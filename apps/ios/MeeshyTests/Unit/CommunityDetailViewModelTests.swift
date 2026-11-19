@@ -158,6 +158,54 @@ final class CommunityDetailViewModelTests: XCTestCase {
         XCTAssertNil(stored)
     }
 
+    // #18935 — rejoindre, quitter : « mes communautés » (la bande Communautés
+    // de la liste, la feuille de partage) le voit sans attendre cinq minutes.
+
+    private func seedMyCommunities(_ ids: [String]) async throws -> GRDBCacheStore<String, APICommunity> {
+        let store = await CacheCoordinator.shared.communities
+        await store.invalidate(for: "list")
+        try await store.save(ids.map { CommunityStubs.community(id: $0, name: "Club \($0)") }, for: "list")
+        return store
+    }
+
+    func test_leaveCommunity_success_removesItFromCachedCommunityList() async throws {
+        let store = try await seedMyCommunities(["c1", "c2"])
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: MockCommunityService())
+
+        await viewModel.leaveCommunity()
+
+        let cached = await store.load(for: "list").snapshot()?.map(\.id)
+        await store.invalidate(for: "list")
+        XCTAssertEqual(cached, ["c2"])
+    }
+
+    func test_leaveCommunity_failure_keepsItInTheCachedCommunityList() async throws {
+        let store = try await seedMyCommunities(["c1", "c2"])
+        let service = MockCommunityService()
+        service.voidResult = .failure(APIError.serverError(500, nil))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service)
+
+        await viewModel.leaveCommunity()
+
+        let cached = await store.load(for: "list").snapshot()?.map(\.id)
+        await store.invalidate(for: "list")
+        XCTAssertEqual(cached, ["c1", "c2"], "un départ refusé ne retire rien")
+    }
+
+    func test_joinCommunity_success_addsItToTheCachedCommunityList() async throws {
+        let store = try await seedMyCommunities(["c2"])
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(id: "c1", name: "Club Lecture", currentUserRole: "member"))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service, currentUserId: { "u-reader" })
+
+        await viewModel.joinCommunity()
+
+        let cached = await store.load(for: "list").snapshot()?.map(\.id)
+        await store.invalidate(for: "list")
+        XCTAssertTrue(viewModel.isMember)
+        XCTAssertEqual(cached, ["c1", "c2"], "la communauté rejointe entre en tête")
+    }
+
     // #7816 — un 403 est une RÉPONSE : le détail dit pourquoi dans la langue du
     // lecteur, jamais le message brut du serveur, et n'offre pas de réessayer.
 
@@ -259,4 +307,130 @@ final class CommunityDetailViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.community?.name, "Alpha")
     }
+
+    // MARK: - community:member-* (#18767)
+
+    private func memberSUT(
+        reader: String = "u-mod", role: String? = "moderator", removed: @escaping @MainActor (String) async -> Void = { _ in }
+    ) -> (CommunityDetailViewModel, MockCommunityService) {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator", currentUserRole: role))
+        let viewModel = CommunityDetailViewModel(
+            communityId: "c1", service: service, currentUserId: { reader },
+            communityUpdates: Empty().eraseToAnyPublisher(), memberChanges: Empty().eraseToAnyPublisher(),
+            myCommunities: MyCommunitiesWrites(add: { _ in }, remove: removed)
+        )
+        return (viewModel, service)
+    }
+
+    func test_memberChange_tiers_recopieLEffectifSansToucherAuRoleNiAuReseau() async {
+        let (viewModel, service) = memberSUT()
+        await viewModel.load()
+
+        await viewModel.apply(CommunityStubs.memberChange(userId: "u-other", memberCount: 14, role: .admin))
+
+        XCTAssertEqual(viewModel.community?.memberCount, 14)
+        XCTAssertEqual(viewModel.currentUserRole, .moderator, "un tiers promu ne déplace pas le rôle du lecteur")
+        XCTAssertFalse(viewModel.isAdmin)
+        XCTAssertEqual(service.getCallCount, 1, "aucune relance réseau")
+    }
+
+    func test_memberChange_lecteurPromu_gereAussitot() async {
+        let (viewModel, service) = memberSUT()
+        await viewModel.load()
+
+        await viewModel.apply(CommunityStubs.memberChange(userId: "u-mod", role: .admin))
+
+        XCTAssertEqual(viewModel.currentUserRole, .admin)
+        XCTAssertTrue(viewModel.isAdmin)
+        XCTAssertEqual(service.getCallCount, 1)
+    }
+
+    func test_memberChange_lecteurRetire_perdSesDroits_quitteMesCommunautes_etRelitLaFiche() async {
+        let removed = RemovedCommunities()
+        let (viewModel, service) = memberSUT(removed: { removed.ids.append($0) })
+        await viewModel.load()
+        service.getResult = .failure(APIError.serverError(403, nil))
+
+        await viewModel.apply(CommunityStubs.memberChange(userId: "u-mod", memberCount: 8, role: nil))
+
+        XCTAssertFalse(viewModel.isMember)
+        XCTAssertFalse(viewModel.isAdmin)
+        XCTAssertTrue(viewModel.conversations.isEmpty)
+        XCTAssertEqual(removed.ids, ["c1"])
+        XCTAssertEqual(service.getCallCount, 2, "la fiche se relit : une communauté privée cesse d'être servie")
+    }
+
+    func test_memberChange_lecteurEntreAilleurs_relitLaFiche() async {
+        let (viewModel, service) = memberSUT(reader: "u-new", role: nil)
+        await viewModel.load()
+        XCTAssertFalse(viewModel.isMember)
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator", currentUserRole: "member"))
+
+        await viewModel.apply(CommunityStubs.memberChange(userId: "u-new", role: .member))
+
+        XCTAssertTrue(viewModel.isMember)
+        XCTAssertEqual(service.getCallCount, 2)
+    }
+
+    func test_memberChange_autreCommunaute_neTouchePasLeDetail() async {
+        let (viewModel, service) = memberSUT()
+        await viewModel.load()
+
+        await viewModel.apply(CommunityStubs.memberChange(communityId: "c2", userId: "u-mod", memberCount: 40, role: nil))
+
+        XCTAssertTrue(viewModel.isMember)
+        XCTAssertNotEqual(viewModel.community?.memberCount, 40)
+        XCTAssertEqual(service.getCallCount, 1)
+    }
+
+    // MARK: - community:deleted (#19591)
+
+    func test_disappearance_rendLaFicheIndisponible_sansGeste_etQuitteMesCommunautes() async {
+        let removed = RemovedCommunities()
+        let (viewModel, service) = memberSUT(reader: "u-creator", role: "admin", removed: { removed.ids.append($0) })
+        await viewModel.load()
+        service.getResult = .failure(APIError.serverError(404, nil))
+
+        await viewModel.applyDisappearance(of: "c1")
+
+        XCTAssertNil(viewModel.community)
+        XCTAssertEqual(viewModel.loadFailure, .refused, "l'écran dit que la communauté n'est plus disponible")
+        XCTAssertFalse(viewModel.isMember)
+        XCTAssertFalse(viewModel.isAdmin)
+        XCTAssertFalse(viewModel.isCreator, "plus aucun geste de créateur n'est offert")
+        XCTAssertTrue(viewModel.conversations.isEmpty)
+        XCTAssertFalse(viewModel.isLoading, "la relecture est silencieuse")
+        XCTAssertEqual(removed.ids, ["c1"])
+        XCTAssertEqual(service.getCallCount, 2, "la fiche se relit")
+    }
+
+    func test_disappearance_uneFicheEncoreServie_revient() async {
+        let (viewModel, _) = memberSUT()
+        await viewModel.load()
+
+        await viewModel.applyDisappearance(of: "c1")
+
+        XCTAssertNotNil(viewModel.community)
+        XCTAssertNil(viewModel.loadFailure)
+        XCTAssertEqual(viewModel.currentUserRole, .moderator)
+    }
+
+    func test_disappearance_autreCommunaute_neTouchePasLeDetail() async {
+        let removed = RemovedCommunities()
+        let (viewModel, service) = memberSUT(removed: { removed.ids.append($0) })
+        await viewModel.load()
+
+        await viewModel.applyDisappearance(of: "c2")
+
+        XCTAssertNotNil(viewModel.community)
+        XCTAssertTrue(viewModel.isMember)
+        XCTAssertTrue(removed.ids.isEmpty)
+        XCTAssertEqual(service.getCallCount, 1)
+    }
+}
+
+@MainActor
+private final class RemovedCommunities {
+    var ids: [String] = []
 }

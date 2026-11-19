@@ -14,6 +14,7 @@ import { cutTalkiesOnBlock, talkieCutDepsOf } from '../../services/talkie/talkie
 import { logError } from '../../utils/logger';
 import { captureNowPlayingBefore, refreshNowPlayingAfter } from '../../services/nowPlaying/nowPlayingDeps';
 import { relationIoOf } from '../../socketio/relationEvents';
+import { refreshInactivityServedAfter } from '../../services/inactivityCheck/inactivityDeps';
 import { sendBadRequest, sendInternalError, sendNotFound, sendSuccess } from '../../utils/response';
 import { resolveRelationAccess } from '@meeshy/shared/utils/relation-access';
 import { declaredAgeClass } from '@meeshy/shared/utils/age';
@@ -95,15 +96,15 @@ const settingsSchema = {
   type: 'object',
   properties: {
     success: { type: 'boolean' },
-    data: { type: 'object', properties: { userId: { type: 'string' }, bringBlocked: { type: 'boolean' }, talkieBlocked: { type: 'boolean' }, togetherBlocked: { type: 'boolean' }, listeningCategoryShared: { type: 'boolean' }, ...shareFlags } },
+    data: { type: 'object', properties: { userId: { type: 'string' }, bringBlocked: { type: 'boolean' }, talkieBlocked: { type: 'boolean' }, togetherBlocked: { type: 'boolean' }, bloodLocationMuted: { type: 'boolean' }, listeningCategoryShared: { type: 'boolean' }, ...shareFlags } },
   },
 } as const;
 
 const SETTINGS_SELECT = {
-  bringBlockedAt: true, talkieBlockedAt: true, togetherBlockedAt: true, listeningCategoryShared: true, listeningTitleShared: true, locationShared: true, locationHistoryShared: true, proximityShared: true,
+  bringBlockedAt: true, talkieBlockedAt: true, togetherBlockedAt: true, bloodLocationMutedAt: true, listeningCategoryShared: true, listeningTitleShared: true, locationShared: true, locationHistoryShared: true, proximityShared: true,
 } as const;
 
-type SettingsRow = { readonly bringBlockedAt: Date | null; readonly talkieBlockedAt: Date | null; readonly togetherBlockedAt: Date | null; readonly listeningCategoryShared: boolean | null } & Readonly<Record<(typeof RELATION_RITUAL_SHARES)[number], boolean>>;
+type SettingsRow = { readonly bringBlockedAt: Date | null; readonly talkieBlockedAt: Date | null; readonly togetherBlockedAt: Date | null; readonly bloodLocationMutedAt: Date | null; readonly listeningCategoryShared: boolean | null } & Readonly<Record<(typeof RELATION_RITUAL_SHARES)[number], boolean>>;
 
 /** Ce que JE règle pour l'autre : son Bring, son talkie et ses invitations « ensemble » bloqués ou non, et ce que je lui partage depuis le rituel. */
 const servedSettings = (userId: string, row: SettingsRow | null): RelationPersonSettings => ({
@@ -111,6 +112,7 @@ const servedSettings = (userId: string, row: SettingsRow | null): RelationPerson
   bringBlocked: Boolean(row?.bringBlockedAt),
   talkieBlocked: Boolean(row?.talkieBlockedAt),
   togetherBlocked: Boolean(row?.togetherBlockedAt),
+  bloodLocationMuted: Boolean(row?.bloodLocationMutedAt),
   listeningCategoryShared: row?.listeningCategoryShared === true,
   ...(Object.fromEntries(RELATION_RITUAL_SHARES.map((share) => [share, row?.[share] === true])) as Record<(typeof RELATION_RITUAL_SHARES)[number], boolean>),
 });
@@ -121,7 +123,8 @@ const readSettings = (prisma: FastifyInstance['prisma'], ownerId: string, otherI
 /**
  * Les RÉGLAGES PAR PERSONNE (#13936, spec § 4) : ce que JE règle pour quelqu'un —
  * `GET|PUT /relations/:userId/settings`. `bringBlocked` (#13936, D-3) et
- * `talkieBlocked` (#13935) et `togetherBlocked` (#17023, les invitations « ensemble »), trois
+ * `talkieBlocked` (#13935), `togetherBlocked` (#17023, les invitations « ensemble ») et
+ * `bloodLocationMuted` (#19454, la position continue d'un Sang), quatre
  * préférences de RÉCEPTION actives par défaut et
  * bloquables par personne, et le RETRAIT des partages
  * consentis au rituel du Sang (#14401, RGPD art. 7(3)) : chacun se coupe à `false`,
@@ -145,7 +148,7 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
     onRequest: [fastify.authenticate],
     preHandler: [appVersionFloorPreHandler, reads.middleware()],
     schema: {
-      description: 'What I set for this person: bringBlocked, talkieBlocked, togetherBlocked (all open by default) and the shares I consented to at the Blood ritual.',
+      description: 'What I set for this person: bringBlocked, talkieBlocked, togetherBlocked, bloodLocationMuted (all open by default) and the shares I consented to at the Blood ritual.',
       tags: ['relations'],
       summary: 'Per-person settings',
       params: userIdParams,
@@ -168,11 +171,11 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
     onRequest: [fastify.authenticate],
     preHandler: [appVersionFloorPreHandler, writes.middleware()],
     schema: {
-      description: 'Set what I allow this person: { bringBlocked?, talkieBlocked?, togetherBlocked?, listeningCategoryShared? (granted from Close), listeningTitleShared?, locationShared?, locationHistoryShared?, proximityShared? }. A ritual share can always be withdrawn (false); granting one (true) outside the ritual is accepted only between two team accounts (ANALYST and above), otherwise 400. Unknown settings are refused (400).',
+      description: 'Set what I allow this person: { bringBlocked?, talkieBlocked?, togetherBlocked?, bloodLocationMuted? (stop receiving their continuous Blood location; their consent is untouched), listeningCategoryShared? (granted from Close), listeningTitleShared?, locationShared?, locationHistoryShared?, proximityShared? }. A ritual share can always be withdrawn (false); granting one (true) outside the ritual is accepted only between two team accounts (ANALYST and above), otherwise 400. Unknown settings are refused (400).',
       tags: ['relations'],
       summary: 'Update per-person settings',
       params: userIdParams,
-      body: { type: 'object', minProperties: 1, properties: { bringBlocked: { type: 'boolean' }, talkieBlocked: { type: 'boolean' }, togetherBlocked: { type: 'boolean' }, listeningCategoryShared: { type: 'boolean' }, ...shareFlagsUpdate } },
+      body: { type: 'object', minProperties: 1, properties: { bringBlocked: { type: 'boolean' }, talkieBlocked: { type: 'boolean' }, togetherBlocked: { type: 'boolean' }, bloodLocationMuted: { type: 'boolean' }, listeningCategoryShared: { type: 'boolean' }, ...shareFlagsUpdate } },
       response: { 200: settingsSchema, ...errorResponses },
       security: [{ bearerAuth: [] }],
     },
@@ -185,7 +188,7 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
 
       const ownerId = request.user!.userId;
       const userId = otherId.toLowerCase();
-      const { bringBlocked, talkieBlocked, togetherBlocked, listeningCategoryShared, ...requested } = parsed.data;
+      const { bringBlocked, talkieBlocked, togetherBlocked, bloodLocationMuted, listeningCategoryShared, ...requested } = parsed.data;
       const now = new Date();
       const shares = Object.keys(requested) as RelationRitualShare[];
       const granted = shares.filter((share) => requested[share] === true);
@@ -193,7 +196,7 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
       const teamGrant = granted.length > 0 && !contradictory && (await teamMayGrantShares(fastify.prisma, { ownerId, otherId: userId, shares: granted, now }));
       if (granted.length > 0 && !teamGrant) return sendBadRequest(reply, 'Donnees invalides');
       const current = await readSettings(fastify.prisma, ownerId, userId);
-      const blocking = bringBlocked === true || talkieBlocked === true || togetherBlocked === true;
+      const blocking = bringBlocked === true || talkieBlocked === true || togetherBlocked === true || bloodLocationMuted === true;
       const granting = listeningCategoryShared === true;
       const [linked, close] = await Promise.all([
         blocking ? linkedPerson(fastify.prisma, ownerId, userId) : false,
@@ -217,9 +220,11 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
         ...(bringBlocked === false ? { bringBlockedAt: null } : {}),
         ...(talkieBlocked === false ? { talkieBlockedAt: null } : {}),
         ...(togetherBlocked === false ? { togetherBlockedAt: null } : {}),
+        ...(bloodLocationMuted === false ? { bloodLocationMutedAt: null } : {}),
         ...(bringBlocked === true && linked ? { bringBlockedAt: now } : {}),
         ...(talkieBlocked === true && linked ? { talkieBlockedAt: now } : {}),
         ...(togetherBlocked === true && linked ? { togetherBlockedAt: now } : {}),
+        ...(bloodLocationMuted === true && linked ? { bloodLocationMutedAt: now } : {}),
       };
 
       // UNE écriture : le retrait (qui n'exige aucun lien), les blocages et l'accord partent ensemble.
@@ -243,6 +248,9 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
       // #13934 — un accord fait remonter l'écoute en cours chez l'autre ; un retrait l'efface chez qui la voyait.
       if ((granting && close) || teamGrant || cutsListening) await refreshNowPlayingAfter(ecoute, { userA: ownerId, userB: userId, before: ecouteAvant });
       if ((blocking && !linked) || (granting && !close)) return sendNotFound(reply, 'Personne introuvable');
+      // #18738 — un consentement de POSITION changé re-juge la dernière position d'une alerte d'inactivité
+      // en cours ; un autre réglage n'y touche pas (ni ré-émission, ni consultation notée au journal).
+      if (shares.some((share) => share === 'locationShared' || share === 'locationHistoryShared')) await refreshInactivityServedAfter({ prisma: fastify.prisma, io: relationIoOf(fastify), report: (error) => logError(fastify.log, 'Inactivity not refreshed after relation settings:', error) }, ownerId);
 
       return sendSuccess(reply, servedSettings(userId, await readSettings(fastify.prisma, ownerId, userId)));
     } catch (error) {

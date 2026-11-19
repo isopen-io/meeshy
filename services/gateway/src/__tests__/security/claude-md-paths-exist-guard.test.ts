@@ -70,7 +70,6 @@ const CHEMIN_CITE = /([A-Za-z0-9_@.-]+(?:\/[A-Za-z0-9_@.-]+)+\.(?:tsx|ts|mjs|jso
 const DETTE: ReadonlyArray<{ fichier: string; introuvables: number }> = [
   { fichier: 'CLAUDE.md', introuvables: 7 },
   { fichier: 'apps/ios/CLAUDE.md', introuvables: 4 },
-  { fichier: 'packages/MeeshySDK/CLAUDE.md', introuvables: 5 },
   { fichier: 'packages/shared/CLAUDE.md', introuvables: 1 },
 ];
 
@@ -162,20 +161,41 @@ const CITATIONS_VOLONTAIREMENT_ABSENTES: ReadonlyArray<{
  * supposées : une adresse relative au répertoire du document, à son `src/`, à
  * son `src/routes/` (le raccourci le plus fréquent du gateway) ou à son
  * `src/__tests__/`.
+ *
+ * **Elles sont PAR DOCUMENT depuis #19285, et c'est un défaut de mesure qu'on
+ * répare, pas une permissivité qu'on ajoute.** La liste ci-dessus est façonnée
+ * pour le gateway ; appliquée au document du SDK, elle déclarait introuvables
+ * SIX fichiers qui existent tous — sous `Sources/MeeshySDK/` et
+ * `Sources/MeeshyUI/`, les racines qu'un paquet Swift emploie. La « dette » de
+ * 5 portée par ce fichier depuis le 2026-08-31 n'a donc jamais été une dette de
+ * DOCUMENT : c'était la base de l'instrument qui manquait.
+ *
+ * Les bases restent SÉPARÉES par document plutôt qu'unies en un seul jeu : une
+ * union rendrait le document du gateway plus permissif pour résoudre celui du
+ * SDK, et masquerait là-bas les citations périmées que cette garde existe pour
+ * trouver. Un instrument qui s'élargit pour cesser de rougir ne mesure plus
+ * rien.
  */
-const BASES = ['', 'src', 'src/routes', 'src/__tests__', 'src/__tests__/unit/routes'] as const;
+const BASES_PAR_DEFAUT = ['', 'src', 'src/routes', 'src/__tests__', 'src/__tests__/unit/routes'] as const;
+
+/** Les racines propres à un document, quand les siennes ne sont pas celles du gateway. */
+const BASES_PAR_DOCUMENT: Readonly<Record<string, readonly string[]>> = {
+  // Un paquet Swift cite relativement à ses cibles, pas à un `src/`.
+  'packages/MeeshySDK/CLAUDE.md': ['', 'Sources', 'Sources/MeeshySDK', 'Sources/MeeshyUI'],
+};
 
 /** Les chemins cités par un document, et ceux qui ne résolvent nulle part. */
 function introuvables(relatif: string): string[] {
   const absolu = join(RACINE, relatif);
   if (!existsSync(absolu)) return [];
   const base = dirname(absolu);
+  const bases = BASES_PAR_DOCUMENT[relatif] ?? BASES_PAR_DEFAUT;
   const source = readFileSync(absolu, 'utf8');
   const exemptes = new Set(CITATIONS_VOLONTAIREMENT_ABSENTES.map((e) => e.chemin));
   const cites = new Set<string>();
   for (const m of source.matchAll(CHEMIN_CITE)) if (!exemptes.has(m[1])) cites.add(m[1]);
   return [...cites].filter(
-    (c) => !existsSync(join(RACINE, c)) && !BASES.some((b) => existsSync(join(base, b, c))),
+    (c) => !existsSync(join(RACINE, c)) && !bases.some((b) => existsSync(join(base, b, c))),
   );
 }
 

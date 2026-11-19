@@ -1,9 +1,10 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { mayManageTrackingLink } from './link-ownership';
+import { isForeignAddressLink, mayManageTrackingLink } from './link-ownership';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { servedTrackingLinkTarget } from '../../services/tracking-link-target';
 import { clickGeo } from './click-geo';
+import { addressLinkOpensTo } from '../../services/profile-addresses/address-link-gate';
 import { logError } from '../../utils/logger';
 import {
   createUnifiedAuthMiddleware,
@@ -14,7 +15,6 @@ import {
   requireAnalyticsPermission
 } from '../../middleware/admin-permissions.middleware';
 import {
-  trackingLinkSchema,
   errorResponseSchema,
   validationErrorResponseSchema,
 } from '@meeshy/shared/types/api-schemas';
@@ -26,6 +26,7 @@ import {
   detectDevice
 } from './types';
 import {
+  publicTrackingLinkSchema,
   trackingLinkStatsResponseSchema,
   trackingLinkUserClicksResponseSchema,
   trackingLinkAdminAllResponseSchema,
@@ -34,6 +35,7 @@ import {
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 import { validatePagination } from '../../utils/pagination';
 import { linkVisitorFromRequest } from '../links/utils/link-visitor';
+import { linkActivityRelayOf, type TrackingLinkClickInput } from '../../socketio/linkActivityEvents';
 
 /**
  * Routes de suivi et analytics des liens de tracking
@@ -49,6 +51,11 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
     requireAuth: true,
     allowAnonymous: false
   });
+
+  /** #19446 — le créateur voit ses chiffres bouger ; un résultat incomplet ne dit rien. */
+  const announceClick = (result: Partial<TrackingLinkClickInput> | undefined): void => {
+    if (result?.link && result.click) linkActivityRelayOf(fastify).trackingLinkClicked({ link: result.link, click: result.click });
+  };
 
   /**
    * 2. Rediriger un lien de tracking et enregistrer le clic
@@ -101,7 +108,9 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         return sendBadRequest(reply, 'Token invalide');
       }
 
-      const trackingLink = await trackingLinkService.getTrackingLinkByToken(token);
+      const viewerId = isRegisteredUser(request.authContext) ? request.authContext.registeredUser!.id : undefined;
+      const found = await trackingLinkService.getTrackingLinkByToken(token);
+      const trackingLink = found && (await addressLinkOpensTo(fastify.prisma, found, viewerId)) ? found : null;
 
       if (!trackingLink) {
         return sendNotFound(reply, 'Lien de tracking non trouvé');
@@ -143,7 +152,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         participantId = request.authContext.participantId;
       }
 
-      await trackingLinkService.recordClick({
+      const recorded = await trackingLinkService.recordClick({
         token,
         userId,
         participantId,
@@ -157,6 +166,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         referrer,
         visitor: linkVisitorFromRequest(request)
       });
+      announceClick({ link: recorded?.trackingLink, click: recorded?.click });
 
       return reply.redirect(served);
 
@@ -233,7 +243,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
               properties: {
                 originalUrl: { type: 'string', description: 'Original destination URL' },
                 clickId: { type: 'string', description: 'ID of the recorded click' },
-                trackingLink: trackingLinkSchema
+                trackingLink: publicTrackingLinkSchema
               }
             }
           }
@@ -316,6 +326,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         utmClickContent: body.utmClickContent,
         visitor: linkVisitorFromRequest(request),
       });
+      announceClick({ link: result.trackingLink, click: result.click });
 
       const served = servedTrackingLinkTarget(result.trackingLink.originalUrl);
       return sendSuccess(reply, {
@@ -484,7 +495,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
 
       const trackingLink = await trackingLinkService.getTrackingLinkByToken(token);
 
-      if (!trackingLink) {
+      if (!trackingLink || isForeignAddressLink(trackingLink, request.authContext)) {
         return sendNotFound(reply, 'Lien de tracking non trouvé');
       }
 

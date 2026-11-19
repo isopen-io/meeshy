@@ -293,7 +293,7 @@ describe('le code de parrainage voyage AVEC l’inscription (#8058)', () => {
     const res = await inscrire(app, { ...INSCRIPTION, affiliateToken: 'aff-123', affiliateSessionKey: 'visite-9' });
 
     expect(res.json().data.token).toBe('jwt-token');
-    expect(mockConvertAffiliateVisit).toHaveBeenCalledWith(prisma, 'aff-123', USER_ID, 'visite-9');
+    expect(mockConvertAffiliateVisit).toHaveBeenCalledWith(prisma, 'aff-123', USER_ID, 'visite-9', expect.any(Function));
     expect(mockCreateSession).toHaveBeenCalledTimes(1);
     await app.close();
   });
@@ -306,7 +306,7 @@ describe('le code de parrainage voyage AVEC l’inscription (#8058)', () => {
     const res = await inscrire(app, { ...INSCRIPTION, affiliateToken: 'aff-123' });
 
     expect(res.json().data.token).toBe('jwt-token');
-    expect(mockConvertAffiliateVisit).toHaveBeenCalledWith(expect.anything(), 'aff-123', USER_ID, undefined);
+    expect(mockConvertAffiliateVisit).toHaveBeenCalledWith(expect.anything(), 'aff-123', USER_ID, undefined, expect.any(Function));
     await app.close();
   });
 

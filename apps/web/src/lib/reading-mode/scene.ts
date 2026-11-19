@@ -29,9 +29,8 @@ import { SCENE_FLATTEN_DURATION_MS } from './metrics';
  *    est un sélecteur CSS descendant (`app.css`), jamais N mutations de
  *    style par rangée.
  * 3. **Plus AUCUNE écriture `style.opacity`/`style.transform`** : la
- *    courbe continue que ce hook remplaçait (`perspective.ts`, gelée,
- *    conservée comme point de rebranchement documenté) est retirée de la
- *    production.
+ *    courbe continue que ce hook remplaçait est retirée, du web comme
+ *    d'iOS (#5648).
  * 4. **`prefers-reduced-motion` n'est PAS lu ici** (contrairement à
  *    l'ancien `useThreadPerspective`) : l'élection se pose quoi qu'il
  *    arrive, seules les TRANSITIONS CSS tombent (`app.css:190-199`).

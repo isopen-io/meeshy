@@ -1,4 +1,5 @@
 import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
+import { READ_FLOOR_SELECT, type ReadFloorCursor } from '../services/messaging/readFloor';
 import type { FastifyInstance } from 'fastify';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { ReadStatusUpdatedEventData, ReadStatusSummary } from '@meeshy/shared/types/socketio-events';
@@ -10,6 +11,7 @@ import {
 import { bridgeComputed, bridgeNotComputed } from './unreadBridgeField.js';
 
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { getSharedNotificationService } from '../services/notifications/notification-service-registry.js';
 
 const logger = enhancedLogger.child({ module: 'BroadcastReadStatus' });
 
@@ -70,7 +72,7 @@ export interface ReadStatusBridgeBuilder {
     readonly candidates: readonly { readonly conversationId: string; readonly unreadCount: number }[];
     readonly cursorsByParticipant?: ReadonlyMap<
       string,
-      { readonly lastReadAt: Date | null; readonly lastReadMessageCreatedAt: Date | null }
+      ReadFloorCursor
     >;
   }): Promise<ReadonlyMap<string, { readonly bridge: ConversationBridge }>>;
 }
@@ -203,6 +205,9 @@ export async function broadcastReadStatus(
   args: ReadStatusBroadcastArgs
 ): Promise<void> {
   const { io, prisma, readStatusService, privacyPreferencesService, bridgeService } = deps;
+  // #18910 — le curseur de lecture vient d'être écrit : la pastille de l'iPhone se recompte sur lui, qu'une
+  // notification ait été marquée ou non (lecture progressive, messages arrivés sans notification).
+  if (args.type === 'read' && !args.isAnonymous) getSharedNotificationService()?.noteReadCursorMoved(args.userId);
   if (!io) return;
 
   const actorUserId = args.isAnonymous ? null : args.userId;
@@ -230,7 +235,7 @@ export async function broadcastReadStatus(
             // et non sur l'horloge murale. Le lire ici épargne à la passe de
             // rejouer cette requête, et l'ancre sur le MÊME instantané que le
             // compteur émis à côté.
-            select: { lastReadAt: true, lastReadMessageCreatedAt: true },
+            select: READ_FLOOR_SELECT,
           }),
           readStatusService.getUnreadCount(args.participantId, args.conversationId),
         ]).then(([cursor, unreadCount]) => ({

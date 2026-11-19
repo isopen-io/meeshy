@@ -3,11 +3,11 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { BackGlyph, BUTTON, GLYPH_SIZE, SCREEN_HEADER_HEIGHT, ScreenHeader } from './ui-chrome';
+import { BackGlyph, BUTTON, GLYPH_SIZE } from './ui-chrome';
 
 /**
  * LES PRIMITIVES DU CHROME (#8879) — ce qu'un écran reçoit quand il monte
- * l'en-tête canonique, la flèche de retour et l'échelle des glyphes, au lieu
+ * la flèche de retour et l'échelle des glyphes, au lieu
  * de les réécrire (dix routes portaient chacune leur `HEADER_HEIGHT = 64`).
  */
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -24,30 +24,6 @@ afterAll(async () => {
 
 const mounter = createActMounter();
 afterEach(() => mounter.unmountAll());
-
-describe("ScreenHeader — l'en-tête d'écran, retour à gauche", () => {
-  test('pose la hauteur canonique, le titre en h1, et ordonne retour · titre · actions', async () => {
-    const container = await mounter.mount(
-      <ScreenHeader
-        leading={<button type="button" aria-label="Retour" data-probe="back" />}
-        title="Notifications"
-        subtitle="3"
-        trailing={<button type="button" data-probe="action" />}
-      />,
-    );
-    const header = container.querySelector('header');
-    expect(header?.style.height).toBe(`${SCREEN_HEADER_HEIGHT}px`);
-    expect(container.querySelector('h1')?.textContent).toBe('Notifications');
-    const order = [...(header?.querySelectorAll('[data-probe], h1') ?? [])].map((node) => node.getAttribute('data-probe') ?? 'title');
-    expect(order).toEqual(['back', 'title', 'action']);
-    expect(container.textContent).toContain('3');
-  });
-
-  test('sans sous-titre ni action, il ne rend que le retour et le titre', async () => {
-    const container = await mounter.mount(<ScreenHeader leading={<span data-probe="back" />} title="Réglages" />);
-    expect(container.querySelector('header')?.children.length).toBe(2);
-  });
-});
 
 describe('BackGlyph — la flèche de retour, dessinée dans le disque du chrome', () => {
   test("un chevron gauche, retourné en écriture de droite à gauche, au centre du disque", async () => {

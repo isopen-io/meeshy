@@ -23,7 +23,7 @@ import type { NotificationType } from '@meeshy/shared/types/notification';
 import { isBlockedBetween } from '../../utils/blocking';
 import { livingAmong } from './fanout/entourage';
 
-const ACTOR_CONTENT_TYPES: ReadonlySet<NotificationType> = new Set<NotificationType>([
+export const ACTOR_CONTENT_TYPES: ReadonlySet<NotificationType> = new Set<NotificationType>([
   'friend_new_story',
   'friend_new_post',
   'friend_new_mood',
@@ -46,6 +46,9 @@ const ACTOR_CONTENT_TYPES: ReadonlySet<NotificationType> = new Set<NotificationT
   'comment_reaction',
   'story_new_comment',
   'story_thread_reply',
+  // Partage de position (#19204) : l'émetteur prévient, le destinataire demande — jamais à un bloqué.
+  'location_share_started',
+  'location_share_requested',
 ]);
 
 export async function refusesActorContent(

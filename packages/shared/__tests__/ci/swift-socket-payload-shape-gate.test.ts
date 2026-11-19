@@ -141,6 +141,13 @@ describe('la FORME des charges socket — ce qu\'iOS EXIGE, ce que le contrat D�
     expect(undeclared, `hors contrat : ${undeclared.join(', ')}`).toEqual([]);
   });
 
+  it('lit les routes posées par un RELAIS générique, pas seulement `route(` et `.raw(` (#19650)', () => {
+    const relayed = named.filter((route) => route.file.endsWith('MessageSocketManager+CallControls.swift')).map((route) => route.event);
+    expect(relayed).toEqual(
+      expect.arrayContaining(['call:participant-invited', 'call:invite-declined', 'call:conversation-changed']),
+    );
+  });
+
   it("confronte toujours autant d'événements du contrat qu'à la dernière mesure", () => {
     const swept = new Set(
       named.map((route) => route.event).filter((event): event is string => event !== undefined && contract.has(event)),
@@ -233,7 +240,9 @@ describe('la FORME des charges socket — ce qu\'iOS EXIGE, ce que le contrat D�
     ].sort();
 
     expect(silentRaw).toEqual(['auth:session-revoked', 'auth:token-expired', 'heartbeat:ack', 'talkie:chunk']);
-    expect(manual.length, `types à init(from:) manuel : ${manual.join(', ')}`).toBe(31);
+    // 34 le 2026-11-18 : InactivityAlertRaised et InactivityAlertCleared (#18738), décodeurs TOLÉRANTS comme ceux du téléphone injoignable.
+    // 36 le 2026-11-19 : PhoneCallStarted et PhoneCallEnded (#18753), décodeurs TOLÉRANTS sur le modèle de l'inactivité.
+    expect(manual.length, `types à init(from:) manuel : ${manual.join(', ')}`).toBe(36);
   });
   /**
    * Le SECOND niveau (#18116). Trois événements de commentaire y rendent la MÊME divergence —

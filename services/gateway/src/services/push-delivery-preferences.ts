@@ -13,7 +13,9 @@ import {
   type NotificationPreference as NotifPrefs,
 } from '@meeshy/shared/types/preferences';
 import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
+import { isBadgeSyncPush } from './notifications/badgeSyncPush';
 import { isNotificationRevocationPush } from './notifications/notificationRevocationPush';
+import { LOCATION_SHARE_ENDED_PUSH_TYPE } from '@meeshy/shared/types/shared-location-live-activity';
 import type { PushNotificationPayload, SendPushOptions } from './PushNotificationService';
 
 /**
@@ -129,7 +131,15 @@ export async function applyUserPreferences(
 ): Promise<PushNotificationPayload | null> {
   const { userId, payload, bypassDnd } = options;
   if (isNotificationRevocationPush(payload)) return payload;
+  // #19463 — la fin d'un partage de position retire un compte à rebours déjà affiché : un contrôle, comme la révocation.
+  if (payload.data?.type === LOCATION_SHARE_ENDED_PUSH_TYPE) return payload;
   if (isBringPushDataType(payload.data?.type)) return payload;
+  if (isBadgeSyncPush(payload)) {
+    // #18910 — une pastille ne montre rien : Ne pas déranger ne la concerne pas. `pushEnabled` et
+    // `notificationBadgeEnabled` restent les deux interrupteurs de qui ne veut pas de pastille.
+    const prefs = await loadNotifPrefs(prisma, userId);
+    return isPushAllowed(prefs, true) && prefs.notificationBadgeEnabled !== false ? payload : null;
+  }
 
   const isCallPush = isCallRelatedPush(options);
   const notifPrefs = await loadNotifPrefs(prisma, userId);

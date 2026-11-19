@@ -38,10 +38,16 @@ describe('la forme servie au rattrapage (#17966)', () => {
     circle: 'CLOSE',
     updatedAt: '2026-11-08T12:00:00.000Z',
     expiresAt: '2026-11-08T13:00:00.000Z',
+    startedAt: '2026-11-08T12:00:00.000Z',
   };
 
-  it('le cercle traverse le sérialiseur', () => {
+  it('le cercle et le début du partage (#19458) traversent le sérialiseur', () => {
     expect(JSON.parse(serialize(servie))).toEqual(servie);
+  });
+
+  it('#19887 : le mouvement traverse le sérialiseur', () => {
+    const exacte = { ...servie, precision: 'exact', radiusMeters: 10, motion: 'walking' };
+    expect(JSON.parse(serialize(exacte))).toEqual(exacte);
   });
 
   it('rien de plus riche ne part à côté : un champ non déclaré est retiré', () => {
@@ -56,6 +62,11 @@ describe('mon partage, relu par mes appareils (#18389)', () => {
   it('la liste, les précisions et les échéances traversent le sérialiseur ; sans partage, le terme est nul', () => {
     expect(JSON.parse(serialize(servi))).toEqual(servi);
     expect(JSON.parse(serialize({ recipients: [], expiresAt: null }))).toEqual({ recipients: [], expiresAt: null });
+  });
+
+  it('le début du dernier « Partager » (#18580) traverse le sérialiseur, pour qu’un appareil sache qu’un autre a repris', () => {
+    const avecDébut = { ...servi, startedAt: '2026-11-08T12:00:00.000Z' };
+    expect(JSON.parse(serialize(avecDébut))).toEqual(avecDébut);
   });
 
   it('rien ne part à côté : position, maille ou session non déclarées sont retirées', () => {

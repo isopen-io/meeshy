@@ -57,6 +57,35 @@ public enum NotificationCachePatch {
         }
     }
 
+    /// Range `row` à son rang `createdAt` (le plus récent d'abord), en
+    /// remplaçant la ligne du même id si elle est présente : une notification
+    /// RÉÉCRITE après une édition garde sa place au lieu de passer en tête
+    /// (#19104). Les dates sont les chaînes ISO 8601 du fil (même format,
+    /// donc l'ordre des chaînes est celui des dates).
+    ///
+    /// Une ligne NOUVELLE plus ancienne que toute la fenêtre n'y entre pas : la
+    /// ranger en queue décalerait la pagination par offset (`loadMore` sauterait
+    /// une ligne du serveur). Elle reviendra avec la page qui la porte.
+    public static func upsertingByCreatedAt(_ items: [APINotification], _ row: APINotification) -> [APINotification] {
+        let others = items.filter { $0.id != row.id }
+        guard let slot = others.firstIndex(where: { $0.state.createdAt <= row.state.createdAt }) else {
+            let wasInTheWindow = others.count != items.count
+            return wasInTheWindow || others.isEmpty ? others + [row] : items
+        }
+        return Array(others[..<slot]) + [row] + Array(others[slot...])
+    }
+
+    /// Les lignes NON LUES dont le contexte nomme la demande d'ami
+    /// `friendRequestId` passent lues : répondre à une demande (accepter,
+    /// refuser) consomme sa notification — prédicat `read-bulk` de portée
+    /// `context`, clé `friendRequestId` (#19104).
+    public static func markingRead(_ items: [APINotification], friendRequestId: String) -> [APINotification] {
+        items.map { item in
+            guard !item.isRead, item.context?.friendRequestId == friendRequestId else { return item }
+            return item.withReadState(true)
+        }
+    }
+
     /// Retire une ligne (suppression utilisateur ou événement `notification:deleted`).
     public static func removing(_ items: [APINotification], id: String) -> [APINotification] {
         items.filter { $0.id != id }

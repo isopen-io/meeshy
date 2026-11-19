@@ -1,6 +1,6 @@
 import Foundation
 
-// Extrait de `CoreModels.swift` (2 113 lignes, deux fois le budget 800-1100 de
+// Extrait de l'ancien fichier de modèles du SDK (2 113 lignes, deux fois le budget 800-1100 de
 // la directive 2026-08-28, qui interdit d'AJOUTER à un fichier hors budget).
 // Le lot #4823 ajoute un champ à `MeeshyMessage` : on extrait d'abord, on
 // ajoute ensuite. Découpe par RESPONSABILITÉ : ce fichier tient le message de
@@ -469,7 +469,5 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         return expiresAt > Date()
     }
 }
-
-public typealias MeeshyChatMessage = MeeshyMessage
 
 extension MeeshyMessage: CacheIdentifiable {}

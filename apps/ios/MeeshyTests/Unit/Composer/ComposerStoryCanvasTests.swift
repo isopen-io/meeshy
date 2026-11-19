@@ -15,8 +15,8 @@ final class ComposerStoryCanvasTests: XCTestCase {
 
     // MARK: - L'autre composer ne se charge plus
 
-    /// **Le témoin central.** `.scene` monte `StoryComposerView` — l'atelier,
-    /// c'est-à-dire la vue de composition de story qui préexistait au meuble.
+    /// **Le témoin central.** `.scene` montait l'atelier du SDK, la vue de
+    /// composition de story qui préexistait au meuble.
     /// Là où l'auteur CHOISIT son format, il ne s'y rend plus.
     func test_uneSTORY_choisie_neMonteJamaisLAtelier() {
         for ouverture in [ComposerOpening.keyboardOnContent, .moodGrid] {

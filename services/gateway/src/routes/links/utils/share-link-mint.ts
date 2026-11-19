@@ -1,11 +1,7 @@
 import type { FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MemberRole } from '@meeshy/shared/types/role-types';
-import {
-  conversationAdmitsNewMembers,
-  EXTERNAL_CONVERSATION_ERROR_CODES,
-  EXTERNAL_SINGLE_MEMBER_MESSAGE,
-} from '@meeshy/shared/types/external-conversation';
+import { newMemberRefusal } from '../../../services/conversations/newMemberAdmission';
 import { actorHasMinimumRole, actsWithCreatorRights, type ConversationActor } from '@meeshy/shared/utils/conversation-authority';
 import { isConversationClosed } from '../../../services/messaging/conversationWriteAdmission';
 import { resolveConversationId } from '../../../utils/conversation-id-cache';
@@ -195,7 +191,7 @@ export async function mintConversationShareLink(params: MintShareLinkParams): Pr
     const [conversation, membership] = await Promise.all([
       prisma.conversation.findUnique({
         where: { id: resolvedId },
-        select: { id: true, type: true, title: true, isActive: true, closedAt: true }
+        select: { id: true, type: true, encryptionMode: true, title: true, isActive: true, closedAt: true }
       }),
       prisma.participant.findFirst({
         where: { conversationId: resolvedId, userId, isActive: true }
@@ -221,9 +217,11 @@ export async function mintConversationShareLink(params: MintShareLinkParams): Pr
       return null;
     }
 
-    // #17117 — une conversation externe n'a qu'un membre Meeshy : aucun lien n'y mène.
-    if (!conversationAdmitsNewMembers(conversation.type)) {
-      sendError(reply, 409, EXTERNAL_SINGLE_MEMBER_MESSAGE, { code: EXTERNAL_CONVERSATION_ERROR_CODES.SINGLE_MEMBER });
+    // #17117 — une conversation externe n'a qu'un membre Meeshy, et #16188 — un
+    // tête-à-tête chiffré de bout en bout reste à deux : aucun lien n'y mène.
+    const closedToNewMembers = newMemberRefusal(conversation);
+    if (closedToNewMembers) {
+      sendError(reply, 409, closedToNewMembers.message, { code: closedToNewMembers.code });
       return null;
     }
 

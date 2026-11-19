@@ -7,6 +7,7 @@
  */
 
 import { mergeTranslationEntries, saveTranslatedTrack } from './translatedTrackSave';
+import { namesPostAudio, persistPostAudioTranslations, postAudioTargetOfMedia, postTranscriptionReadyEvent, verifiedPostAudioTarget } from './postAudioResult';
 import { EventEmitter } from 'events';
 import * as path from 'path';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -30,7 +31,6 @@ import { createTranslationJSON, type MessageTranslationJSON } from '../../utils/
 import { isBlankTranscriptionText } from '../../utils/transcription';
 import { isUrlOnly } from '../../utils/url-content';
 import { KeyedMutex } from '../../utils/keyed-mutex';
-import { PostAudioService } from '../posts/PostAudioService';
 import { generateConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { resolveServerTargetLanguages } from './serverTargetLanguages';
@@ -1033,7 +1033,7 @@ export class MessageTranslationService extends EventEmitter {
     translatedAudios: Array<{
       targetLanguage: string;
       translatedText: string;
-      audioUrl: string;
+      audioUrl: string | null;  // #19648 — null sans piste (TTS en échec)
       audioPath: string;
       durationMs: number;
       voiceCloned: boolean;
@@ -1079,30 +1079,7 @@ export class MessageTranslationService extends EventEmitter {
         `Temps: ${data.processingTimeMs}ms | TaskID: ${data.taskId}`
       );
 
-      // Route post/story audio translations to PostAudioService
-      if (data.postId && data.postMediaId && data.translatedAudios.length > 0) {
-        const translations: Record<string, any> = {};
-        for (const ta of data.translatedAudios) {
-          translations[ta.targetLanguage] = {
-            type: 'audio',
-            transcription: ta.translatedText,
-            path: ta.audioPath,
-            url: ta.audioUrl,
-            durationMs: ta.durationMs,
-            format: ta.audioMimeType ?? 'audio/mp3',
-            cloned: ta.voiceCloned,
-            quality: ta.voiceQuality,
-            ttsModel: 'chatterbox',
-            segments: (ta.segments ?? []).map(s => ({ text: s.text, startMs: s.startMs, endMs: s.endMs })),
-          };
-        }
-        await PostAudioService.shared.handleAudioTranslationsReady({
-          postId: data.postId,
-          postMediaId: data.postMediaId,
-          translations,
-        });
-        return;
-      }
+      if (namesPostAudio(data)) return await persistPostAudioTranslations(this.prisma, await verifiedPostAudioTarget(this.prisma, data), data.translatedAudios);
 
       // 1. Récupérer les infos de l'attachment et traductions existantes
       const attachment = await this.prisma.messageAttachment.findUnique({
@@ -1111,6 +1088,8 @@ export class MessageTranslationService extends EventEmitter {
       });
 
       if (!attachment) {
+        const post = await postAudioTargetOfMedia(this.prisma, data.attachmentId);
+        if (post) return await persistPostAudioTranslations(this.prisma, post, data.translatedAudios);
         logger.error(`❌ [TranslationService] Attachment non trouvé: ${data.attachmentId}`);
         return;
       }
@@ -1534,30 +1513,10 @@ export class MessageTranslationService extends EventEmitter {
         return;
       }
 
-      // Post audio requests have no messageAttachment — emit and return immediately
-      // so MeeshySocketIOManager can route to PostAudioService.
-      if (data.postId && data.postMediaId) {
-        this.emit('transcriptionReady', {
-          taskId: data.taskId,
-          messageId: data.messageId,
-          attachmentId: data.attachmentId,
-          transcription: {
-            id: data.attachmentId,
-            text: data.transcription.text,
-            language: data.transcription.language,
-            confidence: data.transcription.confidence,
-            source: data.transcription.source,
-            segments: data.transcription.segments,
-            durationMs: data.transcription.durationMs,
-            speakerCount: data.transcription.speakerCount,
-            primarySpeakerId: data.transcription.primarySpeakerId,
-            senderVoiceIdentified: data.transcription.senderVoiceIdentified,
-            senderSpeakerId: data.transcription.senderSpeakerId,
-          },
-          processingTimeMs: data.processingTimeMs,
-          postId: data.postId,
-          postMediaId: data.postMediaId,
-        });
+      // Un post n'a pas de messageAttachment : MeeshySocketIOManager le route vers PostAudioService.
+      if (namesPostAudio(data)) {
+        const namedPost = await verifiedPostAudioTarget(this.prisma, data);
+        if (namedPost) this.emit('transcriptionReady', postTranscriptionReadyEvent(data, namedPost));
         return;
       }
 
@@ -1574,7 +1533,9 @@ export class MessageTranslationService extends EventEmitter {
       });
 
       if (!attachment) {
-        logger.error(`❌ [TranslationService] Attachment non trouvé: ${data.attachmentId}`);
+        const post = await postAudioTargetOfMedia(this.prisma, data.attachmentId);
+        if (post) this.emit('transcriptionReady', postTranscriptionReadyEvent(data, post));
+        else logger.error(`❌ [TranslationService] Attachment non trouvé: ${data.attachmentId}`);
         return;
       }
 
@@ -1659,7 +1620,7 @@ export class MessageTranslationService extends EventEmitter {
       translatedAudio: {
         targetLanguage: string;
         translatedText: string;
-        audioUrl: string;
+        audioUrl: string | null;  // #19648 — null sans piste (TTS en échec)
         audioPath: string;
         durationMs: number;
         voiceCloned: boolean;

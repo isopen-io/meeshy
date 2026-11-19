@@ -19,7 +19,8 @@ import {
  */
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-export const SOURCE = readFileSync(join(HERE, '../../public/sw-push.js'), 'utf8');
+/** `sw-push.js` et `sw-push-talkie.js` partagent la portée globale du worker, dans l'ordre de `SERVICE_WORKER_SCRIPTS`. */
+export const SOURCE = ['sw-push.js', 'sw-push-talkie.js'].map((name) => readFileSync(join(HERE, '../../public', name), 'utf8')).join('\n');
 
 /** Le CODE seul : un doc-comment qui NOMME un champ interdit le documente, il ne le lit pas. */
 export const CODE = SOURCE.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
@@ -108,11 +109,14 @@ export function mount({
   already = [] as Record<string, unknown>[],
   credential,
   fetchFails = false,
+  indexedDBStalls = false,
 }: {
   readonly clients?: ClientStub[];
   readonly already?: Record<string, unknown>[];
   readonly credential?: DeliveryReceiptCredential;
   readonly fetchFails?: boolean;
+  /** Une IndexedDB qui ne répond jamais (profil chargé, appareil lent) : rien de ce qui l'attend n'aboutit. */
+  readonly indexedDBStalls?: boolean;
 } = {}): WorkerHarness {
   const listeners = new Map<string, Listener>();
   const shown: ShownNotification[] = [];
@@ -177,7 +181,7 @@ export function mount({
         badges.push(count);
       },
     },
-    indexedDB: idb,
+    indexedDB: indexedDBStalls ? { open: () => ({}) } : idb,
     fetch: async (url: string, init: Record<string, unknown>) => {
       deliveries.push({ url, init });
       if (fetchFails) throw new TypeError('Failed to fetch');

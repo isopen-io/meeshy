@@ -24,7 +24,9 @@ extension CommentThreadViewModel {
     }
 
     /// Serves the cached roots at once; a fresh cache stops there, a stale or
-    /// missing one is followed by the first page. With `serverTotal`, a fresh
+    /// missing one is followed by the first page. An expired cache paints what
+    /// the disk still holds before that page, like a stale one (#18938) — the
+    /// TTL says "revalidate", never "show nothing". With `serverTotal`, a fresh
     /// cache also says whether more rows exist.
     @discardableResult
     func loadRoots(serverTotal: Int? = nil) async -> CommentRootsOutcome {
@@ -42,10 +44,22 @@ extension CommentThreadViewModel {
         case .stale(let comments, _):
             absorb(comments)
             return await fetchRootsPage(cursor: nil, for: target, dropping: Set(comments.map(\.id)))
-        case .expired, .empty:
+        case .expired:
+            return await paintExpiredRoots(for: target)
+        case .empty:
             break
         }
         return await fetchRootsPage(cursor: nil, for: target)
+    }
+
+    /// The disk rows of an expired thread, then the first page over them.
+    private func paintExpiredRoots(for target: CommentThreadEntity) async -> CommentRootsOutcome {
+        guard let onDisk = await store.loadIgnoringExpiry(target.rootsCacheKey), !onDisk.isEmpty else {
+            return await fetchRootsPage(cursor: nil, for: target)
+        }
+        guard entity == target else { return .skipped }
+        absorb(onDisk)
+        return await fetchRootsPage(cursor: nil, for: target, dropping: Set(onDisk.map(\.id)))
     }
 
     /// The next (older) page — appended, deduplicated. An unknown pagination

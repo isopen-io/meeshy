@@ -233,10 +233,9 @@ final class CallShareCapsuleTests: XCTestCase {
 
     // MARK: - S1.8 — « Arrêter » atteignable au-dessus d'un plein écran
 
-    func test_returnPoint_showsTheStopOnlyWhileSharing_andNotUnderTheQuickMenu() {
-        XCTAssertTrue(CallReturnPoint.showsShareStop(isSharing: true, isMenuRevealed: false))
-        XCTAssertFalse(CallReturnPoint.showsShareStop(isSharing: true, isMenuRevealed: true))
-        XCTAssertFalse(CallReturnPoint.showsShareStop(isSharing: false, isMenuRevealed: false))
+    func test_returnPoint_showsTheStopOnlyWhileSharing() {
+        XCTAssertTrue(CallReturnPoint.showsShareStop(isSharing: true))
+        XCTAssertFalse(CallReturnPoint.showsShareStop(isSharing: false))
     }
 
     func test_bubble_carriesTheShareStateToThePassthroughWindow() throws {

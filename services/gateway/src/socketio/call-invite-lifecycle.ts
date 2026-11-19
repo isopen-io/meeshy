@@ -178,6 +178,11 @@ export function createCallInvitationLifecycle(deps: CallInvitationLifecycleDeps)
       return true;
     },
 
+    /** Les invitées dont la sonnerie court encore dans cet appel (#19650) : elles occupent une place du plafond. */
+    pendingFor(callId: string): readonly string[] {
+      return [...pending.values()].filter((entry) => entry.invitation.callId === callId).map((entry) => entry.invitation.inviteeUserId);
+    },
+
     /** L'appel est fini : chaque invitation encore en attente se solde tout de suite, sans attendre son échéance. */
     async callEnded(io: MeeshyIOServer, callId: string): Promise<void> {
       const due = [...pending.values()]

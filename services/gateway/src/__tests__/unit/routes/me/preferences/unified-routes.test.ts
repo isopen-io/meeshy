@@ -69,6 +69,7 @@ jest.mock('../../../../../utils/withMutationLog', () => ({
 // ─── Imports après les mocks ──────────────────────────────────────────────────
 
 import { createUnifiedAuthMiddleware } from '../../../../../middleware/auth';
+import { makeUserPreferencesStore } from '../../../../helpers/user-preferences-store';
 import { userPreferencesRoutes } from '../../../../../routes/me/preferences/index';
 import { PREFERENCE_CATEGORIES } from '../../../../../services/preferences/preferences-broadcast';
 import {
@@ -115,14 +116,16 @@ function makeSocketLayer() {
 }
 
 function makePrisma(stored: Record<string, unknown> | null = null) {
-  const upsert = jest.fn<any>(async ({ update }: { update: Record<string, unknown> }) => ({
-    id: 'pref-1',
-    ...update,
-  }));
+  // La table se comporte comme Mongo là où la fusion se joue : le `PATCH` en
+  // `mode=merge` fusionne DANS la base (`$runCommandRaw`), `replace` réécrit
+  // la colonne (`upsert`). Les deux se lisent donc dans la ligne.
+  const store = makeUserPreferencesStore({ rows: stored ? { [USER_ID]: stored } : {} });
   return {
+    store,
+    $runCommandRaw: jest.fn<any>(store.$runCommandRaw),
     userPreferences: {
-      findUnique: jest.fn<any>().mockResolvedValue(stored),
-      upsert,
+      findUnique: jest.fn<any>(store.userPreferences.findUnique),
+      upsert: jest.fn<any>(store.userPreferences.upsert),
       update: jest.fn<any>().mockResolvedValue({}),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
     },
@@ -333,7 +336,7 @@ describe('GET /me/preferences — la lecture unifiée', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('PATCH /me/preferences — l\'écriture unifiée', () => {
-  it('écrit DEUX catégories en UN seul upsert, et diffuse une fois par catégorie', async () => {
+  it('écrit DEUX catégories en UNE seule commande atomique, et diffuse une fois par catégorie', async () => {
     const { app, prisma, emissions } = await buildApp();
     const res = await app.inject({
       method: 'PATCH',
@@ -342,12 +345,11 @@ describe('PATCH /me/preferences — l\'écriture unifiée', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(prisma.userPreferences.upsert).toHaveBeenCalledTimes(1);
+    expect(prisma.$runCommandRaw).toHaveBeenCalledTimes(1);
 
-    const update = prisma.userPreferences.upsert.mock.calls[0][0].update;
-    expect(Object.keys(update).sort()).toEqual(['application', 'notification']);
-    expect(update.application.theme).toBe('dark');
-    expect(update.notification.pushEnabled).toBe(false);
+    const row = prisma.store.rowOf(USER_ID) as Record<string, Record<string, unknown>>;
+    expect(row.application.theme).toBe('dark');
+    expect(row.notification.pushEnabled).toBe(false);
 
     // Le contrat client est PAR CATÉGORIE : un évènement « tout » serait
     // laissé tomber par `use-socket-cache-sync`, qui ne discrimine que sur
@@ -415,7 +417,7 @@ describe('PATCH /me/preferences — l\'écriture unifiée', () => {
       payload: { application: { theme: 'dark' } },
     });
 
-    const written = prisma.userPreferences.upsert.mock.calls[0][0].update.application;
+    const written = (prisma.store.rowOf(USER_ID) as Record<string, Record<string, unknown>>).application;
     expect(written.theme).toBe('dark');
     expect(written.accentColor).toBe('rose');
     await app.close();

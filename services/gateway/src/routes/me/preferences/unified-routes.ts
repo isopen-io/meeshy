@@ -79,6 +79,7 @@ import {
   type PreferenceCategory,
   type PreferenceDocument,
 } from './preference-registry';
+import { mergeCategoriesAtomically } from './preference-atomic-merge';
 import { parseSelection, projectSelection } from './preference-selection';
 import { createPreferenceRateLimitConfig } from './preference-rate-limit';
 import { logError } from '../../../utils/logger.js';
@@ -132,10 +133,12 @@ function parseMode(value: string | undefined): WriteMode | null {
 
 type CategoryWrite = {
   readonly category: PreferenceCategory;
-  /** Ce qui sera ÉCRIT dans la colonne JSON. */
-  readonly stored: PreferenceDocument;
-  /** L'état que le serveur OBÉIRA. */
-  readonly effective: PreferenceDocument;
+  /**
+   * Ce qui sera ÉCRIT dans la colonne JSON. Absent quand la fusion se fait DANS
+   * la base (`mergeCategoriesAtomically`) : la colonne y est calculée là où
+   * elle vit, jamais ici, d'une lecture que le geste voisin a déjà périmée.
+   */
+  readonly stored?: PreferenceDocument;
   /**
    * Ce que le CORPS NOMME — et c'est lui, depuis #4578, que la garde de
    * consentement lit. Voir le commentaire du site de validation plus bas.
@@ -322,23 +325,26 @@ export async function unifiedPreferenceRoutes(fastify: FastifyInstance): Promise
       const categories = named.filter(isPreferenceCategory);
 
       try {
+        // `merge` sur une catégorie SANS rangement propre : la fusion se fait
+        // dans la base (`preference-atomic-merge`), donc rien à lire ici. Lire,
+        // fusionner et réécrire la colonne entière perdait la bascule voisine
+        // dès que deux gestes se recouvraient (#18910). `privacy` (rangement
+        // hérité) et `replace` gardent la lecture-puis-écriture.
+        const mergedInDatabase = (category: PreferenceCategory): boolean =>
+          mode === 'merge' && !PREFERENCE_REGISTRY[category].storage;
         const base =
           mode === 'merge'
-            ? await resolveCompleteCategories(fastify.prisma, userId, categories)
+            ? await resolveCompleteCategories(fastify.prisma, userId, categories.filter((c) => !mergedInDatabase(c)))
             : {};
 
         const writes: CategoryWrite[] = await Promise.all(categories.map(async (category) => {
           const submitted = parseSubmittedKeys(category, body[category]);
+          if (mergedInDatabase(category)) return { category, submitted };
           const stored =
             mode === 'merge'
               ? { ...(base[category] ?? {}), ...submitted }
               : await keepUnnamedKeys(fastify.prisma, userId, category, submitted, submitted);
-          return {
-            category,
-            stored,
-            effective: resolveComplete(PREFERENCE_REGISTRY[category].defaults, stored),
-            submitted,
-          };
+          return { category, stored, submitted };
         }));
 
         // #4578 — la garde lit `submitted`, pas `effective`.
@@ -374,7 +380,11 @@ export async function unifiedPreferenceRoutes(fastify: FastifyInstance): Promise
           });
         }
 
-        const columns = Object.fromEntries(writes.map((w) => [w.category, w.stored]));
+        const columnWrites = writes.filter((w) => w.stored !== undefined);
+        const databaseMerges = writes
+          .filter((w) => w.stored === undefined)
+          .map(({ category, submitted }) => ({ category, defaults: PREFERENCE_REGISTRY[category].defaults, submitted }));
+        const columns = Object.fromEntries(columnWrites.map((w) => [w.category, w.stored]));
         const select = {
           id: true,
           ...Object.fromEntries(writes.map((w) => [w.category, true])),
@@ -391,13 +401,16 @@ export async function unifiedPreferenceRoutes(fastify: FastifyInstance): Promise
           kind: `updateSettings:${categories.join('+')}`,
           replayCost: 'converges',
           op: async () => {
-            const row = await fastify.prisma.userPreferences.upsert({
-              where: { userId },
-              create: { userId, ...columns },
-              update: { ...columns },
-              select,
-            });
-            return row as typeof row & { id: string };
+            if (columnWrites.length > 0 || databaseMerges.length === 0) {
+              const row = await fastify.prisma.userPreferences.upsert({
+                where: { userId },
+                create: { userId, ...columns },
+                update: { ...columns },
+                select,
+              });
+              if (databaseMerges.length === 0) return row as typeof row & { id: string };
+            }
+            return mergeCategoriesAtomically(fastify.prisma, userId, databaseMerges, select);
           },
           onDuplicate: async () => {
             const row = await fastify.prisma.userPreferences.findUnique({

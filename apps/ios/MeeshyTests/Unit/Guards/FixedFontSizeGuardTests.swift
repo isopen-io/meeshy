@@ -137,12 +137,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Components/LocationPickerView.swift",
         "Features/Main/Components/MemberManagementSection.swift",
         "Features/Main/Components/MessageEffectModifiers.swift",
-        "Features/Main/Components/MessageOverlayPreviewAudioPlayer.swift",
-        // RELOCALISATION pure (#9043) : le lecteur vidéo de l'aperçu d'appui
-        // long (son glyphe « play » dans un disque fixe de 52 pt) a quitté
-        // `MessageOverlayMenu.swift` pour son propre fichier. La POPULATION ne
-        // bouge pas — seul le NOM change ; l'hôte d'origine en garde d'autres.
-        "Features/Main/Components/MessageOverlayPreviewVideoPlayer.swift",
         "Features/Main/Components/NearbyDiscoverabilityControl.swift",
         "Features/Main/Components/StatusBubbleOverlay.swift",
         "Features/Main/Views/Bubble/BubbleFailedRetryBar.swift",
@@ -698,9 +692,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         EmojiSite(file: "Features/Profile/Views/ParticipantProfileSheet.swift",
                   head: #"Image(systemName: "theatermasks.fill")"#,
                   marker: "MeeshyFont.relative(MeeshyIconSize.xxl"),
-        EmojiSite(file: "Features/Profile/Views/UserStatsView.swift",
-                  head: #"Image(systemName: "exclamationmark.circle.fill")"#,
-                  marker: "MeeshyFont.relative(MeeshyIconSize.md"),
         EmojiSite(file: "Features/Stories/Views/MyStoryActionBar.swift",
                   head: "Image(systemName: glyph.systemImage)",
                   marker: ".meeshyScaledFont(MeeshyIconSize.sm")

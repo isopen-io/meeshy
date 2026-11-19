@@ -348,47 +348,6 @@ export interface BrowserTranscription {
 }
 
 /**
- * Requête d'enregistrement de profil vocal
- * Utilisé dans POST /voice/profile/register
- */
-export interface VoiceProfileRegisterRequest {
-  audioData: string; // Base64 encoded
-  audioFormat: 'wav' | 'mp3' | 'ogg' | 'webm' | 'm4a';
-  /**
-   * Demande une transcription côté serveur (Whisper)
-   * Ignoré si browserTranscription est fournie
-   */
-  includeTranscription?: boolean;
-  /**
-   * Transcription déjà effectuée côté navigateur
-   * Si fournie, le serveur l'utilise au lieu de re-transcrire
-   */
-  browserTranscription?: BrowserTranscription;
-  /**
-   * Paramètres de clonage vocal personnalisés
-   * Si non spécifiés, les valeurs par défaut seront utilisées
-   * Ces paramètres sont sauvegardés dans UserFeature pour les futurs clonages
-   */
-  voiceCloningSettings?: Partial<VoiceCloningUserSettings>;
-  /**
-   * Générer des previews vocaux dans différentes langues
-   * Les previews sont retournés dans la réponse et doivent être sauvegardés
-   * localement côté client (IndexedDB)
-   */
-  generateVoicePreviews?: boolean;
-  /**
-   * Langues cibles pour les previews (ex: ['en', 'fr', 'es'])
-   * Par défaut: ['en', 'es', 'fr'] si non spécifié et generateVoicePreviews=true
-   */
-  previewLanguages?: string[];
-  /**
-   * Texte source pour les previews (optionnel)
-   * Par défaut: utilise la transcription de l'audio enregistré
-   */
-  previewText?: string;
-}
-
-/**
  * Transcription incluse dans la réponse de registration
  */
 export interface VoiceProfileTranscription {
@@ -534,8 +493,10 @@ export interface VoiceTranslationOriginalAudio {
 export interface VoiceTranslationOutput {
   targetLanguage: string;
   translatedText: string;
-  audioBase64?: string;
-  audioUrl?: string;
+  /** null quand aucune piste n'a été synthétisée (#19648) */
+  audioBase64?: string | null;
+  /** null quand aucune piste n'a été synthétisée (TTS en échec, #16340, #19648) */
+  audioUrl?: string | null;
   durationMs: number;
   voiceCloned: boolean;
   voiceQuality: number;
@@ -544,7 +505,7 @@ export interface VoiceTranslationOutput {
 }
 
 export interface VoiceTranslationProfile {
-  profileId: string;
+  profileId: string | null;
   quality: number;
   isNew: boolean;
 }
@@ -553,7 +514,8 @@ export interface VoiceTranslationResult {
   translationId: string;
   originalAudio: VoiceTranslationOriginalAudio;
   translations: VoiceTranslationOutput[];
-  voiceProfile?: VoiceTranslationProfile;
+  /** null quand la voix n'a pas été clonée (#19648) */
+  voiceProfile?: VoiceTranslationProfile | null;
   processingTimeMs: number;
 }
 
@@ -668,8 +630,6 @@ export interface VoiceJobProgressEvent {
   timestamp: number;
 }
 
-export type VoiceAPIEvent = VoiceAPISuccessEvent | VoiceAPIErrorEvent | VoiceJobProgressEvent;
-
 // ═══════════════════════════════════════════════════════════════════════════
 // ERROR CODES
 // ═══════════════════════════════════════════════════════════════════════════
@@ -722,20 +682,6 @@ export interface TranscriptionResult {
   messageId?: string;
   attachmentId?: string;
   processingTimeMs: number;
-}
-
-/**
- * Résultat de traduction audio (une langue cible)
- */
-export interface TranslatedAudioResult {
-  targetLanguage: string;
-  translatedText: string;
-  audioUrl?: string;
-  audioPath?: string;
-  audioBase64?: string;
-  durationMs?: number;
-  voiceCloned: boolean;
-  voiceQuality?: number;
 }
 
 /**
@@ -883,35 +829,6 @@ export interface VoiceCloneParams {
 }
 
 /**
- * Paramètres optimaux calculés par l'analyse vocale
- */
-export interface VoiceCloneOptimalParams extends Required<Omit<VoiceCloneParams, 'autoOptimize'>> {
-  /** Score de confiance de l'analyse (0.0-1.0) */
-  confidence: number;
-
-  /** Détails de l'analyse vocale */
-  analysis: {
-    /** Score d'expressivité de la voix (0.0-1.0) */
-    expressivenessScore: number;
-    /** Score de stabilité de la voix (0.0-1.0) */
-    stabilityScore: number;
-    /** Coefficient de variation du pitch */
-    pitchCv: number;
-    /** Ratio harmoniques/bruit */
-    harmonicsToNoise: number;
-    /** Largeur de bande spectrale (Hz) */
-    spectralBandwidth: number;
-    /** Type de voix classifié */
-    voiceType: string;
-    /** Genre estimé */
-    gender: string;
-  };
-
-  /** Explication textuelle des paramètres choisis */
-  explanation: string;
-}
-
-/**
  * Résultat générique d'un service
  */
 export interface ServiceResult<T> {
@@ -1002,14 +919,6 @@ export interface VoiceStatsQuery {
 // UTILITY TYPES
 // ═══════════════════════════════════════════════════════════════════════════
 
-export interface VoiceAPIListResponse<T> {
-  items: T[];
-  total: number;
-  limit: number;
-  offset: number;
-  hasMore: boolean;
-}
-
 export interface VoiceAPISuccessResponse<T = unknown> {
   success: true;
   data: T;
@@ -1023,8 +932,6 @@ export interface VoiceAPIErrorResponse {
   timestamp: string;
   details?: Record<string, unknown>;
 }
-
-export type VoiceAPIResponse<T = unknown> = VoiceAPISuccessResponse<T> | VoiceAPIErrorResponse;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // VOICE CLONING USER SETTINGS (Persistent configuration)
@@ -1098,73 +1005,3 @@ export const DEFAULT_VOICE_CLONING_SETTINGS: VoiceCloningUserSettings = {
   voiceCloningTopP: 0.9,
   voiceCloningQualityPreset: 'balanced',
 };
-
-/**
- * Paramètres de clonage pour une requête spécifique
- * Utilisé dans les requêtes ZMQ vers le Translator
- * Merge des settings utilisateur + overrides par requête
- */
-export interface VoiceCloningRequestParams {
-  /** Exagération des caractéristiques vocales */
-  exaggeration: number;
-  /** Poids CFG pour la génération */
-  cfgWeight: number;
-  /** Température de génération */
-  temperature: number;
-  /** Top-P / Nucleus sampling */
-  topP: number;
-  /** Preset de qualité utilisé */
-  qualityPreset: VoiceCloningQualityPreset;
-}
-
-/**
- * Configuration de clonage envoyée dans les requêtes ZMQ
- * Structure attendue par le service Translator Python
- */
-export interface ZmqCloningParams {
-  exaggeration: number;
-  cfgWeight: number;
-  temperature: number;
-  topP: number;
-  qualityPreset: string;
-}
-
-/**
- * Requête de configuration utilisateur pour les features audio
- * Utilisé dans PUT /user-features/configuration
- */
-export interface UserAudioConfigurationRequest {
-  // Paramètres de transcription
-  transcriptionSource?: 'auto' | 'mobile' | 'server';
-  translatedAudioFormat?: 'mp3' | 'wav' | 'ogg';
-
-  // Paramètres de rétention de données
-  dataRetentionDays?: number;
-  voiceDataRetentionDays?: number;
-
-  // Paramètres de clonage vocal (optionnels)
-  voiceCloningExaggeration?: number;
-  voiceCloningCfgWeight?: number;
-  voiceCloningTemperature?: number;
-  voiceCloningTopP?: number;
-  voiceCloningQualityPreset?: VoiceCloningQualityPreset;
-}
-
-/**
- * Réponse de configuration utilisateur pour les features audio
- * Retourné par GET /user-features/configuration
- */
-export interface UserAudioConfigurationResponse {
-  targetLanguage: string;
-  transcriptionSource: 'auto' | 'mobile' | 'server';
-  translatedAudioFormat: 'mp3' | 'wav' | 'ogg';
-  dataRetentionDays: number;
-  voiceDataRetentionDays: number;
-
-  // Paramètres de clonage vocal
-  voiceCloningExaggeration: number;
-  voiceCloningCfgWeight: number;
-  voiceCloningTemperature: number;
-  voiceCloningTopP: number;
-  voiceCloningQualityPreset: VoiceCloningQualityPreset;
-}

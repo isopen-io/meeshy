@@ -1281,3 +1281,228 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   été annulé par le porteur au bout d'une minute (« canceled by @jcnm »), `ci.yml` en cours. `dev` est verrouillée : la
   routine ne relance rien et ne fusionne pas ; la PR attend le porteur. `:core:model` et les gardes shared sont prouvés en
   local ; `sdk-core` et `:core:network` ne le seront que par `android.yml`.
+
+## 2026-11-17 — réveil de 16 h : les onglets d'un même compte sérialisent leur partage de position (#18431)
+
+- Reprise : la PR #18762 (moitié Android de #18578) a été fusionnée le 2026-11-16 ; aucune PR cercles ouverte, `dev`
+  déverrouillée. Aucune branche vivante n'écrit `apps/web/src/lib/shared-locations/` : lot réservé avant toute écriture
+  (`claude/cercles-18431-onglets`).
+- Lot : #18431, web seul. Chaque opération du centre de partage passe par un verrou Web Locks par compte
+  (`navigator.locks`, exclusif, `sharedLocationAcrossTabs`), avec repli sur le verrou de l'onglet sans Web Locks. Un
+  « Arrêter » attend l'accusé d'un démarrage d'un autre onglet, puis relit la liste avant de retirer la personne. Le
+  relevé de « Partager » (qui peut ouvrir la demande de permission du navigateur) se prend HORS du verrou du compte : une
+  demande laissée ouverte ne retient pas les « Arrêter » des autres onglets.
+- Audit adversarial avant PR : non bloquant. Corrigé dans le lot : un `not-sharing` reçu en retard sur une mise à jour
+  vidait la liste qu'un autre onglet venait de démarrer (défaut déjà sur `dev`) ; il ne vide plus que si la liste relue
+  sous le verrou du compte est celle d'avant l'envoi. Consignés sans correctif : un onglet dont l'écriture a échoué
+  (quota) ne relit rien sous le verrou (déjà sur `dev`) ; comportement de Web Locks dans un onglet gelé et dans la
+  WebView Capacitor non vérifié.
+- Gates locaux : `bun test src/lib/shared-locations/` 125 verts (témoins rouges d'abord) ; fichiers de test qui citent le
+  partage 222 verts ; `tsc --noEmit` web vert.
+- Prochain lot recommandé : #18714 (liste périmée, deux appareils qui publient, permission iOS), puis #18580 ; #18351
+  attend la décision du porteur.
+
+## 2026-11-17 — réveil de 17 h : un retrait republie la liste sans position (#19284 ⊂ #18580, passerelle + web)
+
+- Reprise : la PR #19264 (#18431) a été fusionnée par le porteur ; aucune PR cercles ouverte. Aucune branche vivante
+  n'écrit `services/sharedLocation/` ni `apps/web/src/lib/shared-locations/` : lot réservé avant toute écriture
+  (`claude/cercles-19284-liste-seule`).
+- Lot : #19284, la première tranche de #18580 (et du point 3 de #18714). `location:share-start` accepte une charge SANS
+  position (« liste seule ») : la passerelle reprend le point qu'elle garde, scellé, avec son heure et la maille de
+  chacun. Une liste seule ne fait que RETIRER : qui n'est plus servi est ignoré, la précision ne monte pas, le terme et
+  les échéances ne reculent pas, une liste vide vaut un arrêt ; après la prise du pointeur, elle se rejoue sur la session
+  remplacée relue (un retrait ou une position d'un autre appareil écrits pendant l'envoi ne sont ni défaits ni reculés).
+  Web : un retrait ou une échéance envoie la liste seule, sans relevé ; une passerelle d'avant (`INVALID`) fait repartir
+  l'envoi avec position ; « pas de partage » relit la passerelle avant de vider la liste.
+- Audit adversarial avant PR : BLOQUANT au premier passage (un `INVALID` « ajoute quelqu'un » renvoyait le web vers
+  l'envoi avec position, et la vérification n'était pas atomique avec la prise du pointeur). Corrigé dans le lot, avec
+  les points non bloquants (terme prolongé, précision relevée, « pas de partage » vidé à l'aveugle). Restent ouverts en
+  #19288 : une projection inchangée resservie, et une fenêtre étroite où une position peut reculer d'un pas.
+- Gates locaux : passerelle `sharedLocation/` + porte socket 122 verts (témoins rouges prouvés par mutation), `tsc` vert ;
+  web `src/lib/shared-locations/` 140 verts + suites qui citent le partage 117 verts, `tsc` vert ; gardes
+  `packages/shared/__tests__/ci` 215 verts sur l'arbre fusionné avec `dev`.
+- Ce qui reste : iOS et Android (#19287), #18714 (points 1 et 2), #19288, #18351 (décision du porteur).
+- Prochain lot recommandé : #19287 (iOS puis Android, prouvés par leur CI).
+
+## 2026-11-17 — réveil de 23 h : mener la PR #19289 (liste seule) à la fusion
+
+- Reprise : deux PR cercles ouvertes. #19354 (icône de cercle, #17013) avait un commit poussé quatre minutes plus tôt
+  par une autre session : je lui cède. #19289 n'avait plus bougé depuis 21 h 23 et sa CI attendait des runners.
+- `origin/dev` (95ffb1dcc) fusionné à la main sans conflit (seuls le traducteur et un état d'agent d'appel bougeaient).
+  Gates rejoués sur l'arbre fusionné : passerelle `sharedLocation/` + porte socket 122 verts ; web
+  `src/lib/shared-locations/` 140 verts.
+- Prochain lot recommandé : #19287 (iOS puis Android de la liste seule), puis #18714 points 1 et 2, puis #19288.
+
+## 2026-11-18 — réveil de 1 h : #19289 recalée sur dev, la liste seule garde le fantôme et la batterie
+
+- Reprise : deux PR cercles ouvertes, aucune n'avait bougé depuis 23 h 15. #19289 était en conflit avec `dev`
+  (`sharedLocationRelay.ts`, `shared-location.ts`) : `dev` venait d'apporter le fantôme global (#19203, `servableFrom`),
+  la batterie pendant le partage et « prévenir » (#19204, `shareBattery`, `notifyRecipients`).
+- Résolution à la main, les deux côtés gardés. Le contrat garde la position facultative ET les deux clés de #19204. La
+  liste seule reprend désormais de la session remplacée son seuil de sortie du fantôme (sans lui, une liste seule faite
+  après la sortie aurait servi le point pris EN fantôme : fuite trouvée à la fusion, témoin rouge prouvé) et sa
+  batterie, qu'elle peut retirer (`shareBattery: false`) mais jamais ajouter ; « prévenir » ne part pas sur une liste
+  seule (elle n'ajoute personne) ; la batterie est rejouée à partir de la session remplacée relue.
+- Gates sur l'arbre fusionné : passerelle `sharedLocation/` 187 verts (3 témoins neufs, 2 rouges sans le correctif),
+  porte socket + relations + fantôme + blocage 195 verts, `tsc` vert ; web `src/lib/shared-locations/` 140 verts,
+  `tsc` vert ; shared `types` 1 795 verts, gardes `__tests__/ci` 215 verts.
+- Audit adversarial de la résolution : non bloquant, un défaut moyen corrigé dans le lot. Une liste seule d'un autre
+  appareil prise ENTRE la lecture et la retenue de la sortie du fantôme recopiait une session sans seuil, et le point
+  pris en fantôme repartait (même course déjà sur `dev` avec une position). La sortie retient désormais le partage
+  COURANT, relu jusqu'à cinq fois, et lève sinon (fail-closed) ; témoin rouge prouvé. L'état provisoire d'une liste
+  seule, rangé avant la prise, ne sert rien (seuil posé, pas de batterie) tant qu'il n'est pas réécrit. Reste, déjà sur
+  `dev` : avec une position, la session remplacée est lue avant la prise (« prévenir » peut partir deux fois).
+## 2026-11-17 — réveil de 19 h : le marqueur de position dit de quel cercle vient la personne (#17013)
+
+- Reprise : la PR #19289 (liste seule, #19284) est ouverte et conflictuelle, mais le réveil précédent la menait encore
+  (commentaire sur la PR trois minutes avant ce réveil) : ce réveil ne l'a pas touchée (« celui qui n'a rien écrit
+  cède »). Aucune branche vivante n'écrit les cartes de positions : lot réservé avant toute écriture
+  (`claude/cercles-17013-icone-cercle`).
+- Lot : #17013, demande de Jacques du 2026-11-07 (« une icône de position distincte par cercle d'amis sur la carte »).
+  La passerelle servait déjà `circle` (#17966) ; aucun client ne le dessinait.
+  - Web : le décodeur garde `circle` s'il est connu ; l'épingle prend la teinte et l'icône du cercle (🤝, 🔥, 🩸), le
+    libellé lu et la liste disent « Nom · Proche · … ». La couleur d'un niveau vit une fois (`relationLevelTint`,
+    `lib/relations/level-labels.ts`) : la fiche d'un lien et « Mes cercles » ne la recopient plus.
+  - iOS : `SharedLocationChanged.circle` (FRIEND, CLOSE, BLOOD seulement) porté par `SharedLocationEntry` ; le marqueur
+    MapKit prend l'icône du cercle à la place des initiales et la couleur `CircleLevelColor` ; VoiceOver dit le cercle.
+  - Android : le modèle portait déjà le cercle ; `SharedLocationCircle.level` le relie au niveau du lien, l'épingle en
+    tire icône, teinte et nom (TalkBack).
+  - Sans cercle servi (passerelle antérieure), les trois marqueurs restent neutres : aucun client ne devine le cercle.
+- Gates locaux : web `bun test` (cartes, cercles, partage) 7 904 verts, `tsc --noEmit` vert ; gardes iOS texte vertes
+  (règles maison 42, cohésion, localisation, couleurs) ; `vitest packages/shared/__tests__/ci` 25 fichiers, 215 verts ;
+  `jvm-check *SharedLocation*` (voir la PR). iOS et Android se prouvent par la CI de la PR.
+- Prochain lot recommandé : finir #19289 si le réveil précédent ne l'a pas fusionnée, puis #19287 (iOS et Android
+  envoient la liste seule), #18714, #18580.
+
+## 2026-11-18 — réveil de 1 h : #19354 (icône de cercle) recalée sur dev
+
+- `origin/dev` (d84e74a80) fusionnée sans conflit ; aucun fichier de carte ou de position client ne bougeait côté `dev`.
+  Web `src/lib/shared-locations` + `relations` 180 verts, `tsc` vert sur l'arbre fusionné. iOS et Android par la CI.
+
+## 2026-11-18 — réveils de 3 h à 10 h : #19289 et #19354 fusionnées dans `dev`
+
+- Reprise : deux PR de la routine ouvertes, #19289 (liste seule, #19284) et #19354 (icône de cercle, #17013). Aucun
+  nouveau lot ouvert : le run a consisté à les mener à la fusion.
+- `origin/dev` fusionnée à la main dans les deux branches, sans conflit, à trois reprises (c11ad1d1, 5e5414d9, puis
+  47157ee64 pour #19289) ; gates locaux sur l'arbre fusionné : passerelle `sharedLocation` 188 verts (+ `deliveryFloor`,
+  197) et tsc, web `shared-locations` 140 verts, carte 40 verts, tsc web vert.
+- #19354 cédée à 07:09 UTC : une autre session de la routine y a poussé (`ff317d012`).
+- Fusion : les deux PR ont été fusionnées par le porteur le 2026-11-18 à 07:40 UTC (3031bed16 et 9b1090998). #19289 :
+  CI verte sur sa tête (23 succès, 0 échec). #19354 : les tranches du SDK iOS ont été annulées par la fusion, son verdict
+  iOS SDK est rouge par annulation, pas par un test. Le run iOS de `dev` qui suit (14404376b) rougit sur
+  `ProfilePendingActionsCard.swift` (lot profil, isolation `main actor` de `.module`) : étranger aux cercles.
+- Issues fermées avec leur preuve : #19284, #17013. Restent : #19287 (liste seule iOS + Android), #19288 (deux points
+  mineurs), #18714, #18580 ; #18351 attend la décision du porteur.
+- Prochain lot recommandé : #19287, puis #18714.
+## 2026-11-18 — réveil de 9 h : iOS et Android envoient la liste seule (#19287)
+
+- Reprise : #19289 (liste seule, passerelle + web) et #19354 (icône de cercle) sont fusionnées dans `dev`. Aucune branche
+  vivante n'écrit `SharedLocationSharingCenter` ni le centre Android : lot réservé avant toute écriture
+  (`claude/cercles-19287-liste-seule-natifs`).
+- Livré dans la PR #19652 (vers `dev`) : le SDK iOS et le modèle Android savent écrire une liste seule (aucune
+  `position`, aucun repli legacy) ; les deux centres essaient la liste seule d'abord, retombent sur l'envoi complet
+  sur `INVALID` (passerelle d'avant), et relisent ce qui est servi sur `NOT_SHARING`.
+- Audit adversarial : non bloquant, un constat MOYEN corrigé dans le même lot, SUR LES TROIS CLIENTS (web compris) :
+  `NOT_SHARING` couvre aussi une session reprise par un autre appareil ; une relecture en échec vidait la liste et
+  laissait la personne servie. Elle rend désormais « non confirmé » (retrait en attente, rejoué) ; seul un partage
+  servi VIDE vide la liste.
+- Mineurs consignés, sans lot : tout `INVALID` déclenche le repli avec position ; `untilStopped` dans une liste seule
+  serait refusé par le schéma strict (inatteignable aujourd'hui) ; `listOnlyState` plafonnerait un partage
+  « jusqu'à l'arrêt » à `durationMinutes` (à traiter quand la passerelle le servira) ; iOS envoie `shareBattery`
+  dans la liste seule, Android non (sans effet).
+- Gates : jvm-check `:core:model` BUILD SUCCESSFUL ; web 141/141 et `tsc` exit 0 ; gardes iOS exit 0. Swift et
+  `sdk-core` ne compilent pas dans le conteneur : la CI de la PR fait foi.
+- Lot suivant : voir les issues ouvertes du milestone des cercles (prochaine dimension non mûre de la liste seule :
+  le cas « jusqu'à l'arrêt » côté passerelle).
+
+## 2026-11-18 — réveil de 11 h : un seul appareil publie la position (#18580, #18714)
+
+- Reprise : #19652 (liste seule iOS + Android) fusionnée, aucune PR de la routine ouverte, aucune branche vivante sur
+  les centres de partage : lot réservé avant toute écriture (`claude/cercles-18580-un-seul-publie`).
+- Ce qui restait de #18580 et #18714 après la liste seule (#19284, #19287) : un appareil qui PUBLIAIT et relisait une
+  liste changée par un autre appareil l'adoptait sans céder ; les deux envoyaient leur position et la personne voyait
+  le point sauter. Et iOS, au repli vers une passerelle d'avant la liste seule, pouvait faire surgir la demande de
+  permission pour un simple retrait.
+- Première version (comparer la liste servie à la sienne : personne de plus, précision, échéance à 5 min près) jugée
+  BLOQUANTE par l'audit adversarial : l'échéance servie vient de l'horloge de la passerelle, la locale de l'appareil ;
+  un appareil en retard de plus de 5 min se taisait sur son propre partage, un accusé perdu ou une liste seule qui
+  abaisse la précision aussi — et plus personne ne publiait. Leçon : on ne compare jamais deux horloges pour décider
+  qui publie, on fait nommer l'événement par celui qui l'a vu.
+- Livré : la passerelle nomme le dernier démarrage AVEC position (`startedAt`, déjà dans l'état scellé, gardé par la
+  liste seule) dans l'accusé de `location:share-start` et dans `GET /relations/locations/mine` (clés additives).
+  Chaque client garde le `startedAt` de son accusé ; à la relecture, un autre démarrage servi le fait céder (marque
+  « reçue », suivi coupé, aucun relevé). Inconnu (relancement, accusé perdu) : le servi est pris pour le sien ; absent
+  (passerelle d'avant) : rien ne change. iOS : `silentFix()` au repli, jamais de demande de permission.
+- Reste ouvert (suivi) : un appareil relancé PENDANT qu'un autre a repris la publication prend le démarrage servi pour
+  le sien, et publie avec lui jusqu'au prochain « Partager » (persister `startedAt` avec la marque « reçue »).
+- Contre-audit n°2 (sur `startedAt`) : quatre constats, tous corrigés. Web : `publishedStart` vit dans le stockage
+  partagé des onglets (un navigateur est UN appareil ; deux onglets ne se font plus céder l'un l'autre). Un refus
+  d'un démarrage avec position remet l'identité à inconnu sur les trois clients (iOS `forgetPublishedStart`, Android
+  aussi au changement de compte, `resetSession`). Témoin de route : `startedAt` traverse le sérialiseur de
+  `GET /relations/locations/mine`.
+- Gates : passerelle `sharedLocation` + `relations` + `socketio` 1 380 verts puis `relations` + `sharedLocation` 388
+  verts après l'audit, `tsc` vert ; web `shared-locations` + `api` 176 verts, `tsc` vert ; jvm-check `:core:model` `*SharedLocation*` 61 verts ; gardes iOS (règles maison 42,
+  cohésion, inscription des tests) vertes ; `packages/shared/__tests__/ci` 214/215, le rouge
+  (`call:conversation-changed`, parité socket) vient du lot appels de `dev`, étranger aux cercles. Swift et `sdk-core`
+  se prouvent par la CI de la PR.
+
+## 2026-11-18 — réveil de 17 h : #19683 (un seul appareil publie) menée vers la fusion
+
+- Reprise : #19683 toujours ouverte ; le porteur y avait fusionné `dev` à 16:29 UTC (4832809f7). Aucun nouveau lot ouvert.
+- `origin/dev` (2fcb40b94 : profil iOS, leçon jvm-check) fusionnée sans conflit, aucun fichier du lot touché ; la
+  branche contient de nouveau la tête de `dev`. Fusion de la PR dès la CI verte sur sa tête.
+
+## 2026-11-18 — réveil de 19 h : #19683 (un seul appareil publie) recalée sur dev
+
+- Reprise : #19683 toujours ouverte, tête 0754c4ece intacte depuis le réveil de 17 h ; sa CI attendait encore les
+  runners (passerelle, web, shared, SDK iOS en file). Aucun nouveau lot ouvert.
+- `origin/dev` (ffb60040e) fusionnée à la main, sans conflit : aucun fichier du lot ne bougeait côté `dev`.
+- Gates sur l'arbre fusionné : passerelle `sharedLocation` 18 suites, 217 verts, `tsc` vert ; web
+  `src/lib/shared-locations` 152 verts + `api/shared-locations` 24 verts, `tsc` vert. iOS et Android par la CI.
+- Prochain lot recommandé : fusion de #19683, puis #19681 (startedAt persisté au relancement natif), plafond
+  `untilStopped` de `listOnlyState`, #18351 une fois décidé.
+
+## 2026-11-18 — réveil de 23 h : un appareil relancé après une reprise ne republie plus (#19681)
+
+- Reprise : #19683 fusionnée dans `dev` le 2026-11-18 à 20:12 UTC (f1e316f0f0), #18580 et #18714 fermées à la main.
+  #19682 (début arrondi) attend toujours la décision du porteur (commentaire du 2026-11-18 à 21:23 UTC) : sa branche
+  reste sans PR.
+- Lot : #19681. iOS et Android gardent le démarrage accepté par CET appareil (`publishedStart`) dans le même stockage
+  que la marque « reçue », sous la clé du compte : relancé après qu'un autre appareil a repris le partage, le client ne
+  prend plus le démarrage de l'autre pour le sien et cède au lieu de republier. Effacé à l'arrêt, à la cession et
+  quand la passerelle ne sert plus personne. Le web l'avait déjà (localStorage). Un horodatage de démarrage, aucune
+  position : rien à sceller.
+- Témoins : relancement après cession ⇒ aucun relevé ne part et la marque « reçue » est posée ; relancement sans
+  cession ⇒ la publication continue ; partage arrêté ailleurs ⇒ le démarrage gardé s'efface (iOS
+  `SharedLocationSharingSyncTests`, Android `SharedLocationSharingSyncTest`). Swift et Kotlin se prouvent par la CI.
+
+## 2026-11-19 — réveil de 1 h : #19768 (relancement natif) recalée sur dev
+
+- Reprise : #19768 toujours ouverte, tête 798b61316 intacte ; la CI des PR reste gelée (35 vérifications « skipped »
+  sur sa tête), le porteur fusionne les PR dans `dev` une à une. Aucun nouveau lot ouvert. #19682 attend toujours la
+  décision du porteur.
+- `origin/dev` (e4282f1e6) fusionnée à la main, sans conflit. `dev` a touché les écrans iOS de la carte (haptiques,
+  présence des observateurs), jamais `SharedLocationSharingCenter` ni le centre Android.
+- Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests rc=0. Swift et
+  `sdk-core` ne compilent pas en conteneur : `ios.yml` et `android.yml` feront foi au dégel.
+
+## 2026-11-19 — réveil de 5 h : #19768 (relance après reprise) recalée sur dev
+
+- Reprise : #19768 toujours ouverte, tête a263f99ad intacte ; la CI des PR reste gelée (35 vérifications « skipped »).
+  #19682 attend toujours la décision du porteur (aucune réponse depuis le 2026-11-18). Aucun nouveau lot ouvert.
+- `origin/dev` (96f5519cc : appels, profil iOS, pastilles des avatars) fusionnée à la main, sans conflit : `dev` n'a
+  touché ni `SharedLocationSharingCenter` iOS ni le centre Android (seules les feuilles de carte iOS bougent, hors lot).
+- Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests (2 046) rc=0,
+  couleurs d'accent rc=0. Swift et `sdk-core` Android se prouvent par la CI de la PR, au dégel.
+- Prochain lot recommandé : fusion de #19768 au dégel, puis #19767, plafond `untilStopped` de `listOnlyState`,
+  #19682 une fois décidée.
+
+## 2026-11-19 — réveil de 9 h : #19768 recalée sur dev (a6b7eada5)
+
+- Reprise : #19768 toujours ouverte, tête 072cc35df intacte ; la CI des PR reste gelée (35 vérifications « skipped »).
+  #19682 toujours sans décision du porteur. Aucun nouveau lot ouvert.
+- `origin/dev` (a6b7eada5 : tests SDK iOS, appels, profil) fusionnée à la main, sans conflit et sans fichier commun
+  avec le lot.
+- Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests (2 046) rc=0,
+  couleurs d'accent rc=0.
+- Prochain lot recommandé : inchangé (fusion de #19768 au dégel, puis #19767, plafond `untilStopped`, #19682 décidée).

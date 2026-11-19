@@ -10,7 +10,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { translateCircles } from '@/lib/i18n-circles-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { progressSummary, raiseOffer, requestedLevelOf, type CircleLevel } from '@/lib/relations/circles';
-import { relationLevelIcon } from '@/lib/relations/level-labels';
+import { relationLevelIcon, relationLevelTint } from '@/lib/relations/level-labels';
 import { useExitMotion } from '@/lib/view/exit-presence';
 import { levelTitle, progressText } from '@/lib/relations/progress-text';
 import { CircleReceptionBlockSwitch, receptionBlocksFor } from '@/routes/circle-reception-block';
@@ -41,14 +41,6 @@ const EDGE = '1px solid color-mix(in srgb, var(--color-ios-ink-3) 18%, transpare
 const FIELD_FILL = 'color-mix(in srgb, var(--color-ios-ink-3) 14%, transparent)';
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
 
-/** La couleur d'un niveau, tirée des jetons (iso `CircleLevelColor`) — jamais une teinte écrite. */
-const LEVEL_TINT: Readonly<Record<CircleLevel, string>> = {
-  BLOOD: 'var(--color-error)',
-  CLOSE: 'var(--color-warning)',
-  FRIEND: 'var(--color-success)',
-  ACQUAINTANCE: 'var(--ios-info)',
-};
-
 export const circlePersonName = (language: InterfaceLanguage, person: PersonSummary | null): string =>
   personNameOf(person, translate(language, 'discover.unknown'));
 
@@ -57,7 +49,7 @@ export function CircleSectionHeader({ language, level, count }: { readonly langu
   const title = levelTitle(language, level);
   return (
     <h2 data-circle-section={level} aria-label={`${title}, ${count}`} className="flex items-center gap-2 px-5 pt-5 pb-1.5 text-body font-bold" style={{ color: INK }}>
-      <span aria-hidden="true" className="size-2 shrink-0 rounded-full" style={{ backgroundColor: LEVEL_TINT[level] }} />
+      <span aria-hidden="true" className="size-2 shrink-0 rounded-full" style={{ backgroundColor: relationLevelTint(level) }} />
       <span aria-hidden="true">{relationLevelIcon(level)}</span>
       <span aria-hidden="true">{title}</span>
       <span aria-hidden="true" className="text-caption font-semibold tabular-nums" style={{ color: INK_2 }}>

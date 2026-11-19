@@ -12,6 +12,10 @@ import { logger } from '../utils/logger';
  * sockets de la room de l'appel (l'émetteur l'affiche déjà chez lui), jamais à
  * la conversation. Le compte par emoji est écrit APRÈS le relais : une base
  * lente ou indisponible ne retarde ni n'empêche la réaction d'être vue.
+ *
+ * #19650 (D4) — la réaction se pose AUSSI sur la bulle de l'appel dans sa
+ * conversation (`callReactionOnBubble.ts`), après le relais et le compte,
+ * sans jamais retenir l'accusé.
  */
 
 export type CallReactionEventDeps = {
@@ -21,6 +25,7 @@ export type CallReactionEventDeps = {
     callId: string
   ) => Promise<{ readonly participantId: string; readonly userId: string } | null>;
   readonly recordReaction: (callId: string, emoji: CallReactionEmoji) => Promise<void>;
+  readonly reflectOnBubble?: (callId: string, userId: string, emoji: CallReactionEmoji) => Promise<unknown>;
   readonly now?: () => Date;
 };
 
@@ -50,6 +55,9 @@ export function registerCallReactionEvents(
         });
         await deps.recordReaction(callId, emoji).catch((error: unknown) =>
           logger.warn('call-reaction: count not recorded', { callId, error })
+        );
+        void deps.reflectOnBubble?.(callId, sender.userId, emoji).catch((error: unknown) =>
+          logger.warn('call-reaction: not reflected on the call bubble', { callId, error })
         );
         return ACCEPTED;
       },

@@ -394,12 +394,7 @@ class ChatViewModel @Inject constructor(
             }
         }
 
-
-        viewModelScope.launch {
-            conversationRepository.conversationsStream().collect { result ->
-                forward.onConversationsLoaded(result.windowOrNull())
-            }
-        }
+        forward.followConversationsWhileOpen { conversationRepository.conversationsStream() }
 
         viewModelScope.launch {
             combine(
@@ -676,6 +671,7 @@ class ChatViewModel @Inject constructor(
 
     /** Le lieu choisi, en attente du prochain envoi (son propre flux : l'état de l'écran est gelé). */
     val pendingPlace: StateFlow<me.meeshy.sdk.model.SharedPlace?> get() = composer.pendingPlace
+    val endToEndSendRefusals: StateFlow<Int> get() = composer.endToEndSendRefusals
 
     fun setPendingPlace(place: me.meeshy.sdk.model.SharedPlace) = composer.setPendingPlace(place)
 

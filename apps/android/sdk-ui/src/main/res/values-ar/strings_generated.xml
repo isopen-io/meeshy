@@ -107,7 +107,6 @@
     <string name="bubble_a11y_location">موقع تمت مشاركته</string>
     <string name="bubble_a11y_reactions">التفاعلات: %1$s</string>
     <string name="bubble_a11y_reply_to">الرد على %1$s</string>
-    <string name="bubble_attachment_file_fallback">ملف</string>
     <string name="bubble_audio_stack_position">الرسالة الصوتية %1$d من %2$d</string>
     <string name="bubble_blur_view_once">عرض مرة واحدة</string>
     <string name="bubble_contact_card_a11y_on_meeshy">على Meeshy: %1$s</string>
@@ -293,7 +292,6 @@
     <string name="kit_progress_ring_busy">قيد التنفيذ</string>
     <string name="language_strip_more">لغات أخرى</string>
     <string name="lentille_mode_menu_selected">محدد</string>
-    <string name="live_location_duration_title">مدة المشاركة</string>
     <string name="live_location_sharing_by">يشارك %1$s موقعه</string>
     <string name="live_location_stop">إيقاف</string>
     <string name="location_fullscreen_directions">المسار</string>
@@ -364,7 +362,6 @@
     <string name="media_summary_voice">🎙️ رسالة صوتية</string>
     <string name="media_trim_loading">جارٍ تحميل المعاينة</string>
     <string name="media_trim_of_total">من %1$s</string>
-    <string name="media_trim_window">الجزء المحتفظ به</string>
     <string name="media_video_pip_enter">صورة داخل صورة</string>
     <string name="media_video_unavailable_retry">الفيديو غير متاح. أعد المحاولة.</string>
     <string name="media_voice_message">رسالة صوتية</string>
@@ -436,6 +433,7 @@
     <string name="reading_mode_summary_title">الملخص</string>
     <string name="retouch_crop_original">الأصلي</string>
     <string name="retouch_effect_angel">ملاك</string>
+    <string name="retouch_effect_baby">طفل</string>
     <string name="retouch_effect_demon">شيطان</string>
     <string name="retouch_effect_none">بلا</string>
     <string name="retouch_effect_smoothing">تنعيم البشرة</string>
@@ -450,7 +448,6 @@
     <string name="retouch_filter_golden">ذهبي</string>
     <string name="retouch_filter_monochrome">أبيض وأسود</string>
     <string name="retouch_filter_muted">ناعم</string>
-    <string name="retouch_filter_natural">طبيعي</string>
     <string name="retouch_filter_sky">سماء</string>
     <string name="retouch_filter_softNight">ليل هادئ</string>
     <string name="retouch_filter_velvet">مخملي</string>
@@ -502,7 +499,6 @@
     <string name="retouch_tool_text">نص</string>
     <string name="retouch_tool_trim">قص</string>
     <string name="skeleton_feed_post_loading">جارٍ تحميل منشور</string>
-    <string name="skeleton_link_row_loading">جارٍ تحميل رابط</string>
     <string name="skeleton_profile_loading">جارٍ تحميل الملف الشخصي</string>
     <string name="skeleton_stories_loading">جارٍ تحميل القصص</string>
     <string name="slide_rail_delete_cancel">إلغاء</string>
@@ -557,7 +553,6 @@
     <string name="talkie_header_badge_live">مباشر</string>
     <string name="talkie_header_badge_recorded">مسجّل</string>
     <string name="talkie_header_badge_relayed">غير متصل</string>
-    <string name="talkie_header_live">الاتصال اللاسلكي جارٍ</string>
     <string name="talkie_send_connecting">جارٍ الاتصال…</string>
     <string name="talkie_send_failed">تعذّر إرسال جهاز اللاسلكي.</string>
     <string name="talkie_send_hold">اضغط مطولًا للتحدث</string>
@@ -569,7 +564,6 @@
     <string name="talkie_send_rate_limited">مداخلات كثيرة جدًا: أعد المحاولة بعد لحظة.</string>
     <string name="talkie_send_recording_copy">جارٍ تسجيل رسالة صوتية…</string>
     <string name="talkie_send_talking">أنت تتحدث إلى %1$s…</string>
-    <string name="talkie_send_voice">لا يمكن إيصال جهاز اللاسلكي الآن: أرسل رسالة صوتية بدلًا من ذلك.</string>
     <string name="talkie_send_waking">جارٍ إيقاظ %1$s…</string>
     <string name="time_lastSeen_beforeYesterdayAt">شوهد أول أمس في %1$s</string>
     <string name="time_lastSeen_dateAt">شوهد في %1$s الساعة %2$s</string>

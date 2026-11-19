@@ -117,10 +117,14 @@ object ConversationIndexedNotifications {
  * commentaire ou une mention s'écraseraient mutuellement avec le message
  * courant. Un `notificationId` absent (charge d'un gateway antérieur) retombe
  * sur `0`, comme avant.
+ *
+ * Un message ÉPHÉMÈRE ([of] avec `ephemeral`) a sa propre bannière : son délai (`setTimeoutAfter`) retire la bannière
+ * ENTIÈRE, et sous l'index de la conversation elle emportait avec elle les messages ordinaires non lus qu'elle
+ * regroupait. La révocation serveur l'atteint toujours, car elle annule aussi par `notificationId`.
  */
 object MessageNotificationId {
-    fun of(type: String?, conversationId: String?, notificationId: String?): Int =
-        forConversation(type, conversationId) ?: forNotification(notificationId)
+    fun of(type: String?, conversationId: String?, notificationId: String?, ephemeral: Boolean = false): Int =
+        if (ephemeral) forNotification(notificationId) else forConversation(type, conversationId) ?: forNotification(notificationId)
 
     /** `null` quand ce type n'indexe PAS sa bannière par conversation. */
     fun forConversation(type: String?, conversationId: String?): Int? = conversationId
@@ -129,4 +133,16 @@ object MessageNotificationId {
 
     fun forNotification(notificationId: String?): Int =
         notificationId?.takeIf { it.isNotBlank() }?.hashCode() ?: 0
+}
+
+/**
+ * La conversation d'une bannière de MESSAGE, posée dans ses extras quel que soit son index : un éphémère a le sien
+ * ([MessageNotificationId.of]), et « conversation ouverte ou lue ailleurs » doit l'atteindre aussi — sans quoi sa
+ * bannière restait jusqu'à son délai, jusqu'à 24 h, sur un message déjà lu.
+ */
+object ConversationBannerExtra {
+    const val KEY = "meeshy.conversationId"
+
+    fun of(type: String?, conversationId: String?): String? = conversationId
+        ?.takeIf { it.isNotBlank() && ConversationIndexedNotifications.replacesBannerOfItsConversation(type) }
 }

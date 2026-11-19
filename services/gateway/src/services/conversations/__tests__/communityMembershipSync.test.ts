@@ -11,9 +11,11 @@
  */
 import { describe, it, expect, jest } from '@jest/globals';
 import { applyCommunityAdmission, planCommunityAdmission } from '../communityMembershipSync';
+import { findManyIn } from '../../../__tests__/helpers/mongo-where';
 
 type Ligne = { readonly id: string; readonly userId: string; readonly isActive: boolean };
 
+const UN_PASSE = new Date('2026-10-01T00:00:00Z');
 const COMMUNITY_ID = 'comm-1';
 const MOI = 'moi';
 const CREATEUR = 'createur';
@@ -28,7 +30,16 @@ function prismaDouble(lignes: readonly Ligne[], options: { readonly vivants?: re
       createMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     user: {
-      findMany: jest.fn<any>(async (args: any) => (args.where.id.in as string[]).filter((id) => vivants.has(id)).map((id) => ({ id }))),
+      // Le double ÉVALUE le `where` contre des lignes à la forme NOMINALE de
+      // production — ni `deletedAt` ni `deactivatedAt`, qu'aucune création de
+      // compte n'écrit (#19799). Un double qui filtre sur son propre ensemble
+      // accepte une clause d'égalité nue qui, en base, n'apparie personne.
+      findMany: jest.fn<any>(async (args: any) => {
+        const lignesUser = (args.where.id.in as string[]).map((id) => (
+          vivants.has(id) ? { id, isActive: true } : { id, isActive: true, deactivatedAt: UN_PASSE }
+        ));
+        return findManyIn(lignesUser).findMany(args);
+      }),
       findFirst: jest.fn<any>(async (args: any) => {
         const [moi, eux] = args.where.OR as [{ blockedUserIds: { hasSome: string[] } }, { id: { in: string[] } }];
         const touche = [...moi.blockedUserIds.hasSome, ...eux.id.in].some((id) => bloques.has(id));
@@ -56,7 +67,7 @@ describe('planCommunityAdmission — qui entre dans la communauté', () => {
     const prisma = prismaDouble([MOI_ACTIF]);
     const admission = await plan(prisma, { participantIds: ['u1'] });
     expect(admission.kind).toBe('admitted');
-    await applyCommunityAdmission(prisma as never, COMMUNITY_ID, admission as never);
+    await applyCommunityAdmission(prisma as never, COMMUNITY_ID, admission as never, () => undefined);
     expect(prisma.communityMember.createMany).toHaveBeenCalledWith({
       data: [{ communityId: COMMUNITY_ID, userId: 'u1', role: 'member' }],
     });
@@ -92,7 +103,7 @@ describe('planCommunityAdmission — qui entre dans la communauté', () => {
   it('un membre retiré revient en MEMBER, jamais avec son ancien rang', async () => {
     const prisma = prismaDouble([MOI_ACTIF, { id: 'cm-u1', userId: 'u1', isActive: false }]);
     const admission = await plan(prisma, { actorRole: 'admin', participantIds: ['u1'] });
-    await applyCommunityAdmission(prisma as never, COMMUNITY_ID, admission as never);
+    await applyCommunityAdmission(prisma as never, COMMUNITY_ID, admission as never, () => undefined);
     expect(prisma.communityMember.updateMany).toHaveBeenCalledWith({
       where: { id: { in: ['cm-u1'] }, isActive: false },
       data: { isActive: true, leftAt: null, role: 'member' },
@@ -119,7 +130,7 @@ describe('planCommunityAdmission — qui entre dans la communauté', () => {
   it('le créateur de la communauté sans ligne active y revient ADMINISTRATEUR', async () => {
     const prisma = prismaDouble([{ id: 'cm-moi', userId: MOI, isActive: false }]);
     const admission = await plan(prisma, { createdBy: MOI, actorRole: null, participantIds: [] });
-    await applyCommunityAdmission(prisma as never, COMMUNITY_ID, admission as never);
+    await applyCommunityAdmission(prisma as never, COMMUNITY_ID, admission as never, () => undefined);
     expect(prisma.communityMember.updateMany).toHaveBeenCalledWith({
       where: { id: { in: ['cm-moi'] }, isActive: false },
       data: { isActive: true, leftAt: null, role: 'admin' },
@@ -141,7 +152,7 @@ describe('planCommunityAdmission — qui entre dans la communauté', () => {
   it('n\'ouvre jamais une seconde ligne pour une paire qui en a une', async () => {
     const prisma = prismaDouble([MOI_ACTIF, { id: 'cm-u2', userId: 'u2', isActive: false }]);
     const admission = await plan(prisma, { participantIds: ['u2', 'u3'] });
-    await applyCommunityAdmission(prisma as never, COMMUNITY_ID, admission as never);
+    await applyCommunityAdmission(prisma as never, COMMUNITY_ID, admission as never, () => undefined);
     expect(prisma.communityMember.createMany).toHaveBeenCalledWith({
       data: [{ communityId: COMMUNITY_ID, userId: 'u3', role: 'member' }],
     });

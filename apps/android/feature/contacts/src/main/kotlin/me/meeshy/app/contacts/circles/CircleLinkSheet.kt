@@ -36,6 +36,10 @@ import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.battery.BatteryPersonSection
 import me.meeshy.ui.component.battery.BatteryPersonSurface
+import me.meeshy.ui.component.inactivity.InactivityPersonSection
+import me.meeshy.ui.component.inactivity.InactivityPersonSurface
+import me.meeshy.ui.component.phonecall.PhoneCallPersonSection
+import me.meeshy.ui.component.phonecall.PhoneCallPersonSurface
 import me.meeshy.ui.component.phonereachability.PhoneReachabilityPersonSection
 import me.meeshy.ui.component.phonereachability.PhoneReachabilityPersonSurface
 import me.meeshy.ui.component.rememberPresence
@@ -156,6 +160,18 @@ internal fun CircleLinkSheet(
                 userId = link.userId,
                 name = name,
                 surface = PhoneReachabilityPersonSurface.PERSON_FICHE,
+            )
+            // La vérification d'inactivité (#18738) : son alerte, et « Prévenir X si je ne réponds pas ».
+            InactivityPersonSection(
+                userId = link.userId,
+                name = name,
+                surface = InactivityPersonSurface.PERSON_FICHE,
+            )
+            // En appel (#18753) : son état, et « Montrer à X que je suis en appel ».
+            PhoneCallPersonSection(
+                userId = link.userId,
+                name = name,
+                surface = PhoneCallPersonSurface.PERSON_FICHE,
             )
             Spacer(Modifier.heightIn(min = 16.dp))
         }

@@ -74,21 +74,30 @@ class MessageDaoTest {
     }
 
     @Test
-    fun `deleteMissing prunes messages absent from the keep set`() = runTest {
-        dao.upsertAll(listOf(messageRow("a"), messageRow("b"), messageRow("c")))
+    fun `deleteMissingBetween prunes only the absent rows of the held span, both bounds included`() = runTest {
+        dao.upsertAll(
+            listOf(
+                messageRow("before", createdAt = 1),
+                messageRow("from", createdAt = 2),
+                messageRow("kept", createdAt = 5),
+                messageRow("through", createdAt = 8),
+                messageRow("after", createdAt = 9),
+            ),
+        )
 
-        dao.deleteMissing("c1", listOf("b"))
+        dao.deleteMissingBetween("c1", fromMillis = 2, throughMillis = 8, ids = listOf("kept"))
 
-        assertThat(dao.observeForConversation("c1").first().map { it.id }).containsExactly("b")
+        assertThat(dao.observeForConversation("c1").first().map { it.id }).containsExactly("before", "kept", "after").inOrder()
     }
 
     @Test
-    fun `missing and missingSince name exactly the rows the prunes would remove`() = runTest {
+    fun `missingBetween names exactly the rows the prune would remove, never an optimistic one`() = runTest {
         dao.upsertAll(listOf(messageRow("a", createdAt = 1), messageRow("b", createdAt = 5), messageRow("c", createdAt = 9)))
-        dao.upsertAll(listOf(messageRow("cid_1", createdAt = 9).copy(sendState = "SENDING")))
+        dao.upsertAll(listOf(messageRow("cid_1", createdAt = 5).copy(sendState = "SENDING")))
 
-        assertThat(dao.missing("c1", listOf("b")).map { it.id }).containsExactly("a", "c")
-        assertThat(dao.missingSince("c1", minCreatedAt = 5, ids = listOf("b")).map { it.id }).containsExactly("c")
+        assertThat(dao.missingBetween("c1", Long.MIN_VALUE, 9, listOf("b")).map { it.id }).containsExactly("a", "c")
+        assertThat(dao.missingBetween("c1", 5, 9, listOf("b")).map { it.id }).containsExactly("c")
+        assertThat(dao.missingBetween("c1", 5, 8, emptyList()).map { it.id }).containsExactly("b")
     }
 
     @Test

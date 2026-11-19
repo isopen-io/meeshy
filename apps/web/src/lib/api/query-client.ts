@@ -1,6 +1,6 @@
 import { QueryClient, dehydrate, hydrate, type DehydratedState } from '@tanstack/react-query';
 
-import { endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
+import { endToEndRegimeLedger, mayPersistConversationContent } from '@/lib/end-to-end-regime-ledger';
 
 import { createAccountCacheShelf } from './account-caches';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, keepNewerGameState } from './game-state-order';
@@ -121,21 +121,12 @@ const keepAbsentPageParams = (key: string, value: unknown): unknown => mapPagePa
 const reviveAbsentPageParams = (key: string, value: unknown): unknown => mapPageParams(key, value, ABSENT_PAGE_PARAM, undefined);
 
 export type AppQueryClient = QueryClient & {
-  persist: () => void;
   /**
-   * JETER LE CACHE PERSISTÉ, ET NE PLUS RIEN ÉCRIRE (#6936).
-   *
-   * Appelée juste avant un rechargement de MISE À JOUR : la version qui s'en va
-   * ne doit pas laisser derrière elle le cache de ses propres formes de données.
-   *
-   * « Ne plus rien écrire » n'est pas un détail : `persist` est câblée sur
-   * `pagehide` et `visibilitychange` (§ AUTO-PERSISTANCE ci-dessous), tous deux
-   * déclenchés PAR le rechargement. Sans ce verrou, la clé effacée serait
-   * réécrite dans la milliseconde qui suit, avec le même `buster` — la purge
-   * n'aurait rien purgé. Le cache EN MÉMOIRE reste intact : la page qui part
-   * n'a aucune raison de se vider à l'écran avant de partir.
+   * RANGER LE CACHE MAINTENANT. Une mise à jour l'appelle juste avant de
+   * recharger (#18923, qui révise #6936) : la version neuve relit ce cache au
+   * premier pixel, sauf si `CACHE_SCHEMA` a changé — c'est lui seul qui purge.
    */
-  discardPersisted: () => void;
+  persist: () => void;
 };
 
 /**
@@ -174,8 +165,17 @@ export function persistableQuery(query: {
   readonly state: { readonly status: string };
   readonly queryKey: readonly unknown[];
 }): boolean {
-  return query.state.status === 'success' && !estClefNonPersistable(query.queryKey) && !estFenetreAncree(query.queryKey);
+  return query.state.status === 'success' && !estClefNonPersistable(query.queryKey) && !estFenetreAncree(query.queryKey) && !estFilScelle(query.queryKey);
 }
+
+/**
+ * Le fil d'une conversation FERMÉE AU CLAIR (#18991) — il portera un jour le
+ * clair déchiffré sur l'appareil : il vit en mémoire, jamais dans
+ * `localStorage` ni dans l'étagère des comptes (liste noire,
+ * `lib/e2ee/durable-plaintext-sinks.ts`).
+ */
+const estFilScelle = (key: readonly unknown[]): boolean =>
+  key[0] === 'conversations' && typeof key[1] === 'string' && key[2] === 'messages' && !mayPersistConversationContent(key[1]);
 
 /** La fenêtre autour d'un message (#7420, `messages-window.ts`) — un moment de
  * navigation, jamais rouvert au rechargement : seul le présent du fil se persiste. */
@@ -282,10 +282,7 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
   })();
   if (initial !== null && !restoreFrom(initial, buster)) removeActive();
 
-  let persistenceHalted = false;
-
   const persist = (): void => {
-    if (persistenceHalted) return;
     try {
       storage.setItem(CACHE_KEY, serialize(buster));
     } catch {
@@ -303,15 +300,6 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
     if (debounceHandle !== undefined) clearTimeout(debounceHandle);
     debounceHandle = setTimeout(persist, DEBOUNCE_MS);
   };
-  client.discardPersisted = (): void => {
-    persistenceHalted = true;
-    if (debounceHandle !== undefined) clearTimeout(debounceHandle);
-    removeActive();
-    // L'ÉTAGÈRE AUSSI (#8674) : les caches rangés des autres comptes portent
-    // les formes de données de la version qui s'en va.
-    shelf.forgetAll();
-  };
-
   client.getQueryCache().subscribe(schedulePersist);
   // `reactionStore` DÉCLENCHE AUSSI (revue #5814, défaut majeur 5) — chaque
   // écriture de `performReaction` pose déjà un delta sur le cache des
@@ -360,7 +348,7 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
       lastAccount = arriving;
 
       if (debounceHandle !== undefined) clearTimeout(debounceHandle);
-      if (leaving !== null && !persistenceHalted) {
+      if (leaving !== null) {
         try {
           shelf.put(leaving, serialize(busterOf(leaving)));
         } catch {
@@ -381,7 +369,7 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
       resetAbsentMedia();
 
       buster = busterOf(arriving);
-      if (arriving === null || persistenceHalted) return;
+      if (arriving === null) return;
       if (restoreFrom(shelf.take(arriving), buster)) persist();
     });
   }
@@ -390,15 +378,14 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
 }
 
 /**
- * L'INSTANCE UNIQUE — `buster` composé de la VERSION applicative (littéral de
- * construction) et de l'identité courante, résolue UNE FOIS ici plutôt que
- * relue à chaque composant : c'est la garde D-6 contre une liste lue par le
- * compte SUIVANT sur le même navigateur (une session restaurée AVANT la
- * construction de ce client change déjà `sessionStore` par `restoreSession()`,
- * appelée avant ce module dans `main.tsx`).
- */
-/**
- * `CACHE_SCHEMA` — bumpé quand la FORME PERSISTÉE d'une requête change.
+ * `CACHE_SCHEMA` — INCRÉMENTÉ À TOUT CHANGEMENT DE FORME D'UNE CLÉ PERSISTÉE,
+ * et c'est la SEULE purge du cache du lecteur hors changement de compte
+ * (#18923) : le cache survit aux versions de l'application. La règle est tenue
+ * par une garde — `persisted-shapes.test.ts` compare la forme que chaque
+ * fabrique du registre `PersistedShapes` range à l'empreinte enregistrée sous
+ * ce schéma (`persisted-shapes.lock.json`), et rougit dès qu'elle change :
+ * incompatible ⇒ incrémenter ici, puis `node scripts/record-persisted-shapes.mjs` ;
+ * compatible (champ optionnel ajouté) ⇒ réenregistrer seulement.
  *
  *  - **2** (#6195) — `['conversations']` : `readonly Conversation[]` →
  *    `InfiniteData`.
@@ -420,17 +407,31 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
 export const CACHE_SCHEMA = 3;
 
 /**
- * Le `buster` d'un compte — la VERSION, le SCHÉMA, l'ORIGINE de l'API (#8674 :
- * un même identifiant sur une autre passerelle n'est pas le même compte) et
- * le compte. Scelle le cache actif ET le cache rangé d'un compte quitté.
+ * Le `buster` d'un cache — le SCHÉMA, l'ORIGINE de l'API (#8674 : un même
+ * identifiant sur une autre passerelle n'est pas le même compte) et le compte.
+ * JAMAIS la version de l'application (#18923) : chaque mise en ligne jetait le
+ * cache, et le premier démarrage qui suivait peignait des squelettes partout.
+ * Scelle le cache actif ET le cache rangé d'un compte quitté.
  */
-function busterFor(userId: string | null): string {
-  return `${__APP_VERSION__}:${CACHE_SCHEMA}:${apiConfig.base}:${userId ?? 'anonymous'}`;
+export function cacheBuster(parts: { readonly schema: number; readonly apiBase: string; readonly userId: string | null }): string {
+  return `${parts.schema}:${parts.apiBase}:${parts.userId ?? 'anonymous'}`;
 }
 
+/** Le `buster` d'un compte sous le schéma et la passerelle de cette construction. */
+export function cacheBusterFor(userId: string | null): string {
+  return cacheBuster({ schema: CACHE_SCHEMA, apiBase: apiConfig.base, userId });
+}
+
+/**
+ * L'INSTANCE UNIQUE — `buster` de l'identité courante, résolu UNE FOIS ici
+ * plutôt que relu à chaque composant : c'est la garde D-6 contre une liste lue
+ * par le compte SUIVANT sur le même navigateur (une session restaurée AVANT la
+ * construction de ce client change déjà `sessionStore` par `restoreSession()`,
+ * appelée avant ce module dans `main.tsx`).
+ */
 function currentBuster(): string {
   const session = sessionStore.getState().session;
-  return busterFor(session.status === 'authenticated' ? session.user.id : null);
+  return cacheBusterFor(session.status === 'authenticated' ? session.user.id : null);
 }
 
 /**
@@ -456,17 +457,22 @@ sessionStore.subscribe((state) => endToEndRegimeLedger.getState().bind(sessionId
 
 export const appQueryClient: AppQueryClient = createAppQueryClient({
   buster: currentBuster(),
-  busterOf: busterFor,
+  busterOf: cacheBusterFor,
   session: sessionStore,
 });
 
-/* Ce que le cache a servi chiffré de bout en bout — conversation ou fil —, le
-   compte l'a vu : il ne se rouvre plus au clair (#12949, #12986). Demandé AVEC
-   le client, dans son propre petit morceau (le socle est à son plafond), et non
-   plus avec le temps réel chargé après la première peinture ; à sa pose, il relit
-   tout le cache déjà là. Ce qu'un compte a vu reste de toute façon retenu d'une
-   session à l'autre par le registre. */
-export const endToEndCacheWatch: Promise<void> = import('./end-to-end-cache-watch').then(
-  ({ watchEndToEndConversations }) => void watchEndToEndConversations(appQueryClient, endToEndRegimeLedger),
+/* LES CROCHETS DU CACHE, demandés AVEC le client dans UN seul petit morceau
+   (le socle est à son plafond, `app-cache-hooks.ts`) :
+    - ce que le cache a servi chiffré de bout en bout — conversation ou fil —, le
+      compte l'a vu : il ne se rouvre plus au clair (#12949, #12986). Posée avec
+      le client et non plus avec le temps réel chargé après la première peinture,
+      la surveillance relit à sa pose tout le cache déjà là ; ce qu'un compte a vu
+      reste de toute façon retenu d'une session à l'autre par le registre ;
+    - une écriture temps réel survit à une relecture partie avant elle (#18914) :
+      le journal la rejoue sur sa réponse. Aucune requête de la liste, d'une fiche
+      ou d'un fil ne le précède : elles naissent dans des modules chargés à la
+      demande, après cette demande. */
+export const appCacheHooks: Promise<void> = import('./app-cache-hooks').then(
+  ({ installAppCacheHooks }) => installAppCacheHooks(appQueryClient, endToEndRegimeLedger),
   () => undefined,
 );

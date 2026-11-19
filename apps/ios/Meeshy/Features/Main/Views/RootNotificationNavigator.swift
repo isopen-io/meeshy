@@ -121,7 +121,8 @@ struct RootNotificationNavigator {
 
         case .friendRequest, .contactRequest, .legacyFriendRequest,
              .friendAccepted, .contactAccepted, .legacyFriendAccepted,
-             .contactJoined, .contactRecentlyActive, .deviceBattery, .deviceUnreachable, .legacyStatusUpdate:
+             .contactJoined, .contactRecentlyActive, .relationAcquaintance, .deviceBattery, .deviceUnreachable,
+             .inactivityAlert, .legacyStatusUpdate:
             if let senderId = ctx.senderId {
                 router.presentProfileSheet(ProfileSheetUser(userId: senderId, username: ctx.senderUsername ?? senderId))
             }
@@ -176,7 +177,7 @@ struct RootNotificationNavigator {
              .postComment, .legacyPostComment, .commentLike, .commentReply, .commentReaction,
              .storyReaction, .statusReaction, .contentRemoved,
              .storyNewComment, .friendStoryComment, .storyThreadReply,
-             .friendNewStory, .friendNewMood:
+             .friendNewStory, .friendNewMood, .friendContentReaction, .friendContentShare, .friendContentRepost, .friendContentQuote:
             openSocialNotification(ctx)
 
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
@@ -207,10 +208,9 @@ struct RootNotificationNavigator {
         case .securityAlert, .loginNewDevice, .legacySystemAlert,
              .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
              .system, .maintenance, .updateAvailable, .voiceCloneReady, .reportResolved:
-            // Pas d'entité cible : ouvrir la liste des notifications plutôt
-            // qu'un tap muet — l'utilisateur retrouve au moins la notification
-            // (et son détail) qu'il vient de toucher.
+            // Pas d'entité cible : la liste des notifications plutôt qu'un tap muet (il y retrouve son détail).
             router.present(afterPresentedSurfacesLeave: { router.push(.notifications) })
+        case .wellnessCheck: Task { await InactivityCheckCenter.shared.answerWellness() } // « Je vais bien » (#18738)
         }
     }
 

@@ -20,6 +20,11 @@ enum ShareSheetCopy {
     // MARK: Ce qui part
 
     static var contentZone: String { String(localized: "share.sheet.content", defaultValue: "Ce qui part", bundle: .meeshyShare) }
+    /// « Ce qui part » d'une carte ; un profil se lit du côté de l'ami : « Voilà ce que ton ami recevra » (#19442).
+    static func cardZone(_ kind: ShareCardKind) -> String {
+        guard kind == .profile else { return contentZone }
+        return String(localized: "share.sheet.content.profile", defaultValue: "Voilà ce que ton ami recevra", bundle: .meeshyShare)
+    }
     static func messagesKept(_ kept: Int, of total: Int) -> String {
         String(format: String(localized: "share.sheet.content.messages-kept", defaultValue: "Ce qui part · %1$d messages sur %2$d", bundle: .meeshyShare), kept, total)
     }
@@ -74,8 +79,6 @@ enum ShareSheetCopy {
         }
     }
     static var understood: String { String(localized: "share.sheet.blocked.understood", defaultValue: "Compris", bundle: .meeshyShare) }
-
-    static var flameTitle: String { String(localized: "forward.duration.title", defaultValue: "Disparaît après", bundle: .meeshyShare) }
 
     // MARK: Ce qu'on peut en faire
 

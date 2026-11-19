@@ -29,7 +29,14 @@ final class VoIPPushManager: NSObject, ObservableObject {
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
-    static let shared = VoIPPushManager()
+    /// Le partagé offre sa restauration à la sortie de session (#18911) : un
+    /// retrait différé sous le jeton d'une session précédente du même compte a pu
+    /// effacer la ligne VoIP de la session ouverte.
+    static let shared: VoIPPushManager = {
+        let manager = VoIPPushManager()
+        PushRegistrationRestorers.shared.add { [weak manager] in await manager?.restoreRegistration() }
+        return manager
+    }()
 
     private var voipRegistry: PKPushRegistry?
     @Published private(set) var voipToken: String?
@@ -62,6 +69,12 @@ final class VoIPPushManager: NSObject, ObservableObject {
     private var pendingTokenToRegister: String?
     private var authCancellable: AnyCancellable?
 
+    /// Génération de SESSION (#18911, ios-systeme-3) : `unregisterAndClearToken()`
+    /// l'avance. Un enregistrement lancé sous une génération antérieure est périmé :
+    /// il n'écrit ni cooldown ni jeton « enregistré » que le compte suivant
+    /// hériterait, et se fait suivre d'un POST sous la session courante.
+    private var sessionGeneration: UInt64 = 0
+
     /// VoIP tokens are credentials; they no longer live in
     /// UserDefaults. ``KeychainVoIPTokenStore`` writes them to the Keychain
     /// with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` so the NSE can
@@ -74,6 +87,7 @@ final class VoIPPushManager: NSObject, ObservableObject {
     private let tokenRegistrar: VoIPTokenRegistering
     private let authTokenAvailable: @MainActor () -> Bool
     private let deviceIdentity: @MainActor () -> PushDeviceIdentity
+    private let registrationsInFlight: PushRegistrationsInFlight
 
     /// Cached snapshot of the last registered record so the cooldown check
     /// stays synchronous — the keychain read is performed asynchronously in
@@ -88,12 +102,14 @@ final class VoIPPushManager: NSObject, ObservableObject {
         tokenStore: VoIPTokenStoring,
         registrar: VoIPTokenRegistering = APIVoIPTokenRegistrar(),
         authTokenAvailable: @escaping @MainActor () -> Bool = { APIClient.shared.authToken != nil },
-        deviceIdentity: @escaping @MainActor () -> PushDeviceIdentity = { PushDeviceIdentity.current() }
+        deviceIdentity: @escaping @MainActor () -> PushDeviceIdentity = { PushDeviceIdentity.current() },
+        registrationsInFlight: PushRegistrationsInFlight = .shared
     ) {
         self.tokenStore = tokenStore
         self.tokenRegistrar = registrar
         self.authTokenAvailable = authTokenAvailable
         self.deviceIdentity = deviceIdentity
+        self.registrationsInFlight = registrationsInFlight
         super.init()
         // Audit P2-CC-1 — observe AuthManager.isAuthenticated transitions
         // false→true so a VoIP token that arrived pre-login can be retried.
@@ -162,6 +178,7 @@ final class VoIPPushManager: NSObject, ObservableObject {
     /// previous account's VoIP registration until the cooldown naturally
     /// expired — a cross-account privacy leak on shared devices.
     func unregisterAndClearToken() async {
+        sessionGeneration &+= 1
         unregister()
         await tokenStore.clear()
         lastRegisteredRecord = nil
@@ -219,6 +236,30 @@ final class VoIPPushManager: NSObject, ObservableObject {
         logger.info("VoIP push force re-registration triggered")
     }
 
+    /// La réponse qui vient d'arriver appartient à une session QUITTÉE : la
+    /// passerelle garde le dernier POST reçu, et celui du compte courant a pu être
+    /// traité avant. Sous une session ouverte, on reposte le jeton PushKit courant
+    /// en passant outre le cooldown : le POST du compte courant a pu l'armer avant
+    /// que la réponse périmée n'arrive, et c'est précisément lui qu'il faut rejouer.
+    private func replayRegistrationUnderCurrentSession() async {
+        guard authTokenAvailable(), let current = voipToken else {
+            logger.info("Stale VoIP token registration response: no session left to re-register under")
+            return
+        }
+        logger.info("Stale VoIP token registration response: re-registering under the current session")
+        await registerTokenWithBackend(current, bypassingCooldown: true)
+    }
+
+    /// Reposte le jeton PushKit connu sous la session ouverte, sans cooldown
+    /// (#18911) : le retrait différé d'une session précédente du MÊME compte a pu
+    /// effacer la ligne VoIP que la passerelle tenait. Sans jeton connu, PushKit le
+    /// livrera, et son POST partira alors.
+    func restoreRegistration() async {
+        guard let token = voipToken else { return }
+        logger.info("Restoring the VoIP token registration under the current session")
+        await registerTokenWithBackend(token, bypassingCooldown: true)
+    }
+
     /// G4c — retries the backend registration of a token whose POST failed
     /// (network error) or arrived pre-login. No-op when nothing is parked.
     /// Called on foreground (`forceReregister`) and on login (auth sink).
@@ -272,13 +313,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         let isCallPayload = (payloadType == "call" || payloadType == "voip_call") && hasCallId
 
         guard isCallPayload else {
-            let phantomUUID = UUID()
-            let update = CXCallUpdate()
-            update.localizedCallerName = ""
-            update.hasVideo = false
-            MainActor.assumeIsolated {
-                CallManager.shared.incomingRing.reportPhantomVoIPCall(uuid: phantomUUID, update: update, callId: nil)
-            }
+            Self.reportPhantomCall(callId: nil)
             logger.error("VoIP push without valid call payload — reporting phantom call (type=\(payloadType ?? "nil"))")
             completion()
             return
@@ -308,13 +343,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         }
         if alreadyReported {
             logger.info("VoIP push duplicate detected (callId=\(callId)) — phantom-acking")
-            let phantomUUID = UUID()
-            let update = CXCallUpdate()
-            update.localizedCallerName = ""
-            update.hasVideo = false
-            MainActor.assumeIsolated {
-                CallManager.shared.incomingRing.reportPhantomVoIPCall(uuid: phantomUUID, update: update, callId: callId)
-            }
+            Self.reportPhantomCall(callId: callId)
             completion()
             return
         }
@@ -329,11 +358,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         // Backend sends `isVideo` as a string ("true"/"false") because APNs
         // payloads are Record<string,string>, but older builds may still send
         // it as a Bool. Accept both for forward compatibility.
-        let isVideo: Bool = {
-            if let b = data["isVideo"] as? Bool { return b }
-            if let s = data["isVideo"] as? String { return s.lowercased() == "true" }
-            return false
-        }()
+        let isVideo = Self.parseIsVideo(data["isVideo"])
 
         // Per-user TURN credentials carried in the push payload — required so
         // RTCPeerConnection is built with TURN BEFORE the SDP answer is
@@ -356,6 +381,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         let displayName = resolvedName
 
         logger.info("VoIP push received: callId=\(callId), caller=\(displayName), isVideo=\(isVideo), iceServers=\(iceServers?.count ?? 0)")
+        let groupConversationId = Self.groupConversationToMark(data)
 
         // PushKit delivers this on .main (configured in register()). We are
         // guaranteed to be on the main thread but the function is nonisolated,
@@ -370,6 +396,9 @@ extension VoIPPushManager: PKPushRegistryDelegate {
                 iceServers: iceServers,
                 conversationId: conversationId
             )
+            if let groupConversationId {
+                GroupCallMeshCoordinator.shared.markGroupConversation(groupConversationId, title: nil)
+            }
         }
 
         // Async: attempt to resolve a better name from the conversations cache
@@ -385,7 +414,25 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         completion()
     }
 
+    /// PushKit exige un appel signalé par push reçu : un push invalide ou en double se signale en appel fantôme, aussitôt
+    /// terminé. Toujours sur `.main` (configuré dans `register()`).
+    nonisolated private static func reportPhantomCall(callId: String?) {
+        let update = CXCallUpdate()
+        update.localizedCallerName = ""
+        update.hasVideo = false
+        MainActor.assumeIsolated {
+            CallManager.shared.incomingRing.reportPhantomVoIPCall(uuid: UUID(), update: update, callId: callId)
+        }
+    }
+
     // MARK: - Payload Parsers
+
+    /// `isVideo` voyage en chaîne (`"true"`/`"false"`, APNs ne porte que des
+    /// chaînes) ; une passerelle ancienne l'envoie en booléen.
+    nonisolated static func parseIsVideo(_ raw: Any?) -> Bool {
+        if let flag = raw as? Bool { return flag }
+        return (raw as? String)?.lowercased() == "true"
+    }
 
     /// Decode the JSON-encoded `iceServers` field carried by VoIP pushes.
     /// Returns nil when the field is missing, empty, or unparsable — callers
@@ -410,6 +457,17 @@ extension VoIPPushManager: PKPushRegistryDelegate {
             }
             return IceServer(urls: server.urls.asArray, username: server.username, credential: server.credential)
         }
+    }
+
+    /// La conversation d'un appel que le push dit de groupe — `isGroup` (une
+    /// invitation fait d'un duo un groupe) ou une conversation qui n'est pas
+    /// directe. Un appelé réveillé par push ne reçoit jamais `call:initiated` :
+    /// sans ce marquage, chaque offre irait au pair principal (#19238).
+    nonisolated static func groupConversationToMark(_ data: [AnyHashable: Any]) -> String? {
+        guard let conversationId = data["conversationId"] as? String, !conversationId.isEmpty else { return nil }
+        let flagged = (data["isGroup"] as? Bool) ?? ((data["isGroup"] as? String)?.lowercased() == "true")
+        let notDirect = (data["conversationType"] as? String).map { !$0.isEmpty && $0 != "direct" } ?? false
+        return flagged || notDirect ? conversationId : nil
     }
 
     // MARK: - Caller Name Resolution
@@ -456,7 +514,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
 
     static let voipRegistrationCooldown: TimeInterval = 300
 
-    private func registerTokenWithBackend(_ token: String) async {
+    private func registerTokenWithBackend(_ token: String, bypassingCooldown: Bool = false) async {
         // Audit P2-CC-1 — queue the token if auth isn't ready yet, then
         // retry from `authBecameAvailable`. Previously the token was
         // silently dropped and the user received no VoIP pushes until the
@@ -482,7 +540,8 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         } else {
             last = await tokenStore.read()
         }
-        if let last,
+        if !bypassingCooldown,
+           let last,
            last.token == token,
            now.timeIntervalSince(last.at) < Self.voipRegistrationCooldown {
             pendingTokenToRegister = nil
@@ -499,8 +558,13 @@ extension VoIPPushManager: PKPushRegistryDelegate {
             device: deviceIdentity()
         )
 
+        let generation = sessionGeneration
         do {
-            try await tokenRegistrar.register(body)
+            try await registrationsInFlight.track { try await tokenRegistrar.register(body) }
+            guard generation == sessionGeneration else {
+                await replayRegistrationUnderCurrentSession()
+                return
+            }
             let record = VoIPTokenRecord(token: token, at: now)
             do {
                 try await tokenStore.save(token: token, at: now)
@@ -515,13 +579,24 @@ extension VoIPPushManager: PKPushRegistryDelegate {
             pendingTokenToRegister = nil
             logger.info("VoIP token registered with backend (env=\(PushNotificationManager.apnsEnvironment))")
         } catch {
-            // G4c — park the token so the next trigger (foreground
-            // forceReregister, socket reconnect, login) retries the POST.
-            // The cooldown is NOT armed on failure, so the retry is never
-            // swallowed by the idempotence guard.
-            pendingTokenToRegister = token
-            logger.error("Failed to register VoIP token — parked for retry: \(error.localizedDescription)")
+            await handleRegistrationFailure(error, token: token, generation: generation)
         }
+    }
+
+    /// G4c — un POST échoué sous la session qui l'a lancé est parqué pour le prochain
+    /// déclencheur (premier plan, reconnexion, connexion) : le cooldown n'est armé que par un
+    /// succès, donc la reprise n'est jamais avalée. Échoué après un changement de session, il ne
+    /// dit rien de ce que la passerelle a fait — son POST a pu être traité après celui de la
+    /// session ouverte : rien n'est parqué (la reprise tomberait sous le cooldown de la session
+    /// suivante), un POST repart sous la session courante (#18911, audit N1).
+    private func handleRegistrationFailure(_ error: Error, token: String, generation: UInt64) async {
+        guard generation == sessionGeneration else {
+            logger.error("Stale VoIP token registration failed — re-registering under the current session: \(error.localizedDescription)")
+            await replayRegistrationUnderCurrentSession()
+            return
+        }
+        pendingTokenToRegister = token
+        logger.error("Failed to register VoIP token — parked for retry: \(error.localizedDescription)")
     }
 }
 
@@ -541,6 +616,11 @@ extension VoIPPushManager {
 
     /// Test-only accessor on the parked token (G4c retry policy).
     var debug_pendingTokenToRegister: String? { pendingTokenToRegister }
+
+    /// Test-only: le jeton que PushKit tient actuellement.
+    func debug_setVoIPToken(_ token: String?) {
+        voipToken = token
+    }
 
     /// Test-only driver for the private backend registration flow.
     func debug_registerTokenWithBackend(_ token: String) async {

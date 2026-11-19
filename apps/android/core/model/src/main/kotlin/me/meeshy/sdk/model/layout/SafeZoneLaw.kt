@@ -35,7 +35,7 @@ data class PointDp(val x: Float, val y: Float)
  * element ancre a la zone sure ne saute pas quand le clavier s'ouvre — miroir de
  * `sceneSafeAreaInsets`, « clavier exclu », SceneWindowSize.swift).
  *
- * Decoupe : miroir de `IslandGeometry.swift`. Une banniere in-app nait au centre de la decoupe du
+ * Decoupe : Une banniere in-app nait au centre de la decoupe du
  * haut et se pose avec [CUTOUT_CLEARANCE_DP] d'air sous elle (« SANS Y ETRE COLLE ») ; sans
  * decoupe, elle nait au centre de la marge haute.
  */

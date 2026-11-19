@@ -76,6 +76,15 @@ interface SharedLocationRosterStoring {
     fun loadReceived(accountId: String): Boolean
 
     fun saveReceived(accountId: String, received: Boolean)
+
+    /**
+     * Le démarrage que CET appareil a fait accepter (#19681) : survit au lancement avec la marque « reçue », s'efface avec
+     * elle (arrêt, cession). Sans lui, un appareil relancé après qu'un autre a repris le partage prendrait le démarrage
+     * de l'autre pour le sien et republierait.
+     */
+    fun loadPublishedStart(accountId: String): String?
+
+    fun savePublishedStart(accountId: String, startedAt: String?)
 }
 
 /** Ce que l'écran lit et pilote de MON partage de position. */
@@ -107,7 +116,8 @@ interface SharedLocationSharing {
  *   partage que le démarrage suivant vient de poser ;
  * - chaque opération porte le TICKET du compte qui l'a lancée : une réponse arrivée après une déconnexion ou un
  *   changement de compte n'adopte rien, n'écrit rien et ne rallume rien ;
- * - dans le doute, on ARRÊTE : sans relevé pour republier une liste réduite, tout le partage s'arrête ; un accusé perdu
+ * - dans le doute, on ARRÊTE : une liste réduite part SEULE (#19287), et sans relevé pour la republier devant une
+ *   passerelle d'avant, tout le partage s'arrête ; un accusé perdu
  *   garde « Arrêter » à portée pour chaque personne que le serveur peut servir ; une échéance qui n'a pas pu se solder
  *   est rejouée, et à chaque socket accrochée ; un « Arrêter » qui n'a pas pu partir devient un retrait en attente,
  *   gardé et rejoué de la même façon (#18204).
@@ -185,6 +195,9 @@ class SharedLocationSharingCenter internal constructor(
     /** La liste vient d'un autre appareil du compte : celui-ci ne publie pas sa position (#18578). */
     @Volatile private var received = false
 
+    /** Le dernier démarrage avec position que CET appareil a fait accepter (#18580) ; `null` : inconnu, le servi est pris pour le sien. */
+    @Volatile private var publishedStart: String? = null
+
     init {
         scope.launch {
             connected.distinctUntilChanged().filter { it }.collect {
@@ -229,6 +242,7 @@ class SharedLocationSharingCenter internal constructor(
             if (pruned.isEmpty && !_roster.value.hasRecipients) {
                 adopt(ticket, SharedLocationRoster.EMPTY)
                 markReceived(ticket, false)
+                rememberStart(ticket, null)
                 cancelDeadline()
                 return@locked null
             }
@@ -242,7 +256,9 @@ class SharedLocationSharingCenter internal constructor(
     }
 
     /**
-     * Se recale sur le partage que la passerelle sert : un autre appareil du compte a pu le changer (#18578). Une relecture
+     * Se recale sur le partage que la passerelle sert : un autre appareil du compte a pu le changer (#18578). Une liste
+     * qui nomme un AUTRE démarrage (`startedAt`) que l'accusé d'ici fait céder la publication d'ici : un seul appareil
+     * publie, celui du dernier « Partager » (#18580), sans qu'aucune horloge soit comparée. Une relecture
      * qui échoue (hors ligne, passerelle d'avant #18389, réponse sans liste lisible) ne change rien.
      */
     suspend fun sync() {
@@ -251,12 +267,18 @@ class SharedLocationSharingCenter internal constructor(
             if (!isCurrent(ticket)) return@locked null
             val before = _roster.value
             val next = before.withServed(truth, clock())
-            if (next == before) return@locked null
-            if (next.hasRecipients && !before.hasRecipients) markReceived(ticket, true)
+            val yields = next.hasRecipients && !received && before.hasRecipients && yieldsTo(ticket, truth.startedAt)
+            if (next == before) {
+                if (yields) yieldPublishing(ticket)
+                return@locked null
+            }
+            if (yields || (next.hasRecipients && !before.hasRecipients)) markReceived(ticket, true)
             adopt(ticket, next)
+            if (yields) yieldPublishing(ticket)
             if (!next.hasRecipients) {
                 stopFollowingDevice()
                 markReceived(ticket, false)
+                rememberStart(ticket, null)
             }
             scheduleDeadline()
             null
@@ -322,6 +344,7 @@ class SharedLocationSharingCenter internal constructor(
             resetSession(account)
             _roster.value = SharedLocationRoster.fromStored(store.load(account))
             received = store.loadReceived(account)
+            publishedStart = store.loadPublishedStart(account)
             if (_roster.value.hasRecipients && !received) startFollowing()
             scheduleDeadline()
         }
@@ -336,6 +359,7 @@ class SharedLocationSharingCenter internal constructor(
         deadline = null
         lastSent = null
         received = false
+        publishedStart = null
         loadedFor = account
         _roster.value = SharedLocationRoster.EMPTY
     }
@@ -345,15 +369,40 @@ class SharedLocationSharingCenter internal constructor(
     private fun isCurrent(ticket: Ticket): Boolean = ticket.generation == generation && accountId() == ticket.account
 
     /**
-     * Redémarrer le partage serveur avec une liste réduite demande une position : la dernière envoyée, sinon l'appareil.
-     * Sans l'une ni l'autre (permission retirée, aucun relevé), TOUT s'arrête : retirer une personne ne dépend jamais
-     * de la localisation.
+     * Retirer quelqu'un ou solder une échéance republie la LISTE SEULE (#19287, iso `SharedLocationSharingCenter.swift` et
+     * du web #19284) : la passerelle reprend le point qu'elle garde, et cet appareil n'envoie pas sa position — il peut
+     * n'avoir fait que recevoir la liste d'un autre appareil (#18580). « Pas de partage » : la passerelle dit ce qui court
+     * ([settleNotSharing]). Une passerelle d'avant refuse la liste seule (`INVALID`) : la liste repart avec une position,
+     * la dernière envoyée, sinon l'appareil ; sans l'une ni l'autre (permission retirée, aucun relevé), TOUT s'arrête :
+     * retirer une personne ne dépend jamais de la localisation.
      */
     private suspend fun republish(ticket: Ticket, wanted: SharedLocationRoster): SharedLocationShareProblem? {
         val next = wanted.settled()
         if (!next.hasRecipients) return stopAll(ticket)
+        when (val listOnly = publish(ticket, next, fix = null, previous = _roster.value)) {
+            SharedLocationShareProblem.Refused(SharedLocationSendOutcome.INVALID) -> Unit
+            SharedLocationShareProblem.Refused(SharedLocationSendOutcome.NOT_SHARING) -> return settleNotSharing(ticket)
+            else -> return listOnly
+        }
+        if (!isCurrent(ticket)) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
         val fix = freshLastFix() ?: deviceFix() ?: return stopAll(ticket)
         return publish(ticket, next, fix, previous = _roster.value)
+    }
+
+    /**
+     * « Pas de partage » à une liste seule couvre aussi une session remplacée par un autre appareil pendant l'envoi : la
+     * passerelle dit ce qui court. Un partage servi ⇒ le retrait reste en attente et se rejoue (la liste seule ignore qui
+     * n'est plus servi), comme une relecture qui ne conclut pas : vider sur la foi d'une panne laisserait la personne
+     * servie. Seul un partage servi VIDE vide la liste, sans arrêt ni relevé.
+     */
+    private suspend fun settleNotSharing(ticket: Ticket): SharedLocationShareProblem? {
+        val truth = readServed()
+        if (!isCurrent(ticket)) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
+        if (truth == null || truth.recipients.isNotEmpty()) {
+            return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.UNCONFIRMED)
+        }
+        wipe(ticket)
+        return null
     }
 
     /**
@@ -379,34 +428,47 @@ class SharedLocationSharingCenter internal constructor(
      * La liste envoyée solde tous les retraits en attente : c'est elle que le serveur sert dès qu'il l'accepte.
      * `claimsPublishing` : le geste « Partager » d'ici fait de cet appareil celui qui publie — mais seulement une fois le
      * démarrage accepté (ou son accusé perdu) : un « Partager » refusé laisse muet un appareil qui n'a fait que RECEVOIR la
-     * liste, même au prochain lancement.
+     * liste, même au prochain lancement. `fix` nul : la liste seule, sans repli (une passerelle qui la connaît connaît
+     * aussi les échéances par personne).
      */
     private suspend fun publish(
         ticket: Ticket,
         wanted: SharedLocationRoster,
-        fix: SharedLocationFix,
+        fix: SharedLocationFix?,
         previous: SharedLocationRoster,
         claimsPublishing: Boolean = false,
     ): SharedLocationShareProblem? {
         val next = wanted.settled()
         val now = clock()
-        val request = SharedLocationStartRequest.of(next.deadlinedRecipients(now), next.serverDuration(now), fix)
-            ?: return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.INVALID)
+        val recipients = next.deadlinedRecipients(now)
+        val duration = next.serverDuration(now)
+        val built = if (fix == null) {
+            SharedLocationStartRequest.listOnly(recipients, duration)
+        } else {
+            SharedLocationStartRequest.of(recipients, duration, fix)
+        }
+        val request = built ?: return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.INVALID)
         if (!isCurrent(ticket)) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
         val verdict = startTolerant(ticket, request)
         if (!isCurrent(ticket)) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
         return when (verdict) {
             is SharedLocationStartVerdict.Started -> {
                 if (claimsPublishing) markReceived(ticket, false)
+                if (fix != null) rememberStart(ticket, verdict.startedAt)
                 engage(ticket, next, fix)
                 null
             }
             SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.UNCONFIRMED) -> {
                 if (claimsPublishing) markReceived(ticket, false)
+                if (fix != null) rememberStart(ticket, null)
                 engage(ticket, previous.union(next), fix)
                 SharedLocationShareProblem.Refused(SharedLocationSendOutcome.UNCONFIRMED)
             }
-            is SharedLocationStartVerdict.Refused -> SharedLocationShareProblem.Refused(verdict.outcome)
+            is SharedLocationStartVerdict.Refused -> {
+                // La passerelle a PU appliquer un démarrage avec position qu'elle refuse ensuite : dans le doute, inconnu.
+                if (fix != null) rememberStart(ticket, null)
+                SharedLocationShareProblem.Refused(verdict.outcome)
+            }
         }
     }
 
@@ -416,7 +478,8 @@ class SharedLocationSharingCenter internal constructor(
      */
     private suspend fun startTolerant(ticket: Ticket, request: SharedLocationStartRequest): SharedLocationStartVerdict {
         val verdict = emitter.start(request)
-        val legacy = verdict == SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.INVALID) && request.carriesDeadlines
+        val legacy = verdict == SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.INVALID) &&
+            request.carriesDeadlines && !request.isListOnly
         if (!legacy || !isCurrent(ticket)) return verdict
         return emitter.start(request.withoutDeadlines())
     }
@@ -433,9 +496,10 @@ class SharedLocationSharingCenter internal constructor(
     private suspend fun deviceFix(): SharedLocationFix? =
         if (permission.isGranted()) fixes.currentFix()?.let { SharedLocationFix.of(it.latitude, it.longitude, it.accuracy) } else null
 
-    private fun engage(ticket: Ticket, next: SharedLocationRoster, fix: SharedLocationFix) {
+    /** `fix` nul : une liste seule, qui n'a rien envoyé de nouveau — la dernière position envoyée reste celle d'avant. */
+    private fun engage(ticket: Ticket, next: SharedLocationRoster, fix: SharedLocationFix?) {
         adopt(ticket, next)
-        lastSent = SharedLocationUpdateGate.Sent(fix, clock())
+        fix?.let { lastSent = SharedLocationUpdateGate.Sent(it, clock()) }
         if (next.hasRecipients && !received) startFollowing()
         scheduleDeadline()
     }
@@ -489,8 +553,36 @@ class SharedLocationSharingCenter internal constructor(
     private fun wipe(ticket: Ticket) {
         adopt(ticket, SharedLocationRoster.EMPTY)
         markReceived(ticket, false)
+        rememberStart(ticket, null)
         stopFollowingDevice()
         cancelDeadline()
+    }
+
+    /**
+     * UN SEUL APPAREIL PUBLIE (#18580), iso `followServedStart` du web et d'iOS : la passerelle nomme le dernier démarrage
+     * avec position ; s'il diffère de celui de l'accusé d'ici, un autre appareil a partagé après lui. Sans accusé lisible,
+     * le démarrage servi est pris pour le sien ; sans `startedAt` (passerelle d'avant), rien ne change.
+     */
+    private fun yieldsTo(ticket: Ticket, served: String?): Boolean {
+        if (served == null) return false
+        val mine = publishedStart ?: run {
+            rememberStart(ticket, served)
+            return false
+        }
+        return served != mine
+    }
+
+    /** La marque « reçue » s'écrit AVANT la liste (processus tué entre les deux : relancé muet), puis le suivi se coupe. */
+    private fun yieldPublishing(ticket: Ticket) {
+        markReceived(ticket, true)
+        rememberStart(ticket, null)
+        stopFollowingDevice()
+    }
+
+    private fun rememberStart(ticket: Ticket, startedAt: String?) {
+        if (publishedStart == startedAt) return
+        publishedStart = startedAt
+        store.savePublishedStart(ticket.account, startedAt)
     }
 
     private fun stopFollowingDevice() {
@@ -530,10 +622,19 @@ class SharedPreferencesSharedLocationRosterStore @Inject constructor(
         editor.apply()
     }
 
+    override fun loadPublishedStart(accountId: String): String? = prefs.getString(STARTED_PREFIX + accountId, null)
+
+    override fun savePublishedStart(accountId: String, startedAt: String?) {
+        val editor = prefs.edit()
+        if (startedAt == null) editor.remove(STARTED_PREFIX + accountId) else editor.putString(STARTED_PREFIX + accountId, startedAt)
+        editor.apply()
+    }
+
     private companion object {
         const val FILE_NAME = "meeshy_shared_location_roster"
         const val KEY_PREFIX = "roster."
         const val RECEIVED_PREFIX = "received."
+        const val STARTED_PREFIX = "publishedStart."
     }
 }
 

@@ -1,3 +1,6 @@
+import { createStore } from 'zustand/vanilla';
+
+import type { ConversationActiveCall } from '@/lib/api/call-sessions';
 import type { Attachment, Message } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -85,14 +88,52 @@ export function callNoticeTarget(message: CallNoticeSource, viewerId = ''): Call
   };
 }
 
+export type CallNoticeGesture = 'join' | 'call-back';
+
+/**
+ * **« REJOINDRE » SE CONFIRME AUPRÈS DE LA PASSERELLE** (#19778) — la copie du
+ * message (`call-live`) peut survivre à l'appel (édition terminale manquée, fil
+ * relu du cache) : seule la réponse du sondage (`GET …/active-call`) qui nomme
+ * CE `callId` ouvre « Rejoindre ». Avant elle (ou pendant qu'elle reconfirme une
+ * réponse qui ne le nomme pas) la carte reste NEUTRE — un « Rejoindre » optimiste
+ * qui répond « appel terminé » est exactement le défaut. Une réponse qui ne le
+ * nomme pas dit un appel fini : « Rappeler ».
+ */
+export function callNoticeGesture(
+  target: CallNoticeTarget,
+  probe: { readonly served: ConversationActiveCall | null | undefined; readonly confirming: boolean },
+): CallNoticeGesture | null {
+  if (!target.live) return 'call-back';
+  if (target.callId !== null && probe.served?.callId === target.callId) return 'join';
+  if (probe.served === undefined || (probe.confirming && target.callId !== null)) return null;
+  return 'call-back';
+}
+
 export type CallIdentity = { readonly title: string; readonly avatar: string | null; readonly isGroup: boolean };
 
-const identities = new Map<string, CallIdentity>();
+const UNKNOWN_IDENTITY: CallIdentity = { title: '', avatar: null, isGroup: false };
+
+/**
+ * Le registre est un MAGASIN, pas une table muette (#18907) : l'invite « Rappeler … ? »
+ * d'une adresse se pose parfois avant que l'en-tête du fil ne monte, et doit se
+ * renommer — et ne s'offrir au toucher — dès qu'il a déclaré qui est au bout.
+ */
+export const callIdentityStore = createStore<{ readonly byConversation: Readonly<Record<string, CallIdentity>> }>(() => ({ byConversation: {} }));
+
+const sameIdentity = (left: CallIdentity | undefined, right: CallIdentity): boolean =>
+  left !== undefined && left.title === right.title && left.avatar === right.avatar && left.isGroup === right.isGroup;
 
 export function rememberCallIdentity(conversationId: string, identity: CallIdentity): void {
-  identities.set(conversationId, identity);
+  const { byConversation } = callIdentityStore.getState();
+  if (sameIdentity(byConversation[conversationId], identity)) return;
+  callIdentityStore.setState({ byConversation: { ...byConversation, [conversationId]: identity } });
+}
+
+/** Les noms et avatars vus par le compte qui s'en va ne nomment rien pour le suivant (#18907). */
+export function forgetCallIdentities(): void {
+  callIdentityStore.setState({ byConversation: {} });
 }
 
 export function callIdentityOf(conversationId: string): CallIdentity {
-  return identities.get(conversationId) ?? { title: '', avatar: null, isGroup: false };
+  return callIdentityStore.getState().byConversation[conversationId] ?? UNKNOWN_IDENTITY;
 }

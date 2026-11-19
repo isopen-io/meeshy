@@ -10,8 +10,6 @@
     <string name="feed_media_next">Imagen siguiente</string>
     <string name="feed_media_saved">Guardado en la galería</string>
     <string name="feed_media_save_failed">No se pudo guardar en la galería</string>
-    <string name="feed_pinned">Fijado</string>
-    <string name="feed_edited">Editado</string>
     <string name="feed_post_reach_a11y">Vistas e impresiones</string>
     <string name="feed_repost_quoted">Citado</string>
     <string name="feed_repost_open">Abrir la publicación republicada</string>
@@ -19,15 +17,10 @@
     <string name="feed_repost_more_media">+%1$d</string>
     <string name="bookmarks_title">Guardados</string>
     <string name="bookmarks_empty">Aún no hay publicaciones guardadas</string>
-    <string name="bookmarks_remove">Quitar de guardados</string>
-    <string name="post_detail_not_found">Esta publicación ya no está disponible</string>
-    <string name="post_detail_empty">No se pudo cargar esta publicación</string>
     <string name="post_comments_empty">Sin comentarios</string>
     <string name="post_comments_load_more">Ver más comentarios</string>
-    <string name="post_comments_input_hint">Añadir un comentario…</string>
     <string name="post_comments_delete_action">Eliminar comentario</string>
     <string name="post_comments_replying_to_generic">Respondiendo…</string>
-    <string name="post_comments_reply_hint">Añadir una respuesta…</string>
     <string name="post_comments_hide_replies">Ocultar respuestas</string>
     <plurals name="post_comments_view_all_replies">
         <item quantity="one">Ver la %1$d respuesta</item>
@@ -37,7 +30,6 @@
     <string name="status_composer_republishing">Volviendo a publicar @%1$s</string>
     <string name="status_composer_mood_label">Estado de ánimo %1$s</string>
     <string name="feed_composer_open_placeholder">Comparte algo…</string>
-    <string name="feed_composer_attach_media">Añadir foto o video</string>
     <string name="feed_composer_remove_media">Quitar contenido multimedia</string>
     <string name="feed_composer_media_unusable">No se pudo adjuntar ese contenido multimedia</string>
 
@@ -61,4 +53,5 @@
     <string name="nearby_distance_meters">a %1$d m</string>
     <string name="nearby_distance_km">a %1$.1f km</string>
     <string name="status_composer_emoji_too_long">Emoji demasiado largo</string>
+    <string name="status_composer_title">Estado</string>
 </resources>

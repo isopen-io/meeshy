@@ -10,6 +10,7 @@ import { MessageEditDock } from '@/components/message-edit-composer';
 import { SelectionToolbar } from '@/components/selection-toolbar';
 import { ConversationBackdrop } from '@/components/conversation-backdrop';
 import { ThreadHeader } from '@/components/thread-header';
+import { ActAdvanceOnSend } from '@/components/act-advance-pill-lazy';
 import { ConversationDetailsContext } from '@/components/avatar-menu';
 import { ConversationDetailsPortal } from '@/components/conversation-details-sheet-lazy';
 import { WorldParticipantCardHost } from '@/components/world-participant-card-host';
@@ -383,8 +384,8 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
 
   /**
    * LA SCÈNE DU FIL (#5648) — l'ÉLECTION d'une rangée au défilement soutenu
-   * (Focal seul), plus par la courbe continue qu'iOS a retirée
-   * (`reading-mode/perspective.ts`, gelée) ; le RÉVÉLÉ (heure, coches) vit
+   * (Focal seul), plus par la courbe continue qu'iOS a retirée (et le web
+   * avec elle) ; le RÉVÉLÉ (heure, coches) vit
    * en Focal ET en Script — `useThreadScene` le monte donc dès que le mode
    * n'est PAS `bubbles` (« densité uniforme, zéro perspective » ne parle
    * que de l'ÉLECTION, jamais du révélé).
@@ -707,7 +708,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
       className={`thread-root relative ${preview === undefined ? 'h-app' : 'h-full'} overflow-hidden`}
       style={{ ...withAccent(accent), ...personalBubbleVars(conversation), ...chromeStyleVars(), ...insetVars, ...backdropStyleVars() } as CSSProperties}
     >
-      <ConversationBackdrop conversation={conversation} accent={accent} live={preview === undefined} />
+      <ConversationBackdrop conversation={conversation} accent={accent} />
       <ThreadHeader
         title={title}
         accent={accent}
@@ -755,6 +756,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
         (« la géométrie fait le travail », §1.5 de la spécification).
       */}
       <DayPill label={chrome.dayPillLabel} headerExpanded={expanded || preview !== undefined} />
+      {preview === undefined ? <ActAdvanceOnSend sent={flameReplay} /> : null}
       <main
           id={preview === undefined ? 'contenu' : undefined}
           ref={scroller}

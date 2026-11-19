@@ -183,10 +183,10 @@ nonisolated enum ComposerMoodGate {
 ///
 /// Ce que ce type est, et surtout ce qu'il n'est PAS :
 ///
-/// - il **enveloppe** l'atelier de composition du SDK (`StoryComposerView`), il
-///   ne le réécrit pas. L'atelier porte des milliers de lignes éprouvées ; en
-///   refaire une version app-side ferait diverger deux surfaces sans qu'aucun
-///   test ne le dise ;
+/// - il **compose avec les briques du SDK** (`StoryComposerViewModel`,
+///   `StoryComposerCanvasView`), il ne les réécrit pas. Elles portent des
+///   milliers de lignes éprouvées ; en refaire une version app-side ferait
+///   diverger deux surfaces sans qu'aucun test ne le dise ;
 /// - il **ne construit aucun aperçu**. Loi 6 de la doctrine — « le lecteur EST
 ///   l'aperçu » : composer et viewers partagent un seul registre de rendu, et un
 ///   quatrième chemin d'aperçu casserait le WYSIWYG par construction. Le socle
@@ -196,11 +196,10 @@ nonisolated enum ComposerMoodGate {
 /// - il **ne décide de rien** : ce qu'il montre est fonction du
 ///   `ComposerProfile` que `ComposerIntent` lui donne. Le host lit la
 ///   table, il ne la double pas ;
-/// - il **n'ouvre aucun chemin de publication**. L'unique publieur est la barre
-///   du SDK (`StoryComposerView+TopBar.publishButton` → `publishAllSlides()`),
-///   qui rabat les effets du canvas sur la diapositive courante avant de
-///   rendre la main. Un second chemin app-side publierait un document que
-///   personne n'a rabattu.
+/// - il **n'ouvre qu'UN chemin de publication** : `performSoclePublish`
+///   (`MeeshyComposerHost+Socle`), qui rend d'abord la frise ouverte à la slide
+///   avant l'envoi. Un second chemin publierait un document que personne n'a
+///   rabattu.
 ///
 /// **Le socle ne bouge jamais** (loi 5 de la doctrine P1) — et ce que la loi 5
 /// interdit n'est pas qu'une zone manque, c'est qu'elle manque SELON LA PORTE.
@@ -651,36 +650,6 @@ nonisolated enum ComposerSoundRoleCopy {
                defaultValue: "Un son de la bibliothèque reste crédité à son auteur : il ne peut pas devenir une pièce jointe.",
                bundle: .main)
     }
-}
-
-nonisolated enum ComposerSoundSourcePolicy {
-
-    /// L'ordre n'est pas décoratif : **enregistrer d'abord**. La porte ouvre
-    /// directement le micro, et les deux autres provenances sont des entrées
-    /// offertes SOUS lui, dans la même feuille. L'étagère ne vient pas en tête :
-    /// emprunter serait le geste nominal d'un CHOIX préalable, qui n'existe pas.
-    static let offered: [ComposerSoundSource] = [.record, .library, .files]
-
-    static func label(_ source: ComposerSoundSource) -> String {
-        switch source {
-        case .library:
-            return String(localized: "composer.rail.sound.library",
-                          defaultValue: "Emprunter un son", bundle: .main)
-        case .record:
-            return String(localized: "composer.rail.sound.record",
-                          defaultValue: "Enregistrer un vocal", bundle: .main)
-        case .files:
-            return String(localized: "composer.rail.sound.files",
-                          defaultValue: "Importer un fichier audio", bundle: .main)
-        }
-    }
-
-    /// Le titre de la feuille est **le libellé de la porte**, comme pour le
-    /// média : `composer.rail.sound` dit déjà « Ajouter un son » dans les sept
-    /// langues servies.
-    static var chooserTitle: String { ComposerRailCopy.label(.sound) }
-
-    static var cancel: String { ComposerMediaSourcePolicy.cancel }
 }
 
 

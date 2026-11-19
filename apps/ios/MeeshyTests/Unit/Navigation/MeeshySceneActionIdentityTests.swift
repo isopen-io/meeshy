@@ -37,7 +37,7 @@ final class MeeshySceneActionIdentityTests: XCTestCase {
     /// rouvrir la porte à une action neuve par rendu : la nouvelle conversation,
     /// la recherche et la fermeture de fenêtre publiaient encore la leur ainsi.
     func test_aSceneAction_isOnlyEverBuiltByTheRelay() throws {
-        let constructions = try appSources().flatMap { file in
+        let constructions = try appSources().filter { $0.code.contains("MeeshySceneAction") }.flatMap { file in
             AppSourceGuard.strippedLines(file.code)
                 .filter { $0.range(of: #"(?<!: )(?<!-> )\bMeeshySceneAction\s*[({]|\bMeeshySceneAction\.init\b"#, options: .regularExpression) != nil }
                 .map { "\(file.name): \($0.trimmingCharacters(in: .whitespaces))" }

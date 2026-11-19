@@ -261,7 +261,7 @@ extension TimelineViewModel {
         project.sceneObject(id: id)?.duration.map { Float($0) }
     }
 
-    // MARK: - Clip property mutations (used by ClipInspector callbacks)
+    // MARK: - Clip property mutations
 
     public func setClipVolume(id: String, volume: Float) {
         guard let kind = clipKind(forId: id) else { return }
@@ -559,7 +559,7 @@ extension TimelineViewModel {
         moveKeyframe(clipId: clipId, keyframeId: keyframeId, newTime: newTime)
     }
 
-    /// Push a transform / easing edit captured by `KeyframeInspector`.
+    /// Push a transform / easing edit on one keyframe.
     /// All arguments are optional — only non-nil pairs (new + current snapshot)
     /// participate in the resulting `MoveKeyframeCommand`. `newTime` defaults
     /// to the current time so an inspector-driven edit doesn't shift the
@@ -608,9 +608,9 @@ extension TimelineViewModel {
 
     /// Resolves the keyframe currently in the project state into a snapshot of
     /// all its persisted fields. Returns nil for audio clips or when the
-    /// keyframe id is not found. Surfaces defaults that match
-    /// `KeyframeInspector.KeyframeSnapshot` so the inspector and command stack
-    /// stay aligned on what "no value" means.
+    /// keyframe id is not found. Surfaces the defaults that `StoryKeyframe`
+    /// leaves implicit, so every caller and the command stack stay aligned on
+    /// what "no value" means.
     private func currentKeyframeSnapshot(clipId: String,
                                          keyframeId: String,
                                          kind: TimelineClipKind)

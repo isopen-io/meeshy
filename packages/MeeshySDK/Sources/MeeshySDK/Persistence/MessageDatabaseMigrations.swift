@@ -53,5 +53,6 @@ public enum MessageDatabaseMigrations {
         MessagesPlaintextErasuresMigration(),
         MessagesPlaintextErasureAuthenticationMigration(),
         MessagesServedClientMessageIdMigration(),
+        ConversationContiguityMigration(),
     ]
 }

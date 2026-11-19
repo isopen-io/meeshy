@@ -86,8 +86,15 @@ export const trackingLinkSchema = {
     createdBy: { type: 'string', nullable: true, description: 'Creator user ID' },
     conversationId: { type: 'string', nullable: true, description: 'Associated conversation ID' },
     messageId: { type: 'string', nullable: true, description: 'Associated message ID' },
+    targetType: {
+      type: 'string',
+      enum: ['POST', 'REEL', 'STORY', 'STATUS', 'CONVERSATION', 'PROFILE', 'EXTERNAL'],
+      description: 'What the link points to (#19412)'
+    },
+    targetId: { type: 'string', nullable: true, description: 'Targeted item ID — null for an external URL; never served by the public click door' },
     totalClicks: { type: 'number', description: 'Total click count' },
     uniqueClicks: { type: 'number', description: 'Unique visitor clicks' },
+    countUnique: { type: 'boolean', description: 'Whether unique visitors are counted — absent on legacy links means true (#19418)' },
     isActive: { type: 'boolean', description: 'Whether link is active' },
     expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Expiration date' },
     lastClickedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last click timestamp' },

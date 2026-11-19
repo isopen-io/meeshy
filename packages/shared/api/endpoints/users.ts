@@ -15,6 +15,12 @@
 /** GET /api/v1/users/:id */
 export const byId = (id: string): string => `/api/v1/users/${encodeURIComponent(id)}`;
 
+/** GET /api/v1/users/:id/highlights */
+export const byIdHighlights = (id: string): string => `/api/v1/users/${encodeURIComponent(id)}/highlights`;
+
+/** GET /api/v1/users/:id/in-common */
+export const byIdInCommon = (id: string): string => `/api/v1/users/${encodeURIComponent(id)}/in-common`;
+
 /** GET /api/v1/users/:userId/affiliate-token */
 export const byUserIdAffiliateToken = (userId: string): string => `/api/v1/users/${encodeURIComponent(userId)}/affiliate-token`;
 
@@ -41,6 +47,15 @@ export const idById = (id: string): string => `/api/v1/users/id/${encodeURICompo
 
 /** PATCH /api/v1/users/me */
 export const me = '/api/v1/users/me';
+
+/** GET · POST /api/v1/users/me/addresses */
+export const meAddresses = '/api/v1/users/me/addresses';
+
+/** PATCH · DELETE /api/v1/users/me/addresses/:id */
+export const meAddressesById = (id: string): string => `/api/v1/users/me/addresses/${encodeURIComponent(id)}`;
+
+/** PUT /api/v1/users/me/addresses/order */
+export const meAddressesOrder = '/api/v1/users/me/addresses/order';
 
 /** PATCH /api/v1/users/me/avatar */
 export const meAvatar = '/api/v1/users/me/avatar';
@@ -84,8 +99,20 @@ export const meDevices = '/api/v1/users/me/devices';
 /** DELETE /api/v1/users/me/devices/:deviceId */
 export const meDevicesByDeviceId = (deviceId: string): string => `/api/v1/users/me/devices/${encodeURIComponent(deviceId)}`;
 
+/** GET · POST /api/v1/users/me/highlights */
+export const meHighlights = '/api/v1/users/me/highlights';
+
+/** PATCH · DELETE /api/v1/users/me/highlights/:id */
+export const meHighlightsById = (id: string): string => `/api/v1/users/me/highlights/${encodeURIComponent(id)}`;
+
+/** PUT /api/v1/users/me/highlights/order */
+export const meHighlightsOrder = '/api/v1/users/me/highlights/order';
+
 /** PATCH /api/v1/users/me/password */
 export const mePassword = '/api/v1/users/me/password';
+
+/** GET /api/v1/users/me/profile-link/stats */
+export const meProfileLinkStats = '/api/v1/users/me/profile-link/stats';
 
 /** POST · DELETE /api/v1/users/me/push-to-talk-token */
 export const mePushToTalkToken = '/api/v1/users/me/push-to-talk-token';

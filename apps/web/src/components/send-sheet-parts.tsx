@@ -107,40 +107,6 @@ export function PreviewCard({ payload, view, label }: { readonly payload: SendPa
   );
 }
 
-export function PublishChip({
-  format,
-  label,
-  on,
-  disabled,
-  onToggle,
-}: {
-  readonly format: PublishFormat;
-  readonly label: string;
-  readonly on: boolean;
-  readonly disabled: boolean;
-  readonly onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="checkbox"
-      aria-checked={on}
-      disabled={disabled}
-      data-send-publish={format}
-      onClick={onToggle}
-      className="inline-flex min-h-11 items-center gap-2 rounded-chip px-4 text-chip font-semibold"
-      style={
-        on
-          ? { backgroundColor: 'var(--color-ios-brand)', color: 'var(--color-ios-on-brand)' }
-          : { backgroundColor: 'var(--color-ios-fill)', color: 'var(--color-ios-ink)' }
-      }
-    >
-      <GlyphSvg glyph={PUBLISH_GLYPH[format]} size={GLYPH_SIZE.md} />
-      {label}
-    </button>
-  );
-}
-
 export type DurationChoice = { readonly seconds: number; readonly label: string };
 
 /**

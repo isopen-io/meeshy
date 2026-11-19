@@ -10,8 +10,6 @@
     <string name="feed_media_next">Next image</string>
     <string name="feed_media_saved">Saved to gallery</string>
     <string name="feed_media_save_failed">Couldn’t save to gallery</string>
-    <string name="feed_pinned">Pinned</string>
-    <string name="feed_edited">Edited</string>
     <string name="feed_post_reach_a11y">Views and impressions</string>
     <string name="feed_repost_quoted">Quoted</string>
     <string name="feed_repost_open">Open reposted post</string>
@@ -19,15 +17,10 @@
     <string name="feed_repost_more_media">+%1$d</string>
     <string name="bookmarks_title">Saved</string>
     <string name="bookmarks_empty">No saved posts yet</string>
-    <string name="bookmarks_remove">Remove from saved</string>
-    <string name="post_detail_not_found">This post is no longer available</string>
-    <string name="post_detail_empty">Couldn\'t load this post</string>
     <string name="post_comments_empty">No comments</string>
     <string name="post_comments_load_more">Show more comments</string>
-    <string name="post_comments_input_hint">Add a comment…</string>
     <string name="post_comments_delete_action">Delete comment</string>
     <string name="post_comments_replying_to_generic">Replying…</string>
-    <string name="post_comments_reply_hint">Add a reply…</string>
     <string name="post_comments_hide_replies">Hide replies</string>
     <plurals name="post_comments_view_all_replies">
         <item quantity="one">View all %1$d reply</item>
@@ -36,7 +29,6 @@
     <string name="status_composer_republishing">Republishing @%1$s</string>
     <string name="status_composer_mood_label">Mood %1$s</string>
     <string name="feed_composer_open_placeholder">Share something…</string>
-    <string name="feed_composer_attach_media">Add photo or video</string>
     <string name="feed_composer_remove_media">Remove media</string>
     <string name="feed_composer_media_unusable">That media couldn\'t be attached</string>
 
@@ -60,4 +52,5 @@
     <string name="nearby_distance_meters">%1$d m away</string>
     <string name="nearby_distance_km">%1$.1f km away</string>
     <string name="status_composer_emoji_too_long">Emoji too long</string>
+    <string name="status_composer_title">Status</string>
 </resources>

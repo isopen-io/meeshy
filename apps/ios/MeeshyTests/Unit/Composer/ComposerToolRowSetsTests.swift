@@ -54,8 +54,7 @@ final class ComposerToolRowSetsTests: XCTestCase {
 
     /// L'ordre canonique est la RÉFÉRENCE : la rangée, la grille d'état vide et
     /// les chips de switch le suivent. Trois écritures manuelles avaient laissé
-    /// trois ordres diverger — le commentaire de `ComposerToolRow` le rappelle,
-    /// et ce témoin l'empêche de redevenir faux.
+    /// trois ordres diverger — ce témoin l'empêche de redevenir faux.
     func test_lOrdreCanonique_commenceParLeMedia_etFinitParLaTimeline() {
         XCTAssertEqual(StoryToolMode.composerOrder.first, .media)
         XCTAssertEqual(StoryToolMode.composerOrder.last, .timeline)
@@ -63,70 +62,5 @@ final class ComposerToolRowSetsTests: XCTestCase {
             StoryToolMode.composerOrder.contains(.filters),
             "`.filters` n'a pas de panneau : le servir ici peindrait une porte qui n'ouvre rien."
         )
-    }
-
-    // MARK: - La FORME, et là où elle diverge volontairement
-
-    /// La rangée de l'atelier DÉFILE, comme la canonique. Le besoin est mesuré :
-    /// à `accessibility-XXXL` une rangée figée dépasse la largeur de l'écran et
-    /// se fait couper des deux côtés — des outils qu'aucun geste n'atteint.
-    func test_laRangeeDeLAtelier_defile_commeLaCanonique() throws {
-        let code = try AppSourceGuard.stripComments(source())
-        XCTAssertTrue(
-            compact(code).contains("ScrollView(.horizontal,showsIndicators:false)"),
-            "Sans défilement, la rangée redevient coupée aux grandes tailles de police."
-        )
-    }
-
-    /// **Et elle NE reprend PAS le premier plan de la canonique.** Celle du
-    /// document peint en `textSecondary(isDark: true)` parce qu'elle vit sur un
-    /// plateau toujours sombre ; le plateau de l'atelier prend la couleur du
-    /// fond de la scène (#4124), et ce gris y disparaît sur un pastel.
-    ///
-    /// Garde NÉGATIVE : elle rougirait si quelqu'un « alignait » l'atelier sur
-    /// la canonique en recopiant sa couleur — l'alignement le plus tentant, et
-    /// le seul qui casse quelque chose.
-    func test_laRangeeDeLAtelier_neRecopiePas_leGrisEnDurDeLaCanonique() throws {
-        let code = try AppSourceGuard.stripComments(source())
-        XCTAssertFalse(
-            code.contains("textSecondary(isDark: true)"),
-            "Le plateau de l'atelier prend la couleur du fond de la scène : un gris clair en dur y "
-                + "disparaît. `glassControlForeground()` est adaptatif — c'est la raison, pas un goût."
-        )
-        XCTAssertTrue(
-            code.contains("glassControlForeground()"),
-            "… et l'adaptatif doit bien être là : sans lui, cette garde négative serait verte sur une "
-                + "rangée sans aucun premier plan."
-        )
-    }
-
-    /// La cible tactile ne suit pas l'icône. Les pastilles de 48 pt tenaient les
-    /// 44 pt du HIG sans y penser ; un glyphe nu de ~22 pt ne les tient pas.
-    func test_laCibleTactile_reste_a44pt_malgreLIconeNue() throws {
-        let code = try AppSourceGuard.stripComments(source())
-        XCTAssertTrue(
-            compact(code).contains("hitSide:CGFloat=44"),
-            "Une icône nue sans débord de contact descend sous la cible minimale du HIG."
-        )
-    }
-
-    // MARK: - Lecture de source
-
-    private func source() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // Composer
-            .deletingLastPathComponent()   // Unit
-            .deletingLastPathComponent()   // MeeshyTests
-            .deletingLastPathComponent()   // apps/ios
-            .deletingLastPathComponent()   // apps
-            .deletingLastPathComponent()   // racine du dépôt
-            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshyUI/Story/Controls/ComposerToolRow.swift")
-        let brut = try String(contentsOf: url, encoding: .utf8)
-        XCTAssertGreaterThan(brut.count, 2000, "Source vide — les gardes seraient vertes par omission.")
-        return brut
-    }
-
-    private func compact(_ text: String) -> String {
-        text.components(separatedBy: .whitespacesAndNewlines).joined()
     }
 }

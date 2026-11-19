@@ -163,7 +163,17 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
               // porte vraiment ses champs.
               where: { isActive: true },
               take: 5,
-              include: {
+              // Un `select` EXPLICITE (#19429) : la porte d'entrée et le pays
+              // d'arrivée d'un membre ne partent qu'à ceux qui animent la
+              // communauté, jamais à qui la cherche.
+              select: {
+                id: true,
+                communityId: true,
+                userId: true,
+                role: true,
+                isActive: true,
+                joinedAt: true,
+                leftAt: true,
                 user: {
                   select: {
                     id: true,

@@ -1,4 +1,5 @@
 import type { PushNotificationPayload, PushResult } from '../PushNotificationService';
+import { apnsFailureOutcome } from '../pushFailureClassification';
 
 export type PushToTalkTokenRecord = {
   id: string;
@@ -14,7 +15,6 @@ export type ApnsSendOutcome = { failed: Array<{ response?: { reason?: string }; 
 export type PushToTalkTransport = {
   readonly hasClient: (env: ApnsEnvironment) => boolean;
   readonly send: (env: ApnsEnvironment, notification: unknown, token: string, corr: Record<string, unknown>) => Promise<ApnsSendOutcome>;
-  readonly isTransient: (reason: string | undefined) => boolean;
   readonly defaultBundleId: string;
   readonly log: (event: 'success' | 'failure', fields: Record<string, unknown>) => void;
 };
@@ -47,15 +47,15 @@ export async function sendViaPushToTalk(
     const corr = { tokenId: tokenRecord.id, apnsEnv: env, topic: notification.topic, pushType: 'pushtotalk' };
     const result = await transport.send(env, notification, tokenRecord.token, corr);
     if (result.failed.length > 0) {
-      const reason = result.failed[0].response?.reason || 'APNS delivery failed';
-      transport.log('failure', { ...corr, reason, statusCode: result.failed[0].status });
-      return { success: false, tokenId: tokenRecord.id, error: reason, transient: transport.isTransient(reason) };
+      const { error, transient } = apnsFailureOutcome(result.failed[0]);
+      transport.log('failure', { ...corr, reason: error, statusCode: result.failed[0].status });
+      return { success: false, tokenId: tokenRecord.id, error, transient };
     }
     transport.log('success', corr);
     return { success: true, tokenId: tokenRecord.id };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'APNS error';
     transport.log('failure', { tokenId: tokenRecord.id, apnsEnv: env, errorMessage: message });
-    return { success: false, tokenId: tokenRecord.id, error: message };
+    return { success: false, tokenId: tokenRecord.id, error: message, transient: true };
   }
 }

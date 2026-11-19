@@ -86,7 +86,7 @@ struct MessageCardBackdropPanel: View {
     let chosen: MessageCardChosenBackdrop?
     let loading: Bool
     @Binding var item: PhotosPickerItem?
-    let onVeil: (Double) -> Void
+    let onVeil: @MainActor @Sendable (Double) -> Void
     let onRemove: () -> Void
     /// Recadrer le fond choisi (#18810) — `nil` tant que la carte ne le peint pas encore.
     var onCrop: (() -> Void)? = nil
@@ -94,8 +94,8 @@ struct MessageCardBackdropPanel: View {
     var body: some View {
         HStack(spacing: MeeshySpacing.smPlus) {
             PhotosPicker(selection: $item, matching: .any(of: [.images, .videos]), preferredItemEncoding: .current,
-                         photoLibrary: .shared()) {
-                thumb
+                         photoLibrary: .shared()) { [chosen, loading] in
+                MessageCardBackdropThumb(chosen: chosen, loading: loading)
             }
             .buttonStyle(MessageCardPressStyle())
             .accessibilityLabel(chosen == nil
@@ -106,7 +106,7 @@ struct MessageCardBackdropPanel: View {
                     Text(MessageCardExportText.text("export.card.backdrop.veil", "Voile"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Slider(value: Binding(get: { chosen.veil }, set: onVeil), in: MessageCardBackdrop.veilRange)
+                    Slider(value: Binding(get: { chosen.veil }, set: { onVeil($0) }), in: MessageCardBackdrop.veilRange)
                         .accessibilityLabel(MessageCardExportText.text("export.card.backdrop.veil", "Voile"))
                 }
                 if let onCrop {
@@ -140,8 +140,20 @@ struct MessageCardBackdropPanel: View {
         }
         .padding(.horizontal, MeeshySpacing.lg)
     }
+}
 
-    private var thumb: some View {
+/// La vignette du fond : `PhotosPicker` construit son libellé dans une
+/// fermeture `@Sendable` non isolée, d'où l'`init` non isolé.
+private struct MessageCardBackdropThumb: View {
+    let chosen: MessageCardChosenBackdrop?
+    let loading: Bool
+
+    nonisolated init(chosen: MessageCardChosenBackdrop?, loading: Bool) {
+        self.chosen = chosen
+        self.loading = loading
+    }
+
+    var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
                 .fill(Color.primary.opacity(0.07))

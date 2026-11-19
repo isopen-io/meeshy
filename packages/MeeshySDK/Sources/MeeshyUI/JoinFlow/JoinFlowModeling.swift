@@ -8,6 +8,8 @@ public nonisolated enum JoinFlowPhase: Equatable, Sendable {
     case preview
     case form
     case success
+    /// Le lien n'est plus valable (410 : expiré, éteint ou plein) — pas une panne, rien à réessayer.
+    case gone
     case error(String)
 }
 

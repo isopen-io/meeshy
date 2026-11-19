@@ -224,12 +224,35 @@ export function decodeSessionInitiator(session: unknown): string | null {
   return isRecord(session) ? str(session.initiatorId) : null;
 }
 
+/**
+ * L'admin et le lieu d'une session rendue par `call:join` (#8438, #19650) —
+ * rejoint depuis le tête-à-tête d'origine, le lieu servi est le groupe.
+ */
+export function decodeSessionPlace(session: unknown): { readonly initiatorId: string | null; readonly conversationId: string | null } {
+  return { initiatorId: decodeSessionInitiator(session), conversationId: isRecord(session) ? str(session.conversationId) : null };
+}
+
 /** `call:participant-invited` (#8433) — l'invité sonne chez tous les participants. */
 export function decodeParticipantInvited(payload: unknown): { readonly callId: string; readonly invitedBy: string | null; readonly invitee: DecodedPerson } | null {
   if (!isRecord(payload)) return null;
   const callId = str(payload.callId);
   const invitee = personOf(payload.invitee);
   return callId === null || invitee === null ? null : { callId, invitedBy: str(payload.invitedBy), invitee };
+}
+
+/**
+ * `call:conversation-changed` (#19650) — un tête-à-tête qui invite vit
+ * désormais dans le groupe des présents. `title` nul : le groupe n'a pas de
+ * titre, le client le compose depuis les présents.
+ */
+export type DecodedConversationChange = { readonly callId: string; readonly conversationId: string; readonly previousConversationId: string | null; readonly title: string | null };
+
+export function decodeConversationChanged(payload: unknown): DecodedConversationChange | null {
+  if (!isRecord(payload)) return null;
+  const callId = str(payload.callId);
+  const conversationId = str(payload.conversationId);
+  if (callId === null || conversationId === null) return null;
+  return { callId, conversationId, previousConversationId: str(payload.previousConversationId), title: str(payload.conversationTitle) };
 }
 
 /** `call:invite-declined` / `call:invite-expired` (#8470) — l'invitation de `userId` s'est résolue sans décroché. */

@@ -323,6 +323,9 @@ jobs:
           # cette étape énumère ses maillons un par un, donc un maillon ajouté
           # au composite seul ne s'exécuterait nulle part.)
           python3 scripts/generate-icons.py --check
+          # La table des pays (`src/lib/countries.ts`) est GÉNÉRÉE depuis
+          # `CountryPicker.swift` : maillon du composite qui ne tournait nulle part.
+          node scripts/generate-countries.mjs --check
           node scripts/check-curve.mjs
           node scripts/check-river-metrics.mjs
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
@@ -342,6 +345,12 @@ jobs:
           # le disque » était annoncée par `vite.config.ts` sans être appliquée
           # par `dist/sw.js`. Lit `dist/sw.js`, donc après le build ci-dessus.
           node scripts/check-sw-api-cache.mjs
+          # #18986 — les condensats de la politique de sécurité du contenu
+          # (`nginx.conf`) sont EXACTEMENT ceux des scripts en ligne des
+          # documents construits : un script changé sans eux casserait la page
+          # servie, un condensat orphelin élargirait la politique. Lit `dist/`,
+          # aucun navigateur : sa place est ici.
+          node scripts/check-csp-hashes.mjs
           # #7305 — le service worker porte enfin `push`/`notificationclick`,
           # et sa table de destinations est un JUMEAU (un script classique
           # chargé par `importScripts` ne peut importer aucun module TS). Ce
@@ -697,6 +706,19 @@ jobs:
           cd apps/web
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
 
+      # LA VERSION DE PLAYWRIGHT EST ÉPINGLÉE AU PATCH DANS `package.json`
+      # (#19480), et c'est elle qui choisit le Chromium téléchargé ici. Le
+      # dépôt épingle Node ('22.19'), bun ('1.3.14'), pnpm ('9') et Python
+      # ('3.10') ; le NAVIGATEUR, lui, flottait — `^1.62.1` plus un
+      # `bun install` non gelé, donc une résolution au plus récent à chaque
+      # run. CE QUE LE FLOTTEMENT A COÛTÉ, mesuré le 2026-11-17 : `dev` est
+      # passé de 1.64.1 (Chrome 153) à 1.65.1 (Chrome 159) sans qu'une ligne
+      # du dépôt change, et DEUX gardes de tranche 4 ont rougi — l'une parce
+      # que 1.65 fait respecter `inert` dans ses contrôles d'actionnabilité,
+      # l'autre parce que Chrome 159 sérialise `justify-content: flex-end` en
+      # `flow-end`. Les deux témoins étaient fautifs et sont corrigés ; ce qui
+      # restait à réparer, c'est qu'un changement de navigateur arrive par une
+      # PR de dépendance RELUE, jamais par surprise un mardi soir.
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
@@ -1173,6 +1195,17 @@ jobs:
           cd apps/web
           node scripts/check-thread-chrome.mjs
 
+      # #7143, #9121 — LA BANDE DU COMPOSEUR OCCULTE CE QUI PASSE DESSOUS : deux
+      # captures de la même bande (repos, fil remonté) dans les deux schémas, la
+      # rangée qui la borde atteignable au doigt, et les icônes de la rangée haute
+      # à la teinte de l'effet armé (3:1 au moins). Gate écrit et joué par aucune
+      # chaîne jusqu'au lot #18900 (#7663).
+      - name: Gate bande du composeur (occultation, geste, teinte de l'effet)
+        if: ${{ !cancelled() && matrix.tranche == 4 }}
+        run: |
+          cd apps/web
+          node scripts/check-composer-band.mjs
+
       # #6101 — AU REPOS, LA PILULE DE JOUR NE RECOUVRE AUCUN TEXTE. Boîtes
       # des nœuds texte sous la capsule et opacité calculée, deux schémas,
       # deux gabarits, trois modes rendus — une géométrie, jamais un booléen.
@@ -1377,6 +1410,16 @@ jobs:
         run: |
           cd apps/web
           node scripts/check-api-source.mjs
+
+      # #18986 — l'application démarre sous la politique de sécurité du contenu
+      # de `nginx.conf` (servie TELLE QUELLE), le pont libsignal s'instancie
+      # (`'wasm-unsafe-eval'`), et la politique refuse `new Function`, une
+      # amorce altérée et un script tiers.
+      - name: Gate politique de sécurité du contenu
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
+        run: |
+          cd apps/web
+          node scripts/check-csp.mjs
 
       # EN DERNIER, et pas par hasard : ce témoin RECONSTRUIT `dist` en variante
       # de banc (500 messages) pour mesurer la virtualisation, puis le
@@ -1833,6 +1876,10 @@ jobs:
             [ "$i" = 3 ] && exit 1
             echo "apt : tentative $i en échec, nouvelle tentative dans 10 s"
             sleep 10
+            # Un `timeout` qui tue apt pendant l'installation laisse dpkg
+            # INTERROMPU, et toute reprise échoue alors sur « dpkg was
+            # interrupted » (2026-11-19, run 44452585237, deux fois de suite).
+            sudo timeout 240 dpkg --configure -a || true
           done
           ffprobe -version | head -1
           jpegtran -version 2>&1 | head -1
@@ -1982,6 +2029,10 @@ jobs:
             [ "$i" = 3 ] && exit 1
             echo "apt : tentative $i en échec, nouvelle tentative dans 10 s"
             sleep 10
+            # Un `timeout` qui tue apt pendant l'installation laisse dpkg
+            # INTERROMPU, et toute reprise échoue alors sur « dpkg was
+            # interrupted » (2026-11-19, run 44452585237, deux fois de suite).
+            sudo timeout 240 dpkg --configure -a || true
           done
 
       - name: Parity lane self-test
@@ -2543,6 +2594,19 @@ jobs:
       - name: Préparer Node et les dépendances
         uses: ./.github/actions/preparer-js
 
+      # LA VERSION DE PLAYWRIGHT EST ÉPINGLÉE AU PATCH DANS `package.json`
+      # (#19480), et c'est elle qui choisit le Chromium téléchargé ici. Le
+      # dépôt épingle Node ('22.19'), bun ('1.3.14'), pnpm ('9') et Python
+      # ('3.10') ; le NAVIGATEUR, lui, flottait — `^1.62.1` plus un
+      # `bun install` non gelé, donc une résolution au plus récent à chaque
+      # run. CE QUE LE FLOTTEMENT A COÛTÉ, mesuré le 2026-11-17 : `dev` est
+      # passé de 1.64.1 (Chrome 153) à 1.65.1 (Chrome 159) sans qu'une ligne
+      # du dépôt change, et DEUX gardes de tranche 4 ont rougi — l'une parce
+      # que 1.65 fait respecter `inert` dans ses contrôles d'actionnabilité,
+      # l'autre parce que Chrome 159 sérialise `justify-content: flex-end` en
+      # `flow-end`. Les deux témoins étaient fautifs et sont corrigés ; ce qui
+      # restait à réparer, c'est qu'un changement de navigateur arrive par une
+      # PR de dépendance RELUE, jamais par surprise un mardi soir.
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 

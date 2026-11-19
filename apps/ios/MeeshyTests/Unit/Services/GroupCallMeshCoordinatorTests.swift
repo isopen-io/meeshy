@@ -94,11 +94,22 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         func groupCallTitleDidChange(_ title: String) { titles.append(title) }
         private(set) var groupVideoCeilings: [CallVideoBudget?] = []
         func recordVideoCeiling(_ budget: CallVideoBudget?) { groupVideoCeilings.append(budget) }
+        private(set) var systemCallNames: [String] = []
+        func recordSystemCallName(_ name: String) { systemCallNames.append(name) }
     }
 
     private final class ActiveCallStub: ActiveCallServiceProviding, @unchecked Sendable {
         var session: ActiveCallSession?
-        func activeCall(conversationId: String) async throws -> ActiveCallSession? { session }
+        private(set) var conversationReads = 0
+        private(set) var callIdReads: [String] = []
+        func activeCall(conversationId: String) async throws -> ActiveCallSession? {
+            conversationReads += 1
+            return session
+        }
+        func callSession(callId: String) async throws -> ActiveCallSession? {
+            callIdReads.append(callId)
+            return session
+        }
     }
 
     // MARK: - Fabriques
@@ -118,7 +129,8 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
             activeCalls: calls,
             now: { Date(timeIntervalSince1970: 100) },
             samplingInterval: .seconds(3600),
-            primaryVideoCeiling: { [weak host] in host?.recordVideoCeiling($0) }
+            primaryVideoCeiling: { [weak host] in host?.recordVideoCeiling($0) },
+            systemCallName: { [weak host] in host?.recordSystemCallName($0) }
         )
         if markGroup { sut.markGroupConversation("group1", title: "Équipe") }
         sut.attach(host: host)
@@ -268,10 +280,38 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         XCTAssertTrue(factory.links.isEmpty)
     }
 
-    func test_consume_directCall_neverTakesTheSignal() {
+    func test_consume_directCall_primaryOffer_staysWithCallManager() {
         let (sut, _, _, _, _) = makeSUT(markGroup: false)
 
+        XCTAssertFalse(sut.consume(signal: signal("offer", from: "b"), callId: "call1"))
+        XCTAssertFalse(sut.isGroupConversation("group1"))
+    }
+
+    func test_consume_directCall_answerFromAThirdParty_provesNothing() {
+        let (sut, _, _, _, _) = makeSUT(markGroup: false)
+
+        XCTAssertFalse(sut.consume(signal: signal("answer", from: "guest"), callId: "call1"))
+        XCTAssertFalse(sut.isGroupConversation("group1"))
+    }
+
+    /// #19238 — un appel direct n'a qu'un pair qui m'offre : l'offre d'un AUTRE
+    /// membre du même appel prouve qu'il est de groupe, et part au maillage.
+    func test_consume_offerFromAThirdPartyInUnmarkedCall_infersGroupAndGoesToTheMesh() async {
+        let (sut, _, factory, _, _) = makeSUT(markGroup: false)
+
+        XCTAssertTrue(sut.consume(signal: signal("offer", from: "guest"), callId: "call1"))
+        await settle()
+
+        XCTAssertTrue(sut.isGroupConversation("group1"))
+        XCTAssertEqual(factory.link(to: "guest")?.received.map(\.kind), [.offer])
+    }
+
+    func test_consume_offerWithoutDesignatedPrimary_provesNothing() {
+        let (sut, host, _, _, _) = makeSUT(markGroup: false)
+        host.groupPrimaryUserId = nil
+
         XCTAssertFalse(sut.consume(signal: signal("offer", from: "guest"), callId: "call1"))
+        XCTAssertFalse(sut.isGroupConversation("group1"))
     }
 
     func test_consume_answerWithoutLink_isSwallowedWithoutCreatingOne() async {
@@ -466,6 +506,147 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         await settle()
 
         XCTAssertEqual(sut.roster.member("c")?.displayName, "Chloé")
+    }
+
+    // MARK: - #19650 — un membre découvert par son offre garde SA caméra, et la session se lit par l'appel
+
+    private func servedParticipant(_ json: String) -> ActiveCallParticipant {
+        decode(ActiveCallParticipant.self, json)
+    }
+
+    func test_receive_offerFromUnknownMemberWhileLocalCameraOn_doesNotCopyLocalCamera() async {
+        let (sut, host, _, _, _) = makeSUT()
+        host.isLocalVideoEnabled = true
+
+        _ = sut.consume(signal: signal("offer", from: "c"), callId: "call1")
+        await settle()
+
+        XCTAssertEqual(sut.roster.member("c")?.isCameraOn, false, "ma caméra allumée ne dit rien de la sienne")
+    }
+
+    func test_receive_offerFromUnknownMemberWithServedCameraOff_admitsVideoDisabled() async {
+        let (sut, host, _, _, calls) = makeSUT()
+        host.isLocalVideoEnabled = true
+        calls.session = servedSession([servedParticipant(#"{"userId":"c","isMuted":true,"isVideoOff":true}"#)])
+        await settle()
+
+        _ = sut.consume(signal: signal("offer", from: "c"), callId: "call1")
+        await settle()
+
+        XCTAssertEqual(sut.roster.member("c")?.isCameraOn, false)
+        XCTAssertEqual(sut.roster.member("c")?.isMicMuted, true)
+    }
+
+    func test_receive_offerFromUnknownMemberWithServedCameraOn_admitsVideoEnabled() async {
+        let (sut, _, _, _, calls) = makeSUT()
+        calls.session = servedSession([servedParticipant(#"{"userId":"c","isMuted":false,"isVideoOff":false}"#)])
+        await settle()
+
+        _ = sut.consume(signal: signal("offer", from: "c"), callId: "call1")
+        await settle()
+
+        XCTAssertEqual(sut.roster.member("c")?.isCameraOn, true, "ma caméra éteinte ne dit rien de la sienne")
+        XCTAssertEqual(sut.roster.member("c")?.isMicMuted, false)
+    }
+
+    func test_enrich_servedMediaState_appliedToRoster() async {
+        let (sut, _, _, _, calls) = makeSUT()
+        calls.session = servedSession([servedParticipant(#"{"userId":"c","isMuted":true,"isVideoOff":false}"#)])
+
+        _ = sut.consume(signal: signal("offer", from: "c"), callId: "call1")
+        await settle()
+
+        XCTAssertEqual(sut.roster.member("c")?.isCameraOn, true, "la session lue après l'offre dit sa caméra")
+        XCTAssertEqual(sut.roster.member("c")?.isMicMuted, true)
+    }
+
+    func test_enrich_cachedSession_neverOverridesALaterMediaToggle() async {
+        let (sut, _, _, _, calls) = makeSUT()
+        calls.session = servedSession([
+            servedParticipant(#"{"userId":"c","isMuted":false,"isVideoOff":false}"#),
+            servedParticipant(#"{"userId":"d","isMuted":false,"isVideoOff":false}"#)
+        ])
+        await settle()
+        _ = sut.consume(signal: signal("offer", from: "c"), callId: "call1")
+        sut.handleMediaToggled(CallMediaToggleData(callId: "call1", userId: "c", mediaType: "video", enabled: false))
+
+        _ = sut.consume(signal: signal("offer", from: "d"), callId: "call1")
+        await settle()
+
+        XCTAssertEqual(sut.roster.member("c")?.isCameraOn, false, "la session déjà lue ne revient pas sur une bascule plus récente")
+        XCTAssertEqual(sut.roster.member("d")?.isCameraOn, true)
+    }
+
+    func test_enrichNamesIfNeeded_readsSessionByCallId_neverByConversation() async {
+        let (sut, _, _, _, calls) = makeSUT()
+        calls.session = servedSession([ActiveCallParticipant(userId: "c", user: ActiveCallParticipantUser(id: "c", username: "chloe", displayName: "Chloé"))])
+
+        _ = sut.consume(signal: signal("offer", from: "c"), callId: "call1")
+        await settle()
+
+        XCTAssertEqual(calls.callIdReads, ["call1"], "GET /calls/:id répond au membre comme à l'invité")
+        XCTAssertEqual(calls.conversationReads, 0, "l'invité n'est pas membre de la conversation : sa route lui répond 404")
+        XCTAssertEqual(sut.roster.member("c")?.displayName, "Chloé")
+    }
+
+    // MARK: - #19650 — l'appel lancé en tête-à-tête bascule vers le groupe des présents
+
+    private func conversationChanged(callId: String = "call1", to conversationId: String = "group2", title: String? = "Trio") -> CallConversationChangedEvent {
+        let titleField = title.map { #""\#($0)""# } ?? "null"
+        return decode(
+            CallConversationChangedEvent.self,
+            #"{"callId":"\#(callId)","conversationId":"\#(conversationId)","previousConversationId":"dm1","conversationType":"group","conversationTitle":\#(titleField),"memberUserIds":["me","b","c"],"created":true,"reason":"invitation"}"#
+        )
+    }
+
+    func test_adoptCallConversation_currentCall_rebindsConversationAndStaysGroup() async {
+        let (sut, host, factory, _, _) = makeSUT(markGroup: false)
+        host.groupConversationId = "dm1"
+        sut.handleParticipantJoined(joined("c", name: "Chloé"))
+        await settle()
+        XCTAssertTrue(sut.isGroupConversation("dm1"), "le tiers a fait du tête-à-tête un groupe")
+
+        sut.adoptCallConversation(conversationChanged())
+        await settle()
+
+        XCTAssertEqual(host.groupConversationId, "group2")
+        XCTAssertEqual(host.systemCallNames, ["Trio"], "CallKit nomme le groupe")
+        XCTAssertTrue(sut.isGroupConversation("group2"))
+        XCTAssertEqual(sut.groupTitle(for: "group2"), "Trio")
+        XCTAssertTrue(sut.isGroupCallActive, "le maillage reste lié : même appel, même callId")
+        XCTAssertEqual(factory.link(to: "c")?.closeCallCount, 0, "le média ne se coupe pas")
+        XCTAssertTrue(sut.roster.contains("c"))
+    }
+
+    func test_adoptCallConversation_untitledGroup_staysGroupWithoutTitle() async {
+        let (sut, host, _, _, _) = makeSUT()
+
+        sut.adoptCallConversation(conversationChanged(title: nil))
+
+        XCTAssertEqual(host.groupConversationId, "group2")
+        XCTAssertEqual(host.systemCallNames, ["Bob"], "un groupe sans titre se nomme par ses membres")
+        XCTAssertTrue(sut.isGroupConversation("group2"))
+        XCTAssertNil(sut.groupTitle(for: "group2"))
+        XCTAssertTrue(sut.isGroupCallActive)
+    }
+
+    func test_adoptCallConversation_replayed_renamesOnce() {
+        let (sut, host, _, _, _) = makeSUT()
+
+        sut.adoptCallConversation(conversationChanged())
+        sut.adoptCallConversation(conversationChanged())
+
+        XCTAssertEqual(host.systemCallNames, ["Trio"])
+    }
+
+    func test_adoptCallConversation_otherCall_ignored() {
+        let (sut, host, _, _, _) = makeSUT()
+
+        sut.adoptCallConversation(conversationChanged(callId: "call9"))
+
+        XCTAssertTrue(host.systemCallNames.isEmpty)
+        XCTAssertEqual(host.groupConversationId, "group1")
+        XCTAssertFalse(sut.isGroupConversation("group2"))
     }
 
     // MARK: - Départ du principal (#9085)
@@ -764,5 +945,39 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         sut.handleIncomingCall(offer)
 
         XCTAssertFalse(sut.isGroupConversation("dm1"))
+    }
+
+    // MARK: - #19238 — l'invité réveillé par push VoIP reçoit une offre par membre présent
+
+    private func voipInviteeReceivesOneOfferPerMember(markedByThePush: Bool) async -> (sut: GroupCallMeshCoordinator, factory: MockGroupPeerLinkFactory, takenByCallManager: [String]) {
+        let (sut, host, factory, _, _) = makeSUT(engaged: false, markGroup: false)
+        host.groupPrimaryUserId = "a"
+        if markedByThePush { sut.markGroupConversation("group1", title: nil) }
+
+        let takenByCallManager = ["a", "b", "c"].filter { !sut.consume(signal: signal("offer", from: $0), callId: "call1") }
+        host.isGroupCallEngaged = true
+        sut.syncWithHost()
+        await settle()
+        return (sut, factory, takenByCallManager)
+    }
+
+    func test_voipInvitee_markedByThePush_answersTheInviterAsPrimaryAndEveryOtherMemberThroughTheMesh() async {
+        let (sut, factory, takenByCallManager) = await voipInviteeReceivesOneOfferPerMember(markedByThePush: true)
+
+        XCTAssertEqual(takenByCallManager, ["a"])
+        XCTAssertEqual(factory.link(to: "b")?.received.map(\.kind), [.offer])
+        XCTAssertEqual(factory.link(to: "c")?.received.map(\.kind), [.offer])
+        XCTAssertNil(factory.link(to: "a"))
+        XCTAssertEqual(Set(sut.roster.members.map(\.userId)), ["a", "b", "c"])
+    }
+
+    func test_voipInvitee_pushFromAnOlderGateway_stillReachesEveryMemberThroughTheMesh() async {
+        let (sut, factory, takenByCallManager) = await voipInviteeReceivesOneOfferPerMember(markedByThePush: false)
+
+        XCTAssertEqual(takenByCallManager, ["a"])
+        XCTAssertTrue(sut.isGroupConversation("group1"))
+        XCTAssertEqual(factory.link(to: "b")?.received.map(\.kind), [.offer])
+        XCTAssertEqual(factory.link(to: "c")?.received.map(\.kind), [.offer])
+        XCTAssertNil(factory.link(to: "a"))
     }
 }

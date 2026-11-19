@@ -31,6 +31,7 @@ struct LiveCallJoiner {
         do {
             let session = try await activeCallService.activeCall(conversationId: request.conversationId)
             guard let session, session.id == request.callId else {
+                await CallNoticeLivenessChecker.shared.markEnded(callId: request.callId)
                 FeedbackToastManager.shared.show(
                     String(localized: "bubble.call.join.ended", defaultValue: "L'appel est terminé", bundle: .main),
                     type: .info
@@ -44,13 +45,16 @@ struct LiveCallJoiner {
                 ?? String(localized: "call.peer.fallback", defaultValue: "Appel", bundle: .main)
             // #9111 — un groupe se rejoint par le maillage : la conversation est
             // marquée AVANT la reprise, et le premier membre qui offre devient
-            // le pair principal (la poignée reste la conversation).
-            if request.isGroup { context.markGroupConversation(request.conversationId, request.fallbackDisplayName) }
+            // le pair principal (la poignée reste la conversation). #19238 — un
+            // duo devenu groupe par invitation reste « direct » : la session
+            // servie, qui compte plus d'un autre membre encore dedans, le dit.
+            let isGroup = request.isGroup || session.othersStillIn(currentUserId: request.currentUserId) > 1
+            if isGroup { context.markGroupConversation(request.conversationId, request.fallbackDisplayName) }
             let joined = context.rejoinActiveCall(
                 request.callId,
                 request.conversationId,
-                request.isGroup ? request.conversationId : (remote?.userId ?? request.fallbackRemoteUserId ?? ""),
-                request.isGroup ? (request.fallbackDisplayName ?? displayName) : displayName,
+                isGroup ? request.conversationId : (remote?.userId ?? request.fallbackRemoteUserId ?? ""),
+                isGroup ? (request.fallbackDisplayName ?? displayName) : displayName,
                 request.isVideo
             )
             if !joined {
@@ -61,6 +65,12 @@ struct LiveCallJoiner {
                 String(localized: "bubble.call.join.failed", defaultValue: "Impossible de rejoindre l'appel", bundle: .main)
             )
         }
+    }
+}
+
+private extension ActiveCallSession {
+    func othersStillIn(currentUserId: String) -> Int {
+        participants.filter { $0.userId != currentUserId && !$0.hasLeft }.count
     }
 }
 

@@ -8,11 +8,6 @@
     <string name="bubble_reply_attachment">Anhang</string>
     <string name="bubble_file_open">Datei öffnen</string>
     <string name="live_location_remaining">%1$s verbleibend</string>
-    <string name="live_location_duration_15m">15 Min.</string>
-    <string name="live_location_duration_30m">30 Min.</string>
-    <string name="live_location_duration_1h">1 Stunde</string>
-    <string name="live_location_duration_2h">2 Stunden</string>
-    <string name="live_location_duration_8h">8 Stunden</string>
     <string name="bubble_audio_play">Sprachnachricht abspielen</string>
     <string name="bubble_file_size_bytes">%1$s B</string>
     <string name="bubble_file_size_kb">%1$s KB</string>
@@ -43,4 +38,6 @@
     <string name="bubble_a11y_file">Datei %1$s</string>
     <string name="bubble_a11y_pinned">Angeheftet</string>
     <string name="bubble_a11y_ephemeral">Selbstzerstörende Nachricht</string>
+    <string name="skeleton_link_row_loading">Ein Link wird geladen</string>
+    <string name="talkie_send_voice">Das Walkie-Talkie kommt gerade nicht durch: Sende stattdessen eine Sprachnachricht.</string>
 </resources>

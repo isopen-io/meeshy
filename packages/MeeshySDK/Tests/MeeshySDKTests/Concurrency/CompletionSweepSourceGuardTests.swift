@@ -5,7 +5,6 @@ final class CompletionSweepSourceGuardTests: XCTestCase {
     private static let lockFree: [String] = [
         "MeeshySDK/Utils/MediaFormat+Duration.swift",
         "MeeshySDK/Utils/ThumbHash.swift",
-        "MeeshySDK/Cache/ThumbnailPrefetcher.swift",
         "MeeshySDK/Cache/DiskCacheStore.swift",
         "MeeshySDK/Cache/DecodedBitmapStore.swift",
         "MeeshySDK/Cache/CacheCoordinator.swift",
@@ -34,6 +33,17 @@ final class CompletionSweepSourceGuardTests: XCTestCase {
         return text.components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.hasPrefix("//") }
+            .joined(separator: "\n")
+    }
+
+    /// `MediaSessionCoordinator.swift` et ses extensions `MediaSessionCoordinator+*.swift` : l'unité entière.
+    private static var mediaSessionUnit: String {
+        let directory = sources.appendingPathComponent("MeeshySDK/Media")
+        let extensions = ((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? [])
+            .filter { $0.hasPrefix("MediaSessionCoordinator+") && $0.hasSuffix(".swift") }
+            .sorted()
+        return (["MediaSessionCoordinator.swift"] + extensions)
+            .map { code(of: "MeeshySDK/Media/\($0)") ?? "" }
             .joined(separator: "\n")
     }
 
@@ -70,7 +80,7 @@ final class CompletionSweepSourceGuardTests: XCTestCase {
     }
 
     func test_mediaSessionCoordinator_keepsOnlyTheEventsSubjectUnsafe() {
-        let lines = (Self.code(of: "MeeshySDK/Media/MediaSessionCoordinator.swift") ?? "")
+        let lines = Self.mediaSessionUnit
             .components(separatedBy: "\n")
             .filter { $0.contains("nonisolated(unsafe)") && !$0.contains(Self.mediaSessionAllowed) }
         XCTAssertTrue(lines.isEmpty, "\(lines)")

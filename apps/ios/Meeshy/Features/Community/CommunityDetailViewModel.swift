@@ -24,25 +24,58 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
     private let service: CommunityServiceProviding
     private let currentUserId: @MainActor () -> String
     private let postsCache: @MainActor () async -> CommunityPostsCache?
+    private let myCommunities: MyCommunitiesWrites
     private var liveUpdates: AnyCancellable?
+    private var liveMembers: AnyCancellable?
+    private var liveDeletions: AnyCancellable?
+    private let memberLane = OrderedEventLane()
 
     /// `communityUpdates` : `community:updated` (#18439) réécrit l'identité
     /// affichée — nom, description, avatar, bannière, confidentialité,
     /// effectif — sans relance réseau ni toucher au rôle du lecteur.
+    /// `memberChanges` : `community:member-*` (#18767) recopie l'effectif et
+    /// fait suivre le rôle du lecteur quand le geste le concerne.
+    /// `deletions` : `community:deleted` (#19591) rend la fiche indisponible
+    /// sur-le-champ, puis la relit en silence.
     init(
         communityId: String,
         service: CommunityServiceProviding = CommunityService.shared,
         currentUserId: @escaping @MainActor () -> String = { AuthManager.shared.currentUser?.id ?? "" },
         postsCache: @escaping @MainActor () async -> CommunityPostsCache? = { nil },
-        communityUpdates: AnyPublisher<CommunityUpdatedEvent, Never> = CommunityUpdateChannel.live
+        communityUpdates: AnyPublisher<CommunityUpdatedEvent, Never> = CommunityUpdateChannel.live,
+        memberChanges: AnyPublisher<CommunityMemberChange, Never> = CommunityMemberChannel.live,
+        deletions: AnyPublisher<String, Never> = CommunityDeletedChannel.live,
+        myCommunities: MyCommunitiesWrites = .live
     ) {
         self.communityId = communityId
         self.service = service
         self.currentUserId = currentUserId
         self.postsCache = postsCache
+        self.myCommunities = myCommunities
         self.liveUpdates = communityUpdates
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in self?.apply(event) }
+        self.liveMembers = memberChanges
+            .relay(through: memberLane) { [weak self] change in await self?.apply(change) }
+        self.liveDeletions = deletions
+            .relay(through: memberLane) { [weak self] communityId in await self?.applyDisappearance(of: communityId) }
+    }
+
+    /// La communauté regardée a été supprimée ou désactivée : l'écran dit
+    /// aussitôt qu'elle n'est plus disponible — plus aucun geste n'est offert —,
+    /// oublie ses canaux et ses publications gardées, la retire de « mes
+    /// communautés », puis la relit sans indicateur (un compte qui la lit
+    /// encore la retrouve).
+    func applyDisappearance(of disappearedId: String) async {
+        guard disappearedId == communityId else { return }
+        community = nil
+        conversations = []
+        isCreator = false
+        adopt(role: nil)
+        loadFailure = .refused
+        await forgetCachedPosts()
+        await myCommunities.remove(communityId)
+        await loadServed(showsProgress: false)
     }
 
     func apply(_ event: CommunityUpdatedEvent) {
@@ -50,9 +83,40 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
         community = updated
     }
 
+    /// Un tiers : l'effectif seul. Le lecteur : son rôle suit — promu, il
+    /// gère ; sorti (d'un autre appareil, ou retiré), il perd ses droits, ses
+    /// canaux et les publications gardées, et la fiche se relit (une
+    /// communauté privée cesse de lui être servie) ; entré d'ailleurs, la
+    /// fiche se relit pour servir ce qu'un membre lit.
+    func apply(_ change: CommunityMemberChange) async {
+        guard change.communityId == communityId else { return }
+        if let updated = community?.applying(change) { community = updated }
+        guard change.concerns(readerId: currentUserId()) else { return }
+        let wasMember = isMember
+        adopt(role: change.role)
+        switch (wasMember, isMember) {
+        case (true, false):
+            conversations = []
+            await forgetCachedPosts()
+            await myCommunities.remove(communityId)
+            await loadServed()
+        case (false, true):
+            await forgetCachedPosts()
+            if let joined = await loadServed(), isMember { await myCommunities.add(joined) }
+        default:
+            return
+        }
+    }
+
     func load() async {
-        isLoading = true
-        defer { isLoading = false }
+        await loadServed()
+    }
+
+    /// Ce que le serveur sert de la communauté, `nil` sur un échec.
+    @discardableResult
+    private func loadServed(showsProgress: Bool = true) async -> APICommunity? {
+        if showsProgress { isLoading = true }
+        defer { if showsProgress { isLoading = false } }
 
         do {
             let apiCommunity = try await service.get(communityId: communityId)
@@ -63,8 +127,10 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
             if isMember {
                 conversations = try await service.getConversations(communityId: communityId)
             }
+            return apiCommunity
         } catch {
             loadFailure = Self.loadFailure(for: error)
+            return nil
         }
     }
 
@@ -85,9 +151,13 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
         let creatorMatch = apiCommunity.createdBy == readerId
         let servedRole = apiCommunity.currentUserRole.flatMap(MemberRole.init(rawValue:))
         let recordRole = apiCommunity.members?.first(where: { $0.userId == readerId })?.communityRole
-        let role = servedRole ?? recordRole ?? (creatorMatch ? .admin : nil)
-
         isCreator = creatorMatch
+        adopt(role: servedRole ?? recordRole)
+    }
+
+    /// Le créateur vaut admin quand aucun rôle n'est tenu.
+    private func adopt(role served: MemberRole?) {
+        let role = served ?? (isCreator ? .admin : nil)
         isMember = role != nil
         currentUserRole = role ?? .member
         isAdmin = currentUserRole.hasMinimumRole(.admin) || isCreator
@@ -99,7 +169,8 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
         do {
             _ = try await service.join(communityId: communityId)
             await forgetCachedPosts()
-            await load()
+            // #18935 — la bande Communautés et le partage la voient au retour.
+            if let joined = await loadServed(), isMember { await myCommunities.add(joined) }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -109,6 +180,7 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
         do {
             try await service.leave(communityId: communityId)
             await forgetCachedPosts()
+            await myCommunities.remove(communityId)
         } catch {
             errorMessage = error.localizedDescription
         }

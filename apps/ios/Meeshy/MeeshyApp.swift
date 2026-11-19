@@ -55,6 +55,10 @@ struct MeeshyApp: App {
 
         // Sortie de bêta : la clé de la préférence « Activer les bêta » est effacée de l'appareil.
         LentilleFeatureFlag.removeRetiredBetaPreference()
+        // L'ancien cache des aperçus de liens restait dans Documents/, donc dans la sauvegarde,
+        // tant qu'aucune carte n'était montée : il part dès le lancement (R-6, #12768). Une
+        // seule vérification d'existence quand il n'y est plus.
+        LinkPreviewStore.removeLegacyBackedUpCache(inDocuments: URL.documentsDirectory)
 
         // Publier, inviter par e-mail ou créer un lien sans adresse
         // prouvée ouvre la validation, puis la requête repart (`APIClient`).
@@ -194,6 +198,7 @@ struct MeeshyApp: App {
                 .environmentObject(AuthManager.shared)
                 .environmentObject(deepLinkRouter)
                 .meeshyMotionRoot()
+                .meeshyHardwareKeyboardHost()
                 .environment(\.meeshyForceReduceMotion, a11yPrefs.reduceMotion)
                 .meeshyThemeRoot(theme)
                 .modifier(ExternalEntryHandlers(dispatcher: LiveExternalEntryDispatcher(router: deepLinkRouter)))
@@ -517,30 +522,71 @@ struct SystemThemeDetector<Content: View>: View {
 // MARK: - Profile sheet environment
 
 struct ProfileSheetEnvironment: ViewModifier {
-    /// Le niveau et le rang d'un membre, sur la BANNIÈRE de sa fiche : ce que SA visibilité autorise,
-    /// rien sinon. Le chargeur de profil (cache, conversations partagées) est posé au même endroit : une seule
+    /// « Sa Légende » dans la Vitrine d'un membre — et nulle part ailleurs, ni sur sa bannière (#19773) : ce que SA
+    /// visibilité autorise, rien sinon. « En direct » dès Proche (#19416). Le chargeur de profil (cache, conversations partagées) est posé au même endroit : une seule
     /// injection, toutes les feuilles de profil la reçoivent.
+    /// La connectivité que la fiche lit pour « Parler » hors ligne (#18857) : le moniteur réseau de l'app, pas le
+    /// dernier chargement de la fiche.
+    @ObservedObject private var network = NetworkMonitor.shared
+
     func body(content: Content) -> some View {
         content
-            .environment(\.profileGameSection, ProfileGameSection { userId, displayName in
-                ProfileSlot.view(.banner, userId: userId, displayName: displayName)
+            .environment(\.profileNetworkIsOffline, network.isOffline)
+            .environment(\.profileGameSection, ProfileGameSection(
+                card: { userId, tint in ProfileSlot.view(.gameCard, userId: userId, displayName: "", tint: tint) }
+            ))
+            .environment(\.profileLiveSection, ProfileLiveSection { request in
+                ProfileSlot.view(.live, userId: request.userId, displayName: request.displayName, liveRequest: request)
             })
-            .environment(\.profileRelationSection, ProfileRelationSection { userId, displayName, linked in
-                ProfileSlot.view(.relation, userId: userId, displayName: displayName, linked: linked)
+            .environment(\.profileRelationSection, ProfileRelationSection { userId, displayName, standing, tint in
+                ProfileSlot.view(.relation, userId: userId, displayName: displayName, standing: standing, tint: tint)
             })
+            .environment(\.profileRelationPill, ProfileRelationPill { userId, displayName, standing in
+                ProfileSlot.view(.pill, userId: userId, displayName: displayName, standing: standing)
+            })
+            .environment(\.profileActionsParts, ProfileActionsParts { part, request in
+                ProfileSlot.view(.actions, userId: request.userId, displayName: request.displayName,
+                                 liveRequest: request, actionsPart: part)
+            })
+            .environment(\.profileLocationMap, ProfileLocationMap(
+                isOffered: { userId in ProfileWhereCard.isShown(for: userId) },
+                destination: { request in
+                    ProfileSlot.view(.locationMap, userId: request.userId, displayName: request.displayName,
+                                     mapRequest: request)
+                },
+                preview: { request, openMap in
+                    ProfileSlot.view(.whereTheyAre, userId: request.userId, displayName: request.displayName,
+                                     openMap: openMap)
+                }
+            ))
+            .environment(\.profileUnavailableExits, ProfileUnavailableExits(
+                scanner: { onOpened in ProfileSlot.view(.scanner, userId: "", displayName: "", onOpened: onOpened) }
+            ))
+            .environment(\.profileSendSheet, ProfileSendHost.sheet)
+            .environment(\.profileCommunityDoor, ProfileCommunityDoor(
+                open: { id in DeepLinkRouter.shared.pendingDeepLink = .community(id: id) },
+                join: { id in (try? await CommunityService.shared.join(communityId: id)) != nil }
+            ))
             .environment(\.profileLoading, LiveProfileLoading())
             .environment(\.avatarListeningSource, ListeningCenter.shared.source)
     }
 }
 
 /// Les emplacements opaques de la fiche de profil, effacés en UN seul point : le jeu sur la bannière et le cercle à la
-/// place de « Connectés » (#13940). Le cercle se reconstruit à chaque membre (`.id`) : la fiche garde ses vues d'un
+/// place de « Connectés » (#13940), la pilule du cercle commun sous le nom (#18870). Le cercle se reconstruit à chaque membre (`.id`) : la fiche garde ses vues d'un
 /// membre à l'autre, et le niveau du précédent ne doit jamais se peindre sous le nom du suivant.
 enum ProfileSlot {
-    case banner, relation
+    case relation, pill, locationMap, whereTheyAre, scanner, gameCard, live, actions, send
 
-    static func view(_ slot: ProfileSlot, userId: String, displayName: String, linked: Binding<Bool> = .constant(false)) -> AnyView {
-        AnyView(ProfileSlotContent(slot: slot, userId: userId, displayName: displayName, linked: linked))
+    static func view(_ slot: ProfileSlot, userId: String, displayName: String,
+                     standing: Binding<ProfileRelationStanding> = .constant(.unresolved),
+                     mapRequest: ProfileLocationMapRequest? = nil, openMap: (() -> Void)? = nil,
+                     onOpened: (() -> Void)? = nil, tint: Color? = nil,
+                     liveRequest: ProfileLiveRequest? = nil, actionsPart: ProfileActionsPart? = nil,
+                     send: ProfileSendHost? = nil) -> AnyView {
+        AnyView(ProfileSlotContent(slot: slot, userId: userId, displayName: displayName, standing: standing,
+                                   mapRequest: mapRequest, openMap: openMap, onOpened: onOpened, tint: tint,
+                                   liveRequest: liveRequest, actionsPart: actionsPart, send: send))
     }
 }
 
@@ -548,15 +594,46 @@ private struct ProfileSlotContent: View {
     let slot: ProfileSlot
     let userId: String
     let displayName: String
-    @Binding var linked: Bool
+    @Binding var standing: ProfileRelationStanding
+    let mapRequest: ProfileLocationMapRequest?
+    let openMap: (() -> Void)?
+    let onOpened: (() -> Void)?
+    /// L'accent remis par la fiche ; `nil` quand elle n'en remet aucun (le cercle reprend alors sa propre couleur).
+    let tint: Color?
+    let liveRequest: ProfileLiveRequest?
+    let actionsPart: ProfileActionsPart?
+    let send: ProfileSendHost?
 
     var body: some View {
         switch slot {
-        case .banner:
-            GameBannerBadge(userId: userId)
         case .relation:
-            ProfileCircleSection(userId: userId, displayName: displayName, linked: $linked)
+            ProfileCircleSection(userId: userId, displayName: displayName, standing: $standing, tint: tint)
                 .id(userId)
+        case .pill:
+            ProfileRelationPillView(userId: userId, displayName: displayName, standing: $standing)
+                .id(userId)
+        case .locationMap:
+            PersonLocationMapScreen(userId: userId, displayName: displayName,
+                                    onWrite: mapRequest?.onWrite, onCall: mapRequest?.onCall,
+                                    profile: mapRequest?.profile)
+        case .whereTheyAre:
+            ProfileWhereCard(userId: userId, displayName: displayName, openMap: openMap ?? {})
+        case .scanner:
+            ProfileQRScannerSheet(onOpened: onOpened ?? {})
+        case .gameCard:
+            GameProfileBoardSource(userId: userId, tint: tint ?? .clear)
+                .id(userId)
+        case .live:
+            if let liveRequest {
+                ProfileLiveSource(request: liveRequest)
+                    .id(userId)
+            }
+        case .actions:
+            if let liveRequest, let actionsPart {
+                ProfileActionsPartContent(part: actionsPart, request: liveRequest)
+            }
+        case .send:
+            if let send { send }
         }
     }
 }

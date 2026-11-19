@@ -14,6 +14,7 @@ import { ApiError, currentOwnerCredential } from './client';
 import { performCommentGesture, type CommentGestureRequest, type CommentGestureResult } from './comment-gestures';
 import { setCommentsDisabled, type CommentSettingOutcome } from './comment-settings';
 import { repliesInfiniteOptions } from './comment-replies';
+import { appRowGestures } from './app-row-gestures';
 import { performRowAction } from './conversation-actions';
 import { conversationQuery, conversationsQuery, refreshConversations } from './conversations';
 import type { PendingAttachment } from '@/lib/send/attachments';
@@ -21,7 +22,6 @@ import type { PendingAttachment } from '@/lib/send/attachments';
 import { apiDeps } from './deps';
 import { sendTransfer } from '@/lib/send/send-transfer-instance';
 import { feedQuery, refreshFeed } from './feed';
-import { forwardMessages, type ForwardResult, type ForwardSource } from './forward';
 import { performPostGesture, type PostGestureResult } from './feed-gestures';
 import type { FeedAuthor } from './feed-pages';
 import { recordPostShare } from './feed-share';
@@ -48,7 +48,7 @@ import {
   storyPostQueryOptions,
   storyTrayQueryOptions,
 } from './stories';
-import { performStoryReaction, viewerReactedToStory, type StoryReactionResult } from './story-reactions';
+import { performStoryReaction, type StoryReactionResult } from './story-reactions';
 import { storyViewedStore } from './story-viewed-store';
 
 /**
@@ -446,7 +446,7 @@ export function rowAction(conversationId: string, action: RowFlagActionId): void
   void performRowAction({
     conversationId,
     action,
-    deps: { ...apiDeps, store: conversationStore, queryClient: appQueryClient, notify: announceRowEvent },
+    deps: { ...apiDeps, store: conversationStore, queryClient: appQueryClient, notify: announceRowEvent, gestures: appRowGestures() },
   });
 }
 
@@ -500,21 +500,6 @@ export function discardSendAction(params: { readonly conversationId: string; rea
  */
 export function reactAction(conversationId: string, messageId: string, emoji: string): Promise<PerformReactionResult> {
   return performReaction({ conversationId, messageId, emoji, deps: { ...apiDeps, queryClient: appQueryClient } });
-}
-
-/**
- * `forwardAction` (#5866) — RÉFÉRENCE DE MODULE STABLE, motif `reactAction`.
- * Le SITE UNIQUE par lequel la barre de sélection atteint le transport ; la
- * règle (« quoi peut partir ») vit dans `view/forward.ts`, la forme du corps
- * (« jamais d'`attachmentIds` ») dans `api/forward.ts`. Ce relais n'en porte
- * aucune — il ne fait que brancher `apiDeps`.
- */
-export function forwardAction(params: {
-  readonly messages: readonly ForwardSource[];
-  readonly sourceConversationId: string;
-  readonly targetConversationId: string;
-}): Promise<ForwardResult> {
-  return forwardMessages({ ...apiDeps, ...params });
 }
 
 /**
@@ -630,9 +615,4 @@ export function storyReactionAction(storyId: string, emoji?: string): Promise<St
     ...(emoji === undefined ? {} : { emoji }),
     deps: { ...apiDeps, queryClient: appQueryClient },
   });
-}
-
-/** Ai-je réagi à cette story ? Lu du MÊME cache que le geste bascule. */
-export function viewerReactedToStoryNow(storyId: string, emoji?: string): boolean {
-  return viewerReactedToStory(appQueryClient, storyId, emoji);
 }

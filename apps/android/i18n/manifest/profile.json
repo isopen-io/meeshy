@@ -67,10 +67,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "ui",
-          "iosKey": "profile.action.sendMessage",
           "androidName": "profile_action_send_message",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "androidName": "profile_activity_average",
@@ -88,21 +86,13 @@
         },
         {
           "catalog": "app",
-          "iosKey": "a11y.back",
-          "androidName": "profile_back",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "profile.bio",
           "androidName": "profile_bio_label",
           "status": "adopted"
         },
         {
-          "catalog": "ui",
-          "iosKey": "profile.blocked.byMe",
           "androidName": "profile_blocked_by_me",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "ui",
@@ -115,10 +105,6 @@
           "iosKey": "call.dial.notConnected",
           "androidName": "profile_call_not_placed",
           "status": "adopted"
-        },
-        {
-          "androidName": "profile_change_avatar",
-          "status": "android-only"
         },
         {
           "androidName": "profile_change_banner",
@@ -136,34 +122,8 @@
         },
         {
           "catalog": "app",
-          "iosKey": "participantProfile.country",
-          "androidName": "profile_detail_country",
-          "status": "adopted"
-        },
-        {
-          "androidName": "profile_detail_regional_language",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "profile.language.primary",
-          "androidName": "profile_detail_system_language",
-          "status": "adopted"
-        },
-        {
-          "androidName": "profile_detail_timezone",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
           "iosKey": "profile.display_name",
           "androidName": "profile_display_name_label",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "preview.e2ee.a11y",
-          "androidName": "profile_e2ee",
           "status": "adopted"
         },
         {
@@ -202,23 +162,9 @@
         },
         {
           "catalog": "app",
-          "iosKey": "settings.security.not_set",
-          "androidName": "profile_language_unset",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "profile.last_name",
           "androidName": "profile_last_name_label",
           "status": "adopted"
-        },
-        {
-          "androidName": "profile_last_seen",
-          "status": "android-only"
-        },
-        {
-          "androidName": "profile_member_since",
-          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -237,10 +183,8 @@
           "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "share.links.copy.a11y",
           "androidName": "profile_share_copy",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "androidName": "profile_share_message",
@@ -305,10 +249,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "ui",
-          "iosKey": "profile.status.connected",
           "androidName": "profile_status_connected",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -338,12 +280,6 @@
           "catalog": "ui",
           "iosKey": "profile.toast.userUnblocked",
           "androidName": "profile_toast_user_unblocked",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "a11y.message.unknown_sender",
-          "androidName": "profile_unknown",
           "status": "adopted"
         },
         {

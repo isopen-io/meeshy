@@ -9,8 +9,8 @@ import UIKit
 /// - HEIC 4K: 52ms vs 83ms
 /// - JPEG 4K: 24ms vs 105ms
 ///
-/// Used by `VideoClipBar` (and any other strip-rendering view) to extract the
-/// frame thumbnails that line the timeline track. The cost is further amortized
+/// Used wherever a downsampled still is needed (draft thumbnails, image
+/// retouching, comment attachments). The cost is further amortized
 /// by the OS image cache on subsequent renders.
 ///
 /// - Note: This helper is intentionally synchronous. Callers should dispatch

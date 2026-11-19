@@ -3,9 +3,12 @@
  * `/users/me/avatar`, `/users/me/banner`. Extrait de `profile.ts` (#4284,
  * budget de taille) — la façade de ré-export vit là-bas.
  */
+import { normalizeCityInput } from '@meeshy/shared/utils/profile-city';
+import { servedProfileAccentColor } from '@meeshy/shared/utils/profile-accent';
+import { announceProfileAccentToPartners } from './profile-accent';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { logError } from '../../utils/logger';
+import { logError, logWarn } from '../../utils/logger';
 import { capitalizeName, normalizeDisplayName } from '../../utils/normalize';
 import {
   updateUserProfileSchema,
@@ -35,12 +38,14 @@ import {
 } from '../../utils/auto-translate-preference';
 import { applyCategoryWriteEffects } from '../me/preferences/preference-registry';
 import { calculateProfileCompletionRate } from '../../utils/profile-completion';
+import { announceProfileChanged, touchesProfileFiche } from '../../services/notifications/profile-changed';
 import { releaseParticipantAvatarSnapshots } from '../../services/participantAvatarSnapshots';
 import { identityImageIsCallers, IDENTITY_IMAGE_NOT_OWNED } from '../../services/attachments/identityImageOwnership';
 import { refreshParticipantNameSnapshots } from '../../services/participantNameSnapshots';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
+import { announceOwnProfileUpdated } from './own-profile-sync';
 
 /**
  * Le seuil d'une bio qui « compte » (#8959) : le MÊME que l'anneau de
@@ -101,6 +106,20 @@ function creditProfileMilestones(
 }
 
 /**
+ * La réponse du PATCH est lue par son PROPRIÉTAIRE : elle lui rend sa ville et son réglage
+ * (#18862), champs ajoutés qu'un ancien client ignore. `userSchema` reste sans eux, car d'autres
+ * routes le servent.
+ */
+const ownProfileWithCitySchema = {
+  ...userSchema,
+  properties: {
+    ...userSchema.properties,
+    city: { type: 'string', nullable: true, description: 'Declared city (owner only)' },
+    cityCircle: { type: 'string', nullable: true, description: 'Circle from which the city is readable (null = only the owner)' },
+  },
+} as const;
+
+/**
  * Update authenticated user profile
  */
 export async function updateUserProfile(fastify: FastifyInstance) {
@@ -119,7 +138,7 @@ export async function updateUserProfile(fastify: FastifyInstance) {
             data: {
               type: 'object',
               properties: {
-                user: userSchema,
+                user: ownProfileWithCitySchema,
                 message: { type: 'string', example: 'Profile updated successfully' }
               }
             }
@@ -165,6 +184,12 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       // (`contact-change.ts`) — prouve la possession avant d'écrire quoi que
       // ce soit ; ne pas recréer ce raccourci ici.
       if (body.bio !== undefined) updateData.bio = SecuritySanitizer.sanitizeText(body.bio);
+      // #18862 : la ville DÉCLARÉE (texte brut, vide = effacement) et le cercle qui la lit
+      // (`null` = elle seule). Le cercle est une valeur de l'échelle, déjà validée par Zod.
+      if (body.city !== undefined) updateData.city = normalizeCityInput(body.city);
+      if (body.cityCircle !== undefined) updateData.cityCircle = body.cityCircle;
+      // #19201 : la couleur d'accent de la vitrine, déjà canonisée par Zod (liste fermée, `null` = automatique).
+      if (body.profileAccentColor !== undefined) updateData.profileAccentColor = body.profileAccentColor;
 
       // UNE lecture de la ligne avant l'écriture, ouverte seulement quand un
       // champ du corps en a besoin : un NOM (la borne de #13825 ne juge que les
@@ -342,6 +367,26 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         fastify.socketIOHandler?.getManager?.()?.refreshUserTypingIdentity(userId!);
       }
 
+      const accentChanged = body.profileAccentColor !== undefined;
+      if (accentChanged) {
+        announceProfileAccentToPartners(fastify, userId!, servedProfileAccentColor(updatedUser.profileAccentColor));
+      }
+
+      // #18924 — MES autres appareils : la charge PROPRE (langues comprises), sur
+      // `user:<moi>` seulement. Les partenaires ont `user:updated` ci-dessus, et sa
+      // charge publique ; une écriture qui ne touche aucun champ de l'instantané
+      // (bio, ville, réglages) ne diffuse rien. L'accent (#19201) en est un.
+      if (langChanged || nameChanged || accentChanged) {
+        announceOwnProfileUpdated(fastify, updatedUser);
+      }
+
+      // #19384 — la fiche que les AUTRES lisent a changé (bio, ville, langues, voix) :
+      // signal sans contenu vers ses lecteurs, qui la revalident par If-None-Match.
+      if (touchesProfileFiche(body)) {
+        void announceProfileChanged(fastify, { userId: userId! })
+          .catch((error: unknown) => logWarn(fastify.log, '[PROFILE_UPDATE] profile-changed announce failed', error));
+      }
+
       creditProfileMilestones(fastify, userId!, profileMilestonesReached(
         {
           bio: body.bio !== undefined,
@@ -360,7 +405,11 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       const permissions = servedUserPermissions(updatedUser.role as UserRoleEnum);
 
       return sendSuccess(reply, {
-        user: formatUserResponse({ ...updatedUser, autoTranslateEnabled }, permissions),
+        user: {
+          ...formatUserResponse({ ...updatedUser, autoTranslateEnabled }, permissions),
+          city: updatedUser.city ?? null,
+          cityCircle: updatedUser.cityCircle ?? null,
+        },
         message: 'Profile updated successfully'
       });
 
@@ -462,6 +511,7 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
 
       fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: { avatar: updatedUser.avatar } })
         .catch((err: unknown) => logError(fastify.log, '[AVATAR_UPDATE] emitUserUpdated failed', err));
+      announceOwnProfileUpdated(fastify, updatedUser);
 
       fastify.log.info(`[AVATAR_UPDATE] Avatar updated successfully for user ${userId}`);
 
@@ -558,6 +608,7 @@ export async function updateUserBanner(fastify: FastifyInstance) {
 
       fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: { banner: updatedUser.banner } })
         .catch((err: unknown) => logError(fastify.log, '[BANNER_UPDATE] emitUserUpdated failed', err));
+      announceOwnProfileUpdated(fastify, updatedUser);
 
       fastify.log.info(`[BANNER_UPDATE] Banner updated successfully for user ${userId}`);
 

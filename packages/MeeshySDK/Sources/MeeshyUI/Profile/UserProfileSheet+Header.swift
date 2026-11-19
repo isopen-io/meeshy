@@ -1,221 +1,305 @@
 import SwiftUI
 import MeeshySDK
 
-// MARK: - UserProfileSheet — Collapsible header + pinned tab bar
+// MARK: - UserProfileSheet — l'en-tête (#19410)
 //
-// Split out of UserProfileSheet.swift for readability. All members are
-// `extension` computed properties on the single stateful `UserProfileSheet`
-// struct — no state is threaded, they read the struct's @State/@Environment
-// directly (same module). Preserves every visual effect (bounceOnAppear,
-// gradient orbs, avatar ring, fullscreen tap) per the project "do not strip
-// effects" rule. Light/Dark adaptive via `theme.textPrimary/textMuted`.
+// Planches `Autre-Vitrine`, `Autre-Publications`, `Autre-Commun`, `Autre-Actions`, `Etat-HorsLigne` : l'en-tête est
+// fait du kit (loi 12). K28 `MeeshyCollapsingHero` replie bannière, avatar et nom dans sa barre de verre — mini-avatar,
+// nom, pilule de relation — ; sans photo ni décor, la bannière est K27 `MeeshyLivingBanner`. Les valeurs vivent dans
+// `ProfileHeroPlan`.
 
 extension UserProfileSheet {
 
-    // MARK: - Big collapsible header
+    // MARK: - Le défilement sous le héros
 
-    /// Banner + identity only (réduit). Interpolates between the expanded
-    /// state (full banner + avatar + name + @pseudo) and the collapsed state
-    /// (banner shrunk toward `collapsedBar`, avatar/name faded — the compact
-    /// pinned bar takes over). Bio, languages, country and the rest live in the
-    /// Détails tab, not the header. Driven by
-    /// `ProfileHeaderMetrics.progress(offset: scrollOffset)`.
-    @ViewBuilder
-    func bigCollapsibleHeader(offset: CGFloat) -> some View {
-        let progress = ProfileHeaderMetrics.progress(offset: offset)
-        let bannerHeight = ProfileHeaderMetrics.expandedBanner
-            - (ProfileHeaderMetrics.expandedBanner - ProfileHeaderMetrics.collapsedBar) * progress
-
-        VStack(spacing: 0) {
-            bannerSection
-                .frame(height: bannerHeight)
-                .overlay(alignment: .bottom) {
-                    bannerGameBadge
-                        .opacity(1 - Double(progress))
+    /// Ce qui défile, sous le héros épinglé : il vit DANS le défilement (le doigt posé sur la bannière fait défiler)
+    /// et se contre-décale pour rester en haut, pendant que K28 se replie.
+    func heroScrollView<Content: View>(_ content: Content) -> some View {
+        ScrollView(showsIndicators: false) {
+            LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                Color.clear.frame(height: CGFloat(ProfileHeroPlan.contentTop))
+                heroDetails
+                content
+            }
+            // Le haut de ce qui défile, lu dans l'espace du défilement : son minY vaut −contentOffset (iOS 16–17 ;
+            // iOS 18 passe par `trackScrollContentOffset`). Tiré vers le bas, il est positif : seule la bannière s'étire.
+            .background(alignment: .top) {
+                GeometryReader { geo in
+                    Color.clear.preference(
+                        key: ScrollOffsetPreferenceKey.self,
+                        value: geo.frame(in: .named("profileScroll")).minY
+                    )
                 }
-                .clipped()
-                .opacity(1 - Double(progress) * 0.6)
-
-            identitySection(offset: offset)
-                .padding(.top, -40)
-                // Avatar + name shrink slightly as the header collapses, then
-                // the compact pinned bar takes over once mostly collapsed.
-                .scaleEffect(1 - 0.12 * progress, anchor: .top)
-                .opacity(1 - Double(progress))
+            }
+            .overlay(alignment: .top) {
+                ScrollOffsetReader(relay: scrollRelay) { offset in
+                    profileHero(progress: ProfileHeroPlan.progress(scrollOffset: Double(offset), topInset: heroTopInset))
+                        .offset(y: -offset)
+                }
+            }
         }
+        .coordinateSpace(name: "profileScroll")
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }
+        .trackScrollContentOffset { scrollRelay.offset = -$0 }
+        .background(theme.backgroundPrimary)
+        .ignoresSafeArea(edges: .top)
+        .background { statusBarReader }
+    }
+
+    /// Le haut des commandes du héros (#19854) : en plein écran, sous la barre système ; en feuille, `topInset`.
+    var heroTopInset: Double {
+        ProfileHeroPlan.topInset(statusBar: presentationStyle == .cover ? heroStatusBar : 0)
+    }
+
+    /// Lit la barre système sous la fiche, hors du défilement qui l'ignore.
+    private var statusBarReader: some View {
+        GeometryReader { proxy in
+            Color.clear.adaptiveOnChange(of: Double(proxy.safeAreaInsets.top), initial: true) { _, top in
+                heroStatusBar = top
+            }
+        }
+    }
+
+    // MARK: - Le héros (K28)
+
+    func profileHero(progress: Double) -> some View {
+        MeeshyCollapsingHero(
+            progress: progress,
+            title: displayUser.resolvedDisplayName,
+            subtitle: "@\(displayUser.username)",
+            alignment: .leading,
+            expandedHeight: ProfileHeroPlan.expandedHeight,
+            collapsedHeight: ProfileHeroPlan.collapsedHeight(topInset: heroTopInset),
+            topInset: heroTopInset,
+            isLoading: phase == .skeleton,
+            keepsBannerInBar: true,
+            banner: { heroBanner(progress: progress) },
+            leading: { heroCloseButton },
+            trailing: { heroTrailing(progress: progress) },
+            avatar: { size in heroAvatar(size: size) }
+        )
+    }
+
+    /// « Retour » (‹) en plein écran, « Fermer » (⌄) en feuille : un bouton de verre du kit (K02) ; la feuille joue son
+    /// propre retour haptique.
+    var heroCloseButton: some View {
+        MeeshyGlassButton(
+            systemImage: presentationStyle.leadingSymbol,
+            label: presentationStyle == .cover
+                ? String(localized: "common.back", defaultValue: "Retour", bundle: .module)
+                : String(localized: "common.close", defaultValue: "Fermer", bundle: .module),
+            hint: String(localized: "profile.close.a11y", defaultValue: "Ferme le profil", bundle: .module),
+            haptic: .none,
+            action: { closeSheet() }
+        )
+    }
+
+    /// La pilule de relation rejoint la barre repliée, une fois la barre maîtresse de l'identité. Je l'ai bloqué : la
+    /// barre dit « Bloqué » (planche `Etat-Bloque`), une pastille du kit (K41) en sens erreur.
+    @ViewBuilder
+    func heroTrailing(progress: Double) -> some View {
+        if phase == .blockedByMe {
+            MeeshyBadge(.label(ProfileStatesCopy.blockedChip), leading: .systemImage("nosign"), surface: .glass,
+                        kind: .err, size: .s28)
+                .accessibilityIdentifier("profile.header.blocked")
+        } else if ProfileHeroPlan.barShowsRelation(progress: progress, topInset: heroTopInset) {
+            relationPillSlot
+        }
+    }
+
+    /// Bloqué dans un sens ou l'autre : l'identité se grise (planche `Etat-Bloque`).
+    var isIdentityMuted: Bool {
+        ProfileHeroPlan.isIdentityMuted(isBlocked: isBlocked, isBlockedByTarget: isBlockedByTarget)
     }
 
     // MARK: - Banner
 
-    var bannerSection: some View {
-        ZStack(alignment: .bottom) {
-            switch shownBannerPaint {
-            case .design(let design):
-                // #10632, #10933 — la bannière de design ne se peint qu'en l'absence de photo ; décorative, rien ne s'ouvre.
-                BannerDesignView(design: design, isDark: theme.mode.isDark, accentHex: profileAccent)
-                    .frame(height: ProfileHeaderMetrics.expandedBanner)
-                    .accessibilityHidden(true)
-            case .photo(let bannerURL):
-                // CachedAsyncImage (DiskCacheStore persistant) plutôt qu'AsyncImage :
-                // la bannière n'est téléchargée qu'une fois par installation, et le
-                // resolver interne accepte aussi les chemins relatifs du gateway.
-                // showsStatusOverlays: false — echec silencieux, degradation
-                // vers le gradient deja fourni ci-dessous ; pas de bouton
-                // retry sur une banniere decorative (D2, no-retry-on-avatars).
-                CachedAsyncImage(url: bannerURL, showsStatusOverlays: false) {
-                    defaultBannerGradient
+    func heroBanner(progress: Double) -> some View {
+        heroBannerPaint(progress: progress)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .overlay {
+                // #10935 — le cadre équipé se pose PAR-DESSUS la photo ou le fond, centre transparent ; il ne reçoit pas le doigt.
+                if let frame = shownBannerFrame {
+                    BannerFrameView(design: frame)
+                        .equatable()
+                        .allowsHitTesting(false)
                 }
-                .scaledToFill()
-                .frame(height: ProfileHeaderMetrics.expandedBanner)
-                .clipped()
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    openFullscreenImage(url: bannerURL, fallback: displayUser.resolvedDisplayName)
-                }
-                // Expose the banner tap to VoiceOver (raw onTapGesture isn't).
-                .accessibilityElement()
-                .accessibilityLabel(String(localized: "profile.banner.label", defaultValue: "Bannière de profil", bundle: .module))
-                .accessibilityAddTraits(.isButton)
-                .accessibilityAction {
-                    openFullscreenImage(url: bannerURL, fallback: displayUser.resolvedDisplayName)
-                }
-            case .plain:
-                defaultBannerGradient
             }
-        }
-        .overlay {
-            // #10935 — le cadre équipé se pose PAR-DESSUS la photo ou le fond, centre transparent ; il ne reçoit pas le doigt.
-            if let frame = shownBannerFrame {
-                BannerFrameView(design: frame)
-                    .equatable()
+    }
+
+    @ViewBuilder
+    func heroBannerPaint(progress: Double) -> some View {
+        switch ProfileHeroPlan.banner(shownBannerPaint, isMuted: isIdentityMuted) {
+        case .design(let design):
+            // #10632, #10933 — la bannière de design ne se peint qu'en l'absence de photo ; décorative, rien ne s'ouvre.
+            BannerDesignView(design: design, isDark: theme.mode.isDark, accentHex: profileAccent)
+                .frame(height: CGFloat(ProfileHeroPlan.bannerHeight(progress: progress)))
+                .allowsHitTesting(false)
+        case .photo(let bannerURL):
+            // CachedAsyncImage (DiskCacheStore persistant) : téléchargée une fois par installation. Échec silencieux
+            // (D2, no-retry-on-avatars) : la bannière vivante prend sa place, sans bouton « Réessayer ».
+            CachedAsyncImage(url: bannerURL, showsStatusOverlays: false) {
+                livingBanner(isMuted: false, progress: progress)
             }
+            .scaledToFill()
+            .frame(height: CGFloat(ProfileHeroPlan.bannerHeight(progress: progress)))
+            .frame(maxWidth: .infinity)
+            .clipped()
+            .contentShape(Rectangle())
+            .onTapGesture {
+                openFullscreenImage(url: bannerURL, fallback: displayUser.resolvedDisplayName)
+            }
+        case .living(let isMuted):
+            livingBanner(isMuted: isMuted, progress: progress)
         }
     }
 
-    /// #10093, #10231, #10601 — le niveau et le rang du membre, posés sur sa bannière par l'app (`profileGameSection`) :
-    /// ce que SA visibilité autorise, rien sinon. L'app occupe toute la bannière — le niveau à l'angle bas du début, le
-    /// rang à l'angle bas de la fin, leurs cadres posés sur le bord bas, loin du bouton Fermer. Le doigt le traverse —
-    /// toucher la bannière l'ouvre toujours en plein écran.
-    @ViewBuilder
-    var bannerGameBadge: some View {
-        if !isBlocked, !isBlockedByTarget, let userId = resolvedUserId, !userId.isEmpty, let gameSection {
-            gameSection.build(userId, displayUser.displayName ?? displayUser.username)
-                .allowsHitTesting(false)
+    /// Sans photo ni décor : la bannière vivante du kit (K27), éteinte quand il m'a bloqué ; décorative.
+    func livingBanner(isMuted: Bool, progress: Double) -> some View {
+        MeeshyLivingBanner(tint: Color(hex: isMuted ? MeeshyColors.blockedNeutralHex : resolvedAccent),
+                           height: ProfileHeroPlan.bannerHeight(progress: progress),
+                           isMuted: isMuted)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+
+    /// L'adresse de la photo de bannière, quand il y en a une à ouvrir : K28 tait sa bannière au lecteur d'écran,
+    /// l'avatar offre donc l'action.
+    var bannerPhotoURL: String? {
+        if case .photo(let url) = ProfileHeroPlan.banner(shownBannerPaint, isMuted: isIdentityMuted) {
+            return url
         }
+        return nil
     }
 
     /// Ce que la bannière peint (#10933) : la photo gagne toujours, le design équipé ne vient qu'à son défaut.
     var shownBannerPaint: ProfileBannerPaint {
-        ProfileDecorResolver.bannerPaint(photo: displayUser.bannerURL, decor: isBlockedByTarget ? nil : displayUser.profileDecor?.banner)
+        ProfileDecorResolver.bannerPaint(photo: displayUser.bannerURL, decor: isIdentityMuted ? nil : displayUser.profileDecor?.banner)
     }
 
     /// Le cadre de bannière équipé (#10935) ; `nil` ⇒ la bannière d'avant. Masqué comme le reste du décor.
     var shownBannerFrame: BannerFrameDesign? {
-        isBlockedByTarget ? nil : ProfileDecorResolver.bannerFrame(displayUser.profileDecor?.bannerFrame)
+        isIdentityMuted ? nil : ProfileDecorResolver.bannerFrame(displayUser.profileDecor?.bannerFrame)
     }
 
     /// Le contour d'avatar équipé ; `nil` ⇒ avatar nu, comme avant.
     var shownAvatarRing: AvatarRingDesign? {
-        isBlockedByTarget ? nil : ProfileDecorResolver.ring(displayUser.profileDecor?.avatarRing)
-    }
-
-    var defaultBannerGradient: some View {
-        LinearGradient(
-            colors: isBlockedByTarget
-                ? [Color.gray.opacity(MeeshyOpacity.strong), Color.gray.opacity(MeeshyOpacity.medium)]
-                : [Color(hex: resolvedAccent).opacity(0.6), Color(hex: resolvedAccent).opacity(0.2)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        .frame(height: ProfileHeaderMetrics.expandedBanner)
-        .overlay(
-            ZStack {
-                Circle()
-                    .fill(Color(hex: resolvedAccent).opacity(MeeshyOpacity.light))
-                    .frame(width: 200)
-                    .offset(x: -80, y: -30)
-                Circle()
-                    .fill(Color(hex: resolvedAccent).opacity(MeeshyOpacity.subtle))
-                    .frame(width: 150)
-                    .offset(x: 100, y: 20)
-            }
-            // Decorative ambient orbs — not meaningful to VoiceOver.
-            .accessibilityHidden(true)
-        )
-        .clipped()
-        // #10093 — un dégradé n'est pas une image : sans bannière, rien ne s'ouvre en plein écran. Décoratif, il se
-        // tait aussi pour VoiceOver.
-        .accessibilityHidden(true)
+        isIdentityMuted ? nil : ProfileDecorResolver.ring(displayUser.profileDecor?.avatarRing)
     }
 
     // MARK: - Identity
 
-    func identitySection(offset: CGFloat) -> some View {
-        VStack(spacing: MeeshySpacing.xsPlus) {
-            profileAvatar
-                .bounceOnAppear()
-                .onTapGesture {
-                    openFullscreenImage(url: displayUser.avatarURL, fallback: displayUser.resolvedDisplayName)
-                }
-                // Expose the avatar tap to VoiceOver (a raw onTapGesture isn't) — seulement quand une photo s'ouvre.
-                .accessibilityAddTraits(hasAvatarPhoto ? .isButton : [])
-                .accessibilityHint(hasAvatarPhoto ? String(localized: "profile.avatar.viewFullscreen.hint", defaultValue: "Ouvre la photo en plein écran", bundle: .module) : "")
-                .accessibilityAction {
-                    openFullscreenImage(url: displayUser.avatarURL, fallback: displayUser.resolvedDisplayName)
-                }
+    /// Sous l'identité de K28 : sa ville déclarée et sa présence datée, telles que le serveur me les a servies
+    /// (planches `Autre-Inconnu`, `Etat-HorsLigne`), la pilule de relation, puis sa bio et ses puces (planche
+    /// `Autre-Vitrine`). Rien de servi ⇒ la ligne s'en passe ; grisée (bloqué), l'identité ne dit rien de plus.
+    var heroDetails: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            heroStatusLine
+            relationPillSlot
+            if !isIdentityMuted {
+                ProfileIdentityChips(user: displayUser)
+                    .padding(.top, MeeshySpacing.xs)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, MeeshySpacing.xl)
+    }
 
-            Text(displayUser.resolvedDisplayName)
-                .font(.system(.title3, design: .rounded).weight(.bold))
-                .foregroundStyle(theme.textPrimary)
-
+    /// Grisée (bloqué), l'identité ne dit ni sa ville ni sa présence datée.
+    @ViewBuilder
+    var heroStatusLine: some View {
+        let presence = ProfileHeroPlan.presenceLine(state: ProfileHeroPlan.presence(resolvedPresence, isMuted: isIdentityMuted),
+                                                    lastActiveAt: displayUser.lastActiveAt)
+        if !isIdentityMuted, displayUser.city != nil || presence != nil {
             HStack(spacing: MeeshySpacing.xs) {
-                Text("@\(displayUser.username)")
-                    .foregroundStyle(Color(hex: resolvedAccent))
-                // Présence datée après le pseudo — rendue seulement si le serveur
-                // l'a jugée montrable (lastActiveAt non nil pour cet observateur).
-                if let lastActive = displayUser.lastActiveAt {
-                    Text(verbatim: "·").foregroundStyle(theme.textSecondary)
-                    Text(RelativeTimeFormatter.lastSeenString(for: lastActive))
-                        .foregroundStyle(presenceColor(for: lastActive))
+                if let city = displayUser.city {
+                    Image(systemName: "mappin")
+                        .foregroundStyle(theme.textSecondary)
+                        .accessibilityHidden(true)
+                    Text(verbatim: city)
+                        .foregroundStyle(theme.textSecondary)
+                        .lineLimit(1)
+                        .accessibilityIdentifier("profile.header.city")
+                }
+                // La présence dit le MÊME état que le point de l'avatar (#19853) : rien de ce que le serveur n'a pas servi.
+                if let presence {
+                    if displayUser.city != nil {
+                        Text(verbatim: "·").foregroundStyle(theme.textSecondary).accessibilityHidden(true)
+                    }
+                    presenceText(presence)
                 }
             }
-            .font(.system(size: 14, weight: .medium))
+            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+            .accessibilityElement(children: .combine)
         }
-        .padding(.top, MeeshySpacing.xs)
-        // Gate the expanded identity from VoiceOver once the compact pinned bar
-        // becomes the primary (mostly collapsed) — avoids a duplicate name/@user.
-        .accessibilityHidden(ProfileHeaderMetrics.progress(offset: offset) > 0.5)
+    }
+
+    /// La pilule de relation de l'app (loi 3) : le cercle commun, et le chemin vers « Notre cercle ».
+    @ViewBuilder
+    var relationPillSlot: some View {
+        if RelationFace.showsRelationPill(isCurrentUser: isCurrentUser, isBlocked: isBlocked || isBlockedByTarget),
+           let relationPill, let userId = resolvedUserId, !userId.isEmpty {
+            relationPill.build(userId, displayUser.resolvedDisplayName, $relationStanding)
+        }
     }
 
     /// Une photo à ouvrir en plein écran — sans elle, toucher l'avatar à initiales n'ouvre rien (#10093).
     var hasAvatarPhoto: Bool {
-        ProfileFullscreenImage.opening(displayUser.avatarURL, fallbackText: "") != nil
+        ProfileFullscreenImage.opening(shownAvatarURL, fallbackText: "") != nil
     }
 
-    @ViewBuilder
-    var profileAvatar: some View {
-        let avatarName = displayUser.resolvedDisplayName
-        let showRing = !isBlockedByTarget && !isBlocked
-        // App câblée → état réel (pas d'anneau sans story active) ; legacy (nil) → anneau décoratif historique.
-        let ringState: StoryRingState = showRing ? (storyRingState ?? .read) : .none
+    /// Grisée (bloqué), l'identité garde ses initiales : aucune photo ne se peint ni ne s'ouvre.
+    var shownAvatarURL: String? {
+        isIdentityMuted ? nil : displayUser.avatarURL
+    }
 
-        MeeshyLivePresence { MeeshyAvatar(
+    /// L'avatar du héros, à la taille que K28 lui donne : grand sous la bannière, mini dans la barre repliée. L'anneau
+    /// de story ne tient que sur le grand ; toucher la photo l'ouvre en plein écran.
+    func heroAvatar(size: CGFloat) -> some View {
+        let avatarName = displayUser.resolvedDisplayName
+        let showRing = !isIdentityMuted
+        // App câblée → état réel (pas d'anneau sans story active) ; legacy (nil) → anneau décoratif historique.
+        let ringState = ProfileHeroPlan.storyRing(showRing ? (storyRingState ?? .read) : .none, avatarSize: Double(size))
+        let context = AvatarContext.custom(size)
+        let photoHint = String(localized: "profile.avatar.viewFullscreen.a11y", defaultValue: "Ouvre la photo en plein écran", bundle: .module)
+
+        return MeeshyLivePresence { MeeshyAvatar(
             name: avatarName,
-            context: .profileSheet,
-            accentColor: isBlockedByTarget ? MeeshyColors.blockedNeutralHex : profileAccent,
-            avatarURL: displayUser.avatarURL,
+            context: context,
+            accentColor: isIdentityMuted ? MeeshyColors.blockedNeutralHex : profileAccent,
+            avatarURL: shownAvatarURL,
             storyState: ringState,
             moodEmoji: shownMoodEmoji,
-            presenceState: isBlockedByTarget ? nil : resolvedPresence,
-            onViewStory: (showRing && ringState != .none) ? onViewStory : nil,
+            presenceState: ProfileHeroPlan.presence(resolvedPresence, isMuted: isIdentityMuted),
+            onViewStory: ringState != .none ? onViewStory : nil,
             onMoodTap: shownMoodEmoji == nil ? nil : onMoodTap
         ) }
         .avatarRing(
             shownAvatarRing,
-            avatarSize: AvatarContext.profileSheet.size,
-            storyRingSize: ringState == .none ? nil : AvatarContext.profileSheet.ringSize
+            avatarSize: context.size,
+            storyRingSize: ringState == .none ? nil : context.ringSize
         )
-        .overlay { ProfileAvatarListening(userId: isBlockedByTarget || isCurrentUser ? nil : resolvedUserId) }
+        .overlay(alignment: .bottomLeading) {
+            ProfileAvatarListening(userId: isIdentityMuted || isCurrentUser ? nil : resolvedUserId, avatarSize: size,
+                                   tint: accentTint)
+        }
+        .bounceOnAppear()
+        .onTapGesture {
+            openFullscreenImage(url: shownAvatarURL, fallback: avatarName)
+        }
+        // Expose the avatar tap to VoiceOver (a raw onTapGesture isn't) — seulement quand une photo s'ouvre.
+        .accessibilityAddTraits(hasAvatarPhoto ? .isButton : [])
+        .accessibilityHint(hasAvatarPhoto ? photoHint : "")
+        .accessibilityAction {
+            openFullscreenImage(url: shownAvatarURL, fallback: avatarName)
+        }
+        .accessibilityActions {
+            if let bannerURL = bannerPhotoURL {
+                Button(String(localized: "profile.banner.label", defaultValue: "Bannière de profil", bundle: .module)) {
+                    openFullscreenImage(url: bannerURL, fallback: avatarName)
+                }
+            }
+        }
     }
 
     /// L'humeur peinte sur l'avatar — le grand en-tête ET la barre compacte
@@ -227,7 +311,7 @@ extension UserProfileSheet {
     }
 
     var shownMoodEmoji: String? {
-        Self.shownMood(moodEmoji, isBlockedByTarget: isBlockedByTarget)
+        Self.shownMood(moodEmoji, isBlockedByTarget: isIdentityMuted)
     }
 
     /// Présence affichée sur l'avatar (grand header + barre compacte).
@@ -247,141 +331,17 @@ extension UserProfileSheet {
         ).state
     }
 
-    /// Couleur du libellé de présence — dérive l'état via la règle canonique
-    /// (`UserPresence.state`) puis le mapping couleur central (PresenceStyle) :
-    /// vert actif (<= 5 min), orange away (5-30 min), gris texte au-delà.
-    /// Miroir de `presenceColorClass` (web).
-    func presenceColor(for date: Date, now: Date = Date()) -> Color {
-        let state = UserPresence(isOnline: false, lastActiveAt: date).state(now: now)
-        if state == .offline { return theme.textSecondary }
-        return state.dotColor
-    }
-
-    // MARK: - Pinned tab bar (section header — pins on scroll)
-
+    /// Le texte et sa teinte viennent de l'état du point : vert « En ligne », sinon la date dans la couleur de l'état,
+    /// gris texte hors ligne. Miroir de `presenceColorClass` (web).
     @ViewBuilder
-    func pinnedTabBar(offset: CGFloat) -> some View {
-        let progress = ProfileHeaderMetrics.progress(offset: offset)
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                ForEach(ProfileTab.allCases, id: \.self) { tab in
-                    tabButton(tab)
-                }
-            }
-            .padding(.horizontal, MeeshySpacing.xl)
-            .padding(.top, MeeshySpacing.md)
-
-            Divider()
-                .opacity(MeeshyOpacity.medium)
+    func presenceText(_ line: ProfileHeroPlan.PresenceLine) -> some View {
+        switch line {
+        case .online:
+            Text(RelativeTimeFormatter.lastSeenString(for: Date()))
+                .foregroundStyle(PresenceState.online.dotColor)
+        case let .seen(date, state):
+            Text(RelativeTimeFormatter.lastSeenString(for: date))
+                .foregroundStyle(state == .offline ? theme.textSecondary : state.dotColor)
         }
-        // Le fond est posé AVANT le padding : posé après, il remplissait aussi
-        // la bande de `collapsedBar` pt d'écart et la rendait hit-testable —
-        // cet en-tête de section épinglé flotte AU-DESSUS du contenu, la bande
-        // interceptait donc les taps destinés aux cartes (barre d'actions du
-        // haut de liste inopérante). La zone d'écart est couverte visuellement
-        // par la barre compacte opaque quand elle est épinglée.
-        .background(theme.backgroundPrimary)
-        // When the big header has scrolled away (progress → 1) the compact
-        // identity bar (banner + avatar réduits) pins at the very top; the tabs
-        // slide down by its height so they sit JUST BELOW it instead of being
-        // covered by the overlay. No gap while expanded (progress 0).
-        .padding(.top, ProfileHeaderMetrics.collapsedBar * progress)
-    }
-
-    // MARK: - Close button (Liquid Glass, top-leading)
-
-    /// Floating close affordance using the adaptive Liquid Glass helper
-    /// (`glassEffect` on iOS 26+, `.ultraThinMaterial` fallback below). Sits over
-    /// the reduced banner so the sheet is always dismissible even mid-scroll.
-    var closeButton: some View {
-        Button {
-            HapticFeedback.light()
-            onDismiss?()
-            dismiss()
-        } label: {
-            Image(systemName: "xmark")
-                .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
-                .foregroundStyle(theme.textPrimary)
-                .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
-                .adaptiveGlass(in: Circle())
-                .meeshyTapTarget()
-        }
-        .padding(EdgeInsets(top: MeeshySpacing.mdPlus - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular), leading: MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular), bottom: 0, trailing: 0))
-        .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .module))
-        .accessibilityHint(String(localized: "profile.close.hint", defaultValue: "Ferme le profil", bundle: .module))
-    }
-
-    private func tabButton(_ tab: ProfileTab) -> some View {
-        Button {
-            HapticFeedback.light()
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                selectedTab = tab
-            }
-        } label: {
-            VStack(spacing: MeeshySpacing.xs) {
-                HStack(spacing: MeeshySpacing.xs) {
-                    Image(systemName: tab.icon)
-                        .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
-                    Text(tab.title)
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                }
-                .foregroundStyle(selectedTab == tab ? Color(hex: resolvedAccent) : theme.textMuted)
-                .padding(.vertical, MeeshySpacing.smPlus)
-
-                Rectangle()
-                    .fill(selectedTab == tab ? Color(hex: resolvedAccent) : Color.clear)
-                    .frame(height: 2)
-            }
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
-        }
-        .accessibilityLabel(tab.title)
-        .accessibilityAddTraits(selectedTab == tab ? [.isButton, .isSelected] : .isButton)
-    }
-
-    // MARK: - Compact pinned bar (overlay, fades in when collapsed)
-
-    /// Small floating identity bar shown at the very top once the big header
-    /// scrolls away. Small avatar + name + @pseudo, on the primary background
-    /// for legibility. Opacity is driven by the caller (`collapsibleLayout`).
-    @ViewBuilder
-    var compactPinnedBar: some View {
-        HStack(spacing: MeeshySpacing.smPlus) {
-            MeeshyLivePresence { MeeshyAvatar(
-                name: displayUser.resolvedDisplayName,
-                context: .custom(32),
-                accentColor: isBlockedByTarget ? MeeshyColors.blockedNeutralHex : profileAccent,
-                avatarURL: displayUser.avatarURL,
-                storyState: .none,
-                moodEmoji: shownMoodEmoji,
-                presenceState: isBlockedByTarget ? nil : resolvedPresence,
-                onMoodTap: shownMoodEmoji == nil ? nil : onMoodTap
-            ) }
-
-            VStack(alignment: .leading, spacing: 0) {
-                Text(displayUser.resolvedDisplayName)
-                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold, design: .rounded))
-                    .foregroundStyle(theme.textPrimary)
-                    .lineLimit(1)
-                Text("@\(displayUser.username)")
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundStyle(Color(hex: resolvedAccent))
-                    .lineLimit(1)
-            }
-
-            Spacer()
-        }
-        // Leading inset clears the top-left close button (36pt @ leading 16) so
-        // the compact avatar/name never sit underneath it when collapsed.
-        .padding(.leading, 56)
-        .padding(.trailing, MeeshySpacing.lg)
-        .padding(.vertical, MeeshySpacing.sm)
-        .frame(height: ProfileHeaderMetrics.collapsedBar)
-        .background(theme.backgroundPrimary)
-        .overlay(alignment: .bottom) {
-            Divider().opacity(MeeshyOpacity.medium)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text(verbatim: "\(displayUser.resolvedDisplayName), @\(displayUser.username)"))
     }
 }

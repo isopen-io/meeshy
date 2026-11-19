@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import MeeshySDK
 import os
 
@@ -11,6 +12,7 @@ import os
 extension MeeshyApp {
     /// Branché une fois, depuis `init()` : avant que la moindre fenêtre ne monte.
     static func installApplicationLifecycleHooks() {
+        RevokedSessionPurge.install()
         AppLifecycleHooks.shared.install(
             authentication: AuthManager.shared.$isAuthenticated.eraseToAnyPublisher(),
             isAuthenticated: { AuthManager.shared.isAuthenticated },
@@ -57,6 +59,9 @@ extension MeeshyApp {
             // Drain any mark-as-read actions the user tapped from the
             // widget while the app was suspended.
             Task { await WidgetActionFlusher.shared.flush() }
+            // #18872 — l'historique du Sang reçoit un point au retour, si un
+            // Sang peut le relire et que la permission est déjà donnée.
+            Task { await BloodLocationRecorder.shared.recordIfDue() }
     }
 
     static func applicationEnteredBackground() {
@@ -105,6 +110,7 @@ extension MeeshyApp {
             DeepLinkRouter.shared.replayShareLinkAwaitingAccount()
         case .startNotificationCoordinators:
             NotificationCoordinator.shared.widgetSink = WidgetDataManager.shared
+            WidgetDataManager.shared.followProfileLink()
             NotificationCoordinator.shared.start()
             NotificationGapResyncCoordinator.shared.start()
         case .startCache:

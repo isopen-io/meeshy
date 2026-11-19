@@ -31,6 +31,11 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
     /// `joinedAt`). Servie par G1 (`packages/shared/utils/first-unread.ts`
     /// doc-comment, § rangs) — voir son doc-comment pour la loi complète.
     public var lastReadMessageCreatedAt: Date?
+    /// L'instant SERVEUR du dernier message lu SUR CET APPAREIL (#19424) — le `lastMessageAt` servi de la ligne au
+    /// moment de la lecture, jamais l'horloge de l'appareil (une dérive d'horloge ferait mentir le badge). Tant que le
+    /// serveur n'a pas confirmé l'accusé (`lastReadMessageCreatedAt` n'a pas rattrapé cet instant), une ligne servie
+    /// dont le dernier message n'est pas plus récent garde un non-lu nul. Local à l'appareil, jamais servi.
+    public var readThroughServerAt: Date?
 
     // MARK: - Notification preferences
 
@@ -92,6 +97,7 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
         lastDeliveredAt: Date? = nil,
         lastReadMessageId: String? = nil,
         lastReadMessageCreatedAt: Date? = nil,
+        readThroughServerAt: Date? = nil,
         isPinned: Bool = false,
         isMuted: Bool = false,
         mentionsOnly: Bool = false,
@@ -116,6 +122,7 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
         self.lastDeliveredAt = lastDeliveredAt
         self.lastReadMessageId = lastReadMessageId
         self.lastReadMessageCreatedAt = lastReadMessageCreatedAt
+        self.readThroughServerAt = readThroughServerAt
         self.isPinned = isPinned
         self.isMuted = isMuted
         self.mentionsOnly = mentionsOnly
@@ -186,6 +193,78 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
         return merged
     }
 
+    /// Les préférences locales gagnent sur la ligne servie `incoming` quand elles sont plus récentes, OU quand un geste
+    /// est encore en file sous une version non dépassée (#19307) : l'accusé d'un autre geste ramène la version à la
+    /// valeur servie, et à version égale la ligne servie effaçait sinon le geste en file et les champs de l'appareil.
+    func holdsLocalPreferences(over incoming: ConversationUserState) -> Bool {
+        version > incoming.version || (pendingMutationCount > 0 && version >= incoming.version)
+    }
+
+    // MARK: - La ligne de conversation (#7198, #18925)
+
+    /// Ce que la ligne de `GET /conversations` et `GET /conversations/:id` sert de l'état du lecteur, projeté
+    /// après l'init memberwise de `APIConversation.toConversation` : la frontière de lecture, et les préférences
+    /// que la diffusion `user:preferences-updated` porte déjà — version, ordre manuel, effacement d'historique
+    /// (#18925). Une ligne synthétisée vaut la version 0 ; un serveur antérieur n'en sert rien, et rien n'est
+    /// fabriqué.
+    func servingRow(
+        lastReadMessageId: String?, lastReadMessageCreatedAt: Date?, preferences: APIConversationPreferences?
+    ) -> ConversationUserState {
+        var served = self
+        served.lastReadMessageId = lastReadMessageId
+        served.lastReadMessageCreatedAt = lastReadMessageCreatedAt
+        served.appearance = preferences?.appearance
+        served.version = preferences?.version ?? 0
+        served.orderInCategory = preferences?.orderInCategory
+        served.clearHistoryBefore = preferences?.clearHistoryBefore
+        return served
+    }
+
+    // MARK: - Served row (#18916)
+
+    /// Adopte une ligne SERVIE par `/user-preferences/conversations` : les seuls
+    /// champs que la route sert, et sa version.
+    ///
+    /// `deletedForUserAt` n'y est pas servi, et `clearHistoryBefore` ne l'est que
+    /// depuis #18925 : un serveur antérieur l'omet, et `nil` ne distingue pas
+    /// l'absent du « jamais effacé » — l'écrire d'ici rouvrirait un historique
+    /// effacé. La lecture et les champs propres à l'appareil n'en viennent pas.
+    /// Un booléen ou une liste absents gardent la valeur locale ; un champ
+    /// NULLABLE servi `null` dit « aucun », comme sur la diffusion vive.
+    func adoptingServed(_ served: APIConversationPreferences) -> ConversationUserState {
+        var adopted = self
+        adopted.isPinned = served.isPinned ?? isPinned
+        adopted.isMuted = served.isMuted ?? isMuted
+        adopted.mentionsOnly = served.mentionsOnly ?? mentionsOnly
+        adopted.isArchived = served.isArchived ?? isArchived
+        adopted.tags = served.tags ?? tags
+        adopted.sectionId = served.categoryId
+        adopted.orderInCategory = served.orderInCategory
+        adopted.customName = served.customName
+        adopted.reaction = served.reaction
+        adopted.appearance = served.appearance
+        adopted.version = served.version ?? version
+        return adopted
+    }
+
+    /// L'accusé d'un geste : la ligne que l'adaptateur a relue après le PUT.
+    ///
+    /// Quand sa version a sauté par-dessus le candidat local, d'autres écritures
+    /// ont eu lieu ailleurs pendant la coupure, et seule la ligne relue les
+    /// porte : elle est adoptée. Sinon, seule la version l'est — l'état
+    /// optimiste EST la ligne servie. Un autre geste encore en file garde son
+    /// état optimiste : l'adopter le ferait reculer à l'écran jusqu'à son
+    /// propre accusé.
+    func acknowledging(_ served: APIConversationPreferences?, keepingOptimistic: Bool) -> ConversationUserState {
+        guard let served, let servedVersion = served.version else { return self }
+        guard servedVersion > version, !keepingOptimistic else {
+            var acknowledged = self
+            acknowledged.version = servedVersion
+            return acknowledged
+        }
+        return adoptingServed(served)
+    }
+
     // MARK: - Codable (lenient decoder)
 
     /// Custom decoder that falls back to the init defaults for any
@@ -203,6 +282,7 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
             lastDeliveredAt: try c.decodeIfPresent(Date.self, forKey: .lastDeliveredAt),
             lastReadMessageId: try c.decodeIfPresent(String.self, forKey: .lastReadMessageId),
             lastReadMessageCreatedAt: try c.decodeIfPresent(Date.self, forKey: .lastReadMessageCreatedAt),
+            readThroughServerAt: try c.decodeIfPresent(Date.self, forKey: .readThroughServerAt),
             isPinned: try c.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false,
             isMuted: try c.decodeIfPresent(Bool.self, forKey: .isMuted) ?? false,
             mentionsOnly: try c.decodeIfPresent(Bool.self, forKey: .mentionsOnly) ?? false,
@@ -222,5 +302,25 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
             lastSyncedAt: try c.decodeIfPresent(Date.self, forKey: .lastSyncedAt),
             pendingMutationCount: try c.decodeIfPresent(Int.self, forKey: .pendingMutationCount) ?? 0
         )
+    }
+}
+
+extension MeeshyConversation {
+
+    /// #19424 : l'instant SERVEUR du dernier message lu sur l'appareil survit à l'instantané servi (qui ne le porte
+    /// jamais) et garde un non-lu nul tant que l'accusé n'est pas confirmé — la ligne servie dont le dernier message
+    /// n'est pas plus récent. Confirmé = le curseur serveur (`lastReadMessageCreatedAt`) a rattrapé l'instant : la
+    /// frontière locale tombe, le serveur fait de nouveau autorité. Monotone, comme `lastReadAt`.
+    func keepingServerInstantRead(local: MeeshyConversation?) -> MeeshyConversation {
+        var result = self
+        guard let through = [local?.userState.readThroughServerAt, userState.readThroughServerAt]
+            .compactMap({ $0 }).max() else { return result }
+        if let confirmed = userState.lastReadMessageCreatedAt, confirmed >= through {
+            result.userState.readThroughServerAt = nil
+            return result
+        }
+        result.userState.readThroughServerAt = through
+        if lastMessageAt <= through { result.userState.unreadCount = 0 }
+        return result
     }
 }

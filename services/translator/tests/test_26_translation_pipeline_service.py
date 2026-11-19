@@ -15,6 +15,7 @@ Tests cover:
 - Statistics and cleanup
 """
 
+import re
 import sys
 import os
 import logging
@@ -816,8 +817,9 @@ class TestTranslationPipelineServiceJobSubmission:
         logger.info("submit_job default languages OK")
 
     @pytest.mark.asyncio
-    async def test_submit_job_with_webhook(self, pipeline_service):
-        """Test job submission with webhook"""
+    async def test_submit_job_with_webhook(self, pipeline_service, monkeypatch):
+        """Test job submission with an allowed webhook (#18772)"""
+        monkeypatch.setenv("TRANSLATOR_WEBHOOK_ALLOWED_HOSTS", "webhook.example.com")
         logger.info("Test 26.21: submit_job with webhook")
 
         await pipeline_service.initialize()
@@ -826,11 +828,11 @@ class TestTranslationPipelineServiceJobSubmission:
             user_id="user_webhook",
             audio_path="/tmp/test.wav",
             target_languages=["fr"],
-            webhook_url="http://webhook.example.com/callback",
+            webhook_url="https://webhook.example.com/callback",
             callback_metadata={"request_id": "req_123"}
         )
 
-        assert job.webhook_url == "http://webhook.example.com/callback"
+        assert job.webhook_url == "https://webhook.example.com/callback"
         assert job.callback_metadata == {"request_id": "req_123"}
 
         await pipeline_service.close()
@@ -1156,11 +1158,11 @@ class TestTranslationPipelineServiceJobId:
         """Test generating job ID"""
         logger.info("Test 26.36: generate_job_id")
 
-        job_id = pipeline_service._generate_job_id("user_12345678")
+        job_id = pipeline_service._generate_job_id()
 
         assert job_id.startswith("mshy_")
-        assert "user_123" in job_id  # First 8 chars of user_id
-        assert len(job_id) > 20  # Should have timestamp and unique part
+        assert re.fullmatch(r"mshy_[0-9a-f]{32}", job_id)
+        assert len(job_id) >= len("mshy_") + 32
         logger.info("generate_job_id OK")
 
     def test_generate_job_id_unique(self, pipeline_service):
@@ -1169,7 +1171,7 @@ class TestTranslationPipelineServiceJobId:
 
         ids = set()
         for _ in range(100):
-            job_id = pipeline_service._generate_job_id("user_test")
+            job_id = pipeline_service._generate_job_id()
             ids.add(job_id)
 
         assert len(ids) == 100
@@ -1571,16 +1573,17 @@ class TestTranslationPipelineServiceWebhook:
         logger.info("send_webhook no URL OK")
 
     @pytest.mark.asyncio
-    async def test_send_webhook_success(self, pipeline_service):
-        """Test send_webhook success"""
+    async def test_send_webhook_success(self, pipeline_service, monkeypatch):
+        """Test send_webhook success to an allowed host (#18772)"""
         logger.info("Test 26.49: send_webhook success")
         from services.translation_pipeline_service import TranslationJob, JobStatus
+        monkeypatch.setenv("TRANSLATOR_WEBHOOK_ALLOWED_HOSTS", "webhook.example.com")
 
         job = TranslationJob(
             id="job_webhook",
             user_id="user_webhook",
             status=JobStatus.COMPLETED,
-            webhook_url="http://webhook.example.com/callback",
+            webhook_url="https://webhook.example.com/callback",
             callback_metadata={"test": "data"}
         )
 

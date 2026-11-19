@@ -65,6 +65,10 @@ const LIGNE_COMPLETE = {
   lastActiveAt: new Date('2026-08-01T00:00:00Z'),
   createdAt: new Date('2026-01-01T00:00:00Z'),
   voiceModel: null,
+  systemLanguage: 'pt',
+  regionalLanguage: 'en',
+  customDestinationLanguage: null,
+  deviceLocale: 'de-DE',
 };
 
 /** Les six champs qui fuyaient, plus le champ écrit en dur. */
@@ -78,13 +82,14 @@ const JAMAIS_PUBLIC = [
   'autoTranslateEnabled',
   'email',
   'phoneNumber',
+  'deviceLocale',
 ] as const;
 
 function buildApp() {
   // La question du blocage n'a pas de ligne : personne n'a bloqué personne.
   const findFirst = jest.fn<any>(async (args?: any) => (args?.where?.blockedUserIds ? null : LIGNE_COMPLETE));
   const findUnique = jest.fn<any>(async () => LIGNE_COMPLETE);
-  return { prisma: { user: { findFirst, findUnique } }, findFirst, findUnique };
+  return { prisma: { profileAddress: { findMany: async () => [] }, communityMember: { findMany: async () => [] }, user: { findFirst, findUnique } }, findFirst, findUnique };
 }
 
 async function monter(prisma: unknown): Promise<FastifyInstance> {
@@ -134,7 +139,12 @@ describe('Un appelant TIERS inscrit ne reçoit aucun champ privé (un anonyme n�
     // Ce qui ne sort pas de la base ne peut pas fuir par une omission de
     // schéma. La première personne qui ajoute un champ au schéma publierait
     // sinon la fuite sans qu'un témoin tombe.
-    for (const champ of ['systemLanguage', 'regionalLanguage', 'customDestinationLanguage', 'updatedAt']) {
+    //
+    // #19373 : les trois rangs du Prisme sont de nouveau CHARGÉS, et seulement
+    // composés : `languages` (la liste ordonnée) part, les colonnes brutes non
+    // — le témoin précédent le tient sur la charge sérialisée. La locale de
+    // l'appareil, elle, ne sort toujours pas de la base.
+    for (const champ of ['deviceLocale', 'updatedAt', 'isActive', 'email', 'phoneNumber']) {
       expect(select[champ]).toBeUndefined();
     }
 
@@ -152,6 +162,8 @@ describe('Un appelant TIERS inscrit ne reçoit aucun champ privé (un anonyme n�
     for (const champ of ['id', 'username', 'displayName', 'avatar', 'bio', 'role', 'createdAt']) {
       expect(champ in data).toBe(true);
     }
+    // #19373 : les langues déclarées, composées, jamais les rangs bruts.
+    expect(data.languages).toEqual(['pt', 'en']);
 
     await app.close();
   });

@@ -31,6 +31,10 @@ export type TrackingLinkUnfurlSource = {
   readonly originalUrl: string;
   readonly isActive: boolean;
   readonly expiresAt: Date | null;
+  /** Posés sur le lien d'une ADRESSE de fiche (#18863) : la porte le passe sous `addressLinkOpensTo` (#19196). */
+  readonly token?: string;
+  readonly createdBy?: string | null;
+  readonly addressId?: string | null;
 };
 
 export type TrackingLinkUnfurlDecision =
@@ -55,7 +59,7 @@ export function isTrackingToken(token: string): boolean {
 export async function loadTrackingLinkUnfurlSource(prisma: PrismaClient, token: string): Promise<TrackingLinkUnfurlSource | null> {
   return prisma.trackingLink.findUnique({
     where: { token },
-    select: { targetType: true, originalUrl: true, isActive: true, expiresAt: true }
+    select: { token: true, targetType: true, originalUrl: true, isActive: true, expiresAt: true, createdBy: true, addressId: true }
   });
 }
 

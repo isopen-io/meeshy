@@ -176,8 +176,8 @@ nonisolated struct PublishIntent: Equatable, Sendable {
     /// **L'autorisation d'extraction du son** (#3996) — une autorisation sur
     /// ce qui PART, décidée une fois pour la publication.
     ///
-    /// Déclarée (`ComposerMediaAccessibility.allowSoundExtraction`,
-    /// `SoundExtractionToggle`) et déjà transmise sur la voie STORY
+    /// Déclarée (`ComposerMediaAccessibility.allowSoundExtraction`) et déjà
+    /// transmise sur la voie STORY
     /// (`publishStoryInBackground(allowSoundExtraction:)`), elle mourait sur
     /// la voie DOCUMENT — celle que prend tout post/réel du meuble : ni
     /// `PublishIntent` ni la charge durable ne la portaient, si bien que

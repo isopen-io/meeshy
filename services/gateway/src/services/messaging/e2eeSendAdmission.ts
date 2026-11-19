@@ -1,14 +1,15 @@
 /**
- * L'admission d'un ENVOI au régime de sa conversation (#11216, #12518), lue
+ * L'admission d'un ENVOI au régime de sa conversation (#11216, #12518, #13113), lue
  * AVANT tout le reste de `MessageProcessor.saveMessage` : un envoi refusé ne
  * laisse rien derrière lui — ni `TrackingLink` minté sur son URL, ni lecture de
  * la source qu'il voulait recopier.
  *
  * Le régime est lu MÊME quand l'envoi porte un chiffré : c'est la conversation
  * qui dit si le serveur a le droit de lire, jamais l'envoi. En `e2ee`, un clair
- * glissé à côté du chiffré et toute pièce que le serveur aurait reçue en clair
- * sont refusés (`e2eePlaintextAdmission.ts`) ; `endToEnd` dit ensuite à
- * l'appelant de ne faire tourner aucun pipeline serveur.
+ * glissé à côté du chiffré, toute pièce que le serveur aurait reçue en clair et
+ * tout voisin déclaré en clair — sticker, pièce citée, transfert serveur
+ * (#13113) — sont refusés (`e2eePlaintextAdmission.ts`) ; `endToEnd` dit ensuite
+ * à l'appelant de ne faire tourner aucun pipeline serveur.
  *
  * Depuis #3706, le SEUL chiffré admis en `e2ee` est un envoi libsignal par
  * appareil (`relay`) : ses enveloppes doivent couvrir exactement l'annuaire
@@ -42,6 +43,7 @@ import { clientOutdated, E2eeRelayRefusedError } from '../e2ee/e2ee-relay-errors
 import { isServerAtRestMode, ServerAtRestCiphertextRefusedError } from './serverAtRest';
 import { parseSharedPlace } from '../location/sharedPlace';
 import {
+  assertNoPlaintextNeighbors,
   assertNoPlaintextPieces,
   assertPlaintextAdmitted,
   E2EE_PLAINTEXT_LOCATION_REFUSAL_MESSAGE,
@@ -59,7 +61,10 @@ export type SendUnderRegime = {
   readonly attachmentIds?: readonly string[];
   readonly copyAttachmentsFromMessageId?: string;
   readonly forwardedFromId?: string;
-  readonly forwardCopySelection?: readonly string[];
+  readonly forwardedFromConversationId?: string;
+  /** Les textes d'un sticker (#4823) et la pièce citée (#6164) : en `e2ee`, des voisins en clair (#13113). */
+  readonly sticker?: unknown;
+  readonly attachmentReplyTo?: unknown;
   /** La ligne `Participant` de l'expéditeur (`Message.senderId`). */
   readonly senderId?: string;
   /** L'envoi libsignal par appareil (#3706), absent de tout autre envoi. */
@@ -80,7 +85,7 @@ export type SendAdmission = {
   readonly deviceLayer: boolean;
 };
 
-type AdmissionPrisma = Pick<PrismaClient, 'conversation' | 'messageAttachment' | 'participant' | 'e2EEDevice' | 'messageEnvelope'>;
+type AdmissionPrisma = Pick<PrismaClient, 'conversation' | 'participant' | 'e2EEDevice' | 'messageEnvelope'>;
 
 export async function admitSendUnderRegime(prisma: AdmissionPrisma, request: SendUnderRegime): Promise<SendAdmission> {
   const carriesCiphertext = Boolean(request.encryptedContent && request.encryptionMetadata);
@@ -105,7 +110,10 @@ export async function admitSendUnderRegime(prisma: AdmissionPrisma, request: Sen
     if (!request.deviceLayerRelay) return { regime, carriesCiphertext, endToEnd, relay: null, deviceLayer: false };
     return { regime, carriesCiphertext, endToEnd, relay: await admitDeviceLayer(prisma, request, request.deviceLayerRelay, regime), deviceLayer: true };
   }
-  assertNoPlaintextPieces({ encryptionMode: regime?.encryptionMode, carriedPieceCount: await countCarriedPieces(prisma, request) });
+  // #13113 — un voisin en clair (sticker, pièce citée, transfert) est refusé
+  // AVANT les pièces : un transfert ne relit même pas sa source.
+  assertNoPlaintextNeighbors({ encryptionMode: regime?.encryptionMode, neighbors: request });
+  assertNoPlaintextPieces({ encryptionMode: regime?.encryptionMode, carriedPieceCount: countCarriedPieces(request) });
   // #12526 — à côté d'un chiffré, un lieu en clair est RETENU (`admitSharedPlace`) ;
   // sans chiffré, le lieu EST le message : un clair, refusé comme tel.
   if (!carriesCiphertext && parseSharedPlace(request.location)) throw new E2eePlaintextRefusedError(E2EE_PLAINTEXT_LOCATION_REFUSAL_MESSAGE);
@@ -175,20 +183,11 @@ async function senderUserIdOf(prisma: AdmissionPrisma, participantId: string | u
 }
 
 /**
- * Les pièces que cet envoi ferait porter à son message, quel que soit le
- * chemin que `handleAttachments` prendra : rattachées, recopiées par une
- * diffusion, ou recopiées d'une source transférée (sauf verdict vide).
+ * Les pièces que cet envoi ferait porter à son message : rattachées, ou
+ * recopiées par une diffusion. Celles d'une source transférée n'ont plus à se
+ * compter : en `e2ee`, le transfert lui-même est refusé avant (#13113).
  */
-async function countCarriedPieces(prisma: AdmissionPrisma, request: SendUnderRegime): Promise<number> {
+function countCarriedPieces(request: SendUnderRegime): number {
   if (request.attachmentIds?.length) return request.attachmentIds.length;
-  if (request.copyAttachmentsFromMessageId) return 1;
-  if (!request.forwardedFromId || request.forwardCopySelection?.length === 0) return 0;
-  const copied = await prisma.messageAttachment.findMany({
-    where: {
-      messageId: request.forwardedFromId,
-      ...(request.forwardCopySelection ? { id: { in: [...request.forwardCopySelection] } } : {}),
-    },
-    select: { id: true },
-  });
-  return copied.length;
+  return request.copyAttachmentsFromMessageId ? 1 : 0;
 }

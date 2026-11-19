@@ -26,6 +26,7 @@ import { contentK22, entryK22 } from './k22';
 import { contentK23, entryK23 } from './k23';
 import { contentK24, entryK24 } from './k24';
 import { contentK25, entryK25 } from './k25';
+import { atomContent, atomEntries, MEESHY_KIT_ATOMS } from './atoms';
 
 type KitContent = (state: MeeshyKitCatalogState, isPressed: boolean) => ReactNode;
 
@@ -87,7 +88,10 @@ const contents: Readonly<Record<string, KitContent>> = {
 
 export const MeeshyKitCatalog = {
   entries,
+  atoms: atomEntries,
+  atomFiles: MEESHY_KIT_ATOMS.flatMap((atom) => [atom.file, ...(atom.alsoFiles ?? [])]),
+  atomContent,
   listedEntries: (): readonly MeeshyKitCatalogEntry[] => listedEntries(entries),
   listedEntry: (key: string): MeeshyKitCatalogEntry | null => listedEntry(key, entries),
-  content: (key: string, state: MeeshyKitCatalogState, isPressed: boolean): ReactNode => contents[key]?.(state, isPressed) ?? null,
+  content: (key: string, state: MeeshyKitCatalogState, isPressed: boolean): ReactNode => contents[key]?.(state, isPressed) ?? atomContent(key, state),
 } as const;

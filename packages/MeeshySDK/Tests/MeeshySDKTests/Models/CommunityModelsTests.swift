@@ -237,6 +237,29 @@ final class CommunityModelsTests: XCTestCase {
         XCTAssertEqual(cached.onlineMemberCount, 3)
     }
 
+    // MARK: - Le lien de la communauté (#19505, servi par #19290)
+
+    func test_apiCommunity_servedLinkEntryCount_isRead_andAbsentStaysNil() throws {
+        let served = try makeDecoder().decode(APICommunity.self, from: Data("""
+        {"id":"c","identifier":"c","name":"C","isPrivate":false,"createdBy":"u",
+         "createdAt":"2026-02-20T14:00:00.000Z","linkEntryCount":58}
+        """.utf8))
+        let olderServer = try makeDecoder().decode(APICommunity.self, from: detailJSON(onlineMemberCount: nil))
+        XCTAssertEqual(served.linkEntryCount, 58)
+        XCTAssertNil(olderServer.linkEntryCount)
+    }
+
+    func test_apiCommunityMember_servedStatus_isRead_andAbsentStaysNil() throws {
+        let pending = try makeDecoder().decode(APICommunityMember.self, from: Data("""
+        {"id":"m","communityId":"c","userId":"u","role":"member","joinedAt":null,"user":null,"status":"pending"}
+        """.utf8))
+        let olderServer = try makeDecoder().decode(APICommunityMember.self, from: Data("""
+        {"id":"m","communityId":"c","userId":"u","role":"member","joinedAt":null,"user":null}
+        """.utf8))
+        XCTAssertEqual(pending.status, "pending")
+        XCTAssertNil(olderServer.status)
+    }
+
     // MARK: - APICommunitySearchResult
 
     func test_apiCommunitySearchResult_decodes() throws {

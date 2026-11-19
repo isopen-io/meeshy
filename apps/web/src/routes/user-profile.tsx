@@ -1,12 +1,16 @@
-import { Suspense, lazy, useCallback, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
 import { LiveAnnouncement } from '@/components/live-announcement';
+import { VisitorVitrine } from '@/components/vitrine-preview';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { GameBannerOwnSlot, GameBannerVisitorSlot } from '@/components/game-profile-slots';
 import { ProfileTabPanel, ProfileTabs, useProfileTab } from '@/components/profile-tabs';
+import { ProfileSeeOnMapRow } from '@/components/profile-see-on-map';
+import { ProfileFacePanel, ProfileFaces, useProfileFace } from '@/components/profile-faces';
+import { CircleLadderCard, RelationLockedRows, RelationWriteAction } from '@/components/profile-relation-face';
 import { ReportSheet } from '@/components/report-sheet';
 import { apiDeps } from '@/lib/api/deps';
 import { sharedConversationsQueryOptions } from '@/lib/api/shared-conversations';
@@ -17,7 +21,9 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { profileFailureOf } from '@/lib/profile/failure';
+import { safeNextPath } from '@/lib/session-guard';
 import { userProfileTabs } from '@/lib/profile/tabs';
+import { circleLadderOf, relationActionsOf } from '@/lib/profile/relation-face';
 import { useParams } from '@/lib/router';
 import { openSendSheet } from '@/lib/send/send-sheet-store';
 import { profileSendRequest } from '@/lib/view/profile-share';
@@ -28,6 +34,9 @@ import { ProfileCall } from '@/routes/user-profile-call';
 import { ProfileConversationsSection } from '@/routes/user-profile-conversations';
 import { useProfileController } from '@/routes/user-profile-controller';
 import { ProfileHero } from '@/routes/user-profile-header';
+import { ProfileLinksFace } from '@/routes/user-profile-links-face';
+import { ProfileRelationRows, rowOffered } from '@/routes/user-profile-relation-rows';
+import { useRelationCircleVerdict } from '@/routes/user-profile-circle-verdict';
 import { ProfilePostsPanel } from '@/routes/user-profile-posts';
 import {
   ProfileBlockedCard,
@@ -36,27 +45,11 @@ import {
   ProfileStatsSection,
 } from '@/routes/user-profile-sections';
 import { ProfileBodySkeleton, ProfileFailureNotice, ProfileOfflineBanner, ProfileSkeleton } from '@/routes/user-profile-states';
-import { announcementToneOf } from '@/lib/view/announcement-tone';
-
-/* LA LIGNE DU CERCLE (#13940) — chargée à la demande : elle ne pèse sur la fiche que là où un lien peut exister. */
-const ProfileCircleRow = lazy(() => import('@/routes/user-profile-circle').then((m) => ({ default: m.ProfileCircleRow })));
-/* Le Bring (#13936) : son propre chunk, chargé avec le cercle — le serveur dit s'il existe. */
-const ProfileBringRow = lazy(() => import('@/routes/user-profile-bring').then((m) => ({ default: m.ProfileBringRow })));
-/* Le talkie (#16641) : son propre chunk, dès Proche — le niveau vient du cache des liens. */
-const ProfileTalkieRow = lazy(() => import('@/routes/user-profile-talkie').then((m) => ({ default: m.ProfileTalkieRow })));
-/* Regarder ou écouter ensemble (#17055) : son propre chunk, dès Proche, comme le talkie. */
-const ProfileTogetherRow = lazy(() => import('@/routes/user-profile-together').then((m) => ({ default: m.ProfileTogetherRow })));
-/* Partager ma position (#18345) : son propre chunk, dès Ami — et gardé tant qu'un partage court. */
-const ProfileShareLocationRow = lazy(() => import('@/routes/user-profile-share-location').then((m) => ({ default: m.ProfileShareLocationRow })));
-/* La batterie (#14147) : son propre chunk, dès Proche — le détail, le relevé entre Sangs, et ce que je lui partage. */
-const ProfileBatteryRow = lazy(() => import('@/components/battery-panel').then((m) => ({ default: m.ProfileBatteryRow })));
-/* Le téléphone injoignable (#18737) : son propre chunk, dès Proche — l'heure, la cause probable, et « Prévenir {name} ». */
-const ProfilePhoneReachabilityRow = lazy(() => import('@/components/phone-reachability-panel').then((m) => ({ default: m.ProfilePhoneReachabilityRow })));
 
 /**
  * **LE PROFIL PUBLIC DE QUELQU'UN** (#7032, complété par #7083) — `/u/$username`,
  * l'adresse que chaque mention vise. Elle porte la nomenclature du LEGACY
- * (`apps/web/app/u/`, D-5) : un lien déjà partagé, un signet, une notification
+ * (`legacy-web-final:apps/web/app/u/`, D-5) : un lien déjà partagé, un signet, une notification
  * qui la nomme doivent continuer de s'ouvrir après la bascule.
  *
  * **CE QU'ELLE RÉPOND MAINTENANT**, et que le lot d'ouverture avait différé :
@@ -88,6 +81,14 @@ const ProfilePhoneReachabilityRow = lazy(() => import('@/components/phone-reacha
  * revanche, dit autre chose et se rend autrement : un débit n'est pas une
  * absence.
  */
+
+/**
+ * **« SE CONNECTER » RAMÈNE À LA VITRINE** (#18878) — la fiche est publique : le visiteur qui se
+ * connecte depuis elle revient à l'adresse qu'il lisait (`/u/…` ou `/@…`), jamais à la liste. Le
+ * chemin passe par la même garde que tout `next` (`safeNextPath`) : rien ne sort du domaine.
+ */
+export const visitorSignInHref = (location: { readonly pathname: string; readonly search: string }): string =>
+  href('login', undefined, { next: safeNextPath(`${location.pathname}${location.search}`) ?? undefined });
 
 function ProfileHeaderBar({ title, onSend }: { readonly title: string; readonly onSend?: () => void }) {
   return (
@@ -193,8 +194,9 @@ export function UserProfileView({ username }: { readonly username: string }) {
    * la ligne de flottaison. « Conversations » n'existe que s'il y a une
    * question à poser : jamais sur sa propre fiche, jamais sans session.
    */
-  const offered = useMemo(() => userProfileTabs({ conversations: signedIn && !isSelf }), [signedIn, isSelf]);
-  const [tab, selectTab, tabBase] = useProfileTab({ offered, fallback: 'details' });
+  const offered = useMemo(() => userProfileTabs({ conversations: signedIn && !isSelf }).filter((entry) => entry !== 'details'), [signedIn, isSelf]);
+  const [tab, selectTab, tabBase] = useProfileTab({ offered, fallback: 'posts' });
+  const [face, selectFace, faceBase] = useProfileFace('vitrine');
 
   /**
    * **CE QUE VOUS PARTAGEZ DÉJÀ** (#7124) — `?withUserId=<id>`, le filtre que
@@ -218,7 +220,27 @@ export function UserProfileView({ username }: { readonly username: string }) {
     appQueryClient,
   );
 
-  const onSignIn = useCallback(() => navigate(href('login')), []);
+  /**
+   * **LE CERCLE COMMUN, JUGÉ PAR LA PASSERELLE** (#18879) — jamais sans compte, ni sur soi-même, ni sur
+   * un compte bloqué ; une passerelle plus ancienne ne le sert pas : `items` reste `null` et la face
+   * Actions garde son comportement d'avant. Relu dès qu'un geste réglé fait bouger la relation.
+   */
+  const verdict = useRelationCircleVerdict({
+    handle: username,
+    viewerId,
+    personId: person?.id ?? subjectId,
+    relationKind: relation.kind,
+    enabled: showsContent && !isSelf,
+    settled: !busy,
+  });
+  const served = verdict.kind === 'served' ? verdict.view : null;
+  const items = useMemo(() => relationActionsOf(served), [served]);
+  /* En attente ou en échec, aucune rangée qui dépend du cercle ne s'offre : l'ancienne règle ne vaut que
+     pour un ancien serveur (revue #18879). */
+  const rowItems = useMemo(() => (verdict.kind === 'pending' ? [] : items), [verdict.kind, items]);
+  const ladder = useMemo(() => circleLadderOf(served), [served]);
+
+  const onSignIn = useCallback(() => navigate(visitorSignInHref(window.location)), []);
   const onCallFailed = useCallback((message: string) => announce(message, 'error'), [announce]);
   const onPostsAnnounce = useCallback((text: string) => announce(text), [announce]);
   const callPerson = useMemo(
@@ -241,7 +263,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
       <main id="contenu" className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-4 pb-safe">
         {person !== undefined ? (
           <div className="mx-auto grid w-full max-w-xl gap-6 pb-12 pt-2">
-            {online ? null : <ProfileOfflineBanner language={language} />}
+            {online ? null : <ProfileOfflineBanner language={language} updatedAt={view.dataUpdatedAt} />}
             <ProfileHero
               profile={person}
               name={name}
@@ -261,38 +283,66 @@ export function UserProfileView({ username }: { readonly username: string }) {
               <ProfileBlockedCard language={language} name={name} online={online} busy={busy} onAction={onAction} />
             ) : (
               <>
-                <ProfileTabs language={language} tabs={offered} active={tab} onChange={selectTab} idBase={tabBase} accent={accent} />
-                <ProfileTabPanel idBase={tabBase} tab={tab}>
-                  {tab === 'posts' ? (
-                    <ProfilePostsPanel
-                      language={language}
-                      authorId={person.id}
-                      stats={stats}
-                      online={online}
-                      gestures={gestures}
-                      announce={onPostsAnnounce}
-                    />
-                  ) : tab === 'conversations' ? (
-                    <ProfileConversationsSection
-                      language={language}
-                      conversations={shared.data ?? []}
-                      viewerId={rowViewerId}
-                      loading={shared.isPending}
-                      failed={shared.isError}
-                      onRetry={() => void shared.refetch()}
-                    />
-                  ) : (
-                    <>
-                      {isSelf ? (
-                        /* SA PROPRE FICHE MÈNE À SON ÉDITION (#7188) — miroir iOS
-                           (`UserProfileSheet+DetailsTab.swift:23`) : pas de
-                           geste relationnel sur soi, mais jamais un cul-de-sac. */
-                        <ProfileSelfSection language={language} />
+                <ProfileFaces language={language} active={face} onChange={selectFace} />
+                {face === 'vitrine' ? (
+                  <ProfileFacePanel language={language} face="vitrine" idBase={faceBase}>
+                    {/* LA VITRINE D'UN VISITEUR SANS COMPTE (#18878) : la page publique EST la Vitrine au cercle Public (loi 2), là où il arrive. */}
+                    {isSelf || signedIn ? null : <VisitorVitrine language={language} targetId={person.id} />}
+                    {/* SA PROPRE FICHE MÈNE À SON ÉDITION dès la face où l'on arrive (revue #18879). */}
+                    {isSelf ? <ProfileSelfSection language={language} /> : null}
+                    <ProfileStatsSection language={language} stats={stats} createdAt={person.createdAt} loading={statsLoading} />
+                    <ProfileTabs language={language} tabs={offered} active={tab} onChange={selectTab} idBase={tabBase} accent={accent} />
+                    <ProfileTabPanel idBase={tabBase} tab={tab}>
+                      {tab === 'conversations' ? (
+                        <ProfileConversationsSection
+                          language={language}
+                          conversations={shared.data ?? []}
+                          viewerId={rowViewerId}
+                          loading={shared.isPending}
+                          failed={shared.isError}
+                          onRetry={() => void shared.refetch()}
+                        />
                       ) : (
+                        <ProfilePostsPanel
+                          language={language}
+                          authorId={person.id}
+                          stats={stats}
+                          online={online}
+                          gestures={gestures}
+                          announce={onPostsAnnounce}
+                        />
+                      )}
+                    </ProfileTabPanel>
+                  </ProfileFacePanel>
+                ) : face === 'liens' ? (
+                  <ProfileFacePanel language={language} face="liens" idBase={faceBase}>
+                    <ProfileLinksFace
+                      language={language}
+                      username={person.username}
+                      onSend={signedIn ? () => openSendSheet(profileSendRequest({ id: person.id, username: person.username, name, avatar: person.avatar ?? null })) : undefined}
+                      onCopied={announce}
+                    />
+                  </ProfileFacePanel>
+                ) : (
+                  <ProfileFacePanel language={language} face="actions" idBase={faceBase}>
+                    {isSelf ? (
+                      /* SA PROPRE FICHE MÈNE À SON ÉDITION (#7188) — jamais un cul-de-sac. */
+                      <ProfileSelfSection language={language} />
+                    ) : (
+                      <>
+                        {signedIn ? <ProfileSeeOnMapRow language={language} personId={person.id} name={name} avatar={person.avatar} accent={accent} presence={presence?.status} /> : null}
+                        {items === null ? null : (
+                          <>
+                            {items.filter((item) => item.id === 'write').map((item) => (
+                              <RelationWriteAction key={item.id} language={language} item={item} disabled={busy || !online} onWrite={() => onAction('write')} />
+                            ))}
+                            <RelationLockedRows language={language} items={items} />
+                          </>
+                        )}
                         <ProfileRelationSection
                           language={language}
                           relation={relation}
-                          actions={actions}
+                          actions={items === null ? actions : actions.filter((kind) => kind !== 'write')}
                           name={name}
                           signedIn={signedIn}
                           online={online}
@@ -300,67 +350,20 @@ export function UserProfileView({ username }: { readonly username: string }) {
                           onAction={onAction}
                           onSignIn={onSignIn}
                           circle={
-                            signedIn && person !== undefined && (relation.kind === 'friend' || relation.kind === 'none') ? (
-                              <Suspense fallback={null}>
-                                <ProfileCircleRow
-                                  language={language}
-                                  person={{ id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar }}
-                                  raisable={relation.kind === 'friend'}
-                                  viewerId={viewerId}
-                                  now={new Date()}
-                                  onNotice={(message) => announce(message, 'error')}
-                                  onOutcome={(outcome) =>
-                                    announce(
-                                      translate(language, outcome === 'done' ? 'discover.announce.sent' : outcome === 'offline' ? 'discover.announce.offline' : 'discover.announce.sendFailed'),
-                                      announcementToneOf(outcome),
-                                    )
-                                  }
-                                />
-                                {relation.kind === 'friend' ? (
-                                  <>
-                                    <ProfileTalkieRow
-                                      language={language}
-                                      person={{ id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar }}
-                                      onNotice={(message, failed) => announce(message, failed ? 'error' : 'neutral')}
-                                    />
-                                    <ProfileTogetherRow
-                                      language={language}
-                                      person={{ id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar }}
-                                      onNotice={(message, failed) => announce(message, failed ? 'error' : 'neutral')}
-                                    />
-                                    <ProfilePhoneReachabilityRow language={language} viewerId={viewerId} person={{ id: person.id, username: person.username, displayName: person.displayName }} />
-                                    <ProfileBatteryRow language={language} viewerId={viewerId} person={{ id: person.id, username: person.username, displayName: person.displayName }} />
-                                  </>
-                                ) : null}
-                                <ProfileShareLocationRow
-                                  language={language}
-                                  person={{ id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar }}
-                                  offered={relation.kind === 'friend'}
-                                  onNotice={(message) => announce(message, 'error')}
-                                />
-                                <ProfileBringRow
-                                  language={language}
-                                  person={{ id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar }}
-                                  friend={relation.kind === 'friend'}
-                                  onNotice={(message) => announce(message, 'error')}
-                                />
-                              </Suspense>
+                            signedIn && (relation.kind === 'friend' || relation.kind === 'none') ? (
+                              <ProfileRelationRows language={language} person={person} relation={relation} viewerId={viewerId} items={rowItems} announce={announce} />
                             ) : null
                           }
                         />
-                      )}
-                      {isSelf || !signedIn || !callsAvailable() ? null : (
-                        <ProfileCall language={language} person={callPerson} online={online} onFailed={onCallFailed} />
-                      )}
-                      <ProfileStatsSection
-                        language={language}
-                        stats={stats}
-                        createdAt={person.createdAt}
-                        loading={statsLoading}
-                      />
-                    </>
-                  )}
-                </ProfileTabPanel>
+                        {ladder === null ? null : <CircleLadderCard language={language} ladder={ladder} name={name} />}
+                      </>
+                    )}
+                    {/* APPELER suit le verdict du cercle commun : un appel qu'il ferme a sa rangée verrouillée, jamais un bouton à côté. */}
+                    {isSelf || !signedIn || !callsAvailable() || !rowOffered(rowItems, 'call', true) ? null : (
+                      <ProfileCall language={language} person={callPerson} online={online} onFailed={onCallFailed} />
+                    )}
+                  </ProfileFacePanel>
+                )}
               </>
             )}
           </div>

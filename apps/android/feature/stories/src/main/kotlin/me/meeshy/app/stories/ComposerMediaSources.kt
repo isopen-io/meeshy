@@ -25,7 +25,7 @@ import me.meeshy.ui.icons.MeeshyIcons
 
 /**
  * L'appui long d'un outil (#13845) : [label] annonce le geste à TalkBack, [open] présente le choix, et [actions] offrent
- * chaque source directement, comme les actions nommées de VoiceOver sur iOS (`ComposerRailEntryLongPress`).
+ * chaque source directement, comme les actions nommées de VoiceOver sur iOS.
  */
 internal class ToolLongPress(val label: String, val open: () -> Unit, val actions: List<CustomAccessibilityAction>)
 

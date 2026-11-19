@@ -1,0 +1,154 @@
+/* LE MÉDAILLON (K45, #18874) — une forme, un fond, un contenu, un décor. Jamais
+   interactif : ni cible, ni état pressé. Aucun flou, aucune ombre portée. Chaque
+   valeur chiffrée vient de `meeshy-medallion-recipe.ts`, qui la pose en propriétés
+   `--kit-medallion-*`. Le halo et les ondes DÉBORDENT la boîte sans la changer. Seuls
+   `transform` et `opacity` s'animent ; la forme tourne ou dérive, le contenu reste droit. */
+@layer components {
+  .kit-medallion {
+    position: relative;
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    box-sizing: border-box;
+    inline-size: var(--kit-medallion-d);
+    block-size: var(--kit-medallion-d);
+    border: var(--kit-medallion-border) solid transparent;
+    border-radius: var(--kit-medallion-radius);
+    color: var(--kit-medallion-ink);
+    opacity: var(--kit-medallion-opacity);
+    user-select: none;
+    pointer-events: none;
+  }
+
+  .kit-medallion[data-state='locked'] {
+    border-style: dashed;
+    border-color: var(--color-ios-ink-3);
+    color: var(--color-ios-ink-3);
+  }
+
+  .kit-medallion__shape {
+    position: absolute;
+    inset: calc(-1 * var(--kit-medallion-border));
+    border-radius: inherit;
+    background-image: linear-gradient(140deg, var(--kit-medallion-tone), var(--kit-medallion-tone-end));
+    opacity: var(--kit-medallion-fill-opacity);
+  }
+
+  .kit-medallion[data-background='solid'] > .kit-medallion__shape {
+    opacity: 1;
+  }
+
+  .kit-medallion[data-background='none'] > .kit-medallion__shape {
+    display: none;
+  }
+
+  .kit-medallion[data-motion='spin'] > .kit-medallion__shape {
+    animation: kit-medallion-spin var(--kit-medallion-motion-seconds) linear infinite;
+  }
+
+  .kit-medallion[data-motion='drift'] > .kit-medallion__shape {
+    animation: kit-medallion-drift var(--kit-medallion-motion-seconds) ease-in-out infinite alternate;
+  }
+
+  .kit-medallion__glyph {
+    position: relative;
+    display: grid;
+    place-items: center;
+    inline-size: var(--kit-medallion-glyph);
+    block-size: var(--kit-medallion-glyph);
+  }
+
+  .kit-medallion__glyph > svg {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  .kit-medallion__value {
+    position: relative;
+    font-size: var(--kit-medallion-value);
+    font-weight: 900;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .kit-medallion__halo {
+    position: absolute;
+    inset: calc(-1 * var(--kit-medallion-halo));
+    border-radius: var(--ios-radius-full);
+    background-color: var(--kit-medallion-tone);
+    opacity: var(--kit-medallion-halo-opacity);
+  }
+
+  .kit-medallion__dashed {
+    position: absolute;
+    inset: var(--kit-medallion-dash-inset);
+    border: var(--kit-medallion-dash-width) dashed var(--color-ios-ink-3);
+    border-radius: var(--ios-radius-full);
+    animation: kit-medallion-spin var(--kit-medallion-dash-seconds) linear infinite;
+  }
+
+  .kit-medallion__wave {
+    position: absolute;
+    inset: 0;
+    border: 2px solid var(--kit-medallion-tone);
+    border-radius: var(--ios-radius-full);
+    opacity: 0;
+    animation: kit-motion-pulse var(--kit-medallion-waves-seconds) var(--motion-pulse) infinite;
+  }
+
+  .kit-medallion__strike {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 50%;
+    inline-size: var(--kit-medallion-strike-length);
+    block-size: var(--kit-medallion-strike-width);
+    margin-inline-start: calc(var(--kit-medallion-strike-length) / -2);
+    margin-block-start: calc(var(--kit-medallion-strike-width) / -2);
+    border-radius: var(--ios-radius-full);
+    background-color: currentcolor;
+    transform: rotate(var(--kit-medallion-strike-angle));
+    outline: var(--kit-medallion-strike-cutout) solid var(--kit-medallion-surface);
+  }
+}
+
+.kit-medallion-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kit-medallion-row__count {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ios-ink-2);
+}
+
+@keyframes kit-medallion-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes kit-medallion-drift {
+  from {
+    transform: rotate(-6deg) scale(1);
+  }
+
+  to {
+    transform: rotate(8deg) scale(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kit-medallion[data-motion='spin'] > .kit-medallion__shape,
+  .kit-medallion[data-motion='drift'] > .kit-medallion__shape,
+  .kit-medallion__dashed {
+    animation: none;
+  }
+
+  .kit-medallion__wave {
+    animation: none;
+    opacity: 0.5;
+  }
+}

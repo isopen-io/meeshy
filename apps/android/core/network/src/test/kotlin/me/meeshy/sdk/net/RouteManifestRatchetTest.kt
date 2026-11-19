@@ -136,8 +136,22 @@ class RouteManifestRatchetTest {
          * relit quand la passerelle annonce que son partage a changé) ; le recalage d'Android la portera (#18578).
          * 130 : moins `GET /relations/locations/mine`, que porte `RelationsApi.ownSharedLocation` (#18578 : le centre de
          * partage Android se recale sur la liste que la passerelle sert).
+         * 133 : plus `GET`/`POST /e2ee/devices/self/verifications` et `POST /e2ee/devices/self/verifications/ack` (#19080,
+         * vérification d'appareil E2EE servie par la passerelle) ; #19189 les portera.
+         * 138 : plus les cinq routes « Mes adresses » sous `/users/me/addresses` (lecture, création, modification,
+         * suppression, ordre — lot `serveur-mes-adresses` de #18857) ; la face Liens Android (#18889) les portera.
+         * 139 : plus `GET /users/:id/in-common` (#19231 : nos communautés, nos amis et nos médias en commun sur la
+         * fiche d'un autre) ; la fiche Android du chantier #18857 la portera.
+         * 147 : plus les huit routes de la part serveur du profil (#19200–#19207, PR #19316) — invitations par
+         * e-mail (liste, relance, désinscription), statistiques du lien de profil, échange de contact sans
+         * contact (création, acceptation), demande de position Sang et mode fantôme ; la fiche Android du
+         * chantier #18857 les portera.
+         * 146 : moins `GET /users/me/addresses`, que porte `MyAddressesApi` (#18889 : la rangée « Mes adresses » de la face
+         * Liens) ; création, modification, suppression et ordre restent à porter.
+         * 158 : plus les douze routes servies par la PR #19509 (contrat client du profil, #18857) — stories à la une, demandes
+         * d'entrée et entrées d'une communauté, réglages du fantôme et du Sang — servies avant leurs écrans Android.
          */
-        const val TO_PORT_CEILING = 130
+        const val TO_PORT_CEILING = 158
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

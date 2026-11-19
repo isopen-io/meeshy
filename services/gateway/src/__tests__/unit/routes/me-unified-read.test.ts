@@ -167,6 +167,8 @@ function buildPrisma() {
     // throwing on a missing model — same shape proven by
     // `identity-twins-retired.test.ts`.
     userPreferences: { findUnique: jest.fn<any>().mockResolvedValue(null) },
+    // #19374 — « Ma voix » : l'échantillon du titulaire, public OU privé.
+    userVoiceModel: { findUnique: jest.fn<any>().mockResolvedValue(null) },
     userPreference: { findMany: jest.fn<any>().mockResolvedValue([]) },
     userConversationCategory: { findMany: jest.fn<any>().mockResolvedValue([]), count: jest.fn<any>().mockResolvedValue(0) },
     $transaction: jest.fn<any>().mockResolvedValue([]),
@@ -272,6 +274,85 @@ describe('GET /api/v1/me — JWT (utilisateur enregistré)', () => {
     const user = res.json().data.user;
     expect(user.passwordHash).toBeUndefined();
     expect('passwordHash' in user).toBe(false);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════
+// #19374 — « Ma voix » : l'échantillon se sert à son titulaire, public OU privé
+// ═════════════════════════════════════════════════════════════════════════
+
+function voiceModelRow(overrides: Record<string, unknown> = {}) {
+  return {
+    voicePublicAt: null,
+    referenceAudioUrl: '/api/v1/attachments/file/voice%2Falice.wav',
+    totalDurationMs: 12000,
+    qualityScore: 0.93,
+    referenceAudioId: 'ref-audio-1',
+    embeddingPath: '/models/alice.npy',
+    ...overrides,
+  };
+}
+
+describe('GET /api/v1/me — « Ma voix » (#19374)', () => {
+  const baseAvant = process.env.API_PUBLIC_URL;
+  beforeEach(() => { process.env.API_PUBLIC_URL = 'https://gate.test'; });
+  afterEach(() => {
+    if (baseAvant === undefined) delete process.env.API_PUBLIC_URL;
+    else process.env.API_PUBLIC_URL = baseAvant;
+  });
+
+  it('sert au titulaire son échantillon PRIVÉ — voicePublic false, URL et durée présentes', async () => {
+    prisma.userVoiceModel.findUnique.mockResolvedValue(voiceModelRow());
+    const res = await app.inject({ method: 'GET', url: PREFIXE_ME, headers: { authorization: `Bearer ${signJwt()}` } });
+    const user = res.json().data.user;
+    expect(user.voicePublic).toBe(false);
+    expect(user.voiceSampleUrl).toBe('https://gate.test/api/v1/attachments/file/voice%2Falice.wav');
+    expect(user.voiceSampleDurationMs).toBe(12000);
+    expect(prisma.userVoiceModel.findUnique.mock.calls[0][0]).toEqual({
+      where: { userId: USER_ID },
+      select: { voicePublicAt: true, referenceAudioUrl: true, totalDurationMs: true },
+    });
+  });
+
+  it('sert au titulaire son échantillon PUBLIC, et rien de ce qui voisine dans le modèle vocal', async () => {
+    prisma.userVoiceModel.findUnique.mockResolvedValue(voiceModelRow({ voicePublicAt: new Date('2026-10-01T00:00:00.000Z') }));
+    const res = await app.inject({ method: 'GET', url: '/api/v1/auth/me', headers: { authorization: `Bearer ${signJwt()}` } });
+    const user = res.json().data.user;
+    expect(user.voicePublic).toBe(true);
+    expect(user.voiceSampleUrl).toBe('https://gate.test/api/v1/attachments/file/voice%2Falice.wav');
+    for (const voisin of ['voicePublicAt', 'qualityScore', 'voiceQuality', 'referenceAudioUrl', 'referenceAudioId', 'embeddingPath', 'voiceModel']) {
+      expect(voisin in user).toBe(false);
+    }
+  });
+
+  it('sans modèle vocal : voicePublic false, ni URL ni durée', async () => {
+    const res = await app.inject({ method: 'GET', url: PREFIXE_ME, headers: { authorization: `Bearer ${signJwt()}` } });
+    const user = res.json().data.user;
+    expect(user.voicePublic).toBe(false);
+    expect('voiceSampleUrl' in user).toBe(false);
+    expect('voiceSampleDurationMs' in user).toBe(false);
+  });
+
+  it('une panne de lecture ne casse pas « qui suis-je » et n\'affirme rien sur la voix', async () => {
+    prisma.userVoiceModel.findUnique.mockRejectedValue(new Error('mongo down'));
+    const res = await app.inject({ method: 'GET', url: PREFIXE_ME, headers: { authorization: `Bearer ${signJwt()}` } });
+    expect(res.statusCode).toBe(200);
+    expect('voicePublic' in res.json().data.user).toBe(false);
+  });
+
+  it('?fields= qui ne nomme aucun champ de voix n\'ouvre aucune lecture ; qui en nomme un ne sert que lui', async () => {
+    prisma.userVoiceModel.findUnique.mockResolvedValue(voiceModelRow());
+    await app.inject({ method: 'GET', url: `${PREFIXE_ME}?fields=id,username`, headers: { authorization: `Bearer ${signJwt()}` } });
+    expect(prisma.userVoiceModel.findUnique).not.toHaveBeenCalled();
+
+    const res = await app.inject({ method: 'GET', url: `${PREFIXE_ME}?fields=id,voicePublic`, headers: { authorization: `Bearer ${signJwt()}` } });
+    expect(Object.keys(res.json().data.user).sort()).toEqual(['id', 'voicePublic']);
+  });
+
+  it('un participant anonyme n\'a pas de voix : aucune lecture, aucun champ', async () => {
+    const res = await app.inject({ method: 'GET', url: PREFIXE_ME, headers: { 'x-session-token': 'session-anonyme-1' } });
+    expect(prisma.userVoiceModel.findUnique).not.toHaveBeenCalled();
+    expect('voicePublic' in res.json().data.user).toBe(false);
   });
 });
 

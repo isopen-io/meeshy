@@ -16,6 +16,8 @@ struct OverlayHost: ViewModifier {
                 ListeningBroadcaster.start()
                 BatteryCenter.start()
                 PhoneReachabilityCenter.start()
+                InactivityCheckCenter.start()
+                PhoneCallCenter.start()
             }
             .sheet(isPresented: $isCrashSheetPresented) {
                 CrashReportSheet(reports: crashReports)

@@ -11,7 +11,9 @@ type Encoding = Readonly<Record<string, unknown>>;
 
 type FakeSender = { readonly kind: 'audio' | 'video'; encodings: readonly Encoding[]; readonly sets: Encoding[][]; preference: unknown };
 
-function fakeConnection(network: { loss: number; rtt: number; relay?: boolean; refusePreference?: boolean }) {
+type Network = { loss: number; rtt: number; relay?: boolean; refusePreference?: boolean; estimate?: number; uplinkLoss?: number };
+
+function fakeConnection(network: Network) {
   const senders: Record<'audio' | 'video', FakeSender> = {
     audio: { kind: 'audio', encodings: [{ active: true }], sets: [], preference: undefined },
     video: { kind: 'video', encodings: [{ active: true, rid: 'f' }], sets: [], preference: undefined },
@@ -33,7 +35,8 @@ function fakeConnection(network: { loss: number; rtt: number; relay?: boolean; r
       received += 100;
       lost += Math.round((100 * network.loss) / (100 - network.loss));
       const entries = [
-        { type: 'candidate-pair', nominated: true, state: 'succeeded', currentRoundTripTime: network.rtt / 1000, localCandidateId: 'l1' },
+        { type: 'candidate-pair', nominated: true, state: 'succeeded', currentRoundTripTime: network.rtt / 1000, localCandidateId: 'l1', ...(network.estimate === undefined ? {} : { availableOutgoingBitrate: network.estimate }) },
+        ...(network.uplinkLoss === undefined ? [] : [{ type: 'remote-inbound-rtp', kind: 'video', roundTripTime: network.rtt / 1000, fractionLost: network.uplinkLoss / 100 }]),
         { type: 'local-candidate', id: 'l1', candidateType: network.relay === true ? 'relay' : 'srflx' },
         { type: 'inbound-rtp', kind: 'audio', packetsReceived: received, packetsLost: lost, bytesReceived: received * 100, jitter: 0.01 },
         { type: 'outbound-rtp', kind: 'video', bytesSent: 10, codecId: 'v' },
@@ -45,12 +48,12 @@ function fakeConnection(network: { loss: number; rtt: number; relay?: boolean; r
   return { connection: connection as unknown as RTCPeerConnection, senders };
 }
 
-function harness(options: { readonly wantsVideo?: () => boolean; readonly profile?: () => DataProfile } = {}) {
+function harness(options: { readonly wantsVideo?: () => boolean; readonly profile?: () => DataProfile; readonly sharingScreen?: () => boolean } = {}) {
   let now = 0;
   const peers = new Map<string, ReturnType<typeof fakeConnection>>();
-  const networks = new Map<string, { loss: number; rtt: number; relay?: boolean; refusePreference?: boolean }>();
+  const networks = new Map<string, Network>();
   const add = (userId: string, refusePreference = false) => {
-    const network: { loss: number; rtt: number; relay?: boolean; refusePreference?: boolean } = { loss: 0, rtt: 40, refusePreference };
+    const network: Network = { loss: 0, rtt: 40, refusePreference };
     networks.set(userId, network);
     peers.set(userId, fakeConnection(network));
   };
@@ -59,6 +62,7 @@ function harness(options: { readonly wantsVideo?: () => boolean; readonly profil
     wantsVideo: options.wantsVideo ?? (() => true),
     now: () => now,
     ...(options.profile === undefined ? {} : { profile: options.profile }),
+    ...(options.sharingScreen === undefined ? {} : { sharingScreen: options.sharingScreen }),
   });
   const advance = async (ms: number) => {
     const ticks = [];
@@ -73,6 +77,9 @@ function harness(options: { readonly wantsVideo?: () => boolean; readonly profil
 
 const lastVideo = (peer: ReturnType<typeof fakeConnection>) => peer.senders.video.encodings[0];
 
+/** La vidéo part en priorité réseau haute, comme sur iOS (#19775). */
+const sent = (encoding: object) => ({ rid: 'f', networkPriority: 'high', ...encoding });
+
 describe('la boucle de qualité d’un appel (#8047)', () => {
   test('chaque pair reçoit le palier de SON lien, sans toucher aux autres', async () => {
     const h = harness();
@@ -81,8 +88,8 @@ describe('la boucle de qualité d’un appel (#8047)', () => {
     const bNet = h.networks.get('b');
     if (bNet !== undefined) bNet.rtt = 350;
     await h.advance(4_000);
-    expect(lastVideo(h.peers.get('a') as ReturnType<typeof fakeConnection>)).toEqual({ rid: 'f', ...TIER_ENCODING.high });
-    expect(lastVideo(h.peers.get('b') as ReturnType<typeof fakeConnection>)).toEqual({ rid: 'f', ...TIER_ENCODING.medium });
+    expect(lastVideo(h.peers.get('a') as ReturnType<typeof fakeConnection>)).toEqual(sent(TIER_ENCODING.high));
+    expect(lastVideo(h.peers.get('b') as ReturnType<typeof fakeConnection>)).toEqual(sent(TIER_ENCODING.medium));
   });
 
   test('un palier inchangé n’est pas réappliqué à chaque relevé', async () => {
@@ -163,7 +170,7 @@ describe('la boucle de qualité d’un appel (#8047)', () => {
     h.add('a');
     const [tick] = await h.advance(2_000);
     const peer = h.peers.get('a') as ReturnType<typeof fakeConnection>;
-    expect(lastVideo(peer)).toEqual({ rid: 'f', ...profiledEncoding(TIER_ENCODING.high, 'cellular') });
+    expect(lastVideo(peer)).toEqual(sent(profiledEncoding(TIER_ENCODING.high, 'cellular')));
     expect(peer.senders.video.preference).toBe('balanced');
     expect(tick?.profile).toBe('cellular');
   });
@@ -195,7 +202,7 @@ describe('la boucle de qualité d’un appel (#8047)', () => {
     profile = 'economy';
     await h.advance(2_000);
     const peer = h.peers.get('a') as ReturnType<typeof fakeConnection>;
-    expect(lastVideo(peer)).toEqual({ rid: 'f', ...profiledEncoding(TIER_ENCODING.high, 'economy') });
+    expect(lastVideo(peer)).toEqual(sent(profiledEncoding(TIER_ENCODING.high, 'economy')));
     expect(peer.senders.video.preference).toBe('maintain-framerate');
     expect(peer.senders.audio.encodings[0]).toMatchObject({ maxBitrate: 16_000 });
   });
@@ -216,9 +223,68 @@ describe('la boucle de qualité d’un appel (#8047)', () => {
     h.add('a', true);
     await h.advance(2_000);
     const peer = h.peers.get('a') as ReturnType<typeof fakeConnection>;
-    expect(lastVideo(peer)).toEqual({ rid: 'f', ...profiledEncoding(TIER_ENCODING.high, 'cellular') });
+    expect(lastVideo(peer)).toEqual(sent(profiledEncoding(TIER_ENCODING.high, 'cellular')));
     const sets = peer.senders.video.sets.length;
     await h.advance(6_000);
     expect(peer.senders.video.sets.length).toBe(sets);
+  });
+
+  test('une forte latence sur un lien large garde la haute définition : c’est le débit estimé qui décide (#19775)', async () => {
+    const h = harness();
+    h.add('a');
+    const network = h.networks.get('a') as Network;
+    network.rtt = 420;
+    network.estimate = 3_000_000;
+    await h.advance(10_000);
+    expect(lastVideo(h.peers.get('a') as ReturnType<typeof fakeConnection>)).toEqual(sent(TIER_ENCODING.high));
+  });
+
+  test('un débit estimé faible fait descendre l’image, mais un relevé isolé ne la fait pas clignoter (#19775)', async () => {
+    const h = harness();
+    h.add('a');
+    const peer = h.peers.get('a') as ReturnType<typeof fakeConnection>;
+    const network = h.networks.get('a') as Network;
+    network.estimate = 3_000_000;
+    await h.advance(2_000);
+    network.estimate = 600_000;
+    await h.advance(2_000);
+    expect(lastVideo(peer)).toEqual(sent(TIER_ENCODING.high));
+    await h.advance(2_000);
+    expect(lastVideo(peer)).toEqual(sent(TIER_ENCODING.low));
+  });
+
+  test('une perte montante de 10 % retire un cran, même sur un lien large (#19775)', async () => {
+    const h = harness();
+    h.add('a');
+    const network = h.networks.get('a') as Network;
+    network.estimate = 3_000_000;
+    network.uplinkLoss = 12;
+    await h.advance(4_000);
+    expect(lastVideo(h.peers.get('a') as ReturnType<typeof fakeConnection>)).toEqual(sent(TIER_ENCODING.medium));
+  });
+
+  test('un lien reconstruit pour le même pair reçoit ses plafonds au premier relevé (#19775)', async () => {
+    const h = harness();
+    h.add('a');
+    await h.advance(2_000);
+    h.add('a');
+    await h.advance(2_000);
+    const rebuilt = h.peers.get('a') as ReturnType<typeof fakeConnection>;
+    expect(rebuilt.senders.video.sets.length).toBe(1);
+    expect(lastVideo(rebuilt)).toEqual(sent(TIER_ENCODING.high));
+  });
+
+  test('pendant un partage d’écran, la vidéo garde sa résolution : 3 Mb/s, 15 i/s, jamais réduite (#19777)', async () => {
+    let sharing = true;
+    const h = harness({ sharingScreen: () => sharing });
+    h.add('a');
+    await h.advance(2_000);
+    const peer = h.peers.get('a') as ReturnType<typeof fakeConnection>;
+    expect(lastVideo(peer)).toEqual(sent({ active: true, maxBitrate: 3_000_000, scaleResolutionDownBy: 1, maxFramerate: 15 }));
+    expect(peer.senders.video.preference).toBe('maintain-resolution');
+    sharing = false;
+    await h.advance(2_000);
+    expect(lastVideo(peer)).toEqual(sent(TIER_ENCODING.high));
+    expect(peer.senders.video.preference).toBe('balanced');
   });
 });

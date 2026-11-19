@@ -504,6 +504,48 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(mockMessageService.listAfterCallCount, 0)
     }
 
+    /// #18929 — le rattrapage repart de la fin du fil détenu SANS TROU, jamais
+    /// d'un message entré seul. Une première ouverture tient le fil jusqu'à T1 ;
+    /// la NSE dépose ensuite le message poussé de T9 ; des messages non poussés
+    /// (conversation muette, push perdu) séparent les deux, et le refresh n'en
+    /// ramène que les trente plus récents. Repartir de T9 — le plus récent
+    /// message détenu — laissait les plus anciens hors du fil, sans signal.
+    func test_loadMessages_unMessagePousseDeposeSeul_neDeplacePasLeDepartDuRattrapage() async throws {
+        let persistence = MessagePersistenceActor(dbWriter: try makeInMemoryPool())
+        let t1 = Date(timeIntervalSince1970: 1_748_736_000)
+        let held = ["2025-05-31T23:59:57.000Z", "2025-05-31T23:59:58.000Z", "2025-05-31T23:59:59.000Z", "2025-06-01T00:00:00.000Z"]
+        let pushed = (id: "pushed-t9", at: "2025-06-01T02:00:00.000Z")
+        mockMessageService.listResult = .success(makeServedPage(held.enumerated().map { (id: "held-\($0.offset)", at: $0.element) }))
+        let first = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
+        await first.loadMessages()
+
+        try await persistence.upsertFromAPIMessages(makeServedPage([pushed]).data)
+        let unpushed = (0..<29).map { (id: "gap-\($0)", at: "2025-06-01T01:00:00.000Z") }
+        mockMessageService.listResult = .success(makeServedPage(unpushed + [pushed]))
+        mockMessageService.listAfterResult = .success(makeMessagesResponse())
+        let reopened = makeSUT(dependencies: ConversationDependencies(persistence: persistence))
+        await reopened.loadMessages()
+        let rattrape = await MessageStoreObservationHelper.awaitCondition(timeout: 2.0) {
+            self.mockMessageService.listAfterCallCount >= 1
+        }
+
+        XCTAssertTrue(rattrape, "un refresh qui ne rejoint pas la fin du fil détenu laisse un trou à combler")
+        let after = try XCTUnwrap(mockMessageService.lastListAfterAfter)
+        XCTAssertLessThanOrEqual(after, t1)
+        XCTAssertGreaterThan(
+            after, t1.addingTimeInterval(-0.01),
+            "le rattrapage repart de T1, la fin du fil détenu, jamais du message de T9 déposé seul"
+        )
+    }
+
+    /// Une page servie par la passerelle : un message reçu par (identifiant, instant ISO).
+    private func makeServedPage(_ entries: [(id: String, at: String)]) -> MessagesAPIResponse {
+        let items = entries.map { entry in
+            #"{"id":"\#(entry.id)","conversationId":"\#(testConversationId)","senderId":"000000000000000000000042","content":"m","createdAt":"\#(entry.at)"}"#
+        }
+        return JSONStub.decode(#"{"success":true,"data":[\#(items.joined(separator: ","))],"pagination":null,"cursorPagination":null,"hasNewer":null}"#)
+    }
+
     func test_openingGapCursor_withNothingHeld_returnsNil() {
         XCTAssertNil(ConversationViewModel.openingGapCursor(heldUpTo: nil, refreshReachedBackTo: Date()))
     }
@@ -3020,6 +3062,8 @@ final class ConversationViewModelTests: XCTestCase {
             onCalled?()
             return try result.get()
         }
+
+        func callSession(callId: String) async throws -> ActiveCallSession? { nil }
     }
 
     private func makeAnonymousSession(conversationId: String) -> AnonymousSessionContext {

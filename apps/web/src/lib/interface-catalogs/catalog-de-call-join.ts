@@ -20,7 +20,6 @@ const deCallJoin = {
   'callJoin.detail.loading': 'Anruf wird geladen',
   'callJoin.detail.notFound.title': 'Anruf nicht gefunden',
   'callJoin.detail.notFound.body': 'Dieser Anruf existiert nicht mehr oder ist für dich nicht verfügbar.',
-  'callJoin.detail.joining': 'Verbindung zum Anruf…',
   'keypad.title': 'Tastenfeld',
   'keypad.open': 'Nummer wählen',
   'keypad.input.placeholder': 'Nummer oder Name',

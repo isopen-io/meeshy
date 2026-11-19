@@ -138,7 +138,7 @@ final class MessageAuthorRingTests: XCTestCase {
         "Auth/Views/AccountSwitcherSheet.swift": (1, "comptes enregistrés sur l'appareil — l'instantané local ne garde pas le contour"),
         "Profile/Views/ProfileOwnAvatar.swift": (1, "profil — le contour se pose AUTOUR de l'avatar (`.avatarRing`), comme sur la fiche de profil"),
         "Profile/Views/ProfileDecorSheet.swift": (1, "sélecteur de contour — chaque tuile pose SON contour autour de l'avatar (`.avatarRing`)"),
-        "MeeshyUI/Profile/UserProfileSheet+Header.swift": (2, "profil — le contour se pose AUTOUR de l'avatar (`.avatarRing`)"),
+        "MeeshyUI/Profile/UserProfileSheet+Header.swift": (1, "profil — le contour se pose AUTOUR de l'avatar (`.avatarRing`) ; un seul avatar voyage du héros à la barre (K28, #19410)"),
         "Share/ShareRecipientRow.swift": (2, "écran de partage unique en cours (#10947/#10948) — son contour est l'affaire de son lot"),
         "Main/Views/PublicationViewersSheet.swift": (1, "vues d'une publication — la liste servie ne porte pas le contour (#10957)"),
         "Main/Views/ViewerEngagementDetailScreen.swift": (1, "détail d'une personne de la liste des vues — `StoryViewerItem` servi ne porte pas le contour (#10957)"),
@@ -156,6 +156,19 @@ final class MessageAuthorRingTests: XCTestCase {
         "MeeshyUI/Story/Controls/SoundLibraryPicker.swift": (1, "décor, illustration ou son — aucune personne"),
         "MeeshyUI/Packs/PackElementStage.swift": (2, "soi, essai d'un décor — le contour essayé se pose AUTOUR de l'avatar (`.avatarRing`), la bannière essayée n'en montre aucun"),
         "MeeshyUI/Packs/PublisherPageView.swift": (1, "page d'un éditeur — `PackPublisherOwner` servi ne porte pas le contour (#10957)"),
+        "Links/Views/CommunityLinkDetailView+Sections.swift": (1, "entrées par un lien de communauté — `CommunityLinkEntry` servie ne porte pas le contour (#10957)"),
+        "SharedLocation/Map/NearbyMapScreen.swift": (1, "carte « Autour de toi » — la position servie ne porte pas le contour (#10957)"),
+        "SharedLocation/Map/PersonLocationMapScreen.swift": (1, "carte d'une personne — l'épingle servie ne porte pas le contour (#10957)"),
+        "SharedLocation/Map/LocationMapPinsLayer.swift": (1, "épingles de la carte — la position servie ne porte pas le contour (#10957)"),
+        "SharedLocation/Map/BloodLocationSheet.swift": (1, "qui a regardé ma position — l'observateur servi ne porte pas le contour (#10957)"),
+        "SharedLocation/Map/ShareMyLocationSheet.swift": (1, "destinataires du partage de position — le destinataire choisi ne porte pas le contour (#10957)"),
+        "Battery/BatteryPullRequestsCard.swift": (1, "demande de batterie — le demandeur servi (`BatteryPullRequester`) ne porte pas le contour (#10957)"),
+        "Links/Views/AffiliateView+Referral.swift": (1, "filleuls — `ReferredUser` servi ne porte pas le contour (#10957)"),
+        "Profile/Contactless/ContactlessExchangeSection.swift": (1, "échange sans contact — l'annonce de proximité et `ContactExchangePerson` servi ne portent pas le contour (#10957)"),
+        "Profile/Views/ProfileEditImageControls.swift": (1, "soi, édition du profil — le contour se pose AUTOUR de l'avatar (`.avatarRing`), comme sur la fiche de profil"),
+        "MeeshyUI/JoinFlow/JoinFlowScreen.swift": (1, "lien expiré — le créateur servi (`JoinFlowGoneLink.Creator`) ne porte pas le contour (#10957)"),
+        "MeeshyUI/Profile/LinksFaceStack.swift": (1, "visages d'un lien — `LinksFaceMember` servi ne porte pas le contour (#10957)"),
+        "MeeshyUI/Profile/ProfileInCommonParts.swift": (2, "amis en commun — `InCommonFriend` servi ne porte pas le contour (#10957)"),
     ]
 
     func test_everyPersonAvatar_passesTheServedRing_orIsCountedWithItsReason() throws {

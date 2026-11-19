@@ -99,6 +99,12 @@ public data class CallFaceLandmarks(
     }
 }
 
+/**
+ * #19779 — une déformation posée sur le visage : une bosse (`CIBumpDistortion`, [scale] > 0 agrandit) ou, pour
+ * [CallFaceEffectGeometry.babyChinPinch], un pincement (`CIPinchDistortion`, [scale] est sa force : il resserre).
+ */
+public data class CallFaceDistortion(val center: FacePoint, val radius: Float, val scale: Float)
+
 /** Une braise de l'éruption. */
 public data class CallEmber(val center: FacePoint, val radius: Float, val opacity: Float)
 
@@ -139,6 +145,14 @@ public object CallFaceEffectGeometry {
         FacePoint(face.left + face.width * 0.26f, face.top + face.height * 0.64f),
         FacePoint(face.left + face.width * 0.74f, face.top + face.height * 0.64f),
     )
+
+    /** #19779 — le Bébé : les deux yeux agrandis, sur les vrais yeux quand ils sont lus (iOS `babyEyeBumps`). */
+    public fun babyEyeBumps(landmarks: CallFaceLandmarks): List<CallFaceDistortion> =
+        eyeCenters(landmarks).map { CallFaceDistortion(it, landmarks.bounds.width * 0.15f, 0.42f) }
+
+    /** #19779 — le bas du visage légèrement resserré : un menton de bébé (iOS `babyChinPinch`, y vers le bas). */
+    public fun babyChinPinch(face: FaceBox): CallFaceDistortion =
+        CallFaceDistortion(FacePoint(face.midX, face.top + face.height * 0.78f), face.width * 0.42f, 0.22f)
 
     public fun wartCenters(face: FaceBox, count: Int, seed: ULong): List<FacePoint> =
         (0 until max(0, count)).map { index -> FacePoint(wartX(face, index, seed), wartY(face, index, seed)) }

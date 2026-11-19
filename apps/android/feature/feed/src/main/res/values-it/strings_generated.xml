@@ -12,7 +12,6 @@
     <string name="feed_action_repost">Ripubblica</string>
     <string name="feed_action_send">Invia</string>
     <string name="feed_action_share">Condividi</string>
-    <string name="feed_action_view_profile">Vedi profilo</string>
     <string name="feed_caption_collapse">meno</string>
     <string name="feed_caption_expand">altro…</string>
     <string name="feed_carousel_a11y_position">Media %1$d di %2$d</string>
@@ -74,14 +73,8 @@
         <item quantity="many">%1$d mi piace</item>
         <item quantity="other">%1$d mi piace</item>
     </plurals>
-    <plurals name="feed_post_stat_replies">
-        <item quantity="one">%1$d risposta</item>
-        <item quantity="many">%1$d risposte</item>
-        <item quantity="other">%1$d risposte</item>
-    </plurals>
     <string name="feed_post_stat_saves">%1$d salvataggi</string>
     <string name="feed_post_stat_shares">%1$d condivisioni</string>
-    <string name="feed_quote_cancel">Annulla</string>
     <string name="feed_quote_submit">Ripubblica</string>
     <string name="feed_reel">Reel</string>
     <string name="feed_reel_card_a11y">Reel di %1$s</string>
@@ -89,7 +82,7 @@
     <string name="feed_reel_republished_by">Ricondiviso da %1$s</string>
     <string name="feed_reel_views">Visualizzazioni</string>
     <string name="feed_report_reason_harassment">Molestie</string>
-    <string name="feed_report_reason_hate_speech">Incitamento all\'odio</string>
+    <string name="feed_report_reason_hate_speech">Odio</string>
     <string name="feed_report_reason_impersonation">Furto d\'identità</string>
     <string name="feed_report_reason_inappropriate">Contenuto inappropriato</string>
     <string name="feed_report_reason_other">Altro</string>
@@ -178,9 +171,7 @@
     <string name="post_comments_reply_badge">Rispondi</string>
     <string name="post_comments_reply_error">Errore nell\'invio della risposta</string>
     <string name="post_comments_replying_to">In risposta a %1$s</string>
-    <string name="post_comments_send">Invia</string>
     <string name="post_comments_send_error">Errore nell\'invio del commento</string>
-    <string name="post_comments_sending">Invio…</string>
     <string name="post_comments_title">Commenti</string>
     <plurals name="post_comments_view_replies">
         <item quantity="one">Vedi %1$d risposta</item>
@@ -213,7 +204,6 @@
     <string name="status_composer_mood_question">Come ti senti?</string>
     <string name="status_composer_publish">Pubblica</string>
     <string name="status_composer_publish_disabled_hint">Scegli un\'emoji per pubblicare il tuo stato</string>
-    <string name="status_composer_title">Stato</string>
     <string name="status_composer_visibility_community">Community</string>
     <string name="status_composer_visibility_friends">Amici</string>
     <string name="status_composer_visibility_private">Privato</string>

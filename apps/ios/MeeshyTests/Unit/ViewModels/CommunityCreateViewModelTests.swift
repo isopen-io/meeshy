@@ -41,6 +41,24 @@ final class CommunityCreateViewModelTests: XCTestCase {
         XCTAssertEqual(sut.errorMessage, "pris")
     }
 
+    /// #18935 — créer n'écrivait rien : la communauté neuve n'apparaissait dans
+    /// la bande Communautés qu'au bout de cinq minutes.
+    func test_createCommunity_success_insertsItInTheCachedCommunityList() async throws {
+        let store = await CacheCoordinator.shared.communities
+        await store.invalidate(for: "list")
+        try await store.save([CommunityStubs.community(id: "c-old", name: "Ancienne")], for: "list")
+        let service = MockCommunityService()
+        service.createResult = .success(CommunityStubs.community(id: "c-new", name: "Neuve"))
+        let sut = CommunityCreateViewModel(communityService: service, userService: MockUserService())
+        sut.name = "Neuve"
+
+        _ = await sut.createCommunity()
+
+        let cached = await store.load(for: "list").snapshot()?.map(\.id)
+        await store.invalidate(for: "list")
+        XCTAssertEqual(cached, ["c-new", "c-old"])
+    }
+
     private func isolatedDefaults() throws -> UserDefaults {
         let suite = "community-create-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

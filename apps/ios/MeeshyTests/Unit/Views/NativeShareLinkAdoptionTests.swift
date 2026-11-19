@@ -66,19 +66,20 @@ final class NativeShareLinkAdoptionTests: XCTestCase {
         )
     }
 
-    func test_shareLinkDetailView_sharesJoinUrlWithNativeShareLink() throws {
+    /// The fiche moved to the kit (planche `Lien-Partage`, #18871): its gestures are `MeeshyLabeledAction`
+    /// buttons, which cannot wrap a `ShareLink`. The join URL now goes through the repo's other first-party
+    /// answer — `.sheet(item:)` + `ShareSheet`, already locked for `TrackingLinkDetailView` — which fixes the
+    /// same two failure modes (iPad anchor, unordered scene).
+    func test_shareLinkDetailView_sharesJoinUrlThroughASwiftUISheet() throws {
         let source = try readSource(Self.shareLinkDetailView)
 
-        XCTAssertTrue(
-            source.contains("ShareLink(item: url)"),
-            "The share-link detail share affordance must use SwiftUI's ShareLink."
-        )
-        // Comment-stripped: the doc comment above shareActionButton names the
-        // removed helper on purpose, to explain what it got wrong.
+        XCTAssertTrue(source.contains(".sheet(item: $sharedLink)"),
+                      "The share-link detail must present the share sheet through .sheet(item:).")
+        XCTAssertTrue(source.contains("ShareableLink(url: $0)"),
+                      "It must share a URL, never a bare String.")
         XCTAssertFalse(
             try code(Self.shareLinkDetailView).contains("presentSheet"),
-            "The presentSheet(_:) helper must be gone: it was the last caller of the " +
-            "window-hierarchy walk in this file."
+            "The presentSheet(_:) helper must stay gone: it walked the window hierarchy."
         )
     }
 
@@ -88,7 +89,7 @@ final class NativeShareLinkAdoptionTests: XCTestCase {
         // Anchored on the ShareLink itself: `.accessibilityHidden(true)` and
         // `.opacity(0.4)` both occur elsewhere in these files, so a bare
         // file-wide `contains` would pass even without the fallback branch.
-        for path in [Self.affiliateView, Self.shareLinkDetailView] {
+        for path in [Self.affiliateView] {
             let source = try readSource(path)
             guard let anchor = source.range(of: "ShareLink(item: url)") else {
                 XCTFail("\(path) must contain a ShareLink to anchor the fallback assertion on")
@@ -107,28 +108,26 @@ final class NativeShareLinkAdoptionTests: XCTestCase {
         }
     }
 
-    // MARK: - The label extraction must not break the sibling button
-
-    /// `ShareLink` needs the label body on its own, so the hero card's buttons
-    /// render through one builder, `heroButtonLabel`. Since #7797 the fiche's
-    /// two link actions — Partager (the ShareLink) and Copier le lien — sit
-    /// side by side in the hero card; both must keep going through it, or the
-    /// pair silently loses its uniform styling.
-    func test_shareLinkDetailView_heroActionsShareOneLabelBuilder() throws {
+    /// A malformed join URL leaves no dead control on the share-link fiche: its Share and QR gestures are
+    /// disabled, so VoiceOver announces them unavailable instead of doing nothing.
+    func test_shareLinkDetailView_disablesItsShareGestures_whenTheUrlIsUnusable() throws {
         let source = try readSource(Self.shareLinkDetailView)
 
-        XCTAssertTrue(
-            source.contains("private func heroButtonLabel("),
-            "The hero card must keep a single label builder for its actions."
-        )
-        XCTAssertTrue(
-            source.contains("heroButtonLabel(ShareLinkDetailCopy.share, icon: \"square.and.arrow.up\", filled: true)"),
-            "The ShareLink must reuse the hero label builder."
-        )
-        XCTAssertTrue(
-            source.contains("heroButtonLabel(copiedFeedback ? ShareLinkDetailCopy.copied : ShareLinkDetailCopy.copyLink"),
-            "The copy action must reuse the same label builder as the ShareLink."
-        )
+        XCTAssertTrue(source.contains(".disabled(link.address.url == nil)"),
+                      "The share gestures must be disabled when the join URL cannot be parsed.")
+    }
+
+    // MARK: - The hero gestures come from the kit
+
+    /// Planche `Lien-Partage` (#18871): the hero gestures are the kit's labeled actions in one grid —
+    /// no hand-drawn label builder survives on the fiche (law 12).
+    func test_shareLinkDetailView_heroGesturesAreKitLabeledActions() throws {
+        let source = try readSource(Self.shareLinkDetailView)
+
+        XCTAssertTrue(source.contains("MeeshyActionGrid("), "The hero gestures must sit in the kit's action grid.")
+        XCTAssertTrue(source.contains("MeeshyLabeledAction(title: ShareLinkDetailCopy.share"),
+                      "Share must be a kit labeled action.")
+        XCTAssertFalse(source.contains("heroButtonLabel("), "No hand-drawn hero button may come back.")
     }
 
     // MARK: - Single-source-of-truth lock

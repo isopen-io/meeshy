@@ -29,7 +29,7 @@ const RANK: Readonly<Record<RelationLevel, number>> = {
   BLOOD: 5,
 };
 
-const isRelationLevel = (value: unknown): value is RelationLevel =>
+export const isRelationLevel = (value: unknown): value is RelationLevel =>
   typeof value === 'string' && Object.prototype.hasOwnProperty.call(RANK, value);
 
 export const parseRelationLevel = (value: unknown): RelationLevel => (isRelationLevel(value) ? value : 'PUBLIC');
@@ -91,6 +91,9 @@ export const relationLevelBelow = (level: RelationRequestLevel): RelationLevel =
 /** `candidate` retient-il un lien que `removed` fondait ? Vrai quand il vise le même cran ou un cran au-dessus. */
 export const requestLevelSustains = (candidate: RelationRequestLevel, removed: RelationRequestLevel): boolean =>
   RANK[candidate] >= RANK[removed];
+
+/** Cet accord atteint-il ce cran ? (la fiche par cercle dit lequel des deux côtés manque pour monter, #18861) */
+export const grantReaches = (granted: RelationLevel, rung: RelationRequestLevel): boolean => RANK[granted] >= RANK[rung];
 
 export type RelationPairKey = { readonly userLowId: string; readonly userHighId: string };
 
@@ -168,6 +171,32 @@ export const relationEntryDate = (transitions: ReadonlyArray<RelationTransition>
   });
   const dates = [...firstByActor.values()].map((d) => d.getTime());
   return dates.length === 0 ? null : new Date(Math.max(...dates));
+};
+
+export type RelationPairLevelEntry = { readonly level: RelationRequestLevel; readonly at: Date };
+
+/**
+ * L'entrée d'une paire à chaque niveau de son cercle COMMUN (« Notre histoire »,
+ * #19378) — lue dans les seules MONTÉES visibles, comme `relationEntryDate`.
+ *
+ * Plus strict que `relationEntryDate` sur deux points, parce que la frise se
+ * montre à l'AUTRE : un niveau au-dessus du cercle commun n'est jamais servi
+ * (un accord unilatéral reste muet), et un niveau que seul l'un des deux a daté
+ * non plus (sa date serait celle d'un geste de l'un seul). Les passages d'un
+ * tiers ne comptent pas.
+ */
+export const relationPairLevelEntries = (params: {
+  readonly transitions: ReadonlyArray<RelationTransition>;
+  readonly effectiveLevel: RelationLevel;
+  readonly actorIds: readonly [string, string];
+}): RelationPairLevelEntry[] => {
+  const visible = visibleRelationTransitions(params.transitions);
+  const firstReach = (actorId: string, level: RelationLevel): number | null =>
+    visible.find((t) => t.actorId === actorId && RANK[t.to] >= RANK[level])?.at.getTime() ?? null;
+  return RELATION_REQUEST_LEVELS.filter((level) => RANK[level] <= RANK[params.effectiveLevel]).flatMap((level) => {
+    const dates = params.actorIds.map((actorId) => firstReach(actorId, level));
+    return dates.every((date): date is number => date !== null) ? [{ level, at: new Date(Math.max(...dates)) }] : [];
+  });
 };
 
 /**

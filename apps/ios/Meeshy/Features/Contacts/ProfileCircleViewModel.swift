@@ -21,10 +21,26 @@ final class ProfileCircleViewModel: ObservableObject {
     @Published private(set) var link: RelationLink?
     @Published private(set) var pendingLevel: RelationLevel?
     @Published var notice: String?
+    /// La montée qui n'est pas partie (#19611, planche `Etat-Erreur` vue 2) : « Notre cercle » le dit, avec « Réessayer ».
+    @Published private(set) var failedRaise: RelationLevel?
     @Published private(set) var isLowering = false
     @Published private(set) var didUnlink = false
     /// Le niveau auquel la passerelle juge les outils de cercle (`accessLevel`, #16623) ; `nil` tant qu'il n'est pas lu.
     @Published private(set) var toolLevel: RelationLevel?
+    /// La proposition de cercle que CETTE personne m'a faite, au-dessus du commun (#19449) ; `nil` sinon.
+    @Published private(set) var receivedProposal: ProfileCircleProposal?
+    /// Un lien ou un verdict a été lu (cache, liste, détail), ou la lecture s'est achevée : le niveau d'outil est résolu.
+    @Published private(set) var hasReadRelation = false
+
+    /// Les propositions répondues ou remises à plus tard ici : une relecture ne les ramène pas.
+    private var setAside: Set<String> = []
+    /// Le chargement en vol : la pilule, « Notre cercle » et la face Actions partagent ce modèle, un seul chargement part.
+    private var loading: Task<Void, Never>?
+    /// Une revalidation par ouverture de la fiche : remonter la face Actions ne relance rien.
+    private var hasLoaded = false
+    /// Les gestes locaux sur le lien (baisse, acceptation) : un lien servi lu AVANT l'un d'eux ne l'écrase pas.
+    private var linkEdits = 0
+    private var linkEditsInFlight = 0
 
     private let relations: RelationsProviding
     private let friendService: FriendServiceProviding
@@ -32,6 +48,7 @@ final class ProfileCircleViewModel: ObservableObject {
     private let networkMonitor: any NetworkMonitorProviding
     private let now: () -> Date
     private let linksStore: @concurrent @Sendable () async -> GRDBCacheStore<String, RelationLink>
+    private let cachedReceived: @concurrent @Sendable () async -> [FriendRequest]
     private let forgetFriendship: @MainActor (String) async -> Void
 
     init(
@@ -42,6 +59,7 @@ final class ProfileCircleViewModel: ObservableObject {
         networkMonitor: any NetworkMonitorProviding,
         now: @escaping () -> Date = { Date() },
         linksStore: @escaping @concurrent @Sendable () async -> GRDBCacheStore<String, RelationLink> = CirclesLinkStore.live,
+        cachedReceived: @escaping @concurrent @Sendable () async -> [FriendRequest] = ReceivedCircleRequests.none,
         forgetFriendship: @escaping @MainActor (String) async -> Void
     ) {
         self.userId = userId
@@ -51,6 +69,7 @@ final class ProfileCircleViewModel: ObservableObject {
         self.networkMonitor = networkMonitor
         self.now = now
         self.linksStore = linksStore
+        self.cachedReceived = cachedReceived
         self.forgetFriendship = forgetFriendship
     }
 
@@ -77,7 +96,7 @@ final class ProfileCircleViewModel: ObservableObject {
     }
 
     /// Le talkie se PROPOSE dès Proche (D-4), par le lien affiché ou par le verdict servi. La passerelle rejuge à chaque
-    /// appui ; un `TALKIE_NOT_ALLOWED` retire la ligne (#16927).
+    /// appui ; un `TALKIE_NOT_ALLOWED` se dit sur la carte, qui ne disparaît plus (#16927, #19732).
     var offersTalkie: Bool {
         max(shownLevel ?? .public, toolLevel ?? .public) >= .close
     }
@@ -114,8 +133,29 @@ final class ProfileCircleViewModel: ObservableObject {
         effectiveToolLevel == .close
     }
 
+    /// « Prévenir si je ne réponds pas » (#18738) : entre Sangs (`safety.inactivity`), accordé par défaut et retirable.
+    var offersInactivity: Bool {
+        effectiveToolLevel >= RelationFeature.safetyInactivity.minimumLevel
+    }
+
+    /// « Montrer quand je suis en appel » (#18753) : entre Sangs et dans l'équipe (`device.call`), accordé par défaut
+    /// et retirable.
+    var offersPhoneCall: Bool {
+        effectiveToolLevel >= RelationFeature.deviceCall.minimumLevel
+    }
+
     private var effectiveToolLevel: RelationLevel {
         max(shownLevel ?? .public, toolLevel ?? .public)
+    }
+
+    /// Le cercle auquel la face Actions juge ce qui reste fermé (#18870) : le même que celui qui PROPOSE les outils,
+    /// pour qu'une opération ne soit jamais à la fois offerte et verrouillée.
+    var toolGateLevel: RelationLevel { effectiveToolLevel }
+
+    /// Ce que la fiche apprend du cercle (#18870) : le lien montré et le niveau d'outil, `nil` avant toute lecture. La
+    /// fiche y juge si écrire part en demande — au niveau qui propose les outils.
+    var standing: ProfileRelationStanding {
+        ProfileRelationStanding(linked: claimsTheSlot, toolLevel: hasReadRelation ? toolGateLevel : nil)
     }
 
     /// « Partager ma position » se PROPOSE dès Ami (feature `location.temporary`, #16983), par le lien affiché ou par le
@@ -127,47 +167,113 @@ final class ProfileCircleViewModel: ObservableObject {
     /// Le cercle occupe l'emplacement de la fiche : un lien est montré, ou vient d'être annulé ici.
     var claimsTheSlot: Bool { shownLevel != nil || didUnlink }
 
-    /// Le geste de baisse proposé : un cran sous le niveau affiché, l'annulation du lien à Connaissance.
-    var offeredLowering: ProfileCircleLowering? {
-        guard let level = shownLevel, let below = RelationRequestRule.rung(below: level) else { return nil }
-        return below == .public ? .unlink : .demote(below)
+    /// Les gestes de baisse proposés (planche `Autre-Cercle`) : le cran sous le niveau affiché, puis l'annulation du lien
+    /// dès qu'il est au-dessus de Connaissance ; à Connaissance, l'annulation seule.
+    var offeredLowerings: [ProfileCircleLowering] {
+        guard let level = shownLevel, let below = RelationRequestRule.rung(below: level) else { return [] }
+        return below == .public ? [.unlink] : [.demote(below), .unlink]
+    }
+
+    /// Le premier geste de baisse : le cran inférieur, l'annulation du lien à Connaissance.
+    var offeredLowering: ProfileCircleLowering? { offeredLowerings.first }
+
+    /// « Notre cercle » (#18870) : seulement pour un lien montré, rien n'est fabriqué sans lui.
+    var ourCircle: OurCircleSummary? {
+        guard shownLevel != nil, let link else { return nil }
+        return OurCircleSummary.make(link, pending: pendingLevel)
     }
 
     var summary: String? {
         link.flatMap { CircleProgressSummary.make($0, now: now()).text(levelTitle: CircleLevelNames.title(of:)) }
     }
 
+    /// Regroupé : un appel pendant un chargement en vol l'attend, un appel après lui ne relance rien.
     func load() async {
+        guard !hasLoaded else { return }
+        if let loading {
+            await loading.value
+            return
+        }
+        let task = Task<Void, Never> { [weak self] in
+            guard let self else { return }
+            await self.performLoad()
+        }
+        loading = task
+        await task.value
+        loading = nil
+        hasLoaded = true
+    }
+
+    /// Après un geste qui change le lien hors de ce modèle (le rituel du Sang scellé) : une relecture, même déjà chargé.
+    func reload() async {
+        await loading?.value
+        hasLoaded = false
+        await load()
+    }
+
+    private func performLoad() async {
         let relations = self.relations
         let userId = self.userId
+        let edits = linkEdits
         let store = await linksStore()
         let loader = CacheFirstLoader(store: store, key: CirclesViewModel.cacheKey, networkMonitor: networkMonitor)
         let fetch: @Sendable () async throws -> [RelationLink] = { try await relations.links() }
         let apply: @MainActor @Sendable ([RelationLink]) -> Void = { [weak self] served in
-            self?.link = served.first { $0.userId == userId }
+            guard let self, self.servedLinkMayApply(since: edits) else { return }
+            self.link = served.first { $0.userId == userId }
+            self.hasReadRelation = true
         }
         let revalidation = await loader.load(fetch: fetch, setLoadState: { _ in }, apply: apply)
+        let cached = await cachedReceived()
+        paintProposal(from: cached)
         await revalidation?.value
-        await loadServedDetail()
-        await loadPendingRequest()
+        await loadServedDetail(since: edits)
+        hasReadRelation = true
+        await loadPendingRequest(since: edits)
+        await loadReceivedProposal(cached: cached)
     }
 
-    /// `GET /relations/:userId` : le blocage de montée quand la passerelle le sert, et le lien lui-même quand la liste
-    /// ne le portait pas encore. Un échec garde ce qui est affiché.
-    private func loadServedDetail() async {
-        guard let served = await servedDetail() else { return }
+    /// Faux dès qu'un geste local a touché le lien depuis le début de la lecture, ou en touche un maintenant.
+    private func servedLinkMayApply(since edits: Int) -> Bool {
+        linkEditsInFlight == 0 && linkEdits == edits
+    }
+
+    private func beginLinkEdit() {
+        linkEdits += 1
+        linkEditsInFlight += 1
+    }
+
+    private func endLinkEdit() {
+        linkEditsInFlight -= 1
+    }
+
+    /// `GET /relations/:userId` : le niveau commun, le blocage de montée et le verdict d'outil, lus APRÈS la liste —
+    /// le détail gagne sur une liste en cache dont la revalidation a échoué (une baisse silencieuse, RG-07) et
+    /// invalide alors le cache des liens. Le lien lui-même quand la liste ne le portait pas. Un échec garde l'affiché.
+    private func loadServedDetail(since edits: Int) async {
+        guard let served = await servedDetail(), servedLinkMayApply(since: edits) else { return }
         toolLevel = served.toolLevel
+        hasReadRelation = true
         guard let current = link else {
             if served.effectiveLevel >= .acquaintance { link = served }
             return
         }
-        link = RelationLink(
+        link = Self.merged(current, with: served)
+        guard served.effectiveLevel != current.effectiveLevel else { return }
+        await linksStore().invalidate(for: CirclesViewModel.cacheKey)
+    }
+
+    /// Le lien de la liste, corrigé par le détail servi : son niveau commun, son blocage et son verdict d'outil ; sur un
+    /// niveau qui a changé, la progression et le cran atteint sont ceux du détail, jamais ceux de l'ancien cercle.
+    private static func merged(_ current: RelationLink, with served: RelationLink) -> RelationLink {
+        let agrees = served.effectiveLevel == current.effectiveLevel
+        return RelationLink(
             userId: current.userId,
-            effectiveLevel: current.effectiveLevel,
+            effectiveLevel: served.effectiveLevel,
             grantedByMe: current.grantedByMe,
             since: current.since,
-            progress: current.progress,
-            eligibleFor: current.eligibleFor,
+            progress: agrees ? current.progress : served.progress,
+            eligibleFor: agrees ? current.eligibleFor : served.eligibleFor,
             raiseBlockedUntil: served.raiseBlockedUntil ?? current.raiseBlockedUntil,
             canRaise: served.canRaise ?? current.canRaise,
             accessLevel: served.accessLevel ?? current.accessLevel
@@ -189,9 +295,10 @@ final class ProfileCircleViewModel: ObservableObject {
         return served
     }
 
-    private func loadPendingRequest() async {
+    private func loadPendingRequest(since edits: Int) async {
         guard pendingLevel == nil,
-              let sent = try? await friendService.sentRequests(offset: 0, limit: Self.requestsPage) else { return }
+              let sent = try? await friendService.sentRequests(offset: 0, limit: Self.requestsPage),
+              pendingLevel == nil, servedLinkMayApply(since: edits) else { return }
         pendingLevel = sent.data.first { $0.status == "pending" && $0.receiverId == userId }?.requestedLevel
     }
 
@@ -200,9 +307,11 @@ final class ProfileCircleViewModel: ObservableObject {
     func requestRaise() async -> Bool {
         guard let target = offeredRaise else { return false }
         pendingLevel = target
+        failedRaise = nil
         do {
             try await CircleRaiseSender(offlineQueue: offlineQueue).send(to: userId, level: target) { [weak self] in
                 self?.pendingLevel = nil
+                self?.failedRaise = target
                 self?.notice = String(localized: "circles.notice.requestFailed", defaultValue: "Impossible d'envoyer la demande", bundle: .main)
                 HapticFeedback.error()
             }
@@ -210,21 +319,123 @@ final class ProfileCircleViewModel: ObservableObject {
             return true
         } catch {
             pendingLevel = nil
+            failedRaise = target
             notice = String(localized: "circles.notice.requestFailed", defaultValue: "Impossible d'envoyer la demande", bundle: .main)
             HapticFeedback.error()
             return false
         }
     }
 
-    /// Instantané -> local -> réseau -> retour arrière. Silencieux pour l'autre (RG-07).
+    // MARK: - Une proposition reçue (#19449, planche `Autre-Cercle`)
+
+    /// La première page des demandes reçues, filtrée sur CETTE personne : la passerelle ne filtre pas encore par
+    /// expéditeur (#19450). Une liste non servie garde ce que le cache a peint.
+    private func loadReceivedProposal(cached: [FriendRequest]) async {
+        let served = try? await friendService.receivedRequests(offset: 0, limit: Self.requestsPage)
+        paintProposal(from: served?.data ?? cached)
+    }
+
+    private func paintProposal(from requests: [FriendRequest]) {
+        receivedProposal = ProfileCircleProposal.received(in: requests, from: userId, common: shownLevel, setAside: setAside)
+    }
+
+    /// Instantané -> local -> file durable -> retour arrière. Une proposition de Sang ne s'accepte que par le rituel
+    /// (le serveur refuse `PATCH accept` : `RELATION_RITUAL_REQUIRED`) : la carte reste jusqu'au scellement.
+    func acceptProposal(name: String) async -> ProfileCircleProposalAnswer {
+        guard let proposal = receivedProposal, let current = link else { return .notSent }
+        guard proposal.level != .blood else { return .opensRitual(CircleRitualTarget(userId: userId, name: name)) }
+        let pendingBefore = pendingLevel
+        beginLinkEdit()
+        defer { endLinkEdit() }
+        setAside.insert(proposal.requestId)
+        receivedProposal = nil
+        link = Self.accepted(current, at: proposal.level)
+        if let waiting = pendingLevel, waiting <= proposal.level { pendingLevel = nil }
+        let restore: @MainActor () -> Void = { [weak self] in
+            self?.restore(proposal, undoing: (link: current, pending: pendingBefore))
+        }
+        do {
+            try await CircleAnswerSender(offlineQueue: offlineQueue).send(proposal.requestId, action: .accept, onExhausted: restore)
+            await linksStore().invalidate(for: CirclesViewModel.cacheKey)
+            HapticFeedback.success()
+            return .answered
+        } catch {
+            restore()
+            return .notSent
+        }
+    }
+
+    /// Instantané -> local -> file durable -> retour arrière. Le refus ne se lit pas chez l'autre (RG-07).
     @discardableResult
-    func lower() async -> Bool {
-        guard !isLowering, let current = link, let lowering = offeredLowering else { return false }
+    func declineProposal() async -> Bool {
+        guard let proposal = receivedProposal else { return false }
+        setAside.insert(proposal.requestId)
+        receivedProposal = nil
+        let restore: @MainActor () -> Void = { [weak self] in
+            self?.restore(proposal)
+        }
+        do {
+            try await CircleAnswerSender(offlineQueue: offlineQueue).send(proposal.requestId, action: .reject, onExhausted: restore)
+            HapticFeedback.medium()
+            return true
+        } catch {
+            restore()
+            return false
+        }
+    }
+
+    /// « Plus tard » : rien ne part, la carte se range pour cette ouverture de la fiche.
+    func postponeProposal() {
+        guard let proposal = receivedProposal else { return }
+        setAside.insert(proposal.requestId)
+        receivedProposal = nil
+        HapticFeedback.light()
+    }
+
+    /// La carte revient ; une acceptation défaite rend aussi le lien et ma demande d'avant.
+    private func restore(_ proposal: ProfileCircleProposal,
+                         undoing acceptance: (link: RelationLink, pending: RelationLevel?)? = nil) {
+        setAside.remove(proposal.requestId)
+        receivedProposal = proposal
+        if let acceptance {
+            link = acceptance.link
+            pendingLevel = acceptance.pending
+        }
+        notice = String(localized: "circles.notice.respondFailed", defaultValue: "Impossible de répondre à la demande", bundle: .main)
+        HapticFeedback.error()
+    }
+
+    /// Le lien après MON acceptation : la personne accorde déjà le cran proposé, le mien le rejoint.
+    private static func accepted(_ link: RelationLink, at level: RelationLevel) -> RelationLink {
+        RelationLink(
+            userId: link.userId,
+            effectiveLevel: max(link.effectiveLevel, level),
+            grantedByMe: max(link.grantedByMe, level),
+            since: link.since,
+            progress: link.progress,
+            eligibleFor: nil,
+            raiseBlockedUntil: link.raiseBlockedUntil,
+            canRaise: link.canRaise,
+            accessLevel: link.accessLevel
+        )
+    }
+
+    /// Instantané -> local -> réseau -> retour arrière. Silencieux pour l'autre (RG-07). Sans geste nommé, le cran
+    /// inférieur ; un geste qui n'est pas proposé ne part pas.
+    @discardableResult
+    func lower(_ requested: ProfileCircleLowering? = nil) async -> Bool {
+        guard !isLowering, let current = link, let lowering = requested ?? offeredLowering,
+              offeredLowerings.contains(lowering) else { return false }
         let target = lowering.level
         let pendingBefore = pendingLevel
         let toolBefore = toolLevel
         isLowering = true
-        defer { isLowering = false }
+        beginLinkEdit()
+        failedRaise = nil
+        defer {
+            isLowering = false
+            endLinkEdit()
+        }
         link = current.lowered(to: target)
         toolLevel = Self.toolLevelAfterLowering(toolBefore, link: current.effectiveLevel, to: target)
         if let waiting = pendingLevel, waiting > target { pendingLevel = nil }
@@ -249,7 +460,7 @@ final class ProfileCircleViewModel: ObservableObject {
 }
 
 /// Le geste de baisse d'un lien : un cran plus bas, ou la sortie du cercle à Connaissance.
-enum ProfileCircleLowering: Equatable {
+nonisolated enum ProfileCircleLowering: Hashable {
     case demote(RelationLevel)
     case unlink
 
@@ -299,6 +510,19 @@ extension ProfileCircleLowering {
         }
     }
 
+    /// Ce que la baisse change, dit avant de la confirmer : silencieuse pour l'autre (RG-07), 30 jours avant sa demande.
+    func confirmationBody(name: String, from level: RelationLevel) -> String {
+        switch self {
+        case .demote(let target):
+            return String(
+                format: String(localized: "circles.demote.confirm.body", defaultValue: "%1$@ passera de %2$@ à %3$@. Vous perdrez ce que %2$@ partage. %1$@ n'en sera pas averti(e) et ne pourra pas vous redemander de remonter avant 30 jours.", bundle: .main),
+                name, CircleLevelNames.title(of: level), CircleLevelNames.title(of: target)
+            )
+        case .unlink:
+            return String(format: String(localized: "circles.unlink.confirm.body", defaultValue: "Vous ne serez plus liés : plus aucun cercle commun. %@ n'en sera pas averti(e) et ne pourra pas vous redemander de lien avant 30 jours.", bundle: .main), name)
+        }
+    }
+
     func confirmationTitle(name: String) -> String {
         switch self {
         case .demote(.close):
@@ -310,5 +534,32 @@ extension ProfileCircleLowering {
         case .unlink:
             return String(format: String(localized: "circles.unlink.confirm.title", defaultValue: "Annuler le lien avec %@ ?", bundle: .main), name)
         }
+    }
+}
+
+/// UN modèle de cercle par personne tant qu'une vue le tient (#18870) : la pilule sous le nom, « Notre cercle » et la
+/// face Actions lisent le même lien — une baisse faite dans la feuille se voit aussitôt sur la fiche, jamais deux vérités.
+/// Faible : la fiche fermée, le modèle s'en va.
+@MainActor
+enum ProfileCircleModels {
+    private final class WeakModel {
+        weak var model: ProfileCircleViewModel?
+        init(_ model: ProfileCircleViewModel) { self.model = model }
+        nonisolated deinit {}
+    }
+
+    private static var models: [String: WeakModel] = [:]
+
+    static func model(for userId: String, make: () -> ProfileCircleViewModel) -> ProfileCircleViewModel {
+        let key = userId.lowercased()
+        if let held = models[key]?.model { return held }
+        models = models.filter { $0.value.model != nil }
+        let created = make()
+        models[key] = WeakModel(created)
+        return created
+    }
+
+    static func model(for userId: String) -> ProfileCircleViewModel {
+        model(for: userId) { ProfileCircleViewModel(userId: userId) }
     }
 }

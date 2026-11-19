@@ -85,6 +85,17 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     /// de ses révisions) — « début d'énoncé », jamais l'heure de sa dernière
     /// révision.
     private var currentUtteranceStartedAt: Date?
+    /// #19713 — en reconnaissance continue sur l'appareil, `isFinal` n'arrive
+    /// presque jamais tant que le micro coule : sans pause, tout ce que dit
+    /// l'utilisateur restait UN énoncé réécrit. Une pause de parole de cette
+    /// durée clôt l'énoncé en cours à partir de sa dernière révision.
+    private let utterancePause: Duration
+    private var utterancePauseTask: Task<Void, Never>?
+    private var lastUtteranceRevision: UtteranceRevision?
+    /// Génération de la tâche de reconnaissance en cours : une révision ou
+    /// l'erreur d'annulation d'une tâche REMPLACÉE (rotation après une pause)
+    /// porte une génération dépassée et se jette.
+    private var recognitionGeneration = 0
     /// Nom d'affichage local embarqué dans les entrées P2P du data channel
     /// (pas de serveur pour l'estampiller sur ce chemin) — fourni par
     /// `CallManager.toggleTranscription` au démarrage.
@@ -128,8 +139,13 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     private var gateConversationId: String?
     private var gateReading: Task<Void, Never>?
 
-    init(socket: any MessageSocketProviding = MessageSocketManager.shared, gateResolver: (any CallCaptionsGateResolving)? = nil) {
+    init(
+        socket: any MessageSocketProviding = MessageSocketManager.shared,
+        gateResolver: (any CallCaptionsGateResolving)? = nil,
+        utterancePause: Duration = .milliseconds(1200)
+    ) {
         self.socket = socket
+        self.utterancePause = utterancePause
         self.gateResolver = gateResolver ?? CallCaptionsGateResolver()
         captureForwarding = captureJournal.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
     }
@@ -311,6 +327,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         recognizer = nil
         currentUtteranceWireId = nil
         currentUtteranceStartedAt = nil
+        forgetUtterancePause()
 
         // Le JOURNAL est volontairement CONSERVÉ : arrêter la capture en cours
         // d'appel n'arrête ni la réception (le journal garde tout l'appel,
@@ -645,6 +662,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         // the current one once it reaches applyRecognitionResult/Error — see
         // those methods' callId guard.
         let ownerCallId = callId
+        let generation = recognitionGeneration
         // @Sendable-typed local: recognitionTask(with:)'s resultHandler runs
         // on the recognizer's own queue, off-MainActor — same isolation trap
         // as startLocalCapture's tap block and requestPermission's
@@ -653,7 +671,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         // it's the identical Apple-completion-handler shape, so fixed
         // preemptively rather than waiting for a third device round-trip.
         let resultHandler: @Sendable (SFSpeechRecognitionResult?, Error?) -> Void = { [weak self] result, error in
-            self?.handleRecognizerCallback(result: result, error: error, speakerId: speakerId, language: language, ownerCallId: ownerCallId)
+            self?.handleRecognizerCallback(result: result, error: error, speakerId: speakerId, language: language, ownerCallId: ownerCallId, generation: generation)
         }
         recognitionTask = recognizer.recognitionTask(with: request, resultHandler: resultHandler)
     }
@@ -665,7 +683,8 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         error: Error?,
         speakerId: String,
         language: String,
-        ownerCallId: String?
+        ownerCallId: String?,
+        generation: Int
     ) {
         if let error {
             let errorDescription = error.localizedDescription
@@ -675,7 +694,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
                         domain: "CallTranscriptionService",
                         code: -2,
                         userInfo: [NSLocalizedDescriptionKey: errorDescription]
-                    )), callId: ownerCallId)
+                    )), callId: ownerCallId, generation: generation)
                     callsLogger.error("Recognition error: \(errorDescription, privacy: .public)")
                 }
             }
@@ -703,7 +722,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
             await self?.applyRecognitionResult(
                 text: text, speakerId: speakerId, startMs: startMs, endMs: endMs,
                 isFinal: isFinal, confidence: confidence, language: language, capturedAt: capturedAt,
-                callId: ownerCallId
+                callId: ownerCallId, generation: generation
             )
         }
     }
@@ -726,9 +745,10 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     func applyRecognitionResult(
         text: String, speakerId: String, startMs: Int, endMs: Int,
         isFinal: Bool, confidence: Double, language: String, capturedAt: Date,
-        callId: String? = nil
+        callId: String? = nil, generation: Int? = nil
     ) {
         guard self.callId == callId else { return }
+        guard isCurrentRecognition(generation) else { return }
         guard isTranscribing else { return }
         // #13720 — porte fermée en cours de capture : rien ne part, ni socket
         // ni canal de données, et la capture s'arrête.
@@ -766,10 +786,16 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
                 wireId: wireId, text: text, speakerId: speakerId,
                 confidence: confidence, language: language, capturedAt: utteranceStart
             )
+            awaitUtterancePause(after: UtteranceRevision(
+                text: text, speakerId: speakerId, startMs: startMs, endMs: endMs,
+                confidence: confidence, language: language, capturedAt: capturedAt
+            ))
             return
         }
         currentUtteranceWireId = nil
         currentUtteranceStartedAt = nil
+        forgetUtterancePause()
+        recognitionGeneration += 1
         emitFinalSegment(
             wireId: wireId, text: text, speakerId: speakerId, startMs: startMs, endMs: endMs,
             confidence: confidence, language: language, capturedAt: utteranceStart
@@ -784,8 +810,9 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     /// off, see `CallView`) reflects reality instead of staying lit while
     /// nothing updates, then restore `lastError` since `stopTranscribing()`
     /// clears it.
-    func applyRecognitionError(_ error: TranscriptionError, callId: String? = nil) {
+    func applyRecognitionError(_ error: TranscriptionError, callId: String? = nil, generation: Int? = nil) {
         guard self.callId == callId else { return }
+        guard isCurrentRecognition(generation) else { return }
         guard isTranscribing else { return }
         stopTranscribing()
         lastError = error
@@ -832,6 +859,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     }
 
     private func rotateRecognitionRequest(language: String) {
+        guard request != nil else { return }
         recognitionTask?.cancel()
         request?.endAudio()
 
@@ -846,6 +874,40 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         guard reinstallTap(for: newRequest) else { return }
 
         startRecognitionTask(language: language)
+    }
+
+    // MARK: - Pause de parole (#19713)
+
+    private func isCurrentRecognition(_ generation: Int?) -> Bool {
+        generation.map { $0 == recognitionGeneration } ?? true
+    }
+
+    private func awaitUtterancePause(after revision: UtteranceRevision) {
+        lastUtteranceRevision = revision
+        utterancePauseTask?.cancel()
+        let pause = utterancePause
+        let ownerCallId = callId
+        let generation = recognitionGeneration
+        utterancePauseTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: pause) } catch { return }
+            self?.closeUtteranceAfterPause(callId: ownerCallId, generation: generation)
+        }
+    }
+
+    private func closeUtteranceAfterPause(callId: String?, generation: Int) {
+        guard let revision = lastUtteranceRevision else { return }
+        applyRecognitionResult(
+            text: revision.text, speakerId: revision.speakerId,
+            startMs: revision.startMs, endMs: revision.endMs,
+            isFinal: true, confidence: revision.confidence, language: revision.language,
+            capturedAt: revision.capturedAt, callId: callId, generation: generation
+        )
+    }
+
+    private func forgetUtterancePause() {
+        utterancePauseTask?.cancel()
+        utterancePauseTask = nil
+        lastUtteranceRevision = nil
     }
 
     // MARK: - Remote segments (data channel P2P + relais serveur traduit)
@@ -904,4 +966,16 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         @unknown default: return .denied
         }
     }
+}
+
+/// La dernière révision partielle de l'énoncé en cours : ce qu'une pause de
+/// parole clôt en final (#19713).
+private struct UtteranceRevision {
+    let text: String
+    let speakerId: String
+    let startMs: Int
+    let endMs: Int
+    let confidence: Double
+    let language: String
+    let capturedAt: Date
 }

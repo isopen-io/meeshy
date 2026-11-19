@@ -23,17 +23,15 @@ import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { identityImageIsCallers, IDENTITY_IMAGE_NOT_OWNED } from '../../services/attachments/identityImageOwnership';
 import { countOnlineMembers } from '../../services/community-online-count';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
+import { viewerJoinRequestState } from './join-request-state';
 import { activeMembershipOf, COMMUNITY_ACTIVE_COUNTS, communityConversationSchema, communityDetailInclude, communityForViewer, flattenCommunityCounts } from './serialization';
 import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import type { CommunityEngagementOptions } from './types';
 import { applyCommunityAdmission, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
-import {
-  conversationAdmitsNewMembers,
-  EXTERNAL_CONVERSATION_ERROR_CODES,
-  EXTERNAL_SINGLE_MEMBER_MESSAGE,
-} from '@meeshy/shared/types/external-conversation';
+import { communityMemberAnnouncerFrom } from '../../services/community-member-broadcast';
+import { newMemberRefusal } from '../../services/conversations/newMemberAdmission';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesCoreRoutes' });
 
@@ -311,7 +309,14 @@ export async function registerCoreRoutes(
         return null;
       });
 
-      sendSuccess(reply, { ...served, onlineMemberCount });
+      const currentUserJoinRequest = await viewerJoinRequestState(fastify.prisma, {
+        communityId: community.id,
+        viewerId: userId,
+        requiresJoinApproval: community.requiresJoinApproval === true,
+        isMember: served.currentUserRole !== null,
+      });
+
+      sendSuccess(reply, { ...served, onlineMemberCount, currentUserJoinRequest });
     } catch (error) {
       logger.error('Error fetching community', error as Error);
       sendInternalError(reply, 'Failed to fetch community');
@@ -712,6 +717,7 @@ const community = await fastify.prisma.community.findFirst({
         select: {
           id: true,
           type: true,
+          encryptionMode: true,
           communityId: true,
           participants: { select: { userId: true, role: true, isActive: true } }
         }
@@ -744,10 +750,12 @@ const community = await fastify.prisma.community.findFirst({
         return refuserCommeIntrouvable(reply);
       }
 
-      // #17117 — une conversation externe n'a qu'un membre Meeshy : un salon
-      // donnerait des droits sur elle aux administrateurs de la communauté.
-      if (!conversationAdmitsNewMembers(conversation.type)) {
-        return sendConflict(reply, EXTERNAL_SINGLE_MEMBER_MESSAGE, { code: EXTERNAL_CONVERSATION_ERROR_CODES.SINGLE_MEMBER });
+      // #17117 — une conversation externe n'a qu'un membre Meeshy, et #16188 —
+      // un tête-à-tête chiffré de bout en bout reste à deux : un salon donnerait
+      // des droits sur elle aux administrateurs de la communauté.
+      const closedToNewMembers = newMemberRefusal(conversation);
+      if (closedToNewMembers) {
+        return sendConflict(reply, closedToNewMembers.message, { code: closedToNewMembers.code });
       }
 
       // Administrer la conversation ne donne pas le droit de la SOUSTRAIRE à
@@ -800,7 +808,7 @@ const community = await fastify.prisma.community.findFirst({
       // L'admission s'écrit AVANT le rattachement : si elle échoue, rien n'est
       // rattaché (au pire des membres en plus, jamais un salon ouvert).
       if (admission?.kind === 'admitted') {
-        await applyCommunityAdmission(fastify.prisma, id, admission);
+        await applyCommunityAdmission(fastify.prisma, id, admission, communityMemberAnnouncerFrom(fastify));
       }
 
       // Update conversation to belong to this community (allows moving between communities)

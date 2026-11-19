@@ -1,16 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="profile_change_avatar">Cambiar foto</string>
     <string name="profile_change_banner">Cambiar foto de portada</string>
     <string name="profile_image_error_empty">Ese archivo está vacío. Elige otra foto.</string>
     <string name="profile_image_error_type">Aquí solo se pueden usar imágenes.</string>
     <string name="profile_image_error_too_large">Esa imagen es demasiado grande. Elige una más pequeña.</string>
     <string name="profile_image_error_upload">Error al subir. Comprueba tu conexión e inténtalo de nuevo.</string>
-    <string name="profile_member_since">Miembro desde %1$s</string>
-    <string name="profile_last_seen">Visto %1$s</string>
     <string name="profile_completion">Perfil %1$d%% completo</string>
-    <string name="profile_detail_regional_language">Idioma secundario</string>
-    <string name="profile_detail_timezone">Zona horaria</string>
     <string name="profile_stat_member_days">Días como miembro</string>
     <string name="profile_achievements_title">Logros</string>
     <string name="profile_achievements_unlocked">%1$d de %2$d desbloqueados</string>
@@ -23,4 +18,20 @@
     <string name="profile_share_qr_cd">Código QR de %1$s</string>
     <string name="profile_share_via">Compartir perfil mediante</string>
     <string name="profile_share_message">%1$s en Meeshy: %2$s</string>
+    <string name="profile_blocked_by_me">Has bloqueado a este usuario</string>
+    <string name="profile_language_choose">Elegir</string>
+    <string name="profile_language_none">Ninguna</string>
+    <string name="profile_loadFailed_message">No se pudo cargar este perfil.</string>
+    <string name="profile_section_languages">IDIOMAS</string>
+    <string name="profile_share_copy">Copiar el enlace</string>
+    <string name="profile_toast_report_sent">Denuncia enviada</string>
+    <string name="profile_toast_report_failed">No se pudo enviar la denuncia</string>
+    <string name="profile_stats_a11y_hint">Abre las estadísticas detalladas</string>
+    <string name="profile_tab_details">Detalles</string>
+    <string name="profile_action_send_message">Enviar un mensaje</string>
+    <string name="profile_section_about">Acerca de</string>
+    <string name="profile_stats_memberSince">Miembro desde</string>
+    <string name="profile_status_connected">Conectados</string>
+    <string name="profile_voice_title">Voz</string>
+    <string name="shared_location_share_action_a11y">Compartir mi ubicación con %1$s</string>
 </resources>

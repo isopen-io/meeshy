@@ -195,6 +195,121 @@ final class ParticipantServiceCachePreservationTests: XCTestCase {
         await CacheCoordinator.shared.participants.invalidate(for: conversationId)
     }
 
+    // MARK: - #18916 — une page `.stale` se sert aussitôt ET se revalide
+
+    /// Une page de membres vieille de six minutes : `.stale`. Servie sans jamais
+    /// être relue, elle gardait un membre parti jusqu'à l'expiration du cache,
+    /// 24 h plus tard.
+    private func seedStaleCache(_ items: [PaginatedParticipant], for key: String) async {
+        try? await CacheCoordinator.shared.participants.save(items, for: key)
+        await CacheCoordinator.shared.participants.debugRewindFetchTimestamp(by: 6 * 60, for: key)
+    }
+
+    private func stubFirstPage(_ ids: [String], for conversationId: String, on api: MockAPIClientForApp) {
+        let page: PaginatedParticipantsResponse = JSONStub.decode(participantsResponseJSON(ids: ids))
+        api.stub(api.legacyPath(for: ConversationsEndpoint.byIdParticipants(id: conversationId)), result: page)
+    }
+
+    func test_staleFirstPage_revalidatesFromNetwork() async {
+        let conversationId = makeConversationId()
+        await seedStaleCache([makeParticipant("p1")], for: conversationId)
+        let (sut, api) = makeSUT()
+        stubFirstPage(["p1", "p2"], for: conversationId, on: api)
+
+        let served = try? await sut.loadFirstPage(for: conversationId)
+        var attempts = 0
+        while await diskPayload(for: conversationId).count < 2, attempts < 200 {
+            attempts += 1
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertEqual(served?.map(\.id), ["p1"], "la page `.stale` est servie aussitôt, sans attendre le réseau")
+        XCTAssertEqual(api.requestCount, 1, "puis elle se revalide en silence")
+        let onDisk = await diskPayload(for: conversationId)
+        XCTAssertEqual(onDisk.map(\.id), ["p1", "p2"], "le disque porte la page relue")
+
+        await CacheCoordinator.shared.participants.invalidate(for: conversationId)
+    }
+
+    func test_revalidatedFirstPage_afterStaleFirstPage_returnsTheNetworkPage() async {
+        let conversationId = makeConversationId()
+        await seedStaleCache([makeParticipant("p1")], for: conversationId)
+        let (sut, api) = makeSUT()
+        stubFirstPage(["p1", "p2"], for: conversationId, on: api)
+
+        _ = try? await sut.loadFirstPage(for: conversationId)
+        let revalidated = await sut.revalidatedFirstPage(for: conversationId)
+
+        XCTAssertEqual(revalidated?.map(\.id), ["p1", "p2"], "l'écran qui a peint la page `.stale` repeint la page relue")
+
+        await CacheCoordinator.shared.participants.invalidate(for: conversationId)
+    }
+
+    /// #19309 — un rafraîchissement forcé sert la page qu'IL vient de relire : une revalidation `.stale` encore en vol,
+    /// plus ancienne, ne la remplace pas (le membre qui vient de rejoindre en disparaissait).
+    func test_pageToPaint_afterAForcedRefresh_isTheOneThatRequestJustRead_notAnOlderRevalidation() async {
+        let conversationId = makeConversationId()
+        await seedStaleCache([makeParticipant("p1")], for: conversationId)
+        let (sut, api) = makeSUT()
+        stubFirstPage(["p1", "p2"], for: conversationId, on: api)
+        _ = try? await sut.loadFirstPage(for: conversationId)
+        let justRead = [makeParticipant("p1"), makeParticipant("p2"), makeParticipant("p3")]
+
+        let painted = await sut.pageToPaint(afterLoading: justRead, for: conversationId, forceRefresh: true)
+
+        XCTAssertEqual(painted.map(\.id), ["p1", "p2", "p3"], "le membre qui vient de rejoindre est affiché")
+
+        await CacheCoordinator.shared.participants.invalidate(for: conversationId)
+    }
+
+    /// #19309 — l'écran a peint une page `.stale` et attend sa revalidation, LENTE ; un membre rejoint, le
+    /// rafraîchissement forcé relit la page qui le porte. La revalidation revient ensuite avec une page plus ANCIENNE :
+    /// ni l'écran qui l'attendait, ni le disque ne la reprennent.
+    func test_anOlderRevalidationStillInFlight_neverOverwritesAForcedRefresh() async {
+        let conversationId = makeConversationId()
+        await seedStaleCache([makeParticipant("p1")], for: conversationId)
+        let (sut, api) = makeSUT()
+        let older: PaginatedParticipantsResponse = JSONStub.decode(participantsResponseJSON(ids: ["p1"]))
+        let newer: PaginatedParticipantsResponse = JSONStub.decode(participantsResponseJSON(ids: ["p1", "p2"]))
+        api.stubSequence(
+            api.legacyPath(for: ConversationsEndpoint.byIdParticipants(id: conversationId)), results: [older, newer])
+        let slowRevalidation = RequestLatch()
+        api.requestGate = { call in if call == 1 { await slowRevalidation.wait() } }
+
+        let stale = (try? await sut.loadFirstPage(for: conversationId)) ?? []
+        var attempts = 0
+        while api.requestCount < 1, attempts < 200 {
+            attempts += 1
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        let openingScreen = Task { await sut.pageToPaint(afterLoading: stale, for: conversationId, forceRefresh: false) }
+        let forced = (try? await sut.loadFirstPage(for: conversationId, forceRefresh: true)) ?? []
+        let forcedPaint = await sut.pageToPaint(afterLoading: forced, for: conversationId, forceRefresh: true)
+        await slowRevalidation.open()
+        let openingPaint = await openingScreen.value
+
+        XCTAssertEqual(forcedPaint.map(\.id), ["p1", "p2"], "le rafraîchissement forcé affiche le membre qui vient de rejoindre")
+        XCTAssertEqual(openingPaint.map(\.id), ["p1", "p2"], "l'écran qui attendait la revalidation ne repeint pas la page plus ancienne")
+        let onDisk = await diskPayload(for: conversationId)
+        XCTAssertEqual(onDisk.map(\.id), ["p1", "p2"], "le disque garde la page la plus récente")
+
+        await CacheCoordinator.shared.participants.invalidate(for: conversationId)
+    }
+
+    func test_pageToPaint_withoutForce_repaintsTheRevalidatedPage() async {
+        let conversationId = makeConversationId()
+        await seedStaleCache([makeParticipant("p1")], for: conversationId)
+        let (sut, api) = makeSUT()
+        stubFirstPage(["p1", "p2"], for: conversationId, on: api)
+        let served = (try? await sut.loadFirstPage(for: conversationId)) ?? []
+
+        let painted = await sut.pageToPaint(afterLoading: served, for: conversationId, forceRefresh: false)
+
+        XCTAssertEqual(painted.map(\.id), ["p1", "p2"])
+
+        await CacheCoordinator.shared.participants.invalidate(for: conversationId)
+    }
+
     func test_loadFirstPage_whenCacheIsFresh_servesItWithoutTouchingTheNetwork() async {
         let conversationId = makeConversationId()
         try? await CacheCoordinator.shared.participants.save(
@@ -209,5 +324,22 @@ final class ParticipantServiceCachePreservationTests: XCTestCase {
         XCTAssertEqual(api.requestCount, 0, "Un cache frais ne fait attendre AUCUN aller-retour.")
 
         await CacheCoordinator.shared.participants.invalidate(for: conversationId)
+    }
+}
+
+/// Retient un aller réseau jusqu'à ce que le témoin le relâche.
+private actor RequestLatch {
+    private var isOpen = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func wait() async {
+        guard !isOpen else { return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+
+    func open() {
+        isOpen = true
+        waiters.forEach { $0.resume() }
+        waiters = []
     }
 }

@@ -27,6 +27,10 @@ export type StatsRead = {
   readonly codec: string | null;
   /** Le chemin du média (#8698) : par un relais TURN, ou direct ; `null` avant qu'une paire soit élue. */
   readonly path: MediaPath | null;
+  /** Ce que le navigateur estime pouvoir envoyer sur ce lien (b/s, TWCC/GCC) ; `null` quand il ne le dit pas (Firefox). */
+  readonly availableOutgoingBitrate: number | null;
+  /** La perte que le pair constate sur MA vidéo (%, `remote-inbound-rtp`) ; `null` avant son premier rapport. */
+  readonly uplinkLoss: number | null;
 };
 
 export type MediaPath = 'direct' | 'relay';
@@ -87,6 +91,8 @@ export function readStats(report: StatsReportLike, at: number): StatsRead {
   const codecEntry = (sending('video') ?? sending('audio'))?.codecId;
   const codec = entries.find((entry) => entry.type === 'codec' && entry.id === codecEntry);
   const local = pair === undefined ? undefined : entries.find((entry) => entry.type === 'local-candidate' && entry.id === pair.localCandidateId);
+  const estimate = pair?.availableOutgoingBitrate;
+  const uplink = entries.find((entry) => entry.type === 'remote-inbound-rtp' && entry.kind === 'video' && typeof entry.fractionLost === 'number');
   return {
     at,
     rtt: numberOf(pair?.currentRoundTripTime ?? remote?.roundTripTime) * 1000,
@@ -99,6 +105,8 @@ export function readStats(report: StatsReportLike, at: number): StatsRead {
     bytesReceived: sum(inbound, 'bytesReceived'),
     codec: subtype(codec?.mimeType),
     path: local === undefined ? null : local.candidateType === 'relay' ? 'relay' : 'direct',
+    availableOutgoingBitrate: typeof estimate === 'number' && Number.isFinite(estimate) && estimate > 0 ? estimate : null,
+    uplinkLoss: uplink === undefined ? null : numberOf(uplink.fractionLost) * 100,
   };
 }
 
@@ -135,20 +143,70 @@ export type VideoTier = 'high' | 'medium' | 'low' | 'frozen' | 'suspended';
 
 export type TierEncoding = { readonly active: boolean; readonly maxBitrate: number; readonly scaleResolutionDownBy: number; readonly maxFramerate: number };
 
-/** Les paliers d'`applyVideoQuality` d'iOS ; `high` est le plafond Wi-Fi du barème (`call-data-profile.ts`), `frozen` `survivalFrozenFPS` au plancher `minVideoBitrate`. */
+/**
+ * Les paliers d'`applyVideoQuality` d'iOS ; `high` va jusqu'au plafond d'Android
+ * (2,5 Mb/s en 720p30, #19775), `frozen` `survivalFrozenFPS` au plancher
+ * `minVideoBitrate`. Hors du palier bas, la taille n'est jamais réduite d'office :
+ * l'encodeur (`balanced`) n'abaisse la résolution que si le débit l'y oblige.
+ */
 export const TIER_ENCODING: Readonly<Record<VideoTier, TierEncoding>> = {
-  high: { active: true, maxBitrate: 1_200_000, scaleResolutionDownBy: 1, maxFramerate: 30 },
-  medium: { active: true, maxBitrate: 600_000, scaleResolutionDownBy: 1.5, maxFramerate: 24 },
-  low: { active: true, maxBitrate: 250_000, scaleResolutionDownBy: 2, maxFramerate: 15 },
+  high: { active: true, maxBitrate: 2_500_000, scaleResolutionDownBy: 1, maxFramerate: 30 },
+  medium: { active: true, maxBitrate: 1_200_000, scaleResolutionDownBy: 1, maxFramerate: 30 },
+  low: { active: true, maxBitrate: 500_000, scaleResolutionDownBy: 1.5, maxFramerate: 20 },
   frozen: { active: true, maxBitrate: 100_000, scaleResolutionDownBy: 2, maxFramerate: 2 },
   suspended: { active: false, maxBitrate: 100_000, scaleResolutionDownBy: 2, maxFramerate: 2 },
 };
 
+export type SteadyTier = 'high' | 'medium' | 'low';
+
+const STEADY_ORDER: readonly SteadyTier[] = ['high', 'medium', 'low'];
+
+const levelTier = (level: ConnectionQualityLevel): SteadyTier => (level === 'excellent' || level === 'good' ? 'high' : level === 'fair' ? 'medium' : 'low');
+
+/** Seuils d'iOS `VideoQualityLevel.from(availableOutgoingBitrateBps:)`, sous chaque cible pour garder de la marge. */
+const estimateTier = (bps: number): SteadyTier => (bps >= 2_000_000 ? 'high' : bps >= 1_000_000 ? 'medium' : 'low');
+
+const UPLINK_LOSS_STEP_DOWN = 10;
+
+/**
+ * Le palier que CE lien peut porter (#19775) : l'estimation de débit du navigateur
+ * quand il la donne, sinon le niveau du lien ; une perte montante de 10 % en
+ * retire un cran. La latence seule ne fait plus descendre l'image.
+ */
+export function linkTier(signal: { readonly level: ConnectionQualityLevel; readonly availableOutgoingBitrate: number | null; readonly uplinkLoss: number | null }): SteadyTier {
+  const base = signal.availableOutgoingBitrate === null ? levelTier(signal.level) : estimateTier(signal.availableOutgoingBitrate);
+  if ((signal.uplinkLoss ?? 0) < UPLINK_LOSS_STEP_DOWN) return base;
+  return STEADY_ORDER[Math.min(STEADY_ORDER.indexOf(base) + 1, STEADY_ORDER.length - 1)] ?? 'low';
+}
+
+export type TierState = { readonly tier: SteadyTier; readonly pending: SteadyTier | null; readonly streak: number };
+
+export const initialTierState = (): TierState => ({ tier: 'high', pending: null, streak: 0 });
+
+const DOWN_CONFIRMATIONS = 2;
+const UP_CONFIRMATIONS = 3;
+
+/**
+ * L'hystérésis du palier (#19775) : descendre après deux relevés concordants
+ * (4 s), remonter après trois (6 s). Un relevé isolé ne fait pas clignoter la
+ * netteté, et l'image ne remonte qu'une fois le lien vraiment revenu.
+ */
+export function stepTier(state: TierState, target: SteadyTier): TierState {
+  if (target === state.tier) return { tier: state.tier, pending: null, streak: 0 };
+  const streak = state.pending === target ? state.streak + 1 : 1;
+  const needed = STEADY_ORDER.indexOf(target) > STEADY_ORDER.indexOf(state.tier) ? DOWN_CONFIRMATIONS : UP_CONFIRMATIONS;
+  return streak >= needed ? { tier: target, pending: null, streak: 0 } : { tier: state.tier, pending: target, streak };
+}
+
 /** Sans hystérésis : un palier est un `setParameters`, sans renégociation — c'est la survie qui en porte une. */
 export function appliedTier(level: ConnectionQualityLevel, stage: SurvivalStage): VideoTier {
   if (stage !== 'sending') return stage;
-  if (level === 'excellent' || level === 'good') return 'high';
-  return level === 'fair' ? 'medium' : 'low';
+  return levelTier(level);
+}
+
+/** Le palier envoyé : la survie impose son plancher, sinon le palier stable du lien. */
+export function sentTier(steady: SteadyTier, stage: SurvivalStage): VideoTier {
+  return stage === 'sending' ? steady : stage;
 }
 
 export function encodingFor<T extends object>(encoding: T, tier: VideoTier): T & TierEncoding {

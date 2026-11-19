@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- « En appel » (#18753, ACT-01) : android-only tant que les clés phoneCall.* ne sont pas au catalogue iOS. -->
+<resources>
+    <string name="phone_call_someone">someone close</string>
+    <string name="phone_call_pill_started">%1$s is on a call</string>
+    <string name="phone_call_pill_ended">%1$s hung up</string>
+    <string name="phone_call_since_minutes">On a call for %1$d min</string>
+    <string name="phone_call_since_clock">On a call since %1$s</string>
+    <string name="phone_call_a11y">%1$s is on a call</string>
+    <string name="phone_call_share_global_title">Show my Blood that I\'m on a call</string>
+    <string name="phone_call_share_global_scope">Never who with.</string>
+    <string name="phone_call_share_person">Show %1$s that I\'m on a call</string>
+    <string name="phone_call_share_person_scope">%1$s sees that I\'m on a call, never who with.</string>
+    <string name="phone_call_share_off">Showing that you\'re on a call is off.</string>
+</resources>

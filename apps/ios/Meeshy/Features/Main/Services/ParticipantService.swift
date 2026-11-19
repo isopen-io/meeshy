@@ -10,6 +10,12 @@ actor ParticipantService {
     private let pageSize = 30
 
     private var paginationState: [String: PaginationState] = [:]
+    /// La revalidation qu'une première page `.stale` a lancée, en vol, par conversation.
+    private var revalidations: [String: Task<[PaginatedParticipant]?, Never>] = [:]
+    /// Le rang de la dernière relecture d'une première page, par conversation (#19309) : seule la plus RÉCENTE écrit
+    /// le disque et la pagination. Une revalidation `.stale` lente, partie avant un rafraîchissement forcé, revient
+    /// après lui avec une page plus ANCIENNE — elle ne l'écrase plus.
+    private var firstPageGenerations: [String: Int] = [:]
 
     private struct PaginationState {
         var nextCursor: String?
@@ -34,18 +40,8 @@ actor ParticipantService {
     // MARK: - Load
 
     func loadFirstPage(for conversationId: String, forceRefresh: Bool = false) async throws -> [PaginatedParticipant] {
-        if !forceRefresh {
-            // SWR: any in-cache page (fresh or stale) satisfies the
-            // first-page request. The caller (`ConversationViewModel`) reads
-            // the participants store again later for downstream operations,
-            // so a separate refresh kick here would be redundant.
-            let result = await CacheCoordinator.shared.participants.load(for: conversationId)
-            switch result {
-            case .fresh(let items, _), .stale(let items, _):
-                if !items.isEmpty { return items }
-            case .expired, .empty:
-                break
-            }
+        if !forceRefresh, let cached = await cachedFirstPage(for: conversationId) {
+            return cached
         }
 
         // Fetch-then-replace : le cache n'est touché QUE lorsque le réseau a
@@ -56,9 +52,23 @@ actor ParticipantService {
         // (`ConversationInfoSheet`, `ParticipantsView`), et l'ouverture suivante
         // repartait du réseau puisque le cache n'avait plus rien à servir.
         // Même correctif que `ConversationListViewModel.forceRefresh`.
-        paginationState[conversationId] = PaginationState()
+        return try await fetchFirstPage(for: conversationId, generation: claimFirstPage(of: conversationId))
+    }
+
+    private func claimFirstPage(of conversationId: String) -> Int {
+        let generation = (firstPageGenerations[conversationId] ?? 0) + 1
+        firstPageGenerations[conversationId] = generation
+        return generation
+    }
+
+    private func isLatestFirstPage(_ generation: Int, of conversationId: String) -> Bool {
+        firstPageGenerations[conversationId] == generation
+    }
+
+    private func fetchFirstPage(for conversationId: String, generation: Int) async throws -> [PaginatedParticipant] {
+        if isLatestFirstPage(generation, of: conversationId) { paginationState[conversationId] = PaginationState() }
         do {
-            return try await fetchNextPage(for: conversationId, replacingCachedPages: true)
+            return try await fetchNextPage(for: conversationId, replacingCachedPages: generation)
         } catch {
             // `load()` rend un `.expired` SANS charge — le signal veut dire
             // « ne t'y fie pas », jamais « il n'y a rien ». Le disque, lui, l'a
@@ -88,6 +98,58 @@ actor ParticipantService {
         }
 
         return try await fetchNextPage(for: conversationId)
+    }
+
+    /// La page la plus récente de la conversation (#18916) : celle que rendra la
+    /// revalidation en vol d'une première page `.stale`, sinon ce que le disque
+    /// tient. Un appelant qui a déjà peint la page `.stale` repeint celle-ci.
+    /// Une revalidation qu'une relecture plus récente a dépassée ne rend rien : l'appelant repeint alors le disque, qui
+    /// porte la page la plus récente (#19309).
+    func revalidatedFirstPage(for conversationId: String) async -> [PaginatedParticipant]? {
+        if let revalidation = revalidations[conversationId], let page = await revalidation.value {
+            return page
+        }
+        return await CacheCoordinator.shared.participants.loadIgnoringExpiry(for: conversationId)?.items
+    }
+
+    /// La page à peindre après `loadFirstPage` (#19309). Un rafraîchissement FORCÉ sert la page que cette requête
+    /// vient de relire : une revalidation `.stale` encore en vol est plus ANCIENNE et peut ignorer le membre qui
+    /// vient de rejoindre. Sans force, l'écran a peint la page `.stale` et repeint la page revalidée.
+    func pageToPaint(
+        afterLoading served: [PaginatedParticipant], for conversationId: String, forceRefresh: Bool
+    ) async -> [PaginatedParticipant] {
+        guard !forceRefresh else { return served }
+        return await revalidatedFirstPage(for: conversationId) ?? served
+    }
+
+    /// Stale-while-revalidate : une page `.fresh` se sert telle quelle ; une page
+    /// `.stale` aussi — aussitôt, sans attendre le réseau — et sa revalidation
+    /// part en arrière-plan. La servir sans jamais la relire laissait un membre
+    /// parti dans la liste jusqu'à l'expiration du cache, 24 h plus tard.
+    private func cachedFirstPage(for conversationId: String) async -> [PaginatedParticipant]? {
+        switch await CacheCoordinator.shared.participants.load(for: conversationId) {
+        case .fresh(let items, _) where !items.isEmpty:
+            return items
+        case .stale(let items, _) where !items.isEmpty:
+            revalidateInBackground(conversationId)
+            return items
+        case .fresh, .stale, .expired, .empty:
+            return nil
+        }
+    }
+
+    private func revalidateInBackground(_ conversationId: String) {
+        guard revalidations[conversationId] == nil else { return }
+        let generation = claimFirstPage(of: conversationId)
+        revalidations[conversationId] = Task {
+            let page = try? await self.fetchFirstPage(for: conversationId, generation: generation)
+            return await self.forgetRevalidation(of: conversationId, generation: generation) ? page : nil
+        }
+    }
+
+    private func forgetRevalidation(of conversationId: String, generation: Int) async -> Bool {
+        revalidations[conversationId] = nil
+        return isLatestFirstPage(generation, of: conversationId)
     }
 
     // MARK: - Mutations
@@ -121,15 +183,17 @@ actor ParticipantService {
 
     // MARK: - Private
 
-    /// - Parameter replacingCachedPages: une PREMIÈRE page remplace ce que le
-    ///   cache portait au lieu de s'y ajouter. C'est ce que l'`invalidate()`
-    ///   préalable obtenait ; le dire ici plutôt que de vider le disque donne le
-    ///   même résultat sans exposer l'intervalle où l'app n'a plus rien.
+    /// - Parameter replacingCachedPages: le rang d'une PREMIÈRE page, qui remplace
+    ///   ce que le cache portait au lieu de s'y ajouter. C'est ce que
+    ///   l'`invalidate()` préalable obtenait ; le dire ici plutôt que de vider le
+    ///   disque donne le même résultat sans exposer l'intervalle où l'app n'a plus
+    ///   rien. Une première page dépassée par une relecture plus récente rend ce
+    ///   qu'elle a lu sans rien écrire (#19309).
     private func fetchNextPage(
         for conversationId: String,
-        replacingCachedPages: Bool = false
+        replacingCachedPages generation: Int? = nil
     ) async throws -> [PaginatedParticipant] {
-        let cursor = paginationState[conversationId]?.nextCursor
+        let cursor = generation == nil ? paginationState[conversationId]?.nextCursor : nil
         // #4282 — le chemin était CONSTRUIT par concaténation, requête comprise.
         // Ni la migration ni l'audit ne le voyaient : ils cherchent un littéral,
         // et ici il n'y en avait pas un seul complet. La pagination passe en
@@ -151,10 +215,14 @@ actor ParticipantService {
                 .loadIgnoringExpiry(for: conversationId)?.items ?? []
         }
 
+        if let generation, !isLatestFirstPage(generation, of: conversationId) {
+            return response.data
+        }
+
         // Page-merge: we just fetched the next page, so we want to append to
         // whatever is currently cached regardless of freshness.
         let existingItems: [PaginatedParticipant]
-        if replacingCachedPages {
+        if generation != nil {
             existingItems = []
         } else {
             let existingResult = await CacheCoordinator.shared.participants.load(for: conversationId)

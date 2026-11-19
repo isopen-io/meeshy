@@ -312,6 +312,7 @@ services:
     restart: unless-stopped
     logging: *journald-logging
     environment:
+      - GATEWAY_DRAIN_MS=20000
       - DATABASE_TYPE=${DATABASE_TYPE:-MONGODB}
       - DATABASE_URL=mongodb://database-staging:27017/${MONGODB_DATABASE:-meeshy}?replicaSet=rs0&directConnection=true
       - REDIS_URL=redis://redis-staging:6379
@@ -522,12 +523,16 @@ services:
     networks:
       - meeshy-staging-network
       - meeshy-staging-edge
+    # #19280 — au SIGTERM la passerelle répond /health en 503 (vidange, `utils/shutdown-drain.ts`) :
+    # Traefik n'écarte un conteneur que `unhealthy`, et ce délai (2 échecs x 5 s) borne l'attente
+    # `GATEWAY_DRAIN_MS`. Pendant ce temps, toute requête neuve reçoit 503 + CORS de la passerelle.
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      interval: 5s
+      timeout: 3s
+      retries: 2
       start_period: 30s
+    stop_grace_period: 45s
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=meeshy-staging-edge"
@@ -584,6 +589,19 @@ services:
       - "traefik.http.routers.frontend-staging-affiliate-unfurl.service=gateway-staging"
       - "traefik.http.middlewares.affiliate-unfurl-staging-path.replacepathregex.regex=^/signup/affiliate/([A-Za-z0-9_-]{2,100})/?$$"
       - "traefik.http.middlewares.affiliate-unfurl-staging-path.replacepathregex.replacement=/api/v1/affiliate/$$1/og"
+      # #18865 — les mêmes robots qui déplient le lien d'une FICHE, /u/<pseudo> ou l'adresse
+      # courte /@<pseudo>, reçoivent la carte de profil au niveau Public
+      # (GET /api/v1/people/<pseudo>/og) : nom, pseudo, bannière sinon avatar, bio, ville d'un
+      # cercle public ; un pseudo inconnu, désactivé ou caché rend l'aperçu générique. Le motif
+      # n'admet ni point ni second segment : les médias hérités servis sous /u/ (nginx) restent hors d'atteinte.
+      - "traefik.http.routers.frontend-staging-person-unfurl.rule=Host(`staging.${DOMAIN:-meeshy.me}`) && PathRegexp(`^/(u/|@)[A-Za-z0-9_-]{1,64}/?$$`) && !Query(`open`, `1`) && HeaderRegexp(`User-Agent`, `(?i)(facebookexternalhit|facebot|whatsapp|twitterbot|slackbot|telegrambot|discordbot|linkedinbot|skypeuripreview|embedly|iframely|redditbot|pinterestbot|vkshare|mastodon|bluesky|cardyb|google-pagerenderer|kakaotalk-scrap|bitlybot|mattermost|synapse)`)"
+      - "traefik.http.routers.frontend-staging-person-unfurl.priority=100"
+      - "traefik.http.routers.frontend-staging-person-unfurl.entrypoints=websecure"
+      - "traefik.http.routers.frontend-staging-person-unfurl.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.frontend-staging-person-unfurl.middlewares=person-unfurl-staging-path,rate-limit@file,compress@file"
+      - "traefik.http.routers.frontend-staging-person-unfurl.service=gateway-staging"
+      - "traefik.http.middlewares.person-unfurl-staging-path.replacepathregex.regex=^/(?:u/|@)([A-Za-z0-9_-]{1,64})/?$$"
+      - "traefik.http.middlewares.person-unfurl-staging-path.replacepathregex.replacement=/api/v1/people/$$1/og"
       - "traefik.http.services.gateway-staging.loadbalancer.server.port=3000"
 
   # #11264 — `meeshy-media-worker` : la MÊME image que la passerelle, un autre
@@ -705,7 +723,9 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=meeshy-staging-edge"
       - "traefik.http.routers.frontend-staging.rule=Host(`staging.${DOMAIN:-meeshy.me}`)"
-      - "traefik.http.routers.frontend-staging.middlewares=compress@file"
+      # #18986 — mêmes en-têtes de transport que la production (HSTS, `nosniff`,
+      # anti-cadrage, `Referrer-Policy`) ; la CSP voyage avec l'image.
+      - "traefik.http.routers.frontend-staging.middlewares=secure-headers@file,compress@file"
       - "traefik.http.routers.frontend-staging.entrypoints=websecure"
       - "traefik.http.routers.frontend-staging.tls.certresolver=letsencrypt"
       - "traefik.http.services.frontend-staging.loadbalancer.server.port=3400"

@@ -64,6 +64,11 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         }
     }
 
+    /// Appelé après l'enregistrement d'une requête `request`, AVANT sa réponse :
+    /// un témoin y retient la requête le temps de glisser un événement pendant
+    /// son vol (#18936), puis la relâche. `nil` : réponse immédiate.
+    var beforeResponse: (@Sendable (_ endpoint: String, _ queryItems: [URLQueryItem]?) async -> Void)?
+
     /// Erreur choisie REQUÊTE PAR REQUÊTE, après enregistrement — pour un
     /// double qui refuse une requête d'un lot et accepte sa voisine sur la
     /// même adresse (#10483 : les `open` refusés, les vues acceptées).
@@ -121,6 +126,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         wireStubs.removeAll()
         wireSequences.mutate { $0.removeAll() }
         errorToThrow = nil
+        beforeResponse = nil
         endpointErrors.removeAll()
         authToken = nil
         freshAuthTokenStub = nil
@@ -140,6 +146,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         // écrivent déjà. `legacyPath(for:)` la donne (#4282).
         let endpoint = legacyPath(for: typedEndpoint)
         recordRequest(endpoint: endpoint, rejectionPolicy: typedEndpoint.rejectionPolicy, method: method, bodyData: body, queryItems: queryItems)
+        if let beforeResponse { await beforeResponse(endpoint, queryItems) }
         if let error = endpointErrors[endpoint] { throw error }
         if let error = errorToThrow { throw error }
         return try await stubbed(endpoint, as: T.self)

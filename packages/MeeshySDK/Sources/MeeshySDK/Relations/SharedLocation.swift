@@ -34,9 +34,12 @@ public struct SharedLocationChanged: Decodable, Sendable, Equatable {
     public let radiusMeters: Double
     public let updatedAt: Date
     public let expiresAt: Date
+    /// `circle` (#17966), ADDITIF : le cercle d'où vient l'émetteur POUR MOI (Ami, Proche, Sang). Un serveur antérieur
+    /// ne le sert pas, une valeur hors des trois cercles se lit comme absente : la carte dessine alors un marqueur neutre.
+    public let circle: RelationLevel?
 
     public init(userId: String, latitude: Double, longitude: Double, precision: SharedLocationPrecision,
-                radiusMeters: Double, updatedAt: Date, expiresAt: Date) {
+                radiusMeters: Double, updatedAt: Date, expiresAt: Date, circle: RelationLevel? = nil) {
         self.userId = userId
         self.latitude = latitude
         self.longitude = longitude
@@ -44,6 +47,7 @@ public struct SharedLocationChanged: Decodable, Sendable, Equatable {
         self.radiusMeters = min(SharedLocationContract.maxRadiusMeters, max(SharedLocationContract.exactMinRadiusMeters, radiusMeters))
         self.updatedAt = updatedAt
         self.expiresAt = expiresAt
+        self.circle = circle.flatMap { SharedLocationCircle.served.contains($0) ? $0 : nil }
     }
 
     /// La durée de vie servie, bornée par le contrat : une échéance absurde ne garde jamais une position affichée.
@@ -51,10 +55,13 @@ public struct SharedLocationChanged: Decodable, Sendable, Equatable {
         min(SharedLocationContract.maxLifetime, max(0, expiresAt.timeIntervalSince(updatedAt)))
     }
 
-    private enum CodingKeys: String, CodingKey { case userId, latitude, longitude, precision, radiusMeters, updatedAt, expiresAt }
+    private enum CodingKeys: String, CodingKey { case userId, latitude, longitude, precision, radiusMeters, updatedAt, expiresAt, circle }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        guard (try? SharedLocationGhost(from: decoder)) == nil else {
+            throw DecodingError.dataCorruptedError(forKey: .userId, in: c, debugDescription: "position en pause (fantôme)")
+        }
         let userId = try c.decode(String.self, forKey: .userId).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !userId.isEmpty else {
             throw DecodingError.dataCorruptedError(forKey: .userId, in: c, debugDescription: "userId vide")
@@ -75,9 +82,15 @@ public struct SharedLocationChanged: Decodable, Sendable, Equatable {
               let expiresAt = WireDate.date(from: try c.decode(String.self, forKey: .expiresAt)) else {
             throw DecodingError.dataCorruptedError(forKey: .updatedAt, in: c, debugDescription: "instant illisible")
         }
+        let circle = ((try? c.decodeIfPresent(String.self, forKey: .circle)) ?? nil).flatMap(RelationLevel.init(rawValue:))
         self.init(userId: userId, latitude: latitude, longitude: longitude, precision: precision,
-                  radiusMeters: radius, updatedAt: updatedAt, expiresAt: expiresAt)
+                  radiusMeters: radius, updatedAt: updatedAt, expiresAt: expiresAt, circle: circle)
     }
+}
+
+/// `SHARED_LOCATION_CIRCLES` : les seuls cercles d'où une position peut venir.
+public enum SharedLocationCircle {
+    public static let served: Set<RelationLevel> = [.friend, .close, .blood]
 }
 
 /// `location:share-ended` — le partage de cette personne s'arrête chez moi (arrêt, baisse sous Ami, blocage, retrait).
@@ -89,13 +102,50 @@ public struct SharedLocationEnded: Decodable, Sendable, Equatable {
     }
 }
 
-/// `GET /relations/locations` — les partages servis à MOI, déjà tronqués. Un élément illisible est écarté, il ne fait
-/// pas tomber le rattrapage.
+/// Une personne qui me partageait sa position et l'a mise EN PAUSE par son mode fantôme (#19562, chaîne serveur
+/// #19304). ADDITIF : un élément `{ userId, paused: "ghost", circle? }` (ou `ghost: true`) de `GET /relations/locations`.
+/// Il ne porte que QUI et de quel cercle : aucune coordonnée, aucun instant, aucune précision n'a de champ où se poser,
+/// même si le serveur en servait. Un serveur qui ne le sert pas ne montre personne en fantôme.
+public struct SharedLocationGhost: Decodable, Sendable, Equatable, Identifiable {
+    public let userId: String
+    public let circle: RelationLevel?
+
+    public var id: String { userId }
+
+    public init(userId: String, circle: RelationLevel? = nil) {
+        self.userId = userId
+        self.circle = circle.flatMap { SharedLocationCircle.served.contains($0) ? $0 : nil }
+    }
+
+    private enum CodingKeys: String, CodingKey { case userId, paused, ghost, circle }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let paused = (try? c.decodeIfPresent(String.self, forKey: .paused)) ?? nil
+        let flagged = (try? c.decodeIfPresent(Bool.self, forKey: .ghost)) ?? nil
+        guard paused == "ghost" || flagged == true else {
+            throw DecodingError.dataCorruptedError(forKey: .paused, in: c, debugDescription: "pas en fantôme")
+        }
+        let userId = try c.decode(String.self, forKey: .userId).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !userId.isEmpty else {
+            throw DecodingError.dataCorruptedError(forKey: .userId, in: c, debugDescription: "userId vide")
+        }
+        let circle = ((try? c.decodeIfPresent(String.self, forKey: .circle)) ?? nil).flatMap(RelationLevel.init(rawValue:))
+        self.init(userId: userId, circle: circle)
+    }
+}
+
+/// `GET /relations/locations` — les partages servis à MOI, déjà tronqués, et ceux qui sont en pause par fantôme. Un
+/// élément illisible est écarté, il ne fait pas tomber le rattrapage ; une personne servie à la fois en position et en
+/// fantôme est un fantôme (la pause l'emporte : aucune position ne s'affiche d'elle).
 public struct SharedLocationSnapshot: Decodable, Sendable, Equatable {
     public let items: [SharedLocationChanged]
+    public let ghosts: [SharedLocationGhost]
 
-    public init(items: [SharedLocationChanged]) {
-        self.items = items
+    public init(items: [SharedLocationChanged], ghosts: [SharedLocationGhost] = []) {
+        let paused = Set(ghosts.map(\.userId))
+        self.items = items.filter { !paused.contains($0.userId) }
+        self.ghosts = ghosts
     }
 
     private enum CodingKeys: String, CodingKey { case items }
@@ -103,14 +153,16 @@ public struct SharedLocationSnapshot: Decodable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let lenient = (try? c.decodeIfPresent([Lenient].self, forKey: .items)) ?? nil
-        items = (lenient ?? []).compactMap(\.value)
+        self.init(items: (lenient ?? []).compactMap(\.position), ghosts: (lenient ?? []).compactMap(\.ghost))
     }
 
     private struct Lenient: Decodable {
-        let value: SharedLocationChanged?
+        let position: SharedLocationChanged?
+        let ghost: SharedLocationGhost?
 
         init(from decoder: Decoder) throws {
-            value = try? SharedLocationChanged(from: decoder)
+            ghost = try? SharedLocationGhost(from: decoder)
+            position = ghost == nil ? try? SharedLocationChanged(from: decoder) : nil
         }
     }
 }
@@ -169,17 +221,22 @@ public struct SharedLocationOwnRecipient: Decodable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey { case userId, precision, expiresAt }
 
     /// Une précision inconnue se relit comme la ville (on ouvre plus, jamais l'inverse) ; un identifiant vide ou une
-    /// échéance illisible rend la personne illisible, et le cliché l'écarte.
+    /// échéance illisible rend la personne illisible, et le cliché l'écarte. `expiresAt: null` : un partage sans fin
+    /// (#19616), lu `SharedLocationShareTerm.openEndedDeadline` ; une clé absente reste illisible.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let userId = try c.decode(String.self, forKey: .userId).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !userId.isEmpty else {
             throw DecodingError.dataCorruptedError(forKey: .userId, in: c, debugDescription: "userId vide")
         }
+        let precision = (try? c.decode(String.self, forKey: .precision)).flatMap(SharedLocationPrecision.init(rawValue:)) ?? .city
+        guard try !c.decodeNil(forKey: .expiresAt) else {
+            self.init(userId: userId, precision: precision, expiresAt: SharedLocationShareTerm.openEndedDeadline)
+            return
+        }
         guard let expiresAt = WireDate.date(from: try c.decode(String.self, forKey: .expiresAt)) else {
             throw DecodingError.dataCorruptedError(forKey: .expiresAt, in: c, debugDescription: "instant illisible")
         }
-        let precision = (try? c.decode(String.self, forKey: .precision)).flatMap(SharedLocationPrecision.init(rawValue:)) ?? .city
         self.init(userId: userId, precision: precision, expiresAt: expiresAt)
     }
 }
@@ -190,16 +247,42 @@ public struct SharedLocationOwnRecipient: Decodable, Sendable, Equatable {
 /// l'appareil garde sa liste et ses « Arrêter » (iso `decodeOwnSharedLocation` du web).
 public struct SharedLocationOwnSnapshot: Decodable, Sendable, Equatable {
     public let recipients: [SharedLocationOwnRecipient]
+    /// La batterie accompagne-t-elle le partage (#19204) ? `nil` : la passerelle ne le dit pas (aucun partage, ou
+    /// passerelle antérieure) — jamais lu comme « non ».
+    public let shareBattery: Bool?
+    /// La passerelle accepte-t-elle un point choisi à la main (`source: 'manual'`, #19557) ? Absent : non — l'écran
+    /// garde alors « Ouvrir les réglages » seul.
+    public let acceptsManualSource: Bool
+    /// La passerelle accepte-t-elle un partage sans fin entre Sangs (`untilStopped`, #19616) ? Absent : non — la tuile
+    /// « Jusqu'à ce que j'arrête » reste verrouillée.
+    public let acceptsUntilStopped: Bool
+    /// UN SEUL APPAREIL PUBLIE (#18580) : le dernier démarrage AVEC position, renouvelé par chaque « Partager », gardé
+    /// par la liste seule. `nil` : passerelle antérieure — l'appareil ne cède alors jamais.
+    public let startedAt: String?
 
-    public init(recipients: [SharedLocationOwnRecipient]) {
+    public init(
+        recipients: [SharedLocationOwnRecipient],
+        shareBattery: Bool? = nil,
+        acceptsManualSource: Bool = false,
+        acceptsUntilStopped: Bool = false,
+        startedAt: String? = nil
+    ) {
         self.recipients = recipients
+        self.shareBattery = shareBattery
+        self.acceptsManualSource = acceptsManualSource
+        self.acceptsUntilStopped = acceptsUntilStopped
+        self.startedAt = startedAt
     }
 
-    private enum CodingKeys: String, CodingKey { case recipients }
+    private enum CodingKeys: String, CodingKey { case recipients, shareBattery, acceptsManualSource, acceptsUntilStopped, startedAt }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         recipients = try c.decode([Lenient].self, forKey: .recipients).compactMap(\.value)
+        shareBattery = (try? c.decodeIfPresent(Bool.self, forKey: .shareBattery)) ?? nil
+        acceptsManualSource = ((try? c.decodeIfPresent(Bool.self, forKey: .acceptsManualSource)) ?? nil) ?? false
+        acceptsUntilStopped = ((try? c.decodeIfPresent(Bool.self, forKey: .acceptsUntilStopped)) ?? nil) ?? false
+        startedAt = (try? c.decodeIfPresent(String.self, forKey: .startedAt)) ?? nil
     }
 
     private struct Lenient: Decodable {

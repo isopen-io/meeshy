@@ -70,14 +70,14 @@ const KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE = new Set([
   // `GET /api/v1/l/:token` — atteinte par NAVIGATION DIRECTE du navigateur
   // (lien partagé), jamais par un appel `fetch` typé. Chemin `/l/${token}`
   // écrit à la main dans plusieurs sites de composition de lien partageable :
-  // `apps/web/lib/utils/link-parser.ts:116-117`,
-  // `apps/web/components/chat/message-with-links.tsx`.
+  // `legacy-web-final:apps/web/lib/utils/link-parser.ts:116-117`,
+  // `legacy-web-final:apps/web/components/chat/message-with-links.tsx`.
   'l.byToken',
   // `GET /api/v1/u/:username` — navigation directe via des liens `<Link
   // href={\`/u/${username}\`}>` écrits à la main dans des dizaines de sites
   // (profils, mentions), jamais via `API_ENDPOINTS.u.byUsername`. Exemples :
-  // `apps/web/components/common/bubble-message/MessageNameDate.tsx`,
-  // `apps/web/components/v2/MessageBubble.tsx`.
+  // `legacy-web-final:apps/web/components/common/bubble-message/MessageNameDate.tsx`,
+  // `legacy-web-final:apps/web/components/v2/MessageBubble.tsx`.
   'u.byUsername',
   // `PATCH`/`DELETE /api/v1/guest-sessions/me` — appelée en production par le
   // SDK iOS (`ShareLinkService` → `GuestSessionsEndpoint.me`), hors du périmètre
@@ -534,6 +534,32 @@ export const callersIn = (contents, nsNames) => {
 // `applyKnownLiveExceptions` la fait rougir (PÉRIMÉE) le jour où son appelant
 // arrive — la déclaration doit alors partir dans le même commit.
 const PENDING_CLIENT_ENTRIES = {
+  // Le jeton d'Activité en direct d'un partage de position (#19463, chantier #18857) : l'iPhone qui affiche
+  // « Léo partage sa position » le confie à la passerelle, qui clôt l'Activité si le partage finit avant son terme.
+  'me.liveActivityTokens': { issue: 19463, reason: 'POST /me/live-activity-tokens — l\'Activité en direct close par la passerelle à la fin du partage' },
+  // Les entrées d'un lien de communauté (#19429, besoin #19290, chantier #18857) : iOS les lira d'abord
+  // (fiche `Lien-Communaute`) ; le web et Android avec leur fiche de lien.
+  'communities.byIdEntriesStats': { issue: 19429, reason: 'GET /communities/:id/entries/stats — « N entrées par ce lien », « N cette semaine », la série sur 30 jours' },
+  'communities.byIdJoinRequests': { issue: 19429, reason: 'GET /communities/:id/join-requests — « En attente de validation »' },
+  'communities.byIdJoinRequestsByRequestIdAccept': { issue: 19429, reason: 'POST …/join-requests/:requestId/accept — le bouton Accepter' },
+  'communities.byIdJoinRequestsByRequestIdReject': { issue: 19429, reason: 'POST …/join-requests/:requestId/reject — le bouton Refuser' },
+  // Stories « à la une » servies par la passerelle (#19394, chantier #18857) : les clients liront le rail
+  // « À la une » de la Vitrine (K20) et l'auteur composera ses albums.
+  'users.byIdHighlights': { issue: 19394, reason: 'GET /users/:id/highlights — le rail « À la une » de la fiche, chaque story sous sa propre audience' },
+  'users.meHighlights': { issue: 19394, reason: 'GET · POST /users/me/highlights — mes albums à la une (lecture, création)' },
+  'users.meHighlightsById': { issue: 19394, reason: 'PATCH · DELETE /users/me/highlights/:id — modifier ou supprimer un album à la une' },
+  'users.meHighlightsOrder': { issue: 19394, reason: 'PUT /users/me/highlights/order — réordonner mes albums à la une' },
+  // « Mes cercles » compté par la passerelle, Communauté comprise (#19375, chantier #18857) : iOS le lira
+  // d'abord (rangée « Mes cercles » de la fiche) ; le web et Android le liront avec leur profil.
+  'relations.summary': { issue: 19375, reason: 'GET /relations/summary — le compte de chaque cercle et des demandes en attente, rangée « Mes cercles »' },
+  // Le profil de la planche (#18857, PR serveur #19316) : le serveur sert avant le tour client web.
+  'contactExchange.byTokenAccept': { issue: 19205, reason: 'POST /contact-exchange/:token/accept — accepter un partage sans contact (web)' },
+  'me.contactExchange': { issue: 19205, reason: 'POST /me/contact-exchange — émettre le jeton du partage sans contact (web)' },
+  'me.locationGhost': { issue: 19203, reason: 'PUT /me/location/ghost — le fantôme global de position (web)' },
+  'relations.byUserIdLocationRequest': { issue: 19204, reason: 'POST /relations/:userId/location/request — prolonger ou redemander un partage (web)' },
+  'users.meProfileLinkStats': { issue: 19206, reason: 'GET /users/me/profile-link/stats — les visites de mon lien (web)' },
+  'invitations.emailByIdResend': { issue: 19207, reason: 'POST /invitations/email/:id/resend — relancer une invitation (web)' },
+  'invitations.emailOptOut': { issue: 19321, reason: 'POST /invitations/email/opt-out — la page web de désinscription' },
   // La boîte de demandes (#14107, PR #14449) : le serveur sert « Accepter » avant le tour client, qui le portera.
   'conversations.byIdMessageRequestAccept': { issue: 14107, reason: 'POST /conversations/:id/message-request/accept — le bouton « Accepter » de la boîte de demandes (web)' },
   // #11327 (S26) — `/api/v1/lens` : le crédit « Lens par X », le logo du filigrane et le ping d'usage, que la
@@ -571,7 +597,20 @@ const PENDING_CLIENT_ENTRIES = {
   // Le téléphone injoignable (#18737) : le signe de vie ne vient que d'un TÉLÉPHONE (iOS, Android répondent à la
   // sonde silencieuse — le web n'en est pas un), et le web lit l'état d'une personne par le rattrapage et le direct.
   'me.deviceAlive': { issue: 18737, reason: 'POST /me/device/alive — la réponse du téléphone à la sonde silencieuse, appelée par iOS et Android seulement' },
+  'me.deviceCall': { issue: 18753, reason: 'POST /me/device/call — le rapport « en appel » du téléphone suivi, appelé par iOS et Android seulement ; un navigateur ne voit pas les appels' },
   'relations.byUserIdPhoneReachability': { issue: 18737, reason: 'GET /relations/:userId/phone-reachability — l’état d’une personne, lu par iOS et Android ; le web suit le rattrapage et `phone:*`' },
+  // Le relais de la confirmation d'un appareil par code (#19156, spec 2026-11-17 § 5.2) : la passerelle le sert avant
+  // les lots clients de la spécification (§ 10 : web lot 6, iOS lots 3-4, Android lot 5), portés par #18906.
+  'e2Ee.devicesSelfVerifications': { issue: 18906, reason: 'POST|GET /e2ee/devices/self/verifications — déposer et relire les messages de comparaison, appelés par le lot web de la confirmation par code' },
+  'e2Ee.devicesSelfVerificationsAck': { issue: 18906, reason: 'POST /e2ee/devices/self/verifications/ack — accuser les messages de comparaison lus, même lot web' },
+  // « Mes adresses » (serveur-mes-adresses, chantier #18857) : la passerelle sert la lecture, l'écriture et l'ordre des
+  // adresses personnelles avant la face Liens web (#18880), qui les appellera.
+  'users.meAddressesById': { issue: 18880, reason: 'PATCH|DELETE /users/me/addresses/:id — modifier et retirer une adresse, face Liens web' },
+  'users.meAddressesOrder': { issue: 18880, reason: 'PUT /users/me/addresses/order — réordonner mes adresses, face Liens web' },
+  // « En commun » (#19234, servi par la PR #19231) : la passerelle sert les communautés, les amis et les médias
+  // partagés de la fiche d'un autre — chacun gardé par son cercle — avant le lot CLIENTS qui les affichera. La face
+  // web de la fiche de relation est #19180, et son drapeau d'allumage est #19230.
+  'users.byIdInCommon': { issue: 19234, reason: 'GET /users/:id/in-common — nos communautés, nos amis et nos médias en commun, lus par la fiche d’un autre (web, iOS, Android)' },
 };
 
 // 274 -> 271 (#6375, 2026-11-07) : `communities.byIdMembers`, `.byIdMembersByMemberId` et

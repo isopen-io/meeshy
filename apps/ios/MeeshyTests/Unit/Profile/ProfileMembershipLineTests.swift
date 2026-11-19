@@ -53,4 +53,27 @@ final class ProfileMembershipLineTests: XCTestCase {
         XCTAssertNil(ProfileMembershipLine.text(createdAt: "2027-01-01T00:00:00Z", locale: french, now: now),
                      "une inscription ne vient pas du futur : la date est corrompue, la ligne se tait")
     }
+
+    // MARK: - La ville déclarée (#19388, planche `Main`)
+
+    func test_text_withADeclaredCity_putsItBeforeTheMembership() {
+        let text = ProfileMembershipLine.text(city: "Dakar", createdAt: "2026-03-15T10:00:00.000Z", locale: interface, now: now)
+        let phrase = Bundle.main.localizedString(forKey: "profile.membership.cityAndSince", value: nil, table: nil)
+        let formatter = DateFormatter()
+        formatter.locale = interface
+        formatter.setLocalizedDateFormatFromTemplate("MMMMy")
+        let month = formatter.string(from: ISO8601DateFormatter().date(from: "2026-03-15T10:00:00Z")!)
+        XCTAssertEqual(text, String(format: phrase, "Dakar", month))
+        XCTAssertTrue(text?.hasPrefix("Dakar") == true, text ?? "nil")
+    }
+
+    func test_text_withACityButNoDate_saysTheCityAlone() {
+        XCTAssertEqual(ProfileMembershipLine.text(city: " Porto ", createdAt: nil, locale: french, now: now), "Porto")
+    }
+
+    func test_text_withABlankCity_isTheMembershipAlone() {
+        let withBlank = ProfileMembershipLine.text(city: "  ", createdAt: "2026-03-15T10:00:00.000Z", locale: interface, now: now)
+        XCTAssertEqual(withBlank, expected(monthOf: "2026-03-15T10:00:00.000Z"))
+    }
 }
+

@@ -8,11 +8,6 @@
     <string name="bubble_reply_attachment">مرفق</string>
     <string name="bubble_file_open">فتح الملف</string>
     <string name="live_location_remaining">المتبقي %1$s</string>
-    <string name="live_location_duration_15m">15 دقيقة</string>
-    <string name="live_location_duration_30m">30 دقيقة</string>
-    <string name="live_location_duration_1h">ساعة واحدة</string>
-    <string name="live_location_duration_2h">ساعتان</string>
-    <string name="live_location_duration_8h">8 ساعات</string>
     <string name="bubble_audio_play">تشغيل الرسالة الصوتية</string>
     <string name="bubble_file_size_bytes">%1$s بايت</string>
     <string name="bubble_file_size_kb">%1$s ك.ب</string>
@@ -43,4 +38,6 @@
     <string name="bubble_a11y_file">ملف %1$s</string>
     <string name="bubble_a11y_pinned">مثبّتة</string>
     <string name="bubble_a11y_ephemeral">رسالة ذاتية الحذف</string>
+    <string name="skeleton_link_row_loading">جارٍ تحميل رابط</string>
+    <string name="talkie_send_voice">لا يمكن إيصال جهاز اللاسلكي الآن: أرسل رسالة صوتية بدلًا من ذلك.</string>
 </resources>

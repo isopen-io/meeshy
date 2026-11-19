@@ -1,5 +1,5 @@
 import { audioBitrateFor, DATA_PROFILES, profiledEncoding, type DataProfile } from './call-data-profile';
-import { aggregateQuality, appliedTier, peerRate, readStats, TIER_ENCODING, type MediaPath, type PeerQuality, type StatsRead, type VideoTier } from './call-quality';
+import { aggregateQuality, initialTierState, linkTier, peerRate, readStats, sentTier, stepTier, TIER_ENCODING, type MediaPath, type PeerQuality, type StatsRead, type TierEncoding, type TierState, type VideoTier } from './call-quality';
 import { initialSurvival, stepSurvival, type SurvivalStage, type SurvivalState } from './call-survival';
 
 /**
@@ -13,6 +13,13 @@ import { initialSurvival, stepSurvival, type SurvivalStage, type SurvivalState }
  * seconde, résolution, débit Opus — et un lien mauvais fait descendre la voix
  * au palier dégradé. Le moteur (`engine.ts`) ne fait que lancer `tick` et
  * publier ce qu'il rend.
+ *
+ * #19775 — le palier d'un lien suit son débit estimé et la perte que le pair
+ * constate sur MA vidéo (`linkTier`), avec hystérésis (`stepTier`) ; il est
+ * rattaché à la CONNEXION, pas au pair : un lien reconstruit reçoit ses
+ * plafonds au premier relevé. La vidéo part en priorité réseau haute.
+ * #19777 — pendant un partage d'écran, l'image garde sa résolution : le texte
+ * doit rester lisible, quitte à descendre à 15 i/s.
  */
 
 export type QualityTick = {
@@ -30,7 +37,18 @@ export type QualityLoopDeps = {
   readonly now: () => number;
   /** Le profil de données du moment ; Wi-Fi quand rien n'est annoncé. */
   readonly profile?: () => DataProfile;
+  /** Je partage mon écran : la vidéo envoyée est un document, pas un visage (#19777). */
+  readonly sharingScreen?: () => boolean;
 };
+
+const SCREEN_ENCODING: TierEncoding = { active: true, maxBitrate: 3_000_000, scaleResolutionDownBy: 1, maxFramerate: 15 };
+
+type VideoPlan = { readonly key: string; readonly encoding: TierEncoding; readonly preference: RTCDegradationPreference };
+
+const videoPlan = (tier: VideoTier, profile: DataProfile, sharing: boolean): VideoPlan =>
+  sharing && tier !== 'suspended' && tier !== 'frozen'
+    ? { key: 'screen', encoding: SCREEN_ENCODING, preference: 'maintain-resolution' }
+    : { key: `${tier}:${profile}`, encoding: profiledEncoding(TIER_ENCODING[tier], profile), preference: DATA_PROFILES[profile].degradationPreference };
 
 export type QualityLoop = { readonly tick: () => Promise<QualityTick | null> };
 
@@ -55,7 +73,8 @@ async function rewrite(sender: RTCRtpSender | null, change: (encoding: RTCRtpEnc
 export function createQualityLoop(deps: QualityLoopDeps): QualityLoop {
   let survival: SurvivalState = initialSurvival();
   let previous: ReadonlyMap<string, StatsRead> = new Map();
-  let applied: ReadonlyMap<string, string> = new Map();
+  let applied: ReadonlyMap<string, readonly [RTCPeerConnection, string]> = new Map();
+  let steady: ReadonlyMap<string, readonly [RTCPeerConnection, TierState]> = new Map();
   let voiced: ReadonlyMap<string, readonly [RTCPeerConnection, number]> = new Map();
 
   const measure = async ([userId, pc]: readonly [string, RTCPeerConnection]): Promise<readonly [string, RTCPeerConnection, StatsRead] | null> => {
@@ -71,18 +90,24 @@ export function createQualityLoop(deps: QualityLoopDeps): QualityLoop {
     return done ? [userId, [pc, bitrate]] : null;
   };
 
-  const applyTier = async (userId: string, pc: RTCPeerConnection, tier: VideoTier, profile: DataProfile): Promise<readonly [string, string] | null> => {
-    const key = `${tier}:${profile}`;
-    if (applied.get(userId) === key) return [userId, key];
-    const encoding = profiledEncoding(TIER_ENCODING[tier], profile);
-    return (await rewrite(senderOf(pc, 'video'), (current) => ({ ...current, ...encoding }), DATA_PROFILES[profile].degradationPreference)) ? [userId, key] : null;
+  const applyTier = async (userId: string, pc: RTCPeerConnection, plan: VideoPlan): Promise<readonly [string, readonly [RTCPeerConnection, string]] | null> => {
+    const current = applied.get(userId);
+    if (current !== undefined && current[0] === pc && current[1] === plan.key) return [userId, current];
+    const done = await rewrite(senderOf(pc, 'video'), (encoding) => ({ ...encoding, ...plan.encoding, networkPriority: 'high' }), plan.preference);
+    return done ? [userId, [pc, plan.key]] : null;
+  };
+
+  const steadyTierOf = (userId: string, pc: RTCPeerConnection, read: StatsRead, rate: PeerQuality): TierState => {
+    const previousState = steady.get(userId);
+    const state = previousState !== undefined && previousState[0] === pc ? previousState[1] : initialTierState();
+    return stepTier(state, linkTier({ level: rate.level, availableOutgoingBitrate: read.availableOutgoingBitrate, uplinkLoss: read.uplinkLoss }));
   };
 
   let inFlight = false;
 
   const measureAll = async (): Promise<QualityTick | null> => {
     const reads = (await Promise.all(deps.links().map(measure))).filter((entry): entry is readonly [string, RTCPeerConnection, StatsRead] => entry !== null);
-    const rates = reads.map(([userId, pc, read]) => [userId, pc, peerRate(read, previous.get(userId) ?? null)] as const);
+    const rates = reads.map(([userId, pc, read]) => [userId, pc, peerRate(read, previous.get(userId) ?? null), read] as const);
     previous = new Map(reads.map(([userId, , read]) => [userId, read]));
     const total = aggregateQuality(rates.map(([, , rate]) => rate));
     if (total === null) return null;
@@ -91,8 +116,11 @@ export function createQualityLoop(deps: QualityLoopDeps): QualityLoop {
     survival = stepSurvival(survival, { at: deps.now(), level: total.level, wantsVideo });
     const voices = await Promise.all(rates.map(([userId, pc, rate]) => voice(userId, pc, audioBitrateFor(profile, rate.level))));
     voiced = new Map(voices.filter((entry): entry is readonly [string, readonly [RTCPeerConnection, number]] => entry !== null));
-    const tiers = await Promise.all(rates.map(([userId, pc, rate]) => applyTier(userId, pc, wantsVideo ? appliedTier(rate.level, survival.stage) : 'high', profile)));
-    applied = new Map(tiers.filter((entry): entry is readonly [string, string] => entry !== null));
+    const states = rates.map(([userId, pc, rate, read]) => [userId, pc, steadyTierOf(userId, pc, read, rate)] as const);
+    steady = new Map(states.map(([userId, pc, state]) => [userId, [pc, state] as const]));
+    const sharing = deps.sharingScreen?.() === true;
+    const tiers = await Promise.all(states.map(([userId, pc, state]) => applyTier(userId, pc, videoPlan(wantsVideo ? sentTier(state.tier, survival.stage) : 'high', profile, sharing))));
+    applied = new Map(tiers.filter((entry): entry is readonly [string, readonly [RTCPeerConnection, string]] => entry !== null));
     const paths = reads.map(([, , read]) => read.path);
     return {
       total,

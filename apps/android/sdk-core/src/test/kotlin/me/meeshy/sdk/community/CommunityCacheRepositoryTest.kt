@@ -17,7 +17,10 @@ import me.meeshy.sdk.cache.store.inMemoryDatabase
 import me.meeshy.sdk.model.ApiCommunity
 import me.meeshy.sdk.model.ApiCommunityMember
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.CommunityDeletedEvent
+import me.meeshy.sdk.model.CommunityMemberChange
 import me.meeshy.sdk.model.CommunityUpdatedEvent
+import me.meeshy.sdk.model.MemberRole
 import me.meeshy.sdk.model.ContentFetchFailure
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.api.CommunityApi
@@ -172,5 +175,126 @@ class CommunityCacheRepositoryTest {
         repository().applyUpdate(updated("c1", "Renommee"))
 
         assertThat(cache().get("community:detail", "c1", ApiCommunity.serializer())!!.fetchedAt).isEqualTo(fetchedAt)
+    }
+
+    private fun memberChange(
+        userId: String,
+        role: MemberRole?,
+        kind: CommunityMemberChange.Kind = if (role == null) CommunityMemberChange.Kind.LEFT else CommunityMemberChange.Kind.JOINED,
+        memberCount: Int = 3,
+    ) = CommunityMemberChange(kind, "c1", userId, memberCount, role)
+
+    private fun line(userId: String, role: String = "member") = ApiCommunityMember(id = "m-$userId", communityId = "c1", userId = userId, role = role)
+
+    private val membersSerializer = ListSerializer(ApiCommunityMember.serializer())
+    private val pageSerializer = ListSerializer(ApiCommunity.serializer())
+
+    @Test fun `un tiers qui entre recopie l effectif et fait relire la liste des membres tenue`() = runTest {
+        cache().put("community:detail", "c1", community("c1").copy(members = listOf(line("me")), memberCount = 2), ApiCommunity.serializer(), null)
+        cache().put("community:list", "page0", listOf(community("c0"), community("c1")), pageSerializer, null)
+        cache().put("community:members", "c1", listOf(line("me")), membersSerializer, null)
+        coEvery { api.getMembers("c1", any(), any()) } returns ApiResponse(success = true, data = listOf(line("me"), line("u3")))
+
+        repository().applyMemberChange(memberChange("u3", MemberRole.MEMBER), viewerId = "me")
+
+        assertThat(cache().get("community:detail", "c1", ApiCommunity.serializer())!!.value.memberCount).isEqualTo(3)
+        assertThat(cache().get("community:list", "page0", pageSerializer)!!.value.map { it.memberCount }).containsExactly(null, 3).inOrder()
+        assertThat(cache().get("community:members", "c1", membersSerializer)!!.value.map { it.userId }).containsExactly("me", "u3")
+        coVerify(exactly = 0) { api.list(any(), any(), any()) }
+    }
+
+    @Test fun `un depart ou un role suit la liste des membres tenue sans reseau`() = runTest {
+        cache().put("community:members", "c1", listOf(line("me"), line("u2"), line("u3")), membersSerializer, null)
+        val repository = repository()
+
+        repository.applyMemberChange(memberChange("u2", null, memberCount = 2), viewerId = "me")
+        repository.applyMemberChange(memberChange("u3", MemberRole.MODERATOR, CommunityMemberChange.Kind.ROLE_UPDATED, 2), viewerId = "me")
+
+        val members = cache().get("community:members", "c1", membersSerializer)!!.value
+        assertThat(members.map { it.userId to it.communityRole }).containsExactly("me" to MemberRole.MEMBER, "u3" to MemberRole.MODERATOR).inOrder()
+        coVerify(exactly = 0) { api.getMembers(any(), any(), any()) }
+        coVerify(exactly = 0) { api.list(any(), any(), any()) }
+    }
+
+    @Test fun `le lecteur promu tient son nouveau role sans relire sa liste`() = runTest {
+        cache().put("community:detail", "c1", community("c1").copy(members = listOf(line("me"))), ApiCommunity.serializer(), null)
+
+        repository().applyMemberChange(memberChange("me", MemberRole.ADMIN, CommunityMemberChange.Kind.ROLE_UPDATED, 1), viewerId = "me")
+
+        val detail = cache().get("community:detail", "c1", ApiCommunity.serializer())!!.value
+        assertThat(detail.members!!.single().communityRole).isEqualTo(MemberRole.ADMIN)
+        coVerify(exactly = 0) { api.list(any(), any(), any()) }
+    }
+
+    @Test fun `le lecteur retire d une communaute privee n en garde ni membres ni channels et relit sa liste`() = runTest {
+        cache().put("community:detail", "c1", community("c1").copy(isPrivate = true, members = listOf(line("me"))), ApiCommunity.serializer(), null)
+        cache().put("community:members", "c1", listOf(line("me"), line("u2")), membersSerializer, null)
+        cache().put("community:channels", "c1", emptyList(), ListSerializer(me.meeshy.sdk.model.ApiConversation.serializer()), null)
+        coEvery { api.list(any(), any(), any()) } returns listResponse("c0")
+
+        repository().applyMemberChange(memberChange("me", null, memberCount = 1), viewerId = "me")
+
+        val detail = cache().get("community:detail", "c1", ApiCommunity.serializer())!!.value
+        assertThat(detail.members).isEmpty()
+        assertThat(detail.memberCount).isEqualTo(1)
+        assertThat(cache().get("community:members", "c1", membersSerializer)).isNull()
+        assertThat(cache().get("community:channels", "c1", ListSerializer(me.meeshy.sdk.model.ApiConversation.serializer()))).isNull()
+        assertThat(cache().get("community:list", "page0", pageSerializer)!!.value.map { it.id }).containsExactly("c0")
+    }
+
+    @Test fun `le lecteur qui quitte une communaute publique garde la liste des membres, sans sa ligne`() = runTest {
+        cache().put("community:detail", "c1", community("c1").copy(isPrivate = false, members = listOf(line("me"))), ApiCommunity.serializer(), null)
+        cache().put("community:members", "c1", listOf(line("me"), line("u2")), membersSerializer, null)
+        coEvery { api.list(any(), any(), any()) } returns listResponse("c0", "c1")
+
+        repository().applyMemberChange(memberChange("me", null, memberCount = 1), viewerId = "me")
+
+        assertThat(cache().get("community:members", "c1", membersSerializer)!!.value.map { it.userId }).containsExactly("u2")
+    }
+
+    @Test fun `un geste sur une communaute que l appareil ne tient pas ne cree rien`() = runTest {
+        repository().applyMemberChange(memberChange("u3", MemberRole.MEMBER), viewerId = "me")
+
+        assertThat(cache().get("community:detail", "c1", ApiCommunity.serializer())).isNull()
+        assertThat(cache().get("community:members", "c1", membersSerializer)).isNull()
+        coVerify(exactly = 0) { api.getMembers(any(), any(), any()) }
+    }
+
+    @Test fun `community deleted retire la ligne de la liste et oublie fiche, membres et channels`() = runTest {
+        val channels = ListSerializer(me.meeshy.sdk.model.ApiConversation.serializer())
+        cache().put("community:list", "page0", listOf(community("c0"), community("c1")), pageSerializer, null)
+        cache().put("community:detail", "c1", community("c1"), ApiCommunity.serializer(), null)
+        cache().put("community:members", "c1", listOf(line("u2")), membersSerializer, null)
+        cache().put("community:channels", "c1", emptyList(), channels, null)
+        cache().put("community:detail", "c2", community("c2"), ApiCommunity.serializer(), null)
+
+        repository().applyDeleted(CommunityDeletedEvent(communityId = "c1", reason = "deleted"))
+
+        assertThat(cache().get("community:list", "page0", pageSerializer)!!.value.map { it.id }).containsExactly("c0")
+        assertThat(cache().get("community:detail", "c1", ApiCommunity.serializer())).isNull()
+        assertThat(cache().get("community:members", "c1", membersSerializer)).isNull()
+        assertThat(cache().get("community:channels", "c1", channels)).isNull()
+        assertThat(cache().get("community:detail", "c2", ApiCommunity.serializer())).isNotNull()
+        coVerify(exactly = 0) { api.list(any(), any(), any()) }
+    }
+
+    @Test fun `le detail d une communaute disparue repart a froid, donc se relit et rend le refus de la passerelle`() = runTest {
+        cache().put("community:detail", "c1", community("c1"), ApiCommunity.serializer(), null)
+        coEvery { api.get("c1") } throws IOException("404")
+        val repository = repository()
+
+        repository.applyDeleted(CommunityDeletedEvent(communityId = "c1", reason = "deactivated"))
+        val failures = mutableListOf<Throwable>()
+        val results = repository.detail("c1", onError = { failures += it }).take(1).toList()
+
+        assertThat(results.single()).isEqualTo(CacheResult.Empty)
+    }
+
+    @Test fun `une charge sans communaute ne touche a rien`() = runTest {
+        cache().put("community:list", "page0", listOf(community("c1")), pageSerializer, null)
+
+        repository().applyDeleted(CommunityDeletedEvent(communityId = ""))
+
+        assertThat(cache().get("community:list", "page0", pageSerializer)!!.value.map { it.id }).containsExactly("c1")
     }
 }

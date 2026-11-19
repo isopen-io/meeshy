@@ -19,6 +19,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case categoriesReorder
     case consents
     case consentsByPurpose(purpose: String)
+    case contactExchange
     case deleteAccount
     case deleteAccountCancel
     case deleteAccountConfirm
@@ -26,6 +27,8 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case deviceAlive
     case deviceBattery
     case deviceBatterySettings
+    case deviceCall
+    case deviceCallSettings
     case deviceReachabilitySettings
     case engagement
     case export
@@ -54,9 +57,11 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case gameSeasonStepsByStepClaim(step: String)
     case gameShowcaseOrder
     case gameVisibility
+    case liveActivityTokens
     case locationBlood
     case locationBloodSettings
     case locationConsultations
+    case locationGhost
     case locationHistory
     case meeshMint
     case onboarding
@@ -82,6 +87,8 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case stickersByStickerId(stickerId: String)
     case stickersByStickerIdUse(stickerId: String)
     case terms
+    case wellnessOk
+    case wellnessSettings
 
     public var path: String {
         switch self {
@@ -92,6 +99,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .categoriesReorder: return "/api/v1/me/categories/reorder"
         case .consents: return "/api/v1/me/consents"
         case .consentsByPurpose(let purpose): return "/api/v1/me/consents/\(purpose)"
+        case .contactExchange: return "/api/v1/me/contact-exchange"
         case .deleteAccount: return "/api/v1/me/delete-account"
         case .deleteAccountCancel: return "/api/v1/me/delete-account/cancel"
         case .deleteAccountConfirm: return "/api/v1/me/delete-account/confirm"
@@ -99,6 +107,8 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .deviceAlive: return "/api/v1/me/device/alive"
         case .deviceBattery: return "/api/v1/me/device/battery"
         case .deviceBatterySettings: return "/api/v1/me/device/battery/settings"
+        case .deviceCall: return "/api/v1/me/device/call"
+        case .deviceCallSettings: return "/api/v1/me/device/call/settings"
         case .deviceReachabilitySettings: return "/api/v1/me/device/reachability/settings"
         case .engagement: return "/api/v1/me/engagement"
         case .export: return "/api/v1/me/export"
@@ -127,9 +137,11 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .gameSeasonStepsByStepClaim(let step): return "/api/v1/me/game/season/steps/\(step)/claim"
         case .gameShowcaseOrder: return "/api/v1/me/game/showcase/order"
         case .gameVisibility: return "/api/v1/me/game/visibility"
+        case .liveActivityTokens: return "/api/v1/me/live-activity-tokens"
         case .locationBlood: return "/api/v1/me/location/blood"
         case .locationBloodSettings: return "/api/v1/me/location/blood-settings"
         case .locationConsultations: return "/api/v1/me/location/consultations"
+        case .locationGhost: return "/api/v1/me/location/ghost"
         case .locationHistory: return "/api/v1/me/location/history"
         case .meeshMint: return "/api/v1/me/meesh/mint"
         case .onboarding: return "/api/v1/me/onboarding"
@@ -155,6 +167,8 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .stickersByStickerId(let stickerId): return "/api/v1/me/stickers/\(stickerId)"
         case .stickersByStickerIdUse(let stickerId): return "/api/v1/me/stickers/\(stickerId)/use"
         case .terms: return "/api/v1/me/terms"
+        case .wellnessOk: return "/api/v1/me/wellness/ok"
+        case .wellnessSettings: return "/api/v1/me/wellness/settings"
         }
     }
 }

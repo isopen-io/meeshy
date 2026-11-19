@@ -1,16 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="profile_change_avatar">Change photo</string>
     <string name="profile_change_banner">Change cover photo</string>
     <string name="profile_image_error_empty">That file is empty. Pick another photo.</string>
     <string name="profile_image_error_type">Only images can be used here.</string>
     <string name="profile_image_error_too_large">That image is too large. Pick a smaller one.</string>
     <string name="profile_image_error_upload">Upload failed. Check your connection and try again.</string>
-    <string name="profile_member_since">Member since %1$s</string>
-    <string name="profile_last_seen">Last seen %1$s</string>
     <string name="profile_completion">Profile %1$d%% complete</string>
-    <string name="profile_detail_regional_language">Secondary language</string>
-    <string name="profile_detail_timezone">Time zone</string>
     <string name="profile_stat_member_days">Days as member</string>
     <string name="profile_achievements_title">Achievements</string>
     <string name="profile_achievements_unlocked">%1$d of %2$d unlocked</string>
@@ -23,4 +18,20 @@
     <string name="profile_share_qr_cd">QR code for %1$s</string>
     <string name="profile_share_via">Share profile via</string>
     <string name="profile_share_message">%1$s on Meeshy: %2$s</string>
+    <string name="profile_blocked_by_me">You have blocked this user</string>
+    <string name="profile_language_choose">Choose</string>
+    <string name="profile_language_none">None</string>
+    <string name="profile_loadFailed_message">This profile couldn\'t be loaded.</string>
+    <string name="profile_section_languages">LANGUAGES</string>
+    <string name="profile_share_copy">Copy link</string>
+    <string name="profile_toast_report_sent">Report sent</string>
+    <string name="profile_toast_report_failed">Unable to send the report</string>
+    <string name="profile_stats_a11y_hint">Opens the detailed statistics</string>
+    <string name="profile_tab_details">Details</string>
+    <string name="profile_action_send_message">Send a message</string>
+    <string name="profile_section_about">About</string>
+    <string name="profile_stats_memberSince">Member since</string>
+    <string name="profile_status_connected">Connected</string>
+    <string name="profile_voice_title">Voice</string>
+    <string name="shared_location_share_action_a11y">Share my location with %1$s</string>
 </resources>

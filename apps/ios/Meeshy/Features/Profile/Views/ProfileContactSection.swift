@@ -25,62 +25,63 @@ struct ProfileContactSection: View {
         }
     }
 
-    private var theme: ThemeManager { ThemeManager.shared }
-
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            ProfileSectionHeader(icon: "envelope.fill",
-                                 title: String(localized: "profile.section.contact", bundle: .main),
-                                 color: MeeshyColors.indigo300)
-            VStack(spacing: 0) {
-                row(.email, icon: "envelope.fill",
-                    title: String(localized: "profile.email", bundle: .main),
-                    value: Self.displayedEmail(email), verified: Self.isFilled(email) ? isEmailVerified : nil,
-                    identifier: "profile.contact.email")
-                row(.phone, icon: "phone.fill",
-                    title: String(localized: "profile.phone", bundle: .main),
-                    value: Self.displayedPhone(phoneNumber), verified: Self.isFilled(phoneNumber) ? isPhoneVerified : nil,
-                    identifier: "profile.contact.phone")
+            MeeshySectionHeader(title: Self.title)
+            MeeshyGroupCard(layout: .group, tint: Color(hex: accentHex), label: Self.title) {
+                VStack(spacing: 0) {
+                    row(.email, icon: "envelope.fill",
+                        title: String(localized: "profile.email", bundle: .main),
+                        value: Self.displayedEmail(email), verified: Self.isFilled(email) ? isEmailVerified : nil,
+                        identifier: "profile.contact.email")
+                    row(.phone, icon: "phone.fill",
+                        title: String(localized: "profile.phone", bundle: .main),
+                        value: Self.displayedPhone(phoneNumber), verified: Self.isFilled(phoneNumber) ? isPhoneVerified : nil,
+                        identifier: "profile.contact.phone")
+                }
             }
-            .background(ProfileSectionCard(tintHex: accentHex))
         }
     }
 
+    /// Une rangée K06 : le champ, sa valeur, la pastille K41 de vérification à côté du titre, et le chevron vers Sécurité.
     private func row(_ field: Field, icon: String, title: String, value: String?, verified: Bool?, identifier: String) -> some View {
-        Button {
-            HapticFeedback.light()
-            onOpenSecurity(field.securityFocus)
-        } label: {
-            HStack(spacing: MeeshySpacing.md) {
-                ProfileFieldIcon(name: icon, accentColor: accentHex)
-                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                    Text(title)
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                        .foregroundStyle(theme.textMuted)
-                    Text(value ?? "—")
-                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                        .foregroundColor(value != nil ? theme.textPrimary : theme.textMuted)
-                }
-                Spacer()
-                if let verified { ProfileVerificationBadge(isVerified: verified) }
-                Image(systemName: "chevron.forward")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundStyle(theme.textMuted)
-                    .accessibilityHidden(true)
-            }
-            .padding(.horizontal, MeeshySpacing.mdPlus)
-            .padding(.vertical, MeeshySpacing.smPlus)
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
+        MeeshyToggleRow(content: Self.rowContent(title: title, value: value, verified: verified),
+                        action: { onOpenSecurity(field.securityFocus) },
+                        leading: { MeeshyToggleRowSymbol(icon) },
+                        titleAccessory: { verificationBadge(verified) },
+                        trailing: { MeeshyToggleRowNoSlot() })
+            .accessibilityHint(Self.openSecurityHint)
+            .accessibilityIdentifier(identifier)
+    }
+
+    @ViewBuilder
+    private func verificationBadge(_ verified: Bool?) -> some View {
+        if let verified {
+            MeeshyBadge(.label(Self.verificationWord(isVerified: verified)),
+                        leading: .systemImage(verified ? "checkmark.seal.fill" : "exclamationmark.shield.fill"),
+                        kind: verified ? .ok : .warn)
         }
-        .buttonStyle(PressableButtonStyle())
-        .accessibilityElement(children: .combine)
-        .accessibilityHint(Self.openSecurityHint)
-        .accessibilityIdentifier(identifier)
+    }
+
+    static var title: String {
+        String(localized: "profile.section.contact", bundle: .main)
+    }
+
+    /// Ce que la rangée montre et dit : la valeur (ou un tiret), et l'état de vérification que la pastille, muette, ne
+    /// dit pas à VoiceOver. Un contact absent n'a rien à vérifier.
+    static func rowContent(title: String, value: String?, verified: Bool?) -> MeeshyToggleRowContent {
+        MeeshyToggleRowContent(title: title, subtitle: value ?? "—", accessory: .chevron,
+                               titleAccessoryLabel: verified.map { verificationWord(isVerified: $0) })
+    }
+
+    static func verificationWord(isVerified: Bool) -> String {
+        isVerified
+            ? String(localized: "profile.verified", bundle: .main)
+            : String(localized: "profile.not_verified", bundle: .main)
     }
 
     static var openSecurityHint: String {
-        String(localized: "profile.contact.open.hint", defaultValue: "Ouvre Sécurité, où se change et se vérifie ce contact", bundle: .main)
+        String(localized: "profile.contact.open.a11y", defaultValue: "Ouvre Sécurité, où se change et se vérifie ce contact", bundle: .main)
     }
 
     private static func isFilled(_ value: String?) -> Bool { !(value ?? "").isEmpty }
@@ -90,21 +91,5 @@ struct ProfileContactSection: View {
     private static func displayedPhone(_ phone: String?) -> String? {
         guard let phone, !phone.isEmpty else { return nil }
         return "\(CountryPicker.flag(forPhoneNumber: phone)) \(phone)"
-    }
-}
-
-/// « Vérifié » / « Non vérifié », en pastille de couleur sémantique.
-struct ProfileVerificationBadge: View {
-    let isVerified: Bool
-
-    var body: some View {
-        Text(isVerified
-             ? String(localized: "profile.verified", bundle: .main)
-             : String(localized: "profile.not_verified", bundle: .main))
-            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-            .foregroundColor(.white)
-            .padding(.horizontal, MeeshySpacing.xsPlus)
-            .padding(.vertical, MeeshySpacing.xxs)
-            .background(Capsule().fill(isVerified ? MeeshyColors.success : MeeshyColors.warning))
     }
 }

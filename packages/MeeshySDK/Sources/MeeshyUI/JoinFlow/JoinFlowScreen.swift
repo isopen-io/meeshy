@@ -65,6 +65,9 @@ public struct JoinFlowScreen<ViewModel: JoinFlowModeling>: View {
                 case .success:
                     successState
                         .transition(.scale.combined(with: .opacity))
+                case .gone:
+                    goneState
+                        .transition(.opacity)
                 case .error(let message):
                     errorState(message)
                         .transition(.opacity)
@@ -213,6 +216,55 @@ public struct JoinFlowScreen<ViewModel: JoinFlowModeling>: View {
     }
 
     // MARK: - Error
+
+    /// Le lien n'est plus valable (planche `Etat-Erreur` vue 3) : le billet barré du lien (K30), le bloc d'état (K38)
+    /// sans « Réessayer » — le lien ne reviendra pas —, la carte de son créateur (K39), puis « Fermer ». Billet et carte
+    /// ne viennent que de l'aperçu déjà servi : un lien mort dès l'ouverture garde le seul bloc d'état.
+    private var goneState: some View {
+        let gone = JoinFlowGoneLink(info: viewModel.linkInfo)
+        return ScrollView(showsIndicators: false) {
+            VStack(spacing: MeeshySpacing.xl) {
+                Spacer(minLength: MeeshySpacing.xxl)
+                if let gone { goneTicket(gone) }
+                MeeshyStateBlock(
+                    kind: .denied,
+                    title: JoinFlowCopy.goneTitle(in: .module),
+                    message: JoinFlowCopy.goneMessage(creatorFirstName: gone?.creator?.firstName, in: .module),
+                    primary: nil,
+                    art: gone == nil ? .glyph : .none,
+                    systemImage: "link"
+                )
+                if let creator = gone?.creator { goneCreator(creator) }
+                MeeshyButton(String(localized: "joinFlow.error.close", defaultValue: "Fermer", bundle: .module),
+                             systemImage: "xmark", width: .fill, action: { dismiss() })
+            }
+            .padding(.horizontal, MeeshySpacing.xl)
+            .padding(.bottom, MeeshySpacing.xxl)
+        }
+        .accessibilityIdentifier("joinFlow.gone")
+    }
+
+    private func goneTicket(_ gone: JoinFlowGoneLink) -> some View {
+        let title = gone.title ?? JoinFlowCopy.goneInvitation(in: .module)
+        let address = ShareLinkAddress(linkId: gone.linkId).displayString
+        return MeeshyTicket(title: title, code: address, tint: theme.textMuted, systemImage: "bubble.left.and.bubble.right",
+                            size: .row, kind: .struck,
+                            label: JoinFlowCopy.goneTicketLabel(title: title, address: address, in: .module))
+            .rotationEffect(.degrees(-2.5))
+            .padding(.horizontal, MeeshySpacing.md)
+            .accessibilityIdentifier("joinFlow.gone.ticket")
+    }
+
+    private func goneCreator(_ creator: JoinFlowGoneLink.Creator) -> some View {
+        MeeshyPersonRow(title: creator.name, subtitle: "@\(creator.username)",
+                        meta: JoinFlowCopy.goneCreatorCaption(in: .module), showsDivider: false,
+                        avatar: {
+                            MeeshyAvatar(name: creator.name, context: .userListItem,
+                                         accentColor: DynamicColorGenerator.colorForName(creator.username),
+                                         avatarURL: creator.avatar, isDark: isDark)
+                        })
+            .accessibilityIdentifier("joinFlow.gone.creator")
+    }
 
     private func errorState(_ message: String) -> some View {
         VStack(spacing: MeeshySpacing.xl) {

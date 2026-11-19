@@ -93,6 +93,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
 import { MentionService, MentionSuggestion, MentionValidationResult, resolveMentionedUsers, resolveUsernamesToIds } from '../../../services/MentionService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../../../services/CacheStore';
+import { findUniqueIn } from '../../helpers/mongo-where';
 
 describe('MentionService', () => {
   let service: MentionService;
@@ -1405,107 +1406,6 @@ describe('MentionService', () => {
     });
   });
 
-  // ==============================================
-  // CAN MENTION USER TESTS
-  // ==============================================
-
-  describe('canMentionUser', () => {
-    const conversationId = 'conv-123';
-    const userId = 'user-to-mention';
-
-    it('should return false when conversation not found', async () => {
-      prisma.conversation.findUnique.mockResolvedValue(null);
-
-      const result = await service.canMentionUser(conversationId, userId);
-
-      expect(result).toBe(false);
-    });
-
-    describe('Public/Global conversations', () => {
-      it('should return true for active user in public conversation', async () => {
-        prisma.conversation.findUnique.mockResolvedValue({
-          id: conversationId,
-          type: 'public',
-        });
-        prisma.user.findUnique.mockResolvedValue({ id: userId });
-
-        const result = await service.canMentionUser(conversationId, userId);
-
-        expect(result).toBe(true);
-      });
-
-      it('should return true for active user in global conversation', async () => {
-        prisma.conversation.findUnique.mockResolvedValue({
-          id: conversationId,
-          type: 'global',
-        });
-        prisma.user.findUnique.mockResolvedValue({ id: userId });
-
-        const result = await service.canMentionUser(conversationId, userId);
-
-        expect(result).toBe(true);
-      });
-
-      it('should return false for non-existent user in public conversation', async () => {
-        prisma.conversation.findUnique.mockResolvedValue({
-          id: conversationId,
-          type: 'public',
-        });
-        prisma.user.findUnique.mockResolvedValue(null);
-
-        const result = await service.canMentionUser(conversationId, userId);
-
-        expect(result).toBe(false);
-      });
-    });
-
-    describe('Private/Direct/Group conversations', () => {
-      it('should return true when user is active member', async () => {
-        prisma.conversation.findUnique.mockResolvedValue({
-          id: conversationId,
-          type: 'direct',
-        });
-        prisma.participant.findFirst.mockResolvedValue({
-          userId,
-          isActive: true,
-        });
-
-        const result = await service.canMentionUser(conversationId, userId);
-
-        expect(result).toBe(true);
-      });
-
-      it('should return false when user is not a member', async () => {
-        prisma.conversation.findUnique.mockResolvedValue({
-          id: conversationId,
-          type: 'group',
-        });
-        prisma.participant.findFirst.mockResolvedValue(null);
-
-        const result = await service.canMentionUser(conversationId, userId);
-
-        expect(result).toBe(false);
-      });
-
-      it('should check for active membership', async () => {
-        prisma.conversation.findUnique.mockResolvedValue({
-          id: conversationId,
-          type: 'direct',
-        });
-        prisma.participant.findFirst.mockResolvedValue(null);
-
-        await service.canMentionUser(conversationId, userId);
-
-        expect(prisma.participant.findFirst).toHaveBeenCalledWith({
-          where: {
-            conversationId,
-            userId,
-            isActive: true,
-          },
-        });
-      });
-    });
-  });
 
   // ==============================================
   // EDGE CASES AND ERROR HANDLING

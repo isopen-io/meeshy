@@ -28,6 +28,10 @@ import type { AccountActivation } from '../account-activation.js';
  * `null` sur `displayName`/`firstName`/`lastName` signifie EFFACÉ, et c'est le
  * seul moyen pour le client de faire retomber le nom sur le composant suivant.
  * `username` est obligatoire côté base, donc jamais `null`.
+ *
+ * `profileAccentColor` (#19201) : la couleur d'accent de la vitrine, une teinte de
+ * `PROFILE_ACCENT_HEXES` ; `null` = retour à l'accent CALCULÉ. Champ ajouté, qu'un ancien
+ * client ignore. Il part aussi vers les AUTRES appareils de la personne, pour les repeindre.
  */
 export interface UserUpdatedEventData {
   readonly userId: string;
@@ -38,7 +42,22 @@ export interface UserUpdatedEventData {
     username?: string;
     firstName?: string | null;
     lastName?: string | null;
+    profileAccentColor?: string | null;
   }>;
+}
+
+/**
+ * Payload de `USER_PROFILE_CHANGED` (#19384) — la fiche de `userId` a changé
+ * (bio, ville, langues, voix, décor, adresses). AUCUN contenu : chaque lecteur
+ * a sa propre fiche, découpée par son cercle, et la revalide par
+ * `GET /directory/people/:handle` avec `If-None-Match`. AUCUNE horloge non plus :
+ * le signal part à chaque geste silencieux du sujet, et une heure exacte dirait
+ * à quelle seconde il était actif — `If-None-Match` suffit à écarter un signal
+ * déjà lu. Audience : liés de niveau Connaissance ou plus et partenaires de
+ * conversations directes, hors blocage.
+ */
+export interface UserProfileChangedEventData {
+  readonly userId: string;
 }
 
 export interface UserPermissions {
@@ -68,6 +87,7 @@ export interface SocketIOUser {
   readonly displayName?: string;
   readonly avatar?: string;
   readonly banner?: string;  // Profile banner/cover image
+  readonly profileAccentColor?: string | null;  // #19201 : accent de la vitrine, null = automatique
   readonly bio?: string;
   readonly role: string;
   readonly permissions?: UserPermissions;

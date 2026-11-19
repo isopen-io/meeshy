@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 import os
 
 // MARK: - Sélection de la colonne de détail
@@ -177,13 +178,13 @@ extension iPadRootView {
                 await StoryDoor(tray: storyViewModel, viewer: storyViewerCoordinator)
                     .open(postId: postId) { rightPanelRoute = .postDetail(postId) }
             }
-        case .userProfile(let username):
+        case .userProfile(let username, let face):
             // Opens the profile sheet over the two-pane layout. Same
             // surface as friend-request notification taps above
             // (handleNotificationTap → router.deepLinkProfileUser). Même
             // fabrique que `RootView` : un `/l/<token>` de type PROFILE porte
             // un userId, pas un pseudo.
-            router.deepLinkProfileUser = ProfileSheetUser.from(idOrUsername: username)
+            router.deepLinkProfileUser = ProfileSheetUser.from(idOrUsername: username).opening(on: face)
         case .ownProfile:
             // iPad surfaces own profile + user links in the right column,
             // matching the existing achievement / affiliate notification
@@ -375,12 +376,10 @@ extension iPadRootView {
 
         case .friendRequest, .contactRequest, .legacyFriendRequest,
              .friendAccepted, .contactAccepted, .legacyFriendAccepted,
-             .contactJoined, .contactRecentlyActive, .deviceBattery, .deviceUnreachable, .legacyStatusUpdate:
+             .contactJoined, .contactRecentlyActive, .relationAcquaintance, .deviceBattery, .deviceUnreachable,
+             .inactivityAlert, .legacyStatusUpdate:
             if let senderId = ctx.senderId {
-                router.deepLinkProfileUser = ProfileSheetUser(
-                    userId: senderId,
-                    username: ctx.senderUsername ?? senderId
-                )
+                router.deepLinkProfileUser = ProfileSheetUser(userId: senderId, username: ctx.senderUsername ?? senderId)
             }
 
         case .communityInvite, .communityJoined, .communityLeft,
@@ -423,7 +422,7 @@ extension iPadRootView {
              .postComment, .legacyPostComment, .commentLike, .commentReply, .commentReaction,
              .storyReaction, .statusReaction, .contentRemoved,
              .storyNewComment, .friendStoryComment, .storyThreadReply,
-             .friendNewStory, .friendNewMood:
+             .friendNewStory, .friendNewMood, .friendContentReaction, .friendContentShare, .friendContentRepost, .friendContentQuote:
             openSocialNotification(ctx)
 
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
@@ -444,6 +443,8 @@ extension iPadRootView {
              .system, .maintenance, .updateAvailable, .voiceCloneReady, .reportResolved:
             // Pas d'entité cible : le panneau des notifications plutôt qu'un tap muet.
             rightPanelRoute = .notifications
+
+        case .wellnessCheck: Task { await InactivityCheckCenter.shared.answerWellness() } // « Je vais bien » (#18738)
         }
     }
 

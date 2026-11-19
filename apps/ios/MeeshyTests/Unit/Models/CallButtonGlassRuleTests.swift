@@ -1,5 +1,6 @@
 import XCTest
 import CoreGraphics
+import MeeshyUI
 @testable import Meeshy
 
 /// #17323 — la loi pure qui choisit le traitement de verre de CHAQUE bouton de
@@ -80,6 +81,23 @@ final class CallButtonGlassRuleTests: XCTestCase {
         ))
         let image = try XCTUnwrap(context.makeImage())
         XCTAssertFalse(CallPillChipArt.image(image).carriesGlass)
+    }
+
+    /// #19239 — sous iOS 26 un verre ne peut pas lire un autre verre : posés dans
+    /// la pilule de verre, les boutons fondaient en formes molles et leurs icônes
+    /// passaient dessous. Les boutons étant les verres, le bloc qui les porte n'en
+    /// est plus un ; avant iOS 26 le verre dessiné se superpose sans défaut.
+    func test_controlsBlock_carriesNoGlassOfItsOwn_whereItsButtonsAreLiquidGlass() {
+        XCTAssertFalse(CallControlsBlockRule.carriesItsOwnGlass(isLiquidGlassAvailable: true))
+        XCTAssertTrue(CallControlsBlockRule.carriesItsOwnGlass(isLiquidGlassAvailable: false))
+    }
+
+    /// Sans verre, le bloc reste lisible sur une image claire : son fond sombre
+    /// est plus dense que le voile posé sous un verre, et son liseré le détache.
+    func test_controlsBlock_backdrop_isDenserThanTheVeilUnderAGlass() {
+        XCTAssertGreaterThan(CallControlsBlockRule.backdropOpacity, MeeshyOpacity.light)
+        XCTAssertLessThan(CallControlsBlockRule.backdropOpacity, 1)
+        XCTAssertGreaterThan(CallControlsBlockRule.rimOpacity, 0)
     }
 
     /// L1.3 — en appel vidéo le haut-parleur démarre allumé d'office : c'est l'état

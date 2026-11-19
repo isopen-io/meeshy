@@ -2,7 +2,7 @@ package me.meeshy.sdk.model.scene
 
 /**
  * The pure, Compose-agnostic fade timing of an on-canvas text element — parity with the
- * iOS `StoryTextEditorView` fade in/out fields (`StoryTextObject.fadeIn` / `fadeOut`,
+ * iOS `StoryInlineTextEditor` fade in/out fields (`StoryTextObject.fadeIn` / `fadeOut`,
  * seconds, `0…5`).
  *
  * Held as a flat ([inSeconds], [outSeconds]) pair because the two ends are independent —

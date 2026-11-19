@@ -72,6 +72,8 @@ import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.R as UiR
 import me.meeshy.sdk.model.composer.look.ComposerLookPerson
 import me.meeshy.ui.component.battery.BatterySharingSwitch
+import me.meeshy.ui.component.inactivity.InactivityDelaySetting
+import me.meeshy.ui.component.phonecall.PhoneCallSharingSwitch
 import me.meeshy.ui.component.phonereachability.PhoneReachabilitySharingSwitch
 import me.meeshy.ui.component.retouch.EntityImageRetouchHost
 import me.meeshy.ui.component.retouch.rememberEntityImageRetouch
@@ -109,6 +111,7 @@ fun OwnProfileScreen(
     val uploadState by uploadViewModel.state.collectAsStateWithLifecycle()
     val onEvent = viewModel::onEvent
     var isSharing by rememberSaveable { mutableStateOf(false) }
+    var isPreviewing by rememberSaveable { mutableStateOf(false) }
     var pickingSlot by rememberSaveable { mutableStateOf<OwnProfileLanguageSlot?>(null) }
     var fullscreen by remember { mutableStateOf<ProfileFullscreenImage?>(null) }
     val mediaBaseUrl = LocalMediaBaseUrl.current
@@ -140,6 +143,7 @@ fun OwnProfileScreen(
                     state = state,
                     isUploading = uploadState.uploading != null,
                     onShare = { isSharing = true },
+                    onPreviewAs = { isPreviewing = true },
                     onEvent = onEvent,
                 )
             },
@@ -176,6 +180,7 @@ fun OwnProfileScreen(
     fullscreen?.let { image -> ProfileFullscreenImageViewer(image = image, onDismiss = { fullscreen = null }) }
     val share = state.user?.let(ProfileShareBuilder::build)
     if (isSharing && share != null) ProfileShareSheet(share = share, onDismiss = { isSharing = false })
+    if (isPreviewing) VitrineAsCircleSheet(onDismiss = { isPreviewing = false })
 }
 
 
@@ -325,6 +330,10 @@ internal fun OwnProfileBody(
             BatterySharingSwitch()
             // Prévenir mes Proches si mon téléphone est injoignable (#18737) : la coupure globale, dans MON profil.
             PhoneReachabilitySharingSwitch()
+            // Vérification d'inactivité (#18738) : 6 h / 12 h / 24 h / Désactivée, pour tous, dans MON profil.
+            InactivityDelaySetting()
+            // Montrer à mes Sangs que je suis en appel (#18753) : la coupure globale, collecte comprise, dans MON profil.
+            PhoneCallSharingSwitch()
         }
         Spacer(Modifier.height(MeeshySpacing.xxxl + MeeshySpacing.sm))
     }
@@ -336,6 +345,7 @@ private fun OwnProfileTrailing(
     state: OwnProfileUiState,
     isUploading: Boolean,
     onShare: () -> Unit,
+    onPreviewAs: () -> Unit,
     onEvent: (OwnProfileUiEvent) -> Unit,
 ) {
     if (state.isSaving || isUploading) {
@@ -345,6 +355,13 @@ private fun OwnProfileTrailing(
             modifier = Modifier.padding(horizontal = MeeshySpacing.md).size(20.dp),
         )
         return
+    }
+    if (!state.isEditing && state.user != null) {
+        CollapsibleHeaderActionButton(
+            icon = MeeshyIcons.Eye,
+            contentDescription = stringResource(R.string.vitrine_as_title),
+            onClick = onPreviewAs,
+        )
     }
     if (!state.isEditing && state.user?.let(ProfileShareBuilder::build) != null) {
         CollapsibleHeaderActionButton(

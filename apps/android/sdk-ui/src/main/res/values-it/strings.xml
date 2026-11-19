@@ -8,11 +8,6 @@
     <string name="bubble_reply_attachment">Allegato</string>
     <string name="bubble_file_open">Apri file</string>
     <string name="live_location_remaining">%1$s rimanenti</string>
-    <string name="live_location_duration_15m">15 min</string>
-    <string name="live_location_duration_30m">30 min</string>
-    <string name="live_location_duration_1h">1 ora</string>
-    <string name="live_location_duration_2h">2 ore</string>
-    <string name="live_location_duration_8h">8 ore</string>
     <string name="bubble_audio_play">Riproduci messaggio vocale</string>
     <string name="bubble_file_size_bytes">%1$s B</string>
     <string name="bubble_file_size_kb">%1$s KB</string>
@@ -43,4 +38,6 @@
     <string name="bubble_a11y_file">File %1$s</string>
     <string name="bubble_a11y_pinned">Fissato</string>
     <string name="bubble_a11y_ephemeral">Messaggio a autodistruzione</string>
+    <string name="skeleton_link_row_loading">Caricamento di un link</string>
+    <string name="talkie_send_voice">Il walkie-talkie ora non passa: invia un messaggio vocale.</string>
 </resources>

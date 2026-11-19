@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="chat_composer_end_to_end">Esta conversa tem criptografia de ponta a ponta: escreva nela pelo app Meeshy no iPhone</string>
-    <string name="chat_menu_e2ee_signals_notice">Reagir, fixar e apagar para todos: pelo app Meeshy no iPhone.</string>
-    <string name="chat_menu_e2ee_signals_notice_alone">Criptografada de ponta a ponta: reagir, fixar e apagar para todos são feitos pelo app Meeshy no iPhone.</string>
+    <string name="chat_composer_end_to_end">Esta conversa criptografada ainda não pode ser escrita deste dispositivo</string>
+    <string name="chat_menu_e2ee_signals_notice">Reagir, fixar e apagar para todos: ainda não neste dispositivo.</string>
+    <string name="chat_menu_e2ee_signals_notice_alone">Criptografada de ponta a ponta: reagir, fixar e apagar para todos, ainda não aqui.</string>
+    <string name="chat_e2ee_send_not_sent">Mensagem criptografada não enviada: o seu texto voltou ao campo</string>
 </resources>

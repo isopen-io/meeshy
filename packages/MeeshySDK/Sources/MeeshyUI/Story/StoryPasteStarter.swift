@@ -4,8 +4,8 @@ import MeeshySDK
 
 // MARK: - La capsule « Coller » — règles pures
 //
-// Elles vivaient en `static` de `StoryComposerView`, l'atelier du SDK retiré au
-// #15629 ; la capsule et le rail du composer unifié les lisent ici.
+// Elles vivaient en `static` de la vue de l'atelier du SDK, retiré au #15629 ;
+// la capsule et le rail du composer unifié les lisent ici.
 
 public nonisolated enum StoryPasteStarter {
     /// Règle PURE de l'offre de collage.

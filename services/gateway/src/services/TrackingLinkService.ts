@@ -1,15 +1,18 @@
 import { randomInt } from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { TrackingLink, TrackingLinkClick } from '@meeshy/shared/types/tracking-link';
+import { TrackingLink, TrackingLinkClick, TrackingTargetType } from '@meeshy/shared/types/tracking-link';
 import { TrackingTargetCarriesEmailSecretError, isServableTrackingTarget, servedTrackingLinkTarget } from './tracking-link-target';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { EngagementService } from './engagement/EngagementService';
+import { addressLinkOpensTo } from './profile-addresses/address-link-gate';
 import type { LinkVisitor, LinkVisitRecorder } from '../routes/links/utils/link-visitor';
 import {
   clickStatsPipeline,
   foldClickStatsFacet,
+  type ClickPlace,
   type ClickStatsFacet,
 } from './trackingLinkClickAggregation';
+import { LINK_WRITINGS_SOURCE, linkOccurrences } from './trackingLinkOccurrences';
 
 const logger = enhancedLogger.child({ module: 'TrackingLinkService' });
 
@@ -20,27 +23,6 @@ const logger = enhancedLogger.child({ module: 'TrackingLinkService' });
  * lisible sont préservés). Source UNIQUE produite par `collectContentTrackingLinks`.
  */
 export type ContentTrackingLink = { url: string; token: string };
-
-const RAW_URL_SOURCE = String.raw`https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&\/=]*)`;
-
-/**
- * Les écritures d'un lien, lues dans l'ordre du texte (#9093). À une même
- * position, la plus longue gagne : `[[url]]` (groupe absent : jamais suivi),
- * `[libellé](url)` (groupe 1 : suivi par la carte, jamais réécrit) puis l'URL
- * brute (groupe 2). Sans cette lecture, la détection brute attrapait l'adresse
- * d'un `[[…]]` et emportait la parenthèse fermante d'un lien markdown.
- */
-const LINK_WRITINGS_SOURCE = String.raw`\[\[[^\]\n]+\]\]|\[[^\]\n]+\]\((https?:\/\/[^)\s]+)\)|(${RAW_URL_SOURCE})`;
-
-type LinkOccurrence = { readonly url: string; readonly raw: boolean };
-
-function linkOccurrences(content: string): LinkOccurrence[] {
-  return [...content.matchAll(new RegExp(LINK_WRITINGS_SOURCE, 'gi'))].flatMap((match): LinkOccurrence[] => {
-    if (match[1]) return [{ url: match[1], raw: false }];
-    if (match[2]) return [{ url: match[2], raw: true }];
-    return [];
-  });
-}
 
 /**
  * Source UNIQUE de l'URL du frontend pour bâtir les liens `/l/<token>`.
@@ -89,6 +71,9 @@ const reuseScopeWhere = (scope: TrackingLinkReuseScope) =>
   scope.kind === 'conversation'
     ? { conversationId: scope.conversationId }
     : { createdBy: scope.createdBy, ...(scope.conversationId ? { conversationId: scope.conversationId } : {}) };
+
+/** Le lien d'une adresse de fiche lui appartient (#18863) : aucun contenu ne le réutilise. */
+const NOT_AN_ADDRESS_LINK = { OR: [{ addressId: null }, { addressId: { isSet: false } }] };
 
 /**
  * La portée d'un contenu (message, post, story, commentaire) : la conversation
@@ -199,6 +184,13 @@ export class TrackingLinkService {
     messageId?: string;
     expiresAt?: Date;
     customToken?: string;
+    /** L'adresse de fiche dont ce lien est le lien DÉDIÉ (#18863). */
+    addressId?: string;
+    /** La cible MEESHY du lien (#19418) — vérifiée par l'appelant, jamais ici. */
+    targetType?: Exclude<TrackingTargetType, 'EXTERNAL'>;
+    targetId?: string;
+    /** `false` ⇒ les clics de ce lien ne comptent aucun visiteur unique (#19418). */
+    countUnique?: boolean;
     /**
      * `true` ⇒ la création est un geste de l'auteur (`POST /tracking-links`)
      * et lui paie `social.tracked_link`. La réécriture automatique des URL
@@ -238,6 +230,9 @@ export class TrackingLinkService {
         conversationId: params.conversationId,
         messageId: params.messageId,
         expiresAt: params.expiresAt,
+        ...(params.addressId ? { addressId: params.addressId } : {}),
+        ...(params.targetType && params.targetId ? { targetType: params.targetType, targetId: params.targetId } : {}),
+        ...(params.countUnique === false ? { countUnique: false } : {}),
         isActive: true,
         totalClicks: 0,
         uniqueClicks: 0
@@ -278,8 +273,9 @@ export class TrackingLinkService {
    * mais marqué `isActive: false` (la page/app décide). Renvoie `null` si aucun
    * lien ne correspond (→ 404 côté route).
    */
-  async resolveTarget(token: string): Promise<ResolvedLinkTarget | null> {
+  async resolveTarget(token: string, viewerId?: string): Promise<ResolvedLinkTarget | null> {
     const link = await this.prisma.trackingLink.findUnique({ where: { token } });
+    if (link && !(await addressLinkOpensTo(this.prisma, link, viewerId))) return null;
     if (link) {
       const servable = isServableTrackingTarget(link.originalUrl);
       return {
@@ -324,9 +320,19 @@ export class TrackingLinkService {
    */
   async findExistingTrackingLink(originalUrl: string, scope: TrackingLinkReuseScope): Promise<TrackingLink | null> {
     const trackingLink = await this.prisma.trackingLink.findFirst({
-      where: { originalUrl, isActive: true, ...reuseScopeWhere(scope) }
+      where: { originalUrl, isActive: true, ...reuseScopeWhere(scope), ...NOT_AN_ADDRESS_LINK }
     });
 
+    return trackingLink as TrackingLink | null;
+  }
+
+  /**
+   * Le lien que cet auteur a déjà pour cette cible MEESHY (#19418), quel que
+   * soit son état : l'index unique partiel `(targetId, createdBy)` n'en admet
+   * qu'un, et `shareWithTrackingLink` le réutilise de même.
+   */
+  async findTargetTrackingLink(targetId: string, createdBy: string): Promise<TrackingLink | null> {
+    const trackingLink = await this.prisma.trackingLink.findFirst({ where: { targetId, createdBy } });
     return trackingLink as TrackingLink | null;
   }
 
@@ -371,8 +377,8 @@ export class TrackingLinkService {
     /** Le visiteur établi par le SERVEUR (`linkVisitorFromRequest`) — absent ⇒ rien n'est crédité. */
     visitor?: LinkVisitor;
   }): Promise<{ trackingLink: TrackingLink; click: TrackingLinkClick }> {
-    // Vérifier que le lien existe et est actif
-    const trackingLink = await this.getTrackingLinkByToken(params.token);
+    const found = await this.getTrackingLinkByToken(params.token);
+    const trackingLink = found && (await addressLinkOpensTo(this.prisma, found, params.userId)) ? found : null;
 
     if (!trackingLink) {
       throw new Error('Tracking link not found');
@@ -387,7 +393,8 @@ export class TrackingLinkService {
     }
 
     // Vérifier si c'est un clic unique (basé sur IP + device fingerprint)
-    const isUnique = await this.isUniqueClick(
+    // `countUnique: false` (#19418) : l'auteur a choisi de ne pas compter les visiteurs uniques.
+    const isUnique = trackingLink.countUnique !== false && await this.isUniqueClick(
       trackingLink.id,
       params.ipAddress,
       params.deviceFingerprint
@@ -525,6 +532,8 @@ export class TrackingLinkService {
     clicksByDate: { [date: string]: number };
     topReferrers: { referrer: string; count: number }[];
     confirmedClicks: number;
+    countryCount: number;
+    clicksByPlace: ClickPlace[];
   }> {
     const trackingLink = await this.getTrackingLinkByToken(token);
 
@@ -544,7 +553,8 @@ export class TrackingLinkService {
       }),
     })) as unknown as ReadonlyArray<ClickStatsFacet>;
 
-    const agrege = foldClickStatsFacet(facet);
+    // Le lien d'une adresse de fiche peut n'avoir qu'un lecteur : aucune ville (#19175).
+    const agrege = foldClickStatsFacet(facet, { citiesServed: !trackingLink.addressId });
 
     // Source unique = le compteur STOCKÉ (incrémenté à l'écriture), pour que tous
     // les endpoints renvoient le MÊME nombre. Le recalcul max(IPs, fingerprints)
@@ -575,7 +585,9 @@ export class TrackingLinkService {
       clicksByHour: agrege.clicksByHour,
       clicksBySocialSource: agrege.clicksBySocialSource,
       clicksByDate: agrege.clicksByDate,
-      topReferrers: [...agrege.topReferrers]
+      topReferrers: [...agrege.topReferrers],
+      countryCount: agrege.countryCount,
+      clicksByPlace: [...agrege.clicksByPlace]
     };
   }
 
@@ -933,6 +945,10 @@ export class TrackingLinkService {
   async updateTrackingLink(params: {
     token: string;
     originalUrl?: string;
+    name?: string | null;
+    campaign?: string | null;
+    source?: string | null;
+    medium?: string | null;
     expiresAt?: Date | null;
     isActive?: boolean;
     newToken?: string;
@@ -947,30 +963,20 @@ export class TrackingLinkService {
       throw new TrackingTargetCarriesEmailSecretError();
     }
 
-    // Si un nouveau token est fourni, vérifier qu'il n'existe pas déjà
-    if (params.newToken && params.newToken !== params.token) {
-      const existingWithNewToken = await this.tokenExists(params.newToken);
-      if (existingWithNewToken) {
-        throw new Error('Token already exists');
-      }
+    const renamed = Boolean(params.newToken && params.newToken !== params.token);
+    if (renamed && await this.tokenExists(params.newToken!)) {
+      throw new Error('Token already exists');
     }
 
-    // Mettre à jour le lien
-    const updateData: any = {};
-
-    if (params.originalUrl !== undefined) {
-      updateData.originalUrl = params.originalUrl;
-    }
-    if (params.expiresAt !== undefined) {
-      updateData.expiresAt = params.expiresAt;
-    }
-    if (params.isActive !== undefined) {
-      updateData.isActive = params.isActive;
-    }
-    if (params.newToken && params.newToken !== params.token) {
-      updateData.token = params.newToken;
-      updateData.shortUrl = `/l/${params.newToken}`;
-    }
+    // Seuls les champs FOURNIS s'écrivent ; `null` efface un nom ou un UTM (#19412).
+    const fournis = {
+      originalUrl: params.originalUrl, name: params.name, campaign: params.campaign, source: params.source,
+      medium: params.medium, expiresAt: params.expiresAt, isActive: params.isActive,
+    };
+    const updateData = {
+      ...Object.fromEntries(Object.entries(fournis).filter(([, v]) => v !== undefined)),
+      ...(renamed ? { token: params.newToken, shortUrl: `/l/${params.newToken}` } : {}),
+    };
 
     const updatedLink = await this.prisma.trackingLink.update({
       where: { token: params.token },

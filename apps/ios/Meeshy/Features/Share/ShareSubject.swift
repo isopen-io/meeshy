@@ -29,14 +29,6 @@ enum ShareSubject {
         }
     }
 
-    /// Les messages source, dans l'ordre — vides pour un contenu qui n'en vient pas.
-    var sourceMessages: [Message] {
-        switch self {
-        case .messages(let messages, _, _): return messages
-        case .piece(let message, _, _, _): return [message]
-        case .text, .link, .card, .incoming: return []
-        }
-    }
 
     /// Les pièces venues d'une autre app, dans l'ordre d'envoi.
     var incomingMediaIds: [String] {
@@ -109,6 +101,9 @@ struct ShareCard: Equatable {
     /// s'ouvre sans compte et élargirait l'audience d'une story FRIENDS ou
     /// PRIVATE. Fermé par défaut.
     var isPublicStory: Bool = false
+    /// La ligne qui accompagne la carte dans « Ce qui part » — la bio d'un profil (#19442). Elle ne part pas dans le
+    /// texte : l'ami la lit sur la carte qu'il ouvre.
+    var detail: String? = nil
 
     /// **Le lien suivi de l'utilisateur se frappe pour cette carte** (#14310) :
     /// une publication et un réel toujours (la passerelle vérifie l'audience

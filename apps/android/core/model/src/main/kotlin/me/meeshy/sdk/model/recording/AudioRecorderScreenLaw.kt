@@ -38,7 +38,7 @@ public sealed interface RecorderScreenEvent {
 public data class RecorderTransition(val state: RecorderScreenState, val haptic: RecorderHaptic? = null)
 
 /**
- * La machine d'états de l'enregistreur plein écran (iOS `UniversalAudioRecorderView`) : un refus de micro
+ * La machine d'états de l'enregistreur plein écran (iOS `AudioRecorderSheet`) : un refus de micro
  * s'explique sous les contrôles au lieu de laisser un écran inerte, un démarrage vivant vibre moyen, une
  * prise gardée vibre en succès et ouvre l'aperçu.
  */

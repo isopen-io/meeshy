@@ -8,6 +8,7 @@ import {
   updateUserPassword,
   updateUsername,
   getUserByUsername,
+  userShortAddressAlias,
   getUserById,
   getUserByEmail,
   getUserByIdDedicated,
@@ -69,6 +70,17 @@ import { getUsersPresence } from './presence';
 // Referral code (intrinsic per-account code, #3690)
 import { getReferralCode } from './referral-code';
 
+// Adresses personnelles publiées sur la fiche (#18863)
+import { meAddressRoutes } from './me-addresses';
+
+// « En commun » : communautés, amis et médias partagés, gardés par le cercle (#19200)
+import { getUserInCommon } from './in-common';
+
+// Stories « à la une » : albums de l'auteur, chaque story sous sa propre audience (#19394)
+import { storyHighlightRoutes } from './story-highlights';
+// Les visites de mon lien de profil, lues par le propriétaire seul (#19206)
+import { profileLinkStatsRoutes } from './profile-link-stats';
+
 /**
  * Main user routes registration
  * Aggregates all user-related routes from modular files
@@ -84,9 +96,14 @@ export async function userRoutes(fastify: FastifyInstance) {
   await updateUserPassword(fastify);
   await updateUsername(fastify);
   await getUserByUsername(fastify);
+  await userShortAddressAlias(fastify);
+  await meAddressRoutes(fastify);
+  await profileLinkStatsRoutes(fastify);
   await getUserById(fastify);
   await getUserByEmail(fastify);
   await getUserByIdDedicated(fastify);
+  await getUserInCommon(fastify);
+  await storyHighlightRoutes(fastify);
   await getUserByPhone(fastify);
 
   // Contact change routes — surface unifiée d'abord (#4341), anciennes

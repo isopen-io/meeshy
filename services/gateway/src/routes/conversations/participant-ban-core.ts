@@ -6,7 +6,9 @@ import { resolveConversationId } from '../../utils/conversation-id-cache'
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
 import { enhancedLogger } from '../../utils/logger-enhanced.js'
 import { liftBanOnly, resolveBanWrite, resolveUnbanWrite } from '../../services/conversations/conversationBanState'
+import { returningMemberRefusalFor } from '../../services/conversations/newMemberAdmission'
 import { applyCommunityAdmission, loadSalonCommunity, planSalonEntry } from '../../services/conversations/communityMembershipSync'
+import { communityMemberAnnouncerOverIO } from '../../services/community-member-broadcast'
 import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount'
 import { endConversationMembership } from '../../socketio/endConversationMembership'
 import { resolveTargetParticipant, identifyTarget } from './utils/target-participant'
@@ -278,7 +280,7 @@ export async function leverBannissementDeParticipant(
 
   const currentParticipant = await prisma.participant.findFirst({
     where: { conversationId: id, userId: currentUserId, isActive: true },
-    select: { id: true, role: true, conversation: { select: { communityId: true } } },
+    select: { id: true, role: true, conversation: { select: { communityId: true, type: true, encryptionMode: true, encryptionEnabledAt: true } } },
   })
 
   if (!currentParticipant) {
@@ -360,7 +362,20 @@ export async function leverBannissementDeParticipant(
   // privée, la loi de `planSalonEntry` décide, l'appelant étant celui qui
   // débannit. Refusé, le bannissement est levé quand même (la porte n'est
   // plus fermée par CE geste) mais l'appartenance n'est pas rendue.
-  const proposedUnban = resolveUnbanWrite(targetParticipant)
+  // #16188 (audit de #19080, E1) — rendre l'appartenance, c'est faire REVENIR :
+  // dans un tête-à-tête chiffré de bout en bout, seul un membre de sa paire y
+  // revient (`returningMemberRefusalFor`). Refusé, le bannissement est levé quand
+  // même, l'appartenance n'est pas rendue — l'issue du refus d'une communauté.
+  const unbanWrite = resolveUnbanWrite(targetParticipant)
+  const pairRefusal = unbanWrite.membershipRestored
+    ? await returningMemberRefusalFor(prisma, {
+        conversationId: id,
+        conversation: currentParticipant.conversation,
+        returningUserId: targetParticipant.userId,
+        leftAt: targetParticipant.leftAt,
+      })
+    : null
+  const proposedUnban = pairRefusal ? liftBanOnly() : unbanWrite
   const community = proposedUnban.membershipRestored
     ? await loadSalonCommunity(prisma, { communityId: currentParticipant.conversation?.communityId, actorId: currentUserId })
     : null
@@ -375,7 +390,7 @@ export async function leverBannissementDeParticipant(
     data: unban.data,
   })
   if (community && communityAdmission.kind === 'admitted') {
-    await applyCommunityAdmission(prisma, community.communityId, communityAdmission)
+    await applyCommunityAdmission(prisma, community.communityId, communityAdmission, communityMemberAnnouncerOverIO(prisma, socketIO?.getManager()?.getIO()))
   }
   invalidateParticipantLookup(targetParticipant.id, id)
   if (unban.membershipRestored) {

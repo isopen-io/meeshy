@@ -91,7 +91,7 @@ public struct ConversationContext: Sendable {
 // Access pattern:
 //   conversation.accentColor     → colorPalette.primary (main accent hex)
 //   conversation.colorPalette    → ConversationColorPalette { primary, secondary, accent, saturationBoost }
-//   conversation.colorContext    → ConversationContext { name, type, language, theme, memberCount }
+//   MeeshyConversation.computeColorPalette(...) → builds the ConversationContext { name, type, language, theme, memberCount }
 //
 
 public struct DynamicColorGenerator {
@@ -405,8 +405,9 @@ public struct ConversationColorPalette: Sendable {
 }
 
 public extension MeeshyUser {
-    /// La couleur de ce profil (#10754) : `DynamicColorGenerator.profileAccentHex`, graine = l'identifiant.
+    /// La couleur de ce profil (#10754) : la teinte CHOISIE si le serveur la sert (#19391), sinon
+    /// `DynamicColorGenerator.profileAccentHex`, graine = l'identifiant.
     var profileAccentHex: String {
-        DynamicColorGenerator.profileAccentHex(userId: id, name: displayName ?? username)
+        ProfileAccent.hex(chosen: profileAccentColor, userId: id, name: displayName ?? username)
     }
 }

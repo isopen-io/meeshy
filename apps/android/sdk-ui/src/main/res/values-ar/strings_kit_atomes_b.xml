@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Atomes du kit K33 échelle de cercles, K35 lecteur d'onde, K37 rangée verrouillée, K51 marque de traduction, K53 stepper, K38 squelette (lot #18884). -->
+    <string name="kit_circle_scale_value">%1$d من %2$d</string>
+    <string name="kit_stepper_position">%1$d من %2$d</string>
+    <string name="kit_stepper_at_minimum">تم بلوغ الحد الأدنى</string>
+    <string name="kit_stepper_at_maximum">تم بلوغ الحد الأقصى</string>
+    <string name="kit_stepper_milestone_done">تم</string>
+    <string name="kit_stepper_milestone_current">قيد التنفيذ</string>
+    <string name="kit_stepper_milestone_todo">قيد الانتظار</string>
+    <string name="kit_wave_player_play">تشغيل</string>
+    <string name="kit_wave_player_pause">إيقاف مؤقت</string>
+    <string name="kit_wave_player_replay">إعادة التشغيل</string>
+    <string name="kit_wave_player_buffering">جارٍ التحميل</string>
+    <string name="kit_wave_player_unavailable">غير متاح</string>
+    <string name="kit_wave_player_position">%1$s من %2$s</string>
+    <string name="kit_locked_row_locked">مقفل</string>
+    <string name="kit_locked_row_unlocked">مفتوح</string>
+    <string name="kit_translation_mark_translated">مُترجَم</string>
+    <string name="kit_translation_mark_translated_from">مُترجَم من %1$s</string>
+    <string name="kit_translation_mark_original">الأصل</string>
+    <string name="kit_translation_mark_original_from">الأصل بـ%1$s</string>
+    <string name="kit_translation_mark_show_translation">عرض الترجمة</string>
+    <string name="kit_translation_mark_show_original">عرض الأصل</string>
+    <string name="kit_translation_mark_value_original">الأصل معروض</string>
+    <string name="kit_translation_mark_value_translated">الترجمة معروضة</string>
+</resources>

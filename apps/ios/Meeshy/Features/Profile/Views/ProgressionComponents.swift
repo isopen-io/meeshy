@@ -9,7 +9,7 @@ import MeeshyUI
 // passées en `let` — la règle « Zero Unnecessary Re-render » des Instant App
 // Principles. Le thème se lit par une propriété calculée, jamais observée.
 
-/// Une carte teintée — la même surface que `UserStatsView.statCard` et les
+/// Une carte teintée — la même surface que les
 /// sections de `SettingsView` : dégradé du thème dans la teinte, filet 1 pt.
 struct ProgressionCard<Content: View>: View {
     let tint: Color
@@ -79,46 +79,6 @@ struct ProgressionTierDots: View {
                     .accessibilityLabel(ProgressionCopy.tierAccessibilityLabel(tier))
             }
         }
-    }
-}
-
-struct ProgressionStreakCard: View {
-    let streak: EngagementStreakProgress
-
-    private var theme: ThemeManager { ThemeManager.shared }
-    private let tint = MeeshyColors.warning
-
-    var body: some View {
-        ProgressionCard(tint: tint) {
-            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                HStack(spacing: MeeshySpacing.sm) {
-                    Image(systemName: "flame.fill")
-                        .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
-                        .foregroundColor(tint)
-                        .accessibilityHidden(true)
-                    Text(ProgressionCopy.streak(streak.currentDays))
-                        .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold, design: .rounded))
-                        .foregroundStyle(theme.textPrimary)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.8)
-                }
-                Text(ProgressionCopy.streakRecord(streak.longestDays))
-                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                    .foregroundStyle(theme.textMuted)
-                ProgressionBar(
-                    progress: streak.scale.progress,
-                    tint: tint,
-                    label: String(localized: "progression.a11y.bar.streak", defaultValue: "Ta Flamme, vers son prochain jalon", bundle: .main)
-                )
-                .padding(.top, MeeshySpacing.xs)
-                Text(ProgressionCopy.nextStep(for: streak.scale, kind: .streak))
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundStyle(theme.textMuted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .accessibilityElement(children: .combine)
     }
 }
 

@@ -135,14 +135,11 @@ struct ParticipantsView: View {
                 }
             }
             .onReceive(
-                MessageSocketManager.shared.conversationJoined
+                MessageSocketManager.shared.participantJoined
                     .filter { $0.conversationId == conversationId }
                     .receive(on: DispatchQueue.main)
             ) { _ in
-                Task {
-                    await ParticipantService.shared.invalidate(conversationId: conversationId)
-                    await loadParticipants()
-                }
+                Task { await refreshParticipantsFromAPI(forceRefresh: true) }
             }
             .onReceive(
                 MessageSocketManager.shared.conversationLeft
@@ -150,11 +147,8 @@ struct ParticipantsView: View {
                     .receive(on: DispatchQueue.main)
             ) { event in
                 participants.removeAll { $0.userId == event.userId }
-                Task {
-                    await ParticipantService.shared.invalidate(conversationId: conversationId)
-                }
             }
-            .sheet(item: Binding(
+            .profileCover(item: Binding(
                 get: { profileParticipantId.map(IdentifiedString.init) },
                 set: { profileParticipantId = $0?.value }
             )) { target in
@@ -617,12 +611,17 @@ struct ParticipantsView: View {
         }
     }
 
-    private func refreshParticipantsFromAPI() async {
+    /// Une page `.stale` est déjà peinte : le service la revalide en arrière-plan,
+    /// et la page relue la remplace sans indicateur (#18916).
+    private func refreshParticipantsFromAPI(forceRefresh: Bool = false) async {
         defer { isLoading = false }
         do {
-            let fetched = try await ParticipantService.shared.loadFirstPage(
-                for: conversationId
+            let served = try await ParticipantService.shared.loadFirstPage(
+                for: conversationId,
+                forceRefresh: forceRefresh
             )
+            let fetched = await ParticipantService.shared.pageToPaint(
+                afterLoading: served, for: conversationId, forceRefresh: forceRefresh)
             participants = fetched
             hasMore = await ParticipantService.shared.hasMore(for: conversationId)
             // Pas de `save()` ici : `ParticipantService.fetchNextPage` vient de

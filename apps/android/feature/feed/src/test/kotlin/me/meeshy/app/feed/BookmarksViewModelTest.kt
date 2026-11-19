@@ -20,7 +20,10 @@ import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.BookmarkPage
+import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.post.UserPostsCacheRepository
+import me.meeshy.sdk.post.UserPostsSnapshot
 import me.meeshy.sdk.session.SessionRepository
 import org.junit.After
 import org.junit.Before
@@ -50,9 +53,9 @@ class BookmarksViewModelTest {
     private fun page(vararg ids: String, nextCursor: String? = null, hasMore: Boolean = false) =
         NetworkResult.Success(BookmarkPage(ids.map { post(it) }, nextCursor, hasMore))
 
-    private fun viewModel(): BookmarksViewModel {
+    private fun viewModel(cache: UserPostsCacheRepository = bookmarksCache()): BookmarksViewModel {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
-        return BookmarksViewModel(repository, mockk(relaxed = true), session, config, FakeProfileSocial().socket)
+        return BookmarksViewModel(repository, mockk(relaxed = true), session, config, FakeProfileSocial().socket, cache)
     }
 
     @Test
@@ -217,5 +220,71 @@ class BookmarksViewModelTest {
             assertThat(awaitItem().posts.map { it.id }).containsExactly("x")
         }
         coVerify(exactly = 2) { repository.getBookmarksPage(null, any()) }
+    }
+
+    private fun snapshot(vararg ids: String, cursor: String? = null, hasMore: Boolean = false) =
+        UserPostsSnapshot(ids.map { post(it) }, cursor, hasMore)
+
+    @Test
+    fun `a fresh disk copy paints the saved posts with no skeleton and no network call`() = runTest {
+        val vm = viewModel(bookmarksCache(CacheResult.Fresh(snapshot("a", "b"), ageMillis = 1_000)))
+
+        val s = vm.state.value
+        assertThat(s.posts.map { it.id }).containsExactly("a", "b").inOrder()
+        assertThat(s.showSkeleton).isFalse()
+        coVerify(exactly = 0) { repository.getBookmarksPage(any(), any()) }
+    }
+
+    @Test
+    fun `a stale disk copy paints at once, then the first page replaces it and is written back`() = runTest {
+        val gate = CompletableDeferred<NetworkResult<BookmarkPage>>()
+        coEvery { repository.getBookmarksPage(null, any()) } coAnswers { gate.await() }
+        val written = mutableListOf<UserPostsSnapshot>()
+
+        val vm = viewModel(bookmarksCache(CacheResult.Stale(snapshot("a", "old"), ageMillis = 999_999), written))
+
+        assertThat(vm.state.value.posts.map { it.id }).containsExactly("a", "old").inOrder()
+        assertThat(vm.state.value.showSkeleton).isFalse()
+        gate.complete(page("a", "new", nextCursor = "c2", hasMore = true))
+        assertThat(vm.state.value.posts.map { it.id }).containsExactly("a", "new").inOrder()
+        assertThat(written.last().posts.map { it.id }).containsExactly("a", "new").inOrder()
+        assertThat(written.last().nextCursor).isEqualTo("c2")
+    }
+
+    @Test
+    fun `offline with a disk copy keeps the rows and says nothing`() = runTest {
+        coEvery { repository.getBookmarksPage(null, any()) } returns NetworkResult.Failure(ApiError("offline"))
+
+        val vm = viewModel(bookmarksCache(CacheResult.Stale(snapshot("a"), ageMillis = 999_999)))
+
+        assertThat(vm.state.value.posts.map { it.id }).containsExactly("a")
+        assertThat(vm.state.value.errorMessage).isNull()
+        assertThat(vm.state.value.isLoading).isFalse()
+    }
+
+    @Test
+    fun `an empty disk shows the skeleton until the first page, which is then written`() = runTest {
+        val gate = CompletableDeferred<NetworkResult<BookmarkPage>>()
+        coEvery { repository.getBookmarksPage(null, any()) } coAnswers { gate.await() }
+        val written = mutableListOf<UserPostsSnapshot>()
+
+        val vm = viewModel(bookmarksCache(written = written))
+
+        assertThat(vm.state.value.showSkeleton).isTrue()
+        gate.complete(page("a", hasMore = false))
+        assertThat(written.last().posts.map { it.id }).containsExactly("a")
+    }
+
+    @Test
+    fun `un-saving writes the shorter list to disk at once, and a refused un-save writes it back`() = runTest {
+        coEvery { repository.getBookmarksPage(null, any()) } returns page("a", "b", hasMore = false)
+        coEvery { repository.removeBookmark("b") } returns NetworkResult.Failure(ApiError("nope"))
+        val written = mutableListOf<UserPostsSnapshot>()
+        val vm = viewModel(bookmarksCache(written = written))
+
+        vm.removeBookmark("b")
+
+        assertThat(written.map { s -> s.posts.map { it.id } }.takeLast(2))
+            .containsExactly(listOf("a"), listOf("a", "b")).inOrder()
     }
 }

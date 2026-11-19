@@ -33,6 +33,7 @@ import me.meeshy.sdk.model.ImageUploadTarget
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.profile.LocalProfileGameSlot
+import me.meeshy.ui.profile.ProfileGamePieces
 import me.meeshy.ui.profile.ProfileFullscreenImage
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
 import me.meeshy.ui.theme.MeeshyPalette
@@ -200,14 +201,13 @@ private fun OwnProfileBannerFrame(
     }
 }
 
-/** Le niveau (coin bas, début) et le rang (coin bas, fin), fournis par l'app ; le doigt les traverse. */
+/** Le rang (coin bas, début) et le niveau (coin bas, fin), fournis par l'app ; le doigt les traverse. */
 @Composable
 private fun BoxScope.OwnProfileGameBadges(userId: String, displayName: String) {
     val slot = LocalProfileGameSlot.current ?: return
     if (userId.isBlank()) return
     Box(Modifier.matchParentSize().padding(horizontal = MeeshySpacing.md)) {
-        Box(Modifier.align(Alignment.BottomStart)) { slot.level(userId, displayName) }
-        Box(Modifier.align(Alignment.BottomEnd)) { slot.rank(userId, displayName) }
+        ProfileGamePieces(slot, userId, displayName)
     }
 }
 

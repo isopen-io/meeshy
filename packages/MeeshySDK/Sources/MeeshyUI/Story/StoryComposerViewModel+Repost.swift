@@ -22,8 +22,8 @@ extension StoryComposerViewModel {
     ///
     /// The publish flow itself is NOT modified — `StoryComposerViewModel` still does not
     /// call `PostService.create*` directly. Publication is delegated to the
-    /// `onPublishSlide` callback (`StoryComposerView.swift`) implemented by the iOS app
-    /// caller (Phase C), which reads `vm.repostOfId` and forwards it to
+    /// iOS app (`MeeshyComposerHost+Socle`), which reads `vm.repostOfId` and
+    /// forwards it to
     /// `PostService.create(...)` / `createStory(...)` (B.5c).
     public convenience init(reposting story: StoryItem) {
         self.init()

@@ -141,14 +141,14 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'socketio/handlers/__tests__/MessageHandler.test.ts': 3083,
   '__tests__/unit/services/MessagingService.test.ts': 3000,
   '__tests__/unit/routes/participants.test.ts': 2938,
-  '__tests__/unit/services/MessageTranslationService.audio.test.ts': 2833,
+  '__tests__/unit/services/MessageTranslationService.audio.test.ts': 2784,
   '__tests__/unit/PostService.test.ts': 2649,
   '__tests__/unit/services/ZmqTranslationClient.test.ts': 2476,
   '__tests__/unit/services/AuthService.test.ts': 2472,
-  '__tests__/unit/routes/calls-routes.test.ts': 2154,
+  '__tests__/unit/routes/calls-routes.test.ts': 1198,
   '__tests__/unit/routes/admin/admin-routes-group2.test.ts': 2153,
   '__tests__/unit/services/MessageTranslationService.test.ts': 2085,
-  '__tests__/unit/services/MentionService.test.ts': 2063,
+  '__tests__/unit/services/MentionService.test.ts': 1945,
   '__tests__/unit/services/VoiceProfileService.test.ts': 1911,
   '__tests__/unit/services/PasswordResetService.test.ts': 1823,
   '__tests__/unit/services/RedisDeliveryQueue.test.ts': 1723,
@@ -193,7 +193,7 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   '__tests__/unit/socketio/CallEventsHandler-end.test.ts': 1187,
   '__tests__/unit/routes/links-admin.test.ts': 1181,
   '__tests__/unit/routes/me-preferences.test.ts': 1160,
-  '__tests__/unit/services/AudioTranslateService.test.ts': 1156,
+  '__tests__/unit/services/AudioTranslateService.test.ts': 1137,
   '__tests__/unit/services/ZmqMessageHandler.test.ts': 1150,
   '__tests__/unit/routes/friends-routes.test.ts': 1141,
   '__tests__/unit/services/ConversationMessageStatsService.test.ts': 1139,
@@ -207,7 +207,12 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   // disponible pour la prochaine addition.
   '__tests__/unit/services/NotificationService.pushMessage.test.ts': 1061,
   '__tests__/unit/routes/admin/admin-content-routes.test.ts': 1087,
-  '__tests__/unit/services/EncryptionService.test.ts': 1044,
+  // 1044 → SORTIE DE LA DETTE (#19755, 2026-11-19) : les deux témoins du
+  // démarrage du coffre ont rejoint `serverKeyVaultConversationKeyLookup.test.ts`,
+  // là où vit la règle qu'ils gardent, et la suite est repassée sous 1 000. Le
+  // fichier était hors budget, donc interdit d'addition : ce lot n'avait pas le
+  // droit d'y ajouter ses témoins, et l'extraction est le correctif, jamais une
+  // marge à relever.
   '__tests__/unit/services/MetadataManager.test.ts': 1044,
   '__tests__/unit/routes/posts/interactions2.test.ts': 1039,
   '__tests__/unit/routes/communities-presence-gate.test.ts': 1038,

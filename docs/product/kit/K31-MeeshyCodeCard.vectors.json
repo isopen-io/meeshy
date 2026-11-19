@@ -1,0 +1,62 @@
+{
+  "composant": "MeeshyCodeCard",
+  "cle": "K31",
+  "note": "Vecteurs de parité (fiche K31 § 10). Pivot borné à ±16° en lacet et ±6° en tangage ; reflet de 112 % à −32 % ; plaque ±7 px ; pastille ±13 px (6 de plus) ; mini et plain rendent zéro partout.",
+  "inclinaisons": [
+    {
+      "lacet": -16,
+      "reflet": 112,
+      "plaque": 7,
+      "pastille": 13
+    },
+    {
+      "lacet": 0,
+      "reflet": 40,
+      "plaque": 0,
+      "pastille": 0
+    },
+    {
+      "lacet": 16,
+      "reflet": -32,
+      "plaque": -7,
+      "pastille": -13
+    },
+    {
+      "lacet": 90,
+      "reflet": -32,
+      "plaque": -7,
+      "pastille": -13
+    }
+  ],
+  "cotes": [
+    {
+      "taille": "mini",
+      "cote": 72
+    },
+    {
+      "taille": "compact",
+      "cote": 160
+    },
+    {
+      "taille": "large",
+      "cote": 220
+    }
+  ],
+  "largeurCarte": {
+    "cote": 220,
+    "largeur": 318
+  },
+  "plaqueNote": "Évolution du profil (plan-kit K31) : la plaque `MeeshyCodePlate` extraite de la carte, posée à plat ailleurs (billet du profil, partage). Côté 56 à 220 ; marge et rayon aux trois tailles de la carte, interpolés entre elles ; la miniature n'a ni yeux teintés ni pastille centrale (pastille dès 120, 25 % du côté).",
+  "plaqueCotes": {"min": 56, "max": 220},
+  "plaque": [
+    {"cote": 56, "miniature": false, "coteServi": 56, "marge": 6, "rayon": 14, "boite": 68, "pastille": 0, "yeuxTeintes": true},
+    {"cote": 72, "miniature": false, "coteServi": 72, "marge": 6, "rayon": 14, "boite": 84, "pastille": 0, "yeuxTeintes": true},
+    {"cote": 116, "miniature": false, "coteServi": 116, "marge": 9, "rayon": 18, "boite": 134, "pastille": 0, "yeuxTeintes": true},
+    {"cote": 160, "miniature": false, "coteServi": 160, "marge": 12, "rayon": 22, "boite": 184, "pastille": 40, "yeuxTeintes": true},
+    {"cote": 190, "miniature": false, "coteServi": 190, "marge": 14, "rayon": 25, "boite": 218, "pastille": 48, "yeuxTeintes": true},
+    {"cote": 220, "miniature": false, "coteServi": 220, "marge": 16, "rayon": 28, "boite": 252, "pastille": 55, "yeuxTeintes": true},
+    {"cote": 220, "miniature": true, "coteServi": 220, "marge": 16, "rayon": 28, "boite": 252, "pastille": 0, "yeuxTeintes": false},
+    {"cote": 400, "miniature": false, "coteServi": 220, "marge": 16, "rayon": 28, "boite": 252, "pastille": 55, "yeuxTeintes": true},
+    {"cote": 10, "miniature": false, "coteServi": 56, "marge": 6, "rayon": 14, "boite": 68, "pastille": 0, "yeuxTeintes": true}
+  ]
+}

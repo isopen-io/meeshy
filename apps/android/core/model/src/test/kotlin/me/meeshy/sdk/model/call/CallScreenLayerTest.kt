@@ -6,7 +6,7 @@ import org.junit.Test
 class CallScreenLayerTest {
     private val all = CallActionSet(
         myImage = listOf(CallAction.Camera, CallAction.Effects),
-        theCall = listOf(CallAction.Journal, CallAction.React, CallAction.Recording, CallAction.AddPeople, CallAction.Capture),
+        theCall = listOf(CallAction.Captions, CallAction.React, CallAction.Recording, CallAction.AddPeople, CallAction.Capture),
     )
 
     @Test
@@ -137,10 +137,18 @@ class CallScreenLayerTest {
     }
 
     @Test
-    fun `reconciliation drops the menu over a journal to the menu when the journal vanishes`() {
+    fun `reconciliation keeps the journal - no action of the call opens it (19670)`() {
         val without = CallActionSet(myImage = emptyList(), theCall = emptyList())
-        assertThat(CallScreenLayer.MenuOverJournal.reconciled(without)).isEqualTo(CallScreenLayer.Menu)
-        assertThat(CallScreenLayer.MenuOverJournal.reconciled(all)).isEqualTo(CallScreenLayer.MenuOverJournal)
+        assertThat(CallScreenLayer.Panel(CallScreenPanel.Journal).reconciled(without)).isEqualTo(CallScreenLayer.Panel(CallScreenPanel.Journal))
+        assertThat(CallScreenLayer.MenuOverJournal.reconciled(without)).isEqualTo(CallScreenLayer.MenuOverJournal)
+    }
+
+    @Test
+    fun `turning captions off closes the journal and only it - an open menu stays (19670)`() {
+        assertThat(CallScreenLayer.Panel(CallScreenPanel.Journal).closingJournal()).isEqualTo(CallScreenLayer.Idle)
+        assertThat(CallScreenLayer.MenuOverJournal.closingJournal()).isEqualTo(CallScreenLayer.Menu)
+        listOf(CallScreenLayer.Idle, CallScreenLayer.Menu, CallScreenLayer.Panel(CallScreenPanel.React), CallScreenLayer.Mode(CallScreenMode.Effects))
+            .forEach { assertThat(it.closingJournal()).isEqualTo(it) }
     }
 
     /**

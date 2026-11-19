@@ -110,13 +110,6 @@ public enum ComposerMode: Equatable {
         default: return false
         }
     }
-
-    public var sendIcon: String {
-        switch self {
-        case .post: return "arrow.up.circle.fill"
-        default: return "paperplane.fill"
-        }
-    }
 }
 
 // MARK: - Attachment Status Body
@@ -383,43 +376,6 @@ public enum CodeLanguage: String, CaseIterable, Sendable {
         }
     }
 
-    public var highlightJsName: String {
-        switch self {
-        case .python: return "python"
-        case .javascript: return "javascript"
-        case .typescript: return "typescript"
-        case .swift: return "swift"
-        case .c: return "c"
-        case .cpp: return "cpp"
-        case .java: return "java"
-        case .go: return "go"
-        case .rust: return "rust"
-        case .ruby: return "ruby"
-        case .php: return "php"
-        case .shell: return "bash"
-        case .css: return "css"
-        case .html: return "xml"
-        case .json: return "json"
-        case .yaml: return "yaml"
-        case .xml: return "xml"
-        case .sql: return "sql"
-        case .markdown: return "markdown"
-        case .kotlin: return "kotlin"
-        case .scala: return "scala"
-        case .dart: return "dart"
-        case .lua: return "lua"
-        case .perl: return "perl"
-        case .r: return "r"
-        case .objectiveC: return "objectivec"
-        case .dockerfile: return "dockerfile"
-        case .makefile: return "makefile"
-        case .toml: return "ini"
-        case .ini: return "ini"
-        case .graphql: return "graphql"
-        case .protobuf: return "protobuf"
-        }
-    }
-
     private static let extensionMap: [String: CodeLanguage] = {
         var map: [String: CodeLanguage] = [:]
         let pairs: [(CodeLanguage, [String])] = [
@@ -515,50 +471,6 @@ public enum CodeLanguage: String, CaseIterable, Sendable {
         }
 
         return nil
-    }
-}
-
-// MARK: - Media Preview Context
-
-public enum MediaPreviewContext: Equatable {
-    case story
-    case post
-    case message
-    case avatar
-    case banner
-
-    public var cornerRadius: CGFloat {
-        switch self {
-        case .story: return 0
-        case .post: return 16
-        case .message: return 14
-        case .avatar: return .infinity
-        case .banner: return 0
-        }
-    }
-
-    public var isImmersive: Bool {
-        self == .story
-    }
-
-    public var contextLabel: String {
-        switch self {
-        case .story: return "Story"
-        case .post: return "Post"
-        case .message: return "Message"
-        case .avatar: return "Avatar"
-        case .banner: return "Banni\u{00E8}re"
-        }
-    }
-
-    public var contextIcon: String {
-        switch self {
-        case .story: return "bolt.circle.fill"
-        case .post: return "square.text.square.fill"
-        case .message: return "bubble.left.fill"
-        case .avatar: return "person.circle.fill"
-        case .banner: return "rectangle.fill"
-        }
     }
 }
 

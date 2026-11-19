@@ -235,7 +235,15 @@ extension ConversationSyncEngine {
                 }
             }
         }
+        await realtimeMessagePersistor?(.attachmentEnriched(AttachmentEnrichment(event)))
         _messagesDidChange.send(event.conversationId)
+    }
+
+    /// `message:translation` (#18934) : la carte du cache, et la base du compte
+    /// comme la conversation ouverte — passé les 24 h du cache, rien d'autre.
+    /* partagé entre les fichiers du moteur (#4172) */ func handleTranslationReceived(_ event: TranslationEvent) async {
+        await cache.cacheTranslation(event)
+        await realtimeMessagePersistor?(.translationsReceived(event.translations))
     }
 
     /// `[langue: contenu]` du message reçu pour le Prisme de la ligne de liste — voir `PreviewTranslationCard`.
@@ -281,11 +289,9 @@ extension ConversationSyncEngine {
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
                 updated[idx].userState.unreadCount = 0
-                // Frontière de lecture locale — lue par `reconcileUnread` pour
-                // qu'un instantané serveur en retard sur l'accusé de lecture
-                // (outbox encore pleine, hors-ligne, 429) ne rallume pas la
-                // pastille.
+                // Frontière locale (+ instant serveur, #19424) : un instantané en retard sur l'accusé ne rallume pas la pastille.
                 updated[idx].userState.lastReadAt = Date()
+                updated[idx].userState.readThroughServerAt = updated[idx].lastMessageAt
             }
             return updated
         }
@@ -329,7 +335,7 @@ extension ConversationSyncEngine {
         await cache.conversations.update(for: "list") { conversations in
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
-                updated[idx].userState.lastReadAt = nil
+                (updated[idx].userState.lastReadAt, updated[idx].userState.readThroughServerAt) = (nil, nil)
                 if updated[idx].userState.unreadCount == 0 {
                     // Le serveur reste autoritatif sur le compte exact ; on pose
                     // localement ≥ 1 pour que la pastille apparaisse tout de suite.
@@ -406,13 +412,13 @@ extension ConversationSyncEngine {
 
         if openConversationIds.contains(incoming.id) {
             result.userState.unreadCount = 0
-            return result
+            return result.keepingServerInstantRead(local: local)
         }
 
         if let frontier = result.userState.lastReadAt, frontier >= incoming.lastMessageAt {
             result.userState.unreadCount = 0
         }
-        return result
+        return result.keepingServerInstantRead(local: local)
     }
 
     /// Variante par lot — applique la règle ci-dessus à chaque ligne entrante en

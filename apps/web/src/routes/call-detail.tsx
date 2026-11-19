@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useStore } from 'zustand/react';
 
 import { callSessionQueryKey, loadCallSession } from '@/lib/api/call-sessions';
@@ -19,7 +19,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useParams } from '@/lib/router';
 import { coldStateOf } from '@/lib/view/cold-state';
 import { useMinute } from '@/lib/view/use-minute';
-import { CallDetailCard, CallDetailHeader, CallDetailSkeleton, CallDetailState } from '@/routes/call-detail-parts';
+import { CallDetailCard, CallDetailHeader, CallDetailSkeleton, CallDetailState, CallJoinPrompt } from '@/routes/call-detail-parts';
 import { href, navigate } from '@/routes/route-table';
 
 /**
@@ -29,9 +29,10 @@ import { href, navigate } from '@/routes/route-table';
  *   persisté du journal, la fiche se peint au premier rendu et AUCUNE requête
  *   ne part — un appel terminé ne change plus.
  * - **Lien profond sans cache** : `GET /calls/:callId`. Un appel VIVANT s'y
- *   REJOINT (le fil de sa conversation s'ouvre à sa place, l'écran d'appel
- *   par-dessus) ; un appel fini s'y lit ; un appel introuvable ou interdit
- *   se dit « introuvable », sans distinguer les deux.
+ *   rejoint AU TOUCHER « Rejoindre » (le fil de sa conversation s'ouvre à sa
+ *   place, l'écran d'appel par-dessus) — jamais à l'ouverture : l'adresse se
+ *   forge, le geste non (#18907). Un appel fini s'y lit ; un appel introuvable
+ *   ou interdit se dit « introuvable », sans distinguer les deux.
  *
  * Le rappel part de la conversation de l'appel, du type choisi (iOS :
  * `CallStarter.start`).
@@ -74,13 +75,12 @@ export default function CallDetailScreen() {
         ? null
         : callDetailFromSession(served.data, { viewerId, unknown, identity: callIdentityOf(served.data.conversationId) });
 
-  const joined = useRef(false);
-  useEffect(() => {
-    if (plan !== 'join' || detail === null || joined.current) return;
-    joined.current = true;
+  const onJoin = useCallback(() => {
+    if (detail === null) return;
     navigate(href('thread', { conversation: detail.conversationId }), true);
     callActions.join({ conversationId: detail.conversationId, callId: detail.callId, media: detail.media, title: detail.name, avatar: detail.avatar, isGroup: detail.isGroup, peerKey: detail.peerKey });
-  }, [plan, detail]);
+  }, [detail]);
+  const onDeclineJoin = useCallback(() => navigate(href('calls'), true), []);
 
   const onCall = useCallback(
     (media: CallMedia) => {
@@ -92,8 +92,8 @@ export default function CallDetailScreen() {
 
   const cold = coldStateOf(served);
   const body =
-    plan === 'join' ? (
-      <CallDetailState language={language} kind="joining" />
+    plan === 'join' && detail !== null ? (
+      <CallJoinPrompt language={language} name={detail.name} media={detail.media} onJoin={onJoin} onCancel={onDeclineJoin} />
     ) : plan === 'not-found' ? (
       <CallDetailState language={language} kind="not-found" />
     ) : detail !== null ? (

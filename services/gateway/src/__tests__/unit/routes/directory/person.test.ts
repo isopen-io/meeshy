@@ -21,6 +21,9 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 
+// Le `CacheStore` partagé n'est pas monté ici : chaque témoin relit l'audience (#19368).
+jest.mock('../../../../services/CacheStore', () => ({ getCacheStore: () => undefined }));
+
 jest.mock('../../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), info: jest.fn(), warn: jest.fn(), debug: jest.fn() }) },
 }));
@@ -110,6 +113,7 @@ const projete = (ligne: LigneDemande, select: unknown): Partial<LigneDemande> =>
 
 function prismaDouble(bloquesParLeLecteur: readonly string[] = [], demandes: readonly LigneDemande[] = []) {
   return {
+    profileAddress: { findMany: async () => [] }, communityMember: { findMany: async () => [] },
     user: {
       findMany: jest.fn(async () => []),
       // La ligne rend PLUS que la projection publique — c'est le point : si le

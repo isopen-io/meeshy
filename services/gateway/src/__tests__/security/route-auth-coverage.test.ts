@@ -353,6 +353,10 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   // /users/:id, /users/id/:id) ne sont PLUS publics depuis #10205 (directive
   // porteur du 2026-10-11) : un lecteur sans compte reçoit 403 ACCOUNT_REQUIRED,
   // et le témoin ci-dessous le PROUVE en les traitant comme toute route gardée.
+  // #18862 — l'adresse courte `/@:username` est une REDIRECTION pure vers `/directory/people/:handle` :
+  // aucune lecture, aucune identité, le pseudo (validé) est recopié tel quel dans l'adresse. La garde de
+  // #10205 (compte requis) s'applique à la CIBLE, que le client suit ensuite.
+  { method: 'GET', url: '/api/v1/@:username', why: "redirection pure vers /directory/people/:handle, sans lecture : la garde « compte requis » (#10205) s'applique à la cible" },
   // #10157 (L5) — le magasin adressé par contenu des packs officiels : le web
   // le lit en `fetch(url, { mode: 'cors' })` SANS aucun en-tête. Liste blanche
   // calculée au démarrage par `PackIndex`, aucune lecture de base, aucune identité.
@@ -375,6 +379,7 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'GET', url: '/api/v1/tracking-links/:token', why: 'résolution publique de lien court (design assumé, commentaire explicite dans le code)' },
   { method: 'GET', url: '/api/v1/tracking-links/:token/og', why: "page d'aperçu des robots (#10192) : 302 vers la cible web publique d'un lien actif (ce que l'ouverture du lien donne à quiconque le tient, sans clic compté), aperçu d'une invitation ouverte et publique, sinon générique sans rien de la cible" },
   { method: 'GET', url: '/api/v1/affiliate/:token/og', why: "page d'aperçu des robots (#10559) : nom affiché, pseudo, bannière ou avatar de l'invitant d'un jeton ouvert — ce que la validation publique du jeton sert déjà ; jeton fermé ou compte désactivé ⇒ aperçu générique, aucun clic compté" },
+  { method: 'GET', url: '/api/v1/people/:username/og', why: "page d'aperçu des robots (#18865) : par défaut l'aperçu GÉNÉRIQUE de Meeshy quel que soit le pseudo, sans lire User — un profil ne se montre qu'à un membre connecté (#10205) ; la carte nommée au niveau PUBLIC ne vit que derrière le drapeau serveur PERSON_UNFURL_NAMED_CARD, éteint" },
   { method: 'GET', url: '/api/v1/tracking-links/:token/resolve', why: "idem ; `sharer` (#9149) n'expose que nom affiché, pseudo et avatar du partageur d'un CONTENU (link-sharer.ts, resolve-sharer.test.ts)" },
   { method: 'GET', url: '/api/v1/l/:token', why: 'redirection publique de lien court' },
   { method: 'POST', url: '/api/v1/tracking-links/:token/click', why: "comptage de clic public par design" },
@@ -384,6 +389,7 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'GET', url: '/api/v1/affiliate/validate/:token', why: "validation publique d'un token d'affiliation (nom/avatar publics uniquement)" },
   { method: 'POST', url: '/api/v1/affiliate/track-visit', why: "tracking de visite public par design (pollution mineure notée séparément dans l'audit)" },
   { method: 'POST', url: '/api/v1/affiliate/click/:token', why: 'comptage de clic public par design' },
+  { method: 'POST', url: '/api/v1/invitations/email/opt-out', why: "désinscription de l'INVITÉ (#19207), qui n'a pas de compte : le jeton secret de son invitation suffit, et seule une empreinte HMAC de l'adresse est gardée" },
 
   // --- Voice : sonde publique, aucune donnée utilisateur ---
   // `GET /api/v1/voice/health` a QUITTÉ cette liste AVEC la route elle-même

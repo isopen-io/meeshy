@@ -136,6 +136,9 @@ function makePrisma(opts: PrismaOpts = {}) {
       findUnique: mockFn(opt(opts.userFindUnique, DB_USER)), findMany: jest.fn(async () => []), // #13298 blocage
       findFirst: jest.fn(async () => null), // #13933 blocage relu avant d'accepter
     },
+    // #19362 — le réglage « accepter les demandes » de la cible, lu à l'envoi.
+    userPreferences: { findMany: jest.fn(async () => []) },
+    userPreference: { findMany: jest.fn(async () => []) },
     friendRequest: {
       findFirst: mockFn(opt(opts.friendRequestFindFirst, null)),
       // `findUnique` porte DEUX questions depuis #4162, et le double les

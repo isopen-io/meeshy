@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="vitrine_cap_presence">الحضور</string>
+    <string name="vitrine_cap_presence_detailed">الحضور المفصّل</string>
+    <string name="vitrine_cap_level_rank">المستوى والرتبة</string>
+    <string name="vitrine_cap_sparks">الشرارات</string>
+    <string name="vitrine_cap_battery">البطارية</string>
+    <string name="vitrine_cap_location_live">الموقع المباشر</string>
+    <string name="vitrine_cap_location_history">سجل الموقع</string>
+    <string name="vitrine_cap_direct_message">رسالة مباشرة</string>
+    <string name="vitrine_cap_message_request">طلب مراسلة</string>
+    <string name="vitrine_cap_ring">مكالمة</string>
+    <string name="vitrine_cap_talkie">جهاز اللاسلكي</string>
+    <string name="vitrine_cap_together">معًا</string>
+    <string name="vitrine_cap_bring">Bring</string>
+    <string name="vitrine_cap_listening_category">الاستماع: الفئة</string>
+    <string name="vitrine_cap_listening_title">الاستماع: العنوان</string>
+    <string name="vitrine_cap_location_temporary">موقع مؤقت</string>
+    <string name="vitrine_cap_location_proximity">القرب</string>
+    <string name="vitrine_cap_battery_pull">قراءة البطارية</string>
+    <string name="vitrine_cap_unreachable">الهاتف غير متاح</string>
+    <string name="vitrine_as_title">عرض كـ</string>
+    <string name="vitrine_as_subtitle">واجهتك كما تراها كل دائرة.</string>
+    <string name="vitrine_as_open_title">مرئي في هذا المستوى</string>
+    <string name="vitrine_as_hidden_title">مخفي في هذا المستوى</string>
+    <string name="vitrine_as_opens_from">ابتداءً من %1$s</string>
+    <string name="vitrine_as_nothing_hidden">لا شيء مخفي في هذا المستوى.</string>
+</resources>

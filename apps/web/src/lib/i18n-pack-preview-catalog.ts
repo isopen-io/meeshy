@@ -57,8 +57,6 @@ export function loadPackPreviewCatalog(language: InterfaceLanguage): Promise<Pac
   return request;
 }
 
-export const isPackPreviewCatalogLoaded = (language: InterfaceLanguage): boolean => loaded.has(language);
-
 /** `true` dès que le catalogue de la langue est là : l'hôte ne monte la fiche ou le plein écran qu'à ce moment. */
 export function usePackPreviewCatalog(language: InterfaceLanguage): boolean {
   const [ready, setReady] = useState(() => loaded.has(language));

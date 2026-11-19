@@ -11,9 +11,17 @@
 
 import type { E2EEServedEnvelope } from '../e2ee-directory.js';
 import type { E2EESignalAck, E2EESignalSocketPayload } from '../e2ee-signals.js';
+import type {
+  DeviceVerificationSend,
+  DeviceVerificationSendAck,
+  E2EEOwnDeviceEnrolledEventData,
+  E2EEOwnDeviceRetiredEventData,
+  ServedDeviceVerification,
+} from '../e2ee-device-trust.js';
 import type { AdminMetricsSubscribeAck, HostMetricsSample } from '../admin-ops.js';
 import type { ConversationEngagementSnapshot, PostEngagementSnapshot } from '../engagement-scale.js';
 import type { GameMissionsUpdatedEventData, GameUpdatedEventData } from '../game-sync.js';
+import type { ProfileUpdatedEventData } from '../own-profile-sync.js';
 import type { ContentCaptureAck, ContentCaptureReportInput } from '../content-capture.js';
 // Import pour les événements sociaux (posts, stories, statuts, commentaires)
 import type {
@@ -116,6 +124,7 @@ import type {
   CallMutedByModeratorEvent,
   CallParticipantInvitedEvent,
   CallInviteSettledEvent,
+  CallConversationChangedEvent,
   CallReactionEvent,
   CallReactionReceivedEvent,
 } from '../call-controls.js';
@@ -167,13 +176,22 @@ import type {
   FriendRequestCancelledEventData,
   FriendRequestNewEventData,
   FriendRequestRejectedEventData,
+  FriendRequestUpdatedEventData,
 } from './friend-request.js';
 import type { LinkMessageNewEventData } from './link.js';
 import type {
+  AffiliateReferralJoinedEventData,
+  CommunityLinkEntryEventData,
+  ShareLinkArrivalEventData,
+  TrackingLinkClickedEventData,
+} from './link-activity.js';
+import type {
+  RelationLevelLoweredEventData,
   RelationLevelRaisedEventData,
   RelationRitualCompletedEventData,
   RelationRitualProgressEventData,
   RelationRitualStartedEventData,
+  UserBlockedByMeEventData,
 } from './relation.js';
 import type { BringRingEventData, BringStoppedEventData } from '../bring.js';
 import type {
@@ -203,12 +221,16 @@ import type {
   BatteryReportAck,
 } from '../battery.js';
 import type { PhoneReachabilityChangedEventData, PhoneReachabilityClearedEventData } from '../phone-reachability.js';
-import type { BloodProximityEventData } from '../blood-location.js';
+import type { InactivityAlertEventData, InactivityClearedEventData } from '../inactivity-check.js';
+import type { PhoneCallEndedEventData, PhoneCallStartedEventData } from '../phone-call.js';
+import type { BloodMovedEventData, BloodProximityEventData } from '../blood-location.js';
+import type { ContactExchangeReceivedEventData } from '../contact-exchange.js';
 import type {
   SharedLocationAck,
   SharedLocationChangedEventData,
   SharedLocationEndedEventData,
   SharedLocationOwnChangedEventData,
+  SharedLocationRequestedEventData,
   SharedLocationStartPayload,
   SharedLocationStopAck,
   SharedLocationUpdatePayload,
@@ -272,6 +294,8 @@ import type {
   ParticipantRoleUpdatedEventData,
 } from './participant.js';
 import type {
+  CommunityDeletedEventData,
+  CommunityJoinRequestedEventData,
   CommunityMemberJoinedEventData,
   CommunityMemberLeftEventData,
   CommunityMemberRoleUpdatedEventData,
@@ -311,7 +335,7 @@ import type {
   MessageTranslationSharedEventData,
   TranslationEvent,
 } from './translation.js';
-import type { UserUpdatedEventData } from './user.js';
+import type { UserProfileChangedEventData, UserUpdatedEventData } from './user.js';
 
 // Événements du serveur vers le client
 export interface ServerToClientEvents {
@@ -349,6 +373,12 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.AUTH_SESSION_REVOKED]: (data: AuthSessionRevokedEventData) => void;
   /** L'enveloppe libsignal de CET appareil (#3706), vers `ROOMS.device`. */
   [SERVER_EVENTS.E2EE_ENVELOPE]: (data: E2EEServedEnvelope) => void;
+  /** Un message de comparaison pour CETTE génération (#19156), vers `ROOMS.device`. */
+  [SERVER_EVENTS.E2EE_VERIFICATION]: (data: ServedDeviceVerification) => void;
+  /** Un appareil a rejoint mon compte (ou y revient), vers mes autres appareils capables (#19156). */
+  [SERVER_EVENTS.E2EE_OWN_DEVICE_ENROLLED]: (data: E2EEOwnDeviceEnrolledEventData) => void;
+  /** Une génération de mon compte a été retirée, vers mes autres appareils capables (#19156). */
+  [SERVER_EVENTS.E2EE_OWN_DEVICE_RETIRED]: (data: E2EEOwnDeviceRetiredEventData) => void;
   [SERVER_EVENTS.ERROR]: (data: ErrorEventData) => void;
   [SERVER_EVENTS.CONVERSATION_STATS]: (data: ConversationStatsEventData) => void;
   [SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED]: (data: ConversationUnreadUpdatedEventData) => void;
@@ -378,6 +408,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CALL_RECORDING_STARTED]: (data: CallRecordingStartedEvent) => void;
   [SERVER_EVENTS.CALL_RECORDING_STOPPED]: (data: CallRecordingStoppedEvent) => void;
   [SERVER_EVENTS.CALL_PARTICIPANT_INVITED]: (data: CallParticipantInvitedEvent) => void;
+  [SERVER_EVENTS.CALL_CONVERSATION_CHANGED]: (data: CallConversationChangedEvent) => void;
   [SERVER_EVENTS.CALL_INVITE_DECLINED]: (data: CallInviteSettledEvent) => void;
   [SERVER_EVENTS.CALL_INVITE_EXPIRED]: (data: CallInviteSettledEvent) => void;
   [SERVER_EVENTS.CALL_MUTED_BY_MODERATOR]: (data: CallMutedByModeratorEvent) => void;
@@ -390,7 +421,11 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.FRIEND_REQUEST_NEW]: (data: FriendRequestNewEventData) => void;
   [SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED]: (data: FriendRequestAcceptedEventData) => void;
   [SERVER_EVENTS.FRIEND_REQUEST_REJECTED]: (data: FriendRequestRejectedEventData) => void;
+  [SERVER_EVENTS.FRIEND_REQUEST_UPDATED]: (data: FriendRequestUpdatedEventData) => void;
   [SERVER_EVENTS.RELATION_LEVEL_RAISED]: (data: RelationLevelRaisedEventData) => void;
+  [SERVER_EVENTS.RELATION_LEVEL_LOWERED]: (data: RelationLevelLoweredEventData) => void;
+  [SERVER_EVENTS.USER_BLOCKED_BY_ME]: (data: UserBlockedByMeEventData) => void;
+  [SERVER_EVENTS.USER_UNBLOCKED_BY_ME]: (data: UserBlockedByMeEventData) => void;
   [SERVER_EVENTS.RELATION_RITUAL_STARTED]: (data: RelationRitualStartedEventData) => void;
   [SERVER_EVENTS.RELATION_RITUAL_PROGRESS]: (data: RelationRitualProgressEventData) => void;
   [SERVER_EVENTS.RELATION_RITUAL_COMPLETED]: (data: RelationRitualCompletedEventData) => void;
@@ -404,12 +439,23 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.BATTERY_CHANGED]: (data: BatteryChangedEventData) => void;
   [SERVER_EVENTS.BATTERY_CLEARED]: (data: BatteryClearedEventData) => void;
   [SERVER_EVENTS.BATTERY_PULL_REQUESTED]: (data: BatteryPullRequestedEventData) => void;
+  [SERVER_EVENTS.TRACKING_LINK_CLICKED]: (data: TrackingLinkClickedEventData) => void;
+  [SERVER_EVENTS.SHARE_LINK_ARRIVAL]: (data: ShareLinkArrivalEventData) => void;
+  [SERVER_EVENTS.COMMUNITY_LINK_ENTRY]: (data: CommunityLinkEntryEventData) => void;
+  [SERVER_EVENTS.AFFILIATE_REFERRAL_JOINED]: (data: AffiliateReferralJoinedEventData) => void;
   [SERVER_EVENTS.PHONE_UNREACHABLE]: (data: PhoneReachabilityChangedEventData) => void;
   [SERVER_EVENTS.PHONE_REACHABLE]: (data: PhoneReachabilityClearedEventData) => void;
+  [SERVER_EVENTS.INACTIVITY_ALERT]: (data: InactivityAlertEventData) => void;
+  [SERVER_EVENTS.INACTIVITY_CLEARED]: (data: InactivityClearedEventData) => void;
+  [SERVER_EVENTS.PHONE_CALL_STARTED]: (data: PhoneCallStartedEventData) => void;
+  [SERVER_EVENTS.PHONE_CALL_ENDED]: (data: PhoneCallEndedEventData) => void;
   [SERVER_EVENTS.SHARED_LOCATION_CHANGED]: (data: SharedLocationChangedEventData) => void;
   [SERVER_EVENTS.SHARED_LOCATION_ENDED]: (data: SharedLocationEndedEventData) => void;
   [SERVER_EVENTS.SHARED_LOCATION_OWN_CHANGED]: (data: SharedLocationOwnChangedEventData) => void;
+  [SERVER_EVENTS.SHARED_LOCATION_REQUESTED]: (data: SharedLocationRequestedEventData) => void;
+  [SERVER_EVENTS.CONTACT_EXCHANGE_RECEIVED]: (data: ContactExchangeReceivedEventData) => void;
   [SERVER_EVENTS.BLOOD_PROXIMITY]: (data: BloodProximityEventData) => void;
+  [SERVER_EVENTS.BLOOD_MOVED]: (data: BloodMovedEventData) => void;
   [SERVER_EVENTS.TOGETHER_INVITED]: (data: TogetherInvitedEventData) => void;
   [SERVER_EVENTS.TOGETHER_STARTED]: (data: TogetherStartedEventData) => void;
   [SERVER_EVENTS.TOGETHER_SYNCED]: (data: TogetherSyncedEventData) => void;
@@ -499,16 +545,22 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.COMMUNITY_MEMBER_JOINED]: (data: CommunityMemberJoinedEventData) => void;
   [SERVER_EVENTS.COMMUNITY_MEMBER_LEFT]: (data: CommunityMemberLeftEventData) => void;
   [SERVER_EVENTS.COMMUNITY_MEMBER_ROLE_UPDATED]: (data: CommunityMemberRoleUpdatedEventData) => void;
+  [SERVER_EVENTS.COMMUNITY_DELETED]: (data: CommunityDeletedEventData) => void;
+  [SERVER_EVENTS.COMMUNITY_JOIN_REQUESTED]: (data: CommunityJoinRequestedEventData) => void;
 
   // Packs
   [SERVER_EVENTS.PACK_INSTALLATION_UPDATED]: (data: PackInstallationUpdatedEventData) => void;
   [SERVER_EVENTS.PROFILE_DECOR_UPDATED]: (data: ProfileDecorUpdatedEventData) => void;
+
+  // Mon profil (#18924) — sur `user:<moi>` seulement
+  [SERVER_EVENTS.PROFILE_UPDATED]: (data: ProfileUpdatedEventData) => void;
 
   // Mes stickers (#16515)
   [SERVER_EVENTS.STICKER_LIBRARY_UPDATED]: (data: StickerLibraryUpdatedEventData) => void;
 
   // User Profile
   [SERVER_EVENTS.USER_UPDATED]: (data: UserUpdatedEventData) => void;
+  [SERVER_EVENTS.USER_PROFILE_CHANGED]: (data: UserProfileChangedEventData) => void;
 
   // Conversation Categories
   [SERVER_EVENTS.CATEGORY_CREATED]: (data: CategoryCreatedEventData) => void;
@@ -583,6 +635,7 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.MESSAGE_DELETE]: (data: MessageDeleteData, callback?: (response: SocketIOResponse) => void) => void;
   [CLIENT_EVENTS.MESSAGE_CAPTURE_DETECTED]: (data: ContentCaptureReportInput, callback?: (response: ContentCaptureAck) => void) => void;
   [CLIENT_EVENTS.E2EE_SEND_SIGNAL]: (data: E2EESignalSocketPayload, callback?: (response: E2EESignalAck) => void) => void;
+  [CLIENT_EVENTS.E2EE_SEND_VERIFICATION]: (data: DeviceVerificationSend, callback?: (response: DeviceVerificationSendAck) => void) => void;
   [CLIENT_EVENTS.TALKIE_START]: (data: TalkieStartPayload, callback?: (response: TalkieStartAck) => void) => void;
   [CLIENT_EVENTS.TALKIE_SEND_CHUNK]: (data: TalkieChunkPayload) => void;
   [CLIENT_EVENTS.TALKIE_END]: (data: TalkieEndPayload) => void;

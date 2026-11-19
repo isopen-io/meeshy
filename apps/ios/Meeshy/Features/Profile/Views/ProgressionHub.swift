@@ -339,8 +339,7 @@ struct ProgressionFlammeHero: View {
                 // Le jalon passe en DERNIÈRE LIGNE. À droite, il était cadré à l'opposé de ce qu'il
                 // qualifie et se lisait comme une colonne à part ; en dessous,
                 // il termine la phrase que les deux lignes commencent — où j'en
-                // suis, mon record, ce qui reste. C'est aussi la forme qu'a
-                // déjà `ProgressionStreakCard`, dont ce hero est le résumé.
+                // suis, mon record, ce qui reste.
                 Text(ProgressionCopy.nextStep(for: progress.streak.scale, kind: .streak))
                     .font(.caption)
                     .foregroundStyle(theme.textMuted)

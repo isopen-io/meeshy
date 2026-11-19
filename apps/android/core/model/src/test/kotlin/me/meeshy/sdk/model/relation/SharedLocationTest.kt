@@ -63,6 +63,13 @@ class SharedLocationTest {
     }
 
     @Test
+    fun `chaque cercle servi se lit au niveau du lien dont le marqueur tire son icône et sa couleur (#17013)`() {
+        assertThat(SharedLocationCircle.entries.map { it.level })
+            .containsExactly(RelationLevel.FRIEND, RelationLevel.CLOSE, RelationLevel.BLOOD).inOrder()
+        assertThat(SharedLocationCircle.entries.map { CircleLevelIcons.of(it.level) }).containsExactly("🤝", "🔥", "🩸").inOrder()
+    }
+
+    @Test
     fun `une coordonnee hors du globe ou absente n'atteint jamais la carte`() {
         assertThat(wire(latitude = 90.5).served()).isNull()
         assertThat(wire(longitude = -180.1).served()).isNull()

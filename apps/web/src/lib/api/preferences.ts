@@ -44,7 +44,7 @@ const NO_FLAGS: ConversationFlags = { isPinned: false, isMuted: false, isArchive
 
 /** L'entrée UNIQUE du tableau `userPreferences`, ou `undefined` si la forme
  * n'y correspond pas — le narrowing s'arrête ici, jamais plus loin. */
-const preferenceEntryOf = (conversation: Conversation): Record<string, unknown> | undefined => {
+export const preferenceEntryOf = (conversation: Conversation): Record<string, unknown> | undefined => {
   const raw = conversation.userPreferences;
   if (!Array.isArray(raw)) return undefined;
   const [entry] = raw;

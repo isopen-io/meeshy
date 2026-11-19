@@ -44,4 +44,53 @@
     <string name="dashboard_action_search">Búsqueda global</string>
     <string name="global_search_hint">Buscar en todas partes…</string>
     <string name="new_conversation_error_blocked">No puedes iniciar una conversación con este usuario.</string>
+    <string name="links_community_detail_created_at">Creado el</string>
+    <string name="links_community_detail_full_link">Enlace completo</string>
+    <string name="links_community_detail_identifier">Identificador</string>
+    <string name="links_community_detail_informations">INFORMACIÓN</string>
+    <string name="links_community_detail_members">Miembros</string>
+    <string name="links_community_detail_status">Estado</string>
+    <string name="links_community_identify">Identificar</string>
+    <plurals name="links_community_row_subtitle">
+        <item quantity="one">%1$d miembro · %2$s</item>
+        <item quantity="many">%1$d miembros · %2$s</item>
+        <item quantity="other">%1$d miembros · %2$s</item>
+    </plurals>
+    <string name="links_tracking_detail_browsers">NAVEGADORES</string>
+    <string name="links_tracking_detail_countries">PAÍSES</string>
+    <string name="links_tracking_detail_last_click">Último clic: %1$s</string>
+    <string name="links_tracking_detail_stats_title">ESTADÍSTICAS</string>
+    <string name="links_tracking_detail_stats_total_clicks">Clics totales</string>
+    <string name="links_tracking_detail_stats_unique_clicks">Clics únicos</string>
+    <plurals name="links_tracking_row_clicks">
+        <item quantity="one">%1$d clic</item>
+        <item quantity="many">%1$d clics</item>
+        <item quantity="other">%1$d clics</item>
+    </plurals>
+    <plurals name="links_tracking_row_uniques">
+        <item quantity="one">· %1$d único</item>
+        <item quantity="many">· %1$d únicos</item>
+        <item quantity="other">· %1$d únicos</item>
+    </plurals>
+    <string name="my_share_links_copy">Copiar el enlace</string>
+    <plurals name="my_share_links_joined_count">
+        <item quantity="one">%1$d se unió</item>
+        <item quantity="many">%1$d se unieron</item>
+        <item quantity="other">%1$d se unieron</item>
+    </plurals>
+    <string name="my_share_links_status_active">Activo</string>
+    <string name="my_share_links_status_inactive">Inactivo</string>
+    <string name="shareLink_detail_askedOnArrival">Se pide al llegar</string>
+    <string name="shareLink_detail_concurrent">Al mismo tiempo</string>
+    <string name="shareLink_detail_concurrentMax">%1$d máx.</string>
+    <string name="shareLink_detail_configuration">Configuración</string>
+    <string name="shareLink_detail_createdOn">Enlace creado el %1$s</string>
+    <string name="shareLink_detail_never">Nunca</string>
+    <string name="shareLink_detail_noAccountBadge">sin cuenta</string>
+    <string name="shareLink_detail_optional">Opcional</string>
+    <string name="shareLink_detail_recentArrivals">Llegados recientemente</string>
+    <string name="shareLink_detail_required">Obligatoria</string>
+    <string name="shareLink_detail_uses">Usos</string>
+    <string name="shareLink_detail_usesUnlimited">%1$d / ilimitado</string>
+    <string name="share_links_copy_a11y">Copiar el enlace</string>
 </resources>

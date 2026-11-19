@@ -3,7 +3,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import type { Message } from '@/lib/api/types';
 
 import { DESTRUCTION_MS } from './ephemeral-destruction';
-import { isEphemeralGone, livingMessages, nextEphemeralGoneAt } from './ephemeral-gone';
+import { livingMessages, nextEphemeralGoneAt } from './ephemeral-gone';
 import {
   configureEphemeralReceptionStorage,
   noteEphemeralReception,
@@ -117,13 +117,14 @@ describe('la réception d’un éphémère survit au rechargement (#8900, trou 2
 describe('la loi « partie » (#8900, trou 3)', () => {
   test('échéance servie passée depuis plus que la combustion ⇒ partie', () => {
     const message = messageOf({ ephemeralDuration: 60, expiresAt: new Date(RECEPTION) });
-    expect(isEphemeralGone({ message, isMine: false, now: RECEPTION + DESTRUCTION_MS })).toBe(true);
-    expect(isEphemeralGone({ message, isMine: false, now: RECEPTION + DESTRUCTION_MS - 1 })).toBe(false);
+    const at = (now: number) => livingMessages({ messages: [message], isMine: notMine, now, destroyingIds: new Set(), expiredIds: new Set() });
+    expect(at(RECEPTION + DESTRUCTION_MS)).toEqual([]);
+    expect(at(RECEPTION + DESTRUCTION_MS - 1)).toEqual([message]);
   });
 
   test('la lecture de la loi ne pose AUCUNE réception : un message jamais peint ne décompte pas', () => {
     const message = messageOf({ ephemeralDuration: 60 });
-    expect(isEphemeralGone({ message, isMine: false, now: RECEPTION })).toBe(false);
+    expect(livingMessages({ messages: [message], isMine: notMine, now: RECEPTION, destroyingIds: new Set(), expiredIds: new Set() })).toEqual([message]);
     expect(receptionOf(message.id)).toBeNull();
   });
 

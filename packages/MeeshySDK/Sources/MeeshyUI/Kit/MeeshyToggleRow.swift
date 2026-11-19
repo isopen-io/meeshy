@@ -34,6 +34,8 @@ public struct MeeshyToggleRowNoSlot: View, Equatable {
 public nonisolated struct MeeshyToggleRowContent: Sendable, Equatable {
     public let title: String
     public let subtitle: String?
+    /// Ce que dit l'accessoire de titre (dessin muet) quand il porte un état : « Vérifié ».
+    public let titleAccessoryLabel: String?
     public let accessory: MeeshyToggleRowAccessory
     public let kind: MeeshyToggleRowKind
     public let showsDivider: Bool
@@ -47,10 +49,12 @@ public nonisolated struct MeeshyToggleRowContent: Sendable, Equatable {
         kind: MeeshyToggleRowKind = .normal,
         showsDivider: Bool = false,
         tone: MeeshyGlassTone? = nil,
-        tint: Color? = nil
+        tint: Color? = nil,
+        titleAccessoryLabel: String? = nil
     ) {
         self.title = title
         self.subtitle = subtitle
+        self.titleAccessoryLabel = titleAccessoryLabel
         self.accessory = accessory
         self.kind = kind
         self.showsDivider = showsDivider
@@ -199,6 +203,10 @@ public struct MeeshyToggleRowFace<Leading: View, TitleAccessory: View, Trailing:
             Image(systemName: "chevron.forward")
                 .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
                 .foregroundStyle(recipe.accessoryColor)
+        case .external:
+            Image(systemName: "arrow.up.right.square")
+                .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
+                .foregroundStyle(recipe.accessoryColor)
         case .value(let text):
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .regular))
@@ -261,7 +269,8 @@ public struct MeeshyToggleRow<Leading: View, TitleAccessory: View, Trailing: Vie
             )
         }
         .buttonStyle(MeeshyToggleRowPressStyle(kind: content.kind, tone: content.tone, tint: content.tint))
-        .accessibilityLabel(MeeshyToggleRowRecipe.accessibilityLabel(title: content.title, subtitle: content.subtitle))
+        .accessibilityLabel(MeeshyToggleRowRecipe.accessibilityLabel(title: content.title, titleAccessory: content.titleAccessoryLabel,
+                                                                      subtitle: content.subtitle))
         .accessibilityValue(spokenValue)
         .accessibilityAddTraits(isSelectedTrait)
     }

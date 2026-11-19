@@ -408,4 +408,6 @@ private fun SyncPillGlyph.vector(): ImageVector? = when (this) {
     SyncPillGlyph.MOOD -> MeeshyIcons.EmojiFilled
     SyncPillGlyph.BATTERY -> BatteryPillVector
     SyncPillGlyph.PHONE_UNREACHABLE -> PhoneUnreachableVector
+    SyncPillGlyph.INACTIVITY -> MeeshyIcons.Hourglass
+    SyncPillGlyph.PHONE_CALL -> MeeshyIcons.Call
 }

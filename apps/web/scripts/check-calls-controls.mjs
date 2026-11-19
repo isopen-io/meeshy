@@ -333,6 +333,12 @@ const dragEach = async (page, cdp, selector) => {
   const results = [];
   for (let index = 0; index < count; index += 1) {
     const track = page.locator(selector).nth(index);
+    /* Le carrousel vient de s'ouvrir : on attend qu'il ait posé ses vignettes (sa marge de défilement) avant de la mesurer — une mesure trop tôt lisait 0 et passait pour « rien à faire défiler ». */
+    await track.evaluate((element) => new Promise((resolve) => {
+      const started = performance.now();
+      const read = () => (element.scrollWidth - element.clientWidth > 1 || performance.now() - started > 3000 ? resolve(null) : requestAnimationFrame(read));
+      read();
+    })).catch(() => null);
     const box = await track.boundingBox();
     const room = await track.evaluate((element) => element.scrollWidth - element.clientWidth);
     if (box === null || room <= 1) {
@@ -385,7 +391,7 @@ try {
       check(mineRail?.onStart === true && callRail?.onEnd === true, `${label} : « mon image » à gauche, « l'appel » à droite (${JSON.stringify(rails.map((rail) => [rail.family, rail.box.left, rail.box.right]))})`);
       check(rails.every((rail) => rail.role === 'toolbar' && rail.orientation === 'vertical' && rail.overflowY === 'auto' && rail.middle && rail.onScreen && rail.edge >= 8), `${label} : chaque rail est une colonne verticale qui défile si l'écran est court, au milieu, hors des bords (${JSON.stringify(rails.map((rail) => [rail.role, rail.orientation, rail.overflowY, rail.middle, rail.edge]))})`);
       check((await page.$('[data-call-control-pill="pill"]')) !== null && (await page.$('[data-call-control-pill="grown"]')) === null && (await page.$('[data-call-row]')) === null, `${label} : la pilule ne grandit pas, aucune rangée dedans`);
-      check(JSON.stringify(callRail?.keys.filter((key) => key !== 'pip')) === JSON.stringify(['captions', 'record', 'invite', 'journal', 'react']), `${label} : « l'appel » : Sous-titres, Enregistrer, Ajouter, Journal, Réagir (${callRail?.keys.join(' · ')})`);
+      check(JSON.stringify(callRail?.keys.filter((key) => key !== 'pip')) === JSON.stringify(['captions', 'record', 'invite', 'react']), `${label} : « l'appel » : Sous-titres, Enregistrer, Ajouter, Réagir — le Journal vit au pied des sous-titres, #19670 (${callRail?.keys.join(' · ')})`);
       check(mineRail !== undefined && mineRail.keys.includes('camera') && mineRail.keys.every((key) => ['camera', 'screen'].includes(key)), `${label} : caméra éteinte, « mon image » : Caméra et Écran seuls (${mineRail?.keys.join(' · ')})`);
       check((await page.$('[data-call-control="capture"]')) === null, `${label} : en audio, pas de « Capturer »`);
       check(rails.every((rail) => rail.sizes.length > 0 && rail.sizes.every((size) => size >= TAP_FLOOR) && rail.disc && !rail.blur), `${label} : boutons de ${TAP_FLOOR}, chacun son disque de verre et pas de flou à lui (#17345)`);
@@ -551,7 +557,7 @@ try {
       const videoCall = videoRails.find((rail) => rail.family === 'call');
       check(videoMine?.onStart === true && videoCall?.onEnd === true, `vidéo : « mon image » à gauche, « l'appel » à droite (${JSON.stringify(videoRails.map((rail) => [rail.family, rail.box.left, rail.box.right]))})`);
       check(JSON.stringify(videoMine?.keys.filter((key) => !['flip', 'camera-picker'].includes(key))) === JSON.stringify(['camera', 'effects', 'screen']) && (videoMine.keys[1] === 'flip' || videoMine.keys[1] === 'camera-picker' || !videoMine.keys.some((key) => ['flip', 'camera-picker'].includes(key))), `vidéo : « mon image » : Caméra · (Retourner) · Effets · Écran (${videoMine?.keys.join(' · ')})`);
-      check(JSON.stringify(videoCall?.keys.filter((key) => key !== 'pip')) === JSON.stringify(['captions', 'record', 'invite', 'journal', 'react', 'capture']), `vidéo : « l'appel » : Sous-titres, Enregistrer, Ajouter, Journal, Réagir, Capture (${videoCall?.keys.join(' · ')})`);
+      check(JSON.stringify(videoCall?.keys.filter((key) => key !== 'pip')) === JSON.stringify(['captions', 'record', 'invite', 'react', 'capture']), `vidéo : « l'appel » : Sous-titres, Enregistrer, Ajouter, Réagir, Capture (${videoCall?.keys.join(' · ')})`);
       check(videoRails.every((rail) => rail.sizes.every((size) => size >= TAP_FLOOR) && rail.onScreen), `vidéo : ${TAP_FLOOR} px chacun, à l'écran (${JSON.stringify(videoRails.map((rail) => [rail.family, rail.sizes, rail.box]))})`);
       check((await page.$('[data-call-row="mine"]')) === null && (await page.locator('[data-call-control="camera"]').count()) === 1, 'vignette : le (…) ne double pas les commandes de ma caméra');
       await capture(page, 'controles-rails-video-dark');
@@ -665,6 +671,22 @@ try {
       check(await until(page, () => document.querySelector('[data-call-rails="shown"]') !== null && [...document.querySelectorAll('[data-call-rail-scroll]')].some((rail) => rail.scrollHeight - rail.clientHeight > 1)), 'doigt : en paysage (568 × 320), un rail déborde et défile sur place');
       /* Ma vignette rejoint son coin de paysage en glissant (`useFlip`, une animation Web) : on la mesure posée. */
       await until(page, () => (document.querySelector('[data-call-corner-frame]')?.getAnimations().length ?? 0) === 0, undefined, 2000);
+      /* Le glissé ne démarre qu'à l'image suivant le changement de taille : « aucune animation » peut être lu AVANT qu'elle parte. On attend donc aussi que le coin ne bouge plus pendant douze images de suite. */
+      await until(page, () => new Promise((resolve) => {
+        const corner = document.querySelector('[data-call-corner-frame]');
+        const key = () => { const box = corner?.getBoundingClientRect(); return box ? [box.x, box.y, box.width, box.height].map((value) => Math.round(value * 10)).join(',') : ''; };
+        let last = key();
+        let still = 0;
+        const started = performance.now();
+        const step = () => {
+          const now = key();
+          still = now === last && (corner?.getAnimations().length ?? 0) === 0 ? still + 1 : 0;
+          last = now;
+          if (still >= 12 || performance.now() - started > 4000) resolve(true);
+          else requestAnimationFrame(step);
+        };
+        step();
+      }), undefined, 6000);
       const landscape = await railsOf(page);
       check(landscape.length === 2 && landscape.every((rail) => rail.clearOfTile && rail.fade), `doigt : en paysage, aucun rail ne recouvre ma vignette, et ce qui y défile s’estompe à ses deux bords (${JSON.stringify(landscape.map((rail) => [rail.family, rail.clearOfTile, rail.fade, rail.box, rail.tile]))})`);
       const slid = await page.evaluate(() => [...document.querySelectorAll('[data-call-rail]')].map((rail) => ({ family: rail.getAttribute('data-call-rail'), room: Math.round((rail.querySelector('[data-call-rail-scroll]')?.scrollHeight ?? 0) - (rail.querySelector('[data-call-rail-scroll]')?.clientHeight ?? 0)), box: rail.getBoundingClientRect().toJSON() })).filter((rail) => rail.room > 1));
@@ -673,7 +695,8 @@ try {
         const track = page.locator(`[data-call-rail="${rail.family}"] [data-call-rail-scroll]`);
         await track.evaluate((element) => void (element.scrollTop = 0));
         const x = rail.box.x + rail.box.width / 2;
-        const span = Math.min(rail.box.height - 24, rail.room * 0.8);
+        /* Au moins le seuil d'un glissé : sous lui, Chromium lit un toucher, qui range les commandes (#19670 : le rail « l'appel », sans Journal, ne déborde plus que de quelques pixels). */
+        const span = Math.min(rail.box.height - 24, Math.max(rail.room * 0.8, 24));
         const start = rail.box.y + rail.box.height - 12;
         await drag(cdp, { x, y: start }, { x, y: start - span });
         const moved = await track
@@ -808,8 +831,13 @@ try {
         await page.evaluate(() => {
           for (const [id, text] of [['j-1', 'Bonjour'], ['j-2', 'On se voit demain'], ['j-3', 'À tout à l’heure']]) window.__meeshyFixtureCallPeer?.speak?.({ id, text, translatedText: text });
         });
+        /* #19670 : le journal n'a de porte qu'au pied des sous-titres — on les allume, puis on touche « Journal ». */
         await openActions(page);
-        await page.touchscreen.tap(...(await centerOfSelector(page, '[data-call-control="journal"]')));
+        await page.touchscreen.tap(...(await centerOfSelector(page, '[data-call-rail="call"] [data-call-captions]')));
+        await page.touchscreen.tap(...(await centerOfSelector(page, '[data-call-more]')));
+        await until(page, () => document.querySelector('[data-call-screen]')?.getAttribute('data-call-layer') === 'idle');
+        check(await appears(page, '[data-call-control-pill] [data-call-captions-journal]'), `${label} : les sous-titres allumés portent « Journal » à leur pied`);
+        await page.touchscreen.tap(...(await centerOfSelector(page, '[data-call-control-pill] [data-call-captions-journal]')));
         check(await appears(page, '[data-call-control-pill] [data-call-journal-panel]'), `${label} : « Journal » ouvre le journal DANS la pilule`);
         await until(page, () => document.querySelector('[data-call-audio-stage]')?.getAttribute('data-call-audio-stage') === 'compact');
         await stageSettled(page);

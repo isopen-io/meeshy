@@ -248,6 +248,10 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // `Promise.all` sous l'unique `withOrphanedSenderRepair`, donc une seule
   // application pour trois lectures.
   'search/globalMessageSearch.ts': { kind: 'applies', reads: 3, applications: 1 },
+  // #19200 — « En commun », rubrique Liens : le curseur (`createdAt` seul) puis la fenêtre de compte
+  // et la page, toutes deux sous `LINK_MESSAGE_SELECT` (id, conversation, contenu, date, colonnes de
+  // protection). Jamais la relation `sender` : un lien partagé ne nomme pas son auteur.
+  'relations/sharedLinks.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
 
   // Deux lectures depuis #9240 : `resolveConversationId` (projette le scalaire
   // `conversationId`) et la garde d'admission d'écriture de
@@ -295,7 +299,14 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // `messaging/freezeMessageStatus.ts` (déclaré plus bas), même mécanique —
   // le fichier hôte pèse deux fois le plafond de taille et le lot du décompte
   // éphémère devait y ajouter. La lecture a changé de fichier, pas de nature.
-  'MessageReadStatusService.ts': { kind: 'exempt', reads: 10, why: DOES_NOT_SELECT_SENDER },
+  //
+  // 10 → 11 (#18731) : le BALAYAGE de contiguïté de la livraison
+  // (`_computeExactDeliveredCursorTarget`) lit les entrées figées de la fenêtre
+  // pour savoir jusqu'où le curseur a le droit d'avancer. Son `select` est
+  // `{ messageId: true }` — l'exemption tient pour la raison qui la fonde, pas
+  // par héritage : cette lecture ne nomme aucun expéditeur, et ne rend rien à
+  // personne.
+  'MessageReadStatusService.ts': { kind: 'exempt', reads: 11, why: DOES_NOT_SELECT_SENDER },
   'messaging/anonymizeDeletedAccountMessages.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #11381 — le texte à retraduire (colonnes au repos seules, jamais `sender`).
   'messaging/atRestTranslationSource.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
@@ -313,6 +324,8 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // #14105 — le lien d'un choisi d'un post ONLY : a-t-il écrit dans la conversation directe ?
   // `select: { senderId: true }`, la relation n'est jamais chargée.
   'posts/directContactVisibility.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #19378 — « Notre histoire » : `select: { createdAt: true }` seul (premier message, jalons). Aucun expéditeur servi.
+  'relations/pairHistory.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   // #7578 — purge serveur du contenu d'une vue unique : ni expéditeur ni contenu servi.
   'messaging/purgeViewOnceContent.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #11269 — rattrapage des médias à vue unique lus par tous : `senderId` (colonne) seul, la relation n'est jamais chargée.
@@ -361,6 +374,12 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // `findUniqueOrThrow` avec `CALL_SUMMARY_MESSAGE_INCLUDE`, la même forme que
   // les écritures du message-résumé de `CallService` (initiateur de l'appel).
   'calls/callRecordingLink.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #19650 — la bascule d'un appel retrouve la bulle « en cours » du tête-à-tête
+  // d'origine par `select: { id, metadata }` (l'édition repasse par
+  // `CALL_SUMMARY_MESSAGE_INCLUDE`), et la réaction d'appel retrouve la bulle
+  // du groupe par `select: { id }` : aucune ne lit l'expéditeur.
+  'calls/originConversationCall.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'calls/callReactionOnBubble.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/conversationWriteAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/attachmentSendAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/copyExitProtection.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },

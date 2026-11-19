@@ -48,8 +48,6 @@ export const UPLOAD_REFUSAL_CODES = {
   DAILY_QUOTA_EXCEEDED: 'UPLOAD_DAILY_QUOTA_EXCEEDED',
 } as const;
 
-export type UploadRefusalCode = (typeof UPLOAD_REFUSAL_CODES)[keyof typeof UPLOAD_REFUSAL_CODES];
-
 const FAMILY_OF_TYPE: Readonly<Record<AttachmentType, UploadSizeFamily>> = {
   image: 'image',
   audio: 'audio',

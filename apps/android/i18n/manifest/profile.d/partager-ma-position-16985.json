@@ -5,7 +5,7 @@
       "resDir": "feature/profile/src/main/res",
       "entries": [
         { "catalog": "app", "iosKey": "sharedLocation.share.action", "androidName": "shared_location_share_action", "status": "adopted" },
-        { "catalog": "app", "iosKey": "sharedLocation.share.actionAccessibility", "androidName": "shared_location_share_action_a11y", "status": "adopted" },
+        { "androidName": "shared_location_share_action_a11y", "status": "android-only" },
         { "catalog": "app", "iosKey": "sharedLocation.share.sheetTitle", "androidName": "shared_location_share_sheet_title", "status": "adopted" },
         { "catalog": "app", "iosKey": "sharedLocation.share.durationTitle", "androidName": "shared_location_share_duration_title", "status": "adopted" },
         { "catalog": "app", "iosKey": "sharedLocation.share.oneHour", "androidName": "shared_location_share_one_hour", "status": "adopted" },

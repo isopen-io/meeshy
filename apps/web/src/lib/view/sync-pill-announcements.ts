@@ -26,7 +26,9 @@ export type PillAnnouncementTone = 'alert' | 'warn' | 'good';
 
 export type PillAnnouncementIcon =
   | { readonly kind: 'battery'; readonly level: number | null; readonly charging: boolean }
-  | { readonly kind: 'phone'; readonly reachable: boolean };
+  | { readonly kind: 'phone'; readonly reachable: boolean }
+  | { readonly kind: 'inactivity'; readonly responded: boolean }
+  | { readonly kind: 'call'; readonly active: boolean };
 
 export type PillAnnouncement = {
   readonly id: string;
@@ -36,7 +38,8 @@ export type PillAnnouncement = {
   readonly tone: PillAnnouncementTone;
   /**
    * Le dessin de tête : une batterie, son niveau (nul : contour seul) et sa charge ; ou un téléphone, barré
-   * quand il est injoignable (#18737).
+   * quand il est injoignable (#18737) ; ou un sablier, que le retour remplace par une coche (#18738) ; ou un
+   * combiné, raccroché à la fin d'un appel (#18753).
    */
   readonly icon: PillAnnouncementIcon;
   /** L'horloge locale de l'arrivée. */

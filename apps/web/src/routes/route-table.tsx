@@ -275,7 +275,7 @@ export const ROUTES = {
   },
   thread: { pattern: '/c/$conversation', screen: () => import('@/routes/thread') },
   /* NOUVELLE CONVERSATION (#5652) — nomenclature legacy reprise (D-5) :
-     `apps/web/app/conversations/new` porte déjà ce chemin. */
+     `legacy-web-final:apps/web/app/conversations/new` porte déjà ce chemin. */
   conversationsNew: { pattern: '/conversations/new', screen: () => import('@/routes/conversation-new') },
   login: { pattern: '/login', screen: () => import('@/routes/login') },
   signup: { pattern: '/signup', screen: () => import('@/routes/signup') },
@@ -412,7 +412,7 @@ export const ROUTES = {
      ou une story de l'auteur : on y modifie, ajoute et supprime des scènes. */
   postEdit: { pattern: '/posts/$post/edit', screen: () => import('@/routes/publication-edit') },
   /* LE LECTEUR PLEIN ÉCRAN (#5817) — nomenclature legacy `/story/:postId`
-     (D-5, `parity.md:310`). Une story NOMMÉE ouvre directement CETTE
+     (D-5, `parity.md:411`). Une story NOMMÉE ouvre directement CETTE
      adresse (intention `targetingStory`, `StoryViewerRequestOrigin.swift`) ;
      le rail et la liste des stories nomment une PERSONNE et calculent
      eux-mêmes l'id d'entrée (`entryStoryId`, `lib/view/story-tray.ts`) avant
@@ -446,8 +446,8 @@ export const ROUTES = {
      tranche (issue compagnon). */
   forgotPassword: { pattern: '/forgot-password', screen: () => withAccountRecoveryCatalog(import('@/routes/forgot-password')) },
   /* ON FINIT D'ENTRER DANS MEESHY (T-verify/T-reset, #5672) — nomenclature
-     legacy reprise (D-5) : `apps/web/app/auth/verify-email`,
-     `apps/web/app/reset-password`. Depuis #10859 le jeton (et l'adresse) d'un
+     legacy reprise (D-5) : `legacy-web-final:apps/web/app/auth/verify-email`,
+     `legacy-web-final:apps/web/app/reset-password`. Depuis #10859 le jeton (et l'adresse) d'un
      lien d'e-mail voyagent dans le FRAGMENT, relevés puis rangés dans l'entrée
      d'historique (`lib/links/email-link-secret.ts`) — un rafraîchissement les
      retrouve, aucun journal d'accès ne les voit. */
@@ -563,7 +563,7 @@ export const ROUTES = {
      les DEUX adresses que le texte enrichi vise, et elles arrivent AVANT les
      liens qui les visent : une mention qui tomberait sur « adresse inconnue »
      serait un contrôle qui ment (loi 4), le défaut que le rail des stories a
-     déjà payé plus haut. Nomenclature LEGACY reprise (D-5) : `apps/web/app/u/`
+     déjà payé plus haut. Nomenclature LEGACY reprise (D-5) : `legacy-web-final:apps/web/app/u/`
      et `apps/web/app/hashtag/[tag]` servent déjà ces chemins, et un lien déjà
      partagé doit continuer de s'ouvrir après la bascule.
 
@@ -571,6 +571,10 @@ export const ROUTES = {
      texte, et la passerelle résout les deux à la même adresse
      (`servirProfilPublic`, insensible à la casse sur le pseudo). */
   userProfile: { pattern: '/u/$username', screen: () => import('@/routes/user-profile') },
+  /* L'ADRESSE COURTE D'UNE PERSONNE (#18878) — `meeshy.me/@pseudo`, le lien qu'on colle dans une
+     biographie ou sur une carte. MÊME écran que `/u/$username`, jamais une redirection : le
+     visiteur garde l'adresse qu'il a reçue, et rien ne se rejoue. */
+  userShortcut: { pattern: '/@$username', screen: () => import('@/routes/user-profile-shortcut') },
   hashtag: { pattern: '/hashtag/$tag', screen: () => import('@/routes/hashtag') },
   links: { pattern: '/links', screen: () => withLinkFamiliesCatalog(import('@/routes/links')) },
   /* LES LIENS DE PARTAGE (#6361, D-63) — miroir `Route.shareLinks`, puis
@@ -608,7 +612,7 @@ export const ROUTES = {
   communities: { pattern: '/communities', screen: () => import('@/routes/communities') },
   /* CRÉER, PUIS UNE COMMUNAUTÉ (#6364, D-60) — miroir `Route.communityCreate` et
      `Route.communityDetail` (`Router.swift`). `/communities/:id` est l'adresse
-     que le legacy sert (`apps/web/app/(connected)/communities/[id]`, D-5).
+     que le legacy sert (`legacy-web-final:apps/web/app/(connected)/communities/[id]`, D-5).
      L'ORDRE compte : le routeur rend la PREMIÈRE adresse qui correspond, et
      `new` serait sinon lu comme l'identifiant d'une communauté. */
   communityNew: { pattern: '/communities/new', screen: communityNewScreen },
@@ -621,7 +625,7 @@ export const ROUTES = {
   settings: { pattern: '/settings', screen: () => import('@/routes/settings') },
   profile: { pattern: '/me', screen: () => import('@/routes/profile') },
   /* L'ESPACE D'ADMINISTRATION (#6432) — nomenclature LEGACY reprise (D-5) :
-     `apps/web/app/admin` et `apps/web/app/admin/users` servent déjà ces deux
+     `legacy-web-final:apps/web/app/admin` et `legacy-web-final:apps/web/app/admin/users` servent déjà ces deux
      adresses, et un administrateur qui bascule d'une application à l'autre
      doit retrouver ses signets.
 

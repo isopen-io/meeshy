@@ -16,11 +16,12 @@ import { capOpener, shownLevelOf, sparksReading } from '@/lib/game/ladder';
 
 /**
  * LA BANNIÈRE DU JOUEUR (#9494, conception XIII.1) — ce que le bandeau du haut
- * montre quand aucun appel ni aucun audio ne l'occupe. Ordre FIXE, de gauche à
- * droite, en une rangée de 48 px (#11125) : l'anneau et la jauge des étincelles ;
- * au milieu la Flamme et les Meeshes, la mission du jour, le contenant de
- * l'Héritage (#17437) et la ligue ; au bout le
- * blason du rang, sa jauge de Gloire et ce qui manque pour le rang suivant.
+ * montre quand aucun appel ni aucun audio ne l'occupe. Ordre FIXE, du début à
+ * la fin, en une rangée de 48 px (#11125) : EN TÊTE le blason du rang, sa jauge
+ * de Gloire et ce qui manque pour le rang suivant — devenir Légende est l'objet
+ * du jeu (#17394, #19705) — ; puis l'anneau et la jauge des étincelles ; au
+ * milieu la Flamme et les Meeshes, la mission du jour, le contenant de
+ * l'Héritage (#17437) et la ligue.
  *
  * SEULEMENT CE QUI A DU SENS : un élément sans donnée vaut `null` et ne se
  * dessine pas — jamais un zéro, un tiret ou une case vide ; sans AUCUNE donnée,
@@ -171,9 +172,9 @@ export const leaguePlace = (place: number, language: InterfaceLanguage = current
   translateGameOrdinal(language, 'game.banner.place', place);
 
 /**
- * Ce que lit un lecteur d'écran, en UNE phrase et dans l'ordre de la bannière (#11125) : « Niveau 34, Éclat, 78 % vers le
- * 35, Flamme 23 jours, 12 Meeshes, Missions du jour : 2 sur 3, ligue Jade 4e, Conteur III, 3 400 Gloire, encore 1 200 vers
- * Conteur II ». Trophées et saison ne sont dits que dans la disposition grand texte, la seule qui les montre. Ce qui
+ * Ce que lit un lecteur d'écran, en UNE phrase et dans l'ordre de la bannière (#11125, #19705) : « Conteur III, 3 400
+ * Gloire, 1 200 de gloire jusqu'à Conteur II, Niveau 34, Éclat, 78 % vers le 35, Flamme 23 jours, 12 Meeshes, Rêve : 2 sur 3,
+ * joute de Jade 4e ». Trophées et saison ne sont dits que dans la disposition grand texte, la seule qui les montre. Ce qui
  * n'existe pas ne se dit pas.
  */
 export function playerBannerLabel(model: PlayerBannerModel, language: InterfaceLanguage = currentInterfaceLanguage(), layout: PlayerBannerLayout = 'compact'): string {
@@ -181,6 +182,7 @@ export function playerBannerLabel(model: PlayerBannerModel, language: InterfaceL
   const { level } = model;
   const large = layout === 'large';
   const parts: readonly (string | null)[] = [
+    model.rank === null ? null : rankSentence(model.rank, language),
     level === null ? null : translateGame(language, 'game.banner.level', { level: count(level.level) }),
     level === null ? null : levelTierName(model.tier, language),
     level === null
@@ -202,7 +204,6 @@ export function playerBannerLabel(model: PlayerBannerModel, language: InterfaceL
     model.league === null
       ? null
       : translateGame(language, 'game.banner.league', { league: leagueName(model.league.league, language), place: leaguePlace(model.league.place, language) }),
-    model.rank === null ? null : rankSentence(model.rank, language),
     !large || model.trophies === null ? null : translateGame(language, 'game.banner.link.trophies', { count: count(model.trophies) }),
     !large || model.season === null ? null : translateGame(language, 'game.banner.link.season', { stars: count(model.season.stars) }),
   ];

@@ -4,7 +4,7 @@ import MeeshySDK
 
 // MARK: - User Profile Sheet
 
-public enum ConnectionStatus: Equatable, Sendable {
+public nonisolated enum ConnectionStatus: Equatable, Sendable {
     case none
     case pendingSent(requestId: String)
     case pendingReceived(requestId: String)
@@ -36,7 +36,19 @@ public struct UserProfileSheet: View {
 
     @State var isBlocked: Bool = false
     @State var connectionStatus: ConnectionStatus = .none
-    @State private var pendingRequestId: String?
+    @State var pendingRequestId: String?
+    /// La demande en attente telle que le cache la garde : sa date (« envoyée il y a 2 j ») et le mot de l'émetteur.
+    @State var pendingRequest: FriendRequest?
+    /// Acceptée sur cette fiche : « Vous êtes amis » reste à l'écran le temps qu'on la lise (planche `Etat-Demande`).
+    @State var justAccepted = false
+    /// La dernière demande n'est pas partie (planche `Etat-Erreur` vue 2) : la carte le dit et propose « Réessayer ».
+    @State var requestUnsent = false
+    /// Le mot de la demande qui n'est pas partie : la carte le reprend, et « Réessayer » le renvoie tel quel.
+    @State var unsentNote: String?
+    /// Accepter, refuser ou annuler a raté (planche `Etat-Erreur` vue 2, #19611) : la carte le dit et propose « Réessayer ».
+    @State var relationFailure: ProfileRelationMutation?
+    /// Une demande est en route : un second appui ne repart pas, et la carte « Envoyée » attend son identifiant servi.
+    @State var isSendingRequest = false
 
     public let dependencies: UserProfileDependencies
 
@@ -66,21 +78,44 @@ public struct UserProfileSheet: View {
     /// L'emplacement du jeu (#9481) — fourni par l'app, vide sinon.
     @Environment(\.profileGameSection) var gameSection
     @Environment(\.profileRelationSection) var relationSection
+    @Environment(\.profileRelationPill) var relationPill
+    @Environment(\.profileLocationMap) var locationMap
+    /// « En direct · Entre Proches » (#19416) — fourni par l'app, absent sinon.
+    @Environment(\.profileLiveSection) var liveSectionSlot
+    /// Les sections de la face Actions lues par l'app (#19433) ; absentes sans elle.
+    @Environment(\.profileActionsParts) var actionsParts
+    /// La feuille d'envoi Meeshy de l'app (#19442) ; sans elle, « Envoyer son profil » ouvre celle du système.
+    @Environment(\.profileSendSheet) var sendSheet
     @Environment(\.profileLoading) private var injectedProfileLoading
     @Environment(\.dismiss) var dismiss
-    @State var selectedTab: ProfileTab = .details
+    /// En plein écran (`profileCover`, #19674), la tête dit « Retour » ; en feuille, « Fermer ».
+    @Environment(\.profilePresentationStyle) var presentationStyle
+    /// La face lue (loi 1, #18870) ; la Vitrine d'abord, ou celle que demande l'ouverture (#19732).
+    @State var face: RelationFace = .vitrine
+    /// Ce que l'emplacement du cercle publie (#14910, #18870) : le lien montré et le niveau d'outil lu, `unresolved`
+    /// tant que l'app n'a rien lu.
+    @State var relationStanding = ProfileRelationStanding.unresolved
+    @State var sharesProfile = false
     /// #10093 — la bannière ou la photo ouverte en plein écran, PRÉSENTÉE par-dessus la feuille (`fullScreenCover`) :
     /// posée dans la pile de la feuille, la visionneuse ne pouvait pas déborder de sa hauteur (mi-écran en `.medium`).
     @State private var fullscreenImage: ProfileFullscreenImage?
     @State var showReportSheet = false
-    /// Signed scroll offset feeding `ProfileHeaderMetrics.progress`. Negative
+    /// Signed scroll offset feeding `ProfileHeroPlan.progress`. Negative
     /// while scrolling content down. Updated by the iOS 16-17 preference path
     /// and the iOS 18+ `trackScrollContentOffset` path simultaneously.
     @State var scrollRelay = ScrollOffsetRelay()
+    /// La hauteur de la barre système, lue sous l'en-tête plein écran (#19854) ; 0 en feuille.
+    @State var heroStatusBar: Double = 0
     /// #10093 — profil et statistiques : le cache d'abord, la synchronisation dès l'ouverture.
     @StateObject var loader = ProfileSheetLoader()
+    @StateObject var acquaintance = ProfileAcquaintanceModel()
     @State private var internalConversations: [MeeshyConversation] = []
     @State private var internalIsLoadingConversations = false
+    /// Nos directes lues dans le cache de la liste (#19646) : la pastille d'« Écrire », relue à chaque réécriture du cache,
+    /// et si une directe existe déjà ; rien tant qu'elles ne sont pas lues.
+    @State var directDigest: ProfileDirectDigest = .empty
+    /// La connectivité observée par l'app (#18857) ; `nil` sans elle.
+    @Environment(\.profileNetworkIsOffline) var networkIsOffline
 
     public init(
         user: ProfileSheetUser,
@@ -98,6 +133,7 @@ public struct UserProfileSheet: View {
     ) {
         self.dependencies = dependencies
         self.user = user
+        _face = State(initialValue: user.openingFace)
         self.onDismiss = onDismiss
         self.onNavigateToConversation = onNavigateToConversation
         self.onSendMessage = onSendMessage
@@ -114,14 +150,20 @@ public struct UserProfileSheet: View {
         user.accentColor
     }
 
+    /// L'accent de la fiche en couleur, pour les composants du kit qui le reçoivent.
+    var accentTint: Color { Color(hex: resolvedAccent) }
+
     /// La couleur du PROFIL (#10754) — avatar sans photo, bannière de design — et non
-    /// l'accent de l'écran d'où la fiche s'ouvre : la même source que ma propre fiche.
+    /// l'accent de l'écran d'où la fiche s'ouvre : la même source que ma propre fiche. La teinte qu'il a
+    /// CHOISIE d'abord (#19391), l'accent calculé quand le serveur n'en sert pas.
     var profileAccent: String {
-        DynamicColorGenerator.profileAccentHex(userId: displayUser.userId, name: displayUser.resolvedDisplayName)
+        ProfileAccent.hex(chosen: displayUser.profileAccentColor, userId: displayUser.userId,
+                          name: displayUser.resolvedDisplayName)
     }
 
+    /// Introuvable, privé ou il m'a bloqué (loi 9) : le décor et la présence se taisent, la fiche rend « Personne ici ».
     var isBlockedByTarget: Bool {
-        loader.isBlockedByTarget
+        loader.isUnavailable
     }
 
     var displayUser: ProfileSheetUser {
@@ -147,15 +189,28 @@ public struct UserProfileSheet: View {
         internalConversations
     }
 
+    var effectiveIsLoadingConversations: Bool {
+        internalIsLoadingConversations
+    }
+
     public var body: some View {
         ZStack {
-            if isBlockedByTarget {
-                Color.clear.onAppear { onDismiss?(); dismiss() }
-            } else if isBlocked {
+            switch phase {
+            case .unavailable:
+                unavailableLayout
+            case .blockedByMe:
                 blockedLayout
-            } else {
+            case .skeleton, .failed, .shown:
                 collapsibleLayout
             }
+        }
+        .sheet(isPresented: $showReportSheet) {
+            ProfileReportSheet(name: displayUser.resolvedDisplayName, avatarURL: displayUser.avatarURL,
+                               accentColor: profileAccent, ring: displayUser.profileDecor?.avatarRing,
+                               presence: ProfileHeroPlan.presence(resolvedPresence, isMuted: isIdentityMuted),
+                               isAlreadyBlocked: isBlocked, reportMessages: dependencies.reportMessages, reportedUserId: resolvedUserId,
+                               onSend: { draft in await sendReport(draft) },
+                               onRetryBlock: { await retryReportBlock() })
         }
         .fullScreenCover(item: $fullscreenImage) { image in
             FullscreenImageView(imageURL: image.url, fallbackText: image.fallbackText, accentColor: resolvedAccent)
@@ -181,135 +236,97 @@ public struct UserProfileSheet: View {
         loaded.flatMap(event.repainted)
     }
 
-    /// Layout shown when the current user blocked the target — no tabs, just
-    /// the (greyed) header + the unblock card, preserving prior behavior.
-    @ViewBuilder
-    private var blockedLayout: some View {
-        VStack(spacing: 0) {
-            bannerSection
-            identitySection(offset: 0)
-                .padding(.top, -40)
-            blockedByMeCard
-                .padding(.horizontal, MeeshySpacing.xl)
-                .padding(.top, MeeshySpacing.lg)
-            Spacer()
-        }
-        .background(theme.backgroundPrimary)
-        .ignoresSafeArea(edges: .top)
-    }
-
-    /// The redesigned single-scroll layout: a big collapsible header scrolls
-    /// away while the tab bar pins, with a compact identity bar fading in.
+    /// La fiche en un seul défilement (#19410) : le héros K28 se replie en barre de verre épinglée, et le sélecteur de
+    /// faces flotte en bas (loi 5).
     @ViewBuilder
     private var collapsibleLayout: some View {
-        ScrollView(showsIndicators: false) {
-            LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-                ScrollOffsetReader(relay: scrollRelay) { offset in
-                    bigCollapsibleHeader(offset: offset)
-                }
-
-                Section {
-                    tabContent
+        heroScrollView(
+            VStack(spacing: 0) {
+                if case .shown(let fallback?) = phase {
+                    ProfileCacheFallbackBanner(fallback: fallback, onRetry: { retryFromState() })
                         .padding(.top, MeeshySpacing.lg)
-                } header: {
-                    ScrollOffsetReader(relay: scrollRelay) { offset in
-                        pinnedTabBar(offset: offset)
-                    }
                 }
 
-                Color.clear.frame(height: 40)
-            }
+                MeeshyRevealZone(isRevealed: phase != .skeleton) { faceContent } placeholder: { ProfileSkeletonFace() }
+                    .padding(.top, MeeshySpacing.lg)
 
-            GeometryReader { geo in
-                Color.clear.preference(
-                    key: ScrollOffsetPreferenceKey.self,
-                    value: geo.frame(in: .named("profileScroll")).minY
-                )
+                Color.clear.frame(height: showsFaceSelector ? MeeshySpacing.xxl * 3 : 40)
             }
-            .frame(height: 0)
-        }
-        .coordinateSpace(name: "profileScroll")
-        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }
-        .trackScrollContentOffset { scrollRelay.offset = -$0 }
-        .background(theme.backgroundPrimary)
-        .ignoresSafeArea(edges: .top)
-        .overlay(alignment: .top) {
-            ScrollOffsetReader(relay: scrollRelay) { offset in
-                compactPinnedBar
-                    .opacity(Double(ProfileHeaderMetrics.progress(offset: offset)))
-                    .allowsHitTesting(ProfileHeaderMetrics.progress(offset: offset) > 0.5)
-                    // Hide the compact identity from VoiceOver while the header is
-                    // still mostly expanded — the expanded identity is the primary
-                    // and reads name/@username; avoids a duplicate identity element.
-                    .accessibilityHidden(ProfileHeaderMetrics.progress(offset: offset) <= 0.5)
+        )
+        .overlay(alignment: .bottom) {
+            if showsFaceSelector {
+                RelationFaceSelector(face: $face, writeShortcut: writeShortcut)
             }
         }
-        // Always-on close affordance over the (reduced) banner, top-leading.
-        .overlay(alignment: .topLeading) {
-            closeButton
-        }
+        .environment(\.meeshyProfileAccent, profileAccent)
         .task {
             await loadDataIfNeeded()
             await loadConversationsIfNeeded()
+            await acquaintance.resolve(userId: resolvedUserId, host: dependencies.acquaintance)
+        }
+        .task(id: resolvedUserId) {
+            directDigest = .empty
+            for await digest in ProfileDirectDigest.updates(for: resolvedUserId, from: dependencies.directUnread) {
+                directDigest = digest
+            }
+        }
+        .adaptiveOnChange(of: networkIsOffline) { old, new in
+            guard ProfileTalkReach.reloadsOnReconnect(from: old, to: new, phase: phase) else { return }
+            Task { await retryProfile() }
         }
     }
 
-    /// Tab content switch — each tab content is defined in its own extension
-    /// file. Loading placeholder shown only on cold cache.
+    /// Sans réseau : la connectivité observée par l'app, sinon le dernier chargement (planche `Etat-HorsLigne`).
+    var talksOffline: Bool {
+        ProfileTalkReach.isOffline(phase, network: networkIsOffline)
+    }
+
+    /// La face lue — chacune dans son extension, glissant dans le sens du geste (#19606). Squelette sur cache vide (loi 8).
     @ViewBuilder
-    var tabContent: some View {
-        if effectiveIsLoading {
-            loadingPlaceholder
-                .padding(.horizontal, MeeshySpacing.xl)
-        } else if loader.profileLoadFailed {
-            profileLoadFailedState
-                .padding(.horizontal, MeeshySpacing.xl)
-        } else {
-            switch selectedTab {
-            case .posts:
-                postsTab
-            case .conversations:
-                conversationsTab
-            case .details:
-                detailsTab
+    var faceContent: some View {
+        switch phase {
+        case .skeleton:
+            ProfileSkeletonFace()
+        case .failed(let failure):
+            ProfileFailedState(failure: failure, onRetry: { retryFromState() })
+        case .shown, .unavailable, .blockedByMe:
+            MeeshySegmentedPages(selection: RelationFace.shown(face, isCurrentUser: isCurrentUser),
+                                 order: RelationFace.allCases) { shown in
+                switch shown {
+                case .vitrine: vitrineFace
+                case .links: RelationLinksFace.of(self)
+                case .actions: actionsFace
+                }
             }
         }
     }
 
-    // MARK: - Profil non chargé (#8025)
-
-    /// Le profil n'a pas pu se charger et le cache n'a rien à montrer : la
-    /// fiche le dit et propose de réessayer, au lieu d'onglets vides.
-    private var profileLoadFailedState: some View {
-        VStack(spacing: MeeshySpacing.md) {
-            Image(systemName: "wifi.exclamationmark")
-                .font(MeeshyFont.relative(28, weight: .light))
-                .foregroundStyle(theme.textMuted)
-                .accessibilityHidden(true)
-            Text(String(localized: "profile.loadFailed.message", defaultValue: "Ce profil n'a pas pu se charger.", bundle: .module))
-                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                .foregroundStyle(theme.textSecondary)
-                .multilineTextAlignment(.center)
-            Button {
-                HapticFeedback.light()
-                Task { await retryProfile() }
-            } label: {
-                Text(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .module))
-                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, MeeshySpacing.xl)
-                    .frame(minHeight: MeeshyControlSize.tapTarget)
-                    .background(Capsule().fill(Color(hex: resolvedAccent)))
-                    .contentShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .accessibilityHint(String(localized: "profile.loadFailed.message", defaultValue: "Ce profil n'a pas pu se charger.", bundle: .module))
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, MeeshySpacing.xl)
+    var showsFaceSelector: Bool {
+        RelationFace.showsSelector(isCurrentUser: isCurrentUser, isBlocked: isBlocked, loadFailed: !phase.showsFaceSelector)
     }
 
-    private func retryProfile() async {
+    /// « Écrire » à droite du sélecteur, sur la Vitrine seulement (brief § 1).
+    private var writeShortcut: (() -> Void)? {
+        guard face.offersWriteShortcut(isInteractionDisabled: isInteractionDisabled),
+              talkReach(.write) != .needsNetwork else { return nil }
+        return { openConversation() }
+    }
+
+    /// Sans lien ni connexion acceptée, écrire part en demande de message, jugé au niveau d'outil que l'app a lu.
+    var writesARequest: Bool {
+        RelationFace.writesARequest(standing: servedStanding, connection: connectionStatus)
+    }
+
+    /// L'app montre un lien d'au moins Connaissance (#14910) : la fiche range ce qu'elle montrait sans lien.
+    var relationLinked: Bool { relationStanding.linked }
+
+    /// Sans emplacement de cercle ni pilule, personne ne publie : la fiche reste au cercle Public d'avant.
+    var servedStanding: ProfileRelationStanding {
+        relationSection == nil && relationPill == nil ? .unhosted : relationStanding
+    }
+
+    /// « Réessayer » (#8025) : le chargeur rejoue l'ouverture, puis les conversations en commun si elles manquent.
+    func retryProfile() async {
         await loader.retry(userId: user.userId, username: user.username, using: profileLoading)
         resolveConnectionStatus()
         if internalConversations.isEmpty {
@@ -330,7 +347,7 @@ public struct UserProfileSheet: View {
         user.userId ?? loader.profile?.id
     }
 
-    private func loadConversationsIfNeeded() async {
+    func loadConversationsIfNeeded() async {
         guard let userId = resolvedUserId else { return }
         internalIsLoadingConversations = true
         internalConversations = (try? await profileLoading.sharedConversations(with: userId, currentUserId: currentUserId)) ?? internalConversations
@@ -365,71 +382,134 @@ public struct UserProfileSheet: View {
 
     // MARK: - Connection Actions
 
-    func sendConnectionRequest() async {
-        guard let userId = resolvedUserId, !userId.isEmpty else { return }
-        guard let requestId = await connectionActions.sendRequest(to: userId) else {
-            HapticFeedback.error()
-            postToast(String(localized: "profile.toast.requestSendFailed", defaultValue: "Impossible d'envoyer la demande", bundle: .module), isSuccess: false)
-            return
+    /// Optimiste (planche `Etat-Demande`) : l'étape « Envoyée » s'affiche au geste, un second appui ne repart pas, et
+    /// un refus du réseau ramène la carte d'ouverture qui le dit (« La demande n'est pas partie » + Réessayer).
+    func sendConnectionRequest(message: String? = nil) async {
+        guard let userId = resolvedUserId, !userId.isEmpty, !isSendingRequest else { return }
+        isSendingRequest = true
+        requestUnsent = false
+        relationFailure = nil
+        let outcome = await connectionActions.sendRequest(to: userId, message: message) { provisional in
+            markRequestPending(provisional)
         }
+        isSendingRequest = false
+        applySent(outcome, note: message)
+    }
+
+    private func markRequestPending(_ requestId: String) {
         pendingRequestId = requestId
         connectionStatus = .pendingSent(requestId: requestId)
-        HapticFeedback.success()
-        postToast(String(localized: "profile.toast.requestSent", defaultValue: "Demande envoyée", bundle: .module), isSuccess: true)
+    }
+
+    /// La demande servie porte sa date et son mot : l'étape dit « à l'instant » sans attendre le cache des demandes.
+    private func applySent(_ outcome: ProfileRequestSend, note: String?) {
+        switch outcome {
+        case .sent(let request):
+            unsentNote = nil
+            pendingRequest = request
+            markRequestPending(request.id)
+            HapticFeedback.success()
+            postToast(String(localized: "profile.toast.requestSent", defaultValue: "Demande envoyée", bundle: .module), isSuccess: true)
+        case .failed:
+            pendingRequestId = nil
+            connectionStatus = .none
+            requestUnsent = true
+            unsentNote = note
+            HapticFeedback.error()
+        case .alreadyPending:
+            resolveConnectionStatus()
+        }
     }
 
     func cancelRequest() async {
-        guard let requestId = pendingRequestId, let userId = resolvedUserId else { return }
-        let cancelled = await connectionActions.cancelRequest(requestId: requestId, userId: userId) {
+        guard let requestId = pendingRequestId, let userId = resolvedUserId,
+              !ProfileConnectionActions.isProvisional(requestId) else { return }
+        relationFailure = nil
+        let cancelled = await connectionActions.perform(.cancel, requestId: requestId, userId: userId) {
             pendingRequestId = nil
             connectionStatus = .none
             HapticFeedback.medium()
         }
-        guard cancelled else {
-            resolveConnectionStatus()
-            postToast(String(localized: "profile.toast.cancelFailed", defaultValue: "Impossible d'annuler", bundle: .module), isSuccess: false)
-            return
-        }
+        guard cancelled else { return relationFailed(.cancel) }
         postToast(String(localized: "profile.toast.requestCancelled", defaultValue: "Demande annulée", bundle: .module), isSuccess: true)
     }
 
+    /// Le cache des demandes ne remplace la demande gardée que s'il en rend une, pour le même identifiant.
+    func loadPendingRequest() async {
+        guard let requestId = pendingRequestId, !ProfileConnectionActions.isProvisional(requestId) else { return }
+        let request = await connectionActions.pendingRequest(requestId)
+        guard requestId == pendingRequestId, let request, request.id == requestId else { return }
+        pendingRequest = request
+    }
+
+    /// « Renvoyer » : l'ancienne demande se retire (optimiste, remise si le réseau refuse — la carte le dit), puis la
+    /// nouvelle part avec le mot de l'ancienne. Si elle ne part pas, l'étape retombe sur « La demande n'est pas partie ».
     func resendRequest() async {
-        if let requestId = pendingRequestId {
-            await connectionActions.discardRequest(requestId)
+        guard let requestId = pendingRequestId, let userId = resolvedUserId, !userId.isEmpty, !isSendingRequest,
+              !ProfileConnectionActions.isProvisional(requestId) else { return }
+        let message = pendingRequest?.id == requestId ? pendingRequest?.message : nil
+        isSendingRequest = true
+        requestUnsent = false
+        relationFailure = nil
+        let outcome = await connectionActions.resendRequest(
+            requestId: requestId, userId: userId, message: message,
+            afterWithdrawn: {
+                pendingRequestId = nil
+                connectionStatus = .none
+            },
+            afterOptimistic: { provisional in markRequestPending(provisional) }
+        )
+        isSendingRequest = false
+        switch outcome {
+        case .resent(let request): applySent(.sent(request), note: message)
+        case .unsent(let note): applySent(.failed, note: note)
+        case .withdrawFailed: relationFailed(.resend)
         }
-        await sendConnectionRequest()
     }
 
     func acceptRequest() async {
         guard let requestId = pendingRequestId, let userId = resolvedUserId else { return }
-        let accepted = await connectionActions.acceptRequest(requestId: requestId, senderId: userId) {
+        relationFailure = nil
+        let accepted = await connectionActions.perform(.accept, requestId: requestId, userId: userId) {
+            justAccepted = true
             connectionStatus = .connected
             pendingRequestId = nil
             HapticFeedback.success()
         }
         guard accepted else {
-            resolveConnectionStatus()
-            HapticFeedback.error()
-            postToast(String(localized: "profile.toast.acceptFailed", defaultValue: "Impossible d'accepter", bundle: .module), isSuccess: false)
-            return
+            justAccepted = false
+            return relationFailed(.accept)
         }
         postToast(String(localized: "profile.toast.connectionAccepted", defaultValue: "Connexion acceptée", bundle: .module), isSuccess: true)
     }
 
     func declineRequest() async {
         guard let requestId = pendingRequestId, let userId = resolvedUserId else { return }
-        let declined = await connectionActions.declineRequest(requestId: requestId, senderId: userId) {
+        relationFailure = nil
+        let declined = await connectionActions.perform(.decline, requestId: requestId, userId: userId) {
             connectionStatus = .none
             pendingRequestId = nil
             HapticFeedback.medium()
         }
-        guard declined else {
-            resolveConnectionStatus()
-            HapticFeedback.error()
-            postToast(String(localized: "profile.toast.declineFailed", defaultValue: "Impossible de refuser", bundle: .module), isSuccess: false)
-            return
-        }
+        guard declined else { return relationFailed(.decline) }
         postToast(String(localized: "profile.toast.requestDeclined", defaultValue: "Demande refusée", bundle: .module), isSuccess: true)
+    }
+
+    /// Le retour arrière a remis l'étape d'avant : la carte la repeint, et la note dit ce qui n'est pas parti.
+    private func relationFailed(_ mutation: ProfileRelationMutation) {
+        resolveConnectionStatus()
+        HapticFeedback.error()
+        relationFailure = mutation
+    }
+
+    /// « Réessayer » rejoue la même mutation, optimiste comme la première fois.
+    func retryRelation(_ mutation: ProfileRelationMutation) async {
+        switch mutation {
+        case .accept: await acceptRequest()
+        case .decline: await declineRequest()
+        case .cancel: await cancelRequest()
+        case .resend: await resendRequest()
+        }
     }
 
     // MARK: - Block Actions
@@ -457,239 +537,25 @@ public struct UserProfileSheet: View {
         postToast(String(localized: "profile.toast.userUnblocked", defaultValue: "Utilisateur débloqué", bundle: .module), isSuccess: true)
     }
 
-    // MARK: - Bio Card
-
-    func bioCard(_ bio: String) -> some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            Text(bio)
-                .font(.callout)
-                .foregroundStyle(theme.textSecondary)
-                .lineLimit(5)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(MeeshySpacing.lg)
-        .background(theme.surfaceGradient(tint: resolvedAccent))
-        .glassCard(cornerRadius: MeeshyRadius.lg)
-    }
-
-    // MARK: - Info Chip
-
-    func infoChip(icon: String, text: String) -> some View {
-        HStack(spacing: MeeshySpacing.xsPlus) {
-            if icon.count > 1 {
-                // Emoji flag
-                Text(icon)
-                    .meeshyScaledFont(MeeshyFont.labelSize)
-            } else {
-                // SF Symbol
-                Image(systemName: icon)
-                    .font(.system(size: MeeshyIconSize.xxs, weight: .medium))
-                    .foregroundStyle(Color(hex: resolvedAccent))
-            }
-            Text(text)
-                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                .foregroundStyle(theme.textPrimary)
-        }
-        .padding(.horizontal, MeeshySpacing.md)
-        .padding(.vertical, MeeshySpacing.xsPlus)
-        .background(theme.surface(tint: resolvedAccent, intensity: 0.12))
-        .clipShape(Capsule())
-        .overlay(
-            Capsule().stroke(theme.border(tint: resolvedAccent, intensity: 0.2), lineWidth: 1)
-        )
-    }
-
-    // MARK: - E2EE Badge
-
-    var e2eeBadge: some View {
-        HStack(spacing: MeeshySpacing.sm) {
-            Image(systemName: "lock.shield.fill")
-                .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
-                .foregroundStyle(MeeshyColors.success)
-
-            Text(String(localized: "profile.e2ee.enabled", defaultValue: "Chiffrement de bout en bout activé", bundle: .module))
-                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                .foregroundStyle(MeeshyColors.success)
-        }
-        .padding(.horizontal, MeeshySpacing.mdPlus)
-        .padding(.vertical, MeeshySpacing.sm)
-        .background(MeeshyColors.success.opacity(MeeshyOpacity.light))
-        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
-        .overlay(
-            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                .stroke(MeeshyColors.success.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.emphasis)
-        )
-    }
-
-    // MARK: - Language Pills
-
-    @ViewBuilder
-    var languagePills: some View {
-        let sysLang = LanguageDisplay.from(code: displayUser.systemLanguage)
-        let regLang = LanguageDisplay.from(code: displayUser.regionalLanguage)
-
-        if sysLang != nil || regLang != nil {
-            HStack(spacing: MeeshySpacing.sm) {
-                if let lang = sysLang {
-                    languagePill(lang)
-                }
-                if let lang = regLang, lang.code != sysLang?.code {
-                    languagePill(lang)
-                }
-            }
-        }
-    }
-
-    func languagePill(_ lang: LanguageDisplay) -> some View {
-        HStack(spacing: MeeshySpacing.xs) {
-            Text(lang.flag)
-                .font(.system(size: MeeshyFont.labelSize))
-            Text(lang.name)
-                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                .foregroundStyle(theme.textPrimary)
-        }
-        .padding(.horizontal, MeeshySpacing.md)
-        .padding(.vertical, MeeshySpacing.xsPlus)
-        .background(theme.surface(tint: resolvedAccent, intensity: 0.12))
-        .clipShape(Capsule())
-        .overlay(
-            Capsule().stroke(theme.border(tint: resolvedAccent, intensity: 0.2), lineWidth: 1)
-        )
-    }
-
-    // MARK: - Send Message Button
-
-    var sendMessageButton: some View {
-        sendMessageButtonContent(compact: false)
-    }
-
-    var sendMessageButtonCompact: some View {
-        sendMessageButtonContent(compact: true)
-    }
-
-    private func sendMessageButtonContent(compact: Bool) -> some View {
-        Button {
-            HapticFeedback.medium()
-            if let onSendMessage {
-                onSendMessage()
-            } else if let targetUserId = loader.profile?.id ?? user.userId {
-                dismiss()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    NotificationCenter.default.post(
-                        name: Notification.Name("sendMessageToUser"),
-                        object: targetUserId
-                    )
-                }
-            }
-        } label: {
-            HStack(spacing: compact ? 6 : 8) {
-                Image(systemName: "paperplane.fill")
-                    .font(.system(size: compact ? 12 : 14, weight: .semibold))
-                Text(String(localized: "profile.action.sendMessage", defaultValue: "Envoyer un message", bundle: .module))
-                    .meeshyScaledFont(compact ? 13 : 15, weight: .semibold)
-            }
-            .foregroundStyle(.white)
-            .frame(maxWidth: compact ? nil : .infinity)
-            .padding(.horizontal, compact ? 20 : 0)
-            .padding(.vertical, compact ? 10 : 14)
-            .background(
-                LinearGradient(
-                    colors: [MeeshyColors.indigo500, MeeshyColors.indigo400],
-                    startPoint: .leading,
-                    endPoint: .trailing
+    /// Écrire : l'hôte ouvre la conversation (ou la demande de message) ; sans hôte, l'annonce historique.
+    func openConversation() {
+        if let onSendMessage {
+            onSendMessage()
+        } else if let targetUserId = loader.profile?.id ?? user.userId {
+            dismiss()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                NotificationCenter.default.post(
+                    name: Notification.Name("sendMessageToUser"),
+                    object: targetUserId
                 )
-            )
-            .clipShape(RoundedRectangle(cornerRadius: compact ? 20 : 14))
-            .shadow(color: MeeshyColors.indigo500.opacity(MeeshyOpacity.medium), radius: compact ? 4 : 8, y: compact ? 2 : 4)
-        }
-        .pressable()
-    }
-
-    // MARK: - Loading Placeholder
-
-    var loadingPlaceholder: some View {
-        VStack(spacing: MeeshySpacing.md) {
-            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                .fill(theme.surface(tint: resolvedAccent, intensity: 0.1))
-                .frame(height: 60)
-                .shimmer()
-
-            HStack(spacing: MeeshySpacing.sm) {
-                RoundedRectangle(cornerRadius: MeeshyRadius.xl)
-                    .fill(theme.surface(tint: resolvedAccent, intensity: 0.1))
-                    .frame(width: 80, height: 30)
-                RoundedRectangle(cornerRadius: MeeshyRadius.xl)
-                    .fill(theme.surface(tint: resolvedAccent, intensity: 0.1))
-                    .frame(width: 80, height: 30)
             }
-            .shimmer()
         }
-    }
-
-    // MARK: - Blocked By Me
-
-    private var blockedByMeCard: some View {
-        VStack(spacing: MeeshySpacing.md) {
-            Text(String(localized: "profile.blocked.byMe", defaultValue: "Vous avez bloqué cet utilisateur", bundle: .module))
-                .meeshyScaledFont(MeeshyFont.labelSize, weight: .medium)
-                .foregroundStyle(theme.textSecondary)
-
-            Button {
-                HapticFeedback.medium()
-                Task { await unblockUser() }
-            } label: {
-                Text(String(localized: "profile.blocked.unblock", defaultValue: "Débloquer", bundle: .module))
-                    .meeshyScaledFont(MeeshyFont.labelSize, weight: .semibold)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, MeeshySpacing.xxl)
-                    .padding(.vertical, MeeshySpacing.smPlus)
-                    .background(
-                        LinearGradient(
-                            colors: [MeeshyColors.success, MeeshyColors.successDeep],
-                            startPoint: .leading, endPoint: .trailing
-                        )
-                    )
-                    .clipShape(Capsule())
-            }
-            .pressable()
-        }
-        .frame(maxWidth: .infinity)
-        .padding(MeeshySpacing.xl)
-        .background(theme.surfaceGradient(tint: MeeshyColors.blockedNeutralHex))
-        .glassCard(cornerRadius: MeeshyRadius.lg)
     }
 
     // MARK: - Helpers
 
-    func formatRegistrationDate(_ date: Date) -> String {
-        date.formatted(.dateTime.year().month(.wide).day())
-    }
-
     /// Sans image, rien ne s'ouvre : un plein écran de l'avatar à initiales n'a rien à montrer.
     func openFullscreenImage(url: String?, fallback: String) {
         fullscreenImage = ProfileFullscreenImage.opening(url, fallbackText: fallback)
-    }
-}
-
-// MARK: - Profile Tab Enum
-
-/// L'ordre des cas est celui des onglets (#17202) : Détails, Conversations, Publications.
-enum ProfileTab: String, CaseIterable {
-    case details, conversations, posts
-
-    var title: String {
-        switch self {
-        case .posts: return String(localized: "profile.tab.posts", defaultValue: "Publications", bundle: .module)
-        case .conversations: return String(localized: "profile.tab.conversations", defaultValue: "Conversations", bundle: .module)
-        case .details: return String(localized: "profile.tab.details", defaultValue: "Détails", bundle: .module)
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .posts: return "square.text.square.fill"
-        case .conversations: return "bubble.left.and.bubble.right.fill"
-        case .details: return "person.text.rectangle.fill"
-        }
     }
 }

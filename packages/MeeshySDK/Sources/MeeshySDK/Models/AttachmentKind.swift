@@ -117,7 +117,7 @@ public enum AttachmentKind: String, Sendable, Equatable, CaseIterable, Codable {
     /// Couleur d'accentuation au format hex 6 chiffres (sans `#`). Utilisée
     /// par les chemins qui sérialisent des couleurs (thumbnailColor sur les
     /// previews, story reader, post models) et par la couche SwiftUI via
-    /// `Color(hex:)` (cf. `AttachmentDisplay` dans MeeshyUI).
+    /// `Color(hex:)`.
     public var hexTintColor: String {
         switch self {
         case .image:        return "4ECDC4"  // teal — matches the historical "image" tint

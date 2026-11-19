@@ -9,7 +9,10 @@
  *    lien (`mayMintShareLink`) — consulte le prédicat UNIQUE
  *    `conversationAdmitsNewMembers`. Le discriminant est l'appel à la loi
  *    d'entrée : une cinquième porte qui l'appelle entre dans ce balayage sans
- *    que personne y pense.
+ *    que personne y pense. Une porte qui ne l'appelle PAS lui échappe donc —
+ *    c'est ainsi que « restaurer pour moi » est passée (audit de #19080, E1) :
+ *    le recensement par EFFET (`services/conversations/__tests__/member-activation-doors-sweep.test.ts`)
+ *    couvre toute écriture qui rend un membre actif, qu'elle appelle une loi ou non.
  * 2. **Le numéro ne survit pas au fil.** Tout site qui FERME une conversation
  *    appelle déjà le site unique `deactivateShareLinksOnClose` (#3740) ; il
  *    appelle aussi `eraseExternalPeerOnClose`.
@@ -50,7 +53,14 @@ const DEFINES_ENTRY_LAW = new Set([
   'services/conversations/conversationEntryAdmission.ts',
 ]);
 
-const SINGLE_MEMBER_LAW = 'conversationAdmitsNewMembers(';
+/**
+ * La loi des portes est `newMemberRefusal` (#16188) : elle tient le seul membre
+ * d'une conversation externe (`conversationAdmitsNewMembers`, #17117) ET le
+ * tête-à-tête chiffré de bout en bout qui reste à deux. Une porte qui
+ * n'appellerait que le prédicat externe laisserait entrer un tiers chez deux
+ * correspondants chiffrés.
+ */
+const SINGLE_MEMBER_LAW = 'newMemberRefusal(';
 
 describe('un seul membre Meeshy : chaque porte d’entrée consulte la loi unique', () => {
   const doors = sources
@@ -60,14 +70,14 @@ describe('un seul membre Meeshy : chaque porte d’entrée consulte la loi uniqu
 
   it('le balayage trouve les portes connues (une garde qui ne voit rien reste verte)', () => {
     expect(doors).toEqual(expect.arrayContaining([
-      'routes/conversations/participants-writes.ts',
+      'services/conversations/memberAdmission.ts',
       'routes/conversations/sharing-invite.ts',
       'routes/links/utils/share-link-mint.ts',
       'services/conversations/linkAdmission.ts',
     ]));
   });
 
-  it('chaque porte appelle conversationAdmitsNewMembers', () => {
+  it('chaque porte appelle newMemberRefusal', () => {
     const silent = doors.filter((file) => !sources.find((source) => source.file === file)?.code.includes(SINGLE_MEMBER_LAW));
 
     expect(silent).toEqual([]);

@@ -408,16 +408,8 @@ extension AudioFullscreenPage {
         .presentationDragIndicator(.visible)
     }
 
-    func profileSheet(_ user: ProfileSheetUser) -> some View {
-        UserProfileSheet(
-            user: user,
-            moodEmoji: moodEmojiProvider?(user.userId ?? ""),
-            onMoodTap: moodTapProvider.flatMap { $0(user.userId ?? "") },
-            presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
-            postsContent: ProfilePostsOpener.postsContent { selectedProfileUser = nil }, dependencies: .live
-        )
-        .presentationDetents([.large, .medium])
-        .presentationDragIndicator(.visible)
+    func knownPresence(of userId: String) -> PresenceState? {
+        PresenceManager.shared.knownPresenceState(for: userId)
     }
 
     // MARK: - L'enregistrement

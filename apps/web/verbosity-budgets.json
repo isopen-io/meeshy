@@ -169,8 +169,8 @@
       "firstScreen": 69
     },
     "links": {
-      "total": 38,
-      "firstScreen": 38
+      "total": 45,
+      "firstScreen": 45
     },
     "links-affiliate": {
       "total": 35,
@@ -205,7 +205,7 @@
       "firstScreen": 48
     },
     "me": {
-      "total": 103,
+      "total": 116,
       "firstScreen": 37
     },
     "me-bookmarks": {
@@ -400,15 +400,15 @@
   "releves": {
     "links": {
       "de": {
-        "total": 39,
-        "firstScreen": 39
+        "total": 38,
+        "firstScreen": 38
       },
       "a": {
-        "total": 70,
-        "firstScreen": 70
+        "total": 45,
+        "firstScreen": 45
       },
-      "motif": "Chaque type de lien (partage, suivi, communautés, parrainage) redit sous son nom à quoi il sert",
-      "issue": 17641
+      "motif": "La face Liens de la planche du profil montre mon lien de profil en billet (« Mon lien de profil », son adresse), « Mes adresses » et le chiffre de chaque famille accordé à son nombre (« 3 arrivées ») : sept mots que l'écran doit porter, le reste reste derrière ses (i)",
+      "issue": 18880
     },
     "links-affiliate": {
       "de": {
@@ -628,15 +628,15 @@
     },
     "me": {
       "de": {
-        "total": 100,
+        "total": 105,
         "firstScreen": 37
       },
       "a": {
-        "total": 103,
+        "total": 116,
         "firstScreen": 37
       },
-      "motif": "La carte « Mon téléphone » (ex « Batterie ») accueille la coupure du téléphone injoignable (« Téléphone injoignable ») au lieu d'une section de plus ; qui est prévenu se lit sur la fiche de chaque personne",
-      "issue": 18737
+      "motif": "La carte « Mon téléphone », hors du premier écran, accueille deux lignes, « Vérification d’inactivité » (#18738, un sélecteur fermé : 6 h, 12 h, 24 h ou Désactivée, +2) et « Montrer à mes Sangs que je suis en appel » (#18753, +9) : une ligne chacune au lieu d’une section de plus, sans titre ni explication ; ce que le réglage ouvre se lit sur la fiche de chaque Sang. Le libellé nomme ce qui part et à qui : le raccourcir ferait croire qu’on montre l’appel lui-même, ou à tout le monde",
+      "issue": 18753
     }
   }
 }

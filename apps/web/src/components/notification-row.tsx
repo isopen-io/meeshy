@@ -17,6 +17,7 @@ import {
   type NotificationRowPresentation,
   type RowFooter,
 } from '@/lib/notifications/row-presentation';
+import { answerWellnessCheck } from '@/lib/inactivity/wellness-answer';
 import { notificationTarget, type NotificationTarget } from '@/lib/notifications/target';
 import { shortRelativeTime } from '@/lib/relative-time';
 import { initialsOf } from '@/lib/view/conversation';
@@ -339,7 +340,11 @@ function NotificationRowView({
   const surface: SurfaceProps = {
     className: `flex w-full items-start gap-3 py-3 ${callBack === null ? 'pe-14' : 'pe-24'} ps-4 text-start focus-visible:outline-2 focus-visible:-outline-offset-2`,
     style: { outlineColor: 'var(--color-ios-brand)' },
-    onClick: () => onOpen(id),
+    onClick: () => {
+      /* « Tout va bien ? » (#18738) : la toucher, c'est répondre « Je vais bien ». */
+      void answerWellnessCheck(notification);
+      onOpen(id);
+    },
     draggable: false,
     children: (
       <>

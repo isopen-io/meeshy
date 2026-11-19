@@ -35,7 +35,6 @@ import type { ConversationLiveCall } from '../types/conversation-bridge.js'
  *   (`conversationUserPreferencesSelect`,
  *   `services/gateway/src/routes/conversations/core.ts:108-122`, et
  *   `orderInCategory` sur `UserConversationPreferences`,
- *   `packages/shared/types/user-preferences.ts:17-18` /
  *   `schema.prisma:2098`). iOS porte les TROIS mêmes champs sous
  *   `Conversation.userState` — `isPinned`, `sectionId` (= `categoryId`,
  *   renommé), `orderInCategory`

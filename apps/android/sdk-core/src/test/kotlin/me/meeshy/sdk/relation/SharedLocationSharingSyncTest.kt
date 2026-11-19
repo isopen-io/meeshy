@@ -42,6 +42,7 @@ class SharedLocationSharingSyncTest {
         private val scope: TestScope,
         val saved: MutableMap<String, String?> = mutableMapOf(),
         val receivedMarks: MutableMap<String, Boolean> = mutableMapOf(),
+        val startMarks: MutableMap<String, String?> = mutableMapOf(),
     ) {
         var servedSnapshot: SharedLocationOwnSnapshot? = null
         var servedFailure: Exception? = null
@@ -55,6 +56,8 @@ class SharedLocationSharingSyncTest {
         val updates = mutableListOf<SharedLocationFix>()
         var stops = 0
         var reads = 0
+        var fixAsks = 0
+        val queuedStartVerdicts = ArrayDeque<SharedLocationStartVerdict>()
         var following = 0
         val stream = MutableSharedFlow<LiveLocationFix>(extraBufferCapacity = 8)
 
@@ -62,7 +65,7 @@ class SharedLocationSharingSyncTest {
             emitter = object : SharedLocationEmitting {
                 override suspend fun start(request: SharedLocationStartRequest): SharedLocationStartVerdict {
                     starts += request
-                    return startVerdict
+                    return queuedStartVerdicts.removeFirstOrNull() ?: startVerdict
                 }
                 override suspend fun update(fix: SharedLocationFix): SharedLocationStartVerdict {
                     updates += fix
@@ -74,7 +77,10 @@ class SharedLocationSharingSyncTest {
                 }
             },
             fixes = object : LiveLocationFixSource {
-                override suspend fun currentFix() = LiveLocationFix(48.8566, 2.3522, accuracy = 8.0)
+                override suspend fun currentFix(): LiveLocationFix {
+                    fixAsks++
+                    return LiveLocationFix(48.8566, 2.3522, accuracy = 8.0)
+                }
                 override fun updates(intervalMillis: Long): Flow<LiveLocationFix> {
                     following++
                     return stream
@@ -92,6 +98,10 @@ class SharedLocationSharingSyncTest {
                     writes += "received:$accountId=$received"
                     receivedMarks[accountId] = received
                 }
+                override fun loadPublishedStart(accountId: String): String? = startMarks[accountId]
+                override fun savePublishedStart(accountId: String, startedAt: String?) {
+                    startMarks[accountId] = startedAt
+                }
             },
             accountId = { account },
             connected = connected,
@@ -106,7 +116,7 @@ class SharedLocationSharingSyncTest {
             },
         )
 
-        fun relaunched(): Device = Device(scope, saved, receivedMarks)
+        fun relaunched(): Device = Device(scope, saved, receivedMarks, startMarks)
     }
 
     private fun served(vararg pairs: Pair<String, Long>) =
@@ -320,5 +330,247 @@ class SharedLocationSharingSyncTest {
         assertThat(device.starts.last().recipients.map { it.userId }).containsExactly(alice)
         assertThat(device.center.roster.value.entry(bob)).isNull()
         assertThat(device.center.roster.value.hasPendingWithdrawals).isFalse()
+    }
+
+    @Test
+    fun `retirer quelqu'un d'une liste recue envoie la liste seule, sans jamais demander la position d'ici`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = served(alice to hour, bob to hour)
+        device.ownChanged.emit(Unit)
+        runCurrent()
+
+        val problem = device.center.stopSharing(bob)
+        runCurrent()
+
+        assertThat(problem).isNull()
+        assertThat(device.fixAsks).isEqualTo(0)
+        assertThat(device.starts.map { it.isListOnly }).containsExactly(true)
+        assertThat(device.starts.single().recipients.map { it.userId }).containsExactly(alice)
+        assertThat(device.following).isEqualTo(0)
+        assertThat(device.receivedMarks["me"]).isTrue()
+        assertThat(device.center.roster.value.entry(bob)).isNull()
+    }
+
+    @Test
+    fun `une liste seule sans partage alors que la passerelle sert encore quelqu'un garde le retrait en attente`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = served(alice to hour, bob to hour)
+        device.ownChanged.emit(Unit)
+        runCurrent()
+        device.queuedStartVerdicts += SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.NOT_SHARING)
+
+        val problem = device.center.stopSharing(bob)
+
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.WithdrawalPending)
+        assertThat(device.center.roster.value.isWithdrawalPending(bob)).isTrue()
+        assertThat(device.center.roster.value.entry(alice)).isNotNull()
+        assertThat(device.stops).isEqualTo(0)
+        assertThat(device.fixAsks).isEqualTo(0)
+    }
+
+    @Test
+    fun `une liste seule sans partage quand la passerelle ne sert plus personne vide la liste sans arreter`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = served(alice to hour, bob to hour)
+        device.ownChanged.emit(Unit)
+        runCurrent()
+        device.queuedStartVerdicts += SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.NOT_SHARING)
+        device.servedSnapshot = served()
+
+        val problem = device.center.stopSharing(bob)
+
+        assertThat(problem).isNull()
+        assertThat(device.center.roster.value.isEmpty).isTrue()
+        assertThat(device.stops).isEqualTo(0)
+        assertThat(device.fixAsks).isEqualTo(0)
+    }
+
+    @Test
+    fun `une liste seule sans partage suivie d'une relecture en echec garde le retrait en attente`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = served(alice to hour, bob to hour)
+        device.ownChanged.emit(Unit)
+        runCurrent()
+        device.queuedStartVerdicts += SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.NOT_SHARING)
+        device.servedSnapshot = null
+
+        val problem = device.center.stopSharing(bob)
+
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.WithdrawalPending)
+        assertThat(device.center.roster.value.isWithdrawalPending(bob)).isTrue()
+        assertThat(device.center.roster.value.entry(alice)).isNotNull()
+        assertThat(device.stops).isEqualTo(0)
+    }
+
+    private val mine = "2026-01-01T00:00:00.000Z"
+    private val elsewhere = "2026-01-01T00:00:05.000Z"
+
+    private fun servedFrom(startedAt: String?, vararg people: Pair<String, Long>) =
+        SharedLocationOwnSnapshot(served(*people).recipients, startedAt)
+
+    private suspend fun TestScope.publishing(device: Device) {
+        runCurrent()
+        device.startVerdict = SharedLocationStartVerdict.Started(hour, mine)
+        device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        runCurrent()
+        assertThat(device.following).isEqualTo(1)
+    }
+
+    @Test
+    fun `un autre demarrage servi fait ceder l'appareil qui publiait, aucun releve ne part plus`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        val sent = device.updates.size
+        device.servedSnapshot = servedFrom(elsewhere, alice to hour, bob to hour)
+
+        device.ownChanged.emit(Unit)
+        runCurrent()
+        advanceTimeBy(10_000L)
+        device.stream.emit(LiveLocationFix(45.0, 5.0, accuracy = 8.0))
+        runCurrent()
+
+        assertThat(device.center.roster.value.entry(bob)).isNotNull()
+        assertThat(device.updates).hasSize(sent)
+        assertThat(device.receivedMarks["me"]).isTrue()
+        val relaunched = device.relaunched()
+        relaunched.center.restore()
+        runCurrent()
+        assertThat(relaunched.following).isEqualTo(0)
+    }
+
+    @Test
+    fun `la meme personne repartagee ailleurs, liste identique, fait ceder aussi`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        device.servedSnapshot = servedFrom(elsewhere, alice to hour)
+
+        device.ownChanged.emit(Unit)
+        runCurrent()
+
+        assertThat(device.receivedMarks["me"]).isTrue()
+    }
+
+    @Test
+    fun `son propre demarrage relu avec une echeance decalee de dix minutes ne fait pas ceder`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        val sent = device.updates.size
+        device.servedSnapshot = servedFrom(mine, alice to hour + 600_000L)
+
+        device.ownChanged.emit(Unit)
+        runCurrent()
+        advanceTimeBy(10_000L)
+        device.stream.emit(LiveLocationFix(45.0, 5.0, accuracy = 8.0))
+        runCurrent()
+
+        assertThat(device.receivedMarks["me"]).isNotEqualTo(true)
+        assertThat(device.updates.size).isGreaterThan(sent)
+    }
+
+    @Test
+    fun `un accuse perdu prend le demarrage servi pour le sien, puis cede au suivant`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.startVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.UNCONFIRMED)
+        device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        device.servedSnapshot = servedFrom(mine, alice to hour)
+        device.ownChanged.emit(Unit)
+        runCurrent()
+        assertThat(device.receivedMarks["me"]).isNotEqualTo(true)
+
+        device.servedSnapshot = servedFrom(elsewhere, alice to hour)
+        device.ownChanged.emit(Unit)
+        runCurrent()
+
+        assertThat(device.receivedMarks["me"]).isTrue()
+    }
+
+    @Test
+    fun `une passerelle qui ne nomme pas le demarrage ne fait jamais ceder`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        device.servedSnapshot = servedFrom(null, alice to hour, bob to hour)
+
+        device.ownChanged.emit(Unit)
+        runCurrent()
+
+        assertThat(device.receivedMarks["me"]).isNotEqualTo(true)
+    }
+
+    @Test
+    fun `le demarrage d'un autre compte du telephone ne fait pas ceder le partage de celui-ci`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        device.account = "other"
+        device.center.clear()
+        runCurrent()
+        device.startVerdict = SharedLocationStartVerdict.Started(hour, elsewhere)
+        device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        runCurrent()
+
+        device.account = "me"
+        device.center.clear()
+        runCurrent()
+        device.servedSnapshot = servedFrom(mine, alice to hour)
+        device.ownChanged.emit(Unit)
+        runCurrent()
+
+        assertThat(device.receivedMarks["me"]).isNotEqualTo(true)
+    }
+
+    @Test
+    fun `relance apres qu'un autre appareil a repris le partage, cet appareil cede au lieu de republier`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        val relaunched = device.relaunched()
+        relaunched.center.restore()
+        runCurrent()
+        relaunched.servedSnapshot = servedFrom(elsewhere, alice to hour)
+
+        relaunched.ownChanged.emit(Unit)
+        runCurrent()
+        advanceTimeBy(10_000L)
+        relaunched.stream.emit(LiveLocationFix(45.0, 5.0, accuracy = 8.0))
+        runCurrent()
+
+        assertThat(relaunched.receivedMarks["me"]).isTrue()
+        assertThat(relaunched.updates).isEmpty()
+        assertThat(relaunched.startMarks["me"]).isNull()
+    }
+
+    @Test
+    fun `relance sans reprise ailleurs, cet appareil continue de publier`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        val relaunched = device.relaunched()
+        relaunched.center.restore()
+        runCurrent()
+        relaunched.servedSnapshot = servedFrom(mine, alice to hour)
+
+        relaunched.ownChanged.emit(Unit)
+        runCurrent()
+        advanceTimeBy(10_000L)
+        relaunched.stream.emit(LiveLocationFix(45.0, 5.0, accuracy = 8.0))
+        runCurrent()
+
+        assertThat(relaunched.receivedMarks["me"]).isNotEqualTo(true)
+        assertThat(relaunched.updates).isNotEmpty()
+        assertThat(relaunched.startMarks["me"]).isEqualTo(mine)
+    }
+
+    @Test
+    fun `un partage arrete ailleurs oublie le demarrage garde`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        device.servedSnapshot = servedFrom(null)
+
+        device.ownChanged.emit(Unit)
+        runCurrent()
+
+        assertThat(device.startMarks["me"]).isNull()
     }
 }

@@ -26,21 +26,21 @@ final class SocketInboundRouteTableTests: XCTestCase {
         "audio:transcription-failed", "audio:transcription-ready", "audio:translation-failed",
         "audio:translation-ready", "audio:translations-completed", "audio:translations-progressive",
         "auth:session-revoked", "auth:token-expired", "battery:changed", "battery:cleared", "battery:pull-requested",
-        "bring:ring", "bring:stopped", "call:already-answered", "call:ended", "call:error",
+        "bring:ring", "bring:stopped", "call:already-answered", "call:conversation-changed", "call:ended", "call:error",
         "call:force-leave", "call:frame-selected", "call:ice-servers-refreshed", "call:initiated",
         "call:invite-declined", "call:invite-expired", "call:media-toggled", "call:missed",
         "call:muted-by-moderator", "call:participant-invited", "call:participant-joined", "call:participant-left",
         "call:preview-requested", "call:preview-signal", "call:quality-alert", "call:reaction-received",
         "call:recording-requested", "call:recording-started", "call:recording-stopped", "call:screen-capture-alert",
         "call:signal", "call:transcription-active", "call:translated-segment", "categories:reordered",
-        "category:created", "community:updated", "category:deleted", "category:updated", "conversation:closed", "conversation:deleted",
+        "category:created", "community:deleted", "community:member-joined", "community:member-left", "community:member-role-updated", "community:updated", "category:deleted", "category:updated", "conversation:closed", "conversation:deleted",
         "conversation:encryption-changed", "conversation:join-error", "conversation:joined", "conversation:left", "conversation:new",
         "conversation:obsoleted",
         "conversation:participant-banned", "conversation:participant-joined", "conversation:participant-left",
         "conversation:participant-unbanned", "conversation:restored", "conversation:stats",
         "conversation:unread-updated", "conversation:updated", "e2ee:envelope", "engagement:conversation-updated",
         "engagement:post-updated", "friend-request:cancelled", "friend-request:rejected", "game:missions-updated", "game:updated",
-        "heartbeat:ack", "location:live-started", "location:live-stopped", "location:live-updated",
+        "heartbeat:ack", "inactivity:alert", "inactivity:cleared", "location:live-started", "location:live-stopped", "location:live-updated",
         "location:share-changed", "location:share-ended", "location:share-own-changed",
         "mention:created", "message:attachment-updated", "message:cited-post-withdrawn", "message:consumed",
         "message:countdown-started", "message:deleted", "message:edited", "message:expired", "message:hidden-for-me",
@@ -49,8 +49,8 @@ final class SocketInboundRouteTableTests: XCTestCase {
         "notification:counts", "notification:deleted", "notification:deleted-bulk", "notification:new",
         "notification:read", "notification:read-bulk", "now-playing:changed", "now-playing:cleared",
         "participant:rights-updated", "participant:role-updated",
-        "phone:reachable", "phone:unreachable",
-        "presence:snapshot", "profile:decor-updated", "reaction:added", "reaction:removed", "read-status:updated",
+        "phone-call:ended", "phone-call:started", "phone:reachable", "phone:unreachable",
+        "presence:snapshot", "profile:decor-updated", "profile:updated", "reaction:added", "reaction:removed", "read-status:updated",
         "relation:level-raised", "relation:ritual-completed", "relation:ritual-progress", "relation:ritual-started",
         "talkie:chunk", "talkie:ended", "talkie:incoming",
         "together:ended", "together:invited", "together:started", "together:synced",
@@ -298,6 +298,69 @@ final class SocketInboundRouteTableTests: XCTestCase {
                 "communityId": "c-renamed", "identifier": "mshy_c", "name": "Nouveau nom",
                 "description": NSNull(), "avatar": NSNull(), "banner": NSNull(),
                 "isPrivate": true, "memberCount": 7, "updatedAt": "2026-11-15T10:00:00.000Z",
+            ])
+        }
+    }
+
+    /// #18924 — ma langue changée sur un autre appareil repeint le compte connecté, quel que soit l'écran.
+    @MainActor
+    func test_profileUpdated_repaintsTheSignedInAccount() async {
+        let auth = AuthManager.shared
+        let previousUser = auth.currentUser
+        let previousPending = auth.pendingOptimisticProfile
+        defer {
+            auth.currentUser = previousUser
+            auth.pendingOptimisticProfile = previousPending
+        }
+        auth.pendingOptimisticProfile = nil
+        auth.currentUser = MeeshyUser(id: "moi-route", username: "alice", systemLanguage: "fr", updatedAt: "2026-11-17T10:00:00.000Z")
+        let registrar = installed(MessageSocketRoutes.all(for: .shared))
+
+        await expectOneValue(from: auth.$currentUser, where: { $0?.systemLanguage == "en" }) {
+            registrar.deliver("profile:updated", [
+                "userId": "moi-route", "updatedAt": "2026-11-17T10:05:00.000Z",
+                "profile": [
+                    "systemLanguage": "en", "regionalLanguage": NSNull(), "customDestinationLanguage": NSNull(),
+                    "displayName": NSNull(), "firstName": "Alice", "lastName": "Dupont", "username": "alice",
+                    "avatar": NSNull(), "banner": NSNull(),
+                ] as [String: Any],
+            ])
+        }
+    }
+
+    func test_communityMemberEvents_reachTheCommunityMemberChannel() async {
+        let registrar = installed(MessageSocketRoutes.all(for: .shared))
+
+        await expectOneValue(from: MessageSocketManager.shared.communityMemberChanged, where: {
+            $0.communityId == "c-eff" && $0.userId == "u-new" && $0.memberCount == 8 && $0.role == .moderator
+        }) {
+            registrar.deliver("community:member-joined", [
+                "communityId": "c-eff", "userId": "u-new", "role": "moderator", "via": "self",
+                "memberCount": 8, "at": "2026-11-17T10:00:00.000Z",
+            ])
+        }
+        await expectOneValue(from: MessageSocketManager.shared.communityMemberChanged, where: {
+            $0.communityId == "c-eff" && $0.userId == "u-gone" && $0.memberCount == 7 && $0.role == nil
+        }) {
+            registrar.deliver("community:member-left", [
+                "communityId": "c-eff", "userId": "u-gone", "reason": "left", "memberCount": 7, "at": "2026-11-17T10:00:00.000Z",
+            ])
+        }
+        await expectOneValue(from: MessageSocketManager.shared.communityMemberChanged, where: {
+            $0.communityId == "c-eff" && $0.userId == "u-new" && $0.role == .admin
+        }) {
+            registrar.deliver("community:member-role-updated", [
+                "communityId": "c-eff", "userId": "u-new", "role": "admin", "memberCount": 7, "at": "2026-11-17T10:00:00.000Z",
+            ])
+        }
+    }
+
+    func test_communityDeleted_reachesTheCommunityDeletedChannel() async {
+        let registrar = installed(MessageSocketRoutes.all(for: .shared))
+
+        await expectOneValue(from: MessageSocketManager.shared.communityDeleted, where: { $0 == "c-gone" }) {
+            registrar.deliver("community:deleted", [
+                "communityId": "c-gone", "reason": "deactivated", "at": "2026-11-18T10:00:00.000Z",
             ])
         }
     }

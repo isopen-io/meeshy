@@ -407,7 +407,8 @@ describe('Notifications - Tests de Sécurité', () => {
       const count = await service.markConversationNotificationsAsRead(userId, conversationId);
 
       expect(prisma.notification.findMany).not.toHaveBeenCalled();
-      expect(prisma.$runCommandRaw).toHaveBeenCalledTimes(1);
+      // UN SEUL update (#18910 : la lecture des bannières à révoquer est un `find` borné, après l'écriture).
+      expect(prisma.$runCommandRaw.mock.calls.filter(([command]: [Record<string, unknown>]) => 'update' in command)).toHaveLength(1);
       // IDOR: le filtre est scopé par userId au niveau Mongo
       expect(prisma.$runCommandRaw).toHaveBeenCalledWith({
         update: 'Notification',

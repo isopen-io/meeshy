@@ -80,6 +80,7 @@ function base() {
   ]);
   const prisma = {
     userSession: table([]),
+    pushToken: table([]),
     userVoiceModel: table([]),
     userRelation: table([]),
     pairInteractionDay: table([]),
@@ -89,6 +90,15 @@ function base() {
     friendRequest: table([]),
     // Les adresses d'amis d'un réseau tiers (#17117) : aucune conversation externe ouverte.
     externalConversationPeer: table([]),
+    // Les adresses de fiche (#18863) : un compte qui n'en a publié aucune.
+    profileAddress: table([]),
+    storyHighlight: table([]),
+    communityJoinRequest: table([]),
+    trackingLink: table([]),
+    trackingLinkClick: table([]),
+    // Les visites du lien de profil (#19206) : aucune.
+    profileLinkVisitDay: table([]),
+    emailInvitation: table([]),
     conversationShareLink: table([]),
     userContact,
     contactJoinNotice,
@@ -106,6 +116,7 @@ function base() {
     messageEnvelope: table([]),
     e2EERevokedIdentity: table([]),
     e2EEBindingProof: table([]),
+    e2EEDeviceVerificationMessage: table([]),
     // Le jeu (#9384) : des collections vides.
     ...Object.fromEntries(
       [...GAME_PURGED_MODELS, 'gameDuo', 'leagueGroupWeek', 'affiliateVisitSession', 'mythicSeat', 'mythicEdition'].map((model) => [model, table([])]),

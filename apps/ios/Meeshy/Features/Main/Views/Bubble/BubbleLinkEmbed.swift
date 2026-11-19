@@ -9,6 +9,7 @@ import MeeshyUI
 /// par `BubbleContentBuilder`, plus de `NSDataDetector` ici) :
 /// - une vidéo intégrable → sa façade de lecteur ;
 /// - une conversation Meeshy → la carte qui fait rejoindre, quitter ou ouvrir ;
+/// - la fiche d'une personne → sa carte de profil, vue par le lecteur (#19519) ;
 /// - toute autre URL → l'aperçu OpenGraph.
 struct BubbleLinkEmbed: View {
     let text: BubbleContent.Text
@@ -32,6 +33,9 @@ struct BubbleLinkEmbed: View {
                 if let target = text.conversationCardTarget {
                     ConversationLinkCard(target: target, urlString: url, fallbackAccent: accentColor, isDark: isDark)
                         .id(target)
+                } else if let handle = text.profileCardHandle {
+                    BubbleProfileLinkCard(handle: handle, urlString: url, fallbackAccent: accentColor, isDark: isDark)
+                        .id(handle)
                 } else {
                     LinkPreviewCard(urlString: url, accentColor: accentColor, isDark: isDark)
                 }
@@ -50,6 +54,9 @@ extension EnvironmentValues {
     /// (#11232, F3) : une carte de lien interrogerait un site tiers (OpenGraph)
     /// ou le serveur (`ConversationCardService.refresh`) avec une URL que seul
     /// l'appareil a lue. Posée par l'aperçu d'appui long, par message.
+    /// SECOND verrou seulement : la loi vit dans la valeur (`BubbleContent.text(raw:of:)`
+    /// ne rend aucun lien à intégrer pour un tel message, #12768), qu'aucun hôte
+    /// ne peut oublier de poser — ce que l'environnement, vrai par défaut, permettait.
     var mountsLinkEmbeds: Bool {
         get { self[MountsLinkEmbedsKey.self] }
         set { self[MountsLinkEmbedsKey.self] = newValue }

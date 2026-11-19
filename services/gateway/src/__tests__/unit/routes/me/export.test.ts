@@ -64,6 +64,8 @@ function makeMocks() {
 async function buildApp(opts: {
   auth?: 'authenticated' | 'unauthenticated';
   mocks?: ReturnType<typeof makeMocks>;
+  profileLinkVisits?: jest.Mock;
+  emailInvitations?: jest.Mock;
 } = {}): Promise<{ app: FastifyInstance; mocks: ReturnType<typeof makeMocks> }> {
   const { auth = 'authenticated', mocks = makeMocks() } = opts;
 
@@ -72,6 +74,12 @@ async function buildApp(opts: {
     user: { findUnique: mocks.userFindUnique },
     participant: { findMany: mocks.participantFindMany },
     message: { findMany: mocks.messageFindMany },
+    // Les liens d'adresse (#18863) : un compte qui n'en a aucun.
+    trackingLink: { findMany: jest.fn().mockResolvedValue([]) },
+    // Les visites du lien de profil (#19206) : aucune, sauf mention contraire.
+    profileLinkVisitDay: { findMany: opts.profileLinkVisits ?? jest.fn().mockResolvedValue([]) },
+    // Les invitations par e-mail (#19207) : aucune, sauf mention contraire.
+    emailInvitation: { findMany: opts.emailInvitations ?? jest.fn().mockResolvedValue([]) },
     // #3633 — le défaut "toutes les types" en couvre désormais dix, pas trois ;
     // ce fichier ne teste que profile/messages/contacts, ces doubles évitent
     // seulement qu'un modèle non simulé fasse lever le chemin par défaut.
@@ -188,6 +196,22 @@ describe('GET /export — profile only', () => {
   });
 });
 
+describe('GET /export — la ville déclarée (#18862)', () => {
+  it('lit et rend la ville et le cercle qui la lit dans la section profile', async () => {
+    const mocks = {
+      ...makeMocks(),
+      userFindUnique: jest.fn<any>().mockResolvedValue({ ...mockUser, city: 'Dakar', cityCircle: 'FRIEND' }),
+    };
+    const { app } = await buildApp({ mocks });
+    const res = await app.inject({ method: 'GET', url: '/export?types=profile' });
+    expect(res.statusCode).toBe(200);
+    const [{ select }] = mocks.userFindUnique.mock.calls[0] as [{ select: Record<string, boolean> }];
+    expect(select).toMatchObject({ city: true, cityCircle: true });
+    expect(res.json().data.profile).toMatchObject({ city: 'Dakar', cityCircle: 'FRIEND' });
+    await app.close();
+  });
+});
+
 describe('GET /export — messages only', () => {
   it('returns 200 and calls participant then message queries', async () => {
     const mocks = {
@@ -286,6 +310,53 @@ describe('GET /export — error handling', () => {
     const { app } = await buildApp({ mocks });
     const res = await app.inject({ method: 'GET', url: '/export?types=profile' });
     expect(res.statusCode).toBe(500);
+    await app.close();
+  });
+});
+
+describe('GET /export — couleur d’accent de la vitrine (#19201)', () => {
+  it('lit et rend la couleur d’accent choisie dans la section profile', async () => {
+    const mocks = {
+      ...makeMocks(),
+      userFindUnique: jest.fn<any>().mockResolvedValue({ ...mockUser, profileAccentColor: '#A855F7' }),
+    };
+    const { app } = await buildApp({ mocks });
+    const res = await app.inject({ method: 'GET', url: '/export?types=profile' });
+    expect(res.statusCode).toBe(200);
+    const [{ select }] = mocks.userFindUnique.mock.calls[0] as [{ select: Record<string, boolean> }];
+    expect(select).toMatchObject({ profileAccentColor: true });
+    expect(res.json().data.profile).toMatchObject({ profileAccentColor: '#A855F7' });
+    await app.close();
+  });
+});
+
+describe('GET /export — visites de mon lien de profil (#19206)', () => {
+  it('rend, dans la section profile, chaque jour compté et son nombre de visites', async () => {
+    const profileLinkVisits = jest.fn<any>().mockResolvedValue([{ day: new Date('2026-11-17T00:00:00.000Z'), visits: 57 }]);
+    const { app } = await buildApp({ profileLinkVisits });
+    const res = await app.inject({ method: 'GET', url: '/export?types=profile' });
+    expect(res.statusCode).toBe(200);
+    expect(profileLinkVisits).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: USER_ID } }));
+    expect(res.json().data.profile.profileLinkVisits).toEqual([{ day: '2026-11-17', visits: 57 }]);
+    await app.close();
+  });
+});
+
+describe('GET /export — mes invitations par e-mail (#19207)', () => {
+  it('rend, dans la section profile, chaque invitation avec son adresse masquée et ses relances', async () => {
+    const emailInvitations = jest.fn<any>().mockResolvedValue([
+      { email: 'marie.dupont@gmail.com', sentAt: new Date('2026-11-13T12:00:00.000Z'), resendCount: 1, lastResentAt: new Date('2026-11-16T12:00:00.000Z') },
+      { email: 'jo@x.io', sentAt: new Date('2026-11-01T08:00:00.000Z'), resendCount: null, lastResentAt: null },
+    ]);
+    const { app } = await buildApp({ emailInvitations });
+    const res = await app.inject({ method: 'GET', url: '/export?types=profile' });
+    expect(res.statusCode).toBe(200);
+    expect(emailInvitations).toHaveBeenCalledWith(expect.objectContaining({ where: { senderId: USER_ID }, take: expect.any(Number) }));
+    expect(res.body).not.toContain('marie.dupont');
+    expect(res.json().data.profile.emailInvitations).toEqual([
+      { maskedEmail: 'ma•••••@gmail.com', sentAt: '2026-11-13T12:00:00.000Z', resendCount: 1, lastResentAt: '2026-11-16T12:00:00.000Z' },
+      { maskedEmail: 'j•••••@x.io', sentAt: '2026-11-01T08:00:00.000Z', resendCount: 0, lastResentAt: null },
+    ]);
     await app.close();
   });
 });

@@ -36,7 +36,9 @@ function harness() {
   ['c3', 'd4'].forEach((prefix, index) => {
     store.collections.UserSession.insert({ id: prefix.repeat(12), userId: USER, isValid: true, expiresAt: new Date(Date.now() + 86_400_000) });
     store.collections.E2EEDevice.insert({ userId: USER, deviceId: index + 1, registrationId: 100 + index, sessionId: prefix.repeat(12), identityKey: 'ik', platform: 'ios' });
+    store.collections.PushToken.insert({ userId: USER, token: `jeton-apns-de-la-session-${index + 1}`, type: 'apns', platform: 'ios', sessionId: prefix.repeat(12), isActive: true });
   });
+  store.collections.PushToken.insert({ userId: USER, token: 'jeton-herite-sans-session', type: 'fcm', platform: 'android', sessionId: null, isActive: true });
   const tokens: Row[] = [];
   const sessions = store.collections.UserSession.rows;
   const tx = {
@@ -97,18 +99,33 @@ function harness() {
   return { store, service, email };
 }
 
+async function resetPassword(harnessed: ReturnType<typeof harness>) {
+  const { service, email } = harnessed;
+  await service.requestPasswordReset({ email: ADRESSE, ipAddress: '203.0.113.7', userAgent: 'jest' });
+  const lien = new URL(String(email.sendPasswordResetEmail.mock.calls.at(-1)?.[0]?.resetLink), 'https://meeshy.test');
+  const token = new URLSearchParams(lien.hash.slice(1)).get('token') ?? '';
+
+  return service.completePasswordReset({
+    token, newPassword: MOT_DE_PASSE, confirmPassword: MOT_DE_PASSE, ipAddress: '203.0.113.7', userAgent: 'jest',
+  });
+}
+
 describe('la réinitialisation du mot de passe et les appareils chiffrés', () => {
   it('retire chaque appareil des sessions fermées par la réinitialisation', async () => {
-    const { store, service, email } = harness();
-    await service.requestPasswordReset({ email: ADRESSE, ipAddress: '203.0.113.7', userAgent: 'jest' });
-    const lien = new URL(String(email.sendPasswordResetEmail.mock.calls.at(-1)?.[0]?.resetLink), 'https://meeshy.test');
-    const token = new URLSearchParams(lien.hash.slice(1)).get('token') ?? '';
+    const harnessed = harness();
 
-    const result = await service.completePasswordReset({
-      token, newPassword: MOT_DE_PASSE, confirmPassword: MOT_DE_PASSE, ipAddress: '203.0.113.7', userAgent: 'jest',
-    });
+    const result = await resetPassword(harnessed);
 
     expect(result.success).toBe(true);
-    expect(store.collections.E2EEDevice.rows.filter((row) => row.retiredAt === null)).toEqual([]);
+    expect(harnessed.store.collections.E2EEDevice.rows.filter((row) => row.retiredAt === null)).toEqual([]);
+  });
+
+  it('#9616 — désactive chaque jeton push du compte, la ligne héritée sans session comprise : aucune session ne reste', async () => {
+    const harnessed = harness();
+
+    const result = await resetPassword(harnessed);
+
+    expect(result.success).toBe(true);
+    expect(harnessed.store.collections.PushToken.rows.filter((row) => row.isActive === true)).toEqual([]);
   });
 });

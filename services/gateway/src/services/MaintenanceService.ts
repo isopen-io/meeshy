@@ -19,6 +19,7 @@ import { purgeAccountIsolatedData, anonymizeUserIdentity } from './AccountPurgeS
 import { endSharedLocationAfter } from './sharedLocation/sharedLocationDeps';
 import { purgeMediaOfDeletedAccount } from './purgeDeletedAccountMedia';
 import { deactivateCommunityMembershipsOfDeletedAccount } from './deactivateDeletedAccountCommunityMemberships';
+import { communityMemberAnnouncerOverIO } from './community-member-broadcast';
 import { cleanupExpiredData as sweepExpiredData, type ShareLinkRevocationLive } from './cleanupExpiredData';
 import {
   RECIPIENT_LANG_SELECT,
@@ -800,9 +801,12 @@ export class MaintenanceService {
    * départ volontaire et le retrait admin (#5760/#5799/#5800) —
    * `isActive: false` + `leftAt` — jamais un `deleteMany`, pour la même
    * raison qu'eux : l'historique de modération de la communauté survit.
+   * Le départ s'annonce aux membres restants par le serveur Socket.IO injecté
+   * (#18769) ; sans serveur, il n'y a aucune socket à prévenir.
    */
   private deactivateCommunityMembershipsOfExpiredAccount(userId: string): Promise<void> {
-    return this.bestEffortDeletionStep(userId, 'Community membership deactivation', () => deactivateCommunityMembershipsOfDeletedAccount(this.prisma, userId));
+    const announce = communityMemberAnnouncerOverIO(this.prisma, this.shareLinkRevocationLive?.resolveIO?.());
+    return this.bestEffortDeletionStep(userId, 'Community membership deactivation', () => deactivateCommunityMembershipsOfDeletedAccount(this.prisma, userId, announce));
   }
 
   /**

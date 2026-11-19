@@ -33,6 +33,9 @@ export const consents = '/api/v1/me/consents';
 /** PUT /api/v1/me/consents/:purpose */
 export const consentsByPurpose = (purpose: string): string => `/api/v1/me/consents/${encodeURIComponent(purpose)}`;
 
+/** POST /api/v1/me/contact-exchange */
+export const contactExchange = '/api/v1/me/contact-exchange';
+
 /** DELETE /api/v1/me/delete-account */
 export const deleteAccount = '/api/v1/me/delete-account';
 
@@ -53,6 +56,12 @@ export const deviceBattery = '/api/v1/me/device/battery';
 
 /** GET · PUT /api/v1/me/device/battery/settings */
 export const deviceBatterySettings = '/api/v1/me/device/battery/settings';
+
+/** POST /api/v1/me/device/call */
+export const deviceCall = '/api/v1/me/device/call';
+
+/** GET · PUT /api/v1/me/device/call/settings */
+export const deviceCallSettings = '/api/v1/me/device/call/settings';
 
 /** GET · PUT /api/v1/me/device/reachability/settings */
 export const deviceReachabilitySettings = '/api/v1/me/device/reachability/settings';
@@ -139,14 +148,20 @@ export const gameShowcaseOrder = '/api/v1/me/game/showcase/order';
 /** PUT /api/v1/me/game/visibility */
 export const gameVisibility = '/api/v1/me/game/visibility';
 
+/** POST /api/v1/me/live-activity-tokens */
+export const liveActivityTokens = '/api/v1/me/live-activity-tokens';
+
 /** POST /api/v1/me/location/blood */
 export const locationBlood = '/api/v1/me/location/blood';
 
-/** PUT /api/v1/me/location/blood-settings */
+/** GET · PUT /api/v1/me/location/blood-settings */
 export const locationBloodSettings = '/api/v1/me/location/blood-settings';
 
 /** GET /api/v1/me/location/consultations */
 export const locationConsultations = '/api/v1/me/location/consultations';
+
+/** GET · PUT /api/v1/me/location/ghost */
+export const locationGhost = '/api/v1/me/location/ghost';
 
 /** DELETE /api/v1/me/location/history */
 export const locationHistory = '/api/v1/me/location/history';
@@ -222,3 +237,9 @@ export const stickersByStickerIdUse = (stickerId: string): string => `/api/v1/me
 
 /** GET · PUT /api/v1/me/terms */
 export const terms = '/api/v1/me/terms';
+
+/** POST /api/v1/me/wellness/ok */
+export const wellnessOk = '/api/v1/me/wellness/ok';
+
+/** GET · PUT /api/v1/me/wellness/settings */
+export const wellnessSettings = '/api/v1/me/wellness/settings';

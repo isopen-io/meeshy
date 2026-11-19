@@ -25,6 +25,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-14 | Sur Android, la notification « ajouté à la communauté » ouvre la communauté | voir réveil 43 | #18061 | voir réveil 43 |
 | 2026-11-15 | Sur Android, toucher la bannière in-app « ajouté à la communauté » ouvre la communauté | voir réveil du 2026-11-15 17:38 | #18670 | voir réveil du 2026-11-15 17:38 |
 | 2026-11-15 | Rejoindre, quitter ou changer de rôle dans une communauté se voit aussitôt chez ses membres (passerelle, web) | voir réveil du 2026-11-15 23:38 | #18766 | voir réveil du 2026-11-15 23:38 |
+| 2026-11-18 | Supprimer ou désactiver une communauté se voit aussitôt chez ses membres (passerelle, web) | voir réveil du 2026-11-18 05:38 | #19590 | voir réveil du 2026-11-18 05:38 |
 
 ## 2026-11-07 — lot 1
 
@@ -449,3 +450,138 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Cliquet de parité : famille « effectif d'une communauté » ajoutée à `ASYMETRIES` (absents iOS #18767, Android #18768).
 - Hors lot : les entrées INDIRECTES (créer ou rejoindre un salon d'une communauté via `applyCommunityAdmission`, désactivation des appartenances d'un compte supprimé) n'émettent pas encore — suivi à ouvrir ; la suppression d'une communauté reste muette (reste de #16857).
 - Prochain lot recommandé : #18767 (iOS lit l'effectif), puis #18768 (Android), puis la suppression d'une communauté (#16857).
+
+## 2026-11-17 — réveil 15:38 UTC
+
+- Début du run : aucune PR de la routine ouverte ; #18770 (#18766) fusionnée le 2026-11-16. #18767 (iOS) cédé : la PR vivante #18954 (revue des caches iOS) écrit `CommunityDetailViewModel` et `CommunityListViewModel`.
+- Lot : #18768 (Android lit l'effectif). `core/model` : `CommunityMemberJoinedEvent` / `LeftEvent` / `RoleUpdatedEvent` (miroirs des trois charges), lus en `CommunityMemberChange` (geste, effectif, rôle tenu ou `null`) ; rôle inconnu, effectif négatif ou identifiant vide ⇒ écarté. Règles d'application : `ApiCommunity.applying(change, viewerId)` recopie `memberCount` et fait suivre la ligne de la personne dans `members` — c'est de là que `CommunityMembership` tire les droits d'écran du lecteur (entré ⇒ sa ligne, promu ⇒ son rôle, retiré ⇒ plus de ligne) ; un tiers qui entre n'est pas inventé. `applyingMember` réécrit la liste des membres tenue sur un départ ou un rôle.
+- `sdk-core` : `CommunityCacheRepository.applyMemberChange` (fiche, première page, membres ; une ENTRÉE fait relire la liste des membres tenue ; le lecteur qui entre ou sort relit sa liste ; sorti d'une communauté privée, il n'en garde ni membres ni channels). `CommunityMemberBinding` (`RealtimeBinding` en `@IntoSet`, modèle de `CommunityUpdateBinding`) installe les trois routes. Aucun ViewModel touché : détail, liste et membres lisent ce cache.
+- Cliquets partagés : Android sort de la famille « effectif d'une communauté » d'`ASYMETRIES` ; `SWEPT_EVENTS_AT_LAST_MEASURE` 131 → 134. `__tests__/ci/` 25 fichiers, 215 tests verts.
+- Gates locaux : `jvm-check -PjvmCheckModelOnly` (le mode complet bute sur `libsignal-client`, 403) : `CommunityMemberEventsTest` 12/12 et les suites `Community*` + `socket.*` de `core/model` vertes. `sdk-core` (Robolectric) ne se prouve que par `android.yml` : `CommunityMemberBindingTest` (4), `CommunityCacheRepositoryTest` (+6).
+- Prochain lot recommandé : #18767 (iOS lit l'effectif) dès que #18954 est fusionnée, puis la suppression d'une communauté (#16857).
+
+## 2026-11-17 — réveil 17:38 UTC
+
+- Début du run : aucune PR de la routine ouverte ; #19266 (#18768, Android) et #18954 fusionnées, ce qui débloque #18767.
+- Lot : #18767 (iOS lit l'effectif), le dernier client. SDK : `CommunityMemberJoinedEvent` / `LeftEvent` / `RoleUpdatedEvent` (miroirs des trois charges, `Sockets/CommunityMemberChannel.swift`), lus en `CommunityMemberChange` (communauté, personne, effectif, rôle TENU ou `nil`) ; identifiant vide, effectif négatif, rôle inconnu ou `creator` ⇒ écarté. Trois routes vers `CommunityMemberChannel`, servi par `MessageSocketProviding.communityMemberChanged`. Règles d'application (`Models/CommunityMemberChange+Apply.swift`) : `MeeshyCommunity.applying` recopie l'effectif ; `APICommunity.applying(_:readerId:)` recopie l'effectif et fait suivre `currentUserRole` au seul geste du lecteur. `CacheCoordinator` réécrit `communities` sous toutes ses clés.
+- App : `CommunityDetailViewModel` (tiers ⇒ effectif ; lecteur promu ⇒ droits ; lecteur sorti ⇒ droits, canaux et publications gardées retirés, « mes communautés » allégée, fiche relue ; entré d'ailleurs ⇒ fiche relue), `CommunityListViewModel` (effectif ; le lecteur entré sans ligne ou sorti avec une ⇒ liste relue), `CommunityMembersViewModel` (liste ouverte relue), `MyCommunities` (effectif ; lecteur sorti ⇒ retiré de la bande et du cache de partage ; entré ⇒ bande relue). Flux par `OrderedEventLane.relay` (la règle maison interdit `sink { Task }`).
+- Cliquets partagés : la famille « effectif d'une communauté » quitte `ASYMETRIES` (les trois clients lisent) ; `SWIFT_SWEPT_EVENTS_AT_LAST_MEASURE` 162 → 165. `__tests__/ci/` 25 fichiers, 215 tests verts.
+- Témoins : SDK `CommunityMemberEventsTests` (9), `SocketInboundRouteTableTests` (+1, relevé figé +3 noms), `CacheCoordinatorCommunityMemberChangesTests` (2) ; app `CommunityDetailViewModelTests` (+5), `CommunityListViewModelTests` (+3), `MyCommunitiesTests` (+2), `CommunityMembersViewModelTests` (+3). Preuve : CI iOS de la PR (pas de Swift en conteneur). Gardes iOS locales : `check_house_rules.sh` (42 règles tenues), `check_cohesion_budget.sh`, `check_test_registration.sh`, accent-color verts.
+- Prochain lot recommandé : la suppression d'une communauté (reste de #16857) ; les entrées INDIRECTES (salon rejoint via `applyCommunityAdmission`, compte supprimé) n'émettent toujours pas.
+
+## 2026-11-17 — réveil 21:38 UTC
+
+- Début du run : #19297 (#18767, iOS lit l'effectif) ouverte, dernière poussée à 19:38, donc inactive : run consacré à la mener à la fusion.
+- État trouvé : CI de `70124379f` encore en file Mac depuis 19:38 (builds app et SDK non partis) ; seul rouge, la tranche 4 des gardes navigateur web (`media-16` lit `flow-end` pour `justify-end`, plus un 404 de script) — étrangère au lot (aucun fichier web touché) et suivie par #19370.
+- `dev` (60 commits) fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : shared `__tests__/ci/` 25 fichiers / 215 tests verts ; `check_house_rules.sh` 42 règles tenues, `check_cohesion_budget.sh` et `check_test_registration.sh` verts, `check-accent-color-hardcoding.mjs` conforme.
+- Les runs de l'ancienne tête sont annulés, ci.yml / ios.yml / ios-sdk relancés sur la nouvelle.
+- Prochain lot recommandé : fusionner #19297 dès que la CI iOS est verte (la tranche 4 web reste rouge tant que #19370 est ouverte : fusion à faire valider par Jacques), puis la suppression d'une communauté (#16857).
+
+## 2026-11-17 — réveil 23:38 UTC
+
+- Début du run : #19297 (#18767) ouverte, dernière poussée à 21:41, donc inactive : run consacré à la mener à la fusion.
+- État trouvé : la CI iOS SDK de `8521abb25` a enfin tourné et rendu un VRAI rouge du lot : `CommunityMemberEventsTests.swift:14` — `static let joinedPayload: [String: Any]` refusé par Swift 6 (« not concurrency-safe, non-Sendable »). Corrigé en propriété calculée. Deux tranches gateway encore en file d'attente depuis 21:41.
+- `dev` (50 commits) fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : shared `__tests__/ci/` 25 fichiers / 215 tests verts ; `check_house_rules.sh`, `check_cohesion_budget.sh`, `check_test_registration.sh`, `check-accent-color-hardcoding.mjs` verts.
+- Prochain lot recommandé : fusionner #19297 dès que la CI iOS SDK est verte sur la nouvelle tête, puis la suppression d'une communauté (#16857).
+## 2026-11-18 — réveil 05:38 UTC
+
+- Début du run : #19297 (#18767, iOS lit l'effectif) est ouverte et a reçu une poussée à 05:30 d'une autre session qui la mène (rouges `Verdict iOS SDK` étrangers) : cédée. Elle écrit `CommunityDetailViewModel` / `CommunityListViewModel`, donc le volet iOS de ce lot attend sa fusion.
+- Lot : #19590, dernière tranche de #16857 (la disparition). Contrat : `community:deleted` (`CommunityDeletedEventData` : `communityId`, `reason: deleted|deactivated`, `at` ISO) — ni membres, ni créateur, ni identité. Passerelle : `services/community-deleted-broadcast.ts` ; l'audience (membres actifs ∪ créateur) se lit AVANT l'écriture (`readCommunityDeletedAudience` : la suppression efface les appartenances ; une lecture qui échoue rend une audience vide, jamais un échec de la suppression), l'envoi part après la réponse, isolé par destinataire. Branché sur `DELETE /communities/:id` (`deleted`) et sur `PATCH /admin/communities/:id` avec `isActive: false` (`deactivated`) ; la réactivation reste annoncée par `community:updated`. Web : `lib/api/community-deleted-live.ts`, monté par `bindCommunityLive` — la communauté sort de chaque liste en cache ; le détail REGARDÉ se relit (404, l'état de refus déjà dessiné), tout ce que personne ne regarde (détail par id ou par identifiant, membres, salons, publications) est oublié.
+- Témoins : passerelle `community-deleted-broadcast.test.ts` (9), `community-deleted-emission.test.ts` (3, la suppression rouge sans branchement ; le faux Prisma efface vraiment les appartenances, une audience lue après serait vide), `admin-communities.test.ts` (+3, la désactivation rouge sans branchement) ; web `community-deleted-live.test.ts` (4), `community-live-binding.test.ts` (+1, cinq écoutes). Le cliquet `socket-event-orphan-gate` a rougi tant que le web ne citait pas l'événement.
+- Cliquet de parité : famille « disparition d'une communauté » ajoutée à `ASYMETRIES` (absents iOS #19591, Android #19592).
+- Gates locaux : passerelle `tsc --noEmit` vert (8 Go de tas ; il meurt faute de mémoire en parallèle d'autres gates), `unit/routes` + services communauté + balayages d'émission, de promesses détachées et `tsc-never-loaded` 929 suites / 14 233 tests verts ; shared vitest 437 fichiers / 10 602 tests verts ; web `tsc` vert, `bun test` 34 381 / 34 382 (le rouge `act-leak-guard` est étranger, comme aux runs précédents), `vite build` + `measure-weight` verts (première peinture 99,76 Ko, inchangée : le module est dans l'import paresseux de `community-live`).
+- Pas de revue adversariale : diffusion, vers les seuls membres actifs, d'un fait qu'ils découvriraient au prochain chargement ; ni permission ni migration.
+- #16857 : les trois tranches de son contrat sont livrées (identité, effectif, disparition) ; reste les entrées INDIRECTES qui n'émettent pas (salon d'une communauté via `applyCommunityAdmission`, compte supprimé), à ouvrir en issue avant de la fermer.
+- Prochain lot recommandé : #19592 (Android lit la disparition), puis #18767 / #19591 côté iOS quand #19297 est fusionnée ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-18 — réveil 07:38 UTC
+
+- Début du run : #19602 (#19590, la disparition) ouverte, dernière poussée à 06:02, donc inactive : run consacré à la mener à la fusion. #19297 (#18767, iOS) poussée à 07:10 par une autre session : cédée.
+- État : CI de `e858f87b1` en file depuis 06:03 (94 runs en attente sur le dépôt), cinq tâches jamais démarrées (`Tests · web`, Playwright 2 et 3, deux du traducteur), tout le reste vert. `dev` avait 54 commits d'avance : fusionné sans conflit.
+- Gates locaux sur l'arbre fusionné : shared `__tests__/ci/` 25 fichiers / 215 tests ; passerelle `tsc --noEmit` vert, suites communauté + admin + `tsc-never-loaded` 37 suites / 609 tests ; web `tsc` vert, `bun test src/lib/api/community` 114 / 114.
+
+## 2026-11-18 — réveil 09:38 UTC
+
+- Début du run : aucune PR de la routine ouverte ; #19297 (#18767, iOS lit l'effectif) et #19602 (#19590, disparition passerelle + web) fusionnées à 07:40.
+- Lot : #19592 (Android lit la disparition). `core/model` : `CommunityDeletedEvent` (miroir de `CommunityDeletedEventData` : `communityId`, `reason`, `at`), `disappearedId` (`null` si la charge ne désigne rien), `List<ApiCommunity>.withoutCommunity`. `SocketEventNames.COMMUNITY_DELETED`. `sdk-core` : `CommunityCacheRepository.applyDeleted` retire la ligne de la première page tenue sans réseau et oublie fiche, membres et channels ; le détail ouvert repart donc à froid, relit, et `CommunityDetailViewModel.onDetailFailure` dessine le refus (404) qu'il sait déjà dessiner — même règle que le web. `CommunityDeletedBinding` (`RealtimeBinding` en `@IntoSet`, modèle de `CommunityUpdateBinding`) ; charge sans communauté écartée sans couper le flux. Aucun ViewModel touché.
+- Cliquets partagés : Android sort de la famille « disparition d'une communauté » d'`ASYMETRIES` (reste iOS, #19591) ; `SWEPT_EVENTS_AT_LAST_MEASURE` 135 → 136. `__tests__/ci/` 25 fichiers, 215 tests verts.
+- Gates locaux : `jvm-check -PjvmCheckModelOnly` (compilation en processus, le démon Kotlin manquant de mémoire) : `CommunityDeletedEventTest` 4/4, les suites `Community*` et `socket.*` de `core/model` vertes. `sdk-core` (Robolectric) ne se prouve que par `android.yml` : `CommunityDeletedBindingTest` (4), `CommunityCacheRepositoryTest` (+3).
+- Prochain lot recommandé : #19591 (iOS lit la disparition, débloqué par la fusion de #19297), puis fermer #16857 après avoir ouvert l'issue des entrées INDIRECTES (salon via `applyCommunityAdmission`, compte supprimé).
+
+## 2026-11-18 — réveil 11:38 UTC
+
+- Début du run : aucune PR de la routine ouverte ; #19655 (#19592, Android lit la disparition) fusionnée. #19591 (iOS lit la disparition) cédé : #19665 et #19667, vivantes (poussées à 11:30), écrivent `ConversationListView+CommunitiesLoader.swift` et `CommunityListViewModelTests.swift`.
+- Lot : #19406 (une communauté grandit en silence), première moitié de #18769. `applyCommunityAdmission` (écrivain UNIQUE des admissions implicites) reçoit `CommunityMemberAnnounce` en paramètre REQUIS et annonce ce qu'il a ÉCRIT : `community:member-joined`, `via: self` (l'appelant qui revient admin) ou `invited`, rang écrit (une ligne réactivée repart `member`) ; un lot de réactivations qu'une course a déjà en partie fait ne s'annonce pas. Les plans portent désormais `userId` et `via` sur chaque entrée. `broadcastCommunityMemberChanges` relit communauté et effectif UNE fois pour tout le lot (un salon à cent participants n'en fait pas cent lectures). Deux fabriques : `communityMemberAnnouncerFrom(fastify)` (routes) et `communityMemberAnnouncerOverIO(prisma, io)` (`admitConversationMember`, débannissement, entrée par lien de salon). Sept appelants branchés (`core-lifecycle`, `participants-writes` via `memberAdmission`, `call-invite-events` idem, `link-admission`, `sharing-invite`, `participant-ban-core`, `communities/core`) + `admitSalonOccupants` / `closeSalonsAfterSwitch` (`settings`, `admin/communities-oversight`).
+- Cliquet : `src/__tests__/community-member-writer-sweep.test.ts` fige les six fichiers qui écrivent `CommunityMember` et leur émetteur ; seul muet nommé : la désactivation d'un compte supprimé (#18769, qui reste ouverte pour elle — `MeeshySocketIOManager` étant hors budget, l'injection d'une annonce dans `MaintenanceService` demande son propre lot).
+- Aucun client touché : web, iOS et Android lisent déjà `community:member-joined` (#18766, #18767, #18768).
+- Prochain lot recommandé : #19591 (iOS lit la disparition) dès que #19665 / #19667 sont fusionnées ; sinon la moitié « compte supprimé » de #18769.
+
+## 2026-11-18 — réveil 13:38 UTC
+
+- Début du run : #19678 (#19406, admissions implicites) ouverte, poussée à 13:12 : vivante, cédée. #19655 (#19592, Android) fusionnée.
+- Lot : #19591 (iOS lit la disparition), le dernier client. SDK : `CommunityDeletedEvent` (miroir de `CommunityDeletedEventData` : `communityId`, `reason`, `at` ; `disappearedId` nul si la charge ne désigne rien), `CommunityDeletedChannel` (publie l'identifiant, écarte une charge vide), route `community:deleted`, `MessageSocketProviding.communityDeleted`. `CacheCoordinator.applyCommunityDeletion` retire la communauté de TOUTES les clés de `communities` (`removeEverywhere`), sans réseau.
+- App : `CommunityDetailViewModel.applyDisappearance` — la fiche regardée passe aussitôt à l'état « indisponible » (`community` nul, `loadFailure = .refused`, plus aucun rôle ni geste de créateur), oublie canaux et publications gardées, quitte « mes communautés », puis se relit SANS indicateur (un compte qui la lit encore la retrouve). `CommunityListViewModel` retire la ligne sans relance ; `MyCommunities` la retire de la bande et du cache de partage.
+- Cliquets partagés : la famille « disparition d'une communauté » quitte `ASYMETRIES` (les trois clients lisent) ; `SWIFT_SWEPT_EVENTS_AT_LAST_MEASURE` 166 → 167 (+1, `community:deleted`, après le correctif appels de dev).
+- Rouges ÉTRANGERS trouvés sur `dev` nu (`3bb5b20e8`), reproduits avant le lot : `swift-socket-payload-shape-gate` mesure 160 au lieu de 165 (cinq événements d'appel ne sont plus balayés : `call:invite-declined`, `call:invite-expired`, `call:muted-by-moderator`, `call:participant-invited`, `call:reaction-received`, après le lot appels `65738b005`) et `socket-event-platform-parity-gate` signale `call:conversation-changed` absent d'Android. Avec le lot : 161 (+1).
+- Témoins : SDK `CommunityDeletedEventTests` (5), `CacheCoordinatorCommunityDeletionsTests` (2), `SocketInboundRouteTableTests` (+1, relevé figé +1 nom) ; app `CommunityDetailViewModelTests` (+3), `CommunityListViewModelTests` (+2), `MyCommunitiesTests` (+1). Preuve : CI iOS de la PR. Gardes iOS locales : `check_house_rules.sh` (42 règles), `check_cohesion_budget.sh`, `check_test_registration.sh`, accent-color verts.
+- Prochain lot recommandé : ouvrir l'issue des entrées INDIRECTES restantes puis fermer #16857 ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-18 — réveil 15:38 UTC
+
+- Début du run : #19694 (#19591, iOS lit la disparition) poussée à 15:01, donc vivante : cédée. #19678 (#19406) inactive depuis 14:20 : run consacré à la mener à la fusion.
+- `dev` (11 commits, appels et miroirs Swift ; seul `packages/shared/types/call-rules.ts` côté partagé) fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : passerelle `tsc --noEmit` vert, `unit/routes` + `unit/services/conversations` + `services/conversations/__tests__` + balayage des écrivains + `tsc-never-loaded` 976 suites / 14 845 tests verts ; shared `__tests__/ci/` 25 fichiers / 216 tests verts.
+- Prochain lot recommandé : la moitié « compte supprimé » de #18769 ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-18 — réveil 17:38 UTC
+
+- Début du run : deux PR de la routine ouvertes, inactives depuis plus d'une heure (dernières poussées 16:26 et 16:31) : #19694 (#19591, iOS lit la disparition) et #19678 (#19406, admissions implicites). Run consacré à les mener à la fusion.
+- État trouvé : leur CI n'avait pas démarré (102 runs en file sur le dépôt), et `dev` avait reçu deux commits utiles aux deux branches : `725488896` (la deinit isolée au MainActor qui tuait xctest au démontage) et `2fcb40b94` (leçon jvm-check, garde `journal-one-file-per-entry-guard`).
+- `dev` (`2fcb40b94`) fusionnée dans les deux branches sans conflit. Rejoués sur les arbres fusionnés : shared `__tests__/ci/` 25 fichiers / 216 tests verts (les deux), gardes de leçons de la passerelle vertes ; pour #19694, `check_house_rules.sh`, `check_cohesion_budget.sh`, `check_test_registration.sh` et `check-accent-color-hardcoding.mjs` (410 = référence) verts.
+- Prochain lot recommandé : fusionner #19694 et #19678 dès que leur CI est verte sur ces têtes (la seconde fusionnée devra reprendre `dev` : les deux écrivent ce journal) ; puis fermer #16857.
+- 17:43 : #19678 fusionnée par Jacques (`ba1f209bf`), #19406 fermée. `dev` reprise dans #19694 (seul conflit : ce journal, les deux entrées gardées dans l'ordre des réveils).
+
+## 2026-11-18 — réveil 19:38 UTC
+
+- Début du run : CI du dépôt gelée par le porteur depuis 19:20 (tous les workflows désactivés) ; la session `v2-meeshy-88` fusionne seule vers `dev`. #19694 (#19591, iOS lit la disparition) seule PR ouverte de la routine, déclarée « prête » à 19:27 sur `dev` `ffb60040e`.
+- `dev` avait avancé (`c465db99c`, dont `packages/shared/types/voice-api.ts` et `api-schemas/message-attachment.ts`) : fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : shared `__tests__/ci/` 25 fichiers / 216 tests verts ; `check_house_rules.sh` (42 règles), `check_cohesion_budget.sh`, `check_test_registration.sh` (2 045 fichiers inscrits), `check-accent-color-hardcoding.mjs` (168 / 410 = références) verts. Branche redéclarée prête sur la PR.
+- Aucun nouveau lot ouvert : une seule PR de la routine à la fois, et rien ne se prouve tant que la CI est gelée.
+- Prochain lot recommandé : après la fusion de #19694, ouvrir l'issue des entrées INDIRECTES restantes et fermer #16857, puis la moitié « compte supprimé » de #18769.
+
+## 2026-11-18 — réveil 21:38 UTC
+
+- Début du run : #19694 (#19591, iOS lit la disparition) fusionnée à 21:28 par la file coordonnée ; aucune PR de la routine ouverte. CI de PR toujours gelée (`pull_request` « skipped »), la preuve passe par `workflow_dispatch`.
+- Lot : #18769, seconde moitié — un compte supprimé quitte ses communautés, et ça se voit. `deactivateCommunityMembershipsOfDeletedAccount` reçoit `CommunityMemberAnnounce` en paramètre REQUIS (même règle qu'`applyCommunityAdmission`), lit ses communautés actives AVANT l'écriture (après, il n'y en a plus), et annonce `community:member-left` (`reason: 'removed'`) dans chacune — rien si l'écriture lève, rien si une course l'a déjà faite (`count === 0`). `MaintenanceService` branche `communityMemberAnnouncerOverIO(prisma, resolveIO())` sur le serveur que le manager lui injecte déjà (`setShareLinkRevocationLive`) : aucune ligne ajoutée à `MeeshySocketIOManager`, hors budget.
+- Audience : celle de la loi partagée (membres actifs restants, créateur, et la room du compte lui-même, dont les sessions sont déjà révoquées à ce stade de la suppression). Charge : l'identifiant seul, déjà anonymisé en place par #5691.
+- Cliquet `community-member-writer-sweep` : plus aucun écrivain muet (l'entrée `silent #18769` devient `member-broadcast`).
+- Témoins : `deactivateDeletedAccountCommunityMemberships.test.ts` (+4), `MaintenanceService.test.ts` (+2, dont le branchement traversant le vrai annonceur jusqu'aux rooms `user:<id>`). Rouge prouvé : 6 échecs sans le correctif.
+- Gates locaux : passerelle `tsc --noEmit` vert ; 31 suites / 811 tests verts (MaintenanceService, écrivains, diffusion, promesses détachées). Rouge ÉTRANGER : `tsc-never-loaded-tests-ratchet` mesure 80 erreurs non muettes pour un plafond de 76 — identique sur `dev` nu (même liste avant / après le lot).
+- Aucun client touché : les trois lisent déjà `community:member-left`.
+- Prochain lot recommandé : fermer #16857 (ses trois tranches et ses entrées indirectes sont livrées) ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-19 — réveil 05:38 UTC
+
+- Début du run : #19763 (#18769, un compte supprimé quitte ses communautés) seule PR de la routine ouverte, dernière poussée à 01:38, donc inactive : run consacré à la mener à la fusion.
+- `dev` (`d88c406d7`, 14 commits : iOS, SDK, garde passerelle `participation-soft-state-equality-filter-guard`) fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : passerelle `tsc --noEmit` vert ; `MaintenanceService`, `deactivateDeletedAccountCommunityMemberships`, `community-member-writer-sweep`, `participation-soft-state-equality-filter-guard` et `tsc-never-loaded` verts.
+- Seul rouge : `gateway-test-file-size-budget` règle 3 (`calls-routes.test.ts : 2154 → 2175`), ÉTRANGER et identique sur `dev` nu ; avec la garde web `capability-guard` (`lib/calls/call-network-recovery.ts`), il est corrigé par #19772, vivante (poussée à 05:06 par une autre session) : cédée.
+- Pas de `workflow_dispatch` sur cette tête : son verdict serait rouge pour ces deux causes, et la branche devra reprendre `dev` après #19772.
+- Prochain lot recommandé : dès que #19772 est sur `dev`, reprendre `dev`, lancer `ci.yml` en `workflow_dispatch` et fusionner #19763 sur un verdict vert ; puis fermer #16857.
+
+## 2026-11-19 — réveil 07:38 UTC
+
+- Début du run : #19763 (#18769, compte supprimé) seule PR de la routine ouverte, inactive depuis 05:45 : run consacré à la mener à la fusion.
+- Blocage inchangé : les deux rouges ÉTRANGERS de son verdict (`capability-guard` qui vise `lib/calls/call-network-recovery.ts`, et `calls-routes.test.ts` à 2 175 lignes pour une référence de 2 154) sont toujours sur `dev` (`89bece81d`). #19772, qui corrige les deux, est ouverte et poussée à 06:44 par une autre session : vivante, cédée.
+- `dev` (`89bece81d`, 3 commits iOS / Android / web uiux, aucun chemin sous `services/` ni `packages/shared`) fusionnée dans la branche sans conflit ; les gardes passerelle du réveil précédent restent valables pour cet arbre. Pas de dispatch : son verdict ne serait rouge que de ces deux étrangers, et la file en compte déjà plusieurs.
+- Prochain lot recommandé : dès que #19772 est sur `dev`, la refusionner, dispatcher `ci.yml`, fusionner #19763, fermer #18769 puis #16857.
+
+## 2026-11-19 — réveil 09:38 UTC
+
+- Début du run : #19763 (#18769) fusionnée (`1ff276909`) ; aucune PR de la routine ouverte.
+- Lot : #19868 — demander à rejoindre une communauté qui valide chaque entrée dit « Demande envoyée » (passerelle + web), jamais un faux membre.
+- Constat : le web lisait le 409 `COMMUNITY_JOIN_PENDING` d'une communauté qui valide chaque entrée (#19429) comme « déjà membre » — « Quitter », compteur +1 et entrée dans « mes communautés » pour quelqu'un qui n'était pas entré. iOS affichait le message brut en anglais.
+- Passerelle : `GET /communities/:id` sert `currentUserJoinRequest` (`'pending' | null`, additif), la demande du LECTEUR seul, lue seulement pour un non-membre d'une communauté qui valide chaque entrée (`routes/communities/join-request-state.ts`) ; lecture qui lève ⇒ `null`.
+- Web : la jonction annonce `acceptsPending` ; « Demander à rejoindre », puis l'état « Demande envoyée » (un statut, pas un bouton) ; 403 `COMMUNITY_JOIN_COOLDOWN` dit le délai ; un 202 sur un cache périmé défait l'entrée optimiste ; `community:member-joined` sur soi efface la demande. Quatre clés en sept langues ; budget `interface_catalogs_community_membership` 7 → 8 Ko (7,11 Ko au `measure-weight`). Glyphe `clock` ajouté au jeu des communautés (`extract-glyphs.mjs`).
+- Témoins : passerelle `communities-core.test.ts` (+6, rouge prouvé : 5 échecs) ; web `community-membership.test.ts` (+8), `view.test.ts` (+3), `community-membership.test.tsx` (+3), `community-member-live.test.ts` (+1) — rouge prouvé (12 échecs).
+- Gates locaux : passerelle `tsc --noEmit` vert, 51 suites / 772 tests verts (communautés, `routes/__tests__`, `tsc-never-loaded`) ; shared `__tests__/ci/` 25 / 216 verts ; web `tsc --noEmit` vert, build vert, `measure-weight` vert, suite complète 34 700 verts, 1 rouge ÉTRANGER (`act-leak-guard.test.ts`, identique sur `dev` nu `cd0157b87`).
+- Auditeur adversarial : non bloquant ; deux états hérités relevés → #19872.
+- Suivis ouverts (milestone 284) : iOS #19869, Android #19870, intendants (liste, accepter, refuser, `community:join-requested`) #19871, clôture des demandes #19872.
+- Prochain lot recommandé : #19871 (web d'abord), sans quoi une demande envoyée n'a personne pour y répondre.

@@ -141,13 +141,13 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
         // moins à la réécriture.
         //
         // `FeedViewModelTests` l'exerce — donc « code testé, jamais expédié »,
-        // la même forme que `likePost` / `bookmarkPost` plus bas, et le même
+        // la même forme que `likePost` plus bas, et le même
         // coût : une suite verte qui n'atteste rien du produit.
         "supersedeRecoveredPost",
 
         // ── 244i · le fil : trois méthodes dont le SEUL appelant est la SUITE ──
         //
-        // `likePost`, `bookmarkPost` et `clearTranslationOverride` sont
+        // `likePost` et `clearTranslationOverride` sont
         // déclarées sur `FeedViewModel`, largement couvertes par
         // `FeedViewModelTests` — et appelées par AUCUN code de production.
         //
@@ -172,7 +172,6 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
         // Inscrites NOMMÉMENT pour rester une dette VUE, avec le correctif
         // proposé dans l'analyse 244i.
         "likePost",
-        "bookmarkPost",
         "clearTranslationOverride",
 
         // ── 244i · la conversation : quatre méthodes que seule la suite appelle ──
@@ -481,7 +480,7 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
 ///
 /// Relevé sur `dev` 3ff99d3aa3 : la conversation se lit de CINQ façons, et le
 /// décompte d'un message éphémère n'existait que dans trois d'entre elles —
-/// Focal et Script (`FocalEphemeralBadge`), Bulle (`BubbleEphemeralBadge`).
+/// Focal, Script et Bulle, par deux badges distincts.
 /// **Rivière et Résumé n'affichaient rien** : un message qui allait disparaître
 /// dans trente secondes ne le disait pas à deux lecteurs sur cinq.
 ///

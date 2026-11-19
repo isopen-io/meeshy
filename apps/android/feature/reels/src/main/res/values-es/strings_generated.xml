@@ -5,7 +5,6 @@
     <string name="reels_action_send">Enviar</string>
     <string name="reels_author_profile">Perfil del autor</string>
     <string name="reels_caption_translated">Traducción disponible</string>
-    <string name="reels_close">Cerrar</string>
     <plurals name="reels_comments_count">
         <item quantity="one">%1$d comentario</item>
         <item quantity="many">%1$d comentarios</item>
@@ -26,14 +25,13 @@
     <string name="reels_mute">Silenciar</string>
     <string name="reels_open_failure_back">Volver</string>
     <string name="reels_report_reason_harassment">Acoso</string>
-    <string name="reels_report_reason_hate_speech">Discurso de odio</string>
+    <string name="reels_report_reason_hate_speech">Odio</string>
     <string name="reels_report_reason_impersonation">Suplantación de identidad</string>
     <string name="reels_report_reason_inappropriate">Contenido inapropiado</string>
     <string name="reels_report_reason_other">Otro</string>
     <string name="reels_report_reason_spam">Spam</string>
     <string name="reels_report_reason_violence">Violencia</string>
     <string name="reels_scrub">Avanzar o retroceder</string>
-    <string name="reels_share">Compartir</string>
     <string name="reels_toast_delete_failed">Error al eliminar la publicación</string>
     <string name="reels_toast_deleted">Publicación eliminada</string>
     <string name="reels_toast_pin_failed">Error al fijar la publicación</string>

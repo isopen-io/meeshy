@@ -81,7 +81,7 @@ final class GameBannerBadgeLoadingTests: XCTestCase {
         XCTAssertEqual(service.userGameIds, [userId])
     }
 
-    // MARK: - #10231 — le niveau et ses points au DÉBUT de la bannière, le rang à la FIN
+    // MARK: - #10231, #19764 — le rang au DÉBUT de la bannière, le niveau et ses points à la FIN
 
     private func badge(points: Int?) -> GameBannerBadgeView {
         let served = GameStanding(level: 3, tier: .etincelle, prestige: 0, flame: nil, rank: .murmure, division: .iii,
@@ -89,13 +89,13 @@ final class GameBannerBadgeLoadingTests: XCTestCase {
         return GameBannerBadgeView(model: GameBannerBadgeModel.of(GameStandingContent(standing: served, treasuryTier: nil), userId: "u1")!)
     }
 
-    func test_badge_leftToRight_levelAtTheStart_rankAtTheEnd() throws {
+    func test_badge_leftToRight_rankAtTheStart_levelAtTheEnd() throws {
         ecran = RenderedScreen(badge(points: 976).frame(width: 360), size: CGSize(width: 360, height: 200))
 
         let level = try XCTUnwrap(ecran?.frame(of: "profile.banner.game.level", borne: 5))
         let rank = try XCTUnwrap(ecran?.frame(of: "profile.banner.game.rank", borne: 5))
-        XCTAssertLessThan(level.maxX, 180, "le niveau et ses points se posent à GAUCHE de la bannière")
-        XCTAssertGreaterThan(rank.minX, 180, "le rang se pose à DROITE de la bannière")
+        XCTAssertLessThan(rank.maxX, 180, "le rang ouvre la bannière, à GAUCHE (#17375, #19764)")
+        XCTAssertGreaterThan(level.minX, 180, "le niveau et ses points se posent à DROITE de la bannière")
     }
 
     func test_badge_rightToLeft_mirrorsTheTwoGroups() throws {
@@ -106,8 +106,8 @@ final class GameBannerBadgeLoadingTests: XCTestCase {
 
         let level = try XCTUnwrap(ecran?.frame(of: "profile.banner.game.level", borne: 5))
         let rank = try XCTUnwrap(ecran?.frame(of: "profile.banner.game.rank", borne: 5))
-        XCTAssertGreaterThan(level.minX, 180)
-        XCTAssertLessThan(rank.maxX, 180)
+        XCTAssertGreaterThan(rank.minX, 180, "en RTL le rang ouvre la bannière à DROITE")
+        XCTAssertLessThan(level.maxX, 180)
     }
 
     func test_badge_levelGroupSaysItsPoints() throws {
@@ -143,30 +143,30 @@ final class GameBannerBadgeLoadingTests: XCTestCase {
         )
     }
 
-    func test_badge_leftToRight_levelAtTheBottomStartCorner_rankAtTheBottomEndCorner() throws {
+    func test_badge_leftToRight_rankAtTheBottomStartCorner_levelAtTheBottomEndCorner() throws {
         let (banner, level, rank) = try mount()
 
-        XCTAssertEqual(level.minX, banner.minX, accuracy: 0.5, "le niveau s'ancre à l'angle bas GAUCHE")
-        XCTAssertEqual(level.maxY, banner.maxY, accuracy: 0.5, "le cadre du niveau se pose sur le bord bas")
-        XCTAssertEqual(rank.maxX, banner.maxX, accuracy: 0.5, "le rang s'ancre à l'angle bas DROIT")
+        XCTAssertEqual(rank.minX, banner.minX, accuracy: 0.5, "le rang s'ancre à l'angle bas GAUCHE")
         XCTAssertEqual(rank.maxY, banner.maxY, accuracy: 0.5, "le cadre du rang se pose sur le bord bas")
+        XCTAssertEqual(level.maxX, banner.maxX, accuracy: 0.5, "le niveau s'ancre à l'angle bas DROIT")
+        XCTAssertEqual(level.maxY, banner.maxY, accuracy: 0.5, "le cadre du niveau se pose sur le bord bas")
         let side = (banner.width - GameBannerBadgeView.avatarClearance) / 2
-        XCTAssertLessThanOrEqual(level.maxX, banner.minX + side + 0.5, "le niveau s'arrête avant l'avatar posé au milieu du bas")
-        XCTAssertGreaterThanOrEqual(rank.minX, banner.maxX - side - 0.5, "le rang s'arrête avant l'avatar")
+        XCTAssertLessThanOrEqual(rank.maxX, banner.minX + side + 0.5, "le rang s'arrête avant l'avatar posé au milieu du bas")
+        XCTAssertGreaterThanOrEqual(level.minX, banner.maxX - side - 0.5, "le niveau s'arrête avant l'avatar")
     }
 
-    func test_badge_rightToLeft_levelAtTheBottomRightCorner_rankAtTheBottomLeftCorner() throws {
+    func test_badge_rightToLeft_rankAtTheBottomRightCorner_levelAtTheBottomLeftCorner() throws {
         let (banner, level, rank) = try mount(.rightToLeft)
 
-        XCTAssertEqual(level.maxX, banner.maxX, accuracy: 0.5)
-        XCTAssertEqual(level.maxY, banner.maxY, accuracy: 0.5)
-        XCTAssertEqual(rank.minX, banner.minX, accuracy: 0.5)
+        XCTAssertEqual(rank.maxX, banner.maxX, accuracy: 0.5)
         XCTAssertEqual(rank.maxY, banner.maxY, accuracy: 0.5)
+        XCTAssertEqual(level.minX, banner.minX, accuracy: 0.5)
+        XCTAssertEqual(level.maxY, banner.maxY, accuracy: 0.5)
     }
 
     /// Le cadre se lit au PIXEL sur une bannière blanche : ses angles bas sont voilés jusqu'au coin (coins carrés) ; en
-    /// haut, seul le coin tourné vers le MILIEU laisse passer le blanc (arrondi) — aucun arrondi au bord de DÉBUT des
-    /// étincelles ni au bord de FIN du rang (décision porteur 2026-10-16) ; le voile reste léger.
+    /// haut, seul le coin tourné vers le MILIEU laisse passer le blanc (arrondi) — aucun arrondi au bord de DÉBUT du rang
+    /// ni au bord de FIN des étincelles (décision porteur 2026-10-16, #19764) ; le voile reste léger.
     func test_badge_frames_squareBottomCorners_roundedTopCorners_lightVeil() throws {
         let (banner, levelOnScreen, rankOnScreen) = try mount()
         let level = levelOnScreen.offsetBy(dx: -banner.minX, dy: -banner.minY)
@@ -175,13 +175,13 @@ final class GameBannerBadgeLoadingTests: XCTestCase {
         let pixels = try XCTUnwrap(Self.render(onBanner()))
         let white = 255.0
         XCTAssertEqual(pixels.size.height, Self.banner.height * pixels.scale, accuracy: 1)
-        XCTAssertLessThan(pixels.luma(level.minX + 0.5, Self.banner.height - 0.5), white - 20, "coin bas du DÉBUT carré : voilé jusqu'au bord")
-        XCTAssertLessThan(pixels.luma(rank.maxX - 0.5, Self.banner.height - 0.5), white - 20, "coin bas de la FIN carré : voilé jusqu'au bord")
-        XCTAssertLessThan(pixels.luma(level.minX + 0.5, level.minY + 0.5), white - 20, "coin haut du DÉBUT des étincelles carré")
-        XCTAssertGreaterThan(pixels.luma(level.maxX - 0.5, level.minY + 0.5), white - 8, "coin haut vers le milieu arrondi")
-        XCTAssertLessThan(pixels.luma(rank.maxX - 0.5, rank.minY + 0.5), white - 20, "coin haut de la FIN du rang carré")
-        XCTAssertGreaterThan(pixels.luma(rank.minX + 0.5, rank.minY + 0.5), white - 8, "coin haut vers le milieu arrondi")
-        XCTAssertGreaterThan(pixels.luma(level.minX + 2, Self.banner.height - 2), white * 0.66, "le voile reste léger : la bannière se voit")
+        XCTAssertLessThan(pixels.luma(rank.minX + 0.5, Self.banner.height - 0.5), white - 20, "coin bas du DÉBUT carré : voilé jusqu'au bord")
+        XCTAssertLessThan(pixels.luma(level.maxX - 0.5, Self.banner.height - 0.5), white - 20, "coin bas de la FIN carré : voilé jusqu'au bord")
+        XCTAssertLessThan(pixels.luma(rank.minX + 0.5, rank.minY + 0.5), white - 20, "coin haut du DÉBUT du rang carré")
+        XCTAssertGreaterThan(pixels.luma(rank.maxX - 0.5, rank.minY + 0.5), white - 8, "coin haut vers le milieu arrondi")
+        XCTAssertLessThan(pixels.luma(level.maxX - 0.5, level.minY + 0.5), white - 20, "coin haut de la FIN des étincelles carré")
+        XCTAssertGreaterThan(pixels.luma(level.minX + 0.5, level.minY + 0.5), white - 8, "coin haut vers le milieu arrondi")
+        XCTAssertGreaterThan(pixels.luma(rank.minX + 2, Self.banner.height - 2), white * 0.66, "le voile reste léger : la bannière se voit")
     }
 
     func test_banner_captures_whenADirectoryIsGiven() throws {

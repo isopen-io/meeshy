@@ -39,6 +39,11 @@ const CEILINGS = ['long', 'explanations'];
 const LABELS = { labels: 'libellés', words: 'mots', long: 'libellés de plus de 80 caractères', explanations: "libellés d'explication" };
 const EXPLANATION = /hint|help|description|subtitle|detail|footer|info|explain|caption/i;
 const LONG = 80;
+// #19710 — un `ECHEC` NOMME les libellés qu'il refuse : dire « 2 libellés de plus de 80
+// caractères » sans dire LESQUELS fait refaire le relevé à chaque passant (mesuré sur #19709).
+// Borné : au-delà, le reste est annoncé — un rapport illisible ne vaut pas mieux qu'un rapport muet.
+const OFFENDERS_SHOWN = 10;
+const OFFENDER_EXCERPT = 60;
 
 const empty = () => ({ labels: 0, words: 0, long: 0, explanations: 0 });
 
@@ -74,13 +79,32 @@ const frenchValues = (key, entry, sourceLanguage) => {
   return sourceLanguage === 'fr' ? [key] : [];
 };
 
-export const measureIosCatalog = (origin, catalog) => {
+// Les PAIRES `{ famille, clé, valeur }` sont la source unique des deux projections : les COMPTEURS
+// (ce que les budgets tiennent) et le RELEVÉ des coupables (ce que l'`ECHEC` nomme). Deux balayages
+// séparés divergeraient sur la famille, la valeur française ou les pluriels — un pour un.
+export const iosPairs = (origin, catalog) =>
+  Object.entries(catalog.strings ?? {}).flatMap(([key, entry]) =>
+    frenchValues(key, entry, catalog.sourceLanguage).map((value) => ({ family: `ios:${origin}/${iosFamilyOf(key)}`, key, value })),
+  );
+
+const countPairs = (pairs) => {
   const families = {};
-  for (const [key, entry] of Object.entries(catalog.strings ?? {})) {
-    for (const value of frenchValues(key, entry, catalog.sourceLanguage)) add(families, `ios:${origin}/${iosFamilyOf(key)}`, key, value);
-  }
+  for (const { family, key, value } of pairs) add(families, family, key, value);
   return families;
 };
+
+export const offendersOfPairs = (pairs) => {
+  const byFamily = {};
+  for (const { family, key, value } of pairs) {
+    const slot = byFamily[family] ?? { long: [], explanations: [] };
+    if (value.length > LONG) slot.long.push({ key, value });
+    if (EXPLANATION.test(key)) slot.explanations.push({ key, value });
+    byFamily[family] = slot;
+  }
+  return byFamily;
+};
+
+export const measureIosCatalog = (origin, catalog) => countPairs(iosPairs(origin, catalog));
 
 const unescapeAndroid = (raw) =>
   raw
@@ -103,19 +127,26 @@ export const androidEntries = (xml) => {
   return [...strings, ...groups];
 };
 
-export const measureAndroidFiles = (files) => {
-  const families = {};
-  for (const { module, xml } of files) {
-    for (const { key, value } of androidEntries(xml)) add(families, `android:${module}`, key, value);
-  }
-  return families;
-};
+export const androidPairs = (files) =>
+  files.flatMap(({ module, xml }) => androidEntries(xml).map(({ key, value }) => ({ family: `android:${module}`, key, value })));
+
+export const measureAndroidFiles = (files) => countPairs(androidPairs(files));
 
 const sorted = (record) => Object.fromEntries(Object.entries(record).sort(([a], [b]) => a.localeCompare(b)));
 
 const exceeding = (counters, budget, keys) => keys.filter((counter) => counters[counter] > budget[counter]);
 
-export const nativeVerdict = ({ measured, budgets, previous }) => {
+const offenderLines = (list) => {
+  const shown = list.slice(0, OFFENDERS_SHOWN);
+  const lines = shown.map(({ key, value }) => {
+    const excerpt = value.length > OFFENDER_EXCERPT ? `${value.slice(0, OFFENDER_EXCERPT)}…` : value;
+    return `    ${String(value.length).padStart(4)}  ${key}  « ${excerpt} »`;
+  });
+  const rest = list.length - shown.length;
+  return rest > 0 ? [...lines, `    … et ${rest} de plus`] : lines;
+};
+
+export const nativeVerdict = ({ measured, budgets, previous, offenders = {} }) => {
   const notes = [];
   const overBudget = Object.entries(measured).flatMap(([family, counters]) => {
     const budget = budgets.families[family];
@@ -124,8 +155,11 @@ export const nativeVerdict = ({ measured, budgets, previous }) => {
       return [];
     }
     for (const counter of exceeding(counters, budget, ['labels', 'words'])) notes.push(`${family} : ${counters[counter]} ${LABELS[counter]} pour un budget de ${budget[counter]}`);
-    return exceeding(counters, budget, CEILINGS).map(
-      (counter) => `${family} : ${counters[counter]} ${LABELS[counter]} pour un budget de ${budget[counter]} — l'écran redevient bavard, range l'explication derrière un (i)`,
+    return exceeding(counters, budget, CEILINGS).map((counter) =>
+      [
+        `${family} : ${counters[counter]} ${LABELS[counter]} pour un budget de ${budget[counter]} — l'écran redevient bavard, range l'explication derrière un (i)`,
+        ...offenderLines(offenders[family]?.[counter] ?? []),
+      ].join('\n'),
     );
   });
   const raised =
@@ -165,9 +199,13 @@ const androidFiles = (root) => {
   return found.sort().map((path) => ({ module: relative(join(root, 'apps/android'), path).split(`${join('src')}/`)[0].replace(/\/$/, ''), xml: readFileSync(path, 'utf8') }));
 };
 
+/** `{ measured, offenders }` — les compteurs que les budgets tiennent, et le relevé que l'`ECHEC` nomme. */
 export const measureRepository = (root) => {
-  const ios = IOS_CATALOGS.map(({ origin, path }) => measureIosCatalog(origin, JSON.parse(readFileSync(join(root, path), 'utf8'))));
-  return sorted(Object.assign({}, ...ios, measureAndroidFiles(androidFiles(root))));
+  const pairs = [
+    ...IOS_CATALOGS.flatMap(({ origin, path }) => iosPairs(origin, JSON.parse(readFileSync(join(root, path), 'utf8')))),
+    ...androidPairs(androidFiles(root)),
+  ];
+  return { measured: sorted(countPairs(pairs)), offenders: offendersOfPairs(pairs) };
 };
 
 const readBase = (root, ref) => {
@@ -191,7 +229,7 @@ const readBase = (root, ref) => {
 
 const main = () => {
   const root = fileURLToPath(new URL('..', import.meta.url));
-  const measured = measureRepository(root);
+  const { measured, offenders } = measureRepository(root);
   const budgetsFile = join(root, BUDGETS_PATH);
   if (process.argv.includes('--write')) {
     const existing = (() => {
@@ -209,7 +247,7 @@ const main = () => {
   const ref = process.env.VERBOSITY_BASE_REF ?? 'origin/dev';
   const previous = readBase(root, ref);
   if (previous === null) console.log(`  note  aucun budget lisible sur ${ref} : le cliquet contre la base est sauté, les budgets restent tenus`);
-  const { problems, notes } = nativeVerdict({ measured, budgets, previous });
+  const { problems, notes } = nativeVerdict({ measured, budgets, previous, offenders });
   for (const note of notes) console.log(`  note  ${note}`);
   const below = Object.entries(measured).filter(([family, counters]) => {
     const budget = budgets.families[family];

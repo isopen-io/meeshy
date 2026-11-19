@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import me.meeshy.sdk.model.PlainSignalAdmission
 import me.meeshy.sdk.model.reading.focal.FocalMetrics
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Alignment
 import me.meeshy.ui.theme.MeeshySpacing
 import androidx.compose.material3.Scaffold
@@ -25,6 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -81,6 +83,8 @@ fun ChatScreen(
     ChatShellEffects(viewModel, remember(viewModel) { ChatLifecycleHooks() }, leave)
     ChatWindowCaptureShield(remember(state.messages) { ChatCaptureShield.shields(state.messages.map { it.exitOffer }) })
     EncryptionSwitchAnnouncementEffect(remember(viewModel) { viewModel.controllers.find<EncryptionSwitchAnnouncementController>() })
+    val endToEndSendRefusals by viewModel.endToEndSendRefusals.collectAsStateWithLifecycle()
+    EndToEndSendRefusalEffect(endToEndSendRefusals)
     val callEntry by viewModel.callEntry.collectAsStateWithLifecycle()
     val mayInviteFriends by viewModel.mayInviteFriends.collectAsStateWithLifecycle()
 
@@ -111,6 +115,8 @@ fun ChatScreen(
     val engagement = remember(engagementSnapshot, engagementController) {
         ChatEngagementBinding(engagementSnapshot, engagementController?.sent ?: NO_SENT)
     }
+    val actAdvanceController = remember(viewModel) { viewModel.controllers.find<ChatActAdvanceController>() }
+    val actAdvance by (actAdvanceController?.shown ?: NO_ACT_ADVANCE).collectAsStateWithLifecycle()
     val readingModeController = remember(viewModel) { viewModel.controllers.find<ReadingModeController>()?.let(::ThreadReadingModeViewModel) }
     val readingModeState by (readingModeController?.state ?: NO_READING_MODE).collectAsStateWithLifecycle()
     val summaryController = remember(viewModel) { viewModel.controllers.find<LivingSummaryController>() }
@@ -222,6 +228,11 @@ fun ChatScreen(
                 ) {
                     ChatHeaderHost(host, remember(viewModel) { viewModel.controllers.find<ChatServerSearch>() })
                 }
+                // L'acte du Rêve qui avance (#17367) : sous la bande de l'en-tête, jamais sur la saisie.
+                ChatActAdvancePill(
+                    advance = actAdvance.takeUnless { chromeHidden },
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = headerHeight + MeeshySpacing.sm),
+                )
                 Box(
                     Modifier
                         .align(Alignment.BottomCenter)
@@ -239,8 +250,6 @@ fun ChatScreen(
 
 /**
  * The bytes + display name + declared content-type read back from a picked content Uri.
- * Shared with [me.meeshy.app.chat.IncomingShareScreen] (an inbound `ACTION_SEND` attachment is
- * read through the exact same content-Uri glue as a locally picked one).
  */
 internal data class PickedAttachment(
     val file: File,
@@ -301,5 +310,20 @@ private fun EncryptionSwitchAnnouncementEffect(announcer: EncryptionSwitchAnnoun
     val notice = stringResource(R.string.conversation_encryption_switched_enabled)
     LaunchedEffect(announcer, notice) {
         announcer?.announcements?.collect { Toast.makeText(context, notice, Toast.LENGTH_LONG).show() }
+    }
+}
+
+/**
+ * #18975 — un envoi chiffré qui n'a pas pu partir se dit, traduit, UNE fois : ni une recomposition ni l'écran recréé
+ * (rotation, retour au fil) ne rejouent l'avis (audit de #19077, P10). Son texte est déjà revenu dans le composeur.
+ */
+@Composable
+internal fun EndToEndSendRefusalEffect(refusals: Int) {
+    val context = LocalContext.current
+    val notice = stringResource(R.string.chat_e2ee_send_not_sent)
+    var announced by rememberSaveable { mutableIntStateOf(refusals) }
+    LaunchedEffect(refusals) {
+        if (refusals > announced) Toast.makeText(context, notice, Toast.LENGTH_LONG).show()
+        announced = refusals
     }
 }

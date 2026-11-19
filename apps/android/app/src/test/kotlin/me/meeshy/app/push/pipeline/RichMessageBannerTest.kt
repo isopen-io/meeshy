@@ -14,6 +14,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import me.meeshy.app.R
+import me.meeshy.app.navigation.ConversationNotificationCanceller
 import me.meeshy.app.push.IncomingPush
 import me.meeshy.app.push.PushTapExtras
 import me.meeshy.app.push.media.PushMediaFetcher
@@ -61,7 +62,7 @@ class RichMessageBannerTest {
                 override fun interruptionFilter() = 1
                 override suspend fun localUnreadConversations(): Int? = null
             },
-            enrichers = setOf(MessagingStyleEnricher(context, fetcher), BigTextEnricher(), MessageActionsEnricher(context, session, me.meeshy.app.push.LaunchIntentProof(context), me.meeshy.sdk.net.InMemoryTokenStore(), me.meeshy.sdk.lock.InMemoryConversationLockStore())),
+            enrichers = setOf(MessagingStyleEnricher(context, fetcher), BigTextEnricher(), EphemeralExpirationEnricher(), MessageActionsEnricher(context, session, me.meeshy.app.push.LaunchIntentProof(context), me.meeshy.sdk.net.InMemoryTokenStore(), me.meeshy.sdk.lock.InMemoryConversationLockStore())),
             summaryNotifier = PushSummaryNotifier(context),
         )
     }
@@ -177,6 +178,110 @@ class RichMessageBannerTest {
 
         pipeline.renderNow(push("notificationId" to "n6", "senderAvatar" to avatar))
         coVerify(exactly = 1) { fetcher.fetch(avatar, any(), any(), any(), any()) }
+    }
+
+    private fun children(): List<Notification> = manager.activeNotifications
+        .filter { (it.notification.flags and Notification.FLAG_GROUP_SUMMARY) == 0 }
+        .map { it.notification }
+
+    private fun Notification.texts(): List<String> =
+        NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(this)?.messages.orEmpty().map { it.text.toString() }
+
+    @Test
+    fun `l expiration d un message ephemere ne retire pas la banniere des messages ordinaires de la conversation`() = runTest {
+        val pipeline = pipeline()
+        pipeline.renderNow(push("notificationId" to "n1", "body" to "Salut"))
+        pipeline.renderNow(push("notificationId" to "n2", "body" to "Ceci s'efface", "ephemeralDuration" to "30"))
+
+        val ordinary = children().single { "Salut" in it.texts() }
+        assertThat(ordinary.timeoutAfter).isEqualTo(0L)
+        assertThat(ordinary.texts()).doesNotContain("Ceci s'efface")
+        assertThat(children().single { "Ceci s'efface" in it.texts() }.timeoutAfter).isEqualTo(30_000L)
+    }
+
+    @Test
+    fun `le message ordinaire qui suit un ephemere ne recopie pas son texte`() = runTest {
+        val pipeline = pipeline()
+        pipeline.renderNow(push("notificationId" to "n1", "body" to "Salut"))
+        pipeline.renderNow(push("notificationId" to "n2", "body" to "Ceci s'efface", "ephemeralDuration" to "30"))
+        pipeline.renderNow(push("notificationId" to "n3", "body" to "Tu es là ?"))
+
+        val ordinary = children().single { "Tu es là ?" in it.texts() }
+        assertThat(ordinary.texts()).containsExactly("Salut", "Tu es là ?").inOrder()
+        assertThat(ordinary.timeoutAfter).isEqualTo(0L)
+    }
+
+    @Test
+    fun `la correction d un message remplace son texte dans la banniere au lieu de l empiler`() = runTest {
+        val pipeline = pipeline()
+        pipeline.renderNow(push("notificationId" to "n1", "messageId" to "m1", "body" to "RDV 18h à Gare du Nord"))
+        pipeline.renderNow(push("notificationId" to "n2", "messageId" to "m2", "body" to "Tu viens ?"))
+
+        pipeline.renderNow(
+            push(
+                "notificationId" to "n1", "messageId" to "m1", "body" to "RDV 19h à Châtelet",
+                "reproduced" to "true", "replacesNotificationId" to "n1",
+            ),
+        )
+
+        val texts = children().single().texts()
+        assertThat(texts).containsExactly("RDV 19h à Châtelet", "Tu viens ?").inOrder()
+        assertThat(children().single().flags and Notification.FLAG_ONLY_ALERT_ONCE).isNotEqualTo(0)
+    }
+
+    /** La charge réelle d'une correction (`reproducedPushData`) : ni expéditeur, ni titre en données, le texte dans le bloc `notification`. */
+    private fun gatewayCorrection(notificationId: String, messageId: String, text: String) = IncomingPush.of(
+        data = mapOf(
+            "type" to "new_message",
+            "notificationId" to notificationId,
+            "conversationId" to "6501a1b2c3d4e5f607182930",
+            "messageId" to messageId,
+            "unreadCount" to "3",
+            "reproduced" to "true",
+            "replacesNotificationId" to notificationId,
+        ),
+        notificationTitle = "Alice",
+        notificationBody = text,
+        hasNotificationBlock = true,
+    )
+
+    private suspend fun correctTheFirstOfTwoMessages(): Notification {
+        val pipeline = pipeline()
+        pipeline.renderNow(push("notificationId" to "n1", "messageId" to "m1", "body" to "RDV 18h à Gare du Nord"))
+        pipeline.renderNow(push("notificationId" to "n2", "messageId" to "m2", "body" to "Tu viens ?"))
+        pipeline.renderNow(gatewayCorrection("n1", "m1", "RDV 19h à Châtelet"))
+        return children().single()
+    }
+
+    @Test
+    fun `la correction servie par la passerelle, sans expediteur, garde les autres messages de la banniere`() = runTest {
+        val banner = correctTheFirstOfTwoMessages()
+
+        assertThat(banner.texts()).containsExactly("RDV 19h à Châtelet", "Tu viens ?").inOrder()
+        val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(banner)!!
+        assertThat(style.messages.first().person?.name.toString()).isEqualTo("Alice")
+    }
+
+    @Test
+    @Config(sdk = [26])
+    fun `sur Android 8 la correction retrouve aussi le message qu elle remplace`() = runTest {
+        val banner = correctTheFirstOfTwoMessages()
+
+        assertThat(banner.texts()).containsExactly("RDV 19h à Châtelet", "Tu viens ?").inOrder()
+    }
+
+    @Test
+    fun `ouvrir ou lire la conversation retire aussi la banniere de son message ephemere`() = runTest {
+        val pipeline = pipeline()
+        pipeline.renderNow(push("notificationId" to "n1", "body" to "Salut"))
+        pipeline.renderNow(push("notificationId" to "n2", "body" to "Ceci s'efface", "ephemeralDuration" to "86400"))
+        pipeline.renderNow(push("type" to "user_mentioned", "notificationId" to "n3", "body" to "@moi"))
+
+        ConversationNotificationCanceller(context).cancel("6501a1b2c3d4e5f607182930")
+
+        assertThat(children().flatMap { it.texts() }).doesNotContain("Ceci s'efface")
+        assertThat(children().flatMap { it.texts() }).doesNotContain("Salut")
+        assertThat(children()).hasSize(1)
     }
 
     @Test

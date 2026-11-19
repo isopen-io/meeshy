@@ -534,7 +534,7 @@ struct MessageOverlayMenu: View {
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measuredPreviewHeight = $0 }
             // Le flou levé dans l'aperçu (#18856) ne sort pas par une capture.
-            .captureShield(message.holdsBlur)
+            .captureShield(message.exitOffer.capture.shieldsCapture())
         }
         // Le cadre défile, ou l'aperçu porte une zone de lecture (#11339) :
         // sinon, une image que les touchers traversent jusqu'au voile.
@@ -812,12 +812,6 @@ private struct ShownAndTouchable: ViewModifier {
 // MARK: - Ce que le fil sert pour ce message
 
 extension MessageOverlayMenu {
-    /// #9010 — l'aperçu joue la piste que la bulle sert ; l'original seulement
-    /// quand l'hôte n'en a élu aucune.
-    static func previewAudioTrack(for attachment: MessageAttachment, served: [String: ServedAudioTrack]) -> ServedAudioTrack {
-        served[attachment.id] ?? .original(of: attachment)
-    }
-
     /// **Ce que le fil sert pour CE message** (#9259) : la sélection du
     /// drapeau (`ConversationViewModel.bubbleLanguageSelections`), ses
     /// écrivains, les pistes qu'elle élit et le mode de lecture du fil — lus
@@ -879,7 +873,6 @@ extension MessageOverlayMenu {
     }
 }
 
-// `OverlayAudioPlayer` vit chez lui depuis #7005 :
-// `Meeshy/Features/Main/Components/OverlayAudioPlayer.swift`. Un lecteur média
+// Le lecteur audio de l'aperçu a quitté ce fichier au #7005 : un lecteur média
 // n'a rien à faire dans le fichier d'un menu contextuel, et cet hôte était déjà
 // hors budget — il fallait extraire avant d'ajouter la garde d'idempotence.

@@ -5,8 +5,8 @@ import MeeshySDK
 // MARK: - StoryComposerViewModel + insertion de média en premier plan
 //
 // Extraction SANS RÉÉCRITURE de la moitié « insertion » du chemin média, qui
-// vivait enfermée dans deux blocs `await MainActor.run { … }` de la View
-// (`StoryComposerView+Media.swift`) : non testable, et obligeant tout nouveau
+// vivait enfermée dans deux blocs `await MainActor.run { … }` de la vue de
+// l'ancien atelier : non testable, et obligeant tout nouveau
 // point d'entrée (caméra, dernière photo de la pellicule) à en écrire un
 // JUMEAU. Les cinq points fragiles historiquement documentés sont conservés
 // mot pour mot — bump de `loadedImagesVersion` via `registerLoadedImage`,

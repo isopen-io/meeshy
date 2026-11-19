@@ -28,7 +28,7 @@ Ce code va dans `apps/ios/Meeshy/Features/Main/Views/` (ou ViewModels selon le c
 | Rule engines stateless (pures functions) | SDK | `MediaDownloadPolicyEngine.shouldAutoDownload` |
 | Services low-level | SDK | `APIClient`, `CacheCoordinator`, `NetworkConditionMonitor` |
 | Stores de préférences | SDK | `MediaDownloadPreferencesStore` |
-| State machines internes | SDK (internal) | `VideoPlaybackController` |
+| State machines internes | SDK (internal) | `SyncEngineState` |
 | **View wrappers cascadant cache + policy + downloader** | **APP** | `VideoAvailabilityResolver` |
 | **Downloaders qui parlent au CacheCoordinator nommé du produit** | **APP** | `AttachmentDownloader` |
 | **ViewModels** | APP | `ConversationViewModel`, `FeedViewModel` |
@@ -48,7 +48,8 @@ Ce code va dans `apps/ios/Meeshy/Features/Main/Views/` (ou ViewModels selon le c
 ## Tech Stack
 - Swift 6 (swift-tools-version 6.2), iOS 16.0+
 - Swift Package Manager (SPM)
-- Socket.IO Client 16.1 (seule dpendance externe)
+- Dépendances externes déclarées par `Package.swift` : Socket.IO Client 16.1.1, GRDB 6.29.3 (cache SQLite), WebRTC 146.0.0 (appels), Lottie 4.6.1 (MeeshyUI), `LibSignalClient` (paquet local, MeeshyE2EE) ; swift-snapshot-testing pour les tests seulement
+- Cibles : `MeeshyCore`, `MeeshySDK`, `MeeshyUI`, `MeeshyE2EE` (+ le support de test)
 - URLSession natif (HTTP)
 - Combine (streams ractifs)
 
@@ -77,8 +78,7 @@ MeeshySDK/                      -> Target core (logique mtier)
     FeedPost.swift             -> FeedPost, FeedComment.swift, FeedMedia.swift
     StoryItem.swift            -> StoryItem, StorySlide.swift, StoryGroup.swift, StoryEffects.swift
     UserModels.swift           -> UpdateProfileRequest/Response, changement e-mail/telephone
-    APINotification.swift      -> APINotification ; NotificationContext.swift, MeeshyNotificationType.swift
-    SampleData.swift           -> Donnes de dmo
+    APINotification.swift      -> APINotification ; NotificationContext.swift (MeeshyNotificationType vit dans MeeshyCore/Models/)
   Cache/
     CachePolicy.swift          -> TTL, staleTTL, maxItemCount, StorageLocation, predefined policies
     CacheIdentifiable.swift    -> Protocol for cached models (requires `id: String`)
@@ -93,18 +93,18 @@ MeeshySDK/                      -> Target core (logique mtier)
   Theme/
     ColorGeneration.swift      -> Gnration couleurs depuis hash
   Notifications/
-    PushNotificationManager.swift -> Firebase + APNs push
+    PushNotificationManager.swift -> APNs push (Firebase n'est pas une dépendance du SDK)
 
 MeeshyUI/                       -> Target UI (composants SwiftUI)
   Theme/
     ColorExtensions.swift      -> Color(hex:) extension
   Auth/
-    MeeshyLoginView.swift      -> cran de connexion
-    MeeshyRegisterView.swift   -> cran d'inscription
-    MeeshyForgotPasswordView.swift -> Mot de passe oubli
+    MeeshyForgotPasswordView.swift -> Mot de passe oublié
+    MeeshyNewPasswordView.swift -> Nouveau mot de passe
+    SignupForm.swift, PasswordChangeForm.swift, ForgotPasswordInput.swift
     Components/
       AuthTextField.swift      -> Champ de saisie auth
-      UsernameField.swift      -> Champ username avec validation
+      MeeshyPasswordField.swift -> Champ mot de passe
       PasswordStrengthIndicator.swift -> Indicateur force mdp
       LanguageSelector.swift   -> Slecteur de langue
       CountryPicker.swift      -> Slecteur de pays
@@ -174,7 +174,7 @@ saturationBoost = min(1.0, memberCount / 100) × 0.2
 **Acces** (`Sources/MeeshySDK/Models/MeeshyConversation.swift` → `MeeshyConversation`) :
 - `conversation.accentColor` → `String` (hex primary, propriete calculee)
 - `conversation.colorPalette` → `ConversationColorPalette { primary, secondary, accent, saturationBoost }`
-- `conversation.colorContext` → `ConversationContext { name, type, language, theme, memberCount }`
+- `MeeshyConversation.computeColorPalette(type:title:identifier:language:theme:memberCount:)` → construit le `ConversationContext { name, type, language, theme, memberCount }` et appelle `DynamicColorGenerator.colorFor(context:)` (aucun accesseur ne l'expose sur la conversation)
 
 **Fallback** : `DynamicColorGenerator.colorForName(name)` → hash du nom dans une palette de 20 couleurs vibrantes
 
@@ -192,12 +192,12 @@ Le SDK fournit les types API et la communication temps reel pour le prisme lingu
 - `APITextTranslation` : Traduction brute depuis l'API (id, messageId, sourceLanguage, targetLanguage, translatedContent, translationModel, confidenceScore)
 - `APIMessage.translations: [APITextTranslation]?` : Traductions pre-chargees avec le message via REST
 
-**Model App** (`Features/Main/ViewModels/ConversationViewModel.swift`) :
+**Model App** (`apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift`) :
 - `MessageTranslation` : Type domain cote app (pas dans le SDK) pour les traductions en cache dans le ViewModel
 
 **Socket** (`Sockets/MessageSocketManager.swift`) :
 - `requestTranslation(messageId:targetLanguage:)` : Demande de traduction on-demand
-- `translationReceivedPublisher` : Combine publisher pour les traductions recues en temps reel
+- `translationReceived` : `PassthroughSubject<TranslationEvent, Never>` pour les traductions reçues en temps réel
 - Evenements : `translation:request` (client → server), `translation:completed` (server → client)
 
 **Resolution** : La logique de resolution de langue preferee est dans le ViewModel de l'app (pas dans le SDK). Le SDK fournit les donnees brutes, l'app decide de l'affichage.
@@ -212,7 +212,7 @@ Vue UI associee : `Sources/MeeshyUI/Notifications/NotificationToastView.swift` (
 
 A ne pas confondre avec les composants qui gerent l'**entite** Notification (listing, prefs) :
 - `NotificationCoordinator` (unread count, badge, widget)
-- `PushNotificationManager` (APN/Firebase plumbing low-level)
+- `PushNotificationManager` (plomberie APNs low-level)
 - `NotificationService` (REST CRUD)
 - `NotificationListView`, `NotificationRowView` (UI listing)
 - `UserNotificationPreferences+Filter`
@@ -337,7 +337,7 @@ xcodebuild test -scheme MeeshySDK-Package \
 
 ### Test Targets
 - `MeeshySDKTests` → Tests for MeeshySDK core (models, services, networking, auth)
-- `MeeshyUITests` → Tests for MeeshyUI components (placeholder for now)
+- `MeeshyUITests` → Tests for MeeshyUI components (plusieurs centaines de fichiers : vues, kit, gardes de source, snapshots)
 
 ### Test Organization
 ```
@@ -364,16 +364,16 @@ let result = try await service.list(offset: 0, limit: 30)
 - Swift Testing (`@Test`, `#expect`) for pure model decoding tests
 - XCTest for service tests requiring async/await patterns
 - JSONStub pattern for creating test fixtures from JSON strings
-- 506+ SDK tests currently passing
+- Le nombre de tests se mesure (`find Tests -name '*.swift' | wc -l`), il ne se recopie pas ici
 
 ## Relation avec apps/ios
 - `apps/ios/Meeshy/` importe `MeeshySDK` et `MeeshyUI` via SPM local
-- Les modles dans `apps/ios/Features/Main/Models/` utilisent les types SDK comme base
-- `ConversationModels.swift` (app) a `APIConversation` qui map vers `Conversation` (SDK)
+- Les modèles dans `apps/ios/Meeshy/Features/Main/Models/` utilisent les types SDK comme base
+- `APIConversation` (SDK, `Sources/MeeshySDK/Models/ConversationModels.swift`) se convertit en `MeeshyConversation` par `toConversation(currentUserId:)`
 - Les services app (AuthManager, APIClient) sont ceux du SDK via `.shared`
 
 ## Scurit
-- Tokens JWT et VoIP stocks dans Keychain (`AuthManager` via `KeychainStoring`/`KeychainManager`, `VoIPTokenStore` avec `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`) — la migration UserDefaults -> Keychain est termine (`KeychainManager.migrateFromUserDefaults`, cls legacy uniquement). `UserDefaults` ne sert plus qu'aux prfrences non sensibles.
+- Tokens JWT et VoIP stocks dans Keychain (`AuthManager` via `KeychainStoring`/`KeychainManager`, `KeychainVoIPTokenStore` derrière `VoIPTokenStoring`, adossé à `KeychainManager` et `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`) — la migration UserDefaults -> Keychain est termine (`KeychainManager.migrateFromUserDefaults`, cls legacy uniquement). `UserDefaults` ne sert plus qu'aux prfrences non sensibles.
 - HTTPS enforc via App Transport Security ; TLS pinning (SPKI) partag entre `APIClient` et `MessageSocketManager` via `CertificatePinningDelegate`
 
 ## Build
@@ -394,7 +394,7 @@ swift test --filter MeeshySDKTests   # Tests SDK uniquement
 
 ## Rgles cls
 1. **Pas de dpendance SwiftUI dans MeeshySDK** (uniquement dans MeeshyUI)
-2. **Socket.IO est la seule dpendance externe** (garder minimal)
+2. **Dépendances externes au minimum** : celles de `Package.swift` (Socket.IO, GRDB, WebRTC, Lottie, `LibSignalClient`) et aucune autre sans décision dans `decisions.md`
 3. **Actor pour le cache** (pas class, pour thread safety)
 4. **Combine pour les streams**, async/await pour le single-value
 5. **Modles Decodable** avec CodingKeys explicites

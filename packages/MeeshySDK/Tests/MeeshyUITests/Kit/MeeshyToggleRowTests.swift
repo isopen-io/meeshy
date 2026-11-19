@@ -90,6 +90,28 @@ final class MeeshyToggleRowTests: XCTestCase {
         )
     }
 
+    func test_accessibilityLabel_withTitleAccessoryLabel_speaksItRightAfterTheTitle() {
+        XCTAssertEqual(
+            MeeshyToggleRowRecipe.accessibilityLabel(title: "E-mail", titleAccessory: "Vérifié", subtitle: "a@b.sn"),
+            "E-mail, Vérifié, a@b.sn"
+        )
+    }
+
+    func test_accessibilityLabel_withBlankTitleAccessoryLabel_staysSilentOnIt() {
+        XCTAssertEqual(
+            MeeshyToggleRowRecipe.accessibilityLabel(title: "E-mail", titleAccessory: "  ", subtitle: nil),
+            "E-mail"
+        )
+    }
+
+    func test_content_carriesTheSpokenTitleAccessory_andComparesOnIt() {
+        let verified = MeeshyToggleRowContent(title: "E-mail", titleAccessoryLabel: "Vérifié")
+        let unverified = MeeshyToggleRowContent(title: "E-mail", titleAccessoryLabel: "Non vérifié")
+        XCTAssertEqual(verified.titleAccessoryLabel, "Vérifié")
+        XCTAssertNotEqual(verified, unverified)
+        XCTAssertNil(MeeshyToggleRowContent(title: "E-mail").titleAccessoryLabel)
+    }
+
     func test_valueFor_toggle_readsItsState() {
         XCTAssertEqual(MeeshyToggleRowRecipe.valueFor(accessory: .toggle(isOn: false)), .toggle(isOn: false))
     }
@@ -100,6 +122,12 @@ final class MeeshyToggleRowTests: XCTestCase {
 
     func test_valueFor_value_readsTheText() {
         XCTAssertEqual(MeeshyToggleRowRecipe.valueFor(accessory: .value("Wolof")), .text("Wolof"))
+    }
+
+    /// Une adresse qui quitte Meeshy porte la sortie : ni choisie, ni valeur à dire.
+    func test_external_isNeitherChosenNorAValue() {
+        XCTAssertFalse(MeeshyToggleRowRecipe.isChosen(.external))
+        XCTAssertEqual(MeeshyToggleRowRecipe.valueFor(accessory: .external), MeeshyToggleRowValue.none)
     }
 
     func test_isChosen_uncheckedChoice_isNotChosen() {

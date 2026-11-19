@@ -34,7 +34,7 @@ public nonisolated struct StoryStoredDraftFrame: Equatable, Sendable {
 /// **Le brouillon de « Mes stories », tenu par le ViewModel et non par une vue**
 /// (#15629).
 ///
-/// La reprise et l'écriture vivaient dans `StoryComposerView` : un hôte qui
+/// La reprise et l'écriture vivaient dans la vue de l'atelier : un hôte qui
 /// compose ailleurs que dans l'atelier adoptait l'identifiant du brouillon
 /// (`adoptDraft(id:)`) et rouvrait une scène VIDE — rien ne relisait le
 /// magasin. Elles sont ici, où tout hôte les atteint.

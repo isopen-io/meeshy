@@ -8,11 +8,6 @@
     <string name="bubble_reply_attachment">Pièce jointe</string>
     <string name="bubble_file_open">Ouvrir le fichier</string>
     <string name="live_location_remaining">%1$s restantes</string>
-    <string name="live_location_duration_15m">15 min</string>
-    <string name="live_location_duration_30m">30 min</string>
-    <string name="live_location_duration_1h">1 heure</string>
-    <string name="live_location_duration_2h">2 heures</string>
-    <string name="live_location_duration_8h">8 heures</string>
     <string name="bubble_audio_play">Lire le message vocal</string>
     <string name="bubble_file_size_bytes">%1$s o</string>
     <string name="bubble_file_size_kb">%1$s Ko</string>
@@ -43,4 +38,6 @@
     <string name="bubble_a11y_file">Fichier %1$s</string>
     <string name="bubble_a11y_pinned">Épinglé</string>
     <string name="bubble_a11y_ephemeral">Message éphémère</string>
+    <string name="skeleton_link_row_loading">Chargement d\'un lien</string>
+    <string name="talkie_send_voice">Le talkie ne passe pas en ce moment : envoyez plutôt un message vocal.</string>
 </resources>

@@ -101,7 +101,6 @@
     <string name="bubble_a11y_location">Localização compartilhada</string>
     <string name="bubble_a11y_reactions">Reações: %1$s</string>
     <string name="bubble_a11y_reply_to">Responder a %1$s</string>
-    <string name="bubble_attachment_file_fallback">Arquivo</string>
     <string name="bubble_audio_stack_position">Mensagem de voz %1$d de %2$d</string>
     <string name="bubble_blur_view_once">Ver uma vez</string>
     <string name="bubble_contact_card_a11y_on_meeshy">No Meeshy: %1$s</string>
@@ -287,7 +286,6 @@
     <string name="kit_progress_ring_busy">Em andamento</string>
     <string name="language_strip_more">Outros idiomas</string>
     <string name="lentille_mode_menu_selected">selecionado</string>
-    <string name="live_location_duration_title">Duração do compartilhamento</string>
     <string name="live_location_sharing_by">%1$s está compartilhando a localização</string>
     <string name="live_location_stop">Parar</string>
     <string name="location_fullscreen_directions">Direções</string>
@@ -358,7 +356,6 @@
     <string name="media_summary_voice">🎙️ Mensagem de voz</string>
     <string name="media_trim_loading">Carregando a prévia</string>
     <string name="media_trim_of_total">de %1$s</string>
-    <string name="media_trim_window">Trecho mantido</string>
     <string name="media_video_pip_enter">Picture in Picture</string>
     <string name="media_video_unavailable_retry">Vídeo indisponível. Tentar novamente.</string>
     <string name="media_voice_message">Mensagem de voz</string>
@@ -421,6 +418,7 @@
     <string name="reading_mode_summary_title">Resumo</string>
     <string name="retouch_crop_original">Original</string>
     <string name="retouch_effect_angel">Anjo</string>
+    <string name="retouch_effect_baby">Bebê</string>
     <string name="retouch_effect_demon">Demônio</string>
     <string name="retouch_effect_none">Nenhum</string>
     <string name="retouch_effect_smoothing">Suavizar pele</string>
@@ -435,7 +433,6 @@
     <string name="retouch_filter_golden">Dourado</string>
     <string name="retouch_filter_monochrome">Preto e branco</string>
     <string name="retouch_filter_muted">Suave</string>
-    <string name="retouch_filter_natural">Natural</string>
     <string name="retouch_filter_sky">Céu</string>
     <string name="retouch_filter_softNight">Noite suave</string>
     <string name="retouch_filter_velvet">Veludo</string>
@@ -487,7 +484,6 @@
     <string name="retouch_tool_text">Texto</string>
     <string name="retouch_tool_trim">Cortar</string>
     <string name="skeleton_feed_post_loading">Carregando uma publicação</string>
-    <string name="skeleton_link_row_loading">Carregando um link</string>
     <string name="skeleton_profile_loading">Carregando o perfil</string>
     <string name="skeleton_stories_loading">Carregando os stories</string>
     <string name="slide_rail_delete_cancel">Cancelar</string>
@@ -542,7 +538,6 @@
     <string name="talkie_header_badge_live">Ao vivo</string>
     <string name="talkie_header_badge_recorded">Gravado</string>
     <string name="talkie_header_badge_relayed">Offline</string>
-    <string name="talkie_header_live">Talkie em andamento</string>
     <string name="talkie_send_connecting">Conectando…</string>
     <string name="talkie_send_failed">O walkie-talkie não pôde ser enviado.</string>
     <string name="talkie_send_hold">Segure para falar</string>
@@ -554,7 +549,6 @@
     <string name="talkie_send_rate_limited">Falas demais: tente de novo em um instante.</string>
     <string name="talkie_send_recording_copy">Gravando mensagem de voz…</string>
     <string name="talkie_send_talking">Você está falando com %1$s…</string>
-    <string name="talkie_send_voice">O walkie-talkie não passa agora: envie uma mensagem de voz.</string>
     <string name="talkie_send_waking">Acordando %1$s…</string>
     <string name="time_lastSeen_beforeYesterdayAt">Visto anteontem às %1$s</string>
     <string name="time_lastSeen_dateAt">Visto em %1$s às %2$s</string>

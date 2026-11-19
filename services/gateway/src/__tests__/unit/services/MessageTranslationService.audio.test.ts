@@ -86,7 +86,7 @@ jest.mock('fs', () => ({
     mkdir: jest.fn().mockResolvedValue(undefined),
     writeFile: jest.fn().mockResolvedValue(undefined),
     readFile: jest.fn().mockResolvedValue(Buffer.from('mock-audio')),
-    unlink: jest.fn().mockResolvedValue(undefined),
+    ...Object.fromEntries(['unlink', 'rename', 'chmod'].map((name) => [name, jest.fn().mockResolvedValue(undefined)])),
     stat: jest.fn().mockResolvedValue({ size: 1024 })
   },
   existsSync: jest.fn().mockReturnValue(true),
@@ -173,98 +173,12 @@ import { ZMQSingleton } from '../../../services/ZmqSingleton';
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 import { isBlankTranscriptionText } from '../../../utils/transcription';
 import { EncryptionHelper } from '../../../services/message-translation/EncryptionHelper';
-
-// ---------------------------------------------------------------------------
-// Prisma factory
-// ---------------------------------------------------------------------------
-const createMockPrisma = () => ({
-  conversation: {
-    findFirst: jest.fn() as MockFn,
-    findUnique: jest.fn() as MockFn,
-    create: jest.fn() as MockFn,
-    update: jest.fn() as MockFn,
-    updateMany: jest.fn() as MockFn
-  },
-  message: {
-    findFirst: jest.fn() as MockFn,
-    findUnique: jest.fn() as MockFn,
-    create: jest.fn() as MockFn,
-    update: jest.fn() as MockFn
-  },
-  messageTranslation: {
-    findFirst: jest.fn() as MockFn,
-    findMany: jest.fn() as MockFn,
-    create: jest.fn() as MockFn,
-    update: jest.fn() as MockFn,
-    upsert: jest.fn() as MockFn,
-    deleteMany: jest.fn() as MockFn
-  },
-  participant: {
-    findMany: jest.fn() as MockFn,
-    findUnique: jest.fn() as MockFn
-  },
-  userStats: {
-    upsert: jest.fn() as MockFn
-  },
-  messageAttachment: {
-    findUnique: jest.fn() as MockFn,
-    update: jest.fn() as MockFn
-  },
-  user: {
-    findUnique: jest.fn() as MockFn
-  },
-  serverEncryptionKey: {
-    findUnique: jest.fn() as MockFn
-  },
-  userVoiceModel: {
-    upsert: jest.fn() as MockFn,
-    findUnique: jest.fn() as MockFn
-  }
-});
-
-// Helper: wait for all micro/macro tasks in a handler
-async function flushAsync(count = 3) {
-  for (let i = 0; i < count; i++) {
-    await new Promise<void>(r => setImmediate(r));
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Shared attachment data builders
-// ---------------------------------------------------------------------------
-function makeTranslatedAudio(overrides: Record<string, unknown> = {}) {
-  return {
-    targetLanguage: 'fr',
-    translatedText: 'Bonjour',
-    audioUrl: '',
-    audioPath: '',
-    durationMs: 1000,
-    voiceCloned: false,
-    voiceQuality: 0.8,
-    audioMimeType: 'audio/mp3',
-    ...overrides
-  };
-}
-
-function makeAudioProcessCompletedData(overrides: Record<string, unknown> = {}) {
-  return {
-    taskId: 'task-audio-1',
-    messageId: 'msg-1',
-    attachmentId: 'att-1',
-    transcription: {
-      text: 'Hello world',
-      language: 'en',
-      confidence: 0.95,
-      source: 'whisper',
-      durationMs: 2000
-    },
-    translatedAudios: [makeTranslatedAudio()],
-    voiceModelUserId: 'user-1',
-    voiceModelQuality: 0.9,
-    processingTimeMs: 500,
-    ...overrides
-  };
-}
+import {
+  createMockPrisma,
+  flushAsync,
+  makeAudioProcessCompletedData,
+  makeTranslatedAudio, POST_FIXTURE_ID, POST_MEDIA_FIXTURE_ID,
+} from '../../helpers/message-translation-audio-doubles';
 
 // ---------------------------------------------------------------------------
 // TEST SUITES
@@ -1119,8 +1033,8 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
     it('routes to PostAudioService when postId and postMediaId are present', async () => {
       const data = {
         ...makeAudioProcessCompletedData(),
-        postId: 'post-1',
-        postMediaId: 'media-1',
+        postId: POST_FIXTURE_ID,
+        postMediaId: POST_MEDIA_FIXTURE_ID,
         translatedAudios: [makeTranslatedAudio()]
       };
 
@@ -1128,17 +1042,58 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
       await flushAsync(3);
 
       expect(mockHandleAudioTranslationsReady).toHaveBeenCalledWith(
-        expect.objectContaining({ postId: 'post-1', postMediaId: 'media-1' })
+        expect.objectContaining({ postId: POST_FIXTURE_ID, postMediaId: POST_MEDIA_FIXTURE_ID })
       );
       // Should NOT touch messageAttachment
       expect(prisma.messageAttachment.findUnique).not.toHaveBeenCalled();
     });
 
+    it('persists a post translation without audio (#19648) with neither url nor path, and keeps the voiced one', async () => {
+      const data = {
+        ...makeAudioProcessCompletedData(),
+        postId: POST_FIXTURE_ID,
+        postMediaId: POST_MEDIA_FIXTURE_ID,
+        translatedAudios: [
+          makeTranslatedAudio({ targetLanguage: 'de', translatedText: 'Hallo', audioUrl: null, audioPath: '', durationMs: 0, textOnly: true }),
+          makeTranslatedAudio({ targetLanguage: 'fr', audioUrl: '/outputs/audio/translated/fr.mp3', audioPath: '/app/outputs/fr.mp3', _audioBinary: Buffer.from('voix-fr') }),
+        ]
+      };
+
+      mockZmqClient.emit('audioProcessCompleted', data);
+      await flushAsync(3);
+
+      const { translations } = mockHandleAudioTranslationsReady.mock.calls[0][0] as { translations: Record<string, Record<string, unknown>> };
+      expect(translations.de.transcription).toBe('Hallo');
+      expect(translations.de).not.toHaveProperty('url');
+      expect(translations.de).not.toHaveProperty('path');
+      expect(translations.fr.url).toMatch(new RegExp(`^/api/v1/attachments/file/translated/post/${POST_MEDIA_FIXTURE_ID}_fr_[0-9a-f]{32}\\.mp3$`));
+      expect(translations.fr.path).toMatch(new RegExp(`/translated/post/${POST_MEDIA_FIXTURE_ID}_fr_[0-9a-f]{32}\\.mp3$`));
+    });
+
+    it('persists an empty audioUrl from a translator of the previous version (#19648) with neither url nor path', async () => {
+      const data = {
+        ...makeAudioProcessCompletedData(),
+        postId: POST_FIXTURE_ID,
+        postMediaId: POST_MEDIA_FIXTURE_ID,
+        translatedAudios: [
+          makeTranslatedAudio({ targetLanguage: 'de', translatedText: 'Hallo', audioUrl: '', audioPath: '', durationMs: 0 }),
+        ]
+      };
+
+      mockZmqClient.emit('audioProcessCompleted', data);
+      await flushAsync(3);
+
+      const { translations } = mockHandleAudioTranslationsReady.mock.calls[0][0] as { translations: Record<string, Record<string, unknown>> };
+      expect(translations.de.transcription).toBe('Hallo');
+      expect(translations.de).not.toHaveProperty('url');
+      expect(translations.de).not.toHaveProperty('path');
+    });
+
     it('does not route to PostAudioService when translatedAudios is empty', async () => {
       const data = {
         ...makeAudioProcessCompletedData(),
-        postId: 'post-1',
-        postMediaId: 'media-1',
+        postId: POST_FIXTURE_ID,
+        postMediaId: POST_MEDIA_FIXTURE_ID,
         translatedAudios: []
       };
 
@@ -1589,8 +1544,8 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
         taskId: 'tr-post-1',
         messageId: 'msg-post',
         attachmentId: 'att-post',
-        postId: 'post-1',
-        postMediaId: 'media-1',
+        postId: POST_FIXTURE_ID,
+        postMediaId: POST_MEDIA_FIXTURE_ID,
         transcription: {
           text: 'Post audio content',
           language: 'en',
@@ -1603,7 +1558,7 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
       await flushAsync(3);
 
       expect(events).toHaveLength(1);
-      expect((events[0] as any).postId).toBe('post-1');
+      expect((events[0] as any).postId).toBe(POST_FIXTURE_ID);
       // Should NOT have queried messageAttachment
       expect(prisma.messageAttachment.findUnique).not.toHaveBeenCalled();
     });

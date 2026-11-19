@@ -46,7 +46,7 @@ export const unreadOf = (conversation: Conversation): number => conversation.unr
  * Le défaut ne vient PAS de la v2, qui ne pose aucun titre à la création d'un
  * direct (`api/conversations.ts § createDirectConversation` : `{ type,
  * participantIds }`, sans titre). Il vient du LEGACY, qui composait un titre
- * CÔTÉ CLIENT et l'envoyait (`apps/web/components/conversations/
+ * CÔTÉ CLIENT et l'envoyait (`legacy-web-final:apps/web/components/conversations/
  * create-conversation-modal.tsx:102-130`) — d'où les « X & Y » gravés sur des
  * lignes créées avant la bascule. Les ignorer à l'affichage corrige le symptôme
  * sans toucher une seule donnée ; le nettoyage en base, s'il est décidé, reste
@@ -204,30 +204,3 @@ export const presenceOf = (
     now,
   );
 };
-
-/**
- * LA FORME DE L'APERÇU DE LISTE — miroir de `LastMessageSummaryKind.swift:6-37`
- * (D-23, #5676) : un aperçu PROTÉGÉ ne descend PAS le Prisme, jamais
- * `lastMessage.content` ni `lastMessageTranslations` — `previewKindOf` est le
- * SEUL point de décision, appelé AVANT `served()` (`lens-row.tsx`).
- *
- * ORDRE, exactement celui d'iOS : `expired` (échu) → `hidden` (flouté) →
- * `view-once` → `ephemeral` (en cours) → `standard`. Un `lastMessage` absent
- * (conversation sans historique) rend `standard` — rien à protéger.
- */
-export type PreviewKind = 'standard' | 'hidden' | 'view-once' | 'expired' | 'ephemeral';
-
-export function previewKindOf(conversation: Conversation, now: number = Date.now()): PreviewKind {
-  const last = conversation.lastMessage;
-  // #5650, revue-correction : la passerelle sert `null` (pas seulement
-  // `undefined`) pour une conversation sans premier message — mesuré en
-  // direct sur `gate.staging.meeshy.me`. `Conversation.lastMessage` est
-  // typé `Message | undefined` ; `null` n'y était pas gardé et faisait
-  // lever `last.expiresAt` juste en dessous.
-  if (last === undefined || last === null) return 'standard';
-  if (last.expiresAt !== undefined && new Date(last.expiresAt).getTime() <= now) return 'expired';
-  if (last.isBlurred) return 'hidden';
-  if (last.isViewOnce) return 'view-once';
-  if (last.expiresAt !== undefined && new Date(last.expiresAt).getTime() > now) return 'ephemeral';
-  return 'standard';
-}

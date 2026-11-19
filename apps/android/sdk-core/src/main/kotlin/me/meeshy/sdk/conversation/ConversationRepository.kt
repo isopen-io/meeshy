@@ -10,10 +10,12 @@ import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.ConversationDao
 import me.meeshy.core.database.dao.SyncMetaDao
 import me.meeshy.sdk.cache.CachePolicy
+import me.meeshy.sdk.cache.SwrCacheSource
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.appearance.ConversationAppearance
 import me.meeshy.sdk.model.DIRECT_CONVERSATION_TYPE
 import me.meeshy.sdk.model.directConversationRequest
@@ -30,9 +32,10 @@ import me.meeshy.sdk.model.MemberRole
 import me.meeshy.sdk.model.MemberRosterPage
 import me.meeshy.sdk.model.UpdateConversationResponse
 import me.meeshy.sdk.model.UpdateConversationSettingsRequest
+import me.meeshy.sdk.model.ConversationReorderItem
 import me.meeshy.sdk.model.UserPreferencesConversationUpdatedSocketData
-import me.meeshy.sdk.model.applyRemote
 import me.meeshy.sdk.model.withMemberCount
+import me.meeshy.sdk.model.conversationlist.ConversationLiveFacet
 import me.meeshy.sdk.model.conversationlist.RecentlyCreatedMerge
 import me.meeshy.sdk.model.conversationlist.UnreadReconciliation
 import me.meeshy.sdk.model.conversationlist.UnreadRow
@@ -76,12 +79,17 @@ class ConversationRepository @Inject constructor(
     private val fence: AccountFence? = null,
     presenceSink: ServedPresenceSink = ServedPresenceSink.None,
     syncDelta: SyncDeltaFetching = SyncDeltaFetching.None,
+    /** #18926 — shared with every live writer, read gestures included: what it writes during a sweep survives its page. */
+    private val liveJournal: ConversationLiveJournal = ConversationLiveJournal(),
 ) {
     /** conversationId → instant this client created it ([RecentlyCreatedMerge]); guarded by itself. */
     private val recentlyCreated = mutableMapOf<String, Long>()
 
     /** Annonces `conversation:new` en cours de lecture : une même conversation n'est jamais lue deux fois à la fois. */
     private val learning: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+    /** The preference broadcasts of the user's other devices, written onto the cached rows. */
+    private val remotePreferences = RemoteConversationPreferences(database, conversationDao, fence)
 
     private val cacheSource = ConversationCacheSource(
         database = database,
@@ -96,6 +104,8 @@ class ConversationRepository @Inject constructor(
         fence = fence,
         presenceSink = presenceSink,
         syncDelta = syncDelta,
+        journal = liveJournal,
+        pendingGestures = OutboxPendingConversationGestures(database.outboxDao()),
     )
 
     /**
@@ -107,7 +117,14 @@ class ConversationRepository @Inject constructor(
         policy: CachePolicy = CachePolicy.Default,
         onSyncError: (Throwable) -> Unit = {},
     ): Flow<CacheResult<List<ApiConversation>>> =
-        cacheFirstFlow(policy, cacheSource, onRevalidateError = onSyncError)
+        cacheFirstFlow(policy, streamSource(policy), onRevalidateError = onSyncError)
+
+    /** #18927 — the stream joins the list's single sweep, and starts none when the instant it reads again is fresh. */
+    private fun streamSource(policy: CachePolicy): SwrCacheSource<List<ApiConversation>> =
+        object : SwrCacheSource<List<ApiConversation>> by cacheSource {
+            override suspend fun revalidate() =
+                cacheSource.revalidateFromStream(StreamFreshness(SystemCacheClock, policy.freshForMillis))
+        }
 
     /**
      * Cache-first single conversation: the Room row written by the list sync,
@@ -170,10 +187,29 @@ class ConversationRepository @Inject constructor(
         conversationDao.recentByUpdatedAt(limit)
             .map { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }
 
-    /** Explicit refresh (pull-to-refresh / retry). Throws on failure. */
+    /** Explicit refresh (pull-to-refresh / retry): joins the sweep in flight, if any. Throws on failure. */
     suspend fun refresh() {
         cacheSource.revalidate()
     }
+
+    /**
+     * #18927 — the socket came back: events were missed, so a sweep that STARTS after this call — one more behind the
+     * sweep in flight, never that one, built before them. Throws on failure.
+     */
+    suspend fun catchUp() {
+        cacheSource.catchUp()
+    }
+
+    /** [catchUp], silent: a failure is reported as `false`, the cache stays on screen. */
+    suspend fun catchUpSilently(): Boolean =
+        try {
+            cacheSource.catchUp()
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            false
+        }
 
     /**
      * Silent sync (launch prewarm, cached-fresh first frame, return to the foreground): the same
@@ -217,6 +253,7 @@ class ConversationRepository @Inject constructor(
                 )
             }
             if (updated.isNotEmpty()) conversationDao.upsertAll(updated)
+            updated.forEach { liveJournal.record(it.id, UNREAD_FACET) }
             updated.size
         }
     }
@@ -666,6 +703,7 @@ class ConversationRepository @Inject constructor(
                         ),
                     ),
                 )
+                liveJournal.record(id, UNREAD_FACET)
                 true
             }
         }?.also { if (it) readLocallySignal.tryEmit(id) } ?: false
@@ -697,15 +735,28 @@ class ConversationRepository @Inject constructor(
 
     /** [declaration] : ce qui a été lu et dans quelle langue, résolu à la composition (jamais à l'envoi de la file). */
     private suspend fun queueReadReceipt(id: String, declaration: ReadReceiptPayload? = null) {
+        val stamped = declaration?.takeIf { it.caughtUpToMessageId != null }
+            ?: (declaration ?: ReadReceiptPayload()).copy(readThroughAt = lastMessageInstant(id))
         outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.READ_RECEIPT,
                 lane = OutboxLanes.READ_RECEIPT,
                 targetId = id,
-                payload = declaration?.let { MeeshyApi.json.encodeToString(ReadReceiptPayload.serializer(), it) } ?: "{}",
+                payload = MeeshyApi.json.encodeToString(ReadReceiptPayload.serializer(), stamped),
             ),
         )
     }
+
+    /**
+     * #19424 — la frontière d'un reçu qui ne nomme aucun message (toute la conversation est lue) : l'instant SERVEUR du
+     * dernier message de [id] tel que le cache le tient. Un reçu qui nomme jusqu'où le lecteur a rattrapé porte déjà
+     * l'instant de CE message ([ReadReceiptPayload.readThroughAt], résolu à la composition) : la ligne de liste peut
+     * tenir un message plus récent, pas encore lu, ou un plus ancien, que le temps réel n'a pas encore avancé.
+     */
+    private suspend fun lastMessageInstant(id: String): Long? =
+        conversationDao.find(id)
+            ?.let { runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }.getOrNull() }
+            ?.lastMessage?.createdAt?.let(::isoToEpochMillisOrNull)
 
     /**
      * The open conversation's read receipt (#13793): the decision to acknowledge was taken by the
@@ -750,6 +801,7 @@ class ConversationRepository @Inject constructor(
                     ),
                 ),
             )
+            liveJournal.record(id, UNREAD_FACET)
             true
         }
         if (!updated) return false
@@ -851,40 +903,21 @@ class ConversationRepository @Inject constructor(
     /**
      * Apply a conversation-scope `user:preferences-updated` broadcast to the cached
      * row — the read side of the per-USER preferences the user changed on ANOTHER
-     * device (issue #4127).
-     *
-     * The arbitration lives in the pure [applyRemote]; this method is only the I/O
-     * around it, so every drop rule is JVM-covered without a database. `false` means
-     * nothing was written: the conversation is not cached (the next list refresh
-     * catches up — the same silent drop iOS makes), or the event lost the version
-     * arbitration.
-     *
-     * The snapshot lands on [ApiConversation.preferences] rather than on
-     * `userPreferences[0]` for the same reason the optimistic path writes there: it
-     * is the override `resolvedPreferences` reads FIRST, so the list re-buckets on
-     * the Room emission without waiting for a refetch, and the next REST sync — the
-     * server's own truth — replaces the whole row payload and clears the override.
+     * device (issue #4127). `false` means nothing was written: the conversation is
+     * not cached, or the event lost the version arbitration. See
+     * [RemoteConversationPreferences].
      */
     suspend fun applyRemoteConversationPreferences(
         event: UserPreferencesConversationUpdatedSocketData,
-    ): Boolean {
-        val ticket = fence?.currentTicket()
-        return fence.commitOrWrite(ticket) {
-            database.withTransaction {
-                val row = conversationDao.find(event.conversationId) ?: return@withTransaction false
-                val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
-                val next = conversation.resolvedPreferences.applyRemote(event) ?: return@withTransaction false
-                conversationDao.upsertAll(
-                    listOf(
-                        row.copy(
-                            payload = MeeshyApi.json.encodeToString(conversation.copy(preferences = next)),
-                        ),
-                    ),
-                )
-                true
-            }
-        } ?: false
-    }
+    ): Boolean = remotePreferences.applyUpdated(event)
+
+    /**
+     * #18915 (AND-04) — apply a `user:preferences-reordered` broadcast: the order a
+     * drag set on ANOTHER device lands on the cached rows, version untouched. Returns
+     * how many rows changed. See [RemoteConversationPreferences].
+     */
+    suspend fun applyRemoteReorder(updates: List<ConversationReorderItem>): Int =
+        remotePreferences.applyReordered(updates)
 
     /**
      * Optimistic per-conversation preference update (ARCHITECTURE.md §5): the
@@ -970,6 +1003,9 @@ class ConversationRepository @Inject constructor(
     companion object {
         /** Le préfixe d'une conversation créée sur cet appareil et pas encore connue du serveur. */
         private const val PENDING_PREFIX: String = "pending_"
+
+        /** #18926 — a badge written on this device during a list sweep: the page built before keeps it. */
+        private val UNREAD_FACET: Set<ConversationLiveFacet> = setOf(ConversationLiveFacet.UNREAD)
 
         /** [ApiError.code] of a call that never reached the server (airplane mode, DNS, timeout). */
         private const val OFFLINE_ERROR_CODE: String = "NETWORK"

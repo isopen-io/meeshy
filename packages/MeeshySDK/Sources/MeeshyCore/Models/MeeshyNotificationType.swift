@@ -40,12 +40,21 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
     /// au plus une fois toutes les 3 h par acteur, décidé par la passerelle.
     /// L'acteur est celui qui revient ; le toucher ouvre son profil.
     case contactRecentlyActive = "contact_recently_active"
+    /// La Connaissance née toute seule entre deux personnes qui échangent (#13932). L'acteur est l'autre
+    /// personne ; le toucher ouvre son profil. Suit la préférence « contacts », comme côté passerelle.
+    case relationAcquaintance = "relation_acquaintance"
     /// La batterie d'un Proche ou d'un Sang (#14147) : un palier, la zone critique, l'extinction probable, la
     /// recharge. L'acteur est la personne ; le toucher ouvre son profil. App ouverte, la SyncPill la dit à la place.
     case deviceBattery = "device_battery"
     /// Le téléphone d'un Proche ou d'un Sang est injoignable, ou répond de nouveau (#18737). L'acteur est la personne ;
     /// le toucher ouvre son profil. App ouverte, la SyncPill la dit à la place.
     case deviceUnreachable = "device_unreachable"
+    /// « Tout va bien ? » (#18738) : mon téléphone est resté inactif au-delà de mon délai. Adressée à SOI ; le toucher ou
+    /// l'action « Je vais bien » répondent. Signal de sécurité : aucun interrupteur par type.
+    case wellnessCheck = "wellness_check"
+    /// Un Sang n'a pas répondu à « Tout va bien ? », ou vient de répondre (#18738). L'acteur est la personne ; le toucher
+    /// ouvre son profil. Signal de sécurité : aucun interrupteur par type.
+    case inactivityAlert = "inactivity_alert"
 
     // Interaction events
     case userMentioned = "user_mentioned"
@@ -70,6 +79,13 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
     case friendNewStory = "friend_new_story"
     case friendNewPost = "friend_new_post"
     case friendNewMood = "friend_new_mood"
+    /// L'activité d'un proche relayée à son entourage (#14068 à #14072) : sa réaction, son partage, sa
+    /// republication ou sa citation d'une publication (`context.postId`), que le toucher ouvre. Suit la
+    /// préférence « contenus des amis », comme côté passerelle.
+    case friendContentReaction = "friend_content_reaction"
+    case friendContentShare = "friend_content_share"
+    case friendContentRepost = "friend_content_repost"
+    case friendContentQuote = "friend_content_quote"
 
     // Call events
     case missedCall = "missed_call"
@@ -177,8 +193,11 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .friendAccepted, .contactAccepted, .legacyFriendAccepted: return "person.2.fill"
         case .contactJoined: return "person.crop.circle.badge.plus"
         case .contactRecentlyActive: return "person.crop.circle.badge.clock"
+        case .relationAcquaintance: return "person.crop.circle.badge.checkmark"
         case .deviceBattery: return "battery.25"
         case .deviceUnreachable: return "iphone.slash"
+        case .wellnessCheck: return "hand.wave.fill"
+        case .inactivityAlert: return "person.fill.questionmark"
         case .communityInvite, .legacyGroupInvite: return "person.3.fill"
         case .communityJoined, .memberJoined, .legacyGroupJoined: return "person.badge.checkmark"
         case .communityLeft, .memberLeft, .legacyGroupLeft: return "person.badge.minus"
@@ -191,6 +210,10 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .friendNewStory: return "camera.fill"
         case .friendNewPost: return "square.text.square.fill"
         case .friendNewMood: return "face.smiling.fill"
+        case .friendContentReaction: return "heart.fill"
+        case .friendContentShare: return "square.and.arrow.up.fill"
+        case .friendContentRepost: return "arrow.2.squarepath"
+        case .friendContentQuote: return "quote.bubble.fill"
         case .achievementUnlocked, .legacyAchievementUnlocked: return "trophy.fill"
         case .badgeEarned: return "medal.fill"
         case .streakMilestone: return "flame.fill"
@@ -231,7 +254,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .userMentioned, .mention, .legacyMention:
             return "9B59B6"
         case .friendRequest, .contactRequest, .legacyFriendRequest, .friendAccepted, .contactAccepted, .legacyFriendAccepted, .legacyStatusUpdate,
-             .contactJoined, .contactRecentlyActive, .deviceBattery, .deviceUnreachable:
+             .contactJoined, .contactRecentlyActive, .relationAcquaintance, .deviceBattery, .deviceUnreachable, .wellnessCheck:
             return "4ECDC4"
         case .communityInvite, .communityJoined, .communityLeft, .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged, .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft:
             return "F8B500"
@@ -246,13 +269,14 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .legacyAffiliateSignup:
             return "2ECC71"
         case .securityAlert, .loginNewDevice, .legacySystemAlert, .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
-             .contentRemoved:
+             .contentRemoved, .inactivityAlert:
             return "EF4444"
         case .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted, .voiceCloneReady:
             return "08D9D6"
         case .system, .maintenance, .updateAvailable, .reportResolved:
             return "6366F1"
-        case .friendNewStory, .friendNewPost, .friendNewMood:
+        case .friendNewStory, .friendNewPost, .friendNewMood,
+             .friendContentReaction, .friendContentShare, .friendContentRepost, .friendContentQuote:
             return "6366F1"
         case .postRepost:
             return "9B59B6"

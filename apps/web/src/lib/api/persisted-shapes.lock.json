@@ -1,0 +1,3641 @@
+{
+ "schema": 3,
+ "families": {
+  "bookmarks": {
+   "named": "@tanstack#InfiniteData<FeedPage, FeedPageParam>"
+  },
+  "calls/history": {
+   "named": "@tanstack#InfiniteData<CallHistoryPage, string | null>"
+  },
+  "communities/:id/members": {
+   "named": "@tanstack#InfiniteData<CommunityMemberPage, number>"
+  },
+  "communities/:id/posts": {
+   "named": "@tanstack#InfiniteData<FeedPage, FeedPageParam>"
+  },
+  "conversations": {
+   "named": "@tanstack#InfiniteData<ConversationsPage, ConversationsPageParam>"
+  },
+  "conversations/:id": {
+   "ref": "Conversation"
+  },
+  "conversations/:id/media": {
+   "named": "@tanstack#InfiniteData<MessagesPage, MessagesPageParam>"
+  },
+  "conversations/:id/members": {
+   "named": "@tanstack#InfiniteData<ConversationMembersPage, string | null>"
+  },
+  "conversations/:id/messages": {
+   "named": "@tanstack#InfiniteData<MessagesPage, MessagesPageParam>"
+  },
+  "feed": {
+   "named": "@tanstack#InfiniteData<FeedPage, FeedPageParam>"
+  },
+  "friend-requests/:bucket": {
+   "named": "@tanstack#InfiniteData<FriendRequestsPage, string | null>"
+  },
+  "hashtags/:tag": {
+   "named": "@tanstack#InfiniteData<HashtagPage, number>"
+  },
+  "me/profile": {
+   "named": "src/lib/api/profile.ts#MyProfile"
+  },
+  "notifications/:category": {
+   "named": "@tanstack#InfiniteData<NotificationsPage, NotificationsPageParam>"
+  },
+  "posts/:id/comments": {
+   "named": "@tanstack#InfiniteData<CommentPage, CommentPageParam>"
+  },
+  "posts/:id/comments/:id/replies": {
+   "named": "@tanstack#InfiniteData<CommentPage, CommentPageParam>"
+  },
+  "reels": {
+   "named": "@tanstack#InfiniteData<FeedPage, FeedPageParam>"
+  },
+  "starred": {
+   "named": "@tanstack#InfiniteData<StarredPage, string | undefined>"
+  },
+  "users/:id/posts": {
+   "named": "@tanstack#InfiniteData<FeedPage, FeedPageParam>"
+  }
+ },
+ "types": {
+  "@tanstack#InfiniteData<CallHistoryPage, string | null>": {
+   "object": {
+    "pageParams": {
+     "optional": false,
+     "type": {
+      "array": {
+       "union": [
+        {
+         "primitive": "null"
+        },
+        {
+         "primitive": "string"
+        }
+       ]
+      }
+     }
+    },
+    "pages": {
+     "optional": false,
+     "type": {
+      "array": {
+       "named": "src/lib/api/calls.ts#CallHistoryPage"
+      }
+     }
+    }
+   }
+  },
+  "@tanstack#InfiniteData<CommentPage, CommentPageParam>": {
+   "object": {
+    "pageParams": {
+     "optional": false,
+     "type": {
+      "array": {
+       "union": [
+        {
+         "primitive": "string"
+        },
+        {
+         "primitive": "undefined"
+        }
+       ]
+      }
+     }
+    },
+    "pages": {
+     "optional": false,
+     "type": {
+      "array": {
+       "named": "src/lib/api/publication-comments.ts#CommentPage"
+      }
+     }
+    }
+   }
+  },
+  "@tanstack#InfiniteData<CommunityMemberPage, number>": {
+   "object": {
+    "pageParams": {
+     "optional": false,
+     "type": {
+      "array": {
+       "primitive": "number"
+      }
+     }
+    },
+    "pages": {
+     "optional": false,
+     "type": {
+      "array": {
+       "named": "src/lib/api/community-members.ts#CommunityMemberPage"
+      }
+     }
+    }
+   }
+  },
+  "@tanstack#InfiniteData<ConversationMembersPage, string | null>": {
+   "object": {
+    "pageParams": {
+     "optional": false,
+     "type": {
+      "array": {
+       "union": [
+        {
+         "primitive": "null"
+        },
+        {
+         "primitive": "string"
+        }
+       ]
+      }
+     }
+    },
+    "pages": {
+     "optional": false,
+     "type": {
+      "array": {
+       "named": "src/lib/api/conversation-members.ts#ConversationMembersPage"
+      }
+     }
+    }
+   }
+  },
+  "@tanstack#InfiniteData<ConversationsPage, ConversationsPageParam>": {
+   "object": {
+    "pageParams": {
+     "optional": false,
+     "type": {
+      "array": {
+       "union": [
+        {
+         "primitive": "string"
+        },
+        {
+         "primitive": "undefined"
+        }
+       ]
+      }
+     }
+    },
+    "pages": {
+     "optional": false,
+     "type": {
+      "array": {
+       "named": "src/lib/api/conversations-pages.ts#ConversationsPage"
+      }
+     }
+    }
+   }
+  },
+  "@tanstack#InfiniteData<FeedPage, FeedPageParam>": {
+   "object": {
+    "pageParams": {
+     "optional": false,
+     "type": {
+      "array": {
+       "union": [
+        {
+         "primitive": "string"
+        },
+        {
+         "primitive": "undefined"
+        }
+       ]
+      }
+     }
+    },
+    "pages": {
+     "optional": false,
+     "type": {
+      "array": {
+       "named": "src/lib/api/feed-pages.ts#FeedPage"
+      }
+     }
+    }
+   }
+  },
+  "@tanstack#InfiniteData<FriendRequestsPage, string | null>": {
+   "object": {
+    "pageParams": {
+     "optional": false,
+     "type": {
+      "array": {
+       "union": [
+        {
+         "primitive": "null"
+        },
+        {
+         "primitive": "string"
+        }
+       ]
+      }
+     }
+    },
+    "pages": {
+     "optional": false,
+     "type": {
+      "array": {
+       "named": "src/lib/api/friend-requests.ts#FriendRequestsPage"
+      }
+     }
+    }
+   }
+  },
+  "@tanstack#InfiniteData<HashtagPage, number>": {
+   "object": {
+    "pageParams": {
+     "optional": false,
+     "type": {
+      "array": {
+       "primitive": "number"
+      }
+     }
+    },
+    "pages": {
+     "optional": false,
+     "type": {
+      "array": {
+       "named": "src/lib/api/hashtag-posts.ts#HashtagPage"
+      }
+     }
+    }
+   }
+  },
+  "@tanstack#InfiniteData<MessagesPage, MessagesPageParam>": {
+   "object": {
+    "pageParams": {
+     "optional": false,
+     "type": {
+      "array": {
+       "union": [
+        {
+         "primitive": "string"
+        },
+        {
+         "primitive": "undefined"
+        }
+       ]
+      }
+     }
+    },
+    "pages": {
+     "optional": false,
+     "type": {
+      "array": {
+       "named": "src/lib/api/messages-pages.ts#MessagesPage"
+      }
+     }
+    }
+   }
+  },
+  "@tanstack#InfiniteData<NotificationsPage, NotificationsPageParam>": {
+   "object": {
+    "pageParams": {
+     "optional": false,
+     "type": {
+      "array": {
+       "union": [
+        {
+         "primitive": "string"
+        },
+        {
+         "primitive": "undefined"
+        }
+       ]
+      }
+     }
+    },
+    "pages": {
+     "optional": false,
+     "type": {
+      "array": {
+       "named": "src/lib/api/notifications.ts#NotificationsPage"
+      }
+     }
+    }
+   }
+  },
+  "@tanstack#InfiniteData<StarredPage, string | undefined>": {
+   "object": {
+    "pageParams": {
+     "optional": false,
+     "type": {
+      "array": {
+       "union": [
+        {
+         "primitive": "string"
+        },
+        {
+         "primitive": "undefined"
+        }
+       ]
+      }
+     }
+    },
+    "pages": {
+     "optional": false,
+     "type": {
+      "array": {
+       "named": "src/lib/api/starred-messages-cache.ts#StarredPage"
+      }
+     }
+    }
+   }
+  },
+  "lib.es5.d.ts#Omit<FeedAuthor, \"id\">": {
+   "object": {
+    "avatar": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "displayName": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "username": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    }
+   }
+  },
+  "lib.es5.d.ts#Partial<Readonly<Record<MetadataField, string>>>": {
+   "object": {
+    "achievementKey": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "axisKey": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "batteryKind": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "callType": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "commentPreview": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "contentType": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "excerpt": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "gameSection": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "mediaType": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "messagePreview": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "parentCommentPreview": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "postPreview": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "postThumbnailUrl": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "postType": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "reachabilityKind": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "reason": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    }
+   }
+  },
+  "lib.es5.d.ts#Partial<Readonly<Record<MetadataNumberField, number>>>": {
+   "object": {
+    "level": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "threshold": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "tierRank": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    }
+   }
+  },
+  "lib.es5.d.ts#Partial<Record<\"👍\" | \"❤️\" | \"😂\" | \"😮\" | \"😢\" | \"👏\" | \"🎉\" | \"🔥\", number>>": {
+   "object": {
+    "❤️": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "🎉": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "👍": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "👏": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "🔥": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "😂": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "😢": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "😮": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    }
+   }
+  },
+  "lib.es5.d.ts#Pick<NotificationActor, \"id\" | \"username\">": {
+   "object": {
+    "id": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "username": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    }
+   }
+  },
+  "src/lib/api/calls.ts#CallHistoryPage": {
+   "object": {
+    "nextCursor": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    },
+    "records": {
+     "optional": false,
+     "type": {
+      "array": {
+       "named": "src/lib/api/calls.ts#CallRecord"
+      }
+     }
+    }
+   }
+  },
+  "src/lib/api/calls.ts#CallParticipantName": {
+   "object": {
+    "avatar": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    },
+    "displayName": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "participantId": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "username": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    }
+   }
+  },
+  "src/lib/api/calls.ts#CallPeer": {
+   "object": {
+    "avatar": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    },
+    "displayName": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    },
+    "userId": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "username": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    }
+   }
+  },
+  "src/lib/api/calls.ts#CallRecord": {
+   "object": {
+    "bytes": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "number"
+       }
+      ]
+     }
+    },
+    "callId": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "conversationAvatar": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    },
+    "conversationId": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "conversationTitle": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    },
+    "conversationType": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "direction": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "\"incoming\""
+       },
+       {
+        "primitive": "\"missed\""
+       },
+       {
+        "primitive": "\"outgoing\""
+       }
+      ]
+     }
+    },
+    "durationSec": {
+     "optional": false,
+     "type": {
+      "primitive": "number"
+     }
+    },
+    "isVideo": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "false"
+       },
+       {
+        "primitive": "true"
+       }
+      ]
+     }
+    },
+    "participants": {
+     "optional": false,
+     "type": {
+      "array": {
+       "named": "src/lib/api/calls.ts#CallParticipantName"
+      }
+     }
+    },
+    "peer": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "named": "src/lib/api/calls.ts#CallPeer"
+       },
+       {
+        "primitive": "null"
+       }
+      ]
+     }
+    },
+    "reactionCounts": {
+     "optional": false,
+     "type": {
+      "named": "lib.es5.d.ts#Partial<Record<\"👍\" | \"❤️\" | \"😂\" | \"😮\" | \"😢\" | \"👏\" | \"🎉\" | \"🔥\", number>>"
+     }
+    },
+    "startedAt": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    }
+   }
+  },
+  "src/lib/api/community-members.ts#CommunityMember": {
+   "object": {
+    "avatar": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    },
+    "id": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "name": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "online": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "false"
+       },
+       {
+        "primitive": "true"
+       }
+      ]
+     }
+    },
+    "ring": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "undefined"
+       },
+       {
+        "ref": "__type"
+       }
+      ]
+     }
+    },
+    "role": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "\"admin\""
+       },
+       {
+        "primitive": "\"member\""
+       },
+       {
+        "primitive": "\"moderator\""
+       }
+      ]
+     }
+    },
+    "userId": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "username": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    }
+   }
+  },
+  "src/lib/api/community-members.ts#CommunityMemberPage": {
+   "object": {
+    "members": {
+     "optional": false,
+     "type": {
+      "array": {
+       "named": "src/lib/api/community-members.ts#CommunityMember"
+      }
+     }
+    },
+    "nextOffset": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "number"
+       }
+      ]
+     }
+    }
+   }
+  },
+  "src/lib/api/conversation-members.ts#ConversationMember": {
+   "object": {
+    "avatar": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "displayName": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "id": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "ring": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "undefined"
+       },
+       {
+        "ref": "__type"
+       }
+      ]
+     }
+    },
+    "role": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "userId": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    },
+    "username": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    }
+   }
+  },
+  "src/lib/api/conversation-members.ts#ConversationMembersPage": {
+   "object": {
+    "members": {
+     "optional": false,
+     "type": {
+      "array": {
+       "named": "src/lib/api/conversation-members.ts#ConversationMember"
+      }
+     }
+    },
+    "nextCursor": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    },
+    "totalCount": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "number"
+       }
+      ]
+     }
+    }
+   }
+  },
+  "src/lib/api/conversations-pages.ts#ConversationsCursorPagination": {
+   "object": {
+    "hasMore": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "false"
+       },
+       {
+        "primitive": "true"
+       }
+      ]
+     }
+    },
+    "limit": {
+     "optional": false,
+     "type": {
+      "primitive": "number"
+     }
+    },
+    "nextCursor": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    }
+   }
+  },
+  "src/lib/api/conversations-pages.ts#ConversationsPage": {
+   "object": {
+    "conversations": {
+     "optional": false,
+     "type": {
+      "array": {
+       "ref": "Conversation"
+      }
+     }
+    },
+    "cursorPagination": {
+     "optional": false,
+     "type": {
+      "named": "src/lib/api/conversations-pages.ts#ConversationsCursorPagination"
+     }
+    },
+    "pagination": {
+     "optional": false,
+     "type": {
+      "named": "src/lib/api/conversations-pages.ts#ConversationsPagination"
+     }
+    }
+   }
+  },
+  "src/lib/api/conversations-pages.ts#ConversationsPagination": {
+   "object": {
+    "hasMore": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "false"
+       },
+       {
+        "primitive": "true"
+       }
+      ]
+     }
+    },
+    "limit": {
+     "optional": false,
+     "type": {
+      "primitive": "number"
+     }
+    },
+    "offset": {
+     "optional": false,
+     "type": {
+      "primitive": "number"
+     }
+    },
+    "total": {
+     "optional": false,
+     "type": {
+      "primitive": "number"
+     }
+    }
+   }
+  },
+  "src/lib/api/feed-pages.ts#FeedAuthor": {
+   "object": {
+    "avatar": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "displayName": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "id": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "username": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    }
+   }
+  },
+  "src/lib/api/feed-pages.ts#FeedMedia": {
+   "object": {
+    "alt": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "altLanguage": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "altTranslations": {
+     "optional": true,
+     "type": {
+      "primitive": "unknown"
+     }
+    },
+    "avifVariants": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "array": {
+         "ref": "ImageVariant"
+        }
+       },
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "caption": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "captionLanguage": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "captionTranslations": {
+     "optional": true,
+     "type": {
+      "primitive": "unknown"
+     }
+    },
+    "duration": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "fileSize": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "fileUrl": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "height": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "id": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "imageVariants": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "array": {
+         "ref": "ImageVariant"
+        }
+       },
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "mimeType": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "order": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "renditions": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "array": {
+         "ref": "MediaRendition"
+        }
+       },
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "thumbHash": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "thumbnailUrl": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "transcription": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "undefined"
+       },
+       {
+        "ref": "AudioTranscription"
+       },
+       {
+        "ref": "DocumentTranscription"
+       },
+       {
+        "ref": "ImageTranscription"
+       },
+       {
+        "ref": "VideoTranscription"
+       }
+      ]
+     }
+    },
+    "translations": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "undefined"
+       },
+       {
+        "ref": "AttachmentTranslations"
+       }
+      ]
+     }
+    },
+    "width": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    }
+   }
+  },
+  "src/lib/api/feed-pages.ts#FeedPage": {
+   "object": {
+    "pagination": {
+     "optional": false,
+     "type": {
+      "named": "src/lib/api/feed-pages.ts#FeedPagination"
+     }
+    },
+    "posts": {
+     "optional": false,
+     "type": {
+      "array": {
+       "named": "src/lib/api/feed-pages.ts#FeedPost"
+      }
+     }
+    }
+   }
+  },
+  "src/lib/api/feed-pages.ts#FeedPagination": {
+   "object": {
+    "hasMore": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "false"
+       },
+       {
+        "primitive": "true"
+       }
+      ]
+     }
+    },
+    "limit": {
+     "optional": false,
+     "type": {
+      "primitive": "number"
+     }
+    },
+    "nextCursor": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    }
+   }
+  },
+  "src/lib/api/feed-pages.ts#FeedPost": {
+   "object": {
+    "author": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "named": "src/lib/api/feed-pages.ts#FeedAuthor"
+       },
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "bookmarkCount": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "commentCount": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "commentsDisabled": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "false"
+       },
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "true"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "content": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "createdAt": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "ref": "Date"
+       }
+      ]
+     }
+    },
+    "expiresAt": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       },
+       {
+        "ref": "Date"
+       }
+      ]
+     }
+    },
+    "id": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "isBookmarkedByMe": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "false"
+       },
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "true"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "isLikedByMe": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "false"
+       },
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "true"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "isRepostedByMe": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "false"
+       },
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "true"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "likeCount": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "media": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "array": {
+         "named": "src/lib/api/feed-pages.ts#FeedMedia"
+        }
+       },
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "mentions": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "array": {
+         "object": {
+          "username": {
+           "optional": false,
+           "type": {
+            "primitive": "string"
+           }
+          }
+         }
+        }
+       },
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "metadata": {
+     "optional": true,
+     "type": {
+      "primitive": "unknown"
+     }
+    },
+    "moodEmoji": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "originalLanguage": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "originalRepostOfId": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "rankingSource": {
+     "optional": true,
+     "type": {
+      "primitive": "unknown"
+     }
+    },
+    "repostCount": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "repostOf": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "named": "src/lib/api/feed-pages.ts#FeedRepostOf"
+       },
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "repostOfId": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "servedListing": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "named": "src/lib/telemetry/served-listing.ts#ServedListing"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "shareCount": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "storyEffects": {
+     "optional": true,
+     "type": {
+      "primitive": "unknown"
+     }
+    },
+    "trackingLinks": {
+     "optional": true,
+     "type": {
+      "primitive": "unknown"
+     }
+    },
+    "translations": {
+     "optional": true,
+     "type": {
+      "primitive": "unknown"
+     }
+    },
+    "type": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "viewerPoints": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "viewerPointsAt": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "visibility": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "\"ACQUAINTANCES\""
+       },
+       {
+        "primitive": "\"BLOOD\""
+       },
+       {
+        "primitive": "\"CLOSE\""
+       },
+       {
+        "primitive": "\"COMMUNITY\""
+       },
+       {
+        "primitive": "\"EXCEPT\""
+       },
+       {
+        "primitive": "\"FRIENDS\""
+       },
+       {
+        "primitive": "\"ONLY\""
+       },
+       {
+        "primitive": "\"PRIVATE\""
+       },
+       {
+        "primitive": "\"PUBLIC\""
+       },
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    }
+   }
+  },
+  "src/lib/api/feed-pages.ts#FeedRepostOf": {
+   "object": {
+    "author": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "intersection": [
+         {
+          "named": "lib.es5.d.ts#Omit<FeedAuthor, \"id\">"
+         },
+         {
+          "object": {
+           "id": {
+            "optional": true,
+            "type": {
+             "union": [
+              {
+               "primitive": "string"
+              },
+              {
+               "primitive": "undefined"
+              }
+             ]
+            }
+           }
+          }
+         }
+        ]
+       },
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "commentsDisabled": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "false"
+       },
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "true"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "content": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "createdAt": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       },
+       {
+        "ref": "Date"
+       }
+      ]
+     }
+    },
+    "id": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "likeCount": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "media": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "array": {
+         "named": "src/lib/api/feed-pages.ts#FeedMedia"
+        }
+       },
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "moodEmoji": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "originalLanguage": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "translations": {
+     "optional": true,
+     "type": {
+      "primitive": "unknown"
+     }
+    },
+    "type": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    }
+   }
+  },
+  "src/lib/api/friend-requests.ts#FriendRequestRecord": {
+   "object": {
+    "createdAt": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "id": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "message": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    },
+    "receiver": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "named": "src/lib/api/friend-requests.ts#PersonSummary"
+       },
+       {
+        "primitive": "null"
+       }
+      ]
+     }
+    },
+    "receiverId": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "sender": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "named": "src/lib/api/friend-requests.ts#PersonSummary"
+       },
+       {
+        "primitive": "null"
+       }
+      ]
+     }
+    },
+    "senderId": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "status": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "targetLevel": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "\"ACQUAINTANCE\""
+       },
+       {
+        "primitive": "\"BLOOD\""
+       },
+       {
+        "primitive": "\"CLOSE\""
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    }
+   }
+  },
+  "src/lib/api/friend-requests.ts#FriendRequestsPage": {
+   "object": {
+    "nextCursor": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    },
+    "requests": {
+     "optional": false,
+     "type": {
+      "array": {
+       "named": "src/lib/api/friend-requests.ts#FriendRequestRecord"
+      }
+     }
+    }
+   }
+  },
+  "src/lib/api/friend-requests.ts#PersonSummary": {
+   "object": {
+    "avatar": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    },
+    "displayName": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    },
+    "id": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "ring": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "undefined"
+       },
+       {
+        "ref": "__type"
+       }
+      ]
+     }
+    },
+    "username": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    }
+   }
+  },
+  "src/lib/api/hashtag-posts.ts#HashtagPage": {
+   "object": {
+    "nextCursor": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "number"
+       }
+      ]
+     }
+    },
+    "posts": {
+     "optional": false,
+     "type": {
+      "array": {
+       "named": "src/lib/api/feed-pages.ts#FeedPost"
+      }
+     }
+    }
+   }
+  },
+  "src/lib/api/messages-pages.ts#MessagesPage": {
+   "object": {
+    "hasOlder": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "false"
+       },
+       {
+        "primitive": "true"
+       }
+      ]
+     }
+    },
+    "messages": {
+     "optional": false,
+     "type": {
+      "array": {
+       "ref": "Message"
+      }
+     }
+    },
+    "nextCursor": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    }
+   }
+  },
+  "src/lib/api/notifications.ts#NotificationsPage": {
+   "object": {
+    "hasMore": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "false"
+       },
+       {
+        "primitive": "true"
+       }
+      ]
+     }
+    },
+    "nextCursor": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    },
+    "notifications": {
+     "optional": false,
+     "type": {
+      "array": {
+       "named": "src/lib/notifications/record.ts#NotificationRecord"
+      }
+     }
+    }
+   }
+  },
+  "src/lib/api/profile.ts#MaskedContact": {
+   "object": {
+    "masked": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "verified": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "false"
+       },
+       {
+        "primitive": "true"
+       }
+      ]
+     }
+    }
+   }
+  },
+  "src/lib/api/profile.ts#MyProfile": {
+   "object": {
+    "avatar": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    },
+    "banner": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    },
+    "bio": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "createdAt": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    },
+    "customDestinationLanguage": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    },
+    "displayName": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    },
+    "email": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "named": "src/lib/api/profile.ts#MaskedContact"
+       },
+       {
+        "primitive": "null"
+       }
+      ]
+     }
+    },
+    "firstName": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    },
+    "id": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "lastName": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    },
+    "phone": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "named": "src/lib/api/profile.ts#MaskedContact"
+       },
+       {
+        "primitive": "null"
+       }
+      ]
+     }
+    },
+    "profileDecor": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "undefined"
+       },
+       {
+        "ref": "ServedProfileDecor"
+       }
+      ]
+     }
+    },
+    "regionalLanguage": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    },
+    "systemLanguage": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "updatedAt": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "username": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    }
+   }
+  },
+  "src/lib/api/publication-comments.ts#CommentPage": {
+   "object": {
+    "comments": {
+     "optional": false,
+     "type": {
+      "array": {
+       "named": "src/lib/api/publication-comments.ts#PostComment"
+      }
+     }
+    },
+    "pagination": {
+     "optional": false,
+     "type": {
+      "object": {
+       "hasMore": {
+        "optional": false,
+        "type": {
+         "union": [
+          {
+           "primitive": "false"
+          },
+          {
+           "primitive": "true"
+          }
+         ]
+        }
+       },
+       "limit": {
+        "optional": false,
+        "type": {
+         "primitive": "number"
+        }
+       },
+       "nextCursor": {
+        "optional": false,
+        "type": {
+         "union": [
+          {
+           "primitive": "null"
+          },
+          {
+           "primitive": "string"
+          }
+         ]
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "src/lib/api/publication-comments.ts#PostComment": {
+   "object": {
+    "author": {
+     "optional": false,
+     "type": {
+      "named": "src/lib/api/feed-pages.ts#FeedAuthor"
+     }
+    },
+    "content": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "createdAt": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "currentUserReactions": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "array": {
+         "primitive": "string"
+        }
+       },
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "effectFlags": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "id": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "isLikedByMe": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "false"
+       },
+       {
+        "primitive": "true"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "likeCount": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "media": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "array": {
+         "named": "src/lib/api/feed-pages.ts#FeedMedia"
+        }
+       },
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "metadata": {
+     "optional": true,
+     "type": {
+      "primitive": "unknown"
+     }
+    },
+    "originalLanguage": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "parentId": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "pending": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "false"
+       },
+       {
+        "primitive": "true"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "replyCount": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "sticker": {
+     "optional": true,
+     "type": {
+      "primitive": "unknown"
+     }
+    },
+    "trackingLinks": {
+     "optional": true,
+     "type": {
+      "primitive": "unknown"
+     }
+    },
+    "translations": {
+     "optional": true,
+     "type": {
+      "primitive": "unknown"
+     }
+    }
+   }
+  },
+  "src/lib/api/starred-messages-cache.ts#StarredPage": {
+   "object": {
+    "items": {
+     "optional": false,
+     "type": {
+      "array": {
+       "ref": "__type"
+      }
+     }
+    },
+    "pagination": {
+     "optional": false,
+     "type": {
+      "named": "src/lib/api/starred-messages-cache.ts#StarredPagination"
+     }
+    }
+   }
+  },
+  "src/lib/api/starred-messages-cache.ts#StarredPagination": {
+   "object": {
+    "hasMore": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "false"
+       },
+       {
+        "primitive": "true"
+       }
+      ]
+     }
+    },
+    "limit": {
+     "optional": false,
+     "type": {
+      "primitive": "number"
+     }
+    },
+    "nextCursor": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    }
+   }
+  },
+  "src/lib/notifications/record.ts#NotificationRecord": {
+   "object": {
+    "actor": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "intersection": [
+         {
+          "named": "lib.es5.d.ts#Pick<NotificationActor, \"id\" | \"username\">"
+         },
+         {
+          "object": {
+           "avatar": {
+            "optional": false,
+            "type": {
+             "union": [
+              {
+               "primitive": "null"
+              },
+              {
+               "primitive": "string"
+              }
+             ]
+            }
+           },
+           "displayName": {
+            "optional": false,
+            "type": {
+             "union": [
+              {
+               "primitive": "null"
+              },
+              {
+               "primitive": "string"
+              }
+             ]
+            }
+           }
+          }
+         }
+        ]
+       },
+       {
+        "primitive": "null"
+       }
+      ]
+     }
+    },
+    "content": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "context": {
+     "optional": false,
+     "type": {
+      "named": "src/lib/notifications/record.ts#NotificationRecordContext"
+     }
+    },
+    "id": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    },
+    "metadata": {
+     "optional": false,
+     "type": {
+      "intersection": [
+       {
+        "named": "lib.es5.d.ts#Partial<Readonly<Record<MetadataField, string>>>"
+       },
+       {
+        "named": "lib.es5.d.ts#Partial<Readonly<Record<MetadataNumberField, number>>>"
+       }
+      ]
+     }
+    },
+    "state": {
+     "optional": false,
+     "type": {
+      "object": {
+       "createdAt": {
+        "optional": false,
+        "type": {
+         "primitive": "string"
+        }
+       },
+       "isRead": {
+        "optional": false,
+        "type": {
+         "union": [
+          {
+           "primitive": "false"
+          },
+          {
+           "primitive": "true"
+          }
+         ]
+        }
+       }
+      }
+     }
+    },
+    "subtitle": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "title": {
+     "optional": false,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       }
+      ]
+     }
+    },
+    "type": {
+     "optional": false,
+     "type": {
+      "primitive": "string"
+     }
+    }
+   }
+  },
+  "src/lib/notifications/record.ts#NotificationRecordContext": {
+   "object": {
+    "callSessionId": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "commentId": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "communityId": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "communityName": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "contentDetail": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "undefined"
+       },
+       {
+        "ref": "NotificationContentDetail"
+       }
+      ]
+     }
+    },
+    "conversationId": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "conversationTitle": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "conversationType": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "\"broadcast\""
+       },
+       {
+        "primitive": "\"direct\""
+       },
+       {
+        "primitive": "\"global\""
+       },
+       {
+        "primitive": "\"group\""
+       },
+       {
+        "primitive": "\"public\""
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "firstAttachmentDurationMs": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "firstAttachmentMimeType": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "firstAttachmentUrl": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "friendRequestId": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "messageId": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "parentCommentId": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "postCreatedAt": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "postExpiresAt": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "postId": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    }
+   }
+  },
+  "src/lib/telemetry/served-listing.ts#ServedListing": {
+   "object": {
+    "feedRequestId": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "rankingSource": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "\"bookmarks\""
+       },
+       {
+        "primitive": "\"following\""
+       },
+       {
+        "primitive": "\"for_you\""
+       },
+       {
+        "primitive": "\"hashtag\""
+       },
+       {
+        "primitive": "\"nearby\""
+       },
+       {
+        "primitive": "\"other\""
+       },
+       {
+        "primitive": "\"profile\""
+       },
+       {
+        "primitive": "\"search\""
+       },
+       {
+        "primitive": "\"sound\""
+       },
+       {
+        "primitive": "\"trending\""
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    }
+   }
+  }
+ }
+}

@@ -9,6 +9,8 @@ final class MockNotificationFeed: NotificationFeedProviding {
 
     var unreadCount = 0
     var cached: CacheResult<[APINotification]> = .empty
+    /// Ce que le disque tient quel que soit son âge (`cachedFeedIgnoringExpiry`).
+    var diskFeed: [APINotification] = []
     var markAllResult = true
     var deleteResult = true
 
@@ -21,8 +23,13 @@ final class MockNotificationFeed: NotificationFeedProviding {
     let allReadSubject = PassthroughSubject<Void, Never>()
     let rolledBackSubject = PassthroughSubject<String, Never>()
     let deletedSubject = PassthroughSubject<String, Never>()
+    let arrivedQuietlySubject = PassthroughSubject<APINotification, Never>()
+    let readPurgedSubject = PassthroughSubject<Void, Never>()
+    let resyncedSubject = PassthroughSubject<Void, Never>()
+    let friendRequestReadSubject = PassthroughSubject<String, Never>()
 
     private(set) var cachedFeedCallCount = 0
+    private(set) var cachedFeedIgnoringExpiryCallCount = 0
     private(set) var storedFeeds: [[APINotification]] = []
     private(set) var refreshUnreadCountCallCount = 0
     private(set) var markedReadIds: [String] = []
@@ -36,10 +43,19 @@ final class MockNotificationFeed: NotificationFeedProviding {
     var allNotificationsRead: AnyPublisher<Void, Never> { allReadSubject.eraseToAnyPublisher() }
     var notificationReadRolledBack: AnyPublisher<String, Never> { rolledBackSubject.eraseToAnyPublisher() }
     var notificationWasDeleted: AnyPublisher<String, Never> { deletedSubject.eraseToAnyPublisher() }
+    var notificationArrivedQuietly: AnyPublisher<APINotification, Never> { arrivedQuietlySubject.eraseToAnyPublisher() }
+    var readNotificationsPurged: AnyPublisher<Void, Never> { readPurgedSubject.eraseToAnyPublisher() }
+    var resynced: AnyPublisher<Void, Never> { resyncedSubject.eraseToAnyPublisher() }
+    var friendRequestNotificationsRead: AnyPublisher<String, Never> { friendRequestReadSubject.eraseToAnyPublisher() }
 
     func cachedFeed() async -> CacheResult<[APINotification]> {
         cachedFeedCallCount += 1
         return cached
+    }
+
+    func cachedFeedIgnoringExpiry() async -> [APINotification] {
+        cachedFeedIgnoringExpiryCallCount += 1
+        return diskFeed
     }
 
     func storeFeed(_ notifications: [APINotification]) async throws {
@@ -93,11 +109,19 @@ final class MockNotificationListService: NotificationServiceProviding, @unchecke
 }
 
 enum NotificationStubs {
-    static func notification(_ id: String, type: String = "message", isRead: Bool = false) -> APINotification {
+    static func notification(
+        _ id: String,
+        type: String = "message",
+        isRead: Bool = false,
+        createdAt: String = "2026-09-30T00:00:00.000Z",
+        friendRequestId: String? = nil
+    ) -> APINotification {
         APINotification(
             id: id, userId: "u1", type: type, priority: nil,
-            content: "n", actor: nil, context: nil, metadata: nil,
-            state: NotificationState(isRead: isRead, readAt: nil, createdAt: "2026-09-30T00:00:00.000Z", expiresAt: nil),
+            content: "n", actor: nil,
+            context: friendRequestId.map { NotificationContext(friendRequestId: $0) },
+            metadata: nil,
+            state: NotificationState(isRead: isRead, readAt: nil, createdAt: createdAt, expiresAt: nil),
             delivery: nil
         )
     }

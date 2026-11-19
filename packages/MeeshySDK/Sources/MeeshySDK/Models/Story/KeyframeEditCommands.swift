@@ -85,7 +85,7 @@ public struct MoveKeyframeCommand: EditCommand {
     public let keyframeId: String
     // Time delta — always-encoded, drives the "scrub a keyframe along the
     // timeline" gesture. Other deltas below are optional (nil = no change)
-    // and let the same command type carry KeyframeInspector edits
+    // and let the same command type carry property edits
     // (position / scale / opacity / easing) without exploding the
     // AnyEditCommand enum.
     public let oldTime: Float

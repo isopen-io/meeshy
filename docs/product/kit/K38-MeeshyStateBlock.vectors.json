@@ -1,0 +1,123 @@
+{
+  "composant": "MeeshyStateBlock",
+  "cle": "K38",
+  "note": "Vecteurs de parité (fiche K38 § 02, § 06). Une erreur a toujours une sortie ; un vide plein écran aussi ; seule la forme compacte peut s'en passer. Le refus dit ce qui est fermé comme le succès dit ce qui est fait (au plus quatre lignes, #18873) ; un glyphe nommé par l'hôte remplace celui du genre. Une rangée de tuiles fantômes légendées (ghostTiles) en montre au plus quatre, sans légende vide.",
+  "refus": [
+    {
+      "genre": "error",
+      "taille": "regular",
+      "primaire": false,
+      "resolu": false
+    },
+    {
+      "genre": "error",
+      "taille": "compact",
+      "primaire": false,
+      "resolu": false
+    },
+    {
+      "genre": "error",
+      "taille": "regular",
+      "primaire": true,
+      "resolu": true
+    },
+    {
+      "genre": "empty",
+      "taille": "regular",
+      "primaire": false,
+      "resolu": false
+    },
+    {
+      "genre": "empty",
+      "taille": "compact",
+      "primaire": false,
+      "resolu": true
+    },
+    {
+      "genre": "denied",
+      "taille": "regular",
+      "primaire": false,
+      "resolu": true
+    },
+    {
+      "genre": "offline",
+      "taille": "regular",
+      "primaire": false,
+      "resolu": true
+    },
+    {
+      "genre": "success",
+      "taille": "regular",
+      "primaire": false,
+      "resolu": true
+    }
+  ],
+  "genres": [
+    {
+      "genre": "empty",
+      "ton": "accent",
+      "annonce": false
+    },
+    {
+      "genre": "error",
+      "ton": "error",
+      "annonce": true
+    },
+    {
+      "genre": "denied",
+      "ton": "warning",
+      "annonce": false
+    },
+    {
+      "genre": "offline",
+      "ton": "neutral",
+      "annonce": true
+    },
+    {
+      "genre": "success",
+      "ton": "success",
+      "annonce": false
+    }
+  ],
+  "consequences": [
+    {
+      "genre": "success",
+      "garde": true,
+      "glyphe": "checkmark"
+    },
+    {
+      "genre": "denied",
+      "garde": true,
+      "glyphe": "minus.circle"
+    },
+    {
+      "genre": "error",
+      "garde": false
+    },
+    {
+      "genre": "offline",
+      "garde": false
+    },
+    {
+      "genre": "empty",
+      "garde": false
+    }
+  ],
+  "tuilesFantomes": [
+    {
+      "demandees": 3,
+      "legendesVides": 0,
+      "montrees": 3
+    },
+    {
+      "demandees": 6,
+      "legendesVides": 0,
+      "montrees": 4
+    },
+    {
+      "demandees": 3,
+      "legendesVides": 1,
+      "montrees": 2
+    }
+  ]
+}

@@ -184,10 +184,12 @@ export function toEncryptedPayload(
 
   const relay = relayOf(envelope, caller.sessionId ?? null);
   const { relay: _clientRelay, ...metadata } = envelope.encryptionMetadata ?? {};
+  // #9998 — les champs VALIDÉS par le schéma sont posés APRÈS les métadonnées
+  // libres : un `mode` ou un `ciphertext` qu'elles glisseraient ne les remplace pas.
   return {
+    ...metadata,
     ciphertext: envelope.encryptedContent,
     mode: envelope.encryptionMode ?? 'e2ee',
-    ...metadata,
     ...(relay ? { relay } : {}),
   } as unknown as MessageRequest['encryptedPayload'];
 }

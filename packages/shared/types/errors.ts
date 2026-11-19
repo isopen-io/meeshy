@@ -50,6 +50,14 @@ export enum ErrorCode {
   BIRTH_DATE_ALREADY_SET = 'BIRTH_DATE_ALREADY_SET',
   
   // System (9xxx)
+  /**
+   * Audit de #19080, E3 : l'écriture d'un message n'a pas été validée — conflit
+   * d'écriture avec un renvoi concurrent au même `clientMessageId` (P2034) ou
+   * transaction expirée (P2028). Rien n'est écrit ; le même envoi, rejoué au
+   * même `clientMessageId` après `retryAfter` secondes, aboutit ou se
+   * déduplique. Jamais un refus.
+   */
+  MESSAGE_SEND_RETRYABLE = 'MESSAGE_SEND_RETRYABLE',
   INTERNAL_ERROR = 'INTERNAL_ERROR',
   DATABASE_ERROR = 'DATABASE_ERROR',
   TRANSLATION_ERROR = 'TRANSLATION_ERROR',
@@ -175,6 +183,10 @@ export const ErrorMessages: Record<ErrorCode, { fr: string; en: string }> = {
   },
   
   // System
+  [ErrorCode.MESSAGE_SEND_RETRYABLE]: {
+    fr: 'Le message n’a pas pu être enregistré : renvoyez-le',
+    en: 'The message could not be saved: send it again',
+  },
   [ErrorCode.INTERNAL_ERROR]: {
     fr: 'Erreur interne du serveur',
     en: 'Internal server error',
@@ -244,7 +256,8 @@ export const ErrorStatusMap: Record<ErrorCode, number> = {
   [ErrorCode.AGE_BELOW_MINIMUM]: 422,
   [ErrorCode.BIRTH_DATE_ALREADY_SET]: 409,
   
-  // System (500)
+  // System (500, 503)
+  [ErrorCode.MESSAGE_SEND_RETRYABLE]: 503,
   [ErrorCode.INTERNAL_ERROR]: 500,
   [ErrorCode.DATABASE_ERROR]: 500,
   [ErrorCode.TRANSLATION_ERROR]: 500,

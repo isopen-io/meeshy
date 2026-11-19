@@ -6,7 +6,7 @@ import MeeshySDK
 /// Cohérence du composite ThumbHash avec le rendu réel pour la couche FOND.
 /// Une story moderne porte son fond comme `StoryMediaObject(isBackground: true)`
 /// (pas comme `bgImage` legacy séparé). `renderComposite` doit dessiner ce fond
-/// PLEIN CADRE (comme `StoryBackgroundLayer` / `SlideMiniPreview`) et l'exclure
+/// PLEIN CADRE (comme `StoryBackgroundLayer`) et l'exclure
 /// de la couche foreground — sinon le fond est rendu en petite image 0.6× centrée
 /// qui (étant dessinée après le texte) occulte le texte dans le placeholder.
 @MainActor

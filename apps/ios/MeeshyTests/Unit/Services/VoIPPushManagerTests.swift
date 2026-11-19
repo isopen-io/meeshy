@@ -356,7 +356,8 @@ final class VoIPPushManagerTests: XCTestCase {
         }
         let followingBody = String(source[dedupRange.upperBound...].prefix(400))
         XCTAssertTrue(
-            followingBody.contains("reportPhantomVoIPCall(uuid: phantomUUID, update: update, callId: callId)"),
+            followingBody.contains("Self.reportPhantomCall(callId: callId)") &&
+            source.contains("reportPhantomVoIPCall(uuid: UUID(), update: update, callId: callId)"),
             "The dedup-hit phantom-call path must pass `callId` to reportPhantomVoIPCall so a CallKit " +
             "rejection can evict the dedup entry — otherwise a genuine retry is silently swallowed."
         )
@@ -370,7 +371,7 @@ final class VoIPPushManagerTests: XCTestCase {
         }
         let precedingBody = String(source[..<malformedRange.lowerBound].suffix(400))
         XCTAssertTrue(
-            precedingBody.contains("reportPhantomVoIPCall(uuid: phantomUUID, update: update, callId: nil)") &&
+            precedingBody.contains("Self.reportPhantomCall(callId: nil)") &&
             !precedingBody.contains("callId: callId"),
             "The malformed-payload path never inserted into the dedup ring, so it must not pass a callId " +
             "(there's nothing to evict)."
@@ -583,4 +584,41 @@ final class VoIPPushManagerTests: XCTestCase {
         XCTAssertEqual(registrar.registerCallCount, 0)
         XCTAssertEqual(sut.debug_pendingTokenToRegister, "tokPreLogin")
     }
+
+    // MARK: - #19238 — le push dit seul que l'appel est de groupe
+
+    func test_groupConversationToMark_isGroupFlag_marksTheConversation() {
+        XCTAssertEqual(VoIPPushManager.groupConversationToMark(["conversationId": "conv-1", "conversationType": "direct", "isGroup": "true"]), "conv-1")
+        XCTAssertEqual(VoIPPushManager.groupConversationToMark(["conversationId": "conv-1", "isGroup": true]), "conv-1")
+    }
+
+    func test_groupConversationToMark_groupConversationType_marksTheConversation() {
+        XCTAssertEqual(VoIPPushManager.groupConversationToMark(["conversationId": "conv-1", "conversationType": "group", "isGroup": "false"]), "conv-1")
+    }
+
+    func test_groupConversationToMark_directCallOrOlderGateway_marksNothing() {
+        XCTAssertNil(VoIPPushManager.groupConversationToMark(["conversationId": "conv-1", "conversationType": "direct", "isGroup": "false"]))
+        XCTAssertNil(VoIPPushManager.groupConversationToMark(["conversationId": "conv-1"]))
+        XCTAssertNil(VoIPPushManager.groupConversationToMark(["conversationId": "", "isGroup": "true"]))
+        XCTAssertNil(VoIPPushManager.groupConversationToMark(["isGroup": "true"]))
+    }
+
+    func test_voipPush_marksTheGroupRightAfterReportingTheCall() throws {
+        let source = AppSourceGuard.stripComments(try voipPushManagerSource())
+        let parse = try XCTUnwrap(source.range(of: "let groupConversationId = Self.groupConversationToMark(data)"))
+        let report = try XCTUnwrap(source.range(of: "CallManager.shared.incomingRing.reportIncomingVoIPCall(", range: parse.upperBound..<source.endIndex))
+        let mark = try XCTUnwrap(source.range(of: "GroupCallMeshCoordinator.shared.markGroupConversation(groupConversationId", range: report.upperBound..<source.endIndex))
+        XCTAssertTrue(source[report.upperBound..<mark.lowerBound].contains("if let groupConversationId"))
+    }
+
+    func test_parseIsVideo_readsTheStringOfAPNsAndTheBoolOfAnOlderGateway() {
+        XCTAssertTrue(VoIPPushManager.parseIsVideo("true"))
+        XCTAssertTrue(VoIPPushManager.parseIsVideo("TRUE"))
+        XCTAssertTrue(VoIPPushManager.parseIsVideo(true))
+        XCTAssertFalse(VoIPPushManager.parseIsVideo("false"))
+        XCTAssertFalse(VoIPPushManager.parseIsVideo(false))
+        XCTAssertFalse(VoIPPushManager.parseIsVideo(nil))
+        XCTAssertFalse(VoIPPushManager.parseIsVideo(1))
+    }
 }
+

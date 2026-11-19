@@ -38,6 +38,11 @@ public protocol AuthServiceProviding: Sendable {
     /// Authorization header at all. Default forwards to the parameterless
     /// variant for conformers that haven't opted in (tests, stubs).
     func logoutThrowing(token: String) async throws
+    /// #18911 (ios-systeme-1) — retire de la passerelle les jetons push (APNs ET
+    /// VoIP) de CETTE installation, sous `token` épinglé comme
+    /// `logoutThrowing(token:)`. Se joue AVANT la fermeture de la session : une
+    /// fois close, son JWT serait refusé. Repli des doubles : rien.
+    func unregisterPushDevice(deviceId: String, token: String) async throws
 }
 
 public extension AuthServiceProviding {
@@ -57,6 +62,8 @@ public extension AuthServiceProviding {
     func logoutThrowing(token: String) async throws {
         try await logoutThrowing()
     }
+
+    func unregisterPushDevice(deviceId: String, token: String) async throws {}
 
     /// Repli des doubles qui ne l'implémentent pas : la vérification par code
     /// d'avant #8035, sans session.
@@ -334,6 +341,22 @@ public final class AuthService: AuthServiceProviding, PasswordResetProviding, @u
         return response.data.user.security?.hasPassword
     }
 
+    /// #19512 — ce compte a-t-il des clés de chiffrement de bout en bout ? Lu sur
+    /// `GET /auth/me?expand=security` (`security.hasSignalKeys`, un bundle de
+    /// pré-clés ACTIF — la seule source vraie : `User.signalIdentityKeyPublic`
+    /// n'est alimenté par aucun chemin d'écriture). `nil` quand la passerelle ne
+    /// sert pas le champ : ma vitrine n'affirme alors rien.
+    public func hasSignalKeys() async throws -> Bool? {
+        let response: APIResponse<MeSecurityResponseData> = try await api.request(
+            AuthEndpoint.me,
+            queryItems: [
+                URLQueryItem(name: "fields", value: "id"),
+                URLQueryItem(name: "expand", value: "security"),
+            ]
+        )
+        return response.data.user.security?.hasSignalKeys
+    }
+
     // MARK: - Email Verification
 
     // `verifyEmail(token:)` a été RETIRÉE (#4588). Elle visait
@@ -396,10 +419,28 @@ public final class AuthService: AuthServiceProviding, PasswordResetProviding, @u
             bearerToken: token
         )
     }
+
+    /// #18911 (ios-systeme-1) — `DELETE /users/register-device-token` avec le SEUL
+    /// corps `{ deviceId }` : la passerelle retire alors toutes les lignes de
+    /// l'installation, la VoIP comme l'APNs. Un `deviceId` vide est refusé AVANT
+    /// d'écrire : un corps sans clé effacerait les jetons de TOUS les appareils.
+    public func unregisterPushDevice(deviceId: String, token: String) async throws {
+        guard !deviceId.isEmpty else {
+            throw MeeshyError.server(statusCode: 400, message: "deviceId manquant")
+        }
+        let body = try JSONEncoder().encode(UnregisterPushDeviceRequest(deviceId: deviceId))
+        let _: APIResponse<DiscardedResponseBody> = try await pinned.requestPinned(
+            UsersEndpoint.registerDeviceToken,
+            method: "DELETE",
+            body: body,
+            headers: [:],
+            bearerToken: token
+        )
+    }
 }
 
-/// `GET /auth/me?expand=security` — la seule chose que l'écran du mot de passe
-/// en lit (#9186).
+/// `GET /auth/me?expand=security` — ce que l'écran du mot de passe (#9186) et
+/// ma vitrine (#19512) en lisent.
 public struct MeSecurityResponseData: Decodable, Sendable {
     public let user: User
 
@@ -409,5 +450,7 @@ public struct MeSecurityResponseData: Decodable, Sendable {
 
     public struct Security: Decodable, Sendable {
         public let hasPassword: Bool?
+        /// #19512 — un bundle de pré-clés actif ; `nil` sur une passerelle qui ne le sert pas.
+        public var hasSignalKeys: Bool? = nil
     }
 }

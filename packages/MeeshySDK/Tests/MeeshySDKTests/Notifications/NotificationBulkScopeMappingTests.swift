@@ -145,4 +145,18 @@ final class NotificationBulkScopeMappingTests: XCTestCase {
         let items = [makeNotification(id: "n1", isRead: false)]
         XCTAssertEqual(NotificationBulkScopeMapping.removingRead(items).map(\.id), ["n1"])
     }
+
+
+    // MARK: - Demande d'ami (#19104)
+
+    func test_friendRequestId_isTheValueOfAFriendRequestContextPredicate() {
+        let payload = NotificationBulkScopePayload(kind: "context", contextKey: "friendRequestId", contextValue: "fr1")
+        XCTAssertEqual(NotificationBulkScopeMapping.friendRequestId(from: payload), "fr1")
+    }
+
+    func test_friendRequestId_isNilForEveryOtherPredicate() {
+        XCTAssertNil(NotificationBulkScopeMapping.friendRequestId(from: NotificationBulkScopePayload(kind: "context", contextKey: "conversationId", contextValue: "c1")))
+        XCTAssertNil(NotificationBulkScopeMapping.friendRequestId(from: NotificationBulkScopePayload(kind: "context", contextKey: "friendRequestId", contextValue: "")))
+        XCTAssertNil(NotificationBulkScopeMapping.friendRequestId(from: NotificationBulkScopePayload(kind: "all")))
+    }
 }

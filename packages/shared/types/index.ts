@@ -46,9 +46,6 @@ export { gatewayToUIMessage, getDisplayContent, isTranslating, hasTranslation } 
 // Export des types unifiés Phase 2 - Messaging
 export * from './messaging.js';
 
-// Export des types unifiés Phase 3 - Affiliate
-export * from './affiliate.js';
-
 // Export des types unifiés Phase 4 - Tracking Links
 export * from './tracking-link.js';
 
@@ -103,13 +100,6 @@ export * from './lens-partner.js';
 // Export des types unifiés Phase 7 - Audio Effects Timeline
 export * from './audio-effects-timeline.js';
 
-// Export des types unifiés Phase 8 - Push Notifications
-export * from './push-notification.js';
-
-// NOTE: Les types de notifications sont dans /apps/web/types/notification.ts
-// Ils ne sont pas dans /shared car ils utilisent des types frontend spécifiques
-// Le backend doit importer NotificationType depuis le webapp si nécessaire
-
 // Export des types posts/stories/statuts
 export * from './post.js';
 
@@ -154,9 +144,6 @@ export * from './report.js';
 
 // Export des types encryption (E2EE / Signal Protocol)
 export * from './encryption.js';
-
-// Export des types admin (audit logs, analytics, etc.)
-export * from './admin.js';
 
 // Export des types de sécurité (sessions, tokens, events)
 export * from './security.js';
@@ -247,9 +234,6 @@ export type { NotificationContentDetail, NotificationContentCategory } from './n
 // Legacy aliases for backwards compatibility
 export type { Notification as PrismaNotification } from './notification.js';
 export type { NotificationType as PrismaNotificationType } from './notification.js';
-
-// Export des types de préférences utilisateur
-export * from './user-preferences.js';
 
 // Export des types Voice API
 export * from './voice-api.js';
@@ -801,6 +785,8 @@ export * from './conversation-bridge.js';
 export * from './contact-card.js';
 export * from './relation.js';
 export * from './relation-level-response.js';
+export * from './relation-circles-summary.js';
+export * from './story-highlight.js';
 export * from './bring.js';
 export * from './talkie.js';
 // Les schémas zod de l'écoute et de la position partagée ne passent pas par le
@@ -833,6 +819,45 @@ export type {
   BatteryPersonSettings,
   BatteryPersonSettingsUpdate,
 } from './battery.js';
+// Mon profil synchronisé entre mes appareils (#18924) : les types seuls, le schéma reste hors du baril.
+export type { OwnProfileField, OwnProfileSnapshot, ProfileUpdatedEventData } from './own-profile-sync.js';
+export {
+  INACTIVITY_DELAY_HOURS,
+  INACTIVITY_CHECK_CONFIG,
+  INACTIVITY_ANNOUNCEMENT_KINDS,
+  WELLNESS_CHECK_NOTIFICATION_TYPE,
+  INACTIVITY_ALERT_NOTIFICATION_TYPE,
+} from './inactivity-check.js';
+export type {
+  InactivityDelayHours,
+  InactivityCheckConfig,
+  InactivityAnnouncement,
+  InactivityAnnouncementKind,
+  InactivityAlertState,
+  InactivityAlertEventData,
+  InactivityClearedEventData,
+  InactivitySnapshot,
+  InactivityCheckSettings,
+  InactivityCheckSettingsUpdate,
+  InactivityCheckPersonSettings,
+  InactivityLastPosition,
+  InactivityLastBattery,
+  WellnessOkAck,
+} from './inactivity-check.js';
+export { PHONE_CALL_ANNOUNCEMENT_KINDS, PHONE_CALL_CONFIG } from './phone-call.js';
+export type {
+  PhoneCallAnnouncement,
+  PhoneCallAnnouncementKind,
+  PhoneCallConfig,
+  PhoneCallState,
+  PhoneCallStartedEventData,
+  PhoneCallEndedEventData,
+  PhoneCallSnapshot,
+  PhoneCallAck,
+  PhoneCallReport,
+  PhoneCallEmitterSettings,
+  PhoneCallPersonSettings,
+} from './phone-call.js';
 export * from './phone-reachability-constants.js';
 export type {
   PhoneReachabilityAnnouncement,
@@ -848,6 +873,7 @@ export type {
 } from './phone-reachability.js';
 export * from './shared-location-constants.js';
 export * from './blood-location.js';
+export * from './contact-exchange.js';
 export type {
   SharedLocationPosition,
   SharedLocationStartPayload,
@@ -858,6 +884,8 @@ export type {
   SharedLocationEndedEventData,
   SharedLocationSnapshot,
 } from './shared-location.js';
+// La fin d'un partage de position portée à l'appareil suspendu (#19463)
+export * from './shared-location-live-activity.js';
 
 // ===== LA CAPTURE D'UN CONTENU QUI DISPARAÎT (#9617) =====
 export * from './content-capture.js';

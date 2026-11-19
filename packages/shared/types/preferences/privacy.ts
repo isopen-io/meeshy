@@ -75,6 +75,10 @@ export const PrivacyPreferenceSchema = z.object({
   // lecture par `autoAcquaintanceEnabled` (`utils/auto-acquaintance-preference.ts`).
   // Un client ne l'envoie que si l'utilisateur l'a réglé.
   autoAcquaintance: z.boolean().optional(),
+  // « Montrer mes chiffres à mes Proches » (#19371) — messages et traductions sur
+  // ma fiche, vus du Proche et au-dessus. SANS défaut stocké : l'absence de choix
+  // se lit par `profileFiguresShared` (`utils/profile-figures.ts`).
+  showProfileFigures: z.boolean().optional(),
 
   // Encryption et sécurité
   encryptionPreference: z.enum(['disabled', 'optional', 'always']).default('optional'),

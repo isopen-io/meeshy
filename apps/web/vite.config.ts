@@ -11,6 +11,7 @@ import { INLINE_APP_SCHEME_BOOTSTRAP } from './src/lib/inline-scheme-bootstrap.j
 import { declaredBuildFlag } from './src/lib/build-flag.js';
 import { loadedPreloadDeps } from './src/lib/build-preload-deps.js';
 import { shellApiOrigin, withApiPreconnect } from './src/lib/net/shell-preconnect.js';
+import { withRuntimeConfigPrefetch } from './src/lib/api/runtime-config.js';
 import { dropServiceWorkerScripts, meeshyPwa } from './vite/pwa.js';
 
 /**
@@ -63,7 +64,7 @@ const inlineInterfaceLanguageBootstrap = (): Plugin => ({
 /**
  * La coque préconnecte sa passerelle dès le HTML (#10534) — voir
  * `src/lib/net/shell-preconnect.ts`. Le web n'en reçoit pas : son origine
- * n'est connue qu'à l'exécution (`/config.js`).
+ * n'est connue qu'à l'exécution (`/config.json`).
  */
 const shellApiPreconnect = (): Plugin => ({
   name: 'meeshy-shell-api-preconnect',
@@ -71,15 +72,13 @@ const shellApiPreconnect = (): Plugin => ({
 });
 
 /**
- * DEUX runtimes, UN code source.
- *
- * `MEESHY_RUNTIME=react` construit avec React 19 ; par defaut on construit avec
- * Preact via `preact/compat`. Le code applicatif est IDENTIQUE dans les deux
- * cas — c'est tout l'interet de compat, et c'est ce qui rend la comparaison de
- * poids honnete : le meme arbre, le meme Tailwind, le meme routeur, seul le
- * runtime change. Le POC mesure les deux (scripts/measure-weight.mjs).
+ * Le web nu précharge sa configuration de déploiement (#18988) — voir
+ * `src/lib/api/runtime-config.ts`. La coque ne la lit pas (`__RUNTIME_CONFIG__`).
  */
-const runtime = process.env.MEESHY_RUNTIME === 'react' ? 'react' : 'preact';
+const runtimeConfigPrefetch = (): Plugin => ({
+  name: 'meeshy-runtime-config-prefetch',
+  transformIndexHtml: (html) => withRuntimeConfigPrefetch(html),
+});
 
 /**
  * Forme TABLEAU avec motifs ancres, et non objet.
@@ -90,9 +89,7 @@ const runtime = process.env.MEESHY_RUNTIME === 'react' ? 'react' : 'preact';
  * n'attrapent que le specificateur exact.
  */
 const aliasPreact = [
-  // `react` pointe le SHIM, pas compat directement : voir src/lib/react-shim.js
-  // (TanStack Router lit `React.use`, que compat n'expose pas).
-  { find: /^react$/, replacement: fileURLToPath(new URL('./src/lib/react-shim.js', import.meta.url)) },
+  { find: /^react$/, replacement: 'preact/compat' },
   { find: /^react-dom$/, replacement: 'preact/compat' },
   { find: /^react-dom\/client$/, replacement: 'preact/compat/client' },
   { find: /^react\/jsx-runtime$/, replacement: 'preact/jsx-runtime' },
@@ -118,8 +115,8 @@ const forCapacitor = process.env.MEESHY_TARGET === 'capacitor';
  * normal il vaut `0`, la branche qui rembourre la fixture devient
  * `if (0 > 0)`, et rolldown l'élimine : le coût est nul, et le gate de poids
  * le prouve plutôt que ce commentaire. `MEESHY_BENCH=500 bun run build` produit
- * la variante que le témoin mesure — même mécanique que `MEESHY_RUNTIME` et
- * `MEESHY_TARGET`, déjà en place.
+ * la variante que le témoin mesure — même mécanique que `MEESHY_TARGET`,
+ * déjà en place.
  */
 const bench = Number.parseInt(process.env.MEESHY_BENCH ?? '0', 10) || 0;
 
@@ -323,7 +320,7 @@ const dropWebOnlyAssets = (): Plugin => ({
 });
 
 /**
- * LES SIX FABRIQUES DE FIXTURES — nommées ICI, lues par la règle d'élagage
+ * LES FABRIQUES DE FIXTURES (`src/lib/api/fixtures*.ts`) — nommées ICI, lues par la règle d'élagage
  * (§ `build.rollupOptions.treeshake`, revue #5815).
  */
 const FIXTURE_MODULE = /\/src\/lib\/api\/fixtures[\w-]*\.ts$/;
@@ -438,6 +435,8 @@ export default defineConfig({
   define: {
     __BENCH__: JSON.stringify(bench),
     __SHELL__: JSON.stringify(forCapacitor),
+    /* #18988 — le web nu lit `/config.json` au démarrage ; la coque, jamais. */
+    __RUNTIME_CONFIG__: JSON.stringify(!forCapacitor),
     /**
      * `__FIXTURES__` — LE JEU DE FIXTURES EST-IL LIÉ DANS CE BUNDLE ?
      * (revue #5815). Littéral, jamais une valeur d'exécution : c'est la
@@ -521,7 +520,7 @@ export default defineConfig({
   },
   resolve: {
     alias: [
-      ...(runtime === 'preact' ? aliasPreact : []),
+      ...aliasPreact,
       { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
     ],
   },
@@ -533,6 +532,7 @@ export default defineConfig({
     inlineInterfaceLanguageBootstrap(),
     prerenderInstitutionalPages(),
     ...(forCapacitor ? [] : [prerenderLanding()]),
+    ...(forCapacitor ? [] : [runtimeConfigPrefetch()]),
     ...(forCapacitor ? [dropServiceWorkerScripts(), dropWebOnlyAssets(), shellApiPreconnect()] : []),
     /**
      * VARIANTE A (PWA). Desactivee sous Capacitor : la coque native gere
@@ -555,7 +555,7 @@ export default defineConfig({
     reportCompressedSize: true,
     rollupOptions: {
       /**
-       * LES SIX FABRIQUES DE FIXTURES N'ONT AUCUN EFFET DE BORD (revue #5815).
+       * LES FABRIQUES DE FIXTURES N'ONT AUCUN EFFET DE BORD (revue #5815).
        *
        * `__FIXTURES__` (§ `define`) rend leurs exports NON RÉFÉRENCÉS sous
        * `VITE_DATA_SOURCE=gateway` — mesuré : `CONVERSATIONS` (« Voyage
@@ -750,6 +750,9 @@ export default defineConfig({
            * mode Effets l'en important statiquement (`call_overlay.dynamic_only`).
            */
           if (/\/lib\/calls\/call-speaking\.ts$/.test(id)) return 'call-speaking';
+          /* #19696 : la bulle n'importe plus les glyphes d'appel ; sans ce nom, Rollup les fond dans `call_overlay`, que la
+             pastille, la grille, le cadre en direct et l'écran zoomé importeraient alors STATIQUEMENT. Un chunk à eux. */
+          if (/\/components\/glyphs-call-(screen|view|devices)\.ts$/.test(id)) return 'call-glyphs';
           /**
            * LE (i) DES NOTES (#17587) — `info-hint.tsx` sert les écrans d'entrée ET les réglages : seul, il devenait un
            * chunk de plus, et chaque écran qui le cite allongeait la table de préchargement du socle (première peinture

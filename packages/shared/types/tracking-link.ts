@@ -33,7 +33,16 @@ export interface TrackingLink {
   readonly createdAt: Date;
   readonly updatedAt: Date;
   readonly lastClickedAt?: Date; // Date du dernier clic
+  readonly targetType?: TrackingTargetType; // Ce que le lien vise (#19412)
+  readonly targetId?: string | null; // L'élément visé, nul pour une adresse externe
+  readonly addressId?: string | null; // L'adresse de fiche qu'il suit (#18863)
+  readonly countUnique?: boolean | null; // Compter les visiteurs uniques — absent/null = vrai (#19418)
 }
+
+/**
+ * Ce qu'un lien de suivi vise — miroir de l'enum Prisma `TrackingTargetType`.
+ */
+export type TrackingTargetType = 'POST' | 'REEL' | 'STORY' | 'STATUS' | 'CONVERSATION' | 'PROFILE' | 'EXTERNAL';
 
 /**
  * Clic sur un lien de tracking
@@ -105,56 +114,11 @@ export interface CreateTrackingLinkResponseData {
 }
 
 /**
- * Réponse de création d'un lien de tracking
- */
-export interface CreateTrackingLinkResponse {
-  readonly success: boolean;
-  readonly data?: CreateTrackingLinkResponseData;
-  readonly error?: string;
-}
-
-/**
- * Requête de récupération d'un lien de tracking
- */
-export interface GetTrackingLinkRequest {
-  readonly token: string;
-}
-
-/**
  * Données de réponse pour la récupération d'un lien de tracking
  */
 export interface GetTrackingLinkResponseData {
   readonly trackingLink: TrackingLink;
   readonly clicks?: readonly TrackingLinkClick[];
-}
-
-/**
- * Réponse de récupération d'un lien de tracking
- */
-export interface GetTrackingLinkResponse {
-  readonly success: boolean;
-  readonly data?: GetTrackingLinkResponseData;
-  readonly error?: string;
-}
-
-/**
- * Requête d'enregistrement d'un clic
- */
-export interface RecordClickRequest {
-  readonly token: string;
-  readonly userId?: string;
-  readonly participantId?: string;
-  readonly ipAddress?: string;
-  readonly country?: string;
-  readonly city?: string;
-  readonly region?: string;
-  readonly userAgent?: string;
-  readonly browser?: string;
-  readonly os?: string;
-  readonly device?: DeviceType;
-  readonly language?: string;
-  readonly referrer?: string;
-  readonly deviceFingerprint?: string;
 }
 
 /**
@@ -167,28 +131,20 @@ export interface RecordClickResponseData {
 }
 
 /**
- * Réponse d'enregistrement d'un clic
- */
-export interface RecordClickResponse {
-  readonly success: boolean;
-  readonly data?: RecordClickResponseData;
-  readonly error?: string;
-}
-
-/**
- * Requête de statistiques d'un lien de tracking
- */
-export interface TrackingLinkStatsRequest {
-  readonly token: string;
-  readonly startDate?: Date;
-  readonly endDate?: Date;
-}
-
-/**
  * Référant principal
  */
 export interface TopReferrer {
   readonly referrer: string;
+  readonly count: number;
+}
+
+/**
+ * Un lieu de visiteurs (#19412) : agrégat seul. Une ville sous le plancher de
+ * k-anonymat se replie dans son pays (`city: null`).
+ */
+export interface TrackingLinkClickPlace {
+  readonly country: string; // ISO 3166-1 alpha-2
+  readonly city: string | null;
   readonly count: number;
 }
 
@@ -209,15 +165,8 @@ export interface TrackingLinkStatsResponseData {
   readonly clicksByDate: Readonly<Record<string, number>>;
   readonly topReferrers: readonly TopReferrer[];
   readonly confirmedClicks: number;
-}
-
-/**
- * Réponse de statistiques d'un lien de tracking
- */
-export interface TrackingLinkStatsResponse {
-  readonly success: boolean;
-  readonly data?: TrackingLinkStatsResponseData;
-  readonly error?: string;
+  readonly countryCount?: number;
+  readonly clicksByPlace?: readonly TrackingLinkClickPlace[];
 }
 
 // ============================================================================
@@ -228,25 +177,6 @@ export interface TrackingLinkStatsResponse {
  * Types de contenu dans un message parsé
  */
 export type ParsedMessageType = 'text' | 'link' | 'tracking-link';
-
-/**
- * Message parsé avec détection de liens
- */
-export interface ParsedMessage {
-  readonly text: string;
-  readonly type: ParsedMessageType;
-  readonly originalUrl?: string;
-  readonly trackingUrl?: string;
-  readonly token?: string;
-}
-
-/**
- * Options pour le parsing de liens
- */
-export interface LinkParserOptions {
-  readonly createTrackingLinks?: boolean; // Créer automatiquement des liens de tracking
-  readonly domain?: string; // Domaine pour les liens courts (par défaut: meeshy.me)
-}
 
 // ============================================================================
 // Constantes

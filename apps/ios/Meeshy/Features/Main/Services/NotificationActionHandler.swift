@@ -64,6 +64,10 @@ final class NotificationActionHandler: NotificationActionHandling {
     /// #12655 — une réponse refusée sous PIN le dit, hors de l'app.
     private let notifyRefusedReply: @MainActor (String?) -> Void
     private let stopBring: @MainActor (String) async -> Void
+    /// #18738 — « Je vais bien » : l'action de « Tout va bien ? », ou le toucher de la bannière.
+    private let answerWellness: @MainActor () async -> Void
+    private let markReadThroughStore: @MainActor (String) async -> Bool
+    let recordPendingRevocations: @MainActor ([String]) -> Void
     /// L'unique consommation du SDK, injectée pour que les tests l'observent :
     /// `NotificationToastManager` est un singleton `@MainActor` sans couture de
     /// service, et un témoin ne peut pas mesurer un aller-retour REST réel.
@@ -125,9 +129,7 @@ final class NotificationActionHandler: NotificationActionHandling {
         backgroundTasks: BackgroundTaskScheduling = UIApplicationBackgroundTaskScheduler(),
         authTokenProvider: @escaping @MainActor () -> String? = { AuthManager.shared.authToken },
         applyAuthToken: @escaping @MainActor (String?) -> Void = { APIClient.shared.authToken = $0 },
-        currentUserId: @escaping @MainActor () -> String? = {
-            AuthManager.shared.currentUser?.id ?? AuthManager.shared.persistedActiveUserId
-        },
+        currentUserId: @escaping @MainActor () -> String? = { PushTapAddressee.currentUserId() },
         preferredLanguage: @escaping @MainActor () -> String? = {
             // Défaut de COMPOSITION (langue proposée, repli « fr ») — pas une lecture (#11875).
             AuthManager.shared.currentUser?.preferredContentLanguages.first
@@ -139,7 +141,9 @@ final class NotificationActionHandler: NotificationActionHandling {
         openNotification: @escaping @MainActor ([AnyHashable: Any]) -> Void = {
             // iPad, fenêtre détachée devant : la cible s'ouvre dans la fenêtre principale — qui revient d'abord.
             MainWindowRegistry.shared.bringPrimaryForwardIfHidden()
-            PushNotificationManager.shared.handleNotification(userInfo: $0)
+            PushTapAddressee.publishTap($0, currentUserId: PushTapAddressee.currentUserId()) { userInfo, addressee in
+                PushNotificationManager.shared.handleNotification(userInfo: userInfo, addressedTo: addressee)
+            }
         },
         dialCallBack: @escaping @MainActor (CallBackRequest) -> Void = { request in
             CallBackDialer.shared.dial(request)
@@ -189,9 +193,20 @@ final class NotificationActionHandler: NotificationActionHandling {
         endToEnd: any EndToEndMessagingProviding = EndToEndMessagingRuntime.shared,
         repliesAwaitingRegime: any NotificationRepliesAwaitingRegimeStoring = NotificationRepliesAwaitingRegime.shared,
         awaitingReplyRules: NotificationReplyRegimeWait.Rules = .live,
-        stopBring: @escaping @MainActor (String) async -> Void = { await BringCenter.shared.stopAndWait(bringId: $0) }
+        stopBring: @escaping @MainActor (String) async -> Void = { await BringCenter.shared.stopAndWait(bringId: $0) },
+        answerWellness: @escaping @MainActor () async -> Void = { _ = await InactivityCheckCenter.shared.answerWellness() },
+        markReadThroughStore: @escaping @MainActor (String) async -> Bool = {
+            await ConversationStore.shared.markReadDurably($0)
+        },
+        // ios-systeme-7 — l'inscription que l'extension relit avant de livrer.
+        recordPendingRevocations: @escaping @MainActor ([String]) -> Void = {
+            PendingBannerRevocations.inAppGroup().record($0, now: Date())
+        }
     ) {
+        self.markReadThroughStore = markReadThroughStore
+        self.recordPendingRevocations = recordPendingRevocations
         self.stopBring = stopBring
+        self.answerWellness = answerWellness
         self.repliesAwaitingRegime = repliesAwaitingRegime
         self.awaitingReplyRules = awaitingReplyRules
         self.destinationGuard = destinationGuard
@@ -250,9 +265,7 @@ final class NotificationActionHandler: NotificationActionHandling {
 
         switch actionIdentifier {
         case UNNotificationDefaultActionIdentifier:
-            // #6999 — OUVRIR, c'est CONSOMMER ; la navigation d'ABORD, la consommation attend le `markAsRead` REST.
-            openNotification(userInfo)
-            await consumeTapped(payload)
+            await handleDefaultTap(payload, userInfo: userInfo)
 
         case UNNotificationDismissActionIdentifier:
             break
@@ -296,6 +309,9 @@ final class NotificationActionHandler: NotificationActionHandling {
         case MeeshyNotificationAction.stopBring.rawValue:
             await handleStopBring(userInfo)
 
+        case MeeshyNotificationAction.wellnessOk.rawValue:
+            await handleWellnessOk(payload)
+
         case MeeshyNotificationAction.declineCall.rawValue:
             // Silent decline — no navigation. The VoIP layer handles the
             // actual decline via CallKit; APNs declineCall is just
@@ -312,6 +328,22 @@ final class NotificationActionHandler: NotificationActionHandling {
     private func handleStopBring(_ userInfo: [AnyHashable: Any]) async {
         guard let bringId = userInfo["bringId"] as? String, !bringId.isEmpty else { return }
         await stopBring(bringId)
+    }
+
+    /// #6999 — OUVRIR, c'est CONSOMMER ; la navigation d'ABORD, la consommation attend le `markAsRead` REST. Toucher
+    /// « Tout va bien ? » (#18738), c'est déjà répondre « Je vais bien ».
+    private func handleDefaultTap(_ payload: NotificationPayload, userInfo: [AnyHashable: Any]) async {
+        openNotification(userInfo)
+        if userInfo["type"] as? String == InactivityCheckContract.wellnessCheckNotificationType {
+            await answerWellness()
+        }
+        await consumeTapped(payload)
+    }
+
+    /// #18738 — « Je vais bien » depuis la bannière : la réponse part, l'app ne s'ouvre pas.
+    private func handleWellnessOk(_ payload: NotificationPayload) async {
+        await answerWellness()
+        await consumeTapped(payload)
     }
 
     // MARK: - Conversation verrouillée par PIN (#12655)
@@ -406,10 +438,14 @@ final class NotificationActionHandler: NotificationActionHandling {
     private func handleMarkRead(_ payload: NotificationPayload) async {
         guard let conversationId = payload.conversationId else { return }
         localMarkRead(conversationId)
-        do {
-            try await conversationService.markRead(conversationId: conversationId)
-        } catch {
-            logger.error("markRead REST failed for \(conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        // ios-systeme-4 — le store porte l'envoi dans sa file persistante (rejeu au retour du
+        // réseau) ; le POST direct n'est que le repli d'une conversation que le store ne connaît pas.
+        if !(await markReadThroughStore(conversationId)) {
+            do {
+                try await conversationService.markRead(conversationId: conversationId)
+            } catch {
+                logger.error("markRead REST failed for \(conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
         }
         removeDeliveredForConversation(conversationId)
     }

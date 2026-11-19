@@ -4,7 +4,7 @@ import MeeshySDK
 /// **Une vidéo éditée REMPLACE la pièce jointe en attente** (#8443, #8523).
 ///
 /// Le composeur d'un message et la citation d'un post ouvraient tous deux
-/// `MeeshyVideoEditorView` puis jetaient son résultat : l'auteur rognait sa
+/// l'ancien éditeur vidéo puis jetaient son résultat : l'auteur rognait sa
 /// vidéo, validait, et c'était l'originale qui partait — un contrôle qui ment
 /// (loi 4). Même contrat que l'audio (`applyEditedAudio`) : remplacement par
 /// id, jamais un second chip ; `didEdit == false` ne change rien. La retouche

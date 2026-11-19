@@ -16,7 +16,7 @@ import Foundation
 /// plus ancien au-delà du cap — l'évincé est RETOURNÉ à l'appelant (seam de
 /// la purge différée des bitmaps orphelins, piège Inc.3 du plan).
 ///
-/// Struct pure `nonisolated` (parité BandStateMachine) : testable hors main
+/// Struct pure `nonisolated` (parité `StoryCanvasFraming`) : testable hors main
 /// actor, aucune dépendance produit.
 public nonisolated struct HistoryStore<S: Equatable & Sendable>: Sendable {
 

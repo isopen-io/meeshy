@@ -46,7 +46,10 @@ extension MeeshyUser {
             profileCompletionRate: profileCompletionRate,
             signalIdentityKeyPublic: signalIdentityKeyPublic,
             activation: activation,
-            profileDecor: profileDecor
+            profileDecor: profileDecor,
+            addresses: addresses,
+            city: city, cityCircle: cityCircle,
+            profileAccentColor: profileAccentColor
         )
     }
 
@@ -77,7 +80,10 @@ extension MeeshyUser {
             profileCompletionRate: profileCompletionRate,
             signalIdentityKeyPublic: signalIdentityKeyPublic,
             activation: activation,
-            profileDecor: profileDecor
+            profileDecor: profileDecor,
+            addresses: addresses,
+            city: city, cityCircle: cityCircle,
+            profileAccentColor: profileAccentColor
         )
     }
 }

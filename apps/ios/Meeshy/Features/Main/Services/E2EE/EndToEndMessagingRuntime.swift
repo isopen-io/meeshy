@@ -36,6 +36,10 @@ nonisolated protocol EndToEndMessagingProviding: Sendable {
     /// Les messages dont le coffre de `account` tient le clair ; `nil` si ce
     /// coffre n'est pas le sien.
     func storedMessageIds(as account: String) async -> [String]?
+    /// Quand CET appareil, dans sa génération actuelle, a été enrôlé pour
+    /// `account` (R-3) : un message antérieur n'a aucune enveloppe pour lui.
+    /// `nil` quand le coffre ne le sait pas, ou n'est pas celui de ce compte.
+    func enrolledAt(as account: String) async -> Date?
     /// Chaque enveloppe ouverte, par la socket ou le rattrapage.
     var opened: AnyPublisher<E2EEOpenOutcome, Never> { get }
     /// Le compte de chaque session qui s'ouvre (`nil` à la fermeture) : ce qui
@@ -291,6 +295,11 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
         return ids
     }
 
+    func enrolledAt(as account: String) async -> Date? {
+        guard let owner = session.account, owner == account else { return nil }
+        return try? provisioning.plaintexts(owner: owner).enrolledAt()
+    }
+
     /// Une enveloppe poussée par la socket de cet appareil.
     func receive(_ envelope: E2EEServedEnvelope, as userId: String) async {
         guard let device = try? await ready(for: userId) else { return }
@@ -327,6 +336,8 @@ actor EndToEndMessagingRuntime: EndToEndMessagingProviding, EndToEndDeviceManagi
             Logger.e2ee.info("e2ee envelope opened message=\(message.messageId, privacy: .public)")
         case .undecryptable(let messageId, _):
             Logger.e2ee.warning("e2ee envelope undecryptable message=\(messageId, privacy: .public)")
+        case .awaitingUpgrade(let messageId, _):
+            Logger.e2ee.warning("e2ee envelope kept for a newer version message=\(messageId, privacy: .public)")
         case .notForThisDevice(let envelopeId):
             Logger.e2ee.info("e2ee envelope for another device id=\(envelopeId, privacy: .public)")
         case .deferred(let envelopeId):

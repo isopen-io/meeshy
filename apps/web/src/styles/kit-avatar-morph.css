@@ -1,0 +1,55 @@
+/* L'AVATAR QUI VOYAGE (K29, #18877) — un cadre rond, deux emplacements autour. Le voyage est
+   une transition de vue nommée le temps du trajet (`view-transition-name` posé par la portée) ;
+   le calque de vol porte l'ombre. Sans transition de vue, sous mouvement réduit ou hors portée :
+   fondu enchaîné sur place. Seules `transform` et `opacity` s'animent. */
+@layer components {
+  .kit-morph {
+    position: relative;
+    display: inline-block;
+    flex: none;
+    inline-size: var(--kit-morph-size);
+    block-size: var(--kit-morph-size);
+    contain: layout;
+  }
+
+  .kit-morph__content {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    border-radius: 999px;
+    overflow: hidden;
+  }
+
+  .kit-morph__ring {
+    position: absolute;
+    inset: calc(-1 * var(--kit-morph-ring));
+    pointer-events: none;
+  }
+
+  .kit-morph__badge {
+    position: absolute;
+    inset-block-end: 0;
+    inset-inline-end: 0;
+    min-inline-size: var(--kit-morph-badge);
+    min-block-size: var(--kit-morph-badge);
+  }
+
+  .kit-morph[data-mode='driven'] .kit-morph__content {
+    transform: scale(calc(1 - var(--kit-morph-progress, 0) * 0.5));
+  }
+}
+
+::view-transition-group(*.kit-morph) {
+  animation-duration: var(--motion-travel-duration, 560ms);
+  animation-timing-function: var(--motion-travel, ease-out);
+}
+
+::view-transition-image-pair(*.kit-morph) {
+  filter: drop-shadow(0 0.75rem 1rem rgb(0 0 0 / 0.4));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*.kit-morph) {
+    animation-duration: 160ms;
+  }
+}

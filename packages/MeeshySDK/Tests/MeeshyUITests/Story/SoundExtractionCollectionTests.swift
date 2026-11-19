@@ -16,70 +16,7 @@ import MeeshySDK
 @MainActor
 final class SoundExtractionCollectionTests: XCTestCase {
 
-    // MARK: - MediaAccessibilityStore
-
-    /// `test_allowsSoundExtraction_defaultsToTrue` rougit si l'interrupteur
-    /// affiche un refus que la passerelle n'applique pas : l'absence de choix
-    /// vaut accord (#8012), seul un refus explicite retient la bande-son.
-    func test_allowsSoundExtraction_defaultsToTrue() {
-        let store = MediaAccessibilityStore()
-        XCTAssertTrue(store.allowsSoundExtraction())
-        XCTAssertNil(store.draftSnapshot().allowSoundExtraction)
-    }
-
-    /// `test_setAllowsSoundExtraction_roundTrips` rougit si
-    /// `setAllowsSoundExtraction(_:)` cesse d'écrire l'override.
-    func test_setAllowsSoundExtraction_roundTrips() {
-        let store = MediaAccessibilityStore()
-        store.setAllowsSoundExtraction(true)
-        XCTAssertTrue(store.allowsSoundExtraction())
-
-        store.setAllowsSoundExtraction(false)
-        XCTAssertFalse(store.allowsSoundExtraction())
-    }
-
-    /// `test_soundChoice_isNilUntouched` rougit si le
-    /// payload renvoie `false` au lieu de `nil` tant que l'auteur n'a jamais
-    /// touché l'interrupteur — un update partiel ne doit jamais écraser un
-    /// `true` serveur existant avec un `false` que personne n'a choisi.
-    func test_soundChoice_isNilUntouched() {
-        let store = MediaAccessibilityStore()
-        XCTAssertNil(store.draftSnapshot().allowSoundExtraction)
-    }
-
-    /// `test_soundChoice_reflectsExplicitChoice` rougit si
-    /// le payload ne reflète pas le dernier choix explicite de l'auteur.
-    func test_soundChoice_reflectsExplicitChoice() {
-        let store = MediaAccessibilityStore()
-        store.setAllowsSoundExtraction(true)
-        XCTAssertEqual(store.draftSnapshot().allowSoundExtraction, true)
-    }
-
-    /// `test_removingOneMedia_leavesSoundExtractionChoiceIntact` rougit si
-    /// `remove(mediaId:)` se met à réinitialiser le choix composer-wide —
-    /// supprimer UNE vidéo ne doit pas effacer un choix qui vaut pour tout
-    /// le post, tant qu'une autre vidéo peut rester dans la composition.
-    func test_removingOneMedia_leavesSoundExtractionChoiceIntact() {
-        let store = MediaAccessibilityStore()
-        store.setAllowsSoundExtraction(false)
-        store.remove(mediaId: "media-1")
-        XCTAssertFalse(store.allowsSoundExtraction())
-    }
-
     // MARK: - Gardes de source
-
-    /// `test_toggle_describesConsequenceNotFieldName` rougit si le libellé
-    /// ou la légende de `SoundExtractionToggle` se réduisent au nom du champ
-    /// technique (`allowSoundExtraction`) au lieu de dire ce qui se passe si
-    /// on l'active — consigne explicite du lot : « le libellé doit dire ce
-    /// qui se passe si on l'active, pas nommer un champ technique ».
-    func test_toggle_describesConsequenceNotFieldName() throws {
-        let code = try ComposerSourceGuard.source("Controls/SoundExtractionToggle.swift")
-        XCTAssertFalse(code.contains("\"allowSoundExtraction\""),
-                       "Le libellé visible ne doit jamais nommer le champ technique.")
-        XCTAssertTrue(code.contains("story.media.soundExtraction.caption"),
-                      "Une légende doit expliquer la conséquence de l'activation.")
-    }
 
     /// Espaces normalisés — cf. `MediaAltCollectionTests.collapsed` : une garde
     /// ancrée sur un littéral multi-lignes tombe au premier retour à la ligne.
@@ -88,21 +25,6 @@ final class SoundExtractionCollectionTests: XCTestCase {
     }
 
     // MARK: - Le défaut AFFICHÉ est celui que la passerelle APPLIQUE (#8012)
-
-    /// `test_store_defaultMirrorsTheGateway` rougit si le repli du store
-    /// redevient `?? false` : la passerelle lit l'absence de choix comme un
-    /// accord (`videoSoundExtractionAllowed`, directive porteur 2026-09-26),
-    /// donc un interrupteur éteint par défaut MENTIRAIT sur ce qui sera publié.
-    /// Le test de comportement voisin (`test_allowsSoundExtraction_defaultsToTrue`)
-    /// prouve le résultat ; cette garde nomme le MÉCANISME.
-    func test_store_defaultMirrorsTheGateway() throws {
-        let code = try ComposerSourceGuard.source("Controls/MediaAccessibilityStore.swift")
-        let flat = collapsed(code)
-        XCTAssertTrue(flat.contains("allowSoundExtractionOverride ?? true"),
-                      "Le repli du store doit afficher l'accord que la passerelle applique.")
-        XCTAssertFalse(flat.contains("allowSoundExtractionOverride ?? false"),
-                       "Un repli au refus afficherait un état que la publication ne suit pas.")
-    }
 
     // MARK: - La chaîne ATTEINT le point de publication (C-bis, correctif 3)
 
@@ -134,57 +56,5 @@ final class SoundExtractionCollectionTests: XCTestCase {
         XCTAssertNil(json["allowSoundExtraction"])
     }
 
-    /// `test_mediaAccessibilityPanel_hasNoPerMediaSoundToggle` rougit si un
-    /// futur changement réintroduit `SoundExtractionToggle` DANS le panneau
-    /// par-média — le flag n'a qu'un seul foyer légitime (`mediaPanel`),
-    /// jamais un par row.
-    func test_mediaAccessibilityPanel_hasNoPerMediaSoundToggle() throws {
-        let code = try ComposerSourceGuard.source("Controls/MediaAccessibilityPanel.swift")
-        XCTAssertFalse(code.contains("SoundExtractionToggle("),
-                       "Le panneau par-média ne doit pas dupliquer l'interrupteur composer-wide.")
-    }
-
     // MARK: - F2 — le choix SURVIT à la fermeture du composer
-
-    /// `test_draftSnapshot_carriesTheExplicitChoice` rougit si l'instantané
-    /// persisté par le brouillon cesse de porter le choix de l'auteur :
-    /// l'interrupteur redemanderait, à chaque reprise, une décision déjà prise.
-    func test_draftSnapshot_carriesTheExplicitChoice() {
-        let store = MediaAccessibilityStore()
-        store.setAllowsSoundExtraction(true)
-
-        XCTAssertEqual(store.draftSnapshot().allowSoundExtraction, true)
-    }
-
-    /// `test_draftSnapshot_staysSilentOnAnUntouchedSwitch` rougit si un
-    /// interrupteur jamais touché se met à persister `false` : la reprise
-    /// rendrait alors un refus EXPLICITE là où l'auteur n'avait rien décidé,
-    /// et le transport écraserait le défaut serveur au lieu de le laisser.
-    func test_draftSnapshot_staysSilentOnAnUntouchedSwitch() {
-        XCTAssertNil(MediaAccessibilityStore().draftSnapshot().allowSoundExtraction)
-    }
-
-    /// `test_restore_reposesTheExplicitChoice` rougit si adopter un brouillon
-    /// ne repose pas l'interrupteur dans le store vivant.
-    func test_restore_reposesTheExplicitChoice() {
-        let store = MediaAccessibilityStore()
-
-        store.restore(from: StoryDraftAccessibility(allowSoundExtraction: true))
-
-        XCTAssertTrue(store.allowsSoundExtraction())
-    }
-
-    /// `test_restore_ofADraftWithoutAChoice_keepsTheDefault` rougit si la
-    /// reprise d'un brouillon muet fabriquait un choix : le défaut du store est
-    /// l'accord, mais c'est un défaut, pas une décision de l'auteur — le
-    /// payload doit rester silencieux.
-    func test_restore_ofADraftWithoutAChoice_keepsTheDefault() {
-        let store = MediaAccessibilityStore()
-        store.setAllowsSoundExtraction(false)
-
-        store.restore(from: .empty)
-
-        XCTAssertTrue(store.allowsSoundExtraction())
-        XCTAssertNil(store.draftSnapshot().allowSoundExtraction)
-    }
 }

@@ -12,7 +12,6 @@
     <string name="feed_action_repost">إعادة نشر</string>
     <string name="feed_action_send">إرسال</string>
     <string name="feed_action_share">مشاركة</string>
-    <string name="feed_action_view_profile">عرض الملف الشخصي</string>
     <string name="feed_caption_collapse">أقل</string>
     <string name="feed_caption_expand">المزيد…</string>
     <string name="feed_carousel_a11y_position">الوسائط %1$d من %2$d</string>
@@ -83,17 +82,8 @@
         <item quantity="many">%1$d إعجابًا</item>
         <item quantity="other">%1$d إعجاب</item>
     </plurals>
-    <plurals name="feed_post_stat_replies">
-        <item quantity="zero">لا توجد ردود</item>
-        <item quantity="one">رد واحد</item>
-        <item quantity="two">ردان</item>
-        <item quantity="few">%1$d ردود</item>
-        <item quantity="many">%1$d ردًا</item>
-        <item quantity="other">%1$d رد</item>
-    </plurals>
     <string name="feed_post_stat_saves">%1$d عملية حفظ</string>
     <string name="feed_post_stat_shares">%1$d مشاركة</string>
-    <string name="feed_quote_cancel">إلغاء</string>
     <string name="feed_quote_submit">إعادة نشر</string>
     <string name="feed_reel">ريل</string>
     <string name="feed_reel_card_a11y">ريل من %1$s</string>
@@ -101,7 +91,7 @@
     <string name="feed_reel_republished_by">أعاد نشره %1$s</string>
     <string name="feed_reel_views">المشاهدات</string>
     <string name="feed_report_reason_harassment">تحرّش</string>
-    <string name="feed_report_reason_hate_speech">خطاب كراهية</string>
+    <string name="feed_report_reason_hate_speech">كراهية</string>
     <string name="feed_report_reason_impersonation">انتحال الهوية</string>
     <string name="feed_report_reason_inappropriate">محتوى غير لائق</string>
     <string name="feed_report_reason_other">أخرى</string>
@@ -199,9 +189,7 @@
     <string name="post_comments_reply_badge">رد</string>
     <string name="post_comments_reply_error">تعذّر إرسال الرد</string>
     <string name="post_comments_replying_to">ردًا على %1$s</string>
-    <string name="post_comments_send">إرسال</string>
     <string name="post_comments_send_error">تعذّر إرسال التعليق</string>
-    <string name="post_comments_sending">جارٍ الإرسال…</string>
     <string name="post_comments_title">التعليقات</string>
     <plurals name="post_comments_view_replies">
         <item quantity="zero">عرض لا ردود</item>
@@ -237,7 +225,6 @@
     <string name="status_composer_mood_question">كيف تشعر؟</string>
     <string name="status_composer_publish">نشر</string>
     <string name="status_composer_publish_disabled_hint">اختر رمزًا تعبيريًا لنشر حالتك</string>
-    <string name="status_composer_title">الحالة</string>
     <string name="status_composer_visibility_community">المجتمعات</string>
     <string name="status_composer_visibility_friends">الأصدقاء</string>
     <string name="status_composer_visibility_private">خاص</string>

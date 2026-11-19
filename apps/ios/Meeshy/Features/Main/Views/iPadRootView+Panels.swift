@@ -261,8 +261,7 @@ struct iPadPanelDestination: View {
         case .userStats:
             UserStatsView()
                                 .navigationBarHidden(true)
-        // L'ancien tableau de bord (#9564, amendement n° 4) ouvre la première page, une version durant.
-        case .progression, .progressionDashboard:
+        case .progression:
             ProgressionView()
                                 .navigationBarHidden(true)
         case .progressionSection(let section):
@@ -280,20 +279,8 @@ struct iPadPanelDestination: View {
         case .progressionConcept(let concept, let section):
             ProgressionConceptPage(concept: concept, section: section)
                 .navigationBarHidden(true)
-        case .links:
-            LinksHubView()
-                        case .affiliate:
-            AffiliateView()
-                                .navigationBarHidden(true)
-        case .trackingLinks:
-            TrackingLinksView()
-                                .navigationBarHidden(true)
-        case .shareLinks:
-            ShareLinksView()
-                                .navigationBarHidden(true)
-        case .communityLinks:
-            CommunityLinksView()
-                                .navigationBarHidden(true)
+        case .links, .affiliate, .trackingLinks, .shareLinks, .communityLinks, .myAddresses:
+            LinksRouteDestination(route: route)
         case .dataExport:
             DataExportView()
                                 .navigationBarHidden(true)
@@ -330,101 +317,6 @@ struct iPadPanelDestination: View {
         case .moodSpotlight(let statusId):
             MoodSpotlightView(statusId: statusId)
         }
-    }
-}
-
-struct iPadLeftColumnHeader: View {
-    let title: String
-    var showFeedButton: Bool = false
-    var onFeedTap: (() -> Void)?
-    var notificationCount: Int = 0
-    var onNotificationsTap: (() -> Void)?
-    var onSettingsTap: (() -> Void)?
-
-    private var theme: ThemeManager { ThemeManager.shared }
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
-
-    var body: some View {
-        HStack(spacing: MeeshySpacing.md) {
-            if showFeedButton {
-                Button {
-                    HapticFeedback.light()
-                    onFeedTap?()
-                } label: {
-                    HStack(spacing: MeeshySpacing.xsPlus) {
-                        Image(systemName: "square.stack.fill")
-                            .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
-                        Text(String(localized: "root.ipad.feed", defaultValue: "Flux", bundle: .main))
-                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                    }
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .padding(.horizontal, MeeshySpacing.md)
-                    .padding(.vertical, MeeshySpacing.xsPlus)
-                    .background(
-                        Capsule()
-                            .fill(MeeshyColors.indigo100.opacity(isDark ? 0.15 : 1))
-                    )
-                }
-            }
-
-            Text(title)
-                .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold))
-                .foregroundStyle(theme.textPrimary)
-                .accessibilityAddTraits(.isHeader)
-
-            Spacer()
-
-            if let onNotificationsTap {
-                Button {
-                    HapticFeedback.light()
-                    onNotificationsTap()
-                } label: {
-                    ZStack(alignment: .topTrailing) {
-                        Image(systemName: "bell.fill")
-                            .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
-                            .foregroundStyle(theme.textSecondary)
-
-                        if notificationCount > 0 {
-                            Text(NotificationBadge.displayed(notificationCount))
-                                // Doctrine 86i : le compteur reste figé face au Dynamic
-                                // Type, mais la pastille s'élargit — « 99+ » entier.
-                                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: NotificationBadge.fontWeight))
-                                .foregroundStyle(Color.white)
-                                .lineLimit(1)
-                                .padding(.horizontal, MeeshySpacing.xs)
-                                .frame(minWidth: 16, minHeight: 16)
-                                .background(Capsule().fill(MeeshyColors.error))
-                                .offset(x: 6, y: -6)
-                                .accessibilityHidden(true)
-                        }
-                    }
-                }
-                .accessibilityLabel(String(localized: "root.ipad.notifications", defaultValue: "Notifications", bundle: .main))
-                .accessibilityValue(notificationCount > 0 ? String(notificationCount) : "")
-            }
-
-            if let onSettingsTap {
-                Button {
-                    HapticFeedback.light()
-                    onSettingsTap()
-                } label: {
-                    Image(systemName: "gearshape.fill")
-                        .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
-                        .foregroundStyle(theme.textSecondary)
-                }
-                .accessibilityLabel(String(localized: "root.ipad.settings", defaultValue: "Paramètres", bundle: .main))
-            }
-        }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.vertical, MeeshySpacing.md)
-        .background(theme.backgroundPrimary.opacity(0.95))
     }
 }
 

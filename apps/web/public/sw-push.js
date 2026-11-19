@@ -93,7 +93,7 @@ const EPHEMERAL_ONLY_TYPES = [
 /** JUMEAU de `MOOD_TYPES` (#10813) : la nouvelle humeur d'un contact a sa page. */
 const MOOD_TYPES = ['friend_new_mood'];
 const REQUEST_TYPES = ['friend_request', 'contact_request'];
-const PROFILE_TYPES = ['contact_joined', 'contact_recently_active', 'device_battery', 'device_unreachable'];
+const PROFILE_TYPES = ['contact_joined', 'contact_recently_active', 'device_battery', 'device_unreachable', 'inactivity_alert'];
 /** JUMEAU de `MISSED_CALL_TYPES` (#9177) : repli d'un appel manqué sans `conversationId`. */
 const MISSED_CALL_TYPES = ['missed_call', 'CALL_MISSED', 'call_declined'];
 const PROGRESSION_TYPES = [
@@ -209,50 +209,48 @@ const CREDENTIAL_DB_VERSION = 1;
 const CREDENTIAL_STORE_NAME = 'credential';
 const CREDENTIAL_KEY = 'current';
 
-/**
- * Lit le crédential posé par la page — `null` si absent, IndexedDB
- * indisponible (portée privée, navigateur ancien) ou en échec : un accusé
- * manqué se rattrape à la reconnexion, EXACTEMENT le comportement PRÉCÉDENT
- * (#7368 § Contexte) — jamais une erreur qui empêcherait la bannière.
- */
-function lireCredential() {
+/** Ouvre une base IndexedDB — `null` si indisponible, en échec ou sans le magasin : best-effort, jamais une erreur qui empêche la bannière. Le SEUL code d'ouverture du worker. */
+function ouvrirBase(nom, version, magasin) {
   return new Promise((resolve) => {
     if (typeof self.indexedDB === 'undefined') { resolve(null); return; }
     let requete;
     try {
-      requete = self.indexedDB.open(CREDENTIAL_DB_NAME, CREDENTIAL_DB_VERSION);
+      requete = self.indexedDB.open(nom, version);
     } catch {
       resolve(null);
       return;
     }
     requete.onupgradeneeded = () => {
       const db = requete.result;
-      if (!db.objectStoreNames.contains(CREDENTIAL_STORE_NAME)) db.createObjectStore(CREDENTIAL_STORE_NAME);
+      if (!db.objectStoreNames.contains(magasin)) db.createObjectStore(magasin);
     };
     requete.onerror = () => resolve(null);
     requete.onsuccess = () => {
       const db = requete.result;
-      if (!db.objectStoreNames.contains(CREDENTIAL_STORE_NAME)) {
-        db.close();
-        resolve(null);
-        return;
-      }
-      try {
-        const lecture = db.transaction(CREDENTIAL_STORE_NAME).objectStore(CREDENTIAL_STORE_NAME).get(CREDENTIAL_KEY);
-        lecture.onsuccess = () => {
-          db.close();
-          resolve(lecture.result || null);
-        };
-        lecture.onerror = () => {
-          db.close();
-          resolve(null);
-        };
-      } catch {
-        db.close();
-        resolve(null);
-      }
+      if (db.objectStoreNames.contains(magasin)) { resolve(db); return; }
+      db.close();
+      resolve(null);
     };
   });
+}
+
+/** Lit le crédential posé par la page — `null` si absent ou en échec : un accusé manqué se rattrape à la reconnexion (#7368). */
+function lireCredential() {
+  return ouvrirBase(CREDENTIAL_DB_NAME, CREDENTIAL_DB_VERSION, CREDENTIAL_STORE_NAME).then(
+    (db) =>
+      db === null
+        ? null
+        : new Promise((resolve) => {
+            try {
+              const lecture = db.transaction(CREDENTIAL_STORE_NAME).objectStore(CREDENTIAL_STORE_NAME).get(CREDENTIAL_KEY);
+              lecture.onsuccess = () => { db.close(); resolve(lecture.result || null); };
+              lecture.onerror = () => { db.close(); resolve(null); };
+            } catch {
+              db.close();
+              resolve(null);
+            }
+          }),
+  );
 }
 
 /** JUMEAU de `credentialHeaders()` (`src/lib/api/http.ts:215-219`) — les DEUX
@@ -521,6 +519,20 @@ const REPLYABLE_TYPES = ['new_message', 'message_reply', 'reply', 'user_mentione
 const INVITE_FORMS = ['chat', 'join'];
 const SHARE_LINK_KEY = /^[A-Za-z0-9_-]{1,100}$/;
 
+/** « TOUT VA BIEN ? » (#18738) : `wellness_check` reste affichée et porte « Je vais bien » ; l'action (sans ouvrir l'app) et le toucher
+ * répondent `POST /api/v1/me/wellness/ok` au nom du compte ENREGISTRÉ. JUMEAU de `answerWellnessCheck` (`src/lib/inactivity/wellness-answer.ts`). */
+const WELLNESS_PUSH_TYPE = 'wellness_check';
+const WELLNESS_OK_ACTION = 'wellness-ok';
+const WELLNESS_OK_LABELS = { fr: 'Je vais bien', en: 'I’m OK', es: 'Estoy bien', de: 'Mir geht es gut', it: 'Sto bene', pt: 'Estou bem', ar: 'أنا بخير' };
+const questionBienEtre = (data) => (texte(data.type) === WELLNESS_PUSH_TYPE ? { action: WELLNESS_OK_ACTION, title: WELLNESS_OK_LABELS[langueDuNavigateur()] } : null);
+async function repondreBienEtre(data, action) {
+  const stocke = await lireCredential();
+  const entetes = stocke !== null && stocke.credential && stocke.credential.kind === 'registered' ? entetesCredential(stocke.credential) : null;
+  const corps = { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, entetes), body: '{}', keepalive: true };
+  if (entetes !== null) await self.fetch(texte(stocke.apiBase) + '/api/v1/me/wellness/ok', corps).catch(() => undefined);
+  if (action !== WELLNESS_OK_ACTION) await ouvrir(data);
+}
+
 function coordonnee(valeur, borne) {
   const nombre = Number(texte(valeur));
   return texte(valeur) !== '' && Number.isFinite(nombre) && Math.abs(nombre) <= borne ? nombre : null;
@@ -585,12 +597,14 @@ function offreContenu(data) {
 function montrer(banniere, notification, data) {
   const offre = rappel(data);
   const contenu = offreContenu(data);
-  const actions = offre === null ? contenu.actions : [offre.action];
+  const question = questionBienEtre(data);
+  const actions = question !== null ? [question] : offre === null ? contenu.actions : [offre.action];
   const cle = acteurSujet(data);
   const tap = { ...donneesDuTap(data), ...(cle === '' ? {} : { [ACTOR_SUBJECT_KEY]: cle }) };
   return self.registration.showNotification(banniere.titre, {
     body: banniere.corps,
     ...livraison(notification, texte(data.notificationId)),
+    ...(question === null ? {} : { requireInteraction: true }),
     icon: BANNER_ICON,
     badge: BANNER_BADGE,
     ...(contenu.image === '' ? {} : { image: contenu.image }),
@@ -724,104 +738,6 @@ async function afficher(payload) {
 }
 
 /**
- * LE TALKIE D'URGENCE, ONGLET FERMÉ (#17141, #17144) — un Proche parle pendant
- * que personne ne regarde : la passerelle pousse `talkie_incoming` (titre et
- * corps localisés, `talkieId`, `fromUserId`, nom de l'émetteur, et parfois
- * l'audio `audioUrl`). La notification dit « X vous parle » ; la toucher ouvre
- * (ou focalise) l'app, qui rattrape la voix par `talkie:join`.
- *
- * C'est la SEULE notification de Meeshy qui porte une action de LECTURE
- * (directive porteur 2026-11-08) : « Écouter » ({@link TALKIE_LISTEN_ACTION})
- * fait jouer la voix par un onglet déjà ouvert SANS le mettre au premier plan
- * — un worker ne joue pas de son lui-même ; sans onglet, elle ouvre l'app sur
- * le talkie. Aucune autre notification ne la porte : `sw-push-talkie.test.ts`
- * en est le témoin. D-11 vaut ici aussi : un onglet visible l'entend déjà.
- */
-const TALKIE_PUSH_TYPE = 'talkie_incoming';
-const TALKIE_TAG_PREFIX = 'talkie:';
-const TALKIE_LISTEN_ACTION = 'talkie-listen';
-/** JUMEAUX de `TALKIE_PARAM` et `TALKIE_WAKE_MESSAGE` (`src/lib/talkie/talkie-wake-intent.ts`). */
-const TALKIE_PARAM = 'talkie';
-const TALKIE_WAKE_MESSAGE = 'TALKIE_WAKE';
-/** Le libellé d'« Écouter » quand la passerelle n'en sert pas : le worker ne charge aucun catalogue. */
-const TALKIE_LISTEN_LABELS = { fr: 'Écouter', en: 'Listen', es: 'Escuchar', de: 'Anhören', it: 'Ascolta', pt: 'Ouvir', ar: 'استماع' };
-const TALKIE_TALKS_LABELS = { fr: ' vous parle', en: ' is talking to you', es: ' te está hablando', de: ' spricht mit dir', it: ' ti sta parlando', pt: ' está falando com você', ar: ' يتحدث إليك' };
-
-function langueDuNavigateur() {
-  const langue = texte(self.navigator && self.navigator.language).slice(0, 2).toLowerCase();
-  return Object.prototype.hasOwnProperty.call(TALKIE_LISTEN_LABELS, langue) ? langue : 'en';
-}
-
-/**
- * L'audio porté par le push ne voyage que s'il vient de la PASSERELLE
- * configurée (`apiBase` posé par la page avec le crédential) : une autre
- * origine ferait jouer une fausse voix d'urgence et partir une requête
- * arbitraire. Sans passerelle connue, rien ne voyage (fail-closed).
- */
-function audioDuTalkie(valeur, apiBase) {
-  try {
-    const passerelle = new URL(texte(apiBase));
-    const audio = new URL(texte(valeur));
-    return audio.protocol === 'https:' && audio.origin === passerelle.origin ? audio.href : '';
-  } catch {
-    return '';
-  }
-}
-
-async function annoncerTalkie(data) {
-  const talkieId = texte(data.talkieId);
-  const nom = texte(data.fromName) || texte(data.senderName);
-  const langue = langueDuNavigateur();
-  const titre = texte(data.title) || (nom === '' ? '' : nom + TALKIE_TALKS_LABELS[langue]);
-  if (talkieId === '' || texte(data.fromUserId) === '' || titre === '') return;
-
-  const ouvertes = await fenetres();
-  if (ouvertes.some((client) => client.visibilityState === 'visible')) return;
-  const stocke = await lireCredential();
-
-  await self.registration.showNotification(titre, {
-    body: texte(data.body),
-    tag: TALKIE_TAG_PREFIX + talkieId,
-    renotify: true,
-    requireInteraction: true,
-    icon: BANNER_ICON,
-    badge: BANNER_BADGE,
-    actions: [{ action: TALKIE_LISTEN_ACTION, title: texte(data.listenLabel) || TALKIE_LISTEN_LABELS[langue] }],
-    data: { type: TALKIE_PUSH_TYPE, talkieId: talkieId, audioUrl: audioDuTalkie(voixDuTalkie(data), stocke && stocke.apiBase) },
-  });
-}
-
-/* Le push de SUIVI (`phase: 'ended'`, même étiquette : il remplace la
-   bannière) porte la voix gardée en pièce jointe, `attachmentUrl` ; le réveil
-   en direct, sa capacité `audioUrl`. Les deux passent la même garde d'origine. */
-function voixDuTalkie(data) {
-  if (data.phase === 'ended') return texte(data.attachmentUrl) || data.audioUrl;
-  return data.audioUrl;
-}
-
-async function ouvrirTalkie(data, action) {
-  const talkieId = texte(data.talkieId);
-  if (talkieId === '') return;
-  const ecouter = action === TALKIE_LISTEN_ACTION;
-  const audioUrl = ecouter ? texte(data.audioUrl) : '';
-  const ouvertes = await fenetres();
-  const client = ouvertes[0];
-  if (client === undefined) {
-    /* L'adresse d'un onglet neuf ne porte QUE la prise de parole : jamais
-       d'audio dans l'URL de la page (un lien forgé ferait jouer une fausse
-       voix). L'onglet rattrape par `talkie:join`. */
-    await self.clients.openWindow(PUSH_ROUTE_PATTERNS.notifications + '?' + TALKIE_PARAM + '=' + encodeURIComponent(talkieId));
-    return;
-  }
-  if (!ecouter) {
-    await Promise.resolve()
-      .then(() => client.focus())
-      .catch(() => undefined);
-  }
-  client.postMessage({ type: TALKIE_WAKE_MESSAGE, talkieId: talkieId, ...(audioUrl !== '' ? { audioUrl: audioUrl } : {}) });
-}
-
-/**
  * L'APPEL ENTRANT, ONGLET FERMÉ (#8043) — la sonnerie iOS (CallKit) et
  * Android (plein écran) a son équivalent web : une notification qui RESTE
  * (`requireInteraction`), avec Répondre et Refuser.
@@ -915,11 +831,39 @@ async function refuserAppel(callId) {
 }
 
 /**
- * Répondre ouvre le fil de l'appel et le fait DÉCROCHER : l'onglet ouvert
- * reçoit l'identifiant de l'appel, un onglet neuf le lit dans son adresse
- * (`?repondre=<id>`). Le toucher du corps ouvre seulement le fil, où
- * `call:check-active` rejoue la sonnerie à la connexion.
+ * LA CONFIRMATION D'UN ONGLET NEUF (#18907) — JUMEAU de `src/lib/calls/call-answer-confirmation.ts`
+ * (base, magasin, version) et de `ANSWER_INTENT_TTL_MS`. Une adresse `?repondre=` se compose à la main :
+ * seul ce worker a reçu le toucher, donc seul il pose `{ callId, until }` que la page consomme. Son écriture
+ * n'attend que CALL_INTENT_WAIT_MS avant `openWindow`, que Firefox ne permet qu'environ une seconde après le clic.
  */
+const CALL_INTENT_DB_NAME = 'meeshy-call-intent';
+const CALL_INTENT_DB_VERSION = 1;
+const CALL_INTENT_STORE_NAME = 'intents';
+const CALL_INTENT_TTL_MS = 70000;
+const CALL_INTENT_WAIT_MS = 250;
+
+/** Best-effort : sans IndexedDB l'appel sonne et attend un toucher — jamais un décrochage sans consentement. */
+function poserConfirmationAppel(callId) {
+  return ouvrirBase(CALL_INTENT_DB_NAME, CALL_INTENT_DB_VERSION, CALL_INTENT_STORE_NAME).then(
+    (db) =>
+      db === null
+        ? undefined
+        : new Promise((resolve) => {
+            const fin = () => { db.close(); resolve(); };
+            try {
+              const tx = db.transaction(CALL_INTENT_STORE_NAME, 'readwrite');
+              tx.objectStore(CALL_INTENT_STORE_NAME).put({ callId: callId, until: Date.now() + CALL_INTENT_TTL_MS }, callId);
+              tx.oncomplete = fin;
+              tx.onerror = fin;
+            } catch {
+              fin();
+            }
+          }),
+  );
+}
+
+/** Répondre ouvre le fil et le fait DÉCROCHER : un onglet ouvert reçoit l'identifiant dans le MESSAGE (voie de confiance),
+ * un onglet neuf le lit dans `?repondre=<id>` après la confirmation du worker. Le corps ouvre seulement le fil. */
 async function ouvrirAppel(data, action) {
   const callId = texte(data.callId);
   if (action === CALL_DECLINE_ACTION) {
@@ -931,8 +875,10 @@ async function ouvrirAppel(data, action) {
   const ouvertes = await fenetres();
   const client = ouvertes[0];
   if (client === undefined) {
+    const confirmation = repondre ? poserConfirmationAppel(callId) : Promise.resolve();
+    await Promise.race([confirmation, new Promise((fin) => setTimeout(fin, CALL_INTENT_WAIT_MS))]);
     await self.clients.openWindow(repondre ? fil + '?' + CALL_ANSWER_PARAM + '=' + encodeURIComponent(callId) : fil);
-    return;
+    return confirmation;
   }
   try {
     await client.focus();
@@ -1050,22 +996,7 @@ function identifiantEvenement() {
 }
 
 function ouvrirTelemetrie() {
-  return new Promise((resolve) => {
-    if (typeof self.indexedDB === 'undefined') { resolve(null); return; }
-    let requete;
-    try {
-      requete = self.indexedDB.open(TELEMETRIE_DB_NAME, TELEMETRIE_DB_VERSION);
-    } catch {
-      resolve(null);
-      return;
-    }
-    requete.onupgradeneeded = () => {
-      const db = requete.result;
-      if (!db.objectStoreNames.contains(TELEMETRIE_STORE_NAME)) db.createObjectStore(TELEMETRIE_STORE_NAME);
-    };
-    requete.onerror = () => resolve(null);
-    requete.onsuccess = () => resolve(requete.result.objectStoreNames.contains(TELEMETRIE_STORE_NAME) ? requete.result : null);
-  });
+  return ouvrirBase(TELEMETRIE_DB_NAME, TELEMETRIE_DB_VERSION, TELEMETRIE_STORE_NAME);
 }
 
 function lireEtEcrire(db, transformer) {
@@ -1143,6 +1074,8 @@ self.addEventListener('notificationclick', (evenement) => {
       ouverture,
       texte(data.type) === TALKIE_PUSH_TYPE
         ? ouvrirTalkie(data, action)
+        : texte(data.type) === WELLNESS_PUSH_TYPE
+        ? repondreBienEtre(data, action)
         : texte(data.type) === CALL_PUSH_TYPE
         ? ouvrirAppel(data, action)
         : action === CALL_BACK_ACTION

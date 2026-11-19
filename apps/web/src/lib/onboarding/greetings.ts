@@ -17,7 +17,5 @@ const TEMPLATE_KEYS = [
   'onboarding.global.template.8',
 ] as const satisfies readonly OnboardingCatalogKey[];
 
-export const GREETING_COUNT = TEMPLATE_KEYS.length;
-
 export const greetingTemplates = (language: InterfaceLanguage): readonly string[] =>
   TEMPLATE_KEYS.map((key) => translateOnboarding(language, key, { name: '{name}', languages: '{languages}' }));

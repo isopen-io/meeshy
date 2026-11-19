@@ -167,8 +167,8 @@ extension PasteIntoComposer {
         // n'ouvrait depuis le collage : l'annonce était donc un refus poli pour
         // une matière que la scène savait parfaitement héberger.
         //
-        // Où il va est décidé par `StoryPastePolicy`, côté SDK, au moment de la
-        // pose : ce résolveur transporte, il ne place pas.
+        // Où il va est décidé par `ComposerPasteRouting` (`PasteDestination.swift`)
+        // au moment de la pose : ce résolveur transporte, il ne place pas.
         let textes = resolved.text.map { StoryPastedItem.text($0) }
         return await sceneItems(resolved.scene, surface: .scene) + textes
     }
@@ -183,8 +183,8 @@ extension PasteIntoComposer {
         let candidates: [ComposerPasteExclusion?] = [
             batch.unreadable.isEmpty ? nil : .unreadable(batch.unreadable),
             batch.attachments.isEmpty ? nil : .documentBelongsToAPost(batch.attachments.map(\.name)),
-            // #4378 — le texte n'est plus exclu : il est POSÉ, en description
-            // ou en objet selon `StoryPastePolicy`. L'annoncer maintenant
+            // #4378 — le texte n'est plus exclu : il est POSÉ, au contenu ou à
+            // la légende selon `ComposerPasteRouting`. L'annoncer maintenant
             // refuserait poliment une matière qu'on sait héberger, ce qui est
             // pire qu'un rejet muet : c'est un rejet qui se croit poli.
             nil
@@ -291,8 +291,8 @@ extension PasteIntoComposer {
 // MARK: - Injection dans le composer de story (SDK)
 
 extension View {
-    /// Fournit au composer de story (`StoryComposerView`, côté SDK) la lecture
-    /// du presse-papier. Même doctrine que `storyCameraCaptureProvided` : la
+    /// Fournit au composer (`MeeshyComposerHost+Portals`, via l'environnement
+    /// du SDK) la lecture du presse-papier. Même doctrine que `storyCameraCaptureProvided` : la
     /// résolution d'un `NSItemProvider` (représentation fichier vs données,
     /// autorisation sandbox, nom d'origine) est de l'orchestration app-side, et
     /// elle existe déjà. Sans cet appel, la capsule « Coller » n'est pas rendue

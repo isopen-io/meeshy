@@ -16,7 +16,7 @@ import { appQueryClient } from '@/lib/api/query-client';
 import { sendSheetStore } from '@/lib/send/send-sheet-store';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { UserProfileView } from './user-profile';
+import { UserProfileView, visitorSignInHref } from './user-profile';
 
 /**
  * **LE PROFIL PUBLIC, MONTÉ** (#7083) — ce que les témoins de port et de pièce
@@ -63,7 +63,7 @@ const settle = () =>
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
-async function mount(username: string, tab?: 'posts' | 'conversations'): Promise<HTMLDivElement> {
+async function mount(username: string, tab?: 'posts' | 'conversations' | 'actions' | 'liens'): Promise<HTMLDivElement> {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -78,7 +78,8 @@ async function mount(username: string, tab?: 'posts' | 'conversations'): Promise
   await settle();
   await settle();
   if (tab === undefined) return container;
-  act(() => (container.querySelector(`[data-profile-tab="${tab}"]`) as HTMLButtonElement).click());
+  const target = tab === 'actions' || tab === 'liens' ? `[data-profile-faces] [data-kit-chip="${tab}"]` : `[data-profile-tab="${tab}"]`;
+  act(() => (container.querySelector(target) as HTMLButtonElement).click());
   await settle();
   await settle();
   return container;
@@ -92,35 +93,37 @@ const text = (el: Element | null | undefined) => (el?.textContent ?? '').replace
  * chaque liste longue a son onglet au lieu de pousser la suivante sous la
  * ligne de flottaison.
  */
-describe('la fiche se lit par onglets', () => {
-  const tabs = (el: Element) => [...el.querySelectorAll('[role="tab"]')].map((node) => node.getAttribute('data-profile-tab'));
-  const selected = (el: Element) => el.querySelector('[role="tab"][aria-selected="true"]')?.getAttribute('data-profile-tab');
+describe('la fiche se lit en trois faces', () => {
+  const tabs = (el: Element) => [...el.querySelectorAll('[role="tab"][data-profile-tab]')].map((node) => node.getAttribute('data-profile-tab'));
+  const selected = (el: Element) => el.querySelector('[role="tab"][data-profile-tab][aria-selected="true"]')?.getAttribute('data-profile-tab');
+  const faces = (el: Element) => [...el.querySelectorAll('[data-profile-faces] [data-kit-chip]')].map((node) => node.getAttribute('data-kit-chip'));
 
-  test('trois onglets dans l’ordre d’iOS, Détails ouvert d’abord', async () => {
+  test('trois faces dans l’ordre de la planche, Vitrine d’abord', async () => {
     const el = await mount('kwame-mensah');
-    expect(tabs(el)).toEqual(['details', 'conversations', 'posts']);
-    expect(selected(el)).toBe('details');
+    expect(faces(el)).toEqual(['vitrine', 'liens', 'actions']);
+    expect(el.querySelector('[data-profile-face]')?.getAttribute('data-profile-face')).toBe('vitrine');
   });
 
-  test('Détails porte l’essentiel d’un coup : identité, relation, compteurs — sans la liste des publications', async () => {
+  test('la Vitrine porte les publications et les conversations en commun, et les compteurs — sans la relation', async () => {
     const el = await mount('kwame-mensah');
+    expect(tabs(el)).toEqual(['conversations', 'posts']);
+    expect(selected(el)).toBe('posts');
+    expect(el.querySelector('[data-profile-stats]')).not.toBeNull();
+    expect(el.querySelector('[data-profile-relation]')).toBeNull();
+  });
+
+  test('Actions porte la relation et ses gestes — sans la liste des publications', async () => {
+    const el = await mount('kwame-mensah', 'actions');
     expect(text(el.querySelector('[data-user-hero] p'))).toBe('Kwame Mensah');
     expect(text(el.querySelector('[data-user-hero] p:nth-of-type(2)'))).toBe('@kwame-mensah');
     expect(el.querySelector('[data-profile-relation]')).not.toBeNull();
-    expect(el.querySelector('[data-profile-stats]')).not.toBeNull();
     expect(el.querySelector('[data-profile-posts]')).toBeNull();
-    /* Le PANNEAU de l'onglet, pas toute la page : la vitrine du jeu (#9481) se pose AU-DESSUS des onglets, hors de Détails. */
-    expect([...el.querySelectorAll('[role="tabpanel"] section h2')].map((node) => text(node))).toEqual(['CONNEXION', 'STATISTIQUES']);
+    expect(el.querySelector('[data-profile-face="actions"]')).not.toBeNull();
   });
 
-  test('le panneau est nommé par son onglet, et l’onglet pointe son panneau', async () => {
-    const el = await mount('kwame-mensah');
-    const tab = el.querySelector('[role="tab"][aria-selected="true"]');
-    const panel = el.querySelector('[role="tabpanel"]');
-    expect(panel?.getAttribute('aria-labelledby')).toBe(tab?.id ?? 'absent');
-    expect(tab?.getAttribute('aria-controls')).toBe(panel?.id ?? 'absent');
-    expect(tab?.getAttribute('tabindex')).toBe('0');
-    expect(el.querySelectorAll('[role="tab"][tabindex="-1"]').length).toBe(2);
+  test('la face Liens donne l’adresse canonique de la fiche, à copier', async () => {
+    const el = await mount('kwame-mensah', 'liens');
+    expect(text(el.querySelector('[data-profile-links]'))).toContain('https://meeshy.me/u/kwame-mensah');
   });
 
   test('toucher Publications ouvre le listing de CET auteur et son bandeau servi', async () => {
@@ -131,28 +134,12 @@ describe('la fiche se lit par onglets', () => {
     expect([...el.querySelectorAll('[data-feed-card-id]')].length).toBeGreaterThan(0);
   });
 
-  test('les flèches parcourent les onglets et ouvrent celui qui prend le focus', async () => {
-    const el = await mount('kwame-mensah');
-    const details = el.querySelector('[data-profile-tab="details"]') as HTMLButtonElement;
-    details.focus();
-    await act(async () => {
-      details.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-    });
-    await settle();
-    expect(selected(el)).toBe('conversations');
-    expect(document.activeElement?.getAttribute('data-profile-tab')).toBe('conversations');
-    await act(async () => {
-      (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
-    });
-    expect(selected(el)).toBe('posts');
-  });
-
   test('sur SA PROPRE fiche, pas d’onglet Conversations', async () => {
     const el = await mount('vous');
-    expect(tabs(el)).toEqual(['details', 'posts']);
+    expect(tabs(el)).toEqual(['posts']);
   });
 
-  test('sur un compte BLOQUÉ, aucun onglet : l’identité et « Débloquer »', async () => {
+  test('sur un compte BLOQUÉ, aucune face : l’identité et « Débloquer »', async () => {
     const el = await mount('yann.legoff');
     expect(el.querySelector('[role="tablist"]')).toBeNull();
   });
@@ -163,7 +150,7 @@ describe('la relation servie', () => {
      appelant. L'inventaire reste EXHAUSTIF et ORDONNÉ : c'est lui qui dirait
      qu'une action a disparu, ou qu'une s'est glissée sans décision. */
   test('la relation servie « aucune » offre Ajouter et Écrire au repos, Bloquer et Signaler derrière ⋯', async () => {
-    const el = await mount('kwame-mensah');
+    const el = await mount('kwame-mensah', 'actions');
     expect(el.querySelector('[data-profile-relation]')?.getAttribute('data-profile-relation')).toBe('none');
     const actions = (): (string | null)[] => [...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'));
     expect(actions()).toEqual(['add', 'write']);
@@ -263,7 +250,7 @@ describe('une demande REÇUE', () => {
     /* `amina` a une demande en attente dans le panier des reçues
        (`fixtures-friends.ts`), et `fixturePublicProfile` en DÉRIVE la relation
        — la même source que côté serveur (`relationAvec` lit `friendRequest`). */
-    const el = await mount('amina.diallo');
+    const el = await mount('amina.diallo', 'actions');
     expect(el.querySelector('[data-profile-relation]')?.getAttribute('data-profile-relation')).toBe('pendingReceived');
     expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual([
       'accept',
@@ -322,7 +309,7 @@ describe('les conversations en commun', () => {
  */
 describe('la ligne de la demande, lue sur le FIL', () => {
   test('les gestes sont armés d’emblée — aucun n’attend sa ligne', async () => {
-    const el = await mount('amina.diallo');
+    const el = await mount('amina.diallo', 'actions');
     const accept = el.querySelector('[data-profile-action="accept"]');
     expect(accept).not.toBeNull();
     expect((accept as HTMLButtonElement | null)?.disabled).toBe(false);
@@ -523,7 +510,7 @@ describe('le blocage, lu par SUJET', () => {
  */
 describe('l’annonce d’un geste relationnel', () => {
   test('elle QUITTE `sr-only` — même loi que « Découvrir » (dimension 6)', async () => {
-    const el = await mount('kwame-mensah');
+    const el = await mount('kwame-mensah', 'actions');
     act(() => (el.querySelector('[data-profile-action="add"]') as HTMLButtonElement).click());
     await settle();
     const region = el.querySelector('[data-profile-announce]');
@@ -599,12 +586,18 @@ describe('la fiche rend les gestes qui lui manquaient (#7188)', () => {
    * aucun chemin vers `/me`, donc un cul-de-sac.
    */
   test('sur sa propre fiche, un chemin mène à l’édition', async () => {
-    const el = await mount('vous');
+    const el = await mount('vous', 'actions');
 
     const lien = el.querySelector('[data-profile-self] a');
     expect(lien).not.toBe(null);
     expect(lien?.getAttribute('href')).toBe('/me');
     expect(text(lien)).toBe('Modifier mon profil');
+  });
+
+  test('sur sa propre fiche, l’édition est sur la face où l’on arrive (revue #18879)', async () => {
+    const el = await mount('vous');
+
+    expect(el.querySelector('[data-profile-face="vitrine"] [data-profile-self] a')?.getAttribute('href')).toBe('/me');
   });
 
   /**
@@ -638,7 +631,7 @@ describe('signaler ouvre la feuille des motifs (#7187)', () => {
   });
 
   test('le bouton « Signaler » la fait apparaître, avec les HUIT motifs', async () => {
-    const el = await mount('kwame-mensah');
+    const el = await mount('kwame-mensah', 'actions');
 
     await act(async () => el.querySelector<HTMLButtonElement>('[data-profile-more]')?.click());
     const bouton = el.querySelector<HTMLButtonElement>('[data-profile-action="report"]');
@@ -664,7 +657,7 @@ describe('signaler ouvre la feuille des motifs (#7187)', () => {
   /** ET ELLE EXPLIQUE CE QU'ELLE FAIT : une liste de motifs sans phrase laisse
       deviner à qui va le signalement, et ce qu'il déclenche. */
   test('elle dit à qui le signalement s’adresse', async () => {
-    const el = await mount('kwame-mensah');
+    const el = await mount('kwame-mensah', 'actions');
 
     await act(async () => el.querySelector<HTMLButtonElement>('[data-profile-more]')?.click());
     await act(async () => el.querySelector<HTMLButtonElement>('[data-profile-action="report"]')?.click());
@@ -688,5 +681,23 @@ describe('Envoyer le profil', () => {
   test('un compte bloqué n’offre pas d’envoyer son profil', async () => {
     const blocked = await mount('yann.legoff');
     expect(blocked.querySelector('[data-profile-send]')).toBeNull();
+  });
+});
+
+/**
+ * **LE VISITEUR QUI SE CONNECTE DEPUIS UNE VITRINE Y REVIENT** (#18878) — la fiche est publique :
+ * « Se connecter » doit ramener à l'adresse qu'il lisait, `/u/…` comme `/@…`, et jamais ailleurs.
+ */
+describe('se connecter depuis une vitrine publique', () => {
+  const nextOf = (target: string) => new URL(target, 'http://localhost').searchParams.get('next');
+
+  test('la connexion ramène à l’adresse lue, courte ou longue, avec sa requête', () => {
+    expect(new URL(visitorSignInHref({ pathname: '/@aissa', search: '' }), 'http://localhost').pathname).toBe('/login');
+    expect(nextOf(visitorSignInHref({ pathname: '/@aissa', search: '' }))).toBe('/@aissa');
+    expect(nextOf(visitorSignInHref({ pathname: '/u/aissa', search: '?via=abc' }))).toBe('/u/aissa?via=abc');
+  });
+
+  test('une adresse qui sortirait du domaine ne part pas en `next`', () => {
+    expect(nextOf(visitorSignInHref({ pathname: '//evil.example', search: '' }))).toBeNull();
   });
 });

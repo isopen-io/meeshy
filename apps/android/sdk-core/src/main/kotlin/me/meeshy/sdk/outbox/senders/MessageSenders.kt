@@ -138,9 +138,14 @@ public class SendMessageHandler @Inject constructor(
     }
 }
 
-/** `EDIT_MESSAGE`: patches the message content. */
+/**
+ * `EDIT_MESSAGE`: patches the message content. The edit is optimistic (the text flips, its translations are
+ * purged): an exhausted edit — refused for good once its window passed, the conversation closed or the daily limit
+ * reached — reads the message back by its id (#18915), so the author stops seeing a text nobody else sees.
+ */
 public class EditMessageHandler @Inject constructor(
     private val messageApi: MessageApi,
+    private val messageRepository: MessageRepository,
     private val json: Json,
     private val ledger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
 ) : OutboxKindHandler {
@@ -151,6 +156,10 @@ public class EditMessageHandler @Inject constructor(
             (result as? NetworkResult.Failure)?.let { PlaintextRefusal.of(it, PlaintextRefusal.laneConversation(row.lane), ledger) }
                 ?: result.toSendResult()
         }
+
+    override suspend fun onExhausted(row: OutboxEntity) {
+        PlaintextRefusal.laneConversation(row.lane)?.let { messageRepository.refreshMessage(it, row.targetId) }
+    }
 }
 
 /**
@@ -176,8 +185,10 @@ internal object PlaintextRefusal {
 /**
  * `DELETE_MESSAGE`: deletes the message for everyone. Only an ACCEPTED deletion lets the end-to-end plaintext leave the
  * vault (#14656, iOS `confirmDeletion`). An exhausted deletion (refused in clear for an end-to-end conversation, #13790,
- * or retries spent) lifts its optimistic tombstone — the plaintext, never erased, reads again — then refreshes the
- * conversation of its lane, so the bubble gives way to the server's message.
+ * refused for good, or retries spent) reads the message back by its id (#18915) — wherever it sits in the thread: a
+ * refresh of the conversation only reads its recent window — and its tombstone falls only when the server serves the
+ * message alive; a read back that does not serve it confirms the deletion and erases its plaintext, and a refusal that
+ * already said the target is gone (404, 410) never brings it back (#19047, [MessageRepository.settleRefusedDeletion]).
  */
 public class DeleteMessageHandler @Inject constructor(
     private val messageApi: MessageApi,
@@ -192,14 +203,19 @@ public class DeleteMessageHandler @Inject constructor(
     }
 
     override suspend fun onExhausted(row: OutboxEntity) {
-        messageRepository.markUndeleted(row.targetId)
-        PlaintextRefusal.laneConversation(row.lane)?.let { messageRepository.refresh(it) }
+        messageRepository.settleRefusedDeletion(
+            PlaintextRefusal.laneConversation(row.lane),
+            row.targetId,
+            refusedAsGone = SendFailureClassifier.refusedAsGone(row.lastError),
+            authorId = row.ownerId,
+        )
     }
 }
 
 /**
- * `PIN_MESSAGE`: pins the message in its conversation. An exhausted pin refreshes the
- * conversation so the optimistic `pinnedAt` flip is reconciled with the server truth.
+ * `PIN_MESSAGE`: pins the message in its conversation. An exhausted pin reads the message back by its id (#18915), so
+ * the optimistic `pinnedAt` flip is reconciled with the server truth — a pinned message is often an old one, out of
+ * the recent window a conversation refresh reads.
  */
 public class PinMessageHandler @Inject constructor(
     private val messageApi: MessageApi,
@@ -214,7 +230,7 @@ public class PinMessageHandler @Inject constructor(
         }
 
     override suspend fun onExhausted(row: OutboxEntity) {
-        refreshPinnedConversation(json, messageRepository, row)
+        refreshPinnedMessage(json, messageRepository, row)
     }
 }
 
@@ -232,7 +248,7 @@ public class UnpinMessageHandler @Inject constructor(
         }
 
     override suspend fun onExhausted(row: OutboxEntity) {
-        refreshPinnedConversation(json, messageRepository, row)
+        refreshPinnedMessage(json, messageRepository, row)
     }
 }
 
@@ -263,14 +279,15 @@ public class ConsumeViewOnceHandler @Inject constructor(
         }
 }
 
-private suspend fun refreshPinnedConversation(
+/** Reads the pinned or unpinned message back by its id, in the conversation its payload names; an unreadable payload reads nothing. */
+private suspend fun refreshPinnedMessage(
     json: Json,
     messageRepository: MessageRepository,
     row: OutboxEntity,
 ) {
     runCatching { json.decodeFromString<PinPayload>(row.payload) }
         .getOrNull()
-        ?.let { messageRepository.refresh(it.conversationId) }
+        ?.let { messageRepository.refreshMessage(it.conversationId, row.targetId) }
 }
 
 @Module

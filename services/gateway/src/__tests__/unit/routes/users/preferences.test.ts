@@ -10,6 +10,9 @@ import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
+// Le `CacheStore` partagé n'est pas monté ici : chaque témoin relit l'audience (#19368).
+jest.mock('../../../../services/CacheStore', () => ({ getCacheStore: () => undefined }));
+
 jest.mock('../../../../utils/logger-enhanced', () => ({
   enhancedLogger: {
     child: jest.fn(() => ({
@@ -214,10 +217,10 @@ describe('GET /users/:userId/stats — user not found', () => {
 describe('GET /users/:userId/stats — success by MongoId', () => {
   it('returns 200 with stats when user is found by ID', async () => {
     const prisma = makePrisma();
-    prisma.user.findFirst = jest.fn<any>().mockResolvedValue({
+    prisma.user.findFirst = jest.fn<any>(async (args: any) => (args?.where?.blockedUserIds ? null : {
       id: TARGET_USER_ID,
       createdAt: new Date('2024-01-01'),
-    });
+    }));
     const { app } = await buildApp({ prisma });
     const res = await app.inject({ method: 'GET', url: `/users/${TARGET_USER_ID}/stats` });
     expect(res.statusCode).toBe(200);
@@ -229,10 +232,10 @@ describe('GET /users/:userId/stats — success by MongoId', () => {
 describe('GET /users/:userId/stats — success by username', () => {
   it('returns 200 when user is found by username string', async () => {
     const prisma = makePrisma();
-    prisma.user.findFirst = jest.fn<any>().mockResolvedValue({
+    prisma.user.findFirst = jest.fn<any>(async (args: any) => (args?.where?.blockedUserIds ? null : {
       id: TARGET_USER_ID,
       createdAt: new Date('2024-01-01'),
-    });
+    }));
     const { app } = await buildApp({ prisma });
     const res = await app.inject({ method: 'GET', url: '/users/alice/stats' });
     expect(res.statusCode).toBe(200);

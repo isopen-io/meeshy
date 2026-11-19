@@ -54,6 +54,8 @@ final class CallWindowPresenter {
 
     private let hosting: CallWindowHosting
     private let viewing: ConversationViewingReporting
+    private let clearing: CallScreenClearing
+    private var clearedCallKey: String??
     private var subscription: AnyCancellable?
     private var activation: AnyCancellable?
     private var disconnection: AnyCancellable?
@@ -66,10 +68,12 @@ final class CallWindowPresenter {
     /// (#9065) ; réduit, l'utilisateur y revient s'il l'a sous les yeux.
     init(
         hosting: CallWindowHosting = CallOverlayWindowHost(),
-        viewing: ConversationViewingReporting = ConversationViewingReporter.shared
+        viewing: ConversationViewingReporting = ConversationViewingReporter.shared,
+        clearing: CallScreenClearing = CallScreenClearer()
     ) {
         self.hosting = hosting
         self.viewing = viewing
+        self.clearing = clearing
     }
 
     var isBound: Bool { subscription != nil }
@@ -136,6 +140,68 @@ final class CallWindowPresenter {
         isShowing = hosting.show(manager)
         shownManager = manager
         pendingManager = isShowing ? nil : manager
+        clearScreenOnceFor(manager)
+    }
+
+    private func clearScreenOnceFor(_ manager: CallManager) {
+        guard isShowing, clearedCallKey != .some(manager.currentCallId) else { return }
+        clearedCallKey = .some(manager.currentCallId)
+        clearing.clearForCall()
+    }
+}
+
+/// Un appel qui se lance, sonne ou se rejoint ferme tout clavier et toute
+/// feuille de l'app : rien ne reste ouvert sous l'écran d'appel, ni ne
+/// reparaît quand l'appel se réduit. Une fois par appel — revenir d'un appel
+/// réduit ne ferme pas ce qu'on a ouvert pendant.
+@MainActor
+protocol CallScreenClearing: AnyObject {
+    func clearForCall()
+}
+
+enum CallScreenSheets {
+    /// Une feuille (y compris un popover) se ferme ; un plein écran, une
+    /// alerte ou une présentation sur mesure restent.
+    static func isSheet(_ style: UIModalPresentationStyle, isAlert: Bool) -> Bool {
+        guard !isAlert else { return false }
+        switch style {
+        case .pageSheet, .formSheet, .automatic, .popover: return true
+        default: return false
+        }
+    }
+
+    /// Dans une pile de présentations, de la plus basse à la plus haute, le
+    /// rang de la première feuille : la fermer depuis son présentateur
+    /// emporte tout ce qui est posé au-dessus d'elle.
+    static func firstSheetIndex(in chain: [(style: UIModalPresentationStyle, isAlert: Bool)]) -> Int? {
+        chain.firstIndex { isSheet($0.style, isAlert: $0.isAlert) }
+    }
+}
+
+@MainActor
+final class CallScreenClearer: CallScreenClearing {
+    nonisolated deinit {}
+
+    func clearForCall() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        let windows = (DeviceLayout.activeWindowScene?.windows ?? [])
+            .filter { !($0 is CallPassthroughWindow) && $0.windowLevel < CallReturnPoint.windowLevel }
+        windows.forEach { window in
+            window.endEditing(true)
+            dismissSheets(above: window.rootViewController)
+        }
+    }
+
+    private func dismissSheets(above root: UIViewController?) {
+        var chain: [UIViewController] = []
+        var cursor = root?.presentedViewController
+        while let presented = cursor {
+            chain.append(presented)
+            cursor = presented.presentedViewController
+        }
+        let styles = chain.map { (style: $0.modalPresentationStyle, isAlert: $0 is UIAlertController) }
+        guard let index = CallScreenSheets.firstSheetIndex(in: styles) else { return }
+        chain[index].presentingViewController?.dismiss(animated: false)
     }
 }
 
@@ -256,10 +322,11 @@ enum CallReturnPoint {
     }
 
     /// #17763 — la bulle ne se montre plus pendant mon partage que si un plein
-    /// écran de l'app recouvre la capsule : « Arrêter » l'y accompagne. Le
-    /// mini-menu rapide, qui porte déjà ses propres actions, la remplace.
-    static func showsShareStop(isSharing: Bool, isMenuRevealed: Bool) -> Bool {
-        isSharing && !isMenuRevealed
+    /// écran de l'app recouvre la capsule : « Arrêter » l'y accompagne. #19696 —
+    /// l'appel réduit n'a plus aucun bouton d'appel ; « Arrêter le partage » est la
+    /// seule commande qui reste, garde de confidentialité.
+    static func showsShareStop(isSharing: Bool) -> Bool {
+        isSharing
     }
 
     /// Une présentation modale de la racine recouvre la pastille ; une alerte

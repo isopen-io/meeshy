@@ -38,6 +38,7 @@ import {
   exitSalonOutsiders,
   isBecomingPrivate,
 } from '../../../../services/conversations/communitySalonAdoption';
+import { findManyIn } from '../../../helpers/mongo-where';
 
 const COMMUNITY = '507f1f77bcf86cd799439044';
 const CREATEUR = '507f1f77bcf86cd7994390c0';
@@ -99,18 +100,27 @@ function prismaDouble(monde: Monde = {}) {
       createMany: jest.fn<any>(async (args: any) => ({ count: args.data.length })),
     },
     user: {
+      // La lecture « compte vivant » ÉVALUE son `where` contre des lignes à la
+      // forme NOMINALE de production : ni `deletedAt` ni `deactivatedAt`, qu'aucune
+      // création de compte n'écrit (#19799). Un double qui répond depuis son propre
+      // ensemble accepte une égalité nue qui, en base, n'apparie personne.
       findMany: jest.fn<any>(async (args: any) => {
-        if (args.where.isActive === true) {
-          return args.where.id.in.filter((id: string) => !morts.has(id)).map((id: string) => ({ id }));
+        if (args.where.blockedUserIds !== undefined) {
+          return args.where.id.in.filter((id: string) => bloquentCreateur.has(id)).map((id: string) => ({ id }));
         }
-        return args.where.id.in.filter((id: string) => bloquentCreateur.has(id)).map((id: string) => ({ id }));
+        const comptes = (args.where.id.in as string[]).map((id) => (
+          morts.has(id) ? { id, isActive: true, deactivatedAt: UN_PASSE } : { id, isActive: true }
+        ));
+        return findManyIn(comptes).findMany(args);
       }),
       findUnique: jest.fn<any>(async () => ({ blockedUserIds: bloquesParCreateur })),
     },
   };
 }
 
+const UN_PASSE = new Date('2026-10-01T00:00:00.000Z');
 const NOW = new Date('2026-11-07T22:00:00.000Z');
+const NO_ANNOUNCE = (): void => undefined;
 const creations = (prisma: ReturnType<typeof prismaDouble>) =>
   prisma.communityMember.createMany.mock.calls.flatMap((c: any) => c[0].data);
 
@@ -135,7 +145,7 @@ describe('admitSalonOccupants — les occupants des salons entrent dans la commu
   it("un occupant inscrit qui n'est pas membre entre, en MEMBER, sans rien demander à personne", async () => {
     const prisma = prismaDouble({ occupations: [{ conversationId: SALON_A, userId: OCCUPANT }] });
 
-    const exclus = await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR });
+    const exclus = await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR }, NO_ANNOUNCE);
 
     expect(exclus).toEqual([]);
     expect(creations(prisma)).toEqual([{ communityId: COMMUNITY, userId: OCCUPANT, role: 'member' }]);
@@ -147,7 +157,7 @@ describe('admitSalonOccupants — les occupants des salons entrent dans la commu
       membres: [{ id: 'cm-membre', userId: MEMBRE, isActive: true }],
     });
 
-    await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR });
+    await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR }, NO_ANNOUNCE);
 
     expect(prisma.communityMember.createMany).not.toHaveBeenCalled();
     expect(prisma.communityMember.updateMany).not.toHaveBeenCalled();
@@ -160,7 +170,7 @@ describe('admitSalonOccupants — les occupants des salons entrent dans la commu
       membres: [{ id: 'cm-ancien', userId: ANCIEN, isActive: false }],
     });
 
-    const exclus = await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR });
+    const exclus = await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR }, NO_ANNOUNCE);
 
     expect(exclus).toEqual([ANCIEN]);
     expect(prisma.communityMember.updateMany).not.toHaveBeenCalled();
@@ -176,7 +186,7 @@ describe('admitSalonOccupants — les occupants des salons entrent dans la commu
       ],
     });
 
-    const exclus = await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR });
+    const exclus = await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR }, NO_ANNOUNCE);
 
     expect(exclus).toEqual([]);
     expect(prisma.communityMember.createMany).not.toHaveBeenCalled();
@@ -187,7 +197,7 @@ describe('admitSalonOccupants — les occupants des salons entrent dans la commu
       occupations: [{ conversationId: SALON_A, userId: OCCUPANT, bannedAt: new Date('2026-10-01T00:00:00.000Z') }],
     });
 
-    const exclus = await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR });
+    const exclus = await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR }, NO_ANNOUNCE);
 
     expect(exclus).toEqual([]);
     expect(prisma.communityMember.createMany).not.toHaveBeenCalled();
@@ -196,7 +206,7 @@ describe('admitSalonOccupants — les occupants des salons entrent dans la commu
   it("le créateur n'est jamais réinscrit : il peut revenir dans ses salons sans ligne (#16703)", async () => {
     const prisma = prismaDouble({ occupations: [{ conversationId: SALON_A, userId: CREATEUR }] });
 
-    const exclus = await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR });
+    const exclus = await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR }, NO_ANNOUNCE);
 
     expect(exclus).toEqual([]);
     expect(prisma.communityMember.createMany).not.toHaveBeenCalled();
@@ -210,7 +220,7 @@ describe('admitSalonOccupants — les occupants des salons entrent dans la commu
       ],
     });
 
-    await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR });
+    await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR }, NO_ANNOUNCE);
 
     expect(creations(prisma)).toHaveLength(1);
   });
@@ -225,7 +235,7 @@ describe('admitSalonOccupants — les occupants des salons entrent dans la commu
       ],
     });
 
-    const exclus = await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR });
+    const exclus = await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR }, NO_ANNOUNCE);
 
     expect(exclus).toEqual([]);
     expect(prisma.communityMember.createMany).not.toHaveBeenCalled();
@@ -248,7 +258,7 @@ describe('admitSalonOccupants — les occupants des salons entrent dans la commu
       bloquentCreateur: [AUSSI_BLOQUE],
     });
 
-    const exclus = await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR });
+    const exclus = await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR }, NO_ANNOUNCE);
 
     expect([...exclus].sort()).toEqual([BLOQUE, MORT, AUSSI_BLOQUE].sort());
     expect(creations(prisma)).toEqual([{ communityId: COMMUNITY, userId: OCCUPANT, role: 'member' }]);
@@ -258,7 +268,7 @@ describe('admitSalonOccupants — les occupants des salons entrent dans la commu
     const prisma = prismaDouble();
     prisma.conversation.findMany.mockResolvedValueOnce([]);
 
-    const exclus = await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR });
+    const exclus = await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR }, NO_ANNOUNCE);
 
     expect(exclus).toEqual([]);
     expect(prisma.participant.findMany).not.toHaveBeenCalled();
@@ -295,7 +305,7 @@ describe('closeSalonsAfterSwitch — la bascule écrite, rattraper puis faire so
       ],
       bloquesParCreateur: [BLOQUE],
     });
-    const deps = { prisma: prisma as never, socketIOHandler: null };
+    const deps = { prisma: prisma as never, socketIOHandler: null, announce: NO_ANNOUNCE };
 
     await closeSalonsAfterSwitch(deps, {
       communityId: COMMUNITY, createdBy: CREATEUR, outsiders: [BLOQUE, MORT], now: NOW,
@@ -308,7 +318,7 @@ describe('closeSalonsAfterSwitch — la bascule écrite, rattraper puis faire so
   it('une seconde passe en panne ne rejette pas : les exclus de la première sortent quand même', async () => {
     const prisma = prismaDouble();
     prisma.conversation.findMany.mockRejectedValueOnce(new Error('panne'));
-    const deps = { prisma: prisma as never, socketIOHandler: null };
+    const deps = { prisma: prisma as never, socketIOHandler: null, announce: NO_ANNOUNCE };
 
     await expect(closeSalonsAfterSwitch(deps, {
       communityId: COMMUNITY, createdBy: CREATEUR, outsiders: [MORT], now: NOW,
@@ -318,7 +328,7 @@ describe('closeSalonsAfterSwitch — la bascule écrite, rattraper puis faire so
 
   it("personne à faire sortir : aucune sortie", async () => {
     const prisma = prismaDouble();
-    await closeSalonsAfterSwitch({ prisma: prisma as never, socketIOHandler: null }, {
+    await closeSalonsAfterSwitch({ prisma: prisma as never, socketIOHandler: null, announce: NO_ANNOUNCE }, {
       communityId: COMMUNITY, createdBy: CREATEUR, outsiders: [], now: NOW,
     });
     expect(exitCommunitySalons).not.toHaveBeenCalled();
@@ -337,7 +347,7 @@ describe("admitSalonOccupants — qui entre l'apprend (#18052)", () => {
       morts: [MORT],
     });
 
-    await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR });
+    await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR }, NO_ANNOUNCE);
 
     expect(scheduleCommunityAddedAnnouncement).toHaveBeenCalledTimes(1);
     expect(scheduleCommunityAddedAnnouncement).toHaveBeenCalledWith(prisma, {
@@ -355,7 +365,7 @@ describe("admitSalonOccupants — qui entre l'apprend (#18052)", () => {
       membres: [{ id: 'cm-ancien', userId: ANCIEN, isActive: false }],
     });
 
-    await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR });
+    await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR }, NO_ANNOUNCE);
 
     expect(scheduleCommunityAddedAnnouncement).not.toHaveBeenCalled();
   });
@@ -364,7 +374,36 @@ describe("admitSalonOccupants — qui entre l'apprend (#18052)", () => {
     const prisma = prismaDouble({ occupations: [{ conversationId: SALON_A, userId: OCCUPANT }] });
     prisma.communityMember.createMany.mockRejectedValueOnce(new Error('panne'));
 
-    await expect(admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR })).rejects.toThrow('panne');
+    await expect(admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR }, NO_ANNOUNCE)).rejects.toThrow('panne');
     expect(scheduleCommunityAddedAnnouncement).not.toHaveBeenCalled();
+  });
+});
+
+describe("admitSalonOccupants — l'entrée se voit chez les membres (#19406)", () => {
+  it("chaque occupant fait membre part en community:member-joined, « invited », rang member — jamais l'exclu", async () => {
+    const prisma = prismaDouble({
+      occupations: [
+        { conversationId: SALON_A, userId: OCCUPANT },
+        { conversationId: SALON_A, userId: BLOQUE },
+      ],
+      bloquesParCreateur: [BLOQUE],
+    });
+    const announced: unknown[] = [];
+
+    await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR }, (changes) => { announced.push(...changes); });
+
+    expect(announced).toEqual([{ kind: 'joined', communityId: COMMUNITY, userId: OCCUPANT, role: 'member', via: 'invited' }]);
+  });
+
+  it('la seconde passe de la bascule annonce aussi ceux qu\'elle rattrape', async () => {
+    const prisma = prismaDouble({ occupations: [{ conversationId: SALON_A, userId: OCCUPANT }] });
+    const announced: unknown[] = [];
+
+    await closeSalonsAfterSwitch(
+      { prisma: prisma as never, socketIOHandler: null, announce: (changes) => { announced.push(...changes); } },
+      { communityId: COMMUNITY, createdBy: CREATEUR, outsiders: [], now: NOW },
+    );
+
+    expect(announced).toEqual([{ kind: 'joined', communityId: COMMUNITY, userId: OCCUPANT, role: 'member', via: 'invited' }]);
   });
 });

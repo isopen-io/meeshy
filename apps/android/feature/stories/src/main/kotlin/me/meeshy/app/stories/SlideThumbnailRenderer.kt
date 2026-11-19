@@ -56,7 +56,7 @@ internal object SlideThumbnailRenderer {
         return bitmap
     }
 
-    /** A posed media at its place, the size the canvas gives it (iOS `ForegroundMediaFrame`), cropped to its frame and turned about its centre. */
+    /** A posed media at its place, the size the canvas gives it (as on iOS), cropped to its frame and turned about its centre. */
     private fun drawMedia(canvas: Canvas, media: SlideThumbnailSpec.Media, image: Bitmap, width: Float, height: Float) {
         val size = ForegroundMediaFrame.renderedSize(media.aspectRatio, media.scale.toDouble(), width.toDouble())
         val centreX = media.x * width

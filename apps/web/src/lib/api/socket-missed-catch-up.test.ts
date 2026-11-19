@@ -14,6 +14,7 @@ import { FEED_NEW_COUNT_KEY } from './feed-new-count';
 import { STORY_TRAY_QUERY_KEY } from './stories';
 import type { ConversationsPage } from './conversations-pages';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
+import { MY_PROFILE_QUERY_KEY } from './me-keys';
 import { messagesQueryKey } from './messages';
 import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATION_LISTS_KEY } from './notifications';
 import { UNKNOWN_ROW_COALESCE_MS } from './realtime-thread-catch-up';
@@ -394,6 +395,7 @@ describe('#18573 — la première authentification rattrape les familles PERSONN
     ['la cloche — les comptes', NOTIFICATION_COUNTS_QUERY_KEY],
     ['les demandes d’amitié', FRIENDS_QUERY_PREFIX],
     ['les messages favoris', STARRED_MESSAGES_QUERY_ROOT],
+    ['le profil du lecteur — ses langues, son nom, sa photo (#18914)', MY_PROFILE_QUERY_KEY],
   ] as const;
 
   for (const [nom, queryKey] of PERSONAL_FAMILIES) {
@@ -427,4 +429,20 @@ describe('#18573 — la première authentification rattrape les familles PERSONN
       expect(queryClient.getQueryState(queryKey)).toBeUndefined();
     });
   }
+
+  /**
+   * #18914 (WEB-01) — la langue changée sur un autre appareil n'atteint aucun
+   * socket de soi : la passerelle ne l'émet que vers les partenaires. La session
+   * suit `GET /me` (`served-profile-session.ts`) ; c'est la relecture de chaque
+   * (re)connexion qui la ramène, sans attendre la fenêtre de trente minutes.
+   */
+  test('le profil du lecteur se relit aussi à chaque RECONNEXION', () => {
+    const { socket, queryClient } = connect();
+    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+    queryClient.setQueryData(MY_PROFILE_QUERY_KEY, { quoi: 'servi avant la coupure' });
+
+    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+
+    expect(isInvalidated(queryClient, MY_PROFILE_QUERY_KEY)).toBe(true);
+  });
 });

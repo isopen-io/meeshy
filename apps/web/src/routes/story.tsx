@@ -164,7 +164,7 @@ export default function StoryScreen() {
    * **LA TROISIÈME MARCHE DE LA CASCADE** (#5817, revue-correction, défaut
    * 4) — miroir de `StoryViewerContainer.swift:297-352`. `loadStoryFeed` ne
    * sert que les 50 stories les plus récentes ; une story partagée par LIEN
-   * mais hors de cette fenêtre (l'exact cas que `parity.md:310` qualifie
+   * mais hors de cette fenêtre (l'exact cas que `parity.md:411` qualifie
    * « lien partageable publiquement ») ne s'y trouve jamais, quel que soit
    * l'état du réseau. `primaryGroups`/`primaryRawPosition` mesurent CE
    * MANQUE sur le corpus principal SEUL, avant tout repli — c'est ce

@@ -4,9 +4,8 @@ import UIKit
 @testable import MeeshySDK
 
 /// Le composite cover/thumbHash (`StorySlideRenderer.renderComposite`) doit refléter le
-/// transform du FOND (zoom/pan/rotation) comme `SlideMiniPreview` (référence non-ambiguë :
-/// `.scaleEffect(scale)` + `.rotationEffect(rotation)` autour du centre, `.position(x·w, y·h)`)
-/// et le canvas. Avant le fix it.51, le fond était dessiné full-bleed sans transform → un fond
+/// transform du FOND (zoom/pan/rotation) comme le canvas (`scale` + `rotation` autour du
+/// centre, puis position `(x·w, y·h)`). Avant le fix it.51, le fond était dessiné full-bleed sans transform → un fond
 /// zoomé/pané/pivoté par l'utilisateur apparaissait droit dans la vignette de la tray (it.50).
 @MainActor
 final class StorySlideRendererBackgroundTransformTests: XCTestCase {

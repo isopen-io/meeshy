@@ -345,7 +345,8 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   // (`getUnreadCount`) est parti, entier, dans `unreadCountOfParticipant.ts`
   // (déclaré ci-dessous) — ce fichier hors budget ne pouvait plus grandir pour
   // y écarter les avis de capture. Aucune lecture n'a disparu.
-  'MessageReadStatusService.ts': { kind: 'applies', reads: 3, applications: 0 },
+  // 3 → 4 (#18731) : le balayage de contiguïté de la LIVRAISON n'applique PAS le masquage — décision motivée dans `decisions/2026-11-17-le-curseur-de-livraison-est-le-prefixe-contigu-de-la-remise-18731.md`.
+  'MessageReadStatusService.ts': { kind: 'applies', reads: 4, applications: 0 },
   // #9630 — le compteur unitaire : le `count` sous `applyPersonalHistoryHiding`
   // (masquage personnel ET avis de capture non adressés à ce lecteur), plus la
   // lecture des CANDIDATS avis de la fenêtre (identité et marque, aucun contenu)
@@ -355,6 +356,9 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   // qu'il a masqué de sa vue (historique effacé, messages supprimés pour lui)
   // ne lui est pas retraduit. Un invité sans compte n'a rien à masquer.
   'message-translation/ArrivalHistoryBackfill.ts': { kind: 'applies', reads: 1, applications: 1 },
+  // #19200 — « En commun », Liens : fenêtre de compte et page ; le masquage personnel est jugé EN MÉMOIRE
+  // (`hiddenFromReader`, marqueurs exigés par `IN_MEMORY_HIDING_SURFACES`), la fenêtre compte ce que la page sert.
+  'relations/sharedLinks.ts': { kind: 'applies', reads: 2, applications: 0 },
 
   /**
    * #5759 — les succès de « parole » et « retouche ». Trois lectures, toutes
@@ -546,9 +550,9 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       'Global pour proposer des personnes à suivre, jamais un contenu servi. ' +
       "Le masquage personnel porte sur l'historique affiché, pas sur qui parle.",
   },
+  'relations/pairHistory.ts': { kind: 'exempt', reads: 1, why: "« Notre histoire » (#19378) : des DATES et un comptage, jamais un contenu servi — effacer son historique ne défait pas qu'on se soit parlé." },
   'posts/directContactVisibility.ts': {
-    kind: 'exempt',
-    reads: 1,
+    kind: 'exempt', reads: 1,
     why:
       "Lien d'un choisi d'un post ONLY (#14105) : ne lit que les `senderId` des messages qu'il a " +
       "lui-même écrits dans une conversation directe avec l'auteur, pour décider s'il est prévenu, " +
@@ -705,13 +709,9 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
    * un aperçu. Même raison que `attachments/fileRouteVerdict.ts` ci-dessus :
    * rien n'est SERVI, donc rien à masquer.
    */
-  'world/worldSeedOperations.ts': {
-    kind: 'exempt',
-    reads: 1,
-    why:
+  'world/worldSeedOperations.ts': { kind: 'exempt', reads: 1, why:
       "Compte les messages d'UNE conversation (le seed World Wide) pour décider " +
-      "si sa purge doit être refusée — aucun contenu, auteur ni aperçu servi.",
-  },
+      "si sa purge doit être refusée — aucun contenu, auteur ni aperçu servi." },
 };
 
 /**
@@ -782,6 +782,7 @@ const IN_MEMORY_HIDING_SURFACES: Record<string, readonly string[]> = {
    * vert quand on retire le filtre (cycle 62 bis). Un marqueur doit tomber avec
    * ce qu'il garde.
    */
+  'relations/sharedLinks.ts': ['loadPersonalHistoryHidingByConversation(', 'hiddenFromReader('],
   'ConversationBridgeService.ts': [
     'loadPersonalHistoryHidingByUser(',
     'exclusiveFloorMsFor(',

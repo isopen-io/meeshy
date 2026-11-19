@@ -151,6 +151,7 @@ export function bindShellCall(env: ShellCallEnvironment): () => void {
     },
     closeRinging: (callId) => send('dismissIncomingCall', { callId }),
     now: env.now,
+    confirm: async () => false,
   });
 
   env.listen('pictureInPictureModeChanged', (data) => {

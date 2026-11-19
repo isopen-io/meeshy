@@ -57,4 +57,37 @@ public nonisolated enum JoinFlowCopy {
         )
         return String(localized: "joinFlow.success.joined", defaultValue: "Vous avez rejoint \(title) en tant que \(username)", bundle: bundle)
     }
+
+    /// Le lien n'est plus valable — expiré, éteint par son créateur ou plein (410) : ce n'est pas une panne qui se
+    /// réessaie, et la planche `Etat-Erreur` vue 3 le dit autrement qu'une erreur.
+    public static func isGone(_ error: Error) -> Bool {
+        guard case .server(410, _)? = error as? MeeshyError else { return false }
+        return true
+    }
+
+    nonisolated static func goneTitle(in bundle: Bundle) -> String {
+        String(localized: "joinFlow.gone.title", defaultValue: "Ce lien n'est plus valable", bundle: bundle)
+    }
+
+    nonisolated static func goneMessage(in bundle: Bundle) -> String {
+        String(localized: "joinFlow.gone.message", defaultValue: "Demande un nouveau lien à la personne qui te l'a envoyé.", bundle: bundle)
+    }
+
+    /// « Demande un nouveau lien à Aïssa. » quand l'aperçu a nommé son créateur ; la phrase anonyme sinon.
+    nonisolated static func goneMessage(creatorFirstName: String?, in bundle: Bundle) -> String {
+        guard let name = creatorFirstName else { return goneMessage(in: bundle) }
+        return String(localized: "joinFlow.gone.messageNamed", defaultValue: "Demande un nouveau lien à \(name).", bundle: bundle)
+    }
+
+    nonisolated static func goneInvitation(in bundle: Bundle) -> String {
+        String(localized: "joinFlow.gone.invitation", defaultValue: "Invitation", bundle: bundle)
+    }
+
+    nonisolated static func goneTicketLabel(title: String, address: String, in bundle: Bundle) -> String {
+        String(localized: "joinFlow.gone.ticketLabel", defaultValue: "\(title), \(address), lien qui n'est plus valable", bundle: bundle)
+    }
+
+    nonisolated static func goneCreatorCaption(in bundle: Bundle) -> String {
+        String(localized: "joinFlow.gone.creatorRole", defaultValue: "a créé ce lien", bundle: bundle)
+    }
 }

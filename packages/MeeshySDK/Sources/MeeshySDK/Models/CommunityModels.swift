@@ -55,6 +55,9 @@ public struct APICommunityMember: Codable, Identifiable, Sendable {
     public let role: String
     public let joinedAt: Date?
     public let user: APICommunityUser?
+    /// `pending` : une demande d'entrée qui attend qu'un admin ou un modérateur la valide (#19290). `nil` : serveur
+    /// qui ne le sert pas, et la rangée se lit comme une entrée faite.
+    public var status: String? = nil
 
     public var communityRole: MemberRole {
         MemberRole(rawValue: role) ?? .member
@@ -111,6 +114,9 @@ public struct APICommunity: Codable, Identifiable, Sendable, CacheIdentifiable {
     /// `GET /communities/:id` (#18014). `nil` : communauté trop petite pour
     /// qu'un compte reste anonyme, ou serveur qui ne le sert pas.
     public var onlineMemberCount: Int? = nil
+    /// Les entrées faites PAR LE LIEN de la communauté, distinctes des ajouts directs et des invitations — servi par
+    /// `GET /communities/:id` (#19290). `nil` : serveur qui ne le sert pas, et la fiche du lien s'en passe.
+    public var linkEntryCount: Int? = nil
 }
 
 extension APICommunity {

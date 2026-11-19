@@ -2,6 +2,12 @@ package me.meeshy.core.e2ee.wire
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.Transient
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 // Le contrat des routes `/api/v1/e2ee/*` (#3706), miroir de `packages/shared/types/e2ee-directory.ts` et de
 // `E2EEDirectoryModels.swift`. Tout ce qui voyage ici est PUBLIC (clés publiques, signatures XEdDSA) ou OPAQUE
@@ -82,8 +88,27 @@ public data class E2eeDeviceListing(val deviceId: Int, val registrationId: Int)
 @Serializable
 public data class E2eeUserDevices(val userId: String, val devices: List<E2eeDeviceListing>)
 
+/**
+ * Une page du rattrapage. [discarded] compte les enveloppes servies que le décodage a écartées (#18971) : une page dont
+ * TOUTES les enveloppes étaient mal formées n'est pas la fin du rattrapage.
+ */
 @Serializable
-public data class E2eeEnvelopePage(val envelopes: List<E2eeServedEnvelope>, val nextCursor: String? = null)
+public data class E2eeEnvelopePage(
+    val envelopes: List<E2eeServedEnvelope>,
+    val nextCursor: String? = null,
+    @Transient val discarded: Int = 0,
+) {
+    public companion object {
+        /** La page servie, décodée enveloppe par enveloppe : une enveloppe mal formée est écartée seule, sans accusé. */
+        public fun decodeServed(data: JsonElement): E2eeEnvelopePage {
+            val page = data as? JsonObject ?: throw SerializationException("e2ee envelope page is not an object")
+            val served = page["envelopes"] as? JsonArray ?: throw SerializationException("e2ee envelope page has no envelopes")
+            val envelopes = served.mapNotNull { E2eeServedEnvelope.decodeOrNull(it) }
+            val cursor = (page["nextCursor"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+            return E2eeEnvelopePage(envelopes, cursor, discarded = served.size - envelopes.size)
+        }
+    }
+}
 
 @Serializable
 public data class E2eeAckResult(val deleted: Int)

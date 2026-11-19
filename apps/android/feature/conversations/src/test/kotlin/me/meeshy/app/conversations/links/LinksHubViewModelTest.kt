@@ -37,6 +37,15 @@ import me.meeshy.sdk.net.api.CommunityLinksApi
 import me.meeshy.sdk.net.api.LinkApi
 import me.meeshy.sdk.net.api.TrackingLinkApi
 import me.meeshy.sdk.sharelink.ShareLinkRepository
+import io.mockk.every
+import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableStateFlow
+import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.profile.MyAddressWire
+import me.meeshy.sdk.model.profile.MyAddressesPayload
+import me.meeshy.sdk.net.api.MyAddressesApi
+import me.meeshy.sdk.profile.MyAddressesRepository
+import me.meeshy.sdk.session.SessionRepository
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -81,10 +90,86 @@ class LinksHubViewModelTest {
         },
     )
 
+    private class Addresses(var answer: () -> ApiResponse<MyAddressesPayload>) : MyAddressesApi {
+        override suspend fun list() = answer()
+    }
+
+    private val site = MyAddressWire(id = "a", title = "Site", url = "https://aissandiaye.studio", glyph = "site", position = 0)
+
+    private fun addresses(answer: () -> ApiResponse<MyAddressesPayload> = { ApiResponse(success = true, data = MyAddressesPayload(listOf(site))) }) =
+        MyAddressesRepository(Addresses(answer))
+
+    private fun user(username: String?) = username?.let { MeeshyUser(id = "u1", username = it) }
+
+    private fun session(username: String? = "aissa") = session(MutableStateFlow(user(username)))
+
+    private fun session(current: MutableStateFlow<MeeshyUser?>) = mockk<SessionRepository> {
+        every { currentUser } returns current
+    }
+
+    private fun hub(
+        sources: Sources = Sources(),
+        cache: LinksCache = LinksCache(),
+        addresses: MyAddressesRepository = addresses(),
+        session: SessionRepository = session(),
+    ) = LinksHubViewModel(repository(sources), cache, addresses, session)
+
+    @Test
+    fun `mon lien de profil est la des le premier instant, sans attendre le reseau`() = runTest {
+        val vm = hub()
+
+        assertThat(vm.state.value.profileLink?.webLink).isEqualTo("https://meeshy.me/u/aissa")
+    }
+
+    @Test
+    fun `mon lien de profil suit la session sans attendre un rechargement`() = runTest {
+        val current = MutableStateFlow(user(null))
+        val vm = hub(session = session(current))
+        advanceUntilIdle()
+        assertThat(vm.state.value.profileLink).isNull()
+
+        current.value = user("aissa")
+        advanceUntilIdle()
+        assertThat(vm.state.value.profileLink?.webLink).isEqualTo("https://meeshy.me/u/aissa")
+
+        current.value = user("aissandiaye")
+        advanceUntilIdle()
+        assertThat(vm.state.value.profileLink?.webLink).isEqualTo("https://meeshy.me/u/aissandiaye")
+    }
+
+    @Test
+    fun `sans pseudo partageable le billet du lien de profil n'existe pas`() = runTest {
+        assertThat(hub(session = session(username = null)).state.value.profileLink).isNull()
+    }
+
+    @Test
+    fun `mes adresses arrivent avec le serveur et la section reste vide quand il ne les sert pas`() = runTest {
+        val served = hub()
+        advanceUntilIdle()
+        assertThat(served.state.value.addresses.map { it.id }).containsExactly("a")
+
+        val absent = hub(addresses = addresses { ApiResponse(success = true, data = MyAddressesPayload()) })
+        advanceUntilIdle()
+        assertThat(absent.state.value.addresses).isEmpty()
+    }
+
+    @Test
+    fun `les adresses du cache sont peintes au premier instant et un echec les garde`() = runTest {
+        val api = Addresses { ApiResponse(success = true, data = MyAddressesPayload(listOf(site))) }
+        val repository = MyAddressesRepository(api)
+        repository.refresh()
+        api.answer = { throw java.io.IOException("offline") }
+
+        val vm = hub(addresses = repository)
+        assertThat(vm.state.value.addresses.map { it.id }).containsExactly("a")
+        advanceUntilIdle()
+        assertThat(vm.state.value.addresses.map { it.id }).containsExactly("a")
+    }
+
     @Test
     fun `les quatre cartes recoivent leurs chiffres depuis les quatre sources`() = runTest {
         val cache = LinksCache()
-        val vm = LinksHubViewModel(repository(Sources()), cache)
+        val vm = hub(cache = cache)
         assertThat(vm.state.value.isRefreshing).isTrue()
         advanceUntilIdle()
 
@@ -100,7 +185,7 @@ class LinksHubViewModelTest {
     @Test
     fun `un cache existant est peint au premier instant`() = runTest {
         val held = LinkStatsSnapshot(share = LinkStatsCard.Loaded(MyShareLinkStats(totalLinks = 8)))
-        val vm = LinksHubViewModel(repository(Sources()), LinksCache().apply { putFigures(held) })
+        val vm = hub(cache = LinksCache().apply { putFigures(held) })
         assertThat(LinksHubSummary.figures(LinksHubEntry.SHARE, vm.state.value.figures)?.count).isEqualTo(8)
     }
 
@@ -108,12 +193,12 @@ class LinksHubViewModelTest {
     fun `une source qui echoue garde l'ancien chiffre des autres cartes intact`() = runTest {
         val cache = LinksCache()
         val sources = Sources()
-        val first = LinksHubViewModel(repository(sources), cache)
+        val first = hub(sources = sources, cache = cache)
         advanceUntilIdle()
         assertThat(first.state.value.figures.tracking.valueOrNull?.totalClicks).isEqualTo(40)
 
         sources.tracking = ApiResponse(success = false)
-        val second = LinksHubViewModel(repository(sources), cache)
+        val second = hub(sources = sources, cache = cache)
         advanceUntilIdle()
 
         assertThat(second.state.value.figures.tracking.valueOrNull?.totalClicks).isEqualTo(40)
@@ -126,7 +211,7 @@ class LinksHubViewModelTest {
             tracking = ApiResponse(success = false), affiliate = ApiResponse(success = false),
             share = ApiResponse(success = false), community = ApiResponse(success = false),
         )
-        val vm = LinksHubViewModel(repository(off), LinksCache())
+        val vm = hub(sources = off)
         advanceUntilIdle()
         assertThat(LinksHubSummary.isEmpty(vm.state.value.figures)).isTrue()
     }

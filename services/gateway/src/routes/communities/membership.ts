@@ -18,7 +18,8 @@ import {
   sendForbidden,
   sendNotFound,
   sendConflict,
-  sendInternalError
+  sendInternalError,
+  sendBadRequest
 } from '../../utils/response.js';
 import { CommunityRole } from './types';
 import { communityGuardsItsSalons, exitCommunitySalons } from '../../services/conversations/communitySalonExit';
@@ -30,6 +31,9 @@ import { viewerFromRequest } from '../users/presence-gate';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import type { CommunityEngagementOptions } from './types';
+import { JoinCommunitySchema } from './join-body';
+import { clickGeo } from '../tracking-links/click-geo';
+import { admitCommunityMember, requestCommunityEntry } from './admission';
 
 const logger = enhancedLogger.child({ module: 'CommunityMembershipRoutes' });
 
@@ -130,7 +134,7 @@ export async function registerMembershipRoutes(
   fastify.post('/communities/:id/join', {
     onRequest: [fastify.authenticate],
     schema: {
-      description: 'Join a public community. The authenticated user is added as a member with the "member" role. Private communities cannot be joined directly - use an invite instead.',
+      description: 'Join a public community. The authenticated user is added as a member with the "member" role. Private communities cannot be joined directly - use an invite instead. Optional body `{ via: "link" }` records an entry through the community link (#19429). A public community that validates each entry (`requiresJoinApproval`) records a join request instead: a client that sends `{ acceptsPending: true }` gets 202 with the pending request, an older client gets 409 `COMMUNITY_JOIN_PENDING`; a request within 7 days of a refusal gets 403 `COMMUNITY_JOIN_COOLDOWN`.',
       tags: ['communities'],
       summary: 'Join a public community',
       params: {
@@ -151,6 +155,24 @@ export async function registerMembershipRoutes(
             success: { type: 'boolean', example: true },
             data: communityMemberSchema
           }
+        },
+        202: {
+          description: 'The community validates each entry: a join request is pending (#19429)',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                status: { type: 'string', enum: ['pending'] },
+                requestId: { type: 'string' }
+              }
+            }
+          }
+        },
+        400: {
+          description: 'Invalid join body',
+          ...errorResponseSchema
         },
         401: {
           description: 'User not authenticated',
@@ -183,87 +205,65 @@ export async function registerMembershipRoutes(
         return sendUnauthorized(reply, 'User must be authenticated');
       }
 
+      // #19429 — corps FACULTATIF : un ancien client n'en envoie aucun et entre « de lui-même ».
+      const parsedBody = JoinCommunitySchema.safeParse(request.body ?? {});
+      if (!parsedBody.success) {
+        return sendBadRequest(reply, 'Invalid join request', { code: 'INVALID_JOIN_REQUEST' });
+      }
+      const via = parsedBody.data.via ?? 'self';
+      // Le pays seul, depuis l'en-tête du CDN — jamais la ville (même source que les liens de suivi).
+      const joinCountry = clickGeo(request).country ?? null;
+
       const userId = authContext.userId;
 
       const community = await fastify.prisma.community.findFirst({
         // #8876 — on ne rejoint pas une communauté désactivée par l'administration.
         where: { id, isActive: true },
-        select: { id: true, isPrivate: true, createdBy: true }
+        select: { id: true, isPrivate: true, createdBy: true, requiresJoinApproval: true }
       });
 
       if (!community) {
         return sendNotFound(reply, 'Community not found');
       }
 
+      // Une communauté privée reste sur invitation (#19429) : la validation
+      // des entrées n'ouvre pas une porte que l'invitation fermait.
       if (community.isPrivate) {
         return sendForbidden(reply, 'Cannot join a private community without an invite');
       }
 
-      const existingMember = await fastify.prisma.communityMember.findFirst({
-        where: { communityId: id, userId }
-      });
-
-      if (existingMember?.isActive) {
-        return sendConflict(reply, 'You are already a member of this community');
+      // « Valider chaque entrée » (#19429) : une DEMANDE, jamais une adhésion directe.
+      if (community.requiresJoinApproval) {
+        const activeMember = await fastify.prisma.communityMember.findFirst({
+          where: { communityId: id, userId, isActive: true },
+          select: { id: true }
+        });
+        if (activeMember) {
+          return sendConflict(reply, 'You are already a member of this community');
+        }
+        const outcome = await requestCommunityEntry(fastify, { communityId: id, userId, via, country: joinCountry });
+        if (outcome.kind === 'cooldown') {
+          return sendForbidden(reply, 'Your last request to join was declined recently', { code: 'COMMUNITY_JOIN_COOLDOWN' });
+        }
+        // Rétrocompatibilité (#9223) : seul le client qui ANNONCE la demande en
+        // attente (`acceptsPending`) reçoit 202 ; un client antérieur décode un
+        // membre, et reçoit donc une erreur métier qu'il sait afficher.
+        if (!parsedBody.data.acceptsPending) {
+          return sendConflict(reply, 'Your request to join is awaiting approval', { code: 'COMMUNITY_JOIN_PENDING' });
+        }
+        return sendSuccess(reply, { status: 'pending', requestId: outcome.requestId }, { statusCode: 202 });
       }
 
-      // Une ligne INACTIVE (`isActive: false`, laissée par un départ — #5760)
-      // se RÉACTIVE : créer en présence d'une ligne existante produirait une
-      // seconde ligne pour la même paire (communityId, userId), exactement le
-      // défaut que `resolveConversationEntry` existe pour éviter côté
-      // conversation. Le rôle repart de MEMBER, jamais de l'ancien rang — un
-      // rang se donne, il ne se retrouve pas dans une ligne périmée.
-      const member = existingMember
-        ? await fastify.prisma.communityMember.update({
-            where: { id: existingMember.id },
-            data: { isActive: true, leftAt: null, role: CommunityRole.MEMBER as string },
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  username: true,
-                  displayName: true,
-                  avatar: true,
-                  isOnline: true
-                }
-              }
-            }
-          })
-        : await fastify.prisma.communityMember.create({
-            data: {
-              communityId: id,
-              userId,
-              role: CommunityRole.MEMBER as string
-            },
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  username: true,
-                  displayName: true,
-                  avatar: true,
-                  isOnline: true
-                }
-              }
-            }
-          });
-
-      // Succès « cercles » (#5759) — APRÈS l'ACK métier, jamais avant : on ne
-      // grave pas un palier pour une adhésion qui n'a pas eu lieu. Best-effort
-      // et idempotent, donc une panne ici ne coûte que le prochain geste.
-      void new CerclesAchievements(fastify.prisma).recordEvent({
-        kind: 'community.join',
-        userId,
+      const { member, admitted } = await admitCommunityMember(fastify, engagement, {
         communityId: id,
-      }).catch(() => undefined);
-
-      // `social.community_joined` (#8959) — une fois par communauté ; le
-      // créateur qui revient dans la sienne ne se paie pas (`targetOwnerId`).
-      engagement
-        .recordActivity(userId, 'social.community_joined', { targetId: id, targetOwnerId: community.createdBy })
-        .catch((err: unknown) => logger.warn('engagement social.community_joined failed', { err }));
-
-      scheduleCommunityMemberBroadcastFrom(fastify, { kind: 'joined', communityId: id, userId, role: 'member', via: 'self' });
+        userId,
+        via,
+        joinCountry,
+        createdBy: community.createdBy
+      });
+      if (!admitted) {
+        return sendConflict(reply, 'You are already a member of this community');
+      }
 
       // Pas de gate ici : le membre rendu est l'APPELANT lui-même, et une
       // préférence de visibilité ne se cache pas à celui qui l'a posée.
@@ -506,7 +506,7 @@ export async function registerMembershipRoutes(
       const member = existingMember
         ? await fastify.prisma.communityMember.update({
             where: { id: existingMember.id },
-            data: { isActive: true, leftAt: null, role: CommunityRole.MEMBER as string },
+            data: { isActive: true, leftAt: null, joinedAt: new Date(), role: CommunityRole.MEMBER as string, joinedVia: 'invited', joinCountry: null },
             include: {
               user: {
                 select: {
@@ -524,7 +524,8 @@ export async function registerMembershipRoutes(
             data: {
               communityId: id,
               userId: inviteeId,
-              role: CommunityRole.MEMBER as string
+              role: CommunityRole.MEMBER as string,
+              joinedVia: 'invited'
             },
             include: {
               user: {

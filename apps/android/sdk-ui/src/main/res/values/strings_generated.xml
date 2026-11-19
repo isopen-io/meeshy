@@ -99,7 +99,6 @@
     <string name="bubble_a11y_location">Shared location</string>
     <string name="bubble_a11y_reactions">Reactions: %1$s</string>
     <string name="bubble_a11y_reply_to">Reply to %1$s</string>
-    <string name="bubble_attachment_file_fallback">File</string>
     <string name="bubble_audio_stack_position">Voice message %1$d of %2$d</string>
     <string name="bubble_blur_view_once">View once</string>
     <string name="bubble_contact_card_a11y_on_meeshy">On Meeshy: %1$s</string>
@@ -285,7 +284,6 @@
     <string name="kit_progress_ring_busy">In progress</string>
     <string name="language_strip_more">Other languages</string>
     <string name="lentille_mode_menu_selected">selected</string>
-    <string name="live_location_duration_title">Share duration</string>
     <string name="live_location_sharing_by">%1$s is sharing their location</string>
     <string name="live_location_stop">Stop</string>
     <string name="location_fullscreen_directions">Directions</string>
@@ -356,7 +354,6 @@
     <string name="media_summary_voice">🎙️ Voice message</string>
     <string name="media_trim_loading">Loading preview</string>
     <string name="media_trim_of_total">of %1$s</string>
-    <string name="media_trim_window">Kept portion</string>
     <string name="media_video_pip_enter">Picture in Picture</string>
     <string name="media_video_unavailable_retry">Video unavailable. Retry.</string>
     <string name="media_voice_message">Voice message</string>
@@ -416,6 +413,7 @@
     <string name="reading_mode_summary_title">Summary</string>
     <string name="retouch_crop_original">Original</string>
     <string name="retouch_effect_angel">Angel</string>
+    <string name="retouch_effect_baby">Baby</string>
     <string name="retouch_effect_demon">Demon</string>
     <string name="retouch_effect_none">None</string>
     <string name="retouch_effect_smoothing">Skin smoothing</string>
@@ -430,7 +428,6 @@
     <string name="retouch_filter_golden">Golden</string>
     <string name="retouch_filter_monochrome">Black &amp; white</string>
     <string name="retouch_filter_muted">Soft</string>
-    <string name="retouch_filter_natural">Natural</string>
     <string name="retouch_filter_sky">Sky</string>
     <string name="retouch_filter_softNight">Soft night</string>
     <string name="retouch_filter_velvet">Velvet</string>
@@ -482,7 +479,6 @@
     <string name="retouch_tool_text">Text</string>
     <string name="retouch_tool_trim">Trim</string>
     <string name="skeleton_feed_post_loading">Loading a post</string>
-    <string name="skeleton_link_row_loading">Loading a link</string>
     <string name="skeleton_profile_loading">Loading the profile</string>
     <string name="skeleton_stories_loading">Loading stories</string>
     <string name="slide_rail_delete_cancel">Cancel</string>
@@ -537,7 +533,6 @@
     <string name="talkie_header_badge_live">Live</string>
     <string name="talkie_header_badge_recorded">Recorded</string>
     <string name="talkie_header_badge_relayed">Offline</string>
-    <string name="talkie_header_live">Talkie in progress</string>
     <string name="talkie_send_connecting">Connecting…</string>
     <string name="talkie_send_failed">The walkie-talkie could not be sent.</string>
     <string name="talkie_send_hold">Hold to talk</string>
@@ -549,7 +544,6 @@
     <string name="talkie_send_rate_limited">Too many talks: try again in a moment.</string>
     <string name="talkie_send_recording_copy">Recording a voice message…</string>
     <string name="talkie_send_talking">You are talking to %1$s…</string>
-    <string name="talkie_send_voice">The walkie-talkie can’t get through right now: send a voice message instead.</string>
     <string name="talkie_send_waking">Waking %1$s…</string>
     <string name="time_lastSeen_beforeYesterdayAt">Seen two days ago at %1$s</string>
     <string name="time_lastSeen_dateAt">Seen on %1$s at %2$s</string>

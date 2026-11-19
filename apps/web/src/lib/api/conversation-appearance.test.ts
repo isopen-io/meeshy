@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { appearanceOf } from '@/lib/appearance/read';
 
-import { bindAppearanceLive, chooseAppearance, createAppearanceSync } from './conversation-appearance';
+import { chooseAppearance } from './conversation-appearance';
 import { CONVERSATIONS_QUERY_KEY, conversationQueryKey, findCachedConversation } from './conversations';
 import { createHttpTransport } from './http';
 import type { Conversation } from './types';
@@ -89,51 +89,5 @@ describe('chooseAppearance', () => {
     await chooseAppearance({ conversationId: 'c1', appearance: SOLID, deps: { source: 'fixtures', transport, queryClient } });
     expect(sent).toEqual([]);
     expect(read(queryClient)).toEqual(SOLID);
-  });
-});
-
-describe('un autre appareil', () => {
-  const event = (extra: Record<string, unknown>) => ({ userId: 'u', conversationId: 'c1', version: 2, reset: false, preferences: { appearance: SOLID }, ...extra });
-
-  test('user:preferences-updated s’applique', () => {
-    const queryClient = seeded(conversation());
-    createAppearanceSync(queryClient)(event({}));
-    expect(read(queryClient)).toEqual(SOLID);
-  });
-
-  test('une version en retard ne défait pas un état plus frais', () => {
-    const queryClient = seeded(conversation());
-    const sync = createAppearanceSync(queryClient);
-    sync(event({ version: 5 }));
-    sync(event({ version: 3, preferences: { appearance: null } }));
-    expect(read(queryClient)).toEqual(SOLID);
-  });
-
-  test('une remise à zéro rend Signature', () => {
-    const queryClient = seeded(conversation({ userPreferences: [{ appearance: SOLID }] }));
-    createAppearanceSync(queryClient)(event({ reset: true, preferences: null }));
-    expect(read(queryClient).background).toEqual({ kind: 'signature' });
-  });
-
-  test('une charge d’un autre scope ou illisible est ignorée', () => {
-    const queryClient = seeded(conversation({ userPreferences: [{ appearance: SOLID }] }));
-    const sync = createAppearanceSync(queryClient);
-    sync({ userId: 'u', category: 'privacy' });
-    sync('x');
-    sync(event({ preferences: { isPinned: true }, version: 9 }));
-    expect(read(queryClient)).toEqual(SOLID);
-  });
-
-  test('l’écoute se pose sur user:preferences-updated et se défait', () => {
-    const handlers = new Map<string, (v: unknown) => void>();
-    const socket = {
-      connected: true, connect: () => undefined, disconnect: () => undefined, emit: () => undefined,
-      on: (e: string, h: (v: unknown) => void) => void handlers.set(e, h),
-      off: (e: string) => void handlers.delete(e),
-    };
-    const off = bindAppearanceLive({ socket: socket as never, queryClient: seeded(conversation()) });
-    expect([...handlers.keys()]).toEqual(['user:preferences-updated']);
-    off();
-    expect(handlers.size).toBe(0);
   });
 });

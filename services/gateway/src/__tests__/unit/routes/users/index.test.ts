@@ -16,6 +16,7 @@ const mockProfileFns = {
   updateUserPassword: jest.fn<any>().mockResolvedValue(undefined),
   updateUsername: jest.fn<any>().mockResolvedValue(undefined),
   getUserByUsername: jest.fn<any>().mockResolvedValue(undefined),
+  userShortAddressAlias: jest.fn<any>().mockResolvedValue(undefined),
   getUserById: jest.fn<any>().mockResolvedValue(undefined),
   getUserByEmail: jest.fn<any>().mockResolvedValue(undefined),
   getUserByIdDedicated: jest.fn<any>().mockResolvedValue(undefined),
@@ -93,6 +94,29 @@ const mockReferralCodeFns = {
 
 jest.mock('../../../../routes/users/referral-code', () => mockReferralCodeFns);
 
+const mockMeAddressFns = {
+  meAddressRoutes: jest.fn<any>().mockResolvedValue(undefined),
+};
+
+jest.mock('../../../../routes/users/me-addresses', () => mockMeAddressFns);
+
+const mockInCommonFns = {
+  getUserInCommon: jest.fn<any>().mockResolvedValue(undefined),
+};
+
+jest.mock('../../../../routes/users/in-common', () => mockInCommonFns);
+
+const mockStoryHighlightFns = {
+  storyHighlightRoutes: jest.fn<any>().mockResolvedValue(undefined),
+};
+
+jest.mock('../../../../routes/users/story-highlights', () => mockStoryHighlightFns);
+const mockProfileLinkStatsFns = {
+  profileLinkStatsRoutes: jest.fn<any>().mockResolvedValue(undefined),
+};
+
+jest.mock('../../../../routes/users/profile-link-stats', () => mockProfileLinkStatsFns);
+
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { userRoutes } from '../../../../routes/users/index';
@@ -112,9 +136,14 @@ describe('userRoutes — registers all route handler groups', () => {
     expect(mockProfileFns.updateUserPassword).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.updateUsername).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.getUserByUsername).toHaveBeenCalledWith(mockFastify);
+    expect(mockProfileFns.userShortAddressAlias).toHaveBeenCalledWith(mockFastify);
+    expect(mockMeAddressFns.meAddressRoutes).toHaveBeenCalledWith(mockFastify);
+    expect(mockProfileLinkStatsFns.profileLinkStatsRoutes).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.getUserById).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.getUserByEmail).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.getUserByIdDedicated).toHaveBeenCalledWith(mockFastify);
+    expect(mockInCommonFns.getUserInCommon).toHaveBeenCalledWith(mockFastify);
+    expect(mockStoryHighlightFns.storyHighlightRoutes).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.getUserByPhone).toHaveBeenCalledWith(mockFastify);
 
     // Contact change routes — surface unifiée (#4341) d'abord

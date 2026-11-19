@@ -82,4 +82,5 @@
     <string name="viewer_doc_open_with">Open with another app</string>
     <string name="viewer_text_show_source">Show source</string>
     <string name="viewer_text_show_rendered">Show rendered</string>
+    <string name="report_message_sent">Report sent</string>
 </resources>

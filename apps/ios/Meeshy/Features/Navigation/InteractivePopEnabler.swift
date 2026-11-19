@@ -124,8 +124,8 @@ enum RouteEdgeSwipe: Equatable {
              .communityList, .communityDetail, .communityCreate, .communitySettings,
              .communityMembers, .communityInvite, .notifications, .userStats,
              .progression, .progressionSection, .progressionRules, .progressionNotebook,
-             .gamePage, .progressionConcept, .progressionDashboard, .links, .affiliate,
-             .trackingLinks, .shareLinks, .communityLinks, .dataExport, .postDetail,
+             .gamePage, .progressionConcept, .links, .affiliate,
+             .trackingLinks, .shareLinks, .communityLinks, .myAddresses, .dataExport, .postDetail,
              .hashtagResults, .bookmarks, .starredMessages, .friendRequests,
              .storyNotificationTarget, .moodSpotlight:
             return .restored

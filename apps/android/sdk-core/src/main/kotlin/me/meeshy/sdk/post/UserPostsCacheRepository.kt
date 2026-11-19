@@ -62,8 +62,78 @@ class UserPostsCacheRepository @Inject constructor(
         }
     }
 
+    /** #19426 — the viewer's saved posts, kept like an author's page (iOS `bookmarks` key of the `feed` store). */
+    suspend fun cachedBookmarks(): CacheResult<UserPostsSnapshot> = cached(BOOKMARKS)
+
+    /**
+     * Written only while the list fits [MAX_CACHED]: a longer one would be cut and its cursor would then skip the
+     * rows between the cut and the cursor, so the previous (shorter, consistent) copy stays.
+     */
+    suspend fun persistBookmarks(snapshot: UserPostsSnapshot, ticket: AccountTicket?) {
+        if (snapshot.posts.size <= MAX_CACHED) persist(BOOKMARKS, snapshot, ticket)
+    }
+
+    /**
+     * #18931 — a live gesture on [postId] ([patch]: the gateway's absolute counts) reaches EVERY author's cached page that
+     * holds it; each page keeps its own freshness (a gesture is not a reload).
+     */
+    suspend fun patchEverywhere(postId: String, patch: (ApiPost) -> ApiPost?, ticket: AccountTicket?) =
+        rewriteEverywhere(postId, ticket) { snapshot ->
+            val index = snapshot.posts.indexOfFirst { it.id == postId }
+            snapshot.posts.getOrNull(index)?.let(patch)?.let { next ->
+                snapshot.copy(posts = snapshot.posts.toMutableList().also { it[index] = next })
+            }
+        }
+
+    /** #18931 — a post deleted elsewhere (`post:deleted`) leaves every author's cached page. */
+    suspend fun removeEverywhere(postId: String, ticket: AccountTicket?) =
+        rewriteEverywhere(postId, ticket) { snapshot ->
+            if (snapshot.posts.none { it.id == postId }) null else snapshot.copy(posts = snapshot.posts.filterNot { it.id == postId })
+        }
+
+    /** #19426 — a post un-saved elsewhere (`post:bookmarked` false) leaves the saved posts only; the author pages keep it. */
+    suspend fun removeFromBookmarks(postId: String, ticket: AccountTicket?) =
+        rewriteEverywhere(postId, ticket, key(BOOKMARKS)) { snapshot ->
+            if (snapshot.posts.none { it.id == postId }) null else snapshot.copy(posts = snapshot.posts.filterNot { it.id == postId })
+        }
+
+    /**
+     * #19426 — a post saved elsewhere (`post:bookmarked` true) that the copy does not hold: the copy is no longer the whole
+     * list, so it loses its freshness and the next open paints it then revalidates it, instead of hiding the new save for
+     * the rest of the fresh window.
+     */
+    suspend fun bookmarkedElsewhere(postId: String, ticket: AccountTicket?) {
+        fence.commitOrWrite(ticket) {
+            val row = dao.observe(key(BOOKMARKS)).first() ?: return@commitOrWrite
+            val snapshot = runCatching { MeeshyApi.json.decodeFromString<UserPostsSnapshot>(row.payload) }.getOrNull()
+            if (snapshot == null || snapshot.posts.any { it.id == postId }) return@commitOrWrite
+            val staleAt = clock.nowMillis() - CachePolicy.Feed.freshForMillis - 1
+            if (row.cachedAt > staleAt) dao.upsert(row.copy(cachedAt = staleAt))
+        }
+    }
+
+    private suspend fun rewriteEverywhere(
+        postId: String,
+        ticket: AccountTicket?,
+        prefix: String = KEY_PREFIX,
+        rewrite: (UserPostsSnapshot) -> UserPostsSnapshot?,
+    ) {
+        fence.commitOrWrite(ticket) {
+            dao.namingUnderPrefix(prefix, postId).forEach { row ->
+                val snapshot = runCatching { MeeshyApi.json.decodeFromString<UserPostsSnapshot>(row.payload) }.getOrNull()
+                    ?: return@forEach
+                val next = rewrite(snapshot) ?: return@forEach
+                dao.upsert(row.copy(payload = MeeshyApi.json.encodeToString(UserPostsSnapshot.serializer(), next)))
+            }
+        }
+    }
+
     internal companion object {
         const val MAX_CACHED: Int = 100
-        fun key(userId: String): String = "profile_posts:$userId"
+        private const val KEY_PREFIX = "profile_posts:"
+
+        /** Not a user id (ObjectIds are hex): the saved posts live under their own key, in reach of [patchEverywhere]. */
+        private const val BOOKMARKS = "bookmarks"
+        fun key(userId: String): String = KEY_PREFIX + userId
     }
 }

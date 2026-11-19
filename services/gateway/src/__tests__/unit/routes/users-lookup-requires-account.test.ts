@@ -63,6 +63,8 @@ function buildApp(reglages: Reglages) {
     // préférences de confidentialité ; aucun document ⇒ personne ne se cache.
     userPreferences: { findMany: jest.fn<any>(async () => []) },
     userPreference: { findMany: jest.fn<any>(async () => []) },
+    profileAddress: { findMany: async () => [] },
+    communityMember: { findMany: async () => [] },
     user: {
       findFirst,
       findUnique: jest.fn<any>(async () => ({

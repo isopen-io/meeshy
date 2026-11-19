@@ -6,8 +6,7 @@ import me.meeshy.sdk.model.search.SearchTextFolder
 
 /**
  * Which of the two content-language slots the wizard's language step is editing.
- * Port of iOS `StepLanguageView.LanguageTarget`
- * (`apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingStepViews.swift`).
+ * Port of the iOS signup language step.
  */
 public enum class LanguageSlot { SYSTEM, REGIONAL }
 
@@ -27,7 +26,7 @@ public data class LanguageSelectionState(
  * and reuses the [LanguageData] catalogue as the single source of truth — nothing is
  * re-implemented or hand-copied.
  *
- * Parity source: iOS `StepLanguageView` over `RegistrationViewModel`.
+ * Parity source: iOS `SignupViewModel`.
  */
 public object LanguageStepSelection {
 

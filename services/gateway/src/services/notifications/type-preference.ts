@@ -32,11 +32,18 @@ export function isNotificationTypeEnabledByPreference(
     case 'contact_recently_active': return prefs.contactActivityEnabled ?? true;
     case 'device_battery':    return prefs.deviceBatteryEnabled ?? true;
     case 'device_unreachable': return prefs.deviceUnreachableEnabled ?? true;
+    case 'location_share_started':
+    case 'location_share_requested': return prefs.locationShareEnabled ?? true;
     case 'game_duo_invited':
     case 'game_duo_accepted':
     case 'game_league_result':
     case 'game_season_step':
-    case 'game_mission_window': return prefs.gameEnabled ?? true;
+    case 'game_mission_window':
+    // Les exploits du Jeu — rang, palier de Flamme, haut fait — sont du Jeu :
+    // « Jeu » coupé ne reçoit rien (décision porteur 2026-11-10, #17368).
+    case 'level_up':
+    case 'streak_milestone':
+    case 'achievement_unlocked': return prefs.gameEnabled ?? true;
     case 'game_photo_moment':   return (prefs.gameEnabled ?? true) && (prefs.gamePhotoEnabled ?? true);
     case 'member_joined':     return prefs.memberJoinedEnabled;
     case 'message_reply':

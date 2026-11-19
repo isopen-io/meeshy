@@ -79,30 +79,6 @@ final class LocalizedStringsBacklogTests: XCTestCase {
         )
     }
 
-    /// `TransitionInspector.easingDisabledNoticeText(easingName:)` injects a
-    /// localized easing name into a `%@` placeholder. The static helpers are
-    /// exposed precisely so this test can drive them without mounting the
-    /// SwiftUI view (which `defaultIsolation(MainActor)` makes awkward).
-    func test_transitionInspector_easingLabel_resolvesViaBundle() {
-        assertResolvedNonRaw("story.timeline.inspector.easing.label")
-        assertResolvedNonRaw("story.timeline.inspector.easing.linear")
-
-        let linearName = TransitionInspector.linearEasingName
-        XCTAssertFalse(linearName.isEmpty)
-        XCTAssertNotEqual(linearName, "story.timeline.inspector.easing.linear")
-
-        let composed = TransitionInspector.easingDisabledNoticeText(easingName: linearName)
-        XCTAssertFalse(composed.isEmpty)
-        // The composed notice must actually interpolate the easing name —
-        // catches `%@` being dropped or the format string returning raw.
-        XCTAssertTrue(
-            composed.contains(linearName),
-            "Composed notice '\(composed)' must contain interpolated easing name '\(linearName)'"
-        )
-        // And it must not be the bare format string echoed back.
-        XCTAssertNotEqual(composed, "story.timeline.inspector.easing.label")
-    }
-
     // MARK: - Catalog completeness probe
 
     /// Asserts every backlog key resolves to a non-raw, non-empty value in

@@ -112,7 +112,8 @@ public enum NotificationCategory: String, CaseIterable, Sendable {
             return [
                 .postComment, .legacyPostComment, .postRepost, .commentReply,
                 .legacyStoryReply, .storyNewComment, .friendStoryComment, .storyThreadReply,
-                .friendNewStory, .friendNewPost, .friendNewMood
+                .friendNewStory, .friendNewPost, .friendNewMood,
+                .friendContentReaction, .friendContentShare, .friendContentRepost, .friendContentQuote
             ]
         case .engagement:
             return [
@@ -123,7 +124,8 @@ public enum NotificationCategory: String, CaseIterable, Sendable {
             return [
                 .friendRequest, .contactRequest, .legacyFriendRequest,
                 .friendAccepted, .contactAccepted, .legacyFriendAccepted,
-                .contactJoined, .contactRecentlyActive, .deviceBattery, .deviceUnreachable, .legacyStatusUpdate
+                .contactJoined, .contactRecentlyActive, .relationAcquaintance, .deviceBattery, .deviceUnreachable,
+                .inactivityAlert, .legacyStatusUpdate
             ]
         case .groups:
             return [
@@ -147,7 +149,7 @@ public enum NotificationCategory: String, CaseIterable, Sendable {
             return [
                 .securityAlert, .loginNewDevice, .legacySystemAlert, .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
                 .system, .maintenance, .updateAvailable, .reportResolved, .contentRemoved,
-                .legacyAffiliateSignup
+                .wellnessCheck, .legacyAffiliateSignup
             ]
         }
     }

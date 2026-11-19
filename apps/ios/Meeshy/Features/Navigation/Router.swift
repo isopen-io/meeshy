@@ -92,14 +92,13 @@ enum Route: Hashable {
     /// au-dessus de la première page. `section` : la section où une entrée extérieure (notification, bandeau du
     /// joueur) pose le regard ; `nil` : la fiche s'ouvre en haut.
     case progressionConcept(ProgressionConcept, section: ProgressionConceptSection? = nil)
-    /// L'ANCIEN tableau de bord de Progression, retiré (#9564, amendement n° 4). La route reste une version pour les
-    /// liens déjà posés et ouvre la première page de Progression ; elle se retire à zéro usage mesuré.
-    case progressionDashboard
     case links
     case affiliate
     case trackingLinks
     case shareLinks
     case communityLinks
+    /// « Mes adresses » (#18871) : poussé depuis la face Liens de ma fiche.
+    case myAddresses
     case dataExport
     case postDetail(String, FeedPost? = nil, showComments: Bool = false, commentId: String? = nil, parentCommentId: String? = nil)
     case hashtagResults(tag: String)
@@ -185,8 +184,6 @@ extension Route {
             return page.title
         case .progressionConcept(let concept, _):
             return ConceptText.name(concept)
-        case .progressionDashboard:
-            return String(localized: "route.title.progression", defaultValue: "Ma Légende", bundle: .main)
         case .links:
             return String(localized: "route.title.links", defaultValue: "Liens", bundle: .main)
         case .affiliate:
@@ -197,6 +194,8 @@ extension Route {
             return String(localized: "route.title.share_links", defaultValue: "Liens de partage", bundle: .main)
         case .communityLinks:
             return String(localized: "route.title.community_links", defaultValue: "Liens de communauté", bundle: .main)
+        case .myAddresses:
+            return ProfileLinksCopy.addressesTitle
         case .dataExport:
             return String(localized: "route.title.data_export", defaultValue: "Export de données", bundle: .main)
         case .postDetail(_, let post, _, _, _):
@@ -797,8 +796,8 @@ final class Router: ObservableObject {
             case .ownProfile:
                 replaceStack(with: .profile)
 
-            case .userProfile(let username):
-                deepLinkProfileUser = ProfileSheetUser(username: username)
+            case .userProfile(let username, let face):
+                deepLinkProfileUser = ProfileSheetUser(username: username).opening(on: face)
 
             case .trackedLink(let token):
                 // `/l/<token>` resolved async by targetType (records the click).
@@ -837,12 +836,7 @@ final class Router: ObservableObject {
             case .userLinks:
                 replaceStack(with: .links)
 
-            case .post(let postId), .postDetail(let postId):
-                // `.post` is the legacy short-form (e.g. `meeshy://post/<id>`
-                // / `meeshy://p/<id>`) and `.postDetail` is the canonical
-                // long-form added with the /feeds/post/:postId rollout —
-                // both land on the same PostDetailView surface, so route
-                // them through a single arm.
+            case .postDetail(let postId):
                 push(.postDetail(postId))
 
             case .storyDetail(let postId):

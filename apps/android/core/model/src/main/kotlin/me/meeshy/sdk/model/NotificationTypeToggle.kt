@@ -43,6 +43,9 @@ public object NotificationTypeToggle {
         // signalement, l'auteur reçoit TOUJOURS l'exposé des motifs d'un retrait. Jamais
         // `systemEnabled` : ce sont des types CONNUS.
         "report_resolved", "content_removed",
+        // La vérification d'inactivité (#18738) : « Tout va bien ? » et l'alerte aux Sangs sont des signaux de
+        // SÉCURITÉ — aucun interrupteur par type, jamais `systemEnabled`.
+        "wellness_check", "inactivity_alert",
     )
 
     private val GROUPS: List<ToggleGroup> = listOf(

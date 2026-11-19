@@ -15,6 +15,9 @@ public nonisolated enum MeeshyToggleRowAccessory: Sendable, Equatable {
     case check(isSelected: Bool)
     case checkbox(isChecked: Bool)
     case chevron
+    /// Une adresse qui quitte Meeshy (navigateur, autre app) : le glyphe de sortie, jamais le chevron d'une navigation
+    /// interne.
+    case external
     case value(String)
 }
 
@@ -92,8 +95,15 @@ public nonisolated struct MeeshyToggleRowRecipe: Sendable, Equatable {
     /// « Titre, sous-titre » : un sous-titre vide ou blanc n'existe pas pour le lecteur
     /// d'écran, et ne laisse aucune virgule orpheline.
     public static func accessibilityLabel(title: String, subtitle: String?) -> String {
-        guard let subtitle = visibleSubtitle(subtitle) else { return title }
-        return "\(title), \(subtitle)"
+        accessibilityLabel(title: title, titleAccessory: nil, subtitle: subtitle)
+    }
+
+    /// « Titre, accessoire de titre, sous-titre » : l'accessoire de titre est un dessin muet
+    /// (une pastille « Vérifié ») ; quand il porte un état, la ligne le dit juste après son titre.
+    public static func accessibilityLabel(title: String, titleAccessory: String?, subtitle: String?) -> String {
+        [title, visibleSubtitle(titleAccessory), visibleSubtitle(subtitle)]
+            .compactMap { $0 }
+            .joined(separator: ", ")
     }
 
     /// Le sous-titre tel qu'il se rend : absent s'il est vide ou blanc.
@@ -110,13 +120,13 @@ public nonisolated struct MeeshyToggleRowRecipe: Sendable, Equatable {
         case .check(let isSelected): return isSelected
         case .checkbox(let isChecked): return isChecked
         case .toggle(let isOn): return isOn
-        case .none, .chevron, .value: return false
+        case .none, .chevron, .external, .value: return false
         }
     }
 
     public static func valueFor(accessory: MeeshyToggleRowAccessory) -> MeeshyToggleRowValue {
         switch accessory {
-        case .none, .chevron: return .none
+        case .none, .chevron, .external: return .none
         case .toggle(let isOn): return .toggle(isOn: isOn)
         case .check(let isSelected): return .selected(isSelected)
         case .checkbox(let isChecked): return .selected(isChecked)

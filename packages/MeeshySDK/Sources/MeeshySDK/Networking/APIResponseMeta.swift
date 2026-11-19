@@ -39,7 +39,7 @@ public struct APIResponseMeta: Decodable, Sendable {
     /// les verrait jamais.
     ///
     /// Jumeau web : `meta.deletedConversationIds`, lu par
-    /// `apps/web/hooks/queries/use-conversations-delta-sync.ts`.
+    /// `loadConversationsDelta` (`apps/web/src/lib/api/conversations-delta.ts`).
     public let deletedConversationIds: [String]?
 
     /// `deletedConversationIds` a débordé son plafond serveur

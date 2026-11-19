@@ -2,83 +2,88 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// « Partager ma position » sur la fiche d'un Ami (#16983, iso de la réception `SharedLocationsMapSection`) : la durée
-/// (1 h, 8 h) et ce que la personne voit (la ville par défaut, le quartier, l'endroit exact) se choisissent dans une
-/// feuille, puis la ligne dit « Elle voit ta position · jusqu'à HH:MM » et « Arrêter » d'un geste, tant que ça dure.
-/// La ligne ne paraît que dès Ami (`ProfileCircleViewModel.offersSharedLocation`) ; la passerelle rejuge la loi à chaque envoi.
+/// « Partager ma position » sur la fiche d'un Ami (#16983, #19637, planche `Autre-Actions`) : une rangée du kit (K06),
+/// teintée par l'accent de la fiche, qui ouvre la feuille où se choisissent la durée et ce que la personne voit. Son
+/// sous-titre dit l'état du partage (« Ma position — non partagée », puis « Léo voit ta position (…) jusqu'à HH:MM ») et,
+/// tant que ça dure, « Arrêter » (K40 danger) se pose en fin de rangée. La ligne ne paraît que dès Ami
+/// (`ProfileCircleViewModel.offersSharedLocation`) ; la passerelle rejuge la loi à chaque envoi.
 struct ProfileShareLocationRow: View {
     @ObservedObject private var center: SharedLocationSharingCenter
     let userId: String
     let displayName: String
+    /// Le cercle commun, qui ouvre « Jusqu'à ce que j'arrête » entre Sangs (#19616) ; `nil` : la tuile reste verrouillée.
+    let circle: RelationLevel?
+    /// L'accent de la fiche ; sans lui, la couleur du cercle commun.
+    let tint: Color?
     @State private var choosing = false
-    private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    init(userId: String, displayName: String, center: SharedLocationSharingCenter = SharedLocationSharingHolder.center()) {
+    init(userId: String, displayName: String, circle: RelationLevel? = nil, tint: Color? = nil,
+         center: SharedLocationSharingCenter = SharedLocationSharingHolder.center()) {
         self.userId = userId
         self.displayName = displayName
+        self.circle = circle
+        self.tint = tint
         _center = ObservedObject(wrappedValue: center)
     }
 
     var body: some View {
-        content
-            .padding(MeeshySpacing.md)
-            .background(MeeshyColors.indigo500.opacity(MeeshyOpacity.subtle))
-            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
-            .sheet(isPresented: $choosing) {
-                ShareLocationChoiceSheet(displayName: displayName) { precision, duration in
-                    choosing = false
-                    Task { await share(precision: precision, duration: duration) }
-                }
-            }
+        let line = ProfileShareLocationLine.resolve(name: displayName, entry: center.entry(for: userId))
+        MeeshyGroupCard {
+            arrangement(line)
+                .padding(.vertical, MeeshySpacing.xs)
+        }
+        .sheet(isPresented: $choosing) {
+            ShareMyLocationSheet(recipients: [ShareMyLocationRecipient(userId: userId, name: displayName, circle: circle)],
+                                 center: center)
+        }
     }
 
     @ViewBuilder
-    private var content: some View {
-        if let entry = center.entry(for: userId) {
-            HStack(spacing: MeeshySpacing.md) {
-                Text("📍 " + ShareLocationWording.sharing(name: displayName, precision: entry.precision, until: entry.until))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(theme.textPrimary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button(ShareLocationWording.stop) {
-                    HapticFeedback.medium()
-                    Task { await stop() }
-                }
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(theme.error)
-                .frame(minHeight: MeeshyControlSize.tapTarget)
-                .disabled(center.isBusy)
-                .accessibilityLabel(ShareLocationWording.stopAccessibility(name: displayName))
-                .accessibilityIdentifier("sharedLocation.stop")
+    private func arrangement(_ line: ProfileShareLocationLine) -> some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                row(line)
+                stopButton(line)
             }
         } else {
-            Button {
-                HapticFeedback.medium()
-                choosing = true
-            } label: {
-                HStack(spacing: MeeshySpacing.sm) {
-                    Image(systemName: "location.fill")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    Text(ShareLocationWording.action)
-                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                }
-                .foregroundStyle(MeeshyColors.indigo500)
-                .frame(maxWidth: .infinity, minHeight: MeeshyControlSize.tapTarget)
+            HStack(spacing: 0) {
+                row(line)
+                stopButton(line)
             }
-            .buttonStyle(.plain)
-            .disabled(center.isBusy)
-            .accessibilityLabel(ShareLocationWording.actionAccessibility(name: displayName))
-            .accessibilityIdentifier("sharedLocation.share")
         }
     }
 
-    private func share(precision: SharedLocationPrecision, duration: SharedLocationShareDuration) async {
-        guard let problem = await center.share(with: userId, precision: precision, duration: duration) else {
-            HapticFeedback.success()
-            return
+    private func row(_ line: ProfileShareLocationLine) -> some View {
+        MeeshyToggleRow(line.title, systemImage: "mappin.and.ellipse", subtitle: line.subtitle, accessory: .chevron,
+                        tint: accent, haptic: .none, action: {
+                            HapticFeedback.medium()
+                            choosing = true
+                        })
+            .disabled(center.isBusy)
+            .accessibilityHint(ShareLocationWording.shareHint)
+            .accessibilityIdentifier("sharedLocation.share")
+    }
+
+    @ViewBuilder
+    private func stopButton(_ line: ProfileShareLocationLine) -> some View {
+        if line.offersStop {
+            MeeshyButton(ShareLocationWording.stop, kind: .danger, size: .s44, action: {
+                HapticFeedback.medium()
+                Task { await stop() }
+            })
+            .disabled(center.isBusy)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .accessibilityLabel(ShareLocationWording.stopAccessibility(name: displayName))
+            .accessibilityIdentifier("sharedLocation.stop")
         }
-        FeedbackToastManager.shared.showError(ShareLocationWording.problem(problem))
+    }
+
+    private var accent: Color { Self.accent(tint: tint, circle: circle) }
+
+    /// L'accent de la fiche quand elle en remet un, sinon la couleur du cercle commun.
+    static func accent(tint: Color?, circle: RelationLevel?) -> Color {
+        tint ?? LocationMapTint.color(for: circle)
     }
 
     private func stop() async {
@@ -93,67 +98,30 @@ struct ProfileShareLocationRow: View {
     }
 }
 
-/// La feuille du choix : durée et précision, la ville par défaut (on ouvre plus, jamais l'inverse).
-struct ShareLocationChoiceSheet: View {
-    let displayName: String
-    let onShare: (SharedLocationPrecision, SharedLocationShareDuration) -> Void
-    @State private var precision: SharedLocationPrecision = .city
-    @State private var duration: SharedLocationShareDuration = .oneHour
-    @State private var openNoteID: String?
-    @Environment(\.dismiss) private var dismiss
+/// La rangée « Partager ma position » en valeurs (#19637) : la personne en titre, l'état du partage en sous-titre, et
+/// « Arrêter » offert tant qu'un partage court vers elle.
+struct ProfileShareLocationLine: Equatable {
+    let title: String
+    let subtitle: String
+    let offersStop: Bool
 
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    Picker(ShareLocationWording.durationTitle, selection: $duration) {
-                        ForEach(SharedLocationShareDuration.allCases, id: \.self) { Text(ShareLocationWording.duration($0)).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                } header: {
-                    Text(ShareLocationWording.durationTitle)
-                }
-                Section {
-                    Picker(ShareLocationWording.precisionTitle, selection: $precision) {
-                        ForEach([SharedLocationPrecision.city, .neighborhood, .exact], id: \.self) {
-                            Text(ShareLocationWording.precision($0)).tag($0)
-                        }
-                    }
-                    .pickerStyle(.inline)
-                    .labelsHidden()
-                } header: {
-                    Text(ShareLocationWording.precisionTitle)
-                } footer: {
-                    MeeshyInfoNoted(note: ShareLocationWording.explainNote, openNoteID: $openNoteID) {
-                        Text(ShareLocationWording.explain(name: displayName))
-                    }
-                }
-            }
-            .navigationTitle(ShareLocationWording.sheetTitle(name: displayName))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(ShareLocationWording.confirm) { onShare(precision, duration) }
-                        .accessibilityIdentifier("sharedLocation.confirm")
-                }
-            }
+    static func resolve(name: String, entry: SharedLocationRoster.Entry?) -> ProfileShareLocationLine {
+        guard let entry else {
+            return ProfileShareLocationLine(title: LocationMapCopy.shareMineWith(name),
+                                            subtitle: LocationMapCopy.myPosition(.notShared, name: name), offersStop: false)
         }
-        .presentationDetents([.medium, .large])
+        return ProfileShareLocationLine(title: LocationMapCopy.shareMineWith(name),
+                                        subtitle: ShareLocationWording.sharing(name: name, precision: entry.precision, until: entry.until),
+                                        offersStop: true)
     }
 }
 
 /// Les phrases du partage de ma position, une clé par sens (sept langues dans `Localizable.xcstrings`). Les précisions
 /// reprennent celles de la carte de réception, pour que l'émetteur et le lecteur lisent le même mot.
 enum ShareLocationWording {
-    static var action: String {
-        String(localized: "sharedLocation.share.action", defaultValue: "Partager ma position", bundle: .main)
-    }
-
-    static func actionAccessibility(name: String) -> String {
-        String(format: String(localized: "sharedLocation.share.actionAccessibility", defaultValue: "Partager ma position avec %@", bundle: .main), name)
+    /// L'indice dit ce que fait le geste : le titre de la rangée dit déjà avec qui on partage.
+    static var shareHint: String {
+        String(localized: "sharedLocation.share.choiceAccessibility", defaultValue: "Choisir la durée et la précision", bundle: .main)
     }
 
     static func sheetTitle(name: String) -> String {
@@ -200,9 +168,19 @@ enum ShareLocationWording {
     }
 
     static func sharing(name: String, precision: SharedLocationPrecision, until: Date) -> String {
-        String(
+        guard !SharedLocationShareTerm.isOpenEnded(until) else { return sharingUntilStopped(name: name, precision: precision) }
+        return String(
             format: String(localized: "sharedLocation.share.active", defaultValue: "%1$@ voit ta position (%2$@) jusqu'à %3$@", bundle: .main),
             name, Self.precision(precision).lowercased(), until.formatted(date: .omitted, time: .shortened)
+        )
+    }
+
+    /// Un partage sans fin (#19616) : ni heure ni compte à rebours, seul « Arrêter » le termine.
+    static func sharingUntilStopped(name: String, precision: SharedLocationPrecision) -> String {
+        String(
+            format: String(localized: "sharedLocation.share.activeUntilStopped",
+                           defaultValue: "%1$@ voit ta position (%2$@) jusqu'à ce que tu arrêtes", bundle: .main),
+            name, Self.precision(precision).lowercased()
         )
     }
 

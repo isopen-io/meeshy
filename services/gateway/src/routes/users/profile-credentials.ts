@@ -30,6 +30,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendBadRequest } from '../../utils/response';
 import { searchTokensFor } from '../../utils/search-tokens';
 import { refreshParticipantNameSnapshots } from '../../services/participantNameSnapshots';
+import { announceOwnProfileUpdated } from './own-profile-sync';
 
 const logger = enhancedLogger.child({ module: 'UserProfileRoutes' });
 
@@ -372,7 +373,17 @@ export async function updateUsername(fastify: FastifyInstance) {
           // que le chemin `PATCH /users/me`.
           displayName: true,
           firstName: true,
-          lastName: true
+          lastName: true,
+          // #18924 — le reste de l'instantané que mes autres appareils reçoivent
+          // (`profile:updated`) et l'instant de l'écriture qui l'arbitre.
+          systemLanguage: true,
+          regionalLanguage: true,
+          customDestinationLanguage: true,
+          avatar: true,
+          banner: true,
+          // #19201 — l'instantané de `profile:updated` porte l'accent : le lire, sinon il partirait `null`.
+          profileAccentColor: true,
+          updatedAt: true
         }
       });
 
@@ -391,6 +402,7 @@ export async function updateUsername(fastify: FastifyInstance) {
         },
       })
         .catch((err: unknown) => logError(fastify.log, '[USERNAME_CHANGE] emitUserUpdated failed', err));
+      announceOwnProfileUpdated(fastify, updatedUser);
 
       // `username` fait partie de l'identité de frappe mise en cache par
       // StatusHandler (`{ username, displayName }`). L'invalider pour que

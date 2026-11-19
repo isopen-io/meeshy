@@ -39,32 +39,6 @@ final class CoreModelsTests: XCTestCase {
         }
     }
 
-    // MARK: - MeeshyFeedItem
-
-    func testFeedItemInit() {
-        let item = MeeshyFeedItem(author: "Alice", content: "Hello world", likes: 10)
-        XCTAssertEqual(item.author, "Alice")
-        XCTAssertEqual(item.content, "Hello world")
-        XCTAssertEqual(item.likes, 10)
-        XCTAssertFalse(item.color.isEmpty)
-    }
-
-    func testFeedItemColorAutoGeneration() {
-        let item1 = MeeshyFeedItem(author: "Alice", content: "A")
-        let item2 = MeeshyFeedItem(author: "Alice", content: "B")
-        XCTAssertEqual(item1.color, item2.color)
-    }
-
-    func testFeedItemExplicitColor() {
-        let item = MeeshyFeedItem(author: "Bob", content: "C", color: "CUSTOM1")
-        XCTAssertEqual(item.color, "CUSTOM1")
-    }
-
-    func testFeedItemDefaultLikes() {
-        let item = MeeshyFeedItem(author: "Charlie", content: "D")
-        XCTAssertEqual(item.likes, 0)
-    }
-
     // MARK: - ConversationType Enum
 
     func testConversationTypeAllCasesRawValues() {

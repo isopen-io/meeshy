@@ -14,7 +14,7 @@
 
 import { readStoredFileBytes } from './attachments/atRest/atRestFiles';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import type { Prisma } from '@meeshy/shared/prisma/client';
+import { mergePreferenceKeysAtomically } from '../routes/me/preferences/preference-atomic-merge';
 import { randomUUID } from 'crypto';
 import { EventEmitter } from 'events';
 import path from 'path';
@@ -917,23 +917,8 @@ export class VoiceProfileService extends EventEmitter {
     userId: string,
     updateData: Record<string, number | string>
   ): Promise<void> {
-    const existing = await this.prisma.userPreferences.findUnique({
-      where: { userId },
-      select: { audio: true }
-    });
-
-    const existingAudio =
-      existing?.audio && typeof existing.audio === 'object' && !Array.isArray(existing.audio)
-        ? (existing.audio as Record<string, unknown>)
-        : {};
-
-    const mergedAudio = { ...existingAudio, ...updateData } as Prisma.InputJsonValue;
-
-    await this.prisma.userPreferences.upsert({
-      where: { userId },
-      create: { userId, audio: mergedAudio },
-      update: { audio: mergedAudio }
-    });
+    // #18910 — dans la base, sur la valeur vivante : une clé `audio` écrite au même instant ne se perd plus.
+    await mergePreferenceKeysAtomically(this.prisma, userId, 'audio', updateData);
 
     // Best-effort : un appelant de test ou un contexte hors requête HTTP
     // construit le service sans `fastify` (voir le doc-comment du

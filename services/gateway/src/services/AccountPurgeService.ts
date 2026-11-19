@@ -16,12 +16,17 @@ import { deleteShareLinksRevokingGuests } from '../socketio/deleteShareLinksRevo
 import { eraseCallTelemetryOf } from './calls/callTelemetryPrivacy';
 import { eraseE2EEDataOfUser } from './e2ee/device-retirement';
 import { eraseExternalPeerHandlesOpenedBy } from './external-conversation/erase-external-peers';
+import { eraseProfileAddressesOf } from './profile-addresses/address-links';
+import { eraseProfileLinkVisitsOf } from './profile-link-visits/profileLinkVisits';
+import { eraseSentInvitationsOf } from './referrals/emailInvitations';
 import type { ShareLinkRevocationLive } from './cleanupExpiredData';
 
 const logger = enhancedLogger.child({ module: 'AccountPurgeService' });
 
 export type AccountPurgeSummary = {
   readonly sessionsDeleted: number;
+  /** Ses jetons push (#18910) : sans eux, l'appareil resté installé recevrait encore les bannières des groupes dont il reste membre. */
+  readonly pushTokensDeleted: number;
   readonly voiceProfileDeleted: number;
   readonly shareLinksDeleted: number;
   readonly notificationsDeleted: number;
@@ -57,6 +62,14 @@ export type AccountPurgeSummary = {
   readonly e2eeErased: { readonly devices: number; readonly preKeys: number; readonly envelopes: number };
   /** Le numéro des amis d'un réseau tiers qu'il avait ouverts (#17117) : gardé pour lui seul, il ne sert plus personne. */
   readonly externalPeerHandlesDeleted: number;
+  readonly profileAddressesDeleted: number;
+  readonly storyHighlightsDeleted: number;
+  /** L'agrégat des visites de son lien de profil, par jour (#19206). */
+  readonly profileLinkVisitDaysDeleted: number;
+  /** Ses invitations par e-mail (#19207) : chacune porte l'adresse d'un tiers. */
+  readonly emailInvitationsDeleted: number;
+  /** Ses demandes d'entrée en communauté (#19429) : chacune porte son pays d'arrivée. */
+  readonly communityJoinRequestsDeleted: number;
 };
 
 export type AccountPurgeOptions = {
@@ -85,7 +98,9 @@ export type AccountPurgeOptions = {
  * faites à d'autres à son sujet : elles désignent un compte qui n'existe plus),
  * et les traductions PARTAGÉES (#9899) que ses participants avaient scellées
  * pour les autres membres (`eraseSharedTranslationsOfAccount`, par
- * `sharedById` — le `Participant.id`, jamais le `User.id`).
+ * `sharedById` — le `Participant.id`, jamais le `User.id`), et les adresses
+ * publiées sur sa fiche (#18863, `eraseProfileAddressesOf`, qui ferme leurs
+ * liens de suivi : la ligne `User` survit, la cascade de Prisma ne joue donc pas).
  * Certaines de ces lignes sont PARTAGÉES avec un tiers, et c'est assumé : un
  * lien de cercle (`UserRelation`, #13927), l'agrégat des échanges de la paire
  * (`PairInteractionDay`), un consentement de cercle dont le tiers est
@@ -135,9 +150,10 @@ export async function purgeAccountIsolatedData(
   options: AccountPurgeOptions = {},
 ): Promise<AccountPurgeSummary> {
   if (!isValidObjectId(userId)) throw new Error('INVALID_USER_ID');
-  const [sessions, voiceProfile, relations, pairInteractionDays, relationConsents, friendRequests, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry, callTelemetry, e2ee, externalPeerHandles] =
+  const [sessions, pushTokens, voiceProfile, relations, pairInteractionDays, relationConsents, friendRequests, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry, callTelemetry, e2ee, externalPeerHandles, profileAddresses, storyHighlights, profileLinkVisitDays, emailInvitations, communityJoinRequests] =
     await Promise.all([
       prisma.userSession.deleteMany({ where: { userId } }),
+      prisma.pushToken.deleteMany({ where: { userId } }),
       prisma.userVoiceModel.deleteMany({ where: { userId } }),
       prisma.userRelation.deleteMany({ where: { OR: [{ userLowId: userId }, { userHighId: userId }] } }),
       prisma.pairInteractionDay.deleteMany({ where: { OR: [{ userLowId: userId }, { userHighId: userId }] } }),
@@ -168,6 +184,16 @@ export async function purgeAccountIsolatedData(
       eraseCallTelemetryOf(prisma, userId),
       eraseE2EEDataOfUser(prisma, userId),
       eraseExternalPeerHandlesOpenedBy(prisma, userId),
+      // #18863 : ses adresses de fiche partent, et leurs liens de suivi se ferment.
+      eraseProfileAddressesOf(prisma, userId),
+      // #19394 : ses albums « à la une » partent ; les stories qu'ils rangeaient suivent leur propre sort.
+      prisma.storyHighlight.deleteMany({ where: { ownerId: userId } }),
+      // #19206 : l'agrégat des visites de son lien de profil.
+      eraseProfileLinkVisitsOf(prisma, userId),
+      // #19207 : ses invitations par e-mail, adresses de tiers comprises.
+      eraseSentInvitationsOf(prisma, userId),
+      // #19429 : ses demandes d'entrée en communauté — son pays d'arrivée, et une demande qu'on accepterait après lui.
+      prisma.communityJoinRequest.deleteMany({ where: { userId } }),
       // #13937 : l'historique de position du Sang et le journal de ses consultations partent avec le compte.
       prisma.bloodLocationPoint.deleteMany({ where: { ownerId: userId } }),
       prisma.bloodLocationConsultation.deleteMany({ where: { OR: [{ observedId: userId }, { observerId: userId }] } }),
@@ -176,6 +202,7 @@ export async function purgeAccountIsolatedData(
 
   const summary: AccountPurgeSummary = {
     sessionsDeleted: sessions.count,
+    pushTokensDeleted: pushTokens.count,
     voiceProfileDeleted: voiceProfile.count,
     relationsDeleted: relations.count,
     pairInteractionDaysDeleted: pairInteractionDays.count,
@@ -193,10 +220,15 @@ export async function purgeAccountIsolatedData(
     callTelemetryErased: callTelemetry,
     e2eeErased: e2ee,
     externalPeerHandlesDeleted: externalPeerHandles,
+    profileAddressesDeleted: profileAddresses,
+    storyHighlightsDeleted: storyHighlights.count,
+    profileLinkVisitDaysDeleted: profileLinkVisitDays,
+    emailInvitationsDeleted: emailInvitations,
+    communityJoinRequestsDeleted: communityJoinRequests.count,
   };
 
   logger.info(
-    `[AccountPurge] user=${userId} sessions=${summary.sessionsDeleted} voiceProfile=${summary.voiceProfileDeleted} ` +
+    `[AccountPurge] user=${userId} sessions=${summary.sessionsDeleted} pushTokens=${summary.pushTokensDeleted} voiceProfile=${summary.voiceProfileDeleted} ` +
       `relations=${summary.relationsDeleted} pairInteractionDays=${summary.pairInteractionDaysDeleted} relationConsents=${summary.relationConsentsDeleted} friendRequests=${summary.friendRequestsDeleted} shareLinks=${summary.shareLinksDeleted} notifications=${summary.notificationsDeleted} ` +
       `addressBook=${summary.addressBookContactsDeleted} joinNotices=${summary.contactJoinNoticesDeleted} ` +
       `arrivalAnnouncements=${summary.arrivalAnnouncementsDeleted} sharedTranslations=${summary.sharedTranslationsDeleted} ` +
@@ -204,7 +236,7 @@ export async function purgeAccountIsolatedData(
       `packChoices=${packs.choicesDeleted} stickers=${packs.libraryDeleted} packSubmissions=${packs.submissionsDeleted} ` +
       `packsAnonymized=${packs.publishedAnonymized} packFiles=${packs.filesDeleted} packOwnerships=${packs.ownershipsDeleted} partnerProfiles=${packs.partnerProfilesDeleted} ` +
       `impressions=${readingTelemetry.impressions} engagements=${readingTelemetry.engagements} ` +
-      `views=${readingTelemetry.views} contentEvents=${readingTelemetry.contentEvents} callTelemetry=${callTelemetry} externalPeerHandles=${externalPeerHandles}`
+      `views=${readingTelemetry.views} contentEvents=${readingTelemetry.contentEvents} callTelemetry=${callTelemetry} externalPeerHandles=${externalPeerHandles} profileAddresses=${profileAddresses} storyHighlights=${storyHighlights.count} profileLinkVisitDays=${profileLinkVisitDays} emailInvitations=${emailInvitations} communityJoinRequests=${communityJoinRequests.count}`
   );
 
   return summary;
@@ -288,6 +320,13 @@ export async function anonymizeUserIdentity(
       equippedBannerFrame: null,
       bio: '',
       birthDate: null,
+      // #18862 — la ville DÉCLARÉE est une donnée personnelle : elle part avec le compte, et son réglage aussi.
+      city: null,
+      cityCircle: null,
+      // #19201 — la couleur d'accent de la vitrine se voit des autres : elle part avec le compte.
+      profileAccentColor: null,
+      // #19203 — le fantôme global de position est un réglage du compte : il part avec lui.
+      locationGhostAt: null,
       searchTokens: [],
       blockedUserIds: [],
       referralCode: null,

@@ -223,9 +223,12 @@ final class EpureReglagesLiensTests: XCTestCase {
     // MARK: - Mes liens : la bannière qui redit le titre s'en va, les cartes gardent leur phrase (règles 2 et 7)
 
     func test_linksHub_hasNoBanner_andEveryCardKeepsItsOrientationSentence() throws {
-        let hub = try code(Self.linksViews + "LinksHubView.swift")
-        XCTAssertFalse(hub.contains("headerBanner"))
-        XCTAssertFalse(hub.contains("links.hub.banner"))
+        let page = try code(Self.linksViews + "LinksHubView.swift")
+        XCTAssertFalse(page.contains("headerBanner"))
+        XCTAssertFalse(page.contains("links.hub.banner"))
+        XCTAssertTrue(page.contains("ProfileLinksFace("), "« Mes liens » est la face Liens de ma fiche (#18871)")
+        // Les familles et leurs phrases d'orientation vivent désormais dans « Nouveau lien » (planche `Lien-Creer`).
+        let hub = try code("Features/Profile/Links/ProfileLinkCreateChooser.swift")
         for key in ["links.hub.share.description", "links.hub.tracking.description", "links.hub.community.description", "links.hub.affiliate.description"] {
             XCTAssertTrue(hub.contains("\"\(key)\""), "\(key) : la phrase d'orientation de la carte reste lisible au repos")
         }
@@ -240,7 +243,8 @@ final class EpureReglagesLiensTests: XCTestCase {
         let view = try code(Self.linksViews + "TrackingLinksView.swift")
         XCTAssertTrue(view.contains("tracking.links.empty.title"))
         XCTAssertFalse(view.contains("tracking.links.empty.subtitle"))
-        XCTAssertTrue(view.contains("actionLabel:"), "l'état vide porte l'action de création")
+        XCTAssertTrue(view.contains("LinksPageEmpty("), "l'état vide porte l'action de création")
+        XCTAssertTrue(view.contains("onCreate: { showCreate = true }"))
         XCTAssertFalse(view.contains("defaultValue: \"Aucun lien de tracking\""))
     }
 

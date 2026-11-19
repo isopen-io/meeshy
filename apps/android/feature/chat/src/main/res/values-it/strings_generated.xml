@@ -17,6 +17,11 @@
     <string name="attachment_stage_thumbnailing">Anteprima</string>
     <string name="attachment_sticker">Sticker</string>
     <string name="audio_fullscreen_language_choose">Traduci l\'audio</string>
+    <string name="chat_act_advance">%1$s · %2$d su %3$d</string>
+    <string name="chat_act_advance_easy">Atto I</string>
+    <string name="chat_act_advance_gold">Atto d’oro</string>
+    <string name="chat_act_advance_hard">Atto III</string>
+    <string name="chat_act_advance_medium">Atto II</string>
     <string name="chat_action_copy">Copia</string>
     <string name="chat_action_copy_link">Copia link</string>
     <string name="chat_action_delete_for_everyone">Elimina per tutti</string>
@@ -607,11 +612,10 @@
     <string name="recentMedia_resolveFailed_multiple">Non è stato possibile preparare %1$d media — usa l\'intera libreria foto</string>
     <string name="report_message_details_header">Dettagli (facoltativo)</string>
     <string name="report_message_details_placeholder">Descrivi il problema…</string>
-    <string name="report_message_sent">Segnalazione inviata</string>
     <string name="report_message_submit">Invia la segnalazione</string>
     <string name="report_message_title">Perché segnali questo messaggio?</string>
     <string name="report_reason_harassment">Molestie</string>
-    <string name="report_reason_hate_speech">Incitamento all\'odio</string>
+    <string name="report_reason_hate_speech">Odio</string>
     <string name="report_reason_impersonation">Furto d\'identità</string>
     <string name="report_reason_inappropriate">Contenuto inappropriato</string>
     <string name="report_reason_other">Altro</string>

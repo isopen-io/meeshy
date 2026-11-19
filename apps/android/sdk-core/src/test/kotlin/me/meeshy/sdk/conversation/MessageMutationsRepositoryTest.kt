@@ -49,7 +49,8 @@ class MessageMutationsRepositoryTest {
 
         assertThat(result).isEqualTo(ChatMutationAdmission.REFUSED)
         coVerify(exactly = 1) { messages.markUndeleted("m1") }
-        coVerify(exactly = 1) { messages.refresh("c1") }
+        coVerify(exactly = 1) { messages.refreshMessage("c1", "m1") }
+        coVerify(exactly = 0) { messages.refresh(any()) }
     }
 
     @Test
@@ -58,6 +59,8 @@ class MessageMutationsRepositoryTest {
 
         assertThat(result).isEqualTo(ChatMutationAdmission.CANCELLED_OUT)
         coVerify(exactly = 1) { messages.markUndeleted("m1") }
+        coVerify(exactly = 1) { messages.refreshMessage("c1", "m1") }
+        coVerify(exactly = 0) { messages.refresh(any()) }
     }
 
     @Test

@@ -14,14 +14,16 @@ tls:
 http:
   middlewares:
     # Security headers
+    # HSTS PRUDENT (revue de #19083) : ni includeSubDomains ni preload. Posés
+    # sur meeshy.me, ils engageraient tout *.meeshy.me pendant un an, sans retour
+    # rapide, et aucun inventaire du DNS ne prouve que chaque sous-domaine sert
+    # HTTPS. Leur ajout attend la décision qui fera cet inventaire.
     secure-headers:
       headers:
         frameDeny: true
         browserXssFilter: true
         contentTypeNosniff: true
         forceSTSHeader: true
-        stsIncludeSubdomains: true
-        stsPreload: true
         stsSeconds: 31536000
         customFrameOptionsValue: "SAMEORIGIN"
         referrerPolicy: "strict-origin-when-cross-origin"
@@ -51,6 +53,11 @@ http:
           - "application/octet-stream"
 
     # CORS for production
+    # NE PAS l'attacher aux routeurs de la passerelle (#18920) : un intergiciel
+    # CORS de Traefik répond LUI-MÊME à tout prévol avec sa liste d'en-têtes, et
+    # celle-ci refuserait ceux que la passerelle accepte (X-Session-Token,
+    # X-Device-Locale, If-None-Match…). La passerelle saine reste seule juge du
+    # CORS (`services/gateway/src/config/cors-origins.ts`).
     cors-prod:
       headers:
         accessControlAllowMethods:
@@ -69,3 +76,89 @@ http:
           - "https://meeshy\\.me$"
         accessControlMaxAge: 86400
         addVaryHeader: true
+
+    # #18920 — les erreurs de la passerelle ABSENTE portent les en-têtes CORS.
+    # Conteneur arrêté, démarrant ou malade : le fournisseur Docker retire son
+    # routeur, et Traefik répondait sans en-tête CORS — le navigateur n'y lisait
+    # qu'une erreur réseau OPAQUE. Ces intergiciels ne vivent que sur les routeurs
+    # de repli ci-dessous, jamais sur ceux de la passerelle saine. Leurs origines
+    # sont un SOUS-ENSEMBLE de celles que la passerelle admet (garde :
+    # services/gateway/src/__tests__/unit/config/gateway-unavailable-cors-18920.test.ts).
+    # Leur prévol laisse passer la requête réelle jusqu'au 503 : tous les en-têtes
+    # (`*`, `Authorization` nommé — le joker ne le couvre pas), les verbes de la
+    # passerelle ; sans `accessControlMaxAge`, rien n'est gardé en cache.
+    gateway-unavailable-cors-prod:
+      headers:
+        accessControlAllowOriginList:
+          - "https://meeshy.me"
+          - "https://www.meeshy.me"
+          - "https://localhost"
+          - "capacitor://localhost"
+        accessControlAllowMethods:
+          - "GET"
+          - "HEAD"
+          - "PUT"
+          - "PATCH"
+          - "POST"
+          - "DELETE"
+          - "OPTIONS"
+        accessControlAllowHeaders:
+          - "*"
+          - "Authorization"
+        accessControlAllowCredentials: true
+        addVaryHeader: true
+
+    gateway-unavailable-cors-staging:
+      headers:
+        accessControlAllowOriginList:
+          - "https://staging.meeshy.me"
+          - "https://localhost"
+          - "capacitor://localhost"
+        accessControlAllowMethods:
+          - "GET"
+          - "HEAD"
+          - "PUT"
+          - "PATCH"
+          - "POST"
+          - "DELETE"
+          - "OPTIONS"
+        accessControlAllowHeaders:
+          - "*"
+          - "Authorization"
+        accessControlAllowCredentials: true
+        addVaryHeader: true
+
+  # #18920 — les routeurs de REPLI de la passerelle : même hôte, priorité 1 (le
+  # routeur Docker de la passerelle, de priorité la longueur de sa règle, gagne
+  # dès qu'il existe), et un service SANS serveur — 503 « no available server »,
+  # jamais une passerelle démarrante ou malade servie en contournant son
+  # healthcheck. Application : staging d'abord (son routeur seul, puis
+  # `curl -i -H 'Origin: https://staging.meeshy.me' https://gate.staging.meeshy.me/api/v1/health`
+  # passerelle arrêtée ⇒ 503 + Access-Control-Allow-Origin), production ensuite.
+  routers:
+    gateway-unavailable:
+      rule: "Host(`gate.meeshy.me`)"
+      priority: 1
+      entryPoints:
+        - "websecure"
+      tls:
+        certResolver: letsencrypt
+      middlewares:
+        - "gateway-unavailable-cors-prod"
+      service: gateway-unavailable
+
+    gateway-staging-unavailable:
+      rule: "Host(`gate.staging.meeshy.me`)"
+      priority: 1
+      entryPoints:
+        - "websecure"
+      tls:
+        certResolver: letsencrypt
+      middlewares:
+        - "gateway-unavailable-cors-staging"
+      service: gateway-unavailable
+
+  services:
+    gateway-unavailable:
+      loadBalancer:
+        servers: []

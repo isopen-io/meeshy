@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La vérification d'inactivité (#18738) : android-only tant que les clés inactivity.* ne sont pas au catalogue iOS. -->
+<resources>
+    <string name="inactivity_someone">un vicino</string>
+    <string name="inactivity_pill_alert">%1$s non ha risposto a «Tutto bene?»</string>
+    <string name="inactivity_pill_responded">%1$s sta bene</string>
+    <string name="inactivity_card_since">Nessuna attività dalle %1$s</string>
+    <string name="inactivity_battery">Batteria %1$d %%</string>
+    <string name="inactivity_open_map">Vedi l\'ultima posizione</string>
+    <string name="inactivity_a11y">Nessuna attività di %1$s</string>
+    <string name="inactivity_share_person">Avvisare %1$s se non rispondo</string>
+    <string name="inactivity_share_person_scope">%1$s viene avvisato se non rispondo a «Tutto bene?».</string>
+    <string name="inactivity_share_off">La verifica di inattività è disattivata.</string>
+    <string name="inactivity_delay_title">Verifica di inattività</string>
+    <string name="inactivity_delay_scope">Senza risposta a «Tutto bene?», il tuo Sangue viene avvisato.</string>
+    <string name="inactivity_delay_6h">6 h</string>
+    <string name="inactivity_delay_12h">12 h</string>
+    <string name="inactivity_delay_24h">24 h</string>
+    <string name="inactivity_delay_off">Disattivata</string>
+    <string name="inactivity_wellness_ok">Sto bene</string>
+</resources>

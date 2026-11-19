@@ -1,10 +1,12 @@
 import type { QueryClient } from '@tanstack/react-query';
-import type { MessageHiddenForMeEventData } from '@meeshy/shared/types/socketio-events/message';
+import type { MessageHiddenForMeEventData, MessageRestoredForMeEventData } from '@meeshy/shared/types/socketio-events/message';
 
 import { rowExitStore } from '@/lib/view/row-exit-motion';
 
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { hideRowsForReader } from './delete-message';
+import { messagesQueryKey } from './messages';
+import { requestFullThreadRead } from './messages-revalidation';
 
 /**
  * LE PUITS DE `message:hidden-for-me` (#10587) — un message masqué « pour moi »
@@ -28,10 +30,11 @@ import { hideRowsForReader } from './delete-message';
  * et relit lui-même la ligne de liste ; la retirer ici la faisait disparaître
  * d'un coup, à mi-fondu.
  *
- * `message:restored-for-me` (l'inverse) n'est pas écouté : le web n'offre pas
- * ce geste, et la rangée revient au prochain chargement du fil.
+ * `message:restored-for-me` (l'inverse, #18914) relit le fil de chaque
+ * conversation nommée : la charge ne porte pas le message, une APPARITION ne
+ * s'écrit pas en pierre tombale (`event-names.ts`).
  */
-export function isMessageHiddenForMeEvent(payload: unknown): payload is MessageHiddenForMeEventData {
+function namesVisibilityRefs(payload: unknown): boolean {
   if (typeof payload !== 'object' || payload === null) return false;
   const p = payload as Record<string, unknown>;
   if (typeof p.userId !== 'string' || !Array.isArray(p.messages)) return false;
@@ -40,6 +43,24 @@ export function isMessageHiddenForMeEvent(payload: unknown): payload is MessageH
     const r = ref as Record<string, unknown>;
     return typeof r.messageId === 'string' && typeof r.conversationId === 'string';
   });
+}
+
+export function isMessageHiddenForMeEvent(payload: unknown): payload is MessageHiddenForMeEventData {
+  return namesVisibilityRefs(payload);
+}
+
+export function isMessageRestoredForMeEvent(payload: unknown): payload is MessageRestoredForMeEventData {
+  return namesVisibilityRefs(payload);
+}
+
+/** Restauré pour moi sur un autre appareil : le fil de chaque conversation nommée, lui seul. FAIL-CLOSED sur le compte. */
+export function applyMessageRestoredForMe(queryClient: QueryClient, data: MessageRestoredForMeEventData, viewerId: string): void {
+  if (viewerId === '' || data.userId !== viewerId) return;
+  for (const conversationId of new Set(data.messages.map((ref) => ref.conversationId))) {
+    /* Un message restauré peut vivre dans une page ancienne : TOUT le fil se relit (#18918). */
+    requestFullThreadRead(queryClient, conversationId);
+    void queryClient.invalidateQueries({ queryKey: messagesQueryKey(conversationId), exact: true });
+  }
 }
 
 export function applyMessageHiddenForMe(queryClient: QueryClient, data: MessageHiddenForMeEventData, viewerId: string): void {

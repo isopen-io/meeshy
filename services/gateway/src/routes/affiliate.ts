@@ -11,6 +11,7 @@ import {
   errorResponseSchema,
 } from '@meeshy/shared/types/api-schemas';
 import { affiliateStatsResponseSchema } from './affiliate-response-schemas';
+import { withReferralFunnelIfAvailable } from '../services/referrals/referralFunnel';
 import { UnifiedAuthRequest } from '../middleware/auth';
 import { generateUniquePublicIdentifier } from '../utils/public-identifier';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
@@ -19,6 +20,8 @@ import { EngagementService } from '../services/engagement/EngagementService';
 import { linkVisitorFromRequest } from './links/utils/link-visitor';
 import { isShareLinkOpen } from '../services/conversationCard';
 import { AFFILIATE_INVITER_SELECT, affiliateInviterOf } from '../services/linkUnfurl/affiliate';
+import { affiliateReferralAnnouncer } from '../services/affiliate-referral-announce';
+import { linkActivityRelayOf } from '../socketio/linkActivityEvents';
 
 const logger = enhancedLogger.child({ module: 'AffiliateRoutes' });
 
@@ -457,7 +460,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
       const result = await AffiliateTrackingService.getAffiliateStats(fastify.prisma, userId, filters);
 
       if (result.success) {
-        return sendSuccess(reply, result.data);
+        return sendSuccess(reply, await withReferralFunnelIfAvailable(fastify.prisma, userId, result.data));
       } else {
         return sendBadRequest(reply, result.error);
       }
@@ -758,7 +761,8 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
         fastify.prisma,
         token,
         referredUserId,
-        sessionKey
+        sessionKey,
+        affiliateReferralAnnouncer({ prisma: fastify.prisma, relay: linkActivityRelayOf(fastify) })
       );
 
       if (result.success) {

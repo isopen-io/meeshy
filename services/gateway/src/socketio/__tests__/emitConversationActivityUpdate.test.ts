@@ -110,7 +110,7 @@ describe('emitConversationActivityUpdate — la dernière réaction (#7545)', ()
 
   it('ne pose que des champs que le contrat déclare', async () => {
     const emitted: Emitted[] = [];
-    await emitConversationActivityUpdate(makePrisma({ activeCallId: 'k1', call: { id: 'k1', status: 'active', startedAt: new Date(), metadata: { type: 'audio' }, _count: { participants: 2 } } }) as never, makeIo(emitted) as never, {
+    await emitConversationActivityUpdate(makePrisma({ activeCallId: 'k1', call: { id: 'k1', status: 'active', startedAt: new Date(), metadata: { type: 'audio' }, participants: [{ id: 'cp-a' }, { id: 'cp-b' }] } }) as never, makeIo(emitted) as never, {
       conversationId: 'c1',
       updatedByUserId: 'u-alice',
       reaction: true,
@@ -179,7 +179,7 @@ describe('emitConversationActivityUpdate — le rang servi à TOUS les participa
 describe('emitConversationActivityUpdate — l’appel en cours (#7545)', () => {
   it('pousse activeCall quand un appel est vivant', async () => {
     const emitted: Emitted[] = [];
-    const call = { id: 'k1', status: 'ringing', startedAt: new Date('2026-09-23T11:59:00Z'), metadata: { type: 'video' }, _count: { participants: 1 } };
+    const call = { id: 'k1', status: 'ringing', startedAt: new Date('2026-09-23T11:59:00Z'), metadata: { type: 'video' }, participants: [{ id: 'cp-a' }] };
     await emitConversationActivityUpdate(makePrisma({ activeCallId: 'k1', call }) as never, makeIo(emitted) as never, {
       conversationId: 'c1',
       updatedByUserId: 'u-bob',

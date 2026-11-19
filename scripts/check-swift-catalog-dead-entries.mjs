@@ -569,6 +569,20 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // `applyKnownLiveExceptions` la fait rougir (PÉRIMÉE) le jour où son appelant
 // arrive — la déclaration doit alors partir dans le même commit.
 const PENDING_CLIENT_ENTRIES = {
+  // Les entrées d'un lien de communauté (#19429, besoin #19290) : la fiche iOS `Lien-Communaute` les lira.
+  'CommunitiesEndpoint.byIdEntriesStats': { issue: 19429, reason: 'GET /communities/:id/entries/stats — « N entrées par ce lien », « N cette semaine », la série sur 30 jours' },
+  'CommunitiesEndpoint.byIdJoinRequests': { issue: 19429, reason: 'GET /communities/:id/join-requests — « En attente de validation »' },
+  'CommunitiesEndpoint.byIdJoinRequestsByRequestIdAccept': { issue: 19429, reason: 'POST …/join-requests/:requestId/accept — le bouton Accepter' },
+  'CommunitiesEndpoint.byIdJoinRequestsByRequestIdReject': { issue: 19429, reason: 'POST …/join-requests/:requestId/reject — le bouton Refuser' },
+  // Routes déjà servies par cette branche (#19375, #19394, chantier #18857), dont l'énumération Swift n'avait pas été régénérée.
+  'RelationsEndpoint.summary': { issue: 19375, reason: 'GET /relations/summary — la rangée « Mes cercles » (iOS)' },
+  'UsersEndpoint.byIdHighlights': { issue: 19394, reason: 'GET /users/:id/highlights — le rail « À la une » de la fiche (iOS)' },
+  'UsersEndpoint.meHighlights': { issue: 19394, reason: 'GET · POST /users/me/highlights — mes albums à la une (iOS)' },
+  'UsersEndpoint.meHighlightsById': { issue: 19394, reason: 'PATCH · DELETE /users/me/highlights/:id (iOS)' },
+  'UsersEndpoint.meHighlightsOrder': { issue: 19394, reason: 'PUT /users/me/highlights/order (iOS)' },
+  // Le profil de la planche (#18857, PR serveur #19316) : le serveur sert avant le tour client iOS.
+  'MeEndpoint.liveActivityTokens': { issue: 19463, reason: 'POST /me/live-activity-tokens — l\'Activité en direct iOS close par la passerelle à la fin du partage' },
+  'InvitationsEndpoint.emailOptOut': { issue: 19321, reason: 'POST /invitations/email/opt-out — la page web de désinscription, pas un écran iOS (#19321)' },
   // La boîte de demandes (#14107, PR #14449) : le serveur sert « Accepter » avant le tour client, qui le portera.
   'ConversationsEndpoint.byIdMessageRequestAccept': { issue: 14107, reason: 'POST /conversations/:id/message-request/accept — le bouton « Accepter » de la boîte de demandes (iOS)' },
   // #11327 (S26) — `/api/v1/lens` : le crédit « Lens par X », le logo du filigrane et le ping d'usage, que la
@@ -591,16 +605,13 @@ const PENDING_CLIENT_ENTRIES = {
   // La conversation externe (#17117, chantier #17007) : la passerelle ouvre une conversation chiffrée de bout en
   // bout avec un ami WhatsApp, derrière un drapeau éteint en production ; le lot clients (#17118) l'appellera.
   'ConversationsEndpoint.external': { issue: 17118, reason: 'POST /conversations/external — ouvrir une conversation avec un ami WhatsApp depuis iOS' },
-  // La position du Sang (#13937, derrière un drapeau éteint) : la passerelle sert l'historique scellé, le fantôme, le
-  // journal et la proximité avant les clients ; `sang-position-historique@ios` les appellera.
-  'MeEndpoint.locationBlood': { issue: 13937, reason: 'POST /me/location/blood — ranger un point au réveil sur changement significatif' },
-  'MeEndpoint.locationHistory': { issue: 13937, reason: 'DELETE /me/location/history — effacer son historique' },
-  'MeEndpoint.locationConsultations': { issue: 13937, reason: 'GET /me/location/consultations — qui a consulté ma position' },
-  'MeEndpoint.locationBloodSettings': { issue: 13937, reason: 'PUT /me/location/blood-settings — fantôme et rayon de proximité' },
-  'RelationsEndpoint.byUserIdLocationHistory': { issue: 13937, reason: 'GET /relations/:userId/location/history — l’historique d’un Sang' },
+  // Le relais de la confirmation d'un appareil par code (#19156, spec 2026-11-17 § 5.2) : la passerelle le sert avant
+  // le SDK et l'app iOS (§ 10, lots 3 et 4), portés par #18906.
+  'E2EeEndpoint.devicesSelfVerifications': { issue: 18906, reason: 'POST|GET /e2ee/devices/self/verifications — déposer et relire les messages de comparaison, appelés par le SDK iOS de la confirmation par code' },
+  'E2EeEndpoint.devicesSelfVerificationsAck': { issue: 18906, reason: 'POST /e2ee/devices/self/verifications/ack — accuser les messages de comparaison lus, même lot iOS' },
 };
 
-const BASELINE_DEAD_ENTRIES = 328;
+const BASELINE_DEAD_ENTRIES = 326;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

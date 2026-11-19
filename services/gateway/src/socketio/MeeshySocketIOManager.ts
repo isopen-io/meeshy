@@ -31,7 +31,7 @@ import { ConversationViewingHandler } from './handlers/ConversationViewingHandle
 import { captureNoticeDelivery, listenContentCapture } from './handlers/ContentCaptureHandler';
 import type { AfterReadDepartureTracker } from './AfterReadDepartureTracker';
 import { createAfterReadDepartureTracker } from './afterReadDepartureWiring';
-import { e2eeSignalHandlerDeps, listenE2EESignals } from './handlers/E2EESignalHandler';
+import { listenE2EEDeviceChannels } from './handlers/E2EEDeviceChannels';
 import { listenCircleLive } from './handlers/circleLiveHandlers';
 import { ReactionHandler } from './handlers/ReactionHandler';
 import { AttachmentReactionHandler } from './handlers/AttachmentReactionHandler';
@@ -69,6 +69,7 @@ import {
   type ParticipantRoomTarget,
 } from './emitToConversationParticipants';
 import { presenceStatusEmissions, TEAM_COLLEAGUES_WHERE } from './presence-audience';
+import { USABLE_ACCOUNT_WHERE } from '../services/relations/usableAccount';
 import { ReactionService } from '../services/ReactionService.js';
 import { CommentReactionService } from '../services/CommentReactionService';
 import { PostReactionService } from '../services/PostReactionService';
@@ -746,15 +747,23 @@ export class MeeshySocketIOManager {
       // « ce message est arrivé chez son destinataire » — l'affirmer d'un
       // message qu'on vient de refuser de livrer mentirait à son auteur.
       //
-      // ⚠ Cette phrase décrit ce que CE chemin passe à l'accusé, et ce que
-      // l'accusé ÉCRIT — plus ce qu'un lecteur en VOIT. Le gel par message est
-      // désormais borné aux ids réellement livrés (#18614) ; mais le statut
-      // SERVI retombe, en l'absence d'entrée figée, sur
-      // `ConversationReadCursor.lastDeliveredAt` — l'horloge MURALE — par le
-      // dernier repli de `resolveReceivedAt`. Un message refusé ici est donc
-      // encore RENDU « remis » à son auteur, pour une raison qui n'est plus le
-      // gel mais le repli. C'est #18701, et c'est la moitié de la chaîne que ce
-      // lot ne ferme pas.
+      // La chaîne est COMPLÈTE depuis #18731, et il faut dire comment, parce
+      // qu'elle a tenu trois lots — ce paragraphe a nommé deux fois une moitié
+      // ouverte, et un commentaire d'incomplétude ne rougit jamais :
+      //
+      //  - #18614 — ce que l'accusé ÉCRIT : le gel par message est borné aux
+      //    ids RÉELLEMENT livrés, donc un message refusé ici n'est plus gravé ;
+      //  - #18701 — ce qu'un lecteur en VOIT : le statut SERVI ne retombe plus
+      //    sur `ConversationReadCursor.lastDeliveredAt` — l'horloge MURALE —
+      //    passé `EXACT_READ_TRACKING_SINCE` ;
+      //  - #18731 — ce que le CURSEUR écrit, la moitié que les deux premiers
+      //    laissaient ouverte : il n'avance plus que jusqu'au préfixe CONTIGU
+      //    des entrées figées, si bien qu'un trou ANTÉRIEUR au dernier message
+      //    livré — celui que le plafond de la file produit sans aucune panne —
+      //    cesse d'être couvert, **y compris bascule non armée**.
+      //
+      // Un message refusé ici n'est donc plus rendu « remis » à son auteur, ni
+      // par le gel, ni par le repli, ni par un curseur qui aurait sauté dessus.
       //
       // Les DEUX questions se lisent sur la même ligne `Participant`, et
       // `authorizeDrainedEntries` existe pour qu'elle ne soit lue qu'une fois.
@@ -1974,8 +1983,8 @@ export class MeeshySocketIOManager {
       this.afterReadDepartures.listen(socket);
       // #9617 — une capture d'écran d'un contenu qui disparaît, annoncée au fil.
       listenContentCapture(socket, { prisma: this.prisma, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers, deliver: captureNoticeDelivery({ io: this.io, prisma: this.prisma, readStatusService: this.readStatusService, bridgeService: this.bridgeService }) });
-      // #13142 — la porte unique des signaux chiffrés d'une conversation e2ee.
-      listenE2EESignals(socket, e2eeSignalHandlerDeps({ prisma: this.prisma, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers }));
+      // #13142, #19156 — les signaux chiffrés d'une conversation e2ee et la confirmation d'un appareil par code.
+      listenE2EEDeviceChannels(socket, { prisma: this.prisma, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers });
       // #13935, #13934 — le talkie et l'écoute partagée, tronquée lecteur par lecteur.
       listenCircleLive(socket, { prisma: this.prisma, io: this.io, socketToUser: this.socketToUser, connectedUsers: this.connectedUsers });
 
@@ -2793,8 +2802,14 @@ export class MeeshySocketIOManager {
     if (cached && Date.now() - cached.cachedAt < this.GLOBAL_ADMIN_IDS_CACHE_TTL_MS) {
       return cached.ids;
     }
+    // La MÊME loi que les collègues (`TEAM_COLLEAGUES_WHERE`) : un compte parti ne
+    // reçoit plus la présence de personne. Cette moitié-ci ne filtrait que le
+    // RÔLE, si bien qu'un administrateur désactivé ou supprimé restait dans
+    // l'audience de `user:status` de tout le monde pendant que l'autre moitié
+    // l'écartait — une asymétrie que le doc-comment de `presence-audience.ts`
+    // niait (audit adversarial du cycle 181, constat C5b).
     const rows = await this.prisma.user.findMany({
-      where: { role: { in: PRESENCE_PRIVILEGED_ROLES } },
+      where: { role: { in: PRESENCE_PRIVILEGED_ROLES }, ...USABLE_ACCOUNT_WHERE },
       select: { id: true },
     });
     const ids = rows.map(row => row.id);
@@ -3646,7 +3661,7 @@ export class MeeshySocketIOManager {
   }): Promise<void> {
     try {
       const participant = await this.prisma.participant.findFirst({
-        where: { userId: reaction.asUserId, conversationId: reaction.conversationId, isActive: true },
+        where: { userId: reaction.asUserId, conversationId: reaction.conversationId, ...PARTICIPATION_VIVANTE },
         select: { id: true },
       });
       if (!participant) {

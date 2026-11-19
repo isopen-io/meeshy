@@ -1,8 +1,8 @@
 /**
  * **LES CATÉGORIES DE LA CLOCHE** (#6288) — miroir de `NotificationCategory`
- * (`packages/MeeshySDK/Sources/MeeshyUI/Notifications/NotificationListView.swift:8-131`)
+ * (`packages/MeeshySDK/Sources/MeeshyUI/Notifications/NotificationCategory.swift`)
  * et de `MeeshyNotificationType.accentHex`
- * (`packages/MeeshySDK/Sources/MeeshySDK/Models/NotificationModels.swift:236-272`).
+ * (`packages/MeeshySDK/Sources/MeeshyCore/Models/MeeshyNotificationType.swift`).
  *
  * **Une catégorie est un FILTRE SERVEUR, jamais un tri local d'une page.** iOS
  * charge trente lignes « toutes catégories » puis les filtre en mémoire, et ne
@@ -108,6 +108,7 @@ const FAMILY_TYPES: Readonly<Record<FamilyCategory, readonly string[]>> = {
     'contact_recently_active',
     'device_battery',
     'device_unreachable',
+    'inactivity_alert',
     'STATUS_UPDATE',
   ],
   groups: [
@@ -149,6 +150,8 @@ const FAMILY_TYPES: Readonly<Record<FamilyCategory, readonly string[]>> = {
     'update_available',
     'AFFILIATE_SIGNUP',
     'content_removed',
+    /* « Tout va bien ? » (#18738) : adressée à soi, elle se relit tant qu'on n'y a pas répondu. */
+    'wellness_check',
   ],
 };
 

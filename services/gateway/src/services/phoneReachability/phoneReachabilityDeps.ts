@@ -33,20 +33,21 @@ const idOf = (value: RawId): string | null => (typeof value === 'string' ? value
 export type RetractionAnnouncer = { readonly announceNotificationsRetracted: (rows: readonly RetractedNotification[]) => Promise<void> };
 
 /**
- * Les notifications d'injoignabilité d'un émetteur chez un lecteur : SUPPRIMÉES, puis ANNONCÉES par
- * le service de notification (`notification:deleted` sur les appareils connectés, push de révocation
+ * Les notifications de type `type` d'un émetteur chez un lecteur : SUPPRIMÉES, puis ANNONCÉES par le
+ * service de notification (`notification:deleted` sur les appareils connectés, push de révocation
  * `notification_revoked` sur les autres) — la bannière déjà affichée et la cloche s'effacent aussi.
  * Chaque ligne passe par `retractedNotificationOf`, le site unique qui lit `delivery.pushSent` : sans
- * lui, la révocation se perdrait en silence.
+ * lui, la révocation se perdrait en silence. Partagé par le téléphone injoignable et l'inactivité.
  */
-export async function retractPhoneReachabilityNotifications(
+export async function retractPairNotifications(
   prisma: Pick<PrismaClient, 'notification'>,
   announcer: RetractionAnnouncer | null,
+  type: string,
   pairs: readonly PhoneReachabilityPair[],
 ): Promise<void> {
   if (pairs.length === 0) return;
   const raw = (await prisma.notification.findRaw({
-    filter: { type: PHONE_REACHABILITY_NOTIFICATION_TYPE, $or: pairs.map((pair) => ({ userId: { $oid: pair.readerId }, 'actor.id': pair.emitterId })) },
+    filter: { type, $or: pairs.map((pair) => ({ userId: { $oid: pair.readerId }, 'actor.id': pair.emitterId })) },
     options: { projection: { _id: 1, userId: 1, type: 1, context: 1, delivery: 1 } },
   })) as unknown as ReadonlyArray<{ readonly _id?: RawId; readonly userId?: RawId; readonly type?: unknown; readonly context?: unknown; readonly delivery?: unknown }>;
   const rows = raw.flatMap((row) => {
@@ -57,6 +58,15 @@ export async function retractPhoneReachabilityNotifications(
   if (rows.length === 0) return;
   await prisma.notification.deleteMany({ where: { id: { in: rows.map((row) => row.id) } } });
   await announcer?.announceNotificationsRetracted(rows).catch(() => undefined);
+}
+
+/** Les notifications d'injoignabilité d'un émetteur chez un lecteur. */
+export function retractPhoneReachabilityNotifications(
+  prisma: Pick<PrismaClient, 'notification'>,
+  announcer: RetractionAnnouncer | null,
+  pairs: readonly PhoneReachabilityPair[],
+): Promise<void> {
+  return retractPairNotifications(prisma, announcer, PHONE_REACHABILITY_NOTIFICATION_TYPE, pairs);
 }
 
 /**

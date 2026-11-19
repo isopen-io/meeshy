@@ -61,6 +61,7 @@ const matches = (row: Row, where: Where = {}, semantics: Semantics = 'prisma'): 
   Object.entries(where).every(([field, condition]) => {
     if (field === 'OR') return (condition as Where[]).some((branch) => matches(row, branch, semantics));
     if (field === 'AND') return (condition as Where[]).every((branch) => matches(row, branch, semantics));
+    if (field === 'NOT') return !([] as Where[]).concat(condition as Where[]).some((branch) => matches(row, branch, semantics));
     return matchesCondition(row[field], condition, semantics);
   });
 
@@ -129,9 +130,9 @@ class FakeCollection {
         const found = this.rows.find((row) => matches(row, args.where));
         return found ? snapshot(found) : null;
       },
-      findMany: async (args: { where?: Where; orderBy?: Record<string, 'asc' | 'desc'>; take?: number } = {}) => {
+      findMany: async (args: { where?: Where; orderBy?: Record<string, 'asc' | 'desc'>; take?: number; skip?: number } = {}) => {
         await tick();
-        const found = ordered(this.rows.filter((row) => matches(row, args.where)), args.orderBy).map(snapshot);
+        const found = ordered(this.rows.filter((row) => matches(row, args.where)), args.orderBy).map(snapshot).slice(args.skip ?? 0);
         return args.take === undefined ? found : found.slice(0, args.take);
       },
       count: async (args: { where?: Where } = {}) => {
@@ -159,7 +160,7 @@ class FakeCollection {
         await tick();
         const [unique] = Object.values(args.where) as Where[];
         const row = this.rows.find((candidate) => matches(candidate, unique));
-        if (row) return Object.assign(row, args.update);
+        if (row) return Object.assign(row, Object.fromEntries(Object.entries(args.update).filter(([, value]) => value !== undefined)));
         return this.created(args.create);
       },
       updateMany: async (args: { where: Where; data: Record<string, unknown> }) => {
@@ -200,7 +201,7 @@ export function createFakeE2EEStore() {
     E2EEDevice: new FakeCollection(
       [['userId', 'deviceId']],
       () => ({ retiredAt: null, pushTokenId: null, label: null, createdAt: new Date(), lastSeenAt: new Date(), signedPreKeyRotatedAt: new Date() }),
-      () => ({ createdAt: new Date(), lastSeenAt: new Date(), signedPreKeyRotatedAt: new Date() }),
+      () => ({ createdAt: new Date(), lastSeenAt: new Date(), signedPreKeyRotatedAt: new Date(), capabilities: [] }),
     ),
     E2EEOneTimePreKey: new FakeCollection(
       [['userId', 'deviceId', 'registrationId', 'kind', 'keyId']],
@@ -208,11 +209,17 @@ export function createFakeE2EEStore() {
       () => ({ createdAt: new Date() }),
     ),
     MessageEnvelope: new FakeCollection([['messageId', 'recipientUserId', 'recipientDeviceId']], () => ({ createdAt: new Date() }), () => ({ createdAt: new Date() })),
+    E2EEDeviceVerificationMessage: new FakeCollection([], () => ({ createdAt: new Date(), ackedAt: null, answeredByDeviceId: null, answeredByRegistrationId: null }), () => ({ createdAt: new Date() })),
     E2EERevokedIdentity: new FakeCollection([['userId', 'identityKey']], () => ({ revokedAt: new Date() }), () => ({ revokedAt: new Date() })),
     E2EEBindingProof: new FakeCollection([], () => ({})),
     Participant: new FakeCollection([], () => ({ isActive: true, type: 'user' })),
     UserSession: new FakeCollection([], () => ({ isValid: true, invalidatedAt: null, expiresAt: new Date(Date.now() + 86_400_000) })),
     Conversation: new FakeCollection([], () => ({ encryptionMode: null, type: 'direct' })),
+    PushToken: new FakeCollection(
+      [['userId', 'token', 'type']],
+      () => ({ isActive: true, sessionId: null, deviceId: null, failedAttempts: 0, createdAt: new Date(), updatedAt: new Date() }),
+      () => ({ isActive: true, failedAttempts: 0, createdAt: new Date(), updatedAt: new Date() }),
+    ),
   };
 
   const findAndModify = (command: FindAndModify) => {
@@ -245,11 +252,13 @@ export function createFakeE2EEStore() {
     e2EEDevice: collections.E2EEDevice.delegate(),
     e2EEOneTimePreKey: collections.E2EEOneTimePreKey.delegate(),
     messageEnvelope: collections.MessageEnvelope.delegate(),
+    e2EEDeviceVerificationMessage: collections.E2EEDeviceVerificationMessage.delegate(),
     e2EERevokedIdentity: collections.E2EERevokedIdentity.delegate(),
     e2EEBindingProof: collections.E2EEBindingProof.delegate(),
     participant: collections.Participant.delegate(),
     userSession: collections.UserSession.delegate(),
     conversation: collections.Conversation.delegate(),
+    pushToken: collections.PushToken.delegate(),
     $runCommandRaw: async (command: unknown) => {
       await tick();
       const typed = command as FindAndModify;

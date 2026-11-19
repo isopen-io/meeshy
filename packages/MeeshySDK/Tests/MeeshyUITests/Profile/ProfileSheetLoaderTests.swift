@@ -76,6 +76,28 @@ final class ProfileSheetLoaderTests: XCTestCase {
         XCTAssertEqual(data.storedStatsUserIds, ["u-bob"])
     }
 
+    /// #18937 — au-delà des cinq minutes de fraîcheur, la fiche se peint depuis le cache SANS
+    /// squelette, puis se revalide : le réseau ne s'interroge qu'une fois le profil déjà à l'écran.
+    func test_open_staleCacheBeyondTheFreshWindow_paintsItThenRevalidatesWithoutTheLoadingState() async {
+        let (sut, data) = makeSUT(
+            cachedProfile: .stale([makeUser(displayName: "Bob en cache")], age: 360),
+            fetchedProfile: .success(makeUser(displayName: "Bob à jour"))
+        )
+        var shownWhileFetching: String?
+        var loadingWhileFetching: Bool?
+        data.onFetchProfile = {
+            shownWhileFetching = sut.profile?.displayName
+            loadingWhileFetching = sut.isLoadingProfile
+        }
+
+        await sut.open(userId: "u-bob", username: "bob", using: data)
+
+        XCTAssertEqual(shownWhileFetching, "Bob en cache", "le profil du cache est à l'écran avant la réponse")
+        XCTAssertEqual(loadingWhileFetching, false, "un cache peint ne repasse jamais par le squelette")
+        XCTAssertEqual(data.fetchProfileCallCount, 1, "un profil périmé se revalide à l'ouverture")
+        XCTAssertEqual(sut.profile?.displayName, "Bob à jour")
+    }
+
     func test_open_synchronizationFails_keepsTheCachedProfileAndStatsOnScreen() async {
         let (sut, data) = makeSUT(
             cachedProfile: .stale([makeUser(displayName: "Bob en cache")], age: 900),
@@ -90,7 +112,7 @@ final class ProfileSheetLoaderTests: XCTestCase {
         XCTAssertEqual(sut.stats?.totalMessages, 42)
         XCTAssertFalse(sut.isLoadingProfile)
         XCTAssertFalse(sut.isLoadingStats)
-        XCTAssertFalse(sut.isBlockedByTarget)
+        XCTAssertFalse(sut.isUnavailable)
     }
 
     func test_open_emptyCache_paintsWhatTheNetworkServesAndEndsTheLoading() async {
@@ -108,7 +130,7 @@ final class ProfileSheetLoaderTests: XCTestCase {
 
         await sut.open(userId: "u-bob", username: "bob", using: data)
 
-        XCTAssertTrue(sut.isBlockedByTarget)
+        XCTAssertTrue(sut.isUnavailable)
     }
 
     func test_open_404OverACachedProfile_marksBlockedByTarget() async {
@@ -119,7 +141,7 @@ final class ProfileSheetLoaderTests: XCTestCase {
 
         await sut.open(userId: "u-bob", username: "bob", using: data)
 
-        XCTAssertTrue(sut.isBlockedByTarget)
+        XCTAssertTrue(sut.isUnavailable)
         XCTAssertFalse(sut.profileLoadFailed)
         XCTAssertNil(sut.profile, "rien du cache ne reste peint sur la fiche d'un pair qui m'a bloqué")
     }
@@ -133,27 +155,32 @@ final class ProfileSheetLoaderTests: XCTestCase {
 
         await sut.open(userId: "u-bob", username: "bob", using: data)
 
-        XCTAssertTrue(sut.isBlockedByTarget)
+        XCTAssertTrue(sut.isUnavailable)
         XCTAssertNil(sut.profile)
         XCTAssertFalse(sut.profileLoadFailed)
     }
 
-    func test_open_404FromTheRealTransportOnColdCache_isAPlainFailure() async {
+    /// #18873, loi 9 — introuvable et privé se confondent : un 404 sur cache vide rend « Personne ici », jamais
+    /// « Réessayer » (réessayer ne ferait pas exister le profil).
+    func test_open_404FromTheRealTransportOnColdCache_isUnavailableNotARetry() async {
         let (sut, data) = makeSUT(fetchedProfile: .failure(MeeshyError.server(statusCode: 404, message: "User not found")))
 
         await sut.open(userId: "u-bob", username: "bob", using: data)
 
-        XCTAssertFalse(sut.isBlockedByTarget)
-        XCTAssertTrue(sut.profileLoadFailed)
+        XCTAssertTrue(sut.isUnavailable)
+        XCTAssertFalse(sut.profileLoadFailed)
+        XCTAssertEqual(sut.phase(isBlockedByMe: false), .unavailable)
     }
 
-    func test_open_404OnColdCache_isAPlainFailureNotABlock() async {
-        let (sut, data) = makeSUT(fetchedProfile: .failure(APIError.serverError(404, nil)))
+    func test_open_404OnColdCache_rendersTheSameScreenAsAPrivateProfile() async {
+        let (missing, missingData) = makeSUT(fetchedProfile: .failure(APIError.serverError(404, nil)))
+        let (hidden, hiddenData) = makeSUT(fetchedProfile: .failure(APIError.serverError(403, nil)))
 
-        await sut.open(userId: "u-bob", username: "bob", using: data)
+        await missing.open(userId: "u-bob", username: "bob", using: missingData)
+        await hidden.open(userId: "u-bob", username: "bob", using: hiddenData)
 
-        XCTAssertFalse(sut.isBlockedByTarget)
-        XCTAssertTrue(sut.profileLoadFailed)
+        XCTAssertEqual(missing.phase(isBlockedByMe: false), hidden.phase(isBlockedByMe: false))
+        XCTAssertEqual(missing.phase(isBlockedByMe: false), .unavailable)
     }
 
     // MARK: - Un profil qui n'a pas pu se charger (#8025)
@@ -166,7 +193,7 @@ final class ProfileSheetLoaderTests: XCTestCase {
         XCTAssertNil(sut.profile)
         XCTAssertTrue(sut.profileLoadFailed, "rien à montrer et rien de chargé : l'écran propose de réessayer")
         XCTAssertFalse(sut.isLoadingProfile)
-        XCTAssertFalse(sut.isBlockedByTarget)
+        XCTAssertFalse(sut.isUnavailable)
     }
 
     func test_open_synchronizationFailsOverACachedProfile_keepsItWithoutARetryState() async {
@@ -211,6 +238,67 @@ final class ProfileSheetLoaderTests: XCTestCase {
         await sut.open(userId: "u-bob", username: "bob", using: data)
 
         XCTAssertFalse(sut.profileLoadFailed, "un refus n'est pas une panne : réessayer ne changerait rien")
+        XCTAssertTrue(sut.isUnavailable, "un profil refusé rend « Personne ici », comme un profil introuvable")
+    }
+
+    // MARK: - Hors ligne, le cache répond (#18873, loi 8)
+
+    func test_open_offlineOverACachedProfile_servesItAndSaysHowOldItIs() async {
+        let (sut, data) = makeSUT(
+            cachedProfile: .stale([makeUser(displayName: "Bob en cache")], age: 10_800),
+            fetchedProfile: .failure(URLError(.notConnectedToInternet))
+        )
+
+        await sut.open(userId: "u-bob", username: "bob", using: data)
+
+        XCTAssertEqual(sut.profile?.displayName, "Bob en cache")
+        XCTAssertEqual(sut.phase(isBlockedByMe: false),
+                       .shown(fallback: ProfileCacheFallback(failure: .offline, age: 10_800)))
+    }
+
+    func test_open_serverDownOverACachedProfile_saysTheServerNotTheNetwork() async {
+        let (sut, data) = makeSUT(
+            cachedProfile: .fresh([makeUser()], age: 60),
+            fetchedProfile: .failure(MeeshyError.server(statusCode: 503, message: "down"))
+        )
+
+        await sut.open(userId: "u-bob", username: "bob", using: data)
+
+        XCTAssertEqual(sut.phase(isBlockedByMe: false),
+                       .shown(fallback: ProfileCacheFallback(failure: .unreachable, age: 60)))
+    }
+
+    func test_open_offlineOnColdCache_failsAsOfflineWithARetry() async {
+        let (sut, data) = makeSUT(fetchedProfile: .failure(URLError(.networkConnectionLost)))
+
+        await sut.open(userId: "u-bob", username: "bob", using: data)
+
+        XCTAssertEqual(sut.phase(isBlockedByMe: false), .failed(.offline))
+    }
+
+    func test_retry_succeedingAfterAnOfflineRead_dropsTheOfflineMark() async {
+        let (sut, data) = makeSUT(
+            cachedProfile: .stale([makeUser(displayName: "Bob en cache")], age: 600),
+            fetchedProfile: .failure(URLError(.notConnectedToInternet))
+        )
+        await sut.open(userId: "u-bob", username: "bob", using: data)
+
+        data.fetchProfileResult = .success(makeUser(displayName: "Bob à jour"))
+        await sut.retry(userId: "u-bob", username: "bob", using: data)
+
+        XCTAssertEqual(sut.phase(isBlockedByMe: false), .shown(fallback: nil))
+        XCTAssertEqual(sut.profile?.displayName, "Bob à jour")
+    }
+
+    func test_phase_emptyCacheWhileSynchronizing_isTheSkeletonOnly() async {
+        let (sut, data) = makeSUT()
+        var phaseWhileFetching: ProfileSheetPhase?
+        data.onFetchProfile = { phaseWhileFetching = sut.phase(isBlockedByMe: false) }
+
+        await sut.open(userId: "u-bob", username: "bob", using: data)
+
+        XCTAssertEqual(phaseWhileFetching, .skeleton)
+        XCTAssertEqual(sut.phase(isBlockedByMe: false), .shown(fallback: nil))
     }
 
     func test_userProfileSheet_mountsTheRetryStateOnTheLoaderRetry() throws {
@@ -222,10 +310,16 @@ final class ProfileSheetLoaderTests: XCTestCase {
             .appendingPathComponent("Sources/MeeshyUI/Profile/UserProfileSheet.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
 
-        XCTAssertTrue(source.contains("loader.profileLoadFailed"), "l'état d'erreur du profil est dessiné")
+        XCTAssertTrue(source.contains("switch phase {"), "l'écran se lit dans la phase du chargeur")
         XCTAssertTrue(source.contains("loader.retry(userId:"), "le bouton relance le chargement")
-        XCTAssertTrue(source.contains("\"common.retry\""), "le bouton dit « Réessayer »")
-        XCTAssertTrue(source.contains("minHeight: MeeshyControlSize.tapTarget"), "cible de 44 pt")
+        let states = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshyUI/Profile/UserProfileSheet+States.swift")
+        let statesSource = try String(contentsOf: states, encoding: .utf8)
+        XCTAssertTrue(statesSource.contains("loader.phase(isBlockedByMe:"), "la phase de l'écran est celle du chargeur")
+        XCTAssertTrue(statesSource.contains("\"common.retry\""), "le bouton dit « Réessayer »")
+        XCTAssertTrue(statesSource.contains("MeeshyStateBlock("), "l'erreur est le bloc d'état du kit (loi 12)")
+        XCTAssertTrue(statesSource.contains("MeeshySkeleton("), "le premier chargement est le squelette du kit")
     }
 
     func test_open_byUsernameOnColdCache_readsTheStatsOfTheResolvedId() async {
@@ -277,9 +371,13 @@ final class MockProfileSheetData: ProfileLoading {
 
     func cachedProfile(for key: String) async -> CacheResult<[MeeshyUser]> { cachedProfileResult }
 
+    /// Appelé à l'entrée de `fetchProfile`, avant la réponse : ce que la fiche montre pendant le vol.
+    var onFetchProfile: (() -> Void)?
+
     func fetchProfile(handle: String) async throws -> MeeshyUser {
         fetchProfileCallCount += 1
         fetchedProfileHandles.append(handle)
+        onFetchProfile?()
         return try fetchProfileResult.get()
     }
 

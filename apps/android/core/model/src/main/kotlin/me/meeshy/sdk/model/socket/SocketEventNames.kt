@@ -29,6 +29,14 @@ object SocketEventNames {
     const val PHONE_UNREACHABLE = "phone:unreachable"
     const val PHONE_REACHABLE = "phone:reachable"
 
+    // vérification d'inactivité (#18738, TEL-02) : serveur -> client, `user:<Sang>` ; aucun événement montant
+    const val INACTIVITY_ALERT = "inactivity:alert"
+    const val INACTIVITY_CLEARED = "inactivity:cleared"
+
+    // en appel (#18753, ACT-01) : serveur -> client, `user:<Sang>` ; aucun événement montant (POST /me/device/call)
+    const val PHONE_CALL_STARTED = "phone-call:started"
+    const val PHONE_CALL_ENDED = "phone-call:ended"
+
     // connection health
     const val HEARTBEAT_ACK = "heartbeat:ack"
 
@@ -37,6 +45,9 @@ object SocketEventNames {
     const val CALL_ANALYTICS = "call:analytics"
     const val CALL_BACKGROUNDED = "call:backgrounded"
     const val CALL_CHECK_ACTIVE = "call:check-active"
+
+    /** Serveur → room de l'appel : l'appel vit désormais dans le groupe des présents (#19650). */
+    const val CALL_CONVERSATION_CHANGED = "call:conversation-changed"
     const val CALL_END = "call:end"
     const val CALL_ENDED = "call:ended"
     const val CALL_ERROR = "call:error"
@@ -109,6 +120,10 @@ object SocketEventNames {
     const val COMMENT_UPDATED = "comment:updated"
 
     // community
+    const val COMMUNITY_DELETED = "community:deleted"
+    const val COMMUNITY_MEMBER_JOINED = "community:member-joined"
+    const val COMMUNITY_MEMBER_LEFT = "community:member-left"
+    const val COMMUNITY_MEMBER_ROLE_UPDATED = "community:member-role-updated"
     const val COMMUNITY_UPDATED = "community:updated"
 
     // conversation
@@ -200,6 +215,7 @@ object SocketEventNames {
     const val PRESENCE_SNAPSHOT = "presence:snapshot"
 
     // game
+    const val GAME_MISSIONS_UPDATED = "game:missions-updated"
     const val GAME_UPDATED = "game:updated"
 
     // pack
@@ -207,6 +223,9 @@ object SocketEventNames {
 
     // reaction
     const val PROFILE_DECOR_UPDATED = "profile:decor-updated"
+
+    /** #18924 — mon profil changé sur un autre de mes appareils, vers `user:<moi>` seulement. */
+    const val PROFILE_UPDATED = "profile:updated"
     const val REACTION_ADDED = "reaction:added"
     const val REACTION_REMOVED = "reaction:removed"
 
@@ -259,6 +278,7 @@ object SocketEventNames {
 
     // user
     const val USER_PREFERENCES_UPDATED = "user:preferences-updated"
+    const val USER_PREFERENCES_REORDERED = "user:preferences-reordered"
     const val USER_STATUS = "user:status"
     const val USER_UPDATED = "user:updated"
 
@@ -311,6 +331,10 @@ object SocketEventNames {
         BATTERY_REPORT,
         PHONE_UNREACHABLE,
         PHONE_REACHABLE,
+        INACTIVITY_ALERT,
+        INACTIVITY_CLEARED,
+        PHONE_CALL_STARTED,
+        PHONE_CALL_ENDED,
         AUDIO_TRANSCRIPTION_READY,
         AUDIO_TRANSLATION_READY,
         AUTH_SESSION_REVOKED,
@@ -320,6 +344,7 @@ object SocketEventNames {
         CALL_ANALYTICS,
         CALL_BACKGROUNDED,
         CALL_CHECK_ACTIVE,
+        CALL_CONVERSATION_CHANGED,
         CALL_END,
         CALL_ENDED,
         CALL_ERROR,
@@ -384,6 +409,10 @@ object SocketEventNames {
         COMMENT_TRANSLATION_UPDATED,
         COMMENT_UNLIKED,
         COMMENT_UPDATED,
+        COMMUNITY_DELETED,
+        COMMUNITY_MEMBER_JOINED,
+        COMMUNITY_MEMBER_LEFT,
+        COMMUNITY_MEMBER_ROLE_UPDATED,
         COMMUNITY_UPDATED,
         CONVERSATION_CLOSED,
         CONVERSATION_DELETED,
@@ -400,6 +429,7 @@ object SocketEventNames {
         E2EE_ENVELOPE,
         ENGAGEMENT_CONVERSATION_UPDATED,
         ENGAGEMENT_POST_UPDATED,
+        GAME_MISSIONS_UPDATED,
         GAME_UPDATED,
         LOCATION_LIVE_START,
         LOCATION_LIVE_STARTED,
@@ -454,6 +484,7 @@ object SocketEventNames {
         PRESENCE_APP_STATE,
         PRESENCE_SNAPSHOT,
         PROFILE_DECOR_UPDATED,
+        PROFILE_UPDATED,
         REACTION_ADDED,
         REACTION_REMOVED,
         FRIEND_REQUEST_CANCELLED,
@@ -486,6 +517,7 @@ object SocketEventNames {
         TYPING_START,
         TYPING_STOP,
         USER_PREFERENCES_UPDATED,
+        USER_PREFERENCES_REORDERED,
         USER_STATUS,
         USER_UPDATED,
         VIEWING_ACTIVITY,

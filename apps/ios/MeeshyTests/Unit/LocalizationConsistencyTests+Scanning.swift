@@ -355,6 +355,8 @@ extension LocalizationConsistencyTests {
     /// A caller fills the parameter under its ARGUMENT LABEL, which is not always
     /// its name: the SDK copy types declare `in bundle: Bundle` and are filled with
     /// `in: .module` (`JoinFlowCopy`, `NotificationListCopy`, `CommunitySettingsCopy`).
+    /// The kit fills it with a fallback — `bundle: bundle ?? .module` — which is the
+    /// same `.module` fill (`MeeshyKeyHintRecipe`, `MeeshyStepperRecipe`).
     func forwardsModuleBundle(_ segment: String, in source: String) -> Bool {
         guard let range = segment.range(of: #"bundle:\s*[A-Za-z_][A-Za-z0-9_]*"#, options: .regularExpression)
         else { return false }
@@ -362,7 +364,10 @@ extension LocalizationConsistencyTests {
         let labels = argumentLabels(of: parameter, in: source)
         let fills = { (value: String) in
             labels.contains { label in
-                source.range(of: "\\b\(label):\\s*\\.\(value)\\b", options: .regularExpression) != nil
+                source.range(
+                    of: "\\b\(label):\\s*(?:[A-Za-z_][A-Za-z0-9_]*\\s*\\?\\?\\s*)?\\.\(value)\\b",
+                    options: .regularExpression
+                ) != nil
             }
         }
         return fills("module") && !fills("main")

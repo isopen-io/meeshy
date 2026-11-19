@@ -36,6 +36,15 @@ class PushPrefetchPolicyTest {
     }
 
     @Test
+    fun `a locked conversation fetches no message but still acknowledges delivery`() {
+        listOf("new_message", "message_reply", "user_mentioned").forEach { type ->
+            val plan = PushPrefetchPolicy.plan(payload(type), conversationLocked = true)
+            assertThat(plan.message).isNull()
+            assertThat(plan.deliveryReceipt).isEqualTo(PushMessageRef("c1", "m1"))
+        }
+    }
+
+    @Test
     fun `missing identifiers or type yield an empty plan`() {
         assertThat(PushPrefetchPolicy.plan(payload("new_message", messageId = null)).isEmpty).isTrue()
         assertThat(PushPrefetchPolicy.plan(payload("new_message", conversationId = " ")).isEmpty).isTrue()

@@ -22,6 +22,12 @@ public object SendFailureClassifier {
 
     private val PERMANENT_STATUSES = setOf(400, 403, 404, 410, 413, 415, 422)
 
+    /** The gateway's own word that the target is gone: unknown (404) or already removed (410). */
+    private val GONE_STATUSES = setOf(404, 410)
+
+    /** How a definitive refusal names its status in the reason it leaves ([refusedAsGone] reads it back). */
+    private const val REFUSED_PREFIX = "Refused: HTTP "
+
     /** Refused for good wherever the answer comes from: a proxy that finds the body too large refuses it again. */
     private val PERMANENT_WHEREVER_ANSWERED = setOf(413, 415)
     private const val NETWORK_CODE = "NETWORK"
@@ -30,13 +36,22 @@ public object SendFailureClassifier {
         val status = error.httpStatus
         return when {
             DailyGestureLimit.from(error.code, null) != null ->
-                SendResult.PermanentFailure("Refused: HTTP ${status ?: 429} ${error.code}")
+                SendResult.PermanentFailure("$REFUSED_PREFIX${status ?: 429} ${error.code}")
             status == 401 -> SendResult.Deferred(SESSION_EXPIRED_REASON)
             status != null && status in PERMANENT_STATUSES && (status in PERMANENT_WHEREVER_ANSWERED || answeredByGateway(error, status)) ->
-                SendResult.PermanentFailure("Refused: HTTP $status ${error.code.orEmpty()}".trim())
+                SendResult.PermanentFailure("$REFUSED_PREFIX$status ${error.code.orEmpty()}".trim())
             status == null && error.code == NETWORK_CODE -> SendResult.TransportFailure
             else -> SendResult.TransientFailure
         }
+    }
+
+    /**
+     * #19047 — whether a row was refused because the gateway itself said its target is gone (404, 410), read back from the
+     * reason [classify] wrote: the only trace of the refusal an exhausted row keeps (`OutboxEntity.lastError`).
+     */
+    public fun refusedAsGone(reason: String?): Boolean {
+        val status = reason?.takeIf { it.startsWith(REFUSED_PREFIX) }?.removePrefix(REFUSED_PREFIX)?.substringBefore(' ')
+        return status?.toIntOrNull()?.let { it in GONE_STATUSES } == true
     }
 
     public fun classify(failure: Throwable): SendResult = when (failure) {

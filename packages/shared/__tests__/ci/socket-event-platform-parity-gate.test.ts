@@ -67,15 +67,12 @@ const ASYMETRIES: readonly {
       'audio:translation-ready',
       'audio:translations-completed',
       'audio:translations-progressive',
-      'comment:media-updated',
       'comment:reaction-added',
       'comment:reaction-removed',
-      'conversation:deleted',
       'conversation:join-error',
       'conversation:joined',
       'conversation:left',
       'conversation:participant-unbanned',
-      'conversation:restored',
       'conversation:stats',
       'e2ee:envelope',
       'heartbeat:ack',
@@ -84,8 +81,6 @@ const ASYMETRIES: readonly {
       'location:live-updated',
       'mention:created',
       'participant:rights-updated',
-      'status:created',
-      'status:deleted',
       'status:reacted',
       'status:unreacted',
       'story:translation-updated',
@@ -117,26 +112,12 @@ const ASYMETRIES: readonly {
     ],
   },
   {
-    absents: ['android', 'ios'],
-    raison:
-      "l'effectif d'une communauté en temps réel (#18766) : la passerelle et le web le portent ; iOS (#18767) et "
-      + 'Android (#18768) le liront sur le modèle de `community:updated` — dette mesurée, chacune son issue.',
-    events: ['community:member-joined', 'community:member-left', 'community:member-role-updated'],
-  },
-  {
     absents: ['web', 'ios'],
     raison:
       "signaux que seul le miroir ANDROID cite : la pièce jointe prête côté SDK Kotlin et le "
       + "réordonnancement des communautés, dont le web persiste la ligne sans écouter l'écho. À instruire "
       + 'avec le lot qui porte ces deux gestes, pas isolément.',
     events: ['attachment:ready', 'user:preferences-community-reordered'],
-  },
-  {
-    absents: ['web', 'android'],
-    raison:
-      "le Jeu Meeshy est né sur iOS : ses missions sont un écran iOS, et le web comme Android n'en ont "
-      + 'pas encore la surface. La parité suivra le portage du Jeu, qui a ses propres issues.',
-    events: ['game:missions-updated'],
   },
 ];
 

@@ -127,13 +127,12 @@ final class ConversationEpureTests: XCTestCase {
         "share.sheet.content.refused-source": "Cette app n’a remis qu’un chemin de fichier : partagez le fichier lui-même.",
         "share.sheet.offline": "Hors ligne : l’envoi repartira au retour du réseau.",
         "share.sheet.sign-in.body": "Votre partage est gardé : il vous attend dans Meeshy.",
-        "talkie.info.a11y": "Et si Meeshy est en arrière-plan ?",
+        "talkie.info.a11y": "À quoi sert le talkie ?",
         "share.sheet.withheld.flame": "Une flamme ne se publie pas, ne s’enregistre pas, ne se copie pas.",
         "share.sheet.withheld.flame.note": "Sa copie disparaît aussi et ne se retransfère pas.",
         "share.sheet.withheld.flame.question": "Que devient la copie d’une flamme ?",
-        "talkie.info.text": "Votre voix sort quand même chez votre proche.",
+        "talkie.info.text": "Pour l’urgence, entre proches : ta voix sort aussitôt, même Meeshy fermé.",
         "talkie.send.e2ee": "Pas de talkie dans une conversation chiffrée : il ne l’est pas de bout en bout.",
-        "talkie.send.explain": "Talkie d’urgence, pour vos très proches : maintenez et parlez, votre voix sort chez %@ sans décrocher.",
         "voice.profile.empty.description": "Vos vocaux traduits garderont votre voix.",
     ]
 
@@ -166,6 +165,9 @@ final class ConversationEpureTests: XCTestCase {
         "share.link.create.permission.view_history.subtitle",
         "share.link.create.picker.empty.description",
         "share.links.empty.subtitle",
+        "talkie.card.live",
+        "talkie.send.explain",
+        "talkie.send.voice",
         "talkie.send.voiceCopy",
         "voice.profile.status.ready.description",
     ]
@@ -249,6 +251,7 @@ final class ConversationEpureTests: XCTestCase {
         "share.sheet.withheld.flame",
         "share.sheet.withheld.flame.question",
         "talkie.info.a11y",
+        "talkie.info.text",
         "talkie.send.e2ee",
         "voice.profile.empty.description",
     ]
@@ -314,8 +317,8 @@ final class ConversationEpureTests: XCTestCase {
                         "send_messages.subtitle", "send_images.subtitle", "send_files.subtitle", "view_history.subtitle", "picker.empty.description"] {
             XCTAssertFalse(view.contains(removed), "\(removed) : la rangée se comprend seule")
         }
-        XCTAssertTrue(view.contains("share.link.create.section.access.subtitle"), "la phrase d'orientation du bloc reste visible (règle 7)")
-        XCTAssertTrue(view.contains("share.link.create.section.permissions.subtitle"), "la phrase d'orientation du bloc reste visible (règle 7)")
+        XCTAssertTrue(view.contains("share.link.create.section.access.subtitle"), "la phrase d'orientation du bloc reste lisible derrière son (i)")
+        XCTAssertTrue(view.contains("share.link.create.section.permissions.subtitle"), "la phrase d'orientation du bloc reste lisible derrière son (i)")
     }
 
     func test_createShareLink_birthDate_explainsItself_behindAnInfoWhoseNameIsTheQuestion() throws {
@@ -378,22 +381,24 @@ final class ConversationEpureTests: XCTestCase {
         }
     }
 
-    func test_talkie_theInfoIsNamedByItsQuestion_andTheVisibleSentenceSaysWhatItIs() throws {
+    /// #19732 : la carte ne dit que le geste, en UNE ligne ; ce qu'est le talkie vit derrière le (i), qui répond à sa
+    /// question, sans rien redire de la carte.
+    func test_talkie_theInfoIsNamedByItsQuestion_andTheCardSaysOnlyTheGesture() throws {
         let app = try Self.catalog(Self.appCatalogPath)
         for language in ["fr"] + Self.otherLanguages {
             let question = try XCTUnwrap(app["talkie.info.a11y"]?[language], language)
             XCTAssertTrue(question.contains("?") || question.contains("؟"), "\(language) : « \(question) » n'est pas une question")
         }
         let row = try code("Meeshy/Features/Talkie/ProfileTalkieRow.swift")
-        XCTAssertTrue(row.contains("Text(ProfileTalkieWording.explain(name: displayName))"), "la phrase propre à Meeshy reste lisible au repos")
+        XCTAssertFalse(row.contains("talkie.send.explain"), "l'explication vit derrière le (i), plus sur la carte")
+        XCTAssertFalse(row.contains("talkie.card.live"), "une seule ligne sur la carte")
         XCTAssertFalse(row.contains("talkie.send.voiceCopy"), "le repli réutilise « Le talkie ne passe pas… »")
         XCTAssertTrue(row.contains("talkie.header.announce.recorded"))
         XCTAssertEqual(ProfileTalkieWording.notice(.voice), String(localized: "talkie.header.announce.recorded", bundle: .main))
-        XCTAssertFalse(TalkieInfoWording.text.isEmpty)
         let note = try XCTUnwrap(app["talkie.info.text"]?["fr"])
-        XCTAssertEqual(app["talkie.info.a11y"]?["fr"], "Et si Meeshy est en arrière-plan ?")
-        XCTAssertEqual(note, "Votre voix sort quand même chez votre proche.", "la note RÉPOND à la question : un fragment « Même si… » n'apprend rien une fois ouvert")
-        XCTAssertFalse(note.contains("urgence"))
+        XCTAssertEqual(app["talkie.info.a11y"]?["fr"], "À quoi sert le talkie ?")
+        XCTAssertEqual(note, "Pour l’urgence, entre proches : ta voix sort aussitôt, même Meeshy fermé.", "la note RÉPOND à la question")
+        XCTAssertFalse(note.contains(ProfileTalkieWording.hold), "le (i) ne redit pas le geste de la carte")
     }
 
     // MARK: - Le chiffrement : l'irréversibilité reste ENTIÈRE et visible, le détail secondaire derrière un (i)
@@ -680,8 +685,9 @@ final class ConversationEpureTests: XCTestCase {
 
     private static let pass3: [String: [String: String]] = [
         "share.link.create.button.create": [
-            "fr": "Créer le lien", "en": "Create the link", "es": "Crear el enlace", "pt-BR": "Criar o link",
-            "de": "Link erstellen", "it": "Crea il link", "ar": "إنشاء الرابط"
+            "fr": "Créer et copier le lien", "en": "Create and copy the link", "es": "Crear y copiar el enlace",
+            "pt-BR": "Criar e copiar o link", "de": "Link erstellen und kopieren", "it": "Crea e copia il link",
+            "ar": "إنشاء الرابط ونسخه"
         ],
         "share.link.create.section.access.subtitle": [
             "fr": "Ce que les invités doivent fournir", "en": "What guests must provide", "es": "Lo que los invitados deben facilitar",
@@ -694,10 +700,13 @@ final class ConversationEpureTests: XCTestCase {
             "ar": "عدد الاستخدامات ومدة الرابط"
         ],
         "talkie.info.text": [
-            "fr": "Votre voix sort quand même chez votre proche.", "en": "Your voice still plays on your loved one’s side.",
-            "es": "Tu voz suena igualmente en el lado de tu ser querido.", "pt-BR": "Sua voz sai mesmo assim do lado da pessoa próxima.",
-            "de": "Deine Stimme ist bei deinem nahen Menschen trotzdem zu hören.", "it": "La tua voce esce comunque dal tuo caro.",
-            "ar": "يخرج صوتك رغم ذلك لدى قريبك."
+            "fr": "Pour l’urgence, entre proches : ta voix sort aussitôt, même Meeshy fermé.",
+            "en": "For emergencies, between close ones: your voice plays at once, even with Meeshy closed.",
+            "es": "Para urgencias, entre allegados: tu voz suena al instante, aunque Meeshy esté cerrado.",
+            "pt-BR": "Para urgências, entre pessoas próximas: sua voz sai na hora, mesmo com o Meeshy fechado.",
+            "de": "Für Notfälle unter Nahestehenden: Deine Stimme ist sofort zu hören, auch wenn Meeshy geschlossen ist.",
+            "it": "Per le urgenze, tra persone care: la tua voce esce subito, anche a Meeshy chiuso.",
+            "ar": "للطوارئ بين المقرّبين: يخرج صوتك فورًا، حتى لو كان Meeshy مغلقًا."
         ],
     ]
 
@@ -732,7 +741,7 @@ final class ConversationEpureTests: XCTestCase {
         let button = try XCTUnwrap(app["share.link.create.button.create"]?["fr"])
         XCTAssertFalse(button.contains("de partage"), "« \(button) » redit « \(title) »")
         let view = try code("Meeshy/Features/Links/Views/CreateShareLinkView.swift")
-        XCTAssertTrue(view.contains("defaultValue: \"Créer le lien\""))
+        XCTAssertTrue(view.contains("defaultValue: \"Créer et copier le lien\""))
     }
 
     func test_createShareLink_orientationSentences_stayVisible_andSayGuestsOnce() throws {
@@ -749,10 +758,9 @@ final class ConversationEpureTests: XCTestCase {
         XCTAssertEqual(TalkieInfoWording.text, served("talkie.info.text"))
         let app = try Self.catalog(Self.appCatalogPath)
         let text = try XCTUnwrap(app["talkie.info.text"]?["fr"])
-        XCTAssertEqual(app["talkie.info.a11y"]?["fr"], "Et si Meeshy est en arrière-plan ?")
-        XCTAssertEqual(text, "Votre voix sort quand même chez votre proche.", "la note répond à la question qu'elle porte")
-        XCTAssertFalse(text.contains("urgence"))
-        XCTAssertLessThan(text.count, 50)
+        XCTAssertEqual(app["talkie.info.a11y"]?["fr"], "À quoi sert le talkie ?")
+        XCTAssertEqual(text, "Pour l’urgence, entre proches : ta voix sort aussitôt, même Meeshy fermé.", "la note répond à la question qu'elle porte")
+        XCTAssertLessThanOrEqual(text.count, 80)
         let source = try code("Meeshy/Features/Talkie/TalkieInfoButton.swift")
         XCTAssertTrue(source.contains(".accessibilityHint(TalkieInfoWording.text)"), "la note reste lue par le lecteur d'écran")
     }

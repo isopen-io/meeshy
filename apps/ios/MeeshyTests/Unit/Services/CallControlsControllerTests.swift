@@ -45,6 +45,7 @@ final class CallControlsControllerTests: XCTestCase {
     private final class MockHost: CallControlsHosting {
         var controlsCallId: String? = "call-1"
         var moderatorMutes = 0
+        var adoptedConversations: [CallConversationChangedEvent] = []
 
         func applyModeratorMute() { moderatorMutes += 1 }
         func participantName(for userId: String) -> String {
@@ -79,7 +80,8 @@ final class CallControlsControllerTests: XCTestCase {
             viewerId: { "u-me" },
             now: { clock.now },
             wait: { _ in },
-            events: Empty().eraseToAnyPublisher()
+            events: Empty().eraseToAnyPublisher(),
+            adoptConversation: { [weak host] in host?.adoptedConversations.append($0) }
         )
         sut.host = host
         return Env(sut: sut, socket: socket, remote: remote, host: host, clock: clock)
@@ -116,6 +118,31 @@ final class CallControlsControllerTests: XCTestCase {
 
         XCTAssertNil(env.sut.invite(lea))
         XCTAssertEqual(env.socket.invites.count, 1)
+    }
+
+    // MARK: - #19650 — l'appel change de conversation
+
+    private func conversationChanged(callId: String) -> CallConversationChangedEvent {
+        CallConversationChangedEvent(
+            callId: callId, conversationId: "g-1", previousConversationId: "dm-1",
+            conversationTitle: "Trio", memberUserIds: ["u-me", "u-admin", "u-lea"], created: true
+        )
+    }
+
+    func test_conversationChanged_currentCall_isHandedToTheHost() {
+        let env = makeEnv()
+
+        env.sut.receive(.conversationChanged(conversationChanged(callId: "call-1")))
+
+        XCTAssertEqual(env.host.adoptedConversations.map(\.conversationId), ["g-1"])
+    }
+
+    func test_conversationChanged_otherCall_isIgnored() {
+        let env = makeEnv()
+
+        env.sut.receive(.conversationChanged(conversationChanged(callId: "call-9")))
+
+        XCTAssertTrue(env.host.adoptedConversations.isEmpty)
     }
 
     func test_participantInvited_byAnother_showsTheTileToEveryone() {

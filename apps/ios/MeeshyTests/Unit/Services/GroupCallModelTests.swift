@@ -30,13 +30,14 @@ final class GroupCallModelTests: XCTestCase {
     }
 
     func test_admitting_beyondCapacity_isIgnored() {
-        let full = (1...5).reduce(GroupCallRoster(localUserId: "me")) { $0.admitting(arrival("u\($1)")) }
+        let seats = CallRules.maxParticipants - 1
+        let full = (1...seats).reduce(GroupCallRoster(localUserId: "me")) { $0.admitting(arrival("u\($1)")) }
 
-        let overflow = full.admitting(arrival("u6"))
+        let overflow = full.admitting(arrival("late"))
 
         XCTAssertTrue(full.isFull)
-        XCTAssertEqual(overflow.members.count, 5)
-        XCTAssertFalse(overflow.contains("u6"))
+        XCTAssertEqual(overflow.members.count, seats)
+        XCTAssertFalse(overflow.contains("late"))
     }
 
     func test_capacity_defaultsToGatewayCeiling() {
@@ -372,6 +373,21 @@ final class GroupCallModelTests: XCTestCase {
 
         XCTAssertEqual(event.principalUserId, "a")
         XCTAssertTrue(event.isGroupCall)
+    }
+
+    /// #19650 — recette du 2026-11-18 : la tuile de l'invitant portait « Talkie
+    /// Un vous invite à un appel de groupe ». La phrase est un TITRE de sonnerie ;
+    /// le pair principal se nomme par la personne.
+    func test_principalDisplayName_invitation_isTheInvitersNameNotTheSentence() throws {
+        let event = try offer(#"{"callId":"c1","conversationId":"dm","initiator":{"userId":"b","username":"bob","displayName":"Bob"},"invitedBy":{"userId":"a","username":"alice","displayName":"Alice"},"isGroup":true}"#)
+
+        XCTAssertEqual(event.principalDisplayName, "Alice")
+    }
+
+    func test_principalDisplayName_withoutDisplayName_fallsBackToUsername() throws {
+        let event = try offer(#"{"callId":"c1","conversationId":"dm","initiator":{"userId":"b","username":"bob"}}"#)
+
+        XCTAssertEqual(event.principalDisplayName, "bob")
     }
 
     func test_principalUserId_plainDirectCall_isTheInitiator() throws {

@@ -23,8 +23,21 @@ import {
 import { applyUserPreferences, isCallPushDataType } from './push-delivery-preferences';
 import { pushRoutingClientOf, tokenRoutesPushType } from './push-type-routing';
 import { apnsThreadIdOf } from './notifications/push-thread';
-import { sendViaPushToTalk, type PushToTalkTokenRecord } from './talkie/pushToTalkApns';
+import { isBadgeSyncPush } from './notifications/badgeSyncPush';
+import { sendViaPushToTalk, type PushToTalkTransport } from './talkie/pushToTalkApns';
+import { sendViaLiveActivity, type LiveActivityEndState, type LiveActivityTarget } from './notifications/liveActivityApns';
+import {
+  APNS_PERMANENT_REASONS,
+  apnsFailureOutcome,
+  circuitOpenError,
+  fcmFailureVerdict,
+  fcmRejectionOutcome,
+  type FcmSendOutcome,
+  isRetryableApnsReason,
+  isRetryableFcmCode,
+} from './pushFailureClassification';
 import { apnsReady, pushTransportConfigFromEnv, type PushTransports } from './push-transport-config';
+import { keepTokensOfLiveSessions } from './pushTokenSessions';
 
 const pushLogger = enhancedLogger.child({ module: 'PushNotificationService' });
 
@@ -143,37 +156,11 @@ const config = pushTransportConfigFromEnv(process.env);
 // TRANSIENT ERROR CLASSIFICATION
 // ============================================
 
-// Apple-reported reasons that indicate a provider-side hiccup, not a bad
-// device token. Worth a short retry before counting as a delivery failure.
-const APNS_TRANSIENT_REASONS = new Set(['InternalServerError', 'ServiceUnavailable', 'TooManyRequests', 'Shutdown']);
-
-// FCM error codes for the same class of provider-side issue (as opposed to
-// `messaging/registration-token-not-registered` / `invalid-registration-token`,
-// which mean the token itself is dead).
-const FCM_TRANSIENT_ERROR_CODES = new Set([
-  'messaging/internal-error',
-  'messaging/server-unavailable',
-  'messaging/unavailable',
-  'messaging/quota-exceeded',
-]);
-
-// Apple-reported reasons that mean the token itself is dead (wrong environment,
-// app uninstalled, expired, wrong topic). Retrying or counting strikes on these
-// only keeps sending doomed pushes — the token is deactivated on first sight.
-const APNS_PERMANENT_REASONS = new Set(['BadDeviceToken', 'Unregistered', 'ExpiredToken', 'DeviceTokenNotForTopic']);
-
-function isTransientApnsReason(reason: string | undefined): boolean {
-  return !!reason && APNS_TRANSIENT_REASONS.has(reason);
-}
-
-function isTransientFcmErrorCode(code: string | undefined): boolean {
-  return !!code && FCM_TRANSIENT_ERROR_CODES.has(code);
-}
-
 // Up to 2 retries (3 attempts total) with exponential backoff before a
 // transient failure is surfaced as a real delivery failure.
 const PUSH_RETRY_MAX_ATTEMPTS = 2;
 const PUSH_RETRY_BASE_DELAY_MS = 200;
+const FCM_PROVIDER_HEALTH_WINDOW_MS = 10 * 60_000;
 
 /**
  * Le son APNs : le nom, ou le dictionnaire CRITIQUE quand le producteur l'a
@@ -211,7 +198,7 @@ export class PushNotificationService {
     resetTimeoutMs: 60_000,
     successThreshold: 2,
     timeout: 10_000,
-    fallback: () => ({ success: false, tokenId: '', error: 'FCM circuit breaker OPEN' }),
+    fallback: () => { throw circuitOpenError('FCM'); },
   });
   private apnsCircuitBreaker = new CircuitBreaker({
     name: 'APNS',
@@ -220,8 +207,12 @@ export class PushNotificationService {
     resetTimeoutMs: 60_000,
     successThreshold: 2,
     timeout: 10_000,
-    fallback: () => ({ success: false, tokenId: '', error: 'APNS circuit breaker OPEN' }),
+    fallback: () => { throw circuitOpenError('APNS'); },
   });
+
+  // Dernière livraison FCM réussie par plateforme : un refus d'identifiants n'accuse le jeton que si Firebase
+  // livre ailleurs sur la même plateforme (#18910).
+  private fcmLastDeliveryAt = new Map<string, number>();
 
   // In-flight deactivation guard: prevents duplicate DB writes when the same
   // token fails multiple concurrent sends (e.g. a burst of push requests).
@@ -383,13 +374,17 @@ export class PushNotificationService {
         bundleId: true,
         apnsEnvironment: true,
         appVersion: true,
+        sessionId: true,
       },
     });
+
+    // #9616 — un jeton dont la session est morte (révoquée, échue) ne part pas, même si son retrait a été manqué.
+    const liveTokens = await keepTokensOfLiveSessions(this.prisma, userId, activeTokens);
 
     // #10267 — un type neuf ne part que vers les appareils qui savent l'ouvrir (`push-type-routing.ts`). Un jeton
     // PushToTalk (#17142) n'est enregistré QUE par un client qui sait le traiter : il porte sa capacité.
     const pushType = effectivePayload.data?.type;
-    const tokens = activeTokens.filter((token) => token.type === 'pushtotalk' || tokenRoutesPushType(token, pushType));
+    const tokens = liveTokens.filter((token) => token.type === 'pushtotalk' || tokenRoutesPushType(token, pushType));
 
     if (tokens.length === 0) {
       pushLogger.debug('No active tokens found for user', { userId, pushType, excluded: activeTokens.length });
@@ -414,7 +409,7 @@ export class PushNotificationService {
           } else if (tokenRecord.type === 'voip') {
             result = await this.sendViaAPNS(tokenRecord, effectivePayload, true);
           } else if (tokenRecord.type === 'pushtotalk') {
-            result = await this.sendViaPushToTalk(tokenRecord, effectivePayload);
+            result = await sendViaPushToTalk(this.apnsTransport('sendViaPushToTalk'), tokenRecord, effectivePayload);
           } else {
             result = { success: false, tokenId: tokenRecord.id, error: `Unknown token type: ${tokenRecord.type}` };
           }
@@ -481,8 +476,10 @@ export class PushNotificationService {
       // client rende sa notification d'appel dans la langue résolue de
       // l'utilisateur (Prisme).
       const isCallPush = isCallPushDataType(payload.data?.type);
+      const isBadgeOnly = isBadgeSyncPush(payload);
       const dataOnly =
         payload.silent === true ||
+        isBadgeOnly ||
         ((tokenRecord.platform === 'android' || tokenRecord.platform === 'web') && isCallPush) ||
         (tokenRecord.platform === 'android' && payload.dataOnlyOnAndroid === true);
 
@@ -505,7 +502,14 @@ export class PushNotificationService {
           };
 
       // Platform-specific options
-      if (tokenRecord.platform === 'ios' && payload.silent === true) {
+      if (tokenRecord.platform === 'ios' && isBadgeOnly) {
+        // #18910 — la pastille seule : `aps = { badge }`, ni alert ni son ni mutable-content ni
+        // content-available ; `alert` + priorité 5 en en-têtes, remplaçable par `collapse-id`.
+        message.apns = {
+          headers: { 'apns-push-type': 'alert', 'apns-priority': '5' },
+          payload: { aps: { badge: payload.badge } },
+        };
+      } else if (tokenRecord.platform === 'ios' && payload.silent === true) {
         // Background pur, miroir exact du chemin APNs direct : `content-available`
         // seul, sans alert ni mutable-content (Apple rejette la combinaison),
         // `apns-push-type: background` + priorité 5 en en-têtes.
@@ -601,13 +605,19 @@ export class PushNotificationService {
         platform: tokenRecord.platform,
         collapseId: payload.collapseId ?? undefined
       };
-      await this.fcmCircuitBreaker.execute(() =>
+      const outcome = await this.fcmCircuitBreaker.execute(() =>
         performanceLogger.withTiming(
           'push.sendViaFCM',
           () => this.sendFcmWithRetry(message, fcmCorr),
           fcmCorr
         )
       );
+      if (outcome.rejection) {
+        pushLogger.warn('push.sendViaFCM.rejected', { ...fcmCorr, errorCode: outcome.rejection.code });
+        const providerHealthy = this.fcmDeliveredRecentlyOn(tokenRecord.platform);
+        return { success: false, tokenId: tokenRecord.id, ...fcmRejectionOutcome(outcome.rejection, { providerHealthy }) };
+      }
+      this.fcmLastDeliveryAt.set(tokenRecord.platform, Date.now());
       pushLogger.info('push.sendViaFCM.success', fcmCorr);
       return { success: true, tokenId: tokenRecord.id };
     } catch (error: any) {
@@ -622,35 +632,33 @@ export class PushNotificationService {
         errorMessage: error?.message
       });
 
-      if (errorCode === 'messaging/registration-token-not-registered' ||
-          errorCode === 'messaging/invalid-registration-token') {
-        // Token is invalid, mark for removal
-        return { success: false, tokenId: tokenRecord.id, error: 'TOKEN_INVALID' };
-      }
-
-      return {
-        success: false,
-        tokenId: tokenRecord.id,
-        error: error.message || 'FCM error',
-        transient: isTransientFcmErrorCode(errorCode),
-      };
+      // Firebase a répondu sur le jeton par une valeur (plus haut) : une exception est une panne du fournisseur,
+      // un délai dépassé ou un disjoncteur ouvert — jamais la faute du jeton.
+      return { success: false, tokenId: tokenRecord.id, error: error.message || 'FCM error', transient: true };
     }
+  }
+
+  private fcmDeliveredRecentlyOn(platform: string): boolean {
+    const at = this.fcmLastDeliveryAt.get(platform);
+    return at !== undefined && Date.now() - at <= FCM_PROVIDER_HEALTH_WINDOW_MS;
   }
 
   /**
    * Sends via FCM, retrying transient provider errors (`messaging/internal-error`,
-   * etc.) with exponential backoff. Permanent errors (bad/unregistered token)
-   * throw immediately on the first attempt — retrying them would just waste
-   * round-trips and delay the TOKEN_INVALID classification.
+   * etc.) with exponential backoff. A rejection of the token or of the message
+   * (unregistered, malformed) is Firebase ANSWERING, not Firebase failing: it is
+   * returned as a value, so the circuit breaker only counts provider faults.
    */
-  private async sendFcmWithRetry(message: unknown, corr: Record<string, unknown>): Promise<unknown> {
+  private async sendFcmWithRetry(message: unknown, corr: Record<string, unknown>): Promise<FcmSendOutcome> {
     for (let attempt = 0; ; attempt++) {
       try {
-        return await this.firebaseMessaging!.send(message);
+        await this.firebaseMessaging!.send(message);
+        return { rejection: null };
       } catch (error: any) {
         const code = error?.code || error?.errorInfo?.code;
-        if (!isTransientFcmErrorCode(code) || attempt >= PUSH_RETRY_MAX_ATTEMPTS) {
-          throw error;
+        if (!isRetryableFcmCode(code) || attempt >= PUSH_RETRY_MAX_ATTEMPTS) {
+          if (fcmFailureVerdict(code) === 'provider-outage') throw error;
+          return { rejection: { code, message: error?.message || code } };
         }
         pushLogger.warn('push.sendViaFCM.retry', { ...corr, attempt: attempt + 1, code });
         await this.wait(PUSH_RETRY_BASE_DELAY_MS * 2 ** attempt);
@@ -689,7 +697,13 @@ export class PushNotificationService {
       const notification = new apn.Notification();
 
       const isSilent = payload.silent === true && !isVoIP;
-      if (isSilent) {
+      const isBadgeOnly = isBadgeSyncPush(payload);
+      if (isBadgeOnly) {
+        // #18910 — `aps = { badge }` seul : ni alert, ni son (une pastille ne montre rien).
+        notification.alert = undefined as never;
+        notification.sound = undefined as never;
+        notification.badge = payload.badge as number;
+      } else if (isSilent) {
         // Explicitly strip every user-visible field — a background push that
         // carries an alert/sound/badge is rejected or displayed by APNs.
         notification.alert = undefined as never;
@@ -721,6 +735,9 @@ export class PushNotificationService {
       if (isVoIP) {
         notification.pushType = 'voip';
         notification.priority = 10; // Immediate delivery for calls
+      } else if (isBadgeOnly) {
+        notification.pushType = 'alert';
+        notification.priority = 5;
       } else if (isSilent) {
         // Apple requires `apns-push-type: background` + priority 5 for pure
         // content-available pushes; priority 10 on a background push is
@@ -754,7 +771,7 @@ export class PushNotificationService {
       // mutable-content routes ALERT pushes through the Notification Service
       // Extension; it has no meaning on a background push (Apple rejects the
       // combination), so only set it on visible notifications.
-      if (!isSilent) {
+      if (!isSilent && !isBadgeOnly) {
         notification.mutableContent = true;
       }
 
@@ -767,7 +784,7 @@ export class PushNotificationService {
       // (`PushDeliveryReceiptService.ack`). Without this, an offline recipient
       // never triggers `mark-as-received` and the sender's checkmark stays at
       // ✓ until the recipient manually foregrounds the app.
-      if (!isVoIP) {
+      if (!isVoIP && !isBadgeOnly) {
         notification.contentAvailable = true;
       }
 
@@ -802,18 +819,13 @@ export class PushNotificationService {
 
       if (result.failed.length > 0) {
         const failure = result.failed[0];
-        const reason = failure.response?.reason || 'APNS delivery failed';
+        const { error, transient } = apnsFailureOutcome(failure);
         pushLogger.warn('push.sendViaAPNS.failure', {
           ...apnsCorr,
-          reason,
+          reason: error,
           statusCode: failure.status
         });
-        return {
-          success: false,
-          tokenId: tokenRecord.id,
-          error: reason,
-          transient: isTransientApnsReason(reason),
-        };
+        return { success: false, tokenId: tokenRecord.id, error, transient };
       }
 
       pushLogger.info('push.sendViaAPNS.success', apnsCorr);
@@ -825,19 +837,24 @@ export class PushNotificationService {
         isVoIP,
         errorMessage: error?.message
       });
-      return { success: false, tokenId: tokenRecord.id, error: error.message || 'APNS error' };
+      // Une exception n'est jamais la faute du jeton : réseau, disjoncteur ouvert, client APNs.
+      return { success: false, tokenId: tokenRecord.id, error: error.message || 'APNS error', transient: true };
     }
   }
 
-  private sendViaPushToTalk(tokenRecord: PushToTalkTokenRecord, payload: PushNotificationPayload): Promise<PushResult> {
-    return sendViaPushToTalk({
+  private apnsTransport(step: string): PushToTalkTransport {
+    return {
       hasClient: (env) => !!(env === 'sandbox' ? this.apnsClientSandbox : this.apnsClientProduction),
-      send: (env, notification, token, corr) => this.apnsCircuitBreaker.execute(() => performanceLogger.withTiming('push.sendViaPushToTalk',
+      send: (env, notification, token, corr) => this.apnsCircuitBreaker.execute(() => performanceLogger.withTiming(`push.${step}`,
         () => this.sendApnsWithRetry(env === 'sandbox' ? this.apnsClientSandbox : this.apnsClientProduction, notification, token, corr), corr)),
-      isTransient: isTransientApnsReason,
       defaultBundleId: config.apns.bundleId,
-      log: (event, fields) => (event === 'success' ? pushLogger.info : pushLogger.warn).call(pushLogger, `push.sendViaPushToTalk.${event}`, fields),
-    }, tokenRecord, payload);
+      log: (event, fields) => (event === 'success' ? pushLogger.info : pushLogger.warn).call(pushLogger, `push.${step}.${event}`, fields),
+    };
+  }
+
+  async sendLiveActivityEnd(target: LiveActivityTarget, state: LiveActivityEndState): Promise<PushResult> {
+    await this.initialize();
+    return !config.enabled ? { success: false, tokenId: 'live-activity', error: 'Push disabled' } : sendViaLiveActivity(this.apnsTransport('sendLiveActivityEnd'), target, state);
   }
 
   /**
@@ -858,7 +875,7 @@ export class PushNotificationService {
         sent: unknown[];
       };
       const reason = result.failed[0]?.response?.reason;
-      if (result.failed.length === 0 || !isTransientApnsReason(reason) || attempt >= PUSH_RETRY_MAX_ATTEMPTS) {
+      if (result.failed.length === 0 || !isRetryableApnsReason(reason) || attempt >= PUSH_RETRY_MAX_ATTEMPTS) {
         return result;
       }
       pushLogger.warn('push.sendViaAPNS.retry', { ...corr, attempt: attempt + 1, reason });

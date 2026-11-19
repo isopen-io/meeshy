@@ -31,6 +31,16 @@ export type IncomingCallPushInput = {
   readonly iceServersJson: string;
   readonly isChinaDevice: boolean;
   readonly voipCapable: boolean;
+  /** `Conversation.type` de l'appel (`'direct' | 'group'`). */
+  readonly conversationType: string;
+  /**
+   * L'appel réunit-il plus de deux personnes ? Vrai pour un groupe ET pour un
+   * duo dans lequel on invite quelqu'un : un appelé réveillé par ce push ne
+   * reçoit pas `call:initiated`, c'est donc ce champ qui l'envoie au maillage.
+   */
+  readonly isGroup: boolean;
+  /** L'utilisateur qui invite dans un appel déjà en cours — absent pour un appel ordinaire. */
+  readonly invitedByUserId?: string;
 };
 
 export function buildIncomingCallPushes(input: IncomingCallPushInput): SendPushOptions[] {
@@ -45,6 +55,9 @@ export function buildIncomingCallPushes(input: IncomingCallPushInput): SendPushO
     callerAvatar: input.callerAvatar || '',
     isVideo: String(input.isVideo),
     iceServers: input.iceServersJson,
+    conversationType: input.conversationType,
+    isGroup: String(input.isGroup),
+    ...(input.invitedByUserId ? { invitedBy: input.invitedByUserId } : {}),
   };
   const common = {
     userId: input.calleeUserId,

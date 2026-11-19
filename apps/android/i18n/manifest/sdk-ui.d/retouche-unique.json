@@ -42,12 +42,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "video.filter.preset.natural",
-          "androidName": "retouch_filter_natural",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "video.filter.preset.warm",
           "androidName": "retouch_filter_warm",
           "status": "adopted"
@@ -332,6 +326,12 @@
           "catalog": "app",
           "iosKey": "call.effects.face.volcano",
           "androidName": "retouch_effect_volcano",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.effects.face.baby",
+          "androidName": "retouch_effect_baby",
           "status": "adopted"
         },
         {

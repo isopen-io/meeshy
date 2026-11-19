@@ -1,12 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 
 import { apiCacheIdentityPlugin } from '@/lib/net/api-cache-identity';
+import { apiCacheOfflineOnlyPlugin } from '@/lib/net/api-cache-offline-only';
 import { API_RESPONSE_CACHE_PATTERN } from '@/lib/net/api-runtime-cache';
 import { mediaCacheFreshnessPlugin } from '@/lib/net/media-cache-freshness';
 
 import {
   auditDelaiDuSeauApi,
   auditFraicheurDuSeauMedias,
+  auditHorsLigneDuSeauApi,
   auditIdentiteDuSeauApi,
   auditRoutage,
   auditSeauApi,
@@ -320,6 +322,39 @@ describe('le seau `api` range chaque réponse sous son identité (#8674)', () =>
 
   test('un greffon non autonome (identifiant importé) est dénoncé', async () => {
     const violations = await auditIdentiteDuSeauApi(AUTOUR(SEAU_MEDIAS(), SEAU_API_AVEC('async({request:s})=>empreinte(s)')));
+    expect(violations.join('\n')).toContain('NON AUTONOME');
+  });
+});
+
+describe('#18919 — en ligne, le seau `api` ne rend jamais sa copie', () => {
+  /** Le seau `api` avec un greffon `cachedResponseWillBeUsed` — la forme que Workbox sérialise. */
+  const SEAU_API_AVEC = (greffon: string) =>
+    `s.registerRoute(${MATCHER_JUSTE},new s.NetworkFirst({cacheName:"api",` +
+    `plugins:[new s.ExpirationPlugin({maxEntries:200,maxAgeSeconds:604800}),{cachedResponseWillBeUsed:${greffon}}]}),"GET")`;
+
+  test('sans greffon, un réseau qui échoue en ligne sert la copie d’il y a une heure : dénoncé', async () => {
+    const violations = await auditHorsLigneDuSeauApi(CONFORME);
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain('cachedResponseWillBeUsed');
+  });
+
+  test('le greffon de PRODUCTION, stringifié comme Workbox le fait, est accepté', async () => {
+    const greffon = String(apiCacheOfflineOnlyPlugin.cachedResponseWillBeUsed);
+    expect(await auditHorsLigneDuSeauApi(AUTOUR(SEAU_MEDIAS(), SEAU_API_AVEC(greffon)))).toEqual([]);
+  });
+
+  test('un greffon qui rend toujours la copie (en ligne compris) est dénoncé', async () => {
+    const violations = await auditHorsLigneDuSeauApi(AUTOUR(SEAU_MEDIAS(), SEAU_API_AVEC('async({cachedResponse:s})=>s')));
+    expect(violations.join('\n')).toContain('EN LIGNE');
+  });
+
+  test('un greffon qui ne rend jamais la copie (hors ligne compris) est dénoncé', async () => {
+    const violations = await auditHorsLigneDuSeauApi(AUTOUR(SEAU_MEDIAS(), SEAU_API_AVEC('async()=>null')));
+    expect(violations.join('\n')).toContain('HORS LIGNE');
+  });
+
+  test('un greffon non autonome (identifiant importé) est dénoncé', async () => {
+    const violations = await auditHorsLigneDuSeauApi(AUTOUR(SEAU_MEDIAS(), SEAU_API_AVEC('async({cachedResponse:s})=>enLigne()?null:s')));
     expect(violations.join('\n')).toContain('NON AUTONOME');
   });
 });

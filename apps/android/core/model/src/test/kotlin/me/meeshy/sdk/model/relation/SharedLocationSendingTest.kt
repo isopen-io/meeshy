@@ -89,6 +89,18 @@ class SharedLocationSendingTest {
     }
 
     @Test
+    fun `l'accuse garde le demarrage nomme par la passerelle`() {
+        val accepted = SocketAck.Accepted(
+            buildJsonObject {
+                put("expiresAt", JsonPrimitive("2026-11-14T13:00:00.000Z"))
+                put("startedAt", JsonPrimitive("2026-11-14T12:00:00.000Z"))
+            },
+        )
+        assertThat(SharedLocationStartVerdict.read(accepted))
+            .isEqualTo(SharedLocationStartVerdict.Started(1_794_661_200_000L, "2026-11-14T12:00:00.000Z"))
+    }
+
+    @Test
     fun `une mise a jour ne part que si l'on a bouge ou au battement et jamais deux en cinq secondes`() {
         val sent = SharedLocationUpdateGate.Sent(paris, atMillis = 0L)
         val far = SharedLocationFix.of(48.8566 + 0.01, 2.3522)!!
@@ -133,6 +145,24 @@ class SharedLocationSendingTest {
         )
         assertThat(legacy.duration).isEqualTo(request.duration)
         assertThat(legacy.fix).isEqualTo(request.fix)
+    }
+
+    @Test
+    fun `une liste seule part sans position, dedoublonnee comme une charge entiere, et jamais vide`() {
+        val request = SharedLocationStartRequest.listOnly(
+            listOf(SharedLocationRecipient(bob.uppercase(), SharedLocationPrecision.CITY, expiresInSeconds = 600)),
+            SharedLocationShareDuration.EIGHT_HOURS,
+        )!!
+
+        assertThat(request.isListOnly).isTrue()
+        assertThat(request.fix).isNull()
+        assertThat(request.wire()).doesNotContainKey("position")
+        assertThat(request.wire()["durationMinutes"]).isEqualTo(480)
+        assertThat(request.recipients).containsExactly(SharedLocationRecipient(bob, SharedLocationPrecision.CITY, 600))
+        assertThat(SharedLocationStartRequest.listOnly(emptyList(), SharedLocationShareDuration.ONE_HOUR)).isNull()
+        val full = SharedLocationStartRequest.of(listOf(SharedLocationRecipient(alice, SharedLocationPrecision.EXACT)), SharedLocationShareDuration.ONE_HOUR, paris)!!
+        assertThat(full.isListOnly).isFalse()
+        assertThat(full.wire()).containsKey("position")
     }
 
     @Test

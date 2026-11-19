@@ -8,10 +8,11 @@ public extension SocketNotificationEvent {
     /// app restart / offline reopen (the in-app toast alone is ephemeral).
     ///
     /// The mapping is intentionally lossless on what the socket carries and `nil`
-    /// elsewhere (notably `metadata`, which has no public memberwise initializer):
-    /// the next successful REST refresh overwrites this entry with the authoritative
-    /// record, de-duplicated by `id`. `createdAt` is injected so the call site owns
-    /// the clock (and tests stay deterministic).
+    /// elsewhere: the next successful REST refresh overwrites this entry with the
+    /// authoritative record, de-duplicated by `id`. `createdAt` is the FALLBACK
+    /// clock, injected so the call site owns it (and tests stay deterministic):
+    /// the date the gateway serves (`state.createdAt`) wins, so a rewritten
+    /// notification keeps its rank instead of looking brand new (#19104).
     func toAPINotification(createdAt: String) -> APINotification {
         let mappedActor: NotificationActor? = {
             guard let actor, let actorId = actor.id else { return nil }
@@ -30,9 +31,12 @@ public extension SocketNotificationEvent {
             conversationAvatar: context?.conversationAvatar,
             messageId: context?.messageId,
             friendRequestId: context?.friendRequestId,
+            communityId: context?.communityId,
             postId: context?.postId ?? metadata?.postId,
             commentId: context?.commentId ?? metadata?.commentId,
-            parentCommentId: context?.parentCommentId ?? metadata?.parentCommentId
+            parentCommentId: context?.parentCommentId ?? metadata?.parentCommentId,
+            postCreatedAt: context?.postCreatedAt,
+            postExpiresAt: context?.postExpiresAt
         )
 
         return APINotification(
@@ -49,11 +53,11 @@ public extension SocketNotificationEvent {
             content: content,
             actor: mappedActor,
             context: mappedContext,
-            metadata: nil,
+            metadata: apiMetadata,
             state: NotificationState(
-                isRead: isRead ?? false,
+                isRead: resolvedIsRead ?? false,
                 readAt: nil,
-                createdAt: createdAt,
+                createdAt: wireCreatedAt ?? createdAt,
                 expiresAt: nil
             ),
             delivery: nil

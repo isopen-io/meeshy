@@ -1,0 +1,85 @@
+import Foundation
+
+// Mon profil synchronisé entre mes appareils (#18924) sur la socket de messages : `profile:updated`, dans la room
+// `user:<moi>` seulement, après chaque écriture qui change ma langue, mon nom, ma photo ou ma bannière
+// (`packages/shared/types/own-profile-sync.ts`).
+
+/// L'INSTANTANÉ des neuf champs de mon profil tels que la ligne les porte après l'écriture — pas un delta : un
+/// événement perdu est réparé par le suivant. `nil` veut dire EFFACÉ (la langue secondaire retirée, le nom affiché
+/// qui retombe sur « Prénom Nom », la photo ôtée). Une clé qu'un serveur plus récent ajoute est ignorée.
+public struct OwnProfileSnapshot: Decodable, Sendable, Equatable {
+    public let systemLanguage: String
+    public let regionalLanguage: String?
+    public let customDestinationLanguage: String?
+    public let displayName: String?
+    public let firstName: String
+    public let lastName: String
+    public let username: String
+    public let avatar: String?
+    public let banner: String?
+    /// L'accent choisi (#19201, iOS #19391) : une passerelle qui ne le porte pas encore ne touche pas celui que je
+    /// tiens (`.unchanged`) ; `null` le remet à l'automatique.
+    public let profileAccentColor: ProfileAccentChange
+
+    public init(
+        systemLanguage: String, regionalLanguage: String?, customDestinationLanguage: String?,
+        displayName: String?, firstName: String, lastName: String, username: String,
+        avatar: String?, banner: String?, profileAccentColor: ProfileAccentChange = .unchanged
+    ) {
+        self.systemLanguage = systemLanguage
+        self.regionalLanguage = regionalLanguage
+        self.customDestinationLanguage = customDestinationLanguage
+        self.displayName = displayName
+        self.firstName = firstName
+        self.lastName = lastName
+        self.username = username
+        self.avatar = avatar
+        self.banner = banner
+        self.profileAccentColor = profileAccentColor
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case systemLanguage, regionalLanguage, customDestinationLanguage, displayName
+        case firstName, lastName, username, avatar, banner, profileAccentColor
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.systemLanguage = try container.decode(String.self, forKey: .systemLanguage)
+        self.regionalLanguage = try container.decodeIfPresent(String.self, forKey: .regionalLanguage)
+        self.customDestinationLanguage = try container.decodeIfPresent(String.self, forKey: .customDestinationLanguage)
+        self.displayName = try container.decodeIfPresent(String.self, forKey: .displayName)
+        self.firstName = try container.decode(String.self, forKey: .firstName)
+        self.lastName = try container.decode(String.self, forKey: .lastName)
+        self.username = try container.decode(String.self, forKey: .username)
+        self.avatar = try container.decodeIfPresent(String.self, forKey: .avatar)
+        self.banner = try container.decodeIfPresent(String.self, forKey: .banner)
+        self.profileAccentColor = ProfileAccentChange.decode(from: container, forKey: .profileAccentColor)
+    }
+}
+
+/// `profile:updated` — `updatedAt` est le `User.updatedAt` de l'écriture (ISO 8601), le même instant que sert
+/// `GET /me` : deux instantanés reçus dans le désordre s'arbitrent par lui (`OwnProfileSync.isStale`).
+public struct ProfileUpdatedEvent: Decodable, Sendable, Equatable {
+    public let userId: String
+    public let updatedAt: String
+    public let profile: OwnProfileSnapshot
+
+    public init(userId: String, updatedAt: String, profile: OwnProfileSnapshot) {
+        self.userId = userId
+        self.updatedAt = updatedAt
+        self.profile = profile
+    }
+}
+
+extension MessageSocketRoutes {
+
+    /// Le compte connecté se repeint quel que soit l'écran ouvert, sans relecture réseau.
+    static func ownProfile(_ m: MessageSocketManager) -> [SocketInboundRoute] {
+        [
+            m.route(.profileUpdated, ProfileUpdatedEvent.self) { _, event in
+                OwnProfileSync.apply(event, to: AuthManager.shared)
+            },
+        ]
+    }
+}

@@ -1,0 +1,110 @@
+{
+  "composant": "MeeshyLabeledAction",
+  "cle": "K32",
+  "note": "Vecteurs de parité (fiche K32 § 10). Colonnes d'au moins 76, écart 8, jamais une action seule sur la dernière rangée ; taille 56 sous 360, 60 au milieu, 64 à partir de 560.",
+  "grilles": [
+    {
+      "largeur": 250,
+      "nombre": 3,
+      "rangees": [
+        3
+      ],
+      "taille": 56
+    },
+    {
+      "largeur": 350,
+      "nombre": 5,
+      "rangees": [
+        3,
+        2
+      ],
+      "taille": 56
+    },
+    {
+      "largeur": 350,
+      "nombre": 4,
+      "rangees": [
+        4
+      ],
+      "taille": 56
+    },
+    {
+      "largeur": 390,
+      "nombre": 9,
+      "rangees": [
+        3,
+        3,
+        3
+      ],
+      "taille": 60
+    },
+    {
+      "largeur": 560,
+      "nombre": 5,
+      "rangees": [
+        5
+      ],
+      "taille": 64
+    },
+    {
+      "largeur": 390,
+      "nombre": 1,
+      "rangees": [
+        1
+      ],
+      "taille": 60
+    }
+  ],
+  "disques": [
+    {
+      "taille": 56,
+      "glyphe": 26
+    },
+    {
+      "taille": 60,
+      "glyphe": 28
+    },
+    {
+      "taille": 64,
+      "glyphe": 30
+    }
+  ],
+  "voix": [
+    {
+      "attente": null,
+      "valeur": null,
+      "pastille": "2",
+      "libellePastille": "2 messages non lus",
+      "dit": "2 messages non lus"
+    },
+    {
+      "attente": null,
+      "valeur": null,
+      "pastille": "2",
+      "libellePastille": null,
+      "dit": "2"
+    },
+    {
+      "attente": "En cours",
+      "valeur": "Sera envoyé",
+      "pastille": "99+",
+      "libellePastille": "150 messages non lus",
+      "dit": "En cours, Sera envoyé, 150 messages non lus"
+    },
+    {
+      "attente": null,
+      "valeur": null,
+      "pastille": null,
+      "libellePastille": "2 messages non lus",
+      "dit": ""
+    },
+    {
+      "attente": null,
+      "valeur": "",
+      "pastille": "",
+      "libellePastille": null,
+      "dit": ""
+    }
+  ],
+  "note_voix": "Ce qui se dit après le nom : l'attente, la valeur, puis la pastille par son libellé quand l'hôte en donne un, telle qu'elle se voit sinon ; un libellé sans pastille ne se dit pas (#19646)."
+}
