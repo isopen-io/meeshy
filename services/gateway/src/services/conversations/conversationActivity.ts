@@ -20,6 +20,34 @@ const logger = enhancedLogger.child({ module: 'ConversationActivity' });
  * l'ordre d'arrivée — l'atomicité d'un document MongoDB suffit, aucune lecture
  * préalable.
  *
+ * **L'absence se dit en DEUX branches, et la première écriture en dépend**
+ * (#19800). Sous MongoDB, `{ lastActivityAt: null }` est une ÉGALITÉ : elle
+ * exige la clé PRÉSENTE et nulle. Or **aucun chemin de création n'écrit la
+ * colonne**, et la mesure qui le prouve se prend par l'autre bout plutôt qu'en
+ * énumérant les créations : il existe **un seul** `data: { lastActivityAt }`
+ * dans tout le dépôt, et c'est celui-ci (les onze `prisma.conversation.create`
+ * de la passerelle, sans aucun `createMany` ni `upsert`, n'en portent pas).
+ * Sans `{ isSet: false }`, `updateMany` n'appariait AUCUNE conversation, rendait
+ * `count: 0` — ce qui n'est pas une erreur — et la colonne restait absente pour
+ * toujours. **Les QUATRE alimenteurs de l'axe « activité » étaient donc inertes
+ * pour la population entière**, et le rang de liste se réduisait à
+ * `lastMessageAt` : `ReactionService` (réaction de message),
+ * `AttachmentReactionService` (réaction de pièce jointe),
+ * `callMessageBroadcasters` (appel) et `messages-pin` (épingle) — les quatre
+ * seuls importateurs de cette unité, qui est l'unique écrivain de la colonne.
+ *
+ * (L'issue en nommait CINQ, en comptant `messagePostSaveEffects.ts:160`. C'est un
+ * HOMONYME : `EngagementService.recordConversationActivity(userId, axisKey,
+ * conversationId)` écrit `EngagementConversationCredit`, et ce fichier n'importe
+ * pas cette unité. Un message avance `lastMessageAt`, jamais `lastActivityAt` —
+ * ce que le § ci-dessus dit déjà.)
+ *
+ * Les trois branches sont écrites ICI plutôt que composées par `unsetOrNull` :
+ * le prédicat partagé rend une clé `OR` que ce `where`, qui porte déjà la
+ * sienne, ne peut pas spreader — et l'écrire au site le garde dans le champ du
+ * cliquet `soft-state-equality-filter-guard`, qui reconnaît une BRANCHE
+ * littérale du même tableau, jamais un appel de helper.
+ *
  * Best-effort : l'action est déjà commise, une liste en retard ne vaut pas de la
  * faire échouer. Ne lève jamais.
  */
@@ -31,7 +59,10 @@ export async function recordConversationActivity(params: {
   const { prisma, conversationId, at } = params;
   try {
     await prisma.conversation.updateMany({
-      where: { id: conversationId, OR: [{ lastActivityAt: null }, { lastActivityAt: { lt: at } }] },
+      where: {
+        id: conversationId,
+        OR: [{ lastActivityAt: null }, { lastActivityAt: { isSet: false } }, { lastActivityAt: { lt: at } }],
+      },
       data: { lastActivityAt: at },
     });
   } catch (error) {
