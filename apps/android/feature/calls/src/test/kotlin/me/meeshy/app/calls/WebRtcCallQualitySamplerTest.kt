@@ -6,6 +6,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.call.CallQualityStatsFeed
+import me.meeshy.sdk.model.call.CallMediaQuality
 import me.meeshy.sdk.model.call.CallStats
 import org.junit.Test
 
@@ -47,6 +48,17 @@ class WebRtcCallQualitySamplerTest {
             advanceTimeBy(10_000)
             runCurrent()
             assertThat(awaitItem().rttMs).isEqualTo(30.0)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `l'echantillon porte la lecture media au rapport d'appel (#19895)`() = runTest {
+        val media = CallMediaQuality(freezeCount = 2.0, candidateType = "relay", relayProtocol = "udp")
+        sampler(CallStats(roundTripTimeMs = 30.0, media = media)).samples.test {
+            advanceTimeBy(5_000)
+            runCurrent()
+            assertThat(awaitItem().media).isEqualTo(media)
             cancelAndIgnoreRemainingEvents()
         }
     }
