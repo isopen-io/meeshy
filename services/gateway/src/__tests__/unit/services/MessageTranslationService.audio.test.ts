@@ -86,9 +86,7 @@ jest.mock('fs', () => ({
     mkdir: jest.fn().mockResolvedValue(undefined),
     writeFile: jest.fn().mockResolvedValue(undefined),
     readFile: jest.fn().mockResolvedValue(Buffer.from('mock-audio')),
-    unlink: jest.fn().mockResolvedValue(undefined),
-    rename: jest.fn().mockResolvedValue(undefined),
-    chmod: jest.fn().mockResolvedValue(undefined),
+    ...Object.fromEntries(['unlink', 'rename', 'chmod'].map((name) => [name, jest.fn().mockResolvedValue(undefined)])),
     stat: jest.fn().mockResolvedValue({ size: 1024 })
   },
   existsSync: jest.fn().mockReturnValue(true),
