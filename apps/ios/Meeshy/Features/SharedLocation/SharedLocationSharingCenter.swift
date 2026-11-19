@@ -144,6 +144,10 @@ final class SharedLocationSharingCenter: ObservableObject {
     private var publishedStart: String? {
         didSet { if publishedStart != oldValue { store.savePublishedStart(publishedStart) } }
     }
+    /// Relancé avec une liste qu'il publiait, l'appareil suit sa position mais n'en envoie rien avant d'avoir relu ce que
+    /// la passerelle sert (#19767) : un autre appareil a pu reprendre le partage pendant qu'il dormait. Une relecture qui
+    /// n'aboutit pas (hors ligne, passerelle d'avant) lève l'attente, comme un « Partager » d'ici.
+    private var awaitsServedTruth = false
     private var following = Set<AnyCancellable>()
     private var deadline: AnyCancellable?
     private var socketWatch = Set<AnyCancellable>()
@@ -189,7 +193,10 @@ final class SharedLocationSharingCenter: ObservableObject {
             .store(in: &socketWatch)
         lane.store(in: &socketWatch)
         guard !restored.isEmpty else { return }
-        if restored.hasRecipients, !received, !restored.isFixedPoint { startFollowing() }
+        if restored.hasRecipients, !received, !restored.isFixedPoint {
+            awaitsServedTruth = true
+            startFollowing()
+        }
         scheduleDeadline()
     }
 
@@ -325,7 +332,10 @@ final class SharedLocationSharingCenter: ObservableObject {
     /// relecture qui échoue (hors ligne, passerelle d'avant #18389) ne change rien.
     func sync() async {
         _ = await locked {
-            guard let truth = await self.served(), self.isLive else { return nil }
+            let read = await self.served()
+            guard self.isLive else { return nil }
+            self.awaitsServedTruth = false
+            guard let truth = read else { return nil }
             if truth.shareBattery != nil { self.servesShareOptions = true }
             if truth.acceptsManualSource { self.servesFixedPoint = true }
             if truth.acceptsUntilStopped { self.servesUntilStopped = true }
@@ -355,7 +365,7 @@ final class SharedLocationSharingCenter: ObservableObject {
     func didMove(to fix: SharedLocationFix) async {
         guard gate.tryEnter() else { return }
         defer { gate.leave() }
-        guard isLive, !received, roster.hasRecipients, !roster.isFixedPoint, !roster.hasPendingWithdrawals, SharedLocationUpdateGate.shouldSend(fix, now: now(), last: lastSent) else { return }
+        guard isLive, !received, !awaitsServedTruth, roster.hasRecipients, !roster.isFixedPoint, !roster.hasPendingWithdrawals, SharedLocationUpdateGate.shouldSend(fix, now: now(), last: lastSent) else { return }
         lastSent = .init(fix: fix, at: now())
         let verdict = await emitter.update(fix)
         if isLive, case .refused(.notSharing) = verdict { wipe() }
@@ -500,12 +510,12 @@ final class SharedLocationSharingCenter: ObservableObject {
     ) -> SharedLocationShareProblem? {
         switch verdict {
         case .started(_, let startedAt):
-            if claimsPublishing { markReceived(false) }
+            if claimsPublishing { claimPublishing() }
             if fix != nil { publishedStart = startedAt }
             engage(next, fix: fix)
             return nil
         case .refused(.unconfirmed):
-            if claimsPublishing { markReceived(false) }
+            if claimsPublishing { claimPublishing() }
             forgetPublishedStart(ifSent: fix)
             engage(previous.union(next), fix: fix)
             return .refused(.unconfirmed)
@@ -595,6 +605,11 @@ final class SharedLocationSharingCenter: ObservableObject {
         }
     }
 
+    private func claimPublishing() {
+        awaitsServedTruth = false
+        markReceived(false)
+    }
+
     private func markReceived(_ next: Bool) {
         received = next
         store.saveReceived(next)
@@ -648,16 +663,30 @@ protocol SharedLocationRosterStoring: AnyObject {
     func savePublishedStart(_ startedAt: String?)
 }
 
-/// La liste d'UN compte, dans ses réglages locaux.
+/// La liste d'UN compte, dans ses réglages locaux. Les réglages partent dans la sauvegarde iCloud : un iPhone restauré
+/// depuis la sauvegarde d'un AUTRE appareil du compte y retrouverait la liste, la marque « reçue » et le démarrage de
+/// celui-ci, et publierait avec lui (#19767). La liste porte donc l'identifiant d'installation de l'appareil qui l'a
+/// écrite (trousseau `ThisDeviceOnly`, jamais restauré ailleurs) : lue sur un autre appareil, elle est REÇUE, sans
+/// démarrage gardé — seul un « Partager » d'ici le refait publier. Une liste d'avant cette marque est adoptée telle quelle.
 final class UserDefaultsSharedLocationRosterStore: SharedLocationRosterStoring {
     nonisolated deinit {}
 
     private let key: String
     private let defaults: UserDefaults
+    private let writtenElsewhere: Bool
 
-    init(userId: String, defaults: UserDefaults = .standard) {
+    init(userId: String, deviceId: String?, defaults: UserDefaults = .standard) {
         self.key = "sharedLocation.roster." + userId
         self.defaults = defaults
+        let marker = key + ".device"
+        let stamped = defaults.string(forKey: marker)
+        writtenElsewhere = Self.isWrittenElsewhere(stamped: stamped, device: deviceId)
+        if let deviceId, !deviceId.isEmpty, stamped != deviceId { defaults.set(deviceId, forKey: marker) }
+    }
+
+    static func isWrittenElsewhere(stamped: String?, device: String?) -> Bool {
+        guard let stamped, !stamped.isEmpty, let device, !device.isEmpty else { return false }
+        return stamped != device
     }
 
     func load() -> SharedLocationRoster? {
@@ -672,13 +701,17 @@ final class UserDefaultsSharedLocationRosterStore: SharedLocationRosterStoring {
         defaults.set(data, forKey: key)
     }
 
-    func loadReceived() -> Bool { defaults.bool(forKey: key + ".received") }
+    func loadReceived() -> Bool {
+        defaults.bool(forKey: key + ".received") || (writtenElsewhere && load()?.hasRecipients == true)
+    }
 
     func saveReceived(_ received: Bool) {
         if received { defaults.set(true, forKey: key + ".received") } else { defaults.removeObject(forKey: key + ".received") }
     }
 
-    func loadPublishedStart() -> String? { defaults.string(forKey: key + ".publishedStart") }
+    func loadPublishedStart() -> String? {
+        writtenElsewhere ? nil : defaults.string(forKey: key + ".publishedStart")
+    }
 
     func savePublishedStart(_ startedAt: String?) {
         if let startedAt { defaults.set(startedAt, forKey: key + ".publishedStart") } else { defaults.removeObject(forKey: key + ".publishedStart") }
@@ -711,7 +744,7 @@ enum SharedLocationSharingHolder {
         let center = SharedLocationSharingCenter(
             emitter: SharedLocationSocketEmitter.shared,
             fixes: SharedLocationFixSource(),
-            store: UserDefaultsSharedLocationRosterStore(userId: userId),
+            store: UserDefaultsSharedLocationRosterStore(userId: userId, deviceId: PushDeviceIdentity.current().deviceId),
             owner: userId,
             currentAccount: { AuthManager.shared.currentUser?.id },
             socketReady: MessageSocketManager.shared.$connectionState

@@ -605,6 +605,131 @@ final class SharedLocationSharingSyncTests: XCTestCase {
         XCTAssertNil(store.publishedStart)
     }
 
+    /// #19767 : relancé, l'appareil ne publie rien avant d'avoir relu le partage servi — un relevé arrivé avant la
+    /// relecture ne part pas, et si un autre appareil a repris le partage, il cède sans que le point ait sauté.
+    func test_aRelaunch_aFixBeforeTheFirstRead_sendsNothing_andYieldsToTheDeviceThatTookOver() async {
+        let store = FakeSharedLocationRosterStore()
+        _ = await publishingSUT(store: store)
+        let relaunched = makeSUT(store: store)
+
+        await relaunched.center.didMove(to: SharedLocationFix(latitude: 45, longitude: 5)!)
+        XCTAssertTrue(relaunched.emitter.updates.isEmpty)
+
+        relaunched.served.snapshot = served(elsewhere, [(alice, .exact, TimeInterval(8 * 3600))])
+        await relaunched.center.sync()
+        await relaunched.center.didMove(to: SharedLocationFix(latitude: 45.1, longitude: 5)!)
+
+        XCTAssertTrue(relaunched.emitter.updates.isEmpty)
+        XCTAssertTrue(store.received)
+    }
+
+    func test_aRelaunch_theReadConfirmsMyStart_theNextFixLeaves() async {
+        let store = FakeSharedLocationRosterStore()
+        _ = await publishingSUT(store: store)
+        let relaunched = makeSUT(store: store)
+        relaunched.served.snapshot = served(mine, [(alice, .exact, TimeInterval(8 * 3600))])
+
+        await relaunched.center.sync()
+        await relaunched.center.didMove(to: SharedLocationFix(latitude: 45, longitude: 5)!)
+
+        XCTAssertEqual(relaunched.emitter.updates.count, 1)
+    }
+
+    func test_aRelaunch_aReadThatFails_liftsTheWait() async {
+        let store = FakeSharedLocationRosterStore()
+        _ = await publishingSUT(store: store)
+        let relaunched = makeSUT(store: store)
+
+        await relaunched.center.sync()
+        await relaunched.center.didMove(to: SharedLocationFix(latitude: 45, longitude: 5)!)
+
+        XCTAssertEqual(relaunched.served.reads, 1)
+        XCTAssertEqual(relaunched.emitter.updates.count, 1)
+    }
+
+    func test_aRelaunch_sharingFromHereBeforeTheRead_liftsTheWait() async {
+        final class Clock { var now: Date; init(_ now: Date) { self.now = now } }
+        let store = FakeSharedLocationRosterStore()
+        _ = await publishingSUT(store: store)
+        let clock = Clock(t0)
+        let parts = makeSUT(store: FakeSharedLocationRosterStore())
+        let relaunched = SharedLocationSharingCenter(
+            emitter: parts.emitter, fixes: parts.fixes, store: store, now: { clock.now },
+            owner: me, currentAccount: { [me] in me }, wakes: parts.wakes
+        )
+        parts.emitter.startVerdict = .started(expiresAt: t0.addingTimeInterval(3600), startedAt: elsewhere)
+
+        _ = await relaunched.share(with: bob, precision: .city, duration: .oneHour)
+        clock.now = t0.addingTimeInterval(10)
+        await relaunched.didMove(to: SharedLocationFix(latitude: 45, longitude: 5.5)!)
+
+        XCTAssertEqual(parts.emitter.updates.count, 1)
+    }
+
+    // MARK: - Une sauvegarde restaurée sur un autre appareil (#19767)
+
+    private func isolatedDefaults() -> UserDefaults {
+        let suite = "sharedLocation.tests." + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        return defaults
+    }
+
+    private func writtenByThisDevice(_ defaults: UserDefaults, device: String) {
+        let store = UserDefaultsSharedLocationRosterStore(userId: me, deviceId: device, defaults: defaults)
+        store.save(SharedLocationRoster.empty.adding(userId: alice, precision: .exact, duration: .eightHours, now: t0))
+        store.saveReceived(false)
+        store.savePublishedStart(mine)
+    }
+
+    func test_aBackupRestoredOnAnotherDevice_isAReceivedList_withoutAKeptStart() {
+        let defaults = isolatedDefaults()
+        writtenByThisDevice(defaults, device: "device-A")
+
+        let restored = UserDefaultsSharedLocationRosterStore(userId: me, deviceId: "device-B", defaults: defaults)
+
+        XCTAssertNotNil(restored.load()?.entry(for: alice))
+        XCTAssertTrue(restored.loadReceived())
+        XCTAssertNil(restored.loadPublishedStart())
+    }
+
+    func test_aRestoredList_neverFollowsTheDevice() {
+        let defaults = isolatedDefaults()
+        writtenByThisDevice(defaults, device: "device-A")
+
+        let relaunched = makeSUT(store: FakeSharedLocationRosterStore())
+        let restored = UserDefaultsSharedLocationRosterStore(userId: me, deviceId: "device-B", defaults: defaults)
+        let center = SharedLocationSharingCenter(
+            emitter: relaunched.emitter, fixes: relaunched.fixes, store: restored, now: { [t0] in t0 },
+            owner: me, currentAccount: { [me] in me }, wakes: relaunched.wakes
+        )
+
+        XCTAssertNotNil(center.entry(for: alice))
+        XCTAssertFalse(relaunched.fixes.isFollowing)
+    }
+
+    func test_theSameDevice_keepsItsListAndItsStart() {
+        let defaults = isolatedDefaults()
+        writtenByThisDevice(defaults, device: "device-A")
+
+        let relaunched = UserDefaultsSharedLocationRosterStore(userId: me, deviceId: "device-A", defaults: defaults)
+
+        XCTAssertFalse(relaunched.loadReceived())
+        XCTAssertEqual(relaunched.loadPublishedStart(), mine)
+    }
+
+    func test_aListFromBeforeTheMark_isAdoptedAsIs_andStampedForNextTime() {
+        let defaults = isolatedDefaults()
+        writtenByThisDevice(defaults, device: "")
+
+        let updated = UserDefaultsSharedLocationRosterStore(userId: me, deviceId: "device-A", defaults: defaults)
+        let restoredElsewhere = UserDefaultsSharedLocationRosterStore(userId: me, deviceId: "device-B", defaults: defaults)
+
+        XCTAssertFalse(updated.loadReceived())
+        XCTAssertEqual(updated.loadPublishedStart(), mine)
+        XCTAssertTrue(restoredElsewhere.loadReceived())
+    }
+
     func test_theOwnSnapshot_decodesTheStartTheGatewayNames() throws {
         let raw = Data(#"{"recipients":[],"expiresAt":null,"startedAt":"2026-01-01T00:00:00.000Z"}"#.utf8)
         XCTAssertEqual(try JSONDecoder().decode(SharedLocationOwnSnapshot.self, from: raw).startedAt, mine)
