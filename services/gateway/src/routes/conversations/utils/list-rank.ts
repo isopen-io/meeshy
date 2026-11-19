@@ -33,6 +33,33 @@ import type { CurseurDeListe } from '../list-cursor';
  * Sinon seulement : les clés de A sur K = offset + limit, la fusion par rang,
  * et la lecture des lignes complètes qui manquent.
  *
+ * ## Ce que la preuve EXIGE de la fenêtre (#19836)
+ *
+ * Les trois paramètres ci-dessous ne sont pas réglables : la preuve du top-K
+ * tombe si l'un change. Témoin :
+ * `__tests__/unit/routes/conversation-list-rank-window.test.ts`, qui ROUGIT sous
+ * chacune des trois mutations (mesuré).
+ *
+ *   - **K vaut `offset + limit` sur les DEUX flux.** Lire `limit` clés suffit
+ *     pour une première page et perd la suivante : sur `offset: 2, limit: 1`,
+ *     `take: limit` sur A rend une page VIDE.
+ *   - **Le flux B ne SKIPPE pas.** Son ordre est `lastActivityAt`, pas le rang :
+ *     sauter `offset` lignes dans SON ordre jette des lignes qui appartiennent à
+ *     la fenêtre du rang. `skip: offset` sur B sert la mauvaise ligne, exactement
+ *     comme `take: limit` — c'est le même sinistre par l'autre bout.
+ *   - **La borne de B porte sur les DEUX colonnes**, et c'est le point
+ *     contre-intuitif : `{ lastMessageAt: { lt: bound } }` est logiquement
+ *     REDONDANTE avec le filtre `isLifted` qui suit — une ligne dont
+ *     `lastActivityAt < bound ≤ lastMessageAt` n'est jamais « remontée ». Elle ne
+ *     l'est pas pour la FENÊTRE : sans elle, les K places de B se remplissent de
+ *     lignes de la page 1, qu'`isLifted` écarte TROP TARD, et une ligne
+ *     réellement remontée de la page 2 en est évincée — donc perdue pour de bon,
+ *     la page suivante bornant plus bas qu'elle.
+ *
+ * Une clause logiquement redondante peut être indispensable à une BORNE DE
+ * LECTURE : la redondance se juge sur le jeu de lignes RENDU, jamais sur le
+ * verdict du filtre qui suit.
+ *
  * ## Le curseur borne sur le RANG
  *
  * `rang < R` ⇔ `lastMessageAt < R` ET (`lastActivityAt < R` OU pas
@@ -41,6 +68,11 @@ import type { CurseurDeListe } from '../list-cursor';
  * contre `mongo:8`, #8309) — et c'est le cas de toute conversation sans
  * activité, que Prisma n'écrit pas. La page 2 perdait ainsi chaque
  * conversation qui n'avait connu que des messages.
+ *
+ * La borne est STRICTE et ne porte que le rang : **deux lignes de rang
+ * IDENTIQUE à la frontière d'une page font perdre la seconde** (mesuré, #19881).
+ * `resolveListCursor` tient l'id du curseur et le jette — le départage est donc
+ * à portée, et c'est un lot à lui (les deux `orderBy` doivent départager aussi).
  *
  * ## La page delta garde son ordre
  *

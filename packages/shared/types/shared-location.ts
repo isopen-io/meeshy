@@ -48,9 +48,11 @@ import {
   SHARED_LOCATION_PRECISIONS,
   SHARED_LOCATION_REQUEST_KINDS,
   SHARED_LOCATION_RECIPIENT_DEADLINE_MAX_SECONDS,
+  SHARED_LOCATION_MOTIONS,
   SHARED_LOCATION_RECIPIENTS_MAX,
   type SharedLocationCircle,
   type SharedLocationErrorCode,
+  type SharedLocationMotion,
   type SharedLocationPrecision,
   type SharedLocationRequestKind,
 } from './shared-location-constants.js';
@@ -64,6 +66,8 @@ export const sharedLocationPositionSchema = z
     latitude: z.number().min(-90).max(90),
     longitude: z.number().min(-180).max(180),
     accuracy: z.number().nonnegative().max(100_000).optional(),
+    /** ADDITIF (#19887) : un serveur antérieur refuse la clé, le client renvoie alors sans elle. */
+    motion: z.enum(SHARED_LOCATION_MOTIONS).optional(),
   })
   .strict();
 export type SharedLocationPosition = z.infer<typeof sharedLocationPositionSchema>;
@@ -154,6 +158,8 @@ export type SharedLocationChangedEventData = {
    * brouille, c'est le RYTHME des déplacements, que le début ne porte pas.
    */
   readonly startedAt?: string;
+  /** Le mouvement (#19887), à la précision exacte seulement. ADDITIF : absent ⇒ rien d'affiché. */
+  readonly motion?: SharedLocationMotion;
 };
 
 export type SharedLocationEndedEventData = { readonly userId: string };
