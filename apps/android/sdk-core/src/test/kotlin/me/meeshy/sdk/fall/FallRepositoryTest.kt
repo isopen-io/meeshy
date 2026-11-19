@@ -126,4 +126,30 @@ class FallRepositoryTest {
         val h = Harness(this, cache)
         assertThat(h.repository.roster.value.byUser).isEmpty()
     }
+
+    @Test
+    fun `un episode tombe a son expiration, en memoire et sur le disque, sans autre evenement`() = runTest {
+        val h = Harness(this)
+        testScheduler.runCurrent()
+        h.events.emit(FallEvent.Detected(state(userId = "tot", expires = 2_000L), null))
+        h.events.emit(FallEvent.Detected(state(userId = "tard", expires = 10_000L), null))
+        testScheduler.runCurrent()
+        h.now = 2_000L
+        testScheduler.advanceTimeBy(1_000L)
+        testScheduler.runCurrent()
+        assertThat(h.repository.roster.value.byUser.keys).containsExactly("tard")
+        assertThat(h.cache.stored?.items?.map { it.userId }).containsExactly("tard")
+    }
+
+    @Test
+    fun `un etat deja expire au moment d'ecrire ne s'ecrit pas`() = runTest {
+        val h = Harness(this)
+        testScheduler.runCurrent()
+        h.events.emit(FallEvent.Detected(state(userId = "tot", expires = 2_000L), null))
+        testScheduler.runCurrent()
+        h.now = 3_000L
+        h.events.emit(FallEvent.Detected(state(userId = "tard", expires = 10_000L), null))
+        testScheduler.runCurrent()
+        assertThat(h.cache.stored?.items?.map { it.userId }).containsExactly("tard")
+    }
 }

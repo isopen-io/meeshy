@@ -59,7 +59,7 @@ class FallRosterTest {
     @Test
     fun `l'etat range se relit avec sa batterie mais JAMAIS sa position, pour le meme compte seulement`() {
         val held = state(userId = "awa", battery = InactivityLastBattery(41, now), position = InactivityLastPosition(48.85, 2.35, 20.0, now))
-        val snapshot = FallRosterSnapshot.of("me", FallRoster().receive(held))
+        val snapshot = FallRosterSnapshot.of("me", FallRoster().receive(held), now)
         val encoded = Json.encodeToString(FallRosterSnapshot.serializer(), snapshot)
         assertThat(encoded).doesNotContain("48.85")
         assertThat(encoded).doesNotContain("latitude")
@@ -72,7 +72,34 @@ class FallRosterTest {
 
     @Test
     fun `un etat range dont l'expiration est passee ne se repeint pas`() {
-        val snapshot = FallRosterSnapshot.of("me", FallRoster().receive(state(expires = now + minute)))
+        val snapshot = FallRosterSnapshot.of("me", FallRoster().receive(state(expires = now + minute)), now)
         assertThat(snapshot.restore("me", now + 2 * minute).byUser).isEmpty()
+    }
+
+    @Test
+    fun `elaguer retire ce dont l'expiration est passee, et dit la prochaine expiration`() {
+        val roster = FallRoster()
+            .receive(state(userId = "tot", expires = now + minute))
+            .receive(state(userId = "tard", expires = now + 60 * minute))
+        assertThat(roster.nextExpiryMillis()).isEqualTo(now + minute)
+        val pruned = roster.pruned(now + minute)
+        assertThat(pruned.byUser.keys).containsExactly("tard")
+        assertThat(pruned.nextExpiryMillis()).isEqualTo(now + 60 * minute)
+        assertThat(pruned.pruned(now + 60 * minute).nextExpiryMillis()).isNull()
+    }
+
+    @Test
+    fun `elaguer sans rien d'expire rend le meme roster`() {
+        val roster = FallRoster().receive(state())
+        assertThat(roster.pruned(now)).isSameInstanceAs(roster)
+    }
+
+    @Test
+    fun `l'instantane range n'ecrit jamais un etat expire`() {
+        val roster = FallRoster()
+            .receive(state(userId = "tot", expires = now + minute))
+            .receive(state(userId = "tard"))
+        val stored = FallRosterSnapshot.of("me", roster, now + minute)
+        assertThat(stored.items.map { it.userId }).containsExactly("tard")
     }
 }

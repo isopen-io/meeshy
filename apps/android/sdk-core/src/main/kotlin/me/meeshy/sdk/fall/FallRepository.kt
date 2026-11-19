@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -121,7 +122,8 @@ private fun minuteTicks(): Flow<Unit> = flow {
  *
  * `fall:detected` / `fall:cleared` s'appliquent dans l'ordre du fil ; à chaque socket accrochée, le rattrapage
  * (`GET /relations/falls`) fait foi, sauf pour qui un événement a touché depuis. CACHE-FIRST : le dernier roster servi
- * est rangé par compte, SANS position, borné à `expiresAt`. La déconnexion ou le changement de compte vident tout.
+ * est rangé par compte, SANS position, jamais expiré (élagué à l'écriture, au chargement, et à l'expiration la plus
+ * proche). La déconnexion ou le changement de compte vident tout.
  */
 @Singleton
 class FallRepository internal constructor(
@@ -162,6 +164,14 @@ class FallRepository internal constructor(
         scope.launch { sources.events.collect(::receive) }
         scope.launch { sources.connected.distinctUntilChanged().filter { it }.collect { launch { catchUp() } } }
         scope.launch { roster.map { it.byUser }.distinctUntilChanged().collect(::persist) }
+        scope.launch { roster.map { it.nextExpiryMillis() }.distinctUntilChanged().collectLatest(::pruneAt) }
+    }
+
+    /** Le réveil à l'expiration la plus proche : l'épisode fini quitte la mémoire ET le disque, sans attendre un événement. */
+    private suspend fun pruneAt(expiryMillis: Long?) {
+        expiryMillis ?: return
+        delay((expiryMillis - sources.now()).coerceAtLeast(0L))
+        reduce { it.pruned(sources.now()) }
     }
 
     override fun stateOf(userId: String?): Flow<FallState?> =
@@ -189,7 +199,7 @@ class FallRepository internal constructor(
 
     private fun persist(byUser: Map<String, FallState>) {
         val viewer = sources.viewerId() ?: return
-        sources.cache.write(FallRosterSnapshot.of(viewer, FallRoster(byUser = byUser)))
+        sources.cache.write(FallRosterSnapshot.of(viewer, FallRoster(byUser = byUser), sources.now()))
     }
 
     private fun receive(event: FallEvent) {

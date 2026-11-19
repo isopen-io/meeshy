@@ -35,6 +35,15 @@ public data class FallRoster(
     public fun clear(userId: String): FallRoster =
         copy(byUser = byUser - userId, mark = mark + 1, touched = touched + (userId to mark + 1))
 
+    /** Sans ce dont l'expiration est passée à [nowMillis] — le même roster quand rien n'a expiré. */
+    public fun pruned(nowMillis: Long): FallRoster {
+        val live = byUser.filterValues { it.isLive(nowMillis) }
+        return if (live.size == byUser.size) this else copy(byUser = live)
+    }
+
+    /** L'expiration la plus proche : l'instant où le magasin s'élague de lui-même ; `null` sans épisode. */
+    public fun nextExpiryMillis(): Long? = byUser.values.minOfOrNull { it.expiresAtMillis }
+
     /** Le rattrapage, parti quand le compteur valait [since] : il remplace tout, sauf qui a bougé depuis. */
     public fun reconcile(items: List<FallState>, since: Long): FallRoster {
         val movedSince = touched.filterValues { it > since }.keys
@@ -62,7 +71,8 @@ public data class FallStoredState(
 
 /**
  * Le dernier roster servi, rangé sur l'appareil PAR COMPTE : l'état se peint dès le démarrage à froid. Un état dont
- * l'expiration est passée ne se repeint pas ; un autre compte ne relit rien ; la position n'y est jamais.
+ * l'expiration est passée ne s'écrit pas et ne se repeint pas ; un autre compte ne relit rien ; la position n'y est
+ * jamais.
  */
 @Serializable
 public data class FallRosterSnapshot(
@@ -76,8 +86,9 @@ public data class FallRosterSnapshot(
     }
 
     public companion object {
-        public fun of(viewerId: String, roster: FallRoster): FallRosterSnapshot =
-            FallRosterSnapshot(viewerId, roster.byUser.values.map { it.stored() })
+        /** Jamais un état expiré à [nowMillis] : ce qui a fini ne dort pas sur le disque. */
+        public fun of(viewerId: String, roster: FallRoster, nowMillis: Long): FallRosterSnapshot =
+            FallRosterSnapshot(viewerId, roster.pruned(nowMillis).byUser.values.map { it.stored() })
     }
 }
 
