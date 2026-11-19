@@ -27,6 +27,8 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case deviceAlive
     case deviceBattery
     case deviceBatterySettings
+    case deviceCall
+    case deviceCallSettings
     case deviceReachabilitySettings
     case engagement
     case export
@@ -105,6 +107,8 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .deviceAlive: return "/api/v1/me/device/alive"
         case .deviceBattery: return "/api/v1/me/device/battery"
         case .deviceBatterySettings: return "/api/v1/me/device/battery/settings"
+        case .deviceCall: return "/api/v1/me/device/call"
+        case .deviceCallSettings: return "/api/v1/me/device/call/settings"
         case .deviceReachabilitySettings: return "/api/v1/me/device/reachability/settings"
         case .engagement: return "/api/v1/me/engagement"
         case .export: return "/api/v1/me/export"

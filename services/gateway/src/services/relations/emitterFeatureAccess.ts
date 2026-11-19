@@ -17,7 +17,8 @@ export type EmitterFeatureDb = BatteryDb;
 /** Une feature à consentement stocké, et la colonne `User` de la coupure globale de son émetteur. */
 export type EmitterFeature =
   | { readonly feature: 'device.unreachable'; readonly disabledColumn: 'unreachableSharingDisabledAt' }
-  | { readonly feature: 'safety.inactivity'; readonly disabledColumn: 'inactivityCheckDisabledAt' };
+  | { readonly feature: 'safety.inactivity'; readonly disabledColumn: 'inactivityCheckDisabledAt' }
+  | { readonly feature: 'device.call'; readonly disabledColumn: 'callSharingDisabledAt' };
 
 export type EmitterFeatureParams = {
   readonly subjectId: string;

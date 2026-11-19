@@ -39,6 +39,9 @@ export const byUserIdLocationHistory = (userId: string): string => `/api/v1/rela
 /** POST /api/v1/relations/:userId/location/request */
 export const byUserIdLocationRequest = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/location/request`;
 
+/** GET · PUT /api/v1/relations/:userId/phone-call/settings */
+export const byUserIdPhoneCallSettings = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/phone-call/settings`;
+
 /** GET /api/v1/relations/:userId/phone-reachability */
 export const byUserIdPhoneReachability = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/phone-reachability`;
 
@@ -65,6 +68,9 @@ export const locationsMine = '/api/v1/relations/locations/mine';
 
 /** GET /api/v1/relations/now-playing */
 export const nowPlaying = '/api/v1/relations/now-playing';
+
+/** GET /api/v1/relations/phone-calls */
+export const phoneCalls = '/api/v1/relations/phone-calls';
 
 /** GET /api/v1/relations/phone-reachability */
 export const phoneReachability = '/api/v1/relations/phone-reachability';

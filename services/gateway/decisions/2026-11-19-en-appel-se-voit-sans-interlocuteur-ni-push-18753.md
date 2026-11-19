@@ -1,0 +1,17 @@
+## 2026-11-19 : « en appel » se voit sans interlocuteur, sans push, et son début est arrondi à 5 minutes
+
+**Statut** : Accepté le 2026-11-19 (#18753, ACT-01 du catalogue `docs/specs/cercles/etat-du-telephone.md`). Suit la forme du téléphone injoignable (#18737) et de la vérification d'inactivité (#18738), dont il réutilise la loi commune des états d'appareil (`relations/emitterFeatureAccess.ts`).
+
+**Contexte** : le catalogue demande « En appel depuis 12 min », sans interlocuteur, par `CXCallObserver` sur iOS et l'état téléphonique sur Android, au niveau Sang. Quatre questions : d'où vient le signal, par quel canal il part, ce qu'il révèle à côté, et que devient un appel dont la fin n'est jamais rapportée.
+
+**Décision** :
+
+1. **La source est le téléphone suivi, et lui seul.** Il rapporte `POST /me/device/call { active }` — un booléen, aucun numéro, aucun nom, aucune durée (le schéma est strict, un champ de plus est refusé). `CXCallObserver` voit aussi les appels CallKit de Meeshy, et le mode audio Android (`MODE_IN_CALL` / `MODE_IN_COMMUNICATION`) les appels VoIP comme téléphoniques, sans aucune permission : la passerelle ne branche donc rien dans `CallService`. Un autre appareil reçoit `tracked: false`.
+2. **Aucun push.** Être en appel n'est pas une alerte ; un Sang notifié à chaque appel de l'autre serait dérangé pour rien. L'état part en silence dans `user:<Sang>` (`phone-call:started` / `phone-call:ended`), et l'annonce — la SyncPill — seulement quand le lecteur est « en conversation » avec l'émetteur (`batteryReaderInConversation`), le moment où savoir qu'il est en ligne change quelque chose.
+3. **Le début servi est arrondi à 5 minutes.** Deux Sangs vus « en appel depuis 14:02:13 » à la seconde près trahiraient qu'ils se parlent ; l'arrondi réduit cette corrélation sans la supprimer (deux personnes en appel dans la même fenêtre de 5 minutes restent rapprochables). C'est un risque résiduel assumé, dit ici.
+4. **Un appel dont la fin n'est jamais rapportée ne dure pas.** iOS ne réveille pas une app suspendue à la fin d'un appel téléphonique ; l'état rangé vit 3 h après le dernier rapport (TTL Redis) et porte `expiresAt`, que le client respecte : passé ce délai, plus rien n'est servi, sans balayage. Un rapport arrivé après expiration ouvre un appel neuf.
+5. **Limite assumée sur iOS** : un appel téléphonique commencé app suspendue n'est vu qu'au retour de l'app (lecture de `callObserver.calls`). Les appels Meeshy, eux, tiennent l'app éveillée.
+
+**Courses** : chaque envoi part hors verrou, relit l'état avant de partir et efface après si un autre rapport l'a périmé entre-temps (leçons des deux audits de #18738).
+
+**Conséquences** : coupure globale `User.callSharingDisabledAt` (collecte comprise), consentement tri-état `RelationFeatureSetting.callShared` (accordé par défaut entre Sangs et dans l'équipe, #16623) ; perte d'accès rejouée par les mêmes crochets que la batterie (paire, équipe). Le web ne rapporte rien (un navigateur ne voit pas les appels) : il affiche.

@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 864,
+  "routeCount": 870,
   "routes": [
     {
       "method": "DELETE",
@@ -4199,6 +4199,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/me/device/call/settings",
+      "module": "deviceCallMeRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/me/device/reachability/settings",
       "module": "deviceReachabilityMeRoutes",
       "mountPrefix": "/api/v1/me",
@@ -5732,6 +5746,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/relations/:userId/phone-call/settings",
+      "module": "relationsRoutes",
+      "mountPrefix": "/api/v1/relations",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/relations/:userId/phone-reachability",
       "module": "relationsRoutes",
       "mountPrefix": "/api/v1/relations",
@@ -5845,6 +5873,20 @@
     {
       "method": "GET",
       "path": "/api/v1/relations/now-playing",
+      "module": "relationsRoutes",
+      "mountPrefix": "/api/v1/relations",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/relations/phone-calls",
       "module": "relationsRoutes",
       "mountPrefix": "/api/v1/relations",
       "securityLevel": "inconnu",
@@ -9806,6 +9848,20 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/me/device/call",
+      "module": "deviceCallMeRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/me/game/chest/claim",
       "module": "meGameRoutes",
       "mountPrefix": "/api/v1/me",
@@ -11664,6 +11720,20 @@
     },
     {
       "method": "PUT",
+      "path": "/api/v1/me/device/call/settings",
+      "module": "deviceCallMeRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
       "path": "/api/v1/me/device/reachability/settings",
       "module": "deviceReachabilityMeRoutes",
       "mountPrefix": "/api/v1/me",
@@ -12085,6 +12155,20 @@
     {
       "method": "PUT",
       "path": "/api/v1/relations/:userId/inactivity/settings",
+      "module": "relationsRoutes",
+      "mountPrefix": "/api/v1/relations",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/relations/:userId/phone-call/settings",
       "module": "relationsRoutes",
       "mountPrefix": "/api/v1/relations",
       "securityLevel": "inconnu",
