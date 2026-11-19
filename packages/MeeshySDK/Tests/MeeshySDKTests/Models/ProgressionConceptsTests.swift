@@ -19,10 +19,10 @@ struct ProgressionConceptsTests {
         ))
     }
 
-    @Test("l'ordre est celui de l'issue, clé pour clé")
+    @Test("l'ordre est celui de l'issue, clé pour clé : le rang en tête, le niveau ensuite")
     func order_isTheDeclaredOne() {
         #expect(ProgressionConcept.allCases.map(\.rawValue) == [
-            "level", "points", "meesh", "glory", "flame", "missions", "league", "season", "prestige",
+            "glory", "level", "points", "meesh", "flame", "missions", "league", "season", "prestige",
             "elans", "badges", "defis", "succes", "showcase", "atlas",
         ])
     }
@@ -41,7 +41,7 @@ struct ProgressionConceptsTests {
         let ranks = served.compactMap { ProgressionConcept.allCases.firstIndex(of: $0) }
         #expect(ranks == ranks.sorted())
         #expect(Set(served).count == served.count)
-        #expect(served == [.level, .points, .meesh, .glory, .flame, .missions, .league, .elans, .badges, .succes, .atlas])
+        #expect(served == [.glory, .level, .points, .meesh, .flame, .missions, .league, .elans, .badges, .succes, .atlas])
     }
 
     @Test("devant un ancien serveur sans carte d'atteignabilité : niveau, Flamme, Élans, badges, succès")
