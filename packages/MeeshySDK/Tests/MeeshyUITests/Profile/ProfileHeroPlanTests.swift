@@ -6,6 +6,26 @@ import MeeshySDK
 /// mène le repli ; la barre repliée prend la pilule de relation ; sans photo ni décor, la bannière est vivante.
 final class ProfileHeroPlanTests: XCTestCase {
 
+    /// #19854 : en plein écran, la barre système est au-dessus de la fiche — les commandes se posent SOUS elle, et la
+    /// barre repliée grandit d'autant ; en feuille, rien ne change.
+    func test_coverLayout_placesControlsBelowTheStatusBar_andGrowsTheCollapsedBar() {
+        let statusBar = 62.0
+        let top = ProfileHeroPlan.topInset(statusBar: statusBar)
+
+        XCTAssertGreaterThanOrEqual(top, statusBar)
+        XCTAssertGreaterThanOrEqual(ProfileHeroPlan.collapsedHeight(topInset: top),
+                                    statusBar + MeeshyCollapsingHeroRecipe.controlTarget)
+        XCTAssertEqual(ProfileHeroPlan.topInset(statusBar: 0), ProfileHeroPlan.topInset)
+        XCTAssertEqual(ProfileHeroPlan.collapsedHeight(topInset: ProfileHeroPlan.topInset), ProfileHeroPlan.collapsedHeight)
+    }
+
+    func test_coverProgress_reachesOne_whenTheTallerBarIsReached() {
+        let top = ProfileHeroPlan.topInset(statusBar: 62)
+        let distance = MeeshyCollapsingHeroRecipe.scrollDistance(expandedHeight: ProfileHeroPlan.expandedHeight,
+                                                                 collapsedHeight: ProfileHeroPlan.collapsedHeight(topInset: top))
+        XCTAssertEqual(ProfileHeroPlan.progress(scrollOffset: -distance, topInset: top), 1, accuracy: 0.0001)
+    }
+
     func test_progress_atRest_isZero() {
         XCTAssertEqual(ProfileHeroPlan.progress(scrollOffset: 0), 0, accuracy: 0.0001)
     }

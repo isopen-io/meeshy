@@ -25,15 +25,31 @@ public nonisolated enum ProfileHeroPlan {
     /// L'avancée du repli : le décalage signé du défilement (négatif quand on descend) ramené à K28. Tirée vers le
     /// bas, elle est négative et seule la bannière s'étire.
     public static func progress(scrollOffset: Double) -> Double {
+        progress(scrollOffset: scrollOffset, topInset: topInset)
+    }
+
+    /// Le même repli, la barre repliée mesurée depuis `topInset` (#19854).
+    public static func progress(scrollOffset: Double, topInset: Double) -> Double {
         guard scrollOffset.isFinite else { return 0 }
         return MeeshyCollapsingHeroRecipe.progress(offset: -scrollOffset, expandedHeight: expandedHeight,
-                                                   collapsedHeight: collapsedHeight)
+                                                   collapsedHeight: collapsedHeight(topInset: topInset))
+    }
+
+    /// Le haut des commandes (#19854) : une feuille n'a pas de barre d'état au-dessus d'elle (`topInset`) ; en plein
+    /// écran, la barre système l'est — les commandes se posent sous elle, jamais dedans.
+    public static func topInset(statusBar: Double) -> Double {
+        statusBar.isFinite && statusBar > 0 ? statusBar + 4 : topInset
+    }
+
+    /// La barre repliée tient les commandes posées à `topInset`, et une marge dessous.
+    public static func collapsedHeight(topInset: Double) -> Double {
+        topInset + MeeshyCollapsingHeroRecipe.controlTarget + 12
     }
 
     /// La pilule de relation rejoint la barre quand la barre porte l'identité, jamais avant (une seule identité).
-    public static func barShowsRelation(progress: Double) -> Bool {
+    public static func barShowsRelation(progress: Double, topInset: Double = topInset) -> Bool {
         MeeshyCollapsingHeroRecipe.resolve(progress: progress, expandedHeight: expandedHeight,
-                                           collapsedHeight: collapsedHeight).barOwnsIdentity
+                                           collapsedHeight: collapsedHeight(topInset: topInset)).barOwnsIdentity
     }
 
     public static func banner(_ paint: ProfileBannerPaint, isBlockedByTarget: Bool) -> ProfileHeroBanner {

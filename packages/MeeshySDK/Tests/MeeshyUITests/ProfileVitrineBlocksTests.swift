@@ -122,6 +122,30 @@ struct ProfileVitrineBlocksTests {
         #expect(board.levelProgress == 1)
     }
 
+    @Test("#19854 : sous « Niveau N », le total d'étincelles — jamais le mot « rang »")
+    @MainActor func game_caption_saysTheLevelAndItsSparks() {
+        let board = ProfileGameBoard(level: 6, rankName: "Murmure V", levelProgress: 0.4, sparks: "3 748", trophies: [])
+        #expect(board.caption == ProfileVitrineCopy.levelAndSparks(6, sparks: "3 748"))
+        #expect(board.caption.contains("3 748"))
+        #expect(board.caption != ProfileVitrineCopy.levelAndRank(6))
+    }
+
+    @Test("#19854 : sans étincelles servies, la légende ne dit que le niveau")
+    @MainActor func game_caption_withoutSparks_isTheLevel() {
+        let board = ProfileGameBoard(level: 6, rankName: "Murmure V", levelProgress: 0.4, sparks: nil, trophies: [])
+        #expect(board.caption == ProfileVitrineCopy.level(6))
+    }
+
+    @Test("#19854 : le palier, le blason du rang et la Gloire voyagent avec la carte")
+    func game_board_carriesTierCrestAndGlory() {
+        let crest = ProfileGameBoard.Crest(rank: .murmure, division5: .v, mythic: nil)
+        let board = ProfileGameBoard(level: 6, rankName: "Murmure V", levelProgress: 0.4, sparks: "3 748", trophies: [],
+                                     tier: .etincelle, crest: crest, glory: "♛ 0", gloryLabel: "0 de gloire")
+        #expect(board.tier == .etincelle)
+        #expect(board.crest == crest)
+        #expect(board.glory == "♛ 0")
+    }
+
     // MARK: Les mots
 
     @Test("le prénom nomme la personne dans un titre court")
