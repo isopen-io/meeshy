@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
-import { MESSAGE_LIVENESS_SELECT } from '../services/messages/message-liveness';
+import { MESSAGE_LIVENESS_SELECT, messageLivenessRowOf, type MessageLivenessRow } from '../services/messages/message-liveness';
 import { carriesMessageText } from './queuedEventContract';
 
 /**
@@ -42,10 +42,17 @@ import { carriesMessageText } from './queuedEventContract';
  * pas dans `byId` — elle est SANS PREUVE, ce que chaque consommateur arbitre
  * de son côté, et non « saine ».
  */
-export type QueuedMessageFactsRow = {
+/**
+ * #19938 — la ligne porte les colonnes de la LOI, par le type, et non par une
+ * énumération que ce fichier tiendrait à jour. Elle en déclarait trois, dont
+ * `viewOnceBurnedAt` n'était pas : le `select` ci-dessous ramenait pourtant la
+ * colonne, et la projection la jetait. Comme `MessageLivenessRow` a tous ses
+ * champs optionnels, `messageLivenessOf` recevait une ligne amputée sans que
+ * `tsc` ni aucun témoin de verdict ne rougisse — et rendait `live` sur une vue
+ * unique dont le serveur avait détruit le contenu.
+ */
+export type QueuedMessageFactsRow = Required<MessageLivenessRow> & {
   readonly createdAt: Date | null;
-  readonly deletedAt: Date | null;
-  readonly expiresAt: Date | null;
 };
 
 export type QueuedMessageFacts =
@@ -83,19 +90,26 @@ export async function readQueuedMessageFacts(
   if (ids.length === 0) return NO_QUEUED_MESSAGE_FACTS;
 
   try {
-    const rows = (await prisma.message.findMany({
+    const rows = await prisma.message.findMany({
       where: { id: { in: [...ids] } },
-      // `createdAt` entre pour le plancher ; les trois autres colonnes étaient
-      // déjà celles de la vivacité. La requête ne change pas de forme — elle
-      // change de largeur d'une colonne, sur une ligne déjà lue.
+      // `createdAt` entre pour le plancher ; les autres colonnes sont celles de
+      // la vivacité, et c'est la LOI qui les énumère. La requête ne change pas
+      // de forme — elle change de largeur, sur une ligne déjà lue.
       select: { id: true, createdAt: true, ...MESSAGE_LIVENESS_SELECT },
-    })) as Array<{ id: string; createdAt?: Date | null; deletedAt?: Date | null; expiresAt?: Date | null }>;
+    });
     return {
       kind: 'read',
       byId: new Map(
         rows.map((row) => [
           row.id,
-          { createdAt: row.createdAt ?? null, deletedAt: row.deletedAt ?? null, expiresAt: row.expiresAt ?? null },
+          // #19938 — la recopie des colonnes de la loi est à SON site
+          // (`messageLivenessRowOf`), jamais ici : une énumération écrite dans
+          // un consommateur est une liste à tenir à jour, et celle-ci avait
+          // déjà pris une colonne de retard. Le `as Array<…>` qui l'affirmait
+          // est parti avec elle — il DÉCLARAIT une forme plus étroite que ce
+          // que le `select` ramène, et c'est lui qui rendait la perte
+          // invisible à `tsc`.
+          { createdAt: row.createdAt ?? null, ...messageLivenessRowOf(row) },
         ]),
       ),
     };
