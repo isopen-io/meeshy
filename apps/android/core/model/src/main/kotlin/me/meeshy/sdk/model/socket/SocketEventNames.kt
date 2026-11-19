@@ -33,6 +33,10 @@ object SocketEventNames {
     const val INACTIVITY_ALERT = "inactivity:alert"
     const val INACTIVITY_CLEARED = "inactivity:cleared"
 
+    // en appel (#18753, ACT-01) : serveur -> client, `user:<Sang>` ; aucun événement montant (POST /me/device/call)
+    const val PHONE_CALL_STARTED = "phone-call:started"
+    const val PHONE_CALL_ENDED = "phone-call:ended"
+
     // connection health
     const val HEARTBEAT_ACK = "heartbeat:ack"
 
@@ -329,6 +333,8 @@ object SocketEventNames {
         PHONE_REACHABLE,
         INACTIVITY_ALERT,
         INACTIVITY_CLEARED,
+        PHONE_CALL_STARTED,
+        PHONE_CALL_ENDED,
         AUDIO_TRANSCRIPTION_READY,
         AUDIO_TRANSLATION_READY,
         AUTH_SESSION_REVOKED,

@@ -61,6 +61,8 @@ const ConversationBatterySection = lazy(() => import('./battery-panel').then((m)
 const ConversationPhoneReachabilitySection = lazy(() => import('./phone-reachability-panel').then((m) => ({ default: m.ConversationPhoneReachabilitySection })));
 /** L'INACTIVITÉ DE L'AUTRE (#18738) — dans un direct avec un Sang : l'alerte servie, et « Prévenir si je ne réponds pas ». */
 const ConversationInactivitySection = lazy(() => import('./inactivity-panel').then((m) => ({ default: m.ConversationInactivitySection })));
+/** « EN APPEL » DE L'AUTRE (#18753) — dans un direct avec un Sang : l'état servi, jamais avec qui, et « Montrer que je suis en appel ». */
+const ConversationPhoneCallSection = lazy(() => import('./phone-call-panel').then((m) => ({ default: m.ConversationPhoneCallSection })));
 
 /**
  * **LES DÉTAILS D'UNE CONVERSATION** (#7829) — premier incrément de
@@ -294,6 +296,7 @@ export function ConversationDetailsSheet({
         {signedIn && batteryPeerId !== undefined ? (
           <Suspense fallback={null}>
             <ConversationInactivitySection userId={batteryPeerId} name={title} language={language} deps={deps} />
+            <ConversationPhoneCallSection userId={batteryPeerId} name={title} language={language} deps={deps} />
             <ConversationPhoneReachabilitySection userId={batteryPeerId} language={language} />
             <ConversationBatterySection userId={batteryPeerId} name={title} language={language} deps={deps} />
           </Suspense>

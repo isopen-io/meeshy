@@ -338,6 +338,10 @@ struct ConversationInfoSheet: View {
                 InactivityAlertDetailSection(userId: peer)
                     .padding(.horizontal, MeeshySpacing.xl)
                     .padding(.top, MeeshySpacing.sm)
+                // En appel (#18753) : depuis quand, jamais avec qui ; rien hors appel.
+                PhoneCallDetailSection(userId: peer)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.top, MeeshySpacing.sm)
             }
 
             Text(String(format: String(localized: "conversation.info.created-on", defaultValue: "Créé le %@", bundle: .main), conversation.createdAt.formatted(.dateTime.day().month().year())))

@@ -597,6 +597,7 @@ const PENDING_CLIENT_ENTRIES = {
   // Le téléphone injoignable (#18737) : le signe de vie ne vient que d'un TÉLÉPHONE (iOS, Android répondent à la
   // sonde silencieuse — le web n'en est pas un), et le web lit l'état d'une personne par le rattrapage et le direct.
   'me.deviceAlive': { issue: 18737, reason: 'POST /me/device/alive — la réponse du téléphone à la sonde silencieuse, appelée par iOS et Android seulement' },
+  'me.deviceCall': { issue: 18753, reason: 'POST /me/device/call — le rapport « en appel » du téléphone suivi, appelé par iOS et Android seulement ; un navigateur ne voit pas les appels' },
   'relations.byUserIdPhoneReachability': { issue: 18737, reason: 'GET /relations/:userId/phone-reachability — l’état d’une personne, lu par iOS et Android ; le web suit le rattrapage et `phone:*`' },
   // Le relais de la confirmation d'un appareil par code (#19156, spec 2026-11-17 § 5.2) : la passerelle le sert avant
   // les lots clients de la spécification (§ 10 : web lot 6, iOS lots 3-4, Android lot 5), portés par #18906.

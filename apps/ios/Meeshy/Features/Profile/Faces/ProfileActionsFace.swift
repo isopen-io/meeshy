@@ -121,6 +121,7 @@ struct ProfileActionsFace: View {
             BatterySharingSettingsSection(accentColor: accentColor)
             PhoneReachabilitySharingSettingsSection(accentColor: accentColor)
             InactivityCheckSettingsSection(accentColor: accentColor)
+            PhoneCallSharingSettingsSection(accentColor: accentColor)
             VStack(spacing: 0) {
                 ProfileNoveltyReader(feature: .ghostMode, accountId: user?.id) { badge in ghostRow(badge: badge) }
                 privacyToggle(ProfileActionsCopy.notifyReturnTitle, systemImage: "bell",

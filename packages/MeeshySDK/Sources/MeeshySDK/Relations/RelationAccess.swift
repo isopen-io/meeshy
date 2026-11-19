@@ -71,6 +71,7 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     case deviceBatteryPull = "device.battery.pull"
     case deviceUnreachable = "device.unreachable"
     case safetyInactivity = "safety.inactivity"
+    case deviceCall = "device.call"
     case acquaintanceAuto = "acquaintance.auto"
 
     /// `isRelationFeature` : une feature qu'un serveur plus récent ajoute n'est
@@ -91,7 +92,7 @@ public enum RelationFeature: String, CaseIterable, Sendable {
              .deviceUnreachable: return .close
         case .relayMyCommentsElsewhere, .audienceBlood, .listeningTitle,
              .locationLive, .locationHistory, .locationProximity, .deviceBatteryPull,
-             .safetyInactivity: return .blood
+             .safetyInactivity, .deviceCall: return .blood
         case .dmDirect, .dmReadReceipts, .dmTyping, .presenceDnd, .audienceAcquaintances: return .acquaintance
         case .acquaintanceAuto, .dmRequest, .callRing: return .public
         case .viewsIdentity: return .community
@@ -104,7 +105,7 @@ public enum RelationFeature: String, CaseIterable, Sendable {
         switch self {
         case .bring, .talkie, .listeningCategory, .listeningTitle,
              .locationLive, .locationTemporary, .locationHistory, .locationProximity,
-             .deviceBattery, .deviceBatteryPull, .deviceUnreachable, .safetyInactivity: return true
+             .deviceBattery, .deviceBatteryPull, .deviceUnreachable, .safetyInactivity, .deviceCall: return true
         default: return false
         }
     }
@@ -124,7 +125,7 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     /// stocké ouvre. Le serveur résout ; le miroir sert à ne pas proposer ce qu'il refusera.
     public var emitterConsentDefaultLevel: RelationLevel? {
         switch self {
-        case .deviceBattery, .deviceBatteryPull, .deviceUnreachable, .safetyInactivity: return .blood
+        case .deviceBattery, .deviceBatteryPull, .deviceUnreachable, .safetyInactivity, .deviceCall: return .blood
         default: return nil
         }
     }

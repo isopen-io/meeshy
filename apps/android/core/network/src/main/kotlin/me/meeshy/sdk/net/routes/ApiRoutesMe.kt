@@ -27,6 +27,8 @@ public object ApiRoutesMe {
     public const val DEVICE_ALIVE: String = "me/device/alive"
     public const val DEVICE_BATTERY: String = "me/device/battery"
     public const val DEVICE_BATTERY_SETTINGS: String = "me/device/battery/settings"
+    public const val DEVICE_CALL: String = "me/device/call"
+    public const val DEVICE_CALL_SETTINGS: String = "me/device/call/settings"
     public const val DEVICE_REACHABILITY_SETTINGS: String = "me/device/reachability/settings"
     public const val ENGAGEMENT: String = "me/engagement"
     public const val EXPORT: String = "me/export"

@@ -13,6 +13,7 @@ import {
 
 import { BatteryGlyph } from './battery-glyph';
 import { InactivityGlyph } from './inactivity-glyph';
+import { PhoneCallGlyph } from './phone-call-glyph';
 import { PhoneReachabilityGlyph } from './phone-reachability-glyph';
 
 /**
@@ -78,5 +79,6 @@ export function PillAnnouncementBody({ announcement }: { readonly announcement: 
 function PillAnnouncementIconOf({ icon }: { readonly icon: PillAnnouncement['icon'] }) {
   if (icon.kind === 'phone') return <PhoneReachabilityGlyph reachable={icon.reachable} size={16} />;
   if (icon.kind === 'inactivity') return <InactivityGlyph responded={icon.responded} size={16} />;
+  if (icon.kind === 'call') return <PhoneCallGlyph active={icon.active} size={16} />;
   return <BatteryGlyph level={icon.level ?? 0} tone={icon.level === null ? 'off' : 'low'} charging={icon.charging} width={18} ink="currentColor" />;
 }

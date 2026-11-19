@@ -3901,6 +3901,99 @@
         "reason": "level",
         "requiresConsent": true
       }
+    },
+    {
+      "id": "phone-call-blood-consented",
+      "matrix": "En appel (#18753)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "BLOOD",
+        "grantedByTarget": "BLOOD",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "device.call",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "BLOOD",
+        "reason": "level",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "phone-call-blood-withdrawn",
+      "matrix": "En appel (#18753)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "BLOOD",
+        "grantedByTarget": "BLOOD",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "device.call",
+        "consent": "refused"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "BLOOD",
+        "reason": "consent",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "phone-call-close-gets-nothing",
+      "matrix": "En appel (#18753)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "CLOSE",
+        "grantedByTarget": "CLOSE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "device.call",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "CLOSE",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "team-analyst-admin-device-call",
+      "matrix": "Équipe (#16623)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "ANALYST",
+        "feature": "device.call",
+        "targetRole": "ADMIN",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "BLOOD",
+        "reason": "level",
+        "requiresConsent": true
+      }
     }
   ]
 }

@@ -75,6 +75,16 @@ describe('le défilement', () => {
     expect(host.querySelector('[data-inactivity-glyph="responded"]')).not.toBeNull();
   });
 
+  test('« en appel » se dit avec un combiné, la fin avec un combiné raccroché (#18753)', async () => {
+    const store = createPillAnnouncementStore();
+    store.getState().announce(said({ key: 'call:jacques', text: 'Jacques est en appel', tone: 'good', icon: { kind: 'call', active: true } }));
+    const host = await mount(<Probe store={store} suppressed={false} />);
+    expect(host.querySelector('[data-call-glyph="active"]')).not.toBeNull();
+    expect(host.querySelector('[data-battery-glyph]')).toBeNull();
+    await act(async () => store.getState().announce(said({ id: 'a2', key: 'call:jacques', text: 'Jacques a raccroché', tone: 'good', icon: { kind: 'call', active: false } })));
+    expect(host.querySelector('[data-call-glyph="ended"]')).not.toBeNull();
+  });
+
   test('retenue tant que la pastille dit plus urgent', async () => {
     const store = createPillAnnouncementStore();
     store.getState().announce(said());

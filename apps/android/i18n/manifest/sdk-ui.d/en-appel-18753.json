@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "androidName": "phone_call_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_call_pill_ended",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_call_pill_started",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_call_share_global_scope",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_call_share_global_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_call_share_off",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_call_share_person",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_call_share_person_scope",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_call_since_clock",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_call_since_minutes",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_call_someone",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

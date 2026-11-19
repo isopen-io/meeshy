@@ -205,7 +205,7 @@
       "firstScreen": 48
     },
     "me": {
-      "total": 107,
+      "total": 116,
       "firstScreen": 37
     },
     "me-bookmarks": {
@@ -632,11 +632,11 @@
         "firstScreen": 37
       },
       "a": {
-        "total": 107,
+        "total": 116,
         "firstScreen": 37
       },
-      "motif": "La carte « Mon téléphone » accueille « Vérification d’inactivité » (6 h, 12 h, 24 h ou Désactivée, dans un sélecteur fermé) au lieu d’une section de plus ; ce qu’elle déclenche se lit sur la fiche de chaque Sang",
-      "issue": 18738
+      "motif": "La carte « Mon téléphone », hors du premier écran, accueille deux lignes, « Vérification d’inactivité » (#18738, un sélecteur fermé : 6 h, 12 h, 24 h ou Désactivée, +2) et « Montrer à mes Sangs que je suis en appel » (#18753, +9) : une ligne chacune au lieu d’une section de plus, sans titre ni explication ; ce que le réglage ouvre se lit sur la fiche de chaque Sang. Le libellé nomme ce qui part et à qui : le raccourcir ferait croire qu’on montre l’appel lui-même, ou à tout le monde",
+      "issue": 18753
     }
   }
 }

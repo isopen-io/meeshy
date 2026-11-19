@@ -36,6 +36,8 @@ import me.meeshy.ui.component.battery.BatteryPersonSection
 import me.meeshy.ui.component.battery.BatteryPersonSurface
 import me.meeshy.ui.component.inactivity.InactivityPersonSection
 import me.meeshy.ui.component.inactivity.InactivityPersonSurface
+import me.meeshy.ui.component.phonecall.PhoneCallPersonSection
+import me.meeshy.ui.component.phonecall.PhoneCallPersonSurface
 import me.meeshy.ui.component.phonereachability.PhoneReachabilityPersonSection
 import me.meeshy.ui.component.phonereachability.PhoneReachabilityPersonSurface
 import me.meeshy.ui.component.rememberConversationHere
@@ -152,6 +154,13 @@ internal fun ConversationInfoSheet(
                         userId = peer,
                         name = title,
                         surface = InactivityPersonSurface.CONVERSATION_INFO,
+                        modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
+                    )
+                    // En appel (#18753) : depuis quand, jamais avec qui.
+                    PhoneCallPersonSection(
+                        userId = peer,
+                        name = title,
+                        surface = PhoneCallPersonSurface.CONVERSATION_INFO,
                         modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
                     )
                 }
