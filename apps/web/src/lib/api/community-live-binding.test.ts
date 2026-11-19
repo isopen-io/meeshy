@@ -38,7 +38,7 @@ describe('les communautés vivantes, montées avec la connexion (#18435, #18766)
     const off = bindCommunityLiveLazily({ socket, queryClient });
     await until(() => handlers.has('community:updated'));
     expect([...handlers.keys()].sort()).toEqual(
-      ['community:deleted', 'community:join-requested', 'community:member-joined', 'community:member-left', 'community:member-role-updated', 'community:updated'],
+      ['community:deleted', 'community:join-request-decided', 'community:join-requested', 'community:member-joined', 'community:member-left', 'community:member-role-updated', 'community:updated'],
     );
 
     handlers.get('community:updated')?.({

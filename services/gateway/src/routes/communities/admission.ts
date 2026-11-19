@@ -22,13 +22,13 @@ import type { CommunityJoinVia } from '../../services/community-entries';
 import {
   closePendingJoinRequests,
   expireStaleJoinRequests,
+  JOIN_REQUEST_COOLDOWN_MS,
   liveJoinRequestWhere
 } from '../../services/community-join-request-lifecycle';
 
 const logger = enhancedLogger.child({ module: 'CommunityAdmission' });
 
-/** Sept jours après un refus avant qu'une nouvelle demande ne parte. */
-export const JOIN_REQUEST_COOLDOWN_MS = 7 * 24 * 3_600_000;
+export { JOIN_REQUEST_COOLDOWN_MS };
 
 const MEMBER_USER_SELECT = {
   id: true,

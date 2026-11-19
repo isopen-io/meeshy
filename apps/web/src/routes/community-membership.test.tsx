@@ -80,4 +80,16 @@ describe('CommunityMembershipAction', () => {
     expect(html).toContain('role="alert"');
     expect(html).toContain('7 days');
   });
+
+  test('« Demande refusée » est un ÉTAT annoncé, qui dit la date de la prochaine demande dans la langue (#19879)', () => {
+    const fr = renderToStaticMarkup(<CommunityMembershipAction language="fr" action="declined" retryAt="2026-11-26T10:00:00.000Z" {...base} />);
+    expect(fr).toContain('data-community-join-declined');
+    expect(fr).toContain('role="status"');
+    expect(fr).toContain('Demande refusée');
+    expect(fr).toContain('26 novembre');
+    expect(fr).not.toContain('<button');
+    const en = renderToStaticMarkup(<CommunityMembershipAction language="en" action="declined" retryAt="2026-11-26T10:00:00.000Z" {...base} />);
+    expect(en).toContain('Request declined');
+    expect(en).toContain('November 26');
+  });
 });

@@ -296,6 +296,7 @@ import type {
 import type {
   CommunityDeletedEventData,
   CommunityJoinRequestedEventData,
+  CommunityJoinRequestDecidedEventData,
   CommunityMemberJoinedEventData,
   CommunityMemberLeftEventData,
   CommunityMemberRoleUpdatedEventData,
@@ -547,6 +548,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.COMMUNITY_MEMBER_ROLE_UPDATED]: (data: CommunityMemberRoleUpdatedEventData) => void;
   [SERVER_EVENTS.COMMUNITY_DELETED]: (data: CommunityDeletedEventData) => void;
   [SERVER_EVENTS.COMMUNITY_JOIN_REQUESTED]: (data: CommunityJoinRequestedEventData) => void;
+  [SERVER_EVENTS.COMMUNITY_JOIN_REQUEST_DECIDED]: (data: CommunityJoinRequestDecidedEventData) => void;
 
   // Packs
   [SERVER_EVENTS.PACK_INSTALLATION_UPDATED]: (data: PackInstallationUpdatedEventData) => void;
