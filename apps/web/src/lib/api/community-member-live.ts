@@ -3,6 +3,7 @@ import type { InfiniteData, QueryClient } from '@tanstack/react-query';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
 import { communityQueryKey, type CommunityPage, type CommunitySummary, type CommunityViewerRole } from './communities';
+import { communityJoinRequestsQueryKey } from './community-join-requests';
 import { communityMembersQueryKey } from './community-members';
 
 /**
@@ -95,6 +96,8 @@ export function applyCommunityMemberEvent(
   });
 
   void queryClient.invalidateQueries({ queryKey: communityMembersQueryKey(change.communityId) });
+  // Une entrée acceptée par un AUTRE intendant retire sa demande de la liste ouverte ici (#19871).
+  if (event === SERVER_EVENTS.COMMUNITY_MEMBER_JOINED) void queryClient.invalidateQueries({ queryKey: communityJoinRequestsQueryKey(change.communityId), exact: true });
   if (change.userId === viewerId && change.role === null) {
     void queryClient.invalidateQueries({ queryKey: communityQueryKey(change.communityId) });
     void queryClient.invalidateQueries({ queryKey: LIST_KEY });
