@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-dqytex` |
+| Branche de travail de la session courante | `claude/practical-fermat-6cktea` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -52,7 +52,26 @@ normal.
 | **85w** | 2026-11-12 | `claude/practical-fermat-l2dnwf` | → `dev` | ✅ mergé |
 | **86w** | 2026-11-13 | `claude/practical-fermat-u8t5dq` | → `dev` | ✅ mergé |
 | **87w** | 2026-11-14 | `claude/practical-fermat-vayul2` | → `dev` | ✅ mergé |
-| **88w** | 2026-11-15 | `claude/practical-fermat-dqytex` | [#18635](https://github.com/isopen-io/meeshy/pull/18635) → `dev` | ⏳ ouverte |
+| **88w** | 2026-11-15 | `claude/practical-fermat-dqytex` | [#18635](https://github.com/isopen-io/meeshy/pull/18635) → `dev` | ✅ mergé |
+| **89w** | 2026-11-19 | `claude/practical-fermat-6cktea` | → `dev` | ⏳ ouverte |
+
+**89w** — maintenabilité / cohérence de thème : le gréement de visage des effets
+d'appel (`lib/calls/face-rig.ts`, #19779) peint dans `paintMask` un dégradé radial
+`rgba(0,0,0,1) → rgba(0,0,0,1) → rgba(0,0,0,0)` sur un canvas HORS DOM — **3 des 12**
+violations du gate (remonté de 5/4 à **12/9** à l'ouverture, `dev` ayant reçu
+plusieurs poches neuves). Ce n'est **pas une couleur** : le canvas sert UNIQUEMENT de
+**masque alpha**, composé en `globalCompositeOperation = 'destination-in'` (ligne 112)
+où seule l'ALPHA découpe l'œil agrandi — le noir n'est jamais rendu comme teinte. La
+charte ne nomme aucun jeton pour une rampe d'alpha de compositing : même régime que le
+masque de luminance de la famille appel (85w) et l'onde canvas (84w). **Exemption
+motivée à la ligne** (`// harmony-exempt: alpha de masque (destination-in), pas une
+couleur` ×3 + commentaire d'en-tête), pas un jeton, pas un chemin exempté — le fichier
+reste scanné. **Aucun pixel ne change** (commentaires seuls). Témoins :
+`check-design-harmony.test.ts` (describe « le masque de l'œil (face-rig) », 40→42) +
+`face-rig.test.ts` (10/10, non-régression). Gate **12 → 9 violations** (−3, exactement
+`face-rig`), **9 → 8 fichiers** ; `tsc` 0. Housekeeping : 88w confirmée mergée (#18635,
+`text-on-media` sur `dev`) ; appariement analyses↔plans 1:1 revérifié (45w→88w), 0
+doublon de numéro `w`. Analyse : `docs/analyses/uiux/2026-11-19-iteration-89w.md`.
 
 **88w** — cohérence de thème / maintenabilité : la barre de composition d'un
 commentaire d'export (`routes/comment-compose-bar.tsx:100`) peignait le ▶
@@ -253,16 +272,21 @@ du code supprimé et ne se rejouent pas.** La routine repart d'une revue fraîch
 l'`apps/web` actuel (Vite + Preact). Toutes sont annotées `CORRIGÉ` et closes pour
 leur époque.
 
-## Prochaine itération : **89w**
-Revue fraîche `apps/web` — voir les pistes 89w+ en pied de
-`docs/analyses/uiux/2026-11-15-iteration-88w.md` (gate d'harmonie à **5/4** après
-88w). Les cibles restantes sont désormais **des composants CALCULÉS, pas des
-littéraux** — chacune réclame un verdict « exemption motivée à la ligne » plutôt
-qu'un jeton : `message-menu` (`, black` ×2, masque de LUMINANCE — candidat exempt
-motivé ou helper `edgeFadeMask` 85w), `conversation-backdrop` (voile DYNAMIQUE
-`rgba(${view.veilColor}, ${view.veil})`), `rank-blason` (`hsl(` DYNAMIQUE de la roue
-du prisme), `admin-post-preview` (letterbox `#000`, candidat exempt motivé, cf. 76w) ;
-+ axe épuration, toujours non entamé.
-**Toujours REMESURER le gate à l'ouverture** : 5/4 après 88w ; il peut remonter si
+## Prochaine itération : **90w**
+Voir les pistes 90w+ en pied de `docs/analyses/uiux/2026-11-19-iteration-89w.md`
+(gate d'harmonie à **9/8** après 89w). Cible la plus nette : la **famille des
+replis `var(--token, littéral)`** — 4 fichiers (`battery-panel:312` `#fff`,
+`shared-location-card:34` `#fff`, `profile-relation-face:112` et
+`vitrine-preview:71` `rgba(127,127,127,.14)`) où le littéral est la valeur de REPLI
+d'un jeton défini. **Candidate d'itération groupée** : vérifier d'abord dans
+`styles/*.css` que `--color-ios-on-brand`, `--color-on-brand`, `--color-ios-fill`
+sont définis sans condition sur `:root` (alors le repli est du code mort retirable) ;
+sinon exemption motivée « repli d'un jeton défini ». Puis les cas calculés restants :
+`message-menu` (`, black` ×2, masque de LUMINANCE — exempt motivé ou `edgeFadeMask`
+85w), `conversation-backdrop` (voile DYNAMIQUE `rgba(${view.veilColor}, …)`),
+`rank-blason` (`hsl(` DYNAMIQUE de la roue du prisme), `admin-post-preview`
+(letterbox `#000`, cf. 76w) ; + axe épuration, toujours non entamé.
+**Toujours REMESURER le gate à l'ouverture** : 9/8 après 89w ; il peut remonter si
 `dev` reçoit une poche neuve entre deux tours (9/7 → 28/11 entre 83w et 84w ; 13/10
-→ 17/12 entre 84w et 85w ; 10/8 stable entre 85w et 86w ; 8/7 → 6/5 entre 86w et 87w).
+→ 17/12 entre 84w et 85w ; 10/8 stable entre 85w et 86w ; 8/7 → 6/5 entre 86w et 87w ;
+**5/4 → 12/9 entre 88w et 89w**).

@@ -59,12 +59,18 @@ const WORK_STEP = 64;
 
 type Surface2D = FaceTarget['context'];
 
+// Le dégradé ci-dessous est un MASQUE ALPHA, pas une couleur : ce canvas hors
+// DOM est composé en `globalCompositeOperation = 'destination-in'` (voir
+// `lensDrawer`), où seule la composante ALPHA (la rampe 1 → 1 → 0) découpe l'œil
+// agrandi — le noir n'est jamais rendu comme une teinte. La charte ne nomme
+// aucun jeton pour une rampe d'alpha de compositing, d'où l'exemption à la
+// ligne (même régime que le masque de luminance de la famille appel).
 function paintMask(into: Surface2D): void {
   const half = MASK_EDGE / 2;
   const gradient = into.createRadialGradient(half, half, 0, half, half, half);
-  gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
-  gradient.addColorStop(0.62, 'rgba(0, 0, 0, 1)');
-  gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  gradient.addColorStop(0, 'rgba(0, 0, 0, 1)'); // harmony-exempt: alpha de masque (destination-in), pas une couleur
+  gradient.addColorStop(0.62, 'rgba(0, 0, 0, 1)'); // harmony-exempt: alpha de masque (destination-in), pas une couleur
+  gradient.addColorStop(1, 'rgba(0, 0, 0, 0)'); // harmony-exempt: alpha de masque (destination-in), pas une couleur
   into.fillStyle = gradient;
   into.fillRect(0, 0, MASK_EDGE, MASK_EDGE);
 }
