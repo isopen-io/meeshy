@@ -36,6 +36,8 @@ import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.battery.BatteryPersonSection
 import me.meeshy.ui.component.battery.BatteryPersonSurface
+import me.meeshy.ui.component.fall.FallPersonSection
+import me.meeshy.ui.component.fall.FallPersonSurface
 import me.meeshy.ui.component.inactivity.InactivityPersonSection
 import me.meeshy.ui.component.inactivity.InactivityPersonSurface
 import me.meeshy.ui.component.phonecall.PhoneCallPersonSection
@@ -160,6 +162,12 @@ internal fun CircleLinkSheet(
                 userId = link.userId,
                 name = name,
                 surface = PhoneReachabilityPersonSurface.PERSON_FICHE,
+            )
+            // La chute détectée (#18748) : son épisode, et « Prévenir X si ma montre détecte une chute ».
+            FallPersonSection(
+                userId = link.userId,
+                name = name,
+                surface = FallPersonSurface.PERSON_FICHE,
             )
             // La vérification d'inactivité (#18738) : son alerte, et « Prévenir X si je ne réponds pas ».
             InactivityPersonSection(

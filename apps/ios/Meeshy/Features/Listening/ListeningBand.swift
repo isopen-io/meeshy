@@ -114,6 +114,8 @@ struct PeerLiveOverlays: ViewModifier {
             .modifier(AvatarInactivityOverlay(userId: userId, avatarSize: avatarSize))
             // « En appel » du pair (#18753) : le glyphe et « En appel depuis… », jamais avec qui.
             .modifier(AvatarPhoneCallOverlay(userId: userId, avatarSize: avatarSize))
+            // La chute détectée du pair (#18748) : le glyphe tant que l'épisode court et n'a pas expiré.
+            .modifier(AvatarFallOverlay(userId: userId, avatarSize: avatarSize))
     }
 }
 
