@@ -454,6 +454,7 @@ internal fun faceLabel(effect: CallFaceEffect): Int = when (effect) {
     CallFaceEffect.Angel -> R.string.call_effects_face_angel
     CallFaceEffect.Demon -> R.string.call_effects_face_demon
     CallFaceEffect.Volcano -> R.string.call_effects_face_volcano
+    CallFaceEffect.Baby -> R.string.call_effects_face_baby
 }
 
 /** iOS `CallEffectsCopy.art` : le symbole barré pour « Aucun », un émoji pour chaque effet. */
@@ -464,6 +465,7 @@ private fun faceGlyph(effect: CallFaceEffect): String = when (effect) {
     CallFaceEffect.Angel -> "😇"
     CallFaceEffect.Demon -> "😈"
     CallFaceEffect.Volcano -> "🌋"
+    CallFaceEffect.Baby -> "👶"
 }
 
 /** Les noms des ambiances viennent du catalogue d'iOS (`video.filter.preset.*`), les mêmes qu'ailleurs dans l'appel. */

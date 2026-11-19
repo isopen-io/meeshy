@@ -8,7 +8,9 @@
  * Effets est GLISSÉ en continu (le rendu Preact du fil principal que le
  * traitement ne doit plus payer) :
  *
- *  1. un effet de couleur ET de visage (« Doré » + « Éruption ») ;
+ *  1. un effet de couleur ET de visage (« Doré » + « Éruption »), puis
+ *     « Doré » + « Bébé » (#19779 : le gréement du visage chargé à la
+ *     demande, sa lecture une image sur cinq) ;
  *  2. le flou d'arrière-plan par segmentation (la caméra simulée n'offre pas
  *     `backgroundBlur`) — et il FLOUTE : la netteté de l'image envoyée chute ;
  *  3. le zoom numérique (#8441) : l'image ENVOYÉE est recadrée.
@@ -270,6 +272,24 @@ try {
   /* Un choix rend le menu de base (#18186) : la mesure fait glisser le carrousel, rouvert par sa puce. */
   await page.click('[data-call-effects-category="face"]');
   await measure(page, 'effet (Doré + Éruption)');
+
+  /*
+   * La glisse CHOISIT au passage (l'élément centré s'applique) et laisse le carrousel où elle l'a mené : il est
+   * refermé puis rouvert par sa puce, et « Bébé » s'y touche comme « Éruption » plus haut. Le toucher referme le
+   * carrousel (#18186) — sauf si la glisse avait déjà posé « Bébé » : il reste alors ouvert, coché.
+   */
+  const faceCarousel = '[data-call-mode="effects"] [data-call-mode-carousel]';
+  const carouselGone = (timeout) => until(page, (selector) => document.querySelector(selector) === null, faceCarousel, timeout);
+  if ((await page.$(faceCarousel)) !== null) {
+    await page.click('[data-call-effects-category="face"]');
+    await carouselGone();
+  }
+  await page.click('[data-call-effects-category="face"]');
+  await appears(page, '[data-carousel-item="baby"]');
+  await page.click('[data-carousel-item="baby"]');
+  if (await carouselGone(1500)) await page.click('[data-call-effects-category="face"]');
+  check(await appears(page, '[data-call-mode-carousel] [data-carousel-item="baby"][aria-checked="true"]'), '« Bébé » posé, le carrousel des visages ouvert sur lui');
+  await measure(page, 'effet (Doré + Bébé)');
 
   /* « Aucun » est au bout de la piste, que la mesure vient de faire glisser : activé comme au lecteur d'écran, sans défilement qui le dispute au centrage. */
   await page.$eval('[data-carousel-item="none"]', (button) => button.click());

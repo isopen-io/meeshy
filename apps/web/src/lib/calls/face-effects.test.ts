@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { FACE_EFFECTS } from './video-effects';
-import { FACE_DETECT_EVERY, FACE_FRAME_BUDGET_MS, faceGrade, glowBucket, particleSeeds, haloOf, heuristicFaceBox, hornsOf, nextEffectLoad, risingParticles, shouldDetect, smoothFaceBox, sparklesOf, toadOf, demonEyesOf, lavaGlow, type Box } from './face-effects';
+import { FACE_DETECT_EVERY, FACE_FRAME_BUDGET_MS, faceGrade, glowBucket, particleSeeds, haloOf, heuristicFaceBox, hornsOf, nextEffectLoad, risingParticles, shouldDetect, smoothFaceBox, sparklesOf, toadOf, demonEyesOf, lavaGlow, eyesOf, babyCheeksOf, type Box } from './face-effects';
 
 /**
  * LES EFFETS DE VISAGE, EN GÉOMÉTRIE PURE (#8551) — où poser les cornes, le
@@ -79,12 +79,43 @@ describe('les ornements se posent sur la tête', () => {
     expect(eyes.every((eye) => eye.cy > face.y && eye.cy < face.y + face.height / 2)).toBe(true);
   });
 
+  test('les yeux du démon brillent sur les VRAIS yeux quand les repères du visage sont connus (#19779)', () => {
+    const real = [
+      { cx: 480, cy: 330, r: 20 },
+      { cx: 610, cy: 350, r: 20 },
+    ] as const;
+    const eyes = demonEyesOf(face, 0, real);
+    expect(eyes.map(({ cx, cy }) => [cx, cy])).toEqual([
+      [480, 330],
+      [610, 350],
+    ]);
+    expect(eyes.every((eye) => eye.r === face.width * 0.06)).toBe(true);
+  });
+
   test('les plumes de l’ange tournent autour de la tête', () => {
     const now = sparklesOf(face, 0);
     const then = sparklesOf(face, 800);
     expect(now.length).toBeGreaterThan(3);
     expect(now).not.toEqual(then);
     expect(sparklesOf(face, 800)).toEqual(then);
+  });
+});
+
+describe('le bébé (#19779)', () => {
+  test('sans repères, ses yeux s’estiment dans la boîte d’un visage vu : deux, symétriques, dans la moitié haute', () => {
+    const eyes = eyesOf(face);
+    expect(eyes).toHaveLength(2);
+    const [left, right] = eyes;
+    expect(centerX(face) - (left?.cx ?? 0)).toBeCloseTo((right?.cx ?? 0) - centerX(face), 5);
+    expect(eyes.every((eye) => eye.cy > face.y && eye.cy < face.y + face.height / 2 && eye.r > 0)).toBe(true);
+  });
+
+  test('ses joues roses se posent sous les yeux, de part et d’autre du nez', () => {
+    const cheeks = babyCheeksOf(face);
+    const eyes = eyesOf(face);
+    expect(cheeks).toHaveLength(2);
+    expect(cheeks.every((cheek) => cheek.cy > (eyes[0]?.cy ?? 0) && cheek.cy < face.y + face.height)).toBe(true);
+    expect((cheeks[0]?.cx ?? 0) < centerX(face) && (cheeks[1]?.cx ?? 0) > centerX(face)).toBe(true);
   });
 });
 
@@ -121,17 +152,17 @@ describe('les braises et la lave', () => {
 });
 
 describe('l’étalonnage de chaque effet', () => {
-  test('ange, démon et éruption changent la couleur de toute l’image ; chacun la sienne', () => {
-    const grades = (['angel', 'demon', 'volcano'] as const).map(faceGrade);
+  test('ange, démon, éruption et bébé changent la couleur de toute l’image ; chacun la sienne', () => {
+    const grades = (['angel', 'demon', 'volcano', 'baby'] as const).map(faceGrade);
     expect(grades.every((grade) => grade.length > 0)).toBe(true);
-    expect(new Set(grades).size).toBe(3);
+    expect(new Set(grades).size).toBe(4);
   });
 
   test('aucun, lissage et crapaud ne touchent que le visage', () => {
     expect(faceGrade('none')).toBe('');
     expect(faceGrade('smoothing')).toBe('');
     expect(faceGrade('toad')).toBe('');
-    expect(FACE_EFFECTS.map(faceGrade)).toHaveLength(6);
+    expect(FACE_EFFECTS.map(faceGrade)).toHaveLength(7);
   });
 });
 
