@@ -425,3 +425,59 @@ de menace du mode `hybrid`, où le serveur détient le clair par conception.
 - les cliquets de taille : `EncryptionService.test.ts` QUITTE la dette (1 044 →
   996, sous le plafond de 1 000) — le fichier était hors budget, donc interdit
   d'addition, et l'extraction est le correctif.
+
+---
+
+## Suite immédiate : #19786, le suivi que ce lot avait rendu NOMINAL
+
+*Fusionné dans `dev` par `0da8f615f`, le cycle continue sur son propre suivi.*
+
+Le constat de l'audit (constat F) était préexistant et je l'avais ouvert plutôt
+qu'absorbé. Mais il n'est pas resté théorique : **le fail-ouvert de ce lot en
+fait le mode nominal d'un incident de base.** Pendant une panne Mongo, la
+relecture rend `undefined` pour toute la salve, le premier appelant prend le
+verrou, `create` échoue — et tous les envois concurrents de cette conversation
+détenaient une promesse qui ne se réglait jamais.
+
+> **Un lot qui ouvre une vanne hérite de ce qui est en aval.** Le verrou était
+> cassé avant ; sa probabilité d'être atteint, non. Ouvrir le suivi était juste ;
+> le laisser mûrir un cycle ne l'était pas, parce que c'est MON changement qui
+> l'avait rendu atteignable.
+
+La seconde moitié du correctif est celle qui mérite d'être retenue, et elle n'est
+pas celle que l'issue décrivait. Donner son `reject` au verrou suffit pour les
+ATTENDANTS ; mais la promesse du verrou peut n'avoir **aucun** attendant — c'est
+même le cas nominal, un seul appelant — et la rejeter sans écouteur **termine le
+process** sous le `--unhandled-rejections=throw` par défaut de Node 22.
+
+Mesuré par mutation, et le verdict est plus net qu'une assertion : sans
+`void lockPromise.catch(() => undefined)`, la suite ne rend pas un témoin rouge,
+elle rend **`Tests: 0 total`** — le worker jest est MORT avant de pouvoir
+rapporter, en tenant le rôle de la passerelle.
+
+> **La règle du dépôt sur `void p` vaut de la promesse qu'on REJETTE comme de
+> celle qu'on détache.** Ajouter un chemin de rejet à une promesse partagée crée
+> un rejet potentiellement non observé, et le `.catch` de déclaration n'est pas
+> une politesse : c'est la moitié du correctif qui empêche le remède d'être pire
+> que le mal. Un correctif de robustesse peut introduire une panne PLUS GRAVE que
+> celle qu'il répare, et seule une mutation le montre.
+
+## Et `dev` était rouge, d'un rouge qui n'est pas le mien
+
+En rejouant les gardes sur l'arbre fusionné, la règle 3 du budget de taille des
+suites a rougi : `calls-routes.test.ts`, **2 154 gelées → 2 175 réelles**. Mesuré
+sur un `git archive origin/dev` (arbre propre) : le rouge est sur `dev`,
+introduit par `7630c0fc8`, et il est **antérieur à ma fusion comme postérieur à
+mon verdict** — mon run était vert quand `dev` était à `e4282f1e`.
+
+La règle vivant dans une suite jest de la passerelle, **toute branche qui
+contient `dev` hérite ce rouge** : aucun lot de la passerelle ne peut obtenir de
+verdict vert tant qu'il tient. C'est ce qui l'a fait trouver — par un lot sans
+aucun rapport.
+
+**Je n'y touche pas**, et c'est la doctrine qui le dit :
+`claude/call-system-display-zrz108` est une branche VIVANTE et c'est son fichier.
+« Quand deux lots se disputent un fichier, celui qui n'a rien écrit cède »
+(#5243). Je cède et je signale : **#19808**, avec la mesure, le commit fautif, et
+le correctif attendu (extraire, puis BAISSER la ligne de dette — jamais la
+monter, ce serait la marge que le cliquet existe pour refuser).
