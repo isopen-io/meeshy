@@ -1475,3 +1475,13 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Témoins : relancement après cession ⇒ aucun relevé ne part et la marque « reçue » est posée ; relancement sans
   cession ⇒ la publication continue ; partage arrêté ailleurs ⇒ le démarrage gardé s'efface (iOS
   `SharedLocationSharingSyncTests`, Android `SharedLocationSharingSyncTest`). Swift et Kotlin se prouvent par la CI.
+
+## 2026-11-19 — réveil de 1 h : #19768 (relancement natif) recalée sur dev
+
+- Reprise : #19768 toujours ouverte, tête 798b61316 intacte ; la CI des PR reste gelée (35 vérifications « skipped »
+  sur sa tête), le porteur fusionne les PR dans `dev` une à une. Aucun nouveau lot ouvert. #19682 attend toujours la
+  décision du porteur.
+- `origin/dev` (e4282f1e6) fusionnée à la main, sans conflit. `dev` a touché les écrans iOS de la carte (haptiques,
+  présence des observateurs), jamais `SharedLocationSharingCenter` ni le centre Android.
+- Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests rc=0. Swift et
+  `sdk-core` ne compilent pas en conteneur : `ios.yml` et `android.yml` feront foi au dégel.
