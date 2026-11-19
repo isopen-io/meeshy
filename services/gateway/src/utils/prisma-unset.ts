@@ -34,6 +34,28 @@
  * explicite de `CallService.initiateCall`) : écrire la colonne rend les lectures
  * exactes pour les lignes À VENIR, ce prédicat les rend exactes pour celles DÉJÀ
  * EN BASE. Les deux moitiés ne se substituent pas l'une à l'autre.
+ *
+ * ─── ET LE PIÈGE EST UN ARTEFACT DE PRISMA : EN MONGO BRUT, C'EST L'INVERSE ──
+ *
+ * Tout ce qui précède vaut pour une requête passée par le CLIENT PRISMA. Dans le
+ * langage de requête MongoDB, `{ champ: null }` apparie les documents où le champ
+ * vaut `null` **OU est ABSENT** — c'est documenté (« Query for Null or Missing
+ * Fields »), et c'est le comportement qu'on cherche. Le connecteur MongoDB de
+ * Prisma, lui, distingue délibérément les deux états, ce pour quoi il fournit
+ * `isSet` (mesuré contre `mongo:8`, #8309).
+ *
+ * Conséquence pratique, et elle a failli coûter une régression (#19909) : sur un
+ * site qui exécute une commande par `prisma.$runCommandRaw`, l'égalité nue est
+ * la forme **JUSTE**, et y poser `isSet` serait une faute — l'opérateur est
+ * propre à Prisma, et un document portant littéralement `{ isSet: false }`
+ * n'existe pas. `services/posts/postCounters.ts` est ce cas : sa clause
+ * `scope.liveOnly ? { deletedAt: null } : {}` voyage dans un document de commande
+ * brute, et elle apparie bien les posts dont la colonne est absente.
+ *
+ * **Avant de proposer `unsetOrNull` ou `NOT_DELETED` sur un site, vérifier qu'il
+ * passe par Prisma et non par `$runCommandRaw`.** Les deux sémantiques sont
+ * opposées sur la même syntaxe, dans le même dépôt, sur la même collection — et
+ * un remède appliqué au mauvais chemin ressemble exactement aux bons.
  */
 export type UnsetOrNull<F extends string> = {
   OR: [{ [K in F]: null }, { [K in F]: { isSet: false } }];
