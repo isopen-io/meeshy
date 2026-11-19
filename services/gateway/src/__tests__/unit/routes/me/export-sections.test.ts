@@ -6,6 +6,19 @@
  * voiceProfile, sessions — each bounded (take/skip), each reporting
  * { total, hasMore } derived from a companion `count`.
  *
+ * ─── CES TROIS TÉMOINS ATTESTAIENT LE DÉFAUT (#19909) ──────────────────────
+ *
+ * Les trois assertions de clause ci-dessous RECOPIAIENT `deletedAt: null`,
+ * c'est-à-dire l'égalité nue qui n'appariait aucune ligne — l'une sous le titre
+ * « excludes soft-deleted », alors que la clause qu'elle épinglait excluait
+ * TOUT. Un témoin qui recopie la clause ne vérifie que sa propre copie.
+ *
+ * Elles attendent désormais `NOT_DELETED`, importé de la PRODUCTION : l'attendu
+ * ne peut plus dériver du site. Leur rôle reste la BORNE (`take`/`skip`) et la
+ * projection ; la couverture de COMPORTEMENT — « l'export rend-il la ligne
+ * nominale, et la compte-t-il ? » — vit dans
+ * `src/__tests__/unit/export-rgpd-publications-nominal-form.test.ts`.
+ *
  * @jest-environment node
  */
 
@@ -21,6 +34,7 @@ import {
 } from '../../../../routes/me/export-sections';
 import { exportSessions } from '../../../../routes/me/export-security';
 import { matchesMongoWhere } from '../../../helpers/mongo-where';
+import { NOT_DELETED } from '../../../../services/posts/softDelete';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 const OTHER_USER_ID = '507f1f77bcf86cd799439012';
@@ -71,18 +85,18 @@ describe('resolveExportPage', () => {
 });
 
 describe('exportPosts', () => {
-  it('filters by authorId, type in [POST, REEL], deletedAt: null — bounded by take/skip', async () => {
+  it('filters by authorId, type in [POST, REEL], deletedAt NOT_DELETED — bounded by take/skip', async () => {
     const prisma = fakePrisma();
     await exportPosts(prisma, USER_ID, { limit: 10, offset: 5 });
     expect(prisma.post.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { authorId: USER_ID, type: { in: ['POST', 'REEL'] }, deletedAt: null },
+        where: { authorId: USER_ID, type: { in: ['POST', 'REEL'] }, deletedAt: NOT_DELETED },
         take: 10,
         skip: 5,
       })
     );
     expect(prisma.post.count).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { authorId: USER_ID, type: { in: ['POST', 'REEL'] }, deletedAt: null } })
+      expect.objectContaining({ where: { authorId: USER_ID, type: { in: ['POST', 'REEL'] }, deletedAt: NOT_DELETED } })
     );
   });
 
@@ -108,7 +122,7 @@ describe('exportStories', () => {
     const prisma = fakePrisma();
     await exportStories(prisma, USER_ID, { limit: 500, offset: 0 });
     expect(prisma.post.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { authorId: USER_ID, type: { in: ['STORY', 'STATUS'] }, deletedAt: null } })
+      expect.objectContaining({ where: { authorId: USER_ID, type: { in: ['STORY', 'STATUS'] }, deletedAt: NOT_DELETED } })
     );
   });
 });
@@ -118,7 +132,7 @@ describe('exportComments', () => {
     const prisma = fakePrisma();
     await exportComments(prisma, USER_ID, { limit: 500, offset: 0 });
     expect(prisma.postComment.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { authorId: USER_ID, deletedAt: null } })
+      expect.objectContaining({ where: { authorId: USER_ID, deletedAt: NOT_DELETED } })
     );
   });
 });
