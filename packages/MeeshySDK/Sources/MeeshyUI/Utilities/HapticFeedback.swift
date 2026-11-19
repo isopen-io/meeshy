@@ -18,12 +18,26 @@ import UIKit
 /// call. `prepare()` is invoked before each event so the engine stays
 /// warm — without it the very first tap feels missing.
 ///
-/// **Meeshy ne joue plus aucun retour haptique** (décision porteur, #19783) : `plays` est la seule porte, et elle est
-/// fermée. Les sites d'appel restent inertes plutôt que retirés un à un ; aucun générateur ne se crée hors d'ici.
+/// **Les retours haptiques ne se jouent qu'aux endroits stratégiques** (décision porteur, #19783) : l'issue d'une
+/// action (succès, avertissement, erreur) et le geste qui engage une action (impacts moyen, fort, rigide : appui long,
+/// envoi, prise de parole). Les tics d'ambiance — léger, doux, sélection, partout au défilement et au toucher anodin —
+/// se taisent. Une seule loi, `plays(_:)`, en décide ; aucun générateur ne se crée hors d'ici.
 public struct HapticFeedback {
 
-    /// La porte de tous les retours haptiques de l'app : fermée.
-    public nonisolated static let plays = false
+    /// Ce qu'un retour haptique dit.
+    public nonisolated enum Weight: Sendable, Equatable, CaseIterable {
+        /// Un tic d'ambiance : défilement, épinglage, toucher anodin. Muet.
+        case tick
+        /// Le geste qui engage une action : appui long, envoi, prise de parole.
+        case action
+        /// L'issue d'une action : succès, avertissement, erreur.
+        case outcome
+    }
+
+    /// La loi : seuls l'engagement d'une action et son issue se sentent.
+    public nonisolated static func plays(_ weight: Weight) -> Bool {
+        weight != .tick
+    }
 
     #if canImport(UIKit) && os(iOS)
     @MainActor private static let lightGenerator = UIImpactFeedbackGenerator(style: .light)
@@ -36,7 +50,7 @@ public struct HapticFeedback {
 
     @MainActor
     public static func light() {
-        guard plays else { return }
+        guard plays(.tick) else { return }
         #if canImport(UIKit) && os(iOS)
         lightGenerator.prepare()
         lightGenerator.impactOccurred()
@@ -45,7 +59,7 @@ public struct HapticFeedback {
 
     @MainActor
     public static func medium() {
-        guard plays else { return }
+        guard plays(.action) else { return }
         #if canImport(UIKit) && os(iOS)
         mediumGenerator.prepare()
         mediumGenerator.impactOccurred()
@@ -54,7 +68,7 @@ public struct HapticFeedback {
 
     @MainActor
     public static func heavy() {
-        guard plays else { return }
+        guard plays(.action) else { return }
         #if canImport(UIKit) && os(iOS)
         heavyGenerator.prepare()
         heavyGenerator.impactOccurred()
@@ -63,7 +77,7 @@ public struct HapticFeedback {
 
     @MainActor
     public static func rigid() {
-        guard plays else { return }
+        guard plays(.action) else { return }
         #if canImport(UIKit) && os(iOS)
         rigidGenerator.prepare()
         rigidGenerator.impactOccurred()
@@ -72,7 +86,7 @@ public struct HapticFeedback {
 
     @MainActor
     public static func soft() {
-        guard plays else { return }
+        guard plays(.tick) else { return }
         #if canImport(UIKit) && os(iOS)
         softGenerator.prepare()
         softGenerator.impactOccurred()
@@ -103,10 +117,10 @@ public struct HapticFeedback {
     }
     #endif
 
-    /// Le tic d'une sélection qui change ; muet comme les autres.
+    /// Le tic d'une sélection qui change : un tic d'ambiance, muet.
     @MainActor
     public static func selection() {
-        guard plays else { return }
+        guard plays(.tick) else { return }
         #if canImport(UIKit) && os(iOS)
         UISelectionFeedbackGenerator().selectionChanged()
         #endif
@@ -114,7 +128,7 @@ public struct HapticFeedback {
 
     @MainActor
     public static func success() {
-        guard plays else { return }
+        guard plays(.outcome) else { return }
         #if canImport(UIKit) && os(iOS)
         notificationGenerator.prepare()
         notificationGenerator.notificationOccurred(.success)
@@ -123,7 +137,7 @@ public struct HapticFeedback {
 
     @MainActor
     public static func warning() {
-        guard plays else { return }
+        guard plays(.outcome) else { return }
         #if canImport(UIKit) && os(iOS)
         notificationGenerator.prepare()
         notificationGenerator.notificationOccurred(.warning)
@@ -132,7 +146,7 @@ public struct HapticFeedback {
 
     @MainActor
     public static func error() {
-        guard plays else { return }
+        guard plays(.outcome) else { return }
         #if canImport(UIKit) && os(iOS)
         notificationGenerator.prepare()
         notificationGenerator.notificationOccurred(.error)

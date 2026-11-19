@@ -152,7 +152,7 @@ private struct CallPressLabel<Content: View>: View {
     }
 }
 
-/// Le doigt posé ne joue plus de choc : l'app ne joue aucun retour haptique (#19783).
+/// Le doigt posé ne joue plus de choc : un tic d'ambiance, muet ; l'action garde son retour au relâchement (#19783).
 private struct CallPressHaptic: ViewModifier {
     let isPressed: Bool
 

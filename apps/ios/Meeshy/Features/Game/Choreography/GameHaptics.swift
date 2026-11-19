@@ -76,9 +76,9 @@ final class GameHaptics: GameHapticsProviding {
         CHHapticEngine.capabilitiesForHardware().supportsHaptics
     }
 
-    /// Muet comme tout retour haptique de l'app (#19783) : la porte de `HapticFeedback` décide.
+    /// La chorégraphie d'une récompense : l'issue d'une action, qui se sent (#19783, `HapticFeedback.plays`).
     func play(_ taps: [GameHapticTap]) {
-        guard HapticFeedback.plays, !taps.isEmpty else { return }
+        guard HapticFeedback.plays(.outcome), !taps.isEmpty else { return }
         guard supportsCoreHaptics, playWithEngine(taps) else {
             playWithImpact(taps)
             return

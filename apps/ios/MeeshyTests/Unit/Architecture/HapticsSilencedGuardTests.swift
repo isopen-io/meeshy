@@ -2,8 +2,9 @@ import XCTest
 import MeeshyUI
 @testable import Meeshy
 
-/// #19783 — Meeshy ne joue plus aucun retour haptique : `HapticFeedback.plays` est la seule porte et elle est fermée.
-/// Aucun générateur UIKit, aucun `.sensoryFeedback` ne joue hors de cette porte, dans l'app comme dans le SDK.
+/// #19783 — les retours haptiques ne se jouent qu'aux endroits stratégiques : l'engagement d'une action et son issue.
+/// Les tics d'ambiance se taisent. `HapticFeedback.plays(_:)` est la seule loi ; aucun générateur UIKit, aucun
+/// `.sensoryFeedback` ne joue hors d'elle, dans l'app comme dans le SDK.
 @MainActor
 final class HapticsSilencedGuardTests: XCTestCase {
 
@@ -14,8 +15,10 @@ final class HapticsSilencedGuardTests: XCTestCase {
     private static let players = ["UIImpactFeedbackGenerator(", "UINotificationFeedbackGenerator(",
                                   "UISelectionFeedbackGenerator(", ".sensoryFeedback(", "CHHapticEngine("]
 
-    func test_theOnlyHapticDoor_isClosed() {
-        XCTAssertFalse(HapticFeedback.plays)
+    func test_onlyStrategicHapticsPlay_actionsAndOutcomes_neverAmbientTicks() {
+        XCTAssertFalse(HapticFeedback.plays(.tick))
+        XCTAssertTrue(HapticFeedback.plays(.action))
+        XCTAssertTrue(HapticFeedback.plays(.outcome))
     }
 
     func test_noHapticPlaysOutsideTheDoor() throws {
@@ -30,6 +33,6 @@ final class HapticsSilencedGuardTests: XCTestCase {
                 if !code.contains("HapticFeedback.plays") { offenders.append(file.lastPathComponent) }
             }
         }
-        XCTAssertEqual(offenders, [], "un retour haptique joue hors de la porte fermée")
+        XCTAssertEqual(offenders, [], "un retour haptique joue hors de la loi")
     }
 }

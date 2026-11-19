@@ -118,4 +118,26 @@ final class ProfileCoverAndNextCirclesTests: XCTestCase {
             .appendingPathComponent("Sources/MeeshyUI/Profile/\(name)")
         return try String(contentsOf: url, encoding: .utf8)
     }
+
+    // MARK: - Les crans vivants (#19785)
+
+    /// Le contour organique de la planche (`mxMorph`, 8 s) : il ondule en continu, jamais sous mouvement réduit.
+    func test_blobMedallion_morphsContinuously_butNeverUnderReducedMotion() {
+        func recipe(reduce: Bool, shape: MeeshyMedallionShape) -> MeeshyMedallionRecipe {
+            MeeshyMedallionRecipe.resolve(kind: .accent, shape: shape, fill: .solid, decor: .halo, size: .s44,
+                                          state: .current, reduceMotion: reduce, supportsShape: true)
+        }
+        XCTAssertTrue(recipe(reduce: false, shape: .blob).morphs)
+        XCTAssertFalse(recipe(reduce: true, shape: .blob).morphs)
+        XCTAssertFalse(recipe(reduce: false, shape: .disc).morphs)
+        XCTAssertEqual(MeeshyMedallionRecipe.morphPhase(elapsed: 0), 0, accuracy: 0.0001)
+        XCTAssertEqual(MeeshyMedallionRecipe.morphPhase(elapsed: 4), Double.pi, accuracy: 0.0001)
+        XCTAssertEqual(MeeshyMedallionRecipe.morphPhase(elapsed: 8), 0, accuracy: 0.0001)
+        XCTAssertEqual(MeeshyMedallionRecipe.morphPhase(elapsed: .nan), 0)
+    }
+
+    func test_nextCircles_areDrawnAsLivingBlobs() throws {
+        let source = try profileSource("ProfileNextCircles.swift")
+        XCTAssertTrue(source.contains("shape: .blob"))
+    }
 }
