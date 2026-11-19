@@ -23,6 +23,7 @@ import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { identityImageIsCallers, IDENTITY_IMAGE_NOT_OWNED } from '../../services/attachments/identityImageOwnership';
 import { countOnlineMembers } from '../../services/community-online-count';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
+import { viewerJoinRequestState } from './join-request-state';
 import { activeMembershipOf, COMMUNITY_ACTIVE_COUNTS, communityConversationSchema, communityDetailInclude, communityForViewer, flattenCommunityCounts } from './serialization';
 import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
@@ -308,7 +309,14 @@ export async function registerCoreRoutes(
         return null;
       });
 
-      sendSuccess(reply, { ...served, onlineMemberCount });
+      const currentUserJoinRequest = await viewerJoinRequestState(fastify.prisma, {
+        communityId: community.id,
+        viewerId: userId,
+        requiresJoinApproval: community.requiresJoinApproval === true,
+        isMember: served.currentUserRole !== null,
+      });
+
+      sendSuccess(reply, { ...served, onlineMemberCount, currentUserJoinRequest });
     } catch (error) {
       logger.error('Error fetching community', error as Error);
       sendInternalError(reply, 'Failed to fetch community');

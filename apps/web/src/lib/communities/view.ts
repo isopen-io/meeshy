@@ -61,21 +61,24 @@ export function cachedSearchPlaceholder(
   return { pages: [{ communities, nextOffset: null }], pageParams: [0] };
 }
 
-export type MembershipAction = 'join' | 'leave' | 'none';
+export type MembershipAction = 'join' | 'request' | 'requested' | 'leave' | 'none';
 
 /**
  * **LE GESTE D'ADHÉSION QUE LE DÉTAIL OFFRE** (#6378) — miroir
  * `CommunityDetailView.actionsSection` : « Rejoindre » à un non-membre d'une
  * communauté PUBLIQUE (une privée ne s'ouvre que sur invitation, la passerelle
  * rendrait 403), « Quitter » à un membre qui ne l'a pas créée (la passerelle
- * refuse le départ du créateur), rien sinon — et rien tant que le rôle du
+ * refuse le départ du créateur), rien sinon. Une communauté qui valide chaque
+ * entrée se DEMANDE, puis se lit « Demande envoyée » (#19868) — et rien tant que le rôle du
  * lecteur n'est pas SERVI : un bouton deviné serait un contrôle qui ment.
  */
 export function membershipActionOf(community: CommunitySummary, viewerId: string | null): MembershipAction {
   if (viewerId === null || community.viewerRole === undefined) return 'none';
   if (community.createdBy === viewerId) return 'none';
-  if (community.viewerRole === null) return community.isPrivate ? 'none' : 'join';
-  return 'leave';
+  if (community.viewerRole !== null) return 'leave';
+  if (community.isPrivate) return 'none';
+  if (community.requiresJoinApproval !== true) return 'join';
+  return community.viewerJoinRequest === 'pending' ? 'requested' : 'request';
 }
 
 /** Qui peut inviter (#6376) — la règle de `POST /communities/:id/invite` : un membre invite ; dans une communauté privée, administrateurs et modérateurs seulement. */
