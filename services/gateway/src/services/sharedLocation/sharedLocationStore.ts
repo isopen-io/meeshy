@@ -13,7 +13,9 @@
  * illisible ou échue vaut « rien ».
  */
 import {
+  SHARED_LOCATION_MOTIONS,
   SHARED_LOCATION_PRECISIONS,
+  type SharedLocationMotion,
   type SharedLocationPosition,
   type SharedLocationPrecision,
 } from '@meeshy/shared/types/shared-location';
@@ -101,7 +103,8 @@ function parsePosition(value: unknown): SharedLocationPosition | null {
   const row = value as Record<string, unknown>;
   if (!isCoordinate(row.latitude, 90) || !isCoordinate(row.longitude, 180)) return null;
   const accuracy = typeof row.accuracy === 'number' && Number.isFinite(row.accuracy) && row.accuracy >= 0 ? row.accuracy : undefined;
-  return { latitude: row.latitude, longitude: row.longitude, ...(accuracy === undefined ? {} : { accuracy }) };
+  const motion = (SHARED_LOCATION_MOTIONS as readonly unknown[]).includes(row.motion) ? { motion: row.motion as SharedLocationMotion } : {};
+  return { latitude: row.latitude, longitude: row.longitude, ...(accuracy === undefined ? {} : { accuracy }), ...motion };
 }
 
 function parseState(raw: string): SharedLocationState | null {

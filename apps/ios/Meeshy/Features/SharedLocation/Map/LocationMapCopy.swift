@@ -12,6 +12,10 @@ enum LocationMapCopy {
     static var back: String { String(localized: "locationMap.back", defaultValue: "Retour", bundle: .main) }
     static var layers: String { String(localized: "locationMap.layers", defaultValue: "Changer le fond de carte", bundle: .main) }
     static var recenter: String { String(localized: "locationMap.recenter", defaultValue: "Recentrer la carte", bundle: .main) }
+    static var showAround: String { String(localized: "locationMap.nearby.showAround", defaultValue: "Voir qui est autour", bundle: .main) }
+    static func showCard(name: String) -> String {
+        String(localized: "locationMap.person.showCard", defaultValue: "Afficher \(name)", bundle: .main)
+    }
     static var northUp: String { String(localized: "locationMap.northUp", defaultValue: "Remettre le nord en haut", bundle: .main) }
     static var someone: String { String(localized: "circles.locations.someone", defaultValue: "Quelqu'un", bundle: .main) }
     static func myPosition(_ share: LocationMapOwnShare, name: String?) -> String {
