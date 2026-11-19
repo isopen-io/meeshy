@@ -55,6 +55,7 @@ import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice';
 import { directLookupWheres, firstFound } from '../../services/conversations/directPair';
+import { highestRankedConversation } from '../../services/conversations/highestRanked';
 import {
   decideCreationRegime,
   directReopeningFor,
@@ -252,12 +253,20 @@ export function registerCreateConversationRoute(
           { userId, peerId: uniqueParticipantIds[0] },
           { plaintext: reopening === 'readable', endToEnd: reopening === 'end-to-end' },
         );
-        const existingDirect = await firstFound(lookups, (where) => prisma.conversation.findFirst({
+        // Des doublons historiques existent (5 DM atabeth↔jcnm datant d'avant ce
+        // fix) : rouvrir la plus RÉCEMMENT ACTIVE, pas une arbitraire — sinon
+        // l'utilisateur retombe sur une DM morte.
+        //
+        // #19835 — « active » est le RANG (max(`lastMessageAt`,
+        // `lastActivityAt`), #9026), pas le dernier message : un doublon où l'on
+        // vient de réagir, de s'appeler ou d'épingler est le vivant, et c'est
+        // précisément lui que l'ancien tri écartait. La PRÉFÉRENCE DE RÉGIME
+        // passe avant le rang et ne bouge pas (#12966) : les deux flux parcourent
+        // les mêmes `lookups` dans le même ordre, donc un tête-à-tête chiffré
+        // existant gagne toujours, et le rang ne départage qu'À régime égal.
+        const existingDirect = await highestRankedConversation((orderBy) => firstFound(lookups, (where) => prisma.conversation.findFirst({
           where,
-          // Des doublons historiques existent (5 DM atabeth↔jcnm datant
-          // d'avant ce fix) : rouvrir la plus RÉCEMMENT ACTIVE, pas une
-          // arbitraire — sinon l'utilisateur retombe sur une DM morte.
-          orderBy: { lastMessageAt: 'desc' },
+          orderBy,
           include: {
             participants: {
               include: {
@@ -273,7 +282,7 @@ export function registerCreateConversationRoute(
               }
             }
           }
-        }));
+        })));
         if (existingDirect) {
           const callerParticipant = existingDirect.participants.find((p: any) => p.userId === userId);
           const creatorParticipant = existingDirect.participants.find((p: any) => isMemberCreator(p.role ?? 'member'));

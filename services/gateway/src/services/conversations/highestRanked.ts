@@ -52,20 +52,40 @@
  */
 import { listRankFromColumns } from '@meeshy/shared/utils/conversation-list-rank';
 
-/** Ce qu'une lecture doit rendre pour qu'on puisse la classer : les deux colonnes du rang, et l'identité qui départage. */
+/**
+ * Ce qu'une lecture doit rendre pour qu'on puisse la classer : les deux colonnes
+ * du rang, et l'identité qui départage.
+ *
+ * **Les trois champs sont REQUIS, et c'est le seul garde-fou qu'un témoin ne
+ * peut pas porter.** Un `select` qui oublie `lastActivityAt` rend un rang
+ * réduit au dernier message — exactement le défaut qu'on corrige — et aucun
+ * double de test ne le verrait (un double rend ce qu'on lui dit, quel que soit
+ * le `select`). Déclarés requis, c'est le COMPILATEUR qui refuse la lecture
+ * incomplète : le type que Prisma dérive d'un `select` partiel n'est pas
+ * assignable. Les appelants qui lisent par `select` répandent `RANK_SELECT`.
+ */
 export type RankedConversationRow = {
   readonly id: string;
-  readonly lastMessageAt?: Date | null;
-  readonly lastActivityAt?: Date | null;
+  readonly lastMessageAt: Date | null;
+  readonly lastActivityAt: Date | null;
 };
 
-/** L'un des deux ordres de lecture — la colonne du flux, puis `id` qui départage les égalités. */
-export type RankStreamOrder =
-  | readonly [{ readonly lastMessageAt: 'desc' }, { readonly id: 'desc' }]
-  | readonly [{ readonly lastActivityAt: 'desc' }, { readonly id: 'desc' }];
+/** Les colonnes sans lesquelles le rang ne se calcule pas — à répandre dans tout `select` d'une lecture classée. */
+export const RANK_SELECT = { id: true, lastMessageAt: true, lastActivityAt: true } as const;
 
-/** Les deux flux dont l'union contient le top-K du rang. Fonction, pour qu'aucun appelant ne partage l'objet qu'il passe à Prisma. */
-export const rankStreamOrders = (): readonly RankStreamOrder[] => [
+/**
+ * L'un des deux ordres de lecture — la colonne du flux, puis `id` qui départage
+ * les égalités. Le tuple est MUTABLE à dessein : l'ordre d'une lecture Prisma
+ * est un `OrderByInput[]` mutable, et un tuple `readonly` n'y est pas
+ * assignable. Ce qui garantit qu'aucun appelant ne mute celui d'un autre est
+ * que `rankStreamOrders()` construit des littéraux NEUFS à chaque appel.
+ */
+export type RankStreamOrder =
+  | [{ lastMessageAt: 'desc' }, { id: 'desc' }]
+  | [{ lastActivityAt: 'desc' }, { id: 'desc' }];
+
+/** Les deux flux dont l'union contient le top-K du rang. */
+export const rankStreamOrders = (): RankStreamOrder[] => [
   [{ lastMessageAt: 'desc' }, { id: 'desc' }],
   [{ lastActivityAt: 'desc' }, { id: 'desc' }],
 ];

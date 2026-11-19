@@ -614,6 +614,14 @@ async function rankConversations(
     }
 
     case 'recent_activity': {
+      // #19835 — RESTE sur `lastMessageAt`, et ici il faut le dire deux fois.
+      // D'abord la décision : ce classement mesure le trafic de MESSAGES, et son
+      // nom (`recent_activity`) est une valeur d'API antérieure à #9026 — il ne
+      // promet pas le rang de liste. Ensuite le coût, qui est ce qui rendrait la
+      // bascule un lot à part : la colonne est ici un FILTRE (`gte: startDate`)
+      // autant qu'un ordre, et filtrer sur max(`lastMessageAt`,
+      // `lastActivityAt`) ne s'écrit pas plus en `where` qu'en `orderBy` — c'est
+      // le patron de tri de #19748, pas un `orderBy` à remplacer.
       const convos = await fastify.prisma.conversation.findMany({
         where: startDate ? { lastMessageAt: { gte: startDate } } : {},
         select: { id: true, identifier: true, title: true, type: true, avatar: true, lastMessageAt: true },
