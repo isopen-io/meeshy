@@ -117,8 +117,21 @@ function matchesFieldFilter(row: MongoDocument, key: string, filter: MongoDocume
     }
     if (operator === 'gt' || operator === 'lt' || operator === 'gte' || operator === 'lte') {
       const value = row[key];
-      if (!(value instanceof Date) || !(operand instanceof Date)) return false;
-      return compareDates[operator](value.getTime(), operand.getTime());
+      if (value instanceof Date && operand instanceof Date) {
+        return compareDates[operator](value.getTime(), operand.getTime());
+      }
+      // Un ORDRE sur une CHAÎNE, et pas seulement sur une date (#19881). MongoDB
+      // compare un ObjectId octet par octet, ce qui est exactement l'ordre
+      // lexicographique de son hexadécimal : `{ id: { lt: '…' } }` et
+      // `orderBy: { id: 'desc' }` s'accordent donc, et c'est de cet accord que
+      // dépend le départage des rangs ÉGAUX du tri de la liste.
+      //
+      // Le cas MIXTE reste `false` — c'est le comportement d'avant, et un
+      // double ne doit pas se mettre à répondre là où il répondait non.
+      if (typeof value === 'string' && typeof operand === 'string') {
+        return compareStrings[operator](value, operand);
+      }
+      return false;
     }
     if (operator === 'in') {
       return has(row, key) && (operand as unknown[]).some((candidate) => sameValue(row[key], candidate));
@@ -158,6 +171,13 @@ const compareDates = {
   lt: (a: number, b: number) => a < b,
   lte: (a: number, b: number) => a <= b,
 } as const;
+
+const compareStrings: Record<'gt' | 'lt' | 'gte' | 'lte', (a: string, b: string) => boolean> = {
+  gt: (a, b) => a > b,
+  lt: (a, b) => a < b,
+  gte: (a, b) => a >= b,
+  lte: (a, b) => a <= b,
+};
 
 function sameValue(left: unknown, right: unknown): boolean {
   if (left instanceof Date && right instanceof Date) return left.getTime() === right.getTime();
