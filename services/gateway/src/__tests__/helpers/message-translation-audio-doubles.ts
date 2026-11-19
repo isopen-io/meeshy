@@ -3,7 +3,14 @@ import { jest } from '@jest/globals';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type MockFn = jest.Mock<any>;
 
+export const POST_FIXTURE_ID = '6650a1b2c3d4e5f6a7b8c9e0';
+export const POST_MEDIA_FIXTURE_ID = '6650a1b2c3d4e5f6a7b8c9e1';
+
 export const createMockPrisma = () => ({
+  postMedia: {
+    findUnique: jest.fn(async ({ where }: { where: { id: string } }) =>
+      where.id === POST_MEDIA_FIXTURE_ID ? { id: POST_MEDIA_FIXTURE_ID, postId: POST_FIXTURE_ID, comment: null } : null) as MockFn
+  },
   conversation: {
     findFirst: jest.fn() as MockFn,
     findUnique: jest.fn() as MockFn,

@@ -177,7 +177,7 @@ import {
   createMockPrisma,
   flushAsync,
   makeAudioProcessCompletedData,
-  makeTranslatedAudio,
+  makeTranslatedAudio, POST_FIXTURE_ID, POST_MEDIA_FIXTURE_ID,
 } from '../../helpers/message-translation-audio-doubles';
 
 // ---------------------------------------------------------------------------
@@ -1033,8 +1033,8 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
     it('routes to PostAudioService when postId and postMediaId are present', async () => {
       const data = {
         ...makeAudioProcessCompletedData(),
-        postId: 'post-1',
-        postMediaId: 'media-1',
+        postId: POST_FIXTURE_ID,
+        postMediaId: POST_MEDIA_FIXTURE_ID,
         translatedAudios: [makeTranslatedAudio()]
       };
 
@@ -1042,7 +1042,7 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
       await flushAsync(3);
 
       expect(mockHandleAudioTranslationsReady).toHaveBeenCalledWith(
-        expect.objectContaining({ postId: 'post-1', postMediaId: 'media-1' })
+        expect.objectContaining({ postId: POST_FIXTURE_ID, postMediaId: POST_MEDIA_FIXTURE_ID })
       );
       // Should NOT touch messageAttachment
       expect(prisma.messageAttachment.findUnique).not.toHaveBeenCalled();
@@ -1051,8 +1051,8 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
     it('persists a post translation without audio (#19648) with neither url nor path, and keeps the voiced one', async () => {
       const data = {
         ...makeAudioProcessCompletedData(),
-        postId: 'post-1',
-        postMediaId: 'media-1',
+        postId: POST_FIXTURE_ID,
+        postMediaId: POST_MEDIA_FIXTURE_ID,
         translatedAudios: [
           makeTranslatedAudio({ targetLanguage: 'de', translatedText: 'Hallo', audioUrl: null, audioPath: '', durationMs: 0, textOnly: true }),
           makeTranslatedAudio({ targetLanguage: 'fr', audioUrl: '/outputs/audio/translated/fr.mp3', audioPath: '/app/outputs/fr.mp3' }),
@@ -1066,15 +1066,15 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
       expect(translations.de.transcription).toBe('Hallo');
       expect(translations.de).not.toHaveProperty('url');
       expect(translations.de).not.toHaveProperty('path');
-      expect(translations.fr.url).toBe('/api/v1/attachments/file/translated/media-1_fr.mp3');
-      expect(translations.fr.path).toMatch(/\/translated\/media-1_fr\.mp3$/);
+      expect(translations.fr.url).toBe(`/api/v1/attachments/file/translated/post/${POST_MEDIA_FIXTURE_ID}_fr.mp3`);
+      expect(translations.fr.path).toMatch(new RegExp(`/translated/post/${POST_MEDIA_FIXTURE_ID}_fr\\.mp3$`));
     });
 
     it('persists an empty audioUrl from a translator of the previous version (#19648) with neither url nor path', async () => {
       const data = {
         ...makeAudioProcessCompletedData(),
-        postId: 'post-1',
-        postMediaId: 'media-1',
+        postId: POST_FIXTURE_ID,
+        postMediaId: POST_MEDIA_FIXTURE_ID,
         translatedAudios: [
           makeTranslatedAudio({ targetLanguage: 'de', translatedText: 'Hallo', audioUrl: '', audioPath: '', durationMs: 0 }),
         ]
@@ -1092,8 +1092,8 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
     it('does not route to PostAudioService when translatedAudios is empty', async () => {
       const data = {
         ...makeAudioProcessCompletedData(),
-        postId: 'post-1',
-        postMediaId: 'media-1',
+        postId: POST_FIXTURE_ID,
+        postMediaId: POST_MEDIA_FIXTURE_ID,
         translatedAudios: []
       };
 
@@ -1544,8 +1544,8 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
         taskId: 'tr-post-1',
         messageId: 'msg-post',
         attachmentId: 'att-post',
-        postId: 'post-1',
-        postMediaId: 'media-1',
+        postId: POST_FIXTURE_ID,
+        postMediaId: POST_MEDIA_FIXTURE_ID,
         transcription: {
           text: 'Post audio content',
           language: 'en',
@@ -1558,7 +1558,7 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
       await flushAsync(3);
 
       expect(events).toHaveLength(1);
-      expect((events[0] as any).postId).toBe('post-1');
+      expect((events[0] as any).postId).toBe(POST_FIXTURE_ID);
       // Should NOT have queried messageAttachment
       expect(prisma.messageAttachment.findUnique).not.toHaveBeenCalled();
     });
