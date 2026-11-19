@@ -76,6 +76,15 @@ interface SharedLocationRosterStoring {
     fun loadReceived(accountId: String): Boolean
 
     fun saveReceived(accountId: String, received: Boolean)
+
+    /**
+     * Le démarrage que CET appareil a fait accepter (#19681) : survit au lancement avec la marque « reçue », s'efface avec
+     * elle (arrêt, cession). Sans lui, un appareil relancé après qu'un autre a repris le partage prendrait le démarrage
+     * de l'autre pour le sien et republierait.
+     */
+    fun loadPublishedStart(accountId: String): String?
+
+    fun savePublishedStart(accountId: String, startedAt: String?)
 }
 
 /** Ce que l'écran lit et pilote de MON partage de position. */
@@ -233,6 +242,7 @@ class SharedLocationSharingCenter internal constructor(
             if (pruned.isEmpty && !_roster.value.hasRecipients) {
                 adopt(ticket, SharedLocationRoster.EMPTY)
                 markReceived(ticket, false)
+                rememberStart(ticket, null)
                 cancelDeadline()
                 return@locked null
             }
@@ -257,7 +267,7 @@ class SharedLocationSharingCenter internal constructor(
             if (!isCurrent(ticket)) return@locked null
             val before = _roster.value
             val next = before.withServed(truth, clock())
-            val yields = next.hasRecipients && !received && before.hasRecipients && yieldsTo(truth.startedAt)
+            val yields = next.hasRecipients && !received && before.hasRecipients && yieldsTo(ticket, truth.startedAt)
             if (next == before) {
                 if (yields) yieldPublishing(ticket)
                 return@locked null
@@ -268,6 +278,7 @@ class SharedLocationSharingCenter internal constructor(
             if (!next.hasRecipients) {
                 stopFollowingDevice()
                 markReceived(ticket, false)
+                rememberStart(ticket, null)
             }
             scheduleDeadline()
             null
@@ -333,6 +344,7 @@ class SharedLocationSharingCenter internal constructor(
             resetSession(account)
             _roster.value = SharedLocationRoster.fromStored(store.load(account))
             received = store.loadReceived(account)
+            publishedStart = store.loadPublishedStart(account)
             if (_roster.value.hasRecipients && !received) startFollowing()
             scheduleDeadline()
         }
@@ -442,19 +454,19 @@ class SharedLocationSharingCenter internal constructor(
         return when (verdict) {
             is SharedLocationStartVerdict.Started -> {
                 if (claimsPublishing) markReceived(ticket, false)
-                if (fix != null) publishedStart = verdict.startedAt
+                if (fix != null) rememberStart(ticket, verdict.startedAt)
                 engage(ticket, next, fix)
                 null
             }
             SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.UNCONFIRMED) -> {
                 if (claimsPublishing) markReceived(ticket, false)
-                if (fix != null) publishedStart = null
+                if (fix != null) rememberStart(ticket, null)
                 engage(ticket, previous.union(next), fix)
                 SharedLocationShareProblem.Refused(SharedLocationSendOutcome.UNCONFIRMED)
             }
             is SharedLocationStartVerdict.Refused -> {
                 // La passerelle a PU appliquer un démarrage avec position qu'elle refuse ensuite : dans le doute, inconnu.
-                if (fix != null) publishedStart = null
+                if (fix != null) rememberStart(ticket, null)
                 SharedLocationShareProblem.Refused(verdict.outcome)
             }
         }
@@ -541,7 +553,7 @@ class SharedLocationSharingCenter internal constructor(
     private fun wipe(ticket: Ticket) {
         adopt(ticket, SharedLocationRoster.EMPTY)
         markReceived(ticket, false)
-        publishedStart = null
+        rememberStart(ticket, null)
         stopFollowingDevice()
         cancelDeadline()
     }
@@ -551,10 +563,10 @@ class SharedLocationSharingCenter internal constructor(
      * avec position ; s'il diffère de celui de l'accusé d'ici, un autre appareil a partagé après lui. Sans accusé lisible,
      * le démarrage servi est pris pour le sien ; sans `startedAt` (passerelle d'avant), rien ne change.
      */
-    private fun yieldsTo(served: String?): Boolean {
+    private fun yieldsTo(ticket: Ticket, served: String?): Boolean {
         if (served == null) return false
         val mine = publishedStart ?: run {
-            publishedStart = served
+            rememberStart(ticket, served)
             return false
         }
         return served != mine
@@ -563,8 +575,14 @@ class SharedLocationSharingCenter internal constructor(
     /** La marque « reçue » s'écrit AVANT la liste (processus tué entre les deux : relancé muet), puis le suivi se coupe. */
     private fun yieldPublishing(ticket: Ticket) {
         markReceived(ticket, true)
-        publishedStart = null
+        rememberStart(ticket, null)
         stopFollowingDevice()
+    }
+
+    private fun rememberStart(ticket: Ticket, startedAt: String?) {
+        if (publishedStart == startedAt) return
+        publishedStart = startedAt
+        store.savePublishedStart(ticket.account, startedAt)
     }
 
     private fun stopFollowingDevice() {
@@ -604,10 +622,19 @@ class SharedPreferencesSharedLocationRosterStore @Inject constructor(
         editor.apply()
     }
 
+    override fun loadPublishedStart(accountId: String): String? = prefs.getString(STARTED_PREFIX + accountId, null)
+
+    override fun savePublishedStart(accountId: String, startedAt: String?) {
+        val editor = prefs.edit()
+        if (startedAt == null) editor.remove(STARTED_PREFIX + accountId) else editor.putString(STARTED_PREFIX + accountId, startedAt)
+        editor.apply()
+    }
+
     private companion object {
         const val FILE_NAME = "meeshy_shared_location_roster"
         const val KEY_PREFIX = "roster."
         const val RECEIVED_PREFIX = "received."
+        const val STARTED_PREFIX = "publishedStart."
     }
 }
 

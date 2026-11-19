@@ -139,8 +139,11 @@ final class SharedLocationSharingCenter: ObservableObject {
     /// La liste vient d'un autre appareil du compte : celui-ci ne publie pas sa position (#18578).
     private var received: Bool
     /// Le dernier démarrage avec position que CET appareil a fait accepter (`startedAt` de l'accusé, #18580) ; `nil` :
-    /// inconnu (relancement, accusé perdu), le démarrage servi est alors pris pour le sien.
-    private var publishedStart: String?
+    /// inconnu (accusé perdu), le démarrage servi est alors pris pour le sien. Gardé avec la marque « reçue » (#19681) :
+    /// relancé après qu'un autre appareil a repris le partage, celui-ci ne prend pas le démarrage de l'autre pour le sien.
+    private var publishedStart: String? {
+        didSet { if publishedStart != oldValue { store.savePublishedStart(publishedStart) } }
+    }
     private var following = Set<AnyCancellable>()
     private var deadline: AnyCancellable?
     private var socketWatch = Set<AnyCancellable>()
@@ -173,6 +176,7 @@ final class SharedLocationSharingCenter: ObservableObject {
         let restored = store.load() ?? .empty
         roster = restored
         received = store.loadReceived()
+        publishedStart = store.loadPublishedStart()
         let lane = OrderedEventLane()
         socketReady
             .relay(through: lane) { [weak self] _ in
@@ -302,6 +306,7 @@ final class SharedLocationSharingCenter: ObservableObject {
             guard !pruned.isEmpty || self.roster.hasRecipients else {
                 self.adopt(.empty)
                 self.markReceived(false)
+                self.publishedStart = nil
                 self.deadline = nil
                 return nil
             }
@@ -334,6 +339,7 @@ final class SharedLocationSharingCenter: ObservableObject {
             if !next.hasRecipients {
                 self.stopFollowingDevice()
                 self.markReceived(false)
+                self.publishedStart = nil
             } else if !before.hasRecipients {
                 self.markReceived(true)
             } else if !self.received {
@@ -636,6 +642,10 @@ protocol SharedLocationRosterStoring: AnyObject {
     /// RECEVOIR la liste ne se remet jamais à publier sa position en se relançant.
     func loadReceived() -> Bool
     func saveReceived(_ received: Bool)
+    /// Le démarrage que CET appareil a fait accepter (#19681) : survit au lancement avec la marque « reçue », s'efface
+    /// avec elle (arrêt, cession), et vit sous la clé du compte comme la liste.
+    func loadPublishedStart() -> String?
+    func savePublishedStart(_ startedAt: String?)
 }
 
 /// La liste d'UN compte, dans ses réglages locaux.
@@ -666,6 +676,12 @@ final class UserDefaultsSharedLocationRosterStore: SharedLocationRosterStoring {
 
     func saveReceived(_ received: Bool) {
         if received { defaults.set(true, forKey: key + ".received") } else { defaults.removeObject(forKey: key + ".received") }
+    }
+
+    func loadPublishedStart() -> String? { defaults.string(forKey: key + ".publishedStart") }
+
+    func savePublishedStart(_ startedAt: String?) {
+        if let startedAt { defaults.set(startedAt, forKey: key + ".publishedStart") } else { defaults.removeObject(forKey: key + ".publishedStart") }
     }
 }
 
