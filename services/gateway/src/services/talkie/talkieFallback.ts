@@ -59,7 +59,9 @@ export async function mostRecentSharedConversation(
   });
   if (shared.length === 0) return null;
 
-  // #19910 — LE SERVEUR DÉCIDE, DONC IL APPLIQUE LA RÈGLE D'ADMISSION ENTIÈRE.
+  // #19910 — LE SERVEUR DÉCIDE, DONC IL APPLIQUE LA RÈGLE D'ADMISSION — moins
+  // DEUX exceptions NOMMÉES ci-dessous, parce qu'un filtre qui se déclare
+  // complet sans l'être est le défaut même que ce lot répare (leçon 124).
   //
   // Tant que ce filtre n'appariait rien (#19803), le serveur ne nommait aucune
   // destination et le client choisissait seul, en appliquant `mayCarryTheCopy`.
@@ -74,6 +76,23 @@ export async function mostRecentSharedConversation(
   // helpers à branche `OR`, composés par `AND` : deux `OR` ne peuvent pas
   // cohabiter dans un même objet, et un second spread écraserait le premier en
   // silence — le filtre redeviendrait mort sans qu'un témoin tombe.
+  //
+  // ─── CE QUE CE `where` N'APPLIQUE PAS, ET POURQUOI ──────────────────────
+  //
+  // 1. `Participant.permissions.canSendMessages` et le droit de joindre un
+  //    AUDIO (`MessagingService`, refus `WRITE_NOT_PERMITTED`). Ce sont des
+  //    droits PERSONNELS portés par un composite, dont l'absence est
+  //    permissive : les filtrer demande une forme `permissions: { is: … }` et
+  //    une instruction à part. Un hôte qui a retiré le droit d'écrire à
+  //    l'émetteur verra donc la copie refusée — c'est #19930.
+  // 2. La course au BLOCAGE : `talkieGate` ne rend `FALLBACK_VOICE` qu'après
+  //    `resolveRelationAccess`, donc un blocage antérieur ne mène jamais ici ;
+  //    un blocage posé ENTRE l'accusé et le POST fait répondre `USER_BLOCKED`.
+  //    Inhérent à deux requêtes, non réparable par un `where`.
+  //
+  // Ni l'un ni l'autre n'est une régression : `mayCarryTheCopy` ne les lit pas
+  // non plus, donc le client commettait déjà la même erreur. Ce qui change est
+  // la PROPRIÉTÉ de la décision, et c'est pour cela qu'on les NOMME ici.
   const base = { id: { in: shared.map((p) => p.conversationId) }, isActive: true, type: { in: PRIVATE_TYPES } };
   const admission = [
     // Le régime se dit en POSITIF (#12966), comme la jumelle `directPair.ts:65`
@@ -88,24 +107,45 @@ export async function mostRecentSharedConversation(
     // `type: 'group'` ne l'exclut pas : `communities/core.ts` rattache une
     // conversation existante à une communauté sans toucher son `type`.
     unsetOrNull('communityId'),
-    // Miroir de `mayCarryTheCopy` : `candidate.isAnnouncementChannel !== true`.
+    // L'ÉTAT TERMINAL, et il ne se lit PAS dans `isActive` seul :
+    // `isConversationClosed` refuse l'écriture sur `isActive === false` **ou**
+    // `closedAt != null`, et la route souveraine
+    // (`admin/conversation-settings-sovereign.ts`) pose `closedAt` quand
+    // `closed: true` arrive SANS `isActive` — le fil reste donc actif et fermé.
+    // Nommer cette conversation ferait répondre `410 conversation-closed` au
+    // POST, et la copie serait perdue sans repli.
+    unsetOrNull('closedAt'),
+    // LA HIÉRARCHIE D'ÉCRITURE NE S'APPLIQUE PAS À UN TÊTE-À-TÊTE, et la
+    // dispense doit être reproduite ici sous peine d'être PIRE que l'absence
+    // de filtre. `WRITE_HIERARCHY_FREE_TYPES` (`conversationWriteAdmission.ts`)
+    // exempte `direct` du rang ET du débit, et son doc-comment dit pourquoi :
+    // l'initiateur d'un tête-à-tête pouvait y poser `isAnnouncementChannel` ou
+    // un plancher `defaultWriteRole`, et la dispense **GUÉRIT** ces conteneurs
+    // empoisonnés. Filtrer sur ces colonnes pour un `direct` écarterait donc
+    // une conversation où l'envoi RÉUSSIT — et quand c'est la seule que la
+    // paire partage, le repli du client ne produit rien non plus
+    // (`createDirectConversation` rend ce même fil, que `mayCarryTheCopy`
+    // rejette) : la copie serait perdue. « L'erreur penche du côté sûr » est
+    // donc FAUX dans ce cas précis, et c'est pour cela que la dispense est ici.
     //
-    // Ces DEUX colonnes-ci se disent sans branche d'absence, et ce n'est pas un
-    // oubli : elles sont REQUISES au schéma (`Boolean @default(false)`,
-    // `String @default("everyone")`), donc Prisma les écrit à chaque création
-    // et son type n'offre même pas `isSet` dessus — le compilateur refuse la
-    // forme permissive. C'est le discriminant à retenir pour toute cette
-    // famille : **la branche d'absence ne vaut que pour une colonne
-    // OPTIONNELLE** (`deletedAt`, `communityId`, `deletedForMe` ci-dessus le
-    // sont ; ces deux-là ne le sont pas).
-    //
-    // Reste le cas d'un document ANTÉRIEUR à l'ajout de la colonne, que ce
-    // conteneur ne peut pas mesurer : il ne serait pas apparié, donc pas
-    // nommé, donc le client choisirait seul — exactement ce qu'il fait
-    // aujourd'hui. L'erreur penche du côté sûr, et c'est pour cela qu'on
-    // l'assume ici plutôt que de l'écrire en permissif.
-    { isAnnouncementChannel: { not: true } },
-    { defaultWriteRole: { in: MEMBER_WRITABLE_ROLES } },
+    // Ces trois colonnes-ci se disent sans branche d'absence, et ce n'est pas
+    // un oubli : elles sont REQUISES au schéma (`Boolean @default(false)`,
+    // `String @default("everyone")`, `Int @default(0)`), donc Prisma les écrit
+    // à chaque création et refuse `isSet` dessus — au compilateur comme au
+    // client. **La branche d'absence ne vaut que pour une colonne OPTIONNELLE**
+    // (`deletedAt`, `closedAt`, `communityId`, `deletedForMe` le sont).
+    {
+      OR: [
+        { type: 'direct' },
+        {
+          AND: [
+            { isAnnouncementChannel: { not: true } },
+            { defaultWriteRole: { in: MEMBER_WRITABLE_ROLES } },
+            { slowModeSeconds: 0 },
+          ],
+        },
+      ],
+    },
   ];
   const latest = await highestRankedConversation((stream) =>
     prisma.conversation.findFirst({

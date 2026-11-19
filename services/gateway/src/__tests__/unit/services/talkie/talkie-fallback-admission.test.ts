@@ -49,6 +49,7 @@ const partagee = (id: string, columns: MongoDocument = {}): DirectDoc => ({
   isActive: true,
   isAnnouncementChannel: false,
   defaultWriteRole: 'everyone',
+  slowModeSeconds: 0,
   lastMessageAt: at('2026-11-10T10:00:00Z'),
   ...columns,
 });
@@ -168,6 +169,50 @@ describe('le repli du talkie n’est plus mort, et il applique sa règle (#19910
     const bavarde = partagee('c-bavarde', { lastMessageAt: at('2026-11-10T10:00:00Z') });
 
     expect(await destination([remontee, bavarde], paireSur(['c-remontee', 'c-bavarde']))).toBe('c-remontee');
+  });
+
+  /**
+   * L'ÉTAT TERMINAL NE SE LIT PAS DANS `isActive` SEUL (constat d'audit).
+   * `admin/conversation-settings-sovereign.ts` pose `closedAt` quand `closed:
+   * true` arrive SANS `isActive` : le fil reste ACTIF et fermé. Nommer cette
+   * conversation ferait répondre `410 conversation-closed` au POST, et la copie
+   * serait perdue sans repli — `isConversationClosed` tranche sur
+   * `isActive === false` **ou** `closedAt != null`.
+   */
+  it('ne nomme pas une conversation FERMÉE qui est restée active', async () => {
+    const fermee = partagee('c-fermee', { closedAt: at('2026-11-12T10:00:00Z'), lastMessageAt: at('2026-11-20T10:00:00Z') });
+    const vivante = partagee('c-vivante');
+
+    expect(await destination([fermee, vivante], paireSur(['c-fermee', 'c-vivante']))).toBe('c-vivante');
+  });
+
+  it('ne nomme pas un GROUPE en mode lent — l’envoi y serait refusé en 429', async () => {
+    const lente = partagee('c-lente', { type: 'group', slowModeSeconds: 300, lastMessageAt: at('2026-11-20T10:00:00Z') });
+    const vivante = partagee('c-vivante');
+
+    expect(await destination([lente, vivante], paireSur(['c-lente', 'c-vivante']))).toBe('c-vivante');
+  });
+
+  /**
+   * ET LA DISPENSE DU TÊTE-À-TÊTE, qui est la moitié la moins intuitive.
+   *
+   * `WRITE_HIERARCHY_FREE_TYPES` exempte `direct` du rang ET du débit, et sa
+   * raison écrite est que la dispense **GUÉRIT** les tête-à-tête qu'un
+   * initiateur a empoisonnés en y posant `isAnnouncementChannel` ou un plancher
+   * `defaultWriteRole`. Filtrer ces colonnes sur un `direct` écarterait donc une
+   * conversation où l'envoi RÉUSSIT — et quand c'est la seule que la paire
+   * partage, le repli du client ne produit rien non plus : la copie serait
+   * perdue. C'est le contre-exemple à « l'erreur penche du côté sûr ».
+   */
+  it('nomme un tête-à-tête EMPOISONNÉ : la hiérarchie d’écriture ne s’y applique pas', async () => {
+    const empoisonne = partagee('c-direct-empoisonne', {
+      type: 'direct',
+      isAnnouncementChannel: true,
+      defaultWriteRole: 'admin',
+      slowModeSeconds: 300,
+    });
+
+    expect(await destination([empoisonne], paireSur(['c-direct-empoisonne']))).toBe('c-direct-empoisonne');
   });
 
   it('rend `null` quand la paire ne partage aucune conversation admissible', async () => {
