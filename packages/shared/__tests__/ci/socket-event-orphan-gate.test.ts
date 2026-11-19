@@ -67,6 +67,8 @@ const SANS_LECTEUR: ReadonlyMap<string, string> = new Map([
   ['affiliate:referral-joined', "ÉMIS — `announceAffiliateReferral` vers la SEULE room du parrain à une relation neuve (#19446). Lecteurs : le billet Parrainage (#18857)."],
   ['community:join-requested', "ÉMIS — `scheduleCommunityJoinRequestedFrom` (`services/community-join-request-broadcast.ts`) vers les administrateurs, modérateurs et créateur d'une communauté qui valide chaque entrée (#19429). Lecteurs : les clients de la fiche d'un lien de communauté (#19290) ; d'ici là chacun relit `GET /communities/:id/join-requests`."],
   ['friend-request:updated', "ÉMIS — `FriendRequestMessageTranslationService` (via `friend-requests-core.ts`) vers la SEULE room du destinataire quand le mot d'une demande vient d'être traduit (#19361), sans contenu. Lecteurs : la liste des demandes reçues (#18857), qui relit la demande ; d'ici là la relecture manuelle suffit."],
+  ['fall:detected', "ÉMIS — `fallRelay.ts` vers la room de chaque Sang autorisé quand une chute est détectée (#18748, SAN-01), hors verrou, avec le push générique. Lecteurs : les lots clients de la chute (iOS, Android, web) de #18748 ; d'ici là `GET /relations/falls` relit."],
+  ['fall:cleared', "ÉMIS — `fallRelay.ts` quand la personne répond, retire son accord ou qu'un lecteur perd l'accès (#18748). Lecteurs : les lots clients de la chute de #18748."],
   ['e2ee:own-device-retired', 'ÉMIS — `own-device-announcements.ts` au retrait d\'une génération (#19156). Lecteurs : lots clients 4, 5 et 6.'],
 ]);
 

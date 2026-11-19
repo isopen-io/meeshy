@@ -42,6 +42,7 @@ export const NOTIFICATION_STRING_KEYS = [
   'battery.levelBody', 'battery.offBody',
   'unreachable.action', 'unreachable.reachableAction', 'unreachable.sinceBody', 'unreachable.batteryBody', 'unreachable.reachableBody',
   'inactivity.wellnessTitle', 'inactivity.wellnessBody', 'inactivity.alertAction', 'inactivity.alertBody', 'inactivity.respondedAction', 'inactivity.respondedBody',
+  'fall.alertTitle', 'fall.alertBody', 'fall.respondedTitle', 'fall.respondedBody',
   'location.startedAction', 'location.startedBody', 'location.startedBodyMinutes', 'location.extendAction', 'location.reaskAction', 'location.requestBody',
   'game.duoInvitedAction', 'game.duoInvitedBody', 'game.duoAcceptedAction', 'game.duoAcceptedBody',
   'game.leaguePromoted', 'game.leagueStayed', 'game.leagueRelegated',

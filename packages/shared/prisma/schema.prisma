@@ -220,6 +220,11 @@ model User {
   /// Non nul = le compte a coupé le partage d'« EN APPEL » pour tous depuis cette date (#18753, ACT-01) :
   /// rien n'est rangé ni servi. Optionnel, sans migration.
   callSharingDisabledAt     DateTime?
+  /// Non nul = l'ACCORD EXPLICITE de prévenir mes Sangs d'une chute détectée, donné à cette date (#18748,
+  /// SAN-01, donnée de santé art. 9 RGPD). Nul = rien n'est collecté ni servi : jamais actif par défaut.
+  fallAlertConsentedAt      DateTime?
+  /// La version du texte d'accord lue (`FALL_CONSENT_VERSION`) ; nulle sans accord. Optionnel, sans migration.
+  fallAlertConsentVersion   String?
   /// Pays appareil (Locale.current.region iOS) propage sur CHAQUE requete via
   /// X-Meeshy-Country, persiste par le middleware gateway deviceCountry.
   /// Signal continu (contrairement a registrationCountry, capture une seule
@@ -2326,6 +2331,11 @@ model RelationFeatureSetting {
   callShared                 Boolean?
   /// Quand ce partage a été RETIRÉ (trace).
   callWithdrawnAt            DateTime?
+  /// Alerte de chute de `ownerId` à `otherId` (#18748), TRI-ÉTAT : nul = le défaut du niveau effectif
+  /// (accordé entre Sangs et dans l'équipe une fois l'accord global donné), `false` = retiré. Optionnel.
+  fallShared                 Boolean?
+  /// Quand ce partage a été RETIRÉ (trace).
+  fallWithdrawnAt            DateTime?
   /// Non nul = `ownerId` est en FANTÔME CIBLÉ pour `otherId` depuis cette date (#13937) : l'autre ne
   /// reçoit ni historique ni alerte de proximité, et rien ne lui dit pourquoi. Ce n'est pas un
   /// consentement : une ligne née d'un fantôme laisse ses quatre partages faux.
