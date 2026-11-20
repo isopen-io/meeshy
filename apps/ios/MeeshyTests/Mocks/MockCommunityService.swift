@@ -9,7 +9,8 @@ enum CommunityStubs {
         members: [APICommunityMember]? = nil,
         currentUserRole: String? = nil,
         requiresJoinApproval: Bool? = nil,
-        currentUserJoinRequest: String? = nil
+        currentUserJoinRequest: String? = nil,
+        currentUserJoinRetryAt: String? = nil
     ) -> APICommunity {
         let membersJSON = members
             .flatMap { try? JSONEncoder().encode($0) }
@@ -17,10 +18,12 @@ enum CommunityStubs {
         let roleJSON = currentUserRole.map { "\"\($0)\"" } ?? "null"
         let approvalJSON = requiresJoinApproval.map { "\($0)" } ?? "null"
         let requestJSON = currentUserJoinRequest.map { "\"\($0)\"" } ?? "null"
+        let retryJSON = currentUserJoinRetryAt.map { "\"\($0)\"" } ?? "null"
         let json = """
         {"id":"\(id)","identifier":"mshy_\(id)","name":"\(name)","isPrivate":false,
          "createdBy":"\(createdBy)","createdAt":"2026-09-01T10:00:00.000Z","members":\(membersJSON),
-         "currentUserRole":\(roleJSON),"requiresJoinApproval":\(approvalJSON),"currentUserJoinRequest":\(requestJSON)}
+         "currentUserRole":\(roleJSON),"requiresJoinApproval":\(approvalJSON),"currentUserJoinRequest":\(requestJSON),
+         "currentUserJoinRetryAt":\(retryJSON)}
         """
         return JSONStub.decode(json)
     }

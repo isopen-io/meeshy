@@ -466,6 +466,21 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
             .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("community.join.requested")
+        } else if declinedUntil != nil {
+            VStack(spacing: MeeshySpacing.xsPlus) {
+                Image(systemName: "xmark.circle")
+                    .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .regular, design: .rounded))
+                    .foregroundStyle(theme.textSecondary)
+                Text(String(localized: "community.join.declined", defaultValue: "Demande refusée", bundle: .module))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium, design: .rounded))
+                    .foregroundStyle(theme.textSecondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, MeeshySpacing.md)
+            .background(theme.backgroundSecondary.opacity(0.5))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("community.join.declined")
         } else {
             actionButton(
                 icon: viewModel.requiresJoinApproval ? "person.crop.circle.badge.questionmark" : "arrow.forward.circle.fill",
@@ -478,7 +493,24 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
         }
     }
 
+    /// Le refus tient jusqu'à la date servie (#19948), relue à chaque rendu :
+    /// la date passée, l'écran offre de nouveau de demander.
+    private var declinedUntil: Date? {
+        guard !viewModel.joinRequestPending, let until = viewModel.joinDeclinedUntil, until > Date() else { return nil }
+        return until
+    }
+
+    /// « Vous pourrez en refaire une à partir du 27 novembre à 10:00. » — la
+    /// date dans la langue et le calendrier du lecteur.
+    static func declinedHint(until: Date, locale: Locale = .current) -> String {
+        let date = until.formatted(.dateTime.day().month(.wide).hour().minute().locale(locale))
+        return String(localized: "community.join.declined.hint", defaultValue: "Vous pourrez en refaire une à partir du \(date).", bundle: .module)
+    }
+
     private var joinNotice: (text: String, isRefusal: Bool)? {
+        if let until = declinedUntil {
+            return (Self.declinedHint(until: until), true)
+        }
         if viewModel.joinRefusal == .cooldown {
             return (String(localized: "community.join.cooldown", defaultValue: "Votre dernière demande a été refusée : réessayez 7 jours après ce refus.", bundle: .module), true)
         }
