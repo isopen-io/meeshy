@@ -6,10 +6,18 @@
  * (#7347), et ne le faisait que pour `read` : `receipts.ts` ne lui passait
  * `messageIds` que dans ce cas, et son repli agrégé
  * (`getLatestMessageSummary`) décrit alors le DERNIER message non supprimé de
- * la conversation. L'écriture, elle, était déjà par message — `markFor` boucle
- * sur le lot vetté et appelle `markMessagesAsReceived` message par message pour
- * `delivered`. Seule la DIFFUSION nommait autre chose que ce qu'on venait
- * d'acquitter.
+ * la conversation. Seule la DIFFUSION nommait alors autre chose que ce qu'on
+ * venait d'acquitter — c'est elle que ce lot a corrigée, et sa correction tient.
+ *
+ * ⚠️ Ce paragraphe affirmait aussi « L'écriture, elle, était déjà par message —
+ * `markFor` boucle sur le lot vetté et appelle `markMessagesAsReceived` message
+ * par message ». La boucle était réelle, la conclusion fausse : aucun de ces
+ * appels ne passait de PÉRIMÈTRE, donc chacun figeait la FENÊTRE depuis le
+ * curseur, messages POSTÉRIEURS compris — et le premier figeait déjà tout, les
+ * suivants étant des no-ops (write-once). Une écriture « par message » dans sa
+ * CADENCE d'appel était une écriture « par fenêtre » dans son EFFET. Corrigé
+ * par #20084 ; l'effet est gardé par
+ * `delivery-receipt-freezes-only-what-it-names.test.ts`.
  *
  * Ce que l'expéditeur perdait : son ✓✓ « remis » sur M1 ne bougeait JAMAIS en
  * direct dès que M1 n'était pas le dernier du fil — c'est-à-dire chaque fois que

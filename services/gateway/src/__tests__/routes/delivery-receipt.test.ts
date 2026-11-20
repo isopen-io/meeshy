@@ -57,8 +57,43 @@ const mockPrisma: any = {
     findUnique: jest.fn(),
     update: jest.fn(),
     findMany: jest.fn()
+  },
+  // #20084 — `messageStatusEntry` manquait, et cette suite était VERTE sans lui
+  // parce que le gel n'y tournait JAMAIS : `delivered` prenait la branche
+  // FENÊTRE, dont le `where` porte `createdAt` et non `id.in`, et le
+  // `message.findMany` de ce double rend `[]` dès qu'`id.in` est absent — donc
+  // `freezeMessageStatus` sortait sur `if (messages.length === 0) return 0`
+  // avant d'atteindre cette table. Ce que la suite assertait (curseur avancé,
+  // `read-status:updated` diffusé) venait de `_advanceCursor`, jamais du gel.
+  //
+  // Depuis que `delivered` passe son périmètre EXACT, le gel résout bel et bien
+  // ses messages et a besoin de cette table. Compléter le double n'affaiblit
+  // donc aucune assertion : cela rend exerçable une écriture que la suite
+  // couvrait de nom. C'est la leçon « un double ment aussi par ce qu'il REND »
+  // — un `[]` rendait tout témoin de gel trivialement vert.
+  // Le double est STATEFUL, et il doit l'être : la branche exacte fige d'abord
+  // (écriture DURABLE) puis RELIT ce qu'elle vient de graver pour calculer le
+  // préfixe contigu prouvé (`_computeExactDeliveredCursorTarget`). Un double
+  // dont `createMany` ne persiste pas ferait rendre `[]` au `findMany` suivant,
+  // donc « aucun préfixe prouvé », donc aucun avancement de curseur — et le
+  // témoin accuserait la production d'un défaut qui n'appartient qu'au double.
+  messageStatusEntry: {
+    findMany: jest.fn(async (args: any) => {
+      const wanted: string[] | undefined = args?.where?.messageId?.in;
+      return frozenEntries
+        .filter((e) => (wanted ? wanted.includes(e.messageId) : true))
+        .map((e) => ({ ...e }));
+    }),
+    createMany: jest.fn(async (args: any) => {
+      for (const row of args?.data ?? []) frozenEntries.push({ ...row });
+      return { count: (args?.data ?? []).length };
+    }),
+    updateMany: jest.fn(async () => ({ count: 0 }))
   }
 };
+
+/** Les entrées que le gel a écrites, relues par le calcul du préfixe contigu. */
+let frozenEntries: any[] = [];
 
 const emitMock = jest.fn();
 const ioChain: any = {};
@@ -95,6 +130,7 @@ describe('POST /conversations/:conversationId/messages/:messageId/delivery-recei
     // Happy-path defaults — individual tests override as needed.
     mockResolveConversationId.mockResolvedValue(CONVERSATION_ID);
     mockShouldShowReadReceipts.mockResolvedValue(true);
+    frozenEntries = [];
     mockPrisma.participant.findFirst.mockResolvedValue({ id: PARTICIPANT_ID });
     mockPrisma.message.findUnique.mockResolvedValue({
       conversationId: CONVERSATION_ID,
@@ -122,11 +158,18 @@ describe('POST /conversations/:conversationId/messages/:messageId/delivery-recei
     // Prisma que la garde pose — chaque cas ci-dessous continue donc de piloter
     // le verdict par `findUnique`, comme avant.
     mockPrisma.message.findMany.mockImplementation(async (args: any) => {
-      const ids: string[] = args?.where?.id?.in ?? [];
-      if (ids.length === 0) return [];
       const row = await mockPrisma.message.findUnique();
       if (!row || row.deletedAt || row.conversationId !== args?.where?.conversationId) return [];
-      return ids.map((id) => ({ id, senderId: row.senderId, createdAt: row.createdAt ?? new Date(0) }));
+      const ids: string[] | undefined = args?.where?.id?.in;
+      if (ids) {
+        return ids.map((id) => ({ id, senderId: row.senderId, createdAt: row.createdAt ?? new Date(0) }));
+      }
+      // Forme FENÊTRE (`createdAt: { gt, lte }`) — celle que la branche exacte
+      // emploie pour relever ses CANDIDATS avant de calculer le préfixe
+      // contigu. Ce double rendait `[]` ici, si bien qu'aucun candidat
+      // n'existait et qu'aucun préfixe ne pouvait être prouvé (#20084). Cette
+      // suite ne porte qu'un message : il EST donc le préfixe.
+      return [{ id: row.id ?? MESSAGE_ID, senderId: row.senderId, createdAt: row.createdAt ?? new Date(0) }];
     });
   });
 

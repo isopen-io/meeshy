@@ -10,15 +10,21 @@
  *
  * ## Pourquoi le paramètre est OPTIONNEL, et doit le rester
  *
- * Quatre autres sites de production appellent cette méthode, et pour eux la
- * FENÊTRE est la sémantique juste — ils disent « tout ce qui précède est
- * arrivé », parce que le lecteur est en ligne et dans le fil :
- * `receipts.ts` (deux portes REST), `messages-list.ts` (remise automatique à
- * la lecture) et `MessageHandler.autoDeliverToOnlineRecipients`.
+ * D'autres sites de production appellent cette méthode, et pour eux la FENÊTRE
+ * est la sémantique juste — ils disent « tout ce qui précède est arrivé »,
+ * parce que le lecteur est EN LIGNE et dans le fil : la porte `received` de
+ * `receipts.ts`, `messages-list.ts` (remise automatique à la lecture) et
+ * `MessageHandler.autoDeliverToOnlineRecipients`.
  *
- * Seul le REJEU sait qu'il a livré un sous-ensemble STRICT de la fenêtre. Le
- * paramètre nomme donc ce savoir-là, et son absence garde le comportement
- * d'origine à l'octet près.
+ * ⚠️ Ce doc-comment disait « `receipts.ts` (deux portes REST) », et c'est l'une
+ * des affirmations qui ont tenu le défaut de #20084 en vie. Le fichier a bien
+ * deux portes, mais sa porte `delivered` sert un destinataire **HORS LIGNE**
+ * qu'un push vient de réveiller (NSE iOS, service worker web) : « tout ce qui
+ * précède est arrivé » y est précisément FAUX. Un appelant ne se classe pas par
+ * son fichier mais par ce que sa porte sait du réseau de son lecteur.
+ *
+ * Deux appelants savent donc qu'ils ont livré un sous-ensemble STRICT de la
+ * fenêtre : le REJEU et la porte `delivered`. Le paramètre nomme ce savoir-là.
  *
  * @jest-environment node
  */
