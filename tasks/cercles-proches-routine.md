@@ -1622,3 +1622,15 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   couleurs d'accent (408) rc=0. Swift reste à prouver par `ios.yml`.
 - Prochain lot recommandé : fusion de #19864, puis #19928 (relecture en échec gardée muette), #19929, plafond
   `untilStopped`, #19682 une fois décidée.
+
+## 2026-11-20 — réveil de 5 h : la suite iOS de #19864 est verte
+
+- Reprise : #19864 ouverte, tête 72c172d19 (témoin `test_aListFromBeforeTheMark_isAdoptedAsIs_andStampedForNextTime`
+  corrigé au réveil de 3 h, après le rouge de la tranche 3 du run 44652457362). Aucun nouveau lot ouvert.
+  #19682 attend toujours la décision du porteur.
+- Preuve iOS : `ios.yml` run 44677003851 (`workflow_dispatch` sur 72c172d19) VERT — build, quatre tranches de tests,
+  verdict. Preuve Android : run 44628440305 vert (code du lot inchangé depuis).
+- `origin/dev` (2ac2ba716) fusionnée à la main, sans conflit et sans fichier commun avec le lot. Gardes iOS sur
+  l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests (2 056) rc=0, accent (408) rc=0.
+- Prochain lot recommandé : fusion de #19864 par le porteur (CI des PR gelée), puis #19928, #19929, plafond
+  `untilStopped`, #19682 une fois décidée.
