@@ -68,36 +68,35 @@ export function servedDescription(row: Protection & {
 }
 
 /**
- * **LES MOTS d'une piste traduite, et eux seuls** (#19978).
+ * **CE QUE CETTE LOI NE TOUCHE PAS : la carte des pistes traduites** — et la
+ * raison est mesurée, pas prudentielle (#19978, audit adversarial).
  *
- * Une piste traduite porte deux choses de nature différente : le MÉDIUM
- * (`url`, `durationMs`, `format`, `voiceModelId`…) et les MOTS
- * (`transcription`, `segments`). La loi de contenu latéral retient les
- * seconds ; le premier a déjà sa propre loi, et elle est plus forte —
- * `signReaderAttachmentUrls` signe `translations[].url` pour le lecteur
- * nommé, donc l'adresse d'une piste protégée est une CAPACITÉ, pas une fuite.
+ * La première rédaction de ce lot en retirait les MOTS (`transcription`,
+ * `segments`) en gardant le MÉDIUM (`url`, `durationMs`). Deux mesures l'ont
+ * interdit :
  *
- * Les retirer tous les deux serait plus simple et plus faux : on perdrait la
- * durée qu'une bulle affiche et l'adresse que la route sert légitimement.
+ * 1. **Le contrat partagé déclare `transcription` REQUISE** sur chaque entrée
+ *    (`messageAttachmentSchema.translations.additionalProperties.required`,
+ *    `packages/shared/types/api-schemas/message-attachment.ts`), et
+ *    `fast-json-stringify` LÈVE sur une clé requise absente — mesuré à nu en
+ *    7.2.1 : `Error: "transcription" is required!`. Retirer la clé rendait donc
+ *    `GET /conversations/:id/messages` et `GET /sync` en **500**, la PAGE
+ *    ENTIÈRE et non la pièce. Sur `/sync`, la pagination par curseur ramenant
+ *    la même ligne à chaque tentative, le rattrapage delta était bloqué
+ *    DÉFINITIVEMENT pour ce lecteur. Un correctif de confidentialité qui casse
+ *    la lecture de toute une page est pire que la fuite qu'il ferme.
+ * 2. **La piste est élue par la langue du TEXTE SERVI** (loi du cycle 128,
+ *    `CLAUDE.md` § Prisme). Vider les mots sans vider la carte fait retomber le
+ *    web sur la piste ORIGINALE — donc les `url` qu'on croyait « garder »
+ *    deviennent inatteignables — pendant qu'iOS, qui élit sur les langues
+ *    DISPONIBLES, joue la piste traduite sans aucun texte. Deux clients
+ *    divergents sur la même charge.
+ *
+ * Le texte traduit d'une pièce protégée reste donc servi aujourd'hui, et c'est
+ * une DETTE ÉCRITE, pas un oubli : la fermer demande de trancher le contrat
+ * partagé (retirer `transcription` de `required`, ce qui touche les trois
+ * clients) et le comportement produit du Prisme audio. Suivi : #20015.
  */
-const WORDS_OF_A_TRACK = ['transcription', 'segments'] as const;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const withoutWords = (map: unknown): unknown => {
-  if (!isRecord(map)) return map;
-  return Object.fromEntries(
-    Object.entries(map).map(([language, entry]) => {
-      if (!isRecord(entry)) return [language, entry];
-      const kept = Object.fromEntries(
-        Object.entries(entry).filter(([key]) => !(WORDS_OF_A_TRACK as readonly string[]).includes(key)),
-      );
-      return [language, kept];
-    }),
-  );
-};
-
 export type SideContentRow = Protection & {
   readonly alt?: string | null;
   readonly altLanguage?: string | null;
@@ -136,20 +135,30 @@ export type ServedSideContent<R extends SideContentRow = SideContentRow> = Serve
  * > qui la cite. La garde existait, bien écrite, et elle gardait UN champ sur
  * > trois parce que c'est celui pour lequel elle avait été ajoutée.
  *
- * `servedDescription` reste exporté : il a des appelants qui ne servent QUE la
- * description, et leur faire rendre `transcription: null` leur ajouterait une
- * clé qu'ils ne portent pas.
+ * **`servedDescription` n'a plus AUCUN appelant de production** — mesuré, et
+ * c'est une correction : la première rédaction de ce lot affirmait le contraire
+ * (« il a des appelants qui ne servent QUE la description »), et ses seules
+ * occurrences restantes hors tests étaient des COMMENTAIRES. C'est la règle du
+ * dépôt « compter les appelants du helper » appliquée à l'envers : un helper à
+ * zéro appelant ne documente rien, il ATTEND qu'on l'utilise.
+ *
+ * Il reste exporté pour sa propre suite (`media-description-served.test.ts`),
+ * qui garde la moitié description de la loi — et un cliquet interdit qu'un
+ * fichier de PRODUCTION l'importe à nouveau
+ * (`__tests__/side-content-single-door.test.ts`) : toute nouvelle surface
+ * appelle `servedSideContent`, sans quoi elle gagne la moitié de la loi en
+ * croyant l'appliquer.
  */
 export function servedSideContent<R extends SideContentRow>(row: R): ServedSideContent<R> {
   const mayTravel = mediaSideContentMayTravel(row, row.message ?? null);
-  const translations = servedAttachmentTranslations(row.translations ?? null);
   return {
     ...servedDescription(row),
-    // Le seul effacement de ce module, et il est inévitable : TypeScript ne
-    // sait pas exprimer « la même carte, chaque entrée privée de deux clés
-    // OPTIONNELLES » sur un générique. Il est borné à ces deux lignes, et la
-    // forme qu'il affirme est celle que les témoins mesurent.
+    // Le seul effacement de ce module : `?? null` élargit le type déclaré par
+    // l'appelant, et TypeScript ne sait pas en déduire que la valeur est soit
+    // la sienne soit `null`. Borné à cette ligne.
     transcription: (mayTravel ? (row.transcription ?? null) : null) as R['transcription'] | null,
-    translations: (mayTravel ? translations : withoutWords(translations)) as R['translations'] | null,
+    // INCHANGÉE — voir le bloc ci-dessus. `servedAttachmentTranslations` retire
+    // la clé disque, comme avant ce lot, et rien d'autre.
+    translations: servedAttachmentTranslations(row.translations ?? null) as R['translations'] | null,
   };
 }

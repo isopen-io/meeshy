@@ -425,9 +425,9 @@ describe('aggregateAttachmentReactions', () => {
  *
  * Ce sérialiseur alimente les TROIS familles socket : `message:new`,
  * `message:edited` et `message:attachment-updated`. Il répandait
- * `transcription` et les mots des pistes traduites sans aucune garde, juste à
- * côté d'`alt`, qui en avait une — si bien qu'un VOCAL à vue unique mettait
- * tout le texte prononcé sur le fil, et dans la file de rejeu pour 48 h.
+ * `transcription` sans aucune garde, juste à côté d'`alt`, qui en avait une —
+ * si bien qu'un VOCAL à vue unique mettait le texte prononcé sur le fil, et
+ * dans la file de rejeu pour 48 h. Le texte TRADUIT reste une dette (#20015).
  */
 describe('serializeAttachmentForSocket — le TEXTE latéral sous la loi (#19978)', () => {
   const vocal = {
@@ -451,14 +451,15 @@ describe('serializeAttachmentForSocket — le TEXTE latéral sous la loi (#19978
     expect(motsDe(charge)).not.toContain('/disk/en.mp3');
   });
 
-  it("ne met AUCUN mot sur le fil pour un vocal à VUE UNIQUE — et garde l'adresse de la piste", () => {
+  it("ne met pas la transcription ORIGINALE sur le fil pour un vocal à VUE UNIQUE", () => {
     const charge = serializeAttachmentForSocket({ ...vocal, isViewOnce: true, isBlurred: false, effectFlags: 0 }) as unknown as Record<string, unknown>;
 
     expect(charge.transcription).toBeNull();
     expect(motsDe(charge)).not.toContain('le secret dit à voix haute');
-    expect(motsDe(charge)).not.toContain('the secret, spoken');
-    // Le MÉDIUM reste : il a sa propre loi (signature par lecteur), plus forte.
-    expect(motsDe(charge)).toContain('/f/en.mp3');
+    // Le texte TRADUIT reste servi : dette écrite #20015 — le contrat partagé
+    // déclare `transcription` REQUISE sur chaque piste, et le sérialiseur LÈVE
+    // sur une requise absente (500 sur la liste et sur `/sync`).
+    expect(motsDe(charge)).toContain('the secret, spoken');
     expect((charge.translations as Record<string, Record<string, unknown>>).en?.durationMs).toBe(12_000);
   });
 

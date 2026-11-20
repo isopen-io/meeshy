@@ -13,9 +13,10 @@
  * Pour un VOCAL à vue unique, #19939 signe désormais l'adresse du fichier — et
  * la même entrée Redis gardait 48 h, EN CLAIR, tout le texte prononcé.
  *
- * Ce que la loi retient est le TEXTE, jamais le MÉDIUM : `url`, `durationMs` et
- * `format` d'une piste traduite restent (ils sont gardés par leur propre loi,
- * la signature par lecteur), `transcription` et `segments` partent.
+ * Ce lot ferme la transcription ORIGINALE. Le texte TRADUIT reste servi, et
+ * c'est une dette écrite (#20015) : le contrat partagé déclare `transcription`
+ * REQUISE sur chaque piste, et `fast-json-stringify` lève sur une requise
+ * absente — retirer la clé rendait la liste et `/sync` en 500.
  *
  * @jest-environment node
  */
@@ -58,14 +59,27 @@ describe('servedSideContent — le texte qui accompagne un média protégé ne v
     expect(servi.alt).toBeNull();
   });
 
-  it('retire les MOTS des pistes traduites, et garde leur MÉDIUM', () => {
+  /**
+   * **La carte des pistes est INCHANGÉE, et c'est un témoin de NON-action.**
+   *
+   * La première rédaction en retirait les mots. Deux mesures l'ont interdit :
+   * le contrat partagé déclare `transcription` REQUISE sur chaque entrée et
+   * `fast-json-stringify` LÈVE sur une requise absente (500 sur la liste et sur
+   * `/sync`, page entière) ; et la piste est élue par la langue du TEXTE servi,
+   * donc vider les mots rend les `url` qu'on croyait garder inatteignables.
+   *
+   * Ce témoin garde la dette À L'ENDROIT où quelqu'un voudra la solder : s'il
+   * retire les mots sans toucher au schéma partagé, il tombe.
+   */
+  it('laisse la carte des pistes traduites INTACTE, clé disque exceptée (dette #20015)', () => {
     const servi = servedSideContent({ ...ordinaire, isViewOnce: true });
     const pistes = servi.translations as Record<string, Record<string, unknown>>;
 
-    expect(pistes.fr).not.toHaveProperty('transcription');
-    expect(pistes.fr).not.toHaveProperty('segments');
+    // Le contrat partagé exige cette clé — la retirer fait LEVER le sérialiseur.
+    expect(pistes.fr).toHaveProperty('transcription');
     expect(pistes.fr?.url).toBe('/f/fr.mp3');
     expect(pistes.fr?.durationMs).toBe(12_000);
+    // La seule chose que ce chemin retirait déjà avant le lot.
     expect(pistes.en).not.toHaveProperty('path');
   });
 
@@ -73,7 +87,6 @@ describe('servedSideContent — le texte qui accompagne un média protégé ne v
     const servi = servedSideContent({ ...ordinaire, message: { isViewOnce: false, isBlurred: false, effectFlags: 0, expiresAt: new Date(), deletedAt: null } });
 
     expect(servi.transcription).toBeNull();
-    expect((servi.translations as Record<string, Record<string, unknown>>).fr).not.toHaveProperty('transcription');
   });
 
   it("ferme sur un message SUPPRIMÉ, et sur une pièce CHIFFRÉE", () => {
