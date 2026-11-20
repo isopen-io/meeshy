@@ -8,10 +8,16 @@ class CallLiveStatsLawsTest {
     private fun candidate(id: String, type: String) =
         CallStats.RawEntry(id, "local-candidate", strings = mapOf("candidateType" to type))
 
-    private fun pair(id: String, local: String, remote: String, nominated: Boolean = true) = CallStats.RawEntry(
+    private fun pair(
+        id: String,
+        local: String,
+        remote: String,
+        nominated: Boolean = true,
+        rttSeconds: Double = 0.04,
+    ) = CallStats.RawEntry(
         id,
         "candidate-pair",
-        values = mapOf("nominated" to if (nominated) 1.0 else 0.0, "currentRoundTripTime" to 0.04),
+        values = mapOf("nominated" to if (nominated) 1.0 else 0.0, "currentRoundTripTime" to rttSeconds),
         strings = mapOf("state" to "succeeded", "localCandidateId" to local, "remoteCandidateId" to remote),
     )
 
@@ -31,6 +37,46 @@ class CallLiveStatsLawsTest {
     fun `sans transport la paire nommée réussie fait foi, et direct si aucun relais`() {
         val entries = listOf(pair("P1", "L1", "R1"), candidate("L1", "host"), candidate("R1", "srflx"))
         assertThat(CallStats.reduce(entries).relayed).isFalse()
+    }
+
+    private fun relayNominatedThenHostProbe(selectedId: String) = listOf(
+        CallStats.RawEntry("T", "transport", strings = mapOf("selectedCandidatePairId" to selectedId)),
+        candidate("L9", "host"),
+        pair("P1", "L1", "R1", nominated = true, rttSeconds = 0.30),
+        pair("P2", "L2", "R2", nominated = false, rttSeconds = 0.02),
+        candidate("L1", "relay"), candidate("R1", "srflx"),
+        candidate("L2", "host"), candidate("R2", "host"),
+    )
+
+    @Test
+    fun `un transport qui désigne autre chose qu'une paire retombe sur la paire nominée`() {
+        val entries = relayNominatedThenHostProbe(selectedId = "L9")
+        assertThat(CallStats.selectedCandidatePair(entries)?.id).isEqualTo("P1")
+    }
+
+    @Test
+    fun `un transport qui désigne autre chose qu'une paire fait élire la même paire au débit et à la route`() {
+        val entries = relayNominatedThenHostProbe(selectedId = "L9")
+        val stats = CallStats.reduce(entries)
+        assertThat(stats.roundTripTimeMs).isWithin(1e-9).of(300.0)
+        assertThat(CallStats.relayedRoute(entries)).isTrue()
+        assertThat(stats.relayed).isTrue()
+        assertThat(stats.media.candidateType).isEqualTo("relay")
+    }
+
+    @Test
+    fun `un transport qui désigne une paire absente retombe sur la paire nominée`() {
+        val entries = relayNominatedThenHostProbe(selectedId = "ghost")
+        assertThat(CallStats.selectedCandidatePair(entries)?.id).isEqualTo("P1")
+        assertThat(CallStats.reduce(entries).roundTripTimeMs).isWithin(1e-9).of(300.0)
+    }
+
+    @Test
+    fun `un transport qui désigne une vraie paire la garde, même non nominée`() {
+        val entries = relayNominatedThenHostProbe(selectedId = "P2")
+        assertThat(CallStats.selectedCandidatePair(entries)?.id).isEqualTo("P2")
+        assertThat(CallStats.reduce(entries).roundTripTimeMs).isWithin(1e-9).of(20.0)
+        assertThat(CallStats.relayedRoute(entries)).isFalse()
     }
 
     @Test
