@@ -217,12 +217,18 @@ export interface PreviewUpdateScope {
  * Fan a `conversation:updated` preview refresh to every active
  * participant's personal user room after a message edit or delete.
  *
- * `MESSAGE_EDITED` / `MESSAGE_DELETED` are emitted only to the
- * conversation room. A participant sitting on the conversation-list
- * screen has joined `user:<id>` but has left `conversation:<id>`, so it
- * never learns that the last-message preview changed — its list row keeps
- * rendering the pre-edit text or the deleted message indefinitely (until a
- * manual reopen triggers a stale-while-revalidate refetch).
+ * `MESSAGE_EDITED` / `MESSAGE_DELETED` say that a BUBBLE changed; they never
+ * say what the list ROW becomes. Since #19943 a deletion does reach the
+ * personal rooms as well — so the participant sitting on the conversation-list
+ * screen now learns that the message is gone, and still not that its row's
+ * last-message preview changed: the preview is recomputed here and nowhere
+ * else. Without this fan-out its row keeps rendering the pre-edit text or the
+ * deleted message indefinitely (until a manual reopen triggers a
+ * stale-while-revalidate refetch).
+ *
+ * Les deux canaux ne se remplacent donc pas : l'un porte un FAIT sur un
+ * message, l'autre l'état RECALCULÉ de la ligne. Élargir l'audience du premier
+ * ne rend pas le second superflu.
  *
  * `broadcastNewMessage` already fans `CONVERSATION_UPDATED` to user rooms
  * on send for exactly this reason; this mirrors it for edit/delete so the

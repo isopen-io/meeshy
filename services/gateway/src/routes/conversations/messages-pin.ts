@@ -291,6 +291,9 @@ export function registerMessagePinRoutes(
         // commise, et sautait la mise en file au passage), et le `.catch` sur la
         // promesse détachée qu'exige la leçon 230.
         await broadcastMessageMutation({
+          // #19943 — nommer l'audience, pas relire l'aperçu : une épingle ne
+          // déplace pas la ligne de liste, et `AudiencePrisma` le dit.
+          prisma,
           manager: fastify.socketIOHandler.getManager(),
           conversationId,
           actorUserId: userId,
@@ -421,6 +424,7 @@ export function registerMessagePinRoutes(
         // Même site unique que le jumeau qui épingle, pour les mêmes deux
         // gardes — les deux sens du même geste ne se diffusent pas autrement.
         await broadcastMessageMutation({
+          prisma,
           manager: fastify.socketIOHandler.getManager(),
           conversationId,
           actorUserId: userId,
