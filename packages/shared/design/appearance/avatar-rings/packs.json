@@ -907,9 +907,9 @@
     },
     "preview": null,
     "contract": {
-      "src": "60b29251a719fca5.json",
+      "src": "a2535873f1126138.json",
       "bytes": 10999,
-      "sha256": "60b29251a719fca53b17bb6932e83e22ce22065ed0fe5fde533bbd9a33c14e37"
+      "sha256": "a2535873f11261384274dc6faa423c94dfbc025af6276b456a44a5e6f9c90fad"
     },
     "strings": {
       "fr": {
@@ -1105,9 +1105,9 @@
     },
     "preview": null,
     "contract": {
-      "src": "9024d271ef9ca281.json",
+      "src": "d2f707c571b016cf.json",
       "bytes": 7381,
-      "sha256": "9024d271ef9ca2815df3603a258016060169a4807a31c1b6dcda6dc97bf42a07"
+      "sha256": "d2f707c571b016cf384f508fbe55a52a93a821698cc43657ace329f2ceebacaa"
     },
     "strings": {
       "fr": {
@@ -1204,9 +1204,9 @@
     },
     "preview": null,
     "contract": {
-      "src": "e9e2fb6f9eebe5d5.json",
+      "src": "6f28edf69de2da63.json",
       "bytes": 6387,
-      "sha256": "e9e2fb6f9eebe5d5820776de71d81db665ac9c57a487d2daa6a9f80e4dd0de80"
+      "sha256": "6f28edf69de2da63a4f0dd5879b2147d70144e41fa20de2a05850f8e7a66261c"
     },
     "strings": {
       "fr": {
@@ -1303,9 +1303,9 @@
     },
     "preview": null,
     "contract": {
-      "src": "049ef6b0219b21bb.json",
+      "src": "608b45036c1323f2.json",
       "bytes": 7042,
-      "sha256": "049ef6b0219b21bbe9f96ae49541f3c5539c91d9dd3d0b9e462e282cf9232ff0"
+      "sha256": "608b45036c1323f2277b342b473da43149dc094a9c7eb799838dae18d9ffa7e6"
     },
     "strings": {
       "fr": {
@@ -1501,9 +1501,9 @@
     },
     "preview": null,
     "contract": {
-      "src": "735dd636c1e58c4b.json",
+      "src": "b21057550334c027.json",
       "bytes": 8030,
-      "sha256": "735dd636c1e58c4b67b3e3ead906fa130e9d029b83d4db745c5bf0d933698aab"
+      "sha256": "b21057550334c0275216f74404180c16a93fc604cb182c5fcaa23b4c5a25af2a"
     },
     "strings": {
       "fr": {
@@ -1699,9 +1699,9 @@
     },
     "preview": null,
     "contract": {
-      "src": "0820f35980422f70.json",
+      "src": "ec1e981461e10950.json",
       "bytes": 5747,
-      "sha256": "0820f35980422f70b983f5f47f34f9a786b76cbccd61a07eb11168e5ff188118"
+      "sha256": "ec1e981461e10950931357391872a39057f83c8ad13a4f0d0bae66356f33c4a2"
     },
     "strings": {
       "fr": {
@@ -1798,9 +1798,9 @@
     },
     "preview": null,
     "contract": {
-      "src": "a51c4c30b924282f.json",
+      "src": "c141f11afc1cb6f7.json",
       "bytes": 7003,
-      "sha256": "a51c4c30b924282f79127162390e1cc2adaeda2f0135d4c1504c7b582a8c1f98"
+      "sha256": "c141f11afc1cb6f7a91321cc5632b0eb7a8ea74be9de5599432f537f9aaff125"
     },
     "strings": {
       "fr": {
