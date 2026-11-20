@@ -1610,3 +1610,15 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   reste gelée.
 - Prochain lot recommandé : fusion de #19864, puis #19928 (relecture en échec gardée muette), #19929, plafond
   `untilStopped`, #19682 une fois décidée.
+
+## 2026-11-20 — réveil de 1 h : #19864 (relevé avant relecture) recalée sur dev (b66be57f7)
+
+- Reprise : #19864 toujours ouverte, tête cd9041f9b intacte ; la CI des PR reste gelée (vérifications « skipped »),
+  le porteur fusionne par vagues. Preuve Android déjà acquise (run `android.yml` 44628440305 vert sur 8d9b953d4).
+  Aucun nouveau lot ouvert : #19928 et #19929 touchent les mêmes centres et attendent la fusion de #19864.
+- `origin/dev` (b66be57f7 : appels Android, pièces jointes, pagination des conversations) fusionnée à la main, sans
+  conflit ; `dev` n'a touché aucun fichier de relation, de position ni `PushDeviceIdentity` depuis c0784d9c3.
+- Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests (2 056) rc=0,
+  couleurs d'accent (408) rc=0. Swift reste à prouver par `ios.yml`.
+- Prochain lot recommandé : fusion de #19864, puis #19928 (relecture en échec gardée muette), #19929, plafond
+  `untilStopped`, #19682 une fois décidée.
