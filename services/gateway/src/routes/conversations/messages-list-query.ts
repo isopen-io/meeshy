@@ -50,6 +50,7 @@ import { logger } from './messages-shared';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 import { servedLinkMetadata } from '../../services/messaging/linkTrackingAuthor';
 import { servedEditAttribution, type EditAttributionReader } from '@meeshy/shared/utils/message-edit-attribution';
+import { servedClientMessageId } from '../../services/messaging/clientMessageIdOwnership';
 import { authorProfileDecor } from '../../services/appearance/authorProfileDecor';
 import { quotedRowOf, signedQuotedReply } from '../../socketio/readerSignedDelivery';
 import type {
@@ -508,7 +509,20 @@ export function mapMessageRowForList(message: RawMessageRow, ctx: MessageRowMapp
           id: message.id,
           // Idempotency key — lets clients reconcile an optimistic send with
           // its server record by `clientMessageId` on a cold list load.
-          clientMessageId: message.clientMessageId ?? null,
+          //
+          // #19960 — SERVIE À SON AUTEUR SEULEMENT, comme le chemin socket la
+          // retire des pairs (`stripClientMessageId`, #16689 : « a non-sender
+          // participant never learns the sender's optimistic-id space »). La
+          // réconciliation dont parle la phrase ci-dessus ne vaut QUE pour ses
+          // propres bulles ; un pair n'a rien à en faire, et la clé est celle
+          // que les trois dédoublonnages apparient. Comparaison sur le
+          // `Participant.id` BRUT, la seule identité que les deux côtés
+          // portent — un invité de lien n'a pas de `User.id`.
+          clientMessageId: servedClientMessageId({
+            clientMessageId: message.clientMessageId,
+            senderParticipantId: message.senderId,
+            readerParticipantId: currentParticipantId,
+          }),
           conversationId: message.conversationId,
           // CORRECTION senderId: en DB, senderId = Participant.id (FK).
           // Les clients (iOS/Web) comparent senderId avec leur userId (User.id).
