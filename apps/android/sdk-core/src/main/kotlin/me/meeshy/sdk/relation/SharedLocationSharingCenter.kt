@@ -42,6 +42,7 @@ import me.meeshy.sdk.model.relation.SharedLocationShareDuration
 import me.meeshy.sdk.model.relation.SharedLocationStartRequest
 import me.meeshy.sdk.model.relation.SharedLocationStartVerdict
 import me.meeshy.sdk.model.relation.SharedLocationUpdateGate
+import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.RelationsApi
 import me.meeshy.sdk.net.apiCall
@@ -716,8 +717,10 @@ internal interface SharedLocationSharingModule {
 
 /**
  * La relecture du partage servi a TROIS issues (#19928, iso `SharedLocationServedRead.answer` iOS) : une réponse, une
- * passerelle d'avant `GET /relations/locations/mine` (404, `null`), ou une panne (toute autre issue, levée). Seules les
+ * passerelle d'avant `GET /relations/locations/mine` (`null`), ou une panne (toute autre issue, levée). Seules les
  * deux premières lèvent l'attente d'un appareil relancé : réduire la panne à « rien » le laissait publier toute la session.
+ * Une passerelle d'avant se reconnaît au « route inconnue » de Fastify (`Route GET:… not found`) : un 404 d'un
+ * intermédiaire (Traefik pendant un redéploiement, portail captif, proxy) est une panne (#20029).
  */
 internal fun ownSharedLocationAnswer(
     result: NetworkResult<SharedLocationOwnSnapshotWire>,
@@ -725,10 +728,15 @@ internal fun ownSharedLocationAnswer(
 ): SharedLocationOwnSnapshot? = when (result) {
     is NetworkResult.Success -> result.data.served(json) ?: throw SharedLocationReadFailed("liste illisible")
     is NetworkResult.Failure ->
-        if (result.error.httpStatus == HTTP_NOT_FOUND) null else throw SharedLocationReadFailed(result.error.message)
+        if (result.error.isUnknownRoute()) null else throw SharedLocationReadFailed(result.error.message)
 }
 
 /** Une relecture du partage servi qui n'a rien tranché : panne réseau, 401, 5xx, réponse illisible. */
 class SharedLocationReadFailed(reason: String) : Exception(reason)
 
 private const val HTTP_NOT_FOUND = 404
+
+private fun ApiError.isUnknownRoute(): Boolean {
+    val served = servedMessage ?: return false
+    return httpStatus == HTTP_NOT_FOUND && served.startsWith("Route GET:") && served.endsWith("not found")
+}
