@@ -5,6 +5,7 @@ import MeeshyUI
 /// #19987 — sous mon nom, UNE ligne : « @pseudo · depuis novembre 2026 », la loi de toutes les fiches
 /// (`ProfileHandleLine`) ; dans la barre repliée, le seul @pseudo. La ligne « Sur Meeshy depuis… » plus bas n'existe
 /// plus : il ne reste, sous l'en-tête, que ma ville déclarée.
+@MainActor
 final class ProfileMembershipLineTests: XCTestCase {
 
     private let french = Locale(identifier: "fr_FR")
