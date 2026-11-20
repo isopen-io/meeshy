@@ -409,6 +409,13 @@ export async function enqueueForOfflineParticipants(
     // plafond mais de paginer cette lecture sous un index qui serve son tri
     // (ce qu'aucun index de `Participant` ne fait aujourd'hui : l'audit de
     // #20007 l'a mesuré).
+    // `restrictToLanguage !== null`, et plus la véracité : la boucle d'enfilage
+    // emploie déjà ce prédicat-là pour la MÊME question, et deux prédicats pour
+    // une question sont une divergence qui attend son cas. Ils coïncident
+    // aujourd'hui — `normalizeLanguageForDedup` ne rend jamais la chaîne vide,
+    // et une entrée vide est écartée en amont par le ternaire qui pose `null` —
+    // donc l'alignement ne change aucun comportement ; il retire la possibilité
+    // qu'un jour il en change un.
     const scan: LiveParticipantScan<OfflineQueueParticipant> | null =
       restrictToLanguage !== null
         ? await scanLiveParticipants<OfflineQueueParticipant>(
