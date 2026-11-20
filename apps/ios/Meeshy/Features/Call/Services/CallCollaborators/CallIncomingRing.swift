@@ -425,7 +425,7 @@ final class CallIncomingRing: CallIncomingRingProviding {
             return
         }
 
-        call.analytics.callInitiatedDate = Date()
+        call.analytics.stampInitiated(wall: Date(), monotonic: call.liveClock.monotonicNow)
         enterIncomingRinging(callId: callId, callerUserId: fromUserId, callerName: fromUsername, conversationId: conversationId, isVideo: isVideo)
 
         let uuid = UUID()

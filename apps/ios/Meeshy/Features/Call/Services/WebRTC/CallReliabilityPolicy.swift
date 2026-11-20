@@ -223,26 +223,33 @@ nonisolated enum CallReliabilityPolicy {
     /// in prod, useless for spotting a WebRTC setup regression.
     /// `negotiationTimeMs` (answer/join → connected) isolates the technical
     /// part. Pure: -1 whenever an anchor is missing — never a lying 0.
-    /// A wall clock moved backwards between two anchors floors at 0 (#19984):
-    /// -1 means « never measured », never « clock went back », and the gateway
+    /// The anchors are MONOTONIC (#20010): a wall clock moved backwards or
+    /// forwards between two anchors changes nothing. Misordered anchors still
+    /// floor at 0 (#19984): -1 means « never measured », and the gateway
     /// accepts no other negative.
     static func callSetupMetrics(
-        initiatedAt: Date?,
-        negotiationStartAt: Date?,
-        connectedAt: Date?
+        initiatedAt: ContinuousClock.Instant?,
+        negotiationStartAt: ContinuousClock.Instant?,
+        connectedAt: ContinuousClock.Instant?
     ) -> (setupTimeMs: Int, negotiationTimeMs: Int) {
         guard let connectedAt else { return (-1, -1) }
-        let setup = initiatedAt.map { CallStatValue.count(connectedAt.timeIntervalSince($0) * 1000) } ?? -1
-        let negotiation = negotiationStartAt.map { CallStatValue.count(connectedAt.timeIntervalSince($0) * 1000) } ?? -1
+        let setup = initiatedAt.map { CallStatValue.count(seconds(connectedAt - $0) * 1000) } ?? -1
+        let negotiation = negotiationStartAt.map { CallStatValue.count(seconds(connectedAt - $0) * 1000) } ?? -1
         return (setup, negotiation)
     }
 
-    /// Elapsed call time for the live chrono and `durationSeconds` (#19984).
-    /// The anchor is a wall-clock `Date`: a clock moved backwards (manual
-    /// change, NTP) would read negative, and the gateway refuses the WHOLE
-    /// `call:analytics` for a negative duration — it floors at 0.
-    static func elapsedSeconds(since start: Date, now: Date) -> TimeInterval {
-        CallStatValue.measured(now.timeIntervalSince(start))
+    /// Elapsed call time for the live chrono and `durationSeconds`. Measured
+    /// on monotonic anchors (#20010): a wall clock moved backwards or forwards
+    /// (manual change, NTP) no longer freezes nor inflates it. The floor at 0
+    /// (#19984) stays — the gateway refuses the WHOLE `call:analytics` for a
+    /// negative duration.
+    static func elapsedSeconds(since start: ContinuousClock.Instant, now: ContinuousClock.Instant) -> TimeInterval {
+        CallStatValue.measured(seconds(now - start))
+    }
+
+    private static func seconds(_ duration: Duration) -> TimeInterval {
+        let components = duration.components
+        return Double(components.seconds) + Double(components.attoseconds) / 1e18
     }
 
     /// Gate for the `call_cancel` silent push (phantom-ring hardening): the

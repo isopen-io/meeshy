@@ -111,7 +111,7 @@ extension CallManager {
             hasExistingStartDate: callStartDate != nil
         ) {
             callStartDate = Date()
-            analytics.connectedDate = callStartDate
+            analytics.stampConnected(wall: callStartDate, monotonic: liveClock.markCallStart())
             callDuration = 0
         }
     }

@@ -5147,7 +5147,7 @@ final class CallManagerAnalyticsTests: XCTestCase {
             ?? source.endIndex
         let body = String(source[funcRange.lowerBound..<bodyEnd])
         XCTAssertTrue(
-            body.contains("analytics.callInitiatedDate = Date()"),
+            body.contains("analytics.stampInitiated(wall: Date(), monotonic: call.liveClock.monotonicNow)"),
             "startCall must stamp analyticsCallInitiatedDate so setupTimeMs measures " +
             "the interval from initiation to first connected state."
         )
@@ -5164,7 +5164,7 @@ final class CallManagerAnalyticsTests: XCTestCase {
             ?? source.endIndex
         let body = String(source[funcRange.lowerBound..<bodyEnd])
         XCTAssertTrue(
-            body.contains("analytics.callInitiatedDate = Date()"),
+            body.contains("analytics.stampInitiated(wall: Date(), monotonic: call.liveClock.monotonicNow)"),
             "handleIncomingCallNotification must stamp analyticsCallInitiatedDate so setupTimeMs " +
             "measures the interval from incoming ring to first connected state."
         )
@@ -5199,8 +5199,8 @@ final class CallManagerAnalyticsTests: XCTestCase {
             XCTFail("emitCallAnalyticsIfNeeded not found in CallManager.swift"); return
         }
         XCTAssertTrue(
-            source.contains("initiatedAt: callInitiatedDate"),
-            "setupTimeMs must use analyticsCallInitiatedDate (set at call initiation) — " +
+            source.contains("initiatedAt: callInitiatedInstant"),
+            "setupTimeMs must use the monotonic callInitiatedInstant (set at call initiation, #20010) — " +
             "using callStartDate would always produce 0 because it is set at the same " +
             "instant as analyticsConnectedDate (both in transitionToConnected)."
         )
@@ -6274,13 +6274,13 @@ final class CallAnsweredElsewherePushTests: XCTestCase {
 @MainActor
 final class CallSetupMetricsTests: XCTestCase {
 
-    private let t0 = Date(timeIntervalSince1970: 1_000_000)
+    private let t0 = ContinuousClock.now
 
     func test_bothAnchors_present_splitsRingFromNegotiation() {
         let metrics = CallReliabilityPolicy.callSetupMetrics(
             initiatedAt: t0,
-            negotiationStartAt: t0.addingTimeInterval(20),   // 20 s de sonnerie
-            connectedAt: t0.addingTimeInterval(21.5)          // 1.5 s de négo
+            negotiationStartAt: t0.advanced(by: .seconds(20)),     // 20 s de sonnerie
+            connectedAt: t0.advanced(by: .milliseconds(21_500))    // 1.5 s de négo
         )
         XCTAssertEqual(metrics.setupTimeMs, 21_500)
         XCTAssertEqual(metrics.negotiationTimeMs, 1_500)
@@ -6288,7 +6288,7 @@ final class CallSetupMetricsTests: XCTestCase {
 
     func test_neverConnected_bothMinusOne() {
         let metrics = CallReliabilityPolicy.callSetupMetrics(
-            initiatedAt: t0, negotiationStartAt: t0.addingTimeInterval(5), connectedAt: nil
+            initiatedAt: t0, negotiationStartAt: t0.advanced(by: .seconds(5)), connectedAt: nil
         )
         XCTAssertEqual(metrics.setupTimeMs, -1)
         XCTAssertEqual(metrics.negotiationTimeMs, -1)
@@ -6296,7 +6296,7 @@ final class CallSetupMetricsTests: XCTestCase {
 
     func test_missingNegotiationAnchor_negotiationMinusOne_setupStillComputed() {
         let metrics = CallReliabilityPolicy.callSetupMetrics(
-            initiatedAt: t0, negotiationStartAt: nil, connectedAt: t0.addingTimeInterval(3)
+            initiatedAt: t0, negotiationStartAt: nil, connectedAt: t0.advanced(by: .seconds(3))
         )
         XCTAssertEqual(metrics.setupTimeMs, 3_000)
         XCTAssertEqual(metrics.negotiationTimeMs, -1)
@@ -6304,7 +6304,7 @@ final class CallSetupMetricsTests: XCTestCase {
 
     func test_missingInitiatedAnchor_setupMinusOne_negotiationStillComputed() {
         let metrics = CallReliabilityPolicy.callSetupMetrics(
-            initiatedAt: nil, negotiationStartAt: t0, connectedAt: t0.addingTimeInterval(2)
+            initiatedAt: nil, negotiationStartAt: t0, connectedAt: t0.advanced(by: .seconds(2))
         )
         XCTAssertEqual(metrics.setupTimeMs, -1)
         XCTAssertEqual(metrics.negotiationTimeMs, 2_000)
@@ -6323,7 +6323,7 @@ final class CallSetupMetricsTests: XCTestCase {
             source.contains("callSetupMetrics"),
             "emitCallAnalyticsIfNeeded must compute metrics via the pure CallReliabilityPolicy.callSetupMetrics"
         )
-        let anchorCount = source.components(separatedBy: "analytics.negotiationStartDate = Date()").count - 1
+        let anchorCount = source.components(separatedBy: "analytics.stampNegotiationStart(wall: Date(), monotonic: ").count - 1
         XCTAssertGreaterThanOrEqual(
             anchorCount, 2,
             "The negotiation anchor must be stamped on BOTH sides: answerCall (callee) and participant-joined (caller)"

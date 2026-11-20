@@ -2,14 +2,29 @@ import Foundation
 import MeeshySDK
 import os
 
+/// L'horloge MONOTONE d'un appel (#20010) : la durée et les délais de mise en
+/// place ne se mesurent jamais sur `Date`, qu'un réglage manuel ou NTP fait
+/// reculer ou avancer. `ContinuousClock` plutôt que `systemUptime` : elle
+/// continue de compter pendant le sommeil de l'appareil, qu'un appel traverse.
+nonisolated protocol CallMonotonicClockProviding: Sendable {
+    var now: ContinuousClock.Instant { get }
+}
+
+nonisolated struct SystemCallMonotonicClock: CallMonotonicClockProviding {
+    var now: ContinuousClock.Instant { .now }
+}
+
 /// Les deux horloges d'un appel établi : le chrono affiché chaque seconde et le
 /// battement de cœur émis vers la passerelle. Le collaborateur possède les deux
 /// tâches ; `callDuration` et `callStartDate` restent sur l'appel (#11522).
+/// Le chrono lit sa propre ancre MONOTONE, posée par `markCallStart()` à côté
+/// de `callStartDate` et effacée à l'arrêt : jamais `Date` (#20010).
 @MainActor
 final class CallLiveClock: CallLiveClockProviding {
     nonisolated deinit {}
 
     private weak var call: CallManager?
+    private let monotonicClock: CallMonotonicClockProviding
     // PERF-011: replace Timer.scheduledTimer with cancellable @MainActor Tasks.
     // Timers run on RunLoop.main and have no native cancellation hand-off; Tasks
     // are cooperative, energy-efficient (no RunLoop wakeup overhead), and
@@ -19,9 +34,21 @@ final class CallLiveClock: CallLiveClockProviding {
 
     var isHeartbeatRunning: Bool { heartbeatTask != nil }
     var isDurationClockRunning: Bool { durationTask != nil }
+    var monotonicNow: ContinuousClock.Instant { monotonicClock.now }
+    private(set) var callStartInstant: ContinuousClock.Instant?
+
+    init(monotonicClock: CallMonotonicClockProviding = SystemCallMonotonicClock()) {
+        self.monotonicClock = monotonicClock
+    }
 
     func attach(to call: CallManager) {
         self.call = call
+    }
+
+    func markCallStart() -> ContinuousClock.Instant {
+        let start = monotonicClock.now
+        callStartInstant = start
+        return start
     }
 
     func startDurationClock() {
@@ -30,18 +57,23 @@ final class CallLiveClock: CallLiveClockProviding {
             while !Task.isCancelled {
                 guard await cancellableSleep(for: .seconds(1)), !Task.isCancelled else { return }
                 guard let self, let call = self.call else { return }
-                // Défense en profondeur : un callStartDate momentanément nil ne
-                // doit PAS tuer la boucle (l'ancien `return` gelait le chrono à
+                // Défense en profondeur : une ancre momentanément nil ne doit
+                // PAS tuer la boucle (l'ancien `return` gelait le chrono à
                 // 00:00 pour tout le reste de l'appel) — on saute juste le tick.
-                guard let start = call.callStartDate else { continue }
-                call.callDuration = CallReliabilityPolicy.elapsedSeconds(since: start, now: Date())
+                guard let start = self.callStartInstant else { continue }
+                call.callDuration = self.elapsedSeconds(since: start)
             }
         }
+    }
+
+    func elapsedSeconds(since start: ContinuousClock.Instant) -> TimeInterval {
+        CallReliabilityPolicy.elapsedSeconds(since: start, now: monotonicClock.now)
     }
 
     func stopDurationClock() {
         durationTask?.cancel()
         durationTask = nil
+        callStartInstant = nil
     }
 
     func startHeartbeat() {
@@ -81,7 +113,10 @@ final class CallLiveClock: CallLiveClockProviding {
 protocol CallLiveClockProviding: AnyObject {
     var isHeartbeatRunning: Bool { get }
     var isDurationClockRunning: Bool { get }
+    var monotonicNow: ContinuousClock.Instant { get }
+    var callStartInstant: ContinuousClock.Instant? { get }
     func attach(to call: CallManager)
+    func markCallStart() -> ContinuousClock.Instant
     func startDurationClock()
     func stopDurationClock()
     func startHeartbeat()

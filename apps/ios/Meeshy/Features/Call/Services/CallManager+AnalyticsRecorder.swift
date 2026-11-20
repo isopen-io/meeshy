@@ -15,6 +15,11 @@ nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
     var callInitiatedDate: Date?
     var negotiationStartDate: Date?
     var connectedDate: Date?
+    /// Les ancres MONOTONES des délais (#20010), posées à côté des `Date` :
+    /// `setupTimeMs` et `negotiationTimeMs` ne lisent qu'elles.
+    var callInitiatedInstant: ContinuousClock.Instant?
+    var negotiationStartInstant: ContinuousClock.Instant?
+    var connectedInstant: ContinuousClock.Instant?
     var networkTransitions = 0
     var qualitySeconds: [VideoQualityLevel: Double] = [:]
     var lastQualityDate: Date?
@@ -30,6 +35,21 @@ nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
     var mediaJitterSum: Double = 0
     var mediaSampleCount = 0
     var limitationSamples: [String: Int] = [:]
+
+    mutating func stampInitiated(wall: Date, monotonic: ContinuousClock.Instant) {
+        callInitiatedDate = wall
+        callInitiatedInstant = monotonic
+    }
+
+    mutating func stampNegotiationStart(wall: Date, monotonic: ContinuousClock.Instant) {
+        negotiationStartDate = wall
+        negotiationStartInstant = monotonic
+    }
+
+    mutating func stampConnected(wall: Date?, monotonic: ContinuousClock.Instant) {
+        connectedDate = wall
+        connectedInstant = monotonic
+    }
 
     mutating func recordSample(
         level: VideoQualityLevel,
@@ -86,9 +106,9 @@ nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
 
     func payload(now: Date, context: CallAnalyticsContext) -> [String: Any] {
         let setupMetrics = CallReliabilityPolicy.callSetupMetrics(
-            initiatedAt: callInitiatedDate,
-            negotiationStartAt: negotiationStartDate,
-            connectedAt: connectedDate
+            initiatedAt: callInitiatedInstant,
+            negotiationStartAt: negotiationStartInstant,
+            connectedAt: connectedInstant
         )
         let qualityDistribution = CallReliabilityPolicy.qualityDistribution(
             accumulatedSeconds: qualitySeconds,

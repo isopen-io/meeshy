@@ -431,10 +431,10 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
     // MARK: - #19984 — une horloge qui recule ne rend aucune durée négative
 
     func test_callSetupMetrics_connectedBeforeAnchors_floorsAtZeroNotNegative() {
-        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        let t0 = ContinuousClock.now
 
         let metrics = CallReliabilityPolicy.callSetupMetrics(
-            initiatedAt: t0, negotiationStartAt: t0.addingTimeInterval(2), connectedAt: t0.addingTimeInterval(-3)
+            initiatedAt: t0, negotiationStartAt: t0.advanced(by: .seconds(2)), connectedAt: t0.advanced(by: .seconds(-3))
         )
 
         XCTAssertEqual(metrics.setupTimeMs, 0)
@@ -442,13 +442,13 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
     }
 
     func test_callSetupMetrics_missingAnchors_stayMinusOne() {
-        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        let t0 = ContinuousClock.now
 
         let neverConnected = CallReliabilityPolicy.callSetupMetrics(
             initiatedAt: t0, negotiationStartAt: t0, connectedAt: nil
         )
         let noAnchors = CallReliabilityPolicy.callSetupMetrics(
-            initiatedAt: nil, negotiationStartAt: nil, connectedAt: t0.addingTimeInterval(-3)
+            initiatedAt: nil, negotiationStartAt: nil, connectedAt: t0.advanced(by: .seconds(-3))
         )
 
         XCTAssertEqual(neverConnected.setupTimeMs, -1)
@@ -458,10 +458,11 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
     }
 
     func test_callSetupMetrics_normalAnchors_unchanged() {
-        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        let t0 = ContinuousClock.now
 
         let metrics = CallReliabilityPolicy.callSetupMetrics(
-            initiatedAt: t0, negotiationStartAt: t0.addingTimeInterval(20), connectedAt: t0.addingTimeInterval(21.5)
+            initiatedAt: t0, negotiationStartAt: t0.advanced(by: .seconds(20)),
+            connectedAt: t0.advanced(by: .milliseconds(21_500))
         )
 
         XCTAssertEqual(metrics.setupTimeMs, 21_500)
@@ -469,10 +470,61 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
     }
 
     func test_elapsedSeconds_startInTheFuture_isZero() {
-        let now = Date(timeIntervalSince1970: 1_000_000)
+        let now = ContinuousClock.now
 
-        XCTAssertEqual(CallReliabilityPolicy.elapsedSeconds(since: now.addingTimeInterval(3_600), now: now), 0)
-        XCTAssertEqual(CallReliabilityPolicy.elapsedSeconds(since: now.addingTimeInterval(-125), now: now), 125)
+        XCTAssertEqual(CallReliabilityPolicy.elapsedSeconds(since: now.advanced(by: .seconds(3_600)), now: now), 0)
+        XCTAssertEqual(CallReliabilityPolicy.elapsedSeconds(since: now.advanced(by: .seconds(-125)), now: now), 125)
+    }
+
+    // MARK: - #20010 — la durée et les délais se mesurent sur l'horloge monotone
+
+    private static func recorderWithAnchors(
+        wallInitiated: Date, wallNegotiation: Date, wallConnected: Date, monotonicStart: ContinuousClock.Instant
+    ) -> CallAnalyticsRecorder {
+        var recorder = CallAnalyticsRecorder()
+        recorder.stampInitiated(wall: wallInitiated, monotonic: monotonicStart)
+        recorder.stampNegotiationStart(wall: wallNegotiation, monotonic: monotonicStart.advanced(by: .seconds(20)))
+        recorder.stampConnected(wall: wallConnected, monotonic: monotonicStart.advanced(by: .milliseconds(21_500)))
+        return recorder
+    }
+
+    func test_payload_wallClockMovedBackwardsDuringSetup_setupTimeComesFromMonotonicAnchors() {
+        let wall = Date(timeIntervalSince1970: 1_000_000)
+        let recorder = Self.recorderWithAnchors(
+            wallInitiated: wall, wallNegotiation: wall.addingTimeInterval(20),
+            wallConnected: wall.addingTimeInterval(-3_600), monotonicStart: ContinuousClock.now
+        )
+
+        let payload = makePayload(recorder)
+
+        XCTAssertEqual(payload["setupTimeMs"] as? Int, 21_500)
+        XCTAssertEqual(payload["negotiationTimeMs"] as? Int, 1_500)
+    }
+
+    func test_payload_wallClockMovedForwardDuringSetup_setupTimeIsNotInflated() {
+        let wall = Date(timeIntervalSince1970: 1_000_000)
+        let recorder = Self.recorderWithAnchors(
+            wallInitiated: wall, wallNegotiation: wall.addingTimeInterval(20),
+            wallConnected: wall.addingTimeInterval(86_400), monotonicStart: ContinuousClock.now
+        )
+
+        let payload = makePayload(recorder)
+
+        XCTAssertEqual(payload["setupTimeMs"] as? Int, 21_500)
+        XCTAssertEqual(payload["negotiationTimeMs"] as? Int, 1_500)
+    }
+
+    func test_payload_monotonicAnchorsMissing_setupTimeMinusOneEvenWithWallDates() {
+        var recorder = CallAnalyticsRecorder()
+        let wall = Date(timeIntervalSince1970: 1_000_000)
+        recorder.callInitiatedDate = wall
+        recorder.negotiationStartDate = wall.addingTimeInterval(20)
+        recorder.connectedDate = wall.addingTimeInterval(21.5)
+
+        let payload = makePayload(recorder)
+
+        XCTAssertEqual(payload["setupTimeMs"] as? Int, -1)
+        XCTAssertEqual(payload["negotiationTimeMs"] as? Int, -1)
     }
 
     func test_payload_negativeCallDuration_emitsZeroDuration() {

@@ -42,7 +42,7 @@ extension CallManager {
         ringbackPlayer.stop()
         ringbackPlayer.stopRingtone()
 
-        analytics.negotiationStartDate = Date()
+        analytics.stampNegotiationStart(wall: Date(), monotonic: liveClock.monotonicNow)
         callState = .connecting
         // Audio session is configured at peer-connection setup (handleIncoming…),
         // not here — CallKit drives activation via provider:didActivate:.
@@ -140,7 +140,7 @@ extension CallManager {
             return
         }
 
-        analytics.negotiationStartDate = Date()
+        analytics.stampNegotiationStart(wall: Date(), monotonic: liveClock.monotonicNow)
         callState = .connecting
 
         if let remoteOffer = pendingRemoteOffer {
