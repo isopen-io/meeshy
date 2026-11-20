@@ -1,6 +1,8 @@
-# Cycle 186 — « same audiences, for the same reason », et deux audiences différentes
+# Cycle 188 — « same audiences, for the same reason », et deux audiences différentes
 
-*2026-11-20, à la suite du cycle 185 (#19835, fusionné dans `dev`). Branche
+*2026-11-20, à la suite du cycle 185 (#19835, fusionné dans `dev`). Numéroté 188 et
+non 186 : deux autres sessions ont pris 186 et une 187 pendant que ce lot attendait
+un runner — un identifiant qui ne s'alloue pas collisionne (#5102). Branche
 `claude/exciting-planck-jzn9ox`. Livre **#19943**.*
 
 ---
