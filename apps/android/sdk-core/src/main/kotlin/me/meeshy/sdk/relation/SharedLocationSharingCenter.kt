@@ -34,6 +34,7 @@ import me.meeshy.sdk.location.LiveLocationFixSource
 import me.meeshy.sdk.location.LocationPermissionGate
 import me.meeshy.sdk.model.relation.SharedLocationFix
 import me.meeshy.sdk.model.relation.SharedLocationOwnSnapshot
+import me.meeshy.sdk.model.relation.SharedLocationOwnSnapshotWire
 import me.meeshy.sdk.model.relation.SharedLocationPrecision
 import me.meeshy.sdk.model.relation.SharedLocationRoster
 import me.meeshy.sdk.model.relation.SharedLocationSendOutcome
@@ -171,7 +172,7 @@ class SharedLocationSharingCenter internal constructor(
         System::currentTimeMillis,
         dispatcher,
         ownChanged = relationSockets.sharedLocationOwnChanged,
-        served = { (apiCall { api.ownSharedLocation() } as? NetworkResult.Success)?.data?.served(json) },
+        served = { ownSharedLocationAnswer(apiCall { api.ownSharedLocation() }, json) },
     )
 
     /** Le compte d'une opération, et la génération de session à laquelle elle appartient. */
@@ -201,7 +202,8 @@ class SharedLocationSharingCenter internal constructor(
     /**
      * Relancé avec une liste qu'il publiait, l'appareil suit sa position mais n'en envoie rien avant d'avoir relu ce que la
      * passerelle sert (#19767, iso `SharedLocationSharingCenter.swift`) : un autre appareil a pu reprendre le partage
-     * pendant qu'il dormait. Une relecture qui n'aboutit pas lève l'attente, comme un « Partager » d'ici.
+     * pendant qu'il dormait. Seules une réponse et une passerelle d'avant (`null`) lèvent l'attente, comme un « Partager »
+     * d'ici ; une panne (relecture qui lève) la GARDE et la relecture se rejoue au rythme de [RETRY_MS] (#19928).
      */
     @Volatile private var awaitsServedTruth = false
 
@@ -209,7 +211,7 @@ class SharedLocationSharingCenter internal constructor(
         scope.launch {
             connected.distinctUntilChanged().filter { it }.collect {
                 sync()
-                reconcile()
+                reconcile(readingFirst = false)
             }
         }
         scope.launch { ownChanged.collect { sync() } }
@@ -241,11 +243,26 @@ class SharedLocationSharingCenter internal constructor(
         SharedLocationShareProblem.WithdrawalPending
     }
 
-    /** Reprend la liste du compte connecté et fait partir chaque échéance passée et chaque retrait en attente. */
-    suspend fun reconcile() {
+    /**
+     * Reprend la liste du compte connecté et fait partir chaque échéance passée et chaque retrait en attente. Relancé et
+     * pas encore relu, l'appareil relit d'abord (`readingFirst`, faux quand l'appelant vient de relire) : une échéance
+     * passée ne fait pas partir une liste gardée périmée avant la relecture (elle retirerait ce qu'un autre appareil a
+     * ajouté) — la passerelle tient l'échéance de chacun (#18205) —, et une panne laisse tout en attente, rejoué au rythme
+     * du rejeu (#19928). Un « Arrêter » en attente, lui, part malgré la panne, en liste seule : la volonté de
+     * l'utilisateur prime, et aucune position n'accompagne la liste.
+     */
+    suspend fun reconcile(readingFirst: Boolean = true): SharedLocationShareProblem? =
         locked { ticket ->
             if (_roster.value.isSettled(clock())) return@locked null
+            if (readingFirst && awaitsServedTruth) syncLocked(ticket)
+            if (!isCurrent(ticket)) return@locked SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
+            if (_roster.value.isSettled(clock())) return@locked null
             val pruned = _roster.value.pruned(clock())
+            if (awaitsServedTruth && !pruned.hasPendingWithdrawals) {
+                if (!pruned.hasRecipients) stopFollowingDevice()
+                scheduleRetry()
+                return@locked SharedLocationShareProblem.Refused(SharedLocationSendOutcome.UNCONFIRMED)
+            }
             if (pruned.isEmpty && !_roster.value.hasRecipients) {
                 adopt(ticket, SharedLocationRoster.EMPTY)
                 markReceived(ticket, false)
@@ -260,51 +277,68 @@ class SharedLocationSharingCenter internal constructor(
             }
             withdrawingRepublish(ticket, pruned).also { if (it != null && isCurrent(ticket)) scheduleRetry() }
         }
-    }
 
     /**
      * Se recale sur le partage que la passerelle sert : un autre appareil du compte a pu le changer (#18578). Une liste
      * qui nomme un AUTRE démarrage (`startedAt`) que l'accusé d'ici fait céder la publication d'ici : un seul appareil
-     * publie, celui du dernier « Partager » (#18580), sans qu'aucune horloge soit comparée. Une relecture
-     * qui échoue (hors ligne, passerelle d'avant #18389, réponse sans liste lisible) ne change rien.
+     * publie, celui du dernier « Partager » (#18580), sans qu'aucune horloge soit comparée. Une passerelle d'avant
+     * (#18389) ne change rien et lève l'attente ; une panne ne change rien et la garde (#19928).
      */
     suspend fun sync() {
         locked { ticket ->
-            val read = readServed()
-            if (!isCurrent(ticket)) return@locked null
-            awaitsServedTruth = false
-            val truth = read ?: return@locked null
-            val before = _roster.value
-            val next = before.withServed(truth, clock())
-            val yields = next.hasRecipients && !received && before.hasRecipients && yieldsTo(ticket, truth.startedAt)
-            if (next == before) {
-                if (yields) yieldPublishing(ticket)
-                return@locked null
-            }
-            if (yields || (next.hasRecipients && !before.hasRecipients)) markReceived(ticket, true)
-            adopt(ticket, next)
-            if (yields) yieldPublishing(ticket)
-            if (!next.hasRecipients) {
-                stopFollowingDevice()
-                markReceived(ticket, false)
-                rememberStart(ticket, null)
-            }
-            scheduleDeadline()
+            syncLocked(ticket)
             null
         }
     }
 
+    private suspend fun syncLocked(ticket: Ticket) {
+        val read = readServed()
+        if (!isCurrent(ticket)) return
+        if (read !is ServedRead.Answered) {
+            if (awaitsServedTruth) scheduleRetry()
+            return
+        }
+        if (awaitsServedTruth) {
+            awaitsServedTruth = false
+            scheduleDeadline()
+        }
+        val truth = read.truth ?: return
+        val before = _roster.value
+        val next = before.withServed(truth, clock())
+        val yields = next.hasRecipients && !received && before.hasRecipients && yieldsTo(ticket, truth.startedAt)
+        if (next == before) {
+            if (yields) yieldPublishing(ticket)
+            return
+        }
+        if (yields || (next.hasRecipients && !before.hasRecipients)) markReceived(ticket, true)
+        adopt(ticket, next)
+        if (yields) yieldPublishing(ticket)
+        if (!next.hasRecipients) {
+            stopFollowingDevice()
+            markReceived(ticket, false)
+            rememberStart(ticket, null)
+        }
+        scheduleDeadline()
+    }
+
+    /** Ce qu'une relecture a donné : une réponse (`null` : passerelle d'avant), ou une panne (#19928). */
+    private sealed interface ServedRead {
+        data class Answered(val truth: SharedLocationOwnSnapshot?) : ServedRead
+
+        data object Failed : ServedRead
+    }
+
     /**
-     * Une relecture qui lève (quelle que soit l'exception) vaut « je ne sais pas » : elle ne tue jamais le collecteur des
-     * reconnexions, qui rejoue les retraits en attente. La marque « reçue » s'écrit AVANT la liste reçue : un processus tué
-     * entre les deux écritures se relance muet, jamais publiant.
+     * Une relecture qui lève (quelle que soit l'exception) est une PANNE : elle ne change rien, garde l'attente d'un
+     * appareil relancé et ne tue jamais le collecteur des reconnexions, qui rejoue les retraits en attente. La marque
+     * « reçue » s'écrit AVANT la liste reçue : un processus tué entre les deux écritures se relance muet, jamais publiant.
      */
-    private suspend fun readServed(): SharedLocationOwnSnapshot? = try {
-        served()
+    private suspend fun readServed(): ServedRead = try {
+        ServedRead.Answered(served())
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (@Suppress("TooGenericExceptionCaught") failure: Exception) {
-        null
+        ServedRead.Failed
     }
 
     /**
@@ -412,7 +446,7 @@ class SharedLocationSharingCenter internal constructor(
      * servie. Seul un partage servi VIDE vide la liste, sans arrêt ni relevé.
      */
     private suspend fun settleNotSharing(ticket: Ticket): SharedLocationShareProblem? {
-        val truth = readServed()
+        val truth = (readServed() as? ServedRead.Answered)?.truth
         if (!isCurrent(ticket)) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
         if (truth == null || truth.recipients.isNotEmpty()) {
             return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.UNCONFIRMED)
@@ -552,7 +586,10 @@ class SharedLocationSharingCenter internal constructor(
         val sessionScope = CoroutineScope(session + scope.coroutineContext.minusKey(Job))
         deadline = sessionScope.launch {
             delay(delayMillis)
-            sessionScope.launch { reconcile() }
+            sessionScope.launch {
+                if (awaitsServedTruth) sync()
+                reconcile(readingFirst = false)
+            }
         }
     }
 
@@ -572,6 +609,7 @@ class SharedLocationSharingCenter internal constructor(
     }
 
     private fun wipe(ticket: Ticket) {
+        awaitsServedTruth = false
         adopt(ticket, SharedLocationRoster.EMPTY)
         markReceived(ticket, false)
         rememberStart(ticket, null)
@@ -675,3 +713,22 @@ internal interface SharedLocationSharingModule {
     @IntoSet
     fun bindAccountCache(center: SharedLocationSharingCenter): PerAccountCache
 }
+
+/**
+ * La relecture du partage servi a TROIS issues (#19928, iso `SharedLocationServedRead.answer` iOS) : une réponse, une
+ * passerelle d'avant `GET /relations/locations/mine` (404, `null`), ou une panne (toute autre issue, levée). Seules les
+ * deux premières lèvent l'attente d'un appareil relancé : réduire la panne à « rien » le laissait publier toute la session.
+ */
+internal fun ownSharedLocationAnswer(
+    result: NetworkResult<SharedLocationOwnSnapshotWire>,
+    json: Json,
+): SharedLocationOwnSnapshot? = when (result) {
+    is NetworkResult.Success -> result.data.served(json) ?: throw SharedLocationReadFailed("liste illisible")
+    is NetworkResult.Failure ->
+        if (result.error.httpStatus == HTTP_NOT_FOUND) null else throw SharedLocationReadFailed(result.error.message)
+}
+
+/** Une relecture du partage servi qui n'a rien tranché : panne réseau, 401, 5xx, réponse illisible. */
+class SharedLocationReadFailed(reason: String) : Exception(reason)
+
+private const val HTTP_NOT_FOUND = 404
