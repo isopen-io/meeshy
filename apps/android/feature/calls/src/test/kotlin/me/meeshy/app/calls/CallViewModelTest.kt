@@ -904,13 +904,13 @@ class CallViewModelTest {
     fun `quality samples aggregate into the terminal report`() = runTest {
         val vm = connectedIncoming()
         qualityFlow.emit(CallQualitySample(rttMs = 100.0, packetLoss = 0.0))
-        qualityFlow.emit(CallQualitySample(rttMs = 300.0, packetLoss = 8.0))
+        qualityFlow.emit(CallQualitySample(rttMs = 300.0, packetLoss = 0.08))
 
         vm.hangUp()
 
         val fields = analyticsFields()
         assertThat(fields["averageRtt"]).isEqualTo(200.0)
-        assertThat(fields["maxPacketLoss"]).isEqualTo(8.0)
+        assertThat(fields["maxPacketLoss"] as Double).isWithin(1e-9).of(8.0)
     }
 
     @Test

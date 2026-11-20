@@ -105,8 +105,12 @@ public data class CallStats(
         /**
          * Pure reducer over the projected [entries] (iOS `CallStats.reduce`).
          *
-         * - `candidate-pair` sets [roundTripTimeMs] (`currentRoundTripTime` ×1000)
-         *   and [availableOutgoingBitrateBps] (`availableOutgoingBitrate`, truncated).
+         * - [roundTripTimeMs] (`currentRoundTripTime` ×1000) and
+         *   [availableOutgoingBitrateBps] (`availableOutgoingBitrate`, truncated) are
+         *   read on the SELECTED pair ([selectedCandidatePair], #19899) — a probing
+         *   pair listed after it no longer overwrites the live path's figures. When no
+         *   pair is elected, or the elected one lacks the field, the last
+         *   `candidate-pair` carrying it wins, as before.
          * - `inbound-rtp` sums [packetsLost] and [bytesReceived]; splits
          *   `packetsReceived` into [inboundAudioPackets] / [inboundVideoPackets] by
          *   [RawEntry.kind]; accumulates the audio jitter mean; and remembers the
@@ -206,8 +210,10 @@ public data class CallStats(
             val jitterMs =
                 if (audioJitterCount > 0) (audioJitterSum / audioJitterCount) * 1000 else 0.0
 
+            val elected = selectedCandidatePair(entries)?.takeIf { it.type == "candidate-pair" }?.values
+
             return CallStats(
-                roundTripTimeMs = rtt,
+                roundTripTimeMs = elected?.get("currentRoundTripTime")?.let { it * 1000 } ?: rtt,
                 packetsLost = packetsLost,
                 bandwidth = bytesSent,
                 bytesReceived = bytesReceived,
@@ -216,7 +222,8 @@ public data class CallStats(
                 inboundAudioPackets = inboundAudio,
                 inboundVideoPackets = inboundVideo,
                 outboundPacketsSent = outbound,
-                availableOutgoingBitrateBps = availableOutgoingBitrateBps,
+                availableOutgoingBitrateBps = elected?.get("availableOutgoingBitrate")?.toInt()
+                    ?: availableOutgoingBitrateBps,
                 jitterMs = jitterMs,
                 inboundAudioBytes = inboundAudioBytes,
                 inboundVideoBytes = inboundVideoBytes,
