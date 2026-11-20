@@ -690,8 +690,9 @@ class SharedPreferencesSharedLocationRosterStore @Inject constructor(
 
 /**
  * La relecture de production à trois états (#19928, iso `SharedLocationSharingHolder.readOwn` d'iOS) : une passerelle
- * d'avant #18389 ne connaît pas la route (404) et rend `null` ; toute autre issue (hors ligne, session expirée, 5xx, délai,
- * réponse sans liste lisible) est une PANNE et lève — le centre garde alors l'attente d'un appareil relancé.
+ * d'avant #18389 ne connaît pas la route — un 404 dont le corps est le « route inconnue » de Fastify — et rend `null` ;
+ * toute autre issue (hors ligne, session expirée, 5xx, délai, réponse sans liste lisible, 404 d'un intermédiaire pendant
+ * un redéploiement ou d'un portail captif) est une PANNE et lève — le centre garde alors l'attente d'un appareil relancé.
  */
 internal fun ownSharedLocationRead(
     result: NetworkResult<SharedLocationOwnSnapshotWire>,
@@ -700,11 +701,15 @@ internal fun ownSharedLocationRead(
     is NetworkResult.Success -> result.data.served(json) ?: error("relecture du partage sans liste lisible")
     is NetworkResult.Failure -> {
         val status = result.error.httpStatus
-        if (status == HTTP_NOT_FOUND) null else error("relecture du partage en panne : $status")
+        val unknownRoute = status == HTTP_NOT_FOUND && isUnknownRoute(result.error.servedMessage)
+        if (unknownRoute) null else error("relecture du partage en panne : $status")
     }
 }
 
 private const val HTTP_NOT_FOUND = 404
+
+private fun isUnknownRoute(served: String?): Boolean =
+    served != null && served.startsWith("Route GET:") && served.endsWith("not found")
 
 @Module
 @InstallIn(SingletonComponent::class)

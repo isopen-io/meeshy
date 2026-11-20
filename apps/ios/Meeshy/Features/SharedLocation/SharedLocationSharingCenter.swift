@@ -761,17 +761,22 @@ enum SharedLocationSharingHolder {
             .sink { _ in warm() }
     }
 
-    /// La relecture à trois états (#19928) : une passerelle d'avant #18389 ne connaît pas la route (404) et rend `nil` ;
-    /// toute autre erreur (hors ligne, session expirée, 5xx, délai) est une PANNE et remonte.
+    /// La relecture à trois états (#19928) : une passerelle d'avant #18389 ne connaît pas la route — un 404 dont le corps
+    /// est le « route inconnue » de Fastify — et rend `nil` ; toute autre erreur (hors ligne, session expirée, 5xx, délai,
+    /// 404 d'un intermédiaire pendant un redéploiement ou d'un portail captif) est une PANNE et remonte.
     @MainActor
     static func readOwn(
         _ read: @MainActor () async throws -> SharedLocationOwnSnapshot
     ) async throws -> SharedLocationOwnSnapshot? {
         do {
             return try await read()
-        } catch MeeshyError.server(statusCode: 404, message: _) {
+        } catch MeeshyError.server(statusCode: 404, message: let served) where isUnknownRoute(served) {
             return nil
         }
+    }
+
+    private static func isUnknownRoute(_ served: String) -> Bool {
+        served.hasPrefix("Route GET:") && served.hasSuffix("not found")
     }
 
     static func center() -> SharedLocationSharingCenter {

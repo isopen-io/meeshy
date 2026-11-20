@@ -698,6 +698,10 @@ class SharedLocationSharingSyncTest {
         assertThat(relaunched.starts).isEmpty()
         assertThat(relaunched.stops).isEqualTo(0)
         assertThat(relaunched.updates).isEmpty()
+
+        advanceTimeBy(retryMillis + 1)
+        runCurrent()
+        assertThat(relaunched.reads).isEqualTo(1)
     }
 
     @Test
@@ -757,7 +761,13 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `une route que la passerelle ne connait pas est une passerelle d'avant`() {
-        val read = ownSharedLocationRead(NetworkResult.Failure(ApiError("not found", httpStatus = 404)), json)
+        val fastify = ApiError(
+            "Not Found",
+            httpStatus = 404,
+            servedMessage = "Route GET:/api/v1/relations/locations/mine not found",
+        )
+
+        val read = ownSharedLocationRead(NetworkResult.Failure(fastify), json)
 
         assertThat(read).isNull()
     }
@@ -768,6 +778,8 @@ class SharedLocationSharingSyncTest {
             NetworkResult.Failure(ApiError("indisponible", httpStatus = 503)),
             NetworkResult.Failure(ApiError("session expiree", httpStatus = 401)),
             NetworkResult.Failure(ApiError("hors ligne", code = "NETWORK_ERROR")),
+            NetworkResult.Failure(ApiError("Not Found", code = "HTTP_404", httpStatus = 404)),
+            NetworkResult.Failure(ApiError("Not Found", httpStatus = 404, servedMessage = "404 page not found")),
             NetworkResult.Success(SharedLocationOwnSnapshotWire(recipients = null)),
         )
 

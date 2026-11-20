@@ -51,4 +51,10 @@ data class ApiError(
     val retryAfterSeconds: Int? = null,
     /** Les consentements qu'un 403 demande (null = refus ordinaire). */
     val requiredConsents: List<String>? = null,
+    /**
+     * Le `message` de l'enveloppe, tel que la réponse l'a servi (`null` : pas d'enveloppe JSON lisible). [message] préfère
+     * `error`, qui pour le « route inconnue » de Fastify ne dit que « Not Found » ; celui-ci garde « Route GET:… not
+     * found », qui distingue une passerelle d'avant d'un 404 d'un intermédiaire (#19928).
+     */
+    val servedMessage: String? = null,
 )

@@ -744,6 +744,8 @@ final class SharedLocationSharingSyncTests: XCTestCase {
     func test_readOwn_anyOtherFailure_isAnOutage() async {
         let failures: [Error] = [
             MeeshyError.server(statusCode: 503, message: "indisponible"),
+            MeeshyError.server(statusCode: 404, message: "Erreur inconnue"),
+            MeeshyError.server(statusCode: 404, message: "404 page not found"),
             MeeshyError.auth(.sessionExpired),
             URLError(.notConnectedToInternet),
             URLError(.timedOut),
