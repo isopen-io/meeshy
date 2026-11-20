@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import type { StoreApi } from 'zustand/vanilla';
 
+import { isStaleAttachmentRefusal } from '@/lib/api/attachment-refusal';
 import type { PostMediaUploadDeps } from '@/lib/api/post-media-upload';
 import type { ApiResult } from '@/lib/api/http';
 import type { TusCheckpointStore } from '@/lib/api/tus-checkpoint';
@@ -307,6 +308,29 @@ async function attempt(params: {
   });
 
   if (!result.ok) {
+    /**
+     * LA PIÈCE MÉMORISÉE N'EXISTE PLUS (#19865) — un envoi dont le
+     * téléversement a RÉUSSI et dont ce `POST …/messages` a ÉCHOUÉ garde son
+     * `upload.attachmentIds` dans une file DURABLE, et la règle « aucune
+     * régénération au renvoi » les réutilise tels quels. Passé 24 h, le
+     * balayage des orphelines a supprimé la ligne et les octets : chaque
+     * reprise redemandait alors la même pièce morte, pour toujours, alors que
+     * `upload.files` porte encore le fichier.
+     *
+     * L'oubli vient AVANT `markFailed`, dans la même retombée : l'entrée que
+     * la bande rend, que la file réécrit sur l'appareil et que
+     * `isPermanentFailure` interroge est alors déjà réparée — il n'existe
+     * aucun instant où elle offre « Réessayer » sans pouvoir aboutir.
+     *
+     * iOS et Android n'ont pas ce défaut, et pour une raison de conception :
+     * leurs files persistent les OCTETS ou un chemin de fichier local
+     * (`OutboxDispatcher+Messages.swift`, `MediaSenders.kt`), jamais un
+     * identifiant serveur — elles se réparent donc sans rien apprendre du
+     * refus.
+     */
+    if (isStaleAttachmentRefusal(result)) {
+      deps.outbox.getState().forgetUploadedIds(conversationId, message.clientMessageId);
+    }
     deps.outbox.getState().markFailed(conversationId, message.clientMessageId, result);
     return;
   }
