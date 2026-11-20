@@ -158,7 +158,7 @@
     "apps/ios/Meeshy/Features/Main/Views/iPadRootView+Navigation.swift::iPadRootView.showDeepLink": 92,
     "apps/ios/Meeshy/Features/Main/Views/iPadRootView+Panels.swift::iPadPanelDestination.body": 149,
     "apps/ios/Meeshy/Features/Main/Views/iPadRootView.swift::iPadRootView.body": 133,
-    "apps/ios/Meeshy/Features/Navigation/Router.swift::Router.handleDeepLink": 84,
+    "apps/ios/Meeshy/Features/Navigation/Router+DeepLinks.swift::Router.handleDeepLink": 84,
     "apps/ios/Meeshy/Features/Profile/ViewModels/ProfileUserPostsViewModel.swift::ProfileUserPostsViewModel.subscribeToSocketUpdates": 93,
     "apps/ios/Meeshy/Features/Profile/Views/ProgressionMeeshEntry.swift::ProgressionMeeshDetail.body": 113,
     "apps/ios/Meeshy/Features/River/Core/RiverConversationMapping.swift::RiverConversationMapping.contents": 98,
