@@ -1967,3 +1967,35 @@ socket jusqu'au client.
    - fusionner la PR.
 1. #19967 (iOS, petit ; vérifier aussi le web et Android), puis #19953 (Android).
 2. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
+
+## Cycle 58 — 2026-11-20
+
+- **Base** : `origin/dev` @ `378653837`. #19968 (#19933, iOS) est fusionnée.
+- **Branche** : `claude/determined-volta-ar0goh`.
+- **Objectif** : #19967. Une horloge murale qui recule pendant un appel iOS ne fait plus sortir `qualityDistribution` de [0 ; 1], donc la passerelle ne rejette plus le `call:analytics`.
+- **Livré** :
+  - `CallAnalyticsRecorder.recordSample` : l'intervalle entre deux relevés passe par `CallStatValue.measured`. Un intervalle négatif ou non fini compte pour 0.
+  - `CallReliabilityPolicy.qualityDistribution` : chaque cumul est neutralisé avant la somme, en défense en profondeur. Un NaN ne fait plus retomber sur « 100 % excellent ».
+  - Pour des relevés normaux, les valeurs sont identiques et la forme du payload aussi. Le serveur ne change pas.
+- **Miroirs** : le web et Android calculent la distribution par nombre d'échantillons, sans horloge. Ils ne sont donc pas concernés par ce défaut.
+- **Tests** :
+  - 3 témoins dans `CallManagerAnalyticsRecorderTests` :
+    - recul seul ;
+    - recul après un intervalle positif (excellent = 2,5 sur `dev`) ;
+    - cumuls négatifs, NaN ou ±∞.
+  - Rouge avant : par calcul seulement, car le conteneur n'a pas Swift. La QA a recalculé chaque valeur de son côté.
+  - Vert après : `workflow_dispatch` d'`ios.yml`, run 44682140412 sur `552a32c50`.
+  - Gardes `house_rules`, `cohesion` et `test_registration` : 0.
+- **QA** : favorable avec réserves. Les réserves sont toutes antérieures au lot :
+  - (a) `CallLiveClock` peut produire une `durationSeconds` négative, ce qui fait rejeter TOUT le rapport (zod `nonnegative`) ;
+  - (b) `setupTimeMs` peut être négatif et se confondre avec la sentinelle -1.
+  - Les deux sont versées dans **#19984**.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée :
+   - lire le run `ios.yml` 44682140412 ;
+   - fusionner `dev` dans la branche ;
+   - fusionner la PR.
+1. **#19984** (iOS, perte de tout le rapport). Poser une horloge monotone et vérifier `setupTimeMs` sur Android. Puis #19953 (Android).
+2. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.

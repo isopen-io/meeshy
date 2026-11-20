@@ -28,9 +28,9 @@ enum StoryEntryMetrics {
     static let paddingVertical: CGFloat = MeeshySpacing.sm
     static let height: CGFloat = 120
 
-    /// #15157 — la place que l'entrée « Moi » réserve pour que son cadre illustré se montre à sa
-    /// taille, l'avatar intact : le débordement latéral tient dans l'espacement entre entrées (sans
-    /// toucher l'anneau du voisin), le débordement vertical écarte le libellé et grandit la bande.
+    /// La place que l'entrée « Moi » réserve pour que son cadre se montre ENTIER à sa taille normalisée
+    /// (#19988) : le débordement latéral tient dans l'espacement entre entrées (sans toucher l'anneau du
+    /// voisin), le débordement vertical écarte le libellé et grandit la bande — rien ne le rogne.
     struct DecorReserve: Equatable {
         let room: CGFloat
         let top: CGFloat
@@ -40,7 +40,7 @@ enum StoryEntryMetrics {
     }
 
     static func decorReserve(_ design: AvatarRingDesign?) -> DecorReserve {
-        let room = AvatarRingLayout.fullSpill(design, box: avatar)
+        let room = AvatarRingGeometry.spill(design, avatarSize: avatar)
         guard room > 0 else { return .none }
         let halo = (ring - avatar) / 2
         let lateral = (labelWidth - avatar) / 2 + itemSpacing + (labelWidth - ring) / 2
