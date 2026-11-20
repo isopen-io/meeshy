@@ -1999,3 +1999,36 @@ socket jusqu'au client.
    - fusionner la PR.
 1. **#19984** (iOS, perte de tout le rapport). Poser une horloge monotone et vérifier `setupTimeMs` sur Android. Puis #19953 (Android).
 2. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
+
+## Cycle 59 — 2026-11-20
+
+- **Base** : `origin/dev` @ `352b47b00`. #19967 (cycle 58) est fusionnée et fermée.
+- **Branche** : `claude/determined-volta-xpw93s`.
+- **Objectif** : #19984. Une horloge murale qui recule ne rend plus de `durationSeconds` ni de `setupTimeMs` négatifs. La passerelle cesse donc de rejeter tout le `call:analytics`.
+- **Livré** :
+  - iOS :
+    - `CallReliabilityPolicy.callSetupMetrics` passe par `CallStatValue.count`. -1 signifie seulement qu'une ancre manque ; sinon la valeur est ≥ 0, et un NaN ne fait plus planter.
+    - `CallReliabilityPolicy.elapsedSeconds(since:now:)` (plancher 0) sert au chrono de `CallLiveClock`.
+    - `CallAnalyticsRecorder.payload` borne aussi `durationSeconds`.
+  - Android : `CallAnalytics.wireFields` plancher `setupTimeMs` (-1 si jamais connecté) et `durationSeconds` à 0.
+  - Le web bornait déjà ces deux champs. Les valeurs normales et la forme du payload ne changent pas, ni le serveur.
+- **Tests** :
+  - iOS : 5 témoins dans `CallManagerAnalyticsRecorderTests`, dont 3 rouges avant (-3000/-5000, -3600, et une fonction absente sur dev).
+  - Android : 2 témoins dans `CallAnalyticsTest`, rouges avant (-3000, -3).
+  - Le rouge est établi par calcul, recalculé par la QA de son côté.
+  - Gardes iOS `house_rules`, `cohesion`, `test_registration` et accent : 0.
+  - CI : `ios.yml` run 44704338560 (`only_testing=CallManagerAnalyticsRecorderTests`) et `android.yml` run 44704342952. Leur résultat est consigné dans la PR et dans l'issue.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves.
+  - R1 : le câblage de `CallLiveClock` n'a pas de témoin.
+  - R2 : la cause racine est l'horloge murale. Le rapport redevient valide, pas juste.
+  - R1 et R2 sont versées dans **#20010** (horloge monotone sur iOS et Android).
+  - R3 : deux témoins font doublon avec `CallSetupMetricsTests`. C'est mineur.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée :
+   - lire les runs 44704338560 et 44704342952 ;
+   - fusionner `dev` dans la branche ;
+   - fusionner la PR.
+1. **#20010** (horloge monotone, iOS et Android ; à coordonner avec la routine iOS), puis #19953 (Android).
+2. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
