@@ -67,6 +67,11 @@ describe('le registre des packs de cadres de gloire est FRAIS (generate:glory-fr
     for (const [src, text] of generated.files) expect({ src, text: readFileSync(join(PACK_ASSETS_DIR, src), 'utf8') }).toEqual({ src, text });
   });
 
+  it('retained.json ne déclare aucune clé deux fois (JSON.parse garderait la dernière en silence)', () => {
+    const keys = [...readFileSync(RETAINED_FILE, 'utf8').matchAll(/^  "([^"]+)": \[/gm)].map((match) => match[1]);
+    expect(keys.filter((key, index) => keys.indexOf(key) !== index)).toEqual([]);
+  });
+
   it('les fichiers retenus égalent ceux que la régénération retient', () => {
     expect(generated.retained).toEqual(readJson(RETAINED_FILE));
   });
