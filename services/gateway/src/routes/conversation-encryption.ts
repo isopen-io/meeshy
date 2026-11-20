@@ -41,7 +41,9 @@ import {
   E2EE_DIRECT_NOT_A_PAIR_MESSAGE,
   E2EE_ERROR_CODES,
   E2EE_IRREVERSIBLE_MESSAGE,
+  E2EE_PARTICIPANT_WITHOUT_DEVICE_MESSAGE,
 } from '@meeshy/shared/types/e2ee-directory';
+import { membersWithoutEndToEndDevice } from '../services/e2ee/members-without-device';
 import { otherEndToEndDirectOf, pairOfMembers, serverReadsMode } from '../services/conversations/directPair';
 import {
   ENCRYPTION_MODE_UNSUPPORTED_CODE,
@@ -216,6 +218,13 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
   /** #12966 — un tête-à-tête ne se chiffre de bout en bout qu'entre deux membres inscrits actifs : un tiers ne contourne pas la règle de la paire. */
   const notAPair = (reply: FastifyReply) =>
     sendError(reply, 409, E2EE_DIRECT_NOT_A_PAIR_MESSAGE, { code: E2EE_ERROR_CODES.DIRECT_NOT_A_PAIR });
+
+  /** #20073 — un membre sans appareil chiffré ne lirait rien : la bascule le nomme et n'écrit rien. */
+  const participantsWithoutDevice = (reply: FastifyReply, userIds: readonly string[]) =>
+    sendError(reply, 409, E2EE_PARTICIPANT_WITHOUT_DEVICE_MESSAGE, {
+      code: E2EE_ERROR_CODES.PARTICIPANT_WITHOUT_DEVICE,
+      details: { withoutDeviceUserIds: userIds },
+    });
 
   /** Le tête-à-tête chiffré que la paire a déjà, à côté de ce tête-à-tête lisible, ou `null`. */
   const pairEndToEndOf = async (conversation: RegimeConversation): Promise<string | null> => {
@@ -416,6 +425,10 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
           const existingEndToEnd = await pairEndToEndOf(conversation);
           if (existingEndToEnd) {
             return pairAlreadyEndToEnd(reply, existingEndToEnd);
+          }
+          const unequipped = await membersWithoutEndToEndDevice(prisma, conversation.participants.map((participant) => participant.userId));
+          if (unequipped.length > 0) {
+            return participantsWithoutDevice(reply, unequipped);
           }
         }
 

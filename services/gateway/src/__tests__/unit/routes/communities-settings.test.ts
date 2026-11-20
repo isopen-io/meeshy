@@ -26,7 +26,7 @@ jest.mock('../../../routes/communities/types', () => ({
 }));
 
 jest.mock('../../../utils/sanitize.js', () => ({
-  SecuritySanitizer: { sanitizeText: (s: string) => s },
+  SecuritySanitizer: { sanitizeText: (s: string) => s, sanitizePlainText: (s: string) => s },
 }));
 
 // ─── Import after mocks ───────────────────────────────────────────────────────

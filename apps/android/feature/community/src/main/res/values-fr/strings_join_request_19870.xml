@@ -4,5 +4,4 @@
     <string name="community_join_request">Demander à rejoindre</string>
     <string name="community_join_requested">Demande envoyée</string>
     <string name="community_join_requested_waiting">Un administrateur ou un modérateur doit l’accepter.</string>
-    <string name="community_join_cooldown">Votre dernière demande a été refusée : réessayez 7 jours après ce refus.</string>
 </resources>

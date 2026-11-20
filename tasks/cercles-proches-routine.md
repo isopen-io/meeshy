@@ -1645,3 +1645,46 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gardes iOS rc=0 sur 4d6e43a03 (house_rules, cohesion, test_registration, accent). Swift et Kotlin ne compilent pas ici : preuve par ios.yml et android.yml en workflow_dispatch.
 - Décisions ouvertes : #19682 (arrondi de startedAt), #19997 (adopter ou céder sans accusé de démarrage).
 - Prochain lot : #19929, puis le plafond `untilStopped` de `listOnlyState`, puis #19999 ; #19682 et #19997 une fois tranchées.
+
+## 2026-11-20 — réveil de 11 h : lot #20029 (404 d'un intermédiaire) → PR #20042
+
+- Reprise : #20000 fusionnée (133a21ad2), #19928 fermée. Aucune PR de la routine ouverte. Lot : #20029, portage du
+  commit 7657978cf (PR #20025 fermée en doublon) sur les sites purs de #20000.
+- iOS `SharedLocationServedRead.answer` et Android `ownSharedLocationAnswer` : seul un 404 au message « Route GET:… not
+  found » (Fastify, la passerelle n'a pas de `setNotFoundHandler`) vaut passerelle d'avant ; Traefik, portail captif,
+  corps vide ⇒ panne, attente gardée. Android : `ApiError.servedMessage` additif, rempli dans `ApiCall.kt`.
+- Témoins rouges poussés d'abord (8bc93b087), correctif e341b5182. Gardes iOS rc=0 (règles maison 42, cohésion,
+  inscription 2 060, accent 408) ; tête contient `dev` 95ab23af5. CI des PR « skipped » : `ios.yml` et `android.yml`
+  lancés en `workflow_dispatch` sur la branche.
+- Prochain lot : #19929 (sauvegarde restaurée : liste effacée et reconstruite, identifiant en empreinte), puis le plafond
+  `untilStopped` de `listOnlyState`, puis #19999 ; #19682 et #19997 attendent la décision du porteur.
+
+## 2026-11-20 — réveil de 13 h : #20042 recalée sur dev (a34b3344b)
+
+- Reprise : #20042 ouverte, tête b76cdc840. `android.yml` (run 44726589593) VERT sur e341b5182. `ios.yml` (run
+  44726594411) ROUGE au build des tests, hors lot : `SafetyAlertNotificationTests.swift:16` appelait depuis un contexte
+  non isolé une méthode `@MainActor` — défaut de `dev`, corrigé sur `dev` par 9d55ba1d6.
+- `origin/dev` (a34b3344b) fusionnée à la main, sans conflit. Gardes iOS sur l'arbre fusionné : règles maison, cohésion,
+  inscription des tests, accent, toutes rc=0. `ios.yml` relancé en `workflow_dispatch` sur la nouvelle tête.
+- Prochain lot : fusion de #20042, puis #19929, le plafond `untilStopped` de `listOnlyState`, #19999 ; #19682 et
+  #19997 attendent la décision du porteur.
+## 2026-11-20 — réveil de 13 h : lot #19929 (sauvegarde restaurée)
+
+- Reprise : #20000 (#19928, relecture en échec gardée muette) fusionnée dans `dev` à 10 h. Le réveil du 16 nov. s'était
+  arrêté sur une limite d'usage avant tout travail.
+- Lot : #19929, branche `claude/cercles-19929-restauration`. iOS + SDK seulement : Android a la sauvegarde désactivée
+  (`allowBackup="false"` + `data_extraction_rules.xml`), aucune liste ne peut y être restaurée.
+- Mise en œuvre : une liste écrite par un autre appareil s'EFFACE (liste, marque « reçue », démarrage, retraits en
+  attente) et la relecture du partage servi la reconstruit, reçue — plus d'arrêt ni de liste périmée partis d'une
+  sauvegarde. La marque d'appareil devient `SHA256(compte:installation)` ; une marque en clair d'avant vaut pour cet
+  appareil et se réécrit. `PushDeviceIdentity.settledInstallationId` rend `nil` quand le trousseau ne tient pas
+  l'identifiant : rien n'est jugé, la marque ne bouge pas. Branchement de production testé
+  (`SharedLocationSharingHolder.rosterStore`).
+- Témoins : `SharedLocationRestoredBackupTests` (nouveau fichier, la section #19767 de `SharedLocationSharingSyncTests`
+  y a déménagé pour tenir le budget), `PushDeviceIdentityTests`.
+- Audit adversarial : non bloquant. Empreinte préfixée par un domaine (F4) dans le lot. Suivis ouverts : #20054 (M1, un
+  arrêt en attente perdu en silence si l'appareil légitime ne se reconnaît plus), #20055 (M2, antérieur : « Partager »
+  avant la première relecture remplace la liste de l'autre appareil), #20056 (F1, sauvegarde d'avant toute marque).
+  F2 (identifiant absent ⇒ rien n'est jugé) assumé, comme avant le lot.
+- Prochain lot : fusion de cette PR (CI iOS en `workflow_dispatch`), puis #20055 (iOS + Android), le plafond
+  `untilStopped` de `listOnlyState`, #19999, #20054 ; #19682 et #19997 une fois tranchées.

@@ -104,6 +104,9 @@ function makeWorld(conversation: MongoDocument, members: Member[] = [ANALYST_ALI
       // #12966 — la paire n'a pas d'autre tête-à-tête.
       findMany: jest.fn(async () => []),
     },
+    e2EEDevice: {
+      findMany: jest.fn(async ({ where }: { where: { userId: { in: string[] } } }) => where.userId.in.map((userId) => ({ userId }))),
+    },
     participant: {
       findFirst: jest.fn(async ({ where }: { where: { userId: string } }) =>
         where.userId === ALICE ? { id: ALICE_PARTICIPANT, displayName: 'Alice' } : null),

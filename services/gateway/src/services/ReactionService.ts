@@ -465,6 +465,19 @@ export class ReactionService {
         const reaction = reactions.find(r => r.emoji === agg.emoji && r.participantId === pid);
         return {
           participantId: pid,
+          // #19996 — le `User.id`, SERVI. Le `select` ci-dessus le charge depuis
+          // toujours ; cette projection ne le posait pas, et le schéma de la
+          // route ne déclarait QUE `userId` : le sérialiseur supprimait donc le
+          // `participantId` servi sans fabriquer le `userId` déclaré, et aucune
+          // identité ne partait. iOS et Android déclarant `userId` non
+          // optionnel, la réponse entière échouait à se décoder chez eux.
+          //
+          // `?? null` et jamais `?? pid` : `Participant.userId` est nul pour un
+          // invité de lien, et un champ nommé `userId` déclare un `User.id`
+          // (§ « authContext.userId n'est PAS toujours un User.id » du
+          // `CLAUDE.md` de la passerelle). L'invité est identifié par son
+          // `participantId`, qui sort toujours.
+          userId: participant?.userId ?? null,
           username: resolveParticipantDisplayName(participant) ?? 'Anonymous',
           avatar: resolveParticipantAvatar(participant),
           createdAt: reaction?.createdAt?.toISOString() ?? new Date().toISOString()

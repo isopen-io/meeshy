@@ -43,7 +43,7 @@ class FallStringsTest {
         assertThat(fr.getValue("fall_pill_responded")).isEqualTo("%1\$s va bien")
         assertThat(fr.getValue("fall_card_at")).isEqualTo("Chute détectée à %1\$s")
         assertThat(fr.getValue("fall_share_person")).isEqualTo("Prévenir %1\$s si ma montre détecte une chute")
-        assertThat(fr.getValue("fall_me_unavailable")).isEqualTo("Indisponible sur Android : elle vient d'une Apple Watch, réglée depuis l'app iPhone.")
+        assertThat(fr.getValue("fall_me_unavailable")).isEqualTo("Indisponible sur Android : elle vient d'une Apple Watch réglée depuis l'iPhone.")
     }
 
     @Test

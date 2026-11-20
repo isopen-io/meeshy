@@ -11,5 +11,5 @@
     <string name="fall_share_person">%1$s benachrichtigen, wenn meine Uhr einen Sturz erkennt</string>
     <string name="fall_share_person_scope">Erkennt deine Apple Watch einen Sturz, wird %1$s sofort benachrichtigt.</string>
     <string name="fall_me_title">Sturzerkennung</string>
-    <string name="fall_me_unavailable">Auf Android nicht verfügbar: Sie kommt von einer Apple Watch, eingerichtet in der iPhone-App.</string>
+    <string name="fall_me_unavailable">Auf Android nicht verfügbar: kommt von der Apple Watch, per iPhone eingerichtet.</string>
 </resources>

@@ -88,8 +88,12 @@ const MOI = '507f1f77bcf86cd799439022';
 const AUTRE = '507f1f77bcf86cd799439033';
 const TIERS = '507f1f77bcf86cd799439044';
 
-function prismaDouble() {
+function prismaDouble(equipped: readonly string[]) {
   return {
+    e2EEDevice: {
+      findMany: jest.fn<any>(async ({ where }: any) =>
+        (where.retiredAt === null ? equipped : []).filter((id) => where.userId.in.includes(id)).map((userId) => ({ userId }))),
+    },
     community: { findFirst: jest.fn<any>().mockResolvedValue(null) },
     conversation: {
       findFirst: jest.fn<any>().mockResolvedValue(null),
@@ -128,8 +132,8 @@ function replyDouble() {
   return reply;
 }
 
-async function creer(body: Record<string, unknown>, role = 'ANALYST') {
-  const prisma = { ...prismaDouble() } as ReturnType<typeof prismaDouble> & { user: Record<string, unknown> };
+async function creer(body: Record<string, unknown>, role = 'ANALYST', equipped: readonly string[] = [MOI, AUTRE, TIERS]) {
+  const prisma = { ...prismaDouble(equipped) } as ReturnType<typeof prismaDouble> & { user: Record<string, unknown> };
   prisma.user = { ...prisma.user, findFirst: jest.fn<any>().mockResolvedValue(null) };
   let handler: any;
   const fastify: any = {
@@ -186,6 +190,39 @@ describe('un tête-à-tête ne NAÎT chiffré de bout en bout qu’entre deux me
 
   it.each(['server', 'hybrid'] as const)('un tête-à-tête %s à deux invités naît comme avant (contrôle)', async (encryptionMode) => {
     const prisma = await creer({ type: 'direct', participantIds: [AUTRE, TIERS], encryptionMode });
+
+    expect(sent.status).toBeUndefined();
+    expect(prisma.conversation.create).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('un tête-à-tête ne NAÎT chiffré de bout en bout que si chacun peut le lire (#20073)', () => {
+  it('l’invité n’a aucun appareil chiffré : 409 E2EE_PARTICIPANT_WITHOUT_DEVICE, personne n’est nommé, aucune conversation créée', async () => {
+    const prisma = await creer({ type: 'direct', participantIds: [AUTRE], encryptionMode: 'e2ee' }, 'ANALYST', [MOI]);
+
+    expect(sent.status).toBe(409);
+    expect(sent.body).toMatchObject({ code: E2EE_ERROR_CODES.PARTICIPANT_WITHOUT_DEVICE });
+    expect(JSON.stringify(sent.body)).not.toContain(AUTRE);
+    expect(prisma.conversation.create).not.toHaveBeenCalled();
+  });
+
+  it('le créateur n’a aucun appareil chiffré : même refus, rien n’est créé', async () => {
+    const prisma = await creer({ type: 'direct', participantIds: [AUTRE], encryptionMode: 'e2ee' }, 'ANALYST', [AUTRE]);
+
+    expect(sent.status).toBe(409);
+    expect(sent.body).toMatchObject({ code: E2EE_ERROR_CODES.PARTICIPANT_WITHOUT_DEVICE });
+    expect(prisma.conversation.create).not.toHaveBeenCalled();
+  });
+
+  it('chacun a un appareil : la paire naît chiffrée (contrôle)', async () => {
+    const prisma = await creer({ type: 'direct', participantIds: [AUTRE], encryptionMode: 'e2ee' });
+
+    expect(sent.status).toBeUndefined();
+    expect(prisma.conversation.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('un tête-à-tête lisible par le serveur naît sans appareil (contrôle)', async () => {
+    const prisma = await creer({ type: 'direct', participantIds: [AUTRE], encryptionMode: 'server' }, 'ANALYST', []);
 
     expect(sent.status).toBeUndefined();
     expect(prisma.conversation.create).toHaveBeenCalledTimes(1);
