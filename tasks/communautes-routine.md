@@ -701,3 +701,9 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - MeeshyUI : `CommunityJoinRequestsSection` en tête de l'écran Membres (avatar sans pastille de présence, pays · « Demande du … », boutons ✓ / ✕ de 44 pt nommés pour VoiceOver, « Voir plus de demandes »), confirmation avant refus (« ne pourra pas redemander avant sept jours »), ligne d'état après le geste. Onze clés × sept langues, mêmes mots que le web.
 - Cliquets : `community:join-requested` sort de l'asymétrie « web seul » (reste Android #19878) ; `SWIFT_SWEPT_EVENTS_AT_LAST_MEASURE` 173 → 174 ; les trois adresses `join-requests` quittent `PENDING_CLIENT_ENTRIES` du catalogue Swift.
 - Gates locaux : shared `__tests__/ci/` 25 fichiers, 216 tests verts ; iOS `check_house_rules.sh` (42 règles), `check_cohesion_budget.sh` (code 0), `check_test_registration.sh` (2 060 fichiers), `check-accent-color-hardcoding.mjs` (168 / 408), `check-swift-catalog-dead-entries.mjs` (326). Compilation et tests Swift : par `ios.yml` et `sdk-tests.yml` de la PR.
+
+## 2026-11-20 — réveil 13:00 UTC
+
+- Début du run : #20049 (iOS #19877, intendants) seule PR de la routine ouverte, inactive depuis 11:52 : run consacré à la mener à la fusion.
+- `ci.yml` rouge sur un témoin ÉTRANGER : `gateway-file-size-budget` (règle 3, `MessageHandler.ts` hors budget, venu de #20022 / #19939), corrigé sur `dev` par `a34b3344b`. `dev` fusionnée dans la branche sans conflit ; le témoin rejoué sur l'arbre fusionné : 5 / 5 verts.
+- Reste : `ios.yml` et `sdk-tests.yml` encore en file sur la tête précédente ; ils repartent sur la nouvelle tête.
