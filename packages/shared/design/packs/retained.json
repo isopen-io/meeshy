@@ -78,8 +78,8 @@
     "98412b5122d72947.json"
   ],
   "avatar-ring/cadres-illustres@1-avant-19935": [
-    "1988db0bd7d4dd37.json",
-    "7c8c0050d5fa2b4f.json"
+    "7c8c0050d5fa2b4f.json",
+    "1988db0bd7d4dd37.json"
   ],
   "avatar-ring/cadres-africains@1-avant-19935": [
     "1ab56fb985920005.json",
@@ -91,8 +91,8 @@
     "f97727531fcede9c.json"
   ],
   "avatar-ring/cadres-nordiques@1-avant-19935": [
-    "2e298af99644a660.json",
-    "a6ef258ac7ee97eb.json"
+    "a6ef258ac7ee97eb.json",
+    "2e298af99644a660.json"
   ],
   "avatar-ring/cadres-mayas@1-avant-19935": [
     "823b2e7ea0aa8b34.json",
@@ -100,14 +100,14 @@
     "c5807b3cd5729110.json"
   ],
   "avatar-ring/cadres-amerindiens@1-avant-19935": [
+    "99fceb6579610113.json",
     "1694175548d7adae.json",
-    "2164a180021bedc1.json",
-    "99fceb6579610113.json"
+    "2164a180021bedc1.json"
   ],
   "avatar-ring/cadres-australs@1-avant-19935": [
+    "f70546c36c087b51.json",
     "12a4cace4108bbc4.json",
-    "3583d233f7c85fc2.json",
-    "f70546c36c087b51.json"
+    "3583d233f7c85fc2.json"
   ],
   "glory-frame/afrique@1": [
     "00acc46cc2d58061.webp",
@@ -4285,36 +4285,36 @@
     "feca2c941155df8b.webp",
     "ff33233c8a91a3bb.webp"
   ],
-  "avatar-ring/cadres-africains@1-avant-19935": [
-    "1ab56fb985920005.json",
-    "da59abd2bc7ad5f2.json"
+  "avatar-ring/cadres-africains@1-avant-19935-trait": [
+    "9024d271ef9ca281.json",
+    "473d41ed662ea897.json"
   ],
-  "avatar-ring/cadres-amerindiens@1-avant-19935": [
-    "99fceb6579610113.json",
-    "1694175548d7adae.json",
-    "2164a180021bedc1.json"
+  "avatar-ring/cadres-amerindiens@1-avant-19935-trait": [
+    "0820f35980422f70.json",
+    "0e3ef69b0f0c985a.json",
+    "ddbfd562cf80f8ba.json"
   ],
-  "avatar-ring/cadres-australs@1-avant-19935": [
-    "f70546c36c087b51.json",
-    "12a4cace4108bbc4.json",
-    "3583d233f7c85fc2.json"
+  "avatar-ring/cadres-australs@1-avant-19935-trait": [
+    "a51c4c30b924282f.json",
+    "7a6165af83c18878.json",
+    "7b71ff13780c5a53.json"
   ],
-  "avatar-ring/cadres-celtes@1-avant-19935": [
-    "3e5448ec7f1b81e7.json",
-    "5e399a2af3618d9e.json",
-    "f97727531fcede9c.json"
+  "avatar-ring/cadres-celtes@1-avant-19935-trait": [
+    "e9e2fb6f9eebe5d5.json",
+    "3b43b241eb09f745.json",
+    "915dfcaa8b5ee778.json"
   ],
-  "avatar-ring/cadres-illustres@1-avant-19935": [
-    "7c8c0050d5fa2b4f.json",
-    "1988db0bd7d4dd37.json"
+  "avatar-ring/cadres-illustres@1-avant-19935-trait": [
+    "60b29251a719fca5.json",
+    "37bd6aa85c5e5fcc.json"
   ],
-  "avatar-ring/cadres-mayas@1-avant-19935": [
-    "823b2e7ea0aa8b34.json",
-    "b9c86ae2e5af52f0.json",
-    "c5807b3cd5729110.json"
+  "avatar-ring/cadres-mayas@1-avant-19935-trait": [
+    "735dd636c1e58c4b.json",
+    "a0db325136560ad4.json",
+    "af7eae580f515908.json"
   ],
-  "avatar-ring/cadres-nordiques@1-avant-19935": [
-    "a6ef258ac7ee97eb.json",
-    "2e298af99644a660.json"
+  "avatar-ring/cadres-nordiques@1-avant-19935-trait": [
+    "049ef6b0219b21bb.json",
+    "b3e27fc97ebf773e.json"
   ]
 }

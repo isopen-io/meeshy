@@ -93446,49 +93446,49 @@
         }
       }
     },
-    "profile.vitrine.memberSince": {
+    "profile.handle.since": {
       "extractionState": "manual",
       "localizations": {
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Membre depuis %@"
+            "value": "%1$@ · depuis %2$@"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Member since %@"
+            "value": "%1$@ · since %2$@"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Miembro desde %@"
+            "value": "%1$@ · desde %2$@"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mitglied seit %@"
+            "value": "%1$@ · seit %2$@"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Membro dal %@"
+            "value": "%1$@ · da %2$@"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Membro desde %@"
+            "value": "%1$@ · desde %2$@"
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "عضو منذ %@"
+            "value": "%1$@ · منذ %2$@"
           }
         }
       }

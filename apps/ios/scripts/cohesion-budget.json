@@ -184,7 +184,7 @@
     "apps/ios/Meeshy/Features/Stories/Views/StoryGestureOverlayView.swift::StoryGestureOverlayView.body": 272,
     "apps/ios/Meeshy/Features/Stories/Views/StoryGroupIntroOverlay.swift::StoryGroupIntroOverlay.body": 113,
     "apps/ios/Meeshy/Features/Stories/Views/StoryTrayActions.swift::StoryComposerCover.body": 90,
-    "apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift::MyStoryButton.body": 167,
+    "apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift::MyStoryButton.body": 166,
     "apps/ios/Meeshy/Features/Stories/Views/StoryViewerContainer.swift::StoryViewerContainer.body": 112,
     "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas+Layers.swift::StoryCardView.actionRailLayer": 103,
     "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Canvas+Layers.swift::StoryCardView.topChromeLayer": 82,

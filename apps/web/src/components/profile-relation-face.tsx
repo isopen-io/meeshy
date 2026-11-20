@@ -109,7 +109,7 @@ export function CircleLadderCard({ language, ladder, name }: { readonly language
           ? 'userProfile.relation.circle.byViewer'
           : 'userProfile.relation.circle.byTarget';
   return (
-    <section data-relation-circle={ladder.level} aria-labelledby={headingId} className="grid gap-2 rounded-card p-4" style={{ backgroundColor: 'var(--color-ios-fill, rgba(127,127,127,.14))' }}>
+    <section data-relation-circle={ladder.level} aria-labelledby={headingId} className="grid gap-2 rounded-card p-4" style={{ /* harmony-exempt: repli d'un jeton de charte défini (--color-ios-fill), jamais rendu */ backgroundColor: 'var(--color-ios-fill, rgba(127,127,127,.14))' }}>
       <h2 id={headingId} className="text-body font-bold">
         {translate(language, 'userProfile.relation.circle.title')}
       </h2>
