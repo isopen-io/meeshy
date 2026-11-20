@@ -55,7 +55,7 @@ const BURNED = oid('m-burned');
 const LAPSED = oid('m-lapsed');
 const VANISHED = oid('m-gone');
 
-type MessageRow = { id: string; deletedAt?: Date | null; expiresAt?: Date | null };
+type MessageRow = { id: string; deletedAt?: Date | null; expiresAt?: Date | null; viewOnceBurnedAt?: Date | null };
 
 describe('drain hors ligne — la vivacité du message est relue avant toute émission', () => {
   let manager: any;
@@ -83,13 +83,21 @@ describe('drain hors ligne — la vivacité du message est relue avant toute ém
           throw new Error(`Invalid \`prisma.message.findMany()\` invocation: Malformed ObjectID: ${String(id)}`);
         }
       }
+      // #19938 — le double rend EXACTEMENT les colonnes que l'appelant a
+      // demandées, et rien d'autre. Il projetait trois champs en dur, dont
+      // `viewOnceBurnedAt` n'était pas : un site qui DEMANDE la colonne et la
+      // jette ensuite rendait donc le même résultat qu'un site juste, et la
+      // troisième preuve de mort de la loi ne pouvait être exercée par aucun
+      // témoin de ce fichier. C'est « un double de test ment aussi par ce qu'il
+      // ACCEPTE », rejoué sur ce qu'il REND.
+      const selected: Record<string, boolean> = args?.select ?? {};
       return rows
         .filter((row) => ids.includes(row.id))
-        .map((row) => ({
-          id: row.id,
-          deletedAt: row.deletedAt ?? null,
-          expiresAt: row.expiresAt ?? null,
-        }));
+        .map((row) => Object.fromEntries(
+          Object.keys(selected)
+            .filter((column) => selected[column])
+            .map((column) => [column, column === 'id' ? row.id : (row as Record<string, unknown>)[column] ?? null]),
+        ));
     }) as any;
   }
 
@@ -139,6 +147,44 @@ describe('drain hors ligne — la vivacité du message est relue avant toute ém
     await manager._drainPendingMessages('reader', false);
 
     expect(emittedWith(SERVER_EVENTS.MESSAGE_NEW)).toEqual([]);
+  });
+
+  /**
+   * #19938 — la TROISIÈME preuve de mort, et la seule qu'aucun témoin
+   * n'exerçait sur ce chemin.
+   *
+   * Une vue unique purgée ne porte NI `deletedAt` NI `expiresAt` : sa bulle
+   * doit survivre à la destruction de son contenu, c'est la raison d'être de
+   * `purgeViewOnceContent`. `viewOnceBurnedAt` est donc tout ce qui prouve que
+   * le clair n'existe plus — et la lecture partagée du drain la DEMANDAIT puis
+   * la JETAIT à la projection, ce qu'un `as Array<…>` rendait invisible à
+   * `tsc`. La garde d'admission jumelle, elle, passait la ligne brute.
+   */
+  it('ne rejoue PAS le contenu d’une VUE UNIQUE dont le serveur a purgé le texte', async () => {
+    seedMessages([{ id: BURNED, viewOnceBurnedAt: new Date('2026-11-07T10:00:00Z'), deletedAt: null, expiresAt: null }]);
+    manager.setDeliveryQueue(queueOf([
+      { payload: { id: BURNED, content: 'le secret qui ne devait être lu qu’une fois' }, conversationId: CONV, messageId: BURNED },
+    ]));
+
+    await manager._drainPendingMessages('reader', false);
+
+    expect(emittedWith(SERVER_EVENTS.MESSAGE_NEW)).toEqual([]);
+  });
+
+  /**
+   * La seconde moitié, même raison que pour les deux autres causes : l'annonce
+   * de la mort doit passer, sans quoi le client garderait la bulle d'une vue
+   * unique dont le contenu est parti.
+   */
+  it('rejoue l’annonce de suppression d’une vue unique purgée', async () => {
+    seedMessages([{ id: BURNED, viewOnceBurnedAt: new Date('2026-11-07T10:00:00Z'), deletedAt: null, expiresAt: null }]);
+    manager.setDeliveryQueue(queueOf([
+      { payload: { messageId: BURNED, conversationId: CONV }, conversationId: CONV, messageId: BURNED, eventType: 'deleted' },
+    ]));
+
+    await manager._drainPendingMessages('reader', false);
+
+    expect(emittedWith(SERVER_EVENTS.MESSAGE_DELETED)).toHaveLength(1);
   });
 
   /**

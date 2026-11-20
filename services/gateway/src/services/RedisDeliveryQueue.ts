@@ -11,7 +11,7 @@ import { carriesMessageText } from '../socketio/queuedEventContract';
 import { destroyedAtBound, readBoundedPushReply } from './deliveryQueueBound';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import type { DeliveryQueueSealer } from './deliveryQueueSealing';
-import { ServerAtRestUnreadableError } from './messaging/serverAtRest';
+import { ServerAtRestUnavailableError, ServerAtRestUnreadableError } from './messaging/serverAtRest';
 
 const logger = enhancedLogger.child({ module: 'RedisDeliveryQueue' });
 
@@ -341,9 +341,10 @@ function collapseCrossSliceDuplicates(sorted: QueuedMessagePayload[]): QueuedMes
   return kept.reverse();
 }
 
-// Bounds for the in-process fallback slice only. It holds what could not reach
-// Redis during a transient outage, so it bounds GATEWAY HEAP across every user
-// at once — a different resource from the durable slice's
+// Bounds for the in-process slice only. It holds what could not reach Redis
+// during a transient outage AND — depuis #19827 — ce qu'on n'a pas PU sceller
+// alors que Redis se portait bien. Il borne donc le TAS de la passerelle pour
+// tous les comptes à la fois — a different resource from the durable slice's
 // `DELIVERY_QUEUE_MAX_PER_USER`, which bounds Redis CPU, Redis memory and the
 // reconnect replay burst. The two caps are deliberately different sizes.
 const MEMORY_QUEUE_MAX_USERS = 1000;
@@ -361,6 +362,46 @@ function isPermanentlyUnreadable(error: unknown): boolean {
   return error instanceof ServerAtRestUnreadableError
     && (error.reason === 'authentication-failed' || error.reason === 'malformed');
 }
+
+/**
+ * #19827 — le JUMEAU d'`isPermanentlyUnreadable`, à l'ENFILAGE, et il ne rend
+ * pas le même verdict sur les mêmes causes : les deux ne paient pas la même
+ * chose pour garder.
+ *
+ * Au drain, l'entrée gardée est SCELLÉE — la garder ne retient aucun clair, donc
+ * la moindre chance de rouvrir plus tard vaut d'être attendue, clé maîtresse
+ * absente comprise. Ici l'entrée gardée est EN CLAIR dans le tas : on ne garde
+ * que ce qu'une attente peut débloquer SANS redémarrage, puisqu'un redémarrage
+ * vide le tas.
+ *
+ * Permanent, donc :
+ * - la charge ne se sérialise pas (`TypeError` de `JSON.stringify`) — aucune
+ *   clé ne changera cela ;
+ * - la clé maîtresse manque, est de mauvaise longueur, ou n'ouvre pas la clé de
+ *   la conversation : le remède est une variable d'environnement et un
+ *   redémarrage, et le tas ne traverse pas le redémarrage.
+ *
+ * Transitoire, et c'est le cas qui motive #19827 : la clé de la conversation
+ * n'a pas pu être CRÉÉE (base injoignable, élection de primaire, conflit
+ * d'écriture — `ConversationKeyGenerationFailedError`, #19786), la base des
+ * clés est injoignable (`key-unavailable`), ou la cause ne se lit pas. Une
+ * cause inconnue est transitoire PAR DÉFAUT : détruire une livraison demande
+ * une raison, la garder n'en demande pas.
+ */
+function isPermanentlyUnsealable(error: unknown): boolean {
+  if (error instanceof TypeError || error instanceof SyntaxError) return true;
+  return error instanceof ServerAtRestUnavailableError
+    && (error.reason === 'missing' || error.reason === 'invalid-length' || error.reason === 'key-unwrap-failed');
+}
+
+/**
+ * Ce qu'`enqueue` doit faire d'une entrée préparée. `keep` est la seule forme
+ * qui porte une entrée NON scellée : elle ne part pas vers Redis.
+ */
+type SealVerdict =
+  | { readonly outcome: 'seal'; readonly entry: QueuedMessagePayload }
+  | { readonly outcome: 'keep'; readonly entry: QueuedMessagePayload }
+  | { readonly outcome: 'drop' };
 
 function isStillLive(entry: QueuedMessagePayload, now: number): boolean {
   const millis = new Date(entry.enqueuedAt).getTime();
@@ -415,23 +456,64 @@ export class RedisDeliveryQueue {
   }
 
   /**
-   * #12822 — FAIL-CLOSED : une entrée à sceller qui ne se scelle pas (aucun
-   * sceau, clé maîtresse absente, clé de conversation illisible) n'est PAS
-   * enfilée. Le destinataire relira le message en ouvrant la conversation ;
-   * le clair ne se pose jamais dans Redis à la place.
+   * #12822 — FAIL-CLOSED : une entrée à sceller qui ne se scelle pas ne va
+   * JAMAIS dans Redis en clair. Le sceau couvre exactement le modèle de menace
+   * d'une copie du magasin sans l'environnement de la passerelle — disque volé,
+   * sauvegarde AOF fuitée —, et cette moitié-là ne bouge pas.
+   *
+   * #19827 — mais le refus décidait AUSSI d'une LIVRAISON, et c'est l'inversion
+   * de la doctrine du drain quinze lignes plus bas : fail-CLOSED sur la preuve,
+   * où un secret est en jeu ; fail-OPEN sur l'ABSENCE de preuve, où c'est une
+   * livraison. Un échec de scellement n'est pas la preuve que ce contenu ne doit
+   * pas voyager : c'est l'aveu qu'on n'a pas PU le sceller.
+   *
+   * CE QUI EST PERDU, EXACTEMENT, et il faut le dire juste parce que c'est ce
+   * qui pèse dans l'arbitrage ci-dessous : **le REJEU**, pas le message. La
+   * ligne `Message` est écrite par `saveMessage` AVANT tout éventail, et le
+   * destinataire la relira en ouvrant la conversation — c'est la phrase que
+   * #12822 écrivait déjà ici, et elle reste vraie. Ce que la destruction coûte
+   * est l'arrivée de la bulle à la RECONNEXION, son accusé de remise, et la
+   * traduction déjà calculée qui voyageait avec elle : aucun client ne relit
+   * spontanément au reconnect — c'est la raison d'être de cette file
+   * (`deliveryQueueSealing.ts`). Un incident de la base des clés rendait donc
+   * muette, pour chaque absent, toute sa durée — un `logger.error` pour seule
+   * trace.
+   *
+   * Le refus est donc CLASSÉ, et les deux verdicts n'envoient pas chercher au
+   * même endroit :
+   *
+   * - `drop` — rien ne scellera jamais cette entrée DANS CE PROCESSUS : aucun
+   *   sceau câblé, clé maîtresse absente ou erronée (le remède est une
+   *   configuration et un redémarrage, qui vide le tas — la garder n'achèterait
+   *   rien et retiendrait du clair pour rien), charge qui ne se sérialise pas ;
+   * - `keep` — on n'a pas PU, maintenant : clé de conversation pas encore
+   *   créée, base des clés injoignable, cause inconnue. L'entrée est gardée
+   *   dans la tranche MÉMOIRE, telle quelle, et `enqueue` ne la pousse pas vers
+   *   Redis.
+   *
+   * La classification est volontairement PLUS LARGE côté `drop` que celle du
+   * drain (`isPermanentlyUnreadable`) : là-bas, garder ne coûte rien, l'entrée
+   * étant déjà scellée ; ici, garder retient du clair dans le tas. Le tas n'est
+   * pas persisté et vit dans l'environnement que le modèle de menace suppose
+   * intact, mais ce n'est pas une raison d'y retenir ce qu'aucune attente ne
+   * débloquera.
    */
-  private async sealedForStorage(userId: string, entry: QueuedMessagePayload): Promise<QueuedMessagePayload | null> {
-    const refuse = (reason: string): null => {
-      logger.error('Offline entry of an at-rest conversation not queued: it cannot be sealed', {
-        userId, conversationId: entry.conversationId, messageId: entry.messageId, eventType: normalizedEventType(entry), reason,
+  private async sealedForStorage(userId: string, entry: QueuedMessagePayload): Promise<SealVerdict> {
+    const refuse = (reason: string, error?: unknown): SealVerdict => {
+      const permanent = error === undefined || isPermanentlyUnsealable(error);
+      logger.error(permanent
+        ? 'Offline entry of an at-rest conversation DROPPED: it can never be sealed'
+        : 'Offline entry of an at-rest conversation kept unsealed in memory: it cannot be sealed right now', {
+        userId, conversationId: entry.conversationId, messageId: entry.messageId, eventType: normalizedEventType(entry),
+        reason, disposition: permanent ? 'dropped' : 'kept-in-memory',
       });
-      return null;
+      return permanent ? { outcome: 'drop' } : { outcome: 'keep', entry };
     };
     if (!this.sealer) return refuse('no-sealer');
     try {
-      return await this.sealer.seal(entry, userId);
+      return { outcome: 'seal', entry: await this.sealer.seal(entry, userId) };
     } catch (error) {
-      return refuse(error instanceof Error && 'code' in error ? String(error.code) : 'seal-failed');
+      return refuse(error instanceof Error && 'code' in error ? String(error.code) : 'seal-failed', error);
     }
   }
 
@@ -533,9 +615,22 @@ export class RedisDeliveryQueue {
   }
 
   async enqueue(userId: string, incoming: QueuedMessagePayload, options: DeliveryQueueEnqueueOptions = {}): Promise<void> {
-    const entry = options.sealAtRest ? await this.sealedForStorage(userId, incoming) : incoming;
-    if (!entry) return;
-    const redis = this.getRedis();
+    const verdict: SealVerdict = options.sealAtRest
+      ? await this.sealedForStorage(userId, incoming)
+      : { outcome: 'seal', entry: incoming };
+    if (verdict.outcome === 'drop') return;
+    const entry = verdict.entry;
+    // #19827 — une entrée gardée faute de sceau est EN CLAIR : la tranche
+    // durable lui est fermée, et c'est le `&&` ci-dessous qui le tient, pas un
+    // commentaire. Redis est sauté MÊME EN PLEINE SANTÉ, et l'entrée tombe dans
+    // la tranche mémoire, qui n'est jamais écrite sur disque et dont le drain,
+    // la purge par message et le plafond s'occupent déjà.
+    //
+    // Elle n'en ressort pas non plus par la remise : `restoreForRetry` ne reçoit
+    // que ce que `openedForReplay` a classé `retry`, qui exige un
+    // `sealedPayload` — une entrée non scellée n'y entre pas.
+    const heapOnly = verdict.outcome === 'keep';
+    const redis = heapOnly ? null : this.getRedis();
     const serialized = JSON.stringify(entry);
     const dedupId = entry.dedupKey ?? entry.messageId;
 
@@ -722,8 +817,10 @@ export class RedisDeliveryQueue {
   /**
    * La tranche en mémoire, balayée par USAGE et non par index : elle ne porte
    * aucune clé Redis, donc l'index inverse ne la désigne pas. Son coût est borné
-   * par `MEMORY_QUEUE_MAX_USERS` × `MEMORY_QUEUE_MAX_PER_USER`, et elle n'est
-   * peuplée que pendant une panne Redis.
+   * par `MEMORY_QUEUE_MAX_USERS` × `MEMORY_QUEUE_MAX_PER_USER`. Elle se peuple
+   * pendant une panne Redis, et — depuis #19827 — quand un scellement a échoué
+   * pour une cause transitoire : ce balayage est alors le SEUL qui retire le
+   * clair d'un message détruit, puisque l'index inverse ne désigne pas le tas.
    */
   private purgeMemorySlice(messageId: string): number {
     let removed = 0;
@@ -749,7 +846,8 @@ export class RedisDeliveryQueue {
     const redis = this.getRedis();
 
     // Entries stashed here were queued during a transient Redis outage before
-    // it recovered. Pulled out up front so they're never orphaned: without this,
+    // it recovered, ou gardées en clair faute de sceau (#19827), Redis sain.
+    // Pulled out up front so they're never orphaned: without this,
     // a Redis-reachable drain() would return only the Redis-backed entries and
     // silently leave these sitting in memory forever (see enqueue()'s fallback).
     // Their FIFO position relative to Redis-backed entries is resolved by
@@ -786,9 +884,10 @@ export class RedisDeliveryQueue {
 
     if (redis) {
       try {
-        // Add the memory-fallback slice: entries stashed there during a transient
-        // Redis outage are still pending until drain() replays them (drain merges
-        // both slices). Returning llen alone would under-report the true backlog.
+        // Add the in-process slice: entries stashed there during a transient
+        // Redis outage — ou gardées faute de sceau (#19827) — are still pending
+        // until drain() replays them (drain merges both slices). Returning llen
+        // alone would under-report the true backlog.
         return (await redis.llen(queueKey(userId))) + memoryCount;
       } catch (error) {
         logger.warn('Redis size failed, falling back to memory', { userId, error });
@@ -835,8 +934,9 @@ export class RedisDeliveryQueue {
       }
     }
 
-    // Always sweep the memory fallback too, regardless of Redis reachability:
-    // entries land here during a transient Redis outage and must still expire
+    // Always sweep the in-process slice too, regardless of Redis reachability:
+    // entries land here during a transient Redis outage — ou faute de sceau
+    // (#19827), Redis sain — and must still expire
     // on schedule even after Redis recovers (drain() reads both, but cleanup
     // must not let them sit unbounded until then).
     for (const [userId, entries] of this.memoryQueue.entries()) {

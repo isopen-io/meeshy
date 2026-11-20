@@ -446,7 +446,7 @@ final class WebRTCService {
     /// Compute a real loss RATIO between two snapshots: Δlost / (Δlost+Δrecv).
     /// The old code passed the raw cumulative count as a fraction, so a single
     /// lost packet read as >100% loss and pinned quality to .critical for life.
-    private static func intervalLossRatio(_ stats: CallStats, previous: CallStats?) -> Double {
+    static func intervalLossRatio(_ stats: CallStats, previous: CallStats?) -> Double {
         let deltaLost = max(0, stats.packetsLost - (previous?.packetsLost ?? 0))
         let deltaReceived = max(0, stats.inboundPacketsReceived - (previous?.inboundPacketsReceived ?? 0))
         let denom = deltaLost + deltaReceived
