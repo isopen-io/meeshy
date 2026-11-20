@@ -12,6 +12,8 @@ const pt = {
   'game.frappe.say.gold': 'A nº {number} é de ouro. Seus ancestrais a viram.',
   'game.frappe.say.prism': 'A nº {number} é de prisma: todos os idiomas brilham nela.',
   'game.frappe.glory': '+{glory} de glória',
+  'game.frappe.glory_toward': '{glory} de glória até {rank}',
+  'game.frappe.risen': 'Chamam você de {rank}',
   'game.frappe.refused.shadow': 'Uma sombra cobre sua luz. Suas próximas faíscas vão dissipá-la, e a gente cunha.',
   'game.frappe.refused.locked': 'Sua Herança espera um título mais alto. Sua glória vai abri-la, e a gente cunha.',
   'game.frappe.refused.light': 'Sua luz ainda não basta. Suas próximas faíscas vão alimentá-la.',
