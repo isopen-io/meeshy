@@ -10,6 +10,7 @@
  *
  * Le reste n'a pas de fil. `groupNotifications: false` retire les deux au chokepoint (`push-delivery-preferences.ts`).
  */
+import { SAFETY_ALERT_CLEARED_PUSH_TYPE, SAFETY_ALERT_PUSH_TYPE } from '@meeshy/shared/types/fall-detection';
 import { isGameNotificationType } from '@meeshy/shared/utils/game/notifications';
 
 export const GAME_PUSH_THREAD_ID = 'game';
@@ -27,4 +28,15 @@ export function pushThreadFields(params: {
 /** Le `thread-id` APNs d'une charge : le fil de sa conversation, sinon son fil iOS seul. */
 export function apnsThreadIdOf(payload: PushThreadFields): string | undefined {
   return payload.threadId ?? payload.apnsThreadId;
+}
+
+const UNLOGGED_COLLAPSE_TYPES: ReadonlySet<string> = new Set([SAFETY_ALERT_PUSH_TYPE, SAFETY_ALERT_CLEARED_PUSH_TYPE]);
+
+/**
+ * Le `collapseId` qu'un journal du transport peut porter : celui d'une alerte de sécurité, même
+ * opaque, ne s'écrit jamais — il relierait les journaux d'un même émetteur d'un épisode à l'autre.
+ */
+export function loggableCollapseId(payload: { readonly collapseId?: string | null; readonly data?: Readonly<Record<string, string>> }): string | undefined {
+  if (!payload.collapseId) return undefined;
+  return UNLOGGED_COLLAPSE_TYPES.has(payload.data?.type ?? '') ? undefined : payload.collapseId;
 }

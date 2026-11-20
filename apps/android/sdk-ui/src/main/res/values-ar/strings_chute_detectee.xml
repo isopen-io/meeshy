@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La chute détectée (#18748) : android-only tant que les clés fall.* ne sont pas au catalogue iOS. Android ne détecte rien. -->
+<resources>
+    <string name="fall_someone">أحد أفراد عائلتك</string>
+    <string name="fall_pill_detected">تم رصد سقوط على ساعة %1$s</string>
+    <string name="fall_pill_responded">%1$s بخير</string>
+    <string name="fall_card_at">تم رصد سقوط عند %1$s</string>
+    <string name="fall_battery">البطارية %1$d٪</string>
+    <string name="fall_open_map">عرض آخر موقع</string>
+    <string name="fall_a11y">تم رصد سقوط لدى %1$s</string>
+    <string name="fall_share_person">تنبيه %1$s إذا رصدت ساعتي سقوطًا</string>
+    <string name="fall_share_person_scope">إذا رصدت ساعة Apple Watch سقوطًا، يتم تنبيه %1$s فورًا.</string>
+    <string name="fall_me_title">رصد السقوط</string>
+    <string name="fall_me_unavailable">غير متاح على Android: يأتي من ساعة Apple Watch، ويُضبط في تطبيق iPhone.</string>
+</resources>

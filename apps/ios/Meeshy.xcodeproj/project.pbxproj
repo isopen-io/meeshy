@@ -7,6 +7,18 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		6082FD287281D433A08C839C /* FallAnnouncementFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAB74AE77CDE2032933D3EF0 /* FallAnnouncementFeed.swift */; };
+		A9D153BEFE28760650995E44 /* FallConsentSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 566D0DF7DE2E47FC05DF45B0 /* FallConsentSettingsSection.swift */; };
+		D7510E870A3EA122EA6F3002 /* FallDetectionCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A279A6210F114F4B778753D6 /* FallDetectionCenter.swift */; };
+		B7C556E2D02F951B02897FCF /* FallDetectionWording.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDD1894C96B72F72B0CB9A8A /* FallDetectionWording.swift */; };
+		17A9E55953CF98E1F045D10C /* FallViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB12A312FDEBBE56B26F8F92 /* FallViews.swift */; };
+		A39B138A7FA8BD82D2702BCB /* HealthKitFallSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = C162C59386E1924E2C3520BE /* HealthKitFallSource.swift */; };
+		DCD42CF7A56E804CD9875BD9 /* ProfileFallRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4815A127D5151B7006DDC6D /* ProfileFallRow.swift */; };
+		2F4672CC58A57FB8AD289092 /* SafetyAlertNotificationCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDB5FAAE79F17E441A18A2E2 /* SafetyAlertNotificationCategory.swift */; };
+		4325264C04EE4B737FE8BA98 /* FallConsentSettingsViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A9CD12CCA774B2C06D89EE8 /* FallConsentSettingsViewModelTests.swift */; };
+		934EE94F4B1A7CE8CCA2497C /* FallDetectionCenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843D11522B42803BB2EB21EC /* FallDetectionCenterTests.swift */; };
+		21EC0CF4B52D63A862C6AF52 /* SafetyAlertNotificationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ADB6AC29CABAC101F4F64E3 /* SafetyAlertNotificationTests.swift */; };
+		54E4568CF0D37CEE302FFABF /* MockFallDetectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89CDECD43B3FAB1C67F5EC73 /* MockFallDetectionService.swift */; };
 		00073C670926284DD45E1271 /* StoryViewerEngagement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7417FA813FF1BE163808BFC4 /* StoryViewerEngagement.swift */; };
 		0008D7D5B479D759E7DBC760 /* MediaSaveDeduplicationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2624CEAC671EFD3549C7B59C /* MediaSaveDeduplicationTests.swift */; };
 		000948901E548E0CAC33E529 /* StatusBubbleControllerReplyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ABF76B8551B950BB417F705 /* StatusBubbleControllerReplyTests.swift */; };
@@ -4969,6 +4981,18 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		CAB74AE77CDE2032933D3EF0 /* FallAnnouncementFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FallAnnouncementFeed.swift; sourceTree = "<group>"; };
+		566D0DF7DE2E47FC05DF45B0 /* FallConsentSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FallConsentSettingsSection.swift; sourceTree = "<group>"; };
+		A279A6210F114F4B778753D6 /* FallDetectionCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FallDetectionCenter.swift; sourceTree = "<group>"; };
+		EDD1894C96B72F72B0CB9A8A /* FallDetectionWording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FallDetectionWording.swift; sourceTree = "<group>"; };
+		CB12A312FDEBBE56B26F8F92 /* FallViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FallViews.swift; sourceTree = "<group>"; };
+		C162C59386E1924E2C3520BE /* HealthKitFallSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitFallSource.swift; sourceTree = "<group>"; };
+		C4815A127D5151B7006DDC6D /* ProfileFallRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileFallRow.swift; sourceTree = "<group>"; };
+		BDB5FAAE79F17E441A18A2E2 /* SafetyAlertNotificationCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafetyAlertNotificationCategory.swift; sourceTree = "<group>"; };
+		1A9CD12CCA774B2C06D89EE8 /* FallConsentSettingsViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FallConsentSettingsViewModelTests.swift; sourceTree = "<group>"; };
+		843D11522B42803BB2EB21EC /* FallDetectionCenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FallDetectionCenterTests.swift; sourceTree = "<group>"; };
+		9ADB6AC29CABAC101F4F64E3 /* SafetyAlertNotificationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafetyAlertNotificationTests.swift; sourceTree = "<group>"; };
+		89CDECD43B3FAB1C67F5EC73 /* MockFallDetectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockFallDetectionService.swift; sourceTree = "<group>"; };
 		00008A0920B7ACBE2AAB8727 /* CallMontageRiseAndFadeGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallMontageRiseAndFadeGuardTests.swift; sourceTree = "<group>"; };
 		000EBA9963DBF574F94AE01B /* ConversationAudioCoordinator+NowPlaying.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationAudioCoordinator+NowPlaying.swift"; sourceTree = "<group>"; };
 		0016995061E3B6CB76B0738A /* SessionTransitionPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTransitionPlan.swift; sourceTree = "<group>"; };
@@ -9842,6 +9866,31 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		9D90EF5CDDADC5217495EB66 /* FallDetection */ = {
+			isa = PBXGroup;
+			children = (
+				CAB74AE77CDE2032933D3EF0 /* FallAnnouncementFeed.swift */,
+				566D0DF7DE2E47FC05DF45B0 /* FallConsentSettingsSection.swift */,
+				A279A6210F114F4B778753D6 /* FallDetectionCenter.swift */,
+				EDD1894C96B72F72B0CB9A8A /* FallDetectionWording.swift */,
+				CB12A312FDEBBE56B26F8F92 /* FallViews.swift */,
+				C162C59386E1924E2C3520BE /* HealthKitFallSource.swift */,
+				C4815A127D5151B7006DDC6D /* ProfileFallRow.swift */,
+				BDB5FAAE79F17E441A18A2E2 /* SafetyAlertNotificationCategory.swift */,
+			);
+			path = FallDetection;
+			sourceTree = "<group>";
+		};
+		26B6A1E10DFCE77F6AE9569C /* FallDetection */ = {
+			isa = PBXGroup;
+			children = (
+				1A9CD12CCA774B2C06D89EE8 /* FallConsentSettingsViewModelTests.swift */,
+				843D11522B42803BB2EB21EC /* FallDetectionCenterTests.swift */,
+				9ADB6AC29CABAC101F4F64E3 /* SafetyAlertNotificationTests.swift */,
+			);
+			path = FallDetection;
+			sourceTree = "<group>";
+		};
 		00B61685604373ED5FF975B5 /* MeeshyWidgets */ = {
 			isa = PBXGroup;
 			children = (
@@ -11520,6 +11569,7 @@
 				B61CC3CEDAB98139499365ED /* MockNotificationFeed.swift */,
 				A587E039D836AA3B3610FC95 /* MockOnboardingService.swift */,
 				B9B31BAF0414EEC89BE198F6 /* MockPhoneCallService.swift */,
+				89CDECD43B3FAB1C67F5EC73 /* MockFallDetectionService.swift */,
 				B9F1E9485A4F581B21B3DCCA /* MockPhoneReachabilityService.swift */,
 				CE87654142A6243C964F8E3A /* MockPostService.swift */,
 				AF27ED03C1648E86B0B43593 /* MockPostServiceRequirementParityTests.swift */,
@@ -11628,6 +11678,7 @@
 				5E38B9D17E678682CEE6AADF /* Packs */,
 				143C24725FE7000995B1AD86 /* Persistence */,
 				890F135FA5EBAB609886B59B /* PhoneCall */,
+				26B6A1E10DFCE77F6AE9569C /* FallDetection */,
 				82F74759DB9CAC59E9070185 /* PhoneReachability */,
 				2C653A88DAB5C8FDC4D0DEA4 /* Profile */,
 				4C83CEAC9354B068009FB5D1 /* River */,
@@ -15720,6 +15771,7 @@
 				892804B253B797C4A6D62B45 /* Notifications */,
 				88295AFD367C11B4A792ADCB /* Onboarding */,
 				902C32CB3F84896470CAC45B /* PhoneCall */,
+				9D90EF5CDDADC5217495EB66 /* FallDetection */,
 				E32A2DCF57E2A10322302A42 /* PhoneReachability */,
 				BEA1187ADB72D2EF448ADBC6 /* Profile */,
 				94A04AF22BCD0C125F728C9F /* River */,
@@ -18604,6 +18656,14 @@
 				4A7551F601F340130CB159B0 /* PersonLocationMapScreen.swift in Sources */,
 				E488345564D80A5F732B63FF /* PhoneCallAnnouncementFeed.swift in Sources */,
 				FEC003E5DF39C1C4B82DCA05 /* PhoneCallCenter.swift in Sources */,
+				6082FD287281D433A08C839C /* FallAnnouncementFeed.swift in Sources */,
+				A9D153BEFE28760650995E44 /* FallConsentSettingsSection.swift in Sources */,
+				D7510E870A3EA122EA6F3002 /* FallDetectionCenter.swift in Sources */,
+				B7C556E2D02F951B02897FCF /* FallDetectionWording.swift in Sources */,
+				17A9E55953CF98E1F045D10C /* FallViews.swift in Sources */,
+				A39B138A7FA8BD82D2702BCB /* HealthKitFallSource.swift in Sources */,
+				DCD42CF7A56E804CD9875BD9 /* ProfileFallRow.swift in Sources */,
+				2F4672CC58A57FB8AD289092 /* SafetyAlertNotificationCategory.swift in Sources */,
 				DC58B1FDBEB683E96F670249 /* PhoneCallReporter.swift in Sources */,
 				9CCA949575C00351FCB0DB46 /* PhoneCallSharingSettingsSection.swift in Sources */,
 				E9537DF152D846DE13BF0159 /* PhoneCallViews.swift in Sources */,
@@ -20680,6 +20740,7 @@
 				6E670EDD17545EEE19A82D2A /* MockNotificationFeed.swift in Sources */,
 				7B0B94CFB89917FE74AEE0B7 /* MockOnboardingService.swift in Sources */,
 				E8D9F503D430990C3DCD5C42 /* MockPhoneCallService.swift in Sources */,
+				54E4568CF0D37CEE302FFABF /* MockFallDetectionService.swift in Sources */,
 				56A505A3B54F5C6D44D2F980 /* MockPhoneReachabilityService.swift in Sources */,
 				2EAEDAAFF9D75AAE005B8EC6 /* MockPostService.swift in Sources */,
 				FE97C2919408E92E04D59629 /* MockPostServiceRequirementParityTests.swift in Sources */,
@@ -20836,6 +20897,9 @@
 				D0BA9E4D8CFD51E097DF9D0F /* PerpetualMotionGuardTests.swift in Sources */,
 				7E35BE66F2DC90FCAFE87504 /* PersistentEffectLifecycleSourceGuardTests.swift in Sources */,
 				DF32C5F2E2E5B49ABEA59100 /* PhoneCallCenterTests.swift in Sources */,
+				4325264C04EE4B737FE8BA98 /* FallConsentSettingsViewModelTests.swift in Sources */,
+				934EE94F4B1A7CE8CCA2497C /* FallDetectionCenterTests.swift in Sources */,
+				21EC0CF4B52D63A862C6AF52 /* SafetyAlertNotificationTests.swift in Sources */,
 				A2057BD2581971830E07E0A0 /* PhoneCallSettingsViewModelsTests.swift in Sources */,
 				834B345A6D02996F70B7B397 /* PhoneChangeFlowModelTests.swift in Sources */,
 				6C2335B5319616CCB85B3A81 /* PhonePromptPolicyTests.swift in Sources */,

@@ -15,6 +15,8 @@ const ProfileTogetherRow = lazy(() => import('@/routes/user-profile-together').t
 const ProfileShareLocationRow = lazy(() => import('@/routes/user-profile-share-location').then((m) => ({ default: m.ProfileShareLocationRow })));
 const ProfileBatteryRow = lazy(() => import('@/components/battery-panel').then((m) => ({ default: m.ProfileBatteryRow })));
 const ProfilePhoneReachabilityRow = lazy(() => import('@/components/phone-reachability-panel').then((m) => ({ default: m.ProfilePhoneReachabilityRow })));
+/* La chute détectée (#18748) se garde elle-même : rien hors Sang, sauf un épisode que le serveur m'a servi. */
+const ProfileFallRow = lazy(() => import('@/components/fall-panel').then((m) => ({ default: m.ProfileFallRow })));
 /* L'inactivité (#18738) se garde elle-même : rien sous Sang, sauf une alerte que le serveur m'a servie. */
 const ProfileInactivityRow = lazy(() => import('@/components/inactivity-panel').then((m) => ({ default: m.ProfileInactivityRow })));
 /* « En appel » (#18753) se garde lui-même : rien hors Sang et équipe, sauf un état que le serveur m'a servi. */
@@ -69,6 +71,7 @@ export function ProfileRelationRows({
       />
       {offered('talkie') ? <ProfileTalkieRow language={language} person={summary} onNotice={notice} /> : null}
       {offered('together') ? <ProfileTogetherRow language={language} person={summary} onNotice={notice} /> : null}
+      <ProfileFallRow language={language} person={named} />
       <ProfileInactivityRow language={language} person={named} />
       <ProfilePhoneCallRow language={language} person={named} />
       {offered('unreachable') ? <ProfilePhoneReachabilityRow language={language} viewerId={viewerId} person={named} /> : null}

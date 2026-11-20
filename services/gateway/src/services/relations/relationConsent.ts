@@ -110,7 +110,7 @@ export async function relationConsentCounterpartsOf(
  * défaut du niveau effectif. La batterie et son relevé à la demande lisent la même colonne ;
  * l'injoignabilité du téléphone (#18737) et l'alerte d'inactivité (#18738) ont chacune la leur.
  */
-export const STORED_CONSENT_FEATURES = ['device.battery', 'device.battery.pull', 'device.unreachable', 'safety.inactivity', 'device.call'] as const;
+export const STORED_CONSENT_FEATURES = ['device.battery', 'device.battery.pull', 'device.unreachable', 'safety.inactivity', 'device.call', 'health.fall'] as const;
 export type StoredConsentFeature = (typeof STORED_CONSENT_FEATURES)[number];
 
 const STORED_COLUMN = {
@@ -119,6 +119,7 @@ const STORED_COLUMN = {
   'device.unreachable': 'unreachableShared',
   'safety.inactivity': 'inactivityShared',
   'device.call': 'callShared',
+  'health.fall': 'fallShared',
 } as const satisfies Record<StoredConsentFeature, string>;
 
 const storedValue = (value: unknown): boolean | null => (value === true || value === false ? value : null);

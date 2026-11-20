@@ -220,6 +220,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         // écrivent déjà. `legacyPath(for:)` la donne (#4282).
         let endpoint = legacyPath(for: typedEndpoint)
         recordRequest(endpoint: endpoint, rejectionPolicy: typedEndpoint.rejectionPolicy, method: "PUT", encodableBody: body)
+        if let error = endpointErrors[endpoint] { throw error }
         if let error = errorToThrow { throw error }
         return try await stubbed(endpoint, as: APIResponse<T>.self)
     }
@@ -233,6 +234,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         // écrivent déjà. `legacyPath(for:)` la donne (#4282).
         let endpoint = legacyPath(for: typedEndpoint)
         recordRequest(endpoint: endpoint, rejectionPolicy: typedEndpoint.rejectionPolicy, method: "PATCH", encodableBody: body)
+        if let error = endpointErrors[endpoint] { throw error }
         if let error = errorToThrow { throw error }
         return try await stubbed(endpoint, as: APIResponse<T>.self)
     }

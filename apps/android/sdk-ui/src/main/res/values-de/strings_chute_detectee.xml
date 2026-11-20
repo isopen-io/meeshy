@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La chute détectée (#18748) : android-only tant que les clés fall.* ne sont pas au catalogue iOS. Android ne détecte rien. -->
+<resources>
+    <string name="fall_someone">Ein Blut-Kontakt</string>
+    <string name="fall_pill_detected">Auf der Uhr von %1$s wurde ein Sturz erkannt</string>
+    <string name="fall_pill_responded">%1$s geht es gut</string>
+    <string name="fall_card_at">Sturz erkannt um %1$s</string>
+    <string name="fall_battery">Akku %1$d %%</string>
+    <string name="fall_open_map">Letzten Standort ansehen</string>
+    <string name="fall_a11y">Sturz erkannt bei %1$s</string>
+    <string name="fall_share_person">%1$s benachrichtigen, wenn meine Uhr einen Sturz erkennt</string>
+    <string name="fall_share_person_scope">Erkennt deine Apple Watch einen Sturz, wird %1$s sofort benachrichtigt.</string>
+    <string name="fall_me_title">Sturzerkennung</string>
+    <string name="fall_me_unavailable">Auf Android nicht verfügbar: Sie kommt von einer Apple Watch, eingerichtet in der iPhone-App.</string>
+</resources>
