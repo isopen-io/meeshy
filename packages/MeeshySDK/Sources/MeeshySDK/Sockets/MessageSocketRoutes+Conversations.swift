@@ -22,6 +22,7 @@ extension MessageSocketRoutes {
             m.route(.communityMemberJoined, CommunityMemberJoinedEvent.self) { _, event in CommunityMemberChannel.shared.publish(CommunityMemberChange(event)) },
             m.route(.communityMemberLeft, CommunityMemberLeftEvent.self) { _, event in CommunityMemberChannel.shared.publish(CommunityMemberChange(event)) },
             m.route(.communityMemberRoleUpdated, CommunityMemberRoleUpdatedEvent.self) { _, event in CommunityMemberChannel.shared.publish(CommunityMemberChange(event)) },
+            m.route(.communityJoinRequested, CommunityJoinRequestedEvent.self) { _, event in CommunityJoinRequestChannel.shared.publish(event) },
             m.route(.communityDeleted, CommunityDeletedEvent.self) { _, event in CommunityDeletedChannel.shared.publish(event) },
             m.route(.conversationEncryptionChanged, ConversationEncryptionChangedEvent.self) { _, event in ConversationEncryptionChannel.shared.changed.send(event) },
             m.route(.userUpdated, UserUpdatedEvent.self) { $0.userUpdated.send($1) },
