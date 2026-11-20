@@ -1,4 +1,3 @@
-import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import { PLAN_UNAVAILABLE } from './planOutcome';
 import { offlineSignedAttachment } from './offlineSignedPayload';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -7,8 +6,8 @@ import { blockedReaderKeys, messageReadership } from './editedAudience';
 import {
   emitToConversationParticipants,
   type ConversationRoomEmitter,
-  type ParticipantRoomTarget,
 } from './emitToConversationParticipants';
+import { loadLiveAudience } from './conversationAudienceRooms';
 import { enqueueForOfflineParticipants, type OfflineParticipantQueueDeps } from './offlineParticipantQueue';
 import { readerSignedPlanForMessageIdBestEffort } from './readerSignedDelivery';
 import { safeBroadcast } from './serverEmit';
@@ -31,6 +30,11 @@ export interface AttachmentUpdatedParams {
    * `serializeAttachmentForSocket` is fail-closed on their absence.
    */
   attachment: SocketAttachmentRow;
+  /**
+   * Le plafond de la lecture d'audience, pour qu'un témoin ATTEIGNE la
+   * troncature sans fabriquer 50 001 lignes. La production ne le passe jamais.
+   */
+  audienceScanCap?: number;
 }
 
 /**
@@ -90,7 +94,20 @@ export async function emitAttachmentUpdated(params: AttachmentUpdatedParams): Pr
     attachment: serializeAttachmentForSocket(attachment),
   };
 
-  const participants = await loadActiveParticipants(prisma, conversationId);
+  // #20020 — la MÊME question que `loadLiveAudience` posait déjà, bornée et
+  // journalisée, écrite ici une seconde fois sans borne. Ce qu'elle rend de
+  // plus est le verdict de COMPLÉTUDE, dont la remise à la file ci-dessous
+  // dépend.
+  const audience = await loadLiveAudience(prisma, conversationId, {
+    cap: params.audienceScanCap,
+    scanLabel: 'attachment-updated',
+    onError: (error) =>
+      logger.warn('attachment-updated participant lookup failed — conversation room only', {
+        conversationId,
+        error,
+      }),
+  });
+  const participants = audience.targets;
 
   // #18613 — QUI a le droit de LIRE le message porteur. Le dépôt DÉCLARE cet
   // événement porteur de texte, deux fois dans le même fichier
@@ -231,7 +248,16 @@ export async function emitAttachmentUpdated(params: AttachmentUpdatedParams): Pr
       // The default (messageId, eventType) identity would let a second
       // attachment's enrichment supersede the first's on a two-audio message.
       ...(attachmentId ? { dedupKey: attachmentId } : {}),
-      ...(participants.length > 0 ? { participants: [...participants] } : {}),
+      // #20020 — la liste n'est remise que si la lecture a nommé TOUTE
+      // l'audience. `length > 0` tenait ce rôle par coïncidence : il écartait
+      // bien la liste d'une lecture TOMBÉE (qui rend `[]`), et il aurait admis
+      // une liste TRONQUÉE — que la borne partagée rend désormais possible.
+      // La file a une garantie DURABLE : une liste partielle y prive
+      // définitivement un absent de la pièce ENRICHIE, et une liste `[]` y
+      // vaut « aucun participant », donc n'enfile pour personne (cycle 116).
+      // `complete` est la seule des deux phrases qui distingue l'affirmation de
+      // l'ignorance ; sur `false`, la file ouvre sa propre lecture, bornée.
+      ...(audience.complete ? { participants: [...participants] } : {}),
     },
   );
 }
@@ -249,25 +275,5 @@ async function attachmentEventSealsAtRest(
   } catch (error) {
     logger.warn('attachment-updated regime lookup failed — not queued for offline participants', { messageId, error });
     return 'unknown';
-  }
-}
-
-async function loadActiveParticipants(
-  prisma: Pick<PrismaClient, 'participant'>,
-  conversationId: string,
-): Promise<ParticipantRoomTarget[]> {
-  try {
-    // `id` is not decoration: it NAMES the personal room of a participant with
-    // no `User` row (see `participantUserRoomTargets`).
-    return await prisma.participant.findMany({
-      where: { conversationId, ...PARTICIPATION_VIVANTE },
-      select: { id: true, userId: true },
-    });
-  } catch (error) {
-    logger.warn('attachment-updated participant lookup failed — conversation room only', {
-      conversationId,
-      error,
-    });
-    return [];
   }
 }
