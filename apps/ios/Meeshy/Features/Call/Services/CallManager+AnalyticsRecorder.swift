@@ -19,7 +19,9 @@ nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
     var connectedUptime: TimeInterval?
     var networkTransitions = 0
     var qualitySeconds: [VideoQualityLevel: Double] = [:]
-    var lastQualityDate: Date?
+    /// Instant MONOTONE du dernier relevé de qualité (#20069) : un réglage de
+    /// l'horloge murale entre deux relevés n'ajoute aucune seconde à un niveau.
+    var lastQualityUptime: TimeInterval?
     var currentLevel: VideoQualityLevel?
     var rttSum: Double = 0
     var sampleCount = 0
@@ -37,12 +39,12 @@ nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
         level: VideoQualityLevel,
         roundTripTimeMs: Double,
         packetLossPercent: Double,
-        at now: Date
+        at uptime: TimeInterval
     ) {
-        if let previousDate = lastQualityDate, let previousLevel = currentLevel {
-            qualitySeconds[previousLevel, default: 0] += CallStatValue.measured(now.timeIntervalSince(previousDate))
+        if let previousUptime = lastQualityUptime, let previousLevel = currentLevel {
+            qualitySeconds[previousLevel, default: 0] += CallStatValue.measured(uptime - previousUptime)
         }
-        lastQualityDate = now
+        lastQualityUptime = uptime
         currentLevel = level
         let rtt = CallStatValue.measured(roundTripTimeMs)
         let loss = CallStatValue.measured(packetLossPercent)
@@ -76,6 +78,13 @@ nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
         if skinSmoothing { effectsUsed.insert("skinSmoothing") }
     }
 
+    /// L'ancrage de la PREMIÈRE connexion (#20069) : le chrono et le délai de
+    /// mise en place partagent le même instant monotone, lu une seule fois.
+    @MainActor
+    mutating func anchorConnection(on clock: CallLiveClockProviding) {
+        connectedUptime = clock.anchorDuration()
+    }
+
     mutating func resetAccumulators() {
         let reconnects = totalReconnects
         self = CallAnalyticsRecorder()
@@ -86,7 +95,9 @@ nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
         self = CallAnalyticsRecorder()
     }
 
-    func payload(now: Date, context: CallAnalyticsContext) -> [String: Any] {
+    /// `uptime` est l'instant MONOTONE du rapport (#20069) : la fenêtre de
+    /// niveau ouverte s'y replie sur la même horloge que les relevés.
+    func payload(uptime: TimeInterval, context: CallAnalyticsContext) -> [String: Any] {
         let setupMetrics = CallReliabilityPolicy.callSetupMetrics(
             initiatedAt: callInitiatedUptime,
             negotiationStartAt: negotiationStartUptime,
@@ -95,8 +106,8 @@ nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
         let qualityDistribution = CallReliabilityPolicy.qualityDistribution(
             accumulatedSeconds: qualitySeconds,
             openWindowLevel: currentLevel,
-            openWindowSince: lastQualityDate,
-            now: now
+            openWindowSince: lastQualityUptime,
+            now: uptime
         )
         let averageRtt = sampleCount > 0 ? CallStatValue.measured(rttSum / Double(sampleCount)) : 0
         let averagePacketLoss = sampleCount > 0 ? CallStatValue.measured(packetLossSum / Double(sampleCount)) : 0
