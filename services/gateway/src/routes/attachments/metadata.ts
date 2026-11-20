@@ -5,6 +5,11 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AttachmentService } from '../../services/attachments';
+// #20113 — `ownsAsUploader` vivait ICI, privée et sans autre appelant, alors
+// que six autres sites comparaient `uploadedBy` à un identifiant d'utilisateur
+// sans elle. Site unique désormais, et son second test ne garde plus que les
+// lignes HÉRITÉES : les deux écrivains de copie posent l'identité de compte.
+import { ownsAsUploader } from '../../services/attachments/uploaderIdentity';
 import {
   messageAttachmentSchema,
   messageAttachmentMinimalSchema,
@@ -126,34 +131,6 @@ const conversationAttachmentListItemSchema = {
     isBlurred: { type: 'boolean', description: 'Attachment-level blur flag — the client must veil until the reader lifts it' },
   },
 } as const;
-
-const OBJECT_ID_PATTERN = /^[a-f0-9]{24}$/i;
-
-/**
- * #13608 — un téléversement pose `uploadedBy = User.id`, mais une copie transférée
- * le pose à `Participant.id` de l'expéditeur. Le propriétaire est donc reconnu
- * sous les DEUX identifiants, et seulement s'il s'agit de SON participant :
- * l'identifiant d'un participant d'autrui, anonyme ou inconnu ne donne rien.
- */
-async function ownsAsUploader(
-  prisma: PrismaClient,
-  uploadedBy: string | null | undefined,
-  userId: string
-): Promise<boolean> {
-  if (!uploadedBy) return false;
-  if (uploadedBy === userId) return true;
-  if (!OBJECT_ID_PATTERN.test(uploadedBy)) return false;
-  try {
-    const participant = await prisma.participant.findUnique({
-      where: { id: uploadedBy },
-      select: { userId: true },
-    });
-    return participant?.userId === userId;
-  } catch (error: unknown) {
-    logger.warn('uploader participant lookup failed', { error });
-    return false;
-  }
-}
 
 export async function registerMetadataRoutes(
   fastify: FastifyInstance,

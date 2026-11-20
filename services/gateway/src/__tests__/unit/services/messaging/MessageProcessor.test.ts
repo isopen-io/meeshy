@@ -588,6 +588,45 @@ describe('MessageProcessor.saveMessage', () => {
   });
 
   /**
+   * #20113 — la copie d'un transfert pose l'identité de COMPTE du transférant.
+   *
+   * Elle y posait `senderId`, qui est un `Message.senderId`, donc un
+   * `Participant.id`. Le champ est servi aux clients et gouverne l'affordance
+   * « supprimer cette pièce » ; les quatre écrivains de téléversement y mettent
+   * l'identité de compte, et `GlobalAchievements` le compte comme telle.
+   */
+  it('#20113 — la copie transférée porte le `userId` du transférant, pas son `Participant.id`', async () => {
+    attFindMany.mockResolvedValueOnce([{ id: 'orig-att', fileName: 'f.jpg', originalName: 'f.jpg', mimeType: 'image/jpeg', fileSize: 10, filePath: '/p', fileUrl: 'u' }]).mockResolvedValue([]);
+    attCreate.mockResolvedValue({ id: 'copy' });
+    partFindUnique.mockResolvedValue({ userId: 'u-sender' });
+
+    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id', forwardImposes: null });
+
+    expect(attCreate.mock.calls[0][0].data.uploadedBy).toBe('u-sender');
+  });
+
+  it("#20113 — un transférant ANONYME garde son `Participant.id` : c'est son identité d'authentification", async () => {
+    attFindMany.mockResolvedValueOnce([{ id: 'orig-att', fileName: 'f.jpg', originalName: 'f.jpg', mimeType: 'image/jpeg', fileSize: 10, filePath: '/p', fileUrl: 'u' }]).mockResolvedValue([]);
+    attCreate.mockResolvedValue({ id: 'copy' });
+    partFindUnique.mockResolvedValue({ userId: null });
+
+    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id', forwardImposes: null });
+
+    expect(attCreate.mock.calls[0][0].data.uploadedBy).toBe(SENDER_ID);
+  });
+
+  it('#20113 — une lecture de participant en échec replie sur le comportement d’avant, elle ne fait pas échouer le transfert', async () => {
+    attFindMany.mockResolvedValueOnce([{ id: 'orig-att', fileName: 'f.jpg', originalName: 'f.jpg', mimeType: 'image/jpeg', fileSize: 10, filePath: '/p', fileUrl: 'u' }]).mockResolvedValue([]);
+    attCreate.mockResolvedValue({ id: 'copy' });
+    partFindUnique.mockRejectedValue(new Error('mongo down'));
+
+    await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id', forwardImposes: null });
+
+    expect(attCreate).toHaveBeenCalledTimes(1);
+    expect(attCreate.mock.calls[0][0].data.uploadedBy).toBe(SENDER_ID);
+  });
+
+  /**
    * Le transfert d'une pièce jointe CHIFFRÉE.
    *
    * La copie reprend `filePath`/`fileUrl` À L'IDENTIQUE : les deux lignes
