@@ -35,6 +35,7 @@ import me.meeshy.sdk.session.SessionRepository
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import java.time.Instant
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class CommunityDetailViewModelTest {
@@ -217,6 +218,41 @@ class CommunityDetailViewModelTest {
 
         assertThat(vm.state.value.joinRequestPending).isFalse()
         assertThat(vm.state.value.joinRefusal).isEqualTo(CommunityJoinRefusal.COOLDOWN)
+    }
+
+    @Test
+    fun `a refusal served by the detail says until when and sends nothing (19949)`() = runTest {
+        val vm = viewModel()
+        detail.emit(CacheResult.Fresh(asking().copy(currentUserJoinRetryAt = "2099-11-27T12:00:00.000Z"), 0))
+
+        vm.join()
+
+        assertThat(vm.state.value.joinDeclinedUntil).isEqualTo(Instant.parse("2099-11-27T12:00:00Z"))
+        assertThat(vm.state.value.joinRequestPending).isFalse()
+        coVerify(exactly = 0) { repository.join(any()) }
+    }
+
+    @Test
+    fun `the live refusal turns request sent into request declined without a reload (19949)`() = runTest {
+        val vm = viewModel()
+        val sent = asking(request = "pending")
+        detail.emit(CacheResult.Fresh(sent, 0))
+        assertThat(vm.state.value.joinRequestPending).isTrue()
+
+        detail.emit(CacheResult.Fresh(sent.copy(currentUserJoinRequest = null, currentUserJoinRetryAt = "2099-11-27T12:00:00.000Z"), 0))
+
+        assertThat(vm.state.value.joinRequestPending).isFalse()
+        assertThat(vm.state.value.joinDeclinedUntil).isEqualTo(Instant.parse("2099-11-27T12:00:00Z"))
+        coVerify(exactly = 0) { cache.refreshDetail(any()) }
+    }
+
+    @Test
+    fun `a past refusal offers to ask again (19949)`() = runTest {
+        val vm = viewModel()
+        detail.emit(CacheResult.Fresh(asking().copy(currentUserJoinRetryAt = "2020-01-01T00:00:00.000Z"), 0))
+
+        assertThat(vm.state.value.joinDeclinedUntil).isNull()
+        assertThat(vm.state.value.access?.canJoin).isTrue()
     }
 
     @Test

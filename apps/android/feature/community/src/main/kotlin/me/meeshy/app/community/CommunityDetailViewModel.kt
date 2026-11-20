@@ -29,11 +29,13 @@ import me.meeshy.sdk.model.CommunityJoinRefusal
 import me.meeshy.sdk.model.CommunityLoadFailure
 import me.meeshy.sdk.model.CommunityMembership
 import me.meeshy.sdk.model.MemberRole
+import me.meeshy.sdk.model.joinDeclinedUntil
 import me.meeshy.sdk.model.toCommunity
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.toContentFetchFailure
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.theme.displayTitle
+import java.time.Instant
 import javax.inject.Inject
 
 /** Une rangée de la liste des channels : le titre est résolu une fois, ici, pas à chaque recomposition. */
@@ -64,6 +66,8 @@ data class CommunityDetailUiState(
     val joinRequestPending: Boolean = false,
     /** Un refus de la jonction que l'écran dit dans la langue du lecteur. */
     val joinRefusal: CommunityJoinRefusal? = null,
+    /** Sa dernière demande a été refusée : nouvelle demande possible à partir de cet instant (#19949). */
+    val joinDeclinedUntil: Instant? = null,
 ) {
     val showSkeleton: Boolean get() = community == null && isLoading
     val showError: Boolean get() = community == null && !isLoading && failure != null
@@ -130,7 +134,7 @@ class CommunityDetailViewModel @Inject constructor(
         val before = _state.value
         val community = before.community ?: return
         val access = before.access ?: return
-        if (before.isJoining || before.joinRequestPending || !access.canJoin) return
+        if (before.isJoining || before.joinRequestPending || before.joinDeclinedUntil != null || !access.canJoin) return
         _state.update {
             if (before.requiresJoinApproval) {
                 it.copy(isJoining = true, joinRequestPending = true, joinRefusal = null)
@@ -243,6 +247,7 @@ class CommunityDetailViewModel @Inject constructor(
                 requiresJoinApproval = api.requiresJoinApproval == true || sending,
                 joinRequestPending = !access.isMember && (api.hasPendingJoinRequest || sending),
                 joinRefusal = it.joinRefusal.takeUnless { access.isMember },
+                joinDeclinedUntil = api.joinDeclinedUntil(Instant.now()).takeUnless { sending },
             )
         }
         observeAppearance(api)

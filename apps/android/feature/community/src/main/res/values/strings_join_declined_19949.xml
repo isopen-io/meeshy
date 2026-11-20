@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La demande d'entrée refusée et la date d'une nouvelle demande (#19949) — mêmes mots que le web (community.membership.declined*). -->
+<resources>
+    <string name="community_join_declined">Request declined</string>
+    <string name="community_join_declined_hint">You can ask again from %1$s.</string>
+</resources>

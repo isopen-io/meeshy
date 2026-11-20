@@ -15,6 +15,7 @@ import me.meeshy.sdk.model.ApiCommunity
 import me.meeshy.sdk.model.ApiCommunityMember
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.CommunityDeletedEvent
+import me.meeshy.sdk.model.CommunityJoinRequestDecidedEvent
 import me.meeshy.sdk.model.CommunityMemberChange
 import me.meeshy.sdk.model.CommunityUpdatedEvent
 import me.meeshy.sdk.model.applying
@@ -143,6 +144,20 @@ class CommunityCacheRepository(
             cache.update(LIST_NAMESPACE, FIRST_PAGE, page, ticket) { next }
         }
         forget(communityId)
+    }
+
+    /**
+     * `community:join-request-decided` (#19949, web `applyCommunityJoinRequestDecidedEvent`) : la fiche
+     * DÉJÀ tenue passe de « Demande envoyée » à « Demande refusée » avec la date de la charge, sans
+     * relecture ni rajeunir l'instant de lecture. Une communauté que l'appareil ne tient pas n'y est
+     * pas posée.
+     */
+    suspend fun applyJoinRequestDecided(event: CommunityJoinRequestDecidedEvent) {
+        val ticket = cache.ticket()
+        val detail = ApiCommunity.serializer()
+        cache.get(DETAIL_NAMESPACE, event.communityId, detail)?.value?.applying(event)?.let { next ->
+            cache.update(DETAIL_NAMESPACE, event.communityId, detail, ticket) { next }
+        }
     }
 
     /** Efface la fiche, les membres et les channels d'une communauté (retrait, sortie, suppression). */

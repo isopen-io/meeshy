@@ -61,6 +61,7 @@ import me.meeshy.sdk.model.CommunityAccess
 import me.meeshy.sdk.model.CommunityJoinRefusal
 import me.meeshy.sdk.model.CommunityLoadFailure
 import me.meeshy.sdk.model.CommunityDetailAction
+import me.meeshy.sdk.model.ShareLinkDateFormat
 import me.meeshy.ui.component.FeedbackKind
 import me.meeshy.ui.component.FeedbackToastHost
 import me.meeshy.ui.component.FeedbackToastRequest
@@ -72,6 +73,7 @@ import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
+import java.time.Instant
 
 /** Ce que l'hôte sait faire depuis le détail ; une destination absente (`null`) retire son bouton plutôt que de le laisser inerte. */
 data class CommunityDetailNavigation(
@@ -185,7 +187,7 @@ private fun LoadedDetail(
             ActionsSection(
                 access = access,
                 isJoining = state.isJoining,
-                join = JoinFace(state.requiresJoinApproval, state.joinRequestPending, state.joinRefusal),
+                join = JoinFace(state.requiresJoinApproval, state.joinRequestPending, state.joinRefusal, state.joinDeclinedUntil),
                 communityId = community.id,
                 navigation = navigation,
                 onJoin = onJoin,
@@ -377,8 +379,12 @@ private fun ActionsSection(
     Column(Modifier.padding(horizontal = 16.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             actions.forEach { action ->
+                if (action == CommunityDetailAction.JOIN && join.declinedUntil != null) {
+                    JoinStatusTile(MeeshyIcons.Block, stringResource(R.string.community_join_declined), Modifier.weight(1f))
+                    return@forEach
+                }
                 if (action == CommunityDetailAction.JOIN && join.pending) {
-                    RequestSentTile(Modifier.weight(1f))
+                    JoinStatusTile(MeeshyIcons.Schedule, stringResource(R.string.community_join_requested), Modifier.weight(1f))
                     return@forEach
                 }
                 val (icon, label) = if (action == CommunityDetailAction.JOIN) join.face() else action.face()
@@ -432,7 +438,12 @@ private fun CommunityDetailAction.face(): Pair<ImageVector, String> = when (this
 
 /** Ce que le détail dit de l'entrée quand la communauté la valide (#19870, miroir `joinAction` iOS). */
 @Immutable
-private data class JoinFace(val asks: Boolean, val pending: Boolean, val refusal: CommunityJoinRefusal?)
+private data class JoinFace(
+    val asks: Boolean,
+    val pending: Boolean,
+    val refusal: CommunityJoinRefusal?,
+    val declinedUntil: Instant? = null,
+)
 
 @Composable
 private fun JoinFace.face(): Pair<ImageVector, String> =
@@ -440,16 +451,17 @@ private fun JoinFace.face(): Pair<ImageVector, String> =
 
 @Composable
 private fun JoinFace.notice(): Pair<String, Boolean>? = when {
+    declinedUntil != null ->
+        stringResource(R.string.community_join_declined_hint, ShareLinkDateFormat.dayAndTime(declinedUntil.toEpochMilli())) to true
     refusal == CommunityJoinRefusal.COOLDOWN -> stringResource(R.string.community_join_cooldown) to true
     pending -> stringResource(R.string.community_join_requested_waiting) to false
     else -> null
 }
 
-/** La demande envoyée est un STATUT, pas un bouton : rien à toucher tant qu'on attend. */
+/** La demande envoyée ou refusée est un STATUT, pas un bouton : rien à toucher tant qu'on attend. */
 @Composable
-private fun RequestSentTile(modifier: Modifier) {
+private fun JoinStatusTile(icon: ImageVector, label: String, modifier: Modifier) {
     val tokens = MeeshyTheme.tokens
-    val label = stringResource(R.string.community_join_requested)
     Column(
         modifier
             .clip(RoundedCornerShape(12.dp))
@@ -459,7 +471,7 @@ private fun RequestSentTile(modifier: Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Icon(MeeshyIcons.Schedule, null, tint = tokens.textSecondary, modifier = Modifier.size(22.dp))
+        Icon(icon, null, tint = tokens.textSecondary, modifier = Modifier.size(22.dp))
         Text(label, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = tokens.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
