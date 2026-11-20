@@ -171,8 +171,25 @@ export function emitEditedToReaders<P extends ServerEventPayload<typeof SERVER_E
   readonly sealedVariant: (payload: P, key: string) => P;
   /** La variante servie quand la cible ne sait pas exclure : scellée pour TOUS. */
   readonly sealedForAll: (payload: P) => P;
+  /**
+   * La panne NOMMÉE chez l'appelant (#19977).
+   *
+   * Les sorties de cette unité sont enrobées ici, et c'est ce qui empêche une
+   * émission qui lève d'emporter l'enfilage durable de l'appelant. Mais
+   * enrober sans relayer **SUPPRIME un signal** : `broadcastMessageMutation`
+   * passe un `onError` que son propre `try` alimentait, et un témoin exigeait
+   * déjà qu'il soit appelé quand la room lève. Le relais n'est donc pas une
+   * commodité — c'est la moitié de la garde qui reste chez celui qui a le
+   * contexte, comme `serverEmit.ts` le prescrit (« un appelant qui a un
+   * contexte le passe »).
+   */
+  readonly onError?: (error: unknown, label: string) => void;
 }): void {
   const { io, conversationId, payload, plan, sealed, blocked } = params;
+  const report = (error: unknown, label: string): void =>
+    params.onError
+      ? params.onError(error, label)
+      : logger.error('message:edited live emission failed — durable paths unaffected', { conversationId, label, error });
   if (!io) return;
   if (plan === PLAN_UNAVAILABLE) return;
 
@@ -185,27 +202,59 @@ export function emitEditedToReaders<P extends ServerEventPayload<typeof SERVER_E
       safeBroadcast(
         `message:edited (per reader ${target.room})`,
         () => io.to(target.room).emit(SERVER_EVENTS.MESSAGE_EDITED, plan.signFor(params.sealedVariant(payload, target.key), target.participantId)),
+        report,
       );
     }
     return;
   }
 
+  // Les branches de ROOM sont enrobées comme la boucle par lecteur l'est
+  // depuis #17026, et pour la MÊME raison portée un cran plus loin : une
+  // émission qui lève — ce que fait `io.to(…).emit` quand l'adaptateur ou
+  // l'encodeur est en défaut, le dépôt l'affirme dans `emitWithSeq` —
+  // remonterait chez l'appelant AU-DESSUS de son enfilage DURABLE, et la
+  // remise hors ligne est la seule voie par laquelle un absent apprend jamais
+  // l'édition (#19977).
+  //
+  // La garde vivait chez DEUX des trois appelants, en enrobage externe
+  // (`MessageHandler.ts`), donc pas chez le troisième — « une règle qui doit
+  // être retapée à chaque site est une règle qu'un site finira par ne pas
+  // avoir », ce que le doc-comment de ce module dit déjà de la LOI qu'il
+  // porte. Elle vit ici désormais, une fois, pour les trois.
   if (sealed.size === 0 && blocked.size === 0) {
-    io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.MESSAGE_EDITED, payload);
+    safeBroadcast(
+      `message:edited (room ${conversationId})`,
+      () => io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.MESSAGE_EDITED, payload),
+      report,
+    );
     return;
   }
 
   const room = io.to(ROOMS.conversation(conversationId));
   if (!canExcept(room)) {
     if (blocked.size > 0) return;
-    room.emit(SERVER_EVENTS.MESSAGE_EDITED, params.sealedForAll(payload));
+    safeBroadcast(
+      `message:edited (room ${conversationId}, sealed for all)`,
+      () => room.emit(SERVER_EVENTS.MESSAGE_EDITED, params.sealedForAll(payload)),
+      report,
+    );
     return;
   }
-  room
-    .except([...sealed.keys(), ...blocked].map((key) => ROOMS.user(key)))
-    .emit(SERVER_EVENTS.MESSAGE_EDITED, payload);
+  safeBroadcast(
+    `message:edited (room ${conversationId}, except ${sealed.size + blocked.size})`,
+    () => room
+      .except([...sealed.keys(), ...blocked].map((key) => ROOMS.user(key)))
+      .emit(SERVER_EVENTS.MESSAGE_EDITED, payload),
+    report,
+  );
   for (const key of sealed.keys()) {
     if (blocked.has(key)) continue;
-    io.to(ROOMS.user(key)).emit(SERVER_EVENTS.MESSAGE_EDITED, params.sealedVariant(payload, key));
+    // Par CIBLE, même raison que la boucle du plan : une cible qui lève
+    // priverait toutes les suivantes de leur variante scellée.
+    safeBroadcast(
+      `message:edited (sealed quote ${key})`,
+      () => io.to(ROOMS.user(key)).emit(SERVER_EVENTS.MESSAGE_EDITED, params.sealedVariant(payload, key)),
+      report,
+    );
   }
 }

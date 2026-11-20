@@ -76,3 +76,62 @@ entièrement la ligne d'arrivées du salon global.
 Le compte faux n'était pas dans un journal : il était dans le doc-comment que
 chaque lot ouvre avant de toucher à l'événement. **Un compte écrit à l'endroit
 le plus autorisé est celui qu'on recompte le moins.**
+
+### Et le correctif de grain était lui-même à l'échelle du fichier, DEUX FOIS SUR CINQ
+
+L'audit adversarial a remesuré le cliquet « réparé » et rendu ceci :
+
+```
+routes/conversations/messages-advanced-edit.ts:546  whole=false
+routes/messages-writes.ts:455                       whole=false
+socketio/callSummaryEditedDelivery.ts:93            whole=TRUE
+socketio/handlers/MessageHandler.ts:1027            whole=TRUE   ← 2 265 lignes
+```
+
+La cause tient en une ligne : la tête d'unité était cherchée sur la LIGNE qui
+porte l'accolade ouvrante (`\([^;]*\)\s*…\{\s*$`), et un paramètre-objet
+multi-lignes — l'idiome DOMINANT du dépôt, celui de toutes les unités que ce
+lot écrit — ferme son `{` sur `}): Promise<void> {`, une ligne sans aucune `(`.
+Aucune tête ne matchait, la pile se vidait, et la fenêtre devenait le fichier.
+
+> **Changer de grain ne suffit pas : il faut mesurer le grain qu'on obtient.**
+> J'avais la bonne idée (l'unité), la bonne preuve (rouge sur l'arbre d'avant)
+> et un instrument qui, sur deux sites réels, rendait exactement la mesure que
+> je revendiquais avoir éliminée. La preuve de ROUGE ne l'a pas vue parce
+> qu'elle ne porte que sur le VERDICT, et le verdict était juste par accident :
+> le fichier fautif ne consultait de plan nulle part, donc « fichier » et
+> « unité » rendaient le même « both ».
+
+**Ce qui l'aurait attrapé, et qui est la règle à retenir : publier la MESURE
+INTERMÉDIAIRE, pas seulement le verdict.** Un balayage qui décide d'une fenêtre
+doit pouvoir dire QUELLE fenêtre il a prise — ici un champ `wholeFile`, promu
+depuis en constat à part entière (`missing: 'unresolved-unit'`), parce qu'une
+unité qu'on n'a pas su délimiter n'est ni gardée ni dispensée : c'est une panne
+de l'instrument, et se taire dessus est la pire des trois réponses.
+
+### Deux autres façons dont le même cliquet dispensait en silence
+
+- **`DELEGATES` matchait la DÉFINITION autant que l'appel** : le fichier qui
+  porte `export async function deliverCallSummaryEdit(` s'exemptait lui-même.
+- **`blankComments` prenait un `/*` à l'intérieur d'une CHAÎNE pour un
+  commentaire** : mesuré, quatorze chaînes de `services/gateway/src/` (des
+  chemins de route comme `'/api/attachments/file/*'`) ouvraient un faux bloc,
+  **612 lignes de code réel effacées**. Impact nul ce jour-là, et la direction
+  de l'erreur exactement inverse de ce que le module revendique : elle DISPENSE.
+  Un dépouilleur de commentaires est un AUTOMATE, pas une expression régulière.
+
+### La forme générale, qui vaut au-delà de ce cliquet
+
+Un balayage rend trois choses, et on n'en publie souvent qu'une :
+
+| ce qu'il rend | vérifié d'habitude |
+|---|---|
+| le VERDICT (qui est fautif) | oui — c'est le test |
+| la PORTÉE (qui a été regardé) | parfois — un plancher de couverture |
+| la FENÊTRE (à quelle échelle on a regardé) | **presque jamais** |
+
+La troisième est celle qui décide si les deux premières veulent dire quelque
+chose. Et elle est invisible tant qu'on ne la nomme pas : rien dans un
+inventaire vide ne distingue « rien n'est fautif » de « j'ai regardé le mauvais
+objet ».
+

@@ -25,6 +25,13 @@ import { servedEditAttribution, type MessageEditorColumns } from '@meeshy/shared
  *   n'enfile rien : c'est par cette absence, et non par une exemption, qu'elle
  *   sort du balayage de signature (`__tests__/edited-signing-door-sweep.ts`).
  *
+ * **Et un CINQUIÈME émetteur met `message:edited` sur le fil sans composer sa
+ * charge** : le DRAIN de la file hors ligne (`DRAINED_EVENT.edited`,
+ * `queuedEventContract.ts`), qui rejoue une charge déjà composée — et qui est
+ * le seul à appliquer le plancher d'historique au dernier instant
+ * (`drainHistoryFloor.ts`, #18615). Il n'apparaît dans aucun inventaire de
+ * COMPOSITION, par construction : c'est pourquoi il est nommé ici.
+ *
  * Chacun composait sa charge à la main, dans son fichier. Le contrat partagé
  * déclare pourtant `message:edited` comme un `SocketIOMessage`, dont SEPT
  * champs sont requis — et le producteur socket n'en servait que quatre :

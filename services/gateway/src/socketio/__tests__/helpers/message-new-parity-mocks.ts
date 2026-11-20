@@ -425,16 +425,21 @@ jest.mock('../../../utils/translation-transformer', () => ({
   transformTranslationsToArray: jest.fn().mockReturnValue([]),
 }));
 
-jest.mock('../../../utils/logger-enhanced', () => ({
-  enhancedLogger: {
-    child: jest.fn().mockReturnValue({
-      info: jest.fn(),
-      debug: jest.fn(),
-      warn: jest.fn(),
-      error: jest.fn(),
-    }),
-  },
-}));
+// **Un double PARTIEL ment par ce qu'il N'A PAS** (#19977). Celui-ci ne
+// portait que `child()` : tout appelant du logger RACINE — `safeBroadcast`
+// quand il n'a pas d'`onError`, et c'est sa branche de repli — y trouvait
+// `enhancedLogger.error === undefined` et levait un `TypeError` **depuis
+// l'intérieur de son propre `catch`**. L'enrobage best-effort se comportait
+// donc, sous ce harnais SEUL, comme s'il n'existait pas : une émission qui
+// lève emportait tout ce qui la suivait, y compris l'enfilage durable. Un
+// témoin écrit pour prouver que la garde TIENT échouait pour une raison qui
+// n'existe pas en production.
+jest.mock('../../../utils/logger-enhanced', () => {
+  const leaf = () => ({ info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() });
+  return {
+    enhancedLogger: { ...leaf(), child: jest.fn().mockReturnValue(leaf()) },
+  };
+});
 
 /**
  * Lit l'état du double `socket.io` de CE fichier de test — chaque fichier hôte

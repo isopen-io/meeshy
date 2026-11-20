@@ -36,7 +36,7 @@ export interface UnsignedEditedProducer {
   /** Chemin relatif à `src/`, pour que la clé ne dérive pas avec le dépôt. */
   readonly file: string;
   /** Ce qui manque — nommé, pour que la réparation ne se devine pas. */
-  readonly missing: 'live-plan' | 'queue-decision' | 'both';
+  readonly missing: 'live-plan' | 'queue-decision' | 'both' | 'unresolved-unit';
 }
 
 /**
@@ -51,8 +51,13 @@ const DOORS = new Set([
   join('socketio', 'broadcastMessageMutation.ts'),
 ]);
 
-/** Appeler une porte partagée VAUT consulter le plan : elle le fait pour son appelant. */
-const DELEGATES = /\b(?:broadcastMessageMutation|deliverCallSummaryEdit)\s*\(/;
+/**
+ * Appeler une porte partagée VAUT consulter le plan : elle le fait pour son
+ * appelant. **La DÉFINITION de la porte n'est pas un appel** (#19977, audit) :
+ * sans ce `(?<!function\s)`, `callSummaryEditedDelivery.ts` s'auto-exemptait
+ * par sa propre ligne `export async function deliverCallSummaryEdit(`.
+ */
+const DELEGATES = /(?<!function\s)\b(?:broadcastMessageMutation|deliverCallSummaryEdit)\s*\(/;
 
 const EMITS_EDITED = /SERVER_EVENTS\s*\.\s*MESSAGE_EDITED/;
 const QUEUES_EDITED = /eventType\s*:\s*'edited'/;
@@ -63,12 +68,60 @@ const LIVE_PLAN = /\breaderSignedPlan[A-Za-z]*\s*\(/;
 /** Le canal DURABLE : la décision `withhold` / `as-is` / `per-reader`. */
 const QUEUE_DECISION = /\bofflineSigned[A-Za-z]*\s*\(/;
 
-/** Les commentaires CITENT la forme fautive pour l'expliquer — c'est leur rôle. */
+/**
+ * Les commentaires CITENT la forme fautive pour l'expliquer — c'est leur rôle,
+ * et les effacer est donc nécessaire.
+ *
+ * **Le balayage est un AUTOMATE, pas une expression régulière** (#19977, audit).
+ * La première rédaction remplaçait `/* … *\u002F` par une regex, donc traitait un
+ * `/*` à l'intérieur d'une CHAÎNE comme l'ouverture d'un commentaire : mesuré
+ * sur `services/gateway/src/`, quatorze chaînes (des chemins de route comme
+ * `'/api/attachments/file/*'`) ouvraient un faux bloc et effaçaient **612
+ * lignes de code réel**. Impact nul le jour où c'était écrit — aucune de ces
+ * régions ne sert `message:edited` — mais l'erreur allait du mauvais CÔTÉ :
+ * elle DISPENSE en silence, quand tout le reste de ce module se trompe du côté
+ * qui demande une preuve de plus.
+ *
+ * Les longueurs sont préservées (chaque caractère effacé devient une espace,
+ * les retours à la ligne restent) : les index servent à remonter la pile
+ * d'accolades, et un cliquet qui nomme la mauvaise ligne a tort de façon
+ * crédible.
+ */
 function blankComments(source: string): string {
-  const blank = (match: string) => match.replace(/[^\n]/g, ' ');
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, blank)
-    .replace(/(^|[^:])(\/\/.*)$/gm, (_m, head: string, comment: string) => head + blank(comment));
+  const out = source.split('');
+  let i = 0;
+  const blankTo = (end: number) => {
+    for (let k = i; k < end && k < out.length; k += 1) if (out[k] !== '\n') out[k] = ' ';
+  };
+  while (i < source.length) {
+    const c = source[i];
+    const next = source[i + 1];
+    if (c === '/' && next === '*') {
+      const end = source.indexOf('*/', i + 2);
+      const stop = end === -1 ? source.length : end + 2;
+      blankTo(stop);
+      i = stop;
+      continue;
+    }
+    if (c === '/' && next === '/') {
+      const end = source.indexOf('\n', i);
+      const stop = end === -1 ? source.length : end;
+      blankTo(stop);
+      i = stop;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') {
+      i += 1;
+      while (i < source.length && source[i] !== c) {
+        if (source[i] === '\\') i += 1;
+        i += 1;
+      }
+      i += 1;
+      continue;
+    }
+    i += 1;
+  }
+  return out.join('');
 }
 
 /**
@@ -79,16 +132,69 @@ function blankComments(source: string): string {
  * qui émet, où le plan calculé vingt lignes plus haut ne figure pas. Un
  * balayage de confidentialité se trompe du côté de la fenêtre TROP LARGE —
  * jamais de celui qui ferait passer un site pour gardé.
+ *
+ * **La tête se reconnaît sur le TEXTE, pas sur la LIGNE** (#19977, audit). La
+ * première rédaction exigeait `\([^;]*\)` sur la ligne qui porte l'accolade
+ * ouvrante, et manquait donc tout paramètre-objet multi-lignes — l'idiome
+ * DOMINANT du dépôt, celui de `deliverCallSummaryEdit`, `emitEditedToReaders`,
+ * `offlineSignedPayload`, `readerSignedPlanForMessageId` —, dont le `{` se
+ * ferme sur `}): Promise<void> {`, une ligne sans aucune `(`. Aucune tête ne
+ * matchait, la pile se vidait, et `enclosingUnit` rendait le FICHIER ENTIER :
+ * **deux unités sur cinq**, dont `MessageHandler.ts` et ses 2 265 lignes,
+ * étaient mesurées exactement à l'échelle que ce module affirme avoir
+ * éliminée. On remonte donc du `{` à sa `)` appariée, puis de celle-ci à sa
+ * `(`, quel que soit le nombre de lignes traversées.
  */
-const CONTROL_HEAD = /^\s*(?:\}\s*)?(?:else\s+)?(?:if|for|while|switch|catch|do|try)\b/;
-const UNIT_HEAD = /\([^;]*\)\s*(?::[^{;=]*)?(?:=>\s*)?\{\s*$/;
+const CONTROL_KEYWORD = /\b(?:if|for|while|switch|catch|do|with)\s*$/;
 
-/** La ligne qui porte l'index donné. */
-const lineAt = (source: string, index: number): string => {
-  const start = source.lastIndexOf('\n', index - 1) + 1;
-  const end = source.indexOf('\n', index);
-  return source.slice(start, end === -1 ? source.length : end);
+/** L'index de la parenthèse ouvrante appariée à celle qui se ferme en `close`. */
+function matchingOpenParen(source: string, close: number): number {
+  let depth = 0;
+  for (let i = close; i >= 0; i -= 1) {
+    if (source[i] === ')') depth += 1;
+    else if (source[i] === '(') {
+      depth -= 1;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+const skipBackSpace = (source: string, from: number): number => {
+  let i = from;
+  while (i >= 0 && /\s/.test(source[i] as string)) i -= 1;
+  return i;
 };
+
+/**
+ * `open` ouvre-t-il une UNITÉ exécutable (fonction, méthode, fermeture) ?
+ *
+ * Vrai quand le texte qui précède l'accolade est une liste de paramètres —
+ * éventuellement suivie d'un type de retour, et éventuellement précédée d'une
+ * flèche — dont le mot qui ouvre la parenthèse n'est pas un mot-clé de
+ * contrôle. Un `) {` d'un `if` est donc écarté par son MOT, jamais par la
+ * forme, qui est identique.
+ */
+function opensUnit(source: string, open: number): boolean {
+  let i = skipBackSpace(source, open - 1);
+  if (i < 0) return false;
+  if (source[i] === '>' && source[i - 1] === '=') i = skipBackSpace(source, i - 2);
+  if (i < 0) return false;
+  if (source[i] !== ')') {
+    // Type de retour (`): Promise<void> {`) : on recule jusqu'à la `)` qui le
+    // précède, sans traverser de `;` ni d'accolade — ce qui exclut un bloc nu.
+    const colon = source.lastIndexOf(':', i);
+    if (colon === -1) return false;
+    const between = source.slice(colon, i + 1);
+    if (/[;{}]/.test(between)) return false;
+    i = skipBackSpace(source, colon - 1);
+    if (i < 0 || source[i] !== ')') return false;
+  }
+  const openParen = matchingOpenParen(source, i);
+  if (openParen === -1) return false;
+  const before = source.slice(Math.max(0, openParen - 24), openParen);
+  return !CONTROL_KEYWORD.test(before);
+}
 
 /**
  * La FENÊTRE de l'unité qui contient `index` : le corps de la fonction ou de la
@@ -100,7 +206,7 @@ const lineAt = (source: string, index: number): string => {
  * `message:new`, trois cents lignes plus haut. Chercher un idiome dans un
  * fichier mesure sa POPULARITÉ, pas une propriété du site qui sert.
  */
-function enclosingUnit(source: string, index: number): string {
+function enclosingUnit(source: string, index: number): { readonly body: string; readonly wholeFile: boolean } {
   const opens: number[] = [];
   for (let i = 0; i < index; i += 1) {
     const c = source[i];
@@ -109,23 +215,22 @@ function enclosingUnit(source: string, index: number): string {
   }
   for (let depth = opens.length - 1; depth >= 0; depth -= 1) {
     const open = opens[depth] as number;
-    const head = lineAt(source, open);
-    if (CONTROL_HEAD.test(head) || !UNIT_HEAD.test(head)) continue;
+    if (!opensUnit(source, open)) continue;
     let balance = 0;
     for (let i = open; i < source.length; i += 1) {
       if (source[i] === '{') balance += 1;
       else if (source[i] === '}') {
         balance -= 1;
-        if (balance === 0) return source.slice(open, i + 1);
+        if (balance === 0) return { body: source.slice(open, i + 1), wholeFile: false };
       }
     }
-    return source.slice(open);
+    return { body: source.slice(open), wholeFile: false };
   }
-  return source;
+  return { body: source, wholeFile: true };
 }
 
-function servingUnits(source: string): readonly string[] {
-  const units: string[] = [];
+function servingUnits(source: string): readonly { readonly body: string; readonly wholeFile: boolean }[] {
+  const units: { readonly body: string; readonly wholeFile: boolean }[] = [];
   for (const pattern of [EMITS_EDITED, QUEUES_EDITED]) {
     const scan = new RegExp(pattern.source, 'g');
     for (let m = scan.exec(source); m !== null; m = scan.exec(source)) {
@@ -161,15 +266,33 @@ export function sweepEditedSigningDoors(srcRoot: string): EditedSigningSweep {
     const file = relative(srcRoot, full).split(sep).join(sep);
     if (DOORS.has(file)) continue;
     const source = blankComments(readFileSync(full, 'utf8'));
-    for (const unit of servingUnits(source)) {
-      if (!MENTIONS_ATTACHMENTS.test(unit)) continue;
-      if (inScope.includes(file)) {
-        // Une unité de plus dans un fichier déjà retenu : la portée reste
-        // clé par FICHIER (lisible), le verdict reste par UNITÉ.
-      } else inScope.push(file);
-      if (DELEGATES.test(unit)) continue;
-      const live = LIVE_PLAN.test(unit);
-      const queue = QUEUE_DECISION.test(unit);
+    // **Les DEUX grains, et ils ne sont pas interchangeables** (#19977, audit).
+    //
+    // La PORTÉE se décide au FICHIER : une charge composée dans une unité et
+    // émise dans une autre — ce que ce lot vient précisément de créer en
+    // sortant `callSummaryEditedPayload` — ne nomme `attachments` dans AUCUNE
+    // unité émettrice, et un discriminant par unité la faisait sortir du
+    // balayage en silence. Un fichier qui ne parle jamais de pièces jointes
+    // (`globalArrivalsNotice.ts`) sort toujours par CONSTRUCTION.
+    //
+    // Le VERDICT se rend à l'UNITÉ : c'est là que vit la propriété gardée —
+    // « ce site a interrogé le plan avant de remettre cette adresse » — et la
+    // mesurer au fichier rend vert le défaut qui a motivé ce module.
+    if (!MENTIONS_ATTACHMENTS.test(source)) continue;
+    const units = servingUnits(source);
+    if (units.length === 0) continue;
+    inScope.push(file);
+    for (const unit of units) {
+      // Une unité qu'on n'a pas su délimiter est traitée comme un DÉFAUT de
+      // l'instrument, pas comme une unité : la mesurer au fichier serait la
+      // popularité d'un idiome, et se taire serait une dispense.
+      if (unit.wholeFile) {
+        offenders.push({ file, missing: 'unresolved-unit' });
+        continue;
+      }
+      if (DELEGATES.test(unit.body)) continue;
+      const live = LIVE_PLAN.test(unit.body);
+      const queue = QUEUE_DECISION.test(unit.body);
       if (live && queue) continue;
       offenders.push({ file, missing: !live && !queue ? 'both' : !live ? 'live-plan' : 'queue-decision' });
     }

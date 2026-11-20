@@ -400,6 +400,7 @@ export async function broadcastMessageMutation(rawParams: MessageMutationParams)
         sealedVariant: (payload, key) => sealedVariant(payload, sealed, key),
         sealedForAll: (payload) =>
           withSealedQuote(payload, new Date(Math.min(...[...sealed.values()].map((at) => at.getTime())))),
+        onError,
       });
     } else if (params.eventType === 'expired') {
       const audience = await loadLiveParticipantTargets(params.prisma, conversationId, onError);
