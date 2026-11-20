@@ -628,3 +628,19 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gates locaux : passerelle `tsc --noEmit` vert ; suites communautés / demandes / admission / présence / balayages / `tsc-never-loaded` 169 fichiers, 2 258 tests verts ; balayages et cliquets (`sweep|ratchet|guard`) 135 / 136 fichiers verts, 1 rouge ÉTRANGER (`DoubleRatchet.test.ts`, 2 échecs identiques sans le lot).
 - Aucun client touché, aucun contrat d'API changé.
 - Prochain lot recommandé : iOS #19877 (intendants) une fois #19903 fusionnée, sinon #19879 (refus notifié, passerelle + web).
+
+## 2026-11-19 — réveil 23:38 UTC
+
+- Début du run : #19950 (#19879, refus notifié) poussée à 23:25 et #19903 (#19869, iOS « Demande envoyée ») dont le `workflow_dispatch` iOS tourne (seconde tentative relancée vers 23:33) : vivantes, cédées.
+- Lot : #14227 — les appartenances de communauté se lisent par index, jamais par un parcours complet de la collection (une lenteur est un bug).
+- Constat : `CommunityMember` ne portait que `(communityId, isActive, joinedAt)`. Les lectures par personne (`{ userId, isActive }` : « mes communautés », accès d'un post COMMUNITY, co-appartenance, purge, export) parcouraient la collection entière ; les lectures de paire (`{ communityId, userId }` : contrôle d'accès de chaque route, invitation, adhésion, demandes d'entrée) parcouraient tout l'effectif de la communauté.
+- Schéma : `@@index([userId, isActive])` et `@@index([communityId, userId])`, non uniques (l'unicité de la paire reste #16696).
+- Migration : `packages/shared/prisma/migrations/2026-11-19-community-member-lookup-indexes.mongodb.js`, même forme que `2026-11-13-circle-pair-reverse-indexes` : index reconnu par sa clé, aucun index ni donnée touché, un index de même clé partiel ou épars signalé (sortie 2) jamais remplacé, `DRY_RUN=1`, idempotente, commande `explain` de vérification dans l'en-tête.
+- Témoin : `community-member-lookup-indexes-migration.test.ts` (9, exécute le fichier mongosh dans un contexte isolé et lit `schema.prisma`) — rouge prouvé : 9 échecs sans le lot.
+- Reste pour fermer #14227 : jouer la migration sur le staging et y relever le plan (IXSCAN) ; la production attend le feu vert du porteur, sauvegarde vérifiée d'abord. Le conteneur de la routine n'atteint pas l'hôte.
+
+## 2026-11-20 — réveil 05:38 UTC
+
+- Début du run : #19983 (doublon de `retained.json`) poussée à 05:37 par le run précédent, encore actif : cédée. #19951 (#14227, index des appartenances), #19950 (#19879) et #19903 (#19869) inactives depuis plus de deux heures ; le rouge étranger qui les bloquait (#19964) est corrigé sur `dev` (#19974, `fb8f5c167`).
+- Lot : mener #19951 à la fusion. `dev` (`b06982a21`) fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : passerelle `tsc --noEmit` vert ; témoin de migration + `tsc-never-loaded` (2 suites, 11 tests) verts ; les deux anciens rouges étrangers verts (shared `glory-frames-generated` 29/29, web `lottie/sources` 3/3).
+- `ci.yml` relancé en `workflow_dispatch` sur cette tête.
