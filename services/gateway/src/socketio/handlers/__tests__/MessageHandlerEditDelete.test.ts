@@ -132,6 +132,25 @@ jest.mock('../../readerSignedDelivery', () => ({
 import { MessageHandler, type MessageHandlerDependencies } from '../MessageHandler';
 import { PLAN_UNAVAILABLE } from '../../planOutcome';
 
+/**
+ * #19939 — le défaut du plan vit au niveau du FICHIER, pas d'un `describe`.
+ *
+ * `jest.clearAllMocks()` efface les APPELS, jamais l'IMPLÉMENTATION, et ce
+ * fichier ne pose ni `resetMocks` ni `restoreMocks`. Posé dans un seul
+ * `describe`, le verdict `PLAN_UNAVAILABLE` d'un témoin FUYAIT vers les
+ * `describe` suivants, où `emitEditedToReaders` se tait — sept témoins voisins
+ * tombaient dès qu'on retirait ce défaut, et le harnais n'était juste que par
+ * son ORDRE. Mesuré par l'audit adversarial du lot.
+ *
+ * `null` est aussi ce que la vraie fonction rend sous ce harnais : sans
+ * `ATTACHMENT_URL_SIGNING_KEY`, `readerSignedPlanForMessageId` sort avant toute
+ * requête. Le double ne fabrique donc aucune fiction.
+ */
+beforeEach(() => {
+  mockEditSignedPlan.mockReset();
+  mockEditSignedPlan.mockResolvedValue(null);
+});
+
 // ── Constants ──────────────────────────────────────────────────────────────
 
 const VALID_MSG_ID = 'a1b2c3d4e5f6a1b2c3d4e5f6';
@@ -338,7 +357,6 @@ describe('MessageHandler — handleMessageEdit', () => {
     jest.clearAllMocks();
     mockCheckLimit.mockResolvedValue(true);
     mockGetRateLimitInfo.mockReturnValue({ resetIn: 30000 });
-    mockEditSignedPlan.mockResolvedValue(null);
     mockValidateSocketEvent.mockReturnValue({
       success: true,
       data: { messageId: VALID_MSG_ID, content: 'Edited content' },
