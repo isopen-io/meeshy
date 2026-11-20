@@ -522,7 +522,8 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
               // être banni et la suppression pour soi posent tous
               // `isActive: false` et GARDENT la ligne, si bien qu'un membre banni
               // gardait l'accès au trombinoscope des réactions — compte,
-              // `participantIds`, et le `displayName`/`avatar`/`userId` de chaque
+              // `participantIds`, et le `displayName`/`avatar`/`participantId`
+              // (plus le `userId` d'un réacteur inscrit, #19996) de chaque
               // réacteur — et apprenait que le message existe toujours.
               //
               // La loi est PARTAGÉE (actif ET jamais banni) et son doc-comment la
