@@ -9,6 +9,7 @@ import { ConsentValidationService } from '../../services/ConsentValidationServic
 import { attachmentTranslateSelect } from '../../services/attachments/attachmentIncludes';
 import { resolveAttachmentReadVerdict, denyAttachmentRead } from '../../services/attachments/attachmentReadVerdict';
 import { serverReadsAttachmentCarrier } from '../../services/attachments/attachmentCarrierServerReadable';
+import { attachmentSideContentIsProducible } from '../../services/attachments/attachmentSideContentAdmission';
 import { messageAttachmentSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { AttachmentParams, TranslateBody, TranscribeBody } from './types';
 import { voiceTranslatedAudioSchema } from '../voice/types';
@@ -410,6 +411,23 @@ export async function registerTranslationRoutes(
 
         if (!consentStatus.canTranscribeAudio) {
           return sendForbidden(reply, 'AUDIO_TRANSCRIPTION_NOT_ENABLED', { message: 'You must enable audio transcription consent to use this feature' });
+        }
+
+        // #20017 — une pièce protégée ne SERT pas son contenu latéral, et n'en
+        // fait pas PRODUIRE. Ce gate couvre les DEUX sorties de ce handler d'un
+        // seul geste : la branche qui rend une transcription DÉJÀ écrite, et
+        // l'appel qui en fabrique une.
+        //
+        // Il est ici, après le verdict d'accès et le gate E2EE, pour la même
+        // raison que celui-ci : un étranger n'apprend rien de l'état du média.
+        //
+        // Et il est en ADMISSION, pas en compensation : garder la transcription
+        // au service empêche de la LIRE, cela ne défait pas qu'elle a été
+        // ÉCRITE en clair dans une colonne que les sauvegardes emportent
+        // (cycle 127 — « que reste-t-il de fait que ce nettoyage ne défait
+        // pas ? »).
+        if (!(await attachmentSideContentIsProducible(prisma, attachmentId))) {
+          return sendForbidden(reply, 'PROTECTED_NOT_TRANSCRIBABLE', { code: 'PROTECTED_NOT_TRANSCRIBABLE', message: 'Protected attachments cannot be transcribed' });
         }
 
         const existingData = await translationService.getAttachmentWithTranscription(attachmentId);
