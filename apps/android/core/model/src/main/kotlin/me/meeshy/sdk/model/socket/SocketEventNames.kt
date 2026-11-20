@@ -37,6 +37,10 @@ object SocketEventNames {
     const val PHONE_CALL_STARTED = "phone-call:started"
     const val PHONE_CALL_ENDED = "phone-call:ended"
 
+    // chute détectée (#18748, SAN-01) : serveur -> client, `user:<Sang>` ; aucun événement montant (POST /me/health/fall, iPhone)
+    const val FALL_DETECTED = "fall:detected"
+    const val FALL_CLEARED = "fall:cleared"
+
     // connection health
     const val HEARTBEAT_ACK = "heartbeat:ack"
 
@@ -335,6 +339,8 @@ object SocketEventNames {
         INACTIVITY_CLEARED,
         PHONE_CALL_STARTED,
         PHONE_CALL_ENDED,
+        FALL_DETECTED,
+        FALL_CLEARED,
         AUDIO_TRANSCRIPTION_READY,
         AUDIO_TRANSLATION_READY,
         AUTH_SESSION_REVOKED,

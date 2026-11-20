@@ -22,7 +22,7 @@ import {
 } from './notifications/notificationRevocationPush';
 import { applyUserPreferences, isCallPushDataType } from './push-delivery-preferences';
 import { pushRoutingClientOf, tokenRoutesPushType } from './push-type-routing';
-import { apnsThreadIdOf } from './notifications/push-thread';
+import { apnsThreadIdOf, loggableCollapseId } from './notifications/push-thread';
 import { isBadgeSyncPush } from './notifications/badgeSyncPush';
 import { sendViaPushToTalk, type PushToTalkTransport } from './talkie/pushToTalkApns';
 import { sendViaLiveActivity, type LiveActivityEndState, type LiveActivityTarget } from './notifications/liveActivityApns';
@@ -603,7 +603,7 @@ export class PushNotificationService {
       const fcmCorr = {
         tokenId: tokenRecord.id,
         platform: tokenRecord.platform,
-        collapseId: payload.collapseId ?? undefined
+        collapseId: loggableCollapseId(payload)
       };
       const outcome = await this.fcmCircuitBreaker.execute(() =>
         performanceLogger.withTiming(
@@ -627,7 +627,7 @@ export class PushNotificationService {
       pushLogger.warn('push.sendViaFCM.failure', {
         tokenId: tokenRecord.id,
         platform: tokenRecord.platform,
-        collapseId: payload.collapseId ?? undefined,
+        collapseId: loggableCollapseId(payload),
         errorCode,
         errorMessage: error?.message
       });
@@ -807,7 +807,7 @@ export class PushNotificationService {
         topic: notification.topic,
         isVoIP,
         bundleId: tokenRecord.bundleId ?? undefined,
-        collapseId: payload.collapseId ?? undefined
+        collapseId: loggableCollapseId(payload)
       };
       const result = await this.apnsCircuitBreaker.execute(() =>
         performanceLogger.withTiming(

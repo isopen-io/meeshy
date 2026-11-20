@@ -27,6 +27,7 @@ import me.meeshy.sdk.model.connection.ConnectionPill
 import me.meeshy.sdk.model.connection.ConnectionPillState
 import me.meeshy.sdk.model.connection.SyncPillEntry
 import me.meeshy.sdk.model.connection.SyncPillReducer
+import me.meeshy.sdk.model.fall.FallPillAnnouncements
 import me.meeshy.sdk.model.inactivity.InactivityPillAnnouncements
 import me.meeshy.sdk.model.phonecall.PhoneCallPillAnnouncements
 import me.meeshy.sdk.model.phonereachability.PhoneReachabilityPillAnnouncements
@@ -67,12 +68,14 @@ class SyncPillViewModel @Inject constructor(
     private val phoneSource: SyncPillPhoneReachabilitySource = SyncPillPhoneReachabilitySource.None,
     private val inactivitySource: SyncPillInactivitySource = SyncPillInactivitySource.None,
     private val phoneCallSource: SyncPillPhoneCallSource = SyncPillPhoneCallSource.None,
+    private val fallSource: SyncPillFallSource = SyncPillFallSource.None,
     private val clock: SyncPillClock,
 ) : ViewModel() {
     private val battery = MutableStateFlow(BatteryPillAnnouncements())
     private val phone = MutableStateFlow(PhoneReachabilityPillAnnouncements())
     private val inactivity = MutableStateFlow(InactivityPillAnnouncements())
     private val phoneCall = MutableStateFlow(PhoneCallPillAnnouncements())
+    private val fall = MutableStateFlow(FallPillAnnouncements())
     private val typers = MutableStateFlow<Map<String, Map<String, String>>>(emptyMap())
     private val typingExpiry = HashMap<String, Job>()
     private val effects = Channel<SyncPillEffect>(Channel.BUFFERED)
@@ -96,6 +99,7 @@ class SyncPillViewModel @Inject constructor(
         observePhoneReachability()
         observeInactivity()
         observePhoneCall()
+        observeFall()
     }
 
     fun onEvent(event: SyncPillUiEvent) {
@@ -175,10 +179,14 @@ class SyncPillViewModel @Inject constructor(
         }
     }
 
-    /** Les annonces passagères (batterie #14147, téléphone injoignable #18737, inactivité #18738, en appel #18753), dans l'ordre de leurs sources. */
+    /**
+     * Les annonces passagères (batterie #14147, téléphone injoignable #18737, inactivité #18738, en appel #18753, chute
+     * détectée #18748), dans l'ordre de leurs sources — la chute en TÊTE : c'est la plus urgente.
+     */
     private fun announcementEntries(): Flow<List<SyncPillEntry>> =
-        combine(battery, phone, inactivity, phoneCall) { b, p, i, c -> b.entries() + p.entries() + i.entries() + c.entries() }
-            .distinctUntilChanged()
+        combine(combine(battery, phone, inactivity, phoneCall) { b, p, i, c -> b.entries() + p.entries() + i.entries() + c.entries() }, fall) { others, f ->
+            f.entries() + others
+        }.distinctUntilChanged()
 
     /**
      * Les annonces du téléphone injoignable (#18737) défilent puis quittent la pastille à leur échéance ; une annonce
@@ -227,6 +235,20 @@ class SyncPillViewModel @Inject constructor(
                 if (expiry == null) return@collectLatest
                 delay((expiry - clock.nowMs()).coerceAtLeast(1L))
                 phoneCall.update { it.expire(clock.nowMs()) }
+            }
+        }
+    }
+
+    /** Les annonces de chute (#18748) : même règle — elles défilent, partent à leur échéance, et ne reviennent jamais. */
+    private fun observeFall() {
+        viewModelScope.launch {
+            fallSource.announcements.collect { item -> fall.update { it.announce(item.id, item.userId, item.label, clock.nowMs()) } }
+        }
+        viewModelScope.launch {
+            fall.map { it.nextExpiryMs() }.distinctUntilChanged().collectLatest { expiry ->
+                if (expiry == null) return@collectLatest
+                delay((expiry - clock.nowMs()).coerceAtLeast(1L))
+                fall.update { it.expire(clock.nowMs()) }
             }
         }
     }
