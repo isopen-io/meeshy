@@ -15,6 +15,7 @@ import { MessageTranslationService } from '../message-translation/MessageTransla
 import { MessageReadStatusService } from '../MessageReadStatusService';
 import { NotificationService } from '../notifications/NotificationService';
 import { MessageValidator } from './MessageValidator';
+import { linkAdmittedAttachmentsToDedupHit } from './earlyDedupAttachments';
 import { MessageProcessor } from './MessageProcessor';
 import { postSaveToolFields, queueMessageTranslation, runMessagePostSaveEffects } from './messagePostSaveEffects';
 import { EngagementService } from '../engagement/EngagementService';
@@ -246,6 +247,20 @@ export class MessagingService {
           // clientMessageId re-broadcasts the bubble to every recipient. This
           // mirrors the P2002 concurrent-retry path in MessageProcessor.saveMessage.
           (openedHit as { isDuplicate?: boolean }).isDuplicate = true;
+          /**
+           * #19917 — LE REJEU PEUT APPORTER DES PIÈCES QUE LA LIGNE N'A PAS.
+           * Ce chemin rend le message et s'arrête AVANT `handleAttachments` :
+           * les `attachmentIds` que le transport vient d'ADMETTRE n'étaient
+           * liés par personne, et l'expéditeur voyait « envoyé » avec ses
+           * aperçus locaux pendant que la pièce n'existait pour personne.
+           * `null` ⇒ rien à faire (aucune pièce au rejeu, ou la ligne porte
+           * déjà les siennes) : on ne touche pas à ce qui est là.
+           */
+          const linked = await linkAdmittedAttachmentsToDedupHit(this.prisma, {
+            hit: openedHit as never,
+            attachmentIds: request.attachmentIds,
+          });
+          if (linked !== null) (openedHit as { attachments?: unknown }).attachments = linked;
           const translations = (openedHit as { translations?: unknown }).translations;
           if (this.isTranslationsEmpty(translations)) {
             void this.queueTranslation(openedHit, openedHit.originalLanguage ?? 'fr').catch((err) =>
