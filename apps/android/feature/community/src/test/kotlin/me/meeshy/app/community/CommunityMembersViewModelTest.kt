@@ -22,6 +22,7 @@ import me.meeshy.sdk.community.CommunityJoinRequestedBinding
 import me.meeshy.sdk.community.CommunityRepository
 import me.meeshy.sdk.model.ApiCommunity
 import me.meeshy.sdk.model.ApiCommunityMember
+import me.meeshy.sdk.model.CommunityJoinRequestedEvent
 import me.meeshy.sdk.model.MemberRole
 import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.net.ApiError
@@ -46,13 +47,14 @@ class CommunityMembersViewModelTest {
     private val cache: CommunityCacheRepository = mockk(relaxed = true)
     private val repository: CommunityRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
-    private val joinRequested: CommunityJoinRequestedBinding = mockk { every { requested } returns MutableSharedFlow() }
+    private val joinRequested: CommunityJoinRequestedBinding = mockk { every { requested } returns MutableSharedFlow<CommunityJoinRequestedEvent>() }
 
     private fun member(user: String, role: String) = ApiCommunityMember(id = "m-$user", userId = user, role = role)
 
     private fun viewModel(meRole: String = "admin", members: List<ApiCommunityMember> = emptyList()): CommunityMembersViewModel {
         val all = members.ifEmpty { listOf(member("me", meRole), member("owner", "admin"), member("u1", "member"), member("u2", "moderator")) }
         every { session.currentUserId } returns "me"
+        coEvery { repository.joinRequests(any(), any(), any()) } returns NetworkResult.Failure(ApiError("hors sujet"))
         every { cache.detail("c1", any()) } returns flowOf(
             CacheResult.Fresh(ApiCommunity(id = "c1", createdBy = "owner", members = all), 0),
         )

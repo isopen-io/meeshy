@@ -34,12 +34,10 @@ data class ApiCommunityJoinRequest(
 
     /** Une ligne sans identifiant, ou qui n'est plus en attente, ne s'affiche pas. */
     val isReadable: Boolean get() = id.isNotEmpty() && userId.isNotEmpty() && (status == null || status == PENDING)
-
-    private companion object {
-        const val PENDING = "pending"
-        val COUNTRY = Regex("^[A-Z]{2}$")
-    }
 }
+
+private const val PENDING = "pending"
+private val COUNTRY = Regex("^[A-Z]{2}$")
 
 /** La décision d'un intendant sur une demande : `POST …/join-requests/:requestId/accept` ou `…/reject`. */
 enum class CommunityJoinRequestDecision { ACCEPT, REJECT }
