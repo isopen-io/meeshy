@@ -143,3 +143,100 @@ rend le passage sûr tant que c'est vrai.
   conversation de plus de 2 000 participants vivants ? Le lot ne répond pas
   davantage ; il rend seulement la question moins chère, puisque le verdict de
   troncature est désormais JOURNALISÉ sur les trois lectures de cette loi.
+
+---
+
+## L'audit adversarial a rendu BLOQUANT, et il avait raison sur les deux
+
+Tout ce qui précède a été écrit avant l'audit. Le raisonnement du lot a tenu —
+aucune fuite trouvée dans la loi, l'inatteignabilité de la branche des ADMIS
+confirmée par la mesure, les neuf appelants vérifiés fail-closed. **Et le lot
+cassait deux suites, dont un cliquet de SÉCURITÉ.**
+
+### Ce que le premier jet a cassé, et pourquoi je ne l'avais pas vu
+
+| | |
+|---|---|
+| **BLOQUANT 1** | `conversation-audience-living-participation` (#16690), 2 témoins sur 4 |
+| **BLOQUANT 2** | `AttachmentReactionHandler`, 3 témoins d'une garantie DURABLE |
+
+Les deux étaient **hors du motif de test** que j'avais joué. « 34 suites /
+603 témoins verts » était vrai et ne disait rien du dépôt : un motif composé à
+partir des fichiers qu'on touche mesure ce qu'on savait déjà chercher. Leçon :
+`tasks/lessons/2026-11-20-un-motif-de-test-est-une-affirmation-sur-le-motif.md`.
+
+**BLOQUANT 1 — le discriminant avait quitté le littéral.** La machinerie bornée
+recevait la clause de participation en PARAMÈTRE (`where: { conversationId,
+...participation }`), si bien que la distinction « audience ⇒ loi étroite /
+refus ⇒ sur-ensemble » — que #16690 tient sur le LITTÉRAL du `where` — était
+devenue un choix de NOM DE FONCTION, qu'aucun balayage ne lit. Le site unique de
+la BORNE et le littéral de la CLAUSE ne sont pas le même site unique.
+`boundedScan` reçoit désormais la LECTURE, jamais le `where` ; la sonde reste
+incessible. Et l'entrée d'exemption a DÉMÉNAGÉ sur l'adresse qu'elle motive
+désormais, raison comprise — une entrée qui ne désigne plus rien autorise en
+silence un site futur qui reprendrait sa clé. Leçon :
+`tasks/lessons/2026-11-20-un-refactor-qui-sort-un-discriminant-du-litteral-casse-le-cliquet-qui-le-lit.md`.
+
+**BLOQUANT 2 — un `await` de plus a révélé trois témoins qui attestaient par
+chance.** L'enfilage hors ligne d'une réaction de pièce part en promesse
+DÉTACHÉE ; `await handler.handleAdd(…)` ne l'attend pas. La production est
+intacte (l'enfilage a lieu, un tick plus tard) ; les témoins l'observaient par
+ordonnancement des microtâches. Ils drainent maintenant — **les deux témoins
+NÉGATIFS du même bloc compris**, qui n'attendaient pas non plus et passaient
+donc trivialement.
+
+### Le constat que je n'avais pas vu venir, et que j'avais pourtant à moitié vu
+
+`narrowing` — l'option que ce lot crée — **pouvait ÉLARGIR l'audience**, sous un
+doc-comment qui affirmait l'inverse. Un objet ÉTALÉ à côté de la loi, donc
+`{ OR: [...] }` — la façon NATURELLE d'écrire un rétrécissement disjonctif —
+écrasait l'`OR` de `bannedAt` et faisait perdre la garde de BANNISSEMENT, sur un
+type d'options partagé par les audiences de DIFFUSION. Le piège est NOMMÉ dans
+le dépôt (`utils/prisma-unset.ts`), et ce lot y ouvrait un chemin générique
+documenté comme sûr.
+
+> J'avais relevé l'ordre du spread moi-même, et décidé d'attendre la fin de
+> l'audit pour y toucher (l'auditeur mutait l'arbre vivant). **Une remarque
+> gardée pour plus tard n'est pas une garde** : si l'audit ne l'avait pas
+> trouvée, elle serait partie dans la PR avec son doc-comment rassurant. Un
+> constat qu'on tient se consigne — ici, il aurait suffi de l'écrire dans le
+> commentaire du lot.
+
+La forme livrée : `narrowing` est un TABLEAU de clauses, placé dans un `AND` —
+un appelant ne peut plus qu'ajouter une conjonction. Et la question des ACTIFS
+n'en admet AUCUNE : `narrowing?: never`, parce qu'une simple ABSENCE compile dès
+que l'appelant passe une variable, et la fonction l'ignorerait en silence. Le
+compilateur a attrapé ce cas dans l'heure qui a suivi (`translationReaders`
+passait bien ses options d'audience au scan des actifs).
+
+### Les quatre mutations, et ce que chacune fait voir
+
+Trois des quatre ne faisaient tomber AUCUN témoin du premier jet — dont un qui
+se félicitait justement que « le double honore le `take` ».
+
+| mutation | ce que le témoin voit maintenant |
+|---|---|
+| garde de complétude des SUSPECTS retirée | `'room'` au lieu d'`'unknown'` — **toute la room servie** |
+| le complément part des ADMIS au lieu des ACTIFS | `u-banni` **disparaît** de l'exclusion |
+| `shareLinkId` retiré de la projection des ADMIS | `user:u-echu` **revient** dans les rooms servies |
+| `narrowing` étalé au lieu d'`AND` | `p-banni` **revient** dans l'audience vivante |
+
+La troisième est un défaut PRÉ-EXISTANT que le lot a rendu visible : le double
+de test n'honorait pas le `select`, donc retirer `shareLinkId` de la projection
+rouvrait la porte des liens ÉCHUS en laissant 20 suites et 410 témoins verts.
+Le double est désormais `findManyIn`, qui honore le `where`, le `select` ET le
+`take`.
+
+### Et le témoin qui NOMMAIT la troncature des suspects ne pouvait pas tomber
+
+Sa fixture tournait à `cap: 1` avec trois participants : les lectures
+ACTIFS/ADMIS débordaient aussi, et le verdict commun rendait `unknown` quelle
+que soit la garde. Il passait pour une raison qui n'était pas la sienne. Sa
+fixture porte maintenant un suspect NON bloqué (lien qui ouvre l'historique) en
+PREMIER et le bloqué en second : la troncature garde le premier, `blocked` est
+vide, et la loi sort sur `{kind:'room'}` **avant** les deux autres lectures —
+c'est le seul montage où cette garde-là est la seule à décider.
+
+> **Un témoin qui porte le NOM d'une garde doit tomber quand cette garde seule
+> tombe.** Vérifier qu'il rougit ne suffit pas : il faut vérifier qu'il rougit
+> pour SA raison, et cela se mesure en mutant cette garde-là, isolément.
