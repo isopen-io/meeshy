@@ -12,13 +12,24 @@ data class CommunityMembership(
     val isAdmin: Boolean get() = isCreator || (role?.hasMinimumRole(MemberRole.ADMIN) == true)
 
     companion object {
-        fun resolve(createdBy: String, meId: String?, members: List<ApiCommunityMember>): CommunityMembership {
+        /**
+         * Le rôle SERVI ([servedRole], `currentUserRole`) passe en premier ; la ligne du lecteur dans
+         * [members] ne sert qu'à un ancien serveur qui ne le sert pas ; le créateur vaut admin (#16602,
+         * miroir `CommunityDetailViewModel.applyMembership` iOS).
+         */
+        fun resolve(
+            createdBy: String,
+            meId: String?,
+            members: List<ApiCommunityMember>,
+            servedRole: String? = null,
+        ): CommunityMembership {
             val isCreator = meId != null && createdBy == meId
-            val mine = meId?.let { id -> members.firstOrNull { it.userId == id } }
+            val held = servedRole?.let(MemberRole::from)
+                ?: meId?.let { id -> members.firstOrNull { it.userId == id } }?.communityRole
             return CommunityMembership(
                 isCreator = isCreator,
-                isMember = isCreator || mine != null,
-                role = mine?.communityRole ?: MemberRole.ADMIN.takeIf { isCreator },
+                isMember = isCreator || held != null,
+                role = held ?: MemberRole.ADMIN.takeIf { isCreator },
             )
         }
     }

@@ -24,6 +24,8 @@ import me.meeshy.sdk.model.ApiCommunity
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.Community
 import me.meeshy.sdk.model.CommunityAccess
+import me.meeshy.sdk.model.CommunityJoinOutcome
+import me.meeshy.sdk.model.CommunityJoinRefusal
 import me.meeshy.sdk.model.CommunityLoadFailure
 import me.meeshy.sdk.model.CommunityMembership
 import me.meeshy.sdk.model.MemberRole
@@ -56,6 +58,12 @@ data class CommunityDetailUiState(
     val failure: CommunityLoadFailure? = null,
     val isJoining: Boolean = false,
     val isLeaving: Boolean = false,
+    /** La communauté valide chaque entrée (#19429) : on y DEMANDE à entrer. */
+    val requiresJoinApproval: Boolean = false,
+    /** La demande du lecteur attend un administrateur ou un modérateur (#19870). */
+    val joinRequestPending: Boolean = false,
+    /** Un refus de la jonction que l'écran dit dans la langue du lecteur. */
+    val joinRefusal: CommunityJoinRefusal? = null,
 ) {
     val showSkeleton: Boolean get() = community == null && isLoading
     val showError: Boolean get() = community == null && !isLoading && failure != null
@@ -113,30 +121,63 @@ class CommunityDetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Rejoindre est OPTIMISTE. Une communauté qui valide chaque entrée dit « Demande envoyée » dès le
+     * toucher et ne fait membre de rien — ni rôle, ni effectif — avant l'acceptation, qui arrive par
+     * `community:member-joined` (miroir `CommunityDetailViewModel.joinCommunity` iOS, #19870).
+     */
     fun join() {
         val before = _state.value
         val community = before.community ?: return
         val access = before.access ?: return
-        if (before.isJoining || !access.canJoin) return
+        if (before.isJoining || before.joinRequestPending || !access.canJoin) return
         _state.update {
-            it.copy(
-                isJoining = true,
-                access = CommunityAccess(CommunityMembership(isCreator = false, isMember = true, role = MemberRole.MEMBER), access.isPrivate),
-                community = community.copy(memberCount = community.memberCount + 1),
-            )
+            if (before.requiresJoinApproval) {
+                it.copy(isJoining = true, joinRequestPending = true, joinRefusal = null)
+            } else {
+                it.copy(
+                    isJoining = true,
+                    joinRefusal = null,
+                    access = CommunityAccess(CommunityMembership(isCreator = false, isMember = true, role = MemberRole.MEMBER), access.isPrivate),
+                    community = community.copy(memberCount = community.memberCount + 1),
+                )
+            }
         }
         viewModelScope.launch {
-            when (repository.join(communityId)) {
-                is NetworkResult.Success -> {
-                    cache.refreshDetail(communityId)
-                    cache.refreshChannels(communityId)
-                    cache.refreshList()
-                    _state.update { it.copy(isJoining = false) }
-                    _effects.send(CommunityDetailEffect.Joined)
+            when (val result = repository.join(communityId)) {
+                is NetworkResult.Success -> when (result.data) {
+                    is CommunityJoinOutcome.Pending -> {
+                        _state.update {
+                            it.copy(
+                                isJoining = false,
+                                requiresJoinApproval = true,
+                                joinRequestPending = true,
+                                access = before.access,
+                                community = before.community,
+                            )
+                        }
+                        cache.refreshDetail(communityId)
+                    }
+                    is CommunityJoinOutcome.Joined -> {
+                        cache.refreshDetail(communityId)
+                        cache.refreshChannels(communityId)
+                        cache.refreshList()
+                        _state.update { it.copy(isJoining = false, joinRequestPending = false) }
+                        _effects.send(CommunityDetailEffect.Joined)
+                    }
                 }
                 is NetworkResult.Failure -> {
-                    _state.update { it.copy(isJoining = false, access = before.access, community = before.community) }
-                    _effects.send(CommunityDetailEffect.ActionFailed)
+                    val refusal = CommunityJoinRefusal.of(result.error.code)
+                    _state.update {
+                        it.copy(
+                            isJoining = false,
+                            joinRequestPending = false,
+                            joinRefusal = refusal,
+                            access = before.access,
+                            community = before.community,
+                        )
+                    }
+                    if (refusal == null) _effects.send(CommunityDetailEffect.ActionFailed)
                 }
             }
         }
@@ -191,9 +232,18 @@ class CommunityDetailViewModel @Inject constructor(
     }
 
     private fun onDetail(api: ApiCommunity) {
-        val access = CommunityAccess.resolve(api.createdBy, api.isPrivate, session.currentUserId, api.members.orEmpty())
+        val access = CommunityAccess.of(api, session.currentUserId)
         _state.update {
-            it.copy(community = api.toCommunity(), access = access, isLoading = false, failure = null)
+            val sending = it.isJoining && it.joinRequestPending
+            it.copy(
+                community = api.toCommunity(),
+                access = access,
+                isLoading = false,
+                failure = null,
+                requiresJoinApproval = api.requiresJoinApproval == true || sending,
+                joinRequestPending = !access.isMember && (api.hasPendingJoinRequest || sending),
+                joinRefusal = it.joinRefusal.takeUnless { access.isMember },
+            )
         }
         observeAppearance(api)
         if (access.isMember) observeChannels() else channelsJob?.cancel()

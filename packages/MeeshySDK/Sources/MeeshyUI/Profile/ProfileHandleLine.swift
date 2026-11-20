@@ -7,14 +7,15 @@ import Foundation
 public enum ProfileHandleLine {
 
     /// Sans date servie, le pseudo seul : la ligne n'invente aucun mois.
-    public static func text(username: String, memberSince: Date?, locale: Locale, inBar: Bool = false) -> String {
+    @MainActor public static func text(username: String, memberSince: Date?, locale: Locale, inBar: Bool = false) -> String {
         let handle = "@\(username)"
         guard !inBar, let memberSince else { return handle }
         return String(format: format, handle, monthAndYear(of: memberSince, locale: locale))
     }
 
     /// La phrase, dans la langue de l'interface ; le mois, dans la locale demandée.
-    static var format: String {
+    /// `@MainActor` malgré le type `nonisolated` : `Bundle.module`.
+    @MainActor static var format: String {
         String(localized: "profile.handle.since", defaultValue: "%1$@ · depuis %2$@", bundle: .module)
     }
 

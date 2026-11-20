@@ -162,7 +162,7 @@ nonisolated enum VitrineSeenAsCopy {
         case .locationHistory: return String(localized: "profile.seenAs.feature.locationHistory", defaultValue: "historique de position", bundle: .main)
         case .locationProximity: return String(localized: "profile.seenAs.feature.locationProximity", defaultValue: "proximité", bundle: .main)
         case .acquaintanceAuto, .relayCommentersOnMyPosts, .relayMyCommentsElsewhere, .notifyNewContent,
-             .presenceDnd, .audienceClose, .audienceBlood, .deviceBatteryPull, .callRing, .safetyInactivity, .deviceCall:
+             .presenceDnd, .audienceClose, .audienceBlood, .deviceBatteryPull, .callRing, .safetyInactivity, .deviceCall, .healthFall:
             return ""
         }
     }

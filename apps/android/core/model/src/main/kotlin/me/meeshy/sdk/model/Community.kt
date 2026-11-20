@@ -56,7 +56,24 @@ data class ApiCommunity(
     val conversationCount: Int? = null,
     /** Agrégat anonyme servi par `GET /communities/:id` (#18014) ; `null` = communauté trop petite ou ancien serveur. */
     val onlineMemberCount: Int? = null,
-)
+    /**
+     * Le rôle que le LECTEUR tient, servi par `GET /communities/:id` (#6378) : sa ligne active, `admin`
+     * pour le créateur, `null` s'il n'est pas membre. `members` n'est plus servi par le détail : c'est
+     * ce champ qui décide Rejoindre ou Quitter (#16602).
+     */
+    val currentUserRole: String? = null,
+    /** Chaque entrée attend qu'un administrateur ou un modérateur l'accepte (#19429). */
+    val requiresJoinApproval: Boolean? = null,
+    /** La demande d'entrée du LECTEUR : `"pending"` quand elle attend une réponse (#19868). */
+    val currentUserJoinRequest: String? = null,
+) {
+    /** Le lecteur attend la réponse à sa demande d'entrée — jamais quand il est déjà membre. */
+    val hasPendingJoinRequest: Boolean get() = currentUserJoinRequest == PENDING_JOIN_REQUEST
+
+    companion object {
+        const val PENDING_JOIN_REQUEST = "pending"
+    }
+}
 
 /** A community search result — port of APICommunitySearchResult (CommunityModels.swift). */
 @Serializable

@@ -223,6 +223,7 @@ import type {
 import type { PhoneReachabilityChangedEventData, PhoneReachabilityClearedEventData } from '../phone-reachability.js';
 import type { InactivityAlertEventData, InactivityClearedEventData } from '../inactivity-check.js';
 import type { PhoneCallEndedEventData, PhoneCallStartedEventData } from '../phone-call.js';
+import type { FallClearedEventData, FallDetectedEventData } from '../fall-detection.js';
 import type { BloodMovedEventData, BloodProximityEventData } from '../blood-location.js';
 import type { ContactExchangeReceivedEventData } from '../contact-exchange.js';
 import type {
@@ -296,6 +297,7 @@ import type {
 import type {
   CommunityDeletedEventData,
   CommunityJoinRequestedEventData,
+  CommunityJoinRequestDecidedEventData,
   CommunityMemberJoinedEventData,
   CommunityMemberLeftEventData,
   CommunityMemberRoleUpdatedEventData,
@@ -449,6 +451,8 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.INACTIVITY_CLEARED]: (data: InactivityClearedEventData) => void;
   [SERVER_EVENTS.PHONE_CALL_STARTED]: (data: PhoneCallStartedEventData) => void;
   [SERVER_EVENTS.PHONE_CALL_ENDED]: (data: PhoneCallEndedEventData) => void;
+  [SERVER_EVENTS.FALL_DETECTED]: (data: FallDetectedEventData) => void;
+  [SERVER_EVENTS.FALL_CLEARED]: (data: FallClearedEventData) => void;
   [SERVER_EVENTS.SHARED_LOCATION_CHANGED]: (data: SharedLocationChangedEventData) => void;
   [SERVER_EVENTS.SHARED_LOCATION_ENDED]: (data: SharedLocationEndedEventData) => void;
   [SERVER_EVENTS.SHARED_LOCATION_OWN_CHANGED]: (data: SharedLocationOwnChangedEventData) => void;
@@ -547,6 +551,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.COMMUNITY_MEMBER_ROLE_UPDATED]: (data: CommunityMemberRoleUpdatedEventData) => void;
   [SERVER_EVENTS.COMMUNITY_DELETED]: (data: CommunityDeletedEventData) => void;
   [SERVER_EVENTS.COMMUNITY_JOIN_REQUESTED]: (data: CommunityJoinRequestedEventData) => void;
+  [SERVER_EVENTS.COMMUNITY_JOIN_REQUEST_DECIDED]: (data: CommunityJoinRequestDecidedEventData) => void;
 
   // Packs
   [SERVER_EVENTS.PACK_INSTALLATION_UPDATED]: (data: PackInstallationUpdatedEventData) => void;

@@ -27,7 +27,7 @@ import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/locat
 import { stickerFromMetadata, hoistStickerOnto } from '../../services/stickers/messageSticker';
 import { resolveForwardSourceGateForReader } from '../../services/preferences/forward-source-visibility.js';
 import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forwarded-attachment-urls.js';
-import { servedDescription } from '../../services/attachments/mediaSideContent';
+import { servedSideContent, type SideContentRow } from '../../services/attachments/mediaSideContent';
 import { servedAttachmentTranslations } from '../../services/attachments/servedAttachmentTranslations';
 import { FORWARD_PIECE_PROTECTION_SELECT, FORWARD_SOURCE_PROTECTION_SELECT, forwardPreviewOf, signReaderAttachmentsIn } from '../../services/attachments/signedAttachmentUrls';
 import type { ReaderFileUrlSigner } from '../../services/attachments/readerFileSignature';
@@ -50,6 +50,7 @@ import { logger } from './messages-shared';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 import { servedLinkMetadata } from '../../services/messaging/linkTrackingAuthor';
 import { servedEditAttribution, type EditAttributionReader } from '@meeshy/shared/utils/message-edit-attribution';
+import { servedClientMessageId } from '../../services/messaging/clientMessageIdOwnership';
 import { authorProfileDecor } from '../../services/appearance/authorProfileDecor';
 import { quotedRowOf, signedQuotedReply } from '../../socketio/readerSignedDelivery';
 import type {
@@ -101,7 +102,10 @@ export function cleanAttachmentsForApi(
     // #12333 — la description sous la loi de `servedDescription` ; la ligne
     // du message porteur (chargée pour cette seule loi) ne sort jamais.
     const { message: _carrier, ...row } = att as RawMessageAttachment & { message?: unknown };
-    const cleaned: CleanedAttachment = { ...row, ...servedDescription(att as Parameters<typeof servedDescription>[0]) };
+    // #19978 — `servedSideContent` et non `servedDescription` : le spread de
+    // `row` répandait `transcription` et les mots des pistes traduites juste à
+    // côté de la description qu'on gardait.
+    const cleaned: CleanedAttachment = { ...row, ...servedSideContent(att as RawMessageAttachment & SideContentRow) };
 
     // BUG2 A' — agréger les réactions par-image en reactionSummary + currentUserReactions
     // (miroir des réactions message-level) et retirer les rows brutes.
@@ -508,7 +512,20 @@ export function mapMessageRowForList(message: RawMessageRow, ctx: MessageRowMapp
           id: message.id,
           // Idempotency key — lets clients reconcile an optimistic send with
           // its server record by `clientMessageId` on a cold list load.
-          clientMessageId: message.clientMessageId ?? null,
+          //
+          // #19960 — SERVIE À SON AUTEUR SEULEMENT, comme le chemin socket la
+          // retire des pairs (`stripClientMessageId`, #16689 : « a non-sender
+          // participant never learns the sender's optimistic-id space »). La
+          // réconciliation dont parle la phrase ci-dessus ne vaut QUE pour ses
+          // propres bulles ; un pair n'a rien à en faire, et la clé est celle
+          // que les trois dédoublonnages apparient. Comparaison sur le
+          // `Participant.id` BRUT, la seule identité que les deux côtés
+          // portent — un invité de lien n'a pas de `User.id`.
+          clientMessageId: servedClientMessageId({
+            clientMessageId: message.clientMessageId,
+            senderParticipantId: message.senderId,
+            readerParticipantId: currentParticipantId,
+          }),
           conversationId: message.conversationId,
           // CORRECTION senderId: en DB, senderId = Participant.id (FK).
           // Les clients (iOS/Web) comparent senderId avec leur userId (User.id).

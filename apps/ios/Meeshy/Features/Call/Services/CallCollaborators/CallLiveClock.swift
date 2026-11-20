@@ -34,7 +34,7 @@ final class CallLiveClock: CallLiveClockProviding {
                 // doit PAS tuer la boucle (l'ancien `return` gelait le chrono à
                 // 00:00 pour tout le reste de l'appel) — on saute juste le tick.
                 guard let start = call.callStartDate else { continue }
-                call.callDuration = Date().timeIntervalSince(start)
+                call.callDuration = CallReliabilityPolicy.elapsedSeconds(since: start, now: Date())
             }
         }
     }

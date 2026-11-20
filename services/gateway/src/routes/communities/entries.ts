@@ -26,11 +26,12 @@ import {
 } from '../../services/community-entries';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { ACCOUNT_STATE_SELECT, isUsableAccount } from '../../services/relations/usableAccount';
+import { scheduleJoinRequestRejectedFrom } from '../../services/community-join-request-decided';
 import { getBlockRelatedUserIds, isBlockedBetween } from '../../utils/blocking.js';
 import { admitCommunityMember, membershipAfterFailure } from './admission';
 import { gateCoMemberPresence } from './member-presence';
 import { viewerFromRequest } from '../users/presence-gate';
-import { liveJoinRequestWhere } from '../../services/community-join-request-lifecycle';
+import { liveJoinRequestWhere, reopenOrphanedAcceptances } from '../../services/community-join-request-lifecycle';
 import type { CommunityEngagementOptions } from './types';
 
 const logger = enhancedLogger.child({ module: 'CommunityEntryRoutes' });
@@ -189,6 +190,8 @@ export async function registerEntryRoutes(fastify: FastifyInstance, options: Com
     const { limit = JOIN_REQUESTS_PAGE_MAX, cursor } = request.query as { limit?: number; cursor?: string };
     try {
       return await guarded(request, reply, id, async (viewerId) => {
+        // #19924 — une acceptation restée sans entrée redevient tranchable avant la lecture.
+        if (!cursor) await reopenOrphanedAcceptances(fastify.prisma, { communityId: id });
         const blocked = await getBlockRelatedUserIds(fastify.prisma, viewerId);
         // Le blocage s'exclut EN BASE : une page n'est jamais vidée par ce qu'on retire après.
         const live = liveJoinRequestWhere(new Date());
@@ -232,14 +235,14 @@ export async function registerEntryRoutes(fastify: FastifyInstance, options: Com
     return pending;
   }
 
-  /** Bascule ATOMIQUE `pending` → décision : deux décisions concurrentes, une seule gagne. */
-  async function decide(id: string, requestId: string, viewerId: string, status: 'accepted' | 'rejected'): Promise<boolean> {
+  /** Bascule ATOMIQUE `pending` → décision : deux décisions concurrentes, une seule gagne, et rend l'instant écrit. */
+  async function decide(id: string, requestId: string, viewerId: string, status: 'accepted' | 'rejected'): Promise<Date | null> {
     const now = new Date();
     const flipped = await fastify.prisma.communityJoinRequest.updateMany({
       where: { id: requestId, communityId: id, ...liveJoinRequestWhere(now) },
       data: { status, decidedAt: now, decidedBy: viewerId }
     });
-    return flipped.count === 1;
+    return flipped.count === 1 ? now : null;
   }
 
   fastify.post('/communities/:id/join-requests/:requestId/accept', {
@@ -297,7 +300,7 @@ export async function registerEntryRoutes(fastify: FastifyInstance, options: Com
   fastify.post('/communities/:id/join-requests/:requestId/reject', {
     onRequest: [fastify.authenticate],
     schema: {
-      description: 'Reject a pending join request (#19429). Nobody enters. Admins and moderators only; any other reader, an unknown or already decided request gets a generic 404.',
+      description: 'Reject a pending join request (#19429). Nobody enters; the requester alone is told, without the steward\'s name (`community:join-request-decided` and a notification, #19879). Admins and moderators only; any other reader, an unknown or already decided request gets a generic 404.',
       tags: ['communities'],
       summary: 'Reject a join request',
       params: requestParams,
@@ -318,7 +321,10 @@ export async function registerEntryRoutes(fastify: FastifyInstance, options: Com
       return await guarded(request, reply, id, async (viewerId) => {
         const pending = await decidableRequest(id, requestId, viewerId);
         if (!pending) return sendNotFound(reply, NOT_FOUND);
-        if (!(await decide(id, pending.id, viewerId, 'rejected'))) return sendNotFound(reply, NOT_FOUND);
+        const decidedAt = await decide(id, pending.id, viewerId, 'rejected');
+        if (!decidedAt) return sendNotFound(reply, NOT_FOUND);
+        // #19879 — le demandeur l'apprend, seul, sans le nom de qui a tranché.
+        scheduleJoinRequestRejectedFrom(fastify, { communityId: id, userId: pending.userId, decidedBy: viewerId, decidedAt });
         return sendSuccess(reply, { id: pending.id, status: 'rejected' });
       });
     } catch (error) {

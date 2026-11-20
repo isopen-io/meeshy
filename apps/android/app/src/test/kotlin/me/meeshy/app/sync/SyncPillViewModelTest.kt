@@ -70,6 +70,10 @@ class SyncPillViewModelTest {
         val phoneCall = object : SyncPillPhoneCallSource {
             override val announcements: Flow<SyncPillPhoneCallItem> = phoneCallItems
         }
+        val fallItems = MutableSharedFlow<SyncPillFallItem>(extraBufferCapacity = 8)
+        val fall = object : SyncPillFallSource {
+            override val announcements: Flow<SyncPillFallItem> = fallItems
+        }
     }
 
     @Before
@@ -88,6 +92,7 @@ class SyncPillViewModelTest {
             f.phone,
             f.inactivity,
             phoneCallSource = f.phoneCall,
+            fallSource = f.fall,
         ) { testScheduler.currentTime }
         backgroundScope.launch { vm.uiState.collect { } }
         runCurrent()
@@ -161,6 +166,28 @@ class SyncPillViewModelTest {
         f.inactivityItems.emit(responded)
         runCurrent()
         assertThat(vm.uiState.value.rows.map { it.literalLabel }).containsExactly(responded.label)
+    }
+
+    @Test
+    fun `une chute detectee defile en tete, disparait, et le retour la remplace pour la meme personne`() = runTest {
+        val f = Fakes()
+        val vm = viewModel(f)
+        f.phoneCallItems.emit(SyncPillPhoneCallItem("phone-call:u3:started:1", "u3", "Jacques est en appel"))
+        val detected = SyncPillFallItem("fall:u2:detected:1", "u2", "Une chute a été détectée sur la montre d'Awa")
+        f.fallItems.emit(detected)
+        runCurrent()
+        assertThat(vm.uiState.value.rows.first().literalLabel).isEqualTo(detected.label)
+        assertThat(vm.uiState.value.rows.first().glyph).isEqualTo(me.meeshy.sdk.model.syncpill.SyncPillGlyph.FALL)
+
+        val responded = SyncPillFallItem("fall:u2:responded:2", "u2", "Awa va bien")
+        f.fallItems.emit(responded)
+        runCurrent()
+        assertThat(vm.uiState.value.rows.map { it.literalLabel }).contains(responded.label)
+        assertThat(vm.uiState.value.rows.map { it.literalLabel }).doesNotContain(detected.label)
+
+        advanceTimeBy(6_001)
+        runCurrent()
+        assertThat(vm.uiState.value.rows).isEmpty()
     }
 
     @Test

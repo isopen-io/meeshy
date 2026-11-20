@@ -50,6 +50,7 @@ const ar = {
   'game.days.two': 'يومان',
   'game.days.few': '{count} أيام',
   'game.banner.level': 'المستوى {level}',
+  'game.banner.light': 'نورك في المستوى {level}',
   'game.banner.to_next': '{percent}٪ نحو المستوى {level}',
   'game.banner.top': 'في القمة',
   'game.banner.capped': '{rank} تفتح المزيد',

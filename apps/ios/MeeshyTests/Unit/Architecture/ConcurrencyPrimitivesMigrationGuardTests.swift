@@ -109,6 +109,8 @@ final class ConcurrencyPrimitivesMigrationGuardTests: XCTestCase {
         "Main/Views/PostDetailView.swift",
         "Main/Views/PostDetailView+CommentTarget.swift",
         "Main/Views/RootView.swift",
+        "Main/Views/RootView+Services.swift",
+        "Main/Views/RootView+Reels.swift",
         "Main/Views/iPadRootView+Navigation.swift",
         "Auth/Views/LoginView.swift",
         "Main/Components/StatusBubbleOverlay.swift",

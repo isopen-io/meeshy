@@ -116,18 +116,19 @@ struct ProfileActionsFace: View {
     private var sharingSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             MeeshySectionHeader(title: ProfileActionsCopy.sharingTitle)
-            positionRow
-                .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
+            VStack(spacing: 0) {
+                positionRow
+                ProfileNoveltyReader(feature: .ghostMode, accountId: user?.id) { badge in ghostRow(badge: badge) }
+            }
+            .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
             BatterySharingSettingsSection(accentColor: accentColor)
             PhoneReachabilitySharingSettingsSection(accentColor: accentColor)
             InactivityCheckSettingsSection(accentColor: accentColor)
             PhoneCallSharingSettingsSection(accentColor: accentColor)
-            VStack(spacing: 0) {
-                ProfileNoveltyReader(feature: .ghostMode, accountId: user?.id) { badge in ghostRow(badge: badge) }
-                privacyToggle(ProfileActionsCopy.notifyReturnTitle, systemImage: "bell",
-                              subtitle: nil, keyPath: \.notifyContactsOnReturn, divider: false)
-            }
-            .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
+            FallConsentSettingsSection(accentColor: accentColor)
+            privacyToggle(ProfileActionsCopy.notifyReturnTitle, systemImage: "bell",
+                          subtitle: nil, keyPath: \.notifyContactsOnReturn, divider: false)
+                .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
         }
     }
 
@@ -139,7 +140,7 @@ struct ProfileActionsFace: View {
         return MeeshyToggleRow(ProfileActionsCopy.positionTitle, systemImage: "mappin.and.ellipse",
                                subtitle: ProfileActionsCopy.positionSubtitle(recipients: count, isGhost: ghost.isGhost),
                                accessory: offersShare ? .value(ProfileActionsCopy.positionShare) : .chevron,
-                               tint: accent, action: { showsNearbyMap = true })
+                               showsDivider: true, tint: accent, action: { showsNearbyMap = true })
             .accessibilityIdentifier("profile.actions.position")
     }
 
@@ -148,7 +149,7 @@ struct ProfileActionsFace: View {
     private func ghostRow(badge: String?) -> some View {
         MeeshyToggleRow(
             content: MeeshyToggleRowContent(title: BloodLocationCopy.ghostTitle, subtitle: ProfileActionsCopy.ghostSubtitle,
-                                            accessory: .toggle(isOn: ghost.isGhost), showsDivider: true, tint: accent,
+                                            accessory: .toggle(isOn: ghost.isGhost), showsDivider: false, tint: accent,
                                             titleAccessoryLabel: badge),
             action: { toggleGhost() },
             leading: { MeeshyToggleRowSymbol("theatermasks") },

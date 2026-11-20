@@ -170,6 +170,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/MediaHub/ConversationMediaHubView.swift",
         "apps/ios/Meeshy/Features/Profile/Views/ParticipantProfileSheet.swift",  // 43
         "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift",  // 37
+        // Le chargement des champs, l'enregistrement et l'envoi des images ont quitté `ProfileView.swift` pour la taille : leurs clés suivent.
+        "apps/ios/Meeshy/Features/Profile/Views/ProfileView+Persistence.swift",
         // #19589 — l'en-tête de ma vitrine (K28) : ses libellés vivent dans son plan de valeurs.
         "apps/ios/Meeshy/Features/Profile/Views/ProfileOwnHeroPlan.swift",
         // #14056 — les règles pures de l'éditeur (refus d'identité compris) ont
@@ -476,6 +478,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Share/ShareSheetCopy.swift",
         "apps/ios/Meeshy/Features/Share/ShareContentZone.swift",
         "apps/ios/Meeshy/Features/Navigation/Router.swift",  // 27
+        "apps/ios/Meeshy/Features/Navigation/Router+DeepLinks.swift",
         "apps/ios/Meeshy/Features/Main/Components/EffectsPickerView.swift",  // 24
         "apps/ios/Meeshy/Features/Links/Views/CreateTrackingLinkView.swift",  // 24
         "apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift",  // 10

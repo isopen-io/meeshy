@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { withServedEditAttribution, type EditAttributionReader } from '@meeshy/shared/utils/message-edit-attribution';
+import { servedClientMessageId } from '../../services/messaging/clientMessageIdOwnership';
 import { Prisma } from '@meeshy/shared/prisma/client';
 import { attachmentSocketSelect, MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
 import { messageSenderUserSelect } from '../conversations/utils/message-sender-select';
@@ -216,7 +217,15 @@ export const SYNC_MESSAGE_SERVED_FIELDS = Object.keys(syncMessageSelect) as read
 // `replyToId`, la coupure de CITATION (#8630) ne peut pas remonter la chaîne et
 // une réponse survivrait à ce qu'elle cite. Lues pour la MÉCANIQUE, jamais
 // servies hors projection (`servedPinnedFor` est inchangé).
-const SYNC_MESSAGE_PINNED = ['id', 'conversationId', 'createdAt', 'updatedAt', 'messageSource', 'messageType', 'expiresAt', 'viewOnceBurnedAt', 'ephemeralDuration', 'effectFlags', 'replyToId'] as const;
+// #19960 — `senderId` rejoint les ÉPINGLÉES parce qu'il est devenu MATIÈRE DE
+// GARDE : `servedClientMessageId` compare l'expéditeur au lecteur. Sans lui,
+// `?fields=messages.clientMessageId` — un jeton VALIDE du vocabulaire — le
+// laissait `undefined`, et la comparaison rendait `null` À L'AUTEUR, sur sa
+// propre clé : la garde échouait FERMÉE et désactivait en silence la seule
+// chose pour laquelle le champ existe. `sparse-fieldset.ts` l'écrit comme une
+// loi — « une garde de confidentialité ne doit jamais dépendre d'un paramètre
+// d'appelant » — et c'est elle qu'on applique ici.
+const SYNC_MESSAGE_PINNED = ['id', 'conversationId', 'senderId', 'createdAt', 'updatedAt', 'messageSource', 'messageType', 'expiresAt', 'viewOnceBurnedAt', 'ephemeralDuration', 'effectFlags', 'replyToId'] as const;
 
 /**
  * Les SIX colonnes de `MESSAGE_PROTECTION_SELECT`, relevées mécaniquement
@@ -344,6 +353,23 @@ function serializeSyncMessage(
             brut.translations as unknown as Record<string, MessageTranslationJSON> | null,
           ),
         }),
+    // #19960 — la clé d'idempotence appartient à son AUTEUR : servie à lui
+    // seul, comme le chemin socket la retire des pairs
+    // (`stripClientMessageId`, #16689). Le `...message` ci-dessus la portait
+    // brute à tout abonné du delta.
+    //
+    // La clé absente du `select` reste ABSENTE — c'est une colonne projetable,
+    // et la masquer en `null` affirmerait que le message n'en a pas. Sur le
+    // profil par défaut elle est toujours chargée, donc un pair reçoit bien un
+    // `null` EXPLICITE : cette branche ne sert que les projections éparses qui
+    // ne la nomment pas.
+    ...(brut.clientMessageId === undefined ? {} : {
+      clientMessageId: servedClientMessageId({
+        clientMessageId: brut.clientMessageId,
+        senderParticipantId: brut.senderId,
+        readerParticipantId,
+      }),
+    }),
     ...(brut.metadata === undefined ? {} : { metadata: servedLinkMetadata(brut.metadata, brut.sender) }),
     ...(brut.attachments === undefined
       ? {}

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Demander à rejoindre une communauté qui valide chaque entrée (#19870) — mêmes mots que les clés iOS community.join.* de #19869. -->
+<resources>
+    <string name="community_join_request">طلب الانضمام</string>
+    <string name="community_join_requested">تم إرسال الطلب</string>
+    <string name="community_join_requested_waiting">يجب أن يقبله مشرف أو مدير.</string>
+    <string name="community_join_cooldown">رُفض طلبك الأخير: يمكنك الطلب مجددًا بعد 7 أيام.</string>
+</resources>

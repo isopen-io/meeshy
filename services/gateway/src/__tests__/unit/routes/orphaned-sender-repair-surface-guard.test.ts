@@ -308,6 +308,13 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // personne.
   'MessageReadStatusService.ts': { kind: 'exempt', reads: 11, why: DOES_NOT_SELECT_SENDER },
   'messaging/anonymizeDeletedAccountMessages.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #19960 — « quelqu'un d'autre tient-il cette clé ? », la SEULE lecture du
+  // dépôt qui apparie un `clientMessageId` sans expéditeur. Elle ne vit que
+  // sur le chemin d'échec d'une violation d'unicité, et son `select` est
+  // `{ id: true }` : elle ne nomme personne et ne rend rien à personne — seule
+  // l'EXISTENCE d'une ligne l'intéresse. La relecture qui SERT (le rejeu
+  // nominal) passe, elle, par `messageDedupProjection.ts`, qui répare.
+  'messaging/clientMessageIdOwnership.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #11381 — le texte à retraduire (colonnes au repos seules, jamais `sender`).
   'messaging/atRestTranslationSource.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7451 — la fenêtre du gel : `select: { id: true }`, rien d'autre.

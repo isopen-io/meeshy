@@ -765,7 +765,7 @@
     <string name="game_level_cap_reached">Nível %1$s: o mais alto que sua patente abre. A patente %2$s abre os próximos.</string>
     <string name="game_level_cap_short">abre na patente %1$s</string>
     <string name="game_level_held">Sua luz já abre o que vem depois: %1$s para passar o nível %2$s.</string>
-    <string name="game_level_ring_a11y">Nível %1$s, %2$s, %3$s estado da sua luz</string>
+    <string name="game_level_ring_a11y">Sua luz no nível %1$s, %2$s, %3$s estado</string>
     <string name="game_level_step_done">vencida</string>
     <string name="game_level_step_flame">manter uma Chama de %1$s dias</string>
     <string name="game_level_step_line">Prova do nível %1$s: %2$s</string>
