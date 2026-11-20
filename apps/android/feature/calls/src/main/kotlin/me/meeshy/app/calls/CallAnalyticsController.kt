@@ -25,7 +25,7 @@ import javax.inject.Inject
  */
 class CallAnalyticsController @Inject constructor(
     private val signals: CallSignalManager,
-    private val clock: CallClock,
+    private val clock: CallElapsedClock,
     private val summaries: CallQualitySummaryStoring,
     private val snapshotTicker: CallAnalyticsSnapshotTicker,
 ) {
@@ -43,9 +43,9 @@ class CallAnalyticsController @Inject constructor(
         this.host = host
     }
 
-    /** A call begins: open a fresh accumulator anchored at now. */
+    /** A call begins: open a fresh accumulator anchored at the monotonic now (a wall-clock jump cannot skew it). */
     fun begin() {
-        analytics = CallAnalytics(startedAtMs = clock.nowMs())
+        analytics = CallAnalytics(startedAtMs = clock.elapsedMs())
         lastSample = null
         stopSnapshots()
         quality.begin()
@@ -61,7 +61,7 @@ class CallAnalyticsController @Inject constructor(
     /** Folds the FSM edge, and reports the call once it ends. */
     fun onTransition(previous: CallState, next: CallState) {
         if (previous !is CallState.Connected && next is CallState.Connected) {
-            analytics = analytics?.connected(clock.nowMs())
+            analytics = analytics?.connected(clock.elapsedMs())
             startSnapshots()
         }
         if (next is CallState.Reconnecting && previous != next) {

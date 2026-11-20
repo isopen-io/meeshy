@@ -22,6 +22,9 @@ internal val silentAnalyticsSnapshots = object : CallAnalyticsSnapshotTicker {
     override val beats: Flow<Unit> = emptyFlow()
 }
 
+/** The monotonic clock the call screens' suites inject when no analytics anchor is asserted. */
+internal val frozenElapsedClock = CallElapsedClock { 0L }
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class CallAnalyticsSnapshotsTest {
 
@@ -42,12 +45,8 @@ class CallAnalyticsSnapshotsTest {
     private val ticker = object : CallAnalyticsSnapshotTicker {
         override val beats: Flow<Unit> = this@CallAnalyticsSnapshotsTest.beats
     }
-    private val clock = object : CallClock {
-        override fun nowMs(): Long = 0L
-    }
-
     private fun connected(host: FakeHost) = CallAnalyticsController(
-        signals, clock, InMemoryCallQualitySummaryStore(), ticker,
+        signals, frozenElapsedClock, InMemoryCallQualitySummaryStore(), ticker,
     ).apply {
         attach(host)
         begin()

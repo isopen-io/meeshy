@@ -112,11 +112,15 @@ class CallViewModelTest {
     /** #16665 — test-driven local screenshots (the activity's `ScreenCaptureWatcher`). */
     private val screenshotFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
 
-    /** Pinned wall clock: assign [clockNowMs] to move time for the analytics anchors. */
+    /** Pinned wall clock (toasts): the analytics anchors no longer read it. */
     private var clockNowMs = 0L
     private val clock = object : CallClock {
         override fun nowMs(): Long = clockNowMs
     }
+
+    /** Pinned monotonic clock: assign [elapsedNowMs] to move time for the analytics anchors. */
+    private var elapsedNowMs = 0L
+    private val elapsedClock = CallElapsedClock { elapsedNowMs }
 
     /** Test-driven peer mute/camera toggles (gateway `call:media-toggled`). */
     private val mediaToggles = MutableSharedFlow<CallMediaTogglePayload>(extraBufferCapacity = 16)
@@ -208,7 +212,7 @@ class CallViewModelTest {
         ),
         CallWaitingController(signalManager, waitingTimer, mockk(relaxed = true)),
         CallWatchdogsController(signalManager, heartbeatTicker, reconnectBudget, connectingWatchdog),
-        CallAnalyticsController(signalManager, clock, InMemoryCallQualitySummaryStore(), silentAnalyticsSnapshots),
+        CallAnalyticsController(signalManager, elapsedClock, InMemoryCallQualitySummaryStore(), silentAnalyticsSnapshots),
         extensions,
         mockk(relaxed = true),
         CallPeerVisualSource { kotlinx.coroutines.flow.emptyFlow() },
@@ -857,10 +861,12 @@ class CallViewModelTest {
     @Test
     fun `hanging up a connected call reports the lifecycle analytics once`() = runTest {
         clockNowMs = 5_000
+        elapsedNowMs = 5_000
         val vm = vm()
         vm.start(incomingAudio)
         vm.onSignal(CallEvent.LocalAnswer)
-        clockNowMs = 8_200
+        clockNowMs = 1_000
+        elapsedNowMs = 8_200
         vm.onSignal(CallEvent.MediaConnected)
         tick(3)
 
