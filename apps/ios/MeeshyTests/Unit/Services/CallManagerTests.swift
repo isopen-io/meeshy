@@ -6346,7 +6346,7 @@ final class CallSetupMetricsTests: XCTestCase {
 @MainActor
 final class CallAnalyticsSnapshotTests: XCTestCase {
 
-    private let t0 = Date(timeIntervalSince1970: 2_000_000)
+    private let t0: TimeInterval = 2_000_000
 
     func test_distribution_includesOpenWindow_withoutMutation() {
         let accumulated: [VideoQualityLevel: Double] = [.excellent: 60]
@@ -6354,7 +6354,7 @@ final class CallAnalyticsSnapshotTests: XCTestCase {
             accumulatedSeconds: accumulated,
             openWindowLevel: .poor,
             openWindowSince: t0,
-            now: t0.addingTimeInterval(40)
+            now: t0 + 40
         )
         XCTAssertEqual(dist["excellent"] ?? 0, 0.6, accuracy: 0.001)
         XCTAssertEqual(dist["poor"] ?? 0, 0.4, accuracy: 0.001)
@@ -6381,7 +6381,7 @@ final class CallAnalyticsSnapshotTests: XCTestCase {
         let dist = CallReliabilityPolicy.qualityDistribution(
             accumulatedSeconds: [.excellent: 10],
             openWindowLevel: .poor,
-            openWindowSince: t0.addingTimeInterval(100),   // "since" dans le futur
+            openWindowSince: t0 + 100,   // "since" dans le futur
             now: t0
         )
         XCTAssertEqual(dist["excellent"] ?? 0, 1.0, accuracy: 0.001)
@@ -6410,7 +6410,7 @@ final class CallAnalyticsSnapshotTests: XCTestCase {
         )
         let recorder = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager+AnalyticsRecorder.swift")
         XCTAssertTrue(
-            recorder.contains("    func payload(now: Date, context: CallAnalyticsContext)"),
+            recorder.contains("    func payload(uptime: TimeInterval, context: CallAnalyticsContext)"),
             "The analytics payload is built by a NON-mutating CallAnalyticsRecorder.payload — the compiler then forbids folding the open window into the accumulators"
         )
         XCTAssertFalse(recorder.contains("mutating func payload("), "payload must stay non-mutating")
