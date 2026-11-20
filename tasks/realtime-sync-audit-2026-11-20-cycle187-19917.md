@@ -1,132 +1,116 @@
-# Cycle 187 — le dédoublonnage rendait « succès » sans les pièces qu'il venait d'admettre
+# Cycle 187 — le lot a été RETIRÉ : la réparation était au mauvais endroit
 
-*2026-11-20, à la suite du cycle 186 (#19865, fusionné dans `dev` par
-`5c5983e759`). Branche `claude/exciting-planck-dr9e11`. Instruit **#19917**,
-que l'audit adversarial du cycle 186 a relevé en cherchant ce que mon propre
-lot METTAIT EN SERVICE.*
+*2026-11-20, à la suite du cycle 186 (#19865, fusionné par `5c5983e759`).
+Branche `claude/exciting-planck-dr9e11`, PR **#19958 fermée sans fusion**.
+Instruisait **#19917**, que l'audit adversarial du cycle 186 avait relevé.*
 
 ---
 
-## Pourquoi celui-là
+## Ce que le lot faisait, et pourquoi il ne fusionne pas
 
-Il n'a pas été choisi dans un tri : **c'est le cycle précédent qui l'a
-produit.** Le lot #19865 a rendu possible un second `POST …/messages` sous le
-même `clientMessageId` avec des `attachmentIds` NEUFS — et l'audit a demandé
-ce que ce chemin allumait. Réponse : un succès qui ment.
+Le dédoublonnage précoce de `MessagingService.handleMessage` rend la ligne
+existante AVANT `handleAttachments` : les `attachmentIds` d'un rejeu, pourtant
+admis par les deux transports, n'étaient liés par personne. Le lot les liait
+depuis le bloc `earlyHit`.
 
-Le critère des cycles précédents tient aussi — défaut **mesuré**, sur le chemin
-de remise, qui **supprime silencieusement une pièce jointe** — avec la
-propriété qui rend celui-ci particulier : **l'erreur a la bonne apparence.**
-L'expéditeur voit « envoyé », sa bulle porte ses aperçus `blob:` locaux, et
-rien ne se signale jamais. C'est le pire des états pour une remise.
+**Le diagnostic est juste. Le LIEU était faux.** L'audit adversarial a rendu
+BLOQUANT ; j'ai vérifié ses trois constats décisifs dans le code avant de
+trancher, et les trois tiennent.
 
-Aucune branche vivante n'écrit `MessagingService`, `MessageProcessor` ni
-`attachmentSendAdmission` (relevé avant d'écrire).
+### 1. Un trou de contrôle d'accès, ouvert par ma main
 
-## Le défaut, mesuré
+`MessagingService.ts:217` — `where: { conversationId, clientMessageId }` :
+**aucun `senderId`**. Et `clientMessageId` est servi à CHAQUE participant par
+la liste REST (`messages-list-query.ts:255` et `:511`), alors que le chemin
+socket le retire des pairs par doctrine (`stripClientMessageId`, #16689).
 
-`MessagingService.handleMessage` (`:212-261`) répond à un rejeu dont le couple
-`(conversationId, clientMessageId)` existe déjà par un `earlyHit` :
-`return this.createSuccessResponse(openedHit)` — **AVANT** tout
-`handleAttachments`. Les `attachmentIds` du rejeu, que les deux transports
-viennent pourtant d'ADMETTRE, ne sont liés par personne.
+Bob lit le `clientMessageId` d'Alice, téléverse son fichier, poste avec ce
+`clientMessageId` : **ma liaison l'attache au message d'Alice**, et
+`associateAttachmentsToMessage(ids, hit.id, hit)` lui fait hériter des drapeaux
+de protection du message d'Alice. La pièce apparaît sous la signature d'Alice.
 
-| transport | admet avant d'appeler `handleMessage` |
+> La lecture était sûre SANS filtre d'auteur — rendre à quelqu'un un message
+> qu'il peut déjà lire ne révèle rien. L'écriture ne l'est pas. **Une condition
+> suffisante pour LIRE ne l'est jamais pour ÉCRIRE, et c'est la même ligne de
+> `where` qui porte les deux.**
+
+### 2. Ma garde centrale était MORTE, et mon témoin ne pouvait pas tomber
+
+`if ((hit.attachments?.length ?? 0) > 0) return null;` — la lecture de dédup
+n'`include` que `sender`. **`attachments` n'est jamais chargé.** La garde ne
+retenait donc rien, et un rejeu portant des ids DIFFÉRENTS aurait AJOUTÉ une
+seconde copie au message qui portait déjà la sienne.
+
+Mon harnais fabriquait `attachments` sur l'objet que `findFirst` rend — une
+forme que la production ne produit pas. Mis à la forme réelle, le témoin du
+« rejeu nominal » **tombe**. Et le `as never` du site d'appel étouffait le
+`TS2741` qui l'aurait dit : `tsc` passe EXIT=0 **sans** ce cast.
+
+> Dans le lot dont le journal préche contre les témoins qui ne peuvent pas
+> tomber. La règle de méthode ne se transporte pas d'un cycle au suivant : elle
+> se réapplique, sur SON harnais.
+
+### 3. La liaison courait avant les gardes d'admission
+
+Le dédoublonnage passe avant §3.6 (état du conteneur), §3.7 (droit d'écriture)
+et §3.8 (`attachmentSendRefusal`) — et le commentaire de §3.6 justifie cet
+ordre par le fait que cette branche **ne fait que LIRE**. J'y ai posé une
+écriture. §3.8 existe mot pour mot pour ce geste : « `upload.ts` ne garde que
+le TÉLÉVERSEMENT du fichier, jamais son admission au moment où il est RATTACHÉ
+à un message » (#5151).
+
+## Et le constat qui condamne l'APPROCHE, pas la rédaction
+
+La liaison nominale entraîne trois gestes que le raccourci n'exécutait pas :
+
+| geste | ce que son absence laisse |
 |---|---|
-| REST | `admitMessageAttachments` (`messages-send.ts:381`) |
-| WS | `admitLoadedMessageAttachments` (`MessageHandler.ts:561`) |
+| scellement au repos | le fichier en CLAIR sur disque en conversation `server` ; le balayage de rattrapage est ancré sur `message.createdAt`, donc un rejeu à plus de 48 h ne sera jamais rattrapé |
+| `processAudioAttachments` | un vocal **jamais transcrit** — donc ni traduction, ni TTS, ni Prisme, pour toujours : cette fonction n'a qu'un appelant et aucun rattrapage |
+| `deriveMessageTypeForAttachments` | la colonne reste `'text'` sur un message qui porte une image |
 
-Les ids qui arrivent ici sont donc **vivants, à l'expéditeur, non attachés** —
-mesuré site par site, et c'est ce qui autorise ce lot à les lier sans rejouer
-une admission.
+Plus la relecture sans `select`, qui servait la ligne BRUTE — `filePath`,
+`encryptionIv`, `encryptionAuthTag`, `serverKeyId`… — ce que
+`attachmentIncludes.ts` interdit nommément.
 
-## La cause racine est écrite dans le dépôt, vingt lignes au-dessus
+> **Le lot remplaçait un échec BRUYANT — la pièce manque, l'utilisateur
+> renvoie — par un état à moitié réparé, SILENCIEUX et DÉFINITIF.** C'est un
+> plus mauvais produit que le défaut qu'il corrigeait. Un correctif ne se juge
+> pas à ce qu'il répare, mais à l'état qu'il laisse.
 
-`MessageProcessor.handleAttachments` lie les pièces pré-téléversées sous un
-`catch` qui JOURNALISE et ne relève pas. Un envoi dont la liaison a échoué
-laisse une bulle sans elles — et la branche COPIE, juste au-dessus, est
-**volontairement hors de ce `try`**, avec le raisonnement complet en
-commentaire :
+## Où la réparation doit aller
 
-> « […] une bulle orpheline […] **qu'un rejeu au même `clientMessageId`
-> rendrait ensuite `success: true` en dédup** […]. Supprimer la ligne avant de
-> propager l'erreur fait échouer l'envoi ET libère le `clientMessageId`. »
+À la RACINE, **#19956** : laisser l'échec de liaison faire ÉCHOUER l'envoi et
+libérer le `clientMessageId`, pour que la reprise reconstruise un message
+COMPLET par le chemin nominal — avec son scellement, son audio, son type et ses
+gardes. C'est exactement ce que la branche COPIE voisine fait déjà, et son
+commentaire le dit depuis toujours.
 
-**Le raisonnement vaut mot pour mot pour la branche voisine, qui ne l'a jamais
-reçu.** C'est « cette entité a-t-elle une JUMELLE ? » dans sa forme la plus
-nette : la règle existe, elle est écrite, elle est juste — et elle ne documente
-que l'exemplaire qu'elle touche. La réparer est **#19956**, pas ce lot : les
-deux branches ne portent pas le même risque (un échec de SCELLEMENT après une
-liaison RÉUSSIE n'a pas la même réponse qu'un échec de liaison), et l'aligner
-naïvement serait faux.
+Le cycle 186 avait lu ce commentaire et en avait tiré la bonne jumelle ; le
+cycle 187 l'a lu et a quand même réparé ailleurs, parce que le symptôme se
+voyait là. **Le lieu où un défaut se VOIT n'est pas le lieu où il se répare.**
 
-## Ce que le lot livre
+## Ce que le cycle laisse
 
-`linkAdmittedAttachmentsToDedupHit` (`services/messaging/earlyDedupAttachments.ts`)
-— appelé en une ligne depuis le bloc `earlyHit`, et qui ne fait quelque chose
-que lorsque les trois conditions tiennent :
+- **#19917** rouvert et redirigé vers #19956, avec les quatre états que la
+  réparation doit traverser (droits, auteur, scellement/audio/type, ligne déjà
+  pourvue) ;
+- **#19956** — la cause racine, inchangée ;
+- **#19957** — le verdict sur un message supprimé (décision produit), toujours
+  valable : le dédoublonnage rend un message supprimé avec `success: true`,
+  mesuré ;
+- **#19959** — le `clientMessageId` d'autrui servi par la liste REST, que le
+  chemin socket retire : préexistant, sans conséquence tant que rien ne l'écrit,
+  et c'est précisément ce qui a rendu ce lot exploitable.
 
-| condition | sinon |
-|---|---|
-| le rejeu porte des `attachmentIds` | `null` |
-| la ligne existante n'en porte AUCUNE | `null` — le rejeu NOMINAL ne retouche rien |
-| la ligne n'est pas SUPPRIMÉE | `null` — voir ci-dessous |
+## Preuve de ce qui est dit ici
 
-`null` dit **« ne touche pas à ce que tu as »**, jamais « il n'y en a pas » :
-rendre `[]` ferait effacer les pièces que la ligne porte déjà. C'est la
-distinction que `CLAUDE.md` pose pour tout champ qu'un client lit
-autoritativement, appliquée à une valeur de retour.
+Les trois constats décisifs sont vérifiés par ma propre lecture du dépôt
+(`MessagingService.ts:214-241` pour l'`include` et le `where`,
+`messages-list-query.ts:255` et `:511` pour l'exposition), et les mutations de
+l'audit sont reproductibles : harnais mis à la forme de production ⇒ le témoin
+du rejeu nominal tombe ; `as never` retiré ⇒ `tsc` EXIT=0.
 
-Le lien lui-même reste le site unique du dépôt
-(`associateAttachmentsToMessage`), qui ne vise que les lignes dont `messageId`
-est absent ou nul (#9587) et pose le `rank` dans l'ordre du composeur (#9776) —
-une réponse de dédup qui rendrait les pièces dans un autre ordre que le
-`message:new` des autres destinataires rouvrirait l'écart que #9776 a fermé.
-
-## Ce que le lot REFUSE d'aggraver, et pourquoi c'est une garde et non un oubli
-
-Le dédoublonnage n'a **aucun filtre sur `deletedAt`**. Mesuré en harnais : il
-rend un message supprimé avec `success: true`. Attacher les pièces du rejeu à
-une telle ligne les rendrait à la fois **invisibles et IMMORTELLES** — le
-balayage des orphelines ne ramasse que les lignes dont `messageId` est vide,
-donc les octets resteraient pour toujours sous un message que personne ne lit.
-
-Le lot pose donc la garde, avec son témoin, et **ne tranche pas** le sort du
-rejeu sur un message supprimé : les trois réponses possibles (refuser,
-ressusciter, laisser) disent trois produits différents, et l'éphémère EXPIRÉ
-n'est pas le message RAPPELÉ. C'est **#19957**, une décision du porteur.
-
-> C'est la règle du cycle 186 retournée vers son auteur : *réparer ce qui
-> rendait une donnée invisible oblige à décider, dans le même lot, ce que la
-> visibilité DÉCLENCHE.* Ici la question se pose d'un LIEN, pas d'un affichage,
-> et la réponse honnête est une garde plus une issue — pas une ligne de plus.
-
-## Preuve
-
-- **RED prouvé par mutation, une par garde** : l'appel retiré ⇒ 1 témoin tombe ;
-  la garde « porte déjà ses pièces » retirée ⇒ 1 ; la garde du message supprimé
-  retirée ⇒ 1. Chacune nomme exactement le scénario qu'elle garde ;
-- `earlyDedupAttachments.test.ts` **4 verts** ;
-- les suites de messagerie du gateway (`unit/services/messaging` +
-  `unit/services/MessagingService*`) : **64 suites, 2 070 verts** ;
-- élargi à `unit/routes/conversations` et `unit/socketio` — les deux surfaces
-  qui appellent `handleMessage` : **240 suites, 3 783 verts** ;
-- `tsc --noEmit` sur `services/gateway` : **EXIT=0**.
-
-**La suite COMPLÈTE du gateway n'a pas tourné localement**, et il faut le dire
-plutôt que de l'omettre : lancée d'un seul `npx jest`, elle a épuisé la mémoire
-du conteneur (le worker est tombé, `exit 137`). La CI la joue en TROIS tranches,
-et c'est elle qui porte cette mesure. Rejouée ici avec `--maxWorkers=2` sur le
-périmètre ci-dessus, pas au-delà.
-
-## Ce qui n'a pas été mesuré, et ne doit pas se lire comme vert
-
-- **Le scénario complet contre un vrai MongoDB** : l'enchaînement (envoi
-  commité, liaison avalée, balayage, rejeu) est établi par lecture et par
-  harnais, jamais rejoué contre le moteur.
-- **La fréquence réelle** : combien d'envois, chez de vrais utilisateurs,
-  atteignent cet état. Le `catch` qui le produit ne compte rien — il
-  journalise.
-- **#19956** (la cause racine) et **#19957** (le verdict sur un message
-  supprimé) restent ouverts : ce lot ferme le chemin par lequel la pièce se
-  perdait, pas ce qui créait l'état.
+Le code du lot est RÉVERTÉ sur la branche ; son histoire reste lisible
+(`7420969dbc`, puis son revert), pour que le prochain qui ouvre #19917 voie ce
+qui a été essayé et pourquoi ça ne tenait pas.
