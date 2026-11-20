@@ -42,7 +42,8 @@ import { sweepUnboundedLiveReads } from './live-audience-bound-sweep';
  * |---|---|
  * | `handlers/MessageHandler.ts` | chemin tenu par une autre branche vivante au relevé du 2026-11-20 (règle d'asymétrie #5243) : la session qui n'a rien écrit cède |
  * | `routes/conversations/guest-sessions.ts`, `emitConversationActivityUpdate.ts` | la liste sert aussi d'EFFECTIF (`memberCount: remaining.length`) : un effectif tronqué est un nombre FAUX servi aux clients, pas une audience partielle. La troncature y exige une décision que ce lot ne prend pas |
- * | les onze autres | des audiences de DIFFUSION et des gates, chacun avec sa propre question sur ce qu'une troncature coûte. Un lot par famille |
+ * | `participant-superset.ts` | **parti au lot #20051** : sa valeur voyage jusqu'à la file hors ligne de `message:new`, la seule porte DURABLE d'un message. Une troncature s'y rend donc comme une panne (`undefined`), jamais comme une liste |
+ * | les dix autres | des audiences de DIFFUSION et des gates, chacun avec sa propre question sur ce qu'une troncature coûte. Un lot par famille |
  *
  * Clé par FICHIER, jamais par numéro de ligne : une clé de ligne dérive à la
  * première édition et transforme le cliquet en bruit (cycle 87 bis).
@@ -59,7 +60,6 @@ const FROZEN_UNBOUNDED: readonly string[] = [
   'src/socketio/emitConversationPreviewUpdate.ts',
   'src/socketio/emitUnreadCountsToRecipients.ts',
   'src/socketio/handlers/MessageHandler.ts',
-  'src/socketio/participant-superset.ts',
   'src/socketio/readerSignedDelivery.ts',
   'src/socketio/revokeShareLinkGuests.ts',
 ];
@@ -91,6 +91,18 @@ describe('#20020 — aucune lecture NEUVE des participants vivants sans borne', 
     const files = new Set(sweepUnboundedLiveReads().map((read) => read.file));
 
     expect(files.has('src/socketio/translationReaders.ts')).toBe(false);
+  });
+
+  /**
+   * #20051 — le superset de `message:new` a rejoint le site unique, et sa
+   * TRONCATURE se rend comme une panne (`undefined`). Rendre les lignes lues
+   * aurait remis à la file une liste PARTIELLE qu'elle traite comme entière :
+   * les absents non nommés n'auraient jamais reçu le message.
+   */
+  it('le superset de `message:new` a rejoint le site unique (#20051)', () => {
+    const files = new Set(sweepUnboundedLiveReads().map((read) => read.file));
+
+    expect(files.has('src/socketio/participant-superset.ts')).toBe(false);
   });
 
   /**

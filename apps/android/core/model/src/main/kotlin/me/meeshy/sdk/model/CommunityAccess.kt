@@ -23,6 +23,14 @@ data class CommunityAccess(
     val canInvite: Boolean
         get() = isMember && (!isPrivate || isAdmin || membership.role == MemberRole.MODERATOR)
     val canManageMembers: Boolean get() = isAdmin
+
+    /**
+     * Qui tranche une demande d'entrée (#19878) : le créateur, l'admin et le modérateur — la règle
+     * `isCommunitySteward` de la passerelle, lue dans le rôle SERVI. Tout autre lecteur recevrait le 404
+     * générique : la liste ne se demande donc qu'à lui.
+     */
+    val canDecideJoinRequests: Boolean
+        get() = isCreator || membership.role?.hasMinimumRole(MemberRole.MODERATOR) == true
     val canAddChannel: Boolean get() = isAdmin
     val canEditSettings: Boolean get() = isCreator
     val canLeave: Boolean get() = isMember && !isCreator

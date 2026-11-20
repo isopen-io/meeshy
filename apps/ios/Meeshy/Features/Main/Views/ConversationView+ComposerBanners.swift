@@ -503,7 +503,7 @@ extension ConversationView {
         } else if viewModel.writeRestriction(served: liveConversation?.viewerWriteRestriction) != nil {
             minorGlobalBanner
         } else {
-            themedComposer
+            themedComposer.modifier(EndToEndPeerWithoutDeviceBannerHost(conversationId: viewModel.conversationId, accentColor: accentColor, sealer: { viewModel.endToEndSealer }, reach: .shared))
         }
     }
 

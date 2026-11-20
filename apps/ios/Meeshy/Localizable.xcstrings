@@ -17834,6 +17834,335 @@
         }
       }
     },
+    "conversation.e2ee.participantWithoutDevice.anonymous": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن لأحد الأعضاء تلقي الرسائل المشفّرة بعد: لم يُفعَّل شيء."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Mitglied kann noch keine verschlüsselten Nachrichten empfangen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A member can’t receive encrypted messages yet: nothing was turned on."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un miembro aún no puede recibir mensajes cifrados: no se activó nada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un membre ne peut pas encore recevoir de messages chiffrés : rien n’est activé."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un membro non può ancora ricevere messaggi cifrati: nulla è attivato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um membro ainda não pode receber mensagens criptografadas: nada foi ativado."
+          }
+        }
+      }
+    },
+    "conversation.e2ee.participantWithoutDevice.named": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن لـ %@ تلقي الرسائل المشفّرة بعد: لم يُفعَّل شيء."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ kann noch keine verschlüsselten Nachrichten empfangen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ can’t receive encrypted messages yet: nothing was turned on."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ todavía no puede recibir mensajes cifrados: no se activó nada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ne peut pas encore recevoir de messages chiffrés : rien n’a été activé."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ non può ancora ricevere messaggi crittografati: non è stato attivato nulla."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ainda não pode receber mensagens criptografadas: nada foi ativado."
+          }
+        }
+      }
+    },
+    "conversation.e2ee.peerWithoutDevice.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن لـ %@ تلقي الرسائل المشفّرة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ kann keine verschlüsselten Nachrichten empfangen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ can’t receive encrypted messages"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ no puede recibir mensajes cifrados"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ne peut pas recevoir de messages chiffrés"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ non può ricevere messaggi crittografati"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ não pode receber mensagens criptografadas"
+          }
+        }
+      }
+    },
+    "conversation.e2ee.peerWithoutDevice.titleAnonymous": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن لمراسلك تلقي الرسائل المشفّرة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Gegenüber kann keine verschlüsselten Nachrichten empfangen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your contact can’t receive encrypted messages"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu contacto no puede recibir mensajes cifrados"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre correspondant ne peut pas recevoir de messages chiffrés"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il tuo interlocutore non può ricevere messaggi crittografati"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seu contato não pode receber mensagens criptografadas"
+          }
+        }
+      }
+    },
+    "conversation.e2ee.peerWithoutDevice.writePlain": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الكتابة دون تشفير"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ohne Verschlüsselung schreiben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write without encryption"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribir sin cifrado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écrire sans chiffrement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scrivi senza crittografia"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escrever sem criptografia"
+          }
+        }
+      }
+    },
+    "conversation.send.e2ee.redirectedToReadable": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن لـ %@ تلقي الرسائل المشفّرة: أُرسلت الرسالة في محادثتكما غير المشفّرة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ empfängt nichts Verschlüsseltes: im unverschlüsselten Chat gesendet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ can’t receive encrypted messages: sent in your unencrypted chat."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ no recibe mensajes cifrados: enviado en tu chat sin cifrar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ne reçoit pas le chiffré : message parti dans votre conversation en clair."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ non riceve messaggi cifrati: inviato nella chat non cifrata."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ não recebe mensagens criptografadas: enviada na conversa sem criptografia."
+          }
+        }
+      }
+    },
+    "conversation.send.e2ee.redirectedToReadableAnonymous": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن لمراسلك تلقي الرسائل المشفّرة: أُرسلت الرسالة في محادثتكما غير المشفّرة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kontakt ohne Verschlüsselung: im unverschlüsselten Chat gesendet."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your contact can’t receive encrypted messages: sent in your unencrypted chat."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu contacto no recibe mensajes cifrados: enviado en tu chat sin cifrar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre correspondant ne reçoit pas le chiffré : message parti en clair."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il contatto non riceve messaggi cifrati: inviato nella chat non cifrata."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seu contato não recebe mensagens criptografadas: enviada sem criptografia."
+          }
+        }
+      }
+    },
     "links.create.share.step2": {
       "extractionState": "manual",
       "localizations": {
