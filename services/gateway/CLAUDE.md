@@ -737,6 +737,57 @@ co-appartenance ne vaut rien : la route passe TOUTES ses lignes par
 `resolveForTargets(viewer, ids)`, et `hasAccess` ne gouverne plus que la liste.
 Le seul régime est le strict ; la seule variable est le viewer.
 
+## Une audience de diffusion lit la participation VIVANTE — et le cliquet qui le garde balaie `src/` ENTIER
+
+`PARTICIPATION_VIVANTE` (`isActive: true` **et** `bannedAt` nul ou absent) est
+la loi de toute porte d'accès. Les DIFFUSEURS la doivent aussi, et la
+distinction qui décide du sens d'un correctif est celle-ci (#16690) :
+
+| la liste répond à | l'appliquer veut dire | la loi |
+|---|---|---|
+| **qui REÇOIT** (audience) | servir | la plus ÉTROITE — `PARTICIPATION_VIVANTE` |
+| **qui ne doit RIEN recevoir** (exclusion, liste de refus) | taire | la plus LARGE — `isActive` nu, **délibérément** |
+| **COMBIEN ils sont** (mesure) | afficher un nombre | dire ce que le nombre alimente ; la troncature et le sur-comptage y sont des nombres FAUX, pas des fuites |
+
+Une ligne `isActive: true, bannedAt ≠ null` **existe en base** : son producteur
+est fermé (#19688, #10436), aucune migration n'a repris les lignes existantes,
+et sa room `user:<id>` est rejointe INCONDITIONNELLEMENT.
+
+**Le cliquet balaie `src/` entier depuis #20091**, et il porte DEUX inventaires
+qu'il ne faut jamais fondre en un :
+
+- `DELIBERATELY_WIDE` — « ce site DOIT être large », avec sa raison instruite ;
+- `MEASURED_NOT_INSTRUCTED` — « on ne sait pas encore ce que ce site décide »,
+  avec sa famille et son issue.
+
+> **« Décidé large » et « pas encore instruit » ne sont pas la même phrase, et
+> les confondre transforme une dette en autorisation** — dans un inventaire
+> unique, on lira toujours « décidé ».
+
+Trois choses à savoir avant d'y toucher :
+
+- **Il PUBLIE ce qu'il ne sait pas juger** (`sweepUnjudgeableParticipantReads`) :
+  un `where` qui est un appel, un ternaire ou un paramètre n'a pas de littéral à
+  lire. Une variable déclarée par un `const` du même fichier est résolue ; rien
+  d'autre. Un site resserré dont le `where` reste illisible n'a AUCUN témoin —
+  mesuré : la mutation inverse laissait le cliquet vert.
+- **Sa clé est `fichier#rang-de-la-requête`**, stable à l'édition et PAS à
+  l'élargissement du discriminant : un lot qui touche le discriminant reclasse
+  l'inventaire entier, il ne fait pas que l'étendre.
+- **Une audience derrière une égalité EXACTE n'a pas de dégradation d'un cran.**
+  L'annuaire d'appareils E2EE est comparé par `isDeviceSetExact` : trop large,
+  il produit soit `409 DEVICES_MISMATCH` à chaque envoi — le chiffrement mort
+  dans le fil — soit la remise du chiffré au banni, selon la liste que le client
+  a utilisée. Devant une liste qui alimente une comparaison exacte, la question
+  est *que fait le site d'en face quand elle ne correspond pas ?*
+
+Et avant de qualifier une clause nue de fuite : **« un audit qui liste des
+`select:` ne liste pas des fuites » vaut aussi des `where:`.**
+`messageMentions.loadMentionParticipants` lit la clause nue et c'est un
+RÉSOLVEUR — l'autorisation vit en aval, dans `validateMentionPermissions`, qui
+épelle la loi. La question n'est pas « cette clause est-elle la bonne ? » mais
+**« qui AUTORISE ce que cette clause rend ? »**.
+
 ## Un fichier `X.ts` à côté d'un répertoire `X/` : lequel est chargé ?
 
 Le fichier. Node résout **LOAD_AS_FILE avant LOAD_AS_DIRECTORY**, donc un import

@@ -12,6 +12,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MemberRole } from '@meeshy/shared/types/role-types';
 import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
+import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
 import type { LinkActivityRelay } from '../../socketio/linkActivityEvents';
 
 const MANAGER_ROLES = [MemberRole.CREATOR, MemberRole.ADMIN, MemberRole.MODERATOR].flatMap((role) => [
@@ -45,7 +46,14 @@ export async function announceShareLinkArrival(params: {
     if (!link || !arrival) return;
 
     const managers = await params.prisma.participant.findMany({
-      where: { conversationId: link.conversationId, isActive: true, userId: { not: null }, role: { in: MANAGER_ROLES } },
+      // #20091 — la loi VIVANTE : ce relais est un flux de SURVEILLANCE du lien
+    // (compteur d'usages, et pour chaque arrivée son `participantId`, son
+    // caractère anonyme, son PAYS et son heure). Sous `isActive` NU, un
+    // gestionnaire BANNI dont la ligne est restée active continuait de le
+    // recevoir — un banni n'est plus un gestionnaire. `userId: { not: null }`
+    // reste : il ne désigne personne, c'est le filtre de nullité qui garde les
+    // membres ayant un compte.
+    where: { conversationId: link.conversationId, ...PARTICIPATION_VIVANTE, userId: { not: null }, role: { in: MANAGER_ROLES } },
       select: { userId: true, role: true },
     });
     const managerIds = managers

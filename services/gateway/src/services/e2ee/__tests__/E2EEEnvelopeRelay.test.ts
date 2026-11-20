@@ -6,6 +6,13 @@ import { createFakeE2EEStore, type FakeE2EEStore } from './fake-e2ee-store';
 const ALICE = 'a1'.repeat(12);
 const BOB = 'b2'.repeat(12);
 const MALLORY = 'e5'.repeat(12);
+/**
+ * #20091 — un membre BANNI dont la ligne est restée `isActive: true`. L'état
+ * existe en base (le producteur est fermé depuis #19688, aucune migration n'a
+ * repris les lignes existantes), et son appareil n'est pas retiré : seule la
+ * clause de PARTICIPATION VIVANTE l'écarte de l'annuaire.
+ */
+const BANNI = 'f7'.repeat(12);
 const CONVERSATION = 'f6'.repeat(12);
 const ALICE_SESSION = 'c3'.repeat(12);
 const BOB_SESSION = 'd4'.repeat(12);
@@ -22,10 +29,12 @@ function seeded(): { store: FakeE2EEStore; relay: E2EEEnvelopeRelay } {
   device(BOB, 1, 201, BOB_SESSION);
   device(BOB, 2, 202, 'bb'.repeat(12), new Date());
   device(MALLORY, 1, 301, 'ee'.repeat(12));
+  device(BANNI, 1, 401, 'ff'.repeat(12));
   store.collections.Participant.insert({ conversationId: CONVERSATION, userId: ALICE });
   store.collections.Participant.insert({ conversationId: CONVERSATION, userId: BOB });
   store.collections.Participant.insert({ conversationId: CONVERSATION, userId: null, type: 'anonymous' });
   store.collections.Participant.insert({ conversationId: CONVERSATION, userId: MALLORY, isActive: false });
+  store.collections.Participant.insert({ conversationId: CONVERSATION, userId: BANNI, isActive: true, bannedAt: NOW });
   return { store, relay: createE2EEEnvelopeRelay({ prisma: store.prisma as never, now: () => NOW }) };
 }
 
@@ -52,6 +61,43 @@ const refusalOf = async (promise: Promise<unknown>): Promise<E2eeRelayRefusedErr
 
 describe("le relais d'enveloppes libsignal", () => {
   describe("admission d'un envoi", () => {
+
+    /**
+     * #20091 — L'ANNUAIRE EST UNE AUDIENCE : il décide quels appareils
+     * REÇOIVENT l'enveloppe chiffrée, donc il lit la participation VIVANTE.
+     *
+     * Avec `isActive: true` NU, l'annuaire portait l'appareil d'un banni, et
+     * `compareDeviceSets` exige une correspondance EXACTE : l'émetteur était
+     * donc CONTRAINT de lui adresser une enveloppe (sans quoi 409
+     * `DEVICES_MISMATCH`), et le banni recevait le chiffré sur chacun de ses
+     * appareils non retirés. La passerelle ne voit pas le clair ; elle
+     * décidait quand même à qui il arrive.
+     *
+     * Les deux témoins sont disjoints, et il faut les deux : le premier dit
+     * que l'annuaire a RÉTRÉCI, le second que la porte s'est FERMÉE. Sous la
+     * lecture nue, le premier tombe en 409 et le second passe.
+     */
+    it("exclut de l'annuaire un membre banni dont la ligne est restée active (#20091)", async () => {
+      const { relay } = seeded();
+
+      await expect(
+        relay.admit({ conversationId: CONVERSATION, senderUserId: ALICE, relay: relayRequest() }),
+      ).resolves.toMatchObject({ senderUserId: ALICE });
+    });
+
+    it('refuse un envoi qui adresse un membre banni dont la ligne est restée active (#20091)', async () => {
+      const { relay } = seeded();
+
+      const error = await refusalOf(
+        relay.admit({
+          conversationId: CONVERSATION,
+          senderUserId: ALICE,
+          relay: relayRequest({ envelopes: [envelope(ALICE, 2, 102), envelope(BOB, 1, 201), envelope(BANNI, 1, 401)] }),
+        }),
+      );
+
+      expect(error.code).toBe(E2EE_ERROR_CODES.DEVICES_MISMATCH);
+    });
     it('admet un envoi qui adresse chaque appareil actif des participants, sauf l’émetteur', async () => {
       const { relay } = seeded();
       await expect(relay.admit({ conversationId: CONVERSATION, senderUserId: ALICE, relay: relayRequest() })).resolves.toMatchObject({

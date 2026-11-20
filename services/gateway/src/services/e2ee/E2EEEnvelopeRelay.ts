@@ -15,6 +15,7 @@ import {
   type E2EERelayRequest,
   type E2EEServedEnvelope,
 } from '@meeshy/shared/types/e2ee-directory';
+import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
 import { E2eeRelayRefusedError } from './e2ee-relay-errors';
 import { compareDeviceSets, isDeviceSetExact } from './sesame';
 
@@ -158,10 +159,38 @@ export class E2EEEnvelopeRelay {
     return count;
   }
 
-  /** Chaque appareil actif de chaque participant inscrit et actif de la conversation. */
+  /**
+   * Chaque appareil actif de chaque participant inscrit et VIVANT de la
+   * conversation.
+   *
+   * ── POURQUOI LA LOI ÉTROITE, ET PAS `isActive` NU (#20091) ──────────────
+   *
+   * Cet annuaire est une AUDIENCE : il décide quels appareils REÇOIVENT
+   * l'enveloppe chiffrée. Il lit donc `PARTICIPATION_VIVANTE`, la constante
+   * que toutes les portes d'accès du dépôt épellent — `isActive: true` **et**
+   * `bannedAt` nul ou absent — et non `isActive` seul, qui admet l'état
+   * legacy `isActive: true, bannedAt ≠ null` (producteur fermé depuis #19688
+   * et #10436, lignes existantes jamais reprises).
+   *
+   * L'écart ne se dégradait pas d'un cran, il cassait DANS LES DEUX SENS,
+   * parce que `compareDeviceSets` exige une correspondance EXACTE :
+   *
+   * | ce que l'émetteur adresse | sous la lecture NUE |
+   * |---|---|
+   * | les membres que les portes lui servent (sans le banni) | **409 `DEVICES_MISMATCH` à chaque envoi** — le chiffrement est MORT dans ce fil |
+   * | l'annuaire tel qu'il est servi (le banni compris) | admis : le banni reçoit le chiffré sur chacun de ses appareils non retirés |
+   *
+   * La passerelle ne voit pas le clair ; elle décide quand même à qui il
+   * arrive, et une correspondance exacte transforme une audience trop large
+   * en panne ou en fuite, jamais en rien.
+   *
+   * `userId: { not: null }` reste : il ne désigne personne, c'est le filtre de
+   * NULLITÉ qui garde les membres ayant un compte — un participant anonyme n'a
+   * pas d'appareil chiffré.
+   */
   private async directoryOf(conversationId: string) {
     const participants = await this.prisma.participant.findMany({
-      where: { conversationId, isActive: true, userId: { not: null } },
+      where: { conversationId, ...PARTICIPATION_VIVANTE, userId: { not: null } },
       select: { userId: true },
     });
     const userIds = [...new Set(participants.map((participant) => participant.userId).filter((id): id is string => Boolean(id)))];

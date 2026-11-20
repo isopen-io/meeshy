@@ -8,8 +8,11 @@
 import { describe, it, expect } from '@jest/globals';
 import {
   sweepConversationAudiences,
+  sweepUnjudgeableParticipantReads,
   audienceKey,
   DELIBERATELY_WIDE,
+  MEASURED_FAMILIES,
+  MEASURED_NOT_INSTRUCTED,
 } from './conversation-audience-living-participation';
 
 describe('audiences de diffusion — l’appartenance VIVANTE, par la même constante que les portes', () => {
@@ -24,13 +27,67 @@ describe('audiences de diffusion — l’appartenance VIVANTE, par la même cons
     expect(sites.length).toBeGreaterThan(8);
   });
 
-  it('n’en laisse aucune sur `isActive` nu, hors refus DÉLIBÉRÉS et motivés', () => {
+  /**
+   * #20091 — DEUX inventaires, pas un, et le témoin les lit comme deux
+   * phrases distinctes : `DELIBERATELY_WIDE` dit « ce site DOIT être large »,
+   * `MEASURED_NOT_INSTRUCTED` dit « on ne sait pas encore ce que ce site
+   * décide ». Une audience NEUVE n'est dans ni l'un ni l'autre, et rougit.
+   */
+  it('n’en laisse aucune sur `isActive` nu, hors refus DÉLIBÉRÉS et dette MESURÉE', () => {
     const bare = sites
       .filter((site) => !site.usesLaw)
       .map((site) => ({ key: audienceKey(sites, site), line: site.line, where: site.where }))
-      .filter((site) => !(site.key in DELIBERATELY_WIDE));
+      .filter((site) => !(site.key in DELIBERATELY_WIDE) && !(site.key in MEASURED_NOT_INSTRUCTED));
 
     expect(bare).toEqual([]);
+  });
+
+  /**
+   * Les deux inventaires sont DISJOINTS. Une clé qui figure dans les deux
+   * laisse choisir la phrase qu'on préfère lire — et on lira « décidé »,
+   * jamais « dette ».
+   */
+  it('ne range aucun site dans les DEUX inventaires', () => {
+    const both = Object.keys(MEASURED_NOT_INSTRUCTED).filter((key) => key in DELIBERATELY_WIDE);
+
+    expect(both).toEqual([]);
+  });
+
+  it('rattache chaque site mesuré à une famille qui dit ce qu’elle retient', () => {
+    for (const [key, family] of Object.entries(MEASURED_NOT_INSTRUCTED)) {
+      expect(key).toMatch(/\.ts#\d+$/);
+      expect(MEASURED_FAMILIES[family]).toBeDefined();
+    }
+    for (const reason of Object.values(MEASURED_FAMILIES)) {
+      expect(reason.length).toBeGreaterThan(200);
+    }
+  });
+
+  /**
+   * La dette ne GROSSIT pas. Le cliquet est un plafond, pas un registre : une
+   * audience neuve se répare, elle ne s'inscrit pas — et une ligne qui part
+   * fait tomber le témoin « ne garde aucun refus périmé », qui exige qu'elle
+   * désigne encore un site.
+   */
+  it('ne laisse pas la dette mesurée grossir au-delà de ce que #20091 a relevé', () => {
+    expect(Object.keys(MEASURED_NOT_INSTRUCTED).length).toBeLessThanOrEqual(41);
+  });
+
+  /**
+   * #20091 — ce que l'instrument ne sait pas JUGER, il le PUBLIE : un `where`
+   * qui est une variable, un appel ou un ternaire n'a pas de littéral à lire.
+   * « Zéro trouvé » n'est pas « zéro existe », et c'est par là que l'audience
+   * de l'arrivée dans le salon GLOBAL est restée nue sans qu'aucun cliquet
+   * puisse le dire.
+   */
+  it('publie les lectures qu’il n’a pas pu juger, au lieu de les sauter', () => {
+    const unjudgeable = sweepUnjudgeableParticipantReads();
+
+    expect(unjudgeable.length).toBeGreaterThan(0);
+    expect(unjudgeable.length).toBeLessThanOrEqual(17);
+    for (const read of unjudgeable) {
+      expect(read.form).toMatch(/^(variable|appel|ternaire|absent)$/);
+    }
   });
 
   /**
@@ -38,9 +95,9 @@ describe('audiences de diffusion — l’appartenance VIVANTE, par la même cons
    * doit encore DÉSIGNER un site, sans quoi elle autorise en silence un site
    * futur qui reprendrait la même clé.
    */
-  it('ne garde aucun refus périmé', () => {
+  it('ne garde aucun refus périmé, ni aucune dette périmée', () => {
     const keys = new Set(sites.filter((site) => !site.usesLaw).map((site) => audienceKey(sites, site)));
-    for (const declared of Object.keys(DELIBERATELY_WIDE)) {
+    for (const declared of [...Object.keys(DELIBERATELY_WIDE), ...Object.keys(MEASURED_NOT_INSTRUCTED)]) {
       expect(keys.has(declared)).toBe(true);
     }
   });
