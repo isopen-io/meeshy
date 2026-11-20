@@ -78,7 +78,8 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
                 persistence: persistence,
                 collaborators: ConversationCollaborators(
                     persistence: persistence, syncEngine: ConversationSyncEngine.shared,
-                    messageService: messageService, regimeLedger: ledger
+                    messageService: messageService, regimeLedger: ledger,
+                    encryptionService: unopenableReadableDirect()
                 )
             ),
             networkMonitor: FakeNetworkMonitor(isOnline: online),
@@ -587,3 +588,11 @@ private func failingEndToEnd() -> MockEndToEndMessaging {
 }
 
 private func workingEndToEnd() -> MockEndToEndMessaging { MockEndToEndMessaging() }
+
+/// Le tête-à-tête lisible ne s'ouvre pas (#20074) : le refus reste lisible, et
+/// aucun test n'appelle la vraie passerelle.
+private func unopenableReadableDirect() -> MockConversationEncryptionService {
+    let service = MockConversationEncryptionService()
+    service.openReadableDirectResult = .failure(URLError(.notConnectedToInternet))
+    return service
+}
