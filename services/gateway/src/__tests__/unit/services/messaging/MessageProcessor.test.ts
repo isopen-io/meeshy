@@ -1431,17 +1431,11 @@ describe('MessageProcessor — branch gap coverage', () => {
     originalLanguage: 'fr',
   } as const;
 
-  // #19956 — ce témoin attestait l'INVERSE : « swallows associateAttachments
-  // ToMessage errors ». Il couvrait un `catch` qui rendait l'envoi « réussi »
-  // sur une bulle VIDE, que le rejeu confirmait ensuite en dédup. Un témoin
-  // posé pour couvrir une BRANCHE atteste ce que la branche fait, jamais ce
-  // qu'elle devrait faire. Le verdict complet (suppression de la ligne,
-  // libération des pièces) vit dans `MessageProcessor.attachmentFailure.test.ts`.
-  it('fait ÉCHOUER l’envoi quand la liaison des pièces pré-téléversées lève (#19956)', async () => {
-    mockAssociateAttachmentsToMessage.mockRejectedValue(new Error('attach fail'));
-    const processor = makeProcessor();
-    await expect(processor.saveMessage({ ...baseData, attachmentIds: ['att-1'] })).rejects.toThrow('attach fail');
-  });
+  // #19956 — un témoin « swallows associateAttachmentsToMessage errors » vivait
+  // ICI et attestait le DÉFAUT : posé pour couvrir une branche, il décrivait ce
+  // que la branche faisait, jamais ce qu'elle devait faire. Verdict (échec de
+  // l'envoi, suppression de la ligne, libération des pièces) :
+  // `MessageProcessor.attachmentFailure.test.ts`.
 
   // Line 710 — catch block in copyForwardedAttachments when prisma throws
   it('swallows copyForwardedAttachments errors on prisma failure', async () => {
