@@ -154,14 +154,27 @@ export function buildCursorFreshnessGuard(params: {
  * (#18614).
  *
  * `messageIds` nomme les messages RÉELLEMENT remis, quand l'appelant en a la
- * liste exacte. Le rejeu hors ligne est le seul dans ce cas : il refuse des
- * entrées (émission qui lève, plancher d'historique, message mort) et la file
- * en évince d'autres à son plafond, si bien que ce qui est parti est un
- * sous-ensemble STRICT de la fenêtre du curseur.
+ * liste exacte. DEUX appelants sont dans ce cas :
+ *
+ *   • le **rejeu hors ligne**, qui refuse des entrées (émission qui lève,
+ *     plancher d'historique, message mort) et dont la file évince d'autres à
+ *     son plafond — ce qui est parti est un sous-ensemble STRICT de la fenêtre ;
+ *   • la porte **`delivered`** de `receipts.ts` (#20084), que la NSE iOS et le
+ *     service worker web appellent pour un destinataire **HORS LIGNE** qu'un
+ *     push vient de réveiller. APNs ne gardant qu'une notification par
+ *     appareil, un seul message est rapporté là où plusieurs ont été envoyés.
  *
  * Omettre la clé garde la FENÊTRE, qui est la sémantique juste des appelants
- * en ligne (`receipts.ts`, `messages-list.ts`,
- * `autoDeliverToOnlineRecipients`) : chez eux, tout ce qui précède EST arrivé.
+ * **en ligne** : `receipts.ts` par sa porte `received` (toute la conversation
+ * en une passe), `messages-list.ts` (remise automatique à la lecture) et
+ * `autoDeliverToOnlineRecipients`. Chez eux, tout ce qui précède EST arrivé.
+ *
+ * ⚠️ Ce doc-comment rangeait `receipts.ts` **en bloc** parmi les appelants en
+ * ligne, et c'est ce qui a tenu le défaut de #20084 en vie : le fichier a DEUX
+ * portes, dont l'une sert la population exactement INVERSE. Un appelant ne se
+ * classe pas par son FICHIER mais par ce que sa porte sait de son lecteur —
+ * « tout ce qui précède est arrivé » est une affirmation sur le RÉSEAU du
+ * destinataire, jamais sur le module qui écrit.
  */
 export type MarkReceivedScope = {
   readonly messageIds?: readonly string[];
@@ -628,9 +641,10 @@ export class MessageReadStatusService {
 
       // ── LE PÉRIMÈTRE EXACT (#18731) ────────────────────────────────────────
       //
-      // Quand l'appelant NOMME ce qu'il a remis — le rejeu hors ligne, seul
-      // dans ce cas (#18614) — les deux écritures de cette méthode ne
-      // connaissent pas le même ensemble :
+      // Quand l'appelant NOMME ce qu'il a remis — le rejeu hors ligne, et la
+      // porte `delivered` de `receipts.ts` depuis #20084 (NSE iOS / service
+      // worker, destinataire HORS LIGNE) — les deux écritures de cette méthode
+      // ne connaissent pas le même ensemble :
       //
       //   • `freezeMessageStatus({ messageIds })` grave l'ensemble EXACT ;
       //   • `_advanceCursor({ messageId })` sautait jusqu'au plus RÉCENT de
@@ -726,10 +740,18 @@ export class MessageReadStatusService {
       // #18614 — le PÉRIMÈTRE du gel. Ici, `freezeMessageStatus` résout une
       // PLAGE (`createdAt > since`), c'est-à-dire TOUT message non supprimé de
       // la conversation créé depuis le curseur précédent. C'est la sémantique
-      // juste des quatre appelants qui disent « tout ce qui précède est
-      // arrivé » — un lecteur EN LIGNE, dans le fil — et ce bloc ne sert plus
-      // qu'eux depuis #18731 : le périmètre EXACT est rendu plus haut, où
-      // l'ordre gel-puis-curseur lui est propre.
+      // juste des appelants qui disent « tout ce qui précède est arrivé » — un
+      // lecteur EN LIGNE, dans le fil — c'est-à-dire la porte `received` de
+      // `receipts.ts`, `messages-list.ts` et `autoDeliverToOnlineRecipients`.
+      // Le périmètre EXACT est rendu plus haut, où l'ordre gel-puis-curseur lui
+      // est propre.
+      //
+      // ⚠️ Cette note disait « ce bloc ne sert plus qu'eux depuis #18731 ».
+      // C'était FAUX jusqu'à #20084 : la porte `delivered` y tombait, parce
+      // qu'elle passait sa liste exacte en `latestMessageId` au lieu
+      // d'`options.messageIds`. Une affirmation de la forme « ce bloc ne sert
+      // plus que X » se vérifie contre les APPELANTS, jamais contre l'intention
+      // du lot qui l'a écrite.
       //
       // `undefined` vaut « je n'ai pas calculé » et garde la fenêtre ; une
       // liste VIDE vaut « j'ai livré, et rien ». La distinction est celle de

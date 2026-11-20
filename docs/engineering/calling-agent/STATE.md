@@ -2070,3 +2070,64 @@ socket jusqu'au client.
    - fusionner la PR.
 1. #20069 (iOS : répartition de qualité monotone, et témoin de comportement de l'ancrage), puis #19953 (Android).
 2. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
+
+## Cycle 61 — 2026-11-20
+
+- **Base** : `origin/dev` @ `34ceac63e`, puis `903bba6bc` fusionnée dans la branche. #20070 (#20010, cycle 60) est fusionnée.
+- **Branche** : `claude/determined-volta-pdn1ri`. **PR** : #20090.
+- **Objectif** : #20069. La répartition de qualité iOS (`qualityDistribution`) se mesure sur l'horloge monotone, et l'ancrage à la connexion a un test de comportement.
+- **Livré** (iOS seulement) :
+  - `CallAnalyticsRecorder.recordSample(at: TimeInterval)` : `lastQualityUptime` remplace `lastQualityDate`. Le site d'appel (`CallManager+WebRTCDelegate`) passe `liveClock.monotonicNow`.
+  - `payload(uptime:)` replie la fenêtre ouverte sur la même horloge (`CallManager+Teardown`). `CallReliabilityPolicy.qualityDistribution` prend des instants monotones.
+  - `CallAnalyticsRecorder.anchorConnection(on:)` extrait l'ancrage. Elle est appelée par `resetCallClockIfNeeded`.
+  - Le payload, le serveur, le web et Android ne changent pas. Les valeurs ne changent pas non plus quand l'horloge ne saute pas.
+- **Tests** :
+  - 2 témoins dans `CallManagerAnalyticsRecorderTests`. Le premier attend 2 s, alors que dev donnait 3602 s. Le second attend 0,5/0,5, alors que dev donnait 0,00055/0,99945.
+  - 2 témoins d'ancrage dans `CallLiveClockTests`, avec une horloge monotone injectée.
+  - Rouge : par calcul et par compilation, l'API étant absente sur dev. Le conteneur n'a pas Swift.
+  - Vert : `workflow_dispatch` d'`ios.yml`, ciblé sur les suites d'appel. Le résultat est dans la PR.
+  - Gardes `house_rules`, `cohesion`, `test_registration` et accent : 0.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves, toutes faibles.
+  - R1 : l'assertion sur l'horloge murale des témoins ne pouvait pas tomber. Elle est retirée : ces témoins éprouvent la soustraction, et c'est le type `TimeInterval`, ajouté à la garde de texte, qui interdit `Date()`.
+  - R2 : le câblage du site `resetCallClockIfNeeded` reste tenu par la garde de texte, parce que `CallManager` a un init privé.
+  - R3 : `dev` est fusionnée dans la branche.
+- **Limites** : rien n'a été vérifié sur appareil. `at: Date().timeIntervalSince1970` compilerait encore ; seule la garde de texte le refuse.
+
+### Cycle suivant : par où reprendre
+
+0. Si #20090 n'est pas fusionnée :
+   - lire son run `ios.yml` ;
+   - fusionner `dev` dans la branche ;
+   - fusionner la PR.
+1. #19953 (Android).
+2. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
+3. Dette d'horloge murale de faible impact, côté Android : `CallToastBus`, `CallReliabilityMonitor`, `CallCaptureViewModel` (cf. cycle 60). Ouvrir une issue si elle n'existe pas.
+
+## Cycle 62 — 2026-11-20
+
+- **Base** : `origin/dev` @ `9230cda94`. #20090 (#20069, cycle 61) est fusionnée.
+- **Branche** : `claude/determined-volta-ra7rtt`. **PR** : #20097.
+- **Objectif** : #19953. Sur Android, `CallStats.selectedCandidatePair` ne rend qu'une `candidate-pair`. Quand l'id du transport désigne autre chose, elle retombe sur la paire nominée, et `reduce`, `relayedRoute` et `CallMediaQuality` élisent la même paire.
+- **Livré** (Android, `core/model`) :
+  - `selectedCandidatePair` ne cherche l'id que parmi les `candidate-pair`.
+  - Le `takeIf` de `reduce` est retiré.
+  - La forme des données et le payload ne changent pas.
+- **Tests** : 4 témoins dans `CallLiveStatsLawsTest`. Avec un id qui désigne un candidat :
+  - sur dev, `reduce` donnait un RTT de 20 ms (la dernière paire) et `relayedRoute` rendait `null` ;
+  - désormais, le RTT vaut 300 ms (la paire nominée) et la route est relayée.
+
+  Le rouge est établi par raisonnement, faute de Gradle dans le conteneur. Le vert vient d'`android.yml`, run 44812921771 (`workflow_dispatch`).
+  - **Mise à jour** : le run 44812921771 a été annulé et remplacé par le run **44813228587** (`workflow_dispatch`, tête `19a4ce682`). Il est **vert** : graphe des modules, jetons, chaînes et routes générés, puis `assembleDebug` et `testDebugUnitTest`.
+  - Le contrôle local (`meeshy.sh jvm-check`) n'a pas pu tourner : le proxy refuse `build-artifacts.signal.org` (`libsignal-client`).
+- **QA** (`general-purpose`, sur le diff) : favorable avec réserves.
+  - R1 (traitée) : il manquait un témoin pour `CallMediaQuality`. L'assertion `media.candidateType == "relay"` a été ajoutée ; sur dev, elle rendait null.
+  - R2 : les témoins « id absent » et « vraie paire non nominée » protègent contre une régression. Ils passaient déjà sur dev. Seuls les deux témoins `L9` prouvent le correctif.
+  - R3 : le miroir iOS (`CallStats.swift:220-231`, `reduce` l.261) a le même défaut, et il lui manque en plus l'élection de #19899. Ouverte en **#20098**.
+- **Limites** : rien n'a été vérifié sur appareil. Le cas corrigé ne se produit pas avec libwebrtc tel qu'il est aujourd'hui.
+
+### Cycle suivant : par où reprendre
+
+0. Si #20097 n'est pas fusionnée : fusionner `dev` dans la branche, puis fusionner la PR (le run 44813228587 est vert).
+1. **#20098** : élection de la paire ICE sur iOS, à faire en parité avec Android. Coordonner avec la routine iOS ; le lot ne touche pas `Views/`.
+2. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
+3. Dette d'horloge murale côté Android, d'impact faible : `CallToastBus`, `CallReliabilityMonitor`, `CallCaptureViewModel`. Ouvrir une issue si elle n'existe pas.

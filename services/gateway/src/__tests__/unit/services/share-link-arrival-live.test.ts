@@ -16,11 +16,34 @@ import { executeurImmediat } from '../../helpers/after-response';
 const LINK = { id: 'sl-1', linkId: 'mshy_abc', currentUses: 23, maxUses: 50, createdBy: 'u-creator', conversationId: 'c-1' };
 const ARRIVING = { id: 'p-new', type: 'anonymous', joinedAt: new Date('2026-11-17T10:00:00.000Z'), joinCountry: 'SN', displayName: 'Ana', userId: null };
 const MEMBERS = [
-  { userId: 'u-creator', role: 'creator' },
-  { userId: 'u-admin', role: 'ADMIN' },
-  { userId: 'u-mod', role: 'moderator' },
-  { userId: 'u-member', role: 'member' },
+  { userId: 'u-creator', role: 'creator', isActive: true, bannedAt: null as Date | null },
+  { userId: 'u-admin', role: 'ADMIN', isActive: true, bannedAt: null as Date | null },
+  { userId: 'u-mod', role: 'moderator', isActive: true, bannedAt: null as Date | null },
+  { userId: 'u-member', role: 'member', isActive: true, bannedAt: null as Date | null },
+  // #20091 — un gestionnaire BANNI dont la ligne est restée ACTIVE : l'état
+  // legacy que #16690 nomme, et que seule la garde de bannissement écarte.
+  { userId: 'u-mod-banni', role: 'moderator', isActive: true, bannedAt: new Date('2026-11-01T00:00:00.000Z') },
+  { userId: 'u-admin-parti', role: 'ADMIN', isActive: false, bannedAt: null as Date | null },
 ];
+
+type MemberWhere = {
+  readonly role?: { readonly in: readonly string[] };
+  readonly isActive?: boolean;
+  readonly OR?: ReadonlyArray<Record<string, unknown>>;
+};
+
+/**
+ * Le `where` jugé comme MongoDB le jugerait — et c'est la moitié du témoin :
+ * un double qui rend tout ce qu'on lui demande atteste une lecture NUE aussi
+ * bien qu'une lecture conforme. Sans `isActive`, un parti passe ; sans la
+ * clause « `bannedAt` nul ou absent », un banni passe.
+ */
+const keeps = (where: MemberWhere | undefined) => (member: (typeof MEMBERS)[number]): boolean => {
+  const bansExcluded = (where?.OR ?? []).some((clause) => Object.prototype.hasOwnProperty.call(clause, 'bannedAt'));
+  if (where?.role && !where.role.in.includes(member.role)) return false;
+  if (where?.isActive === true && !member.isActive) return false;
+  return !bansExcluded || member.bannedAt == null;
+};
 
 function relaySpy() {
   const arrivals: ShareLinkArrivalInput[] = [];
@@ -38,8 +61,7 @@ function fakePrisma() {
     conversationShareLink: { findUnique: jest.fn(async () => LINK) },
     participant: {
       findUnique: jest.fn(async () => ARRIVING),
-      findMany: jest.fn(async ({ where }: { where: { role?: { in: string[] } } }) =>
-        MEMBERS.filter((member) => !where.role || where.role.in.includes(member.role))),
+      findMany: jest.fn(async ({ where }: { where: MemberWhere }) => MEMBERS.filter(keeps(where))),
     },
   };
 }
@@ -54,6 +76,28 @@ describe('announceShareLinkArrival', () => {
       linkId: 'mshy_abc', currentUses: 23, maxUses: 50,
       arrival: { participantId: 'p-new', isAnonymous: true, country: 'SN', joinedAt: ARRIVING.joinedAt },
     });
+  });
+
+  /**
+   * #20091 — ce relais est un flux de SURVEILLANCE du lien : compteur
+   * d'usages, et pour chaque arrivée son `participantId`, son anonymat, son
+   * PAYS et son heure. Sous `isActive` NU, un gestionnaire BANNI dont la ligne
+   * est restée active continuait de le recevoir — un banni n'est plus un
+   * gestionnaire.
+   *
+   * Le témoin NOMME les deux morts à la fois, et c'est voulu : le parti tombait
+   * déjà sous `isActive`, le banni ne tombait que sous la loi VIVANTE. Si
+   * seule la seconde garde est retirée, `u-mod-banni` revient SEUL — c'est la
+   * mutation que ce témoin existe pour attraper.
+   */
+  it('exclut un gestionnaire banni dont la ligne est restée active (#20091)', async () => {
+    const { relay, arrivals } = relaySpy();
+
+    await announceShareLinkArrival({ prisma: fakePrisma() as never, relay, shareLinkId: 'sl-1', participantId: 'p-new' });
+
+    expect([...arrivals[0].recipientIds].sort()).toEqual(['u-admin', 'u-creator', 'u-mod']);
+    expect(arrivals[0].recipientIds).not.toContain('u-mod-banni');
+    expect(arrivals[0].recipientIds).not.toContain('u-admin-parti');
   });
 
   it("se tait quand le lien ou l'arrivée a disparu, et n'échoue jamais", async () => {

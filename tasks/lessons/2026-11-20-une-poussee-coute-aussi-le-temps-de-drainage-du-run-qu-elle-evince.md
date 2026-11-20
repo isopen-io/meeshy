@@ -54,3 +54,34 @@ enseignent à mesurer les JOBS plutôt que le `status`, et le relevé des jobs d
 run NEUF est vide pour deux raisons indiscernables. **La mesure qui tranche
 porte sur un AUTRE objet que celui qu'on observe** — le run précédent, pas le
 sien.
+
+### Et ANNULER un run évincé fabrique une fausse alerte, par le même mécanisme
+
+Ce qui précède dit ce qu'une poussée coûte. Le geste de RANGEMENT coûte aussi,
+et dans l'autre sens. Le même jour, après avoir poussé une résolution de
+conflit sur une branche, j'ai annulé le run devenu obsolète pour libérer la
+file — le geste propre, celui que cette leçon recommande.
+
+L'annulation a produit, en quelques secondes, une notification d'ÉCHEC sur la
+PR :
+
+```
+{"check":"Verdict CI","conclusion":"failure","head_sha":"6f7b73fc…"}
+```
+
+Relevé sur le run annulé : **17 jobs `cancelled`, 1 `failure`** — et ce 1 est
+l'AGRÉGATEUR, rouge faute de résumé à agréger. C'est exactement la forme des
+fausses alertes que cette leçon décrit pour les runs évincés ; ce qui est
+neuf, c'est que **le geste censé les éviter la déclenche**.
+
+> **Annuler un run obsolète n'est pas gratuit : on échange du temps de file
+> contre une fausse alerte qui coûte un tour de triage.** L'arbitrage reste bon
+> — la file est partagée, l'alerte ne l'est pas — mais il se prend en SACHANT
+> que l'alerte viendra, et elle se reconnaît par la question que cette leçon
+> pose déjà : *ce SHA est-il la TÊTE ?*
+
+Corollaire d'instrument, et c'est lui qui fait gagner le tour de triage : **un
+agrégateur qui conclut rouge sur des jobs `cancelled` ne dit rien du code.**
+Avant d'ouvrir un log, lire le `conclusion` du RUN (`cancelled`) et non celui
+du seul check qui a notifié — le check dit « failure » là où le run dit
+« annulé », et c'est le run qui a raison.

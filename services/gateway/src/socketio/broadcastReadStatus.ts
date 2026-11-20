@@ -114,7 +114,17 @@ export interface ReadStatusBroadcastArgs {
    * **Le champ ne dépend PAS du `type`, et c'est le lot #16961 qui l'a tranché**
    * (il était réservé à `read`, si bien qu'un accusé de REMISE diffusait le
    * résumé du dernier message du fil au lieu de celui qu'il venait
-   * d'acquitter — l'écriture étant, elle, déjà par message).
+   * d'acquitter).
+   *
+   * ⚠️ #16961 s'appuyait sur « l'écriture étant, elle, déjà par message », et
+   * cette prémisse était FAUSSE : `delivered` appelait bien le service une fois
+   * par id, mais sans lui passer de périmètre, si bien que chaque appel figeait
+   * la FENÊTRE depuis le curseur — messages POSTÉRIEURS compris. La DIFFUSION
+   * que ce lot a corrigée était donc juste, et l'écriture qu'elle décrivait ne
+   * l'était pas. Corrigé par #20084, qui remet le périmètre exact au service.
+   * La leçon n'est pas « #16961 avait tort » — sa correction tient — mais
+   * qu'une correction bâtie sur une prémisse non mesurée laisse la moitié qu'elle
+   * n'a pas regardée.
    *
    * Ce qu'il veut dire est donc : **le lot exact que cette écriture a figé**,
    * et le site qui a COMPOSÉ l'écriture est le seul à le savoir. C'est lui qui

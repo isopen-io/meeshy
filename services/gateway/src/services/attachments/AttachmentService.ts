@@ -171,6 +171,19 @@ export class AttachmentService {
       readonly maxViewOnceCount?: number | null;
     }
   ): Promise<void> {
+    // #19971 — CE SITE est le seul écrivain de production de `isViewOnce`,
+    // `isBlurred` et `effectFlags` sur une ligne `MessageAttachment` : aucune
+    // des quatre créations ne les pose (`UploadProcessor` ×2, `tus-handler`,
+    // `copyAttachments`), et aucun autre `update` ne les touche. Deux
+    // conséquences, et la seconde est une DETTE que ce site crée :
+    //
+    //  1. l'état d'une pièce AVANT sa liaison est le DÉFAUT du schéma — faux,
+    //     faux, zéro — ce qui est précisément ce que la libération d'un échec
+    //     de liaison lui rend (`attachmentFailureOutcome.ts`) ;
+    //  2. comme on n'AJOUTE que de la protection (un `false` du message
+    //     n'efface rien, `effectFlags` est OR-é), une pièce qui garderait les
+    //     drapeaux d'un message mort les imposerait au message SUIVANT. Tout
+    //     chemin qui dé-lie une pièce doit donc les rendre avec le `messageId`.
     const orderedIds = [...new Set(attachmentIds)];
     const added = {
       messageId,
@@ -339,6 +352,17 @@ export class AttachmentService {
         translations: true,
         metadata: true,
         createdAt: true,
+        // #20017 — les drapeaux de PROTECTION de la pièce, sans lesquels la loi
+        // du contenu latéral ne peut rien garder : `maskedAttachment` ne
+        // regarde que les drapeaux PRÉSENTS, donc un `select` qui les omet rend
+        // la garde de la route VERTE et INERTE. Le PORTEUR est déjà chargé
+        // complet par `attachmentDetailReader`, qui passe `reader.carrier` à la
+        // loi ; c'est la pièce qui manquait.
+        isViewOnce: true,
+        isBlurred: true,
+        effectFlags: true,
+        isEncrypted: true,
+        encryptionMode: true,
         // #4923 — requis par la garde d'appartenance de la route (le
         // déposant d'une pièce PAS ENCORE rattachée à un message est le seul
         // à pouvoir la lire) ; déjà déclaré par `messageAttachmentSchema`

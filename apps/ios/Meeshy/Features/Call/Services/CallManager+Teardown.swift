@@ -50,7 +50,7 @@ extension CallManager {
     /// background ne perd plus que la dernière fenêtre.
     private func emitCallAnalyticsSnapshot(callId: String, endReasonLabel: String) {
         let payload = analytics.payload(
-            now: Date(),
+            uptime: liveClock.monotonicNow,
             context: CallAnalyticsContext(
                 callDuration: callDuration,
                 codec: lastKnownStats?.codec ?? "unknown",
