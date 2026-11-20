@@ -6,6 +6,10 @@ import Foundation
 public nonisolated enum ProfileHandleLine {
 
     /// Sans date servie, le pseudo seul : la ligne n'invente aucun mois.
+    ///
+    /// `@MainActor` : `format` lit `.module` (accesseur de ressources SwiftPM), isolé au MainActor sous
+    /// `-default-isolation MainActor`. Même mécanisme que `ProfileWriteBadge.spoken`.
+    @MainActor
     public static func text(username: String, memberSince: Date?, locale: Locale, inBar: Bool = false) -> String {
         let handle = "@\(username)"
         guard !inBar, let memberSince else { return handle }
@@ -13,6 +17,7 @@ public nonisolated enum ProfileHandleLine {
     }
 
     /// La phrase, dans la langue de l'interface ; le mois, dans la locale demandée.
+    @MainActor
     static var format: String {
         String(localized: "profile.handle.since", defaultValue: "%1$@ · depuis %2$@", bundle: .module)
     }

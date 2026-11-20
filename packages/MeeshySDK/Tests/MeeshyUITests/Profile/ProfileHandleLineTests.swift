@@ -5,6 +5,7 @@ import Foundation
 /// #19987 — sous le nom d'un profil, UNE ligne : « @pseudo · depuis novembre 2026 ». Dans la barre repliée, le seul
 /// @pseudo. Sans date servie, le @pseudo seul : aucun mois inventé.
 @Suite("La ligne du pseudo et de l'ancienneté")
+@MainActor
 struct ProfileHandleLineTests {
 
     private let french = Locale(identifier: "fr_FR")
