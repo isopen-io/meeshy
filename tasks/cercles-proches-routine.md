@@ -1720,6 +1720,10 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   servir. Le lecteur ne reçoit rien de la source.
 - `acceptsManualSource` n'est PAS annoncé : « Choisir sur la carte » reste éteint tant qu'iOS et Android ne lisent pas la
   source servie (moitié client de #20087) — sinon le défaut M2 deviendrait atteignable.
+- Audit adversarial : non bloquant tant que `acceptsManualSource` n'est pas annoncé. Corrigés dans le lot : un
+  démarrage AVEC position SANS source ne remplace plus un point choisi (`FIXED_POINT` ; « device » doit être dit), et un
+  point choisi ne garde ni mouvement ni précision réelle. Suivi #20115 (sortie du fantôme muette pour un point choisi,
+  courses mise à jour / démarrage), à solder AVANT l'annonce.
 - Prochain lot : moitié client de #20087 (iOS + Android : un partage servi `manual` réuni ne republie jamais la position
-  de l'appareil ; « Partager » depuis l'appareil devant un point choisi demande), puis annoncer `acceptsManualSource`
-  (#19557), puis #20054, #20056, #20086.
+  de l'appareil ; « Partager » depuis l'appareil devant un point choisi demande), puis #20115, puis annoncer
+  `acceptsManualSource` (#19557), puis #20054, #20056, #20086.
