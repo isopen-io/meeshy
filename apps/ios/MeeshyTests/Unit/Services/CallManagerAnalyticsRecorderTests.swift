@@ -12,7 +12,7 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
 
     private func makePayload(_ recorder: CallAnalyticsRecorder, endReason: String = "local") -> [String: Any] {
         recorder.payload(
-            now: Date(timeIntervalSince1970: 1_000),
+            uptime: 1_000,
             context: CallAnalyticsContext(
                 callDuration: 42,
                 codec: "opus",
@@ -27,10 +27,10 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
 
     func test_payload_afterSamples_emitsSameSeventeenKeysWithAverages() {
         var recorder = CallAnalyticsRecorder()
-        let t0 = Date(timeIntervalSince1970: 100)
+        let t0: TimeInterval = 100
         recorder.recordSample(level: .excellent, roundTripTimeMs: 100, packetLossPercent: 1, at: t0)
-        recorder.recordSample(level: .good, roundTripTimeMs: 200, packetLossPercent: 3, at: t0.addingTimeInterval(5))
-        recorder.recordSample(level: .good, roundTripTimeMs: 300, packetLossPercent: 2, at: t0.addingTimeInterval(10))
+        recorder.recordSample(level: .good, roundTripTimeMs: 200, packetLossPercent: 3, at: t0 + 5)
+        recorder.recordSample(level: .good, roundTripTimeMs: 300, packetLossPercent: 2, at: t0 + 10)
         recorder.totalReconnects += 1
         recorder.networkTransitions += 1
 
@@ -75,7 +75,7 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
         var recorder = CallAnalyticsRecorder()
         recorder.callInitiatedUptime = 42
         recorder.networkTransitions = 4
-        recorder.recordSample(level: .good, roundTripTimeMs: 10, packetLossPercent: 1, at: Date())
+        recorder.recordSample(level: .good, roundTripTimeMs: 10, packetLossPercent: 1, at: 0)
         recorder.totalReconnects = 2
 
         recorder.resetAccumulators()
@@ -143,14 +143,14 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
     /// dix-sept champs, les nouveaux sont optionnels côté passerelle (#11277).
     func test_payload_withoutMediaSamples_addsNoQualityField() {
         var recorder = CallAnalyticsRecorder()
-        recorder.recordSample(level: .good, roundTripTimeMs: 100, packetLossPercent: 1, at: Date())
+        recorder.recordSample(level: .good, roundTripTimeMs: 100, packetLossPercent: 1, at: 0)
 
         XCTAssertEqual(Set(makePayload(recorder).keys), payloadKeys)
     }
 
     func test_payload_afterMediaSamples_carriesFreezesAndAMos() {
         var recorder = CallAnalyticsRecorder()
-        let t0 = Date(timeIntervalSince1970: 100)
+        let t0: TimeInterval = 100
         recorder.recordSample(level: .good, roundTripTimeMs: 200, packetLossPercent: 2, at: t0)
         recorder.recordMedia(Self.quality(freezes: 1, reason: "cpu"), jitterMs: 20)
         recorder.recordMedia(Self.quality(freezes: 4, reason: "bandwidth"), jitterMs: 20)
@@ -172,7 +172,7 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
     func test_payload_mos_fallsWithLoss() {
         func mos(loss: Double) -> Double {
             var recorder = CallAnalyticsRecorder()
-            recorder.recordSample(level: .good, roundTripTimeMs: 100, packetLossPercent: loss, at: Date())
+            recorder.recordSample(level: .good, roundTripTimeMs: 100, packetLossPercent: loss, at: 0)
             recorder.recordMedia(.none, jitterMs: 10)
             return makePayload(recorder)["mos"] as? Double ?? 0
         }
@@ -322,12 +322,12 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
     func test_payload_aberrantSamples_staysFiniteAndNonNegative() {
         [Double.infinity, -.infinity, .nan, -30, 1e308].forEach { aberrant in
             var recorder = CallAnalyticsRecorder()
-            let t0 = Date(timeIntervalSince1970: 100)
+            let t0: TimeInterval = 100
             recorder.recordSample(level: .poor, roundTripTimeMs: aberrant, packetLossPercent: aberrant, at: t0)
-            recorder.recordSample(level: .poor, roundTripTimeMs: 1e308, packetLossPercent: 1e308, at: t0.addingTimeInterval(1))
+            recorder.recordSample(level: .poor, roundTripTimeMs: 1e308, packetLossPercent: 1e308, at: t0 + 1)
             recorder.recordMedia(.none, jitterMs: aberrant)
 
-            let payload = recorder.payload(now: t0.addingTimeInterval(2), context: Self.makeContext())
+            let payload = recorder.payload(uptime: t0 + 2, context: Self.makeContext())
 
             ["averageRtt", "averagePacketLoss", "maxPacketLoss"].forEach { Self.assertMeasured(payload[$0], "\($0) pour \(aberrant)") }
             XCTAssertNotNil(payload["mos"], "le MOS reste calculé")
@@ -341,10 +341,10 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
                 Self.entry("v", "inbound-rtp", kind: "video", values: ["freezeCount": hostile, "nackCount": hostile, "pliCount": hostile]),
                 Self.entry("a", "inbound-rtp", kind: "audio", values: ["concealedSamples": hostile]),
             ])
-            recorder.recordSample(level: .good, roundTripTimeMs: 100, packetLossPercent: 1, at: Date(timeIntervalSince1970: 100))
+            recorder.recordSample(level: .good, roundTripTimeMs: 100, packetLossPercent: 1, at: 100)
             recorder.recordMedia(quality, jitterMs: 10)
 
-            let payload = recorder.payload(now: Date(timeIntervalSince1970: 101), context: Self.makeContext())
+            let payload = recorder.payload(uptime: 101, context: Self.makeContext())
 
             ["freezeCount", "concealedSamples", "nackCount", "pliCount"].forEach { field in
                 let value = payload[field] as? Int
@@ -356,10 +356,10 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
 
     func test_payload_negativeSamples_countAsNotMeasured() {
         var recorder = CallAnalyticsRecorder()
-        recorder.recordSample(level: .good, roundTripTimeMs: -50, packetLossPercent: -4, at: Date(timeIntervalSince1970: 100))
-        recorder.recordSample(level: .good, roundTripTimeMs: 100, packetLossPercent: 2, at: Date(timeIntervalSince1970: 101))
+        recorder.recordSample(level: .good, roundTripTimeMs: -50, packetLossPercent: -4, at: 100)
+        recorder.recordSample(level: .good, roundTripTimeMs: 100, packetLossPercent: 2, at: 101)
 
-        let payload = recorder.payload(now: Date(timeIntervalSince1970: 102), context: Self.makeContext())
+        let payload = recorder.payload(uptime: 102, context: Self.makeContext())
 
         XCTAssertEqual(payload["averageRtt"] as? Double, 50)
         XCTAssertEqual(payload["averagePacketLoss"] as? Double, 1)
@@ -369,7 +369,7 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
     func test_payload_codecLongerThanFifty_isCutToFifty() {
         let codec = String(repeating: "x", count: 80)
 
-        let payload = CallAnalyticsRecorder().payload(now: Date(), context: Self.makeContext(codec: codec))
+        let payload = CallAnalyticsRecorder().payload(uptime: 0, context: Self.makeContext(codec: codec))
 
         XCTAssertEqual(payload["codec"] as? String, String(repeating: "x", count: 50))
     }
@@ -377,7 +377,7 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
     func test_payload_codecOfWideCharacters_staysWithinFiftyUTF16Units() {
         let codec = String(repeating: "\u{1F3A7}", count: 40)
 
-        let payload = CallAnalyticsRecorder().payload(now: Date(), context: Self.makeContext(codec: codec))
+        let payload = CallAnalyticsRecorder().payload(uptime: 0, context: Self.makeContext(codec: codec))
 
         XCTAssertLessThanOrEqual((payload["codec"] as? String)?.utf16.count ?? .max, 50)
         XCTAssertEqual(payload["codec"] as? String, String(repeating: "\u{1F3A7}", count: 25))
@@ -393,9 +393,9 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
 
     func test_recordSample_clockGoingBackwards_countsNegativeIntervalAsZero() {
         var recorder = CallAnalyticsRecorder()
-        let t0 = Date(timeIntervalSince1970: 100)
+        let t0: TimeInterval = 100
         recorder.recordSample(level: .excellent, roundTripTimeMs: 10, packetLossPercent: 0, at: t0)
-        recorder.recordSample(level: .good, roundTripTimeMs: 10, packetLossPercent: 0, at: t0.addingTimeInterval(-10))
+        recorder.recordSample(level: .good, roundTripTimeMs: 10, packetLossPercent: 0, at: t0 - 10)
 
         XCTAssertGreaterThanOrEqual(recorder.qualitySeconds[.excellent] ?? 0, 0)
         assertDistributionWithinUnit(makePayload(recorder))
@@ -403,12 +403,12 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
 
     func test_recordSample_clockGoingBackwardsAfterPositiveInterval_keepsOnlyPositiveInterval() {
         var recorder = CallAnalyticsRecorder()
-        let t0 = Date(timeIntervalSince1970: 100)
+        let t0: TimeInterval = 100
         recorder.recordSample(level: .excellent, roundTripTimeMs: 10, packetLossPercent: 0, at: t0)
-        recorder.recordSample(level: .good, roundTripTimeMs: 10, packetLossPercent: 0, at: t0.addingTimeInterval(5))
-        recorder.recordSample(level: .poor, roundTripTimeMs: 10, packetLossPercent: 0, at: t0.addingTimeInterval(2))
+        recorder.recordSample(level: .good, roundTripTimeMs: 10, packetLossPercent: 0, at: t0 + 5)
+        recorder.recordSample(level: .poor, roundTripTimeMs: 10, packetLossPercent: 0, at: t0 + 2)
 
-        let payload = recorder.payload(now: t0.addingTimeInterval(2), context: Self.makeContext(codec: "opus"))
+        let payload = recorder.payload(uptime: t0 + 2, context: Self.makeContext(codec: "opus"))
         let distribution = payload["qualityDistribution"] as? [String: Double] ?? [:]
 
         XCTAssertEqual(distribution["excellent"] ?? -1, 1.0, accuracy: 0.0001)
@@ -419,7 +419,7 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
     func test_qualityDistribution_negativeOrNonFiniteAccumulators_countAsZero() {
         let distribution = CallReliabilityPolicy.qualityDistribution(
             accumulatedSeconds: [.excellent: -10, .good: 30, .fair: .nan, .poor: .infinity, .critical: -.infinity],
-            openWindowLevel: nil, openWindowSince: nil, now: Date(timeIntervalSince1970: 0)
+            openWindowLevel: nil, openWindowSince: nil, now: 0
         )
 
         XCTAssertEqual(distribution["good"] ?? -1, 1.0, accuracy: 0.0001)
@@ -468,6 +468,51 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
         XCTAssertEqual(metrics.negotiationTimeMs, 1_500)
     }
 
+    // MARK: - #20069 — la répartition de qualité se mesure sur l'horloge MONOTONE
+
+    /// Un relevé porte les DEUX horloges du poste ; le recorder ne reçoit que la
+    /// monotone. Sur dev, le relevé était daté par `Date()` (horloge murale) :
+    /// une heure d'avance réglée entre deux relevés comptait 3 600 s
+    /// « excellent » au lieu de 2.
+    private struct Reading {
+        let wall: Date
+        let uptime: TimeInterval
+    }
+
+    private static let wallBeforeJump = Date(timeIntervalSince1970: 1_700_000_000)
+
+    func test_recordSample_wallClockJumpsAnHourBetweenSamples_countsTheTwoMonotonicSeconds() {
+        let readings = [
+            Reading(wall: Self.wallBeforeJump, uptime: 500),
+            Reading(wall: Self.wallBeforeJump.addingTimeInterval(3_602), uptime: 502),
+        ]
+        var recorder = CallAnalyticsRecorder()
+
+        recorder.recordSample(level: .excellent, roundTripTimeMs: 40, packetLossPercent: 0, at: readings[0].uptime)
+        recorder.recordSample(level: .good, roundTripTimeMs: 40, packetLossPercent: 0, at: readings[1].uptime)
+
+        XCTAssertEqual(recorder.qualitySeconds[.excellent], 2)
+        XCTAssertEqual(recorder.lastQualityUptime, 502)
+    }
+
+    func test_payload_wallClockJumpsAnHourBeforeTheReport_foldsTheOpenWindowOnTheMonotonicClock() {
+        let readings = [
+            Reading(wall: Self.wallBeforeJump, uptime: 500),
+            Reading(wall: Self.wallBeforeJump.addingTimeInterval(2), uptime: 502),
+            Reading(wall: Self.wallBeforeJump.addingTimeInterval(3_604), uptime: 504),
+        ]
+        var recorder = CallAnalyticsRecorder()
+        recorder.recordSample(level: .excellent, roundTripTimeMs: 40, packetLossPercent: 0, at: readings[0].uptime)
+        recorder.recordSample(level: .good, roundTripTimeMs: 40, packetLossPercent: 0, at: readings[1].uptime)
+
+        let payload = recorder.payload(uptime: readings[2].uptime, context: Self.makeContext())
+        let distribution = payload["qualityDistribution"] as? [String: Double] ?? [:]
+
+        XCTAssertEqual(distribution["excellent"] ?? -1, 0.5, accuracy: 0.000_1)
+        XCTAssertEqual(distribution["good"] ?? -1, 0.5, accuracy: 0.000_1)
+        XCTAssertNil(recorder.qualitySeconds[.good], "le repli de la fenêtre ouverte reste virtuel")
+    }
+
     func test_elapsedSeconds_startInTheFuture_isZero() {
         let now: TimeInterval = 1_000_000
 
@@ -477,7 +522,7 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
 
     func test_payload_negativeCallDuration_emitsZeroDuration() {
         let payload = CallAnalyticsRecorder().payload(
-            now: Date(timeIntervalSince1970: 1_000),
+            uptime: 1_000,
             context: CallAnalyticsContext(callDuration: -3_600, codec: "opus", filtersEnabledNow: false,
                                           transcriptionUsed: false, deviceModel: "iPhone", isVideo: false,
                                           endReason: "local")

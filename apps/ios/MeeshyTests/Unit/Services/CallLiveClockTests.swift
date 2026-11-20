@@ -80,6 +80,44 @@ final class CallLiveClockTests: XCTestCase {
         XCTAssertEqual(clock.elapsedDuration, 4)
     }
 
+    // MARK: - #20069 — l'ancrage à la connexion, éprouvé par son comportement
+
+    /// `resetCallClockIfNeeded` (premier passage à connecté) ancre par
+    /// `analytics.anchorConnection(on: liveClock)` : `CallManager` n'a qu'un
+    /// init privé (singleton, `CXProvider`), donc on éprouve la fonction
+    /// qu'il appelle, sur une horloge monotone injectée.
+    func test_anchorConnection_anchorsTheRecorderAndTheChronoOnTheSameMonotonicInstant() {
+        let (clock, uptime) = makeSUT(startingAt: 9_000)
+        var recorder = CallAnalyticsRecorder()
+        recorder.callInitiatedUptime = 8_976
+        recorder.negotiationStartUptime = 8_998.5
+
+        recorder.anchorConnection(on: clock)
+        uptime.seconds += 42
+
+        XCTAssertEqual(recorder.connectedUptime, 9_000)
+        XCTAssertEqual(clock.elapsedDuration, 42)
+        let payload = recorder.payload(uptime: clock.monotonicNow, context: CallAnalyticsContext(
+            callDuration: clock.elapsedDuration ?? -1, codec: "opus", filtersEnabledNow: false,
+            transcriptionUsed: false, deviceModel: "iPhone", isVideo: false, endReason: "local"))
+        XCTAssertEqual(payload["setupTimeMs"] as? Int, 24_000)
+        XCTAssertEqual(payload["negotiationTimeMs"] as? Int, 1_500)
+        XCTAssertEqual(payload["durationSeconds"] as? TimeInterval, 42)
+    }
+
+    func test_anchorConnection_reanchoredOnAFirstRealConnection_restartsBothAtTheNewInstant() {
+        let (clock, uptime) = makeSUT(startingAt: 100)
+        var recorder = CallAnalyticsRecorder()
+
+        recorder.anchorConnection(on: clock)
+        uptime.seconds += 90
+        recorder.anchorConnection(on: clock)
+        uptime.seconds += 5
+
+        XCTAssertEqual(recorder.connectedUptime, 190)
+        XCTAssertEqual(clock.elapsedDuration, 5)
+    }
+
     /// Le câblage : le chrono, son ancre et les délais du rapport lisent
     /// l'horloge monotone. Remettre `Date().timeIntervalSince(start)` dans la
     /// boucle, ou ancrer la mesure sur `callStartDate`, fait rougir ce témoin.
@@ -91,7 +129,9 @@ final class CallLiveClockTests: XCTestCase {
         XCTAssertTrue(liveClock.contains("guard let elapsed = self.elapsedDuration else { continue }"))
         XCTAssertTrue(liveClock.contains("call.callDuration = elapsed"))
         XCTAssertFalse(call.contains("timeIntervalSince(callStartDate"))
-        XCTAssertTrue(call.contains("analytics.connectedUptime = liveClock.anchorDuration()"))
+        XCTAssertTrue(call.contains("analytics.anchorConnection(on: liveClock)"))
+        XCTAssertTrue(call.contains("at: self.liveClock.monotonicNow"), "les relevés de qualité sont datés sur l'horloge monotone")
+        XCTAssertTrue(call.contains("uptime: liveClock.monotonicNow,"), "le rapport replie la fenêtre ouverte sur l'horloge monotone")
         XCTAssertEqual(call.components(separatedBy: "analytics.callInitiatedUptime = call.liveClock.monotonicNow").count - 1, 3)
         XCTAssertGreaterThanOrEqual(call.components(separatedBy: "analytics.negotiationStartUptime = ").count - 1, 3)
     }

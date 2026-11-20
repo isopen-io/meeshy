@@ -196,15 +196,17 @@ nonisolated enum CallReliabilityPolicy {
     /// an empty call (never connected / no samples) reads as fully excellent;
     /// clock skew (window start in the future) contributes zero, never
     /// negative time; a negative or non-finite accumulated value counts for 0.
+    /// `openWindowSince` and `now` are MONOTONIC instants in seconds (#20069):
+    /// a wall-clock change can no longer add an hour to one level.
     static func qualityDistribution(
         accumulatedSeconds: [VideoQualityLevel: Double],
         openWindowLevel: VideoQualityLevel?,
-        openWindowSince: Date?,
-        now: Date
+        openWindowSince: TimeInterval?,
+        now: TimeInterval
     ) -> [String: Double] {
         var seconds = accumulatedSeconds.mapValues(CallStatValue.measured)
         if let level = openWindowLevel, let since = openWindowSince {
-            seconds[level, default: 0] += CallStatValue.measured(now.timeIntervalSince(since))
+            seconds[level, default: 0] += CallStatValue.measured(now - since)
         }
         let total = seconds.values.reduce(0, +)
         guard total > 0 else {
