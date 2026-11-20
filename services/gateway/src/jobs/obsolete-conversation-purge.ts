@@ -35,6 +35,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { isProtectedFromObsolescence, OBSOLETE_PURGE_DELAY_MS } from '../services/conversations/obsoleteConversation';
+import { messageScopedDelegates, type MessageScopedPrisma } from '../services/messaging/messageScopedRows';
 
 const logger = enhancedLogger.child({ module: 'ObsoleteConversationPurge' });
 
@@ -83,11 +84,14 @@ export type ObsoletePurgePrisma = Pick<
   | 'conversationShareLink' | 'participant' | 'callRecording' | 'serverEncryptionKey'
 >;
 
-/** Ce qui pend à un message, effacé avant lui. */
-const messageScoped = (prisma: ObsoletePurgePrisma): readonly DeleteManyDelegate[] => [
-  prisma.attachmentReaction, prisma.attachmentStatusEntry, prisma.reaction, prisma.mention, prisma.messageStatusEntry,
-  prisma.userMessageDeletion, prisma.messageStar, prisma.sharedTranslation, prisma.messageEnvelope, prisma.notification,
-] as unknown as readonly DeleteManyDelegate[];
+/**
+ * Ce qui pend à un message, effacé avant lui. La LISTE vit dans
+ * `services/messaging/messageScopedRows.ts` depuis #19956 : un second site en a
+ * besoin (l'abandon d'un message dont les pièces n'ont pas pu être liées), et
+ * une liste de tables recopiée est une liste qui divergera.
+ */
+const messageScoped = (prisma: ObsoletePurgePrisma): readonly DeleteManyDelegate[] =>
+  messageScopedDelegates(prisma as unknown as MessageScopedPrisma) as unknown as readonly DeleteManyDelegate[];
 
 /**
  * Ce qui pend à la conversation, effacé APRÈS ses messages ; les appels avant

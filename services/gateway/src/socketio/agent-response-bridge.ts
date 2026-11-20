@@ -192,7 +192,20 @@ export async function handleAgentResponse(deps: AgentResponseBridgeDeps, respons
       metadata: { source: 'api' },
     };
 
-    const result = await deps.messagingService.handleMessage(messageRequest, senderParticipant.id);
+    // #19956 — depuis que l'échec de liaison d'une pièce fait ÉCHOUER l'envoi,
+    // la loi suppose un appelant qui REJOUE. Des trois producteurs
+    // d'`attachmentIds`, celui-ci est le seul à ne pas en avoir : ni outbox,
+    // ni `clientMessageId`, ni file. Sans ce repli, une illustration qui ne se
+    // lie pas ne coûtait que l'illustration ; elle coûterait désormais la
+    // RÉPONSE ENTIÈRE de l'agent, texte compris, et personne ne la
+    // redemanderait. On rejoue donc une fois SANS l'illustration : l'agent
+    // parle, dégradé, plutôt que de se taire.
+    let result = await deps.messagingService.handleMessage(messageRequest, senderParticipant.id);
+    if ((!result.success || !result.data) && attachmentIds && response.content) {
+      logger.warn(`[Agent] envoi refusé avec illustration — rejeu sans elle, conv=${response.conversationId}`, { reason: result.error });
+      const { attachmentIds: _dropped, ...withoutIllustration } = messageRequest;
+      result = await deps.messagingService.handleMessage(withoutIllustration, senderParticipant.id);
+    }
     if (!result.success || !result.data) {
       logger.error(`[Agent] handleMessage failed — conv=${response.conversationId}`, result.error);
       return;

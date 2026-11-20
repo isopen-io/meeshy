@@ -11,10 +11,13 @@ nonisolated enum ProfileOwnHeroControl: String, Equatable, Sendable, CaseIterabl
 
 /// **L'en-tête de ma vitrine en VALEURS** (#19589, planches `Main`, `Moi-Edition`, `Sys-Mouvement`) : K28
 /// `MeeshyCollapsingHero` sur la bannière vivante K27, mené par le seul défilement. Au repos, il se replie de 318 en
-/// barre de verre de 96 ; en édition, la bannière part avec le formulaire et le cadre de mode (K16) tient le haut.
+/// barre de sa seule rangée ; en édition, la bannière part avec le formulaire et le cadre de mode (K16) tient le haut.
 nonisolated enum ProfileOwnHeroPlan {
     static let expandedHeight: Double = MeeshyCollapsingHeroRecipe.expandedHeight
-    static let collapsedHeight: Double = MeeshyCollapsingHeroRecipe.collapsedHeight
+    /// Le haut des commandes : la vitrine défile sous la barre d'état, sa zone sûre ne se lit pas — le repli du kit.
+    static let controlTop: Double = MeeshyCollapsingHeroRecipe.controlTop(safeArea: 0)
+    /// Repliée, la barre n'est que sa rangée (#19987) : ⚙︎, avatar, nom, @pseudo, ✎, et une marge de 12 dessous.
+    static let collapsedHeight: Double = controlTop + MeeshyCollapsingHeroRecipe.controlTarget + 12
     /// Où commence ce qui défile : sous l'identité du héros déplié, qui déborde de la bannière.
     static let contentTop: Double = expandedHeight + MeeshyCollapsingHeroRecipe.identityOverflow
     /// « Changer la bannière » (planche `Moi-Edition`) : sous la rangée des commandes, au bord de fin.

@@ -333,6 +333,53 @@
         }
       }
     },
+    "NSHealthShareUsageDescription" : {
+      "comment" : "Privacy - Health Share Usage Description",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بموافقتك، يقرأ Meeshy فقط وقت حالات السقوط التي ترصدها ساعة Apple Watch، لتنبيه أفراد عائلتك فورًا. لا تتم قراءة أو إرسال أي بيانات صحية أخرى."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mit deiner Einwilligung liest Meeshy nur den Zeitpunkt der Stürze, die deine Apple Watch erkennt, um deine Blut-Kontakte sofort zu benachrichtigen. Keine anderen Gesundheitsdaten werden gelesen oder gesendet."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "With your consent, Meeshy reads only the time of falls your Apple Watch detects, to alert your Blood links right away. No other health data is read or sent."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Con tu consentimiento, Meeshy lee solo la hora de las caídas que detecta tu Apple Watch, para avisar enseguida a tus Sangre. No se lee ni se envía ningún otro dato de salud."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avec votre accord, Meeshy lit seulement l'heure des chutes que votre Apple Watch détecte, pour prévenir vos Sangs tout de suite. Aucune autre donnée de santé n'est lue ni envoyée."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Con il tuo consenso, Meeshy legge solo l'ora delle cadute rilevate dal tuo Apple Watch, per avvisare subito i tuoi Sangue. Nessun altro dato sanitario viene letto o inviato."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Com seu consentimento, o Meeshy lê apenas o horário das quedas que seu Apple Watch detecta, para avisar seus Sangue na hora. Nenhum outro dado de saúde é lido ou enviado."
+          }
+        }
+      }
+    },
     "NSLocalNetworkUsageDescription" : {
       "comment" : "Privacy - Local Network Usage Description",
       "localizations" : {

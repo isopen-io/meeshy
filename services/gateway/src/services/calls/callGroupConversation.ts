@@ -6,17 +6,41 @@ import { implicitConversationRegime } from '../conversations/creationRegime';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../participantRights';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { RANK_SELECT, highestRankedConversations } from '../conversations/highestRanked';
+import { unsetOrNull } from '../../utils/prisma-unset';
 
 /**
- * La fenêtre de chaque flux du rang. **C'est une TRONCATURE héritée, pas une borne
- * que la preuve du top-K démontre** (relevé par l'audit adversarial de #19835) :
- * `take: 20` était déjà là avant que le rang n'arrive, et le filtre d'exactitude
- * des membres s'applique APRÈS elle — un groupe appariant exactement mais hors
- * des vingt premiers reste invisible, et l'appel en crée alors un neuf
- * (`reserveTarget`, `callConversationRebranch.ts`). Ce que la preuve EXIGE, c'est
- * que les deux flux lisent la MÊME fenêtre, quelle qu'elle soit ; ce que 20 vaut
- * se mesure en production (combien de groupes partagent un même ensemble de
- * membres ?) et n'est mesuré par rien.
+ * La fenêtre de chaque flux du rang. **Elle ne décide plus de ce qui est TROUVÉ**
+ * (#19906, relevé par l'audit adversarial de #19835).
+ *
+ * Elle l'a décidé : `take: 20` précède l'arrivée du rang, et le filtre
+ * d'exactitude des membres s'appliquait APRÈS elle. Un groupe appariant
+ * exactement, mais rangé derrière vingt SUR-ENSEMBLES plus récents, restait
+ * invisible — et l'appel en créait alors un neuf (`reserveTarget`,
+ * `callConversationRebranch.ts`) : un doublon, sans erreur ni trace.
+ *
+ * L'exactitude des MEMBRES se dit désormais DANS le `where`, et l'ÉLIGIBILITÉ y
+ * descend pour ce qu'elle peut y descendre exactement (`closedAt`, `deletedAt`,
+ * `communityId` — trois colonnes nullables, donc `unsetOrNull`). Ce que la
+ * fenêtre tronque est la queue d'un ensemble déjà exact et déjà largement épuré,
+ * ordonné par le rang sur lequel l'appelant choisit ; la preuve du top-K
+ * (`highestRanked.ts`) garantit que les vingt premiers par rang SONT les vingt
+ * premiers, et `reserveTarget` les consomme dans cet ordre. Ce que la preuve
+ * EXIGE par ailleurs reste vrai : les deux flux lisent la MÊME fenêtre.
+ *
+ * **Ce que la fenêtre peut ENCORE tronquer, dit sans l'arrondir** : les groupes
+ * que seul `isPlainLiveGroup` écarte, c'est-à-dire `isActive: false`,
+ * `isAnnouncementChannel: true` et le régime. Les deux premiers sont des booléens
+ * REQUIS au schéma — Prisma n'offre pas d'`isSet` dessus, et une égalité nue
+ * amputerait un document d'avant la colonne, soit le piège que ce lot vient de
+ * fermer deux fois. Le RÉGIME ne descend pas pour une raison différente, et c'est
+ * la plus importante : `isPlainLiveGroup` admet un mode INCONNU
+ * (`!isEndToEndMode`) là où `SERVER_READABLE_REGIME_FILTER` le refuse — le
+ * descendre changerait la POLITIQUE d'un appel de groupe, décision qui ne se
+ * prend pas au détour d'un lot de fenêtre.
+ *
+ * **Ce que 20 vaut n'est toujours mesuré par rien, et ce n'est plus une dette
+ * de correction** : c'est le nombre de groupes qu'un même ensemble de membres
+ * peut porter, une question de volumétrie (#19837) et non d'exactitude.
  */
 const CALL_GROUP_WINDOW = 20;
 
@@ -89,15 +113,52 @@ const sameSet = (keys: readonly string[], target: ReadonlySet<string>): boolean 
  * doit se tenir. L'ordre vient de `highestRankedConversations`, qui lit les deux
  * flux du rang sur la MÊME fenêtre — aucun second tri ne le réécrit ici, un
  * ordre qui se redéclare est un ordre qui divergera.
+ *
+ * **Le `where` dit l'EXACTITUDE, et non plus seulement l'intersection** (#19906).
+ * À « tous les membres visés sont actifs ici » (un `some` par membre) s'ajoute
+ * son complément, « aucun membre actif d'ici n'est hors de la cible » : les deux
+ * ensemble SONT l'égalité des ensembles, et la fenêtre ne tronque donc plus que
+ * la queue d'un ensemble déjà exact. Avant, elle décidait : vingt sur-ensembles
+ * plus récents cachaient le groupe exact, et l'appel en créait un neuf.
+ *
+ * L'intrus se dit en branches POSITIVES — `isSet: false`, `null`, `notIn` — et
+ * jamais par une négation de document : un participant SANS compte n'a pas de
+ * clé `userId`, et toute négation sous MongoDB exige la clé présente (#8309).
+ * `sameSet` reste autoritatif en mémoire : ce filtre ne peut que RESSERRER, donc
+ * il ne peut introduire aucun faux positif — c'est ce qui rend le lot sûr sans
+ * base de données pour le mesurer.
  */
 export async function findExactCallGroups(
   prisma: Pick<PrismaClient, 'conversation' | 'callSession'>,
   input: { readonly callId: string; readonly memberUserIds: readonly string[] }
 ): Promise<CallGroupCandidate[]> {
   const target = new Set(input.memberUserIds);
+  // #19906 — l'exactitude se dit EN BASE, et non plus après la fenêtre : à
+  // l'intersection (« tous les visés sont actifs ici ») s'ajoute son complément
+  // (« aucun actif d'ici n'est hors de la cible »). Les deux SONT l'égalité des
+  // ensembles. L'intrus se dit en branches POSITIVES — un participant sans
+  // compte n'a pas de clé `userId`, et toute négation exige la clé présente
+  // (#8309). `sameSet` reste autoritatif en mémoire : ce filtre ne peut que
+  // RESSERRER, donc il n'introduit aucun faux positif.
   const where = {
     type: 'group',
-    AND: input.memberUserIds.map((userId) => ({ participants: { some: { userId, isActive: true } } })),
+    AND: [
+      ...input.memberUserIds.map((userId) => ({ participants: { some: { userId, isActive: true } } })),
+      // #19906 bis — l'ÉLIGIBILITÉ descend pour ce qu'elle peut descendre
+      // EXACTEMENT : trois colonnes nullables, donc `unsetOrNull` les dit sans
+      // amputer. Sans elles, le `where` ne disait que l'exactitude des MEMBRES et
+      // `isPlainLiveGroup` jugeait APRÈS la fenêtre — vingt salons de communauté
+      // aux membres exacts suffisaient à cacher le groupe ordinaire.
+      unsetOrNull('closedAt'),
+      unsetOrNull('deletedAt'),
+      unsetOrNull('communityId'),
+    ],
+    participants: {
+      none: {
+        isActive: true,
+        OR: [{ userId: { isSet: false } }, { userId: null }, { userId: { notIn: [...input.memberUserIds] } }],
+      },
+    },
   };
   const select = {
     ...RANK_SELECT,

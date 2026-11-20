@@ -19,6 +19,12 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published private(set) var loadFailure: CommunityLoadFailure?
+    /// La communauté valide chaque entrée (#19429) : on y DEMANDE à entrer.
+    @Published private(set) var requiresJoinApproval = false
+    /// La demande du lecteur attend un administrateur ou un modérateur (#19869).
+    @Published private(set) var joinRequestPending = false
+    /// Un refus de la jonction dit dans la langue du lecteur (délai après un refus).
+    @Published private(set) var joinRefusal: CommunityJoinRefusal?
 
     let communityId: String
     private let service: CommunityServiceProviding
@@ -72,6 +78,7 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
         conversations = []
         isCreator = false
         adopt(role: nil)
+        joinRequestPending = false
         loadFailure = .refused
         await forgetCachedPosts()
         await myCommunities.remove(communityId)
@@ -152,7 +159,9 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
         let servedRole = apiCommunity.currentUserRole.flatMap(MemberRole.init(rawValue:))
         let recordRole = apiCommunity.members?.first(where: { $0.userId == readerId })?.communityRole
         isCreator = creatorMatch
+        requiresJoinApproval = apiCommunity.requiresJoinApproval == true
         adopt(role: servedRole ?? recordRole)
+        joinRequestPending = !isMember && apiCommunity.currentUserJoinRequest == "pending"
     }
 
     /// Le créateur vaut admin quand aucun rôle n'est tenu.
@@ -161,17 +170,33 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
         isMember = role != nil
         currentUserRole = role ?? .member
         isAdmin = currentUserRole.hasMinimumRole(.admin) || isCreator
+        if isMember { joinRequestPending = false }
     }
 
+    /// Une communauté qui valide chaque entrée dit « Demande envoyée » dès le
+    /// toucher, et le défait si le serveur refuse. Une demande ne fait membre de
+    /// rien : ni rôle, ni effectif, ni « mes communautés » avant l'acceptation,
+    /// qui arrive par `community:member-joined`.
     func joinCommunity() async {
-        isLoading = true
+        guard !joinRequestPending else { return }
+        let asksForEntry = requiresJoinApproval
+        joinRefusal = nil
+        if asksForEntry { joinRequestPending = true } else { isLoading = true }
         defer { isLoading = false }
         do {
-            _ = try await service.join(communityId: communityId)
-            await forgetCachedPosts()
-            // #18935 — la bande Communautés et le partage la voient au retour.
-            if let joined = await loadServed(), isMember { await myCommunities.add(joined) }
+            switch try await service.join(communityId: communityId) {
+            case .pending:
+                requiresJoinApproval = true
+                joinRequestPending = !isMember
+            case .joined:
+                joinRequestPending = false
+                await forgetCachedPosts()
+                // #18935 — la bande Communautés et le partage la voient au retour.
+                if let joined = await loadServed(), isMember { await myCommunities.add(joined) }
+            }
         } catch {
+            joinRequestPending = false
+            joinRefusal = CommunityJoinRefusal.classify(error)
             errorMessage = error.localizedDescription
         }
     }

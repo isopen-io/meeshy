@@ -100,81 +100,60 @@ public enum AvatarRingGeometry {
         return avatarSize / storyRingSize
     }
 
-    /// La part de l'empreinte que l'avatar occupe sous un contour : le cercle de rayon 42
+    /// La part de la boîte d'un contour que l'avatar occupe : le cercle de rayon 42
     /// du viewBox 100 (miroir de `AVATAR_FRACTION`, `avatar-ring.tsx`).
     public static let holeFraction: CGFloat = 0.84
 
-    /// L'échelle de l'avatar quand le contour tient DANS son empreinte (#10713, listes et
-    /// bulles) : l'avatar se ramène au trou du contour, et son anneau de story avec lui.
-    public static func footprintScale(footprint: CGFloat, storyRingSize: CGFloat?) -> CGFloat {
-        holeFraction * avatarScale(avatarSize: footprint, storyRingSize: storyRingSize)
+    /// LA taille d'un avatar décoré (#19988) : quel que soit le cadre — contour simple ou film illustré —,
+    /// il peint dans un carré de `d / 0,84`, centré sur l'avatar de diamètre `d`. Un cadre illustré ne
+    /// grossit donc plus avec sa portée : c'est le visage qui se ramène à son trou.
+    public static func decoratedSide(avatarSize: CGFloat) -> CGFloat {
+        avatarSize / holeFraction
+    }
+
+    /// Ce qu'un avatar décoré peint au-delà de son diamètre, de chaque côté : la marge que l'hôte laisse
+    /// libre, sans clip ni voisin. La même fraction pour tous les cadres ; `0` sans cadre.
+    public static func spill(_ design: AvatarRingDesign?, avatarSize: CGFloat) -> CGFloat {
+        guard design != nil else { return 0 }
+        return (decoratedSide(avatarSize: avatarSize) - avatarSize) / 2
     }
 }
 
-/// La mise en place d'un contour dans sa boîte (#15157) : l'échelle de l'avatar, le film illustré
-/// s'il s'affiche, et si l'anneau fixe se dessine. Le film ne sort de la boîte que de la place que
-/// l'hôte déclare libre (`AvatarRingDecor.fit`) ; quand il s'affiche, l'anneau fixe — son image de
-/// repli — ne se dessine pas dessous. Il s'affiche à toutes les tailles (#16114) ; seul l'hôte qui
-/// le retire (`decor: false`, la bulle de frappe) garde l'anneau seul.
+/// La mise en place d'un cadre autour d'un avatar (#19988) : la boîte normalisée
+/// (`AvatarRingGeometry.decoratedSide`), l'échelle du visage, le film illustré s'il s'affiche, et si
+/// l'anneau fixe se dessine. Le film tient dans la boîte — jamais au-delà, à aucune taille — et, quand il
+/// s'affiche, l'anneau fixe (son image de repli) ne se dessine pas dessous. Seul l'hôte qui le retire
+/// (`decor: false`, la bulle de frappe, #16114) garde l'anneau seul.
 public struct AvatarRingLayout: Equatable {
+    public let box: CGFloat
     public let contentScale: CGFloat
     public let decor: AvatarRingDecorFit?
     public var drawsStill: Bool { decor == nil }
-    /// L'échelle de la couche `lottie` du contour : elle suit l'avatar quand le cadre se réduit.
+    /// L'échelle de la couche `lottie` du contour : elle suit le visage quand un film le réduit.
     public var ringScale: CGFloat { CGFloat(decor?.scale ?? 1) }
-    /// Le côté peint, film compris : jamais plus que la boîte et la place déclarée.
-    public func paintedSide(box: CGFloat) -> CGFloat { decor.map { CGFloat($0.side) } ?? box }
+    /// Le côté peint, film compris : la boîte normalisée.
+    public var paintedSide: CGFloat { decor.map { CGFloat($0.side) } ?? box }
 
-    /// Ce que le film d'un cadre demande au-delà de sa boîte, de chaque côté : la place qu'un hôte
-    /// RÉSERVE (et déclare en `decorRoom`) pour le montrer sans réduire l'avatar. `0` sans film.
-    public static func fullSpill(_ design: AvatarRingDesign?, box: CGFloat) -> CGFloat {
-        guard let decor = design?.decor else { return 0 }
-        return box * CGFloat(decor.reach - 1) / 2
-    }
-
-    /// Ce qu'un avatar posé par `avatarRing` (boîte = `avatarSize / 0,84`) peint sous son bord quand
-    /// l'hôte déclare toute la place : la marge à réserver avant un texte. `0` sans film.
-    public static func paintBeyondAvatar(_ design: AvatarRingDesign?, avatarSize: CGFloat) -> CGFloat {
-        let box = avatarSize * 100 / 84
-        let spill = fullSpill(design, box: box)
-        return spill > 0 ? (box + 2 * spill - avatarSize) / 2 : 0
-    }
-
-    public static func make(_ design: AvatarRingDesign, box: CGFloat, baseScale: CGFloat, room: CGFloat = 0, decor showsDecor: Bool = true) -> AvatarRingLayout {
-        let decor = showsDecor ? design.decor?.fit(box: Double(box), room: Double(room)) : nil
-        return AvatarRingLayout(contentScale: baseScale * CGFloat(decor?.scale ?? 1), decor: decor)
+    public static func make(_ design: AvatarRingDesign, avatarSize: CGFloat, storyRingSize: CGFloat? = nil,
+                            decor showsDecor: Bool = true) -> AvatarRingLayout {
+        let box = AvatarRingGeometry.decoratedSide(avatarSize: avatarSize)
+        let decor = showsDecor ? design.decor?.fit(box: Double(box)) : nil
+        let baseScale = AvatarRingGeometry.avatarScale(avatarSize: avatarSize, storyRingSize: storyRingSize)
+        return AvatarRingLayout(box: box, contentScale: baseScale * CGFloat(decor?.scale ?? 1), decor: decor)
     }
 }
 
 public extension View {
-    /// Pose le contour AUTOUR de l'avatar sans changer sa mise en page : le contour est une superposition
-    /// agrandie (l'avatar occupe le rayon 42 du viewBox 100). `nil` ⇒ la vue telle quelle (rendu historique).
-    /// `storyRingSize` (l'emprise de l'anneau de story quand l'avatar en porte un) réduit l'avatar pour que
-    /// l'anneau passe DANS le contour, concentrique, au lieu d'être recouvert (#10714). `decorRoom` : la place
-    /// libre (pt) que l'hôte garantit autour de la boîte du contour — aucun texte ni avatar voisin n'y vit (#15157).
+    /// Pose le cadre AUTOUR de l'avatar sans changer sa mise en page (#19988) : une superposition de côté
+    /// `avatarSize / 0,84`, la même pour tous les cadres et à toutes les tailles. `storyRingSize` (l'emprise de
+    /// l'anneau de story quand l'avatar en porte un) le ramène dans le trou du cadre, concentrique (#10714).
+    /// `decor: false` retire les films illustrés (la bulle de frappe, #16114). `nil` ⇒ la vue telle quelle.
     @ViewBuilder
-    func avatarRing(_ design: AvatarRingDesign?, avatarSize: CGFloat, storyRingSize: CGFloat? = nil, animates: Bool = true, decorRoom: CGFloat = 0) -> some View {
+    func avatarRing(_ design: AvatarRingDesign?, avatarSize: CGFloat, storyRingSize: CGFloat? = nil,
+                    animates: Bool = true, decor: Bool = true) -> some View {
         if let design {
-            let box = avatarSize * 100 / 84
-            let layout = AvatarRingLayout.make(design, box: box, baseScale: AvatarRingGeometry.avatarScale(avatarSize: avatarSize, storyRingSize: storyRingSize), room: decorRoom)
-            modifier(AvatarRingFrameModifier(design: design, box: box, layout: layout, animates: animates))
-        } else {
-            self
-        }
-    }
-
-    /// Le contour DANS l'empreinte de l'avatar (#10713) — pour les cotes FIXES (ligne de
-    /// liste, bulle) : le contour occupe la cote `footprint`, l'avatar (anneau de story
-    /// compris, #10714) se réduit à son trou. Rien ne grandit, rien ne se décale, et le
-    /// contour se pose sans perte d'image quand il arrive. Animé comme partout (#10815):
-    /// une liste en porte des dizaines, mais le plafond des
-    /// films vivants (`LottieLiveBudget`) n'en fait jouer que quelques-uns à la fois — les
-    /// autres montrent leur première image fixe, et un même fichier ne se décode qu'une fois.
-    @ViewBuilder
-    func avatarRingWithin(_ design: AvatarRingDesign?, footprint: CGFloat, storyRingSize: CGFloat? = nil, animates: Bool = true, decorRoom: CGFloat = 0, decor: Bool = true) -> some View {
-        if let design {
-            let layout = AvatarRingLayout.make(design, box: footprint, baseScale: AvatarRingGeometry.footprintScale(footprint: footprint, storyRingSize: storyRingSize), room: decorRoom, decor: decor)
-            modifier(AvatarRingFrameModifier(design: design, box: footprint, layout: layout, animates: animates))
+            let layout = AvatarRingLayout.make(design, avatarSize: avatarSize, storyRingSize: storyRingSize, decor: decor)
+            modifier(AvatarRingFrameModifier(design: design, box: layout.box, layout: layout, animates: animates))
         } else {
             self
         }

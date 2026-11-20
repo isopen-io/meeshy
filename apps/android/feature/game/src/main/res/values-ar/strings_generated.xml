@@ -765,7 +765,7 @@
     <string name="game_level_cap_reached">المستوى %1$s: أعلى ما تفتحه رتبتك. رتبة %2$s تفتح ما بعده.</string>
     <string name="game_level_cap_short">يُفتح برتبة %1$s</string>
     <string name="game_level_held">نورك يفتح الطريق بالفعل: %1$s لاجتياز المستوى %2$s.</string>
-    <string name="game_level_ring_a11y">المستوى %1$s، %2$s، الحالة %3$s لنورك</string>
+    <string name="game_level_ring_a11y">نورك في المستوى %1$s، %2$s، الحالة %3$s</string>
     <string name="game_level_step_done">اجتزته</string>
     <string name="game_level_step_flame">الحفاظ على لهب لمدة %1$s يومًا</string>
     <string name="game_level_step_line">اختبار المستوى %1$s: %2$s</string>

@@ -1,4 +1,5 @@
 import Combine
+import CryptoKit
 import Foundation
 import MeeshySDK
 
@@ -130,7 +131,9 @@ final class SharedLocationSharingCenter: ObservableObject {
     private let wakes: SharedLocationWakeScheduling
     private let owner: String
     private let currentAccount: () -> String?
-    private let served: @MainActor () async -> SharedLocationOwnSnapshot?
+    /// Ce que la passerelle sert : une réponse, `nil` pour une passerelle d'avant (#18389), une erreur levée pour une
+    /// panne (`SharedLocationServedRead.answer`).
+    private let served: @MainActor () async throws -> SharedLocationOwnSnapshot?
     private let gate = SharedLocationSerialGate()
     private var abandoned = false
     private var lastSent: SharedLocationUpdateGate.Sent?
@@ -145,8 +148,9 @@ final class SharedLocationSharingCenter: ObservableObject {
         didSet { if publishedStart != oldValue { store.savePublishedStart(publishedStart) } }
     }
     /// Relancé avec une liste qu'il publiait, l'appareil suit sa position mais n'en envoie rien avant d'avoir relu ce que
-    /// la passerelle sert (#19767) : un autre appareil a pu reprendre le partage pendant qu'il dormait. Une relecture qui
-    /// n'aboutit pas (hors ligne, passerelle d'avant) lève l'attente, comme un « Partager » d'ici.
+    /// la passerelle sert (#19767) : un autre appareil a pu reprendre le partage pendant qu'il dormait. Seules une
+    /// réponse et une passerelle d'avant (`nil`) lèvent l'attente, comme un « Partager » d'ici ; une panne (hors ligne,
+    /// 401, 5xx, délai) la GARDE et la relecture se rejoue au rythme de `retryDelay` (#19928) : dans le doute, muet.
     private var awaitsServedTruth = false
     private var following = Set<AnyCancellable>()
     private var deadline: AnyCancellable?
@@ -167,7 +171,7 @@ final class SharedLocationSharingCenter: ObservableObject {
         wakes: SharedLocationWakeScheduling = TaskSharedLocationWakeScheduler(),
         socketReady: AnyPublisher<Void, Never> = Empty().eraseToAnyPublisher(),
         ownChanged: AnyPublisher<Void, Never> = Empty().eraseToAnyPublisher(),
-        served: @escaping @MainActor () async -> SharedLocationOwnSnapshot? = { nil }
+        served: @escaping @MainActor () async throws -> SharedLocationOwnSnapshot? = { nil }
     ) {
         self.emitter = emitter
         self.fixes = fixes
@@ -185,7 +189,7 @@ final class SharedLocationSharingCenter: ObservableObject {
         socketReady
             .relay(through: lane) { [weak self] _ in
                 await self?.sync()
-                await self?.reconcile()
+                await self?.reconcile(readingFirst: false)
             }
             .store(in: &socketWatch)
         ownChanged
@@ -306,10 +310,21 @@ final class SharedLocationSharingCenter: ObservableObject {
     }
 
     /// Une échéance est passée ou un retrait attend : le faire partir, et rejouer plus tard si ça n'a pas pu se faire.
-    func reconcile() async {
+    /// Relancé et pas encore relu, l'appareil relit d'abord quand il a quelque chose à envoyer (`readingFirst`, faux
+    /// quand l'appelant vient de relire) : une échéance passée ne fait pas partir une liste gardée périmée avant la
+    /// relecture (elle retirerait ce qu'un autre appareil a ajouté) — la passerelle tient l'échéance de chacun (#18205),
+    /// et une panne laisse tout en attente, rejoué au rythme du rejeu (#19928). Un « Arrêter » en attente, lui, part
+    /// malgré la panne, en liste seule : la volonté de l'utilisateur prime, et aucune position n'accompagne la liste.
+    func reconcile(readingFirst: Bool = true) async {
+        if readingFirst, awaitsServedTruth, !roster.isSettled(now: now()) { await sync() }
         _ = await locked {
             guard !self.roster.isSettled(now: self.now()) else { return nil }
             let pruned = self.roster.pruned(now: self.now())
+            if self.awaitsServedTruth, !pruned.hasPendingWithdrawals {
+                if !pruned.hasRecipients { self.stopFollowingDevice() }
+                self.arm(after: Self.retryDelay)
+                return .refused(.unconfirmed)
+            }
             guard !pruned.isEmpty || self.roster.hasRecipients else {
                 self.adopt(.empty)
                 self.markReceived(false)
@@ -329,12 +344,21 @@ final class SharedLocationSharingCenter: ObservableObject {
     }
 
     /// Se recale sur le partage que la passerelle sert : un autre appareil du compte a pu le changer (#18578). Une
-    /// relecture qui échoue (hors ligne, passerelle d'avant #18389) ne change rien.
+    /// passerelle d'avant (#18389) ne change rien et lève l'attente ; une panne ne change rien et la garde (#19928).
     func sync() async {
         _ = await locked {
-            let read = await self.served()
+            let read: SharedLocationOwnSnapshot?
+            do {
+                read = try await self.served()
+            } catch {
+                if self.isLive, self.awaitsServedTruth { self.arm(after: Self.retryDelay) }
+                return nil
+            }
             guard self.isLive else { return nil }
-            self.awaitsServedTruth = false
+            if self.awaitsServedTruth {
+                self.awaitsServedTruth = false
+                self.scheduleDeadline()
+            }
             guard let truth = read else { return nil }
             if truth.shareBattery != nil { self.servesShareOptions = true }
             if truth.acceptsManualSource { self.servesFixedPoint = true }
@@ -449,7 +473,7 @@ final class SharedLocationSharingCenter: ObservableObject {
     /// qui n'est plus servi), comme une relecture qui ne conclut pas : vider sur la foi d'une panne laisserait la
     /// personne servie. Seul un partage servi VIDE vide la liste, sans arrêt ni relevé.
     private func settleNotSharing() async -> SharedLocationShareProblem? {
-        let truth = await served()
+        let truth = try? await served()
         guard isLive else { return .refused(.failed) }
         guard let truth, truth.recipients.isEmpty else { return .refused(.unconfirmed) }
         wipe()
@@ -603,7 +627,10 @@ final class SharedLocationSharingCenter: ObservableObject {
     private func arm(after delay: TimeInterval) {
         deadline = wakes.schedule(after: delay) { [weak self] in
             guard let self else { return }
-            Task { @MainActor in await self.reconcile() }
+            Task { @MainActor in
+                if self.awaitsServedTruth { await self.sync() }
+                await self.reconcile(readingFirst: false)
+            }
         }
     }
 
@@ -618,6 +645,7 @@ final class SharedLocationSharingCenter: ObservableObject {
     }
 
     private func wipe() {
+        awaitsServedTruth = false
         adopt(.empty)
         markReceived(false)
         publishedStart = nil
@@ -666,33 +694,47 @@ protocol SharedLocationRosterStoring: AnyObject {
 }
 
 /// La liste d'UN compte, dans ses réglages locaux. Les réglages partent dans la sauvegarde iCloud : un iPhone restauré
-/// depuis la sauvegarde d'un AUTRE appareil du compte y retrouverait la liste, la marque « reçue » et le démarrage de
-/// celui-ci, et publierait avec lui (#19767). La liste porte donc l'identifiant d'installation de l'appareil qui l'a
-/// écrite (trousseau `ThisDeviceOnly`, jamais restauré ailleurs) : lue sur un autre appareil, elle est REÇUE, sans
-/// démarrage gardé — seul un « Partager » d'ici le refait publier. Une liste d'avant cette marque est adoptée telle quelle.
+/// depuis la sauvegarde d'un AUTRE appareil du compte y retrouverait la liste, la marque « reçue », le démarrage et les
+/// retraits en attente de celui-ci (#19767, #19929). La liste porte donc la marque de l'appareil qui l'a écrite — une
+/// EMPREINTE de son identifiant d'installation (trousseau `ThisDeviceOnly`, jamais restauré ailleurs), jamais
+/// l'identifiant lui-même, qui est aussi celui des jetons push. Lue sur un autre appareil, elle est EFFACÉE avec sa
+/// marque et son démarrage : la relecture du partage servi la reconstruit, reçue — rien de la sauvegarde ne repart, ni
+/// un arrêt ni une liste périmée. Une marque d'avant l'empreinte (l'identifiant en clair) vaut pour cet appareil et se
+/// réécrit en empreinte ; une liste d'avant toute marque est adoptée telle quelle. Sans identifiant tenu par le
+/// trousseau (avant le premier déverrouillage), rien n'est jugé et la marque ne change pas.
 final class UserDefaultsSharedLocationRosterStore: SharedLocationRosterStoring {
     nonisolated deinit {}
 
     private let key: String
     private let defaults: UserDefaults
 
-    /// La liste écrite ailleurs devient REÇUE et perd son démarrage dans les réglages AVANT que la marque passe à cet
-    /// appareil : déduite sans être écrite, la cession ne tiendrait qu'un lancement.
+    /// L'effacement se fait dans les réglages AVANT que la marque passe à cet appareil : déduit sans être écrit, il ne
+    /// tiendrait qu'un lancement.
     init(userId: String, deviceId: String?, defaults: UserDefaults = .standard) {
         self.key = "sharedLocation.roster." + userId
         self.defaults = defaults
+        guard let deviceId, !deviceId.isEmpty else { return }
         let marker = key + ".device"
         let stamped = defaults.string(forKey: marker)
-        if Self.isWrittenElsewhere(stamped: stamped, device: deviceId) {
-            if load()?.hasRecipients == true { saveReceived(true) }
+        let mark = Self.deviceMark(userId: userId, deviceId: deviceId)
+        if Self.isWrittenElsewhere(stamped: stamped, deviceId: deviceId, mark: mark) {
+            save(.empty)
+            saveReceived(false)
             savePublishedStart(nil)
         }
-        if let deviceId, !deviceId.isEmpty, stamped != deviceId { defaults.set(deviceId, forKey: marker) }
+        if stamped != mark { defaults.set(mark, forKey: marker) }
     }
 
-    static func isWrittenElsewhere(stamped: String?, device: String?) -> Bool {
-        guard let stamped, !stamped.isEmpty, let device, !device.isEmpty else { return false }
-        return stamped != device
+    private static let markDomain = "meeshy.sharedLocation.deviceMark.v1:"
+
+    /// L'empreinte qui marque la liste : un condensé du compte et de l'installation, qui ne redonne ni l'un ni l'autre.
+    static func deviceMark(userId: String, deviceId: String) -> String {
+        SHA256.hash(data: Data((Self.markDomain + userId + ":" + deviceId).utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    static func isWrittenElsewhere(stamped: String?, deviceId: String, mark: String) -> Bool {
+        guard let stamped, !stamped.isEmpty else { return false }
+        return stamped != mark && stamped != deviceId
     }
 
     func load() -> SharedLocationRoster? {
@@ -739,6 +781,20 @@ enum SharedLocationSharingHolder {
             .sink { _ in warm() }
     }
 
+    /// La liste du compte, marquée par l'identifiant d'installation que le trousseau TIENT : un identifiant de passage
+    /// ferait prendre cet appareil pour un autre et effacerait sa liste (#19929).
+    static func rosterStore(
+        userId: String,
+        keychain: any KeychainStoring = KeychainManager.shared,
+        defaults: UserDefaults = .standard
+    ) -> UserDefaultsSharedLocationRosterStore {
+        UserDefaultsSharedLocationRosterStore(
+            userId: userId,
+            deviceId: PushDeviceIdentity.settledInstallationId(keychain: keychain),
+            defaults: defaults
+        )
+    }
+
     static func center() -> SharedLocationSharingCenter {
         let userId = AuthManager.shared.currentUser?.id ?? ""
         if let current, current.userId == userId { return current.center }
@@ -746,7 +802,7 @@ enum SharedLocationSharingHolder {
         let center = SharedLocationSharingCenter(
             emitter: SharedLocationMotionTaggingEmitter(inner: SharedLocationSocketEmitter.shared, motion: SharedLocationMotionSource()),
             fixes: SharedLocationFixSource(),
-            store: UserDefaultsSharedLocationRosterStore(userId: userId, deviceId: PushDeviceIdentity.current().deviceId),
+            store: rosterStore(userId: userId),
             owner: userId,
             currentAccount: { AuthManager.shared.currentUser?.id },
             socketReady: MessageSocketManager.shared.$connectionState
@@ -756,9 +812,30 @@ enum SharedLocationSharingHolder {
                 .map { _ in () }
                 .eraseToAnyPublisher(),
             ownChanged: SharedLocationEvents.ownChanged,
-            served: { try? await RelationsService.shared.ownSharedLocation() }
+            served: { try await SharedLocationServedRead.answer { try await RelationsService.shared.ownSharedLocation() } }
         )
         current = (userId, center)
         return center
+    }
+}
+
+/// La relecture du partage servi a TROIS issues (#19928) : une réponse, une passerelle d'avant `GET /locations/mine`
+/// (`nil`), ou une panne (toute autre erreur, relevée). Seules les deux premières lèvent l'attente d'un appareil
+/// relancé : réduire la panne à « rien » le laissait publier toute la session à côté de l'appareil qui a repris.
+/// Une passerelle d'avant se reconnaît au « route inconnue » de Fastify (`Route GET:… not found`) : un 404 d'un
+/// intermédiaire (Traefik pendant un redéploiement, portail captif, proxy) est une panne (#20029).
+enum SharedLocationServedRead {
+    static func answer(_ read: () async throws -> SharedLocationOwnSnapshot) async throws -> SharedLocationOwnSnapshot? {
+        do {
+            return try await read()
+        } catch MeeshyError.server(404, let served) where isUnknownRoute(served) {
+            return nil
+        } catch APIError.serverError(404, let served?) where isUnknownRoute(served) {
+            return nil
+        }
+    }
+
+    private static func isUnknownRoute(_ served: String) -> Bool {
+        served.hasPrefix("Route GET:") && served.hasSuffix("not found")
     }
 }

@@ -18,6 +18,8 @@ const esCommunityMembership = {
   'community.membership.request': 'Solicitar unirse',
   'community.membership.requested': 'Solicitud enviada',
   'community.membership.requested.hint': 'Un administrador o un moderador debe aceptarla.',
+  'community.membership.declined': 'Solicitud rechazada',
+  'community.membership.declined.hint': 'Podrás volver a solicitarlo a partir del {date}.',
   'community.membership.error.cooldown': 'Tu última solicitud fue rechazada: podrás volver a pedirlo 7 días después.',
   'community.settings.open': "Ajustes",
   'community.members.open': 'Miembros',

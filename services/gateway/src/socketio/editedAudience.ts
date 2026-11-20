@@ -47,6 +47,23 @@ export type EditAudiencePrisma = Pick<PrismaClient, 'participant' | 'conversatio
  * finira par ne pas avoir** : ce module est l'endroit où elle n'est écrite
  * qu'une fois.
  *
+ * ─── Ce que le transport SOCKET apprend d'ici, et n'a plus à redire ──────────
+ *
+ * Son site d'appel portait ces trois raisons en commentaire ; elles valent de
+ * TOUS ses appelants, donc elles vivent ici (rapatriées le 2026-11-20, quand le
+ * merge de `dev` a poussé `MessageHandler.ts` hors de son budget de taille —
+ * deux branches chacune SOUS le plafond, et leur somme au-dessus) :
+ *
+ * - **#9646** — un message protégé se sert par destinataire, adresses signées ;
+ * - **cycle 147** — et sous le PLANCHER D'HISTORIQUE. Le transport socket est le
+ *   SECOND de l'édition, et la garde posée sur `broadcastMessageMutation` ne le
+ *   couvrait pas : toute socket authentifiée pouvait servir le texte édité d'un
+ *   message écrit avant l'arrivée d'un invité sans historique ;
+ * - **#17026, 5e site** — l'édition est déjà PERSISTÉE quand on émet, et le
+ *   `catch` de fin de méthode du handler rend en plus « échec » au client :
+ *   l'émission s'enrobe donc (`safeBroadcast`), faute de quoi une panne
+ *   d'adaptateur ferait échouer une édition qui a eu lieu.
+ *
  * ─── DEUX lectures, et une seule a une valeur de repli ───────────────────────
  *
  * Même discipline qu'en #16965, et pour la même raison : les enfermer dans un

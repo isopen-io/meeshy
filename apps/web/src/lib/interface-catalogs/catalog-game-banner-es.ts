@@ -44,6 +44,7 @@ const es = {
   'game.rank.mythe': 'Mito',
   'game.rank.mythe_seat': 'Mito n.º {number}',
   'game.banner.level': 'Nivel {level}',
+  'game.banner.light': 'Tu luz en el nivel {level}',
   'game.banner.level_max_a11y': 'tu luz más alta: nivel {level}',
   'game.banner.to_next': '{percent} % hacia el {level}',
   'game.banner.top': 'en la cima',

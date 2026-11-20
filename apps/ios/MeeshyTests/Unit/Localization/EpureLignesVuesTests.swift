@@ -120,7 +120,7 @@ final class EpureLignesVuesTests: XCTestCase {
     // MARK: - Profil : toast hors ligne
 
     func test_profile_offlineSaveToast_isARealCatalogKey_andShort() throws {
-        let view = try code("Features/Profile/Views/ProfileView.swift")
+        let view = try code("Features/Profile/Views/ProfileView+Persistence.swift")
         XCTAssertTrue(view.contains("profile.save.queued"))
         XCTAssertFalse(view.contains("Modifications enregistrees"))
         for (language, value) in try XCTUnwrap(try app()["profile.save.queued"]) {

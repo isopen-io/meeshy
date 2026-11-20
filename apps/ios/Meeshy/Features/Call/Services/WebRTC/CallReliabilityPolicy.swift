@@ -195,16 +195,16 @@ nonisolated enum CallReliabilityPolicy {
     /// `critical` merges into `poor` (the payload contract has 4 buckets);
     /// an empty call (never connected / no samples) reads as fully excellent;
     /// clock skew (window start in the future) contributes zero, never
-    /// negative time.
+    /// negative time; a negative or non-finite accumulated value counts for 0.
     static func qualityDistribution(
         accumulatedSeconds: [VideoQualityLevel: Double],
         openWindowLevel: VideoQualityLevel?,
         openWindowSince: Date?,
         now: Date
     ) -> [String: Double] {
-        var seconds = accumulatedSeconds
+        var seconds = accumulatedSeconds.mapValues(CallStatValue.measured)
         if let level = openWindowLevel, let since = openWindowSince {
-            seconds[level, default: 0] += max(0, now.timeIntervalSince(since))
+            seconds[level, default: 0] += CallStatValue.measured(now.timeIntervalSince(since))
         }
         let total = seconds.values.reduce(0, +)
         guard total > 0 else {
@@ -223,15 +223,27 @@ nonisolated enum CallReliabilityPolicy {
     /// in prod, useless for spotting a WebRTC setup regression.
     /// `negotiationTimeMs` (answer/join → connected) isolates the technical
     /// part. Pure: -1 whenever an anchor is missing — never a lying 0.
+    /// The anchors are MONOTONIC instants in seconds (`CallMonotonicClock`,
+    /// #20010): a wall clock moved by hand or by NTP changes no delay. An
+    /// interval that still reads negative floors at 0 (#19984): -1 means
+    /// « never measured », and the gateway accepts no other negative.
     static func callSetupMetrics(
-        initiatedAt: Date?,
-        negotiationStartAt: Date?,
-        connectedAt: Date?
+        initiatedAt: TimeInterval?,
+        negotiationStartAt: TimeInterval?,
+        connectedAt: TimeInterval?
     ) -> (setupTimeMs: Int, negotiationTimeMs: Int) {
         guard let connectedAt else { return (-1, -1) }
-        let setup = initiatedAt.map { Int(connectedAt.timeIntervalSince($0) * 1000) } ?? -1
-        let negotiation = negotiationStartAt.map { Int(connectedAt.timeIntervalSince($0) * 1000) } ?? -1
+        let setup = initiatedAt.map { CallStatValue.count((connectedAt - $0) * 1000) } ?? -1
+        let negotiation = negotiationStartAt.map { CallStatValue.count((connectedAt - $0) * 1000) } ?? -1
         return (setup, negotiation)
+    }
+
+    /// Elapsed call time for the live chrono and `durationSeconds`, between two
+    /// MONOTONIC instants in seconds (#20010) — never wall-clock `Date`s, which
+    /// a manual change or NTP moves by an hour. Still floored at 0 (#19984):
+    /// the gateway refuses the WHOLE `call:analytics` for a negative duration.
+    static func elapsedSeconds(since start: TimeInterval, now: TimeInterval) -> TimeInterval {
+        CallStatValue.measured(now - start)
     }
 
     /// Gate for the `call_cancel` silent push (phantom-ring hardening): the

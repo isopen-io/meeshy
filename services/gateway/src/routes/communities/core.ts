@@ -8,6 +8,7 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { viewerFromRequest } from '../users/presence-gate';
+import { conversationActiveMemberCountSelect } from '../conversations/utils/active-member-count';
 import { gateConversationParticipantsPresence } from './member-presence';
 import {
   CreateCommunitySchema,
@@ -23,7 +24,8 @@ import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { identityImageIsCallers, IDENTITY_IMAGE_NOT_OWNED } from '../../services/attachments/identityImageOwnership';
 import { countOnlineMembers } from '../../services/community-online-count';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
-import { viewerJoinRequestState } from './join-request-state';
+import { viewerJoinRequestState, viewerJoinRetryAt } from './join-request-state';
+import { scheduleCommunityJoinRequestedFrom } from '../../services/community-join-request-broadcast';
 import { activeMembershipOf, COMMUNITY_ACTIVE_COUNTS, communityConversationSchema, communityDetailInclude, communityForViewer, flattenCommunityCounts } from './serialization';
 import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
@@ -309,14 +311,19 @@ export async function registerCoreRoutes(
         return null;
       });
 
-      const currentUserJoinRequest = await viewerJoinRequestState(fastify.prisma, {
+      const joinRequestInput = {
         communityId: community.id,
         viewerId: userId,
         requiresJoinApproval: community.requiresJoinApproval === true,
         isMember: served.currentUserRole !== null,
+      };
+      const currentUserJoinRequest = await viewerJoinRequestState(fastify.prisma, {
+        ...joinRequestInput,
+        onReopened: (reopened) => scheduleCommunityJoinRequestedFrom(fastify, reopened),
       });
+      const currentUserJoinRetryAt = currentUserJoinRequest === null ? await viewerJoinRetryAt(fastify.prisma, joinRequestInput) : null;
 
-      sendSuccess(reply, { ...served, onlineMemberCount, currentUserJoinRequest });
+      sendSuccess(reply, { ...served, onlineMemberCount, currentUserJoinRequest, currentUserJoinRetryAt });
     } catch (error) {
       logger.error('Error fetching community', error as Error);
       sendInternalError(reply, 'Failed to fetch community');
@@ -393,9 +400,9 @@ export async function registerCoreRoutes(
       // Creer la communaute ET automatiquement ajouter le createur comme membre ADMIN
       const community = await fastify.prisma.community.create({
         data: {
-          name: SecuritySanitizer.sanitizeText(validatedData.name),
+          name: SecuritySanitizer.sanitizePlainText(validatedData.name),
           identifier: identifier,
-          description: validatedData.description !== undefined ? SecuritySanitizer.sanitizeText(validatedData.description) : undefined,
+          description: validatedData.description !== undefined ? SecuritySanitizer.sanitizePlainText(validatedData.description) : undefined,
           avatar: validatedData.avatar,
           isPrivate: validatedData.isPrivate ?? true,
           createdBy: userId,
@@ -574,10 +581,16 @@ const community = await fastify.prisma.community.findFirst({
       //   `where`/`include` ; au-delà du plafond, un client qui a besoin de
       //   la liste exhaustive des membres d'UNE conversation appelle déjà
       //   `GET /conversations/:id/participants` (paginée séparément).
+      // #19541 — ce que le membre peut OUVRIR, au même filtre que
+      // `GET /conversations` (`core-list.ts`) : une participation ACTIVE (ni
+      // partie, ni bannie) dans une conversation ACTIVE (ni fermée, ni rendue
+      // obsolète — les deux écritures posent `isActive: false`). Le total
+      // paginé lit le même `where`.
       const whereClause = {
         communityId: id,
+        isActive: true,
         participants: {
-          some: { userId: userId }
+          some: { userId: userId, isActive: true }
         }
       };
 
@@ -586,6 +599,7 @@ const community = await fastify.prisma.community.findFirst({
           where: whereClause,
           include: {
             participants: {
+              where: { isActive: true },
               take: COMMUNITY_CONVERSATION_PARTICIPANTS_DISPLAY_CAP,
               orderBy: { joinedAt: 'asc' },
               include: {
@@ -603,7 +617,7 @@ const community = await fastify.prisma.community.findFirst({
             _count: {
               select: {
                 messages: true,
-                participants: true
+                ...conversationActiveMemberCountSelect
               }
             }
           },
@@ -629,7 +643,11 @@ const community = await fastify.prisma.community.findFirst({
       // de sortir. Déclarer sans gater aurait publié la fuite.
       const gated = await gateConversationParticipantsPresence(fastify.prisma, viewerFromRequest(request), conversations);
 
-      return sendPaginatedSuccess(reply, gated, {
+      // `memberCount` est l'effectif ACTIF compté à la lecture, jamais la
+      // colonne `Conversation.memberCount`, que rien n'écrit (#19541).
+      const served = gated.map(conversation => ({ ...conversation, memberCount: conversation._count.participants }));
+
+      return sendPaginatedSuccess(reply, served, {
         total: totalCount,
         limit: limitNum,
         offset: offsetNum,
@@ -817,6 +835,7 @@ const community = await fastify.prisma.community.findFirst({
         data: { communityId: id },
         include: {
           participants: {
+            where: { isActive: true },
             include: {
               user: {
                 select: {
@@ -830,7 +849,7 @@ const community = await fastify.prisma.community.findFirst({
             }
           },
           _count: {
-            select: { messages: true, participants: true }
+            select: { messages: true, ...conversationActiveMemberCountSelect }
           }
         }
       });
@@ -841,7 +860,7 @@ const community = await fastify.prisma.community.findFirst({
       // `user` ET celle de la ligne `Participant` ; le schéma retient le reste
       // de la ligne que l'`include` rend (jeton de session, session anonyme).
       const [gated] = await gateConversationParticipantsPresence(fastify.prisma, viewerFromRequest(request), [updated]);
-      return sendSuccess(reply, gated);
+      return sendSuccess(reply, { ...gated, memberCount: gated._count.participants });
     } catch (error) {
       logger.error('Error adding conversation to community', error as Error);
       return sendInternalError(reply, 'Failed to add conversation to community');

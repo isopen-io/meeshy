@@ -37,6 +37,10 @@ object SocketEventNames {
     const val PHONE_CALL_STARTED = "phone-call:started"
     const val PHONE_CALL_ENDED = "phone-call:ended"
 
+    // chute détectée (#18748, SAN-01) : serveur -> client, `user:<Sang>` ; aucun événement montant (POST /me/health/fall, iPhone)
+    const val FALL_DETECTED = "fall:detected"
+    const val FALL_CLEARED = "fall:cleared"
+
     // connection health
     const val HEARTBEAT_ACK = "heartbeat:ack"
 
@@ -121,6 +125,7 @@ object SocketEventNames {
 
     // community
     const val COMMUNITY_DELETED = "community:deleted"
+    const val COMMUNITY_JOIN_REQUEST_DECIDED = "community:join-request-decided"
     const val COMMUNITY_MEMBER_JOINED = "community:member-joined"
     const val COMMUNITY_MEMBER_LEFT = "community:member-left"
     const val COMMUNITY_MEMBER_ROLE_UPDATED = "community:member-role-updated"
@@ -335,6 +340,8 @@ object SocketEventNames {
         INACTIVITY_CLEARED,
         PHONE_CALL_STARTED,
         PHONE_CALL_ENDED,
+        FALL_DETECTED,
+        FALL_CLEARED,
         AUDIO_TRANSCRIPTION_READY,
         AUDIO_TRANSLATION_READY,
         AUTH_SESSION_REVOKED,
@@ -410,6 +417,7 @@ object SocketEventNames {
         COMMENT_UNLIKED,
         COMMENT_UPDATED,
         COMMUNITY_DELETED,
+        COMMUNITY_JOIN_REQUEST_DECIDED,
         COMMUNITY_MEMBER_JOINED,
         COMMUNITY_MEMBER_LEFT,
         COMMUNITY_MEMBER_ROLE_UPDATED,

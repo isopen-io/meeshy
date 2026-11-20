@@ -49,7 +49,26 @@ export async function mostRecentSharedConversation(
   // DESTINATAIRE, lui, ne se filtre pas : la conversation lui réapparaît à
   // l'arrivée du message, et son client ne l'a jamais consultée pour ce choix.
   const mine = await prisma.participant.findMany({
-    where: { userId: fromUserId, isActive: true, ...unsetOrNull('deletedForMe') },
+    where: {
+      userId: fromUserId,
+      isActive: true,
+      ...unsetOrNull('deletedForMe'),
+      // #19930 — LES DROITS PERSONNELS DE L'ÉMETTEUR, que ce `where` ne lisait
+      // pas. La copie vocale est un message AVEC une pièce jointe audio, et
+      // `MessagingService` la refuse deux fois : `canSendMessages === false`
+      // rend `WRITE_NOT_PERMITTED`, et un droit de média explicitement fermé
+      // fait passer la pièce par l'admission qui lit `canSendAudios`
+      // (`closesSomeMedia`, `attachmentSendRightForMimeType`). Nommer une
+      // conversation où l'hôte a retiré l'un des deux faisait perdre la copie.
+      //
+      // `not: false` et non `equals: true`, pour épouser la sémantique du site
+      // d'admission : seul un refus EXPLICITE bloque, un droit absent est
+      // permissif. Et c'est `permissions` BRUT qu'on filtre, pas
+      // `resolveParticipantRights` : la surcharge qu'il applique vient de
+      // `anonymousSession`, qu'un expéditeur IDENTIFIÉ par `userId` n'a jamais
+      // — un anonyme n'a pas de `userId`, donc n'atteint pas cette requête.
+      permissions: { is: { canSendMessages: { not: false }, canSendAudios: { not: false } } },
+    },
     select: { conversationId: true },
   });
   if (mine.length === 0) return null;
@@ -60,8 +79,8 @@ export async function mostRecentSharedConversation(
   if (shared.length === 0) return null;
 
   // #19910 — LE SERVEUR DÉCIDE, DONC IL APPLIQUE LA RÈGLE D'ADMISSION — moins
-  // DEUX exceptions NOMMÉES ci-dessous, parce qu'un filtre qui se déclare
-  // complet sans l'être est le défaut même que ce lot répare (leçon 124).
+  // UNE exception NOMMÉE ci-dessous, parce qu'un filtre qui se déclare complet
+  // sans l'être est le défaut même que ce lot répare (leçon 124).
   //
   // Tant que ce filtre n'appariait rien (#19803), le serveur ne nommait aucune
   // destination et le client choisissait seul, en appliquant `mayCarryTheCopy`.
@@ -79,16 +98,14 @@ export async function mostRecentSharedConversation(
   //
   // ─── CE QUE CE `where` N'APPLIQUE PAS, ET POURQUOI ──────────────────────
   //
-  // 1. `Participant.permissions.canSendMessages` et le droit de joindre un
-  //    AUDIO (`MessagingService`, refus `WRITE_NOT_PERMITTED`). Ce sont des
-  //    droits PERSONNELS portés par un composite, dont l'absence est
-  //    permissive : les filtrer demande une forme `permissions: { is: … }` et
-  //    une instruction à part. Un hôte qui a retiré le droit d'écrire à
-  //    l'émetteur verra donc la copie refusée — c'est #19930.
-  // 2. La course au BLOCAGE : `talkieGate` ne rend `FALLBACK_VOICE` qu'après
-  //    `resolveRelationAccess`, donc un blocage antérieur ne mène jamais ici ;
-  //    un blocage posé ENTRE l'accusé et le POST fait répondre `USER_BLOCKED`.
-  //    Inhérent à deux requêtes, non réparable par un `where`.
+  // La course au BLOCAGE, et elle seule : `talkieGate` ne rend
+  // `FALLBACK_VOICE` qu'après `resolveRelationAccess`, donc un blocage
+  // antérieur ne mène jamais ici ; un blocage posé ENTRE l'accusé et le POST
+  // fait répondre `USER_BLOCKED`. Inhérent à deux requêtes, non réparable par
+  // un `where`.
+  //
+  // Les droits PERSONNELS de l'émetteur, eux, étaient la seconde exception et
+  // ne le sont plus : ils se filtrent sur sa participation (#19930, plus haut).
   //
   // Ni l'un ni l'autre n'est une régression : `mayCarryTheCopy` ne les lit pas
   // non plus, donc le client commettait déjà la même erreur. Ce qui change est

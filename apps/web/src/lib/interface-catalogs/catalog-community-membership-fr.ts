@@ -16,6 +16,8 @@ const frCommunityMembership = {
   'community.membership.request': 'Demander à rejoindre',
   'community.membership.requested': 'Demande envoyée',
   'community.membership.requested.hint': 'Un administrateur ou un modérateur doit l’accepter.',
+  'community.membership.declined': 'Demande refusée',
+  'community.membership.declined.hint': 'Vous pourrez en refaire une à partir du {date}.',
   'community.membership.error.cooldown': 'Votre dernière demande a été refusée : vous pourrez en refaire une 7 jours après ce refus.',
   'community.settings.open': "Réglages",
   'community.members.open': 'Membres',

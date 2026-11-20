@@ -28,6 +28,8 @@ import { inactivityRelayDepsOf } from '../inactivityCheck/inactivityDeps';
 import { refreshInactivityBetween } from '../inactivityCheck/inactivityRelay';
 import { phoneCallRelayDepsOf } from '../phoneCall/phoneCallDeps';
 import { refreshPhoneCallBetween } from '../phoneCall/phoneCallRelay';
+import { fallRelayDepsOf } from '../fallDetection/fallDeps';
+import { refreshFallBetween } from '../fallDetection/fallRelay';
 
 /** Sans Redis (développement, panne), l'ensemble des émetteurs surveillés vit dans le processus. */
 const localSets = new Map<string, Set<string>>();
@@ -182,7 +184,7 @@ export function batteryPullDepsOf(params: { readonly prisma: PrismaClient; reado
  * pour les gestes qui les rejouent ensemble (fin d'un rôle d'équipe, `revokeTeamSharesOf`).
  */
 export function deviceStateRelaysOf(params: { readonly prisma: PrismaClient; readonly io: ServerEmitIO | undefined }) {
-  return { battery: batteryRelayDepsOf(params), phoneReachability: phoneReachabilityRelayDepsOf(params), inactivity: inactivityRelayDepsOf(params), phoneCall: phoneCallRelayDepsOf(params) };
+  return { battery: batteryRelayDepsOf(params), phoneReachability: phoneReachabilityRelayDepsOf(params), inactivity: inactivityRelayDepsOf(params), phoneCall: phoneCallRelayDepsOf(params), fall: fallRelayDepsOf(params) };
 }
 
 type RefreshParams = { readonly prisma: PrismaClient; readonly io: ServerEmitIO | undefined; readonly report: (error: unknown) => void };
@@ -235,6 +237,11 @@ export async function refreshBatteryAfter(
   }
   try {
     await refreshPhoneCallBetween(phoneCallRelayDepsOf(params), { userA: pair.userA, userB: pair.userB });
+  } catch (error) {
+    params.report(error);
+  }
+  try {
+    await refreshFallBetween(fallRelayDepsOf(params), { userA: pair.userA, userB: pair.userB });
   } catch (error) {
     params.report(error);
   }

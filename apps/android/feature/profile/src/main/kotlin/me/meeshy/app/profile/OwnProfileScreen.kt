@@ -72,6 +72,7 @@ import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.R as UiR
 import me.meeshy.sdk.model.composer.look.ComposerLookPerson
 import me.meeshy.ui.component.battery.BatterySharingSwitch
+import me.meeshy.ui.component.fall.FallSelfNotice
 import me.meeshy.ui.component.inactivity.InactivityDelaySetting
 import me.meeshy.ui.component.phonecall.PhoneCallSharingSwitch
 import me.meeshy.ui.component.phonereachability.PhoneReachabilitySharingSwitch
@@ -334,6 +335,8 @@ internal fun OwnProfileBody(
             InactivityDelaySetting()
             // Montrer à mes Sangs que je suis en appel (#18753) : la coupure globale, collecte comprise, dans MON profil.
             PhoneCallSharingSwitch()
+            // Détection de chute (#18748) : elle n'existe pas sur Android, et la ligne le dit (Apple Watch + app iPhone).
+            FallSelfNotice()
         }
         Spacer(Modifier.height(MeeshySpacing.xxxl + MeeshySpacing.sm))
     }

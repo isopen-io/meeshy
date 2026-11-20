@@ -48,6 +48,7 @@ import { attachmentForwardPreviewSelect, attachmentSocketSelect, MESSAGE_ATTACHM
 import { serializeAttachmentForSocket, serializeMessageAttachmentsForSocket } from '../serializeAttachmentForSocket';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
+import { emitMessageDeletedToAudience } from '../emitMessageDeletedToAudience';
 import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { offlineSignedPayload } from '../offlineSignedPayload';
 import { offlineSignedEdit, queueSigningFields } from '../editedOfflineSigning';
@@ -963,16 +964,8 @@ export class MessageHandler {
         attachments: message.attachments.map((att) => serializeAttachmentForSocket(att)),
       };
 
-      // #9646 — un message protégé : par destinataire, adresses signées. Et
-      // depuis le cycle 147, sous le PLANCHER D'HISTORIQUE : ce transport est le
-      // SECOND de l'édition, et la garde posée sur `broadcastMessageMutation` ne
-      // le couvrait pas — toute socket authentifiée pouvait donc servir le texte
-      // édité d'un message écrit avant l'arrivée d'un invité sans historique.
-      // Le site de la loi est UNIQUE (`editedAudience.ts`), partagé avec l'autre
-      // transport : une règle retapée à chaque site est une règle qu'un site
-      // finira par ne pas avoir.
-      // 5e site #17026 : l'édition est déjà PERSISTÉE ici, et le `catch` de fin
-      // de méthode rend en plus « échec » au client. Raison : `safeBroadcast`.
+      // Plan signé par destinataire, plancher d'historique, et enrobage
+      // best-effort : les trois raisons vivent à leur site, `editedAudience.ts`.
       const editPlan = await readerSignedPlanForMessageIdBestEffort(
         this.prisma,
         { conversationId: message.conversationId, messageId: validated.messageId, attachments: editedPayload.attachments },
@@ -1011,13 +1004,8 @@ export class MessageHandler {
       // seul exclu. `userId` est l'éditeur, et c'est un `User.id` réel :
       // l'anonyme est refusé en tête de ce handler. Jumeau du même correctif
       // dans `handleMessageDelete`.
-      // La file est la TROISIÈME sortie de la même charge, et elle PERSISTE
-      // 48 h : sans cette exclusion, le texte d'un message hors du plancher d'un
-      // invité l'attendait dans Redis sous sa clé. Sur `'unknown'` rien n'entre
-      // — on ne sait NI qui est bloqué, NI qui est autorisé.
-      // #19939 — la file est le canal le PLUS exposé des deux, et c'était le
-      // seul à ne pas appliquer `editPlan`. La règle, sa raison et la raison
-      // pour laquelle la base IGNORE la clé vivent à leur site :
+      // La file est la TROISIÈME sortie de la même charge — exclusion,
+      // `'unknown'`, et signature par lecteur : tout est à son site,
       // `socketio/editedOfflineSigning.ts`.
       const signedEdit = offlineSignedEdit({ plan: editPlan, payload: editedPayload });
       if (editReaders.kind !== 'unknown' && signedEdit.kind !== 'withhold') {
@@ -1177,21 +1165,26 @@ export class MessageHandler {
       });
       if (moderationReason !== null) await completeModeratedMessageRemoval({ prisma: this.prisma }, { actorUserId: userId, authorUserId: message.sender?.userId, messageId: message.id, conversationId: message.conversationId, reason: moderationReason });
 
-      const room = ROOMS.conversation(message.conversationId);
-      const deletedPayload = {
-        messageId: validated.messageId,
-        conversationId: message.conversationId,
-        deletedAt: deletedAt.toISOString(),
-      };
-      // 7e site #17026, trouvé par le CLIQUET. Raison : `safeBroadcast`.
-      safeBroadcast('message:deleted', () => this.io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, deletedPayload),
-        (error) => handlerLogger.error('message:deleted live emission failed — offline replay unaffected', { messageId: validated.messageId, error }));
+      // Le fan-out vit dans `emitMessageDeletedToAudience` : audience vivante
+      // (#19943, #20007), charge d'ids, émission gardée. Ses raisons — la room
+      // personnelle comme seule adresse d'un `message:new` par lecteur, et le
+      // plafond qui TRONQUE en journalisant — vivent là-bas, avec la loi
+      // qu'elles décrivent. C'est la réponse que `dev` a donnée sur ce hunk
+      // (#20032 : rendre au budget les lignes qui ne parlent pas de CE fichier),
+      // poussée d'un cran.
+      const deletedPayload = await emitMessageDeletedToAudience({
+        io: this.io, prisma: this.prisma, conversationId: message.conversationId,
+        messageId: validated.messageId, deletedAt,
+        onAudienceError: (error) => handlerLogger.warn('message:deleted audience lookup failed — conversation room only', { messageId: validated.messageId, error }),
+        onEmitError: (error) => handlerLogger.error('message:deleted live emission failed — offline replay unaffected', { messageId: validated.messageId, error }),
+      });
 
       // Fan a conversation:updated preview refresh to list-screen participants
       // (in user:<id> but not conversation:<id>): deleting the latest message
-      // changes their row's preview, which MESSAGE_DELETED (conversation room
-      // only) never tells them. The latest non-deleted message is recomputed
-      // inside the helper, consistent with the lastMessageAt recompute above.
+      // changes their row's PREVIEW, which MESSAGE_DELETED tells no one — ce
+      // canal-ci dit qu'une bulle disparaît, pas ce que la ligne de liste
+      // devient. The latest non-deleted message is recomputed inside the
+      // helper, consistent with the lastMessageAt recompute above.
       await emitConversationPreviewUpdate(
         this.prisma, this.io, message.conversationId, userId,
         (err) => handlerLogger.warn('conversation preview fanout (delete) failed', { error: err })
@@ -1701,12 +1694,7 @@ export class MessageHandler {
     messageId: string;
     /** Les clés que le plancher d'historique écarte (`editedAudience.ts`). */
     excludedQueueKeys?: ReadonlySet<string>;
-    /**
-     * #19939 — la charge DE CE LECTEUR, signée pour SA ligne `Participant`.
-     * Deux paramètres, comme la file les remet (`offlineParticipantQueue.ts`) :
-     * la clé de file nomme la ROOM, l'id de participant nomme la LIGNE qui
-     * autorise le fichier, et les deux ne se déduisent pas l'un de l'autre.
-     */
+    /** #19939 — la charge de ce lecteur, signée pour sa ligne `Participant` (`offlineParticipantQueue.ts`). */
     resolvePayloadForReader?: (queueKey: string, participantId: string) => Record<string, unknown>;
   } & QueuedVariantFor<'edited' | 'deleted'>): Promise<void> {
     await enqueueForOfflineParticipants(

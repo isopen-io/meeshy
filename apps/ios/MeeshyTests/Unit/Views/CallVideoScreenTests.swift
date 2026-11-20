@@ -88,7 +88,7 @@ final class CallRemoteVideoSurfaceTests: XCTestCase {
         XCTAssertTrue(ring.contains("CallPeerSpeech.colorHex(forPeer: peerUserId)"))
         XCTAssertTrue(ring.contains("CallRemoteVideoFade.duration(reduceMotion: reduceMotion)"), "le fondu de l'anneau suit la loi unique, plus court sous Réduire les animations")
         XCTAssertTrue(ring.contains("value: isSpeaking"))
-        XCTAssertTrue(try AppSourceGuard.callViewSource().contains(".avatarRingWithin(ProfileDecorResolver.ring("), "la décoration de profil reste dans le visage")
+        XCTAssertTrue(try AppSourceGuard.callViewSource().contains(".avatarRing(ProfileDecorResolver.ring("), "la décoration de profil entoure le visage, à la taille normalisée (#19988)")
     }
 
     func test_cameraOffPlaceholder_reusesTheSpeechRing_withoutACopy() throws {
@@ -333,11 +333,11 @@ final class CallScreenTickTests: XCTestCase {
         let source = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallTranscriptionService.swift")
         )
-        let stop = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func stopLocalCapture()", in: source))
+        let stop = try XCTUnwrap(DeclarationBodyScanner.body(containing: "func stopLocalCapture()", in: source))
         XCTAssertTrue(stop.contains("Self.engineTeardownQueue.async(execute: teardown)"))
         XCTAssertFalse(stop.contains("audioEngine.stop()"), "plus de démontage synchrone au geste")
 
-        let start = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func startLocalCapture()", in: source))
+        let start = try XCTUnwrap(DeclarationBodyScanner.body(containing: "func startLocalCapture()", in: source))
         XCTAssertTrue(start.contains("awaitEngineTeardown()"), "jamais d'installTap sur un bus encore équipé")
     }
 }

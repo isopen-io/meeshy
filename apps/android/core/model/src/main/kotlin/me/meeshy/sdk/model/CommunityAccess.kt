@@ -48,7 +48,12 @@ data class CommunityAccess(
             isPrivate: Boolean,
             meId: String?,
             members: List<ApiCommunityMember>,
-        ): CommunityAccess = CommunityAccess(CommunityMembership.resolve(createdBy, meId, members), isPrivate)
+            servedRole: String? = null,
+        ): CommunityAccess = CommunityAccess(CommunityMembership.resolve(createdBy, meId, members, servedRole), isPrivate)
+
+        /** Les droits du lecteur sur une fiche servie : le rôle servi d'abord, la liste en repli. */
+        fun of(community: ApiCommunity, meId: String?): CommunityAccess =
+            resolve(community.createdBy, community.isPrivate, meId, community.members.orEmpty(), community.currentUserRole)
     }
 }
 

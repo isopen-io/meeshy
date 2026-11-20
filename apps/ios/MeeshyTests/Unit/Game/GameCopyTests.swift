@@ -67,6 +67,8 @@ final class GameCopyTests: XCTestCase {
         XCTAssertTrue(text.contains(GameCopy.formatCount(34)))
         XCTAssertTrue(text.contains(GameCopy.tierName(.eclat)))
         XCTAssertTrue(text.contains(GameCopy.tierOrdinal(.eclat)))
+        XCTAssertTrue(text.hasPrefix(GameText.bannerLight(level: GameCopy.formatCount(34))),
+                      "l'anneau nomme ta lumière avant son chiffre (#19892) : \(text)")
     }
 
     func test_theNamesAreAllDistinct() {

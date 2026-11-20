@@ -141,6 +141,16 @@ final class ProfileActionsFaceTests: XCTestCase {
         XCTAssertFalse(face.contains("LocationMapCopy.nearbyOpen"), "la rangée sans état a laissé la place à « Ma position »")
     }
 
+    func test_sharingSection_ghostLivesUnderMyPosition_inTheSameCard() throws {
+        let face = try code("Meeshy/Features/Profile/Faces/ProfileActionsFace.swift")
+        let position = try XCTUnwrap(face.range(of: "            positionRow\n"), "#20028 : « Ma position » ouvre sa carte")
+        let ghost = try XCTUnwrap(face.range(of: "ProfileNoveltyReader(feature: .ghostMode"))
+        let battery = try XCTUnwrap(face.range(of: "BatterySharingSettingsSection("))
+        XCTAssertLessThan(position.lowerBound, ghost.lowerBound)
+        XCTAssertLessThan(ghost.lowerBound, battery.lowerBound,
+                          "#20028 : le fantôme masque ma position — il se range sous elle, pas après l'appel")
+    }
+
     func test_savedContent_isMadeOfTheKit_neverTheOldChrome() throws {
         let rows = try code("Meeshy/Features/Profile/Views/ProfileSavedContentRows.swift")
         XCTAssertTrue(rows.contains("MeeshySectionHeader(title: Self.title)"), "l'en-tête K44")

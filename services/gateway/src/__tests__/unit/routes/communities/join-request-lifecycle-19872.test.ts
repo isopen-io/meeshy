@@ -289,7 +289,9 @@ describe('Une demande sans juge expire', () => {
     const app = await build(prisma);
     await app.inject({ method: 'GET', url: `/communities/${COMM}/join-requests` });
 
-    const where = prisma.communityJoinRequest.findMany.mock.calls[0][0].where;
+    // La réparation des acceptations orphelines (#19924) lit avant : on vise la LISTE.
+    const listing = prisma.communityJoinRequest.findMany.mock.calls.find((c: any) => c[0].include?.user !== undefined);
+    const where = listing[0].where;
     expect(where.status).toBe('pending');
     expect(where.createdAt.gte.getTime()).toBeGreaterThan(Date.now() - JOIN_REQUEST_TTL_MS - 60_000);
     expect(where.createdAt.gte.getTime()).toBeLessThanOrEqual(Date.now() - JOIN_REQUEST_TTL_MS + 60_000);

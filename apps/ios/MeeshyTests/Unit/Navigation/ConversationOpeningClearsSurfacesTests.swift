@@ -352,8 +352,12 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
     /// présenté : elle passe par `Router.presentProfileSheet(_:)`. Base mesurée
     /// sur le code masqué : 4 (fenêtre détachée, réels de l'iPhone, relais
     /// de la notification `openProfileSheet`, aiguillage des notifications de l'iPad).
+    /// Le routeur, c'est `Router.swift`, `RouterCommands.swift` et ses extensions
+    /// `Router+….swift` nées de son découpage (#16901).
     func test_ratchet_profileSheetWritesOutsideTheRouter_neverRise() throws {
-        let sources = try maskedSources(under: "") { !["Router.swift", "RouterCommands.swift"].contains($0) }
+        let sources = try maskedSources(under: "") {
+            !["Router.swift", "RouterCommands.swift"].contains($0) && !$0.hasPrefix("Router+")
+        }
         XCTAssertLessThanOrEqual(count("deepLinkProfileUser = ProfileSheetUser(", in: sources), 4)
     }
 

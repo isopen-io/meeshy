@@ -6,10 +6,12 @@ import me.meeshy.sdk.model.ApiCommunityMember
 import me.meeshy.sdk.model.ApiCommunitySearchResult
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.CommunityJoinOutcome
 import me.meeshy.sdk.model.CommunityMini
 import me.meeshy.sdk.model.CreateCommunityRequest
 import me.meeshy.sdk.model.IdentifierAvailability
 import me.meeshy.sdk.model.InviteMemberRequest
+import me.meeshy.sdk.model.JoinCommunityRequest
 import me.meeshy.sdk.model.UpdateCommunityRequest
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -93,8 +95,12 @@ interface CommunityApi {
         @Path("userId") userId: String,
     ): ApiResponse<Unit>
 
+    /** `acceptsPending` (#19870) : une communauté qui valide chaque entrée rend une demande (202), jamais un 409. */
     @POST("communities/{id}/join")
-    suspend fun join(@Path("id") communityId: String): ApiResponse<ApiCommunityMember>
+    suspend fun join(
+        @Path("id") communityId: String,
+        @Body body: JoinCommunityRequest = JoinCommunityRequest.AcceptsPending,
+    ): ApiResponse<CommunityJoinOutcome>
 
     @POST("communities/{id}/leave")
     suspend fun leave(@Path("id") communityId: String): ApiResponse<Unit>

@@ -43,6 +43,16 @@
    ]
   },
   {
+   "status": "hors-perimetre-mobile",
+   "reason": "Émission de la chute détectée (#18748) : seul l'iPhone, qui lit HealthKit (Apple Watch), rapporte une chute, la lève (« Je vais bien ») et règle l'accord. Android n'a aucune source standard ; il lit les chutes de ses Sangs par FallApi (/relations/falls, /relations/:userId/fall/settings).",
+   "routes": [
+    "GET /api/v1/me/health/fall/settings",
+    "POST /api/v1/me/health/fall",
+    "POST /api/v1/me/health/fall/ok",
+    "PUT /api/v1/me/health/fall/settings"
+   ]
+  },
+  {
    "status": "ops-only",
    "reason": "Console d'administration web : aucun écran mobile ne l'appelle (rôles BIGBOSS/ADMIN, exploitation de la plateforme).",
    "routes": [

@@ -124,6 +124,25 @@ const BUILTIN: Readonly<Record<string, () => Promise<unknown>>> = {
   '76356c212acf9bf9.json': () => import('@meeshy/shared/design/appearance/lottie/76356c212acf9bf9.json'),
   '3f315eaf529d3947.json': () => import('@meeshy/shared/design/appearance/lottie/3f315eaf529d3947.json'),
   'cf5704f84d5d73bb.json': () => import('@meeshy/shared/design/appearance/lottie/cf5704f84d5d73bb.json'),
+  // #19969 — les onze couches des cadres illustrés percés par `b560659a8`.
+  // L'adressage est PAR CONTENU : percer le centre d'un anneau change son
+  // `sha16`, donc son nom, donc son entrée ici. Les fichiers partaient déjà
+  // chez la passerelle et Android ; seul ce registre, tenu à la MAIN, les a
+  // manqués — et une couche absente n'est pas introuvable, elle bascule en
+  // TÉLÉCHARGEMENT : sept packs perdaient leur animation hors-ligne et au
+  // démarrage à froid, en silence. Dériver cette carte du catalogue au lieu
+  // de la recopier est la vraie réparation, et c'est #19969.
+  '0e3ef69b0f0c985a.json': () => import('@meeshy/shared/design/appearance/lottie/0e3ef69b0f0c985a.json'),
+  '37bd6aa85c5e5fcc.json': () => import('@meeshy/shared/design/appearance/lottie/37bd6aa85c5e5fcc.json'),
+  '3b43b241eb09f745.json': () => import('@meeshy/shared/design/appearance/lottie/3b43b241eb09f745.json'),
+  '473d41ed662ea897.json': () => import('@meeshy/shared/design/appearance/lottie/473d41ed662ea897.json'),
+  '7a6165af83c18878.json': () => import('@meeshy/shared/design/appearance/lottie/7a6165af83c18878.json'),
+  '7b71ff13780c5a53.json': () => import('@meeshy/shared/design/appearance/lottie/7b71ff13780c5a53.json'),
+  '915dfcaa8b5ee778.json': () => import('@meeshy/shared/design/appearance/lottie/915dfcaa8b5ee778.json'),
+  'a0db325136560ad4.json': () => import('@meeshy/shared/design/appearance/lottie/a0db325136560ad4.json'),
+  'af7eae580f515908.json': () => import('@meeshy/shared/design/appearance/lottie/af7eae580f515908.json'),
+  'b3e27fc97ebf773e.json': () => import('@meeshy/shared/design/appearance/lottie/b3e27fc97ebf773e.json'),
+  'ddbfd562cf80f8ba.json': () => import('@meeshy/shared/design/appearance/lottie/ddbfd562cf80f8ba.json'),
 };
 
 /** Les adresses intégrées : le témoin du catalogue exige que toute couche des packs `builtin` y figure. */

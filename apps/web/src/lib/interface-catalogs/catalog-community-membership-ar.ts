@@ -18,6 +18,8 @@ const arCommunityMembership = {
   'community.membership.request': 'طلب الانضمام',
   'community.membership.requested': 'تم إرسال الطلب',
   'community.membership.requested.hint': 'يجب أن يقبله مشرف أو مدير.',
+  'community.membership.declined': 'تم رفض الطلب',
+  'community.membership.declined.hint': 'يمكنك الطلب مجددًا ابتداءً من {date}.',
   'community.membership.error.cooldown': 'رُفض طلبك الأخير: يمكنك الطلب مجددًا بعد 7 أيام.',
   'community.settings.open': "الإعدادات",
   'community.members.open': 'الأعضاء',

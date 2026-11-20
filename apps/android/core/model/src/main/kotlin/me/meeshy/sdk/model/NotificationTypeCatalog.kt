@@ -176,9 +176,11 @@ public object NotificationTypeCatalog {
 
     /**
      * Les types de la passerelle qu'AUCUNE ligne ne règle : les signaux de sécurité de la vérification d'inactivité
-     * (#18738, « Tout va bien ? » et l'alerte aux Sangs). Ils passent toujours ([NotificationTypeToggle]).
+     * (#18738, « Tout va bien ? » et l'alerte aux Sangs) et l'alerte de sécurité de la chute détectée (#18748, et sa
+     * levée). Ils passent toujours ([NotificationTypeToggle]).
      */
-    public val untoggleableWireTypes: Set<String> = me.meeshy.sdk.model.inactivity.InactivityContract.NOTIFICATION_TYPES
+    public val untoggleableWireTypes: Set<String> =
+        me.meeshy.sdk.model.inactivity.InactivityContract.NOTIFICATION_TYPES + me.meeshy.sdk.model.fall.FallContract.PUSH_TYPES
 
     private val byType: Map<NotificationType, NotificationTypeDescriptor> =
         descriptors.associateBy { it.type }

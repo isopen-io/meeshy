@@ -73,9 +73,13 @@ final class ProfileOwnHeroTests: XCTestCase {
         XCTAssertTrue(ProfileOwnHeroPlan.isPinned(isEditing: false))
     }
 
-    func test_geometry_isTheKitHero_318to96_andTheContentStartsUnderTheIdentity() {
+    /// #19987 — repliée, la barre s'arrête sous SA rangée (⚙︎, avatar, nom, @pseudo, ✎) : le haut des commandes, leur
+    /// cible de 44 et une marge de 12, comme la fiche d'un autre — rien de plus.
+    func test_geometry_isTheKitHero_foldedToItsRowAlone_andTheContentStartsUnderTheIdentity() {
         XCTAssertEqual(ProfileOwnHeroPlan.expandedHeight, 318)
-        XCTAssertEqual(ProfileOwnHeroPlan.collapsedHeight, 96)
+        XCTAssertEqual(ProfileOwnHeroPlan.collapsedHeight,
+                       ProfileOwnHeroPlan.controlTop + MeeshyCollapsingHeroRecipe.controlTarget + 12)
+        XCTAssertEqual(ProfileOwnHeroPlan.controlTop, MeeshyCollapsingHeroRecipe.controlTop(safeArea: 0))
         XCTAssertEqual(ProfileOwnHeroPlan.contentTop,
                        MeeshyCollapsingHeroRecipe.expandedHeight + MeeshyCollapsingHeroRecipe.identityOverflow)
     }

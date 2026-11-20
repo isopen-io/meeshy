@@ -35,8 +35,9 @@ import * as path from 'path';
  * | **qui REÇOIT** (audience) | servir | la plus ÉTROITE — `PARTICIPATION_VIVANTE` |
  * | **qui ne doit RIEN recevoir** (exclusion) | taire | la plus LARGE — `isActive` nu |
  *
- * `translationReaders` porte les DEUX dans un seul `Promise.all` : la requête
- * lawful construit `rooms` (qui reçoit la traduction), la requête NUE construit
+ * `translationReaders` porte les DEUX dans un seul `Promise.all` : la lecture
+ * lawful (`scanLiveParticipants`) construit `rooms` (qui reçoit la traduction),
+ * la lecture NUE (`scanActiveParticipants`, bornée depuis #20050) construit
  * `excludedQueueKeys` (qui ne doit rien recevoir, pas même en file). Resserrer
  * la seconde retirerait le membre banni de la liste d'EXCLUSION — il
  * recevrait donc la traduction par la file hors ligne. **Une liste de refus se
@@ -80,11 +81,14 @@ export const DELIBERATELY_WIDE: Readonly<Record<string, string>> = {
     'resserrer réduirait la liste de refus. Et le même relevé décide `typerIsRegistered`, ' +
     "donc laquelle des deux lois s'applique — un frappeur actif-et-banni y basculerait de " +
     'la loi des cercles vers la règle de blocage seule, strictement plus faible.',
-  'translationReaders.ts#1':
-    "`excludedQueueKeys` est une liste de REFUS : elle se construit sur le sur-ensemble. " +
-    "Resserrer ici retirerait un membre banni de l'exclusion, donc lui servirait la " +
-    'traduction par la file hors ligne. La requête lawful du même `Promise.all` construit, ' +
-    "elle, l'audience (`rooms`).",
+  'conversationAudienceRooms.ts#1':
+    "`scanActiveParticipants` sert les listes de REFUS, qui se construisent sur le " +
+    "sur-ensemble : resserrer ici retirerait un membre banni de l'exclusion, donc lui " +
+    'servirait le contenu par la file hors ligne. Son unique consommateur est ' +
+    "`translationReaders.excludedQueueKeys` (#20050) ; l'audience du même appel, elle, " +
+    "passe par `scanLiveParticipants`, qui ÉPELLE la loi. L'entrée vivait sur " +
+    '`translationReaders.ts#1` jusqu\'à ce que la lecture manuscrite y soit remplacée par ' +
+    'cet appel — une DÉCISION déménage avec le site qu\'elle motive, elle ne disparaît pas.',
 };
 
 /**

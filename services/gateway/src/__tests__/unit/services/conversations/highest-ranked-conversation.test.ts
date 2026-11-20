@@ -189,3 +189,35 @@ describe('les deux flux, et la fenêtre que la preuve du top-K exige', () => {
     expect(await firstOf([grand, petit])).toMatchObject({ id: 'zzz' });
   });
 });
+
+/**
+ * LE `where` D'UN FLUX NE PEUT PAS ÉCRASER CELUI DE SON APPELANT (#19906 bis).
+ *
+ * Les cinq appelants du rang composent par SPREAD — `{ ...where, ...stream.where }`
+ * — ce qui donne à `rankStreams()` le pouvoir d'écraser en silence n'importe
+ * quelle clé de l'appelant. Trois d'entre elles décident aujourd'hui de la
+ * confidentialité ou de l'exactitude : `AND` porte les prédicats de soft-state
+ * (`unsetOrNull`) et le régime de chiffrement, `OR` est la forme que rend chacun
+ * de ces prédicats, et `participants` porte l'anti-jointure d'exactitude d'un
+ * groupe d'appel. Un flux qui rendrait l'une des trois les retirerait du `where`
+ * **sans qu'aucun témoin d'appelant ne tombe** : la requête resterait valide, et
+ * servirait simplement plus.
+ *
+ * Le lot écrit beaucoup sur le danger de deux `OR` frères (leçon 318) ; ce
+ * témoin ferme la version de ce danger que le lot a lui-même créée. Il garde la
+ * classe pour les CINQ appelants d'un coup, là où un témoin par appelant garderait
+ * cinq fois le même cas en laissant le sixième dehors.
+ */
+describe('un flux du rang ne compose jamais une clé que ses appelants portent', () => {
+  const COMPOSANTES = ['AND', 'OR', 'NOT', 'participants'];
+
+  it('aucun `where` de flux ne porte `AND`, `OR`, `NOT` ni `participants`', () => {
+    const clés = rankStreams().flatMap((stream) => Object.keys(stream.where));
+    expect(clés.filter((clé) => COMPOSANTES.includes(clé))).toEqual([]);
+  });
+
+  it('et ce qu’ils portent se limite aux colonnes du RANG', () => {
+    const clés = new Set(rankStreams().flatMap((stream) => Object.keys(stream.where)));
+    expect([...clés].filter((clé) => !['lastMessageAt', 'lastActivityAt'].includes(clé))).toEqual([]);
+  });
+});

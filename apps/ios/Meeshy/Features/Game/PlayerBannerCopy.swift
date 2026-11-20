@@ -66,7 +66,7 @@ enum PlayerBannerCopy {
             let toNext = banner.nextLevel.map {
                 GameText.bannerToNext(percent: GameCopy.formatCount(banner.percent), level: GameCopy.formatCount($0))
             } ?? GameCopy.levelTopShort(cap: banner.levelCap)
-            return [GameText.bannerLevel(level: GameCopy.formatCount(banner.level)), GameCopy.tierName(banner.tier), toNext]
+            return [GameText.bannerLight(level: GameCopy.formatCount(banner.level)), GameCopy.tierName(banner.tier), toNext]
                 .joined(separator: GameText.bannerSeparator)
         case .sparks:
             return GameSparksCopy.sparks(banner.score)
@@ -108,7 +108,7 @@ enum PlayerBannerCopy {
         } ?? GameCopy.levelTopShort(cap: banner.levelCap)
         // Le détail du niveau ne se dit qu'au-delà du niveau 1 (#9536) ; au niveau 1, ce sont les points gagnés qui parlent.
         let levelParts: [String?] = banner.showsLevel
-            ? [GameText.bannerLevel(level: GameCopy.formatCount(banner.level)), GameCopy.tierName(banner.tier), toNext]
+            ? [GameText.bannerLight(level: GameCopy.formatCount(banner.level)), GameCopy.tierName(banner.tier), toNext]
             : [banner.showsScore ? GameText.bannerPoints(points: GameCopy.formatCount(banner.score)) : nil]
         let rankPart: [String?] = [banner.rank.map { GameCopy.rankLabel($0.rank, division5: $0.division, mythic: $0.mythic) }]
         let parts: [String?] = rankPart + levelParts + [

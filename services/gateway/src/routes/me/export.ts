@@ -633,6 +633,9 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
               cityCircle: true,
               // #19201 — la couleur d'accent choisie pour la vitrine.
               profileAccentColor: true,
+              // #18748 — l'accord explicite aux alertes de chute, et la version du texte accepté.
+              fallAlertConsentedAt: true,
+              fallAlertConsentVersion: true,
               avatar: true,
               banner: true,
               systemLanguage: true,

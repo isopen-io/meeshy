@@ -144,6 +144,12 @@ final class ProfileCircleViewModel: ObservableObject {
         effectiveToolLevel >= RelationFeature.deviceCall.minimumLevel
     }
 
+    /// « Prévenir si ma montre détecte une chute » (#18748) : entre Sangs (`health.fall`), accordé par défaut une fois mon
+    /// accord donné, retirable.
+    var offersFall: Bool {
+        effectiveToolLevel >= RelationFeature.healthFall.minimumLevel
+    }
+
     private var effectiveToolLevel: RelationLevel {
         max(shownLevel ?? .public, toolLevel ?? .public)
     }

@@ -3,6 +3,7 @@ import { lazy, Suspense } from 'react';
 import { AppBadge } from './app-badge';
 import { BatteryMount } from './battery-mount';
 import { BringRingMount } from './bring-ring-mount';
+import { FallMount } from './fall-mount';
 import { GamePhotoAlertMount } from './game-photo-alert-mount';
 import { InactivityMount } from './inactivity-mount';
 import { ListeningMount } from './listening-mount';
@@ -24,7 +25,7 @@ import { TogetherMount } from './together-mount';
  * (`together-mount.tsx`, #17055), et mon partage de position qui reprend au chargement (`shared-location-sharing-mount.tsx`, #18345),
  * et le guet qui rappelle le bandeau du joueur quand un acte, l'Offrande ou la Flamme change (`use-banner-recall.ts`, #17366),
  * et la batterie de mes Proches et de mes Sangs (`battery-mount.tsx`, #14147), et leur téléphone injoignable
- * (`phone-reachability-mount.tsx`, #18737), et l'alerte d'inactivité de mes Sangs (`inactivity-mount.tsx`, #18738), et « en appel » (`phone-call-mount.tsx`, #18753).
+ * (`phone-reachability-mount.tsx`, #18737), et l'alerte d'inactivité de mes Sangs (`inactivity-mount.tsx`, #18738), et « en appel » (`phone-call-mount.tsx`, #18753), et la chute détectée (`fall-mount.tsx`, #18748).
  * L'entrée n'en connaît qu'un nom.
  */
 /** Le guet du rappel emporte les lois du Jeu : son chunk se charge à part, et la coquille ne porte même pas son nom. */
@@ -46,6 +47,7 @@ export function DeferredChrome({ routeKey, signedIn }: { readonly routeKey: stri
       <PhoneReachabilityMount signedIn={signedIn} />
       <InactivityMount signedIn={signedIn} />
       <PhoneCallMount signedIn={signedIn} />
+      <FallMount signedIn={signedIn} />
       <Suspense fallback={null}>
         <BannerRecallMount signedIn={signedIn} />
       </Suspense>

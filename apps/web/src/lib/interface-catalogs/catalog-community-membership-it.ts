@@ -18,6 +18,8 @@ const itCommunityMembership = {
   'community.membership.request': 'Chiedi di unirti',
   'community.membership.requested': 'Richiesta inviata',
   'community.membership.requested.hint': 'Un amministratore o un moderatore deve accettarla.',
+  'community.membership.declined': 'Richiesta rifiutata',
+  'community.membership.declined.hint': 'Potrai richiederlo di nuovo dal {date}.',
   'community.membership.error.cooldown': 'La tua ultima richiesta è stata rifiutata: potrai chiedere di nuovo 7 giorni dopo.',
   'community.settings.open': "Impostazioni",
   'community.members.open': 'Membri',

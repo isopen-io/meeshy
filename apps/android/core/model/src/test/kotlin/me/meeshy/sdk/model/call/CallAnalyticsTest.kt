@@ -45,6 +45,18 @@ class CallAnalyticsTest {
     }
 
     @Test
+    fun `a wall clock moved backwards floors setupTimeMs at 0, never the -1 sentinel nor a negative`() {
+        val analytics = CallAnalytics(startedAtMs = 8_000).connected(nowMs = 5_000)
+
+        assertThat(fieldsOf(analytics)["setupTimeMs"]).isEqualTo(0L)
+    }
+
+    @Test
+    fun `a negative duration is reported as 0 — the gateway refuses the whole report otherwise`() {
+        assertThat(fieldsOf(CallAnalytics(startedAtMs = 0), durationSeconds = -3)["durationSeconds"]).isEqualTo(0L)
+    }
+
+    @Test
     fun `negotiationTimeMs is omitted — no anchor on Android, the schema allows absence`() {
         assertThat(fieldsOf(CallAnalytics(startedAtMs = 0))).doesNotContainKey("negotiationTimeMs")
     }

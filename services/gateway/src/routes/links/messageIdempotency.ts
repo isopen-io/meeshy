@@ -40,6 +40,7 @@
 
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair.js';
+import { ownReplayWhere, ClientMessageIdTakenError, clientMessageIdHolder } from '../../services/messaging/clientMessageIdOwnership';
 
 /**
  * La projection que les DEUX chemins servent — l'écriture neuve et la
@@ -148,14 +149,38 @@ export async function writeLinkMessageIdempotently(params: {
     // partagée ne porte pas — l'a laissée derrière. **Un choix de projection
     // emporte ce que la projection qu'on écarte faisait AUTOUR de la lecture**,
     // pas seulement ses colonnes.
-    const existing = await withOrphanedSenderRepair(
+    // #19960 — le TRIO, jamais le couple : la clé appartient à son AUTEUR.
+    // L'index partiel garde `(conversationId, clientMessageId)`, donc il lève
+    // aussi quand un AUTRE participant tient la clé — et relire sans
+    // `senderId` rendait SA ligne à l'invité, en `success: true`, pendant que
+    // le message de l'invité n'était écrit nulle part. Loi :
+    // `services/messaging/clientMessageIdOwnership.ts`.
+    const senderId = typeof data.senderId === 'string' ? data.senderId : null;
+    const existing = senderId === null ? null : await withOrphanedSenderRepair(
       { prisma: prisma as PrismaClient, conversationIds: [conversationId] },
       () => prisma.message.findFirst({
-        where: { conversationId, clientMessageId },
+        where: ownReplayWhere({ conversationId, clientMessageId, senderId }),
         include: LINK_MESSAGE_WRITE_INCLUDE,
       })
     );
-    if (!existing) throw error;
+    if (!existing) {
+      // Deux causes, deux réponses. La seconde lecture ne vit que sur ce
+      // chemin d'échec : elle sépare « un autre tient la clé » (nommable,
+      // définitif tant que la clé ne change pas) d'une course irréconciliable.
+      // Sous `try` : une lecture qui lève ici remplacerait l'erreur d'origine.
+      // Et elle LIT l'expéditeur — refuser sur « quelqu'un tient la clé » dirait
+      // à un invité que SA propre clé est prise par autrui dès qu'un secondaire
+      // en retard a fait manquer la relecture du TRIO, en lui prescrivant une
+      // clé neuve : le remède dupliquerait son message.
+      let holder: Awaited<ReturnType<typeof clientMessageIdHolder>> = 'nobody';
+      try {
+        holder = await clientMessageIdHolder({ prisma, conversationId, clientMessageId, senderId: senderId ?? '' });
+      } catch {
+        holder = 'nobody';
+      }
+      if (holder === 'another-sender') throw new ClientMessageIdTakenError(conversationId, clientMessageId);
+      throw error;
+    }
 
     return { row: existing, isDuplicate: true };
   }

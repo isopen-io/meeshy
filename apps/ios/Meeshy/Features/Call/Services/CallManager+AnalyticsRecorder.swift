@@ -12,9 +12,11 @@ nonisolated struct CallAnalyticsContext: Sendable {
 }
 
 nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
-    var callInitiatedDate: Date?
-    var negotiationStartDate: Date?
-    var connectedDate: Date?
+    /// Instants MONOTONES (`CallLiveClock.monotonicNow`, #20010) : les délais
+    /// de mise en place ne bougent pas quand l'horloge murale est réglée.
+    var callInitiatedUptime: TimeInterval?
+    var negotiationStartUptime: TimeInterval?
+    var connectedUptime: TimeInterval?
     var networkTransitions = 0
     var qualitySeconds: [VideoQualityLevel: Double] = [:]
     var lastQualityDate: Date?
@@ -38,7 +40,7 @@ nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
         at now: Date
     ) {
         if let previousDate = lastQualityDate, let previousLevel = currentLevel {
-            qualitySeconds[previousLevel, default: 0] += now.timeIntervalSince(previousDate)
+            qualitySeconds[previousLevel, default: 0] += CallStatValue.measured(now.timeIntervalSince(previousDate))
         }
         lastQualityDate = now
         currentLevel = level
@@ -86,9 +88,9 @@ nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
 
     func payload(now: Date, context: CallAnalyticsContext) -> [String: Any] {
         let setupMetrics = CallReliabilityPolicy.callSetupMetrics(
-            initiatedAt: callInitiatedDate,
-            negotiationStartAt: negotiationStartDate,
-            connectedAt: connectedDate
+            initiatedAt: callInitiatedUptime,
+            negotiationStartAt: negotiationStartUptime,
+            connectedAt: connectedUptime
         )
         let qualityDistribution = CallReliabilityPolicy.qualityDistribution(
             accumulatedSeconds: qualitySeconds,
@@ -101,7 +103,7 @@ nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
         let base: [String: Any] = [
             "setupTimeMs":         setupMetrics.setupTimeMs,
             "negotiationTimeMs":   setupMetrics.negotiationTimeMs,
-            "durationSeconds":     context.callDuration,
+            "durationSeconds":     CallStatValue.measured(context.callDuration),
             "reconnectionCount":   totalReconnects,
             "networkTransitions":  networkTransitions,
             "averageRtt":          averageRtt,

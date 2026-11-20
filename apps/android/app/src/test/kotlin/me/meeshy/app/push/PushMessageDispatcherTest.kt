@@ -54,6 +54,7 @@ class PushMessageDispatcherTest {
                 notices = me.meeshy.sdk.inactivity.InactivityForegroundNotices(),
                 foreground = { false },
             ),
+            fallHandler = me.meeshy.app.fall.FallPushHandler({}) { false },
             messagePresenter = messagePresenter,
             freshness = freshness,
             observers = observers,

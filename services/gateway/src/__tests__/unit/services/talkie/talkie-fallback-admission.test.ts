@@ -54,11 +54,18 @@ const partagee = (id: string, columns: MongoDocument = {}): DirectDoc => ({
   ...columns,
 });
 
-/** Les deux participations ACTIVES de la paire, à la forme nominale (`deletedForMe` absent). */
+/**
+ * Les deux participations ACTIVES de la paire, à la forme nominale
+ * (`deletedForMe` absent) et aux droits d'un membre ordinaire — `permissions`
+ * est un composite REQUIS, donc toute ligne de production le porte
+ * (`NEW_MEMBER_PERMISSIONS` ouvre les deux droits que ce chemin exige).
+ */
+const DROITS_OUVERTS = { canSendMessages: true, canSendAudios: true };
+
 const paireSur = (ids: readonly string[], extra: MongoDocument = {}): MongoDocument[] =>
   ids.flatMap((conversationId) => [
-    { conversationId, userId: MOI, isActive: true, ...extra },
-    { conversationId, userId: LUI, isActive: true },
+    { conversationId, userId: MOI, isActive: true, permissions: DROITS_OUVERTS, ...extra },
+    { conversationId, userId: LUI, isActive: true, permissions: DROITS_OUVERTS },
   ]);
 
 const monde = (conversations: readonly DirectDoc[], participants: readonly MongoDocument[]) =>
@@ -125,8 +132,8 @@ describe('le repli du talkie n’est plus mort, et il applique sa règle (#19910
     const visible = partagee('c-visible');
     const participants = [
       ...paireSur(['c-visible']),
-      { conversationId: 'c-masquee', userId: MOI, isActive: true, deletedForMe: at('2026-11-12T10:00:00Z') },
-      { conversationId: 'c-masquee', userId: LUI, isActive: true },
+      { conversationId: 'c-masquee', userId: MOI, isActive: true, permissions: DROITS_OUVERTS, deletedForMe: at('2026-11-12T10:00:00Z') },
+      { conversationId: 'c-masquee', userId: LUI, isActive: true, permissions: DROITS_OUVERTS },
     ];
 
     expect(await destination([masquee, visible], participants)).toBe('c-visible');
@@ -136,8 +143,8 @@ describe('le repli du talkie n’est plus mort, et il applique sa règle (#19910
   it('nomme une conversation que seul le DESTINATAIRE a masquée', async () => {
     const masqueeChezLui = partagee('c-chez-lui');
     const participants = [
-      { conversationId: 'c-chez-lui', userId: MOI, isActive: true },
-      { conversationId: 'c-chez-lui', userId: LUI, isActive: true, deletedForMe: at('2026-11-12T10:00:00Z') },
+      { conversationId: 'c-chez-lui', userId: MOI, isActive: true, permissions: DROITS_OUVERTS },
+      { conversationId: 'c-chez-lui', userId: LUI, isActive: true, permissions: DROITS_OUVERTS, deletedForMe: at('2026-11-12T10:00:00Z') },
     ];
 
     expect(await destination([masqueeChezLui], participants)).toBe('c-chez-lui');
@@ -213,6 +220,52 @@ describe('le repli du talkie n’est plus mort, et il applique sa règle (#19910
     });
 
     expect(await destination([empoisonne], paireSur(['c-direct-empoisonne']))).toBe('c-direct-empoisonne');
+  });
+
+  /**
+   * LES DROITS PERSONNELS DE L'ÉMETTEUR (#19930). La copie vocale est un
+   * message AVEC une pièce jointe audio : `MessagingService` la refuse si
+   * `canSendMessages` est explicitement fermé (`WRITE_NOT_PERMITTED`), et un
+   * droit de média fermé fait passer la pièce par l'admission qui lit
+   * `canSendAudios`. Nommer une telle conversation perdait la copie.
+   */
+  it('ne nomme pas une conversation où l’hôte a retiré à l’émetteur le droit d’ÉCRIRE', async () => {
+    const interdite = partagee('c-interdite', { lastMessageAt: at('2026-11-20T10:00:00Z') });
+    const vivante = partagee('c-vivante');
+    const participants = [
+      ...paireSur(['c-vivante']),
+      { conversationId: 'c-interdite', userId: MOI, isActive: true, permissions: { canSendMessages: false, canSendAudios: true } },
+      { conversationId: 'c-interdite', userId: LUI, isActive: true, permissions: DROITS_OUVERTS },
+    ];
+
+    expect(await destination([interdite, vivante], participants)).toBe('c-vivante');
+  });
+
+  it('ne nomme pas une conversation où l’émetteur ne peut pas joindre d’AUDIO', async () => {
+    const muette = partagee('c-muette', { lastMessageAt: at('2026-11-20T10:00:00Z') });
+    const vivante = partagee('c-vivante');
+    const participants = [
+      ...paireSur(['c-vivante']),
+      { conversationId: 'c-muette', userId: MOI, isActive: true, permissions: { canSendMessages: true, canSendAudios: false } },
+      { conversationId: 'c-muette', userId: LUI, isActive: true, permissions: DROITS_OUVERTS },
+    ];
+
+    expect(await destination([muette, vivante], participants)).toBe('c-vivante');
+  });
+
+  /**
+   * ET LE DROIT DU DESTINATAIRE NE DÉCIDE RIEN : c'est l'ÉMETTEUR qui poste la
+   * copie. Filtrer le destinataire écarterait une conversation où l'envoi
+   * réussit — l'erreur symétrique de celle que ce lot répare.
+   */
+  it('nomme une conversation où seul le DESTINATAIRE n’a pas le droit d’écrire', async () => {
+    const vivante = partagee('c-vivante');
+    const participants = [
+      { conversationId: 'c-vivante', userId: MOI, isActive: true, permissions: DROITS_OUVERTS },
+      { conversationId: 'c-vivante', userId: LUI, isActive: true, permissions: { canSendMessages: false, canSendAudios: false } },
+    ];
+
+    expect(await destination([vivante], participants)).toBe('c-vivante');
   });
 
   it('rend `null` quand la paire ne partage aucune conversation admissible', async () => {

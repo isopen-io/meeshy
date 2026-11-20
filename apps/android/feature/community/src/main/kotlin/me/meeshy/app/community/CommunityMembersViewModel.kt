@@ -86,7 +86,7 @@ class CommunityMembersViewModel @Inject constructor(
             cache.detail(communityId).collect { result ->
                 val api = result.valueOrNull ?: return@collect
                 createdBy = api.createdBy
-                val access = CommunityAccess.resolve(api.createdBy, api.isPrivate, session.currentUserId, api.members.orEmpty())
+                val access = CommunityAccess.of(api, session.currentUserId)
                 _state.update { it.copy(access = access) }
                 publish()
             }

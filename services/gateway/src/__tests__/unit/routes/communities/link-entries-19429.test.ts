@@ -334,7 +334,9 @@ describe('Les demandes en attente', () => {
     const res = await app.inject({ method: 'GET', url: `/communities/${COMM}/join-requests` });
     expect(res.statusCode).toBe(200);
     expect(res.json().data[0]).toEqual(expect.objectContaining({ id: REQUEST, userId: ARRIVANT, country: 'SN', via: 'link' }));
-    expect(prisma.communityJoinRequest.findMany.mock.calls[0][0]).toEqual(expect.objectContaining({
+    // La réparation des acceptations orphelines (#19924) lit avant : on vise la LISTE.
+    const listing = prisma.communityJoinRequest.findMany.mock.calls.find((c: any) => c[0].include?.user !== undefined);
+    expect(listing[0]).toEqual(expect.objectContaining({
       where: { communityId: COMM, status: 'pending', createdAt: { gte: expect.any(Date) } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     }));
   });

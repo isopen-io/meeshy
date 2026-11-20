@@ -30,7 +30,7 @@ final class IncomingCallViewTests: XCTestCase {
             "initiales — jamais les initiales SOUS la photo (#12568)."
         )
         XCTAssertTrue(
-            source.contains(".avatarRingWithin(") && source.contains("ProfileDecorResolver.ring(peerProfile?.profileDecor?.avatarRing)"),
+            source.contains(".avatarRing(") && source.contains("ProfileDecorResolver.ring(peerProfile?.profileDecor?.avatarRing)"),
             "Le disque de l'appel entrant doit porter le contour équipé du correspondant."
         )
     }

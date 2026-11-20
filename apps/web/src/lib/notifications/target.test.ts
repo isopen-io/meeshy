@@ -354,6 +354,17 @@ describe('device_unreachable ouvre le profil du Proche dont le téléphone est i
   });
 });
 
+describe('l’alerte de sécurité d’un Sang — la chute détectée (#18748)', () => {
+  test('`safety_alert` et sa levée ouvrent le profil du Sang quand la charge le nomme', () => {
+    expect(pushTapTarget({ type: 'safety_alert', senderUsername: 'awa' })).toEqual({ route: 'userProfile', params: { username: 'awa' } });
+    expect(pushTapTarget({ type: 'safety_alert_cleared', senderUsername: 'awa' })).toEqual({ route: 'userProfile', params: { username: 'awa' } });
+  });
+
+  test('sans nom dans la charge, la bannière atterrit sur la cloche', () => {
+    expect(pushTapTarget({ type: 'safety_alert' })).toEqual({ route: 'notifications' });
+  });
+});
+
 describe('la vérification d’inactivité (#18738)', () => {
   const sang = { id: 'u-jacques', username: 'jacques', displayName: 'Jacques', avatar: null };
 

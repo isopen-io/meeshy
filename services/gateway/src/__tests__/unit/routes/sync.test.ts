@@ -72,7 +72,7 @@ type PrismaStub = {
 function makePrisma(over: Partial<Record<string, unknown>> = {}): PrismaStub {
   return {
     participant: {
-      findMany: jest.fn<any>().mockResolvedValue([{ conversationId: 'c1' }]),
+      findMany: jest.fn<any>().mockResolvedValue([{ id: 'p-mine', conversationId: 'c1' }]),
     },
     message: {
       findMany: jest.fn<any>().mockResolvedValue([]),
@@ -218,13 +218,13 @@ describe('GET /sync — contrat de rendabilité du select messages', () => {
     prisma.message.findMany
       .mockResolvedValueOnce([
         {
-          id: 'm1', conversationId: 'c1', senderId: 's1', content: 'Hello',
+          id: 'm1', conversationId: 'c1', senderId: 'p-mine', content: 'Hello',
           clientMessageId: 'cid_x', originalLanguage: 'en',
           translations: { fr: { text: 'Bonjour' } },
           messageType: 'text', metadata: null, isEdited: false, editedAt: null,
           replyToId: null, reactionSummary: null, reactionCount: 0,
           attachments: [{ id: 'a1', fileUrl: '/f.jpg' }],
-          sender: { id: 's1', displayName: 'Ana' },
+          sender: { id: 'p-mine', displayName: 'Ana' },
           createdAt: new Date('2026-07-02T10:00:00Z'), updatedAt: new Date('2026-07-02T10:00:00Z'),
         },
       ])
@@ -243,7 +243,7 @@ describe('GET /sync — contrat de rendabilité du select messages', () => {
     ]);
     expect(added.originalLanguage).toBe('en');
     expect(added.attachments).toHaveLength(1);
-    expect(added.sender).toEqual({ id: 's1', displayName: 'Ana' });
+    expect(added.sender).toEqual({ id: 'p-mine', displayName: 'Ana' });
     expect(added.clientMessageId).toBe('cid_x');
     await app.close();
   });

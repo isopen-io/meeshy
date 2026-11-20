@@ -1,5 +1,4 @@
-import { servedDescription } from '../services/attachments/mediaSideContent';
-import { servedAttachmentTranslations } from '../services/attachments/servedAttachmentTranslations';
+import { servedSideContent } from '../services/attachments/mediaSideContent';
 import {
   attachmentProtectionOf,
   type AttachmentProtectionField,
@@ -249,10 +248,11 @@ export function serializeAttachmentForSocket(
     capturedInApp: (raw.capturedInApp as boolean | null | undefined) ?? false,
     lensSlug: typeof raw.lensSlug === 'string' ? raw.lensSlug : null,
     createdAt: raw.createdAt as Date | string,
-    // Prisme Linguistique — null = pas encore enrichi, présent = serialize tel quel
-    transcription: raw.transcription ?? null,
-    translations: servedAttachmentTranslations(raw.translations ?? null),
-    ...servedDescription(raw as Parameters<typeof servedDescription>[0]),
+    // Prisme Linguistique, SOUS LA LOI du contenu latéral (#19978). Les trois
+    // champs partent ENSEMBLE ou pas du tout : `transcription` voyageait sans
+    // aucune garde juste à côté d'`alt`, qui en avait une, et les mots d'un
+    // vocal à vue unique arrivaient en clair sur le fil comme dans la file.
+    ...servedSideContent(raw as Parameters<typeof servedSideContent>[0]),
     reactionSummary,
     // La clé n'existe que si un lecteur était NOMMÉ — voir le champ. En
     // diffusion elle est absente, pas vide : c'est ce qui la distingue d'une

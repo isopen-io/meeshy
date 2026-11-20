@@ -234,6 +234,38 @@ describe('handleAgentResponse — budget global de l\'illustration (#6198)', () 
     expect(deps.messagingService.handleMessage.mock.calls[0][0]).not.toHaveProperty('attachmentIds');
   });
 
+  // #19956 — la loi « un échec de liaison fait ÉCHOUER l'envoi » suppose un
+  // appelant qui REJOUE. Des trois producteurs d'`attachmentIds`, ce pont est
+  // le seul sans outbox, sans `clientMessageId` et sans file : sans ce repli,
+  // une illustration qui ne se lie pas coûterait la RÉPONSE ENTIÈRE de
+  // l'agent, texte compris, et personne ne la redemanderait.
+  it('rejoue SANS l’illustration quand l’envoi avec elle est refusé — l’agent parle, dégradé', async () => {
+    const deps = makeDeps();
+    deps.resolveIllustration.mockResolvedValue({
+      buffer: JPEG, mimeType: 'image/jpeg', filename: 'x.jpg', sourceUrl: ARTICLE, imageUrl: 'https://cdn.example/x.jpg',
+    });
+    deps.messagingService.handleMessage
+      .mockResolvedValueOnce({ success: false, error: 'link failed' })
+      .mockResolvedValue({ success: true, data: { id: 'msg-1', createdAt: new Date('2026-09-12T10:00:00Z'), content: 'x' } });
+
+    await handleAgentResponse(deps, makeResponse({ illustration: { sourceUrl: ARTICLE } }));
+
+    expect(deps.messagingService.handleMessage).toHaveBeenCalledTimes(2);
+    expect(deps.messagingService.handleMessage.mock.calls[0][0]).toMatchObject({ attachmentIds: ['att-1'] });
+    expect(deps.messagingService.handleMessage.mock.calls[1][0]).not.toHaveProperty('attachmentIds');
+    expect(deps.broadcastNewMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('ne rejoue PAS quand il n’y avait aucune illustration à retirer', async () => {
+    const deps = makeDeps();
+    deps.messagingService.handleMessage.mockResolvedValue({ success: false, error: 'nope' });
+
+    await handleAgentResponse(deps, makeResponse());
+
+    expect(deps.messagingService.handleMessage).toHaveBeenCalledTimes(1);
+    expect(deps.broadcastNewMessage).not.toHaveBeenCalled();
+  });
+
   it('still uploads the image when it resolves well within budget', async () => {
     const deps = makeDeps({ illustrationBudgetMs: 5_000 });
     deps.resolveIllustration.mockResolvedValue({ buffer: JPEG, mimeType: 'image/jpeg', filename: 'x.jpg', sourceUrl: ARTICLE, imageUrl: 'https://cdn.example/x.jpg' });

@@ -205,7 +205,7 @@
       "firstScreen": 48
     },
     "me": {
-      "total": 116,
+      "total": 121,
       "firstScreen": 37
     },
     "me-bookmarks": {
@@ -628,15 +628,15 @@
     },
     "me": {
       "de": {
-        "total": 105,
-        "firstScreen": 37
-      },
-      "a": {
         "total": 116,
         "firstScreen": 37
       },
-      "motif": "La carte « Mon téléphone », hors du premier écran, accueille deux lignes, « Vérification d’inactivité » (#18738, un sélecteur fermé : 6 h, 12 h, 24 h ou Désactivée, +2) et « Montrer à mes Sangs que je suis en appel » (#18753, +9) : une ligne chacune au lieu d’une section de plus, sans titre ni explication ; ce que le réglage ouvre se lit sur la fiche de chaque Sang. Le libellé nomme ce qui part et à qui : le raccourcir ferait croire qu’on montre l’appel lui-même, ou à tout le monde",
-      "issue": 18753
+      "a": {
+        "total": 121,
+        "firstScreen": 37
+      },
+      "motif": "La carte « Mon téléphone », hors du premier écran, accueille « Détection de chute · Apple Watch » (#18748, +5) : une ligne et sa source, sans titre ; où l’accord se donne (l’app iPhone) et ce qui part restent derrière un (i). La source se dit à l’écran : sans elle, un utilisateur web chercherait ici un réglage qui n’existe que sur l’iPhone",
+      "issue": 18748
     }
   }
 }

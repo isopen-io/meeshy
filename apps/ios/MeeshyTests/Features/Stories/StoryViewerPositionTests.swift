@@ -98,8 +98,7 @@ final class StoryViewerPositionTests: XCTestCase {
     /// pas la première non vue de l'auteur.
     func test_pushedStoryRoute_opensTheExactPost_onIPhoneAndIPad() throws {
         for path in ["Meeshy/Features/Main/Views/RootView.swift", "Meeshy/Features/Main/Views/iPadRootView+Navigation.swift"] {
-            let source = AppSourceGuard.stripComments(try String(contentsOf: try XCTUnwrap(
-                AppSourceGuard.unitURLs(path).first), encoding: .utf8))
+            let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(path))
             let route = try XCTUnwrap(source.range(of: "routeName.hasPrefix(\"storyDetail:\")"), path)
             let tail = String(source[route.upperBound...].prefix(600))
             XCTAssertTrue(tail.contains("postId: postId"), path)

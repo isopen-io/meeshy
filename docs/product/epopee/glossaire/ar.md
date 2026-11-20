@@ -83,7 +83,7 @@ Le ton : on tutoie, on écrit pour un enfant de 13 ans, une idée par phrase. La
 - **Les vingt états** : **شرارة** (clé `etincelle`), وميض، **صفاء** (clé `lumiere`)، بريق، شعاع، فجر، مذنّب، نجمة، كوكبة، مجرّة، puis سديم، نجم نابض، كوازار، مستعر أعظم، ماغنيتار، عنقود، عنقود فائق، الكون، اللانهاية، التفرد.
 - **L'épreuve** (الاختبار) : tous les dix niveaux, de 10 à 100, les aïeux demandent une épreuve. Tant qu'elle n'est pas réussie (« ما لم تجتزه »), la lumière attend.
 - **Le rang ouvre la lumière** : « ورتبتك تفتح نورك فوق المستوى 499 ».
-- **A** : « المستوى 34 »، « 3٬200 حتى المستوى 35 ».
+- **A** : « المستوى 34 »، « 3٬200 حتى المستوى 35 ». Lus à voix haute, le bandeau et l'anneau disent « نورك في المستوى 34 » (#19892).
 - **B** : « نورك يسطع في المستوى 34: 3٬200 حتى المستوى 35. »
 - **Bannis** : « لا يزال أمامك N قبل المستوى X » → « N حتى المستوى X » ; « مرحلة » → « اختبار » / « حالة » ; « الرقم القياسي للمستوى » → « ذروة نورك ».
 

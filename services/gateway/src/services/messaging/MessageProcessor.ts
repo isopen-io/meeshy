@@ -48,11 +48,13 @@ import { E2EE_PLAINTEXT_LOCATION_WITHHELD } from '../location/sharedPlace';
 import { LIVE_MESSAGE_MARK } from './liveMessage';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { mapWithConcurrency } from '@meeshy/shared/utils/concurrency';
-import { findExistingMessage, findContentWindowDuplicate } from './messageDedupProjection';
+import { findContentWindowDuplicate } from './messageDedupProjection';
+import { isUniqueViolation, resolveOwnReplayAfterUniqueViolation } from './uniqueViolationDedup';
 import { MESSAGE_AUTHOR_USER_SELECT } from './messageAuthorSelect';
 import type { SocketAttachmentRow } from '../../socketio/serializeAttachmentForSocket';
 import { prismaAtRestFileStore, type AtRestFileAccess } from '../attachments/atRest/atRestFiles';
 import { contentDisappears, gatewaySealDeps, requireFileSealingKey, sealMessageAttachmentsAtRest, sendCarriesFiles } from './sealMessageAttachments';
+import { discardMessageAfterCopyFailure, discardMessageAfterLinkFailure, sealLinkedFilesAtRest } from './attachmentFailureOutcome';
 
 // Logger dédié pour MessageProcessor
 const logger = enhancedLogger.child({ module: 'MessageProcessor' });
@@ -528,33 +530,21 @@ export class MessageProcessor {
         corr
       );
     } catch (e) {
-      const isP2002 =
-        typeof e === 'object' && e !== null
-          && 'code' in e && (e as { code?: unknown }).code === 'P2002';
-      if (!isP2002 || !data.clientMessageId) {
+      if (!isUniqueViolation(e) || !data.clientMessageId) {
         throw e;
       }
-      // Use `findFirst` instead of `findUnique` because the unique
-      // constraint on `(conversationId, clientMessageId)` lives in a
-      // partial MongoDB index (managed by the manual migration), not
-      // a Prisma `@@unique` directive — so the `findUnique` compound
-      // type is not generated. The compound `@@index` declared in the
-      // schema still backs this query for performance.
-      const existing = await findExistingMessage({
+      // #19960 — `P2002` ne dit pas « tu as déjà envoyé ça », mais « la clé
+      // est prise dans cette conversation ». Les trois suites possibles sont
+      // dans `uniqueViolationDedup.ts`.
+      const existing = await resolveOwnReplayAfterUniqueViolation({
         prisma: this.prisma,
-        where: { conversationId: data.conversationId, clientMessageId: data.clientMessageId },
         conversationId: data.conversationId,
-        timingLabel: 'messaging.dedupFindFirst',
-        corr
+        clientMessageId: data.clientMessageId,
+        senderId: data.senderId,
+        originalError: e,
+        corr,
+        logger,
       });
-      if (!existing) {
-        // Race condition we cannot reconcile — bubble up the original error.
-        logger.error('P2002 raised but no existing record found for clientMessageId', {
-          conversationId: data.conversationId,
-          clientMessageId: data.clientMessageId
-        });
-        throw e;
-      }
       message = await this.revealStored(existing);
       isDuplicate = true;
       logger.info('Idempotent dedup hit on clientMessageId', {
@@ -690,13 +680,16 @@ export class MessageProcessor {
     const sealFiles = () => options.sealsAtRest
       ? sealMessageAttachmentsAtRest(gatewaySealDeps(this.prisma, this.atRestFiles), { messageId: message.id, conversationId: data.conversationId })
       : Promise.resolve();
+    // Ce que chaque échec fait du message DÉJÀ écrit est une règle à part
+    // entière — `attachmentFailureOutcome.ts` la porte, avec ses trois issues
+    // et ce qui les sépare. Ici on ne lit que les verbes.
+    const sealLinked = () => sealLinkedFilesAtRest(sealFiles, { messageId: message.id });
+
     // Diffusion à plusieurs destinataires (PAS un transfert) : copie SERVEUR
-    // des pièces jointes du message désigné. Volontairement HORS du
-    // try/catch ci-dessous — celui-ci absorbe les échecs du forward en
-    // best-effort (une source disparue dégrade en message ordinaire), mais
-    // une copie manquée ici doit faire ÉCHOUER l'envoi : sans elle le
-    // message créé n'a ni texte ni pièce jointe — une bulle vide et
-    // irrécupérable chez TOUS les destinataires de la diffusion.
+    // des pièces jointes du message désigné. Une copie manquée doit faire
+    // ÉCHOUER l'envoi : sans elle le message créé n'a ni texte ni pièce
+    // jointe — une bulle vide et irrécupérable chez TOUS les destinataires de
+    // la diffusion.
     if (data.copyAttachmentsFromMessageId) {
       try {
         await copyAttachmentsFromMessage(this.prisma, {
@@ -705,45 +698,44 @@ export class MessageProcessor {
           requesterParticipantId: data.senderId,
         });
       } catch (error) {
-        // La ligne `Message` existe déjà : `saveMessage` la crée AVANT
-        // d'appeler `handleAttachments`. Laisser l'erreur remonter sans
-        // nettoyer laisserait une bulle orpheline (content vide, zéro pièce
-        // jointe, `deletedAt: null`) que le prochain GET servirait comme un
-        // message réel — et qu'un rejeu au même `clientMessageId` rendrait
-        // ensuite `success: true` en dédup P2002 (`saveMessage` retourne
-        // AVANT `handleAttachments` sur ce chemin, donc la copie ne serait
-        // jamais retentée). Supprimer la ligne avant de propager l'erreur
-        // fait échouer l'envoi ET libère le `clientMessageId` pour un vrai
-        // nouvel essai.
-        await this.prisma.message.delete({ where: { id: message.id } }).catch((deleteError) =>
-          logger.error('[MessageProcessor] Failed to delete orphaned message after copy failure', deleteError)
-        );
+        await discardMessageAfterCopyFailure(this.prisma, { messageId: message.id });
         throw error;
       }
-      await sealFiles();
+      await sealLinked();
       return;
     }
 
-    try {
-      // 1. Lier les attachments pré-uploadés
-      if (data.attachmentIds && data.attachmentIds.length > 0) {
+    // 1. Lier les attachments pré-uploadés. Le MÊME raisonnement que la
+    //    diffusion ci-dessus, et il n'avait jamais été porté ici : la liaison
+    //    vivait sous un `catch` qui journalise, donc une bulle VIDE partait
+    //    annoncée « envoyée », et le rejeu la confirmait en dédup (#19956).
+    if (data.attachmentIds && data.attachmentIds.length > 0) {
+      try {
         await this.attachmentService.associateAttachmentsToMessage(data.attachmentIds, message.id, message);
-        // #13100 — scellés AVANT le départ de l'audio et avant `message:new`.
-        await sealFiles();
+      } catch (error) {
+        await discardMessageAfterLinkFailure(this.prisma, { messageId: message.id });
+        throw error;
+      }
+      // #13100 — scellés AVANT le départ de l'audio et avant `message:new`.
+      // Son échec ne descend PAS avec eux et n'emporte pas l'audio, qui n'a
+      // aucun rattrapage là où le scellement en a un.
+      await sealLinked();
 
-        // Déclencher le traitement audio si nécessaire — jamais en e2ee (#12518).
-        if (this.translationService && options.serverReads) {
-          this.processAudioAttachments(data.attachmentIds, message.id, data.conversationId, data.senderId, { atRest: options.sealsAtRest || contentDisappears(message) })
-            .catch(err => logger.error('[MessageProcessor] Audio processing failed', err));
-        }
+      // Déclencher le traitement audio si nécessaire — jamais en e2ee (#12518).
+      if (this.translationService && options.serverReads) {
+        this.processAudioAttachments(data.attachmentIds, message.id, data.conversationId, data.senderId, { atRest: options.sealsAtRest || contentDisappears(message) })
+          .catch(err => logger.error('[MessageProcessor] Audio processing failed', err));
       }
-      // 2. Copier les attachments si c'est un forward et qu'aucun nouvel attachment n'est fourni
-      else if (data.forwardedFromId) {
-        await this.copyForwardedAttachments(data.forwardedFromId, message.id, data.senderId, data.forwardCopySelection);
-        await sealFiles();
-      }
-    } catch (error) {
-      logger.error('[MessageProcessor] Error handling attachments', error);
+      return;
+    }
+
+    // 2. Copier les attachments si c'est un forward et qu'aucun nouvel
+    //    attachment n'est fourni. `copyForwardedAttachments` absorbe ses
+    //    propres erreurs par décision (une source disparue dégrade en message
+    //    ordinaire) : rien ne lève ici, et le message reste.
+    if (data.forwardedFromId) {
+      await this.copyForwardedAttachments(data.forwardedFromId, message.id, data.senderId, data.forwardCopySelection);
+      await sealLinked();
     }
   }
 

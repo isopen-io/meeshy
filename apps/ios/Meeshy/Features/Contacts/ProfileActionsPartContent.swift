@@ -191,6 +191,7 @@ private struct ProfilePhoneSection: View {
         let shownUnreachable = circle.offersPhoneReachability ? unreachable : nil
         return VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             MeeshySectionHeader(title: ProfileActionsWording.phone)
+            FallDetailSection(userId: request.userId)
             InactivityAlertDetailSection(userId: request.userId)
             PhoneCallDetailSection(userId: request.userId)
             if let board = ProfileLiveBoard.resolve(
@@ -216,6 +217,9 @@ private struct ProfilePhoneSection: View {
             }
             if circle.offersInactivity {
                 ProfileInactivityRow(userId: request.userId, tint: request.tint)
+            }
+            if circle.offersFall {
+                ProfileFallRow(userId: request.userId, tint: request.tint)
             }
             if circle.offersPhoneCall {
                 ProfilePhoneCallRow(userId: request.userId, tint: request.tint)

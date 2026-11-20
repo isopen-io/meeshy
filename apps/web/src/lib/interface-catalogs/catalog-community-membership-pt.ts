@@ -18,6 +18,8 @@ const ptCommunityMembership = {
   'community.membership.request': 'Pedir para entrar',
   'community.membership.requested': 'Pedido enviado',
   'community.membership.requested.hint': 'Um administrador ou moderador precisa aceitá-lo.',
+  'community.membership.declined': 'Pedido recusado',
+  'community.membership.declined.hint': 'Você poderá pedir de novo a partir de {date}.',
   'community.membership.error.cooldown': 'O seu último pedido foi recusado: poderá pedir novamente 7 dias depois.',
   'community.settings.open': "Definições",
   'community.members.open': 'Membros',

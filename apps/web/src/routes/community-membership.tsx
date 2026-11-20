@@ -24,6 +24,10 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * rejoindre » (`request`, même bouton de marque), puis « Demande envoyée »
  * (`requested`) : un ÉTAT, pas un contrôle (loi 4 — rien à presser), annoncé comme statut, qui dit qui doit
  * l'accepter — jamais un second envoi, jamais un faux « Quitter ».
+ *
+ * Refusée (#19879), elle se lit « Demande refusée » avec la date, dans la
+ * langue, à partir de laquelle une nouvelle demande est possible (`retryAt`,
+ * servi par la passerelle) : un ÉTAT encore, jusqu'à cette date.
  */
 
 export type MembershipFailure = 'join' | 'refused' | 'cooldown' | 'leave' | 'offline';
@@ -50,6 +54,11 @@ const REQUESTED_STYLE = {
   minHeight: 48,
 } as const;
 
+const retryDateOf = (language: InterfaceLanguage, retryAt: string | null | undefined): string | null => {
+  const at = typeof retryAt === 'string' ? Date.parse(retryAt) : Number.NaN;
+  return Number.isFinite(at) ? new Intl.DateTimeFormat(language, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }).format(at) : null;
+};
+
 const LEAVE_STYLE = {
   color: ERROR_INK,
   backgroundColor: 'color-mix(in srgb, var(--color-error) 10%, transparent)',
@@ -62,6 +71,7 @@ export function CommunityMembershipAction({
   pending,
   online,
   failure,
+  retryAt,
   onJoin,
   onLeave,
 }: {
@@ -70,6 +80,7 @@ export function CommunityMembershipAction({
   readonly pending: boolean;
   readonly online: boolean;
   readonly failure: MembershipFailure | null;
+  readonly retryAt?: string | null;
   readonly onJoin: () => void;
   readonly onLeave: () => void;
 }) {
@@ -103,6 +114,18 @@ export function CommunityMembershipAction({
           <p className="text-center text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
             {translateMembership(language, 'community.membership.requested.hint')}
           </p>
+        </div>
+      ) : action === 'declined' ? (
+        <div role="status" className="grid gap-1" data-community-join-declined>
+          <p className="flex w-full items-center justify-center gap-2 rounded-card text-body font-semibold" style={REQUESTED_STYLE}>
+            <GlyphSvg glyph={COMMUNITIES_GLYPHS.clock} size={18} />
+            {translateMembership(language, 'community.membership.declined')}
+          </p>
+          {retryDateOf(language, retryAt) === null ? null : (
+            <p className="text-center text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+              {translateMembership(language, 'community.membership.declined.hint', { date: retryDateOf(language, retryAt) ?? '' })}
+            </p>
+          )}
         </div>
       ) : (
         <button

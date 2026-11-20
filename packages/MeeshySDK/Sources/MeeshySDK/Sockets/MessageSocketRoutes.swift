@@ -28,6 +28,7 @@ enum MessageSocketRoutes {
             phoneReachability(manager),
             inactivity(manager),
             phoneCall(manager),
+            fall(manager),
             sharedLocation(manager),
             conversations(manager),
             notifications(manager, presentedToken: presentedToken),

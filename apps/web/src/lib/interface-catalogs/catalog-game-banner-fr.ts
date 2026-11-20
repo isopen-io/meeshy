@@ -42,6 +42,7 @@ const fr = {
   'game.rank.mythe': 'Mythe',
   'game.rank.mythe_seat': 'Mythe n° {number}',
   'game.banner.level': 'Niveau {level}',
+  'game.banner.light': 'Ta lumière au niveau {level}',
   'game.banner.to_next': '{percent} % vers le {level}',
   'game.banner.top': 'au sommet',
   'game.banner.capped': '{rank} ouvre la suite',

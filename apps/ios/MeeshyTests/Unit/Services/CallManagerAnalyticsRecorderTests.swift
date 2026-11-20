@@ -73,7 +73,7 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
 
     func test_resetAccumulators_keepsTotalReconnectsOnly() {
         var recorder = CallAnalyticsRecorder()
-        recorder.callInitiatedDate = Date()
+        recorder.callInitiatedUptime = 42
         recorder.networkTransitions = 4
         recorder.recordSample(level: .good, roundTripTimeMs: 10, packetLossPercent: 1, at: Date())
         recorder.totalReconnects = 2
@@ -381,6 +381,109 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
 
         XCTAssertLessThanOrEqual((payload["codec"] as? String)?.utf16.count ?? .max, 50)
         XCTAssertEqual(payload["codec"] as? String, String(repeating: "\u{1F3A7}", count: 25))
+    }
+
+    private func assertDistributionWithinUnit(_ payload: [String: Any], file: StaticString = #filePath, line: UInt = #line) {
+        let distribution = payload["qualityDistribution"] as? [String: Double] ?? [:]
+        XCTAssertEqual(Set(distribution.keys), ["excellent", "good", "fair", "poor"], file: file, line: line)
+        for (key, share) in distribution {
+            XCTAssertTrue(share.isFinite && share >= 0 && share <= 1, "\(key) hors de [0;1] : \(share)", file: file, line: line)
+        }
+    }
+
+    func test_recordSample_clockGoingBackwards_countsNegativeIntervalAsZero() {
+        var recorder = CallAnalyticsRecorder()
+        let t0 = Date(timeIntervalSince1970: 100)
+        recorder.recordSample(level: .excellent, roundTripTimeMs: 10, packetLossPercent: 0, at: t0)
+        recorder.recordSample(level: .good, roundTripTimeMs: 10, packetLossPercent: 0, at: t0.addingTimeInterval(-10))
+
+        XCTAssertGreaterThanOrEqual(recorder.qualitySeconds[.excellent] ?? 0, 0)
+        assertDistributionWithinUnit(makePayload(recorder))
+    }
+
+    func test_recordSample_clockGoingBackwardsAfterPositiveInterval_keepsOnlyPositiveInterval() {
+        var recorder = CallAnalyticsRecorder()
+        let t0 = Date(timeIntervalSince1970: 100)
+        recorder.recordSample(level: .excellent, roundTripTimeMs: 10, packetLossPercent: 0, at: t0)
+        recorder.recordSample(level: .good, roundTripTimeMs: 10, packetLossPercent: 0, at: t0.addingTimeInterval(5))
+        recorder.recordSample(level: .poor, roundTripTimeMs: 10, packetLossPercent: 0, at: t0.addingTimeInterval(2))
+
+        let payload = recorder.payload(now: t0.addingTimeInterval(2), context: Self.makeContext(codec: "opus"))
+        let distribution = payload["qualityDistribution"] as? [String: Double] ?? [:]
+
+        XCTAssertEqual(distribution["excellent"] ?? -1, 1.0, accuracy: 0.0001)
+        XCTAssertEqual(distribution["good"] ?? -1, 0.0, accuracy: 0.0001)
+        assertDistributionWithinUnit(payload)
+    }
+
+    func test_qualityDistribution_negativeOrNonFiniteAccumulators_countAsZero() {
+        let distribution = CallReliabilityPolicy.qualityDistribution(
+            accumulatedSeconds: [.excellent: -10, .good: 30, .fair: .nan, .poor: .infinity, .critical: -.infinity],
+            openWindowLevel: nil, openWindowSince: nil, now: Date(timeIntervalSince1970: 0)
+        )
+
+        XCTAssertEqual(distribution["good"] ?? -1, 1.0, accuracy: 0.0001)
+        for share in distribution.values {
+            XCTAssertTrue(share.isFinite && share >= 0 && share <= 1)
+        }
+    }
+
+    // MARK: - #19984 — une horloge qui recule ne rend aucune durée négative
+
+    func test_callSetupMetrics_connectedBeforeAnchors_floorsAtZeroNotNegative() {
+        let t0: TimeInterval = 1_000_000
+
+        let metrics = CallReliabilityPolicy.callSetupMetrics(
+            initiatedAt: t0, negotiationStartAt: t0 + 2, connectedAt: t0 - 3
+        )
+
+        XCTAssertEqual(metrics.setupTimeMs, 0)
+        XCTAssertEqual(metrics.negotiationTimeMs, 0)
+    }
+
+    func test_callSetupMetrics_missingAnchors_stayMinusOne() {
+        let t0: TimeInterval = 1_000_000
+
+        let neverConnected = CallReliabilityPolicy.callSetupMetrics(
+            initiatedAt: t0, negotiationStartAt: t0, connectedAt: nil
+        )
+        let noAnchors = CallReliabilityPolicy.callSetupMetrics(
+            initiatedAt: nil, negotiationStartAt: nil, connectedAt: t0 - 3
+        )
+
+        XCTAssertEqual(neverConnected.setupTimeMs, -1)
+        XCTAssertEqual(neverConnected.negotiationTimeMs, -1)
+        XCTAssertEqual(noAnchors.setupTimeMs, -1)
+        XCTAssertEqual(noAnchors.negotiationTimeMs, -1)
+    }
+
+    func test_callSetupMetrics_normalAnchors_unchanged() {
+        let t0: TimeInterval = 1_000_000
+
+        let metrics = CallReliabilityPolicy.callSetupMetrics(
+            initiatedAt: t0, negotiationStartAt: t0 + 20, connectedAt: t0 + 21.5
+        )
+
+        XCTAssertEqual(metrics.setupTimeMs, 21_500)
+        XCTAssertEqual(metrics.negotiationTimeMs, 1_500)
+    }
+
+    func test_elapsedSeconds_startInTheFuture_isZero() {
+        let now: TimeInterval = 1_000_000
+
+        XCTAssertEqual(CallReliabilityPolicy.elapsedSeconds(since: now + 3_600, now: now), 0)
+        XCTAssertEqual(CallReliabilityPolicy.elapsedSeconds(since: now - 125, now: now), 125)
+    }
+
+    func test_payload_negativeCallDuration_emitsZeroDuration() {
+        let payload = CallAnalyticsRecorder().payload(
+            now: Date(timeIntervalSince1970: 1_000),
+            context: CallAnalyticsContext(callDuration: -3_600, codec: "opus", filtersEnabledNow: false,
+                                          transcriptionUsed: false, deviceModel: "iPhone", isVideo: false,
+                                          endReason: "local")
+        )
+
+        XCTAssertEqual(payload["durationSeconds"] as? TimeInterval, 0)
     }
 
     private static func quality(freezes: Int, reason: String) -> CallMediaQuality {

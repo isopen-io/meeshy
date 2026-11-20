@@ -14,6 +14,7 @@ import DOMPurify from 'isomorphic-dompurify';
 import { createHash } from 'crypto';
 import { NotificationTypeEnum } from '@meeshy/shared';
 import { validateAndNormalizeEmail } from '@meeshy/shared/utils/email-validator';
+import { unescapeSerializedText } from './serialized-text';
 
 export class SecuritySanitizer {
   /**
@@ -74,6 +75,18 @@ export class SecuritySanitizer {
       .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '') // Control chars (keep \t \n \r)
       .replace(/[\uFFF9-\uFFFB]/g, '') // Interlinear annotation chars
       .trim();
+  }
+
+  /**
+   * Un texte SIMPLE tel qu'écrit (#16786) : balises retirées comme par `sanitizeText`, mais sans les entités que la
+   * sérialisation HTML de DOMPurify ajoute (« A & B » sort « A & B », jamais « A &amp; B »). À employer pour un texte
+   * que les clients rendent en TEXTE (nom et description d'une communauté), jamais pour un texte qu'un gabarit
+   * HTML interpole : celui-là s'échappe au rendu (`escapeHtml`). DOMPurify rend une entrée sans `<` telle quelle et
+   * ne sérialise que les autres : seules celles-là sont décodées, si bien qu'un « &amp; » tapé reste « &amp; ».
+   */
+  static sanitizePlainText(input: string | null | undefined): string {
+    const sanitized = this.sanitizeText(input);
+    return input?.includes('<') ? unescapeSerializedText(sanitized) : sanitized;
   }
 
   /**
