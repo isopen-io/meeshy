@@ -1640,3 +1640,8 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - #19864 fusionnée dans `dev` par le porteur (64516f16b, tête 72c172d19), #19767 fermée. L'entrée de journal de 5 h,
   poussée après la fusion, est reprise ici.
 - Lot : #19928 (une relecture en échec garde l'appareil muet), branche `claude/cercles-19928-panne-muette`.
+- Mise en œuvre (6bc63e9da, 4d6e43a03), iOS et Android : la relecture de `/relations/locations/mine` a trois issues — une réponse lève l'attente, un 404 (passerelle d'avant la route) aussi, toute autre erreur est une PANNE qui garde l'appareil muet et rejoue la relecture toutes les 30 s. `reconcile` relit d'abord quand la liste n'est pas soldée ; sous attente, un retrait en attente part quand même (liste seule, sans position), et le suivi GPS s'arrête quand plus aucun destinataire ne reste. `wipe` remet l'attente à faux.
+- Audit adversarial avant PR : F1 (retrait bloqué), F2 (GPS), F3 (rejeu après wipe), F4 (double relecture) corrigés dans 4d6e43a03 ; F5 (404 de Traefik pendant un déploiement) et F6 (« Arrêter » avant la relecture retire un ajout d'un autre appareil, antérieur au lot) → #19999 ; F7 → décision #19997.
+- Gardes iOS rc=0 sur 4d6e43a03 (house_rules, cohesion, test_registration, accent). Swift et Kotlin ne compilent pas ici : preuve par ios.yml et android.yml en workflow_dispatch.
+- Décisions ouvertes : #19682 (arrondi de startedAt), #19997 (adopter ou céder sans accusé de démarrage).
+- Prochain lot : #19929, puis le plafond `untilStopped` de `listOnlyState`, puis #19999 ; #19682 et #19997 une fois tranchées.
