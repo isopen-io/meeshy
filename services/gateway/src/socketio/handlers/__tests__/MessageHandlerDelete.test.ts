@@ -695,9 +695,10 @@ describe('MessageHandler — handleMessageDelete', () => {
   });
 
   // La remise directe élargie ne vaut que si l'absence de participants ne la
-  // fait pas tomber à RIEN. `loadLiveParticipantTargets` replie sur `[]` quand
-  // la lecture lève, et `conversationAudienceRooms` rend alors la room de
-  // conversation SEULE — jamais une liste vide.
+  // fait pas tomber à RIEN. `loadLiveAudience` rend `targets: []` quand la
+  // lecture lève, et `conversationAudienceRooms` rend alors la room de
+  // conversation SEULE — jamais une liste vide (#20007 : c'est désormais le
+  // SEUL cas de repli, le plafond tronquant au lieu de jeter).
   it('#19943 — une lecture d\'audience qui LÈVE replie sur la room de conversation', async () => {
     setupSuccessfulDelete();
     (deps.prisma.participant.findMany as jest.Mock<any>).mockRejectedValue(new Error('participant.findMany down'));
