@@ -43,15 +43,32 @@
  * désormais avant de propager (#19956) — sans quoi tout ce qui suit est une
  * course, pas une garantie.
  *
- * **Ce que la libération ne rend PAS, et c'est assumé.** Une liaison partielle
- * a pu écrire, en même temps que le `messageId`, les drapeaux de protection du
- * message (`isViewOnce`, `isBlurred`, `effectFlags`, OR-és sur les flags
- * portés). La libération ne remet que le `messageId` : leur état d'AVANT la
- * liaison n'est connu de personne, la lecture qui le portait faisant partie de
- * l'opération qui vient d'échouer. Une pièce rendue garde donc au plus la
- * protection qu'on venait de lui poser — fail-CLOSED, donc le bon sens de
- * l'erreur : le rejeu peut servir une pièce PLUS protégée que demandé, jamais
- * moins.
+ * **Ce que la libération rend, et ce qu'elle ne rend pas (#19971).** Une liaison
+ * partielle a pu écrire, en même temps que le `messageId`, les drapeaux de
+ * protection du message (`isViewOnce`, `isBlurred`, `effectFlags`, OR-és sur
+ * les flags portés). Elle les rend donc AUSSI — et le paragraphe qui vivait ici
+ * disait le contraire, sur une prémisse mesurée FAUSSE : « leur état d'AVANT la
+ * liaison n'est connu de personne ».
+ *
+ * Il est connu, et c'est le DÉFAUT DU SCHÉMA. `associateAttachmentsToMessage`
+ * est le SEUL écrivain de production de ces trois colonnes (relevé : aucune des
+ * quatre créations de ligne `MessageAttachment` ne les pose — les deux de
+ * `UploadProcessor`, celle de `tus-handler`, celle de `copyAttachments` —, et
+ * aucun autre `update` ne les touche), et `schema.prisma` les déclare NON
+ * nullables : `isViewOnce Boolean @default(false)`,
+ * `isBlurred Boolean @default(false)`, `effectFlags Int @default(0)`.
+ *
+ * Ce que la libération d'avant #19971 coûtait : une photo envoyée en VUE UNIQUE
+ * dont la liaison lève ressortait `isViewOnce: true` persistant. Recomposée
+ * SANS vue unique depuis la même pièce téléversée, elle arrivait à vue unique
+ * sous une bulle ordinaire — la protection de la PIÈCE contredisant celle du
+ * MESSAGE, ce que #7498 avait fermé dans l'autre sens. Le sens de l'erreur
+ * était « plus protégé que demandé », donc fail-closed ; c'est ce qui en a fait
+ * une issue à part plutôt qu'un bug de #19956, pas une raison de la laisser.
+ *
+ * Le `rank` n'est PAS rendu, et c'est la bonne réponse : la prochaine
+ * association le réécrit inconditionnellement pour tous les ids de son lot, il
+ * ne peut donc pas contredire le message qui reprend la pièce.
  *
  * **Et le scellement ne descend PAS avec eux.** La suppression du message
  * rendrait orphelines des lignes `MessageAttachment` qui portent, elles, des
@@ -75,7 +92,16 @@ const logger = enhancedLogger.child({ module: 'attachmentFailureOutcome' });
 export type AttachmentFailurePrisma = MessageScopedPrisma & {
   readonly message: { delete(args: { where: { id: string } }): Promise<unknown> };
   readonly messageAttachment: {
-    updateMany(args: { where: { messageId: string }; data: { messageId: null } }): Promise<unknown>;
+    /**
+     * #19971 — la forme de la libération est DANS le type : les trois colonnes
+     * de protection sont REQUISES, donc une libération qui n'en rendrait qu'une
+     * partie ne compile pas. C'est la seule garde qu'un double de test ne peut
+     * pas simuler — un mock accepte ce qu'on lui donne.
+     */
+    updateMany(args: {
+      where: { messageId: string };
+      data: { messageId: null; isViewOnce: false; isBlurred: false; effectFlags: 0 };
+    }): Promise<unknown>;
   };
 };
 
@@ -119,7 +145,14 @@ export async function discardMessageAfterLinkFailure(
   input: { readonly messageId: string }
 ): Promise<void> {
   await prisma.messageAttachment
-    .updateMany({ where: { messageId: input.messageId }, data: { messageId: null } })
+    .updateMany({
+      where: { messageId: input.messageId },
+      // #19971 — la PROTECTION part avec le `messageId`. Voir le § « Ce que la
+      // libération rend » ci-dessus : l'association est le seul écrivain de ces
+      // trois colonnes, donc leur état d'avant liaison est le DÉFAUT du schéma,
+      // et une pièce rendue ne peut plus contredire le message qui la reprend.
+      data: { messageId: null, isViewOnce: false, isBlurred: false, effectFlags: 0 },
+    })
     .catch((error: unknown) =>
       logger.error('pièces pré-téléversées non libérées après un échec de liaison : le rejeu les manquera', undefined, {
         messageId: input.messageId,
