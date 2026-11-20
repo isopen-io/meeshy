@@ -1688,3 +1688,22 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   F2 (identifiant absent ⇒ rien n'est jugé) assumé, comme avant le lot.
 - Prochain lot : fusion de cette PR (CI iOS en `workflow_dispatch`), puis #20055 (iOS + Android), le plafond
   `untilStopped` de `listOnlyState`, #19999, #20054 ; #19682 et #19997 une fois tranchées.
+
+## 2026-11-20 — réveil de 17 h : lot #19999 + #20055 (relire avant de composer)
+
+- Reprise : #20042 et #20058 fusionnées dans `dev` (#20029 et #19929 fermées). Aucune PR de la routine ouverte. Le
+  plafond `untilStopped` de `listOnlyState` reste sans objet : la passerelle ne sert pas encore « jusqu'à l'arrêt ».
+- Lot : #19999 et #20055 ensemble (même mécanisme), branche `claude/cercles-19999-relire-avant-de-composer`, iOS +
+  Android. Un drapeau `hasReadServed` (vrai tant que la DERNIÈRE relecture a répondu) : « Partager » relit d'abord si
+  besoin et réunit le partage servi, une panne le refuse (`offline`) ; « Arrêter » relit d'abord et se compose sur la
+  liste servie, une panne garde #19928 (le retrait part, fail-closed) ; une passerelle d'avant ne lève pas l'attente
+  avant un « Arrêter ».
+- Audit adversarial : non bloquant. Corrigés dans le lot : M1 (une relecture en panne remet le drapeau à faux), M3 (un
+  appareil récepteur ne republie jamais SA position dans le repli d'avant la liste seule), F1 (motif juste sur un
+  changement de compte), F2 (relire avant de juger les capacités), F3 (« Arrêter » d'une personne déjà retirée
+  n'envoie rien), F5 (témoins). Suivis ouverts : #20087 (M2, la relecture ne dit pas la source : un point choisi peut
+  devenir position réelle), #20086 (facette de #20055 : état « partage lancé ailleurs, en attente de connexion »).
+- Gardes iOS rc=0 (règles maison 42, cohésion, inscription 2 063, accent 408) ; Swift et Kotlin prouvés par `ios.yml`
+  et `android.yml` en `workflow_dispatch`.
+- Prochain lot : fusion de cette PR, puis #20054, #20056, #20086, #20087 ; #19682 et #19997 attendent la décision du
+  porteur.
