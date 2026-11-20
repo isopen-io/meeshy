@@ -141,7 +141,7 @@ describe('chaque surface du jeu se rend dans la langue de l’interface', () => 
     /* Le niveau a quitté les jauges pour le héros pleine largeur (#5841) : c'est là qu'un anglophone le lit. */
     expect(rendered.hero).toContain('Level');
     /* Le rang ouvre le bandeau (#19705), le niveau suit. */
-    expect(rendered.banner).toMatch(/^\p{L}+ [IV]+, glory [\d,]+, .*Level \d+, /u);
+    expect(rendered.banner).toMatch(/^\p{L}+ [IV]+, glory [\d,]+, .*Your light at level \d+, /u);
     expect(rendered.missions).toContain('Tonight’s dream');
     expect(rendered.missions).toContain('The Offering');
     expect(rendered.offer).toContain('Shall we capture it?');

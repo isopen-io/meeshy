@@ -213,13 +213,14 @@ final class ProfileViewSaveProfileTests: XCTestCase {
     /// les trois BLOCS (jamais le fichier entier) et porte sa contre-épreuve :
     /// réintroduire l'affectation en bloc `= updatedUser` la fait rougir.
     private func profileViewSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
+        let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Profile/Views/ProfileView.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try ["ProfileView.swift", "ProfileView+Persistence.swift"]
+            .map { try String(contentsOf: root.appendingPathComponent("Meeshy/Features/Profile/Views/\($0)"), encoding: .utf8) }
+            .joined(separator: "\n")
     }
 
     private func body(of declaration: String, in source: String) throws -> String {
@@ -228,8 +229,9 @@ final class ProfileViewSaveProfileTests: XCTestCase {
             "ProfileView.swift doit déclarer \(declaration)"
         )
         let rest = source[start.upperBound...]
-        guard let end = rest.range(of: "\n    private func ") else { return String(rest) }
-        return String(rest[..<end.lowerBound])
+        let ends = ["\n    private func ", "\n    func "].compactMap { rest.range(of: $0)?.lowerBound }
+        guard let end = ends.min() else { return String(rest) }
+        return String(rest[..<end])
     }
 
     /// La photo et la bannière partagent un seul envoi (`upload(_:as:)`) : la garde vise ce bloc, et vérifie que les
@@ -238,8 +240,8 @@ final class ProfileViewSaveProfileTests: XCTestCase {
         let source = try profileViewSource()
 
         for (declaration, call) in [
-            ("private func uploadAvatar(", "upload(image, as: .avatar)"),
-            ("private func uploadBanner(", "upload(image, as: .banner)")
+            ("func uploadAvatar(", "upload(image, as: .avatar)"),
+            ("func uploadBanner(", "upload(image, as: .banner)")
         ] {
             let block = try body(of: declaration, in: source)
             XCTAssertTrue(block.contains(call), "\(declaration) doit passer par l'envoi commun : \(call)")
@@ -249,7 +251,7 @@ final class ProfileViewSaveProfileTests: XCTestCase {
 
     func test_serverUserAssignments_inTheThreeUploadPaths_goThroughMergingServerUser() throws {
         let source = try profileViewSource()
-        XCTAssertTrue(try body(of: "private func saveProfile()", in: source).contains("send(request, rollingBackTo: original)"),
+        XCTAssertTrue(try body(of: "func saveProfile()", in: source).contains("send(request, rollingBackTo: original)"),
                       "saveProfile envoie par send(_:rollingBackTo:), qui porte la réponse serveur")
 
         for declaration in [

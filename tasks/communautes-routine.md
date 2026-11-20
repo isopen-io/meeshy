@@ -606,6 +606,16 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - 15:29 : `ci.yml` (`workflow_dispatch`) VERT sur `2d4149e7c`. `dev` ayant reçu 21 commits (appels web, position partagée, relations ; aucun chemin du lot), `dev` `07609bfa9` refusionnée sans conflit ; rejoués : shared `__tests__/ci/` 216 verts, web `tsc --noEmit` vert, suites communautés + appels (182 fichiers, 2 632 tests) vertes, catalogue 269 = référence.
 - Prochain lot recommandé : iOS #19877 (les intendants tranchent les demandes), puis #19869 / #19879.
 
+## 2026-11-19 — réveil 15:38 UTC
+
+- Début du run : #19880 (#19871, intendants web) ouverte, poussée à 15:31 par une autre session avec une CI dispatchée en file : vivante, cédée.
+- Lot : #19869 — iOS dit « Demander à rejoindre » puis « Demande envoyée » sur une communauté qui valide chaque entrée.
+- SDK : `CommunityService.join` annonce `acceptsPending` et rend `CommunityJoinOutcome` (`.joined(membre)` ou `.pending(requestId)`, la réponse 202 se distinguant d'une rangée de membre par `requestId`) ; `CommunityJoinRefusal.classify` lit 403 `COMMUNITY_JOIN_COOLDOWN` par son code ; `APICommunity` décode `requiresJoinApproval` et `currentUserJoinRequest` (servis depuis #19868).
+- App : `CommunityDetailViewModel` — « Demande envoyée » dès le toucher, défaite sur un échec ; une demande ne fait membre de rien, ne relit pas la fiche et n'entre pas dans « mes communautés » ; `community:member-joined` sur soi fait membre et efface la demande ; un cache qui croyait l'entrée directe lit la demande servie. La porte « Rejoindre » de la fiche de profil ne compte plus une demande comme une adhésion.
+- Écran : la demande envoyée est un statut (pas un bouton), avec « Un administrateur ou un modérateur doit l'accepter » ; le délai d'un refus récent se dit. Quatre clés au catalogue MeeshyUI en sept langues, reprises du web.
+- Témoins : SDK `CommunityServiceTests` (+5), app `CommunityDetailViewModelTests` (+8). Preuve : CI iOS de la PR. Gardes iOS locales : `check_house_rules.sh` (42 règles, après correction d'une police fixe), `check_cohesion_budget.sh`, `check_test_registration.sh` (2 056), `check-accent-color-hardcoding.mjs` (168 / 408 = références) verts.
+- Prochain lot recommandé : #19877 (intendants sur iOS).
+
 ## 2026-11-19 — réveil 17:38 UTC
 
 - Début du run : #19903 (#19869, iOS « Demande envoyée ») ouverte, poussée à 16:55 par une autre session, ses `workflow_dispatch` en file : vivante, cédée.
@@ -629,6 +639,11 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Aucun client touché, aucun contrat d'API changé.
 - Prochain lot recommandé : iOS #19877 (intendants) une fois #19903 fusionnée, sinon #19879 (refus notifié, passerelle + web).
 
+## 2026-11-20 — réveil 01:38 UTC
+
+- Début du run : trois PR de la routine ouvertes. #19950 (#19879, refus notifié) poussée à 01:11 : vivante, cédée. #19951 (#14227, index) a son `workflow_dispatch` de `ci.yml` encore en file depuis 23:44 : rien à mener tant qu'il n'a pas de verdict. #19903 (#19869, iOS « Demande envoyée ») inactive depuis 19:39 avec `ci.yml`, `ios.yml` et `sdk-tests.yml` VERTS sur `495efb8b7` : run consacré à la mener à la fusion.
+- `dev` (`b66be57f7`, 46 commits : profil, jeu, talkie, position partagée iOS ; passerelle communautés #19914) fusionnée dans la branche sans conflit (le journal s'est fusionné seul). Aucun chemin iOS / SDK du lot touché par `dev`.
+- Rejoués sur l'arbre fusionné : `check_house_rules.sh` (42 règles tenues), `check_cohesion_budget.sh` (code 0), `check_test_registration.sh` (2 056 fichiers inscrits), `check-accent-color-hardcoding.mjs` (168 / 408 = références).
 ## 2026-11-19 — réveil 23:38 UTC
 
 - Début du run : #19950 (#19879, refus notifié) poussée à 23:25 et #19903 (#19869, iOS « Demande envoyée ») dont le `workflow_dispatch` iOS tourne (seconde tentative relancée vers 23:33) : vivantes, cédées.
@@ -644,3 +659,13 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Début du run : #19983 (doublon de `retained.json`) poussée à 05:37 par le run précédent, encore actif : cédée. #19951 (#14227, index des appartenances), #19950 (#19879) et #19903 (#19869) inactives depuis plus de deux heures ; le rouge étranger qui les bloquait (#19964) est corrigé sur `dev` (#19974, `fb8f5c167`).
 - Lot : mener #19951 à la fusion. `dev` (`b06982a21`) fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : passerelle `tsc --noEmit` vert ; témoin de migration + `tsc-never-loaded` (2 suites, 11 tests) verts ; les deux anciens rouges étrangers verts (shared `glory-frames-generated` 29/29, web `lottie/sources` 3/3).
 - `ci.yml` relancé en `workflow_dispatch` sur cette tête.
+## 2026-11-19 — réveil 21:38 UTC
+
+- Début du run : #19926 (#19914) et #19903 (#19869) ouvertes, leurs `workflow_dispatch` relancés à 21:20–21:36 par une autre session : vivantes, cédées.
+- Lot : #19879 — le demandeur apprend que sa demande d'entrée a été refusée, dans sa langue (passerelle + web).
+- Passerelle : `services/community-join-request-decided.ts`. Le refus (`…/reject`) annonce, après la réponse, `community:join-request-decided` `{ communityId, decision: 'rejected', retryAt, at }` sur la room du DEMANDEUR seul, et une notification `community_invite` (même famille et même préférence que « Ajouté à la communauté ») dans sa langue de cadrage (`recipientLanguage`) — jamais l'intendant nommé (ni acteur, ni identifiant). `decide` rend l'instant écrit ; `retryAt` = décision + `JOIN_REQUEST_COOLDOWN_MS`, désormais déclaré dans `community-join-request-lifecycle.ts` (site unique, `admission.ts` le reprend). `GET /communities/:id` sert `currentUserJoinRetryAt` (additif, ISO ou `null`), lu seulement pour un non-membre d'une communauté qui valide chaque entrée et sans demande en attente.
+- Choix : type de notification EXISTANT plutôt qu'un `community_join_rejected` neuf — les trois clients le rendent et l'ouvrent déjà (rétrocompatible), la préférence `groupInviteEnabled` le coupe.
+- Web : état « Demande refusée » + « Vous pourrez en refaire une à partir du {date} » (date `Intl` dans la langue), un statut, pas un bouton, jusqu'à `retryAt` ; puis « Demander à rejoindre ». L'événement patche le détail en cache sans relecture (`applyCommunityJoinRequestDecidedEvent`, branché dans `bindCommunityLive`). Deux clés en sept langues.
+- Cliquets partagés : `community:join-request-decided` entre dans l'asymétrie « web seul » (iOS #19948, Android #19949).
+- Témoins : passerelle `community-join-request-decided.test.ts` (8), `join-request-rejected-19879.test.ts` (6), `communities-core.test.ts` (+5) — rouges prouvés (4 échecs sans le détail, 2 sans le branchement de la route, 2 si l'annonce part vers l'intendant, 1 si l'acteur est posé). Web `community-join-request-decided.test.ts` (6), `view.test.ts` (+2), `community-membership.test.tsx` (+1), `community-live.test.ts` (+1) — rouges prouvés (3 échecs avant le code).
+- Auditeur adversarial : non bloquant. Corrigés dans le lot : titre de la notification = nom de la communauté (iOS retombait sur « Invitation à la conversation ») ; la date web dit aussi l'heure (le délai court jusqu'à l'heure du refus + 7 jours) ; le témoin « compte inutilisable » pose une vraie ligne supprimée (rouge prouvé en retirant `USABLE_ACCOUNT_WHERE`) ; la résolution du service de notification passe dans le travail différé. Restent, assumés : notification coupée par `groupInviteEnabled` (le détail dit quand même le refus) ; « Demande refusée » ne bascule qu'au prochain rendu quand la date passe écran ouvert.

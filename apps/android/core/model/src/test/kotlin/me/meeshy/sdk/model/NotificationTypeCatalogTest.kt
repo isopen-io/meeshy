@@ -136,7 +136,7 @@ class NotificationTypeCatalogTest {
 
     @Test
     fun safetySignals_areDeclaredUntoggleableAndNeverGetARow() {
-        assertThat(NotificationTypeCatalog.untoggleableWireTypes).containsExactly("wellness_check", "inactivity_alert")
+        assertThat(NotificationTypeCatalog.untoggleableWireTypes).containsExactly("wellness_check", "inactivity_alert", "safety_alert", "safety_alert_cleared")
         val shownNames = NotificationType.entries.map { it.name.lowercase() }
         NotificationTypeCatalog.untoggleableWireTypes.forEach { wire ->
             assertThat(shownNames).doesNotContain(wire)

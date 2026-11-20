@@ -102,6 +102,19 @@ export async function admitLoadedMessageAttachments(
  * Lu par identifiant puis comparé EN MÉMOIRE : le transport WS adresse une
  * conversation par son `ObjectId` ou par son `identifier`, et un filtre Prisma
  * sur `conversationId` lèverait sur le second.
+ *
+ * **Cet appariement est le cinquième du dépôt sur `(conversation,
+ * clientMessageId)`, et le seul sans `senderId`** (#19960, relevé par l'audit
+ * adversarial). Il n'est pas exploitable, et il faut dire POURQUOI plutôt que
+ * de le laisser passer pour un oubli : son appelant exige d'abord
+ * `row.uploadedBy === ownerId` — la pièce appartient à l'appelant — et la loi
+ * de propriété de la clé interdit désormais qu'une pièce à soi se retrouve
+ * liée au message d'autrui. La borne est donc transitive, pas posée ici.
+ *
+ * Elle ne se compare pas directement : `ownerId` est un `authContext.userId`
+ * (un `User.id` pour un inscrit, un `Participant.id` pour un invité), quand
+ * `Message.senderId` est toujours un `Participant.id`. Y poser l'égalité
+ * serait FAUX pour toute la population inscrite. Suivi : #19995.
  */
 async function carriersOfThisSend(
   prisma: Pick<PrismaClient, 'message'>,

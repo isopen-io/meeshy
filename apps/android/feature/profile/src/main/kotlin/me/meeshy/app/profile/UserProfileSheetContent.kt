@@ -59,6 +59,8 @@ import me.meeshy.sdk.model.profile.ProfileTab
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.battery.BatteryPersonSection
 import me.meeshy.ui.component.battery.BatteryPersonSurface
+import me.meeshy.ui.component.fall.FallPersonSection
+import me.meeshy.ui.component.fall.FallPersonSurface
 import me.meeshy.ui.component.inactivity.InactivityPersonSection
 import me.meeshy.ui.component.inactivity.InactivityPersonSurface
 import me.meeshy.ui.component.phonecall.PhoneCallPersonSection
@@ -221,6 +223,12 @@ internal fun ProfileSheetLoadedContent(
                                 userId = profile.id,
                                 name = header.displayName,
                                 surface = PhoneReachabilityPersonSurface.PROFILE,
+                            )
+                            // La chute détectée (#18748) : son épisode, et le partage avec un Sang.
+                            FallPersonSection(
+                                userId = profile.id,
+                                name = header.displayName,
+                                surface = FallPersonSurface.PROFILE,
                             )
                             // La vérification d'inactivité (#18738) : son alerte, et le partage avec un Sang.
                             InactivityPersonSection(

@@ -28,6 +28,9 @@ const logger = enhancedLogger.child({ module: 'CommunityJoinRequestLifecycle' })
 /** Trente jours sans réponse : la demande n'attend plus. */
 export const JOIN_REQUEST_TTL_MS = 30 * 24 * 3_600_000;
 
+/** Sept jours après un refus avant qu'une nouvelle demande ne parte. */
+export const JOIN_REQUEST_COOLDOWN_MS = 7 * 24 * 3_600_000;
+
 const ttlCutoff = (now: Date): Date => new Date(now.getTime() - JOIN_REQUEST_TTL_MS);
 
 /** Le filtre d'une demande en attente ENCORE VIVANTE. */

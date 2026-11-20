@@ -30,6 +30,7 @@ import { LINK_ACTIVITY_SERVER_EVENTS } from './link-activity-event-names.js';
 import { PHONE_REACHABILITY_SERVER_EVENTS } from './phone-reachability-event-names.js';
 import { INACTIVITY_SERVER_EVENTS } from './inactivity-event-names.js';
 import { PHONE_CALL_SERVER_EVENTS } from './phone-call-event-names.js';
+import { FALL_SERVER_EVENTS } from './fall-event-names.js';
 import { SHARED_LOCATION_CLIENT_EVENTS, SHARED_LOCATION_SERVER_EVENTS } from './shared-location-event-names.js';
 import { CONTACT_EXCHANGE_SERVER_EVENTS } from './contact-exchange-event-names.js';
 import { TOGETHER_CLIENT_EVENTS, TOGETHER_SERVER_EVENTS } from './together-event-names.js';
@@ -201,6 +202,7 @@ export const SERVER_EVENTS = {
   ...PHONE_REACHABILITY_SERVER_EVENTS,
   ...INACTIVITY_SERVER_EVENTS,
   ...PHONE_CALL_SERVER_EVENTS,
+  ...FALL_SERVER_EVENTS,
   ...SHARED_LOCATION_SERVER_EVENTS,
   ...CONTACT_EXCHANGE_SERVER_EVENTS,
   ...TOGETHER_SERVER_EVENTS,
@@ -648,6 +650,8 @@ export const SERVER_EVENTS = {
   COMMUNITY_DELETED: 'community:deleted',
   // Une demande d'entrée dans une communauté qui valide chaque entrée (#19429), vers ses admins et modérateurs
   COMMUNITY_JOIN_REQUESTED: 'community:join-requested',
+  // La décision sur SA demande d'entrée (#19879), vers le demandeur seul
+  COMMUNITY_JOIN_REQUEST_DECIDED: 'community:join-request-decided',
 
   // --- Packs (#10148) : l'installation d'un pack, synchronisée entre les appareils du compte ---
   PACK_INSTALLATION_UPDATED: 'pack:installation-updated',

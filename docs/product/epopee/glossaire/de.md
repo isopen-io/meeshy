@@ -74,7 +74,7 @@ Le compte de l'assistant d'inscription (`onboarding.progress`, « Schritt {curre
 - **Les vingt Gestalten** : **Funke** (clé `etincelle`, jamais « Glut »), Schimmer, **Klarheit** (clé `lumiere`, jamais « Licht »), Glanz, Strahl, Morgenrot, Komet, Stern, Sternbild, Galaxie, puis Nebel, Pulsar, Quasar, Supernova, Magnetar, Sternhaufen, Superhaufen, Kosmos, Unendlichkeit, Singularität.
 - **Die Prüfung** : tous les dix niveaux, de 10 à 100, les Ahnen demandent une épreuve. Tant qu'elle n'est pas bestanden, dein Licht wartet.
 - **Le rang ouvre la lumière** : sous Botschafter, Level 499 au plus ; Botschafter ouvre jusqu'à 1000 ; Orakel lève toute limite.
-- **A** : « Level 34 », anneau « 34 » · Glanz.
+- **A** : « Level 34 », anneau « 34 » · Glanz. Lus à voix haute, le bandeau et l'anneau disent « Dein Licht auf Level 34 » (#19892).
 - **B** : « Dein Licht strahlt als Glanz », puis en petit « Level 34 · 3.200 bis Level 35 ».
 - **Bannis** : « Noch N bis Level X » → « N bis Level X » ; « Level-Rekord » → « dein hellstes Licht » ; « Stufe » (pour un état) → « Gestalt ».
 
