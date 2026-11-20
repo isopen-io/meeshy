@@ -731,13 +731,20 @@ class SharedLocationSharingSyncTest {
     @Test
     fun `la relecture servie, une passerelle d'avant la route n'est pas une reponse, toute autre issue est une panne`() {
         val json = Json { ignoreUnknownKeys = true }
-        assertThat(ownSharedLocationAnswer(NetworkResult.Failure(ApiError("absent", httpStatus = 404)), json)).isNull()
+        val fastify = ApiError(
+            "Not Found",
+            httpStatus = 404,
+            servedMessage = "Route GET:/api/v1/relations/locations/mine not found",
+        )
+        assertThat(ownSharedLocationAnswer(NetworkResult.Failure(fastify), json)).isNull()
         assertThat(ownSharedLocationAnswer(NetworkResult.Success(SharedLocationOwnSnapshotWire(recipients = emptyList())), json))
             .isEqualTo(SharedLocationOwnSnapshot(emptyList()))
         listOf(
             NetworkResult.Failure(ApiError("panne", httpStatus = 503)),
             NetworkResult.Failure(ApiError("session", httpStatus = 401)),
             NetworkResult.Failure(ApiError("hors ligne")),
+            NetworkResult.Failure(ApiError("Not Found", code = "HTTP_404", httpStatus = 404)),
+            NetworkResult.Failure(ApiError("Not Found", httpStatus = 404, servedMessage = "404 page not found")),
             NetworkResult.Success(SharedLocationOwnSnapshotWire()),
         ).forEach { result ->
             assertThat(runCatching { ownSharedLocationAnswer(result, json) }.exceptionOrNull())
