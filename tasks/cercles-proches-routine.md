@@ -1658,3 +1658,13 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   lancés en `workflow_dispatch` sur la branche.
 - Prochain lot : #19929 (sauvegarde restaurée : liste effacée et reconstruite, identifiant en empreinte), puis le plafond
   `untilStopped` de `listOnlyState`, puis #19999 ; #19682 et #19997 attendent la décision du porteur.
+
+## 2026-11-20 — réveil de 13 h : #20042 recalée sur dev (a34b3344b)
+
+- Reprise : #20042 ouverte, tête b76cdc840. `android.yml` (run 44726589593) VERT sur e341b5182. `ios.yml` (run
+  44726594411) ROUGE au build des tests, hors lot : `SafetyAlertNotificationTests.swift:16` appelait depuis un contexte
+  non isolé une méthode `@MainActor` — défaut de `dev`, corrigé sur `dev` par 9d55ba1d6.
+- `origin/dev` (a34b3344b) fusionnée à la main, sans conflit. Gardes iOS sur l'arbre fusionné : règles maison, cohésion,
+  inscription des tests, accent, toutes rc=0. `ios.yml` relancé en `workflow_dispatch` sur la nouvelle tête.
+- Prochain lot : fusion de #20042, puis #19929, le plafond `untilStopped` de `listOnlyState`, #19999 ; #19682 et
+  #19997 attendent la décision du porteur.
