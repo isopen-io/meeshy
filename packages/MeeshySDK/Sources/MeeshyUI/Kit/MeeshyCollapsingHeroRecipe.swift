@@ -135,6 +135,13 @@ public nonisolated struct MeeshyCollapsingHeroRecipe: Sendable, Equatable {
         return max(avatarInset, avatarSpill + 8)
     }
 
+    /// L'encre du nom (#19936) : déplié, il se pose sur la page, à l'encre du thème ; replié dans une barre qui garde la
+    /// bannière sous un verre sombre, il prend l'encre des médias, comme les commandes — lisible sur toute bannière.
+    public static func titleInk(keepsBannerInBar: Bool, travel: Double) -> MeeshyCollapsingHeroInk {
+        guard keepsBannerInBar, travel.isFinite, travel >= 0.5 else { return .theme }
+        return .onMedia
+    }
+
     public static func titleGap(avatarSpill: Double) -> Double {
         guard avatarSpill.isFinite else { return titleGap }
         return max(titleGap, avatarSpill + 4)
@@ -188,4 +195,10 @@ public nonisolated struct MeeshyCollapsingHeroRecipe: Sendable, Equatable {
     private static func lerp(_ from: Double, _ to: Double, _ share: Double) -> Double {
         from + (to - from) * share
     }
+}
+
+/// L'encre du nom et du pseudo de l'en-tête repliable (#19936).
+public nonisolated enum MeeshyCollapsingHeroInk: Sendable, Equatable {
+    case theme
+    case onMedia
 }

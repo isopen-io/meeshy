@@ -90,4 +90,20 @@ struct MeeshyCollapsingHeroBannerInBarTests {
         let recipe = MeeshyCollapsingHeroRecipe.resolve(progress: 0.73)
         #expect(recipe.height > MeeshyCollapsingHeroRecipe.collapsedHeight)
     }
+
+    // MARK: Le nom replié se lit sur la bannière (#19936)
+
+    @Test("#19936 : replié sur la bannière gardée, le nom prend l'encre des médias — déplié, celle du thème")
+    func titleInk_followsWhereTheNameSits() {
+        #expect(MeeshyCollapsingHeroRecipe.titleInk(keepsBannerInBar: true, travel: 0) == .theme)
+        #expect(MeeshyCollapsingHeroRecipe.titleInk(keepsBannerInBar: true, travel: 0.49) == .theme)
+        #expect(MeeshyCollapsingHeroRecipe.titleInk(keepsBannerInBar: true, travel: 0.5) == .onMedia)
+        #expect(MeeshyCollapsingHeroRecipe.titleInk(keepsBannerInBar: true, travel: 1) == .onMedia)
+    }
+
+    @Test("#19936 : sans bannière dans la barre, le nom garde l'encre du thème, replié ou non")
+    func titleInk_withoutBanner_staysTheme() {
+        #expect(MeeshyCollapsingHeroRecipe.titleInk(keepsBannerInBar: false, travel: 1) == .theme)
+        #expect(MeeshyCollapsingHeroRecipe.titleInk(keepsBannerInBar: false, travel: .nan) == .theme)
+    }
 }

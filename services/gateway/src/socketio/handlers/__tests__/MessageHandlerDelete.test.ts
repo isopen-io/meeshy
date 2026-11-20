@@ -145,10 +145,19 @@ function makeSocket(overrides: Partial<Socket> = {}): jest.Mocked<Socket> {
  * `target.to.mockReturnValue(target)`) rendait un émetteur chaîné indiscernable
  * d'un émetteur qui aurait oublié tous les salons sauf le premier.
  */
+/**
+ * `to()` accepte une room OU un TABLEAU de rooms, comme le vrai Socket.IO
+ * (`to(room: Room | Room[])`). Le double ne prenait qu'une chaîne : un appelant
+ * qui passe un tableau — `conversationAudienceRooms` en rend un dès qu'il y a
+ * un participant à nommer (#19943) — faisait indexer les émissions sous le
+ * TABLEAU lui-même, donc sous une clé qu'aucune assertion ne peut nommer. Un
+ * double ment aussi par ce qu'il ACCEPTE : celui-ci acceptait, et rangeait
+ * l'émission là où personne ne la cherche.
+ */
 function makeIO(): jest.Mocked<SocketIOServer> {
   const emitsByRoom = new Map<string, any[][]>();
   const chain = (rooms: readonly string[]): any => ({
-    to: jest.fn((room: string) => chain([...rooms, room])),
+    to: jest.fn((room: string | string[]) => chain([...rooms, ...(Array.isArray(room) ? room : [room])])),
     except: jest.fn(() => chain(rooms)),
     emit: jest.fn((...args: any[]) => {
       for (const room of rooms) emitsByRoom.set(room, [...(emitsByRoom.get(room) ?? []), args]);
@@ -156,7 +165,7 @@ function makeIO(): jest.Mocked<SocketIOServer> {
     }),
   });
   return {
-    to: jest.fn((room: string) => chain([room])),
+    to: jest.fn((room: string | string[]) => chain(Array.isArray(room) ? [...room] : [room])),
     sockets: { adapter: { rooms: new Map() } },
     __emitsByRoom: emitsByRoom,
   } as unknown as jest.Mocked<SocketIOServer>;
@@ -649,6 +658,52 @@ describe('MessageHandler — handleMessageDelete', () => {
     await handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, callback);
 
     expect(deps.io.to).toHaveBeenCalledWith(`conversation:${VALID_CONV_ID}`);
+    expect(emitsTo(deps.io, `conversation:${VALID_CONV_ID}`)).toContainEqual([
+      'message:deleted',
+      { messageId: VALID_MSG_ID, conversationId: VALID_CONV_ID, deletedAt: expect.any(String) },
+    ]);
+  });
+
+  // #19943 — un lecteur SUR LA LISTE apprend le retrait.
+  //
+  // `message:new` part en régime PAR LECTEUR dès que le message porte une pièce
+  // protégée : sa destination est la room PERSONNELLE de chaque participant
+  // admis, room qu'on garde en quittant `conversation:<id>` pour la liste.
+  // `message:deleted` n'allait qu'à la room de conversation, et la file hors
+  // ligne ne rattrapait pas ces lecteurs-là : elle saute les CONNECTÉS. Leur
+  // cache de fil gardait donc la bulle d'un message supprimé.
+  //
+  // L'assertion porte sur le salon PERSONNEL — pas sur l'argument de `to()` —
+  // parce que c'est la remise qui est en jeu, pas la forme de l'appel.
+  it('#19943 — atteint aussi les rooms personnelles des participants vivants', async () => {
+    const listReaderUserId = 'user-on-list-00112233445566778';
+    setupSuccessfulDelete();
+    (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([
+      { id: PARTICIPANT_ID, userId: USER_ID },
+      { id: 'part-on-list', userId: listReaderUserId },
+      { id: 'part-guest-no-account', userId: null },
+    ]);
+
+    await handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, callback);
+
+    const deleted = ['message:deleted', { messageId: VALID_MSG_ID, conversationId: VALID_CONV_ID, deletedAt: expect.any(String) }];
+    expect(emitsTo(deps.io, `conversation:${VALID_CONV_ID}`)).toContainEqual(deleted);
+    expect(emitsTo(deps.io, `user:${listReaderUserId}`)).toContainEqual(deleted);
+    // Un participant SANS compte a sa room, nommée par son `Participant.id` :
+    // l'adresser par `userId` seul sauterait une room qui EXISTE.
+    expect(emitsTo(deps.io, 'user:part-guest-no-account')).toContainEqual(deleted);
+  });
+
+  // La remise directe élargie ne vaut que si l'absence de participants ne la
+  // fait pas tomber à RIEN. `loadLiveParticipantTargets` replie sur `[]` quand
+  // la lecture lève, et `conversationAudienceRooms` rend alors la room de
+  // conversation SEULE — jamais une liste vide.
+  it('#19943 — une lecture d\'audience qui LÈVE replie sur la room de conversation', async () => {
+    setupSuccessfulDelete();
+    (deps.prisma.participant.findMany as jest.Mock<any>).mockRejectedValue(new Error('participant.findMany down'));
+
+    await handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, callback);
+
     expect(emitsTo(deps.io, `conversation:${VALID_CONV_ID}`)).toContainEqual([
       'message:deleted',
       { messageId: VALID_MSG_ID, conversationId: VALID_CONV_ID, deletedAt: expect.any(String) },
