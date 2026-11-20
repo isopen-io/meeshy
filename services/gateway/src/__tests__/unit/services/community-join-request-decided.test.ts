@@ -33,8 +33,8 @@ function world(options: { community?: { name: string } | null; requester?: Reque
   const prisma = {
     community: { findFirst: jest.fn(async (_args: { where: Record<string, unknown> }) => community) },
     user: {
-      findMany: jest.fn(async (args: Record<string, unknown>) =>
-        findManyIn(requester === null ? [] : [{ isActive: true, ...requester }]).findMany(args)),
+      findFirst: jest.fn(async (args: Record<string, unknown>) =>
+        (await findManyIn(requester === null ? [] : [{ isActive: true, ...requester }]).findMany({ ...args, take: 1 }))[0] ?? null),
     },
   };
   const createNotification = jest.fn(async (_params: Record<string, unknown>) => {

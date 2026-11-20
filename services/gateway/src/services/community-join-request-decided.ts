@@ -58,10 +58,9 @@ export function joinRetryAt(decidedAt: Date): Date {
 
 async function notifyRequester(deps: JoinRequestDecidedDeps, rejection: JoinRequestRejection, communityName: string): Promise<void> {
   if (deps.notifications === null) return;
-  const [requester] = await deps.prisma.user.findMany({
-    where: { id: { in: [rejection.userId] }, ...USABLE_ACCOUNT_WHERE },
+  const requester = await deps.prisma.user.findFirst({
+    where: { id: rejection.userId, ...USABLE_ACCOUNT_WHERE },
     select: { id: true, ...RECIPIENT_LANG_SELECT },
-    take: 1,
   });
   if (!requester) return;
   const lang = recipientLanguage(requester, 'fr');
