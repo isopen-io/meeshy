@@ -5,11 +5,19 @@ import os
 /// Les deux horloges d'un appel établi : le chrono affiché chaque seconde et le
 /// battement de cœur émis vers la passerelle. Le collaborateur possède les deux
 /// tâches ; `callDuration` et `callStartDate` restent sur l'appel (#11522).
+///
+/// La DURÉE se mesure sur une horloge MONOTONE injectée (#20010), jamais sur
+/// l'horloge murale : une horloge murale reculée d'une heure gelait le chrono à 0
+/// pendant une heure, une horloge avancée gonflait `durationSeconds`.
+/// `callStartDate` reste l'ancre d'AFFICHAGE (sous-titres, Live Activity,
+/// historique) ; `durationAnchor` est celle de la MESURE.
 @MainActor
 final class CallLiveClock: CallLiveClockProviding {
     nonisolated deinit {}
 
     private weak var call: CallManager?
+    private let monotonicSeconds: @MainActor () -> TimeInterval
+    private var durationAnchor: TimeInterval?
     // PERF-011: replace Timer.scheduledTimer with cancellable @MainActor Tasks.
     // Timers run on RunLoop.main and have no native cancellation hand-off; Tasks
     // are cooperative, energy-efficient (no RunLoop wakeup overhead), and
@@ -19,6 +27,23 @@ final class CallLiveClock: CallLiveClockProviding {
 
     var isHeartbeatRunning: Bool { heartbeatTask != nil }
     var isDurationClockRunning: Bool { durationTask != nil }
+
+    init(monotonicSeconds: @escaping @MainActor () -> TimeInterval = CallMonotonicClock.seconds) {
+        self.monotonicSeconds = monotonicSeconds
+    }
+
+    var monotonicNow: TimeInterval { monotonicSeconds() }
+
+    var elapsedDuration: TimeInterval? {
+        durationAnchor.map { CallReliabilityPolicy.elapsedSeconds(since: $0, now: monotonicSeconds()) }
+    }
+
+    @discardableResult
+    func anchorDuration() -> TimeInterval {
+        let anchor = monotonicSeconds()
+        durationAnchor = anchor
+        return anchor
+    }
 
     func attach(to call: CallManager) {
         self.call = call
@@ -30,18 +55,21 @@ final class CallLiveClock: CallLiveClockProviding {
             while !Task.isCancelled {
                 guard await cancellableSleep(for: .seconds(1)), !Task.isCancelled else { return }
                 guard let self, let call = self.call else { return }
-                // Défense en profondeur : un callStartDate momentanément nil ne
-                // doit PAS tuer la boucle (l'ancien `return` gelait le chrono à
+                // Défense en profondeur : une ancre momentanément nil ne doit
+                // PAS tuer la boucle (l'ancien `return` gelait le chrono à
                 // 00:00 pour tout le reste de l'appel) — on saute juste le tick.
-                guard let start = call.callStartDate else { continue }
-                call.callDuration = CallReliabilityPolicy.elapsedSeconds(since: start, now: Date())
+                guard let elapsed = self.elapsedDuration else { continue }
+                call.callDuration = elapsed
             }
         }
     }
 
+    /// Arrêter le chrono oublie son ancre : seul le démontage de l'appel
+    /// l'arrête, et l'appel suivant se ré-ancre à sa première connexion.
     func stopDurationClock() {
         durationTask?.cancel()
         durationTask = nil
+        durationAnchor = nil
     }
 
     func startHeartbeat() {
@@ -81,11 +109,28 @@ final class CallLiveClock: CallLiveClockProviding {
 protocol CallLiveClockProviding: AnyObject {
     var isHeartbeatRunning: Bool { get }
     var isDurationClockRunning: Bool { get }
+    var monotonicNow: TimeInterval { get }
+    var elapsedDuration: TimeInterval? { get }
+    @discardableResult func anchorDuration() -> TimeInterval
     func attach(to call: CallManager)
     func startDurationClock()
     func stopDurationClock()
     func startHeartbeat()
     func stopHeartbeat()
+}
+
+/// L'horloge monotone de production : `ContinuousClock` (mach_continuous_time),
+/// qui ignore tout réglage de l'horloge murale ET continue de compter pendant
+/// le sommeil de l'appareil — `systemUptime` s'y arrête, et un appel peut
+/// durer écran verrouillé. Seules les DIFFÉRENCES ont un sens : l'origine est
+/// le premier relevé du processus.
+nonisolated enum CallMonotonicClock {
+    private static let origin = ContinuousClock.now
+
+    static func seconds() -> TimeInterval {
+        let elapsed = origin.duration(to: ContinuousClock.now).components
+        return TimeInterval(elapsed.seconds) + TimeInterval(elapsed.attoseconds) / 1e18
+    }
 }
 
 private extension Logger {

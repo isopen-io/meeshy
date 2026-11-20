@@ -73,7 +73,7 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
 
     func test_resetAccumulators_keepsTotalReconnectsOnly() {
         var recorder = CallAnalyticsRecorder()
-        recorder.callInitiatedDate = Date()
+        recorder.callInitiatedUptime = 42
         recorder.networkTransitions = 4
         recorder.recordSample(level: .good, roundTripTimeMs: 10, packetLossPercent: 1, at: Date())
         recorder.totalReconnects = 2
@@ -431,10 +431,10 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
     // MARK: - #19984 — une horloge qui recule ne rend aucune durée négative
 
     func test_callSetupMetrics_connectedBeforeAnchors_floorsAtZeroNotNegative() {
-        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        let t0: TimeInterval = 1_000_000
 
         let metrics = CallReliabilityPolicy.callSetupMetrics(
-            initiatedAt: t0, negotiationStartAt: t0.addingTimeInterval(2), connectedAt: t0.addingTimeInterval(-3)
+            initiatedAt: t0, negotiationStartAt: t0 + 2, connectedAt: t0 - 3
         )
 
         XCTAssertEqual(metrics.setupTimeMs, 0)
@@ -442,13 +442,13 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
     }
 
     func test_callSetupMetrics_missingAnchors_stayMinusOne() {
-        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        let t0: TimeInterval = 1_000_000
 
         let neverConnected = CallReliabilityPolicy.callSetupMetrics(
             initiatedAt: t0, negotiationStartAt: t0, connectedAt: nil
         )
         let noAnchors = CallReliabilityPolicy.callSetupMetrics(
-            initiatedAt: nil, negotiationStartAt: nil, connectedAt: t0.addingTimeInterval(-3)
+            initiatedAt: nil, negotiationStartAt: nil, connectedAt: t0 - 3
         )
 
         XCTAssertEqual(neverConnected.setupTimeMs, -1)
@@ -458,10 +458,10 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
     }
 
     func test_callSetupMetrics_normalAnchors_unchanged() {
-        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        let t0: TimeInterval = 1_000_000
 
         let metrics = CallReliabilityPolicy.callSetupMetrics(
-            initiatedAt: t0, negotiationStartAt: t0.addingTimeInterval(20), connectedAt: t0.addingTimeInterval(21.5)
+            initiatedAt: t0, negotiationStartAt: t0 + 20, connectedAt: t0 + 21.5
         )
 
         XCTAssertEqual(metrics.setupTimeMs, 21_500)
@@ -469,10 +469,10 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
     }
 
     func test_elapsedSeconds_startInTheFuture_isZero() {
-        let now = Date(timeIntervalSince1970: 1_000_000)
+        let now: TimeInterval = 1_000_000
 
-        XCTAssertEqual(CallReliabilityPolicy.elapsedSeconds(since: now.addingTimeInterval(3_600), now: now), 0)
-        XCTAssertEqual(CallReliabilityPolicy.elapsedSeconds(since: now.addingTimeInterval(-125), now: now), 125)
+        XCTAssertEqual(CallReliabilityPolicy.elapsedSeconds(since: now + 3_600, now: now), 0)
+        XCTAssertEqual(CallReliabilityPolicy.elapsedSeconds(since: now - 125, now: now), 125)
     }
 
     func test_payload_negativeCallDuration_emitsZeroDuration() {

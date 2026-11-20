@@ -12,9 +12,11 @@ nonisolated struct CallAnalyticsContext: Sendable {
 }
 
 nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
-    var callInitiatedDate: Date?
-    var negotiationStartDate: Date?
-    var connectedDate: Date?
+    /// Instants MONOTONES (`CallLiveClock.monotonicNow`, #20010) : les délais
+    /// de mise en place ne bougent pas quand l'horloge murale est réglée.
+    var callInitiatedUptime: TimeInterval?
+    var negotiationStartUptime: TimeInterval?
+    var connectedUptime: TimeInterval?
     var networkTransitions = 0
     var qualitySeconds: [VideoQualityLevel: Double] = [:]
     var lastQualityDate: Date?
@@ -86,9 +88,9 @@ nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
 
     func payload(now: Date, context: CallAnalyticsContext) -> [String: Any] {
         let setupMetrics = CallReliabilityPolicy.callSetupMetrics(
-            initiatedAt: callInitiatedDate,
-            negotiationStartAt: negotiationStartDate,
-            connectedAt: connectedDate
+            initiatedAt: callInitiatedUptime,
+            negotiationStartAt: negotiationStartUptime,
+            connectedAt: connectedUptime
         )
         let qualityDistribution = CallReliabilityPolicy.qualityDistribution(
             accumulatedSeconds: qualitySeconds,
