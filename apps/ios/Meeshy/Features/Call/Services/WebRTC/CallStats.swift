@@ -358,22 +358,26 @@ nonisolated struct CallMediaQuality: Equatable, Sendable {
 // MARK: - Aberrant values (#19933)
 
 /// **Une mesure aberrante n'est pas une mesure** : `getStats` peut rendre NaN,
-/// l'infini, un négatif ou un compteur hors de `Int`. Une valeur non finie ou
-/// négative vaut 0 (non mesurée) ; un compteur trop grand plafonne à `Int.max`
-/// au lieu de faire planter la conversion. La passerelle refuse tout le
-/// `call:analytics` pour une seule valeur non finie ou négative.
+/// l'infini, un négatif ou un compteur démesuré. Une valeur non finie ou
+/// négative vaut 0 (non mesurée), et un compteur au-delà de 2^53 − 1 aussi,
+/// comme sur le web : la passerelle (zod 4, `.int()`) refuse tout le
+/// `call:analytics` pour un entier hors de `Number.MAX_SAFE_INTEGER`. Les cumuls
+/// plafonnent au même seuil, si bien que la somme de deux compteurs ne déborde
+/// jamais `Int` en aval (`WebRTCService.intervalLossRatio`).
 nonisolated enum CallStatValue {
+    static let maxSafeCount = 9_007_199_254_740_991
+
     static func measured(_ value: Double) -> Double {
         value.isFinite && value > 0 ? value : 0
     }
 
     static func count(_ value: Double) -> Int {
         let valid = measured(value)
-        return valid >= Double(Int.max) ? Int.max : Int(valid)
+        return valid > Double(maxSafeCount) ? 0 : Int(valid)
     }
 
     static func sum(_ lhs: Int, _ rhs: Int) -> Int {
         let (total, overflow) = lhs.addingReportingOverflow(rhs)
-        return overflow ? Int.max : total
+        return overflow ? maxSafeCount : min(total, maxSafeCount)
     }
 }

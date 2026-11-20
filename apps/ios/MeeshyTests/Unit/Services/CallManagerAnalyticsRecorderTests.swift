@@ -225,7 +225,7 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
     }
 
     @MainActor
-    func test_reduce_countersBeyondIntRange_saturateInsteadOfCrashing() {
+    func test_reduce_countersBeyondMaxSafeInteger_areNotMeasured() {
         let stats = CallStats.reduce(entries: [
             Self.entry("a", "inbound-rtp", kind: "audio", values: ["packetsLost": 1e300, "packetsReceived": 1e300, "bytesReceived": 1e300]),
             Self.entry("v", "inbound-rtp", kind: "video", values: ["packetsLost": 1e300, "packetsReceived": 1e300, "bytesReceived": 1e300]),
@@ -233,12 +233,36 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
             Self.entry("p", "candidate-pair", values: ["availableOutgoingBitrate": 1e300]),
         ])
 
-        XCTAssertEqual(stats.packetsLost, Int.max)
-        XCTAssertEqual(stats.inboundPacketsReceived, Int.max)
-        XCTAssertEqual(stats.bytesReceived, Int.max)
-        XCTAssertEqual(stats.outboundPacketsSent, Int.max)
-        XCTAssertEqual(stats.bandwidth, Int.max)
-        XCTAssertEqual(stats.availableOutgoingBitrateBps, Int.max)
+        XCTAssertEqual(stats.packetsLost, 0)
+        XCTAssertEqual(stats.inboundPacketsReceived, 0)
+        XCTAssertEqual(stats.bytesReceived, 0)
+        XCTAssertEqual(stats.outboundPacketsSent, 0)
+        XCTAssertEqual(stats.bandwidth, 0)
+        XCTAssertEqual(stats.availableOutgoingBitrateBps, 0)
+    }
+
+    @MainActor
+    func test_reduce_manyCountersAtMaxSafeInteger_cumulateWithinMaxSafeInteger() {
+        let maxSafe = Double(CallStatValue.maxSafeCount)
+        let stats = CallStats.reduce(entries: (0..<4).flatMap { index in [
+            Self.entry("a\(index)", "inbound-rtp", kind: "audio", values: ["packetsLost": maxSafe, "packetsReceived": maxSafe]),
+            Self.entry("v\(index)", "inbound-rtp", kind: "video", values: ["packetsLost": maxSafe, "packetsReceived": maxSafe]),
+        ] })
+
+        XCTAssertEqual(stats.packetsLost, CallStatValue.maxSafeCount)
+        XCTAssertEqual(stats.inboundPacketsReceived, CallStatValue.maxSafeCount)
+    }
+
+    @MainActor
+    func test_intervalLossRatio_firstReadingWithHostileStats_doesNotOverflow() {
+        let hostile = CallStats.reduce(entries: [
+            Self.entry("a", "inbound-rtp", kind: "audio", values: ["packetsLost": 1e300, "packetsReceived": 1e300]),
+            Self.entry("v", "inbound-rtp", kind: "video", values: ["packetsLost": 9e15, "packetsReceived": 9e15]),
+        ])
+
+        let ratio = WebRTCService.intervalLossRatio(hostile, previous: nil)
+
+        XCTAssertTrue(ratio.isFinite && ratio >= 0 && ratio <= 1, "ratio = \(ratio)")
     }
 
     @MainActor
@@ -266,7 +290,7 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
 
         XCTAssertEqual(quality.freezeCount, 0)
         XCTAssertEqual(quality.totalFreezesDuration, 0)
-        XCTAssertEqual(quality.nackCount, Int.max)
+        XCTAssertEqual(quality.nackCount, 0)
         XCTAssertEqual(quality.pliCount, 0)
         XCTAssertEqual(quality.concealedSamples, 0)
         XCTAssertEqual(quality.jitterBufferDelayMs, 0)
@@ -307,6 +331,26 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
 
             ["averageRtt", "averagePacketLoss", "maxPacketLoss"].forEach { Self.assertMeasured(payload[$0], "\($0) pour \(aberrant)") }
             XCTAssertNotNil(payload["mos"], "le MOS reste calculé")
+        }
+    }
+
+    func test_payload_hostileMediaCounters_stayWithinMaxSafeInteger() {
+        [1e300, 1_152_921_504_606_846_976].forEach { hostile in
+            var recorder = CallAnalyticsRecorder()
+            let quality = CallMediaQuality.reduce(entries: [
+                Self.entry("v", "inbound-rtp", kind: "video", values: ["freezeCount": hostile, "nackCount": hostile, "pliCount": hostile]),
+                Self.entry("a", "inbound-rtp", kind: "audio", values: ["concealedSamples": hostile]),
+            ])
+            recorder.recordSample(level: .good, roundTripTimeMs: 100, packetLossPercent: 1, at: Date(timeIntervalSince1970: 100))
+            recorder.recordMedia(quality, jitterMs: 10)
+
+            let payload = recorder.payload(now: Date(timeIntervalSince1970: 101), context: Self.makeContext())
+
+            ["freezeCount", "concealedSamples", "nackCount", "pliCount"].forEach { field in
+                let value = payload[field] as? Int
+                XCTAssertNotNil(value, "\(field) absent pour \(hostile)")
+                XCTAssertTrue((0...CallStatValue.maxSafeCount).contains(value ?? -1), "\(field) = \(value ?? -1) pour \(hostile)")
+            }
         }
     }
 
