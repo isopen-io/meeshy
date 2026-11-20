@@ -276,7 +276,7 @@ class SharedLocationSharingCenterTest {
     }
 
     @Test
-    fun `la liste gardee reprend au lancement pour son compte seulement et une echeance passee se solde`() = runTest {
+    fun `la liste gardee reprend au lancement pour son compte seulement et une echeance passee se solde apres la relecture`() = runTest {
         val rig = Rig(this, account = "me")
         rig.saved["me"] = SharedLocationRoster.EMPTY
             .adding(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR, nowMillis = -2 * hour)
@@ -287,6 +287,11 @@ class SharedLocationSharingCenterTest {
             .stored()
 
         rig.center.restore()
+        runCurrent()
+        assertThat(rig.starts).isEmpty()
+
+        rig.center.sync()
+        rig.center.reconcile()
         runCurrent()
 
         assertThat(rig.center.roster.value.entry(bob)).isNotNull()

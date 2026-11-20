@@ -130,7 +130,9 @@ final class SharedLocationSharingCenter: ObservableObject {
     private let wakes: SharedLocationWakeScheduling
     private let owner: String
     private let currentAccount: () -> String?
-    private let served: @MainActor () async -> SharedLocationOwnSnapshot?
+    /// La relecture à trois états (#19928) : la liste servie ; `nil` quand la passerelle ne sert pas la relecture
+    /// (passerelle d'avant #18389) ; une erreur levée quand elle n'a pas abouti (panne).
+    private let served: @MainActor () async throws -> SharedLocationOwnSnapshot?
     private let gate = SharedLocationSerialGate()
     private var abandoned = false
     private var lastSent: SharedLocationUpdateGate.Sent?
@@ -145,8 +147,11 @@ final class SharedLocationSharingCenter: ObservableObject {
         didSet { if publishedStart != oldValue { store.savePublishedStart(publishedStart) } }
     }
     /// Relancé avec une liste qu'il publiait, l'appareil suit sa position mais n'en envoie rien avant d'avoir relu ce que
-    /// la passerelle sert (#19767) : un autre appareil a pu reprendre le partage pendant qu'il dormait. Une relecture qui
-    /// n'aboutit pas (hors ligne, passerelle d'avant) lève l'attente, comme un « Partager » d'ici.
+    /// la passerelle sert (#19767) : un autre appareil a pu reprendre le partage pendant qu'il dormait. Seuls une
+    /// relecture servie, une passerelle d'avant (qui ne sert pas la relecture) ou un « Partager » d'ici lèvent l'attente ;
+    /// une relecture en PANNE (hors ligne, session expirée, erreur, délai) la garde et se rejoue au rythme `retryDelay`
+    /// (#19928) — fermé en cas de doute. Tant qu'elle tient, `reconcile` n'envoie rien non plus : une liste seule
+    /// périmée retirerait ce qu'un autre appareil a ajouté, et la passerelle tient elle-même chaque échéance (#18205).
     private var awaitsServedTruth = false
     private var following = Set<AnyCancellable>()
     private var deadline: AnyCancellable?
@@ -167,7 +172,7 @@ final class SharedLocationSharingCenter: ObservableObject {
         wakes: SharedLocationWakeScheduling = TaskSharedLocationWakeScheduler(),
         socketReady: AnyPublisher<Void, Never> = Empty().eraseToAnyPublisher(),
         ownChanged: AnyPublisher<Void, Never> = Empty().eraseToAnyPublisher(),
-        served: @escaping @MainActor () async -> SharedLocationOwnSnapshot? = { nil }
+        served: @escaping @MainActor () async throws -> SharedLocationOwnSnapshot? = { nil }
     ) {
         self.emitter = emitter
         self.fixes = fixes
@@ -322,6 +327,10 @@ final class SharedLocationSharingCenter: ObservableObject {
                 self.scheduleDeadline()
                 return nil
             }
+            guard !self.awaitsServedTruth else {
+                if self.isLive { self.arm(after: Self.retryDelay) }
+                return .refused(.unconfirmed)
+            }
             let problem = await self.withdrawingRepublish(pruned)
             if problem != nil, self.isLive { self.arm(after: Self.retryDelay) }
             return problem
@@ -329,12 +338,21 @@ final class SharedLocationSharingCenter: ObservableObject {
     }
 
     /// Se recale sur le partage que la passerelle sert : un autre appareil du compte a pu le changer (#18578). Une
-    /// relecture qui échoue (hors ligne, passerelle d'avant #18389) ne change rien.
+    /// relecture qui échoue (panne, passerelle d'avant #18389) ne change pas la liste ; une PANNE garde en plus
+    /// l'attente d'un appareil relancé et rejoue la relecture plus tard (#19928).
     func sync() async {
         _ = await locked {
-            let read = await self.served()
+            let read: SharedLocationOwnSnapshot?
+            do {
+                read = try await self.served()
+            } catch {
+                if self.isLive, self.awaitsServedTruth { self.arm(after: Self.retryDelay) }
+                return nil
+            }
             guard self.isLive else { return nil }
+            let wasAwaiting = self.awaitsServedTruth
             self.awaitsServedTruth = false
+            defer { if wasAwaiting { self.scheduleDeadline() } }
             guard let truth = read else { return nil }
             if truth.shareBattery != nil { self.servesShareOptions = true }
             if truth.acceptsManualSource { self.servesFixedPoint = true }
@@ -449,7 +467,7 @@ final class SharedLocationSharingCenter: ObservableObject {
     /// qui n'est plus servi), comme une relecture qui ne conclut pas : vider sur la foi d'une panne laisserait la
     /// personne servie. Seul un partage servi VIDE vide la liste, sans arrêt ni relevé.
     private func settleNotSharing() async -> SharedLocationShareProblem? {
-        let truth = await served()
+        let truth = try? await served()
         guard isLive else { return .refused(.failed) }
         guard let truth, truth.recipients.isEmpty else { return .refused(.unconfirmed) }
         wipe()
@@ -600,10 +618,14 @@ final class SharedLocationSharingCenter: ObservableObject {
     }
 
     /// Le minuteur ne fait que réveiller : la réconciliation tourne à part, pour qu'un nouveau minuteur ne l'annule pas.
+    /// Un appareil relancé dont la relecture était en panne la rejoue d'abord (#19928).
     private func arm(after delay: TimeInterval) {
         deadline = wakes.schedule(after: delay) { [weak self] in
             guard let self else { return }
-            Task { @MainActor in await self.reconcile() }
+            Task { @MainActor in
+                if self.awaitsServedTruth { await self.sync() }
+                await self.reconcile()
+            }
         }
     }
 
@@ -739,6 +761,19 @@ enum SharedLocationSharingHolder {
             .sink { _ in warm() }
     }
 
+    /// La relecture à trois états (#19928) : une passerelle d'avant #18389 ne connaît pas la route (404) et rend `nil` ;
+    /// toute autre erreur (hors ligne, session expirée, 5xx, délai) est une PANNE et remonte.
+    @MainActor
+    static func readOwn(
+        _ read: @MainActor () async throws -> SharedLocationOwnSnapshot
+    ) async throws -> SharedLocationOwnSnapshot? {
+        do {
+            return try await read()
+        } catch MeeshyError.server(statusCode: 404, message: _) {
+            return nil
+        }
+    }
+
     static func center() -> SharedLocationSharingCenter {
         let userId = AuthManager.shared.currentUser?.id ?? ""
         if let current, current.userId == userId { return current.center }
@@ -756,7 +791,7 @@ enum SharedLocationSharingHolder {
                 .map { _ in () }
                 .eraseToAnyPublisher(),
             ownChanged: SharedLocationEvents.ownChanged,
-            served: { try? await RelationsService.shared.ownSharedLocation() }
+            served: { try await readOwn { try await RelationsService.shared.ownSharedLocation() } }
         )
         current = (userId, center)
         return center

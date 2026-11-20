@@ -345,13 +345,19 @@ final class SharedLocationSharingCenterTests: XCTestCase {
         XCTAssertNil(store.kept)
     }
 
-    func test_aKeptRosterPastItsDeadline_isShownAsEnded_andStopsTheServerShare() async {
+    /// L'arrêt d'un partage échu attend la relecture (#19928) : un « arrêter » vaut pour tout le compte, et un autre
+    /// appareil a pu reprendre le partage pendant que celui-ci dormait. La passerelle tient l'échéance elle-même.
+    func test_aKeptRosterPastItsDeadline_isShownAsEnded_andStopsTheServerShareOnceRead() async {
         let store = FakeSharedLocationRosterStore()
         store.kept = SharedLocationRoster.empty.adding(userId: alice, precision: .exact, duration: .oneHour, now: t0.addingTimeInterval(-7200))
         let (sut, emitter, fixes, _) = makeSUT(store: store)
 
         XCTAssertNil(sut.entry(for: alice))
 
+        await sut.reconcile()
+        XCTAssertEqual(emitter.stops, 0)
+
+        await sut.sync()
         await sut.reconcile()
 
         XCTAssertEqual(emitter.stops, 1)
