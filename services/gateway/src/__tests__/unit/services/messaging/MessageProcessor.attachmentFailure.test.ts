@@ -320,7 +320,14 @@ describe('MessageProcessor.saveMessage — l’échec d’une pièce jointe (#19
 
       await expect(sendWithPieces()).rejects.toThrow();
 
-      expect(attUpdateMany).toHaveBeenCalledWith({ where: { messageId: MSG_ID }, data: { messageId: null } });
+      // #19971 — la libération rend AUSSI la protection que l'association
+      // venait de poser : une pièce rendue marquée par un message qui n'existe
+      // plus imposerait sa vue unique au message SUIVANT (l'association
+      // n'AJOUTE que de la protection).
+      expect(attUpdateMany).toHaveBeenCalledWith({
+        where: { messageId: MSG_ID },
+        data: { messageId: null, isViewOnce: false, isBlurred: false, effectFlags: 0 },
+      });
     });
 
     it('efface les enveloppes libsignal, DÉJÀ parties sur le fil, avant la ligne', async () => {
