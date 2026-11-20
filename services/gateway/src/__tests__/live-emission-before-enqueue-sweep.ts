@@ -116,6 +116,15 @@ const ENQUEUE_CALLS = [
   // déclarer ne la referme pas : le quatrième site de #17026 vivait dedans, sur
   // le transport REST/ZMQ, où ce qui se perd est le message ENTIER.
   'syncConversationListOnNewMessage',
+  // #19977 — un enfilage reçu en PARAMÈTRE. `deliverCallSummaryEdit` enfile par
+  // un rappel que son appelant lui remet, donc aucun des noms ci-dessus
+  // n'apparaît dans l'unité : le site a quitté la portée de ce balayage le jour
+  // même où il a cessé d'être gardé, et le cliquet est resté VERT. Un délégué
+  // ANONYME est un délégué quand même — la limite n°2 se referme ici d'un cran.
+  'deliverCallSummaryEdit',
+  // Et le RAPPEL lui-même : `deliverCallSummaryEdit` reçoit son enfilage en
+  // paramètre, donc aucun nom de méthode n'apparaît dans l'unité qui enfile.
+  'enqueue',
 ] as const;
 
 const ENQUEUE_RE = new RegExp(

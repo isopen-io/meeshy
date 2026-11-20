@@ -110,12 +110,57 @@ const ANNONCE_READ_STATUSES: AdresseDepreciee = {
  * déjà ») ; la garde élargie l'a refusé, à raison — un `Link` que le client ne
  * peut pas suivre tel quel désinforme plus qu'il n'informe (`Deprecation`
  * SANS successeur suivable serait honnête ; un GABARIT qui a l'air résolu ne
- * l'est pas). Deux issues restent ouvertes pour qui voudrait annoncer CETTE
- * porte proprement : élargir `utils/deprecation.ts` pour qu'un
- * `AdresseDepreciee` sans `successeur` pose `Deprecation` seul (hors
- * territoire de #4423 — fichier `utils/`), ou constater qu'aucun client ne
+ * l'est pas). Pour annoncer CETTE porte proprement, il reste à élargir
+ * `utils/deprecation.ts` pour qu'un `AdresseDepreciee` sans `successeur` pose
+ * `Deprecation` seul (hors territoire de #4423 — fichier `utils/`).
+ *
+ * ─── CETTE PORTE A DEUX APPELANTS, TOUS DEUX MONTÉS (#20052) ────────────────
+ *
+ * Ce paragraphe offrait une SECONDE issue : « constater qu'aucun client ne
  * l'appelle (mesuré au moment de #4423 : zéro appelant REST dans `apps/`,
- * `packages/MeeshySDK/`) et la retirer plutôt que l'annoncer.
+ * `packages/MeeshySDK/`) et la retirer plutôt que l'annoncer ». **C'est faux
+ * aujourd'hui**, et l'option est RETIRÉE — pas corrigée en « remesurer »,
+ * parce qu'une permission conditionnelle posée ici se relit comme une
+ * permission.
+ *
+ * iOS — l'onglet « Vues » du détail d'un message (appui long → « Plus… ») :
+ *
+ *     ConversationView+MessageSheets.swift:44  → MessageMoreSheet(
+ *     MessageMoreSheet.swift:484               → MessageViewsDetailView(…)
+ *     MessageViewsDetailView.swift:615         → MessagesEndpoint.byMessageIdReadStatus
+ *     MessagesEndpoint.swift:29                → /api/v1/messages/{id}/read-status
+ *
+ * Android — la même fiche, et c'est la MOITIÉ que la première relecture de
+ * #20052 avait manquée en s'arrêtant au premier client trouvé :
+ *
+ *     ChatSheetsHost.kt:409                    → MessageViewsSheet(…)
+ *     MessageViewsSheet.kt:113                 → MessageViewsViewModel
+ *     ReadStatusRepository.kt:106              → api.readStatus(messageId)
+ *     MessageApi.kt:179                        → @GET("messages/{id}/read-status")
+ *
+ * Les deux servent les compteurs reçu / lu / pas vu et les listes nominatives.
+ * `ReadStatusData` en est le SEUL producteur de part et d'autre ; retirer la
+ * route laisserait iOS dans le `catch` de `loadReadStatus`
+ * (`MessageViewsDetailView.swift:629`), donc sur « Impossible de charger les
+ * données », et Android sur le repli d'échec de `ReadStatusRepository` —
+ * indéfiniment, et sur toutes les conversations des deux plateformes.
+ *
+ * **Le décodeur, lui, est conforme** — confronté champ par champ au corps de
+ * `MessageReadStatusService.getMessageReadStatus` : les cinq compteurs sont
+ * toujours servis, `receivedAt` / `readAt` ne sont poussés que sous condition
+ * donc jamais `null` là où Swift les déclare requis, et les `Date` brutes
+ * sortent en ISO par `JSON.stringify`, que `MeeshyCoders.decodeDate` lit. Il
+ * n'y a pas de défaut de forme ici : il y avait un défaut de PRÉMISSE.
+ *
+ * Ce qui l'a rendu durable n'est pas l'erreur mais sa FORME : l'affirmation
+ * était datée (« au moment de #4423 »), donc vraie à l'écriture, et posée à
+ * l'endroit exact où quelqu'un vient chercher la permission de supprimer —
+ * une phrase qui dispense précisément de remesurer ce qu'elle affirme. D'où
+ * la règle pour ce fichier : **une affirmation de non-usage porte sa date ET
+ * la commande qui la rejoue**, sans quoi elle ne se vérifie pas, elle se
+ * croit.
+ *
+ *     grep -rn "byMessageIdReadStatus\|/read-status" apps/ packages/ --include=*.swift --include=*.kt --include=*.ts
  */
 
 export default async function messageReadStatusRoutes(fastify: FastifyInstance) {
