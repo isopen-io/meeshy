@@ -6,7 +6,16 @@ import { createFakeE2EEStore, type FakeE2EEStore } from './fake-e2ee-store';
 const ALICE = 'a1'.repeat(12);
 const BOB = 'b2'.repeat(12);
 const MALLORY = 'e5'.repeat(12);
+/**
+ * #20091 — un membre BANNI dont la ligne est restée `isActive: true`. L'état
+ * existe en base (le producteur est fermé depuis #19688, aucune migration n'a
+ * repris les lignes existantes), et son appareil n'est pas retiré : seule la
+ * clause de PARTICIPATION VIVANTE l'écarte de l'annuaire.
+ */
+const BANNI = 'f7'.repeat(12);
 const CONVERSATION = 'f6'.repeat(12);
+/** La paire `e2ee` du piège de #20091 : Alice et un banni dont la ligne est restée active. */
+const PAIRE_BANNIE = 'f8'.repeat(12);
 const ALICE_SESSION = 'c3'.repeat(12);
 const BOB_SESSION = 'd4'.repeat(12);
 const MESSAGE = '0a'.repeat(12);
@@ -22,10 +31,15 @@ function seeded(): { store: FakeE2EEStore; relay: E2EEEnvelopeRelay } {
   device(BOB, 1, 201, BOB_SESSION);
   device(BOB, 2, 202, 'bb'.repeat(12), new Date());
   device(MALLORY, 1, 301, 'ee'.repeat(12));
+  device(BANNI, 1, 401, 'ff'.repeat(12));
   store.collections.Participant.insert({ conversationId: CONVERSATION, userId: ALICE });
   store.collections.Participant.insert({ conversationId: CONVERSATION, userId: BOB });
   store.collections.Participant.insert({ conversationId: CONVERSATION, userId: null, type: 'anonymous' });
   store.collections.Participant.insert({ conversationId: CONVERSATION, userId: MALLORY, isActive: false });
+  // #20091 — la PAIRE du piège, à part : dans la conversation nominale, un
+  // membre de plus changerait l'annuaire de TOUS les témoins d'à côté.
+  store.collections.Participant.insert({ conversationId: PAIRE_BANNIE, userId: ALICE });
+  store.collections.Participant.insert({ conversationId: PAIRE_BANNIE, userId: BANNI, isActive: true, bannedAt: NOW });
   return { store, relay: createE2EEEnvelopeRelay({ prisma: store.prisma as never, now: () => NOW }) };
 }
 
@@ -52,11 +66,51 @@ const refusalOf = async (promise: Promise<unknown>): Promise<E2eeRelayRefusedErr
 
 describe("le relais d'enveloppes libsignal", () => {
   describe("admission d'un envoi", () => {
-    it('admet un envoi qui adresse chaque appareil actif des participants, sauf l’émetteur', async () => {
+
+    /**
+     * #20091 — L'ANNUAIRE RESTE LARGE, et ce témoin le GÈLE.
+     *
+     * L'annuaire est bien une AUDIENCE au sens de #16690, et un premier jet du
+     * lot l'avait resserré sur la loi de participation vivante. L'audit
+     * adversarial a mesuré que la prémisse était FAUSSE : les trois lectures
+     * qui servent la liste de membres au client — et `mayReadKeysOf`, qui
+     * autorise la lecture des clés — sont toutes en `isActive` NU. Resserrer
+     * ici FAIT DIVERGER l'annuaire de ce que l'émetteur adresse, et
+     * `compareDeviceSets` exige l'égalité EXACTE : le résultat n'est pas une
+     * audience plus étroite, c'est un `409 DEVICES_MISMATCH` sur CHAQUE envoi.
+     *
+     * Le chiffrement de bout en bout étant réservé aux PAIRES, le
+     * banni-mais-actif y est le SEUL pair : la panne frappe donc le membre
+     * légitime, définitivement, dans une conversation que rien ne ramène en
+     * clair (#12949).
+     *
+     * **Ce témoin est un PIÈGE ARMÉ, délibérément** (règle du cycle 84) : il
+     * tombe le jour où quelqu'un resserre cette clause, et l'oblige à voir ce
+     * qu'il casse — ou à faire converger les quatre lectures dans le même lot,
+     * ce qui est #20093. Il n'atteste pas que la clause large est BONNE ; il
+     * atteste qu'on a mesuré ce que la resserrer coûte.
+     */
+    it("garde dans l'annuaire un membre banni dont la ligne est restée active — #20093 avant de resserrer", async () => {
       const { relay } = seeded();
-      await expect(relay.admit({ conversationId: CONVERSATION, senderUserId: ALICE, relay: relayRequest() })).resolves.toMatchObject({
-        senderDeviceId: 1,
-      });
+
+      // Sans adresser le banni : REFUSÉ, parce que l'annuaire le porte.
+      const manquant = await refusalOf(
+        relay.admit({
+          conversationId: PAIRE_BANNIE,
+          senderUserId: ALICE,
+          relay: relayRequest({ envelopes: [envelope(ALICE, 2, 102)] }),
+        }),
+      );
+      expect(manquant.code).toBe(E2EE_ERROR_CODES.DEVICES_MISMATCH);
+
+      // En l'adressant : ADMIS. C'est l'état MESURÉ, pas l'état souhaité.
+      await expect(
+        relay.admit({
+          conversationId: PAIRE_BANNIE,
+          senderUserId: ALICE,
+          relay: relayRequest({ envelopes: [envelope(ALICE, 2, 102), envelope(BANNI, 1, 401)] }),
+        }),
+      ).resolves.toMatchObject({ senderUserId: ALICE });
     });
 
     it('refuse en 409 E2EE_DEVICES_MISMATCH une liste incomplète, en trop ou périmée — et le dit', async () => {

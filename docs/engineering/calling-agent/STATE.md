@@ -2070,3 +2070,35 @@ socket jusqu'au client.
    - fusionner la PR.
 1. #20069 (iOS : répartition de qualité monotone, et témoin de comportement de l'ancrage), puis #19953 (Android).
 2. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
+
+## Cycle 61 — 2026-11-20
+
+- **Base** : `origin/dev` @ `34ceac63e`, puis `903bba6bc` fusionnée dans la branche. #20070 (#20010, cycle 60) est fusionnée.
+- **Branche** : `claude/determined-volta-pdn1ri`. **PR** : #20090.
+- **Objectif** : #20069. La répartition de qualité iOS (`qualityDistribution`) se mesure sur l'horloge monotone, et l'ancrage à la connexion a un test de comportement.
+- **Livré** (iOS seulement) :
+  - `CallAnalyticsRecorder.recordSample(at: TimeInterval)` : `lastQualityUptime` remplace `lastQualityDate`. Le site d'appel (`CallManager+WebRTCDelegate`) passe `liveClock.monotonicNow`.
+  - `payload(uptime:)` replie la fenêtre ouverte sur la même horloge (`CallManager+Teardown`). `CallReliabilityPolicy.qualityDistribution` prend des instants monotones.
+  - `CallAnalyticsRecorder.anchorConnection(on:)` extrait l'ancrage. Elle est appelée par `resetCallClockIfNeeded`.
+  - Le payload, le serveur, le web et Android ne changent pas. Les valeurs ne changent pas non plus quand l'horloge ne saute pas.
+- **Tests** :
+  - 2 témoins dans `CallManagerAnalyticsRecorderTests`. Le premier attend 2 s, alors que dev donnait 3602 s. Le second attend 0,5/0,5, alors que dev donnait 0,00055/0,99945.
+  - 2 témoins d'ancrage dans `CallLiveClockTests`, avec une horloge monotone injectée.
+  - Rouge : par calcul et par compilation, l'API étant absente sur dev. Le conteneur n'a pas Swift.
+  - Vert : `workflow_dispatch` d'`ios.yml`, ciblé sur les suites d'appel. Le résultat est dans la PR.
+  - Gardes `house_rules`, `cohesion`, `test_registration` et accent : 0.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves, toutes faibles.
+  - R1 : l'assertion sur l'horloge murale des témoins ne pouvait pas tomber. Elle est retirée : ces témoins éprouvent la soustraction, et c'est le type `TimeInterval`, ajouté à la garde de texte, qui interdit `Date()`.
+  - R2 : le câblage du site `resetCallClockIfNeeded` reste tenu par la garde de texte, parce que `CallManager` a un init privé.
+  - R3 : `dev` est fusionnée dans la branche.
+- **Limites** : rien n'a été vérifié sur appareil. `at: Date().timeIntervalSince1970` compilerait encore ; seule la garde de texte le refuse.
+
+### Cycle suivant : par où reprendre
+
+0. Si #20090 n'est pas fusionnée :
+   - lire son run `ios.yml` ;
+   - fusionner `dev` dans la branche ;
+   - fusionner la PR.
+1. #19953 (Android).
+2. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
+3. Dette d'horloge murale de faible impact, côté Android : `CallToastBus`, `CallReliabilityMonitor`, `CallCaptureViewModel` (cf. cycle 60). Ouvrir une issue si elle n'existe pas.

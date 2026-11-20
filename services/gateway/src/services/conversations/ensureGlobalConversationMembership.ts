@@ -4,6 +4,7 @@ import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { MEMBER_COUNT_DISPLAY_CAP } from '@meeshy/shared/utils/member-visibility';
 import { PRIVILEGED_PLATFORM_ROLES } from '@meeshy/shared/utils/platform-privilege';
 import { emitArrivalsLineUpdate, postGlobalArrival, type GlobalArrivalsDeps } from './globalArrivalsNotice';
+import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
 import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount';
 import type { ConversationRoomEmitter } from '../../socketio/emitToConversationParticipants';
 import type { AfterResponse } from '../../utils/after-response';
@@ -273,7 +274,16 @@ async function emitMemberCountBestEffort(
       where: { conversationId: params.conversationId, isActive: true },
     });
 
-    const others = { conversationId: params.conversationId, isActive: true, ...differsOrUnset('userId', params.userId) };
+    // #20091 — la loi VIVANTE pour l'AUDIENCE, et `isActive` NU pour le COMPTE
+    // juste au-dessus : ce ne sont pas la même question. Le compte dit combien
+    // ils sont (et décide la branche d'effectif) ; `others` dit QUI reçoit
+    // l'arrivée — identité du nouveau venu et effectif — donc il épelle la loi.
+    //
+    // Ce site a été trouvé par ce qu'un balayage ne voyait PAS : son `where` est
+    // une VARIABLE, et le discriminant textuel du cliquet #16690 ne lit que des
+    // littéraux. Il était donc nu, dans la portée élargie, et invisible à la
+    // mesure qui a motivé #20091.
+    const others = { conversationId: params.conversationId, ...PARTICIPATION_VIVANTE, ...differsOrUnset('userId', params.userId) };
     const audience = memberCount <= MEMBER_COUNT_DISPLAY_CAP
       ? await deps.prisma.participant.findMany({
           where: others,

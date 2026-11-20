@@ -13,7 +13,7 @@ import {
   PARTICIPANT_RIGHT_NAMES,
   type ParticipantRightName,
 } from '../../services/participantRights';
-import { canAccessConversation } from './utils/access-control';
+import { canAccessConversation, PARTICIPATION_VIVANTE } from './utils/access-control';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
 import { accorder, refuser, type VerdictDeGeste } from './utils/participant-geste-verdict';
 import type { PasserelleSocketDeConversation } from './utils/participant-geste-socket';
@@ -337,8 +337,17 @@ async function annoncerDroits(options: {
       // hôte qui est AUSSI l'intéressé (rare : un admin octroie l'historique
       // à un autre admin) reçoit deux fois la même charge sur sa room —
       // idempotent, jamais faux.
+      //
+      // #20091 — la loi VIVANTE, et pas `isActive` NU : cette charge est
+      // délibérément CACHÉE à la room de conversation (elle porte les `rights`
+      // non rabotés et `historyVisibleFrom`, soit jusqu'où un autre membre peut
+      // lire l'historique). Sous la lecture nue, un hôte BANNI dont la ligne est
+      // restée active — l'état legacy que #16690 nomme — gardait un flux complet
+      // de décisions de modération sur les autres membres. **Un banni n'est plus
+      // un hôte** : la seule chose qui le dise dans un `where` est la garde de
+      // bannissement.
       const hosts = await prisma.participant.findMany({
-        where: { conversationId, isActive: true, role: { in: [...CONVERSATION_HOST_ROLE_MATCHES] } },
+        where: { conversationId, ...PARTICIPATION_VIVANTE, role: { in: [...CONVERSATION_HOST_ROLE_MATCHES] } },
         select: { id: true, userId: true }
       });
       for (const room of participantUserRooms(hosts)) {

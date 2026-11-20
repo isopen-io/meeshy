@@ -737,6 +737,82 @@ co-appartenance ne vaut rien : la route passe TOUTES ses lignes par
 `resolveForTargets(viewer, ids)`, et `hasAccess` ne gouverne plus que la liste.
 Le seul régime est le strict ; la seule variable est le viewer.
 
+## Une audience de diffusion lit la participation VIVANTE — et le cliquet qui le garde balaie `src/` ENTIER
+
+`PARTICIPATION_VIVANTE` (`isActive: true` **et** `bannedAt` nul ou absent) est
+la loi que les portes d'accès DEVRAIENT épeler — et **elle n'est pas tenue
+partout : mesuré au cycle 194, ~100 lectures qui nomment un membre lisent
+`isActive` nu, contre ~22 qui épellent la loi.** Deux comptent particulièrement,
+et ce sont des issues ouvertes, pas des détails : `POST /conversations/:id/messages`
+(`messages-send.ts`) n'appelle pas `canAccessConversation` et admet sur
+`isActive` nu — un banni-mais-actif peut encore ENVOYER — et `assertMember` du
+relais de signal E2EE fait de même.
+
+> **Ne pas lire la phrase « c'est la loi de toute porte » comme une mesure.**
+> C'est une cible. Le cycle 194 a écrit l'absolu ici, et son audit adversarial
+> l'a mesuré faux le jour même — un document qui dit vrai sur le principe et
+> faux sur l'état est plus coûteux qu'un document absent (§ cliquet de la table
+> des routes).
+
+Les DIFFUSEURS la doivent aussi, et la distinction qui décide du sens d'un
+correctif est celle-ci (#16690) :
+
+| la liste répond à | l'appliquer veut dire | la loi |
+|---|---|---|
+| **qui REÇOIT** (audience) | servir | la plus ÉTROITE — `PARTICIPATION_VIVANTE` |
+| **qui ne doit RIEN recevoir** (exclusion, liste de refus) | taire | la plus LARGE — `isActive` nu, **délibérément** |
+| **COMBIEN ils sont** (mesure) | afficher un nombre | dire ce que le nombre alimente ; la troncature et le sur-comptage y sont des nombres FAUX, pas des fuites |
+
+Une ligne `isActive: true, bannedAt ≠ null` **existe en base** : son producteur
+est fermé (#19688, #10436), aucune migration n'a repris les lignes existantes,
+et sa room `user:<id>` est rejointe INCONDITIONNELLEMENT.
+
+**Le cliquet balaie `src/` entier depuis #20091**, et il porte DEUX inventaires
+qu'il ne faut jamais fondre en un :
+
+- `DELIBERATELY_WIDE` — « ce site DOIT être large », avec sa raison instruite ;
+- `MEASURED_NOT_INSTRUCTED` — « on ne sait pas encore ce que ce site décide »,
+  avec sa famille et son issue.
+
+> **« Décidé large » et « pas encore instruit » ne sont pas la même phrase, et
+> les confondre transforme une dette en autorisation** — dans un inventaire
+> unique, on lira toujours « décidé ».
+
+Trois choses à savoir avant d'y toucher :
+
+- **Il PUBLIE ce qu'il ne sait pas juger** (`sweepUnjudgeableParticipantReads`) :
+  un `where` qui est un appel, un ternaire ou un paramètre n'a pas de littéral à
+  lire. Une variable déclarée par un `const` du même fichier est résolue ; rien
+  d'autre. Un site resserré dont le `where` reste illisible n'a AUCUN témoin —
+  mesuré : la mutation inverse laissait le cliquet vert.
+- **Sa clé est `fichier#rang-de-la-requête`**, stable à l'édition et PAS à
+  l'élargissement du discriminant : un lot qui touche le discriminant reclasse
+  l'inventaire entier, il ne fait pas que l'étendre.
+- **Une audience derrière une égalité EXACTE n'a pas de dégradation d'un cran —
+  et c'est pourquoi l'annuaire d'appareils E2EE reste LARGE.** `directoryOf` est
+  comparé par `isDeviceSetExact` : le resserrer ferait DIVERGER l'annuaire de ce
+  que l'émetteur adresse, puisque les trois lectures qui servent la liste de
+  membres au client (et `mayReadKeysOf`) sont nues — donc `409 DEVICES_MISMATCH`
+  sur chaque envoi. Et l'E2EE étant réservé aux PAIRES, le banni-mais-actif y
+  est le SEUL pair : la panne frappe le membre légitime, définitivement, dans
+  une conversation que rien ne ramène en clair. **Resserrer ce site seul est
+  net-NÉGATIF**, et un témoin l'a gelé ; la convergence des quatre lectures est
+  #20093.
+
+  > Devant une liste qui alimente une comparaison exacte, la question n'est pas
+  > « est-elle trop large ? » mais **« que fait le site d'en face quand elle ne
+  > correspond pas, et qui paie ? »** — puis *qui compose la liste d'en face, et
+  > sous quelle clause ?*. La seconde question est celle que le cycle 194 avait
+  > sautée : il avait vérifié la FONCTION de garde, pas le `select` qui SERT la
+  > liste.
+
+Et avant de qualifier une clause nue de fuite : **« un audit qui liste des
+`select:` ne liste pas des fuites » vaut aussi des `where:`.**
+`messageMentions.loadMentionParticipants` lit la clause nue et c'est un
+RÉSOLVEUR — l'autorisation vit en aval, dans `validateMentionPermissions`, qui
+épelle la loi. La question n'est pas « cette clause est-elle la bonne ? » mais
+**« qui AUTORISE ce que cette clause rend ? »**.
+
 ## Un fichier `X.ts` à côté d'un répertoire `X/` : lequel est chargé ?
 
 Le fichier. Node résout **LOAD_AS_FILE avant LOAD_AS_DIRECTORY**, donc un import

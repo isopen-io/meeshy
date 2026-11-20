@@ -222,7 +222,7 @@ extension CallManager: WebRTCServiceDelegate {
                 level: level,
                 roundTripTimeMs: stats.roundTripTimeMs,
                 packetLossPercent: packetLossPercent,
-                at: Date()
+                at: self.liveClock.monotonicNow
             )
             // Record the concrete effects the filter config exposes (effectsUsed).
             let filterConfig = self.webRTCService.videoFilters.config
