@@ -26,7 +26,7 @@ export const LIVE_AUDIENCE_PAGE = 2000;
  * pouvoir tourner sans fin, pas pour borner un coût : l'enfilage hors ligne de
  * la même mutation relit ces mêmes lignes SANS plafond ni pagination, quelques
  * lignes plus bas dans le même appel (`offlineParticipantQueue`). C'est une
- * dette mesurée, et elle a son issue.
+ * dette mesurée, et c'est #20020.
  */
 export const LIVE_AUDIENCE_MAX_PAGES = 25;
 
@@ -42,8 +42,8 @@ export const LIVE_AUDIENCE_MAX_PAGES = 25;
  * lecture soit PARTAGÉE avec la file hors ligne : là, `[]` vaudrait « aucun
  * participant » et n'enfilerait pour PERSONNE (règle du cycle 116, « `[]` par
  * défaut décide à la place du consommateur »). Tant que ce partage n'est pas
- * fait, aucun appelant n'a le droit de lire `batches` comme un inventaire
- * complet sans regarder `complete`.
+ * fait (#20020), aucun appelant n'a le droit de lire `batches` comme un
+ * inventaire complet sans regarder `complete`.
  */
 export type LiveAudience = {
   readonly batches: ReadonlyArray<ReadonlyArray<ParticipantRoomTarget>>;
@@ -159,7 +159,7 @@ export function filterLiveAudience(
  * exige d'élargir la porte d'émission (`ServerEmitIO`) à `except` chez ses
  * trois porteurs et chez tous leurs doubles, pour supprimer un doublon
  * idempotent dans une conversation de plus de 2 000 membres. Elle n'est pas
- * écartée, elle est à son prix : une issue à elle.
+ * écartée, elle est à son prix : #20021.
  */
 export function conversationAudienceRoomBatches(
   conversationId: string,

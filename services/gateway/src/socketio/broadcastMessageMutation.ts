@@ -379,7 +379,12 @@ export async function broadcastMessageMutation(rawParams: MessageMutationParams)
   // cette fonction (`deleted`, `expired`, `pinned`, `unpinned`) ne portent que
   // des ids, pas de contenu : leur audience ne change pas ici, et c'est une
   // décision — révéler l'EXISTENCE d'un message est une question distincte,
-  // suivie par sa propre issue.
+  // suivie par **#17029** (la décision produit : une suppression, une expiration
+  // ou une épingle révèlent-elles l'existence d'un message hors du plancher
+  // d'historique ?) et par **#18681** (le REJEU de ces familles sans texte,
+  // borné par rien). Les NOMMER est le correctif de #20007 : « suivie par sa
+  // propre issue » a coûté à l'audit de #19954 une recherche qu'un numéro
+  // rendait inutile — un renvoi sans adresse n'est pas un renvoi.
   const readership: MessageReadership =
     params.eventType === 'edited'
       ? await messageReadership(params.prisma, conversationId, messageId, onError)
