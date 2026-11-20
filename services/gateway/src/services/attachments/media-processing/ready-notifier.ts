@@ -17,6 +17,21 @@
  *
  * Toutes les lignes qui partagent les octets (copies de diffusion et de
  * transfert) sont prévenues : le worker les a toutes écrites.
+ *
+ * ─── Pourquoi `attachment:ready` n'a PAS d'entrée de file (#20045) ───────────
+ *
+ * Parce qu'une relecture sert la vérité : `processingState` est persisté sur la
+ * LIGNE, donc le prochain chargement le sert — l'auteur retrouve l'état de ce
+ * qu'il a envoyé sans qu'on lui rejoue l'annonce. La réponse était déjà dans ce
+ * fichier, mais seulement dans le `catch` de {@link handleMediaReady} (« le
+ * prochain chargement le servira »), c'est-à-dire énoncée pour un ÉCHEC de
+ * notification et jamais pour l'ABSENCE de file : qui cherchait « faut-il
+ * l'enfiler ? » ne pouvait pas la trouver là.
+ *
+ * Le verdict est déclaré, et tenu, par `UNQUEUED_FAMILY_VERDICT`
+ * (`socketio/unqueuedFamilyVerdict.ts`) : une famille neuve ne compile pas sans
+ * sa réponse, et le témoin de ce module vérifie que la citation ci-dessus ne
+ * pourrit pas.
  */
 import { SERVER_EVENTS, type AttachmentReadyEventData, type MediaProcessingState } from '@meeshy/shared/types/socketio-events';
 import { enhancedLogger } from '../../../utils/logger-enhanced.js';
