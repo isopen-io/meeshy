@@ -27,7 +27,7 @@ import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/locat
 import { stickerFromMetadata, hoistStickerOnto } from '../../services/stickers/messageSticker';
 import { resolveForwardSourceGateForReader } from '../../services/preferences/forward-source-visibility.js';
 import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forwarded-attachment-urls.js';
-import { servedDescription } from '../../services/attachments/mediaSideContent';
+import { servedSideContent, type SideContentRow } from '../../services/attachments/mediaSideContent';
 import { servedAttachmentTranslations } from '../../services/attachments/servedAttachmentTranslations';
 import { FORWARD_PIECE_PROTECTION_SELECT, FORWARD_SOURCE_PROTECTION_SELECT, forwardPreviewOf, signReaderAttachmentsIn } from '../../services/attachments/signedAttachmentUrls';
 import type { ReaderFileUrlSigner } from '../../services/attachments/readerFileSignature';
@@ -101,7 +101,10 @@ export function cleanAttachmentsForApi(
     // #12333 — la description sous la loi de `servedDescription` ; la ligne
     // du message porteur (chargée pour cette seule loi) ne sort jamais.
     const { message: _carrier, ...row } = att as RawMessageAttachment & { message?: unknown };
-    const cleaned: CleanedAttachment = { ...row, ...servedDescription(att as Parameters<typeof servedDescription>[0]) };
+    // #19978 — `servedSideContent` et non `servedDescription` : le spread de
+    // `row` répandait `transcription` et les mots des pistes traduites juste à
+    // côté de la description qu'on gardait.
+    const cleaned: CleanedAttachment = { ...row, ...servedSideContent(att as RawMessageAttachment & SideContentRow) };
 
     // BUG2 A' — agréger les réactions par-image en reactionSummary + currentUserReactions
     // (miroir des réactions message-level) et retirer les rows brutes.
