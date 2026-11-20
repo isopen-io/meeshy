@@ -1,4 +1,3 @@
-import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 import {
@@ -8,6 +7,7 @@ import {
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { scanLiveParticipants, type LiveParticipantScan } from './conversationAudienceRooms';
 import type { QueuedEventVariant } from './queuedEventContract';
 import { isServerAtRestMode } from '../services/messaging/serverAtRest';
 import { carriesMessageText } from './queuedEventContract';
@@ -324,6 +324,33 @@ async function messageStillHasTextToKeep(
   }
 }
 
+/**
+ * Les deux projections de la MÊME question, nommées parce qu'elles sont la
+ * SEULE chose qui distingue les deux lectures de cette unité : le `where`, la
+ * borne, la sonde et le verdict de complétude vivent dans
+ * `scanLiveParticipants` (#20020).
+ *
+ * La restriction par langue exige les préférences du lecteur, que la projection
+ * nominale ne porte pas — et qu'aucun appelant restreint ne fournit via
+ * `params.participants`. Le chemin chaud (`broadcastNewMessage`, jamais
+ * restreint) garde donc sa liste pré-chargée et sa projection à deux colonnes.
+ */
+const QUEUE_ROOM_TARGET_SELECT = { id: true, userId: true } as const;
+
+const PRISM_QUEUE_SELECT = {
+  id: true,
+  userId: true,
+  language: true,
+  user: {
+    select: {
+      systemLanguage: true,
+      regionalLanguage: true,
+      customDestinationLanguage: true,
+      deviceLocale: true,
+    },
+  },
+} as const;
+
 export async function enqueueForOfflineParticipants(
   deps: OfflineParticipantQueueDeps,
   params: OfflineParticipantQueueParams
@@ -369,34 +396,55 @@ export async function enqueueForOfflineParticipants(
   const livenessProbe = messageStillHasTextToKeep(prisma, messageId, eventType);
 
   try {
-    // La restriction par langue exige les préférences du lecteur, que la
-    // projection nominale ne porte pas — et qu'aucun appelant restreint ne
-    // fournit via `params.participants`. On requête donc nous-mêmes dans ce cas,
-    // en élargissant le `select` pour ce seul chemin : le chemin chaud
-    // (`broadcastNewMessage`, jamais restreint) garde sa liste pré-chargée et
-    // sa projection à deux colonnes.
-    const participants: OfflineQueueParticipant[] = restrictToLanguage
-      ? await prisma.participant.findMany({
-          where: { conversationId, ...PARTICIPATION_VIVANTE },
-          select: {
-            id: true,
-            userId: true,
-            language: true,
-            user: {
-              select: {
-                systemLanguage: true,
-                regionalLanguage: true,
-                customDestinationLanguage: true,
-                deviceLocale: true,
-              },
-            },
-          },
-        })
-      : params.participants ??
-        (await prisma.participant.findMany({
-          where: { conversationId, ...PARTICIPATION_VIVANTE },
-          select: { id: true, userId: true },
-        }));
+    // #20020 — les deux lectures passent par le site UNIQUE de la borne. Elles
+    // n'avaient AUCUN plafond, et c'est ce qui rendait sans objet l'argument de
+    // coût du plafond de l'audience : le même appel relisait les mêmes lignes
+    // juste à côté, sans borne, pour la même mutation.
+    //
+    // La troncature n'a PAS ici le prix qu'elle a pour une diffusion. Celle-ci
+    // replie sur la room de conversation ; la file, dont la garantie est
+    // DURABLE, perd des entrées que RIEN ne rejouera — d'où le `scanLabel`,
+    // qui met ce prix dans le journal plutôt que dans un commentaire. Au-delà
+    // de 50 000 participants vivants, la réparation n'est pas de relever le
+    // plafond mais de paginer cette lecture sous un index qui serve son tri
+    // (ce qu'aucun index de `Participant` ne fait aujourd'hui : l'audit de
+    // #20007 l'a mesuré).
+    const scan: LiveParticipantScan<OfflineQueueParticipant> | null =
+      restrictToLanguage !== null
+        ? await scanLiveParticipants<OfflineQueueParticipant>(
+            prisma,
+            conversationId,
+            PRISM_QUEUE_SELECT,
+            { scanLabel: `offline-queue:${eventType}:prism` },
+          )
+        : params.participants
+          ? null
+          : await scanLiveParticipants<OfflineQueueParticipant>(
+              prisma,
+              conversationId,
+              QUEUE_ROOM_TARGET_SELECT,
+              { scanLabel: `offline-queue:${eventType}` },
+            );
+
+    // Une lecture qui n'a RIEN prouvé et RIEN rendu n'est pas « aucun
+    // participant » : c'est une panne, et la file ne décide pas sur une panne
+    // (cycle 116). Même sortie qu'avant ce lot — le `catch` de fin de méthode
+    // portait ce cas, la requête nue LEVANT. `scanLiveParticipants` ne lève
+    // pas, donc le refus est désormais ÉCRIT ici, et il dit laquelle des deux
+    // phrases il refuse.
+    if (scan !== null && !scan.complete && scan.rows.length === 0) {
+      logger.warn('Failed to fetch participants for offline enqueue', { conversationId, eventType });
+      return;
+    }
+
+    // Une lecture TRONQUÉE enfile ce qu'elle a nommé : les 50 000 premiers
+    // valent mieux que personne, et `scanLiveParticipants` a déjà journalisé ce
+    // que la queue des suivants a coûté. C'est le seul chemin du dépôt où une
+    // troncature d'audience coûte une garantie DURABLE, et il le dit.
+    const participants: OfflineQueueParticipant[] = scan
+      ? (scan.rows as OfflineQueueParticipant[])
+      : (params.participants as OfflineQueueParticipant[]);
+
     // Le verdict est consommé ICI, après que la liste soit là : les deux attentes
     // se recouvrent, donc la profondeur d'attente est celle d'AVANT ce lot.
     if (!(await livenessProbe)) return;
