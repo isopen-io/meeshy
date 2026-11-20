@@ -68,7 +68,7 @@ export function VitrineCapabilities({
           </Heading>
           <ul className="flex flex-wrap gap-2">
             {opened.map((row) => (
-              <li key={row.key} data-vitrine-capability={row.key} className="rounded-chip px-3 py-1.5 text-caption font-semibold" style={{ backgroundColor: 'var(--color-ios-fill, rgba(127,127,127,.14))' }}>
+              <li key={row.key} data-vitrine-capability={row.key} className="rounded-chip px-3 py-1.5 text-caption font-semibold" style={{ /* harmony-exempt: repli d'un jeton de charte défini (--color-ios-fill), jamais rendu */ backgroundColor: 'var(--color-ios-fill, rgba(127,127,127,.14))' }}>
                 {translate(language, row.labelKey)}
               </li>
             ))}

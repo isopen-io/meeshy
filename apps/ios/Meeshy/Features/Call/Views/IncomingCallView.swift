@@ -288,7 +288,7 @@ struct IncomingCallView: View {
             size: 110,
             accentColor: MeeshyColors.brandPrimaryHex
         )
-        .avatarRingWithin(ProfileDecorResolver.ring(peerProfile?.profileDecor?.avatarRing), footprint: 110)
+        .avatarRing(ProfileDecorResolver.ring(peerProfile?.profileDecor?.avatarRing), avatarSize: 110)
         .shadow(color: MeeshyColors.indigo500.opacity(0.4), radius: 16, y: 6)
     }
 

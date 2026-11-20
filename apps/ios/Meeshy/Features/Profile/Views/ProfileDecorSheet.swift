@@ -461,6 +461,11 @@ struct ProfileDecorEntry: View {
         String(localized: "profile.decor.title", defaultValue: "Contour et bannière", bundle: .main)
     }
 
+    /// Le titre de la section qui porte la rangée sur ma Vitrine (#19986).
+    static var sectionTitle: String {
+        String(localized: "profile.decor.section", defaultValue: "Apparence", bundle: .main)
+    }
+
     static var subtitle: String {
         String(localized: "profile.decor.subtitle", defaultValue: "Visibles de tous sur ton profil", bundle: .main)
     }

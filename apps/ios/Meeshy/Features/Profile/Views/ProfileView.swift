@@ -263,9 +263,12 @@ struct ProfileView: View {
         return MeeshyCollapsingHero(
             progress: progress,
             title: heroTitle,
-            subtitle: user.map { "@\($0.username)" },
+            subtitle: user.map { ProfileMembershipLine.handle(
+                username: $0.username, createdAt: $0.createdAt, locale: Self.interfaceLocale, now: Date(),
+                inBar: MeeshyCollapsingHeroRecipe.resolve(progress: progress).barOwnsIdentity) },
             expandedHeight: ProfileOwnHeroPlan.expandedHeight,
             collapsedHeight: ProfileOwnHeroPlan.collapsedHeight,
+            topInset: ProfileOwnHeroPlan.controlTop,
             isLoading: user == nil,
             keepsBannerInBar: true,
             avatarSpill: Double(ProfileOwnAvatar.reserveBelow(user, avatarSize: CGFloat(MeeshyCollapsingHeroRecipe.avatarExpanded))),
@@ -529,10 +532,12 @@ struct ProfileView: View {
         }
         if languagesMode == .reorderable { languagesSection }
         activitySection.meeshyCascade(rank: 2)
-        voiceBlock.meeshyCascade(rank: 3)
+        legendSection.meeshyCascade(rank: 3)
+        if !isEditing { appearanceSection.meeshyCascade(rank: 4) }
+        voiceBlock.meeshyCascade(rank: 5)
         if !isEditing, let userId = user?.id {
             ProfilePublicationsSection(userId: userId, accentColor: accentColor)
-                .meeshyCascade(rank: 4)
+                .meeshyCascade(rank: 6)
         }
     }
 
@@ -551,7 +556,7 @@ struct ProfileView: View {
         }
     }
 
-    /// Qui je suis, au repos (planche `Main`) : sous le nom et le @pseudo du héros, ma ville et mon ancienneté, ma bio,
+    /// Qui je suis, au repos (planche `Main`) : sous le nom, le @pseudo et l'ancienneté du héros, ma ville, ma bio,
     /// mes langues en pastilles, puis la puce de chiffrement — du texte, aucune carte formulaire. La puce qui arrive
     /// après `loadEncryption()` monte par le jeton du kit, jamais d'un coup.
     private var restingIdentity: some View {
@@ -664,9 +669,9 @@ struct ProfileView: View {
         }
     }
 
-    /// Ville et ancienneté, dans la langue de l'interface.
+    /// Ma ville déclarée ; l'ancienneté se lit sous mon nom, avec le pseudo (#19987).
     private var membershipLine: String? {
-        ProfileMembershipLine.text(city: user?.declaredCity, createdAt: user?.createdAt, locale: Self.interfaceLocale, now: Date())
+        ProfileMembershipLine.city(user?.declaredCity)
     }
 
     /// La langue dans laquelle l'app me parle : le mois de l'ancienneté se dit dans la même langue que sa phrase.
@@ -704,17 +709,26 @@ struct ProfileView: View {
 
     // MARK: - Activity Section
 
-    /// Mon activité (ex-Statistiques) : la bande des trois nombres ouvre les statistiques détaillées ; dessous, ma
-    /// Légende et mon décor, là où je cherche « où j'en suis ».
+    /// Mon activité (ex-Statistiques) : son titre et la bande des trois nombres, qui ouvre les statistiques détaillées.
     private var activitySection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             MeeshySectionHeader(title: ProfileActivityBand.title)
             ProfileActivityBand(stats: stats, isLoading: statsLoading, isOffline: statsOffline, accentColor: accentColor,
                                 onOpen: openActivity, onRetry: retryStats)
-            progressionEntry
-            if !isEditing {
-                ProfileDecorEntry(user: user, onOpenShop: { router.openPackShop(domain: $0) }, onPickBanner: { bannerItem = $0 })
-            }
+        }
+    }
+
+    /// « Ma Légende », une section à part entière (#19986) : la carte porte son propre titre.
+    private var legendSection: some View {
+        progressionEntry
+    }
+
+    /// « Apparence » (#19986) : la rangée du contour et de la bannière sous son titre, plus orpheline entre la Légende
+    /// et les publications.
+    private var appearanceSection: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            MeeshySectionHeader(title: ProfileDecorEntry.sectionTitle)
+            ProfileDecorEntry(user: user, onOpenShop: { router.openPackShop(domain: $0) }, onPickBanner: { bannerItem = $0 })
         }
     }
 

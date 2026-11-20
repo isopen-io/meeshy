@@ -200,11 +200,4 @@ enum ProfileVitrineCopy {
     static var completionTitle: String {
         String(localized: "profile.vitrine.completion.title", defaultValue: "Profil complété", bundle: .module)
     }
-
-    /// « Membre depuis janv. 2026 » : le mois abrégé et l'année, dans la langue du téléphone.
-    static func memberSince(_ date: Date, locale: Locale = .current) -> String {
-        let since = date.formatted(.dateTime.month(.abbreviated).year().locale(locale))
-        return String(format: String(localized: "profile.vitrine.memberSince", defaultValue: "Membre depuis %@",
-                                     bundle: .module, locale: locale), since)
-    }
 }
