@@ -136,8 +136,8 @@ describe('la libération n’est pas une course (#19956)', () => {
 
   it('efface ce qui PEND au message avant sa ligne — les enveloppes libsignal en tête', async () => {
     const { prisma } = makeStore(['a'], 'zzz', 'zzz');
-    const envelopes = jest.fn(async () => ({ count: 2 }));
-    const del = jest.fn(async () => ({ id: MSG_ID }));
+    const envelopes = jest.fn(async (_args: unknown) => ({ count: 2 }));
+    const del = jest.fn(async (_args: unknown) => ({ id: MSG_ID }));
     const spied = { ...prisma, messageEnvelope: { deleteMany: envelopes }, message: { delete: del } } as unknown as AttachmentFailurePrisma;
 
     await discardMessageAfterLinkFailure(spied, { messageId: MSG_ID });

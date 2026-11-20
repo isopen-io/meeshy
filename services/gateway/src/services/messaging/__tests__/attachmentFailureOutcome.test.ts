@@ -25,9 +25,9 @@ import { MESSAGE_SCOPED_MODELS } from '../messageScopedRows';
 
 const MSG_ID = '507f1f77bcf86cd799439033';
 
-function makePrisma(overrides: { deleteImpl?: () => Promise<unknown>; updateManyImpl?: () => Promise<unknown> } = {}) {
-  const del = jest.fn(overrides.deleteImpl ?? (async () => ({ id: MSG_ID })));
-  const updateMany = jest.fn(overrides.updateManyImpl ?? (async () => ({ count: 2 })));
+function makePrisma(overrides: { deleteImpl?: (args: unknown) => Promise<unknown>; updateManyImpl?: (args: unknown) => Promise<unknown> } = {}) {
+  const del = jest.fn(overrides.deleteImpl ?? (async (_args: unknown) => ({ id: MSG_ID })));
+  const updateMany = jest.fn(overrides.updateManyImpl ?? (async (_args: unknown) => ({ count: 2 })));
   const prisma = {
     message: { delete: del },
     messageAttachment: { updateMany },
