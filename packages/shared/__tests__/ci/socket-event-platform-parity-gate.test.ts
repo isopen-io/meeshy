@@ -121,6 +121,13 @@ const ASYMETRIES: readonly {
   {
     absents: ['ios'],
     raison:
+      "les demandes d'entrée d'une communauté qui valide chaque arrivée, lues par les intendants : "
+      + 'le web (#19871) et Android (#19878) les relisent en direct, iOS #19877 en porte la lecture.',
+    events: ['community:join-requested'],
+  },
+  {
+    absents: ['ios'],
+    raison:
       "la décision sur sa propre demande d'entrée en communauté : le web (#19879) et Android (#19949) "
       + "la lisent en direct ; le miroir iOS est #19948.",
     events: ['community:join-request-decided'],

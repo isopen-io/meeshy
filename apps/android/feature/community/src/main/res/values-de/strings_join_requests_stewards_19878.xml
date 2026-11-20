@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Les demandes d'entrée que tranchent les intendants (#19878) — mêmes mots que les clés iOS community.members.requests.* (#19877). -->
+<resources>
+    <string name="community_members_requests_section">Offene Anfragen</string>
+    <string name="community_members_requests_more">Weitere Anfragen anzeigen</string>
+    <string name="community_members_requests_accept_label">Anfrage von %1$s annehmen</string>
+    <string name="community_members_requests_reject_label">Anfrage von %1$s ablehnen</string>
+    <string name="community_members_requests_asked">Angefragt am %1$s</string>
+    <string name="community_members_requests_reject">Ablehnen</string>
+    <string name="community_members_requests_reject_confirm_body">%1$s kann sieben Tage lang keine neue Anfrage stellen.</string>
+    <string name="community_members_requests_accepted">%1$s gehört jetzt zur Community.</string>
+    <string name="community_members_requests_gone">Diese Anfrage wurde bereits bearbeitet.</string>
+    <string name="community_members_requests_failed">Die Entscheidung wurde nicht übernommen. Versuche es erneut.</string>
+</resources>
