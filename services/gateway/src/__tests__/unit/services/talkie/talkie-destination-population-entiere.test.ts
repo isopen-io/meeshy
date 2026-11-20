@@ -1,45 +1,47 @@
 /**
- * LA DESTINATION DE LA COPIE VOCALE D'UN TALKIE NE S'AMPUTE PLUS DE SA
- * POPULATION (#19905).
+ * CE QUE LA DESTINATION D'UNE COPIE VOCALE DOIT RETENIR, GARDÉ DU DEHORS.
  *
- * `mostRecentSharedConversation` bornait ses candidates par DEUX clauses qui,
- * sous MongoDB, exigent toutes deux la clé PRÉSENTE :
+ * **L'implémentation que ces témoins gardent n'est pas celle de ce lot.** Elle est
+ * arrivée par #19910 (PR #19932), fusionnée dans `dev` pendant que cette branche
+ * attendait sa CI, et elle est plus complète que ce que la branche portait : au
+ * `unsetOrNull('deletedAt')`, au régime dit en POSITIF et au `unsetOrNull('communityId')`
+ * qu'ils exercent ci-dessous, elle ajoute l'état terminal (`closedAt`), la hiérarchie
+ * d'écriture avec la dispense du tête-à-tête, et le `deletedForMe` de l'émetteur.
+ * Ces témoins-ci passent contre elle sans modification, et c'est leur intérêt :
+ * **ils n'ont été écrits contre aucune de ces deux implémentations en particulier**,
+ * seulement contre ce que la fonction doit RETENIR.
  *
- *   deletedAt: null                  une ÉGALITÉ — elle n'apparie pas la clé ABSENTE
- *   NOT: SERVER_BLIND_REGIME_FILTER  une NÉGATION — même exigence (#8309)
+ * Ce qu'ils exercent, et pourquoi chacun pouvait tomber :
  *
- * Or **aucun chemin de création n'écrit `Conversation.deletedAt`** : son unique
- * écrivain du dépôt est `obsoleteConversation.ts`, qui pose une DATE (jamais
- * `null`) au moment de la mise au rebut. Une conversation VIVANTE n'a donc pas
- * la clé, et la première clause écartait **la population entière** — ce n'est
- * pas un cas limite, c'est tout le monde. L'émetteur enregistrait sa voix pour
- * rien, en silence : `null` rendu, aucune copie proposée, aucune erreur.
- *
- * ─── Pourquoi la SECONDE clause partait avec la première ────────────────────
- *
- * `SERVER_BLIND_REGIME_FILTER` est écrit pour être lu POSITIVEMENT — son
- * doc-comment le dit (« sans négation de document : un champ absent n'y entre
- * jamais »). Ce site était le SEUL du dépôt à le NIER, et une négation réveille
- * exactement le piège que sa forme positive avait fermé. Son complément existe,
- * déclaré comme tel dans le même fichier : `SERVER_READABLE_REGIME_FILTER`, qui
- * dit l'absence dans une branche (`isSet: false`). Les deux filtres sont des
- * complements EXACTS — `NOT BLIND ≡ READABLE` — donc la substitution ne change
- * rien à ce qui est retenu, et retire la dépendance à la sémantique du `NOT`.
- *
- * **C'est strictement mieux que de la mesurer** : une forme positive n'a pas de
- * sémantique de négation à connaître.
+ * - **La POPULATION.** `{ deletedAt: null }` est une ÉGALITÉ sous MongoDB : elle exige
+ *   la clé PRÉSENTE. Or l'unique écrivain de `Conversation.deletedAt` du dépôt
+ *   (`obsoleteConversation.ts`) pose une DATE à la mise au rebut, jamais `null` : une
+ *   conversation VIVANTE n'a pas la clé, et la clause les écartait TOUTES. Ce n'était
+ *   pas un cas limite — l'émetteur enregistrait sa voix pour rien, sans erreur ni trace.
+ * - **Le RÉGIME dit en POSITIF.** `NOT: SERVER_BLIND_REGIME_FILTER` portait la même
+ *   exigence par un autre chemin : toute négation exige la clé présente (#8309), donc
+ *   une conversation sans `encryptionMode` en sortait aussi. Les deux formes s'accordent
+ *   sur la VALEUR du mode et divergent sur la clé ABSENTE — c'est-à-dire sur la
+ *   population.
+ * - **La COMMUNAUTÉ.** Le doc-comment de la fonction promet depuis #17141 qu'« une copie
+ *   n'atterrit ni dans une communauté, ni dans une conversation chiffrée ». La seconde
+ *   moitié était tenue par le filtre de régime ; la première ne l'était par RIEN. Un
+ *   salon de communauté est une `Conversation` de type `group` portant un `communityId`,
+ *   dont les membres sont des participants actifs : deux membres d'une même communauté
+ *   le PARTAGENT au sens de cette fonction. Et les clients ne rejouent pas leur loi sur
+ *   une destination NOMMÉE — le web court-circuite `mayCarryTheCopy`, iOS ne contrôle
+ *   rien : le vocal privé d'Alice à Bob serait publié dans le salon.
  *
  * ─── Ce que ces témoins exigent du double ──────────────────────────────────
  *
- * Les documents VIVANTS d'ici n'ont **ni la clé `deletedAt` ni la clé
- * `encryptionMode`** — la forme que les treize chemins de création produisent.
- * Un double qui lit `row.deletedAt === null` pour une clé absente les rendrait
- * tous verts ; `matchesMongoWhere` sépare l'absence du nul, et c'est la seule
- * raison pour laquelle ils peuvent tomber. Les témoins de #19835
- * (`surfaces-la-plus-recemment-active.test.ts`) posaient `deletedAt: null` et
- * `encryptionMode: null` EXPLICITEMENT dans leurs fixtures : ils ne pouvaient
- * pas voir ce défaut — c'est la forme de la leçon 318, où la fixture de l'un
- * portait `leftAt: null` à la main.
+ * Les documents VIVANTS d'ici n'ont **ni la clé `deletedAt` ni la clé `encryptionMode`**
+ * — la forme que les treize chemins de création produisent. Un double qui lit
+ * `row.deletedAt === null` pour une clé absente les rendrait tous verts ;
+ * `matchesMongoWhere` sépare l'absence du nul, et c'est la seule raison pour laquelle
+ * ils peuvent tomber. Les témoins de #19835 (`surfaces-la-plus-recemment-active.test.ts`)
+ * posaient `deletedAt: null` et `encryptionMode: null` EXPLICITEMENT dans leurs fixtures :
+ * ils ne pouvaient pas voir ce défaut — connaître le piège avait servi à faire PASSER
+ * les témoins, pas à les faire tomber (leçon 318).
  *
  * @jest-environment node
  */
@@ -114,7 +116,7 @@ describe('une conversation sans la clé `deletedAt` reste candidate (#19905)', (
   });
 });
 
-describe('la copie n’atterrit pas dans une COMMUNAUTÉ (#19919)', () => {
+describe('la copie n’atterrit pas dans une COMMUNAUTÉ (#19919, livré par #19910)', () => {
   /**
    * Le doc-comment du fichier le PROMET depuis #17141 — « une copie n'atterrit ni
    * dans une communauté, ni dans une conversation chiffrée » — et la moitié

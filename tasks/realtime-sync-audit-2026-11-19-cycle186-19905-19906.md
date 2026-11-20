@@ -1,5 +1,40 @@
 # Cycle 186 — les deux suites instructibles de #19835 : une population amputée, une fenêtre qui décidait
 
+> ## ⚠️ CE QUE CE JOURNAL RACONTE, ET CE QUE LE LOT A FINALEMENT LIVRÉ (mise à jour du 2026-11-20)
+>
+> **La moitié « talkie » de ce cycle a été livrée par QUELQU'UN D'AUTRE pendant qu'il
+> attendait sa CI.** #19910 (PR #19932) a fusionné dans `dev` une version de
+> `talkieFallback.ts` qui SUBSUME ce que cette branche y portait — `unsetOrNull('deletedAt')`,
+> le régime dit en POSITIF, `unsetOrNull('communityId')` — et qui va plus loin : état
+> terminal (`closedAt`), hiérarchie d'écriture avec la dispense du tête-à-tête,
+> `deletedForMe` de l'émetteur. C'est-à-dire aussi le suivi #19920 que ce cycle avait ouvert.
+>
+> Elle fait mieux sur un point que ce cycle n'avait gardé que par un témoin : `stream.where`
+> entre DANS le `AND` au lieu d'être répandu à côté, si bien qu'un flux qui porterait un
+> jour sa propre clé `OR` ne remplacerait plus celles du `where`. Ici la sûreté du spread
+> était accidentelle ; chez eux elle est structurelle.
+>
+> **La version de `dev` a donc été gardée ENTIÈREMENT** (directive #18654), et ce journal
+> conserve son analyse parce qu'elle reste vraie du DÉFAUT — la mesure par l'écrivain, la
+> fuite du salon de communauté, la raison pour laquelle les témoins de la veille ne
+> pouvaient pas tomber. Ce qu'il ne faut plus lire, c'est « ce lot corrige
+> `talkieFallback.ts` » : il ne le corrige plus, il le GARDE. Les treize témoins de
+> `talkie-destination-population-entiere.test.ts` passent contre l'implémentation de `dev`
+> sans modification, et c'est tout leur intérêt : ils n'ont été écrits contre aucune des
+> deux en particulier, seulement contre ce que la fonction doit RETENIR.
+>
+> **Ce que ce lot livre encore en propre** : #19906 (la fenêtre du groupe exact d'appel et
+> l'éligibilité descendue en base), la garde de composition de `rankStreams()` pour les
+> cinq appelants du rang, le double de `callGroupConversation.test.ts` qui ÉVALUE son
+> `where` au lieu de le traduire, et les quatre leçons.
+>
+> **Et la leçon de collision**, qui n'est pas dans les quatre : *un lot qui attend sa CI
+> n'a aucun droit sur les fichiers qu'il a touchés.* La règle de la branche poussée tôt
+> (#5243) réduit la FENÊTRE de collision ; elle ne la supprime pas, et elle ne dit rien du
+> cas où la collision se produit pendant qu'on attend un verdict. Ici le coût a été nul
+> parce que l'autre version était MEILLEURE — ce qui est une chance, pas une méthode.
+
+
 **Date** : 2026-11-19 · **Branche** : `claude/exciting-planck-wo4zwx` · **Base** : `dev` (`839daad99`, qui contient #19901)
 **Issues** : #19905, #19906 · **Milestone** : #285 « Aucune surface du rang de liste n'ampute sa population ni sa fenêtre »
 
