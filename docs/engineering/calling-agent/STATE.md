@@ -2032,3 +2032,41 @@ socket jusqu'au client.
    - fusionner la PR.
 1. **#20010** (horloge monotone, iOS et Android ; à coordonner avec la routine iOS), puis #19953 (Android).
 2. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
+
+## Cycle 60 — 2026-11-20
+
+- **Base** : `origin/dev` @ `fe201f6d2`. #20011 (#19984, cycle 59) est fusionnée et #19984 est fermée.
+- **Branche** : `claude/determined-volta-x3d318`.
+- **Objectif** : #20010. La durée d'un appel et ses délais de mise en place restent justes quand l'horloge murale saute, sur iOS et sur Android.
+- **Livré** :
+  - Android :
+    - `CallClock.elapsedMs()` a pour défaut `nowMs()`, ce qui garde les 17 faux de test intacts. En production, c'est `SystemClock.elapsedRealtime()`.
+    - `CallAnalyticsController` ancre le début et la première connexion sur cette horloge, donc `setupTimeMs` est monotone.
+    - `nowMs()` ne change pas : la notification en cours a besoin d'une date murale pour `setWhen`.
+    - La durée (`elapsedSeconds`, comptée par le ticker) ne dépendait pas de l'horloge murale.
+  - iOS :
+    - `CallLiveClock` reçoit une horloge monotone injectée, `ContinuousClock` en production. Contrairement à `systemUptime`, elle compte pendant la veille.
+    - Le chrono et `durationSeconds` lisent `elapsedDuration`, qui est ancrée à la première connexion à côté de `callStartDate = Date()`.
+    - `callInitiatedUptime`, `negotiationStartUptime` et `connectedUptime` remplacent les `Date` d'analytique.
+    - `callSetupMetrics` et `elapsedSeconds` prennent des instants monotones.
+    - `callStartDate` reste l'ancre d'affichage (sous-titres, Live Activity, historique).
+  - La forme du payload et le serveur ne changent pas.
+- **Tests** :
+  - Android : `CallAnalyticsSetupTimeTest`. L'horloge murale recule d'une heure et la monotone avance de 1500 ms ; le test attend `setupTimeMs` = 1500, alors que `dev` donne 0, ramené par le plancher.
+  - iOS : `CallLiveClockTests`, 4 tests de comportement et une garde de câblage. Les tests `callSetupMetrics` et du recorder sont passés aux instants monotones.
+  - Rouge avant : par calcul et par compilation (API absente), car le conteneur n'a ni Swift ni Gradle complet.
+  - Gardes iOS (`house_rules`, `cohesion`, `test_registration`, accent) : 0, rejouées par la QA.
+  - CI : `ios.yml` run 44756504006 (`only_testing` : suites d'appel) et `android.yml` run 44756511442. Leur résultat est dans la PR.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves, versées dans **#20069** :
+  - (moyenne) `qualityDistribution` iOS reste sur `lastQualityDate: Date` ;
+  - (faible) le câblage de la connexion n'est tenu que par une garde de texte.
+- **Limites** : rien n'a été vérifié sur appareil, ni la veille profonde ni un réglage manuel de l'heure en plein appel. `CallToastBus`, `CallReliabilityMonitor` et `CallCaptureViewModel` (Android) mesurent encore des délais sur l'horloge murale ; leur impact est faible (anti-doublon, watchdog).
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée :
+   - lire les runs 44756504006 et 44756511442, et relancer un `workflow_dispatch` s'ils ont été annulés ;
+   - fusionner `dev` dans la branche ;
+   - fusionner la PR.
+1. #20069 (iOS : répartition de qualité monotone, et témoin de comportement de l'ancrage), puis #19953 (Android).
+2. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
