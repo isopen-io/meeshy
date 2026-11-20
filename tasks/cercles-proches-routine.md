@@ -1649,3 +1649,8 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   solde désormais APRÈS la relecture.
 - Point 3 de l'issue (un appareil sans démarrage gardé adopte celui servi, deux appareils publient) sorti en décision
   produit #20023, recommandation « fermé en cas de doute », sur les trois clients.
+- Revue adversariale : RÉSERVES, non bloquantes. Corrigé dans le lot : un 404 d'un intermédiaire (Traefik pendant un
+  redéploiement, portail captif) levait l'attente ; seul le « Route GET:… not found » de Fastify vaut désormais
+  passerelle d'avant (Android lit le message servi, `ApiError.servedMessage`, additif). Ouvert : #20024 (un « Arrêter »
+  pendant l'attente part sur la liste périmée et peut couper le partage d'un autre appareil, antérieur au lot).
+- Prochain lot recommandé : #20024, puis #19929, puis #20023 une fois décidée, plafond `untilStopped`, #19682.
