@@ -691,3 +691,60 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Écran : « Demander à rejoindre », puis une tuile « Demande envoyée » qui n'est pas un bouton, et la ligne « Un administrateur ou un modérateur doit l'accepter. » ; le délai après refus se dit en rouge. Quatre chaînes × sept langues (`strings_join_request_19870.xml`), mêmes mots que les clés iOS de #19903.
 - Gotcha : le `Json` de Retrofit n'encode pas les valeurs par défaut — un `JoinCommunityRequest(acceptsPending = true)` déclaré avec défaut partait `{}`. Le témoin d'encodage l'a attrapé ; le champ n'a plus de défaut.
 - Gate local : `./apps/android/meeshy.sh jvm-check -PjvmCheckModelOnly` (le mode complet ne résout pas `libsignal-client`, hôte refusé par le proxy) — les suites `*Communit*` vertes. ViewModel, écran, réseau : prouvés par `android.yml`.
+
+## 2026-11-20 — réveil 11:38 UTC
+
+- Début du run : #20039 (manifeste Android de #19870) rendue inutile par `95ab23af5` (Jacques, sur `dev`, même classement des quatre chaînes) : fermée sans fusion, commentée. Aucune autre PR de la routine ouverte ; #19950, #20005, #19903, #20027 fusionnées dans la vague de 10:00.
+- Lot : iOS #19877 — les intendants d'une communauté tranchent les demandes d'entrée.
+- SDK : `APICommunityJoinRequest` (projection : nom, identifiant public, avatar, pays ISO à deux lettres, date ; une ligne illisible ou déjà tranchée est sautée), `CommunityJoinRequestPage` (curseur gardé seulement si `hasMore`), `CommunityService.joinRequests(communityId:cursor:limit:)` et `decideJoinRequest(…, .accept | .reject)`. `community:join-requested` routé vers `CommunityJoinRequestChannel`.
+- App : `CommunityMembersViewModel` lit QUI tranche dans le détail servi (`currentUserRole` ≥ modérateur, ou `createdBy`) — jamais dans une page de membres — et ne demande la liste qu'à un intendant (le 404 générique sinon). Geste optimiste : la ligne part au geste ; accepter fait entrer le membre servi ; un 404 (déjà tranchée, blocage, compte fermé) laisse la ligne partie et relit tout ; toute autre erreur rend la liste telle qu'elle était. `community:join-requested` et `community:member-*` relisent la liste.
+- MeeshyUI : `CommunityJoinRequestsSection` en tête de l'écran Membres (avatar sans pastille de présence, pays · « Demande du … », boutons ✓ / ✕ de 44 pt nommés pour VoiceOver, « Voir plus de demandes »), confirmation avant refus (« ne pourra pas redemander avant sept jours »), ligne d'état après le geste. Onze clés × sept langues, mêmes mots que le web.
+- Cliquets : `community:join-requested` sort de l'asymétrie « web seul » (reste Android #19878) ; `SWIFT_SWEPT_EVENTS_AT_LAST_MEASURE` 173 → 174 ; les trois adresses `join-requests` quittent `PENDING_CLIENT_ENTRIES` du catalogue Swift.
+- Gates locaux : shared `__tests__/ci/` 25 fichiers, 216 tests verts ; iOS `check_house_rules.sh` (42 règles), `check_cohesion_budget.sh` (code 0), `check_test_registration.sh` (2 060 fichiers), `check-accent-color-hardcoding.mjs` (168 / 408), `check-swift-catalog-dead-entries.mjs` (326). Compilation et tests Swift : par `ios.yml` et `sdk-tests.yml` de la PR.
+
+## 2026-11-20 — réveil 13:00 UTC
+
+- Début du run : #20049 (iOS #19877, intendants) seule PR de la routine ouverte, inactive depuis 11:52 : run consacré à la mener à la fusion.
+- `ci.yml` rouge sur un témoin ÉTRANGER : `gateway-file-size-budget` (règle 3, `MessageHandler.ts` hors budget, venu de #20022 / #19939), corrigé sur `dev` par `a34b3344b`. `dev` fusionnée dans la branche sans conflit ; le témoin rejoué sur l'arbre fusionné : 5 / 5 verts.
+- Reste : `ios.yml` et `sdk-tests.yml` encore en file sur la tête précédente ; ils repartent sur la nouvelle tête.
+## 2026-11-20 — réveil 13:01 UTC
+
+- Début du run : une seule PR de la routine ouverte, #20049 (#19877, intendants iOS), poussée à 13:02 par une autre session : vivante, cédée. #19950, #20005, #19951, #19903, #20027 fusionnées dans `dev` dans la vague de 10:54.
+- Lot : #20002 — une demande d'entrée rouverte par la réparation (#19924) prévient les intendants comme une nouvelle demande.
+- Passerelle : `reopenOrphanedAcceptances` prend `onReopened` et l'appelle une fois par demande EFFECTIVEMENT rouverte (bascule écrite, count 1) et restée en attente — une demande reclose parce que la personne est entrée pendant la réparation ne s'annonce pas ; une annonce qui lève est journalisée, la réparation ne tombe pas. Les deux portes branchent `scheduleCommunityJoinRequestedFrom` : la liste des intendants (`entries.ts`) et le détail lu par le demandeur (`core.ts` → `viewerJoinRequestState`). La décision effacée est journalisée (`erased: [{ requestId, decidedBy }]`), jamais servie.
+- Témoins : `join-request-reopen-announced-20002.test.ts` (9 ; rouge prouvé : 4 échecs avant le code) ; `communities-core.test.ts` (+1, rouge prouvé en retirant le branchement du détail).
+- Gates locaux : passerelle `tsc --noEmit` vert ; communautés / demandes / balayages / cliquets / manifeste / `tsc-never-loaded` 134 suites, 1 558 tests verts.
+- Aucun client touché, aucun contrat d'API ni d'événement changé (`community:join-requested` existant, même charge).
+- Prochain lot recommandé : mener #20049 à la fusion si elle est abandonnée ; sinon #20003 (coût de la relecture à l'accès) ou iOS #19948 une fois #20049 fusionnée.
+## 2026-11-20 — réveil 13:03 UTC
+
+- Début du run : #20049 (#19877, intendants iOS) poussée à 13:02 par une autre session : vivante, cédée. Aucune autre PR de la routine ouverte.
+- Lot : #16786 (passerelle) — le nom et la description d'une communauté s'écrivent tels qu'écrits, sans entité HTML.
+- Constat mesuré sur le VRAI DOMPurify : une entrée sans `<` sort telle quelle ; une entrée avec `<` est SÉRIALISÉE (« Tom & Jerry <3 » ⇒ « Tom &amp; Jerry &lt;3 »). Sous Jest, `jest.setup.js` remplace DOMPurify par un double qui n'échappe rien : le défaut y était invisible.
+- Passerelle : `SecuritySanitizer.sanitizePlainText` (balises retirées comme `sanitizeText`, entités de la sérialisation défaites en une passe, seulement quand l'entrée contenait `<`) ; `utils/serialized-text.ts` est le site unique du décodage (`asWritten` des bannières de communauté le reprend). `POST /communities` et `PUT /communities/:id` l'emploient ; `sanitizeText` et ses autres appelants ne changent pas.
+- Témoin : `community-text-as-written-16786.test.ts` (13) — double FIDÈLE de DOMPurify confronté au vrai dans un processus Node séparé ; rouge prouvé : 11 échecs sans le correctif. Six suites communautés reçoivent `sanitizePlainText` dans leur double de `utils/sanitize`.
+- Gates locaux : passerelle `tsc --noEmit` vert ; suites `communit|sanitize|community-added|join-request` 77 fichiers, 1 301 tests verts ; balayages et cliquets (`sweep|ratchet|guard`) 136 fichiers, 1 145 tests verts.
+- Reste : les lignes écrites avant ce lot (#20063 : migration de staging ou décodage iOS / Android). #16786 reste ouverte jusque-là.
+- Prochain lot recommandé : #20063 (migration de staging, après l'auditeur), ou iOS #19877 si #20049 est fusionnée.
+
+## 2026-11-20 — réveil 13:04 UTC
+
+- Début du run : #20049 (iOS #19877, intendants) poussée à 13:02 et `claude/communautes-reouverture-annoncee` (#20002) à 13:04 : vivantes, cédées. Aucune autre PR de la routine ouverte.
+- Lot : Android #19949 — le demandeur lit « Demande refusée — nouvelle demande possible le … » sans relecture (miroir de #19879, passerelle + web).
+- `:core:model` : `ApiCommunity.currentUserJoinRetryAt` ; `CommunityJoinRequestDecidedEvent` (miroir de `CommunityJoinRequestDecidedEventData`, `refusedUntil` ne rend une date que pour `rejected` et une date lisible) ; `ApiCommunity.joinDeclinedUntil(now)` (date à venir seulement, jamais pour un membre ni une demande en attente — `membershipActionOf` du web) ; `ApiCommunity.applying(event)` : autre communauté, charge illisible ou lecteur déjà entré ⇒ rien.
+- `sdk-core` : `CommunityJoinRequestDecidedBinding` (modèle de `CommunityDeletedBinding`) → `CommunityCacheRepository.applyJoinRequestDecided`, qui réécrit la fiche DÉJÀ tenue sans rajeunir sa lecture. Écran : tuile « Demande refusée » (statut, pas un bouton) et la date en rouge (`ShareLinkDateFormat.dayAndTime`, grégorienne) ; `join()` n'envoie rien avant la date. Deux chaînes × sept langues (`strings_join_declined_19949.xml`), mêmes mots que le web.
+- Cliquets partagés : `community:join-request-decided` passe à « absent iOS seulement » (#19948) ; `SWEPT_EVENTS_AT_LAST_MEASURE` 144 → 145. `packages/shared/__tests__/ci/` 25 fichiers, 216 tests verts.
+- Gate local : `jvm-check -PjvmCheckModelOnly` — `CommunityJoinRequestDecidedEventTest` 9/9, `SocketEventNamesParityTest` 5/5, suites `*Community*` vertes. Témoin écrit avant le code, mais son rouge n'a pas été exécuté seul (le premier passage a eu lieu avec l'implémentation). Liaison, cache, ViewModel et écran : prouvés par `android.yml` sur la PR.
+- Prochain lot recommandé : iOS #19948 (même décision, dernière plateforme) une fois #20049 fusionnée ; puis Android #19878 (intendants).
+- 14:45 : `dev` a de nouveau avancé (Android #19949) et entrait en conflit sur le cliquet d'asymétrie : `community:join-requested` garde son groupe « absent Android » (ce lot), `community:join-request-decided` le sien « absent iOS » (#19949), et le groupe « web seul » ne les cite plus ni l'un ni l'autre.
+
+## 2026-11-20 — réveil 13:38 UTC
+
+- Début du run : quatre PR de la routine ouvertes et vivantes (#20049 iOS intendants, #20057 réouverture annoncée, #20064 texte tel qu'écrit, #20065 Android refus lu), toutes poussées entre 13:06 et 13:26, leurs `workflow_dispatch` en file : cédées.
+- #14516 et #12417 (doublons, Android « rôles, permissions, lien canonique ») : déjà livrés sur `dev` ; prouvés par `jvm-check -PjvmCheckModelOnly` (`CommunityPermissionsTest`, `CommunityDecodingTest`, `CommunityLinkTest`, `CommunityPresentationTest` : `BUILD SUCCESSFUL`) et fermés avec la preuve.
+- Lot : #19541 (passerelle) — les salons d'une communauté ne listent que ce que le membre peut ouvrir, avec leur vrai effectif.
+- Constat : `GET /communities/:id/conversations` servait les salons quittés, bannis, fermés et obsolètes (ni la participation ni la conversation n'étaient filtrées sur `isActive`, quand `GET /conversations` exige les deux) ; `memberCount` était la colonne morte `Conversation.memberCount` (0 partout, d'où « 0 membre » sur le web, effectif masqué sur Android) ; `_count.participants` comptait les partis ; `conversationCount` de la communauté comptait les salons fermés.
+- Passerelle : `where` = conversation active + participation active du lecteur (le total paginé lit le même `where`) ; participants affichés = les actifs ; `_count` par `conversationActiveMemberCountSelect` ; `memberCount` servi depuis ce `_count`. Même correctif sur la jumelle `POST /communities/:id/conversations/:conversationId`. `COMMUNITY_ACTIVE_COUNTS.Conversation` ne compte que les salons actifs (liste, détail, recherche).
+- Témoins : `communities/salons-actifs-19541.test.ts` (5, double Prisma qui FILTRE sur le `where` et COMPTE selon le `_count.select` reçus) et `communities-core.test.ts` (+1, la jumelle) — rouges prouvés (5 puis 1 échec avant le correctif).
+- Gates locaux : passerelle `tsc --noEmit` vert ; suites communautés 44 fichiers, 716 tests verts ; `tsc-never-loaded-tests-ratchet` 2/2 vert (relancé seul, le premier passage avait été tué faute de mémoire).
+- Aucun client touché, aucun contrat d'API changé (mêmes champs, valeurs justes) : web, iOS et Android lisent déjà `memberCount` en premier.

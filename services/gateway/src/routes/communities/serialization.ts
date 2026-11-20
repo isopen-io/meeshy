@@ -126,8 +126,8 @@ export function activeMembershipOf(userId: string) {
   return { userId, isActive: true } as const;
 }
 
-/** Les compteurs servis : les seuls membres ACTIFS, partout (#16603). */
-export const COMMUNITY_ACTIVE_COUNTS = { members: { where: { isActive: true } }, Conversation: true } as const;
+/** Les compteurs servis : les seuls membres ACTIFS (#16603) et les seuls salons ACTIFS — ni fermés, ni rendus obsolètes (#19541). */
+export const COMMUNITY_ACTIVE_COUNTS = { members: { where: { isActive: true } }, Conversation: { where: { isActive: true } } } as const;
 
 /**
  * Une communauté telle que la voit `viewerId` : compteurs aplatis et rôle

@@ -11,5 +11,5 @@
     <string name="fall_share_person">تنبيه %1$s إذا رصدت ساعتي سقوطًا</string>
     <string name="fall_share_person_scope">إذا رصدت ساعة Apple Watch سقوطًا، يتم تنبيه %1$s فورًا.</string>
     <string name="fall_me_title">رصد السقوط</string>
-    <string name="fall_me_unavailable">غير متاح على Android: يأتي من ساعة Apple Watch، ويُضبط في تطبيق iPhone.</string>
+    <string name="fall_me_unavailable">غير متاح على Android: يأتي من ساعة Apple Watch تُضبط من iPhone.</string>
 </resources>

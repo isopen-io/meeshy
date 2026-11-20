@@ -21,6 +21,7 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 jest.mock('../../../../utils/sanitize', () => ({
   SecuritySanitizer: {
     sanitizeText: jest.fn((text: string) => text),
+    sanitizePlainText: jest.fn((text: string) => text),
   },
 }));
 

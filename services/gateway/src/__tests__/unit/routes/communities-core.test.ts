@@ -43,7 +43,13 @@ jest.mock('../../../utils/pagination', () => ({
 }));
 
 jest.mock('../../../utils/sanitize.js', () => ({
-  SecuritySanitizer: { sanitizeText: (s: string) => s },
+  SecuritySanitizer: { sanitizeText: (s: string) => s, sanitizePlainText: (s: string) => s },
+}));
+
+const scheduleJoinRequested = jest.fn();
+jest.mock('../../../services/community-join-request-broadcast', () => ({
+  ...(jest.requireActual('../../../services/community-join-request-broadcast') as object),
+  scheduleCommunityJoinRequestedFrom: (...args: unknown[]) => scheduleJoinRequested(...args),
 }));
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
@@ -385,6 +391,27 @@ describe('GET /communities/:id — demande d\'entrée du lecteur (#19868)', () =
     await app.close();
     return { res, findJoinRequest };
   }
+
+  it('une acceptation orpheline rouverte par le détail s\'annonce aux intendants (#20002)', async () => {
+    scheduleJoinRequested.mockClear();
+    const decidedAt = new Date(Date.now() - 3_600_000);
+    const orphan = { id: 'req-orphan', userId: USER_ID, decidedAt, decidedBy: OTHER_USER_ID, createdAt: new Date(decidedAt.getTime() - 60_000) };
+    const app = await buildApp('USER', {
+      community: { findFirst: jest.fn<any>().mockResolvedValue(validating) },
+      communityMember: { findMany: jest.fn<any>().mockResolvedValue([]), findFirst: jest.fn<any>().mockResolvedValue(null) },
+      communityJoinRequest: {
+        findMany: jest.fn<any>(async ({ where }: any) => (where.status === 'accepted' ? [orphan] : [{ ...orphan, status: 'accepted' }])),
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+        findFirst: jest.fn<any>().mockResolvedValue({ id: 'req-orphan' }),
+      },
+    });
+    const res = await app.inject({ method: 'GET', url: `/communities/${COMMUNITY_ID}` });
+    await app.close();
+
+    expect(res.json().data.currentUserJoinRequest).toBe('pending');
+    expect(scheduleJoinRequested).toHaveBeenCalledWith(expect.anything(), { communityId: COMMUNITY_ID, requestId: 'req-orphan', userId: USER_ID });
+    expect(JSON.stringify(res.json())).not.toContain('req-orphan');
+  });
 
   it('sert « pending » au non-membre qui a une demande en attente, lue sur SA demande seulement', async () => {
     const { res, findJoinRequest } = await detailWith(validating, { id: 'req-1' });
@@ -783,6 +810,30 @@ describe('POST /communities/:id/conversations/:conversationId — success', () =
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+  });
+});
+
+describe('POST /communities/:id/conversations/:conversationId — effectif actif (#19541)', () => {
+  const update = jest.fn<any>().mockResolvedValue({ ...mockConversation, memberCount: 0, _count: { messages: 0, participants: 2 } });
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    app = await buildApp('USER', {
+      community: {
+        findFirst: jest.fn<any>().mockResolvedValue({ id: COMMUNITY_ID, createdBy: USER_ID, members: [{ userId: USER_ID, role: 'admin' }] }),
+        findUnique: jest.fn<any>().mockResolvedValue(null),
+      },
+      conversation: { findFirst: jest.fn<any>().mockResolvedValue(mockConversation), update },
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('sert l\'effectif ACTIF compté à la lecture, jamais la colonne morte, et ne nomme que les actifs', async () => {
+    const res = await app.inject({ method: 'POST', url: `/communities/${COMMUNITY_ID}/conversations/${CONVERSATION_ID}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.memberCount).toBe(2);
+    const include = update.mock.calls[0]?.[0]?.include;
+    expect(include?._count?.select?.participants).toEqual({ where: { isActive: true } });
+    expect(include?.participants?.where).toEqual({ isActive: true });
   });
 });
 

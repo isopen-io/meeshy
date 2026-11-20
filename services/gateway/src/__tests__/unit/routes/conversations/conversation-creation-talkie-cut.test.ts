@@ -79,6 +79,7 @@ const AUTRE = '507f1f77bcf86cd799439033';
 function prismaDouble() {
   return {
     community: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+    e2EEDevice: { findMany: jest.fn<any>(async ({ where }: { where: { userId: { in: string[] } } }) => where.userId.in.map((userId) => ({ userId }))) },
     conversation: {
       findFirst: jest.fn<any>().mockResolvedValue(null),
       create: jest.fn<any>(async () => ({

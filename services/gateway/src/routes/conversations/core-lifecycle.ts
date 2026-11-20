@@ -69,7 +69,8 @@ import { isServerAtRestUnavailable } from '../../services/messaging/serverAtRest
 import { announceConversationNew } from '../../services/conversations/obsoleteCapability';
 import { ENCRYPTION_ACTIVATION_RESTRICTED_CODE } from '../../utils/encryption-activation-policy';
 import { ENCRYPTION_MODE_UNSUPPORTED_CODE } from '@meeshy/shared/utils/conversation-creation-encryption';
-import { E2EE_DIRECT_NOT_A_PAIR_MESSAGE, E2EE_ERROR_CODES } from '@meeshy/shared/types/e2ee-directory';
+import { E2EE_DIRECT_NOT_A_PAIR_MESSAGE, E2EE_ERROR_CODES, E2EE_PARTICIPANT_WITHOUT_DEVICE_MESSAGE } from '@meeshy/shared/types/e2ee-directory';
+import { membersWithoutEndToEndDevice } from '../../services/e2ee/members-without-device';
 import { activeMembershipOf } from '../communities/serialization';
 import {
   composeConversationUpdate,
@@ -79,9 +80,7 @@ import {
 
 const logger = enhancedLogger.child({ module: 'conversations/core' });
 
-/**
- * Enregistre `POST /conversations` (création d'une conversation).
- */
+/** Enregistre `POST /conversations` (création d'une conversation). */
 export function registerCreateConversationRoute(
   fastify: FastifyInstance,
   prisma: PrismaClient,
@@ -341,6 +340,11 @@ export function registerCreateConversationRoute(
             title: existingDirect.title || null
           }, { statusCode: 200 });
         }
+      }
+
+      // #20073 — un tête-à-tête chiffré ne naît que si chacun a un appareil chiffré ; personne n'est nommé.
+      if (type === 'direct' && regime.mode === 'e2ee' && (await membersWithoutEndToEndDevice(prisma, [userId, ...uniqueParticipantIds])).length > 0) {
+        return sendError(reply, 409, E2EE_PARTICIPANT_WITHOUT_DEVICE_MESSAGE, { code: E2EE_ERROR_CODES.PARTICIPANT_WITHOUT_DEVICE });
       }
 
       // #14107 — chaque membre nommé : direct dès Connaissance, sinon une DEMANDE
@@ -605,9 +609,7 @@ function refuseCreationRegime(reply: FastifyReply, refusal: CreationRegimeRefusa
   });
 }
 
-/**
- * Enregistre `PUT`/`PATCH /conversations/:id` (mise à jour des métadonnées).
- */
+/** Enregistre `PUT`/`PATCH /conversations/:id` (mise à jour des métadonnées). */
 export function registerUpdateConversationRoute(
   fastify: FastifyInstance,
   prisma: PrismaClient,
@@ -868,9 +870,7 @@ export function registerUpdateConversationRoute(
   });
 }
 
-/**
- * Enregistre `DELETE /conversations/:id` (suppression douce d'une conversation).
- */
+/** Enregistre `DELETE /conversations/:id` (suppression douce d'une conversation). */
 export function registerDeleteConversationRoute(
   fastify: FastifyInstance,
   prisma: PrismaClient,

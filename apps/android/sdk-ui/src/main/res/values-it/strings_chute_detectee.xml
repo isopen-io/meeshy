@@ -11,5 +11,5 @@
     <string name="fall_share_person">Avvisa %1$s se il mio orologio rileva una caduta</string>
     <string name="fall_share_person_scope">Se il tuo Apple Watch rileva una caduta, %1$s viene avvisato subito.</string>
     <string name="fall_me_title">Rilevamento cadute</string>
-    <string name="fall_me_unavailable">Non disponibile su Android: viene da un Apple Watch, configurato nell\'app per iPhone.</string>
+    <string name="fall_me_unavailable">Non disponibile su Android: viene da un Apple Watch configurato da iPhone.</string>
 </resources>

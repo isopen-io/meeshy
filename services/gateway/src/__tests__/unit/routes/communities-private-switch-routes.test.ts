@@ -16,7 +16,7 @@ jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: jest.fn(() => ({ info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() })) },
 }));
-jest.mock('../../../utils/sanitize', () => ({ SecuritySanitizer: { sanitizeText: (text: string) => text } }));
+jest.mock('../../../utils/sanitize', () => ({ SecuritySanitizer: { sanitizeText: (text: string) => text, sanitizePlainText: (text: string) => text } }));
 
 const order: string[] = [];
 const admitSalonOccupants = jest.fn<any>(async () => {

@@ -5,6 +5,7 @@ import MeeshySDK
 
 /// L'alerte de sécurité d'un Sang (#18748) : la catégorie `MEESHY_SAFETY_ALERT` est remise au système, sans action (le
 /// lecteur n'a rien à répondre) et avec un aperçu masqué GÉNÉRIQUE — aucun mot de santé à l'écran verrouillé.
+@MainActor
 final class SafetyAlertNotificationTests: XCTestCase {
 
     func test_theRegisteredCategories_includeTheSafetyAlert_withoutAction_andAGenericHiddenPreview() throws {

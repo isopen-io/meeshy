@@ -32,7 +32,7 @@ extension CallManager {
             Logger.calls.info("Participant joined call \(callId), creating offer")
             // Ancrage négociation côté appelant : l'appelé vient de décrocher,
             // la sonnerie est finie — tout ce qui suit est du setup technique.
-            self.analytics.negotiationStartDate = Date()
+            self.analytics.negotiationStartUptime = self.liveClock.monotonicNow
 
             // Update ICE servers with TURN credentials without recreating the peer connection
             if let servers = event.iceServers, !servers.isEmpty {

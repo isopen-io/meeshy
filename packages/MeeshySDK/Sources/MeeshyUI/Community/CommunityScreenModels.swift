@@ -81,6 +81,25 @@ public protocol CommunityMembersModeling: ObservableObject {
     func loadMore() async
     func updateRole(memberId: String, role: MemberRole) async
     func removeMember(userId: String) async
+
+    /// Les demandes d'entrée en attente (#19877) — vides pour tout lecteur
+    /// qui n'est ni administrateur, ni modérateur, ni créateur.
+    var joinRequests: [APICommunityJoinRequest] { get }
+    var hasMoreJoinRequests: Bool { get }
+    var decidingJoinRequestId: String? { get }
+    var joinRequestNotice: CommunityJoinRequestNotice? { get }
+
+    func loadMoreJoinRequests() async
+    func decide(_ request: APICommunityJoinRequest, _ decision: CommunityJoinRequestDecision) async
+}
+
+/// Ce que l'écran dit après un geste sur une demande d'entrée : la personne
+/// est entrée, la demande avait déjà été tranchée (par un autre intendant, un
+/// blocage, un compte fermé), ou la réponse a échoué et rien n'a changé.
+public enum CommunityJoinRequestNotice: Equatable, Sendable {
+    case accepted(name: String)
+    case gone
+    case failed
 }
 
 @MainActor
