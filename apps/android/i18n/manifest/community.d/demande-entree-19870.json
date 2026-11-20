@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:community": {
+      "resDir": "feature/community/src/main/res",
+      "entries": [
+        { "androidName": "community_join_request", "status": "android-only" },
+        { "androidName": "community_join_requested", "status": "android-only" },
+        { "androidName": "community_join_requested_waiting", "status": "android-only" },
+        { "androidName": "community_join_cooldown", "status": "android-only" }
+      ]
+    }
+  }
+}
