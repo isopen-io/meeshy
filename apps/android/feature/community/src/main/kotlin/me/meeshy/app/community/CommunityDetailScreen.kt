@@ -379,7 +379,7 @@ private fun ActionsSection(
     Column(Modifier.padding(horizontal = 16.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             actions.forEach { action ->
-                if (action == CommunityDetailAction.JOIN && join.declinedUntil != null) {
+                if (action == CommunityDetailAction.JOIN && join.declined) {
                     JoinStatusTile(MeeshyIcons.Block, stringResource(R.string.community_join_declined), Modifier.weight(1f))
                     return@forEach
                 }
@@ -443,7 +443,10 @@ private data class JoinFace(
     val pending: Boolean,
     val refusal: CommunityJoinRefusal?,
     val declinedUntil: Instant? = null,
-)
+) {
+    /** Refusée : la date servie, ou le 403 `COMMUNITY_JOIN_COOLDOWN` le temps que le détail relu la serve. */
+    val declined: Boolean get() = declinedUntil != null || refusal == CommunityJoinRefusal.COOLDOWN
+}
 
 @Composable
 private fun JoinFace.face(): Pair<ImageVector, String> =
@@ -452,8 +455,7 @@ private fun JoinFace.face(): Pair<ImageVector, String> =
 @Composable
 private fun JoinFace.notice(): Pair<String, Boolean>? = when {
     declinedUntil != null ->
-        stringResource(R.string.community_join_declined_hint, ShareLinkDateFormat.dayAndTime(declinedUntil.toEpochMilli())) to true
-    refusal == CommunityJoinRefusal.COOLDOWN -> stringResource(R.string.community_join_cooldown) to true
+        stringResource(R.string.community_join_declined_until, ShareLinkDateFormat.dayAndTime(declinedUntil.toEpochMilli())) to true
     pending -> stringResource(R.string.community_join_requested_waiting) to false
     else -> null
 }

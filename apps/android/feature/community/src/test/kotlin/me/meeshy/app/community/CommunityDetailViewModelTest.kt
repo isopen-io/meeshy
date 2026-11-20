@@ -218,6 +218,7 @@ class CommunityDetailViewModelTest {
 
         assertThat(vm.state.value.joinRequestPending).isFalse()
         assertThat(vm.state.value.joinRefusal).isEqualTo(CommunityJoinRefusal.COOLDOWN)
+        coVerify { cache.refreshDetail("c1") }
     }
 
     @Test

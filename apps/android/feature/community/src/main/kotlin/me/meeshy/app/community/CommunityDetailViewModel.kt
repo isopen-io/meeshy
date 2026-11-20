@@ -181,7 +181,7 @@ class CommunityDetailViewModel @Inject constructor(
                             community = before.community,
                         )
                     }
-                    if (refusal == null) _effects.send(CommunityDetailEffect.ActionFailed)
+                    if (refusal == null) _effects.send(CommunityDetailEffect.ActionFailed) else cache.refreshDetail(communityId)
                 }
             }
         }

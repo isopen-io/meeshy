@@ -2,5 +2,5 @@
 <!-- La demande d'entrée refusée et la date d'une nouvelle demande (#19949) — mêmes mots que le web (community.membership.declined*). -->
 <resources>
     <string name="community_join_declined">Richiesta rifiutata</string>
-    <string name="community_join_declined_hint">Potrai richiederlo di nuovo dal %1$s.</string>
+    <string name="community_join_declined_until">Potrai richiederlo di nuovo dal %1$s.</string>
 </resources>
