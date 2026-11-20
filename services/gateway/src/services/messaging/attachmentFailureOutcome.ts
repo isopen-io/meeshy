@@ -26,6 +26,16 @@
  * de la reprise un chemin NOMINAL complet : liaison, scellement au repos,
  * départ de l'audio, type dérivé des pièces.
  *
+ * **Ce que la libération ne rend PAS, et c'est assumé.** Une liaison partielle
+ * a pu écrire, en même temps que le `messageId`, les drapeaux de protection du
+ * message (`isViewOnce`, `isBlurred`, `effectFlags`, OR-és sur les flags
+ * portés). La libération ne remet que le `messageId` : leur état d'AVANT la
+ * liaison n'est connu de personne, la lecture qui le portait faisant partie de
+ * l'opération qui vient d'échouer. Une pièce rendue garde donc au plus la
+ * protection qu'on venait de lui poser — fail-CLOSED, donc le bon sens de
+ * l'erreur : le rejeu peut servir une pièce PLUS protégée que demandé, jamais
+ * moins.
+ *
  * **Et le scellement ne descend PAS avec eux.** La suppression du message
  * rendrait orphelines des lignes `MessageAttachment` qui portent, elles, des
  * fichiers bien réels ; et `sealMessageAttachments.ts` énonce déjà le régime
