@@ -67,9 +67,13 @@ describe('#20091 — le balayage des audiences voit tout `src/`, pas un réperto
     const inside = sites.filter((site) => site.file.startsWith('socketio/'));
     const outside = sites.filter((site) => !site.file.startsWith('socketio/'));
 
-    expect(inside.filter((site) => !site.usesLaw).length).toBeLessThanOrEqual(2);
-    expect(outside.length).toBeGreaterThanOrEqual(55);
-    expect(outside.filter((site) => !site.usesLaw).length).toBeLessThanOrEqual(50);
+    // Les bornes ont bougé avec #20100, et c'est le discriminant qui a changé,
+    // pas le dépôt : la forme IMBRIQUÉE, `findFirst` et le filtre NÉGATIF ont
+    // fait entrer soixante lectures de plus. Un lot qui touche le discriminant
+    // reclasse l'inventaire ENTIER — il ne fait pas que l'étendre.
+    expect(inside.filter((site) => !site.usesLaw).length).toBeLessThanOrEqual(3);
+    expect(outside.length).toBeGreaterThanOrEqual(105);
+    expect(outside.filter((site) => !site.usesLaw).length).toBeLessThanOrEqual(84);
   });
 
   /**
@@ -82,6 +86,6 @@ describe('#20091 — le balayage des audiences voit tout `src/`, pas un réperto
     const bare = sites.filter((site) => !site.usesLaw).length;
 
     expect(Object.keys(DELIBERATELY_WIDE).length + Object.keys(MEASURED_NOT_INSTRUCTED).length).toBe(bare);
-    expect(Object.keys(MEASURED_NOT_INSTRUCTED).length).toBeLessThanOrEqual(42);
+    expect(Object.keys(MEASURED_NOT_INSTRUCTED).length).toBeLessThanOrEqual(71);
   });
 });

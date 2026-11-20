@@ -70,7 +70,12 @@ describe('audiences de diffusion — l’appartenance VIVANTE, par la même cons
    * désigne encore un site.
    */
   it('ne laisse pas la dette mesurée grossir au-delà de ce que #20091 a relevé', () => {
-    expect(Object.keys(MEASURED_NOT_INSTRUCTED).length).toBeLessThanOrEqual(42);
+    // #20100 : 71, et le dépôt n'a pas grossi — le DISCRIMINANT a. La forme
+    // imbriquée, `findFirst` et le filtre négatif ont fait entrer soixante
+    // lectures qui étaient hors de vue, dont vingt-neuf nues. Une borne de
+    // dette se rédite quand l'instrument change de portée ; elle ne se
+    // rédite PAS pour accueillir une clause nue écrite après coup.
+    expect(Object.keys(MEASURED_NOT_INSTRUCTED).length).toBeLessThanOrEqual(71);
   });
 
   /**
@@ -84,14 +89,23 @@ describe('audiences de diffusion — l’appartenance VIVANTE, par la même cons
    * « Zéro trouvé » n'est pas « zéro existe », et c'est par là que l'audience
    * de l'arrivée dans le salon GLOBAL est restée nue sans qu'aucun cliquet
    * puisse le dire.
+   *
+   * **#20100 a ajouté les deux formes que ce relevé ne savait pas nommer**, et
+   * chacune aurait produit un verdict FAUX plutôt qu'un silence :
+   * `clé-indirecte` — la clé du membre vient d'un appel étalé
+   * (`{ conversationId, ...callerParticipantWhere(caller) }`, soit une PORTE qui
+   * a l'apparence d'une audience) — et `modèle-indécidable` — une clause
+   * imbriquée qui ne parle ni d'activité ni de bannissement, donc dont on ne
+   * sait même pas si elle vient de `Conversation.participants` ou de
+   * `CallSession.participants`.
    */
   it('publie les lectures qu’il n’a pas pu juger, au lieu de les sauter', () => {
     const unjudgeable = sweepUnjudgeableParticipantReads();
 
     expect(unjudgeable.length).toBeGreaterThan(0);
-    expect(unjudgeable.length).toBeLessThanOrEqual(33);
+    expect(unjudgeable.length).toBeLessThanOrEqual(52);
     for (const read of unjudgeable) {
-      expect(read.form).toMatch(/^(variable|appel|ternaire|absent|portée-indirecte)$/);
+      expect(read.form).toMatch(/^(variable|appel|ternaire|absent|portée-indirecte|clé-indirecte|modèle-indécidable)$/);
     }
   });
 

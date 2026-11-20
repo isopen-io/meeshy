@@ -29,6 +29,7 @@ import { settleWithConcurrency } from '../../utils/settle-with-concurrency';
 import { NOTIFICATION_FANOUT_CONCURRENCY } from '../notifications/notificationFanOutBudget';
 import { pendingRequestUserIds } from './pendingMessageRequests';
 import { departedAccountUserIds } from './departedAccounts';
+import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
 
 
 export type { NotificationActorProfile };
@@ -409,7 +410,28 @@ export async function notifyMessageRecipients(params: {
         type: true,
         encryptionMode: true,
         participants: {
-          where: { isActive: true, type: 'user' },
+          // #20100 — la LOI, pas `isActive` nu. Cette lecture est l'AUDIENCE de
+          // la bannière : `memberIds` en sort, et avec lui le lot `regular`, le
+          // gate de la réponse (`memberIds.includes`) et le dénominateur du
+          // compte rendu. Un membre actif-et-banni est exclu de
+          // `conversation:<id>` (`AuthHandler`) et du REST
+          // (`canAccessConversation`) — l'écran verrouillé était le SEUL canal
+          // qui lui restait, et il portait le TEXTE du message. Dans une
+          // conversation chiffrée, le § #17194 ci-dessous dit ce que ça coûte :
+          // sa clé de session est par PAIR, rien ne la rote, donc l'ENVELOPPE
+          // s'ouvre.
+          //
+          // Resserrer n'ouvre RIEN, et c'est MESURÉ, pas supposé : la même
+          // lecture alimente `silenced`, une liste de REFUS, que le
+          // sur-ensemble sert normalement mieux (cf.
+          // `conversationAudienceRooms.ts` § `scanActiveParticipants`). Ses
+          // trois consommateurs sont déjà bornés par la loi en AMONT —
+          // `memberIds` l'est par ce `where`, `validatedMentionUserIds` par
+          // `MentionService.validateMentionPermissions`, qui épelle
+          // `PARTICIPATION_VIVANTE` depuis #14066, et le gate de réponse par
+          // `memberIds`. Un banni-mais-actif ne peut donc plus arriver par
+          // aucune des trois portes que `silenced` referme.
+          where: { ...PARTICIPATION_VIVANTE, type: 'user' },
           // #18910 — l'état du compte suit la lecture : un compte supprimé reste membre après la purge.
           select: { userId: true, messageRequestAt: true, user: { select: { isActive: true, deletedAt: true } } },
         },

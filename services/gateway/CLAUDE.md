@@ -741,8 +741,13 @@ Le seul régime est le strict ; la seule variable est le viewer.
 
 `PARTICIPATION_VIVANTE` (`isActive: true` **et** `bannedAt` nul ou absent) est
 la loi que les portes d'accès DEVRAIENT épeler — et **elle n'est pas tenue
-partout : mesuré au cycle 194, ~100 lectures qui nomment un membre lisent
-`isActive` nu, contre ~22 qui épellent la loi.** Deux comptent particulièrement,
+partout.** Le compte vit dans les témoins du cliquet
+(`audience-law-scope.test.ts` § « la distribution mesurée »,
+`audience-law-nested-scope.test.ts`), jamais dans cette phrase : il a déjà été
+écrit ici deux fois, et le cycle 195 l'a déplacé de ~100/~22 à 87/43 **sans que
+le dépôt change** — c'est le DISCRIMINANT qui avait changé. Un compte recopié
+dans un document dérive au premier élargissement de l'instrument qui le produit.
+Deux lectures comptent particulièrement,
 et ce sont des issues ouvertes, pas des détails : `POST /conversations/:id/messages`
 (`messages-send.ts`) n'appelle pas `canAccessConversation` et admet sur
 `isActive` nu — un banni-mais-actif peut encore ENVOYER — et `assertMember` du
@@ -767,7 +772,44 @@ Une ligne `isActive: true, bannedAt ≠ null` **existe en base** : son producteu
 est fermé (#19688, #10436), aucune migration n'a repris les lignes existantes,
 et sa room `user:<id>` est rejointe INCONDITIONNELLEMENT.
 
-**Le cliquet balaie `src/` entier depuis #20091**, et il porte DEUX inventaires
+**Le cliquet voit DEUX formes d'audience depuis #20100**, et la seconde n'a pas de
+portée à lire :
+
+| forme | ce qui la nomme | sa portée |
+|---|---|---|
+| APPELÉE — `participant.findMany\|count\|groupBy\|aggregate\|findFirst` | la TABLE | écrite (`conversationId`) |
+| IMBRIQUÉE — `conversation.find…({ select: { participants: { where } } })` | une RELATION, que `CallSession` partage | **implicite**, portée par le parent |
+
+Trente-trois audiences imbriquées vivaient hors de tout relevé, aucune n'épelant
+la loi, dont l'éventail de notifications push — par où le TEXTE d'un message
+atteignait l'écran verrouillé d'un membre actif-et-banni.
+
+> **Un balayage qui change de forme d'appel change aussi de PREUVE DE MODÈLE.**
+> La forme appelée la portait gratuitement. La question à poser à tout
+> élargissement de discriminant n'est pas « que vois-je en plus ? » mais
+> **« qu'est-ce qui me prouvait, dans la forme d'avant, que je regardais la bonne
+> chose ? »**.
+
+Il PUBLIE donc quatre formes au lieu de les juger : `portée-indirecte` (#20091),
+`clé-indirecte` (la clé du membre vient d'un APPEL étalé — une PORTE qui a
+l'apparence d'une audience), `modèle-indécidable` (une clause imbriquée muette sur
+l'activité et le bannissement, donc peut-être des participants d'APPEL), et les
+trois formes de `where` non littéral. Et il sait que **ni `{ not: … }` ni
+`unsetOrNull`/`differsOrUnset` ne nomment personne** — aucune forme négative ne
+SÉLECTIONNE.
+
+**Une loi peut se juger en CODE, et c'est alors une DÉCISION, pas une dette.**
+Quand une lecture porte deux questions dont l'une exige le sur-ensemble, le
+`where` reste large et la loi s'applique sur l'audience seule
+(`participationEstVivante` après lecture) — `announceStartedGroup` le fait parce
+que son créateur ne se reconnaît qu'au `role` de sa ligne de participation. Deux
+conséquences : le site est NU pour le cliquet (apprendre au cliquet à inférer une
+garde de code reviendrait à rendre des verts sur une intuition), et **la lecture
+doit PROJETER les deux colonnes de la loi** — un champ non projeté vaut
+`undefined`, donc `participationEstVivante` rendrait `false` pour tout le monde,
+et le compilateur ne le voit pas.
+
+**Il porte DEUX inventaires
 qu'il ne faut jamais fondre en un :
 
 - `DELIBERATELY_WIDE` — « ce site DOIT être large », avec sa raison instruite ;

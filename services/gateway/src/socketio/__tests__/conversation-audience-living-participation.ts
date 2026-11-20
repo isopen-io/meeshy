@@ -227,6 +227,48 @@ export const DELIBERATELY_WIDE: Readonly<Record<string, string>> = {
     'des verdicts de blocage interrogés — donc ferait PASSER un envoi que le blocage doit arrêter. ' +
     "Un blocage survit au bannissement : il lie deux COMPTES, pas deux appartenances. Le site était " +
     'juste par accident avant #20091 ; il est désormais juste par décision.',
+  'routes/conversations/messages-send.ts#0':
+    "Le gate de BLOCAGE d'un tête-à-tête : la liste sert à interroger les verdicts de blocage des " +
+    "pairs, pour REFUSER l'envoi. Resserrer retirerait un pair banni-mais-actif des verdicts " +
+    "interrogés, donc ferait PASSER un envoi que le blocage doit arrêter — un blocage lie deux " +
+    'COMPTES, pas deux appartenances (même raison que `E2EESignalRelay.ts#0`). **L\'ADMISSION de ' +
+    "cette même route, elle, est un défaut OUVERT** : elle n'appelle pas `canAccessConversation` et " +
+    'admet sur `isActive` nu (I5 de #20091, suivi #20093). Deux lectures, deux sens : ne pas ' +
+    "confondre l'entrée de ce refus avec le laissez-passer qu'il faut fermer.",
+  'socketio/handlers/MessageHandler.ts#1':
+    '`_isDirectMessageBlocked` est le JUMEAU socket du précédent, au mot près, et prend la même ' +
+    'réponse pour la même raison. Les deux transports du même geste portent la même décision — un ' +
+    "commentaire ne documente que l'exemplaire qu'il touche (cycle 85).",
+  'services/messaging/messageMentions.ts#1':
+    "`notifyNewlyMentioned` (chemin d'ÉDITION) ne tire de cette liste que des EXCLUSIONS — " +
+    '`pendingRequestUserIds` et `departedAccountUserIds` — appliquées à `newlyMentionedUserIds`, un ' +
+    'ensemble DÉJÀ borné par la loi en amont : `MentionService.validateMentionPermissions` épelle ' +
+    '`PARTICIPATION_VIVANTE` depuis #14066. Resserrer ici ne retirerait donc personne de ' +
+    "l'admission (il n'y a aucun banni à en retirer) et rétrécirait un refus : le mauvais sens, " +
+    'pour rien. Mesuré, pas supposé — la jumelle de cette lecture dans ' +
+    "`messageNotificationFanOut` a été RESSERRÉE par #20100, parce que l'admission en sort.",
+  'services/conversations/announceStartedGroup.ts#0':
+    "DEUX questions dans une requête, et le dépôt n'offre pas de second chemin pour la première : le " +
+    "créateur ne se reconnaît qu'au `role` de sa LIGNE de participation (`Conversation` ne porte " +
+    "aucune colonne d'auteur, mesuré sur `schema.prisma`). Resserrer le `where` ferait disparaître un " +
+    'créateur banni-mais-actif du relevé, `creator` serait introuvable et PLUS AUCUN invité légitime ' +
+    "ne serait annoncé. L'AUDIENCE est donc resserrée un cran plus bas, en code " +
+    '(`participationEstVivante` sur `invitees`, #20100), et les deux colonnes de la loi sont ' +
+    'PROJETÉES pour cela — un `where` n\'est pas une projection.',
+  'services/calls/callGroupConversation.ts#0':
+    "La liste alimente une ÉGALITÉ EXACTE (`sameSet(activeKeys(row), target)`) qui reconnaît le groupe " +
+    "déjà porteur d'un appel. Resserrer ferait DIVERGER les deux côtés de la comparaison : le groupe " +
+    "ne serait plus reconnu, et un second appel s'ouvrirait sur la même conversation. Même forme que " +
+    "l'annuaire d'appareils E2EE (`E2EEEnvelopeRelay.ts#0`) : devant une liste qui alimente une " +
+    'comparaison exacte, la question n\'est pas « est-elle trop large ? » mais « que fait le site ' +
+    "d'en face quand elle ne correspond pas, et qui paie ? ».",
+  'routes/conversation-encryption.ts#0':
+    "La lecture UNIQUE des trois routes de régime porte TROIS questions : une PORTE (`memberOf`), un " +
+    'REFUS par égalité exacte (`pairOfMembers` — un tête-à-tête chiffré reste à DEUX, #16188) et une ' +
+    'AUDIENCE (`participantUserRooms(conversation.participants)`, qui diffuse ' +
+    '`conversation:encryption-changed`). Resserrer servirait la troisième et casserait la deuxième — ' +
+    "sur le chemin que rien ne ramène en clair (#12949). C'est la famille de convergence #20093, et " +
+    "elle se tranche là, pas ici.",
   'routes/conversations/shared-translations.ts#0':
     "`blockSeparatesFromDirectPeer` pose la MÊME question côté lecture d'historique, et prend la même " +
     'réponse : le sur-ensemble, parce qu\'un pair oublié du relevé est un blocage qu\'on n\'interroge ' +
@@ -311,6 +353,39 @@ export const MEASURED_FAMILIES: Readonly<Record<string, string>> = {
     'adversarial sur la vraie classe. Le fichier se déclare lui-même fail-OUVERT, ce que l\'entrée de ' +
     "décision contredisait mot pour mot. Ce n'est donc pas une décision mais une dette, et son lot " +
     "devra nommer la frontière qu'il tranche. Suivi : #20091.",
+  'apercu-de-membres-servi':
+    'MESURE — un APERÇU de membres servi dans une charge utile de conversation, et le gros de ce que ' +
+    "la forme imbriquée a fait entrer dans le relevé (#20100). Dix-huit projections : la fiche admin, " +
+    "l'aperçu de nom, la liste souveraine, la fiche d'un compte, les conversations d'une communauté, " +
+    "le détail et la ligne de liste, la recherche, l'export RGPD, la feuille de préférences, le " +
+    "fragment `_count` partagé, les pairs d'un historique d'appels et les partenaires de " +
+    "conversation. Aucune livraison de contenu : un banni-mais-actif y gonfle un nombre ou occupe une " +
+    'ligne AFFICHÉE. **Et c\'est pire qu\'un nombre faux quand la projection est CAPÉE** — `take: 5`, ' +
+    "`take: 6`, `take: 100` : un banni prend la place d'un membre légitime dans l'aperçu, qui montre " +
+    "alors quelqu'un qui n'est plus là en cachant quelqu'un qui l'est. À instruire avec #20051 (que " +
+    "vaut un effectif quand la lecture qui le produit n'est pas la liste des membres ?), pas au fil " +
+    "d'un lot de clause.",
+  'audience-de-publication-a-instruire':
+    "AUDIENCE, et d'un autre domaine : ces deux lectures composent l'ensemble des « contacts » du " +
+    "lecteur — les autres membres de ses tête-à-tête — qui décide QUI PEUT LIRE une publication " +
+    "d'audience restreinte (`buildPostVisibilityOrFilter`, `recordView`). Un banni-mais-actif d'un " +
+    'tête-à-tête y reste un contact, donc lit les posts réservés aux contacts. Ce n\'est pas la même ' +
+    "question que l'audience d'un message — elle se tranche avec les cercles de proximité et la " +
+    "visibilité des publications, dont les seuils sont des décisions produit.",
+  'porte-sur-un-sur-ensemble':
+    "PORTE, et c'est un défaut OUVERT, pas une mesure : `POST /conversations/:id/invite` résout " +
+    "l'INVITEUR depuis cette liste nue (`participants.find(m => m.userId === inviterId)`), si bien " +
+    "qu'un membre actif-et-banni fait entrer qui il veut dans une conversation dont il est exclu — et " +
+    '« inviter » écrit ici un `Participant` immédiatement ACTIF. Le `where` ne se resserre PAS : la ' +
+    'même lecture tient `newMemberRefusal`, un refus par égalité exacte (un tête-à-tête chiffré reste ' +
+    "à DEUX, #16188). Le correctif est celui d'`announceStartedGroup` — la loi jugée en code sur la " +
+    'PORTE seule. Suivi : #20104.',
+  'unicite-d-un-nom':
+    "MESURE, et la seule que `findFirst` a fait entrer dans le relevé (#20100) : le tirage d'un nom " +
+    "d'affichage anonyme interroge si un candidat est déjà PRIS dans la conversation. Un " +
+    'banni-mais-actif qui garde son nom fait retirer un candidat du tirage — un nom de moins, jamais ' +
+    'une fuite. Le sur-ensemble y échoue du bon côté : deux anonymes homonymes dans un même fil ' +
+    "seraient indistinguables à l'écran.",
   'ni-audience-ni-refus':
     'Les quatre sites que la taxonomie du balayage ne range PAS, et le dire vaut mieux que les forcer : ' +
     '`callConversationRebranch` est une table de jointure qui REPOINTE des lignes d\'appel ; ' +
@@ -366,6 +441,38 @@ export const MEASURED_NOT_INSTRUCTED: Readonly<Record<string, string>> = {
   'services/message-translation/ConversationLanguages.ts#0': 'ni-audience-ni-refus',
   'services/messaging/messageMentions.ts#0': 'ni-audience-ni-refus',
   'services/world/worldSeedOperations.ts#0': 'ni-audience-ni-refus',
+  // #20100 — ce que la forme IMBRIQUÉE, `findFirst` et le filtre NÉGATIF ont
+  // fait entrer dans le relevé. Aucun n'a été écrit en violation d'un cliquet :
+  // ils étaient hors de sa vue, comme les cinquante de #20091.
+  'routes/admin/conversation-fiche.ts#0': 'apercu-de-membres-servi',
+  'routes/admin/conversation-name-preview.ts#0': 'apercu-de-membres-servi',
+  'routes/admin/conversations-sovereign.ts#0': 'apercu-de-membres-servi',
+  'routes/admin/users.ts#0': 'apercu-de-membres-servi',
+  'routes/communities/core.ts#0': 'apercu-de-membres-servi',
+  'routes/communities/core.ts#1': 'apercu-de-membres-servi',
+  'routes/conversations/core-selects.ts#0': 'apercu-de-membres-servi',
+  'routes/conversations/core-selects.ts#1': 'apercu-de-membres-servi',
+  'routes/conversations/search.ts#0': 'apercu-de-membres-servi',
+  'routes/conversations/search.ts#1': 'apercu-de-membres-servi',
+  'routes/conversations/utils/active-member-count.ts#0': 'apercu-de-membres-servi',
+  'routes/me/export.ts#0': 'apercu-de-membres-servi',
+  'routes/users/preferences.ts#0': 'apercu-de-membres-servi',
+  'services/search/globalMessageSearch.ts#0': 'apercu-de-membres-servi',
+  'services/calls/callHistoryList.ts#0': 'apercu-de-membres-servi',
+  'services/calls/callHistorySearch.ts#0': 'apercu-de-membres-servi',
+  'utils/conversation-partners.ts#0': 'apercu-de-membres-servi',
+  'utils/conversation-partners.ts#1': 'apercu-de-membres-servi',
+  'services/posts/feedContacts.ts#0': 'audience-de-publication-a-instruire',
+  'services/posts/viewerAudience.ts#0': 'audience-de-publication-a-instruire',
+  'routes/conversations/sharing-invite.ts#0': 'porte-sur-un-sur-ensemble',
+  'services/conversations/anonymousUsername.ts#0': 'unicite-d-un-nom',
+  'services/MessageMediaConsumptionService.ts#0': 'mesure-denominateur-destructif',
+  'services/MessageReadStatusService.ts#2': 'mesure-denominateur-destructif',
+  'services/messaging/messagePostSaveEffects.ts#0': 'mesure-jeu-et-priorite',
+  'services/relations/messageInteractions.ts#0': 'mesure-jeu-et-priorite',
+  'routes/conversations/participant-removal.ts#1': 'effectif-et-depart',
+  'routes/links/utils/share-link-mint.ts#0': 'audience-a-instruire',
+  'services/calls/unrespondedParticipants.ts#0': 'audience-a-instruire',
 };
 
 /**
@@ -402,11 +509,124 @@ function namesAParticularMember(where: string): boolean {
     const value = (match[1] ?? '').trim();
     // Raccourci (`userId,`) ⇒ la variable homonyme NOMME une personne.
     if (value === '') return true;
-    // Un filtre de nullité ne nomme personne ; tout le reste (variable,
-    // littéral, `{ in: [...] }`) sélectionne des personnes précises.
-    if (!/^\{\s*not:\s*null\s*\}$/.test(value)) return true;
+    // Un filtre NÉGATIF ne nomme personne ; tout le reste (variable, littéral,
+    // `{ in: [...] }`) sélectionne des personnes précises. Le premier
+    // discriminant n'admettait que `{ not: null }` — la NULLITÉ — et écartait
+    // ainsi en silence onze audiences réelles dont la clause dit « tous les
+    // membres SAUF moi » (`userId: { not: userId }`) : la liste des pairs d'un
+    // tête-à-tête, l'audience d'une story, les partenaires de conversation.
+    // **Aucune forme de `{ not: … }` ne SÉLECTIONNE quelqu'un** ; les ranger
+    // avec les clés est l'erreur qui omet, donc la silencieuse.
+    if (!/^\{\s*not:\s*[^}]*\}$/.test(value)) return true;
   }
   return false;
+}
+
+/**
+ * Cette clause imbriquée parle-t-elle de PARTICIPATION — donc le relevé sait-il
+ * même de quel MODÈLE elle vient ?
+ *
+ * Le schéma ne porte que DEUX relations nommées `participants` :
+ * `Conversation.participants: Participant[]` et
+ * `CallSession.participants: CallParticipant[]`. La seconde n'a **ni
+ * `isActive` ni `bannedAt`** — c'est la mesure, pas une impression, et
+ * `audience-law-nested-scope.test.ts` § « le modèle » la relit dans
+ * `schema.prisma` pour que l'ajout d'une colonne ou d'une troisième relation
+ * rougisse ici.
+ *
+ * Une clause qui ne nomme aucune des deux colonnes ne peut donc pas être
+ * rattachée à un modèle par le texte, et le premier jet de ce lot l'a payé : il
+ * rangeait les deux lectures de `CallCleanupService`
+ * (`{ OR: [{ leftAt: null }, { leftAt: { isSet: false } }] }`, des participants
+ * d'APPEL) parmi les audiences NUES d'une conversation. Le signal était faux et
+ * il envoyait réparer une clause qui n'a rien à voir avec le bannissement.
+ *
+ * > **Un balayage qui change de forme d'appel change aussi de PREUVE DE
+ * > MODÈLE.** La forme appelée la portait gratuitement — `participant.findMany`
+ * > NOMME la table. La forme imbriquée ne nomme qu'une RELATION, et deux
+ * > modèles la partagent.
+ *
+ * La garde ne s'applique pas à la forme APPELÉE : `participant.<méthode>` dit
+ * la table, et un `where` qui ne porte aucune clause d'activité y est une
+ * audience réellement NON BORNÉE — plus large qu'`isActive` nu, donc à voir.
+ */
+function speaksOfParticipation(where: string): boolean {
+  // Une épellation de la loi compte comme une colonne : `PARTICIPATION_VIVANTE`
+  // est typée `Prisma.ParticipantWhereInput`, donc elle ne se compile que sur la
+  // bonne relation — alors qu'elle ne NOMME aucune colonne dans le texte. Le
+  // premier jet l'oubliait, et c'est le pire défaut que ce lot pouvait avoir :
+  // il publiait en « modèle indécidable » l'audience qu'il venait de
+  // RESSERRER, si bien que l'inventaire se rééquilibrait et que tout paraissait
+  // vert — **un site corrigé disparaissait du relevé au lieu d'y passer au
+  // VERT**. Un cliquet qui se trompe dans le sens rassurant est pire que pas de
+  // cliquet (#20091).
+  if (LAW_SPELLINGS.some((spelling) => where.includes(spelling))) return true;
+  return /\bisActive\b/.test(where) || /\bbannedAt\b/.test(where);
+}
+
+/**
+ * Ce `where` tient-il sa clause d'un APPEL étalé, que le balayage ne sait pas
+ * lire ?
+ *
+ * `{ conversationId, ...callerParticipantWhere(caller) }` a toute l'apparence
+ * d'une audience — portée écrite, aucune identité visible — et c'en est le
+ * CONTRAIRE : l'appel porte la clé du membre. Le discriminant d'identité est
+ * TEXTUEL ; devant un appel il ne peut rien conclure, et conclure quand même
+ * rendait un verdict d'AUDIENCE sur une PORTE (`messagePinAdmission`,
+ * `call-participants`).
+ *
+ * > C'est le constat I2 de #20091 vu par son autre bout : le lot y avait publié
+ * > la portée indirecte (`{ ...SCOPE, isActive: true }`) et laissé la CLÉ
+ * > indirecte se faire juger. Les deux formes ont la même cause — un étalement
+ * > illisible — et seule la seconde produit un faux verdict plutôt qu'un
+ * > silence.
+ *
+ * **Un APPEL, jamais un identifiant**, et ce n'est pas une commodité : nommer
+ * un membre en particulier exige une valeur d'EXÉCUTION, qu'une constante de
+ * module ne peut pas porter. `...NOT_YET_ACCEPTED` et `[...narrowing]` restent
+ * donc jugés — le premier jet publiait les deux formes, et il a fallu mesurer
+ * ce qu'il faisait disparaître : **trois décisions déjà instruites**, reclassées
+ * en « je ne sais pas » par le lot même qui prétend mieux voir.
+ */
+function keyedByAnUnreadableCall(where: string): boolean {
+  const calls = where.match(/\.{3}\s*([A-Za-z_$][\w$.]*)\s*\(/g) ?? [];
+  return calls.some((spread) => {
+    const name = (spread.match(/[A-Za-z_$][\w$.]*/) ?? [''])[0];
+    return !NEGATIVE_WHERE_HELPERS.includes(name);
+  });
+}
+
+/**
+ * Les fabriques de clause du dépôt qui ne peuvent PAS nommer un membre, parce
+ * qu'elles ne produisent qu'un refus : `unsetOrNull(f)` rend
+ * `{ OR: [{ f: null }, { f: { isSet: false } }] }`, `differsOrUnset(f, v)` rend
+ * `{ OR: [{ NOT: { f: v } }, { f: { isSet: false } }] }`
+ * (`utils/prisma-unset.ts`).
+ *
+ * C'est la MÊME règle que celle du `{ not: … }` ci-dessus, prise un niveau
+ * d'écriture plus haut : **aucune forme négative ne SÉLECTIONNE quelqu'un**, et
+ * `differsOrUnset('userId', arrival.userId)` — « tout le monde SAUF l'arrivant »
+ * — est une audience, pas une porte. La ranger avec les clés aurait reclassé
+ * l'éventail d'arrivée de #20051 en « je ne sais pas », perdant une famille
+ * déjà instruite.
+ */
+const NEGATIVE_WHERE_HELPERS = ['unsetOrNull', 'differsOrUnset'] as const satisfies readonly string[];
+
+/**
+ * Le corps d'un bloc, accolades INCLUSES, depuis son accolade ouvrante — ce que
+ * `callArguments` fait pour un appel, sans la parenthèse à franchir.
+ */
+function balancedBlock(source: string, openIndex: number): string | null {
+  let depth = 0;
+  for (let i = openIndex; i < source.length; i += 1) {
+    const char = source[i];
+    if (char === '{') depth += 1;
+    else if (char === '}') {
+      depth -= 1;
+      if (depth === 0) return source.slice(openIndex, i + 1);
+    }
+  }
+  return null;
 }
 
 /**
@@ -546,15 +766,18 @@ function walkParticipantReads(): { audiences: AudienceSite[]; unjudgeable: Unjud
       }
       if (!entry.name.endsWith('.ts') || entry.name.endsWith('.test.ts')) continue;
       const src = stripComments(fs.readFileSync(full, 'utf8'));
-      const re = /participant\.(findMany|count|groupBy|aggregate)\(/g;
+      const file = path.relative(AUDIENCE_ROOT, full);
+      const lineOf = (index: number): number => src.slice(0, index).split('\n').length;
       let match: RegExpExecArray | null;
-      while ((match = re.exec(src)) !== null) {
-        const file = path.relative(AUDIENCE_ROOT, full);
-        const line = src.slice(0, match.index).split('\n').length;
+
+      const called = /participant\.(findMany|count|groupBy|aggregate|findFirst)\(/g;
+      while ((match = called.exec(src)) !== null) {
+        const line = lineOf(match.index);
+        const method = match[1];
         const args = callArguments(src, match.index + match[0].length - 1);
         const at = args === null ? -1 : args.indexOf('where:');
         if (args === null || at < 0) {
-          unjudgeable.push({ file, line, method: match[1], form: 'absent' });
+          unjudgeable.push({ file, line, method, form: 'absent' });
           continue;
         }
         const after = args.slice(at + 'where:'.length);
@@ -563,29 +786,109 @@ function walkParticipantReads(): { audiences: AudienceSite[]; unjudgeable: Unjud
         // se PUBLIE comme illisible.
         const local = form === 'variable' ? resolveLocalWhere(src, (after.trimStart().match(/^[A-Za-z_$][\w$]*/) ?? [''])[0]) : null;
         if (form !== '' && local === null) {
-          unjudgeable.push({ file, line, method: match[1], form });
+          unjudgeable.push({ file, line, method, form });
           continue;
         }
         const where = local ?? balancedObjectBody(args, args.indexOf('{', at) + 1);
         if (where === null) {
-          unjudgeable.push({ file, line, method: match[1], form: 'absent' });
+          unjudgeable.push({ file, line, method, form: 'absent' });
           continue;
         }
-        // #20091, constat de l'audit : un `where` LITTÉRAL dont la portée vient
-        // d'un spread (`{ ...SCOPE, isActive: true }`) n'a pas de
-        // `conversationId` textuel. L'écarter en SILENCE est exactement le
-        // défaut que ce lot corrige ailleurs — il se publie donc.
-        if (!where.includes('conversationId')) {
-          if (/\.{3}[A-Za-z_$]/.test(where)) unjudgeable.push({ file, line, method: match[1], form: 'portée-indirecte' });
+        judge({ file, line, method, where, scopeIsWritten: true }, audiences, unjudgeable);
+      }
+
+      // L'AUTRE forme d'audience : la PROJECTION imbriquée (#20100).
+      const projected = /\bparticipants:\s*\{/g;
+      while ((match = projected.exec(src)) !== null) {
+        const block = balancedBlock(src, match.index + match[0].length - 1);
+        if (block === null) continue;
+        const at = block.indexOf('where:');
+        // Un bloc SANS `where:` n'est pas de ce relevé, et pour deux raisons
+        // distinctes qu'il ne faut pas confondre : ou c'est un FILTRE de
+        // conversation (`{ some: … }`, `{ every: … }`), qui ne nomme aucune
+        // audience, ou c'est une projection NON BORNÉE — plus large encore
+        // qu'`isActive` nu — qui se filtre souvent en CODE, ce qu'aucun
+        // discriminant de `where` ne peut voir. La seconde est mesurée et
+        // suivie chez elle (#20103) ; la deviner ici fabriquerait des verdicts.
+        if (at < 0) continue;
+        const line = lineOf(match.index);
+        const form = unreadableForm(block.slice(at + 'where:'.length));
+        if (form !== '') {
+          unjudgeable.push({ file, line, method: 'participants-imbriqué', form });
           continue;
         }
-        if (namesAParticularMember(where)) continue;
-        audiences.push({ file, line, where, usesLaw: spellsTheLaw(where) });
+        const where = balancedObjectBody(block, block.indexOf('{', at) + 1);
+        if (where === null) {
+          unjudgeable.push({ file, line, method: 'participants-imbriqué', form: 'absent' });
+          continue;
+        }
+        if (!speaksOfParticipation(where)) {
+          unjudgeable.push({ file, line, method: 'participants-imbriqué', form: 'modèle-indécidable' });
+          continue;
+        }
+        judge({ file, line, method: 'participants-imbriqué', where, scopeIsWritten: false }, audiences, unjudgeable);
       }
     }
   };
   walk(AUDIENCE_ROOT);
+  // Le rang d'inventaire d'un site est son rang dans son FICHIER, et les deux
+  // relevés ne balaient pas la même passe : sans ce tri, la clé d'un site
+  // dépendrait de l'ORDRE DES SCANNERS plutôt que de la source. Il est sans
+  // effet sur les clés d'avant #20100, que la passe unique rendait déjà dans
+  // l'ordre des lignes.
+  const byLine = (a: { file: string; line: number }, b: { file: string; line: number }): number =>
+    a.file === b.file ? a.line - b.line : a.file.localeCompare(b.file);
+  audiences.sort(byLine);
+  unjudgeable.sort(byLine);
   return { audiences, unjudgeable };
+}
+
+/**
+ * Le verdict sur un `where` LITTÉRAL, partagé par les deux formes d'audience.
+ *
+ * `scopeIsWritten` est la seule chose qui les distingue, et ce n'est pas un
+ * détail d'implémentation. Une audience IMBRIQUÉE tient sa portée du `where` de
+ * son PARENT :
+ *
+ * ```ts
+ * conversation.findUnique({ where: { id: conversationId }, select: { participants: { where: … } } })
+ * ```
+ *
+ * Exiger d'elle un `conversationId` textuel la rejetait TOUTE — c'est le
+ * constat I2 de #20091, et la raison pour laquelle trente-trois audiences, dont
+ * l'éventail de notifications push, vivaient hors de tout relevé du dépôt.
+ */
+function judge(
+  read: { file: string; line: number; method: string; where: string; scopeIsWritten: boolean },
+  audiences: AudienceSite[],
+  unjudgeable: UnjudgeableRead[]
+): void {
+  const { file, line, method, where, scopeIsWritten } = read;
+  if (scopeIsWritten && !where.includes('conversationId')) {
+    // #20091, constat de l'audit : un `where` LITTÉRAL dont la portée vient
+    // d'un spread (`{ ...SCOPE, isActive: true }`) n'a pas de `conversationId`
+    // textuel. L'écarter en SILENCE est exactement le défaut que ce lot
+    // corrige ailleurs — il se publie donc.
+    if (/\.{3}[A-Za-z_$]/.test(where)) unjudgeable.push({ file, line, method, form: 'portée-indirecte' });
+    return;
+  }
+  // La LOI D'ABORD. Un `where` qui l'épelle est conforme, qu'il désigne un
+  // membre ou toute une audience — se taire sur lui perdrait un VERT sans rien
+  // rendre de plus sûr, et c'est ce que faisait le premier jet de ce lot sur
+  // `scanLiveParticipants`, la lecture d'audience la plus utilisée du dépôt
+  // (son `[...narrowing]` suffisait à la rendre illisible).
+  if (spellsTheLaw(where)) {
+    audiences.push({ file, line, where, usesLaw: true });
+    return;
+  }
+  if (namesAParticularMember(where)) return;
+  // La CLÉ peut venir d'un appel étalé, comme la PORTÉE — et là, se taire est
+  // le seul verdict honnête (#20100).
+  if (keyedByAnUnreadableCall(where)) {
+    unjudgeable.push({ file, line, method, form: 'clé-indirecte' });
+    return;
+  }
+  audiences.push({ file, line, where, usesLaw: false });
 }
 
 /** La clé d'inventaire d'un site : fichier + rang de la requête dans ce fichier. */
