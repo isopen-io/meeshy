@@ -174,19 +174,22 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
     }
 
     private func nameBlock(recipe: MeeshyCollapsingHeroRecipe, isDark: Bool, centered: Bool) -> some View {
-        VStack(alignment: centered ? .center : .leading, spacing: 2) {
+        let onMedia = MeeshyCollapsingHeroRecipe.titleInk(keepsBannerInBar: keepsBannerInBar,
+                                                          travel: recipe.identityTravel) == .onMedia
+        return VStack(alignment: centered ? .center : .leading, spacing: 2) {
             Text(title)
                 .font(MeeshyKitFont.exact(recipe.titleSize, weight: .heavy, design: .rounded))
-                .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
+                .foregroundStyle(onMedia ? MeeshyColors.onMedia : MeeshyColors.textPrimary(isDark: isDark))
                 .lineLimit(1)
                 .truncationMode(.tail)
             if let subtitle, recipe.subtitleSize > 0 {
                 Text(subtitle)
                     .font(MeeshyKitFont.exact(recipe.subtitleSize, weight: .medium))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(onMedia ? MeeshyColors.onMediaSecondary : Color.accentColor)
                     .lineLimit(1)
             }
         }
+        .shadow(color: onMedia ? .black.opacity(0.28) : .clear, radius: 2, y: 1)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }
