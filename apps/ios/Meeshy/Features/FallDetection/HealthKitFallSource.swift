@@ -55,16 +55,23 @@ final class HealthKitFallSource: FallSampleSourcing {
         return status == .unnecessary
     }
 
+    /// Le temps laissé à une livraison pour lire et rapporter avant de rendre la main à HealthKit. Le rappel de fin
+    /// n'est pas `Sendable` : il reste sur la file de HealthKit, qui attend la lecture au lieu de le confier au
+    /// MainActor. HealthKit accorde une trentaine de secondes à un réveil d'arrière-plan.
+    private nonisolated static let deliveryBudget: TimeInterval = 25
+
     func start(accountId: String, deliver: @escaping @MainActor ([Date]) async -> Bool) {
         if let observer { store.stop(observer) }
         guard isAvailable else { return }
-        let query = HKObserverQuery(sampleType: fallType, predicate: nil) { [weak self] _, completion, error in
+        let query = HKObserverQuery(sampleType: fallType, predicate: nil) { @Sendable [weak self] _, completion, error in
             guard error == nil else { return completion() }
-            let done = ObserverCompletion(signal: completion)
+            let fetched = DispatchSemaphore(value: 0)
             Task { @MainActor in
                 await self?.fetchNew(accountId: accountId, deliver: deliver)
-                done.signal()
+                fetched.signal()
             }
+            _ = fetched.wait(timeout: .now() + Self.deliveryBudget)
+            completion()
         }
         observer = query
         store.execute(query)
@@ -88,12 +95,6 @@ final class HealthKitFallSource: FallSampleSourcing {
         guard await deliver(dates), let next else { return }
         anchors.save(next, for: accountId)
     }
-}
-
-/// Le rappel de fin d'une livraison HealthKit, qui n'est pas `Sendable` : il ne voyage que jusqu'à la tâche qui
-/// lit les échantillons, et n'est appelé qu'une fois, après elle — HealthKit ne le touche plus entre-temps.
-private nonisolated struct ObserverCompletion: @unchecked Sendable {
-    let signal: HKObserverQueryCompletionHandler
 }
 
 /// Où l'ancre de la requête HealthKit survit, par compte : un autre compte sur le même iPhone repart de zéro. L'ancre
