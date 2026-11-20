@@ -13723,7 +13723,7 @@
         }
       }
     },
-    "community.join.declined.hint": {
+    "community.join.declined.until": {
       "extractionState": "manual",
       "localizations": {
         "ar": {

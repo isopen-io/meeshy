@@ -502,14 +502,14 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
 
     /// « Vous pourrez en refaire une à partir du 27 novembre à 10:00. » — la
     /// date dans la langue et le calendrier du lecteur.
-    static func declinedHint(until: Date, locale: Locale = .current) -> String {
+    static func declinedUntilText(until: Date, locale: Locale = .current) -> String {
         let date = until.formatted(.dateTime.day().month(.wide).hour().minute().locale(locale))
-        return String(localized: "community.join.declined.hint", defaultValue: "Vous pourrez en refaire une à partir du \(date).", bundle: .module)
+        return String(localized: "community.join.declined.until", defaultValue: "Vous pourrez en refaire une à partir du \(date).", bundle: .module)
     }
 
     private var joinNotice: (text: String, isRefusal: Bool)? {
         if let until = declinedUntil {
-            return (Self.declinedHint(until: until), true)
+            return (Self.declinedUntilText(until: until), true)
         }
         if viewModel.joinRefusal == .cooldown {
             return (String(localized: "community.join.cooldown", defaultValue: "Votre dernière demande a été refusée : réessayez 7 jours après ce refus.", bundle: .module), true)
