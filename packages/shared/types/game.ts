@@ -240,9 +240,11 @@ export const gamePersonalMissionSchema = gameMissionSchema.extend({
 export const gameMissionsSchema = z.object({
   dayKey,
   prismDay: z.boolean(),
-  /** Niveau 5 atteint. */
+  /** Niveau 5 atteint : le Rêve complet. En dessous, `items` porte le premier Rêve, d'un acte (#17370). */
   unlocked: z.boolean(),
   items: z.array(gameMissionSchema).max(4),
+  /** Sous le niveau 5 : les étincelles qui manquent avant le Rêve complet (#17370). Tolérant, absent devant un serveur antérieur. */
+  fullDreamIn: nonNegativeInt.optional().catch(undefined),
   rerollAvailable: z.boolean(),
   /** Tolérante : une mission personnelle illisible tombe seule, sans emporter le bloc. */
   personal: gamePersonalMissionSchema.nullable().optional().catch(undefined),

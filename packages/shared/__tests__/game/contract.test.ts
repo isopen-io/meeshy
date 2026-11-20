@@ -215,6 +215,29 @@ describe('le bloc game', () => {
     expect(block().missions.unlocked).toBe(true);
   });
 
+  it("dit, sous le niveau 5, combien d'étincelles manquent avant le Rêve complet (#17370)", () => {
+    const low = block({ score: 1_900, levelRecord: null, missions: [] });
+    expect(low.missions.fullDreamIn).toBe(levelThreshold(5) - 1_900);
+    expect(gameBlockSchema.safeParse(low).success).toBe(true);
+    expect(block().missions.fullDreamIn).toBeUndefined();
+  });
+
+  it("ouvre l'Offrande d'un premier Rêve dès que son acte unique est fait (#17370)", () => {
+    const [first] = missionRecords(1);
+    const low = block({ score: 100, levelRecord: null, missions: [first!] });
+    expect(low.missions.unlocked).toBe(false);
+    expect(low.missions.items).toHaveLength(1);
+    expect(low.chest.status).toBe('ready');
+    expect(low.missions.rerollAvailable).toBe(false);
+  });
+
+  it('tolère un fullDreamIn illisible sans emporter le bloc', () => {
+    const low = { ...block({ score: 100, levelRecord: null, missions: [] }) };
+    const parsed = gameBlockSchema.safeParse({ ...low, missions: { ...low.missions, fullDreamIn: 'beaucoup' } });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.missions.fullDreamIn).toBeUndefined();
+  });
+
   it('ferme le coffre tant que les missions ne sont pas finies, l\'ouvre ensuite', () => {
     expect(block().chest.status).toBe('locked');
     const done = missionRecords(34).map((m) => ({ ...m, progress: m.target, completedAt: '2026-10-05T10:00:00.000Z' }));

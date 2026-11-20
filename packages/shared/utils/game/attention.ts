@@ -10,6 +10,9 @@ import type { FlameStatus } from './flame.js';
  * Miroirs, rejoués sur les mêmes cas : iOS `GameAttention` (`packages/MeeshySDK/.../Game/GameAttention.swift`),
  * Android `GameAttention` (`apps/android/core/model/.../game/GameAttention.kt`).
  *
+ * L'Offrande du premier Rêve (#17370, sous le niveau 5) se signale comme les autres : la passerelle ne la sert
+ * prête qu'une fois son acte fait.
+ *
  * « Jeu masqué » ⇒ rien. Aucun bloc (cache vide, ancien serveur) ⇒ rien. Aucune notification n'en découle (#17368).
  */
 export type GameAttention = {
@@ -21,7 +24,6 @@ export const NO_GAME_ATTENTION: GameAttention = { chestReady: false, flameAtRisk
 
 /** La part du bloc `game` que la loi lit — rien d'autre. */
 export type GameAttentionSource = {
-  readonly missions: { readonly unlocked: boolean };
   readonly chest: { readonly status: 'locked' | 'ready' | 'claimed' };
   readonly flame: { readonly status: FlameStatus; readonly days: number };
 };
@@ -29,7 +31,7 @@ export type GameAttentionSource = {
 export function gameAttention(game: GameAttentionSource | null | undefined, options: { readonly hidden: boolean }): GameAttention {
   if (options.hidden || game === null || game === undefined) return NO_GAME_ATTENTION;
   return {
-    chestReady: game.missions.unlocked && game.chest.status === 'ready',
+    chestReady: game.chest.status === 'ready',
     flameAtRisk: game.flame.status === 'at-risk' && game.flame.days > 0,
   };
 }
