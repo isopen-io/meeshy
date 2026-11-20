@@ -2032,3 +2032,43 @@ socket jusqu'au client.
    - fusionner la PR.
 1. **#20010** (horloge monotone, iOS et Android ; à coordonner avec la routine iOS), puis #19953 (Android).
 2. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
+
+## Cycle 60 — 2026-11-20
+
+- **Base** : `origin/dev` @ `95ab23af5`. #19984 (cycle 59, PR #20011) est fusionnée.
+- **Branche** : `claude/determined-volta-30aot2`. PR #20047.
+- **Objectif** : #20010. La durée d'un appel et ses délais de mise en place se mesurent sur une horloge MONOTONE. Un saut de l'horloge murale (réglage manuel, NTP) ne les fausse plus.
+- **Livré** :
+  - iOS (`31bada29a7`) :
+    - `CallMonotonicClockProviding` / `SystemCallMonotonicClock`, sur `ContinuousClock`, qui continue de compter pendant le sommeil de l'appareil. Ils sont injectés dans `CallLiveClock`.
+    - Le chrono lit `callStartInstant` : `markCallStart()` le pose à côté de `callStartDate`, `stopDurationClock()` l'efface.
+    - `CallAnalyticsRecorder` tient trois `ContinuousClock.Instant` à côté des `Date` (`stampInitiated`, `stampNegotiationStart`, `stampConnected`), et `callSetupMetrics` lit les instants.
+    - Aucune `Date` n'est retirée.
+  - Android (`7197a04a48`) :
+    - `CallElapsedClock` (`SystemClock.elapsedRealtime()`) est injectée dans `CallAnalyticsController`.
+    - `RealCallClock` reste une heure murale, parce que `CallOngoingController.connectedSinceEpochMs` sert au chronomètre de la notification.
+    - `durationSeconds` Android était déjà un compteur de ticks, sans horloge.
+  - La forme du payload ne change pas, le serveur non plus.
+- **Organisation** : deux agents APPEL en parallèle, iOS dans l'arbre principal et Android dans un worktree isolé, repris par cherry-pick. Puis la QA (`auditeur-adversarial`). Quatre sous-agents en tout.
+- **Tests** :
+  - iOS : 7 témoins (`CallManagerAnalyticsRecorderTests` : recul, avance, ancres absentes = -1 ; `CallLiveClockTests` : horloge injectée, `markCallStart`, gardes de source). Rouge établi par raisonnement, faute de Swift dans le conteneur.
+  - Android : `CallAnalyticsElapsedClockTest`, et `CallViewModelTest`, où l'horloge murale recule de 5 000 à 1 000 et `setupTimeMs` vaut toujours 3 200.
+  - Gardes iOS : 0.
+  - CI : `android.yml` run 44729838729 **vert** (assemble + unit tests) ; `ios.yml` run 44729833506 (suites d'appel ciblées), voir PR.
+- **QA** : favorable avec réserves.
+  - R1 : `DeviceTime.wall` n'est injecté nulle part dans le test Android. Le vrai témoin de comportement est dans `CallViewModelTest`.
+  - R2 : le chrono iOS n'est gardé que structurellement.
+  - R3 : défaut antérieur au lot. Les ancres d'un appel sans `currentCallId` passent à l'appel suivant. Versé dans **#20046**.
+- **Suivis ouverts** :
+  - **#20043** : la surveillance Android (watchdog, détection « à moitié ouvert ») calcule encore ses deltas sur l'heure murale. C'est le cas sensible, parce qu'un saut peut relancer ou couper un appel à tort.
+  - **#20044** : la répartition de qualité iOS (`recordSample`) est encore sur l'heure murale.
+  - **#20046** : la remise à zéro des ancres.
+
+### Cycle suivant : par où reprendre
+
+0. Si #20047 n'est pas fusionnée :
+   - lire le run `ios.yml` 44729833506 ;
+   - fusionner `dev` dans la branche ;
+   - fusionner la PR.
+1. **#20043** (Android, fiabilité : un saut d'horloge ne doit ni relancer ni couper un appel), puis #20046 et #20044 (iOS, petits), puis #19953.
+2. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
