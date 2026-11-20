@@ -5,14 +5,25 @@ import { servedEditAttribution, type MessageEditorColumns } from '@meeshy/shared
 /**
  * Source UNIQUE du NOYAU de la charge utile `message:edited`.
  *
- * L'événement a TROIS producteurs et un seul décodeur par client :
+ * L'événement a QUATRE chemins d'émission et un seul décodeur par client.
+ * **Il en a eu « TROIS » écrits ici jusqu'au 2026-11-20 (#19977), et ce compte
+ * était faux** : il omettait la ligne d'arrivées, et nommait la PORTE REST là
+ * où la composition a lieu dans trois fichiers de routes. Un compte est une
+ * AFFIRMATION — recompté au 2026-11-20, SIX sites composent ce noyau :
  *
  * - `MessageHandler.handleMessageEdit` — transport socket, celui qu'emploie le
  *   WEB (`messaging.service.ts` émet `message:edit`), et que son propre
  *   commentaire nomme « le transport d'édition PRIMAIRE » ;
- * - `MeeshySocketIOManager.broadcastMessageEdited` — résumés d'appel ;
- * - `broadcastMessageMutation` — transport REST, celui qu'emploie iOS pour
- *   éditer (`PUT /messages/:messageId`).
+ * - `callSummaryEditedDelivery.ts` — résumés d'appel, servi par
+ *   `MeeshySocketIOManager.broadcastMessageEdited` (sorti du manager par
+ *   #19977, qui y a fermé la remise par lecteur) ;
+ * - `broadcastMessageMutation` — la PORTE REST, dont les trois sites de
+ *   composition vivent dans `routes/conversations/messages-advanced-edit.ts`
+ *   (deux) et `routes/messages-writes.ts` ;
+ * - `emitArrivalsLineUpdate` (`services/conversations/globalArrivalsNotice.ts`)
+ *   — la ligne d'arrivées du salon global, qui ne porte AUCUNE pièce jointe et
+ *   n'enfile rien : c'est par cette absence, et non par une exemption, qu'elle
+ *   sort du balayage de signature (`__tests__/edited-signing-door-sweep.ts`).
  *
  * Chacun composait sa charge à la main, dans son fichier. Le contrat partagé
  * déclare pourtant `message:edited` comme un `SocketIOMessage`, dont SEPT
@@ -58,6 +69,14 @@ import { servedEditAttribution, type MessageEditorColumns } from '@meeshy/shared
  * (`MessageHandler.handleMessageEdit`, `MeeshySocketIOManager.broadcastMessageEdited`)
  * servent la MÊME, `SocketAttachment`. Un troisième qui chargerait des pièces
  * jointes n'a donc plus de forme à choisir — il a une forme à REJOINDRE.
+ *
+ * **Et une forme ne suffit pas : il a aussi un PLAN à interroger.** #19977 a
+ * mesuré que le chemin des résumés d'appel était, lui, déjà alimenté en pièces
+ * par `CALL_SUMMARY_MESSAGE_INCLUDE` — il servait donc l'adresse NUE d'une
+ * pièce qui se lit par lecteur, à la room entière et dans Redis pour 48 h,
+ * pendant que les deux autres transports étaient gardés. Le balayage
+ * `edited-signing-door-sweep.ts` tient désormais cette seconde moitié à
+ * l'échelle de l'UNITÉ qui sert, et non du fichier.
  *
  * Toute famille de champs REQUISE PAR LE CONTRAT appartient à cette unité,
  * jamais au site d'appel : c'est la seule disposition où « ce transport sert le
