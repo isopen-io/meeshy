@@ -751,11 +751,12 @@ final class SharedLocationSharingSyncTests: XCTestCase {
         writtenByThisDevice(defaults, device: "")
 
         let updated = UserDefaultsSharedLocationRosterStore(userId: me, deviceId: "device-A", defaults: defaults)
-        let restoredElsewhere = UserDefaultsSharedLocationRosterStore(userId: me, deviceId: "device-B", defaults: defaults)
-
         XCTAssertFalse(updated.loadReceived())
         XCTAssertEqual(updated.loadPublishedStart(), mine)
+
+        let restoredElsewhere = UserDefaultsSharedLocationRosterStore(userId: me, deviceId: "device-B", defaults: defaults)
         XCTAssertTrue(restoredElsewhere.loadReceived())
+        XCTAssertNil(restoredElsewhere.loadPublishedStart())
     }
 
     func test_theOwnSnapshot_decodesTheStartTheGatewayNames() throws {
