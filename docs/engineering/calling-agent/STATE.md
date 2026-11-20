@@ -2131,3 +2131,42 @@ socket jusqu'au client.
 1. **#20098** : élection de la paire ICE sur iOS, à faire en parité avec Android. Coordonner avec la routine iOS ; le lot ne touche pas `Views/`.
 2. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
 3. Dette d'horloge murale côté Android, d'impact faible : `CallToastBus`, `CallReliabilityMonitor`, `CallCaptureViewModel`. Ouvrir une issue si elle n'existe pas.
+
+## Cycle 63 — 2026-11-20
+
+- **Base** : `origin/dev` @ `dd00ea14d`. #20097 (#19953, cycle 62) est fusionnée.
+- **Branche** : `claude/determined-volta-3ip0d1`.
+- **Objectif** : #20098. Sur iOS, le RTT, le débit sortant disponible et la route d'un appel se lisent sur la même paire ICE élue, comme sur Android (#19899, #19953).
+- **Livré** (iOS seulement, `Features/Call/Services/WebRTC/CallStats.swift`) :
+  - `CallStats.selectedCandidatePair(in:)` ne rend qu'une `candidate-pair` : celle que désigne l'id du transport, sinon la paire nominée réussie, sinon `nil`.
+  - `relayedRoute` passe par elle. `byId` garde la dernière entrée en cas d'id dupliqué, comme Android.
+  - `reduce` lit le RTT et le débit sur la paire élue. Sans paire élue, ou si elle n'a pas le champ, la dernière `candidate-pair` qui le porte gagne, comme Android. `CallStatValue` assainit toujours les valeurs aberrantes.
+  - Rien ne change quand l'id du transport désigne une paire, ni quand il n'y a qu'une paire, ce qui est le cas de toutes les fixtures existantes.
+  - Ni `Views/`, ni le payload, ni Android, ni le web, ni le serveur ne changent.
+- **Tests** : 6 témoins dans `CallStatsRelayedRouteTests` (`CallQualityNetworkContextTests.swift`).
+  - 4 tombent sur dev :
+    - un id qui désigne un candidat donnait une route `nil` et un RTT de 400 ms, celui de la sonde ; on attend une route relayée et 50 ms ;
+    - un id absent donnait un RTT de 400 ms, on attend 50 ms ;
+    - une vraie paire non nominée donnait un RTT de 300 ms, on attend 80 ms ;
+    - une sonde listée en dernier donnait 400 ms et 100 kb/s, on attend 50 ms et 900 kb/s.
+  - Les 2 autres sont des non-régressions.
+  - Rouge : par raisonnement et par compilation (API absente sur dev). Le conteneur n'a pas Swift.
+  - Gardes `house_rules`, `cohesion`, `test_registration` et accent : 0, rejouées par la QA.
+  - CI : `ios.yml` run 44838398412 (`workflow_dispatch`, suites d'appel). Le résultat est dans la PR.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves, toutes faibles.
+  - R1 : le rouge du commit de test est d'abord un échec de compilation.
+  - R2 : l'élection dépend de l'ordre des entrées, qui suit le hachage d'un `Dictionary` sur iOS. Versée dans **#20121** (iOS et Android).
+  - R3 : le passage de `byId` à la dernière entrée n'a pas de témoin. Il est sans effet réel, puisqu'un dictionnaire source n'a jamais deux fois le même id.
+  - R4 : Android n'assainit pas un RTT NaN ou négatif. Le défaut est antérieur au lot ; versé dans **#20122**.
+- **Limites** : rien n'a été vérifié sur appareil.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée :
+   - lire le run 44838398412, et relancer un `workflow_dispatch` s'il a été annulé ;
+   - fusionner `dev` dans la branche ;
+   - fusionner la PR.
+1. **#20122** : assainir les valeurs aberrantes sur Android. Le lot est petit, Android seulement, prouvé par `android.yml`.
+2. **#20121** : rendre l'élection indépendante de l'ordre des entrées, sur iOS et Android.
+3. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
+4. Dette d'horloge murale côté Android, d'impact faible : `CallToastBus`, `CallReliabilityMonitor`, `CallCaptureViewModel`. Ouvrir une issue si elle n'existe pas.
