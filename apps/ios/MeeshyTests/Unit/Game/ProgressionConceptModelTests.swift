@@ -28,6 +28,14 @@ final class ProgressionConceptModelTests: XCTestCase {
         XCTAssertEqual(cards.map(\.concept), ProgressionConcept.allCases, "les quinze concepts, dans l'ordre du partagé")
     }
 
+    func test_cards_gameServed_opensOnTheRank_thenTheLevel() {
+        let game = GameFixture.game()
+        let cards = ProgressionConceptModel.cards(progress: progress(game), game: game)
+
+        XCTAssertEqual(cards.prefix(2).map(\.concept), [.glory, .level],
+                       "la première page ouvre sur le rang, le niveau se lit ensuite (#17394)")
+    }
+
     func test_cards_oldServer_keepsTheLinesOfBefore_andNoneOfTheGame() {
         let cards = ProgressionConceptModel.cards(progress: progress(nil), game: nil)
 

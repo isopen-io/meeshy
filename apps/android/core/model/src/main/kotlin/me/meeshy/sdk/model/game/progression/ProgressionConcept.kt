@@ -6,13 +6,14 @@ import me.meeshy.sdk.model.game.engagement.EngagementProgress
 /**
  * LES CONCEPTS DE « PROGRESSION », DANS L'ORDRE — le miroir de `ProgressionConcepts` (iOS) et de
  * `progressionConcepts()` (web). La première page porte une carte par concept ; la fiche de chacun parcourt la
- * MÊME liste. L'ordre des entrées EST l'ordre de l'écran.
+ * MÊME liste. L'ordre des entrées EST l'ordre de l'écran. Le RANG ouvre la liste (#17394) : c'est l'objet du Jeu,
+ * et il ne recule jamais ; le niveau, qui baisse à chaque frappe, se lit juste après.
  */
 public enum class ProgressionConcept(public val wire: String) {
+    Glory("glory"),
     Level("level"),
     Points("points"),
     Meesh("meesh"),
-    Glory("glory"),
     Flame("flame"),
     Missions("missions"),
     League("league"),
