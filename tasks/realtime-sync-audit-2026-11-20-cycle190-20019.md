@@ -95,14 +95,37 @@ c'est-à-dire sous une clé qu'aucune assertion ne peut nommer (cycle 188).
 ## #20036 — `dev` était ROUGE sur le budget de taille, et ce n'était pas ce lot
 
 Au gate, `MessageHandler.ts` mesurait **2 281** lignes pour une dette déclarée à
-**2 269** : la signature de l'édition hors ligne (#19939, fusionnée dans la vague
-du jour) a ajouté 14 lignes à un fichier déjà hors budget. Le cliquet était donc
-rouge pour toute branche partie de `dev`.
+**2 269**, donc rouge pour toute branche partie de `dev`.
+
+**L'attribution que #20036 écrivait d'abord — « #19939 a ajouté 14 lignes à un
+fichier déjà hors budget » — est FAUSSE, et c'est une autre session qui l'a
+mesurée juste** (PR #20032, ouverte à 10:12, avant cette issue) : l'ancêtre était
+à 2 252, `dev` à **2 267** après #19943, la branche de #19939 à **2 266** après
+ses quatorze lignes. **Les deux côtés étaient SOUS le plafond, et les deux CI
+étaient vertes** ; c'est leur FUSION qui donne 2 281.
+
+> **Un cliquet qui borne une valeur par FICHIER ne peut pas être vérifié avant la
+> fusion** : chaque branche mesure sa distance au plafond, aucune ne mesure la
+> somme — et un `git merge` sans conflit TEXTUEL ne dit rien de ces gardes
+> CUMULATIVES (taille, dette de `any`, cohésion, cumul de couverture). C'est la
+> démonstration la plus nette de la directive #18654 (« rejouer les gardes sur
+> l'arbre FUSIONNÉ »), qui n'est donc pas une précaution de style mais la seule
+> mesure possible pour cette classe de gardes.
 
 Réparé par une EXTRACTION, jamais en montant le plafond (« une dette héritée ne
 se solde pas en montant le plafond ») : le fan-out de `message:deleted` du
 transport socket vit dans `socketio/emitMessageDeletedToAudience.ts` — 2 267
 lignes, cliquet vert, table inchangée.
+
+**Et ce lot ne revendique pas cette réparation.** PR #20032 l'avait écrite
+d'abord, dans une AUTRE région du même fichier (les commentaires de
+`handleMessageEdit`, rapatriés vers les modules qui portent la loi — 2 268
+lignes). La règle d'asymétrie (#5243) tranche en faveur de qui a écrit le
+premier, et elle vise la duplication : il n'y en a pas ici, les deux régions
+étant disjointes et les deux réductions CUMULATIVES (2 281 − 13 − 14 = 2 254 à
+la fusion des deux). Ce lot garde la sienne pour sa COHÉSION — le fan-out d'un
+retrait n'a pas sa place dans un handler de 2 300 lignes — et non pour le
+budget, que #20032 paie déjà.
 
 Et l'extraction a payé plus que des lignes : la fonction **REND** la charge
 qu'elle a servie, que la file réutilise. Le direct et la file sont deux

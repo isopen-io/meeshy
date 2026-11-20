@@ -47,10 +47,19 @@ Le prix de l'asymétrie, pour qui :
 
 ### Et un ROUGE de `dev` trouvé en passant le gate (#20036)
 
-`MessageHandler.ts` mesurait 2 281 lignes pour une dette déclarée à 2 269 : un
-lot fusionné le même jour (#19939) a ajouté 14 lignes à un fichier déjà hors
-budget. Réparé par une EXTRACTION — « une dette héritée ne se solde pas en
-montant le plafond » — et l'extraction a payé plus que des lignes : la fonction
-extraite **REND** la charge qu'elle a servie, que la file réutilise. Le direct et
-la file sont deux projections d'une SEULE composition (cycle 123) ; les
-recomposer séparément est ce qui laisse deux `deletedAt` pour un seul retrait.
+`MessageHandler.ts` mesurait 2 281 lignes pour une dette déclarée à 2 269.
+L'attribution spontanée — « un lot du jour a ajouté 14 lignes à un fichier déjà
+hors budget » — est FAUSSE : `dev` était à 2 267 et la branche de #19939 à
+2 266, **tous deux sous le plafond, tous deux verts en CI**. C'est la FUSION qui
+donne 2 281 (mesure d'une autre session, PR #20032).
+
+> **Un cliquet qui borne une valeur par FICHIER ne peut pas être vérifié avant la
+> fusion**, et un `git merge` sans conflit textuel ne dit rien de lui. Devant un
+> rouge de ce genre, ne pas chercher « qui a dépassé » — personne n'a dépassé —
+> mais **quelles branches se sont additionnées**.
+
+Réparé par une EXTRACTION, jamais en montant le plafond. Et l'extraction a payé
+plus que des lignes : la fonction extraite **REND** la charge qu'elle a servie,
+que la file réutilise. Le direct et la file sont deux projections d'une SEULE
+composition (cycle 123) ; les recomposer séparément est ce qui laisse deux
+`deletedAt` pour un seul retrait.
