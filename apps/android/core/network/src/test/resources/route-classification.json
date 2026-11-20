@@ -431,9 +431,6 @@
     "DELETE /api/v1/users/me/highlights/:id",
     "PUT /api/v1/users/me/highlights/order",
     "GET /api/v1/communities/:id/entries/stats",
-    "GET /api/v1/communities/:id/join-requests",
-    "POST /api/v1/communities/:id/join-requests/:requestId/accept",
-    "POST /api/v1/communities/:id/join-requests/:requestId/reject",
     "GET /api/v1/me/location/ghost",
     "GET /api/v1/me/location/blood-settings"
    ]
