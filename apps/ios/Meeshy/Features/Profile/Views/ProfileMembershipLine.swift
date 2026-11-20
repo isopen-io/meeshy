@@ -12,7 +12,7 @@ nonisolated enum ProfileMembershipLine {
     private static let futureTolerance: TimeInterval = 86_400
 
     /// Le @pseudo, suivi de l'ancienneté quand elle est servie et lisible — jamais un mois inventé.
-    static func handle(username: String, createdAt: String?, locale: Locale, now: Date, inBar: Bool = false) -> String {
+    @MainActor static func handle(username: String, createdAt: String?, locale: Locale, now: Date, inBar: Bool = false) -> String {
         ProfileHandleLine.text(username: username, memberSince: servedDate(createdAt: createdAt, now: now),
                                locale: locale, inBar: inBar)
     }
