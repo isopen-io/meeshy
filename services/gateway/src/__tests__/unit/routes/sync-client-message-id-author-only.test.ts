@@ -13,6 +13,23 @@
  *
  * Même harnais que `sync-sender-identity.test.ts`.
  *
+ * ## Ce que ce lot a changé dans `sync.test.ts`, et pourquoi c'est écrit ICI
+ *
+ * `sync.test.ts` est en dette de taille (1292 lignes gelées) : un ajout y est
+ * interdit, le raisonnement vient donc chez le lot qui le porte.
+ *
+ * 1. **Son double d'appartenance rendait `{ conversationId: 'c1' }` — SANS
+ *    `id`.** La production n'émet jamais cette forme : le delta résout le
+ *    lecteur de chaque conversation par cet `id`, et son absence faisait
+ *    paraître « lecteur non résolu » toute la page. Toute porte par lecteur y
+ *    échouait FERMÉE, pour une raison qui n'est pas la sienne — un double ment
+ *    aussi par ce qu'il ACCEPTE.
+ * 2. **Son témoin de « rendabilité » exigeait la clé sur un message dont
+ *    l'expéditeur n'est pas le lecteur.** Son intention — « le delta porte de
+ *    quoi réconcilier une bulle optimiste » — est juste ; sa fixture codifiait
+ *    l'ancienne PORTÉE. L'expéditeur y devient le lecteur : l'intention est
+ *    gardée, la portée corrigée, et ce que la portée exclut est gardé ici.
+ *
  * @jest-environment node
  */
 

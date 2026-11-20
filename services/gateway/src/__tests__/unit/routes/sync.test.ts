@@ -69,18 +69,10 @@ type PrismaStub = {
   userConversationPreferences: { findMany: jest.Mock };
 };
 
-/** La ligne du LECTEUR dans `c1` — ce que l'appartenance rend en production. */
-const READER_PARTICIPANT = 'p-mine';
-
 function makePrisma(over: Partial<Record<string, unknown>> = {}): PrismaStub {
   return {
     participant: {
-      // #19960 — la ligne d'appartenance porte TOUJOURS son `id` en
-      // production, et le delta s'en sert pour résoudre le lecteur dans
-      // chaque conversation. Un double qui l'omet fait paraître « lecteur non
-      // résolu » toute la page, et toute porte par lecteur y échoue fermée
-      // pour une raison qui n'est pas la sienne.
-      findMany: jest.fn<any>().mockResolvedValue([{ id: READER_PARTICIPANT, conversationId: 'c1' }]),
+      findMany: jest.fn<any>().mockResolvedValue([{ id: 'p-mine', conversationId: 'c1' }]),
     },
     message: {
       findMany: jest.fn<any>().mockResolvedValue([]),
@@ -226,17 +218,13 @@ describe('GET /sync — contrat de rendabilité du select messages', () => {
     prisma.message.findMany
       .mockResolvedValueOnce([
         {
-          // #19960 — l'expéditeur EST le lecteur : la réconciliation optimiste
-          // que ce contrat garde ne vaut que pour SES propres bulles, et la
-          // clé n'est plus servie aux pairs (cf.
-          // `sync-client-message-id-author-only.test.ts`).
-          id: 'm1', conversationId: 'c1', senderId: READER_PARTICIPANT, content: 'Hello',
+          id: 'm1', conversationId: 'c1', senderId: 'p-mine', content: 'Hello',
           clientMessageId: 'cid_x', originalLanguage: 'en',
           translations: { fr: { text: 'Bonjour' } },
           messageType: 'text', metadata: null, isEdited: false, editedAt: null,
           replyToId: null, reactionSummary: null, reactionCount: 0,
           attachments: [{ id: 'a1', fileUrl: '/f.jpg' }],
-          sender: { id: READER_PARTICIPANT, displayName: 'Ana' },
+          sender: { id: 'p-mine', displayName: 'Ana' },
           createdAt: new Date('2026-07-02T10:00:00Z'), updatedAt: new Date('2026-07-02T10:00:00Z'),
         },
       ])
@@ -255,7 +243,7 @@ describe('GET /sync — contrat de rendabilité du select messages', () => {
     ]);
     expect(added.originalLanguage).toBe('en');
     expect(added.attachments).toHaveLength(1);
-    expect(added.sender).toEqual({ id: READER_PARTICIPANT, displayName: 'Ana' });
+    expect(added.sender).toEqual({ id: 'p-mine', displayName: 'Ana' });
     expect(added.clientMessageId).toBe('cid_x');
     await app.close();
   });
