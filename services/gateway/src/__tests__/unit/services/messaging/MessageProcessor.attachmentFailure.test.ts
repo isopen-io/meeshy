@@ -138,6 +138,7 @@ jest.mock('../../../../services/messaging/sealMessageAttachments', () => ({
 // ── Import after all mocks ─────────────────────────────────────────────────
 
 import { MessageProcessor } from '../../../../services/messaging/MessageProcessor';
+import { MESSAGE_SCOPED_MODELS } from '../../../../services/messaging/messageScopedRows';
 
 // ── Prisma helpers ─────────────────────────────────────────────────────────
 
@@ -163,6 +164,7 @@ const userFindUnique = jest.fn() as jest.Mock<any>;
 const userFindMany = jest.fn() as jest.Mock<any>;
 const prefFindMany = jest.fn() as jest.Mock<any>;
 const postFindUnique = jest.fn() as jest.Mock<any>;
+const scopedDeleteMany = jest.fn() as jest.Mock<any>;
 
 const prisma: PrismaClient = {
   conversation: { findUnique: convFindUnique },
@@ -173,6 +175,11 @@ const prisma: PrismaClient = {
   user: { findUnique: userFindUnique, findMany: userFindMany },
   userConversationPreferences: { findMany: prefFindMany },
   post: { findUnique: postFindUnique },
+  // #19956 — les dix tables qui PENDENT à un message. Le double les porte parce
+  // que la production les porte : les omettre ferait passer ce harnais à côté
+  // du balayage, et c'est exactement le défaut (« un double incomplet ») que ce
+  // lot vient de trouver ailleurs.
+  ...Object.fromEntries(MESSAGE_SCOPED_MODELS.map((m) => [m, { deleteMany: scopedDeleteMany }])),
 } as unknown as PrismaClient;
 
 function makeMessage(overrides: Partial<Message> = {}): Message {
@@ -234,6 +241,7 @@ function resetPrisma() {
   userFindMany.mockReset();
   prefFindMany.mockReset();
   postFindUnique.mockReset();
+  scopedDeleteMany.mockReset();
 
   // Sensible defaults
   convFindUnique.mockResolvedValue({ encryptionMode: null, encryptionEnabledAt: null, serverEncryptionKeyId: null });
@@ -253,6 +261,7 @@ function resetPrisma() {
   userFindMany.mockResolvedValue([]);
   prefFindMany.mockResolvedValue([]);
   postFindUnique.mockResolvedValue(null);
+  scopedDeleteMany.mockResolvedValue({ count: 0 });
 }
 
 const baseData = {
@@ -314,6 +323,30 @@ describe('MessageProcessor.saveMessage — l’échec d’une pièce jointe (#19
       expect(attUpdateMany).toHaveBeenCalledWith({ where: { messageId: MSG_ID }, data: { messageId: null } });
     });
 
+    it('efface les enveloppes libsignal, DÉJÀ parties sur le fil, avant la ligne', async () => {
+      mockAssociateAttachmentsToMessage.mockRejectedValue(new Error('link failed'));
+
+      await expect(sendWithPieces()).rejects.toThrow();
+
+      // Les dix tables qui pendent au message sont balayées — `MessageEnvelope`
+      // en tête, la seule sans relation Prisma donc sans cascade, et la seule
+      // dont une orpheline est encore SERVIE par `GET /e2ee/envelopes`.
+      expect(scopedDeleteMany).toHaveBeenCalledTimes(MESSAGE_SCOPED_MODELS.length);
+      expect(scopedDeleteMany).toHaveBeenCalledWith({ where: { messageId: MSG_ID } });
+      expect(scopedDeleteMany.mock.invocationCallOrder.at(-1)).toBeLessThan(msgDelete.mock.invocationCallOrder[0]);
+    });
+
+    it('n’est pas empêché par une table qui résiste, et ne masque pas la cause', async () => {
+      mockAssociateAttachmentsToMessage.mockRejectedValue(new Error('link failed'));
+      // Un délégué ABSENT lève SYNCHRONEMENT : sans garde, ce `TypeError`
+      // remplacerait l'erreur d'origine, la seule qui porte la cause.
+      scopedDeleteMany.mockImplementation(() => { throw new TypeError('deleteMany is not a function'); });
+
+      await expect(sendWithPieces()).rejects.toThrow('link failed');
+
+      expect(msgDelete).toHaveBeenCalledWith({ where: { id: MSG_ID } });
+    });
+
     it('ne scelle rien et ne lance aucun audio sur un message qui n’existe plus', async () => {
       mockAssociateAttachmentsToMessage.mockRejectedValue(new Error('link failed'));
 
@@ -354,7 +387,28 @@ describe('MessageProcessor.saveMessage — l’échec d’une pièce jointe (#19
 
       await expect(sendCopy()).rejects.toThrow();
 
+      // `MessageAttachment.message` est `onDelete: Cascade` (schema.prisma) et
+      // Prisma l'émule côté client sur MongoDB : les lignes recopiées partent
+      // avec le message. Il n'y a rien à rendre — elles n'ont pas d'autre vie.
       expect(attUpdateMany).not.toHaveBeenCalled();
+    });
+
+    // CHANGEMENT DE RÉGIME, dit à voix haute : avant #19956, `await sealFiles()`
+    // vivait ICI hors de tout `try`, donc un échec de scellement propageait et
+    // faisait échouer la diffusion en laissant la ligne ET ses copies — un
+    // état que personne ne nettoyait. Il suit désormais la même loi que la
+    // branche des pièces pré-téléversées.
+    it('un SCELLEMENT qui lève ne fait plus échouer la diffusion (régime aligné)', async () => {
+      convFindUnique.mockResolvedValue(AT_REST_REGIME);
+      msgFindUnique.mockResolvedValue({ ...ORDINARY_SOURCE, sender: { id: SENDER_ID, userId: 'user-1' } });
+      partFindUnique.mockResolvedValue({ id: SENDER_ID, userId: 'user-1' });
+      mockSealAtRest.mockRejectedValue(new Error('keyring unavailable'));
+
+      await expect(
+        processor.saveMessage({ ...baseData, content: '', copyAttachmentsFromMessageId: SOURCE_MSG_ID } as never)
+      ).resolves.toMatchObject({ id: MSG_ID });
+
+      expect(msgDelete).not.toHaveBeenCalled();
     });
   });
 

@@ -26,6 +26,23 @@
  * de la reprise un chemin NOMINAL complet : liaison, scellement au repos,
  * départ de l'audio, type dérivé des pièces.
  *
+ * **Abandonner un message n'est pas supprimer sa LIGNE.** Ce qui pend à lui
+ * s'efface d'abord (`messageScopedRows.ts`) : neuf de ces dix tables ne
+ * déclarent qu'un `messageId` nu, sans relation, donc aucune cascade ne les
+ * emporte. `MessageEnvelope` est celle qui compte ici — sur le chemin
+ * libsignal par appareil (hybride + `deviceLayerRelay`, admis AVEC des pièces
+ * jointes), les enveloppes sont écrites avec la ligne et **diffusées** avant
+ * que les pièces ne soient liées. « L'envoi échoue » serait faux sur le fil si
+ * on les laissait : le chiffré est déjà chez le destinataire, et le rejeu lui
+ * en livrerait un second jeu pour le même clair.
+ *
+ * **Et le nettoyage n'est sûr que parce que le LINKER attend toutes ses
+ * écritures.** `associateAttachmentsToMessage` en lance une par pièce ; tant
+ * qu'il rejetait par `Promise.all`, les retardataires couraient contre la
+ * libération et re-liaient une pièce au message qu'on supprimait. Il settle
+ * désormais avant de propager (#19956) — sans quoi tout ce qui suit est une
+ * course, pas une garantie.
+ *
  * **Ce que la libération ne rend PAS, et c'est assumé.** Une liaison partielle
  * a pu écrire, en même temps que le `messageId`, les drapeaux de protection du
  * message (`isViewOnce`, `isBlurred`, `effectFlags`, OR-és sur les flags
@@ -50,11 +67,12 @@
  */
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { SERVER_AT_REST_FILE_SEAL_FAILED } from './sealMessageAttachments';
+import { deleteMessageScopedRows, type MessageScopedPrisma } from './messageScopedRows';
 
 const logger = enhancedLogger.child({ module: 'attachmentFailureOutcome' });
 
 /** La part de Prisma qu'un abandon de message touche — structurale, pour être doublée telle quelle. */
-export type AttachmentFailurePrisma = {
+export type AttachmentFailurePrisma = MessageScopedPrisma & {
   readonly message: { delete(args: { where: { id: string } }): Promise<unknown> };
   readonly messageAttachment: {
     updateMany(args: { where: { messageId: string }; data: { messageId: null } }): Promise<unknown>;
@@ -63,7 +81,26 @@ export type AttachmentFailurePrisma = {
 
 const reasonOf = (error: unknown): string => (error instanceof Error ? error.name : 'unknown');
 
+/**
+ * Abandonner un message, c'est effacer ce qui PEND à lui AVANT sa ligne —
+ * `MessageEnvelope` en tête, qui n'a aucune relation Prisma donc aucune
+ * cascade, et dont les copies sont DÉJÀ parties sur le fil quand on arrive ici.
+ * Les neuf autres tables ne peuvent pas encore porter de ligne à ce point du
+ * `saveMessage` (mentions et notifications sont l'étape 6) : c'est
+ * l'ÉNUMÉRATION qui tient dans le temps, pas le fait qu'elle soit vide
+ * aujourd'hui.
+ */
 async function deleteMessageRow(prisma: AttachmentFailurePrisma, messageId: string, stage: string): Promise<void> {
+  await deleteMessageScopedRows(prisma, {
+    messageId,
+    onError: (model, error) =>
+      logger.error('ligne pendante non effacée avant l’abandon du message', undefined, {
+        messageId,
+        stage,
+        model,
+        reason: reasonOf(error),
+      }),
+  });
   await prisma.message.delete({ where: { id: messageId } }).catch((error: unknown) =>
     logger.error('message orphelin non supprimé après un échec de pièce jointe', undefined, {
       messageId,

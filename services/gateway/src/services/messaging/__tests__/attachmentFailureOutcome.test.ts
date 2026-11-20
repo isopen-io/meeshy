@@ -21,13 +21,18 @@ import {
   sealLinkedFilesAtRest,
   type AttachmentFailurePrisma,
 } from '../attachmentFailureOutcome';
+import { MESSAGE_SCOPED_MODELS } from '../messageScopedRows';
 
 const MSG_ID = '507f1f77bcf86cd799439033';
 
 function makePrisma(overrides: { deleteImpl?: () => Promise<unknown>; updateManyImpl?: () => Promise<unknown> } = {}) {
   const del = jest.fn(overrides.deleteImpl ?? (async () => ({ id: MSG_ID })));
   const updateMany = jest.fn(overrides.updateManyImpl ?? (async () => ({ count: 2 })));
-  const prisma = { message: { delete: del }, messageAttachment: { updateMany } } as unknown as AttachmentFailurePrisma;
+  const prisma = {
+    message: { delete: del },
+    messageAttachment: { updateMany },
+    ...Object.fromEntries(MESSAGE_SCOPED_MODELS.map((m) => [m, { deleteMany: jest.fn(async () => ({ count: 0 })) }])),
+  } as unknown as AttachmentFailurePrisma;
   return { prisma, del, updateMany };
 }
 
@@ -57,7 +62,14 @@ describe('attachmentFailureOutcome', () => {
       expect(logError).toHaveBeenCalled();
     });
 
-    it('ne masque pas l’erreur d’origine quand la suppression échoue', async () => {
+    // Ce témoin n'atteste PAS « l'erreur d'origine n'est pas masquée » — son
+    // intitulé le disait, et c'était faux : cette fonction ne REÇOIT pas
+    // l'erreur d'origine, donc rien ici ne peut tomber sur cette propriété-là.
+    // Elle est tenue par `MessageProcessor.attachmentFailure.test.ts`, où le
+    // `throw` d'après le nettoyage est observable. Ici on garde ce qui l'est :
+    // une suppression qui échoue ne fait pas lever le nettoyage, et elle
+    // laisse une trace nommée.
+    it('survit à une suppression qui échoue, et la journalise', async () => {
       const { prisma } = makePrisma({ deleteImpl: async () => { throw new Error('mongo down'); } });
 
       await expect(discardMessageAfterLinkFailure(prisma, { messageId: MSG_ID })).resolves.toBeUndefined();
