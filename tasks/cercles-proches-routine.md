@@ -1638,4 +1638,14 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 ## 2026-11-20 — réveil de 9 h : une relecture en panne garde l'appareil muet (#19928)
 
 - Reprise : #19864 FUSIONNÉE dans `dev` (64516f16b, 05:44 UTC) ; #19767 fermée. L'entrée du réveil de 5 h, restée
-  sur la branche de #19864 après sa fusion, est reprise ci-dessus. Lot choisi : #19928 (en cours).
+  sur la branche de #19864 après sa fusion, est reprise ci-dessus. Aucune branche vivante n'écrit les centres de
+  partage depuis la fusion.
+- Lot : #19928. La relecture du partage servi a trois issues sur iOS et Android : la liste servie, une passerelle d'avant
+  #18389 (404 : l'attente se lève, rien ne viendra confirmer), ou une PANNE (hors ligne, session expirée, 5xx, délai,
+  réponse illisible) qui GARDE l'attente et se rejoue au rythme du rejeu (30 s). Tant que l'attente tient, `reconcile`
+  n'envoie ni liste seule ni arrêt (l'un retirerait ce qu'un autre appareil a ajouté, l'autre couperait son partage ; la
+  passerelle tient les échéances, #18205). Sites de production : `SharedLocationSharingHolder.readOwn` (iOS),
+  `ownSharedLocationRead` (Android). Un témoin existant de chaque plateforme (échéance gardée soldée au lancement) se
+  solde désormais APRÈS la relecture.
+- Point 3 de l'issue (un appareil sans démarrage gardé adopte celui servi, deux appareils publient) sorti en décision
+  produit #20023, recommandation « fermé en cas de doute », sur les trois clients.
