@@ -806,3 +806,63 @@ describe('POST /communities/:id/conversations/:conversationId — DB error', () 
     expect(res.json().success).toBe(false);
   });
 });
+
+// #19879 — le détail dit au lecteur refusé QUAND il pourra redemander
+describe('GET /communities/:id — date de la prochaine demande après un refus (#19879)', () => {
+  const validating = { ...mockCommunity, createdBy: OTHER_USER_ID, isPrivate: false, requiresJoinApproval: true, members: [] };
+  const decidedAt = new Date(Date.now() - 2 * 24 * 3_600_000);
+
+  async function detailWith(community: unknown, rows: { pending: unknown; rejected: unknown }) {
+    const findJoinRequest = jest.fn<any>(async ({ where }: any) => (where.status === 'rejected' ? rows.rejected : rows.pending));
+    const app = await buildApp('USER', {
+      community: { findFirst: jest.fn<any>().mockResolvedValue(community) },
+      communityJoinRequest: { findFirst: findJoinRequest },
+    });
+    const res = await app.inject({ method: 'GET', url: `/communities/${COMMUNITY_ID}` });
+    await app.close();
+    return { res, findJoinRequest };
+  }
+
+  it('sert la fin du délai de sept jours au non-membre refusé récemment, lue sur SA demande seulement', async () => {
+    const { res, findJoinRequest } = await detailWith(validating, { pending: null, rejected: { decidedAt } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.currentUserJoinRequest).toBeNull();
+    expect(res.json().data.currentUserJoinRetryAt).toBe(new Date(decidedAt.getTime() + 7 * 24 * 3_600_000).toISOString());
+    const lookup = findJoinRequest.mock.calls.find((c: any) => c[0].where.status === 'rejected')?.[0] as any;
+    expect(lookup.where).toEqual({ communityId: COMMUNITY_ID, userId: USER_ID, status: 'rejected', decidedAt: { gte: expect.any(Date) } });
+  });
+
+  it('ne sert ni qui a refusé, ni l\'identifiant de la demande', async () => {
+    const { res } = await detailWith(validating, { pending: null, rejected: { id: 'req-9', decidedAt, decidedBy: 'steward-7' } });
+    const served = JSON.stringify(res.json().data);
+    expect(served).not.toContain('req-9');
+    expect(served).not.toContain('steward-7');
+  });
+
+  it('sert null sans refus récent, et quand une demande est en attente', async () => {
+    expect((await detailWith(validating, { pending: null, rejected: null })).res.json().data.currentUserJoinRetryAt).toBeNull();
+    const withPending = await detailWith(validating, { pending: { id: 'req-1' }, rejected: { decidedAt } });
+    expect(withPending.res.json().data.currentUserJoinRequest).toBe('pending');
+    expect(withPending.res.json().data.currentUserJoinRetryAt).toBeNull();
+  });
+
+  it('ne lit aucun refus pour un membre ni pour une communauté à entrée directe', async () => {
+    const member = await detailWith({ ...validating, members: [{ userId: USER_ID, role: 'member' }] }, { pending: null, rejected: { decidedAt } });
+    expect(member.res.json().data.currentUserJoinRetryAt).toBeNull();
+    expect(member.findJoinRequest).not.toHaveBeenCalled();
+    const open = await detailWith({ ...validating, requiresJoinApproval: false }, { pending: null, rejected: { decidedAt } });
+    expect(open.res.json().data.currentUserJoinRetryAt).toBeNull();
+    expect(open.findJoinRequest).not.toHaveBeenCalled();
+  });
+
+  it('une lecture qui lève ne fait pas tomber le détail (null)', async () => {
+    const app = await buildApp('USER', {
+      community: { findFirst: jest.fn<any>().mockResolvedValue(validating) },
+      communityJoinRequest: { findFirst: jest.fn<any>(async ({ where }: any) => { if (where.status === 'rejected') throw new Error('mongo'); return null; }) },
+    });
+    const res = await app.inject({ method: 'GET', url: `/communities/${COMMUNITY_ID}` });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.currentUserJoinRetryAt).toBeNull();
+  });
+});

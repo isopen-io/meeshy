@@ -18,6 +18,8 @@ const deCommunityMembership = {
   'community.membership.request': 'Beitritt anfragen',
   'community.membership.requested': 'Anfrage gesendet',
   'community.membership.requested.hint': 'Ein Admin oder Moderator muss sie annehmen.',
+  'community.membership.declined': 'Anfrage abgelehnt',
+  'community.membership.declined.hint': 'Du kannst ab dem {date} erneut anfragen.',
   'community.membership.error.cooldown': 'Deine letzte Anfrage wurde abgelehnt: Du kannst 7 Tage danach erneut anfragen.',
   'community.settings.open': "Einstellungen",
   'community.members.open': 'Mitglieder',

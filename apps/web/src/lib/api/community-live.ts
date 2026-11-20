@@ -5,7 +5,7 @@ import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names'
 import type { SocketClient } from '../net/socket';
 import { COMMUNITIES_QUERY_PREFIX, communityQueryKey, decodeCommunity, type CommunityPage, type CommunitySummary } from './communities';
 import { applyCommunityDeletedEvent } from './community-deleted-live';
-import { applyCommunityJoinRequestedEvent } from './community-join-request-live';
+import { applyCommunityJoinRequestDecidedEvent, applyCommunityJoinRequestedEvent } from './community-join-request-live';
 import { applyCommunityMemberEvent, COMMUNITY_MEMBER_EVENTS } from './community-member-live';
 
 /**
@@ -71,7 +71,8 @@ export function applyCommunityUpdatedEvent(queryClient: QueryClient, payload: un
 /**
  * Branche l'identité (`community:updated`), l'effectif (`community:member-*`,
  * #18766), la disparition (`community:deleted`, #19590) et les demandes
- * d'entrée (`community:join-requested`, #19871) sur les caches des communautés ; rend le débranchement. `viewerId`
+ * d'entrée (`community:join-requested`, #19871), la décision sur la sienne
+ * (`community:join-request-decided`, #19879) sur les caches des communautés ; rend le débranchement. `viewerId`
  * dit qui lit : un événement qui le concerne change son rôle.
  */
 export function bindCommunityLive(params: {
@@ -89,13 +90,16 @@ export function bindCommunityLive(params: {
   });
   const onDeleted = (payload: unknown): void => applyCommunityDeletedEvent(queryClient, payload);
   const onJoinRequested = (payload: unknown): void => applyCommunityJoinRequestedEvent(queryClient, payload);
+  const onJoinRequestDecided = (payload: unknown): void => applyCommunityJoinRequestDecidedEvent(queryClient, payload);
   socket.on(SERVER_EVENTS.COMMUNITY_UPDATED, onUpdated);
   socket.on(SERVER_EVENTS.COMMUNITY_DELETED, onDeleted);
   socket.on(SERVER_EVENTS.COMMUNITY_JOIN_REQUESTED, onJoinRequested);
+  socket.on(SERVER_EVENTS.COMMUNITY_JOIN_REQUEST_DECIDED, onJoinRequestDecided);
   return () => {
     socket.off(SERVER_EVENTS.COMMUNITY_UPDATED, onUpdated);
     socket.off(SERVER_EVENTS.COMMUNITY_DELETED, onDeleted);
     socket.off(SERVER_EVENTS.COMMUNITY_JOIN_REQUESTED, onJoinRequested);
+    socket.off(SERVER_EVENTS.COMMUNITY_JOIN_REQUEST_DECIDED, onJoinRequestDecided);
     onMember.forEach(({ event, handler }) => socket.off(event, handler));
   };
 }

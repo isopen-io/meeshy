@@ -639,6 +639,17 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Aucun client touché, aucun contrat d'API changé.
 - Prochain lot recommandé : iOS #19877 (intendants) une fois #19903 fusionnée, sinon #19879 (refus notifié, passerelle + web).
 
+## 2026-11-19 — réveil 21:38 UTC
+
+- Début du run : #19926 (#19914) et #19903 (#19869) ouvertes, leurs `workflow_dispatch` relancés à 21:20–21:36 par une autre session : vivantes, cédées.
+- Lot : #19879 — le demandeur apprend que sa demande d'entrée a été refusée, dans sa langue (passerelle + web).
+- Passerelle : `services/community-join-request-decided.ts`. Le refus (`…/reject`) annonce, après la réponse, `community:join-request-decided` `{ communityId, decision: 'rejected', retryAt, at }` sur la room du DEMANDEUR seul, et une notification `community_invite` (même famille et même préférence que « Ajouté à la communauté ») dans sa langue de cadrage (`recipientLanguage`) — jamais l'intendant nommé (ni acteur, ni identifiant). `decide` rend l'instant écrit ; `retryAt` = décision + `JOIN_REQUEST_COOLDOWN_MS`, désormais déclaré dans `community-join-request-lifecycle.ts` (site unique, `admission.ts` le reprend). `GET /communities/:id` sert `currentUserJoinRetryAt` (additif, ISO ou `null`), lu seulement pour un non-membre d'une communauté qui valide chaque entrée et sans demande en attente.
+- Choix : type de notification EXISTANT plutôt qu'un `community_join_rejected` neuf — les trois clients le rendent et l'ouvrent déjà (rétrocompatible), la préférence `groupInviteEnabled` le coupe.
+- Web : état « Demande refusée » + « Vous pourrez en refaire une à partir du {date} » (date `Intl` dans la langue), un statut, pas un bouton, jusqu'à `retryAt` ; puis « Demander à rejoindre ». L'événement patche le détail en cache sans relecture (`applyCommunityJoinRequestDecidedEvent`, branché dans `bindCommunityLive`). Deux clés en sept langues.
+- Cliquets partagés : `community:join-request-decided` entre dans l'asymétrie « web seul » (iOS #19948, Android #19949).
+- Témoins : passerelle `community-join-request-decided.test.ts` (8), `join-request-rejected-19879.test.ts` (6), `communities-core.test.ts` (+5) — rouges prouvés (4 échecs sans le détail, 2 sans le branchement de la route, 2 si l'annonce part vers l'intendant, 1 si l'acteur est posé). Web `community-join-request-decided.test.ts` (6), `view.test.ts` (+2), `community-membership.test.tsx` (+1), `community-live.test.ts` (+1) — rouges prouvés (3 échecs avant le code).
+- Auditeur adversarial : non bloquant. Corrigés dans le lot : titre de la notification = nom de la communauté (iOS retombait sur « Invitation à la conversation ») ; la date web dit aussi l'heure (le délai court jusqu'à l'heure du refus + 7 jours) ; le témoin « compte inutilisable » pose une vraie ligne supprimée (rouge prouvé en retirant `USABLE_ACCOUNT_WHERE`) ; la résolution du service de notification passe dans le travail différé. Restent, assumés : notification coupée par `groupInviteEnabled` (le détail dit quand même le refus) ; « Demande refusée » ne bascule qu'au prochain rendu quand la date passe écran ouvert.
+
 ## 2026-11-19 — réveil 23:38 UTC
 
 - Début du run : #19950 (#19879, refus notifié) poussée à 23:25 et #19903 (#19869, iOS « Demande envoyée ») dont le `workflow_dispatch` iOS tourne (seconde tentative relancée vers 23:33) : vivantes, cédées.

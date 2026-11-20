@@ -650,6 +650,8 @@ export const SERVER_EVENTS = {
   COMMUNITY_DELETED: 'community:deleted',
   // Une demande d'entrée dans une communauté qui valide chaque entrée (#19429), vers ses admins et modérateurs
   COMMUNITY_JOIN_REQUESTED: 'community:join-requested',
+  // La décision sur SA demande d'entrée (#19879), vers le demandeur seul
+  COMMUNITY_JOIN_REQUEST_DECIDED: 'community:join-request-decided',
 
   // --- Packs (#10148) : l'installation d'un pack, synchronisée entre les appareils du compte ---
   PACK_INSTALLATION_UPDATED: 'pack:installation-updated',
