@@ -6,18 +6,18 @@ import type { MeeshEdition } from '@meeshy/shared/utils/game/mint';
 
 import type { HapticName } from '@/lib/game/haptics';
 import { createStrikeGate, type StrikeGate } from '@/lib/game/strike-gate';
-import { loadGameCatalogParts, translateGame } from '@/lib/i18n-game-catalog';
+import { formatGameNumber, loadGameCatalogParts, translateGame } from '@/lib/i18n-game-catalog';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { MintCeremony, isModestDevice, type CeremonyClock } from './mint-ceremony';
+import { MintCeremony, isModestDevice, type CeremonyClock, type MintCeremonyGlory } from './mint-ceremony';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
 beforeAll(async () => {
   ensureHappyDomRegistered({ url: 'http://localhost/me/progression' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
-  await loadGameCatalogParts('fr', ['frappe']);
+  await loadGameCatalogParts('fr', ['frappe', 'banner']);
 });
 
 afterAll(async () => {
@@ -65,9 +65,9 @@ const stagedGate = (): StrikeGate => createStrikeGate({ staged: () => true, redu
 const isOpen = async (gate: StrikeGate): Promise<boolean> =>
   Promise.race([gate.opened().then(() => true), Promise.resolve().then(() => Promise.resolve()).then(() => false)]);
 
-type Bench = { readonly edition?: MeeshEdition; readonly reduced?: boolean; readonly number?: number };
+type Bench = { readonly edition?: MeeshEdition; readonly reduced?: boolean; readonly number?: number; readonly glory?: MintCeremonyGlory | null };
 
-async function bench({ edition = 'silver', reduced = false, number = 92 }: Bench = {}) {
+async function bench({ edition = 'silver', reduced = false, number = 92, glory }: Bench = {}) {
   const gate = stagedGate();
   const time = manualClock();
   const haptics: HapticName[] = [];
@@ -75,7 +75,17 @@ async function bench({ edition = 'silver', reduced = false, number = 92 }: Bench
   gate.begin();
   gate.claim();
   await mounter.mount(
-    <MintCeremony edition={edition} number={number} gate={gate} onDone={() => void (done.count += 1)} reducedMotion={reduced} modest={false} clock={time.clock} haptic={(name) => void haptics.push(name)} />,
+    <MintCeremony
+      edition={edition}
+      number={number}
+      gate={gate}
+      glory={glory}
+      onDone={() => void (done.count += 1)}
+      reducedMotion={reduced}
+      modest={false}
+      clock={time.clock}
+      haptic={(name) => void haptics.push(name)}
+    />,
   );
   const scene = (): HTMLElement | null => document.body.querySelector('[data-game-ceremony]');
   return { gate, time, haptics, done, scene };
@@ -177,6 +187,35 @@ describe('la frappe arrive en dernier', () => {
     await time.advanceTo(ms('silver', 'reveal') + 400);
     expect(scene()?.querySelector('[data-ceremony-say]')?.textContent).toBe(translateGame('fr', 'game.frappe.say.silver', { number: '93' }));
     expect(scene()?.querySelector('[data-ceremony-face="reverse"] [data-game-number]')?.getAttribute('data-game-number')).toBe('93');
+  });
+});
+
+describe('la frappe finit sur la gloire gagnée et le pas vers le rang suivant (#19855)', () => {
+  const glory = (scene: () => HTMLElement | null) => scene()?.querySelector('[data-ceremony-glory]');
+  const step = (scene: () => HTMLElement | null) => scene()?.querySelector('[data-ceremony-glory-step]');
+  const n = (value: number): string => formatGameNumber('fr', value);
+
+  test('la gloire que l’aperçu sert, puis celle qui manque jusqu’à la marche suivante', async () => {
+    const { scene } = await bench({ glory: { before: 100, gained: 250, mythic: false } });
+    expect(glory(scene)?.querySelector('[data-ceremony-glory-gained]')?.textContent).toBe(translateGame('fr', 'game.frappe.glory', { glory: n(250) }));
+    expect(step(scene)?.textContent).toBe(translateGame('fr', 'game.frappe.glory_toward', { glory: n(50), rank: 'Murmure IV' }));
+  });
+
+  test('une marche franchie se dit par le nouveau nom', async () => {
+    const { scene } = await bench({ glory: { before: 1500, gained: 1000, mythic: false } });
+    expect(step(scene)?.textContent).toBe(translateGame('fr', 'game.frappe.risen', { rank: 'Écho V' }));
+  });
+
+  test('le Mythe n’a pas de marche suivante : la gloire seule', async () => {
+    const { scene } = await bench({ glory: { before: 1_200_000, gained: 1000, mythic: true } });
+    expect(glory(scene)?.querySelector('[data-ceremony-glory-gained]')?.textContent).toBe(translateGame('fr', 'game.frappe.glory', { glory: n(1000) }));
+    expect(step(scene)).toBeNull();
+  });
+
+  test('devant un ancien serveur, sans gloire servie : « +1 000 de gloire », comme avant', async () => {
+    const { scene } = await bench();
+    expect(glory(scene)?.querySelector('[data-ceremony-glory-gained]')?.textContent).toBe(translateGame('fr', 'game.frappe.glory', { glory: n(1000) }));
+    expect(step(scene)).toBeNull();
   });
 });
 

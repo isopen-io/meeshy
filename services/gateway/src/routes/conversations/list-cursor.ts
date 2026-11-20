@@ -52,7 +52,20 @@ export type CurseurDeListe =
    * max(`lastMessageAt`, `lastActivityAt`), la clé du
    * tri de la liste.
    */
-  | { readonly genre: 'borne'; readonly rang: Date }
+  | {
+      readonly genre: 'borne';
+      readonly rang: Date;
+      /**
+       * L'identité de la ligne de bord, qui DÉPARTAGE les rangs égaux (#19881).
+       *
+       * Elle n'a jamais eu besoin d'être calculée : `beforeCursor` EST un
+       * `Conversation.id`, et la lecture ci-dessous l'a déjà autorisé dans le
+       * scope du lecteur. Elle était jetée une ligne avant d'être utile, et deux
+       * conversations de rang identique à la frontière d'une page faisaient
+       * perdre la seconde — la page suivante bornant plus bas que son rang.
+       */
+      readonly id: string;
+    }
   /** Curseur sur une conversation du lecteur qui n'a jamais eu de message : elle est en queue du tri, rien ne la suit. */
   | { readonly genre: 'queue' };
 
@@ -77,5 +90,5 @@ export async function resolveListCursor({
 
   if (conversation === null) return { genre: 'refus' };
   const rang = listRankFromColumns(conversation);
-  return rang === null ? { genre: 'queue' } : { genre: 'borne', rang };
+  return rang === null ? { genre: 'queue' } : { genre: 'borne', rang, id: beforeCursor };
 }

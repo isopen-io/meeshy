@@ -260,3 +260,25 @@ export const levelCapForRank = (rank: GloryRankOrMythic): LevelCap => {
 
 /** Le plafond de niveau que cette Gloire cumulée ouvre (le Mythe, servi par le serveur, passe par `levelCapForRank`). */
 export const levelCapForGlory = (glory: number): LevelCap => levelCapForRank(gloryStanding({ glory }).rank);
+
+/**
+ * CE QU'UN GAIN DE GLOIRE FAIT AU RANG (#19855, tranche de #17394) — la frappe finit sur la gloire gagnée ET le pas
+ * vers le rang suivant. `risen` : le gain franchit une marche (une division ou un rang), et l'on dit le nouveau nom ;
+ * `toward` : la gloire qui manque, APRÈS le gain, jusqu'à la marche suivante. `null` quand il n'y a pas de suite
+ * (Légende I) ou que le rang vient du serveur (Mythe).
+ */
+export type GloryAfterGain =
+  | { readonly kind: 'risen'; readonly rank: GloryRankKey; readonly division5: GloryDivision5 }
+  | { readonly kind: 'toward'; readonly gloryMissing: number; readonly rank: GloryRankKey; readonly division5: GloryDivision5 };
+
+const wholeGlory = (value: number): number => (Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0);
+
+export function gloryAfterGain(params: { readonly before: number; readonly gained: number; readonly mythic?: boolean }): GloryAfterGain | null {
+  if (params.mythic === true) return null;
+  const before = gloryStanding({ glory: wholeGlory(params.before) });
+  const after = gloryStanding({ glory: before.glory + wholeGlory(params.gained) });
+  if (after.rank === 'mythe' || after.division5 === null) return null;
+  if (after.rank !== before.rank || after.division5 !== before.division5) return { kind: 'risen', rank: after.rank, division5: after.division5 };
+  if (after.next === null || after.gloryMissing === null) return null;
+  return { kind: 'toward', gloryMissing: after.gloryMissing, rank: after.next.rank, division5: after.next.division5 };
+}
