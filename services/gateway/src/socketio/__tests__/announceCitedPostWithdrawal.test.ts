@@ -10,12 +10,32 @@
  * la LISTE, qui a quitté cette room et garde la sienne. L'audience vivante est
  * désormais nommée, conversation par conversation.
  *
+ * #20109 — et cet élargissement avait un coût que rien ne majorait : la lecture
+ * des citants n'avait AUCUNE borne, et le nombre de lectures d'audience qu'elle
+ * commande non plus. UNE borne suffit aux deux, et elle se prouve par une
+ * TRONCATURE observée — jamais par la seule présence d'un `take`, qui dirait
+ * qu'une borne existe sans dire ce qu'elle fait.
+ *
  * @jest-environment node
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
-import { announceCitedPostWithdrawal } from '../announceCitedPostWithdrawal';
+
+const logWarn = jest.fn();
+jest.mock('../../utils/logger-enhanced', () => ({
+  enhancedLogger: {
+    child: jest.fn(() => ({
+      info: jest.fn(),
+      warn: (...args: unknown[]) => logWarn(...args),
+      error: jest.fn(),
+      debug: jest.fn(),
+    })),
+    warn: jest.fn(),
+  },
+}));
+
+import { announceCitedPostWithdrawal, CITED_WITHDRAWAL_SCAN_CAP } from '../announceCitedPostWithdrawal';
 import { liveParticipantTable } from '../../__tests__/helpers/live-audience-double';
 import type { MongoDocument } from '../../__tests__/helpers/mongo-where';
 
@@ -44,9 +64,27 @@ function makeIo() {
 
 type MessageRow = { conversationId: string; storyReplyToId: string | null };
 
+/**
+ * Le double APPLIQUE `take`, et c'est ce qui rend la borne prouvable.
+ *
+ * Un double qui rend tout ce qu'il a ne peut pas prouver qu'une borne coupe :
+ * la troncature ne s'observerait nulle part, et le seul témoin possible serait
+ * la PRÉSENCE du `take` dans les arguments — qui dit qu'une borne existe sans
+ * rien dire de ce qu'elle fait.
+ *
+ * Sa signature déclare `take` requis pour que les doubles de ce fichier
+ * décrivent l'appel qu'ils attendent, **pas** pour contraindre la production :
+ * le prisma factice est remis en `as never`, donc aucun typage ne relie les
+ * deux. Ce qui attrape une production qui cesserait de borner est l'assertion
+ * `toHaveBeenCalledWith`, et elle seule.
+ */
 function makePrisma(rows: ReadonlyArray<MessageRow>, participants: ReadonlyArray<MongoDocument> = []) {
-  const findMany = jest.fn(async (args: { where: { storyReplyToId: string }; select?: object; distinct?: string[] }) =>
-    rows.filter((row) => row.storyReplyToId === args.where.storyReplyToId).map((row) => ({ conversationId: row.conversationId })),
+  const findMany = jest.fn(
+    async (args: { where: { storyReplyToId: string }; select?: object; distinct?: string[]; take: number }) =>
+      rows
+        .filter((row) => row.storyReplyToId === args.where.storyReplyToId)
+        .slice(0, args.take)
+        .map((row) => ({ conversationId: row.conversationId })),
   );
   const participant = liveParticipantTable(participants);
   return { prisma: { message: { findMany }, participant }, findMany, participant };
@@ -67,6 +105,8 @@ const post = (overrides: Partial<{ deletedAt: Date | null; expiresAt: Date | nul
 });
 
 describe('announceCitedPostWithdrawal', () => {
+  beforeEach(() => { logWarn.mockClear(); });
+
   it('émet vers la room de CHAQUE conversation qui cite le post, une fois par conversation', async () => {
     const { io, emissions } = makeIo();
     const { prisma } = makePrisma([
@@ -117,6 +157,10 @@ describe('announceCitedPostWithdrawal', () => {
       where: { storyReplyToId: POST_ID },
       select: { conversationId: true },
       distinct: ['conversationId'],
+      // `cap + 1` : la sonde qui distingue « exactement le plafond » de
+      // « au moins un de plus », et qui est la seule façon de SAVOIR qu'on
+      // tronque (même forme que `loadLiveAudience`, #20007).
+      take: CITED_WITHDRAWAL_SCAN_CAP + 1,
     });
   });
 
@@ -174,7 +218,10 @@ describe('announceCitedPostWithdrawal', () => {
 
   it("#20019 — une lecture d'audience qui LÈVE ne prive que SA conversation", async () => {
     const { io, emissions } = makeIo();
-    const findMany = jest.fn(async () => [{ conversationId: CITING_A }, { conversationId: CITING_B }]);
+    const findMany = jest.fn(async (_args: { where: { storyReplyToId: string }; take: number }) => [
+      { conversationId: CITING_A },
+      { conversationId: CITING_B },
+    ]);
     let read = 0;
     const participant = {
       findMany: jest.fn(async () => {
@@ -194,6 +241,69 @@ describe('announceCitedPostWithdrawal', () => {
       ROOMS.conversation(CITING_A),
       [ROOMS.conversation(CITING_B), 'user:u-b1'],
     ]);
+  });
+
+  describe('#20109 — la borne, et ce qu’elle achète', () => {
+    const citingRows = (count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        conversationId: `64b7f1f77bcf86cd799${String(430000 + index).padStart(6, '0')}`,
+        storyReplyToId: POST_ID,
+      }));
+
+    it('ne lit jamais plus que le plafond, n’annonce que lui, et le DIT quand elle coupe', async () => {
+      const { io, emissions } = makeIo();
+      const { prisma, participant } = makePrisma(citingRows(CITED_WITHDRAWAL_SCAN_CAP + 50));
+
+      const announced = await announceCitedPostWithdrawal({ prisma: prisma as never, io, post: post() });
+
+      // La sonde rend `cap + 1` lignes ; la `cap + 1`-ième ne sert qu'à SAVOIR,
+      // elle n'est pas annoncée.
+      expect(announced).toHaveLength(CITED_WITHDRAWAL_SCAN_CAP);
+      expect(emissions).toHaveLength(CITED_WITHDRAWAL_SCAN_CAP);
+      // Et c'est le second coût que la MÊME borne majore : une lecture
+      // d'audience par conversation annoncée, donc jamais plus que le plafond,
+      // quelle que soit la popularité du post.
+      expect(participant.reads()).toBe(CITED_WITHDRAWAL_SCAN_CAP);
+      expect(logWarn).toHaveBeenCalled();
+      expect(String(logWarn.mock.calls[0]?.[0])).toContain('cited-post withdrawal truncated');
+    });
+
+    it('ne journalise RIEN quand rien n’est tronqué — un cliquet bavard ne se lit plus', async () => {
+      const { io, emissions } = makeIo();
+      const { prisma } = makePrisma([
+        { conversationId: CITING_A, storyReplyToId: POST_ID },
+        { conversationId: CITING_B, storyReplyToId: POST_ID },
+      ]);
+
+      await announceCitedPostWithdrawal({ prisma: prisma as never, io, post: post() });
+
+      expect(emissions).toHaveLength(2);
+      expect(logWarn).not.toHaveBeenCalled();
+    });
+
+    it('une troncature de LIGNES couvre la perte de CONVERSATIONS : le plafond atteint par un seul fil journalise quand même', async () => {
+      const { io, emissions } = makeIo();
+      // Toutes les citations dans la MÊME conversation, plus une ailleurs —
+      // la forme qui pourrait faire perdre une conversation en silence si la
+      // troncature se mesurait sur les conversations plutôt que sur les lignes.
+      const { prisma } = makePrisma([
+        ...Array.from({ length: CITED_WITHDRAWAL_SCAN_CAP + 1 }, () => ({
+          conversationId: CITING_A,
+          storyReplyToId: POST_ID,
+        })),
+        { conversationId: CITING_B, storyReplyToId: POST_ID },
+      ]);
+
+      const announced = await announceCitedPostWithdrawal({ prisma: prisma as never, io, post: post() });
+
+      // `CITING_B` est PERDUE — c'est assumé, et c'est pourquoi le journal est
+      // la seule chose qui ne doit pas manquer : il dit qu'une annonce est
+      // peut-être incomplète, alors même que le nombre de conversations
+      // annoncées est loin du plafond.
+      expect(announced).toEqual([CITING_A]);
+      expect(emissions).toHaveLength(1);
+      expect(logWarn).toHaveBeenCalled();
+    });
   });
 
   it('sans socket, ne lit même pas la base', async () => {
