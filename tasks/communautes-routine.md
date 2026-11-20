@@ -701,3 +701,13 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gates locaux : passerelle `tsc --noEmit` vert ; communautés / demandes / balayages / cliquets / manifeste / `tsc-never-loaded` 134 suites, 1 558 tests verts.
 - Aucun client touché, aucun contrat d'API ni d'événement changé (`community:join-requested` existant, même charge).
 - Prochain lot recommandé : mener #20049 à la fusion si elle est abandonnée ; sinon #20003 (coût de la relecture à l'accès) ou iOS #19948 une fois #20049 fusionnée.
+
+## 2026-11-20 — réveil 13:04 UTC
+
+- Début du run : #20049 (iOS #19877, intendants) poussée à 13:02 et `claude/communautes-reouverture-annoncee` (#20002) à 13:04 : vivantes, cédées. Aucune autre PR de la routine ouverte.
+- Lot : Android #19949 — le demandeur lit « Demande refusée — nouvelle demande possible le … » sans relecture (miroir de #19879, passerelle + web).
+- `:core:model` : `ApiCommunity.currentUserJoinRetryAt` ; `CommunityJoinRequestDecidedEvent` (miroir de `CommunityJoinRequestDecidedEventData`, `refusedUntil` ne rend une date que pour `rejected` et une date lisible) ; `ApiCommunity.joinDeclinedUntil(now)` (date à venir seulement, jamais pour un membre ni une demande en attente — `membershipActionOf` du web) ; `ApiCommunity.applying(event)` : autre communauté, charge illisible ou lecteur déjà entré ⇒ rien.
+- `sdk-core` : `CommunityJoinRequestDecidedBinding` (modèle de `CommunityDeletedBinding`) → `CommunityCacheRepository.applyJoinRequestDecided`, qui réécrit la fiche DÉJÀ tenue sans rajeunir sa lecture. Écran : tuile « Demande refusée » (statut, pas un bouton) et la date en rouge (`ShareLinkDateFormat.dayAndTime`, grégorienne) ; `join()` n'envoie rien avant la date. Deux chaînes × sept langues (`strings_join_declined_19949.xml`), mêmes mots que le web.
+- Cliquets partagés : `community:join-request-decided` passe à « absent iOS seulement » (#19948) ; `SWEPT_EVENTS_AT_LAST_MEASURE` 144 → 145. `packages/shared/__tests__/ci/` 25 fichiers, 216 tests verts.
+- Gate local : `jvm-check -PjvmCheckModelOnly` — `CommunityJoinRequestDecidedEventTest` 9/9, `SocketEventNamesParityTest` 5/5, suites `*Community*` vertes. Témoin écrit avant le code, mais son rouge n'a pas été exécuté seul (le premier passage a eu lieu avec l'implémentation). Liaison, cache, ViewModel et écran : prouvés par `android.yml` sur la PR.
+- Prochain lot recommandé : iOS #19948 (même décision, dernière plateforme) une fois #20049 fusionnée ; puis Android #19878 (intendants).
