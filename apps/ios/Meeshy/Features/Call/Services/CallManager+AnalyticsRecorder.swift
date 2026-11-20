@@ -38,7 +38,7 @@ nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
         at now: Date
     ) {
         if let previousDate = lastQualityDate, let previousLevel = currentLevel {
-            qualitySeconds[previousLevel, default: 0] += now.timeIntervalSince(previousDate)
+            qualitySeconds[previousLevel, default: 0] += CallStatValue.measured(now.timeIntervalSince(previousDate))
         }
         lastQualityDate = now
         currentLevel = level

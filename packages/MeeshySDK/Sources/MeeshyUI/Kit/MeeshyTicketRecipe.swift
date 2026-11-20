@@ -69,6 +69,9 @@ public nonisolated struct MeeshyTicketRecipe: Sendable, Equatable {
     public let showsBack: Bool
     public let flipRotation: Double
     public let flipCrossfades: Bool
+    /// #20013 : le plus petit facteur auquel le titre se resserre avant de se tronquer — 0,75 sur un rail compact, où
+    /// 150 pt ne laissent pas « Ajouter » entier à 17 pt ; 1 ailleurs.
+    public let titleMinimumScale: Double
 
     public static func resolve(
         size: MeeshyTicketSize,
@@ -104,7 +107,8 @@ public nonisolated struct MeeshyTicketRecipe: Sendable, Equatable {
             showsContent: kind != .loading,
             showsBack: isFlipped,
             flipRotation: isFlipped && !reduceMotion ? 180 : 0,
-            flipCrossfades: reduceMotion
+            flipCrossfades: reduceMotion,
+            titleMinimumScale: size == .compact ? 0.75 : 1
         )
     }
 
