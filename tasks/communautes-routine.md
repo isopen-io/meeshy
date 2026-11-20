@@ -692,6 +692,22 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gotcha : le `Json` de Retrofit n'encode pas les valeurs par défaut — un `JoinCommunityRequest(acceptsPending = true)` déclaré avec défaut partait `{}`. Le témoin d'encodage l'a attrapé ; le champ n'a plus de défaut.
 - Gate local : `./apps/android/meeshy.sh jvm-check -PjvmCheckModelOnly` (le mode complet ne résout pas `libsignal-client`, hôte refusé par le proxy) — les suites `*Communit*` vertes. ViewModel, écran, réseau : prouvés par `android.yml`.
 
+## 2026-11-20 — réveil 11:38 UTC
+
+- Début du run : #20039 (manifeste Android de #19870) rendue inutile par `95ab23af5` (Jacques, sur `dev`, même classement des quatre chaînes) : fermée sans fusion, commentée. Aucune autre PR de la routine ouverte ; #19950, #20005, #19903, #20027 fusionnées dans la vague de 10:00.
+- Lot : iOS #19877 — les intendants d'une communauté tranchent les demandes d'entrée.
+- SDK : `APICommunityJoinRequest` (projection : nom, identifiant public, avatar, pays ISO à deux lettres, date ; une ligne illisible ou déjà tranchée est sautée), `CommunityJoinRequestPage` (curseur gardé seulement si `hasMore`), `CommunityService.joinRequests(communityId:cursor:limit:)` et `decideJoinRequest(…, .accept | .reject)`. `community:join-requested` routé vers `CommunityJoinRequestChannel`.
+- App : `CommunityMembersViewModel` lit QUI tranche dans le détail servi (`currentUserRole` ≥ modérateur, ou `createdBy`) — jamais dans une page de membres — et ne demande la liste qu'à un intendant (le 404 générique sinon). Geste optimiste : la ligne part au geste ; accepter fait entrer le membre servi ; un 404 (déjà tranchée, blocage, compte fermé) laisse la ligne partie et relit tout ; toute autre erreur rend la liste telle qu'elle était. `community:join-requested` et `community:member-*` relisent la liste.
+- MeeshyUI : `CommunityJoinRequestsSection` en tête de l'écran Membres (avatar sans pastille de présence, pays · « Demande du … », boutons ✓ / ✕ de 44 pt nommés pour VoiceOver, « Voir plus de demandes »), confirmation avant refus (« ne pourra pas redemander avant sept jours »), ligne d'état après le geste. Onze clés × sept langues, mêmes mots que le web.
+- Cliquets : `community:join-requested` sort de l'asymétrie « web seul » (reste Android #19878) ; `SWIFT_SWEPT_EVENTS_AT_LAST_MEASURE` 173 → 174 ; les trois adresses `join-requests` quittent `PENDING_CLIENT_ENTRIES` du catalogue Swift.
+- Gates locaux : shared `__tests__/ci/` 25 fichiers, 216 tests verts ; iOS `check_house_rules.sh` (42 règles), `check_cohesion_budget.sh` (code 0), `check_test_registration.sh` (2 060 fichiers), `check-accent-color-hardcoding.mjs` (168 / 408), `check-swift-catalog-dead-entries.mjs` (326). Compilation et tests Swift : par `ios.yml` et `sdk-tests.yml` de la PR.
+
+## 2026-11-20 — réveil 13:00 UTC
+
+- Début du run : #20049 (iOS #19877, intendants) seule PR de la routine ouverte, inactive depuis 11:52 : run consacré à la mener à la fusion.
+- `ci.yml` rouge sur un témoin ÉTRANGER : `gateway-file-size-budget` (règle 3, `MessageHandler.ts` hors budget, venu de #20022 / #19939), corrigé sur `dev` par `a34b3344b`. `dev` fusionnée dans la branche sans conflit ; le témoin rejoué sur l'arbre fusionné : 5 / 5 verts.
+- Reste : `ios.yml` et `sdk-tests.yml` encore en file sur la tête précédente ; ils repartent sur la nouvelle tête.
+
 ## 2026-11-20 — réveil 13:04 UTC
 
 - Début du run : #20049 (iOS #19877, intendants) poussée à 13:02 et `claude/communautes-reouverture-annoncee` (#20002) à 13:04 : vivantes, cédées. Aucune autre PR de la routine ouverte.
@@ -701,3 +717,4 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Cliquets partagés : `community:join-request-decided` passe à « absent iOS seulement » (#19948) ; `SWEPT_EVENTS_AT_LAST_MEASURE` 144 → 145. `packages/shared/__tests__/ci/` 25 fichiers, 216 tests verts.
 - Gate local : `jvm-check -PjvmCheckModelOnly` — `CommunityJoinRequestDecidedEventTest` 9/9, `SocketEventNamesParityTest` 5/5, suites `*Community*` vertes. Témoin écrit avant le code, mais son rouge n'a pas été exécuté seul (le premier passage a eu lieu avec l'implémentation). Liaison, cache, ViewModel et écran : prouvés par `android.yml` sur la PR.
 - Prochain lot recommandé : iOS #19948 (même décision, dernière plateforme) une fois #20049 fusionnée ; puis Android #19878 (intendants).
+- 14:45 : `dev` a de nouveau avancé (Android #19949) et entrait en conflit sur le cliquet d'asymétrie : `community:join-requested` garde son groupe « absent Android » (ce lot), `community:join-request-decided` le sien « absent iOS » (#19949), et le groupe « web seul » ne les cite plus ni l'un ni l'autre.
