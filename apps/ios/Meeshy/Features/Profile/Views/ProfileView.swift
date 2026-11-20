@@ -529,10 +529,12 @@ struct ProfileView: View {
         }
         if languagesMode == .reorderable { languagesSection }
         activitySection.meeshyCascade(rank: 2)
-        voiceBlock.meeshyCascade(rank: 3)
+        legendSection.meeshyCascade(rank: 3)
+        if !isEditing { appearanceSection.meeshyCascade(rank: 4) }
+        voiceBlock.meeshyCascade(rank: 5)
         if !isEditing, let userId = user?.id {
             ProfilePublicationsSection(userId: userId, accentColor: accentColor)
-                .meeshyCascade(rank: 4)
+                .meeshyCascade(rank: 6)
         }
     }
 
@@ -704,17 +706,26 @@ struct ProfileView: View {
 
     // MARK: - Activity Section
 
-    /// Mon activité (ex-Statistiques) : la bande des trois nombres ouvre les statistiques détaillées ; dessous, ma
-    /// Légende et mon décor, là où je cherche « où j'en suis ».
+    /// Mon activité (ex-Statistiques) : son titre et la bande des trois nombres, qui ouvre les statistiques détaillées.
     private var activitySection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             MeeshySectionHeader(title: ProfileActivityBand.title)
             ProfileActivityBand(stats: stats, isLoading: statsLoading, isOffline: statsOffline, accentColor: accentColor,
                                 onOpen: openActivity, onRetry: retryStats)
-            progressionEntry
-            if !isEditing {
-                ProfileDecorEntry(user: user, onOpenShop: { router.openPackShop(domain: $0) }, onPickBanner: { bannerItem = $0 })
-            }
+        }
+    }
+
+    /// « Ma Légende », une section à part entière (#19986) : la carte porte son propre titre.
+    private var legendSection: some View {
+        progressionEntry
+    }
+
+    /// « Apparence » (#19986) : la rangée du contour et de la bannière sous son titre, plus orpheline entre la Légende
+    /// et les publications.
+    private var appearanceSection: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            MeeshySectionHeader(title: ProfileDecorEntry.sectionTitle)
+            ProfileDecorEntry(user: user, onOpenShop: { router.openPackShop(domain: $0) }, onPickBanner: { bannerItem = $0 })
         }
     }
 

@@ -1,3 +1,5 @@
+import { isStaleAttachmentRefusal } from './attachment-refusal';
+
 /**
  * L'ISSUE D'UN APPEL RÉSEAU (#5813, étape 0 — extrait de
  * `conversation-actions.ts:26-36`, AUCUN changement de règle) — lue sur la
@@ -28,6 +30,30 @@ export type Outcome = 'success' | 'permanent' | 'transient';
  */
 export const RETRYABLE_CLIENT_STATUSES: ReadonlySet<number> = new Set([408, 425, 429]);
 
+/**
+ * POURQUOI `outcomeOf` ET `isPermanentFailure` PEUVENT DIVERGER (#19865).
+ *
+ * Les deux ne posent pas la même question, et le refus d'une pièce jointe
+ * balayée est le premier cas du dépôt où les réponses s'écartent :
+ *
+ * | la question | qui répond |
+ * |---|---|
+ * | ce MÊME appel, rejoué À L'IDENTIQUE, peut-il aboutir ? | `outcomeOf` — **non** : il redemanderait la pièce supprimée |
+ * | cette ENTRÉE offre-t-elle encore un espoir de partir ? | `isPermanentFailure` — **oui** : le client vient de la réparer |
+ *
+ * `outcomeOf` reste donc INCHANGÉ, et il doit l'être : ses vingt appelants
+ * décident de rollbacks optimistes sur des 404 qui, eux, sont définitifs.
+ * `isPermanentFailure` ne gouverne qu'UNE chose — le bouton « Réessayer » de
+ * la bande d'envoi (`view/use-send.ts`, `components/failed-send-band.tsx`) — et
+ * il le lit sur une entrée que `perform-send.ts` a déjà MODIFIÉE : les ids
+ * mémorisés oubliés, le rejeu n'est plus identique.
+ *
+ * **Les deux moitiés se livrent ENSEMBLE, et aucune ne vaut seule.** Oublier
+ * les ids sans rendre la reprise offerte laisse une entrée réparée que rien ne
+ * relance ; offrir la reprise sans oublier les ids rejoue le même refus
+ * indéfiniment.
+ */
+
 export function outcomeOf(result: unknown): Outcome {
   if (typeof result !== 'object' || result === null) return 'transient';
   const r = result as { readonly ok?: unknown; readonly status?: unknown };
@@ -50,8 +76,10 @@ export function outcomeOf(result: unknown): Outcome {
  * n'est jamais permanent non plus : son rejeu À L'IDENTIQUE peut aboutir sans
  * aucun geste de l'utilisateur ailleurs.
  */
-export function isPermanentFailure(failure: { readonly status: number } | undefined): boolean {
-  return failure !== undefined && outcomeOf({ ok: false, status: failure.status }) === 'permanent';
+export function isPermanentFailure(failure: { readonly status: number; readonly code?: string } | undefined): boolean {
+  if (failure === undefined) return false;
+  if (isStaleAttachmentRefusal(failure)) return false;
+  return outcomeOf({ ok: false, status: failure.status }) === 'permanent';
 }
 
 /**
