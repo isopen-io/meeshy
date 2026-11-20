@@ -1,8 +1,6 @@
-# Une audience trop large derrière une égalité EXACTE devient une panne ou une fuite, jamais rien
+## Une audience trop large derrière une égalité EXACTE devient une panne ou une fuite, jamais rien (2026-11-20, cycle 194, #20091)
 
-*2026-11-20, cycle 194, #20091.*
-
-## Le fait
+### Le fait
 
 `E2EEEnvelopeRelay.directoryOf` — l'annuaire des appareils qui REÇOIVENT
 l'enveloppe chiffrée — lisait `isActive` NU, donc admettait l'état legacy
@@ -18,7 +16,7 @@ Aucune des deux branches n'est bénigne, et laquelle survient ne dépend pas de 
 passerelle : elle dépend de la liste que le CLIENT a utilisée pour composer son
 envoi.
 
-## La règle
+### La règle
 
 On raisonne d'ordinaire sur une audience trop large comme sur une dégradation
 d'un cran : « quelqu'un reçoit ce qu'il ne devrait pas ». **Derrière un
@@ -33,7 +31,7 @@ confidentialité : une panne totale.
 > une panne ; s'il accepte, c'est une fuite. On ne sait pas laquelle sans
 > l'ouvrir.
 
-## Le corollaire de mesure
+### Le corollaire de mesure
 
 Le témoin l'a dit plus fort que le raisonnement : ajouter **une** ligne
 banni-mais-actif à la fixture du relais fait tomber **9 témoins sur 11** — tous
@@ -43,7 +41,7 @@ les envois nominaux, pas seulement ceux qui parlaient du banni.
 > l'instrument qui dit que le défaut n'est pas où on le cherchait. Je cherchais
 > une fuite ; la mesure a montré une panne, et la fuite avec.
 
-## Et la jumelle qu'il faut ouvrir AVANT de resserrer
+### Et la jumelle qu'il faut ouvrir AVANT de resserrer
 
 Resserrer un annuaire soumis à égalité exacte déplace la panne de l'autre
 côté si la liste que le client lit ne vient pas de la même loi. Avant le

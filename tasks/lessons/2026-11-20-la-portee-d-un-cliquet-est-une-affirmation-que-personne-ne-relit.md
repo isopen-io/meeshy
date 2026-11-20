@@ -1,8 +1,6 @@
-# La PORTÉE d'un cliquet est une affirmation, et c'est celle que personne ne relit
+## La PORTÉE d'un cliquet est une affirmation, et c'est celle que personne ne relit (2026-11-20, cycle 194, #20091)
 
-*2026-11-20, cycle 194, #20091.*
-
-## Le fait
+### Le fait
 
 Le cliquet de #16690 tient une loi de confidentialité — « une audience de
 DIFFUSION lit la participation VIVANTE, jamais `isActive` NU ». Il était vert.
@@ -14,7 +12,7 @@ nues**. La propriété tenait sur 13 sites ; le cliquet l'affirmait de
 l'ensemble — et l'un des 50 était l'annuaire des appareils qui reçoivent les
 enveloppes chiffrées.
 
-## La règle
+### La règle
 
 La leçon 261 dit qu'une énumération porte deux affirmations : « ces sites
 respectent la règle » et « ce sont les sites où la règle s'applique ». Appliquée
@@ -30,7 +28,7 @@ affirmation sur le dépôt ; ça ressemble à de la plomberie.
 > balayage sur une racine plus large et en comparant les comptes — c'est une
 > commande, pas une relecture.
 
-## Le corollaire : la cécité de SYNTAXE, composée avec celle de portée
+### Le corollaire : la cécité de SYNTAXE, composée avec celle de portée
 
 Le même balayage exigeait `participant.findMany({ where: {` d'affilée. **28 des
 215 lectures de `Participant` du dépôt lui échappaient par la seule forme de
@@ -43,7 +41,7 @@ ressemble à un trou** : l'une est un chemin, l'autre une expression régulière
 Élargir la portée sans corriger la syntaxe aurait produit un cliquet plus large
 et toujours menteur, avec l'autorité d'un lot qui vient de le vérifier.
 
-## Ce qu'on fait quand la mesure rend 50 sites
+### Ce qu'on fait quand la mesure rend 50 sites
 
 On ne les range pas tous dans l'inventaire des exemptions. `DELIBERATELY_WIDE`
 dit « ce site DOIT être large » : y verser 50 lignes rend le cliquet vert en

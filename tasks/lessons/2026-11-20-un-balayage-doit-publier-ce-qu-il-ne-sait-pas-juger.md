@@ -1,8 +1,6 @@
-# Un correctif sans témoin est un correctif qui se perdra — et c'est l'instrument qui le dit
+## Un correctif sans témoin est un correctif qui se perdra — et c'est l'instrument qui le dit (2026-11-20, cycle 194, #20091)
 
-*2026-11-20, cycle 194, #20091.*
-
-## Le fait
+### Le fait
 
 J'ai resserré la clause d'une audience (`ensureGlobalConversationMembership`,
 qui sert l'arrivée dans le salon GLOBAL), puis rejoué la mutation inverse pour
@@ -14,7 +12,7 @@ TEXTUEL : il lit le littéral du `where`. Il n'y avait pas de littéral, donc ri
 était bon, mesuré, et absolument non gardé : la première personne qui réécrit ce
 site le reperd sans qu'aucun témoin tombe.
 
-## La règle
+### La règle
 
 > **Un lot ne se livre pas sur « le correctif est juste ». Il se livre sur « la
 > mutation inverse fait tomber quelque chose ».** Et cela se VÉRIFIE, site par
@@ -22,7 +20,7 @@ site le reperd sans qu'aucun témoin tombe.
 > des quatre sites de ce lot étaient gardés ; le quatrième ne l'était pas, et
 > rien dans le code ne le distinguait des trois autres.
 
-## Les deux moitiés du remède
+### Les deux moitiés du remède
 
 **1. Publier ce qu'on ne sait pas juger.** Le balayage rend désormais une
 seconde liste — les lectures dont le `where` est une `variable`, un `appel`, un
@@ -39,7 +37,7 @@ pas de la prudence décorative : elle garde à l'instrument la capacité de dire
 « je n'ai pas pu juger ». Une résolution qui devine fabrique des verdicts au
 lieu d'en publier l'absence.
 
-## Le corollaire sur les CLÉS d'inventaire
+### Le corollaire sur les CLÉS d'inventaire
 
 Le cliquet clé ses lignes par `fichier#rang-de-la-requête`, pour la bonne raison :
 une clé de LIGNE dérive à la première édition. Mais le RANG dérive quand

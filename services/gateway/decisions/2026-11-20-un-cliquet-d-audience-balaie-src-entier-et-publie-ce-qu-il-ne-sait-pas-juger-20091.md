@@ -1,8 +1,6 @@
-# Le cliquet d'audience balaie `src/` entier, et publie ce qu'il ne sait pas juger
+## 2026-11-20 : Le cliquet d'audience balaie `src/` entier, et publie ce qu'il ne sait pas juger (#20091, à la suite de #16690)
 
-*2026-11-20 — #20091, à la suite de #16690.*
-
-## Contexte
+### Contexte
 
 #16690 a posé la loi « une audience de DIFFUSION lit la participation VIVANTE
 (`PARTICIPATION_VIVANTE`), jamais `isActive` NU », et son cliquet
@@ -13,7 +11,7 @@ Mesuré avec son propre classifieur sur `src/` : 15 audiences dans `socketio/`
 (13 conformes, 2 déclarées larges) et **51 au dehors, dont 50 nues**. Parmi
 elles, l'annuaire des appareils qui reçoivent les enveloppes chiffrées.
 
-## Décision
+### Décision
 
 1. **La portée du balayage est `src/` entier.** Une audience de diffusion ne
    vit pas dans un répertoire ; une portée qui en nomme un mesure une propriété
@@ -38,7 +36,7 @@ elles, l'annuaire des appareils qui reçoivent les enveloppes chiffrées.
    Trois témoins : disjonction, chaque clé désigne encore un site, la dette ne
    grossit pas.
 
-## Alternatives rejetées
+### Alternatives rejetées
 
 - **Verser les 51 sites dans `DELIBERATELY_WIDE`.** Le cliquet serait vert en
   affirmant 51 fois une décision que personne n'a prise. « Décidé large » et
@@ -52,7 +50,7 @@ elles, l'annuaire des appareils qui reçoivent les enveloppes chiffrées.
   résolution qui devine fabrique des verdicts au lieu d'en publier l'absence, et
   supprime le seul signal honnête que l'instrument possède.
 
-## Conséquences
+### Conséquences
 
 - Les clés d'inventaire portent leur chemin depuis `src/`
   (`socketio/handlers/StatusHandler.ts#0`). Une clé périmée fait tomber le
