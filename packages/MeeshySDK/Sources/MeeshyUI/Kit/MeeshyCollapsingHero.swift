@@ -27,7 +27,8 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
     private let isLoading: Bool
     private let collapsedTapLabel: String?
     private let onCollapsedTap: (() -> Void)?
-    /// La bannière reste DANS la barre repliée, floutée par son verre, au lieu de s'effacer (fiche de profil, #19780).
+    /// La bannière reste DANS la barre repliée, floutée par son verre, au lieu de s'effacer (fiche de profil, #19780) ;
+    /// la barre se replie alors avec l'identité, et n'est plus que sa rangée une fois l'identité arrivée (#19987).
     private let keepsBannerInBar: Bool
     /// Ce que le cadre illustré de l'avatar peint sous son bord : le nom descend d'autant (#19925).
     private let avatarSpill: Double
@@ -80,7 +81,8 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
         MeeshyCollapsingHeroRecipe.resolve(
             progress: progress, expandedHeight: expandedHeight, collapsedHeight: collapsedHeight,
             alignment: alignment, hasAvatar: avatar != nil, hasSubtitle: subtitle != nil,
-            reduceMotion: MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+            reduceMotion: MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion),
+            foldsWithIdentity: keepsBannerInBar
         )
     }
 

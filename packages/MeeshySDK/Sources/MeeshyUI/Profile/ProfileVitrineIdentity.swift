@@ -5,7 +5,7 @@ import MeeshySDK
 //
 // Sous le nom et la pilule de relation : la bio, puis ses puces (K41) — langues, pays, heure chez lui, chiffrement —,
 // sans section « À propos » ni carte de bio. Plus bas : « Sa voix » (K44 + K35, « Échantillon ») et « En chiffres »
-// (K44, « Membre depuis » en tête, puis la bande K34).
+// (K44, la bande K34 ; l'ancienneté est sous le nom, #19987).
 
 /// La bio et les puces d'identité, dans l'ordre de la planche. Rien de servi ⇒ rien de posé.
 struct ProfileIdentityChips: View {
@@ -117,33 +117,22 @@ struct ProfileVoiceSample: View {
     }
 }
 
-/// « En chiffres » (K44) : « Membre depuis janv. 2026 » en tête, puis la bande de chiffres (K34). Les chiffres sont
-/// lus avec le profil (#10093), cache d'abord ; le squelette du kit ne se montre que sur un cache vide.
+/// « En chiffres » (K44) : la bande de chiffres (K34). L'ancienneté a rejoint le pseudo sous le nom
+/// (`ProfileHandleLine`, #19987). Les chiffres sont lus avec le profil (#10093), cache d'abord ; le squelette du kit ne
+/// se montre que sur un cache vide.
 struct ProfileFiguresSection: View {
-    let memberSince: Date?
     let stats: UserStats?
     let isLoadingStats: Bool
 
-    @Environment(\.locale) private var locale
-
     var body: some View {
-        let showsBand = ProfileVitrineFigures.isVisible(stats: stats, isLoading: isLoadingStats)
-        if memberSince != nil || showsBand {
+        if ProfileVitrineFigures.isVisible(stats: stats, isLoading: isLoadingStats) {
             VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-                MeeshySectionHeader(title: ProfileVitrineCopy.figuresTitle, lead: { EmptyView() }, accessory: {
-                    if let memberSince {
-                        MeeshyBadge(.label(ProfileVitrineCopy.memberSince(memberSince, locale: locale)),
-                                    leading: .systemImage("calendar"))
-                            .accessibilityIdentifier("profile.vitrine.memberSince")
-                    }
-                })
-                if showsBand {
-                    MeeshyFigureBand(items: ProfileVitrineFigures.items(of: stats), size: .compact,
-                                     isLoading: stats == nil && isLoadingStats,
-                                     emptyLabel: ProfileVitrineFigures.emptyLabel)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .accessibilityIdentifier("profile.vitrine.figures")
-                }
+                MeeshySectionHeader(title: ProfileVitrineCopy.figuresTitle)
+                MeeshyFigureBand(items: ProfileVitrineFigures.items(of: stats), size: .compact,
+                                 isLoading: stats == nil && isLoadingStats,
+                                 emptyLabel: ProfileVitrineFigures.emptyLabel)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("profile.vitrine.figures")
             }
         }
     }

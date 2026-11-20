@@ -88,7 +88,7 @@ final class CallRemoteVideoSurfaceTests: XCTestCase {
         XCTAssertTrue(ring.contains("CallPeerSpeech.colorHex(forPeer: peerUserId)"))
         XCTAssertTrue(ring.contains("CallRemoteVideoFade.duration(reduceMotion: reduceMotion)"), "le fondu de l'anneau suit la loi unique, plus court sous Réduire les animations")
         XCTAssertTrue(ring.contains("value: isSpeaking"))
-        XCTAssertTrue(try AppSourceGuard.callViewSource().contains(".avatarRingWithin(ProfileDecorResolver.ring("), "la décoration de profil reste dans le visage")
+        XCTAssertTrue(try AppSourceGuard.callViewSource().contains(".avatarRing(ProfileDecorResolver.ring("), "la décoration de profil entoure le visage, à la taille normalisée (#19988)")
     }
 
     func test_cameraOffPlaceholder_reusesTheSpeechRing_withoutACopy() throws {
