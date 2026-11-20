@@ -10,7 +10,7 @@ import {
   scanActiveParticipants,
   scanLiveParticipants,
   type LiveParticipantScan,
-  type LoadLiveAudienceOptions,
+  type ParticipantScanOptions,
 } from './conversationAudienceRooms';
 import { enhancedLogger } from '../utils/logger-enhanced';
 
@@ -99,7 +99,7 @@ const queueKeyOf = (participant: ReaderRow): string => participant.userId ?? par
  *   `warn` d'un module que personne ne regarde.
  */
 async function boundedRead<Row>(
-  read: (options: LoadLiveAudienceOptions) => Promise<LiveParticipantScan<Row>>,
+  read: (options: ParticipantScanOptions) => Promise<LiveParticipantScan<Row>>,
   scanLabel: string,
   cap: number | undefined,
 ): Promise<LiveParticipantScan<Row>> {
@@ -121,9 +121,13 @@ export async function translationReaders(
   options?: TranslationReadersOptions,
 ): Promise<TranslationReaders> {
   const cap = options?.cap;
-  const late = messageCreatedAt
-    ? { AND: [{ OR: [{ joinedAt: { gt: messageCreatedAt } }, { historyVisibleFrom: { gt: messageCreatedAt } }] }] }
-    : {};
+  // Sans date de message, il n'y a RIEN à rétrécir : la loi lit alors le
+  // plancher de TOUS les participants et exclut quiconque en a un (fail-closed).
+  // `null` plutôt qu'un objet vide — un `AND: [{}]` ne dit rien et se lit comme
+  // une clause.
+  const late: Record<string, unknown> | null = messageCreatedAt
+    ? { OR: [{ joinedAt: { gt: messageCreatedAt } }, { historyVisibleFrom: { gt: messageCreatedAt } }] }
+    : null;
   // La clause de cette lecture est celle de la porte de LECTURE des fichiers
   // (`ADMITTED_FILE_READER_WHERE`), qui EST `PARTICIPATION_VIVANTE` — une
   // affectation directe, gardée par un témoin de ce lot : le jour où les deux
@@ -134,7 +138,7 @@ export async function translationReaders(
         prisma,
         conversationId,
         { id: true, userId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT },
-        { ...scanOptions, narrow: late },
+        { ...scanOptions, ...(late === null ? {} : { narrowing: [late] }) },
       ),
     'translation-readers-suspects',
     cap,

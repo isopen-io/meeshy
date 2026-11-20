@@ -21,31 +21,38 @@
  * ce site sans le rendre fail-closed aurait été pire que de le laisser nu** —
  * c'est pourquoi #20020 l'a GELÉ au cliquet plutôt que corrigé au passage.
  *
- * ─── Ce que ces témoins exigent, et pourquoi ils ne peuvent pas se poser au
- *     cas nominal ──────────────────────────────────────────────────────────────
+ * ─── Ce que ces témoins exigent de leur double ───────────────────────────────
  *
- * Quand personne n'est arrivé après le message, la loi rend `{kind:'room'}`
- * sans rien restreindre : la forme juste et la forme fautive rendent le MÊME
- * verdict. Chaque témoin porte donc un lecteur SOUS PLANCHER, et le cas nominal
- * est gardé à part comme non-régression.
+ * Le double est `findManyIn` (`__tests__/helpers/mongo-where`), qui honore le
+ * `where`, le `select` **et** le `take`. Les trois comptent, et chacun garde
+ * une chose qu'un double maison laissait passer :
  *
- * **Le double honore le `take`** — sans quoi aucun témoin de borne ne peut
- * tomber : un double qui rend tout ce qu'on lui demande atteste une lecture
- * bornée aussi bien qu'une lecture nue (règle du cycle 112 bis, « un double de
- * test ment aussi par ce qu'il ACCEPTE »). Et il ÉVALUE le `where`
- * (`matchesMongoWhere`) : la sélection se juge sur ce qu'elle rend, jamais sur
- * une copie de la clause.
+ * - le **`take`** : sans lui, aucun témoin de borne ne peut tomber — un double
+ *   qui rend tout ce qu'on lui demande atteste une lecture bornée aussi bien
+ *   qu'une lecture nue ;
+ * - le **`select`** : sans lui, retirer `shareLinkId` de la projection des
+ *   ADMIS rouvre la porte des liens ÉCHUS sans faire rougir un seul témoin
+ *   (mesuré par l'audit adversarial du lot : 20 suites, 410 témoins, tous
+ *   verts sous cette mutation). C'est la règle du `CLAUDE.md` du gateway — « le
+ *   `select` est le seul des trois qu'aucun témoin de rang ne peut voir » ;
+ * - le **`where`** : il est ÉVALUÉ, donc la sélection se juge sur ce qu'elle
+ *   rend, jamais sur une copie de la clause.
+ *
+ * Et les témoins ne peuvent pas se poser au cas nominal : quand personne n'est
+ * arrivé après le message, la loi rend `{kind:'room'}` sans rien restreindre —
+ * la forme juste et la forme fautive rendent le MÊME verdict. Chacun porte donc
+ * un lecteur SOUS PLANCHER, et le cas nominal est gardé à part comme
+ * non-régression.
  *
  * @jest-environment node
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect } from '@jest/globals';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
 
 import { translationReaders } from '../translationReaders';
-import { ADMITTED_FILE_READER_WHERE } from '../../services/attachments/fileReaderAdmission';
-import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
-import { matchesMongoWhere, type MongoDocument } from '../../__tests__/helpers/mongo-where';
+import { scanLiveParticipants } from '../conversationAudienceRooms';
+import { findManyIn, type MongoDocument } from '../../__tests__/helpers/mongo-where';
 
 const CONV = 'aaaaaaaaaaaaaaaaaaaaaaaa';
 const ECRIT = new Date('2026-11-01T10:00:00Z');
@@ -54,7 +61,7 @@ const apres = (minutes: number) => new Date(ECRIT.getTime() + minutes * 60_000);
 const avant = (jours: number) => new Date(ECRIT.getTime() - jours * 86_400_000);
 
 /** Un inscrit entré bien avant le message : aucun plancher ne le concerne. */
-const membre = (suffixe: string): MongoDocument => ({
+const membre = (suffixe: string, overrides: MongoDocument = {}): MongoDocument => ({
   id: `p-${suffixe}`,
   userId: `u-${suffixe}`,
   conversationId: CONV,
@@ -67,97 +74,99 @@ const membre = (suffixe: string): MongoDocument => ({
   permissions: null,
   anonymousSession: null,
   user: { role: 'USER' },
+  ...overrides,
 });
 
 /** Entré APRÈS le message, par un lien qui REFUSE l'historique : sous plancher. */
 const sousPlancher = (suffixe: string): MongoDocument => ({
-  id: `p-${suffixe}`,
+  ...membre(suffixe),
   userId: null,
-  conversationId: CONV,
-  isActive: true,
-  bannedAt: null,
-  role: 'member',
   joinedAt: apres(30),
   shareLinkId: 'lnk-ferme',
-  historyVisibleFrom: null,
-  permissions: null,
   anonymousSession: { rights: null },
   user: null,
 });
 
-/** Actif, et BANNI : il est dans la lecture des ACTIFS, jamais dans les admis. */
-const banni = (suffixe: string): MongoDocument => ({
-  ...membre(suffixe),
-  bannedAt: avant(1),
+/**
+ * Entré APRÈS le message, mais par un lien qui OUVRE l'historique : il est
+ * SUSPECT (la clause de retard l'apparie) et n'est PAS bloqué.
+ *
+ * C'est la seule fixture qui permet au témoin de la troncature des SUSPECTS de
+ * tomber SEUL — sans elle, le verdict commun des lectures ACTIFS/ADMIS rend
+ * `unknown` de toute façon, et le témoin passe pour une raison qui n'est pas
+ * la sienne (constat de l'audit adversarial du lot).
+ */
+const sousPlancherOuvert = (suffixe: string): MongoDocument => ({
+  ...sousPlancher(suffixe),
+  shareLinkId: 'lnk-ouvert',
 });
 
-type Lecture = { readonly where: MongoDocument; readonly take: number | undefined };
+/** Actif, et BANNI : il est dans la lecture des ACTIFS, jamais dans les admis. */
+const banni = (suffixe: string): MongoDocument => ({ ...membre(suffixe), bannedAt: avant(1) });
+
+/** Admis par la clause, et pourtant RETIRÉ : son lien d'entrée a expiré. */
+const lienEchu = (suffixe: string): MongoDocument => ({ ...membre(suffixe), shareLinkId: 'lnk-echu' });
+
+const LIENS = [
+  { id: 'lnk-ferme', allowViewHistory: false, expiresAt: null },
+  { id: 'lnk-ouvert', allowViewHistory: true, expiresAt: null },
+  { id: 'lnk-echu', allowViewHistory: true, expiresAt: avant(1) },
+];
 
 function monde(participants: readonly MongoDocument[], options?: { readonly leve?: boolean }) {
-  const lectures: Lecture[] = [];
+  const collection = findManyIn(participants);
   const prisma = {
     participant: {
-      findMany: jest.fn(async (args: any) => {
-        if (options?.leve) throw new Error('mongo down');
-        lectures.push({ where: args.where, take: args.take });
-        const matched = participants.filter((row) => matchesMongoWhere(row, args.where));
-        // Le `take` de production vaut `cap + 1` : la ligne EXCÉDENTAIRE est la
-        // sonde qui distingue une audience de la taille EXACTE du plafond d'une
-        // audience tronquée. Un double qui l'ignore rend le témoin décoratif.
-        return typeof args.take === 'number' ? matched.slice(0, args.take) : matched;
-      }),
+      findMany: options?.leve
+        ? async () => { throw new Error('mongo down'); }
+        : collection.findMany,
     },
-    conversationShareLink: {
-      findMany: jest.fn(async () => [
-        { id: 'lnk-ferme', allowViewHistory: false, expiresAt: null },
-        { id: 'lnk-ouvert', allowViewHistory: true, expiresAt: null },
-      ]),
-    },
+    conversationShareLink: { findMany: async () => LIENS },
   } as any;
 
-  return { prisma, lectures };
+  return { prisma, lectures: collection.calls };
 }
 
 describe('#20050 — la loi du plancher borne ses lectures, et une troncature ne SOUS-exclut jamais', () => {
-  /**
-   * La lecture des suspects passe désormais par `scanLiveParticipants`, dont la
-   * clause est `PARTICIPATION_VIVANTE` — là où ce site écrivait
-   * `ADMITTED_FILE_READER_WHERE`. Les deux sont la MÊME clause (une affectation
-   * directe, `fileReaderAdmission.ts`), et c'est exactement ce qui rend le
-   * passage sûr… tant que c'est vrai.
-   *
-   * Ce témoin garde le couplage : le jour où la porte de LECTURE des fichiers
-   * se durcit ou s'élargit, il tombe, et ce site est relu dans le même lot au
-   * lieu de suivre en silence. Chercher une clause par son NOM, c'est manquer
-   * les sites qui l'écrivent autrement (cycle 105) — la réciproque est qu'un
-   * site qui change de NOM de clause doit prouver que la clause n'a pas changé.
-   */
-  it("la porte de lecture des fichiers et la participation vivante sont encore la MÊME clause", () => {
-    expect(ADMITTED_FILE_READER_WHERE).toEqual(PARTICIPATION_VIVANTE);
-  });
-
   it('les TROIS lectures partent bornées, à la même sonde `cap + 1`', async () => {
     const { prisma, lectures } = monde([membre('hote'), sousPlancher('invite')]);
 
     await translationReaders(prisma, CONV, ECRIT, NOW, { cap: 10 });
 
-    expect(lectures.length).toBeGreaterThanOrEqual(3);
-    expect(lectures.every((lecture) => lecture.take === 11)).toBe(true);
+    expect(lectures.map((lecture) => lecture.take)).toEqual([11, 11, 11]);
+  });
+
+  /**
+   * La clause de retard est ce qui rend la première lecture BON MARCHÉ : au cas
+   * nominal — un message neuf — elle ne rend rien. La retirer n'ouvre aucune
+   * fuite (la loi devient plus large, donc plus fermée) mais fait payer
+   * l'audience ENTIÈRE à chaque traduction, et rien ne le signalerait.
+   */
+  it('la lecture des SUSPECTS porte la clause de retard, dans un `AND`', async () => {
+    const { prisma, lectures } = monde([membre('hote'), sousPlancher('invite')]);
+
+    await translationReaders(prisma, CONV, ECRIT, NOW, { cap: 10 });
+
+    expect(JSON.stringify(lectures[0].where)).toContain('joinedAt');
+    expect(lectures[0].where).toEqual(expect.objectContaining({ AND: expect.any(Array), isActive: true }));
   });
 
   /**
    * La lecture des SUSPECTS — « qui est arrivé, ou a été autorisé, APRÈS ce
-   * message ? » — décide à elle seule si l'audience se restreint : zéro suspect
-   * ⇒ `{kind:'room'}`, toute la room servie. Une troncature y fait disparaître
-   * des suspects, donc des BLOQUÉS.
+   * message ? » — décide à elle seule si l'audience se restreint : aucun
+   * SUSPECT BLOQUÉ ⇒ `{kind:'room'}`, toute la room servie.
    *
-   * Mutation qui le prouve : la clause de complétude retirée de cette lecture,
-   * la loi rend `{kind:'readers'}` dont `rooms` porte la room du second invité
-   * sous plancher — elle le SERT, en direct, le message qu'il n'a pas le droit
-   * de lire.
+   * La fixture est construite pour que ce témoin tombe SEUL : le suspect
+   * CONSERVÉ par la troncature n'est pas bloqué (son lien ouvre l'historique),
+   * le suspect PERDU l'est. Sans la garde, la loi sort donc sur
+   * `blocked.length === 0` en rendant `{kind:'room'}` — AVANT même les lectures
+   * des actifs et des admis, dont le verdict commun ne peut plus rattraper
+   * quoi que ce soit. Mutation qui le prouve : la garde de complétude des
+   * suspects retirée ⇒ `'room'` au lieu d'`'unknown'`, et le lecteur sous
+   * plancher est servi en direct.
    */
-  it("une lecture des SUSPECTS tronquée ne sert plus personne — elle n'affirme rien", async () => {
-    const { prisma } = monde([membre('hote'), sousPlancher('invite-1'), sousPlancher('invite-2')]);
+  it("une lecture des SUSPECTS tronquée ne rend pas « toute la room »", async () => {
+    const { prisma } = monde([sousPlancherOuvert('invite-ouvert'), sousPlancher('invite-ferme')]);
 
     const readers = await translationReaders(prisma, CONV, ECRIT, NOW, { cap: 1 });
 
@@ -191,6 +200,50 @@ describe('#20050 — la loi du plancher borne ses lectures, et une troncature ne
     if (readers.kind !== 'readers') return;
     expect([...readers.rooms].sort()).toEqual([ROOMS.user('u-autre'), ROOMS.user('u-hote')].sort());
     expect([...readers.excludedQueueKeys]).toEqual(['p-invite']);
+  });
+
+  /**
+   * La RAISON D'ÊTRE de `scanActiveParticipants` : un banni est ACTIF et n'est
+   * pas ADMIS, donc il doit figurer dans la liste de refus — c'est la
+   * distinction que le cliquet #16690 tient (« audience ⇒ loi étroite / refus
+   * ⇒ sur-ensemble »), et la seule chose qui distingue cette lecture de celle
+   * de l'audience.
+   *
+   * Mutation qui le prouve : `activeScan.rows` → `admittedScan.rows` dans le
+   * complément — c'est-à-dire annuler exactement ce que cette lecture existe
+   * pour faire — fait disparaître `u-banni` de l'exclusion, donc lui sert la
+   * traduction par la file. Aucun témoin du premier jet du lot ne tombait sous
+   * cette mutation (constat de l'audit adversarial).
+   */
+  it('un membre BANNI entre dans les clés exclues, et jamais dans les rooms', async () => {
+    const { prisma } = monde([membre('hote'), banni('banni'), sousPlancher('invite')]);
+
+    const readers = await translationReaders(prisma, CONV, ECRIT, NOW, { cap: 10 });
+
+    expect(readers.kind).toBe('readers');
+    if (readers.kind !== 'readers') return;
+    expect([...readers.rooms]).toEqual([ROOMS.user('u-hote')]);
+    expect([...readers.excludedQueueKeys].sort()).toEqual(['p-invite', 'u-banni']);
+  });
+
+  /**
+   * Le `select` des ADMIS porte `shareLinkId` pour une seule raison :
+   * `withoutExpiredShareLinks` en a besoin. Le retirer ne fait rien compiler de
+   * faux et ne change aucune clause — il rend `shareLinkId` indéfini pour tout
+   * le monde, donc n'exclut plus AUCUN invité au lien échu.
+   *
+   * Ce témoin est la seule chose qui tombe sous cette mutation, et il ne tombe
+   * que parce que le double honore le `select`.
+   */
+  it('un invité au lien ÉCHU ne reçoit rien, et son absence de projection le prouve', async () => {
+    const { prisma } = monde([membre('hote'), lienEchu('echu'), sousPlancher('invite')]);
+
+    const readers = await translationReaders(prisma, CONV, ECRIT, NOW, { cap: 10 });
+
+    expect(readers.kind).toBe('readers');
+    if (readers.kind !== 'readers') return;
+    expect([...readers.rooms]).toEqual([ROOMS.user('u-hote')]);
+    expect([...readers.excludedQueueKeys].sort()).toEqual(['p-invite', 'u-echu']);
   });
 
   it('personne sous plancher ⇒ la room entière, comme avant le lot', async () => {
@@ -227,5 +280,45 @@ describe('#20050 — la loi du plancher borne ses lectures, et une troncature ne
     const readers = await translationReaders(prisma, CONV, null, NOW, { cap: 2 });
 
     expect(readers.kind).toBe('unknown');
+  });
+});
+
+/**
+ * Le rétrécissement que cette loi apporte à la lecture des vivants est la SEULE
+ * liberté qu'un appelant obtient sur le `where` — et la première écriture du
+ * lot la lui donnait sous forme d'objet ÉTALÉ, sous un doc-comment affirmant
+ * qu'« un appelant ne peut pas élargir l'audience ».
+ *
+ * C'était faux, et l'audit adversarial du lot l'a mesuré : `{ OR: [...] }` —
+ * la façon NATURELLE d'écrire un rétrécissement disjonctif — écrasait l'`OR` de
+ * `bannedAt`, donc faisait perdre la garde de BANNISSEMENT sur un type
+ * d'options partagé par les audiences de DIFFUSION. Le dépôt NOMME ce piège
+ * (`utils/prisma-unset.ts`). Ce témoin garde la forme qui le ferme.
+ *
+ * La question des ACTIFS, elle, n'admet AUCUN rétrécissement, et c'est le
+ * COMPILATEUR qui le tient : `ActiveParticipantScanOptions` déclare
+ * `narrowing?: never`, donc un appelant qui lui passe les options de l'audience
+ * ne compile pas — au lieu de se faire ignorer en silence, l'autre moitié du
+ * même constat d'audit. Aucun témoin d'exécution ici : un `expect(true)` qui
+ * NOMME une garde de type est une décoration, pas un témoin.
+ */
+describe('#20050 — un rétrécissement ne peut QUE rétrécir', () => {
+  const vivants = [membre('hote'), banni('banni')];
+
+  it('une clause disjonctive n’écrase pas la garde de bannissement', async () => {
+    const collection = findManyIn(vivants);
+    const prisma = { participant: { findMany: collection.findMany } } as any;
+
+    const scan = await scanLiveParticipants<{ id: string }>(
+      prisma,
+      CONV,
+      { id: true },
+      { narrowing: [{ OR: [{ joinedAt: { gt: avant(60) } }] }] },
+    );
+
+    // Le banni apparie la clause de rétrécissement ; seule la loi l'écarte.
+    expect(scan.rows.map((row) => row.id)).toEqual(['p-hote']);
+    expect(collection.calls[0].where).toEqual(expect.objectContaining({ isActive: true }));
+    expect(JSON.stringify(collection.calls[0].where)).toContain('bannedAt');
   });
 });

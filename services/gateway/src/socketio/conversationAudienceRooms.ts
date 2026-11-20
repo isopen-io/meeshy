@@ -46,7 +46,7 @@ export type LiveAudience = {
   readonly complete: boolean;
 };
 
-export type LoadLiveAudienceOptions = {
+export type ParticipantScanOptions = {
   readonly onError?: (error: unknown) => void;
   /**
    * Le plafond, paramétrable pour qu'un témoin puisse l'ATTEINDRE sans
@@ -63,18 +63,47 @@ export type LoadLiveAudienceOptions = {
    * garantie est DURABLE, perd des entrées que rien ne rejouera).
    */
   readonly scanLabel?: string;
+};
+
+/**
+ * Les options de la lecture des participants VIVANTS — la machinerie, plus la
+ * seule liberté qu'un appelant obtient sur le `where`.
+ */
+export type LoadLiveAudienceOptions = ParticipantScanOptions & {
   /**
-   * Une clause SUPPLÉMENTAIRE, qui ne peut que RÉTRÉCIR l'audience — et c'est
-   * la seule liberté qu'un appelant obtient sur le `where`, avec sa projection.
+   * Des clauses SUPPLÉMENTAIRES, qui ne peuvent que RÉTRÉCIR l'audience.
    *
-   * Elle existe pour la loi du plancher d'historique (#20050), dont la première
-   * lecture ne demande pas « qui est vivant ? » mais « qui est vivant ET arrivé
-   * APRÈS ce message ? » : sans elle, ce site paierait la lecture ENTIÈRE pour
-   * une question qui, au cas nominal, ne rend rien. Elle est ÉTALÉE à côté de
-   * la clause de participation vivante, jamais à sa place : un appelant ne peut
-   * pas en élargir l'audience, il ne peut que la restreindre.
+   * Elles existent pour la loi du plancher d'historique (#20050), dont la
+   * première lecture ne demande pas « qui est vivant ? » mais « qui est vivant
+   * ET arrivé APRÈS ce message ? » : sans elles, ce site paierait la lecture
+   * ENTIÈRE pour une question qui, au cas nominal, ne rend rien.
+   *
+   * **C'est un TABLEAU, et il part dans un `AND`, pas dans un spread** — la
+   * première écriture de cette option prenait un objet ÉTALÉ à côté de la loi,
+   * et son doc-comment affirmait qu'un appelant « ne peut pas élargir
+   * l'audience ». C'était faux, et l'audit adversarial du lot l'a mesuré :
+   * `{ OR: [...] }` — la façon NATURELLE d'écrire un rétrécissement disjonctif
+   * — écrasait l'`OR` de `bannedAt` et faisait perdre la garde de
+   * BANNISSEMENT ; `{ isActive: undefined }` faisait perdre celle d'ACTIVITÉ.
+   * Le piège est NOMMÉ dans le dépôt (`utils/prisma-unset.ts` : « le spread
+   * silencieux qui écraserait un `OR` existant est le seul piège de cet
+   * utilitaire »), et cette option y ouvrait un chemin générique documenté
+   * comme sûr. Sous un `AND`, un appelant ne peut plus qu'ajouter une
+   * conjonction : il ne touche ni `isActive`, ni `bannedAt`, ni
+   * `conversationId`.
    */
-  readonly narrow?: Record<string, unknown>;
+  readonly narrowing?: ReadonlyArray<Record<string, unknown>>;
+};
+
+/**
+ * Les options de la lecture des participants ACTIFS, qui n'admet PAS de
+ * rétrécissement — `narrowing: never` plutôt qu'une absence, parce qu'une
+ * absence COMPILE dès que l'appelant passe une variable : la fonction
+ * l'ignorerait en silence, et l'appelant lirait une audience plus large que
+ * celle qu'il croit demander (constat de l'audit adversarial du lot).
+ */
+export type ActiveParticipantScanOptions = ParticipantScanOptions & {
+  readonly narrowing?: never;
 };
 
 /**
@@ -111,12 +140,17 @@ export async function scanLiveParticipants<Row>(
   select: Record<string, unknown>,
   options?: LoadLiveAudienceOptions,
 ): Promise<LiveParticipantScan<Row>> {
-  return scanParticipants<Row>(
-    prisma,
-    conversationId,
-    { ...PARTICIPATION_VIVANTE, ...(options?.narrow ?? {}) },
-    select,
-    options,
+  const narrowing = options?.narrowing ?? [];
+  return boundedScan<Row>(conversationId, options, async (probe) =>
+    (await prisma.participant.findMany({
+      where: {
+        conversationId,
+        ...(narrowing.length > 0 ? { AND: [...narrowing] } : {}),
+        ...PARTICIPATION_VIVANTE,
+      },
+      select,
+      take: probe,
+    })) as Row[],
   );
 }
 
@@ -138,23 +172,39 @@ export async function scanActiveParticipants<Row>(
   prisma: Pick<PrismaClient, 'participant'>,
   conversationId: string,
   select: Record<string, unknown>,
-  options?: LoadLiveAudienceOptions,
+  options?: ActiveParticipantScanOptions,
 ): Promise<LiveParticipantScan<Row>> {
-  return scanParticipants<Row>(prisma, conversationId, { isActive: true }, select, options);
+  return boundedScan<Row>(conversationId, options, async (probe) =>
+    (await prisma.participant.findMany({
+      // `isActive` NU, délibérément : voir le doc-comment ci-dessus, et
+      // l'entrée `conversationAudienceRooms.ts#1` de `DELIBERATELY_WIDE`
+      // (#16690), qui porte la raison et que ce site DÉSIGNE.
+      where: { conversationId, isActive: true },
+      select,
+      take: probe,
+    })) as Row[],
+  );
 }
 
 /**
  * La machinerie commune aux deux questions : la borne, la sonde `cap + 1`, le
- * journal de troncature et le verdict de complétude. Le `where` lui est REMIS —
- * c'est le seul endroit du module où il n'est pas décidé sur place, et aucune
- * des deux fonctions publiques ne laisse un appelant le composer.
+ * journal de troncature et le verdict de complétude.
+ *
+ * **Elle reçoit la LECTURE, jamais le `where`**, et ce n'est pas un détail de
+ * style : la première écriture de ce lot passait la clause de participation en
+ * PARAMÈTRE, si bien que le `where` de production se lisait
+ * `{ conversationId, ...participation }` — et le cliquet #16690, qui tient la
+ * distinction « audience ⇒ loi étroite / refus ⇒ sur-ensemble » sur le LITTÉRAL
+ * du `where`, est devenu rouge en nommant un site qu'il ne pouvait plus juger.
+ * Le discriminant avait quitté le code pour devenir un choix de nom de
+ * fonction, qu'aucun balayage ne lit. Chaque question ÉPELLE donc sa clause
+ * chez elle ; la machinerie ne décide que de la borne, et la sonde reste
+ * incessible — un appelant reçoit `probe`, il ne le choisit pas.
  */
-async function scanParticipants<Row>(
-  prisma: Pick<PrismaClient, 'participant'>,
+async function boundedScan<Row>(
   conversationId: string,
-  participation: Record<string, unknown>,
-  select: Record<string, unknown>,
-  options?: LoadLiveAudienceOptions,
+  options: ParticipantScanOptions | undefined,
+  read: (probe: number) => Promise<Row[]>,
 ): Promise<LiveParticipantScan<Row>> {
   const cap = options?.cap ?? LIVE_AUDIENCE_SCAN_CAP;
   let rows: Row[];
@@ -162,18 +212,14 @@ async function scanParticipants<Row>(
     // `cap + 1` : la ligne EXCÉDENTAIRE est la sonde « y en a-t-il d'autres ? »,
     // la seule façon de distinguer une audience de la taille exacte du plafond
     // d'une audience tronquée.
-    rows = (await prisma.participant.findMany({
-      where: { conversationId, ...participation },
-      select,
-      take: cap + 1,
-    })) as Row[];
+    rows = await read(cap + 1);
   } catch (error) {
     options?.onError?.(error);
     return { rows: [], complete: false };
   }
 
-  const read = rows ?? [];
-  if (read.length <= cap) return { rows: read, complete: true };
+  const scanned = rows ?? [];
+  if (scanned.length <= cap) return { rows: scanned, complete: true };
 
   // Le seul cas où une mutation n'atteint pas toute la liste, et il ne se tait
   // plus : c'était la perte SILENCIEUSE que l'audit de #19954 a nommée.
@@ -183,7 +229,7 @@ async function scanParticipants<Row>(
     named: cap,
     scan: options?.scanLabel ?? 'live-audience',
   });
-  return { rows: read.slice(0, cap), complete: false };
+  return { rows: scanned.slice(0, cap), complete: false };
 }
 
 /** La projection qui NOMME une room : `id` pour un participant sans ligne `User`. */

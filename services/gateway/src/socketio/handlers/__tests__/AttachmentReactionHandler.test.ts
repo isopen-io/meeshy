@@ -455,6 +455,28 @@ describe('AttachmentReactionHandler', () => {
       return prisma;
     }
 
+    /**
+     * L'enfilage hors ligne part en promesse DÉTACHÉE
+     * (`void this._enqueueOfflineAttachmentReactionEvent(…).catch(…)`,
+     * `AttachmentReactionHandler.ts`) : `await handler.handleAdd(…)` ne
+     * l'attend PAS. Ces témoins l'observaient donc par CHANCE d'ordonnancement
+     * des microtâches, et un `await` de plus dans la chaîne de lecture des
+     * participants les a fait tomber — sans que la production change de
+     * comportement (#20050 : l'audit adversarial du lot a isolé le tick).
+     *
+     * `setImmediate` franchit la phase « check », après laquelle toutes les
+     * microtâches en attente ont été drainées : c'est le patron que le
+     * `CLAUDE.md` du gateway prescrit pour une promesse détachée — « se prouve
+     * par le runtime, pas par le retour de l'appelant ».
+     *
+     * **Il va dans les DEUX sens** : un témoin NÉGATIF qui n'attend pas non
+     * plus passe trivialement, sans avoir rien prouvé. Les deux
+     * `not.toHaveBeenCalled()` de ce bloc attendent donc aussi.
+     */
+    const apresLEnfilageDetache = (): Promise<void> =>
+      new Promise((resolve) => { setImmediate(resolve); });
+
+
     it('enqueues attachment-reaction-added for offline peers, excluding the actor', async () => {
       const prisma = prismaWithParticipants();
       const deliveryQueue = makeDeliveryQueue();
@@ -462,6 +484,8 @@ describe('AttachmentReactionHandler', () => {
       const socket = makeSocket();
 
       await handler.handleAdd(socket, validData, jest.fn());
+
+      await apresLEnfilageDetache();
 
       expect(deliveryQueue.enqueue).toHaveBeenCalledTimes(1);
       const [queueKey, entry] = deliveryQueue.enqueue.mock.calls[0];
@@ -514,6 +538,8 @@ describe('AttachmentReactionHandler', () => {
 
       await handler.handleAdd(socket, validData, jest.fn());
 
+      await apresLEnfilageDetache();
+
       // Le pair EN LIGNE a perdu sa diffusion — il n'y a rien à y faire. Le
       // pair ABSENT a sa file, et c'est sa seule voie.
       expect(deliveryQueue.enqueue).toHaveBeenCalledTimes(1);
@@ -527,6 +553,8 @@ describe('AttachmentReactionHandler', () => {
       const socket = makeSocket();
 
       await handler.handleRemove(socket, validData, jest.fn());
+
+      await apresLEnfilageDetache();
 
       expect(deliveryQueue.enqueue).toHaveBeenCalledTimes(1);
       const [, entry] = deliveryQueue.enqueue.mock.calls[0];
@@ -544,6 +572,8 @@ describe('AttachmentReactionHandler', () => {
       const socket = makeSocket();
 
       await handler.handleAdd(socket, validData, jest.fn());
+
+      await apresLEnfilageDetache();
 
       expect(deliveryQueue.enqueue).not.toHaveBeenCalled();
     });
@@ -568,6 +598,8 @@ describe('AttachmentReactionHandler', () => {
       const socket = makeSocket();
 
       await handler.handleAdd(socket, validData, jest.fn());
+
+      await apresLEnfilageDetache();
 
       expect(deliveryQueue.enqueue).not.toHaveBeenCalled();
     });
