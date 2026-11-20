@@ -182,6 +182,17 @@ final class SharedLocationRestoredBackupTests: XCTestCase {
                        UserDefaultsSharedLocationRosterStore.mark(userId: me, device: "device-A"))
     }
 
+    func test_aMarkInClear_fromAnotherDevice_isForgottenOnRestore() {
+        let defaults = isolatedDefaults()
+        written(defaults, device: "device-A")
+        defaults.set("device-A", forKey: "sharedLocation.roster." + me + ".device")
+
+        let restored = store(defaults, device: "device-B")
+
+        XCTAssertNil(restored.load())
+        XCTAssertNil(restored.loadPublishedStart())
+    }
+
     func test_anotherAccountsMark_onTheSameDevice_isNotThisAccounts() {
         XCTAssertNotEqual(UserDefaultsSharedLocationRosterStore.mark(userId: me, device: "device-A"),
                           UserDefaultsSharedLocationRosterStore.mark(userId: alice, device: "device-A"))
