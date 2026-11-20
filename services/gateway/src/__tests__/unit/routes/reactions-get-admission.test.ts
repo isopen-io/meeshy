@@ -11,7 +11,9 @@
  * (`participant-ban-core.ts`) et la suppression pour soi posent tous
  * `isActive: false` et GARDENT la ligne. Un membre banni conservait donc l'accès
  * au trombinoscope des réactions — par emoji : le compte, les `participantIds`,
- * et pour chaque réacteur son `displayName`, son `avatar`, son `userId`
+ * et pour chaque réacteur son `displayName`, son `avatar`, son `participantId`
+ * (plus son `userId` s'il est inscrit — #19996 : cette phrase disait `userId`
+ * SEUL, alors que le sérialiseur n'en laissait sortir AUCUN des deux)
  * (`ReactionService.getMessageReactions`) — et apprenait au passage que le
  * message existe toujours. Fail-OPEN, dans le seul sens qui coûte.
  *

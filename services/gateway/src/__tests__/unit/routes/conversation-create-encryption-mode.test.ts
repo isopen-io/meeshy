@@ -100,6 +100,7 @@ function world(docs: DirectDoc[]) {
     return { count: 1 };
   });
   const prisma = {
+    e2EEDevice: { findMany: jest.fn(async ({ where }: { where: { userId: { in: string[] } } }) => where.userId.in.map((userId) => ({ userId }))) },
     conversation: {
       findFirst: jest.fn(async (args: any) => (args?.where?.identifier !== undefined ? null : directs.findFirst(args))),
       findMany: jest.fn(async (args: any) => directs.findMany(args)),

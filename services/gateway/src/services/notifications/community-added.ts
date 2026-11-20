@@ -37,6 +37,7 @@ import { deferAfterResponse, type AfterResponse } from '../../utils/after-respon
 import type { NotificationService } from './NotificationService.js';
 import { getSharedNotificationService } from './notification-service-registry.js';
 import { USABLE_ACCOUNT_WHERE } from '../relations/usableAccount';
+import { unescapeSerializedText } from '../../utils/serialized-text';
 
 const logger = enhancedLogger.child({ module: 'CommunityAdded' });
 
@@ -54,13 +55,12 @@ export type CommunityAddedRequest = {
   readonly recipientIds: readonly string[];
 };
 
-const ESCAPED_ENTITIES: Readonly<Record<string, string>> = {
-  '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&#x27;': "'", '&nbsp;': ' ',
-};
-
-/** Le nom tel qu'écrit : la passerelle le stocke échappé (#16786), une bannière n'est pas du HTML. */
+/**
+ * Le nom tel qu'écrit : les lignes écrites avant #16786 le portent échappé, une bannière n'est pas du HTML.
+ * Inoffensif sur une ligne écrite depuis, qui ne porte plus d'entité ajoutée.
+ */
 export function asWritten(name: string): string {
-  return name.replace(/&(?:amp|lt|gt|quot|#39|#x27|nbsp);/g, (entity) => ESCAPED_ENTITIES[entity] ?? entity);
+  return unescapeSerializedText(name);
 }
 
 export async function announceAddedToCommunity(

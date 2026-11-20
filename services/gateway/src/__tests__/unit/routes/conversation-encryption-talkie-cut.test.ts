@@ -96,6 +96,9 @@ function makeWorld(params: { readonly conversation?: MongoDocument; readonly mem
       }),
       update: jest.fn(async () => ({ id: CONV_ID })),
     },
+    e2EEDevice: {
+      findMany: jest.fn(async ({ where }: { where: { userId: { in: string[] } } }) => where.userId.in.map((userId) => ({ userId }))),
+    },
     participant: {
       findFirst: jest.fn(async () => ({ id: 'p-alice', displayName: 'Alice' })),
     },

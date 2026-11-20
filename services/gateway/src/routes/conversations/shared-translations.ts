@@ -582,6 +582,18 @@ async function broadcastSharedTranslation(params: {
       io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.MESSAGE_TRANSLATION_SHARED, sharedTranslation);
       return;
     }
+    // La loi répond TROIS choses (#17026, #20050) : la room, ses seuls lecteurs
+    // autorisés, ou RIEN DE PROUVÉ. Sur `unknown`, on se tait — la ligne est
+    // rangée et `GET …/shared-translations` la sert, donc ouvrir la
+    // conversation la retrouve ; diffuser à la room servirait le texte à un
+    // lecteur peut-être sous plancher.
+    if (readers.kind === 'unknown') {
+      logger.warn('shared translation audience unresolvable — nothing emitted', {
+        conversationId,
+        messageId: sharedTranslation.messageId,
+      });
+      return;
+    }
     if (readers.rooms.length === 0) return;
     io.to([...readers.rooms]).emit(SERVER_EVENTS.MESSAGE_TRANSLATION_SHARED, sharedTranslation);
   } catch (error) {
