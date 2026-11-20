@@ -29,6 +29,14 @@ const EXPECTED: Record<QueuedEventType, boolean> = {
   pinned: false,
   unpinned: false,
   'attachment-updated': false,
+  // #20019 — le retrait d'UNE pièce d'un message DÉJÀ arrivé. Même famille que
+  // son jumeau d'enrichissement ci-dessus : accuser réception affirmerait une
+  // remise qui n'a pas eu lieu, et le message, lui, était arrivé depuis
+  // longtemps. C'est ce `Record` qui a exigé le verdict — le lot qui a ajouté
+  // la famille à l'union ne compilait plus tant qu'elle n'était pas tranchée
+  // ici, et c'est le CLIQUET DE TYPES des fichiers de test (#6160, gate A) qui
+  // l'a fait rougir : la suite, elle, ne typeche plus rien depuis #10203.
+  'attachment-deleted': false,
   translation: false,
   // Les trois MARQUES PERSONNELLES du lecteur (#16688) : elles décrivent l'état
   // d'un message DÉJÀ arrivé — étoilé, masqué « pour moi », rendu — pour les
