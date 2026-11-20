@@ -208,6 +208,12 @@ class SharedLocationSharingCenter internal constructor(
      */
     @Volatile private var awaitsServedTruth = false
 
+    /**
+     * La passerelle a répondu à une relecture depuis le chargement de la session (#20055) : avant, toute liste composée
+     * d'ici peut ignorer ce qu'un autre appareil du compte partage.
+     */
+    @Volatile private var hasReadServed = false
+
     init {
         scope.launch {
             connected.distinctUntilChanged().filter { it }.collect {
@@ -229,6 +235,8 @@ class SharedLocationSharingCenter internal constructor(
         precision: SharedLocationPrecision,
         duration: SharedLocationShareDuration,
     ): SharedLocationShareProblem? = locked { ticket ->
+        if (!readBeforeComposing(ticket)) return@locked SharedLocationShareProblem.Refused(SharedLocationSendOutcome.OFFLINE)
+        if (!isCurrent(ticket)) return@locked SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
         if (!permission.isGranted()) return@locked SharedLocationShareProblem.LocationDenied
         val fix = deviceFix() ?: return@locked SharedLocationShareProblem.LocationUnavailable
         val previous = _roster.value
@@ -236,6 +244,8 @@ class SharedLocationSharingCenter internal constructor(
     }
 
     override suspend fun stopSharing(userId: String): SharedLocationShareProblem? = locked { ticket ->
+        readBeforeComposing(ticket, liftsWaitOnLegacy = false)
+        if (!isCurrent(ticket)) return@locked SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
         val problem = withdrawingRepublish(ticket, _roster.value.pruned(clock()).removing(userId))
         if (problem == null || !isCurrent(ticket) || _roster.value.entry(userId) == null) return@locked problem
         adopt(ticket, _roster.value.withdrawing(userId, clock()))
@@ -292,24 +302,30 @@ class SharedLocationSharingCenter internal constructor(
         }
     }
 
-    private suspend fun syncLocked(ticket: Ticket) {
+    /**
+     * Sous le verrou : relit le partage servi et s'y recale. `true` : la passerelle a répondu (`null` compris, passerelle
+     * d'avant) ; `false` : une panne, rien n'a changé. `liftsWaitOnLegacy` faux : une passerelle d'avant ne lève pas
+     * l'attente d'un appareil relancé (la relecture d'avant un « Arrêter » ne le fait pas republier sa position).
+     */
+    private suspend fun syncLocked(ticket: Ticket, liftsWaitOnLegacy: Boolean = true): Boolean {
         val read = readServed()
-        if (!isCurrent(ticket)) return
+        if (!isCurrent(ticket)) return false
         if (read !is ServedRead.Answered) {
             if (awaitsServedTruth) scheduleRetry()
-            return
+            return false
         }
-        if (awaitsServedTruth) {
+        hasReadServed = true
+        if (awaitsServedTruth && (read.truth != null || liftsWaitOnLegacy)) {
             awaitsServedTruth = false
             scheduleDeadline()
         }
-        val truth = read.truth ?: return
+        val truth = read.truth ?: return true
         val before = _roster.value
         val next = before.withServed(truth, clock())
         val yields = next.hasRecipients && !received && before.hasRecipients && yieldsTo(ticket, truth.startedAt)
         if (next == before) {
             if (yields) yieldPublishing(ticket)
-            return
+            return true
         }
         if (yields || (next.hasRecipients && !before.hasRecipients)) markReceived(ticket, true)
         adopt(ticket, next)
@@ -320,7 +336,16 @@ class SharedLocationSharingCenter internal constructor(
             rememberStart(ticket, null)
         }
         scheduleDeadline()
+        return true
     }
+
+    /**
+     * Sous le verrou, avant de COMPOSER une liste (#20055, #19999, iso `SharedLocationSharingCenter.swift`) : un appareil
+     * qui n'a encore rien relu depuis le chargement de la session (installation neuve, relecture en panne) ne connaît pas
+     * ce qu'un autre appareil du compte partage. Il relit d'abord, pour que la liste qu'il envoie réunisse le partage servi.
+     */
+    private suspend fun readBeforeComposing(ticket: Ticket, liftsWaitOnLegacy: Boolean = true): Boolean =
+        hasReadServed || syncLocked(ticket, liftsWaitOnLegacy)
 
     /** Ce qu'une relecture a donné : une réponse (`null` : passerelle d'avant), ou une panne (#19928). */
     private sealed interface ServedRead {
@@ -408,6 +433,7 @@ class SharedLocationSharingCenter internal constructor(
         received = false
         publishedStart = null
         awaitsServedTruth = false
+        hasReadServed = false
         loadedFor = account
         _roster.value = SharedLocationRoster.EMPTY
     }
