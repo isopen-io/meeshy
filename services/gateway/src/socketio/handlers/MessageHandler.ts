@@ -1014,7 +1014,25 @@ export class MessageHandler {
       // 48 h : sans cette exclusion, le texte d'un message hors du plancher d'un
       // invité l'attendait dans Redis sous sa clé. Sur `'unknown'` rien n'entre
       // — on ne sait NI qui est bloqué, NI qui est autorisé.
-      if (editReaders.kind !== 'unknown') {
+      // #19939 — la file est le canal le PLUS exposé des deux, et c'était le
+      // seul des deux à ne pas appliquer `editPlan`. L'émission directe sert à
+      // chaque lecteur CONNECTÉ un `fileUrl` signé pour SA ligne `Participant`
+      // (#9646) ; l'enfilage posait la charge GÉNÉRIQUE, non signée, dans une
+      // entrée qui vit jusqu'à 48 h — donc qui SURVIT à la fenêtre pendant
+      // laquelle la protection d'une pièce peut changer.
+      //
+      // `PLAN_UNAVAILABLE` gouverne les DEUX canaux, pour la raison que
+      // `planOutcome.ts` écrit : « l'adresse nue d'une pièce peut-être protégée
+      // partirait à toute la room ». La phrase vaut mot pour mot d'une entrée
+      // adressée à un destinataire NOMMÉ — ce qui disqualifie une diffusion
+      // n'est pas l'audience, c'est de remettre une adresse dont on ne sait pas
+      // si elle est protégée. Ce qu'on perd alors est une REMISE, que la
+      // relecture du fil sert de toute façon sous les mêmes lois.
+      const offlineSignedEdit = offlineSignedPayload({
+        plan: editPlan,
+        base: () => editedPayload as unknown as Record<string, unknown>,
+      });
+      if (editReaders.kind !== 'unknown' && offlineSignedEdit.kind !== 'withhold') {
         this._enqueueOfflineEventForParticipants({
           conversationId: message.conversationId,
           actorUserId: userId,
@@ -1023,6 +1041,8 @@ export class MessageHandler {
           payload: editedPayload,
           atRest: queuedEventSealsAtRest(message),
           ...(editBlocked.size > 0 ? { excludedQueueKeys: editBlocked } : {}),
+          // UN seul hook par lecteur, composé par la décision ci-dessus.
+          ...(offlineSignedEdit.kind === 'per-reader' ? { resolvePayloadForReader: offlineSignedEdit.resolve } : {}),
         }).catch((err) => handlerLogger.warn('offline enqueue (edit) failed', { error: err }));
       }
 
@@ -1694,6 +1714,13 @@ export class MessageHandler {
     messageId: string;
     /** Les clés que le plancher d'historique écarte (`editedAudience.ts`). */
     excludedQueueKeys?: ReadonlySet<string>;
+    /**
+     * #19939 — la charge DE CE LECTEUR, signée pour SA ligne `Participant`.
+     * Deux paramètres, comme la file les remet (`offlineParticipantQueue.ts`) :
+     * la clé de file nomme la ROOM, l'id de participant nomme la LIGNE qui
+     * autorise le fichier, et les deux ne se déduisent pas l'un de l'autre.
+     */
+    resolvePayloadForReader?: (queueKey: string, participantId: string) => Record<string, unknown>;
   } & QueuedVariantFor<'edited' | 'deleted'>): Promise<void> {
     await enqueueForOfflineParticipants(
       { deliveryQueue: this.deliveryQueue, prisma: this.prisma, connectedUsers: this.connectedUsers },
