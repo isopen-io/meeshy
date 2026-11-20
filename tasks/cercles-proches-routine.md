@@ -1645,3 +1645,17 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gardes iOS rc=0 sur 4d6e43a03 (house_rules, cohesion, test_registration, accent). Swift et Kotlin ne compilent pas ici : preuve par ios.yml et android.yml en workflow_dispatch.
 - Décisions ouvertes : #19682 (arrondi de startedAt), #19997 (adopter ou céder sans accusé de démarrage).
 - Prochain lot : #19929, puis le plafond `untilStopped` de `listOnlyState`, puis #19999 ; #19682 et #19997 une fois tranchées.
+
+## 2026-11-20 — réveil de 13 h : #20000 fusionnée, lot #19929 (sauvegarde restaurée)
+
+- #20000 (#19928) fusionnée dans `dev` (133a21ad2) pendant la vague du 2026-11-20.
+- Lot : #19929, branche `claude/cercles-19929-sauvegarde-restauree`, iOS seulement (Android : `allowBackup="false"`).
+- Mise en œuvre : une liste marquée par un autre appareil est OUBLIÉE avec sa marque « reçue » et son démarrage, puis
+  reconstruite REÇUE par `sync` ; la marque est une empreinte SHA-256 `userId:deviceId` (une marque en clair d'avant est
+  reconnue et réécrite) ; le magasin de production ne compare qu'avec l'identifiant GARDÉ au trousseau
+  (`PushDeviceIdentity.durableInstallationId`), via `SharedLocationSharingHolder.rosterStore`, témoigné.
+- Audit adversarial : fusionnable. Suivis ouverts : #20059 (liste d'avant la marque restaurée ailleurs avec retrait en
+  attente), #20061 (« Partager » sur une liste jamais relue efface les destinataires de l'autre appareil, et état
+  hors ligne d'un appareil restauré).
+- Gardes iOS rc=0 sur l'arbre fusionné (dev a34b3344b) : règles maison, cohésion, inscription des tests, accent.
+- Prochain lot : plafond `untilStopped` de `listOnlyState`, #20061, #20059, #19999 ; #19682 et #19997 une fois tranchées.
