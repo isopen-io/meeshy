@@ -707,3 +707,14 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Début du run : #20049 (iOS #19877, intendants) seule PR de la routine ouverte, inactive depuis 11:52 : run consacré à la mener à la fusion.
 - `ci.yml` rouge sur un témoin ÉTRANGER : `gateway-file-size-budget` (règle 3, `MessageHandler.ts` hors budget, venu de #20022 / #19939), corrigé sur `dev` par `a34b3344b`. `dev` fusionnée dans la branche sans conflit ; le témoin rejoué sur l'arbre fusionné : 5 / 5 verts.
 - Reste : `ios.yml` et `sdk-tests.yml` encore en file sur la tête précédente ; ils repartent sur la nouvelle tête.
+
+## 2026-11-20 — réveil 13:04 UTC
+
+- Début du run : #20049 (iOS #19877, intendants) poussée à 13:02 et `claude/communautes-reouverture-annoncee` (#20002) à 13:04 : vivantes, cédées. Aucune autre PR de la routine ouverte.
+- Lot : Android #19949 — le demandeur lit « Demande refusée — nouvelle demande possible le … » sans relecture (miroir de #19879, passerelle + web).
+- `:core:model` : `ApiCommunity.currentUserJoinRetryAt` ; `CommunityJoinRequestDecidedEvent` (miroir de `CommunityJoinRequestDecidedEventData`, `refusedUntil` ne rend une date que pour `rejected` et une date lisible) ; `ApiCommunity.joinDeclinedUntil(now)` (date à venir seulement, jamais pour un membre ni une demande en attente — `membershipActionOf` du web) ; `ApiCommunity.applying(event)` : autre communauté, charge illisible ou lecteur déjà entré ⇒ rien.
+- `sdk-core` : `CommunityJoinRequestDecidedBinding` (modèle de `CommunityDeletedBinding`) → `CommunityCacheRepository.applyJoinRequestDecided`, qui réécrit la fiche DÉJÀ tenue sans rajeunir sa lecture. Écran : tuile « Demande refusée » (statut, pas un bouton) et la date en rouge (`ShareLinkDateFormat.dayAndTime`, grégorienne) ; `join()` n'envoie rien avant la date. Deux chaînes × sept langues (`strings_join_declined_19949.xml`), mêmes mots que le web.
+- Cliquets partagés : `community:join-request-decided` passe à « absent iOS seulement » (#19948) ; `SWEPT_EVENTS_AT_LAST_MEASURE` 144 → 145. `packages/shared/__tests__/ci/` 25 fichiers, 216 tests verts.
+- Gate local : `jvm-check -PjvmCheckModelOnly` — `CommunityJoinRequestDecidedEventTest` 9/9, `SocketEventNamesParityTest` 5/5, suites `*Community*` vertes. Témoin écrit avant le code, mais son rouge n'a pas été exécuté seul (le premier passage a eu lieu avec l'implémentation). Liaison, cache, ViewModel et écran : prouvés par `android.yml` sur la PR.
+- Prochain lot recommandé : iOS #19948 (même décision, dernière plateforme) une fois #20049 fusionnée ; puis Android #19878 (intendants).
+- 14:45 : `dev` a de nouveau avancé (Android #19949) et entrait en conflit sur le cliquet d'asymétrie : `community:join-requested` garde son groupe « absent Android » (ce lot), `community:join-request-decided` le sien « absent iOS » (#19949), et le groupe « web seul » ne les cite plus ni l'un ni l'autre.

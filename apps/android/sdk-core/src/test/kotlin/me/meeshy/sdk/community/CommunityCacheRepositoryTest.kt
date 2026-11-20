@@ -18,6 +18,7 @@ import me.meeshy.sdk.model.ApiCommunity
 import me.meeshy.sdk.model.ApiCommunityMember
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CommunityDeletedEvent
+import me.meeshy.sdk.model.CommunityJoinRequestDecidedEvent
 import me.meeshy.sdk.model.CommunityMemberChange
 import me.meeshy.sdk.model.CommunityUpdatedEvent
 import me.meeshy.sdk.model.MemberRole
@@ -296,5 +297,28 @@ class CommunityCacheRepositoryTest {
         repository().applyDeleted(CommunityDeletedEvent(communityId = ""))
 
         assertThat(cache().get("community:list", "page0", pageSerializer)!!.value.map { it.id }).containsExactly("c1")
+    }
+
+    private fun refused(communityId: String) =
+        CommunityJoinRequestDecidedEvent(communityId, decision = "rejected", retryAt = "2026-11-27T12:00:00.000Z", at = "2026-11-20T12:00:00.000Z")
+
+    @Test fun `le refus de sa demande reecrit la fiche tenue sans reseau ni rajeunir sa lecture`() = runTest {
+        cache().put("community:detail", "c1", community("c1").copy(requiresJoinApproval = true, currentUserJoinRequest = "pending"), ApiCommunity.serializer(), null)
+        val fetchedAt = cache().get("community:detail", "c1", ApiCommunity.serializer())!!.fetchedAt
+        clock.now += 60_000
+
+        repository().applyJoinRequestDecided(refused("c1"))
+
+        val held = cache().get("community:detail", "c1", ApiCommunity.serializer())!!
+        assertThat(held.value.currentUserJoinRequest).isNull()
+        assertThat(held.value.currentUserJoinRetryAt).isEqualTo("2026-11-27T12:00:00.000Z")
+        assertThat(held.fetchedAt).isEqualTo(fetchedAt)
+        coVerify(exactly = 0) { api.get(any()) }
+    }
+
+    @Test fun `le refus d une communaute que l appareil ne tient pas ne cree rien`() = runTest {
+        repository().applyJoinRequestDecided(refused("c9"))
+
+        assertThat(cache().get("community:detail", "c9", ApiCommunity.serializer())).isNull()
     }
 }
