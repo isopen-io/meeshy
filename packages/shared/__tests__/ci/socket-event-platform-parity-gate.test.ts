@@ -96,17 +96,23 @@ const ASYMETRIES: readonly {
     events: ['bring:ring', 'now-playing:changed', 'now-playing:cleared'],
   },
   {
+    absents: ['android'],
+    raison:
+      "les demandes d'entrée d'une communauté qui valide chaque arrivée, lues par les intendants : "
+      + 'le web (#19871) et iOS (#19877) les relisent en direct, Android #19878 en porte la lecture.',
+    events: ['community:join-requested'],
+  },
+  {
     absents: ['android', 'ios'],
     raison:
       'surfaces que le WEB SEUL porte aujourd\'hui : la console d\'administration (métriques d\'hôte), '
       + "l'enveloppe d'erreur générique, les deux familles de demande d'ami, la traduction d'un texte "
-      + "alternatif, la bibliothèque d'autocollants et les demandes d'entrée d'une communauté (iOS #19877, "
-      + "Android #19878 en portent la lecture), et la décision sur la sienne (iOS #19948, Android #19949). Pour plusieurs, le natif a sa propre voie (REST, "
+      + "alternatif, la bibliothèque d'autocollants, et la décision sur sa propre demande d'entrée en "
+      + "communauté (iOS #19948, Android #19949). Pour plusieurs, le natif a sa propre voie (REST, "
       + 'notification) ; la parité par socket est une question produit, pas une dette mesurée.',
     events: [
       'admin-metrics:sample',
       'community:join-request-decided',
-      'community:join-requested',
       'error',
       'friend-request:accepted',
       'friend-request:new',

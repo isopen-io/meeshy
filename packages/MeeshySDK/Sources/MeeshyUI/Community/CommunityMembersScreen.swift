@@ -9,6 +9,7 @@ public struct CommunityMembersScreen<ViewModel: CommunityMembersModeling, Invite
 
     public var onInvite: (() -> Void)? = nil
     @State private var showInviteSheet = false
+    @State private var rejecting: APICommunityJoinRequest?
     private let inviteSheet: () -> Invite
 
     public init(
@@ -64,11 +65,64 @@ public struct CommunityMembersScreen<ViewModel: CommunityMembersModeling, Invite
             inviteSheet()
                 .onDisappear { Task { await viewModel.refresh() } }
         }
+        .confirmationDialog(
+            rejecting.map(rejectTitle) ?? "",
+            isPresented: Binding(get: { rejecting != nil }, set: { if !$0 { rejecting = nil } }),
+            titleVisibility: .visible,
+            presenting: rejecting
+        ) { request in
+            Button(String(localized: "community.members.requests.reject", defaultValue: "Refuser", bundle: .module), role: .destructive) {
+                Task { await viewModel.decide(request, .reject) }
+            }
+        } message: { request in
+            Text(String(format: String(localized: "community.members.requests.reject.confirm.body", defaultValue: "%@ ne pourra pas redemander avant sept jours.", bundle: .module), request.name))
+        }
+    }
+
+    private func rejectTitle(_ request: APICommunityJoinRequest) -> String {
+        String(format: String(localized: "community.members.requests.rejectLabel", defaultValue: "Refuser la demande de %@", bundle: .module), request.name)
+    }
+
+    @ViewBuilder
+    private var joinRequestNotice: some View {
+        if let notice = viewModel.joinRequestNotice {
+            Text(noticeText(notice))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                .foregroundStyle(notice == .failed ? MeeshyColors.error : theme.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, MeeshySpacing.sm)
+                .accessibilityAddTraits(.updatesFrequently)
+        }
+    }
+
+    private func noticeText(_ notice: CommunityJoinRequestNotice) -> String {
+        switch notice {
+        case .accepted(let name):
+            return String(format: String(localized: "community.members.requests.accepted", defaultValue: "%@ fait désormais partie de la communauté.", bundle: .module), name)
+        case .gone:
+            return String(localized: "community.members.requests.gone", defaultValue: "Cette demande a déjà été traitée.", bundle: .module)
+        case .failed:
+            return String(localized: "community.members.requests.failed", defaultValue: "La décision n’est pas passée. Réessayez.", bundle: .module)
+        }
     }
 
     private var memberList: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
+                joinRequestNotice
+
+                if !viewModel.joinRequests.isEmpty {
+                    CommunityJoinRequestsSection(
+                        requests: viewModel.joinRequests,
+                        hasMore: viewModel.hasMoreJoinRequests,
+                        busy: viewModel.decidingJoinRequestId != nil,
+                        onAccept: { request in Task { await viewModel.decide(request, .accept) } },
+                        onReject: { request in rejecting = request },
+                        onMore: { Task { await viewModel.loadMoreJoinRequests() } }
+                    )
+                }
+
                 ForEach(viewModel.sections) { section in
                     Section {
                         ForEach(section.members) { member in
