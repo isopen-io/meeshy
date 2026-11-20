@@ -1893,3 +1893,44 @@ socket jusqu'au client.
 0. Si la PR de ce cycle n'est pas fusionnée, la reprendre : fusionner `dev`, puis `workflow_dispatch` de `ci.yml`, puis la fusionner.
 1. **#19933** (iOS, le seul risque de plantage), puis #19899 et #19896 (Android).
 2. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
+
+## Cycle 56 — 2026-11-20
+
+- **Base** : `origin/dev` @ `c0784d9c3`.
+- **Branche** : `claude/determined-volta-88j55a`. **PR** : #19952, fusionnée dans `dev` par le commit `4eca9175b`.
+- **Reprise du cycle 55** : #19934 (#19911, web) attendait des runners.
+  - Le run `ci.yml` 44619713699 sur `3aa20bafe` est vert (Verdict CI success).
+  - `dev` @ `b66be57f7` a ensuite été fusionné dans sa branche, puis tout a été rejoué par moi sur l'arbre fusionné :
+    - `bun test src/lib/calls/` : 0 fail ;
+    - `tsc` : 0 ;
+    - build ;
+    - `measure-weight` : sortie 0, `call_engine` à 16 Ko pour un plafond de 16 Ko.
+  - #19934 est fusionnée dans le même mouvement que ce journal.
+- **Objectif** : #19896 et #19899 (Android). Le rapport `call:analytics` porte la perte en pourcentage, ne contient jamais de valeur absurde, et lit le RTT sur la paire élue.
+- **Livré** :
+  - **`CallAnalytics.fields()`** :
+    - `averagePacketLoss` et `maxPacketLoss` sont en pourcentage, et restent en fraction en interne.
+    - Le MOS lit la perte une seule fois en pourcentage, et sa valeur ne change pas.
+    - Les valeurs sont neutralisées à l'entrée de `plusSample` : une valeur non finie ou négative vaut 0, et une perte au-delà de 1 vaut 1. Elles sont ensuite bornées à la sortie (`measured`).
+  - **`CallStats.reduce`** : le RTT et `availableOutgoingBitrate` sont lus sur `selectedCandidatePair` (transport, puis paire nominée). À défaut, l'ancien repli s'applique.
+  - **Rétrocompatibilité** : le serveur ne change pas. Les anciens builds Android émettent une fraction jusqu'à leur mise à jour, et le payload ne porte pas de version, donc il n'y a pas de renormalisation. La décision est dans #19896.
+- **Tests** :
+  - Les témoins `CallAnalyticsTest`, `CallAnalyticsHostileSampleTest` (6) et `CallStatsTest` (4) étaient rouges sur `dev`.
+  - **Preuve** : `workflow_dispatch` d'`android.yml`, run 44640749272 sur `20e5c0484`, **success**.
+  - Relancé par moi sur l'arbre fusionné avec `dev` `5c5983e75` (`dev` n'a touché aucun fichier Android) : `jvm-check -PjvmCheckModelOnly` `call.*`, 2242 tests, 0 échec.
+  - **Nouveau outil** : `./apps/android/meeshy.sh jvm-check -PjvmCheckModelOnly` compile `:core:model` dans le conteneur, sans `libsignal`. C'est la première fois qu'un test Kotlin tourne ici.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves.
+  - Les mutants suivants sont tués : neutralisation d'entrée, `measured`, plafond, unité, dernière paire pour le RTT et le débit, double ×100.
+  - R1 (KDoc par version plutôt que par date, décision écrite dans l'issue) et R2 (témoin à deux échantillons, qui tue m9 et m10) sont corrigées.
+  - R4 (faible) part dans #19953.
+- **Limites** :
+  - Je n'ai pas vérifié sur appareil la présence de l'entrée `transport` dans le libwebrtc embarqué.
+  - L'agrégat admin `avgPacketLoss` est biaisé vers le bas pendant la transition des versions Android.
+  - Les champs `Status` du projet ne sont pas posés : GraphQL est refusé depuis ces sessions.
+
+### Cycle suivant : par où reprendre
+
+0. Vérifier que #19934 est bien dans `dev` et que #19911 est fermée.
+1. #19933, miroir iOS de #19911 : RTT non fini, `Int(Double)` qui peut planter, codec plus long que 50 caractères. Ce lot touche `Features/Call/Services`, à coordonner avec la routine iOS. La preuve se fait par `workflow_dispatch` d'`ios.yml`.
+2. #19953 (Android, petit).
+3. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
