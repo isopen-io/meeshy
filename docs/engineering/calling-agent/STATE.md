@@ -1934,3 +1934,36 @@ socket jusqu'au client.
 1. #19933, miroir iOS de #19911 : RTT non fini, `Int(Double)` qui peut planter, codec plus long que 50 caractères. Ce lot touche `Features/Call/Services`, à coordonner avec la routine iOS. La preuve se fait par `workflow_dispatch` d'`ios.yml`.
 2. #19953 (Android, petit).
 3. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
+
+## Cycle 57 — 2026-11-20
+
+- **Base** : `origin/dev` @ `349742d45`. #19934 (#19911, web) est bien dans `dev` (`72b4b5ede`) et #19911 est fermée.
+- **Branche** : `claude/determined-volta-pm7x97`. **PR** : #19968 vers `dev`.
+- **Objectif** : #19933, miroir iOS de #19911. Une stat WebRTC aberrante ne fait plus planter l'app et ne fait plus refuser tout le `call:analytics` par la passerelle.
+- **Livré** :
+  - **`CallStatValue`** (`WebRTC/CallStats.swift`) :
+    - `measured` : une valeur non finie ou ≤ 0 vaut 0.
+    - `count` : une valeur non finie, négative ou au-delà de 2^53−1 vaut 0. C'est la sémantique du web, et zod 4 refuse tout entier au-delà de `MAX_SAFE_INTEGER`.
+    - `sum` : l'addition sature à 2^53−1.
+  - **`CallStats.reduce`** et **`CallMediaQuality.reduce`** n'ont plus aucun `Int(Double)` brut, alors qu'un NaN, l'infini ou une valeur hors de `Int` faisait planter.
+  - **`CallAnalyticsRecorder`** borne chaque relevé et chaque moyenne, et coupe le codec à 50 unités UTF-16.
+  - **`WebRTCService.intervalLossRatio`** n'est plus `private`, pour qu'un test l'atteigne, et il ne déborde plus.
+  - Pour des stats valides, rien ne change. Le serveur ne change pas.
+- **Tests** :
+  - 13 témoins dans `CallManagerAnalyticsRecorderTests`.
+  - **Rouge avant** : par raisonnement seulement, car le conteneur n'a ni Xcode ni `swift`. La QA a contre-vérifié chaque témoin.
+  - **Vert après** : `workflow_dispatch` d'`ios.yml` (suites d'appel ciblées), run 44663094577 sur `4db3545a1`.
+  - Gardes `house_rules`, `cohesion` et `test_registration` : 0.
+- **QA** : favorable avec réserves.
+  - R1 : plafonner à `Int.max` déplaçait le plantage vers `intervalLossRatio`, et la passerelle refusait le rapport. Corrigée dans `4db3545a1`.
+  - R2 : une horloge qui recule rend `qualitySeconds` négatif. Défaut antérieur au lot, versé dans **#19967**.
+- **Limites** : rien n'a tourné sur un appareil. `framesPerSecond` et `audioLevel` ne sont pas bornés, mais ils ne partent pas dans `call:analytics`.
+
+### Cycle suivant : par où reprendre
+
+0. Si #19968 n'est pas fusionnée, la reprendre :
+   - lire le run `ios.yml` (relancer un `workflow_dispatch` si besoin) ;
+   - fusionner `dev` dans la branche ;
+   - fusionner la PR.
+1. #19967 (iOS, petit ; vérifier aussi le web et Android), puis #19953 (Android).
+2. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
