@@ -383,6 +383,51 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
         XCTAssertEqual(payload["codec"] as? String, String(repeating: "\u{1F3A7}", count: 25))
     }
 
+    private func assertDistributionWithinUnit(_ payload: [String: Any], file: StaticString = #filePath, line: UInt = #line) {
+        let distribution = payload["qualityDistribution"] as? [String: Double] ?? [:]
+        XCTAssertEqual(Set(distribution.keys), ["excellent", "good", "fair", "poor"], file: file, line: line)
+        for (key, share) in distribution {
+            XCTAssertTrue(share.isFinite && share >= 0 && share <= 1, "\(key) hors de [0;1] : \(share)", file: file, line: line)
+        }
+    }
+
+    func test_recordSample_clockGoingBackwards_countsNegativeIntervalAsZero() {
+        var recorder = CallAnalyticsRecorder()
+        let t0 = Date(timeIntervalSince1970: 100)
+        recorder.recordSample(level: .excellent, roundTripTimeMs: 10, packetLossPercent: 0, at: t0)
+        recorder.recordSample(level: .good, roundTripTimeMs: 10, packetLossPercent: 0, at: t0.addingTimeInterval(-10))
+
+        XCTAssertGreaterThanOrEqual(recorder.qualitySeconds[.excellent] ?? 0, 0)
+        assertDistributionWithinUnit(makePayload(recorder))
+    }
+
+    func test_recordSample_clockGoingBackwardsAfterPositiveInterval_keepsOnlyPositiveInterval() {
+        var recorder = CallAnalyticsRecorder()
+        let t0 = Date(timeIntervalSince1970: 100)
+        recorder.recordSample(level: .excellent, roundTripTimeMs: 10, packetLossPercent: 0, at: t0)
+        recorder.recordSample(level: .good, roundTripTimeMs: 10, packetLossPercent: 0, at: t0.addingTimeInterval(5))
+        recorder.recordSample(level: .poor, roundTripTimeMs: 10, packetLossPercent: 0, at: t0.addingTimeInterval(2))
+
+        let payload = recorder.payload(now: t0.addingTimeInterval(2), context: Self.makeContext(codec: "opus"))
+        let distribution = payload["qualityDistribution"] as? [String: Double] ?? [:]
+
+        XCTAssertEqual(distribution["excellent"] ?? -1, 1.0, accuracy: 0.0001)
+        XCTAssertEqual(distribution["good"] ?? -1, 0.0, accuracy: 0.0001)
+        assertDistributionWithinUnit(payload)
+    }
+
+    func test_qualityDistribution_negativeOrNonFiniteAccumulators_countAsZero() {
+        let distribution = CallReliabilityPolicy.qualityDistribution(
+            accumulatedSeconds: [.excellent: -10, .good: 30, .fair: .nan, .poor: .infinity, .critical: -.infinity],
+            openWindowLevel: nil, openWindowSince: nil, now: Date(timeIntervalSince1970: 0)
+        )
+
+        XCTAssertEqual(distribution["good"] ?? -1, 1.0, accuracy: 0.0001)
+        for share in distribution.values {
+            XCTAssertTrue(share.isFinite && share >= 0 && share <= 1)
+        }
+    }
+
     private static func quality(freezes: Int, reason: String) -> CallMediaQuality {
         CallMediaQuality(freezeCount: freezes, totalFreezesDuration: 2, framesPerSecond: 30,
                          qualityLimitationReason: reason, jitterBufferDelayMs: 40,

@@ -48,6 +48,7 @@ import { attachmentForwardPreviewSelect, attachmentSocketSelect, MESSAGE_ATTACHM
 import { serializeAttachmentForSocket, serializeMessageAttachmentsForSocket } from '../serializeAttachmentForSocket';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
+import { conversationAudienceRooms, loadLiveParticipantTargets } from '../conversationAudienceRooms';
 import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { offlineSignedPayload } from '../offlineSignedPayload';
 import { offlineSignedEdit, queueSigningFields } from '../editedOfflineSigning';
@@ -1177,21 +1178,35 @@ export class MessageHandler {
       });
       if (moderationReason !== null) await completeModeratedMessageRemoval({ prisma: this.prisma }, { actorUserId: userId, authorUserId: message.sender?.userId, messageId: message.id, conversationId: message.conversationId, reason: moderationReason });
 
-      const room = ROOMS.conversation(message.conversationId);
+      // #19943 — la room de conversation ET les rooms personnelles des
+      // participants vivants, comme le jumeau REST (`broadcastMessageMutation`)
+      // et pour la raison de #18556 : un lecteur qui a reçu `message:new` dans
+      // sa room PERSONNELLE (régime par lecteur d'un message à pièce protégée)
+      // puis quitté le fil pour la liste n'était atteint par aucun des deux
+      // canaux — ni l'émission de room, ni la file, qui saute les CONNECTÉS.
+      // Une lecture qui lève ou une audience hors plafond replie sur la room de
+      // conversation seule, le comportement d'avant ce lot.
+      const audience = await loadLiveParticipantTargets(
+        this.prisma,
+        message.conversationId,
+        (error) => handlerLogger.warn('message:deleted audience lookup failed — conversation room only', { messageId: validated.messageId, error }),
+      );
+      const rooms = conversationAudienceRooms(message.conversationId, audience);
       const deletedPayload = {
         messageId: validated.messageId,
         conversationId: message.conversationId,
         deletedAt: deletedAt.toISOString(),
       };
       // 7e site #17026, trouvé par le CLIQUET. Raison : `safeBroadcast`.
-      safeBroadcast('message:deleted', () => this.io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, deletedPayload),
+      safeBroadcast('message:deleted', () => this.io.to(rooms).emit(SERVER_EVENTS.MESSAGE_DELETED, deletedPayload),
         (error) => handlerLogger.error('message:deleted live emission failed — offline replay unaffected', { messageId: validated.messageId, error }));
 
       // Fan a conversation:updated preview refresh to list-screen participants
       // (in user:<id> but not conversation:<id>): deleting the latest message
-      // changes their row's preview, which MESSAGE_DELETED (conversation room
-      // only) never tells them. The latest non-deleted message is recomputed
-      // inside the helper, consistent with the lastMessageAt recompute above.
+      // changes their row's PREVIEW, which MESSAGE_DELETED tells no one — ce
+      // canal-ci dit qu'une bulle disparaît, pas ce que la ligne de liste
+      // devient. The latest non-deleted message is recomputed inside the
+      // helper, consistent with the lastMessageAt recompute above.
       await emitConversationPreviewUpdate(
         this.prisma, this.io, message.conversationId, userId,
         (err) => handlerLogger.warn('conversation preview fanout (delete) failed', { error: err })

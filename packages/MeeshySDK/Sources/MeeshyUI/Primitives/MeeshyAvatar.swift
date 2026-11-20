@@ -255,9 +255,6 @@ public struct MeeshyAvatar: View {
     public var contextMenuItems: [AvatarContextMenuItem]? = nil
     public var enablePulse: Bool = true
     public var kind: AvatarKind = .user
-    /// La place libre (pt) que l'hôte garantit autour de l'empreinte : le cadre illustré s'y montre
-    /// sans réduire l'avatar (#15157). `0` ⇒ le cadre tient dans l'empreinte.
-    public private(set) var ringDecorRoom: CGFloat = 0
     /// `false` : le contour sans ses films illustrés, l'anneau fixe seul — la SEULE surface qui le
     /// retire est la bulle de frappe (#16114) ; partout ailleurs, le décor s'affiche entier.
     public private(set) var ringShowsDecor: Bool = true
@@ -425,17 +422,17 @@ public struct MeeshyAvatar: View {
         let resolvedMenuItems = effectiveContextMenuItems
         let showContextMenu = hasContextMenu(resolvedItems: resolvedMenuItems)
 
-        // LE CONTOUR ÉQUIPÉ (#10946) — dans l'empreinte de l'avatar : rien ne
-        // grandit ni ne se décale, l'anneau de story reste concentrique dedans
-        // (#10714), et le point de présence se pose PAR-DESSUS, au bord.
+        // LE CADRE ÉQUIPÉ (#10946) — à la taille normalisée de `avatarRing` (#19988) :
+        // la mise en page ne bouge pas, le cadre se peint autour, l'anneau de story reste
+        // concentrique dans son trou (#10714), et le point de présence se pose PAR-DESSUS.
         let visual = ZStack {
             storyRing
             avatarBody
         }
-        .avatarRingWithin(
+        .avatarRing(
             ringDesign ?? servedRing,
-            footprint: context.size,
-            storyRingSize: effectiveStoryState == .none ? nil : context.ringSize, decorRoom: ringDecorRoom,
+            avatarSize: context.size,
+            storyRingSize: effectiveStoryState == .none ? nil : context.ringSize,
             decor: ringShowsDecor
         )
         .overlay(alignment: .bottomTrailing) { presenceBadge }
@@ -528,13 +525,6 @@ public struct MeeshyAvatar: View {
                     dotDiameter: diameter
                 ))
         }
-    }
-
-    /// Déclare la place libre autour de l'empreinte (#15157) : l'hôte l'a réservée, aucun texte ni avatar voisin n'y vit.
-    public func ringDecorRoom(_ room: CGFloat) -> MeeshyAvatar {
-        var copy = self
-        copy.ringDecorRoom = room
-        return copy
     }
 
     /// Retire les films illustrés du contour : l'anneau fixe seul (#16114, la bulle de frappe).

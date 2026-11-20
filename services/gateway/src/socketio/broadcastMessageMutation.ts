@@ -1,4 +1,4 @@
-import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type {
   MessageDeletedEventData,
   MessageExpiredEventData,
@@ -33,6 +33,22 @@ import { conversationAudienceRooms, loadLiveParticipantTargets } from './convers
  * destinataires admis (`readerSignedPlanForMessageId`).
  */
 type MutationPrisma = PreviewPrisma & Pick<PrismaClient, 'participant' | 'conversationShareLink' | 'message'>;
+
+/**
+ * Ce qu'il faut pour NOMMER l'audience d'une mutation — rien de plus.
+ *
+ * `MutationPrisma` est le client des familles qui déplacent l'APERÇU : il porte
+ * la relecture de la conversation et de son dernier message. Une épingle n'en a
+ * pas besoin, et la lui exiger aurait donné la passe d'aperçu pour obligatoire
+ * au prochain transport qui recopierait la forme (le doc-comment de
+ * {@link MessageMutationParams} dit pourquoi). Elle a besoin, elle, de la SEULE
+ * lecture qui nomme les rooms personnelles de ses lecteurs — `participant`.
+ *
+ * Deux types, donc deux phrases : « cette mutation bouge la ligne de liste » et
+ * « cette mutation doit atteindre qui est SUR la liste » sont deux questions, et
+ * elles ne reçoivent pas la même réponse.
+ */
+type AudiencePrisma = Pick<PrismaClient, 'participant'>;
 
 /**
  * The `MeeshySocketIOManager` surface this helper needs, kept structural so it
@@ -147,17 +163,22 @@ type MessageMutationBase<TPayload> = {
  * Absent de l'édition, parce qu'éditer ne change aucun compte : redemander le
  * badge y coûterait deux requêtes par frappe validée, pour zéro delta.
  *
- * **`prisma` n'existe QUE sur les mutations qui déplacent l'APERÇU**, et
- * c'est la même façon de parler : le type dit quelles audiences chaque mutation
- * doit atteindre, plutôt que de laisser un drapeau le décider au corps de la
- * fonction. Éditer change le texte du dernier message, supprimer ou expirer
- * change quel message est le dernier — les trois se voient depuis la liste des
- * conversations. Épingler n'y change RIEN : ni l'aperçu, ni son ordre, ni son
- * compteur. Exiger le client Prisma pour l'épingle aurait fait payer à chaque
- * épinglage la passe d'aperçu (`emitConversationPreviewUpdate` relit la
- * conversation et son dernier message) pour zéro delta observable, et — pire —
- * aurait donné la passe pour obligatoire au prochain transport qui recopierait
- * la forme.
+ * **Le TYPE du client Prisma dit ce que la mutation doit faire**, plutôt que
+ * de laisser un drapeau le décider au corps de la fonction — et il y a DEUX
+ * questions, pas une :
+ *
+ *  - *« cette mutation déplace-t-elle la ligne de LISTE ? »* ⇒ `MutationPrisma`,
+ *    qui porte la relecture d'aperçu. Éditer change le texte du dernier
+ *    message, supprimer ou expirer change quel message est le dernier.
+ *    Épingler n'y change RIEN : ni l'aperçu, ni son ordre, ni son compteur, et
+ *    exiger la passe d'aperçu pour l'épingle aurait fait payer à chaque
+ *    épinglage une relecture pour zéro delta observable — pire, elle aurait
+ *    donné la passe pour obligatoire au prochain transport qui recopierait la
+ *    forme ;
+ *  - *« cette mutation doit-elle atteindre qui est SUR la liste ? »* ⇒
+ *    `AudiencePrisma`, la seule lecture qui nomme les rooms personnelles. La
+ *    réponse est OUI pour les cinq familles (#19943), et c'est ce qui donne un
+ *    `prisma` à l'épingle sans lui donner la passe d'aperçu.
  */
 export type MessageMutationParams =
   | (MessageMutationBase<MessageEditedMutationPayload> & {
@@ -182,12 +203,18 @@ export type MessageMutationParams =
       // same audiences, for the same reason: the destroyed message may have
       // been the conversation's last, and its author's unread badge must stop
       // counting it.
+      //
+      // « Same audiences » a été FAUX d'un cycle à l'autre : #18556 a élargi
+      // l'audience de la seule expiration, et son jumeau est resté sur la room
+      // de conversation seule pendant que cette phrase promettait l'inverse.
+      // #19943 les a réunies. Un commentaire qui énonce une symétrie est une
+      // AFFIRMATION : il se mesure contre le code des DEUX moitiés.
       eventType: 'expired';
       prisma: MutationPrisma;
       authorId: string | null | undefined;
     })
-  | (MessageMutationBase<MessagePinnedMutationPayload> & { eventType: 'pinned' })
-  | (MessageMutationBase<MessageUnpinnedMutationPayload> & { eventType: 'unpinned' });
+  | (MessageMutationBase<MessagePinnedMutationPayload> & { eventType: 'pinned'; prisma: AudiencePrisma })
+  | (MessageMutationBase<MessageUnpinnedMutationPayload> & { eventType: 'unpinned'; prisma: AudiencePrisma });
 
 /**
  * L'émission de la room, discriminée sur `eventType`.
@@ -401,11 +428,26 @@ export async function broadcastMessageMutation(rawParams: MessageMutationParams)
         sealedForAll: (payload) =>
           withSealedQuote(payload, new Date(Math.min(...[...sealed.values()].map((at) => at.getTime())))),
       });
-    } else if (params.eventType === 'expired') {
+    } else {
+      // #19943 — les QUATRE familles d'ids (`deleted`, `expired`, `pinned`,
+      // `unpinned`) partagent une audience, parce qu'elles partagent le
+      // problème que #18556 a mesuré sur la seule expiration : `message:new`
+      // part en régime PAR LECTEUR dès que le message porte une pièce protégée
+      // (`messageNewEmission.emitPerReader`), donc vers des rooms PERSONNELLES
+      // que leur titulaire garde en quittant le fil pour la liste. Une mutation
+      // adressée à `conversation:<id>` seule ne les atteint pas, et la file
+      // hors ligne ne les rattrape pas — elle saute les comptes CONNECTÉS.
+      //
+      // Élargir n'ouvre aucune surface de confidentialité : ces charges ne
+      // portent que des ids, jamais de contenu (c'est ce qui rend l'arbitrage
+      // simple, et ce qui le distingue de l'édition, gardée par `readership`).
+      //
+      // `loadLiveParticipantTargets` replie sur `[]` quand la lecture lève ou
+      // que l'audience dépasse son plafond, et `conversationAudienceRooms` rend
+      // alors la room de conversation SEULE : le comportement d'avant ce lot,
+      // jamais rien.
       const audience = await loadLiveParticipantTargets(params.prisma, conversationId, onError);
       emitToConversationRoom(io?.to(conversationAudienceRooms(conversationId, audience)), params);
-    } else {
-      emitToConversationRoom(io?.to(ROOMS.conversation(conversationId)), params);
     }
   } catch (error) {
     onError?.(error);

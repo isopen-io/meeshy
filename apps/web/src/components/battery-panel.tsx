@@ -309,7 +309,7 @@ function ConsentOffer({ language, name, onAnswer }: { readonly language: Interfa
         data-battery-consent-confirm=""
         onClick={() => onAnswer(checked)}
         className="grid place-items-center rounded-chip px-3 text-body font-semibold transition-transform focus-visible:outline-2 active:scale-[0.98]"
-        style={{ minHeight: 44, color: 'var(--color-ios-on-brand, #fff)', backgroundColor: 'var(--color-ios-brand)' }}
+        style={{ minHeight: 44, /* harmony-exempt: repli d'un jeton de charte défini (--color-ios-on-brand), jamais rendu — filet de contraste de l'encre sur l'aplat de marque */ color: 'var(--color-ios-on-brand, #fff)', backgroundColor: 'var(--color-ios-brand)' }}
       >
         {translateBattery(language, 'battery.consent.confirm')}
       </button>

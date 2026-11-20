@@ -198,6 +198,13 @@ class SharedLocationSharingCenter internal constructor(
     /** Le dernier démarrage avec position que CET appareil a fait accepter (#18580) ; `null` : inconnu, le servi est pris pour le sien. */
     @Volatile private var publishedStart: String? = null
 
+    /**
+     * Relancé avec une liste qu'il publiait, l'appareil suit sa position mais n'en envoie rien avant d'avoir relu ce que la
+     * passerelle sert (#19767, iso `SharedLocationSharingCenter.swift`) : un autre appareil a pu reprendre le partage
+     * pendant qu'il dormait. Une relecture qui n'aboutit pas lève l'attente, comme un « Partager » d'ici.
+     */
+    @Volatile private var awaitsServedTruth = false
+
     init {
         scope.launch {
             connected.distinctUntilChanged().filter { it }.collect {
@@ -263,8 +270,10 @@ class SharedLocationSharingCenter internal constructor(
      */
     suspend fun sync() {
         locked { ticket ->
-            val truth = readServed() ?: return@locked null
+            val read = readServed()
             if (!isCurrent(ticket)) return@locked null
+            awaitsServedTruth = false
+            val truth = read ?: return@locked null
             val before = _roster.value
             val next = before.withServed(truth, clock())
             val yields = next.hasRecipients && !received && before.hasRecipients && yieldsTo(ticket, truth.startedAt)
@@ -307,7 +316,7 @@ class SharedLocationSharingCenter internal constructor(
         try {
             val ticket = currentTicket()?.takeIf(::isCurrent) ?: return
             val roster = _roster.value
-            if (received || !roster.hasRecipients || roster.hasPendingWithdrawals) return
+            if (received || awaitsServedTruth || !roster.hasRecipients || roster.hasPendingWithdrawals) return
             if (!SharedLocationUpdateGate.shouldSend(fix, clock(), lastSent)) return
             lastSent = SharedLocationUpdateGate.Sent(fix, clock())
             val verdict = emitter.update(fix)
@@ -345,7 +354,10 @@ class SharedLocationSharingCenter internal constructor(
             _roster.value = SharedLocationRoster.fromStored(store.load(account))
             received = store.loadReceived(account)
             publishedStart = store.loadPublishedStart(account)
-            if (_roster.value.hasRecipients && !received) startFollowing()
+            if (_roster.value.hasRecipients && !received) {
+                awaitsServedTruth = true
+                startFollowing()
+            }
             scheduleDeadline()
         }
         return Ticket(account, generation)
@@ -360,6 +372,7 @@ class SharedLocationSharingCenter internal constructor(
         lastSent = null
         received = false
         publishedStart = null
+        awaitsServedTruth = false
         loadedFor = account
         _roster.value = SharedLocationRoster.EMPTY
     }
@@ -374,7 +387,8 @@ class SharedLocationSharingCenter internal constructor(
      * n'avoir fait que recevoir la liste d'un autre appareil (#18580). « Pas de partage » : la passerelle dit ce qui court
      * ([settleNotSharing]). Une passerelle d'avant refuse la liste seule (`INVALID`) : la liste repart avec une position,
      * la dernière envoyée, sinon l'appareil ; sans l'une ni l'autre (permission retirée, aucun relevé), TOUT s'arrête :
-     * retirer une personne ne dépend jamais de la localisation.
+     * retirer une personne ne dépend jamais de la localisation. Relancé et pas encore relu (#19767), l'appareil ne
+     * republie pas SA position : le retrait reste en attente et se rejoue après la relecture.
      */
     private suspend fun republish(ticket: Ticket, wanted: SharedLocationRoster): SharedLocationShareProblem? {
         val next = wanted.settled()
@@ -385,7 +399,9 @@ class SharedLocationSharingCenter internal constructor(
             else -> return listOnly
         }
         if (!isCurrent(ticket)) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
-        val fix = freshLastFix() ?: deviceFix() ?: return stopAll(ticket)
+        freshLastFix()?.let { return publish(ticket, next, it, previous = _roster.value) }
+        if (awaitsServedTruth) return stopAll(ticket)
+        val fix = deviceFix() ?: return stopAll(ticket)
         return publish(ticket, next, fix, previous = _roster.value)
     }
 
@@ -453,13 +469,13 @@ class SharedLocationSharingCenter internal constructor(
         if (!isCurrent(ticket)) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
         return when (verdict) {
             is SharedLocationStartVerdict.Started -> {
-                if (claimsPublishing) markReceived(ticket, false)
+                if (claimsPublishing) claimPublishing(ticket)
                 if (fix != null) rememberStart(ticket, verdict.startedAt)
                 engage(ticket, next, fix)
                 null
             }
             SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.UNCONFIRMED) -> {
-                if (claimsPublishing) markReceived(ticket, false)
+                if (claimsPublishing) claimPublishing(ticket)
                 if (fix != null) rememberStart(ticket, null)
                 engage(ticket, previous.union(next), fix)
                 SharedLocationShareProblem.Refused(SharedLocationSendOutcome.UNCONFIRMED)
@@ -543,6 +559,11 @@ class SharedLocationSharingCenter internal constructor(
     private fun cancelDeadline() {
         deadline?.cancel()
         deadline = null
+    }
+
+    private fun claimPublishing(ticket: Ticket) {
+        awaitsServedTruth = false
+        markReceived(ticket, false)
     }
 
     private fun markReceived(ticket: Ticket, next: Boolean) {

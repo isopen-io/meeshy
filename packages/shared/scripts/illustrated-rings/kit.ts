@@ -209,24 +209,35 @@ type Paint = { readonly ty?: string; readonly r?: number };
 
 const isEllipse = (shape: unknown): shape is Ellipse => (shape as { ty?: string }).ty === 'el';
 const isEvenOdd = (paint: unknown): boolean => (paint as Paint).r === 2;
-const width = (shape: Ellipse): number => shape.s.k[0] ?? 0;
+const diameter = (shape: Ellipse): number => shape.s.k[0] ?? 0;
+const concentric = (a: Ellipse, b: Ellipse): boolean => a.p.k[0] === b.p.k[0] && a.p.k[1] === b.p.k[1];
+
+/** Le remplissage d'un anneau devient le trait qui le couvre : aplat ⇒ trait, dégradé ⇒ trait en dégradé. */
+const strokeOf = (paint: unknown, width: number) => {
+  const { r: _rule, ty, ...rest } = paint as Paint & Record<string, unknown>;
+  return { ...rest, ty: ty === 'gf' ? 'gs' : 'st', w: still(width), lc: 1, lj: 1, ml: 4 };
+};
 
 /**
- * Un anneau (deux ellipses sous une peinture pair-impair) s'émet en règle NON NULLE, l'ellipse intérieure
- * tracée en sens inverse : le moteur Core Animation de Lottie (iOS) ignore la règle pair-impair d'un
- * DÉGRADÉ et peindrait un disque plein par-dessus l'avatar (#19935). Le sens inverse perce partout.
+ * Un anneau (deux cercles concentriques sous une peinture pair-impair) s'émet en TRAIT épais sur son cercle
+ * médian : le moteur Core Animation de Lottie (iOS) ignore la règle pair-impair d'un DÉGRADÉ — et le sens de
+ * tracé n'y change rien — et peindrait un disque plein par-dessus l'avatar (#19935). Un trait n'a pas de trou
+ * à percer : tous les moteurs le peignent pareil.
  */
-function nonzeroAnnulus(shapes: readonly unknown[], paints: readonly unknown[]) {
+function annulusAsStroke(shapes: readonly unknown[], paints: readonly unknown[]) {
   if (shapes.length !== 2 || !shapes.every(isEllipse) || !paints.some(isEvenOdd)) return { shapes, paints };
-  const outer = Math.max(...shapes.map(width));
+  const [first, second] = shapes as readonly [Ellipse, Ellipse];
+  if (!concentric(first, second)) return { shapes, paints };
+  const [inner, outer] = [diameter(first), diameter(second)].sort((x, y) => x - y) as [number, number];
+  const middle = (inner + outer) / 2;
   return {
-    shapes: shapes.map((shape) => ({ ...shape, d: width(shape) === outer ? 1 : 3 })),
-    paints: paints.map((paint) => (isEvenOdd(paint) ? { ...(paint as object), r: 1 } : paint)),
+    shapes: [ellipse([middle, middle], first.p.k as P)],
+    paints: paints.map((paint) => strokeOf(paint, (outer - inner) / 2)),
   };
 }
 
 export const art = (shapes: readonly unknown[], paints: readonly unknown[], tr: Record<string, unknown> = {}) => {
-  const annulus = nonzeroAnnulus(shapes, paints);
+  const annulus = annulusAsStroke(shapes, paints);
   return { ty: 'gr', it: [...annulus.shapes, ...[...annulus.paints].reverse(), transform(tr)] };
 };
 

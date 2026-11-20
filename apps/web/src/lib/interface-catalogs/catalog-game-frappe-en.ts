@@ -12,6 +12,8 @@ const en = {
   'game.frappe.say.gold': 'No. {number} is gold. Your ancestors saw it.',
   'game.frappe.say.prism': 'No. {number} is prism: every language shines in it.',
   'game.frappe.glory': '+{glory} glory',
+  'game.frappe.glory_toward': '{glory} glory to {rank}',
+  'game.frappe.risen': 'They call you {rank}',
   'game.frappe.refused.shadow': 'A shadow veils your light. Your next sparks will clear it, and we’ll mint.',
   'game.frappe.refused.locked': 'Your Legacy is waiting for a higher rank. Your glory will open it, and we’ll mint.',
   'game.frappe.refused.light': 'Your light isn’t enough yet. Your next sparks will feed it.',

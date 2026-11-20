@@ -113,4 +113,12 @@ struct MeeshyTicketTests {
                                                  statusLabel: "Masquée", titleBadge: nil)
         #expect(bare == "Site, 12, Masquée")
     }
+
+    @Test("#20013 : sur un rail compact, le titre se resserre avant de se tronquer — ailleurs, il garde sa taille")
+    func titleMinimumScale_shrinksOnlyOnTheCompactRail() {
+        #expect(MeeshyTicketRecipe.resolve(size: .compact, kind: .ghost).titleMinimumScale == 0.75)
+        #expect(MeeshyTicketRecipe.resolve(size: .compact).titleMinimumScale == 0.75)
+        #expect(MeeshyTicketRecipe.resolve(size: .hero).titleMinimumScale == 1)
+        #expect(MeeshyTicketRecipe.resolve(size: .mini).titleMinimumScale == 1)
+    }
 }
