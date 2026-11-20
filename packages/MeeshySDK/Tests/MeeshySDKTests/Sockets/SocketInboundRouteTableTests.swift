@@ -33,7 +33,7 @@ final class SocketInboundRouteTableTests: XCTestCase {
         "call:preview-requested", "call:preview-signal", "call:quality-alert", "call:reaction-received",
         "call:recording-requested", "call:recording-started", "call:recording-stopped", "call:screen-capture-alert",
         "call:signal", "call:transcription-active", "call:translated-segment", "categories:reordered",
-        "category:created", "community:deleted", "community:join-requested", "community:member-joined", "community:member-left", "community:member-role-updated", "community:updated", "category:deleted", "category:updated", "conversation:closed", "conversation:deleted",
+        "category:created", "community:deleted", "community:join-request-decided", "community:join-requested", "community:member-joined", "community:member-left", "community:member-role-updated", "community:updated", "category:deleted", "category:updated", "conversation:closed", "conversation:deleted",
         "conversation:encryption-changed", "conversation:join-error", "conversation:joined", "conversation:left", "conversation:new",
         "conversation:obsoleted",
         "conversation:participant-banned", "conversation:participant-joined", "conversation:participant-left",
@@ -364,6 +364,19 @@ final class SocketInboundRouteTableTests: XCTestCase {
             registrar.deliver("community:join-requested", [
                 "communityId": "c-ask", "requestId": "r-1", "userId": "u-asker", "pendingCount": 3,
                 "at": "2026-11-20T10:00:00.000Z",
+            ])
+        }
+    }
+
+    func test_communityJoinRequestDecided_reachesTheJoinRequestChannel() async {
+        let registrar = installed(MessageSocketRoutes.all(for: .shared))
+
+        await expectOneValue(from: CommunityJoinRequestChannel.shared.decided, where: {
+            $0.communityId == "c-ask" && $0.refusedUntil != nil
+        }) {
+            registrar.deliver("community:join-request-decided", [
+                "communityId": "c-ask", "decision": "rejected",
+                "retryAt": "2026-11-27T10:00:00.000Z", "at": "2026-11-20T10:00:00.000Z",
             ])
         }
     }

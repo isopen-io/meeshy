@@ -123,6 +123,19 @@ public struct APICommunity: Codable, Identifiable, Sendable, CacheIdentifiable {
     /// La demande d'entrée du LECTEUR : `"pending"` quand elle attend une réponse,
     /// `nil` sinon — servi par `GET /communities/:id` (#19868).
     public var currentUserJoinRequest: String? = nil
+    /// La date (ISO) à partir de laquelle le LECTEUR pourra redemander, après un
+    /// refus de moins de sept jours — servi par `GET /communities/:id` (#19879),
+    /// lu par iOS depuis #19948. `nil` : aucun refus récent, ou ancien serveur.
+    public var currentUserJoinRetryAt: String? = nil
+
+    /// « Demande refusée » tient jusqu'à cette date : seulement une date LISIBLE
+    /// et À VENIR, jamais pour un membre ni pour une demande qui attend encore.
+    public func joinDeclinedUntil(now: Date) -> Date? {
+        guard currentUserRole == nil, currentUserJoinRequest != "pending",
+              let retryAt = currentUserJoinRetryAt.flatMap(WireDate.date(from:)),
+              retryAt > now else { return nil }
+        return retryAt
+    }
 }
 
 extension APICommunity {
