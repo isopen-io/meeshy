@@ -139,3 +139,108 @@ ils gardent ce que le lot ne doit pas casser.
   `(conversationId, senderId, clientMessageId)` — reste celle du dépôt. La
   changer est une MIGRATION, et la loi applicative rend la collision inoffensive
   sans elle : une issue à ouvrir si le `409` se mesure en production.
+
+---
+
+## L'audit adversarial a rendu BLOQUANT, et il avait raison sur les quatre
+
+Lot soumis à `auditeur-adversarial` (contrôle d'accès). J'ai vérifié chacun des
+constats décisifs dans le code avant de trancher ; les quatre tiennent.
+
+### 1. Mon cliquet était VERT avec un appariement non gardé sous les yeux
+
+Le discriminant était `grep clientMessageId | includes('where')` — **ligne par
+ligne**. Un `where:` écrit sur plusieurs lignes met `where` et
+`clientMessageId` sur deux lignes différentes : **aucune des deux ne passe le
+filtre**. Le dépôt porte déjà cette forme (`services/CallService.ts:2642`), et
+la sonde de l'audit — un appariement de production sans `senderId` déposé dans
+`services/messaging/` — laissait le cliquet à `3 passed`.
+
+Il comptait de plus les COMMENTAIRES comme des sites, ce que le `CLAUDE.md` du
+gateway prescrit de ne pas faire depuis le balayage des schémas.
+
+> **Un balayage qui mesure la popularité d'un IDIOME ne mesure pas une
+> PROPRIÉTÉ.** Et le cliquet que j'écrivais pour garder « ce sont les sites où
+> la règle s'applique » gardait en fait « ces lignes-là contiennent deux mots ».
+
+Réécrit : texte débarrassé de ses commentaires, blocs `where { … }` résolus en
+ENTIER (accolades équilibrées). **Le ROUGE est prouvé sur la sonde exacte de
+l'audit** — déposée, le cliquet tombe en la nommant ; retirée, il repasse.
+
+### 2. Sur `/sync`, le discriminant de ma garde était un PARAMÈTRE D'APPELANT
+
+`senderId` n'était pas dans `SYNC_MESSAGE_PINNED`. Or `clientMessageId` est un
+jeton VALIDE du vocabulaire épars : `?fields=messages.clientMessageId` est une
+requête admise, et `brut.senderId` y vaut `undefined` — la comparaison rendait
+donc **`null` À L'AUTEUR, sur sa propre clé**.
+
+Ça échoue FERMÉ, donc rien ne fuit ; et ça désactive en silence la seule chose
+pour laquelle le champ existe. `sparse-fieldset.ts` énonce exactement la loi que
+ça viole : « une garde de confidentialité ne doit jamais dépendre d'un
+paramètre d'appelant ». `senderId` est désormais ÉPINGLÉ, et les deux cliquets
+de projection éparse l'actent avec leur raison.
+
+**Et aucun de mes témoins ne pouvait le voir** : mon harnais `/sync` rend la
+ligne entière par `mockResolvedValueOnce`, quel que soit le `select`. Le double
+mentait par ce qu'il acceptait — la faute que ce même lot relevait chez
+`sync.test.ts` deux heures plus tôt.
+
+### 3. Mon code d'erreur AFFIRMAIT ce que personne n'avait vérifié
+
+`clientMessageIdHeldByAnother` lisait `select: { id: true }` et répondait
+« quelqu'un tient la clé ». Ses appelants en tiraient un refus dont le texte
+servi dit « par un **autre expéditeur** : renvoyer sous un nouveau
+clientMessageId ».
+
+Les deux ne sont pas la même phrase, et l'écart est atteignable par un appelant
+HONNÊTE : une lecture servie par un secondaire en retard rend `null` pour une
+ligne vivante — le dépôt documente déjà cette cause pour
+`NotificationService.messageLiveness`. Sur le rejeu CONCURRENT d'un invité — le
+cas même que l'idempotence existe pour absorber — la passerelle lui aurait dit
+que SA clé est prise par autrui, **et le remède prescrit aurait DUPLIQUÉ son
+message**.
+
+> **Un code d'erreur est une AFFIRMATION**, au même titre qu'un tri, un compte
+> ou une contrainte écrite en commentaire. Il se vérifie contre ce que la
+> lecture a établi, jamais contre ce qu'on s'attend à trouver là.
+
+`clientMessageIdHolder` lit `senderId` et rend TROIS verdicts —
+`another-sender` / `own-row` / `nobody` — et `own-row` laisse remonter l'erreur
+d'origine, donc un rejeu au MÊME `clientMessageId`. La lecture est de plus sous
+`try` : une lecture qui lève ne REMPLACE plus l'erreur d'origine, ce que mon
+propre doc-comment promettait déjà.
+
+### 4. Ma justification du `409` était fausse, et c'est mesuré
+
+J'avais écrit qu'un `500` muet « laisserait l'invité rejouer indéfiniment ».
+Mesuré : **iOS et Android traitent `409` et `500` à l'identique** — iOS exclut
+`409` de ses refus définitifs *précisément* parce qu'« un conflit sur un
+clientMessageId dédoublonné peut vouloir dire déjà livré », Android le range en
+`TransientFailure`. Le web est le seul à distinguer, et il distingue en jetant
+la bulle sans bouton « Réessayer ».
+
+Le choix du `409` tient — il est plus VRAI que le repli, et il cesse de servir
+la ligne d'autrui en `success: true` — mais **sa raison écrite était fausse**,
+et une raison fausse se corrige comme un défaut. Elle l'est, sur le site. Ce
+que les clients doivent apprendre est #19993.
+
+## Ce que l'audit laisse en issues
+
+- **#19993** — les trois clients rejouent indéfiniment un `409
+  CLIENT_MESSAGE_ID_TAKEN` ou jettent la bulle ; aucun ne sait tirer une clé
+  neuve.
+- **#19994** — rien ne garde la PRÉMISSE qui rend l'espace `call-summary:`
+  disjoint : le balayage gèle l'exemption, pas ce qui la fonde.
+- **#19995** — le cinquième appariement (`attachmentSendAdmission`, en mémoire)
+  est borné par une AUTRE question, pas par une garde à lui. Non exploitable
+  aujourd'hui ; la borne est transitive, et c'est écrit sur le site.
+
+## Ce que l'audit a cherché à casser et qui TIENT
+
+L'identité comparée (`Participant.id` des deux côtés, sans divergence sur
+aucun chemin — rejoin, réparation d'orphelins, invité, multi-appareil) ;
+l'absence de tout chemin qui réécrirait un `clientMessageId` sous un autre
+expéditeur ; la survie du `code` à la sérialisation sur les deux routes ;
+l'absence de la clé dans tout ce qui voyage À CÔTÉ (`replyTo`, citations,
+recherche, épingles, file hors ligne) ; et la fermeture par défaut de
+`servedClientMessageId` sur toutes les formes de production.

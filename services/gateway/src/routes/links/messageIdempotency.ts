@@ -40,7 +40,7 @@
 
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair.js';
-import { ownReplayWhere, ClientMessageIdTakenError, clientMessageIdHeldByAnother } from '../../services/messaging/clientMessageIdOwnership';
+import { ownReplayWhere, ClientMessageIdTakenError, clientMessageIdHolder } from '../../services/messaging/clientMessageIdOwnership';
 
 /**
  * La projection que les DEUX chemins servent — l'écriture neuve et la
@@ -167,8 +167,18 @@ export async function writeLinkMessageIdempotently(params: {
       // Deux causes, deux réponses. La seconde lecture ne vit que sur ce
       // chemin d'échec : elle sépare « un autre tient la clé » (nommable,
       // définitif tant que la clé ne change pas) d'une course irréconciliable.
-      const heldByAnother = await clientMessageIdHeldByAnother({ prisma, conversationId, clientMessageId });
-      if (heldByAnother) throw new ClientMessageIdTakenError(conversationId, clientMessageId);
+      // Sous `try` : une lecture qui lève ici remplacerait l'erreur d'origine.
+      // Et elle LIT l'expéditeur — refuser sur « quelqu'un tient la clé » dirait
+      // à un invité que SA propre clé est prise par autrui dès qu'un secondaire
+      // en retard a fait manquer la relecture du TRIO, en lui prescrivant une
+      // clé neuve : le remède dupliquerait son message.
+      let holder: Awaited<ReturnType<typeof clientMessageIdHolder>> = 'nobody';
+      try {
+        holder = await clientMessageIdHolder({ prisma, conversationId, clientMessageId, senderId: senderId ?? '' });
+      } catch {
+        holder = 'nobody';
+      }
+      if (holder === 'another-sender') throw new ClientMessageIdTakenError(conversationId, clientMessageId);
       throw error;
     }
 

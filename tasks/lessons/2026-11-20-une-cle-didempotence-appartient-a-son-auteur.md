@@ -71,3 +71,51 @@ Tous les clients tirent un UUID v4 : la collision ACCIDENTELLE est hors de
 portée. Ce lot ne répare donc pas une panne observée — il désarme un piège, et
 la distinction se dit à voix haute. Annoncer une panne qu'on n'a pas mesurée
 coûte la confiance dans les cycles où il y en a une.
+
+### Le cliquet qu'on écrit pour garder une propriété garde ce qu'il SAIT LIRE
+
+Ce lot a posé un balayage pour garder la seconde affirmation d'une énumération
+(« ce sont les sites où la règle s'applique »). Il filtrait **ligne par
+ligne** : `grep clientMessageId | includes('where')`. Un `where:` écrit sur
+plusieurs lignes met les deux mots sur deux lignes, et **aucune ne passe le
+filtre** — une forme que le dépôt portait déjà. Un appariement de production
+sans auteur, déposé sous ses yeux, le laissait VERT.
+
+> **Un balayage qui mesure la popularité d'un IDIOME ne mesure pas une
+> PROPRIÉTÉ.** Le prouver demande la sonde NÉGATIVE : déposer le défaut que le
+> cliquet prétend attraper, et le voir tomber en le nommant. Sans cette
+> mesure, un cliquet vert n'atteste que de lui-même — et il ment plus
+> longtemps qu'un journal, parce qu'on cesse de regarder derrière.
+
+### Un code d'erreur est une AFFIRMATION
+
+Le même lot a servi un refus dont le texte dit « déjà pris par un **autre
+expéditeur** » sur la foi d'une lecture en `select: { id: true }` — qui établit
+« quelqu'un tient la clé », jamais « quelqu'un d'AUTRE ». L'écart est
+atteignable par un appelant honnête : un secondaire en retard rend `null` pour
+une ligne vivante, et le refus aurait alors dit à l'auteur que SA clé est prise
+par autrui, **en lui prescrivant d'en tirer une neuve — donc en dupliquant son
+message**.
+
+> Un `code` se vérifie contre ce que la lecture a ÉTABLI, jamais contre ce
+> qu'on s'attend à trouver là. Même famille que le tri, le compte et la
+> contrainte écrite en commentaire : ce qui a la forme d'un constat et n'a pas
+> été mesuré.
+
+Et le remède d'un refus compte autant que le refus : **avant de prescrire une
+conduite à l'appelant, mesurer ce que la conduite coûte s'il la suit sur un
+verdict faux.**
+
+### Mesurer ce que les CLIENTS font du statut qu'on invente
+
+Le `409` neuf de ce lot n'atteint aucun lecteur : iOS l'exclut délibérément de
+ses refus définitifs (« un conflit sur un clientMessageId dédoublonné peut
+vouloir dire *déjà livré* »), Android le range en transitoire, le web jette la
+bulle sans recours. La justification écrite — « sinon l'invité rejouerait
+indéfiniment » — était donc **fausse à la mesure** : les deux clients natifs
+traitent `409` et `500` à l'identique.
+
+> Donner un sens NEUF à un statut dont la signification côté client est déjà
+> FIGÉE n'est pas gratuit, et la question se pose dans le même lot : *qui lit
+> ce code, et qu'en fait-il aujourd'hui ?* C'est la forme « qui AFFICHE ce que
+> ton résolveur élit » (cycle 122) portée d'un texte à un code d'erreur.

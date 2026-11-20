@@ -597,9 +597,18 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         return sendError(reply, 503, error.message, { code: error.code });
       }
       // #19960 — la clé d'idempotence est tenue par un AUTRE expéditeur :
-      // `409`, et le motif NOMMÉ. Un `503` serait faux (renvoyer sous la même
-      // clé échouerait toujours) et un `500` muet laisserait l'invité
-      // rejouer indéfiniment sur le seul transport dont il dispose.
+      // `409`, et le motif NOMMÉ. Un `503` serait faux — renvoyer sous la même
+      // clé échouerait toujours.
+      //
+      // Ce que le `409` ne fait PAS, mesuré par l'audit adversarial et dit ici
+      // plutôt qu'omis : il n'atteint aucun lecteur. Les trois clients ont une
+      // politique de `409` écrite pour un AUTRE sens — iOS l'exclut
+      // délibérément de ses refus définitifs, Android le range en transitoire,
+      // le web le jette sans bouton « Réessayer ». iOS et Android traitent
+      // donc `409` et `500` à l'IDENTIQUE : ce statut n'est pas meilleur que
+      // le repli pour eux, il est seulement plus VRAI, et il cesse de servir
+      // la ligne d'autrui en `success: true`. Leur apprendre à tirer une clé
+      // neuve est #19993.
       if (isClientMessageIdTakenError(error)) {
         return sendError(reply, 409, error.message, { code: error.code });
       }

@@ -82,6 +82,44 @@ describe('le transport des liens apparie la clé AVEC son auteur (#19960)', () =
     expect(JSON.stringify(refusal)).not.toContain(ALICE_SECRET);
   });
 
+  it('SA PROPRE ligne, manquée par la relecture du TRIO (réplication), ne devient PAS un refus', async () => {
+    // Le cas que l'audit adversarial a trouvé, et qui est atteignable par un
+    // appelant HONNÊTE : un secondaire en retard rend `null` pour une ligne
+    // vivante (le dépôt documente la cause pour `NotificationService.messageLiveness`).
+    // Un refus ici dirait à l'invité que SA clé est prise par autrui et lui
+    // prescrirait d'en tirer une neuve — le remède DUPLIQUERAIT son message.
+    const prisma = prismaWith([{ ...aliceRow(), senderId: GUEST, content: 'bonjour' }]);
+    const honest = (prisma as unknown as { message: { findFirst: (a: { where: Row }) => Promise<Row | null> } }).message.findFirst;
+    let reads = 0;
+    (prisma as unknown as { message: { findFirst: unknown } }).message.findFirst =
+      async (args: { where: Row }) => { reads += 1; return reads === 1 ? null : honest(args); };
+
+    const outcome = await writeLinkMessageIdempotently({
+      prisma, data: guestWrite(), conversationId: CONV_ID, clientMessageId: CID,
+    }).then(() => 'resolved', (err: unknown) => err);
+
+    expect(isClientMessageIdTakenError(outcome)).toBe(false);
+  });
+
+  it('une lecture de propriétaire qui LÈVE ne remplace pas l’erreur d’origine', async () => {
+    const prisma = prismaWith([aliceRow()]);
+    const honest = (prisma as unknown as { message: { findFirst: (a: { where: Row }) => Promise<Row | null> } }).message.findFirst;
+    let reads = 0;
+    (prisma as unknown as { message: { findFirst: unknown } }).message.findFirst =
+      async (args: { where: Row }) => {
+        reads += 1;
+        if (reads === 1) return honest(args);
+        throw new Error('replica unavailable');
+      };
+
+    const outcome = await writeLinkMessageIdempotently({
+      prisma, data: guestWrite(), conversationId: CONV_ID, clientMessageId: CID,
+    }).then(() => null, (err: unknown) => err);
+
+    expect((outcome as { code?: string }).code).toBe('P2002');
+    expect((outcome as Error).message).not.toContain('replica unavailable');
+  });
+
   it('la clé LIBRE écrit la ligne de l’invité', async () => {
     const prisma = prismaWith([]);
 

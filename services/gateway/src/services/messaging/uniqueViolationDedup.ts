@@ -23,7 +23,7 @@ import { findExistingMessage } from './messageDedupProjection';
 import {
   ownReplayWhere,
   ClientMessageIdTakenError,
-  clientMessageIdHeldByAnother,
+  clientMessageIdHolder,
 } from './clientMessageIdOwnership';
 
 export function isUniqueViolation(error: unknown): boolean {
@@ -64,15 +64,35 @@ export async function resolveOwnReplayAfterUniqueViolation(params: {
   });
   if (existing) return existing;
 
-  // Les deux causes que l'index confond. La seconde lecture ne vit QUE sur ce
+  // Les causes que l'index confond. La seconde lecture ne vit QUE sur ce
   // chemin d'échec — le chemin nominal ne paie rien.
-  if (await clientMessageIdHeldByAnother({ prisma, conversationId, clientMessageId })) {
+  //
+  // Sous `try` : une lecture qui LÈVE ici REMPLACERAIT l'erreur d'origine par
+  // la sienne, et le doc-comment ci-dessus promet l'inverse. Ne rien pouvoir
+  // établir vaut `'nobody'` — on ne REFUSE jamais sur une lecture qui n'a rien
+  // prouvé, c'est un refus qui accuse.
+  let holder: Awaited<ReturnType<typeof clientMessageIdHolder>> = 'nobody';
+  try {
+    holder = await clientMessageIdHolder({ prisma, conversationId, clientMessageId, senderId });
+  } catch (readError) {
+    logger.warn('holder read failed after unique violation — original error kept', {
+      conversationId, clientMessageId,
+      reason: readError instanceof Error ? readError.message : String(readError),
+    });
+  }
+
+  if (holder === 'another-sender') {
     logger.warn('clientMessageId held by another sender', { conversationId, clientMessageId });
     throw new ClientMessageIdTakenError(conversationId, clientMessageId);
   }
 
-  logger.error('P2002 raised but no existing record found for clientMessageId', {
-    conversationId, clientMessageId,
+  // `'own-row'` — la ligne EST celle de l'appelant, et la relecture du TRIO
+  // l'a manquée (réplication). C'est un rejeu, pas un conflit : l'erreur
+  // d'origine remonte, et le transport la traite comme une écriture non
+  // validée, rejouable au MÊME `clientMessageId`. Refuser ici prescrirait une
+  // clé neuve, donc un DOUBLON.
+  logger.error('unique violation on clientMessageId, no own row read back', {
+    conversationId, clientMessageId, holder,
   });
   throw originalError;
 }

@@ -123,28 +123,49 @@ export function servedClientMessageId(params: {
 }
 
 /**
- * **LA SEULE QUESTION QUI S'APPARIE SANS AUTEUR** — « quelqu'un d'autre
- * tient-il cette clé ? » — et elle vit ICI, dans la loi, pour qu'aucun site
- * n'ait à réécrire un `where` sans `senderId`.
+ * **QUI TIENT CETTE CLÉ ?** — la seule lecture du dépôt qui apparie sans
+ * `senderId`, et elle vit ICI pour qu'aucun site n'ait à réécrire ce `where`.
  *
  * Elle ne s'appelle que sur le chemin d'ÉCHEC, après qu'une violation
  * d'unicité a eu lieu ET que la relecture par le TRIO n'a rien rendu : le
- * chemin nominal ne paie donc aucune lecture de plus. Elle sépare deux causes
- * que l'index partiel confond, et qui n'ont pas la même réponse :
+ * chemin nominal ne paie aucune lecture de plus.
  *
- * - **un AUTRE expéditeur tient la clé** — nommable, et définitif tant que la
- *   clé ne change pas : l'appelant doit en tirer une neuve, jamais rejouer ;
- * - **une course irréconciliable** — la ligne a disparu entre le `create` et
- *   la relecture : l'erreur d'origine remonte, inchangée.
+ * **Elle LIT l'expéditeur, et c'est le point.** Une première version rendait
+ * un booléen depuis un `select: { id: true }` : elle répondait « quelqu'un
+ * tient la clé » et ses appelants en tiraient un refus qui AFFIRME « un autre
+ * expéditeur ». Les deux ne sont pas la même phrase, et l'écart est atteignable
+ * par un appelant HONNÊTE — une lecture servie par un secondaire en retard sur
+ * le jeu de réplicas rend `null` pour une ligne parfaitement vivante (le dépôt
+ * le documente déjà pour `NotificationService.messageLiveness`). Sur le rejeu
+ * CONCURRENT d'un invité — le cas même que l'idempotence existe pour absorber —
+ * la passerelle lui aurait dit que SA clé est prise par autrui, en lui
+ * prescrivant d'en tirer une neuve : le remède aurait DUPLIQUÉ son message.
+ *
+ * > **Un code d'erreur est une AFFIRMATION**, au même titre qu'un tri, un
+ * > compte ou une contrainte écrite en commentaire. Il se vérifie contre ce
+ * > que la lecture a réellement établi, jamais contre ce qu'on s'attend à
+ * > trouver là.
+ *
+ * Trois verdicts, et le troisième n'est pas le second :
+ *
+ * | ce que la clé porte | verdict |
+ * |---|---|
+ * | la ligne d'un AUTRE expéditeur | `'another-sender'` |
+ * | MA ligne (la relecture du TRIO l'a manquée — réplication) | `'own-row'` |
+ * | personne | `'nobody'` |
  */
-export async function clientMessageIdHeldByAnother(params: {
-  readonly prisma: { message: { findFirst(args: unknown): Promise<{ id: string } | null> } };
+export type ClientMessageIdHolder = 'another-sender' | 'own-row' | 'nobody';
+
+export async function clientMessageIdHolder(params: {
+  readonly prisma: { message: { findFirst(args: unknown): Promise<{ senderId?: string | null } | null> } };
   readonly conversationId: string;
   readonly clientMessageId: string;
-}): Promise<boolean> {
+  readonly senderId: string;
+}): Promise<ClientMessageIdHolder> {
   const held = await params.prisma.message.findFirst({
     where: { conversationId: params.conversationId, clientMessageId: params.clientMessageId },
-    select: { id: true },
+    select: { id: true, senderId: true },
   });
-  return held !== null;
+  if (held === null) return 'nobody';
+  return held.senderId === params.senderId ? 'own-row' : 'another-sender';
 }
