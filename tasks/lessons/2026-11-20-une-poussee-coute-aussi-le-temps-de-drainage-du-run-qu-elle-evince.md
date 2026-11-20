@@ -55,7 +55,7 @@ run NEUF est vide pour deux raisons indiscernables. **La mesure qui tranche
 porte sur un AUTRE objet que celui qu'on observe** — le run précédent, pas le
 sien.
 
-## Et ANNULER un run évincé fabrique une fausse alerte, par le même mécanisme
+### Et ANNULER un run évincé fabrique une fausse alerte, par le même mécanisme
 
 Ce qui précède dit ce qu'une poussée coûte. Le geste de RANGEMENT coûte aussi,
 et dans l'autre sens. Le même jour, après avoir poussé une résolution de
