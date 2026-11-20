@@ -664,20 +664,45 @@ class SharedLocationSharingSyncTest {
     }
 
     @Test
-    fun `relance, reconcilier avant la relecture pendant une panne n'envoie rien et garde le retrait`() = runTest {
+    fun `relance, une echeance passee avant la relecture pendant une panne n'envoie rien et se rejoue`() = runTest {
+        val device = Device(this)
+        device.saved["me"] = SharedLocationRoster.EMPTY
+            .adding(alice, SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS, currentTime)
+            .adding(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR, currentTime - 2 * hour)
+            .stored()
+        device.servedFailure = IllegalStateException("hors ligne")
+
+        val problem = device.center.reconcile()
+        runCurrent()
+
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.Refused(SharedLocationSendOutcome.UNCONFIRMED))
+        assertThat(device.starts).isEmpty()
+        assertThat(device.stops).isEqualTo(0)
+        assertThat(device.reads).isEqualTo(1)
+
+        advanceTimeBy(31_000L)
+        runCurrent()
+
+        assertThat(device.reads).isAtLeast(2)
+        assertThat(device.starts).isEmpty()
+        assertThat(device.updates).isEmpty()
+    }
+
+    @Test
+    fun `relance, un arreter en attente part en liste seule malgre une panne prolongee de la relecture`() = runTest {
         val device = Device(this)
         publishingToTwoThenWithdrawingBob(device)
         val relaunched = device.relaunched()
         relaunched.servedFailure = IllegalStateException("hors ligne")
 
-        val problem = relaunched.center.reconcile()
+        repeat(3) { relaunched.center.reconcile() }
         runCurrent()
 
-        assertThat(problem).isEqualTo(SharedLocationShareProblem.Refused(SharedLocationSendOutcome.UNCONFIRMED))
-        assertThat(relaunched.starts).isEmpty()
-        assertThat(relaunched.stops).isEqualTo(0)
+        assertThat(relaunched.center.roster.value.isWithdrawalPending(bob)).isFalse()
+        assertThat(relaunched.starts).isNotEmpty()
+        assertThat(relaunched.starts.all { it.isListOnly }).isTrue()
         assertThat(relaunched.updates).isEmpty()
-        assertThat(relaunched.center.roster.value.isWithdrawalPending(bob)).isTrue()
+        assertThat(relaunched.fixAsks).isEqualTo(0)
     }
 
     @Test

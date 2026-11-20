@@ -211,7 +211,7 @@ class SharedLocationSharingCenter internal constructor(
         scope.launch {
             connected.distinctUntilChanged().filter { it }.collect {
                 sync()
-                reconcile()
+                reconcile(readingFirst = false)
             }
         }
         scope.launch { ownChanged.collect { sync() } }
@@ -245,20 +245,24 @@ class SharedLocationSharingCenter internal constructor(
 
     /**
      * Reprend la liste du compte connecté et fait partir chaque échéance passée et chaque retrait en attente. Relancé et
-     * pas encore relu, l'appareil relit d'abord : une liste gardée périmée ne part pas avant la relecture (elle retirerait
-     * ce qu'un autre appareil a ajouté), et une panne laisse tout en attente, rejoué au rythme du rejeu (#19928).
+     * pas encore relu, l'appareil relit d'abord (`readingFirst`, faux quand l'appelant vient de relire) : une échéance
+     * passée ne fait pas partir une liste gardée périmée avant la relecture (elle retirerait ce qu'un autre appareil a
+     * ajouté) — la passerelle tient l'échéance de chacun (#18205) —, et une panne laisse tout en attente, rejoué au rythme
+     * du rejeu (#19928). Un « Arrêter » en attente, lui, part malgré la panne, en liste seule : la volonté de
+     * l'utilisateur prime, et aucune position n'accompagne la liste.
      */
-    suspend fun reconcile() {
+    suspend fun reconcile(readingFirst: Boolean = true): SharedLocationShareProblem? =
         locked { ticket ->
             if (_roster.value.isSettled(clock())) return@locked null
-            if (awaitsServedTruth) syncLocked(ticket)
+            if (readingFirst && awaitsServedTruth) syncLocked(ticket)
             if (!isCurrent(ticket)) return@locked SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
             if (_roster.value.isSettled(clock())) return@locked null
-            if (awaitsServedTruth) {
-                scheduleDeadline(retrying = true)
+            val pruned = _roster.value.pruned(clock())
+            if (awaitsServedTruth && !pruned.hasPendingWithdrawals) {
+                if (!pruned.hasRecipients) stopFollowingDevice()
+                scheduleRetry()
                 return@locked SharedLocationShareProblem.Refused(SharedLocationSendOutcome.UNCONFIRMED)
             }
-            val pruned = _roster.value.pruned(clock())
             if (pruned.isEmpty && !_roster.value.hasRecipients) {
                 adopt(ticket, SharedLocationRoster.EMPTY)
                 markReceived(ticket, false)
@@ -273,7 +277,6 @@ class SharedLocationSharingCenter internal constructor(
             }
             withdrawingRepublish(ticket, pruned).also { if (it != null && isCurrent(ticket)) scheduleRetry() }
         }
-    }
 
     /**
      * Se recale sur le partage que la passerelle sert : un autre appareil du compte a pu le changer (#18578). Une liste
@@ -292,7 +295,7 @@ class SharedLocationSharingCenter internal constructor(
         val read = readServed()
         if (!isCurrent(ticket)) return
         if (read !is ServedRead.Answered) {
-            if (awaitsServedTruth) scheduleDeadline(retrying = true)
+            if (awaitsServedTruth) scheduleRetry()
             return
         }
         if (awaitsServedTruth) {
@@ -566,14 +569,11 @@ class SharedLocationSharingCenter internal constructor(
         }
     }
 
-    /**
-     * L'échéance la plus proche réveille le centre ; un retrait en attente, ou une relecture tombée en panne (`retrying`),
-     * le réveille au rythme du rejeu, au plus tard.
-     */
-    private fun scheduleDeadline(retrying: Boolean = false) {
+    /** L'échéance la plus proche réveille le centre ; un retrait en attente le réveille au rythme du rejeu, au plus tard. */
+    private fun scheduleDeadline() {
         val roster = _roster.value
         val untilDeadline = roster.nextDeadlineMillis?.let { (it - clock()).coerceAtLeast(0L) + DEADLINE_SLACK_MS }
-        val untilRetry = RETRY_MS.takeIf { roster.hasPendingWithdrawals || retrying }
+        val untilRetry = RETRY_MS.takeIf { roster.hasPendingWithdrawals }
         val delayMillis = listOfNotNull(untilDeadline, untilRetry).minOrNull() ?: return cancelDeadline()
         armDeadline(delayMillis)
     }
@@ -588,7 +588,7 @@ class SharedLocationSharingCenter internal constructor(
             delay(delayMillis)
             sessionScope.launch {
                 if (awaitsServedTruth) sync()
-                reconcile()
+                reconcile(readingFirst = false)
             }
         }
     }
@@ -609,6 +609,7 @@ class SharedLocationSharingCenter internal constructor(
     }
 
     private fun wipe(ticket: Ticket) {
+        awaitsServedTruth = false
         adopt(ticket, SharedLocationRoster.EMPTY)
         markReceived(ticket, false)
         rememberStart(ticket, null)

@@ -188,7 +188,7 @@ final class SharedLocationSharingCenter: ObservableObject {
         socketReady
             .relay(through: lane) { [weak self] _ in
                 await self?.sync()
-                await self?.reconcile()
+                await self?.reconcile(readingFirst: false)
             }
             .store(in: &socketWatch)
         ownChanged
@@ -309,18 +309,21 @@ final class SharedLocationSharingCenter: ObservableObject {
     }
 
     /// Une échéance est passée ou un retrait attend : le faire partir, et rejouer plus tard si ça n'a pas pu se faire.
-    /// Relancé et pas encore relu, l'appareil relit d'abord quand il a quelque chose à envoyer : une liste gardée
-    /// périmée ne part pas avant la relecture (elle retirerait ce qu'un autre appareil a ajouté), et une panne laisse
-    /// tout en attente, rejoué au rythme du rejeu (#19928).
-    func reconcile() async {
-        if awaitsServedTruth, !roster.isSettled(now: now()) { await sync() }
+    /// Relancé et pas encore relu, l'appareil relit d'abord quand il a quelque chose à envoyer (`readingFirst`, faux
+    /// quand l'appelant vient de relire) : une échéance passée ne fait pas partir une liste gardée périmée avant la
+    /// relecture (elle retirerait ce qu'un autre appareil a ajouté) — la passerelle tient l'échéance de chacun (#18205),
+    /// et une panne laisse tout en attente, rejoué au rythme du rejeu (#19928). Un « Arrêter » en attente, lui, part
+    /// malgré la panne, en liste seule : la volonté de l'utilisateur prime, et aucune position n'accompagne la liste.
+    func reconcile(readingFirst: Bool = true) async {
+        if readingFirst, awaitsServedTruth, !roster.isSettled(now: now()) { await sync() }
         _ = await locked {
             guard !self.roster.isSettled(now: self.now()) else { return nil }
-            guard !self.awaitsServedTruth else {
-                self.scheduleDeadline(retrying: true)
+            let pruned = self.roster.pruned(now: self.now())
+            if self.awaitsServedTruth, !pruned.hasPendingWithdrawals {
+                if !pruned.hasRecipients { self.stopFollowingDevice() }
+                self.arm(after: Self.retryDelay)
                 return .refused(.unconfirmed)
             }
-            let pruned = self.roster.pruned(now: self.now())
             guard !pruned.isEmpty || self.roster.hasRecipients else {
                 self.adopt(.empty)
                 self.markReceived(false)
@@ -347,7 +350,7 @@ final class SharedLocationSharingCenter: ObservableObject {
             do {
                 read = try await self.served()
             } catch {
-                if self.isLive, self.awaitsServedTruth { self.scheduleDeadline(retrying: true) }
+                if self.isLive, self.awaitsServedTruth { self.arm(after: Self.retryDelay) }
                 return nil
             }
             guard self.isLive else { return nil }
@@ -608,11 +611,10 @@ final class SharedLocationSharingCenter: ObservableObject {
         lane.store(in: &following)
     }
 
-    /// L'échéance la plus proche réveille le centre ; un retrait en attente, ou une relecture tombée en panne
-    /// (`retrying`), le réveille au rythme du rejeu, au plus tard.
-    private func scheduleDeadline(retrying: Bool = false) {
+    /// L'échéance la plus proche réveille le centre ; un retrait en attente le réveille au rythme du rejeu, au plus tard.
+    private func scheduleDeadline() {
         let untilDeadline = roster.nextDeadline.map { max(0, $0.timeIntervalSince(now())) + Self.deadlineSlack }
-        let untilRetry: TimeInterval? = roster.hasPendingWithdrawals || retrying ? Self.retryDelay : nil
+        let untilRetry: TimeInterval? = roster.hasPendingWithdrawals ? Self.retryDelay : nil
         guard let delay = [untilDeadline, untilRetry].compactMap({ $0 }).min() else {
             deadline = nil
             return
@@ -626,7 +628,7 @@ final class SharedLocationSharingCenter: ObservableObject {
             guard let self else { return }
             Task { @MainActor in
                 if self.awaitsServedTruth { await self.sync() }
-                await self.reconcile()
+                await self.reconcile(readingFirst: false)
             }
         }
     }
@@ -642,6 +644,7 @@ final class SharedLocationSharingCenter: ObservableObject {
     }
 
     private func wipe() {
+        awaitsServedTruth = false
         adopt(.empty)
         markReceived(false)
         publishedStart = nil
