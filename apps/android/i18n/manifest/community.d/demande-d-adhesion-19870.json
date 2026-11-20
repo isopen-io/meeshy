@@ -24,8 +24,14 @@
         },
         {
           "catalog": "ui",
-          "iosKey": "community.join.cooldown",
-          "androidName": "community_join_cooldown",
+          "iosKey": "community.join.declined",
+          "androidName": "community_join_declined",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.join.declined.until",
+          "androidName": "community_join_declined_until",
           "status": "candidate"
         }
       ]
