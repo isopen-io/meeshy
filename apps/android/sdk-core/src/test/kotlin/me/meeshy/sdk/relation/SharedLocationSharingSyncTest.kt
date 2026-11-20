@@ -176,7 +176,7 @@ class SharedLocationSharingSyncTest {
         device.ownChanged.emit(Unit)
         runCurrent()
 
-        assertThat(device.reads).isEqualTo(1)
+        assertThat(device.reads).isEqualTo(2)
         assertThat(device.center.roster.value).isEqualTo(before)
     }
 
@@ -801,5 +801,140 @@ class SharedLocationSharingSyncTest {
         runCurrent()
 
         assertThat(device.startMarks["me"]).isNull()
+    }
+
+    private val carol = "dddddddddddddddddddddddd"
+
+    @Test
+    fun `installation neuve, partager relit d'abord et la liste envoyee garde ce qu'un autre appareil partage`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = servedFrom(elsewhere, alice to hour)
+
+        val problem = device.center.share(carol, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        runCurrent()
+
+        assertThat(problem).isNull()
+        assertThat(device.reads).isEqualTo(1)
+        assertThat(device.starts.last().recipients.map { it.userId }).containsExactly(alice, carol)
+    }
+
+    @Test
+    fun `installation neuve, une relecture en panne refuse le partage sans rien envoyer`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedFailure = IllegalStateException("hors ligne")
+
+        val problem = device.center.share(carol, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        runCurrent()
+
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.Refused(SharedLocationSendOutcome.OFFLINE))
+        assertThat(device.starts).isEmpty()
+        assertThat(device.fixAsks).isEqualTo(0)
+        assertThat(device.center.roster.value.isEmpty).isTrue()
+        device.endOutage()
+    }
+
+    @Test
+    fun `apres une relecture, partager ne relit pas`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = servedFrom(elsewhere, alice to hour)
+        device.center.share(carol, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+
+        device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        runCurrent()
+
+        assertThat(device.reads).isEqualTo(1)
+    }
+
+    @Test
+    fun `relance, arreter avant la relecture garde la personne ajoutee sur un autre appareil`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        runCurrent()
+        val relaunched = device.relaunched()
+        relaunched.servedSnapshot = servedFrom(elsewhere, alice to hour, bob to hour, carol to hour)
+
+        val problem = relaunched.center.stopSharing(bob)
+        runCurrent()
+
+        assertThat(problem).isNull()
+        assertThat(relaunched.reads).isEqualTo(1)
+        assertThat(relaunched.stops).isEqualTo(0)
+        assertThat(relaunched.starts.all { it.isListOnly }).isTrue()
+        assertThat(relaunched.starts.last().recipients.map { it.userId }).containsExactly(alice, carol)
+        assertThat(relaunched.center.roster.value.entry(carol)).isNotNull()
+    }
+
+    @Test
+    fun `relance, arreter la derniere personne d'ici avant la relecture n'arrete pas le partage d'un autre appareil`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        val relaunched = device.relaunched()
+        relaunched.servedSnapshot = servedFrom(elsewhere, alice to hour, carol to hour)
+
+        relaunched.center.stopSharing(alice)
+        runCurrent()
+
+        assertThat(relaunched.stops).isEqualTo(0)
+        assertThat(relaunched.starts.last().recipients.map { it.userId }).containsExactly(carol)
+        assertThat(relaunched.updates).isEmpty()
+    }
+
+    @Test
+    fun `une relecture en panne apres une relecture reussie fait relire partager, refuse tant qu'elle dure`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = servedFrom(elsewhere, alice to hour)
+        device.center.share(carol, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        val startsBefore = device.starts.size
+        device.servedFailure = IllegalStateException("503")
+        device.ownChanged.emit(Unit)
+        runCurrent()
+
+        val problem = device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        runCurrent()
+
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.Refused(SharedLocationSendOutcome.OFFLINE))
+        assertThat(device.reads).isEqualTo(3)
+        assertThat(device.starts).hasSize(startsBefore)
+        device.endOutage()
+    }
+
+    @Test
+    fun `relance, arreter pendant une panne de la relecture fait partir le retrait en liste seule`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        runCurrent()
+        val relaunched = device.relaunched()
+        relaunched.servedFailure = IllegalStateException("hors ligne")
+
+        relaunched.center.stopSharing(bob)
+        runCurrent()
+
+        assertThat(relaunched.starts.last().isListOnly).isTrue()
+        assertThat(relaunched.starts.last().recipients.map { it.userId }).containsExactly(alice)
+        assertThat(relaunched.stops).isEqualTo(0)
+        relaunched.endOutage()
+    }
+
+    @Test
+    fun `relance, la relecture cede a un autre appareil et une passerelle sans liste seule arrete sans la position d'ici`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        val relaunched = device.relaunched()
+        relaunched.servedSnapshot = servedFrom(elsewhere, alice to hour, carol to hour)
+        relaunched.queuedStartVerdicts += SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.INVALID)
+
+        relaunched.center.stopSharing(alice)
+        runCurrent()
+
+        assertThat(relaunched.stops).isEqualTo(1)
+        assertThat(relaunched.starts.all { it.isListOnly }).isTrue()
+        assertThat(relaunched.updates).isEmpty()
+        assertThat(relaunched.fixAsks).isEqualTo(0)
     }
 }

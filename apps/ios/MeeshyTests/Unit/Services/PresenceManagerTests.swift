@@ -144,6 +144,7 @@ final class PresenceManagerTests: XCTestCase {
         "MeeshyUI/JoinFlow/JoinFlowScreen.swift": "la passerelle ne sert aucune présence à cette charge (créateur d'un lien expiré, vu par un visiteur)",
         "MeeshyUI/Profile/LinksFaceStack.swift": "visage d'un lien — il dit qui est venu, jamais qui est en ligne ; `LinksFaceMember` ne porte aucune présence",
         "MeeshyUI/Profile/ProfileInCommonParts.swift": "amis en commun — `InCommonFriend` ne porte aucune présence servie",
+        "MeeshyUI/Community/CommunityJoinRequestsSection.swift": "demande d'entrée — `APICommunityJoinRequest` ne porte aucune présence servie (non-membre)",
     ]
 
     func test_everyPeerAvatar_passesTheServedPresence_orIsNamedWithItsReason() throws {
