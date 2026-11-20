@@ -23,7 +23,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { withSealedQuote } from '../services/messaging/servedQuotedMessage';
 import { readerSignedPlanForMessageId } from './readerSignedDelivery';
 import { stripClientMessageId } from './utils/message-ack-shaping';
-import { conversationAudienceRooms, loadLiveParticipantTargets } from './conversationAudienceRooms';
+import { conversationAudienceRoomBatches, loadLiveAudience } from './conversationAudienceRooms';
 
 // Ce relais ne lit rien lui-même : il transmet le prisma de l'aperçu tel quel.
 // Le dériver plutôt que le redéclarer est ce qui empêche les deux listes de
@@ -429,12 +429,17 @@ export async function broadcastMessageMutation(rawParams: MessageMutationParams)
       // portent que des ids, jamais de contenu (c'est ce qui rend l'arbitrage
       // simple, et ce qui le distingue de l'édition, gardée par `readership`).
       //
-      // `loadLiveParticipantTargets` replie sur `[]` quand la lecture lève ou
-      // que l'audience dépasse son plafond, et `conversationAudienceRooms` rend
-      // alors la room de conversation SEULE : le comportement d'avant ce lot,
-      // jamais rien.
-      const audience = await loadLiveParticipantTargets(params.prisma, conversationId, onError);
-      emitToConversationRoom(io?.to(conversationAudienceRooms(conversationId, audience)), params);
+      // #20007 — la lecture est PAGINÉE et l'émission se fait par LOTS : une
+      // audience plus grande qu'une page ne retombe plus sur la room de
+      // conversation seule, où un lecteur resté sur la LISTE ne recevait rien.
+      // Une lecture qui lève garde les pages qu'elle avait prouvées, et
+      // `conversationAudienceRoomBatches` rend la room de conversation SEULE
+      // quand elle n'a nommé personne : le comportement d'avant #18556, jamais
+      // rien.
+      const audience = await loadLiveAudience(params.prisma, conversationId, { onError });
+      for (const rooms of conversationAudienceRoomBatches(conversationId, audience)) {
+        emitToConversationRoom(io?.to(rooms), params);
+      }
     }
   } catch (error) {
     onError?.(error);

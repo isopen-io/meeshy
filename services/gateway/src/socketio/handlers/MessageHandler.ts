@@ -48,7 +48,7 @@ import { attachmentForwardPreviewSelect, attachmentSocketSelect, MESSAGE_ATTACHM
 import { serializeAttachmentForSocket, serializeMessageAttachmentsForSocket } from '../serializeAttachmentForSocket';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
-import { conversationAudienceRooms, loadLiveParticipantTargets } from '../conversationAudienceRooms';
+import { conversationAudienceRoomBatches, loadLiveAudience } from '../conversationAudienceRooms';
 import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { offlineSignedPayload } from '../offlineSignedPayload';
 import { emitUnreadCountsToRecipients } from '../emitUnreadCountsToRecipients';
@@ -1179,19 +1179,24 @@ export class MessageHandler {
       // canaux — ni l'émission de room, ni la file, qui saute les CONNECTÉS.
       // Une lecture qui lève ou une audience hors plafond replie sur la room de
       // conversation seule, le comportement d'avant ce lot.
-      const audience = await loadLiveParticipantTargets(
+      // #20007 — lecture PAGINÉE, émission par LOTS : au-delà d'une page de
+      // participants vivants, la suppression n'est plus perdue pour qui est
+      // resté sur la LISTE.
+      const audience = await loadLiveAudience(
         this.prisma,
         message.conversationId,
-        (error) => handlerLogger.warn('message:deleted audience lookup failed — conversation room only', { messageId: validated.messageId, error }),
+        { onError: (error) => handlerLogger.warn('message:deleted audience lookup failed — partial audience', { messageId: validated.messageId, error }) },
       );
-      const rooms = conversationAudienceRooms(message.conversationId, audience);
+      const batches = conversationAudienceRoomBatches(message.conversationId, audience);
       const deletedPayload = {
         messageId: validated.messageId,
         conversationId: message.conversationId,
         deletedAt: deletedAt.toISOString(),
       };
       // 7e site #17026, trouvé par le CLIQUET. Raison : `safeBroadcast`.
-      safeBroadcast('message:deleted', () => this.io.to(rooms).emit(SERVER_EVENTS.MESSAGE_DELETED, deletedPayload),
+      safeBroadcast('message:deleted', () => {
+        for (const rooms of batches) this.io.to(rooms).emit(SERVER_EVENTS.MESSAGE_DELETED, deletedPayload);
+      },
         (error) => handlerLogger.error('message:deleted live emission failed — offline replay unaffected', { messageId: validated.messageId, error }));
 
       // Fan a conversation:updated preview refresh to list-screen participants

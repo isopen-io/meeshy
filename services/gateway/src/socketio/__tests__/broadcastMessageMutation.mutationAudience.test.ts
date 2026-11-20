@@ -19,31 +19,52 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { broadcastMessageMutation } from '../broadcastMessageMutation';
-import { matchesMongoWhere, type MongoDocument } from '../../__tests__/helpers/mongo-where';
+import { LIVE_AUDIENCE_PAGE } from '../conversationAudienceRooms';
+import { liveParticipantTable, type LiveParticipantTableHooks } from '../../__tests__/helpers/live-audience-double';
+import { type MongoDocument } from '../../__tests__/helpers/mongo-where';
 
 type Emitted = { rooms: string | string[]; event: string; payload: unknown };
 
 const CONV = '507f1f77bcf86cd799439011';
+
+const BANNED_AT = new Date('2026-11-01T00:00:00.000Z');
 
 const participants = (): MongoDocument[] => [
   { id: 'p-sender', userId: 'u-sender', conversationId: CONV, isActive: true },
   { id: 'p-list', userId: 'u-list', conversationId: CONV, isActive: true },
   { id: 'p-guest', userId: null, conversationId: CONV, isActive: true },
   { id: 'p-gone', userId: 'u-gone', conversationId: CONV, isActive: false },
+  // #20007 — ACTIF et BANNI. C'est la seule ligne qui distingue
+  // `PARTICIPATION_VIVANTE` (`isActive` ET `bannedAt` nul ou absent) d'un
+  // `isActive: true` nu : sans elle, la clause `bannedAt` pouvait quitter la loi
+  // sans faire rougir un seul témoin d'audience (audit adversarial de #19954).
+  { id: 'p-banned', userId: 'u-banned', conversationId: CONV, isActive: true, bannedAt: BANNED_AT },
 ];
 
-function participantsOf(rows: MongoDocument[], onFindMany?: () => never) {
+function participantsOf(rows: MongoDocument[], hooks?: LiveParticipantTableHooks) {
   return {
-    participant: {
-      findMany: jest.fn(async (args: { where?: MongoDocument }) => {
-        onFindMany?.();
-        return rows.filter((row) => matchesMongoWhere(row, args?.where ?? {}));
-      }),
-    },
+    // Le double PAGINE (`take` / `cursor` / `skip` / `orderBy` honorés, toute
+    // autre forme JETTE) : un double qui les ignorerait rendrait la même page
+    // indéfiniment, et la lecture paginée de la production ne serait jamais
+    // exercée.
+    participant: liveParticipantTable(rows, hooks),
     conversationShareLink: { findMany: jest.fn(async () => []) },
     message: { findUnique: jest.fn(async () => null), findFirst: jest.fn(async () => null) },
   };
 }
+
+const crowd = (count: number): MongoDocument[] =>
+  Array.from({ length: count }, (_, index) => ({
+    id: `p-${String(index).padStart(6, '0')}`,
+    userId: `u-${String(index).padStart(6, '0')}`,
+    conversationId: CONV,
+    isActive: true,
+  }));
+
+const allRoomsOf = (sink: Emitted[], event: string): string[] =>
+  sink
+    .filter((emitted) => emitted.event === event)
+    .flatMap((emitted) => (Array.isArray(emitted.rooms) ? emitted.rooms : [emitted.rooms]));
 
 function managerInto(sink: Emitted[]) {
   const enqueue = jest.fn(async (_params: unknown) => undefined);
@@ -128,16 +149,42 @@ describe('#19943 — les mutations d’ids atteignent la liste comme le fil', ()
       expect(roomsOf(sink, EVENT_OF[kind])).not.toContain('user:u-gone');
     });
 
+    it(`${kind} : un participant BANNI n’est pas adressé`, async () => {
+      const sink: Emitted[] = [];
+      const { manager } = managerInto(sink);
+
+      await mutate(participantsOf(participants()), manager, kind);
+
+      expect(allRoomsOf(sink, EVENT_OF[kind])).not.toContain('user:u-banned');
+    });
+
     it(`${kind} : une lecture qui LÈVE replie sur la room de conversation, jamais sur rien`, async () => {
       const sink: Emitted[] = [];
       const { manager } = managerInto(sink);
-      const prisma = participantsOf(participants(), () => {
-        throw new Error('participant.findMany down');
+      const prisma = participantsOf(participants(), {
+        onPage: () => {
+          throw new Error('participant.findMany down');
+        },
       });
 
       await mutate(prisma, manager, kind);
 
       expect(roomsOf(sink, EVENT_OF[kind])).toEqual([`conversation:${CONV}`]);
+    });
+
+    it(`${kind} : au-delà d’une page, l’événement part par LOTS et n’oublie personne`, async () => {
+      const sink: Emitted[] = [];
+      const { manager } = managerInto(sink);
+      const prisma = participantsOf(crowd(LIVE_AUDIENCE_PAGE + 2));
+
+      await mutate(prisma, manager, kind);
+
+      const rooms = allRoomsOf(sink, EVENT_OF[kind]);
+      expect(sink.filter((emitted) => emitted.event === EVENT_OF[kind])).toHaveLength(2);
+      expect(rooms).toHaveLength(LIVE_AUDIENCE_PAGE + 3);
+      expect(rooms.filter((room) => room === `conversation:${CONV}`)).toHaveLength(1);
+      expect(rooms).toContain('user:u-000000');
+      expect(rooms).toContain(`user:u-${String(LIVE_AUDIENCE_PAGE + 1).padStart(6, '0')}`);
     });
   }
 });
