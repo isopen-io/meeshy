@@ -289,7 +289,7 @@ export interface ApplyReceiptParams {
  * |---|---|---|
  * | `read` | le curseur de LECTURE (et, par implication, celui de livraison) | `read` |
  * | `received` | le curseur de LIVRAISON, toute la conversation | `received` |
- * | `delivered` | le curseur de LIVRAISON, borné aux messages RAPPORTÉS | `received` |
+ * | `delivered` | le curseur de LIVRAISON **et le gel**, bornés aux rapportés | `received` |
  *
  * `delivered` est la forme PAR MESSAGE de `received` — ce que fait déjà
  * `POST …/messages/:messageId/delivery-receipt` (NSE iOS, destinataire hors
@@ -395,7 +395,7 @@ export async function applyReceipt(
         //
         // #16961 — la forme suit l'ÉCRITURE, pas le mot de l'accusé, et
         // `markFor` la décide : `read` et `delivered` figent les ids vettés (le
-        // second un par un) et les déclarent ; `received` fige TOUT le préfixe
+        // second par la FENÊTRE jusqu'à #20084) ; `received` fige le préfixe
         // en une passe, donc ses seuls ids rapportés diffuseraient MOINS que
         // l'écrit — repli agrégé, par décision. Table : doc de `messageIds`.
         messageIds: params.type === 'received' ? undefined : targeted,
@@ -455,18 +455,18 @@ async function markFor(ctx: ReceiptContext, args: MarkArgs): Promise<number> {
   // surtout pas un balayage de toute la conversation qu'on n'a pas demandé.
   if (args.targeted.length === 0) return 0;
 
-  // `delivered` : la forme PAR MESSAGE. Le service dédoublonne par
-  // `(participant, conversation, message)`, donc un lot rejoué ne compte pas
-  // deux fois.
-  let total = 0;
-  for (const messageId of args.targeted) {
-    total += await ctx.readStatusService.markMessagesAsReceived(
-      args.participantId,
-      args.conversationId,
-      messageId
-    );
-  }
-  return total;
+  // `delivered` : le PÉRIMÈTRE EXACT (#20084). Cette branche passait chaque id
+  // en `latestMessageId` sans remplir `options.messageIds`, donc le service
+  // prenait sa branche FENÊTRE et gravait tout depuis le curseur — messages
+  // POSTÉRIEURS compris. Son appelant primaire est la NSE iOS (destinataire
+  // HORS LIGNE), et c'est irréversible : gel write-once.
+  //
+  // `latestMessageId` reste VIDE : la branche exacte calcule elle-même le
+  // préfixe contigu prouvé, et l'ordre de `args.targeted` vient d'un `findMany`
+  // sans `orderBy`. Détail : `tasks/realtime-sync-audit-2026-11-20-20084.md`.
+  return ctx.readStatusService.markMessagesAsReceived(
+    args.participantId, args.conversationId, undefined, { messageIds: args.targeted }
+  );
 }
 
 // ── La LECTURE — l'unité partagée ─────────────────────────────────────────────
