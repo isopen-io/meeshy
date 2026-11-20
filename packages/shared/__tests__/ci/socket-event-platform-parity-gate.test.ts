@@ -96,13 +96,6 @@ const ASYMETRIES: readonly {
     events: ['bring:ring', 'now-playing:changed', 'now-playing:cleared'],
   },
   {
-    absents: ['android'],
-    raison:
-      "les demandes d'entrée d'une communauté qui valide chaque arrivée, lues par les intendants : "
-      + 'le web (#19871) et iOS (#19877) les relisent en direct, Android #19878 en porte la lecture.',
-    events: ['community:join-requested'],
-  },
-  {
     absents: ['android', 'ios'],
     raison:
       'surfaces que le WEB SEUL porte aujourd\'hui : la console d\'administration (métriques d\'hôte), '

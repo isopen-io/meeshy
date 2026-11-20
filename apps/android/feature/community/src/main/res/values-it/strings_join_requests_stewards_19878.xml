@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Les demandes d'entrée que tranchent les intendants (#19878) — mêmes mots que les clés iOS community.members.requests.* (#19877). -->
+<resources>
+    <string name="community_members_requests_section">Richieste in attesa</string>
+    <string name="community_members_requests_more">Mostra altre richieste</string>
+    <string name="community_members_requests_accept_label">Accetta la richiesta di %1$s</string>
+    <string name="community_members_requests_reject_label">Rifiuta la richiesta di %1$s</string>
+    <string name="community_members_requests_asked">Richiesta del %1$s</string>
+    <string name="community_members_requests_reject">Rifiuta</string>
+    <string name="community_members_requests_reject_confirm_body">%1$s non potrà richiederlo di nuovo per sette giorni.</string>
+    <string name="community_members_requests_accepted">%1$s ora fa parte della community.</string>
+    <string name="community_members_requests_gone">Questa richiesta è già stata gestita.</string>
+    <string name="community_members_requests_failed">La decisione non è andata a buon fine. Riprova.</string>
+</resources>

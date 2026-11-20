@@ -317,7 +317,7 @@ final class NewConversationViewModel: ObservableObject {
             participantIds: selectedUsers.map(\.id),
             encryptionMode: encryptionMode(isGroup: isGroup)
         )
-        await submit(body)
+        await submit(body, invitee: isGroup ? nil : selectedUsers.first)
     }
 
     func openDirect(with user: SearchedUser) async {
@@ -330,10 +330,13 @@ final class NewConversationViewModel: ObservableObject {
             title: nil,
             participantIds: [user.id],
             encryptionMode: encryptionMode(isGroup: false)
-        ))
+        ), invitee: user)
     }
 
-    private func submit(_ body: CreateConversationRequest) async {
+    /// `invitee` : l'unique invité d'un tête-à-tête, que le refus
+    /// `E2EE_PARTICIPANT_WITHOUT_DEVICE` nomme (#20073 : la passerelle ne le
+    /// nomme pas à la création).
+    private func submit(_ body: CreateConversationRequest, invitee: SearchedUser? = nil) async {
         defer { openingUserId = nil }
         do {
             let response: APIResponse<APIConversation> = try await api.post(
@@ -345,7 +348,12 @@ final class NewConversationViewModel: ObservableObject {
             isCreating = false
         } catch {
             isCreating = false
-            if error.isUserBlockedError {
+            if EndToEndParticipantWithoutDeviceRefusal.matches(error) {
+                errorMessage = EndToEndParticipantWithoutDeviceRefusal.message(
+                    peerUserId: invitee?.id, peerName: invitee.map(Self.inviteeName),
+                    withoutDeviceUserIds: EndToEndParticipantWithoutDeviceRefusal.withoutDeviceUserIds(in: error)
+                )
+            } else if error.isUserBlockedError {
                 errorMessage = String(
                     localized: "new_conversation.error.blocked",
                     defaultValue: "Vous ne pouvez pas démarrer de conversation avec cet utilisateur.",
@@ -357,6 +365,13 @@ final class NewConversationViewModel: ObservableObject {
                 )
             }
         }
+    }
+
+    /// Le nom qu'une phrase adresse à l'invité : prénom, nom affiché, pseudo.
+    static func inviteeName(_ user: SearchedUser) -> String {
+        [user.firstName, user.displayName, user.username]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty } ?? ""
     }
 
     /// Acknowledge the navigation hand-off so a second consumer (e.g. a

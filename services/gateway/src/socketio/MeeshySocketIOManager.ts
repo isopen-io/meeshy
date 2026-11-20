@@ -106,7 +106,8 @@ import { CLIENT_EVENTS, SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socket
 import { conversationStatsService } from '../services/ConversationStatsService';
 import type { Message } from '@meeshy/shared/types/index';
 import { buildMessageNewPayload } from './messageNewPayload';
-import { buildMessageEditedCore, resolveWireSenderId } from './messageEditedPayload';
+import { resolveWireSenderId } from './messageEditedPayload';
+import { callSummaryEditedPayload, deliverCallSummaryEdit } from './callSummaryEditedDelivery';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { socketIoCorsOrigin } from '../config/cors-origins';
 import { BoundedTtlCache } from '../utils/bounded-cache';
@@ -122,7 +123,6 @@ import { announcesMessageArrival } from './queuedMessageArrival';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 import type { QueuedPayloadFor } from './queuedEventContract';
 import type { MessageMutationQueueParams } from './broadcastMessageMutation';
-import { isServerAtRestMode } from '../services/messaging/serverAtRest';
 import { drainedEventName, isAddressableConversationId, isDeliverableQueuedPayload } from './queuedEventContract';
 import { dropQueuedEntriesWhoseMessageDied } from './queuedMessageLiveness';
 import { authorizeDrainedEntries } from './drainAuthorization';
@@ -3400,70 +3400,21 @@ export class MeeshySocketIOManager {
   public async broadcastMessageEdited(message: Message, conversationId: string): Promise<void> {
     try {
       const normalizedId = await this.normalizeConversationId(conversationId);
+      const editedPayload = callSummaryEditedPayload(message, normalizedId);
 
-      let messageTranslations: unknown[] = [];
-      if (message.id) {
-        try {
-          messageTranslations = transformTranslationsToArray(
-            message.id,
-            message.translations as unknown as Record<string, import('../utils/translation-transformer').MessageTranslationJSON>
-          );
-        } catch (error) {
-          logger.warn(`Translation transform failed for edited message ${message.id}`, { error });
-        }
-      }
-
-      const senderParticipant = message.sender;
-      const resolvedSenderId = resolveWireSenderId(message);
-      const updatedAt = message.updatedAt || new Date();
-      // Le NOYAU du contrat vient de `buildMessageEditedCore`, source unique
-      // partagée avec le transport socket (`MessageHandler.handleMessageEdit`),
-      // qui en omettait trois champs requis — cf.
-      // `socketio/messageEditedPayload.ts`. Ce producteur-ci les servait déjà
-      // tous : le passage à l'unité ne change RIEN de ce qu'il émet, il
-      // supprime la possibilité qu'un quatrième transport diverge.
-      const editedPayload = {
-        ...buildMessageEditedCore(message, {
-          conversationId: normalizedId,
-          content: message.content,
-          isEdited: Boolean(message.isEdited),
-          editedAt: updatedAt,
-        }),
-        messageSource: message.messageSource || undefined,
-        metadata: message.metadata ?? {},
-        translations: messageTranslations,
-        sender: senderParticipant ? {
-          id: senderParticipant.id,
-          displayName: senderParticipant.nickname || senderParticipant.displayName,
-          avatar: senderParticipant.avatar || senderParticipant.user?.avatar,
-          type: senderParticipant.type,
-          userId: senderParticipant.userId,
-          username: senderParticipant.user?.username,
-          firstName: senderParticipant.user?.firstName || '',
-          lastName: senderParticipant.user?.lastName || '',
-        } : undefined,
-        // #7070 — même unification que `_broadcastNewMessage` : la ligne
-        // brute ne repart plus telle quelle sur `message:edited`.
-        attachments: serializeMessageAttachmentsForSocket(message.attachments),
-      };
-
-      // 6e site #17026, trouvé par le CLIQUET. Raison : `safeBroadcast`.
-      safeBroadcast('message:edited (call summary)', () => this.io.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload),
-        (error) => logger.error('message:edited (call summary) live emission failed — offline replay unaffected', { conversationId: normalizedId, messageId: message.id, error }));
+      await deliverCallSummaryEdit({
+        io: this.io,
+        prisma: this.prisma,
+        conversationId: normalizedId,
+        message,
+        payload: editedPayload,
+        enqueue: (queued) => this.enqueueOfflineMessageMutation(queued),
+      });
 
       await emitConversationPreviewUpdate(
-        this.prisma, this.io, normalizedId, resolvedSenderId ?? '',
+        this.prisma, this.io, normalizedId, resolveWireSenderId(message) ?? '',
         (err) => logger.warn('conversation preview fanout (call edit) failed', { error: err })
       );
-
-      await this.enqueueOfflineMessageMutation({
-        conversationId: normalizedId,
-        actorUserId: null,
-        eventType: 'edited',
-        messageId: message.id,
-        payload: editedPayload,
-        atRest: isServerAtRestMode(message.encryptionMode),
-      });
     } catch (error) {
       logger.error('broadcast message:edited (call) failed', error);
     }
