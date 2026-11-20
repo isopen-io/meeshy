@@ -2102,3 +2102,18 @@ socket jusqu'au client.
 1. #19953 (Android).
 2. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
 3. Dette d'horloge murale de faible impact, côté Android : `CallToastBus`, `CallReliabilityMonitor`, `CallCaptureViewModel` (cf. cycle 60). Ouvrir une issue si elle n'existe pas.
+
+## Cycle 62 — 2026-11-20
+
+- **Base** : `origin/dev` @ `9230cda94`. #20090 (#20069, cycle 61) est fusionnée.
+- **Branche** : `claude/determined-volta-ra7rtt`. **PR** : #20097.
+- **Objectif** : #19953. Sur Android, `CallStats.selectedCandidatePair` ne rend qu'une `candidate-pair`. Quand l'id du transport désigne autre chose, elle retombe sur la paire nominée, et `reduce`, `relayedRoute` et `CallMediaQuality` élisent la même paire.
+- **Livré** (Android, `core/model`) :
+  - `selectedCandidatePair` ne cherche l'id que parmi les `candidate-pair`.
+  - Le `takeIf` de `reduce` est retiré.
+  - La forme des données et le payload ne changent pas.
+- **Tests** : 4 témoins dans `CallLiveStatsLawsTest`. Avec un id qui désigne un candidat :
+  - sur dev, `reduce` donnait un RTT de 20 ms (la dernière paire) et `relayedRoute` rendait `null` ;
+  - désormais, le RTT vaut 300 ms (la paire nominée) et la route est relayée.
+
+  Le rouge est établi par raisonnement, faute de Gradle dans le conteneur. Le vert vient d'`android.yml`, run 44812921771 (`workflow_dispatch`).
