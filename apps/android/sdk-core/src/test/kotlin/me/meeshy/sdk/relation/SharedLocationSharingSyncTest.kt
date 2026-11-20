@@ -51,6 +51,12 @@ class SharedLocationSharingSyncTest {
     ) {
         var servedSnapshot: SharedLocationOwnSnapshot? = null
         var servedFailure: Exception? = null
+
+        /** Une panne qu'on laisse courir rejoue la relecture toutes les 30 s pour toujours : `runTest`, qui avance
+         * l'horloge virtuelle jusqu'au repos, ne finirait jamais. Le témoin la lève une fois ses assertions faites. */
+        fun endOutage() {
+            servedFailure = null
+        }
         var servedGate: CompletableDeferred<Unit>? = null
         var account: String? = "me"
         val writes = mutableListOf<String>()
@@ -686,6 +692,7 @@ class SharedLocationSharingSyncTest {
         assertThat(device.reads).isAtLeast(2)
         assertThat(device.starts).isEmpty()
         assertThat(device.updates).isEmpty()
+        device.endOutage()
     }
 
     @Test
@@ -703,6 +710,7 @@ class SharedLocationSharingSyncTest {
         assertThat(relaunched.starts.all { it.isListOnly }).isTrue()
         assertThat(relaunched.updates).isEmpty()
         assertThat(relaunched.fixAsks).isEqualTo(0)
+        relaunched.endOutage()
     }
 
     @Test
