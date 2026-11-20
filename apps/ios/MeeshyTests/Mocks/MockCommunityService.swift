@@ -31,6 +31,17 @@ enum CommunityStubs {
         """)
     }
 
+    static func joinRequest(id: String, userId: String, name: String = "Ana") -> APICommunityJoinRequest {
+        APICommunityJoinRequest(
+            id: id, userId: userId, name: name, username: name.lowercased(), avatar: nil, country: "FR",
+            createdAt: Date(timeIntervalSince1970: 1_790_000_000)
+        )
+    }
+
+    static func joinRequested(communityId: String = "c1", requestId: String = "r9", userId: String = "u-asker") -> CommunityJoinRequestedEvent {
+        CommunityJoinRequestedEvent(communityId: communityId, requestId: requestId, userId: userId, pendingCount: 1, at: "2026-11-20T10:00:00.000Z")
+    }
+
     static func communityUpdated(communityId: String = "c1", name: String, isPrivate: Bool = true, memberCount: Int = 9) -> CommunityUpdatedEvent {
         CommunityUpdatedEvent(
             communityId: communityId, identifier: "mshy_\(communityId)", name: name, description: "Réglée ailleurs",
@@ -132,6 +143,22 @@ final class MockCommunityService: CommunityServiceProviding, @unchecked Sendable
     func join(communityId: String) async throws -> CommunityJoinOutcome {
         joinCallCount += 1
         return try joinResult.get()
+    }
+
+    var joinRequestsResult: Result<CommunityJoinRequestPage, Error> = .success(CommunityJoinRequestPage(requests: [], nextCursor: nil))
+    private(set) var joinRequestsCallCount = 0
+    private(set) var lastJoinRequestsCursor: String?
+    func joinRequests(communityId: String, cursor: String?, limit: Int) async throws -> CommunityJoinRequestPage {
+        joinRequestsCallCount += 1
+        lastJoinRequestsCursor = cursor
+        return try joinRequestsResult.get()
+    }
+
+    var decideResult: Result<APICommunityMember?, Error> = .success(nil)
+    private(set) var decisions: [(requestId: String, decision: CommunityJoinRequestDecision)] = []
+    func decideJoinRequest(communityId: String, requestId: String, decision: CommunityJoinRequestDecision) async throws -> APICommunityMember? {
+        decisions.append((requestId, decision))
+        return try decideResult.get()
     }
 
     func leave(communityId: String) async throws {

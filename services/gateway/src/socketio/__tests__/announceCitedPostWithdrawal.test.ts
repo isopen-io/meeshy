@@ -5,26 +5,36 @@
  * est la conversation OUVERTE, qui ne relit rien : la carte restait pleine et
  * tapable jusqu'au prochain rechargement.
  *
+ * #20019 — et la conversation ouverte n'était pas la seule à ne rien relire :
+ * l'annonce ne partait qu'à `conversation:<id>`, donc PAS au lecteur revenu à
+ * la LISTE, qui a quitté cette room et garde la sienne. L'audience vivante est
+ * désormais nommée, conversation par conversation.
+ *
  * @jest-environment node
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { announceCitedPostWithdrawal } from '../announceCitedPostWithdrawal';
+import { liveParticipantTable } from '../../__tests__/helpers/live-audience-double';
+import type { MongoDocument } from '../../__tests__/helpers/mongo-where';
 
 const POST_ID = '64b7f1f77bcf86cd79943001';
 const CITING_A = '64b7f1f77bcf86cd79943aaa';
 const CITING_B = '64b7f1f77bcf86cd79943bbb';
 const DELETED_AT = new Date('2026-09-25T10:00:00Z');
 
-type Emission = { room: string; event: string; payload: unknown };
+type Emission = { room: string | string[]; event: string; payload: unknown };
 
 function makeIo() {
   const emissions: Emission[] = [];
   const io = {
+    // Les rooms sont gardées TELLES QUELLES : `String(room)` sur un tableau rend
+    // « a,b » et range l'émission sous une clé qu'aucune assertion ne peut
+    // nommer — un double mentit aussi par ce qu'il ACCEPTE (cycle 188).
     to: jest.fn((room: string | string[]) => ({
       emit: (event: string, payload: unknown) => {
-        emissions.push({ room: String(room), event, payload });
+        emissions.push({ room, event, payload });
         return true;
       },
     })),
@@ -34,12 +44,20 @@ function makeIo() {
 
 type MessageRow = { conversationId: string; storyReplyToId: string | null };
 
-function makePrisma(rows: ReadonlyArray<MessageRow>) {
+function makePrisma(rows: ReadonlyArray<MessageRow>, participants: ReadonlyArray<MongoDocument> = []) {
   const findMany = jest.fn(async (args: { where: { storyReplyToId: string }; select?: object; distinct?: string[] }) =>
     rows.filter((row) => row.storyReplyToId === args.where.storyReplyToId).map((row) => ({ conversationId: row.conversationId })),
   );
-  return { prisma: { message: { findMany } }, findMany };
+  const participant = liveParticipantTable(participants);
+  return { prisma: { message: { findMany }, participant }, findMany, participant };
 }
+
+const living = (conversationId: string, suffix: string): MongoDocument => ({
+  id: `p-${suffix}`,
+  userId: `u-${suffix}`,
+  conversationId,
+  isActive: true,
+});
 
 const post = (overrides: Partial<{ deletedAt: Date | null; expiresAt: Date | null }> = {}) => ({
   id: POST_ID,
@@ -71,6 +89,9 @@ describe('announceCitedPostWithdrawal', () => {
         payload: { conversationId: CITING_B, postId: POST_ID, deletedAt: DELETED_AT.toISOString() },
       },
     ]);
+    // Sans participant à nommer, la room de conversation SEULE, sous sa forme
+    // de chaîne : le comportement d'avant #20019.
+    expect(emissions.every((emission) => typeof emission.room === 'string')).toBe(true);
   });
 
   it("une conversation qui ne cite PAS le post ne reçoit rien", async () => {
@@ -121,6 +142,58 @@ describe('announceCitedPostWithdrawal', () => {
 
     expect(findMany).not.toHaveBeenCalled();
     expect(emissions).toEqual([]);
+  });
+
+  it("#20019 — l'audience VIVANTE de chaque conversation, pas seulement son fil", async () => {
+    const { io, emissions } = makeIo();
+    const { prisma, participant } = makePrisma(
+      [
+        { conversationId: CITING_A, storyReplyToId: POST_ID },
+        { conversationId: CITING_B, storyReplyToId: POST_ID },
+      ],
+      [
+        living(CITING_A, 'a1'),
+        living(CITING_A, 'a2'),
+        { ...living(CITING_A, 'a-gone'), isActive: false },
+        { ...living(CITING_A, 'a-banni'), bannedAt: new Date('2026-11-01T00:00:00.000Z') },
+        living(CITING_B, 'b1'),
+      ],
+    );
+
+    await announceCitedPostWithdrawal({ prisma: prisma as never, io, post: post() });
+
+    expect(emissions.map((emission) => emission.room)).toEqual([
+      [ROOMS.conversation(CITING_A), 'user:u-a1', 'user:u-a2'],
+      [ROOMS.conversation(CITING_B), 'user:u-b1'],
+    ]);
+    // Une lecture d'audience PAR conversation citante : c'est le coût de
+    // l'élargissement, et il est proportionnel au nombre de conversations qui
+    // citent le post, pas au nombre de leurs participants.
+    expect(participant.reads()).toBe(2);
+  });
+
+  it("#20019 — une lecture d'audience qui LÈVE ne prive que SA conversation", async () => {
+    const { io, emissions } = makeIo();
+    const findMany = jest.fn(async () => [{ conversationId: CITING_A }, { conversationId: CITING_B }]);
+    let read = 0;
+    const participant = {
+      findMany: jest.fn(async () => {
+        read += 1;
+        if (read === 1) throw new Error('participant.findMany down');
+        return [{ id: 'p-b1', userId: 'u-b1' }];
+      }),
+    };
+
+    await announceCitedPostWithdrawal({
+      prisma: { message: { findMany }, participant } as never,
+      io,
+      post: post(),
+    });
+
+    expect(emissions.map((emission) => emission.room)).toEqual([
+      ROOMS.conversation(CITING_A),
+      [ROOMS.conversation(CITING_B), 'user:u-b1'],
+    ]);
   });
 
   it('sans socket, ne lit même pas la base', async () => {

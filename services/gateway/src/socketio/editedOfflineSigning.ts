@@ -18,6 +18,22 @@ import type { PlanOutcome } from './planOutcome';
  * (#18619) énonce la règle ; elle avait quatre consommateurs, et aucun transport
  * d'édition.
  *
+ * ─── Les DEUX autres raisons de ne rien enfiler, rapatriées ici ──────────────
+ *
+ * Elles vivaient en commentaire au site d'appel, dans `handleMessageEdit`, et
+ * c'est le site qui décide le MOINS de ce qu'elles disent :
+ *
+ * - **l'EXCLUSION** (`excludedQueueKeys`) — sans elle, le texte d'un message
+ *   hors du plancher d'historique d'un invité l'attendait dans Redis sous SA
+ *   clé, pendant 48 h, alors qu'aucune route ne le lui sert ;
+ * - **`'unknown'`** — quand la loi de lecture ne conclut pas, rien n'entre : on
+ *   ne sait NI qui est bloqué, NI qui est autorisé, et un contenu persisté deux
+ *   jours chez qui n'y a pas droit coûte plus qu'une remise perdue dont la base
+ *   garde la vérité.
+ *
+ * Les trois raisons gouvernent la MÊME décision — enfiler ou non — et elles se
+ * lisent donc ensemble, là où la décision se prend.
+ *
  * ─── Pourquoi `PLAN_UNAVAILABLE` ferme les DEUX canaux ───────────────────────
  *
  * `planOutcome.ts` l'écrit pour la diffusion : « l'adresse nue d'une pièce

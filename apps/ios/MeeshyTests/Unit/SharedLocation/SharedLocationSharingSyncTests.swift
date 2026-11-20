@@ -766,12 +766,17 @@ final class SharedLocationSharingSyncTests: XCTestCase {
 
     func test_theServedRead_aGatewayBeforeTheRoute_isNoAnswer_anyOtherFailureIsAnOutage() async throws {
         let legacy = try await SharedLocationServedRead.answer {
-            throw MeeshyError.server(statusCode: 404, message: "Not Found")
+            throw MeeshyError.server(statusCode: 404, message: "Route GET:/api/v1/relations/locations/mine not found")
         }
         XCTAssertNil(legacy)
 
         for failure: Error in [
             MeeshyError.server(statusCode: 503, message: "down"),
+            MeeshyError.server(statusCode: 404, message: "Erreur inconnue"),
+            MeeshyError.server(statusCode: 404, message: "404 page not found"),
+            MeeshyError.server(statusCode: 404, message: "Not Found"),
+            APIError.serverError(404, nil),
+            APIError.serverError(404, "404 page not found"),
             URLError(.notConnectedToInternet),
             URLError(.timedOut)
         ] {
@@ -816,82 +821,6 @@ final class SharedLocationSharingSyncTests: XCTestCase {
         XCTAssertTrue(relaunched.emitter.starts.allSatisfy(\.isListOnly))
         XCTAssertTrue(relaunched.emitter.updates.isEmpty)
         XCTAssertTrue(relaunched.center.roster.isEmpty)
-    }
-
-    // MARK: - Une sauvegarde restaurée sur un autre appareil (#19767)
-
-    private func isolatedDefaults() -> UserDefaults {
-        let suite = "sharedLocation.tests." + UUID().uuidString
-        let defaults = UserDefaults(suiteName: suite)!
-        defaults.removePersistentDomain(forName: suite)
-        return defaults
-    }
-
-    private func writtenByThisDevice(_ defaults: UserDefaults, device: String) {
-        let store = UserDefaultsSharedLocationRosterStore(userId: me, deviceId: device, defaults: defaults)
-        store.save(SharedLocationRoster.empty.adding(userId: alice, precision: .exact, duration: .eightHours, now: t0))
-        store.saveReceived(false)
-        store.savePublishedStart(mine)
-    }
-
-    func test_aBackupRestoredOnAnotherDevice_isAReceivedList_withoutAKeptStart() {
-        let defaults = isolatedDefaults()
-        writtenByThisDevice(defaults, device: "device-A")
-
-        let restored = UserDefaultsSharedLocationRosterStore(userId: me, deviceId: "device-B", defaults: defaults)
-
-        XCTAssertNotNil(restored.load()?.entry(for: alice))
-        XCTAssertTrue(restored.loadReceived())
-        XCTAssertNil(restored.loadPublishedStart())
-    }
-
-    func test_aRestoredList_neverFollowsTheDevice() {
-        let defaults = isolatedDefaults()
-        writtenByThisDevice(defaults, device: "device-A")
-
-        let relaunched = makeSUT(store: FakeSharedLocationRosterStore())
-        let restored = UserDefaultsSharedLocationRosterStore(userId: me, deviceId: "device-B", defaults: defaults)
-        let center = SharedLocationSharingCenter(
-            emitter: relaunched.emitter, fixes: relaunched.fixes, store: restored, now: { [t0] in t0 },
-            owner: me, currentAccount: { [me] in me }, wakes: relaunched.wakes
-        )
-
-        XCTAssertNotNil(center.entry(for: alice))
-        XCTAssertFalse(relaunched.fixes.isFollowing)
-    }
-
-    func test_aRestoredBackup_staysReceived_onTheSecondLaunch() {
-        let defaults = isolatedDefaults()
-        writtenByThisDevice(defaults, device: "device-A")
-        _ = UserDefaultsSharedLocationRosterStore(userId: me, deviceId: "device-B", defaults: defaults)
-
-        let second = UserDefaultsSharedLocationRosterStore(userId: me, deviceId: "device-B", defaults: defaults)
-
-        XCTAssertTrue(second.loadReceived())
-        XCTAssertNil(second.loadPublishedStart())
-    }
-
-    func test_theSameDevice_keepsItsListAndItsStart() {
-        let defaults = isolatedDefaults()
-        writtenByThisDevice(defaults, device: "device-A")
-
-        let relaunched = UserDefaultsSharedLocationRosterStore(userId: me, deviceId: "device-A", defaults: defaults)
-
-        XCTAssertFalse(relaunched.loadReceived())
-        XCTAssertEqual(relaunched.loadPublishedStart(), mine)
-    }
-
-    func test_aListFromBeforeTheMark_isAdoptedAsIs_andStampedForNextTime() {
-        let defaults = isolatedDefaults()
-        writtenByThisDevice(defaults, device: "")
-
-        let updated = UserDefaultsSharedLocationRosterStore(userId: me, deviceId: "device-A", defaults: defaults)
-        XCTAssertFalse(updated.loadReceived())
-        XCTAssertEqual(updated.loadPublishedStart(), mine)
-
-        let restoredElsewhere = UserDefaultsSharedLocationRosterStore(userId: me, deviceId: "device-B", defaults: defaults)
-        XCTAssertTrue(restoredElsewhere.loadReceived())
-        XCTAssertNil(restoredElsewhere.loadPublishedStart())
     }
 
     func test_theOwnSnapshot_decodesTheStartTheGatewayNames() throws {

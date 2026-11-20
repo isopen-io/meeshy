@@ -14,6 +14,8 @@ public protocol CommunityServiceProviding: Sendable {
     func updateMemberRole(communityId: String, memberId: String, role: MemberRole) async throws -> APICommunityMember
     func removeMember(communityId: String, userId: String) async throws
     func join(communityId: String) async throws -> CommunityJoinOutcome
+    func joinRequests(communityId: String, cursor: String?, limit: Int) async throws -> CommunityJoinRequestPage
+    func decideJoinRequest(communityId: String, requestId: String, decision: CommunityJoinRequestDecision) async throws -> APICommunityMember?
     func leave(communityId: String) async throws
     func invite(communityId: String, userId: String) async throws -> APICommunityMember
     func invite(communityId: String, userIds: [String]) async throws
@@ -145,6 +147,46 @@ public final class CommunityService: CommunityServiceProviding, Sendable {
             body: JoinCommunityRequest(acceptsPending: true)
         )
         return response.data
+    }
+
+    // MARK: - Join Requests (#19877)
+
+    /// Les demandes en attente, les plus récentes d'abord, continuées par
+    /// `pagination.nextCursor`. Tout autre lecteur qu'un intendant reçoit le
+    /// 404 générique : ne la demander qu'à un intendant.
+    public func joinRequests(communityId: String, cursor: String? = nil, limit: Int = 50) async throws -> CommunityJoinRequestPage {
+        var queryItems = [URLQueryItem(name: "limit", value: "\(limit)")]
+        if let cursor, !cursor.isEmpty {
+            queryItems.append(URLQueryItem(name: "cursor", value: cursor))
+        }
+        let response: PaginatedAPIResponse<LossyDecodableArray<APICommunityJoinRequest>> = try await api.request(
+            CommunitiesEndpoint.byIdJoinRequests(id: communityId),
+            queryItems: queryItems
+        )
+        let hasMore = response.pagination?.hasMore == true
+        return CommunityJoinRequestPage(
+            requests: response.data.elements,
+            nextCursor: hasMore ? response.pagination?.nextCursor : nil
+        )
+    }
+
+    /// Accepter rend le membre entré (`nil` si sa forme est illisible) ;
+    /// refuser ne fait entrer personne et rend toujours `nil`.
+    public func decideJoinRequest(communityId: String, requestId: String, decision: CommunityJoinRequestDecision) async throws -> APICommunityMember? {
+        switch decision {
+        case .accept:
+            let response: APIResponse<LossyBox<APICommunityMember>> = try await api.request(
+                CommunitiesEndpoint.byIdJoinRequestsByRequestIdAccept(id: communityId, requestId: requestId),
+                method: "POST"
+            )
+            return response.data.value
+        case .reject:
+            let _: APIResponse<DiscardedResponseBody> = try await api.request(
+                CommunitiesEndpoint.byIdJoinRequestsByRequestIdReject(id: communityId, requestId: requestId),
+                method: "POST"
+            )
+            return nil
+        }
     }
 
     // MARK: - Leave Community
