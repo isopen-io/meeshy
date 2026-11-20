@@ -74,6 +74,8 @@ export type CommunitySummary = {
   readonly requiresJoinApproval?: boolean;
   /** La demande d'entrée DU LECTEUR (#19868) : `'pending'` = envoyée, en attente ; `null` = aucune ; absent = non servi. */
   readonly viewerJoinRequest?: CommunityJoinRequestState | null;
+  /** Après un refus de moins de sept jours (#19879) : l'instant ISO où le lecteur peut redemander ; `null` = aucun refus en cours ; absent = non servi. */
+  readonly viewerJoinRetryAt?: string | null;
 };
 
 export type CommunityJoinRequestState = 'pending';
@@ -120,6 +122,7 @@ const WireCommunity = z.object({
   onlineMemberCount: counter,
   requiresJoinApproval: z.optional(z.nullable(z.boolean())),
   currentUserJoinRequest: optionalText,
+  currentUserJoinRetryAt: optionalText,
 });
 
 const WireConversation = z.object({
@@ -141,6 +144,10 @@ const servedText = (value: string | null | undefined): string | null => {
   const text = textOrNull(value);
   return text === null ? null : decodeHtmlText(text);
 };
+
+/** Un instant ISO lisible, rendu tel que servi ; tout le reste se lit comme « aucun ». */
+export const isoInstantOrNull = (value: string | null | undefined): string | null =>
+  typeof value === 'string' && Number.isFinite(Date.parse(value)) ? value : null;
 
 const countOf = (...values: ReadonlyArray<number | null | undefined>): number => {
   const found = values.find((value) => typeof value === 'number' && Number.isFinite(value) && value >= 0);
@@ -174,6 +181,7 @@ export function decodeCommunity(raw: unknown): CommunitySummary | null {
     ...(wire.onlineMemberCount === undefined ? {} : { onlineMemberCount: onlineCountOf(wire.onlineMemberCount) }),
     ...(wire.requiresJoinApproval === true ? { requiresJoinApproval: true } : {}),
     ...(wire.currentUserJoinRequest === undefined ? {} : { viewerJoinRequest: wire.currentUserJoinRequest === 'pending' ? 'pending' : null }),
+    ...(wire.currentUserJoinRetryAt === undefined ? {} : { viewerJoinRetryAt: isoInstantOrNull(wire.currentUserJoinRetryAt) }),
   };
 }
 
