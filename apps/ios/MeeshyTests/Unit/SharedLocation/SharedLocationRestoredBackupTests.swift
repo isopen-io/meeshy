@@ -7,6 +7,8 @@ import MeeshySDK
 /// ailleurs. Elle s'efface avec sa marque « reçue », son démarrage et ses retraits en attente, et la relecture du partage
 /// servi la reconstruit, reçue : rien de la sauvegarde ne repart, ni un arrêt ni une liste périmée. La marque de
 /// l'appareil est une empreinte, jamais l'identifiant d'installation, et un trousseau illisible ne juge rien.
+/// Un appareil qui n'a encore rien relu (installation neuve, sauvegarde effacée, relecture en panne) relit avant de
+/// composer une liste : « Partager » et « Arrêter » réunissent le partage lancé ailleurs (#20055, #19999).
 @MainActor
 final class SharedLocationRestoredBackupTests: XCTestCase {
 
@@ -40,8 +42,11 @@ final class SharedLocationRestoredBackupTests: XCTestCase {
 
     private final class Served {
         var snapshot: SharedLocationOwnSnapshot?
+        var outage: Error?
         var reads = 0
     }
+
+    private struct Outage: Error {}
 
     private struct Relaunch {
         let center: SharedLocationSharingCenter
@@ -62,6 +67,7 @@ final class SharedLocationRestoredBackupTests: XCTestCase {
             socketReady: sockets.eraseToAnyPublisher(),
             served: {
                 served.reads += 1
+                if let outage = served.outage { throw outage }
                 return served.snapshot
             }
         )
@@ -248,6 +254,84 @@ final class SharedLocationRestoredBackupTests: XCTestCase {
         XCTAssertNotNil(store.load()?.entry(for: alice))
         XCTAssertEqual(store.loadPublishedStart(), mine)
         XCTAssertEqual(defaults.string(forKey: "sharedLocation.roster." + me + ".device"), mark)
+    }
+
+    // MARK: - Un appareil qui n'a rien relu relit avant de composer (#20055, #19999)
+
+    private let carol = "dddddddddddddddddddddddd"
+
+    private func servedElsewhere(_ people: [String]) -> SharedLocationOwnSnapshot {
+        SharedLocationOwnSnapshot(
+            recipients: people.map {
+                SharedLocationOwnRecipient(userId: $0, precision: .exact, expiresAt: t0.addingTimeInterval(3600))
+            },
+            startedAt: "2026-01-01T00:00:05.000Z"
+        )
+    }
+
+    func test_share_onAFreshInstall_readsFirst_andTheListSentKeepsWhatAnotherDeviceShares() async {
+        let restored = relaunch(on: FakeSharedLocationRosterStore())
+        restored.served.snapshot = servedElsewhere([alice])
+
+        let problem = await restored.center.share(with: carol, precision: .city, duration: .oneHour)
+
+        XCTAssertNil(problem)
+        XCTAssertEqual(restored.served.reads, 1)
+        XCTAssertEqual(Set(restored.emitter.starts.last?.recipients.map(\.userId) ?? []), [alice, carol])
+    }
+
+    func test_share_onAFreshInstall_aReadOutage_refusesAndSendsNothing() async {
+        let restored = relaunch(on: FakeSharedLocationRosterStore())
+        restored.served.outage = Outage()
+
+        let problem = await restored.center.share(with: carol, precision: .city, duration: .oneHour)
+
+        XCTAssertEqual(problem, .refused(.offline))
+        XCTAssertTrue(restored.emitter.starts.isEmpty)
+        XCTAssertTrue(restored.center.roster.isEmpty)
+        XCTAssertFalse(restored.fixes.isFollowing)
+    }
+
+    func test_share_afterARead_doesNotReadAgain() async {
+        let restored = relaunch(on: FakeSharedLocationRosterStore())
+        restored.served.snapshot = servedElsewhere([alice])
+        _ = await restored.center.share(with: carol, precision: .city, duration: .oneHour)
+
+        _ = await restored.center.share(with: bob, precision: .city, duration: .oneHour)
+
+        XCTAssertEqual(restored.served.reads, 1)
+    }
+
+    func test_stop_onARelaunchBeforeTheRead_keepsThePersonAddedOnAnotherDevice() async {
+        let store = FakeSharedLocationRosterStore()
+        store.save(sharingAlice().adding(userId: bob, precision: .city, duration: .eightHours, now: t0))
+        store.publishedStart = mine
+        let relaunched = relaunch(on: store)
+        relaunched.served.snapshot = servedElsewhere([alice, bob, carol])
+
+        let problem = await relaunched.center.stopSharing(with: bob)
+
+        XCTAssertNil(problem)
+        XCTAssertEqual(relaunched.served.reads, 1)
+        XCTAssertEqual(relaunched.emitter.stops, 0)
+        XCTAssertTrue(relaunched.emitter.starts.allSatisfy(\.isListOnly))
+        XCTAssertEqual(Set(relaunched.emitter.starts.last?.recipients.map(\.userId) ?? []), [alice, carol])
+        XCTAssertNil(relaunched.center.entry(for: bob))
+        XCTAssertNotNil(relaunched.center.entry(for: carol))
+    }
+
+    func test_stop_onARelaunchBeforeTheRead_theLastLocalPerson_neverStopsTheShareOfAnotherDevice() async {
+        let store = FakeSharedLocationRosterStore()
+        store.save(sharingAlice())
+        store.publishedStart = mine
+        let relaunched = relaunch(on: store)
+        relaunched.served.snapshot = servedElsewhere([alice, carol])
+
+        _ = await relaunched.center.stopSharing(with: alice)
+
+        XCTAssertEqual(relaunched.emitter.stops, 0)
+        XCTAssertEqual(relaunched.emitter.starts.last?.recipients.map(\.userId), [carol])
+        XCTAssertTrue(relaunched.emitter.updates.isEmpty)
     }
 }
 
