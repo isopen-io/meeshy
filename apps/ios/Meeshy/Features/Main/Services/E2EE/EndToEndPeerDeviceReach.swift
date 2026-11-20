@@ -102,7 +102,7 @@ enum EndToEndParticipantWithoutDeviceRefusal {
         let name = namesPeer ? PeerFirstName.of(peerName) : ""
         guard !name.isEmpty else {
             return String(localized: "conversation.e2ee.participantWithoutDevice.anonymous",
-                          defaultValue: "Un membre ne peut pas encore recevoir de messages chiffrés : rien n’a été activé.",
+                          defaultValue: "Un membre ne peut pas encore recevoir de messages chiffrés : rien n’est activé.",
                           bundle: .main)
         }
         return String(localized: "conversation.e2ee.participantWithoutDevice.named",

@@ -17846,7 +17846,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ein Mitglied kann noch keine verschlüsselten Nachrichten empfangen: Es wurde nichts aktiviert."
+            "value": "Ein Mitglied kann noch keine verschlüsselten Nachrichten empfangen."
           }
         },
         "en": {
@@ -17858,19 +17858,19 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un miembro todavía no puede recibir mensajes cifrados: no se activó nada."
+            "value": "Un miembro aún no puede recibir mensajes cifrados: no se activó nada."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un membre ne peut pas encore recevoir de messages chiffrés : rien n’a été activé."
+            "value": "Un membre ne peut pas encore recevoir de messages chiffrés : rien n’est activé."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un membro non può ancora ricevere messaggi crittografati: non è stato attivato nulla."
+            "value": "Un membro non può ancora ricevere messaggi cifrati: nulla è attivato."
           }
         },
         "pt-BR": {
@@ -17893,7 +17893,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ kann noch keine verschlüsselten Nachrichten empfangen: Es wurde nichts aktiviert."
+            "value": "%@ kann noch keine verschlüsselten Nachrichten empfangen."
           }
         },
         "en": {
@@ -18081,37 +18081,37 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ kann keine verschlüsselten Nachrichten empfangen: Nachricht in eurer unverschlüsselten Unterhaltung gesendet."
+            "value": "%@ empfängt nichts Verschlüsseltes: im unverschlüsselten Chat gesendet."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ can’t receive encrypted messages: message sent in your unencrypted conversation."
+            "value": "%@ can’t receive encrypted messages: sent in your unencrypted chat."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ no puede recibir mensajes cifrados: mensaje enviado en tu conversación sin cifrar."
+            "value": "%@ no recibe mensajes cifrados: enviado en tu chat sin cifrar."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ ne peut pas recevoir de messages chiffrés : message envoyé dans votre conversation non chiffrée."
+            "value": "%@ ne reçoit pas le chiffré : message parti dans votre conversation en clair."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ non può ricevere messaggi crittografati: messaggio inviato nella vostra conversazione non crittografata."
+            "value": "%@ non riceve messaggi cifrati: inviato nella chat non cifrata."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ não pode receber mensagens criptografadas: mensagem enviada na sua conversa sem criptografia."
+            "value": "%@ não recebe mensagens criptografadas: enviada na conversa sem criptografia."
           }
         }
       }
@@ -18128,37 +18128,37 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Gegenüber kann keine verschlüsselten Nachrichten empfangen: Nachricht in eurer unverschlüsselten Unterhaltung gesendet."
+            "value": "Kontakt ohne Verschlüsselung: im unverschlüsselten Chat gesendet."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your contact can’t receive encrypted messages: message sent in your unencrypted conversation."
+            "value": "Your contact can’t receive encrypted messages: sent in your unencrypted chat."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu contacto no puede recibir mensajes cifrados: mensaje enviado en tu conversación sin cifrar."
+            "value": "Tu contacto no recibe mensajes cifrados: enviado en tu chat sin cifrar."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Votre correspondant ne peut pas recevoir de messages chiffrés : message envoyé dans votre conversation non chiffrée."
+            "value": "Votre correspondant ne reçoit pas le chiffré : message parti en clair."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il tuo interlocutore non può ricevere messaggi crittografati: messaggio inviato nella vostra conversazione non crittografata."
+            "value": "Il contatto non riceve messaggi cifrati: inviato nella chat non cifrata."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seu contato não pode receber mensagens criptografadas: mensagem enviada na sua conversa sem criptografia."
+            "value": "Seu contato não recebe mensagens criptografadas: enviada sem criptografia."
           }
         }
       }

@@ -1,6 +1,6 @@
-import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
+import { scanLiveParticipants, type ParticipantScanOptions } from './conversationAudienceRooms';
 import { enhancedLogger } from '../utils/logger-enhanced';
 
 import {
@@ -39,22 +39,48 @@ export type ParticipantSuperset = Array<PreviewPrismParticipant & { joinedAt: Da
  * partager la ligne. Une jumelle documentée reste une jumelle : la prochaine
  * évolution du `select` n'aurait fait rougir aucun témoin en n'en touchant
  * qu'une.
+ *
+ * **Et la lecture est BORNÉE depuis #20051**, par le site unique de la borne
+ * (`scanLiveParticipants`). Ce qui compte ici n'est pas la borne mais ce
+ * qu'elle fait d'une TRONCATURE : la même chose qu'une panne, `undefined`.
+ * Rendre les lignes LUES serait le pire des trois comportements possibles — la
+ * file recevrait une liste PARTIELLE, qu'elle traiterait comme la liste
+ * entière, et les absents qu'elle ne nomme pas ne recevraient jamais le
+ * message : ni en direct (ils sont hors ligne), ni au rejeu (ils n'auraient pas
+ * d'entrée). C'est l'asymétrie de #20050 portée au contenu le plus cher du
+ * produit, et c'est pourquoi une borne naïve y serait pire que pas de borne.
  */
 export async function fetchParticipantSuperset(
   prisma: PrismaClient,
   conversationId: string,
-  transport: string
+  transport: string,
+  /** Le plafond, pour qu'un témoin puisse l'ATTEINDRE. La production ne le passe jamais. */
+  options?: Pick<ParticipantScanOptions, 'cap'>
 ): Promise<ParticipantSuperset | undefined> {
-  try {
-    return await prisma.participant.findMany({
-      where: { conversationId, ...PARTICIPATION_VIVANTE },
-      select: { ...PREVIEW_PRISM_PARTICIPANT_SELECT, joinedAt: true },
-    }) as ParticipantSuperset;
-  } catch (error) {
+  let failed: unknown;
+  const scan = await scanLiveParticipants<PreviewPrismParticipant & { joinedAt: Date }>(
+    prisma,
+    conversationId,
+    { ...PREVIEW_PRISM_PARTICIPANT_SELECT, joinedAt: true },
+    {
+      ...(options?.cap === undefined ? {} : { cap: options.cap }),
+      scanLabel: `message-new-superset:${transport}`,
+      onError: (error) => { failed = error; },
+    },
+  );
+  if (failed !== undefined) {
     logger.warn(
       'participant fetch failed — signaux cosmétiques sautés, la file hors ligne refait sa propre requête',
-      { transport, conversationId, error }
+      { transport, conversationId, error: failed }
     );
     return undefined;
   }
+  // Une TRONCATURE se rend comme une PANNE, et pour la même raison : les deux
+  // ne savent pas qui sont tous les participants. Le journal les SÉPARE —
+  // `scanLiveParticipants` a déjà émis sa ligne de troncature, avec le
+  // transport dans son `scanLabel` — mais le verdict rendu est le même, parce
+  // que le consommateur destructif, lui, ne fait qu'une différence : liste, ou
+  // pas de liste.
+  if (!scan.complete) return undefined;
+  return [...scan.rows] as ParticipantSuperset;
 }

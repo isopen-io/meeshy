@@ -240,3 +240,47 @@ c'est le seul montage où cette garde-là est la seule à décider.
 > **Un témoin qui porte le NOM d'une garde doit tomber quand cette garde seule
 > tombe.** Vérifier qu'il rougit ne suffit pas : il faut vérifier qu'il rougit
 > pour SA raison, et cela se mesure en mutant cette garde-là, isolément.
+
+---
+
+## Suite du même cycle — le superset de `message:new` (#20051, premier lot)
+
+Le lot précédent fermé et fusionné, le cycle a enchaîné sur la liste gelée, en
+prenant le site dont la troncature coûte le plus cher — et pas celui qui était
+le plus facile.
+
+`fetchParticipantSuperset` (`socketio/participant-superset.ts`) est le site
+unique du `select` que les quatre transports de `message:new` partagent, et sa
+valeur voyage jusqu'à la **file hors ligne** (`params.participants`). C'est la
+TROISIÈME porte de sortie d'un message, et la seule DURABLE : un destinataire
+déconnecté n'apprend l'existence du message que par le rejeu.
+
+La fonction séparait déjà l'ignorance de l'affirmation, et son doc-comment
+disait pourquoi : `undefined` ⇒ « je n'ai rien prouvé », et l'unité partagée
+refait SA requête ; `[]` ⇒ « aucun participant », donc n'enfile pour personne
+(cycle 116). **Il manquait le troisième cas** — une liste TRONQUÉE, que la borne
+rend possible, et que la file traiterait comme la liste ENTIÈRE.
+
+> **Le consommateur destructif ne fait qu'une différence : liste, ou pas de
+> liste.** C'est ce qui décide le verdict : une troncature s'y rend comme une
+> PANNE. Les deux restent séparées dans le JOURNAL — `scanLiveParticipants`
+> émet sa ligne de troncature avec le transport dans son `scanLabel` — mais pas
+> dans ce qui est rendu, parce que l'appelant n'a pas de troisième branche à
+> offrir. Rendre les lignes lues aurait été le pire des trois comportements
+> possibles : les absents non nommés ne recevraient jamais le message, ni en
+> direct (ils sont hors ligne), ni au rejeu (ils n'auraient pas d'entrée).
+
+C'est l'asymétrie de #20050 portée au contenu le plus cher du produit, et la
+raison pour laquelle ce site-là non plus ne pouvait pas être borné « au
+passage ».
+
+**Le ROUGE, mesuré avant l'implémentation** : trois participants vivants, un
+plafond à deux ⇒ la fonction rendait **les trois lignes** et aucune borne
+(`take: undefined`). Les deux témoins tombaient.
+
+**Ce que le double honore, et pourquoi c'est la moitié du lot** : `findManyIn`
+projette le `select` comme Prisma le projette, et le témoin de projection a
+servi dès l'écriture — ma fixture posait les préférences de langue à PLAT sur
+le participant, quand `PREVIEW_PRISM_PARTICIPANT_SELECT` les demande sur la
+ligne `User` imbriquée. Un double qui rend le document entier aurait accepté ma
+fixture fausse et attesté une projection que la production ne fait pas.
