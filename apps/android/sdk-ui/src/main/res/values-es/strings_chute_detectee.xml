@@ -11,5 +11,5 @@
     <string name="fall_share_person">Avisar a %1$s si mi reloj detecta una caída</string>
     <string name="fall_share_person_scope">Si tu Apple Watch detecta una caída, se avisa a %1$s enseguida.</string>
     <string name="fall_me_title">Detección de caídas</string>
-    <string name="fall_me_unavailable">No disponible en Android: viene de un Apple Watch, configurado en la app de iPhone.</string>
+    <string name="fall_me_unavailable">No disponible en Android: viene de un Apple Watch configurado desde un iPhone.</string>
 </resources>

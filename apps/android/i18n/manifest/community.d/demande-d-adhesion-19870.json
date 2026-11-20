@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:community": {
+      "resDir": "feature/community/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "community.join.request",
+          "androidName": "community_join_request",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.join.requested",
+          "androidName": "community_join_requested",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.join.requested.waiting",
+          "androidName": "community_join_requested_waiting",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.join.cooldown",
+          "androidName": "community_join_cooldown",
+          "status": "candidate"
+        }
+      ]
+    }
+  }
+}

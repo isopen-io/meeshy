@@ -11,5 +11,5 @@
     <string name="fall_share_person">Prévenir %1$s si ma montre détecte une chute</string>
     <string name="fall_share_person_scope">Si votre Apple Watch détecte une chute, %1$s est prévenu tout de suite.</string>
     <string name="fall_me_title">Détection de chute</string>
-    <string name="fall_me_unavailable">Indisponible sur Android : elle vient d\'une Apple Watch, réglée depuis l\'app iPhone.</string>
+    <string name="fall_me_unavailable">Indisponible sur Android : elle vient d\'une Apple Watch réglée depuis l\'iPhone.</string>
 </resources>
