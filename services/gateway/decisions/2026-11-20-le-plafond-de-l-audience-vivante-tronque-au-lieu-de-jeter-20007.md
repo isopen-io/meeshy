@@ -1,6 +1,6 @@
-# Le plafond de l'audience vivante TRONQUE en le journalisant, et ce qu'il nomme part en UNE émission (2026-11-20, #20007)
+## Le plafond de l'audience vivante TRONQUE en le journalisant, et ce qu'il nomme part en UNE émission (2026-11-20, #20007)
 
-## La décision
+### La décision
 
 Les cinq familles de mutation qui ne portent que des **ids** — `message:deleted`,
 `message:expired`, `message:pinned`, `message:unpinned`, et les deux faits de vue
@@ -31,7 +31,7 @@ de conversation **et** aux rooms personnelles des participants vivants
   PARTAGÉE avec la file hors ligne, où `[]` vaut « personne » et n'enfile pour
   personne (cycle 116).
 
-## Ce que la décision ÉCARTE, et pourquoi
+### Ce que la décision ÉCARTE, et pourquoi
 
 Une première version PAGINAIT la lecture (curseur sur `id`) et émettait **par
 lots**, en assumant une double livraison pour les sockets présents à la fois dans
@@ -56,7 +56,7 @@ la room de conversation et dans un lot ultérieur. L'audit adversarial du lot l'
 **#20021 est donc sans objet** : il n'y a ni lot, ni doublon, ni porte à
 élargir.
 
-## Ce que la décision ne change pas
+### Ce que la décision ne change pas
 
 - **L'ÉDITION garde son audience propre**, gardée par `readership`
   (`editedAudience.ts`) : son texte n'est pas un id.
@@ -71,7 +71,7 @@ la room de conversation et dans un lot ultérieur. L'audit adversarial du lot l'
 - **Aucun index, aucune migration** : la requête est celle d'avant le lot, à la
   valeur du `take` près.
 
-## Sites
+### Sites
 
 `socketio/conversationAudienceRooms.ts` (`loadLiveAudience`,
 `conversationAudienceRooms`, `filterLiveAudience`), consommé par
