@@ -22,7 +22,15 @@ jest.mock('../../../../routes/conversations/utils/access-control', () =>
     jest.requireActual('../../../../routes/conversations/utils/access-control') as Record<string, unknown>,
     (...args: any[]) => mockCanAccessConversation(...args)));
 
+// #20017 — PROLONGER, jamais remplacer. Ce double énumérait cinq champs de
+// `attachmentMediaSelect` et rien d'autre : sous lui, tout ce que le module
+// GAGNE vaut `undefined` en silence — `attachmentProtectionSelect` compris,
+// dont le spread devient alors un no-op, et la garde de contenu latéral de ce
+// fichier serait inerte sans qu'un témoin tombe. C'est le patron que le dépôt
+// proscrit depuis les cycles 86, 91, 93 et 104, et il avait déjà coûté deux
+// fois : `jest.requireActual` + surcharge CIBLÉE.
 jest.mock('../../../../services/attachments/attachmentIncludes', () => ({
+  ...(jest.requireActual('../../../../services/attachments/attachmentIncludes') as Record<string, unknown>),
   attachmentMediaSelect: {
     id: true,
     fileName: true,
