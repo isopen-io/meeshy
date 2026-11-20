@@ -476,7 +476,8 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
       precision: recipient.precision ?? SHARED_LOCATION_DEFAULT_PRECISION,
       ...(recipient.expiresInSeconds === undefined ? {} : { expiresAt: new Date(Math.min(term, now + recipient.expiresInSeconds * 1000)).toISOString() }),
     }));
-  const position = parsed.data.position;
+  const manual = parsed.data.source === 'manual';
+  const position = parsed.data.position && manual ? { latitude: parsed.data.position.latitude, longitude: parsed.data.position.longitude } : parsed.data.position;
   const termIso = new Date(term).toISOString();
   const shareBattery = parsed.data.shareBattery;
 
@@ -486,12 +487,13 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
     const generation = await sharedLocationGeneration(deps.cache, emitterId);
     if (!(await accountStates(deps.prisma, [emitterId])).usable.has(emitterId)) return STOPPED;
     previous = await readSharedLocation(deps.cache, emitterId, now);
+    if (position && previous?.source === 'manual' && parsed.data.source === undefined) return FIXED_POINT;
     const sessionId = randomUUID();
     if (position) {
       state = {
         sessionId, recipients, position, updatedAt: new Date(now).toISOString(), expiresAt: termIso, startedAt: new Date(now).toISOString(),
         ...(shareBattery === true ? { shareBattery: true as const } : {}),
-        ...(parsed.data.source === 'manual' ? { source: 'manual' as const } : {}),
+        ...(manual ? { source: 'manual' as const } : {}),
       };
     } else {
       if (!previous) return NOT_SHARING;

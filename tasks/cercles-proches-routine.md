@@ -1707,3 +1707,19 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   et `android.yml` en `workflow_dispatch`.
 - Prochain lot : fusion de cette PR, puis #20054, #20056, #20086, #20087 ; #19682 et #19997 attendent la décision du
   porteur.
+
+## 2026-11-20 — réveil de 23 h : lot #19557 (moitié serveur) + #20087 (moitié serveur)
+
+- Reprise : #20088 fusionnée (b79d1f006), #19999 et #20055 fermées. Aucune PR de la routine ouverte.
+- Constat : #20087 suppose une source que la passerelle ne connaissait pas — #19557 (point choisi à la main) n'avait
+  jamais été servi côté passerelle. Lot : les deux moitiés SERVEUR ensemble, branche
+  `claude/cercles-20087-source-servie`.
+- Mise en œuvre : `location:share-start` accepte `source?: 'device' | 'manual'` (absente ⇒ device ; manual exige une
+  position) ; l'état scellé garde `source: 'manual'`, la liste seule la reprend ; `GET /relations/locations/mine` sert
+  `source` (additif) ; `location:share-update` sur un point choisi rend `SHARED_LOCATION_FIXED_POINT` sans rien écrire ni
+  servir. Le lecteur ne reçoit rien de la source.
+- `acceptsManualSource` n'est PAS annoncé : « Choisir sur la carte » reste éteint tant qu'iOS et Android ne lisent pas la
+  source servie (moitié client de #20087) — sinon le défaut M2 deviendrait atteignable.
+- Prochain lot : moitié client de #20087 (iOS + Android : un partage servi `manual` réuni ne republie jamais la position
+  de l'appareil ; « Partager » depuis l'appareil devant un point choisi demande), puis annoncer `acceptsManualSource`
+  (#19557), puis #20054, #20056, #20086.

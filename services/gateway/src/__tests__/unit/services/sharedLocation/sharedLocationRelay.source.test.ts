@@ -75,11 +75,31 @@ describe('mes appareils relisent la source du partage en cours', () => {
     expect(await ownSharedLocationFor(m.deps, EMETTEUR)).toMatchObject({ source: 'manual', recipients: [{ userId: AMI.toLowerCase() }] });
   });
 
-  it('un nouveau « Partager » depuis l’appareil remplace le point choisi : la relecture le dit', async () => {
+  it('un « Partager » qui DIT « device » remplace le point choisi : la relecture le dit', async () => {
     const m = monde();
     await partager(m, { source: 'manual' });
     m.avancer(MINUTE);
+    expect(await partager(m, { source: 'device' })).toMatchObject({ success: true });
+    expect(await ownSharedLocationFor(m.deps, EMETTEUR)).toMatchObject({ source: 'device' });
+  });
+
+  it('un démarrage avec position SANS source (client d’avant, ou réunion du partage servi) ne remplace pas un point choisi', async () => {
+    const m = monde();
+    await partager(m, { source: 'manual' });
+    const avant = changes(m, AMI).length;
+    m.avancer(MINUTE);
+
+    expect(await partager(m, { position: PLUS_LOIN })).toMatchObject({ success: false, code: SHARED_LOCATION_ERROR_CODES.FIXED_POINT });
+    expect(changes(m, AMI)).toHaveLength(avant);
+    expect((await readSharedLocation(m.deps.cache, EMETTEUR, m.deps.now()))).toMatchObject({ source: 'manual', position: { latitude: PARIS.latitude, longitude: PARIS.longitude } });
+  });
+
+  it('un état rangé avant le lot (sans source) se lit « device » et accepte les mises à jour', async () => {
+    const m = monde();
     await partager(m);
+    expect((await readSharedLocation(m.deps.cache, EMETTEUR, m.deps.now()))?.source).toBeUndefined();
+    m.avancer(MINUTE);
+    expect(await updateSharedLocation(m.deps, EMETTEUR, PLUS_LOIN)).toMatchObject({ success: true });
     expect(await ownSharedLocationFor(m.deps, EMETTEUR)).toMatchObject({ source: 'device' });
   });
 
@@ -100,7 +120,7 @@ describe('une mise à jour d’appareil ne remplace jamais un point choisi', () 
 
     expect(ack).toMatchObject({ success: false, code: SHARED_LOCATION_ERROR_CODES.FIXED_POINT });
     expect(changes(m, AMI)).toHaveLength(avant);
-    expect((await readSharedLocation(m.deps.cache, EMETTEUR, m.deps.now()))?.position).toEqual(PARIS);
+    expect((await readSharedLocation(m.deps.cache, EMETTEUR, m.deps.now()))?.position).toEqual({ latitude: PARIS.latitude, longitude: PARIS.longitude });
   });
 
   it('acceptée sur un partage « device », comme avant', async () => {
@@ -108,6 +128,15 @@ describe('une mise à jour d’appareil ne remplace jamais un point choisi', () 
     await partager(m);
     m.avancer(MINUTE);
     expect(await updateSharedLocation(m.deps, EMETTEUR, PLUS_LOIN)).toMatchObject({ success: true });
+  });
+});
+
+describe('un point choisi ne porte rien de l’appareil', () => {
+  it('ni mouvement ni précision réelle ne sont rangés ni servis à côté du point', async () => {
+    const m = monde();
+    await partager(m, { source: 'manual', position: { ...PARIS, accuracy: 5, motion: 'automotive' } });
+    expect((await readSharedLocation(m.deps.cache, EMETTEUR, m.deps.now()))?.position).toEqual({ latitude: PARIS.latitude, longitude: PARIS.longitude });
+    for (const e of changes(m, AMI)) expect(e.data).not.toHaveProperty('motion');
   });
 });
 
