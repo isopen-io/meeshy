@@ -136,8 +136,11 @@ describe('la libération n’est pas une course (#19956)', () => {
 
   it('efface ce qui PEND au message avant sa ligne — les enveloppes libsignal en tête', async () => {
     const { prisma } = makeStore(['a'], 'zzz', 'zzz');
-    const envelopes = jest.fn(async () => ({ count: 2 }));
-    const del = jest.fn(async () => ({ id: MSG_ID }));
+    // Les doubles déclarent la forme de l'appel : sans paramètre, `jest.fn`
+    // infère un mock à ZÉRO argument et `toHaveBeenCalledWith({…})` est un
+    // `TS2554` que seul `tsconfig.test.json` voit.
+    const envelopes = jest.fn(async (_args: { readonly where: { readonly messageId: string } }) => ({ count: 2 }));
+    const del = jest.fn(async (_args: { readonly where: { readonly id: string } }) => ({ id: MSG_ID }));
     const spied = { ...prisma, messageEnvelope: { deleteMany: envelopes }, message: { delete: del } } as unknown as AttachmentFailurePrisma;
 
     await discardMessageAfterLinkFailure(spied, { messageId: MSG_ID });

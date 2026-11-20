@@ -25,9 +25,18 @@ import { MESSAGE_SCOPED_MODELS } from '../messageScopedRows';
 
 const MSG_ID = '507f1f77bcf86cd799439033';
 
+/**
+ * Les doubles DÉCLARENT la forme de l'appel qu'ils attendent. Sans paramètre,
+ * `jest.fn` infère un mock à ZÉRO argument et `toHaveBeenCalledWith({…})` est
+ * alors un `TS2554` — que `tsc -p tsconfig.json` ne voit pas (il exclut les
+ * tests), seul `tsconfig.test.json` l'atteint.
+ */
+type DeleteArgs = { readonly where: { readonly id: string } };
+type ReleaseArgs = { readonly where: { readonly messageId: string }; readonly data: { readonly messageId: null } };
+
 function makePrisma(overrides: { deleteImpl?: () => Promise<unknown>; updateManyImpl?: () => Promise<unknown> } = {}) {
-  const del = jest.fn(overrides.deleteImpl ?? (async () => ({ id: MSG_ID })));
-  const updateMany = jest.fn(overrides.updateManyImpl ?? (async () => ({ count: 2 })));
+  const del = jest.fn(async (_args: DeleteArgs) => (overrides.deleteImpl ? overrides.deleteImpl() : { id: MSG_ID }));
+  const updateMany = jest.fn(async (_args: ReleaseArgs) => (overrides.updateManyImpl ? overrides.updateManyImpl() : { count: 2 }));
   const prisma = {
     message: { delete: del },
     messageAttachment: { updateMany },
