@@ -12,6 +12,8 @@ const de = {
   'game.frappe.say.gold': 'Nr. {number} ist aus Gold. Deine Ahnen haben sie gesehen.',
   'game.frappe.say.prism': 'Nr. {number} ist aus Prisma: Alle Sprachen leuchten darin.',
   'game.frappe.glory': '+{glory} Ruhm',
+  'game.frappe.glory_toward': '{glory} Ruhm bis {rank}',
+  'game.frappe.risen': 'Man nennt dich {rank}',
   'game.frappe.refused.shadow': 'Ein Schatten verhüllt dein Licht. Deine nächsten Funken vertreiben ihn, dann prägen wir.',
   'game.frappe.refused.locked': 'Dein Erbe wartet auf einen höheren Rang. Dein Ruhm öffnet es, dann prägen wir.',
   'game.frappe.refused.light': 'Dein Licht reicht noch nicht. Deine nächsten Funken nähren es.',
