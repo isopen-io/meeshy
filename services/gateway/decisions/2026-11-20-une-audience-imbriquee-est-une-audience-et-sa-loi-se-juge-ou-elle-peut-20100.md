@@ -1,6 +1,6 @@
-# Une audience IMBRIQUÉE est une audience, et sa loi se juge là où elle PEUT se juger (2026-11-20, #20100)
+## Une audience IMBRIQUÉE est une audience, et sa loi se juge là où elle PEUT se juger (2026-11-20, #20100)
 
-## Contexte
+### Contexte
 
 Le cliquet des audiences de diffusion (#16690, élargi à `src/` entier par #20091)
 garde une loi : une liste qui décide **qui REÇOIT** lit la participation VIVANTE
@@ -21,7 +21,7 @@ conversation.findUnique({
 Mesuré : **trente-trois sites**, aucun n'épelant la loi, tous hors de tout relevé
 du dépôt — dont `messageNotificationFanOut`, l'éventail de notifications push.
 
-## Décision
+### Décision
 
 **1. La forme imbriquée entre dans le relevé, sans exiger de `conversationId`
 textuel.** Une portée implicite est une portée. Le discriminant distingue les deux
@@ -66,7 +66,7 @@ et **plus aucun invité légitime ne serait annoncé**. Le site reste donc dans
 `DELIBERATELY_WIDE`, avec sa raison, et son comportement est gardé par un témoin —
 le seul endroit où une loi appliquée après lecture peut tomber.
 
-## Ce que la décision refuse
+### Ce que la décision refuse
 
 - **Apprendre au cliquet à reconnaître une loi appliquée en code.** Ce serait
   rendre des verdicts VERTS sur une inférence, exactement ce qu'il existe pour
@@ -82,7 +82,7 @@ le seul endroit où une loi appliquée après lecture peut tomber.
   (trois questions dans une lecture, famille de convergence #20093) et
   `announceStartedGroup`.
 
-## Preuve
+### Preuve
 
 - `src/socketio/__tests__/audience-law-nested-scope.test.ts` — le site resserré
   nommé avec son verdict, la distribution gelée, la preuve de modèle lue dans
