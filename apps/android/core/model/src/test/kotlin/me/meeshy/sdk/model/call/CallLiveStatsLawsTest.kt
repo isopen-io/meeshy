@@ -61,6 +61,7 @@ class CallLiveStatsLawsTest {
         assertThat(stats.roundTripTimeMs).isWithin(1e-9).of(300.0)
         assertThat(CallStats.relayedRoute(entries)).isTrue()
         assertThat(stats.relayed).isTrue()
+        assertThat(stats.media.candidateType).isEqualTo("relay")
     }
 
     @Test
