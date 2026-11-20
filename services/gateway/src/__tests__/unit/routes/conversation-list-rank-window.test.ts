@@ -28,17 +28,20 @@
  * `{ lastMessageAt: { lt: bound } }` laissait les neuf témoins de rang VERTS
  * (mesuré par l'audit de #19800).
  *
- * **Le moteur de ce témoin HONORE `skip`**, là où celui de
- * `conversation-list-rank-populated-activity.test.ts` le fixe à zéro. Ce n'est
- * pas un détail de confort : un double qui ignore `skip` rend indétectable
- * exactement la mutation 2. Un double ment aussi par ce qu'il ACCEPTE.
+ * **Le moteur HONORE `skip`** — c'est ce qui rend la mutation 2 détectable, et
+ * c'est pour cela qu'il est désormais UNIQUE pour les cinq suites de rang
+ * (`__tests__/helpers/list-rank-engine.ts`). Les quatre doubles d'avant
+ * divergeaient sur ce qu'ils honoraient, et celui qui fixait `skip` à zéro
+ * rendait cette mutation invisible — au compilateur comme au témoin, `skip`
+ * n'étant pas déclaré dans `RankedPagePrisma`.
  *
  * @jest-environment node
  */
 import { describe, it, expect } from '@jest/globals';
 import { loadRankedConversationPage, type ListRankRow, type RowsQuery } from '../../../routes/conversations/utils/list-rank';
 import { listRankFromColumns } from '@meeshy/shared/utils/conversation-list-rank';
-import { matchesMongoWhere, type MongoDocument } from '../../helpers/mongo-where';
+import type { MongoDocument } from '../../helpers/mongo-where';
+import { moteurDeRang } from '../../helpers/list-rank-engine';
 
 const at = (iso: string) => new Date(iso);
 type Ligne = ListRankRow & MongoDocument;
@@ -46,41 +49,20 @@ type Ligne = ListRankRow & MongoDocument;
 const rang = (row: ListRankRow) => listRankFromColumns(row)!.getTime();
 const parRang = (lignes: readonly Ligne[]) => [...lignes].sort((x, y) => rang(y) - rang(x)).map((r) => r.id);
 
-/**
- * Un moteur qui filtre, trie, SAUTE et prend — les quatre, sur les deux flux.
- * `skip` n'est pas dans `RankedPagePrisma`, et c'est le point : le lire ici rend
- * son APPARITION visible au témoin.
- */
-const moteurDe = (lignes: readonly Ligne[]) => {
-  const lire = (where: MongoDocument, key: string, skip: number, take: number) =>
-    lignes.filter((r) => matchesMongoWhere(r, where))
-      .sort((x, y) => ((y[key] as Date | undefined)?.getTime() ?? 0) - ((x[key] as Date | undefined)?.getTime() ?? 0))
-      .slice(skip, skip + take);
-  return {
-    lire,
-    prisma: {
-      conversation: {
-        findMany: async (args: { where: MongoDocument; orderBy: Record<string, 'asc' | 'desc'>; skip?: number; take: number }) =>
-          lire(args.where, Object.keys(args.orderBy)[0], args.skip ?? 0, args.take),
-      },
-    },
-  };
-};
-
 const page = (
   lignes: readonly Ligne[],
   { curseur, limit, offset }: { curseur: unknown; limit: number; offset: number },
 ) => {
-  const { lire, prisma } = moteurDe(lignes);
+  const moteur = moteurDeRang(lignes);
   return loadRankedConversationPage({
-    prisma: prisma as never,
-    readRows: async (q: RowsQuery) => lire(q.where as MongoDocument, 'lastMessageAt', q.skip, q.take) as never,
+    prisma: moteur.prisma as never,
+    readRows: moteur.readRows as never,
     where: {}, curseur: curseur as never, deltaOrder: false, limit, offset,
   }).then((s) => s.map((r) => r.id));
 };
 
 const sansCurseur = { genre: 'absent' } as const;
-const borneSur = (ligne: Ligne) => ({ genre: 'borne', rang: listRankFromColumns(ligne)! }) as const;
+const borneSur = (ligne: Ligne) => ({ genre: 'borne', rang: listRankFromColumns(ligne)!, id: ligne.id }) as const;
 
 describe('la fenêtre du flux « par activité » (#19836)', () => {
   /**
