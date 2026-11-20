@@ -24,6 +24,7 @@ import { identityImageIsCallers, IDENTITY_IMAGE_NOT_OWNED } from '../../services
 import { countOnlineMembers } from '../../services/community-online-count';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
 import { viewerJoinRequestState, viewerJoinRetryAt } from './join-request-state';
+import type { ReopenedJoinRequest } from '../../services/community-join-request-lifecycle';
 import { activeMembershipOf, COMMUNITY_ACTIVE_COUNTS, communityConversationSchema, communityDetailInclude, communityForViewer, flattenCommunityCounts } from './serialization';
 import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
@@ -31,6 +32,7 @@ import { EngagementService } from '../../services/engagement/EngagementService';
 import type { CommunityEngagementOptions } from './types';
 import { applyCommunityAdmission, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
 import { communityMemberAnnouncerFrom } from '../../services/community-member-broadcast';
+import { scheduleCommunityJoinRequestedFrom } from '../../services/community-join-request-broadcast';
 import { newMemberRefusal } from '../../services/conversations/newMemberAdmission';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesCoreRoutes' });
@@ -314,6 +316,7 @@ export async function registerCoreRoutes(
         viewerId: userId,
         requiresJoinApproval: community.requiresJoinApproval === true,
         isMember: served.currentUserRole !== null,
+        announce: (reopened: ReopenedJoinRequest) => scheduleCommunityJoinRequestedFrom(fastify, reopened),
       };
       const currentUserJoinRequest = await viewerJoinRequestState(fastify.prisma, joinRequestInput);
       const currentUserJoinRetryAt = currentUserJoinRequest === null ? await viewerJoinRetryAt(fastify.prisma, joinRequestInput) : null;

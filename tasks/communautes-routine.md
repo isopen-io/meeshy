@@ -26,6 +26,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-15 | Sur Android, toucher la bannière in-app « ajouté à la communauté » ouvre la communauté | voir réveil du 2026-11-15 17:38 | #18670 | voir réveil du 2026-11-15 17:38 |
 | 2026-11-15 | Rejoindre, quitter ou changer de rôle dans une communauté se voit aussitôt chez ses membres (passerelle, web) | voir réveil du 2026-11-15 23:38 | #18766 | voir réveil du 2026-11-15 23:38 |
 | 2026-11-18 | Supprimer ou désactiver une communauté se voit aussitôt chez ses membres (passerelle, web) | voir réveil du 2026-11-18 05:38 | #19590 | voir réveil du 2026-11-18 05:38 |
+| 2026-11-20 | Une demande rouverte par la réparation prévient les intendants comme une nouvelle demande (passerelle) | voir réveil du 2026-11-20 13:05 | #20002 | voir réveil du 2026-11-20 13:05 |
 
 ## 2026-11-07 — lot 1
 
@@ -691,3 +692,14 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Écran : « Demander à rejoindre », puis une tuile « Demande envoyée » qui n'est pas un bouton, et la ligne « Un administrateur ou un modérateur doit l'accepter. » ; le délai après refus se dit en rouge. Quatre chaînes × sept langues (`strings_join_request_19870.xml`), mêmes mots que les clés iOS de #19903.
 - Gotcha : le `Json` de Retrofit n'encode pas les valeurs par défaut — un `JoinCommunityRequest(acceptsPending = true)` déclaré avec défaut partait `{}`. Le témoin d'encodage l'a attrapé ; le champ n'a plus de défaut.
 - Gate local : `./apps/android/meeshy.sh jvm-check -PjvmCheckModelOnly` (le mode complet ne résout pas `libsignal-client`, hôte refusé par le proxy) — les suites `*Communit*` vertes. ViewModel, écran, réseau : prouvés par `android.yml`.
+
+## 2026-11-20 — réveil 13:05 UTC
+
+- Début du run : une seule PR de la routine ouverte, #20049 (iOS #19877, intendants), poussée à 13:03 : vivante, cédée. #19951, #19950, #19903, #19983, #20005 ne sont plus ouvertes.
+- Lot : #20002 (passerelle) — une demande rouverte par `reopenOrphanedAcceptances` s'annonce aux intendants.
+- Passerelle : `reopenOrphanedAcceptances` reçoit un relais `announce` (`ReopenedJoinRequest`), appelé une fois par demande rouverte ET restée en attente — jamais pour une écriture conditionnelle qui n'a rien rouvert, jamais pour une demande reclose aussitôt (entrée par une autre porte) ; un relais qui lève est journalisé et ne défait rien. La liste des intendants (`entries.ts`) et le détail du demandeur (`core.ts` → `viewerJoinRequestState`) passent `scheduleCommunityJoinRequestedFrom` : même audience, même compteur que pour une demande neuve. Le journal de la réparation porte `erasedDecisions` (`requestId`, `decidedBy` d'avant), rien de servi.
+- Pas d'import circulaire : le service de cycle de vie ne connaît pas la diffusion, il reçoit le relais.
+- Témoins : `join-request-reopened-broadcast-20002.test.ts` (8) — rouge prouvé : 4 échecs avant le correctif.
+- Gates locaux : passerelle `tsc --noEmit` vert ; `routes/communities` + balayages/cliquets (`join-request|communit|sweep|ratchet|detached|tsc-never`) 131 suites, 1 517 tests verts.
+- Aucun client touché, aucun contrat d'API ni d'événement changé (événement existant, charge inchangée).
+- Prochain lot recommandé : mener #20049 à la fusion si elle est inactive ; puis #19948 (iOS « Demande refusée ») après #20049, ou #20003 (coût de la relecture à l'accès).

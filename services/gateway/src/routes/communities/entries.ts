@@ -27,6 +27,7 @@ import {
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { ACCOUNT_STATE_SELECT, isUsableAccount } from '../../services/relations/usableAccount';
 import { scheduleJoinRequestRejectedFrom } from '../../services/community-join-request-decided';
+import { scheduleCommunityJoinRequestedFrom } from '../../services/community-join-request-broadcast';
 import { getBlockRelatedUserIds, isBlockedBetween } from '../../utils/blocking.js';
 import { admitCommunityMember, membershipAfterFailure } from './admission';
 import { gateCoMemberPresence } from './member-presence';
@@ -191,7 +192,12 @@ export async function registerEntryRoutes(fastify: FastifyInstance, options: Com
     try {
       return await guarded(request, reply, id, async (viewerId) => {
         // #19924 — une acceptation restée sans entrée redevient tranchable avant la lecture.
-        if (!cursor) await reopenOrphanedAcceptances(fastify.prisma, { communityId: id });
+        if (!cursor) {
+          await reopenOrphanedAcceptances(fastify.prisma, {
+            communityId: id,
+            announce: (reopened) => scheduleCommunityJoinRequestedFrom(fastify, reopened),
+          });
+        }
         const blocked = await getBlockRelatedUserIds(fastify.prisma, viewerId);
         // Le blocage s'exclut EN BASE : une page n'est jamais vidée par ce qu'on retire après.
         const live = liveJoinRequestWhere(new Date());

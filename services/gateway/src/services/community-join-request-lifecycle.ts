@@ -89,6 +89,13 @@ export const ORPHAN_ACCEPTANCE_GRACE_MS = 10 * 60_000;
 
 const ORPHAN_SCAN_LIMIT = 50;
 
+/** Une demande rouverte, nommée comme une demande neuve (`community:join-requested`). */
+export type ReopenedJoinRequest = {
+  readonly communityId: string;
+  readonly requestId: string;
+  readonly userId: string;
+};
+
 type MembershipTrace = { readonly userId: string; readonly isActive: boolean; readonly leftAt: Date | null };
 
 /**
@@ -110,10 +117,20 @@ const nobodyEnteredSince = (decidedAt: Date, rows: readonly MembershipTrace[]): 
  * demande plus récente de la personne a pris la suite (en attente, refusée…) :
  * rouvrir la vieille annulerait un refus. Rend le nombre rouvert, ne
  * lève jamais.
+ *
+ * Une demande rouverte ET restée en attente s'annonce par `announce` (#20002),
+ * comme une demande neuve : sans quoi, rouverte depuis le détail du
+ * demandeur, le compteur des intendants connectés restait faux. La décision
+ * effacée (`decidedBy`) se journalise, elle ne se sert jamais.
  */
 export async function reopenOrphanedAcceptances(
   prisma: Pick<PrismaClient, 'communityJoinRequest' | 'communityMember'>,
-  input: { readonly communityId: string; readonly userId?: string; readonly now?: Date },
+  input: {
+    readonly communityId: string;
+    readonly userId?: string;
+    readonly now?: Date;
+    readonly announce?: (reopened: ReopenedJoinRequest) => void;
+  },
 ): Promise<number> {
   const now = input.now ?? new Date();
   const { communityId } = input;
@@ -128,7 +145,7 @@ export async function reopenOrphanedAcceptances(
       },
       orderBy: [{ decidedAt: 'desc' }, { id: 'desc' }],
       take: ORPHAN_SCAN_LIMIT,
-      select: { id: true, userId: true, decidedAt: true, createdAt: true },
+      select: { id: true, userId: true, decidedAt: true, createdAt: true, decidedBy: true },
     });
     if (acceptances.length === 0) return 0;
 
@@ -169,23 +186,39 @@ export async function reopenOrphanedAcceptances(
         }),
       ),
     );
+    const reopenedRequests = perPerson.filter((_, index) => counts[index].count > 0);
     const reopened = counts.reduce((sum, { count }) => sum + count, 0);
     if (reopened === 0) return 0;
-    logger.warn('Orphaned join request acceptances reopened', { communityId, reopened });
+    logger.warn('Orphaned join request acceptances reopened', {
+      communityId,
+      reopened,
+      erasedDecisions: reopenedRequests.map((a) => ({ requestId: a.id, decidedBy: a.decidedBy ?? null })),
+    });
     // Entrée par une autre porte PENDANT la réparation : la demande rouverte se reclôt.
     const enteredMeanwhile = await prisma.communityMember.findMany({
       where: { communityId, userId: { in: perPerson.map((a) => a.userId) }, isActive: true },
       select: { userId: true },
     });
-    await closePendingJoinRequests(prisma, {
-      communityId,
-      userIds: [...new Set(enteredMeanwhile.map((m) => m.userId))],
-      decidedBy: null,
-      now,
-    });
+    const entered = new Set(enteredMeanwhile.map((m) => m.userId));
+    await closePendingJoinRequests(prisma, { communityId, userIds: [...entered], decidedBy: null, now });
+    reopenedRequests
+      .filter((a) => !entered.has(a.userId))
+      .forEach((a) => announceReopened(input.announce, { communityId, requestId: a.id, userId: a.userId }));
     return reopened;
   } catch (error) {
     logger.warn('Orphaned acceptance repair failed', { communityId, error: String(error) });
     return 0;
+  }
+}
+
+function announceReopened(
+  announce: ((reopened: ReopenedJoinRequest) => void) | undefined,
+  reopened: ReopenedJoinRequest,
+): void {
+  if (!announce) return;
+  try {
+    announce(reopened);
+  } catch (error) {
+    logger.warn('Reopened join request announcement failed', { communityId: reopened.communityId, error: String(error) });
   }
 }
