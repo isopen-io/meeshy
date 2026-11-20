@@ -341,13 +341,21 @@
 }
 
 [data-ceremony-glory] {
-  left: 100px;
-  width: 160px;
+  left: 40px;
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
   text-align: center;
   font: 800 13px system-ui, sans-serif;
   color: var(--ceremony-glory);
   opacity: 0;
   white-space: nowrap;
+}
+
+[data-ceremony-glory-step] {
+  font: 600 11.5px system-ui, sans-serif;
 }
 
 [data-game-ceremony] > [data-ceremony-hint] {
