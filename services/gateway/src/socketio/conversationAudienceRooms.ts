@@ -63,6 +63,18 @@ export type LoadLiveAudienceOptions = {
    * garantie est DURABLE, perd des entrées que rien ne rejouera).
    */
   readonly scanLabel?: string;
+  /**
+   * Une clause SUPPLÉMENTAIRE, qui ne peut que RÉTRÉCIR l'audience — et c'est
+   * la seule liberté qu'un appelant obtient sur le `where`, avec sa projection.
+   *
+   * Elle existe pour la loi du plancher d'historique (#20050), dont la première
+   * lecture ne demande pas « qui est vivant ? » mais « qui est vivant ET arrivé
+   * APRÈS ce message ? » : sans elle, ce site paierait la lecture ENTIÈRE pour
+   * une question qui, au cas nominal, ne rend rien. Elle est ÉTALÉE à côté de
+   * la clause de participation vivante, jamais à sa place : un appelant ne peut
+   * pas en élargir l'audience, il ne peut que la restreindre.
+   */
+  readonly narrow?: Record<string, unknown>;
 };
 
 /**
@@ -99,6 +111,51 @@ export async function scanLiveParticipants<Row>(
   select: Record<string, unknown>,
   options?: LoadLiveAudienceOptions,
 ): Promise<LiveParticipantScan<Row>> {
+  return scanParticipants<Row>(
+    prisma,
+    conversationId,
+    { ...PARTICIPATION_VIVANTE, ...(options?.narrow ?? {}) },
+    select,
+    options,
+  );
+}
+
+/**
+ * La lecture BORNÉE des participants ACTIFS — une question PLUS LARGE que la
+ * précédente, et délibérément : elle ne retire pas les BANNIS.
+ *
+ * Elle existe pour un seul usage, et il justifie l'écart : composer un
+ * COMPLÉMENT (`actifs moins admis`, `translationReaders`), c'est-à-dire nommer
+ * ceux qui ne doivent RIEN recevoir. Un banni doit y figurer — il est actif, il
+ * n'est pas admis — alors qu'il n'a rien à faire dans une AUDIENCE.
+ *
+ * Elle vit ici, et non chez son appelant, parce que la borne, la sonde, le
+ * journal et le verdict de complétude sont les mêmes : c'est la QUESTION qui
+ * change, jamais la machinerie. Un site qui la réécrirait en perdrait au moins
+ * un (#20020).
+ */
+export async function scanActiveParticipants<Row>(
+  prisma: Pick<PrismaClient, 'participant'>,
+  conversationId: string,
+  select: Record<string, unknown>,
+  options?: LoadLiveAudienceOptions,
+): Promise<LiveParticipantScan<Row>> {
+  return scanParticipants<Row>(prisma, conversationId, { isActive: true }, select, options);
+}
+
+/**
+ * La machinerie commune aux deux questions : la borne, la sonde `cap + 1`, le
+ * journal de troncature et le verdict de complétude. Le `where` lui est REMIS —
+ * c'est le seul endroit du module où il n'est pas décidé sur place, et aucune
+ * des deux fonctions publiques ne laisse un appelant le composer.
+ */
+async function scanParticipants<Row>(
+  prisma: Pick<PrismaClient, 'participant'>,
+  conversationId: string,
+  participation: Record<string, unknown>,
+  select: Record<string, unknown>,
+  options?: LoadLiveAudienceOptions,
+): Promise<LiveParticipantScan<Row>> {
   const cap = options?.cap ?? LIVE_AUDIENCE_SCAN_CAP;
   let rows: Row[];
   try {
@@ -106,7 +163,7 @@ export async function scanLiveParticipants<Row>(
     // la seule façon de distinguer une audience de la taille exacte du plafond
     // d'une audience tronquée.
     rows = (await prisma.participant.findMany({
-      where: { conversationId, ...PARTICIPATION_VIVANTE },
+      where: { conversationId, ...participation },
       select,
       take: cap + 1,
     })) as Row[];

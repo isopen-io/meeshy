@@ -40,7 +40,6 @@ import { sweepUnboundedLiveReads } from './live-audience-bound-sweep';
  *
  * | ligne(s) | ce qui la retient |
  * |---|---|
- * | `translationReaders.ts` (2 lectures) | la loi du plancher d'historique compose un COMPLÉMENT — `excludedQueueKeys`, les lecteurs qui ne doivent RIEN recevoir, dérivé d'une TROISIÈME lecture (`{ conversationId, isActive: true }`, hors de ce discriminant). Une lecture tronquée y SOUS-exclut, donc y FUIT : borner sans rendre le site fail-closed serait pire que de le laisser nu. Lot à part, avec audit adversarial |
  * | `handlers/MessageHandler.ts` | chemin tenu par une autre branche vivante au relevé du 2026-11-20 (règle d'asymétrie #5243) : la session qui n'a rien écrit cède |
  * | `routes/conversations/guest-sessions.ts`, `emitConversationActivityUpdate.ts` | la liste sert aussi d'EFFECTIF (`memberCount: remaining.length`) : un effectif tronqué est un nombre FAUX servi aux clients, pas une audience partielle. La troncature y exige une décision que ce lot ne prend pas |
  * | les onze autres | des audiences de DIFFUSION et des gates, chacun avec sa propre question sur ce qu'une troncature coûte. Un lot par famille |
@@ -63,7 +62,6 @@ const FROZEN_UNBOUNDED: readonly string[] = [
   'src/socketio/participant-superset.ts',
   'src/socketio/readerSignedDelivery.ts',
   'src/socketio/revokeShareLinkGuests.ts',
-  'src/socketio/translationReaders.ts',
 ];
 
 describe('#20020 — aucune lecture NEUVE des participants vivants sans borne', () => {
@@ -80,6 +78,19 @@ describe('#20020 — aucune lecture NEUVE des participants vivants sans borne', 
     expect(files.has('src/socketio/emitAttachmentUpdated.ts')).toBe(false);
     expect(files.has('src/socketio/offlineParticipantQueue.ts')).toBe(false);
     expect(files.has('src/services/messaging/afterReadEarlyBurnGate.ts')).toBe(false);
+  });
+
+  /**
+   * #20050 — la loi du plancher d'historique a quitté l'inventaire, et pas en
+   * posant seulement un `take` : ses TROIS lectures passent par le site unique,
+   * et une TRONCATURE y rend `{kind:'unknown'}`. Borner sans cela aurait
+   * SOUS-exclu, donc ouvert une porte — c'est la raison pour laquelle #20020
+   * l'avait gelée plutôt que corrigée au passage.
+   */
+  it("la loi du plancher d'historique a rejoint le site unique (#20050)", () => {
+    const files = new Set(sweepUnboundedLiveReads().map((read) => read.file));
+
+    expect(files.has('src/socketio/translationReaders.ts')).toBe(false);
   });
 
   /**
