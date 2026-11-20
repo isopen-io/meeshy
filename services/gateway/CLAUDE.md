@@ -780,9 +780,14 @@ portée à lire :
 | APPELÉE — `participant.findMany\|count\|groupBy\|aggregate\|findFirst` | la TABLE | écrite (`conversationId`) |
 | IMBRIQUÉE — `conversation.find…({ select: { participants: { where } } })` | une RELATION, que `CallSession` partage | **implicite**, portée par le parent |
 
-Trente-trois audiences imbriquées vivaient hors de tout relevé, aucune n'épelant
-la loi, dont l'éventail de notifications push — par où le TEXTE d'un message
-atteignait l'écran verrouillé d'un membre actif-et-banni.
+Une trentaine d'audiences imbriquées vivaient hors de tout relevé, dont
+l'éventail de notifications push — par où le TEXTE d'un message atteignait
+l'écran verrouillé d'un membre actif-et-banni. **« Aucune n'épelait la loi » est
+FAUX**, et l'audit du lot l'a mesuré : `MentionService.validateMentionPermissions`
+porte `where: PARTICIPATION_VIVANTE` sur une clause imbriquée depuis #14066 — le
+relevé ne la voit pas parce que ce `where` est une CONSTANTE et non un littéral,
+donc il la PUBLIE comme illisible. Une affirmation d'exhaustivité sur un relevé
+qui publie ce qu'il n'a pas jugé doit compter les DEUX colonnes.
 
 > **Un balayage qui change de forme d'appel change aussi de PREUVE DE MODÈLE.**
 > La forme appelée la portait gratuitement. La question à poser à tout
@@ -790,13 +795,30 @@ atteignait l'écran verrouillé d'un membre actif-et-banni.
 > **« qu'est-ce qui me prouvait, dans la forme d'avant, que je regardais la bonne
 > chose ? »**.
 
-Il PUBLIE donc quatre formes au lieu de les juger : `portée-indirecte` (#20091),
+Il PUBLIE donc, au lieu de les juger : `portée-indirecte` (#20091),
 `clé-indirecte` (la clé du membre vient d'un APPEL étalé — une PORTE qui a
 l'apparence d'une audience), `modèle-indécidable` (une clause imbriquée muette sur
 l'activité et le bannissement, donc peut-être des participants d'APPEL), et les
 trois formes de `where` non littéral. Et il sait que **ni `{ not: … }` ni
 `unsetOrNull`/`differsOrUnset` ne nomment personne** — aucune forme négative ne
-SÉLECTIONNE.
+SÉLECTIONNE, et cela vaut de `{ notIn: … }`, de `NOT: { userId }` et d'un curseur
+de pagination `{ gt: … }` autant que de `{ not: null }`. Les combinateurs `AND`
+et `OR` sont TRAVERSÉS (l'idiome `OR: [{ id: clé }, { userId: clé }]` que ce
+document prescrit désigne UN lecteur, donc une porte), `NOT` ne l'est pas, et la
+traversée s'arrête avant les filtres de RELATION.
+
+**La garde de bannissement se reconnaît par une LISTE BLANCHE de formes, jamais
+par le mot `bannedAt`.** `NOT: { bannedAt: null }` et
+`OR: [{ bannedAt: null }, { role: 'creator' }]` étaient certifiés CONFORMES par
+le discriminant d'avant — le mot y est, la polarité et la portée n'y sont pas.
+Une orthographe valide non prévue est donc comptée NUE : une relecture de trop
+coûte moins qu'une fausse certification.
+
+**Une projection imbriquée SANS `where`** (strictement plus large qu'`isActive`
+nu : elle rend les partis, les retirés et les bannis) est écartée du relevé
+EXPLICITEMENT, pas en silence — plusieurs de ces sites jugent la loi en CODE, ce
+qu'aucun discriminant de `where` ne peut voir, et deviner y fabriquerait des
+verdicts. Elles sont mesurées et suivies par #20103.
 
 **Une loi peut se juger en CODE, et c'est alors une DÉCISION, pas une dette.**
 Quand une lecture porte deux questions dont l'une exige le sur-ensemble, le

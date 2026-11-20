@@ -38,7 +38,9 @@ import {
   sweepConversationAudiences,
   sweepUnjudgeableParticipantReads,
   audienceKey,
+  spellsTheLawForAudit,
   DELIBERATELY_WIDE,
+  MEASURED_FAMILIES,
   MEASURED_NOT_INSTRUCTED,
 } from './conversation-audience-living-participation';
 
@@ -155,5 +157,76 @@ describe('#20100 — la preuve de modèle du discriminant imbriqué', () => {
     const published = sweepUnjudgeableParticipantReads().filter((read) => read.form === 'modèle-indécidable');
 
     expect(published.map((read) => read.file)).toEqual(['services/CallCleanupService.ts', 'services/CallCleanupService.ts']);
+  });
+});
+
+/**
+ * #20100 bis — LA POLARITÉ ET LA PORTÉE, mesurées par l'audit adversarial du
+ * premier jet, qui a planté ces clauses dans `src/` et relevé le verdict rendu.
+ *
+ * #20091 avait fermé `bannedAt: { not: null }` — le MOT contre la polarité. Deux
+ * autres orthographes passaient encore, et elles ne sont pas exotiques : ce sont
+ * les deux façons normales d'écrire une exception en Prisma.
+ *
+ * > **Un cliquet qui se trompe dans le sens rassurant est pire que pas de
+ * > cliquet** — et c'est la DEUXIÈME fois qu'il se trompe sur cette même
+ * > question, dans le lot qui dénonçait ce défaut puis dans celui qui le
+ * > réparait. La reconnaissance est donc une LISTE BLANCHE de formes, pas une
+ * > recherche de mot : une orthographe valide non prévue est comptée NUE, ce qui
+ * > coûte une relecture au lieu d'une fausse certification.
+ */
+describe('#20100 — la garde de bannissement se lit sur sa POLARITÉ et sa PORTÉE', () => {
+  it.each([
+    ['la loi par sa constante', '...PARTICIPATION_VIVANTE, type: \'user\'', true],
+    ['la loi à la main', "isActive: true, ...unsetOrNull('bannedAt')", true],
+    ['la loi en clair', 'conversationId, isActive: true, bannedAt: null', true],
+    ['la loi par son OR', 'isActive: true, OR: [{ bannedAt: null }, { bannedAt: { isSet: false } }]', true],
+    ['`isActive` nu', 'conversationId, isActive: true', false],
+    ['le MOT, polarité inversée (#20091)', 'isActive: true, bannedAt: { not: null }', false],
+    ['le MOT sous un `NOT:` englobant', 'isActive: true, NOT: { bannedAt: null }', false],
+    ['un OR dont une branche ne garde RIEN', "isActive: true, OR: [{ bannedAt: null }, { role: 'creator' }]", false],
+  ])('%s ⇒ %s', (_label, where, expected) => {
+    expect(spellsTheLawForAudit(where)).toBe(expected);
+  });
+});
+
+/**
+ * Les COMPTES des familles ne vivent plus dans leur prose, et c'est le remède au
+ * constat le plus répétitif de l'audit : quatre textes de famille annonçaient
+ * « sept sites », « ces quatre nombres », « les quatre sites », « dix-huit
+ * projections » — trois de ces chiffres rendus faux par le lot LUI-MÊME, qui
+ * ajoutait des entrées sous un texte se lisant comme exhaustif.
+ *
+ * > **Un compte en commentaire ne peut pas rougir** (cycle 93), et c'est la
+ * > troisième fois que ce fichier l'apprend. Les numéraux sont retirés ; ce qui
+ * > reste vérifiable est gardé ici.
+ */
+describe('#20100 — chaque famille déclarée désigne au moins un site', () => {
+  it('ne garde aucune famille vide, ni aucune famille non déclarée', () => {
+    const used = new Set(Object.values(MEASURED_NOT_INSTRUCTED));
+    const declared = new Set(Object.keys(MEASURED_FAMILIES));
+
+    expect([...used].filter((family) => !declared.has(family))).toEqual([]);
+    expect([...declared].filter((family) => !used.has(family))).toEqual([]);
+  });
+
+  /**
+   * Et aucun texte de famille n'annonce un TOTAL que rien ne nomme.
+   *
+   * La distinction n'est pas cosmétique, et le premier jet de ce témoin l'a
+   * ratée en bannissant tout numéral : **un compte qui NOMME ses membres est
+   * vérifiable** (« les DEUX lectures de `conversation-partners` » se relit
+   * contre le fichier), **un total nu DÉRIVE** (« ces quatre nombres », « ces
+   * sept sites ») — et c'est cette seconde forme que le lot a rendue fausse
+   * quatre fois en y ajoutant des entrées.
+   *
+   * Un témoin trop large est le défaut qu'on vient de corriger ailleurs, dans
+   * l'autre sens : il interdit une écriture juste.
+   */
+  it("n'annonce aucun total que rien ne nomme", () => {
+    const bareTotal = /\b(?:ces|les)\s+(?:deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|dix-huit|vingt)\s+(?:sites?|projections?|nombres?|lectures?|audiences?)\b(?![^.]{0,40}`)/i;
+    const counted = Object.entries(MEASURED_FAMILIES).filter(([, reason]) => bareTotal.test(reason));
+
+    expect(counted.map(([family]) => family)).toEqual([]);
   });
 });

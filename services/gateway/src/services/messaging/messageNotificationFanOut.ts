@@ -421,16 +421,30 @@ export async function notifyMessageRecipients(params: {
           // sa clé de session est par PAIR, rien ne la rote, donc l'ENVELOPPE
           // s'ouvre.
           //
-          // Resserrer n'ouvre RIEN, et c'est MESURÉ, pas supposé : la même
-          // lecture alimente `silenced`, une liste de REFUS, que le
-          // sur-ensemble sert normalement mieux (cf.
-          // `conversationAudienceRooms.ts` § `scanActiveParticipants`). Ses
-          // trois consommateurs sont déjà bornés par la loi en AMONT —
-          // `memberIds` l'est par ce `where`, `validatedMentionUserIds` par
-          // `MentionService.validateMentionPermissions`, qui épelle
-          // `PARTICIPATION_VIVANTE` depuis #14066, et le gate de réponse par
-          // `memberIds`. Un banni-mais-actif ne peut donc plus arriver par
-          // aucune des trois portes que `silenced` referme.
+          // Resserrer n'ouvre RIEN — et la raison écrite ici au premier jet
+          // était FAUSSE, mesurée par l'audit adversarial du lot. Elle disait
+          // que `validatedMentionUserIds` est borné en amont par
+          // `MentionService.validateMentionPermissions`, « qui épelle
+          // `PARTICIPATION_VIVANTE` depuis #14066 ». Il l'épelle en portées
+          // `interlocutor` et `members` SEULEMENT : en portée `directory`
+          // (conversation `public`, `global`, `broadcast`) il valide « tout
+          // compte existant », sans filtre d'appartenance. Un banni-mais-actif
+          // PEUT donc être un mentionné validé.
+          //
+          // Ce qui le retient est ce `where`, et rien d'autre : les TROIS lots
+          // passent par lui. `regular` ne lit que `memberIds` ; le gate de
+          // réponse exige `memberIds.includes(...)` ; et le lot de MENTIONS
+          // reçoit `memberIds` en 3e argument de
+          // `createMentionNotificationsBatch`, dont le filtre interne
+          // (`if (!memberIds.includes(userId)) return false`) est sa porte
+          // d'admission. `silenced` n'est donc pas la garde portante : c'est un
+          // raffinement par-dessus une admission déjà bornée.
+          //
+          // > **Une raison qui nomme la mauvaise garde est pire qu'une absence
+          // > de raison** : elle autorise le prochain lot à retirer celle qui
+          // > porte. La jumelle de cette lecture sur le chemin d'ÉDITION
+          // > (`messageMentions.ts`) portait la même phrase en DÉCISION
+          // > d'inventaire, et là le trou était VIVANT.
           where: { ...PARTICIPATION_VIVANTE, type: 'user' },
           // #18910 — l'état du compte suit la lecture : un compte supprimé reste membre après la purge.
           select: { userId: true, messageRequestAt: true, user: { select: { isActive: true, deletedAt: true } } },

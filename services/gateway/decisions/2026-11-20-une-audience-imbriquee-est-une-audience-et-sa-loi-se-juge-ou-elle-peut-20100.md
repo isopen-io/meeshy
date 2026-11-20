@@ -35,7 +35,21 @@ les deux seules du schéma). Une clause imbriquée qui ne parle **ni d'activité
 de bannissement** se **publie** comme `modèle-indécidable` au lieu d'être jugée, et
 la prémisse de schéma vit dans un témoin qui relit `schema.prisma`.
 
-**3. Ce que l'instrument ne sait pas juger, il le PUBLIE — y compris la CLÉ.**
+**3. La garde de bannissement se reconnaît par une LISTE BLANCHE de formes.**
+`NOT: { bannedAt: null }` et `OR: [{ bannedAt: null }, { role: 'creator' }]`
+étaient certifiés CONFORMES par le discriminant d'avant — le mot y est, la
+polarité et la portée n'y sont pas. Une orthographe valide non prévue est comptée
+NUE : une relecture de trop coûte moins qu'une fausse certification.
+
+**4. Les deux discriminants lisent les paires de PREMIER NIVEAU, pas le texte.**
+`AND` et `OR` sont traversés (l'idiome `OR: [{ id: clé }, { userId: clé }]` que
+`CLAUDE.md` prescrit désigne UN lecteur), `NOT` ne l'est pas, et la traversée
+s'arrête avant les filtres de RELATION — y entrer transformerait une audience en
+porte. « Aucune forme négative ne SÉLECTIONNE » vaut désormais de `{ notIn: … }`,
+de `NOT: { userId }` et d'un curseur `{ gt: … }`, et plus seulement de
+`{ not: null }` : quatre audiences réelles disparaissaient par là, sans trace.
+
+**5. Ce que l'instrument ne sait pas juger, il le PUBLIE — y compris la CLÉ.**
 #20091 publiait la **portée** indirecte et laissait la **clé** indirecte se faire
 juger : `{ conversationId, ...callerParticipantWhere(caller) }` a l'apparence d'une
 audience et c'en est le contraire. Un étalement qui est un **APPEL** (jamais un
@@ -43,21 +57,32 @@ identifiant : nommer un membre exige une valeur d'exécution) rend la clause
 `clé-indirecte`. Les fabriques purement NÉGATIVES du dépôt (`unsetOrNull`,
 `differsOrUnset`) sont exemptées, aucune forme négative ne sélectionnant personne.
 
-**4. Un filtre négatif ne nomme personne.** `{ not: <quoi que ce soit> }`, et plus
+**6. Un filtre négatif ne nomme personne.** `{ not: <quoi que ce soit> }`, et plus
 seulement `{ not: null }` : le discriminant d'identité prenait
 `userId: { not: userId }` — « tous les membres SAUF moi », l'audience la plus
 courante d'un tête-à-tête — pour la désignation d'une personne, et écartait ainsi
 onze audiences réelles en silence.
 
-**5. L'éventail de notifications push est RESSERRÉ dans son `where`.** C'est de
+**7. L'éventail de notifications push est RESSERRÉ dans son `where`.** C'est de
 cette lecture que sortent `memberIds`, le lot `regular`, le gate de la réponse et
-le dénominateur du compte rendu. Resserrer n'ouvre rien, et c'est **mesuré** : la
-même lecture tient `silenced`, une liste de refus, dont les trois consommateurs
-sont déjà bornés par la loi en amont (`validatedMentionUserIds` par
-`MentionService.validateMentionPermissions`, qui épelle `PARTICIPATION_VIVANTE`
-depuis #14066).
+le dénominateur du compte rendu. Resserrer n'ouvre rien — et ce qui le PORTE est ce
+`where` lui-même, pas la garde d'amont que le premier jet nommait.
+`MentionService.validateMentionPermissions` épelle la loi en portées
+`interlocutor` et `members` seulement ; en portée `directory` (conversation
+`public`, `global`, `broadcast`) elle valide « tout compte existant ». Les trois
+lots passent par `memberIds`, que ce `where` produit : `regular` ne lit que lui,
+le gate de réponse exige `memberIds.includes(...)`, et le lot de MENTIONS le
+reçoit en 3e argument de `createMentionNotificationsBatch`, dont le filtre
+interne est sa porte d'admission.
 
-**6. Quand une lecture porte DEUX questions dont l'une exige le sur-ensemble, la
+**La jumelle de cette lecture sur le chemin d'ÉDITION était une fuite VIVANTE**,
+et son entrée d'inventaire affirmait le contraire en portant « Mesuré, pas
+supposé » : `notifyNewlyMentioned` composait le même `memberIds` d'admission sous
+`isActive` nu, si bien qu'une édition ajoutant `@banni` lui poussait le texte
+ÉDITÉ. La clause est resserrée, l'entrée SUPPRIMÉE — pas réécrite — et l'admission
+est jugée LOCALEMENT plutôt que déléguée au filtre de l'appelé.
+
+**8. Quand une lecture porte DEUX questions dont l'une exige le sur-ensemble, la
 loi se juge en CODE sur l'audience seule — et la lecture PROJETTE ses deux
 colonnes.** `announceStartedGroup` trouve le créateur au `role` de sa ligne de
 participation, que rien d'autre ne nomme (`Conversation` n'a pas de colonne
@@ -81,6 +106,28 @@ le seul endroit où une loi appliquée après lecture peut tomber.
   ensemble déjà borné), `callGroupConversation` (`sameSet`), `conversation-encryption`
   (trois questions dans une lecture, famille de convergence #20093) et
   `announceStartedGroup`.
+
+### Ce que l'audit adversarial a cassé
+
+Verdict **BLOQUANT**, six constats intégrés. Outre la fuite d'édition ci-dessus :
+le cliquet certifiait deux clauses qui annulent la loi ; son discriminant
+d'identité faisait disparaître quatre audiences (dont l'élection du successeur
+d'un créateur, où un banni-mais-actif est éligible) ; `participationEstVivante`
+devenait un **no-op muet** si `bannedAt` sortait du `select`, puisque
+`undefined == null`, et la suite entière restait verte ; `conversation-partners`
+était rangé en aperçu AFFICHÉ quand son doc-comment le déclare audience de
+DIFFUSION ; et quatre textes de famille annonçaient des totaux que le lot
+lui-même avait rendus faux.
+
+Quatre autres sont devenus des issues : #20110 (l'arrivée NOMME le banni à tous
+les invités, et son nom peut être le TITRE du groupe), #20111 (la portée du
+balayage s'arrête à `services/gateway/src` — l'agent anime des membres dormants
+sur `isActive` nu), et deux compléments à #20103.
+
+**Non vérifié, et c'est la question qui décide de tout** : personne n'a compté les
+lignes `isActive: true, bannedAt ≠ null` en production. Les fuites de ce cycle
+sont *possibles*, pas *dénombrées*. Et le lot touchant la frontière E2EE, un audit
+cryptographique tiers reste requis.
 
 ### Preuve
 

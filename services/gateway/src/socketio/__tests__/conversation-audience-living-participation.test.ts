@@ -70,12 +70,14 @@ describe('audiences de diffusion — l’appartenance VIVANTE, par la même cons
    * désigne encore un site.
    */
   it('ne laisse pas la dette mesurée grossir au-delà de ce que #20091 a relevé', () => {
-    // #20100 : 71, et le dépôt n'a pas grossi — le DISCRIMINANT a. La forme
-    // imbriquée, `findFirst` et le filtre négatif ont fait entrer soixante
-    // lectures qui étaient hors de vue, dont vingt-neuf nues. Une borne de
+    // #20100 : le dépôt n'a pas grossi — le DISCRIMINANT a, deux fois. La forme
+    // imbriquée, `findFirst` et les formes NÉGATIVES ont fait entrer des
+    // lectures qui étaient hors de vue, et l'audit adversarial du lot en a
+    // ajouté quatre de plus en corrigeant ce qui prenait `{ notIn: … }`,
+    // `{ gt: … }` et `NOT: { userId }` pour la désignation d'une personne. Une borne de
     // dette se rédite quand l'instrument change de portée ; elle ne se
     // rédite PAS pour accueillir une clause nue écrite après coup.
-    expect(Object.keys(MEASURED_NOT_INSTRUCTED).length).toBeLessThanOrEqual(71);
+    expect(Object.keys(MEASURED_NOT_INSTRUCTED).length).toBeLessThanOrEqual(75);
   });
 
   /**

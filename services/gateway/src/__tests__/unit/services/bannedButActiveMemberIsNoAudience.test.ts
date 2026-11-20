@@ -25,6 +25,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { notifyMessageRecipients } from '../../../services/messaging/messageNotificationFanOut';
 import { announceStartedGroup } from '../../../services/conversations/announceStartedGroup';
+import { reconcileEditedMentions } from '../../../services/messaging/messageMentions';
 import { PARTICIPATION_VIVANTE } from '../../../routes/conversations/utils/access-control';
 
 const CONV = '507f1f77bcf86cd799439222';
@@ -141,5 +142,128 @@ describe("l'annonce d'un groupe démarré n'invite pas un membre banni", () => {
     ]);
 
     expect(emitted).toEqual([`user:${MEMBRE}`]);
+  });
+});
+
+describe("une édition qui ajoute une mention n'admet pas un membre banni", () => {
+  /**
+   * Le double HONORE le `where` — sans quoi ce témoin serait vert avant comme
+   * après, et c'est exactement ce que mon premier jet était : il laissait une
+   * porte de sortie (`if (calls.length === 0) return`) et restait VERT sous la
+   * mutation inverse. **Un témoin qui ne peut pas tomber n'est pas un témoin** ;
+   * le harnais ci-dessous vient de l'audit adversarial, qui l'a livré ROUGE.
+   *
+   * La portée de mention est `directory` ici (`validateMentionPermissions` y
+   * valide « tout compte existant ») : c'est le seul cas où un banni-mais-actif
+   * atteint `newlyMentionedUserIds`, donc le seul où la clause de cette lecture
+   * décide quelque chose.
+   */
+  const harness = async () => {
+    const batch = jest.fn<any>().mockResolvedValue(1);
+    // MEMBRE est nommé lui aussi, et il est VIVANT : sans lui le lot serait
+    // vide, l'unité rendrait avant d'appeler, et le témoin n'observerait plus
+    // rien — vert par absence. C'est la même erreur que la porte de sortie du
+    // premier jet, déplacée dans la fixture.
+    const rows = [
+      { userId: SENDER, messageRequestAt: null, bannedAt: null, isActive: true, user: { isActive: true, deletedAt: null } },
+      { userId: MEMBRE, messageRequestAt: null, bannedAt: null, isActive: true, user: { isActive: true, deletedAt: null } },
+      { userId: BANNI, messageRequestAt: null, bannedAt: new Date('2026-11-01T00:00:00Z'), isActive: true, user: { isActive: true, deletedAt: null } },
+    ];
+    const honour = (where: any) =>
+      rows.filter((row) => (where?.isActive === undefined || row.isActive === where.isActive)
+        && (where?.OR === undefined || row.bannedAt === null));
+
+    const prisma = {
+      mention: { findMany: jest.fn<any>().mockResolvedValue([]), deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+      message: {
+        update: jest.fn<any>().mockResolvedValue({}),
+        findUnique: jest.fn<any>().mockResolvedValue({
+          createdAt: new Date('2026-11-20T10:00:00Z'), messageType: 'text', isEncrypted: false,
+          isViewOnce: false, isBlurred: false, effectFlags: 0, expiresAt: null, ephemeralDuration: null,
+        }),
+      },
+      user: {
+        findMany: jest.fn<any>().mockResolvedValue([]),
+        findUnique: jest.fn<any>().mockResolvedValue({ username: 'ed', displayName: 'Ed', avatar: null }),
+      },
+      participant: {
+        findMany: jest.fn<any>(async (args: any) => honour(args?.where).map((row) => ({ id: row.userId, userId: row.userId, historyFloorAt: null }))),
+        findUnique: jest.fn<any>().mockResolvedValue({ userId: SENDER, isActive: true, bannedAt: null, conversationId: CONV }),
+        findFirst: jest.fn<any>().mockResolvedValue({ id: SENDER_PART, userId: SENDER }),
+      },
+      conversation: {
+        findUnique: jest.fn<any>(async (args: any) => ({
+          participants: honour(args?.select?.participants?.where ?? args?.include?.participants?.where),
+        })),
+      },
+      conversationShareLink: { findMany: jest.fn<any>().mockResolvedValue([]) },
+      userBlock: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    };
+
+    await reconcileEditedMentions({
+      prisma: prisma as never,
+      mentionService: {
+        extractMentions: () => [BANNI, MEMBRE],
+        extractMentionsWithParticipants: () => ['banni', 'membre'],
+        resolveUsernames: async () => new Map([['banni', { id: BANNI, username: 'banni' }], ['membre', { id: MEMBRE, username: 'membre' }]]),
+        validateMentionPermissions: async () => ({ validUserIds: [BANNI, MEMBRE] }),
+        createMentions: jest.fn<any>().mockResolvedValue(undefined),
+      } as never,
+      notificationService: { createMentionNotificationsBatch: batch } as never,
+      message: { id: MSG, conversationId: CONV, senderId: SENDER_PART, expiresAt: null } as never,
+      content: 'coucou @banni @membre',
+      editorUserId: SENDER,
+      onError: () => undefined,
+    } as never);
+
+    return batch;
+  };
+
+  it("ne met pas le banni dans le `memberIds` qui AUTORISE le lot de mentions", async () => {
+    const batch = await harness();
+
+    expect(batch).toHaveBeenCalled();
+    expect(batch.mock.calls[0][2] as string[]).toContain(MEMBRE);
+    expect(batch.mock.calls[0][2] as string[]).not.toContain(BANNI);
+  });
+
+  it("ne l'admet pas parmi les mentionnés notifiés", async () => {
+    const batch = await harness();
+
+    expect(batch.mock.calls[0][0] as string[]).toContain(MEMBRE);
+    expect(batch.mock.calls[0][0] as string[]).not.toContain(BANNI);
+  });
+});
+
+/**
+ * LA PROJECTION, et c'est le constat que l'audit a mesuré le plus coûteux pour
+ * `announceStartedGroup` : sa loi est jugée APRÈS lecture, et
+ * `participationEstVivante` vaut `row.isActive === true && row.bannedAt == null`.
+ *
+ * `undefined == null` est **vrai**. Une lecture qui oublie `bannedAt` dans son
+ * `select` rend donc une garde qui LAISSE PASSER TOUT LE MONDE — un no-op
+ * silencieux, l'inverse exact de l'omission d'`isActive`, qui ferme tout et se
+ * voit immédiatement. Mesuré par l'audit : en retirant `bannedAt: true` du
+ * `select`, la suite gateway ENTIÈRE reste verte, les trente-cinq témoins de la
+ * famille du lot compris.
+ *
+ * > **Les deux moitiés d'une loi jugée après lecture n'échouent pas du même
+ * > côté.** Celle qui ferme se voit ; celle qui ouvre ne se voit pas. Un témoin
+ * > de comportement ne peut attraper que la première — d'où un témoin sur la
+ * > REQUÊTE, la règle que le dépôt écrit déjà pour le Prisme
+ * > (« un témoin de projection assert sur la REQUÊTE, pas sur le rendu »).
+ */
+describe("l'annonce d'un groupe PROJETTE les deux colonnes de sa loi", () => {
+  it('demande `isActive` ET `bannedAt`, sans quoi la garde est un no-op muet', async () => {
+    const findUnique = jest.fn<any>().mockResolvedValue(null);
+    await announceStartedGroup(
+      { prisma: { conversation: { findUnique } } as never, io: undefined, notificationService: undefined },
+      CONV
+    );
+
+    const projection = (findUnique.mock.calls[0][0] as any).select.participants.select;
+
+    expect(projection.isActive).toBe(true);
+    expect(projection.bannedAt).toBe(true);
   });
 });

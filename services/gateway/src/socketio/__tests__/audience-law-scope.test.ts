@@ -72,8 +72,8 @@ describe('#20091 — le balayage des audiences voit tout `src/`, pas un réperto
     // fait entrer soixante lectures de plus. Un lot qui touche le discriminant
     // reclasse l'inventaire ENTIER — il ne fait pas que l'étendre.
     expect(inside.filter((site) => !site.usesLaw).length).toBeLessThanOrEqual(3);
-    expect(outside.length).toBeGreaterThanOrEqual(105);
-    expect(outside.filter((site) => !site.usesLaw).length).toBeLessThanOrEqual(84);
+    expect(outside.length).toBeGreaterThanOrEqual(110);
+    expect(outside.filter((site) => !site.usesLaw).length).toBeLessThanOrEqual(87);
   });
 
   /**
@@ -86,6 +86,6 @@ describe('#20091 — le balayage des audiences voit tout `src/`, pas un réperto
     const bare = sites.filter((site) => !site.usesLaw).length;
 
     expect(Object.keys(DELIBERATELY_WIDE).length + Object.keys(MEASURED_NOT_INSTRUCTED).length).toBe(bare);
-    expect(Object.keys(MEASURED_NOT_INSTRUCTED).length).toBeLessThanOrEqual(71);
+    expect(Object.keys(MEASURED_NOT_INSTRUCTED).length).toBeLessThanOrEqual(75);
   });
 });

@@ -206,3 +206,170 @@ convergence #20093).
   deux mutations, ce qui est ce qu'il doit faire : il garde la décision, pas le
   correctif.
 - Suite complète du gateway, `bun run test:coverage`.
+
+---
+
+## L'audit adversarial, et ce qu'il a cassé
+
+Verdict : **BLOQUANT**. Six de ses constats sont entrés dans le lot ; quatre sont
+devenus des issues. Le plus cher n'était pas une omission : c'était une
+**affirmation que le lot avait écrite comme mesurée**.
+
+### Le constat qui change le récit du lot : la raison nommait la mauvaise garde
+
+Le lot écrivait, sur le site ET dans son inventaire de décisions, que resserrer
+l'éventail n'ouvre rien parce que `validatedMentionUserIds` est borné en amont
+par `MentionService.validateMentionPermissions`, « qui épelle
+`PARTICIPATION_VIVANTE` depuis #14066 ».
+
+**Faux.** Il l'épelle en portées `interlocutor` et `members`. En portée
+**`directory`** — conversation `public`, `global`, `broadcast` — il valide « tout
+compte existant », sans filtre d'appartenance, et le dit sur place :
+
+```ts
+case 'directory': {
+  // Tout compte existant. Pas de filtre isActive/deletedAt : la
+  // validation reste plus large que la recherche, jamais plus étroite.
+```
+
+J'avais ouvert cette fonction et lu sa lecture de conversation — qui porte bien
+`where: PARTICIPATION_VIVANTE`. Je n'avais pas lu ses BRANCHES.
+
+> **Vérifier qu'une garde existe n'est pas vérifier qu'elle s'applique à mon
+> cas.** Une fonction d'autorisation a des RÉGIMES, et le mien était celui qui
+> n'en a pas. La question juste n'est pas « cette fonction épelle-t-elle la
+> loi ? » mais **« sous quelle portée s'applique ce qu'elle épelle, et la mienne
+> y est-elle ? »**.
+
+Sur le chemin d'ENVOI, la conclusion tenait — mais par une **autre garde** :
+`memberIds`, que le lot venait justement de resserrer, et dont le filtre interne
+(`if (!memberIds.includes(userId)) return false`) est la porte d'admission du lot
+de mentions. Le correctif était bon ; sa raison désignait ce qui ne porte pas.
+
+> **Une raison qui nomme la mauvaise garde est pire qu'une absence de raison** :
+> elle autorise le prochain lot à retirer celle qui porte.
+
+### Et sur le chemin d'ÉDITION, la même phrase était une DÉCISION, et le trou était VIVANT
+
+`DELIBERATELY_WIDE['services/messaging/messageMentions.ts#1']` affirmait que
+`notifyNewlyMentioned` « ne tire de cette liste que des EXCLUSIONS […] **Mesuré,
+pas supposé** ». Les deux jambes étaient fausses : la lecture compose aussi le
+`memberIds` d'ADMISSION remis au batch, et rien ne bornait en amont.
+
+Scénario mesuré : conversation `public` · B membre `isActive: true,
+bannedAt ≠ null` · quelqu'un ÉDITE son message pour y ajouter `@B` → B reçoit une
+bannière portant le **texte édité**, sur sa room `user:<id>`, la seule qui lui
+reste.
+
+J'avais vu ce site. J'avais même noté, en le lisant, « passé en dernier argument
+à `createMentionNotificationsBatch` — reste à voir pour quoi », et je ne l'ai pas
+fait : j'ai conclu depuis les deux helpers d'exclusion que je comprenais déjà.
+
+> **Une question qu'on se pose et qu'on ne referme pas devient une affirmation
+> dans le texte qu'on écrit ensuite.** Celle-ci est sortie sous la forme la plus
+> autorisée du dépôt — une entrée de `DELIBERATELY_WIDE`, c'est-à-dire l'endroit
+> réservé aux décisions INSTRUITES — avec « Mesuré, pas supposé » écrit dessus.
+
+Correctif : la clause passe à `PARTICIPATION_VIVANTE`, l'entrée d'inventaire est
+**supprimée** (pas réécrite), et l'admission est jugée LOCALEMENT
+(`liveMembers.has(userId)`) au lieu d'être déléguée au filtre de l'appelé —
+« une garde de confidentialité qui dépend du câblage de l'appelant échoue en
+montrant PLUS » est écrit deux paragraphes plus haut dans cette même unité.
+
+### Le cliquet certifiait deux clauses qui ANNULENT la loi
+
+#20091 avait fermé `bannedAt: { not: null }` — le MOT contre la polarité. Deux
+orthographes passaient encore, et ce sont les deux façons normales d'écrire une
+exception :
+
+| clause | verdict rendu | vérité |
+|---|---|---|
+| `{ isActive: true, NOT: { bannedAt: null } }` | **conforme** | audience composée EXCLUSIVEMENT de bannis |
+| `{ isActive: true, OR: [{ bannedAt: null }, { role: 'creator' }] }` | **conforme** | un créateur **banni** passe |
+
+C'est la **deuxième** fois que ce cliquet se trompe dans le sens rassurant sur
+cette même question : dans le lot qui dénonçait ce défaut, puis dans celui qui le
+réparait. La reconnaissance est désormais une **liste blanche** de formes, pas
+une recherche de mot — et la liste blanche est le bon sens d'erreur : une
+orthographe valide non prévue est comptée NUE.
+
+### Le discriminant d'identité faisait DISPARAÎTRE des audiences, sans trace
+
+« Aucune forme négative ne SÉLECTIONNE » était écrit comme une propriété
+générale ; le code ne l'implémentait que pour `{ not: … }` au premier niveau.
+Hors de vue, donc : `{ notIn: … }`, `NOT: { userId }`, `{ not: { in: … } }`, tout
+opérateur de PLAGE (`{ gt: curseur }` — une pagination keyset faisait passer une
+audience entière pour une porte), et toute clé commençant par `id`/`userId`
+faute de frontière de mot (`idempotencyKey:`, `userIdsExcluded:`).
+
+Quatre audiences réelles en sont sorties, dont deux qui comptent :
+`memberAdmission` (l'éventail de « X a rejoint ») et **`creatorSuccession`** — un
+banni-mais-actif est éligible à la SUCCESSION, donc peut être élu créateur de la
+conversation dont il est exclu.
+
+> Les deux discriminants lisaient le `where` par expression régulière sur son
+> TEXTE ENTIER. **La portée (à quel niveau ?) et la polarité (dans quel sens ?)
+> sont exactement les deux choses qu'une expression régulière ne peut pas voir —
+> et les deux qui décident du verdict.** Ils lisent désormais les paires de
+> premier niveau, combinateurs `AND`/`OR` traversés, `NOT` non traversé, et la
+> traversée s'arrête avant les filtres de RELATION (y entrer transformerait une
+> audience en porte, l'erreur inverse).
+
+### Le correctif en CODE pouvait s'annuler sans qu'un témoin rougisse
+
+`participationEstVivante` vaut `isActive === true && bannedAt == null`, et
+**`undefined == null` est vrai**. Le journal du lot avait écrit qu'un champ non
+projeté « rendrait `false` pour TOUT LE MONDE » : vrai d'`isActive`, **faux et
+dangereux de `bannedAt`**, qui rend la garde passante. Mesuré par l'audit : en
+retirant `bannedAt: true` du `select`, la suite gateway ENTIÈRE reste verte.
+
+> **Les deux moitiés d'une loi jugée après lecture n'échouent pas du même côté.**
+> Celle qui ferme se voit tout de suite ; celle qui ouvre ne se voit jamais. Un
+> témoin de comportement ne peut attraper que la première — d'où un témoin sur la
+> REQUÊTE, la règle que le dépôt écrit déjà pour le Prisme.
+
+### Et mon premier témoin de la fuite d'édition ne pouvait pas tomber
+
+Je l'avais écrit avec une porte de sortie (`if (calls.length === 0) return`)
+« au cas où » le batch ne serait pas appelé. Sous la mutation inverse, il est
+resté VERT. Le harnais retenu est celui de l'audit, livré ROUGE — et sa fixture a
+dû gagner un membre LÉGITIME, sans quoi le correctif court-circuite l'appel et le
+témoin redevient vert par absence.
+
+> Deux fois dans le même témoin, la même erreur sous deux formes : une porte de
+> sortie dans l'assertion, puis une fixture dont le cas nominal ne se produit
+> pas. **« Vert » et « vert pour la bonne raison » ne se distinguent qu'en
+> exécutant la mutation.**
+
+### Les comptes, encore
+
+Quatre textes de famille annonçaient des totaux — « ces sept sites », « ces
+quatre nombres », « les quatre sites », « dix-huit projections ». **Trois ont été
+rendus faux par le lot lui-même**, qui ajoutait des entrées sous un texte se
+lisant comme exhaustif. Les numéraux sont retirés, et un témoin interdit
+désormais qu'un texte de famille annonce un total **que rien ne nomme** — un
+compte qui NOMME ses membres (« les deux lectures de `conversation-partners` »)
+reste vérifiable, un total nu dérive.
+
+### Ce que l'audit a vérifié JUSTE
+
+Les six refus décidés tiennent (les deux transports du gate de blocage, l'égalité
+exacte de `callGroupConversation`, les trois questions de `conversation-encryption`),
+la preuve de modèle tient, `anonymousUsername` est bien la seule audience que
+`findFirst` fait entrer, et le correctif de l'éventail est réel — rouge dès qu'on
+remet `isActive` nu.
+
+### Ce qu'il n'a pas pu vérifier, et qui reste ouvert
+
+**Aucun accès base** : personne n'a compté les lignes `isActive: true,
+bannedAt ≠ null` en production. Toutes les fuites de ce cycle sont « possibles »,
+pas « dénombrées » — c'est la question que le cycle 194 avait déjà posée et que
+personne n'a tranchée. Et les **48 lectures publiées sans raison** (21 portée
+indirecte, 9 variable, 6 appel, 5 ternaire, 7 absente) restent non instruites :
+le relevé les publie, le lot ne les ouvre pas, et aucun témoin ne dit ce qu'elles
+décident.
+
+Enfin : le lot touche la frontière E2EE (l'enveloppe par appareil sur la charge
+push). **Un audit cryptographique tiers reste requis** avant de présenter Meeshy
+comme une messagerie chiffrée — l'agent le dit lui-même, et il a raison de le
+dire.
