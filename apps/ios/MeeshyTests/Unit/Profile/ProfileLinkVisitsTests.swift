@@ -125,4 +125,17 @@ final class ProfileLinkVisitsTests: XCTestCase {
         XCTAssertTrue(spoken.contains(1719.formatted()))
         XCTAssertTrue(spoken.contains(ProfileLinksCopy.visitsThisMonth(1719)))
     }
+
+    func test_copy_figureCaption_takesTheSingularForOne() {
+        let cases: [(LinksFaceFigure, LinksFaceFigure, String)] = [
+            (.arrivals(1, cap: nil), .arrivals(2, cap: nil), "arrivals"), (.clicks(1), .clicks(2), "clicks"),
+            (.members(1), .members(2), "members"), (.referrals(1), .referrals(2), "referrals")
+        ]
+        for (one, many, key) in cases {
+            XCTAssertEqual(ProfileLinksCopy.figureCaption(one),
+                           Bundle.main.localizedString(forKey: "profile.links.figure.\(key).one", value: nil, table: nil))
+            XCTAssertEqual(ProfileLinksCopy.figureCaption(many),
+                           Bundle.main.localizedString(forKey: "profile.links.figure.\(key)", value: nil, table: nil))
+        }
+    }
 }
