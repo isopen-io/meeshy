@@ -99,7 +99,7 @@ voyait là. **Le lieu où un défaut se VOIT n'est pas le lieu où il se répare
 - **#19957** — le verdict sur un message supprimé (décision produit), toujours
   valable : le dédoublonnage rend un message supprimé avec `success: true`,
   mesuré ;
-- **#19959** — le `clientMessageId` d'autrui servi par la liste REST, que le
+- **#19960** — le `clientMessageId` d'autrui servi par la liste REST, que le
   chemin socket retire : préexistant, sans conséquence tant que rien ne l'écrit,
   et c'est précisément ce qui a rendu ce lot exploitable.
 
