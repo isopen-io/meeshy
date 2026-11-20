@@ -93,11 +93,11 @@ struct EndToEndReadableRedirect {
         let name = PeerFirstName.of(peerName)
         guard !name.isEmpty else {
             return String(localized: "conversation.send.e2ee.redirectedToReadableAnonymous",
-                          defaultValue: "Votre correspondant ne peut pas recevoir de messages chiffrés : message envoyé dans votre conversation non chiffrée.",
+                          defaultValue: "Votre correspondant ne reçoit pas le chiffré : message parti en clair.",
                           bundle: .main)
         }
         return String(localized: "conversation.send.e2ee.redirectedToReadable",
-                      defaultValue: "\(name) ne peut pas recevoir de messages chiffrés : message envoyé dans votre conversation non chiffrée.",
+                      defaultValue: "\(name) ne reçoit pas le chiffré : message parti dans votre conversation en clair.",
                       bundle: .main)
     }
 }
