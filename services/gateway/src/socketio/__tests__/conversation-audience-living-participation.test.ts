@@ -70,12 +70,17 @@ describe('audiences de diffusion — l’appartenance VIVANTE, par la même cons
    * désigne encore un site.
    */
   it('ne laisse pas la dette mesurée grossir au-delà de ce que #20091 a relevé', () => {
-    expect(Object.keys(MEASURED_NOT_INSTRUCTED).length).toBeLessThanOrEqual(41);
+    expect(Object.keys(MEASURED_NOT_INSTRUCTED).length).toBeLessThanOrEqual(42);
   });
 
   /**
    * #20091 — ce que l'instrument ne sait pas JUGER, il le PUBLIE : un `where`
-   * qui est une variable, un appel ou un ternaire n'a pas de littéral à lire.
+   * qui est une variable, un appel ou un ternaire n'a pas de littéral à lire —
+   * et un `where` LITTÉRAL dont la portée vient d'un spread
+   * (`{ ...SCOPE, isActive: true }`) n'a pas de `conversationId` à reconnaître.
+   * Cette dernière forme était ÉCARTÉE EN SILENCE jusqu'à l'audit adversarial
+   * du lot, qui l'a nommée : onze lectures de plus, dont la seconde requête du
+   * site même que ce lot resserre.
    * « Zéro trouvé » n'est pas « zéro existe », et c'est par là que l'audience
    * de l'arrivée dans le salon GLOBAL est restée nue sans qu'aucun cliquet
    * puisse le dire.
@@ -84,9 +89,9 @@ describe('audiences de diffusion — l’appartenance VIVANTE, par la même cons
     const unjudgeable = sweepUnjudgeableParticipantReads();
 
     expect(unjudgeable.length).toBeGreaterThan(0);
-    expect(unjudgeable.length).toBeLessThanOrEqual(17);
+    expect(unjudgeable.length).toBeLessThanOrEqual(33);
     for (const read of unjudgeable) {
-      expect(read.form).toMatch(/^(variable|appel|ternaire|absent)$/);
+      expect(read.form).toMatch(/^(variable|appel|ternaire|absent|portée-indirecte)$/);
     }
   });
 

@@ -44,7 +44,7 @@ import { sweepUnboundedLiveReads } from './live-audience-bound-sweep';
  * | `routes/conversations/guest-sessions.ts`, `emitConversationActivityUpdate.ts` | la liste sert aussi d'EFFECTIF (`memberCount: remaining.length`) : un effectif tronqué est un nombre FAUX servi aux clients, pas une audience partielle. La troncature y exige une décision que ce lot ne prend pas |
  * | `participant-superset.ts` | **parti au lot #20051** : sa valeur voyage jusqu'à la file hors ligne de `message:new`, la seule porte DURABLE d'un message. Une troncature s'y rend donc comme une panne (`undefined`), jamais comme une liste |
  * | les dix autres | des audiences de DIFFUSION et des gates, chacun avec sa propre question sur ce qu'une troncature coûte. Un lot par famille |
- * | `participant-rights-core.ts`, `shareLinkArrivalAnnounce.ts`, `E2EEEnvelopeRelay.ts` | **arrivés par #20091, et pas parce qu'ils ont changé de borne** — voir ci-dessous |
+ * | `participant-rights-core.ts`, `shareLinkArrivalAnnounce.ts` | **arrivés par #20091, et pas parce qu'ils ont changé de borne** — voir ci-dessous |
  *
  * ## TROIS LIGNES QUE #20091 A RENDUES VISIBLES SANS RIEN DÉBORNER
  *
@@ -67,14 +67,16 @@ import { sweepUnboundedLiveReads } from './live-audience-bound-sweep';
  *
  * Ce qui les retient, et ce n'est pas la paresse d'un lot :
  *
- * - **`E2EEEnvelopeRelay.directoryOf` ne peut PAS être borné « au passage », et
- *   peut-être pas du tout.** Sa valeur alimente `compareDeviceSets`, qui exige
- *   une correspondance EXACTE : un annuaire TRONQUÉ ferait refuser en
- *   `409 DEVICES_MISMATCH` **tout** envoi d'une conversation trop grande, et un
- *   émetteur qui s'alignerait sur la troncature laisserait sans enveloppe les
- *   appareils non nommés — un message chiffré qui n'arrive jamais, sans que
- *   personne ne le sache. `complete === false` y exige donc une LEVÉE, pas un
- *   `take`, et c'est une décision de protocole.
+ * `E2EEEnvelopeRelay.directoryOf` y a figuré un temps, puis en est SORTI : son
+ * resserrement a été annulé par l'audit adversarial du lot (la liste servie au
+ * client est nue, donc resserrer l'annuaire fait DIVERGER les deux côtés d'une
+ * égalité exacte — #20093). Sa clause étant redevenue nue, ce balayage ne la
+ * voit plus. **Elle n'en est pas bornée pour autant** : sa borne est une
+ * décision de PROTOCOLE, pas un `take`, puisqu'un annuaire tronqué derrière
+ * `compareDeviceSets` ferait refuser TOUT envoi d'une grande conversation —
+ * `complete === false` y exige une LEVÉE. C'est écrit sur place, dans
+ * `directoryOf`, parce qu'aucun inventaire d'ici ne peut plus le porter.
+ *
  * - **`participant-rights-core` et `shareLinkArrivalAnnounce` sont des éventails
  *   d'HÔTES** (`role in creator|admin|moderator`) : leur cardinalité est bornée
  *   par le produit, pas par la requête. La borne y est juste, et elle se pose
@@ -90,7 +92,6 @@ const FROZEN_UNBOUNDED: readonly string[] = [
   'src/routes/conversations/guest-sessions.ts',
   'src/routes/conversations/participant-rights-core.ts',
   'src/services/conversations/shareLinkArrivalAnnounce.ts',
-  'src/services/e2ee/E2EEEnvelopeRelay.ts',
   'src/services/mentions/mentionSuggestions.ts',
   'src/services/together/togetherGate.ts',
   'src/socketio/CallEventsHandler.ts',

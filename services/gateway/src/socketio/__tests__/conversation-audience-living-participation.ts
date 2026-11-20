@@ -76,7 +76,16 @@ const LAW_SPELLINGS = ['PARTICIPATION_VIVANTE', 'ADMITTED_FILE_READER_WHERE'] as
  */
 function spellsTheLaw(where: string): boolean {
   if (LAW_SPELLINGS.some((spelling) => where.includes(spelling))) return true;
-  return /isActive:\s*true/.test(where) && /bannedAt/.test(where);
+  if (!/isActive:\s*true/.test(where)) return false;
+  // La POLARITÉ, jamais le MOT. Le premier jet rendait `true` sur
+  // `/bannedAt/` nu — l'audit adversarial a mesuré le faux VERT qu'il
+  // autorisait : `{ conversationId, isActive: true, bannedAt: { not: null } }`,
+  // soit une audience composée EXCLUSIVEMENT de bannis, était déclarée
+  // conforme à la loi qui existe pour les exclure. Un cliquet qui se trompe
+  // dans le sens rassurant est pire que pas de cliquet.
+  return /unsetOrNull\(\s*['"`]bannedAt['"`]\s*\)/.test(where)
+    || /bannedAt:\s*null/.test(where)
+    || /bannedAt:\s*\{\s*isSet:\s*false\s*\}/.test(where);
 }
 
 /** Une audience relevée par le balayage. */
@@ -114,18 +123,29 @@ export type UnjudgeableRead = {
   readonly file: string;
   readonly line: number;
   readonly method: string;
-  /** Ce qui tient la place du littéral : `variable`, `appel`, `ternaire`, `absent`. */
+  /**
+   * Ce qui tient la place du littéral : `variable`, `appel`, `ternaire`,
+   * `absent`, ou `portée-indirecte` — un `where` littéral dont le
+   * `conversationId` vient d'un spread, donc dont on ne sait pas dire s'il
+   * désigne une conversation.
+   */
   readonly form: string;
 };
 
 /**
  * LA PORTÉE DU BALAYAGE — `src/` ENTIER, et c'est #20091.
  *
- * Elle valait `path.resolve(__dirname, '..')`, soit `src/socketio/`. Mesuré en
- * faisant tourner CE classifieur sur `src/` : 15 audiences dans `socketio/`
- * (13 épellent la loi, 2 déclarées larges) et **51 au dehors, dont 50 nues**.
- * Le cliquet était vert, et affirmait d'un dépôt ce qu'il mesurait d'un
- * répertoire.
+ * Elle valait `path.resolve(__dirname, '..')`, soit `src/socketio/`. Le cliquet
+ * était vert, et affirmait d'un dépôt ce qu'il mesurait d'un répertoire.
+ *
+ * **Les comptes vivent dans un TÉMOIN, pas ici** (`audience-law-scope.test.ts`,
+ * § « la distribution mesurée »). Le premier jet de ce lot les avait écrits en
+ * prose — « 51 au dehors, dont 50 nues » — et l'audit adversarial a mesuré
+ * qu'ils ne correspondaient plus : le lot avait ÉLARGI le discriminant dans le
+ * même mouvement, si bien que le chiffre d'avant et le chiffre d'après ne
+ * comptent pas la même chose. Un compte est une AFFIRMATION (cycle 93) ; écrit
+ * dans un commentaire il ne peut pas rougir, et il dérive au premier
+ * élargissement de l'instrument qui le produit.
  *
  * > Une énumération porte DEUX affirmations (leçon 261) : « ces sites
  * > respectent la règle » — vérifiable, et vérifiée — et « ce sont les sites
@@ -176,24 +196,31 @@ export const DELIBERATELY_WIDE: Readonly<Record<string, string>> = {
     'sur-ensemble, et le bannissement n\'est pas une place libérée pour cette question-là.',
   'services/conversations/obsoleteCapability.ts#0':
     '`NOT_YET_ACCEPTED`, et non `isActive` : ce relevé nomme les participations EN ATTENTE qui REFUSENT ' +
-    'la capacité « rendre obsolète » (`sendsPendingRequest`). Il est large par nature — il cherche ' +
-    'précisément ce que la participation vivante EXCLUT — et resserrer le priverait de son objet. Borné ' +
-    'par les conversations directes du lecteur.',
+    'la capacité « rendre obsolète » (`sendsPendingRequest`), et plus de lignes ⇒ plus de refus. ' +
+    "L'entrée affirmait d'abord qu'il « cherche ce que la participation vivante EXCLUT » : l'audit " +
+    'adversarial l\'a mesuré FAUX — `NOT_YET_ACCEPTED` est ORTHOGONAL à `isActive`/`bannedAt` (une ' +
+    'demande en attente vit sur une ligne ACTIVE). La décision était juste et sa raison fausse ; ' +
+    "c'est le fail-closed du refus qui la porte, pas une orthogonalité inventée.",
   'services/conversations/obsoleteCapability.ts#1':
     'Le `groupBy` jumeau du précédent, visible du cliquet depuis #20091 seulement (il ne lisait pas ' +
     '`groupBy`). Il alimente `activeParticipants <= 2`, du même verdict autoriser/refuser et du même ' +
     'côté : un membre de trop fait REFUSER, un membre manquant ferait autoriser. Sur-ensemble délibéré, ' +
     'pour la raison de son #0.',
-  'services/game/GameAbuseGuard.ts#0':
-    'La garde d\'abus lit la FORME de la conversation (`self` / `pair` / `group`, `take: 3`) pour REFUSER ' +
-    'le crédit de jeu — entre-soi, nouveau venu non prouvé, blocage. Un membre que le relevé rate fait ' +
-    'passer une conversation de `pair` à `self`, donc fait CRÉDITER ce qu\'il faut refuser. Le ' +
-    'sur-ensemble échoue fermé.',
   'services/message-translation/ArrivalHistoryBackfill.ts#0':
     'Le rattrapage prend le plancher d\'historique le PLUS RÉCENT de tous les participants pour ne PAS ' +
     'traduire puis pousser à la room un message qu\'un membre n\'a pas le droit de lire. Un participant ' +
     'oublié du relevé est un plancher qu\'on n\'applique pas, donc de l\'historique servi à qui ne l\'a ' +
     'jamais eu : ici encore, le sur-ensemble est la garde.',
+  'services/e2ee/E2EEEnvelopeRelay.ts#0':
+    "`directoryOf` est l'annuaire des appareils qui REÇOIVENT l'enveloppe chiffrée — une AUDIENCE, " +
+    "donc la loi étroite en principe. #20091 l'a resserrée, et l'audit adversarial du lot l'a fait " +
+    'ANNULER sur une mesure : les trois lectures qui servent la liste de membres au client, et ' +
+    '`mayReadKeysOf` qui autorise la lecture des clés, sont TOUTES en `isActive` nu. Resserrer ici ' +
+    'fait donc DIVERGER les deux côtés d\'une égalité EXACTE (`compareDeviceSets`), soit un ' +
+    '`409 DEVICES_MISMATCH` sur CHAQUE envoi — et le chiffrement de bout en bout étant réservé aux ' +
+    'PAIRES, le banni-mais-actif y est le SEUL pair : la panne frappe le membre légitime, ' +
+    'définitivement, dans une conversation que rien ne ramène en clair (#12949). Raison complète sur ' +
+    'le site, avec son lot de convergence : #20093.',
   'services/e2ee/E2EESignalRelay.ts#0':
     "`assertNotBlocked` relève mes PAIRS d'une conversation directe pour REFUSER l'envoi si l'un " +
     "d'eux m'a bloqué : c'est une liste de REFUS, et resserrer la retirerait un pair banni-mais-actif " +
@@ -218,12 +245,12 @@ export const DELIBERATELY_WIDE: Readonly<Record<string, string>> = {
  * | `DELIBERATELY_WIDE` | « ce site DOIT être large » | la raison, instruite, écrite sur place |
  * | `MEASURED_NOT_INSTRUCTED` | « on ne sait pas encore ce que ce site décide » | sa famille, et une issue |
  *
- * Ces 48 sites sont entrés dans la portée du balayage le jour où elle est
- * passée de `src/socketio/` à `src/` : ils n'ont pas été écrits en violation
- * d'un cliquet, ils étaient simplement hors de sa vue. Les geler avec leur
- * raison est la seule manœuvre honnête — vider l'inventaire en reclassant
- * 48 sites en « décision » le rendrait vert en affirmant 48 fois ce que
- * personne n'a instruit.
+ * Ces sites sont entrés dans la portée du balayage le jour où elle est passée
+ * de `src/socketio/` à `src/` : ils n'ont pas été écrits en violation d'un
+ * cliquet, ils étaient simplement hors de sa vue. Les geler avec leur raison
+ * est la seule manœuvre honnête — vider l'inventaire en les reclassant tous en
+ * « décision » le rendrait vert en affirmant autant de fois ce que personne n'a
+ * instruit. Leur NOMBRE est tenu par un témoin, pas par cette phrase.
  *
  * **La question à poser à chaque ligne est celle du doc-comment en tête de ce
  * fichier** : cette liste décide-t-elle qui REÇOIT (audience ⇒ loi étroite),
@@ -274,6 +301,16 @@ export const MEASURED_FAMILIES: Readonly<Record<string, string>> = {
     'Aucune livraison, et l\'écart qu\'un banni-mais-actif produit est un palier, une clé ou une priorité ' +
     'légèrement faux. À instruire avec les règles du Jeu et de la modération, dont les seuils sont des ' +
     'décisions produit — pas au fil d\'un lot de clause.',
+  'refus-dont-une-frontiere-echoue-ouvert':
+    "`GameAbuseGuard.shapeOf` a TROIS branches et DEUX frontières, et l'inventaire des décisions n'en " +
+    'avait raisonné QU\'UNE. À la frontière 1↔2 le sur-ensemble échoue FERMÉ (un membre de plus fait ' +
+    "passer `self` à `pair`, donc soumet au plafond d'entre-soi). À la frontière 2↔3 il S'INVERSE : " +
+    '`group` ne passe NI par `accountsAllowed` (blocage, nouveau venu non prouvé) NI par le plafond ' +
+    "d'entre-soi, si bien qu'un banni-mais-actif de trop transforme `quarter` en `full` et `none` en " +
+    '`full` — il CRÉDITE les deux abus que la garde existe pour refuser. Mesuré par l\'audit ' +
+    'adversarial sur la vraie classe. Le fichier se déclare lui-même fail-OUVERT, ce que l\'entrée de ' +
+    "décision contredisait mot pour mot. Ce n'est donc pas une décision mais une dette, et son lot " +
+    "devra nommer la frontière qu'il tranche. Suivi : #20091.",
   'ni-audience-ni-refus':
     'Les quatre sites que la taxonomie du balayage ne range PAS, et le dire vaut mieux que les forcer : ' +
     '`callConversationRebranch` est une table de jointure qui REPOINTE des lignes d\'appel ; ' +
@@ -323,6 +360,7 @@ export const MEASURED_NOT_INSTRUCTED: Readonly<Record<string, string>> = {
   'services/game/MessageGameSignals.ts#1': 'mesure-jeu-et-priorite',
   'routes/admin/system-rankings.ts#0': 'mesure-jeu-et-priorite',
   'services/reports/reportPriority.ts#0': 'mesure-jeu-et-priorite',
+  'services/game/GameAbuseGuard.ts#0': 'refus-dont-une-frontiere-echoue-ouvert',
   'services/calls/callConversationRebranch.ts#0': 'ni-audience-ni-refus',
   'services/conversations/orphanedSalonLinks.ts#0': 'ni-audience-ni-refus',
   'services/message-translation/ConversationLanguages.ts#0': 'ni-audience-ni-refus',
@@ -533,7 +571,14 @@ function walkParticipantReads(): { audiences: AudienceSite[]; unjudgeable: Unjud
           unjudgeable.push({ file, line, method: match[1], form: 'absent' });
           continue;
         }
-        if (!where.includes('conversationId')) continue;
+        // #20091, constat de l'audit : un `where` LITTÉRAL dont la portée vient
+        // d'un spread (`{ ...SCOPE, isActive: true }`) n'a pas de
+        // `conversationId` textuel. L'écarter en SILENCE est exactement le
+        // défaut que ce lot corrige ailleurs — il se publie donc.
+        if (!where.includes('conversationId')) {
+          if (/\.{3}[A-Za-z_$]/.test(where)) unjudgeable.push({ file, line, method: match[1], form: 'portée-indirecte' });
+          continue;
+        }
         if (namesAParticularMember(where)) continue;
         audiences.push({ file, line, where, usesLaw: spellsTheLaw(where) });
       }
