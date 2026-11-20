@@ -1431,12 +1431,11 @@ describe('MessageProcessor — branch gap coverage', () => {
     originalLanguage: 'fr',
   } as const;
 
-  // Line 639 — catch block in handleAttachments when associateAttachmentsToMessage throws
-  it('swallows associateAttachmentsToMessage errors (handleAttachments catch)', async () => {
-    mockAssociateAttachmentsToMessage.mockRejectedValue(new Error('attach fail'));
-    const processor = makeProcessor();
-    await expect(processor.saveMessage({ ...baseData, attachmentIds: ['att-1'] })).resolves.toBeDefined();
-  });
+  // #19956 — un témoin « swallows associateAttachmentsToMessage errors » vivait
+  // ICI et attestait le DÉFAUT : posé pour couvrir une branche, il décrivait ce
+  // que la branche faisait, jamais ce qu'elle devait faire. Verdict (échec de
+  // l'envoi, suppression de la ligne, libération des pièces) :
+  // `MessageProcessor.attachmentFailure.test.ts`.
 
   // Line 710 — catch block in copyForwardedAttachments when prisma throws
   it('swallows copyForwardedAttachments errors on prisma failure', async () => {
