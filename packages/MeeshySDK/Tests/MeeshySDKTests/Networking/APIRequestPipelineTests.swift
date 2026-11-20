@@ -193,6 +193,25 @@ final class APIRequestPipelineTests: XCTestCase {
         ))
     }
 
+    func test_classify_participantWithoutDevice_onTheOpaqueEncryptionRoute_carriesTheMembersWithoutDevice() {
+        let body = #"{"success":false,"error":"End-to-end encryption needs an encrypting device for every member","code":"E2EE_PARTICIPANT_WITHOUT_DEVICE","withoutDeviceUserIds":["b"]}"#
+        guard case MeeshyError.rejected(let rejection)? = thrown(classify(status: 409, body: body)) else {
+            return XCTFail("le refus de bascule sans appareil garde son code sur toute adresse (#20073)")
+        }
+        XCTAssertEqual(rejection.code, E2EEErrorCode.participantWithoutDevice)
+        XCTAssertEqual(rejection.withoutDeviceUserIds, ["b"])
+        XCTAssertEqual(MeeshyError.rejected(rejection).e2eeCode, E2EEErrorCode.participantWithoutDevice)
+    }
+
+    func test_classify_participantWithoutDevice_onCreation_withoutNamedMembers_keepsItsCode() {
+        let body = #"{"success":false,"error":"End-to-end encryption needs an encrypting device","code":"E2EE_PARTICIPANT_WITHOUT_DEVICE"}"#
+        guard case MeeshyError.rejected(let rejection)? = thrown(classify(status: 409, body: body)) else {
+            return XCTFail("la création d'un direct e2ee refusée garde son code, même sans membres nommés")
+        }
+        XCTAssertEqual(rejection.code, E2EEErrorCode.participantWithoutDevice)
+        XCTAssertEqual(rejection.withoutDeviceUserIds, [])
+    }
+
     func test_classify_e2eeDeviceNotBound_isATypedRefusal_notASessionFailure() {
         let body = #"{"success":false,"error":"Appareil non lié","code":"E2EE_DEVICE_NOT_BOUND"}"#
         let error = thrown(classify(status: 403, body: body))
