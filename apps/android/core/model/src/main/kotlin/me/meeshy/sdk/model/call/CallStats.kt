@@ -137,14 +137,18 @@ public data class CallStats(
             return types.contains("relay")
         }
 
-        /** The SELECTED ICE pair: the transport's `selectedCandidatePairId`, else the nominated succeeded pair. */
+        /**
+         * The SELECTED ICE pair, always a `candidate-pair`: the one the transport's
+         * `selectedCandidatePairId` names, else — that id absent or naming an entry of
+         * another type — the nominated succeeded pair (#19953).
+         */
         public fun selectedCandidatePair(entries: List<RawEntry>): RawEntry? {
+            val pairs = entries.filter { it.type == "candidate-pair" }
             val selectedId = entries.firstOrNull { it.type == "transport" }?.strings?.get("selectedCandidatePairId")
-            val nominated = entries.firstOrNull {
-                it.type == "candidate-pair" && it.strings["state"] == "succeeded" &&
-                    (it.values["nominated"] ?: 0.0) > 0.0
+            val nominated = pairs.firstOrNull {
+                it.strings["state"] == "succeeded" && (it.values["nominated"] ?: 0.0) > 0.0
             }
-            return selectedId?.let { id -> entries.lastOrNull { it.id == id } } ?: nominated
+            return selectedId?.let { id -> pairs.lastOrNull { it.id == id } } ?: nominated
         }
 
         public fun reduce(entries: List<RawEntry>): CallStats {
@@ -210,7 +214,7 @@ public data class CallStats(
             val jitterMs =
                 if (audioJitterCount > 0) (audioJitterSum / audioJitterCount) * 1000 else 0.0
 
-            val elected = selectedCandidatePair(entries)?.takeIf { it.type == "candidate-pair" }?.values
+            val elected = selectedCandidatePair(entries)?.values
 
             return CallStats(
                 roundTripTimeMs = elected?.get("currentRoundTripTime")?.let { it * 1000 } ?: rtt,
