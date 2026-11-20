@@ -35,6 +35,17 @@ public struct PushDeviceIdentity: Sendable, Equatable {
         return seeded
     }
 
+    /// L'identifiant d'installation, seulement s'il est GARDÉ au trousseau (#19929). Trousseau illisible (avant le
+    /// premier déverrouillage) ou refusant l'écriture : `nil`, jamais un identifiant de passage qui passerait pour un
+    /// autre appareil auprès de qui compare.
+    public static func durableInstallationId(
+        keychain: any KeychainStoring,
+        vendorId: () -> String?
+    ) -> String? {
+        let id = installationId(keychain: keychain, vendorId: vendorId)
+        return keychain.load(forKey: installationIdKey, account: nil) == id ? id : nil
+    }
+
     @MainActor
     public static func current(keychain: any KeychainStoring = KeychainManager.shared) -> PushDeviceIdentity {
         let info = Bundle.main.infoDictionary

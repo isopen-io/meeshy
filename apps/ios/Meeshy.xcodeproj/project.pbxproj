@@ -2197,6 +2197,7 @@
 		716053D691D8E3D2C8D0776A /* ProfilePublicationTiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 772ADF45CA8261C32ED95FE2 /* ProfilePublicationTiles.swift */; };
 		7166609F29C3B1F9290F8C4D /* SharePendingSendContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D7E9EE6FABF64C718A7DBB4 /* SharePendingSendContractTests.swift */; };
 		718D2E8E8FFA869FA9E8D024 /* StickerOptimisticAttachmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B51C9C9F4EF5670380BFB5A /* StickerOptimisticAttachmentTests.swift */; };
+		5BFFC5CD248DA74258B95CD3 /* SharedLocationRestoredBackupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F5E6EC85D9F958998052BE7 /* SharedLocationRestoredBackupTests.swift */; };
 		71AC1575B26B069CA234EE98 /* SharedLocationSharingSyncTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE6C7A0D83B59E9C80D54528 /* SharedLocationSharingSyncTests.swift */; };
 		71D6E6B8085D4A50CB647BF5 /* OptionalViewReturnGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B176702401936F84123D5CC1 /* OptionalViewReturnGuardTests.swift */; };
 		71D952FCFB773546094968CA /* CallManager+RemoteEvents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C098E2302474746264D562C /* CallManager+RemoteEvents.swift */; };
@@ -9471,6 +9472,7 @@
 		EE5F5CDD657F93F0091E59A1 /* CallMontageRecorderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallMontageRecorderTests.swift; sourceTree = "<group>"; };
 		EE6063F80BE948424A24586E /* MediaLifecycleBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLifecycleBridgeTests.swift; sourceTree = "<group>"; };
 		EE68C1C62F7DEB4D149C2CA7 /* SectionDropTargetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectionDropTargetTests.swift; sourceTree = "<group>"; };
+		5F5E6EC85D9F958998052BE7 /* SharedLocationRestoredBackupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedLocationRestoredBackupTests.swift; sourceTree = "<group>"; };
 		EE6C7A0D83B59E9C80D54528 /* SharedLocationSharingSyncTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedLocationSharingSyncTests.swift; sourceTree = "<group>"; };
 		EE947F70CE6366BB18CA1EB6 /* MeeshyComposerHost+SceneColumns.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MeeshyComposerHost+SceneColumns.swift"; sourceTree = "<group>"; };
 		EEA2A833CAF4DECF3AD7C248 /* LiveShareDispatcherTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveShareDispatcherTests.swift; sourceTree = "<group>"; };
@@ -11256,6 +11258,7 @@
 				8465FE98923211767F4126F6 /* AnchoredSheetNamingGuardTests.swift */,
 				9BF80E15B81A38CBD62FE6CC /* SharedLocationMotionTests.swift */,
 				E504C5751E2AC90984F4FC65 /* SharedLocationSharingCenterTests.swift */,
+				5F5E6EC85D9F958998052BE7 /* SharedLocationRestoredBackupTests.swift */,
 				EE6C7A0D83B59E9C80D54528 /* SharedLocationSharingSyncTests.swift */,
 			);
 			path = SharedLocation;
@@ -21223,6 +21226,7 @@
 				EBFCE21D93602FBF39F9D8AC /* SharedComponentsMotionWiringTests.swift in Sources */,
 				3B15DCE85A38DC7A6ECE598B /* SharedLocationMotionTests.swift in Sources */,
 				7FA2D71B05BF771055382D0F /* SharedLocationSharingCenterTests.swift in Sources */,
+				5BFFC5CD248DA74258B95CD3 /* SharedLocationRestoredBackupTests.swift in Sources */,
 				71AC1575B26B069CA234EE98 /* SharedLocationSharingSyncTests.swift in Sources */,
 				B7A5C1C61ADDDA8AAD907B4F /* SharedLocationsMapViewModelTests.swift in Sources */,
 				E4A94ACC66A79D945E23AF7A /* SheetEnvironmentObjectGuardTests.swift in Sources */,

@@ -36,6 +36,28 @@ final class PushDeviceIdentityTests: XCTestCase {
         XCTAssertEqual(first, second)
     }
 
+    // MARK: - durableInstallationId (#19929)
+
+    func test_durableInstallationId_aKeptId_isReturned() {
+        let keychain = makeKeychain()
+        _ = PushDeviceIdentity.installationId(keychain: keychain, vendorId: { "VENDOR-1" })
+
+        XCTAssertEqual(PushDeviceIdentity.durableInstallationId(keychain: keychain, vendorId: { "VENDOR-2" }), "VENDOR-1")
+    }
+
+    func test_durableInstallationId_aFirstLaunch_seedsAndReturnsTheKeptId() {
+        let keychain = makeKeychain()
+
+        XCTAssertEqual(PushDeviceIdentity.durableInstallationId(keychain: keychain, vendorId: { "VENDOR-1" }), "VENDOR-1")
+    }
+
+    func test_durableInstallationId_anUnreadableKeychain_isNil_neverAPassingId() {
+        let keychain = UnreadablePushIdentityKeychain()
+
+        XCTAssertNil(PushDeviceIdentity.durableInstallationId(keychain: keychain, vendorId: { "VENDOR-1" }))
+        XCTAssertNil(PushDeviceIdentity.durableInstallationId(keychain: keychain, vendorId: { nil }))
+    }
+
     // MARK: - RegisterDeviceTokenRequest carries the device
 
     func test_registerDeviceTokenRequest_encodesTheDeviceIdentity() throws {
@@ -101,4 +123,15 @@ private final class InMemoryPushIdentityKeychain: KeychainStoring, @unchecked Se
         try save(value, forKey: key, account: account)
     }
     func loadAsync(forKey key: String, account: String?) async -> String? { load(forKey: key, account: account) }
+}
+
+/// Le trousseau avant le premier déverrouillage : rien ne s'y lit, rien ne s'y écrit.
+private final class UnreadablePushIdentityKeychain: KeychainStoring, @unchecked Sendable {
+    struct Locked: Error {}
+
+    func save(_ value: String, forKey key: String, account: String?) throws { throw Locked() }
+    func load(forKey key: String, account: String?) -> String? { nil }
+    func delete(forKey key: String, account: String?) {}
+    func saveAsync(_ value: String, forKey key: String, account: String?) async throws { throw Locked() }
+    func loadAsync(forKey key: String, account: String?) async -> String? { nil }
 }
