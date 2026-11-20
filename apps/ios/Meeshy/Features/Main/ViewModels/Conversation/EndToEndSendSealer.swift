@@ -46,7 +46,7 @@ struct EndToEndSendSealer {
     var peerDeviceReach: EndToEndPeerDeviceReach?
     /// La ligne de liste annonçait déjà l'envoi (« Vous : … ») : elle revient au
     /// dernier message réel quand la bulle part ailleurs (#20074).
-    var withdrawListPreview: (_ localId: String) async -> Void = { _ in }
+    var withdrawListPreview: @MainActor (_ localId: String) async -> Void = { _ in }
 
     var requiresSeal: Bool {
         EndToEndSendGate.requiresSeal(conversationEncryptionModes: encryptionModes)
