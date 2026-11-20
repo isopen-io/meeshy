@@ -660,3 +660,14 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Début du run : #19983 (doublon de `retained.json`) poussée à 05:37 par le run précédent, encore actif : cédée. #19951 (#14227, index des appartenances), #19950 (#19879) et #19903 (#19869) inactives depuis plus de deux heures ; le rouge étranger qui les bloquait (#19964) est corrigé sur `dev` (#19974, `fb8f5c167`).
 - Lot : mener #19951 à la fusion. `dev` (`b06982a21`) fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : passerelle `tsc --noEmit` vert ; témoin de migration + `tsc-never-loaded` (2 suites, 11 tests) verts ; les deux anciens rouges étrangers verts (shared `glory-frames-generated` 29/29, web `lottie/sources` 3/3).
 - `ci.yml` relancé en `workflow_dispatch` sur cette tête.
+
+## 2026-11-20 — réveil 07:38 UTC
+
+- Début du run : quatre PR de la routine ouvertes (#19951 index, #19950 refus notifié, #19903 iOS « Demande envoyée », #19983 doublon `retained.json`), inactives depuis 05:49, leurs `workflow_dispatch` toujours en file (92 travaux en attente sur le dépôt) : rien à y faire sans annuler leur verdict.
+- Lot : #19924 (passerelle) — une demande acceptée dont l'entrée n'a pas eu lieu redevient tranchable.
+- Passerelle : `reopenOrphanedAcceptances` (`services/community-join-request-lifecycle.ts`), appelée avant la première page de la liste des intendants et dans `viewerJoinRequestState` (détail du demandeur). Rouvre une acceptation sur PREUVE seulement : décision de plus de dix minutes (`ORPHAN_ACCEPTANCE_GRACE_MS`), demande vivante par son âge, aucune demande plus récente de la personne (en attente, refusée, expirée), aucune ligne d'appartenance de la paire ou seulement des lignes quittées AVANT la décision. Si la personne entre par une autre porte pendant la réparation, la demande rouverte se reclôt. Ne lève jamais.
+- Témoins : `join-request-orphan-19924.test.ts` (18 ; rouge prouvé : 13 échecs sans le module, puis 3 sur les correctifs d'audit) ; `join-request-lifecycle-19872` et `link-entries-19429` visent désormais l'appel de LISTE (la réparation lit avant).
+- Auditeur adversarial : bloquant corrigé dans le lot (une demande plus récente REFUSÉE était annulée par la réouverture de la vieille acceptation, contournant l'attente de sept jours) ; course lecture/écriture corrigée (reclôture). Suivis ouverts : #20002 (réouverture silencieuse pour les intendants), #20003 (coût et portée de la relecture à l'accès).
+- Gates locaux : passerelle `tsc --noEmit` vert ; communautés / demandes / `tsc-never-loaded` / balayage des écrivains 72 suites, 1 044 tests verts ; balayages et cliquets (`sweep|ratchet|detached`) 56 suites, 440 tests verts.
+- Aucun client touché, aucun contrat d'API changé.
+- Prochain lot recommandé : mener à la fusion #19951, #19950, #19903, #19983 dès que leurs vérifications rendent un verdict ; puis iOS #19877.
