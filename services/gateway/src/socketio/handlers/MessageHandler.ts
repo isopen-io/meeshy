@@ -48,7 +48,7 @@ import { attachmentForwardPreviewSelect, attachmentSocketSelect, MESSAGE_ATTACHM
 import { serializeAttachmentForSocket, serializeMessageAttachmentsForSocket } from '../serializeAttachmentForSocket';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
-import { conversationAudienceRooms, loadLiveParticipantTargets } from '../conversationAudienceRooms';
+import { conversationAudienceRooms, loadLiveAudience } from '../conversationAudienceRooms';
 import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { offlineSignedPayload } from '../offlineSignedPayload';
 import { offlineSignedEdit, queueSigningFields } from '../editedOfflineSigning';
@@ -1184,13 +1184,13 @@ export class MessageHandler {
       // sa room PERSONNELLE (régime par lecteur d'un message à pièce protégée)
       // puis quitté le fil pour la liste n'était atteint par aucun des deux
       // canaux — ni l'émission de room, ni la file, qui saute les CONNECTÉS.
-      // Une lecture qui lève ou une audience hors plafond replie sur la room de
-      // conversation seule, le comportement d'avant ce lot.
-      const audience = await loadLiveParticipantTargets(
-        this.prisma,
-        message.conversationId,
-        (error) => handlerLogger.warn('message:deleted audience lookup failed — conversation room only', { messageId: validated.messageId, error }),
-      );
+      // #20007 — le plafond de lecture TRONQUE en le journalisant : une audience
+      // hors plafond ne replie plus sur la room de conversation seule (elle le
+      // faisait, et c'était ce même défaut rétabli au-dessus d'un seuil). Seule
+      // une lecture qui ne prouve RIEN y replie encore.
+      const audience = await loadLiveAudience(this.prisma, message.conversationId, {
+        onError: (error) => handlerLogger.warn('message:deleted audience lookup failed — conversation room only', { messageId: validated.messageId, error }),
+      });
       const rooms = conversationAudienceRooms(message.conversationId, audience);
       const deletedPayload = {
         messageId: validated.messageId,

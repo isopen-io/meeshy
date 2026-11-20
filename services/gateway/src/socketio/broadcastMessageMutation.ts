@@ -23,7 +23,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { withSealedQuote } from '../services/messaging/servedQuotedMessage';
 import { readerSignedPlanForMessageId } from './readerSignedDelivery';
 import { stripClientMessageId } from './utils/message-ack-shaping';
-import { conversationAudienceRooms, loadLiveParticipantTargets } from './conversationAudienceRooms';
+import { conversationAudienceRooms, loadLiveAudience } from './conversationAudienceRooms';
 
 // Ce relais ne lit rien lui-même : il transmet le prisma de l'aperçu tel quel.
 // Le dériver plutôt que le redéclarer est ce qui empêche les deux listes de
@@ -392,7 +392,12 @@ export async function broadcastMessageMutation(rawParams: MessageMutationParams)
   // cette fonction (`deleted`, `expired`, `pinned`, `unpinned`) ne portent que
   // des ids, pas de contenu : leur audience ne change pas ici, et c'est une
   // décision — révéler l'EXISTENCE d'un message est une question distincte,
-  // suivie par sa propre issue.
+  // suivie par **#17029** (la décision produit : une suppression, une expiration
+  // ou une épingle révèlent-elles l'existence d'un message hors du plancher
+  // d'historique ?) et par **#18681** (le REJEU de ces familles sans texte,
+  // borné par rien). Les NOMMER est le correctif de #20007 : « suivie par sa
+  // propre issue » a coûté à l'audit de #19954 une recherche qu'un numéro
+  // rendait inutile — un renvoi sans adresse n'est pas un renvoi.
   const readership: MessageReadership =
     params.eventType === 'edited'
       ? await messageReadership(params.prisma, conversationId, messageId, onError)
@@ -442,11 +447,14 @@ export async function broadcastMessageMutation(rawParams: MessageMutationParams)
       // portent que des ids, jamais de contenu (c'est ce qui rend l'arbitrage
       // simple, et ce qui le distingue de l'édition, gardée par `readership`).
       //
-      // `loadLiveParticipantTargets` replie sur `[]` quand la lecture lève ou
-      // que l'audience dépasse son plafond, et `conversationAudienceRooms` rend
-      // alors la room de conversation SEULE : le comportement d'avant ce lot,
-      // jamais rien.
-      const audience = await loadLiveParticipantTargets(params.prisma, conversationId, onError);
+      // #20007 — le plafond de lecture TRONQUE en le journalisant, il ne JETTE
+      // plus : une audience de plus de 2 000 participants ne retombait sur la
+      // room de conversation seule, où un lecteur resté sur la LISTE ne reçoit
+      // rien. UNE émission, parce que Socket.IO ne dédoublonne que par
+      // émission : `to()` prend le tableau entier. Une lecture qui lève rend
+      // `targets: []`, et `conversationAudienceRooms` la room de conversation
+      // SEULE — le comportement d'avant #18556, jamais rien.
+      const audience = await loadLiveAudience(params.prisma, conversationId, { onError });
       emitToConversationRoom(io?.to(conversationAudienceRooms(conversationId, audience)), params);
     }
   } catch (error) {

@@ -13,6 +13,7 @@ import { describe, it, expect, jest } from '@jest/globals';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { broadcastViewOnceFact } from '../broadcastViewOnceFact';
 import { LIVE_AUDIENCE_SCAN_CAP } from '../conversationAudienceRooms';
+import { liveParticipantTable } from '../../__tests__/helpers/live-audience-double';
 import { matchesMongoWhere, type MongoDocument } from '../../__tests__/helpers/mongo-where';
 
 type Emitted = { rooms: string | string[]; event: string; payload: unknown };
@@ -201,20 +202,35 @@ describe('les faits de vue unique atteignent chaque participant actif (#18556)',
   });
 });
 
-describe('l’audience nommée est bornée (#18556)', () => {
-  it('au-delà du plafond, la diffusion replie sur la room de conversation seule', async () => {
+/**
+ * Ce témoin assertait l'INVERSE jusqu'à #20007 — « au-delà du plafond, la
+ * diffusion replie sur la room de conversation seule » — et il gelait ainsi la
+ * perte que l'audit de #19954 a nommée : dans une conversation de plus de 2 000
+ * participants vivants, un lecteur resté sur la LISTE ne recevait ni ouverture
+ * ni purge, et rien ne le rattrapait (la file saute les comptes CONNECTÉS).
+ * Il est RÉÉCRIT sciemment, avec sa raison sur place : le plafond ne JETTE plus,
+ * il tronque — à 50 000, en le journalisant.
+ *
+ * Son assertion sur la BORNE est conservée, parce qu'elle garde le seul argument
+ * de cette lecture, qu'aucun témoin de comportement ne peut voir. Elle était
+ * d'ailleurs ANESTHÉSIÉE : la fixture valait `CAP + 1` sur une constante
+ * retirée, et `Array.from({ length: NaN })` rend un tableau VIDE — le témoin
+ * passait sur une foule de zéro personne.
+ */
+describe('l’audience nommée est TRONQUÉE, plus jamais jetée (#20007)', () => {
+  it('au-delà de l’ancien plafond, une seule émission couvre tout le monde', async () => {
     const sink: Emitted[] = [];
     const { manager } = managerInto(sink);
-    const crowd = Array.from({ length: LIVE_AUDIENCE_SCAN_CAP + 1 }, (_, index) => ({
-      id: `p-${index}`,
-      userId: `u-${index}`,
+    const crowd = Array.from({ length: 2001 }, (_, index) => ({
+      id: `507f1f77bcf86cd7994${index.toString(16).padStart(5, '0')}`,
+      userId: `u-${String(index).padStart(6, '0')}`,
       conversationId: CONV,
       isActive: true,
     }));
-    const prisma = prismaOf(crowd);
+    const table = liveParticipantTable(crowd);
 
     await broadcastViewOnceFact({
-      prisma: prisma as never,
+      prisma: { participant: table } as never,
       manager: manager as never,
       conversationId: CONV,
       messageId: 'm-1',
@@ -222,7 +238,15 @@ describe('l’audience nommée est bornée (#18556)', () => {
       payload: { messageId: 'm-1', conversationId: CONV },
     });
 
-    expect(sink.map((e) => e.rooms)).toEqual([`conversation:${CONV}`]);
-    expect(prisma.participant.findMany.mock.calls[0][0]).toMatchObject({ take: LIVE_AUDIENCE_SCAN_CAP + 1 });
+    const purges = sink.filter((emitted) => emitted.event === SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED);
+    const rooms = purges.flatMap((emitted) => (Array.isArray(emitted.rooms) ? emitted.rooms : [emitted.rooms]));
+
+    expect(table.reads()).toBe(1);
+    expect(purges).toHaveLength(1);
+    expect(rooms).toHaveLength(2002);
+    expect(rooms.filter((room) => room === `conversation:${CONV}`)).toHaveLength(1);
+    expect(rooms).toContain('user:u-000000');
+    expect(rooms).toContain('user:u-002000');
+    expect(table.lastArgs()).toMatchObject({ take: LIVE_AUDIENCE_SCAN_CAP + 1 });
   });
 });
