@@ -34,12 +34,24 @@ const OTHER_READER = '68a000000000000000000013';
 const POST = '68c000000000000000000001';
 const postId = (n: number) => `68c0000000000000000001${String(n).padStart(2, '0')}`;
 
+/**
+ * Le premier Rêve du jour (#17370, sous le niveau 5) attend un geste que ces témoins ne font pas : un acte achevé
+ * paierait sa récompense sur son axe, et le cumul se lit ici sur les seuls gestes du post.
+ */
+const awaitAnotherGesture = (db: FakeGameDb, userId: string) =>
+  db.dailyMission.rows.push({
+    id: `first-dream-${userId}`, userId, dayKey: new Date().toISOString().slice(0, 10), slot: 0, templateKey: 'send-voice', difficulty: 'easy',
+    signal: 'axis:content.audio_message', prism: false, target: 2, progress: 0, reward: 40, glory: 0, seen: [],
+    completedAt: null, paidPoints: null, rerolledAt: null,
+  });
+
 type Emission = { readonly room: string | string[]; readonly event: string; readonly payload: unknown };
 
 function setup(options: { readonly emitFails?: boolean } = {}) {
   const db = fakeGameDb();
   for (const id of [READER, AUTHOR, OTHER_READER]) {
     seedUser(db, { emailVerifiedAt: new Date('2026-01-01T00:00:00Z') }, id);
+    awaitAnotherGesture(db, id);
   }
   const emissions: Emission[] = [];
   const io = {

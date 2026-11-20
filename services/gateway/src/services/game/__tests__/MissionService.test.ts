@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
-import { drawDailyMissions } from '@meeshy/shared/utils/game/missions';
+import { drawDailyMissions, drawFirstDream } from '@meeshy/shared/utils/game/missions';
 import { prismHourWindow } from '@meeshy/shared/utils/game/boosts';
 import { dailyChest, dayEffort } from '@meeshy/shared/utils/game/chest';
 import { MissionService } from '../MissionService';
@@ -79,9 +79,10 @@ describe('MissionService.ensureToday — le tirage paresseux', () => {
     const expected = drawDailyMissions({ userId: USER, dayKey: DAY, level: 20, flameDays: 0, treasury: 0, profile: NO_PROFILE });
     expect(today.dayKey).toBe(DAY);
     expect(today.unlocked).toBe(true);
-    expect(db.dailyMission.rows.map((r) => r.templateKey)).toEqual(expected.missions.map((m) => m.templateKey));
-    expect(db.dailyMission.rows.map((r) => r.slot)).toEqual([0, 1, 2]);
-    expect(db.dailyMission.rows.map((r) => r.target)).toEqual(expected.missions.map((m) => m.target));
+    const rows = [...db.dailyMission.rows].sort((a, b) => a.slot - b.slot);
+    expect(rows.map((r) => r.templateKey)).toEqual(expected.missions.map((m) => m.templateKey));
+    expect(rows.map((r) => r.slot)).toEqual([0, 1, 2]);
+    expect(rows.map((r) => r.target)).toEqual(expected.missions.map((m) => m.target));
   });
 
   it('ne retire pas au second accès, et deux accès concurrents ne doublent rien', async () => {
@@ -95,22 +96,60 @@ describe('MissionService.ensureToday — le tirage paresseux', () => {
 
   it('un tirage INTERROMPU (une seule ligne posée) est complété au prochain accès, sans toucher la ligne posée', async () => {
     const { db, service } = setup();
-    const first = drawDailyMissions({ userId: USER, dayKey: DAY, level: 20, flameDays: 0, treasury: 0 }).missions[0]!;
-    insertMission(db, { templateKey: first.templateKey, signal: first.signal, target: first.target, reward: first.reward, progress: 1 });
+    const top = drawDailyMissions({ userId: USER, dayKey: DAY, level: 20, flameDays: 0, treasury: 0 }).missions[2]!;
+    insertMission(db, { slot: 2, difficulty: top.difficulty, templateKey: top.templateKey, signal: top.signal, target: top.target, reward: top.reward, progress: 1 });
 
     const today = await service.ensureToday(USER, NOW);
 
     expect(today.rows.map((r) => r.slot)).toEqual([0, 1, 2]);
-    expect(today.rows[0]?.progress).toBe(1);
+    expect(today.rows[2]?.progress).toBe(1);
   });
 
-  it('ne tire rien avant le niveau 5 (les missions s’ouvrent au niveau 5)', async () => {
+  it('écrit un tirage complet de l’emplacement 2 vers l’emplacement 0 : une interruption ne laisse jamais l’acte facile seul (#17370)', async () => {
+    const { db, service } = setup();
+    const create = db.prisma.dailyMission.create.bind(db.prisma.dailyMission);
+    let calls = 0;
+    db.prisma.dailyMission.create = (async (args: Parameters<typeof create>[0]) => {
+      calls += 1;
+      if (calls === 2) throw new Error('écriture tombée');
+      return create(args);
+    }) as typeof create;
+
+    await expect(service.ensureToday(USER, NOW)).rejects.toThrow('écriture tombée');
+
+    expect(db.dailyMission.rows.map((r) => r.slot)).toEqual([2]);
+  });
+
+  it('sous le niveau 5, tire le premier Rêve : un seul acte, facile, celui de la loi partagée (#17370)', async () => {
     const { db, service } = setup({ engagementScore: 10 * 4 * 4, levelRecord: 4 });
 
     const today = await service.ensureToday(USER, NOW);
 
+    const expected = drawFirstDream({ userId: USER, dayKey: DAY, level: 1, flameDays: 0, treasury: 0, profile: NO_PROFILE }).missions;
     expect(today.unlocked).toBe(false);
-    expect(db.dailyMission.rows).toHaveLength(0);
+    expect(db.dailyMission.rows).toHaveLength(1);
+    expect(today.rows.map((r) => ({ slot: r.slot, difficulty: r.difficulty, templateKey: r.templateKey, target: r.target }))).toEqual(
+      expected.map((m) => ({ slot: 0, difficulty: 'easy', templateKey: m.templateKey, target: m.target })),
+    );
+  });
+
+  it('le premier Rêve ne grandit pas au second accès (#17370)', async () => {
+    const { db, service } = setup({ engagementScore: 10 * 4 * 4, levelRecord: 4 });
+
+    await service.ensureToday(USER, NOW);
+    await service.ensureToday(USER, NOW);
+
+    expect(db.dailyMission.rows).toHaveLength(1);
+  });
+
+  it('passer le niveau 5 dans la journée garde le premier Rêve jusqu’au lendemain : l’Offrande prête ne se reverrouille pas (#17370)', async () => {
+    const { db, service } = setup();
+    insertMission(db, { slot: 0, completedAt: NOW });
+
+    const today = await service.ensureToday(USER, NOW);
+
+    expect(today.unlocked).toBe(true);
+    expect(db.dailyMission.rows).toHaveLength(1);
   });
 
   it('le niveau RECORD ouvre les missions même si une frappe a fait redescendre le niveau', async () => {
@@ -125,8 +164,9 @@ describe('MissionService.ensureToday — le tirage paresseux', () => {
     await service.ensureToday(USER, NOW);
 
     const expected = drawDailyMissions({ userId: USER, dayKey: DAY, level: 6, flameDays: 25, treasury: 50, profile: NO_PROFILE });
-    expect(db.dailyMission.rows.map((r) => r.reward)).toEqual(expected.missions.map((m) => m.reward));
-    expect(db.dailyMission.rows[2]?.difficulty).toBe('gold');
+    const rows = [...db.dailyMission.rows].sort((a, b) => a.slot - b.slot);
+    expect(rows.map((r) => r.reward)).toEqual(expected.missions.map((m) => m.reward));
+    expect(rows[2]?.difficulty).toBe('gold');
   });
 
   it('le jour se lit dans le fuseau de l’utilisateur', async () => {
@@ -338,12 +378,14 @@ describe('MissionService.onSignal — la progression au geste', () => {
     expect(db.dailyMission.rows).toHaveLength(3);
   });
 
-  it('sous le niveau 5, un geste ne tire rien', async () => {
+  it('sous le niveau 5, le premier geste tire le premier Rêve puis compte (#17370)', async () => {
     const { db, service } = setup({ engagementScore: 10, levelRecord: 1 });
+    const [act] = drawFirstDream({ userId: USER, dayKey: DAY, level: 1, flameDays: 0, treasury: 0, profile: NO_PROFILE }).missions;
 
-    await service.onSignal(USER, 'axis:content.text_message', { now: NOW, record: 1 });
+    await service.onSignal(USER, act!.signal, { now: NOW, record: 1 });
 
-    expect(db.dailyMission.rows).toHaveLength(0);
+    expect(db.dailyMission.rows).toHaveLength(1);
+    expect(db.dailyMission.rows[0]?.progress).toBe(1);
   });
 });
 
@@ -427,9 +469,28 @@ describe('MissionService.claimChest — le coffre du jour', () => {
 
   it('refuse un jour qui ne porte pas ses trois missions, même toutes faites', async () => {
     const { db, service } = setup();
-    insertMission(db, { completedAt: NOW });
+    insertMission(db, { slot: 2, completedAt: NOW, difficulty: 'hard' });
 
     const error = await refusal(() => service.claimChest({ userId: USER, requestId: 'coffre-0009', now: NOW }));
+
+    expect(error.code).toBe('CHEST_NOT_READY');
+  });
+
+  it('s’ouvre sur le premier Rêve dès que son acte unique est fait (#17370)', async () => {
+    const { db, service, creditPoints } = setup({ engagementScore: 10, levelRecord: 1 });
+    insertMission(db, { slot: 0, completedAt: NOW });
+
+    const result = await service.claimChest({ userId: USER, requestId: 'coffre-0101', now: NOW });
+
+    expect(result.reward.points).toBeGreaterThan(0);
+    expect(creditPoints).toHaveBeenCalled();
+  });
+
+  it('refuse le premier Rêve tant que son acte n’est pas fait (#17370)', async () => {
+    const { db, service } = setup({ engagementScore: 10, levelRecord: 1 });
+    insertMission(db, { slot: 0 });
+
+    const error = await refusal(() => service.claimChest({ userId: USER, requestId: 'coffre-0102', now: NOW }));
 
     expect(error.code).toBe('CHEST_NOT_READY');
   });
