@@ -15,19 +15,24 @@ import kotlinx.serialization.json.contentOrNull
 /**
  * Corps de `POST /communities/:id/join` (#19429) : `acceptsPending` dit à la passerelle que ce client
  * sait lire une demande en attente (202) — sans lui, une communauté qui valide chaque entrée répond 409
- * `COMMUNITY_JOIN_PENDING`. Miroir de `JoinCommunityRequest` (iOS).
+ * `COMMUNITY_JOIN_PENDING`. Miroir de `JoinCommunityRequest` (iOS). Sans valeur par défaut : le `Json`
+ * de Retrofit n'encode pas les défauts, et un `{}` envoyé ferait retomber sur le 409.
  */
 @Serializable
-data class JoinCommunityRequest(val acceptsPending: Boolean = true)
+data class JoinCommunityRequest(val acceptsPending: Boolean) {
+    companion object {
+        val AcceptsPending = JoinCommunityRequest(acceptsPending = true)
+    }
+}
 
 /**
  * Ce que rend la jonction (#19870, miroir `CommunityJoinOutcome` iOS) : une adhésion — la ligne écrite —
  * ou, pour une communauté qui valide chaque entrée, une DEMANDE qui ne fait encore membre de rien.
  */
 @Serializable(with = CommunityJoinOutcomeSerializer::class)
-sealed interface CommunityJoinOutcome {
-    data class Joined(val member: ApiCommunityMember) : CommunityJoinOutcome
-    data class Pending(val requestId: String) : CommunityJoinOutcome
+sealed class CommunityJoinOutcome {
+    data class Joined(val member: ApiCommunityMember) : CommunityJoinOutcome()
+    data class Pending(val requestId: String) : CommunityJoinOutcome()
 }
 
 /**

@@ -128,7 +128,7 @@ class CommunityServedRoleTest {
 
     @Test
     fun `le corps de la jonction annonce la demande en attente`() {
-        assertThat(json.encodeToString(JoinCommunityRequest.serializer(), JoinCommunityRequest())).isEqualTo("""{"acceptsPending":true}""")
+        assertThat(Json.encodeToString(JoinCommunityRequest.serializer(), JoinCommunityRequest.AcceptsPending)).isEqualTo("""{"acceptsPending":true}""")
     }
 
     @Test
