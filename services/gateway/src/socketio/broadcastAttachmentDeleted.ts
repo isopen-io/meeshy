@@ -9,8 +9,16 @@ export type AttachmentDeletedParams = {
   readonly manager: Pick<MessageMutationManager, 'getIO' | 'enqueueOfflineMessageMutation'> | null | undefined;
   readonly messageId: string | null;
   readonly attachmentId: string;
-  /** L'auteur du retrait, exclu de la file : il vient de recevoir sa réponse REST. */
+  /**
+   * L'auteur du retrait, exclu de la file : il vient de recevoir sa réponse
+   * REST. DEUX identités, dérivées séparément — cette route est `authOptional`
+   * et un INVITÉ y retire la pièce qu'il a lui-même téléversée, auquel cas
+   * `authContext.userId` porte un `Participant.id` et non un `User.id`
+   * (CLAUDE.md, § Authentication). Recopier l'un dans l'autre n'exclurait
+   * personne.
+   */
   readonly actorUserId?: string | null;
+  readonly actorParticipantId?: string | null;
   readonly onError?: (error: unknown) => void;
 };
 
@@ -85,6 +93,7 @@ export async function broadcastAttachmentDeleted(params: AttachmentDeletedParams
       manager.enqueueOfflineMessageMutation({
         conversationId,
         actorUserId: params.actorUserId ?? null,
+        ...(params.actorParticipantId ? { actorParticipantId: params.actorParticipantId } : {}),
         messageId,
         eventType: 'attachment-deleted',
         payload,

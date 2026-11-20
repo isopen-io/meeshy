@@ -144,6 +144,44 @@ describe('broadcastAttachmentDeleted — l’audience vivante, puis la file', ()
     });
   });
 
+  it('un INVITÉ qui retire sa pièce est exclu par sa LIGNE, jamais par un `userId` qu’il n’a pas', async () => {
+    const sink: Emitted[] = [];
+    const { manager, enqueue } = managerInto(sink);
+
+    await broadcastAttachmentDeleted({
+      prisma: prismaOf(participants()) as never,
+      manager: manager as never,
+      messageId: MESSAGE,
+      attachmentId: ATTACHMENT,
+      // La route est `authOptional` : un invité y retire la pièce qu'il a
+      // téléversée, et `authContext.userId` porte alors un `Participant.id`.
+      // Le recopier dans `actorUserId` n'exclurait PERSONNE — l'exclusion par
+      // `actorUserId` compare `p.userId`, celle par `actorParticipantId`
+      // compare `p.id`.
+      actorUserId: null,
+      actorParticipantId: 'p-guest',
+    });
+    await flush();
+
+    expect(enqueue.mock.calls[0][0]).toMatchObject({ actorUserId: null, actorParticipantId: 'p-guest' });
+  });
+
+  it('un acteur INSCRIT n’envoie aucune identité de participant', async () => {
+    const sink: Emitted[] = [];
+    const { manager, enqueue } = managerInto(sink);
+
+    await broadcastAttachmentDeleted({
+      prisma: prismaOf(participants()) as never,
+      manager: manager as never,
+      messageId: MESSAGE,
+      attachmentId: ATTACHMENT,
+      actorUserId: 'u-author',
+    });
+    await flush();
+
+    expect(enqueue.mock.calls[0][0]).not.toHaveProperty('actorParticipantId');
+  });
+
   it('une lecture d’audience qui LÈVE replie sur la room de conversation, et enfile quand même', async () => {
     const sink: Emitted[] = [];
     const { manager, enqueue } = managerInto(sink);

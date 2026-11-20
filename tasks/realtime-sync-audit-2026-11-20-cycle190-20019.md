@@ -132,6 +132,32 @@ qu'elle a servie, que la file réutilise. Le direct et la file sont deux
 projections d'une SEULE composition (cycle 123) ; les recomposer séparément est
 ce qui laisse deux `deletedAt` pour un seul retrait.
 
+## L'auto-relecture a trouvé un défaut du lot lui-même
+
+La route `DELETE /attachments/:attachmentId` est `authOptional`, et son handler
+porte explicitement la branche `isAnonymous` : **un INVITÉ retire la pièce qu'il
+a téléversée** (`attachment.uploadedBy === userId && attachment.isAnonymous`).
+Dans cette branche, `authContext.userId` porte un `Participant.id`, pas un
+`User.id` — ce que `CLAUDE.md` § Authentication dit en toutes lettres : « Ne
+jamais le recopier tel quel dans un champ de payload nommé `userId` ».
+
+Le premier jet du lot passait `actorUserId: userId`. Conséquence mesurée : pour
+un invité, l'exclusion de la file compare `p.userId === <Participant.id>` et
+n'apparie RIEN — l'acteur n'est plus exclu, et le champ MENT sur l'identité
+qu'il porte pour le prochain lecteur.
+
+Les deux rôles se dérivent désormais séparément, et `MessageMutationQueueParams`
+déclare enfin `actorParticipantId` (la file le supporte depuis toujours,
+`offlineParticipantQueue.ts:106` — le type nommé ne le déclarait pas, et **un
+champ qu'un relais ne déclare pas est un champ que le relais RETIENT en
+silence**, leçon 279). Deux témoins, dont un de surface qui joue un contexte
+anonyme ; le rouge est prouvé en recopiant l'identifiant.
+
+> **Un transport « REST autorisé » n'est pas un transport d'INSCRIT.** La
+> question à poser à tout champ d'acteur n'est pas « d'où vient cet id ? » mais
+> **« quelles sortes de comptes peuvent atteindre ce site ? »** — et sur une
+> route `authOptional`, la réponse comprend toujours l'invité.
+
 ## Ce qui RESTE
 
 - **#20020** — quatre lecteurs des MÊMES lignes (`conversationAudienceRooms`,

@@ -51,7 +51,7 @@ const participants: Record<string, { userId: string | null }> = {
 
 type IoMode = 'present' | 'absent' | 'throwing';
 
-const buildHarness = async (role = 'USER', ioMode: IoMode = 'present') => {
+const buildHarness = async (role = 'USER', ioMode: IoMode = 'present', as?: { anonymous: string }) => {
   const emitted: Array<{ room: string | string[]; event: string; payload: unknown }> = [];
   // `to` prend `Room | Room[]` chez Socket.IO, et l'audience vivante en rend un
   // TABLEAU dès qu'il y a un participant à nommer (#20007). Un double déclaré
@@ -94,9 +94,12 @@ const buildHarness = async (role = 'USER', ioMode: IoMode = 'present') => {
     }),
   });
   const authOptional = async (req: FastifyRequest) => {
-    (req as any).authContext = {
-      isAuthenticated: true, isAnonymous: false, userId: USER_ID, registeredUser: { id: USER_ID, role },
-    };
+    (req as any).authContext = as
+      // Un invité de lien : `userId` porte son `Participant.id`, et il n'a
+      // AUCUN `User.id` — c'est tout le piège que la dérivation des deux rôles
+      // ferme (CLAUDE.md, § Authentication).
+      ? { isAuthenticated: true, isAnonymous: true, userId: as.anonymous, participantId: as.anonymous }
+      : { isAuthenticated: true, isAnonymous: false, userId: USER_ID, registeredUser: { id: USER_ID, role } };
   };
   await registerMetadataRoutes(app, authOptional, prisma);
   await app.ready();
@@ -169,6 +172,20 @@ describe('DELETE /attachments/:id — diffusion', () => {
       event: 'attachment:deleted',
       payload: { conversationId: CONVERSATION_ID, messageId: MESSAGE_ID, attachmentId: ATTACHMENT_ID },
     }]);
+    await app.close();
+  });
+
+  it('un INVITÉ qui retire SA pièce est exclu par sa LIGNE, pas par un `userId` (#20019)', async () => {
+    // La route est `authOptional` et l'invité retire la pièce qu'il a
+    // téléversée : `authContext.userId` porte un `Participant.id`.
+    participants[GUEST_PARTICIPANT_ID] = { userId: null };
+    mockGetAttachment.mockResolvedValueOnce({
+      id: ATTACHMENT_ID, messageId: MESSAGE_ID, uploadedBy: GUEST_PARTICIPANT_ID, isAnonymous: true,
+    });
+    const { app, enqueued } = await buildHarness('USER', 'present', { anonymous: GUEST_PARTICIPANT_ID });
+    expect((await remove(app)).statusCode).toBe(200);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(enqueued[0]).toMatchObject({ actorUserId: null, actorParticipantId: GUEST_PARTICIPANT_ID });
     await app.close();
   });
 

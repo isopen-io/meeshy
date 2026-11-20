@@ -65,6 +65,22 @@ type AudiencePrisma = Pick<PrismaClient, 'participant'>;
 export type MessageMutationQueueParams = {
   conversationId: string;
   actorUserId: string | null | undefined;
+  /**
+   * #20019 — l'acteur par sa ligne `Participant`, pour les transports qu'un
+   * INVITÉ peut emprunter.
+   *
+   * `authContext.userId` n'est pas toujours un `User.id` : pour un invité de
+   * lien partagé il porte un `Participant.id` (CLAUDE.md, § Authentication).
+   * Les deux rôles se DÉRIVENT séparément — l'exclusion par `actorUserId`
+   * compare `p.userId`, celle-ci compare `p.id` — et recopier l'un dans
+   * l'autre ne sur-exclut personne : les deux espaces d'id ne se croisent pas,
+   * donc une ligne qui ment sur l'identité ne retire rien, elle n'exclut
+   * simplement PLUS l'acteur. La file le supporte depuis toujours
+   * (`offlineParticipantQueue.ts:106`) ; ce type ne le déclarait pas, et un
+   * champ qu'un relais ne déclare pas est un champ que le relais RETIENT en
+   * silence (leçon 279).
+   */
+  actorParticipantId?: string | null;
   messageId: string;
   /**
    * #8562 — la variante d'un lecteur que la charge commune ne peut pas servir.

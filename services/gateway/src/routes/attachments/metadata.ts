@@ -546,7 +546,12 @@ export async function registerMetadataRoutes(
           manager: fastify.socketIOHandler?.getManager(),
           messageId,
           attachmentId,
-          actorUserId: userId,
+          // Les DEUX rôles, dérivés séparément d'`isAnonymous` : cette route est
+          // `authOptional`, et un INVITÉ y retire la pièce qu'il a téléversée —
+          // `authContext.userId` porte alors un `Participant.id`, qu'un champ
+          // nommé `actorUserId` ne doit pas recevoir (CLAUDE.md, § Authentication).
+          actorUserId: isAnonymous ? null : userId,
+          ...(isAnonymous ? { actorParticipantId: userId } : {}),
           onError: (err) => logger.warn('attachment:deleted broadcast failed', { attachmentId, error: err }),
         });
         // #17022 — une séance « ensemble » qui lisait cette pièce s'arrête chez les deux.
