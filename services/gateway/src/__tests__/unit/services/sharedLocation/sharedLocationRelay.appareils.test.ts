@@ -35,6 +35,7 @@ describe('mon partage, tel que la passerelle le sert à mes appareils', () => {
       expiresAt: iso(T0 + HEURE),
       shareBattery: false,
       startedAt: iso(T0),
+      source: 'device',
     });
   });
 

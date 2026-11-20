@@ -398,6 +398,8 @@ async function drainRetiring(deps: SharedLocationRelayDeps, emitterId: string, a
 }
 
 const NOT_SHARING = failed(SHARED_LOCATION_ERROR_CODES.NOT_SHARING, 'Aucun partage en cours');
+/** Un point choisi à la main ne devient jamais une position d'appareil par une mise à jour (#20087). */
+const FIXED_POINT = failed(SHARED_LOCATION_ERROR_CODES.FIXED_POINT, 'Le partage montre un point choisi');
 
 const coarser = (a: SharedLocationPrecision, b: SharedLocationPrecision): SharedLocationPrecision =>
   SHARED_LOCATION_PRECISIONS.indexOf(a) >= SHARED_LOCATION_PRECISIONS.indexOf(b) ? a : b;
@@ -438,7 +440,8 @@ function listOnlyState(
   const servableFrom = current.servableFrom === undefined ? {} : { servableFrom: current.servableFrom };
   const shareBattery = current.shareBattery === true && wanted.shareBattery !== false ? { shareBattery: true as const } : {};
   const startedAt = current.startedAt === undefined ? {} : { startedAt: current.startedAt };
-  return { recipients, position: current.position, updatedAt: current.updatedAt, expiresAt, ...startedAt, ...servableFrom, ...shareBattery };
+  const source = current.source === 'manual' ? { source: 'manual' as const } : {};
+  return { recipients, position: current.position, updatedAt: current.updatedAt, expiresAt, ...startedAt, ...servableFrom, ...shareBattery, ...source };
 }
 
 /** Plus rien à servir : la liste seule vaut un arrêt. */
@@ -485,7 +488,11 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
     previous = await readSharedLocation(deps.cache, emitterId, now);
     const sessionId = randomUUID();
     if (position) {
-      state = { sessionId, recipients, position, updatedAt: new Date(now).toISOString(), expiresAt: termIso, startedAt: new Date(now).toISOString(), ...(shareBattery === true ? { shareBattery: true as const } : {}) };
+      state = {
+        sessionId, recipients, position, updatedAt: new Date(now).toISOString(), expiresAt: termIso, startedAt: new Date(now).toISOString(),
+        ...(shareBattery === true ? { shareBattery: true as const } : {}),
+        ...(parsed.data.source === 'manual' ? { source: 'manual' as const } : {}),
+      };
     } else {
       if (!previous) return NOT_SHARING;
       const listed = listOnlyState(previous, { recipients, shareBattery }, termIso, now);
@@ -544,6 +551,7 @@ export async function updateSharedLocation(deps: SharedLocationRelayDeps, emitte
   try {
     current = await readSharedLocation(deps.cache, emitterId, now);
     if (!current) return NOT_SHARING;
+    if (current.source === 'manual') return FIXED_POINT;
     state = { ...current, recipients: withHeldCells(current, parsed.data), position: parsed.data, updatedAt: new Date(now).toISOString() };
     if (!(await storeSharedLocationIfCurrent(deps.cache, emitterId, state, now))) return STOPPED;
   } catch {
@@ -803,7 +811,7 @@ export async function ownSharedLocationFor(deps: SharedLocationRelayDeps, emitte
     .sort((a, b) => a.userId.localeCompare(b.userId));
   if (recipients.length === 0) return { recipients, expiresAt: null };
   const startedAt = state.startedAt === undefined ? {} : { startedAt: state.startedAt };
-  return { recipients, expiresAt: state.expiresAt, shareBattery: state.shareBattery === true, ...startedAt };
+  return { recipients, expiresAt: state.expiresAt, shareBattery: state.shareBattery === true, ...startedAt, source: state.source ?? 'device' };
 }
 
 /**
