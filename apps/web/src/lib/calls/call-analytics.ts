@@ -93,6 +93,8 @@ export function withSample(telemetry: Telemetry, sample: TelemetrySample): Telem
   };
 }
 
+const nonNegative = (value: number): number => (Number.isFinite(value) ? Math.max(value, 0) : 0);
+
 /**
  * #19876 — un relevé média (`CallAnalyticsRecorder.recordMedia`, iOS) : les
  * compteurs cumulés de chaque pair relevé remplacent les siens, la gigue s'ajoute pour le MOS,
@@ -102,7 +104,7 @@ export function withMedia(telemetry: Telemetry, peers: Readonly<Record<string, M
   const read = Object.values(peers);
   if (read.length === 0) return telemetry;
   const limitations = read.map((peer) => peer.qualityLimitationReason).filter(isLimitationReason).reduce((counts, reason) => ({ ...counts, [reason]: counts[reason] + 1 }), telemetry.limitations);
-  return { ...telemetry, peers: { ...telemetry.peers, ...peers }, mediaSamples: telemetry.mediaSamples + 1, jitterSum: telemetry.jitterSum + (Number.isFinite(jitterMs) ? Math.max(jitterMs, 0) : 0), limitations };
+  return { ...telemetry, peers: { ...telemetry.peers, ...peers }, mediaSamples: telemetry.mediaSamples + 1, jitterSum: telemetry.jitterSum + nonNegative(jitterMs), limitations };
 }
 
 /** La cause la plus fréquente ; à égalité, la première dans l'ordre alphabétique, comme iOS. */
@@ -163,7 +165,7 @@ export function deviceLabel(userAgent: string): string {
   return parts.length === 0 ? 'web' : parts.join(' · ');
 }
 
-const share = (count: number, total: number): number => (total === 0 ? 0 : count / total);
+const share = (count: number, total: number): number => nonNegative(count / total);
 
 export function analyticsPayload(telemetry: Telemetry, context: AnalyticsContext): CallAnalyticsEvent {
   const { samples, levels, connectedAt } = telemetry;
@@ -179,8 +181,8 @@ export function analyticsPayload(telemetry: Telemetry, context: AnalyticsContext
     networkTransitions: telemetry.networkTransitions,
     averageRtt,
     averagePacketLoss,
-    maxPacketLoss: telemetry.maxLoss,
-    codec: telemetry.codec ?? 'unknown',
+    maxPacketLoss: nonNegative(telemetry.maxLoss),
+    codec: (telemetry.codec ?? 'unknown').slice(0, 50),
     effectsUsed: telemetry.effects,
     filtersUsed: telemetry.effects.some(isColorFilter),
     transcriptionUsed: telemetry.captionsShown,
