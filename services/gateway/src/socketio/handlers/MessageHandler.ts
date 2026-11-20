@@ -50,6 +50,7 @@ import { transformTranslationsToArray, type MessageTranslationJSON } from '../..
 import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
 import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { offlineSignedPayload } from '../offlineSignedPayload';
+import { offlineSignedEdit, queueSigningFields } from '../editedOfflineSigning';
 import { emitUnreadCountsToRecipients } from '../emitUnreadCountsToRecipients';
 import { ConversationBridgeService } from '../../services/ConversationBridgeService';
 import { emitToConversationParticipants, participantUserRoomTargets } from '../emitToConversationParticipants';
@@ -1015,24 +1016,11 @@ export class MessageHandler {
       // invité l'attendait dans Redis sous sa clé. Sur `'unknown'` rien n'entre
       // — on ne sait NI qui est bloqué, NI qui est autorisé.
       // #19939 — la file est le canal le PLUS exposé des deux, et c'était le
-      // seul des deux à ne pas appliquer `editPlan`. L'émission directe sert à
-      // chaque lecteur CONNECTÉ un `fileUrl` signé pour SA ligne `Participant`
-      // (#9646) ; l'enfilage posait la charge GÉNÉRIQUE, non signée, dans une
-      // entrée qui vit jusqu'à 48 h — donc qui SURVIT à la fenêtre pendant
-      // laquelle la protection d'une pièce peut changer.
-      //
-      // `PLAN_UNAVAILABLE` gouverne les DEUX canaux, pour la raison que
-      // `planOutcome.ts` écrit : « l'adresse nue d'une pièce peut-être protégée
-      // partirait à toute la room ». La phrase vaut mot pour mot d'une entrée
-      // adressée à un destinataire NOMMÉ — ce qui disqualifie une diffusion
-      // n'est pas l'audience, c'est de remettre une adresse dont on ne sait pas
-      // si elle est protégée. Ce qu'on perd alors est une REMISE, que la
-      // relecture du fil sert de toute façon sous les mêmes lois.
-      const offlineSignedEdit = offlineSignedPayload({
-        plan: editPlan,
-        base: () => editedPayload as unknown as Record<string, unknown>,
-      });
-      if (editReaders.kind !== 'unknown' && offlineSignedEdit.kind !== 'withhold') {
+      // seul à ne pas appliquer `editPlan`. La règle, sa raison et la raison
+      // pour laquelle la base IGNORE la clé vivent à leur site :
+      // `socketio/editedOfflineSigning.ts`.
+      const signedEdit = offlineSignedEdit({ plan: editPlan, payload: editedPayload });
+      if (editReaders.kind !== 'unknown' && signedEdit.kind !== 'withhold') {
         this._enqueueOfflineEventForParticipants({
           conversationId: message.conversationId,
           actorUserId: userId,
@@ -1041,8 +1029,7 @@ export class MessageHandler {
           payload: editedPayload,
           atRest: queuedEventSealsAtRest(message),
           ...(editBlocked.size > 0 ? { excludedQueueKeys: editBlocked } : {}),
-          // UN seul hook par lecteur, composé par la décision ci-dessus.
-          ...(offlineSignedEdit.kind === 'per-reader' ? { resolvePayloadForReader: offlineSignedEdit.resolve } : {}),
+          ...queueSigningFields(signedEdit),
         }).catch((err) => handlerLogger.warn('offline enqueue (edit) failed', { error: err }));
       }
 
