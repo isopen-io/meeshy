@@ -151,10 +151,14 @@ enum APIFailureVerdict {
     /// #3707 — le refus d'un envoi libsignal (409 Sesame et son écart, 403
     /// appareil non lié, 400 client périmé) garde son code sur TOUTE adresse :
     /// l'envoi doit savoir rechiffrer pour les bons appareils, jamais rejouer.
+    /// Le 409 d'une bascule de régime ou d'une création de direct refusée
+    /// (#20073) aussi : l'écran dit qui n'a pas d'appareil chiffrant.
     private static func endToEndRelayRefusal(statusCode: Int, data: Data, message: String?, decoder: JSONDecoder) -> APIRejection? {
         guard [400, 403, 409].contains(statusCode),
               let envelope = try? decoder.decode(APIRejectionEnvelope.self, from: data),
-              let code = envelope.code, E2EEErrorCode.relayRefusals.contains(code) else { return nil }
+              let code = envelope.code,
+              E2EEErrorCode.relayRefusals.contains(code) || (statusCode == 409 && E2EEErrorCode.regimeRefusals.contains(code))
+        else { return nil }
         return envelope.rejection(statusCode: statusCode, fallbackMessage: message ?? "Envoi chiffré refusé")
     }
 
