@@ -27,7 +27,9 @@ import {
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { ACCOUNT_STATE_SELECT, isUsableAccount } from '../../services/relations/usableAccount';
 import { getBlockRelatedUserIds, isBlockedBetween } from '../../utils/blocking.js';
-import { admitCommunityMember } from './admission';
+import { admitCommunityMember, membershipAfterFailure } from './admission';
+import { gateCoMemberPresence } from './member-presence';
+import { viewerFromRequest } from '../users/presence-gate';
 import { liveJoinRequestWhere } from '../../services/community-join-request-lifecycle';
 import type { CommunityEngagementOptions } from './types';
 
@@ -268,9 +270,15 @@ export async function registerEntryRoutes(fastify: FastifyInstance, options: Com
             createdBy: community.createdBy,
             decidedBy: viewerId
           });
-          return sendSuccess(reply, member);
+          return sendSuccess(reply, await gateCoMemberPresence(fastify.prisma, viewerFromRequest(request), member));
         } catch (error) {
-          // L'entrée n'a pas eu lieu : la demande redevient tranchable.
+          // #19914 — seule une entrée qui n'a PAS eu lieu rouvre la demande.
+          const after = await membershipAfterFailure(fastify, id, pending.userId);
+          if (after.kind === 'entered') {
+            logger.warn('join request accepted: entry written despite an error', { requestId: pending.id, error });
+            return sendSuccess(reply, await gateCoMemberPresence(fastify.prisma, viewerFromRequest(request), after.member));
+          }
+          if (after.kind === 'unknown') throw error;
           await fastify.prisma.communityJoinRequest
             .updateMany({
               where: { id: pending.id, status: 'accepted', decidedBy: viewerId },
