@@ -188,6 +188,157 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
         XCTAssertEqual(recorder, CallAnalyticsRecorder())
     }
 
+    // MARK: - #19933 — une mesure aberrante ne fait ni planter ni refuser le rapport
+
+    private static func makeContext(codec: String = "opus") -> CallAnalyticsContext {
+        CallAnalyticsContext(callDuration: 42, codec: codec, filtersEnabledNow: false, transcriptionUsed: false,
+                             deviceModel: "iPhone", isVideo: false, endReason: "local")
+    }
+
+    private static func assertMeasured(_ value: Any?, _ field: String, file: StaticString = #filePath, line: UInt = #line) {
+        guard let number = value as? Double else { return XCTFail("\(field) absent", file: file, line: line) }
+        XCTAssertTrue(number.isFinite && number >= 0, "\(field) = \(number) : la passerelle refuserait le rapport", file: file, line: line)
+    }
+
+    @MainActor
+    func test_reduce_aberrantRoundTripTime_isNotMeasured() {
+        [1e306, -0.2, .nan, .infinity].forEach { aberrant in
+            let stats = CallStats.reduce(entries: [Self.entry("p", "candidate-pair", values: ["currentRoundTripTime": aberrant])])
+
+            XCTAssertEqual(stats.roundTripTimeMs, 0, "RTT \(aberrant) s")
+        }
+    }
+
+    @MainActor
+    func test_reduce_aberrantCounters_doNotCrashAndCountZero() {
+        [Double.nan, .infinity, -.infinity, -12].forEach { aberrant in
+            let stats = CallStats.reduce(entries: [
+                Self.entry("p", "candidate-pair", values: ["availableOutgoingBitrate": aberrant]),
+                Self.entry("a", "inbound-rtp", kind: "audio", values: [
+                    "packetsLost": aberrant, "packetsReceived": aberrant, "bytesReceived": aberrant,
+                ]),
+                Self.entry("o", "outbound-rtp", kind: "audio", values: ["packetsSent": aberrant, "bytesSent": aberrant]),
+            ])
+
+            XCTAssertEqual(stats, CallStats(relayed: nil), "compteurs \(aberrant)")
+        }
+    }
+
+    @MainActor
+    func test_reduce_countersBeyondIntRange_saturateInsteadOfCrashing() {
+        let stats = CallStats.reduce(entries: [
+            Self.entry("a", "inbound-rtp", kind: "audio", values: ["packetsLost": 1e300, "packetsReceived": 1e300, "bytesReceived": 1e300]),
+            Self.entry("v", "inbound-rtp", kind: "video", values: ["packetsLost": 1e300, "packetsReceived": 1e300, "bytesReceived": 1e300]),
+            Self.entry("o", "outbound-rtp", kind: "audio", values: ["packetsSent": 1e300, "bytesSent": 1e300]),
+            Self.entry("p", "candidate-pair", values: ["availableOutgoingBitrate": 1e300]),
+        ])
+
+        XCTAssertEqual(stats.packetsLost, Int.max)
+        XCTAssertEqual(stats.inboundPacketsReceived, Int.max)
+        XCTAssertEqual(stats.bytesReceived, Int.max)
+        XCTAssertEqual(stats.outboundPacketsSent, Int.max)
+        XCTAssertEqual(stats.bandwidth, Int.max)
+        XCTAssertEqual(stats.availableOutgoingBitrateBps, Int.max)
+    }
+
+    @MainActor
+    func test_reduce_aberrantJitter_isIgnored() {
+        let stats = CallStats.reduce(entries: [
+            Self.entry("a1", "inbound-rtp", kind: "audio", values: ["jitter": 0.02]),
+            Self.entry("a2", "inbound-rtp", kind: "audio", values: ["jitter": .nan]),
+            Self.entry("a3", "inbound-rtp", kind: "audio", values: ["jitter": -1]),
+            Self.entry("a4", "inbound-rtp", kind: "audio", values: ["jitter": .infinity]),
+        ])
+
+        XCTAssertEqual(stats.jitterMs, 20, accuracy: 0.000_1)
+    }
+
+    @MainActor
+    func test_reduce_aberrantMediaCounters_doNotCrash() {
+        let quality = CallMediaQuality.reduce(entries: [
+            Self.entry("v", "inbound-rtp", kind: "video", values: [
+                "freezeCount": .nan, "totalFreezesDuration": .infinity, "nackCount": 1e300, "pliCount": -4,
+            ]),
+            Self.entry("a", "inbound-rtp", kind: "audio", values: [
+                "concealedSamples": .infinity, "jitterBufferDelay": .infinity, "jitterBufferEmittedCount": 10,
+            ]),
+        ])
+
+        XCTAssertEqual(quality.freezeCount, 0)
+        XCTAssertEqual(quality.totalFreezesDuration, 0)
+        XCTAssertEqual(quality.nackCount, Int.max)
+        XCTAssertEqual(quality.pliCount, 0)
+        XCTAssertEqual(quality.concealedSamples, 0)
+        XCTAssertEqual(quality.jitterBufferDelayMs, 0)
+    }
+
+    @MainActor
+    func test_reduce_validStats_areUnchanged() {
+        let stats = CallStats.reduce(entries: [
+            Self.entry("p", "candidate-pair", values: ["currentRoundTripTime": 0.12, "availableOutgoingBitrate": 800_000]),
+            Self.entry("a", "inbound-rtp", kind: "audio", values: [
+                "packetsLost": 3, "packetsReceived": 500, "bytesReceived": 40_000, "jitter": 0.01,
+            ]),
+            Self.entry("v", "inbound-rtp", kind: "video", values: ["packetsLost": 2, "packetsReceived": 900, "bytesReceived": 900_000]),
+            Self.entry("o", "outbound-rtp", kind: "audio", values: ["packetsSent": 450, "bytesSent": 36_000]),
+        ])
+
+        XCTAssertEqual(stats.roundTripTimeMs, 120, accuracy: 0.000_1)
+        XCTAssertEqual(stats.availableOutgoingBitrateBps, 800_000)
+        XCTAssertEqual(stats.packetsLost, 5)
+        XCTAssertEqual(stats.inboundAudioPackets, 500)
+        XCTAssertEqual(stats.inboundVideoPackets, 900)
+        XCTAssertEqual(stats.inboundPacketsReceived, 1_400)
+        XCTAssertEqual(stats.bytesReceived, 940_000)
+        XCTAssertEqual(stats.outboundPacketsSent, 450)
+        XCTAssertEqual(stats.bandwidth, 36_000)
+        XCTAssertEqual(stats.jitterMs, 10, accuracy: 0.000_1)
+    }
+
+    func test_payload_aberrantSamples_staysFiniteAndNonNegative() {
+        [Double.infinity, -.infinity, .nan, -30, 1e308].forEach { aberrant in
+            var recorder = CallAnalyticsRecorder()
+            let t0 = Date(timeIntervalSince1970: 100)
+            recorder.recordSample(level: .poor, roundTripTimeMs: aberrant, packetLossPercent: aberrant, at: t0)
+            recorder.recordSample(level: .poor, roundTripTimeMs: 1e308, packetLossPercent: 1e308, at: t0.addingTimeInterval(1))
+            recorder.recordMedia(.none, jitterMs: aberrant)
+
+            let payload = recorder.payload(now: t0.addingTimeInterval(2), context: Self.makeContext())
+
+            ["averageRtt", "averagePacketLoss", "maxPacketLoss"].forEach { Self.assertMeasured(payload[$0], "\($0) pour \(aberrant)") }
+            XCTAssertNotNil(payload["mos"], "le MOS reste calculé")
+        }
+    }
+
+    func test_payload_negativeSamples_countAsNotMeasured() {
+        var recorder = CallAnalyticsRecorder()
+        recorder.recordSample(level: .good, roundTripTimeMs: -50, packetLossPercent: -4, at: Date(timeIntervalSince1970: 100))
+        recorder.recordSample(level: .good, roundTripTimeMs: 100, packetLossPercent: 2, at: Date(timeIntervalSince1970: 101))
+
+        let payload = recorder.payload(now: Date(timeIntervalSince1970: 102), context: Self.makeContext())
+
+        XCTAssertEqual(payload["averageRtt"] as? Double, 50)
+        XCTAssertEqual(payload["averagePacketLoss"] as? Double, 1)
+        XCTAssertEqual(payload["maxPacketLoss"] as? Double, 2)
+    }
+
+    func test_payload_codecLongerThanFifty_isCutToFifty() {
+        let codec = String(repeating: "x", count: 80)
+
+        let payload = CallAnalyticsRecorder().payload(now: Date(), context: Self.makeContext(codec: codec))
+
+        XCTAssertEqual(payload["codec"] as? String, String(repeating: "x", count: 50))
+    }
+
+    func test_payload_codecOfWideCharacters_staysWithinFiftyUTF16Units() {
+        let codec = String(repeating: "\u{1F3A7}", count: 40)
+
+        let payload = CallAnalyticsRecorder().payload(now: Date(), context: Self.makeContext(codec: codec))
+
+        XCTAssertLessThanOrEqual((payload["codec"] as? String)?.utf16.count ?? .max, 50)
+        XCTAssertEqual(payload["codec"] as? String, String(repeating: "\u{1F3A7}", count: 25))
+    }
+
     private static func quality(freezes: Int, reason: String) -> CallMediaQuality {
         CallMediaQuality(freezeCount: freezes, totalFreezesDuration: 2, framesPerSecond: 30,
                          qualityLimitationReason: reason, jitterBufferDelayMs: 40,
