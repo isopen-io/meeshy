@@ -1,4 +1,5 @@
 import Combine
+import CryptoKit
 import Foundation
 import MeeshySDK
 
@@ -693,33 +694,45 @@ protocol SharedLocationRosterStoring: AnyObject {
 }
 
 /// La liste d'UN compte, dans ses réglages locaux. Les réglages partent dans la sauvegarde iCloud : un iPhone restauré
-/// depuis la sauvegarde d'un AUTRE appareil du compte y retrouverait la liste, la marque « reçue » et le démarrage de
-/// celui-ci, et publierait avec lui (#19767). La liste porte donc l'identifiant d'installation de l'appareil qui l'a
-/// écrite (trousseau `ThisDeviceOnly`, jamais restauré ailleurs) : lue sur un autre appareil, elle est REÇUE, sans
-/// démarrage gardé — seul un « Partager » d'ici le refait publier. Une liste d'avant cette marque est adoptée telle quelle.
+/// depuis la sauvegarde d'un AUTRE appareil du compte y retrouverait la liste, la marque « reçue », le démarrage et les
+/// retraits en attente de celui-ci (#19767, #19929). La liste porte donc la marque de l'appareil qui l'a écrite — une
+/// EMPREINTE de son identifiant d'installation (trousseau `ThisDeviceOnly`, jamais restauré ailleurs), jamais
+/// l'identifiant lui-même, qui est aussi celui des jetons push. Lue sur un autre appareil, elle est EFFACÉE avec sa
+/// marque et son démarrage : la relecture du partage servi la reconstruit, reçue — rien de la sauvegarde ne repart, ni
+/// un arrêt ni une liste périmée. Une marque d'avant l'empreinte (l'identifiant en clair) vaut pour cet appareil et se
+/// réécrit en empreinte ; une liste d'avant toute marque est adoptée telle quelle. Sans identifiant tenu par le
+/// trousseau (avant le premier déverrouillage), rien n'est jugé et la marque ne change pas.
 final class UserDefaultsSharedLocationRosterStore: SharedLocationRosterStoring {
     nonisolated deinit {}
 
     private let key: String
     private let defaults: UserDefaults
 
-    /// La liste écrite ailleurs devient REÇUE et perd son démarrage dans les réglages AVANT que la marque passe à cet
-    /// appareil : déduite sans être écrite, la cession ne tiendrait qu'un lancement.
+    /// L'effacement se fait dans les réglages AVANT que la marque passe à cet appareil : déduit sans être écrit, il ne
+    /// tiendrait qu'un lancement.
     init(userId: String, deviceId: String?, defaults: UserDefaults = .standard) {
         self.key = "sharedLocation.roster." + userId
         self.defaults = defaults
+        guard let deviceId, !deviceId.isEmpty else { return }
         let marker = key + ".device"
         let stamped = defaults.string(forKey: marker)
-        if Self.isWrittenElsewhere(stamped: stamped, device: deviceId) {
-            if load()?.hasRecipients == true { saveReceived(true) }
+        let mark = Self.deviceMark(userId: userId, deviceId: deviceId)
+        if Self.isWrittenElsewhere(stamped: stamped, deviceId: deviceId, mark: mark) {
+            save(.empty)
+            saveReceived(false)
             savePublishedStart(nil)
         }
-        if let deviceId, !deviceId.isEmpty, stamped != deviceId { defaults.set(deviceId, forKey: marker) }
+        if stamped != mark { defaults.set(mark, forKey: marker) }
     }
 
-    static func isWrittenElsewhere(stamped: String?, device: String?) -> Bool {
-        guard let stamped, !stamped.isEmpty, let device, !device.isEmpty else { return false }
-        return stamped != device
+    /// L'empreinte qui marque la liste : un condensé du compte et de l'installation, qui ne redonne ni l'un ni l'autre.
+    static func deviceMark(userId: String, deviceId: String) -> String {
+        SHA256.hash(data: Data((userId + ":" + deviceId).utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    static func isWrittenElsewhere(stamped: String?, deviceId: String, mark: String) -> Bool {
+        guard let stamped, !stamped.isEmpty else { return false }
+        return stamped != mark && stamped != deviceId
     }
 
     func load() -> SharedLocationRoster? {
@@ -766,6 +779,20 @@ enum SharedLocationSharingHolder {
             .sink { _ in warm() }
     }
 
+    /// La liste du compte, marquée par l'identifiant d'installation que le trousseau TIENT : un identifiant de passage
+    /// ferait prendre cet appareil pour un autre et effacerait sa liste (#19929).
+    static func rosterStore(
+        userId: String,
+        keychain: any KeychainStoring = KeychainManager.shared,
+        defaults: UserDefaults = .standard
+    ) -> UserDefaultsSharedLocationRosterStore {
+        UserDefaultsSharedLocationRosterStore(
+            userId: userId,
+            deviceId: PushDeviceIdentity.settledInstallationId(keychain: keychain),
+            defaults: defaults
+        )
+    }
+
     static func center() -> SharedLocationSharingCenter {
         let userId = AuthManager.shared.currentUser?.id ?? ""
         if let current, current.userId == userId { return current.center }
@@ -773,7 +800,7 @@ enum SharedLocationSharingHolder {
         let center = SharedLocationSharingCenter(
             emitter: SharedLocationMotionTaggingEmitter(inner: SharedLocationSocketEmitter.shared, motion: SharedLocationMotionSource()),
             fixes: SharedLocationFixSource(),
-            store: UserDefaultsSharedLocationRosterStore(userId: userId, deviceId: PushDeviceIdentity.current().deviceId),
+            store: rosterStore(userId: userId),
             owner: userId,
             currentAccount: { AuthManager.shared.currentUser?.id },
             socketReady: MessageSocketManager.shared.$connectionState
