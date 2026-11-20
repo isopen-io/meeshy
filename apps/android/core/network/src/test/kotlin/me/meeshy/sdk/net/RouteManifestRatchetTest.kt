@@ -150,8 +150,10 @@ class RouteManifestRatchetTest {
          * Liens) ; création, modification, suppression et ordre restent à porter.
          * 158 : plus les douze routes servies par la PR #19509 (contrat client du profil, #18857) — stories à la une, demandes
          * d'entrée et entrées d'une communauté, réglages du fantôme et du Sang — servies avant leurs écrans Android.
+         * 155 : moins les trois routes des demandes d'entrée d'une communauté (liste, accepter, refuser), que porte
+         * `CommunityApi` (#20078 : les intendants lisent et tranchent les demandes sur Android).
          */
-        const val TO_PORT_CEILING = 158
+        const val TO_PORT_CEILING = 155
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
