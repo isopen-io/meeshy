@@ -69,7 +69,8 @@ import { isServerAtRestUnavailable } from '../../services/messaging/serverAtRest
 import { announceConversationNew } from '../../services/conversations/obsoleteCapability';
 import { ENCRYPTION_ACTIVATION_RESTRICTED_CODE } from '../../utils/encryption-activation-policy';
 import { ENCRYPTION_MODE_UNSUPPORTED_CODE } from '@meeshy/shared/utils/conversation-creation-encryption';
-import { E2EE_DIRECT_NOT_A_PAIR_MESSAGE, E2EE_ERROR_CODES } from '@meeshy/shared/types/e2ee-directory';
+import { E2EE_DIRECT_NOT_A_PAIR_MESSAGE, E2EE_ERROR_CODES, E2EE_PARTICIPANT_WITHOUT_DEVICE_MESSAGE } from '@meeshy/shared/types/e2ee-directory';
+import { membersWithoutEndToEndDevice } from '../../services/e2ee/members-without-device';
 import { activeMembershipOf } from '../communities/serialization';
 import {
   composeConversationUpdate,
@@ -340,6 +341,18 @@ export function registerCreateConversationRoute(
             ...(sealed ?? {}),
             title: existingDirect.title || null
           }, { statusCode: 200 });
+        }
+      }
+
+      // #20073 — un tête-à-tête ne NAÎT chiffré de bout en bout que si chacun
+      // a un appareil chiffré actif : sinon il naîtrait mort, et ne se quitte pas.
+      if (type === 'direct' && regime.mode === 'e2ee') {
+        const unequipped = await membersWithoutEndToEndDevice(prisma, [userId, ...uniqueParticipantIds]);
+        if (unequipped.length > 0) {
+          // Personne n'est nommé : la création ne sonde pas les clés d'un tiers.
+          return sendError(reply, 409, E2EE_PARTICIPANT_WITHOUT_DEVICE_MESSAGE, {
+            code: E2EE_ERROR_CODES.PARTICIPANT_WITHOUT_DEVICE,
+          });
         }
       }
 
