@@ -1598,3 +1598,15 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Cause : devant une passerelle d'avant la liste seule, l'appareil relancé qui attend la relecture rendait `Refused(UNCONFIRMED)` ; le témoin déjà sur dev `SharedLocationSharingCenterTest:344` attend l'arrêt complet. Correctif sur les deux miroirs : `stopAll` (un arrêt n'a pas besoin de la position, aucune position d'ici ne part avant la relecture). Mes deux témoins du lot suivent (arrêt, rien de la position, liste vide).
 - `dev` b560659a8 fusionnée à la main ; gardes iOS vertes sur l'arbre fusionné (house_rules 42, cohesion, registration 2056 inscrits, accent 168/408). `android.yml` déclenché sur la branche, comme demandé sur la PR.
 - Restent en lots suivants : #19928 (relecture en échec à garder muette), #19929 (liste restaurée effacée et reconstruite, empreinte de l'identifiant d'installation).
+
+## 2026-11-20 — réveil de 23 h (19 nov.) : #19864 prouvée sur Android
+
+- Reprise : #19864 corrigée à 22 h 25 après son retrait de la vague de fusion (arrêt complet devant une passerelle
+  d'avant la liste seule). Aucun nouveau lot ouvert : la routine mène sa PR.
+- `android.yml` (`workflow_dispatch`, run 44628440305) sur 8d9b953d4 : **vert** — assemble + tests unitaires, chaînes,
+  routes, jetons et graphe des modules. La tête suivante ne touche que ce journal.
+- `origin/dev` c0784d9c3 fusionnée à la main, sans conflit (seules les demandes d'entrée des communautés bougent).
+  Gardes iOS sur l'arbre fusionné : règles maison, cohésion, inscription des tests, toutes rc=0. La CI iOS des PR
+  reste gelée.
+- Prochain lot recommandé : fusion de #19864, puis #19928 (relecture en échec gardée muette), #19929, plafond
+  `untilStopped`, #19682 une fois décidée.
