@@ -101,7 +101,7 @@ nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
         let base: [String: Any] = [
             "setupTimeMs":         setupMetrics.setupTimeMs,
             "negotiationTimeMs":   setupMetrics.negotiationTimeMs,
-            "durationSeconds":     context.callDuration,
+            "durationSeconds":     CallStatValue.measured(context.callDuration),
             "reconnectionCount":   totalReconnects,
             "networkTransitions":  networkTransitions,
             "averageRtt":          averageRtt,

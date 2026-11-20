@@ -4,10 +4,12 @@ import me.meeshy.sdk.model.ApiCommunity
 import me.meeshy.sdk.model.ApiCommunityMember
 import me.meeshy.sdk.model.ApiCommunitySearchResult
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.CommunityJoinOutcome
 import me.meeshy.sdk.model.CommunityMini
 import me.meeshy.sdk.model.CreateCommunityRequest
 import me.meeshy.sdk.model.IdentifierAvailability
 import me.meeshy.sdk.model.InviteMemberRequest
+import me.meeshy.sdk.model.JoinCommunityRequest
 import me.meeshy.sdk.model.UpdateCommunityRequest
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.PagedResult
@@ -125,8 +127,9 @@ class CommunityRepository @Inject constructor(
     suspend fun removeMember(communityId: String, userId: String): NetworkResult<Unit> =
         apiCall { communityApi.removeMember(communityId, userId) }
 
-    suspend fun join(communityId: String): NetworkResult<ApiCommunityMember> =
-        apiCall { communityApi.join(communityId) }
+    /** Une adhésion, ou une demande qui attend un administrateur ou un modérateur (#19870). */
+    suspend fun join(communityId: String): NetworkResult<CommunityJoinOutcome> =
+        apiCall { communityApi.join(communityId, JoinCommunityRequest.AcceptsPending) }
 
     suspend fun leave(communityId: String): NetworkResult<Unit> =
         apiCall { communityApi.leave(communityId) }

@@ -217,7 +217,13 @@ describe('MessagingService.handleMessage — familles des pièces jointes d’un
       },
       trackingLink: { updateMany: jest.fn() },
       messageAttachment: {
-        findMany: jest.fn().mockResolvedValue([{ mimeType: 'image/jpeg' }])
+        findMany: jest.fn().mockResolvedValue([{ mimeType: 'image/jpeg' }]),
+        // #19956 — `AttachmentService.associateAttachmentsToMessage` écrit ICI.
+        // Le double l'omettait, et la liaison levait donc `TypeError` à CHAQUE
+        // envoi de ces suites : le `catch` qui journalisait rendait l'envoi
+        // « réussi » par-dessus, et aucun témoin ne pouvait le voir. Un double
+        // INCOMPLET ne se signale que le jour où l'on cesse d'avaler l'échec.
+        updateMany: jest.fn().mockResolvedValue({ count: 1 })
       },
       user: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
       conversationShareLink: { findUnique: jest.fn().mockResolvedValue(WORLD_LINK) }

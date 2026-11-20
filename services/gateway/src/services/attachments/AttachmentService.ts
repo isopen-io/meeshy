@@ -191,7 +191,19 @@ export class AttachmentService {
       const carried = carriedFlags.get(id);
       return carried === undefined ? [] : [{ id, data: { ...added, rank, effectFlags: carried | addedFlags } }];
     });
-    await Promise.all(
+    // #19956 — `allSettled`, jamais `all`. `Promise.all` REJETTE à la première
+    // erreur en laissant les autres écritures EN VOL : l'appelant repart aussitôt
+    // et, s'il nettoie (libération du `messageId` puis suppression de la ligne,
+    // cf. `attachmentFailureOutcome.ts`), une retardataire atterrit APRÈS. Elle
+    // matche de nouveau — son `where` porte `unsetOrNull('messageId')`, que la
+    // libération vient de satisfaire — et re-lie la pièce à un message qui
+    // n'existe plus ou disparaît : détruite par la cascade si elle arrive avant,
+    // inéligible au rejeu à jamais si elle arrive après. Dans les deux cas la
+    // pièce de l'utilisateur est PERDUE, ce que la libération existe précisément
+    // pour éviter. Attendre toutes les écritures est ce qui rend ce nettoyage
+    // possible ; le contrat envers l'appelant ne change pas (la première erreur
+    // est propagée telle quelle).
+    const outcomes = await Promise.allSettled(
       writes.map(({ id, data }) =>
         this.prisma.messageAttachment.updateMany({
           where: { id: { in: [id] }, ...unsetOrNull('messageId') },
@@ -199,6 +211,8 @@ export class AttachmentService {
         }),
       ),
     );
+    const refused = outcomes.find((outcome) => outcome.status === 'rejected');
+    if (refused) throw (refused as PromiseRejectedResult).reason;
   }
 
   private toAttachment(attachment: {

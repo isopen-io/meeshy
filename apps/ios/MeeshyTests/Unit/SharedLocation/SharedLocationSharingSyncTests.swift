@@ -17,8 +17,12 @@ final class SharedLocationSharingSyncTests: XCTestCase {
 
     private final class Served {
         var snapshot: SharedLocationOwnSnapshot?
+        /// Une panne (hors ligne, 401, 5xx, délai) : la relecture lève, ce qui n'est pas une passerelle d'avant.
+        var outage: Error?
         var reads = 0
     }
+
+    private struct Outage: Error {}
 
     private struct SUT {
         let center: SharedLocationSharingCenter
@@ -54,6 +58,7 @@ final class SharedLocationSharingSyncTests: XCTestCase {
             ownChanged: ownChanged.eraseToAnyPublisher(),
             served: {
                 served.reads += 1
+                if let outage = served.outage { throw outage }
                 return served.snapshot
             }
         )
@@ -635,7 +640,7 @@ final class SharedLocationSharingSyncTests: XCTestCase {
         XCTAssertEqual(relaunched.emitter.updates.count, 1)
     }
 
-    func test_aRelaunch_aReadThatFails_liftsTheWait() async {
+    func test_aRelaunch_aGatewayBeforeTheOwnRead_liftsTheWait() async {
         let store = FakeSharedLocationRosterStore()
         _ = await publishingSUT(store: store)
         let relaunched = makeSUT(store: store)
@@ -645,6 +650,136 @@ final class SharedLocationSharingSyncTests: XCTestCase {
 
         XCTAssertEqual(relaunched.served.reads, 1)
         XCTAssertEqual(relaunched.emitter.updates.count, 1)
+    }
+
+    /// #19928 : une panne n'est pas une passerelle d'avant. L'appareil relancé reste muet, et la relecture se rejoue
+    /// au rythme du rejeu jusqu'à trancher.
+    func test_aRelaunch_aReadThatFails_keepsTheWait_andRetriesTheRead() async {
+        let store = FakeSharedLocationRosterStore()
+        _ = await publishingSUT(store: store)
+        let relaunched = makeSUT(store: store)
+        relaunched.served.outage = Outage()
+
+        await relaunched.center.sync()
+        await relaunched.center.didMove(to: SharedLocationFix(latitude: 45, longitude: 5)!)
+
+        XCTAssertTrue(relaunched.emitter.updates.isEmpty)
+        XCTAssertEqual(relaunched.wakes.delays.last, SharedLocationSharingCenter.retryDelay)
+
+        relaunched.served.outage = nil
+        relaunched.served.snapshot = served(elsewhere, [(alice, .exact, TimeInterval(8 * 3600))])
+        await relaunched.wakes.fireLast()
+        await settle { relaunched.served.reads >= 2 && store.received }
+        await relaunched.center.didMove(to: SharedLocationFix(latitude: 45.1, longitude: 5)!)
+
+        XCTAssertTrue(relaunched.emitter.updates.isEmpty)
+        XCTAssertTrue(store.received)
+    }
+
+    func test_aRelaunch_aReadThatFailsThenConfirmsMyStart_theNextFixLeaves() async {
+        let store = FakeSharedLocationRosterStore()
+        _ = await publishingSUT(store: store)
+        let relaunched = makeSUT(store: store)
+        relaunched.served.outage = Outage()
+        await relaunched.center.sync()
+
+        relaunched.served.outage = nil
+        relaunched.served.snapshot = served(mine, [(alice, .exact, TimeInterval(8 * 3600))])
+        await relaunched.center.sync()
+        await relaunched.center.didMove(to: SharedLocationFix(latitude: 45, longitude: 5)!)
+
+        XCTAssertEqual(relaunched.emitter.updates.count, 1)
+    }
+
+    /// #19928 : une échéance passée ne fait pas partir une liste gardée périmée avant la relecture — elle retirerait ce
+    /// qu'un autre appareil a ajouté, et la passerelle tient l'échéance de chacun. Pendant une panne, rien ne part.
+    func test_aRelaunch_aPassedDeadlineBeforeTheRead_duringAnOutage_sendsNothing_andRetriesTheRead() async {
+        let store = FakeSharedLocationRosterStore()
+        store.save(SharedLocationRoster.empty
+            .adding(userId: alice, precision: .exact, duration: .eightHours, now: t0)
+            .adding(userId: bob, precision: .city, duration: .oneHour, now: t0.addingTimeInterval(-7200)))
+        store.saveReceived(false)
+        store.savePublishedStart(mine)
+        let relaunched = makeSUT(store: store)
+        relaunched.served.outage = Outage()
+        let armedBefore = relaunched.wakes.delays.count
+
+        await relaunched.center.reconcile()
+
+        XCTAssertTrue(relaunched.emitter.starts.isEmpty)
+        XCTAssertEqual(relaunched.emitter.stops, 0)
+        XCTAssertTrue(relaunched.emitter.updates.isEmpty)
+        XCTAssertGreaterThan(relaunched.wakes.delays.count, armedBefore)
+        XCTAssertEqual(relaunched.wakes.delays.last, SharedLocationSharingCenter.retryDelay)
+    }
+
+    /// #19928 (audit) : « Arrêter » ne dépend pas de la relecture. Un retrait en attente part malgré une panne prolongée,
+    /// en liste seule, sans aucune position.
+    func test_aRelaunch_aPendingWithdrawal_leavesAsTheListAlone_despiteAProlongedReadOutage() async {
+        let store = FakeSharedLocationRosterStore()
+        let sut = await publishingSUT(store: store)
+        sut.emitter.startVerdict = .started(expiresAt: t0.addingTimeInterval(3600), startedAt: mine)
+        _ = await sut.center.share(with: bob, precision: .city, duration: .oneHour)
+        store.kept = store.kept?.withdrawing(userId: bob, now: t0)
+        let relaunched = makeSUT(store: store)
+        relaunched.served.outage = Outage()
+
+        for _ in 0..<3 { await relaunched.center.reconcile() }
+
+        XCTAssertFalse(relaunched.center.roster.hasPendingWithdrawals)
+        XCTAssertFalse(relaunched.emitter.starts.isEmpty)
+        XCTAssertTrue(relaunched.emitter.starts.allSatisfy(\.isListOnly))
+        XCTAssertTrue(relaunched.emitter.updates.isEmpty)
+        XCTAssertEqual(relaunched.fixes.silentReads, 0)
+    }
+
+    /// #19928 (audit) : toutes les échéances passées pendant une panne, l'appareil cesse de se suivre.
+    func test_aRelaunch_everyDeadlinePassedDuringAnOutage_stopsFollowingTheDevice() async {
+        let store = FakeSharedLocationRosterStore()
+        store.save(SharedLocationRoster.empty
+            .adding(userId: alice, precision: .exact, duration: .oneHour, now: t0.addingTimeInterval(-7200)))
+        store.saveReceived(false)
+        let relaunched = makeSUT(store: store)
+        relaunched.served.outage = Outage()
+
+        await relaunched.center.reconcile()
+
+        XCTAssertFalse(relaunched.fixes.isFollowing)
+        XCTAssertTrue(relaunched.emitter.starts.isEmpty)
+    }
+
+    func test_aRelaunch_reconcileBeforeTheRead_readsFirst_andAppliesTheServedList() async {
+        let store = FakeSharedLocationRosterStore()
+        let sut = await publishingSUT(store: store)
+        sut.emitter.startVerdict = .started(expiresAt: t0.addingTimeInterval(3600), startedAt: mine)
+        _ = await sut.center.share(with: bob, precision: .city, duration: .oneHour)
+        store.kept = store.kept?.withdrawing(userId: bob, now: t0)
+        let relaunched = makeSUT(store: store)
+        relaunched.served.snapshot = served(mine, [(alice, .exact, TimeInterval(8 * 3600))])
+
+        await relaunched.center.reconcile()
+
+        XCTAssertEqual(relaunched.served.reads, 1)
+        XCTAssertNil(relaunched.center.roster.entry(for: bob))
+        XCTAssertNotNil(relaunched.center.roster.entry(for: alice))
+    }
+
+    func test_theServedRead_aGatewayBeforeTheRoute_isNoAnswer_anyOtherFailureIsAnOutage() async throws {
+        let legacy = try await SharedLocationServedRead.answer {
+            throw MeeshyError.server(statusCode: 404, message: "Not Found")
+        }
+        XCTAssertNil(legacy)
+
+        for failure: Error in [
+            MeeshyError.server(statusCode: 503, message: "down"),
+            URLError(.notConnectedToInternet),
+            URLError(.timedOut)
+        ] {
+            do {
+                _ = try await SharedLocationServedRead.answer { throw failure }
+                XCTFail("une panne ne doit pas se lire comme une passerelle d'avant")
+            } catch {}
+        }
     }
 
     func test_aRelaunch_sharingFromHereBeforeTheRead_liftsTheWait() async {

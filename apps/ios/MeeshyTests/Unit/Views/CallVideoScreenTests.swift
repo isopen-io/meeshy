@@ -333,11 +333,11 @@ final class CallScreenTickTests: XCTestCase {
         let source = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallTranscriptionService.swift")
         )
-        let stop = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func stopLocalCapture()", in: source))
+        let stop = try XCTUnwrap(DeclarationBodyScanner.body(containing: "func stopLocalCapture()", in: source))
         XCTAssertTrue(stop.contains("Self.engineTeardownQueue.async(execute: teardown)"))
         XCTAssertFalse(stop.contains("audioEngine.stop()"), "plus de démontage synchrone au geste")
 
-        let start = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func startLocalCapture()", in: source))
+        let start = try XCTUnwrap(DeclarationBodyScanner.body(containing: "func startLocalCapture()", in: source))
         XCTAssertTrue(start.contains("awaitEngineTeardown()"), "jamais d'installTap sur un bus encore équipé")
     }
 }

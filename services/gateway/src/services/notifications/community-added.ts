@@ -58,7 +58,8 @@ const ESCAPED_ENTITIES: Readonly<Record<string, string>> = {
   '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&#x27;': "'", '&nbsp;': ' ',
 };
 
-function asWritten(name: string): string {
+/** Le nom tel qu'écrit : la passerelle le stocke échappé (#16786), une bannière n'est pas du HTML. */
+export function asWritten(name: string): string {
   return name.replace(/&(?:amp|lt|gt|quot|#39|#x27|nbsp);/g, (entity) => ESCAPED_ENTITIES[entity] ?? entity);
 }
 

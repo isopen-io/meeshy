@@ -125,6 +125,7 @@ struct ProfileActionsFace: View {
             PhoneReachabilitySharingSettingsSection(accentColor: accentColor)
             InactivityCheckSettingsSection(accentColor: accentColor)
             PhoneCallSharingSettingsSection(accentColor: accentColor)
+            FallConsentSettingsSection(accentColor: accentColor)
             privacyToggle(ProfileActionsCopy.notifyReturnTitle, systemImage: "bell",
                           subtitle: nil, keyPath: \.notifyContactsOnReturn, divider: false)
                 .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)

@@ -48,9 +48,10 @@ import { attachmentForwardPreviewSelect, attachmentSocketSelect, MESSAGE_ATTACHM
 import { serializeAttachmentForSocket, serializeMessageAttachmentsForSocket } from '../serializeAttachmentForSocket';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
-import { conversationAudienceRooms, loadLiveParticipantTargets } from '../conversationAudienceRooms';
+import { conversationAudienceRooms, loadLiveAudience } from '../conversationAudienceRooms';
 import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { offlineSignedPayload } from '../offlineSignedPayload';
+import { offlineSignedEdit, queueSigningFields } from '../editedOfflineSigning';
 import { emitUnreadCountsToRecipients } from '../emitUnreadCountsToRecipients';
 import { ConversationBridgeService } from '../../services/ConversationBridgeService';
 import { emitToConversationParticipants, participantUserRoomTargets } from '../emitToConversationParticipants';
@@ -1015,7 +1016,12 @@ export class MessageHandler {
       // 48 h : sans cette exclusion, le texte d'un message hors du plancher d'un
       // invité l'attendait dans Redis sous sa clé. Sur `'unknown'` rien n'entre
       // — on ne sait NI qui est bloqué, NI qui est autorisé.
-      if (editReaders.kind !== 'unknown') {
+      // #19939 — la file est le canal le PLUS exposé des deux, et c'était le
+      // seul à ne pas appliquer `editPlan`. La règle, sa raison et la raison
+      // pour laquelle la base IGNORE la clé vivent à leur site :
+      // `socketio/editedOfflineSigning.ts`.
+      const signedEdit = offlineSignedEdit({ plan: editPlan, payload: editedPayload });
+      if (editReaders.kind !== 'unknown' && signedEdit.kind !== 'withhold') {
         this._enqueueOfflineEventForParticipants({
           conversationId: message.conversationId,
           actorUserId: userId,
@@ -1024,6 +1030,7 @@ export class MessageHandler {
           payload: editedPayload,
           atRest: queuedEventSealsAtRest(message),
           ...(editBlocked.size > 0 ? { excludedQueueKeys: editBlocked } : {}),
+          ...queueSigningFields(signedEdit),
         }).catch((err) => handlerLogger.warn('offline enqueue (edit) failed', { error: err }));
       }
 
@@ -1177,13 +1184,13 @@ export class MessageHandler {
       // sa room PERSONNELLE (régime par lecteur d'un message à pièce protégée)
       // puis quitté le fil pour la liste n'était atteint par aucun des deux
       // canaux — ni l'émission de room, ni la file, qui saute les CONNECTÉS.
-      // Une lecture qui lève ou une audience hors plafond replie sur la room de
-      // conversation seule, le comportement d'avant ce lot.
-      const audience = await loadLiveParticipantTargets(
-        this.prisma,
-        message.conversationId,
-        (error) => handlerLogger.warn('message:deleted audience lookup failed — conversation room only', { messageId: validated.messageId, error }),
-      );
+      // #20007 — le plafond de lecture TRONQUE en le journalisant : une audience
+      // hors plafond ne replie plus sur la room de conversation seule (elle le
+      // faisait, et c'était ce même défaut rétabli au-dessus d'un seuil). Seule
+      // une lecture qui ne prouve RIEN y replie encore.
+      const audience = await loadLiveAudience(this.prisma, message.conversationId, {
+        onError: (error) => handlerLogger.warn('message:deleted audience lookup failed — conversation room only', { messageId: validated.messageId, error }),
+      });
       const rooms = conversationAudienceRooms(message.conversationId, audience);
       const deletedPayload = {
         messageId: validated.messageId,
@@ -1709,6 +1716,13 @@ export class MessageHandler {
     messageId: string;
     /** Les clés que le plancher d'historique écarte (`editedAudience.ts`). */
     excludedQueueKeys?: ReadonlySet<string>;
+    /**
+     * #19939 — la charge DE CE LECTEUR, signée pour SA ligne `Participant`.
+     * Deux paramètres, comme la file les remet (`offlineParticipantQueue.ts`) :
+     * la clé de file nomme la ROOM, l'id de participant nomme la LIGNE qui
+     * autorise le fichier, et les deux ne se déduisent pas l'un de l'autre.
+     */
+    resolvePayloadForReader?: (queueKey: string, participantId: string) => Record<string, unknown>;
   } & QueuedVariantFor<'edited' | 'deleted'>): Promise<void> {
     await enqueueForOfflineParticipants(
       { deliveryQueue: this.deliveryQueue, prisma: this.prisma, connectedUsers: this.connectedUsers },

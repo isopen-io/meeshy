@@ -122,8 +122,8 @@ data class CallAnalytics(
         averageRttMs: Double,
         averagePacketLossPercent: Double,
     ): Map<String, Any> = mapOf(
-        "setupTimeMs" to (connectedAtMs?.let { it - startedAtMs } ?: -1L),
-        "durationSeconds" to durationSeconds,
+        "setupTimeMs" to (connectedAtMs?.let { (it - startedAtMs).coerceAtLeast(0L) } ?: -1L),
+        "durationSeconds" to durationSeconds.coerceAtLeast(0L),
         "reconnectionCount" to reconnectionCount,
         "networkTransitions" to 0,
         "averageRtt" to averageRttMs,

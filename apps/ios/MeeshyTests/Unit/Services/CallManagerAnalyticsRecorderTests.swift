@@ -428,6 +428,64 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
         }
     }
 
+    // MARK: - #19984 — une horloge qui recule ne rend aucune durée négative
+
+    func test_callSetupMetrics_connectedBeforeAnchors_floorsAtZeroNotNegative() {
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+
+        let metrics = CallReliabilityPolicy.callSetupMetrics(
+            initiatedAt: t0, negotiationStartAt: t0.addingTimeInterval(2), connectedAt: t0.addingTimeInterval(-3)
+        )
+
+        XCTAssertEqual(metrics.setupTimeMs, 0)
+        XCTAssertEqual(metrics.negotiationTimeMs, 0)
+    }
+
+    func test_callSetupMetrics_missingAnchors_stayMinusOne() {
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+
+        let neverConnected = CallReliabilityPolicy.callSetupMetrics(
+            initiatedAt: t0, negotiationStartAt: t0, connectedAt: nil
+        )
+        let noAnchors = CallReliabilityPolicy.callSetupMetrics(
+            initiatedAt: nil, negotiationStartAt: nil, connectedAt: t0.addingTimeInterval(-3)
+        )
+
+        XCTAssertEqual(neverConnected.setupTimeMs, -1)
+        XCTAssertEqual(neverConnected.negotiationTimeMs, -1)
+        XCTAssertEqual(noAnchors.setupTimeMs, -1)
+        XCTAssertEqual(noAnchors.negotiationTimeMs, -1)
+    }
+
+    func test_callSetupMetrics_normalAnchors_unchanged() {
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+
+        let metrics = CallReliabilityPolicy.callSetupMetrics(
+            initiatedAt: t0, negotiationStartAt: t0.addingTimeInterval(20), connectedAt: t0.addingTimeInterval(21.5)
+        )
+
+        XCTAssertEqual(metrics.setupTimeMs, 21_500)
+        XCTAssertEqual(metrics.negotiationTimeMs, 1_500)
+    }
+
+    func test_elapsedSeconds_startInTheFuture_isZero() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+
+        XCTAssertEqual(CallReliabilityPolicy.elapsedSeconds(since: now.addingTimeInterval(3_600), now: now), 0)
+        XCTAssertEqual(CallReliabilityPolicy.elapsedSeconds(since: now.addingTimeInterval(-125), now: now), 125)
+    }
+
+    func test_payload_negativeCallDuration_emitsZeroDuration() {
+        let payload = CallAnalyticsRecorder().payload(
+            now: Date(timeIntervalSince1970: 1_000),
+            context: CallAnalyticsContext(callDuration: -3_600, codec: "opus", filtersEnabledNow: false,
+                                          transcriptionUsed: false, deviceModel: "iPhone", isVideo: false,
+                                          endReason: "local")
+        )
+
+        XCTAssertEqual(payload["durationSeconds"] as? TimeInterval, 0)
+    }
+
     private static func quality(freezes: Int, reason: String) -> CallMediaQuality {
         CallMediaQuality(freezeCount: freezes, totalFreezesDuration: 2, framesPerSecond: 30,
                          qualityLimitationReason: reason, jitterBufferDelayMs: 40,

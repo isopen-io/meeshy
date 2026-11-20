@@ -81,9 +81,10 @@ data class CommunityMemberChange(
 /**
  * La fiche tenue, réécrite par un geste de l'effectif — `null` quand il ne la concerne pas ou n'y
  * change rien. `memberCount` se recopie ; la ligne de la personne, quand la fiche la tient, suit son
- * rôle ou disparaît. Le LECTEUR qui entre y reçoit sa ligne : c'est d'elle que [CommunityMembership]
- * lit son rôle, donc ce que l'écran lui offre. Un tiers qui entre n'y est pas inventé : la charge ne
- * porte pas son profil, et la liste des membres se relit.
+ * rôle ou disparaît. Le LECTEUR qui entre y reçoit sa ligne ET son rôle servi (`currentUserRole`,
+ * quand la fiche le tient, que [CommunityMembership] lit en premier, #16602) ; entré, sa demande
+ * d'entrée n'attend plus rien. Un tiers qui entre n'y est pas inventé : la charge ne porte pas son
+ * profil, et la liste des membres se relit.
  */
 fun ApiCommunity.applying(change: CommunityMemberChange, viewerId: String?): ApiCommunity? {
     if (change.communityId != id) return null
@@ -96,7 +97,13 @@ fun ApiCommunity.applying(change: CommunityMemberChange, viewerId: String?): Api
         change.userId == viewerId -> held.orEmpty() + viewerLine(change, change.role)
         else -> held
     }
-    return copy(memberCount = change.memberCount, members = next).takeIf { it != this }
+    val isViewer = viewerId != null && change.userId == viewerId
+    return copy(
+        memberCount = change.memberCount,
+        members = next,
+        currentUserRole = if (isViewer && currentUserRole != null) change.role?.wireValue else currentUserRole,
+        currentUserJoinRequest = if (isViewer && change.role != null) null else currentUserJoinRequest,
+    ).takeIf { it != this }
 }
 
 private fun ApiCommunity.viewerLine(change: CommunityMemberChange, role: MemberRole) = ApiCommunityMember(

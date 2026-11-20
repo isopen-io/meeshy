@@ -101,7 +101,7 @@ final class ReelRepostOffersQuoteTests: XCTestCase {
         XCTAssertTrue(player.contains("QuoteComposerCover("),
                       "« Citer » du lecteur doit ouvrir QuoteComposerDoor.")
         for path in [
-            "Meeshy/Features/Main/Views/RootView.swift",
+            "Meeshy/Features/Main/Views/RootView+Reels.swift",
             "Meeshy/Features/Main/Views/AdaptiveRootView.swift",
             "Meeshy/Features/Main/Views/RootLayers/iPadRootViewLayers.swift"
         ] {

@@ -12,17 +12,22 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
 import me.meeshy.sdk.location.LiveLocationFixSource
 import me.meeshy.sdk.location.LocationPermissionGate
 import me.meeshy.sdk.model.LiveLocationFix
 import me.meeshy.sdk.model.relation.SharedLocationFix
 import me.meeshy.sdk.model.relation.SharedLocationOwnRecipient
 import me.meeshy.sdk.model.relation.SharedLocationOwnSnapshot
+import me.meeshy.sdk.model.relation.SharedLocationOwnSnapshotWire
 import me.meeshy.sdk.model.relation.SharedLocationPrecision
+import me.meeshy.sdk.model.relation.SharedLocationRoster
 import me.meeshy.sdk.model.relation.SharedLocationSendOutcome
 import me.meeshy.sdk.model.relation.SharedLocationShareDuration
 import me.meeshy.sdk.model.relation.SharedLocationStartRequest
 import me.meeshy.sdk.model.relation.SharedLocationStartVerdict
+import me.meeshy.sdk.net.ApiError
+import me.meeshy.sdk.net.NetworkResult
 import org.junit.Test
 
 /**
@@ -46,6 +51,12 @@ class SharedLocationSharingSyncTest {
     ) {
         var servedSnapshot: SharedLocationOwnSnapshot? = null
         var servedFailure: Exception? = null
+
+        /** Une panne qu'on laisse courir rejoue la relecture toutes les 30 s pour toujours : `runTest`, qui avance
+         * l'horloge virtuelle jusqu'au repos, ne finirait jamais. Le témoin la lève une fois ses assertions faites. */
+        fun endOutage() {
+            servedFailure = null
+        }
         var servedGate: CompletableDeferred<Unit>? = null
         var account: String? = "me"
         val writes = mutableListOf<String>()
@@ -586,7 +597,25 @@ class SharedLocationSharingSyncTest {
     }
 
     @Test
-    fun `relance, une relecture qui echoue leve l'attente et le releve suivant part`() = runTest {
+    fun `relance, une passerelle d'avant la relecture leve l'attente et le releve suivant part`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        val relaunched = device.relaunched()
+        relaunched.center.restore()
+        runCurrent()
+        relaunched.servedSnapshot = null
+
+        relaunched.ownChanged.emit(Unit)
+        runCurrent()
+        relaunched.stream.emit(LiveLocationFix(45.0, 5.0, accuracy = 8.0))
+        runCurrent()
+
+        assertThat(relaunched.reads).isEqualTo(1)
+        assertThat(relaunched.updates).hasSize(1)
+    }
+
+    @Test
+    fun `relance, une relecture en panne garde l'attente, se rejoue, et l'appareil cede a celui qui a repris`() = runTest {
         val device = Device(this)
         publishing(device)
         val relaunched = device.relaunched()
@@ -598,9 +627,122 @@ class SharedLocationSharingSyncTest {
         runCurrent()
         relaunched.stream.emit(LiveLocationFix(45.0, 5.0, accuracy = 8.0))
         runCurrent()
+        assertThat(relaunched.updates).isEmpty()
+
+        relaunched.servedFailure = null
+        relaunched.servedSnapshot = servedFrom(elsewhere, alice to hour)
+        advanceTimeBy(31_000L)
+        runCurrent()
+        relaunched.stream.emit(LiveLocationFix(45.1, 5.0, accuracy = 8.0))
+        runCurrent()
+
+        assertThat(relaunched.reads).isAtLeast(2)
+        assertThat(relaunched.updates).isEmpty()
+        assertThat(relaunched.receivedMarks["me"]).isTrue()
+    }
+
+    @Test
+    fun `relance, une relecture en panne puis qui confirme mon demarrage laisse partir le releve suivant`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        val relaunched = device.relaunched()
+        relaunched.center.restore()
+        runCurrent()
+        relaunched.servedFailure = IllegalStateException("503")
+        relaunched.ownChanged.emit(Unit)
+        runCurrent()
+
+        relaunched.servedFailure = null
+        relaunched.servedSnapshot = servedFrom(mine, alice to hour)
+        relaunched.ownChanged.emit(Unit)
+        runCurrent()
+        relaunched.stream.emit(LiveLocationFix(45.0, 5.0, accuracy = 8.0))
+        runCurrent()
+
+        assertThat(relaunched.updates).hasSize(1)
+    }
+
+    private suspend fun TestScope.publishingToTwoThenWithdrawingBob(device: Device) {
+        publishing(device)
+        device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        runCurrent()
+        device.saved["me"] = SharedLocationRoster.fromStored(device.saved["me"]).withdrawing(bob, currentTime).stored()
+    }
+
+    @Test
+    fun `relance, une echeance passee avant la relecture pendant une panne n'envoie rien et se rejoue`() = runTest {
+        val device = Device(this)
+        device.saved["me"] = SharedLocationRoster.EMPTY
+            .adding(alice, SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS, currentTime)
+            .adding(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR, currentTime - 2 * hour)
+            .stored()
+        device.servedFailure = IllegalStateException("hors ligne")
+
+        val problem = device.center.reconcile()
+        runCurrent()
+
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.Refused(SharedLocationSendOutcome.UNCONFIRMED))
+        assertThat(device.starts).isEmpty()
+        assertThat(device.stops).isEqualTo(0)
+        assertThat(device.reads).isEqualTo(1)
+
+        advanceTimeBy(31_000L)
+        runCurrent()
+
+        assertThat(device.reads).isAtLeast(2)
+        assertThat(device.starts).isEmpty()
+        assertThat(device.updates).isEmpty()
+        device.endOutage()
+    }
+
+    @Test
+    fun `relance, un arreter en attente part en liste seule malgre une panne prolongee de la relecture`() = runTest {
+        val device = Device(this)
+        publishingToTwoThenWithdrawingBob(device)
+        val relaunched = device.relaunched()
+        relaunched.servedFailure = IllegalStateException("hors ligne")
+
+        repeat(3) { relaunched.center.reconcile() }
+        runCurrent()
+
+        assertThat(relaunched.center.roster.value.isWithdrawalPending(bob)).isFalse()
+        assertThat(relaunched.starts).isNotEmpty()
+        assertThat(relaunched.starts.all { it.isListOnly }).isTrue()
+        assertThat(relaunched.updates).isEmpty()
+        assertThat(relaunched.fixAsks).isEqualTo(0)
+        relaunched.endOutage()
+    }
+
+    @Test
+    fun `relance, reconcilier avant la relecture relit d'abord et applique la liste servie`() = runTest {
+        val device = Device(this)
+        publishingToTwoThenWithdrawingBob(device)
+        val relaunched = device.relaunched()
+        relaunched.servedSnapshot = servedFrom(mine, alice to hour)
+
+        relaunched.center.reconcile()
+        runCurrent()
 
         assertThat(relaunched.reads).isEqualTo(1)
-        assertThat(relaunched.updates).hasSize(1)
+        assertThat(relaunched.center.roster.value.isWithdrawalPending(bob)).isFalse()
+        assertThat(relaunched.center.roster.value.entry(alice)).isNotNull()
+    }
+
+    @Test
+    fun `la relecture servie, une passerelle d'avant la route n'est pas une reponse, toute autre issue est une panne`() {
+        val json = Json { ignoreUnknownKeys = true }
+        assertThat(ownSharedLocationAnswer(NetworkResult.Failure(ApiError("absent", httpStatus = 404)), json)).isNull()
+        assertThat(ownSharedLocationAnswer(NetworkResult.Success(SharedLocationOwnSnapshotWire(recipients = emptyList())), json))
+            .isEqualTo(SharedLocationOwnSnapshot(emptyList()))
+        listOf(
+            NetworkResult.Failure(ApiError("panne", httpStatus = 503)),
+            NetworkResult.Failure(ApiError("session", httpStatus = 401)),
+            NetworkResult.Failure(ApiError("hors ligne")),
+            NetworkResult.Success(SharedLocationOwnSnapshotWire()),
+        ).forEach { result ->
+            assertThat(runCatching { ownSharedLocationAnswer(result, json) }.exceptionOrNull())
+                .isInstanceOf(SharedLocationReadFailed::class.java)
+        }
     }
 
     @Test

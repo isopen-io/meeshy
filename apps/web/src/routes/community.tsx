@@ -202,6 +202,7 @@ export default function CommunityScreen() {
                 pending={membershipPending}
                 online={online}
                 failure={membershipFailure}
+                retryAt={community.viewerJoinRetryAt ?? null}
                 onJoin={() => void changeMembership('join')}
                 onLeave={() => void changeMembership('leave')}
               />

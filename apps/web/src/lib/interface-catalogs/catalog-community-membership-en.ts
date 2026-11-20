@@ -18,6 +18,8 @@ const enCommunityMembership = {
   'community.membership.request': 'Ask to join',
   'community.membership.requested': 'Request sent',
   'community.membership.requested.hint': 'An admin or moderator needs to accept it.',
+  'community.membership.declined': 'Request declined',
+  'community.membership.declined.hint': 'You can ask again from {date}.',
   'community.membership.error.cooldown': 'Your last request was declined: you can ask again 7 days after it.',
   'community.settings.open': "Settings",
   'community.members.open': 'Members',

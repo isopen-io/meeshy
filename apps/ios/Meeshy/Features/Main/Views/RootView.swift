@@ -46,28 +46,28 @@ struct StoryViewerRequest: Identifiable, Equatable {
 
 struct RootView: View {
     @State private var delayed = DelayedActions()
-    @ObservedObject private var storyViewModel: StoryViewModel
-    @ObservedObject private var statusViewModel: StatusViewModel
+    @ObservedObject var storyViewModel: StoryViewModel
+    @ObservedObject var statusViewModel: StatusViewModel
     // Possédé sans être observé (cf. ConversationListVMOwner) : évite que le churn
     // du VM (presence, reloadFromCache) ne re-render RootView à l'idle. Exposé via
     // la propriété calculée `conversationViewModel` ci-dessous — les 12 usages
     // (injections + closures) restent inchangés.
     private let conversationVMOwner: ConversationListVMOwner
-    private var conversationViewModel: ConversationListViewModel { conversationVMOwner.viewModel }
-    @StateObject private var router = Router()
+    var conversationViewModel: ConversationListViewModel { conversationVMOwner.viewModel }
+    @StateObject var router = Router()
     // CallManager n'est PLUS observé ici : sa présentation (cover + overlays) est
     // portée par `.modifier(CallPresentationLayer())`, qui isole le churn d'appel
     // (callDuration 1 Hz + stats qualité) hors de `RootView.body`. Cf. watchdog
     // 0x8BADF00D. RootView ne se ré-évalue donc plus à chaque tick d'appel.
-    @ObservedObject private var notifications: RootNotificationSource  // #7010 — le compteur SEUL est observé ; cf. RootNotificationSource.
+    @ObservedObject var notifications: RootNotificationSource  // #7010 — le compteur SEUL est observé ; cf. RootNotificationSource.
     @EnvironmentObject private var deepLinkRouter: DeepLinkRouter
-    @Environment(\.accessibilityReduceMotion) private var reduceMotionEnabled
+    @Environment(\.accessibilityReduceMotion) var reduceMotionEnabled
     @State private var showFeed = false
     @State private var feedWasVisibleBeforeNav = false
     @State private var showMenu = false
     /// Drives the immersive reels overlay. A long-press on the feed button (or a
     /// tap on a reel card in the feed) sets `reelsPresenter.launch`.
-    @ObservedObject private var reelsPresenter: ReelsPresenter
+    @ObservedObject var reelsPresenter: ReelsPresenter
     /// Liquid "water wave" reveal of the reels overlay. `reelsRevealProgress`
     /// drives the `LiquidRevealShape` mask 0→1 (open) / 1→0 (close) from the
     /// feed button's on-screen position. `reelsRevealCompleted` gates the first
@@ -77,16 +77,16 @@ struct RootView: View {
     /// `AVPlayerViewController` surface renders live video (a persistent SwiftUI
     /// `.mask()` over an AVPlayer layer freezes it on the poster). `reelsRevealClosing`
     /// routes the reverse wave before `reelsPresenter.dismiss()`.
-    @State private var reelsRevealProgress: Double = 0
-    @State private var reelsRevealCompleted = false
-    @State private var reelsRevealMasked = false
-    @State private var reelsRevealClosing = false
+    @State var reelsRevealProgress: Double = 0
+    @State var reelsRevealCompleted = false
+    @State var reelsRevealMasked = false
+    @State var reelsRevealClosing = false
     /// Hoisted out of `@State` (Phase H) so deep-stack screens such as
     /// `StoryNotificationTargetScreen` can present the viewer through
     /// `.environmentObject` injection without threading a binding through
     /// every parent view. The coordinator's `pendingRequest` mirrors the
     /// legacy `Identifiable?` contract expected by `.fullScreenCover(item:)`.
-    @StateObject private var storyViewerCoordinator = StoryViewerCoordinator()
+    @StateObject var storyViewerCoordinator = StoryViewerCoordinator()
     /// Page « Mes stories » (en cours + passées) ouverte depuis la tuile
     /// Stories du bandeau de stats du profil. Hébergée ICI (racine, toujours
     /// montée) : la feuille de profil peut être présentée depuis n'importe
@@ -112,7 +112,7 @@ struct RootView: View {
     @State private var notificationPreviewDetent: PresentationDetent = .medium
     /// Mood à republier depuis la bulle (hôte racine) — présente le composer
     /// de statut pré-rempli. Anciennement dans ConversationListView, mort.
-    @State private var republishStatusEntry: StatusEntry?
+    @State var republishStatusEntry: StatusEntry?
     /// Suppresses the toast `Button`'s tap action that can fire on release right
     /// after a long-press / drag opened the preview, preventing a double action
     /// (preview sheet + underlying navigation).
@@ -144,7 +144,7 @@ struct RootView: View {
     /// C4b — rupture cliente. Deux entrées (le 426 vécu, le plancher lu au
     /// démarrage), une porte qui ne se referme pas. `iPadRootView` porte le
     /// jumeau : l'iPad a sa racine PROPRE et n'hérite rien d'ici.
-    @ObservedObject private var upgradeGate: UpgradeGateController
+    @ObservedObject var upgradeGate: UpgradeGateController
 
     init(scope: RootScopeModels, reelsPresenter: ReelsPresenter = .shared,
          onboardingPresence: OnboardingPresenceSignal = .shared) {
@@ -352,92 +352,6 @@ struct RootView: View {
         navigateToConversationById(target.conversationId, highlightMessageId: target.highlightMessageId)
     }
 
-    // MARK: - Démarrage de la racine
-
-    /// Le corps du `.task` de la racine, monté par `RootStoryDoorsLayer` :
-    /// connexion socket, abonnements, exécuteur de publication, chargements
-    /// parallèles. Écrit ICI parce que la racine possède tout ce qu'il touche.
-    private func startRootServices() async {
-        // Connect Socket.IO early so the backend knows we're online
-        MessageSocketManager.shared.connect()
-        statusViewModel.subscribeToSocketEvents()
-        // Sans cet appel, le SDK reçoit bien `story:created` /
-        // `story:updated` / `story:deleted` mais personne n'est sink'é
-        // sur les publishers de SocialSocketManager → les stories des
-        // amis n'arrivent jamais dans `storyGroups` en temps réel.
-        storyViewModel.subscribeToSocketEvents()
-        // Même raison, pour le feed : `FeedSocketHandler` est le SEUL
-        // écrivain disque de post:created/updated/reposted, des
-        // commentaires et des réactions. Armé par `FeedView` et désarmé à
-        // sa disparition, il ratait tout ce qui arrivait ailleurs dans
-        // l'app. `arm()` est idempotent — jamais désarmé.
-        await RealtimeRelays.arm()
-
-        // Deferred cleanup
-        Task.detached(priority: .background) {
-            guard await cancellableSleep(for: .seconds(5)) else { return }
-            await ConversationSyncEngine.shared.cleanupRetentionIfNeeded()
-        }
-
-        // Observe sync events for conversation list
-        conversationViewModel.observeSync()
-
-        #if DEBUG
-        // Pré-résout à pile courte les métadonnées du 1er rendu de
-        // ConversationView (classe de crashs stack-overflow du décodeur
-        // Swift sur device Debug — cf. ConversationFirstRenderWarmup).
-        ConversationFirstRenderWarmup.run()
-        #endif
-
-        // Réponse à un mood (confirmée via pop-up, ou immédiate en DM) :
-        // résout/ouvre la DM avec l'auteur et amorce le composer.
-        StatusBubbleController.shared.onConfirmedReply = { entry in
-            router.navigateToStoryReply(
-                .status(statusId: entry.id, authorId: entry.userId,
-                        authorName: entry.username, emoji: entry.moodEmoji,
-                        content: entry.content, publishedAt: entry.createdAt),
-                conversationList: conversationViewModel
-            )
-        }
-
-        // En conversation, la boule de mood ouvre la page plein écran de
-        // l'humeur (#13987) — la même que la notification « nouvelle humeur ».
-        StatusBubbleController.shared.onOpenSpotlight = { entry in
-            router.push(.moodSpotlight(statusId: entry.id))
-        }
-
-        // Republication d'un mood : câblé ICI (hôte racine de la bulle)
-        // — l'ancien branchement vivait dans un overlay mort de
-        // ConversationListView, le bouton « Republier » n'agissait donc
-        // jamais depuis la bulle du modifier.
-        StatusBubbleController.shared.onRepublish = { entry in
-            republishStatusEntry = entry
-        }
-        StatusBubbleController.shared.reactionHandler = statusViewModel.reactionHandler
-
-        // Pilier 22 V3 wiring — register the StoryViewModel as the
-        // queue's upload executor. setExecutor also registers the
-        // queue's publish handler in the same call, so the M5 auto-
-        // drain that fires next has a guaranteed-non-nil executor to
-        // delegate to. Calling configure() at app boot (in MeeshyApp)
-        // intentionally only sets up listeners — the handler is
-        // registered HERE, atomic with the executor assignment, to
-        // avoid the boot race that would burn retry budget on a
-        // guaranteed-fail call.
-        StoryPublishService.shared.setExecutor(storyViewModel)
-
-        // C4b — plancher de version lu au démarrage. Best-effort et
-        // SILENCIEUX : sans lui, un binaire périmé qui ne fait que LIRE ne
-        // rencontre jamais de 426 et se croit à jour indéfiniment.
-        // Parallélisé comme les autres : il ne doit rien retenir.
-        async let versionFloor: Void = upgradeGate.checkFloor()
-        async let storiesLoad: Void = storyViewModel.loadStories()
-        async let statusesLoad: Void = statusViewModel.loadStatuses()
-        async let conversationsLoad: Void = ConversationListVMOwner.loadAtLaunch(conversationViewModel)
-        async let unreadRefresh: Void = notifications.manager.refreshUnreadCount()
-        _ = await (storiesLoad, statusesLoad, conversationsLoad, unreadRefresh, versionFloor)
-    }
-
     // MARK: - Intentions reçues par la racine (via `RootIntentRoutingLayer`)
 
     private func handleSendMessageToUser(_ notification: Notification) {
@@ -458,31 +372,6 @@ struct RootView: View {
                 router.navigateToConversation(conv)
             } catch {
                 FeedbackToastManager.shared.showError(String(localized: "root.create_conversation.error", defaultValue: "Impossible de créer la conversation", bundle: .main))
-            }
-        }
-    }
-
-    private func handlePushNavigateToRoute(_ notification: Notification) {
-        guard let routeName = notification.object as? String else { return }
-        if routeName.hasPrefix("postDetail:") {
-            let postId = String(routeName.dropFirst("postDetail:".count))
-            router.push(.postDetail(postId))
-        } else if routeName.hasPrefix("storyDetail:") {
-            let postId = String(routeName.dropFirst("storyDetail:".count))
-            if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                storyViewerCoordinator.present(StoryViewerRequest(
-                    id: storyViewModel.storyGroups[groupIdx].id,
-                    postId: postId
-                ))
-            } else {
-                router.push(.postDetail(postId))
-            }
-        } else {
-            switch routeName {
-            case "userStats": router.push(.userStats)
-            case "progression": router.push(.progression)
-            case "affiliate": router.push(.affiliate)
-            default: break
             }
         }
     }
@@ -840,106 +729,6 @@ struct RootView: View {
     private var pendingSettingsBannerOverlay: some View { RootPendingBanners() }
 
     // MARK: - Themed Background
-
-    // MARK: - Reels Liquid Reveal Orchestration
-
-    /// Opens the reels overlay: animate the wavy disc 0→1 from the feed button.
-    /// Two timers fire off the animation: playback starts 0.2s BEFORE the disc is
-    /// full (so the reel is already running when revealed), and the mask drops at
-    /// full screen (so the live `AVPlayer` surface renders instead of staying
-    /// frozen under a persistent `.mask()`). Reduce Motion uses a quick cross-fade.
-    /// Le lecteur de réels monté par l'overlay — sorti de `body`, qui portait
-    /// ses vingt-cinq lignes d'arguments (cohésion, #15869).
-    private func reelsPlayer(_ launch: ReelsPresenter.Launch, safeArea: EdgeInsets) -> some View {
-        ReelsPlayerView(
-            seedPosts: launch.seedPosts,
-            startId: launch.startId,
-            commentTargetId: launch.commentId,
-            commentParentTargetId: launch.parentCommentId,
-            revealCompleted: reelsRevealCompleted,
-            safeArea: safeArea,
-            onClose: { closeReels() },
-            onOpenProfile: { userId, username in
-                router.deepLinkProfileUser = ProfileSheetUser(userId: userId, username: username)
-            },
-            onOpenStory: { userId in
-                storyViewerCoordinator.present(StoryViewerRequest(
-                    id: userId,
-                    startAtFirstUnviewed: true,
-                    singleGroup: true
-                ))
-            },
-            onOpenDetail: { postId in
-                // Ferme le lecteur immersif avant de pousser le détail —
-                // sinon la page se pousse SOUS l'overlay (zIndex 60) et
-                // reste invisible tant que l'utilisateur ne ferme pas.
-                closeReels()
-                router.push(.postDetail(postId))
-            },
-            authorHasStory: { userId in
-                storyViewModel.storyRingState(forUserId: userId) != .none
-            },
-            quoteHost: QuoteComposerHost(storyViewModel: storyViewModel, router: router,
-                                         conversationListViewModel: conversationViewModel,
-                                         statusViewModel: statusViewModel)
-        )
-    }
-
-    private func openReels() {
-        reelsRevealCompleted = false
-        reelsRevealClosing = false
-        reelsRevealMasked = true
-        reelsRevealProgress = 0
-        let duration = ReelsRevealMotion.duration(opening: true, reduceMotion: reduceMotionEnabled)
-        ReelsRevealMotion.animate(opening: true, reduceMotion: reduceMotionEnabled) {
-            reelsRevealProgress = 1
-        }
-        // Wait for the reveal to FINISH before the first reel plays. Starting
-        // earlier played UNDER the (poster-freezing) `.mask()`: those frames were
-        // invisible, then dropping the mask snapped the surface to an already-
-        // advanced frame — the launch flash. Now, at the animation's end, drop the
-        // mask FIRST (the poster / frame 0 shows), THEN start playback from frame 0
-        // over the poster that stays underneath (`ReelVideoView` keeps `ReelPoster`
-        // behind the surface) → seamless, no flash and no black gap.
-        Task {
-            guard await cancellableSleep(for: .seconds(duration)) else { return }
-            guard reelsPresenter.launch != nil, !reelsRevealClosing else { return }
-            reelsRevealMasked = false
-            reelsRevealCompleted = true
-        }
-    }
-
-    private var reelsCoverScreen: Bool {
-        ReelsCover.isCovered(hasLaunch: reelsPresenter.launch != nil, revealCompleted: reelsRevealCompleted)
-    }
-
-    /// Closes the reels overlay with the reverse wave: pause the reel, re-apply
-    /// the mask, shrink the disc back toward the feed button (1→0), THEN dismiss.
-    /// Reduce Motion cross-fades.
-    private func closeReels() {
-        guard !reelsRevealClosing else { return }
-        reelsRevealClosing = true
-        reelsRevealCompleted = false
-        reelsRevealMasked = true
-        SharedAVPlayerManager.shared.pause()
-        // Couper aussi tout réel-AUDIO en cours : il est piloté par le moteur
-        // externe `@StateObject` de la page (pas par `SharedAVPlayerManager`), et
-        // ni `AudioPlayerView.onDisappear` (early-return pour moteur externe) ni
-        // `ReelPageView.onChange(isActive)` (la page reste active à la fermeture)
-        // ne le stoppent. `stopAllAudio()` coupe les players audio/externes en
-        // laissant le moteur vidéo (repris par la surface de fond du feed).
-        PlaybackCoordinator.shared.stopAllAudio()
-        HapticFeedback.light()
-        let duration = ReelsRevealMotion.duration(opening: false, reduceMotion: reduceMotionEnabled)
-        ReelsRevealMotion.animate(opening: false, reduceMotion: reduceMotionEnabled) {
-            reelsRevealProgress = 0
-        }
-        Task {
-            guard await cancellableSleep(for: .seconds(duration)) else { return }
-            reelsPresenter.dismiss()
-            reelsRevealClosing = false
-        }
-    }
 
     // MARK: - Floating chrome (boutons + menu), au-dessus du chrome global
 
