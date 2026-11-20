@@ -195,16 +195,16 @@ nonisolated enum CallReliabilityPolicy {
     /// `critical` merges into `poor` (the payload contract has 4 buckets);
     /// an empty call (never connected / no samples) reads as fully excellent;
     /// clock skew (window start in the future) contributes zero, never
-    /// negative time.
+    /// negative time; a negative or non-finite accumulated value counts for 0.
     static func qualityDistribution(
         accumulatedSeconds: [VideoQualityLevel: Double],
         openWindowLevel: VideoQualityLevel?,
         openWindowSince: Date?,
         now: Date
     ) -> [String: Double] {
-        var seconds = accumulatedSeconds
+        var seconds = accumulatedSeconds.mapValues(CallStatValue.measured)
         if let level = openWindowLevel, let since = openWindowSince {
-            seconds[level, default: 0] += max(0, now.timeIntervalSince(since))
+            seconds[level, default: 0] += CallStatValue.measured(now.timeIntervalSince(since))
         }
         let total = seconds.values.reduce(0, +)
         guard total > 0 else {

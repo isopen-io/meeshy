@@ -263,9 +263,12 @@ struct ProfileView: View {
         return MeeshyCollapsingHero(
             progress: progress,
             title: heroTitle,
-            subtitle: user.map { "@\($0.username)" },
+            subtitle: user.map { ProfileMembershipLine.handle(
+                username: $0.username, createdAt: $0.createdAt, locale: Self.interfaceLocale, now: Date(),
+                inBar: MeeshyCollapsingHeroRecipe.resolve(progress: progress).barOwnsIdentity) },
             expandedHeight: ProfileOwnHeroPlan.expandedHeight,
             collapsedHeight: ProfileOwnHeroPlan.collapsedHeight,
+            topInset: ProfileOwnHeroPlan.controlTop,
             isLoading: user == nil,
             keepsBannerInBar: true,
             avatarSpill: Double(ProfileOwnAvatar.reserveBelow(user, avatarSize: CGFloat(MeeshyCollapsingHeroRecipe.avatarExpanded))),
@@ -553,7 +556,7 @@ struct ProfileView: View {
         }
     }
 
-    /// Qui je suis, au repos (planche `Main`) : sous le nom et le @pseudo du héros, ma ville et mon ancienneté, ma bio,
+    /// Qui je suis, au repos (planche `Main`) : sous le nom, le @pseudo et l'ancienneté du héros, ma ville, ma bio,
     /// mes langues en pastilles, puis la puce de chiffrement — du texte, aucune carte formulaire. La puce qui arrive
     /// après `loadEncryption()` monte par le jeton du kit, jamais d'un coup.
     private var restingIdentity: some View {
@@ -666,9 +669,9 @@ struct ProfileView: View {
         }
     }
 
-    /// Ville et ancienneté, dans la langue de l'interface.
+    /// Ma ville déclarée ; l'ancienneté se lit sous mon nom, avec le pseudo (#19987).
     private var membershipLine: String? {
-        ProfileMembershipLine.text(city: user?.declaredCity, createdAt: user?.createdAt, locale: Self.interfaceLocale, now: Date())
+        ProfileMembershipLine.city(user?.declaredCity)
     }
 
     /// La langue dans laquelle l'app me parle : le mois de l'ancienneté se dit dans la même langue que sa phrase.
