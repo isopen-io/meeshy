@@ -638,3 +638,9 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Migration : `packages/shared/prisma/migrations/2026-11-19-community-member-lookup-indexes.mongodb.js`, même forme que `2026-11-13-circle-pair-reverse-indexes` : index reconnu par sa clé, aucun index ni donnée touché, un index de même clé partiel ou épars signalé (sortie 2) jamais remplacé, `DRY_RUN=1`, idempotente, commande `explain` de vérification dans l'en-tête.
 - Témoin : `community-member-lookup-indexes-migration.test.ts` (9, exécute le fichier mongosh dans un contexte isolé et lit `schema.prisma`) — rouge prouvé : 9 échecs sans le lot.
 - Reste pour fermer #14227 : jouer la migration sur le staging et y relever le plan (IXSCAN) ; la production attend le feu vert du porteur, sauvegarde vérifiée d'abord. Le conteneur de la routine n'atteint pas l'hôte.
+
+## 2026-11-20 — réveil 05:38 UTC
+
+- Début du run : #19983 (doublon de `retained.json`) poussée à 05:37 par le run précédent, encore actif : cédée. #19951 (#14227, index des appartenances), #19950 (#19879) et #19903 (#19869) inactives depuis plus de deux heures ; le rouge étranger qui les bloquait (#19964) est corrigé sur `dev` (#19974, `fb8f5c167`).
+- Lot : mener #19951 à la fusion. `dev` (`b06982a21`) fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : passerelle `tsc --noEmit` vert ; témoin de migration + `tsc-never-loaded` (2 suites, 11 tests) verts ; les deux anciens rouges étrangers verts (shared `glory-frames-generated` 29/29, web `lottie/sources` 3/3).
+- `ci.yml` relancé en `workflow_dispatch` sur cette tête.
