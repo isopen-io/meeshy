@@ -12,7 +12,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { broadcastViewOnceFact } from '../broadcastViewOnceFact';
-import { LIVE_AUDIENCE_PAGE } from '../conversationAudienceRooms';
+import { LIVE_AUDIENCE_SCAN_CAP } from '../conversationAudienceRooms';
 import { liveParticipantTable } from '../../__tests__/helpers/live-audience-double';
 import { matchesMongoWhere, type MongoDocument } from '../../__tests__/helpers/mongo-where';
 
@@ -208,15 +208,21 @@ describe('les faits de vue unique atteignent chaque participant actif (#18556)',
  * perte que l'audit de #19954 a nommée : dans une conversation de plus de 2 000
  * participants vivants, un lecteur resté sur la LISTE ne recevait ni ouverture
  * ni purge, et rien ne le rattrapait (la file saute les comptes CONNECTÉS).
- * Il est RÉÉCRIT sciemment, avec sa raison sur place : le plafond n'abandonne
- * plus, il PAGINE.
+ * Il est RÉÉCRIT sciemment, avec sa raison sur place : le plafond ne JETTE plus,
+ * il tronque — à 50 000, en le journalisant.
+ *
+ * Son assertion sur la BORNE est conservée, parce qu'elle garde le seul argument
+ * de cette lecture, qu'aucun témoin de comportement ne peut voir. Elle était
+ * d'ailleurs ANESTHÉSIÉE : la fixture valait `CAP + 1` sur une constante
+ * retirée, et `Array.from({ length: NaN })` rend un tableau VIDE — le témoin
+ * passait sur une foule de zéro personne.
  */
-describe('l’audience nommée est PAGINÉE, plus plafonnée (#20007)', () => {
-  it('au-delà d’une page, plusieurs émissions couvrent tout le monde', async () => {
+describe('l’audience nommée est TRONQUÉE, plus jamais jetée (#20007)', () => {
+  it('au-delà de l’ancien plafond, une seule émission couvre tout le monde', async () => {
     const sink: Emitted[] = [];
     const { manager } = managerInto(sink);
-    const crowd = Array.from({ length: LIVE_AUDIENCE_PAGE + 2 }, (_, index) => ({
-      id: `p-${String(index).padStart(6, '0')}`,
+    const crowd = Array.from({ length: 2001 }, (_, index) => ({
+      id: `507f1f77bcf86cd7994${index.toString(16).padStart(5, '0')}`,
       userId: `u-${String(index).padStart(6, '0')}`,
       conversationId: CONV,
       isActive: true,
@@ -235,13 +241,12 @@ describe('l’audience nommée est PAGINÉE, plus plafonnée (#20007)', () => {
     const purges = sink.filter((emitted) => emitted.event === SERVER_EVENTS.MESSAGE_VIEW_ONCE_PURGED);
     const rooms = purges.flatMap((emitted) => (Array.isArray(emitted.rooms) ? emitted.rooms : [emitted.rooms]));
 
-    expect(table.pagesRead()).toBe(2);
-    expect(purges).toHaveLength(2);
-    // Un lot de plus que la page : la room de conversation, qui voyage dans le
-    // premier et dans lui seul.
-    expect(rooms).toHaveLength(LIVE_AUDIENCE_PAGE + 3);
+    expect(table.reads()).toBe(1);
+    expect(purges).toHaveLength(1);
+    expect(rooms).toHaveLength(2002);
     expect(rooms.filter((room) => room === `conversation:${CONV}`)).toHaveLength(1);
     expect(rooms).toContain('user:u-000000');
-    expect(rooms).toContain(`user:u-${String(LIVE_AUDIENCE_PAGE + 1).padStart(6, '0')}`);
+    expect(rooms).toContain('user:u-002000');
+    expect(table.lastArgs()).toMatchObject({ take: LIVE_AUDIENCE_SCAN_CAP + 1 });
   });
 });

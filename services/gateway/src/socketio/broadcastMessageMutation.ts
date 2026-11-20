@@ -23,7 +23,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { withSealedQuote } from '../services/messaging/servedQuotedMessage';
 import { readerSignedPlanForMessageId } from './readerSignedDelivery';
 import { stripClientMessageId } from './utils/message-ack-shaping';
-import { conversationAudienceRoomBatches, loadLiveAudience } from './conversationAudienceRooms';
+import { conversationAudienceRooms, loadLiveAudience } from './conversationAudienceRooms';
 
 // Ce relais ne lit rien lui-même : il transmet le prisma de l'aperçu tel quel.
 // Le dériver plutôt que le redéclarer est ce qui empêche les deux listes de
@@ -434,17 +434,15 @@ export async function broadcastMessageMutation(rawParams: MessageMutationParams)
       // portent que des ids, jamais de contenu (c'est ce qui rend l'arbitrage
       // simple, et ce qui le distingue de l'édition, gardée par `readership`).
       //
-      // #20007 — la lecture est PAGINÉE et l'émission se fait par LOTS : une
-      // audience plus grande qu'une page ne retombe plus sur la room de
-      // conversation seule, où un lecteur resté sur la LISTE ne recevait rien.
-      // Une lecture qui lève garde les pages qu'elle avait prouvées, et
-      // `conversationAudienceRoomBatches` rend la room de conversation SEULE
-      // quand elle n'a nommé personne : le comportement d'avant #18556, jamais
-      // rien.
+      // #20007 — le plafond de lecture TRONQUE en le journalisant, il ne JETTE
+      // plus : une audience de plus de 2 000 participants ne retombait sur la
+      // room de conversation seule, où un lecteur resté sur la LISTE ne reçoit
+      // rien. UNE émission, parce que Socket.IO ne dédoublonne que par
+      // émission : `to()` prend le tableau entier. Une lecture qui lève rend
+      // `targets: []`, et `conversationAudienceRooms` la room de conversation
+      // SEULE — le comportement d'avant #18556, jamais rien.
       const audience = await loadLiveAudience(params.prisma, conversationId, { onError });
-      for (const rooms of conversationAudienceRoomBatches(conversationId, audience)) {
-        emitToConversationRoom(io?.to(rooms), params);
-      }
+      emitToConversationRoom(io?.to(conversationAudienceRooms(conversationId, audience)), params);
     }
   } catch (error) {
     onError?.(error);

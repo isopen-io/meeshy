@@ -19,7 +19,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { broadcastMessageMutation } from '../broadcastMessageMutation';
-import { LIVE_AUDIENCE_PAGE } from '../conversationAudienceRooms';
+import { LIVE_AUDIENCE_SCAN_CAP } from '../conversationAudienceRooms';
 import { liveParticipantTable, type LiveParticipantTableHooks } from '../../__tests__/helpers/live-audience-double';
 import { type MongoDocument } from '../../__tests__/helpers/mongo-where';
 
@@ -43,19 +43,19 @@ const participants = (): MongoDocument[] => [
 
 function participantsOf(rows: MongoDocument[], hooks?: LiveParticipantTableHooks) {
   return {
-    // Le double PAGINE (`take` / `cursor` / `skip` / `orderBy` honorés, toute
-    // autre forme JETTE) : un double qui les ignorerait rendrait la même page
-    // indéfiniment, et la lecture paginée de la production ne serait jamais
-    // exercée.
+    // Le double EXIGE `take` et JETTE sur toute autre forme : un double qui
+    // l'ignorerait laisserait retirer de la production la seule borne du
+    // chemin sans faire rougir un témoin.
     participant: liveParticipantTable(rows, hooks),
     conversationShareLink: { findMany: jest.fn(async () => []) },
     message: { findUnique: jest.fn(async () => null), findFirst: jest.fn(async () => null) },
   };
 }
 
+/** La forme de PRODUCTION d'un id : `Participant.id` est un ObjectId (24 hex). */
 const crowd = (count: number): MongoDocument[] =>
   Array.from({ length: count }, (_, index) => ({
-    id: `p-${String(index).padStart(6, '0')}`,
+    id: `507f1f77bcf86cd7994${index.toString(16).padStart(5, '0')}`,
     userId: `u-${String(index).padStart(6, '0')}`,
     conversationId: CONV,
     isActive: true,
@@ -162,7 +162,7 @@ describe('#19943 — les mutations d’ids atteignent la liste comme le fil', ()
       const sink: Emitted[] = [];
       const { manager } = managerInto(sink);
       const prisma = participantsOf(participants(), {
-        onPage: () => {
+        onRead: () => {
           throw new Error('participant.findMany down');
         },
       });
@@ -172,19 +172,25 @@ describe('#19943 — les mutations d’ids atteignent la liste comme le fil', ()
       expect(roomsOf(sink, EVENT_OF[kind])).toEqual([`conversation:${CONV}`]);
     });
 
-    it(`${kind} : au-delà d’une page, l’événement part par LOTS et n’oublie personne`, async () => {
+    it(`${kind} : une grande audience part en UNE émission, et n’oublie personne`, async () => {
       const sink: Emitted[] = [];
       const { manager } = managerInto(sink);
-      const prisma = participantsOf(crowd(LIVE_AUDIENCE_PAGE + 2));
+      // 2 001 : le seuil qui JETAIT l'audience entière avant ce lot, et qui
+      // repliait la diffusion sur la room de conversation seule.
+      const prisma = participantsOf(crowd(2001));
 
       await mutate(prisma, manager, kind);
 
+      const emissions = sink.filter((emitted) => emitted.event === EVENT_OF[kind]);
       const rooms = allRoomsOf(sink, EVENT_OF[kind]);
-      expect(sink.filter((emitted) => emitted.event === EVENT_OF[kind])).toHaveLength(2);
-      expect(rooms).toHaveLength(LIVE_AUDIENCE_PAGE + 3);
+      // UNE émission : Socket.IO ne dédoublonne que par émission, et `to()`
+      // prend le tableau entier.
+      expect(emissions).toHaveLength(1);
+      expect(rooms).toHaveLength(2002);
       expect(rooms.filter((room) => room === `conversation:${CONV}`)).toHaveLength(1);
       expect(rooms).toContain('user:u-000000');
-      expect(rooms).toContain(`user:u-${String(LIVE_AUDIENCE_PAGE + 1).padStart(6, '0')}`);
+      expect(rooms).toContain('user:u-002000');
+      expect(prisma.participant.lastArgs()).toMatchObject({ take: LIVE_AUDIENCE_SCAN_CAP + 1 });
     });
   }
 });

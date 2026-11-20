@@ -2,26 +2,24 @@
  * #20007 — l'audience d'une mutation d'id ne s'arrête plus au plafond.
  *
  * `loadLiveParticipantTargets` rendait `[]` dès que l'audience dépassait 2 000
- * participants, et `conversationAudienceRooms` repliait alors sur la room de
- * conversation SEULE : au-delà de ce seuil, un lecteur resté sur la LISTE ne
- * recevait ni suppression, ni épingle, ni désépinglage — silencieusement, et
- * sans suivi. L'audit adversarial de #19954 a nommé les deux moitiés du défaut :
- * ce plafond, et l'absence de tout témoin sur la clause `bannedAt` de
- * `PARTICIPATION_VIVANTE`.
+ * participants, et la diffusion repliait alors sur la room de conversation
+ * SEULE : au-delà de ce seuil, un lecteur resté sur la LISTE ne recevait ni
+ * suppression, ni épingle, ni désépinglage, ni fait de vue unique —
+ * silencieusement, et sans suivi. L'audit adversarial de #19954 a nommé les deux
+ * moitiés du défaut : ce plafond, et l'absence de tout témoin sur la clause
+ * `bannedAt` de `PARTICIPATION_VIVANTE`.
  *
- * La lecture se fait désormais PAGE par page (curseur sur `id`, la forme de
- * `userRelationBackfill`) et l'émission par LOTS : chaque page est une émission,
- * la room de conversation voyageant dans la première.
+ * Le plafond TRONQUE désormais en le journalisant, à 50 000, et ce qu'il nomme
+ * part en UNE émission — Socket.IO ne dédoublonnant que par émission.
  *
  * @jest-environment node
  */
 import { describe, it, expect } from '@jest/globals';
 import {
-  conversationAudienceRoomBatches,
+  conversationAudienceRooms,
   filterLiveAudience,
   loadLiveAudience,
-  LIVE_AUDIENCE_MAX_PAGES,
-  LIVE_AUDIENCE_PAGE,
+  LIVE_AUDIENCE_SCAN_CAP,
 } from '../conversationAudienceRooms';
 import { liveParticipantTable } from '../../__tests__/helpers/live-audience-double';
 import type { MongoDocument } from '../../__tests__/helpers/mongo-where';
@@ -29,18 +27,21 @@ import type { MongoDocument } from '../../__tests__/helpers/mongo-where';
 const CONV = '507f1f77bcf86cd799439011';
 const BANNED_AT = new Date('2026-11-01T00:00:00.000Z');
 
+/** La forme de PRODUCTION d'un id : `Participant.id` est un ObjectId (24 hex). */
+const objectId = (serial: number): string => `507f1f77bcf86cd7994${serial.toString(16).padStart(5, '0')}`;
+
 const living = (serial: number): MongoDocument => ({
-  id: `p-${String(serial).padStart(6, '0')}`,
+  id: objectId(serial),
   userId: `u-${String(serial).padStart(6, '0')}`,
   conversationId: CONV,
   isActive: true,
 });
 
-const manyLiving = (count: number): MongoDocument[] => Array.from({ length: count }, (_, index) => living(index));
+const crowd = (count: number): MongoDocument[] => Array.from({ length: count }, (_, index) => living(index));
 
 const prismaOf = (table: { findMany: unknown }) => ({ participant: table }) as never;
 
-describe('loadLiveAudience — qui est VIVANT, page par page', () => {
+describe('loadLiveAudience — qui est VIVANT, en une lecture bornée', () => {
   it('nomme les vivants, écarte la participation close et le participant BANNI', async () => {
     const table = liveParticipantTable([
       { id: 'p-live', userId: 'u-live', conversationId: CONV, isActive: true },
@@ -56,121 +57,100 @@ describe('loadLiveAudience — qui est VIVANT, page par page', () => {
     const audience = await loadLiveAudience(prismaOf(table), CONV);
 
     expect(audience.complete).toBe(true);
-    expect(audience.batches.flat().map((target) => target.id)).toEqual(['p-guest', 'p-live']);
+    expect(audience.targets.map((target) => target.id)).toEqual(['p-live', 'p-guest']);
   });
 
-  it('une audience plus grande qu’une page se lit en PLUSIEURS pages, sans perdre personne', async () => {
-    const table = liveParticipantTable(manyLiving(LIVE_AUDIENCE_PAGE + 3));
+  it('la lecture est BORNÉE par le plafond du module, plus une ligne de sonde', async () => {
+    const table = liveParticipantTable(crowd(3));
 
-    const audience = await loadLiveAudience(prismaOf(table), CONV);
+    await loadLiveAudience(prismaOf(table), CONV);
 
-    expect(table.pagesRead()).toBe(2);
+    // La borne est le seul argument que ce chemin passe, et c'est la seule garde
+    // de mémoire qu'il a : un témoin de comportement ne peut pas la voir.
+    expect(table.lastArgs()).toMatchObject({ take: LIVE_AUDIENCE_SCAN_CAP + 1 });
+    expect(table.reads()).toBe(1);
+  });
+
+  it('une audience EXACTEMENT de la taille du plafond est COMPLÈTE — la sonde le distingue', async () => {
+    const table = liveParticipantTable(crowd(4));
+
+    const audience = await loadLiveAudience(prismaOf(table), CONV, { cap: 4 });
+
     expect(audience.complete).toBe(true);
-    expect(audience.batches.map((batch) => batch.length)).toEqual([LIVE_AUDIENCE_PAGE, 3]);
-    expect(audience.batches.flat()).toHaveLength(LIVE_AUDIENCE_PAGE + 3);
+    expect(audience.targets).toHaveLength(4);
   });
 
-  it('une audience EXACTEMENT d’une page ne paie pas de page vide', async () => {
-    const table = liveParticipantTable(manyLiving(4));
+  it('au-delà du plafond, l’audience est TRONQUÉE — plus jamais JETÉE', async () => {
+    const table = liveParticipantTable(crowd(7));
 
-    const audience = await loadLiveAudience(prismaOf(table), CONV, { page: 4 });
+    const audience = await loadLiveAudience(prismaOf(table), CONV, { cap: 4 });
 
-    expect(table.pagesRead()).toBe(1);
-    expect(audience.complete).toBe(true);
-    expect(audience.batches).toHaveLength(1);
-  });
-
-  it('le plafond de pages TRONQUE, et le dit — il ne rend plus une audience vide', async () => {
-    const table = liveParticipantTable(manyLiving(7));
-
-    const audience = await loadLiveAudience(prismaOf(table), CONV, { page: 2, maxPages: 2 });
-
-    expect(table.pagesRead()).toBe(2);
     expect(audience.complete).toBe(false);
-    expect(audience.batches.flat()).toHaveLength(4);
+    expect(audience.targets).toHaveLength(4);
   });
 
-  it('une lecture qui LÈVE à la première page ne prouve rien : aucune cible, et la panne est rendue', async () => {
+  it('une lecture qui LÈVE ne prouve rien : aucune cible, et la panne est rendue', async () => {
     const seen: unknown[] = [];
-    const table = liveParticipantTable(manyLiving(3), {
-      onPage: () => {
+    const table = liveParticipantTable(crowd(3), {
+      onRead: () => {
         throw new Error('participant.findMany down');
       },
     });
 
     const audience = await loadLiveAudience(prismaOf(table), CONV, { onError: (error) => seen.push(error) });
 
-    expect(audience).toEqual({ batches: [], complete: false });
+    expect(audience).toEqual({ targets: [], complete: false });
     expect(seen).toHaveLength(1);
   });
 
-  it('une lecture qui LÈVE à la DEUXIÈME page garde ce qu’elle avait prouvé', async () => {
-    const table = liveParticipantTable(manyLiving(6), {
-      onPage: (page) => {
-        if (page === 2) throw new Error('participant.findMany down mid-scan');
-      },
-    });
+  it('une audience VIDE est une AFFIRMATION, pas une ignorance', async () => {
+    const audience = await loadLiveAudience(prismaOf(liveParticipantTable([])), CONV);
 
-    const audience = await loadLiveAudience(prismaOf(table), CONV, { page: 2 });
-
-    expect(audience.complete).toBe(false);
-    expect(audience.batches.flat().map((target) => target.id)).toEqual(['p-000000', 'p-000001']);
-  });
-
-  it('le plafond par défaut borne la lecture, quoi qu’il arrive', () => {
-    expect(LIVE_AUDIENCE_MAX_PAGES * LIVE_AUDIENCE_PAGE).toBeGreaterThanOrEqual(50_000);
+    expect(audience).toEqual({ targets: [], complete: true });
   });
 });
 
-describe('conversationAudienceRoomBatches — une émission par page', () => {
-  const audienceOf = (batches: Array<Array<{ id: string; userId: string | null }>>, complete = true) => ({
-    batches,
+describe('conversationAudienceRooms — UNE émission, dédoublonnée de bout en bout', () => {
+  const audienceOf = (targets: Array<{ id: string; userId: string | null }>, complete = true) => ({
+    targets,
     complete,
   });
 
-  it('la room de conversation voyage dans la PREMIÈRE émission, et dans elle seule', () => {
-    const emissions = conversationAudienceRoomBatches(
+  it('la room de conversation SUIVIE des rooms personnelles, une seule fois chacune', () => {
+    const rooms = conversationAudienceRooms(
       CONV,
       audienceOf([
-        [{ id: 'p-1', userId: 'u-1' }],
-        [{ id: 'p-2', userId: 'u-2' }],
-        [{ id: 'p-3', userId: null }],
+        { id: 'p-1', userId: 'u-1' },
+        { id: 'p-2', userId: 'u-2' },
+        { id: 'p-3', userId: null },
+        // Deux lignes VIVANTES pour un même compte (inscrit entré aussi par un
+        // lien : `@@unique([conversationId, userId, sessionTokenHash])` le
+        // permet) ne nomment qu'une room — et le dédoublonnage porte sur
+        // l'audience ENTIÈRE, puisqu'il n'y a qu'une émission.
+        { id: 'p-4', userId: 'u-1' },
       ]),
     );
 
-    expect(emissions).toEqual([
-      [`conversation:${CONV}`, 'user:u-1'],
-      'user:u-2',
-      'user:p-3',
-    ]);
-    expect(emissions.flat().filter((room) => room === `conversation:${CONV}`)).toHaveLength(1);
+    expect(rooms).toEqual([`conversation:${CONV}`, 'user:u-1', 'user:u-2', 'user:p-3']);
   });
 
   it('sans aucune cible nommée, la room de conversation SEULE — jamais rien', () => {
-    expect(conversationAudienceRoomBatches(CONV, audienceOf([], false))).toEqual([`conversation:${CONV}`]);
-  });
-
-  it('une seule room dans une émission sort en CHAÎNE, comme avant ce lot', () => {
-    expect(conversationAudienceRoomBatches(CONV, audienceOf([[{ id: 'p-1', userId: null }], [{ id: 'p-2', userId: null }]]))).toEqual([
-      [`conversation:${CONV}`, 'user:p-1'],
-      'user:p-2',
-    ]);
+    expect(conversationAudienceRooms(CONV, audienceOf([], false))).toEqual(`conversation:${CONV}`);
   });
 });
 
-describe('filterLiveAudience — retirer une personne sans perdre les pages', () => {
-  it('garde la forme en lots, et le verdict de complétude', () => {
+describe('filterLiveAudience — retirer une personne sans mentir sur la lecture', () => {
+  it('garde le verdict de complétude, qui parle de la LECTURE et non du filtre', () => {
     const audience = {
-      batches: [
-        [{ id: 'p-1', userId: 'u-1' }, { id: 'p-2', userId: 'u-2' }],
-        [{ id: 'p-3', userId: null }],
+      targets: [
+        { id: 'p-1', userId: 'u-1' },
+        { id: 'p-2', userId: 'u-2' },
       ],
-      complete: true,
+      complete: false,
     };
 
     const without = filterLiveAudience(audience, (target) => (target.userId ?? target.id) !== 'u-2');
 
-    expect(without.complete).toBe(true);
-    expect(without.batches.map((batch) => batch.map((target) => target.id))).toEqual([['p-1'], ['p-3']]);
+    expect(without).toEqual({ targets: [{ id: 'p-1', userId: 'u-1' }], complete: false });
   });
 });

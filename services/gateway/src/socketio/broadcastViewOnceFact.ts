@@ -3,7 +3,7 @@ import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { MessageMutationManager } from './broadcastMessageMutation';
 import type { QueuedPayloadFor } from './queuedEventContract';
 import type { ServerEmitTarget } from './serverEmit';
-import { conversationAudienceRoomBatches, filterLiveAudience, loadLiveAudience } from './conversationAudienceRooms';
+import { conversationAudienceRooms, filterLiveAudience, loadLiveAudience } from './conversationAudienceRooms';
 
 type ViewOnceFact =
   | { eventType: 'consumed'; payload: QueuedPayloadFor<'consumed'> }
@@ -73,25 +73,21 @@ export async function broadcastViewOnceFact(params: ViewOnceFactParams): Promise
       ? { eventType: 'consumed', payload: params.payload }
       : { eventType: 'view-once-purged', payload: params.payload };
 
-  // #20007 — audience PAGINÉE, émission par LOTS : au-delà d'une page, un fait
-  // de vue unique n'est plus perdu pour qui est resté sur la liste.
+  // #20007 — le plafond TRONQUE au lieu de JETER : au-delà de 2 000 vivants, un
+  // fait de vue unique n'est plus perdu pour qui est resté sur la liste.
   const audience = await loadLiveAudience(prisma, conversationId, { onError });
   try {
     const io = manager.getIO();
     if (fact.eventType === 'consumed') {
       const openerKey = fact.payload.userId;
       const others = filterLiveAudience(audience, (participant) => (participant.userId ?? participant.id) !== openerKey);
-      for (const rooms of conversationAudienceRoomBatches(conversationId, others)) {
-        emitFact(io?.to(rooms), {
-          eventType: 'consumed',
-          payload: withoutOpener(fact.payload),
-        });
-      }
+      emitFact(io?.to(conversationAudienceRooms(conversationId, others)), {
+        eventType: 'consumed',
+        payload: withoutOpener(fact.payload),
+      });
       emitFact(io?.to(ROOMS.user(openerKey)), fact);
     } else {
-      for (const rooms of conversationAudienceRoomBatches(conversationId, audience)) {
-        emitFact(io?.to(rooms), fact);
-      }
+      emitFact(io?.to(conversationAudienceRooms(conversationId, audience)), fact);
     }
   } catch (error) {
     onError?.(error);
