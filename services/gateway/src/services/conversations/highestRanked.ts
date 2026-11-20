@@ -114,11 +114,32 @@ export type RankStream = {
   readonly where: Readonly<Record<string, unknown>>;
 };
 
+/**
+ * Le flux A — toutes les lignes, par dernier message.
+ *
+ * **Nommé, et pas seulement rangé dans `rankStreams()` (#19904).** Les deux
+ * consommateurs n'en font pas le même usage : `highestRanked` les PARCOURT
+ * indifféremment, `list-rank.ts` les distingue (le flux A lit des lignes
+ * COMPLÈTES avec `skip`, le flux B des clés seules). Lire le second par son
+ * INDICE ferait de l'ordre du tableau un contrat que rien n'énonce et qu'aucun
+ * témoin ne garde : un jour où l'on inverserait les deux lignes ci-dessous, la
+ * liste lirait le mauvais flux sans qu'une seule compilation rougisse.
+ */
+export const rankStreamByMessage = (): RankStream =>
+  ({ orderBy: [{ lastMessageAt: 'desc' }, { id: 'desc' }], where: {} });
+
+/**
+ * Le flux B — les seules lignes QUI PORTENT une activité.
+ *
+ * Son `where` fait partie du flux, pas de l'appelant : sans lui, la colonne
+ * étant absente de presque tous les documents, ce flux dépense sa fenêtre
+ * entière sur des lignes à égalité sur `null` (voir « Ce que la preuve EXIGE »).
+ */
+export const rankStreamByActivity = (): RankStream =>
+  ({ orderBy: [{ lastActivityAt: 'desc' }, { id: 'desc' }], where: { lastActivityAt: { not: null } } });
+
 /** Les deux flux dont l'union contient le top-K du rang. */
-export const rankStreams = (): readonly RankStream[] => [
-  { orderBy: [{ lastMessageAt: 'desc' }, { id: 'desc' }], where: {} },
-  { orderBy: [{ lastActivityAt: 'desc' }, { id: 'desc' }], where: { lastActivityAt: { not: null } } },
-];
+export const rankStreams = (): readonly RankStream[] => [rankStreamByMessage(), rankStreamByActivity()];
 
 const rankMillis = (row: RankedConversationRow): number =>
   listRankFromColumns(row)?.getTime() ?? Number.NEGATIVE_INFINITY;
