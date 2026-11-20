@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { logError } from '../../utils/logger';
 import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendBadRequest, sendInternalError, sendError } from '../../utils/response.js';
 import { writeLinkMessageIdempotently } from './messageIdempotency';
+import { isClientMessageIdTakenError } from '../../services/messaging/clientMessageIdOwnership';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
@@ -207,6 +208,14 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         },
         403: {
           description: 'Forbidden - anonymous messages not allowed or insufficient permissions',
+          ...errorResponseSchema
+        },
+        409: {
+          // #19960 — la clé d'idempotence est tenue par un AUTRE expéditeur.
+          // DÉCLARÉ ici : #18617 a mesuré ce que coûte un code rendu sans
+          // schéma sur cette route, et son commentaire est encore dans le
+          // gestionnaire. Un code qu'on sert se déclare, toujours.
+          description: 'Le clientMessageId est déjà pris dans cette conversation par un autre expéditeur (CLIENT_MESSAGE_ID_TAKEN) : renvoyer sous une clé neuve',
           ...errorResponseSchema
         },
         404: {
@@ -586,6 +595,13 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       // #11381 — sans clé maîtresse, un message server/hybrid est refusé, jamais écrit en clair.
       if (isServerAtRestUnavailable(error)) {
         return sendError(reply, 503, error.message, { code: error.code });
+      }
+      // #19960 — la clé d'idempotence est tenue par un AUTRE expéditeur :
+      // `409`, et le motif NOMMÉ. Un `503` serait faux (renvoyer sous la même
+      // clé échouerait toujours) et un `500` muet laisserait l'invité
+      // rejouer indéfiniment sur le seul transport dont il dispose.
+      if (isClientMessageIdTakenError(error)) {
+        return sendError(reply, 409, error.message, { code: error.code });
       }
       logError(fastify.log, 'Send link message error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');

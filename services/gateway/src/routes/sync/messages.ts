@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { withServedEditAttribution, type EditAttributionReader } from '@meeshy/shared/utils/message-edit-attribution';
+import { servedClientMessageId } from '../../services/messaging/clientMessageIdOwnership';
 import { Prisma } from '@meeshy/shared/prisma/client';
 import { attachmentSocketSelect, MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
 import { messageSenderUserSelect } from '../conversations/utils/message-sender-select';
@@ -344,6 +345,19 @@ function serializeSyncMessage(
             brut.translations as unknown as Record<string, MessageTranslationJSON> | null,
           ),
         }),
+    // #19960 — la clé d'idempotence appartient à son AUTEUR : servie à lui
+    // seul, comme le chemin socket la retire des pairs
+    // (`stripClientMessageId`, #16689). Le `...message` ci-dessus la portait
+    // brute à tout abonné du delta. La clé ABSENTE du `select` reste absente :
+    // c'est une colonne PROJETABLE, et la masquer en `null` affirmerait que
+    // le message n'en a pas.
+    ...(brut.clientMessageId === undefined ? {} : {
+      clientMessageId: servedClientMessageId({
+        clientMessageId: brut.clientMessageId,
+        senderParticipantId: brut.senderId,
+        readerParticipantId,
+      }),
+    }),
     ...(brut.metadata === undefined ? {} : { metadata: servedLinkMetadata(brut.metadata, brut.sender) }),
     ...(brut.attachments === undefined
       ? {}

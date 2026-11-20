@@ -40,6 +40,7 @@
 
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair.js';
+import { ownReplayWhere, ClientMessageIdTakenError, clientMessageIdHeldByAnother } from '../../services/messaging/clientMessageIdOwnership';
 
 /**
  * La projection que les DEUX chemins servent — l'écriture neuve et la
@@ -148,14 +149,28 @@ export async function writeLinkMessageIdempotently(params: {
     // partagée ne porte pas — l'a laissée derrière. **Un choix de projection
     // emporte ce que la projection qu'on écarte faisait AUTOUR de la lecture**,
     // pas seulement ses colonnes.
-    const existing = await withOrphanedSenderRepair(
+    // #19960 — le TRIO, jamais le couple : la clé appartient à son AUTEUR.
+    // L'index partiel garde `(conversationId, clientMessageId)`, donc il lève
+    // aussi quand un AUTRE participant tient la clé — et relire sans
+    // `senderId` rendait SA ligne à l'invité, en `success: true`, pendant que
+    // le message de l'invité n'était écrit nulle part. Loi :
+    // `services/messaging/clientMessageIdOwnership.ts`.
+    const senderId = typeof data.senderId === 'string' ? data.senderId : null;
+    const existing = senderId === null ? null : await withOrphanedSenderRepair(
       { prisma: prisma as PrismaClient, conversationIds: [conversationId] },
       () => prisma.message.findFirst({
-        where: { conversationId, clientMessageId },
+        where: ownReplayWhere({ conversationId, clientMessageId, senderId }),
         include: LINK_MESSAGE_WRITE_INCLUDE,
       })
     );
-    if (!existing) throw error;
+    if (!existing) {
+      // Deux causes, deux réponses. La seconde lecture ne vit que sur ce
+      // chemin d'échec : elle sépare « un autre tient la clé » (nommable,
+      // définitif tant que la clé ne change pas) d'une course irréconciliable.
+      const heldByAnother = await clientMessageIdHeldByAnother({ prisma, conversationId, clientMessageId });
+      if (heldByAnother) throw new ClientMessageIdTakenError(conversationId, clientMessageId);
+      throw error;
+    }
 
     return { row: existing, isDuplicate: true };
   }

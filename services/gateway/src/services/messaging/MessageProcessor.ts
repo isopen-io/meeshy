@@ -48,7 +48,8 @@ import { E2EE_PLAINTEXT_LOCATION_WITHHELD } from '../location/sharedPlace';
 import { LIVE_MESSAGE_MARK } from './liveMessage';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { mapWithConcurrency } from '@meeshy/shared/utils/concurrency';
-import { findExistingMessage, findContentWindowDuplicate } from './messageDedupProjection';
+import { findContentWindowDuplicate } from './messageDedupProjection';
+import { isUniqueViolation, resolveOwnReplayAfterUniqueViolation } from './uniqueViolationDedup';
 import { MESSAGE_AUTHOR_USER_SELECT } from './messageAuthorSelect';
 import type { SocketAttachmentRow } from '../../socketio/serializeAttachmentForSocket';
 import { prismaAtRestFileStore, type AtRestFileAccess } from '../attachments/atRest/atRestFiles';
@@ -528,33 +529,21 @@ export class MessageProcessor {
         corr
       );
     } catch (e) {
-      const isP2002 =
-        typeof e === 'object' && e !== null
-          && 'code' in e && (e as { code?: unknown }).code === 'P2002';
-      if (!isP2002 || !data.clientMessageId) {
+      if (!isUniqueViolation(e) || !data.clientMessageId) {
         throw e;
       }
-      // Use `findFirst` instead of `findUnique` because the unique
-      // constraint on `(conversationId, clientMessageId)` lives in a
-      // partial MongoDB index (managed by the manual migration), not
-      // a Prisma `@@unique` directive — so the `findUnique` compound
-      // type is not generated. The compound `@@index` declared in the
-      // schema still backs this query for performance.
-      const existing = await findExistingMessage({
+      // #19960 — `P2002` ne dit pas « tu as déjà envoyé ça », mais « la clé
+      // est prise dans cette conversation ». Les trois suites possibles sont
+      // dans `uniqueViolationDedup.ts`.
+      const existing = await resolveOwnReplayAfterUniqueViolation({
         prisma: this.prisma,
-        where: { conversationId: data.conversationId, clientMessageId: data.clientMessageId },
         conversationId: data.conversationId,
-        timingLabel: 'messaging.dedupFindFirst',
-        corr
+        clientMessageId: data.clientMessageId,
+        senderId: data.senderId,
+        originalError: e,
+        corr,
+        logger,
       });
-      if (!existing) {
-        // Race condition we cannot reconcile — bubble up the original error.
-        logger.error('P2002 raised but no existing record found for clientMessageId', {
-          conversationId: data.conversationId,
-          clientMessageId: data.clientMessageId
-        });
-        throw e;
-      }
       message = await this.revealStored(existing);
       isDuplicate = true;
       logger.info('Idempotent dedup hit on clientMessageId', {
