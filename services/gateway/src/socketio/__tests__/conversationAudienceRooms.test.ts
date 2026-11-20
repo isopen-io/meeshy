@@ -1,7 +1,8 @@
 /**
  * #20007 — l'audience d'une mutation d'id ne s'arrête plus au plafond.
  *
- * `loadLiveParticipantTargets` rendait `[]` dès que l'audience dépassait 2 000
+ * `loadLiveParticipantTargets` (le nom d'avant ce lot) rendait `[]` dès que
+ * l'audience dépassait 2 000
  * participants, et la diffusion repliait alors sur la room de conversation
  * SEULE : au-delà de ce seuil, un lecteur resté sur la LISTE ne recevait ni
  * suppression, ni épingle, ni désépinglage, ni fait de vue unique —
