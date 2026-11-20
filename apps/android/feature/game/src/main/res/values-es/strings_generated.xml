@@ -765,7 +765,7 @@
     <string name="game_level_cap_reached">Nivel %1$s: el más alto que abre tu rango. El rango %2$s abre lo que sigue.</string>
     <string name="game_level_cap_short">se abre con el rango %1$s</string>
     <string name="game_level_held">Tu luz ya abre el camino: %1$s para pasar el nivel %2$s.</string>
-    <string name="game_level_ring_a11y">Nivel %1$s, %2$s, %3$s estado de tu luz</string>
+    <string name="game_level_ring_a11y">Tu luz en el nivel %1$s, %2$s, %3$s estado</string>
     <string name="game_level_step_done">superada</string>
     <string name="game_level_step_flame">mantener una Llama de %1$s días</string>
     <string name="game_level_step_line">Prueba del nivel %1$s: %2$s</string>

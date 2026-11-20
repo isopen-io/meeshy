@@ -173,7 +173,7 @@ export const leaguePlace = (place: number, language: InterfaceLanguage = current
 
 /**
  * Ce que lit un lecteur d'écran, en UNE phrase et dans l'ordre de la bannière (#11125, #19705) : « Conteur III, 3 400
- * Gloire, 1 200 de gloire jusqu'à Conteur II, Niveau 34, Éclat, 78 % vers le 35, Flamme 23 jours, 12 Meeshes, Rêve : 2 sur 3,
+ * Gloire, 1 200 de gloire jusqu'à Conteur II, Ta lumière au niveau 34, Éclat, 78 % vers le 35, Flamme 23 jours, 12 Meeshes, Rêve : 2 sur 3,
  * joute de Jade 4e ». Trophées et saison ne sont dits que dans la disposition grand texte, la seule qui les montre. Ce qui
  * n'existe pas ne se dit pas.
  */
@@ -183,7 +183,7 @@ export function playerBannerLabel(model: PlayerBannerModel, language: InterfaceL
   const large = layout === 'large';
   const parts: readonly (string | null)[] = [
     model.rank === null ? null : rankSentence(model.rank, language),
-    level === null ? null : translateGame(language, 'game.banner.level', { level: count(level.level) }),
+    level === null ? null : translateGame(language, 'game.banner.light', { level: count(level.level) }),
     level === null ? null : levelTierName(model.tier, language),
     level === null
       ? null
@@ -250,7 +250,7 @@ export function playerBannerPieceLabels(model: PlayerBannerModel, language: Inte
             level: count(level.nextLevel),
           });
   return {
-    level: level === null ? null : join([translateGame(language, 'game.banner.level', { level: count(level.level) }), levelTierName(model.tier, language)]),
+    level: level === null ? null : join([translateGame(language, 'game.banner.light', { level: count(level.level) }), levelTierName(model.tier, language)]),
     sparks: join([model.points === null ? null : translateGame(language, 'game.banner.link.sparks', { points: count(model.points) }), march]),
     meesh: model.meeshes === null ? null : translateGame(language, 'game.banner.link.meesh', { count: count(model.meeshes) }),
     rank: model.rank === null ? null : rankSentence(model.rank, language),

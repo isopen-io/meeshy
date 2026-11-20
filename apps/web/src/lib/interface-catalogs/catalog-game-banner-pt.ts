@@ -44,6 +44,7 @@ const pt = {
   'game.rank.mythe': 'Mito',
   'game.rank.mythe_seat': 'Mito n.º {number}',
   'game.banner.level': 'Nível {level}',
+  'game.banner.light': 'Sua luz no nível {level}',
   'game.banner.to_next': '{percent}% rumo ao {level}',
   'game.banner.top': 'no topo',
   'game.banner.capped': '{rank} abre mais',

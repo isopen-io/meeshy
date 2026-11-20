@@ -44,6 +44,7 @@ const en = {
   'game.rank.mythe': 'Myth',
   'game.rank.mythe_seat': 'Myth #{number}',
   'game.banner.level': 'Level {level}',
+  'game.banner.light': 'Your light at level {level}',
   'game.banner.to_next': '{percent}% to {level}',
   'game.banner.top': 'at the top',
   'game.banner.capped': '{rank} opens more',
