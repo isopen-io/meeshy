@@ -42,17 +42,19 @@ nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
         }
         lastQualityDate = now
         currentLevel = level
-        rttSum += roundTripTimeMs
+        let rtt = CallStatValue.measured(roundTripTimeMs)
+        let loss = CallStatValue.measured(packetLossPercent)
+        rttSum += rtt
         sampleCount += 1
-        packetLossSum += packetLossPercent
-        maxPacketLoss = max(maxPacketLoss, packetLossPercent)
+        packetLossSum += loss
+        maxPacketLoss = max(maxPacketLoss, loss)
     }
 
     /// #11294 — le dernier relevé des compteurs cumulés, et la gigue de
     /// chaque relevé pour le MOS de l'appel.
     mutating func recordMedia(_ quality: CallMediaQuality, jitterMs: Double) {
         mediaQuality = quality
-        mediaJitterSum += jitterMs
+        mediaJitterSum += CallStatValue.measured(jitterMs)
         mediaSampleCount += 1
         if let reason = quality.qualityLimitationReason { limitationSamples[reason, default: 0] += 1 }
     }
@@ -94,8 +96,8 @@ nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
             openWindowSince: lastQualityDate,
             now: now
         )
-        let averageRtt = sampleCount > 0 ? rttSum / Double(sampleCount) : 0
-        let averagePacketLoss = sampleCount > 0 ? packetLossSum / Double(sampleCount) : 0
+        let averageRtt = sampleCount > 0 ? CallStatValue.measured(rttSum / Double(sampleCount)) : 0
+        let averagePacketLoss = sampleCount > 0 ? CallStatValue.measured(packetLossSum / Double(sampleCount)) : 0
         let base: [String: Any] = [
             "setupTimeMs":         setupMetrics.setupTimeMs,
             "negotiationTimeMs":   setupMetrics.negotiationTimeMs,
@@ -105,7 +107,7 @@ nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
             "averageRtt":          averageRtt,
             "averagePacketLoss":   averagePacketLoss,
             "maxPacketLoss":       maxPacketLoss,
-            "codec":               context.codec,
+            "codec":               Self.clipped(context.codec, utf16Limit: 50),
             "effectsUsed":         Array(effectsUsed),
             "filtersUsed":         videoFiltersUsed || context.filtersEnabledNow,
             "transcriptionUsed":   context.transcriptionUsed,
@@ -116,6 +118,16 @@ nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
             "endReason":           context.endReason
         ]
         return base.merging(mediaFields(averageRtt: averageRtt, averagePacketLoss: averagePacketLoss)) { current, _ in current }
+    }
+
+    /// La passerelle compte la longueur en unités UTF-16 (`z.string().max`) :
+    /// on coupe sur une frontière de caractère sans dépasser la limite.
+    private static func clipped(_ text: String, utf16Limit: Int) -> String {
+        var units = 0
+        return String(text.prefix { character in
+            units += character.utf16.count
+            return units <= utf16Limit
+        })
     }
 
     /// Les champs de qualité (#11277), optionnels : absents tant que rien n'a
