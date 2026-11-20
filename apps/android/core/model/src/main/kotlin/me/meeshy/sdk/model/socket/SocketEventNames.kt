@@ -126,6 +126,7 @@ object SocketEventNames {
     // community
     const val COMMUNITY_DELETED = "community:deleted"
     const val COMMUNITY_JOIN_REQUEST_DECIDED = "community:join-request-decided"
+    const val COMMUNITY_JOIN_REQUESTED = "community:join-requested"
     const val COMMUNITY_MEMBER_JOINED = "community:member-joined"
     const val COMMUNITY_MEMBER_LEFT = "community:member-left"
     const val COMMUNITY_MEMBER_ROLE_UPDATED = "community:member-role-updated"
@@ -418,6 +419,7 @@ object SocketEventNames {
         COMMENT_UPDATED,
         COMMUNITY_DELETED,
         COMMUNITY_JOIN_REQUEST_DECIDED,
+        COMMUNITY_JOIN_REQUESTED,
         COMMUNITY_MEMBER_JOINED,
         COMMUNITY_MEMBER_LEFT,
         COMMUNITY_MEMBER_ROLE_UPDATED,

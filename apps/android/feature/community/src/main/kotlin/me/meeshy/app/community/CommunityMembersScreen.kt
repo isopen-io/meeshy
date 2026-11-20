@@ -49,7 +49,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableSharedFlow
 import me.meeshy.feature.community.R
+import me.meeshy.sdk.model.ApiCommunityJoinRequest
 import me.meeshy.sdk.model.ApiCommunityMember
+import me.meeshy.sdk.model.CommunityJoinRequestDecision
 import me.meeshy.sdk.model.MemberRole
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.FeedbackKind
@@ -104,6 +106,7 @@ fun CommunityMembersScreen(
     val haptics = rememberMeeshyHaptics()
     val toasts = remember { MutableSharedFlow<FeedbackToastRequest>(extraBufferCapacity = 1) }
     var confirmRemove by remember { mutableStateOf<ApiCommunityMember?>(null) }
+    var confirmReject by remember { mutableStateOf<ApiCommunityJoinRequest?>(null) }
     val listState = rememberLazyListState()
     LoadMoreNearEnd(listState, enabled = state.hasMore && !state.isLoadingMore, onLoadMore = viewModel::loadMore)
 
@@ -140,13 +143,30 @@ fun CommunityMembersScreen(
                         "",
                         actionLabel = stringResource(R.string.community_common_retry), onAction = viewModel::retry,
                     )
-                    state.isEmpty -> MeeshyEmptyState(
+                    state.isEmpty && state.joinRequests.isEmpty() -> MeeshyEmptyState(
                         MeeshyIcons.GroupsFilled, stringResource(R.string.community_members_empty_title),
                         "",
                         actionLabel = if (state.canInvite) stringResource(R.string.community_members_empty_action) else null,
                         onAction = if (state.canInvite) onInvite else null,
                     )
                     else -> LazyColumn(Modifier.fillMaxSize(), state = listState) {
+                        state.joinRequestNotice?.let { notice -> item(key = "join-request-notice") { JoinRequestNoticeText(notice) } }
+                        if (state.joinRequests.isNotEmpty()) {
+                            stickyHeader(key = "join-requests-header", contentType = "header") {
+                                JoinRequestsHeader(state.joinRequests.size, state.hasMoreJoinRequests)
+                            }
+                            items(state.joinRequests.size, key = { "request-${state.joinRequests[it].id}" }, contentType = { "join-request" }) { index ->
+                                val request = state.joinRequests[index]
+                                JoinRequestRow(
+                                    request = request,
+                                    busy = state.decidingJoinRequestId != null,
+                                    onAccept = { haptics.success(); viewModel.decide(request, CommunityJoinRequestDecision.ACCEPT) },
+                                    onReject = { confirmReject = request },
+                                    modifier = Modifier.animateItem(),
+                                )
+                            }
+                            if (state.hasMoreJoinRequests) item(key = "join-requests-more") { JoinRequestsMore(viewModel::loadMoreJoinRequests) }
+                        }
                         state.sections.forEach { section ->
                             stickyHeader(key = "header-${section.role}", contentType = "header") {
                                 SectionHeader(section.role, section.rows.size)
@@ -172,6 +192,19 @@ fun CommunityMembersScreen(
             }
         }
         FeedbackToastHost(toasts = toasts, modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
+    }
+    confirmReject?.let { request ->
+        AlertDialog(
+            onDismissRequest = { confirmReject = null },
+            title = { Text(stringResource(R.string.community_members_requests_reject_label, request.name)) },
+            text = { Text(stringResource(R.string.community_members_requests_reject_confirm_body, request.name)) },
+            confirmButton = {
+                TextButton(onClick = { haptics.warning(); viewModel.decide(request, CommunityJoinRequestDecision.REJECT); confirmReject = null }) {
+                    Text(stringResource(R.string.community_members_requests_reject), color = MeeshyTheme.tokens.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { confirmReject = null }) { Text(stringResource(R.string.community_common_cancel)) } },
+        )
     }
     confirmRemove?.let { member ->
         AlertDialog(

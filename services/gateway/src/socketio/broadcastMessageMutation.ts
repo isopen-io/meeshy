@@ -458,6 +458,7 @@ export async function broadcastMessageMutation(rawParams: MessageMutationParams)
         sealedVariant: (payload, key) => sealedVariant(payload, sealed, key),
         sealedForAll: (payload) =>
           withSealedQuote(payload, new Date(Math.min(...[...sealed.values()].map((at) => at.getTime())))),
+        onError,
       });
     } else {
       // #19943 — les QUATRE familles d'ids (`deleted`, `expired`, `pinned`,

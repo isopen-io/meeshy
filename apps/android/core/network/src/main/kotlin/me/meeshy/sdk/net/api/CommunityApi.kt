@@ -2,11 +2,13 @@ package me.meeshy.sdk.net.api
 
 import kotlinx.serialization.Serializable
 import me.meeshy.sdk.model.ApiCommunity
+import me.meeshy.sdk.model.ApiCommunityJoinRequest
 import me.meeshy.sdk.model.ApiCommunityMember
 import me.meeshy.sdk.model.ApiCommunitySearchResult
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CommunityJoinOutcome
+import me.meeshy.sdk.model.CommunityJoinRequestRejected
 import me.meeshy.sdk.model.CommunityMini
 import me.meeshy.sdk.model.CreateCommunityRequest
 import me.meeshy.sdk.model.IdentifierAvailability
@@ -101,6 +103,31 @@ interface CommunityApi {
         @Path("id") communityId: String,
         @Body body: JoinCommunityRequest = JoinCommunityRequest.AcceptsPending,
     ): ApiResponse<CommunityJoinOutcome>
+
+    /**
+     * Les demandes d'entrée EN ATTENTE (#19878), les plus récentes d'abord, par pages continuées avec
+     * `pagination.nextCursor`. Intendants seuls : tout autre lecteur reçoit le 404 générique.
+     */
+    @GET("communities/{id}/join-requests")
+    suspend fun joinRequests(
+        @Path("id") communityId: String,
+        @Query("limit") limit: Int,
+        @Query("cursor") cursor: String? = null,
+    ): ApiResponse<List<ApiCommunityJoinRequest>>
+
+    /** Accepter : le demandeur entre, et la passerelle sert le membre entré. */
+    @POST("communities/{id}/join-requests/{requestId}/accept")
+    suspend fun acceptJoinRequest(
+        @Path("id") communityId: String,
+        @Path("requestId") requestId: String,
+    ): ApiResponse<ApiCommunityMember>
+
+    /** Refuser : personne n'entre, le demandeur seul l'apprend, sans le nom de qui a tranché. */
+    @POST("communities/{id}/join-requests/{requestId}/reject")
+    suspend fun rejectJoinRequest(
+        @Path("id") communityId: String,
+        @Path("requestId") requestId: String,
+    ): ApiResponse<CommunityJoinRequestRejected>
 
     @POST("communities/{id}/leave")
     suspend fun leave(@Path("id") communityId: String): ApiResponse<Unit>

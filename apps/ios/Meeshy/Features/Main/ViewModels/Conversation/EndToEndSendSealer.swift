@@ -39,6 +39,14 @@ struct EndToEndSendSealer {
     /// sert désormais sans bout en bout une conversation vue chiffrée.
     var onRegimeStale: @MainActor () async -> Bool = { false }
     var toast: any FeedbackToastSurfacing = FeedbackToastManager.shared
+    /// Un pair sans appareil chiffré : le texte part dans le tête-à-tête
+    /// lisible de la paire, jamais en clair ici (#20074). `nil` hors direct.
+    var readableRedirect: EndToEndReadableRedirect?
+    /// Ce que l'app sait des pairs sans appareil chiffré : le refus le confirme.
+    var peerDeviceReach: EndToEndPeerDeviceReach?
+    /// La ligne de liste annonçait déjà l'envoi (« Vous : … ») : elle revient au
+    /// dernier message réel quand la bulle part ailleurs (#20074).
+    var withdrawListPreview: (_ localId: String) async -> Void = { _ in }
 
     var requiresSeal: Bool {
         EndToEndSendGate.requiresSeal(conversationEncryptionModes: encryptionModes)
@@ -139,10 +147,36 @@ struct EndToEndSendSealer {
             await hooks.acknowledged(receipt)
             return .success(receipt)
         case .refused(let refusal):
+            if let receipt = await redirected(refusal, outgoing, context: context, wireEffectFlags: wireEffectFlags, coordinator: coordinator) {
+                return .success(receipt)
+            }
             return .failure(await refuse(refusal, localId: localId, coordinator: coordinator))
         case .transportFailed(let error):
             return await hooks.recover(error)
         }
+    }
+
+    /// #20074 — un pair sans appareil chiffré : le texte part dans le
+    /// tête-à-tête lisible, qui s'ouvre ; la bulle et son clair quittent le
+    /// fil chiffré. `nil` : tout autre refus, ou une redirection qui échoue,
+    /// et l'appelant garde la bulle en échec.
+    func redirected(
+        _ refusal: EndToEndSendRefusal,
+        _ outgoing: OutgoingMessage,
+        context: SendAttemptContext,
+        wireEffectFlags: UInt32?,
+        coordinator: any ConversationSendCoordinatorProviding
+    ) async -> SentMessageReceipt? {
+        guard refusal == .recipientWithoutEncryptedDevice else { return nil }
+        if let peerUserId { peerDeviceReach?.confirmWithoutDevice(peerUserId) }
+        guard let readableRedirect,
+              let receipt = await readableRedirect.deliver(outgoing, context: context, wireEffectFlags: wireEffectFlags)
+        else { return nil }
+        let localId = context.clientMessageId.rawValue
+        await coordinator.withdraw(localId: localId)
+        await withdrawListPreview(localId)
+        _ = await endToEnd.erase([localId], as: senderUserId)
+        return receipt
     }
 
     func deliver(
@@ -285,7 +319,26 @@ extension EndToEndSendSealer {
                 refresher.refresh(conversationId: id)
                 await refresher.settle()
                 return ledger.servedInClear(id)
+            },
+            readableRedirect: Self.readableRedirect(for: viewModel, ledger: ledger),
+            peerDeviceReach: .shared,
+            withdrawListPreview: { [conversationId = viewModel.conversationId] localId in
+                await ConversationSyncEngine.shared.withdrawLocalMessage(conversationId: conversationId, messageId: localId)
             }
+        )
+    }
+
+    /// Le tête-à-tête lisible d'un direct dont le pair est connu (#20074).
+    static func readableRedirect(for viewModel: ConversationViewModel, ledger: EndToEndRegimeLedger) -> EndToEndReadableRedirect? {
+        guard viewModel.isDirect, let peerUserId = viewModel.participantUserId, !peerUserId.isEmpty else { return nil }
+        return EndToEndReadableRedirect(
+            fromConversationId: viewModel.conversationId,
+            peerUserId: peerUserId,
+            peerName: viewModel.currentConversation?.name ?? "",
+            encryption: viewModel.collaborators.encryptionService,
+            messages: viewModel.messageService,
+            ledger: ledger,
+            isOnline: { [monitor = viewModel.networkMonitor] in monitor.isOnline }
         )
     }
 }

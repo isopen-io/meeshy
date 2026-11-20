@@ -1,10 +1,12 @@
 package me.meeshy.sdk.community
 
 import me.meeshy.sdk.model.ApiCommunity
+import me.meeshy.sdk.model.ApiCommunityJoinRequest
 import me.meeshy.sdk.model.ApiCommunityMember
 import me.meeshy.sdk.model.ApiCommunitySearchResult
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.CommunityJoinOutcome
+import me.meeshy.sdk.model.CommunityJoinRequestDecision
 import me.meeshy.sdk.model.CommunityMini
 import me.meeshy.sdk.model.CreateCommunityRequest
 import me.meeshy.sdk.model.IdentifierAvailability
@@ -131,6 +133,46 @@ class CommunityRepository @Inject constructor(
     suspend fun join(communityId: String): NetworkResult<CommunityJoinOutcome> =
         apiCall { communityApi.join(communityId, JoinCommunityRequest.AcceptsPending) }
 
+    /**
+     * Une page des demandes d'entrée en attente (#19878), continuée par [PagedResult.nextCursor] — `null`
+     * quand il n'en reste plus. Une ligne illisible (sans identifiant, déjà tranchée) n'est pas rendue.
+     */
+    suspend fun joinRequests(
+        communityId: String,
+        cursor: String? = null,
+        limit: Int = JOIN_REQUESTS_PAGE_SIZE,
+    ): NetworkResult<PagedResult<List<ApiCommunityJoinRequest>>> =
+        when (val result = pagedApiCall { communityApi.joinRequests(communityId, limit, cursor) }) {
+            is NetworkResult.Success -> {
+                val page = result.data
+                val more = page.pagination?.hasMore == true
+                NetworkResult.Success(
+                    page.copy(
+                        data = page.data.filter { it.isReadable },
+                        pagination = page.pagination?.copy(nextCursor = page.nextCursor.takeIf { more }),
+                    ),
+                )
+            }
+            else -> result
+        }
+
+    /**
+     * Trancher une demande : accepter rend le membre entré, refuser ne rend personne (`null`). Un 404 dit
+     * que la demande n'est plus tranchable PAR CE LECTEUR (déjà tranchée, blocage, compte fermé).
+     */
+    suspend fun decideJoinRequest(
+        communityId: String,
+        requestId: String,
+        decision: CommunityJoinRequestDecision,
+    ): NetworkResult<ApiCommunityMember?> =
+        when (decision) {
+            CommunityJoinRequestDecision.ACCEPT -> apiCall { communityApi.acceptJoinRequest(communityId, requestId) }
+            CommunityJoinRequestDecision.REJECT -> when (val rejected = apiCall { communityApi.rejectJoinRequest(communityId, requestId) }) {
+                is NetworkResult.Success -> NetworkResult.Success(null)
+                is NetworkResult.Failure -> rejected
+            }
+        }
+
     suspend fun leave(communityId: String): NetworkResult<Unit> =
         apiCall { communityApi.leave(communityId) }
 
@@ -164,5 +206,6 @@ class CommunityRepository @Inject constructor(
 
     companion object {
         const val ADMIN_ROLES = "admin,moderator"
+        const val JOIN_REQUESTS_PAGE_SIZE = 50
     }
 }
