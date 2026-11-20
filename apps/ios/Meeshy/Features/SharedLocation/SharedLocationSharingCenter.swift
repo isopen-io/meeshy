@@ -725,9 +725,11 @@ final class UserDefaultsSharedLocationRosterStore: SharedLocationRosterStoring {
         if stamped != mark { defaults.set(mark, forKey: marker) }
     }
 
+    private static let markDomain = "meeshy.sharedLocation.deviceMark.v1:"
+
     /// L'empreinte qui marque la liste : un condensé du compte et de l'installation, qui ne redonne ni l'un ni l'autre.
     static func deviceMark(userId: String, deviceId: String) -> String {
-        SHA256.hash(data: Data((userId + ":" + deviceId).utf8)).map { String(format: "%02x", $0) }.joined()
+        SHA256.hash(data: Data((Self.markDomain + userId + ":" + deviceId).utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
     static func isWrittenElsewhere(stamped: String?, deviceId: String, mark: String) -> Bool {
