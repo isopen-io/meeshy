@@ -13,7 +13,12 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { JOIN_REQUEST_COOLDOWN_MS, liveJoinRequestWhere, reopenOrphanedAcceptances } from '../../services/community-join-request-lifecycle';
+import {
+  JOIN_REQUEST_COOLDOWN_MS,
+  liveJoinRequestWhere,
+  reopenOrphanedAcceptances,
+  type ReopenedJoinRequest,
+} from '../../services/community-join-request-lifecycle';
 
 const logger = enhancedLogger.child({ module: 'CommunityJoinRequestState' });
 
@@ -26,13 +31,19 @@ export async function viewerJoinRequestState(
     readonly viewerId: string;
     readonly requiresJoinApproval: boolean;
     readonly isMember: boolean;
+    readonly onReopened?: (reopened: ReopenedJoinRequest) => void;
   },
   now: Date = new Date(),
 ): Promise<ViewerJoinRequestState> {
   if (!input.requiresJoinApproval || input.isMember) return null;
   try {
     // #19924 — une acceptation restée sans entrée redevient « Demande envoyée ».
-    await reopenOrphanedAcceptances(prisma, { communityId: input.communityId, userId: input.viewerId, now });
+    await reopenOrphanedAcceptances(prisma, {
+      communityId: input.communityId,
+      userId: input.viewerId,
+      now,
+      onReopened: input.onReopened,
+    });
     const pending = await prisma.communityJoinRequest.findFirst({
       where: { communityId: input.communityId, userId: input.viewerId, ...liveJoinRequestWhere(now) },
       select: { id: true },

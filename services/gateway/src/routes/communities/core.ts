@@ -24,6 +24,7 @@ import { identityImageIsCallers, IDENTITY_IMAGE_NOT_OWNED } from '../../services
 import { countOnlineMembers } from '../../services/community-online-count';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
 import { viewerJoinRequestState, viewerJoinRetryAt } from './join-request-state';
+import { scheduleCommunityJoinRequestedFrom } from '../../services/community-join-request-broadcast';
 import { activeMembershipOf, COMMUNITY_ACTIVE_COUNTS, communityConversationSchema, communityDetailInclude, communityForViewer, flattenCommunityCounts } from './serialization';
 import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
@@ -315,7 +316,10 @@ export async function registerCoreRoutes(
         requiresJoinApproval: community.requiresJoinApproval === true,
         isMember: served.currentUserRole !== null,
       };
-      const currentUserJoinRequest = await viewerJoinRequestState(fastify.prisma, joinRequestInput);
+      const currentUserJoinRequest = await viewerJoinRequestState(fastify.prisma, {
+        ...joinRequestInput,
+        onReopened: (reopened) => scheduleCommunityJoinRequestedFrom(fastify, reopened),
+      });
       const currentUserJoinRetryAt = currentUserJoinRequest === null ? await viewerJoinRetryAt(fastify.prisma, joinRequestInput) : null;
 
       sendSuccess(reply, { ...served, onlineMemberCount, currentUserJoinRequest, currentUserJoinRetryAt });

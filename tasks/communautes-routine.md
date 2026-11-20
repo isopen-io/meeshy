@@ -691,3 +691,13 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Écran : « Demander à rejoindre », puis une tuile « Demande envoyée » qui n'est pas un bouton, et la ligne « Un administrateur ou un modérateur doit l'accepter. » ; le délai après refus se dit en rouge. Quatre chaînes × sept langues (`strings_join_request_19870.xml`), mêmes mots que les clés iOS de #19903.
 - Gotcha : le `Json` de Retrofit n'encode pas les valeurs par défaut — un `JoinCommunityRequest(acceptsPending = true)` déclaré avec défaut partait `{}`. Le témoin d'encodage l'a attrapé ; le champ n'a plus de défaut.
 - Gate local : `./apps/android/meeshy.sh jvm-check -PjvmCheckModelOnly` (le mode complet ne résout pas `libsignal-client`, hôte refusé par le proxy) — les suites `*Communit*` vertes. ViewModel, écran, réseau : prouvés par `android.yml`.
+
+## 2026-11-20 — réveil 13:01 UTC
+
+- Début du run : une seule PR de la routine ouverte, #20049 (#19877, intendants iOS), poussée à 13:02 par une autre session : vivante, cédée. #19950, #20005, #19951, #19903, #20027 fusionnées dans `dev` dans la vague de 10:54.
+- Lot : #20002 — une demande d'entrée rouverte par la réparation (#19924) prévient les intendants comme une nouvelle demande.
+- Passerelle : `reopenOrphanedAcceptances` prend `onReopened` et l'appelle une fois par demande EFFECTIVEMENT rouverte (bascule écrite, count 1) et restée en attente — une demande reclose parce que la personne est entrée pendant la réparation ne s'annonce pas ; une annonce qui lève est journalisée, la réparation ne tombe pas. Les deux portes branchent `scheduleCommunityJoinRequestedFrom` : la liste des intendants (`entries.ts`) et le détail lu par le demandeur (`core.ts` → `viewerJoinRequestState`). La décision effacée est journalisée (`erased: [{ requestId, decidedBy }]`), jamais servie.
+- Témoins : `join-request-reopen-announced-20002.test.ts` (9 ; rouge prouvé : 4 échecs avant le code) ; `communities-core.test.ts` (+1, rouge prouvé en retirant le branchement du détail).
+- Gates locaux : passerelle `tsc --noEmit` vert ; communautés / demandes / balayages / cliquets / manifeste / `tsc-never-loaded` 134 suites, 1 558 tests verts.
+- Aucun client touché, aucun contrat d'API ni d'événement changé (`community:join-requested` existant, même charge).
+- Prochain lot recommandé : mener #20049 à la fusion si elle est abandonnée ; sinon #20003 (coût de la relecture à l'accès) ou iOS #19948 une fois #20049 fusionnée.
