@@ -1645,3 +1645,16 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gardes iOS rc=0 sur 4d6e43a03 (house_rules, cohesion, test_registration, accent). Swift et Kotlin ne compilent pas ici : preuve par ios.yml et android.yml en workflow_dispatch.
 - Décisions ouvertes : #19682 (arrondi de startedAt), #19997 (adopter ou céder sans accusé de démarrage).
 - Prochain lot : #19929, puis le plafond `untilStopped` de `listOnlyState`, puis #19999 ; #19682 et #19997 une fois tranchées.
+
+## 2026-11-20 — réveil de 11 h : lot #20029 (404 d'un intermédiaire) → PR #20042
+
+- Reprise : #20000 fusionnée (133a21ad2), #19928 fermée. Aucune PR de la routine ouverte. Lot : #20029, portage du
+  commit 7657978cf (PR #20025 fermée en doublon) sur les sites purs de #20000.
+- iOS `SharedLocationServedRead.answer` et Android `ownSharedLocationAnswer` : seul un 404 au message « Route GET:… not
+  found » (Fastify, la passerelle n'a pas de `setNotFoundHandler`) vaut passerelle d'avant ; Traefik, portail captif,
+  corps vide ⇒ panne, attente gardée. Android : `ApiError.servedMessage` additif, rempli dans `ApiCall.kt`.
+- Témoins rouges poussés d'abord (8bc93b087), correctif e341b5182. Gardes iOS rc=0 (règles maison 42, cohésion,
+  inscription 2 060, accent 408) ; tête contient `dev` 95ab23af5. CI des PR « skipped » : `ios.yml` et `android.yml`
+  lancés en `workflow_dispatch` sur la branche.
+- Prochain lot : #19929 (sauvegarde restaurée : liste effacée et reconstruite, identifiant en empreinte), puis le plafond
+  `untilStopped` de `listOnlyState`, puis #19999 ; #19682 et #19997 attendent la décision du porteur.
