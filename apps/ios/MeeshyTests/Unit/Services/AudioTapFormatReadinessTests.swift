@@ -85,7 +85,7 @@ final class AudioTapFormatReadinessTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features")
-        return try ["Call/Services/CallTranscriptionService.swift", "Main/Models/TranscriptionError.swift"]
+        return try ["Call/Services/CallTranscriptionService.swift", "Call/Services/CallTranscriptionService+Capture.swift", "Main/Models/TranscriptionError.swift"]
             .map { try String(contentsOf: url.appendingPathComponent($0), encoding: .utf8) }
             .joined(separator: "\n")
     }
@@ -98,8 +98,8 @@ final class AudioTapFormatReadinessTests: XCTestCase {
         let poses = source.components(separatedBy: "installTap(onBus: 0, bufferSize:").count - 1
         XCTAssertEqual(poses, 2,
                        "Un troisième site de pose devrait porter sa propre garde — la garde suit l'appel, pas la fonction.")
-        for fonction in ["private func startLocalCapture() throws {",
-                         "private func reinstallTap(for newRequest:"] {
+        for fonction in ["func startLocalCapture() throws {",
+                         "func reinstallTap(for newRequest:"] {
             guard let debut = source.range(of: fonction),
                   let fin = source.range(of: "installTap(onBus: 0, bufferSize:",
                                          range: debut.upperBound..<source.endIndex) else {
