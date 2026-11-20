@@ -2,6 +2,7 @@ import { transformTranslationsToArray } from '../../../utils/translation-transfo
 import { resolveAnonymousSenderIdentity } from '@meeshy/shared/utils/participant-helpers';
 import { mapMessageProtectionFields } from '../../conversations/messages-list-query';
 import { quotesCaptureNotice, servedQuotedMessage } from '../../../services/messaging/servedQuotedMessage';
+import { servedSideContent } from '../../../services/attachments/mediaSideContent';
 import { servedLinkMetadata } from '../../../services/messaging/linkTrackingAuthor';
 import { attachmentReplyToFromMetadata } from '../../../services/messaging/attachmentReplySnapshot';
 import type { EphemeralReaderResolution } from '../../conversations/ephemeralReaderDeadlines';
@@ -100,6 +101,31 @@ export function formatMessageWithUnifiedSender(message: any) {
  * plus exposée (visiteurs sans compte) était aussi la seule à n'avoir aucun
  * moyen de savoir qu'un message est protégé.
  */
+/**
+ * Les pièces d'un message de lien, passées par la loi UNIQUE du contenu latéral
+ * (#20017).
+ *
+ * Trois choses sortent sous protection — la transcription ORIGINALE, la
+ * description et ses traductions — et deux restent, chacune pour sa raison :
+ *
+ * - **l'ADRESSE du fichier** (`fileUrl`, `thumbnailUrl`) a sa propre loi, plus
+ *   forte : la route qui la sert re-juge le droit du lecteur à chaque appel.
+ *   C'est l'arbitrage écrit de #19978, et il vaut ici mot pour mot.
+ * - **les MOTS des pistes traduites**, et c'est une dette, pas un choix :
+ *   `messageAttachmentSchema.translations.additionalProperties.required` vaut
+ *   `['type', 'transcription', 'createdAt']`, et `fast-json-stringify` LÈVE sur
+ *   une requise absente — la page ENTIÈRE en 500, pas la pièce. Mesuré sur ce
+ *   chemin, pas hérité : le chemin de la CITATION a pu les retirer (#20018)
+ *   parce que SON schéma ne les déclare pas. Suivi : #20015.
+ */
+function servedLinkAttachments(attachments: unknown): unknown[] {
+  if (!Array.isArray(attachments)) return [];
+  return attachments.map((att) => {
+    const { message: _carrier, ...row } = (att ?? {}) as Record<string, unknown> & { message?: unknown };
+    return { ...row, ...servedSideContent(att as Parameters<typeof servedSideContent>[0]) };
+  });
+}
+
 export type LinkQuotedReaders = {
   readonly deadlines: ReadonlyMap<string, EphemeralReaderResolution>;
   readonly now: Date;
@@ -125,7 +151,16 @@ export function formatLinkMessageWithDetails(message: any, readers?: LinkQuotedR
     ...(message.senderId ? { senderId: message.senderId } : {}),
     ...(servedMetadata ? { metadata: servedMetadata } : {}),
     sender: extractSenderInfo(message.sender),
-    attachments: message.attachments || [],
+    // #20017 — la loi du CONTENU LATÉRAL, sur la porte la plus exposée du
+    // dépôt : un visiteur de lien n'a pas de compte. La ligne brute partait
+    // telle quelle, et le schéma ne la retient pas — `messageAttachmentSchema`
+    // DÉCLARE `transcription` et `translations`, sa description dit même
+    // « with their Prisme transcription/translations ».
+    //
+    // `message` est le PORTEUR, chargé sous chaque pièce pour cette seule loi
+    // (`MESSAGE_SIDE_PROTECTION_SELECT`) : il est retiré de ce qui est servi,
+    // même geste que `cleanAttachmentsForApi`.
+    attachments: servedLinkAttachments(message.attachments),
     replyTo: message.replyTo ? formatReplyToMessage(message.replyTo, message.metadata, readers) : null,
     reactions: message.reactions || [],
     translations: transformTranslationsToArray(
