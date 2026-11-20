@@ -1,8 +1,8 @@
-# Une clé d'idempotence appartient à son auteur — et l'espace que l'index garde n'est pas celui où le client la tire
+## 2026-11-20 — Une clé d'idempotence appartient à son AUTEUR, et l'espace que l'index garde n'est pas celui où le client la tire (routine messagerie, cycle 189, #19960)
 
 *2026-11-20, cycle 189, #19960.*
 
-## La forme
+### La forme
 
 Un client tire une clé d'idempotence dans **son** espace (`cid_<uuid v4>`, par
 appareil). La base garde l'unicité sur un **autre** espace — ici
@@ -16,7 +16,7 @@ Ils ne le sont pas, et l'écart se paie au moment où quelque chose APPARIE :
 > partagé, et la servir **détruit** le message de l'appelant en lui répondant
 > « envoyé ».
 
-## La question à poser
+### La question à poser
 
 Devant toute clé d'idempotence, de déduplication ou de réconciliation :
 
@@ -30,7 +30,7 @@ La troisième n'est pas une précaution : une condition suffisante pour **LIRE**
 ne l'est jamais pour **ÉCRIRE** (leçon du cycle 187, qui l'a payée), et la même
 ligne de `where` porte les deux.
 
-## Le corollaire de SERVICE, qui est l'autre moitié
+### Le corollaire de SERVICE, qui est l'autre moitié
 
 Un identifiant exposé n'est pas une fuite tant que personne ne s'en sert comme
 d'une clé. **C'est un piège armé** — et la personne qui marche dessus est celle
@@ -46,7 +46,7 @@ SES propres bulles seulement.
 > **Une raison écrite ne documente que l'exemplaire qu'elle touche**, et une
 > raison qui dit vrai d'un cas se relit comme vraie de tous.
 
-## Ce qui a failli manquer deux sites sur cinq
+### Ce qui a failli manquer deux sites sur cinq
 
 L'issue en énumérait deux ; le dépôt en portait cinq. Les trois autres se
 trouvent en cessant de chercher par le NOM de la famille (« les chemins de
@@ -65,7 +65,7 @@ recherche par intention.
 dérivées côté serveur reconnue par son PRODUCTEUR — jamais par son fichier, un
 site neuf du même fichier n'ayant aucune raison d'hériter d'une exemption.
 
-## Et la mesure qui remet le défaut à sa place
+### Et la mesure qui remet le défaut à sa place
 
 Tous les clients tirent un UUID v4 : la collision ACCIDENTELLE est hors de
 portée. Ce lot ne répare donc pas une panne observée — il désarme un piège, et
