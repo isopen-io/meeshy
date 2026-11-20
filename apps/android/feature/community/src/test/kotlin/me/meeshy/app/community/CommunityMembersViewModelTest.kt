@@ -9,6 +9,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -17,6 +18,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.community.CommunityCacheRepository
+import me.meeshy.sdk.community.CommunityJoinRequestedBinding
 import me.meeshy.sdk.community.CommunityRepository
 import me.meeshy.sdk.model.ApiCommunity
 import me.meeshy.sdk.model.ApiCommunityMember
@@ -44,6 +46,7 @@ class CommunityMembersViewModelTest {
     private val cache: CommunityCacheRepository = mockk(relaxed = true)
     private val repository: CommunityRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
+    private val joinRequested: CommunityJoinRequestedBinding = mockk { every { requested } returns MutableSharedFlow() }
 
     private fun member(user: String, role: String) = ApiCommunityMember(id = "m-$user", userId = user, role = role)
 
@@ -54,7 +57,7 @@ class CommunityMembersViewModelTest {
             CacheResult.Fresh(ApiCommunity(id = "c1", createdBy = "owner", members = all), 0),
         )
         every { cache.members("c1", any()) } returns flowOf(CacheResult.Fresh(all, 0))
-        return CommunityMembersViewModel(SavedStateHandle(mapOf("communityId" to "c1")), cache, repository, session)
+        return CommunityMembersViewModel(SavedStateHandle(mapOf("communityId" to "c1")), cache, repository, session, joinRequested)
     }
 
     @Test
