@@ -244,3 +244,44 @@ expéditeur ; la survie du `code` à la sérialisation sur les deux routes ;
 l'absence de la clé dans tout ce qui voyage À CÔTÉ (`replyTo`, citations,
 recherche, épingles, file hors ligne) ; et la fermeture par défaut de
 `servedClientMessageId` sur toutes les formes de production.
+
+---
+
+## Ce que la CI a appris au cycle, et que le local ne pouvait pas dire
+
+Le run de la PR voisine (#19970, le lot du cycle 188, piloté par une autre
+session) est tombé sur **UN** rouge : `tsc-never-loaded-tests-ratchet` —
+**81** erreurs de typecheck non muettes dans les fichiers de test, plafond
+**76**. Les cinq étaient les siennes, toutes `TS2554` (« Expected 0 arguments,
+but got 1 ») sur des doubles déclarés `jest.fn(async () => …)`, dont la
+signature inférée n'a aucun paramètre.
+
+**Sa PR classait ce cliquet parmi les rouges d'environnement**, au motif que
+« sa commande rend 0 erreur ici ». C'était faux, et la raison vaut d'être
+écrite : `tsc --noEmit` avait bien été joué — mais `tsconfig.json` **exclut**
+les tests, et ts-jest ne type plus rien depuis #10203. Ce cliquet est le
+**SEUL** typecheck qui atteint un fichier de test.
+
+> **Un gate qu'on déclare environnemental se joue avec SA commande, jamais
+> avec une commande voisine.** Et un `tsc --noEmit` vert ne dit RIEN de la
+> santé des types des témoins — c'est une propriété du `tsconfig`, pas du
+> dépôt.
+
+Mesuré par attribution, parce qu'un chiffre s'attribue avant de s'imputer :
+**81** sur la branche de #19970, **76** sur celle de ce cycle, 76 après son
+correctif. Le plafond est tenu, pas relevé.
+
+Ce lot-ci a six fichiers de témoins neufs et mesure **76 avant comme après la
+fusion de `dev`** — zéro marge, ce que le cliquet veut (« toute marge laissée
+au-dessus est une erreur de type que plus rien ne verrait »).
+
+## Ce que le cycle laisse ouvert
+
+La **file d'Actions du dépôt est saturée** : mesurés à 08:53 UTC, 22 runs CI
+réels devant celui de ce lot, et 61 runs antérieurs à la journée (les plus
+anciens du 11 novembre) qui bouchent la file. Les lanes macOS et Ubuntu sont
+distinctes — l'Ubuntu avance, lentement.
+
+La PR **#19991** est donc prête, fusionnée avec `dev`, auditée, et **en attente
+de sa CI**. Elle ne se fusionne pas avant : c'est précisément le rouge que la
+CI a trouvé chez la voisine, invisible en local, qui justifie l'attente.
