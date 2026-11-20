@@ -50,19 +50,19 @@ struct ProfileOwnAvatar: View {
         ProfileDecorResolver.ring(user?.profileDecor?.avatarRing)
     }
 
-    /// #15157 — ce que le cadre illustré peint sous un avatar de `avatarSize` : l'écran le réserve avant le nom.
+    /// Ce que le cadre peint sous un avatar de `avatarSize` (#19988) : l'écran le réserve avant le nom.
     /// Vers le haut, le cadre déborde sur la bannière ; sur les côtés, l'écran est libre.
     static func reserveBelow(_ user: MeeshyUser?, avatarSize: CGFloat) -> CGFloat {
-        AvatarRingLayout.paintBeyondAvatar(ring(of: user), avatarSize: avatarSize)
+        AvatarRingGeometry.spill(ring(of: user), avatarSize: avatarSize)
     }
 }
 
-/// Le cadre équipé, avec toute la place que son film demande autour de sa boîte : il se voit en entier (#15157).
+/// Le cadre équipé, à la taille normalisée de tous les avatars décorés (#19988).
 struct ProfileOwnRing: ViewModifier {
     let ring: AvatarRingDesign?
     let size: CGFloat
 
     func body(content: Content) -> some View {
-        content.avatarRing(ring, avatarSize: size, decorRoom: AvatarRingLayout.fullSpill(ring, box: size * 100 / 84))
+        content.avatarRing(ring, avatarSize: size)
     }
 }

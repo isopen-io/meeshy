@@ -13,8 +13,8 @@ public nonisolated enum MeeshyCollapsingHeroAlignment: String, Sendable, Equatab
 /// couleur, aucun type du domaine : l'hôte donne des tailles, la recette rend des
 /// tailles.
 ///
-/// Les lois : hauteur = déplié − (déplié − replié) × progress ; l'avatar et le
-/// titre finissent à 55 % ; la bannière s'efface de 0 à 50 %, le verre apparaît
+/// Les lois : hauteur = déplié − (déplié − replié) × progress (× progress / 55 % quand la
+/// barre se replie avec l'identité, #19987) ; l'avatar et le titre finissent à 55 % ; la bannière s'efface de 0 à 50 %, le verre apparaît
 /// de 50 à 100 % ; l'identité passe dans la barre au-delà de 50 %. Sous « Réduire les
 /// animations », le doigt mène toujours la hauteur, mais l'identité ne glisse plus :
 /// elle s'efface et reparaît à sa place au passage de main (un fondu). L'épinglage ne
@@ -75,21 +75,23 @@ public nonisolated struct MeeshyCollapsingHeroRecipe: Sendable, Equatable {
         hasAvatar: Bool = true,
         hasSubtitle: Bool = true,
         overscroll: Double = 0,
-        reduceMotion: Bool = false
+        reduceMotion: Bool = false,
+        foldsWithIdentity: Bool = false
     ) -> MeeshyCollapsingHeroRecipe {
         let raw = progress.isFinite ? progress : 0
         let share = clamp01(progress)
         let travel = travelShare(share, reduceMotion: reduceMotion)
+        let fold = foldShare(share, foldsWithIdentity: foldsWithIdentity)
         let distance = scrollDistance(expandedHeight: expandedHeight, collapsedHeight: collapsedHeight)
         let pulled = max(max(overscroll.isFinite ? overscroll : 0, 0), raw < 0 ? -raw * distance : 0)
         return MeeshyCollapsingHeroRecipe(
-            height: expandedHeight - (expandedHeight - collapsedHeight) * share,
+            height: expandedHeight - (expandedHeight - collapsedHeight) * fold,
             bannerStretch: pulled,
             avatarSize: hasAvatar ? lerp(avatarExpanded, avatarCollapsed, travel) : 0,
             titleSize: lerp(titleExpanded, titleCollapsed, travel),
             subtitleSize: hasSubtitle ? lerp(subtitleExpanded, subtitleCollapsed, travel) : 0,
             bannerOpacity: clamp01((1 - share) / handoverShare),
-            glassOpacity: clamp01((share - handoverShare) / (1 - handoverShare)),
+            glassOpacity: clamp01((fold - handoverShare) / (1 - handoverShare)),
             controlsDiscOpacity: clamp01(1 - share / discFadeShare),
             titleRise: clamp01((share - handoverShare) / (titleRiseEnd - handoverShare)),
             controlSize: controlTarget,
@@ -136,6 +138,13 @@ public nonisolated struct MeeshyCollapsingHeroRecipe: Sendable, Equatable {
     public static func titleGap(avatarSpill: Double) -> Double {
         guard avatarSpill.isFinite else { return titleGap }
         return max(titleGap, avatarSpill + 4)
+    }
+
+    /// L'avancée du repli de la barre : celle du doigt, ou — pour une bannière gardée dans la barre (#19987) — celle de
+    /// l'identité, qui finit à 55 % : dès que l'avatar et le nom sont dans la barre, la barre n'est plus que sa rangée,
+    /// sans bande vide dessous ; le reste du défilement fait passer le contenu sous elle.
+    private static func foldShare(_ share: Double, foldsWithIdentity: Bool) -> Double {
+        foldsWithIdentity ? min(share / finishShare, 1) : share
     }
 
     private static func travelShare(_ share: Double, reduceMotion: Bool) -> Double {

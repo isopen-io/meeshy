@@ -77,8 +77,7 @@ extension UserProfileSheet {
     // MARK: - En chiffres (K44 + K34)
 
     private var figuresSection: some View {
-        ProfileFiguresSection(memberSince: displayUser.createdAt, stats: effectiveUserStats,
-                              isLoadingStats: effectiveIsLoadingStats)
+        ProfileFiguresSection(stats: effectiveUserStats, isLoadingStats: effectiveIsLoadingStats)
             .padding(.horizontal, MeeshySpacing.xl)
     }
 
