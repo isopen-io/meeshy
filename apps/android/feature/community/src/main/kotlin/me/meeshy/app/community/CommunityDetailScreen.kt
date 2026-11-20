@@ -43,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -72,6 +73,10 @@ import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 /** Ce que l'hôte sait faire depuis le détail ; une destination absente (`null`) retire son bouton plutôt que de le laisser inerte. */
 data class CommunityDetailNavigation(
@@ -185,7 +190,7 @@ private fun LoadedDetail(
             ActionsSection(
                 access = access,
                 isJoining = state.isJoining,
-                join = JoinFace(state.requiresJoinApproval, state.joinRequestPending, state.joinRefusal),
+                join = JoinFace(state.requiresJoinApproval, state.joinRequestPending, state.joinRefusal, state.joinDeclinedUntil),
                 communityId = community.id,
                 navigation = navigation,
                 onJoin = onJoin,
@@ -378,7 +383,11 @@ private fun ActionsSection(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             actions.forEach { action ->
                 if (action == CommunityDetailAction.JOIN && join.pending) {
-                    RequestSentTile(Modifier.weight(1f))
+                    JoinStatusTile(stringResource(R.string.community_join_requested), Modifier.weight(1f))
+                    return@forEach
+                }
+                if (action == CommunityDetailAction.JOIN && join.declinedUntil != null) {
+                    JoinStatusTile(stringResource(R.string.community_join_declined), Modifier.weight(1f))
                     return@forEach
                 }
                 val (icon, label) = if (action == CommunityDetailAction.JOIN) join.face() else action.face()
@@ -432,7 +441,7 @@ private fun CommunityDetailAction.face(): Pair<ImageVector, String> = when (this
 
 /** Ce que le détail dit de l'entrée quand la communauté la valide (#19870, miroir `joinAction` iOS). */
 @Immutable
-private data class JoinFace(val asks: Boolean, val pending: Boolean, val refusal: CommunityJoinRefusal?)
+private data class JoinFace(val asks: Boolean, val pending: Boolean, val refusal: CommunityJoinRefusal?, val declinedUntil: Instant?)
 
 @Composable
 private fun JoinFace.face(): Pair<ImageVector, String> =
@@ -442,14 +451,26 @@ private fun JoinFace.face(): Pair<ImageVector, String> =
 private fun JoinFace.notice(): Pair<String, Boolean>? = when {
     refusal == CommunityJoinRefusal.COOLDOWN -> stringResource(R.string.community_join_cooldown) to true
     pending -> stringResource(R.string.community_join_requested_waiting) to false
+    declinedUntil != null -> stringResource(R.string.community_join_declined_hint, retryDateLabel(declinedUntil)) to false
     else -> null
 }
 
-/** La demande envoyée est un STATUT, pas un bouton : rien à toucher tant qu'on attend. */
+/** La date de la nouvelle demande, dans la langue de l'écran, avec l'heure : le délai court jusqu'à l'heure du refus. */
 @Composable
-private fun RequestSentTile(modifier: Modifier) {
+private fun retryDateLabel(instant: Instant): String {
+    val locale = LocalConfiguration.current.locales[0]
+    return remember(instant, locale) {
+        DateTimeFormatter.ofLocalizedDateTime(FormatStyle.LONG, FormatStyle.SHORT)
+            .withLocale(locale)
+            .withZone(ZoneId.systemDefault())
+            .format(instant)
+    }
+}
+
+/** Demande envoyée ou refusée : un STATUT, pas un bouton — rien à toucher tant qu'on attend. */
+@Composable
+private fun JoinStatusTile(label: String, modifier: Modifier) {
     val tokens = MeeshyTheme.tokens
-    val label = stringResource(R.string.community_join_requested)
     Column(
         modifier
             .clip(RoundedCornerShape(12.dp))

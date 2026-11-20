@@ -103,6 +103,7 @@ fun ApiCommunity.applying(change: CommunityMemberChange, viewerId: String?): Api
         members = next,
         currentUserRole = if (isViewer && currentUserRole != null) change.role?.wireValue else currentUserRole,
         currentUserJoinRequest = if (isViewer && change.role != null) null else currentUserJoinRequest,
+        currentUserJoinRetryAt = if (isViewer && change.role != null) null else currentUserJoinRetryAt,
     ).takeIf { it != this }
 }
 

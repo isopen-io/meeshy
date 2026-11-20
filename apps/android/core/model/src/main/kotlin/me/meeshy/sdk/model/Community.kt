@@ -66,6 +66,11 @@ data class ApiCommunity(
     val requiresJoinApproval: Boolean? = null,
     /** La demande d'entrée du LECTEUR : `"pending"` quand elle attend une réponse (#19868). */
     val currentUserJoinRequest: String? = null,
+    /**
+     * Pour un non-membre dont la dernière demande a été refusée : l'instant ISO à partir duquel il peut
+     * en refaire une (#19879, additif) ; `null` sinon. Lu par [joinDeclinedUntil] (#19949).
+     */
+    val currentUserJoinRetryAt: String? = null,
 ) {
     /** Le lecteur attend la réponse à sa demande d'entrée — jamais quand il est déjà membre. */
     val hasPendingJoinRequest: Boolean get() = currentUserJoinRequest == PENDING_JOIN_REQUEST

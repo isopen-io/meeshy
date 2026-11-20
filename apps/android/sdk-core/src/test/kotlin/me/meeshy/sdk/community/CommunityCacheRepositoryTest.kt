@@ -18,6 +18,7 @@ import me.meeshy.sdk.model.ApiCommunity
 import me.meeshy.sdk.model.ApiCommunityMember
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CommunityDeletedEvent
+import me.meeshy.sdk.model.CommunityJoinRequestDecidedEvent
 import me.meeshy.sdk.model.CommunityMemberChange
 import me.meeshy.sdk.model.CommunityUpdatedEvent
 import me.meeshy.sdk.model.MemberRole
@@ -175,6 +176,26 @@ class CommunityCacheRepositoryTest {
         repository().applyUpdate(updated("c1", "Renommee"))
 
         assertThat(cache().get("community:detail", "c1", ApiCommunity.serializer())!!.fetchedAt).isEqualTo(fetchedAt)
+    }
+
+    private fun rejected(communityId: String) =
+        CommunityJoinRequestDecidedEvent(communityId = communityId, decision = "rejected", retryAt = "2026-11-27T11:00:00.000Z", at = "2026-11-20T11:00:00.000Z")
+
+    @Test fun `un refus fait lire Demande refusee sur la fiche tenue sans relecture`() = runTest {
+        cache().put("community:detail", "c1", community("c1").copy(requiresJoinApproval = true, currentUserJoinRequest = "pending"), ApiCommunity.serializer(), null)
+
+        repository().applyJoinRequestDecision(rejected("c1"))
+
+        val detail = cache().get("community:detail", "c1", ApiCommunity.serializer())!!.value
+        assertThat(detail.hasPendingJoinRequest).isFalse()
+        assertThat(detail.currentUserJoinRetryAt).isEqualTo("2026-11-27T11:00:00.000Z")
+        coVerify(exactly = 0) { api.get(any()) }
+    }
+
+    @Test fun `un refus ne cree pas la fiche d une communaute que l appareil ne tient pas`() = runTest {
+        repository().applyJoinRequestDecision(rejected("c9"))
+
+        assertThat(cache().get("community:detail", "c9", ApiCommunity.serializer())).isNull()
     }
 
     private fun memberChange(

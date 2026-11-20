@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.community.CommunityAppearance
 import me.meeshy.sdk.community.CommunityAppearanceStore
@@ -29,11 +30,13 @@ import me.meeshy.sdk.model.CommunityJoinRefusal
 import me.meeshy.sdk.model.CommunityLoadFailure
 import me.meeshy.sdk.model.CommunityMembership
 import me.meeshy.sdk.model.MemberRole
+import me.meeshy.sdk.model.joinDeclinedUntil
 import me.meeshy.sdk.model.toCommunity
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.toContentFetchFailure
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.theme.displayTitle
+import java.time.Instant
 import javax.inject.Inject
 
 /** Une rangée de la liste des channels : le titre est résolu une fois, ici, pas à chaque recomposition. */
@@ -64,6 +67,11 @@ data class CommunityDetailUiState(
     val joinRequestPending: Boolean = false,
     /** Un refus de la jonction que l'écran dit dans la langue du lecteur. */
     val joinRefusal: CommunityJoinRefusal? = null,
+    /**
+     * La dernière demande a été refusée : « Demande refusée », un statut et pas un bouton, jusqu'à cet
+     * instant ; ensuite la demande est de nouveau possible (#19949, web `membershipActionOf`).
+     */
+    val joinDeclinedUntil: Instant? = null,
 ) {
     val showSkeleton: Boolean get() = community == null && isLoading
     val showError: Boolean get() = community == null && !isLoading && failure != null
@@ -88,6 +96,7 @@ class CommunityDetailViewModel @Inject constructor(
     private val repository: CommunityRepository,
     private val session: SessionRepository,
     private val appearanceStore: CommunityAppearanceStore,
+    private val clock: CacheClock,
 ) : ViewModel() {
 
     val communityId: String = checkNotNull(savedStateHandle[COMMUNITY_ID_ARG])
@@ -130,7 +139,7 @@ class CommunityDetailViewModel @Inject constructor(
         val before = _state.value
         val community = before.community ?: return
         val access = before.access ?: return
-        if (before.isJoining || before.joinRequestPending || !access.canJoin) return
+        if (before.isJoining || before.joinRequestPending || before.joinDeclinedUntil != null || !access.canJoin) return
         _state.update {
             if (before.requiresJoinApproval) {
                 it.copy(isJoining = true, joinRequestPending = true, joinRefusal = null)
@@ -243,6 +252,7 @@ class CommunityDetailViewModel @Inject constructor(
                 requiresJoinApproval = api.requiresJoinApproval == true || sending,
                 joinRequestPending = !access.isMember && (api.hasPendingJoinRequest || sending),
                 joinRefusal = it.joinRefusal.takeUnless { access.isMember },
+                joinDeclinedUntil = if (access.isMember || sending) null else api.joinDeclinedUntil(Instant.ofEpochMilli(clock.nowMillis())),
             )
         }
         observeAppearance(api)

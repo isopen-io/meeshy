@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:community": {
+      "resDir": "feature/community/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "community.join.declined",
+          "androidName": "community_join_declined",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.join.declined.hint",
+          "androidName": "community_join_declined_hint",
+          "status": "candidate"
+        }
+      ]
+    }
+  }
+}

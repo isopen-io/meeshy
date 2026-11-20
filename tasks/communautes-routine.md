@@ -26,6 +26,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-15 | Sur Android, toucher la bannière in-app « ajouté à la communauté » ouvre la communauté | voir réveil du 2026-11-15 17:38 | #18670 | voir réveil du 2026-11-15 17:38 |
 | 2026-11-15 | Rejoindre, quitter ou changer de rôle dans une communauté se voit aussitôt chez ses membres (passerelle, web) | voir réveil du 2026-11-15 23:38 | #18766 | voir réveil du 2026-11-15 23:38 |
 | 2026-11-18 | Supprimer ou désactiver une communauté se voit aussitôt chez ses membres (passerelle, web) | voir réveil du 2026-11-18 05:38 | #19590 | voir réveil du 2026-11-18 05:38 |
+| 2026-11-20 | Sur Android, le demandeur lit « Demande refusée — nouvelle demande possible le … » sans relecture | voir réveil du 2026-11-20 13:07 | #19949 | voir réveil du 2026-11-20 13:07 |
 
 ## 2026-11-07 — lot 1
 
@@ -691,3 +692,14 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Écran : « Demander à rejoindre », puis une tuile « Demande envoyée » qui n'est pas un bouton, et la ligne « Un administrateur ou un modérateur doit l'accepter. » ; le délai après refus se dit en rouge. Quatre chaînes × sept langues (`strings_join_request_19870.xml`), mêmes mots que les clés iOS de #19903.
 - Gotcha : le `Json` de Retrofit n'encode pas les valeurs par défaut — un `JoinCommunityRequest(acceptsPending = true)` déclaré avec défaut partait `{}`. Le témoin d'encodage l'a attrapé ; le champ n'a plus de défaut.
 - Gate local : `./apps/android/meeshy.sh jvm-check -PjvmCheckModelOnly` (le mode complet ne résout pas `libsignal-client`, hôte refusé par le proxy) — les suites `*Communit*` vertes. ViewModel, écran, réseau : prouvés par `android.yml`.
+
+## 2026-11-20 — réveil 13:07 UTC
+
+- Début du run : #20049 (#19877, iOS intendants) poussée à 13:06 par une autre session, et deux branches tout juste ouvertes sur #20002 (`claude/communautes-reouverture-annoncee`, `-diffusee`, 13:04 et 13:08) : vivantes, cédées. (Deux réveils de la routine travaillent en même temps : relever les branches de la dernière demi-heure avant de choisir.)
+- Lot : Android #19949 — le demandeur lit « Demande refusée — nouvelle demande possible le … » sans relecture (miroir de #19879).
+- `:core:model` : `ApiCommunity.currentUserJoinRetryAt` (additif) ; `CommunityJoinRequestDecidedEvent` (miroir de `CommunityJoinRequestDecidedEventData`, qui ne nomme pas l'intendant) ; `applying(decided)` patche la fiche tenue (demande close, date posée) sauf pour un lecteur déjà membre ou une charge illisible ; `joinDeclinedUntil(now)` = la date servie si elle est à venir, jamais pour un membre ni pendant qu'une demande attend (web `membershipActionOf`). Entrer efface la date (`applying(change)`).
+- `sdk-core` : `CommunityJoinRequestDecidedBinding` (route `community:join-request-decided`, même forme que `CommunityUpdateBinding`) → `CommunityCacheRepository.applyJoinRequestDecision`, qui ne crée jamais une fiche non tenue.
+- Écran : la tuile « Demande refusée » est un statut, pas un bouton, et la ligne « Vous pourrez en refaire une à partir du {date, heure} » dans la langue de l'écran ; `join()` ne part pas tant que la date n'est pas passée. Deux chaînes × sept langues (`strings_join_declined_19949.xml`, mots du web), inscrites au manifeste en `candidate` face aux futures clés iOS `community.join.declined*` (#19948).
+- Cliquets partagés : `community:join-request-decided` passe de l'asymétrie « web seul » à « iOS absent » ; couverture de forme Kotlin 144 → 145.
+- Gates locaux : `./meeshy.sh jvm-check -PjvmCheckModelOnly` vert (2 283 suites, 19 235 tests, 0 échec ; le nouveau témoin de 10 tests rouge prouvé : ne compilait pas sans le code) ; `packages/shared` `__tests__/ci` 25 fichiers, 216 tests verts. Binding, cache, modèle de vue et écran : prouvés par `android.yml`.
+

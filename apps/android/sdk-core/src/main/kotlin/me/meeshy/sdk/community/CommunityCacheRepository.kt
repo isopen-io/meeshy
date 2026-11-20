@@ -15,6 +15,7 @@ import me.meeshy.sdk.model.ApiCommunity
 import me.meeshy.sdk.model.ApiCommunityMember
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.CommunityDeletedEvent
+import me.meeshy.sdk.model.CommunityJoinRequestDecidedEvent
 import me.meeshy.sdk.model.CommunityMemberChange
 import me.meeshy.sdk.model.CommunityUpdatedEvent
 import me.meeshy.sdk.model.applying
@@ -83,6 +84,19 @@ class CommunityCacheRepository(
         val page = ListSerializer(ApiCommunity.serializer())
         cache.get(LIST_NAMESPACE, FIRST_PAGE, page)?.value?.applying(event)?.let { next ->
             cache.update(LIST_NAMESPACE, FIRST_PAGE, page, ticket) { next }
+        }
+    }
+
+    /**
+     * `community:join-request-decided` (#19949, web `applyCommunityJoinRequestDecidedEvent`) : la fiche
+     * DÉJÀ tenue passe de « Demande envoyée » à « Demande refusée » jusqu'à `retryAt`, sans relecture —
+     * la charge dit déjà tout. Une communauté que l'appareil ne tient pas n'est pas créée.
+     */
+    suspend fun applyJoinRequestDecision(event: CommunityJoinRequestDecidedEvent) {
+        val ticket = cache.ticket()
+        val detail = ApiCommunity.serializer()
+        cache.get(DETAIL_NAMESPACE, event.communityId, detail)?.value?.applying(event)?.let { next ->
+            cache.update(DETAIL_NAMESPACE, event.communityId, detail, ticket) { next }
         }
     }
 

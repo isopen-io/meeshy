@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.community.CommunityAppearance
 import me.meeshy.sdk.community.CommunityCacheRepository
@@ -32,6 +33,7 @@ import me.meeshy.sdk.model.ContentFetchFailure
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
+import java.time.Instant
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -52,6 +54,9 @@ class CommunityDetailViewModelTest {
     private val session: SessionRepository = mockk(relaxed = true)
     private val detail = MutableSharedFlow<CacheResult<ApiCommunity>>(replay = 1)
     private val channels = MutableSharedFlow<CacheResult<List<ApiConversation>>>(replay = 1)
+    private val clock = object : CacheClock {
+        override fun nowMillis(): Long = Instant.parse("2026-11-20T12:00:00Z").toEpochMilli()
+    }
 
     private fun community(createdBy: String = "owner", role: String? = null, isPrivate: Boolean = false) = ApiCommunity(
         id = "c1", name = "Club", createdBy = createdBy, isPrivate = isPrivate, memberCount = 4,
@@ -62,7 +67,7 @@ class CommunityDetailViewModelTest {
         every { session.currentUserId } returns "me"
         every { cache.detail("c1", any()) } returns detail
         every { cache.channels("c1", any()) } returns channels
-        return CommunityDetailViewModel(SavedStateHandle(mapOf("communityId" to "c1")), cache, repository, session, InMemoryCommunityAppearanceStore())
+        return CommunityDetailViewModel(SavedStateHandle(mapOf("communityId" to "c1")), cache, repository, session, InMemoryCommunityAppearanceStore(), clock)
     }
 
     @Test
@@ -104,7 +109,7 @@ class CommunityDetailViewModelTest {
         val onError = slot<(Throwable) -> Unit>()
         every { session.currentUserId } returns "me"
         every { cache.detail("c1", capture(onError)) } returns detail
-        val vm = CommunityDetailViewModel(SavedStateHandle(mapOf("communityId" to "c1")), cache, repository, session, InMemoryCommunityAppearanceStore())
+        val vm = CommunityDetailViewModel(SavedStateHandle(mapOf("communityId" to "c1")), cache, repository, session, InMemoryCommunityAppearanceStore(), clock)
 
         onError.captured(RuntimeException("offline"))
         assertThat(vm.state.value.showError).isTrue()
@@ -220,6 +225,40 @@ class CommunityDetailViewModelTest {
     }
 
     @Test
+    fun `a declined request is a status until the served date, and join does nothing meanwhile`() = runTest {
+        val vm = viewModel()
+        detail.emit(CacheResult.Fresh(asking().copy(currentUserJoinRetryAt = "2026-11-27T11:00:00.000Z"), 0))
+
+        assertThat(vm.state.value.joinDeclinedUntil).isEqualTo(Instant.parse("2026-11-27T11:00:00Z"))
+        assertThat(vm.state.value.joinRequestPending).isFalse()
+
+        vm.join()
+
+        coVerify(exactly = 0) { repository.join(any()) }
+    }
+
+    @Test
+    fun `a decision pushed while the screen is open turns Demande envoyee into Demande refusee`() = runTest {
+        val vm = viewModel()
+        detail.emit(CacheResult.Fresh(asking(request = "pending"), 0))
+        assertThat(vm.state.value.joinRequestPending).isTrue()
+
+        detail.emit(CacheResult.Fresh(asking().copy(currentUserJoinRetryAt = "2026-11-27T11:00:00.000Z"), 0))
+
+        assertThat(vm.state.value.joinRequestPending).isFalse()
+        assertThat(vm.state.value.joinDeclinedUntil).isNotNull()
+    }
+
+    @Test
+    fun `a past retry date offers to ask again`() = runTest {
+        val vm = viewModel()
+        detail.emit(CacheResult.Fresh(asking().copy(currentUserJoinRetryAt = "2026-11-19T11:00:00.000Z"), 0))
+
+        assertThat(vm.state.value.joinDeclinedUntil).isNull()
+        assertThat(vm.state.value.access?.canJoin).isTrue()
+    }
+
+    @Test
     fun `an accepted request turns the reader into a member and clears the notice`() = runTest {
         val vm = viewModel()
         detail.emit(CacheResult.Fresh(asking(request = "pending"), 0))
@@ -270,7 +309,7 @@ class CommunityDetailViewModelTest {
         every { session.currentUserId } returns "me"
         every { cache.detail("c1", capture(onError)) } returns detail
         every { cache.channels("c1", any()) } returns channels
-        val vm = CommunityDetailViewModel(SavedStateHandle(mapOf("communityId" to "c1")), cache, repository, session, InMemoryCommunityAppearanceStore())
+        val vm = CommunityDetailViewModel(SavedStateHandle(mapOf("communityId" to "c1")), cache, repository, session, InMemoryCommunityAppearanceStore(), clock)
         return vm to { error -> onError.captured(error) }
     }
 

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La demande d'entrée refusée (#19949) — mêmes mots que les clés web community.membership.declined* de #19879. -->
+<resources>
+    <string name="community_join_declined">Request declined</string>
+    <string name="community_join_declined_hint">You can ask again from %1$s.</string>
+</resources>
