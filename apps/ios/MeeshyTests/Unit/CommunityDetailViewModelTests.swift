@@ -428,9 +428,132 @@ final class CommunityDetailViewModelTests: XCTestCase {
         XCTAssertTrue(removed.ids.isEmpty)
         XCTAssertEqual(service.getCallCount, 1)
     }
+
+    // #19869 — une communauté qui valide chaque entrée se DEMANDE : « Demande
+    // envoyée » dès le toucher, jamais un faux membre, et le refus récent se dit.
+
+    private func approvalSUT(
+        joinRequest: String? = nil, added: @escaping @MainActor (APICommunity) async -> Void = { _ in }
+    ) -> (CommunityDetailViewModel, MockCommunityService) {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(
+            createdBy: "u-creator", requiresJoinApproval: true, currentUserJoinRequest: joinRequest
+        ))
+        service.joinResult = .success(.pending(requestId: "req-1"))
+        let viewModel = CommunityDetailViewModel(
+            communityId: "c1", service: service, currentUserId: { "u-visitor" },
+            communityUpdates: Empty().eraseToAnyPublisher(), memberChanges: Empty().eraseToAnyPublisher(),
+            deletions: Empty().eraseToAnyPublisher(),
+            myCommunities: MyCommunitiesWrites(add: added, remove: { _ in })
+        )
+        return (viewModel, service)
+    }
+
+    func test_load_communauteQuiValideChaqueEntree_offreDeDemander() async {
+        let (viewModel, _) = approvalSUT()
+
+        await viewModel.load()
+
+        XCTAssertTrue(viewModel.requiresJoinApproval)
+        XCTAssertFalse(viewModel.joinRequestPending)
+        XCTAssertFalse(viewModel.isMember)
+    }
+
+    func test_load_demandeDuLecteurEnAttente_seLitDemandeEnvoyee() async {
+        let (viewModel, _) = approvalSUT(joinRequest: "pending")
+
+        await viewModel.load()
+
+        XCTAssertTrue(viewModel.joinRequestPending)
+        XCTAssertFalse(viewModel.isMember)
+    }
+
+    func test_join_demandeAcceptee_enAttente_neFaitPasMembre_niNEntreDansMesCommunautes() async {
+        let added = RemovedCommunities()
+        let (viewModel, service) = approvalSUT(added: { added.ids.append($0.id) })
+        await viewModel.load()
+
+        await viewModel.joinCommunity()
+
+        XCTAssertTrue(viewModel.joinRequestPending)
+        XCTAssertFalse(viewModel.isMember, "une demande ne fait membre de rien")
+        XCTAssertTrue(added.ids.isEmpty, "« mes communautés » attend l'acceptation")
+        XCTAssertEqual(service.getCallCount, 1, "aucune relecture : rien n'a changé pour le lecteur")
+    }
+
+    func test_join_demandeEnvoyee_estOptimiste_puisDefaiteSurUnEchec() async {
+        let (viewModel, service) = approvalSUT()
+        await viewModel.load()
+        service.joinResult = .failure(MeeshyError.server(statusCode: 500, message: "boom"))
+        let seen = SeenFlags()
+        let watch = viewModel.$joinRequestPending.sink { seen.values.append($0) }
+
+        await viewModel.joinCommunity()
+        watch.cancel()
+
+        XCTAssertEqual(seen.values, [false, true, false], "« Demande envoyée » dès le toucher, défaite au refus")
+        XCTAssertNil(viewModel.joinRefusal)
+    }
+
+    func test_join_refusRecent_ditLeDelai() async {
+        let (viewModel, service) = approvalSUT()
+        await viewModel.load()
+        let body = Data(#"{"success":false,"error":"declined recently","code":"COMMUNITY_JOIN_COOLDOWN"}"#.utf8)
+        service.joinResult = .failure(MeeshyError.forbidden(reason: "declined recently", body: body))
+
+        await viewModel.joinCommunity()
+
+        XCTAssertEqual(viewModel.joinRefusal, .cooldown)
+        XCTAssertFalse(viewModel.joinRequestPending)
+    }
+
+    func test_join_demandeDejaEnvoyee_neRenvoieRien() async {
+        let (viewModel, service) = approvalSUT(joinRequest: "pending")
+        await viewModel.load()
+
+        await viewModel.joinCommunity()
+
+        XCTAssertEqual(service.joinCallCount, 0)
+    }
+
+    func test_join_cacheQuiCroitLEntreeDirecte_litLaDemandeServie() async {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator"))
+        service.joinResult = .success(.pending(requestId: "req-1"))
+        let viewModel = CommunityDetailViewModel(
+            communityId: "c1", service: service, currentUserId: { "u-visitor" },
+            communityUpdates: Empty().eraseToAnyPublisher(), memberChanges: Empty().eraseToAnyPublisher(),
+            deletions: Empty().eraseToAnyPublisher(), myCommunities: MyCommunitiesWrites(add: { _ in }, remove: { _ in })
+        )
+        await viewModel.load()
+
+        await viewModel.joinCommunity()
+
+        XCTAssertTrue(viewModel.joinRequestPending)
+        XCTAssertTrue(viewModel.requiresJoinApproval)
+        XCTAssertFalse(viewModel.isMember)
+    }
+
+    func test_memberChange_demandeAcceptee_faitMembre_etEffaceLaDemande() async {
+        let (viewModel, service) = approvalSUT(joinRequest: "pending")
+        await viewModel.load()
+        service.getResult = .success(CommunityStubs.community(
+            createdBy: "u-creator", currentUserRole: "member", requiresJoinApproval: true
+        ))
+
+        await viewModel.apply(CommunityStubs.memberChange(userId: "u-visitor", role: .member))
+
+        XCTAssertTrue(viewModel.isMember)
+        XCTAssertFalse(viewModel.joinRequestPending)
+    }
 }
 
 @MainActor
 private final class RemovedCommunities {
     var ids: [String] = []
+}
+
+@MainActor
+private final class SeenFlags {
+    var values: [Bool] = []
 }
