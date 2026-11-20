@@ -620,13 +620,35 @@ describe('#4349 critère 5 — type: delivered', () => {
     });
   });
 
-  it('borne la livraison aux messages RAPPORTÉS, un par un', async () => {
+  // #20084 — ce témoin s'intitulait « borne la livraison aux messages
+  // RAPPORTÉS, un par un » et assertait la forme d'APPEL : un appel par id,
+  // chacun passant son id en troisième argument positionnel. L'assertion était
+  // JUSTE et son intitulé FAUX — cette forme ne bornait rien.
+  //
+  // `latestMessageId` ne remplit pas `options.messageIds`, donc
+  // `markMessagesAsReceived` prenait sa branche FENÊTRE et gravait
+  // `createdAt > curseur AND <= now`, messages POSTÉRIEURS compris. Le premier
+  // appel figeait déjà tout ; les suivants étaient des no-ops (write-once).
+  //
+  // C'est le motif « un témoin qui nomme correctement la moitié qu'il GARDE
+  // gèle l'autre » : l'intitulé promettait une BORNE, l'assertion mesurait une
+  // CADENCE, et la borne n'a jamais existé. Ce qui se garde ici est donc le
+  // PÉRIMÈTRE remis au service ; l'EFFET (quels messages reçoivent
+  // `deliveredAt`) est gardé par
+  // `delivery-receipt-freezes-only-what-it-names.test.ts`, qui traverse le vrai
+  // `freezeMessageStatus`.
+  it('remet au service le PÉRIMÈTRE EXACT des messages rapportés, en un seul appel', async () => {
     const app = await buildApp();
 
     await postReceipt(app, { type: 'delivered', messageIds: [MESSAGE_ID, SECOND_MESSAGE_ID] });
 
-    expect(mockMarkMessagesAsReceived).toHaveBeenCalledWith(PARTICIPANT_ID, CONVERSATION_ID, MESSAGE_ID);
-    expect(mockMarkMessagesAsReceived).toHaveBeenCalledWith(PARTICIPANT_ID, CONVERSATION_ID, SECOND_MESSAGE_ID);
+    expect(mockMarkMessagesAsReceived).toHaveBeenCalledTimes(1);
+    expect(mockMarkMessagesAsReceived).toHaveBeenCalledWith(
+      PARTICIPANT_ID,
+      CONVERSATION_ID,
+      undefined,
+      { messageIds: [MESSAGE_ID, SECOND_MESSAGE_ID] }
+    );
   });
 
   it('sans messageIds, retombe sur la forme CONVERSATION de `received`', async () => {
