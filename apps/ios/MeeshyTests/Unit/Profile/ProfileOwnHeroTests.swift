@@ -34,8 +34,6 @@ final class ProfileOwnHeroTests: XCTestCase {
         XCTAssertTrue(ProfileOwnHeroPlan.trailing(isEditing: true, progress: 0).isEmpty)
         XCTAssertTrue(ProfileOwnHeroPlan.usesModeHeader(isEditing: true))
         XCTAssertFalse(ProfileOwnHeroPlan.usesModeHeader(isEditing: false))
-        XCTAssertFalse(ProfileOwnHeroPlan.showsGameBadges(isEditing: true))
-        XCTAssertTrue(ProfileOwnHeroPlan.showsGameBadges(isEditing: false))
     }
 
     func test_controls_eachSayTheirOwnName_toVoiceOver() {
@@ -98,7 +96,9 @@ final class ProfileOwnHeroTests: XCTestCase {
         XCTAssertTrue(profile.contains("MeeshyModeHeader("), "Annuler et Enregistrer sont les capsules du cadre K16")
         XCTAssertTrue(profile.contains("MeeshyGlassButton(systemImage: ProfileOwnHeroPlan.systemImage(control)"),
                       "Réglages et le crayon sont K02")
-        XCTAssertTrue(profile.contains("GameBannerBadge(userId: userId)"), "le niveau et le rang restent aux angles")
+        XCTAssertFalse(profile.contains("GameBannerBadge("), "#19925 : le jeu a quitté ma bannière pour « Ma Légende »")
+        XCTAssertTrue(profile.contains("GameProfileBoardSource("), "#19925 : « Ma Légende » porte la synthèse du jeu")
+        XCTAssertTrue(profile.contains("wearsRing: false"), "#19925 : le cadre se pose hors du bouton qui découpe")
         XCTAssertFalse(profile.contains(".frame(height: 120)"), "plus de bannière de 120 dans une carte")
         XCTAssertFalse(profile.contains("frame(width: 90, height: 90)"), "plus d'avatar de 90")
     }

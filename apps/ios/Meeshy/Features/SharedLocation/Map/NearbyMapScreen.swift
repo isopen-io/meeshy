@@ -20,6 +20,9 @@ struct NearbyMapScreen: View {
     @State private var opened: ShareMyLocationRecipient?
     @State private var sharesMine = false
     @State private var sheetHeight: CGFloat = 0
+    /// « Autour de toi » se range d'un glissement vers le bas pour libérer la carte, et revient par son bouton (#19885).
+    @State private var showsAround = true
+    @StateObject private var talkie = TalkieSender()
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -47,8 +50,8 @@ struct NearbyMapScreen: View {
                 }
             } else {
                 mapStage.meeshyAnchoredSheet(
-                    isPresented: .constant(true), accessibilityLabel: LocationMapCopy.nearbyTitle,
-                    height: .detents([0.42, 0.85], initial: 0), isDragDismissEnabled: false,
+                    isPresented: $showsAround, accessibilityLabel: LocationMapCopy.nearbyTitle,
+                    height: .detents([0.42, 0.85], initial: 0), isDragDismissEnabled: true,
                     closeLabel: nil, surface: .dark, outside: .passesThrough
                 ) { ScrollView { sheetContent } }
             }
@@ -68,35 +71,48 @@ struct NearbyMapScreen: View {
 
     // MARK: - La carte
 
+    /// La carte s'étend sous la barre système ; les commandes, elles, restent dans la zone sûre de l'écran où l'on est
+    /// (#19885) : posées sur un fond qui la respecte, jamais dans une pile que la carte agrandit jusqu'au bord.
     private var mapStage: some View {
-        ZStack(alignment: .top) {
-            LocationMapCanvas(focus: focus, onViewport: { viewport = $0 },
-                              onRegionSettled: { model.regionChanged($0.bounds) })
+        Color.clear
+            .background {
+                ZStack {
+                    LocationMapCanvas(focus: focus, onViewport: { viewport = $0 },
+                                      onRegionSettled: { model.regionChanged($0.bounds) })
+                    LocationMapPinsLayer(viewport: viewport, pins: shown, me: me,
+                                         meShare: LocationMapOwnShare.resolve(recipientIds: recipientIds, focusedUserId: nil),
+                                         isOffline: isOffline, onSelect: { open($0) }, talkie: talkie)
+                }
                 .ignoresSafeArea()
-            LocationMapPinsLayer(viewport: viewport, pins: shown, me: me,
-                                 meShare: LocationMapOwnShare.resolve(recipientIds: recipientIds, focusedUserId: nil),
-                                 isOffline: isOffline, onSelect: { open($0) })
-                .ignoresSafeArea()
-            VStack(spacing: MeeshySpacing.md) {
-                header
-                filters
-                sharingCapsule
-                LocationTravelPill(me: me, places: places)
             }
-            .padding(.top, MeeshySpacing.sm)
-            .frame(maxWidth: .infinity)
-            VStack {
-                Spacer()
+            .overlay(alignment: .top) {
+                VStack(spacing: MeeshySpacing.md) {
+                    header
+                    filters
+                    sharingCapsule
+                    LocationTravelPill(me: me, places: places)
+                }
+                .padding(.top, MeeshySpacing.sm)
+                .frame(maxWidth: .infinity)
+                // Une carte est un fond CLAIR : le verre s'y fonce pour que l'encre blanche se lise (#19885).
+                .meeshyGlassTone(.onLight)
+            }
+            .overlay(alignment: .bottom) {
                 HStack {
+                    if sizeClass != .regular, !showsAround {
+                        MeeshyGlassButton(systemImage: "list.bullet", label: LocationMapCopy.showAround, size: .s44,
+                                          action: { showsAround = true })
+                            .accessibilityIdentifier("locationMap.nearby.showAround")
+                    }
                     Spacer()
                     MeeshyGlassButton(systemImage: "scope", label: LocationMapCopy.recenter, size: .s44,
                                       action: { refocus(animated: true) })
                 }
+                .padding(MeeshySpacing.lg)
+                .padding(.bottom, sizeClass == .regular || !showsAround ? 0 : sheetHeight)
+                .meeshyGlassTone(.onLight)
             }
-            .padding(MeeshySpacing.lg)
-            .padding(.bottom, sizeClass == .regular ? 0 : sheetHeight)
-        }
-        .onMeeshyAnchoredSheetFootprint { sheetHeight = $0?.height ?? 0 }
+            .onMeeshyAnchoredSheetFootprint { sheetHeight = $0?.height ?? 0 }
     }
 
     private var recipientIds: [String] { sharing.roster.pruned(now: Date()).recipients.map(\.userId) }
@@ -110,7 +126,7 @@ struct NearbyMapScreen: View {
             ProfileNoveltyReader(feature: .closeOnesMap, accountId: AuthManager.shared.currentUser?.id) { badge in
                 MeeshyCollapsingHeroCapsule(LocationMapCopy.nearbyTitle,
                                             subtitle: LocationMapCopy.nearbySubtitle(model.pins.count),
-                                            titleBadge: badge, width: .fill, tone: .deep) { EmptyView() }
+                                            titleBadge: badge, width: .fill, tone: .onLight) { EmptyView() }
             }
         } trailing: {
             arrangeMenu
@@ -145,7 +161,7 @@ struct NearbyMapScreen: View {
             selection: [filter.rawValue],
             label: LocationMapCopy.filtersLabel,
             mode: .single,
-            surface: .onMedia,
+            surface: .theme,
             inset: MeeshySpacing.lg,
             onChange: { _, id in filter = NearbyCircleFilter(rawValue: id) ?? .all }
         )
@@ -335,10 +351,13 @@ struct NearbyPersonRow: View {
 
     var body: some View {
         let window = SharedLocationWindow(deadline: pin.deadline, now: now)
-        let subtitle = [place, LocationMapCopy.precisionWord(pin.precision)].compactMap { $0 }.joined(separator: " · ")
+        let motion = LocationMotionGlyph.drawn(pin.shownMotion(now: now))
+        let subtitle = [motion.map(LocationMotionGlyph.label(for:)), place, LocationMapCopy.precisionWord(pin.precision)]
+            .compactMap { $0 }.joined(separator: " · ")
         MeeshyPersonRow(
             title: pin.name,
             subtitle: subtitle,
+            subtitleImage: motion.flatMap(LocationMotionGlyph.symbol(for:)),
             meta: distanceMeters.map { LocationMapCopy.distance($0, locale: locale) },
             metaDetail: LocationMapCopy.remainingShort(window),
             levelImage: pin.circle.map { PersonLocationCard.circleSymbol($0) },

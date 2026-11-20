@@ -268,6 +268,7 @@ struct ProfileView: View {
             collapsedHeight: ProfileOwnHeroPlan.collapsedHeight,
             isLoading: user == nil,
             keepsBannerInBar: true,
+            avatarSpill: Double(ProfileOwnAvatar.reserveBelow(user, avatarSize: CGFloat(MeeshyCollapsingHeroRecipe.avatarExpanded))),
             banner: { heroBanner(progress: progress) },
             leading: { heroControls(ProfileOwnHeroPlan.leading(isEditing: isEditing)) },
             trailing: { heroControls(ProfileOwnHeroPlan.trailing(isEditing: isEditing, progress: progress)) },
@@ -329,8 +330,8 @@ struct ProfileView: View {
         }
     }
 
-    /// La bannière à fond perdu : ma photo, mon décor, ou la bannière vivante du kit (K27). Le niveau et le rang aux
-    /// angles bas, au-dessus de l'avatar qui la chevauche ; toucher la photo l'ouvre en plein écran.
+    /// La bannière à fond perdu : ma photo, mon décor, ou la bannière vivante du kit (K27) ; toucher la photo l'ouvre
+    /// en plein écran. Le jeu n'y est plus : sa synthèse vit dans « Ma Légende », plus bas (#19925).
     private func heroBanner(progress: Double) -> some View {
         let height = CGFloat(ProfileOwnHeroPlan.bannerHeight(progress: progress))
         return photoButton(ProfileOwnBanner.openablePhoto(of: user)) {
@@ -338,15 +339,6 @@ struct ProfileView: View {
                 .frame(height: height)
                 .frame(maxWidth: .infinity)
                 .clipped()
-                .overlay(alignment: .bottom) {
-                    // #10601 — le niveau et le rang aux angles bas de la bannière, jamais en édition.
-                    if ProfileOwnHeroPlan.showsGameBadges(isEditing: isEditing), let userId = user?.id {
-                        GameBannerBadge(userId: userId)
-                            .allowsHitTesting(false)
-                            .padding(.bottom, CGFloat(ProfileOwnHeroPlan.bannerBottomInset))
-                            .transition(.opacity)
-                    }
-                }
         }
         .overlay {
             if isUploadingBanner {
@@ -360,9 +352,12 @@ struct ProfileView: View {
     /// bannière au lecteur d'écran : l'avatar offre donc d'ouvrir la photo de bannière.
     private func heroAvatar(size: CGFloat) -> some View {
         ZStack(alignment: .bottomTrailing) {
+            // Le cadre se pose HORS du bouton : la source de la transition zoom (iOS 18) découpe à ses bornes ce
+            // qu'elle enveloppe, et le film du cadre déborde de la boîte de l'avatar (#19925).
             photoButton(user?.avatar) {
-                ProfileOwnAvatar(user: user, accentColor: shownAccentHex, isEditing: isEditing, size: size)
+                ProfileOwnAvatar(user: user, accentColor: shownAccentHex, isEditing: isEditing, size: size, wearsRing: false)
             }
+            .modifier(ProfileOwnRing(ring: ProfileOwnAvatar.ring(of: user), size: size))
 
             if isEditing {
                 // La pastille d'action de coin du kit (K02, petite taille) : l'appareil photo sur l'avatar modifiable.
@@ -411,11 +406,14 @@ struct ProfileView: View {
                 VStack(spacing: MeeshySpacing.xxl) {
                     // Premier chargement, cache vide (AuthManager n'a encore aucun compte) : le gabarit fait du squelette
                     // du kit (K38, #19594) cède à la fiche par `motion.reveal` (K26, #19528) : même place, fondu croisé.
+                    // La fiche se pose sur le THÈME : sans ce ton, le kit prend celui du verre sombre et peint ses rangées
+                    // en encre claire sur un fond clair (#19925).
                     MeeshyRevealZone(isRevealed: !MeeshySkeletonLaw.shows(isLoading: true, hasCachedData: user != nil)) {
                         faceContent
                     } placeholder: {
                         ProfileVitrineSkeleton()
                     }
+                    .meeshyGlassTone(.theme)
                     Spacer().frame(height: MeeshySpacing.xxxl + 8 + (showsFaceSelector ? Self.faceSelectorRoom : 0))
                 }
                 .padding(.horizontal, MeeshySpacing.lg)
@@ -726,10 +724,20 @@ struct ProfileView: View {
         router.push(.userStats)
     }
 
-    /// L'entrée du tableau de bord des streaks & badges (#5698) — sous mon activité, là où l'utilisateur cherche « où
-    /// j'en suis ». #10093 — plus de carte de jeu sur le profil : le niveau et le rang vivent sur la bannière.
+    /// « Ma Légende » (#19925) : la synthèse de mon jeu — palier et niveau, rang et blason, Gloire, progression,
+    /// trophées —, la même carte que « Sa Légende » chez un autre, qui ne vit plus sur ma bannière. Toute la carte
+    /// mène au tableau de bord Progression ; sans jeu servi, l'entrée d'avant garde le chemin.
+    @ViewBuilder
     private var progressionEntry: some View {
-        ProfileProgressionEntry(summary: legend.summary) { router.push(.progression) }
+        if let userId = user?.id {
+            GameProfileBoardSource(
+                userId: userId, tint: Color(hex: accentColor), title: ProfileLegendCopy.title,
+                onOpen: { router.push(.progression) },
+                fallback: .legend(legend.summary)
+            )
+        } else {
+            ProfileProgressionEntry(summary: legend.summary) { router.push(.progression) }
+        }
     }
 
     /// La bannière ou la photo, touchable quand elle s'ouvre en plein écran : elle s'enfonce sous le doigt (voile seul
@@ -739,7 +747,9 @@ struct ProfileView: View {
         return Button { openFullscreen(url) } label: { label() }
             .buttonStyle(PressableButtonStyle())
             .allowsHitTesting(opens)
-            .zoomTransitionSource(id: url ?? "", in: photoZoomSpace)
+            // Seule une photo qui s'ouvre est la source du zoom : sans elle, la source découperait et voilerait ce
+            // qu'elle enveloppe pour rien (#19925).
+            .zoomTransitionSource(id: url ?? "", in: opens ? photoZoomSpace : nil)
             .accessibilityHint(opens ? ProfileImageCopy.openFullscreenHint : "")
             .accessibilityRemoveTraits(opens ? [] : .isButton)
     }

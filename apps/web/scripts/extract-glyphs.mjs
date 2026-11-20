@@ -801,10 +801,11 @@ emit({
  * | `xmark.circle.fill` (effacer la recherche) | `x-circle` |
  * | `lock.shield.fill` / `eye.fill` (confidentialite a la creation) | `shield-check` / `eye` |
  * | `chevron.forward` | `caret-right` |
+ * | `clock.fill` (demande d'entree envoyee, #19868) | `clock` |
  *
  * `lock`, `users`, `magnifyingGlass`, `caretLeft` et `warningCircle` restent au SOCLE.
  */
-const COMMUNITIES = ['chat-circle', 'chats-circle', 'globe', 'plus-circle', 'users-three', 'x-circle', 'shield-check', 'eye', 'caret-right'];
+const COMMUNITIES = ['chat-circle', 'chats-circle', 'globe', 'plus-circle', 'users-three', 'x-circle', 'shield-check', 'eye', 'caret-right', 'clock'];
 
 emit({
   ids: COMMUNITIES,

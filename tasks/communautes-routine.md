@@ -572,3 +572,59 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Blocage inchangé : les deux rouges ÉTRANGERS de son verdict (`capability-guard` qui vise `lib/calls/call-network-recovery.ts`, et `calls-routes.test.ts` à 2 175 lignes pour une référence de 2 154) sont toujours sur `dev` (`89bece81d`). #19772, qui corrige les deux, est ouverte et poussée à 06:44 par une autre session : vivante, cédée.
 - `dev` (`89bece81d`, 3 commits iOS / Android / web uiux, aucun chemin sous `services/` ni `packages/shared`) fusionnée dans la branche sans conflit ; les gardes passerelle du réveil précédent restent valables pour cet arbre. Pas de dispatch : son verdict ne serait rouge que de ces deux étrangers, et la file en compte déjà plusieurs.
 - Prochain lot recommandé : dès que #19772 est sur `dev`, la refusionner, dispatcher `ci.yml`, fusionner #19763, fermer #18769 puis #16857.
+
+## 2026-11-19 — réveil 09:38 UTC
+
+- Début du run : #19763 (#18769) fusionnée (`1ff276909`) ; aucune PR de la routine ouverte.
+- Lot : #19868 — demander à rejoindre une communauté qui valide chaque entrée dit « Demande envoyée » (passerelle + web), jamais un faux membre.
+- Constat : le web lisait le 409 `COMMUNITY_JOIN_PENDING` d'une communauté qui valide chaque entrée (#19429) comme « déjà membre » — « Quitter », compteur +1 et entrée dans « mes communautés » pour quelqu'un qui n'était pas entré. iOS affichait le message brut en anglais.
+- Passerelle : `GET /communities/:id` sert `currentUserJoinRequest` (`'pending' | null`, additif), la demande du LECTEUR seul, lue seulement pour un non-membre d'une communauté qui valide chaque entrée (`routes/communities/join-request-state.ts`) ; lecture qui lève ⇒ `null`.
+- Web : la jonction annonce `acceptsPending` ; « Demander à rejoindre », puis l'état « Demande envoyée » (un statut, pas un bouton) ; 403 `COMMUNITY_JOIN_COOLDOWN` dit le délai ; un 202 sur un cache périmé défait l'entrée optimiste ; `community:member-joined` sur soi efface la demande. Quatre clés en sept langues ; budget `interface_catalogs_community_membership` 7 → 8 Ko (7,11 Ko au `measure-weight`). Glyphe `clock` ajouté au jeu des communautés (`extract-glyphs.mjs`).
+- Témoins : passerelle `communities-core.test.ts` (+6, rouge prouvé : 5 échecs) ; web `community-membership.test.ts` (+8), `view.test.ts` (+3), `community-membership.test.tsx` (+3), `community-member-live.test.ts` (+1) — rouge prouvé (12 échecs).
+- Gates locaux : passerelle `tsc --noEmit` vert, 51 suites / 772 tests verts (communautés, `routes/__tests__`, `tsc-never-loaded`) ; shared `__tests__/ci/` 25 / 216 verts ; web `tsc --noEmit` vert, build vert, `measure-weight` vert, suite complète 34 700 verts, 1 rouge ÉTRANGER (`act-leak-guard.test.ts`, identique sur `dev` nu `cd0157b87`).
+- Auditeur adversarial : non bloquant ; deux états hérités relevés → #19872.
+- Suivis ouverts (milestone 284) : iOS #19869, Android #19870, intendants (liste, accepter, refuser, `community:join-requested`) #19871, clôture des demandes #19872.
+- Prochain lot recommandé : #19871 (web d'abord), sans quoi une demande envoyée n'a personne pour y répondre.
+
+## 2026-11-19 — réveil 11:38 UTC
+
+- Début du run : aucune PR de la routine ouverte ; #19868 fusionnée (`6f3155bf4`).
+- Lot : #19871 — les intendants d'une communauté voient, acceptent et refusent les demandes d'entrée (web d'abord).
+- Web : l'écran Membres ouvre, pour l'intendant SEUL (`isCommunityStewardOf` : administrateur, modérateur, créateur, lus dans ce que le détail sert), la section « Demandes en attente · N » (« + » quand d'autres pages restent) : avatar, nom, pays (code ISO rendu par `Intl.DisplayNames`), date ; « Accepter » et « Refuser », vrais boutons de 44 nommés pour le lecteur d'écran ; refuser est confirmé (sept jours avant une nouvelle demande). La liste n'est même pas demandée à un autre lecteur (la passerelle lui répondrait 404).
+- Optimiste (`community-join-request-actions.ts`) : la ligne part au geste, accepter fait monter `memberCount` aussitôt et le membre servi entre dans l'effectif ; un échec rend exactement le cache d'avant ; un 404 (déjà tranchée ailleurs, compte fermé, blocage) laisse la ligne partie, remet le compteur et relit liste, effectif et fiche. Hors ligne, rien ne part.
+- Temps réel : `community:join-requested` relit la liste de CETTE communauté (`community-join-request-live.ts`, branché dans `bindCommunityLive`) ; `community:member-joined` la relit aussi (une demande acceptée par un autre intendant s'efface).
+- Passerelle inchangée. Cliquets partagés : `community:join-requested` quitte `SANS_LECTEUR` (orphan gate) et entre dans l'asymétrie « web seul » (parity gate, iOS #19877, Android #19878) ; `check-ts-catalog-dead-entries.mjs` perd les trois entrées `join-requests` (269 = référence). Budget `interface_catalogs_community_membership` 8 → 9 Ko (8,16 Ko mesurés).
+- Gardes web ajustées : `press-ratchet` (réponse d’appui sur les trois boutons), `avatar-presence-guard` (exemption : un demandeur n’a pas de présence servie), `community-live-binding.test.ts` (sept événements écoutés). Suite web complète : 34 719 verts, 1 rouge ÉTRANGER (`act-leak-guard.test.ts`, rouge aussi sans le lot).
+- Témoins : `community-join-requests.test.ts` (13), `community-join-requests.test.tsx` (6), `community-live.test.ts` (+1), `community-member-live.test.ts` (+1) — rouge prouvé sur les deux branchements temps réel (2 échecs sans eux).
+- Suivis ouverts (milestone 284) : iOS #19877, Android #19878, refus notifié au demandeur #19879.
+
+## 2026-11-19 — réveil 13:38 UTC
+
+- Début du run : #19880 (#19871, intendants web) seule PR de la routine ouverte, dernière poussée à 11:55, donc inactive : run consacré à la mener à la fusion.
+- Verdict trouvé sur `4390a6065` : seconde tentative du `workflow_dispatch` de `ci.yml`, tous les travaux verts (les rouges de la première tentative étaient d'infrastructure : miroir apt de Playwright, tranche passerelle annulée).
+- `dev` (`fbfaa617b`, 20 fichiers : position partagée, rang de liste, carte iOS ; aucun chemin du lot) fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : shared `__tests__/ci/` 25 fichiers / 216 tests verts ; web `tsc --noEmit` vert, suites du lot (6 fichiers, 41 tests) vertes, `check-ts-catalog-dead-entries` 269 = référence.
+- 15:29 : `ci.yml` (`workflow_dispatch`) VERT sur `2d4149e7c`. `dev` ayant reçu 21 commits (appels web, position partagée, relations ; aucun chemin du lot), `dev` `07609bfa9` refusionnée sans conflit ; rejoués : shared `__tests__/ci/` 216 verts, web `tsc --noEmit` vert, suites communautés + appels (182 fichiers, 2 632 tests) vertes, catalogue 269 = référence.
+- Prochain lot recommandé : iOS #19877 (les intendants tranchent les demandes), puis #19869 / #19879.
+
+## 2026-11-19 — réveil 17:38 UTC
+
+- Début du run : #19903 (#19869, iOS « Demande envoyée ») ouverte, poussée à 16:55 par une autre session, ses `workflow_dispatch` en file : vivante, cédée.
+- Lot : #19872 (passerelle) — une demande d'entrée se clôt quand la personne entre par une autre porte, et n'attend jamais indéfiniment.
+- Constat : une demande `pending` survivait à une entrée par une autre porte (invitation, ajout, salon) — repartie, la personne relisait « Demande envoyée » et accepter la vieille demande la faisait revenir ; et une demande qu'aucun intendant ne voit (blocage, compte un temps inutilisable) attendait indéfiniment.
+- Passerelle : `services/community-join-request-lifecycle.ts`. `closePendingJoinRequests` (`accepted`, au nom de qui fait entrer, ne lève jamais) appelée par les quatre écrivains d'entrée (`admitCommunityMember`, `…/invite`, `…/members`, `applyCommunityAdmission`) ; `liveJoinRequestWhere` (trente jours, `JOIN_REQUEST_TTL_MS`) dans chaque lecture et bascule : détail du demandeur, liste et décisions des intendants, compteur de `community:join-requested`, déduplication de `requestCommunityEntry`, qui écrit `expired` sur la vieille avant d'en poser une nouvelle. Décision écrite (`services/gateway/decisions/2026-11-19-…-19872.md`) : l'expiration plutôt qu'un refus implicite au blocage, qui le révélerait.
+- Cliquet `community-member-writer-sweep` : chaque écrivain d'entrée doit appeler `closePendingJoinRequests`.
+- Témoins : `join-request-lifecycle-19872.test.ts` (15, rouge prouvé : 11 échecs sur un module vide) ; `communities-core` et `link-entries-19429` ajustés (le `where` porte `createdAt`).
+- Aucun client touché, aucun contrat d'API changé.
+- Auditeur adversarial : non bloquant. Corrigés dans le lot : une invitation qui fait entrer pendant que la demande s'écrit (la demande naît close, personne n'est relancé) ; une réactivation déjà faite par une course clôt quand même (tout le plan d'`applyCommunityAdmission`) ; témoin de l'ajout sur une ligne réactivée. Rouge prouvé (2 échecs sans les correctifs). Ouverte, préexistante : #19914 (accepter rouvre la demande si une panne survient après l'entrée). Rappel : pas d'index unique sur la paire `CommunityMember` (#16696).
+
+## 2026-11-19 — réveil 19:38 UTC
+
+- Début du run : #19903 (#19869, iOS « Demande envoyée ») ouverte et inactive depuis 16:56 ; une autre session y a fusionné `dev` à 19:39 et relancé ses vérifications : vivante, cédée.
+- Lot : #19914 (passerelle) — accepter une demande d'entrée ne la rouvre jamais quand la personne est déjà entrée.
+- Constat : `POST …/join-requests/:requestId/accept` remettait la demande en `pending` sur TOUTE exception d'`admitCommunityMember`, y compris une panne levée APRÈS l'écriture de l'appartenance (diffusion, engagement levant en synchrone) : membre active ET demande de nouveau tranchable, 500 pour l'intendant.
+- Passerelle : `admitCommunityMember` sépare l'ÉCRITURE de ses suites (`afterEntry` : succès « cercles », engagement, diffusion, clôture des demandes), chacune gardée seule et journalisée, jamais remontée — le correctif vaut aussi pour l'adhésion directe. Sur erreur, l'acceptation relit l'appartenance (`membershipAfterFailure`, trois états) : `entered` ⇒ succès et membre servi ; `absent` ⇒ la demande redevient tranchable ; `unknown` (la relecture lève) ⇒ 500 sans rouvrir, une ignorance ne rouvre rien.
+- Témoins : `join-request-accept-19914.test.ts` (8, rouge prouvé : 4 échecs avant le correctif, puis 2 sur la présence).
+- Auditeur adversarial : non bloquant. Corrigé dans le lot : la réponse de l'acceptation servait l'`isOnline` brut du nouveau membre à l'intendant (préexistant, et le chemin `entered` l'étendait) ; elle passe désormais par `gateCoMemberPresence`, comme l'ajout d'un membre (`deactivatedAt` lu, jamais servi). Ouverte : #19924 (une demande `accepted` sans membre, quand écriture et relecture ont échoué, n'est réparée par rien). Rappel : pas d'index unique sur la paire `CommunityMember` (#16696).
+- Gates locaux : passerelle `tsc --noEmit` vert ; suites communautés / demandes / admission / présence / balayages / `tsc-never-loaded` 169 fichiers, 2 258 tests verts ; balayages et cliquets (`sweep|ratchet|guard`) 135 / 136 fichiers verts, 1 rouge ÉTRANGER (`DoubleRatchet.test.ts`, 2 échecs identiques sans le lot).
+- Aucun client touché, aucun contrat d'API changé.
+- Prochain lot recommandé : iOS #19877 (intendants) une fois #19903 fusionnée, sinon #19879 (refus notifié, passerelle + web).

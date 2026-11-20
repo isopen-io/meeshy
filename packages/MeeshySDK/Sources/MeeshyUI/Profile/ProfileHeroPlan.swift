@@ -76,6 +76,19 @@ public nonisolated enum ProfileHeroPlan {
         isMuted ? nil : state
     }
 
+    /// Ce que dit le texte de présence de la fiche (#19853) : le même état que le point de l'avatar. Vert ⇒ « En ligne »,
+    /// quelle que soit la date d'activité servie ; sinon la date, teintée de cet état ; rien sans état ni date.
+    public enum PresenceLine: Equatable, Sendable {
+        case online
+        case seen(Date, PresenceState)
+    }
+
+    public static func presenceLine(state: PresenceState?, lastActiveAt: Date?) -> PresenceLine? {
+        guard let state else { return nil }
+        if state == .online { return .online }
+        return lastActiveAt.map { .seen($0, state) }
+    }
+
     public static func storyRing(_ state: StoryRingState, avatarSize: Double) -> StoryRingState {
         avatarSize >= storyRingMinimumAvatar ? state : .none
     }

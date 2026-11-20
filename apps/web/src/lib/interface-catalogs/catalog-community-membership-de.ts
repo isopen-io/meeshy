@@ -15,6 +15,10 @@ const deCommunityMembership = {
   'community.membership.offline': 'Offline.',
   'community.membership.error': 'Fehlgeschlagen. Versuche es erneut.',
   'community.membership.error.refused': 'Diese Community ist privat: Beitritt nur auf Einladung.',
+  'community.membership.request': 'Beitritt anfragen',
+  'community.membership.requested': 'Anfrage gesendet',
+  'community.membership.requested.hint': 'Ein Admin oder Moderator muss sie annehmen.',
+  'community.membership.error.cooldown': 'Deine letzte Anfrage wurde abgelehnt: Du kannst 7 Tage danach erneut anfragen.',
   'community.settings.open': "Einstellungen",
   'community.members.open': 'Mitglieder',
   'community.members.title': 'Mitglieder',
@@ -67,6 +71,16 @@ const deCommunityMembership = {
   'community.posts.error.offline': "Offline: Die Beiträge erscheinen, sobald das Netz zurück ist.",
   'community.posts.retry': "Erneut versuchen",
   'community.posts.loadingMore': "Weitere werden geladen",
+  'community.members.requests.section': "Ausstehende Anfragen",
+  'community.members.requests.asked': "Angefragt am {date}",
+  'community.members.requests.accept': "Annehmen",
+  'community.members.requests.reject': "Ablehnen",
+  'community.members.requests.acceptLabel': "Anfrage von {name} annehmen",
+  'community.members.requests.rejectLabel': "Anfrage von {name} ablehnen",
+  'community.members.requests.reject.confirm.body': "{name} kann erst in sieben Tagen erneut anfragen.",
+  'community.members.requests.gone': "Diese Anfrage wurde bereits bearbeitet.",
+  'community.members.requests.accepted': "{name} gehört jetzt zur Community.",
+  'community.members.requests.more': "Weitere Anfragen anzeigen",
 } as const satisfies CommunityMembershipCatalog;
 
 export default deCommunityMembership;

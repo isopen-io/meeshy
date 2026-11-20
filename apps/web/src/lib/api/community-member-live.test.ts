@@ -10,6 +10,7 @@ import type {
 
 import type { SocketClient } from '../net/socket';
 import { communitiesQueryKey, communityQueryKey, type CommunityPage, type CommunitySummary } from './communities';
+import { communityJoinRequestsQueryKey } from './community-join-requests';
 import { communityMembersQueryKey } from './community-members';
 import { applyCommunityMemberEvent } from './community-member-live';
 import { bindCommunityLive } from './community-live';
@@ -66,6 +67,15 @@ describe('applyCommunityMemberEvent', () => {
     expect(stale(client, communityMembersQueryKey(CLUB))).toBe(true);
   });
 
+  test("une entrée — acceptée par un AUTRE intendant — relit les demandes en attente ; un départ ne les relit pas (#19871)", () => {
+    const client = seeded();
+    client.setQueryData(communityJoinRequestsQueryKey(CLUB), { pages: [], pageParams: [null] });
+    applyCommunityMemberEvent(client, SERVER_EVENTS.COMMUNITY_MEMBER_LEFT, left(), ME);
+    expect(stale(client, communityJoinRequestsQueryKey(CLUB))).toBe(false);
+    applyCommunityMemberEvent(client, SERVER_EVENTS.COMMUNITY_MEMBER_JOINED, joined(), ME);
+    expect(stale(client, communityJoinRequestsQueryKey(CLUB))).toBe(true);
+  });
+
   test("le départ ou le retrait d'un autre membre baisse l'effectif", () => {
     const client = seeded();
     applyCommunityMemberEvent(client, SERVER_EVENTS.COMMUNITY_MEMBER_LEFT, left({ reason: 'removed' }), ME);
@@ -91,6 +101,16 @@ describe('applyCommunityMemberEvent', () => {
     applyCommunityMemberEvent(client, SERVER_EVENTS.COMMUNITY_MEMBER_JOINED, joined({ userId: ME, via: 'invited' }), ME);
 
     expect(detail(client)?.viewerRole).toBe('member');
+  });
+
+  test("sa demande ACCEPTÉE fait du lecteur un membre, et la demande s'efface — un départ ultérieur ne la ressuscite pas (#19868)", () => {
+    const client = new QueryClient();
+    client.setQueryData(communityQueryKey(CLUB), summary(CLUB, { viewerRole: null, requiresJoinApproval: true, viewerJoinRequest: 'pending' }));
+    applyCommunityMemberEvent(client, SERVER_EVENTS.COMMUNITY_MEMBER_JOINED, joined({ userId: ME }), ME);
+    expect([detail(client)?.viewerRole, detail(client)?.viewerJoinRequest]).toEqual(['member', null]);
+
+    applyCommunityMemberEvent(client, SERVER_EVENTS.COMMUNITY_MEMBER_LEFT, left({ userId: ME }), ME);
+    expect([detail(client)?.viewerRole, detail(client)?.viewerJoinRequest]).toEqual([null, null]);
   });
 
   test("le lecteur retiré n'a plus de rôle, et ce qu'il voyait de la communauté se relit (une privée cesse d'être servie)", () => {

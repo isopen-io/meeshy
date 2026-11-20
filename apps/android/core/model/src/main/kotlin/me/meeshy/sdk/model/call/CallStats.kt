@@ -50,6 +50,8 @@ public data class CallStats(
     val inboundVideoBytes: Int = 0,
     /** `true` when the selected ICE pair rides a TURN relay, `false` when direct, `null` while unknown. */
     val relayed: Boolean? = null,
+    /** Gels, limitation, tampon de gigue et route de cette lecture (#19895) ; tout `null` = rien de mesuré. */
+    val media: CallMediaQuality = CallMediaQuality(),
 ) {
     /**
      * The interval [CallQualitySample] this snapshot yields against the [previous]
@@ -103,8 +105,12 @@ public data class CallStats(
         /**
          * Pure reducer over the projected [entries] (iOS `CallStats.reduce`).
          *
-         * - `candidate-pair` sets [roundTripTimeMs] (`currentRoundTripTime` ×1000)
-         *   and [availableOutgoingBitrateBps] (`availableOutgoingBitrate`, truncated).
+         * - [roundTripTimeMs] (`currentRoundTripTime` ×1000) and
+         *   [availableOutgoingBitrateBps] (`availableOutgoingBitrate`, truncated) are
+         *   read on the SELECTED pair ([selectedCandidatePair], #19899) — a probing
+         *   pair listed after it no longer overwrites the live path's figures. When no
+         *   pair is elected, or the elected one lacks the field, the last
+         *   `candidate-pair` carrying it wins, as before.
          * - `inbound-rtp` sums [packetsLost] and [bytesReceived]; splits
          *   `packetsReceived` into [inboundAudioPackets] / [inboundVideoPackets] by
          *   [RawEntry.kind]; accumulates the audio jitter mean; and remembers the
@@ -123,17 +129,22 @@ public data class CallStats(
          */
         public fun relayedRoute(entries: List<RawEntry>): Boolean? {
             val byId = entries.associateBy { it.id }
-            val selectedId = entries.firstOrNull { it.type == "transport" }?.strings?.get("selectedCandidatePairId")
-            val nominated = entries.firstOrNull {
-                it.type == "candidate-pair" && it.strings["state"] == "succeeded" &&
-                    (it.values["nominated"] ?: 0.0) > 0.0
-            }
-            val pair = selectedId?.let { byId[it] } ?: nominated ?: return null
+            val pair = selectedCandidatePair(entries) ?: return null
             val types = listOf("localCandidateId", "remoteCandidateId")
                 .mapNotNull { pair.strings[it] }
                 .mapNotNull { byId[it]?.strings?.get("candidateType") }
             if (types.isEmpty()) return null
             return types.contains("relay")
+        }
+
+        /** The SELECTED ICE pair: the transport's `selectedCandidatePairId`, else the nominated succeeded pair. */
+        public fun selectedCandidatePair(entries: List<RawEntry>): RawEntry? {
+            val selectedId = entries.firstOrNull { it.type == "transport" }?.strings?.get("selectedCandidatePairId")
+            val nominated = entries.firstOrNull {
+                it.type == "candidate-pair" && it.strings["state"] == "succeeded" &&
+                    (it.values["nominated"] ?: 0.0) > 0.0
+            }
+            return selectedId?.let { id -> entries.lastOrNull { it.id == id } } ?: nominated
         }
 
         public fun reduce(entries: List<RawEntry>): CallStats {
@@ -199,8 +210,10 @@ public data class CallStats(
             val jitterMs =
                 if (audioJitterCount > 0) (audioJitterSum / audioJitterCount) * 1000 else 0.0
 
+            val elected = selectedCandidatePair(entries)?.takeIf { it.type == "candidate-pair" }?.values
+
             return CallStats(
-                roundTripTimeMs = rtt,
+                roundTripTimeMs = elected?.get("currentRoundTripTime")?.let { it * 1000 } ?: rtt,
                 packetsLost = packetsLost,
                 bandwidth = bytesSent,
                 bytesReceived = bytesReceived,
@@ -209,11 +222,13 @@ public data class CallStats(
                 inboundAudioPackets = inboundAudio,
                 inboundVideoPackets = inboundVideo,
                 outboundPacketsSent = outbound,
-                availableOutgoingBitrateBps = availableOutgoingBitrateBps,
+                availableOutgoingBitrateBps = elected?.get("availableOutgoingBitrate")?.toInt()
+                    ?: availableOutgoingBitrateBps,
                 jitterMs = jitterMs,
                 inboundAudioBytes = inboundAudioBytes,
                 inboundVideoBytes = inboundVideoBytes,
                 relayed = relayedRoute(entries),
+                media = CallMediaQuality.read(entries),
             )
         }
     }

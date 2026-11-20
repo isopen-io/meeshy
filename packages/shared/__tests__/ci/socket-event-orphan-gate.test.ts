@@ -65,7 +65,6 @@ const SANS_LECTEUR: ReadonlyMap<string, string> = new Map([
   ['share-link:arrival', "ÉMIS — `announceShareLinkArrival` vers le créateur du lien et les modérateurs+ de la conversation, après le pays de l'arrivée (#19446). Lecteurs : la fiche d'un lien de partage (#18857)."],
   ['community-link:entry', "ÉMIS — `announceCommunityLinkEntry` vers les intendants (`isCommunitySteward`) à une entrée `via: 'link'` (#19446). Lecteurs : le billet du lien de communauté (#18857)."],
   ['affiliate:referral-joined', "ÉMIS — `announceAffiliateReferral` vers la SEULE room du parrain à une relation neuve (#19446). Lecteurs : le billet Parrainage (#18857)."],
-  ['community:join-requested', "ÉMIS — `scheduleCommunityJoinRequestedFrom` (`services/community-join-request-broadcast.ts`) vers les administrateurs, modérateurs et créateur d'une communauté qui valide chaque entrée (#19429). Lecteurs : les clients de la fiche d'un lien de communauté (#19290) ; d'ici là chacun relit `GET /communities/:id/join-requests`."],
   ['friend-request:updated', "ÉMIS — `FriendRequestMessageTranslationService` (via `friend-requests-core.ts`) vers la SEULE room du destinataire quand le mot d'une demande vient d'être traduit (#19361), sans contenu. Lecteurs : la liste des demandes reçues (#18857), qui relit la demande ; d'ici là la relecture manuelle suffit."],
   ['e2ee:own-device-retired', 'ÉMIS — `own-device-announcements.ts` au retrait d\'une génération (#19156). Lecteurs : lots clients 4, 5 et 6.'],
 ]);

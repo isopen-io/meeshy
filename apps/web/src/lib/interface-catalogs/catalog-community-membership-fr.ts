@@ -13,6 +13,10 @@ const frCommunityMembership = {
   'community.membership.offline': 'Hors ligne.',
   'community.membership.error': 'Échec. Réessayez.',
   'community.membership.error.refused': 'Cette communauté est privée : on n’y entre que sur invitation.',
+  'community.membership.request': 'Demander à rejoindre',
+  'community.membership.requested': 'Demande envoyée',
+  'community.membership.requested.hint': 'Un administrateur ou un modérateur doit l’accepter.',
+  'community.membership.error.cooldown': 'Votre dernière demande a été refusée : vous pourrez en refaire une 7 jours après ce refus.',
   'community.settings.open': "Réglages",
   'community.members.open': 'Membres',
   'community.members.title': 'Membres',
@@ -65,6 +69,16 @@ const frCommunityMembership = {
   'community.posts.error.offline': "Hors ligne : les publications s’afficheront au retour du réseau.",
   'community.posts.retry': "Réessayer",
   'community.posts.loadingMore': "Chargement de la suite",
+  'community.members.requests.section': "Demandes en attente",
+  'community.members.requests.asked': "Demande du {date}",
+  'community.members.requests.accept': "Accepter",
+  'community.members.requests.reject': "Refuser",
+  'community.members.requests.acceptLabel': "Accepter la demande de {name}",
+  'community.members.requests.rejectLabel': "Refuser la demande de {name}",
+  'community.members.requests.reject.confirm.body': "{name} ne pourra pas redemander avant sept jours.",
+  'community.members.requests.gone': "Cette demande a déjà été traitée.",
+  'community.members.requests.accepted': "{name} fait désormais partie de la communauté.",
+  'community.members.requests.more': "Voir plus de demandes",
 } as const;
 
 export default frCommunityMembership;

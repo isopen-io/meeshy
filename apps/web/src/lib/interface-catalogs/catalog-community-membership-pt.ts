@@ -15,6 +15,10 @@ const ptCommunityMembership = {
   'community.membership.offline': 'Offline.',
   'community.membership.error': 'Falhou. Tente novamente.',
   'community.membership.error.refused': 'Esta comunidade é privada: só se entra por convite.',
+  'community.membership.request': 'Pedir para entrar',
+  'community.membership.requested': 'Pedido enviado',
+  'community.membership.requested.hint': 'Um administrador ou moderador precisa aceitá-lo.',
+  'community.membership.error.cooldown': 'O seu último pedido foi recusado: poderá pedir novamente 7 dias depois.',
   'community.settings.open': "Definições",
   'community.members.open': 'Membros',
   'community.members.title': 'Membros',
@@ -67,6 +71,16 @@ const ptCommunityMembership = {
   'community.posts.error.offline': "Sem conexão: as publicações aparecerão quando a rede voltar.",
   'community.posts.retry': "Tentar de novo",
   'community.posts.loadingMore': "Carregando mais",
+  'community.members.requests.section': "Pedidos pendentes",
+  'community.members.requests.asked': "Pedido em {date}",
+  'community.members.requests.accept': "Aceitar",
+  'community.members.requests.reject': "Recusar",
+  'community.members.requests.acceptLabel': "Aceitar o pedido de {name}",
+  'community.members.requests.rejectLabel': "Recusar o pedido de {name}",
+  'community.members.requests.reject.confirm.body': "{name} só poderá pedir de novo daqui a sete dias.",
+  'community.members.requests.gone': "Este pedido já foi tratado.",
+  'community.members.requests.accepted': "{name} agora faz parte da comunidade.",
+  'community.members.requests.more': "Ver mais pedidos",
 } as const satisfies CommunityMembershipCatalog;
 
 export default ptCommunityMembership;

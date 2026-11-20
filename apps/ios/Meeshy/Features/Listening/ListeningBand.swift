@@ -89,6 +89,18 @@ struct HeaderPeerListening: ViewModifier {
     func body(content: Content) -> some View {
         content
             .modifier(door)
+            .modifier(PeerLiveOverlays(userId: userId, avatarSize: avatarSize))
+    }
+}
+
+/// Ce que vit un pair, posé sur son avatar, le même partout où on le voit (en-tête, carte des cercles #19885) : ce qu'il
+/// écoute, sa batterie, son téléphone injoignable, l'alerte d'inactivité et « En appel » — chacun tel que servi.
+struct PeerLiveOverlays: ViewModifier {
+    let userId: String?
+    let avatarSize: CGFloat
+
+    func body(content: Content) -> some View {
+        content
             .overlay {
                 if let userId, AvatarListeningOverlay.paints(userId: userId, avatarSize: avatarSize) {
                     AvatarListeningLive(userId: userId, avatarSize: avatarSize, source: ListeningCenter.shared.source)

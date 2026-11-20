@@ -73,6 +73,8 @@ extension UserProfileSheet {
             topInset: heroTopInset,
             isLoading: phase == .skeleton,
             keepsBannerInBar: true,
+            avatarSpill: Double(AvatarRingLayout.paintBeyondAvatar(
+                shownAvatarRing, avatarSize: CGFloat(MeeshyCollapsingHeroRecipe.avatarExpanded))),
             banner: { heroBanner(progress: progress) },
             leading: { heroCloseButton },
             trailing: { heroTrailing(progress: progress) },
@@ -208,7 +210,9 @@ extension UserProfileSheet {
     /// Grisée (bloqué), l'identité ne dit ni sa ville ni sa présence datée.
     @ViewBuilder
     var heroStatusLine: some View {
-        if !isIdentityMuted, displayUser.city != nil || displayUser.lastActiveAt != nil {
+        let presence = ProfileHeroPlan.presenceLine(state: ProfileHeroPlan.presence(resolvedPresence, isMuted: isIdentityMuted),
+                                                    lastActiveAt: displayUser.lastActiveAt)
+        if !isIdentityMuted, displayUser.city != nil || presence != nil {
             HStack(spacing: MeeshySpacing.xs) {
                 if let city = displayUser.city {
                     Image(systemName: "mappin")
@@ -219,14 +223,12 @@ extension UserProfileSheet {
                         .lineLimit(1)
                         .accessibilityIdentifier("profile.header.city")
                 }
-                // Présence datée — rendue seulement si le serveur l'a jugée montrable (lastActiveAt non nil pour cet
-                // observateur : rien sous Ami).
-                if let lastActive = displayUser.lastActiveAt {
+                // La présence dit le MÊME état que le point de l'avatar (#19853) : rien de ce que le serveur n'a pas servi.
+                if let presence {
                     if displayUser.city != nil {
                         Text(verbatim: "·").foregroundStyle(theme.textSecondary).accessibilityHidden(true)
                     }
-                    Text(RelativeTimeFormatter.lastSeenString(for: lastActive))
-                        .foregroundStyle(presenceColor(for: lastActive))
+                    presenceText(presence)
                 }
             }
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
@@ -274,10 +276,12 @@ extension UserProfileSheet {
             onViewStory: ringState != .none ? onViewStory : nil,
             onMoodTap: shownMoodEmoji == nil ? nil : onMoodTap
         ) }
+        // Toute la place que le film du cadre demande : il se voit en entier, le nom descend d'autant (#19925).
         .avatarRing(
             shownAvatarRing,
             avatarSize: context.size,
-            storyRingSize: ringState == .none ? nil : context.ringSize
+            storyRingSize: ringState == .none ? nil : context.ringSize,
+            decorRoom: AvatarRingLayout.fullSpill(shownAvatarRing, box: context.size * 100 / 84)
         )
         .overlay(alignment: .bottomLeading) {
             ProfileAvatarListening(userId: isIdentityMuted || isCurrentUser ? nil : resolvedUserId, avatarSize: size,
@@ -331,13 +335,17 @@ extension UserProfileSheet {
         ).state
     }
 
-    /// Couleur du libellé de présence — dérive l'état via la règle canonique
-    /// (`UserPresence.state`) puis le mapping couleur central (PresenceStyle) :
-    /// vert actif (<= 5 min), orange away (5-30 min), gris texte au-delà.
-    /// Miroir de `presenceColorClass` (web).
-    func presenceColor(for date: Date, now: Date = Date()) -> Color {
-        let state = UserPresence(isOnline: false, lastActiveAt: date).state(now: now)
-        if state == .offline { return theme.textSecondary }
-        return state.dotColor
+    /// Le texte et sa teinte viennent de l'état du point : vert « En ligne », sinon la date dans la couleur de l'état,
+    /// gris texte hors ligne. Miroir de `presenceColorClass` (web).
+    @ViewBuilder
+    func presenceText(_ line: ProfileHeroPlan.PresenceLine) -> some View {
+        switch line {
+        case .online:
+            Text(RelativeTimeFormatter.lastSeenString(for: Date()))
+                .foregroundStyle(PresenceState.online.dotColor)
+        case let .seen(date, state):
+            Text(RelativeTimeFormatter.lastSeenString(for: date))
+                .foregroundStyle(state == .offline ? theme.textSecondary : state.dotColor)
+        }
     }
 }

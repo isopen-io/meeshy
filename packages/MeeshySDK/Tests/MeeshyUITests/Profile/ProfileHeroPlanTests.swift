@@ -6,6 +6,18 @@ import MeeshySDK
 /// mène le repli ; la barre repliée prend la pilule de relation ; sans photo ni décor, la bannière est vivante.
 final class ProfileHeroPlanTests: XCTestCase {
 
+    /// #19853 : le texte de présence lit le MÊME état que le point de l'avatar — `isOnline` autoritatif l'emporte sur
+    /// un `lastActiveAt` vieux de deux minutes, et le texte dit « En ligne » quand le point est vert.
+    func test_presenceLine_followsTheDotState_notTheRawLastActiveDate() {
+        let twoMinutesAgo = Date(timeIntervalSinceNow: -120)
+        XCTAssertEqual(ProfileHeroPlan.presenceLine(state: .online, lastActiveAt: twoMinutesAgo), .online)
+        XCTAssertEqual(ProfileHeroPlan.presenceLine(state: .online, lastActiveAt: nil), .online)
+        XCTAssertEqual(ProfileHeroPlan.presenceLine(state: .away, lastActiveAt: twoMinutesAgo),
+                       .seen(twoMinutesAgo, .away))
+        XCTAssertEqual(ProfileHeroPlan.presenceLine(state: .offline, lastActiveAt: nil), nil)
+        XCTAssertEqual(ProfileHeroPlan.presenceLine(state: nil, lastActiveAt: twoMinutesAgo), nil)
+    }
+
     /// #19854 : en plein écran, la barre système est au-dessus de la fiche — les commandes se posent SOUS elle, et la
     /// barre repliée grandit d'autant ; en feuille, rien ne change.
     func test_coverLayout_placesControlsBelowTheStatusBar_andGrowsTheCollapsedBar() {

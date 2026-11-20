@@ -129,6 +129,11 @@ async function loadFiche(prisma: PrismaClient, id: string, options: { readonly w
             lastMessageAt: true,
             _count: { select: conversationActiveMemberCountSelect },
           },
+          // #19835 — la supervision RESTE sur `lastMessageAt` (décision) : elle
+          // mesure le TRAFIC de messages d'une communauté, là où le rang
+          // (max(`lastMessageAt`, `lastActivityAt`), #9026) est la règle d'ORDRE
+          // de la liste d'un utilisateur. Une réaction ne fait pas d'un salon
+          // muet un salon actif pour qui le supervise.
           orderBy: [{ lastMessageAt: 'desc' }, { id: 'desc' }],
           take: CONVERSATION_LIMIT,
         })

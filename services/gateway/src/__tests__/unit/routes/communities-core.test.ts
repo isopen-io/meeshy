@@ -371,6 +371,68 @@ describe('GET /communities/:id — success (creator)', () => {
   });
 });
 
+// #19868 — le détail dit au lecteur NON membre qu'il a déjà une demande en attente
+describe('GET /communities/:id — demande d\'entrée du lecteur (#19868)', () => {
+  const validating = { ...mockCommunity, createdBy: OTHER_USER_ID, isPrivate: false, requiresJoinApproval: true, members: [] };
+
+  async function detailWith(community: unknown, pending: unknown) {
+    const findJoinRequest = jest.fn<any>().mockResolvedValue(pending);
+    const app = await buildApp('USER', {
+      community: { findFirst: jest.fn<any>().mockResolvedValue(community) },
+      communityJoinRequest: { findFirst: findJoinRequest },
+    });
+    const res = await app.inject({ method: 'GET', url: `/communities/${COMMUNITY_ID}` });
+    await app.close();
+    return { res, findJoinRequest };
+  }
+
+  it('sert « pending » au non-membre qui a une demande en attente, lue sur SA demande seulement', async () => {
+    const { res, findJoinRequest } = await detailWith(validating, { id: 'req-1' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.currentUserJoinRequest).toBe('pending');
+    expect(res.json().data.requiresJoinApproval).toBe(true);
+    expect(findJoinRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { communityId: COMMUNITY_ID, userId: USER_ID, status: 'pending', createdAt: { gte: expect.any(Date) } } }),
+    );
+  });
+
+  it('ne sert ni l\'identifiant de la demande ni rien d\'autre qu\'un état', async () => {
+    const { res } = await detailWith(validating, { id: 'req-1', userId: USER_ID, country: 'FR' });
+    expect(JSON.stringify(res.json().data)).not.toContain('req-1');
+    expect(JSON.stringify(res.json().data)).not.toContain('"FR"');
+  });
+
+  it('sert null quand le lecteur n\'a aucune demande en attente', async () => {
+    const { res } = await detailWith(validating, null);
+    expect(res.json().data.currentUserJoinRequest).toBeNull();
+  });
+
+  it('ne lit aucune demande pour une communauté à entrée directe', async () => {
+    const { res, findJoinRequest } = await detailWith({ ...validating, requiresJoinApproval: false }, { id: 'req-1' });
+    expect(res.json().data.currentUserJoinRequest).toBeNull();
+    expect(findJoinRequest).not.toHaveBeenCalled();
+  });
+
+  it('ne lit aucune demande pour un lecteur déjà membre', async () => {
+    const member = { ...validating, members: [{ userId: USER_ID, role: 'member' }] };
+    const { res, findJoinRequest } = await detailWith(member, { id: 'req-1' });
+    expect(res.json().data.currentUserRole).toBe('member');
+    expect(res.json().data.currentUserJoinRequest).toBeNull();
+    expect(findJoinRequest).not.toHaveBeenCalled();
+  });
+
+  it('une lecture de demande qui lève ne fait pas tomber le détail (null)', async () => {
+    const app = await buildApp('USER', {
+      community: { findFirst: jest.fn<any>().mockResolvedValue(validating) },
+      communityJoinRequest: { findFirst: jest.fn<any>().mockRejectedValue(new Error('mongo')) },
+    });
+    const res = await app.inject({ method: 'GET', url: `/communities/${COMMUNITY_ID}` });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.currentUserJoinRequest).toBeNull();
+  });
+});
+
 describe('GET /communities/:id — DB error', () => {
   let app: FastifyInstance;
   beforeAll(async () => {

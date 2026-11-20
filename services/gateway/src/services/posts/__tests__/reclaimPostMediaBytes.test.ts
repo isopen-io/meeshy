@@ -1,5 +1,6 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { POST_MEDIA_FILE_COLUMNS, reclaimMediaRowBytes } from '../reclaimPostMediaBytes';
+import { postTrackFilename } from '../../attachments/postTranslatedTrack';
 
 type SoundRow = { fileUrl: string; coverUrl: string | null };
 
@@ -218,6 +219,17 @@ describe('reclaimMediaRowBytes', () => {
 
       expect(deleted(storage)).toEqual(['/api/v1/attachments/file/translated/media-1_en.mp3', '/api/v1/attachments/file/translated/media-1_fr.mp3', '2026/11/u/voice.m4a']);
       expect(count).toBe(3);
+    });
+
+    it('test_reclaim_deletesAPostTrackUnderItsTokenKey_19841', async () => {
+      const storage = buildStorage();
+      const track = `/api/v1/attachments/file/translated/${postTrackFilename({ postMediaId: '6650a1b2c3d4e5f6a7b8c9d1', language: 'en', extension: 'mp3' })}`;
+
+      await reclaimMediaRowBytes(buildPrisma(), storage, [
+        { fileUrl: '2026/11/u/voice.m4a', translations: { en: { type: 'audio', transcription: 'Hello', path: '/app/uploads/x', url: track } } },
+      ]);
+
+      expect(deleted(storage)).toContain(track);
     });
 
     it('test_reclaim_keepsATranslatedTrackStillReferencedByASound', async () => {

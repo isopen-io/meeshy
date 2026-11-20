@@ -28,12 +28,12 @@ const AVEC_MEESH = {
 const AVANT = resolveEngagementProgress(VIDE);
 
 describe("l'ordre des concepts", () => {
-  it("est celui de l'issue, clé pour clé", () => {
+  it("est celui de l'issue, clé pour clé : le rang en tête, le niveau ensuite (#17394)", () => {
     expect([...PROGRESSION_CONCEPTS]).toEqual([
+      'glory',
       'level',
       'points',
       'meesh',
-      'glory',
       'flame',
       'missions',
       'league',
@@ -85,12 +85,12 @@ describe("une ligne n'existe que si sa donnée est servie", () => {
     expect(progressionConcepts(resolveEngagementProgress({ ...VIDE, achievementReach: {} }))).toContain('defis');
   });
 
-  it('le bloc `game` sert points, Meeshes, gloire et missions', () => {
+  it('le bloc `game` sert gloire, points, Meeshes et missions, et la première page ouvre sur le rang', () => {
     expect(progressionConcepts({ ...AVANT, game: {} })).toEqual([
+      'glory',
       'level',
       'points',
       'meesh',
-      'glory',
       'flame',
       'missions',
       'elans',
