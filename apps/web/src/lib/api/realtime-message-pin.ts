@@ -6,8 +6,10 @@ import type { Message } from './types';
 
 /**
  * LES PUITS DE `message:pinned` ET `message:unpinned` (#7558) — la passerelle
- * les diffuse à la salle de la conversation (`broadcastMessageMutation`,
- * `services/gateway/src/routes/conversations/messages-pin.ts`). La rangée du
+ * les diffuse à la salle de la conversation ET aux salles PERSONNELLES des
+ * participants vivants depuis #19943 (`broadcastMessageMutation`,
+ * `services/gateway/src/routes/conversations/messages-pin.ts`) : un lecteur
+ * revenu sur la liste reçoit donc l'épingle sans être dans le fil. La rangée du
  * fil prend ou perd son épingle, et le badge (`badgesOf`) suit sans
  * rechargement. Miroir iOS : `messagePersistence.updatePinned`.
  *
