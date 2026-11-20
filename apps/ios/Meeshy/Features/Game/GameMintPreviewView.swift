@@ -132,7 +132,9 @@ struct GameMintPreviewView: View {
 
     /// LE TOUCHER : la cérémonie part aussitôt (optimiste), et la frappe part vers la passerelle avec elle.
     private func strike() {
-        MintCeremonyLaunch.begin($ceremony, with: MintCeremonyRequest(number: mint.number, edition: mint.edition, settled: settlement))
+        MintCeremonyLaunch.begin($ceremony, with: MintCeremonyRequest(
+            number: mint.number, edition: mint.edition, settled: settlement, glory: MintCeremonyGlory(mint: mint, glory: game.glory)
+        ))
         onMint()
     }
 

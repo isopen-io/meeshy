@@ -53,7 +53,7 @@ private struct MintCeremonyHost: View {
         self.answer = answer
         _run = StateObject(wrappedValue: MintCeremonyRun(
             edition: request.edition, look: request.look, number: request.number, reduced: UIAccessibility.isReduceMotionEnabled,
-            onFinish: onFinish
+            glory: request.glory, onFinish: onFinish
         ))
     }
 

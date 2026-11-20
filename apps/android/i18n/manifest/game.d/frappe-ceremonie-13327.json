@@ -30,6 +30,18 @@
         },
         {
           "catalog": "app",
+          "iosKey": "game.frappe.glory_toward",
+          "androidName": "game_frappe_glory_toward",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.frappe.risen",
+          "androidName": "game_frappe_risen",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
           "iosKey": "game.frappe.light",
           "androidName": "game_frappe_light",
           "status": "adopted"

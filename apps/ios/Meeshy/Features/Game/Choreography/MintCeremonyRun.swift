@@ -36,6 +36,33 @@ enum MintCeremonyAnswer: Equatable {
     case refused(code: String?)
 }
 
+/// LA GLOIRE DE LA FRAPPE (#19859, miroir de `MintCeremonyGlory` du web) : la Gloire du joueur AVANT le geste, celle que
+/// l'aperçu promet et le Mythe servi. La scène finit sur la gloire gagnée ET le pas vers le rang suivant.
+struct MintCeremonyGlory: Equatable, Sendable {
+    let before: Int
+    let gained: Int
+    let mythic: Bool
+
+    /// Lue AU GESTE : la Gloire que la passerelle rafraîchit pendant la scène ne compte pas deux fois.
+    init(mint: GameMintPreview, glory: GameBlock.Glory) {
+        before = glory.glory
+        gained = mint.gloryGained
+        mythic = glory.rank == .mythe
+    }
+
+    init(before: Int, gained: Int, mythic: Bool) {
+        self.before = before
+        self.gained = gained
+        self.mythic = mythic
+    }
+
+    /// La gloire que la scène écrit : celle que l'aperçu sert, la constante de la frappe en repli.
+    var shownGain: Int { gained > 0 ? gained : GameGlory.points.mint }
+
+    /// Le pas vers le rang suivant : la marche franchie, ou la gloire qui manque ; `nil` pour le Mythe et en Légende I.
+    var step: GloryAfterGain? { GameGlory.afterGain(before: before, gained: shownGain, mythic: mythic) }
+}
+
 /// UNE cérémonie demandée par un toucher : la pièce que l'écran annonçait, et la dernière frappe réglée au moment du
 /// toucher — la réponse qui compte est la PREMIÈRE réglée après lui.
 ///
@@ -48,13 +75,16 @@ struct MintCeremonyRequest: Identifiable, Equatable {
     let look: MeeshEdition
     let number: Int
     let settledKey: Int
+    /// La gloire du joueur au toucher et celle que la frappe apporte (#19859) ; absente, « +1 000 de gloire » seul.
+    let glory: MintCeremonyGlory?
 
     /// - Parameter edition: la loi de la pièce, telle que l'aperçu la sert ; le dessin se déduit de son numéro.
-    init(number: Int, edition: MeeshEdition, settled: GameMintSettlement?) {
+    init(number: Int, edition: MeeshEdition, settled: GameMintSettlement?, glory: MintCeremonyGlory? = nil) {
         self.edition = edition
         look = GameMint.displayEdition(forNumber: number)
         self.number = number
         settledKey = settled?.key ?? 0
+        self.glory = glory
     }
 
     /// Ce que la passerelle a répondu depuis le toucher : une pièce, un refus, ou rien encore.
@@ -85,6 +115,9 @@ final class MintCeremonyRun: ObservableObject {
     let modest: Bool
     let reduced: Bool
     let particles: MintCeremonyParticles
+    /// La gloire gagnée que la scène écrit, et le pas vers le rang suivant qu'elle dit dessous (#19859).
+    let gloryGained: Int
+    let gloryStep: GloryAfterGain?
 
     @Published private(set) var number: Int
     @Published private(set) var refusal: MintRefusalReason?
@@ -104,7 +137,7 @@ final class MintCeremonyRun: ObservableObject {
     nonisolated deinit {}
 
     init(edition: MeeshEdition, look: MeeshEdition? = nil, number: Int, reduced: Bool, modest: Bool = MintCeremonyRun.isModestDevice,
-         haptics: GameHapticsProviding = GameHaptics.shared,
+         glory: MintCeremonyGlory? = nil, haptics: GameHapticsProviding = GameHaptics.shared,
          clock: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
          onFinish: @escaping () -> Void) {
         self.edition = edition
@@ -115,6 +148,8 @@ final class MintCeremonyRun: ObservableObject {
         self.haptics = haptics
         self.clock = clock
         self.onFinish = onFinish
+        gloryGained = glory?.shownGain ?? GameGlory.points.mint
+        gloryStep = glory?.step
         mode = reduced ? .reduced : .normal
         startedAt = clock()
         particles = reduced

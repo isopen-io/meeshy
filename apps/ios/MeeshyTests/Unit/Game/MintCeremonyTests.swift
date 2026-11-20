@@ -260,6 +260,44 @@ final class MintCeremonyTests: XCTestCase {
         XCTAssertEqual(finishes(), 1)
     }
 
+    // MARK: - La frappe finit sur la gloire gagnée et le pas vers le rang suivant (#19859)
+
+    func test_theGlory_isReadAtTheGesture_andRidesTheRequestIntoTheRun() {
+        let glory = MintCeremonyGlory(before: 1500, gained: 1000, mythic: false)
+        let request = MintCeremonyRequest(number: 92, edition: .silver, settled: nil, glory: glory)
+        XCTAssertEqual(request.glory, glory)
+        let run = MintCeremonyRun(edition: .silver, number: 92, reduced: false, modest: false, glory: request.glory,
+                                  haptics: MockGameHaptics(), onFinish: {})
+        XCTAssertEqual(run.gloryGained, 1000)
+        XCTAssertEqual(run.gloryStep, .risen(rank: .echo, division5: .v), "1 500 + 1 000 franchit Écho V")
+    }
+
+    func test_theGloryServedByThePreview_isTheOneTheSceneWrites_theConstantStandsIn() {
+        XCTAssertEqual(MintCeremonyGlory(before: 0, gained: 1200, mythic: false).shownGain, 1200)
+        XCTAssertEqual(MintCeremonyGlory(before: 0, gained: 0, mythic: false).shownGain, GameGlory.points.mint,
+                       "un aperçu qui ne sert pas sa gloire : la constante de la frappe")
+    }
+
+    func test_withoutGlory_theSceneSaysOnlyTheGainAsBefore() {
+        let (run, _, _) = makeRun()
+        XCTAssertEqual(run.gloryGained, GameGlory.points.mint)
+        XCTAssertNil(run.gloryStep)
+    }
+
+    func test_theMythAndLegendOne_sayNoStep() {
+        XCTAssertNil(MintCeremonyGlory(before: 10, gained: 1000, mythic: true).step)
+        XCTAssertNil(MintCeremonyGlory(before: 999_000, gained: 1000, mythic: false).step)
+    }
+
+    func test_theStepLine_namesTheRankAndTheMissingGlory_inTheCatalogsWords() {
+        let risen = MintCeremonyCopy.gloryStep(.risen(rank: .conteur, division5: .ii))
+        XCTAssertTrue(risen.contains(GameCopy.rankLabel(.conteur, division5: .ii)), risen)
+        let toward = MintCeremonyCopy.gloryStep(.toward(gloryMissing: 1200, rank: .conteur, division5: .ii))
+        XCTAssertTrue(toward.contains(GameCopy.rankLabel(.conteur, division5: .ii)), toward)
+        XCTAssertTrue(toward.contains(GameCopy.formatCount(1200)), toward)
+        XCTAssertNotEqual(risen, toward)
+    }
+
     func test_theCeremony_saysItsLinesInTheCatalogsWords() {
         XCTAssertFalse(MintCeremonyCopy.say(.silver, number: 92).isEmpty)
         for reason in MintRefusalReason.allCases { XCTAssertFalse(MintCeremonyCopy.refused(reason).isEmpty) }
