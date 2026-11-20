@@ -32,7 +32,18 @@ const MSG_ID = '507f1f77bcf86cd799439033';
  * tests), seul `tsconfig.test.json` l'atteint.
  */
 type DeleteArgs = { readonly where: { readonly id: string } };
-type ReleaseArgs = { readonly where: { readonly messageId: string }; readonly data: { readonly messageId: null } };
+type ReleaseArgs = {
+  readonly where: { readonly messageId: string };
+  readonly data: {
+    readonly messageId: null;
+    // #19971 — la protection que l'association venait de poser part avec le
+    // `messageId` : le double DÉCLARE les trois colonnes, donc une libération
+    // qui en oublierait une ne compilerait plus sous `tsconfig.test.json`.
+    readonly isViewOnce: false;
+    readonly isBlurred: false;
+    readonly effectFlags: 0;
+  };
+};
 
 function makePrisma(overrides: { deleteImpl?: () => Promise<unknown>; updateManyImpl?: () => Promise<unknown> } = {}) {
   const del = jest.fn(async (_args: DeleteArgs) => (overrides.deleteImpl ? overrides.deleteImpl() : { id: MSG_ID }));
@@ -48,6 +59,46 @@ function makePrisma(overrides: { deleteImpl?: () => Promise<unknown>; updateMany
 describe('attachmentFailureOutcome', () => {
   beforeEach(() => { jest.clearAllMocks(); });
 
+  describe('#19971 — la protection ne survit pas au message qui n’existe plus', () => {
+    it('la libération rend les TROIS colonnes de protection à leur état d’avant liaison', async () => {
+      const { prisma, updateMany } = makePrisma();
+
+      await discardMessageAfterLinkFailure(prisma, { messageId: MSG_ID });
+
+      // `associateAttachmentsToMessage` n'AJOUTE que de la protection
+      // (`effectFlags: carried | addedFlags`, `isViewOnce` posé mais jamais
+      // effacé). Une pièce libérée en gardant ces drapeaux ressort MARQUÉE par
+      // un message qui n'existe plus : recomposée SANS vue unique depuis la
+      // même pièce téléversée, elle arrive à vue unique sous une bulle
+      // ordinaire — la protection de la PIÈCE contredit celle du MESSAGE, ce
+      // que #7498 avait fermé dans l'autre sens.
+      //
+      // L'état d'avant liaison est CONNU, et c'est le défaut du schéma :
+      // l'association est le SEUL écrivain de production de ces trois colonnes
+      // (aucune des quatre créations de ligne ne les pose), et le schéma les
+      // déclare non nullables — `isViewOnce Boolean @default(false)`,
+      // `isBlurred Boolean @default(false)`, `effectFlags Int @default(0)`.
+      expect(updateMany.mock.calls[0][0].data).toEqual({
+        messageId: null,
+        isViewOnce: false,
+        isBlurred: false,
+        effectFlags: 0,
+      });
+    });
+
+    it('le `rank` n’est PAS rendu, et c’est la bonne réponse', async () => {
+      const { prisma, updateMany } = makePrisma();
+
+      await discardMessageAfterLinkFailure(prisma, { messageId: MSG_ID });
+
+      // La prochaine association réécrit `rank` INCONDITIONNELLEMENT pour tous
+      // les ids de son lot : il ne peut pas contredire le message qui reprend
+      // la pièce. Le dire ici évite de l'ajouter « par symétrie » à une liste
+      // dont chaque membre a une raison.
+      expect(updateMany.mock.calls[0][0].data).not.toHaveProperty('rank');
+    });
+  });
+
   describe('un échec de LIAISON', () => {
     it('rend les pièces déjà liées à l’état non lié, PUIS supprime le message', async () => {
       const { prisma, del, updateMany } = makePrisma();
@@ -57,7 +108,10 @@ describe('attachmentFailureOutcome', () => {
       // La libération est ce qui rend le rejeu COMPLET : `associateAttachmentsToMessage`
       // ne relie qu'un `messageId` nul ou absent, donc une pièce restée liée à la
       // ligne supprimée serait manquée par le nouvel essai, en silence.
-      expect(updateMany).toHaveBeenCalledWith({ where: { messageId: MSG_ID }, data: { messageId: null } });
+      expect(updateMany).toHaveBeenCalledWith({
+        where: { messageId: MSG_ID },
+        data: { messageId: null, isViewOnce: false, isBlurred: false, effectFlags: 0 },
+      });
       expect(del).toHaveBeenCalledWith({ where: { id: MSG_ID } });
       expect(updateMany.mock.invocationCallOrder[0]).toBeLessThan(del.mock.invocationCallOrder[0]);
     });
