@@ -60,6 +60,31 @@ export type MessageLivenessRow = {
 };
 
 /**
+ * #19938 — le site UNIQUE qui RECOPIE les colonnes de la loi, et la seule
+ * raison pour laquelle il existe.
+ *
+ * Un consommateur qui relit une ligne et la REPROJETTE avant de la soumettre au
+ * verdict — parce qu'il la met en cache, la mêle à d'autres faits, ou la
+ * transporte entre deux unités — recopiait ces colonnes à la main, loin d'ici.
+ * `MessageLivenessRow` ayant TOUS ses champs optionnels, une colonne oubliée à
+ * la recopie ne fait rougir ni `tsc` ni aucun témoin de verdict : la ligne
+ * amputée passe, et `messageLivenessOf` rend `live` sur un message mort. C'est
+ * exactement ce qui est arrivé à `viewOnceBurnedAt` dans la lecture partagée du
+ * drain (`socketio/queuedMessageFacts.ts`), dont le `select` demandait pourtant
+ * la colonne : elle a été perdue à la PROJECTION, un cran plus bas que la
+ * variante que le `select` ci-dessus documente.
+ *
+ * La recopie vit donc ICI, collée au `select` et au verdict : ajouter une
+ * quatrième preuve de mort se fait en touchant trois déclarations VOISINES, et
+ * le cliquet de `message-liveness.test.ts` tombe si l'une des trois est oubliée.
+ */
+export const messageLivenessRowOf = (row: MessageLivenessRow): Required<MessageLivenessRow> => ({
+  deletedAt: row.deletedAt ?? null,
+  expiresAt: row.expiresAt ?? null,
+  viewOnceBurnedAt: row.viewOnceBurnedAt ?? null,
+});
+
+/**
  * Ce qui PROUVE la mort — nommé, parce que les trois causes ne se journalisent
  * pas pareil.
  *
