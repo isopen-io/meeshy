@@ -786,6 +786,30 @@ describe('POST /communities/:id/conversations/:conversationId — success', () =
   });
 });
 
+describe('POST /communities/:id/conversations/:conversationId — effectif actif (#19541)', () => {
+  const update = jest.fn<any>().mockResolvedValue({ ...mockConversation, memberCount: 0, _count: { messages: 0, participants: 2 } });
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    app = await buildApp('USER', {
+      community: {
+        findFirst: jest.fn<any>().mockResolvedValue({ id: COMMUNITY_ID, createdBy: USER_ID, members: [{ userId: USER_ID, role: 'admin' }] }),
+        findUnique: jest.fn<any>().mockResolvedValue(null),
+      },
+      conversation: { findFirst: jest.fn<any>().mockResolvedValue(mockConversation), update },
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('sert l\'effectif ACTIF compté à la lecture, jamais la colonne morte, et ne nomme que les actifs', async () => {
+    const res = await app.inject({ method: 'POST', url: `/communities/${COMMUNITY_ID}/conversations/${CONVERSATION_ID}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.memberCount).toBe(2);
+    const include = update.mock.calls[0]?.[0]?.include;
+    expect(include?._count?.select?.participants).toEqual({ where: { isActive: true } });
+    expect(include?.participants?.where).toEqual({ isActive: true });
+  });
+});
+
 describe('POST /communities/:id/conversations/:conversationId — DB error', () => {
   let app: FastifyInstance;
   beforeAll(async () => {

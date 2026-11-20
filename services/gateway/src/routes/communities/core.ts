@@ -8,6 +8,7 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { viewerFromRequest } from '../users/presence-gate';
+import { conversationActiveMemberCountSelect } from '../conversations/utils/active-member-count';
 import { gateConversationParticipantsPresence } from './member-presence';
 import {
   CreateCommunitySchema,
@@ -576,10 +577,16 @@ const community = await fastify.prisma.community.findFirst({
       //   `where`/`include` ; au-delà du plafond, un client qui a besoin de
       //   la liste exhaustive des membres d'UNE conversation appelle déjà
       //   `GET /conversations/:id/participants` (paginée séparément).
+      // #19541 — ce que le membre peut OUVRIR, au même filtre que
+      // `GET /conversations` (`core-list.ts`) : une participation ACTIVE (ni
+      // partie, ni bannie) dans une conversation ACTIVE (ni fermée, ni rendue
+      // obsolète — les deux écritures posent `isActive: false`). Le total
+      // paginé lit le même `where`.
       const whereClause = {
         communityId: id,
+        isActive: true,
         participants: {
-          some: { userId: userId }
+          some: { userId: userId, isActive: true }
         }
       };
 
@@ -588,6 +595,7 @@ const community = await fastify.prisma.community.findFirst({
           where: whereClause,
           include: {
             participants: {
+              where: { isActive: true },
               take: COMMUNITY_CONVERSATION_PARTICIPANTS_DISPLAY_CAP,
               orderBy: { joinedAt: 'asc' },
               include: {
@@ -605,7 +613,7 @@ const community = await fastify.prisma.community.findFirst({
             _count: {
               select: {
                 messages: true,
-                participants: true
+                ...conversationActiveMemberCountSelect
               }
             }
           },
@@ -631,7 +639,11 @@ const community = await fastify.prisma.community.findFirst({
       // de sortir. Déclarer sans gater aurait publié la fuite.
       const gated = await gateConversationParticipantsPresence(fastify.prisma, viewerFromRequest(request), conversations);
 
-      return sendPaginatedSuccess(reply, gated, {
+      // `memberCount` est l'effectif ACTIF compté à la lecture, jamais la
+      // colonne `Conversation.memberCount`, que rien n'écrit (#19541).
+      const served = gated.map(conversation => ({ ...conversation, memberCount: conversation._count.participants }));
+
+      return sendPaginatedSuccess(reply, served, {
         total: totalCount,
         limit: limitNum,
         offset: offsetNum,
@@ -819,6 +831,7 @@ const community = await fastify.prisma.community.findFirst({
         data: { communityId: id },
         include: {
           participants: {
+            where: { isActive: true },
             include: {
               user: {
                 select: {
@@ -832,7 +845,7 @@ const community = await fastify.prisma.community.findFirst({
             }
           },
           _count: {
-            select: { messages: true, participants: true }
+            select: { messages: true, ...conversationActiveMemberCountSelect }
           }
         }
       });
@@ -843,7 +856,7 @@ const community = await fastify.prisma.community.findFirst({
       // `user` ET celle de la ligne `Participant` ; le schéma retient le reste
       // de la ligne que l'`include` rend (jeton de session, session anonyme).
       const [gated] = await gateConversationParticipantsPresence(fastify.prisma, viewerFromRequest(request), [updated]);
-      return sendSuccess(reply, gated);
+      return sendSuccess(reply, { ...gated, memberCount: gated._count.participants });
     } catch (error) {
       logger.error('Error adding conversation to community', error as Error);
       return sendInternalError(reply, 'Failed to add conversation to community');
