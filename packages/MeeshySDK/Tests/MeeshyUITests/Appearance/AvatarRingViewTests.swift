@@ -54,102 +54,73 @@ final class AvatarRingViewTests: XCTestCase {
         XCTAssertEqual(AvatarRingGeometry.avatarScale(avatarSize: 80, storyRingSize: 70), 1)
     }
 
-    // MARK: Le contour dans l'empreinte (#10713)
-
-    func test_footprintScale_withoutAStoryRing_fitsTheAvatarInTheContourHole() {
-        XCTAssertEqual(AvatarRingGeometry.footprintScale(footprint: 52, storyRingSize: nil), 0.84, accuracy: 0.0001)
-    }
-
-    func test_footprintScale_withAStoryRing_fitsTheStoryRingInTheContourHole() {
-        let context = AvatarContext.conversationList
-        let scale = AvatarRingGeometry.footprintScale(footprint: context.size, storyRingSize: context.ringSize)
-        XCTAssertEqual(context.ringSize * scale, context.size * AvatarRingGeometry.holeFraction, accuracy: 0.001)
-    }
-
-    // MARK: Un cadre illustré à la bonne taille partout (#15157)
+    // MARK: Une seule taille de cadre, partout (#19988)
 
     private func toile() throws -> AvatarRingDesign {
         let pack = try XCTUnwrap(AvatarRingCatalog.shared.packs.first { $0.slug == "cadres-illustres" })
         return try XCTUnwrap(pack.rings.first { $0.key == "toile-araignee" })
     }
 
-    /// Le profil : le cadre ne peint pas plus loin que l'anneau seul — ni sur le nom, ni deux fois l'avatar.
-    func test_layout_profile_paintsNoFurtherThanThePlainRing() throws {
-        let avatar = AvatarContext.profileBanner.size
-        let box = avatar * 100 / 84
-        let layout = AvatarRingLayout.make(try toile(), box: box, baseScale: 1)
-        XCTAssertNotNil(layout.decor)
-        XCTAssertLessThanOrEqual(layout.paintedSide(box: box), box + 0.001)
-        XCTAssertLessThanOrEqual(layout.paintedSide(box: box) / avatar, 1.2)
-        XCTAssertFalse(layout.drawsStill, "l'anneau de repli ne se dessine pas sous le film")
-        XCTAssertEqual(layout.contentScale, 1 / 1.4, accuracy: 0.0001, "l'avatar se réduit avec son cadre, l'illustration reste calée")
+    private func plain() throws -> AvatarRingDesign {
+        try XCTUnwrap(AvatarRingCatalog.shared.packs.flatMap(\.rings).first { $0.decor == nil })
     }
 
-    /// La rangée des stories : le film tient dans l'empreinte, il n'atteint ni la pastille « + » ni l'avatar voisin.
-    func test_layout_storyTray_staysInsideTheFootprint() throws {
-        let context = AvatarContext.storyTray
-        let layout = AvatarRingLayout.make(try toile(), box: context.size,
-                                           baseScale: AvatarRingGeometry.footprintScale(footprint: context.size, storyRingSize: context.ringSize))
-        XCTAssertNotNil(layout.decor)
-        XCTAssertLessThanOrEqual(layout.paintedSide(box: context.size), context.size + 0.001)
-        XCTAssertFalse(layout.drawsStill)
-        XCTAssertEqual(context.ringSize * layout.contentScale, context.size * 0.84 / 1.4, accuracy: 0.001)
-    }
+    private let everyAvatarSize: [CGFloat] = [
+        AvatarContext.postReaction.size, AvatarContext.messageBubble.size, 38, AvatarContext.conversationList.size,
+        AvatarContext.storyTray.size, AvatarContext.profileBanner.size, 110
+    ]
 
-    /// Liste, bulle et mini-avatar : le cadre s'affiche ENTIER, dans l'empreinte, l'avatar réduit avec lui (#16114).
-    func test_layout_listAndMiniAvatar_showTheWholeFrame() throws {
-        for size in [AvatarContext.conversationList.size, AvatarContext.messageBubble.size, AvatarContext.postReaction.size] {
-            let layout = AvatarRingLayout.make(try toile(), box: size, baseScale: 0.84)
-            XCTAssertNotNil(layout.decor, "\(size)")
-            XCTAssertFalse(layout.drawsStill)
-            XCTAssertEqual(layout.paintedSide(box: size), size, accuracy: 0.001)
-            XCTAssertEqual(layout.contentScale, 0.84 / 1.4, accuracy: 0.0001)
+    /// Le retour porteur du 2026-11-20 : un cadre, quel qu'il soit, peint dans le MÊME encombrement rapporté au
+    /// diamètre de l'avatar — la boîte d'un contour simple, `d / 0,84` —, de la réaction de 20 pt au profil.
+    func test_layout_everyFrame_paintsTheSameSideProportionalToTheAvatar() throws {
+        for design in [try toile(), try plain()] {
+            for size in everyAvatarSize {
+                let layout = AvatarRingLayout.make(design, avatarSize: size)
+                XCTAssertEqual(layout.paintedSide, size / AvatarRingGeometry.holeFraction, accuracy: 0.001, "\(design.key) \(size)")
+                XCTAssertEqual(layout.paintedSide, AvatarRingGeometry.decoratedSide(avatarSize: size), accuracy: 0.001)
+            }
         }
     }
 
-    /// La bulle de frappe retire les films : l'anneau fixe seul, à sa taille d'avant (#16114).
-    func test_layout_withoutDecor_keepsTheRingAlone() throws {
-        let layout = AvatarRingLayout.make(try toile(), box: 22, baseScale: 0.84, decor: false)
+    /// Un cadre illustré ne grossit plus : le visage se ramène au trou que dessine son film (`1 / reach`).
+    func test_layout_illustratedFrame_bringsTheFaceIntoItsHole() throws {
+        let layout = AvatarRingLayout.make(try toile(), avatarSize: 88)
+        XCTAssertNotNil(layout.decor)
+        XCTAssertFalse(layout.drawsStill, "l'anneau de repli ne se dessine pas sous le film")
+        XCTAssertEqual(layout.contentScale, 1 / 1.4, accuracy: 0.0001)
+        XCTAssertEqual(layout.ringScale, 1 / 1.4, accuracy: 0.0001)
+    }
+
+    /// Un contour simple entoure l'avatar entier : le visage garde son diamètre.
+    func test_layout_plainRing_keepsTheFaceWhole() throws {
+        let layout = AvatarRingLayout.make(try plain(), avatarSize: 52)
         XCTAssertNil(layout.decor)
         XCTAssertTrue(layout.drawsStill)
-        XCTAssertEqual(layout.paintedSide(box: 22), 22)
-        XCTAssertEqual(layout.contentScale, 0.84, accuracy: 0.0001)
-    }
-
-    /// Une place déclarée libre par l'hôte se prend, jamais plus.
-    func test_layout_declaredRoom_isTheOnlySpill() throws {
-        let layout = AvatarRingLayout.make(try toile(), box: 100, baseScale: 1, room: 8)
-        XCTAssertEqual(layout.paintedSide(box: 100), 116, accuracy: 0.001)
-        XCTAssertEqual(layout.ringScale, 116 / 140, accuracy: 0.0001)
-    }
-
-    func test_layout_aPlainRing_isUnchanged() throws {
-        let plain = try XCTUnwrap(AvatarRingCatalog.shared.packs.flatMap(\.rings).first { $0.decor == nil })
-        let layout = AvatarRingLayout.make(plain, box: 107, baseScale: 1)
-        XCTAssertNil(layout.decor)
-        XCTAssertTrue(layout.drawsStill)
-        XCTAssertEqual(layout.contentScale, 1)
-    }
-
-    /// Le profil réserve tout le débordement : l'avatar garde ses 90 pt, le film sa taille, et l'écran
-    /// sait ce qu'il peint sous l'avatar pour y faire passer le nom (#15157).
-    func test_fullSpill_profile_keepsTheAvatarIntact() throws {
-        let design = try toile()
-        let avatar = AvatarContext.profileBanner.size
-        let box = avatar * 100 / 84
-        let spill = AvatarRingLayout.fullSpill(design, box: box)
-        XCTAssertEqual(spill, box * 0.2, accuracy: 0.001)
-        let layout = AvatarRingLayout.make(design, box: box, baseScale: 1, room: spill)
         XCTAssertEqual(layout.contentScale, 1, accuracy: 0.0001)
-        XCTAssertEqual(layout.paintedSide(box: box), box * 1.4, accuracy: 0.001)
-        XCTAssertEqual(AvatarRingLayout.paintBeyondAvatar(design, avatarSize: avatar), (box * 1.4 - avatar) / 2, accuracy: 0.001)
     }
 
-    func test_fullSpill_withoutFilm_isZero() throws {
-        let plain = try XCTUnwrap(AvatarRingCatalog.shared.packs.flatMap(\.rings).first { $0.decor == nil })
-        XCTAssertEqual(AvatarRingLayout.fullSpill(plain, box: 107), 0)
-        XCTAssertEqual(AvatarRingLayout.fullSpill(nil, box: 107), 0)
-        XCTAssertEqual(AvatarRingLayout.paintBeyondAvatar(plain, avatarSize: 90), 0)
-        XCTAssertEqual(AvatarRingLayout.fullSpill(try toile(), box: 40), 8, accuracy: 0.001, "même petit, le film demande sa place (#16114)")
+    /// L'anneau de story reste concentrique, dans le trou du cadre (#10714).
+    func test_layout_storyRing_fitsTheFrameHole() throws {
+        let context = AvatarContext.storyTray
+        let layout = AvatarRingLayout.make(try toile(), avatarSize: context.size, storyRingSize: context.ringSize)
+        XCTAssertEqual(context.ringSize * layout.contentScale, context.size / 1.4, accuracy: 0.001)
+    }
+
+    /// La bulle de frappe retire les films : l'anneau fixe seul, à la même taille normalisée (#16114).
+    func test_layout_withoutDecor_keepsTheRingAloneAtTheSameSide() throws {
+        let layout = AvatarRingLayout.make(try toile(), avatarSize: 24, decor: false)
+        XCTAssertNil(layout.decor)
+        XCTAssertTrue(layout.drawsStill)
+        XCTAssertEqual(layout.paintedSide, 24 / 0.84, accuracy: 0.001)
+        XCTAssertEqual(layout.contentScale, 1, accuracy: 0.0001)
+    }
+
+    /// Ce qu'un avatar décoré peint au-delà de son diamètre, de chaque côté : la marge qu'un hôte laisse libre
+    /// (aucun clip) — la même fraction pour tous les cadres, rien sans cadre.
+    func test_spill_isTheSameFractionForEveryFrame_andNothingWithoutOne() throws {
+        for design in [try toile(), try plain()] {
+            XCTAssertEqual(AvatarRingGeometry.spill(design, avatarSize: 88), 88 * (1 / 0.84 - 1) / 2, accuracy: 0.001)
+        }
+        XCTAssertEqual(AvatarRingGeometry.spill(nil, avatarSize: 88), 0)
     }
 }

@@ -183,7 +183,7 @@ public enum StoryExportIntro {
                                 width: avatarSide,
                                 height: avatarSide)
         // Sous un contour, l'avatar se ramène au trou (rayon 42 du viewBox 100)
-        // et le contour occupe la boîte — la géométrie de `avatarRingWithin` :
+        // et le contour occupe la boîte — la géométrie d'un cadre dans sa boîte :
         // le nom et le pseudo ne bougent pas. Sans contour, la boîte entière.
         let discRect = content.avatarRing == nil ? avatarRect : ringHole(of: avatarRect)
         cg.saveGState()
