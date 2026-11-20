@@ -149,6 +149,102 @@ cliquet `tsc-never-loaded-tests-ratchet` dont la commande rend 0 erreur ici
 pression mémoire qui PASSE en isolation. Aucune ne cite `MessageProcessor`,
 `MessagingService` ni le module neuf (mesuré). La CI fait foi.
 
+## L'audit adversarial a rendu BLOQUANT, et il avait raison deux fois
+
+Les deux constats décisifs ont été vérifiés dans le code avant d'être repris.
+
+### 1. La libération était une COURSE, pas une garantie
+
+`associateAttachmentsToMessage` écrit une pièce par requête sous
+`Promise.all` — **qui rejette à la première erreur en laissant les autres EN
+VOL.** L'appelant repartait donc nettoyer pendant qu'elles volaient. La
+libération remet `messageId` à `null`, ce qui satisfait de nouveau le `where`
+d'une retardataire (`unsetOrNull`) : elle re-liait sa pièce au message qu'on
+était en train de supprimer. `MessageAttachment.message` étant
+`onDelete: Cascade` — émulé côté client sur MongoDB —, la pièce était
+**détruite** si l'écriture atterrissait avant la suppression, et **inéligible au
+rejeu à jamais** si elle atterrissait après.
+
+Soit, mot pour mot, l'état que le module promettait d'éliminer.
+
+> **Un correctif qui s'appuie sur la FORME d'un collaborateur hérite de sa
+> sémantique d'erreur.** J'avais lu la bonne chose — « une pièce par requête »,
+> c'est ce qui JUSTIFIE la libération — et pas la ligne au-dessus, qui dit
+> comment cette boucle abandonne. `Promise.all` ne tient pas les promesses
+> qu'il n'attend plus : **la propriété qui fonde un nettoyage n'est pas « quelles
+> écritures ont eu lieu » mais « lesquelles ont FINI quand je reprends la
+> main ».**
+
+### 2. L'abandon oubliait les enveloppes, DÉJÀ parties sur le fil
+
+Sur le chemin hybride + `deviceLayerRelay` — admis AVEC des pièces jointes,
+`assertNoPlaintextPieces` ne gardant que l'e2ee PUR —,
+`createMessageWithEnvelopes` écrit la ligne ET ses `MessageEnvelope` dans une
+transaction, **puis les DIFFUSE**, le tout à l'étape 3, avant la liaison.
+`MessageEnvelope` ne déclare qu'un `messageId` nu, sans `@relation` : aucune
+cascade ne l'emporte.
+
+« L'envoi échoue » était donc **faux sur le fil**. Le chiffré était déjà chez le
+destinataire, servi par `GET /e2ee/envelopes` jusqu'à l'accusé ou la rétention,
+et le rejeu en produisait un second jeu pour le même clair.
+
+> C'est la question du cycle 125 — *« la charge que ce site remet contient-elle
+> autre chose que ce que je viens de garder ? »* — posée à un ABANDON plutôt
+> qu'à une protection : **que reste-t-il de FAIT que ce nettoyage ne défait
+> pas ?** Et la réponse ne se trouve pas en lisant la fonction qu'on corrige :
+> elle se trouve en lisant ce que les ÉTAPES PRÉCÉDENTES ont écrit et émis.
+
+La liste des dix tables qui pendent à un message a quitté le purgeur de
+conversation obsolète pour `messageScopedRows.ts`, que les DEUX sites
+consomment. Neuf ne peuvent pas encore porter de ligne à ce point du
+`saveMessage` : **c'est l'ÉNUMÉRATION qui tient dans le temps, pas le fait
+qu'elle soit vide aujourd'hui.**
+
+### 3. Et la réponse d'un agent se serait tue
+
+La loi « l'échec fait échouer l'envoi » suppose un appelant qui **REJOUE**. Des
+trois producteurs d'`attachmentIds`, `agent-response-bridge` est le seul sans
+outbox, sans `clientMessageId` et sans file : il journalise et abandonne. Une
+illustration qui ne se lie pas ne coûtait que l'illustration ; elle aurait coûté
+la RÉPONSE ENTIÈRE de l'agent, texte compris, que personne n'aurait redemandée.
+
+> **Une loi d'échec se vérifie contre TOUS ses appelants, pas contre le
+> nominal.** Deux rejouent, un non — et c'est celui-là qui décide si la loi est
+> une amélioration ou une régression.
+
+Il rejoue désormais une fois sans l'illustration : l'agent parle, dégradé.
+
+### Ce que l'audit a trouvé de ma méthode, et qui fait le plus mal
+
+Le témoin `« ne masque pas l'erreur d'origine quand la suppression échoue »`
+**ne pouvait pas tomber** : la fonction ne REÇOIT pas l'erreur d'origine.
+L'intitulé nommait une propriété que rien dans le corps n'observait.
+
+> C'est la faute du cycle 187, commise à vingt lignes de l'endroit où ce journal
+> la raconte. **Une règle de méthode ne se transporte pas d'un paragraphe au
+> suivant ; elle se réapplique, témoin par témoin.** Le rempart qui a fonctionné
+> n'est pas ma vigilance : c'est d'avoir fait relire le lot par quelqu'un qui
+> cherchait à le casser.
+
+Renommé en ce qu'il atteste vraiment ; la propriété nommée est tenue, elle, par
+le témoin d'intégration qui observe le `throw` d'après le nettoyage.
+
+### Les témoins qui prouvent la correction
+
+`attachmentLinkRelease.race.test.ts` fait tourner le **VRAI** linker contre la
+**VRAIE** `discardMessageAfterLinkFailure`, avec un double qui modélise les deux
+comportements dont le témoin dépend : `updateMany` n'écrit que si son `where`
+matche ENCORE, et `message.delete` émule la cascade.
+
+> C'est le seul endroit où la justification de la libération est vérifiable —
+> elle n'existe QUE parce que le linker écrit une pièce par requête, et **ce
+> fait-là disparaît dès qu'on double le linker.** Les dix témoins du premier lot
+> mockaient `AttachmentService` : aucun ne pouvait voir la course.
+
+ROUGE prouvé pour chacun : `Promise.all` restauré ⇒ 2/3 tombent ; effacement des
+lignes pendantes retiré ⇒ le 3e tombe ; repli de l'agent neutralisé ⇒ son témoin
+tombe.
+
 ## Ce que le cycle laisse
 
 - **#19917** — le symptôme d'origine : ce lot lui retire sa cause (un rejeu ne
@@ -157,4 +253,11 @@ pression mémoire qui PASSE en isolation. Aucune ne cite `MessageProcessor`,
 - **#19957** — le dédoublonnage rend un message supprimé avec `success: true`
   (décision produit), inchangé ;
 - **#19960** — le `clientMessageId` d'autrui servi par la liste REST,
-  préexistant.
+  préexistant ;
+- **#19971** — une pièce rendue garde la protection du message qui n'existe
+  plus (fail-closed, donc une issue et non un blocage) ;
+- **#19972** — l'échec sort en `400` muet là où la famille `retryableWrite`
+  sert `503` + `Retry-After` + `MESSAGE_SEND_RETRYABLE` ;
+- **#19973** — deux doubles Prisma avalent encore des `TypeError` de production
+  que plus aucun `catch` ne justifie : le lot n'a complété que la surface qu'il
+  venait de rendre bruyante, ce qui est la faute que sa propre leçon décrit.
