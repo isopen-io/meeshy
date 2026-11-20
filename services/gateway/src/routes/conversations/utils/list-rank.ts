@@ -1,5 +1,6 @@
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { listRankFromColumns } from '@meeshy/shared/utils/conversation-list-rank';
+import { outranks, rankStreamByActivity, rankStreamByMessage, type RankedConversationRow } from '../../../services/conversations/highestRanked';
 import type { CurseurDeListe } from '../list-cursor';
 
 /**
@@ -213,21 +214,28 @@ function boundOf(curseur: RankedPageRequest<ListRankRow>['curseur']): Borne | nu
   return null;
 }
 
-function rankMillis(row: ListRankRow): number {
-  return listRankFromColumns(row)?.getTime() ?? Number.NEGATIVE_INFINITY;
-}
-
 function isLifted(row: ListRankRow): boolean {
   const rank = listRankFromColumns(row);
   if (rank === null) return false;
   return !row.lastMessageAt || rank.getTime() > row.lastMessageAt.getTime();
 }
 
-/** `id` décroissant — l'ordre que MongoDB rend sur un ObjectId, donc celui des deux `orderBy`. */
-function compareIdDesc(left: string, right: string): number {
-  if (left === right) return 0;
-  return left < right ? 1 : -1;
-}
+/**
+ * `ListRankRow` → la forme que le comparateur partagé EXIGE (#19904).
+ *
+ * `RankedConversationRow` déclare ses trois colonnes REQUISES, et c'est une
+ * garde : un `select` qui en oublie une rend un rang faux sans que rien ne
+ * rougisse. On ne l'affaiblit donc pas pour s'y assigner — on NORMALISE une clé
+ * absente en `null`, ce que Prisma fait déjà de son côté. `ListRankRow` les
+ * garde optionnelles parce que les témoins construisent des DOCUMENTS Mongo, où
+ * une clé jamais écrite est absente et non nulle (`__tests__/helpers/mongo-where.ts`) ;
+ * c'est la seule différence, et elle est de harnais, pas de production.
+ */
+const classable = (row: ListRankRow): RankedConversationRow => ({
+  id: row.id,
+  lastMessageAt: row.lastMessageAt ?? null,
+  lastActivityAt: row.lastActivityAt ?? null,
+});
 
 /**
  * Les ids de la page, fusionnés par `(rang desc, id desc)`.
@@ -250,7 +258,7 @@ export function mergeByRank(
     return true;
   });
   return [...unique]
-    .sort((a, b) => rankMillis(b) - rankMillis(a) || compareIdDesc(a.id, b.id))
+    .sort((a, b) => (outranks(classable(a), classable(b)) ? -1 : 1))
     .slice(window.offset, window.offset + window.limit)
     .map((row) => row.id);
 }
@@ -264,22 +272,21 @@ export async function loadRankedConversationPage<Row extends ListRankRow>(
     return readRows({ where, orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }], skip: offset, take: limit });
   }
 
+  const [parMessage, parActivite] = [rankStreamByMessage(), rankStreamByActivity()];
   const bound = boundOf(curseur);
   const clauses = bound ? rankBound(bound) : { byMessage: [], byActivity: [] };
   const byMessageWhere: Prisma.ConversationWhereInput = clauses.byMessage.length
     ? { AND: [where, ...clauses.byMessage] }
     : where;
+  // `parActivite.where` — « les lignes qui portent une activité » appartient au
+  // FLUX, pas à cet appelant (#19904). Le redéclarer ici en faisait une règle
+  // tenue par deux sites, dont un seul rougirait si elle changeait.
   const byActivityWhere: Prisma.ConversationWhereInput = {
-    AND: [where, { lastActivityAt: { not: null } }, ...clauses.byActivity],
+    AND: [where, parActivite.where as Prisma.ConversationWhereInput, ...clauses.byActivity],
   };
   const window = offset + limit;
-  // Les deux ordres départagent sur `id` (#19881) : sans clé de départage,
-  // l'ordre des ex aequo rendu par MongoDB n'est pas spécifié, donc le top-K des
-  // deux lectures d'une MÊME requête peut ne pas s'accorder — et la borne du
-  // curseur, qui départage désormais, s'accorderait avec un ordre que la lecture
-  // ne rend pas.
-  const byMessageOrder: Prisma.ConversationOrderByWithRelationInput[] = [{ lastMessageAt: 'desc' }, { id: 'desc' }];
-  const byActivityOrder: Prisma.ConversationOrderByWithRelationInput[] = [{ lastActivityAt: 'desc' }, { id: 'desc' }];
+  const byMessageOrder = parMessage.orderBy;
+  const byActivityOrder = parActivite.orderBy;
 
   const [firstRows, withActivity] = await Promise.all([
     readRows({ where: byMessageWhere, orderBy: byMessageOrder, skip: offset, take: limit }),
