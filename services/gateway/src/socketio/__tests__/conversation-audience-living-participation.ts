@@ -451,9 +451,20 @@ function unreadableForm(afterWhere: string): string {
  * compose sous ses propres yeux et se tait sur tout le reste.
  */
 function resolveLocalWhere(source: string, name: string): string | null {
-  const declaration = new RegExp(`\\bconst\\s+${name}\\s*(?::[^=]*)?=\\s*\\{`).exec(source);
-  if (declaration === null) return null;
-  return balancedObjectBody(source, declaration.index + declaration[0].length);
+  // `$` est un métacaractère : un identifiant qui en porte un composerait une
+  // expression régulière qui ne cherche pas ce qu'on croit.
+  const escaped = name.replace(/[$]/g, '\\$&');
+  const declaration = new RegExp(`\\bconst\\s+${escaped}\\s*(?::[^=]*)?=\\s*\\{`, 'g');
+  const first = declaration.exec(source);
+  if (first === null) return null;
+  // HOMONYME ⇒ on ne résout PAS. Deux fonctions du même fichier peuvent
+  // déclarer `const others = { … }` ; prendre la PREMIÈRE déclarerait conforme
+  // un site qui ne l'est pas, et ce faux VERT est le seul verdict que ce
+  // balayage n'a pas le droit de rendre. Un site non résolu se publie comme
+  // illisible — « je n'ai pas conclu » est une réponse, « il est conforme »
+  // n'en est pas une quand on a deviné.
+  if (declaration.exec(source) !== null) return null;
+  return balancedObjectBody(source, first.index + first[0].length);
 }
 
 /**
