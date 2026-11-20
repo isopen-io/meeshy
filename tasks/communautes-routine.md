@@ -638,3 +638,9 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gates locaux : passerelle `tsc --noEmit` vert ; suites communautés / demandes / admission / présence / balayages / `tsc-never-loaded` 169 fichiers, 2 258 tests verts ; balayages et cliquets (`sweep|ratchet|guard`) 135 / 136 fichiers verts, 1 rouge ÉTRANGER (`DoubleRatchet.test.ts`, 2 échecs identiques sans le lot).
 - Aucun client touché, aucun contrat d'API changé.
 - Prochain lot recommandé : iOS #19877 (intendants) une fois #19903 fusionnée, sinon #19879 (refus notifié, passerelle + web).
+
+## 2026-11-20 — réveil 01:38 UTC
+
+- Début du run : trois PR de la routine ouvertes. #19950 (#19879, refus notifié) poussée à 01:11 : vivante, cédée. #19951 (#14227, index) a son `workflow_dispatch` de `ci.yml` encore en file depuis 23:44 : rien à mener tant qu'il n'a pas de verdict. #19903 (#19869, iOS « Demande envoyée ») inactive depuis 19:39 avec `ci.yml`, `ios.yml` et `sdk-tests.yml` VERTS sur `495efb8b7` : run consacré à la mener à la fusion.
+- `dev` (`b66be57f7`, 46 commits : profil, jeu, talkie, position partagée iOS ; passerelle communautés #19914) fusionnée dans la branche sans conflit (le journal s'est fusionné seul). Aucun chemin iOS / SDK du lot touché par `dev`.
+- Rejoués sur l'arbre fusionné : `check_house_rules.sh` (42 règles tenues), `check_cohesion_budget.sh` (code 0), `check_test_registration.sh` (2 056 fichiers inscrits), `check-accent-color-hardcoding.mjs` (168 / 408 = références).
