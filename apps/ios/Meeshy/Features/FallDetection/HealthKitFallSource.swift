@@ -60,9 +60,10 @@ final class HealthKitFallSource: FallSampleSourcing {
         guard isAvailable else { return }
         let query = HKObserverQuery(sampleType: fallType, predicate: nil) { [weak self] _, completion, error in
             guard error == nil else { return completion() }
+            let done = ObserverCompletion(signal: completion)
             Task { @MainActor in
                 await self?.fetchNew(accountId: accountId, deliver: deliver)
-                completion()
+                done.signal()
             }
         }
         observer = query
@@ -87,6 +88,12 @@ final class HealthKitFallSource: FallSampleSourcing {
         guard await deliver(dates), let next else { return }
         anchors.save(next, for: accountId)
     }
+}
+
+/// Le rappel de fin d'une livraison HealthKit, qui n'est pas `Sendable` : il ne voyage que jusqu'à la tâche qui
+/// lit les échantillons, et n'est appelé qu'une fois, après elle — HealthKit ne le touche plus entre-temps.
+private nonisolated struct ObserverCompletion: @unchecked Sendable {
+    let signal: HKObserverQueryCompletionHandler
 }
 
 /// Où l'ancre de la requête HealthKit survit, par compte : un autre compte sur le même iPhone repart de zéro. L'ancre
