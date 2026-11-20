@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
-import { socketCallAnalyticsSchema } from '../../../../../services/gateway/src/validation/call-schemas';
-import { analyticsPayload, createTelemetry, withMedia, withSample } from './call-analytics';
+import { socketCallAnalyticsSchema, socketQualityReportSchema } from '../../../../../services/gateway/src/validation/call-schemas';
+import { analyticsPayload, createTelemetry, qualityReport, withCodec, withMedia, withSample } from './call-analytics';
 import { readMediaQuality } from './call-analytics-read';
+import { peerRate, readStats, type PeerQuality } from './call-quality';
 
 type Entry = Readonly<Record<string, unknown>>;
 
@@ -67,5 +68,107 @@ describe('une stat malformée ne casse ni la boucle ni le rapport (#19876, QA)',
     expect(payload.pliCount).toBe(Number.MAX_SAFE_INTEGER);
     expect(payload.concealedSamples).toBe(Number.MAX_SAFE_INTEGER);
     expect(payload.mos).toBeGreaterThanOrEqual(1);
+  });
+});
+
+const linkReport = (link: { readonly lost: number; readonly received: number; readonly rtt?: number; readonly mimeType?: string; readonly jitter?: number }) =>
+  report([
+    { type: 'candidate-pair', id: 'p', state: 'succeeded', nominated: true, currentRoundTripTime: link.rtt ?? 0.05 },
+    { type: 'inbound-rtp', kind: 'audio', packetsLost: link.lost, packetsReceived: link.received, bytesReceived: 1000, jitter: link.jitter ?? 0.01 },
+    { type: 'outbound-rtp', kind: 'video', bytesSent: 500, codecId: 'c' },
+    { type: 'codec', id: 'c', mimeType: link.mimeType ?? 'video/VP8' },
+  ]);
+
+const payloadOf = (rates: readonly { readonly level: PeerQuality['level']; readonly rtt: number; readonly packetLoss: number }[], codec: string | null = null) =>
+  analyticsPayload(
+    rates.reduce((telemetry, rate) => withSample(telemetry, rate), withCodec(createTelemetry(0), codec)),
+    context,
+  );
+
+describe('une perte, une latence ou un codec hors bornes ne font plus rejeter le rapport (#19911)', () => {
+  test('une perte cumulée négative au premier relevé (RFC 3550, doublons) ne rend pas une perte négative', () => {
+    const rate = peerRate(readStats(linkReport({ lost: -2, received: 10 }), 0), null);
+    expect(rate.packetLoss).toBe(0);
+    expect(rate.level).toBe('excellent');
+    expect(socketCallAnalyticsSchema.safeParse(payloadOf([rate])).success).toBe(true);
+  });
+
+  test('une perte cumulée qui devient négative au relevé suivant ne rend pas une perte négative', () => {
+    const first = readStats(linkReport({ lost: 0, received: 10 }), 0);
+    const next = readStats(linkReport({ lost: -3, received: 20 }), 2000);
+    const rate = peerRate(next, first);
+    expect(rate.packetLoss).toBe(0);
+    expect(socketCallAnalyticsSchema.safeParse(payloadOf([peerRate(first, null), rate])).success).toBe(true);
+  });
+
+  test('un RTT démesuré n’est pas lu comme une latence infinie', () => {
+    const rate = peerRate(readStats(linkReport({ lost: 0, received: 10, rtt: 1e306 }), 0), null);
+    expect(Number.isFinite(rate.rtt)).toBe(true);
+    expect(rate.rtt).toBeGreaterThanOrEqual(0);
+    expect(socketCallAnalyticsSchema.safeParse(payloadOf([rate])).success).toBe(true);
+  });
+
+  test('un RTT négatif n’est pas lu comme une latence négative', () => {
+    const rate = peerRate(readStats(linkReport({ lost: 0, received: 10, rtt: -0.2 }), 0), null);
+    expect(rate.rtt).toBe(0);
+    expect(socketCallAnalyticsSchema.safeParse(payloadOf([rate])).success).toBe(true);
+  });
+
+  test('un codec de 80 caractères est coupé à 50', () => {
+    const read = readStats(linkReport({ lost: 0, received: 10, mimeType: `video/${'x'.repeat(80)}` }), 0);
+    const payload = payloadOf([peerRate(read, null)], read.codec);
+    expect(payload.codec).toBe('x'.repeat(50));
+    expect(socketCallAnalyticsSchema.safeParse(payload).success).toBe(true);
+  });
+
+  test('des sommes qui débordent ou des échantillons négatifs rendent des moyennes finies et positives', () => {
+    const payload = payloadOf([
+      { level: 'poor', rtt: Number.MAX_VALUE, packetLoss: -40 },
+      { level: 'poor', rtt: Number.MAX_VALUE, packetLoss: -40 },
+    ]);
+    [payload.averageRtt, payload.averagePacketLoss, payload.maxPacketLoss].forEach((value) => {
+      expect(Number.isFinite(value)).toBe(true);
+      expect(value).toBeGreaterThanOrEqual(0);
+    });
+    expect(socketCallAnalyticsSchema.safeParse(payload).success).toBe(true);
+  });
+
+  test('des stats valides gardent leur valeur : perte, latence et niveau inchangés', () => {
+    const first = readStats(linkReport({ lost: 0, received: 100, rtt: 0.12 }), 0);
+    const rate = peerRate(readStats(linkReport({ lost: 2, received: 198, rtt: 0.12 }), 2000), first);
+    expect(rate.packetLoss).toBe(2);
+    expect(rate.rtt).toBe(120);
+    expect(rate.level).toBe('good');
+  });
+
+  test('le relevé de qualité affiché et poussé reste fini et positif : aucun indicateur absurde', () => {
+    [
+      { lost: -2, received: 10, rtt: 1e306, jitter: 1e306 },
+      { lost: -2, received: 10, rtt: -0.2, jitter: -0.5 },
+    ].forEach((link) => {
+      const rate = peerRate(readStats(linkReport(link), 0), null);
+      expect([rate.packetLoss, rate.rtt, rate.jitter].every((value) => Number.isFinite(value) && value >= 0)).toBe(true);
+      expect(socketQualityReportSchema.safeParse(qualityReport('507f1f77bcf86cd799439099', rate, 0)).success).toBe(true);
+    });
+  });
+
+  test('une somme de pertes ou d’octets qui déborde ne rend ni NaN ni Infinity, au relevé suivant non plus', () => {
+    const overflowing = report([
+      { type: 'candidate-pair', id: 'p', state: 'succeeded', nominated: true, currentRoundTripTime: 0.05 },
+      { type: 'inbound-rtp', kind: 'audio', packetsLost: 1e308, packetsReceived: 10, bytesReceived: 1e308 },
+      { type: 'inbound-rtp', kind: 'audio', packetsLost: 1e308, packetsReceived: 10, bytesReceived: 1e308 },
+    ]);
+    const first = readStats(overflowing, 0);
+    const rates = [peerRate(first, null), peerRate(readStats(overflowing, 2000), first)];
+    rates.forEach((rate) => {
+      expect([rate.packetLoss, rate.audioKbps, rate.videoKbps].every((value) => Number.isFinite(value) && value >= 0)).toBe(true);
+      expect(socketQualityReportSchema.safeParse(qualityReport('507f1f77bcf86cd799439099', rate, 0)).success).toBe(true);
+    });
+    const payload = payloadOf(rates);
+    [payload.averagePacketLoss, payload.maxPacketLoss].forEach((value) => {
+      expect(Number.isFinite(value)).toBe(true);
+      expect(value).toBeGreaterThanOrEqual(0);
+    });
+    expect(socketCallAnalyticsSchema.safeParse(payload).success).toBe(true);
   });
 });
