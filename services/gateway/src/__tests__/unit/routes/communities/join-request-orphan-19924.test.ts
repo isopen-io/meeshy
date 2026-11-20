@@ -40,6 +40,7 @@ const REQUEST = '507f1f77bcf86cd799430055';
 const OTHER = '507f1f77bcf86cd799430077';
 const NOW = new Date('2026-11-20T08:00:00Z');
 const DECIDED = new Date(NOW.getTime() - ORPHAN_ACCEPTANCE_GRACE_MS - 60_000);
+const CREATED = new Date(DECIDED.getTime() - 3_600_000);
 
 type Row = { userId: string; isActive: boolean; leftAt: Date | null };
 
@@ -47,6 +48,7 @@ const accepted = (data: Record<string, unknown> = {}) => ({
   id: REQUEST,
   userId: ARRIVANT,
   decidedAt: DECIDED,
+  createdAt: CREATED,
   ...data,
 });
 
@@ -54,7 +56,8 @@ function makePrisma(options: {
   readonly acceptedRequests?: readonly Record<string, unknown>[];
   readonly members?: readonly Row[];
   readonly livePendingOf?: readonly string[];
-  readonly memberRead?: () => Promise<unknown>;
+  readonly laterRequests?: readonly Record<string, unknown>[];
+  readonly memberRead?: (args: any) => Promise<unknown>;
 } = {}) {
   return {
     community: {
@@ -64,13 +67,16 @@ function makePrisma(options: {
       }),
     },
     communityMember: {
-      findMany: jest.fn<any>(options.memberRead ?? (async () => options.members ?? [])),
+      findMany: jest.fn<any>(options.memberRead ?? (async ({ where }: any) =>
+        (options.members ?? []).filter((m) => where.isActive === undefined || m.isActive === where.isActive))),
     },
     communityJoinRequest: {
       findMany: jest.fn<any>(async ({ where }: any) => {
         if (where.status === 'accepted') return options.acceptedRequests ?? [accepted()];
-        if (where.status === 'pending' && where.userId?.in) {
-          return (options.livePendingOf ?? []).filter((u) => where.userId.in.includes(u)).map((userId) => ({ userId }));
+        if (where.status === undefined && where.userId?.in) {
+          const accepts = (options.acceptedRequests ?? [accepted()]).map((a) => ({ ...a, status: 'accepted' }));
+          const pendings = (options.livePendingOf ?? []).map((userId) => ({ id: `p-${userId}`, userId, status: 'pending', createdAt: CREATED }));
+          return [...accepts, ...pendings, ...(options.laterRequests ?? [])].filter((r: any) => where.userId.in.includes(r.userId));
         }
         return [];
       }),
@@ -151,6 +157,45 @@ describe('reopenOrphanedAcceptances — la réparation d\'une acceptation sans e
     expect(reopenings(prisma)).toEqual([]);
   });
 
+  it('une demande PLUS RÉCENTE refusée a pris la suite : la vieille acceptation reste close (le refus tient)', async () => {
+    const prisma = makePrisma({
+      laterRequests: [{ id: OTHER, userId: ARRIVANT, status: 'rejected', createdAt: new Date(DECIDED.getTime() + 86_400_000) }],
+    });
+
+    expect(await reopenOrphanedAcceptances(prisma, { communityId: COMM, now: NOW })).toBe(0);
+    expect(reopenings(prisma)).toEqual([]);
+  });
+
+  it('une demande plus ANCIENNE de la personne (refusée avant) n\'empêche pas la réparation', async () => {
+    const prisma = makePrisma({
+      laterRequests: [{ id: OTHER, userId: ARRIVANT, status: 'rejected', createdAt: new Date(CREATED.getTime() - 86_400_000) }],
+    });
+
+    expect(await reopenOrphanedAcceptances(prisma, { communityId: COMM, now: NOW })).toBe(1);
+  });
+
+  it('la personne entre par une autre porte PENDANT la réparation : la demande rouverte se reclôt', async () => {
+    let reads = 0;
+    const prisma = makePrisma({
+      memberRead: async () => {
+        reads += 1;
+        return reads === 1 ? [] : [{ userId: ARRIVANT }];
+      },
+    });
+
+    await reopenOrphanedAcceptances(prisma, { communityId: COMM, now: NOW });
+
+    const closures = prisma.communityJoinRequest.updateMany.mock.calls
+      .map((c: any) => c[0])
+      .filter((args: any) => args.data.status === 'accepted');
+    expect(closures).toEqual([
+      expect.objectContaining({
+        where: expect.objectContaining({ communityId: COMM, userId: { in: [ARRIVANT] }, status: 'pending' }),
+        data: expect.objectContaining({ status: 'accepted', decidedBy: null }),
+      }),
+    ]);
+  });
+
   it('ne lit que les acceptations décidées hors du délai de grâce et encore VIVANTES par leur âge, bornées', async () => {
     const prisma = makePrisma({ acceptedRequests: [] });
 
@@ -224,7 +269,8 @@ describe('la réparation se fait au prochain accès (#19924)', () => {
     expect(res.statusCode).toBe(200);
     expect(reopenings(prisma)).toEqual([expect.objectContaining({ where: expect.objectContaining({ id: REQUEST }) })]);
     const order = (fn: any) => fn.mock.invocationCallOrder[0];
-    const listing = prisma.communityJoinRequest.findMany.mock.calls.findIndex((c: any) => c[0].where.status !== 'accepted');
+    expect(prisma.communityJoinRequest.findMany.mock.calls.some((c: any) => c[0].include?.user !== undefined)).toBe(true);
+    const listing = prisma.communityJoinRequest.findMany.mock.calls.findIndex((c: any) => c[0].include?.user !== undefined);
     expect(order(prisma.communityJoinRequest.updateMany)).toBeLessThan(
       prisma.communityJoinRequest.findMany.mock.invocationCallOrder[listing],
     );
