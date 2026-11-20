@@ -644,3 +644,18 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Début du run : trois PR de la routine ouvertes. #19950 (#19879, refus notifié) poussée à 01:11 : vivante, cédée. #19951 (#14227, index) a son `workflow_dispatch` de `ci.yml` encore en file depuis 23:44 : rien à mener tant qu'il n'a pas de verdict. #19903 (#19869, iOS « Demande envoyée ») inactive depuis 19:39 avec `ci.yml`, `ios.yml` et `sdk-tests.yml` VERTS sur `495efb8b7` : run consacré à la mener à la fusion.
 - `dev` (`b66be57f7`, 46 commits : profil, jeu, talkie, position partagée iOS ; passerelle communautés #19914) fusionnée dans la branche sans conflit (le journal s'est fusionné seul). Aucun chemin iOS / SDK du lot touché par `dev`.
 - Rejoués sur l'arbre fusionné : `check_house_rules.sh` (42 règles tenues), `check_cohesion_budget.sh` (code 0), `check_test_registration.sh` (2 056 fichiers inscrits), `check-accent-color-hardcoding.mjs` (168 / 408 = références).
+## 2026-11-19 — réveil 23:38 UTC
+
+- Début du run : #19950 (#19879, refus notifié) poussée à 23:25 et #19903 (#19869, iOS « Demande envoyée ») dont le `workflow_dispatch` iOS tourne (seconde tentative relancée vers 23:33) : vivantes, cédées.
+- Lot : #14227 — les appartenances de communauté se lisent par index, jamais par un parcours complet de la collection (une lenteur est un bug).
+- Constat : `CommunityMember` ne portait que `(communityId, isActive, joinedAt)`. Les lectures par personne (`{ userId, isActive }` : « mes communautés », accès d'un post COMMUNITY, co-appartenance, purge, export) parcouraient la collection entière ; les lectures de paire (`{ communityId, userId }` : contrôle d'accès de chaque route, invitation, adhésion, demandes d'entrée) parcouraient tout l'effectif de la communauté.
+- Schéma : `@@index([userId, isActive])` et `@@index([communityId, userId])`, non uniques (l'unicité de la paire reste #16696).
+- Migration : `packages/shared/prisma/migrations/2026-11-19-community-member-lookup-indexes.mongodb.js`, même forme que `2026-11-13-circle-pair-reverse-indexes` : index reconnu par sa clé, aucun index ni donnée touché, un index de même clé partiel ou épars signalé (sortie 2) jamais remplacé, `DRY_RUN=1`, idempotente, commande `explain` de vérification dans l'en-tête.
+- Témoin : `community-member-lookup-indexes-migration.test.ts` (9, exécute le fichier mongosh dans un contexte isolé et lit `schema.prisma`) — rouge prouvé : 9 échecs sans le lot.
+- Reste pour fermer #14227 : jouer la migration sur le staging et y relever le plan (IXSCAN) ; la production attend le feu vert du porteur, sauvegarde vérifiée d'abord. Le conteneur de la routine n'atteint pas l'hôte.
+
+## 2026-11-20 — réveil 05:38 UTC
+
+- Début du run : #19983 (doublon de `retained.json`) poussée à 05:37 par le run précédent, encore actif : cédée. #19951 (#14227, index des appartenances), #19950 (#19879) et #19903 (#19869) inactives depuis plus de deux heures ; le rouge étranger qui les bloquait (#19964) est corrigé sur `dev` (#19974, `fb8f5c167`).
+- Lot : mener #19951 à la fusion. `dev` (`b06982a21`) fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : passerelle `tsc --noEmit` vert ; témoin de migration + `tsc-never-loaded` (2 suites, 11 tests) verts ; les deux anciens rouges étrangers verts (shared `glory-frames-generated` 29/29, web `lottie/sources` 3/3).
+- `ci.yml` relancé en `workflow_dispatch` sur cette tête.

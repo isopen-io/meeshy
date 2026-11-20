@@ -2542,6 +2542,10 @@ model CommunityMember {
   community Community @relation(fields: [communityId], references: [id])
 
   @@index([communityId, isActive, joinedAt])
+  // Lectures par personne : « mes communautés », accès d'un post COMMUNITY, purge, export (#14227)
+  @@index([userId, isActive])
+  // Une personne dans une communauté : contrôle d'accès, invitation, adhésion (#14227)
+  @@index([communityId, userId])
 }
 
 /// Demande d'entrée dans une communauté qui valide chaque entrée (#19429).
