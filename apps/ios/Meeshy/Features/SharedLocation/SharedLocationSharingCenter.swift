@@ -152,8 +152,8 @@ final class SharedLocationSharingCenter: ObservableObject {
     /// réponse et une passerelle d'avant (`nil`) lèvent l'attente, comme un « Partager » d'ici ; une panne (hors ligne,
     /// 401, 5xx, délai) la GARDE et la relecture se rejoue au rythme de `retryDelay` (#19928) : dans le doute, muet.
     private var awaitsServedTruth = false
-    /// La passerelle a répondu à une relecture depuis le lancement (#20055) : avant, toute liste composée d'ici peut
-    /// ignorer ce qu'un autre appareil du compte partage.
+    /// La DERNIÈRE relecture a répondu (#20055) : jamais relu, ou relecture en panne depuis, toute liste composée d'ici
+    /// peut ignorer ce qu'un autre appareil du compte partage — ou rendre une personne qu'il a retirée.
     private var hasReadServed = false
     private var following = Set<AnyCancellable>()
     private var deadline: AnyCancellable?
@@ -241,9 +241,9 @@ final class SharedLocationSharingCenter: ObservableObject {
         battery: Bool? = nil
     ) async -> SharedLocationShareProblem? {
         await locked {
-            guard self.accepts(term) else { return .refused(.unavailable) }
-            guard await self.readBeforeComposing() else { return .refused(.offline) }
+            guard await self.readBeforeComposing() else { return self.isLive ? .refused(.offline) : .refused(.failed) }
             guard self.isLive else { return .refused(.failed) }
+            guard self.accepts(term) else { return .refused(.unavailable) }
             let fix: SharedLocationFix
             switch await self.fixes.currentFix() {
             case .fix(let current): fix = current
@@ -280,9 +280,9 @@ final class SharedLocationSharingCenter: ObservableObject {
         battery: Bool? = nil
     ) async -> SharedLocationShareProblem? {
         await locked {
-            guard self.servesFixedPoint, self.accepts(term) else { return .refused(.unavailable) }
-            guard await self.readBeforeComposing() else { return .refused(.offline) }
+            guard await self.readBeforeComposing() else { return self.isLive ? .refused(.offline) : .refused(.failed) }
             guard self.isLive else { return .refused(.failed) }
+            guard self.servesFixedPoint, self.accepts(term) else { return .refused(.unavailable) }
             let next = self.adding(userId, precision: precision, term: term, battery: battery).withFixedPoint(true)
             return await self.publish(next, fix: point, previous: self.roster, claimsPublishing: true, notify: notify)
         }
@@ -307,8 +307,12 @@ final class SharedLocationSharingCenter: ObservableObject {
     @discardableResult
     func stopSharing(with userId: String) async -> SharedLocationShareProblem? {
         await locked {
-            _ = await self.readBeforeComposing(liftsWaitOnLegacy: false)
+            let firstRead = !self.hasReadServed
+            let answered = await self.readBeforeComposing(liftsWaitOnLegacy: false)
             guard self.isLive else { return .refused(.failed) }
+            if firstRead, answered, self.roster.entry(for: userId) == nil, !self.roster.isWithdrawalPending(for: userId) {
+                return nil
+            }
             let problem = await self.withdrawingRepublish(self.roster.pruned(now: self.now()).removing(userId: userId))
             guard problem != nil, self.isLive, self.roster.entry(for: userId) != nil else { return problem }
             self.adopt(self.roster.withdrawing(userId: userId, now: self.now()))
@@ -369,6 +373,7 @@ final class SharedLocationSharingCenter: ObservableObject {
         do {
             read = try await served()
         } catch {
+            hasReadServed = false
             if isLive, awaitsServedTruth { arm(after: Self.retryDelay) }
             return false
         }
@@ -453,7 +458,8 @@ final class SharedLocationSharingCenter: ObservableObject {
     /// liste seule (`INVALID`) : la liste repart avec une position, la dernière envoyée, sinon celle de l'appareil ;
     /// sans l'une ni l'autre (permission retirée, aucun relevé), TOUT s'arrête : retirer une personne ne dépend jamais
     /// de la localisation. Un point choisi se republie lui-même, jamais un relevé (#19558) ; perdu avec un lancement,
-    /// on arrête. Relancé et pas encore relu (#19767), l'appareil ne republie pas SA position à la place de la liste :
+    /// on arrête. Relancé et pas encore relu (#19767), ou simple récepteur d'une liste (#18578), l'appareil ne republie pas
+    /// SA position à la place de la liste :
     /// le retrait reste en attente et se rejoue après la relecture.
     private func republish(_ wanted: SharedLocationRoster) async -> SharedLocationShareProblem? {
         let next = wanted.settled
@@ -469,7 +475,7 @@ final class SharedLocationSharingCenter: ObservableObject {
             return await publish(next, fix: pinnedFix, previous: roster)
         }
         if let last = freshLastFix { return await publish(next, fix: last, previous: roster) }
-        guard !awaitsServedTruth else { return await stopAll() }
+        guard !awaitsServedTruth, !received else { return await stopAll() }
         guard let fix = await fixes.silentFix() else { return await stopAll() }
         guard isLive else { return .refused(.failed) }
         return await publish(next, fix: fix, previous: roster)

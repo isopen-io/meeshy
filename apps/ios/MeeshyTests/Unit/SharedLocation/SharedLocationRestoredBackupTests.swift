@@ -333,6 +333,52 @@ final class SharedLocationRestoredBackupTests: XCTestCase {
         XCTAssertEqual(relaunched.emitter.starts.last?.recipients.map(\.userId), [carol])
         XCTAssertTrue(relaunched.emitter.updates.isEmpty)
     }
+
+    func test_share_aReadOutageAfterASuccessfulRead_readsAgain_andRefusesWhileItLasts() async {
+        let restored = relaunch(on: FakeSharedLocationRosterStore())
+        restored.served.snapshot = servedElsewhere([alice])
+        _ = await restored.center.share(with: carol, precision: .city, duration: .oneHour)
+        let startsBefore = restored.emitter.starts.count
+        restored.served.outage = Outage()
+        restored.sockets.send(())
+        await settle(until: { restored.served.reads >= 2 })
+
+        let problem = await restored.center.share(with: bob, precision: .city, duration: .oneHour)
+
+        XCTAssertEqual(problem, .refused(.offline))
+        XCTAssertEqual(restored.served.reads, 3)
+        XCTAssertEqual(restored.emitter.starts.count, startsBefore)
+    }
+
+    func test_stop_onARelaunch_aReadOutage_stillSendsTheWithdrawalAsTheListAlone() async {
+        let store = FakeSharedLocationRosterStore()
+        store.save(sharingAlice().adding(userId: bob, precision: .city, duration: .eightHours, now: t0))
+        store.publishedStart = mine
+        let relaunched = relaunch(on: store)
+        relaunched.served.outage = Outage()
+
+        _ = await relaunched.center.stopSharing(with: bob)
+
+        XCTAssertEqual(relaunched.emitter.starts.last?.recipients.map(\.userId), [alice])
+        XCTAssertEqual(relaunched.emitter.starts.last?.isListOnly, true)
+        XCTAssertEqual(relaunched.emitter.stops, 0)
+    }
+
+    func test_stop_onARelaunch_theReadYieldsToAnotherDevice_aGatewayBeforeTheListAlone_stopsWithoutThisDevicesPosition() async {
+        let store = FakeSharedLocationRosterStore()
+        store.save(sharingAlice())
+        store.publishedStart = mine
+        let relaunched = relaunch(on: store)
+        relaunched.served.snapshot = servedElsewhere([alice, carol])
+        relaunched.emitter.queuedStartVerdicts = [.refused(.invalid)]
+
+        _ = await relaunched.center.stopSharing(with: alice)
+
+        XCTAssertEqual(relaunched.emitter.stops, 1)
+        XCTAssertTrue(relaunched.emitter.starts.allSatisfy(\.isListOnly))
+        XCTAssertTrue(relaunched.emitter.updates.isEmpty)
+        XCTAssertEqual(relaunched.fixes.silentReads, 0)
+    }
 }
 
 private final class InMemoryRosterKeychain: KeychainStoring, @unchecked Sendable {

@@ -209,8 +209,8 @@ class SharedLocationSharingCenter internal constructor(
     @Volatile private var awaitsServedTruth = false
 
     /**
-     * La passerelle a répondu à une relecture depuis le chargement de la session (#20055) : avant, toute liste composée
-     * d'ici peut ignorer ce qu'un autre appareil du compte partage.
+     * La DERNIÈRE relecture a répondu (#20055) : jamais relu dans la session, ou relecture en panne depuis, toute liste
+     * composée d'ici peut ignorer ce qu'un autre appareil du compte partage — ou rendre une personne qu'il a retirée.
      */
     @Volatile private var hasReadServed = false
 
@@ -235,8 +235,9 @@ class SharedLocationSharingCenter internal constructor(
         precision: SharedLocationPrecision,
         duration: SharedLocationShareDuration,
     ): SharedLocationShareProblem? = locked { ticket ->
-        if (!readBeforeComposing(ticket)) return@locked SharedLocationShareProblem.Refused(SharedLocationSendOutcome.OFFLINE)
+        val answered = readBeforeComposing(ticket)
         if (!isCurrent(ticket)) return@locked SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
+        if (!answered) return@locked SharedLocationShareProblem.Refused(SharedLocationSendOutcome.OFFLINE)
         if (!permission.isGranted()) return@locked SharedLocationShareProblem.LocationDenied
         val fix = deviceFix() ?: return@locked SharedLocationShareProblem.LocationUnavailable
         val previous = _roster.value
@@ -244,8 +245,11 @@ class SharedLocationSharingCenter internal constructor(
     }
 
     override suspend fun stopSharing(userId: String): SharedLocationShareProblem? = locked { ticket ->
-        readBeforeComposing(ticket, liftsWaitOnLegacy = false)
+        val firstRead = !hasReadServed
+        val answered = readBeforeComposing(ticket, liftsWaitOnLegacy = false)
         if (!isCurrent(ticket)) return@locked SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
+        val gone = _roster.value.entry(userId) == null && !_roster.value.isWithdrawalPending(userId)
+        if (firstRead && answered && gone) return@locked null
         val problem = withdrawingRepublish(ticket, _roster.value.pruned(clock()).removing(userId))
         if (problem == null || !isCurrent(ticket) || _roster.value.entry(userId) == null) return@locked problem
         adopt(ticket, _roster.value.withdrawing(userId, clock()))
@@ -311,6 +315,7 @@ class SharedLocationSharingCenter internal constructor(
         val read = readServed()
         if (!isCurrent(ticket)) return false
         if (read !is ServedRead.Answered) {
+            hasReadServed = false
             if (awaitsServedTruth) scheduleRetry()
             return false
         }
@@ -461,7 +466,7 @@ class SharedLocationSharingCenter internal constructor(
         }
         if (!isCurrent(ticket)) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
         freshLastFix()?.let { return publish(ticket, next, it, previous = _roster.value) }
-        if (awaitsServedTruth) return stopAll(ticket)
+        if (awaitsServedTruth || received) return stopAll(ticket)
         val fix = deviceFix() ?: return stopAll(ticket)
         return publish(ticket, next, fix, previous = _roster.value)
     }

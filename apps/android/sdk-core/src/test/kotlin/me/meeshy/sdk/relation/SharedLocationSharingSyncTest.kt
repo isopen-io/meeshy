@@ -882,4 +882,59 @@ class SharedLocationSharingSyncTest {
         assertThat(relaunched.starts.last().recipients.map { it.userId }).containsExactly(carol)
         assertThat(relaunched.updates).isEmpty()
     }
+
+    @Test
+    fun `une relecture en panne apres une relecture reussie fait relire partager, refuse tant qu'elle dure`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = servedFrom(elsewhere, alice to hour)
+        device.center.share(carol, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        val startsBefore = device.starts.size
+        device.servedFailure = IllegalStateException("503")
+        device.ownChanged.emit(Unit)
+        runCurrent()
+
+        val problem = device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        runCurrent()
+
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.Refused(SharedLocationSendOutcome.OFFLINE))
+        assertThat(device.reads).isEqualTo(3)
+        assertThat(device.starts).hasSize(startsBefore)
+        device.endOutage()
+    }
+
+    @Test
+    fun `relance, arreter pendant une panne de la relecture fait partir le retrait en liste seule`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        runCurrent()
+        val relaunched = device.relaunched()
+        relaunched.servedFailure = IllegalStateException("hors ligne")
+
+        relaunched.center.stopSharing(bob)
+        runCurrent()
+
+        assertThat(relaunched.starts.last().isListOnly).isTrue()
+        assertThat(relaunched.starts.last().recipients.map { it.userId }).containsExactly(alice)
+        assertThat(relaunched.stops).isEqualTo(0)
+        relaunched.endOutage()
+    }
+
+    @Test
+    fun `relance, la relecture cede a un autre appareil et une passerelle sans liste seule arrete sans la position d'ici`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        val relaunched = device.relaunched()
+        relaunched.servedSnapshot = servedFrom(elsewhere, alice to hour, carol to hour)
+        relaunched.queuedStartVerdicts += SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.INVALID)
+
+        relaunched.center.stopSharing(alice)
+        runCurrent()
+
+        assertThat(relaunched.stops).isEqualTo(1)
+        assertThat(relaunched.starts.all { it.isListOnly }).isTrue()
+        assertThat(relaunched.updates).isEmpty()
+        assertThat(relaunched.fixAsks).isEqualTo(0)
+    }
 }
