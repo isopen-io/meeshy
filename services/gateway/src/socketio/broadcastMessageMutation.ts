@@ -66,8 +66,21 @@ export type MessageMutationQueueParams = {
   conversationId: string;
   actorUserId: string | null | undefined;
   messageId: string;
-  /** #8562 — la variante d'un lecteur que la charge commune ne peut pas servir. */
-  resolvePayloadForReader?: (queueKey: string) => Record<string, unknown>;
+  /**
+   * #8562 — la variante d'un lecteur que la charge commune ne peut pas servir.
+   *
+   * #19939 — DEUX paramètres, comme la file les remet
+   * (`offlineParticipantQueue.ts:171`). Il n'en déclarait qu'UN, si bien que ce
+   * transport ne POUVAIT pas signer une pièce qui se lit par lecteur : signer
+   * exige la ligne `Participant`, que la clé de file ne porte pas (elle vaut
+   * `userId ?? id`, donc jamais l'id de participant d'un inscrit).
+   *
+   * Inoffensif au moment du lot — les trois routes REST d'édition ne chargent
+   * pas `attachments`, donc le plan y sort `null` — et c'est précisément ce qui
+   * en faisait un piège : le quatrième transport qui chargerait des pièces
+   * aurait rouvert la fuite sans qu'aucun type ne le dise.
+   */
+  resolvePayloadForReader?: (queueKey: string, participantId: string) => Record<string, unknown>;
   /**
    * Les clés de file qui ne doivent RIEN recevoir de cette mutation — les
    * lecteurs dont le plancher d'historique place ce message hors de leur
