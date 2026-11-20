@@ -259,27 +259,27 @@ extension CallStats {
         for entry in entries {
             switch entry.type {
             case "candidate-pair":
-                if let value = entry.values["currentRoundTripTime"] { rtt = value * 1000 }
-                if let bps = entry.values["availableOutgoingBitrate"] { availableOutgoingBitrateBps = Int(bps) }
+                if let value = entry.values["currentRoundTripTime"] { rtt = CallStatValue.measured(value * 1000) }
+                if let bps = entry.values["availableOutgoingBitrate"] { availableOutgoingBitrateBps = CallStatValue.count(bps) }
             case "inbound-rtp":
-                if let lost = entry.values["packetsLost"] { packetsLost += Int(lost) }
-                let received = Int(entry.values["packetsReceived"] ?? 0)
-                let receivedBytes = Int(entry.values["bytesReceived"] ?? 0)
+                if let lost = entry.values["packetsLost"] { packetsLost = CallStatValue.sum(packetsLost, CallStatValue.count(lost)) }
+                let received = CallStatValue.count(entry.values["packetsReceived"] ?? 0)
+                let receivedBytes = CallStatValue.count(entry.values["bytesReceived"] ?? 0)
                 if entry.kind == "video" {
-                    inboundVideo += received
-                    inboundVideoBytes += receivedBytes
+                    inboundVideo = CallStatValue.sum(inboundVideo, received)
+                    inboundVideoBytes = CallStatValue.sum(inboundVideoBytes, receivedBytes)
                 } else {
-                    inboundAudio += received
-                    inboundAudioBytes += receivedBytes
+                    inboundAudio = CallStatValue.sum(inboundAudio, received)
+                    inboundAudioBytes = CallStatValue.sum(inboundAudioBytes, receivedBytes)
                     // libwebrtc reports jitter in seconds; accumulate for mean across audio streams
-                    if let j = entry.values["jitter"] { audioJitterSum += j; audioJitterCount += 1 }
+                    if let j = entry.values["jitter"], j.isFinite, j >= 0 { audioJitterSum += j; audioJitterCount += 1 }
                     audioLevel = max(audioLevel, entry.values["audioLevel"] ?? 0)
                 }
-                bytesReceived += receivedBytes
+                bytesReceived = CallStatValue.sum(bytesReceived, receivedBytes)
                 if primaryCodecId == nil { primaryCodecId = entry.codecId }
             case "outbound-rtp":
-                outbound += Int(entry.values["packetsSent"] ?? 0)
-                bytesSent += Int(entry.values["bytesSent"] ?? 0)
+                outbound = CallStatValue.sum(outbound, CallStatValue.count(entry.values["packetsSent"] ?? 0))
+                bytesSent = CallStatValue.sum(bytesSent, CallStatValue.count(entry.values["bytesSent"] ?? 0))
             case "media-source" where entry.kind == "audio":
                 localAudioLevel = max(localAudioLevel, entry.values["audioLevel"] ?? 0)
             default:
@@ -291,7 +291,7 @@ extension CallStats {
             .flatMap { codecMime[$0] }
             .map { mime in mime.split(separator: "/").last.map(String.init) ?? mime }
 
-        let jitterMs = audioJitterCount > 0 ? (audioJitterSum / Double(audioJitterCount)) * 1000 : 0
+        let jitterMs = audioJitterCount > 0 ? CallStatValue.measured((audioJitterSum / Double(audioJitterCount)) * 1000) : 0
 
         return CallStats(
             roundTripTimeMs: rtt,
@@ -299,7 +299,7 @@ extension CallStats {
             bandwidth: bytesSent,
             bytesReceived: bytesReceived,
             codec: resolvedCodec,
-            inboundPacketsReceived: inboundAudio + inboundVideo,
+            inboundPacketsReceived: CallStatValue.sum(inboundAudio, inboundVideo),
             inboundAudioPackets: inboundAudio,
             inboundVideoPackets: inboundVideo,
             outboundPacketsSent: outbound,
@@ -343,14 +343,41 @@ nonisolated struct CallMediaQuality: Equatable, Sendable {
         let somme = { (flux: [CallStats.RawEntry], cle: String) in flux.reduce(0.0) { $0 + ($1.values[cle] ?? 0) } }
         let emissions = somme(audio, "jitterBufferEmittedCount")
         return CallMediaQuality(
-            freezeCount: Int(somme(video, "freezeCount")),
-            totalFreezesDuration: somme(video, "totalFreezesDuration"),
+            freezeCount: CallStatValue.count(somme(video, "freezeCount")),
+            totalFreezesDuration: CallStatValue.measured(somme(video, "totalFreezesDuration")),
             framesPerSecond: video.compactMap { $0.values["framesPerSecond"] }.max() ?? 0,
             qualityLimitationReason: entries.first { $0.type == "outbound-rtp" && $0.kind == "video" }?
                 .strings["qualityLimitationReason"],
-            jitterBufferDelayMs: emissions > 0 ? somme(audio, "jitterBufferDelay") / emissions * 1000 : nil,
-            concealedSamples: Int(somme(audio, "concealedSamples")),
-            nackCount: Int(somme(video, "nackCount")),
-            pliCount: Int(somme(video, "pliCount")))
+            jitterBufferDelayMs: emissions > 0 ? CallStatValue.measured(somme(audio, "jitterBufferDelay") / emissions * 1000) : nil,
+            concealedSamples: CallStatValue.count(somme(audio, "concealedSamples")),
+            nackCount: CallStatValue.count(somme(video, "nackCount")),
+            pliCount: CallStatValue.count(somme(video, "pliCount")))
+    }
+}
+
+// MARK: - Aberrant values (#19933)
+
+/// **Une mesure aberrante n'est pas une mesure** : `getStats` peut rendre NaN,
+/// l'infini, un négatif ou un compteur démesuré. Une valeur non finie ou
+/// négative vaut 0 (non mesurée), et un compteur au-delà de 2^53 − 1 aussi,
+/// comme sur le web : la passerelle (zod 4, `.int()`) refuse tout le
+/// `call:analytics` pour un entier hors de `Number.MAX_SAFE_INTEGER`. Les cumuls
+/// plafonnent au même seuil, si bien que la somme de deux compteurs ne déborde
+/// jamais `Int` en aval (`WebRTCService.intervalLossRatio`).
+nonisolated enum CallStatValue {
+    static let maxSafeCount = 9_007_199_254_740_991
+
+    static func measured(_ value: Double) -> Double {
+        value.isFinite && value > 0 ? value : 0
+    }
+
+    static func count(_ value: Double) -> Int {
+        let valid = measured(value)
+        return valid > Double(maxSafeCount) ? 0 : Int(valid)
+    }
+
+    static func sum(_ lhs: Int, _ rhs: Int) -> Int {
+        let (total, overflow) = lhs.addingReportingOverflow(rhs)
+        return overflow ? maxSafeCount : min(total, maxSafeCount)
     }
 }
