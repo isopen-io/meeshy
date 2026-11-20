@@ -339,6 +339,17 @@ export class AttachmentService {
         translations: true,
         metadata: true,
         createdAt: true,
+        // #20017 — les drapeaux de PROTECTION de la pièce, sans lesquels la loi
+        // du contenu latéral ne peut rien garder : `maskedAttachment` ne
+        // regarde que les drapeaux PRÉSENTS, donc un `select` qui les omet rend
+        // la garde de la route VERTE et INERTE. Le PORTEUR est déjà chargé
+        // complet par `attachmentDetailReader`, qui passe `reader.carrier` à la
+        // loi ; c'est la pièce qui manquait.
+        isViewOnce: true,
+        isBlurred: true,
+        effectFlags: true,
+        isEncrypted: true,
+        encryptionMode: true,
         // #4923 — requis par la garde d'appartenance de la route (le
         // déposant d'une pièce PAS ENCORE rattachée à un message est le seul
         // à pouvoir la lire) ; déjà déclaré par `messageAttachmentSchema`

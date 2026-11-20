@@ -27,6 +27,7 @@ import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor, applyHistoryFloor }
 import { applyPersonalHistoryHiding, loadPersonalHistoryHiding } from '../../services/personalHistoryFilter';
 import { CARRIER_LIFECYCLE_SELECT, carrierMessageStillServesBytes } from '../../services/attachments/carrierMessageLifecycle';
 import { READER_LIFECYCLE_MESSAGE_SELECT, readerStillReadsBytes } from '../../services/attachments/readerAttachmentLifecycle';
+import { servedSideContent } from '../../services/attachments/mediaSideContent';
 import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
 import { RECIPIENT_LANG_SELECT, recipientLanguages } from '../../utils/recipient-language';
 import {
@@ -370,7 +371,25 @@ export async function registerMetadataRoutes(
         reply.header('Cache-Control', signed ? 'private, no-cache' : 'private, max-age=3600, stale-while-revalidate=86400');
         reply.header('ETag', etag);
 
-        return sendSuccess(reply, { attachment });
+        // #20017 — la loi du CONTENU LATÉRAL, que la route jumelle
+        // `…/subtitles/:lang` applique quarante lignes plus bas
+        // (`servedSubtitles` → `subtitlesMayTravel`, qui EST
+        // `mediaSideContentMayTravel`) et que celle-ci n'appliquait pas :
+        // `attachment: messageAttachmentSchema` DÉCLARE `transcription`, donc
+        // rien ne la retenait au sérialiseur.
+        //
+        // APRÈS la signature, sur l'objet remis : l'adresse et le contenu
+        // latéral sont deux lois indépendantes, et appliquer celle-ci en
+        // dernier garantit qu'aucun spread de la ligne brute ne la suit.
+        // `reader.carrier` est nul pour le déposant d'une pièce PAS ENCORE
+        // rattachée — il n'y a alors pas de porteur, et la loi juge la pièce
+        // seule, ce qui est exact et non un repli permissif.
+        const served = {
+          ...attachment,
+          ...servedSideContent({ ...attachment, message: reader.carrier } as Parameters<typeof servedSideContent>[0]),
+        };
+
+        return sendSuccess(reply, { attachment: served });
       } catch (error: unknown) {
         logger.error('error fetching attachment metadata', { error });
         return sendInternalError(reply, 'METADATA_FETCH_FAILED', { message: error instanceof Error ? error.message : 'Failed to fetch attachment metadata' });
