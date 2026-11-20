@@ -4,5 +4,4 @@
     <string name="community_join_request">Beitritt anfragen</string>
     <string name="community_join_requested">Anfrage gesendet</string>
     <string name="community_join_requested_waiting">Ein Admin oder Moderator muss sie annehmen.</string>
-    <string name="community_join_cooldown">Deine letzte Anfrage wurde abgelehnt: Du kannst 7 Tage danach erneut anfragen.</string>
 </resources>
