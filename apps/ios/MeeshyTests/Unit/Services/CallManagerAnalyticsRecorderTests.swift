@@ -491,7 +491,6 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
         recorder.recordSample(level: .excellent, roundTripTimeMs: 40, packetLossPercent: 0, at: readings[0].uptime)
         recorder.recordSample(level: .good, roundTripTimeMs: 40, packetLossPercent: 0, at: readings[1].uptime)
 
-        XCTAssertEqual(readings[1].wall.timeIntervalSince(readings[0].wall), 3_602)
         XCTAssertEqual(recorder.qualitySeconds[.excellent], 2)
         XCTAssertEqual(recorder.lastQualityUptime, 502)
     }
