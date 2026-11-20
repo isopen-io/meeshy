@@ -47,6 +47,7 @@ private fun ApiResponse<*>.toApiError(
         resetAtEpochMillis = DailyGestureLimit.parseInstant(resetAt),
         retryAfterSeconds = retryAfterSecondsOf(httpStatus, refusalCode, retryAfterHeader),
         requiredConsents = requiredConsents,
+        servedMessage = message,
     )
 }
 

@@ -766,12 +766,17 @@ final class SharedLocationSharingSyncTests: XCTestCase {
 
     func test_theServedRead_aGatewayBeforeTheRoute_isNoAnswer_anyOtherFailureIsAnOutage() async throws {
         let legacy = try await SharedLocationServedRead.answer {
-            throw MeeshyError.server(statusCode: 404, message: "Not Found")
+            throw MeeshyError.server(statusCode: 404, message: "Route GET:/api/v1/relations/locations/mine not found")
         }
         XCTAssertNil(legacy)
 
         for failure: Error in [
             MeeshyError.server(statusCode: 503, message: "down"),
+            MeeshyError.server(statusCode: 404, message: "Erreur inconnue"),
+            MeeshyError.server(statusCode: 404, message: "404 page not found"),
+            MeeshyError.server(statusCode: 404, message: "Not Found"),
+            APIError.serverError(404, nil),
+            APIError.serverError(404, "404 page not found"),
             URLError(.notConnectedToInternet),
             URLError(.timedOut)
         ] {
