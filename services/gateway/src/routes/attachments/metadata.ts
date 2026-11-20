@@ -36,8 +36,7 @@ import {
   type SubtitleCarrier,
 } from '../../services/attachments/servedSubtitles';
 import { isPrivilegedPlatformRole } from '@meeshy/shared/utils/platform-privilege';
-import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
-import type { AttachmentDeletedEventData } from '@meeshy/shared/types/socketio-events/attachment';
+import { broadcastAttachmentDeleted } from '../../socketio/broadcastAttachmentDeleted';
 import { cutTogetherWhere } from '../../services/together/togetherDeps';
 import { togetherMediaOf } from '../../services/together/togetherGate';
 
@@ -126,36 +125,6 @@ const conversationAttachmentListItemSchema = {
     isBlurred: { type: 'boolean', description: 'Attachment-level blur flag — the client must veil until the reader lifts it' },
   },
 } as const;
-
-/**
- * #13608 — la suppression d'une pièce se voit chez tous les membres. Charge
- * minimale (jamais le contenu de la pièce) ; un échec de diffusion ne défait pas
- * une suppression déjà faite.
- */
-async function broadcastAttachmentDeleted(
-  fastify: FastifyInstance,
-  prisma: PrismaClient,
-  target: { messageId: string | null; attachmentId: string }
-): Promise<void> {
-  if (!target.messageId) return;
-  try {
-    const io = fastify.socketIOHandler?.getManager()?.getIO();
-    if (!io) return;
-    const message = await prisma.message.findUnique({
-      where: { id: target.messageId },
-      select: { conversationId: true },
-    });
-    if (!message) return;
-    const payload: AttachmentDeletedEventData = {
-      conversationId: message.conversationId,
-      messageId: target.messageId,
-      attachmentId: target.attachmentId,
-    };
-    io.to(ROOMS.conversation(message.conversationId)).emit(SERVER_EVENTS.ATTACHMENT_DELETED, payload);
-  } catch (error: unknown) {
-    logger.warn('attachment:deleted broadcast failed', { error });
-  }
-}
 
 const OBJECT_ID_PATTERN = /^[a-f0-9]{24}$/i;
 
@@ -570,7 +539,16 @@ export async function registerMetadataRoutes(
           return sendError(reply, 409, SIGNAL_CHANNEL_REFUSAL.error, { code: SIGNAL_CHANNEL_REFUSAL.code });
         }
         await attachmentService.deleteAttachment(attachmentId);
-        await broadcastAttachmentDeleted(fastify, prisma, { messageId, attachmentId });
+        // #20019 — l'audience vivante ET la file hors ligne, par leur site
+        // unique : ce retrait ne partait qu'à `conversation:<id>`, sans file.
+        await broadcastAttachmentDeleted({
+          prisma,
+          manager: fastify.socketIOHandler?.getManager(),
+          messageId,
+          attachmentId,
+          actorUserId: userId,
+          onError: (err) => logger.warn('attachment:deleted broadcast failed', { attachmentId, error: err }),
+        });
         // #17022 — une séance « ensemble » qui lisait cette pièce s'arrête chez les deux.
         if (carrier && togetherMediaOf(attachment.mimeType)) {
           await cutTogetherWhere({ conversationId: carrier.conversationId });

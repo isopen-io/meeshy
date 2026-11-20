@@ -1,7 +1,9 @@
 /**
  * #13608 — DELETE /attachments/:attachmentId
  *  (a) l'auteur inscrit supprime la copie qu'il a transférée (uploadedBy = Participant.id)
- *  (b) la suppression est diffusée à la room de la conversation (`attachment:deleted`)
+ *  (b) la suppression est diffusée à l'audience VIVANTE de la conversation
+ *      (`attachment:deleted`) : la room de la conversation ET les rooms
+ *      personnelles, plus la file hors ligne (#20019)
  *
  * @jest-environment node
  */
@@ -31,6 +33,7 @@ jest.mock('../../../../services/attachments', () => ({
 }));
 
 import { registerMetadataRoutes } from '../../../../routes/attachments/metadata';
+import { liveParticipantTable } from '../../../helpers/live-audience-double';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 const OTHER_USER_ID = '507f1f77bcf86cd799439012';
@@ -39,6 +42,7 @@ const OTHER_PARTICIPANT_ID = '507f1f77bcf86cd7994390bb';
 const ATTACHMENT_ID = '507f1f77bcf86cd7994390cc';
 const MESSAGE_ID = '507f1f77bcf86cd7994390dd';
 const CONVERSATION_ID = '507f1f77bcf86cd7994390ee';
+const GUEST_PARTICIPANT_ID = '507f1f77bcf86cd7994390e1';
 
 const participants: Record<string, { userId: string | null }> = {
   [MY_PARTICIPANT_ID]: { userId: USER_ID },
@@ -48,19 +52,32 @@ const participants: Record<string, { userId: string | null }> = {
 type IoMode = 'present' | 'absent' | 'throwing';
 
 const buildHarness = async (role = 'USER', ioMode: IoMode = 'present') => {
-  const emitted: Array<{ room: string; event: string; payload: unknown }> = [];
+  const emitted: Array<{ room: string | string[]; event: string; payload: unknown }> = [];
+  // `to` prend `Room | Room[]` chez Socket.IO, et l'audience vivante en rend un
+  // TABLEAU dès qu'il y a un participant à nommer (#20007). Un double déclaré
+  // `to(room: string)` ACCEPTE l'appel et range l'émission sous le tableau
+  // lui-même — donc sous une clé qu'aucune assertion ne peut nommer (cycle 188).
   const io = {
-    to: (room: string) => ({
+    to: (room: string | string[]) => ({
       emit: (event: string, payload: unknown) => {
         if (ioMode === 'throwing') throw new Error('adapter down');
         emitted.push({ room, event, payload });
       },
     }),
   };
+  const enqueued: unknown[] = [];
+  // Sans `findMany`, la lecture d'audience LÈVE et le site replie sur la room de
+  // conversation : le témoin de surface passerait en n'exerçant que le repli.
+  const liveParticipants = liveParticipantTable([
+    { id: MY_PARTICIPANT_ID, userId: USER_ID, conversationId: CONVERSATION_ID, isActive: true },
+    { id: OTHER_PARTICIPANT_ID, userId: OTHER_USER_ID, conversationId: CONVERSATION_ID, isActive: true },
+    { id: GUEST_PARTICIPANT_ID, userId: null, conversationId: CONVERSATION_ID, isActive: true },
+  ]);
   const prisma = {
     participant: {
       findFirst: jest.fn<any>().mockResolvedValue(null),
       findUnique: jest.fn<any>(async ({ where }: any) => participants[where.id] ?? null),
+      findMany: liveParticipants.findMany,
     },
     message: {
       findUnique: jest.fn<any>().mockResolvedValue({ conversationId: CONVERSATION_ID }),
@@ -68,7 +85,14 @@ const buildHarness = async (role = 'USER', ioMode: IoMode = 'present') => {
   } as any;
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('prisma', prisma);
-  app.decorate('socketIOHandler', { getManager: () => ({ getIO: () => (ioMode === 'absent' ? undefined : io) }) });
+  app.decorate('socketIOHandler', {
+    getManager: () => ({
+      getIO: () => (ioMode === 'absent' ? undefined : io),
+      enqueueOfflineMessageMutation: async (params: unknown) => {
+        enqueued.push(params);
+      },
+    }),
+  });
   const authOptional = async (req: FastifyRequest) => {
     (req as any).authContext = {
       isAuthenticated: true, isAnonymous: false, userId: USER_ID, registeredUser: { id: USER_ID, role },
@@ -76,7 +100,7 @@ const buildHarness = async (role = 'USER', ioMode: IoMode = 'present') => {
   };
   await registerMetadataRoutes(app, authOptional, prisma);
   await app.ready();
-  return { app, emitted };
+  return { app, emitted, enqueued };
 };
 
 const attachmentOf = (uploadedBy: string) => ({
@@ -129,14 +153,37 @@ describe('DELETE /attachments/:id — copie transférée (uploadedBy = Participa
 });
 
 describe('DELETE /attachments/:id — diffusion', () => {
-  it('émet attachment:deleted vers la room de la conversation, sans contenu de la pièce', async () => {
+  it('émet attachment:deleted à l\'audience VIVANTE, sans contenu de la pièce (#20019)', async () => {
     mockGetAttachment.mockResolvedValueOnce({ ...attachmentOf(USER_ID), fileUrl: 'https://x/secret.png' });
     const { app, emitted } = await buildHarness();
     expect((await remove(app)).statusCode).toBe(200);
     expect(emitted).toEqual([{
-      room: `conversation:${CONVERSATION_ID}`,
+      // La room de conversation SUIVIE des rooms personnelles : un lecteur
+      // revenu à la LISTE a quitté `conversation:<id>` et garde la sienne.
+      room: [
+        `conversation:${CONVERSATION_ID}`,
+        `user:${USER_ID}`,
+        `user:${OTHER_USER_ID}`,
+        `user:${GUEST_PARTICIPANT_ID}`,
+      ],
       event: 'attachment:deleted',
       payload: { conversationId: CONVERSATION_ID, messageId: MESSAGE_ID, attachmentId: ATTACHMENT_ID },
+    }]);
+    await app.close();
+  });
+
+  it('enfile le retrait pour les absents, sous la clé de la PIÈCE (#20019)', async () => {
+    mockGetAttachment.mockResolvedValueOnce(attachmentOf(USER_ID));
+    const { app, enqueued } = await buildHarness();
+    expect((await remove(app)).statusCode).toBe(200);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(enqueued).toEqual([{
+      conversationId: CONVERSATION_ID,
+      actorUserId: USER_ID,
+      messageId: MESSAGE_ID,
+      eventType: 'attachment-deleted',
+      payload: { conversationId: CONVERSATION_ID, messageId: MESSAGE_ID, attachmentId: ATTACHMENT_ID },
+      dedupKey: ATTACHMENT_ID,
     }]);
     await app.close();
   });

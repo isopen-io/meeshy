@@ -83,6 +83,16 @@ export type QueuedMessagePayload = {
    * écrire, laissait l'auteur — le plus souvent un invité, dont c'est l'unique
    * transport d'envoi — sur un tic « envoyé » jusqu'à ce qu'on ouvre la
    * conversation, l'attente même que le drain existe pour supprimer.
+   * #20019 — 'attachment-deleted' replays ATTACHMENT_DELETED so a peer who was
+   * offline when a member removed ONE attachment of a message still converges:
+   * its live emit only reached `conversation:<id>`, and a cached thread
+   * (`staleTime: Infinity` on the web) kept the attachment until a manual
+   * reload. The payload is ids only — no attachment content, no text — so it
+   * declares no at-rest regime and never bears a delivery receipt (a removal is
+   * not a message arriving). The dedupKey names the ATTACHMENT, not the
+   * message: the default (messageId + eventType) identity would let a second
+   * removal supersede the first on a multi-attachment message, exactly as it
+   * would for 'attachment-updated'.
    * 'attachment-updated' replays MESSAGE_ATTACHMENT_UPDATED so a peer who was
    * offline when Whisper finished transcribing (or when NLLB+Chatterbox
    * finished one language of translated audio) still gets the enrichment. The
@@ -142,6 +152,7 @@ export type QueuedMessagePayload = {
     | 'unpinned'
     | 'link-message'
     | 'attachment-updated'
+    | 'attachment-deleted'
     | 'translation'
     | 'starred'
     | 'hidden-for-me'

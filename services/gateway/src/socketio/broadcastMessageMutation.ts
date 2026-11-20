@@ -91,7 +91,17 @@ export type MessageMutationQueueParams = {
   excludedQueueKeys?: ReadonlySet<string>;
   /** Identité de déduplication de la file, quand plusieurs occurrences d'un même `eventType` comptent. */
   dedupKey?: string;
-} & QueuedVariantFor<'edited' | 'deleted' | 'expired' | 'pinned' | 'unpinned' | 'consumed' | 'view-once-purged'>;
+} & QueuedVariantFor<
+  | 'edited'
+  | 'deleted'
+  | 'expired'
+  | 'pinned'
+  | 'unpinned'
+  | 'consumed'
+  | 'view-once-purged'
+  // #20019 — le retrait d'UNE pièce jointe, enfilé par `broadcastAttachmentDeleted`.
+  | 'attachment-deleted'
+>;
 
 export interface MessageMutationManager {
   getIO(): PreviewEmitIO | null | undefined;
