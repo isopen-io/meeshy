@@ -395,9 +395,9 @@ export async function registerCoreRoutes(
       // Creer la communaute ET automatiquement ajouter le createur comme membre ADMIN
       const community = await fastify.prisma.community.create({
         data: {
-          name: SecuritySanitizer.sanitizeText(validatedData.name),
+          name: SecuritySanitizer.sanitizePlainText(validatedData.name),
           identifier: identifier,
-          description: validatedData.description !== undefined ? SecuritySanitizer.sanitizeText(validatedData.description) : undefined,
+          description: validatedData.description !== undefined ? SecuritySanitizer.sanitizePlainText(validatedData.description) : undefined,
           avatar: validatedData.avatar,
           isPrivate: validatedData.isPrivate ?? true,
           createdBy: userId,

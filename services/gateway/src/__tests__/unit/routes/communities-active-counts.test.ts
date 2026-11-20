@@ -26,7 +26,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 jest.mock('../../../utils/logger', () => ({ logError: jest.fn() }));
 
 jest.mock('../../../utils/sanitize', () => ({
-  SecuritySanitizer: { sanitizeText: jest.fn((text: string) => text) },
+  SecuritySanitizer: { sanitizeText: jest.fn((text: string) => text), sanitizePlainText: jest.fn((text: string) => text) },
 }));
 
 import { registerSearchRoutes } from '../../../routes/communities/search';

@@ -691,3 +691,14 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Écran : « Demander à rejoindre », puis une tuile « Demande envoyée » qui n'est pas un bouton, et la ligne « Un administrateur ou un modérateur doit l'accepter. » ; le délai après refus se dit en rouge. Quatre chaînes × sept langues (`strings_join_request_19870.xml`), mêmes mots que les clés iOS de #19903.
 - Gotcha : le `Json` de Retrofit n'encode pas les valeurs par défaut — un `JoinCommunityRequest(acceptsPending = true)` déclaré avec défaut partait `{}`. Le témoin d'encodage l'a attrapé ; le champ n'a plus de défaut.
 - Gate local : `./apps/android/meeshy.sh jvm-check -PjvmCheckModelOnly` (le mode complet ne résout pas `libsignal-client`, hôte refusé par le proxy) — les suites `*Communit*` vertes. ViewModel, écran, réseau : prouvés par `android.yml`.
+
+## 2026-11-20 — réveil 13:03 UTC
+
+- Début du run : #20049 (#19877, intendants iOS) poussée à 13:02 par une autre session : vivante, cédée. Aucune autre PR de la routine ouverte.
+- Lot : #16786 (passerelle) — le nom et la description d'une communauté s'écrivent tels qu'écrits, sans entité HTML.
+- Constat mesuré sur le VRAI DOMPurify : une entrée sans `<` sort telle quelle ; une entrée avec `<` est SÉRIALISÉE (« Tom & Jerry <3 » ⇒ « Tom &amp; Jerry &lt;3 »). Sous Jest, `jest.setup.js` remplace DOMPurify par un double qui n'échappe rien : le défaut y était invisible.
+- Passerelle : `SecuritySanitizer.sanitizePlainText` (balises retirées comme `sanitizeText`, entités de la sérialisation défaites en une passe, seulement quand l'entrée contenait `<`) ; `utils/serialized-text.ts` est le site unique du décodage (`asWritten` des bannières de communauté le reprend). `POST /communities` et `PUT /communities/:id` l'emploient ; `sanitizeText` et ses autres appelants ne changent pas.
+- Témoin : `community-text-as-written-16786.test.ts` (13) — double FIDÈLE de DOMPurify confronté au vrai dans un processus Node séparé ; rouge prouvé : 11 échecs sans le correctif. Six suites communautés reçoivent `sanitizePlainText` dans leur double de `utils/sanitize`.
+- Gates locaux : passerelle `tsc --noEmit` vert ; suites `communit|sanitize|community-added|join-request` 77 fichiers, 1 301 tests verts ; balayages et cliquets (`sweep|ratchet|guard`) 136 fichiers, 1 145 tests verts.
+- Reste : les lignes écrites avant ce lot (#20063 : migration de staging ou décodage iOS / Android). #16786 reste ouverte jusque-là.
+- Prochain lot recommandé : #20063 (migration de staging, après l'auditeur), ou iOS #19877 si #20049 est fusionnée.

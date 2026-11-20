@@ -123,8 +123,8 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
 
       // Preparer les donnees de mise a jour
       const updateData: any = {
-        name: validatedData.name !== undefined ? SecuritySanitizer.sanitizeText(validatedData.name) : undefined,
-        description: validatedData.description !== undefined ? SecuritySanitizer.sanitizeText(validatedData.description) : undefined,
+        name: validatedData.name !== undefined ? SecuritySanitizer.sanitizePlainText(validatedData.name) : undefined,
+        description: validatedData.description !== undefined ? SecuritySanitizer.sanitizePlainText(validatedData.description) : undefined,
         avatar: validatedData.avatar,
         banner: validatedData.banner,
         isPrivate: validatedData.isPrivate,
