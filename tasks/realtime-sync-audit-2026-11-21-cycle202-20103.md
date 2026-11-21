@@ -90,3 +90,22 @@ une fermeture que la prochaine sortie oubliera. Le fichier est passé de 997 à
 - `src/socketio/__tests__/announceConversationClosed.test.ts` : 4 témoins neufs sur `audienceDeRetractation`, dont le banni RETENU.
 - Mutation prouvée : retirer `bannedAt: true` de `SELECT_ECRITURE` ⇒ `tsc` rouge sur la ligne exacte. Remettre `p.isActive` dans l'unité ⇒ 2 témoins rouges.
 - `tsc --noEmit` vert ; cliquets de taille (`routes/`, gateway, suites) verts ; 220 suites des conversations et du socket vertes ; suite complète du gateway rejouée.
+
+## Et les TROIS AUTRES émetteurs du même événement — mesurés, déjà conformes
+
+La question de la leçon 275 posée au correctif lui-même : `conversation:updated`
+part de QUATRE endroits, et les trois autres portent `lastMessagePreview`,
+c'est-à-dire du contenu encore plus sensible que le titre. Relevé avant de
+clore :
+
+| émetteur | audience | verdict |
+|---|---|---|
+| `postMessageSyncFanOut` (REST/ZMQ) | `fetchParticipantSuperset` → `scanLiveParticipants` | **conforme** — `PARTICIPATION_VIVANTE` dans le `where` |
+| `MessageHandler.broadcastNewMessage` (WS) | idem, site partagé depuis 2026-09-05 | **conforme** |
+| `emitConversationPreviewUpdate` (édition / suppression) | `where: { conversationId, ...PARTICIPATION_VIVANTE }` | **conforme** |
+| `conversation-metadata-update` (renommage) | projection SANS `where` + filtre en code | **le défaut de ce lot** |
+
+Les trois conformes ont un `where` ; le quatrième n'en avait pas. **C'est
+exactement ce que #20100 avait prédit en écartant la forme sans `where` : le
+site que le cliquet ne voit pas est celui qui dérive.** La famille est
+désormais cohérente aux quatre sites.
