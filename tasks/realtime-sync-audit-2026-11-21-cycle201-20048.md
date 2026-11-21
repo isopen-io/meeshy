@@ -103,11 +103,20 @@ les assertions de retrait vertes pour la mauvaise raison.
 
 ### Ce que ce lot NE fait pas
 
-`AttachmentSchemas.full` (`packages/shared/utils/validation-media.ts`) déclare
-`filePath` en Zod **REQUIS** et n'a, mesuré, **aucun consommateur** — sa seule
-autre occurrence du dépôt est sa ré-exportation. Les deux champs y sont alignés
-sur le contrat servi, parce que laisser une jumelle divergente est ce que le
-dépôt refuse ; mais le fait qu'un schéma de validation entier n'ait aucune
-frontière qui l'exécute est un constat DISTINCT, de la famille de #20102 (« un
-contrat déclaré par quatre sites et écrit par personne »), et il ne se solde pas
-dans un lot de confidentialité.
+**`AttachmentSchemas.full` (`packages/shared/utils/validation-media.ts`) n'est
+PAS touché**, et il faut dire pourquoi plutôt que de l'aligner par réflexe. Il
+déclare `filePath` en Zod REQUIS et `thumbnailPath` en optionnel, et il n'a,
+mesuré, **aucun consommateur** — sa seule autre occurrence du dépôt est sa
+ré-exportation.
+
+Le réflexe serait d'y retirer les deux champs « pour ne pas laisser de jumelle
+divergente ». Ce serait confondre deux contrats : celui-ci ne décrit pas ce
+qu'on SERT, il décrit une LIGNE de pièce jointe — et une ligne, elle, porte bien
+son chemin disque. Retirer le champ d'un validateur de ligne au motif qu'une
+ROUTE ne le sert plus serait exact par coïncidence et faux par raisonnement.
+
+Reste le vrai constat, DISTINCT de ce lot : un schéma de validation entier
+qu'aucune frontière n'exécute, dont un `z.string()` requis rejetterait toute
+charge réelle le jour où quelqu'un le branche. C'est la famille de #20102 (« un
+contrat déclaré par quatre sites et écrit par personne »), et cela ne se solde
+pas dans un lot de confidentialité.
