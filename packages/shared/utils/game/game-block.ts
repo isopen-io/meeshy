@@ -108,6 +108,11 @@ export type GameBlockFacts = {
    */
   readonly broken: { readonly streak: number; readonly lastActiveDay: string } | null;
   readonly freezes: number;
+  /**
+   * Le jour où la première Veilleuse a été offerte (#20169), `null` s'il n'y en a pas. Absent : la passerelle ne le
+   * lit pas, et le bloc garde la forme d'avant.
+   */
+  readonly freezeGiftDay?: string | null;
   readonly lastRelightDay: string | null;
   readonly missions: readonly GameMissionRecord[];
   /** La mission personnelle du jour (#9539) : sa plage, et l'instant qui fixe son état. Absente : rien n'est servi. */
@@ -270,6 +275,7 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       relightPrice: FLAME_RELIGHT_PRICE,
       status,
       canRelight: relight.allowed,
+      ...(facts.freezeGiftDay === undefined ? {} : { freezeGifted: facts.freezeGiftDay === flameToday }),
     },
     boosts: {
       // Avec les étincelles, le Vent arrière souffle à 7 niveaux ou plus sous le record (#10896) ; sans, la loi d'hier.

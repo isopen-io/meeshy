@@ -5,10 +5,12 @@
 import { describe, it, expect } from 'vitest';
 import {
   FLAME_FIRST_FREEZE_GIFT_DAY,
+  FLAME_FREEZE_GIFT_SEEN_KEY,
   FLAME_FREEZE_MAX,
   FLAME_FREEZE_PRICE,
   FLAME_RELIGHT_PRICE,
   advanceFlame,
+  announcesFreezeGift,
   canBuyFreeze,
   canRelight,
   flameBonus,
@@ -212,5 +214,25 @@ describe('la première Veilleuse offerte (#17371)', () => {
 
   it('tolère des compteurs absents ou illisibles', () => {
     expect(firstFreezeGift({ previousLongest: Number.NaN, streak: 3, freezes: -2 })).toEqual({ gifted: true, freezes: 1 });
+  });
+});
+
+describe('le moment « Une Veilleuse t\'est offerte » (#20169)', () => {
+  it('a une clé de guide stable, que le serveur sait garder', () => {
+    expect(FLAME_FREEZE_GIFT_SEEN_KEY).toBe('flame-freeze-gift');
+    expect(FLAME_FREEZE_GIFT_SEEN_KEY.length).toBeLessThanOrEqual(64);
+  });
+
+  it('se montre le jour du cadeau, tant qu\'il n\'a pas été vu', () => {
+    expect(announcesFreezeGift({ flame: { freezeGifted: true }, guideSeen: [] })).toBe(true);
+  });
+
+  it('ne se montre qu\'une fois', () => {
+    expect(announcesFreezeGift({ flame: { freezeGifted: true }, guideSeen: [FLAME_FREEZE_GIFT_SEEN_KEY] })).toBe(false);
+  });
+
+  it('ne se montre ni un autre jour, ni devant un serveur antérieur', () => {
+    expect(announcesFreezeGift({ flame: { freezeGifted: false }, guideSeen: [] })).toBe(false);
+    expect(announcesFreezeGift({ flame: {}, guideSeen: [] })).toBe(false);
   });
 });

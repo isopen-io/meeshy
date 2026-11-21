@@ -101,6 +101,16 @@ describe('exportGame', () => {
     expect(game.progress).toMatchObject({ prestige: 2, prestigeLevelRecords: [150, 100] });
   });
 
+  it('exporte le jour où la première Veilleuse a été offerte (#20169)', async () => {
+    const db = fakeGameDb();
+    seed(db);
+    Object.assign(db.user.rows[0]!, { flameFreezeGiftDay: '2026-10-05' });
+
+    const game = await exportGame(db.prisma, USER, PAGE);
+
+    expect(game.progress).toMatchObject({ flameFreezeGiftDay: '2026-10-05' });
+  });
+
   it('rend les réglages, le pseudonyme et chaque liste du compte', async () => {
     const db = fakeGameDb();
     seed(db);

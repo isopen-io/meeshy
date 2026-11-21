@@ -65,6 +65,22 @@ describe('GameBlockService.build', () => {
     expect(block.boosts.tailwind).toBe(1);
   });
 
+  it('le jour de la première Veilleuse offerte, la Flamme le dit — et seulement ce jour-là (#20169)', async () => {
+    const gifted = fakeGameDb();
+    seedUser(gifted, { currentStreakDays: 3, longestStreakDays: 3, lastStreakDate: new Date('2026-10-05T00:00:00Z'), flameFreezes: 1, flameFreezeGiftDay: '2026-10-05', timezone: 'UTC' });
+    const blockOfGiftDay = await build(gifted);
+    expect(gameBlockSchema.safeParse(blockOfGiftDay).success).toBe(true);
+    expect(blockOfGiftDay.flame.freezeGifted).toBe(true);
+
+    const later = fakeGameDb();
+    seedUser(later, { currentStreakDays: 4, longestStreakDays: 4, lastStreakDate: new Date('2026-10-05T00:00:00Z'), flameFreezes: 1, flameFreezeGiftDay: '2026-10-04', timezone: 'UTC' });
+    expect((await build(later)).flame.freezeGifted).toBe(false);
+
+    const never = fakeGameDb();
+    seedUser(never, { currentStreakDays: 4, longestStreakDays: 4, lastStreakDate: new Date('2026-10-05T00:00:00Z'), timezone: 'UTC' });
+    expect((await build(never)).flame.freezeGifted).toBe(false);
+  });
+
   it('les points sont là, l\'étape du 10 manque : le niveau attend à 9 et dit laquelle (#9706)', async () => {
     const db = fakeGameDb();
     seedUser(db, { engagementScore: 100 * 15 * 15, levelRecord: 9 });

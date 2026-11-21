@@ -72,6 +72,20 @@ export function firstFreezeGift(params: {
   return { gifted: true, freezes: freezes + 1 };
 }
 
+/** La clé de guide du moment « Une Veilleuse t'est offerte » (#20169) : vue une fois, gardée par `game.guideSeen`. */
+export const FLAME_FREEZE_GIFT_SEEN_KEY = 'flame-freeze-gift';
+
+/**
+ * Le moment du cadeau se montre le jour où la première Veilleuse est offerte (`flame.freezeGifted`, servi par la
+ * passerelle), une seule fois. Un serveur antérieur ne sert pas le champ : rien ne se montre.
+ */
+export function announcesFreezeGift(block: {
+  readonly flame: { readonly freezeGifted?: boolean };
+  readonly guideSeen: readonly string[];
+}): boolean {
+  return block.flame.freezeGifted === true && !block.guideSeen.includes(FLAME_FREEZE_GIFT_SEEN_KEY);
+}
+
 export type FlameOutcome = 'started' | 'same-day' | 'continued' | 'protected' | 'broken';
 
 export type FlameTransition = {
