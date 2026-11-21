@@ -414,6 +414,7 @@ final class SharedLocationServedSourceTests: XCTestCase {
 
     private let alice = "aaaaaaaaaaaaaaaaaaaaaaaa"
     private let bob = "bbbbbbbbbbbbbbbbbbbbbbbb"
+    private let carol = "dddddddddddddddddddddddd"
     private let me = "cccccccccccccccccccccccc"
     private let t0 = Date(timeIntervalSince1970: 1_000_000)
 
@@ -494,7 +495,7 @@ final class SharedLocationServedSourceTests: XCTestCase {
 
         let problem = await sut.center.share(with: bob, precision: .city, duration: .oneHour)
 
-        XCTAssertEqual(problem, .replacesChosenPoint)
+        XCTAssertEqual(problem?.pointReplacement?.recipientIds, [alice])
         XCTAssertTrue(sut.emitter.starts.isEmpty)
         XCTAssertEqual(sut.fixes.asks, 0)
         XCTAssertNil(sut.center.entry(for: bob))
@@ -506,7 +507,7 @@ final class SharedLocationServedSourceTests: XCTestCase {
 
         let problem = await sut.center.share(with: bob, precision: .city, duration: .oneHour)
 
-        XCTAssertEqual(problem, .replacesChosenPoint)
+        XCTAssertEqual(problem?.pointReplacement?.recipientIds, [alice])
         XCTAssertTrue(sut.emitter.starts.isEmpty)
     }
 
@@ -515,8 +516,10 @@ final class SharedLocationServedSourceTests: XCTestCase {
         sut.served.snapshot = served([alice], source: .manual)
         await sut.center.sync()
 
-        let problem = await sut.center.share(with: bob, precision: .city, term: .bounded(.oneHour), replacingPoint: true)
+        let asked = await sut.center.share(with: bob, precision: .city, duration: .oneHour)?.pointReplacement
+        let problem = await sut.center.share(with: bob, precision: .city, term: .bounded(.oneHour), replacing: asked)
 
+        XCTAssertNotNil(asked)
         XCTAssertNil(problem)
         let sent = sut.emitter.starts.last
         XCTAssertEqual(Set(sent?.recipients.map(\.userId) ?? []), [alice, bob])
@@ -588,8 +591,103 @@ final class SharedLocationServedSourceTests: XCTestCase {
 
         let problem = await sut.center.share(with: bob, precision: .city, duration: .oneHour)
 
-        XCTAssertEqual(problem, .replacesChosenPoint)
+        XCTAssertEqual(problem?.pointReplacement?.recipientIds, [alice])
         XCTAssertTrue(sut.center.roster.isFixedPoint)
         XCTAssertNil(sut.center.entry(for: bob))
+    }
+
+    // MARK: - La confirmation vaut pour le partage montré (#20127)
+
+    private func question(_ sut: SUT) async -> SharedLocationPointReplacement? {
+        await sut.center.share(with: bob, precision: .city, duration: .oneHour)?.pointReplacement
+    }
+
+    func test_theQuestion_describesTheServedShare_itsStartAndThoseWhoSeeThePoint() async {
+        let sut = makeSUT()
+        sut.served.snapshot = served([alice, carol], source: .manual, startedAt: "S1")
+
+        let asked = await question(sut)
+
+        XCTAssertEqual(asked, SharedLocationPointReplacement(startedAt: "S1", recipientIds: [alice, carol]))
+    }
+
+    func test_confirming_afterSomeoneWasAddedElsewhere_sendsNothing_andAsksAgainNamingThem() async {
+        let sut = makeSUT()
+        sut.served.snapshot = served([alice], source: .manual, startedAt: "S1")
+        let asked = await question(sut)
+        sut.served.snapshot = served([alice, carol], source: .manual, startedAt: "S1")
+
+        let problem = await sut.center.share(with: bob, precision: .city, term: .bounded(.oneHour), replacing: asked)
+
+        XCTAssertEqual(problem?.pointReplacement?.recipientIds, [alice, carol])
+        XCTAssertTrue(sut.emitter.starts.isEmpty)
+        XCTAssertEqual(sut.fixes.asks, 0)
+        XCTAssertTrue(sut.center.roster.isFixedPoint)
+    }
+
+    func test_confirming_afterAnotherStart_sendsNothing_andAsksAgain() async {
+        let sut = makeSUT()
+        sut.served.snapshot = served([alice], source: .manual, startedAt: "S1")
+        let asked = await question(sut)
+        sut.served.snapshot = served([alice], source: .manual, startedAt: "S2")
+
+        let problem = await sut.center.share(with: bob, precision: .city, term: .bounded(.oneHour), replacing: asked)
+
+        XCTAssertEqual(problem?.pointReplacement?.startedAt, "S2")
+        XCTAssertTrue(sut.emitter.starts.isEmpty)
+    }
+
+    func test_confirming_rereadsTheServedShare_evenWhenAlreadyRead() async {
+        let sut = makeSUT()
+        sut.served.snapshot = served([alice], source: .manual, startedAt: "S1")
+        let asked = await question(sut)
+        let reads = sut.served.reads
+
+        _ = await sut.center.share(with: bob, precision: .city, term: .bounded(.oneHour), replacing: asked)
+
+        XCTAssertGreaterThan(sut.served.reads, reads)
+    }
+
+    func test_confirming_afterSomeoneLeft_stillReplacesThePoint() async {
+        let sut = makeSUT()
+        sut.served.snapshot = served([alice, carol], source: .manual, startedAt: "S1")
+        let asked = await question(sut)
+        sut.served.snapshot = served([alice], source: .manual, startedAt: "S1")
+
+        let problem = await sut.center.share(with: bob, precision: .city, term: .bounded(.oneHour), replacing: asked)
+
+        XCTAssertNil(problem)
+        XCTAssertEqual(Set(sut.emitter.starts.last?.recipients.map(\.userId) ?? []), [alice, bob])
+        XCTAssertEqual(sut.emitter.starts.last?.replacesChosenPoint, true)
+    }
+
+    func test_anAnswerToAnotherShare_neverReplacesThePoint() async {
+        let sut = makeSUT()
+        sut.served.snapshot = served([alice], source: .manual, startedAt: "S1")
+        let stale = SharedLocationPointReplacement(startedAt: "S0", recipientIds: [alice])
+
+        let problem = await sut.center.share(with: bob, precision: .city, term: .bounded(.oneHour), replacing: stale)
+
+        XCTAssertNotNil(problem?.pointReplacement)
+        XCTAssertTrue(sut.emitter.starts.isEmpty)
+    }
+
+    func test_theAudience_namesThreeKnownPeopleAtMost_andCountsTheRest() {
+        let asked = SharedLocationPointReplacement(startedAt: nil, recipientIds: [alice, bob, carol, me, "eeeeeeeeeeeeeeeeeeeeeeee"])
+        let known = [(userId: "ffffffffffffffffffffffff", name: "Zoé"), (userId: alice.uppercased(), name: "Alice"),
+                     (userId: bob, name: "Bob"), (userId: carol, name: "Carol"), (userId: me, name: "Moi")]
+
+        let audience = asked.audience(knownNames: known)
+
+        XCTAssertEqual(audience.named, ["Alice", "Bob", "Carol"])
+        XCTAssertEqual(audience.others, 2)
+    }
+
+    func test_theMessage_namesThosePeople() {
+        let message = ShareMyLocationCopy.replacePointMessage((named: ["Alice", "Bob"], others: 0))
+
+        XCTAssertTrue(message.contains("Alice"))
+        XCTAssertTrue(message.contains("Bob"))
+        XCTAssertNotEqual(message, ShareMyLocationCopy.replacePointMessage)
     }
 }
