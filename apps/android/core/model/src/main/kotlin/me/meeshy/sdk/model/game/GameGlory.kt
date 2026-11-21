@@ -22,6 +22,16 @@ public data class GloryStanding(
 )
 
 /**
+ * Ce qu'un gain de Gloire fait au rang (#19860, miroir de `gloryAfterGain`, `packages/shared/utils/game/glory.ts`, et de
+ * `GloryAfterGain` iOS) : [Risen], le gain franchit une marche (une division ou un rang) et l'on dit le nouveau nom ;
+ * [Toward], la gloire qui manque, APRÈS le gain, jusqu'à la marche suivante.
+ */
+public sealed interface GloryAfterGain {
+    public data class Risen(val rank: GloryRank, val division5: Int) : GloryAfterGain
+    public data class Toward(val gloryMissing: Int, val rank: GloryRank, val division5: Int) : GloryAfterGain
+}
+
+/**
  * GLOIRE ET RANGS : dix rangs de Murmure (0) à Légende (600 000), chacun coupé en cinq divisions
  * (V au départ, I juste avant le rang suivant) ; Légende I jusqu'à 1 000 000, puis le Mythe, que le
  * serveur attribue et que le client ne calcule jamais. Le TypeScript fait foi
@@ -154,6 +164,19 @@ public object GloryLaws {
             progress = next?.let { (g - step.minGlory).toDouble() / (it.minGlory - step.minGlory) } ?: 1.0,
             mythic = null,
         )
+    }
+
+    /** Ce que ce gain fait au rang : `null` quand il n'y a pas de suite (Légende I) ou que le rang vient du serveur (Mythe). */
+    public fun afterGain(before: Int, gained: Int, mythic: Boolean): GloryAfterGain? {
+        if (mythic) return null
+        val start = standing(before)
+        val end = standing(start.glory + max(0, gained))
+        val division5 = end.division5 ?: return null
+        if (end.rank != start.rank || division5 != start.division5) return GloryAfterGain.Risen(end.rank, division5)
+        val next = end.next ?: return null
+        val missing = end.gloryMissing ?: return null
+        val nextDivision5 = next.division5 ?: return null
+        return GloryAfterGain.Toward(missing, next.rank, nextDivision5)
     }
 
     /**
