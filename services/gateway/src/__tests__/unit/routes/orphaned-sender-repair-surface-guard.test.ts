@@ -142,7 +142,8 @@ const ROUTE_SURFACES: Record<string, Classification> = {
   'conversations/messages-view-once.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'conversations/receipts.ts': { kind: 'exempt', reads: 5, why: DOES_NOT_SELECT_SENDER },
   'conversations/shared-translations.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
-  'me/export.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #20163 — la lecture a déménagé de `me/export.ts` vers `me/export-sections.ts` avec `exportMessages`, qui ouvre le sceau au repos ; `senderId` reste dans le `where`, jamais dans le `select`.
+  'me/export-sections.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'mentions.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'reactions.ts': { kind: 'exempt', reads: 5, why: DOES_NOT_SELECT_SENDER },
   'reports/target.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
