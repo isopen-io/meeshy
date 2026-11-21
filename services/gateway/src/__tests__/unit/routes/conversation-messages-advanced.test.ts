@@ -1270,7 +1270,16 @@ describe('registerMessagesAdvancedRoutes', () => {
       prisma.conversation.findUnique.mockResolvedValue({
         title: 'Test',
         type: 'group',
-        participants: [{ userId: USER_ID }],
+        // #20100 bis — alice est MEMBRE, et sans elle ce témoin attestait un
+        // appel qui ne notifiait PERSONNE : la liste ne portait que l'éditeur,
+        // donc le `memberIds` remis au lot de mentions excluait la seule
+        // personne mentionnée, et `createMentionNotificationsBatch` la filtrait
+        // en silence. Le témoin s'appelle « sends mention notifications » et
+        // n'assertait que l'APPEL — la forme exacte que le dépôt dénonce
+        // (« un témoin qui n'assert que l'appel couvre une route morte sans
+        // jamais rougir »). Rendu visible par la garde d'admission LOCALE de
+        // #20100 bis, qui court-circuite désormais un lot vide.
+        participants: [{ userId: USER_ID }, { userId: 'user-alice', bannedAt: null, isActive: true }],
       });
 
       const req = makeRequest({
@@ -1282,6 +1291,11 @@ describe('registerMessagesAdvancedRoutes', () => {
       await getEditHandler(fastify)(req, reply);
 
       expect(createBatchMock).toHaveBeenCalled();
+      // Et ce que l'appel REMET : alice est dans le lot ET dans l'ensemble qui
+      // l'autorise. Un appel seul n'est pas une notification.
+      const [mentioned, , memberIds] = createBatchMock.mock.calls[0] as [string[], unknown, string[]];
+      expect(mentioned).toContain('user-alice');
+      expect(memberIds).toContain('user-alice');
     });
 
     it('handles mention processing error gracefully', async () => {
