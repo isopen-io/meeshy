@@ -58,7 +58,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from './withOrphanedSenderRepair';
 
 import { copiedAttachmentFields, type SourceAttachment } from './copiedAttachmentFields';
-import { uploaderIdentityOf } from '../attachments/uploaderIdentity';
+import { uploaderStampOf } from '../attachments/uploaderIdentity';
 import { MESSAGE_ATTACHMENT_ORDER } from '../attachments/attachmentIncludes';
 
 export type { SourceAttachment };
@@ -141,13 +141,17 @@ export async function copyAttachmentsFromMessage(
           ...copiedAttachmentFields(att),
           messageId: params.targetMessageId,
           rank,
-          // #20113 — l'identité de COMPTE, jamais celle du participant :
+          // #20113 / #20142 — l'EMPREINTE du déposant, ses deux champs ensemble.
           // `uploadedBy` est lu comme un `User.id` par tous ses lecteurs (dont
           // `GlobalAchievements`, qui le préfère explicitement à
-          // `message.sender.userId`), et il gouverne côté client l'affordance
-          // « supprimer cette pièce ». La valeur était déjà en main — le
-          // contrôle d'appartenance ci-dessus l'a lue.
-          uploadedBy: uploaderIdentityOf(requester, params.requesterParticipantId),
+          // `message.sender.userId`) et gouverne côté client l'affordance
+          // « supprimer cette pièce » ; `isAnonymous` décide, lui, de la branche
+          // anonyme de `DELETE /attachments/:id`. Posée APRÈS
+          // `copiedAttachmentFields`, dont elle corrige le `isAnonymous: false`
+          // inconditionnel — ce champ ne peut pas se décider sans connaître le
+          // copieur. La valeur était déjà en main : le contrôle d'appartenance
+          // ci-dessus a lu le participant.
+          ...uploaderStampOf(requester, params.requesterParticipantId),
         },
       })
     )

@@ -75,6 +75,40 @@ describe('copyAttachmentsFromMessage', () => {
 
       expect(prisma.messageAttachment.create.mock.calls[0][0].data.uploadedBy).toBe('p_anon');
     });
+
+    /**
+     * #20142 — `isAnonymous` voyage AVEC `uploadedBy`.
+     *
+     * `copiedAttachmentFields` posait `isAnonymous: false` sans condition, parce
+     * qu'il ne connaît pas le copieur. Un invité ne pouvait donc plus supprimer
+     * la pièce qu'il venait de diffuser : la branche anonyme de
+     * `DELETE /attachments/:id` exige les DEUX.
+     */
+    it("marque la copie d'un INVITÉ comme anonyme — sinon il ne peut plus la supprimer", async () => {
+      const prisma = makePrisma({
+        message: { findUnique: jest.fn().mockResolvedValue({ sender: { id: 'p_anon', userId: null } }) },
+        participant: { findUnique: jest.fn().mockResolvedValue({ id: 'p_anon', userId: null }) },
+      });
+
+      await copyAttachmentsFromMessage(prisma, {
+        sourceMessageId: 'src', targetMessageId: 'dst', requesterParticipantId: 'p_anon',
+      });
+
+      expect(prisma.messageAttachment.create.mock.calls[0][0].data.isAnonymous).toBe(true);
+    });
+
+    it("ne marque PAS anonyme la copie d'un inscrit", async () => {
+      const prisma = makePrisma({
+        message: { findUnique: jest.fn().mockResolvedValue({ sender: { id: 'p_me', userId: 'u1' } }) },
+        participant: { findUnique: jest.fn().mockResolvedValue({ id: 'p_me', userId: 'u1' }) },
+      });
+
+      await copyAttachmentsFromMessage(prisma, {
+        sourceMessageId: 'src', targetMessageId: 'dst', requesterParticipantId: 'p_me',
+      });
+
+      expect(prisma.messageAttachment.create.mock.calls[0][0].data.isAnonymous).toBe(false);
+    });
   });
 
   // Exigence user : les destinataires d'une diffusion ne voient AUCUNE marque
