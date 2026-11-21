@@ -52,12 +52,17 @@ import { blankOutNonCode, walk } from '../../../__tests__/detached-promise-catch
  * EXISTE. Un site rangé `account` qui poserait en réalité un participant
  * passerait au vert — c'est le témoin de ce site qui l'attrape.
  *
- * Deux limites restent, déclarées faute de pouvoir être fermées par du texte :
+ * Trois limites restent, déclarées faute de pouvoir être fermées par du texte :
  *  1. un écrivain qui passerait par un nom calculé (`data['uploadedBy'] = …`) ;
  *  2. une valeur HISSÉE dans une locale (`const uploader = …` puis
  *     `uploadedBy: uploader`) : le balayage voit le nom de la locale, jamais ce
- *     qu'elle contient. C'est la forme que ce lot a lui-même produite, et c'est
- *     pourquoi aucun témoin ne prétend juger la valeur POSÉE.
+ *     qu'elle contient — et aucun témoin ne prétend donc juger la valeur POSÉE ;
+ *  3. un écrivain qui pose le champ par ÉPANDAGE (`...uploaderStampOf(…)`),
+ *     forme qu'exige #20142 pour que `uploadedBy` et `isAnonymous` ne puissent
+ *     plus se contredire. Le nom du champ n'apparaît alors nulle part, donc le
+ *     balayage ne voit rien — c'est pourquoi les deux écrivains de copie ne
+ *     figurent plus dans l'inventaire, et pourquoi un témoin SÉPARÉ exige
+ *     qu'ils passent par le site unique de l'empreinte.
  */
 export type UploadedByKeyUse = {
   /** Chemin relatif à `src/`, la forme dont un inventaire se lit. */
