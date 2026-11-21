@@ -79,7 +79,6 @@ const ASYMETRIES: readonly {
       'location:live-stopped',
       'location:live-updated',
       'mention:created',
-      'participant:rights-updated',
       'status:reacted',
       'status:unreacted',
       'story:translation-updated',
