@@ -2300,3 +2300,36 @@ socket jusqu'au client.
 1. **#20185** : recette sur le staging, si un accès existe.
 2. **#20121** : rendre l'élection ICE indépendante de l'ordre des entrées, sur iOS et Android.
 3. #11932, #12236, #16933, #20043.
+
+## Cycle 68 — 2026-11-21
+
+- **Base** : `origin/dev` @ `c9240b50c`. #20203 (#20184, cycle 67) est fusionnée.
+- **Branche** : `claude/determined-volta-2nmf8r`.
+- **#20185** (recette staging de #20152) : non jouée. Ce conteneur n'a toujours pas d'accès authentifié au staging.
+- **Objectif** : #20121. L'élection de la paire ICE, et le RTT, le débit sortant et la route relayée qu'on y lit, ne dépendent plus de l'ordre des entrées de `getStats`. Sur iOS, `report.statistics` est un `Dictionary`.
+- **Livré** (iOS `CallStats.swift`, Android `CallStats.kt` et `CallStatsCollector.kt`) : la même règle dans les deux miroirs.
+  1. Transport : celui de plus petit id dont `selectedCandidatePairId` nomme une `candidate-pair` existante.
+  2. Sinon : la paire `succeeded` et nominée de plus forte `priority`, puis de plus petit id. Une priorité NaN, négative ou absente vaut 0.
+  3. Une mesure absente de la paire élue se lit sur la première paire de ce même ordre qui la porte, et non plus sur la dernière rencontrée.
+  - `priority` est désormais projeté (iOS `RawEntry.numericKeys`, Android `NUMERIC_KEYS`).
+  - Avec un transport et une paire nominée, le résultat est identique à avant. Le payload ne change pas.
+- **Tests** : `CallStatsElectionOrderTest` (Android, 5 cas) et `CallStatsElectionOrderTests` (iOS, 5 cas plus la projection de `priority`). Chaque cas évalue le relevé dans ses rotations et dans les rotations de son inverse.
+  - Deux témoins figeaient le défaut (« la dernière paire gagne ») ; ils sont réécrits.
+  - Rouge Android : 5 échecs sur 5 sur le code de dev.
+  - Vert : `jvm-check -PjvmCheckModelOnly --rerun-tasks` donne 19 309 tests, 0 échec. La QA l'a rejoué.
+  - Mutations faites par la QA : sans le tri d'élection, 5 échecs ; sans le tri des transports, 1 échec.
+  - Gardes iOS (house rules, cohésion, inscription des tests, accent) : 0.
+  - CI : `ios.yml` run 44915977124 (suites ciblées) et `android.yml` run 44915980549, en `workflow_dispatch` sur `f46e8e080`.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves.
+  - R1 (faible) : sur des ids de paire dupliqués, iOS garde la première entrée et Android la dernière. libwebrtc ne produit pas ce cas. Versée dans #20221.
+  - R2 (moyenne, procédurale) : le Swift n'a pas été compilé ici. `ios.yml` doit être vert avant la fusion.
+  - R3 (faible, théorique) : l'ordre des chaînes diffère entre Swift et Kotlin hors ASCII.
+- **Découvert** : **#20221**. Le codec affiché (`primaryCodecId`, premier `inbound-rtp`) et `qualityLimitationReason` (premier `outbound-rtp` vidéo) dépendent encore de l'ordre.
+- **Limites** : rien n'a été vérifié sur appareil. La présence réelle de `priority` dans libwebrtc 146 n'a pas été observée.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée : lire les runs `ios.yml` et `android.yml`, fusionner `dev` dans la branche, puis fusionner la PR.
+1. **#20221** : rendre indépendants de l'ordre le codec affiché et la limitation de qualité, et dédoublonner les ids de la même façon (R1).
+2. **#20185** : recette sur le staging, si un accès existe.
+3. #11932, #12236, #16933, #20043.
