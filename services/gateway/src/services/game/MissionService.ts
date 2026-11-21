@@ -39,6 +39,8 @@ import {
   MISSION_REROLL_PER_DAY,
   MISSION_REROLL_PRICE,
   drawDailyMissions,
+  drawFirstDream,
+  isDreamWhole,
   replaceImpossibleMissions,
   rerollDailyMission,
   resolveGameDayKey,
@@ -339,14 +341,15 @@ export class MissionService {
     });
     // Un tirage INTERROMPU (une écriture tombée entre deux emplacements) se
     // COMPLÈTE : les emplacements posés font foi, seuls les manquants s'écrivent.
-    if (existing.length >= DAILY_MISSION_SLOTS || !unlocked) return { dayKey, unlocked, rows: existing };
+    // Le Rêve du jour se fige au tirage : ses trois actes, ou l'acte unique du premier Rêve sous le niveau 5 (#17370).
+    if (isDreamWhole(existing.map((row) => row.slot))) return { dayKey, unlocked, rows: existing };
     const taken = new Set(existing.map((row) => row.slot));
 
     const [treasury, profile] = await Promise.all([
       meeshTotalsFromLedger(this.prisma, userId).then((totals) => totals.balance),
       missionProfileOf({ prisma: this.prisma, userId, user: user ?? null, now }),
     ]);
-    const draw = drawDailyMissions({
+    const draw = (unlocked ? drawDailyMissions : drawFirstDream)({
       userId,
       dayKey,
       level,
@@ -355,7 +358,9 @@ export class MissionService {
       profile,
     });
 
-    for (const [slot, mission] of draw.missions.entries()) {
+    // De l'emplacement 2 vers l'emplacement 0 : un tirage complet interrompu ne laisse jamais l'acte facile seul, la
+    // forme du premier Rêve (`isDreamWhole`).
+    for (const [slot, mission] of [...draw.missions.entries()].reverse()) {
       if (taken.has(slot)) continue;
       try {
         await this.prisma.dailyMission.create({
@@ -410,10 +415,9 @@ export class MissionService {
     const dayKey = resolveGameDayKey({ candidate, latest: latestOpenedDay(recent), now });
     let rows = recent.filter((row) => row.dayKey === dayKey);
     if (rows.length === 0) {
-      // Le geste précède toute lecture du jour : on tire ici, sinon il serait perdu.
-      if (options.record !== undefined && options.record < MISSIONS_MIN_LEVEL) return;
+      // Le geste précède toute lecture du jour : on tire ici, sinon il serait perdu — le premier Rêve aussi (#17370).
       const today = await this.ensureToday(userId, now);
-      if (!today.unlocked) return;
+      if (today.rows.length === 0) return;
       rows = [...today.rows];
     }
 
@@ -637,7 +641,7 @@ export class MissionService {
     if (stored?.chestClaimedAt) return this.alreadyClaimed(userId, stored);
 
     const rows = await this.prisma.dailyMission.findMany({ where: { userId, dayKey, slot: { lt: DAILY_MISSION_SLOTS } } });
-    if (rows.length < DAILY_MISSION_SLOTS || rows.some((r) => r.completedAt === null)) throw new GameRefusal('CHEST_NOT_READY');
+    if (!isDreamWhole(rows.map((r) => r.slot)) || rows.some((r) => r.completedAt === null)) throw new GameRefusal('CHEST_NOT_READY');
 
     await this.ensureGameDay(userId, dayKey);
     const mintBase = await this.chestPriceBase({ userId, now, dayKey });

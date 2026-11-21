@@ -26,7 +26,7 @@ import type { LevelStepFacts } from './level-steps.js';
 import { meeshPrice, previewMint } from './mint.js';
 import { levelSparksOf, previewSparksMint, type SparksFacts } from './sparks.js';
 import { levelOnTheWire, mintOnTheWire } from './level-wire.js';
-import { MISSIONS_MIN_LEVEL, MISSION_REROLL_PER_DAY, MISSION_REROLL_PRICE, isPrismDay } from './missions.js';
+import { MISSIONS_MIN_LEVEL, MISSION_REROLL_PER_DAY, MISSION_REROLL_PRICE, fullDreamIn, isPrismDay } from './missions.js';
 import { personalMissionState } from './personal-mission.js';
 import { treasuryReserveAccess, treasuryTier } from './treasury.js';
 import { buildGameBlockExtras, type GameBlockExtrasFacts } from './game-block-extras.js';
@@ -221,6 +221,8 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       prismDay: isPrismDay({ userId: facts.userId, dayKey: facts.today }),
       unlocked,
       items: [...facts.missions],
+      // Sous le niveau 5, le premier Rêve tient en un acte (#17370) : le joueur lit combien d'étincelles manquent avant le Rêve complet.
+      ...(unlocked ? {} : { fullDreamIn: fullDreamIn(level.score) }),
       ...(facts.personalMission == null
         ? {}
         : {

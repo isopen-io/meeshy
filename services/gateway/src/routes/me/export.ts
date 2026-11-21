@@ -10,6 +10,7 @@ import {
   exportComments,
   exportReactions,
   exportMedia,
+  needsParticipantIds,
   exportVoiceProfile,
   exportPacks,
 } from './export-sections';
@@ -29,6 +30,7 @@ import { exportSharedLocationEndsOf } from '../../services/sharedLocation/shared
 import { exportProfileLinkVisitsOf } from '../../services/profile-link-visits/profileLinkVisits';
 import { exportSentInvitationsOf } from '../../services/referrals/emailInvitations';
 import { exportCallTelemetry } from '../../services/calls/callTelemetryPrivacy';
+import { accountSeatIds } from '../../services/participants/accountParticipantIds';
 import { PROFILE_ADDRESS_EXPORT_SELECT, withExportedAddresses } from './export-addresses';
 
 const logger = enhancedLogger.child({ module: 'DataExport' });
@@ -677,16 +679,16 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
         // `findMany` sans `take`, au-delà de la dette gelée par
         // `unbounded-findmany-guard.test.ts`.
         let pIds: string[] = [];
-        // #20129 — `media` entre dans cette condition : `exportMedia` a besoin de
-        // la même liste, parce que `uploadedBy` porte DEUX espaces de clés pour
-        // les lignes écrites avant #20113. Aucune lecture de plus — c'est la
-        // MÊME, déjà calculée une fois pour ses voisines.
-        if (requestedTypes.includes('messages') || requestedTypes.includes('reactions') || requestedTypes.includes('media')) {
-          const participantIds = await fastify.prisma.participant.findMany({
-            where: { userId, type: 'user' },
-            select: { id: true },
-          });
-          pIds = participantIds.map((p) => p.id);
+        // #20129 — `media` est entrée dans cette condition parce que
+        // `exportMedia` a besoin de la même liste (`uploadedBy` porte DEUX
+        // espaces de clés pour les lignes écrites avant #20113). La liste des
+        // sections qui en dépendent vit DÉSORMAIS avec les sections elles-mêmes
+        // (`SECTIONS_NEEDING_PARTICIPANT_IDS`), et `calls` l'a rejointe : elle
+        // avait besoin de la même liste et la relisait chez elle, avec son
+        // propre `where` — quatrième lecture de la même chose dans la même
+        // requête. La lecture, elle, passe par le producteur unique.
+        if (needsParticipantIds(requestedTypes)) {
+          pIds = await accountSeatIds(fastify.prisma, userId);
         }
 
         if (requestedTypes.includes('messages')) {
@@ -846,7 +848,7 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
         }
 
         if (requestedTypes.includes('calls')) {
-          const section = await exportCallTelemetry(fastify.prisma, userId, page);
+          const section = await exportCallTelemetry(fastify.prisma, pIds, page);
           exportData.calls = section.items;
           exportData.callsCount = section.total;
           exportData.callsHasMore = section.hasMore;

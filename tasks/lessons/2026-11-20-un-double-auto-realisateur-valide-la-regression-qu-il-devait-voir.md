@@ -55,3 +55,31 @@ await expect(identityImageIsCallers(prisma, { userId: TRANSFERANT, reference: CH
 - Un lot qui touche un prédicat de contrôle d'accès passe par
   l'`auditeur-adversarial` avant fusion. Ici, il a trouvé ce que trois suites
   vertes, un typecheck vert et un cliquet neuf avaient laissé passer.
+
+### Quand ce motif est BÉNIN — mesuré le 2026-11-21, pour ne pas sur-appliquer la leçon
+
+Tenté d'en faire un cliquet, et renoncé **sur mesure**. Dans la passerelle :
+
+- **99** fichiers de test posent un double en `mockImplementation(({ where }) => …)` ;
+- **27** d'entre eux DÉCIDENT sur la forme du `where` (`where.x === …`, `where.OR.some(…)`).
+
+Mais la plupart de ces 27 sont **légitimes**, et la différence est nette une fois
+qu'on la nomme :
+
+| forme | exemple | verdict |
+|---|---|---|
+| **identité** — « cette ligne existe-t-elle ? » | `where.id === ATTACHMENT_ID ? row : null` | **bénin** : c'est une table en mémoire à une ligne, pas une réaffirmation de la règle testée |
+| **autorisation** — le double rejoue la CLAUSE que le test prétend garder | `where.uploadedBy === USER_ID && where.OR.some(…) ? row : null` | **tautologie** : le témoin ne peut rendre que ce que l'appelant lui demande |
+
+`attachments-download.test.ts` est l'exemple du premier cas : ses doubles
+apparient par clé primaire, et la décision d'ACCÈS vient d'un interrupteur
+explicite (`participant.findFirst → granted ? … : null`). Rien à corriger.
+
+**Pourquoi aucun cliquet n'a été écrit** : un discriminant textuel ne sépare pas
+ces deux formes — il faut savoir ce que le test PRÉTEND garder. Un cliquet qui
+les confondrait signalerait vingt faux positifs et rassurerait sur les vrais.
+Un cliquet qui rassure à tort est pire que pas de cliquet (#20113, F3).
+
+**La question qui tranche, à poser au témoin, pas au double** : *si la règle
+sous test changeait d'espace de clés ou de forme, ce double rendrait-il encore
+ce que l'assertion attend ?* Si oui, le témoin ne garde rien.

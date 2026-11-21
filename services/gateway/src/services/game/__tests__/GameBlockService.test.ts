@@ -102,7 +102,9 @@ describe('GameBlockService.build', () => {
     expect(gameBlockSchema.safeParse(block).success).toBe(true);
     expect(block.level).toMatchObject({ level: 1, record: 1, prestige: 0 });
     expect(block.glory.glory).toBe(0);
-    expect(block.missions).toMatchObject({ unlocked: false, items: [] });
+    // Sous le niveau 5, le premier Rêve : un acte facile, et les étincelles qui manquent avant le Rêve complet (#17370).
+    expect(block.missions).toMatchObject({ unlocked: false, fullDreamIn: 2500 });
+    expect(block.missions.items.map((item) => item.difficulty)).toEqual(['easy']);
     expect(block.flame).toMatchObject({ days: 0, status: 'none', freezes: 0 });
     expect(block.guideSeen).toEqual([]);
   });

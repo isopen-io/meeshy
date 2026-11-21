@@ -12,6 +12,13 @@ import { describe, it, expect } from '@jest/globals';
 import { eraseCallTelemetryOf, exportCallTelemetry } from '../../../services/calls/callTelemetryPrivacy';
 
 const ME = '507f1f77bcf86cd799439011';
+/**
+ * #20129 — les sièges arrivent de la route, qui les lit une fois pour toutes ses
+ * sections (`accountSeatIds`, dont le `where` a son propre témoin). Cette unité
+ * ne résout plus l'appartenance : elle en reçoit le résultat, et ce que ces
+ * témoins gardent reste entier — rien de la télémétrie d'autrui ne sort.
+ */
+const MY_SEATS = ['p-me-1', 'p-me-2'];
 const OTHER = '507f1f77bcf86cd799439022';
 const AT = new Date('2026-10-20T10:00:00.000Z');
 
@@ -75,7 +82,7 @@ describe('exportCallTelemetry', () => {
       rowOf({ id: 'c', callSessionId: 'call-1', participantId: 'p-other', analytics: { deviceModel: 'Pixel 9' } }),
     ]);
 
-    const section = await exportCallTelemetry(db as never, ME, { limit: 10, offset: 0 });
+    const section = await exportCallTelemetry(db as never, MY_SEATS, { limit: 10, offset: 0 });
 
     expect(section.total).toBe(2);
     expect(section.hasMore).toBe(false);
@@ -94,14 +101,14 @@ describe('exportCallTelemetry', () => {
   it('pagine : la page suivante dit qu’il en reste', async () => {
     const db = fakeDb([rowOf({ id: 'a' }), rowOf({ id: 'b', callSessionId: 'call-2' })]);
 
-    const section = await exportCallTelemetry(db as never, ME, { limit: 1, offset: 0 });
+    const section = await exportCallTelemetry(db as never, MY_SEATS, { limit: 1, offset: 0 });
 
     expect(section.items).toHaveLength(1);
     expect(section.hasMore).toBe(true);
   });
 
   it('rend une section vide pour un compte sans participant', async () => {
-    const section = await exportCallTelemetry(fakeDb([]) as never, '507f1f77bcf86cd799439033', { limit: 10, offset: 0 });
+    const section = await exportCallTelemetry(fakeDb([]) as never, [], { limit: 10, offset: 0 });
 
     expect(section).toEqual({ items: [], total: 0, hasMore: false });
   });

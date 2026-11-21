@@ -105,8 +105,16 @@ describe('l’anneau des actes autour du bouton du menu', () => {
     expect(boutonMenu().getAttribute('aria-describedby')).toBeNull();
   });
 
-  test('avant le niveau 5 : aucun anneau', () => {
-    servir({ unlocked: false, done: [true, false, false] });
+  test('avant le niveau 5, le premier Rêve a un acte : un anneau d’un segment (#17370)', () => {
+    servir({ unlocked: false, done: [true] });
+    monter();
+
+    expect(anneau()?.getAttribute('data-acts-ring')).toBe('1/1');
+    expect(description()).toBe('Actes du jour : 1 sur 1');
+  });
+
+  test('avant le niveau 5 devant un serveur antérieur (aucun acte servi) : aucun anneau', () => {
+    servir({ unlocked: false, done: [] });
     monter();
 
     expect(anneau()).toBeNull();

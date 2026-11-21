@@ -43,6 +43,4 @@ const readCachedAttention = (): { readonly game?: Partial<GameAttentionSource> }
 
 /** Un bloc d'un ancien serveur peut manquer l'Offrande ou la Flamme : alors rien à signaler, jamais une exception. */
 const attentionSource = (game: Partial<GameAttentionSource> | undefined): GameAttentionSource | null =>
-  game?.missions === undefined || game.chest === undefined || game.flame === undefined
-    ? null
-    : { missions: game.missions, chest: game.chest, flame: game.flame };
+  game?.chest === undefined || game.flame === undefined ? null : { chest: game.chest, flame: game.flame };

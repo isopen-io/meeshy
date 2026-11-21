@@ -271,6 +271,7 @@ const en = {
   'game.mint.tailwind_value': '7 levels below your highest light',
   'game.missions.title': 'Tonight’s dream',
   'game.missions.locked': 'The dream opens at level 5 · you are at level {level}.',
+  'game.missions.full_dream_in': 'Your first full dream arrives in {sparks}.',
   'game.missions.prism_day': 'Prism Day: one of the acts is played in a language other than yours.',
   'game.missions.prism_hour': 'Prism Hour: {start} – {end} — every act counts double.',
   'game.missions.offline': 'Offline: changing an act or opening the Offering will resume online.',

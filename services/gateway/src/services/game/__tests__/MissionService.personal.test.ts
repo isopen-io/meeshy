@@ -152,7 +152,7 @@ describe('la mission personnelle ne gouverne ni le coffre ni le changement de mi
 
   it('un tirage interrompu des trois du jour se complète même quand la personnelle est posée', async () => {
     const { db, service } = setup();
-    insert(db, { slot: 0 });
+    insert(db, { slot: 2, difficulty: 'hard' });
     personal(db);
 
     const today = await service.ensureToday(USER, new Date('2026-10-06T10:00:00Z'));

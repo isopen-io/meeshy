@@ -187,6 +187,31 @@ export async function exportReactions(prisma: PrismaClient, participantIds: read
 }
 
 /**
+ * Les sections dont la requête a besoin des SIÈGES du compte, et pas seulement
+ * de son `userId`.
+ *
+ * C'est la liste qui décide si `me/export.ts` lit les sièges (`accountSeatIds`)
+ * — une lecture faite UNE fois et réutilisée. Elle vit ici, à côté des sections
+ * qui en dépendent, parce que c'est le seul endroit où l'on sait pourquoi :
+ * `messages` apparie `senderId`, `reactions` `participantId`, `media` le second
+ * espace de clés de `uploadedBy`, et `calls` le `participantId` de
+ * `CallParticipant`.
+ *
+ * **`calls` y a été inscrite après coup, et c'est la leçon 261.** La condition
+ * écrite dans la route affirmait deux choses : « ces sections consomment la
+ * liste » (vrai) et « ce sont les sections qui en ont besoin » (jamais
+ * vérifié). `exportCallTelemetry` en avait besoin et la relisait chez elle, avec
+ * son propre `where` — une quatrième lecture de la même liste dans la même
+ * requête d'export. Une section qui en aura besoin demain s'inscrit ici ; la
+ * vérification, elle, ne se déduit pas de la liste.
+ */
+export const SECTIONS_NEEDING_PARTICIPANT_IDS = ['messages', 'reactions', 'media', 'calls'] as const;
+
+export function needsParticipantIds(requestedTypes: readonly string[]): boolean {
+  return SECTIONS_NEEDING_PARTICIPANT_IDS.some((section) => requestedTypes.includes(section));
+}
+
+/**
  * Même raison de séparation que `exportReactions` : deux tables, deux propriétaires.
  *
  * ─── ET DEUX ESPACES DE CLÉS DANS `uploadedBy` (#20129) ────────────────────
