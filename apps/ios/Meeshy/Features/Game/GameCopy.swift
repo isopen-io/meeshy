@@ -65,6 +65,12 @@ enum GameCopy {
         String(localized: "game.missions.locked", defaultValue: "Le rêve s’ouvre au niveau 5 · tu es au niveau \(shown).", bundle: .main)
     }
 
+    /// Sous le niveau 5, le premier Rêve tient en un acte (#17370) : les étincelles qui manquent avant le Rêve complet.
+    static func fullDreamLine(sparks: Int) -> String {
+        let count = points(sparks)
+        return String(localized: "game.missions.full_dream_in", defaultValue: "Ton premier rêve complet arrive dans \(count).", bundle: .main)
+    }
+
     static func meeshes(_ count: Int) -> String {
         if count <= 0 {
             return String(localized: "game.meeshes.none", defaultValue: "Aucune Meesh", bundle: .main)

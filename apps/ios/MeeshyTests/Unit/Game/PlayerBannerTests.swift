@@ -440,9 +440,22 @@ final class PlayerBannerTests: XCTestCase {
 
     // MARK: - À l'ouverture seulement, et seulement ce qui a du sens (#9536)
 
-    /// Un joueur qui n'a rien fait : niveau 1, aucun point, aucune Meesh, aucune Gloire, aucune Flamme.
+    /// Un joueur qui n'a rien fait : niveau 1, aucun point, aucune Meesh, aucune Gloire, aucune Flamme — et aucun acte servi
+    /// (serveur antérieur à #17370 : le premier Rêve a ses propres témoins).
     private func emptyBlock() -> GameBlock {
-        GameFixture.game(score: 0, glory: 0, held: 0, flameDays: 0, flameStatus: .none)
+        GameFixture.game(score: 0, glory: 0, held: 0, flameDays: 0, flameStatus: .none, missions: [])
+    }
+
+    func test_aPlayerAtZero_seesTheBannerOfTheirFirstDream_fromTheFirstDay() async {
+        let first = GameFixture.game(score: 0, glory: 0, held: 0, flameDays: 0, flameStatus: .none,
+                                     missions: [GameFixture.mission(id: "m0")], rerollAvailable: false)
+        let source = FakeSource()
+        source.cachedBlock = first
+        source.fetchedBlock = first
+        let sut = store(source)
+        await sut.activate()
+        XCTAssertEqual(sut.banner?.dailyMission, GamePlayerBanner.DailyMission(done: 0, total: 1),
+                       "le premier Rêve (#17370) a sa pièce : un joueur à zéro voit un bandeau dès son premier jour")
     }
 
     func test_aPlayerWhoDidNothingYet_hasNoBannerAtAll() async {
