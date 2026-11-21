@@ -58,6 +58,13 @@ export const SHARED_LOCATION_MOTIONS = ['stationary', 'walking', 'running', 'cyc
 export type SharedLocationMotion = (typeof SHARED_LOCATION_MOTIONS)[number];
 
 /**
+ * D'où vient la position d'un partage (#19557) : `device`, le relevé de l'appareil, suivi ; `manual`, un point
+ * CHOISI à la main sur la carte, fixe, qui ne se met jamais à jour. Absente d'une charge : `device`, comme avant.
+ */
+export const SHARED_LOCATION_SOURCES = ['device', 'manual'] as const;
+export type SharedLocationSource = (typeof SHARED_LOCATION_SOURCES)[number];
+
+/**
  * Le cercle d'où vient la personne, tel que la loi d'accès vient de le juger pour CE
  * lecteur (#17013, #17966) : le marqueur de la carte en tire son icône et sa couleur,
  * et aucun client ne le recalcule. Un partage temporaire s'ouvre dès Ami, donc rien
@@ -79,6 +86,11 @@ export const SHARED_LOCATION_ERROR_CODES = {
   REQUEST_FORBIDDEN: 'SHARED_LOCATION_REQUEST_FORBIDDEN',
   /** Une demande déjà faite à cette personne dans la fenêtre (#19204). */
   REQUEST_TOO_SOON: 'SHARED_LOCATION_REQUEST_TOO_SOON',
+  /**
+   * Une position d'appareil envoyée sur un partage dont le point est CHOISI à la main (#20087) : un point choisi ne
+   * devient jamais une position réelle par une simple mise à jour. Un client qui ne connaît pas le code y lit un échec.
+   */
+  FIXED_POINT: 'SHARED_LOCATION_FIXED_POINT',
 } as const;
 export type SharedLocationErrorCode = (typeof SHARED_LOCATION_ERROR_CODES)[keyof typeof SHARED_LOCATION_ERROR_CODES];
 
