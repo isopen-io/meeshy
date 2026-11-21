@@ -193,6 +193,7 @@
     <string name="content_card_a11y_post_by">Post di %1$s</string>
     <string name="content_card_a11y_reel_by">Reel di %1$s</string>
     <string name="content_card_a11y_saves">%1$d salvataggi</string>
+    <string name="content_card_a11y_slide_position">Media %1$d di %2$d</string>
     <string name="content_card_a11y_story_by">Storia di %1$s</string>
     <plurals name="content_card_a11y_views">
         <item quantity="one">%1$d visualizzazione</item>

@@ -191,6 +191,7 @@
     <string name="content_card_a11y_post_by">Beitrag von %1$s</string>
     <string name="content_card_a11y_reel_by">Reel von %1$s</string>
     <string name="content_card_a11y_saves">%1$d Speicherungen</string>
+    <string name="content_card_a11y_slide_position">Medium %1$d von %2$d</string>
     <string name="content_card_a11y_story_by">Story von %1$s</string>
     <plurals name="content_card_a11y_views">
         <item quantity="one">%1$d Ansicht</item>
