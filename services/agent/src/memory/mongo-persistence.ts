@@ -1,4 +1,5 @@
 import type { PrismaClient, UserRole } from '@meeshy/shared/prisma/client';
+import { PARTICIPATION_VIVANTE } from '@meeshy/shared/utils/participation-vivante';
 import type { ToneProfile, ControlledUser, TraitValue } from '../graph/state';
 import { toneProfileToGlobalFields } from './profile-merger';
 
@@ -301,6 +302,41 @@ export class MongoPersistence {
     });
   }
 
+  /**
+   * LA GARDE DE LIVRAISON — l'autre bout de #20111, et le plus important.
+   *
+   * Les trois lectures de `Participant` de ce fichier gardent l'ÉLECTION : qui
+   * ENTRE sous contrôle de l'agent. Celle-ci est ce que les TROIS chemins de
+   * livraison appellent avant de faire parler l'agent
+   * (`reactive/reactive-handler.ts`, `scheduler/conversation-scanner.ts`,
+   * `server.ts`), et elle ne lisait **aucune** participation : un
+   * `agentUserRole.findMany({ where: { conversationId } })` nu, puis un filtre
+   * sur la seule horloge `User.lastActiveAt`.
+   *
+   * Deux chemins par lesquels un banni parlait encore, et le second ne dépend
+   * d'aucune ligne héritée :
+   *
+   * 1. **Le rôle déjà DÉTENU.** Rien, sur le chemin de bannissement, ne libère
+   *    `AgentUserRole` (mesuré : seuls `routes/admin/agent-reset.ts` et
+   *    `jobs/obsolete-conversation-purge.ts` y touchent) ; et le rôle ne se
+   *    périme pas, `touchUserRoles` réécrivant `lastUsedAt` chaque fois qu'il
+   *    SERT. Quiconque était élu avant son bannissement restait animé
+   *    indéfiniment. Le retrait du rôle AU bannissement est le suivi #20208 —
+   *    cette garde-ci couvre en plus les lignes DÉJÀ en base, ce qu'aucune
+   *    écriture future ne peut faire.
+   * 2. **L'épinglage manuel** (`AgentConfig.manualUserIds`) fabriquait un
+   *    `ControlledUser` sans jamais lire `Participant`.
+   *
+   * > **Une garde posée sur l'ÉLECTION ne garde pas la LIVRAISON.** C'est la
+   * > question du cycle 202 — « qui AUTORISE ce que cette clause rend ? » —
+   * > retournée : la clause était juste, et personne ne la rejouait au moment
+   * > où le message part.
+   *
+   * **Fail-closed** : un contrôlé sans participation vivante est LÂCHÉ. Le
+   * silence d'un animateur ne coûte rien ; parler au nom d'un exclu, si. Et
+   * l'épinglage manuel garde exactement ce qu'il a toujours contourné —
+   * l'horloge d'inactivité — jamais l'appartenance.
+   */
   async getControlledUsers(conversationId: string): Promise<ControlledUser[]> {
     const [roles, config] = await Promise.all([
       this.prisma.agentUserRole.findMany({ where: { conversationId } }),
@@ -314,7 +350,16 @@ export class MongoPersistence {
     const roleUserIds = new Set(roles.map((r: { userId: string }) => r.userId));
     const missingManualIds = [...manualUserIds].filter((id) => !roleUserIds.has(id));
 
-    const allUserIds = [...roleUserIds, ...missingManualIds];
+    const candidateUserIds = [...roleUserIds, ...missingManualIds];
+    if (candidateUserIds.length === 0) return [];
+
+    const vivants = await this.prisma.participant.findMany({
+      where: { conversationId, ...PARTICIPATION_VIVANTE, userId: { in: candidateUserIds } },
+      select: { userId: true },
+    });
+    const vivantUserIds = new Set(vivants.flatMap((p: { userId: string | null }) => (p.userId ? [p.userId] : [])));
+
+    const allUserIds = candidateUserIds.filter((id) => vivantUserIds.has(id));
     if (allUserIds.length === 0) return [];
 
     const users = await this.prisma.user.findMany({
@@ -331,6 +376,10 @@ export class MongoPersistence {
 
     const results: ControlledUser[] = roles
       .filter((r: Record<string, any>) => {
+        // L'appartenance VIVANTE d'abord, et elle ne se contourne pas : un
+        // épinglage manuel saute l'horloge d'inactivité (ci-dessous), jamais
+        // cette ligne-ci.
+        if (!vivantUserIds.has(r.userId as string)) return false;
         if (manualUserIds.has(r.userId as string)) return true;
         const userInfo = userMap.get(r.userId as string);
         if (!userInfo) return true;
@@ -368,7 +417,7 @@ export class MongoPersistence {
       },
     }));
 
-    for (const uid of missingManualIds) {
+    for (const uid of missingManualIds.filter((id) => vivantUserIds.has(id))) {
       results.push({
         userId: uid,
         displayName: userMap.get(uid)?.displayName ?? uid,
@@ -402,24 +451,25 @@ export class MongoPersistence {
     return results;
   }
 
-  async getInactiveUsers(conversationId: string, thresholdHours: number, excludedRoles: string[], excludedUserIds: string[]) {
-    const threshold = new Date(Date.now() - thresholdHours * 60 * 60 * 1000);
-    const participants = await this.prisma.participant.findMany({
-      where: {
-        conversationId,
-        isActive: true,
-        lastActiveAt: { lt: threshold },
-        userId: { not: null, notIn: excludedUserIds },
-        user: { role: { notIn: excludedRoles as UserRole[] } },
-      },
-      select: {
-        user: { select: { id: true, displayName: true, username: true, bio: true, systemLanguage: true } },
-      },
-    });
-    return participants
-      .flatMap((p) => (p.user ? [p.user] : []));
-  }
-
+  /**
+   * UN MEMBRE BANNI N'EST PAS ANIMÉ (#20111).
+   *
+   * Cette lecture décide **à la place de qui l'agent va parler**. Elle portait
+   * `isActive: true` NU, et la ligne `{ isActive: true, bannedAt ≠ null }`
+   * existe en base — bannir pendant qu'une participation est inactive n'écrit
+   * que `bannedAt` (`conversationBanState.ts`). La migration qui reprendrait les
+   * lignes existantes existe (#16690) et n'a été exécutée nulle part. Un membre actif-et-banni était donc éligible, et
+   * l'agent publiait un message signé de quelqu'un d'EXCLU dans le fil dont il
+   * est exclu : pas une fuite de lecture, une INJECTION de contenu attribuée à
+   * une personne bannie.
+   *
+   * `PARTICIPATION_VIVANTE` vient de `@meeshy/shared` et ne se réécrit pas :
+   * `bannedAt: null` seul fermerait l'agent à TOUTE la population (la colonne
+   * est ABSENTE du document de qui n'a jamais été banni). C'est pour cette
+   * lecture-ci, et ses deux sœurs, que la loi a déménagé dans le paquet
+   * partagé — elle vivait dans la passerelle, que ce service ne peut pas
+   * importer.
+   */
   async getPotentialControlledUsers(
     conversationId: string,
     limit: number,
@@ -469,7 +519,7 @@ export class MongoPersistence {
     const participants = await this.prisma.participant.findMany({
       where: {
         conversationId,
-        isActive: true,
+        ...PARTICIPATION_VIVANTE,
         lastActiveAt: { lt: threshold },
         userId: { not: null, notIn: [...excludedUserIds, ...existingRoleUserIds] },
         user: {
@@ -496,6 +546,7 @@ export class MongoPersistence {
     return tirerAuSort(participants.flatMap((p) => (p.user ? [p.user] : [])), limit);
   }
 
+  /** Le repli du sélecteur ci-dessus — même loi, pour la même raison (#20111). */
   async getLeastActiveParticipants(
     conversationId: string,
     limit: number,
@@ -507,7 +558,7 @@ export class MongoPersistence {
     const participants = await this.prisma.participant.findMany({
       where: {
         conversationId,
-        isActive: true,
+        ...PARTICIPATION_VIVANTE,
         userId: { not: null, notIn: [...excludedUserIds, ...existingControlledUserIds] },
         user: {
           // Même loi que ci-dessus : la connexion décide, jamais l'activité.
@@ -625,7 +676,13 @@ export class MongoPersistence {
         by: ['conversationId'],
         where: {
           conversationId: { in: allConvIds },
-          isActive: true,
+          ...PARTICIPATION_VIVANTE,
+          // La MESURE porte la même loi que les deux sélecteurs qu'elle garde
+          // (#20111). Ici un banni n'est pas une fuite — c'est un nombre FAUX :
+          // ce comptage élit les conversations qui valent un scan, et compter
+          // un banni comme éligible envoyait scanner un fil dont les trois
+          // sélecteurs d'aval ne retiendront personne. Un compte doit dire la
+          // même chose que ce qu'il alimente.
           userId: { not: null },
           // Même loi qu'en aval : la CONNEXION décide, pas l'activité.
           //

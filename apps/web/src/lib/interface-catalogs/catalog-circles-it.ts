@@ -213,6 +213,10 @@ const it = {
   'shareLocation.rateLimited': 'Troppi invii, riprova tra un attimo.',
   'shareLocation.failed': 'La condivisione della posizione non è partita, riprova.',
   'shareLocation.stopPending': 'La condivisione si fermerà appena torna la rete.',
+  'shareLocation.replacePoint.title': 'Mostrare la tua posizione reale?',
+  'shareLocation.replacePoint.message': 'Stai condividendo un punto scelto sulla mappa. Tutti quelli che lo vedono vedranno invece la tua posizione reale.',
+  'shareLocation.replacePoint.confirm': 'Mostra la mia posizione reale',
+  'shareLocation.replacePoint.keep': 'Mantieni il punto scelto',
 } as const satisfies CirclesCatalog;
 
 export default it;

@@ -179,6 +179,25 @@ describe('le bloc game', () => {
     });
   });
 
+  it('dit le jour où la première Veilleuse est offerte, celui de la Flamme (#20169)', () => {
+    expect(block({ freezeGiftDay: '2026-10-05' }).flame.freezeGifted).toBe(true);
+    expect(block({ freezeGiftDay: '2026-10-04' }).flame.freezeGifted).toBe(false);
+    expect(block({ freezeGiftDay: null }).flame.freezeGifted).toBe(false);
+    expect(block({ today: '2026-10-05', flameToday: '2026-10-06', freezeGiftDay: '2026-10-06' }).flame.freezeGifted).toBe(true);
+    expect(gameBlockSchema.safeParse(block({ freezeGiftDay: '2026-10-05' })).success).toBe(true);
+  });
+
+  it('garde la forme d\'avant quand la passerelle ne lit pas le jour du cadeau', () => {
+    expect(block().flame).not.toHaveProperty('freezeGifted');
+  });
+
+  it('tolère un freezeGifted illisible sans emporter le bloc', () => {
+    const b = block();
+    const parsed = gameBlockSchema.safeParse({ ...b, flame: { ...b.flame, freezeGifted: 'oui' } });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.flame.freezeGifted).toBeUndefined();
+  });
+
   it('dit qu\'une Flamme éteinte se rallume, avec son prix', () => {
     const b = block({
       lastActiveDay: '2026-10-02',

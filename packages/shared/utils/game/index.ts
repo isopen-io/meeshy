@@ -39,3 +39,4 @@ export * from './photo-step-ids.js';
 export * from './photo-alerts.js';
 export * from './constellation.js';
 export * from './attention.js';
+export * from './welcome-back.js';

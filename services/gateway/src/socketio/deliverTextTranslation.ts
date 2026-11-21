@@ -29,6 +29,24 @@ export type TextTranslationDeliveryDeps = {
 };
 
 /**
+ * Combien de sockets les rooms ADRESSÉES portent — la mesure de ce qu'une
+ * remise restreinte a vraiment servi (#20222).
+ *
+ * Les rooms personnelles sont DISJOINTES par lecteur (`userId ?? id`), donc la
+ * somme ne double-compte personne ; un lecteur à trois appareils compte trois
+ * fois, exactement comme `clientCount` le fait pour la room de conversation.
+ *
+ * Elle ne LÈVE jamais : la carte de l'adaptateur est en mémoire, et le site
+ * d'appel est le `try` dont dépend l'enfilage des absents. Une lecture de
+ * mesure n'a pas le droit d'emporter une durabilité (règle du cycle 116).
+ */
+function connectedSocketsIn(io: MeeshyIOServer, rooms: readonly string[]): number {
+  const map = io.sockets?.adapter?.rooms;
+  if (!map) return 0;
+  return rooms.reduce((total, room) => total + (map.get(room)?.size ?? 0), 0);
+}
+
+/**
  * Livre la traduction TEXTE d'un message que le traducteur vient de rendre :
  * la room de conversation (ou ses seuls lecteurs autorisés), la file hors
  * ligne, puis l'aperçu de liste. Extrait de `MeeshySocketIOManager`
@@ -144,16 +162,23 @@ export async function deliverTextTranslation(
       // affirmerait avoir servi `clientCount` clients qui n'ont rien reçu. Avant
       // ce lot, le `catch` de fin de méthode l'en empêchait par accident ; le
       // garder juste est à notre charge depuis qu'on le court-circuite.
-      let served = false;
+      // #20222 — le compteur porte un NOMBRE, jamais un booléen. Un drapeau
+      // posé après la branche ne peut pas dire laquelle a émis : il valait
+      // `true` quand `readers.rooms` était VIDE (aucune émission), et faisait
+      // créditer la room entière à une remise restreinte à un seul lecteur.
+      // « Rien émis ⇒ rien compté » est désormais une propriété de la forme,
+      // pas une intention écrite au-dessus d'un drapeau qui la démentait.
+      let servedClients = 0;
       safeBroadcast(
         'message:translation',
         () => {
           if (readers.kind === 'room') {
             deps.io.to(roomName).emit(SERVER_EVENTS.MESSAGE_TRANSLATION, translationData);
+            servedClients = clientCount;
           } else if (readers.rooms.length > 0) {
             deps.io.to([...readers.rooms]).emit(SERVER_EVENTS.MESSAGE_TRANSLATION, translationData);
+            servedClients = connectedSocketsIn(deps.io, readers.rooms);
           }
-          served = true;
         },
         (error) => logger.warn('message:translation live emission failed — offline replay unaffected', {
           messageId: result.messageId,
@@ -161,7 +186,7 @@ export async function deliverTextTranslation(
           error,
         }),
       );
-      if (served) deps.stats.translations_sent += clientCount;
+      deps.stats.translations_sent += servedClients;
 
       // Troisième audience, la seule que rien ne servait : les participants
       // HORS LIGNE à l'instant où NLLB répond. La room ne contient que des
