@@ -54,6 +54,11 @@ export type SharedLocationState = {
    * avec CE partage. Absent (tout partage rangé avant, ou sans la bascule) : rien n'est accordé.
    */
   readonly shareBattery?: true;
+  /**
+   * Le point est CHOISI à la main (#19557) : fixe, jamais remplacé par une mise à jour d'appareil (#20087). Absent
+   * (tout partage rangé avant, ou parti d'un relevé) : la position est celle d'un appareil.
+   */
+  readonly source?: 'manual';
 };
 
 export type SharedLocationCache = SharedLocationKv;
@@ -119,7 +124,8 @@ function parseState(raw: string): SharedLocationState | null {
   const startedAt = typeof row.startedAt === 'string' && !Number.isNaN(Date.parse(row.startedAt)) ? { startedAt: row.startedAt } : {};
   const servableFrom = typeof row.servableFrom === 'string' && !Number.isNaN(Date.parse(row.servableFrom)) ? { servableFrom: row.servableFrom } : {};
   const shareBattery = row.shareBattery === true ? { shareBattery: true as const } : {};
-  return { sessionId: row.sessionId, recipients: recipients as SharedLocationRecipient[], position, updatedAt: row.updatedAt, expiresAt: row.expiresAt, ...startedAt, ...servableFrom, ...shareBattery };
+  const source = row.source === 'manual' ? { source: 'manual' as const } : {};
+  return { sessionId: row.sessionId, recipients: recipients as SharedLocationRecipient[], position, updatedAt: row.updatedAt, expiresAt: row.expiresAt, ...startedAt, ...servableFrom, ...shareBattery, ...source };
 }
 
 const ttlOf = (state: Pick<SharedLocationState, 'expiresAt'>, now: number): number =>
