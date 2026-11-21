@@ -229,14 +229,6 @@ export const MEASURED_FAMILIES: Readonly<Record<string, string>> = {
     'tête-à-tête y reste un contact, donc lit les posts réservés aux contacts. Ce n\'est pas la même ' +
     "question que l'audience d'un message — elle se tranche avec les cercles de proximité et la " +
     "visibilité des publications, dont les seuils sont des décisions produit.",
-  'porte-sur-un-sur-ensemble':
-    "PORTE, et c'est un défaut OUVERT, pas une mesure : `POST /conversations/:id/invite` résout " +
-    "l'INVITEUR depuis cette liste nue (`participants.find(m => m.userId === inviterId)`), si bien " +
-    "qu'un membre actif-et-banni fait entrer qui il veut dans une conversation dont il est exclu — et " +
-    '« inviter » écrit ici un `Participant` immédiatement ACTIF. Le `where` ne se resserre PAS : la ' +
-    'même lecture tient `newMemberRefusal`, un refus par égalité exacte (un tête-à-tête chiffré reste ' +
-    "à DEUX, #16188). Le correctif est celui d'`announceStartedGroup` — la loi jugée en code sur la " +
-    'PORTE seule. Suivi : #20104.',
   'unicite-d-un-nom':
     "MESURE, et la seule que `findFirst` a fait entrer dans le relevé (#20100) : le tirage d'un nom " +
     "d'affichage anonyme interroge si un candidat est déjà PRIS dans la conversation. Un " +
@@ -324,7 +316,6 @@ export const MEASURED_NOT_INSTRUCTED: Readonly<Record<string, string>> = {
   'utils/conversation-partners.ts#1': 'audience-a-instruire',
   'services/posts/feedContacts.ts#0': 'audience-de-publication-a-instruire',
   'services/posts/viewerAudience.ts#0': 'audience-de-publication-a-instruire',
-  'routes/conversations/sharing-invite.ts#0': 'porte-sur-un-sur-ensemble',
   'services/conversations/anonymousUsername.ts#0': 'unicite-d-un-nom',
   'services/MessageMediaConsumptionService.ts#0': 'mesure-denominateur-destructif',
   'services/MessageReadStatusService.ts#2': 'mesure-denominateur-destructif',
