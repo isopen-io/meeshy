@@ -116,6 +116,8 @@ function doublePrisma(etat: {
         etat.posts.map((p) => ({ postId: p.id })).slice(skip ?? 0, (skip ?? 0) + (take ?? etat.posts.length)),
       ),
     },
+    // #16894 — les deux lectures du blocage (`getBlockRelatedUserIds`) : personne ici.
+    user: { findMany: jest.fn(async () => []), findUnique: jest.fn(async () => ({ blockedUserIds: [] })) },
     communityMember: { findMany: jest.fn(async () => []) },
     post: {
       findMany: jest.fn(async ({ where, take }: any) => {

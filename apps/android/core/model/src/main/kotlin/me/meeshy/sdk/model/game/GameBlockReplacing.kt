@@ -173,6 +173,7 @@ public fun GameMissions.replacing(
     items = items ?: this.items,
     rerollAvailable = rerollAvailable ?: this.rerollAvailable,
     personal = personal,
+    fullDreamIn = fullDreamIn,
 )
 
 public fun GameChest.replacing(status: ChestStatus? = null, reward: Put<DailyChest?>? = null): GameChest = GameChest(

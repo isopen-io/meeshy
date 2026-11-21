@@ -76,10 +76,15 @@ class GameActAdvanceTest {
     }
 
     @Test
-    fun `actes pas encore ouverts - rien`() {
-        val before = game(listOf(act("b", MissionDifficulty.Medium, 2, 5)), unlocked = false)
-        val after = game(listOf(act("b", MissionDifficulty.Medium, 3, 5)), unlocked = false)
-        assertThat(GameActAdvance.between(before, after, hidden = false)).isNull()
+    fun `avant le niveau 5, l'acte du premier Reve qui avance se voit aussi (#17370)`() {
+        val before = game(listOf(act("a", MissionDifficulty.Easy, 0, 3)), unlocked = false)
+        val after = game(listOf(act("a", MissionDifficulty.Easy, 1, 3)), unlocked = false)
+        assertThat(GameActAdvance.between(before, after, hidden = false)).isEqualTo(GameActAdvance(MissionDifficulty.Easy, 1, 3))
+    }
+
+    @Test
+    fun `aucun acte servi (ancien serveur, sous le niveau 5) - rien`() {
+        assertThat(GameActAdvance.between(game(emptyList(), unlocked = false), game(emptyList(), unlocked = false), hidden = false)).isNull()
     }
 
     @Test
