@@ -238,6 +238,12 @@ export type SharedLocationOwnSnapshot = {
    * position réelle sans que l'utilisateur le demande. ADDITIF : absent d'un serveur antérieur (ou sans partage).
    */
   readonly source?: SharedLocationSource;
+  /**
+   * La passerelle accepte-t-elle un point choisi à la main (`source: 'manual'`, #19557) ? Servi avec ou sans partage
+   * en cours : c'est le SEUL signal qu'un client lit pour proposer « Choisir sur la carte ». ADDITIF : absent d'un
+   * serveur antérieur, le client garde « Ouvrir les réglages » seul.
+   */
+  readonly acceptsManualSource?: boolean;
 };
 
 /**

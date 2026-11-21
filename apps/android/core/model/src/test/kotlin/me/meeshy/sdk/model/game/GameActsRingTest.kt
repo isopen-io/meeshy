@@ -38,8 +38,13 @@ class GameActsRingTest {
     }
 
     @Test
-    fun `avant le niveau 5 les actes ne sont pas ouverts, aucun anneau`() {
-        assertThat(GameActsRing.of(missions(unlocked = false, done = listOf(true, false, false)), hidden = false)).isNull()
+    fun `avant le niveau 5, le premier Reve a un acte - un anneau d'un segment (#17370)`() {
+        assertThat(GameActsRing.of(missions(unlocked = false, done = listOf(true)), hidden = false)).isEqualTo(GameActsRing(done = 1, total = 1))
+    }
+
+    @Test
+    fun `avant le niveau 5 devant un ancien serveur (aucun acte servi), aucun anneau`() {
+        assertThat(GameActsRing.of(missions(unlocked = false, done = emptyList()), hidden = false)).isNull()
     }
 
     @Test
