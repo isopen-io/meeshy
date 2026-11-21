@@ -2,14 +2,11 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Ce que la face Actions de MA fiche demande à son hôte : la face ne connaît ni le routeur ni les feuilles.
+/// Ce que ma fiche demande à son hôte (la face Actions et les commandes de la bannière) : ni le routeur ni les feuilles.
 enum ProfileFaceAction: Hashable {
-    case share
     case seenAs
     case edit
     case mood
-    case stats
-    case legend
     case security
     case settings
     case logout
@@ -20,31 +17,29 @@ enum ProfileFaceAction: Hashable {
 /// La face Actions de MA fiche (#18869, planche `Moi-Actions`) : ce que je peux faire.
 ///
 /// Faite du kit : les actions libellées en grille (K32), les rangées à interrupteur et à chevron (K06), les en-têtes de
-/// section (K44), le bouton de sortie (K40). Ce qui vivait sur la fiche s'y range sans rien perdre (loi 11) : le partage
-/// de ma batterie et de mon téléphone injoignable, mes contenus, mon activité et ma Légende. « Montrer » rejoue Mon QR,
-/// Scanner et Sans contact par les présentations de la face Liens (#19469) ; « Ma position » dit son état et mène à la
-/// carte de mes proches ; le mode fantôme global me masque à tous, Sang compris. « Qui me voit » dit, depuis la loi
+/// section (K44), le bouton de sortie (K40). Le billet de mon lien de profil et mes liens créés se posent au-dessus
+/// d'elle (#20177). Une action n'a qu'une place : Partager est au bouton du
+/// sélecteur ; Mon QR et Sans contact au billet de mon lien ; Voir comme, Modifier et Réglages sur la bannière ; mon
+/// activité et ma Légende sur la Vitrine. « Montrer » garde Scanner (par les présentations des liens, #19469), Ma carte
+/// et Mon statut ; « Ma position » dit son état et mène à la carte de mes proches ; le mode fantôme global me masque à
+/// tous, Sang compris. « Qui me voit » dit, depuis la loi
 /// d'accès, le cercle à partir duquel ma présence se voit (loi 10) ; chaque interrupteur s'applique aussitôt et se
 /// synchronise ensuite (`UserPreferencesManager`).
 struct ProfileActionsFace: View {
     let user: MeeshyUser?
     let stats: UserStats?
     let accentColor: String
-    let canShare: Bool
     /// Vrai là où le modèle des statuts est servi : « Mon statut » ouvre alors le composer de mood.
     var canSetMood: Bool = false
-    /// « Ma Légende » : mon niveau et mon rang en sous-titre, lus dans le cache du jeu par l'hôte (#19630).
-    var legend: ProfileLegendSummary? = nil
     let onAction: (ProfileFaceAction) -> Void
 
     @ObservedObject var prefs: UserPreferencesManager
     @ObservedObject var sharing: SharedLocationSharingCenter = SharedLocationSharingHolder.center()
     @StateObject private var ghost = LocationGhostModel()
 
-    @Environment(\.locale) private var locale
     /// « Carte de mes proches » (#18872) : la carte est une action, ouverte en plein écran.
     @State private var showsNearbyMap = false
-    /// Mon QR, Scanner et Sans contact : les présentations de la face Liens, rejouées ici.
+    /// Scanner : les présentations des liens, rejouées ici.
     @State private var presented: ProfileLinksPresented?
     @State private var sent: SharedContentWrapper?
 
@@ -75,32 +70,14 @@ struct ProfileActionsFace: View {
         ))
     }
 
-    // MARK: - En-tête
-
     // MARK: - Montrer
 
     private var showSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             MeeshySectionHeader(title: ProfileActionsCopy.showTitle)
             MeeshyActionGrid(columns: .fixed(4)) {
-                if canShare {
-                    MeeshyLabeledAction(title: ProfileActionsCopy.share, systemImage: "square.and.arrow.up",
-                                        tint: accent, action: { onAction(.share) })
-                }
-                if profileLink != nil {
-                    MeeshyLabeledAction(title: ProfileActionsCopy.myQR, systemImage: "qrcode",
-                                        tint: accent, action: { presented = .card(.qr) })
-                }
                 MeeshyLabeledAction(title: ProfileActionsCopy.scan, systemImage: "qrcode.viewfinder",
                                     tint: accent, action: { presented = .scanner })
-                if profileLink != nil {
-                    MeeshyLabeledAction(title: ProfileLinksCopy.contactless, systemImage: ProfileGlyph.contactless,
-                                        tint: accent, action: { presented = .card(.contactless) })
-                }
-                MeeshyLabeledAction(title: ProfileActionsCopy.seenAs, systemImage: "eye",
-                                    tint: accent, action: { onAction(.seenAs) })
-                MeeshyLabeledAction(title: ProfileActionsCopy.edit, systemImage: "pencil",
-                                    tint: accent, action: { onAction(.edit) })
                 MeeshyLabeledAction(title: ProfileActionsCopy.myMap, systemImage: "map",
                                     tint: accent, action: { showsNearbyMap = true })
                 if canSetMood {
@@ -117,9 +94,11 @@ struct ProfileActionsFace: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             MeeshySectionHeader(title: ProfileActionsCopy.sharingTitle)
             VStack(spacing: 0) {
+                positionPreview
                 positionRow
                 ProfileNoveltyReader(feature: .ghostMode, accountId: user?.id) { badge in ghostRow(badge: badge) }
             }
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
             .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
             BatterySharingSettingsSection(accentColor: accentColor)
             PhoneReachabilitySharingSettingsSection(accentColor: accentColor)
@@ -129,6 +108,20 @@ struct ProfileActionsFace: View {
             privacyToggle(ProfileActionsCopy.notifyReturnTitle, systemImage: "bell",
                           subtitle: nil, keyPath: \.notifyContactsOnReturn, divider: false)
                 .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
+        }
+    }
+
+    /// L'aperçu de carte de ma position, au-dessus de la rangée, seulement quand elle part et que l'appareil la connaît
+    /// (#20199) : le toucher ouvre la carte de mes proches.
+    @ViewBuilder
+    private var positionPreview: some View {
+        let recipients = sharing.roster.pruned(now: Date()).recipients.map(\.userId)
+        if case .map(let fix) = ProfileOwnPositionPreview.resolve(recipients: recipients.count, isGhost: ghost.isGhost,
+                                                                    fix: LocationMapOwnPosition.lastKnown()) {
+            ProfileOwnPositionMiniature(fix: fix,
+                                        share: LocationMapOwnShare.resolve(recipientIds: recipients, focusedUserId: nil),
+                                        onTap: { showsNearbyMap = true })
+                .accessibilityIdentifier("profile.actions.positionMap")
         }
     }
 
@@ -209,19 +202,9 @@ struct ProfileActionsFace: View {
     private var accountSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             MeeshySectionHeader(title: ProfileActionsCopy.accountTitle)
-            VStack(spacing: 0) {
-                MeeshyToggleRow(ProfileActionsCopy.statsTitle, systemImage: "chart.bar",
-                                subtitle: ProfileActionsCopy.statsSubtitle(stats, locale: locale),
-                                accessory: .chevron, showsDivider: true, tint: accent, action: { onAction(.stats) })
-                MeeshyToggleRow(ProfileActionsCopy.legend, systemImage: "trophy",
-                                subtitle: ProfileLegendSummary.subtitle(for: legend), accessory: .chevron,
-                                showsDivider: true, tint: accent, action: { onAction(.legend) })
-                MeeshyToggleRow(ProfileActionsCopy.securityTitle, systemImage: "checkmark.shield",
-                                subtitle: ProfileActionsCopy.securitySubtitle(user), accessory: .chevron,
-                                showsDivider: true, tint: accent, action: { onAction(.security) })
-                MeeshyToggleRow(ProfileActionsCopy.settingsTitle, systemImage: "gearshape", accessory: .chevron,
-                                tint: accent, action: { onAction(.settings) })
-            }
+            MeeshyToggleRow(ProfileActionsCopy.securityTitle, systemImage: "checkmark.shield",
+                            subtitle: ProfileActionsCopy.securitySubtitle(user), accessory: .chevron,
+                            tint: accent, action: { onAction(.security) })
             .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
         }
     }

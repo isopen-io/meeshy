@@ -96,6 +96,8 @@ public struct UserProfileSheet: View {
     /// tant que l'app n'a rien lu.
     @State var relationStanding = ProfileRelationStanding.unresolved
     @State var sharesProfile = false
+    /// « Partager le profil » (#20177) : son adresse part hors de Meeshy, par la feuille du système.
+    @State var sharesOutside = false
     /// #10093 — la bannière ou la photo ouverte en plein écran, PRÉSENTÉE par-dessus la feuille (`fullScreenCover`) :
     /// posée dans la pile de la feuille, la visionneuse ne pouvait pas déborder de sa hauteur (mi-écran en `.medium`).
     @State private var fullscreenImage: ProfileFullscreenImage?
@@ -257,10 +259,16 @@ public struct UserProfileSheet: View {
         )
         .overlay(alignment: .bottom) {
             if showsFaceSelector {
-                RelationFaceSelector(face: $face, writeShortcut: writeShortcut)
+                RelationFaceSelector(face: $face, accessory: faceAccessory, writeBadge: writeBadge,
+                                     onAccessory: { performFaceAccessory($0) })
             }
         }
         .environment(\.meeshyProfileAccent, profileAccent)
+        .sheet(isPresented: $sharesOutside) {
+            if let link = ProfileLink(username: displayUser.username) {
+                ProfileActivitySheet(items: [link.url]).presentationDetents([.medium, .large])
+            }
+        }
         .task {
             await loadDataIfNeeded()
             await loadConversationsIfNeeded()
@@ -296,7 +304,6 @@ public struct UserProfileSheet: View {
                                  order: RelationFace.allCases) { shown in
                 switch shown {
                 case .vitrine: vitrineFace
-                case .links: RelationLinksFace.of(self)
                 case .actions: actionsFace
                 }
             }
@@ -307,11 +314,17 @@ public struct UserProfileSheet: View {
         RelationFace.showsSelector(isCurrentUser: isCurrentUser, isBlocked: isBlocked, loadFailed: !phase.showsFaceSelector)
     }
 
-    /// « Écrire » à droite du sélecteur, sur la Vitrine seulement (brief § 1).
-    private var writeShortcut: (() -> Void)? {
-        guard face.offersWriteShortcut(isInteractionDisabled: isInteractionDisabled),
-              talkReach(.write) != .needsNetwork else { return nil }
-        return { openConversation() }
+    /// À droite du sélecteur (#20177) : « Parler » sur la Vitrine, « Partager le profil » sur les Actions.
+    private var faceAccessory: RelationFaceAccessory? {
+        face.accessory(isInteractionDisabled: isInteractionDisabled, canTalk: talkReach(.write) != .needsNetwork,
+                       hasLink: ProfileLink(username: displayUser.username) != nil)
+    }
+
+    private func performFaceAccessory(_ accessory: RelationFaceAccessory) {
+        switch accessory {
+        case .talk: openConversation()
+        case .share: sharesOutside = true
+        }
     }
 
     /// Sans lien ni connexion acceptée, écrire part en demande de message, jugé au niveau d'outil que l'app a lu.

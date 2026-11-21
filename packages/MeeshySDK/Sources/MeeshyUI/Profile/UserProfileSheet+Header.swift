@@ -276,6 +276,7 @@ extension UserProfileSheet {
             storyState: ringState,
             moodEmoji: shownMoodEmoji,
             presenceState: ProfileHeroPlan.presence(resolvedPresence, isMuted: isIdentityMuted),
+            circleUserId: isIdentityMuted || isCurrentUser ? nil : resolvedUserId,
             onViewStory: ringState != .none ? onViewStory : nil,
             onMoodTap: shownMoodEmoji == nil ? nil : onMoodTap
         ) }
@@ -286,8 +287,8 @@ extension UserProfileSheet {
             storyRingSize: ringState == .none ? nil : context.ringSize
         )
         .overlay(alignment: .bottomLeading) {
-            ProfileAvatarListening(userId: isIdentityMuted || isCurrentUser ? nil : resolvedUserId, avatarSize: size,
-                                   tint: accentTint)
+            ProfileHeroSignals(userId: isIdentityMuted || isCurrentUser ? nil : resolvedUserId, avatarSize: size,
+                               tint: accentTint)
         }
         .bounceOnAppear()
         .onTapGesture {

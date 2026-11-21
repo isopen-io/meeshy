@@ -26,7 +26,7 @@ extension PostDetailView {
                         accentColor: post.authorColor,
                         avatarURL: post.authorAvatarURL,
                         presenceState: PresenceManager.shared.knownPresenceState(for: post.authorId),
-                        ring: post.authorRing
+                        ring: post.authorRing, circleUserId: post.authorId
                     ) }
                     .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 1) {

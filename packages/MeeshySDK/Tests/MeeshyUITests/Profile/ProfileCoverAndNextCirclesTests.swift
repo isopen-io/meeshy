@@ -78,10 +78,10 @@ final class ProfileCoverAndNextCirclesTests: XCTestCase {
     // MARK: - Écoute en ce moment
 
     func test_listeningPill_fadesWithTheAvatar_whenTheHeroCollapses() {
-        XCTAssertEqual(ProfileAvatarListening.opacity(avatarSize: 120), 1)
-        XCTAssertEqual(ProfileAvatarListening.opacity(avatarSize: ProfileAvatarListening.minimumAvatarSize), 0)
-        XCTAssertEqual(ProfileAvatarListening.opacity(avatarSize: 30), 0)
-        let midway = ProfileAvatarListening.opacity(avatarSize: ProfileAvatarListening.minimumAvatarSize + 12)
+        XCTAssertEqual(ProfileHeroSignals.opacity(avatarSize: 120), 1)
+        XCTAssertEqual(ProfileHeroSignals.opacity(avatarSize: ProfileHeroSignals.minimumAvatarSize), 0)
+        XCTAssertEqual(ProfileHeroSignals.opacity(avatarSize: 30), 0)
+        let midway = ProfileHeroSignals.opacity(avatarSize: ProfileHeroSignals.minimumAvatarSize + 12)
         XCTAssertGreaterThan(midway, 0)
         XCTAssertLessThan(midway, 1)
     }

@@ -43,25 +43,6 @@ enum ProfileVitrineCopy {
         return date.formatted(style)
     }
 
-    // MARK: Avec lui
-
-    static func withThemTitle(_ name: String) -> String {
-        String(format: String(localized: "profile.vitrine.withThem.title", defaultValue: "Avec %@", bundle: .module),
-               firstName(name))
-    }
-
-    static var seeAll: String {
-        String(localized: "profile.vitrine.withThem.seeAll", defaultValue: "Tout voir", bundle: .module)
-    }
-
-    static var seeAllHint: String {
-        String(localized: "profile.vitrine.withThem.seeAll.a11y", defaultValue: "Ouvre la face Actions", bundle: .module)
-    }
-
-    static var withoutNetwork: String {
-        String(localized: "profile.vitrine.withThem.offline", defaultValue: "Sans réseau", bundle: .module)
-    }
-
     // MARK: En direct
 
     static var liveTitle: String {
@@ -102,11 +83,6 @@ enum ProfileVitrineCopy {
 
     static var mood: String {
         String(localized: "profile.vitrine.live.mood", defaultValue: "Humeur", bundle: .module)
-    }
-
-    /// Hors ligne, « Carte » montre où il était au dernier relevé.
-    static var lastKnownPosition: String {
-        String(localized: "profile.vitrine.withThem.map.lastKnown", defaultValue: "dernière position connue", bundle: .module)
     }
 
     static var phone: String {

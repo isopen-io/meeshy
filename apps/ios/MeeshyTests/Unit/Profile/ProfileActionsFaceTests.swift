@@ -122,15 +122,19 @@ final class ProfileActionsFaceTests: XCTestCase {
         XCTAssertEqual(ProfileSavedContentRows.formatted(12_480, locale: Locale(identifier: "en_US")), "12,480")
     }
 
-    // MARK: - Fait du kit, rejoué depuis la face Liens
+    // MARK: - Fait du kit, rejoué par les présentations des liens
 
-    func test_showSection_replaysMyQR_scanner_andContactless_byTheLinksPresentations() throws {
+    /// #20177 — Mon QR et Sans contact ne vivent plus qu'au billet de mon lien, posé en tête de la même face.
+    func test_showSection_keepsTheScannerAndMyMap_byTheLinksPresentations() throws {
         let face = try code("Meeshy/Features/Profile/Faces/ProfileActionsFace.swift")
-        XCTAssertTrue(face.contains("presented = .card(.qr)"), "Mon QR ouvre la carte de profil de la face Liens")
-        XCTAssertTrue(face.contains("presented = .scanner"), "Scanner ouvre le lecteur de la face Liens")
-        XCTAssertTrue(face.contains("presented = .card(.contactless)"), "Sans contact ouvre la carte sans contact")
+        XCTAssertTrue(face.contains("presented = .scanner"), "Scanner ouvre le lecteur des liens")
+        XCTAssertFalse(face.contains("presented = .card(.qr)"), "Mon QR est au billet de mon lien")
+        XCTAssertFalse(face.contains("presented = .card(.contactless)"), "Sans contact est au billet de mon lien")
         XCTAssertTrue(face.contains("ProfileLinksPresentations("), "les mêmes présentations, jamais redessinées")
         XCTAssertTrue(face.contains("ProfileActionsCopy.myMap"), "Ma carte ouvre la carte de mes proches")
+        let ticket = try code("Meeshy/Features/Profile/Faces/ProfileLinksFace.swift")
+        XCTAssertTrue(ticket.contains("presented = .card(.qr)"))
+        XCTAssertTrue(ticket.contains("presented = .card(.contactless)"))
     }
 
     func test_sharingSection_hasMyPosition_andTheGlobalGhost_asRowsOfTheKit() throws {
