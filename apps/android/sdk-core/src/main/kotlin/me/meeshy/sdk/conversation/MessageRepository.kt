@@ -224,6 +224,25 @@ class MessageRepository internal constructor(
         copyAttachmentsFromMessageId = copyAttachmentsFromMessageId,
     ) }
 
+    /** Un texte optimiste qui dit s'il est EN FILE (#20182) : la redirection chiffré → lisible n'annonce que ce qui partira. */
+    suspend fun sendQueued(
+        conversationId: String,
+        content: String,
+        originalLanguage: String,
+        sender: MeeshyUser,
+        effects: MessageEffects = MessageEffects(),
+        clientMessageId: String? = null,
+    ): QueuedSend = history.returnToPresent(conversationId).let {
+        sends.enqueueOptimistic(
+            conversationId = conversationId,
+            content = content,
+            originalLanguage = originalLanguage,
+            sender = sender,
+            effects = effects,
+            clientMessageId = clientMessageId,
+        )
+    }
+
     /**
      * Server ACK for an optimistic send: atomically replaces the local `cmid`
      * row with the authoritative server message — no flicker, no duplicate.
@@ -243,6 +262,9 @@ class MessageRepository internal constructor(
     /** Envoie la bulle déjà posée au tap [cid] avec les pièces montées (ou leurs téléversements durables), sans bulle de plus. */
     suspend fun sendPostedBubble(cid: String, attachmentIds: List<String> = emptyList(), dependsOn: Set<String> = emptySet()): Boolean =
         sends.sendPostedBubble(cid, attachmentIds, dependsOn)
+
+    /** Retire la bulle optimiste [cid] et recalcule l'aperçu de sa conversation : son envoi est parti ailleurs (#20076). */
+    suspend fun withdrawLocal(cid: String) = sends.withdrawLocal(cid)
 
     /** User-initiated retry of a failed bubble: back to `SENDING`, its outbox row revived. */
     suspend fun retrySend(cmid: String) = sends.retrySend(cmid)

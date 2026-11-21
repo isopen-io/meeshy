@@ -1,0 +1,5 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="e2ee_send_redirected_to_readable">%1$s não recebe mensagens criptografadas: enviada na conversa sem criptografia.</string>
+    <string name="e2ee_send_redirected_to_readable_anonymous">Seu contato não recebe mensagens criptografadas: enviada sem criptografia.</string>
+</resources>

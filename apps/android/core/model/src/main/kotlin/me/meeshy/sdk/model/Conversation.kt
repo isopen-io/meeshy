@@ -349,6 +349,11 @@ data class CreateConversationRequest(
      * de l'écran de création (profil, partage, transfert, réponse à une story).
      */
     val encryptionMode: String? = null,
+    /**
+     * `true` : le tête-à-tête que le serveur LIT (clair, `server` ou `hybrid`), retrouvé ou créé à côté d'un chiffré de bout
+     * en bout (#12966, #20076). `null` : le champ part absent, la passerelle rouvre le chiffré d'abord.
+     */
+    val plaintext: Boolean? = null,
 )
 
 /**

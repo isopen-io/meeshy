@@ -31,6 +31,8 @@ import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.MessageSticker
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.reaction.InMemoryRecentEmojiStore
 import me.meeshy.sdk.session.InMemoryAnonymousSessionStore
@@ -487,6 +489,41 @@ class ChatComposerControllerTest {
     }
 
     // --- end-to-end encryption (#13110) --------------------------------------------------------
+
+    /** #20182 (2) — l'effet du geste (vue unique, éphémère, flou) part avec l'envoi chiffré, pour qu'une redirection le garde. */
+    @Test
+    fun `an end to end send carries the pending effect of the gesture`() = runTest {
+        val viewOnce = MessageEffects(flags = MessageEffectFlags.VIEW_ONCE, maxViewOnceCount = 1)
+        val carried = mutableListOf<MessageEffects>()
+        val endToEnd = object : EndToEndThreadAccess by EndToEndThreadAccess.None {
+            override suspend fun sendText(
+                conversationId: String,
+                peerUserId: String,
+                text: String,
+                language: String?,
+                sender: MeeshyUser,
+                replyToId: String?,
+                effects: MessageEffects,
+            ): String {
+                carried += effects
+                return "cid_1"
+            }
+        }
+        val e2ee = ChatUiState(
+            conversationId = "c1",
+            encryptionMode = "e2ee",
+            endToEndAvailable = true,
+            directPeerUserId = "64f0c0ffee0000000000bbbb",
+            pendingEffects = viewOnce,
+        )
+        val r = rig(initial = e2ee, endToEnd = endToEnd)
+        r.controller.onDraftChange("vu une fois")
+
+        r.controller.send()
+        advanceUntilIdle()
+
+        assertThat(carried).containsExactly(viewOnce)
+    }
 
     @Test
     fun `an end-to-end conversation sends no text — nothing leaves the device`() = runTest {

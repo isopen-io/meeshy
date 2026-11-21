@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "conversation.e2ee.participantWithoutDevice.named", "androidName": "new_conversation_error_participant_without_device_named", "status": "adopted" },
+        { "catalog": "app", "iosKey": "conversation.e2ee.participantWithoutDevice.anonymous", "androidName": "new_conversation_error_participant_without_device_anonymous", "status": "adopted" }
+      ]
+    }
+  }
+}

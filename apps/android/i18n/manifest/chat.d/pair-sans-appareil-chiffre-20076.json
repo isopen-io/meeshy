@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "conversation.e2ee.peerWithoutDevice.title", "androidName": "chat_e2ee_peer_without_device_title", "status": "adopted" },
+        { "catalog": "app", "iosKey": "conversation.e2ee.peerWithoutDevice.titleAnonymous", "androidName": "chat_e2ee_peer_without_device_title_anonymous", "status": "adopted" },
+        { "catalog": "app", "iosKey": "conversation.e2ee.peerWithoutDevice.writePlain", "androidName": "chat_e2ee_peer_without_device_write_plain", "status": "adopted" },
+        { "catalog": "app", "iosKey": "conversation.encryption.detail.plaintextDirectOffline", "androidName": "chat_e2ee_readable_direct_offline", "status": "adopted" },
+        { "catalog": "app", "iosKey": "conversation.encryption.detail.plaintextDirectFailed", "androidName": "chat_e2ee_readable_direct_failed", "status": "adopted" },
+        { "catalog": "app", "iosKey": "conversation.e2ee.participantWithoutDevice.named", "androidName": "encryption_participant_without_device_named", "status": "adopted" },
+        { "catalog": "app", "iosKey": "conversation.e2ee.participantWithoutDevice.anonymous", "androidName": "encryption_participant_without_device_anonymous", "status": "adopted" }
+      ]
+    }
+  }
+}
