@@ -104,6 +104,23 @@ function linkCreatedByOtherWithCallerAs(role: string | null) {
   };
 }
 
+/**
+ * Le même lien, mais l'appelant y est actif-et-BANNI (#20135). Noter que la
+ * ligne porte `bannedAt` : la lecture de production emploie un `include`, donc
+ * toutes les colonnes scalaires reviennent — le piège de projection du cycle
+ * 199 ne s'applique pas ici, et c'est la CLAUSE qui doit retenir la ligne.
+ */
+function linkCreatedByOtherWithCallerBanned(role: string) {
+  const row = linkCreatedByOtherWithCallerAs(role);
+  return {
+    ...row,
+    conversation: {
+      ...row.conversation,
+      participants: [{ userId: USER_ID, role, isActive: true, bannedAt: new Date('2026-11-01T00:00:00.000Z') }],
+    },
+  };
+}
+
 function makeUpdatedLink() {
   return {
     id: LINK_DB_ID,
@@ -298,6 +315,84 @@ describe('Routes d’administration d’un lien — l’autorité de plateforme 
       const res = await app.inject(inject);
 
       expect(res.statusCode).toBe(403);
+      await app.close();
+    });
+  });
+});
+
+/**
+ * **Un modérateur actif-et-BANNI n'administre plus les liens de partage de la
+ * conversation dont il est exclu** (#20135).
+ *
+ * `loadShareLinkForManagement` chargeait les membres sous la clause NUE
+ * (`where: { userId, isActive: true }`) puis en tirait `isConversationAdmin`.
+ * Une ligne `isActive: true, bannedAt ≠ null` EXISTE en base — son producteur
+ * est fermé depuis #19688 / #10436, mais aucune migration n'a reprise les lignes
+ * déjà écrites — si bien qu'un exclu pouvait révoquer, réactiver, prolonger ou
+ * replafonner les liens d'une conversation qu'il ne peut plus lire.
+ *
+ * Une seule lecture sert les trois routes depuis #4170, donc un seul correctif
+ * les couvre : la loi va dans la CLAUSE, le seul endroit qu'un balayage de
+ * source sait lire (#20050).
+ *
+ * **Et ce site n'est vu par AUCUN cliquet** — mesuré : le balayage des
+ * audiences ne le relève ni comme audience ni comme illisible, son `where`
+ * nommant une PERSONNE et non un ensemble. Les portes par appelant sont hors de
+ * sa portée par construction ; la lacune est consignée par l'issue du lot, pas
+ * par ce témoin.
+ */
+describe('Routes d’administration d’un lien — la participation VIVANTE (#20135)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  describe.each(ROUTES)('$name', ({ inject, arm }) => {
+    it("refuse un ADMIN de conversation actif-et-BANNI, et n'écrit rien", async () => {
+      const prisma = makePrisma();
+      prisma.conversationShareLink.findFirst = findFirstHonouringWhere(
+        linkCreatedByOtherWithCallerBanned('admin')
+      );
+      arm(prisma);
+      const app = await buildApp(prisma);
+
+      const res = await app.inject(inject as never);
+
+      expect(res.statusCode).toBe(403);
+      // L'EFFET, jamais le seul statut : ni écriture, ni suppression.
+      expect(prisma.conversationShareLink.update).not.toHaveBeenCalled();
+      expect(prisma.conversationShareLink.delete).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('répond toujours à un ADMIN de conversation VIVANT — la mesure inverse', async () => {
+      // Sans elle, « refuse tout le monde » satisferait le témoin ci-dessus, et
+      // le lot pourrait fermer la porte à ceux qu'elle doit servir.
+      const prisma = makePrisma();
+      prisma.conversationShareLink.findFirst = findFirstHonouringWhere(
+        linkCreatedByOtherWithCallerAs('admin')
+      );
+      arm(prisma);
+      const app = await buildApp(prisma);
+
+      const res = await app.inject(inject as never);
+
+      expect(res.statusCode).toBe(200);
+      await app.close();
+    });
+
+    it("sert le CRÉATEUR du lien même banni de la conversation — `isCreator` ne dépend pas de la participation", async () => {
+      // Une frontière à dire : la route dérive DEUX qualités séparément, et
+      // seule la seconde lit la participation. Resserrer la clause ne doit pas
+      // retirer au créateur d'un lien le droit sur son propre lien — ce que le
+      // dépôt décide ailleurs pour la même raison (le créateur d'un groupe
+      // reste cherché sur le sur-ensemble, #20100).
+      const prisma = makePrisma();
+      const row = linkCreatedByOtherWithCallerBanned('member');
+      prisma.conversationShareLink.findFirst = findFirstHonouringWhere({ ...row, createdBy: USER_ID });
+      arm(prisma);
+      const app = await buildApp(prisma);
+
+      const res = await app.inject(inject as never);
+
+      expect(res.statusCode).toBe(200);
       await app.close();
     });
   });
