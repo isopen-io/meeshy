@@ -387,10 +387,53 @@ describe('Ce qu’un visiteur sans compte ne peut pas lire rend l’aperçu gén
     ['d’un auteur désactivé', contenu({ author: auteur({ deactivatedAt: new Date('2026-11-01T00:00:00Z') }) })],
     ['d’un auteur inactif', contenu({ author: auteur({ isActive: false }) })],
     ['d’un auteur introuvable', contenu({ author: null })],
-    ['la republication d’un original réservé', contenu({ repostOfId: ORIGINAL_ID, repostOf: { visibility: 'FRIENDS', deletedAt: null, expiresAt: null, content: 'secret', originalLanguage: 'fr', translations: null, media: [] } })],
+    ['la republication d’un original réservé', contenu({ repostOfId: ORIGINAL_ID, repostOf: { visibility: 'FRIENDS', deletedAt: null, expiresAt: null, author: { isActive: true, deletedAt: null, deactivatedAt: null }, content: 'secret', originalLanguage: 'fr', translations: null, media: [] } })],
     ['la republication d’un original disparu', contenu({ repostOfId: ORIGINAL_ID, repostOf: null })],
   ])('%s', async (_cas, ligne) => {
     await generique({ ligne });
+  });
+
+  it.each(['FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY', 'ACQUAINTANCES', 'CLOSE', 'BLOOD'])(
+    'une audience %s rend le générique',
+    async (visibility) => {
+      await generique({ ligne: contenu({ visibility }) });
+    },
+  );
+
+  it('la republication d’un original dont l’auteur est parti rend le générique (#20211)', async () => {
+    const html = await generique({
+      ligne: contenu({
+        content: null,
+        media: [],
+        repostOfId: ORIGINAL_ID,
+        repostOf: { visibility: 'PUBLIC', deletedAt: null, expiresAt: null, content: 'Texte de l’auteur parti', originalLanguage: 'fr', translations: null, media: [], author: { isActive: true, deletedAt: null, deactivatedAt: new Date('2026-11-01T00:00:00Z') } },
+      }),
+    });
+    expect(html).not.toContain('Texte de l’auteur parti');
+  });
+
+  it('un contenu passé en privé après un premier dépliage rend aussitôt le générique (#20211)', async () => {
+    const etat = { ligne: contenu() };
+    const { app } = await monter({ ligne: () => Promise.resolve(etat.ligne) });
+    const avant = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/og` });
+    etat.ligne = contenu({ visibility: 'PRIVATE' });
+    const apres = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/og` });
+    await app.close();
+    expect(avant.body).toContain('Petite Côte');
+    expect(apres.body).not.toContain('Petite Côte');
+    expect(meta(apres.body, 'og:title')).toBe(GENERIQUE_FR);
+  });
+
+  it('un contenu servi n’est gardé par les caches partagés qu’une minute (#20211)', async () => {
+    const { reponse } = await deplier();
+    expect(reponse.headers['cache-control']).toBe('public, max-age=60');
+  });
+
+  it('un identifiant inconnu et un contenu réservé rendent les MÊMES en-têtes', async () => {
+    const inconnu = await deplier({ ligne: null });
+    const reserve = await deplier({ ligne: contenu({ visibility: 'FRIENDS' }) });
+    const entetes = (h: Record<string, unknown>) => Object.fromEntries(Object.entries(h).filter(([k]) => k !== 'date'));
+    expect(entetes(inconnu.reponse.headers)).toEqual(entetes(reserve.reponse.headers));
   });
 
   it('un identifiant inconnu rend la MÊME page qu’un contenu réservé', async () => {

@@ -64,6 +64,12 @@ import {
 export const LINK_UNFURL_RATE_LIMIT_MAX = 60;
 export const LINK_UNFURL_CACHE_TTL_MS = 5 * 60_000;
 const LINK_UNFURL_CACHE_MAX = 2_000;
+/**
+ * Un contenu passé en privé, supprimé ou retiré cesse de se déplier À LA
+ * REQUÊTE suivante : sa ligne n'est jamais gardée en mémoire, et les caches
+ * partagés ne gardent la page qu'une minute (#20211).
+ */
+export const CONTENT_UNFURL_MAX_AGE_SECONDS = 60;
 
 const RESPONSE_HEADERS = {
   'cache-control': `public, max-age=${LINK_UNFURL_CACHE_TTL_MS / 1000}`,
@@ -71,6 +77,11 @@ const RESPONSE_HEADERS = {
   'x-robots-tag': 'noindex, nofollow',
   'referrer-policy': 'no-referrer',
   vary: 'Accept-Language, User-Agent'
+} as const;
+
+const CONTENT_RESPONSE_HEADERS = {
+  ...RESPONSE_HEADERS,
+  'cache-control': `public, max-age=${CONTENT_UNFURL_MAX_AGE_SECONDS}`
 } as const;
 
 /** 60 dépliages par minute et par adresse, comptés à `onRequest`, en échec OUVERT (#9712). */
@@ -122,23 +133,13 @@ export function registerLinkUnfurlRoute(
     return row;
   };
 
-  const contentRows = new BoundedTtlCache<string, ContentUnfurlSource | null>({
-    maxSize: LINK_UNFURL_CACHE_MAX,
-    ttlMs: LINK_UNFURL_CACHE_TTL_MS
-  });
-
-  /** Un contenu lu pour un robot ; une lecture qui tombe vaut un contenu inconnu (le générique). */
+  /** Un contenu lu pour un robot, À CHAQUE requête ; une lecture qui tombe vaut un contenu inconnu (le générique). */
   const readContent = async (postId: string): Promise<ContentUnfurlSource | null> => {
     if (!isContentUnfurlId(postId)) return null;
-    const cached = contentRows.get(postId);
-    if (cached !== undefined) return cached;
-    const row = await loadContentUnfurlSource(prisma, postId).catch((error: unknown) => {
+    return loadContentUnfurlSource(prisma, postId).catch((error: unknown) => {
       logWarn(fastify.log, 'Content unfurl read failed — serving the generic preview', error);
-      return undefined;
+      return null;
     });
-    if (row === undefined) return null;
-    contentRows.set(postId, row);
-    return row;
   };
 
   fastify.get<{ Params: { identifier: string } }>('/links/:identifier/og', {
@@ -258,7 +259,7 @@ export function registerLinkUnfurlRoute(
       });
       return reply
         .code(200)
-        .headers(RESPONSE_HEADERS)
+        .headers(CONTENT_RESPONSE_HEADERS)
         .type('text/html; charset=utf-8')
         .send(renderLinkUnfurlPage(atTrackingAddress(content, { origin, token })));
     }
@@ -427,7 +428,7 @@ export function registerLinkUnfurlRoute(
     });
     return reply
       .code(200)
-      .headers(RESPONSE_HEADERS)
+      .headers(CONTENT_RESPONSE_HEADERS)
       .type('text/html; charset=utf-8')
       .send(renderLinkUnfurlPage(unfurl));
   });

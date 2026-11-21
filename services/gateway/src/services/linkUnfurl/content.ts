@@ -104,6 +104,7 @@ const contentUnfurlSelect = {
       visibility: true,
       deletedAt: true,
       expiresAt: true,
+      author: { select: { isActive: true, deletedAt: true, deactivatedAt: true } },
       content: true,
       originalLanguage: true,
       translations: true,
@@ -148,7 +149,9 @@ export type ContentUnfurlSource = Lifetime & Readable & {
     readonly deletedAt: Date | null;
     readonly deactivatedAt: Date | null;
   } | null;
-  readonly repostOf: (Lifetime & Readable) | null;
+  readonly repostOf: (Lifetime & Readable & {
+    readonly author: { readonly isActive: boolean; readonly deletedAt: Date | null; readonly deactivatedAt: Date | null } | null;
+  }) | null;
 };
 
 /** Un identifiant de contenu plausible : un ObjectId. Tout le reste est inconnu, sans lecture. */
