@@ -428,6 +428,19 @@ export const USER = '68a000000000000000000001';
 export const OTHER = '68a000000000000000000002';
 
 /** Un compte tel qu'un test le pose — jamais plus que ce qu'il dit. */
+/**
+ * Le Rêve du jour d'un compte, entier et en attente d'un geste que le témoin ne fait pas (#17370 : sous le niveau
+ * 5, le premier Rêve d'un acte se tire au premier geste et paie sur son axe). Pour un témoin qui mesure un crédit
+ * de geste à l'exclusion de toute récompense d'acte.
+ */
+export const dreamAwaitingAnotherGesture = (db: FakeGameDb, userId: string = USER, dayKey: string = new Date().toISOString().slice(0, 10)): void => {
+  db.dailyMission.rows.push({
+    id: `dream-elsewhere-${userId}`, userId, dayKey, slot: 0, templateKey: 'send-voice', difficulty: 'easy',
+    signal: 'axis:content.audio_message', prism: false, target: 2, progress: 0, reward: 40, glory: 0, seen: [],
+    completedAt: null, paidPoints: null, rerolledAt: null,
+  });
+};
+
 export const seedUser = (db: FakeGameDb, fields: Record<string, unknown> = {}, id = USER): Row => {
   const row: Row = { id, timezone: 'UTC', createdAt: new Date('2026-01-01T00:00:00Z'), blockedUserIds: [], guideSeen: [], ...fields };
   db.user.rows.push(row);
