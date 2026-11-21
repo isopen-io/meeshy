@@ -75,7 +75,8 @@ struct MintCeremonyScene: View {
                                         reduced: run.reduced, frame: frame, stage: stage, palette: palette)
                     .opacity(frame.backdrop)
                 // La pièce se dessine dans son édition d'AFFICHAGE (#11483) ; la forge suit la loi.
-                MintCeremonyCoinLayers(edition: run.look, number: run.number, frame: frame, stage: stage, palette: palette)
+                MintCeremonyCoinLayers(edition: run.look, number: run.number, frame: frame, stage: stage, palette: palette,
+                                       gloryGained: run.gloryGained, gloryStep: run.gloryStep)
             }
             .offset(x: frame.shake.x * stage.k, y: frame.shake.y * stage.k)
         }

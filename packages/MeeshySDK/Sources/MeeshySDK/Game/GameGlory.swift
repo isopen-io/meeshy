@@ -191,6 +191,14 @@ public struct GloryStanding: Sendable, Equatable {
     }
 }
 
+/// Ce qu'un gain de Gloire fait au rang (#19859, miroir de `gloryAfterGain`, `packages/shared/utils/game/glory.ts`) :
+/// `risen`, le gain franchit une marche (une division ou un rang) et l'on dit le nouveau nom ; `toward`, la gloire qui
+/// manque, APRÈS le gain, jusqu'à la marche suivante.
+public enum GloryAfterGain: Sendable, Equatable {
+    case risen(rank: GloryRank, division5: GloryDivision5)
+    case toward(gloryMissing: Int, rank: GloryRank, division5: GloryDivision5)
+}
+
 public enum GameGlory {
 
     /// Ce que chaque fait ponctuel rapporte en Gloire — les missions ont leur table, `missionGlory`.
@@ -331,5 +339,16 @@ public enum GameGlory {
             gloryMissing: next.map { $0.minGlory - glory },
             progress: next.map { Double(glory - step.minGlory) / Double($0.minGlory - step.minGlory) } ?? 1
         )
+    }
+
+    /// Ce que ce gain fait au rang : `nil` quand il n'y a pas de suite (Légende I) ou que le rang vient du serveur (Mythe).
+    public static func afterGain(before: Int, gained: Int, mythic: Bool) -> GloryAfterGain? {
+        guard !mythic else { return nil }
+        let start = standing(glory: before, mythic: false)
+        let end = standing(glory: start.glory + max(0, gained), mythic: false)
+        guard let division5 = end.division5 else { return nil }
+        if end.rank != start.rank || division5 != start.division5 { return .risen(rank: end.rank, division5: division5) }
+        guard let next = end.next, let missing = end.gloryMissing else { return nil }
+        return .toward(gloryMissing: missing, rank: next.rank, division5: next.shownDivision)
     }
 }

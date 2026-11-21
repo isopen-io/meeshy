@@ -34,6 +34,20 @@ enum MintCeremonyCopy {
         return String(localized: "game.frappe.glory", defaultValue: "+\(shown) de gloire", bundle: .main)
     }
 
+    /// Le pas vers le rang suivant, sous la gloire gagnée (#19859) : « On t’appelle Conteur II », ou « 1 200 de gloire
+    /// jusqu’à Conteur II » — les mêmes clés et les mêmes mots que le web.
+    static func gloryStep(_ step: GloryAfterGain) -> String {
+        switch step {
+        case .risen(let rank, let division5):
+            let name = GameCopy.rankLabel(rank, division5: division5)
+            return String(localized: "game.frappe.risen", defaultValue: "On t’appelle \(name)", bundle: .main)
+        case .toward(let missing, let rank, let division5):
+            let shown = GameCopy.formatCount(missing)
+            let name = GameCopy.rankLabel(rank, division5: division5)
+            return String(localized: "game.frappe.glory_toward", defaultValue: "\(shown) de gloire jusqu’à \(name)", bundle: .main)
+        }
+    }
+
     static func refused(_ reason: MintRefusalReason) -> String {
         switch reason {
         case .shadow:
@@ -397,6 +411,8 @@ struct MintCeremonyCoinLayers: View {
     let stage: MintCeremonyFit
     let palette: MintCeremonyPalette
     var target: MintCeremonyTarget = MintCeremonyStage.defaultTarget
+    var gloryGained: Int = GameGlory.points.mint
+    var gloryStep: GloryAfterGain? = nil
 
     private var year: Int { Calendar.current.component(.year, from: Date()) }
 
@@ -413,12 +429,21 @@ struct MintCeremonyCoinLayers: View {
                 .scaleEffect(x: frame.coin.scale, y: frame.coin.scale * frame.coin.squash)
                 .opacity(frame.coin.opacity)
                 .modifier(MintCeremonyStageBox(stage: stage, x: frame.coin.x - 75, y: frame.coin.y - 75, w: 150, h: 150))
-            Text(MintCeremonyCopy.glory(GameGlory.points.mint))
+            Text(MintCeremonyCopy.glory(gloryGained))
                 .font(stage.font(13, weight: .heavy))
                 .foregroundStyle(palette.gloryInk)
                 .lineLimit(1)
                 .opacity(frame.glory.opacity)
                 .modifier(MintCeremonyStageBox(stage: stage, x: target.x - 80, y: target.y - 24 - 40 * frame.glory.rise, w: 160, h: 18))
+            if let gloryStep {
+                Text(MintCeremonyCopy.gloryStep(gloryStep))
+                    .font(stage.font(10, weight: .semibold))
+                    .foregroundStyle(palette.gloryInk)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .opacity(frame.glory.opacity * 0.9)
+                    .modifier(MintCeremonyStageBox(stage: stage, x: target.x - 110, y: target.y - 6 - 40 * frame.glory.rise, w: 220, h: 14))
+            }
         }
         .allowsHitTesting(false)
     }
