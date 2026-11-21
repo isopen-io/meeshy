@@ -11,7 +11,10 @@ import type { Conversation } from './types';
  * `participant-rights-core.ts`). Les droits servis sont l'état RÉSOLU du
  * participant NOMMÉ : ils se posent sur SA ligne du détail, celle que le fil
  * relit (`thread.tsx` → `menuViewerOf` → `viewerCanWrite`, et le tiroir du
- * composeur par `viewerParticipant?.permissions`).
+ * composeur par `useComposerAccess` → `viewerParticipantOf`, #20264 — la ligne
+ * y était cherchée sur la seule colonne `userId`, donc introuvable pour un
+ * visiteur sans compte : ce lot-ci n'atteignait le tiroir qu'une fois cette
+ * seconde moitié posée).
  *
  * **Le web n'avait AUCUN consommateur jusqu'à #20228** — mesuré le 2026-11-21,
  * zéro occurrence de `rights-updated` dans `apps/web/src` — alors que le

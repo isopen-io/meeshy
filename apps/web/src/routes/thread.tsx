@@ -176,18 +176,17 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
   const signedIn = session.status === 'authenticated' || apiDeps.source === 'fixtures';
   const storyRingOf = useAuthorStoryRings(viewer);
 
-  /**
-   * LE `Participant` DU LECTEUR DANS cette conversation (#5813, étape 8) —
-   * calculé ICI, AVANT les retours anticipés (`useSend` en a besoin) : la
-   * charge que `sender` exige sur un message ENVOYÉ (avatar, présence…).
+  /** L'auteur d'un envoi en vol : un invité y porte le nom qu'il a donné (#10120).
+   * Calculé ICI, AVANT les retours anticipés (`useSend` en a besoin) : la charge
+   * que `sender` exige sur un message ENVOYÉ (avatar, présence…).
    * `conversation` peut être `undefined` pendant `pending`/`refused`/`error`
    * (F8) — le résultat est alors `undefined`, sans conséquence tant que le
-   * rendu final ne montre pas encore le fil réel.
-   */
-  const viewerParticipant = useMemo(() => conversation?.participants.find((p) => p.userId === viewer.id), [conversation, viewer.id]);
-  /** L'auteur d'un envoi en vol : un invité y porte le nom qu'il a donné (#10120). */
+   * rendu final ne montre pas encore le fil réel. */
   const selfSender = useMemo(() => selfSenderOf({ participants: conversation?.participants, viewer }), [conversation, viewer]);
-  const composerAccess = useComposerAccess({ session, conversationId, conversation, viewerId: viewer.id, rights: viewerParticipant?.permissions });
+  /* #20264 — les droits du tiroir ne se composent plus ICI : cet écran cherchait
+     la ligne du lecteur sur la seule colonne `userId`, ce qu'un visiteur de lien
+     n'a pas. `useComposerAccess` la nomme par `viewerParticipantOf`. */
+  const composerAccess = useComposerAccess({ session, conversationId, conversation, viewer });
 
   /**
    * LA FENÊTRE COUVRE-T-ELLE TOUT LE NON-LU ? — `threadData.hasOlder` mime

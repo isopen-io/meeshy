@@ -43,7 +43,7 @@ const SESSION = { status: 'anonymous' } as unknown as SessionState;
 type Sent = Parameters<Parameters<typeof Composer>[0]['onSend']>[0];
 
 function ThreadComposer({ conversationId, onSend = () => {} }: { readonly conversationId: string; readonly onSend?: (payload: Sent) => void }) {
-  const access = useComposerAccess({ session: SESSION, conversationId, conversation: undefined, viewerId: 'u-viewer', rights: undefined });
+  const access = useComposerAccess({ session: SESSION, conversationId, conversation: undefined, viewer: { id: 'u-viewer', isAnonymous: false } });
   return <Composer onSend={onSend} preferred={['fr']} {...access} />;
 }
 

@@ -13,6 +13,7 @@ import type { MediaPageOffers } from './viewer-page-offers';
 
 import { placeOf, stickerOf } from './message-body';
 import { metadataOf } from './message-metadata';
+import { viewerParticipantOf } from './viewer-participant';
 
 /**
  * QUI LIT, ET DANS QUELLE CONVERSATION (#11210) — la porte UNIQUE par laquelle
@@ -84,7 +85,12 @@ export function menuViewerOf(input: {
 }): MenuViewer {
   const { viewer, conversation } = input;
   const id = viewer.id ?? '';
-  const participant = id === '' ? undefined : input.participants?.find((p) => p.userId === id || p.id === id);
+  /* #20264 — la ligne se cherche sur la COLONNE de la clé (site unique) : la
+     disjonction `userId === id || id === id` qui vivait ici rendait le même
+     verdict en production (un `Participant.id` ne vaut jamais un `User.id`)
+     sans DIRE de quelle nature est la clé — et c'est cette ignorance qui a
+     produit la troisième orthographe, fausse, chez l'hôte du composeur. */
+  const participant = viewerParticipantOf({ participants: input.participants, viewer });
   const hasAccount = !viewer.isAnonymous && id !== '';
   return {
     id,
