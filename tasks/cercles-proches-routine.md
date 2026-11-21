@@ -1743,3 +1743,14 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `SharedLocationServedSourceTests` vit dans `SharedLocationRestoredBackupTests.swift`.
 - Gardes iOS : règles maison 42, cohésion rc=0, inscription 2 063, localisation, accent 168/408 ; vitest
   `packages/shared/__tests__/ci` 216/216. Swift prouvé par `ios.yml` + `sdk-tests.yml` en `workflow_dispatch`.
+- PR #20128. Suivis ouverts par l'audit : #20127 (confirmation liée au partage montré), commentaire sur #20115.
+
+## 2026-11-21 — réveil de 5 h : fusion de #20128
+
+- Reprise : `ios.yml` (44850786079), `sdk-tests.yml` (44850788553) et `ci.yml` (44850791219) VERTS sur ccd964264.
+  Une autre session a fusionné `dev` dans la branche à 4 h 47 (c2185cdfc) ; `origin/dev` (36970d31d, trois commits de
+  passerelle sans recouvrement) refusionnée à la main, sans conflit.
+- Gardes iOS sur l'arbre fusionné : règles maison 42, cohésion rc=0, inscription 2 063, accent 168/408, catalogue JSON
+  valide. PR fusionnée dans `dev`, #20087 fermée à la main.
+- Prochain lot : #20115 (sortie du fantôme pour un point choisi) avant d'annoncer `acceptsManualSource` (#19557), puis
+  #20126 (web + Android), #20127, #20054, #20056, #20086.
