@@ -2349,7 +2349,8 @@ socket jusqu'au client.
   - Vert : `jvm-check -PjvmCheckModelOnly --rerun-tasks --tests 'me.meeshy.sdk.model.call.*'`, 2286 tests, 0 échec. La QA l'a rejoué.
   - Mutations de la QA : sans les tris, 6 échecs ; sans le départage par id, 2 échecs.
   - Gardes iOS (house rules, cohésion, inscription des tests, accent) : 0 violation.
-  - CI : `ios.yml` run 44931575416 (suites ciblées) et `android.yml` run 44931579052, en `workflow_dispatch` sur `2dc59c470`.
+  - CI : `android.yml` run 44931579052, en `workflow_dispatch` sur `2dc59c470` : **vert** (assemble, tests unitaires, gardes). `ios.yml` run 44931575416 (suites ciblées `CallStatsStreamOrderTests,CallStatsElectionOrderTests,WebRTCTypesTests,CallManagerAnalyticsRecorderTests`) : ses gardes iOS sont vertes, mais à la clôture du cycle sa compilation attendait encore un runner macOS (en file depuis 18:39 UTC).
+- **PR** : #20258, ouverte. Elle n'est pas fusionnée tant qu'`ios.yml` n'est pas vert (réserve R1).
 - **QA** (indépendante) : favorable avec réserves.
   - R1 (moyenne, procédurale) : le Swift n'a pas été compilé ici. `ios.yml` doit être vert avant la fusion.
   - R2 (mineure) : le nom de `WebRTCTypesTests.test_reduce_codec_usesFirstInboundRTPCodecId` décrit encore l'ancienne règle. Versée dans #20257.
@@ -2360,7 +2361,7 @@ socket jusqu'au client.
 
 ### Cycle suivant : par où reprendre
 
-0. Si la PR de ce cycle n'est pas fusionnée : lire les runs `ios.yml` et `android.yml`, fusionner `dev` dans la branche, puis fusionner la PR.
+0. **PR #20258** : lire le run `ios.yml` 44931575416. S'il est vert, fusionner `dev` dans la branche, puis fusionner la PR. S'il a été annulé ou a expiré, le relancer en `workflow_dispatch` avec les mêmes suites. S'il est rouge, corriger le Swift.
 1. **#20257** : petit lot iOS, sur les analytics et le nom du test.
 2. **#20256** : aligner le web. Proposition : le codec reçu, comme sur le mobile.
 3. **#20185** : la recette sur le staging, si un accès existe.
