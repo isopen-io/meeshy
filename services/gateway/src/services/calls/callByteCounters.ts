@@ -5,7 +5,8 @@
  * les dépasse. Les cumuls exacts vivent à côté, dans `bytesSentTotal` /
  * `bytesReceivedTotal` (double, exact jusqu'à 2^53 − 1, la borne des clients) ;
  * les champs `Int` reçoivent la même valeur saturée, pour les anciens lecteurs
- * et pour qu'une écriture `Int` ne sorte jamais de l'int32.
+ * et pour qu'une écriture `Int` ne sorte jamais de l'int32. La lecture prend le
+ * plus grand des deux ; le CAS porte sur les valeurs BRUTES lues.
  */
 import type { Prisma } from '@meeshy/shared/prisma/client';
 
@@ -51,10 +52,22 @@ export const boundByteCounter = (value?: number | null): number | null => {
 
 const saturateToLegacyInt = (value: number): number => Math.min(value, LEGACY_INT32_BYTE_CEILING);
 
-/** Les octets d'une ligne : le total exact d'abord, l'int32 hérité pour les enregistrements antérieurs. */
+const largerOf = (total?: number | null, legacy?: number | null): number | null => {
+  const exact = boundByteCounter(total);
+  const saturated = boundByteCounter(legacy);
+  if (exact === null) return saturated;
+  return saturated === null ? exact : Math.max(exact, saturated);
+};
+
+/**
+ * Les octets d'une ligne, champ par champ : le plus grand du total exact et de
+ * l'int32 hérité. Une écriture de ce lot pose toujours int32 ≤ total ; un int32
+ * plus grand ne peut venir que d'une passerelle antérieure qui a écrit APRÈS
+ * (déploiement progressif, retour arrière) et laissé le total périmé.
+ */
 export const effectiveCallBytes = (row: StoredCallByteCounters): CallByteCounters => ({
-  bytesSent: boundByteCounter(row.bytesSentTotal ?? row.bytesSent),
-  bytesReceived: boundByteCounter(row.bytesReceivedTotal ?? row.bytesReceived)
+  bytesSent: largerOf(row.bytesSentTotal, row.bytesSent),
+  bytesReceived: largerOf(row.bytesReceivedTotal, row.bytesReceived)
 });
 
 /**

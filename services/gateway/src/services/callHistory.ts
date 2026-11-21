@@ -80,7 +80,7 @@ export interface CallHistoryRow {
   duration: number | null;
   bytesSent: number | null;
   bytesReceived: number | null;
-  /** Exact cumulative counters beyond int32 (#20152) — absent on older rows. */
+  /** Exact cumulative counters beyond int32 (#20152) — absent on older rows; read as max(total, int32). */
   bytesSentTotal?: number | null;
   bytesReceivedTotal?: number | null;
   metadata: unknown;

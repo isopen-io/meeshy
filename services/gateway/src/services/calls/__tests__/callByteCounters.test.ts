@@ -83,7 +83,7 @@ describe('boundByteCounter — une mesure d’octets bornée à l’entier exact
   });
 });
 
-describe('effectiveCallBytes — les octets d’une ligne, total exact d’abord, int32 hérité ensuite', () => {
+describe('effectiveCallBytes — les octets d’une ligne, le plus grand du total exact et de l’int32 hérité', () => {
   it('lit le total exact quand il est posé', () => {
     expect(
       effectiveCallBytes(legacyRow({ bytesSent: LEGACY_INT32_BYTE_CEILING, bytesSentTotal: THREE_GB, bytesReceived: ONE_GB, bytesReceivedTotal: ONE_GB }))
@@ -92,6 +92,26 @@ describe('effectiveCallBytes — les octets d’une ligne, total exact d’abord
 
   it('relit un ancien enregistrement qui n’a que les champs int32', () => {
     expect(effectiveCallBytes({ bytesSent: 1000, bytesReceived: 2000 })).toEqual({ bytesSent: 1000, bytesReceived: 2000 });
+  });
+
+  it('une ancienne passerelle qui écrit l’int32 APRÈS le total n’est pas masquée par un total périmé (R3)', () => {
+    expect(
+      effectiveCallBytes({ bytesSent: 1_500_000_000, bytesSentTotal: 1_000_000, bytesReceived: 7, bytesReceivedTotal: 9 })
+    ).toEqual({ bytesSent: 1_500_000_000, bytesReceived: 9 });
+  });
+
+  it('une nouvelle mesure se compare au maximum lu, le CAS restant sur les valeurs BRUTES lues (R3)', () => {
+    const stored = { bytesSent: 1_500_000_000, bytesReceived: 0, bytesSentTotal: 1_000_000, bytesReceivedTotal: 0 };
+
+    expect(planCallByteWrite(stored, { bytesSent: 1_200_000_000, bytesReceived: 0 })).toBeNull();
+    expect(planCallByteWrite(stored, { bytesSent: THREE_GB, bytesReceived: 0 })?.where).toEqual({
+      AND: [
+        { OR: [{ bytesSent: 1_500_000_000 }] },
+        { OR: [{ bytesReceived: 0 }] },
+        { OR: [{ bytesSentTotal: 1_000_000 }] },
+        { OR: [{ bytesReceivedTotal: 0 }] }
+      ]
+    });
   });
 
   it('rend null quand rien n’a jamais été mesuré', () => {
