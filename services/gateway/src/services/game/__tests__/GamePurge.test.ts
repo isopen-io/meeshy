@@ -297,6 +297,19 @@ describe('un compte qui a beaucoup joué n’est pas purgé à moitié (#9481)',
   });
 });
 
+describe('le jour du retour (#20218)', () => {
+  it('la purge efface le jour du dernier retour du compte, pas celui des autres', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { gameWelcomeBackDay: '2026-10-20' });
+    seedUser(db, { gameWelcomeBackDay: '2026-10-11' }, OTHER);
+
+    await purgeGameData(db.prisma, USER);
+
+    expect(db.user.rows.find((u) => u.id === USER)!.gameWelcomeBackDay).toBeNull();
+    expect(db.user.rows.find((u) => u.id === OTHER)!.gameWelcomeBackDay).toBe('2026-10-11');
+  });
+});
+
 describe('les notifications de duo qui NOMMENT le compte effacé (revue adversariale #9490)', () => {
   const PARTNER = '68a0000000000000000000aa';
   const STRANGER_DUO = '68a0000000000000000000cc';

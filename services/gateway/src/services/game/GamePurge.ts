@@ -235,6 +235,7 @@ export async function purgeGameData(prisma: PurgeDb, userId: string, deps: GameP
       lastRelightDay: null,
       brokenStreakDays: null,
       brokenStreakLastDay: null,
+      gameWelcomeBackDay: null,
     },
   });
   return { deleted, duosDeleted, duosSettled, duoNotificationsErased, leagueGroupsTouched, mythicSeatsReleased };

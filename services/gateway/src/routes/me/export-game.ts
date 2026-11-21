@@ -39,6 +39,7 @@ export async function exportGame(prisma: PrismaClient, userId: string, page: Exp
           guideSeen: true,
           publicLeagueConsentAt: true,
           publicLeagueConsentVersion: true,
+          gameWelcomeBackDay: true,
         },
       }),
       prisma.gameProfile.findUnique({ where: { userId } }),
@@ -133,6 +134,7 @@ export async function exportGame(prisma: PrismaClient, userId: string, page: Exp
             guideSeen: account.guideSeen,
             publicLeagueConsentAt: account.publicLeagueConsentAt,
             publicLeagueConsentVersion: account.publicLeagueConsentVersion,
+            gameWelcomeBackDay: account.gameWelcomeBackDay ?? null,
           };
         })()
       : account,

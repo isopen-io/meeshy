@@ -111,6 +111,17 @@ describe('exportGame', () => {
     expect(game.progress).toMatchObject({ flameFreezeGiftDay: '2026-10-05' });
   });
 
+  it('exporte le jour du dernier retour (#20218), nul quand il n’y en a pas', async () => {
+    const back = fakeGameDb();
+    seed(back);
+    Object.assign(back.user.rows[0]!, { gameWelcomeBackDay: '2026-10-20' });
+    const never = fakeGameDb();
+    seed(never);
+
+    expect((await exportGame(back.prisma, USER, PAGE)).progress).toMatchObject({ gameWelcomeBackDay: '2026-10-20' });
+    expect((await exportGame(never.prisma, USER, PAGE)).progress).toMatchObject({ gameWelcomeBackDay: null });
+  });
+
   it('rend les réglages, le pseudonyme et chaque liste du compte', async () => {
     const db = fakeGameDb();
     seed(db);
