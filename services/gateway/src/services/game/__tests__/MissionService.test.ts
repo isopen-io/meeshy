@@ -79,7 +79,7 @@ describe('MissionService.ensureToday — le tirage paresseux', () => {
     const expected = drawDailyMissions({ userId: USER, dayKey: DAY, level: 20, flameDays: 0, treasury: 0, profile: NO_PROFILE });
     expect(today.dayKey).toBe(DAY);
     expect(today.unlocked).toBe(true);
-    const rows = [...db.dailyMission.rows].sort((a, b) => a.slot - b.slot);
+    const rows = [...db.dailyMission.rows].sort((a, b) => Number(a.slot) - Number(b.slot));
     expect(rows.map((r) => r.templateKey)).toEqual(expected.missions.map((m) => m.templateKey));
     expect(rows.map((r) => r.slot)).toEqual([0, 1, 2]);
     expect(rows.map((r) => r.target)).toEqual(expected.missions.map((m) => m.target));
@@ -164,7 +164,7 @@ describe('MissionService.ensureToday — le tirage paresseux', () => {
     await service.ensureToday(USER, NOW);
 
     const expected = drawDailyMissions({ userId: USER, dayKey: DAY, level: 6, flameDays: 25, treasury: 50, profile: NO_PROFILE });
-    const rows = [...db.dailyMission.rows].sort((a, b) => a.slot - b.slot);
+    const rows = [...db.dailyMission.rows].sort((a, b) => Number(a.slot) - Number(b.slot));
     expect(rows.map((r) => r.reward)).toEqual(expected.missions.map((m) => m.reward));
     expect(rows[2]?.difficulty).toBe('gold');
   });
