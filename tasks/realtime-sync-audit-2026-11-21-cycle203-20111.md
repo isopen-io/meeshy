@@ -187,6 +187,37 @@ Deux décisions de forme, et chacune a sa raison écrite sur le site :
   `services/agent` ; 496 témoins de l'agent verts ; suite complète du gateway
   rejouée.
 
+### Le déménagement a RETIRÉ une couverture, et seule la suite complète l'a dit
+
+La suite complète du gateway a rendu **7 suites rouges**. Six sont
+l'environnement — `sharp` sans décodeur HEVC/HEIC ni carte de gain HDR — et
+**elles tombent à l'identique sur `origin/dev`** (6 suites, 17 témoins, mesuré
+en détachant l'arbre sur `9f7a74ca9`), donc elles ne sont pas de ce lot. La
+septième l'était :
+
+`soft-state-equality-filter-guard.test.ts` RÉSOLVAIT `PARTICIPATION_VIVANTE`
+tant qu'elle était un `const` de `access-control.ts` : il voyait son littéral et
+vérifiait qu'elle ne cachait pas un `bannedAt: null` NU. Devenue une constante
+IMPORTÉE, elle lui est OPAQUE — elle est entrée dans son inventaire
+`HORS_DE_PORTEE`, dont le doc-comment décrivait déjà cette catégorie et
+demandait qu'un neuvième « se fasse ouvrir ».
+
+> **Déplacer une constante hors d'un paquet la retire des instruments de ce
+> paquet.** Le gain (un second paquet peut l'importer) et la perte (un cliquet
+> ne la voit plus) arrivent dans le MÊME commit, et **seul le gain est
+> visible** : la perte ne se signale que si un cliquet rougit, ce qui n'arrive
+> que par chance — ici, parce que celui-là publiait sa propre liste d'angles
+> morts. La question à poser à tout déménagement : **qu'est-ce qui, à l'ancienne
+> adresse, savait lire ce que je déplace ?**
+
+La couverture est **RENDUE chez le paquet qui porte désormais la loi** —
+`packages/shared/utils/__tests__/participation-vivante.test.ts`, 9 témoins :
+chaque branche de l'`OR` contraint `bannedAt` (aucune porte de sortie),
+l'absence est dite dans le MÊME `OR` que le `null`, `isActive` est comparé à
+`true`, et `participationEstVivante` rend le même verdict que le `where` sur les
+six états qu'une ligne peut porter. **Une ligne d'inventaire sans cette
+contrepartie aurait été une absolution, pas une limite.**
+
 ### TROIS erreurs du lot, gardées pour ce qu'elles mesurent
 
 **1. Une garde ANNONCÉE totale, posée sur un seul bout** — le § ci-dessus. Le

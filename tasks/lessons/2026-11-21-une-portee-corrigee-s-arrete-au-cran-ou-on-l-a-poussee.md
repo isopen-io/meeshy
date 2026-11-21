@@ -125,3 +125,30 @@ Le remède général : **prouver le rouge de chaque témoin séparément**, par 
 mutation qu'il NOMME. C'est la seule étape qui distingue un témoin d'une
 décoration, et elle a attrapé ici ce que la relecture n'avait pas vu — dans un
 lot dont trois témoins sur quatre tombaient parfaitement.
+
+### Déplacer une constante hors d'un paquet la retire des instruments de ce paquet
+
+Le gain et la perte arrivent dans le même commit, et **seul le gain est
+visible.**
+
+Mesuré : `soft-state-equality-filter-guard.test.ts` (passerelle) RÉSOLVAIT
+`PARTICIPATION_VIVANTE` tant qu'elle était un `const` local — il lisait son
+littéral et vérifiait qu'elle ne cachait pas un `bannedAt: null` nu, l'écriture
+qui ferme une conversation à toute la population jamais bannie. Déplacée dans
+`@meeshy/shared` pour qu'un second paquet puisse l'importer, elle lui est
+devenue OPAQUE.
+
+Ce qui a sauvé la mesure n'est pas la relecture : c'est que **ce cliquet-là
+publie sa propre liste d'angles morts** et rougit quand elle grandit. Un cliquet
+qui se serait contenté de sauter ce qu'il ne résout pas serait resté vert, et la
+couverture serait partie sans trace.
+
+> La question à poser à tout déménagement de constante, de fonction ou de
+> fichier : **qu'est-ce qui, à l'ancienne adresse, savait lire ce que je
+> déplace ?** Les instruments d'un paquet — cliquets, balayages, résolveurs de
+> littéraux — sont bornés à ce paquet, et ils ne se plaignent pas de ce qui
+> sort de leur portée. C'est la leçon de la portée (ci-dessus) vue depuis
+> l'objet déplacé au lieu de l'instrument.
+
+Et le remède n'est jamais la seule ligne d'inventaire : **la couverture se REND
+chez le paquet qui reçoit**, sinon l'exemption est une absolution.
