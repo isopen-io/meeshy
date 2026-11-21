@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, jest } from '@jest/globals';
 import { withMentions } from '../postReferences';
-import { readerSeparatedFrom } from '../separatedCompanions';
+import { readerSeparatedFrom } from '../separatedReader';
 
 const READER = '507f1f77bcf86cd799439001';
 const AUTHOR = '507f1f77bcf86cd799439002';

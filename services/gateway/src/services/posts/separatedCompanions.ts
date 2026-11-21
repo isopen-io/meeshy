@@ -10,7 +10,7 @@
  * contenu au lecteur.
  *
  * La règle se pose sur le LECTEUR (`WireReader.separatedUserIds`), lue une
- * fois par requête par `readerSeparatedFrom`, et s'applique dans
+ * fois par requête par `readerSeparatedFrom` (`separatedReader.ts`), et s'applique dans
  * `withMentions`, par où passe chaque post servi : la source d'un auteur séparé
  * part en `repostOf: null` — la forme qu'a déjà un original disparu, que les
  * trois clients rendent « ce contenu n'est plus disponible » — et ses
@@ -18,8 +18,6 @@
  * lecteur : elle ne porte pas de séparation, et chaque client relit le post par
  * le REST, qui la porte.
  */
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { getBlockRelatedUserIds } from '../../utils/blocking';
 import type { WireReader } from './storyEffectsV3';
 
 type WithAuthor = { readonly author?: { readonly id?: unknown } | null };
@@ -41,20 +39,6 @@ export function withoutSeparatedCompanions<T>(post: T, separated: ReadonlySet<st
     ...(dropsRepost ? { repostOf: null } : {}),
     ...(dropsComments ? { comments: kept } : {}),
   };
-}
-
-/**
- * Le lecteur d'une requête, avec ceux qu'un blocage sépare de lui. Sans compte,
- * personne. Une lecture qui échoue fait échouer la requête : on ne sert pas un
- * fil sans savoir ce qu'il doit taire.
- */
-export async function readerSeparatedFrom(
-  prisma: Pick<PrismaClient, 'user'>,
-  viewerId: string | undefined,
-  reader: WireReader | undefined,
-): Promise<WireReader> {
-  const separated = viewerId ? await getBlockRelatedUserIds(prisma, viewerId) : new Set<string>();
-  return { ...(reader ?? {}), separatedUserIds: separated };
 }
 
 /** Les identifiants séparés du lecteur, pour les filtres de liste qui les lisent déjà. */

@@ -8,6 +8,7 @@ import { withMentions, type WireReader } from './posts/postReferences';
 import { EPHEMERAL_AUTHOR_ARCHIVE_MS } from './posts/ephemeralPosts';
 import { likedFromReactions, withViewerPostState } from './posts/viewerPostState';
 import { buildFeedVisibilityFilter, viewerPostAudience } from './posts/feedVisibility';
+import { readerSeparatedFrom } from './posts/separatedReader';
 import {
   reelAffinityScore,
   type ReelAffinityContext,
@@ -135,7 +136,8 @@ export class PostFeedService {
       getCommunityCoMemberIds(this.prisma, userId, this.cache),
     ]);
     const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
-    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, allContactIds, communityCoMemberIds, this.cache);
+    const served = await readerSeparatedFrom(this.prisma, userId, reader);
+    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, allContactIds, communityCoMemberIds, this.cache, served.separatedUserIds);
 
     // Phase 1 — Fetch candidates
     const where: any = {
@@ -227,7 +229,7 @@ export class PostFeedService {
     const withState = await withViewerPostState(this.prisma, userId, items.map((s) => s.post));
 
     return {
-      items: withState.map((post) => withMentions(hoistLocationDeep(post), reader)),
+      items: withState.map((post) => withMentions(hoistLocationDeep(post), served)),
       nextCursor,
       hasMore,
     };
@@ -279,7 +281,7 @@ export class PostFeedService {
           ],
         });
       }
-      return this.fetchAndEnrichStories(archiveWhere, userId, limit, options?.projection === 'tray', () => Promise.resolve([]), now, options?.viewerRole, options?.reader);
+      return this.fetchAndEnrichStories(archiveWhere, userId, limit, options?.projection === 'tray', () => Promise.resolve([]), now, options?.viewerRole, await readerSeparatedFrom(this.prisma, userId, options?.reader));
     }
     const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
       this.getFriendIds(userId),
@@ -287,7 +289,8 @@ export class PostFeedService {
       getCommunityCoMemberIds(this.prisma, userId, this.cache),
     ]);
     const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
-    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, allContactIds, communityCoMemberIds, this.cache);
+    const storyReader = await readerSeparatedFrom(this.prisma, userId, options?.reader);
+    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, allContactIds, communityCoMemberIds, this.cache, storyReader.separatedUserIds);
 
     // Archive de l'AUTEUR : mes propres stories restent renvoyées après leur
     // expiration, pour que « Mes stories » puisse les lister (vignette voilée).
@@ -391,7 +394,7 @@ export class PostFeedService {
           .then((rows) => rows.map((r) => r.id))
       : () => Promise.resolve([]);
 
-    return this.fetchAndEnrichStories(where, userId, limit, options?.projection === 'tray', deletedIdsFactory, now, options?.viewerRole, options?.reader);
+    return this.fetchAndEnrichStories(where, userId, limit, options?.projection === 'tray', deletedIdsFactory, now, options?.viewerRole, storyReader);
   }
 
   /**
@@ -650,7 +653,8 @@ export class PostFeedService {
       getCommunityCoMemberIds(this.prisma, userId, this.cache),
     ]);
     const contactIds = new Set([...friendIds, ...dmContactIds]);
-    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, [...contactIds], communityCoMemberIds, this.cache);
+    const reelReader = await readerSeparatedFrom(this.prisma, userId, opts.reader);
+    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, [...contactIds], communityCoMemberIds, this.cache, reelReader.separatedUserIds);
 
     const andClauses: any[] = [
       visibilityFilter,
@@ -727,7 +731,7 @@ export class PostFeedService {
       .sort((a, b) => b.score - a.score);
 
     return {
-      items: await this.enrichReelsForViewer(scored.map((s) => s.post), userId, opts.reader),
+      items: await this.enrichReelsForViewer(scored.map((s) => s.post), userId, reelReader),
       nextCursor,
       hasMore,
     };
@@ -844,6 +848,7 @@ export class PostFeedService {
 
   async getUserPosts(targetUserId: string, viewerUserId: string | undefined, cursor?: string, limit: number = 20, reader?: WireReader) {
     const cursorData = cursor ? decodeCursor(cursor) : null;
+    const served = await readerSeparatedFrom(this.prisma, viewerUserId, reader);
 
     const where: any = {
       authorId: targetUserId,
@@ -868,7 +873,7 @@ export class PostFeedService {
         getCommunityCoMemberIds(this.prisma, viewerUserId, this.cache),
       ]);
       const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
-      andClauses.push(await buildFeedVisibilityFilter(this.prisma, viewerUserId, allContactIds, communityCoMemberIds, this.cache));
+      andClauses.push(await buildFeedVisibilityFilter(this.prisma, viewerUserId, allContactIds, communityCoMemberIds, this.cache, served.separatedUserIds));
     }
 
     if (cursorData) {
@@ -900,7 +905,7 @@ export class PostFeedService {
     const withState = await withViewerPostState(this.prisma, viewerUserId, items);
 
     return {
-      items: withState.map((p) => withMentions(hoistLocationDeep(p), reader)),
+      items: withState.map((p) => withMentions(hoistLocationDeep(p), served)),
       nextCursor,
       hasMore,
     };
@@ -916,7 +921,8 @@ export class PostFeedService {
     // L'audience se relit à CHAQUE lecture (#17182) : un favori est posé une
     // fois, l'audience de la publication bouge (communauté quittée, ami retiré,
     // passage en PRIVATE, blocage). Posée dans la requête, la page reste pleine.
-    const audience = await viewerPostAudience(this.prisma, userId, this.cache);
+    const served = await readerSeparatedFrom(this.prisma, userId, reader);
+    const audience = await viewerPostAudience(this.prisma, userId, this.cache, served.separatedUserIds);
     const where: any = { userId, post: { is: { deletedAt: NOT_DELETED, AND: [audience] } } };
 
     if (cursorData) {
@@ -954,7 +960,7 @@ export class PostFeedService {
       items: withState.map((p) => withMentions(hoistLocationDeep({
         ...p,
         isBookmarkedByMe: true,
-      }), reader)),
+      }), served)),
       nextCursor,
       hasMore,
     };

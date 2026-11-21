@@ -28,7 +28,9 @@ function auth(userId = 'user-abc') {
 
 async function buildApp(prisma: unknown, userId = 'user-abc') {
   const app = Fastify();
-  registerNearbyRoutes(app, prisma as import('@meeshy/shared/prisma/client').PrismaClient, auth(userId));
+  // #16894 — les deux lectures du blocage (`getBlockRelatedUserIds`) : personne ici.
+  const user = { findMany: jest.fn(async () => []), findUnique: jest.fn(async () => ({ blockedUserIds: [] })) };
+  registerNearbyRoutes(app, { user, ...(prisma as object) } as unknown as import('@meeshy/shared/prisma/client').PrismaClient, auth(userId));
   await app.ready();
   return app;
 }

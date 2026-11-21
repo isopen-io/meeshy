@@ -6,6 +6,8 @@ import { sendSuccess, sendUnauthorized, sendBadRequest, sendInternalError } from
 import { postInclude, NOT_DELETED } from '../../services/posts/postIncludes';
 import { withoutAudienceList } from '../../services/posts/audienceList';
 import { withMentions } from '../../services/posts/postReferences';
+import { separatedIdsOf } from '../../services/posts/separatedCompanions';
+import { readerSeparatedFrom } from '../../services/posts/separatedReader';
 import { wireReaderFromRequest, type WireReader } from '../../services/posts/storyEffectsV3';
 import { hoistLocationDeep } from '../../services/location/sharedPlace';
 import { resolveDensityGridStepDegrees } from '../../services/location/geoDiscoverability';
@@ -146,11 +148,14 @@ export type NearbyFeedResult = {
  */
 export async function chargerPostsProches(
   prisma: PrismaClient,
-  params: { lat: number; lng: number; radiusKm: number; cursor: number; limit: number },
+  params: { lat: number; lng: number; radiusKm: number; cursor: number; limit: number; viewerUserId?: string },
   reader: WireReader,
 ): Promise<NearbyFeedResult> {
   const { lat, lng, radiusKm, cursor, limit } = params;
   const now = new Date();
+  // #16894 — un blocage écarte l'auteur ET ce qui voyage avec ses posts.
+  const served = await readerSeparatedFrom(prisma, params.viewerUserId, reader);
+  const separatedIds = separatedIdsOf(served);
 
   const command = {
     aggregate: 'Post',
@@ -184,6 +189,7 @@ export async function chargerPostsProches(
     where: {
       id: { in: orderedIds },
       ...buildPublicDiscoverablePrismaWhere(now),
+      ...(separatedIds.length > 0 ? { authorId: { notIn: separatedIds } } : {}),
     },
     select: postInclude,
   });
@@ -195,7 +201,7 @@ export async function chargerPostsProches(
     .map((post) => ({
       // La découverte ne sert que du PUBLIC et ne connaît pas son lecteur ici :
       // une liste d'audience restée d'un ancien `EXCEPT` ne part pas (#7407).
-      ...withMentions(hoistLocationDeep(withoutAudienceList(post)), reader),
+      ...withMentions(hoistLocationDeep(withoutAudienceList(post)), served),
       distanceMeters: distanceById.get(post.id) ?? null,
     }));
 
@@ -260,7 +266,7 @@ export function registerNearbyRoutes(
 
       const resultat = await chargerPostsProches(
         prisma,
-        parsed.data,
+        { ...parsed.data, viewerUserId: authContext.userId },
         wireReaderFromRequest(request as UnifiedAuthRequest),
       );
 
