@@ -128,3 +128,37 @@ final class ProfileSendContentViewModel: ObservableObject {
                          grouping: .together, chosenDurationSeconds: nil, copyOnDevice: false)
     }
 }
+
+// MARK: - La grille (#20243)
+
+extension ProfileSendContentKind {
+    /// Une publication se tient en 4:5 ; un réel et une story dans le portrait de la scène.
+    var cardAspectRatio: CGFloat { self == .publication ? 4.0 / 5.0 : SceneShape.aspect }
+}
+
+/// Trois cartes larges par ligne, défilement vertical : la largeur se partage entre deux gouttières.
+nonisolated enum ProfileSendContentGridLayout {
+    static let columns = 3
+
+    static func cardSize(width: CGFloat, spacing: CGFloat, kind: ProfileSendContentKind) -> CGSize {
+        guard width > 0 else { return .zero }
+        let side = (width - spacing * CGFloat(columns - 1)) / CGFloat(columns)
+        return CGSize(width: side, height: side / kind.cardAspectRatio)
+    }
+}
+
+/// Ce qui se joue sur place : la vidéo d'une carte qui EST une vidéo seule (`ContentCard.Visual.media` vidéo), muette,
+/// élue par la politique du fil (une seule, la plus centrée). Un diaporama se fait glisser, il ne se joue pas.
+nonisolated enum ProfileSendContentPlayback {
+    static func inlineVideo(of post: FeedPost, showcase: ContentCard.Showcase? = nil) -> FeedMedia? {
+        guard case .media(let shown) = (showcase ?? ContentCard.Showcase(post: post)).visual,
+              shown.kind == .video else { return nil }
+        return post.media.first { $0.id == shown.id }
+    }
+
+    /// À la fermeture, le moteur partagé se libère s'il joue une vidéo de la feuille — jamais celle d'un autre écran.
+    static func releasesEngine(activeURL: String, shown: [FeedPost]) -> Bool {
+        guard !activeURL.isEmpty else { return false }
+        return shown.contains { inlineVideo(of: $0)?.toMessageAttachment().fileUrl == activeURL }
+    }
+}
