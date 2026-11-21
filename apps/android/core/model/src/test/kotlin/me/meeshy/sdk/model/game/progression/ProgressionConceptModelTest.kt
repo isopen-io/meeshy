@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.game.progression
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -99,6 +100,43 @@ class ProgressionConceptModelTest {
         assertThat(missions.line?.key).isEqualTo(GameTextKey.ChipChestReady)
         assertThat(missions.value?.key).isEqualTo(GameTextKey.Ratio)
         assertThat(missions.gauge).isWithin(1e-9).of(0.5)
+    }
+
+    private fun belowFive(vararg items: JsonElement): GameBlock = game(
+        mapOf(
+            "missions" to buildJsonObject {
+                put("dayKey", JsonPrimitive("2026-10-20"))
+                put("prismDay", JsonPrimitive(false))
+                put("unlocked", JsonPrimitive(false))
+                put("items", JsonArray(items.toList()))
+                put("rerollAvailable", JsonPrimitive(false))
+            },
+        ),
+    )
+
+    @Test
+    fun `sous le niveau 5 le premier reve servi dit 0 sur 1 et sa jauge comme l etat`() {
+        val missions = card(ProgressionConcept.Missions, belowFive(GameBlockFixtures.mission("m0")))
+
+        assertThat(missions.value?.key).isEqualTo(GameTextKey.Ratio)
+        assertThat(missions.value?.args).containsExactly(GameTextArg.Count(0), GameTextArg.Count(1)).inOrder()
+        assertThat(missions.gauge).isWithin(1e-9).of(0.0)
+    }
+
+    @Test
+    fun `sous le niveau 5 le premier reve fait remplit sa jauge`() {
+        val missions = card(ProgressionConcept.Missions, belowFive(GameBlockFixtures.mission("m0", "2026-10-20T09:00:00.000Z")))
+
+        assertThat(missions.value?.key).isEqualTo(GameTextKey.Ratio)
+        assertThat(missions.gauge).isWithin(1e-9).of(1.0)
+    }
+
+    @Test
+    fun `sous le niveau 5 devant un serveur anterieur la porte reste fermee`() {
+        val missions = card(ProgressionConcept.Missions, belowFive())
+
+        assertThat(missions.value?.key).isEqualTo(GameTextKey.DoorLeagueLocked)
+        assertThat(missions.gauge).isNull()
     }
 
     @Test
