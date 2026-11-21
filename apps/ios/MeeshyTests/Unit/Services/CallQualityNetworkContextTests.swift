@@ -368,3 +368,128 @@ final class CallStatsElectionOrderTests: XCTestCase {
         XCTAssertEqual(entry.values["priority"], 4_611_686_018_427_387_904)
     }
 }
+
+// MARK: - #20221 — le codec et la limitation ne dépendent pas de l'ordre du relevé
+
+/// Après la paire ICE (#20121), les flux : un même relevé, lu dans n'importe
+/// quel ordre, affiche le même codec et la même cause de limitation (miroir
+/// Android `CallStatsStreamOrderTest`).
+@MainActor
+final class CallStatsStreamOrderTests: XCTestCase {
+
+    private func codec(_ id: String, mime: String) -> CallStats.RawEntry {
+        CallStats.RawEntry(id: id, type: "codec", mimeType: mime)
+    }
+
+    private func inbound(_ id: String, kind: String, codecId: String?) -> CallStats.RawEntry {
+        CallStats.RawEntry(id: id, type: "inbound-rtp", kind: kind, codecId: codecId, values: ["packetsReceived": 10])
+    }
+
+    private func outbound(_ id: String, kind: String = "video", reason: String?) -> CallStats.RawEntry {
+        CallStats.RawEntry(id: id, type: "outbound-rtp", kind: kind,
+                           strings: reason.map { ["qualityLimitationReason": $0] } ?? [:])
+    }
+
+    private func orders(_ entries: [CallStats.RawEntry]) -> [[CallStats.RawEntry]] {
+        let rotations = { (list: [CallStats.RawEntry]) in list.indices.map { Array(list[$0...] + list[..<$0]) } }
+        return rotations(entries) + rotations(Array(entries.reversed()))
+    }
+
+    private func codecs(_ report: [CallStats.RawEntry]) -> Set<String?> {
+        Set(orders(report).map { CallStats.reduce(entries: $0).codec })
+    }
+
+    private func reasons(_ report: [CallStats.RawEntry]) -> Set<String?> {
+        Set(orders(report).map { CallMediaQuality.reduce(entries: $0).qualityLimitationReason })
+    }
+
+    func test_reduce_audioAndVideoInbound_showsTheAudioCodecInEveryOrder() {
+        let report = [
+            inbound("IA", kind: "video", codecId: "C_h264"),
+            inbound("IZ", kind: "audio", codecId: "C_opus"),
+            codec("C_opus", mime: "audio/opus"),
+            codec("C_h264", mime: "video/H264")
+        ]
+
+        XCTAssertEqual(codecs(report), ["opus"])
+    }
+
+    func test_reduce_unresolvedAudioCodec_yieldsToTheResolvedVideoCodec() {
+        let report = [
+            inbound("IA", kind: "audio", codecId: "ghost"),
+            inbound("IV", kind: "video", codecId: "C_vp8"),
+            codec("C_vp8", mime: "video/VP8")
+        ]
+
+        XCTAssertEqual(codecs(report), ["VP8"])
+    }
+
+    func test_reduce_twoAudioInbound_showsTheSmallestIdCodec() {
+        let report = [
+            inbound("IA2", kind: "audio", codecId: "C_g722"),
+            inbound("IA1", kind: "audio", codecId: "C_opus"),
+            codec("C_opus", mime: "audio/opus"),
+            codec("C_g722", mime: "audio/G722")
+        ]
+
+        XCTAssertEqual(codecs(report), ["opus"])
+    }
+
+    func test_reduce_emptyCodecId_neverTakesTheResolvedCodecPlace() {
+        let report = [
+            inbound("IA0", kind: "audio", codecId: ""),
+            inbound("IA1", kind: "audio", codecId: "C_opus"),
+            codec("", mime: "audio/PCMU"),
+            codec("C_opus", mime: "audio/opus")
+        ]
+
+        XCTAssertEqual(codecs(report), ["opus"])
+    }
+
+    func test_reduce_noResolvedCodec_showsNoCodec() {
+        let report = [inbound("IA", kind: "audio", codecId: "ghost"), inbound("IV", kind: "video", codecId: nil)]
+
+        XCTAssertEqual(codecs(report), [nil])
+    }
+
+    func test_mediaQuality_noneAndBandwidth_keepsBandwidthInEveryOrder() {
+        let report = [outbound("OV1", reason: "none"), outbound("OV2", reason: "bandwidth")]
+
+        XCTAssertEqual(reasons(report), ["bandwidth"])
+    }
+
+    func test_mediaQuality_rankBandwidthThenCpuThenOther() {
+        let report = [
+            outbound("OV1", reason: "other"),
+            outbound("OV2", reason: "cpu"),
+            outbound("OV3", reason: "bandwidth"),
+            outbound("OV4", reason: "none")
+        ]
+
+        XCTAssertEqual(reasons(report), ["bandwidth"])
+        XCTAssertEqual(reasons(report.filter { $0.id != "OV3" }), ["cpu"])
+        XCTAssertEqual(reasons([outbound("OV1", reason: "none"), outbound("OV2", reason: "other")]), ["other"])
+    }
+
+    func test_mediaQuality_equalRank_keepsTheSmallestId() {
+        let report = [outbound("OVb", reason: "none"), outbound("OVa", reason: "inconnue")]
+
+        XCTAssertEqual(reasons(report), ["inconnue"])
+    }
+
+    func test_mediaQuality_emptyOrAudioReason_isIgnored() {
+        let report = [
+            outbound("OV0", reason: ""),
+            outbound("OA", kind: "audio", reason: "bandwidth"),
+            outbound("OV1", reason: "none")
+        ]
+
+        XCTAssertEqual(reasons(report), ["none"])
+    }
+
+    func test_mediaQuality_noReasonCarried_readsNoLimitation() {
+        let report = [outbound("OV0", reason: ""), outbound("OV1", reason: nil)]
+
+        XCTAssertEqual(reasons(report), [nil])
+    }
+}
