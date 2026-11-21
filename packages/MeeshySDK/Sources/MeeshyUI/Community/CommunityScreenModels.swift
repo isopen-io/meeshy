@@ -28,6 +28,9 @@ public protocol CommunityDetailModeling: ObservableObject {
     var requiresJoinApproval: Bool { get }
     var joinRequestPending: Bool { get }
     var joinRefusal: CommunityJoinRefusal? { get }
+    /// La demande du lecteur a été refusée (#19948) : « Demande refusée »
+    /// jusqu'à cette date, puis « Demander à rejoindre ». `nil` sinon.
+    var joinDeclinedUntil: Date? { get }
 
     func load() async
     func joinCommunity() async

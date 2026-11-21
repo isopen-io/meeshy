@@ -4,6 +4,7 @@ import { MemberRole } from '@meeshy/shared/types/role-types';
 import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { newMemberRefusal } from '../../services/conversations/newMemberAdmission';
+import { PARTICIPATION_VIVANTE } from './utils/access-control';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
   conversationParticipantSchema,
@@ -126,7 +127,24 @@ export function registerInviteRoute(
         where: { id: conversationId },
         include: {
           participants: {
-            where: { isActive: true, type: 'user' },
+            // #20104 — la PARTICIPATION VIVANTE, et dans la CLAUSE : c'est le
+            // seul endroit qu'un balayage de source sait lire (#20050). Cette
+            // liste a UN consommateur dans cette route — la porte de l'inviteur
+            // vingt lignes plus bas — et un membre actif-et-banni la franchissait,
+            // faisant entrer qui il veut dans une conversation dont il est exclu ;
+            // « inviter » écrit ici un `Participant` immédiatement ACTIF.
+            //
+            // L'inventaire du cliquet d'audiences classait ce site
+            // « porte-sur-un-sur-ensemble » en interdisant de resserrer, au motif
+            // que « la même lecture tient `newMemberRefusal`, un refus par
+            // égalité exacte ». **Mesuré faux** : `newMemberRefusal` ne lit que
+            // `type` et `encryptionMode` (`conversations/newMemberAdmission.ts`)
+            // — le tête-à-tête chiffré de #16188 se tient par `isEndToEndDirect`,
+            // qui ne compte personne. Et `resolveConversationEntry` relit ses
+            // propres lignes avec leur `bannedAt` ; `isConversationClosed` ne lit
+            // que des colonnes de la conversation. Aucun refus ne dépend du
+            // sur-ensemble ici, donc rien n'oblige à juger la loi en code.
+            where: { ...PARTICIPATION_VIVANTE, type: 'user' },
             select: {
               id: true,
               userId: true,
@@ -217,11 +235,13 @@ export function registerInviteRoute(
       // Connaissance : il entre par sa boîte de demandes, et l'invitation ne s'annonce pas.
       const opening = await decideDirectOpening(fastify.prisma, { senderId: inviterId, recipientId: userId });
 
-      // `conversation.participants` est chargé avec `where: { isActive: true }` :
-      // il ne pouvait donc PAS voir la ligne d'un banni ni celle d'un ancien
-      // membre, et le `create` qui suit leur fabriquait une ligne neuve et
-      // active — un bannissement défait sans passer par `POST …/unban`, plus une
-      // seconde ligne `Participant` pour la même paire.
+      // `conversation.participants` est chargé sous `PARTICIPATION_VIVANTE`
+      // (#20104, et sous `isActive` nu avant lui) : il ne peut donc PAS voir la
+      // ligne d'un banni ni celle d'un ancien membre, et le `create` qui suivait
+      // leur fabriquait une ligne neuve et active — un bannissement défait sans
+      // passer par `POST …/unban`, plus une seconde ligne `Participant` pour la
+      // même paire. Resserrer la clause ÉLARGIT ce que cette note décrit : un
+      // banni y était déjà invisible, un membre désactivé aussi.
       const entry = await resolveConversationEntry({
         prisma: fastify.prisma,
         conversationId,
