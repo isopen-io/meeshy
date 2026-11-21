@@ -21,6 +21,8 @@ final class AvatarCircleDirectory: ObservableObject {
             }
     }
 
+    nonisolated deinit {}
+
     static func levels(from links: [RelationLink], viewerId: String?) -> AvatarCircleLevels {
         AvatarCircleLevels(table(from: links, viewerId: viewerId))
     }
