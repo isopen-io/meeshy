@@ -364,7 +364,7 @@ export const AUDIENCE_SCOPE = AUDIENCE_ROOTS.map(({ prefix, dir }) => ({ prefix,
  * ligne calculé sur une source raccourcie désigne la mauvaise ligne, et un
  * cliquet qui pointe à côté se lit comme un cliquet qui se trompe.
  */
-function stripComments(source: string): string {
+export function stripComments(source: string): string {
   const keepLines = (block: string): string => '\n'.repeat((block.match(/\n/g) ?? []).length);
   return source
     .replace(/\/\*[\s\S]*?\*\//g, keepLines)
@@ -386,7 +386,7 @@ function stripComments(source: string): string {
  * appel manqué, pont d'agent). Un balayage qui OMET est plus coûteux qu'un
  * balayage qui sur-signale : seul le premier est silencieux.
  */
-function namesAParticularMember(where: string): boolean {
+export function namesAParticularMember(where: string): boolean {
   for (const { key, value } of identityLevelPairs(where)) {
     if (key !== 'id' && key !== 'userId') continue;
     if (value === '') return true;
@@ -569,7 +569,7 @@ const NEGATIVE_WHERE_HELPERS = ['unsetOrNull', 'differsOrUnset'] as const satisf
  * Le corps d'un bloc, accolades INCLUSES, depuis son accolade ouvrante — ce que
  * `callArguments` fait pour un appel, sans la parenthèse à franchir.
  */
-function balancedBlock(source: string, openIndex: number): string | null {
+export function balancedBlock(source: string, openIndex: number): string | null {
   let depth = 0;
   for (let i = openIndex; i < source.length; i += 1) {
     const char = source[i];
@@ -593,7 +593,7 @@ function balancedBlock(source: string, openIndex: number): string | null {
  * tronque se trompe dans les deux sens, et seul le sens rassurant est
  * silencieux.**
  */
-function balancedObjectBody(source: string, openIndex: number): string | null {
+export function balancedObjectBody(source: string, openIndex: number): string | null {
   let depth = 1;
   for (let i = openIndex; i < source.length; i += 1) {
     const char = source[i];
@@ -620,7 +620,7 @@ function balancedObjectBody(source: string, openIndex: number): string | null {
  * Le bloc d'ARGUMENTS d'un appel, accolades équilibrées — depuis l'accolade
  * ouvrante qui suit la parenthèse.
  */
-function callArguments(source: string, parenIndex: number): string | null {
+export function callArguments(source: string, parenIndex: number): string | null {
   const open = source.indexOf('{', parenIndex);
   if (open < 0) return null;
   let depth = 0;
@@ -636,7 +636,7 @@ function callArguments(source: string, parenIndex: number): string | null {
 }
 
 /** Ce qui tient la place du littéral, quand `where:` n'ouvre pas d'accolade. */
-function unreadableForm(afterWhere: string): string {
+export function unreadableForm(afterWhere: string): string {
   const head = afterWhere.trimStart();
   if (head.startsWith('{')) return '';
   if (/^[A-Za-z_$][\w$.]*\s*\(/.test(head)) return 'appel';
@@ -661,7 +661,7 @@ function unreadableForm(afterWhere: string): string {
  * `response-payload-mismatch`, qui résout la variable que le gestionnaire
  * compose sous ses propres yeux et se tait sur tout le reste.
  */
-function resolveLocalWhere(source: string, name: string): string | null {
+export function resolveLocalWhere(source: string, name: string): string | null {
   // `$` est un métacaractère : un identifiant qui en porte un composerait une
   // expression régulière qui ne cherche pas ce qu'on croit.
   const escaped = name.replace(/[$]/g, '\\$&');
