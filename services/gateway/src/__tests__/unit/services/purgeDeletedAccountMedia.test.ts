@@ -69,17 +69,26 @@ function buildPrisma(params: {
   attachmentPages?: AttachmentRow[][];
   postMediaPages?: PostMediaRow[][];
   sounds?: Array<{ fileUrl: string | null; coverUrl: string | null }>;
+  /** #20129 — les clés de participant du compte ; `null` fait LEVER la lecture. */
+  participantKeys?: readonly string[] | null;
 }) {
   const {
     attachmentPages = [[{ id: 'att-1' }], []],
     postMediaPages = [[{ id: 'pm-1', fileUrl: '/f/pm-1.jpg', thumbnailUrl: null }], []],
     sounds = [],
+    participantKeys = [],
   } = params;
 
   let attachmentPageIndex = 0;
   let postMediaPageIndex = 0;
 
   return {
+    participant: {
+      findMany: jest.fn<(args: unknown) => Promise<Array<{ id: string }>>>().mockImplementation(async () => {
+        if (participantKeys === null) throw new Error('participant.findMany down');
+        return participantKeys.map((id) => ({ id }));
+      }),
+    },
     messageAttachment: {
       findMany: jest.fn<(args: unknown) => Promise<AttachmentRow[]>>().mockImplementation(async () => {
         const page = attachmentPages[attachmentPageIndex] ?? [];
@@ -129,11 +138,42 @@ const postMediaFindManyArgs = (prisma: unknown, callIndex = 0) =>
 
 describe('purgeMediaOfDeletedAccount', () => {
   describe('MessageAttachment', () => {
-    it('cible `uploadedBy: userId, isAnonymous: false` — même filtre que export-sections.ts', async () => {
-      const prisma = buildPrisma({});
+    /**
+     * #20129 — les DEUX espaces de clés de `uploadedBy`, même filtre que
+     * `export-sections.ts`.
+     *
+     * Les lignes écrites avant #20113 portent le `Participant.id` du
+     * transférant, pas son identité de compte. Une purge qui n'apparie que le
+     * compte laisse derrière elle les médias TRANSFÉRÉS par le compte qu'on
+     * efface — à la fin de sa période de grâce, donc sans autre passage.
+     */
+    it('cible les DEUX espaces de clés de `uploadedBy`, et jamais les téléversements anonymes', async () => {
+      const prisma = buildPrisma({ participantKeys: ['p-1', 'p-2'] });
       await purgeMediaOfDeletedAccount(prisma, buildAttachmentRemover(), buildMediaService(), USER_ID);
 
-      expect(attachmentFindManyArgs(prisma)?.where).toMatchObject({ uploadedBy: USER_ID, isAnonymous: false });
+      expect(attachmentFindManyArgs(prisma)?.where).toMatchObject({
+        uploadedBy: { in: [USER_ID, 'p-1', 'p-2'] },
+        isAnonymous: false,
+      });
+    });
+
+    it('BORNE la lecture des clés de participant — une liste sans fin ne purge rien', async () => {
+      const prisma = buildPrisma({ participantKeys: ['p-1'] });
+      await purgeMediaOfDeletedAccount(prisma, buildAttachmentRemover(), buildMediaService(), USER_ID);
+
+      expect(prisma.participant.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { userId: USER_ID }, take: expect.any(Number) }),
+      );
+    });
+
+    it("purge l'espace de COMPTE quand les clés de participant sont illisibles — jamais rien plutôt que peu", async () => {
+      const remover = buildAttachmentRemover();
+      const prisma = buildPrisma({ participantKeys: null, attachmentPages: [[{ id: 'att-1' }], []] });
+
+      await purgeMediaOfDeletedAccount(prisma, remover, buildMediaService(), USER_ID);
+
+      expect(attachmentFindManyArgs(prisma)?.where).toMatchObject({ uploadedBy: { in: [USER_ID] } });
+      expect(remover.deleteAttachment).toHaveBeenCalledWith('att-1');
     });
 
     it('appelle `AttachmentService.deleteAttachment` pour chaque attachment — jamais un `deleteMany` direct', async () => {

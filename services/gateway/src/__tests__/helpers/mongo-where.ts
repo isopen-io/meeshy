@@ -219,9 +219,10 @@ type FindManyArgs = {
   readonly select?: MongoDocument;
   readonly orderBy?: MongoDocument | readonly MongoDocument[];
   readonly take?: number;
+  readonly skip?: number;
 };
 
-const SUPPORTED_FIND_MANY_ARGS = new Set(['where', 'select', 'orderBy', 'take']);
+const SUPPORTED_FIND_MANY_ARGS = new Set(['where', 'select', 'orderBy', 'take', 'skip']);
 const SUPPORTED_NESTED_SELECT_ARGS = new Set(['select', 'include', 'where', 'take']);
 
 /**
@@ -356,7 +357,11 @@ export function findManyIn<T extends MongoDocument>(rows: readonly T[]) {
     const matched = rows.filter((row) => matchesMongoWhere(row, args.where));
     const orderBy = args.orderBy === undefined ? [] : Array.isArray(args.orderBy) ? args.orderBy : [args.orderBy as MongoDocument];
     const sorted = orderBy.length === 0 ? matched : [...matched].sort(compareBy(orderBy));
-    const taken = args.take === undefined ? sorted : sorted.slice(0, args.take);
+    // `skip` AVANT `take`, l'ordre de Prisma — et supporté depuis #20129, parce
+    // qu'un double qui refuse un argument LÉGITIME force les témoins à éviter
+    // la forme réelle de l'appel, donc à ne plus la décrire.
+    const skipped = args.skip === undefined ? sorted : sorted.slice(Number(args.skip));
+    const taken = args.take === undefined ? skipped : skipped.slice(0, args.take);
     return Promise.resolve(taken.map((row) => (args.select ? project(row, args.select) : { ...row })));
   };
   return { findMany, calls };
