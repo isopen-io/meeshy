@@ -27,6 +27,8 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-15 | Rejoindre, quitter ou changer de rôle dans une communauté se voit aussitôt chez ses membres (passerelle, web) | voir réveil du 2026-11-15 23:38 | #18766 | voir réveil du 2026-11-15 23:38 |
 | 2026-11-18 | Supprimer ou désactiver une communauté se voit aussitôt chez ses membres (passerelle, web) | voir réveil du 2026-11-18 05:38 | #19590 | voir réveil du 2026-11-18 05:38 |
 | 2026-11-21 | Un blocage retire aussi la source d'une republication et l'aperçu des commentaires de l'auteur séparé (passerelle) | voir réveil du 2026-11-21 11:38 | #16894 | voir réveil du 2026-11-21 11:38 |
+| 2026-11-21 | La liste complète des commentaires tait l'auteur bloqué (passerelle) | #20215 | #20205 | fusionnée dans dev |
+| 2026-11-21 | Un commentaire d'un auteur bloqué n'arrive plus en direct et ne se traduit ni ne se like (passerelle) | voir réveil du 2026-11-21 15:38 | #20216 | voir réveil du 2026-11-21 15:38 |
 
 ## 2026-11-07 — lot 1
 
@@ -814,3 +816,14 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Décision : `commentCount` / `replyCount` restent BRUTS (ils ne nomment personne ; un compte par lecteur coûterait une requête par commentaire). Écrite dans le module.
 - Témoins : `unit/services/posts/comments-separated-authors-20205.test.ts` (8, double Prisma qui applique `where`, `orderBy` et `take` ; rouge prouvé : 6 échecs avant le code). Le harnais `PostCommentService.test.ts` reçoit un double `user` sans blocage.
 - Aucun client touché, aucun contrat changé.
+- 2026-11-21 15:30 : #20215 fusionnée dans `dev` (`cdc828c61`) après `ci.yml` 44914073126 vert ; #20205 fermée avec sa preuve.
+
+## 2026-11-21 — réveil 15:38 UTC
+
+- Début du run : aucune PR de la routine ouverte ; aucune branche vivante sur `SocialEventsHandler.ts` ni `routes/posts/comments.ts`.
+- Lot : #20216 (passerelle) — suite de #20205 côté temps réel et actions.
+- Diffusions : `SocialEventsHandler.commentEmitter` — `comment:added`, `comment:updated`, `comment:media-updated` et `comment:translation-updated` partent sur les mêmes rooms, moins `user:<id>` de chaque compte qu'un blocage sépare du COMMENTATEUR (deux sens, `getBlockRelatedUserIds`, relu à chaque émission, jamais mis en cache) ; une lecture des blocages qui échoue n'émet rien (le lecteur relit par le REST, qui sait quoi taire). `broadcastCommentTranslationUpdated` reçoit l'auteur du commentaire en 5e argument optionnel (`PostTranslationService` le lit dans la relecture qu'il faisait déjà).
+- Actions : `loadCommentPostAcl` porte l'auteur du commentaire (additif) ; `commentAuthorSeparatedFrom` (`services/posts/separatedCommentAuthors.ts`, fermé) refuse traduire et liker (REST : `404 COMMENT_NOT_FOUND`) et réagir par socket (« Comment not found »), comme un commentaire absent. Décision : retirer SA réaction reste permis (ne sert rien du commentaire, défait un geste d'avant le blocage).
+- Témoins : `socketio/handlers/__tests__/SocialEventsHandler.comment-separated-20216.test.ts` (13 ; rouge prouvé : 8 échecs avant le code), `__tests__/unit/routes/posts/comment-actions-separated-20216.test.ts` (8 ; rouge prouvé : 6 échecs), `CommentReactionHandler.test.ts` (+3 ; rouge prouvé : 2 échecs). Harnais suivi : `comments-like-delete.test.ts` reconnaît la tranche d'ACL à `select.post` (elle porte désormais `authorId`).
+- Aucun client touché, aucun contrat changé (les clients ne voient qu'un événement de moins et le 404 qu'ils traitent déjà).
+

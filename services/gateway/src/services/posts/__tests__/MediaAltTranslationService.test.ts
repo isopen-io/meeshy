@@ -219,7 +219,7 @@ describe('MediaAltTranslationService', () => {
       );
       expect(socialEvents.broadcastMediaAltTranslationUpdated).toHaveBeenCalledWith(
         expect.objectContaining({ mediaId: 'media-1', postId: 'post-1', language: 'en' }),
-        'author-1', 'PUBLIC', [],
+        'author-1', 'PUBLIC', [], undefined,
       );
     });
 
@@ -253,7 +253,7 @@ describe('MediaAltTranslationService', () => {
     it('resolves the owning post through the comment when the media belongs to a comment', async () => {
       const { zmqClient, prisma, socialEvents } = makeService({
         postMedia: { id: 'media-1', postId: null, commentId: 'comment-1', alt: 'Bonjour', altLanguage: 'fr', altTranslations: null },
-        postComment: { postId: 'post-9' },
+        postComment: { postId: 'post-9', authorId: 'commentateur-1' },
       });
       zmqClient.emit('translationCompleted', {
         targetLanguage: 'en',
@@ -261,10 +261,10 @@ describe('MediaAltTranslationService', () => {
       });
       await flushPromises();
 
-      expect(prisma.postComment.findUnique).toHaveBeenCalledWith({ where: { id: 'comment-1' }, select: { postId: true } });
+      expect(prisma.postComment.findUnique).toHaveBeenCalledWith({ where: { id: 'comment-1' }, select: { postId: true, authorId: true } });
       expect(socialEvents.broadcastMediaAltTranslationUpdated).toHaveBeenCalledWith(
         expect.objectContaining({ mediaId: 'media-1', postId: 'post-9', commentId: 'comment-1', language: 'en' }),
-        'author-1', 'PUBLIC', [],
+        'author-1', 'PUBLIC', [], 'commentateur-1',
       );
     });
   });

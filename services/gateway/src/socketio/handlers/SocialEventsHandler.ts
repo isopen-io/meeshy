@@ -99,6 +99,16 @@ export interface SocialEventsHandlerDependencies {
   prisma: PrismaClient;
 }
 
+/**
+ * L'auteur d'un commentaire diffusé. Les producteurs le SÉLECTIONNENT sous
+ * `author` (`CREATED_COMMENT_SELECT`, `updateComment`, `PostAudioService`) et
+ * jamais à plat : lire `authorId` seul ne trouverait personne, et la diffusion
+ * partirait sans filtre (#20216). `authorId` reste lu pour une charge qui le porte.
+ */
+export function commentAuthorIdOf(comment: { readonly author?: { readonly id?: string } | null; readonly authorId?: string } | null | undefined): string | undefined {
+  return comment?.author?.id ?? comment?.authorId;
+}
+
 export class SocialEventsHandler {
   private io: SocketIOServer;
   private prisma: PrismaClient;
@@ -632,7 +642,7 @@ export class SocialEventsHandler {
    *
    * Fermé : une lecture des blocages qui échoue rend `null`, et l'appelant
    * n'émet rien — le lecteur relira le fil par le REST, qui sait quoi taire.
-   * Un commentateur inconnu (charge sans `authorId`) n'a personne à taire.
+   * Un commentateur inconnu n'a personne à taire.
    */
   private async commentEmitter(rooms: string[], commentAuthorId: string | null | undefined) {
     const target = this.io.to(rooms);
@@ -664,7 +674,7 @@ export class SocialEventsHandler {
     visibilityUserIds: string[],
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
-    const emitter = await this.commentEmitter(this.commentBroadcastRooms(recipients, postAuthorId, data.postId), data.comment?.authorId);
+    const emitter = await this.commentEmitter(this.commentBroadcastRooms(recipients, postAuthorId, data.postId), commentAuthorIdOf(data.comment));
     emitter?.emit(SERVER_EVENTS.COMMENT_ADDED, { ...data, comment: withServedCarrierMedia(data.comment) });
   }
 
@@ -682,7 +692,7 @@ export class SocialEventsHandler {
     visibilityUserIds: string[],
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
-    const emitter = await this.commentEmitter(this.commentBroadcastRooms(recipients, postAuthorId, data.postId), data.comment?.authorId);
+    const emitter = await this.commentEmitter(this.commentBroadcastRooms(recipients, postAuthorId, data.postId), commentAuthorIdOf(data.comment));
     emitter?.emit(SERVER_EVENTS.COMMENT_UPDATED, { ...data, comment: withServedCarrierMedia(data.comment) });
   }
 
@@ -772,7 +782,7 @@ export class SocialEventsHandler {
     visibilityUserIds: string[],
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
-    const emitter = await this.commentEmitter(this.commentBroadcastRooms(recipients, postAuthorId, data.postId), data.comment?.authorId);
+    const emitter = await this.commentEmitter(this.commentBroadcastRooms(recipients, postAuthorId, data.postId), commentAuthorIdOf(data.comment));
     emitter?.emit(SERVER_EVENTS.COMMENT_MEDIA_UPDATED, { ...data, comment: withServedCarrierMedia(data.comment) });
   }
 
@@ -789,11 +799,12 @@ export class SocialEventsHandler {
     postAuthorId: string,
     visibility: string | null | undefined,
     visibilityUserIds: string[],
+    commentAuthorId?: string | null,
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
     if (data.commentId) {
-      const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
-      this.io.to(rooms).emit(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, data);
+      const emitter = await this.commentEmitter(this.commentBroadcastRooms(recipients, postAuthorId, data.postId), commentAuthorId);
+      emitter?.emit(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, data);
       return;
     }
     this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, data);
@@ -809,11 +820,12 @@ export class SocialEventsHandler {
     postAuthorId: string,
     visibility: string | null | undefined,
     visibilityUserIds: string[],
+    commentAuthorId?: string | null,
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
     if (data.commentId) {
-      const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
-      this.io.to(rooms).emit(SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, data);
+      const emitter = await this.commentEmitter(this.commentBroadcastRooms(recipients, postAuthorId, data.postId), commentAuthorId);
+      emitter?.emit(SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, data);
       return;
     }
     this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, data);

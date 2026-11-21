@@ -57,7 +57,18 @@ function monter(blocages: Blocages) {
   return { handler: new SocialEventsHandler({ io, prisma }), emissions, prisma };
 }
 
-const commentaire = (): any => ({ id: 'c-20216', postId: POST_ID, authorId: COMMENTATEUR, content: 'bonjour' });
+// La forme que les producteurs SÉLECTIONNENT (`CREATED_COMMENT_SELECT`) : l'auteur
+// voyage sous `author`, jamais en `authorId` à plat. Une fabrique qui posait
+// `authorId` rendait ce témoin vert sur une diffusion qui, en production, ne
+// filtrait personne (revue adversariale du lot).
+const commentaire = (): any => ({
+  id: 'c-20216',
+  postId: POST_ID,
+  content: 'bonjour',
+  author: { id: COMMENTATEUR, username: 'commentateur', displayName: 'Commentateur', avatar: null },
+});
+
+const traduction = { text: 'hello', translationModel: 'nllb', createdAt: '2026-11-21T00:00:00.000Z' };
 
 const diffusions: ReadonlyArray<readonly [string, (h: SocialEventsHandler) => Promise<void>]> = [
   ['comment:added', (h) => h.broadcastCommentAdded({ postId: POST_ID, comment: commentaire(), commentCount: 1 }, AUTEUR_POST, 'PUBLIC', [])],
@@ -67,12 +78,20 @@ const diffusions: ReadonlyArray<readonly [string, (h: SocialEventsHandler) => Pr
     'comment:translation-updated',
     (h) =>
       h.broadcastCommentTranslationUpdated(
-        { postId: POST_ID, commentId: 'c-20216', language: 'en', translation: { text: 'hello', translationModel: 'nllb', createdAt: '2026-11-21T00:00:00.000Z' } },
+        { postId: POST_ID, commentId: 'c-20216', language: 'en', translation: traduction },
         AUTEUR_POST,
         'PUBLIC',
         [],
         COMMENTATEUR,
       ),
+  ],
+  [
+    'media:caption-translation-updated',
+    (h) => h.broadcastMediaCaptionTranslationUpdated({ mediaId: 'm-20216', postId: POST_ID, commentId: 'c-20216', language: 'en', translation: traduction } as never, AUTEUR_POST, 'PUBLIC', [], COMMENTATEUR),
+  ],
+  [
+    'media:alt-translation-updated',
+    (h) => h.broadcastMediaAltTranslationUpdated({ mediaId: 'm-20216', postId: POST_ID, commentId: 'c-20216', language: 'en', translation: traduction } as never, AUTEUR_POST, 'PUBLIC', [], COMMENTATEUR),
   ],
 ];
 
@@ -114,6 +133,6 @@ describe('#20216 — la diffusion d’un commentaire tait l’auteur séparé du
 
     await handler.broadcastCommentAdded({ postId: POST_ID, comment: commentaire(), commentCount: 3 }, AUTEUR_POST, 'PUBLIC', []);
 
-    expect(emissions[0].charge).toMatchObject({ postId: POST_ID, commentCount: 3, comment: { id: 'c-20216', authorId: COMMENTATEUR, content: 'bonjour' } });
+    expect(emissions[0].charge).toMatchObject({ postId: POST_ID, commentCount: 3, comment: { id: 'c-20216', author: { id: COMMENTATEUR }, content: 'bonjour' } });
   });
 });
