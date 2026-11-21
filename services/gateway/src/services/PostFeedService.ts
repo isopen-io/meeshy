@@ -130,13 +130,13 @@ export class PostFeedService {
     // (accepted friends only) is reused below for affinity scoring; contacts
     // (friends ∪ direct-conversation partners) widen the FRIENDS gate exactly
     // like getStories/getStatuses/getReels.
-    const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
+    const [friendIds, dmContactIds, communityCoMemberIds, served] = await Promise.all([
       this.getFriendIds(userId),
       this.getDirectConversationContactIds(userId),
       getCommunityCoMemberIds(this.prisma, userId, this.cache),
+      readerSeparatedFrom(this.prisma, userId, reader),
     ]);
     const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
-    const served = await readerSeparatedFrom(this.prisma, userId, reader);
     const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, allContactIds, communityCoMemberIds, this.cache, served.separatedUserIds);
 
     // Phase 1 — Fetch candidates
@@ -283,13 +283,13 @@ export class PostFeedService {
       }
       return this.fetchAndEnrichStories(archiveWhere, userId, limit, options?.projection === 'tray', () => Promise.resolve([]), now, options?.viewerRole, await readerSeparatedFrom(this.prisma, userId, options?.reader));
     }
-    const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
+    const [friendIds, dmContactIds, communityCoMemberIds, storyReader] = await Promise.all([
       this.getFriendIds(userId),
       this.getDirectConversationContactIds(userId),
       getCommunityCoMemberIds(this.prisma, userId, this.cache),
+      readerSeparatedFrom(this.prisma, userId, options?.reader),
     ]);
     const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
-    const storyReader = await readerSeparatedFrom(this.prisma, userId, options?.reader);
     const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, allContactIds, communityCoMemberIds, this.cache, storyReader.separatedUserIds);
 
     // Archive de l'AUTEUR : mes propres stories restent renvoyées après leur

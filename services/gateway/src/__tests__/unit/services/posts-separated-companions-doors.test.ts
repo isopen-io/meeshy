@@ -95,4 +95,28 @@ describe('#16894 — ce qui voyage avec un post, par porte', () => {
     const where = (prisma.post.findMany.mock.calls[0] as unknown as [{ where: { authorId?: unknown } }])[0].where;
     expect(where.authorId).toEqual({ notIn: expect.arrayContaining([BLOCKED, BLOCKER]) });
   });
+
+  it('le profil (lu par son auteur, sans filtre d’audience) sert quand même la séparation du lecteur', async () => {
+    const prisma = prismaServing([servedPost('p1')]);
+    const page = await new PostFeedService(prisma as never).getUserPosts(VIEWER, VIEWER);
+    expectCompanionsGone(page.items);
+  });
+
+  it('les favoris : une lecture du blocage pour le filtre ET le post servi', async () => {
+    const prisma = {
+      ...prismaServing([]),
+      friendRequest: { findMany: jest.fn<any>(async () => []) },
+      participant: { findMany: jest.fn<any>(async () => []) },
+      userRelation: { findMany: jest.fn<any>(async () => []), findUnique: jest.fn<any>(async () => null) },
+      conversation: { findMany: jest.fn<any>(async () => []) },
+      postBookmark: { findMany: jest.fn<any>(async () => [{ id: 'b1', createdAt: new Date(), post: servedPost('p1') }]) },
+    };
+    const page = await new PostFeedService(prisma as never).getBookmarks(VIEWER);
+    expectCompanionsGone(page.items);
+    const blockReads = prisma.user.findMany.mock.calls.filter((call) => JSON.stringify(call).includes('blockedUserIds'));
+    expect(blockReads).toHaveLength(1);
+    const where = (prisma.postBookmark.findMany.mock.calls[0] as unknown as [{ where: { post: { is: { AND: Array<{ AND?: unknown[] }> } } } }])[0].where;
+    expect(JSON.stringify(where)).toContain('snapshotAuthorId');
+  });
 });
+

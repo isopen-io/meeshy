@@ -6,7 +6,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendUnauthorized, sendBadRequest } from '../../utils/response';
 import { postInclude, NOT_DELETED, type PostPayload } from '../../services/posts/postIncludes';
 import { withMentions } from '../../services/posts/postReferences';
-import { separatedIdsOf } from '../../services/posts/separatedCompanions';
+import { separatedIdsOf, snapshotAuthorNotSeparated } from '../../services/posts/separatedCompanions';
 import { readerSeparatedFrom } from '../../services/posts/separatedReader';
 import { withViewerPostState } from '../../services/posts/viewerPostState';
 import { wireReaderFromRequest, type WireReader } from '../../services/posts/storyEffectsV3';
@@ -129,7 +129,7 @@ export async function chargerPostsParHashtag(
         id: { in: links.map((l) => l.postId) },
         type: { in: ['POST', 'REEL'] },
         deletedAt: NOT_DELETED,
-        ...(separatedIds.length > 0 ? { authorId: { notIn: separatedIds } } : {}),
+        ...(separatedIds.length > 0 ? { authorId: { notIn: separatedIds }, AND: [snapshotAuthorNotSeparated(separatedIds)] } : {}),
         OR: [
           { authorId: viewerUserId },
           { visibility: 'PUBLIC' },

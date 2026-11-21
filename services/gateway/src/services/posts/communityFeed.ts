@@ -3,7 +3,7 @@ import { PostType } from '@meeshy/shared/prisma/client';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 
 import { decodeCursor, encodeCursor } from '../../routes/posts/types';
-import { separatedIdsOf } from './separatedCompanions';
+import { separatedIdsOf, snapshotAuthorNotSeparated } from './separatedCompanions';
 import { readerSeparatedFrom } from './separatedReader';
 import { hoistLocationDeep } from '../location/sharedPlace';
 import { isActiveCommunityMember } from './communityVisibility';
@@ -81,7 +81,7 @@ export async function loadCommunityFeed(
       deletedAt: NOT_DELETED,
       type: { in: [PostType.POST, PostType.REEL] },
       visibility: access === 'member' ? { in: ['PUBLIC', 'COMMUNITY'] } : 'PUBLIC',
-      ...(blockedAuthorIds.length > 0 ? { authorId: { notIn: blockedAuthorIds } } : {}),
+      ...(blockedAuthorIds.length > 0 ? { authorId: { notIn: blockedAuthorIds }, AND: [snapshotAuthorNotSeparated(blockedAuthorIds)] } : {}),
       ...(cursorData
         ? {
             OR: [
