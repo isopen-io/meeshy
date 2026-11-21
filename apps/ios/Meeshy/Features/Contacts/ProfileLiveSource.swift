@@ -48,34 +48,43 @@ struct ProfileLiveSource: View {
         }
     }
 
+    /// Le bloc héros de carte (#20242) dès qu'une position m'est SERVIE, quel que soit le cercle (la passerelle a déjà
+    /// jugé) : la dernière position connue et son heure. Le tableau « En direct » ne redit alors pas le lieu.
     @ViewBuilder
     private func board(now: Date) -> some View {
         let pin = locations.pin(for: request.userId)
+        VStack(spacing: MeeshySpacing.lg) {
+            if let pin {
+                ProfileWhereHero(title: places.name(for: pin) ?? request.displayName,
+                                 stamp: ProfileWhereStamp.of(pin.updatedAt, now: now), now: now,
+                                 onTap: { request.openMap?() }) {
+                    ProfileWhereMiniature(pin: pin, height: ProfileWhereHero<EmptyView>.height)
+                }
+            }
+            liveBoard(now: now)
+        }
+    }
+
+    /// Le lieu vit dans le bloc héros : le tableau ne porte que l'appareil et la présence.
+    @ViewBuilder
+    private func liveBoard(now: Date) -> some View {
         if let board = ProfileLiveBoard.resolve(
             level: circle.toolGateLevel,
-            place: pin.map { ProfileLiveSourceRules.place(of: $0, name: places.name(for: $0), fallback: request.displayName, now: now) },
+            place: nil,
             battery: circle.offersBattery ? ProfileLiveSourceRules.battery(battery, now: now) : nil,
             unreachableSince: circle.offersPhoneReachability ? unreachable?.unreachableSince : nil,
             isOnline: request.isOnline,
             staleAge: request.staleAge,
             mood: request.mood
         ) {
-            ProfileLiveBoardView(
-                board: board, now: now, tint: request.tint,
-                map: pin.map { ProfileWhereMiniature(pin: $0, height: CGFloat(MeeshyStatusTileRecipe.mediaMinHeight)) },
-                onOpenMap: pin == nil ? nil : request.openMap
-            )
+            ProfileLiveBoardView(board: board, now: now, tint: request.tint, map: ProfileWhereMiniature?.none,
+                                 onOpenMap: nil)
         }
     }
 }
 
-/// Ce que la source remet au SDK, en valeurs : le lieu à la précision servie, et la batterie hors épisode retirée.
+/// Ce que la source remet au SDK, en valeurs : la batterie hors épisode retirée.
 enum ProfileLiveSourceRules {
-    static func place(of pin: SharedLocationPin, name: String?, fallback: String, now: Date) -> ProfileLiveBoard.Place {
-        let detail = LocationMapCopy.whereDetail(pin.precision, window: SharedLocationWindow(deadline: pin.deadline, now: now))
-        return ProfileLiveBoard.Place(name: name ?? fallback, detail: detail)
-    }
-
     /// Un relevé n'existe qu'en épisode et jamais au-delà de son TTL : sinon, pas de tuile.
     static func battery(_ state: BatteryReaderState?, now: Date) -> ProfileLiveBoard.Battery? {
         guard let state, !state.isExpired(at: now) else { return nil }

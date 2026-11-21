@@ -20,6 +20,8 @@ struct ProfileTalkieRow: View {
     @State private var holding = false
     @State private var shown: TalkieSettled?
     @State private var remainingSeconds: Int?
+    /// Le téléphone de la personne est injoignable depuis plusieurs minutes (#20241) : le geste laisse un message vocal.
+    @State private var unreachableLasting = false
     @Environment(\.openURL) private var openURL
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -32,8 +34,10 @@ struct ProfileTalkieRow: View {
 
     private var aftermath: TalkieAftermath? { shown.map { TalkieAftermath.of($0.outcome) } }
 
+    private var delivery: TalkieDelivery { TalkieDelivery.of(lasting: unreachableLasting) }
+
     private var line: TalkieCardLine {
-        TalkieCardLine.resolve(phase: sender.phase, waking: sender.waking, aftermath: aftermath)
+        TalkieCardLine.resolve(phase: sender.phase, waking: sender.waking, aftermath: aftermath, delivery: delivery)
     }
 
     var body: some View {
@@ -51,6 +55,7 @@ struct ProfileTalkieRow: View {
             }
             .task(id: shown) { await fade(shown) }
             .task(id: sender.talkWindow) { await countDown(sender.talkWindow) }
+            .modifier(PhoneUnreachableLastingReader(userId: userId, lasting: $unreachableLasting))
     }
 
     private var card: some View {
@@ -103,7 +108,7 @@ struct ProfileTalkieRow: View {
     private var holdButton: some View {
         let live = holding || sender.isActive
         return MeeshyMedallion(tint: tint, fill: .solid, decor: live ? .none : .waves(count: 2), size: .s96,
-                               label: ProfileTalkieWording.holdA11y(name: displayName))
+                               label: ProfileTalkieWording.holdA11y(name: displayName, delivery: delivery))
             .overlay { glyph(live: live).foregroundStyle(MeeshyColors.plateauNoir) }
             .overlay {
                 Circle()
@@ -116,11 +121,11 @@ struct ProfileTalkieRow: View {
             .scaleEffect(live ? Self.pressedScale : 1)
             .background { countdown(live: live) }
             .contentShape(Circle())
-            .modifier(TalkieHoldModifier(sender: sender, userId: userId, pressed: $holding))
+            .modifier(TalkieHoldModifier(sender: sender, userId: userId, pressed: $holding, delivery: delivery))
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(ProfileTalkieWording.holdA11y(name: displayName))
+            .accessibilityLabel(ProfileTalkieWording.holdA11y(name: displayName, delivery: delivery))
             .accessibilityValue(live ? spokenValue : "")
-            .accessibilityHint(ProfileTalkieWording.holdHint)
+            .accessibilityHint(ProfileTalkieWording.holdHint(delivery))
             .accessibilityAddTraits([.isButton, .updatesFrequently])
             .accessibilityIdentifier("talkie.send")
     }
@@ -249,6 +254,7 @@ enum ProfileTalkieWording {
     static func text(for line: TalkieCardLine, name: String) -> String {
         switch line {
         case .hold: hold
+        case .leaveVoice: leaveVoice
         case .connecting: connecting
         case .talking: talking(name: name)
         case .waking: waking(name: name)
@@ -265,6 +271,28 @@ enum ProfileTalkieWording {
 
     static var holdHint: String {
         String(localized: "talkie.send.hold.hint", defaultValue: "Touche deux fois et maintiens, parle, puis relâche.", bundle: .main)
+    }
+
+    /// « Laisser un message vocal » : le téléphone du destinataire est injoignable depuis plusieurs minutes (#20241).
+    static var leaveVoice: String {
+        String(localized: "talkie.send.leaveVoice", defaultValue: "Laisser un message vocal", bundle: .main)
+    }
+
+    static func holdA11y(name: String, delivery: TalkieDelivery) -> String {
+        guard delivery == .voiceMessage else { return holdA11y(name: name) }
+        return String(format: String(localized: "talkie.send.leaveVoice.a11y", defaultValue: "Laisser un message vocal à %@", bundle: .main), name)
+    }
+
+    static func holdHint(_ delivery: TalkieDelivery) -> String {
+        guard delivery == .voiceMessage else { return holdHint }
+        return String(localized: "talkie.send.leaveVoice.hint",
+                      defaultValue: "Son téléphone est injoignable. Touche deux fois et maintiens, parle, puis relâche : ta voix part en message vocal.",
+                      bundle: .main)
+    }
+
+    /// Ce qu'un simple toucher rappelle : le geste, dans le mode où il est.
+    static func holdReminder(_ delivery: TalkieDelivery) -> String {
+        delivery == .voiceMessage ? leaveVoice : hold
     }
 
     static var connecting: String { String(localized: "talkie.send.connecting", defaultValue: "Connexion…", bundle: .main) }
@@ -284,6 +312,16 @@ enum ProfileTalkieWording {
     /// Une issue qui n'est pas une erreur : le repli fait partir la voix en message vocal (#17141).
     static func isInformation(_ outcome: TalkieSendOutcome) -> Bool {
         outcome == .voice
+    }
+
+    /// Un message vocal CHOISI (téléphone injoignable, #20241) ne se dit pas comme un repli : « Parti en message vocal ».
+    @MainActor
+    static func present(_ outcome: TalkieSendOutcome, delivery: TalkieDelivery, toasts: FeedbackToastManager = .shared) {
+        guard delivery == .voiceMessage, outcome == .voice else {
+            present(outcome, toasts: toasts)
+            return
+        }
+        toasts.show(sentAsVoice, type: .info)
     }
 
     /// Dit l'issue : une information neutre pour le repli, une erreur pour le reste.

@@ -336,6 +336,15 @@ enum LocationMapOwnPosition {
         }
     }
 
+    /// La DERNIÈRE position que l'appareil connaît, quel que soit son âge, et son instant (#20242) : le bloc héros de ma
+    /// fiche la montre avec son heure plutôt que rien.
+    static func lastKnownAnyAge() -> (fix: SharedLocationFix, at: Date)? {
+        guard isAuthorized, let location = CLLocationManager().location,
+              let fix = SharedLocationFix(latitude: location.coordinate.latitude, longitude: location.coordinate.longitude,
+                                          accuracy: location.horizontalAccuracy) else { return nil }
+        return (fix, location.timestamp)
+    }
+
     static func lastKnown(now: Date = Date()) -> SharedLocationFix? {
         guard isAuthorized else { return nil }
         let manager = CLLocationManager()

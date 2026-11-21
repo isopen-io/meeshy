@@ -77,21 +77,40 @@ nonisolated enum TalkieAftermath: Equatable {
     }
 }
 
+/// Ce que le geste du talkie fait partir (#20241) : la voix en direct, ou — quand la passerelle me sert que le téléphone
+/// du destinataire est injoignable depuis plusieurs minutes (`PhoneUnreachableLasting`) — un message vocal déposé dans
+/// notre conversation directe. Sans état servi : toujours le direct.
+nonisolated enum TalkieDelivery: Equatable, Sendable {
+    case live
+    case voiceMessage
+
+    static func resolve(unreachable: PhoneReachabilityState?, now: Date) -> TalkieDelivery {
+        PhoneUnreachableLasting.isLasting(unreachable, now: now) ? .voiceMessage : .live
+    }
+
+    static func of(lasting: Bool) -> TalkieDelivery {
+        lasting ? .voiceMessage : .live
+    }
+}
+
 /// La ligne unique de la carte : la phase tant que la voix vit, l'issue de la dernière prise de parole au repos.
 nonisolated enum TalkieCardLine: Equatable {
     case hold
+    /// Au repos, le téléphone du destinataire injoignable : « Laisser un message vocal » (#20241).
+    case leaveVoice
     case connecting
     case talking
     case waking
     case recordingCopy
     case aftermath(TalkieAftermath)
 
-    static func resolve(phase: TalkieSender.Phase, waking: Bool, aftermath: TalkieAftermath?) -> TalkieCardLine {
+    static func resolve(phase: TalkieSender.Phase, waking: Bool, aftermath: TalkieAftermath?,
+                        delivery: TalkieDelivery = .live) -> TalkieCardLine {
         switch phase {
         case .starting: return .connecting
         case .talking: return waking ? .waking : .talking
         case .recordingCopy: return .recordingCopy
-        case .idle: return aftermath.map(TalkieCardLine.aftermath) ?? .hold
+        case .idle: return aftermath.map(TalkieCardLine.aftermath) ?? (delivery == .voiceMessage ? .leaveVoice : .hold)
         }
     }
 }

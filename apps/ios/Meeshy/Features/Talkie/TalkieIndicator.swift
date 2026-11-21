@@ -133,8 +133,10 @@ private struct TalkieBannerTalkButton: View {
     let userId: String
     let name: String
     @Binding var holding: Bool
+    @State private var unreachableLasting = false
 
     private var live: Bool { holding || sender.isActive }
+    private var delivery: TalkieDelivery { TalkieDelivery.of(lasting: unreachableLasting) }
 
     var body: some View {
         Image(systemName: live ? "waveform" : "mic.fill")
@@ -144,10 +146,11 @@ private struct TalkieBannerTalkButton: View {
             .background(Capsule().fill(live ? MeeshyColors.brandPrimary : Color.clear))
             .overlay(Capsule().stroke(MeeshyColors.brandPrimary, lineWidth: 1.5))
             .contentShape(Capsule())
-            .modifier(TalkieHoldModifier(sender: sender, userId: userId, pressed: $holding))
+            .modifier(TalkieHoldModifier(sender: sender, userId: userId, pressed: $holding, delivery: delivery))
+            .modifier(PhoneUnreachableLastingReader(userId: userId, lasting: $unreachableLasting))
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(ProfileTalkieWording.holdA11y(name: name))
-            .accessibilityHint(ProfileTalkieWording.holdHint)
+            .accessibilityLabel(ProfileTalkieWording.holdA11y(name: name, delivery: delivery))
+            .accessibilityHint(ProfileTalkieWording.holdHint(delivery))
             .accessibilityAddTraits([.isButton, .updatesFrequently])
             .accessibilityIdentifier("talkie.incoming.talk")
     }

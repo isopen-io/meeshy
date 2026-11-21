@@ -13,19 +13,19 @@ final class ProfileOwnPositionPreviewTests: XCTestCase {
     }
 
     func test_resolve_sharedWithAKnownFix_showsTheMap() {
-        XCTAssertEqual(ProfileOwnPositionPreview.resolve(recipients: 2, isGhost: false, fix: fix()), .map(fix()))
+        XCTAssertEqual(ProfileOwnPositionPreview.resolve(recipients: 2, isGhost: false, fix: fix(), at: nil), .map(fix(), at: nil))
     }
 
     func test_resolve_notShared_saysItWithoutAMap() {
-        XCTAssertEqual(ProfileOwnPositionPreview.resolve(recipients: 0, isGhost: false, fix: fix()), .note)
+        XCTAssertEqual(ProfileOwnPositionPreview.resolve(recipients: 0, isGhost: false, fix: fix(), at: nil), .note)
     }
 
     func test_resolve_ghost_hidesTheMapEvenWhenShared() {
-        XCTAssertEqual(ProfileOwnPositionPreview.resolve(recipients: 3, isGhost: true, fix: fix()), .note)
+        XCTAssertEqual(ProfileOwnPositionPreview.resolve(recipients: 3, isGhost: true, fix: fix(), at: nil), .note)
     }
 
     func test_resolve_sharedButNoKnownFix_neverDrawsAnEmptyMap() {
-        XCTAssertEqual(ProfileOwnPositionPreview.resolve(recipients: 1, isGhost: false, fix: nil), .note)
+        XCTAssertEqual(ProfileOwnPositionPreview.resolve(recipients: 1, isGhost: false, fix: nil, at: nil), .note)
     }
 
     func test_talkie_isOfferedFromCloseOnly() {

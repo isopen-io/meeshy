@@ -36,6 +36,7 @@ struct ProfileActionsFace: View {
     @ObservedObject var prefs: UserPreferencesManager
     @ObservedObject var sharing: SharedLocationSharingCenter = SharedLocationSharingHolder.center()
     @StateObject private var ghost = LocationGhostModel()
+    @StateObject private var ownPosition = OwnLastPositionReader()
 
     /// « Carte de mes proches » (#18872) : la carte est une action, ouverte en plein écran.
     @State private var showsNearbyMap = false
@@ -111,18 +112,30 @@ struct ProfileActionsFace: View {
         }
     }
 
-    /// L'aperçu de carte de ma position, au-dessus de la rangée, seulement quand elle part et que l'appareil la connaît
-    /// (#20199) : le toucher ouvre la carte de mes proches.
+    /// Le bloc héros de ma position, au-dessus de la rangée, seulement quand elle part et que l'appareil en connaît une
+    /// (#20199, #20242) : la dernière position connue avec son heure, le cache d'abord ; le toucher ouvre la carte.
     @ViewBuilder
     private var positionPreview: some View {
         let recipients = sharing.roster.pruned(now: Date()).recipients.map(\.userId)
-        if case .map(let fix) = ProfileOwnPositionPreview.resolve(recipients: recipients.count, isGhost: ghost.isGhost,
-                                                                    fix: LocationMapOwnPosition.lastKnown()) {
-            ProfileOwnPositionMiniature(fix: fix,
-                                        share: LocationMapOwnShare.resolve(recipientIds: recipients, focusedUserId: nil),
-                                        onTap: { showsNearbyMap = true })
+        // Un `ZStack` et son ancre, jamais un `Group` vide : sans enfant, le relevé silencieux ne partirait pas.
+        ZStack {
+            Color.clear.frame(height: 0).accessibilityHidden(true)
+            if case .map(let fix, let instant) = ProfileOwnPositionPreview.resolve(
+                recipients: recipients.count, isGhost: ghost.isGhost, fix: ownPosition.known?.fix, at: ownPosition.known?.at
+            ) {
+                TimelineView(.periodic(from: .now, by: 30)) { context in
+                    ProfileWhereHero(title: ProfileActionsCopy.positionTitle,
+                                     stamp: instant.flatMap { ProfileWhereStamp.of($0, now: context.date) },
+                                     now: context.date, onTap: { showsNearbyMap = true }) {
+                        ProfileOwnPositionMiniature(fix: fix,
+                                                    share: LocationMapOwnShare.resolve(recipientIds: recipients, focusedUserId: nil),
+                                                    height: ProfileWhereHero<EmptyView>.height, onTap: { showsNearbyMap = true })
+                    }
+                }
                 .accessibilityIdentifier("profile.actions.positionMap")
+            }
         }
+        .task(id: recipients.isEmpty) { await ownPosition.refresh(sharing: !recipients.isEmpty) }
     }
 
     /// « Ma position » : son état en une ligne ; « Partager » tant qu'elle n'est ni partagée ni en pause. La rangée
