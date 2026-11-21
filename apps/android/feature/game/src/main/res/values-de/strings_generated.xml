@@ -642,11 +642,13 @@
     <string name="game_frappe_ancestors_prism">jede tausendste Münze vereint alle Sprachen</string>
     <string name="game_frappe_ancestors_title">Deine Ahnen zeigen sich</string>
     <string name="game_frappe_glory">+%1$s Ruhm</string>
+    <string name="game_frappe_glory_toward">%1$s Ruhm bis %2$s</string>
     <string name="game_frappe_light">dein Licht</string>
     <string name="game_frappe_refused_light">Dein Licht reicht noch nicht. Deine nächsten Funken nähren es.</string>
     <string name="game_frappe_refused_locked">Dein Erbe wartet auf einen höheren Rang. Dein Ruhm öffnet es, dann prägen wir.</string>
     <string name="game_frappe_refused_offline">Gerade keine Verbindung. Sobald sie zurück ist, prägen wir.</string>
     <string name="game_frappe_refused_unknown">Das Prägen hat nicht stattgefunden. Nichts ist verloren: Dein Licht ist unversehrt.</string>
+    <string name="game_frappe_risen">Man nennt dich %1$s</string>
     <string name="game_frappe_say_gold">Nr. %1$s ist aus Gold. Deine Ahnen haben sie gesehen.</string>
     <string name="game_frappe_say_prism">Nr. %1$s ist aus Prisma: Alle Sprachen leuchten darin.</string>
     <string name="game_frappe_say_silver">Nr. %1$s kommt in dein Erbe.</string>

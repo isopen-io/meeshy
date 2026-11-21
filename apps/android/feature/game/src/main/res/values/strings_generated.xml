@@ -642,11 +642,13 @@
     <string name="game_frappe_ancestors_prism">every thousandth coin unites every language</string>
     <string name="game_frappe_ancestors_title">Your ancestors send a sign</string>
     <string name="game_frappe_glory">+%1$s glory</string>
+    <string name="game_frappe_glory_toward">%1$s glory to %2$s</string>
     <string name="game_frappe_light">your light</string>
     <string name="game_frappe_refused_light">Your light isn’t enough yet. Your next sparks will feed it.</string>
     <string name="game_frappe_refused_locked">Your Legacy is waiting for a higher rank. Your glory will open it, and we’ll mint.</string>
     <string name="game_frappe_refused_offline">No connection right now. As soon as it’s back, we mint.</string>
     <string name="game_frappe_refused_unknown">The mint didn’t happen. Nothing is lost: your light is whole.</string>
+    <string name="game_frappe_risen">They call you %1$s</string>
     <string name="game_frappe_say_gold">No. %1$s is gold. Your ancestors saw it.</string>
     <string name="game_frappe_say_prism">No. %1$s is prism: every language shines in it.</string>
     <string name="game_frappe_say_silver">No. %1$s joins your Legacy.</string>
