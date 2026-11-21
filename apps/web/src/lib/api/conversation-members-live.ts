@@ -16,6 +16,7 @@ import { applyViewerRoleUpdate, viewerRoleUpdateOf } from './realtime-viewer-rol
  *   le LECTEUR qui change de rang, la conversation (liste et fil) le reçoit
  *   aussi, avec la capacité que l'événement lui remet (`viewerCapabilities`,
  *   #14690, #15987) — règle unique : `realtime-viewer-role.ts` ;
+ * - `conversation:participant-unbanned` — la cible redevient active (#20227)
  * - `conversation:participant-left` et `conversation:participant-banned` — la
  *   rangée part, le compte baisse ;
  * - `conversation:participant-joined` — la charge ne porte pas la rangée
@@ -90,6 +91,10 @@ export function bindConversationMembersLive(params: {
     [SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, onDeparture],
     [SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onDeparture],
     [SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED, onJoined],
+    // #20227 — un débannissement change le trombinoscope comme une arrivée :
+    // la cible redevient une ligne ACTIVE, donc la liste servie la porte de
+    // nouveau. Même invalidation, pour la même raison.
+    [SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED, onJoined],
   ];
   for (const [event, handler] of bindings) socket.on<unknown>(event, handler);
   return () => {
