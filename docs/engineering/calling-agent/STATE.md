@@ -2375,3 +2375,35 @@ socket jusqu'au client.
 2. **#20257** : les analytics iOS ne comptent que les quatre causes connues. Le lot est petit, en Swift, et se prouve par `ios.yml`.
 3. **#20284** : le débit estimé sur mobile (fluidité), puis **#20280** et **#20273**.
 4. #20185 (recette staging), #11932, #12236, #16933, #20043.
+
+## Cycle 71 — 2026-11-21
+
+- **Base** : `origin/dev` @ `5f406e5ff6`, qui inclut #20275 (#20256, cycle 70). Cette fusion a été faite par la session du cycle 70, encore active ; elle pilote aussi #20258. Ce cycle lui cède les deux PR, qui écrivent les fichiers de statistiques.
+- **Branche** : `claude/determined-volta-2eq9xv`.
+- **Objectif** : #20043. Sur Android, la surveillance d'un appel mesure ses délais sur l'horloge monotone : un saut de l'heure murale (NTP, réglage manuel) ne relance plus l'ICE et ne coupe plus l'appel.
+- **Livré** (`apps/android/feature/calls`, commit `ae077ac597`) :
+  - `CallReliabilityMonitor` lit `CallClock.elapsedMs()`, soit `SystemClock.elapsedRealtime()` en production, pour le chien de garde de mise en relation et pour la détection « à moitié ouvert ».
+    - Leurs ancres (`connectingSinceMs`, `epochStartMs`) ne sont posées que par ces mêmes lectures, et `start()` recrée le chien de garde : les deux horloges ne se mélangent pas.
+  - `CallToastBus.admit` lit aussi l'horloge monotone. Un recul de l'heure murale taisait un même texte pendant une heure.
+  - `WebRtcCallQualitySampler` lit aussi l'horloge monotone pour `atMs`. Cette valeur ne sert qu'à l'écart qui donne le débit, et elle ne quitte pas l'appareil.
+  - Restent en heure murale : `CallOngoingController` (`setWhen`) et `CallCaptureController`, dont l'ancre est comparée à `System.currentTimeMillis()` par le chrono du montage (#20288).
+  - Aucun payload ni aucune valeur persistée ne change.
+- **Tests** :
+  - `CallReliabilityMonitorTest` : 4 témoins (sauts de +1 h et −1 h, en `Connecting` et en lien à moitié ouvert), avec un faux `JumpingWallClock`.
+  - `CallToastBusTest` : 2 témoins, et les deux tests existants avancent désormais les deux horloges ensemble.
+  - `WebRtcCallQualitySamplerTest` : 1 témoin, où le débit est de 8,0 kb/s malgré une heure murale qui saute à chaque lecture.
+  - Rouge, raisonné et contre-vérifié par la QA : 7 témoins sur 7 échouent sur le code de dev. Ils n'ont pas été exécutés localement, car le conteneur ne compile pas `feature/calls`.
+  - CI : `android.yml`, run 44963467115 (`workflow_dispatch`, sha `ae077ac597`).
+- **QA** (`auditeur-adversarial`) : favorable avec réserves.
+  - R1 (moyenne, hors périmètre) : `CallChromeController` mesure encore `hiddenFor` sur l'heure murale. Après un recul de l'horloge, les commandes masquées captent les touchers pendant environ une heure. Versée dans **#20290**.
+  - R2 (faible) : le chrono du montage relève de #20288. L'écart affiché des sous-titres est versé dans #20290.
+  - R3 (faible) : rien n'oblige une future implémentation de production à surcharger `elapsedMs`.
+- **Limites** : rien n'a été vérifié sur appareil.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée : lire le run `android.yml` 44963467115, fusionner `dev` dans la branche, puis fusionner la PR.
+1. **#20258** : si la session du cycle 70 l'a laissée ouverte, la reprendre (run `ios.yml` sur la tête de branche).
+2. **#20290** : les commandes masquées et l'horloge murale, un petit lot Android de fiabilité.
+3. #20257, #20284, #20280, #20273, puis #20288.
+4. #20185 (recette staging), #11932, #12236, #16933.
