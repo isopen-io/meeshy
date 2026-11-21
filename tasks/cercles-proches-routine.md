@@ -1814,3 +1814,20 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `vite build` vert ; poids vert ; les gates navigateur (verbosité, Playwright) ne tournent pas en conteneur, ils se
   prouvent en CI.
 - Prochain lot : #20212 (Android), puis #20127, #20054, #20056, #20086.
+
+## 2026-11-21 — réveil de 15 h : Android lit la source servie (#20212)
+
+- Reprise : la PR #20214 (moitié web de #20126) est menée par le réveil de 13 h, sa CI `ci.yml` en file depuis 14 h 27 :
+  ce réveil n'y touche pas (un push annulerait le run) ; elle a été fusionnée dans `dev` pendant ce réveil (711e1cafc9).
+  Aucune branche vivante n'écrit les chemins Android de la position.
+- Lot : #20212, iso iOS (#20087) et web (#20126). `:core:model` lit `source` (inconnue ⇒ point choisi, absente ⇒ rien ne
+  change), `SharedLocationRoster` garde le point choisi (survit au lancement, s'éteint sans personne), `FIXED_POINT` se lit,
+  et seul un démarrage avec position ET accord porte `source: 'device'`. Le centre ne suit ni n'envoie devant un point
+  choisi, ne republie jamais sa position en repli (tout s'arrête plutôt), et un refus `FIXED_POINT` (relevé ou démarrage)
+  coupe le suivi et relit. La fiche d'un ami demande « Montrer ta position réelle ? », le choix fait attendant la réponse.
+- Libellés : titre, confirmer et garder adoptés du catalogue iOS ; le message iOS (111 caractères en français) aurait
+  fait monter le cliquet de verbosité d'`android:feature/profile` — il est remplacé par une phrase Android de moins de
+  80 caractères dans les 7 langues.
+- Gates locaux : `jvm-check` `:core:model` (`*SharedLocation*`, 7 classes dont la nouvelle, 0 échec), verbosité verte,
+  chaînes générées à jour. Centre, ViewModel et Compose se prouvent par `android.yml` sur la PR.
+- Prochain lot : #20127 (confirmation liée au partage montré, puis web et Android), #20054, #20056, #20086.

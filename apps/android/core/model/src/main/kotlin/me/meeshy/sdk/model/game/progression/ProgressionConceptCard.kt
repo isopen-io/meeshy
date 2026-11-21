@@ -324,7 +324,7 @@ public object ProgressionConceptModel {
     private fun missions(game: GameBlock?, nowMillis: Long): Head {
         val block = game ?: return Head(Piece(null, ConceptFact.MissionsDone))
         val missions = block.missions
-        if (!missions.unlocked) {
+        if (missions.showsDoorOnly) {
             return Head(
                 Piece(
                     GameText.of(GameTextKey.DoorLeagueLocked, count(GameMissionLaws.MISSIONS_MIN_LEVEL)),
@@ -495,7 +495,7 @@ public object ProgressionConceptModel {
             ?: progress.meesh?.progress
         ProgressionConcept.Glory -> game?.glory?.takeIf { it.next != null }?.progress
         ProgressionConcept.Flame -> progress.streak.scale.let { if (it.nextThreshold == null) null else it.progress }
-        ProgressionConcept.Missions -> game?.missions?.takeIf { it.unlocked }
+        ProgressionConcept.Missions -> game?.missions?.takeIf { !it.showsDoorOnly }
             ?.let { share(it.items.count { mission -> mission.isCompleted }, it.items.size) }
         ProgressionConcept.Season -> game?.season?.takeUnless { it.completed }?.progress
         ProgressionConcept.Badges -> share(progress.badgesEarned, progress.badgesTotal)

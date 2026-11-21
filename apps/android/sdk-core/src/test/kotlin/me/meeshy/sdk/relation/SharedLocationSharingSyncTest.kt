@@ -24,8 +24,10 @@ import me.meeshy.sdk.model.relation.SharedLocationPrecision
 import me.meeshy.sdk.model.relation.SharedLocationRoster
 import me.meeshy.sdk.model.relation.SharedLocationSendOutcome
 import me.meeshy.sdk.model.relation.SharedLocationShareDuration
+import me.meeshy.sdk.model.relation.SharedLocationSource
 import me.meeshy.sdk.model.relation.SharedLocationStartRequest
 import me.meeshy.sdk.model.relation.SharedLocationStartVerdict
+import me.meeshy.sdk.model.relation.SharedLocationUpdateGate
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import org.junit.Test
@@ -61,6 +63,7 @@ class SharedLocationSharingSyncTest {
         var account: String? = "me"
         val writes = mutableListOf<String>()
         var startVerdict: SharedLocationStartVerdict = SharedLocationStartVerdict.Started(0L)
+        var updateVerdict: SharedLocationStartVerdict = SharedLocationStartVerdict.Started(0L)
         val connected = MutableStateFlow(false)
         val ownChanged = MutableSharedFlow<Unit>(extraBufferCapacity = 4)
         val starts = mutableListOf<SharedLocationStartRequest>()
@@ -80,7 +83,7 @@ class SharedLocationSharingSyncTest {
                 }
                 override suspend fun update(fix: SharedLocationFix): SharedLocationStartVerdict {
                     updates += fix
-                    return SharedLocationStartVerdict.Started(0L)
+                    return updateVerdict
                 }
                 override suspend fun stop(): Boolean {
                     stops++
@@ -936,5 +939,97 @@ class SharedLocationSharingSyncTest {
         assertThat(relaunched.starts.all { it.isListOnly }).isTrue()
         assertThat(relaunched.updates).isEmpty()
         assertThat(relaunched.fixAsks).isEqualTo(0)
+    }
+
+    private fun pointChosenElsewhere(vararg pairs: Pair<String, Long>) =
+        served(*pairs).copy(source = SharedLocationSource.MANUAL, startedAt = "2026-11-21T15:00:00.000Z")
+
+    @Test
+    fun `un point choisi sur un autre appareil coupe le suivi d'ici et aucun releve ne part`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
+        device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
+
+        device.center.sync()
+        device.stream.emit(LiveLocationFix(45.0, 4.0, accuracy = 5.0))
+        runCurrent()
+
+        assertThat(device.center.roster.value.isFixedPoint).isTrue()
+        assertThat(device.updates).isEmpty()
+        assertThat(SharedLocationRoster.fromStored(device.saved["me"]).isFixedPoint).isTrue()
+    }
+
+    @Test
+    fun `partager devant un point choisi demande d'abord, sans rien envoyer ni demander la position`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
+        device.center.sync()
+        val asksBefore = device.fixAsks
+
+        val problem = device.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.ONE_HOUR)
+
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.ReplacesChosenPoint)
+        assertThat(device.starts).isEmpty()
+        assertThat(device.fixAsks).isEqualTo(asksBefore)
+        assertThat(device.center.roster.value.entry(bob)).isNull()
+    }
+
+    @Test
+    fun `l'accord remplace le point par la position reelle, et l'appareil publie de nouveau`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
+        device.center.sync()
+
+        val problem = device.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.ONE_HOUR, replacingPoint = true)
+        runCurrent()
+
+        assertThat(problem).isNull()
+        assertThat(device.starts.single().wire()["source"]).isEqualTo("device")
+        assertThat(device.starts.single().recipients.map { it.userId }).containsExactly(alice, bob)
+        assertThat(device.center.roster.value.isFixedPoint).isFalse()
+        assertThat(device.following).isEqualTo(1)
+    }
+
+    @Test
+    fun `un partage sans accord refuse devant un point que l'appareil ignorait relit puis demande`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = served()
+        device.startVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.FIXED_POINT)
+        device.center.sync()
+        device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
+
+        val problem = device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.ReplacesChosenPoint)
+        assertThat(device.starts.single().wire()).doesNotContainKey("source")
+        assertThat(device.center.roster.value.entry(alice)).isNotNull()
+        assertThat(device.center.roster.value.entry(bob)).isNull()
+        assertThat(device.center.roster.value.isFixedPoint).isTrue()
+    }
+
+    @Test
+    fun `un releve refuse devant un point choisi coupe le suivi et relit`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = served()
+        device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
+        runCurrent()
+        device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
+        device.updateVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.FIXED_POINT)
+        val readsBefore = device.reads
+        advanceTimeBy(SharedLocationUpdateGate.HEARTBEAT_MS + 1)
+
+        device.stream.emit(LiveLocationFix(45.0, 4.0, accuracy = 5.0))
+        runCurrent()
+        device.stream.emit(LiveLocationFix(46.0, 5.0, accuracy = 5.0))
+        runCurrent()
+
+        assertThat(device.updates).hasSize(1)
+        assertThat(device.reads).isGreaterThan(readsBefore)
+        assertThat(device.center.roster.value.isFixedPoint).isTrue()
     }
 }

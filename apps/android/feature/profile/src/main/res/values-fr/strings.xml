@@ -34,4 +34,5 @@
     <string name="profile_status_connected">Connectés</string>
     <string name="profile_voice_title">Voix</string>
     <string name="shared_location_share_action_a11y">Partager ma position avec %1$s</string>
+    <string name="shared_location_replace_point_message">Ceux qui voient ton point choisi verront ta position réelle à la place.</string>
 </resources>

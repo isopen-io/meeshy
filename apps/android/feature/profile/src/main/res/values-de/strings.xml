@@ -16,4 +16,5 @@
     <string name="profile_status_connected">Verbunden</string>
     <string name="profile_voice_title">Stimme</string>
     <string name="shared_location_share_action_a11y">Meinen Standort mit %1$s teilen</string>
+    <string name="shared_location_replace_point_message">Wer deinen gewählten Punkt sieht, sieht stattdessen deinen echten Standort.</string>
 </resources>

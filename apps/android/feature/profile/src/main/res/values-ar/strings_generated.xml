@@ -105,6 +105,9 @@
     <string name="shared_location_precision_city">على مستوى المدينة</string>
     <string name="shared_location_precision_exact">موقع دقيق</string>
     <string name="shared_location_precision_neighborhood">على مستوى الحي</string>
+    <string name="shared_location_replace_point_confirm">إظهار موقعي الحقيقي</string>
+    <string name="shared_location_replace_point_keep">الإبقاء على النقطة المختارة</string>
+    <string name="shared_location_replace_point_title">هل تريد إظهار موقعك الحقيقي؟</string>
     <string name="shared_location_share_action">مشاركة موقعي</string>
     <string name="shared_location_share_active">يرى %1$s موقعك (%2$s) حتى %3$s</string>
     <string name="shared_location_share_confirm">مشاركة</string>

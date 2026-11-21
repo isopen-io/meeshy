@@ -618,3 +618,39 @@ describe('le concept des étincelles : la poche, le total à vie, la dette', () 
     expect(chipsOf(sparky({ sparks: 0, sparksDebt: 40 })).some((text) => /Une ombre sur 40 étincelles/.test(text))).toBe(true);
   });
 });
+
+/**
+ * LE PREMIER RÊVE SOUS LE NIVEAU 5 (#20160) : la passerelle sert un acte facile avant que le Rêve
+ * complet s'ouvre (#17370). La tête de la carte le dit, comme l'état de la fiche — jamais « Dès le
+ * niveau 5 » au-dessus d'un « 0 sur 1 acte ». Devant un serveur antérieur (aucun acte), la porte reste.
+ */
+describe('la tête du Rêve sous le niveau 5', () => {
+  const firstAct = (): NonNullable<EngagementWithGame['game']>['missions']['items'][number] => {
+    const item = gameBlockWithExtrasFixture().missions.items[0];
+    if (item === undefined) throw new Error('fixture sans mission');
+    return { ...item, progress: 0, completedAt: null };
+  };
+  const belowFive = (items: NonNullable<EngagementWithGame['game']>['missions']['items']): EngagementWithGame =>
+    withGame((game) => ({ ...game, missions: { ...game.missions, unlocked: false, items, personal: null } }));
+
+  test('un acte servi : la tête dit « 0 / 1 » et sa jauge, comme l’état', () => {
+    const view = conceptView('missions', belowFive([firstAct()]), NOW);
+    expect(view.value).toBe('0 / 1');
+    expect(view.valueId).toBe('missions_done');
+    expect(view.gauge).toBe(0);
+    expect(view.value).not.toContain('niveau 5');
+  });
+
+  test('l’acte fait : « 1 / 1 », jauge pleine', () => {
+    const view = conceptView('missions', belowFive([{ ...firstAct(), progress: 5, completedAt: '2026-11-02T08:00:00.000Z' }]), NOW);
+    expect(view.value).toBe('1 / 1');
+    expect(view.gauge).toBe(1);
+  });
+
+  test('devant un serveur antérieur (aucun acte), la porte fermée reste : « Dès le niveau 5 »', () => {
+    const view = conceptView('missions', belowFive([]), NOW);
+    expect(view.value).toContain('5');
+    expect(view.valueId).toBe('missions_unlock_level');
+    expect(view.gauge).toBeNull();
+  });
+});

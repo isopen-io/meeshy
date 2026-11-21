@@ -31,7 +31,7 @@ import {
   isMessageEditedEvent,
 } from './realtime-message-mutations';
 import { applyMessageHiddenForMe, applyMessageRestoredForMe, isMessageHiddenForMeEvent, isMessageRestoredForMeEvent } from './realtime-message-hidden';
-import { applyViewerMembershipEnded, viewerMembershipEndedOf } from './realtime-membership-ended';
+import { applyViewerMembershipEnded, applyViewerMembershipRestored, viewerMembershipEndedOf, viewerMembershipRestoredOf } from './realtime-membership';
 import { applyMemberCountChange, memberCountChangeOf, type MembershipChange } from './realtime-member-count';
 import { applyConversationGone, conversationGoneOf, viewerConversationOf } from './realtime-conversation-gone';
 import { applyMessagePinnedEvent, applyMessageUnpinnedEvent, isMessagePinnedEvent, isMessageUnpinnedEvent } from './realtime-message-pin';
@@ -533,7 +533,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
 
   const onParticipantJoined = (payload: unknown): void => applyMembershipCount(payload, 'joined');
 
-  /** `conversation:participant-left` / `-banned` qui nomment le lecteur (#11415) : il n'y est plus membre. Règle : `realtime-membership-ended.ts`. */
+  /** `conversation:participant-left` / `-banned` qui nomment le lecteur (#11415) : il n'y est plus membre. Règle : `realtime-membership.ts`. */
   const onParticipantDeparture =
     (change: Exclude<MembershipChange, 'joined'>) =>
     (payload: unknown): void => {
@@ -543,6 +543,26 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     };
   const onParticipantLeft = onParticipantDeparture('left');
   const onParticipantBanned = onParticipantDeparture('banned');
+
+  /**
+   * `conversation:participant-unbanned` qui nomme le lecteur ET restaure son
+   * appartenance (#20227) : il y est de nouveau membre. Règle :
+   * `realtime-membership.ts`.
+   *
+   * La liste se relit EN ENTIER, comme `conversation:restored` : un
+   * débannissement n'écrit qu'un `participant.update`, donc
+   * `Conversation.updatedAt` ne bouge pas et le delta de liste ne peut PAS
+   * porter ce changement.
+   */
+  const onParticipantUnbanned = (payload: unknown): void => {
+    const restored = viewerMembershipRestoredOf(payload, deps.viewerId());
+    if (restored !== null) {
+      applyViewerMembershipRestored(deps.queryClient, restored);
+      requestFullConversationRead(deps.queryClient);
+      relaunchConversationList(deps.queryClient);
+    }
+    applyMembershipCount(payload, 'unbanned');
+  };
 
   /** `conversation:closed` / `-obsoleted` (#14645) — ligne, détail et messages partent. Règle : `realtime-conversation-gone.ts`. */
   const onConversationGone = (payload: unknown): void => {
@@ -865,6 +885,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED, onParticipantJoined);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, onParticipantLeft);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onParticipantBanned);
+  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED, onParticipantUnbanned);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_CLOSED, onConversationGone);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_OBSOLETED, onConversationGone);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_DELETED, onConversationDeletedForMe);
@@ -947,6 +968,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED, onParticipantJoined);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, onParticipantLeft);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onParticipantBanned);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED, onParticipantUnbanned);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_CLOSED, onConversationGone);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_OBSOLETED, onConversationGone);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_DELETED, onConversationDeletedForMe);

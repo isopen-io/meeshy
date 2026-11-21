@@ -105,9 +105,11 @@ async function buildApp(
   const prisma = {
     postComment: {
       findUnique: jest.fn().mockResolvedValue({ content: 'hi' }),
-      // La cible d'un DELETE se relit par `select: { authorId, postId }` (#11149).
+      // La cible d'un DELETE se relit par `select: { authorId, postId }` (#11149) ;
+      // la tranche d'ACL (`loadCommentPostAcl`) se reconnaît à `select.post`, et
+      // porte aussi l'auteur du commentaire depuis #20216 (aucun blocage ici).
       findFirst: jest.fn().mockImplementation(async (args: any) =>
-        args?.select?.authorId ? { authorId: commentAuthorId, postId: POST_ID } : { postId: POST_ID, post: publicAcl }),
+        args?.select?.post ? { postId: POST_ID, authorId: commentAuthorId, post: publicAcl } : { authorId: commentAuthorId, postId: POST_ID }),
     },
     post: {
       findUnique: jest.fn().mockResolvedValue(null),
@@ -115,6 +117,7 @@ async function buildApp(
     },
     user: {
       findUnique: jest.fn().mockResolvedValue({ role: opts.commentAuthorRole ?? 'USER', systemLanguage: 'fr' }),
+      findFirst: jest.fn().mockResolvedValue(null),
     },
     adminAuditLog: { create: jest.fn().mockResolvedValue({ id: 'audit-1' }) },
   } as any;

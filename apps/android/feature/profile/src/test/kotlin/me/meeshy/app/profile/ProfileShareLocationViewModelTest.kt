@@ -33,6 +33,8 @@ class ProfileShareLocationViewModelTest {
         val rosterFlow = MutableStateFlow(SharedLocationRoster.EMPTY)
         var restored = 0
         val stopped = mutableListOf<String>()
+        val replacing = mutableListOf<Boolean>()
+        var showsChosenPoint = false
         override val roster: StateFlow<SharedLocationRoster> = rosterFlow
         override val isBusy: StateFlow<Boolean> = MutableStateFlow(false)
         override fun restore() { restored++ }
@@ -40,7 +42,10 @@ class ProfileShareLocationViewModelTest {
             userId: String,
             precision: SharedLocationPrecision,
             duration: SharedLocationShareDuration,
+            replacingPoint: Boolean,
         ): SharedLocationShareProblem? {
+            replacing += replacingPoint
+            if (showsChosenPoint && !replacingPoint) return SharedLocationShareProblem.ReplacesChosenPoint
             if (answer == null) rosterFlow.value = rosterFlow.value.adding(userId, precision, duration, now)
             return answer
         }
@@ -94,6 +99,40 @@ class ProfileShareLocationViewModelTest {
         vm.share(SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
         vm.stop()
         assertThat(sharing.stopped).containsExactly(friend)
+        assertThat(vm.state.value.entry).isNull()
+    }
+
+    @Test
+    fun `devant un point choisi rien ne part, la question se pose avec le choix fait et seul l'accord le remplace`() {
+        val sharing = FakeSharing().apply { showsChosenPoint = true }
+        val vm = ProfileShareLocationViewModel(sharing).also { it.load(friend) }
+
+        vm.share(SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS)
+
+        assertThat(vm.state.value.entry).isNull()
+        assertThat(vm.state.value.problem).isNull()
+        assertThat(vm.state.value.replacingPoint)
+            .isEqualTo(ProfileShareChoice(SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS))
+
+        vm.confirmReplacingPoint()
+
+        assertThat(sharing.replacing).containsExactly(false, true).inOrder()
+        assertThat(vm.state.value.replacingPoint).isNull()
+        assertThat(vm.state.value.entry)
+            .isEqualTo(SharedLocationRoster.Entry(SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS.millis))
+    }
+
+    @Test
+    fun `garder le point choisi ne fait rien partir`() {
+        val sharing = FakeSharing().apply { showsChosenPoint = true }
+        val vm = ProfileShareLocationViewModel(sharing).also { it.load(friend) }
+
+        vm.share(SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        vm.keepChosenPoint()
+        vm.confirmReplacingPoint()
+
+        assertThat(sharing.replacing).containsExactly(false)
+        assertThat(vm.state.value.replacingPoint).isNull()
         assertThat(vm.state.value.entry).isNull()
     }
 }
