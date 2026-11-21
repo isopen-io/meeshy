@@ -25,6 +25,9 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
     @Published private(set) var joinRequestPending = false
     /// Un refus de la jonction dit dans la langue du lecteur (délai après un refus).
     @Published private(set) var joinRefusal: CommunityJoinRefusal?
+    /// La demande du lecteur a été refusée (#19948) : « Demande refusée »
+    /// jusqu'à cette date — servie par le détail ou annoncée en direct.
+    @Published private(set) var joinDeclinedUntil: Date?
 
     let communityId: String
     private let service: CommunityServiceProviding
@@ -34,6 +37,8 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
     private var liveUpdates: AnyCancellable?
     private var liveMembers: AnyCancellable?
     private var liveDeletions: AnyCancellable?
+    private var liveDecisions: AnyCancellable?
+    private let now: @MainActor () -> Date
     private let memberLane = OrderedEventLane()
 
     /// `communityUpdates` : `community:updated` (#18439) réécrit l'identité
@@ -43,6 +48,8 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
     /// fait suivre le rôle du lecteur quand le geste le concerne.
     /// `deletions` : `community:deleted` (#19591) rend la fiche indisponible
     /// sur-le-champ, puis la relit en silence.
+    /// `joinDecisions` : `community:join-request-decided` (#19948) fait passer
+    /// « Demande envoyée » à « Demande refusée » sans relecture.
     init(
         communityId: String,
         service: CommunityServiceProviding = CommunityService.shared,
@@ -51,13 +58,16 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
         communityUpdates: AnyPublisher<CommunityUpdatedEvent, Never> = CommunityUpdateChannel.live,
         memberChanges: AnyPublisher<CommunityMemberChange, Never> = CommunityMemberChannel.live,
         deletions: AnyPublisher<String, Never> = CommunityDeletedChannel.live,
-        myCommunities: MyCommunitiesWrites = .live
+        joinDecisions: AnyPublisher<CommunityJoinRequestDecidedEvent, Never> = CommunityJoinRequestChannel.liveDecisions,
+        myCommunities: MyCommunitiesWrites = .live,
+        now: @escaping @MainActor () -> Date = { Date() }
     ) {
         self.communityId = communityId
         self.service = service
         self.currentUserId = currentUserId
         self.postsCache = postsCache
         self.myCommunities = myCommunities
+        self.now = now
         self.liveUpdates = communityUpdates
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in self?.apply(event) }
@@ -65,6 +75,19 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
             .relay(through: memberLane) { [weak self] change in await self?.apply(change) }
         self.liveDeletions = deletions
             .relay(through: memberLane) { [weak self] communityId in await self?.applyDisappearance(of: communityId) }
+        self.liveDecisions = joinDecisions
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in self?.apply(event) }
+    }
+
+    /// Le refus de la demande du lecteur : la charge dit déjà la date, rien ne
+    /// se relit. Une autre communauté, une charge illisible ou un lecteur déjà
+    /// entré par une autre porte ne changent rien.
+    func apply(_ decided: CommunityJoinRequestDecidedEvent) {
+        guard decided.communityId == communityId, !isMember,
+              let until = decided.refusedUntil, until > now() else { return }
+        joinRequestPending = false
+        joinDeclinedUntil = until
     }
 
     /// La communauté regardée a été supprimée ou désactivée : l'écran dit
@@ -79,6 +102,7 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
         isCreator = false
         adopt(role: nil)
         joinRequestPending = false
+        joinDeclinedUntil = nil
         loadFailure = .refused
         await forgetCachedPosts()
         await myCommunities.remove(communityId)
@@ -162,6 +186,7 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
         requiresJoinApproval = apiCommunity.requiresJoinApproval == true
         adopt(role: servedRole ?? recordRole)
         joinRequestPending = !isMember && apiCommunity.currentUserJoinRequest == "pending"
+        joinDeclinedUntil = isMember ? nil : apiCommunity.joinDeclinedUntil(now: now())
     }
 
     /// Le créateur vaut admin quand aucun rôle n'est tenu.
@@ -170,7 +195,7 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
         isMember = role != nil
         currentUserRole = role ?? .member
         isAdmin = currentUserRole.hasMinimumRole(.admin) || isCreator
-        if isMember { joinRequestPending = false }
+        if isMember { joinRequestPending = false; joinDeclinedUntil = nil }
     }
 
     /// Une communauté qui valide chaque entrée dit « Demande envoyée » dès le
@@ -178,7 +203,7 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
     /// rien : ni rôle, ni effectif, ni « mes communautés » avant l'acceptation,
     /// qui arrive par `community:member-joined`.
     func joinCommunity() async {
-        guard !joinRequestPending else { return }
+        guard !joinRequestPending, !isDeclined else { return }
         let asksForEntry = requiresJoinApproval
         joinRefusal = nil
         if asksForEntry { joinRequestPending = true } else { isLoading = true }
@@ -199,6 +224,12 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
             joinRefusal = CommunityJoinRefusal.classify(error)
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Avant la date servie, une nouvelle demande serait refusée (403
+    /// `COMMUNITY_JOIN_COOLDOWN`) : rien ne part.
+    private var isDeclined: Bool {
+        joinDeclinedUntil.map { $0 > now() } ?? false
     }
 
     func leaveCommunity() async {
