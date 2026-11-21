@@ -23,10 +23,14 @@ function conversation(type: string, title: string | null = 'Équipe') {
     type,
     title,
     createdAt: CREATED_AT,
+    // `isActive` et `bannedAt` sont PROJETÉS par la production depuis #20100 :
+    // l'audience des invités se juge après lecture (`participationEstVivante`),
+    // le créateur restant cherché sur le sur-ensemble. Une fixture qui les omet
+    // atteste un rang que la passerelle ne reçoit pas.
     participants: [
-      { userId: CREATOR, role: 'creator', messageRequestAt: null, user: { id: CREATOR, displayName: 'Créa', username: 'crea', avatar: 'a.png', firstName: null, lastName: null } },
-      { userId: ALICE, role: 'member', messageRequestAt: null, user: { id: ALICE, displayName: 'Alice', username: 'alice', avatar: null, firstName: null, lastName: null } },
-      { userId: BOB, role: 'member', messageRequestAt: new Date(), user: { id: BOB, displayName: 'Bob', username: 'bob', avatar: null, firstName: null, lastName: null } },
+      { userId: CREATOR, role: 'creator', isActive: true, bannedAt: null, messageRequestAt: null, user: { id: CREATOR, displayName: 'Créa', username: 'crea', avatar: 'a.png', firstName: null, lastName: null } },
+      { userId: ALICE, role: 'member', isActive: true, bannedAt: null, messageRequestAt: null, user: { id: ALICE, displayName: 'Alice', username: 'alice', avatar: null, firstName: null, lastName: null } },
+      { userId: BOB, role: 'member', isActive: true, bannedAt: null, messageRequestAt: new Date(), user: { id: BOB, displayName: 'Bob', username: 'bob', avatar: null, firstName: null, lastName: null } },
     ],
   };
 }
