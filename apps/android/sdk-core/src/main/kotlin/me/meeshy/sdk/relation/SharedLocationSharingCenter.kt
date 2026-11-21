@@ -433,6 +433,8 @@ class SharedLocationSharingCenter internal constructor(
                 false
             }
             SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.FIXED_POINT) -> {
+                // La passerelle sert un point choisi : la liste le dit tout de suite, une relecture en panne la laisse muette.
+                adopt(ticket, _roster.value.withFixedPoint(true))
                 stopFollowingDevice()
                 true
             }

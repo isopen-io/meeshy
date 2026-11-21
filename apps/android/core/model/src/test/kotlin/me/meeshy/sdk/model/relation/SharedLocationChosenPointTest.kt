@@ -60,6 +60,15 @@ class SharedLocationChosenPointTest {
     }
 
     @Test
+    fun `la derniere personne en retrait en attente ne fait pas oublier le point a la suivante`() {
+        val withdrawn = mine().withFixedPoint(true).withdrawing(alice, nowMillis = 0L)
+        val bob = "bbbbbbbbbbbbbbbbbbbbbbbb"
+        assertThat(withdrawn.isFixedPoint).isFalse()
+        assertThat(withdrawn.adding(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR, nowMillis = 0L).isFixedPoint).isTrue()
+        assertThat(SharedLocationRoster.EMPTY.withFixedPoint(true).adding(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR, 0L).isFixedPoint).isFalse()
+    }
+
+    @Test
     fun `un point choisi qui n'a pas pu se remplacer se lit comme tel`() {
         assertThat(SharedLocationSendOutcome.ofRefusal("SHARED_LOCATION_FIXED_POINT")).isEqualTo(SharedLocationSendOutcome.FIXED_POINT)
     }
