@@ -82,6 +82,8 @@
 	<string>Meeshy uses Face ID to provide secure and convenient authentication.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>With your consent, Meeshy reads only the time of falls your Apple Watch detects, to alert your Blood links right away. No other health data is read or sent.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Meeshy never writes any health data. Health access only reads the time of falls your Apple Watch detects, to alert your Blood links right away.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Meeshy uses your location to share your current location with contacts and find nearby friends.</string>
 	<key>NSAlarmKitUsageDescription</key>
