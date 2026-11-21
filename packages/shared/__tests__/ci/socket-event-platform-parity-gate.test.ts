@@ -112,10 +112,45 @@ const ASYMETRIES: readonly {
   {
     absents: ['web', 'ios'],
     raison:
-      "signaux que seul le miroir ANDROID cite : la pièce jointe prête côté SDK Kotlin et le "
-      + "réordonnancement des communautés, dont le web persiste la ligne sans écouter l'écho. À instruire "
-      + 'avec le lot qui porte ces deux gestes, pas isolément.',
-    events: ['attachment:ready', 'user:preferences-community-reordered'],
+      "signal que seul le miroir ANDROID cite : la pièce jointe prête côté SDK Kotlin. À instruire avec le "
+      + 'lot qui porte ce geste, pas isolément. '
+      + "(`user:preferences-community-reordered` figurait ici jusqu'au cycle 207 : mesuré, la citation "
+      + "d'Android était la PHRASE « `user:preferences-community-reordered` stays unheard » de "
+      + "`PreferencesSocketManager.kt` — une NÉGATION comptée comme un lecteur. Plus aucun client ne le "
+      + "cite : il est passé à l'inventaire de l'orphan gate, #20267.)",
+    events: ['attachment:ready'],
+  },
+  {
+    absents: ['android', 'ios'],
+    raison:
+      "`authenticated` est l'avis de fin d'authentification du SOCKET, et le WEB l'écoute — c'est lui qui "
+      + 'déclenche ses rattrapages de reconnexion (#18573, `socket.ts` et `call-socket-bridge.ts`). iOS et '
+      + "Android lisent l'ACCUSÉ de la poignée de main et n'ont aucun rattrapage à déclencher dessus. "
+      + 'Mesuré au cycle 207 (#20267) : le relevé ne RÉSOLVAIT pas ce nom — il est déclaré dans '
+      + '`session-event-names.ts`, une des cartes de domaine que `SERVER_EVENTS` répand —, si bien que '
+      + "l'orphan gate le portait comme « cité par AUCUN client », ce qui était faux du web.",
+    events: ['authenticated'],
+  },
+  {
+    absents: ['web'],
+    raison:
+      "le web REÇOIT la batterie des autres, il n'en REND pas : `battery:pull-requested` ne vise que le "
+      + "téléphone de l'ÉMETTEUR (`batteryPull.ts`, room de l'émetteur seul) et un onglet n'a pas de "
+      + 'batterie à relever. `battery-host.tsx` le dit — « le web REÇOIT, il n\'émet pas … cet onglet '
+      + "n'écoute pas l'événement » —, et c'est cette phrase que le relevé comptait comme un lecteur "
+      + 'jusqu\'au cycle 207 (#20267). Asymétrie DÉCIDÉE, pas un retard.',
+    events: ['battery:pull-requested'],
+  },
+  {
+    absents: ['web', 'ios'],
+    raison:
+      "`pack:installation-updated` — un pack installé ou retiré sur un AUTRE de mes appareils. Android le "
+      + 'ROUTE (`MessageSocketManager`, puis `PackShopViewModel` et `ProfileDecorViewModel`) ; iOS et le web '
+      + "ne le NOMMENT que dans un doc-comment (l'origine `remote` d'un retrait côté iOS, la comparaison de "
+      + '`library-sync.ts` côté web) et relisent leurs vitrines par REST. `sticker:library-updated`, qu\'ils '
+      + 'écoutent tous deux, porte la BIBLIOTHÈQUE de stickers et non la POSSESSION d\'un pack : ce n\'est pas '
+      + 'le même fait. À instruire avec le lot des vitrines.',
+    events: ['pack:installation-updated'],
   },
 ];
 
