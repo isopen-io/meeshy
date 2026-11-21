@@ -131,6 +131,42 @@ describe('aucune course ne sert la position réelle APRÈS un point choisi (#201
     expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items.map((item) => item.latitude)).toEqual([CHOISI.latitude]);
   });
 
+  it('le point choisi n’est jamais remplacé, même un instant : un « device » explicite qui suit le refus gagne, sans résurrection', async () => {
+    const m = monde();
+    await partagerAppareil(m);
+    m.avancer(MINUTE);
+    m.suspendreProchainePrise();
+    const demarrageAppareil = partagerAppareil(m, PLUS_LOIN);
+    await tick();
+    await tick();
+    await choisirPoint(m);
+    expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items.map((item) => item.latitude)).toEqual([CHOISI.latitude]);
+    m.relacherPrise();
+    expect(await demarrageAppareil).toMatchObject({ success: false, code: SHARED_LOCATION_ERROR_CODES.FIXED_POINT });
+
+    const remplacement = await startSharedLocation(m.deps, EMETTEUR, { recipients: DESTINATAIRES, durationMinutes: 60, position: PLUS_LOIN, source: 'device' });
+
+    expect(remplacement).toMatchObject({ success: true });
+    expect(await ownSharedLocationFor(m.deps, EMETTEUR)).toMatchObject({ source: 'device' });
+    expect(dernierServi(m, AMI)).toMatchObject({ latitude: PLUS_LOIN.latitude });
+  });
+
+  it('un démarrage sans source devancé par un autre partage d’APPAREIL relit et prend le pointeur', async () => {
+    const m = monde();
+    await partagerAppareil(m);
+    m.avancer(MINUTE);
+    m.suspendreProchainePrise();
+    const lent = partagerAppareil(m, PLUS_LOIN);
+    await tick();
+    await tick();
+    expect(await partagerAppareil(m)).toMatchObject({ success: true });
+    m.relacherPrise();
+
+    expect(await lent).toMatchObject({ success: true });
+    expect(dernierServi(m, AMI)).toMatchObject({ latitude: PLUS_LOIN.latitude });
+    expect((await readSharedLocation(m.deps.cache, EMETTEUR, m.deps.now()))?.position).toMatchObject({ latitude: PLUS_LOIN.latitude });
+  });
+
   it('un démarrage qui DIT « device » remplace toujours le point choisi, même dans cette course', async () => {
     const m = monde();
     await partagerAppareil(m);
