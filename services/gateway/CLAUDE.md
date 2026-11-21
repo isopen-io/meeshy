@@ -759,9 +759,23 @@ elle NOMME ce qu'elle laisse dehors (`AUDIENCE_ROOTS` /
 `AUDIENCE_SCOPE`) : `services/gateway/src` (préfixe vide, l'orthographe
 historique) et `services/agent/src` (préfixe `@meeshy/agent/`).
 `services/translator` (Python, aucun client Prisma), `packages/shared` (qui
-DÉCLARE la loi et n'interroge rien), `apps/*` et `scripts/` sont dehors parce
-qu'ils n'ont **aucune lecture à garder** — c'est écrit dans une table, pas
-déduit d'un chemin. Une racine déclarée et absente du disque JETTE.
+DÉCLARE la loi et n'interroge rien) et `apps/*` (aucun client Prisma instancié)
+sont dehors parce qu'ils n'ont **aucune lecture à garder**.
+
+**`scripts/` en a, lui, et sa ligne a dû être réécrite** — 6 lectures de
+`Participant` dans 4 fichiers, dont `mesure-succession-plafonds.ts` qui porte une
+portée écrite sur `isActive` NU, c'est-à-dire exactement le discriminant du
+balayage. Sa raison de sortie n'est donc PAS « aucune lecture à garder » mais
+**« hors CI, aucune surface servie, aucune de ces lectures ne décide d'une
+autorisation »** : des outils de migration et de mesure qu'un humain lance à la
+main. C'est écrit dans une table, pas déduit d'un chemin, et une racine déclarée
+absente du disque JETTE.
+
+> **Une racine EXCLUE porte une raison, et la raison est une affirmation comme
+> les autres.** Le premier jet de cette table a écrit « aucun accès base » de
+> `scripts/` — faux, et faux précisément là où la leçon du lot demande que
+> l'exclusion soit « vérifiable ». Le remède n'est pas d'entrer la racine : la
+> bonne raison existait, elle n'avait pas été cherchée.
 
 > **#20091 avait déplacé la portée de `src/socketio/` à `src/` — d'un
 > RÉPERTOIRE, pas d'un PAQUET.** La leçon qu'il écrivait (« une portée est une
@@ -860,8 +874,12 @@ correctif est celle-ci (#16690) :
 | **COMBIEN ils sont** (mesure) | afficher un nombre | dire ce que le nombre alimente ; la troncature et le sur-comptage y sont des nombres FAUX, pas des fuites |
 
 Une ligne `isActive: true, bannedAt ≠ null` **existe en base** : son producteur
-est fermé (#19688, #10436), aucune migration n'a repris les lignes existantes,
-et sa room `user:<id>` est rejointe INCONDITIONNELLEMENT.
+est fermé (#19688, #10436), la migration qui reprendrait les lignes existantes
+EXISTE (#16690,
+`packages/shared/prisma/migrations/2026-11-07-participant-active-and-banned.mongodb.js`)
+et n'a été exécutée NULLE PART, et sa room `user:<id>` est rejointe
+INCONDITIONNELLEMENT. **La population n'est donc pas mesurée** : ce que ce §
+décrit est un risque instruit, jamais un incident constaté.
 
 **Le cliquet voit DEUX formes d'audience depuis #20100**, et la seconde n'a pas de
 portée à lire :

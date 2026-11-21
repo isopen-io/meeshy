@@ -25,6 +25,7 @@ import { describe, it, expect } from '@jest/globals';
 import * as fs from 'fs';
 import {
   sweepConversationAudiences,
+  assertRootExists,
   AUDIENCE_SCOPE,
   DELIBERATELY_WIDE,
   MEASURED_NOT_INSTRUCTED,
@@ -107,6 +108,20 @@ describe('#20091 — le balayage des audiences voit tout `src/`, pas un réperto
  * vide et un balayage aveugle sont le même vert ».
  */
 describe('#20111 — la portée couvre les paquets qui lisent `Participant`', () => {
+  /**
+   * Le ROUGE propre du refus de racine absente — constat B7 de l'audit
+   * adversarial de #20111. Tant qu'il vivait en ligne dans la boucle, le
+   * remplacer par un `continue` laissait les 36 témoins VERTS : la propriété
+   * était tenue par son voisin ci-dessous, jamais par un rouge à elle. **Une
+   * ceinture sans témoin se lit comme la garde.**
+   */
+  it('JETTE sur une racine déclarée que le disque ne porte pas', () => {
+    expect(() => assertRootExists('/racine/qui/n/existe/pas/20111')).toThrow(/racine déclarée ABSENTE/);
+    for (const { dir } of AUDIENCE_SCOPE) {
+      expect(() => assertRootExists(dir)).not.toThrow();
+    }
+  });
+
   it('déclare ses racines, et chacune EXISTE sur le disque', () => {
     expect(AUDIENCE_SCOPE.length).toBeGreaterThanOrEqual(2);
     for (const { dir } of AUDIENCE_SCOPE) {

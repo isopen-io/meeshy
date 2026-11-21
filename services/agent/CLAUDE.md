@@ -34,23 +34,50 @@ L'agent **Animateur** est activé par défaut sur toutes les conversations pour 
 3.  **Support (SAV)**: Agent dédié à la résolution de tickets ou à l'aide utilisateur. Utilise souvent le rôle `AGENT` sur son profil.
 4.  **FAQ**: Répond aux questions fréquentes basées sur une base de connaissances.
 
-## 🚫 L'agent ne parle JAMAIS à la place d'un membre BANNI (#20111)
+## 🚫 Un membre BANNI n'est ni élu ni servi par l'agent — les DEUX bouts (#20111)
 
 **Toute lecture de `Participant` de ce service porte `PARTICIPATION_VIVANTE`**
 — `isActive: true` **et** `bannedAt` nul ou absent —, importée de
 `@meeshy/shared/utils/participation-vivante`, jamais réécrite.
 
-Les trois lectures concernées vivent dans `src/memory/mongo-persistence.ts` :
-`getPotentialControlledUsers` et `getLeastActiveParticipants` (les sélecteurs
-de membres dormants, qui décident **à la place de qui l'agent va parler**) et
-le `participant.groupBy` de `getEligibleConversations` (la MESURE qui élit les
-conversations à scanner).
+**Le titre a dû être réécrit, et il faut dire pourquoi.** Il disait « l'agent ne
+parle JAMAIS à la place d'un membre banni » quand le lot ne gardait que
+l'ÉLECTION. Une garde partielle annoncée totale est pire qu'une garde absente :
+personne ne va vérifier derrière. Ce qui est tenu, et ce qui ne l'est pas :
+
+| ce que c'est | où | tenu ? |
+|---|---|---|
+| **ÉLECTION** — qui entre sous contrôle | `getPotentialControlledUsers`, `getLeastActiveParticipants` | **oui** |
+| **MESURE** — quelles conversations valent un scan | le `participant.groupBy` de `getEligibleConversations` | **oui** |
+| **LIVRAISON** — qui l'agent sert, juste avant de parler | `getControlledUsers`, appelé par les TROIS chemins (`reactive-handler`, `conversation-scanner`, `server.ts`) | **oui**, fail-closed |
+| **le rôle déjà DÉTENU** — `AgentUserRole` au bannissement | `participant-ban-core.ts` (passerelle) | **non — #20208** |
+| le fil retenu sur `hasRoles` seul, donc scanné pour rien | `getEligibleConversations` | **non — #20208** |
+
+La LIVRAISON était le trou, et c'est un audit adversarial qui l'a ouvert : elle
+ne lisait **aucune** participation — `agentUserRole.findMany({ where: {
+conversationId } })` nu, puis un filtre sur la seule horloge
+`User.lastActiveAt`. Donc **quiconque était élu avant son bannissement restait
+animé indéfiniment**, et un **épinglage manuel** (`AgentConfig.manualUserIds`)
+fabriquait un contrôlé sans lire `Participant` du tout.
+
+> **Une garde posée sur l'ÉLECTION ne garde pas la LIVRAISON.** La question du
+> cycle 202 — « qui AUTORISE ce que cette clause rend ? » — doit se poser dans
+> les DEUX sens : *qui autorise ce que cette clause rend ?* **et** *cette clause
+> est-elle rejouée là où l'effet se produit ?*. Et le cliquet des audiences ne
+> pouvait pas voir ce trou **par construction** : un cliquet qui garde une TABLE
+> ne dit rien d'un chemin qui ne l'interroge pas.
+
+L'épinglage manuel garde exactement ce qu'il a toujours contourné —
+**l'horloge d'inactivité** — jamais l'appartenance.
 
 Pourquoi ce n'est pas une garde cosmétique : elles portaient `isActive: true`
 NU, et la ligne `{ isActive: true, bannedAt ≠ null }` **existe en base** —
 bannir pendant qu'une participation est inactive n'écrit que `bannedAt`
-(`conversationBanState.ts` de la passerelle), et aucune migration n'a repris
-les lignes existantes. Un membre actif-et-banni était donc éligible, et l'agent
+(`conversationBanState.ts` de la passerelle). La migration qui reprendrait les
+lignes existantes EXISTE —
+`packages/shared/prisma/migrations/2026-11-07-participant-active-and-banned.mongodb.js`
+(#16690) — et n'a été exécutée **nulle part** : la population n'est donc pas
+mesurée, et ce que ce § décrit est un risque instruit, pas un incident mesuré. Un membre actif-et-banni était donc éligible, et l'agent
 publiait un message signé de quelqu'un d'**exclu** dans le fil dont il est
 exclu. Ce n'est pas une fuite de lecture : c'est une **injection de contenu
 attribuée à une personne bannie**.
@@ -65,8 +92,9 @@ Deux pièges, tous deux mesurés :
   sa propre copie**, et passe aussi bien avec la clause juste qu'avec celle qui
   éteint tout. `src/__tests__/memory/mongo-persistence-living-participation.test.ts`
   ÉVALUE le `where` contre des documents nus (`findManyIn` / `groupByIn`, le
-  seul évaluateur de `where` MongoDB du dépôt, importé de la passerelle), et
-  assert sur les utilisateurs RENDUS.
+  **plus complet** des cinq évaluateurs de `where` du dépôt — et le seul sans
+  aucune dépendance, ce pour quoi il s'importe à travers les paquets plutôt que
+  de se recopier), et assert sur les utilisateurs RENDUS.
 
 Le cliquet des audiences de la passerelle balaie désormais ce paquet
 (`AUDIENCE_ROOTS`, préfixe `@meeshy/agent/`) : une quatrième lecture posée sur

@@ -62,6 +62,57 @@ Le site était **doublement masqué** : hors de la racine du balayage, **et**
 derrière le `notIn` que le discriminant d'identité prenait pour la désignation
 d'une personne (corrigé par #20100, mais hors de sa portée).
 
+### LE TROU QUE L'AUDIT A OUVERT : la garde était sur l'ÉLECTION, pas sur la LIVRAISON
+
+**C'est le constat le plus important du cycle, et il condamnait le titre du lot.**
+Le § neuf de `services/agent/CLAUDE.md` s'appelait « L'agent ne parle JAMAIS à la
+place d'un membre BANNI ». Mesuré par l'audit adversarial : **faux.**
+
+Les quatre lectures ci-dessus gardent l'**ÉLECTION** — qui ENTRE sous contrôle de
+l'agent. `getControlledUsers` est l'autre bout : ce que les **trois** chemins de
+livraison appellent avant de faire parler l'agent
+(`reactive/reactive-handler.ts`, `scheduler/conversation-scanner.ts`,
+`server.ts`). Il ne lisait **aucune** participation — `agentUserRole.findMany({
+where: { conversationId } })` nu, puis un filtre sur la seule horloge
+`User.lastActiveAt`.
+
+Deux chemins par lesquels un banni parlait encore, et le second ne dépend
+d'aucune ligne héritée :
+
+| chemin | pourquoi il survivait |
+|---|---|
+| le rôle déjà **DÉTENU** | rien, sur le chemin de bannissement, ne libère `AgentUserRole` (mesuré : seuls `routes/admin/agent-reset.ts` et `jobs/obsolete-conversation-purge.ts` y touchent) ; et il ne se périme pas, `touchUserRoles` réécrivant `lastUsedAt` **chaque fois qu'il SERT**, pendant qu'`evictRecentlyActiveUsers` n'agit que si la personne REVIENT |
+| l'**épinglage manuel** (`AgentConfig.manualUserIds`) | la branche `missingManualIds` fabriquait un `ControlledUser` sans lire `Participant` du tout |
+
+> **Une garde posée sur l'ÉLECTION ne garde pas la LIVRAISON.** C'est la question
+> du cycle 202 — « qui AUTORISE ce que cette clause rend ? » — **retournée** :
+> là-bas la clause était nue et l'autorisation vivait en aval, donc il n'y avait
+> rien à réparer ; ici la clause est juste et **personne ne la rejoue au moment
+> où le message part**. La même question, les deux sens, deux verdicts opposés.
+> Il faut donc la poser dans les deux sens : *qui autorise ce que cette clause
+> rend ?* **et** *cette clause est-elle rejouée là où l'effet se produit ?*
+
+Et le cliquet des audiences ne pouvait pas le voir **par construction** :
+`getControlledUsers` ne lisait pas `Participant`. L'affirmation du lot — « une
+quatrième lecture posée sur `isActive` nu le fait rougir » — était donc vraie et
+**hors sujet** : un cliquet qui garde une TABLE ne dit rien d'un chemin qui ne
+l'interroge pas.
+
+**Fermé dans ce lot**, et fail-closed : `getControlledUsers` relit
+`PARTICIPATION_VIVANTE` sur les ids candidats, et un contrôlé sans participation
+vivante est LÂCHÉ — le silence d'un animateur ne coûte rien, parler au nom d'un
+exclu si. L'épinglage manuel garde exactement ce qu'il a toujours contourné —
+l'horloge d'inactivité — **jamais l'appartenance**.
+
+**L'écriture reste OUVERTE : #20208.** Retirer `AgentUserRole` AU bannissement
+n'est pas redondant avec cette garde, et la raison est celle qu'`unsetOrNull`
+écrit déjà pour `LIVE_MESSAGE_MARK` : *écrire la colonne rend les lectures
+exactes pour les lignes À VENIR, le prédicat de lecture les rend exactes pour
+celles DÉJÀ EN BASE.* Ce que seul le retrait gagne : `getEligibleConversations`
+retient un fil sur `hasRoles` **seul**, donc un fil dont tous les rôles sont des
+bannis est scanné à chaque passe pour ne rien produire — la MESURE que ce lot
+vient de corriger est court-circuitée.
+
 ### Pourquoi la loi a déménagé dans `@meeshy/shared`
 
 `PARTICIPATION_VIVANTE` vivait dans
@@ -72,8 +123,8 @@ importer est une loi qu'il va réécrire ou ignorer ; ici il l'avait ignorée.
 - `packages/shared/utils/prisma-unset.ts` — `unsetOrNull` / `differsOrUnset`
   déménagés ; `services/gateway/src/utils/prisma-unset.ts` est une **coquille de
   ré-export**, la forme que ce dépôt prescrit déjà après une scission de module.
-  **53 fichiers de la passerelle importent ce chemin, et ils sont inchangés** —
-  `tsc` le prouve.
+  **55 fichiers de la passerelle consomment ce chemin (53 de production, 2 de
+  témoins), et ils sont inchangés** — `tsc` le prouve.
 - `packages/shared/utils/participation-vivante.ts` — la loi et
   `participationEstVivante`, avec le doc-comment qui les instruit.
   `access-control.ts` les ré-exporte **sous le même nom** : le cliquet reconnaît
@@ -90,12 +141,13 @@ importer est une loi qu'il va réécrire ou ignorer ; ici il l'avait ignorée.
 | `services/agent/src` | oui — les sélecteurs de dormants | **oui**, préfixe `@meeshy/agent/` |
 | `services/translator` | non — Python, aucun client Prisma | non |
 | `packages/shared` | il DÉCLARE la loi, n'interroge rien | non |
-| `apps/*`, `scripts/` | aucun accès base | non |
+| `apps/*` | non — aucun client Prisma instancié | non |
+| `scripts/` | **OUI** — 6 lectures dans 4 fichiers | non, et sa raison est AUTRE |
 
 Deux décisions de forme, et chacune a sa raison écrite sur le site :
 
 1. **Le préfixe de la passerelle est VIDE.** L'asymétrie est mesurée :
-   repréfixer la passerelle reclasserait **99 clés d'inventaire** à la main pour
+   repréfixer la passerelle reclasserait **89 clés d'inventaire** à la main pour
    zéro signal — et un inventaire recopié est l'endroit où une ligne se perd. Ce
    qu'une clé doit garantir est qu'elle désigne EXACTEMENT un fichier, et
    `@meeshy/agent/` ne peut par construction collisionner avec aucun chemin
@@ -109,14 +161,18 @@ Deux décisions de forme, et chacune a sa raison écrite sur le site :
 
 - **ROUGE mesuré, deux fois.**
   - `services/agent/src/__tests__/memory/mongo-persistence-living-participation.test.ts`,
-    7 témoins neufs : sur l'arbre d'avant, **4 tombent** (le banni est élu par B
-    et par C ; la conversation au seul dormant banni est retenue par D).
+    12 témoins neufs : sur l'arbre d'avant, **5 des 7 premiers tombent** (le
+    banni est élu par B et par C ; les deux témoins de non-régression ; la
+    conversation au seul dormant banni est retenue par D), et **3 des 5
+    derniers** (la garde de LIVRAISON, § ci-dessous).
   - Portée : `...PARTICIPATION_VIVANTE` → `isActive: true` sur les trois sites
     ⇒ le balayage les rend `law=false` et **3 témoins des deux suites de cliquet
     rougissent**. Le balayage voit bien le paquet, et il voit bien la loi.
 - **Les doubles honorent leur `where`.** `findManyIn` et `groupByIn`
-  (`services/gateway/src/__tests__/helpers/mongo-where.ts`, le seul évaluateur de
-  `where` MongoDB du dépôt — importé, jamais recopié) ÉVALUENT la clause contre
+  (`services/gateway/src/__tests__/helpers/mongo-where.ts`, le **plus complet**
+  des cinq évaluateurs de `where` du dépôt, et le seul SANS DÉPENDANCE — ce qui
+  est la propriété qui autorise un import inter-paquets ; importé, jamais
+  recopié) ÉVALUENT la clause contre
   des documents nus. La fixture `dormantVivant` ne porte **aucune clé
   `bannedAt`** : le témoin « vivant admis » passe donc par la branche
   `{ isSet: false }`, pas par chance. `groupByIn` est neuf, et il refuse toute
@@ -131,11 +187,22 @@ Deux décisions de forme, et chacune a sa raison écrite sur le site :
   `services/agent` ; 496 témoins de l'agent verts ; suite complète du gateway
   rejouée.
 
-### DEUX erreurs du lot, gardées pour ce qu'elles mesurent
+### TROIS erreurs du lot, gardées pour ce qu'elles mesurent
 
-**1. Un compte écrit sans être posé comme une question.** Les quatre documents du
-lot ont d'abord annoncé « 98 importeurs de la passerelle ». Mesuré : **53**
-fichiers importent `utils/prisma-unset` (52 de production, 1 de test). 98 est le
+**1. Une garde ANNONCÉE totale, posée sur un seul bout** — le § ci-dessus. Le
+titre disait « JAMAIS » là où le lot tenait l'élection et laissait la livraison
+ouverte. Le dépôt a un nom pour cela : **« une garde partielle annoncée totale
+est pire qu'une garde absente »**, et c'est la troisième fois en deux cycles que
+ce reproche tombe. Trouvée par l'audit adversarial, pas par le lot.
+
+**2. Des comptes écrits sans être posés comme des questions — TROIS.** Les
+documents ont d'abord annoncé « 98 importeurs », « 99 clés d'inventaire » et
+« 4 témoins tombent ». Mesuré : **55** consommateurs (53 de production, 2 de
+témoins), **89** clés (15 + 74 ; les 10 de `MEASURED_FAMILIES` ne sont pas des
+clés de site), **5** témoins sur 7. Le détail du premier : **53**
+fichiers de PRODUCTION importent `utils/prisma-unset` ; **55 consommateurs** en
+tout, les 2 témoins compris (56 fichiers si l'on compte la coquille elle-même).
+98 est le
 compte des fichiers qui **mentionnent** `unsetOrNull` ou `differsOrUnset` —
 commentaires, journaux et balayages de texte compris — c'est-à-dire la réponse à
 une autre question que celle qui était posée (« combien de fichiers casse ce
@@ -147,9 +214,16 @@ dans le même lot que la phrase du § portée qui dit qu'un compte recopié dér
 **écrire une règle ne l'applique pas au lot qui l'écrit** (c'est le constat
 textuel du cycle 202, rejoué sur un compte au lieu d'une porte). Corrigé dans
 `services/gateway/CLAUDE.md`, le doc-comment de la coquille et ici ; les deux
-messages de commit du lot portent encore 98, et cette ligne est leur correction.
+premiers messages de commit du lot portent encore 98, et cette ligne est leur
+correction.
 
-**2. La garde partie par accident.** La seconde passe de documentation a
+**Et la passe de CORRECTION a laissé passer le chiffre résiduel** vingt lignes
+au-dessus de son propre paragraphe, dans le fichier de leçon — plus les deux
+autres comptes, qu'elle n'a pas pensé à relire parce qu'elle corrigeait « le »
+compte. Une passe de correction a besoin de la même relecture que la passe
+d'origine ; l'audit adversarial les a trouvés tous les trois.
+
+**3. La garde partie par accident.** La seconde passe de documentation a
 **effacé le spread** `...PARTICIPATION_VIVANTE`
 du site D en réécrivant son commentaire. Le témoin du compte l'a dit tout de
 suite — c'est précisément pour cela qu'il assert sur les conversations RENDUES
@@ -169,3 +243,16 @@ et non sur la forme du `where`.
   qu'il a créés), inchangée.
 - `getInactiveUsers` supprimé : si un lot futur a besoin d'un tel sélecteur, il
   le réécrit sous la loi, et le cliquet l'y oblige.
+- **#20208 (NEUF)** — bannir ne libère pas `AgentUserRole`, et ce rôle ne se
+  périme jamais. La LECTURE est fermée par ce lot ; l'écriture, non, et c'est
+  elle qui rendrait au scan les conversations qu'il parcourt pour rien.
+- **Deux faiblesses de témoin, consignées par l'audit** : le `throw` sur racine
+  absente n'a aucun rouge propre (la propriété est tenue par le témoin voisin
+  « chacune EXISTE sur le disque », qui rougit bien), et `groupByIn` n'a pas de
+  témoin dans le paquet qui le porte. Les deux sont réparés dans ce lot.
+- **Le cliquet de la passerelle, SEUL, certifie `bannedAt: null`** — l'orthographe
+  qui ÉTEINT la sélection pour toute la population. `guardsAgainstBan` l'admet
+  par décision écrite (`captureNoticeVisibility.ts` l'épelle ainsi), et ce sont
+  les témoins de COMPORTEMENT de l'agent qui l'attrapent (5 rouges sur 7). La
+  phrase du lot — « un témoin qui compare la clause reçue ne vérifie que sa
+  propre copie » — vaut donc **aussi de son propre cliquet**.

@@ -27,7 +27,9 @@ export { DELIBERATELY_WIDE, MEASURED_FAMILIES, MEASURED_NOT_INSTRUCTED };
  * avant #10436. Le dépôt NOMME cette conséquence
  * (`routes/user-deletions.ts`) : « rendait la ligne active ET bannie, lue comme
  * vivante par toute lecture `userId + isActive: true` ». Le producteur est
- * fermé ; aucune migration n'a reprise les lignes existantes.
+ * fermé ; la migration qui reprendrait les lignes existantes existe (#16690,
+ * `packages/shared/prisma/migrations/2026-11-07-participant-active-and-banned.mongodb.js`)
+ * et n'a été exécutée nulle part.
  *
  * Une telle ligne n'est PAS dans `conversation:<id>`, mais sa room `user:<id>`
  * est rejointe INCONDITIONNELLEMENT (`AuthHandler.ts:392`) — c'est par là que
@@ -66,6 +68,26 @@ export { DELIBERATELY_WIDE, MEASURED_FAMILIES, MEASURED_NOT_INSTRUCTED };
  * existe pour empêcher.
  */
 const LAW_SPELLINGS = ['PARTICIPATION_VIVANTE', 'ADMITTED_FILE_READER_WHERE'] as const;
+
+/**
+ * ⚠️ CE CLIQUET, SEUL, CERTIFIE L'ORTHOGRAPHE QUI ÉTEINT LA FEATURE (#20111).
+ *
+ * `guardsAgainstBan` admet `bannedAt: null` comme la loi, et c'est une décision
+ * écrite (`captureNoticeVisibility.ts` l'épelle ainsi). Mais sur MongoDB cette
+ * égalité n'apparie PAS la clé absente — donc elle exclut l'immense majorité de
+ * la population, qui n'a jamais été bannie. Mesuré : remplacer
+ * `...PARTICIPATION_VIVANTE` par `isActive: true, bannedAt: null` sur les trois
+ * sélecteurs de l'agent laisse **les 36 témoins de ces cliquets VERTS**, et ce
+ * sont les témoins de COMPORTEMENT du paquet agent qui l'attrapent (5 rouges
+ * sur 7).
+ *
+ * > La phrase que ce dépôt répète — « un témoin qui compare la clause reçue à
+ * > celle qu'il attend ne vérifie que sa propre copie » — vaut **aussi de ce
+ * > cliquet-ci**. Il garde qu'une clause PARLE du bannissement ; il ne peut pas
+ * > garder qu'elle apparie la bonne population. Cela se garde par un double qui
+ * > ÉVALUE le `where` contre des documents nus, chez le consommateur.
+ */
+
 
 /**
  * Les clés de PREMIER NIVEAU d'un `where`, avec leur valeur telle qu'écrite.
@@ -273,20 +295,35 @@ const AUDIENCE_ROOT = path.resolve(__dirname, '..', '..');
  * | `services/agent/src` | oui — les sélecteurs de dormants | **oui** (#20111) |
  * | `services/translator` | non — Python, aucun client Prisma | non |
  * | `packages/shared` | il DÉCLARE la loi et les types, n'interroge rien | non |
- * | `apps/*` | aucun accès base | non |
- * | `scripts/` | hors CI, pas de surface servie | non |
+ * | `apps/*` | non — aucun client Prisma instancié | non |
+ * | `scripts/` | **OUI** — 6 lectures dans 4 fichiers | non, et sa raison est autre |
  *
- * Les trois derniers ne sont pas une dette : ils n'ont aucune lecture à
- * garder. Le jour où l'un en acquiert une, c'est cette table qu'il faut
- * relire — et le témoin `audience-law-scope.test.ts` § « la portée couvre les
- * paquets qui lisent `Participant` » rougit si une racine déclarée disparaît.
+ * `services/translator`, `packages/shared` et `apps/*` n'ont **aucune lecture à
+ * garder**. **`scripts/` en a**, et sa ligne a dû être réécrite : le premier jet
+ * de cette table y avait écrit « aucun accès base », ce qui est FAUX —
+ * `mesure-succession-plafonds.ts:83` porte `{ conversationId, isActive: true,
+ * role: { in: [...] } }`, c'est-à-dire exactement le discriminant de ce
+ * balayage. Sa raison de sortie est **« hors CI, aucune surface servie, aucune
+ * de ces lectures ne décide d'une autorisation »** : des outils de migration et
+ * de mesure qu'un humain lance à la main.
+ *
+ * > **Une racine EXCLUE porte une raison, et la raison est une affirmation
+ * > comme les autres.** Elle doit être fausse pour être remarquée, et celle-là
+ * > l'était — dans le lot même qui fait de l'exclusion « vérifiable » sa
+ * > leçon. Le remède n'est pas d'entrer la racine : la bonne raison existait,
+ * > elle n'avait pas été cherchée.
+ *
+ * Le jour où une racine exclue acquiert une lecture qui DÉCIDE, c'est cette
+ * table qu'il faut relire — et le témoin `audience-law-scope.test.ts` § « la
+ * portée couvre les paquets qui lisent `Participant` » rougit si une racine
+ * déclarée disparaît.
  *
  * ── POURQUOI LE PRÉFIXE DE LA PASSERELLE EST VIDE ───────────────────────────
  *
  * La clé d'inventaire d'un site est `<préfixe><chemin>#<rang>`. Celui de la
  * passerelle est VIDE — l'orthographe historique — et celui de l'agent porte
  * son nom de paquet. L'asymétrie est un choix, et il se mesure : repréfixer la
- * passerelle reclasserait **99 clés d'inventaire** pour aucun signal
+ * passerelle reclasserait **89 clés d'inventaire** pour aucun signal
  * supplémentaire, et un inventaire recopié à la main est l'endroit où une
  * ligne se perd. Ce qu'une clé doit garantir est qu'elle désigne EXACTEMENT un
  * fichier, et un préfixe `@meeshy/agent/` ne peut par construction collisionner
@@ -301,6 +338,23 @@ const AUDIENCE_ROOTS: ReadonlyArray<{ readonly prefix: string; readonly dir: str
   { prefix: '', dir: AUDIENCE_ROOT },
   { prefix: '@meeshy/agent/', dir: path.resolve(AUDIENCE_ROOT, '..', '..', 'agent', 'src') },
 ];
+
+/**
+ * Une racine déclarée et ABSENTE du disque JETTE — extraite pour être
+ * TESTABLE (#20111, constat B7 de l'audit adversarial).
+ *
+ * Elle vivait en ligne dans la boucle de balayage, et la mutation qui la
+ * remplaçait par un `continue` laissait les 36 témoins VERTS : la propriété
+ * était tenue par son voisin (« chacune EXISTE sur le disque »), jamais par un
+ * rouge à elle. **Une ceinture sans témoin se lit comme la garde** — son
+ * doc-comment l'annonçait comme telle — et c'est exactement ce que ce fichier
+ * reproche ailleurs à une portée écrite en commentaire.
+ */
+export function assertRootExists(dir: string): void {
+  if (!fs.existsSync(dir)) {
+    throw new Error(`balayage des audiences: racine déclarée ABSENTE — ${dir}. Une portée qui rétrécit en silence est le défaut de #20091.`);
+  }
+}
 
 /** Les racines déclarées, pour le témoin de portée — qui les veut toutes présentes. */
 export const AUDIENCE_SCOPE = AUDIENCE_ROOTS.map(({ prefix, dir }) => ({ prefix, dir }));
@@ -656,13 +710,11 @@ export function sweepConversationAudiences(): AudienceSite[] {
 function walkParticipantReads(): { audiences: AudienceSite[]; unjudgeable: UnjudgeableRead[] } {
   const audiences: AudienceSite[] = [];
   const unjudgeable: UnjudgeableRead[] = [];
-  let prefix = '';
-  let root = AUDIENCE_ROOT;
-  const walk = (dir: string): void => {
+  const walk = (dir: string, prefix: string, root: string): void => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (entry.name !== '__tests__') walk(full);
+        if (entry.name !== '__tests__') walk(full, prefix, root);
         continue;
       }
       if (!entry.name.endsWith('.ts') || entry.name.endsWith('.test.ts')) continue;
@@ -732,12 +784,8 @@ function walkParticipantReads(): { audiences: AudienceSite[]; unjudgeable: Unjud
     }
   };
   for (const declared of AUDIENCE_ROOTS) {
-    if (!fs.existsSync(declared.dir)) {
-      throw new Error(`balayage des audiences: racine déclarée ABSENTE — ${declared.dir}. Une portée qui rétrécit en silence est le défaut de #20091.`);
-    }
-    prefix = declared.prefix;
-    root = declared.dir;
-    walk(declared.dir);
+    assertRootExists(declared.dir);
+    walk(declared.dir, declared.prefix, declared.dir);
   }
   // Le rang d'inventaire d'un site est son rang dans son FICHIER, et les deux
   // relevés ne balaient pas la même passe : sans ce tri, la clé d'un site

@@ -10,8 +10,9 @@
  *
  * La ligne `{ isActive: true, bannedAt ≠ null }` existe en base : bannir
  * pendant qu'une participation est inactive n'écrit que `bannedAt`
- * (`conversationBanState.ts`), et aucune migration n'a repris les lignes
- * existantes. Le producteur est fermé ; la population, non.
+ * (`conversationBanState.ts`). Le producteur est fermé ; la population, non : la
+ * migration qui reprendrait les lignes existantes existe (#16690) et n'a été
+ * exécutée nulle part — donc le risque est instruit, pas mesuré.
  *
  * ── POURQUOI CE DOUBLE, ET PAS UN `toMatchObject` SUR LE `where` ────────────
  *
@@ -23,10 +24,14 @@
  * documents nus — une clé absente de l'objet est absente du document — et
  * c'est le RÉSULTAT de la lecture qui parle.
  *
- * Le double vient de la passerelle PAR IMPORT, jamais par copie : c'est le
- * seul évaluateur de `where` MongoDB du dépôt, il n'a aucune dépendance, et
- * une seconde transcription de la sémantique « absent ≠ null » serait
- * exactement la jumelle divergente que ce lot ferme.
+ * Le double vient de la passerelle PAR IMPORT, jamais par copie. Il n'est pas
+ * le seul évaluateur de `where` du dépôt — il y en a cinq
+ * (`where-matcher-posts.ts`, `notification-where.ts`,
+ * `find-first-honouring-where.ts`, `fakePrismaStore.matchesWhere`) — mais il
+ * est **le plus complet**, et le seul SANS AUCUNE DÉPENDANCE, ce qui est la
+ * propriété qui autorise un import inter-paquets. Une seconde transcription de
+ * la sémantique « absent ≠ null » serait exactement la jumelle divergente que
+ * ce lot ferme.
  */
 import { describe, it, expect } from '@jest/globals';
 import { PARTICIPATION_VIVANTE } from '@meeshy/shared/utils/participation-vivante';
@@ -163,5 +168,134 @@ describe('#20111 — la MESURE d’éligibilité compte comme ses sélecteurs', 
     const retenues = await persistence.getEligibleConversations();
 
     expect(retenues.map((c: { id: string }) => c.id)).toEqual([CONVERSATION]);
+  });
+});
+
+/**
+ * LA GARDE DE LIVRAISON — et c'est le trou que l'audit adversarial a ouvert.
+ *
+ * Les trois lectures ci-dessus gardent l'ÉLECTION : qui ENTRE sous contrôle de
+ * l'agent. `getControlledUsers` est l'autre bout — ce que les TROIS chemins de
+ * livraison (`reactive-handler`, `conversation-scanner`, le serveur ZMQ)
+ * appellent avant de faire parler l'agent — et il ne lisait **aucune**
+ * participation : `agentUserRole.findMany({ where: { conversationId } })` nu,
+ * puis un filtre sur la seule horloge `User.lastActiveAt`.
+ *
+ * Deux conséquences, et la seconde ne dépend d'aucune ligne héritée :
+ *
+ * 1. **Quiconque a été élu AVANT son bannissement reste animé indéfiniment.**
+ *    Rien, sur le chemin de bannissement, ne libère `AgentUserRole` ; et le
+ *    rôle ne se périme pas, `touchUserRoles` réécrivant `lastUsedAt` à chaque
+ *    fois qu'il SERT.
+ * 2. **Un épinglage manuel d'administrateur** (`AgentConfig.manualUserIds`)
+ *    fabriquait un `ControlledUser` sans jamais lire `Participant`.
+ *
+ * > **Une garde posée sur l'ÉLECTION ne garde pas la LIVRAISON.** C'est la
+ * > question du cycle 202 — « qui AUTORISE ce que cette clause rend ? » —
+ * > retournée : ici la clause était juste, et personne ne la rejouait au moment
+ * > où le message part. La garde de ce lot était donc ANNONCÉE totale et posée
+ * > sur un seul des deux bouts, ce que le dépôt nomme « pire qu'une garde
+ * > absente ».
+ *
+ * La garde est **fail-closed** : un contrôlé sans participation vivante est
+ * LÂCHÉ. Le silence d'un animateur ne coûte rien ; parler au nom d'un exclu,
+ * si. Et l'épinglage manuel conserve exactement ce qu'il a toujours
+ * contourné — l'horloge d'inactivité — jamais l'appartenance.
+ */
+describe('#20111 — la LIVRAISON relit la participation, pas seulement l’élection', () => {
+  const role = (userId: string) => ({
+    conversationId: CONVERSATION,
+    userId,
+    origin: 'archetype',
+    personaSummary: '',
+    tone: 'neutre',
+    vocabularyLevel: 'courant',
+    typicalLength: 'court',
+    emojiUsage: 'occasionnel',
+    topicsOfExpertise: [],
+    topicsAvoided: [],
+    relationshipMap: {},
+    catchphrases: [],
+    responseTriggers: [],
+    silenceTriggers: [],
+    commonEmojis: [],
+    reactionPatterns: [],
+    messagesAnalyzed: 0,
+    confidence: 0.5,
+    locked: false,
+  });
+
+  const persistenceDeLivraison = (options: {
+    readonly roles: readonly Record<string, unknown>[];
+    readonly participants: readonly Record<string, unknown>[];
+    readonly manualUserIds?: readonly string[];
+  }) => {
+    const participant = findManyIn(options.participants);
+    const prisma = {
+      agentUserRole: { findMany: () => Promise.resolve([...options.roles]) },
+      agentConfig: { findUnique: () => Promise.resolve({ manualUserIds: [...(options.manualUserIds ?? [])], inactivityThresholdHours: 24 }) },
+      participant: { findMany: participant.findMany },
+      user: {
+        findMany: ({ where }: { where: { id: { in: readonly string[] } } }) => Promise.resolve(
+          where.id.in.map((id) => ({ id, displayName: id, username: id, systemLanguage: 'fr', lastActiveAt: VIEILLE_ACTIVITE }))
+        ),
+      },
+    } as never;
+    return new MongoPersistence(prisma);
+  };
+
+  it('ne rend pas un contrôlé BANNI, même si son rôle existe encore', async () => {
+    const persistence = persistenceDeLivraison({
+      roles: [role('vivant'), role('banni')],
+      participants: [dormantVivant('vivant'), dormantBanni('banni')],
+    });
+
+    const controles = await persistence.getControlledUsers(CONVERSATION);
+
+    expect(controles.map((c) => c.userId)).toEqual(['vivant']);
+  });
+
+  it('ne rend pas un ÉPINGLÉ manuellement qui est banni — le pin contourne l’horloge, jamais l’appartenance', async () => {
+    const persistence = persistenceDeLivraison({
+      roles: [],
+      participants: [dormantBanni('banni')],
+      manualUserIds: ['banni'],
+    });
+
+    await expect(persistence.getControlledUsers(CONVERSATION)).resolves.toEqual([]);
+  });
+
+  it('rend l’ÉPINGLÉ vivant, qui n’a pas de rôle encore', async () => {
+    const persistence = persistenceDeLivraison({
+      roles: [],
+      participants: [dormantVivant('epingle')],
+      manualUserIds: ['epingle'],
+    });
+
+    const controles = await persistence.getControlledUsers(CONVERSATION);
+
+    expect(controles.map((c) => c.userId)).toEqual(['epingle']);
+  });
+
+  /**
+   * FAIL-CLOSED : un rôle dont la personne n'a AUCUNE ligne de participation
+   * (quittée, purgée, jamais membre) est lâché. C'est le sens d'erreur qui
+   * coûte le moins : l'animateur se taît.
+   */
+  it('lâche un rôle sans aucune ligne de participation', async () => {
+    const persistence = persistenceDeLivraison({ roles: [role('fantome')], participants: [] });
+
+    await expect(persistence.getControlledUsers(CONVERSATION)).resolves.toEqual([]);
+  });
+
+  it('garde le contrôlé DÉBANNI (bannedAt remis à null)', async () => {
+    const persistence = persistenceDeLivraison({
+      roles: [role('debanni')],
+      participants: [dormantDebanni('debanni')],
+    });
+
+    const controles = await persistence.getControlledUsers(CONVERSATION);
+
+    expect(controles.map((c) => c.userId)).toEqual(['debanni']);
   });
 });

@@ -58,7 +58,7 @@ cliquet et la portée de la LOI étaient le même défaut vu de deux côtés.
 > que soit la qualité du cliquet qui la garde ailleurs.
 
 Déménager la loi dans `@meeshy/shared` en laissant une **coquille de ré-export
-sous le MÊME nom** coûte zéro import réécrit (98, ici) et garde le cliquet, qui
+sous le MÊME nom** coûte zéro import réécrit (55, ici) et garde le cliquet, qui
 reconnaît la loi à son orthographe.
 
 ### Et un témoin de garde doit tomber quand la garde part PAR ACCIDENT
@@ -78,18 +78,50 @@ clause juste qu'avec celle qui éteint la feature pour tout le monde.
 Troisième erreur mesurée du même lot, et la plus instructive, parce qu'elle a été
 commise **dans le lot qui écrivait la règle contre elle**.
 
-Les documents ont annoncé « 98 importeurs de la passerelle » pour le fichier
-déménagé. Mesuré : **53**. 98 était le compte de `grep -rl 'unsetOrNull\|differsOrUnset'`
-— les fichiers qui **mentionnent** les deux noms, commentaires, journaux et
-balayages de texte compris. La question posée était tout autre : *combien de
-fichiers ce déménagement casse-t-il ?*, soit
-`grep -rlE "^import .*utils/prisma-unset"`.
+Le lot a publié **TROIS comptes faux, dans trois documents, en deux passes** —
+et chaque fois pour la même raison : la commande lancée répondait à une question
+voisine de celle qui était posée.
+
+| annoncé | mesuré | ce que la commande comptait vraiment |
+|---|---|---|
+| « 98 importeurs » | **55** (53 de production, 2 de témoins) | les fichiers qui **mentionnent** `unsetOrNull`/`differsOrUnset` — commentaires, journaux et balayages de texte compris |
+| « 99 clés d'inventaire » | **89** (15 `DELIBERATELY_WIDE` + 74 `MEASURED_NOT_INSTRUCTED`) | `grep -c "':"` sur le fichier d'inventaires, donc **plus les 10 noms de `MEASURED_FAMILIES`** — des familles, pas des clés de site |
+| « 4 témoins tombent » | **5** sur 7 | une prévision, jamais rejouée après l'ajout du troisième site |
 
 > **Deux `grep` qui se ressemblent répondent à deux questions, et une seule est
-> la vôtre.** Avant d'écrire un compte, écrire la question dont il est la
+> la vôtre.** Avant d'écrire un compte, écrire la QUESTION dont il est la
 > réponse, puis vérifier que la commande la pose — un compte est une AFFIRMATION
 > (cycle 93), et « j'ai une commande qui rend un nombre » n'est pas une mesure.
+> Un compte d'inventaire se lit en **exécutant** l'inventaire
+> (`Object.keys(...).length`), jamais en comptant des lignes de sa source : la
+> source porte d'autres tables.
 
-C'est le constat textuel du cycle 202 rejoué sur un compte au lieu d'une porte :
-**écrire une règle ne l'applique pas au lot qui l'écrit.** La relire contre son
-propre diff est une étape, pas une évidence.
+C'est le constat textuel du cycle 202 rejoué sur des comptes au lieu d'une
+porte : **écrire une règle ne l'applique pas au lot qui l'écrit.** Le premier
+faux a été corrigé par un commit qui, lui-même, laissait le chiffre résiduel
+vingt lignes plus haut dans CE fichier, et n'avait pas regardé son voisin de
+paragraphe. La relire contre son propre diff est une étape, pas une évidence —
+et **la passe de correction a besoin de la même relecture que la passe
+d'origine.**
+
+### Et un témoin qui dépend de l'ORDRE de sa fixture teste l'ordre, pas la propriété
+
+Quatrième erreur du lot, trouvée en prouvant le rouge des témoins ajoutés pour
+réparer les constats de l'audit — c'est-à-dire **dans la passe qui réparait les
+faiblesses de témoin**.
+
+Le témoin de `groupByIn` qui garde « une clé ABSENTE et une clé `null` vont dans
+le MÊME seau » avait sa fixture écrite `[{ userId: null }, { }]`. Il ne pouvait
+pas tomber : un seau garde la valeur de la **première** ligne qui le crée, donc
+la ligne `null` arrivant d'abord, la normalisation `?? null` n'était jamais
+sollicitée. La mutation qui la retire laissait le témoin **vert**.
+
+> Quand la propriété gardée est une **normalisation** — deux entrées qui doivent
+> rendre la même sortie — la fixture doit la solliciter **depuis chaque côté**.
+> Un seul ordre ne teste que le côté par lequel la valeur attendue arrive déjà
+> normalisée. `it.each` sur les deux ordres coûte une ligne.
+
+Le remède général : **prouver le rouge de chaque témoin séparément**, par la
+mutation qu'il NOMME. C'est la seule étape qui distingue un témoin d'une
+décoration, et elle a attrapé ici ce que la relecture n'avait pas vu — dans un
+lot dont trois témoins sur quatre tombaient parfaitement.
