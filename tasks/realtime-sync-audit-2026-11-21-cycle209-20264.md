@@ -137,6 +137,35 @@ après.
   > l'un ni l'autre n'avait de raison de demander *qui compose la valeur
   > d'amorce*, et c'est pourtant la seule question qui restait.
 
+  **Instruit dans le même cycle, et le verdict renverse le classement.**
+  `participant-rights-core.ts` n'écrit **que** `anonymousSession.rights`, et ne
+  touche JAMAIS `Participant.permissions` — par décision, écrite sur place : « la
+  surcharge est un DELTA […] une surcharge qui recopie le join cesse de le
+  suivre, et l'hôte perd tout moyen de revenir en arrière ». Les deux colonnes
+  divergent donc dès le premier usage du levier, **et c'est l'intention** : ce
+  n'est pas un piège armé, c'est un défaut vivant, et il n'y a aucune écriture à
+  aligner — la seule réparation est que le détail RÉSOLVE.
+
+  **Et la divergence va dans les DEUX sens, dont un que CE lot ouvre.**
+  `resolveParticipantRights` remplace chaque droit NOMMÉ, donc la surcharge peut
+  être plus permissive comme plus restrictive que le join :
+
+  | le geste de l'hôte | ce que le détail sert | ce que le tiroir en fait |
+  |---|---|---|
+  | RETIRE un droit que le join donnait | l'ancien `true` | une tuile offerte pour un geste refusé — le défaut de ce lot, une couche plus bas |
+  | ACCORDE un droit que le join refusait | l'ancien `false` | une tuile **CACHÉE** pour un geste que le serveur accepterait |
+
+  Avant ce lot, le web ne lisant AUCUN droit, le tiroir restait ouvert et le cas
+  « accordé » fonctionnait par accident. Il faut le dire ainsi : **ce lot corrige
+  le sens d'erreur qui mentait en OFFRANT, et ouvre celui qui mente en CACHANT**,
+  dans la fenêtre où le visiteur n'était pas connecté au moment du geste.
+  Fail-closed est le bon défaut pour un contrôle dérivé de droits — cacher une
+  tuile permise se rattrape, offrir un geste refusé est la loi 4 prise à
+  l'envers — mais c'est un arbitrage de TRANSITION, et #20277 est sa fin.
+
+  > **Un lot qui met un client à lire une donnée hérite de la question de sa
+  > justesse, et aussi de celle de son SENS D'ERREUR.**
+
 - **La garde des `act()` abandonnés ne reproduit plus son défaut sous bun ≥ 1.4
   — #20276.** DEUX causes empilées, la première masquant la seconde : les chemins
   ABSOLUS que son harnais remet à `bun test` y sont lus comme des FILTRES (les
