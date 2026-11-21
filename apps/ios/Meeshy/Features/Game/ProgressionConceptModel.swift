@@ -298,7 +298,7 @@ enum ProgressionConceptModel {
     private static func missionsHead(_ game: GameBlock?, now: Date) -> ConceptHeadParts {
         guard let game else { return ConceptHeadParts(value: ProgressionFactText("", .missionsDone), line: nil) }
         let missions = game.missions
-        guard missions.unlocked else {
+        guard !missions.showsDoorOnly else {
             return ConceptHeadParts(
                 value: ProgressionFactText(GameText.doorLeagueLocked(level: count(GameMissions.minLevel)), .missionsUnlockLevel), line: nil
             )
@@ -436,7 +436,7 @@ enum ProgressionConceptModel {
         case .flame:
             return progress.streak.scale.nextThreshold == nil ? nil : progress.streak.scale.progress
         case .missions:
-            guard let missions = game?.missions, missions.unlocked else { return nil }
+            guard let missions = game?.missions, !missions.showsDoorOnly else { return nil }
             return share(missions.items.filter(\.isCompleted).count, missions.items.count)
         case .season:
             guard let season = game?.season, !season.completed else { return nil }
