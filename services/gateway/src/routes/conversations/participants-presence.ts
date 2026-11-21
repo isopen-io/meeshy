@@ -2,6 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ACTIVE_MEMBER_LISTING_LIMIT } from '@meeshy/shared/utils/member-visibility';
 import { getPresenceVisibilityService, type PresenceViewer } from '../../services/PresenceVisibilityService';
 import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
+import { presenceFor } from '../users/presence-gate';
 import { participantListUserSelect } from './utils/participant-projection';
 import { sliceByIdCursor } from '../../utils/pagination';
 
@@ -155,4 +156,43 @@ export async function loadMostActiveParticipants(options: {
   // pagination rather than silently restart from page 1. See `sliceByIdCursor`.
   const { page, hasMore, nextCursor } = sliceByIdCursor(filtered, cursor, pageLimit);
   return { participants: page, hasMore, nextCursor };
+}
+
+/**
+ * La PORTE DE PRÉSENCE posée sur des lignes de participation DÉJÀ lues, avant
+ * de les servir — `isOnline` et `lastActiveAt` masqués selon ce que le viewer a
+ * le droit de connaître (régime STRICT du 2026-08-25, affiné par #13928 : l'Ami
+ * sait qu'on est en ligne, le Proche sait depuis quand).
+ *
+ * Elle existe parce qu'un `include` de `Conversation.participants` ramène TOUS
+ * les scalaires de `Participant` : ces deux champs atteignaient le fil BRUTS. Un
+ * id ABSENT de la carte rendue par `resolveForTargets` — un participant sans
+ * compte — est masqué, sauf pour un viewer ADMIN+ (`presenceFor` est
+ * fail-closed).
+ *
+ * **Extraite de `core-lifecycle.ts` le 2026-11-21 (#20103) : pur déplacement,
+ * aucune règle changée.** Elle y était une fermeture locale, et la raison de
+ * l'extraction est celle que son propre commentaire donnait — « appliquée aux
+ * DEUX sorties de la route, et une porte posée sur une seule des deux n'est pas
+ * une porte ». Une porte qui doit valoir pour plusieurs sorties a sa place dans
+ * une unité nommée, pas dans une fermeture que la prochaine sortie oubliera.
+ */
+export async function gateParticipantsPresence<
+  P extends { userId: string | null; isOnline: boolean | null; lastActiveAt: Date | null }
+>(
+  deps: { readonly prisma: PrismaClient; readonly viewer: PresenceViewer },
+  participants: readonly P[]
+): Promise<P[]> {
+  const vis = await getPresenceVisibilityService(deps.prisma).resolveForTargets(
+    deps.viewer,
+    participants.map((p) => p.userId).filter((uid): uid is string => !!uid)
+  );
+  return participants.map((p) => {
+    const prefs = presenceFor(deps.viewer, vis, p.userId);
+    return {
+      ...p,
+      isOnline: prefs.showOnline ? p.isOnline : false,
+      lastActiveAt: prefs.showLastSeenTimestamp ? p.lastActiveAt : null,
+    };
+  });
 }

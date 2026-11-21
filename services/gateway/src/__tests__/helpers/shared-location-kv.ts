@@ -79,6 +79,7 @@ export function sharedLocationKvEnMemoire(options: { readonly horloge?: () => nu
       await ecriture('claim');
       if ((vivante(keys.generation)?.value ?? '0') !== args.generation) return { claimed: false, displaced: null };
       const displaced = vivante(keys.pointer)?.value ?? null;
+      if (args.expected !== undefined && displaced !== args.expected) return { claimed: false, displaced: null, moved: true };
       poser(keys.pointer, args.session, args.ttlSeconds);
       if (displaced !== null) ajouter(keys.retiring, [displaced]);
       return { claimed: true, displaced };

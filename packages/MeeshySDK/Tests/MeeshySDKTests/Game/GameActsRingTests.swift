@@ -35,9 +35,14 @@ struct GameActsRingTests {
         #expect(ring?.isComplete == true)
     }
 
-    @Test("avant le niveau 5, les actes ne sont pas ouverts : aucun anneau")
-    func lockedBeforeLevelFive() {
-        #expect(GameActsRing.of(missions: missions(unlocked: false, done: [true, false, false]), hidden: false) == nil)
+    @Test("avant le niveau 5, le premier Rêve a un acte : un anneau d'un segment (#17370)")
+    func firstDreamBeforeLevelFive() {
+        #expect(GameActsRing.of(missions: missions(unlocked: false, done: [true]), hidden: false) == GameActsRing(done: 1, total: 1))
+    }
+
+    @Test("avant le niveau 5 devant un ancien serveur (aucun acte servi) : aucun anneau")
+    func oldServerBeforeLevelFive() {
+        #expect(GameActsRing.of(missions: missions(unlocked: false, done: []), hidden: false) == nil)
     }
 
     @Test("un jour servi sans acte : aucun anneau")

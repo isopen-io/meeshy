@@ -123,4 +123,22 @@ final class AvatarRingViewTests: XCTestCase {
         }
         XCTAssertEqual(AvatarRingGeometry.spill(nil, avatarSize: 88), 0)
     }
+    /// Le retour porteur du 2026-11-21 : le halo d'un film ne laisse jamais voir le bord CARRÉ de sa zone de
+    /// dessin. Les films s'éteignent sur le cercle inscrit (alpha 0 à la demi-largeur, donc aux bords et aux
+    /// coins du carré) et restent pleins jusqu'au contour qu'ils encadrent.
+    func test_edgeFade_illustratedFrame_dimsToNothingOnTheInscribedCircle_andKeepsTheRingWhole() throws {
+        for size in everyAvatarSize {
+            let layout = AvatarRingLayout.make(try toile(), avatarSize: size)
+            let fade = try XCTUnwrap(layout.edgeFade, "\(size)")
+            XCTAssertEqual(fade.clearAt, 1, "transparent dès le cercle inscrit : aucun bord du carré ne se voit")
+            XCTAssertGreaterThanOrEqual(fade.opaqueUntil, layout.ringScale, "le contour réduit reste plein")
+            XCTAssertLessThan(fade.opaqueUntil, fade.clearAt, "un fondu, pas une coupe nette")
+        }
+    }
+
+    /// Sans film, rien ne déborde : l'anneau seul n'est pas fondu.
+    func test_edgeFade_withoutFilm_isAbsent() throws {
+        XCTAssertNil(AvatarRingLayout.make(try plain(), avatarSize: 52).edgeFade)
+        XCTAssertNil(AvatarRingLayout.make(try toile(), avatarSize: 24, decor: false).edgeFade)
+    }
 }

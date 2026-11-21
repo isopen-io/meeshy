@@ -1754,3 +1754,22 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   valide. PR fusionnée dans `dev`, #20087 fermée à la main.
 - Prochain lot : #20115 (sortie du fantôme pour un point choisi) avant d'annoncer `acceptsManualSource` (#19557), puis
   #20126 (web + Android), #20127, #20054, #20056, #20086.
+
+## 2026-11-21 — réveil de 7 h : lot #20115 (point choisi après le fantôme, courses)
+
+- Reprise : aucune PR de la routine ouverte. Branche `claude/cercles-20115-fantome-point-choisi`, passerelle seule.
+- Mise en œuvre : à la sortie du fantôme, un point choisi est REJOUÉ (daté de la sortie) au direct et au rattrapage, et
+  sa fin redevient à dire ; une position d'appareil reste retenue jusqu'à la suivante. `fanOut` relit le pointeur avant
+  d'émettre : une mise à jour dont l'éventail est plus lent qu'un point choisi ne sert plus rien. Un démarrage avec
+  position SANS source prend le pointeur à condition qu'il désigne encore la session lue (`claim` avec `expected`,
+  script Lua) : un point choisi arrivé entre-temps n'est jamais remplacé, même un instant (`FIXED_POINT`), et un partage
+  d'appareil qui l'a devancé fait relire et retenter (3 essais, puis `UNAVAILABLE`).
+- Audit adversarial : BLOQUANT sur la première version (une restauration après coup du point choisi défaisait un
+  remplacement `device` légitime) ; corrigé par la prise conditionnelle, qui supprime la fenêtre. Mineurs actés : la
+  sortie du fantôme d'un point choisi part tout de suite (un lecteur flouté apprend l'heure de sortie à l'arrivée de
+  l'événement — c'est ce que l'issue demande) ; la fenêtre résiduelle entre la relecture du pointeur et l'envoi est
+  antérieure au lot et rattrapée par `reconcile`.
+- Gates : suites position 32/32 (401 tests), `tsc` 0, mutation de la prise conditionnelle ⇒ 2 témoins rouges, script
+  Lua joué une fois contre un vrai `redis-server` local (hors dépôt).
+- Prochain lot : annoncer `acceptsManualSource` (#19557, avec les préconditions du commentaire de #20115 : schéma de
+  `ownSharedLocationSchema`, plancher `MIN_APP_VERSION`), puis #20126 (web + Android), #20127, #20054, #20056, #20086.

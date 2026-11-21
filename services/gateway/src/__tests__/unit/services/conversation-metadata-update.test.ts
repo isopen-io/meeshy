@@ -63,15 +63,19 @@ describe('broadcastConversationUpdated', () => {
     return { io: { to: (room: string) => chain([room]) }, emissions };
   }
 
+  // `bannedAt` est OBLIGATOIRE dans la signature depuis #20103 : un champ non
+  // projeté vaut `undefined`, et `undefined == null` est vrai, donc la garde
+  // rendrait `true` pour un banni. Le compilateur est ici la garde, et cette
+  // fixture le montre — la retirer ne compile plus.
   it('diffuse conversation:updated à la room ET aux rooms personnelles des ACTIFS seuls', () => {
     const { io, emissions } = fauxIO();
     broadcastConversationUpdated({
       io: io as never,
       conversationId: 'c1',
       participants: [
-        { id: 'p1', userId: 'u1', isActive: true },
-        { id: 'p2', userId: null, isActive: true },
-        { id: 'p3', userId: 'u3', isActive: false },
+        { id: 'p1', userId: 'u1', isActive: true, bannedAt: null },
+        { id: 'p2', userId: null, isActive: true, bannedAt: null },
+        { id: 'p3', userId: 'u3', isActive: false, bannedAt: null },
       ],
       changedFields: { title: 'Nouveau' },
       updatedBy: 'admin-1',
@@ -93,5 +97,90 @@ describe('broadcastConversationUpdated', () => {
       changedFields: { title: 'x' },
       updatedBy: 'a',
     })).not.toThrow();
+  });
+});
+
+describe("#20103 — ce que `conversation:updated` PORTE décide de son audience", () => {
+  /**
+   * `conversation:updated` transporte le TITRE, la description, l'avatar et la
+   * bannière — du CONTENU, pas une rétractation. Un membre actif-et-banni n'a
+   * accès ni à la room du fil ni à son REST : lui servir le nouveau titre lui
+   * donne un contenu qu'aucune autre porte ne lui rend, et c'est exactement la
+   * fuite que #20110 a fermée sur la charge d'ARRIVÉE d'un groupe.
+   *
+   * La loi se juge donc sur `participationEstVivante`, pas sur `isActive` nu —
+   * et le TYPE de l'unité exige `bannedAt`, pour qu'une projection qui l'omet
+   * ne compile pas : un champ non projeté vaut `undefined`, et
+   * `undefined == null` est vrai, donc la garde rendrait `true` pour un banni
+   * sans qu'aucun témoin ne rougisse (#20136).
+   */
+  function fauxIO() {
+    const emissions: Array<{ rooms: string[]; event: string; payload: Record<string, unknown> }> = [];
+    const chain = (rooms: string[]) => ({
+      to: (room: string) => chain([...rooms, room]),
+      emit: (event: string, payload: Record<string, unknown>) => {
+        emissions.push({ rooms, event, payload });
+        return true;
+      },
+    });
+    return { io: { to: (room: string) => chain([room]) }, emissions };
+  }
+
+  it("ne sert pas le nouveau titre à un membre actif-et-BANNI", () => {
+    const { io, emissions } = fauxIO();
+    broadcastConversationUpdated({
+      io: io as never,
+      conversationId: 'c1',
+      participants: [
+        { id: 'p1', userId: 'u1', isActive: true, bannedAt: null },
+        { id: 'p2', userId: 'u2', isActive: true, bannedAt: new Date('2026-11-01T00:00:00.000Z') },
+      ],
+      changedFields: { title: 'Nouveau' },
+      updatedBy: 'admin-1',
+    });
+
+    expect(emissions).toHaveLength(1);
+    expect(emissions[0].rooms).not.toContain(ROOMS.user('u2'));
+    // La mesure INVERSE, sans laquelle « n'atteint personne » passerait aussi.
+    expect(emissions[0].rooms).toEqual([ROOMS.conversation('c1'), ROOMS.user('u1')]);
+    expect(emissions[0].payload).toMatchObject({ title: 'Nouveau' });
+  });
+
+  it("sert les vivants dont la colonne `bannedAt` est ABSENTE du document", () => {
+    const { io, emissions } = fauxIO();
+    broadcastConversationUpdated({
+      io: io as never,
+      conversationId: 'c1',
+      // `bannedAt: undefined` est la forme que MongoDB rend pour un participant
+      // JAMAIS banni : la colonne n'est pas dans le document. La confondre avec
+      // un bannissement fermerait l'annonce à toute la population.
+      participants: [{ id: 'p1', userId: 'u1', isActive: true, bannedAt: undefined }],
+      changedFields: { title: 'Nouveau' },
+      updatedBy: 'admin-1',
+    });
+
+    expect(emissions).toHaveLength(1);
+    expect(emissions[0].rooms).toEqual([ROOMS.conversation('c1'), ROOMS.user('u1')]);
+  });
+
+  it("ne nomme AUCUNE room personnelle quand plus aucun membre n'est vivant", () => {
+    const { io, emissions } = fauxIO();
+    broadcastConversationUpdated({
+      io: io as never,
+      conversationId: 'c1',
+      participants: [
+        { id: 'p1', userId: 'u1', isActive: false, bannedAt: null },
+        { id: 'p2', userId: 'u2', isActive: true, bannedAt: new Date('2026-11-01T00:00:00.000Z') },
+      ],
+      changedFields: { title: 'Nouveau' },
+      updatedBy: 'admin-1',
+    });
+
+    // La room de conversation reste seule en tête de chaîne : un banni n'y a
+    // pas accès (il n'y entre pas à la connexion socket), donc elle ne le
+    // porte pas. Ce qui devait disparaître est sa room PERSONNELLE, le seul
+    // chemin qui joint un client posé sur l'écran de LISTE.
+    expect(emissions).toHaveLength(1);
+    expect(emissions[0].rooms).toEqual([ROOMS.conversation('c1')]);
   });
 });

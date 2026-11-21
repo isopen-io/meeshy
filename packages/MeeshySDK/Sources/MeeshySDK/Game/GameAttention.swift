@@ -7,7 +7,9 @@ import Foundation
 //
 // L'Offrande du jour est prête, la Flamme est à risque : le client ne recalcule AUCUNE règle (ni la précocité, ni le
 // jour du joueur, ni l'état de la Flamme). Il LIT `chest.status` et `flame.status` servis dans le bloc `game` — le
-// cache d'abord — et en tire deux booléens. « Jeu masqué » ou aucun bloc ⇒ rien. Aucune notification n'en découle.
+// cache d'abord — et en tire deux booléens. L'Offrande du premier Rêve (#17370, sous le niveau 5) se signale comme les
+// autres : la passerelle ne la sert prête qu'une fois son acte fait. « Jeu masqué » ou aucun bloc ⇒ rien. Aucune
+// notification n'en découle.
 
 public struct GameAttention: Equatable, Sendable {
     /// L'Offrande du jour est prête à s'ouvrir.
@@ -23,15 +25,14 @@ public struct GameAttention: Equatable, Sendable {
     }
 
     /// La loi, sur la seule part du bloc qu'elle lit.
-    public init(missionsUnlocked: Bool, chest: GameBlock.Chest.Status, flame: FlameStatus, flameDays: Int) {
-        self.chestReady = missionsUnlocked && chest == .ready
+    public init(chest: GameBlock.Chest.Status, flame: FlameStatus, flameDays: Int) {
+        self.chestReady = chest == .ready
         self.flameAtRisk = flame == .atRisk && flameDays > 0
     }
 
     public static func of(_ game: GameBlock?, hidden: Bool) -> GameAttention {
         guard !hidden, let game else { return .none }
-        return GameAttention(missionsUnlocked: game.missions.unlocked, chest: game.chest.status,
-                             flame: game.flame.status, flameDays: game.flame.days)
+        return GameAttention(chest: game.chest.status, flame: game.flame.status, flameDays: game.flame.days)
     }
 
     /// Au moins un signal à montrer.

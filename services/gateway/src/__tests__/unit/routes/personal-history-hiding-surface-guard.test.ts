@@ -160,12 +160,12 @@ const SURFACES: Record<string, Classification> = {
       "rend aucun contenu de message. Masquer un message de SA propre vue ne le " +
       'retire pas de la comptabilité de lecture des autres participants.',
   },
-  'me/export.ts': {
+  'me/export-sections.ts': {
     kind: 'exempt',
     reads: 1,
     why:
-      "Export RGPD des messages que l'utilisateur a ÉCRITS. Le masquage est une " +
-      "préférence d'affichage, pas un effacement : l'export doit rendre la donnée " +
+      "Export RGPD des messages que l'utilisateur a ÉCRITS (#20163). Le masquage est " +
+      "une préférence d'affichage, pas un effacement : l'export doit rendre la donnée " +
       'telle que le responsable de traitement la détient.',
   },
   'user-deletions.ts': {

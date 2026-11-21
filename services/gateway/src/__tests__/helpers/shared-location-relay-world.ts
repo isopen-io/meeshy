@@ -53,6 +53,8 @@ export function monde(extra: { readonly links?: readonly CircleLink[]; readonly 
   let lectureEnPanne = false;
   let lecturesAPasser = 0;
   let relacherLecture = (): void => undefined;
+  let pausePrise: Promise<void> | null = null;
+  let relacherPrise = (): void => undefined;
   const users = world.prisma.user as unknown as { findMany: (args: unknown) => Promise<unknown> };
   const prisma = new Proxy(world.prisma, {
     get: (target, prop) =>
@@ -83,7 +85,18 @@ export function monde(extra: { readonly links?: readonly CircleLink[]; readonly 
   const deps: SharedLocationRelayDeps = {
     prisma: prisma as unknown as PrismaClient,
     cache: new Proxy(cache, {
-      get: (target, prop) => (prop === 'get' ? (...args: [string]) => { lectures.cache += 1; return target.get(...args); } : Reflect.get(target, prop)),
+      get: (target, prop) => {
+        if (prop === 'get') return (...args: [string]) => { lectures.cache += 1; return target.get(...args); };
+        if (prop === 'claim') {
+          return async (...args: Parameters<typeof target.claim>) => {
+            const attente = pausePrise;
+            pausePrise = null;
+            if (attente) await attente;
+            return target.claim(...args);
+          };
+        }
+        return Reflect.get(target, prop);
+      },
     }) as SharedLocationRelayDeps['cache'],
     io: { to: (room: string) => ({ emit: (event: string, data: Record<string, unknown>) => emissions.push({ room, event, data }) }) } as unknown as SharedLocationRelayDeps['io'],
     now: () => now,
@@ -105,6 +118,13 @@ export function monde(extra: { readonly links?: readonly CircleLink[]; readonly 
       });
     },
     relacherLecture: () => relacherLecture(),
+    /** La prochaine prise du pointeur (un démarrage) attend `relacherPrise()` : un autre geste peut passer entre sa lecture et sa prise. */
+    suspendreProchainePrise: () => {
+      pausePrise = new Promise<void>((resolve) => {
+        relacherPrise = resolve;
+      });
+    },
+    relacherPrise: () => relacherPrise(),
     /** La prochaine lecture des comptes lève (base injoignable), après `passer` lectures. */
     echouerProchaineLecture: (passer = 0) => {
       lecturesAPasser = passer;
