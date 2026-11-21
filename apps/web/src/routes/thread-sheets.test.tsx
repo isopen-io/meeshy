@@ -223,6 +223,16 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
   });
 
   test('la date de la fiche suit la langue d’INTERFACE, jamais le Prisme du lecteur (#10817)', async () => {
+    /* LA LANGUE ÉPINGLÉE VOYAGE AVEC SON CATALOGUE (#20272). Le `beforeAll` ne
+       charge que le français : sans cette ligne, ce témoin ne passait que si un
+       AUTRE fichier de la suite avait chargé « en » avant lui — le registre des
+       catalogues étant un état de MODULE que `bun test` partage entre fichiers.
+       Vert sur la suite entière, rouge dès qu'on l'isole, donc il n'attestait
+       pas ce qu'il nomme. La fiche lit aussi `translateMessagePieces` pour les
+       rangées Modifier / Épingler / Supprimer, qu'un `act` ne lui donne pas
+       ici : un témoin qui les rendrait en « en » chargerait ce catalogue-là
+       aussi. Mesuré : sans lui, les 33 témoins passent seuls. */
+    await loadInterfaceCatalog('en');
     const previous = document.documentElement.lang;
     document.documentElement.lang = 'en';
     try {
