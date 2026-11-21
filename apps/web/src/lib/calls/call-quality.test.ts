@@ -69,7 +69,7 @@ describe('la qualité d’un lien, lue dans getStats (#8047)', () => {
     expect(metricGrade('rtt', 450)).toBe('poor');
   });
 
-  test('sans audio reçu, le codec est celui de la vidéo reçue ; le codec émis ne compte pas (#20256)', () => {
+  test('sans audio reçu, le codec est celui de la vidéo reçue, avant le codec émis (#20256)', () => {
     const read = readStats(report([{ type: 'outbound-rtp', kind: 'audio', bytesSent: 10, codecId: 'o' }, { type: 'inbound-rtp', kind: 'video', codecId: 'v' }, { type: 'codec', id: 'o', mimeType: 'audio/opus' }, { type: 'codec', id: 'v', mimeType: 'video/VP8' }]), 0);
     expect(read.codec).toBe('VP8');
   });

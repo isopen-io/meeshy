@@ -57,8 +57,17 @@ describe('le codec affiché est le codec REÇU, quel que soit l’ordre des flux
     expect(everyOrder([inbound('IA0', 'audio', ''), inbound('IA1', 'audio', 'C_opus'), codec('', 'audio/PCMU'), codec('C_opus', 'audio/opus')], codecOf)).toEqual(['opus']);
   });
 
-  test('le codec émis ne compte plus ; aucun codec reçu résolu ne donne aucun codec', () => {
-    expect(everyOrder([inbound('IA', 'audio', 'ghost'), inbound('IV', 'video', undefined), { type: 'outbound-rtp', id: 'O', kind: 'video', bytesSent: 10, codecId: 'C_vp8' }, codec('C_vp8', 'video/VP8')], codecOf)).toEqual([null]);
+  test('un codec reçu résolu passe devant tout codec émis', () => {
+    expect(everyOrder([inbound('IV', 'video', 'C_vp8'), { type: 'outbound-rtp', id: 'OA', kind: 'audio', codecId: 'C_opus' }, codec('C_vp8', 'video/VP8'), codec('C_opus', 'audio/opus')], codecOf)).toEqual(['VP8']);
+  });
+
+  test('rien de reçu ne se résout : le codec ÉMIS, selon le même ordre, pour qu’un pair muet ne rende pas l’appel « unknown »', () => {
+    const sent = (id: string, kind: string, codecId: string): Entry => ({ type: 'outbound-rtp', id, kind, codecId });
+    expect(everyOrder([inbound('IA', 'audio', 'ghost'), sent('OV', 'video', 'C_vp8'), sent('OA2', 'audio', 'C_pcmu'), sent('OA1', 'audio', 'C_opus'), codec('C_vp8', 'video/VP8'), codec('C_opus', 'audio/opus'), codec('C_pcmu', 'audio/PCMU')], codecOf)).toEqual(['opus']);
+  });
+
+  test('aucun codec résolu, ni reçu ni émis, ne donne aucun codec', () => {
+    expect(everyOrder([inbound('IA', 'audio', 'ghost'), { type: 'outbound-rtp', id: 'O', kind: 'video', codecId: 'nowhere' }, codec('C_vp8', 'video/VP8')], codecOf)).toEqual([null]);
   });
 });
 

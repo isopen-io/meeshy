@@ -25,14 +25,19 @@ const rankValue = (value: unknown): number => (typeof value === 'number' && Numb
 /** Les flux audio d'abord (`kind` absent compte comme audio), puis le plus petit id. */
 const streamOrder = (entries: readonly StatsEntry[]): readonly StatsEntry[] => [...entries].sort((a, b) => Number(a.kind === 'video') - Number(b.kind === 'video') || byId(a, b));
 
-/** Le `mimeType` du codec REÇU : le premier `inbound-rtp` de `streamOrder` dont le `codecId` se résout ; `null` sinon. */
+const streamCodecMime = (entries: readonly StatsEntry[], mimes: ReadonlyMap<string, string>, type: string): string | null =>
+  streamOrder(entries.filter((entry) => entry.type === type && nonEmpty(entry.codecId) !== null)).map((entry) => mimes.get(nonEmpty(entry.codecId) ?? '')).find((mime) => mime !== undefined) ?? null;
+
+/**
+ * Le `mimeType` du codec REÇU : le premier `inbound-rtp` de `streamOrder` dont le `codecId` se résout (iOS, Android).
+ * Rien de reçu ne se résout (pair muet, flux à sens unique) : le codec ÉMIS, même ordre ; `null` sinon.
+ */
 export function receivedCodecMime(entries: readonly StatsEntry[]): string | null {
   const mimes = new Map(entries.flatMap((entry): [string, string][] => {
     const mime = textOf(entry.mimeType);
     return entry.type === 'codec' && mime !== null ? [[idOf(entry), mime]] : [];
   }));
-  const streams = streamOrder(entries.filter((entry) => entry.type === 'inbound-rtp' && nonEmpty(entry.codecId) !== null));
-  return streams.map((entry) => mimes.get(nonEmpty(entry.codecId) ?? '')).find((mime) => mime !== undefined) ?? null;
+  return streamCodecMime(entries, mimes, 'inbound-rtp') ?? streamCodecMime(entries, mimes, 'outbound-rtp');
 }
 
 const LIMITATION_RANK: ReadonlyMap<string, number> = new Map([['bandwidth', 3], ['cpu', 2], ['other', 1]]);

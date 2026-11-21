@@ -2345,12 +2345,13 @@ socket jusqu'au client.
 - **Livré** (web, `apps/web/src/lib/calls/`) :
   - `call-stats-election.ts` : un nouveau module pur, consommé par `readStats` et `readMediaQuality`. Il porte trois règles.
     - **Codec affiché = codec REÇU.** On considère les `inbound-rtp` qui ont un `codecId`, l'audio d'abord (un `kind` absent compte comme audio), puis le plus petit id, et on garde le premier dont le codec se résout. Avant, le web prenait le codec ÉMIS, vidéo d'abord. Le champ `codec` de `call:analytics` a désormais le même sens sur les trois plateformes. Sa forme ne change pas (sous-type MIME, coupé à 50 caractères).
+      - **Repli** : quand rien de reçu ne se résout, on prend le codec ÉMIS, dans le même ordre. C'est le cas d'un pair muet ou d'un flux à sens unique. Le gate navigateur `check-calls-quality.mjs`, dont le pair de test ne fait que recevoir, a rougi sans ce repli : `call:analytics` partait avec `unknown`. Le mobile rend encore `nil` dans ce cas, voir **#20280**.
     - **Limitation** : la cause la plus contraignante (bandwidth > cpu > other > le reste). À égalité, le plus petit id. Les rangs sont dans une `Map`, si bien qu'une clé du prototype vaut 0 (QA R1).
     - **Paire ICE** : la règle de #20121 (le transport, sinon la paire nominée de plus forte priorité), et la mesure manquante lue sur la paire suivante. Le web était le dernier miroir de cette règle.
-- **Tests** : `call-stats-order.test.ts`, 18 cas, chacun joué dans toutes les rotations du relevé et de son inverse.
+- **Tests** : `call-stats-order.test.ts`, 20 cas, chacun joué dans toutes les rotations du relevé et de son inverse.
   - Rouge : 15 échecs sur 17 sur le code de dev ; 1 échec sur 1 pour R1.
   - Réécrits : 3 tests figeaient le codec émis (`call-quality`, `call-quality-loop`, `call-analytics-hostile-stats`).
-  - Vert, sur l'arbre fusionné : `bun test src/lib/calls`, 2467 tests, 0 échec. `tsc` donne 0, le build donne 0.
+  - Vert, sur l'arbre fusionné : `bun test src/lib/calls`, 2469 tests, 0 échec. `tsc` donne 0, le build donne 0. `check-calls-quality.mjs` passe en local (code de sortie 0, codec `opus`).
   - Suite web complète : 34 979 réussis et 1 échec. Ce dernier, `act-leak-guard.test.ts`, échoue à l'identique sur `origin/dev` : c'est un problème d'environnement local (bun 1.4.4), pas un effet du lot.
   - Mutations faites par la QA : M1 à M7 échouent toutes, de 1 à 5 échecs chacune.
 - **QA** (indépendante) : favorable avec réserves.
