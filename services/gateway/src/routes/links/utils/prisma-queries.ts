@@ -5,6 +5,7 @@ import { MESSAGE_SIDE_PROTECTION_SELECT } from '../../../services/attachments/me
 import { applyHistoryFloor } from '../../../services/historyFloor';
 import { withOrphanedSenderRepair } from '../../../services/messaging/withOrphanedSenderRepair';
 
+import { PARTICIPATION_VIVANTE } from '../../conversations/utils/access-control';
 /**
  * Plafond d'affichage des listes membres / participants anonymes d'un lien de
  * partage (#4165). Aligné sur le plafond de `validatePagination` (≤ 100) : au
@@ -101,12 +102,19 @@ export const shareLinkSelectStructure = {
 };
 
 /**
- * Est-ce que `userId` a une participation ACTIVE de type `user` dans cette
+ * Est-ce que `userId` a une participation **VIVANTE** de type `user` dans cette
  * conversation ? Requête ciblée et indexée — indépendante de l'effectif de la
  * conversation, à l'inverse de l'ancien `participants.find(...)` sur la
  * relation chargée en bloc (#4165). Sert à la fois la garde d'accès et le
  * calcul de `userType` : un lecteur `hasAccess` par le cas spécial "meeshy"
  * sans être réellement participant reste `userType: 'anonymous'`, comme avant.
+ *
+ * « ACTIVE » jusqu'à #20183, et le NOM de cette fonction porte encore ce mot :
+ * `isActive` nu est le SUR-ENSEMBLE de la loi, pas la loi. Le nom n'est pas
+ * corrigé dans ce lot-là — le renommer toucherait son site d'appel pour une
+ * raison étrangère au défaut — mais ce doc-comment est la seule chose qui
+ * dise lequel des deux la clause épelle. Le nom juste serait
+ * `findLiveUserParticipant`.
  */
 export async function findActiveUserParticipant(
   prisma: PrismaClient,
@@ -114,7 +122,26 @@ export async function findActiveUserParticipant(
   userId: string
 ): Promise<{ id: string } | null> {
   return prisma.participant.findFirst({
-    where: { conversationId, userId, type: 'user', isActive: true },
+    // #20183 — la PARTICIPATION VIVANTE. `retrieval.ts` en fait
+    // `hasAccess = memberRow !== null || canPreview` : la ligne rendue donne
+    // l'accès de MEMBRE à la fiche du lien, PAR-DESSUS ce que l'aperçu public
+    // accorde. Sous `isActive` nu, un membre actif-et-banni le gardait.
+    // Dans la clause et non en aval, bien que cette lecture serve AUSSI
+    // `userType` : un banni n'est pas « un membre dont on masque des champs »,
+    // il est absent.
+    //
+    // CE QUE CE RESSERREMENT NE FAIT PAS, mesuré par l'audit adversarial du
+    // lot, parce qu'une garde partielle annoncée totale est pire qu'une garde
+    // absente : il retire le SEUL grant de membre. Un banni garde exactement
+    // ce qu'un INCONNU obtient — l'aperçu public (`canPreview` : lien actif,
+    // `allowViewHistory`, non échu, conversation ouverte), messages compris —
+    // et le salon GLOBAL « meeshy » reste admis INCONDITIONNELLEMENT pour tout
+    // compte authentifié (`retrieval.ts`, avant toute lecture de participation).
+    // Ce que le lot ferme est donc : l'accès de membre quand l'aperçu public
+    // est fermé, l'étiquette `userType: 'member'`, et le `redirectTo` qui
+    // envoie vers le fil. Fermer `canPreview` ou le cas « meeshy » pour un
+    // banni est une décision de produit, pas ce correctif.
+    where: { conversationId, userId, type: 'user', ...PARTICIPATION_VIVANTE },
     select: { id: true }
   });
 }

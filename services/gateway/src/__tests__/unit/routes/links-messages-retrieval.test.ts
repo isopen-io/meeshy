@@ -7,6 +7,7 @@
 
 import { describe, it, expect, jest, beforeAll, afterAll } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
+import { findFirstIn } from '../../helpers/mongo-where';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -193,6 +194,41 @@ describe('GET /links/:identifier/messages — authenticated non-member', () => {
   it('returns 403 for non-member', async () => {
     const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}/messages` });
     expect(res.statusCode).toBe(403);
+  });
+});
+
+/**
+ * #20183 — le fil de la conversation par l'URL du lien, face à un membre
+ * actif-et-BANNI. C'est la porte de LECTURE la plus directe des six de ce lot :
+ * `hasAccess = !!member`, puis 403. Sous la clause nue, un membre exclu lisait
+ * les messages de la conversation dont il est exclu, par une adresse qui n'est
+ * pas celle du fil.
+ *
+ * Le double HONORE son `where` (`findFirstIn`) : sous
+ * `mockResolvedValue(ligne)` — la forme des quatre témoins voisins — retirer
+ * la garde de la production laisserait ce témoin VERT.
+ */
+describe('GET /links/:identifier/messages — membre actif-et-BANNI (#20183)', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    app = await buildApp(
+      { isAuthenticated: true, isAnonymous: false, user: { id: USER_ID } },
+      {
+        participant: {
+          findFirst: findFirstIn([
+            { id: 'part-1', userId: USER_ID, conversationId: CONV_ID, isActive: true, bannedAt: new Date('2026-11-01T00:00:00Z') },
+          ] as never),
+        },
+      }
+    );
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('refuse (403) et ne lit AUCUN message', async () => {
+    mockGetConversationMessagesWithDetails.mockClear();
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}/messages` });
+    expect(res.statusCode).toBe(403);
+    expect(mockGetConversationMessagesWithDetails).not.toHaveBeenCalled();
   });
 });
 

@@ -105,7 +105,13 @@ describe('audiences de diffusion — l’appartenance VIVANTE, par la même cons
     const unjudgeable = sweepUnjudgeableParticipantReads();
 
     expect(unjudgeable.length).toBeGreaterThan(0);
-    expect(unjudgeable.length).toBeLessThanOrEqual(52);
+    // 53 depuis #20183, et la lecture de plus est un GAIN : la porte de
+    // l'invité anonyme (`routes/links/messages.ts`) est keyée sur son
+    // `sessionTokenHash` et n'a aucun `conversationId` textuel — tant que son
+    // `where` ne portait aucun étalement, le relevé l'écartait EN SILENCE ;
+    // l'épellation de la loi par spread la fait publier en
+    // `portée-indirecte`. Ce plafond borne la dette, il ne la nie pas.
+    expect(unjudgeable.length).toBeLessThanOrEqual(53);
     for (const read of unjudgeable) {
       expect(read.form).toMatch(/^(variable|appel|ternaire|absent|portée-indirecte|clé-indirecte|modèle-indécidable)$/);
     }

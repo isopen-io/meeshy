@@ -27,6 +27,7 @@ import { apiPath } from '@meeshy/shared/api/prefix';
 import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
 import { isConversationClosed } from '../../services/messaging/conversationWriteAdmission';
 
+import { PARTICIPATION_VIVANTE } from '../conversations/utils/access-control';
 // ═══════════════════════════════════════════════════════════════════════════
 // #4170 — GET /links absorbe GET /links/my-links, GET /links/stats et
 // GET /conversations/:conversationId/links (`conversations/sharing.ts`, hors
@@ -544,7 +545,12 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
         // 500. `creatorId` (la colonne inexistante que la porte fautive lisait)
         // n'apparaît nulle part ici : la colonne réelle est `createdBy`.
         const membership = await fastify.prisma.participant.findFirst({
-          where: { conversationId, userId, isActive: true },
+          // #20183 — la PARTICIPATION VIVANTE, comme sur l'alias déprécié que
+          // cette route remplace (`GET /conversations/:id/links`) : un membre
+          // actif-et-banni lisait les codes d'entrée vivants de la conversation
+          // dont il est exclu, et TOUS s'il est modérateur — `membership.role`
+          // ci-dessous est lu sur cette même ligne.
+          where: { conversationId, userId, ...PARTICIPATION_VIVANTE },
           select: { role: true }
         });
 
