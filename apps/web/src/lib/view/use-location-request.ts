@@ -84,6 +84,8 @@ export function useLocationRequest(params?: { readonly engine?: LocationEngine }
   readonly dismiss: () => void;
   /** Retire le lieu attaché ET remet l'état au repos. */
   readonly clear: () => void;
+  /** Rattache un lieu déjà obtenu : celui d'un envoi qui n'est pas parti (#20197). */
+  readonly restore: (place: SharedPlace) => void;
 } {
   const [state, setState] = useState<LocationRequestState>(IDLE);
   const [place, setPlace] = useState<SharedPlace | null>(null);
@@ -112,5 +114,5 @@ export function useLocationRequest(params?: { readonly engine?: LocationEngine }
     setState(IDLE);
   }, []);
 
-  return { state, place, request, dismiss, clear };
+  return { state, place, request, dismiss, clear, restore: setPlace };
 }

@@ -1,6 +1,7 @@
 import * as authEndpoints from '@meeshy/shared/api/endpoints/auth';
 
 import { commentDrafts } from '../comments/comment-draft';
+import { forgetPeersSeenWithDevice } from '../e2ee/peer-device-key';
 import { unsentComments } from '../comments/unsent-comments';
 import { draftStore } from '../send/draft-store';
 import { safeLocalStorage } from '../storage';
@@ -54,6 +55,8 @@ function forgetAccountLocally(userId: string): void {
  */
 function retireAccountLocally(userId: string): void {
   forgetAccountLocally(userId);
+  /* Les pairs dont il a vu un appareil chiffré (#20197) : la déconnexion les garde, le retrait les emporte. */
+  forgetPeersSeenWithDevice(safeLocalStorage(), userId);
   /* Chargé au geste : l'écran de connexion et les réglages n'embarquent pas le carnet. */
   void import('../game-photo/notebook-legacy')
     .then(({ forgetAccountNotebook }) => forgetAccountNotebook(typeof indexedDB === 'undefined' ? undefined : indexedDB, userId))
