@@ -44,18 +44,31 @@ la plus proche ne décide jamais seul d'un vert ni d'un rouge.
 
 | | |
 |---|---|
-| portes relevées | 156 — 148 clauses, 8 prédicats |
-| portes NUES (inventoriées) | 130 |
-| dont décidées LARGES, raison instruite | 2 |
-| publiées faute d'être jugeables | 25 (15 `where-illisible`, 6 `source-introuvable`, 4 `source-ambigue`) |
+| portes relevées | 159 — 148 clauses, 11 prédicats |
+| portes NUES (inventoriées) | 131 |
+| dont décidées LARGES, raison instruite | 3 |
+| publiées faute d'être jugeables | 22 (15 `where-illisible`, 6 `source-ambigue`, 1 `source-introuvable`) |
 
-Resserrements de portée, tous deux délibérés et écrits sur place : `count` /
-`aggregate` / `groupBy` sont des **MESURES** (le `CLAUDE.md` de la passerelle a
-déjà tranché leur régime — « la troncature et le sur-comptage y sont des nombres
-FAUX, pas des fuites »), et `findMany` rend un ENSEMBLE, donc une audience, qui a
-déjà son cliquet. Sans ces deux exclusions, 41 hydratations par lot et 41 mesures
-entraient dans un inventaire de sécurité où chacune se lirait comme une
-autorisation.
+Resserrements de portée, délibérés et écrits sur place : `count` / `aggregate` /
+`groupBy` sont des **MESURES** (le `CLAUDE.md` a déjà tranché leur régime — « la
+troncature et le sur-comptage y sont des nombres FAUX, pas des fuites »), et
+`findMany` rend un ENSEMBLE, donc une audience.
+
+**Et la première version de ce journal écrivait, comme le code, que ces
+méthodes « ont déjà leur cliquet ». C'est FAUX, et l'audit l'a mesuré** : le
+cliquet des audiences écarte toute clause qui nomme une personne, donc une
+lecture plurielle ou une mesure keyée sur l'appelant n'est vue par AUCUN des
+deux balayages — la lacune que ce lot ferme, rouverte pour quatre méthodes
+Prisma. 44 sites, dont 41 nus (#20260). L'exclusion de portée reste
+défendable ; l'affirmation de couverture ne l'était pas, et c'est elle qui
+endort la question.
+
+Le « 41 hydratations par lot » qu'annonçait la justification de
+`nommeUnePluralite` est lui aussi faux : **mesuré 0 site** dans la portée de ce
+balayage. Le 41 venait de la portée `findMany`, où l'exclusion ne s'applique
+pas — un chiffre hérité d'un autre discriminant, recopié pour justifier un
+no-op. « Un compte est une AFFIRMATION » (cycle 93), appliqué au lot qui cite
+la leçon.
 
 ### Preuve de ROUGE
 
@@ -123,3 +136,76 @@ parcourt par `participant.userId === userId` sans loi, pour alimenter
 dont il est exclu.** C'est un lot de cryptographie et de contrôle d'accès : il
 passe par `auditeur-adversarial` avant fusion (directive #9226), donc par son
 issue, pas par celui-ci.
+
+### Ce que l'audit adversarial a changé au lot (verdict BLOQUANT, levé)
+
+Quatre corrections de fond, toutes dans le lot :
+
+1. **Le rattachement prédicat → projection rendait de FAUX VERTS** (voir plus
+   haut) : la position n'est plus lue, le verdict exige l'unanimité des
+   candidates du fichier, et il est symétrique.
+2. **Deux affirmations de portée étaient fausses** — « `findMany` a déjà son
+   cliquet » (#20260) et « 41 hydratations écartées » (mesuré 0). Corrigées
+   dans le code et ci-dessus.
+3. **Un témoin ne pouvait pas tomber sur la mutation qu'il nomme.** Celui de
+   `p.isActive !== false` était tenu par la moitié `bannedAt` de
+   `jugeLaLoiEnCode`, qui exige la CONJONCTION : faire accepter la mauvaise
+   polarité au balayage laissait les quinze témoins verts. Il porte désormais
+   une garde de bannissement VALIDE à côté de la mauvaise polarité — le seul
+   corps où la polarité décide seule — plus sa contre-épreuve. Vérifié : il
+   tombe sur la mutation.
+4. **L'inventaire reclassait « pas encore instruit » un site DÉJÀ INSTRUIT par
+   l'inventaire frère.** `audience-law-inventories.ts` porte
+   `routes/conversation-encryption.ts#0` en `DELIBERATELY_WIDE`, avec une
+   raison qui **nomme `memberOf`** et dit que resserrer la clause casserait
+   `pairOfMembers` sur le chemin que rien ne ramène en clair (#12949, #20093).
+   La ligne passe en `PORTES_DELIBEREMENT_LARGES` avec cette raison, et #20254
+   est RÉÉCRITE : le correctif est la loi EN CODE dans `memberOf`, jamais un
+   resserrement de `REGIME_SELECT`.
+
+C'est la confusion que l'inventaire existe pour empêcher, prise par l'autre
+bout : **« décidé large » relu en « pas encore instruit »**. Et le lot l'a
+commise en ayant écrit, dans l'en-tête du fichier d'inventaire, qu'une
+exemption recopiée d'une issue sans être confrontée au relevé est une
+affirmation. La règle était là, à vingt lignes.
+
+Deux corrections de forme : les étiquettes `predicat-sans-loi` (un verdict, et
+tautologique) et `clause-admin` (« lit une CIBLE », ce que l'instrument ne peut
+pas savoir) sont renommées ; les publications portent un RANG, sans quoi deux
+illisibles du même fichier s'annulaient et un illisible neuf passait inaperçu.
+
+**Et la clé positionnelle MISDIRIGEAIT la réparation.** Insérer une porte nue en
+tête de `target-participant.ts` fait rougir le cliquet en nommant `#clause:2`
+— alors que la porte neuve est `#clause:0`, les deux clés instruites ayant
+glissé. Le mainteneur qui suit « instruire sa loi » resserrait alors la lecture
+de #10465, rendant un banni indébannissable : le cliquet envoyait réparer ce
+qui tient. Les entrantes nomment désormais leur LIGNE.
+
+### Trois défauts PRÉEXISTANTS que l'audit a révélés, chacun en issue
+
+- **#20261** — l'aperçu avant décroché relaie caméra et micro sur la foi d'un
+  `count(…) > 0` nu, seul gate de `calleeRefusal` pour ses deux verbes, sans
+  aucun refus en aval. C'est ce que l'exclusion « les mesures sont des
+  nombres » cachait : ici le nombre EST l'autorisation.
+- **#20262** — le FILTRE DE RELATION, quatrième genre, est nommé sur `dev`
+  depuis #20209 (« 30 filtres keyés, zéro n'épelait la loi ») et n'a **aucun
+  cliquet d'inventaire** : prouvé, remettre `list-viewer-scope.ts` sur
+  `isActive` nu laisse les quatre cliquets verts. Avec une porte réelle,
+  `report-external-content.ts`.
+- **#20263** — trois orthographes invisibles ET non publiées (alias de liste,
+  boucle, `where` keyé après un `where` imbriqué). Latentes, mesurées absentes
+  aujourd'hui. La comparaison inversée était de cette liste : elle est corrigée
+  ici, une porte ne changeant pas de nature avec l'ordre de ses opérandes.
+
+### Une leçon de méthode sur la mesure elle-même
+
+La suite complète du gateway a d'abord rendu **sept suites rouges**, dont mon
+propre cliquet, sur une porte nue de `services/talkie/talkieGate.ts` que
+l'inventaire ne portait pas. Elle n'y était pas : c'était la **mutation M3 de
+l'audit adversarial**, qui tournait en parallèle et insérait exactement cette
+porte pour prouver que le cliquet tombe. Arbre restauré, cliquet vert.
+
+> **Un audit par mutation et une suite complète ne se lancent pas en
+> parallèle.** L'un édite l'arbre que l'autre mesure, et le rapport qui en sort
+> accuse le lot. Le réflexe « deux travaux indépendants, autant les paralléliser »
+> est faux dès que l'un des deux ÉCRIT dans ce que l'autre lit.

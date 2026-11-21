@@ -10,6 +10,7 @@ import {
 import {
   balancedParens,
   porteKey,
+  publicationKey,
   sweepCallerKeyedDoors,
   sweepCallerKeyedDoorsIn,
   sweepUnjudgeableCallerKeyedDoors
@@ -91,14 +92,40 @@ describe('le balayage NOMME les trois défauts de référence — la preuve de R
 
   /**
    * `p.isActive !== false` est l'orthographe que #20136 a CORRIGÉE : elle
-   * admet une ligne dont `isActive` est ABSENT. Le témoin l'épingle, parce que
-   * c'est la seule forme qui RESSEMBLE à la loi sans l'être.
+   * admet une ligne dont `isActive` est ABSENT.
+   *
+   * **La première version de ce témoin ne pouvait pas tomber sur la mutation
+   * qu'elle nommait**, et l'audit du lot l'a mesuré : le verdict était tenu
+   * par la moitié `bannedAt` de `jugeLaLoiEnCode`, qui exige la CONJONCTION
+   * des deux colonnes. Faire accepter `!== false` au balayage laissait les
+   * quinze témoins VERTS, parce que la garde de bannissement manquait de toute
+   * façon dans la fixture. Le témoin épinglait la conjonction, pas la
+   * POLARITÉ dont il parle.
+   *
+   * Celui-ci porte donc une garde de bannissement VALIDE à côté de la mauvaise
+   * polarité d'activité : le seul corps où la polarité décide seule.
    */
-  it('ne prend PAS `p.isActive !== false` pour la loi', () => {
-    const { portes } = sweepCallerKeyedDoorsIn([
-      dansUnDossier({ 'd.ts': AVANT_20136.replace('&& p.isActive !== false', '&& p.isActive !== false && p.leftAt === null') })
-    ]);
+  it('ne prend PAS `p.isActive !== false` pour la loi, même à côté d\'une garde de bannissement VALIDE', () => {
+    const avecBanValide = AVANT_20136.replace(
+      'p.userId === userId && p.isActive !== false',
+      'p.userId === userId && p.isActive !== false && p.bannedAt === null'
+    );
+    const { portes } = sweepCallerKeyedDoorsIn([dansUnDossier({ 'd.ts': avecBanValide })]);
     expect(portes.filter(p => !p.epelleLaLoi)).toHaveLength(1);
+  });
+
+  /**
+   * Et la CONTRE-ÉPREUVE, sans laquelle le témoin ci-dessus serait vert pour
+   * la mauvaise raison : la MÊME forme avec la bonne polarité est acceptée.
+   * Les deux ensemble font que seule la polarité distingue les deux verdicts.
+   */
+  it('accepte les deux colonnes épelées à la main avec la BONNE polarité', () => {
+    const correct = AVANT_20136.replace(
+      'p.userId === userId && p.isActive !== false',
+      'p.userId === userId && p.isActive === true && p.bannedAt === null'
+    );
+    const { portes } = sweepCallerKeyedDoorsIn([dansUnDossier({ 'e.ts': correct })]);
+    expect(portes.filter(p => !p.epelleLaLoi)).toHaveLength(0);
   });
 });
 
@@ -130,10 +157,16 @@ describe('les portes à clé d\'appelant du dépôt', () => {
 
   /**
    * Un balayage dont le relevé est VIDE et un dépôt sans porte rendent le même
-   * vert. Celui-ci mesure donc d'abord qu'il VOIT quelque chose, et que ses
-   * deux discriminants rapportent chacun.
+   * vert. Ce témoin garde contre le premier.
+   *
+   * **Et il ne garde QUE le démantèlement total d'un discriminant** — c'est
+   * une borne, pas une mesure, et l'audit du lot l'a vérifié : retirer la
+   * branche des projections imbriquées fait tomber quatre témoins, mais par
+   * l'égalité exacte de l'inventaire et par les publications, **jamais par ce
+   * seuil**. Ne pas le lire comme « le balayage voit toujours autant » : c'est
+   * l'inventaire gelé qui tient le compte, ligne par ligne.
    */
-  it('voit les deux genres — un discriminant muet ne garde rien', () => {
+  it('voit les deux genres — un discriminant ENTIÈREMENT muet ne garde rien', () => {
     expect(sites.filter(s => s.genre === 'clause').length).toBeGreaterThan(50);
     expect(sites.filter(s => s.genre === 'prédicat').length).toBeGreaterThan(0);
   });
@@ -156,21 +189,35 @@ describe('les portes à clé d\'appelant du dépôt', () => {
     expect(fantomes).toEqual([]);
   });
 
+  /**
+   * **Une entrante se nomme avec sa LIGNE, et c'est la correction d'un piège
+   * mesuré par l'audit du lot.**
+   *
+   * La clé est positionnelle (`fichier#genre:rang`). Insérer une porte nue EN
+   * TÊTE d'un fichier qui en porte déjà deux fait donc rougir le cliquet en
+   * nommant `#clause:2` — alors que la porte NEUVE est `#clause:0`, les deux
+   * anciennes ayant glissé. Le mainteneur qui suit l'instruction « instruire
+   * sa loi » resserre alors la DERNIÈRE, et sur `target-participant.ts` cela
+   * rendrait un banni introuvable donc indébannissable (#10465) : le cliquet
+   * envoyait réparer ce qui tient, sans rien dans son message pour s'en
+   * apercevoir. La ligne, elle, désigne le bon site.
+   */
   it('le relevé des portes NUES est exactement celui des deux inventaires', () => {
     const attendues = new Set([...PORTES_DELIBEREMENT_LARGES.keys(), ...PORTES_MESUREES_NON_INSTRUITES.keys()]);
     const mesurees = nues.map(n => porteKey(sites, n));
-    const entrantes = mesurees.filter(k => !attendues.has(k));
-    const sortantes = [...attendues].filter(k => !mesurees.includes(k));
     // ENTRANTE = une porte NEUVE : instruire sa loi, pas ajouter une ligne.
+    // La LIGNE la désigne ; le rang de la clé peut appartenir à une voisine.
+    const entrantes = nues
+      .filter(n => !attendues.has(porteKey(sites, n)))
+      .map(n => `${porteKey(sites, n)} — ligne ${n.line} : ${n.forme}`);
     expect(entrantes).toEqual([]);
     // SORTANTE = une porte RÉPARÉE : retirer sa ligne fait partie du correctif.
-    expect(sortantes).toEqual([]);
+    expect([...attendues].filter(k => !mesurees.includes(k))).toEqual([]);
   });
 
   it('ce que le balayage ne sait pas juger est PUBLIÉ, jamais tu (#20091)', () => {
-    const publies = sweepUnjudgeableCallerKeyedDoors()
-      .map(u => `${u.file}#${u.genre}/${u.raison}`)
-      .sort();
+    const toutes = sweepUnjudgeableCallerKeyedDoors();
+    const publies = toutes.map(u => publicationKey(toutes, u)).sort();
     expect(publies).toEqual([...PORTES_NON_JUGEABLES_GELEES].sort());
   });
 });
