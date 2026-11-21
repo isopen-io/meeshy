@@ -213,6 +213,21 @@ describe('planStreak — la transition de série appliquée au geste du jour', (
     expect(plan.data).toMatchObject({ currentStreakDays: 3, flameFreezes: 1 });
   });
 
+  it('le jour du cadeau s\'écrit avec lui, pour que les clients l\'annoncent ce jour-là (#20169)', () => {
+    const plan = planStreak(facts({ currentStreakDays: 2, longestStreakDays: 2 }));
+    expect(plan.data).toMatchObject({ flameFreezeGiftDay: '2026-10-05' });
+  });
+
+  it('sans cadeau, le jour du cadeau ne s\'écrit pas', () => {
+    expect(planStreak(facts({ currentStreakDays: 9 })).data).not.toHaveProperty('flameFreezeGiftDay');
+    expect(planStreak(facts({ currentStreakDays: 2, longestStreakDays: 9 })).data).not.toHaveProperty('flameFreezeGiftDay');
+  });
+
+  it('lit le jour du cadeau du compte, absent sur un compte antérieur', () => {
+    expect(facts({ flameFreezeGiftDay: '2026-09-30' }).freezeGiftDay).toBe('2026-09-30');
+    expect(facts({}).freezeGiftDay).toBeNull();
+  });
+
   it('un jour couvert par un gel qui mène au 3e jour : le gel part, la Veilleuse offerte arrive', () => {
     const plan = planStreak(
       facts({ currentStreakDays: 2, longestStreakDays: 2, lastStreakDate: new Date('2026-10-03T00:00:00Z'), flameFreezes: 1 }),
@@ -242,7 +257,7 @@ describe('writeStreak — la Veilleuse offerte arrive dans la réserve du compte
 
     expect(written?.plan).toMatchObject({ streak: 3, freezeGifted: true });
     const row = await db.user.findUnique({ where: { id: USER } });
-    expect(row).toMatchObject({ currentStreakDays: 3, flameFreezes: 1 });
+    expect(row).toMatchObject({ currentStreakDays: 3, flameFreezes: 1, flameFreezeGiftDay: '2026-10-05' });
   });
 
   it('un compte antérieur au Jeu, sans champ de gel : la Veilleuse s\'écrit quand même', async () => {

@@ -1791,10 +1791,35 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   relations 35 suites / 444 tests ; `tsc` 0.
 - Prochain lot : #20126 (web + Android lisent la source servie), puis #20127, #20054, #20056, #20086.
 
+## 2026-11-21 — réveil de 13 h : la moitié web de #20126 (un point choisi ne se remplace pas en silence)
+
+- Reprise : la PR #20202 (#19557, annoncer `acceptsManualSource`) était menée par une autre session vivante (fusion de
+  `dev` et CI relancée à 13 h 03) : ce réveil n'y touche pas. Aucune branche n'écrit `apps/web/src/lib/shared-locations`.
+- Lot : web seul de #20126. Le web lit `source` sur `GET /relations/locations/mine` (inconnue ⇒ `manual`, absente ⇒
+  rien) ; devant un point choisi l'onglet ne suit plus la position et n'en envoie aucune (marque `<clé>.fixedPoint`,
+  relue au rechargement et entre onglets) ; un relevé refusé `FIXED_POINT` coupe le suivi et relit ; « Partager » rend
+  `replaces-chosen-point` sans demander de relevé ni rien envoyer, la fiche demande « Montrer votre position réelle ? »
+  (« Garder le point choisi » en premier), puis rejoue le même choix avec `source: 'device'`. Un démarrage refusé
+  `FIXED_POINT` (point choisi ailleurs pendant l'envoi) relit et demande. « Arrêter » devant un point choisi republie la
+  liste seule et ne se replie jamais sur la position de l'appareil.
+- Audit adversarial : non bloquant. Corrigé dans le lot : trois gardes de l'onglet que la passerelle seule tenait ont
+  leur témoin (relevé en vol après la marque, suivi non rallumé par un retrait, aucun repli sur la position devant un
+  point choisi) ; une source absente lève la marque (une passerelle d'avant ne sert jamais de point choisi) ; un refus
+  `FIXED_POINT` à l'envoi rend `received` tel qu'il était ; la liste vidée par l'échéance lève la marque ; l'écran
+  redemande au lieu d'afficher le titre en toast. Noté : une source inconnue se lit `manual` (choix fail-closed).
+- Android : issue de suivi #20212 (même milestone). La confirmation liée au partage montré et les noms concernés restent
+  #20127.
+- Gates : `bun test` complet 34 928 verts, 2 rouges dont 1 hérité (`act-leak-guard`, rouge sans le lot) et 1 corrigé
+  dans le lot (cliquet des boutons sans réponse d'appui : `active:scale-[0.98]` sur les deux boutons neufs) ; `tsc` 0 ;
+  `vite build` vert ; poids vert ; les gates navigateur (verbosité, Playwright) ne tournent pas en conteneur, ils se
+  prouvent en CI.
+- Prochain lot : #20212 (Android), puis #20127, #20054, #20056, #20086.
+
 ## 2026-11-21 — réveil de 15 h : Android lit la source servie (#20212)
 
 - Reprise : la PR #20214 (moitié web de #20126) est menée par le réveil de 13 h, sa CI `ci.yml` en file depuis 14 h 27 :
-  ce réveil n'y touche pas (un push annulerait le run). Aucune branche vivante n'écrit les chemins Android de la position.
+  ce réveil n'y touche pas (un push annulerait le run) ; elle a été fusionnée dans `dev` pendant ce réveil (711e1cafc9).
+  Aucune branche vivante n'écrit les chemins Android de la position.
 - Lot : #20212, iso iOS (#20087) et web (#20126). `:core:model` lit `source` (inconnue ⇒ point choisi, absente ⇒ rien ne
   change), `SharedLocationRoster` garde le point choisi (survit au lancement, s'éteint sans personne), `FIXED_POINT` se lit,
   et seul un démarrage avec position ET accord porte `source: 'device'`. Le centre ne suit ni n'envoie devant un point
