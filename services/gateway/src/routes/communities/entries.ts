@@ -32,7 +32,7 @@ import { getBlockRelatedUserIds, isBlockedBetween } from '../../utils/blocking.j
 import { admitCommunityMember, membershipAfterFailure } from './admission';
 import { gateCoMemberPresence } from './member-presence';
 import { viewerFromRequest } from '../users/presence-gate';
-import { liveJoinRequestWhere, reopenOrphanedAcceptances } from '../../services/community-join-request-lifecycle';
+import { liveJoinRequestWhere, reopenOrphanedAcceptances, sealVerifiedAcceptances } from '../../services/community-join-request-lifecycle';
 import type { CommunityEngagementOptions } from './types';
 
 const logger = enhancedLogger.child({ module: 'CommunityEntryRoutes' });
@@ -279,12 +279,15 @@ export async function registerEntryRoutes(fastify: FastifyInstance, options: Com
             createdBy: community.createdBy,
             decidedBy: viewerId
           });
+          // #20003 — l'entrée a eu lieu : la réparation des orphelines ne relira plus cette acceptation.
+          await sealVerifiedAcceptances(fastify.prisma, { communityId: id, requestIds: [pending.id], now: new Date() });
           return sendSuccess(reply, await gateCoMemberPresence(fastify.prisma, viewerFromRequest(request), member));
         } catch (error) {
           // #19914 — seule une entrée qui n'a PAS eu lieu rouvre la demande.
           const after = await membershipAfterFailure(fastify, id, pending.userId);
           if (after.kind === 'entered') {
             logger.warn('join request accepted: entry written despite an error', { requestId: pending.id, error });
+            await sealVerifiedAcceptances(fastify.prisma, { communityId: id, requestIds: [pending.id], now: new Date() });
             return sendSuccess(reply, await gateCoMemberPresence(fastify.prisma, viewerFromRequest(request), after.member));
           }
           if (after.kind === 'unknown') throw error;

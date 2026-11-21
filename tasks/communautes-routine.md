@@ -778,4 +778,16 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Passerelle : `communityTextAsWritten` (`routes/communities/serialization.ts`, une passe de `unescapeSerializedText`) appliqué dans `flattenCommunityCounts` (liste, détail, création, réglages), la recherche, « mes communautés », le tableau de bord (`recentCommunities`) et la charge de `community:updated`. Les bannières (`asWritten`) le faisaient déjà.
 - Témoins : `legacy-text-served-20063.test.ts` (7, par le vrai sérialiseur ; rouge prouvé : 6 échecs avant le code) et `preferences-dashboard.test.ts` (+1, rouge prouvé). Deux témoins anciens suivis : la charge de `community:updated` attendait `Club &amp; amis` ; le double de `/communities/mine` ne portait pas la communauté que l'`include` garantit.
 - Reste : les noms d'une communauté dans les écrans d'administration web (qui décodent déjà) ; la ligne en base reste échappée jusqu'à une éventuelle migration, que plus rien n'exige.
+- 2026-11-21 06:34 : #20154 fusionnée dans `dev` (`5dfc40f09`) par le porteur ; #20063 et #16786 fermées avec leur preuve ; le `workflow_dispatch` de `ci.yml` (44872940315) est revenu vert sur `7f2787c82`.
+
+## 2026-11-21 — réveil 07:37 UTC
+
+- Début du run : aucune PR de la routine ouverte, aucune branche `claude/communautes-*` vivante.
+- #14227 (appartenances lues par index) fermée : son critère de fin était atteint depuis le 2026-11-20 (index posés en staging puis en production, IXSCAN relu).
+- Lot : #20003 — une acceptation vérifiée « entrée » n'est plus relue, et toutes les orphelines sont atteignables.
+- Schéma : `CommunityJoinRequest.entryVerifiedAt DateTime?` (additif, sans migration ; nul ou absent = à vérifier).
+- Passerelle : `sealVerifiedAcceptances` (`services/community-join-request-lifecycle.ts`, best-effort, ne touche qu'une acceptation encore acceptée et non scellée) ; la réparation ne lit plus que les non scellées (`OR` nul / `isSet: false`) et scelle ce qu'elle relit sans le rouvrir (entrée prouvée, demande remplacée) — une preuve d'entrée ne se défait pas ; `closePendingJoinRequests` scelle d'emblée ; la route d'acceptation scelle après l'entrée écrite (et sur le chemin « entrée écrite malgré l'erreur »), jamais quand l'entrée n'a pas eu lieu.
+- Témoins : `join-request-entry-verified-20003.test.ts` (12, magasin en mémoire qui applique filtres et écritures ; rouge prouvé : 9 échecs sans le code) ; deux anciens témoins suivis (le filtre du balayage, la donnée de clôture).
+- Gates locaux : passerelle `tsc --noEmit` vert ; suites communautés + `community-member-writer-sweep` + `tsc-never-loaded-tests-ratchet` : 45 fichiers, 691 tests verts.
+- Reste : la mesure sur staging (nombre de lectures par ouverture de la liste) ; aucun client touché.
 
