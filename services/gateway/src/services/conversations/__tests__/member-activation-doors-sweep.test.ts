@@ -32,10 +32,23 @@ type Door =
   | { readonly writes: number; readonly exempt: string };
 
 const DOORS: Readonly<Record<string, Door>> = {
-  'routes/conversations/participants-writes.ts': { writes: 2, law: 'newMemberRefusal(' },
+  // #19650 — l'ajout d'un membre, partagé par `POST …/participants` et l'invitation pendant un appel.
+  //
+  // #19688 — leurs DEUX écritures activantes sont toujours là, et c'est le
+  // point : la rentrée s'écrit désormais par `commitParticipantRejoin`, que le
+  // recensement a appris à lire. Sans cela, trois écritures activantes
+  // quittaient l'inventaire sans qu'il rougisse — et une QUATRIÈME porte qui
+  // rallumerait une participation par cette fonction, sans appeler aucune loi
+  // d'entrée, serait passée inaperçue (le défaut même de #16188). La loi de
+  // CHAQUE porte juge donc encore sa rentrée, comme sa création.
+  'services/conversations/memberAdmission.ts': { writes: 2, law: 'newMemberRefusal(' },
   'routes/conversations/sharing-invite.ts': { writes: 2, law: 'newMemberRefusal(' },
   'services/messaging/MessagingService.ts': { writes: 1, law: 'newMemberRefusal(' },
   'routes/conversations/link-admission.ts': { writes: 2, law: 'admitLinkEntry(' },
+  'services/conversations/rejoinParticipantWrite.ts': {
+    writes: 1,
+    exempt: 'commet la RENTRÉE des trois portes (#19688) — sa charge est un PARAMÈTRE, et la loi d’entrée a déjà jugé chez l’appelant, où le recensement compte aussi cette écriture (deux lois différentes, donc aucun `decidedBy` ne la nomme). C’est la seule écriture activante du dépôt qui porte `unsetOrNull(bannedAt)` dans son `where` : elle ne peut pas activer une ligne bannie',
+  },
   'routes/conversations/link-admission-guest.ts': {
     writes: 1,
     law: 'admitLinkEntry(',
@@ -53,6 +66,10 @@ const DOORS: Readonly<Record<string, Door>> = {
   'routes/links/utils/share-link-mint.ts': {
     writes: 2,
     exempt: 'fait naître une conversation publique avec son créateur : ni tête-à-tête, ni externe',
+  },
+  'services/calls/callGroupConversation.ts': {
+    writes: 1,
+    exempt: 'fait naître le groupe d’un appel en tête-à-tête qui s’élargit, avec ses présents et l’invité : ni tête-à-tête, ni externe (#19650)',
   },
   'services/external-conversation/open-external-conversation.ts': {
     writes: 1,
@@ -174,6 +191,15 @@ describe('le recensement lit l’effet, et compte comme activation ce qu’il ne
     ['un rattachement par la relation du compte', 'prisma.user.update({ data: { participations: { connect: { id } } } })', [{ operation: 'participations.connect', activates: true }]],
     ['une écriture brute par commande', 'prisma.$runCommandRaw({ update: "Participant", updates: [] })', [{ operation: 'raw.update', activates: true }]],
     ['une écriture brute par le pilote', 'const rows = db.collection("Participant");\nrows.updateMany({}, { $set: {} })', [{ operation: 'raw.updateMany', activates: true }]],
+    // #19688 — l'unité PARTAGÉE de rentrée. Sans ces deux sondes, le
+    // recensement redeviendrait aveugle à la graphie par laquelle les trois
+    // portes commettent aujourd'hui, et il l'a été : trois écritures
+    // activantes avaient quitté l'inventaire sans qu'il rougisse.
+    ['la rentrée par l’unité partagée', 'await commitParticipantRejoin({ prisma, participantId, data: { ...REJOIN_PARTICIPANT_STATE } })', [{ operation: 'commitParticipantRejoin', activates: true }]],
+    ['la rentrée par l’unité partagée, avec ses arguments de type', 'await commitParticipantRejoin<ParticipantRow>({ prisma, participantId, data: { isActive: true } })', [{ operation: 'commitParticipantRejoin', activates: true }]],
+    // Et le verdict suit la DONNÉE, comme pour un délégué : la fonction n'est
+    // pas réputée activer par son nom.
+    ['une rentrée qui n’active pas', 'await commitParticipantRejoin({ prisma, participantId, data: { role: "member" } })', [{ operation: 'commitParticipantRejoin', activates: false }]],
   ])('%s', (_label, text, expected) => {
     expect(verdicts(text)).toEqual(expected);
   });

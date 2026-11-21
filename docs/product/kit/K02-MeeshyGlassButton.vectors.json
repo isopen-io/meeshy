@@ -46,6 +46,16 @@
       "slack": 0
     }
   ],
+  "cornerSizes": [
+    {
+      "size": "s32",
+      "role": "corner-action",
+      "diameter": 32,
+      "glyph": 14,
+      "target": 44,
+      "slack": 6
+    }
+  ],
   "matter": [
     {
       "kind": "normal",

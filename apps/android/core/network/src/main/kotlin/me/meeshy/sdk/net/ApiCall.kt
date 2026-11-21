@@ -7,6 +7,7 @@ import me.meeshy.sdk.model.ApiResponseMeta
 import me.meeshy.sdk.model.DeletionAcknowledgement
 import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.model.feedback.DailyGestureLimit
+import me.meeshy.sdk.model.e2ee.EndToEndParticipantWithoutDevice
 import me.meeshy.sdk.model.net.MaskedEmailOwner
 import me.meeshy.sdk.model.net.NewcomerSlowMode
 import okhttp3.ResponseBody
@@ -47,6 +48,8 @@ private fun ApiResponse<*>.toApiError(
         resetAtEpochMillis = DailyGestureLimit.parseInstant(resetAt),
         retryAfterSeconds = retryAfterSecondsOf(httpStatus, refusalCode, retryAfterHeader),
         requiredConsents = requiredConsents,
+        withoutDeviceUserIds = EndToEndParticipantWithoutDevice.userIdsFrom(withoutDeviceUserIds),
+        servedMessage = message,
     )
 }
 

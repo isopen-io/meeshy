@@ -3,7 +3,7 @@ import type { FaceEffect } from './video-effects';
 /**
  * **LES EFFETS DE VISAGE, EN GÉOMÉTRIE** (#8551) — sans canevas : où est le
  * visage, où poser les cornes du démon, le halo de l'ange, les yeux du
- * crapaud, où sont les braises de l'éruption à l'instant `t`. Le dessin
+ * crapaud et du bébé, où sont les braises de l'éruption à l'instant `t`. Le dessin
  * (`face-effects-draw.ts`) ne fait que tracer ce que ces fonctions rendent.
  *
  * Tout est DÉTERMINISTE et piloté par le temps (`t` en millisecondes) : la
@@ -24,6 +24,15 @@ export type Box = { readonly x: number; readonly y: number; readonly width: numb
 export type Point = { readonly x: number; readonly y: number };
 
 export type Circle = { readonly cx: number; readonly cy: number; readonly r: number };
+
+/**
+ * Ce que les 478 repères disent que la boîte ne dit pas (#19779) : le visage
+ * dans SON repère (`face`, debout, centré entre le front et le menton), de
+ * combien la tête penche (`roll`, en radians) et où sont les deux yeux, en
+ * pixels de l'image. Calculée par `face-pose.ts`, dans le gréement chargé à
+ * la demande.
+ */
+export type FacePose = { readonly face: Box; readonly roll: number; readonly eyes: readonly [Circle, Circle] };
 
 export const FACE_DETECT_EVERY = 5;
 
@@ -95,10 +104,23 @@ export function toadOf(face: Box): { readonly eyes: readonly ToadEye[]; readonly
   };
 }
 
-export function demonEyesOf(face: Box, t: number): readonly (Circle & { readonly glow: number })[] {
-  const glow = 0.7 + 0.3 * Math.sin(t / 180);
-  return ([-1, 1] as const).map((side) => ({ cx: centerOf(face) + side * face.width * 0.2, cy: face.y + face.height * 0.4, r: face.width * 0.06, glow }));
+/** Les yeux, quand seule la boîte est connue : à hauteur des yeux d'un visage debout. */
+export function eyesOf(face: Box): readonly [Circle, Circle] {
+  const eye = (side: -1 | 1): Circle => ({ cx: centerOf(face) + side * face.width * 0.2, cy: face.y + face.height * 0.4, r: face.width * 0.09 });
+  return [eye(-1), eye(1)];
 }
+
+/** Les yeux du démon brillent sur les yeux connus (`at`, les repères) ; sinon là où la boîte les suppose. */
+export function demonEyesOf(face: Box, t: number, at: readonly Circle[] = eyesOf(face)): readonly (Circle & { readonly glow: number })[] {
+  const glow = 0.7 + 0.3 * Math.sin(t / 180);
+  return at.map(({ cx, cy }) => ({ cx, cy, r: face.width * 0.06, glow }));
+}
+
+/** Les joues roses du bébé, sous les yeux, de part et d'autre du nez. */
+export function babyCheeksOf(face: Box): readonly Circle[] {
+  return ([-1, 1] as const).map((side) => ({ cx: centerOf(face) + side * face.width * 0.27, cy: face.y + face.height * 0.64, r: face.width * 0.16 }));
+}
+
 
 /** Un générateur pseudo-aléatoire graine → [0, 1) : les mêmes braises à chaque rendu. */
 function seeded(seed: number): () => number {
@@ -169,6 +191,7 @@ const GRADE: Readonly<Record<FaceEffect, string>> = {
   angel: 'brightness(1.08) saturate(0.92) contrast(0.96)',
   demon: 'contrast(1.18) saturate(1.25) sepia(0.25) hue-rotate(-20deg)',
   volcano: 'sepia(0.35) saturate(1.6) hue-rotate(-12deg) contrast(1.1)',
+  baby: 'brightness(1.05) saturate(1.12)',
 };
 
 /** Ce que l'effet fait à la couleur de TOUTE l'image, en filtre de canevas — vide s'il ne touche que le visage. */

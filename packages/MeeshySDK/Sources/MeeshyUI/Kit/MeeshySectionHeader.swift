@@ -8,7 +8,9 @@ import SwiftUI
 /// lecteur d'écran (`level` de 1 à 6) et le compteur est lu avec lui. Repliable
 /// (`onToggle` reçoit l'état DEMANDÉ), toute la ligne est UN bouton qui dit
 /// `expandedLabel` ou `collapsedLabel`, le chevron et le point sont muets. Statique,
-/// la ligne ne répond pas : seul l'accessoire se touche.
+/// la ligne ne répond pas : seul l'accessoire se touche. Une pastille de titre
+/// (`titleBadge`, K41) se pose juste après le titre et se dit après lui. Un détail de fin
+/// (`detail`, « 4 arrêts ») se pose au bout de la ligne, petit et secondaire, et se dit après le titre.
 public struct MeeshySectionHeader<Lead: View, Accessory: View>: View {
     private let title: String
     private let count: Int?
@@ -19,6 +21,8 @@ public struct MeeshySectionHeader<Lead: View, Accessory: View>: View {
     private let isExpanded: Bool
     private let onToggle: ((Bool) -> Void)?
     private let isLive: Bool
+    private let titleBadge: String?
+    private let detail: String?
     private let level: Int
     private let expandedLabel: String?
     private let collapsedLabel: String?
@@ -40,6 +44,8 @@ public struct MeeshySectionHeader<Lead: View, Accessory: View>: View {
                 isExpanded: Bool = true,
                 onToggle: ((Bool) -> Void)? = nil,
                 isLive: Bool = false,
+                titleBadge: String? = nil,
+                detail: String? = nil,
                 level: Int = 2,
                 expandedLabel: String? = nil,
                 collapsedLabel: String? = nil,
@@ -55,6 +61,8 @@ public struct MeeshySectionHeader<Lead: View, Accessory: View>: View {
         self.isExpanded = isExpanded
         self.onToggle = onToggle
         self.isLive = isLive
+        self.titleBadge = titleBadge
+        self.detail = detail
         self.level = level
         self.expandedLabel = expandedLabel
         self.collapsedLabel = collapsedLabel
@@ -74,8 +82,7 @@ public struct MeeshySectionHeader<Lead: View, Accessory: View>: View {
     }
 
     private var spokenTitle: String {
-        guard let count, count > 0 else { return title }
-        return "\(title), \(count)"
+        MeeshySectionHeaderRecipe.spokenTitle(title: title, count: count, titleBadge: titleBadge)
     }
 
     private var headingLevel: AccessibilityHeadingLevel {
@@ -95,7 +102,7 @@ public struct MeeshySectionHeader<Lead: View, Accessory: View>: View {
             Button(action: { onToggle(!isExpanded) }) { EmptyView() }
                 .buttonStyle(MeeshySectionHeaderStyle { isPressed in row(recipe: recipe(isPressed: isPressed), includesAccessory: false) })
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(spokenTitle)
+                .accessibilityLabel(MeeshySectionHeaderRecipe.spokenRow(spokenTitle: spokenTitle, detail: detail))
                 .accessibilityValue((isExpanded ? expandedLabel : collapsedLabel) ?? "")
                 .accessibilityAddTraits([.isButton, .isHeader])
                 .accessibilityHeading(headingLevel)
@@ -112,6 +119,7 @@ public struct MeeshySectionHeader<Lead: View, Accessory: View>: View {
             leading(recipe: recipe, isDark: isDark)
             titleBlock(recipe: recipe, isDark: isDark)
             if !recipe.accessoryBelowTitle && !recipe.showsRules { Spacer(minLength: MeeshySpacing.sm) }
+            detailText(isDark: isDark)
             accessory
             if recipe.showsChevron {
                 Image(systemName: "chevron.up")
@@ -184,7 +192,22 @@ public struct MeeshySectionHeader<Lead: View, Accessory: View>: View {
                     .padding(.leading, CGFloat(recipe.liveDotGap))
                     .accessibilityHidden(true)
             }
+            if let titleBadge, !titleBadge.isEmpty {
+                MeeshyBadge(.label(titleBadge), surface: .solid, kind: .accent, tint: tint)
+                    .padding(.leading, MeeshySpacing.sm)
+                    .transition(.opacity)
+            }
             if recipe.showsRules { rule(isDark: isDark).padding(.leading, CGFloat(recipe.ruleGap)) }
+        }
+    }
+
+    @ViewBuilder
+    private func detailText(isDark: Bool) -> some View {
+        if let detail, !detail.isEmpty {
+            Text(detail)
+                .font(MeeshyFont.relative(CGFloat(MeeshySectionHeaderRecipe.detailFontSize), weight: .semibold))
+                .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

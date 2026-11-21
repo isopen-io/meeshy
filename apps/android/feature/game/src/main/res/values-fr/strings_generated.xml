@@ -642,11 +642,13 @@
     <string name="game_frappe_ancestors_prism">chaque millième pièce réunit toutes les langues</string>
     <string name="game_frappe_ancestors_title">Tes aïeux se manifestent</string>
     <string name="game_frappe_glory">+%1$s de gloire</string>
+    <string name="game_frappe_glory_toward">%1$s de gloire jusqu’à %2$s</string>
     <string name="game_frappe_light">ta lumière</string>
     <string name="game_frappe_refused_light">Ta lumière ne suffit pas encore. Tes prochaines étincelles la nourriront.</string>
     <string name="game_frappe_refused_locked">Ton Héritage attend un rang plus haut. Ta gloire l’ouvrira, et on frappera.</string>
     <string name="game_frappe_refused_offline">Pas de connexion pour l’instant. Dès qu’elle revient, on frappe.</string>
     <string name="game_frappe_refused_unknown">La frappe n’a pas eu lieu. Rien n’est perdu : ta lumière est intacte.</string>
+    <string name="game_frappe_risen">On t’appelle %1$s</string>
     <string name="game_frappe_say_gold">La n° %1$s est d’or. Tes aïeux l’ont vue.</string>
     <string name="game_frappe_say_prism">La n° %1$s est de prisme : toutes les langues y brillent.</string>
     <string name="game_frappe_say_silver">La n° %1$s rejoint ton Héritage.</string>
@@ -765,7 +767,7 @@
     <string name="game_level_cap_reached">Niveau %1$s : le plus haut que ton rang ouvre. Le rang %2$s ouvre la suite.</string>
     <string name="game_level_cap_short">s’ouvre au rang %1$s</string>
     <string name="game_level_held">Ta lumière ouvre déjà la suite : %1$s pour passer le niveau %2$s.</string>
-    <string name="game_level_ring_a11y">Niveau %1$s, %2$s, %3$s état de ta lumière</string>
+    <string name="game_level_ring_a11y">Ta lumière au niveau %1$s, %2$s, %3$s état</string>
     <string name="game_level_step_done">réussie</string>
     <string name="game_level_step_flame">tenir une Flamme de %1$s jours</string>
     <string name="game_level_step_line">Épreuve du niveau %1$s : %2$s</string>

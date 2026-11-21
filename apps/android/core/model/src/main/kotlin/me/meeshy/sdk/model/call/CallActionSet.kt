@@ -17,8 +17,9 @@ data class CallActionFamilyRow(val family: CallActionFamily, val actions: List<C
 /**
  * The actions the "(…)" unfolds, per family ("my image" / "the call"). Pure rules —
  * which actions, in which order, when — the views only draw them. Mirrors iOS
- * `CallActionSet.resolve` (`CallControlsLayout.swift`). « The call » reads Captions · Record · Add · Journal · React ·
- * Capture (decided on #17329); Picture-in-Picture lives in the header, not here.
+ * `CallActionSet.resolve` (`CallControlsLayout.swift`). « The call » reads Captions · Record · Add · React · Capture
+ * (decided on #17329); Picture-in-Picture lives in the header, not here. #19670 — the Journal is not an action either:
+ * it only makes sense with captions, and its one door is « Journal » at the foot of their band.
  */
 data class CallActionSet(val myImage: List<CallAction>, val theCall: List<CallAction>) {
 
@@ -51,7 +52,7 @@ data class CallActionSet(val myImage: List<CallAction>, val theCall: List<CallAc
             val add = if (c.isConnected) listOf(CallAction.AddPeople) else emptyList()
             val react = if (c.isConnected) listOf(CallAction.React) else emptyList()
             val capture = if (c.isConnected && c.showsVideo) listOf(CallAction.Capture) else emptyList()
-            return listOf(CallAction.Captions) + recording + add + listOf(CallAction.Journal) + react + capture
+            return listOf(CallAction.Captions) + recording + add + react + capture
         }
     }
 }

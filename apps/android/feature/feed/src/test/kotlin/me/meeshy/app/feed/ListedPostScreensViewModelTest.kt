@@ -57,7 +57,7 @@ class ListedPostScreensViewModelTest {
     private fun bookmarks(vararg served: ApiPost): BookmarksViewModel {
         signedIn()
         coEvery { posts.getBookmarksPage(null, any()) } returns NetworkResult.Success(BookmarkPage(served.toList(), null, false))
-        return BookmarksViewModel(posts, reports, session, MeeshyConfig(), social.socket)
+        return BookmarksViewModel(posts, reports, session, MeeshyConfig(), social.socket, bookmarksCache())
     }
 
     private fun userPosts(vararg served: ApiPost): UserPostsViewModel {

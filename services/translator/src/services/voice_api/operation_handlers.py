@@ -23,6 +23,31 @@ class VoiceAPIResult:
     processing_time_ms: int = 0
 
 
+JOB_NOT_FOUND = "Job not found"
+JOB_STATUS_FAILED = "Job status unavailable"
+JOB_CANCEL_FAILED = "Job cancellation failed"
+JOB_CANCELLED = "Job cancelled"
+JOB_NOT_CANCELLABLE = "Job is no longer pending"
+JOB_PRIVATE_KEYS = frozenset({"user_id", "webhook_url"})
+
+
+def served_job_view(job) -> Dict[str, Any]:
+    """Vue d'un job servie à son propriétaire : ni l'utilisateur ni l'URL du webhook."""
+    return {key: value for key, value in job.to_dict().items() if key not in JOB_PRIVATE_KEYS}
+
+
+def _job_not_found() -> "VoiceAPIResult":
+    return VoiceAPIResult(success=False, error=JOB_NOT_FOUND, error_code="NOT_FOUND")
+
+
+def _pipeline_unavailable() -> "VoiceAPIResult":
+    return VoiceAPIResult(
+        success=False,
+        error="Translation pipeline not available",
+        error_code="SERVICE_UNAVAILABLE"
+    )
+
+
 class OperationHandlers:
     """
     Handles core voice operation business logic.
@@ -539,62 +564,44 @@ class OperationHandlers:
     # JOB OPERATIONS
     # ═══════════════════════════════════════════════════════════════════════════
 
-    async def handle_job_status(self, job_id: str) -> VoiceAPIResult:
-        """Get job status"""
+    async def _owned_job(self, job_id: Optional[str], user_id: Optional[str]):
+        """Le job si `user_id` (posé par la passerelle depuis le JWT) en est le propriétaire, sinon `None`."""
+        if not user_id or not job_id:
+            return None
+        job = await self.translation_pipeline.get_job(job_id)
+        if job is None or job.user_id != user_id:
+            return None
+        return job
+
+    async def handle_job_status(self, job_id: Optional[str], user_id: Optional[str]) -> VoiceAPIResult:
+        """État d'un job, servi à son seul propriétaire (#19293)."""
+        if not self.translation_pipeline:
+            return _pipeline_unavailable()
         try:
-            if not self.translation_pipeline:
-                return VoiceAPIResult(
-                    success=False,
-                    error="Translation pipeline not available",
-                    error_code="SERVICE_UNAVAILABLE"
-                )
-
-            job = await self.translation_pipeline.get_job(job_id)
-
-            if not job:
-                return VoiceAPIResult(
-                    success=False,
-                    error="Job not found",
-                    error_code="NOT_FOUND"
-                )
-
-            return VoiceAPIResult(
-                success=True,
-                data=job.to_dict() if hasattr(job, 'to_dict') else job
-            )
-
+            job = await self._owned_job(job_id, user_id)
         except Exception as e:
-            logger.error(f"Get job status error: {e}")
-            return VoiceAPIResult(
-                success=False,
-                error=str(e),
-                error_code="INTERNAL_ERROR"
-            )
+            logger.error(f"[TRANSLATOR] Get job status error: {type(e).__name__}")
+            return VoiceAPIResult(success=False, error=JOB_STATUS_FAILED, error_code="INTERNAL_ERROR")
 
-    async def handle_job_cancel(self, job_id: str) -> VoiceAPIResult:
-        """Cancel a job"""
+        if job is None:
+            return _job_not_found()
+        return VoiceAPIResult(success=True, data=served_job_view(job))
+
+    async def handle_job_cancel(self, job_id: Optional[str], user_id: Optional[str]) -> VoiceAPIResult:
+        """Annule un job en attente de son seul propriétaire (#19293, #19380)."""
+        if not self.translation_pipeline:
+            return _pipeline_unavailable()
         try:
-            if not self.translation_pipeline:
-                return VoiceAPIResult(
-                    success=False,
-                    error="Translation pipeline not available",
-                    error_code="SERVICE_UNAVAILABLE"
-                )
-
-            success, message = await self.translation_pipeline.cancel_job(job_id)
-
-            return VoiceAPIResult(
-                success=True,
-                data={'success': success, 'message': message}
-            )
-
+            job = await self._owned_job(job_id, user_id)
+            if job is None:
+                return _job_not_found()
+            cancelled = await self.translation_pipeline.cancel_job(job.id)
         except Exception as e:
-            logger.error(f"Cancel job error: {e}")
-            return VoiceAPIResult(
-                success=False,
-                error=str(e),
-                error_code="INTERNAL_ERROR"
-            )
+            logger.error(f"[TRANSLATOR] Cancel job error: {type(e).__name__}")
+            return VoiceAPIResult(success=False, error=JOB_CANCEL_FAILED, error_code="INTERNAL_ERROR")
+
+        message = JOB_CANCELLED if cancelled else JOB_NOT_CANCELLABLE
+        return VoiceAPIResult(success=True, data={'success': cancelled, 'message': message})
 
     # ═══════════════════════════════════════════════════════════════════════════
     # ANALYTICS OPERATIONS

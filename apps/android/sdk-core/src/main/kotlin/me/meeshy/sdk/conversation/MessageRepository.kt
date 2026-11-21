@@ -28,6 +28,7 @@ import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.withAccountTicket
 
 /**
  * The messages of a conversation, offline-first (ARCHITECTURE.md §4, §5): Room is the single
@@ -223,6 +224,25 @@ class MessageRepository internal constructor(
         copyAttachmentsFromMessageId = copyAttachmentsFromMessageId,
     ) }
 
+    /** Un texte optimiste qui dit s'il est EN FILE (#20182) : la redirection chiffré → lisible n'annonce que ce qui partira. */
+    suspend fun sendQueued(
+        conversationId: String,
+        content: String,
+        originalLanguage: String,
+        sender: MeeshyUser,
+        effects: MessageEffects = MessageEffects(),
+        clientMessageId: String? = null,
+    ): QueuedSend = history.returnToPresent(conversationId).let {
+        sends.enqueueOptimistic(
+            conversationId = conversationId,
+            content = content,
+            originalLanguage = originalLanguage,
+            sender = sender,
+            effects = effects,
+            clientMessageId = clientMessageId,
+        )
+    }
+
     /**
      * Server ACK for an optimistic send: atomically replaces the local `cmid`
      * row with the authoritative server message — no flicker, no duplicate.
@@ -242,6 +262,9 @@ class MessageRepository internal constructor(
     /** Envoie la bulle déjà posée au tap [cid] avec les pièces montées (ou leurs téléversements durables), sans bulle de plus. */
     suspend fun sendPostedBubble(cid: String, attachmentIds: List<String> = emptyList(), dependsOn: Set<String> = emptySet()): Boolean =
         sends.sendPostedBubble(cid, attachmentIds, dependsOn)
+
+    /** Retire la bulle optimiste [cid] et recalcule l'aperçu de sa conversation : son envoi est parti ailleurs (#20076). */
+    suspend fun withdrawLocal(cid: String) = sends.withdrawLocal(cid)
 
     /** User-initiated retry of a failed bubble: back to `SENDING`, its outbox row revived. */
     suspend fun retrySend(cmid: String) = sends.retrySend(cmid)
@@ -364,12 +387,27 @@ class MessageRepository internal constructor(
      *   never a row revived out of the window for good, its plaintext kept in the vault;
      * - a read that proves nothing (offline, refused) ⇒ a refusal that already said the target is gone ([refusedAsGone]:
      *   404, 410) keeps it deleted, its plaintext kept until a read proves its absence; any other refusal gives it back.
+     *
+     * #19422 — what the read decides belongs to the account that ASKED for it: its ticket is taken before the request, and
+     * the settlement lands only while that account is still the current one — never in the same message id of the next
+     * account, never stamped with whoever the session names when the write lands. [authorId], when given, is the account
+     * that queued the deletion: under any other account the settlement is refused, the request would leave signed by one
+     * account about the message of another.
      */
-    suspend fun settleRefusedDeletion(conversationId: String?, messageId: String, refusedAsGone: Boolean = false) {
-        when (val read = conversationId?.let { history.readBack(it, messageId) } ?: MessageReadBack.Unknown) {
-            is MessageReadBack.Served -> if (read.message.deletedAt == null) markUndeleted(messageId, snapshot = read.message)
-            MessageReadBack.Absent -> confirmDeletion(messageId)
-            MessageReadBack.Unknown -> if (!refusedAsGone) markUndeleted(messageId)
+    suspend fun settleRefusedDeletion(
+        conversationId: String?,
+        messageId: String,
+        refusedAsGone: Boolean = false,
+        authorId: String? = null,
+    ) {
+        val ticket = mutations.ticket()
+        if (!authorId.isNullOrBlank() && ticket != null && ticket.ownerId != authorId) return
+        val read = conversationId?.let { history.readBack(it, messageId) } ?: MessageReadBack.Unknown
+        if (!mutations.isCurrent(ticket)) return
+        when (read) {
+            is MessageReadBack.Served -> if (read.message.deletedAt == null) mutations.markUndeleted(ticket, messageId, read.message)
+            MessageReadBack.Absent -> mutations.commitUnder(ticket) { withAccountTicket(ticket) { confirmDeletion(messageId) } }
+            MessageReadBack.Unknown -> if (!refusedAsGone) mutations.markUndeleted(ticket, messageId, null)
         }
     }
 

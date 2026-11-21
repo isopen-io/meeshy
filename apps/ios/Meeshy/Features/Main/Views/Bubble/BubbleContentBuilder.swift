@@ -95,6 +95,7 @@ extension BubbleContent {
             trackedLinks: trackedLinks,
             embedTrackedURL: embedTrackedURL,
             conversationCardTarget: conversationCardTarget,
+            profileCardHandle: firstLinkURL.flatMap { PersonLink.handle(from: $0) },
             contentLink: precedesContent ? nil : ContentLinkMatch.first(among: links)
         )
     }

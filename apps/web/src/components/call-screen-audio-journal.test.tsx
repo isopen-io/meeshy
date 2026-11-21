@@ -133,14 +133,14 @@ describe('P9b — le journal ouvert dans la pilule réduit l’avatar en en-têt
     view.done();
   });
 
-  test('sous-titres éteints, le journal ouvert depuis les rangées réduit l’avatar aussi (#17342)', async () => {
+  test('#19670 — sous-titres éteints, aucune porte n’ouvre le journal : l’avatar garde sa taille', async () => {
     const view = mount({ captionsMode: 'off' });
     await view.settle();
+    expect(view.find('[data-call-captions-journal]')).toBeNull();
     view.press('[data-call-more]');
     await view.settle();
-    view.press('[data-call-control="journal"]');
-    await view.settle();
-    expect(view.stage()).toBe('compact');
+    expect(view.find('[data-call-control="journal"]')).toBeNull();
+    expect(view.stage()).toBe('full');
     view.done();
   });
 

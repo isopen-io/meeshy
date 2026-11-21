@@ -380,8 +380,6 @@ extension CallView {
             reactActionButton(captioned: captioned, diameter: diameter)
         case .capture:
             captureActionButton(captioned: captioned, diameter: diameter)
-        case .journal:
-            journalActionButton(captioned: captioned, diameter: diameter)
         }
     }
 

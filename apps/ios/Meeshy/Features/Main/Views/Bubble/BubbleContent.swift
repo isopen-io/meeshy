@@ -109,6 +109,10 @@ nonisolated struct BubbleContent: Equatable {
         /// direct), précalculée une fois par le builder. Non-nil → la bulle
         /// rend la carte de conversation (#8099) au lieu de l'aperçu OpenGraph.
         var conversationCardTarget: ConversationCardTarget? = nil
+        /// Pseudo de la fiche désignée par `firstLinkURL` (`meeshy.me/@pseudo`, `/u/pseudo`), précalculé une fois par
+        /// le builder (`PersonLink.handle`). Non-nil → la bulle rend la carte de profil du lecteur (#19519) au lieu de
+        /// l'aperçu OpenGraph.
+        var profileCardHandle: String? = nil
         /// L'auteur n'a pas de compte (#10286) : aucune adresse n'est un lien
         /// — ni aperçu, ni carte, ni lecteur, ni lien suivi —, le texte se
         /// rend tel qu'il a été écrit.

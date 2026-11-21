@@ -2,8 +2,11 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { MeeshyIOServer, MeeshySocket } from './typed-socket';
 import type { CallService } from '../services/CallService';
 import type { PushNotificationService } from '../services/PushNotificationService';
+import type { NotificationService } from '../services/notifications/NotificationService';
 import type { SocketRateLimiter } from '../utils/socket-rate-limiter';
 import { recordCallReaction } from '../services/calls/callReactions';
+import { reflectCallReactionOnBubble } from '../services/calls/callReactionOnBubble';
+import type { ReactionService } from '../services/ReactionService';
 import { resolveActiveCallParticipant, resolveActiveCallParticipantDetailed } from './call-participants';
 import { callInviteDependencies, registerCallInviteEvents } from './call-invite-events';
 import type { CallInvitationLifecycle } from './call-invite-lifecycle';
@@ -25,6 +28,10 @@ export type CallControlDeps = {
   readonly rateLimiter: Pick<SocketRateLimiter, 'checkLimit'>;
   readonly pushService: () => PushNotificationService | null;
   readonly invitations: CallInvitationLifecycle;
+  /** #19650 — le diffuseur `message:new` des messages d'appel, pour la bulle « en cours » d'un groupe et l'avis d'arrivée. */
+  readonly broadcastMessage?: () => ((message: unknown, conversationId: string) => Promise<void>) | null;
+  /** #19650 — l'éventail d'arrivée d'un membre ajouté par l'appel. */
+  readonly notificationService?: () => NotificationService | null;
 };
 
 export function registerCallControlEvents(
@@ -33,6 +40,7 @@ export function registerCallControlEvents(
   getUserId: (socketId: string) => string | undefined
 ): void {
   const { io, prisma, callService, rateLimiter } = deps;
+  let bubbleReactions: Promise<ReactionService> | null = null;
   registerCallInviteEvents(callInviteDependencies(deps), socket, getUserId);
   registerCallModerationEvents({ io, rateLimiter, callService }, socket, getUserId);
   registerCallReactionEvents(
@@ -40,6 +48,10 @@ export function registerCallControlEvents(
       rateLimiter,
       resolveActiveCallParticipant: (userId, callId) => resolveActiveCallParticipant({ prisma, callService }, userId, callId),
       recordReaction: (callId, emoji) => recordCallReaction(prisma, callId, emoji),
+      reflectOnBubble: async (callId, userId, emoji) => {
+        bubbleReactions ??= import('../services/ReactionService').then(({ ReactionService }) => new ReactionService(prisma, null));
+        return reflectCallReactionOnBubble({ prisma, reactions: await bubbleReactions, io }, { callId, userId, emoji });
+      },
     },
     socket,
     getUserId

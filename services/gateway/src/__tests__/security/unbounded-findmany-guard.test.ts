@@ -321,7 +321,12 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   // celles de #4176, #4284, #4713 et #16837 au-dessus, et pour la même raison
   // qu'elle reste non bornée : une ligne de liste qui ne nomme que N membres
   // sur N+1 est fausse, pas plus sûre.
-  'conversations/participants-writes.ts': 1,
+  //
+  // 1 -> 0 : #19650 a emporté l'admission d'un membre dans
+  // `services/conversations/memberAdmission.ts`, que l'invitation d'appel
+  // partage avec `POST …/participants` ; sa lecture des membres existants est
+  // partie avec elle, hors du périmètre `routes/` de ce balayage. La borne qui
+  // compte reste l'appartenance à UNE conversation.
   'conversations/memberArrivalFanOut.ts': 1,
   'conversations/membershipAdmissionFanOut.ts': 1,
   'conversations/participant-removal.ts': 2,
@@ -338,7 +343,13 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   // total du depot est inchange ; seule la CLE change, parce que ce cliquet est
   // indexe par FICHIER. Ne pas lire cette ligne comme une nouvelle dette.
   'links/utils/share-link-mint.ts': 2,
-  'me/export.ts': 2,
+  // #20129 — passe de 2 a 1, et ce n'est PAS une dette remboursee : la lecture
+  // des sieges du compte a DEMENAGE dans `services/participants/accountParticipantIds.ts`
+  // (producteur unique, que trois sites reecrivaient). Elle y est toujours non
+  // bornee, et ce cliquet ne balaie que `routes/` — le total du depot est
+  // inchange, seule la PORTEE de l'instrument a change. Le balayage de fond qui
+  // ne peut pas se permettre une liste entiere pagine, lui (`accountSeatIdBatches`).
+  'me/export.ts': 1,
   'posts/hashtag.ts': 1,
   // `posts/interactions.ts` a perdu le sien en meme temps que ses routes : il
   // vit desormais dans `posts/impressions.ts`, inchange. `postConsumptionGate`

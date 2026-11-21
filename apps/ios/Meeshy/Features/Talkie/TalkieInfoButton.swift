@@ -2,8 +2,8 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Le (i) à côté de chaque bouton talkie (#17141, demande du porteur) : la rangée dit déjà à qui le talkie
-/// est destiné et ce qu'il fait ; le (i) répond au cas limite — la voix sort même quand Meeshy est en arrière-plan.
+/// Le (i) de la carte talkie (#17141, #19732) : la carte ne dit que le geste ; le (i) dit à quoi sert le talkie —
+/// l'urgence, entre proches — et que la voix sort aussitôt, même Meeshy fermé. Rien de la carte n'y est redit.
 struct TalkieInfoButton: View {
     var tint: Color = MeeshyColors.brandPrimary
     @State private var showing = false
@@ -55,12 +55,12 @@ enum TalkieInfoWording {
     static var text: String {
         String(
             localized: "talkie.info.text",
-            defaultValue: "Votre voix sort quand même chez votre proche.",
+            defaultValue: "Pour l’urgence, entre proches : ta voix sort aussitôt, même Meeshy fermé.",
             bundle: .main
         )
     }
 
     static var a11y: String {
-        String(localized: "talkie.info.a11y", defaultValue: "Et si Meeshy est en arrière-plan ?", bundle: .main)
+        String(localized: "talkie.info.a11y", defaultValue: "À quoi sert le talkie ?", bundle: .main)
     }
 }

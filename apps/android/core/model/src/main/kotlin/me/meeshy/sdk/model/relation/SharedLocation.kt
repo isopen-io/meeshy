@@ -49,6 +49,14 @@ public enum class SharedLocationCircle {
     CLOSE,
     BLOOD;
 
+    /** Le niveau du lien : le marqueur en tire son icône, sa couleur et son nom (#17013), sans table recopiée. */
+    public val level: RelationLevel
+        get() = when (this) {
+            FRIEND -> RelationLevel.FRIEND
+            CLOSE -> RelationLevel.CLOSE
+            BLOOD -> RelationLevel.BLOOD
+        }
+
     public companion object {
         public fun of(wire: String?): SharedLocationCircle? = entries.firstOrNull { it.name == wire }
     }

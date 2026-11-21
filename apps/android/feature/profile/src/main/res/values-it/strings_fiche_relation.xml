@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="fiche_faces_label">Facce del profilo</string>
+    <string name="fiche_face_vitrine">Vetrina</string>
+    <string name="fiche_face_links">Link</string>
+    <string name="fiche_face_actions">Azioni</string>
+    <string name="fiche_section_talk">Parlare</string>
+    <string name="fiche_section_together">Insieme</string>
+    <string name="fiche_section_where">Dov\'è</string>
+    <string name="fiche_section_card">Il profilo</string>
+    <string name="fiche_section_not_open">Non ancora aperto</string>
+    <string name="fiche_action_write">Scrivi</string>
+    <string name="fiche_action_write_request">Chiedi di scrivere</string>
+    <string name="fiche_action_call">Chiama</string>
+    <string name="fiche_action_video">Video</string>
+    <string name="fiche_card_share">Invia il profilo</string>
+    <string name="fiche_card_our_circle">Il nostro cerchio</string>
+    <string name="fiche_links_title">Link del profilo</string>
+    <string name="fiche_links_hint">Apre la vetrina, vista Pubblico</string>
+    <string name="fiche_links_copy">Copia link</string>
+    <string name="fiche_links_qr">Codice QR</string>
+    <string name="fiche_links_send">Invia a un amico</string>
+    <string name="fiche_links_empty">Non c\'è nessun link da condividere per questa persona.</string>
+    <string name="fiche_circle_title">%1$s e te</string>
+    <string name="fiche_circle_common">Il vostro livello comune è il più basso dei due.</string>
+    <string name="fiche_circle_they_grant">%1$s ti concede</string>
+    <string name="fiche_circle_you_grant">Concedi a %1$s</string>
+    <string name="fiche_circle_at_least">%1$s o più</string>
+    <string name="fiche_circle_opens">Cosa vi apre %1$s</string>
+    <string name="fiche_circle_opens_more">Con %1$s, in più</string>
+    <string name="fiche_circle_missing_they">Manca: che %1$s ti conceda %2$s</string>
+    <string name="fiche_circle_missing_you">Manca: che tu conceda %2$s a %1$s</string>
+</resources>

@@ -55,6 +55,9 @@ public struct APICommunityMember: Codable, Identifiable, Sendable {
     public let role: String
     public let joinedAt: Date?
     public let user: APICommunityUser?
+    /// `pending` : une demande d'entrée qui attend qu'un admin ou un modérateur la valide (#19290). `nil` : serveur
+    /// qui ne le sert pas, et la rangée se lit comme une entrée faite.
+    public var status: String? = nil
 
     public var communityRole: MemberRole {
         MemberRole(rawValue: role) ?? .member
@@ -111,6 +114,28 @@ public struct APICommunity: Codable, Identifiable, Sendable, CacheIdentifiable {
     /// `GET /communities/:id` (#18014). `nil` : communauté trop petite pour
     /// qu'un compte reste anonyme, ou serveur qui ne le sert pas.
     public var onlineMemberCount: Int? = nil
+    /// Les entrées faites PAR LE LIEN de la communauté, distinctes des ajouts directs et des invitations — servi par
+    /// `GET /communities/:id` (#19290). `nil` : serveur qui ne le sert pas, et la fiche du lien s'en passe.
+    public var linkEntryCount: Int? = nil
+    /// Chaque entrée attend qu'un administrateur ou un modérateur l'accepte (#19429) ;
+    /// `nil` : serveur qui ne le sert pas, ou ancienne communauté à entrée directe.
+    public var requiresJoinApproval: Bool? = nil
+    /// La demande d'entrée du LECTEUR : `"pending"` quand elle attend une réponse,
+    /// `nil` sinon — servi par `GET /communities/:id` (#19868).
+    public var currentUserJoinRequest: String? = nil
+    /// La date (ISO) à partir de laquelle le LECTEUR pourra redemander, après un
+    /// refus de moins de sept jours — servi par `GET /communities/:id` (#19879),
+    /// lu par iOS depuis #19948. `nil` : aucun refus récent, ou ancien serveur.
+    public var currentUserJoinRetryAt: String? = nil
+
+    /// « Demande refusée » tient jusqu'à cette date : seulement une date LISIBLE
+    /// et À VENIR, jamais pour un membre ni pour une demande qui attend encore.
+    public func joinDeclinedUntil(now: Date) -> Date? {
+        guard currentUserRole == nil, currentUserJoinRequest != "pending",
+              let retryAt = currentUserJoinRetryAt.flatMap(WireDate.date(from:)),
+              retryAt > now else { return nil }
+        return retryAt
+    }
 }
 
 extension APICommunity {
@@ -210,6 +235,18 @@ public struct InviteMemberRequest: Encodable {
 
     public init(userId: String) {
         self.userId = userId
+    }
+}
+
+// MARK: - Join Community Request
+
+/// Corps de `POST /communities/:id/join` (#19429) : `acceptsPending` dit au
+/// serveur que ce client sait lire une demande en attente (202).
+public struct JoinCommunityRequest: Encodable {
+    public let acceptsPending: Bool
+
+    public init(acceptsPending: Bool) {
+        self.acceptsPending = acceptsPending
     }
 }
 

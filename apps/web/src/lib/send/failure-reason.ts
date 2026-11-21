@@ -1,3 +1,4 @@
+import { isStaleAttachmentRefusal } from '@/lib/api/attachment-refusal';
 import { UPLOAD_FORMAT_REFUSED } from '@/lib/media/heif';
 import type { ApiFailure } from '@/lib/api/http';
 import { translate } from '@/lib/i18n-catalog';
@@ -63,6 +64,17 @@ export function sendFailureReason(
    * garde le refus générique du 403, qui le dit déjà.
    */
   if (failure.code === 'ATTACHMENT_RIGHT_NOT_PERMITTED') return translate(language, 'send.failure.attachmentRight');
+  /**
+   * LA PIÈCE BALAYÉE (#19865) — la passerelle sert `ATTACHMENT_NOT_FOUND` sur
+   * le 404 de `POST /conversations/:id/messages` quand l'identifiant mémorisé
+   * ne désigne plus une pièce vivante. Son JUMEAU par la forme est le refus de
+   * DROIT juste au-dessus, et leurs phrases sont OPPOSÉES : celle-ci promet que
+   * réessayer suffit, parce que `perform-send.ts` vient d'oublier les ids et
+   * que la reprise re-téléversera le fichier conservé. Le refus générique du
+   * 4xx (« envoi refusé ») disait au même utilisateur le contraire de ce que le
+   * produit fait désormais.
+   */
+  if (isStaleAttachmentRefusal(failure)) return translate(language, 'send.failure.attachmentExpired');
   /* #7740 — le mode lent des nouveaux comptes (Meeshy Global) : temporaire,
      et le délai est celui du serveur (`retryAfter`), jamais une constante. */
   if (failure.code === 'NEWCOMER_SLOW_MODE') {

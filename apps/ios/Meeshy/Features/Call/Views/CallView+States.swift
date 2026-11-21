@@ -237,7 +237,7 @@ extension CallView {
             size: size,
             accentColor: accentHex
         )
-        .avatarRingWithin(ProfileDecorResolver.ring(remoteProfile?.profileDecor?.avatarRing), footprint: size)
+        .avatarRing(ProfileDecorResolver.ring(remoteProfile?.profileDecor?.avatarRing), avatarSize: size)
     }
 
     /// Duo d'avatars de l'appel : le correspondant en grand, l'utilisateur

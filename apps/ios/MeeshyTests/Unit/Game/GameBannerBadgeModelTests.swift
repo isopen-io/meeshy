@@ -127,14 +127,18 @@ final class GameBannerBadgeModelTests: XCTestCase {
         XCTAssertEqual(model.rankAccessibilityLabel, ConceptText.factRank + GameText.bannerSeparator + model.rankName)
     }
 
-    // MARK: - Coins LOGIQUES : aucun arrondi au bord de début des étincelles ni au bord de fin des rangs
+    // MARK: - Le rang en tête (#17375, #19764), coins LOGIQUES : seul le coin haut tourné vers l'avatar s'arrondit
+
+    func test_groupOrder_theRankOpensTheBanner() {
+        XCTAssertEqual(GameBannerBadgeView.groupOrder, [.rank, .level])
+    }
 
     func test_corners_followTheReadingDirection() {
-        XCTAssertEqual(GameBannerBadgeView.roundedCorners(for: .level, direction: .leftToRight), [.topRight])
-        XCTAssertEqual(GameBannerBadgeView.roundedCorners(for: .level, direction: .rightToLeft), [.topLeft],
-                       "en RTL la pastille des étincelles est à droite : son bord de début est le droit, carré")
-        XCTAssertEqual(GameBannerBadgeView.roundedCorners(for: .rank, direction: .leftToRight), [.topLeft])
-        XCTAssertEqual(GameBannerBadgeView.roundedCorners(for: .rank, direction: .rightToLeft), [.topRight])
+        XCTAssertEqual(GameBannerBadgeView.roundedCorners(for: .rank, direction: .leftToRight), [.topRight])
+        XCTAssertEqual(GameBannerBadgeView.roundedCorners(for: .rank, direction: .rightToLeft), [.topLeft],
+                       "en RTL le rang est à droite : son bord de début est le droit, carré")
+        XCTAssertEqual(GameBannerBadgeView.roundedCorners(for: .level, direction: .leftToRight), [.topLeft])
+        XCTAssertEqual(GameBannerBadgeView.roundedCorners(for: .level, direction: .rightToLeft), [.topRight])
     }
 
     /// Les deux cadres ont TOUJOURS la même largeur : chacun la moitié de ce que l'avatar laisse (#10951).

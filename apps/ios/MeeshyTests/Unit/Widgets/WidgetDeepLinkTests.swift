@@ -29,6 +29,14 @@ final class WidgetDeepLinkTests: XCTestCase {
         )
     }
 
+    /// « Mes proches » et l'activité d'une position ouvrent la vitrine par le pseudo (#19524).
+    func test_profile_opensTheVitrineByHandle_andNothingWithoutOne() {
+        XCTAssertEqual(WidgetDeepLink.profile("leo.m")?.absoluteString, "meeshy://u/leo.m")
+        XCTAssertEqual(WidgetDeepLink.profile(" leo.m ")?.absoluteString, "meeshy://u/leo.m")
+        XCTAssertNil(WidgetDeepLink.profile(nil))
+        XCTAssertNil(WidgetDeepLink.profile("  "))
+    }
+
     func test_unusualIdentifier_neverTraps() {
         for id in ["a b", "a#b", "a/b", "é"] {
             XCTAssertNotNil(WidgetDeepLink.conversation(id), id)

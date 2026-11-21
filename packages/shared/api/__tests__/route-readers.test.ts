@@ -36,6 +36,13 @@ describe('readersOf — qui lit une route', () => {
     for (const route of WEB_CONSOLE_ROUTES) expect(readersOf(route)).toEqual(['web']);
   });
 
+  it('les jetons d’Activité en direct ne sont lus que par iOS : Android clôt sa notification en cours par la poussée de données', () => {
+    const tokens = { method: 'POST', path: '/api/v1/me/live-activity-tokens' };
+    expect(readersOf(tokens)).toEqual(['ios']);
+    expect(filterRoutesReadBy([tokens], 'android')).toEqual([]);
+    expect(filterRoutesReadBy([tokens], 'ios')).toEqual([tokens]);
+  });
+
   it('distingue par MÉTHODE', () => {
     expect(readersOf({ method: 'PATCH', path: LENS_CATALOG.path })).toBeNull();
   });

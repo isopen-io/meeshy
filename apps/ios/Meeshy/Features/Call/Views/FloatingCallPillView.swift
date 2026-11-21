@@ -536,7 +536,7 @@ struct FloatingCallPillView: View {
                 return
             }
             callManager.displayMode = .bubble
-            callManager.bubbleSizeTier = .circle
+            callManager.bubbleSizeTier = .small
             pillDragOffset = 0
         }
     }

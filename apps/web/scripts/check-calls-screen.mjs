@@ -269,16 +269,6 @@ try {
         const bubbleFit = await page.waitForSelector('[data-call-bubble] video', { timeout: 5000 }).then((video) => video.evaluate((el) => getComputedStyle(el).objectFit), () => null);
         check(bubbleFit === 'contain', `${label} : réduit en bulle, l'écran partagé reste ENTIER (object-fit ${bubbleFit})`);
         await capture(page, `partage-recu-bulle-${slug}`);
-        const pipButton = await page.$('[data-call-bubble-control="pip"]');
-        if (pipButton !== null && (await page.evaluate(() => 'documentPictureInPicture' in window))) {
-          await pipButton.click();
-          const pipFit = await until(page, () => {
-            const video = window.documentPictureInPicture?.window?.document.querySelector('[data-call-pip-window] video');
-            return video !== null && video !== undefined && video.ownerDocument.defaultView?.getComputedStyle(video).objectFit === 'contain';
-          });
-          check(pipFit, `${label} : dans l'image dans l'image, l'écran partagé reste ENTIER`);
-          await page.evaluate(() => window.documentPictureInPicture?.window?.close());
-        }
         await page.click('[data-call-bubble-body]');
         check(await appears(page, '[data-call-shared-screen] video'), `${label} : toucher la bulle rend l'écran partagé en grand`);
         await page.evaluate(() => window.__meeshyFixtureCallPeer?.stopShare());

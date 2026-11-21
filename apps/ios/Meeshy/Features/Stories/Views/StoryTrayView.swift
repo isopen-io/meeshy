@@ -47,7 +47,7 @@ struct StoryTrayView: View {
     /// la dégage des bulles flottantes (#9363), et doit la contenir.
     static let trayHeight: CGFloat = StoryEntryMetrics.height
 
-    /// #15157 — la place que mon cadre illustré réserve dans la bande (aucune sans film).
+    /// La place que mon cadre réserve dans la bande (#19988 ; aucune sans cadre).
     static var decorReserve: StoryEntryMetrics.DecorReserve {
         StoryEntryMetrics.decorReserve(ProfileDecorResolver.ring(AuthManager.shared.currentUser?.profileDecor?.avatarRing))
     }
@@ -104,7 +104,7 @@ struct StoryTrayView: View {
         // listener `openMyStories` de la RACINE (RootView / iPadRootView) —
         // un listener ici ne couvrait que les écrans où un tray est monté et
         // aurait présenté en double depuis chaque instance.
-        .sheet(item: $selectedProfileUser) { user in
+        .profileCover(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
                 moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
@@ -112,8 +112,6 @@ struct StoryTrayView: View {
                 presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
                 postsContent: ProfilePostsOpener.postsContent { selectedProfileUser = nil }, dependencies: .live
             )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
         }
         // L'EXPIRATION AU FIL DE L'EAU — une story expire 24 h après sa
         // publication, mais le tray ne la balayait qu'aux CHARGEMENTS
@@ -367,7 +365,6 @@ private struct MyStoryButton: View {
                         return items
                     }()
                 )
-                .ringDecorRoom(decorReserve.room)
                 // Le libellé porte sur la cible RÉELLEMENT tapée — l'avatar — et
                 // sur elle seule. `MeeshyAvatar` s'annonce avec le nom de la
                 // personne (« Moi »), ce qui ne dit rien de la destination ;
@@ -675,7 +672,7 @@ struct PinnedStoryTrailBand: View {
                 .clipped()
                 .allowsHitTesting(reveal > 0.6)
                 .onDisappear { Task { await SharedImpressionBatchers.flushRail() } }
-                .sheet(item: $selectedProfileUser) { user in
+                .profileCover(item: $selectedProfileUser) { user in
                     UserProfileSheet(
                         user: user,
                         moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
@@ -683,8 +680,6 @@ struct PinnedStoryTrailBand: View {
                         presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
                         postsContent: ProfilePostsOpener.postsContent { selectedProfileUser = nil }, dependencies: .live
                     )
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
                 }
                 .relayingMeeshyRouter(meeshyRouter) { $0.myStoriesSheet(
                     isPresented: $showMyStories,

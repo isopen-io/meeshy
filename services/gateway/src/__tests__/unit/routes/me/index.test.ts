@@ -65,12 +65,30 @@ jest.mock('../../../../routes/me/blood-location', () => ({
   default: jest.fn(async () => {}),
 }));
 
+jest.mock('../../../../routes/me/location-settings-read', () => ({
+  __esModule: true,
+  default: jest.fn(async () => {}),
+}));
+
 jest.mock('../../../../routes/me/device-battery', () => ({
   __esModule: true,
   default: jest.fn(async () => {}),
 }));
 
 jest.mock('../../../../routes/me/device-reachability', () => ({
+  __esModule: true,
+  default: jest.fn(async () => {}),
+}));
+jest.mock('../../../../routes/me/wellness', () => ({
+  __esModule: true,
+  default: jest.fn(async () => {}),
+}));
+jest.mock('../../../../routes/me/device-call', () => ({
+  __esModule: true,
+  default: jest.fn(async () => {}),
+}));
+
+jest.mock('../../../../routes/me/live-activity-tokens', () => ({
   __esModule: true,
   default: jest.fn(async () => {}),
 }));
@@ -189,6 +207,9 @@ async function buildApp(opts: {
 
   // Decorate fastify.prisma
   app.decorate('prisma', prisma);
+  // `PUT /me/location/ghost` (#19203) se garde par `fastify.authenticate`, décoré par le serveur :
+  // ce montage, qui ne l'exerce pas, le fournit pour que le plugin s'enregistre.
+  app.decorate('authenticate', async () => undefined);
 
   await app.register(meRoutes, { prefix: PREFIXE_PRODUCTION });
   await app.ready();

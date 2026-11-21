@@ -523,7 +523,8 @@ describe('POST /conversations/join/:linkId — canViewHistory et rejoin', () => 
     expect(res.statusCode).toBe(200);
     expect((app as any).prisma.participant.create).not.toHaveBeenCalled();
     const written = (app as any).prisma.participant.update.mock.calls[0][0];
-    expect(written.where).toEqual({ id: PART_ID });
+    // #19688 — la clause porte l'id ET la garde de bannissement.
+    expect(written.where).toEqual({ id: PART_ID, OR: [{ bannedAt: null }, { bannedAt: { isSet: false } }] });
     expect(written.data.isActive).toBe(true);
     // L'octroi d'historique de la venue PRÉCÉDENTE est effacé : il PRIME sur
     // le rang/droits remis à zéro, une ligne périmée ne doit pas décider seule

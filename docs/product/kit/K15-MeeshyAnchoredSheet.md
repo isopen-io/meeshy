@@ -10,7 +10,7 @@ Elle ne fait pas :
 - le choix de la feuille ouverte, « une seule à la fois », son titre traduit, sa hauteur par portail (`ComposerPortal`, `StoryComposerSheet`) : l'app ;
 - le contenu et ses états vide, chargement, erreur, hors ligne ; son défilement ; son champ (K08), ses puces (K04), ses lignes (K06) ;
 - les feuilles SYSTÈME (85 `presentationDetents` dans 66 fichiers iOS, 74 `ModalBottomSheet` dans 72 fichiers Android, `Sheet` plein écran, centrée et large du web) : elles restent au système ; K15 ne fournit que leur place publiée ;
-- la photothèque du système (A6, et A19 sur iOS 17+), le clavier et sa barre (K17), une option à réglages (K11, dans la pilule), le verre (aucun : la feuille est opaque).
+- la photothèque du système (A6, et A19 sur iOS 17+), le clavier et sa barre (K17), une option à réglages (K11, dans la pilule), le verre (aucun propre : la feuille est opaque, sauf la surface `glass` d'une feuille posée sur une carte, qui emprunte le verre K01 au ton `deep`, #19583).
 
 ## 2. API (mêmes noms sur les trois plateformes)
 | | iOS `MeeshyUI/Kit/MeeshyAnchoredSheet.swift` | Android `me.meeshy.ui.component.kit` | Web `components/kit/meeshy-anchored-sheet.tsx` |
@@ -109,7 +109,7 @@ Comportements (`MeeshyAnchoredSheetTests`, `MeeshyAnchoredSheetTest`, `meeshy-an
 - loi 13 : ni poignée, ni en-tête, ni ✕, ni voile hors de leurs conditions ;
 - accessibilité : nom, rôle modal ou non, focus à l'entrée et rendu à la sortie, poignée à crans réglable ; web : piège de tabulation, Échap, `aria-labelledby` ;
 - « réduire les animations » : aucune transition ; contraste du titre et de la poignée calculé depuis la recette ;
-- garde de source : aucun verre, aucune couleur en dur, aucun type du composer dans les fichiers de K15 ; web : `check-kit.mjs` vert ;
+- garde de source : aucun verre hors l'unique K01 `deep` de la surface `glass`, aucune couleur en dur, aucun type du composer dans les fichiers de K15 ; web : `check-kit.mjs` vert ;
 - parité : `K15-MeeshyAnchoredSheet.vectors.json` (hauteurs, seuils, crans), lu par les trois suites ; non-régression : le lot ne touche aucun jumeau ni aucun écran (les huit témoins de mesure d'iOS restent verts à côté).
 
 Instantanés (`MeeshyAnchoredSheet/<id>.<variante>`) : `courte`, `mi-hauteur`, `haute`, `valider`, `sans-titre`, `sans-poignee`, `crans`, `theme`, `voile`, `large`, en `clair` et `sombre`, planches `grande-police` et `rtl` ; chacune cadrée avec un bloc d'hôte réduit au-dessus. Web : 390, 820 et 1440 px. Images enregistrées sur la branche du lot (`sdk-tests.yml` et `android.yml` avec `record_snapshots`, `CAPTURE_DIR=docs/product/kit/captures node scripts/check-kit.mjs`) ; Android : aucun nom de test avec « ; » ni « . ».

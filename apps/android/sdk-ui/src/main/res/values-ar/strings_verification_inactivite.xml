@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La vérification d'inactivité (#18738) : android-only tant que les clés inactivity.* ne sont pas au catalogue iOS. -->
+<resources>
+    <string name="inactivity_someone">أحد المقرّبين</string>
+    <string name="inactivity_pill_alert">لم يردّ %1$s على «هل كل شيء بخير؟»</string>
+    <string name="inactivity_pill_responded">%1$s بخير</string>
+    <string name="inactivity_card_since">لا نشاط منذ %1$s</string>
+    <string name="inactivity_battery">البطارية %1$d %%</string>
+    <string name="inactivity_open_map">عرض آخر موقع</string>
+    <string name="inactivity_a11y">لا نشاط من %1$s</string>
+    <string name="inactivity_share_person">إعلام %1$s إذا لم أردّ</string>
+    <string name="inactivity_share_person_scope">يُعلَم %1$s إذا لم أردّ على «هل كل شيء بخير؟».</string>
+    <string name="inactivity_share_off">التحقق من عدم النشاط متوقف.</string>
+    <string name="inactivity_delay_title">التحقق من عدم النشاط</string>
+    <string name="inactivity_delay_scope">دون ردّ على «هل كل شيء بخير؟» يُعلَم أهل الدم.</string>
+    <string name="inactivity_delay_6h">6 س</string>
+    <string name="inactivity_delay_12h">12 س</string>
+    <string name="inactivity_delay_24h">24 س</string>
+    <string name="inactivity_delay_off">متوقف</string>
+    <string name="inactivity_wellness_ok">أنا بخير</string>
+</resources>

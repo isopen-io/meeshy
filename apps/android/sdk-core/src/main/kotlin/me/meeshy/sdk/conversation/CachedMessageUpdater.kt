@@ -3,6 +3,7 @@ package me.meeshy.sdk.conversation
 import androidx.room.withTransaction
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
+import me.meeshy.core.database.dao.MessageKeys
 import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ConversationEventDeltas
@@ -26,6 +27,12 @@ internal class CachedMessageUpdater(
 
     /** Le compte auquel appartient l'événement ou le geste qui écrit MAINTENANT (#13560) ; `null` sans garde. */
     suspend fun ticket(): AccountTicket? = fence?.currentTicket()
+
+    /** [write] sous [ticket], le compte de qui l'a demandé : `null` quand ce compte s'est fermé, rien n'est écrit (#19422). */
+    suspend fun <T> commit(ticket: AccountTicket?, write: suspend () -> T): T? = fence.commitOrWrite(ticket, write)
+
+    /** Le compte de [ticket] est-il encore celui qui est connecté ? Sans garde ni ticket, oui. */
+    fun isCurrent(ticket: AccountTicket?): Boolean = fence == null || ticket == null || fence.isCurrent(ticket)
 
     /** The cached message [messageId], or `null` when no row exists. */
     suspend fun find(messageId: String): ApiMessage? {
@@ -175,11 +182,13 @@ internal class CachedMessageUpdater(
 
     companion object {
         /**
-         * Retire les lignes nommées (par l'une ou l'autre de leurs deux clés), leurs révisions et leurs traductions,
-         * transcriptions et pistes audio retenues. À appeler DANS une transaction.
+         * Retire les lignes nommées (par l'une ou l'autre de leurs deux clés) avec leurs lignes filles, par la règle
+         * unique ([MessageChildRows], #19440 : le pont d'id et l'accusé éphémère partaient sans elle), et les révisions et
+         * traductions retenues des ids qu'aucune ligne ne porte plus. À appeler DANS une transaction.
          */
         suspend fun purgeInTransaction(database: MeeshyDatabase, messageIds: Collection<String>) {
             val rows = messageIds.mapNotNull { MessageIdReconciliation.locate(database, it) }.distinctBy { it.id }
+            MessageChildRows.delete(database, rows.map { MessageKeys(it.id, it.serverId, it.conversationId) })
             if (rows.isNotEmpty()) database.messageDao().deleteByIds(rows.map { it.id })
             messageIds.forEach { database.editRevisionDao().deleteForMessage(it) }
             DedicatedTranslationRows.drop(database, messageIds + rows.flatMap { DedicatedTranslationRows.keysOf(it) })

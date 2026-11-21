@@ -1,6 +1,8 @@
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { announceConversationActivity } from '../services/conversations/conversationActivity';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ActivityPrisma } from './emitConversationActivityUpdate';
+import { finishOriginConversation, type MirroredCallMessage } from '../services/calls/originConversationCall';
 import type { ServerEmitIO } from './serverEmit';
 
 const logger = enhancedLogger.child({ module: 'CallMessageBroadcasters' });
@@ -43,12 +45,15 @@ function callActorKey(message: unknown): string | null {
  */
 export function wireCallMessageBroadcasters(params: {
   readonly handler: CallMessageBroadcastTarget;
-  readonly prisma: ActivityPrisma;
+  readonly prisma: ActivityPrisma & Pick<PrismaClient, 'callSession' | 'message' | 'conversation'>;
   readonly getIO: () => ServerEmitIO | null | undefined;
   readonly broadcastMessage: MessageBroadcaster;
   readonly broadcastMessageEdited: MessageBroadcaster;
+  /** #19650 — le tête-à-tête d'origine d'un appel basculé rend sa réservation, et sa bulle reçoit le même état terminal. */
+  readonly mirrorOnOrigin?: (message: unknown) => Promise<MirroredCallMessage | null>;
 }): void {
   const { handler, prisma, getIO } = params;
+  const mirrorOnOrigin = params.mirrorOnOrigin ?? ((message: unknown) => finishOriginConversation(prisma, message));
 
   const announceCallActivity = (message: unknown, conversationId: string): void => {
     const actor = callActorKey(message);
@@ -57,12 +62,27 @@ export function wireCallMessageBroadcasters(params: {
       .catch((error: unknown) => logger.warn('call activity not announced', { conversationId, error }));
   };
 
+  const finishOriginBubble = async (message: unknown): Promise<void> => {
+    try {
+      const mirrored = await mirrorOnOrigin(message);
+      if (!mirrored?.message) return;
+      try {
+        await params.broadcastMessageEdited(mirrored.message, mirrored.conversationId);
+      } finally {
+        announceCallActivity(mirrored.message, mirrored.conversationId);
+      }
+    } catch (error) {
+      logger.warn('origin call bubble not finished', { error });
+    }
+  };
+
   const withActivity = (broadcast: MessageBroadcaster): MessageBroadcaster =>
     async (message, conversationId) => {
       try {
         await broadcast(message, conversationId);
       } finally {
         announceCallActivity(message, conversationId);
+        await finishOriginBubble(message);
       }
     };
 

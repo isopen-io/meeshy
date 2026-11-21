@@ -29,6 +29,24 @@ export interface RelationLevelRaisedEventData {
   readonly at: string;
 }
 
+/**
+ * `relation:level-lowered` (#19366) — à la room de L'ACTEUR seulement. `userId` est
+ * l'autre ; `grantedByMe` mon nouvel accord ; `effectiveLevel` le lien qui en résulte.
+ * Ni cool-down, ni accord de l'autre : ce que mes autres appareils savent déjà lire.
+ */
+export interface RelationLevelLoweredEventData {
+  readonly userId: string;
+  readonly grantedByMe: RelationLevel;
+  readonly effectiveLevel: RelationLevel;
+  readonly at: string;
+}
+
+/** `user:blocked-by-me` / `user:unblocked-by-me` (#19366) — à la room de L'ACTEUR seulement. */
+export interface UserBlockedByMeEventData {
+  readonly userId: string;
+  readonly at: string;
+}
+
 export interface RelationRitualStartedEventData {
   readonly token: string;
   readonly userId: string;

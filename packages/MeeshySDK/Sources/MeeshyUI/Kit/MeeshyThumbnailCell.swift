@@ -43,6 +43,12 @@ nonisolated struct MeeshyThumbnailCellSpec<ID: Hashable & Sendable>: Equatable {
         isArmed && !isLifted && isEnabled && capabilities.canRemove && thumbnail.removeLabel != nil
     }
 
+    /// La coche de coin d'une vignette cochée (sélection multiple).
+    var showsCheck: Bool { thumbnail.isChecked == true }
+
+    /// Le trait « sélectionné » : la courante, ou une vignette cochée.
+    var isAnnouncedSelected: Bool { isCurrent || showsCheck }
+
     var zOrder: Double {
         isLifted ? 2 : (isArmed ? 1 : 0)
     }
@@ -169,7 +175,7 @@ struct MeeshyThumbnailCell<ID: Hashable & Sendable, Content: View>: View, Equata
             .simultaneousGesture(armedDrag(id))
             .accessibilityLabel(spec.thumbnail.accessibilityLabel)
             .accessibilityValue(spec.thumbnail.accessibilityValue ?? "")
-            .accessibilityAddTraits(spec.isCurrent ? .isSelected : [])
+            .accessibilityAddTraits(spec.isAnnouncedSelected ? .isSelected : [])
             .modifier(MeeshyThumbnailAccessibilityActions(spec: spec, handlers: handlers))
             .overlay(alignment: .topTrailing) { cross(id) }
             .offset(x: spec.shift)
@@ -267,6 +273,7 @@ struct MeeshyThumbnailFace<ID: Hashable & Sendable, Content: View>: View {
     let isPressed: Bool
 
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.layoutDirection) var layoutDirection
     @Environment(\.accessibilityReduceMotion) var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) var forcedReduceMotion
     @State var isHovered = false
@@ -306,6 +313,7 @@ struct MeeshyThumbnailFace<ID: Hashable & Sendable, Content: View>: View {
         .clipShape(shape)
         .overlay { outline(recipe: recipe) }
         .overlay { ring(recipe: recipe, isDark: isDark) }
+        .overlay(alignment: .topTrailing) { check }
         .shadow(color: recipe.shadowColor, radius: recipe.shadow.radius, x: 0, y: recipe.shadow.y)
         .opacity(recipe.opacity)
         .meeshyAnimation(.easeInOut(duration: MeeshyThumbnailRowRecipe.ringFadeDuration), value: recipe.ringOpacity)
@@ -320,6 +328,17 @@ struct MeeshyThumbnailFace<ID: Hashable & Sendable, Content: View>: View {
             .padding(-width)
             .opacity(recipe.ringOpacity)
             .allowsHitTesting(false)
+    }
+
+    /// La coche d'une vignette cochée : le disque déborde du coin de 6, miroité en RTL.
+    @ViewBuilder
+    private var check: some View {
+        if spec.showsCheck {
+            let overhang = MeeshyThumbnailRowRecipe.checkOverhang
+            MeeshyThumbnailCheck()
+                .offset(x: layoutDirection == .rightToLeft ? -overhang : overhang, y: -overhang)
+                .allowsHitTesting(false)
+        }
     }
 
     /// Sur une scène claire, un filet sombre détache la vignette (et son cercle).

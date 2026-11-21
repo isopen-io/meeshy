@@ -24,6 +24,7 @@ public enum SocketEvent: String, CaseIterable, Sendable {
     case callAnalytics = "call:analytics"
     case callBackgrounded = "call:backgrounded"
     case callCheckActive = "call:check-active"
+    case callConversationChanged = "call:conversation-changed"
     case callEnd = "call:end"
     case callEnded = "call:ended"
     case callError = "call:error"
@@ -89,6 +90,16 @@ public enum SocketEvent: String, CaseIterable, Sendable {
     case commentTranslationUpdated = "comment:translation-updated"
     case commentUnliked = "comment:unliked"
     case commentUpdated = "comment:updated"
+    /// La disparition d'une communauté (#19590) — iOS l'applique depuis #19591.
+    case communityDeleted = "community:deleted"
+    /// Une demande d'entrée vient d'arriver (#19429) — iOS la lit depuis #19877, intendants seuls.
+    case communityJoinRequested = "community:join-requested"
+    /// Le refus de la demande du LECTEUR (#19879) — iOS le lit depuis #19948, demandeur seul.
+    case communityJoinRequestDecided = "community:join-request-decided"
+    /// L'effectif d'une communauté (#18766) — iOS l'applique depuis #18767.
+    case communityMemberJoined = "community:member-joined"
+    case communityMemberLeft = "community:member-left"
+    case communityMemberRoleUpdated = "community:member-role-updated"
     /// L'identité d'une communauté vient d'être écrite (#18435) — iOS l'applique depuis #18439.
     case communityUpdated = "community:updated"
     case conversationClosed = "conversation:closed"
@@ -114,6 +125,8 @@ public enum SocketEvent: String, CaseIterable, Sendable {
     case e2eeEnvelope = "e2ee:envelope"
     case engagementConversationUpdated = "engagement:conversation-updated"
     case engagementPostUpdated = "engagement:post-updated"
+    case fallCleared = "fall:cleared"
+    case fallDetected = "fall:detected"
     case feedSubscribe = "feed:subscribe"
     case feedUnsubscribe = "feed:unsubscribe"
     case friendRequestCancelled = "friend-request:cancelled"
@@ -121,6 +134,8 @@ public enum SocketEvent: String, CaseIterable, Sendable {
     case gameMissionsUpdated = "game:missions-updated"
     case gameUpdated = "game:updated"
     case heartbeatAck = "heartbeat:ack"
+    case inactivityAlert = "inactivity:alert"
+    case inactivityCleared = "inactivity:cleared"
     case locationLiveStart = "location:live-start"
     case locationLiveStarted = "location:live-started"
     case locationLiveStop = "location:live-stop"
@@ -167,6 +182,8 @@ public enum SocketEvent: String, CaseIterable, Sendable {
     case nowPlayingUpdate = "now-playing:update"
     case participantRightsUpdated = "participant:rights-updated"
     case participantRoleUpdated = "participant:role-updated"
+    case phoneCallEnded = "phone-call:ended"
+    case phoneCallStarted = "phone-call:started"
     case phoneReachable = "phone:reachable"
     case phoneUnreachable = "phone:unreachable"
     case postBookmarked = "post:bookmarked"

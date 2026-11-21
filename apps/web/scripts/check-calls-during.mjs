@@ -166,8 +166,7 @@ try {
         caption: (el.querySelector('[data-call-bubble-caption]')?.textContent ?? '').trim(),
       }));
       check(!bubbleShows.video && bubbleShows.ring && bubbleShows.caption.includes(' · '), `${label} : l'autre n'envoie pas d'image — la bulle porte son portrait, son liseré et « nom · état », jamais ma caméra (${JSON.stringify(bubbleShows)})`);
-      const bubbleH = await heights(page, '[data-call-bubble] [data-call-bubble-control]');
-      check(bubbleH.length >= 2 && bubbleH.every((h) => h >= TAP_FLOOR), `${label} : les commandes de la bulle font au moins ${TAP_FLOOR} (${JSON.stringify(bubbleH)})`);
+      check((await page.$('[data-call-bubble] [data-call-bubble-control]')) === null, `${label} : #19696 — la bulle ne porte aucun bouton d'appel, la personne et la durée seules`);
 
       // ------------------------------------------------ 4. naviguer et écrire sous la bulle
       await page.goBack();
@@ -273,20 +272,6 @@ try {
       await page.keyboard.press('-');
       await settle();
 
-      // ------------------------------------------------ 4 ter. la sortie audio depuis la bulle (#9097)
-      const sinks = await page.evaluate(() => 'setSinkId' in HTMLMediaElement.prototype);
-      const output = await page.$('[data-call-bubble-control="output"]');
-      check(sinks === (output !== null), `${label} : « Sortie audio » est dans la bulle là où la sortie se choisit (setSinkId : ${sinks})`);
-      if (output !== null) {
-        await output.click();
-        const outputSheet = await appears(page, '[data-call-devices] [role="dialog"]');
-        const speakers = await page.waitForSelector('[data-call-devices-group="speaker"]', { timeout: 3000 }).then(() => true, () => false);
-        check(outputSheet && speakers, `${label} : depuis la bulle, la feuille des périphériques s'ouvre sur la sortie audio`);
-        await capture(page, `bulle-sortie-${slug}`);
-        await page.keyboard.press('Escape');
-        const outputClosed = await page.waitForSelector('[data-call-devices]', { state: 'detached', timeout: 3000 }).then(() => true, () => false);
-        check(outputClosed && (await page.$('[data-call-bubble]')) !== null && (await page.$('[data-call-screen]')) === null, `${label} : Échap ferme la feuille, l'appel reste en bulle`);
-      }
 
       // ------------------------------------------------ 5. déplacer la bulle
       const box = await page.locator('[data-call-bubble-body]').boundingBox();

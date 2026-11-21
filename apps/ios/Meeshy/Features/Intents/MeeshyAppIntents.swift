@@ -43,6 +43,17 @@ struct MeeshyAppShortcuts: AppShortcutsProvider {
         )
 
         AppShortcut(
+            intent: TalkieWithCloseOneIntent(),
+            phrases: [
+                "Talkie on \(.applicationName)",
+                "Talkie with \(\.$person) on \(.applicationName)",
+                "Talk to \(\.$person) on \(.applicationName)"
+            ],
+            shortTitle: "Talkie",
+            systemImageName: "dot.radiowaves.left.and.right"
+        )
+
+        AppShortcut(
             intent: TranslateTextIntent(),
             phrases: [
                 "Translate on \(.applicationName)",

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profile_state_error_title">تعذّر فتح هذا الملف الآن</string>
+    <string name="profile_state_error_message">اتصالك بخير. المشكلة من جهتنا ولا تدوم طويلًا.</string>
+    <string name="profile_state_offline_title">أنت غير متصل</string>
+    <string name="profile_state_offline_message">سيُفتح هذا الملف فور عودة الاتصال.</string>
+    <string name="profile_state_nobody_title">لا أحد هنا</string>
+    <string name="profile_state_nobody_message">هذا الملف غير موجود أو غير ظاهر لك.</string>
+    <string name="profile_state_nobody_back">رجوع</string>
+    <string name="profile_state_cached_message">بلا اتصال · آخر ملف محفوظ</string>
+    <string name="profile_report_sheet_title">الإبلاغ عن %1$s</string>
+    <string name="profile_report_sheet_hint">الإبلاغ مجهول. يقرؤه فريقنا خلال 24 ساعة.</string>
+    <string name="profile_report_sheet_question">ماذا يحدث؟</string>
+    <string name="profile_report_also_block">حظر %1$s أيضًا</string>
+    <string name="profile_report_send">إبلاغ</string>
+</resources>

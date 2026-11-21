@@ -5,6 +5,11 @@ struct ExternalEntryHandlers: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .onAppear {
+                VitrineOpenRouter.install { url in
+                    dispatcher.open(ExternalEntry.classify(url: url, origin: .openURL))
+                }
+            }
             .onOpenURL { url in
                 dispatcher.open(ExternalEntry.classify(url: url, origin: .openURL))
             }

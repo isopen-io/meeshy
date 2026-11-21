@@ -18,6 +18,10 @@ internal object LinkStatsRoutesModule {
 
     @Provides
     @Singleton
+    fun providesMyAddressesApi(api: MeeshyApi): MyAddressesApi = api.service(MyAddressesApi::class.java)
+
+    @Provides
+    @Singleton
     fun providesAffiliateApi(api: MeeshyApi): AffiliateApi = api.service(AffiliateApi::class.java)
 
     @Provides

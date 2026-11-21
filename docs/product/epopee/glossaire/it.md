@@ -78,7 +78,7 @@ Il tono: si dà del **tu**, si scrive per un ragazzo di 13 anni, un’idea per f
 - **I venti stati**: **Scintilla** (chiave `etincelle`, mai «Brace»), Barlume, **Chiarore** (chiave `lumiere`, mai «Luce»), Splendore, Raggio, Aurora, Cometa, Stella, Costellazione, Galassia, poi Nebulosa, Pulsar, Quasar, Supernova, Magnetar, Ammasso, Superammasso, Cosmo, Infinito, Singolarità.
 - **La prova** (fr. épreuve): ogni dieci livelli, da 10 a 100, gli antenati chiedono una prova (una Meesh, un sogno, una Fiamma, un rango). Finché non è superata, la luce aspetta.
 - **Il rango apre la luce**: la Supernova è il limite sotto Ambasciatore, Ambasciatore apre fino alla Singolarità, Oracolo toglie ogni limite.
-- **A**: anello «34» · Splendore; «Livello 34».
+- **A**: anello «34» · Splendore; «Livello 34». Letti ad alta voce, la fascia e l'anello dicono «La tua luce al livello 34» (#19892).
 - **B**: «La tua luce brilla come Splendore», poi in piccolo «livello 34 · 3 200 scintille fino al livello 35».
 - **Bandite**: «ancora N prima del livello X» → «N scintille fino al livello X»; «passo» (del livello) → «prova»; «record di livello» → «la tua luce più alta».
 

@@ -31,6 +31,12 @@
  *  4 bis. l'effet de visage « Éruption » teint l'image ENVOYÉE : le rouge y
  *     domine le bleu nettement plus qu'avant (lave, braises, étalonnage
  *     orangé), et le pair décode toujours (#8551) ;
+ *  4 ter. « Bébé » (#19779), au bout des effets de visage, change l'image
+ *     ENVOYÉE : l'orangé de l'éruption la quitte pour l'étalonnage doux du
+ *     bébé, et le pair décode toujours (la caméra simulée n'a pas de visage :
+ *     la loupe des yeux, qui n'en pose que sur un visage VU, est prouvée par
+ *     `face-effects-draw.test.ts` et `face-rig.test.ts`) ; l'éruption est
+ *     reposée pour la suite ;
  *  5. micro coupé AVANT le mode, un effet de plus : la piste audio reste
  *     coupée et le pair l'a appris (#8434) ; « Réglages » ouvre la luminosité ;
  *  6. Valider garde les effets et rend l'écran d'appel ; Échap (✕) quitte le
@@ -210,6 +216,22 @@ const localAudioEnabled = (page) =>
   });
 
 /** La couleur moyenne de l'image que ma vignette montre — celle qui PART. */
+/** L'écart rouge − bleu moyen de l'aperçu du mode (l'image envoyée), ou `null` sans image. */
+const previewWarmth = (page) =>
+  page.evaluate(() => {
+    const video = document.querySelector('[data-call-mode-preview] video');
+    if (video === null || video.videoWidth === 0) return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    context.drawImage(video, 0, 0, 64, 64);
+    const data = context.getImageData(0, 0, 64, 64).data;
+    let warmth = 0;
+    for (let index = 0; index < data.length; index += 4) warmth += data[index] - data[index + 2];
+    return warmth / (data.length / 4);
+  });
+
 const sentColor = (page) =>
   page.evaluate(() => {
     const video = document.querySelector('[data-call-corner] video, [data-call-tile-self] video');
@@ -443,7 +465,7 @@ try {
       });
       check(Math.abs(carousel.center - width / 2) <= 2 && carousel.bottom > height * 0.6 && carousel.overflowX === 'auto', `${label} : UN carrousel, centré en bas, qui défile (${JSON.stringify(carousel)})`);
       const faces = await page.$$eval('[data-call-mode="effects"] [data-carousel-item]', (chips) => chips.map((chip) => ({ id: chip.getAttribute('data-carousel-item'), h: chip.getBoundingClientRect().height, glyph: chip.querySelector('svg') !== null })));
-      check(JSON.stringify(faces.map((chip) => chip.id)) === JSON.stringify(['none', 'smoothing', 'toad', 'angel', 'demon', 'volcano']) && faces.every((chip) => chip.h >= TAP_FLOOR && chip.glyph), `${label} : six effets de visage de ${TAP_FLOOR}, chacun son aperçu`);
+      check(JSON.stringify(faces.map((chip) => chip.id)) === JSON.stringify(['none', 'smoothing', 'toad', 'angel', 'demon', 'volcano', 'baby']) && faces.every((chip) => chip.h >= TAP_FLOOR && chip.glyph), `${label} : sept effets de visage de ${TAP_FLOOR}, « Bébé » au bout (#19779), chacun son aperçu`);
       check((await nestedGlass(page)) === 0, `${label} : aucun verre posé dans un verre, mode ouvert`);
       await page.click('[data-call-effects-category="color"]');
       const presets = await page.$$eval('[data-call-mode="effects"] [data-carousel-item]', (chips) => chips.map((chip) => chip.getAttribute('data-carousel-item')));
@@ -497,6 +519,31 @@ try {
       check(tinted, `${label} : l'éruption teint l'image envoyée d'orangé (r−b au départ ${Math.round(warmth(natural))})`);
       check(await peerReceives(page), `${label} : le pair décode toujours des images, éruption posée`);
       await capture(page, `effets-eruption-${slug}`);
+
+      // ------------------------------------------------ 4 ter. le bébé (#19779)
+      const eruption = await previewWarmth(page);
+      await page.click('[data-call-effects-category="face"]');
+      await page.click('[data-carousel-item="baby"]');
+      check(await vanishes(page, '[data-call-mode="effects"] [data-call-mode-carousel]'), `${label} : « Bébé » choisi, le carrousel se referme`);
+      const softened = await until(page, (base) => {
+        const video = document.querySelector('[data-call-mode-preview] video');
+        if (video === null || video.videoWidth === 0) return false;
+        const canvas = document.createElement('canvas');
+        canvas.width = 64;
+        canvas.height = 64;
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        context.drawImage(video, 0, 0, 64, 64);
+        const data = context.getImageData(0, 0, 64, 64).data;
+        let warmth = 0;
+        for (let index = 0; index < data.length; index += 4) warmth += data[index] - data[index + 2];
+        return warmth / (data.length / 4) < base - 15;
+      }, eruption ?? 0, 4000);
+      check(eruption !== null && softened, `${label} : « Bébé » change l'image envoyée — l'orangé de l'éruption la quitte pour l'étalonnage doux du bébé (r−b ${Math.round(eruption ?? 0)} → ${Math.round((await previewWarmth(page)) ?? 0)})`);
+      check(await peerReceives(page), `${label} : le pair décode toujours des images, bébé posé`);
+      await capture(page, `effets-bebe-${slug}`);
+      await page.click('[data-call-effects-category="face"]');
+      await page.click('[data-carousel-item="volcano"]');
+      await vanishes(page, '[data-call-mode="effects"] [data-call-mode-carousel]');
 
       // ------------------------------------------------ 5. le micro coupé le reste ; les réglages
       check(JSON.stringify(await localAudioEnabled(page)) === '[false]', `${label} : micro coupé, poser un effet ne le rouvre pas`);
@@ -767,14 +814,13 @@ try {
     /** La toile redimensionnée est repeinte à sa place : sa matrice a le rapport de sa case (aucune attente à durée fixe). */
     const repainted = () => until(page, () => { const canvas = document.querySelector('canvas[data-call-live-frame-surface]'); return canvas !== null && canvas.clientWidth > 0 && Math.abs(canvas.width / canvas.height - canvas.clientWidth / canvas.clientHeight) < 0.02; });
     const near = (a, b) => a !== undefined && b !== undefined && Math.abs(a - b) <= 1.5;
-    const toggleJournal = async () => {
-      await openActions(page);
-      return page.evaluate(() => {
-        document.querySelector('[data-call-control="journal"]')?.click();
+    /* #19670 : la seule porte du journal est « Journal » au pied des sous-titres ; colonne ouverte, le même bouton la referme. */
+    const toggleJournal = async () =>
+      page.evaluate(() => {
+        document.querySelector('[data-call-control-pill] [data-call-captions-journal]')?.click();
         const moved = document.querySelector('[data-call-live-frame-bounds]')?.getAnimations() ?? [];
         return moved.flatMap((animation) => (animation.effect?.getKeyframes() ?? []).flatMap((frame) => Object.keys(frame))).filter((key) => !['offset', 'computedOffset', 'easing', 'composite', 'transform'].includes(key));
       });
-    };
     const bounded = async (rtl) => {
       const g = await geometry();
       const side = rtl ? 'à gauche' : 'à droite';
@@ -798,6 +844,10 @@ try {
       await page.keyboard.press('Escape');
       check(await vanishes(page, '[data-call-mode]'), `${label} : Échap quitte le mode Montage`);
       check(await appears(page, 'canvas[data-call-live-frame-surface]'), `${label} : le cadre gardé se peint autour des deux vidéos`);
+      await openActions(page);
+      await page.click('[data-call-rail="call"] [data-call-captions]');
+      await page.click('[data-call-more]');
+      check(await appears(page, '[data-call-control-pill] [data-call-captions-journal]'), `${label} : les sous-titres allumés portent « Journal » à leur pied`);
       await settled();
       const before = await geometry();
       check(before.bounds !== null && near(before.bounds.width, before.viewport), `${label} : colonne fermée, la surface couvre la fenêtre (${Math.round(before.bounds?.width ?? 0)} px sur ${before.viewport})`);

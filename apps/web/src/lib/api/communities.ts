@@ -70,7 +70,15 @@ export type CommunitySummary = {
   readonly viewerRole?: CommunityViewerRole | null;
   /** Les AUTRES membres en ligne, en agrégat anonyme (#18014) ; `null` = trop petite pour qu'un compte reste anonyme ; absent = non servi. */
   readonly onlineMemberCount?: number | null;
+  /** Chaque entrée attend qu'un administrateur ou un modérateur l'accepte (#19429) ; absent = entrée directe. */
+  readonly requiresJoinApproval?: boolean;
+  /** La demande d'entrée DU LECTEUR (#19868) : `'pending'` = envoyée, en attente ; `null` = aucune ; absent = non servi. */
+  readonly viewerJoinRequest?: CommunityJoinRequestState | null;
+  /** Après un refus de moins de sept jours (#19879) : l'instant ISO où le lecteur peut redemander ; `null` = aucun refus en cours ; absent = non servi. */
+  readonly viewerJoinRetryAt?: string | null;
 };
+
+export type CommunityJoinRequestState = 'pending';
 
 export type CommunityConversation = {
   readonly id: string;
@@ -112,6 +120,9 @@ const WireCommunity = z.object({
   _count: z.optional(z.object({ members: counter, Conversation: counter })),
   currentUserRole: optionalText,
   onlineMemberCount: counter,
+  requiresJoinApproval: z.optional(z.nullable(z.boolean())),
+  currentUserJoinRequest: optionalText,
+  currentUserJoinRetryAt: optionalText,
 });
 
 const WireConversation = z.object({
@@ -133,6 +144,10 @@ const servedText = (value: string | null | undefined): string | null => {
   const text = textOrNull(value);
   return text === null ? null : decodeHtmlText(text);
 };
+
+/** Un instant ISO lisible, rendu tel que servi ; tout le reste se lit comme « aucun ». */
+export const isoInstantOrNull = (value: string | null | undefined): string | null =>
+  typeof value === 'string' && Number.isFinite(Date.parse(value)) ? value : null;
 
 const countOf = (...values: ReadonlyArray<number | null | undefined>): number => {
   const found = values.find((value) => typeof value === 'number' && Number.isFinite(value) && value >= 0);
@@ -164,6 +179,9 @@ export function decodeCommunity(raw: unknown): CommunitySummary | null {
     conversationCount: countOf(wire.conversationCount, wire._count?.Conversation),
     ...(wire.currentUserRole === undefined ? {} : { viewerRole: viewerRoleOf(wire.currentUserRole) }),
     ...(wire.onlineMemberCount === undefined ? {} : { onlineMemberCount: onlineCountOf(wire.onlineMemberCount) }),
+    ...(wire.requiresJoinApproval === true ? { requiresJoinApproval: true } : {}),
+    ...(wire.currentUserJoinRequest === undefined ? {} : { viewerJoinRequest: wire.currentUserJoinRequest === 'pending' ? 'pending' : null }),
+    ...(wire.currentUserJoinRetryAt === undefined ? {} : { viewerJoinRetryAt: isoInstantOrNull(wire.currentUserJoinRetryAt) }),
   };
 }
 
@@ -301,14 +319,27 @@ export async function createCommunity(deps: CommunitiesDeps, draft: CommunityDra
 
 export type MembershipGesture = 'join' | 'leave';
 
-export async function changeMembership(deps: CommunitiesDeps, communityId: string, gesture: MembershipGesture): Promise<ApiResult<null>> {
+/** Ce qu'une adhésion a PRODUIT : une entrée, ou une demande qui attend (#19868, 202 `{ status: 'pending' }`). */
+export type MembershipChange = 'changed' | 'pending';
+
+const WirePendingEntry = z.object({ status: z.literal('pending') });
+
+/**
+ * La jonction ANNONCE qu'elle sait lire une demande en attente
+ * (`acceptsPending`, #19429) : sans ce mot, la passerelle répond 409 à une
+ * communauté qui valide chaque entrée — que ce client lisait « déjà membre ».
+ */
+export async function changeMembership(deps: CommunitiesDeps, communityId: string, gesture: MembershipGesture): Promise<ApiResult<MembershipChange>> {
   if (__FIXTURES__ && deps.source === 'fixtures') {
     const { fixtureChangeMembership } = await import('./fixtures-communities');
     return fixtureChangeMembership(communityId, gesture);
   }
-  const path = gesture === 'join' ? communitiesEndpoints.byIdJoin(communityId) : communitiesEndpoints.byIdLeave(communityId);
-  const result = await deps.transport.request<unknown>({ method: 'POST', path });
-  return result.ok ? { ok: true, data: null } : result;
+  const result =
+    gesture === 'join'
+      ? await deps.transport.request<unknown>({ method: 'POST', path: communitiesEndpoints.byIdJoin(communityId), body: { acceptsPending: true } })
+      : await deps.transport.request<unknown>({ method: 'POST', path: communitiesEndpoints.byIdLeave(communityId) });
+  if (!result.ok) return result;
+  return { ok: true, data: WirePendingEntry.safeParse(result.data).success ? 'pending' : 'changed' };
 }
 
 type PageContext = { readonly pageParam: number; readonly signal?: AbortSignal };

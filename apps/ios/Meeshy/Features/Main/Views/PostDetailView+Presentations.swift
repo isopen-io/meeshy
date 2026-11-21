@@ -14,7 +14,7 @@ extension PostDetailView {
                     PostTranslationSheet(post: post, onSelectLanguage: { selectDisplayLanguage($0, of: post) })
                 }
             }
-            .sheet(item: $selectedProfileUser) { user in
+            .profileCover(item: $selectedProfileUser) { user in
                 UserProfileSheet(
                     user: user,
                     moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
@@ -29,8 +29,6 @@ extension PostDetailView {
                         }))
                     }, dependencies: .live
                 )
-                .presentationDetents([.large, .medium])
-                .presentationDragIndicator(.visible)
             }
             .sheet(item: $shareableLink) { link in
                 // Same `meeshy.me/l/<token>` URL that "Copier le lien" copies —

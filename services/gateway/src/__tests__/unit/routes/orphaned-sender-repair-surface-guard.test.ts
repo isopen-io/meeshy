@@ -130,7 +130,10 @@ const ROUTE_SURFACES: Record<string, Classification> = {
   // ── Exemptes, avec leur raison ────────────────────────────────────────────
   'admin/user-reports.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'admin/user-member-stats.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
-  'attachments/metadata.ts': { kind: 'exempt', reads: 4, why: DOES_NOT_SELECT_SENDER },
+  // #20019 — la quatrième lecture (le `conversationId` du message porteur, pour
+  // adresser `attachment:deleted`) a déménagé dans
+  // `socketio/broadcastAttachmentDeleted.ts` avec le fan-out.
+  'attachments/metadata.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
   // #9927 — lit le TYPE de la conversation du message visé (règle des 13-17 ans), jamais son expéditeur.
   'attachments/upload.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'conversations/messages-advanced-reads.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
@@ -139,7 +142,8 @@ const ROUTE_SURFACES: Record<string, Classification> = {
   'conversations/messages-view-once.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'conversations/receipts.ts': { kind: 'exempt', reads: 5, why: DOES_NOT_SELECT_SENDER },
   'conversations/shared-translations.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
-  'me/export.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #20163 — la lecture a déménagé de `me/export.ts` vers `me/export-sections.ts` avec `exportMessages`, qui ouvre le sceau au repos ; `senderId` reste dans le `where`, jamais dans le `select`.
+  'me/export-sections.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'mentions.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'reactions.ts': { kind: 'exempt', reads: 5, why: DOES_NOT_SELECT_SENDER },
   'reports/target.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
@@ -179,6 +183,9 @@ const SOCKETIO_SURFACES: Record<string, Classification> = {
   'utils/participant-resolver.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'utils/personalPreviewOverride.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'announceCitedPostWithdrawal.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #20019 — lit le `conversationId` du message porteur pour adresser le retrait
+  // d'UNE pièce ; jamais son expéditeur.
+  'broadcastAttachmentDeleted.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #9646 — relit les CINQ colonnes de protection d'un message édité ou dont
   // une pièce est enrichie, pour décider de la remise par lecteur. Jamais
   // `sender`. Absent du garde du masquage personnel : une `findUnique`, hors
@@ -248,6 +255,10 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // `Promise.all` sous l'unique `withOrphanedSenderRepair`, donc une seule
   // application pour trois lectures.
   'search/globalMessageSearch.ts': { kind: 'applies', reads: 3, applications: 1 },
+  // #19200 — « En commun », rubrique Liens : le curseur (`createdAt` seul) puis la fenêtre de compte
+  // et la page, toutes deux sous `LINK_MESSAGE_SELECT` (id, conversation, contenu, date, colonnes de
+  // protection). Jamais la relation `sender` : un lien partagé ne nomme pas son auteur.
+  'relations/sharedLinks.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
 
   // Deux lectures depuis #9240 : `resolveConversationId` (projette le scalaire
   // `conversationId`) et la garde d'admission d'écriture de
@@ -304,6 +315,13 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // personne.
   'MessageReadStatusService.ts': { kind: 'exempt', reads: 11, why: DOES_NOT_SELECT_SENDER },
   'messaging/anonymizeDeletedAccountMessages.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #19960 — « quelqu'un d'autre tient-il cette clé ? », la SEULE lecture du
+  // dépôt qui apparie un `clientMessageId` sans expéditeur. Elle ne vit que
+  // sur le chemin d'échec d'une violation d'unicité, et son `select` est
+  // `{ id: true }` : elle ne nomme personne et ne rend rien à personne — seule
+  // l'EXISTENCE d'une ligne l'intéresse. La relecture qui SERT (le rejeu
+  // nominal) passe, elle, par `messageDedupProjection.ts`, qui répare.
+  'messaging/clientMessageIdOwnership.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #11381 — le texte à retraduire (colonnes au repos seules, jamais `sender`).
   'messaging/atRestTranslationSource.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7451 — la fenêtre du gel : `select: { id: true }`, rien d'autre.
@@ -320,6 +338,8 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // #14105 — le lien d'un choisi d'un post ONLY : a-t-il écrit dans la conversation directe ?
   // `select: { senderId: true }`, la relation n'est jamais chargée.
   'posts/directContactVisibility.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #19378 — « Notre histoire » : `select: { createdAt: true }` seul (premier message, jalons). Aucun expéditeur servi.
+  'relations/pairHistory.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   // #7578 — purge serveur du contenu d'une vue unique : ni expéditeur ni contenu servi.
   'messaging/purgeViewOnceContent.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #11269 — rattrapage des médias à vue unique lus par tous : `senderId` (colonne) seul, la relation n'est jamais chargée.
@@ -368,6 +388,12 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // `findUniqueOrThrow` avec `CALL_SUMMARY_MESSAGE_INCLUDE`, la même forme que
   // les écritures du message-résumé de `CallService` (initiateur de l'appel).
   'calls/callRecordingLink.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #19650 — la bascule d'un appel retrouve la bulle « en cours » du tête-à-tête
+  // d'origine par `select: { id, metadata }` (l'édition repasse par
+  // `CALL_SUMMARY_MESSAGE_INCLUDE`), et la réaction d'appel retrouve la bulle
+  // du groupe par `select: { id }` : aucune ne lit l'expéditeur.
+  'calls/originConversationCall.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'calls/callReactionOnBubble.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/conversationWriteAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/attachmentSendAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/copyExitProtection.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },

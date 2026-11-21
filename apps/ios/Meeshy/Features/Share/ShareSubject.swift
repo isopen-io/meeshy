@@ -101,6 +101,9 @@ struct ShareCard: Equatable {
     /// s'ouvre sans compte et élargirait l'audience d'une story FRIENDS ou
     /// PRIVATE. Fermé par défaut.
     var isPublicStory: Bool = false
+    /// La ligne qui accompagne la carte dans « Ce qui part » — la bio d'un profil (#19442). Elle ne part pas dans le
+    /// texte : l'ami la lit sur la carte qu'il ouvre.
+    var detail: String? = nil
 
     /// **Le lien suivi de l'utilisateur se frappe pour cette carte** (#14310) :
     /// une publication et un réel toujours (la passerelle vérifie l'audience

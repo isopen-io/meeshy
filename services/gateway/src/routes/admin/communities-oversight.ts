@@ -61,6 +61,8 @@ import { ADMIN_PERSON_SELECT } from './oversight-people';
 import { NOT_DELETED } from '../../services/posts/softDelete';
 import { admitSalonOccupants, closeSalonsAfterSwitch, isBecomingPrivate } from '../../services/conversations/communitySalonAdoption';
 import { scheduleCommunityUpdatedBroadcastFrom } from '../../services/community-updated-broadcast';
+import { communityMemberAnnouncerFrom } from '../../services/community-member-broadcast';
+import { readCommunityDeletedAudience, scheduleCommunityDeletedBroadcastFrom } from '../../services/community-deleted-broadcast';
 import {
   booleen,
   chaine,
@@ -127,6 +129,11 @@ async function loadFiche(prisma: PrismaClient, id: string, options: { readonly w
             lastMessageAt: true,
             _count: { select: conversationActiveMemberCountSelect },
           },
+          // #19835 — la supervision RESTE sur `lastMessageAt` (décision) : elle
+          // mesure le TRAFIC de messages d'une communauté, là où le rang
+          // (max(`lastMessageAt`, `lastActivityAt`), #9026) est la règle d'ORDRE
+          // de la liste d'un utilisateur. Une réaction ne fait pas d'un salon
+          // muet un salon actif pour qui le supervise.
           orderBy: [{ lastMessageAt: 'desc' }, { id: 'desc' }],
           take: CONVERSATION_LIMIT,
         })
@@ -383,8 +390,12 @@ export function registerCommunityOversightRoutes(fastify: FastifyInstance): void
         // salons entrent sous son autorité avant, les autres sortent après.
         const closesSalons = isBecomingPrivate({ before: current.isPrivate, requested: isPrivate });
         const outsiders = closesSalons
-          ? await admitSalonOccupants(fastify.prisma, { communityId, createdBy: current.creator.id })
+          ? await admitSalonOccupants(fastify.prisma, { communityId, createdBy: current.creator.id }, communityMemberAnnouncerFrom(fastify))
           : [];
+
+        // #19590 — qui perd la communauté se lit AVANT : désactivée, elle n'a plus d'audience.
+        const deactivates = activeChanged && isActive === false;
+        const lostBy = deactivates ? await readCommunityDeletedAudience(fastify.prisma, communityId) : [];
 
         await fastify.prisma.community.update({
           where: { id: communityId },
@@ -395,12 +406,15 @@ export function registerCommunityOversightRoutes(fastify: FastifyInstance): void
         });
         if (closesSalons) {
           await closeSalonsAfterSwitch(
-            { prisma: fastify.prisma, socketIOHandler: fastify.socketIOHandler },
+            { prisma: fastify.prisma, socketIOHandler: fastify.socketIOHandler, announce: communityMemberAnnouncerFrom(fastify) },
             { communityId, createdBy: current.creator.id, outsiders, now: new Date() },
           );
         }
         // #18435 — une désactivée n'annonce rien (le diffuseur ne lit que les actives).
         scheduleCommunityUpdatedBroadcastFrom(fastify, { communityId });
+        if (deactivates) {
+          scheduleCommunityDeletedBroadcastFrom(fastify, { communityId, reason: 'deactivated', audience: lostBy });
+        }
 
         await withAudit(request, {
           action: 'ADMIN_COMMUNITY_UPDATED',

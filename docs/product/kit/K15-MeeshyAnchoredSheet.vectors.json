@@ -92,5 +92,21 @@
   "contrast": {
     "titleMin": 4.5,
     "handleMin": 3.0
-  }
+  },
+  "surfacesNote": "Évolution du profil (plan-kit K15) : la surface `glass` (K01, ton deep) pour une feuille posée sur une carte géographique ; elle force le sombre et prend l'encre du média, comme `dark`.",
+  "surfaces": [
+    {"surface": "theme", "encreMedia": false, "poignee": 0.5},
+    {"surface": "dark", "encreMedia": true, "poignee": 0.35},
+    {"surface": "glass", "encreMedia": true, "poignee": 0.35}
+  ],
+  "formesNote": "Formes du profil (plan-kit K15) : `modal` haute (0,9 de la place), voile, hôte flouté de 8 ; `confirm` au contenu, voile, hôte flouté, sans poignée ni ✕, rôle de dialogue d'alerte (médaillon, titre, valeur en chasse fixe, paire K40). Sous Réduire la transparence ou les animations, l'hôte ne se floute pas.",
+  "formes": [
+    {"forme": "sheet", "hauteur": "content", "voile": false, "exterieur": "dismisses", "flou": 0, "poignee": true, "alerte": false},
+    {"forme": "modal", "hauteur": 0.9, "voile": true, "exterieur": "dismisses", "flou": 8, "poignee": true, "alerte": false},
+    {"forme": "confirm", "hauteur": "content", "voile": true, "exterieur": "dismisses", "flou": 8, "poignee": false, "alerte": true}
+  ],
+  "formesSansEffets": [
+    {"forme": "modal", "flou": 0},
+    {"forme": "confirm", "flou": 0}
+  ]
 }

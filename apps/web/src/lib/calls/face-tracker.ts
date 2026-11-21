@@ -36,7 +36,11 @@ const boxOf = (found: readonly Detected[]): Box | null => {
   return first === undefined || first.width <= 0 ? null : { x: first.x, y: first.y, width: first.width, height: first.height };
 };
 
-export type FaceTracker = { readonly next: (source: CanvasImageSource, frame: { readonly width: number; readonly height: number }, frameIndex: number) => Box };
+export type FaceTracker = {
+  readonly next: (source: CanvasImageSource, frame: { readonly width: number; readonly height: number }, frameIndex: number) => Box;
+  /** La boîte rendue est-elle celle d'un visage VU ? Jamais la boîte supposée (#19779). */
+  readonly found: () => boolean;
+};
 
 /** La largeur de l'image que lit le détecteur (#9100) : un visage s'y trouve, et la relecture GPU → CPU d'une image 720p ne se paie plus. */
 export const DETECT_WIDTH = 320;
@@ -93,6 +97,7 @@ export function createFaceTracker(detector: FaceDetectorPort | null, options: { 
       state.shown = state.seen === null ? target : smoothFaceBox(state.shown, target);
       return state.shown;
     },
+    found: () => state.seen !== null,
   };
 }
 

@@ -28,6 +28,13 @@ export const SHARED_LOCATION_SERVER_EVENTS = {
    * et se recale : un retrait fait sur un appareil vaut pour les autres (#18389).
    */
   SHARED_LOCATION_OWN_CHANGED: 'location:share-own-changed',
+  /** À l'émetteur seul : un destinataire demande de prolonger ou de refaire le partage (#19204), sans coordonnée. */
+  SHARED_LOCATION_REQUESTED: 'location:share-requested',
   /** À chacun de deux Sangs consentants proches l'un de l'autre : « X est près de toi », sans coordonnée (#13937). */
   BLOOD_PROXIMITY: 'location:blood-proximity',
+  /**
+   * À chaque compte qui pourrait lire l'historique d'un Sang : sa position continue a bougé, sans
+   * coordonnée — le client relit la carte (#19400).
+   */
+  BLOOD_MOVED: 'location:blood-moved',
 } as const;

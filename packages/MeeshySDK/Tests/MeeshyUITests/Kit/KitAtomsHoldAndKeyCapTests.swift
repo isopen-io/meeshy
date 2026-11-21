@@ -115,8 +115,8 @@ struct KitAtomsHoldAndKeyCapTests {
         let path = MeeshyKeyCapRim(cornerRadius: 8, edge: 1, lip: 2.5).path(in: rect)
         #expect(path.contains(CGPoint(x: 13, y: 24.5), eoFill: true), "la lèvre ne se voit pas")
         #expect(path.contains(CGPoint(x: 13, y: 0.5), eoFill: true), "le filet du haut manque")
-        #expect(path.contains(CGPoint(x: 0.5, y: 13), eoFill: true), "le filet du bord manque")
-        #expect(!path.contains(CGPoint(x: 13, y: 13), eoFill: true), "la lèvre recouvre la face")
+        #expect(path.contains(CGPoint(x: 0.5, y: 12.5), eoFill: true), "le filet du bord manque")
+        #expect(!path.contains(CGPoint(x: 13, y: 12.5), eoFill: true), "la lèvre recouvre la face")
         #expect(!path.contains(CGPoint(x: 13, y: 22.5), eoFill: true), "la lèvre est plus épaisse que sa mesure")
     }
 

@@ -64,6 +64,8 @@ final class NotificationActionHandler: NotificationActionHandling {
     /// #12655 — une réponse refusée sous PIN le dit, hors de l'app.
     private let notifyRefusedReply: @MainActor (String?) -> Void
     private let stopBring: @MainActor (String) async -> Void
+    /// #18738 — « Je vais bien » : l'action de « Tout va bien ? », ou le toucher de la bannière.
+    private let answerWellness: @MainActor () async -> Void
     private let markReadThroughStore: @MainActor (String) async -> Bool
     let recordPendingRevocations: @MainActor ([String]) -> Void
     /// L'unique consommation du SDK, injectée pour que les tests l'observent :
@@ -192,6 +194,7 @@ final class NotificationActionHandler: NotificationActionHandling {
         repliesAwaitingRegime: any NotificationRepliesAwaitingRegimeStoring = NotificationRepliesAwaitingRegime.shared,
         awaitingReplyRules: NotificationReplyRegimeWait.Rules = .live,
         stopBring: @escaping @MainActor (String) async -> Void = { await BringCenter.shared.stopAndWait(bringId: $0) },
+        answerWellness: @escaping @MainActor () async -> Void = { _ = await InactivityCheckCenter.shared.answerWellness() },
         markReadThroughStore: @escaping @MainActor (String) async -> Bool = {
             await ConversationStore.shared.markReadDurably($0)
         },
@@ -203,6 +206,7 @@ final class NotificationActionHandler: NotificationActionHandling {
         self.markReadThroughStore = markReadThroughStore
         self.recordPendingRevocations = recordPendingRevocations
         self.stopBring = stopBring
+        self.answerWellness = answerWellness
         self.repliesAwaitingRegime = repliesAwaitingRegime
         self.awaitingReplyRules = awaitingReplyRules
         self.destinationGuard = destinationGuard
@@ -261,9 +265,7 @@ final class NotificationActionHandler: NotificationActionHandling {
 
         switch actionIdentifier {
         case UNNotificationDefaultActionIdentifier:
-            // #6999 — OUVRIR, c'est CONSOMMER ; la navigation d'ABORD, la consommation attend le `markAsRead` REST.
-            openNotification(userInfo)
-            await consumeTapped(payload)
+            await handleDefaultTap(payload, userInfo: userInfo)
 
         case UNNotificationDismissActionIdentifier:
             break
@@ -307,6 +309,9 @@ final class NotificationActionHandler: NotificationActionHandling {
         case MeeshyNotificationAction.stopBring.rawValue:
             await handleStopBring(userInfo)
 
+        case MeeshyNotificationAction.wellnessOk.rawValue:
+            await handleWellnessOk(payload)
+
         case MeeshyNotificationAction.declineCall.rawValue:
             // Silent decline — no navigation. The VoIP layer handles the
             // actual decline via CallKit; APNs declineCall is just
@@ -323,6 +328,22 @@ final class NotificationActionHandler: NotificationActionHandling {
     private func handleStopBring(_ userInfo: [AnyHashable: Any]) async {
         guard let bringId = userInfo["bringId"] as? String, !bringId.isEmpty else { return }
         await stopBring(bringId)
+    }
+
+    /// #6999 — OUVRIR, c'est CONSOMMER ; la navigation d'ABORD, la consommation attend le `markAsRead` REST. Toucher
+    /// « Tout va bien ? » (#18738), c'est déjà répondre « Je vais bien ».
+    private func handleDefaultTap(_ payload: NotificationPayload, userInfo: [AnyHashable: Any]) async {
+        openNotification(userInfo)
+        if userInfo["type"] as? String == InactivityCheckContract.wellnessCheckNotificationType {
+            await answerWellness()
+        }
+        await consumeTapped(payload)
+    }
+
+    /// #18738 — « Je vais bien » depuis la bannière : la réponse part, l'app ne s'ouvre pas.
+    private func handleWellnessOk(_ payload: NotificationPayload) async {
+        await answerWellness()
+        await consumeTapped(payload)
     }
 
     // MARK: - Conversation verrouillée par PIN (#12655)

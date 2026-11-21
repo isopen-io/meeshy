@@ -15,9 +15,9 @@ class CallEffectsModeRuleTest {
     }
 
     @Test
-    fun `the face catalogue offers the six effects of iOS, in iOS order`() {
+    fun `the face catalogue offers the seven effects of iOS, in iOS order`() {
         assertThat(CallEffectsModeRule.faces.map { it.id })
-            .containsExactly("none", "smoothing", "toad", "angel", "demon", "volcano").inOrder()
+            .containsExactly("none", "smoothing", "toad", "angel", "demon", "volcano", "baby").inOrder()
     }
 
     @Test

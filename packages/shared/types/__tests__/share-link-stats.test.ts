@@ -10,6 +10,7 @@ import {
   shareLinkPreviewConversationSchema,
   shareLinkStatsJsonSchema,
   shareLinkStatsSchema,
+  maskGuestEmail,
 } from '../share-link-stats';
 
 const arrival = (overrides: Record<string, unknown> = {}) => ({
@@ -20,6 +21,8 @@ const arrival = (overrides: Record<string, unknown> = {}) => ({
   country: 'FR',
   language: 'fr',
   joinedAt: '2026-09-24T10:00:00.000Z',
+  userId: null,
+  emailMasked: 'b•••@•••.sn',
   ...overrides,
 });
 
@@ -86,8 +89,8 @@ describe('page des arrivées d’un lien d’invitation (#7813)', () => {
     expect(shareLinkArrivalsPageSchema.safeParse({ arrivals: [], nextCursor: null }).success).toBe(true);
   });
 
-  it('une arrivée ne porte QUE nom, visage, badge sans compte, pays, langue et date', () => {
-    const fields = ['avatar', 'country', 'displayName', 'isAnonymous', 'joinedAt', 'language'];
+  it('une arrivée ne porte QUE nom, visage, badge sans compte, pays, langue, date, compte et e-mail masqué', () => {
+    const fields = ['avatar', 'country', 'displayName', 'emailMasked', 'isAnonymous', 'joinedAt', 'language', 'userId'];
     expect(Object.keys(shareLinkArrivalsPageSchema.shape.arrivals.element.shape).sort()).toEqual(fields);
     expect(Object.keys(shareLinkArrivalsPageJsonSchema.properties.arrivals.items.properties).sort()).toEqual(fields);
     expect(shareLinkArrivalsPageJsonSchema.properties.arrivals.items.additionalProperties).toBe(false);
@@ -105,5 +108,54 @@ describe('page des arrivées d’un lien d’invitation (#7813)', () => {
   it('une page par défaut tient entre la vingtaine des récentes et le plafond', () => {
     expect(SHARE_LINK_ARRIVALS_PAGE_DEFAULT).toBeGreaterThan(SHARE_LINK_RECENT_ARRIVALS_CAP);
     expect(SHARE_LINK_ARRIVALS_PAGE_MAX).toBeGreaterThanOrEqual(SHARE_LINK_ARRIVALS_PAGE_DEFAULT);
+  });
+});
+
+describe('l’arrivant d’un lien : de quoi ouvrir sa fiche et son e-mail masqué (#19283)', () => {
+  it('un serveur qui ne les sert pas encore reste lisible', () => {
+    const { userId: _u, emailMasked: _e, ...ancienne } = arrival();
+    expect(shareLinkStatsSchema.safeParse(stats({ recentArrivals: [ancienne] })).success).toBe(true);
+  });
+
+  it('le compte d’un inscrit est une chaîne, celui d’un invité est null', () => {
+    expect(shareLinkStatsSchema.safeParse(stats({ recentArrivals: [arrival({ userId: '68a000000000000000000009', isAnonymous: false, emailMasked: null })] })).success).toBe(true);
+    expect(shareLinkStatsSchema.safeParse(stats({ recentArrivals: [arrival({ userId: 9 })] })).success).toBe(false);
+  });
+
+  it('les schémas JSON déclarent les deux champs, nullables', () => {
+    const recent = shareLinkStatsJsonSchema.properties.recentArrivals.items.properties;
+    const page = shareLinkArrivalsPageJsonSchema.properties.arrivals.items.properties;
+    for (const props of [recent, page]) {
+      expect(props.userId).toEqual(expect.objectContaining({ type: 'string', nullable: true }));
+      expect(props.emailMasked).toEqual(expect.objectContaining({ type: 'string', nullable: true }));
+    }
+  });
+});
+
+describe('maskGuestEmail — l’e-mail d’un invité ne part que masqué (#19283)', () => {
+  it('garde la première lettre et l’extension, masque le reste du nom et tout le domaine', () => {
+    expect(maskGuestEmail('Binta.Diallo@orange.sn')).toBe('b•••@•••.sn');
+    expect(maskGuestEmail('lea@free.fr')).toBe('l•••@•••.fr');
+  });
+
+  it('ne trahit ni la longueur du nom ni celle du domaine', () => {
+    expect(maskGuestEmail('a@x.fr')).toBe(maskGuestEmail('alexandrine@tres-long-domaine.fr'));
+  });
+
+  it('un domaine de plusieurs niveaux ne garde que sa dernière extension', () => {
+    expect(maskGuestEmail('kofi@mail.univ.ac.uk')).toBe('k•••@•••.uk');
+  });
+
+  it('aucune partie du nom ni du domaine au-delà de la première lettre et de l’extension', () => {
+    const masked = maskGuestEmail('secretname@companyinc.com') ?? '';
+    expect(masked).not.toContain('ecret');
+    expect(masked).not.toContain('company');
+  });
+
+  it('une adresse absente rend null, une adresse illisible rend un masque sans rien d’elle', () => {
+    expect(maskGuestEmail(null)).toBeNull();
+    expect(maskGuestEmail('   ')).toBeNull();
+    expect(maskGuestEmail('pas-une-adresse')).toBe('•••');
+    expect(maskGuestEmail('nom@sansextension')).toBe('n•••@•••');
   });
 });

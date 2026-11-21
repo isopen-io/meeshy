@@ -369,7 +369,7 @@ let result = try await service.list(offset: 0, limit: 30)
 ## Relation avec apps/ios
 - `apps/ios/Meeshy/` importe `MeeshySDK` et `MeeshyUI` via SPM local
 - Les modèles dans `apps/ios/Meeshy/Features/Main/Models/` utilisent les types SDK comme base
-- `APIConversation` (SDK, `Models/ConversationModels.swift`) se convertit en `MeeshyConversation` par `toConversation(currentUserId:)`
+- `APIConversation` (SDK, `Sources/MeeshySDK/Models/ConversationModels.swift`) se convertit en `MeeshyConversation` par `toConversation(currentUserId:)`
 - Les services app (AuthManager, APIClient) sont ceux du SDK via `.shared`
 
 ## Scurit

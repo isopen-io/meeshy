@@ -23,6 +23,14 @@ data class CommunityAccess(
     val canInvite: Boolean
         get() = isMember && (!isPrivate || isAdmin || membership.role == MemberRole.MODERATOR)
     val canManageMembers: Boolean get() = isAdmin
+
+    /**
+     * Qui tranche une demande d'entrée (#19878) : le créateur, l'admin et le modérateur — la règle
+     * `isCommunitySteward` de la passerelle, lue dans le rôle SERVI. Tout autre lecteur recevrait le 404
+     * générique : la liste ne se demande donc qu'à lui.
+     */
+    val canDecideJoinRequests: Boolean
+        get() = isCreator || membership.role?.hasMinimumRole(MemberRole.MODERATOR) == true
     val canAddChannel: Boolean get() = isAdmin
     val canEditSettings: Boolean get() = isCreator
     val canLeave: Boolean get() = isMember && !isCreator
@@ -48,7 +56,12 @@ data class CommunityAccess(
             isPrivate: Boolean,
             meId: String?,
             members: List<ApiCommunityMember>,
-        ): CommunityAccess = CommunityAccess(CommunityMembership.resolve(createdBy, meId, members), isPrivate)
+            servedRole: String? = null,
+        ): CommunityAccess = CommunityAccess(CommunityMembership.resolve(createdBy, meId, members, servedRole), isPrivate)
+
+        /** Les droits du lecteur sur une fiche servie : le rôle servi d'abord, la liste en repli. */
+        fun of(community: ApiCommunity, meId: String?): CommunityAccess =
+            resolve(community.createdBy, community.isPrivate, meId, community.members.orEmpty(), community.currentUserRole)
     }
 }
 

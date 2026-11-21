@@ -57,3 +57,12 @@ describe('un compte qui part sans Redis (#16987)', () => {
     expect(report).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('la fin servie part aussi hors de l\'app (#19463)', () => {
+  it('le câblage du relais porte le signal de fin, et sans Redis il ne lève pas', () => {
+    const world = messagingWorld({ users: [{ id: MOI }], links: [] });
+    const deps = sharedLocationRelayDepsOf({ prisma: world.prisma as unknown as PrismaClient, io: undefined });
+    expect(typeof deps.ended).toBe('function');
+    expect(() => deps.ended?.({ readerId: AMI, emitterId: MOI, endedAt: new Date(0).toISOString() })).not.toThrow();
+  });
+});

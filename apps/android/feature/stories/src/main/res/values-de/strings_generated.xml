@@ -292,7 +292,7 @@
     <string name="stories_reply_sent">Antwort gesendet</string>
     <string name="stories_reply_to">Antwort an %1$s</string>
     <string name="stories_report_reason_harassment">Belästigung</string>
-    <string name="stories_report_reason_hate_speech">Hassrede</string>
+    <string name="stories_report_reason_hate_speech">Hass</string>
     <string name="stories_report_reason_impersonation">Identitätsdiebstahl</string>
     <string name="stories_report_reason_inappropriate">Unangemessener Inhalt</string>
     <string name="stories_report_reason_other">Andere</string>

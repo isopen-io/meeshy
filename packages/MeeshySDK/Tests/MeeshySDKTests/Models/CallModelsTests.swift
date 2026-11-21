@@ -163,6 +163,24 @@ struct ActiveCallSessionTests {
         #expect(p.hasLeft)
     }
 
+    @Test func participant_decodesTheServedMediaState() throws {
+        let json = """
+        { "userId": "u1", "isMuted": true, "isVideoOff": false }
+        """.data(using: .utf8)!
+        let p = try JSONDecoder().decode(ActiveCallParticipant.self, from: json)
+        #expect(p.isMuted == true)
+        #expect(p.isVideoOff == false)
+    }
+
+    @Test func participant_withoutMediaState_staysUnknown() throws {
+        let json = """
+        { "userId": "u1" }
+        """.data(using: .utf8)!
+        let p = try JSONDecoder().decode(ActiveCallParticipant.self, from: json)
+        #expect(p.isMuted == nil)
+        #expect(p.isVideoOff == nil)
+    }
+
     @Test func participant_nullOrAbsentLeftAt_isStillInTheCall() throws {
         let json = """
         [{ "userId": "u1", "leftAt": null }, { "userId": "u2" }]

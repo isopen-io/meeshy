@@ -1,5 +1,6 @@
 import XCTest
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// Le profil d'un Ami ou d'un Proche montre le niveau COMMUN (#13940) — celui que `GET /relations` sert à l'appelant
@@ -39,7 +40,7 @@ final class ProfileCircleViewModelTests: XCTestCase {
         try await super.tearDown()
     }
 
-    private func makeRig(userId: String = "a") -> Rig {
+    private func makeRig(userId: String = "a", cached: [FriendRequest] = []) -> Rig {
         let relations = MockRelationsService()
         let friends = MockFriendService()
         let queue = MockOfflineQueue()
@@ -50,6 +51,7 @@ final class ProfileCircleViewModelTests: XCTestCase {
             friendService: friends,
             offlineQueue: queue,
             networkMonitor: FakeNetworkMonitor(isOnline: true),
+            cachedReceived: { cached },
             forgetFriendship: { forgotten.ids.append($0) }
         )
         return Rig(sut: sut, relations: relations, friends: friends, queue: queue, forgotten: forgotten)
@@ -82,6 +84,36 @@ final class ProfileCircleViewModelTests: XCTestCase {
         await rig.sut.load()
 
         XCTAssertNil(rig.sut.shownLevel, "aucun lien servi : le profil garde son badge d'avant")
+    }
+
+    func test_ourCircle_isNil_withoutAServedLink() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("b", .close)])
+
+        await rig.sut.load()
+
+        XCTAssertNil(rig.sut.ourCircle, "« Notre cercle » ne s'ouvre pas sur un lien qui n'est pas servi")
+    }
+
+    func test_ourCircle_readsBothSides_fromTheServedLink() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([RelationLink(userId: "a", effectiveLevel: .close, grantedByMe: .blood)])
+
+        await rig.sut.load()
+
+        XCTAssertEqual(rig.sut.ourCircle?.common, .close)
+        XCTAssertEqual(rig.sut.ourCircle?.mine, .blood)
+        XCTAssertEqual(rig.sut.ourCircle?.missing, .theirGrant(.blood))
+    }
+
+    func test_models_shareOneModelPerPerson_whileAViewHoldsIt() {
+        let first = makeRig(userId: "shared-a").sut
+        let held = ProfileCircleModels.model(for: "shared-a") { first }
+        let again = ProfileCircleModels.model(for: "SHARED-A") { self.makeRig(userId: "shared-a").sut }
+        let other = ProfileCircleModels.model(for: "shared-b") { self.makeRig(userId: "shared-b").sut }
+
+        XCTAssertTrue(held === again, "la pilule et la face Actions lisent le même lien")
+        XCTAssertFalse(held === other)
     }
 
     func test_aLinkBelowAcquaintance_isNotShown() async {
@@ -137,6 +169,27 @@ final class ProfileCircleViewModelTests: XCTestCase {
         XCTAssertFalse(queued)
         XCTAssertNil(rig.sut.pendingLevel)
         XCTAssertNotNil(rig.sut.notice)
+    }
+
+    /// #19611 — planche `Etat-Erreur` vue 2 : une montée ratée reste dite dans « Notre cercle », et « Réessayer » la
+    /// rejoue vers le même cran.
+    func test_requestRaise_failure_isKeptUntilARetrySucceeds() async throws {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .friend, eligibleFor: .close)])
+        await rig.sut.load()
+        rig.queue.enqueueResult = .failure(NSError(domain: "test", code: 1))
+
+        _ = await rig.sut.requestRaise()
+        let failedRaise = rig.sut.failedRaise
+        rig.queue.enqueueResult = .success("mock-cmid")
+        let retried = await rig.sut.requestRaise()
+
+        XCTAssertEqual(failedRaise, .close)
+        XCTAssertTrue(retried)
+        XCTAssertNil(rig.sut.failedRaise)
+        XCTAssertEqual(rig.sut.pendingLevel, .close)
+        let payload = try XCTUnwrap(rig.queue.lastPayload as? SendFriendRequestPayload)
+        XCTAssertEqual(payload.targetLevel, "CLOSE")
     }
 
     func test_aServedPendingRequest_isShownAsWaiting() async {
@@ -289,6 +342,103 @@ final class ProfileCircleViewModelTests: XCTestCase {
         XCTAssertFalse(rig.sut.offersTogether)
     }
 
+    /// #18870 — la face Actions ne montre jamais une opération à la fois offerte et verrouillée : ce qui reste fermé
+    /// se juge au même cercle que ce que le profil propose.
+    func test_toolGateLevel_aFriend_locksExactlyWhatIsNotOffered() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .friend)])
+        rig.relations.linkResult = .success(link("a", .friend))
+
+        await rig.sut.load()
+
+        let gate = rig.sut.toolGateLevel
+        XCTAssertEqual(gate, .friend)
+        XCTAssertEqual(ProfileRelationAction.talkie.gate(at: gate) == .offered, rig.sut.offersTalkie)
+        XCTAssertEqual(ProfileRelationAction.together.gate(at: gate) == .offered, rig.sut.offersTogether)
+        XCTAssertEqual(ProfileRelationAction.bring.gate(at: gate) == .offered, rig.sut.offersBring)
+        XCTAssertEqual(ProfileRelationAction.battery.gate(at: gate) == .offered, rig.sut.offersBattery)
+        XCTAssertEqual(ProfileRelationAction.unreachable.gate(at: gate) == .offered, rig.sut.offersPhoneReachability)
+        XCTAssertEqual(ProfileRelationAction.location.gate(at: gate) == .offered, rig.sut.offersSharedLocation)
+        XCTAssertEqual(ProfileRelationAction.lockedGroups(at: gate).map(\.opensAt), [.close])
+    }
+
+    /// #16623 — entre deux comptes de l'équipe sans lien, la fiche juge l'écriture au niveau servi par
+    /// `GET /relations/:userId`, le même qui propose Talkie, Ensemble et Batterie.
+    func test_standing_betweenTeamAccountsWithoutALink_writingIsNotARequest() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([])
+        rig.relations.linkResult = .success(RelationLink(userId: "a", effectiveLevel: .public, grantedByMe: .public, accessLevel: .blood))
+
+        await rig.sut.load()
+
+        let standing = rig.sut.standing
+        XCTAssertTrue(rig.sut.offersTalkie)
+        XCTAssertFalse(standing.linked)
+        XCTAssertEqual(standing.toolLevel, .blood)
+        XCTAssertFalse(RelationFace.writesARequest(standing: standing, connection: .none))
+    }
+
+    func test_standing_beforeAnyRead_isUnresolved() {
+        let rig = makeRig()
+
+        XCTAssertEqual(rig.sut.standing, .unresolved, "rien n'est jugé avant la lecture")
+    }
+
+    func test_standing_aStrangerOnceRead_isPublic_andWritingIsARequest() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([])
+        rig.relations.linkResult = .success(link("a", .public))
+
+        await rig.sut.load()
+
+        let standing = rig.sut.standing
+        XCTAssertEqual(standing, ProfileRelationStanding(linked: false, toolLevel: .public))
+        XCTAssertTrue(RelationFace.writesARequest(standing: standing, connection: .none))
+    }
+
+    func test_standing_aFriend_isLinkedAtTheToolGate() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .friend)])
+
+        await rig.sut.load()
+
+        XCTAssertEqual(rig.sut.standing, ProfileRelationStanding(linked: true, toolLevel: .friend))
+    }
+
+    /// RG-07 — l'autre est descendu en silence de Proche à Ami : la liste en cache dit encore Proche et sa
+    /// revalidation échoue, mais le détail servi dit Ami. Le détail gagne, le cache des liens est invalidé, et ni la
+    /// batterie ni Talkie ne restent proposés.
+    func test_loadServedDetail_aSilentLoweringServedByTheDetail_winsOverTheCachedList() async throws {
+        try await CacheCoordinator.shared.relationLinks.saveAsStale([link("a", .close)], for: CirclesViewModel.cacheKey)
+        let rig = makeRig()
+        rig.relations.linksResult = .failure(NSError(domain: "test", code: 503))
+        rig.relations.linkResult = .success(link("a", .friend))
+
+        await rig.sut.load()
+
+        let cached = await CacheCoordinator.shared.relationLinks.load(for: CirclesViewModel.cacheKey)
+        XCTAssertEqual(rig.sut.shownLevel, .friend)
+        XCTAssertFalse(rig.sut.offersBattery)
+        XCTAssertFalse(rig.sut.offersTalkie)
+        XCTAssertEqual(rig.sut.toolGateLevel, .friend)
+        guard case .empty = cached else {
+            return XCTFail("le cache des liens qui disait Proche est invalidé, reçu \(cached)")
+        }
+    }
+
+    func test_loadServedDetail_aDetailThatAgreesWithTheList_keepsTheCachedLinks() async throws {
+        try await CacheCoordinator.shared.relationLinks.saveAsStale([link("a", .close)], for: CirclesViewModel.cacheKey)
+        let rig = makeRig()
+        rig.relations.linksResult = .failure(NSError(domain: "test", code: 503))
+        rig.relations.linkResult = .success(link("a", .close))
+
+        await rig.sut.load()
+
+        let cached = await CacheCoordinator.shared.relationLinks.load(for: CirclesViewModel.cacheKey)
+        XCTAssertEqual(rig.sut.shownLevel, .close)
+        if case .empty = cached { XCTFail("un détail d'accord avec la liste n'invalide rien") }
+    }
+
     func test_offersTalkieAndTogether_aStrangerWithoutAccessLevel_areNotOffered() async {
         let rig = makeRig()
         rig.relations.linksResult = .success([])
@@ -314,6 +464,103 @@ final class ProfileCircleViewModelTests: XCTestCase {
             await rig.sut.load()
             XCTAssertEqual(rig.sut.offeredLowering, expected, "depuis \(level)")
         }
+    }
+
+    func test_offeredLowerings_aboveAcquaintance_offerTheRungBelowThenUnlink() async {
+        let cases: [(RelationLevel, [ProfileCircleLowering])] = [
+            (.blood, [.demote(.close), .unlink]), (.close, [.demote(.friend), .unlink]),
+            (.friend, [.demote(.acquaintance), .unlink]), (.acquaintance, [.unlink]),
+        ]
+        for (level, expected) in cases {
+            await CacheCoordinator.shared.relationLinks.invalidate(for: CirclesViewModel.cacheKey)
+            let rig = makeRig()
+            rig.relations.linksResult = .success([link("a", level)])
+            await rig.sut.load()
+            XCTAssertEqual(rig.sut.offeredLowerings, expected, "depuis \(level)")
+        }
+    }
+
+    func test_lower_unlinkFromClose_sendsPublic_andLeavesTheCircle() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .close)])
+        await rig.sut.load()
+
+        let lowered = await rig.sut.lower(.unlink)
+
+        XCTAssertTrue(lowered)
+        XCTAssertEqual(rig.relations.lowerCalls, [.init(userId: "a", level: .public)])
+        XCTAssertTrue(rig.sut.didUnlink)
+    }
+
+    func test_lower_aGestureThatIsNotOffered_doesNotLeave() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .close)])
+        await rig.sut.load()
+
+        let lowered = await rig.sut.lower(.demote(.acquaintance))
+
+        XCTAssertFalse(lowered, "seuls le cran inférieur et l'annulation sont proposés")
+        XCTAssertTrue(rig.relations.lowerCalls.isEmpty)
+    }
+
+    // MARK: - Un seul chargement pour la pilule, « Notre cercle » et la face Actions (#18870)
+
+    func test_load_threeConcurrentCalls_readTheLinksOnce() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .close)])
+        let sut = rig.sut
+
+        async let pill: Void = sut.load()
+        async let section: Void = sut.load()
+        async let live: Void = sut.load()
+        _ = await (pill, section, live)
+
+        XCTAssertEqual(rig.relations.linksCallCount, 1, "trois vues, un modèle, un chargement")
+        XCTAssertEqual(sut.shownLevel, .close)
+    }
+
+    func test_load_remountingTheActionsFace_doesNotReloadEverything() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .close)])
+        await rig.sut.load()
+        await CacheCoordinator.shared.relationLinks.invalidate(for: CirclesViewModel.cacheKey)
+
+        await rig.sut.load()
+
+        XCTAssertEqual(rig.relations.linksCallCount, 1, "une revalidation par ouverture de la fiche")
+        XCTAssertEqual(rig.relations.linkCallCount, 1)
+    }
+
+    func test_reload_afterTheRitual_readsTheLinkAgain() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .close)])
+        rig.relations.linkResult = .success(link("a", .close))
+        await rig.sut.load()
+        rig.relations.linkResult = .success(link("a", .blood))
+        await CacheCoordinator.shared.relationLinks.invalidate(for: CirclesViewModel.cacheKey)
+        rig.relations.linksResult = .success([link("a", .blood)])
+
+        await rig.sut.reload()
+
+        XCTAssertEqual(rig.relations.linkCallCount, 2)
+        XCTAssertEqual(rig.sut.shownLevel, .blood, "le Sang scellé se voit sans rouvrir la fiche")
+    }
+
+    func test_load_aDetailReadBeforeALowering_doesNotOverwriteTheLoweredTools() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .close)])
+        rig.relations.linkResult = .success(link("a", .close))
+        let sut = rig.sut
+        let relations = rig.relations
+        relations.linkHook = {
+            relations.linkResult = .success(RelationLink(userId: "a", effectiveLevel: .friend, grantedByMe: .friend))
+            _ = await sut.lower()
+        }
+
+        await sut.load()
+
+        XCTAssertEqual(sut.shownLevel, .friend)
+        XCTAssertFalse(sut.offersTalkie, "le Proche lu avant la baisse ne rend pas le talkie")
     }
 
     func test_offeredLowering_withoutALink_isNil() async {
@@ -544,5 +791,262 @@ final class ProfileCircleViewModelTests: XCTestCase {
         XCTAssertEqual(Set(titles).count, 3)
         titles.forEach { XCTAssertTrue($0.contains("Ada")) }
         XCTAssertTrue(ProfileCircleLowering.unlink.confirmationTitle(name: "Ada").contains("Ada"))
+    }
+}
+
+/// « Notre cercle » (#18870, planche `Autre-Cercle`) : le niveau accordé de chaque côté tel que le lien le laisse LIRE,
+/// ce que le cercle commun ouvre, ce que le cran suivant ajouterait, et ce qui manque pour y monter. Rien n'est inventé :
+/// l'accord de l'autre n'est jamais servi, il se DÉDUIT du minimum.
+final class OurCircleSummaryTests: XCTestCase {
+
+    private func link(common: RelationLevel, mine: RelationLevel) -> RelationLink {
+        RelationLink(userId: "leo", effectiveLevel: common, grantedByMe: mine)
+    }
+
+    func test_theirGrant_isExact_whenIGrantMoreThanTheCommonCircle() {
+        let summary = OurCircleSummary.make(link(common: .close, mine: .blood), pending: nil)
+        XCTAssertEqual(summary.mine, .blood)
+        XCTAssertEqual(summary.theirs, .exactly(.close), "le minimum est son accord : il se lit sans rien révéler de plus")
+    }
+
+    func test_theirGrant_isOnlyAtLeast_whenMyGrantIsTheCommonCircle() {
+        let summary = OurCircleSummary.make(link(common: .close, mine: .close), pending: nil)
+        XCTAssertEqual(summary.theirs, .atLeast(.close), "son accord peut être plus haut : la fiche ne l'invente pas")
+    }
+
+    func test_missing_namesTheirGrant_whenOnlyTheirSideHoldsTheCommonCircleDown() {
+        let summary = OurCircleSummary.make(link(common: .close, mine: .blood), pending: nil)
+        XCTAssertEqual(summary.next, .blood)
+        XCTAssertEqual(summary.missing, .theirGrant(.blood))
+    }
+
+    func test_missing_asksBothSides_whenMyGrantIsTheCommonCircle() {
+        let summary = OurCircleSummary.make(link(common: .friend, mine: .friend), pending: nil)
+        XCTAssertEqual(summary.missing, .bothChoose(.close))
+    }
+
+    func test_missing_saysTheRequestIsSent_whenARaiseIsPending() {
+        let summary = OurCircleSummary.make(link(common: .friend, mine: .friend), pending: .close)
+        XCTAssertEqual(summary.missing, .pending(.close))
+    }
+
+    func test_atTheTop_nothingIsMissing_andNothingMoreOpens() {
+        let summary = OurCircleSummary.make(link(common: .blood, mine: .blood), pending: nil)
+        XCTAssertNil(summary.next)
+        XCTAssertNil(summary.missing)
+        XCTAssertTrue(summary.nextOpens.isEmpty)
+    }
+
+    func test_opened_followsTheAccessLaw_neverAFeatureAboveTheCommonCircle() {
+        let summary = OurCircleSummary.make(link(common: .close, mine: .blood), pending: nil)
+        XCTAssertFalse(summary.opened.isEmpty)
+        XCTAssertTrue(summary.opened.allSatisfy { $0.feature.minimumLevel <= .close })
+        XCTAssertTrue(summary.opened.contains(.talkie))
+        XCTAssertFalse(summary.opened.contains(.liveLocation))
+    }
+
+    func test_nextOpens_isExactlyWhatTheNextCircleAdds() {
+        let summary = OurCircleSummary.make(link(common: .close, mine: .blood), pending: nil)
+        XCTAssertFalse(summary.nextOpens.isEmpty)
+        XCTAssertTrue(summary.nextOpens.allSatisfy { $0.feature.minimumLevel == .blood })
+        XCTAssertTrue(summary.nextOpens.contains(.liveLocation))
+        XCTAssertTrue(Set(summary.opened).isDisjoint(with: summary.nextOpens))
+    }
+
+    func test_opened_listsTheCommonCircleFirst() {
+        let summary = OurCircleSummary.make(link(common: .close, mine: .close), pending: nil)
+        let levels = summary.opened.map(\.feature.minimumLevel)
+        XCTAssertEqual(levels, levels.sorted(by: >), "ce que Proche ouvre d'abord, puis ce qu'Ami ouvrait déjà")
+    }
+
+    func test_everyFeature_hasATitleAndAGlyph() {
+        for feature in OurCircleFeature.allCases {
+            XCTAssertFalse(feature.title.isEmpty, "\(feature)")
+            XCTAssertFalse(feature.systemImage.isEmpty, "\(feature)")
+        }
+    }
+
+    func test_since_readsTheServedInstant_andStaysNilWithoutIt() {
+        let dated = RelationLink(userId: "leo", effectiveLevel: .close, grantedByMe: .close, since: "2026-03-19T10:00:00.000Z")
+        XCTAssertNotNil(OurCircleSummary.make(dated, pending: nil).since)
+        XCTAssertNil(OurCircleSummary.make(link(common: .close, mine: .close), pending: nil).since)
+    }
+}
+
+// MARK: - Une proposition de cercle reçue (#19449, planche `Autre-Cercle`)
+
+extension ProfileCircleViewModelTests {
+
+    private func proposal(from senderId: String, level: String?, id: String = "r1",
+                          status: String = "pending") -> FriendRequest {
+        let target = level.map { ",\"targetLevel\":\"\($0)\"" } ?? ""
+        return JSONStub.decode("""
+        {"id":"\(id)","senderId":"\(senderId)","receiverId":"me","status":"\(status)",
+         "createdAt":"2026-11-01T10:00:00Z"\(target)}
+        """)
+    }
+
+    private func page(_ requests: [FriendRequest]) -> Result<OffsetPaginatedAPIResponse<[FriendRequest]>, Error> {
+        .success(OffsetPaginatedAPIResponse(success: true, data: requests, pagination: nil, error: nil))
+    }
+
+    private func loadedRig(common: RelationLevel, proposed: String) async -> Rig {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", common)])
+        rig.friends.receivedRequestsResult = page([proposal(from: "a", level: proposed)])
+        await rig.sut.load()
+        return rig
+    }
+
+    func test_receivedProposal_aPendingRaiseFromThisPerson_isShownWithWhatItWouldOpen() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .friend)])
+        rig.friends.receivedRequestsResult = page([
+            proposal(from: "b", level: "BLOOD", id: "rb"),
+            proposal(from: "a", level: "CLOSE")
+        ])
+
+        await rig.sut.load()
+
+        let shown = rig.sut.receivedProposal
+        XCTAssertEqual(shown?.requestId, "r1", "seule la demande de CETTE personne se lit sur sa fiche")
+        XCTAssertEqual(shown?.level, .close)
+        XCTAssertEqual(shown?.opens, OurCircleSummary.addedBy(.close), "ce que Proche ajoute à Ami, rien d'autre")
+    }
+
+    func test_receivedProposal_atOrBelowTheCommonCircle_orNoLongerPending_isNotShown() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .close)])
+        rig.friends.receivedRequestsResult = page([
+            proposal(from: "a", level: "FRIEND", id: "low"),
+            proposal(from: "a", level: "BLOOD", id: "done", status: "accepted")
+        ])
+
+        await rig.sut.load()
+
+        XCTAssertNil(rig.sut.receivedProposal)
+    }
+
+    func test_receivedProposal_withoutAServedLink_isLeftToTheConnectionRequestCard() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([])
+        rig.friends.receivedRequestsResult = page([proposal(from: "a", level: nil)])
+
+        await rig.sut.load()
+
+        XCTAssertNil(rig.sut.receivedProposal, "sans lien, la demande de connexion garde sa carte d'avant")
+    }
+
+    func test_receivedProposal_isPaintedFromTheCache_whenTheNetworkFails() async {
+        let rig = makeRig(cached: [proposal(from: "a", level: "CLOSE")])
+        rig.relations.linksResult = .success([link("a", .friend)])
+        rig.friends.receivedRequestsResult = .failure(NSError(domain: "test", code: 1))
+
+        await rig.sut.load()
+
+        XCTAssertEqual(rig.sut.receivedProposal?.level, .close)
+    }
+
+    func test_receivedProposal_aRevalidationWithoutIt_withdrawsTheCachedCard() async {
+        let rig = makeRig(cached: [proposal(from: "a", level: "CLOSE")])
+        rig.relations.linksResult = .success([link("a", .friend)])
+        rig.friends.receivedRequestsResult = page([])
+
+        await rig.sut.load()
+
+        XCTAssertNil(rig.sut.receivedProposal, "la liste servie fait foi sur le cache")
+    }
+
+    func test_acceptProposal_raisesTheCommonCircleAtOnce_andQueuesTheAcceptance() async throws {
+        let rig = await loadedRig(common: .friend, proposed: "CLOSE")
+
+        let answer = await rig.sut.acceptProposal(name: "Léo")
+
+        XCTAssertEqual(answer, .answered)
+        XCTAssertNil(rig.sut.receivedProposal, "la carte part avant la réponse du serveur")
+        XCTAssertEqual(rig.sut.shownLevel, .close, "le cercle commun monte aussitôt")
+        XCTAssertEqual(rig.queue.enqueueCalls.first?.kind, .respondFriendRequest)
+        let payload = try XCTUnwrap(rig.queue.lastPayload as? RespondFriendRequestPayload)
+        XCTAssertEqual(payload.friendRequestId, "r1")
+        XCTAssertEqual(payload.action, .accept)
+    }
+
+    func test_acceptProposal_refusedByTheServer_rollsBackTheCircleAndTheCard() async throws {
+        let rig = await loadedRig(common: .friend, proposed: "CLOSE")
+        _ = await rig.sut.acceptProposal(name: "Léo")
+        let cmid = try XCTUnwrap((rig.queue.lastPayload as? RespondFriendRequestPayload)?.clientMutationId)
+        try await waitForCondition(timeout: 2) { rig.queue.outcomeContinuations[cmid] != nil }
+
+        rig.queue.emitOutcome(.exhausted(cmid: cmid), for: cmid)
+
+        try await waitForCondition(timeout: 2) { rig.sut.receivedProposal != nil }
+        XCTAssertEqual(rig.sut.shownLevel, .friend)
+        XCTAssertNotNil(rig.sut.notice)
+    }
+
+    func test_acceptProposal_enqueueFailure_rollsBackAndSaysIt() async {
+        let rig = await loadedRig(common: .friend, proposed: "CLOSE")
+        rig.queue.enqueueResult = .failure(NSError(domain: "test", code: 1))
+
+        let answer = await rig.sut.acceptProposal(name: "Léo")
+
+        XCTAssertEqual(answer, .notSent)
+        XCTAssertEqual(rig.sut.receivedProposal?.requestId, "r1")
+        XCTAssertEqual(rig.sut.shownLevel, .friend)
+        XCTAssertNotNil(rig.sut.notice)
+    }
+
+    func test_acceptProposal_ofBlood_opensTheRitual_andSendsNothing() async {
+        let rig = await loadedRig(common: .close, proposed: "BLOOD")
+
+        let answer = await rig.sut.acceptProposal(name: "Léo")
+
+        XCTAssertEqual(answer, .opensRitual(CircleRitualTarget(userId: "a", name: "Léo")))
+        XCTAssertTrue(rig.queue.enqueueCalls.isEmpty, "le Sang ne s'accepte que par le rituel")
+        XCTAssertEqual(rig.sut.receivedProposal?.level, .blood, "la carte reste jusqu'au scellement")
+        XCTAssertEqual(rig.sut.shownLevel, .close)
+    }
+
+    func test_declineProposal_withdrawsTheCardAtOnce_andQueuesTheRefusal() async throws {
+        let rig = await loadedRig(common: .friend, proposed: "CLOSE")
+
+        let sent = await rig.sut.declineProposal()
+
+        XCTAssertTrue(sent)
+        XCTAssertNil(rig.sut.receivedProposal)
+        XCTAssertEqual(rig.sut.shownLevel, .friend, "refuser ne change pas le cercle commun")
+        let payload = try XCTUnwrap(rig.queue.lastPayload as? RespondFriendRequestPayload)
+        XCTAssertEqual(payload.action, .reject)
+    }
+
+    func test_declineProposal_refusedByTheServer_bringsTheCardBack() async throws {
+        let rig = await loadedRig(common: .friend, proposed: "CLOSE")
+        _ = await rig.sut.declineProposal()
+        let cmid = try XCTUnwrap((rig.queue.lastPayload as? RespondFriendRequestPayload)?.clientMutationId)
+        try await waitForCondition(timeout: 2) { rig.queue.outcomeContinuations[cmid] != nil }
+
+        rig.queue.emitOutcome(.exhausted(cmid: cmid), for: cmid)
+
+        try await waitForCondition(timeout: 2) { rig.sut.receivedProposal != nil }
+        XCTAssertNotNil(rig.sut.notice)
+    }
+
+    func test_postponeProposal_setsTheCardAside_sendsNothing_andARevalidationKeepsItAside() async {
+        let rig = await loadedRig(common: .friend, proposed: "CLOSE")
+
+        rig.sut.postponeProposal()
+        await rig.sut.load()
+
+        XCTAssertNil(rig.sut.receivedProposal)
+        XCTAssertTrue(rig.queue.enqueueCalls.isEmpty)
+    }
+
+    func test_proposalCopy_namesThePersonAndTheCircle_andListsWhatItOpens() {
+        let title = ProfileCircleProposalCopy.title(name: "Léo", level: .blood)
+        XCTAssertTrue(title.contains("Léo"))
+        XCTAssertTrue(title.contains(CircleLevelNames.title(of: .blood)))
+        let opens = ProfileCircleProposalCopy.opens(level: .blood, features: OurCircleSummary.addedBy(.blood))
+        XCTAssertTrue(opens?.contains(OurCircleFeature.liveLocation.title) == true)
+        XCTAssertNil(ProfileCircleProposalCopy.opens(level: .blood, features: []))
     }
 }

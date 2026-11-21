@@ -39,12 +39,12 @@ final class AvatarBannerNoRetryWiringTests: XCTestCase {
     func test_userProfileHeaderBanner_suppressesRetryOverlay() throws {
         let source = try sdkSource("Sources/MeeshyUI/Profile/UserProfileSheet+Header.swift")
         let banner = try block(
-            from: "var bannerSection: some View {",
-            upTo: "var defaultBannerGradient",
+            from: "func heroBannerPaint(progress: Double) -> some View {",
+            upTo: "func livingBanner(",
             in: source
         )
         XCTAssertTrue(banner.contains("CachedAsyncImage(url: bannerURL, showsStatusOverlays: false)"),
-                      "Profile banner must suppress the retry button — it already renders defaultBannerGradient on failure.")
+                      "Profile banner must suppress the retry button — it already renders the living banner (K27) on failure.")
     }
 
     func test_communitySettingsBanner_suppressesRetryOverlay() throws {

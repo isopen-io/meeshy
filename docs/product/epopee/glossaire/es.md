@@ -81,7 +81,7 @@ El tono: se tutea (nunca «usted», nunca «vuestro»), se escribe para un chico
 - **Los veinte estados**: **Chispa** (clave `etincelle`, nunca «Brasa»), Destello, **Claridad** (clave `lumiere`, nunca «Luz»), Brillo, Rayo, Aurora, Cometa, Estrella, Constelación, Galaxia, luego Nebulosa, Púlsar, Cuásar, Supernova, Magnetar, Cúmulo, Supercúmulo, Cosmos, Infinito, Singularidad.
 - **La prueba**: cada diez niveles, de 10 a 100, los ancestros piden una prueba (una Meesh, un sueño, una Llama, un rango). Mientras no se supere, la luz espera.
 - **El rango abre la luz**: la Supernova es el límite bajo Embajador, Embajador abre hasta la Singularidad, Oráculo levanta todo límite.
-- **A**: anillo «34» · Brillo; «Nivel 34».
+- **A**: anillo «34» · Brillo; «Nivel 34». Leídos en voz alta, la banda y el anillo dicen «Tu luz en el nivel 34» (#19892).
 - **B**: «Tu luz brilla en Brillo», y en pequeño «nivel 34 · 3200 chispas hasta el nivel 35».
 - **Prohibidas**: «faltan N para el nivel X» → «N chispas hasta el nivel X»; «tramo», «etapa» → «estado», «prueba»; «récord de nivel» → «tu luz más alta».
 

@@ -72,6 +72,7 @@ internal object ComposerRetouchCopy {
         CallFaceEffect.ANGEL -> R.string.retouch_effect_angel
         CallFaceEffect.DEMON -> R.string.retouch_effect_demon
         CallFaceEffect.VOLCANO -> R.string.retouch_effect_volcano
+        CallFaceEffect.BABY -> R.string.retouch_effect_baby
     }
 
     /** Le nom d'une case : le filtre, l'effet (`call.effects.face.*`), le classique ou le nom du cadre. */

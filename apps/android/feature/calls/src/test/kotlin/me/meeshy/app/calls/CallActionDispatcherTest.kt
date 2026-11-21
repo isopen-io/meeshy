@@ -90,14 +90,14 @@ class CallActionDispatcherTest {
     @Test
     fun `offered actions follow the vocabulary order, not the registration order`() {
         val dispatcher = dispatcherOf(
-            CallAction.Journal to FakeHandler(),
+            CallAction.Capture to FakeHandler(),
             CallAction.Effects to FakeHandler(),
             CallAction.Captions to FakeHandler(),
         )
 
         val offered = dispatcher.offered(state()).map { it.action }
 
-        assertThat(offered).containsExactly(CallAction.Effects, CallAction.Captions, CallAction.Journal).inOrder()
+        assertThat(offered).containsExactly(CallAction.Effects, CallAction.Captions, CallAction.Capture).inOrder()
     }
 
     @Test
@@ -134,13 +134,13 @@ class CallActionDispatcherTest {
     @Test
     fun `one handler never affects another`() {
         val react = FakeHandler()
-        val journal = FakeHandler()
-        val dispatcher = dispatcherOf(CallAction.React to react, CallAction.Journal to journal)
+        val capture = FakeHandler()
+        val dispatcher = dispatcherOf(CallAction.React to react, CallAction.Capture to capture)
 
-        dispatcher.dispatch(CallAction.Journal)
+        dispatcher.dispatch(CallAction.Capture)
 
         assertThat(react.performed).isEqualTo(0)
-        assertThat(journal.performed).isEqualTo(1)
+        assertThat(capture.performed).isEqualTo(1)
     }
 
     @Test

@@ -7,7 +7,14 @@
 import type { NotificationActor, NotificationType } from '@meeshy/shared/types/notification';
 import type { NotificationContentCategory } from '@meeshy/shared/types/notification-content-detail';
 
-export { pushThreadFields } from './push-thread';
+export { loggableCollapseId, pushThreadFields } from './push-thread';
+
+/**
+ * La catégorie iOS de l'ALERTE DE SÉCURITÉ (la chute détectée, #18748) et de sa levée : un push
+ * SEUL, sans ligne `Notification`, que `pushCategoryForNotificationType` ne voit donc jamais passer.
+ * Son nom est NEUTRE : il traverse Apple, et rien n'y dit la santé.
+ */
+export const SAFETY_ALERT_PUSH_CATEGORY = 'MEESHY_SAFETY_ALERT';
 
 /** Les bannières qui annoncent le CONTENU d'un message — les seules qu'une catégorie de contenu concerne. */
 const CONTENT_BEARING_TYPES: ReadonlySet<NotificationType> = new Set<NotificationType>([
@@ -85,6 +92,8 @@ export function pushCategoryForNotificationType(
     case 'call_declined':
     case 'call_recording_ready':
       return 'MEESHY_CALL_MISSED';
+    case 'wellness_check':
+      return 'MEESHY_WELLNESS_CHECK';
     default:
       return undefined;
   }

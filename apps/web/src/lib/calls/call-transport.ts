@@ -17,6 +17,8 @@ export type CallTransport = {
   readonly emit: (event: string, payload: unknown) => void;
   /** Émission avec accusé ; rejette passé `timeoutMs` ou si le socket ne sait pas accuser. */
   readonly request: (event: string, payload: unknown, timeoutMs: number) => Promise<unknown>;
+  /** Abandonner la connexion, même « connectée », et rouvrir aussitôt (#19776) ; absent là où il n'y a rien à recycler. */
+  readonly reconnect?: () => void;
 };
 
 export type CallEventListener = (event: string, payload: unknown) => void;

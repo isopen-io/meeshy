@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profile_state_error_title">Impossible d\'ouvrir cette fiche pour l\'instant</string>
+    <string name="profile_state_error_message">Ta connexion va bien. Le souci vient de nous, et il passe vite.</string>
+    <string name="profile_state_offline_title">Tu es hors ligne</string>
+    <string name="profile_state_offline_message">Cette fiche s\'ouvrira dès que tu seras de nouveau connecté.</string>
+    <string name="profile_state_nobody_title">Personne ici</string>
+    <string name="profile_state_nobody_message">Ce profil n\'existe pas, ou il n\'est pas visible pour toi.</string>
+    <string name="profile_state_nobody_back">Retour</string>
+    <string name="profile_state_cached_message">Hors ligne · dernière fiche enregistrée</string>
+    <string name="profile_report_sheet_title">Signaler %1$s</string>
+    <string name="profile_report_sheet_hint">C\'est anonyme. Notre équipe le lit sous 24 h.</string>
+    <string name="profile_report_sheet_question">Que se passe-t-il ?</string>
+    <string name="profile_report_also_block">Bloquer %1$s aussi</string>
+    <string name="profile_report_send">Signaler</string>
+</resources>

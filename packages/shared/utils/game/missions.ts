@@ -38,7 +38,7 @@ import { EXTRA_ENGAGEMENT_OPERATIONS, type EngagementOperationKey } from '../../
 import { dayNumber, fnv1a, pickIndex, seededRng } from './day-prng.js';
 import { flameBonusPercent } from './flame.js';
 import { gloryForMission } from './glory.js';
-import { GAME_LEVEL_MIN } from './levels.js';
+import { GAME_LEVEL_MIN, levelThreshold } from './levels.js';
 import {
   MISSION_FACT_SIGNALS,
   MISSION_TEMPLATES,
@@ -98,8 +98,30 @@ export const missionTemplatesFor = (difficulty: MissionDifficulty): readonly Mis
 export const missionAvailableFor = (template: MissionTemplate, profile: MissionProfile | undefined): boolean =>
   profile === undefined || (template.requires ?? []).every((capability) => profile.capabilities.includes(capability));
 
-/** Les missions du jour s'ouvrent au niveau 5. */
+/** Le Rêve complet — trois actes, le changement d'un acte et la mission personnelle — s'ouvre au niveau 5. */
 export const MISSIONS_MIN_LEVEL = 5;
+/** Les actes du Rêve complet : facile, moyen, difficile (ou d'Or). */
+export const FULL_DREAM_ACTS = 3;
+/** Sous le niveau 5, le premier Rêve tient en un acte (#17370). */
+export const FIRST_DREAM_ACTS = 1;
+
+/** Les étincelles qui manquent avant le Rêve complet, comptées sur la base du niveau. */
+export const fullDreamIn = (levelSparks: number): number => {
+  const sparks = Number.isFinite(levelSparks) ? Math.max(0, Math.trunc(levelSparks)) : 0;
+  return Math.max(0, levelThreshold(MISSIONS_MIN_LEVEL) - sparks);
+};
+
+/**
+ * Le Rêve du jour est-il tiré EN ENTIER ? Ses trois actes, ou l'acte unique du premier Rêve, posé seul à
+ * l'emplacement 0. La passerelle écrit un tirage complet de l'emplacement 2 vers l'emplacement 0 : un tirage
+ * interrompu ne laisse donc jamais l'emplacement 0 seul. La forme du Rêve se fige au tirage — un joueur qui
+ * passe le niveau 5 dans la journée garde son Rêve d'un acte jusqu'au lendemain. La mission personnelle
+ * (emplacement 3) n'en fait pas partie.
+ */
+export const isDreamWhole = (slots: readonly number[]): boolean => {
+  const acts = new Set(slots.filter((slot) => slot >= 0 && slot < FULL_DREAM_ACTS));
+  return acts.size === FULL_DREAM_ACTS || (acts.size === FIRST_DREAM_ACTS && acts.has(0));
+};
 /** Changer une mission : une Meesh, une fois par jour, même difficulté. */
 /**
  * Une journée de jeu (missions et coffre) ne s'ouvre pas moins de 20 h après
@@ -312,6 +334,15 @@ export function drawDailyMissions(input: MissionDrawInput): DailyMissionDraw {
     prismDay,
     missions: (['easy', 'medium', topDifficulty] as const).flatMap((d) => byDifficulty.get(d) ?? []),
   };
+}
+
+/**
+ * Le premier Rêve (#17370) : l'acte facile du tirage complet, au même emplacement. Rien n'est tiré à part, donc
+ * la graine, le jour du Prisme et l'objectif sont ceux du tirage complet.
+ */
+export function drawFirstDream(input: MissionDrawInput): DailyMissionDraw {
+  const full = drawDailyMissions(input);
+  return { ...full, missions: full.missions.filter((mission) => mission.difficulty === 'easy').slice(0, FIRST_DREAM_ACTS) };
 }
 
 /**

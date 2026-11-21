@@ -354,6 +354,32 @@ describe('device_unreachable ouvre le profil du Proche dont le téléphone est i
   });
 });
 
+describe('l’alerte de sécurité d’un Sang — la chute détectée (#18748)', () => {
+  test('`safety_alert` et sa levée ouvrent le profil du Sang quand la charge le nomme', () => {
+    expect(pushTapTarget({ type: 'safety_alert', senderUsername: 'awa' })).toEqual({ route: 'userProfile', params: { username: 'awa' } });
+    expect(pushTapTarget({ type: 'safety_alert_cleared', senderUsername: 'awa' })).toEqual({ route: 'userProfile', params: { username: 'awa' } });
+  });
+
+  test('sans nom dans la charge, la bannière atterrit sur la cloche', () => {
+    expect(pushTapTarget({ type: 'safety_alert' })).toEqual({ route: 'notifications' });
+  });
+});
+
+describe('la vérification d’inactivité (#18738)', () => {
+  const sang = { id: 'u-jacques', username: 'jacques', displayName: 'Jacques', avatar: null };
+
+  test('`inactivity_alert` ouvre le profil du Sang resté sans réponse, depuis la cloche comme depuis le tap', () => {
+    expect(notificationTarget(record({ type: 'inactivity_alert', actor: sang }))).toEqual({ route: 'userProfile', params: { username: 'jacques' } });
+    expect(pushTapTarget({ type: 'inactivity_alert', senderUsername: 'jacques' })).toEqual({ route: 'userProfile', params: { username: 'jacques' } });
+  });
+
+  test('`wellness_check` ne m’ouvre pas mon propre profil : le toucher répond « Je vais bien », et la bannière atterrit sur la cloche', () => {
+    const moi = { id: 'u-moi', username: 'moi', displayName: 'Moi', avatar: null };
+    expect(notificationTarget(record({ type: 'wellness_check', actor: moi }))).toBeNull();
+    expect(pushTapTarget({ type: 'wellness_check', senderUsername: 'moi' })).toEqual({ route: 'notifications' });
+  });
+});
+
 /**
  * UN APPEL MANQUÉ SANS CONVERSATION NOMMÉE (#9177) — une invitée non membre,
  * sans DM avec l'inviteur : la passerelle ne pose aucun `conversationId`, et

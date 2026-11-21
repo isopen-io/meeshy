@@ -105,6 +105,14 @@ describe('l’accusé', () => {
     });
   });
 
+  test('l’accusé garde le démarrage nommé par la passerelle (#18580)', () => {
+    expect(readSharedLocationAck({ success: true, data: { expiresAt: '2026-11-14T09:00:00.000Z', startedAt: '2026-11-14T08:00:00.000Z' } })).toEqual({
+      kind: 'started',
+      expiresAt: Date.parse('2026-11-14T09:00:00.000Z'),
+      startedAt: '2026-11-14T08:00:00.000Z',
+    });
+  });
+
   test('chaque refus connu garde sa raison, un code inconnu vaut un échec', () => {
     expect(readSharedLocationAck({ success: false, code: 'SHARED_LOCATION_NOT_SHARING' })).toEqual({ kind: 'refused', outcome: 'not-sharing' });
     expect(readSharedLocationAck({ success: false, code: 'SHARED_LOCATION_RATE_LIMITED' })).toEqual({ kind: 'refused', outcome: 'rate-limited' });

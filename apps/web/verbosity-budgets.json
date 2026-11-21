@@ -205,7 +205,7 @@
       "firstScreen": 48
     },
     "me": {
-      "total": 105,
+      "total": 121,
       "firstScreen": 37
     },
     "me-bookmarks": {
@@ -628,15 +628,15 @@
     },
     "me": {
       "de": {
-        "total": 103,
+        "total": 116,
         "firstScreen": 37
       },
       "a": {
-        "total": 105,
+        "total": 121,
         "firstScreen": 37
       },
-      "motif": "L'entrée « Voir comme… » (ma Vitrine telle que chaque cercle la voit) tient en deux mots ; son explication est la description accessible de l'entrée, jamais une ligne de plus",
-      "issue": 18878
+      "motif": "La carte « Mon téléphone », hors du premier écran, accueille « Détection de chute · Apple Watch » (#18748, +5) : une ligne et sa source, sans titre ; où l’accord se donne (l’app iPhone) et ce qui part restent derrière un (i). La source se dit à l’écran : sans elle, un utilisateur web chercherait ici un réglage qui n’existe que sur l’iPhone",
+      "issue": 18748
     }
   }
 }

@@ -110,8 +110,8 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
 }));
 
 // ─── Import SUT after mocks ────────────────────────────────────────────────────
-
 import reactionRoutes from '../../../routes/reactions';
+import { PARTICIPATION_VIVANTE } from '../../../routes/conversations/utils/access-control';
 import { ConflictError } from '../../../errors/custom-errors';
 import { REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
 
@@ -307,7 +307,7 @@ describe('reactionRoutes', () => {
       await handler(req, reply);
 
       expect(fastify.prisma.participant.findFirst).toHaveBeenCalledWith({
-        where: { userId: USER_ID, conversationId: CONV_ID, isActive: true },
+        where: { userId: USER_ID, conversationId: CONV_ID, ...PARTICIPATION_VIVANTE },
         select: { id: true },
       });
       expect(mockAddReaction).toHaveBeenCalledWith({
@@ -1147,7 +1147,7 @@ describe('reactionRoutes', () => {
       await handler(req, reply);
 
       expect(fastify.prisma.participant.findFirst).toHaveBeenCalledWith({
-        where: { userId: USER_ID, conversationId: CONV_ID, isActive: true },
+        where: { userId: USER_ID, conversationId: CONV_ID, ...PARTICIPATION_VIVANTE },
         select: { id: true },
       });
       expect(mockGetMessageReactions).toHaveBeenCalledWith({

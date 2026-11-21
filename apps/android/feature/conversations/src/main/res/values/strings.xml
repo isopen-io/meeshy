@@ -45,4 +45,49 @@
     <string name="dashboard_action_search">Global search</string>
     <string name="global_search_hint">Search everywhere…</string>
     <string name="new_conversation_error_blocked">You can\'t start a conversation with this user.</string>
+    <string name="links_community_detail_created_at">Created on</string>
+    <string name="links_community_detail_full_link">Full link</string>
+    <string name="links_community_detail_identifier">Identifier</string>
+    <string name="links_community_detail_informations">INFORMATION</string>
+    <string name="links_community_detail_members">Members</string>
+    <string name="links_community_detail_status">Status</string>
+    <string name="links_community_identify">Identify</string>
+    <plurals name="links_community_row_subtitle">
+        <item quantity="one">%1$d member · %2$s</item>
+        <item quantity="other">%1$d members · %2$s</item>
+    </plurals>
+    <string name="links_tracking_detail_browsers">BROWSERS</string>
+    <string name="links_tracking_detail_countries">COUNTRIES</string>
+    <string name="links_tracking_detail_last_click">Last click: %1$s</string>
+    <string name="links_tracking_detail_stats_title">STATISTICS</string>
+    <string name="links_tracking_detail_stats_total_clicks">Total clicks</string>
+    <string name="links_tracking_detail_stats_unique_clicks">Unique clicks</string>
+    <plurals name="links_tracking_row_clicks">
+        <item quantity="one">%1$d click</item>
+        <item quantity="other">%1$d clicks</item>
+    </plurals>
+    <plurals name="links_tracking_row_uniques">
+        <item quantity="one">· %1$d unique</item>
+        <item quantity="other">· %1$d unique</item>
+    </plurals>
+    <string name="my_share_links_copy">Copy link</string>
+    <plurals name="my_share_links_joined_count">
+        <item quantity="one">%1$d joined</item>
+        <item quantity="other">%1$d joined</item>
+    </plurals>
+    <string name="my_share_links_status_active">Active</string>
+    <string name="my_share_links_status_inactive">Inactive</string>
+    <string name="shareLink_detail_askedOnArrival">Asked on arrival</string>
+    <string name="shareLink_detail_concurrent">At the same time</string>
+    <string name="shareLink_detail_concurrentMax">%1$d max</string>
+    <string name="shareLink_detail_configuration">Settings</string>
+    <string name="shareLink_detail_createdOn">Link created %1$s</string>
+    <string name="shareLink_detail_never">Never</string>
+    <string name="shareLink_detail_noAccountBadge">no account</string>
+    <string name="shareLink_detail_optional">Optional</string>
+    <string name="shareLink_detail_recentArrivals">Recently joined</string>
+    <string name="shareLink_detail_required">Required</string>
+    <string name="shareLink_detail_uses">Uses</string>
+    <string name="shareLink_detail_usesUnlimited">%1$d / unlimited</string>
+    <string name="share_links_copy_a11y">Copy link</string>
 </resources>

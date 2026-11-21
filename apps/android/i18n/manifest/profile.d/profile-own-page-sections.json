@@ -15,9 +15,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "profile.section.languages",
-          "status": "adopted"
+          "androidName": "profile_section_languages",
+          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -86,14 +85,12 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "profile.language.choose",
-          "status": "adopted"
+          "androidName": "profile_language_choose",
+          "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "profile.language.none",
-          "status": "adopted"
+          "androidName": "profile_language_none",
+          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -111,9 +108,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "profile.stats.a11y.hint",
-          "status": "adopted"
+          "androidName": "profile_stats_a11y_hint",
+          "status": "android-only"
         },
         {
           "catalog": "app",

@@ -140,10 +140,17 @@ describe('POST /conversations — direct-DM idempotence', () => {
     await app.close();
   });
 
-  it('reopens the MOST RECENTLY ACTIVE DM when several duplicates exist (orderBy lastMessageAt desc)', async () => {
+  it('reopens the MOST RECENTLY ACTIVE DM when several duplicates exist — le RANG, lu par ses deux flux', async () => {
     // 5 DM atabeth↔jcnm observées en prod (doublons historiques d'avant le
-    // fix) : sans orderBy, findFirst rouvrirait une DM arbitraire — celle
-    // que l'utilisateur N'UTILISE PAS. La plus récemment active gagne.
+    // fix) : sans ordre, findFirst rouvrirait une DM arbitraire — celle que
+    // l'utilisateur N'UTILISE PAS. La plus récemment active gagne.
+    //
+    // #19835 — « active » est le RANG (max(`lastMessageAt`, `lastActivityAt`),
+    // #9026), et un `max` de deux colonnes ne s'écrit pas en `orderBy` Prisma :
+    // la lecture se fait en DEUX flux bornés, chacun départagé sur `id`. Ce
+    // témoin-ci ne garde que la forme des lectures ; la ligne SERVIE, elle, est
+    // gardée par `conversation-reopen-most-recently-active.test.ts`, dont le
+    // double évalue l'ordre contre des documents en mémoire.
     const { prisma, conversationFindFirst } = createMockPrisma({ existingDirect: true });
     const app = await buildApp(prisma);
 
@@ -154,9 +161,15 @@ describe('POST /conversations — direct-DM idempotence', () => {
       payload: { type: 'direct', participantIds: [OTHER_ID] },
     });
 
-    const dedupCall = conversationFindFirst.mock.calls.find((c: any[]) => c[0]?.where?.type === 'direct');
-    expect(dedupCall).toBeDefined();
-    expect((dedupCall as any[])[0].orderBy).toEqual({ lastMessageAt: 'desc' });
+    const dedupOrders = conversationFindFirst.mock.calls
+      .filter((c: any[]) => c[0]?.where?.type === 'direct')
+      .map((c: any[]) => c[0].orderBy);
+    expect(dedupOrders).toEqual(
+      expect.arrayContaining([
+        [{ lastMessageAt: 'desc' }, { id: 'desc' }],
+        [{ lastActivityAt: 'desc' }, { id: 'desc' }],
+      ]),
+    );
 
     await app.close();
   });

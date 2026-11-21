@@ -108,6 +108,7 @@ const FAMILY_TYPES: Readonly<Record<FamilyCategory, readonly string[]>> = {
     'contact_recently_active',
     'device_battery',
     'device_unreachable',
+    'inactivity_alert',
     'STATUS_UPDATE',
   ],
   groups: [
@@ -149,6 +150,8 @@ const FAMILY_TYPES: Readonly<Record<FamilyCategory, readonly string[]>> = {
     'update_available',
     'AFFILIATE_SIGNUP',
     'content_removed',
+    /* « Tout va bien ? » (#18738) : adressée à soi, elle se relit tant qu'on n'y a pas répondu. */
+    'wellness_check',
   ],
 };
 

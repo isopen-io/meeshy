@@ -66,6 +66,10 @@ describe('règles d’appel — relations entre les délais', () => {
     expect(CALL_MAX_PARTICIPANTS).toBeLessThanOrEqual(CALL_MESH_CEILING);
   });
 
+  it('un appel de groupe réunit moins de 6 personnes (décision porteur 2026-11-18, #19650)', () => {
+    expect(CALL_MAX_PARTICIPANTS).toBe(5);
+  });
+
   it('le paquet les exporte par sa racine de types', () => {
     expect(sharedTypes.CALL_RING_TIMEOUT_MS).toBe(CALL_RING_TIMEOUT_MS);
     expect(sharedTypes.CALL_MAX_PARTICIPANTS).toBe(CALL_MAX_PARTICIPANTS);

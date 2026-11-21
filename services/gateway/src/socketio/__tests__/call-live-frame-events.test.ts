@@ -1,6 +1,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { CallControlAck } from '@meeshy/shared/types/call-controls';
+import { CALL_MAX_PARTICIPANTS } from '@meeshy/shared/types/call-rules';
 import { SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter';
 import {
   callRoomRecipients,
@@ -121,7 +122,20 @@ describe('call:frame-select — le cadre en direct part vers les autres particip
     expect(h.relayed).toHaveLength(1);
   });
 
-  describe('en groupe (3 à 6, #11279)', () => {
+  /**
+   * Le plafond se LIT dans `CALL_MAX_PARTICIPANTS`, il ne se recopie pas.
+   *
+   * `6ccc8482b4` l'a fait passer de 6 à 5 (« un appel de groupe réunit au plus
+   * 5 personnes ») sur les trois plateformes. Ce bloc énumérait `[3, 4, 5, 6]`
+   * EN DUR : le cas `6` a continué d'exiger `{ success: true }` d'une
+   * production qui refuse désormais, et il rougissait à la tête de `dev` — donc
+   * sur TOUTE PR ouverte contre elle, la suite gateway étant un seul job.
+   *
+   * > **Un témoin qui RECOPIE une constante partagée en dérive en silence**, et
+   * > il en dérive dans le sens le plus coûteux : il accuse la production d'un
+   * > défaut qui est le sien. La borne se dérive, et le cas « au-delà » aussi.
+   */
+  describe(`en groupe (3 à ${CALL_MAX_PARTICIPANTS}, #11279)`, () => {
     const GROUP_ROOM = [
       { socketId: 'sock-1', capabilities: ['call-live-frame-group'] },
       { socketId: 'sock-bob', capabilities: ['call-live-frame-group'] },
@@ -129,7 +143,12 @@ describe('call:frame-select — le cadre en direct part vers les autres particip
       { socketId: 'sock-dan', capabilities: ['call-live-frame-group'] },
     ];
 
-    it.each([3, 4, 5, 6])('à %i, le choix part à chaque membre qui sait l’afficher, jamais à l’émetteur', async (n) => {
+    const TAILLES_DE_GROUPE = Array.from(
+      { length: CALL_MAX_PARTICIPANTS - 2 },
+      (_, index) => index + 3,
+    );
+
+    it.each(TAILLES_DE_GROUPE)('à %i, le choix part à chaque membre qui sait l’afficher, jamais à l’émetteur', async (n) => {
       const h = harness({ sender: { userId: 'alice', activeParticipants: n }, room: GROUP_ROOM });
 
       expect(await h.send({ callId: CALL, frameId: 'jovial.fete.trio', texts: { name: 'Alice' } })).toEqual({ success: true });
@@ -169,7 +188,7 @@ describe('call:frame-select — le cadre en direct part vers les autres particip
     });
 
     it('au-delà du plafond d’un appel, aucun cadre en direct ne part', async () => {
-      const h = harness({ sender: { userId: 'alice', activeParticipants: 7 }, room: GROUP_ROOM });
+      const h = harness({ sender: { userId: 'alice', activeParticipants: CALL_MAX_PARTICIPANTS + 1 }, room: GROUP_ROOM });
 
       expect(await h.send({ callId: CALL, frameId: 'jovial.fete.trio' })).toEqual({ success: false, code: 'PERMISSION_DENIED' });
       expect(h.groupRecipients).not.toHaveBeenCalled();

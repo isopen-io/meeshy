@@ -1,12 +1,8 @@
-import { lazy, Suspense, useEffect, useId, useRef, useState, type KeyboardEvent, type PointerEvent, type WheelEvent } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type PointerEvent, type RefObject, type WheelEvent } from 'react';
 import { useStore } from 'zustand/react';
 
 import { PeerAvatar } from '@/components/peer-avatar';
 import { StreamVideo } from '@/components/call-media-elements';
-import { Glyph, GlyphSvg } from '@/components/glyph';
-import { CALL_DEVICES_GLYPHS } from '@/components/glyphs-call-devices';
-import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
-import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { MeeshyGlass, meeshyGlassRecipe } from '@/components/kit/meeshy-glass-tone';
 import { callActions } from '@/lib/calls/call-actions';
 import {
@@ -15,23 +11,25 @@ import {
   bubbleSize,
   bubbleTranslate,
   fittingTier,
+  glideBubble,
   isBubbleTap,
   nudgeBubble,
-  offersOutputChoice,
   pinchTier,
   readBubblePlacement,
+  releaseVelocity,
   snapBubble,
   wheelTier,
   writeBubblePlacement,
   type BubblePlacement,
   type BubbleTier,
+  type PointerSample,
   type Point,
   type Size,
 } from '@/lib/calls/call-bubble';
-import { browserPreferenceStorage, sinkSelectionSupported } from '@/lib/calls/call-devices';
+import { browserPreferenceStorage } from '@/lib/calls/call-devices';
 import { reducedCaption, reducedTitle } from '@/lib/calls/call-header';
 import { cachedCallNames } from '@/lib/calls/call-header-names';
-import { browserPipSupport, pipOpenStore, remoteSource, requestCallPip, shouldOfferPip } from '@/lib/calls/call-pip';
+import { pipOpenStore, remoteSource } from '@/lib/calls/call-pip';
 import { peerColor } from '@/lib/calls/call-speaker-color';
 import { callStore, elapsedSeconds, formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { callStatusKey } from '@/lib/calls/call-view';
@@ -44,17 +42,15 @@ import { initialsOf } from '@/lib/view/conversation';
  * forme repliée de l'appel, atteinte depuis la pastille (bouton ou glissement).
  * Elle porte la vidéo du pair, sinon son portrait — jamais ma vidéo (P18.3) —, se
  * déplace au doigt ou à la souris, se clipse au bord le plus proche et garde
- * sa place d'un appel à l'autre. Toucher la bulle rend l'écran d'appel ; sa
- * barre garde le micro, l'image dans l'image et raccrocher à portée — le
- * reste de l'application reste utilisable dessous.
+ * sa place d'un appel à l'autre. Toucher la bulle rend l'écran d'appel —
+ * le reste de l'application reste utilisable dessous.
  *
  * #8145 — trois tailles, au pincement, à Ctrl + molette et aux touches + / −.
  * #8164 — un écran partagé s'y voit ENTIER, sur le fond neutre de la bulle.
- * #9097 — « Sortie audio » y est aussi, là où
- * le choix de sortie existe, comme le bouton haut-parleur de la bulle iOS.
+ * #19696 — aucun bouton d'appel : la personne (sa vidéo, sinon son portrait)
+ * et « nom · durée ». Micro, sortie, image dans l'image et raccrocher vivent
+ * dans l'écran d'appel, comme sur iOS.
  */
-
-const CallDevicesSheet = lazy(() => import('./call-devices-sheet').then((module) => ({ default: module.CallDevicesSheet })));
 
 /* Les marges que la bulle ne recouvre jamais : l'en-tête d'un écran (et ses
    boutons d'appel) en haut, le champ d'écriture et le barreau en bas — 114
@@ -69,10 +65,6 @@ const AWAY_FADE = 'opacity 200ms ease-out';
 const AVATAR: Readonly<Record<BubbleTier, number>> = { small: 48, medium: 60, large: 72 };
 
 const distance = ([a, b]: readonly Point[]): number => (a === undefined || b === undefined ? 0 : Math.hypot(a.x - b.x, a.y - b.y));
-
-function outputChoiceHere(): boolean {
-  return offersOutputChoice({ shell: __SHELL__, sinks: typeof HTMLMediaElement !== 'undefined' && sinkSelectionSupported(HTMLMediaElement) });
-}
 
 function useViewport(): Size {
   const read = (): Size => (typeof window === 'undefined' ? { width: 390, height: 844 } : { width: window.innerWidth, height: window.innerHeight });
@@ -104,6 +96,43 @@ function BubbleCaption({ call }: { readonly call: ActiveCall }) {
   );
 }
 
+/**
+ * #19701 — la vignette se tient dans la COUCHE SUPÉRIEURE du navigateur (popover manuel) : une feuille ouverte en
+ * modale (`showModal`, la visionneuse, les feuilles du kit) ne la recouvre plus. La couche supérieure empile dans
+ * l'ordre d'entrée : à chaque modale qui s'ouvre, la vignette y rentre de nouveau, par-dessus. Sans l'API, ou si le
+ * navigateur la refuse, elle reste à l'étage de l'appel (`CALL_LAYER_Z`), au-dessus de toute la page.
+ */
+function useTopLayer(ref: RefObject<HTMLDivElement | null>): void {
+  useEffect(() => {
+    const element = ref.current;
+    if (element === null || typeof element.showPopover !== 'function' || typeof MutationObserver === 'undefined') {
+      element?.removeAttribute('popover');
+      return;
+    }
+    const lift = () => {
+      try {
+        if (element.matches(':popover-open')) element.hidePopover();
+        element.showPopover();
+      } catch {
+        element.removeAttribute('popover');
+      }
+    };
+    lift();
+    const observer = new MutationObserver((records) => {
+      if (records.some((record) => record.target !== element && record.target instanceof HTMLDialogElement && record.target.open)) lift();
+    });
+    observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['open'] });
+    return () => {
+      observer.disconnect();
+      try {
+        if (element.matches(':popover-open')) element.hidePopover();
+      } catch {
+        /* déjà hors du document */
+      }
+    };
+  }, [ref]);
+}
+
 export function CallBubble({ call, away = false }: { readonly call: ActiveCall; readonly away?: boolean }) {
   const language = currentInterfaceLanguage();
   const hintId = useId();
@@ -111,20 +140,19 @@ export function CallBubble({ call, away = false }: { readonly call: ActiveCall; 
   const [placement, setPlacement] = useState<BubblePlacement>(() => readBubblePlacement(browserPreferenceStorage()));
   const [drag, setDrag] = useState<Point | null>(null);
   const [pinch, setPinch] = useState<number | null>(null);
-  const [devicesOpen, setDevicesOpen] = useState(false);
   const start = useRef<Point | null>(null);
+  const trail = useRef<readonly PointerSample[]>([]);
+  const frame = useRef<HTMLDivElement | null>(null);
+  useTopLayer(frame);
   const dragged = useRef(false);
   const pointers = useRef<ReadonlyMap<number, Point>>(new Map());
   const pinchFrom = useRef(0);
   const wheel = useRef(0);
   const source = remoteSource(call);
   const tint = peerColor(call);
-  const offerPip = shouldOfferPip(call, browserPipSupport());
-  const offerOutput = outputChoiceHere();
   const kind = source === null ? 'portrait' : 'video';
-  const controls = 2 + (offerPip ? 1 : 0) + (offerOutput ? 1 : 0);
-  const tier = fittingTier(placement.tier, viewport, INSETS, (candidate) => bubbleSize(kind, candidate, controls));
-  const size = bubbleSize(kind, tier, controls);
+  const tier = fittingTier(placement.tier, viewport, INSETS, (candidate) => bubbleSize(kind, candidate));
+  const size = bubbleSize(kind, tier);
   const origin = bubbleOrigin(placement, viewport, INSETS, size);
 
   const place = (next: BubblePlacement) => {
@@ -144,6 +172,7 @@ export function CallBubble({ call, away = false }: { readonly call: ActiveCall; 
       return;
     }
     start.current = { x: event.clientX, y: event.clientY };
+    trail.current = [{ x: event.clientX, y: event.clientY, t: event.timeStamp }];
     dragged.current = false;
   };
   const onPointerMove = (event: PointerEvent<HTMLButtonElement>) => {
@@ -154,6 +183,7 @@ export function CallBubble({ call, away = false }: { readonly call: ActiveCall; 
     }
     if (start.current === null) return;
     const moved = { x: event.clientX - start.current.x, y: event.clientY - start.current.y };
+    trail.current = [...trail.current.slice(-5), { x: event.clientX, y: event.clientY, t: event.timeStamp }];
     if (!dragged.current && isBubbleTap(moved)) return;
     dragged.current = true;
     setDrag(moved);
@@ -169,7 +199,10 @@ export function CallBubble({ call, away = false }: { readonly call: ActiveCall; 
     start.current = null;
     setDrag(null);
     if (moved === null || !dragged.current) return;
-    place({ ...placement, ...snapBubble({ x: origin.left + moved.x + size.width / 2, y: origin.top + moved.y + size.height / 2 }, viewport, INSETS, size) });
+    /* #19701 — l'élan du lâcher emporte la vignette, puis le bord le plus proche la reçoit, en glissant. */
+    const glided = glideBubble(moved, releaseVelocity(trail.current));
+    trail.current = [];
+    place({ ...placement, ...snapBubble({ x: origin.left + glided.x + size.width / 2, y: origin.top + glided.y + size.height / 2 }, viewport, INSETS, size) });
   };
   const onClick = () => {
     if (dragged.current) {
@@ -197,6 +230,8 @@ export function CallBubble({ call, away = false }: { readonly call: ActiveCall; 
       <div
         role="group"
         aria-label={`${call.title} · ${translate(language, 'call.bubble.ongoing')}`}
+        ref={frame}
+        popover="manual"
         className={`fixed z-[190] flex flex-col overflow-hidden rounded-card ${BUBBLE_GLASS.className}`}
         {...BUBBLE_GLASS.attributes}
         style={{
@@ -204,6 +239,11 @@ export function CallBubble({ call, away = false }: { readonly call: ActiveCall; 
           height: size.height,
           left: 0,
           top: 0,
+          right: 'auto',
+          bottom: 'auto',
+          margin: 0,
+          padding: 0,
+          border: 0,
           translate: bubbleTranslate({ origin, drag }),
           color: 'var(--color-on-media)',
           transform: pinch === null ? undefined : `scale(${Math.min(1.6, Math.max(0.6, pinch))})`,
@@ -242,45 +282,7 @@ export function CallBubble({ call, away = false }: { readonly call: ActiveCall; 
             {`${translate(language, 'call.bubble.moveHint')}. ${translate(language, 'call.bubble.resizeHint')}`}
           </span>
         </button>
-        <div className="flex flex-wrap items-center justify-around gap-y-1 py-0.5">
-          <button
-            type="button"
-            onClick={callActions.toggleMic}
-            aria-pressed={call.micMuted}
-            aria-label={translate(language, call.micMuted ? 'call.mic.unmute' : 'call.mic.mute')}
-            className="grid size-11 place-items-center rounded-full"
-            data-call-bubble-control="mic"
-          >
-            {call.micMuted ? <GlyphSvg glyph={CALL_SCREEN_GLYPHS.microphoneSlash} size={20} /> : <Glyph name="microphone" size={20} />}
-          </button>
-          {offerOutput ? (
-            <button
-              type="button"
-              onClick={() => setDevicesOpen(true)}
-              aria-haspopup="dialog"
-              aria-expanded={devicesOpen}
-              aria-label={translate(language, 'call.devices.open')}
-              className="grid size-11 place-items-center rounded-full"
-              data-call-bubble-control="output"
-            >
-              <GlyphSvg glyph={CALL_VIEW_GLYPHS.speakerHigh} size={20} />
-            </button>
-          ) : null}
-          {offerPip ? (
-            <button type="button" onClick={requestCallPip} aria-label={translate(language, 'call.pip.enter')} className="grid size-11 place-items-center rounded-full" data-call-bubble-control="pip">
-              <GlyphSvg glyph={CALL_DEVICES_GLYPHS.pictureInPicture} size={20} />
-            </button>
-          ) : null}
-          <button type="button" onClick={callActions.hangup} aria-label={translate(language, 'call.hangup')} className="grid size-11 place-items-center rounded-full" style={{ background: 'var(--ios-error-strong)' }} data-call-bubble-control="hangup">
-            <GlyphSvg glyph={CALL_SCREEN_GLYPHS.phoneDisconnect} size={20} />
-          </button>
-        </div>
       </div>
-      {devicesOpen ? (
-        <Suspense fallback={null}>
-          <CallDevicesSheet onClose={() => setDevicesOpen(false)} />
-        </Suspense>
-      ) : null}
     </>
   );
 }

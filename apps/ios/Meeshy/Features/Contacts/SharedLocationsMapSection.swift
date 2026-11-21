@@ -8,6 +8,8 @@ import MeeshyUI
 /// entourée du cercle de flou que son émetteur a choisi.
 struct SharedLocationsMapSection: View {
     @ObservedObject var viewModel: SharedLocationsMapViewModel
+    /// « Tout voir » ouvre la carte de tous mes proches, en plein écran (#18872, planche Carte-Proches).
+    @State private var showsNearby = false
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
@@ -27,20 +29,25 @@ struct SharedLocationsMapSection: View {
             }
             .padding(.horizontal, MeeshySpacing.xl)
             .padding(.top, MeeshySpacing.md)
+            .fullScreenCover(isPresented: $showsNearby) { NearbyMapScreen() }
         }
     }
 
     private var header: some View {
         let title = String(localized: "circles.locations.title", defaultValue: "Positions partagées avec toi", bundle: .main)
         return HStack(spacing: MeeshySpacing.sm) {
-            Image(systemName: "location.circle.fill").foregroundStyle(MeeshyColors.indigo500).accessibilityHidden(true)
-            Text(title).font(.subheadline.weight(.bold)).foregroundStyle(theme.textPrimary)
-            Text("\(viewModel.pins.count)").font(.caption.weight(.semibold)).foregroundStyle(theme.textMuted)
+            HStack(spacing: MeeshySpacing.sm) {
+                Image(systemName: "location.circle.fill").foregroundStyle(MeeshyColors.indigo500).accessibilityHidden(true)
+                Text(title).font(.subheadline.weight(.bold)).foregroundStyle(theme.textPrimary)
+                Text("\(viewModel.pins.count)").font(.caption.weight(.semibold)).foregroundStyle(theme.textMuted)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityLabel("\(title), \(viewModel.pins.count)")
             Spacer()
+            MeeshyButton(LocationMapCopy.nearbyOpen, systemImage: "map", kind: .text, size: .s36,
+                         action: { showsNearby = true })
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
-        .accessibilityLabel("\(title), \(viewModel.pins.count)")
     }
 }
 
@@ -102,8 +109,8 @@ struct SharedLocationsMapRepresentable: UIViewRepresentable {
                 withIdentifier: MKMapViewDefaultAnnotationViewReuseIdentifier,
                 for: annotation
             ) as? MKMarkerAnnotationView
-            view?.glyphText = pin.initials
-            view?.markerTintColor = UIColor(pin.presence?.dotColor ?? MeeshyColors.indigo500)
+            view?.glyphText = pin.circleIcon ?? pin.initials
+            view?.markerTintColor = UIColor(pin.circle.map(CircleLevelColor.color(for:)) ?? pin.presence?.dotColor ?? MeeshyColors.indigo500)
             view?.titleVisibility = .adaptive
             view?.displayPriority = .required
             view?.isAccessibilityElement = true
@@ -141,13 +148,16 @@ enum SharedLocationsMapRegion {
     }
 }
 
-/// Une épingle : la position servie, le nom en titre, la précision et l'échéance en sous-titre.
+/// Une épingle : la position servie, le nom en titre, la précision et l'échéance en sous-titre ; l'icône et la couleur
+/// du cercle servi quand il y en a un (#17013), sinon les initiales sur la couleur de présence.
 private final class SharedLocationAnnotation: NSObject, MKAnnotation {
     nonisolated deinit {}
     let coordinate: CLLocationCoordinate2D
     let title: String?
     let subtitle: String?
     let initials: String
+    let circleIcon: String?
+    let circle: RelationLevel?
     let presence: PresenceState?
     let spokenLabel: String
 
@@ -156,6 +166,8 @@ private final class SharedLocationAnnotation: NSObject, MKAnnotation {
         title = pin.name
         subtitle = pin.detail
         initials = pin.initials
+        circleIcon = pin.circleIcon
+        circle = pin.circle
         presence = pin.presence
         spokenLabel = pin.accessibilityLabel
     }

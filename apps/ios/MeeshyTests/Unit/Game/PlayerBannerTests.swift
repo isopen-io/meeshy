@@ -88,11 +88,13 @@ final class PlayerBannerTests: XCTestCase {
     func test_theSentenceReadsEveryPiece_inTheOrderOfTheBanner() {
         let banner = completeBanner()
         let label = PlayerBannerCopy.accessibilityLabel(for: banner)
+        let rank = GameCopy.rankLabel(banner.rank?.rank ?? .murmure, division5: banner.rank?.division, mythic: banner.rank?.mythic)
+        XCTAssertTrue(label.hasPrefix(rank), "le rang ouvre la phrase (#19705) : \(label)")
         let order = [
-            GameText.bannerLevel(level: GameCopy.formatCount(banner.level)),
+            rank,
+            GameText.bannerLight(level: GameCopy.formatCount(banner.level)),
             GameCopy.tierName(banner.tier),
             GameCopy.meeshes(banner.meeshes ?? 0),
-            GameCopy.rankLabel(banner.rank?.rank ?? .murmure, division5: banner.rank?.division, mythic: banner.rank?.mythic),
             GameText.leagueName(banner.league?.league ?? .quartz),
             GameCopy.days(banner.flame?.days ?? 0),
         ]
@@ -103,6 +105,15 @@ final class PlayerBannerTests: XCTestCase {
             if let found { cursor = found.upperBound }
         }
         XCTAssertFalse(label.contains("game2."), "une clé brute : \(label)")
+    }
+
+    /// #19892 (#17394) : le niveau se présente comme « ta lumière », jamais comme un chiffre nu.
+    func test_theLevelIsSaidAsTheLight_neverAsABareLevel() {
+        let label = PlayerBannerCopy.accessibilityLabel(for: completeBanner())
+        let level = GameCopy.formatCount(completeBanner().level)
+        XCTAssertNotEqual(GameText.bannerLight(level: level), GameText.bannerLevel(level: level))
+        XCTAssertTrue(label.contains(GameText.bannerLight(level: level)), label)
+        XCTAssertFalse(label.contains(GameText.bannerLevel(level: level)), "le niveau ne se dit plus nu : \(label)")
     }
 
     func test_aNewPlayer_sentenceSaysOnlyTheLevelTheTierAndTheGauge() {
@@ -121,7 +132,7 @@ final class PlayerBannerTests: XCTestCase {
         let banner = try XCTUnwrap(GamePlayerBanner.make(game: GameFixture.game(score: 25, glory: 0, held: 0, flameDays: 0, flameStatus: .none)))
         XCTAssertFalse(banner.showsLevel)
         let label = PlayerBannerCopy.accessibilityLabel(for: banner)
-        XCTAssertFalse(label.contains(GameText.bannerLevel(level: GameCopy.formatCount(1))), "le niveau 1 ne se détaille pas : \(label)")
+        XCTAssertFalse(label.contains(GameText.bannerLight(level: GameCopy.formatCount(1))), "le niveau 1 ne se détaille pas : \(label)")
         XCTAssertTrue(label.contains(GameCopy.formatCount(banner.score)), "les points gagnés se disent : \(label)")
     }
 
@@ -429,9 +440,22 @@ final class PlayerBannerTests: XCTestCase {
 
     // MARK: - À l'ouverture seulement, et seulement ce qui a du sens (#9536)
 
-    /// Un joueur qui n'a rien fait : niveau 1, aucun point, aucune Meesh, aucune Gloire, aucune Flamme.
+    /// Un joueur qui n'a rien fait : niveau 1, aucun point, aucune Meesh, aucune Gloire, aucune Flamme — et aucun acte servi
+    /// (serveur antérieur à #17370 : le premier Rêve a ses propres témoins).
     private func emptyBlock() -> GameBlock {
-        GameFixture.game(score: 0, glory: 0, held: 0, flameDays: 0, flameStatus: .none)
+        GameFixture.game(score: 0, glory: 0, held: 0, flameDays: 0, flameStatus: .none, missions: [])
+    }
+
+    func test_aNewPlayer_seesThePieceOfTheirFirstDream() async {
+        let first = GameFixture.game(score: 25, glory: 0, held: 0, flameDays: 0, flameStatus: .none,
+                                     missions: [GameFixture.mission(id: "m0")], rerollAvailable: false)
+        let source = FakeSource()
+        source.cachedBlock = first
+        source.fetchedBlock = first
+        let sut = store(source)
+        await sut.activate()
+        XCTAssertEqual(sut.banner?.dailyMission, GamePlayerBanner.DailyMission(done: 0, total: 1),
+                       "le premier Rêve (#17370) a sa pièce, « 0 sur 1 », dès les premières étincelles")
     }
 
     func test_aPlayerWhoDidNothingYet_hasNoBannerAtAll() async {

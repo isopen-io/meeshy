@@ -167,6 +167,10 @@ export function registerAgentConfigsRoutes(fastify: FastifyInstance, deps: Agent
         fastify.prisma.conversation.findMany({
           where: conversationWhere,
           select: { id: true, title: true, type: true },
+          // #19835 — RESTE sur `lastMessageAt` (décision) : même raison que la
+          // supervision des communautés, c'est le trafic de messages d'une
+          // conversation outillée qui intéresse l'administration, pas son rang
+          // de liste.
           orderBy: { lastMessageAt: 'desc' },
           skip,
           take: limitNum,

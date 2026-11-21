@@ -14,6 +14,10 @@ struct ProfileOwnAvatar: View {
     let accentColor: String
     /// En édition, le crayon occupe le coin de la pastille.
     let isEditing: Bool
+    /// Le diamètre que l'en-tête repliable (K28) lui donne : 112 sous la bannière, 36 dans la barre (#19589).
+    var size: CGFloat = ProfileOwnAvatar.size
+    /// Le cadre équipé se pose ici, sauf quand l'hôte le pose lui-même hors d'un conteneur qui découpe (#19925).
+    var wearsRing = true
 
     @Environment(\.meeshyMoodEmojiResolver) private var moodEmojiResolver
     @Environment(\.meeshyMoodTapResolver) private var moodTapResolver
@@ -28,23 +32,37 @@ struct ProfileOwnAvatar: View {
         let mood = Self.shownMood(moodEmojiResolver?(userId), isEditing: isEditing)
         MeeshyAvatar(
             name: user?.displayName ?? user?.username ?? "?",
-            context: .profileBanner,
+            context: .custom(size),
             accentColor: accentColor,
             secondaryColor: MeeshyColors.indigo300Hex,
             avatarURL: user?.avatar,
             moodEmoji: mood,
             onMoodTap: mood == nil ? nil : moodTapResolver?(userId)
         )
-        .avatarRing(ring, avatarSize: Self.size, decorRoom: AvatarRingLayout.fullSpill(ring, box: Self.size * 100 / 84))
+        .modifier(ProfileOwnRing(ring: wearsRing ? ring : nil, size: size))
     }
 
     static let size: CGFloat = AvatarContext.profileBanner.size
 
-    private var ring: AvatarRingDesign? { ProfileDecorResolver.ring(user?.profileDecor?.avatarRing) }
+    private var ring: AvatarRingDesign? { Self.ring(of: user) }
 
-    /// #15157 — ce que le cadre illustré peint sous l'avatar : l'écran le réserve avant le nom.
+    static func ring(of user: MeeshyUser?) -> AvatarRingDesign? {
+        ProfileDecorResolver.ring(user?.profileDecor?.avatarRing)
+    }
+
+    /// Ce que le cadre peint sous un avatar de `avatarSize` (#19988) : l'écran le réserve avant le nom.
     /// Vers le haut, le cadre déborde sur la bannière ; sur les côtés, l'écran est libre.
-    static func reserveBelow(_ user: MeeshyUser?) -> CGFloat {
-        AvatarRingLayout.paintBeyondAvatar(ProfileDecorResolver.ring(user?.profileDecor?.avatarRing), avatarSize: size)
+    static func reserveBelow(_ user: MeeshyUser?, avatarSize: CGFloat) -> CGFloat {
+        AvatarRingGeometry.spill(ring(of: user), avatarSize: avatarSize)
+    }
+}
+
+/// Le cadre équipé, à la taille normalisée de tous les avatars décorés (#19988).
+struct ProfileOwnRing: ViewModifier {
+    let ring: AvatarRingDesign?
+    let size: CGFloat
+
+    func body(content: Content) -> some View {
+        content.avatarRing(ring, avatarSize: size)
     }
 }

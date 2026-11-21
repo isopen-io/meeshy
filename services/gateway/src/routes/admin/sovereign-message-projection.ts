@@ -77,6 +77,7 @@
 import { Prisma } from '@meeshy/shared/prisma/client';
 import { withoutCallSummaryParticipants } from '@meeshy/shared/utils/call-summary';
 import { MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
+import { servedAttachmentTranslations } from '../../services/attachments/servedAttachmentTranslations';
 import {
   transformTranslationsToArray,
   type MessageTranslationJSON,
@@ -439,7 +440,8 @@ export function servedAttachment(piece: SovereignAttachmentRow, messageProtege: 
     // des traductions de MESSAGE dit « résolu, rien à servir » sur un champ que
     // le contrat déclare requis.
     transcription: protegee ? undefined : piece.transcription,
-    translations: protegee ? undefined : piece.translations,
+    // #19672 — la piste sort sans son chemin disque (`path`), que la base garde.
+    translations: protegee ? undefined : servedAttachmentTranslations(piece.translations),
     metadata: protegee ? undefined : piece.metadata,
   };
 }

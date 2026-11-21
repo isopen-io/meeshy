@@ -50,6 +50,10 @@ data class ActiveCallParticipant(
     val user: ActiveCallParticipantUser? = null,
     /** Set once the participant left the call (iOS `hasLeft`); a present member has none. */
     val leftAt: String? = null,
+    /** The member's microphone as the gateway last knew it (`isAudioEnabled` flattened); absent from older payloads. */
+    val isMuted: Boolean? = null,
+    /** The member's camera as the gateway last knew it (`isVideoEnabled` flattened); absent from older payloads. */
+    val isVideoOff: Boolean? = null,
 ) {
     val hasLeft: Boolean get() = leftAt != null
 }

@@ -24,6 +24,11 @@ const frEngagement = {
   'engagement.card.open': 'Voir le jeu',
   'engagement.card.hide': 'Masquer la flamme',
   'engagement.card.title': 'Dans cette conversation',
+  'engagement.act.easy': 'Acte I',
+  'engagement.act.medium': 'Acte II',
+  'engagement.act.hard': 'Acte III',
+  'engagement.act.gold': 'Acte d’or',
+  'engagement.act.advance': '{act} · {progress} sur {target}',
 } as const;
 
 export default frEngagement;

@@ -338,6 +338,18 @@ export function PlayerBanner({
         <span aria-hidden="true" data-player-banner-watermark="" className="pointer-events-none absolute -end-4 -top-6 opacity-[0.12]" style={{ color: tint }}>
           <Signature size={120} color="currentColor" />
         </span>
+        {model.rank === null ? null : (
+          <PieceLink concept="glory" label={names.rank} className={large ? 'max-w-full' : 'min-w-16 flex-1'}>
+            <span
+              aria-hidden="true"
+              data-player-banner-rank={`${model.rank.rank}/${model.rank.division ?? 0}/${model.rank.mythic?.edition ?? 0}`}
+              className="flex min-w-0 flex-1 items-center gap-1.5"
+            >
+              <RankBlason rank={model.rank.rank} division={model.rank.division} mythic={model.rank.mythic} size={24} />
+              <RankGauge rank={model.rank} roll={motion.roll} />
+            </span>
+          </PieceLink>
+        )}
         {level === null ? null : (
           <>
             <PieceLink concept="level" label={names.level}>
@@ -408,18 +420,6 @@ export function PlayerBanner({
               </span>
             )}
           </span>
-        )}
-        {model.rank === null ? null : (
-          <PieceLink concept="glory" label={names.rank} className={large ? 'max-w-full' : 'min-w-16 flex-1'}>
-            <span
-              aria-hidden="true"
-              data-player-banner-rank={`${model.rank.rank}/${model.rank.division ?? 0}/${model.rank.mythic?.edition ?? 0}`}
-              className="flex min-w-0 flex-1 items-center gap-1.5"
-            >
-              <RankBlason rank={model.rank.rank} division={model.rank.division} mythic={model.rank.mythic} size={24} />
-              <RankGauge rank={model.rank} roll={motion.roll} />
-            </span>
-          </PieceLink>
         )}
         {!large || model.trophies === null ? null : (
           <PieceLink concept="showcase" label={names.trophies}>

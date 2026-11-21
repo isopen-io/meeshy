@@ -170,6 +170,10 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/MediaHub/ConversationMediaHubView.swift",
         "apps/ios/Meeshy/Features/Profile/Views/ParticipantProfileSheet.swift",  // 43
         "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift",  // 37
+        // Le chargement des champs, l'enregistrement et l'envoi des images ont quitté `ProfileView.swift` pour la taille : leurs clés suivent.
+        "apps/ios/Meeshy/Features/Profile/Views/ProfileView+Persistence.swift",
+        // #19589 — l'en-tête de ma vitrine (K28) : ses libellés vivent dans son plan de valeurs.
+        "apps/ios/Meeshy/Features/Profile/Views/ProfileOwnHeroPlan.swift",
         // #14056 — les règles pures de l'éditeur (refus d'identité compris) ont
         // quitté `ProfileView.swift` pour la taille : leurs clés suivent.
         "apps/ios/Meeshy/Features/Profile/Views/MeeshyUser+ProfileEdits.swift",
@@ -183,7 +187,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Profile/Views/ProfileSavedContentRows.swift",
         "apps/ios/Meeshy/Features/Profile/Views/ProfileContactSection.swift",
         "apps/ios/Meeshy/Features/Profile/Views/ProfileIdentitySection.swift",
-        "apps/ios/Meeshy/Features/Profile/Views/ProfileLanguageRow.swift",
+        // #19534 — les langues du Prisme quittent la rangée maison pour leur section K52 : leurs clés suivent.
+        "apps/ios/Meeshy/Features/Profile/Views/ProfilePrismLanguages.swift",
+        "apps/ios/Meeshy/Features/Profile/Views/ProfilePrismLanguagesSection.swift",
         "apps/ios/Meeshy/Features/Profile/Views/ProfileMembershipLine.swift",
         "apps/ios/Meeshy/Features/Settings/Views/VoiceProfileManageView.swift",  // 34
         "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift",  // 32
@@ -197,6 +203,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/ConversationLockSheet.swift",  // 30
         "apps/ios/Meeshy/Features/Settings/Views/AboutView.swift",  // 28
         "apps/ios/Meeshy/Features/Links/Views/TrackingLinkDetailView.swift",  // 24
+        // #18871 — le détail d'un lien de suivi passé au kit : ses mots ont quitté la vue pour leur table.
+        "apps/ios/Meeshy/Features/Links/Views/TrackingLinkDetailView+Copy.swift",
         "apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift",  // 22
         // #13864 — la surface document est partie ; « Texte du post » la remplace au socle.
         "apps/ios/Meeshy/Features/Composer/ComposerPostTextPill.swift",
@@ -396,8 +404,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/ConversationMediaFilmstrip.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/HashtagResultsView.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonFeedPost.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonLinkRow.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonProfileHeader.swift",  // 1
+        "apps/ios/Meeshy/Features/Links/Views/LinksPageTickets.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/Skeletons/ProfileVitrineSkeleton.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonStoryThumb.swift",  // 1
         "apps/ios/Meeshy/Features/Stories/Views/StoryLocationReaderTapOverlay.swift",  // 1
         // 268i (#4308) — les 105 écrans débloqués par la RÉCONCILIATION des
@@ -470,6 +478,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Share/ShareSheetCopy.swift",
         "apps/ios/Meeshy/Features/Share/ShareContentZone.swift",
         "apps/ios/Meeshy/Features/Navigation/Router.swift",  // 27
+        "apps/ios/Meeshy/Features/Navigation/Router+DeepLinks.swift",
         "apps/ios/Meeshy/Features/Main/Components/EffectsPickerView.swift",  // 24
         "apps/ios/Meeshy/Features/Links/Views/CreateTrackingLinkView.swift",  // 24
         "apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift",  // 10
@@ -585,6 +594,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Links/Views/AffiliateCreateView.swift",  // 12
         "apps/ios/Meeshy/Features/Main/Views/NewConversationView.swift",  // 12
         "apps/ios/Meeshy/Features/Links/Views/CommunityLinkDetailView.swift",  // 11
+        // #18871 — la fiche d'un lien de communauté passée au kit : ses mots ont quitté la vue pour leur table.
+        "apps/ios/Meeshy/Features/Links/Views/CommunityLinkDetailCopy.swift",
         "apps/ios/Meeshy/Features/Main/Components/LocationPickerView.swift",  // 10
         // #16901 — la carte du bas a quitté le sélecteur de lieu avec ses trois clés.
         "apps/ios/Meeshy/Features/Main/Components/LocationPickerBottomCard.swift",  // 3
@@ -985,6 +996,16 @@ final class LocalizationConsistencyTests: XCTestCase {
         XCTAssertEqual(localizedCalls(in: labelled).map(\.isModuleBundle), [true],
                        "le paramètre se remplit sous son ÉTIQUETTE (`in: .module`), pas sous son nom")
         XCTAssertEqual(localizedCalls(in: labelled + "\nlet b = failed(in: .main)").map(\.isModuleBundle), [false])
+
+        let fallback = """
+        static func spoken(bundle: Bundle? = nil) -> String { name(bundle: bundle ?? .module) }
+        static func name(bundle: Bundle) -> String {
+            String(localized: "cle.sdk", defaultValue: "A", bundle: bundle)
+        }
+        """
+        XCTAssertEqual(localizedCalls(in: fallback).map(\.isModuleBundle), [true],
+                       "le kit remplit le paramètre par `bundle ?? .module` : c'est le catalogue du SDK")
+        XCTAssertEqual(localizedCalls(in: fallback + "\nlet b = name(bundle: x ?? .main)").map(\.isModuleBundle), [false])
     }
 
     /// Keys with at least one locale expressed as plural variations.
@@ -1066,7 +1087,7 @@ final class LocalizationConsistencyTests: XCTestCase {
             untranslated.count, backlogCeiling,
             "\(untranslated.count) identifier keys are untranslated in at least one shipped "
             + "locale (ceiling \(backlogCeiling)). Add the missing entries to the catalog of the "
-            + "target that owns them."
+            + "target that owns them: \(untranslated.sorted().joined(separator: ", "))"
         )
     }
 

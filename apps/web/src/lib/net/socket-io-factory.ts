@@ -72,6 +72,13 @@ export const createSocketIOClient: SocketFactory = ({ base, auth }) => {
       socket.connect();
     },
     disconnect: () => socket.disconnect(),
+    /* Fermer le MOTEUR (pas la socket) est une coupure de transport : le
+       serveur l'entend comme une perte de réseau, pas comme un départ voulu,
+       et `connect()` saute le backoff que la fermeture vient d'armer. */
+    recycle: () => {
+      if (socket.connected) socket.io.engine.close();
+      client.connect();
+    },
     on: (event, handler) => {
       socket.on(event, handler as (...args: readonly unknown[]) => void);
     },

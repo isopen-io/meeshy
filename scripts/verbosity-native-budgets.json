@@ -1004,9 +1004,9 @@
     },
     "ios:Meeshy/talkie": {
       "labels": 28,
-      "words": 179,
-      "long": 1,
-      "explanations": 4
+      "words": 172,
+      "long": 0,
+      "explanations": 3
     },
     "ios:Meeshy/thread": {
       "labels": 5,

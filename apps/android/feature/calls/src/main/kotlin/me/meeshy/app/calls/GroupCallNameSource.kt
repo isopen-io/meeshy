@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import me.meeshy.sdk.call.ActiveCallRepository
+import me.meeshy.sdk.call.CallSessionReader
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.ParticipantCacheRepository
 import me.meeshy.sdk.model.ApiConversation
@@ -39,8 +40,10 @@ fun interface GroupCallNameSource {
  *
  * 1. la conversation et son trombinoscope en cache (Room, sans réseau) nomment les membres et donnent le titre d'un
  *    groupe — avant tout aller-retour ;
- * 2. l'appel actif (`GET /conversations/:id/active-call`), lu une fois par appel, complète les noms et dit qui la
- *    passerelle tient pour présent.
+ * 2. la session de l'appel, lue une fois par appel PAR SON IDENTIFIANT (`GET /calls/:id`, iOS `CallsEndpoint.byCallId`,
+ *    #19650) — elle sert un invité qui n'est pas encore membre comme un membre, et dit la caméra et le micro de
+ *    chacun ; à défaut, l'appel actif de la conversation (`GET /conversations/:id/active-call`). Elle complète les
+ *    noms et dit qui la passerelle tient pour présent.
  *
  * Un échec garde l'annuaire déjà émis : le maillage n'a jamais moins que ce que le cache savait.
  */
@@ -48,19 +51,27 @@ class GroupCallNameResolver @Inject constructor(
     private val conversations: ConversationRepository,
     private val participants: ParticipantCacheRepository,
     private val activeCalls: ActiveCallRepository,
+    private val sessions: CallSessionReader,
 ) : GroupCallNameSource {
 
     override fun directoryFor(conversationId: String, callId: String): Flow<GroupCallDirectory> = flow {
-        if (conversationId.isBlank()) return@flow
+        if (conversationId.isBlank() && callId.isBlank()) return@flow
+        val cached = cachedDirectory(conversationId)
+        if (cached != GroupCallDirectory.EMPTY) emit(cached)
+        val session = attempt { sessions.session(callId) }
+            ?: conversationId.takeIf { it.isNotBlank() }?.let { attempt { activeCalls.activeCallFor(it) } }
+            ?: return@flow
+        emit(cached.merging(GroupCallDirectory.fromActiveCall(session, callId)))
+    }
+
+    private suspend fun cachedDirectory(conversationId: String): GroupCallDirectory {
+        if (conversationId.isBlank()) return GroupCallDirectory.EMPTY
         val conversation = conversationOf(conversationId)
         val roster = attempt { participants.observe(conversationId).first() }
-        val cached = GroupCallDirectory.fromConversation(
+        return GroupCallDirectory.fromConversation(
             groupTitle = conversation?.takeUnless { it.isDirect }?.title,
             members = roster?.members.orEmpty(),
         )
-        if (cached != GroupCallDirectory.EMPTY) emit(cached)
-        val session = attempt { activeCalls.activeCallFor(conversationId) } ?: return@flow
-        emit(cached.merging(GroupCallDirectory.fromActiveCall(session, callId)))
     }
 
     override suspend fun isGroupConversation(conversationId: String): Boolean {

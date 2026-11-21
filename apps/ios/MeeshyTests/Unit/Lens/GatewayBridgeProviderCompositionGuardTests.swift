@@ -115,7 +115,8 @@ final class GatewayBridgeProviderCompositionGuardTests: XCTestCase {
         let code = normalizedCode(try viewModelSource())
         XCTAssertTrue(
             code.contains(
-                "didSet { _convIdIndex = nil if LentilleFeatureFlag.isLentilleListEnabled { " +
+                "didSet { _convIdIndex = nil persister.noteRows(from: oldValue, to: conversations) " +
+                "if LentilleFeatureFlag.isLentilleListEnabled { " +
                 "gatewayBridgeProvider.noteBridges(from: conversations) } }"
             ),
             "gatewayBridgeProvider.noteBridges(from:) doit être appelé dans le didSet de `conversations`, " +

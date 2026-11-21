@@ -3,6 +3,7 @@ import type { InfiniteData, QueryClient } from '@tanstack/react-query';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
 import { communityQueryKey, type CommunityPage, type CommunitySummary, type CommunityViewerRole } from './communities';
+import { communityJoinRequestsQueryKey } from './community-join-requests';
 import { communityMembersQueryKey } from './community-members';
 
 /**
@@ -61,6 +62,10 @@ function decodeChange(event: CommunityMemberEventName, payload: unknown): Member
 const patchOf = (change: MemberChange, viewerId: string): Partial<CommunitySummary> =>
   change.userId === viewerId ? { memberCount: change.memberCount, viewerRole: change.role } : { memberCount: change.memberCount };
 
+/** Entré ou sorti, le lecteur n'a plus de demande en attente (#19868) : elle ne survit pas à son adhésion. */
+const patched = (community: CommunitySummary, patch: Partial<CommunitySummary>): CommunitySummary =>
+  'viewerRole' in patch && community.viewerJoinRequest !== undefined ? { ...community, ...patch, viewerJoinRequest: null } : { ...community, ...patch };
+
 const isCommunityList = (data: unknown): data is InfiniteData<CommunityPage, number> => {
   const record = asRecord(data);
   return record !== null && Array.isArray(record['pages']);
@@ -79,18 +84,20 @@ export function applyCommunityMemberEvent(
   const patch = patchOf(change, viewerId);
 
   const detail = queryClient.getQueryData<CommunitySummary>(communityQueryKey(change.communityId));
-  if (detail !== undefined) queryClient.setQueryData<CommunitySummary>(communityQueryKey(change.communityId), { ...detail, ...patch });
+  if (detail !== undefined) queryClient.setQueryData<CommunitySummary>(communityQueryKey(change.communityId), patched(detail, patch));
 
   queryClient.getQueriesData<InfiniteData<CommunityPage, number>>({ queryKey: LIST_KEY }).forEach(([queryKey, list]) => {
     if (!isCommunityList(list) || !list.pages.some((page) => page.communities.some((c) => c.id === change.communityId))) return;
     const pages = list.pages.map((page) => ({
       ...page,
-      communities: page.communities.map((c) => (c.id === change.communityId ? { ...c, ...patch } : c)),
+      communities: page.communities.map((c) => (c.id === change.communityId ? patched(c, patch) : c)),
     }));
     queryClient.setQueryData<InfiniteData<CommunityPage, number>>(queryKey, { ...list, pages });
   });
 
   void queryClient.invalidateQueries({ queryKey: communityMembersQueryKey(change.communityId) });
+  // Une entrée acceptée par un AUTRE intendant retire sa demande de la liste ouverte ici (#19871).
+  if (event === SERVER_EVENTS.COMMUNITY_MEMBER_JOINED) void queryClient.invalidateQueries({ queryKey: communityJoinRequestsQueryKey(change.communityId), exact: true });
   if (change.userId === viewerId && change.role === null) {
     void queryClient.invalidateQueries({ queryKey: communityQueryKey(change.communityId) });
     void queryClient.invalidateQueries({ queryKey: LIST_KEY });

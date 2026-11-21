@@ -4,14 +4,19 @@ import MeeshyUI
 
 /// Le téléphone injoignable sur la fiche d'une personne (#18737), dès Proche :
 /// 1. SON état quand son téléphone ne répond plus (rien sinon) ;
-/// 2. MON partage avec elle : à Proche, offert UNE fois, case non cochée ; entre Sangs, actif d'office et coupable.
+/// 2. « Me prévenir s'il devient injoignable » (#19433), quand la passerelle sert le choix (#19435) ;
+/// 3. MON partage avec elle : à Proche, offert UNE fois, case non cochée ; entre Sangs, actif d'office et coupable.
 struct ProfilePhoneReachabilityRow: View {
     @StateObject private var viewModel: ProfilePhoneReachabilityViewModel
     let displayName: String
     let asksConsent: Bool
+    /// Faux sous « Son téléphone » : la tuile Réseau dit déjà son état.
+    let showsDetail: Bool
+    let tint: Color
     private var theme: ThemeManager { ThemeManager.shared }
 
-    init(userId: String, displayName: String, asksConsent: Bool) {
+    init(userId: String, displayName: String, asksConsent: Bool, showsDetail: Bool = true,
+         tint: Color = MeeshyColors.indigo500) {
         _viewModel = StateObject(wrappedValue: ProfilePhoneReachabilityViewModel(
             userId: userId,
             service: PhoneReachabilityService.shared,
@@ -20,11 +25,18 @@ struct ProfilePhoneReachabilityRow: View {
         ))
         self.displayName = displayName
         self.asksConsent = asksConsent
+        self.showsDetail = showsDetail
+        self.tint = tint
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            PhoneReachabilityDetailSection(userId: viewModel.userId)
+            if showsDetail {
+                PhoneReachabilityDetailSection(userId: viewModel.userId)
+            }
+            if let alerts = viewModel.settings?.alertsMe {
+                alertToggle(alerts)
+            }
             if viewModel.showsConsentOffer {
                 consentOffer
             } else if let settings = viewModel.settings {
@@ -75,6 +87,15 @@ struct ProfilePhoneReachabilityRow: View {
         .padding(MeeshySpacing.md)
         .background(MeeshyColors.indigo500.opacity(MeeshyOpacity.subtle))
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+    }
+
+    private func alertToggle(_ alerts: Bool) -> some View {
+        MeeshyToggleRow(PhoneReachabilitySettingsWording.alertMe, systemImage: "bell.badge", accessory: .toggle(isOn: alerts),
+                        tint: tint) {
+            Task { await viewModel.setAlertsMe(!alerts) }
+        }
+        .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
+        .accessibilityIdentifier("phoneReachability.alert.person")
     }
 
     private func shareToggle(_ settings: PhoneReachabilityPersonSettings) -> some View {

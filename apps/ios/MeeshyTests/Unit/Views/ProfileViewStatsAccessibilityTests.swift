@@ -26,7 +26,7 @@ final class ProfileViewStatsAccessibilityTests: XCTestCase {
             "Le bouton de la bande doit fondre ses nombres en UN élément VoiceOver."
         )
         XCTAssertTrue(
-            band.contains(".accessibilityLabel(Self.accessibilityLabel(stats: stats))"),
+            band.contains(".accessibilityLabel(Self.accessibilityLabel(stats: stats, isLoading: isLoading))"),
             "Le bouton doit exposer le libellé composé."
         )
         XCTAssertFalse(
@@ -43,9 +43,27 @@ final class ProfileViewStatsAccessibilityTests: XCTestCase {
         XCTAssertFalse(band.contains("profile.stats.friends"), "Un compteur de demandes n'est pas une statistique.")
     }
 
+    /// La fiche quittée annule le chargement : il ne doit ni éteindre le squelette ni annoncer « indisponible ».
+    @MainActor
+    func test_statsLoadEnd_aCancellationChangesNothing_aFailureSaysUnavailable() {
+        XCTAssertEqual(ProfileActivityBand.loadEnd(failure: CancellationError(), isCancelled: false), .cancelled)
+        XCTAssertEqual(ProfileActivityBand.loadEnd(failure: URLError(.cancelled), isCancelled: false), .cancelled)
+        XCTAssertEqual(ProfileActivityBand.loadEnd(failure: nil, isCancelled: true), .cancelled)
+        XCTAssertEqual(ProfileActivityBand.loadEnd(failure: URLError(.notConnectedToInternet), isCancelled: false), .failed)
+        XCTAssertEqual(ProfileActivityBand.loadEnd(failure: nil, isCancelled: false), .served)
+    }
+
+    func test_profileView_reloadsWithTheSkeleton_andKeepsOneRetryInFlight() throws {
+        let profile = try source("ProfileView.swift")
+        XCTAssertTrue(profile.contains("if stats == nil { statsLoading = true }"), "le retour sur la fiche repeint le squelette")
+        XCTAssertTrue(profile.contains("case .cancelled: return"), "une tâche annulée ne parle plus")
+        XCTAssertTrue(profile.contains("statsTask?.cancel()"), "Réessayer remplace la relance en vol")
+    }
+
     func test_profileView_mountsTheActivityBand_whichOpensTheDetailedStats() throws {
         let profile = try source("ProfileView.swift")
-        XCTAssertTrue(profile.contains("ProfileActivityBand(stats: stats, onOpen: openActivity)"))
+        XCTAssertTrue(profile.contains("ProfileActivityBand(stats: stats, isLoading: statsLoading, isOffline: statsOffline, accentColor: accentColor,"))
+        XCTAssertTrue(profile.contains("onOpen: openActivity, onRetry: retryStats)"))
         XCTAssertTrue(profile.contains("router.push(.userStats)"), "Mon activité s'ouvre sur la pile, comme depuis toute autre porte")
         XCTAssertFalse(profile.contains("UserStatsView()"), "plus de feuille : le même écran n'a qu'une présentation")
         XCTAssertFalse(profile.contains("statsSection"), "l'ancienne section Statistiques a disparu")

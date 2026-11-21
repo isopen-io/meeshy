@@ -54,6 +54,8 @@ final class CirclesViewModel: ObservableObject {
     private let linksStore: @concurrent @Sendable () async -> GRDBCacheStore<String, RelationLink>
     private var revalidationTask: Task<Void, Never>?
     private var levelSubscription: AnyCancellable?
+    /// « Mes proches » (#19524) : ce que l'écran vient de servir part au widget et au raccourci Talkie.
+    private let publishClosePeople: @MainActor ([RelationLink], [String: CirclePerson]) -> Void
 
     /// Les singletons de production sont injectés par `init()` (`CirclesLive.swift`) : un ViewModel ne nomme pas
     /// `.shared`, et chaque dépendance se remplace par un double de test.
@@ -66,8 +68,10 @@ final class CirclesViewModel: ObservableObject {
         languageCode: String = CirclesViewModel.interfaceLanguageCode,
         now: @escaping () -> Date = { Date() },
         linksStore: @escaping @concurrent @Sendable () async -> GRDBCacheStore<String, RelationLink> = CirclesLinkStore.live,
-        levelEvents: AnyPublisher<RelationLevelRaisedEvent, Never> = RelationEvents.levelRaised
+        levelEvents: AnyPublisher<RelationLevelRaisedEvent, Never> = RelationEvents.levelRaised,
+        publishClosePeople: @escaping @MainActor ([RelationLink], [String: CirclePerson]) -> Void = { _, _ in }
     ) {
+        self.publishClosePeople = publishClosePeople
         self.relations = relations
         self.friendService = friendService
         self.peopleResolver = people
@@ -169,6 +173,7 @@ final class CirclesViewModel: ObservableObject {
         await resolveMissingPeople()
         await revalidationTask?.value
         await resolveMissingPeople()
+        publishClosePeople(links, people)
         await loadRequests()
         await loadConfig()
     }

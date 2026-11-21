@@ -132,6 +132,21 @@ object CallSocialEventParser {
         )
     }
 
+    /** Sans appel ni conversation de destination, la bascule est ignorée ; un titre ou des membres absents se lisent vides. */
+    fun conversationChanged(raw: String): CallConversationChanged? = decode(raw) { o ->
+        CallConversationChanged(
+            callId = o.str("callId") ?: return@decode null,
+            conversationId = o.str("conversationId") ?: return@decode null,
+            previousConversationId = o.str("previousConversationId").orEmpty(),
+            conversationType = o.str("conversationType") ?: "group",
+            conversationTitle = o.str("conversationTitle"),
+            memberUserIds = (o["memberUserIds"] as? JsonArray)
+                ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.contentOrNull?.takeIf(String::isNotBlank) }
+                .orEmpty(),
+            created = o.bool("created") ?: false,
+        )
+    }
+
     /** `call:preview-signal` a la forme de `call:signal`. */
     fun previewSignal(raw: String): CallSignalEnvelope? = CallSignalMapper.signalEnvelope(raw)
 }

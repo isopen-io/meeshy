@@ -184,9 +184,7 @@ final class CallScreenClearer: CallScreenClearing {
 
     func clearForCall() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        let windows = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows)
+        let windows = (DeviceLayout.activeWindowScene?.windows ?? [])
             .filter { !($0 is CallPassthroughWindow) && $0.windowLevel < CallReturnPoint.windowLevel }
         windows.forEach { window in
             window.endEditing(true)
@@ -324,10 +322,11 @@ enum CallReturnPoint {
     }
 
     /// #17763 — la bulle ne se montre plus pendant mon partage que si un plein
-    /// écran de l'app recouvre la capsule : « Arrêter » l'y accompagne. Le
-    /// mini-menu rapide, qui porte déjà ses propres actions, la remplace.
-    static func showsShareStop(isSharing: Bool, isMenuRevealed: Bool) -> Bool {
-        isSharing && !isMenuRevealed
+    /// écran de l'app recouvre la capsule : « Arrêter » l'y accompagne. #19696 —
+    /// l'appel réduit n'a plus aucun bouton d'appel ; « Arrêter le partage » est la
+    /// seule commande qui reste, garde de confidentialité.
+    static func showsShareStop(isSharing: Bool) -> Bool {
+        isSharing
     }
 
     /// Une présentation modale de la racine recouvre la pastille ; une alerte

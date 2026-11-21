@@ -27,6 +27,7 @@ import { apiPath } from '@meeshy/shared/api/prefix';
 import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
 import { isConversationClosed } from '../../services/messaging/conversationWriteAdmission';
 
+import { PARTICIPATION_VIVANTE } from '../conversations/utils/access-control';
 // ═══════════════════════════════════════════════════════════════════════════
 // #4170 — GET /links absorbe GET /links/my-links, GET /links/stats et
 // GET /conversations/:conversationId/links (`conversations/sharing.ts`, hors
@@ -171,7 +172,10 @@ const COLONNES_LIEN = {
   // `closedAt`/`isActive` du conteneur : jamais servis tels quels, ils
   // n'alimentent que `inactiveReason` ci-dessous (§ #3740). Le chargement est
   // gratuit — c'est la MÊME jointure que `conversationTitle` exige déjà.
-  conversation: { select: { id: true, title: true, type: true, description: true, closedAt: true, isActive: true } },
+  //
+  // `memberCount` (#19283) : la colonne DÉNORMALISÉE du conteneur, chargée par
+  // la même jointure — « Mène à Studio · 8 membres » sans lire un seul membre.
+  conversation: { select: { id: true, title: true, type: true, description: true, closedAt: true, isActive: true, memberCount: true } },
   creator: {
     select: { id: true, username: true, firstName: true, lastName: true, displayName: true, avatar: true },
   },
@@ -247,6 +251,7 @@ type LinkRow = {
     description?: string | null;
     closedAt?: Date | null;
     isActive?: boolean;
+    memberCount?: number;
   } | null;
   creator?: {
     id: string;
@@ -412,7 +417,8 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
                       id: { type: 'string' },
                       title: { type: 'string', nullable: true },
                       type: { type: 'string' },
-                      description: { type: 'string', nullable: true }
+                      description: { type: 'string', nullable: true },
+                      memberCount: { type: 'integer', description: 'Members of the conversation the link leads to (#19283)' }
                     }
                   },
                   creator: {
@@ -539,7 +545,12 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
         // 500. `creatorId` (la colonne inexistante que la porte fautive lisait)
         // n'apparaît nulle part ici : la colonne réelle est `createdBy`.
         const membership = await fastify.prisma.participant.findFirst({
-          where: { conversationId, userId, isActive: true },
+          // #20183 — la PARTICIPATION VIVANTE, comme sur l'alias déprécié que
+          // cette route remplace (`GET /conversations/:id/links`) : un membre
+          // actif-et-banni lisait les codes d'entrée vivants de la conversation
+          // dont il est exclu, et TOUS s'il est modérateur — `membership.role`
+          // ci-dessous est lu sur cette même ligne.
+          where: { conversationId, userId, ...PARTICIPATION_VIVANTE },
           select: { role: true }
         });
 
@@ -644,6 +655,7 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
             title: l.conversation.title,
             type: l.conversation.type,
             description: l.conversation.description ?? null,
+            memberCount: l.conversation.memberCount ?? 0,
           };
         }
         if (expand.has('creator')) {

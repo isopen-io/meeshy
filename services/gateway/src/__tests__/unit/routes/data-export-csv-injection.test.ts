@@ -60,4 +60,15 @@ describe('toCsv — formula-injection neutralization', () => {
     expect(toCsv(['v'], [{ v: null }]).split('\n')[1]).toBe('');
     expect(toCsv(['v'], [{ v: undefined }]).split('\n')[1]).toBe('');
   });
+
+  it('une cellule qui porte une liste ou un objet (les visites du lien de profil, #19206) se lit en JSON, jamais « [object Object] »', () => {
+    const visits = [{ day: '2026-11-16', visits: 3 }, { day: '2026-11-17', visits: 57 }];
+    const line = toCsv(['profileLinkVisits'], [{ profileLinkVisits: visits }]).split('\n')[1];
+    expect(line).not.toContain('[object Object]');
+    expect(JSON.parse(line.slice(1, -1).replace(/""/g, '"'))).toEqual(visits);
+  });
+
+  it('une date reste une date lisible, non une liste', () => {
+    expect(toCsv(['at'], [{ at: new Date('2026-11-17T00:00:00.000Z') }]).split('\n')[1]).not.toContain('{');
+  });
 });

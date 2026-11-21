@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.call.ActiveCallRepository
+import me.meeshy.sdk.call.CallSessionReader
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.ParticipantCacheRepository
 import me.meeshy.sdk.model.ApiConversation
@@ -28,7 +29,41 @@ class GroupCallNameResolverTest {
     private val conversations: ConversationRepository = mockk()
     private val participants: ParticipantCacheRepository = mockk()
     private val activeCalls: ActiveCallRepository = mockk()
-    private val resolver = GroupCallNameResolver(conversations, participants, activeCalls)
+    private val sessions: CallSessionReader = mockk()
+    private val resolver = GroupCallNameResolver(conversations, participants, activeCalls, sessions)
+
+    init {
+        coEvery { sessions.session(any()) } returns null
+    }
+
+    private fun served(conversationId: String = "conv") = ActiveCallSession(
+        id = "call-1",
+        conversationId = conversationId,
+        mode = "p2p",
+        status = "active",
+        participants = listOf(ActiveCallParticipant("bruno", ActiveCallParticipantUser("bruno", "bruno", "Bruno"))),
+    )
+
+    @Test
+    fun `the call is read by its id first, which serves a member and an invitee alike (#19650)`() = runTest {
+        cached(type = "group", title = "Famille")
+        coEvery { sessions.session("call-1") } returns served()
+
+        val directories = resolver.directoryFor("conv", "call-1").toList()
+
+        assertThat(directories.last().names.mapValues { it.value.displayName }).containsExactly("ada", "Ada", "bruno", "Bruno")
+        assertThat(directories.last().presentIds).containsExactly("bruno")
+        coVerify(exactly = 0) { activeCalls.activeCallFor(any()) }
+    }
+
+    @Test
+    fun `without a conversation, the call read by its id still names its members`() = runTest {
+        coEvery { sessions.session("call-1") } returns served(conversationId = "group-1")
+
+        val directories = resolver.directoryFor("", "call-1").toList()
+
+        assertThat(directories.single().names.keys).containsExactly("bruno")
+    }
 
     private fun cached(type: String, title: String?) {
         coEvery { conversations.cachedById("conv") } returns ApiConversation(id = "conv", type = type, title = title)

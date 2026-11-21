@@ -321,7 +321,7 @@ describe('TURNCredentialService — parseTURNServers', () => {
       NODE_ENV: 'development',
     });
     const creds = svc.generateCredentials('user-1');
-    const turnEntries = creds.filter(s => (s.urls as string).startsWith('turn:'));
+    const turnEntries = creds.filter(s => (s.urls as string).startsWith('turn:') && !(s.urls as string).includes('transport=tcp'));
     expect(turnEntries).toHaveLength(2);
     expect(turnEntries.map(e => e.urls)).toContain('turn:turn1.example.com:3478');
     expect(turnEntries.map(e => e.urls)).toContain('turn:turn2.example.com:5349');
@@ -391,7 +391,7 @@ describe('TURNCredentialService — parseTURNServers', () => {
     });
     const creds = svc.generateCredentials('user-1');
     const turnEntries = creds.filter(s => (s.urls as string).startsWith('turn:'));
-    expect(turnEntries).toHaveLength(1);
+    expect(turnEntries.map(e => e.urls)).toEqual(['turn:turn.example.com:3478', 'turn:turn.example.com:3478?transport=tcp']);
   });
 
   it('warns (not errors) and returns STUN-only when TURN_SERVERS is empty in development', () => {
@@ -446,6 +446,42 @@ describe('TURNCredentialService — parseTURNServers', () => {
 // so clients behind restrictive firewalls (corporate/mobile networks that
 // block plain UDP/TCP) can still reach the relay over 443-like TLS.
 // ---------------------------------------------------------------------------
+
+/**
+ * Un navigateur ne tente un `turn:` sans `?transport=` qu'en UDP (#19776) :
+ * derrière un réseau qui coupe l'UDP sortant (Wi-Fi d'entreprise, hôtel), le
+ * relais restait injoignable hors du 5349 TLS. L'entrée TCP vit À CÔTÉ de
+ * l'UDP, même hôte, même port, mêmes identifiants.
+ */
+describe('TURNCredentialService — TURN over TCP (#19776)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const urlsOf = (servers: RTCIceServer[]): string[] => servers.flatMap((server) => [server.urls].flat());
+
+  it('sert turn:<hôte>:<port>?transport=tcp juste après l’entrée UDP de chaque relais', () => {
+    const svc = buildService({ TURN_SECRET: 'test-secret', TURN_SERVERS: 'turn1.example.com:3478,turn2.example.com:3480', NODE_ENV: 'development' });
+    const urls = urlsOf(svc.generateCredentials('user-1')).filter((url) => url.startsWith('turn:'));
+    expect(urls).toEqual([
+      'turn:turn1.example.com:3478',
+      'turn:turn1.example.com:3478?transport=tcp',
+      'turn:turn2.example.com:3480',
+      'turn:turn2.example.com:3480?transport=tcp',
+    ]);
+  });
+
+  it('signe l’entrée TCP avec les MÊMES identifiants éphémères que l’entrée UDP', () => {
+    const servers = buildService({ TURN_SECRET: 'test-secret', TURN_SERVERS: 'turn.example.com:3478', NODE_ENV: 'development' }).generateCredentials('user-42');
+    const udp = servers.find((server) => server.urls === 'turn:turn.example.com:3478');
+    const tcp = servers.find((server) => server.urls === 'turn:turn.example.com:3478?transport=tcp');
+    expect(tcp?.username).toBe(udp?.username);
+    expect(tcp?.credential).toBe(udp?.credential);
+  });
+
+  it('ne sert aucune entrée TCP sans relais configuré', () => {
+    const urls = urlsOf(buildService({ TURN_SECRET: 'test-secret', TURN_SERVERS: '', NODE_ENV: 'development' }).generateCredentials('user-1'));
+    expect(urls.some((url) => url.includes('transport=tcp') && url.startsWith('turn:'))).toBe(false);
+  });
+});
 
 describe('TURNCredentialService — TURN over TLS (turns:)', () => {
   beforeEach(() => jest.clearAllMocks());

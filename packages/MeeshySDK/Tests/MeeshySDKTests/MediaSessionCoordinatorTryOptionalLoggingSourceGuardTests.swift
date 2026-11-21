@@ -12,12 +12,7 @@ import XCTest
 final class MediaSessionCoordinatorTryOptionalLoggingSourceGuardTests: XCTestCase {
 
     private func coordinatorSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent() // this test file
-            .deletingLastPathComponent() // MeeshySDKTests/
-            .deletingLastPathComponent() // Tests/
-            .appendingPathComponent("Sources/MeeshySDK/Media/MediaSessionCoordinator.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        try MediaSessionCoordinatorSourceUnit.read()
     }
 
     private func body(from startMarker: String, to endMarker: String, in source: String) throws -> String {

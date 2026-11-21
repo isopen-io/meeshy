@@ -47,7 +47,7 @@ struct ProgressionMeeshEntry: View {
                     .monospacedDigit()
                     .foregroundColor(tint)
                     .modifier(MeeshCounterRoll())
-                    .animation(.easeOut(duration: 0.35), value: meesh.balance)
+                    .meeshyMotion(.rise, value: meesh.balance)
                 MeeshCoinGlyph(size: 20)
             }
             .padding(.horizontal, MeeshySpacing.md)

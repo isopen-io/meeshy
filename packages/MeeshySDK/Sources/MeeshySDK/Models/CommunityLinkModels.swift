@@ -12,9 +12,12 @@ public struct CommunityLink: Codable, Identifiable, Sendable, CacheIdentifiable 
     public let memberCount: Int
     public let isActive: Bool
     public let createdAt: Date
+    /// Quelques membres à montrer en pile sur le billet (planche `Moi-Liens`) ; absent d'un serveur qui ne les sert
+    /// pas encore, et d'un cache écrit avant eux.
+    public let memberPreviews: [LinksFaceMember]?
 
     public init(id: String, name: String, identifier: String, baseUrl: String,
-                memberCount: Int, isActive: Bool, createdAt: Date) {
+                memberCount: Int, isActive: Bool, createdAt: Date, memberPreviews: [LinksFaceMember]? = nil) {
         self.id = id
         self.name = name
         self.identifier = identifier
@@ -24,6 +27,7 @@ public struct CommunityLink: Codable, Identifiable, Sendable, CacheIdentifiable 
         self.memberCount = memberCount
         self.isActive = isActive
         self.createdAt = createdAt
+        self.memberPreviews = memberPreviews
     }
 }
 

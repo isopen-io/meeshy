@@ -15,15 +15,16 @@ import {
   decodeParticipantJoined,
   decodeParticipantLeft,
   decodeSessionMembers,
-  decodeSessionInitiator,
+  decodeSessionPlace,
   decodeSignal,
   mapServerEndReason,
   type DecodedInitiated,
   type DecodedPerson,
 } from './call-decode';
-import { analyticsPayload, createTelemetry, markCaptions, markConnected, markEffects, markNegotiating, markNetworkChange, markReconnecting, qualityReport, withCodec, withSample } from './call-analytics';
+import { analyticsPayload, createTelemetry, markCaptions, markConnected, markEffects, markNegotiating, markNetworkChange, markReconnecting, qualityReport, withCodec, withMedia, withSample } from './call-analytics';
 import { mediaFailureOf, stopStream, type Facing, type MediaFailure } from './call-media';
 import {
+  adoptJoinedSession,
   callStore,
   isCallLive,
   meshPhase,
@@ -47,6 +48,8 @@ import { listenCallEvents, type CallTransport } from './call-transport';
 import { callNoticeStore, callReactionStore, showNotice, type CallNoticeStoreApi, type CallReactionStoreApi } from './call-control-state';
 import { createEngineCamera } from './engine-camera';
 import { createEngineControls } from './engine-controls';
+import { createNetworkRecovery, watchBrowserNetworkPath } from './call-network-recovery';
+import { videoCodecProbe } from './call-codec-probe';
 import { createEnginePreview } from './engine-preview';
 import { loadDefaultEngineDeps } from './engine-defaults';
 import { baseCall, emptySession } from './engine-session';
@@ -131,6 +134,8 @@ export type CallEngineDeps = {
   readonly createQualityLoop: (deps: QualityLoopDeps) => QualityLoop;
   /** Chaque changement de réseau (`online`, le type de connexion) — rend le désabonnement. */
   readonly watchNetwork: (onChange: () => void) => () => void;
+  /** Le CHEMIN réseau qui change (#19776) — la socket est recyclée et ICE relancé ; le navigateur par défaut. */
+  readonly watchNetworkPath?: (onChange: () => void) => () => void;
   readonly platform: () => string;
   readonly deviceModel: () => string;
   /** Le tirage de l'échantillon de la note d'après-appel (#8072) ; `Math.random` par défaut. */
@@ -141,6 +146,8 @@ export type CallEngineDeps = {
   readonly cameraEffects?: CameraEffectsPort;
   /** Ce que montrent les contrôles d'un appel (#8433, #8438, #8439) — les magasins de l'application par défaut. */
   readonly controlState?: { readonly reactions: CallReactionStoreApi; readonly notices: CallNoticeStoreApi };
+  /** Le serveur dit FINI l'appel qu'on rejoignait (join refusé CALL_ENDED, #19778) : ce qui l'offrait encore se répare. */
+  readonly onJoinRefusedEnded?: (ended: { readonly conversationId: string; readonly callId: string }) => void;
 };
 
 export type CallEngine = {
@@ -454,9 +461,16 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     session.loop = deps.createQualityLoop({
       links: () => [...session.links.entries()].map(([userId, link]) => [userId, link.connection()] as const),
       wantsVideo: () => (localStream?.getVideoTracks().length ?? 0) > 0,
+      sharingScreen: () => read()?.screenSharing === true,
       now: deps.now,
     });
-    session.unwatchNetwork = deps.watchNetwork(() => void (session.telemetry = markNetworkChange(session.telemetry)));
+    const unwatchTelemetry = deps.watchNetwork(() => void (session.telemetry = markNetworkChange(session.telemetry)));
+    const recover = createNetworkRecovery({ now: deps.now, reconnect: () => deps.transport()?.reconnect?.(), links: () => session.links.values() });
+    const unwatchPath = (deps.watchNetworkPath ?? watchBrowserNetworkPath)(recover);
+    session.unwatchNetwork = () => {
+      unwatchTelemetry();
+      unwatchPath();
+    };
     session.qualityTimer = deps.repeat(() => void sampleQuality(), QUALITY_INTERVAL_MS);
   };
 
@@ -467,8 +481,8 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     if (loop === null || callId === null) return;
     const tick = await loop.tick();
     if (tick === null || session.loop !== loop || read()?.callId !== callId) return;
-    const { total, stage, codec } = tick;
-    session.telemetry = withCodec(withSample(session.telemetry, total), codec);
+    const { total, stage, codec, media = {} } = tick;
+    session.telemetry = withMedia(withCodec(withSample(session.telemetry, total), codec), media, total.jitter);
     update((current) => ({ ...current, quality: { level: total.level, packetLoss: total.packetLoss, rtt: total.rtt, jitter: total.jitter, audioKbps: total.audioKbps, videoKbps: total.videoKbps, survival: stage } }));
     if (total.level === 'poor') session.troubled = true;
     if (deps.now() - session.lastQualityReport < QUALITY_REPORT_MS) return;
@@ -546,14 +560,15 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
 
   const afterJoinAck = (ack: ReturnType<typeof decodeAck>): boolean => {
     if (!ack.ok) {
+      const refused = read();
+      if (ack.code === 'CALL_ENDED' && refused !== null && refused.callId !== null) deps.onJoinRefusedEnded?.({ conversationId: refused.conversationId, callId: refused.callId });
       if (ack.code === 'CALL_ENDED') finish(mapServerEndReason(ack.endReason ?? 'completed'));
       else finish('failed', ack.code);
       return false;
     }
     session.iceServers = decodeIceServers(ack.data.iceServers) ?? session.iceServers;
     for (const member of decodeSessionMembers(ack.data.callSession)) remember(member, member.participantId, member.flags);
-    const initiatorId = decodeSessionInitiator(ack.data.callSession);
-    if (initiatorId !== null) update((call) => ({ ...call, initiatorId }));
+    update((call) => adoptJoinedSession(call, decodeSessionPlace(ack.data.callSession)));
     return true;
   };
 
@@ -854,6 +869,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       case SERVER_EVENTS.CALL_RECORDING_STOPPED:
         onRecordingNote(event, payload);
         return;
+      case SERVER_EVENTS.CALL_CONVERSATION_CHANGED:
       case SERVER_EVENTS.CALL_PARTICIPANT_INVITED:
       case SERVER_EVENTS.CALL_INVITE_DECLINED:
       case SERVER_EVENTS.CALL_INVITE_EXPIRED:
@@ -1125,6 +1141,7 @@ let singleton: CallEngine | null = null;
 /** Le moteur du navigateur — construit une fois, au premier besoin. */
 export async function defaultCallEngine(): Promise<CallEngine> {
   if (singleton !== null) return singleton;
+  videoCodecProbe.prime();
   const deps = loadDefaultEngineDeps();
   const engine = createCallEngine({ ...deps, store: callStore });
   singleton = engine;

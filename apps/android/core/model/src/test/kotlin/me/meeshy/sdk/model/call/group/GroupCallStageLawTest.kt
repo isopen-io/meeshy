@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model.call.group
 
+import me.meeshy.sdk.model.call.CallRules
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
@@ -82,8 +83,8 @@ class GroupCallStageLawTest {
 
     @Test
     fun `remaining seats count me, the members and the ringing invitations`() {
-        assertThat(CallInviteCandidates.remainingSeats(trio, hasPrimaryOutsideRoster = false, ringingCount = 1)).isEqualTo(2)
-        assertThat(CallInviteCandidates.remainingSeats(GroupCallRoster("me"), hasPrimaryOutsideRoster = true, ringingCount = 0)).isEqualTo(4)
+        assertThat(CallInviteCandidates.remainingSeats(trio, hasPrimaryOutsideRoster = false, ringingCount = 1)).isEqualTo(CallRules.MAX_PARTICIPANTS - 4)
+        assertThat(CallInviteCandidates.remainingSeats(GroupCallRoster("me"), hasPrimaryOutsideRoster = true, ringingCount = 0)).isEqualTo(CallRules.MAX_PARTICIPANTS - 2)
         assertThat(CallInviteCandidates.remainingSeats(trio, hasPrimaryOutsideRoster = false, ringingCount = 9)).isEqualTo(0)
     }
 

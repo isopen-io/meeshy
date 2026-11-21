@@ -169,6 +169,18 @@ class CallChromeControllerTest {
     }
 
     @Test
+    fun `turning captions off closes the journal and leaves an open menu open (19670)`() {
+        val chrome = controller()
+        chrome.open(CallScreenPanel.Journal)
+        chrome.closeJournal()
+        assertThat(chrome.state.value.layer).isEqualTo(CallScreenLayer.Idle)
+        chrome.open(CallScreenPanel.Journal)
+        chrome.toggleMenu()
+        chrome.closeJournal()
+        assertThat(chrome.state.value.layer).isEqualTo(CallScreenLayer.Menu)
+    }
+
+    @Test
     fun `a mode frees the screen and reveals the chrome`() {
         val chrome = controller()
         chrome.onSceneTap(true, false)

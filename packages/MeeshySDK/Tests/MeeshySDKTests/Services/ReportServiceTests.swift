@@ -74,6 +74,37 @@ final class ReportServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 
+    // MARK: - reportUser, messages joints (#19609)
+
+    func testReportUser_withAttachedMessages_sendsTheirIds() async throws {
+        let response = APIResponse<ReportResponseData>(success: true, data: ReportResponseData(id: "report5"), error: nil)
+        mock.stub("/reports", result: response)
+
+        try await service.reportUser(userId: "user789", reportType: "harassment", reason: nil,
+                                     attachedMessageIds: ["m1", "m2"])
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["attachedMessageIds"] as? [String], ["m1", "m2"])
+    }
+
+    func testReportUser_withoutAttachedMessages_sendsTheBodyOfBefore() async throws {
+        let response = APIResponse<ReportResponseData>(success: true, data: ReportResponseData(id: "report6"), error: nil)
+        mock.stub("/reports", result: response)
+
+        try await service.reportUser(userId: "user789", reportType: "spam", reason: nil, attachedMessageIds: [])
+
+        XCTAssertNil(mock.lastRequest?.bodyJSON?["attachedMessageIds"], "une passerelle ancienne ne voit aucune différence")
+    }
+
+    func testReportUser_attachedMessages_areCappedAtTen() async throws {
+        let response = APIResponse<ReportResponseData>(success: true, data: ReportResponseData(id: "report7"), error: nil)
+        mock.stub("/reports", result: response)
+
+        try await service.reportUser(userId: "user789", reportType: "spam", reason: nil,
+                                     attachedMessageIds: (1...12).map { "m\($0)" })
+
+        XCTAssertEqual((mock.lastRequest?.bodyJSON?["attachedMessageIds"] as? [String])?.count, 10)
+    }
+
     // MARK: - reportComment (#8709)
 
     func testReportCommentPostsACommentTargetToReports() async throws {

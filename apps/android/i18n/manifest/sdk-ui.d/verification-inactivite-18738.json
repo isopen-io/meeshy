@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "androidName": "inactivity_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "inactivity_battery",
+          "status": "android-only"
+        },
+        {
+          "androidName": "inactivity_card_since",
+          "status": "android-only"
+        },
+        {
+          "androidName": "inactivity_delay_12h",
+          "status": "android-only"
+        },
+        {
+          "androidName": "inactivity_delay_24h",
+          "status": "android-only"
+        },
+        {
+          "androidName": "inactivity_delay_6h",
+          "status": "android-only"
+        },
+        {
+          "androidName": "inactivity_delay_off",
+          "status": "android-only"
+        },
+        {
+          "androidName": "inactivity_delay_scope",
+          "status": "android-only"
+        },
+        {
+          "androidName": "inactivity_delay_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "inactivity_open_map",
+          "status": "android-only"
+        },
+        {
+          "androidName": "inactivity_pill_alert",
+          "status": "android-only"
+        },
+        {
+          "androidName": "inactivity_pill_responded",
+          "status": "android-only"
+        },
+        {
+          "androidName": "inactivity_share_off",
+          "status": "android-only"
+        },
+        {
+          "androidName": "inactivity_share_person",
+          "status": "android-only"
+        },
+        {
+          "androidName": "inactivity_share_person_scope",
+          "status": "android-only"
+        },
+        {
+          "androidName": "inactivity_someone",
+          "status": "android-only"
+        },
+        {
+          "androidName": "inactivity_wellness_ok",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

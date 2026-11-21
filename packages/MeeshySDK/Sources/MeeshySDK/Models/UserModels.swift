@@ -9,6 +9,15 @@ public struct UpdateProfileRequest: Encodable {
     public var regionalLanguage: String?
     public var customDestinationLanguage: String?
     public var voicePublic: Bool?
+    /// La ville déclarée (#18862) : `nil` = inchangée (omise), `""` = effacée (la passerelle la remet à `null`).
+    public var city: String?
+    /// Le cercle qui lit la ville, en valeur de l'échelle (`FRIEND`…) ; `nil` = inchangé.
+    public var cityCircle: String?
+    /// L'accent choisi de la vitrine (#19201, iOS #19391) : `nil` = inchangé (omis), `.automatic` part en `null`.
+    public var profileAccentColor: ProfileAccentChoice?
+    /// « Traduire automatiquement » (#19512) : `nil` = inchangé (omis) ; la passerelle l'écrit dans
+    /// `UserPreferences.application`.
+    public var autoTranslateEnabled: Bool?
 
     private static func validateLanguageCode(_ code: String?) -> String? {
         guard let code = code?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() else {
@@ -24,7 +33,10 @@ public struct UpdateProfileRequest: Encodable {
 
     public init(firstName: String? = nil, lastName: String? = nil, displayName: String? = nil,
                 bio: String? = nil, systemLanguage: String? = nil, regionalLanguage: String? = nil,
-                customDestinationLanguage: String? = nil, voicePublic: Bool? = nil) {
+                customDestinationLanguage: String? = nil, voicePublic: Bool? = nil,
+                city: String? = nil, cityCircle: RelationLevel? = nil,
+                profileAccentColor: ProfileAccentChoice? = nil,
+                autoTranslateEnabled: Bool? = nil) {
         self.firstName = firstName
         self.lastName = lastName
         self.displayName = displayName
@@ -43,6 +55,10 @@ public struct UpdateProfileRequest: Encodable {
             ? ""
             : Self.validateLanguageCode(customDestinationLanguage)
         self.voicePublic = voicePublic
+        self.city = city.map { String($0.trimmingCharacters(in: .whitespacesAndNewlines).prefix(ProfileCity.maxLength)) }
+        self.cityCircle = cityCircle?.rawValue
+        self.profileAccentColor = profileAccentColor
+        self.autoTranslateEnabled = autoTranslateEnabled
     }
 }
 

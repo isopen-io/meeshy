@@ -10,11 +10,13 @@ final class MockShareLinkManager: ShareLinkManaging, @unchecked Sendable {
     var updateLinkResult: Result<Void, Error> = .success(())
     var toggleLinkResult: Result<Void, Error> = .success(())
     var deleteLinkResult: Result<Void, Error> = .success(())
+    var resetLinkUsesResult: Result<Int?, Error> = .success(0)
 
     private(set) var fetchLinkStatsCallCount = 0
     private(set) var updateLinkCallCount = 0
     private(set) var toggleLinkCallCount = 0
     private(set) var deleteLinkCallCount = 0
+    private(set) var resetLinkUsesCallCount = 0
     private(set) var lastUpdatedSettings: ShareLinkSettings?
     private(set) var lastToggledActive: Bool?
 
@@ -60,6 +62,11 @@ final class MockShareLinkManager: ShareLinkManaging, @unchecked Sendable {
         try toggleLinkResult.get()
     }
 
+    func resetLinkUses(linkId: String) async throws -> Int? {
+        resetLinkUsesCallCount += 1
+        return try resetLinkUsesResult.get()
+    }
+
     func deleteLink(linkId: String) async throws {
         deleteLinkCallCount += 1
         try deleteLinkResult.get()
@@ -71,6 +78,8 @@ final class MockShareLinkManager: ShareLinkManaging, @unchecked Sendable {
         updateLinkResult = .success(())
         toggleLinkResult = .success(())
         deleteLinkResult = .success(())
+        resetLinkUsesResult = .success(0)
+        resetLinkUsesCallCount = 0
         fetchLinkStatsCallCount = 0
         updateLinkCallCount = 0
         toggleLinkCallCount = 0

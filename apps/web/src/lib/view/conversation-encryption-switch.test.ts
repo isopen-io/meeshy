@@ -108,7 +108,11 @@ describe('ce qui ferme le geste (#14664)', () => {
 
 describe('les codes de refus', () => {
   test('sont ceux de la passerelle', () => {
-    expect(SWITCH_REFUSAL_CODES).toEqual({ irreversible: E2EE_ERROR_CODES.IRREVERSIBLE, regimeChanged: E2EE_ERROR_CODES.REGIME_CHANGED });
+    expect(SWITCH_REFUSAL_CODES).toEqual({
+      irreversible: E2EE_ERROR_CODES.IRREVERSIBLE,
+      regimeChanged: E2EE_ERROR_CODES.REGIME_CHANGED,
+      participantWithoutDevice: E2EE_ERROR_CODES.PARTICIPANT_WITHOUT_DEVICE,
+    });
   });
 });
 
@@ -229,6 +233,17 @@ describe('changer de mode', () => {
       expect(await switchConversationEncryption(ports, { conversationId: 'c5', servedMode: 'server', target: 'hybrid' })).toEqual({ kind });
       expect(ports.learned).toEqual([]);
     });
+  });
+
+  test('409 E2EE_PARTICIPANT_WITHOUT_DEVICE (#20073) : rien n’est activé, les membres en cause sont nommés, rien n’est appris', async () => {
+    const answer: ApiResult<unknown> = { ok: false, status: 409, error: 'x', code: E2EE_ERROR_CODES.PARTICIPANT_WITHOUT_DEVICE, withoutDeviceUserIds: ['u-ana'] };
+    const ports = portsOf(answer);
+    expect(await switchConversationEncryption(ports, { conversationId: 'c-pwd', servedMode: 'server', target: 'hybrid' })).toEqual({
+      kind: 'participant-without-device',
+      withoutDeviceUserIds: ['u-ana'],
+    });
+    expect(ports.learned).toEqual([]);
+    expect(endToEndRegimeLedger.getState().sealed['c-pwd']).toBeUndefined();
   });
 
   test('hors connexion : rien ne part', async () => {

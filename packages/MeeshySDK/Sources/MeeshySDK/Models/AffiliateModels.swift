@@ -66,15 +66,56 @@ public struct AffiliateStats: Codable, Sendable {
     public let pendingReferrals: Int?
     /// Les filleuls eux-mêmes — ce que l'onglet « Affilies » liste.
     public let referrals: [AffiliateReferral]?
+    /// L'entonnoir (#19207) : les visites de tous mes liens. Absent d'une passerelle plus ancienne.
+    public let visits: Int?
+    /// L'entonnoir (#19207) : les filleuls inscrits depuis toujours.
+    public let registrations: Int?
+    /// Les filleuls inscrits depuis le premier du mois (UTC, #19207).
+    public let registrationsThisMonth: Int?
+    /// Les filleuls vus dans les trente derniers jours (#19207) ; `nil` tant que la passerelle ne mesure pas l'activité.
+    public let active: Int?
+    /// Ce que le parrainage rapporte et le prochain palier (#19508) ; absent tant que le jeu ne le sert pas (#7743).
+    public let rewards: AffiliateRewards?
 
     public init(totalTokens: Int? = nil, totalReferrals: Int? = nil,
                 totalVisits: Int? = nil, conversionRate: Double? = nil,
                 completedReferrals: Int? = nil, pendingReferrals: Int? = nil,
-                referrals: [AffiliateReferral]? = nil) {
+                referrals: [AffiliateReferral]? = nil, visits: Int? = nil,
+                registrations: Int? = nil, registrationsThisMonth: Int? = nil,
+                active: Int? = nil, rewards: AffiliateRewards? = nil) {
         self.totalTokens = totalTokens; self.totalReferrals = totalReferrals
         self.totalVisits = totalVisits; self.conversionRate = conversionRate
         self.completedReferrals = completedReferrals; self.pendingReferrals = pendingReferrals
         self.referrals = referrals
+        self.visits = visits; self.registrations = registrations
+        self.registrationsThisMonth = registrationsThisMonth; self.active = active
+        self.rewards = rewards
+    }
+}
+
+/// Ce que le parrainage rapporte (#19508) : le gain par filleul actif, le total gagné, le prochain palier.
+public struct AffiliateRewards: Codable, Sendable, Equatable {
+    public let perActiveReferral: Int?
+    public let earned: Int?
+    public let nextTier: AffiliateRewardTier?
+
+    public init(perActiveReferral: Int? = nil, earned: Int? = nil, nextTier: AffiliateRewardTier? = nil) {
+        self.perActiveReferral = perActiveReferral
+        self.earned = earned
+        self.nextTier = nextTier
+    }
+}
+
+/// Le prochain palier : combien de filleuls comptent déjà, combien il en faut, et ce qu'il débloque (texte servi).
+public struct AffiliateRewardTier: Codable, Sendable, Equatable {
+    public let reached: Int
+    public let target: Int
+    public let reward: String?
+
+    public init(reached: Int, target: Int, reward: String? = nil) {
+        self.reached = reached
+        self.target = target
+        self.reward = reward
     }
 }
 
@@ -87,19 +128,24 @@ public struct AffiliateReferral: Codable, Sendable, Identifiable, Equatable, Cac
     public let createdAt: Date?
     public let completedAt: Date?
     public let referredUser: ReferredUser?
+    /// `active` / `inactive` : vu sur Meeshy dans les trente derniers jours (#19207), jamais une date. Absent tant
+    /// que la passerelle ne mesure pas l'activité, `nil` si le filleul masque son statut en ligne.
+    public let activity: String?
 
     public init(
         id: String,
         status: String? = nil,
         createdAt: Date? = nil,
         completedAt: Date? = nil,
-        referredUser: ReferredUser? = nil
+        referredUser: ReferredUser? = nil,
+        activity: String? = nil
     ) {
         self.id = id
         self.status = status
         self.createdAt = createdAt
         self.completedAt = completedAt
         self.referredUser = referredUser
+        self.activity = activity
     }
 
     /// Nom d'affichage du filleul, pseudo en dernier recours.

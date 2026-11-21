@@ -37,7 +37,7 @@
  * Les clauses de filtre ne sont pas réécrites ici : ce sont celles de
  * `MessageReadStatusService.getUnreadCountsForUser` — `deletedAt: null`,
  * `senderId: { not: participant.id }`, plancher CHRONOLOGIQUE
- * (`lastReadMessageCreatedAt ?? lastReadAt ?? joinedAt`), puis
+ * (`readFloorOf(cursor) ?? joinedAt`, cf. `messaging/readFloor.ts`), puis
  * `applyPersonalHistoryHiding` pour `clearHistoryBefore` et les messages
  * effacés pour ce lecteur seul. Le pont et le badge lisent donc le MÊME
  * ensemble de messages, par construction : un pont qui nommerait un auteur
@@ -87,6 +87,7 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { READ_FLOOR_SELECT, readFloorOf, type ReadFloorCursor } from './messaging/readFloor';
 import {
   buildBridgeData as buildSharedBridgeData,
   type BridgeAttachment,
@@ -201,10 +202,7 @@ export interface BuildBridgeDataParams {
    * même table) ; fourni ⇒ la requête interne n'est pas rejouée. Absent ⇒
    * comportement inchangé (la passe lit elle-même, comme avant R6-6).
    */
-  readonly cursorsByParticipant?: ReadonlyMap<
-    string,
-    { readonly lastReadAt: Date | null; readonly lastReadMessageCreatedAt: Date | null }
-  >;
+  readonly cursorsByParticipant?: ReadonlyMap<string, ReadFloorCursor>;
   /** Entrées d'orchestrateur par conversation (facultatif, cf. ci-dessus). */
   readonly orchestratorInputs?: ReadonlyMap<string, BridgeOrchestratorInput>;
   /** Plafond global de la fenêtre agrégée. Défaut : `DEFAULT_BRIDGE_WINDOW_LIMIT`. */
@@ -376,7 +374,7 @@ export class ConversationBridgeService {
             )
           : this.prisma.conversationReadCursor.findMany({
               where: { participantId: { in: participantIds } },
-              select: { participantId: true, lastReadAt: true, lastReadMessageCreatedAt: true },
+              select: { participantId: true, ...READ_FLOOR_SELECT },
             }),
         params.hidingByConversation
           ? Promise.resolve(params.hidingByConversation)
@@ -390,7 +388,7 @@ export class ConversationBridgeService {
       // lecture exacte `lastReadAt` vaut `now` et déclarerait lus les messages
       // sautés. Clause identique à `MessageReadStatusService`.
       const cursorFloorById = new Map<string, Date | null>(
-        cursors.map((c: any) => [c.participantId, c.lastReadMessageCreatedAt ?? c.lastReadAt ?? null])
+        cursors.map((c: any) => [c.participantId, readFloorOf(c)])
       );
       const lastReadAtById = new Map<string, Date | null>(
         cursors.map((c: any) => [c.participantId, c.lastReadAt ?? null])
@@ -646,7 +644,7 @@ export class ConversationBridgeService {
       const [cursors, hidingByUser] = await Promise.all([
         this.prisma.conversationReadCursor.findMany({
           where: { participantId: { in: participantIds } },
-          select: { participantId: true, lastReadAt: true, lastReadMessageCreatedAt: true },
+          select: { participantId: true, ...READ_FLOOR_SELECT },
         }),
         loadPersonalHistoryHidingByUser(this.prisma, {
           userIds: resolved.map((p: any) => p.userId),
@@ -657,7 +655,7 @@ export class ConversationBridgeService {
       // Position CHRONOLOGIQUE du curseur, jamais l'horloge murale — clause
       // identique à `MessageReadStatusService` et à la passe sœur.
       const cursorFloorById = new Map<string, Date | null>(
-        cursors.map((c: any) => [c.participantId, c.lastReadMessageCreatedAt ?? c.lastReadAt ?? null])
+        cursors.map((c: any) => [c.participantId, readFloorOf(c)])
       );
       const lastReadAtById = new Map<string, Date | null>(
         cursors.map((c: any) => [c.participantId, c.lastReadAt ?? null])

@@ -125,7 +125,7 @@ public enum NotificationCategory: String, CaseIterable, Sendable {
                 .friendRequest, .contactRequest, .legacyFriendRequest,
                 .friendAccepted, .contactAccepted, .legacyFriendAccepted,
                 .contactJoined, .contactRecentlyActive, .relationAcquaintance, .deviceBattery, .deviceUnreachable,
-                .legacyStatusUpdate
+                .inactivityAlert, .legacyStatusUpdate
             ]
         case .groups:
             return [
@@ -149,7 +149,7 @@ public enum NotificationCategory: String, CaseIterable, Sendable {
             return [
                 .securityAlert, .loginNewDevice, .legacySystemAlert, .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
                 .system, .maintenance, .updateAvailable, .reportResolved, .contentRemoved,
-                .legacyAffiliateSignup
+                .wellnessCheck, .legacyAffiliateSignup
             ]
         }
     }

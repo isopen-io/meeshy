@@ -109,6 +109,14 @@ enum ProfileBringWording {
         return String(format: String(localized: "bring.remaining", defaultValue: "Restants aujourd’hui : %lld", bundle: .main), left)
     }
 
+    /// « 2 / 3 aujourd'hui » sous l'action Bring (planche `Autre-Actions`) : ce qui reste sur le quota du jour. `nil`
+    /// sans quota servi — la ligne dit alors « Sans limite aujourd'hui » ou ce qui reste.
+    static func counter(_ availability: BringAvailability) -> String? {
+        guard let left = availability.remainingToday, let perDay = availability.perDay, perDay > 0 else { return nil }
+        return String(format: String(localized: "bring.counter", defaultValue: "%1$lld / %2$lld aujourd’hui", bundle: .main),
+                      min(max(left, 0), perDay), perDay)
+    }
+
     static func quota(name: String) -> String {
         String(format: String(localized: "bring.quota", defaultValue: "Plus de Bring aujourd’hui vers %@", bundle: .main), name)
     }

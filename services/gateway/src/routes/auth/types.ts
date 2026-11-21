@@ -5,6 +5,7 @@ import { SmsService } from '../../services/SmsService';
 import type { CacheStore } from '../../services/CacheStore';
 import type { AfterResponse } from '../../utils/after-response';
 import type { AccountActivation } from '@meeshy/shared/types/account-activation';
+import { servedProfileAccentColor } from '@meeshy/shared/utils/profile-accent';
 
 /**
  * Context shared across all auth route modules
@@ -72,6 +73,7 @@ export interface UserResponseData {
   bio: string | null;
   avatar: string | null;
   banner: string | null;
+  profileAccentColor: string | null;
   phoneNumber: string | null;
   role: string;
   isActive: boolean;
@@ -146,6 +148,7 @@ export function formatUserResponse(user: any, permissions?: any): UserResponseDa
     bio: user.bio,
     avatar: user.avatar,
     banner: user.banner || null,
+    profileAccentColor: servedProfileAccentColor(user.profileAccentColor),
     phoneNumber: user.phoneNumber,
     role: user.role,
     isActive: user.isActive,

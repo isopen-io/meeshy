@@ -56,12 +56,32 @@ final class ProfilePhoneReachabilityViewModel: ObservableObject {
         await setShared(true)
     }
 
-    /// Le réglage de partage avec CETTE personne, posé tout de suite et rendu à l'échec.
+    /// Le réglage de partage avec CETTE personne, posé tout de suite et rendu à l'échec. L'alerte servie se garde.
     func setShared(_ shared: Bool) async {
         let previous = settings
-        settings = PhoneReachabilityPersonSettings(userId: userId, isShared: shared)
+        settings = PhoneReachabilityPersonSettings(userId: userId, isShared: shared, alertsMe: previous?.alertsMe)
         do {
-            settings = try await service.updatePersonSettings(userId: userId, isShared: shared)
+            let served = try await service.updatePersonSettings(userId: userId, isShared: shared)
+            settings = PhoneReachabilityPersonSettings(userId: userId, isShared: served.isShared,
+                                                       alertsMe: served.alertsMe ?? previous?.alertsMe)
+        } catch {
+            settings = previous
+            notice = PhoneReachabilitySettingsWording.saveFailed
+        }
+    }
+
+    /// « Me prévenir s'il devient injoignable » (#19433) : seulement quand le serveur sert le champ (#19435).
+    var offersAlert: Bool { settings?.alertsMe != nil }
+
+    /// Être prévenu, ou non, quand SON téléphone devient injoignable : posé tout de suite, rendu à l'échec. Mon
+    /// partage ne bouge pas.
+    func setAlertsMe(_ alerts: Bool) async {
+        guard let previous = settings, previous.alertsMe != nil else { return }
+        settings = PhoneReachabilityPersonSettings(userId: userId, isShared: previous.isShared, alertsMe: alerts)
+        do {
+            let served = try await service.updateAlert(userId: userId, alertsMe: alerts)
+            settings = PhoneReachabilityPersonSettings(userId: userId, isShared: served.isShared,
+                                                       alertsMe: served.alertsMe ?? alerts)
         } catch {
             settings = previous
             notice = PhoneReachabilitySettingsWording.saveFailed

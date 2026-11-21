@@ -50,6 +50,7 @@ import { normalizeStickerImage, type StickerImageOutcome } from '../stickers/sti
 import type { PackViewer } from './PackCatalog';
 import { officialPublisherAccountFrom } from './PackPublishers';
 import { claimPublisherName, isNameKeyViolation, lostNameRace } from './PublisherNames';
+import { unsetOrNull } from '../../utils/prisma-unset';
 
 export type PartnerProfileView = {
   /** L'identifiant OPAQUE du profil — celui que portent les crédits et l'adresse du logo. */
@@ -141,12 +142,36 @@ const profileVersion = (row: ProfileRow): string =>
   createHash('sha256').update(JSON.stringify([row.displayName, row.logoSha256, row.website, row.updatedAt.toISOString()])).digest('hex').slice(0, 32);
 
 /** La ligne telle qu'elle a été relue : la condition de toute écriture qui en dépend. */
+/**
+ * L'instantané que `verify()` exige de retrouver intact — et les DEUX colonnes
+ * optionnelles y disent leur ABSENCE (#19802, audit du cycle 184).
+ *
+ * Prisma rend `null` pour un scalaire optionnel ABSENT du document, si bien
+ * qu'une ligne sans `website` ni logo produit un instantané `{ website: null,
+ * logoSha256: null }` — et l'égalité nue que cet objet posait n'appariait alors
+ * RIEN : `updateMany` rendait `count: 0`, `verify` rendait `profile-changed`, et
+ * la route rendait **409 `PARTNER_PROFILE_CHANGED` à chaque essai, pour
+ * toujours**, puisque rien n'avait changé entre-temps.
+ *
+ * C'est la population qu'`PackPublishers.adopt` crée — un éditeur adopté n'a
+ * rien déclaré, donc ni site ni logo. Elle entrait dans la file de vérification
+ * et n'en sortait jamais.
+ *
+ * > **Le MÊME piège que celui de ce cycle, un cran plus loin : rendre une ligne
+ * > VISIBLE oblige à la rendre TRAITABLE.** Poser la clé d'attente faisait
+ * > entrer ces profils dans la file ; sans ce correctif, le lot aurait ouvert
+ * > une file sur des lignes que l'admin ne pouvait pas traiter — et son seul
+ * > symptôme aurait été un 409 que personne n'aurait rattaché à ce lot.
+ *
+ * Les deux prédicats rendent chacun une clé `OR` : ils se composent par `AND`,
+ * comme `PostFeedService` le fait pour `expiresAt` (`utils/prisma-unset.ts`).
+ */
 const snapshotWhere = (row: ProfileRow) => ({
-  userId: row.userId,
-  displayName: row.displayName,
-  logoSha256: row.logoSha256,
-  website: row.website,
-  updatedAt: row.updatedAt,
+  AND: [
+    { userId: row.userId, displayName: row.displayName, updatedAt: row.updatedAt },
+    row.logoSha256 === null ? unsetOrNull('logoSha256') : { logoSha256: row.logoSha256 },
+    row.website === null ? unsetOrNull('website') : { website: row.website },
+  ],
 });
 
 class AuditUnavailableError extends Error {}

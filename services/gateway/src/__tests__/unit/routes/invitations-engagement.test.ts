@@ -38,6 +38,7 @@ async function inviter({ existingUser = null, withEmailService = true, emailReje
       create: jest.fn<any>().mockResolvedValue({ id: 'affiliate-token-id', token: 'aff_test1234' }),
     },
     emailInvitation: { create: jest.fn<any>().mockResolvedValue({ id: 'email-invitation-id' }) },
+    emailInvitationOptOut: { findUnique: jest.fn<any>().mockResolvedValue(null) },
   } as never);
   app.decorate('authenticate', async (req: any) => {
     req.user = { userId: USER_ID };

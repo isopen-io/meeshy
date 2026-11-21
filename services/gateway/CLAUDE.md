@@ -737,6 +737,206 @@ co-appartenance ne vaut rien : la route passe TOUTES ses lignes par
 `resolveForTargets(viewer, ids)`, et `hasAccess` ne gouverne plus que la liste.
 Le seul régime est le strict ; la seule variable est le viewer.
 
+## Une audience de diffusion lit la participation VIVANTE — et le cliquet qui le garde balaie `src/` ENTIER
+
+`PARTICIPATION_VIVANTE` (`isActive: true` **et** `bannedAt` nul ou absent) est
+la loi que les portes d'accès DEVRAIENT épeler — et **elle n'est pas tenue
+partout.** Le compte vit dans les témoins du cliquet
+(`audience-law-scope.test.ts` § « la distribution mesurée »,
+`audience-law-nested-scope.test.ts`), jamais dans cette phrase : il a déjà été
+écrit ici deux fois, et le cycle 195 l'a déplacé de ~100/~22 à 87/43 **sans que
+le dépôt change** — c'est le DISCRIMINANT qui avait changé. Un compte recopié
+dans un document dérive au premier élargissement de l'instrument qui le produit.
+
+> **Ne pas lire la phrase « c'est la loi de toute porte » comme une mesure.**
+> C'est une cible. Le cycle 194 a écrit l'absolu ici, et son audit adversarial
+> l'a mesuré faux le jour même — un document qui dit vrai sur le principe et
+> faux sur l'état est plus coûteux qu'un document absent (§ cliquet de la table
+> des routes).
+
+**Et ce paragraphe l'a lui-même payé une seconde fois.** Il affirmait, jusqu'au
+cycle 202, que `POST /conversations/:id/messages` (`messages-send.ts`) « admet
+sur `isActive` nu — un banni-mais-actif peut encore ENVOYER ». **Mesuré FAUX**
+(#20183) : la clause nue de ce fichier est un RÉSOLVEUR d'identifiant, et
+l'autorisation vit en aval — `MessagingService.handleMessage` relit la ligne
+(`findUnique`, `bannedAt` PROJETÉ) et refuse (#10440) ; le cache de lecture
+porte `bannedAt` et les deux sites de bannissement l'invalident
+(`participant-ban-core.ts`) ; la branche ANONYME, qui ne lit rien du tout, tombe
+sur la même garde plus le contrôle `p.conversationId !== conversationId` et les
+refus de `ensureParticipantFromMember` (#10443, #16724). La même phrase vit dans
+#20093, qui en est la source.
+
+> **Une clause nue n'est pas une fuite — « un audit qui liste des `select:` ne
+> liste pas des fuites » vaut aussi des `where:`.** La question n'est pas
+> « cette clause est-elle la bonne ? » mais **« qui AUTORISE ce que cette clause
+> rend ? »**, et il faut suivre la valeur jusqu'au site qui refuse. Une porte
+> que deux documents déclarent ouverte envoie réparer ce qui tient, et détourne
+> des six qui ne tenaient pas (voir le § suivant).
+
+**CINQ portes de la famille des LIENS DE PARTAGE étaient bien nues, et elles
+sont fermées** (#20183, cycle 202) : la FABRICATION d'un lien
+(`share-link-mint.ts`, les deux routes), les deux LISTES **avec
+`?conversationId=`** (`GET /conversations/:id/links`,
+`GET /links?conversationId=`), la FICHE d'un lien
+(`findActiveUserParticipant`) et ses MESSAGES (`messages-retrieval.ts`).
+#20135 n'avait fermé que l'ADMINISTRATION d'un lien ; la fabrication est la plus
+grave des cinq — un lien fabriqué par un banni n'a aucun passé, donc rien à
+refuser à l'inconnu qui l'emprunte : **le bannissement se contourne par
+procuration.** (Au présent : voir la dette ci-dessous.)
+
+**La famille n'est PAS fermée, et le dire au passé serait la troisième fois que
+ce paragraphe se trompe sur l'état.** Ce que l'audit adversarial du lot a
+mesuré, et qui reste OUVERT :
+
+- **Le CRÉATEUR d'un lien garde ses droits même banni** — `isCreator` de
+  `loadShareLinkForManagement` nomme l'appelant par une colonne de PROPRIÉTÉ
+  (`ConversationShareLink.createdBy`), sans lire aucune participation. C'est une
+  DÉCISION du cycle 200, gelée par un témoin
+  (`links-admin-host-not-creator.test.ts` § « sert le CRÉATEUR du lien même
+  banni »), et ce lot ne la retourne PAS. Mais l'audit a mesuré qu'elle couvre
+  plus que sa propre justification (« le droit sur son PROPRE lien ») : elle
+  porte `/toggle` — **réactiver un lien qu'un admin vient de désactiver** — et
+  `/arrivals` — le nom, le pays, la langue et la date de CHAQUE arrivée, y
+  compris après son bannissement — et le bannissement **ne désactive pas les
+  liens que la cible a créés** (`participant-ban-core.ts` ne ferme que le lien
+  par lequel elle est ENTRÉE). Avec `GET /links` **sans** `?conversationId=`,
+  qui sert au banni le `linkId` de ses propres liens sans aucun contrôle
+  d'appartenance, la chaîne est complète. **Issue de décision produit : #20189.**
+- **La fiche d'un lien reste lisible par l'aperçu public** (`canPreview`), et le
+  salon GLOBAL « meeshy » est admis inconditionnellement pour tout compte
+  authentifié. Le resserrement de la porte 4 retire le grant de MEMBRE, pas ces
+  deux-là — c'est écrit sur le site.
+- **La porte de l'INVITÉ anonyme n'était pas nue au sens utile** : son
+  autorisation vit en aval (`guestAccessEnd`, #10470). Le lot l'avait comptée
+  parmi ses portes et resserrée ; mesuré, c'était un no-op de sécurité ET une
+  régression de l'ORDRE UNIQUE des causes (#10457). **Reverti**, avec un témoin
+  qui tombe si quelqu'un le rejoue.
+
+> **Et le lot a commis, dans le même commit, l'erreur qu'il venait de
+> documenter deux paragraphes plus haut.** Il a corrigé l'affirmation fausse sur
+> `messages-send.ts` — « qui AUTORISE ce que cette clause rend ? » — puis compté
+> une sixième porte dont l'autorisation vivait en aval, dans le même fichier,
+> soixante-dix lignes plus bas. **Écrire une règle ne l'applique pas au lot qui
+> l'écrit** : la relire contre son propre diff est une étape, pas une évidence.
+
+Les DIFFUSEURS la doivent aussi, et la distinction qui décide du sens d'un
+correctif est celle-ci (#16690) :
+
+| la liste répond à | l'appliquer veut dire | la loi |
+|---|---|---|
+| **qui REÇOIT** (audience) | servir | la plus ÉTROITE — `PARTICIPATION_VIVANTE` |
+| **qui ne doit RIEN recevoir** (exclusion, liste de refus) | taire | la plus LARGE — `isActive` nu, **délibérément** |
+| **COMBIEN ils sont** (mesure) | afficher un nombre | dire ce que le nombre alimente ; la troncature et le sur-comptage y sont des nombres FAUX, pas des fuites |
+
+Une ligne `isActive: true, bannedAt ≠ null` **existe en base** : son producteur
+est fermé (#19688, #10436), aucune migration n'a repris les lignes existantes,
+et sa room `user:<id>` est rejointe INCONDITIONNELLEMENT.
+
+**Le cliquet voit DEUX formes d'audience depuis #20100**, et la seconde n'a pas de
+portée à lire :
+
+| forme | ce qui la nomme | sa portée |
+|---|---|---|
+| APPELÉE — `participant.findMany\|count\|groupBy\|aggregate\|findFirst` | la TABLE | écrite (`conversationId`) |
+| IMBRIQUÉE — `conversation.find…({ select: { participants: { where } } })` | une RELATION, que `CallSession` partage | **implicite**, portée par le parent |
+
+Une trentaine d'audiences imbriquées vivaient hors de tout relevé, dont
+l'éventail de notifications push — par où le TEXTE d'un message atteignait
+l'écran verrouillé d'un membre actif-et-banni. **« Aucune n'épelait la loi » est
+FAUX**, et l'audit du lot l'a mesuré : `MentionService.validateMentionPermissions`
+porte `where: PARTICIPATION_VIVANTE` sur une clause imbriquée depuis #14066 — le
+relevé ne la voit pas parce que ce `where` est une CONSTANTE et non un littéral,
+donc il la PUBLIE comme illisible. Une affirmation d'exhaustivité sur un relevé
+qui publie ce qu'il n'a pas jugé doit compter les DEUX colonnes.
+
+> **Un balayage qui change de forme d'appel change aussi de PREUVE DE MODÈLE.**
+> La forme appelée la portait gratuitement. La question à poser à tout
+> élargissement de discriminant n'est pas « que vois-je en plus ? » mais
+> **« qu'est-ce qui me prouvait, dans la forme d'avant, que je regardais la bonne
+> chose ? »**.
+
+Il PUBLIE donc, au lieu de les juger : `portée-indirecte` (#20091),
+`clé-indirecte` (la clé du membre vient d'un APPEL étalé — une PORTE qui a
+l'apparence d'une audience), `modèle-indécidable` (une clause imbriquée muette sur
+l'activité et le bannissement, donc peut-être des participants d'APPEL), et les
+trois formes de `where` non littéral. Et il sait que **ni `{ not: … }` ni
+`unsetOrNull`/`differsOrUnset` ne nomment personne** — aucune forme négative ne
+SÉLECTIONNE, et cela vaut de `{ notIn: … }`, de `NOT: { userId }` et d'un curseur
+de pagination `{ gt: … }` autant que de `{ not: null }`. Les combinateurs `AND`
+et `OR` sont TRAVERSÉS (l'idiome `OR: [{ id: clé }, { userId: clé }]` que ce
+document prescrit désigne UN lecteur, donc une porte), `NOT` ne l'est pas, et la
+traversée s'arrête avant les filtres de RELATION.
+
+**La garde de bannissement se reconnaît par une LISTE BLANCHE de formes, jamais
+par le mot `bannedAt`.** `NOT: { bannedAt: null }` et
+`OR: [{ bannedAt: null }, { role: 'creator' }]` étaient certifiés CONFORMES par
+le discriminant d'avant — le mot y est, la polarité et la portée n'y sont pas.
+Une orthographe valide non prévue est donc comptée NUE : une relecture de trop
+coûte moins qu'une fausse certification.
+
+**Une projection imbriquée SANS `where`** (strictement plus large qu'`isActive`
+nu : elle rend les partis, les retirés et les bannis) est écartée du relevé
+EXPLICITEMENT, pas en silence — plusieurs de ces sites jugent la loi en CODE, ce
+qu'aucun discriminant de `where` ne peut voir, et deviner y fabriquerait des
+verdicts. Elles sont mesurées et suivies par #20103.
+
+**Une loi peut se juger en CODE, et c'est alors une DÉCISION, pas une dette.**
+Quand une lecture porte deux questions dont l'une exige le sur-ensemble, le
+`where` reste large et la loi s'applique sur l'audience seule
+(`participationEstVivante` après lecture) — `announceStartedGroup` le fait parce
+que son créateur ne se reconnaît qu'au `role` de sa ligne de participation. Deux
+conséquences : le site est NU pour le cliquet (apprendre au cliquet à inférer une
+garde de code reviendrait à rendre des verts sur une intuition), et **la lecture
+doit PROJETER les deux colonnes de la loi** — un champ non projeté vaut
+`undefined`, donc `participationEstVivante` rendrait `false` pour tout le monde,
+et le compilateur ne le voit pas.
+
+**Il porte DEUX inventaires
+qu'il ne faut jamais fondre en un :
+
+- `DELIBERATELY_WIDE` — « ce site DOIT être large », avec sa raison instruite ;
+- `MEASURED_NOT_INSTRUCTED` — « on ne sait pas encore ce que ce site décide »,
+  avec sa famille et son issue.
+
+> **« Décidé large » et « pas encore instruit » ne sont pas la même phrase, et
+> les confondre transforme une dette en autorisation** — dans un inventaire
+> unique, on lira toujours « décidé ».
+
+Trois choses à savoir avant d'y toucher :
+
+- **Il PUBLIE ce qu'il ne sait pas juger** (`sweepUnjudgeableParticipantReads`) :
+  un `where` qui est un appel, un ternaire ou un paramètre n'a pas de littéral à
+  lire. Une variable déclarée par un `const` du même fichier est résolue ; rien
+  d'autre. Un site resserré dont le `where` reste illisible n'a AUCUN témoin —
+  mesuré : la mutation inverse laissait le cliquet vert.
+- **Sa clé est `fichier#rang-de-la-requête`**, stable à l'édition et PAS à
+  l'élargissement du discriminant : un lot qui touche le discriminant reclasse
+  l'inventaire entier, il ne fait pas que l'étendre.
+- **Une audience derrière une égalité EXACTE n'a pas de dégradation d'un cran —
+  et c'est pourquoi l'annuaire d'appareils E2EE reste LARGE.** `directoryOf` est
+  comparé par `isDeviceSetExact` : le resserrer ferait DIVERGER l'annuaire de ce
+  que l'émetteur adresse, puisque les trois lectures qui servent la liste de
+  membres au client (et `mayReadKeysOf`) sont nues — donc `409 DEVICES_MISMATCH`
+  sur chaque envoi. Et l'E2EE étant réservé aux PAIRES, le banni-mais-actif y
+  est le SEUL pair : la panne frappe le membre légitime, définitivement, dans
+  une conversation que rien ne ramène en clair. **Resserrer ce site seul est
+  net-NÉGATIF**, et un témoin l'a gelé ; la convergence des quatre lectures est
+  #20093.
+
+  > Devant une liste qui alimente une comparaison exacte, la question n'est pas
+  > « est-elle trop large ? » mais **« que fait le site d'en face quand elle ne
+  > correspond pas, et qui paie ? »** — puis *qui compose la liste d'en face, et
+  > sous quelle clause ?*. La seconde question est celle que le cycle 194 avait
+  > sautée : il avait vérifié la FONCTION de garde, pas le `select` qui SERT la
+  > liste.
+
+Et avant de qualifier une clause nue de fuite : **« un audit qui liste des
+`select:` ne liste pas des fuites » vaut aussi des `where:`.**
+`messageMentions.loadMentionParticipants` lit la clause nue et c'est un
+RÉSOLVEUR — l'autorisation vit en aval, dans `validateMentionPermissions`, qui
+épelle la loi. La question n'est pas « cette clause est-elle la bonne ? » mais
+**« qui AUTORISE ce que cette clause rend ? »**.
+
 ## Un fichier `X.ts` à côté d'un répertoire `X/` : lequel est chargé ?
 
 Le fichier. Node résout **LOAD_AS_FILE avant LOAD_AS_DIRECTORY**, donc un import

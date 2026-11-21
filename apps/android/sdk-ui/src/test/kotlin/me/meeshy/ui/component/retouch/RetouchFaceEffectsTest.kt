@@ -65,6 +65,16 @@ class RetouchFaceEffectsTest {
     }
 
     @Test
+    fun `le bebe eclaircit toute la prise, et rosit les joues d un visage vu (#19779)`() {
+        val faceless = RetouchFaceEffects.apply(CallFaceEffect.BABY, gray(), null).getPixel(2, 2)
+        assertThat(Color.red(faceless)).isGreaterThan(128)
+        val painted = RetouchFaceEffects.apply(CallFaceEffect.BABY, gray(), face)
+        val cheek = CallFaceEffectGeometry.cheekCenters(face.bounds).first()
+        val blush = painted.getPixel(cheek.x.toInt(), cheek.y.toInt())
+        assertThat(Color.red(blush)).isGreaterThan(Color.blue(blush) + 10)
+    }
+
+    @Test
     fun `l eruption fait monter la lave du bas de l image`() {
         val painted = RetouchFaceEffects.apply(CallFaceEffect.VOLCANO, gray(), null)
         val bottom = painted.getPixel(200, 597)

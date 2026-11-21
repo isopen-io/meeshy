@@ -258,6 +258,8 @@ export interface AudioProcessCompletedEvent {
   voiceModelQuality: number;
   processingTimeMs: number;
   timestamp: number;
+  postId?: string;
+  postMediaId?: string;
 }
 
 export interface AudioProcessErrorEvent {
@@ -350,7 +352,7 @@ export interface TranslationReadyEvent {
   translatedAudio: {
     targetLanguage: string;
     translatedText: string;
-    audioUrl: string;
+    audioUrl: string | null;  // #19648 — null sans piste (TTS en échec)
     audioPath: string;
     durationMs: number;
     voiceCloned: boolean;
@@ -374,7 +376,7 @@ interface BaseTranslationEvent {
   translatedAudio: {
     targetLanguage: string;
     translatedText: string;
-    audioUrl: string;
+    audioUrl: string | null;  // #19648 — null sans piste (TTS en échec)
     audioPath: string;
     durationMs: number;
     voiceCloned: boolean;

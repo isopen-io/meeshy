@@ -122,29 +122,12 @@ public struct MeeshyCodeCard<Center: View, Header: View>: View {
         }
     }
 
+    /// La plaque (K31 `MeeshyCodePlate`), la même qu'à plat hors de la carte : elle glisse avec l'inclinaison,
+    /// sa pastille centrale un peu plus.
     private func plate(recipe: MeeshyCodeCardRecipe, motion: MeeshyCodeCardMotion) -> some View {
-        let plateShape = RoundedRectangle(cornerRadius: CGFloat(recipe.plateRadius), style: .continuous)
-        let plateColor = MeeshyCodeCardRecipe.plateColor(style: recipe.style).color
-        let centerSide = MeeshyCodeCardRecipe.centerSide(forSide: recipe.side)
-        return ZStack {
-            if payload == nil || recipe.showsSkeleton {
-                MeeshySkeleton(shape: .card(aspect: 1, radius: 14))
-                    .frame(width: CGFloat(recipe.side), height: CGFloat(recipe.side))
-            } else {
-                MeeshyCodeMatrix(payload: payload, label: label, tint: tint, side: recipe.side)
-                    .accessibilityHidden(true)
-                if recipe.hasCenter {
-                    center
-                        .frame(width: CGFloat(centerSide), height: CGFloat(centerSide))
-                        .background(plateColor, in: Circle())
-                        .clipShape(Circle())
-                        .offset(x: CGFloat(motion.centerShift - motion.plateShift))
-                }
-            }
-        }
-        .padding(CGFloat(recipe.plateMargin))
-        .background(plateShape.fill(plateColor))
-        .offset(x: CGFloat(motion.plateShift))
+        MeeshyCodePlate(payload: recipe.showsSkeleton ? nil : payload, label: label, tint: tint, side: recipe.side,
+                        style: recipe.style, centerShift: motion.centerShift - motion.plateShift) { center }
+            .offset(x: CGFloat(motion.plateShift))
     }
 
     private func reflection(motion: MeeshyCodeCardMotion, shape: RoundedRectangle) -> some View {

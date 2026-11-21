@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- « En appel » (#18753, ACT-01) : android-only tant que les clés phoneCall.* ne sont pas au catalogue iOS. -->
+<resources>
+    <string name="phone_call_someone">شخص مقرّب</string>
+    <string name="phone_call_pill_started">%1$s في مكالمة</string>
+    <string name="phone_call_pill_ended">أنهى %1$s المكالمة</string>
+    <string name="phone_call_since_minutes">في مكالمة منذ %1$d د</string>
+    <string name="phone_call_since_clock">في مكالمة منذ %1$s</string>
+    <string name="phone_call_a11y">%1$s في مكالمة</string>
+    <string name="phone_call_share_global_title">إظهار أنني في مكالمة لأفراد دمي</string>
+    <string name="phone_call_share_global_scope">دون ذكر مع من أبدًا.</string>
+    <string name="phone_call_share_person">إظهار أنني في مكالمة لـ %1$s</string>
+    <string name="phone_call_share_person_scope">يرى %1$s أنني في مكالمة، دون معرفة مع من.</string>
+    <string name="phone_call_share_off">إظهار أنك في مكالمة معطّل.</string>
+</resources>

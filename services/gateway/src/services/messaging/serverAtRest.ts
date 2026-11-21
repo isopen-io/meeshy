@@ -74,6 +74,39 @@ export class ServerAtRestUnreadableError extends Error {
 export const isServerAtRestUnavailable = (error: unknown): error is ServerAtRestUnavailableError =>
   error instanceof ServerAtRestUnavailableError;
 
+export const CONVERSATION_KEY_GENERATION_FAILED = 'CONVERSATION_KEY_GENERATION_FAILED';
+
+/**
+ * #19786 — la clé de cette conversation n'a pas pu être CRÉÉE, et rien n'a été
+ * écrit. Distinct de `ServerAtRestUnavailableError`, qui dit « la clé maîtresse
+ * manque » — un refus qui durera tant que l'exploitant n'agira pas. Ici la
+ * cause est en général transitoire (base injoignable, élection de primaire,
+ * conflit d'écriture), et le MÊME envoi, rejoué, aboutit.
+ *
+ * Cette classe existe parce que le lot qui a réglé le verrou de génération
+ * (#19786) a fait voyager jusqu'aux appelants une erreur de base BRUTE, qu'aucun
+ * prédicat de `MessagingService` ne reconnaissait : elle tombait dans la branche
+ * terminale « erreur interne », servie en **HTTP 400**, que `outcomeOf`
+ * (`apps/web/src/lib/api/outcome.ts`) classe `permanent` — donc SANS bouton
+ * « Réessayer ». Avant le lot, le même incident pendait puis expirait en
+ * `TIMEOUT`, c'est-à-dire en transitoire RETRYABLE. Régler le verrou sans
+ * classer l'erreur échangeait donc une pendaison contre un refus DÉFINITIF :
+ * un meilleur transport pour une pire issue produit (#9223).
+ *
+ * `underlying` porte la cause pour le journal ; elle ne voyage pas sur le fil.
+ */
+export class ConversationKeyGenerationFailedError extends Error {
+  readonly code = CONVERSATION_KEY_GENERATION_FAILED;
+
+  constructor(readonly conversationId: string, readonly underlying: unknown) {
+    super('La clé de chiffrement de cette conversation n’a pas pu être créée : renvoyez le message');
+    this.name = 'ConversationKeyGenerationFailedError';
+  }
+}
+
+export const isConversationKeyGenerationFailed = (error: unknown): error is ConversationKeyGenerationFailedError =>
+  error instanceof ConversationKeyGenerationFailedError;
+
 export const SERVER_AT_REST_CIPHERTEXT_REFUSED = 'SERVER_AT_REST_CIPHERTEXT_REFUSED';
 
 export const SERVER_AT_REST_CIPHERTEXT_REFUSAL_MESSAGE =

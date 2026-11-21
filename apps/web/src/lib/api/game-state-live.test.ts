@@ -6,7 +6,7 @@ import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progr
 import { ENGAGEMENT_PROGRESS_FIXTURE } from './engagement-fixture';
 import type { EngagementWithGame } from './engagement';
 import { gameBlockFixture } from './game-fixture';
-import { applyGameUpdated } from './game-state-live';
+import { applyGameMissionsUpdated, applyGameUpdated } from './game-state-live';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, keepNewerGameState } from './game-state-order';
 
 const seeded = (gameRevision: number): { client: QueryClient; view: EngagementWithGame } => {
@@ -37,6 +37,15 @@ describe('game:updated (#10900) — l’état servi ailleurs se pose, jamais un 
   test('un événement sans révision lisible est ignoré', () => {
     const { client, view } = seeded(300);
     applyGameUpdated(client, { reason: 'mint', game: gameBlockFixture({ score: 4_000 }) });
+    expect(read(client)).toEqual(view);
+  });
+});
+
+describe('game:missions-updated (#16425, #17367) — un acte qui avance fait relire le bloc', () => {
+  test('l’invalidation pure marque la progression à relire, sans toucher au cache', () => {
+    const { client, view } = seeded(100);
+    applyGameMissionsUpdated(client);
+    expect(client.getQueryState(ENGAGEMENT_PROGRESS_QUERY_KEY)?.isInvalidated).toBe(true);
     expect(read(client)).toEqual(view);
   });
 });

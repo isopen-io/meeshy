@@ -38,4 +38,6 @@
     <string name="bubble_a11y_file">Ficheiro %1$s</string>
     <string name="bubble_a11y_pinned">Fixado</string>
     <string name="bubble_a11y_ephemeral">Mensagem efémera</string>
+    <string name="skeleton_link_row_loading">Carregando um link</string>
+    <string name="talkie_send_voice">O walkie-talkie não passa agora: envie uma mensagem de voz.</string>
 </resources>

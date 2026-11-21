@@ -17,6 +17,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 import { enqueueOfflineReactionEvent, type ReactionEventType } from '../reactionOfflineQueue';
+import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control.js';
 import { emitServerEvent } from '../serverEmit';
 import { emitConversationActivityUpdate } from '../emitConversationActivityUpdate';
 import { queuedVariantOf, type QueuedPayloadFor } from '../queuedEventContract';
@@ -438,14 +439,14 @@ export class ReactionHandler {
       const participantId = user?.participantId;
       if (!participantId) return undefined;
       const anonParticipant = await this.prisma.participant.findFirst({
-        where: { id: participantId, conversationId: msg.conversationId, isActive: true },
+        where: { id: participantId, conversationId: msg.conversationId, ...PARTICIPATION_VIVANTE },
         select: { id: true }
       });
       return anonParticipant ? participantId : undefined;
     }
 
     const participant = await this.prisma.participant.findFirst({
-      where: { userId, conversationId: msg.conversationId, isActive: true },
+      where: { userId, conversationId: msg.conversationId, ...PARTICIPATION_VIVANTE },
       select: { id: true }
     });
     return participant?.id;

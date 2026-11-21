@@ -42,6 +42,9 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
     var paginatedGate: (@Sendable (_ cursor: String?) async -> Void)?
     /// Les curseurs demandés, dans l'ordre.
     var paginatedCursors: [String?] = []
+    /// Suspend un `request` APRÈS qu'il a choisi sa réponse, par rang d'appel (à partir de 1) : la réponse d'un aller
+    /// lent revient après celle d'un aller plus récent (#19309).
+    var requestGate: (@Sendable (_ call: Int) async -> Void)?
 
     // MARK: - Call Tracking
 
@@ -92,14 +95,19 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
         // observable même quand le test court-circuite la réponse.
         if let body { lastPostBodies.append(body) }
         if let error = errorToThrow { throw error }
+        let call = requestCount
         if let next = stubQueues[endpoint]?.first {
             stubQueues[endpoint]?.removeFirst()
             if let error = next as? Error { throw error }
-            if let queued = next as? T { return queued }
+            if let queued = next as? T {
+                await requestGate?(call)
+                return queued
+            }
         }
         guard let result = stubs[endpoint] as? T else {
             throw NSError(domain: "MockAPIClientForApp", code: -1, userInfo: [NSLocalizedDescriptionKey: "No stub for endpoint '\(endpoint)' returning \(T.self)"])
         }
+        await requestGate?(call)
         return result
     }
 

@@ -52,7 +52,7 @@ const ligne = (over: Record<string, unknown> = {}) => ({
 });
 
 async function monter(row: Record<string, unknown>): Promise<FastifyInstance> {
-  const prisma = { profileAddress: { findMany: async () => [] }, user: { findFirst: jest.fn<any>(async (a?: any) => (a?.where?.blockedUserIds ? null : row)) } };
+  const prisma = { profileAddress: { findMany: async () => [] }, communityMember: { findMany: async () => [] }, user: { findFirst: jest.fn<any>(async (a?: any) => (a?.where?.blockedUserIds ? null : row)) } };
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('authenticate', async () => {});
   app.decorate('prisma', prisma as never);

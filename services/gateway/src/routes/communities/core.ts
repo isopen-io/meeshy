@@ -8,6 +8,7 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { viewerFromRequest } from '../users/presence-gate';
+import { conversationActiveMemberCountSelect } from '../conversations/utils/active-member-count';
 import { gateConversationParticipantsPresence } from './member-presence';
 import {
   CreateCommunitySchema,
@@ -18,17 +19,20 @@ import { validatePagination } from '../../utils/pagination';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendBadRequest, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendConflict, sendPaginatedSuccess } from '../../utils/response';
-import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
+import { participationEstVivante, refuserCommeIntrouvable } from '../conversations/utils/access-control';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { identityImageIsCallers, IDENTITY_IMAGE_NOT_OWNED } from '../../services/attachments/identityImageOwnership';
 import { countOnlineMembers } from '../../services/community-online-count';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
+import { viewerJoinRequestState, viewerJoinRetryAt } from './join-request-state';
+import { scheduleCommunityJoinRequestedFrom } from '../../services/community-join-request-broadcast';
 import { activeMembershipOf, COMMUNITY_ACTIVE_COUNTS, communityConversationSchema, communityDetailInclude, communityForViewer, flattenCommunityCounts } from './serialization';
 import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import type { CommunityEngagementOptions } from './types';
 import { applyCommunityAdmission, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
+import { communityMemberAnnouncerFrom } from '../../services/community-member-broadcast';
 import { newMemberRefusal } from '../../services/conversations/newMemberAdmission';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesCoreRoutes' });
@@ -307,7 +311,19 @@ export async function registerCoreRoutes(
         return null;
       });
 
-      sendSuccess(reply, { ...served, onlineMemberCount });
+      const joinRequestInput = {
+        communityId: community.id,
+        viewerId: userId,
+        requiresJoinApproval: community.requiresJoinApproval === true,
+        isMember: served.currentUserRole !== null,
+      };
+      const currentUserJoinRequest = await viewerJoinRequestState(fastify.prisma, {
+        ...joinRequestInput,
+        onReopened: (reopened) => scheduleCommunityJoinRequestedFrom(fastify, reopened),
+      });
+      const currentUserJoinRetryAt = currentUserJoinRequest === null ? await viewerJoinRetryAt(fastify.prisma, joinRequestInput) : null;
+
+      sendSuccess(reply, { ...served, onlineMemberCount, currentUserJoinRequest, currentUserJoinRetryAt });
     } catch (error) {
       logger.error('Error fetching community', error as Error);
       sendInternalError(reply, 'Failed to fetch community');
@@ -384,9 +400,9 @@ export async function registerCoreRoutes(
       // Creer la communaute ET automatiquement ajouter le createur comme membre ADMIN
       const community = await fastify.prisma.community.create({
         data: {
-          name: SecuritySanitizer.sanitizeText(validatedData.name),
+          name: SecuritySanitizer.sanitizePlainText(validatedData.name),
           identifier: identifier,
-          description: validatedData.description !== undefined ? SecuritySanitizer.sanitizeText(validatedData.description) : undefined,
+          description: validatedData.description !== undefined ? SecuritySanitizer.sanitizePlainText(validatedData.description) : undefined,
           avatar: validatedData.avatar,
           isPrivate: validatedData.isPrivate ?? true,
           createdBy: userId,
@@ -565,10 +581,16 @@ const community = await fastify.prisma.community.findFirst({
       //   `where`/`include` ; au-delà du plafond, un client qui a besoin de
       //   la liste exhaustive des membres d'UNE conversation appelle déjà
       //   `GET /conversations/:id/participants` (paginée séparément).
+      // #19541 — ce que le membre peut OUVRIR, au même filtre que
+      // `GET /conversations` (`core-list.ts`) : une participation ACTIVE (ni
+      // partie, ni bannie) dans une conversation ACTIVE (ni fermée, ni rendue
+      // obsolète — les deux écritures posent `isActive: false`). Le total
+      // paginé lit le même `where`.
       const whereClause = {
         communityId: id,
+        isActive: true,
         participants: {
-          some: { userId: userId }
+          some: { userId: userId, isActive: true }
         }
       };
 
@@ -577,6 +599,7 @@ const community = await fastify.prisma.community.findFirst({
           where: whereClause,
           include: {
             participants: {
+              where: { isActive: true },
               take: COMMUNITY_CONVERSATION_PARTICIPANTS_DISPLAY_CAP,
               orderBy: { joinedAt: 'asc' },
               include: {
@@ -594,7 +617,7 @@ const community = await fastify.prisma.community.findFirst({
             _count: {
               select: {
                 messages: true,
-                participants: true
+                ...conversationActiveMemberCountSelect
               }
             }
           },
@@ -620,7 +643,11 @@ const community = await fastify.prisma.community.findFirst({
       // de sortir. Déclarer sans gater aurait publié la fuite.
       const gated = await gateConversationParticipantsPresence(fastify.prisma, viewerFromRequest(request), conversations);
 
-      return sendPaginatedSuccess(reply, gated, {
+      // `memberCount` est l'effectif ACTIF compté à la lecture, jamais la
+      // colonne `Conversation.memberCount`, que rien n'écrit (#19541).
+      const served = gated.map(conversation => ({ ...conversation, memberCount: conversation._count.participants }));
+
+      return sendPaginatedSuccess(reply, served, {
         total: totalCount,
         limit: limitNum,
         offset: offsetNum,
@@ -710,7 +737,18 @@ const community = await fastify.prisma.community.findFirst({
           type: true,
           encryptionMode: true,
           communityId: true,
-          participants: { select: { userId: true, role: true, isActive: true } }
+          participants: {
+            // `bannedAt` EST la moitié de la loi, et la projection est le
+            // seul endroit où elle peut entrer (#20136) : `participationEstVivante`
+            // lit `row.bannedAt == null`, et un champ NON PROJETÉ vaut
+            // `undefined`, dont `undefined == null` est VRAI. Juger la loi sans
+            // charger la colonne est donc un no-op MUET — la garde a l'air
+            // posée, elle rend `true` pour un banni, et aucun témoin de garde
+            // ne peut le voir. « Un `where` n'est pas une projection », et un
+            // prédicat jugé APRÈS lecture ne vaut que ce que la lecture a
+            // demandé.
+            select: { userId: true, role: true, isActive: true, bannedAt: true },
+          }
         }
       });
 
@@ -726,8 +764,15 @@ const community = await fastify.prisma.community.findFirst({
       // rattacher à la sienne n'importe quelle conversation du système dont il
       // connaissait l'identifiant, et en recevoir la liste des participants
       // dans la réponse (#4191).
+      // #20136 — la PARTICIPATION VIVANTE, et deux écarts corrigés d'un coup.
+      // `p.isActive !== false` admettait une ligne dont `isActive` est ABSENT ou
+      // nul — « non faux » n'est pas « vrai » — et ne disait RIEN de `bannedAt` :
+      // un administrateur de conversation BANNI rattachait « sa » conversation à
+      // une communauté. Le second écart est le plus discret des deux, et c'est
+      // celui qu'un correctif pressé laisse derrière lui.
       const participantAppelant = conversation.participants.find(
-        (p: { userId: string | null; isActive?: boolean }) => p.userId === userId && p.isActive !== false
+        (p: { userId: string | null; isActive?: boolean; bannedAt?: Date | null }) =>
+          p.userId === userId && participationEstVivante(p)
       );
       const administreLaConversation = Boolean(
         participantAppelant &&
@@ -784,8 +829,20 @@ const community = await fastify.prisma.community.findFirst({
             createdBy: community.createdBy,
             isPrivate: true,
             actorRole: community.members[0]?.role ?? null,
+            // #20136 — LA MÊME LOI, et c'est ici qu'elle pèse le plus lourd :
+            // cette liste n'affiche rien, elle ÉCRIT. `applyCommunityAdmission`
+            // crée une ligne `CommunityMember` pour chacun, donc un participant
+            // banni de la conversation devenait MEMBRE de la communauté privée
+            // à laquelle on la rattache — une appartenance qu'aucune autre porte
+            // ne lui aurait donnée, obtenue par un geste qui parle d'autre chose.
+            //
+            // La porte vingt lignes plus haut et cette liste lisent le MÊME
+            // relevé sous le MÊME prédicat : les deux écarts avaient une seule
+            // cause, ils ont une seule correction.
             participantIds: conversation.participants
-              .filter((p: { userId: string | null; isActive?: boolean }) => p.isActive !== false)
+              .filter((p: { userId: string | null; isActive?: boolean; bannedAt?: Date | null }) =>
+                participationEstVivante(p)
+              )
               .flatMap((p: { userId: string | null }) => (p.userId ? [p.userId] : [])),
             admitActor: false,
           })
@@ -799,7 +856,7 @@ const community = await fastify.prisma.community.findFirst({
       // L'admission s'écrit AVANT le rattachement : si elle échoue, rien n'est
       // rattaché (au pire des membres en plus, jamais un salon ouvert).
       if (admission?.kind === 'admitted') {
-        await applyCommunityAdmission(fastify.prisma, id, admission);
+        await applyCommunityAdmission(fastify.prisma, id, admission, communityMemberAnnouncerFrom(fastify));
       }
 
       // Update conversation to belong to this community (allows moving between communities)
@@ -808,6 +865,7 @@ const community = await fastify.prisma.community.findFirst({
         data: { communityId: id },
         include: {
           participants: {
+            where: { isActive: true },
             include: {
               user: {
                 select: {
@@ -821,7 +879,7 @@ const community = await fastify.prisma.community.findFirst({
             }
           },
           _count: {
-            select: { messages: true, participants: true }
+            select: { messages: true, ...conversationActiveMemberCountSelect }
           }
         }
       });
@@ -832,7 +890,7 @@ const community = await fastify.prisma.community.findFirst({
       // `user` ET celle de la ligne `Participant` ; le schéma retient le reste
       // de la ligne que l'`include` rend (jeton de session, session anonyme).
       const [gated] = await gateConversationParticipantsPresence(fastify.prisma, viewerFromRequest(request), [updated]);
-      return sendSuccess(reply, gated);
+      return sendSuccess(reply, { ...gated, memberCount: gated._count.participants });
     } catch (error) {
       logger.error('Error adding conversation to community', error as Error);
       return sendInternalError(reply, 'Failed to add conversation to community');

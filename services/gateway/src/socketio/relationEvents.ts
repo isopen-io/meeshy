@@ -2,14 +2,17 @@
  * Les émissions du LIEN entre deux personnes (#13933) : un niveau monté, et les
  * temps du rituel du Sang. Une charge PAR destinataire — chacune nomme l'AUTRE.
  *
- * Aucune émission de baisse, de sortie ni de refus n'existe ici, et c'est
- * volontaire (RG-07) : le silence est une propriété du module, pas de ses
- * appelants. Même patron que `emitMentionCreated.ts` : un `io` optionnel, jamais
+ * Aucune émission de baisse, de sortie, de refus ni de blocage ne part vers
+ * l'AUTRE, et c'est volontaire (RG-07) : le silence est une propriété du module,
+ * pas de ses appelants. Les émissions « by-me » (#19366) n'ont qu'une adresse,
+ * la room de l'ACTEUR — ses autres appareils — et leur signature ne prend même
+ * pas l'identifiant d'une seconde room. Même patron que `emitMentionCreated.ts` : un `io` optionnel, jamais
  * d'échec — un événement temps réel ne fait pas échouer le geste qu'il annonce.
  */
 import {
   ROOMS,
   SERVER_EVENTS,
+  type RelationLevelLoweredEventData,
   type RelationRitualProgressEventData,
   type RelationRitualStartedEventData,
 } from '@meeshy/shared/types/socketio-events';
@@ -40,6 +43,23 @@ export function emitRelationLevelRaised(io: RelationIo | undefined, params: { us
   const at = params.at.toISOString();
   safely(() => io?.to(ROOMS.user(params.userA)).emit(SERVER_EVENTS.RELATION_LEVEL_RAISED, { userId: params.userB, level: params.level, at }));
   safely(() => io?.to(ROOMS.user(params.userB)).emit(SERVER_EVENTS.RELATION_LEVEL_RAISED, { userId: params.userA, level: params.level, at }));
+}
+
+/** À l'ACTEUR seul (#19366) : ses autres appareils relisent le lien baissé. Jamais à l'autre (RG-07). */
+export function emitRelationLevelLowered(
+  io: RelationIo | undefined,
+  params: { actorId: string; otherId: string; grantedByMe: RelationLevelLoweredEventData['grantedByMe']; effectiveLevel: RelationLevelLoweredEventData['effectiveLevel']; at: Date },
+): void {
+  const payload: RelationLevelLoweredEventData = {
+    userId: params.otherId, grantedByMe: params.grantedByMe, effectiveLevel: params.effectiveLevel, at: params.at.toISOString(),
+  };
+  safely(() => io?.to(ROOMS.user(params.actorId)).emit(SERVER_EVENTS.RELATION_LEVEL_LOWERED, payload));
+}
+
+/** À l'ACTEUR seul (#19366) : ses autres appareils posent ou retirent le blocage. Jamais au bloqué. */
+export function emitBlockedByMe(io: RelationIo | undefined, params: { actorId: string; otherId: string; blocked: boolean; at: Date }): void {
+  const event = params.blocked ? SERVER_EVENTS.USER_BLOCKED_BY_ME : SERVER_EVENTS.USER_UNBLOCKED_BY_ME;
+  safely(() => io?.to(ROOMS.user(params.actorId)).emit(event, { userId: params.otherId, at: params.at.toISOString() }));
 }
 
 export function emitRitualStarted(io: RelationIo | undefined, params: { toUserId: string; fromUserId: string } & Omit<RelationRitualStartedEventData, 'userId'>): void {

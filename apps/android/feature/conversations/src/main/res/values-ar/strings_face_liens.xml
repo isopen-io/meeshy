@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="links_face_profile_tag">رابط ملفي الشخصي</string>
+    <string name="links_face_copy">نسخ</string>
+    <string name="links_face_qr">QR</string>
+    <string name="links_face_send">إرسال</string>
+    <string name="links_face_qr_open_a11y">تكبير رمز QR لملفي</string>
+    <string name="links_face_qr_a11y">رمز QR للملف الشخصي</string>
+    <string name="links_face_qr_share_image">مشاركة صورة QR</string>
+    <string name="links_face_close">إغلاق</string>
+    <string name="links_face_addresses_title">عناويني</string>
+    <string name="links_face_address_hidden">مخفي في ملفي الشخصي</string>
+    <string name="links_face_address_a11y">%1$s، %2$s</string>
+</resources>

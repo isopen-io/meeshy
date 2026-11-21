@@ -243,6 +243,56 @@ final class ProfileUserPostsRealtimeSyncTests: XCTestCase {
         XCTAssertEqual(sut.bookmarkCount(sut.posts[0]), 7)
     }
 
+    // MARK: - Création (Vitrine « Publications »)
+
+    private static func created(id: String, authorId: String, type: String = "POST") -> SocketPostCreatedData {
+        SocketPostCreatedData(post: JSONStub.decode("""
+        {"id":"\(id)","type":"\(type)","content":"neuf","createdAt":"2026-01-16T12:00:00.000Z",
+        "author":{"id":"\(authorId)","username":"alice"}}
+        """), clientMutationId: nil)
+    }
+
+    private static func emptyPage() -> PaginatedAPIResponse<[APIPost]> {
+        JSONStub.decode("""
+        {"success":true,"data":[],"pagination":{"hasMore":false,"limit":20}}
+        """)
+    }
+
+    /// « Publier quelque chose » depuis le vide : la publication du propriétaire entre en tête, et la section passe du
+    /// vide aux tuiles au lieu d'affirmer « Rien de publié ».
+    func test_postCreated_byTheOwner_onTheEmptyState_turnsItIntoTiles() async throws {
+        let (sut, mock, socket) = makeSUT()
+        mock.getUserPostsResultsQueue = [.success(Self.emptyPage())]
+        await sut.loadInitial()
+        XCTAssertEqual(ProfilePublicationTiles.state(posts: sut.posts, isLoading: false, pagination: sut.paginationState),
+                       .empty, "précondition : le vide")
+
+        socket.postCreated.send(Self.created(id: "new", authorId: Self.userId))
+        try await waitForCondition { sut.posts.first?.id == "new" }
+
+        let state = ProfilePublicationTiles.state(posts: sut.posts, isLoading: false, pagination: sut.paginationState)
+        guard case .tiles(let tiles) = state else { return XCTFail("attendu des tuiles, reçu \(state)") }
+        XCTAssertEqual(tiles.first?.id, "new")
+    }
+
+    func test_postCreated_byAnotherAuthor_orAsAStory_staysOut() async throws {
+        let (sut, socket) = await loaded()
+        socket.postCreated.send(Self.created(id: "other", authorId: "someone-else"))
+        socket.postCreated.send(Self.created(id: "story", authorId: Self.userId, type: "STORY"))
+        socket.postCreated.send(Self.created(id: "mine", authorId: Self.userId))
+        try await waitForCondition { sut.posts.first?.id == "mine" }
+        XCTAssertEqual(sut.posts.map(\.id), ["mine", "p1"], "ni l'auteur tiers ni la story, que la liste ne sert pas")
+    }
+
+    /// Ma dernière publication supprimée : la section rend son vide, elle ne disparaît pas.
+    func test_postDeleted_ofTheLastPost_onAnExhaustedList_rendsTheEmptyState() async throws {
+        let (sut, socket) = await loaded()
+        socket.postDeleted.send("p1")
+        try await waitForCondition { sut.posts.isEmpty }
+        XCTAssertEqual(ProfilePublicationTiles.state(posts: sut.posts, isLoading: false, pagination: sut.paginationState),
+                       .empty)
+    }
+
     // MARK: - Traduction (#6531)
 
     /// Troisième site du même défaut que `FeedViewModel`/`PostDetailViewModel` :

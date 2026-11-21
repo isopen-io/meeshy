@@ -34,7 +34,7 @@ jest.mock('../../../../middleware/admin-permissions.middleware', () => ({
 // un schéma sans `properties` effaçant par défaut (voir CLAUDE.md gateway,
 // « un schéma de réponse sans `properties` EFFACE »).
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  trackingLinkSchema: { type: 'object', additionalProperties: true },
+  trackingLinkSchema: { type: 'object', additionalProperties: true, properties: {} },
   errorResponseSchema: { type: 'object', additionalProperties: true },
   validationErrorResponseSchema: { type: 'object', additionalProperties: true },
 }));

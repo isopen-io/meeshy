@@ -1,6 +1,7 @@
 import type { UserRole } from '@meeshy/shared/prisma/client';
 import type { RelationLevel } from '@meeshy/shared/types/relation';
 import { GlobalUserRole, isGlobalAdmin, isPlatformTeam } from '@meeshy/shared/types/role-types';
+import { USABLE_ACCOUNT_WHERE } from '../services/relations/usableAccount';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { resolvePresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 import type { RelationAgeClass } from '@meeshy/shared/utils/relation-access';
@@ -59,6 +60,11 @@ export type PresenceAudienceInput = {
  * Les collègues de l'équipe hors administrateurs (ANALYST, AUDIT, MODERATOR), candidats
  * à la transition d'un collègue (#16623) : actifs, ni supprimés ni désactivés. Un compte
  * parti ne reçoit plus la présence de l'équipe. Les ADMIN/BIGBOSS sont déjà dans `adminIds`.
+ *
+ * « Ni supprimé ni désactivé » vient de `USABLE_ACCOUNT_WHERE`, jamais d'une égalité
+ * écrite ici : composé à la main (`deletedAt: null, deactivatedAt: null`), ce filtre
+ * ne rendait AUCUN collègue, aucune création de compte n'écrivant ces colonnes — la
+ * présence d'équipe était inerte pour l'équipe entière (#19799).
  */
 const TEAM_COLLEAGUE_ROLES = Object.values(GlobalUserRole).filter(
   (role) => isPlatformTeam(role) && !isGlobalAdmin(role),
@@ -66,9 +72,7 @@ const TEAM_COLLEAGUE_ROLES = Object.values(GlobalUserRole).filter(
 
 export const TEAM_COLLEAGUES_WHERE = {
   role: { in: TEAM_COLLEAGUE_ROLES },
-  isActive: true,
-  deletedAt: null,
-  deactivatedAt: null,
+  ...USABLE_ACCOUNT_WHERE,
 };
 
 export type PresenceStatusAudience = {

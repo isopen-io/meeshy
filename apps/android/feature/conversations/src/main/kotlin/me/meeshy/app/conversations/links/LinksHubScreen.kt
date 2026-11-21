@@ -2,30 +2,21 @@ package me.meeshy.app.conversations.links
 
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
-import androidx.compose.animation.animateContentSize
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -33,16 +24,16 @@ import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.links.LinksHubEntry
 import me.meeshy.sdk.model.links.LinksHubFigures
 import me.meeshy.sdk.model.links.LinksHubSummary
+import me.meeshy.ui.component.kit.MeeshyTicket
+import me.meeshy.ui.component.kit.MeeshyTicketSize
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.motion.staggeredAppear
-import me.meeshy.ui.theme.MeeshySpacing
-import me.meeshy.ui.theme.MeeshyTheme
 
 /**
- * Le hub « Mes liens » (iOS `LinksHubView`, entrée du menu flottant) : quatre cartes —
- * partage, suivi, communautés, parrainage — chacune avec son « + » de création (sauf communautés) et
- * ses deux chiffres, chargés en parallèle et animés.
+ * La face Liens (iOS `LinksHubView`, entrée du menu flottant) : le billet de mon lien de profil avec son QR et ses trois gestes,
+ * « Mes adresses » quand le serveur en sert, puis les quatre familles de liens en billets avec leurs chiffres — chargés en
+ * parallèle et animés. Tout se peint d'abord du cache ; un échec garde ce qui était là.
  */
 @Composable
 fun LinksHubScreen(
@@ -53,6 +44,8 @@ fun LinksHubScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val accent = linkAccent(LinksHubEntry.COMMUNITY.accentHex)
+    val actions = rememberLinkActions()
+    var showsQr by rememberSaveable { mutableStateOf(false) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
 
     LinksPage(
@@ -62,16 +55,28 @@ fun LinksHubScreen(
         isRefreshing = state.isRefreshing,
         onRefresh = viewModel::refresh,
     ) {
+        state.profileLink?.let { link ->
+            item(key = "profile-link", contentType = "profile-link") {
+                LinksProfileTicket(link = link, actions = actions, onShowQr = { showsQr = true }, modifier = Modifier.staggeredAppear(0))
+            }
+        }
+        if (state.addresses.isNotEmpty()) {
+            item(key = "addresses", contentType = "addresses") {
+                LinksAddressesSection(addresses = state.addresses, modifier = Modifier.staggeredAppear(1))
+            }
+        }
         itemsIndexed(LinksHubEntry.entries, key = { _, entry -> entry.name }, contentType = { _, _ -> "card" }) { index, entry ->
             HubCard(
                 entry = entry,
                 figures = LinksHubSummary.figures(entry, state.figures),
                 onOpen = { onOpen(entry) },
                 onCreate = { onCreate(entry) },
-                modifier = Modifier.staggeredAppear(index),
+                modifier = Modifier.staggeredAppear(index + 2),
             )
         }
     }
+    val link = state.profileLink
+    if (showsQr && link != null) LinksQrDialog(link = link, onDismiss = { showsQr = false })
 }
 
 @Composable
@@ -85,61 +90,42 @@ private fun HubCard(
     val accent = linkAccent(entry.accentHex)
     val haptics = rememberMeeshyHaptics()
     val title = stringResource(entry.titleRes())
+    val description = stringResource(entry.descriptionRes())
     val createLabel = entry.createLabelRes()?.let { stringResource(it) }
+    val figuresText = figures?.let { figuresText(entry, it) }
     val openCard = { haptics.light(); onOpen() }
     val createCard = { haptics.medium(); onCreate() }
 
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .linkSurface(accent)
-            .clickable(onClickLabel = title, onClick = openCard)
-            .semantics {
-                if (createLabel != null) customActions = listOf(CustomAccessibilityAction(createLabel) { createCard(); true })
-            }
-            .padding(MeeshySpacing.mdPlus)
-            .animateContentSize(),
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.mdPlus),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        LinkIconBadge(icon = entry.icon(), accent = accent)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs)) {
-            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = MeeshyTheme.tokens.textPrimary)
-            Text(
-                stringResource(entry.descriptionRes()),
-                style = MaterialTheme.typography.bodySmall,
-                color = MeeshyTheme.tokens.textSecondary,
-                maxLines = 2,
-            )
-            figures?.let { FiguresLine(entry, it, accent) }
-        }
-        if (entry.canCreate) {
+    val createButton: (@Composable () -> Unit)? = if (entry.canCreate) {
+        {
             IconButton(onClick = createCard) {
-                Icon(MeeshyIcons.AddCircleFilled, contentDescription = null, tint = accent, modifier = Modifier.size(28.dp))
+                Icon(MeeshyIcons.AddCircleFilled, contentDescription = createLabel, tint = accent, modifier = Modifier.size(28.dp))
             }
         }
-        Icon(MeeshyIcons.ChevronForward, contentDescription = null, tint = MeeshyTheme.tokens.textMuted, modifier = Modifier.size(20.dp))
+    } else {
+        null
     }
-}
 
-@Composable
-private fun FiguresLine(entry: LinksHubEntry, figures: LinksHubFigures, accent: androidx.compose.ui.graphics.Color) {
-    val (firstLabel, secondLabel) = entry.figureLabels()
-    Text(
-        text = "${animatedCount(figures.count)} ${pluralStringResource(firstLabel, figures.count)}" +
-            " · ${animatedCount(figures.engagement)} ${pluralStringResource(secondLabel, figures.engagement)}",
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.SemiBold,
-        color = accent,
-        maxLines = 1,
+    MeeshyTicket(
+        title = title,
+        code = figuresText ?: description,
+        modifier = modifier.semantics {
+            if (createLabel != null) customActions = listOf(CustomAccessibilityAction(createLabel) { createCard(); true })
+        },
+        tint = accent,
+        size = MeeshyTicketSize.Row,
+        figureCaption = description.takeIf { figuresText != null },
+        label = listOfNotNull(title, figuresText, description).joinToString(", "),
+        onPress = openCard,
+        trailing = createButton,
     )
 }
 
-private fun LinksHubEntry.icon(): ImageVector = when (this) {
-    LinksHubEntry.SHARE -> MeeshyIcons.Link
-    LinksHubEntry.TRACKING -> MeeshyIcons.ChartLine
-    LinksHubEntry.COMMUNITY -> MeeshyIcons.Groups
-    LinksHubEntry.AFFILIATE -> MeeshyIcons.MonetizationOn
+@Composable
+private fun figuresText(entry: LinksHubEntry, figures: LinksHubFigures): String {
+    val (firstLabel, secondLabel) = entry.figureLabels()
+    return "${animatedCount(figures.count)} ${pluralStringResource(firstLabel, figures.count)}" +
+        " · ${animatedCount(figures.engagement)} ${pluralStringResource(secondLabel, figures.engagement)}"
 }
 
 private fun LinksHubEntry.titleRes(): Int = when (this) {

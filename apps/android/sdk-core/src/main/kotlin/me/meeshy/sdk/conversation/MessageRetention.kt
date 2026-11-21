@@ -96,13 +96,7 @@ public class MessageRetentionPurger @Inject internal constructor(
 
     private suspend fun deleteWithChildren(keys: List<MessageKeys>) {
         if (keys.isEmpty()) return
-        val ids = keys.flatMap { listOfNotNull(it.id, it.serverId) }.distinct()
-        ids.chunked(CHUNK).forEach { chunk ->
-            pendingIdDao.deleteForMessages(chunk)
-            editRevisionDao.deleteForMessages(chunk)
-            ephemeralReceiptDao.deleteAll(chunk)
-        }
-        DedicatedTranslationRows.drop(database, ids)
+        MessageChildRows.delete(database, keys, pendingIdDao, editRevisionDao, ephemeralReceiptDao)
         keys.map { it.id }.chunked(CHUNK).forEach { messageDao.deleteByIds(it) }
         keys.mapTo(HashSet()) { it.conversationId }.forEach { database.forgetThreadSync(it) }
     }

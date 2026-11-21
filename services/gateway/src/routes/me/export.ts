@@ -10,6 +10,8 @@ import {
   exportComments,
   exportReactions,
   exportMedia,
+  exportMessages,
+  needsParticipantIds,
   exportVoiceProfile,
   exportPacks,
 } from './export-sections';
@@ -25,12 +27,16 @@ import { exportGame } from './export-game';
 import { exportReadingActivity } from './export-reading';
 import { relationsExportSchema } from './export-relations';
 import { exportRelations } from '../../services/relations/relationExport';
+import { exportSharedLocationEndsOf } from '../../services/sharedLocation/sharedLocationDeps';
+import { exportProfileLinkVisitsOf } from '../../services/profile-link-visits/profileLinkVisits';
+import { exportSentInvitationsOf } from '../../services/referrals/emailInvitations';
 import { exportCallTelemetry } from '../../services/calls/callTelemetryPrivacy';
+import { accountSeatIds } from '../../services/participants/accountParticipantIds';
+import { gatewayKeyring } from '../../services/messaging/atRestTranslationSource';
 import { PROFILE_ADDRESS_EXPORT_SELECT, withExportedAddresses } from './export-addresses';
 
 const logger = enhancedLogger.child({ module: 'DataExport' });
 
-const MESSAGES_LIMIT = 10000;
 
 type ExportType =
   | 'profile'
@@ -77,10 +83,12 @@ function parseTypes(raw: string | undefined): ExportType[] {
  *
  * Exported for direct behavioural testing of the neutralization.
  */
+const isStructured = (val: unknown): boolean => typeof val === 'object' && val !== null && !(val instanceof Date);
+
 export function toCsv(headers: string[], rows: Record<string, unknown>[]): string {
   const FORMULA_TRIGGERS = /^[=+\-@\t\r]/;
   const escape = (val: unknown): string => {
-    const raw = val === null || val === undefined ? '' : String(val);
+    const raw = val === null || val === undefined ? '' : isStructured(val) ? JSON.stringify(val) : String(val);
     const str = FORMULA_TRIGGERS.test(raw) ? `'${raw}` : raw;
     return str.includes(',') || str.includes('"') || str.includes('\n')
       ? `"${str.replace(/"/g, '""')}"`
@@ -626,6 +634,11 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
               // #18862 — la ville déclarée et le cercle qui la lit.
               city: true,
               cityCircle: true,
+              // #19201 — la couleur d'accent choisie pour la vitrine.
+              profileAccentColor: true,
+              // #18748 — l'accord explicite aux alertes de chute, et la version du texte accepté.
+              fallAlertConsentedAt: true,
+              fallAlertConsentVersion: true,
               avatar: true,
               banner: true,
               systemLanguage: true,
@@ -651,8 +664,14 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
           });
 
           // Les adresses de plus de 12 mois ne se servent plus, purge armée ou non.
+          // #19206 : l'agrégat des visites de son lien de profil, jour par jour.
+          // #19207 : ses invitations par e-mail, l'adresse de chaque tiers masquée.
           exportData.profile = user
-            ? await withExportedAddresses(fastify.prisma, userId, withoutExpiredConnectionTraces(user, new Date()))
+            ? {
+                ...(await withExportedAddresses(fastify.prisma, userId, withoutExpiredConnectionTraces(user, new Date()))),
+                profileLinkVisits: await exportProfileLinkVisitsOf(fastify.prisma, userId),
+                emailInvitations: await exportSentInvitationsOf(fastify.prisma, userId),
+              }
             : user;
         }
 
@@ -661,33 +680,23 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
         // `findMany` sans `take`, au-delà de la dette gelée par
         // `unbounded-findmany-guard.test.ts`.
         let pIds: string[] = [];
-        if (requestedTypes.includes('messages') || requestedTypes.includes('reactions')) {
-          const participantIds = await fastify.prisma.participant.findMany({
-            where: { userId, type: 'user' },
-            select: { id: true },
-          });
-          pIds = participantIds.map((p) => p.id);
+        // #20129 — `media` est entrée dans cette condition parce que
+        // `exportMedia` a besoin de la même liste (`uploadedBy` porte DEUX
+        // espaces de clés pour les lignes écrites avant #20113). La liste des
+        // sections qui en dépendent vit DÉSORMAIS avec les sections elles-mêmes
+        // (`SECTIONS_NEEDING_PARTICIPANT_IDS`), et `calls` l'a rejointe : elle
+        // avait besoin de la même liste et la relisait chez elle, avec son
+        // propre `where` — quatrième lecture de la même chose dans la même
+        // requête. La lecture, elle, passe par le producteur unique.
+        if (needsParticipantIds(requestedTypes)) {
+          pIds = await accountSeatIds(fastify.prisma, userId);
         }
 
         if (requestedTypes.includes('messages')) {
-          const messages = await fastify.prisma.message.findMany({
-            where: {
-              senderId: { in: pIds },
-              deletedAt: null,
-            },
-            select: {
-              id: true,
-              conversationId: true,
-              content: true,
-              originalLanguage: true,
-              messageType: true,
-              messageSource: true,
-              createdAt: true,
-              editedAt: true,
-            },
-            orderBy: { createdAt: 'desc' },
-            take: MESSAGES_LIMIT,
-          });
+          // #20163 — la section OUVRE le sceau au repos (`exportMessages`) : elle
+          // servait un `content` vide pour tout message d'une conversation
+          // `server`/`hybrid`, avec un compte juste.
+          const messages = await exportMessages(fastify.prisma, pIds, gatewayKeyring(fastify.prisma));
 
           exportData.messages = messages;
           exportData.messagesCount = messages.length;
@@ -781,7 +790,7 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
         }
 
         if (requestedTypes.includes('media')) {
-          const sections = await exportMedia(fastify.prisma, userId, page);
+          const sections = await exportMedia(fastify.prisma, pIds, userId, page);
           exportData.media = {
             attachments: sections.attachments.items,
             postMedia: sections.postMedia.items,
@@ -826,7 +835,7 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
         }
 
         if (requestedTypes.includes('calls')) {
-          const section = await exportCallTelemetry(fastify.prisma, userId, page);
+          const section = await exportCallTelemetry(fastify.prisma, pIds, page);
           exportData.calls = section.items;
           exportData.callsCount = section.total;
           exportData.callsHasMore = section.hasMore;
@@ -837,7 +846,10 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
         }
 
         if (requestedTypes.includes('relations')) {
-          exportData.relations = await exportRelations(fastify.prisma, userId, page);
+          exportData.relations = {
+            ...(await exportRelations(fastify.prisma, userId, page)),
+            sharedLocationEnds: await exportSharedLocationEndsOf(userId, (error) => logger.warn('[DataExport] fins de partage de position non lues', error)),
+          };
         }
 
         if (requestedTypes.includes('packs')) {

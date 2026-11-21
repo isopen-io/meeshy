@@ -539,6 +539,23 @@ describe('createHttpTransport — le détenteur masqué d’un EMAIL_TAKEN (#821
   });
 });
 
+describe('createHttpTransport — les membres sans appareil chiffré d’un 409 (#20073, #20075)', () => {
+  test('`withoutDeviceUserIds` à la racine voyage jusqu’à l’écran, réduit aux chaînes', async () => {
+    const { impl } = fakeFetch({
+      status: 409,
+      body: { success: false, error: 'x', code: 'E2EE_PARTICIPANT_WITHOUT_DEVICE', withoutDeviceUserIds: ['u-ana', 7, 'u-bea'] },
+    });
+    const result = await createHttpTransport({ base: '', fetchImpl: impl }).request({ method: 'POST', path: '/api/v1/conversations/c1/encryption' });
+    expect(result.ok ? null : result.withoutDeviceUserIds).toEqual(['u-ana', 'u-bea']);
+  });
+
+  test('la création ne nomme personne : aucune clé fabriquée', async () => {
+    const { impl } = fakeFetch({ status: 409, body: { success: false, error: 'x', code: 'E2EE_PARTICIPANT_WITHOUT_DEVICE' } });
+    const result = await createHttpTransport({ base: '', fetchImpl: impl }).request({ method: 'POST', path: '/api/v1/conversations' });
+    expect(result.ok ? true : 'withoutDeviceUserIds' in result).toBe(false);
+  });
+});
+
 describe('createHttpTransport — le crédential FORCÉ par l’appel (#8816)', () => {
   test('`credential: null` part NU : ni Bearer ni jeton d’invité, même sous un compte', async () => {
     const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: {} } });

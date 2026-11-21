@@ -1058,10 +1058,8 @@
           "status": "android-only"
         },
         {
-          "catalog": "ui",
-          "iosKey": "profile.toast.reportSent",
           "androidName": "report_message_sent",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "app",

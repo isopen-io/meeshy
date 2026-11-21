@@ -214,20 +214,29 @@ public struct BatteryCleared: Decodable, Sendable, Equatable {
     }
 }
 
-/// `battery:pull-requested` — à MON téléphone : relever maintenant. Qui l'a demandé n'est pas dit.
+/// `battery:pull-requested` — à MON téléphone : relever maintenant. Une passerelle qui NOMME le demandeur
+/// (`requestedBy`, #19566) remet l'envoi à la personne : la demande s'affiche et attend « Envoyer ». Sans ce champ, ou
+/// s'il est illisible, rien n'est dit et le téléphone relève aussitôt, comme avant.
 public struct BatteryPullRequested: Decodable, Sendable, Equatable {
     public let requestedAt: Date
+    public let requestedBy: BatteryPullRequester?
+    public let expiresAt: Date?
 
-    public init(requestedAt: Date) {
+    public init(requestedAt: Date, requestedBy: BatteryPullRequester? = nil, expiresAt: Date? = nil) {
         self.requestedAt = requestedAt
+        self.requestedBy = requestedBy
+        self.expiresAt = expiresAt
     }
 
-    private enum CodingKeys: String, CodingKey { case requestedAt }
+    private enum CodingKeys: String, CodingKey { case requestedAt, requestedBy, expiresAt }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let raw = (try? c.decodeIfPresent(String.self, forKey: .requestedAt)) ?? nil
-        self.init(requestedAt: raw.flatMap(WireDate.date(from:)) ?? Date())
+        let expires = (try? c.decodeIfPresent(String.self, forKey: .expiresAt)) ?? nil
+        self.init(requestedAt: raw.flatMap(WireDate.date(from:)) ?? Date(),
+                  requestedBy: (try? c.decodeIfPresent(BatteryPullRequester.self, forKey: .requestedBy)) ?? nil,
+                  expiresAt: expires.flatMap(WireDate.date(from:)))
     }
 }
 

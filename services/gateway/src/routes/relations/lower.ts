@@ -8,7 +8,7 @@ import { captureNowPlayingBefore, refreshNowPlayingAfter } from '../../services/
 import { captureBatteryBefore, refreshBatteryAfter } from '../../services/battery/batteryDeps';
 import { captureSharedLocationBefore, refreshSharedLocationAfter } from '../../services/sharedLocation/sharedLocationDeps';
 import { rejudgeTogetherAfter } from '../../services/together/togetherDeps';
-import { relationIoOf } from '../../socketio/relationEvents';
+import { emitRelationLevelLowered, relationIoOf } from '../../socketio/relationEvents';
 import { cooldownEnd, lowerGrant } from '../../services/relations/userRelationWriter';
 import { loadRelationLink } from '../../services/relations/relationLinks';
 import { thresholdsNow } from '../../services/relations/relationRequestGate';
@@ -26,8 +26,8 @@ const corpsNiveau = z.object({ level: z.unknown() });
  * BAISSER ou SORTIR (#13933) : `POST /relations/:userId/level { level }`. Je baisse MON
  * accord — jamais celui de l'autre —, vers un niveau plus bas que celui que j'accorde.
  *
- * SILENCIEUX (RG-07) : ni notification, ni événement, vers personne. L'autre n'en
- * apprend rien ; il se voit seulement retenir de redemander une montée pendant 30 jours
+ * SILENCIEUX pour l'autre (RG-07) : ni notification, ni événement vers lui. Il n'en
+ * apprend rien ; seuls MES autres appareils reçoivent `relation:level-lowered` (#19366) ; il se voit seulement retenir de redemander une montée pendant 30 jours
  * (RG-08), et ne l'apprend qu'en essayant. Monter par cette porte est refusé : une
  * montée est une demande, qui veut l'accord de l'autre.
  *
@@ -41,7 +41,7 @@ export function registerRelationLower(fastify: FastifyInstance): void {
     onRequest: [fastify.authenticate],
     preHandler: [appVersionFloorPreHandler, writes.middleware()],
     schema: {
-      description: 'Lower my grant towards one person, or leave their circle (PUBLIC). Silent: nobody is notified.',
+      description: 'Lower my grant towards one person, or leave their circle (PUBLIC). Silent for the other person; only my own devices receive relation:level-lowered.',
       tags: ['relations'],
       summary: 'Lower or leave a circle',
       params: userIdParams,
@@ -87,6 +87,8 @@ export function registerRelationLower(fastify: FastifyInstance): void {
       await refreshSharedLocationAfter(position, { userA: viewerId, userB: otherId, before: positionAvant });
       // #17012 — sous Proche, la séance « ensemble » de la paire s'arrête chez les deux.
       await rejudgeTogetherAfter(ecoute, { userA: viewerId, userB: otherId });
+      // #19366 — mes autres appareils relisent le lien ; rejoué même sur une baisse déjà écrite, pour qu'ils convergent.
+      emitRelationLevelLowered(ecoute.io, { actorId: viewerId, otherId, grantedByMe: link.grantedByMe, effectiveLevel: link.effectiveLevel, at: now });
       return sendSuccess(reply, link);
     } catch (error) {
       if (error instanceof z.ZodError) return sendBadRequest(reply, 'Donnees invalides');

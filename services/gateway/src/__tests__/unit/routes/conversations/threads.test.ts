@@ -22,7 +22,15 @@ jest.mock('../../../../routes/conversations/utils/access-control', () =>
     jest.requireActual('../../../../routes/conversations/utils/access-control') as Record<string, unknown>,
     (...args: any[]) => mockCanAccessConversation(...args)));
 
+// #20017 — PROLONGER, jamais remplacer. Ce double énumérait cinq champs de
+// `attachmentMediaSelect` et rien d'autre : sous lui, tout ce que le module
+// GAGNE vaut `undefined` en silence — `attachmentProtectionSelect` compris,
+// dont le spread devient alors un no-op, et la garde de contenu latéral de ce
+// fichier serait inerte sans qu'un témoin tombe. C'est le patron que le dépôt
+// proscrit depuis les cycles 86, 91, 93 et 104, et il avait déjà coûté deux
+// fois : `jest.requireActual` + surcharge CIBLÉE.
 jest.mock('../../../../services/attachments/attachmentIncludes', () => ({
+  ...(jest.requireActual('../../../../services/attachments/attachmentIncludes') as Record<string, unknown>),
   attachmentMediaSelect: {
     id: true,
     fileName: true,
@@ -708,6 +716,49 @@ describe('GET threads — la citation d’un éphémère échu POUR CE LECTEUR e
     expect(res.statusCode).toBe(200);
     expect(res.json().data.parent.content).toBe('');
     expect(res.body).not.toContain('4271');
+    await app.close();
+  });
+});
+
+describe('GET threads — #19672 : le chemin disque des pistes traduites ne sort pas', () => {
+  const DISK_PATH = '/app/uploads/translated/507f1f77bcf86cd799439055_en.mp3';
+  const voiceNote = (id: string) => ({
+    id,
+    fileName: 'note.m4a',
+    mimeType: 'audio/mp4',
+    fileUrl: `/api/v1/attachments/file/${id}.m4a`,
+    thumbnailUrl: null,
+    translations: {
+      en: {
+        type: 'audio',
+        transcription: 'Hello there',
+        path: DISK_PATH,
+        url: `/api/v1/attachments/file/translated/${id}_en.mp3`,
+        durationMs: 1200,
+        format: 'mp3',
+      },
+    },
+  });
+
+  it('ni le parent ni ses réponses ne servent translations.<lang>.path', async () => {
+    const parent = { ...mockParentMessage, messageType: 'audio', attachments: [voiceNote('507f1f77bcf86cd799439055')] };
+    const replyWithVoice = { ...mockReplyMessage, messageType: 'audio', attachments: [voiceNote('507f1f77bcf86cd799439066')] };
+    const prisma = makePrisma({
+      message: {
+        findFirst: jest.fn<any>().mockResolvedValue(parent),
+        findMany: jest.fn<any>().mockResolvedValueOnce([replyWithVoice]).mockResolvedValueOnce([]),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+
+    expect(res.statusCode).toBe(200);
+    const data = res.json().data;
+    expect(data.parent.attachments[0].translations.en).toMatchObject({ transcription: 'Hello there', format: 'mp3' });
+    expect(data.replies[0].attachments[0].translations.en).toMatchObject({ transcription: 'Hello there', format: 'mp3' });
+    expect(data.parent.attachments[0].translations.en).not.toHaveProperty('path');
+    expect(data.replies[0].attachments[0].translations.en).not.toHaveProperty('path');
+    expect(res.body).not.toContain('/app/uploads');
     await app.close();
   });
 });

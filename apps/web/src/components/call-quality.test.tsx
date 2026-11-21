@@ -186,7 +186,7 @@ describe('l’indicateur de qualité (#8047), dans la capsule de l’en-tête (#
     const poor = renderToStaticMarkup(<CallQualityDetail quality={quality({ level: 'poor' })} profile="wifi" language="en" onClose={() => undefined} />);
     expect(poor).toContain('Wi-Fi');
     expect(poor).toMatch(/16\s?kb(it)?\/s/);
-    expect(poor).toMatch(/1,200\s?kb(it)?\/s/);
+    expect(poor).toMatch(/2,500\s?kb(it)?\/s/);
     const economy = renderToStaticMarkup(<CallQualityDetail quality={quality()} profile="economy" language="fr" onClose={() => undefined} />);
     expect(economy).toContain('Économie de données');
     expect(economy).toContain('data-call-quality-profile="economy"');

@@ -248,7 +248,11 @@ struct CallTranscriptSection: View {
     let accentHex: String
     let tint: Color
     let onDeleted: () -> Void
+    /// #19687 — sous la carte du fil, la liste tient dans cette hauteur et défile seule ; `nil` (feuilles,
+    /// qui défilent déjà) ⇒ hauteur naturelle.
+    var listMaxHeight: CGFloat? = nil
 
+    @State private var naturalListHeight: CGFloat = 0
     @State private var showOriginalText = false
     @State private var showDeleteConfirmation = false
     @State private var retentionNotice: CallTranscriptRetentionNotice = .hidden
@@ -268,20 +272,7 @@ struct CallTranscriptSection: View {
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
 
-            VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
-                // id: \.offset, not \.capturedAt (recommended, plan review) — saveMerging's dedup
-                // key deliberately allows two segments to share a capturedAt (different
-                // speaker/text at the same instant), which would collide as a ForEach id.
-                ForEach(Array(journal.enumerated()), id: \.offset) { _, item in
-                    switch item {
-                    case .speech(let segment):
-                        transcriptRow(segment, callStartedAt: transcript.callStartedAt)
-                    case .capture(let capture):
-                        captureRow(capture, callStartedAt: transcript.callStartedAt)
-                    }
-                }
-            }
-            .padding(MeeshySpacing.md)
+            journalList
             .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous), tint: tint.opacity(MeeshyOpacity.subtle))
 
             if CallJournalAfterCall.offersOriginalToggle(transcript.segments) {
@@ -339,6 +330,36 @@ struct CallTranscriptSection: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(showOriginalText ? .isSelected : [])
+    }
+
+    /// #19687 — bornée sous la carte du fil, la liste ENTIÈRE défile seule ; ailleurs, elle garde sa hauteur.
+    @ViewBuilder private var journalList: some View {
+        if let limit = listMaxHeight {
+            ScrollView(.vertical) {
+                journalRows
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { naturalListHeight = $0 }
+            }
+            .frame(height: CallJournalUnderCardSizing.listHeight(natural: naturalListHeight, limit: limit))
+        } else {
+            journalRows
+        }
+    }
+
+    private var journalRows: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
+            // id: \.offset, not \.capturedAt (recommended, plan review) — saveMerging's dedup
+            // key deliberately allows two segments to share a capturedAt (different
+            // speaker/text at the same instant), which would collide as a ForEach id.
+            ForEach(Array(journal.enumerated()), id: \.offset) { _, item in
+                switch item {
+                case .speech(let segment):
+                    transcriptRow(segment, callStartedAt: transcript.callStartedAt)
+                case .capture(let capture):
+                    captureRow(capture, callStartedAt: transcript.callStartedAt)
+                }
+            }
+        }
+        .padding(MeeshySpacing.md)
     }
 
     /// #16665 — les captures à leur heure parmi les phrases, comme pendant l'appel.

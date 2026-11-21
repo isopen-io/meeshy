@@ -6,7 +6,10 @@ import { gateProfilePresence } from './presence-gate';
 import { servedProfileDecor, servedProfileDecorJsonSchema } from '../../services/appearance/profileDecor';
 import { startupPackIndex } from '../../services/packs/PackIndex';
 import { withServedCity } from './profile-city';
+import { servedProfileAccentColor } from '@meeshy/shared/utils/profile-accent';
 import { withServedAddresses } from './profile-addresses';
+import { withOpenCommunities } from './profile-open-communities';
+import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 import { isFieldServed } from '../../utils/sparse-fieldset';
 import { targetHasBlockedViewer } from './profile-block-gate';
 import { isGuestViewer, sendAccountRequired, type GuestViewerContext } from '../../services/guests/guestMemberVisibility';
@@ -121,6 +124,8 @@ export const publicProfileSchema = {
     // (`withServedCity`) ; `cityCircle` (le réglage) ne part qu'à lui-même.
     city: { type: 'string' },
     cityCircle: { type: 'string', nullable: true },
+    // #19201 : la couleur d'accent de la vitrine (cercle Public) ; `null` = accent calculé.
+    profileAccentColor: { type: 'string', nullable: true },
     // #18863 : les adresses personnelles servies au cercle choisi par chacune (`withServedAddresses`) ;
     // absent quand rien n'est servi. `circle` ne part qu'à leur propriétaire.
     addresses: {
@@ -137,8 +142,38 @@ export const publicProfileSchema = {
         },
       },
     },
+    // #19274 : ce qui reste FERMÉ au lecteur, un compte par cercle qui l'ouvrirait — ni titre,
+    // ni URL, ni glyphe, ni jeton ; absent quand rien n'est fermé, vers soi ou hors d'atteinte.
+    lockedAddresses: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          circle: { type: 'string' },
+          count: { type: 'number' },
+        },
+      },
+    },
+    // #19274 : ses communautés PUBLIQUES, qu'il ne cache pas de sa liste ; absent quand aucune.
+    openCommunities: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          identifier: { type: 'string' },
+          name: { type: 'string' },
+          avatar: { type: 'string', nullable: true },
+          memberCount: { type: 'number' },
+          isMember: { type: 'boolean' },
+        },
+      },
+    },
     // #10632 / #10932 : le contour d'avatar, la bannière de design et le cadre de bannière ÉQUIPÉS (additif).
     profileDecor: servedProfileDecorJsonSchema,
+    // #19373 : les langues DÉCLARÉES, dans l'ordre du Prisme, dédoublonnées (cercle Public) ;
+    // absent quand aucune n'est déclarée. Jamais la locale de l'appareil, jamais les rangs bruts.
+    languages: { type: 'array', items: { type: 'string' } },
   },
 } as const;
 
@@ -190,11 +225,19 @@ export const publicUserSelect = {
   // selon le cercle choisi, et le réglage ne part qu'à son propriétaire.
   city: true,
   cityCircle: true,
+  // #19201 : servie normalisée par `buildPublicProfile` (hors liste ⇒ `null`).
+  profileAccentColor: true,
   // #10632 : chargés, jamais servis tels quels — `buildPublicProfile` les
   // compose en `profileDecor` et RETIRE les colonnes brutes.
   equippedAvatarRing: true,
   equippedBanner: true,
   equippedBannerFrame: true,
+  // #19373 : chargés, jamais servis tels quels — `buildPublicProfile` les compose en
+  // `languages` (la liste ordonnée, sans dire quelle langue occupe quel rang) et RETIRE les
+  // colonnes brutes que #4161 a sorties de la surface. `deviceLocale` n'est jamais chargée.
+  systemLanguage: true,
+  regionalLanguage: true,
+  customDestinationLanguage: true,
   voiceModel: { select: voiceModelSelect }
 } as const;
 
@@ -235,9 +278,20 @@ export const publicProfilePlan: ColumnPlan<typeof publicUserSelect> = {
     timezone: ['timezone'],
     city: ['city', 'cityCircle'],
     cityCircle: ['cityCircle'],
+    profileAccentColor: ['profileAccentColor'],
     addresses: [],
+    lockedAddresses: [],
+    openCommunities: [],
     profileDecor: ['equippedAvatarRing', 'equippedBanner', 'equippedBannerFrame'],
+    languages: ['systemLanguage', 'regionalLanguage', 'customDestinationLanguage'],
   },
+};
+
+/** Les trois rangs DÉCLARÉS du Prisme, matière de `languages` (#19373), jamais servis bruts. */
+type DeclaredLanguageColumns = {
+  systemLanguage?: string | null;
+  regionalLanguage?: string | null;
+  customDestinationLanguage?: string | null;
 };
 
 /**
@@ -252,16 +306,23 @@ export const publicProfilePlan: ColumnPlan<typeof publicUserSelect> = {
  * garde inopérante au typage.
  */
 export function buildPublicProfile<
-  T extends { voiceModel?: VoiceModelFields | null; equippedAvatarRing?: string | null; equippedBanner?: string | null; equippedBannerFrame?: string | null },
+  T extends { voiceModel?: VoiceModelFields | null; equippedAvatarRing?: string | null; equippedBanner?: string | null; equippedBannerFrame?: string | null; profileAccentColor?: string | null; deactivatedAt?: Date | null } & DeclaredLanguageColumns,
 >(user: T) {
   // `autoTranslateEnabled: true` était écrit EN DUR — un champ de contrat qui
   // ne disait rien de vrai, et qu'un client pouvait croire refléter la
   // préférence de la personne. `email: ''` et `phoneNumber: undefined`
   // prétendaient masquer ce qu'il suffit de ne pas charger. Les trois sont
   // retirés (#4161).
-  const { equippedAvatarRing, equippedBanner, equippedBannerFrame, ...visible } = user;
+  const { equippedAvatarRing, equippedBanner, equippedBannerFrame, systemLanguage, regionalLanguage, customDestinationLanguage, ...visible } = user;
+  // #19373 : la fiche d'un compte DÉSACTIVÉ ne dit plus ses langues — un compte parti
+  // ne garde pas ses préférences en vitrine.
+  const languages = visible.deactivatedAt
+    ? []
+    : resolveUserLanguagesOrdered({ systemLanguage, regionalLanguage, customDestinationLanguage });
   return {
     ...withVoiceFields(visible),
+    ...(languages.length > 0 ? { languages } : {}),
+    ...('profileAccentColor' in visible ? { profileAccentColor: servedProfileAccentColor(visible.profileAccentColor) } : {}),
     isAnonymous: false,
     isMeeshyer: true,
     profileDecor: servedProfileDecor(startupPackIndex(), { equippedAvatarRing, equippedBanner, equippedBannerFrame }),
@@ -354,6 +415,8 @@ export async function composePublicProfile<
 >(fastify: FastifyInstance, request: FastifyRequest, user: T, fields: FieldSet = null) {
   const gated = await gateProfilePresence(fastify, request, user);
   const withCity = await withServedCity(fastify, request, gated);
-  const composed = isFieldServed(fields, 'addresses') ? await withServedAddresses(fastify, request, withCity) : withCity;
+  const addressParts = { addresses: isFieldServed(fields, 'addresses'), lockedAddresses: isFieldServed(fields, 'lockedAddresses') };
+  const withAddresses = await withServedAddresses(fastify, request, withCity, addressParts);
+  const composed = isFieldServed(fields, 'openCommunities') ? await withOpenCommunities(fastify, request, withAddresses) : withAddresses;
   return buildPublicProfile(composed);
 }

@@ -6,12 +6,14 @@ enum CallScreenPanel: String, CaseIterable, Sendable {
     case people
     case journal
 
-    var action: CallAction {
+    /// L'action du `(…)` qui ouvre l'option. #19670 — le journal n'en a pas : il n'a de
+    /// sens qu'avec les sous-titres, et sa seule porte est le « Journal » au pied de leur bande.
+    var action: CallAction? {
         switch self {
         case .react: return .react
         case .record: return .recording
         case .people: return .addPeople
-        case .journal: return .journal
+        case .journal: return nil
         }
     }
 
@@ -136,9 +138,19 @@ enum CallScreenLayer: Equatable, Sendable {
         activeMode == nil ? self : .idle
     }
 
+    /// #19670 — couper les sous-titres referme le journal : il n'a de sens qu'avec eux. Le `(…)`
+    /// ouvert par-dessus reste ouvert ; toute autre couche est intacte.
+    func closingJournal() -> CallScreenLayer {
+        switch self {
+        case .panel(.journal): return .idle
+        case .menuOverJournal: return .menu
+        case .idle, .menu, .panel, .mode: return self
+        }
+    }
+
     func reconciled(with actions: CallActionSet) -> CallScreenLayer {
         switch self {
-        case .panel(let panel) where !actions.contains(panel.action): return .menu
+        case .panel(let panel) where panel.action.map({ !actions.contains($0) }) ?? false: return .menu
         case .mode(let mode) where !actions.contains(mode.action): return .idle
         case .idle, .menu, .menuOverJournal, .panel, .mode: return self
         }

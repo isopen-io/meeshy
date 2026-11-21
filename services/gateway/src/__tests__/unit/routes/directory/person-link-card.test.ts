@@ -71,7 +71,7 @@ const ligne = (etat: Etat) => ({
 });
 
 const prismaDouble = (etat: Etat) => ({
-  profileAddress: { findMany: async () => [] },
+  profileAddress: { findMany: async () => [] }, communityMember: { findMany: async () => [] },
   user: {
     findFirst: jest.fn(async (args?: { where?: Record<string, unknown> }) => {
       const where = args?.where ?? {};

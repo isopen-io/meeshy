@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La carte comme action (#18890) : mots de la carte des positions partagées. -->
+<resources>
+    <string name="location_map_open">عرض على الخريطة</string>
+</resources>

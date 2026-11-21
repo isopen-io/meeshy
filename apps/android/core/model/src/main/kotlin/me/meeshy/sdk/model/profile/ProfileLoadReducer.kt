@@ -70,6 +70,7 @@ object ProfileLoadReducer {
         return when {
             failure is ProfileFailure.Http && failure.code == FORBIDDEN -> blocked(done)
             failure is ProfileFailure.Http && failure.code == NOT_FOUND && state.profile != null -> blocked(done)
+            failure is ProfileFailure.Http && failure.code == NOT_FOUND -> done
             failure == ProfileFailure.Forbidden -> done
             else -> done.copy(profileLoadFailed = state.profile == null)
         }

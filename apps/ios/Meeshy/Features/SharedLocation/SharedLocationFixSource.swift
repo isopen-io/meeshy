@@ -53,6 +53,16 @@ final class SharedLocationFixSource: NSObject, CLLocationManagerDelegate, Shared
         }
     }
 
+    func silentFix() async -> SharedLocationFix? {
+        switch manager.authorizationStatus {
+        case .authorizedWhenInUse, .authorizedAlways:
+            guard case .fix(let fix) = await currentFix() else { return nil }
+            return fix
+        default:
+            return nil
+        }
+    }
+
     func follow() {
         if manager.delegate == nil { manager.delegate = self }
         isFollowing = true

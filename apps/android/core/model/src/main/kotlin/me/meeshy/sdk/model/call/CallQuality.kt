@@ -250,6 +250,8 @@ data class CallQualitySample(
     val bytesSent: Long = 0L,
     val bytesReceived: Long = 0L,
     val availableOutgoingBitrateBps: Int = 0,
+    /** Les compteurs média de la lecture qui a produit ce tick (#19895) ; `null` = aucune lecture média. */
+    val media: CallMediaQuality? = null,
 ) {
     /** The `call:quality-report` payload this tick yields (loss as a percentage, like iOS), at the 4-tier level. */
     fun toReport(): CallQualityReport = CallQualityReport(

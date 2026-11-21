@@ -97,4 +97,12 @@ class PhoneReachabilityContractTest {
         assertThat(PhoneReachabilityContract.NOTIFICATION_TYPE).isEqualTo("device_unreachable")
         assertThat(PhoneReachabilityContract.PROBE_PUSH_TYPE).isEqualTo("device_probe")
     }
+
+    @Test
+    fun `reactiver prevenir mes Proches envoie la cle sur le fil, la valeur par defaut comprise`() {
+        val on = json.encodeToString(PhoneReachabilityEmitterSettingsBody.serializer(), PhoneReachabilityEmitterSettingsBody(sharingEnabled = true))
+        val off = json.encodeToString(PhoneReachabilityEmitterSettingsBody.serializer(), PhoneReachabilityEmitterSettingsBody(sharingEnabled = false))
+        assertThat(on).isEqualTo("""{"sharingEnabled":true}""")
+        assertThat(off).isEqualTo("""{"sharingEnabled":false}""")
+    }
 }

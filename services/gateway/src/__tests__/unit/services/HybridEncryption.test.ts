@@ -10,6 +10,7 @@
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { EncryptionService } from '../../../services/EncryptionService';
+import { findManyIn } from '../../helpers/mongo-where';
 
 // In-memory key storage for tests
 const keyStorage = new Map<string, {
@@ -51,15 +52,12 @@ const mockPrisma = {
       const key = keyStorage.get(args.where.id);
       return Promise.resolve(key || null);
     }),
-    findMany: jest.fn((args: any) => {
-      const results: any[] = [];
-      keyStorage.forEach((value, key) => {
-        if (args?.where?.purpose === value.purpose) {
-          results.push(value);
-        }
-      });
-      return Promise.resolve(results);
-    }),
+    // #19755 — le `where` est ÉVALUÉ contre les documents (`matchesMongoWhere`,
+    // qui distingue une clé ABSENTE d'une clé nulle). Ce double n'appariait que
+    // `purpose`, donc il rendait ses lignes quel que soit le filtre : il ne
+    // pouvait pas voir que la lecture du coffre n'en retenait aucune, et il
+    // servait la clé d'une AUTRE conversation sans broncher.
+    findMany: jest.fn((args: any) => findManyIn([...keyStorage.values()] as any).findMany(args)),
     update: jest.fn((args: any) => {
       const key = keyStorage.get(args.where.id);
       if (key) {

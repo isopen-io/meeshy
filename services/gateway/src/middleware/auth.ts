@@ -43,6 +43,8 @@ export type RegisteredUser = {
   readonly bio?: string;
   readonly avatar?: string;
   readonly banner?: string;
+  /** #19201 — la couleur d'accent de la vitrine ; `null` = automatique. */
+  readonly profileAccentColor?: string | null;
   readonly phoneNumber?: string;
   readonly role: string;
   readonly systemLanguage: string;
@@ -290,6 +292,7 @@ export class AuthMiddleware {
         bio: string | null;
         avatar: string | null;
         banner: string | null;
+        profileAccentColor?: string | null;
         phoneNumber: string | null;
         role: string;
         isActive: boolean;
@@ -357,6 +360,7 @@ export class AuthMiddleware {
             bio: true,
             avatar: true,
             banner: true,
+            profileAccentColor: true,
             phoneNumber: true,
             role: true,
             systemLanguage: true,
@@ -387,6 +391,7 @@ export class AuthMiddleware {
             bio: user.bio,
             avatar: user.avatar,
             banner: user.banner,
+            profileAccentColor: user.profileAccentColor ?? null,
             phoneNumber: user.phoneNumber,
             role: user.role,
             isActive: user.isActive,

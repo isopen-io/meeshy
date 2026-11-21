@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { act } from 'react';
 
 import { createStrikeGate, type StrikeGate } from '@/lib/game/strike-gate';
-import { loadGameCatalogParts } from '@/lib/i18n-game-catalog';
+import { formatGameNumber, loadGameCatalogParts, translateGame } from '@/lib/i18n-game-catalog';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -13,7 +13,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 beforeAll(async () => {
   ensureHappyDomRegistered({ url: 'http://localhost/me/progression' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
-  await loadGameCatalogParts('fr', ['frappe']);
+  await loadGameCatalogParts('fr', ['frappe', 'banner']);
   await loadMintCeremony();
 });
 
@@ -98,5 +98,20 @@ describe('la bande montre la prochaine pièce dans son édition dessinée (#1148
     const scene = document.body.querySelector('[data-game-ceremony]');
     expect(scene?.getAttribute('data-edition')).toBe('silver');
     expect(scene?.querySelector('[data-ceremony-face="reverse"] [data-game-coin]')?.getAttribute('data-game-edition')).toBe('gold');
+  });
+});
+
+describe('la gloire de la frappe (#19855)', () => {
+  test('la cérémonie reçoit la gloire d’AVANT le geste : la gloire rafraîchie pendant la scène ne compte pas deux fois', async () => {
+    const gate = gateFor();
+    const before = { before: 100, gained: 250, mythic: false };
+    const host = await mounter.mount(<MintStrike size={56} strikeKey={0} next={next} gate={gate} glory={before} />);
+    gate.begin();
+    await mounter.rerender(host, <MintStrike size={56} strikeKey={1} next={next} gate={gate} glory={before} />);
+    await flush();
+    await mounter.rerender(host, <MintStrike size={56} strikeKey={1} next={next} gate={gate} glory={{ before: 350, gained: 250, mythic: false }} />);
+    await flush();
+    const step = document.body.querySelector('[data-game-ceremony] [data-ceremony-glory-step]');
+    expect(step?.textContent).toBe(translateGame('fr', 'game.frappe.glory_toward', { glory: formatGameNumber('fr', 50), rank: 'Murmure IV' }));
   });
 });

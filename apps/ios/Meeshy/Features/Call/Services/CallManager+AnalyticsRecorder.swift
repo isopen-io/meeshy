@@ -12,12 +12,16 @@ nonisolated struct CallAnalyticsContext: Sendable {
 }
 
 nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
-    var callInitiatedDate: Date?
-    var negotiationStartDate: Date?
-    var connectedDate: Date?
+    /// Instants MONOTONES (`CallLiveClock.monotonicNow`, #20010) : les délais
+    /// de mise en place ne bougent pas quand l'horloge murale est réglée.
+    var callInitiatedUptime: TimeInterval?
+    var negotiationStartUptime: TimeInterval?
+    var connectedUptime: TimeInterval?
     var networkTransitions = 0
     var qualitySeconds: [VideoQualityLevel: Double] = [:]
-    var lastQualityDate: Date?
+    /// Instant MONOTONE du dernier relevé de qualité (#20069) : un réglage de
+    /// l'horloge murale entre deux relevés n'ajoute aucune seconde à un niveau.
+    var lastQualityUptime: TimeInterval?
     var currentLevel: VideoQualityLevel?
     var rttSum: Double = 0
     var sampleCount = 0
@@ -35,24 +39,26 @@ nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
         level: VideoQualityLevel,
         roundTripTimeMs: Double,
         packetLossPercent: Double,
-        at now: Date
+        at uptime: TimeInterval
     ) {
-        if let previousDate = lastQualityDate, let previousLevel = currentLevel {
-            qualitySeconds[previousLevel, default: 0] += now.timeIntervalSince(previousDate)
+        if let previousUptime = lastQualityUptime, let previousLevel = currentLevel {
+            qualitySeconds[previousLevel, default: 0] += CallStatValue.measured(uptime - previousUptime)
         }
-        lastQualityDate = now
+        lastQualityUptime = uptime
         currentLevel = level
-        rttSum += roundTripTimeMs
+        let rtt = CallStatValue.measured(roundTripTimeMs)
+        let loss = CallStatValue.measured(packetLossPercent)
+        rttSum += rtt
         sampleCount += 1
-        packetLossSum += packetLossPercent
-        maxPacketLoss = max(maxPacketLoss, packetLossPercent)
+        packetLossSum += loss
+        maxPacketLoss = max(maxPacketLoss, loss)
     }
 
     /// #11294 — le dernier relevé des compteurs cumulés, et la gigue de
     /// chaque relevé pour le MOS de l'appel.
     mutating func recordMedia(_ quality: CallMediaQuality, jitterMs: Double) {
         mediaQuality = quality
-        mediaJitterSum += jitterMs
+        mediaJitterSum += CallStatValue.measured(jitterMs)
         mediaSampleCount += 1
         if let reason = quality.qualityLimitationReason { limitationSamples[reason, default: 0] += 1 }
     }
@@ -72,6 +78,13 @@ nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
         if skinSmoothing { effectsUsed.insert("skinSmoothing") }
     }
 
+    /// L'ancrage de la PREMIÈRE connexion (#20069) : le chrono et le délai de
+    /// mise en place partagent le même instant monotone, lu une seule fois.
+    @MainActor
+    mutating func anchorConnection(on clock: CallLiveClockProviding) {
+        connectedUptime = clock.anchorDuration()
+    }
+
     mutating func resetAccumulators() {
         let reconnects = totalReconnects
         self = CallAnalyticsRecorder()
@@ -82,30 +95,32 @@ nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
         self = CallAnalyticsRecorder()
     }
 
-    func payload(now: Date, context: CallAnalyticsContext) -> [String: Any] {
+    /// `uptime` est l'instant MONOTONE du rapport (#20069) : la fenêtre de
+    /// niveau ouverte s'y replie sur la même horloge que les relevés.
+    func payload(uptime: TimeInterval, context: CallAnalyticsContext) -> [String: Any] {
         let setupMetrics = CallReliabilityPolicy.callSetupMetrics(
-            initiatedAt: callInitiatedDate,
-            negotiationStartAt: negotiationStartDate,
-            connectedAt: connectedDate
+            initiatedAt: callInitiatedUptime,
+            negotiationStartAt: negotiationStartUptime,
+            connectedAt: connectedUptime
         )
         let qualityDistribution = CallReliabilityPolicy.qualityDistribution(
             accumulatedSeconds: qualitySeconds,
             openWindowLevel: currentLevel,
-            openWindowSince: lastQualityDate,
-            now: now
+            openWindowSince: lastQualityUptime,
+            now: uptime
         )
-        let averageRtt = sampleCount > 0 ? rttSum / Double(sampleCount) : 0
-        let averagePacketLoss = sampleCount > 0 ? packetLossSum / Double(sampleCount) : 0
+        let averageRtt = sampleCount > 0 ? CallStatValue.measured(rttSum / Double(sampleCount)) : 0
+        let averagePacketLoss = sampleCount > 0 ? CallStatValue.measured(packetLossSum / Double(sampleCount)) : 0
         let base: [String: Any] = [
             "setupTimeMs":         setupMetrics.setupTimeMs,
             "negotiationTimeMs":   setupMetrics.negotiationTimeMs,
-            "durationSeconds":     context.callDuration,
+            "durationSeconds":     CallStatValue.measured(context.callDuration),
             "reconnectionCount":   totalReconnects,
             "networkTransitions":  networkTransitions,
             "averageRtt":          averageRtt,
             "averagePacketLoss":   averagePacketLoss,
             "maxPacketLoss":       maxPacketLoss,
-            "codec":               context.codec,
+            "codec":               Self.clipped(context.codec, utf16Limit: 50),
             "effectsUsed":         Array(effectsUsed),
             "filtersUsed":         videoFiltersUsed || context.filtersEnabledNow,
             "transcriptionUsed":   context.transcriptionUsed,
@@ -116,6 +131,16 @@ nonisolated struct CallAnalyticsRecorder: Equatable, Sendable {
             "endReason":           context.endReason
         ]
         return base.merging(mediaFields(averageRtt: averageRtt, averagePacketLoss: averagePacketLoss)) { current, _ in current }
+    }
+
+    /// La passerelle compte la longueur en unités UTF-16 (`z.string().max`) :
+    /// on coupe sur une frontière de caractère sans dépasser la limite.
+    private static func clipped(_ text: String, utf16Limit: Int) -> String {
+        var units = 0
+        return String(text.prefix { character in
+            units += character.utf16.count
+            return units <= utf16Limit
+        })
     }
 
     /// Les champs de qualité (#11277), optionnels : absents tant que rien n'a

@@ -11,6 +11,7 @@ const ar = {
   'callStudio.face.angel': 'ملاك',
   'callStudio.face.demon': 'شيطان',
   'callStudio.face.volcano': 'ثوران بركان',
+  'callStudio.face.baby': 'طفل',
   'callStudio.montage.screen': 'ملء الشاشة',
   'callStudio.montage.grid': 'فسيفساء',
   'callStudio.montage.strip': 'كشك الصور',

@@ -22,9 +22,9 @@ public nonisolated enum MeeshyFigureTrend: Sendable, Equatable {
 
     public var arrowName: String {
         switch self {
-        case .up: return "arrow.up.right"
-        case .down: return "arrow.down.right"
-        case .flat: return "arrow.right"
+        case .up: return "arrow.up.forward"
+        case .down: return "arrow.down.forward"
+        case .flat: return "arrow.forward"
         }
     }
 }

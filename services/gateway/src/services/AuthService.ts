@@ -868,6 +868,7 @@ export class AuthService {
       bio: user.bio,
       avatar: user.avatar,
       banner: user.banner,
+      profileAccentColor: user.profileAccentColor ?? null,
       role: user.role,
       permissions: this.getUserPermissions({
         ...user,

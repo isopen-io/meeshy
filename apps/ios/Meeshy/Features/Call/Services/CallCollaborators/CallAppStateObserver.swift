@@ -179,7 +179,12 @@ final class CallAppStateObserver: CallAppStateObserverProviding {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let call = self?.call, let callId = call.currentCallId else { return }
+                guard let call = self?.call else { return }
+                // #19695 — l'écran ne se met pas en veille pendant un appel. Le drapeau, posé au
+                // changement d'état, ne vaut qu'au premier plan : un appel décroché depuis l'écran
+                // verrouillé (CallKit, app en arrière-plan) le perdait. Le retour le réaffirme.
+                UIApplication.shared.isIdleTimerDisabled = call.callState.isActive
+                guard let callId = call.currentCallId else { return }
                 let userId = AuthManager.shared.currentUser?.id ?? ""
                 MessageSocketManager.shared.emitCallForegrounded(callId: callId, participantId: userId)
                 Logger.calls.info("Call foregrounded")

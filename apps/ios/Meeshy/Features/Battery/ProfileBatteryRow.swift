@@ -11,9 +11,11 @@ struct ProfileBatteryRow: View {
     let displayName: String
     let canPull: Bool
     let asksConsent: Bool
+    /// Faux sous « Son téléphone » (#19433) : la tuile Batterie dit déjà son relevé.
+    let showsDetail: Bool
     private var theme: ThemeManager { ThemeManager.shared }
 
-    init(userId: String, displayName: String, canPull: Bool, asksConsent: Bool) {
+    init(userId: String, displayName: String, canPull: Bool, asksConsent: Bool, showsDetail: Bool = true) {
         _viewModel = StateObject(wrappedValue: ProfileBatteryViewModel(
             userId: userId,
             service: BatteryService.shared,
@@ -23,11 +25,14 @@ struct ProfileBatteryRow: View {
         self.displayName = displayName
         self.canPull = canPull
         self.asksConsent = asksConsent
+        self.showsDetail = showsDetail
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            BatteryDetailSection(userId: viewModel.userId)
+            if showsDetail {
+                BatteryDetailSection(userId: viewModel.userId)
+            }
             if canPull {
                 pullRow
             }

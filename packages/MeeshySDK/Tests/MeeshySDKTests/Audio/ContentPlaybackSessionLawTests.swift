@@ -33,11 +33,7 @@ struct ContentPlaybackSessionLawTests {
     }
 
     @Test func theDefaultPlaybackRequest_followsTheLaw() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Sources/MeeshySDK/Media/MediaSessionCoordinator.swift")
-        let code = try String(contentsOf: url, encoding: .utf8)
+        let code = try MediaSessionCoordinatorSourceUnit.read()
         let start = try #require(code.range(of: "public func request("))
         let signature = String(code[start.upperBound...].prefix(200))
         #expect(signature.contains("ContentPlaybackSessionLaw.audibleOptions"))

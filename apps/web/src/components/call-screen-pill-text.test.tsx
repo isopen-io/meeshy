@@ -85,7 +85,9 @@ const mount = (overrides: Partial<ActiveCall> = {}) => {
   const host = document.createElement('div');
   document.body.appendChild(host);
   const root = createRoot(host);
-  act(() => root.render(<CallScreen call={call(overrides)} canShare effectsSupport={{ color: false, blur: false }} wide={false} />));
+  const draw = (next: Partial<ActiveCall>) => act(() => root.render(<CallScreen call={call(next)} canShare effectsSupport={{ color: false, blur: false }} wide={false} />));
+  draw(overrides);
+  const rerender = (changes: Partial<ActiveCall>) => draw({ ...overrides, ...changes });
   /* Le double d'une sortie (`data-call-pill-ghost`) n'est pas le contenu : il s'efface et part. */
   const find = (selector: string) => [...host.querySelectorAll<HTMLElement>(selector)].find((node) => node.closest('[data-call-pill-ghost]') === null) ?? null;
   const press = (selector: string) => act(() => find(selector)?.click());
@@ -95,7 +97,7 @@ const mount = (overrides: Partial<ActiveCall> = {}) => {
     act(() => root.unmount());
     host.remove();
   };
-  return { host, find, press, settle, layer, done };
+  return { host, find, press, settle, layer, rerender, done };
 };
 
 type View = ReturnType<typeof mount>;
@@ -352,7 +354,7 @@ describe('(…) les range et les rend (P6.12)', () => {
     expect(view.layer()).toBe('menu');
     expect(view.find('[data-call-journal-panel]')).toBeNull();
     expect(view.find('[data-call-rail="call"]')).not.toBeNull();
-    expect(view.find('[data-call-control="journal"]')?.getAttribute('aria-expanded')).toBe('false');
+    expect(view.find('[data-call-control="journal"]')).toBeNull();
     expect(document.activeElement?.hasAttribute('data-call-more')).toBe(true);
     view.press('[data-call-more]');
     await view.settle();
@@ -361,16 +363,19 @@ describe('(…) les range et les rend (P6.12)', () => {
     view.done();
   });
 
-  test('depuis le menu, « Journal » d’un rail ouvre le journal rangé', async () => {
+  test('#19670 — (…) ouvert, couper les sous-titres referme le journal rangé : refermer les actions ne le rend plus', async () => {
     const view = mount();
     await view.settle();
     view.press('[data-call-captions-journal]');
     await view.settle();
     view.press('[data-call-more]');
     await view.settle();
-    view.press('[data-call-control="journal"]');
+    view.rerender({ captionsMode: 'off' });
     await view.settle();
-    expect(inPill(view, '[data-call-journal-panel]')).not.toBeNull();
+    expect(view.layer()).toBe('menu');
+    view.press('[data-call-more]');
+    await view.settle();
+    expect(view.find('[data-call-journal-panel]')).toBeNull();
     view.done();
   });
 });
@@ -390,12 +395,10 @@ describe('le journal, DANS la pilule, à la place des sous-titres (P6)', () => {
     view.done();
   });
 
-  test('#17342 — le journal garde tout l’appel, sous-titres éteints : il s’ouvre depuis les rangées, et lit tout', async () => {
-    const view = mount({ captionsMode: 'off', captions: Array.from({ length: 5 }, (_, n) => said(n)) });
+  test('#17342 — le journal garde tout l’appel : ouvert depuis les sous-titres, il lit tout, même les phrases que la bande ne montre plus', async () => {
+    const view = mount({ captions: Array.from({ length: 5 }, (_, n) => said(n)) });
     await view.settle();
-    view.press('[data-call-more]');
-    await view.settle();
-    view.press('[data-call-control="journal"]');
+    view.press('[data-call-captions-journal]');
     await view.settle();
     expect(view.host.querySelectorAll('[data-call-journal-entry]')).toHaveLength(5);
     view.done();
@@ -469,20 +472,13 @@ describe('#17964 — « Journal » en disque blanc referme le journal dans la pi
     });
   }
 
-  test('sous-titres éteints : retoucher « Journal » rend la pilule de base, et le focus à (…)', async () => {
+  test('#19670 — sous-titres éteints, ni la pilule ni les rangées ne portent « Journal »', async () => {
     const view = mount({ captionsMode: 'off' });
     await view.settle();
+    expect(view.find('[data-call-captions-journal]')).toBeNull();
     view.press('[data-call-more]');
     await view.settle();
-    view.press('[data-call-control="journal"]');
-    await view.settle();
-    expect(inPill(view, '[data-call-journal-toggle]')?.getAttribute('aria-pressed')).toBe('true');
-    view.press('[data-call-journal-toggle]');
-    await view.settle();
-    expect(view.layer()).toBe('idle');
-    expect(view.find('[data-call-journal-panel]')).toBeNull();
-    expect(view.find('[data-call-captions-panel]')).toBeNull();
-    expect(document.activeElement?.hasAttribute('data-call-more')).toBe(true);
+    expect(view.find('[data-call-control="journal"]')).toBeNull();
     view.done();
   });
 });

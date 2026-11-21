@@ -1,9 +1,8 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { isForeignAddressLink, mayManageTrackingLink } from './link-ownership';
-import { TrackingLinkService } from '../../services/TrackingLinkService';
+import { TrackingLinkService, resolveFrontendBaseUrl } from '../../services/TrackingLinkService';
 import {
-  TRACKING_TARGET_CARRIES_EMAIL_SECRET,
   TrackingTargetCarriesEmailSecretError,
   isServableTrackingTarget,
   servedTrackingLinkTarget
@@ -12,8 +11,11 @@ import { logError } from '../../utils/logger';
 import {
   createUnifiedAuthMiddleware,
   UnifiedAuthRequest,
+  type UnifiedAuthContext,
   isRegisteredUser
 } from '../../middleware/auth';
+import { INTERNAL_TRACKING_TARGET_TYPES, sharableTargetUrl, type InternalTrackingTarget } from './internal-target';
+import { OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
 import {
   trackingLinkSchema,
   errorResponseSchema,
@@ -21,16 +23,19 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import {
   createTrackingLinkSchema,
+  type CreateTrackingLinkBody,
   enrichTrackingLink
 } from './types';
+
 import { refuserAccesConversation, verdictAccesConversation, type MessagesDeRefusDAcces } from '../conversations/utils/access-control';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { validatePagination } from '../../utils/pagination';
 import { SecuritySanitizer } from '../../utils/sanitize';
-import { isHttpUrl } from '@meeshy/shared/utils/validation';
 import { permissionsService } from '../../services/admin/permissions.service';
 import { resolveLinkSharer } from './link-sharer';
 import { registerCheckTokenRoute } from './check-token';
+import { registerUpdateRoute } from './update-route';
+import { refuserCibleSecrete } from './secret-target-refusal';
 import { UserRoleEnum } from '@meeshy/shared/types';
 
 /**
@@ -40,15 +45,28 @@ import { UserRoleEnum } from '@meeshy/shared/types';
  * — et son schéma ne déclare que `200 · 201 · 400 · 500` : Fastify sérialise
  * donc ses refus SANS schéma, corps complet (le défaut de #4689). MESURÉ.
  */
+/** Le nom, les UTM, l'échéance et le choix des visiteurs uniques — nettoyés, communs aux deux formes. */
+const linkLabels = (body: CreateTrackingLinkBody) => ({
+  name: body.name ? SecuritySanitizer.sanitizeText(body.name) : body.name,
+  campaign: body.campaign ? SecuritySanitizer.sanitizeText(body.campaign) : body.campaign,
+  source: body.source ? SecuritySanitizer.sanitizeText(body.source) : body.source,
+  medium: body.medium ? SecuritySanitizer.sanitizeText(body.medium) : body.medium,
+  expiresAt: body.expiresAt ? new Date(body.expiresAt) : undefined,
+  customToken: body.customToken,
+  countUnique: body.countUnique
+});
+
 /**
- * Une cible porteuse d'un secret de lien d'e-mail (connexion, vérification,
- * réinitialisation…) est refusée en 400 typé (#10871). La réponse ne recopie
- * jamais l'adresse : elle porte le jeton.
+ * La MATRICE, jamais une liste (#4153). Un compte privilégié échappe à la
+ * longueur minimale d'un jeton personnalisé — c'est une dispense, et une
+ * dispense est une loi d'admission comme une autre.
  */
-const refuserCibleSecrete = (reply: FastifyReply) =>
-  sendBadRequest(reply, 'Cette adresse ne peut pas être la cible d\'un lien suivi', {
-    code: TRACKING_TARGET_CARRIES_EMAIL_SECRET
-  });
+const mayUseShortToken = (authContext: UnifiedAuthContext): boolean =>
+  permissionsService.hasPermission(authContext.registeredUser!.role as UserRoleEnum, 'canModerateContent');
+
+/** Deux créations simultanées pour la même cible : l'index unique partiel tranche, la perdante réutilise. */
+const isUniqueViolation = (error: unknown): boolean =>
+  typeof error === 'object' && error !== null && 'code' in error && (error as { code?: unknown }).code === 'P2002';
 
 const REFUS_DE_RATTACHEMENT: MessagesDeRefusDAcces = {
   sansSession: 'Authentication required to attach a tracking link to this conversation'
@@ -70,23 +88,80 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
   });
 
   /**
+   * Le lien vers une cible MEESHY (#19418) : la cible doit être partageable par
+   * l'appelant (`sharableTargetUrl`), sinon le même 404 qu'une cible absente.
+   * Un lien par (cible, auteur) — l'index unique partiel le tient en base, la
+   * route le rend idempotent comme `shareWithTrackingLink`.
+   */
+  const createInternalTargetLink = async (
+    authContext: UnifiedAuthContext,
+    createdBy: string,
+    body: CreateTrackingLinkBody & InternalTrackingTarget,
+    reply: FastifyReply
+  ) => {
+    const originalUrl = await sharableTargetUrl(fastify.prisma, authContext, body, resolveFrontendBaseUrl());
+    if (originalUrl === null) {
+      return sendNotFound(reply, 'Cible introuvable', { code: 'TRACKING_TARGET_NOT_FOUND' });
+    }
+
+    const reused = await trackingLinkService.findTargetTrackingLink(body.targetId, createdBy);
+    if (reused) {
+      return sendSuccess(reply, { trackingLink: enrichTrackingLink(reused), existed: true });
+    }
+
+    const trackingLink = await trackingLinkService.createTrackingLink({
+      ...linkLabels(body),
+      originalUrl,
+      createdBy,
+      conversationId: body.conversationId,
+      messageId: body.messageId,
+      targetType: body.targetType,
+      targetId: body.targetId,
+      creditCreator: true
+    }).catch(async (error: unknown) => {
+      const raced = isUniqueViolation(error) ? await trackingLinkService.findTargetTrackingLink(body.targetId, createdBy) : null;
+      if (!raced) throw error;
+      return { ...raced, existed: true as const };
+    });
+    if ('existed' in trackingLink) {
+      const { existed, ...link } = trackingLink;
+      return sendSuccess(reply, { trackingLink: enrichTrackingLink(link), existed });
+    }
+    return sendSuccess(reply, { trackingLink: enrichTrackingLink(trackingLink) }, { statusCode: 201 });
+  };
+
+  /**
    * 1. Créer un lien de tracking
    * POST /api/tracking-links
    */
   fastify.post('/tracking-links', {
     onRequest: [authOptional],
     schema: {
-      description: 'Create a new tracking link for URL analytics. Reserved to registered accounts: no session ⇒ 401 UNAUTHORIZED, guest session ⇒ 403 REGISTERED_USER_REQUIRED (#10291). If the caller already owns an active tracking link for the same URL and conversation, returns it. Each link gets a unique 6-character alphanumeric token used for redirection.',
+      description: 'Create a new tracking link for URL analytics, or toward a Meeshy target (targetType + targetId, #19418: 404 when the target is missing or not sharable by the caller; the caller\'s link to the same target is reused). Reserved to registered accounts: no session ⇒ 401 UNAUTHORIZED, guest session ⇒ 403 REGISTERED_USER_REQUIRED (#10291). If the caller already owns an active tracking link for the same URL and conversation, returns it. Each link gets a unique 6-character alphanumeric token used for redirection.',
       tags: ['tracking-links'],
       summary: 'Create tracking link',
       body: {
         type: 'object',
-        required: ['originalUrl'],
+        anyOf: [{ required: ['originalUrl'] }, { required: ['targetType', 'targetId'] }],
         properties: {
           originalUrl: {
             type: 'string',
             format: 'uri',
-            description: 'The original URL to track'
+            description: 'The external URL to track — required without targetType, ignored with one (#19418)'
+          },
+          targetType: {
+            type: 'string',
+            enum: [...INTERNAL_TRACKING_TARGET_TYPES],
+            description: 'A Meeshy target (#19418): the gateway checks the caller may share it and composes the URL itself'
+          },
+          targetId: {
+            type: 'string',
+            pattern: OBJECT_ID_PATTERN,
+            description: 'The targeted post, reel, story, status, conversation, or the caller\'s own user id (PROFILE)'
+          },
+          countUnique: {
+            type: 'boolean',
+            description: 'Count unique visitors (default true)'
           },
           name: {
             type: 'string',
@@ -209,20 +284,15 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       }
 
       const body = createTrackingLinkSchema.parse(request.body);
+      const externalUrl = body.targetType === undefined ? body.originalUrl : undefined;
 
-      if (!isServableTrackingTarget(body.originalUrl)) {
+      if (body.targetType === undefined && (externalUrl === undefined || !isServableTrackingTarget(externalUrl))) {
         return refuserCibleSecrete(reply);
       }
 
       const createdBy = request.authContext.registeredUser!.id;
-      // La MATRICE, jamais une liste (#4153). Un compte privilégié échappe à
-      // la longueur minimale d'un jeton personnalisé — c'est une dispense, et
-      // une dispense est une loi d'admission comme une autre.
-      const isPrivileged = permissionsService.hasPermission(
-        request.authContext.registeredUser!.role as UserRoleEnum, 'canModerateContent'
-      );
 
-      if (body.customToken && body.customToken.length < 5 && !isPrivileged) {
+      if (body.customToken && body.customToken.length < 5 && !mayUseShortToken(request.authContext)) {
         return sendBadRequest(reply, 'Le token personnalisé doit contenir au moins 5 caractères');
       }
 
@@ -244,9 +314,20 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         }
       }
 
+      if (body.targetType !== undefined && body.targetId !== undefined) {
+        return await createInternalTargetLink(request.authContext, createdBy, {
+          ...body,
+          targetType: body.targetType,
+          targetId: body.targetId
+        }, reply);
+      }
+      if (externalUrl === undefined) {
+        return sendBadRequest(reply, 'Données invalides');
+      }
+
       // Seul l'appelant récupère un lien qu'il a déjà créé (#9184) : la
       // réponse sert le lien ENTIER, compteurs de clics compris.
-      const existingLink = await trackingLinkService.findExistingTrackingLink(body.originalUrl, {
+      const existingLink = await trackingLinkService.findExistingTrackingLink(externalUrl, {
         kind: 'owner',
         createdBy,
         conversationId: body.conversationId
@@ -260,16 +341,11 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       }
 
       const trackingLink = await trackingLinkService.createTrackingLink({
-        originalUrl: body.originalUrl,
-        name: body.name ? SecuritySanitizer.sanitizeText(body.name) : body.name,
-        campaign: body.campaign ? SecuritySanitizer.sanitizeText(body.campaign) : body.campaign,
-        source: body.source ? SecuritySanitizer.sanitizeText(body.source) : body.source,
-        medium: body.medium ? SecuritySanitizer.sanitizeText(body.medium) : body.medium,
+        ...linkLabels(body),
+        originalUrl: externalUrl,
         createdBy,
         conversationId: body.conversationId,
         messageId: body.messageId,
-        expiresAt: body.expiresAt ? new Date(body.expiresAt) : undefined,
-        customToken: body.customToken,
         creditCreator: true
       });
 
@@ -380,11 +456,12 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         }
       }
 
-      // Sans propriétaire, la ligne se lit par tous : elle sert la forme jugée (#10871).
+      // Sans propriétaire, la ligne se lit par tous : elle sert la forme jugée (#10871), sans sa cible (#19412).
+      const { targetId: _cible, ...sansCible } = trackingLink;
       return sendSuccess(reply, {
         trackingLink: trackingLink.createdBy
           ? trackingLink
-          : { ...trackingLink, originalUrl: servedTrackingLinkTarget(trackingLink.originalUrl) }
+          : { ...sansCible, originalUrl: servedTrackingLinkTarget(trackingLink.originalUrl) }
       });
 
     } catch (error) {
@@ -806,168 +883,6 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
     }
   });
 
-  /**
-   * 10. Mettre à jour un lien de tracking
-   * PATCH /api/tracking-links/:token
-   */
-  fastify.patch('/tracking-links/:token', {
-    onRequest: [authRequired],
-    schema: {
-      description: 'Update tracking link properties. Only the creator can update their links. Allows changing the original URL, expiration date, active status, or even the token itself. All fields are optional - only provided fields will be updated.',
-      tags: ['tracking-links'],
-      summary: 'Update tracking link',
-      params: {
-        type: 'object',
-        required: ['token'],
-        properties: {
-          token: {
-            type: 'string',
-            pattern: '^[a-zA-Z0-9_-]{2,50}$',
-            description: 'Current unique alphanumeric tracking token (2-50 chars)'
-          }
-        }
-      },
-      body: {
-        type: 'object',
-        properties: {
-          originalUrl: {
-            type: 'string',
-            format: 'uri',
-            description: 'New original URL to redirect to'
-          },
-          expiresAt: {
-            type: 'string',
-            format: 'date-time',
-            nullable: true,
-            description: 'New expiration date (null to remove expiration)'
-          },
-          isActive: {
-            type: 'boolean',
-            description: 'Whether the link is active'
-          },
-          newToken: {
-            type: 'string',
-            pattern: '^[a-zA-Z0-9][a-zA-Z0-9_-]{0,48}[a-zA-Z0-9]$',
-            description: 'New token (2-50 chars, cannot start or end with dash)'
-          }
-        }
-      },
-      response: {
-        200: {
-          description: 'Tracking link updated successfully',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                trackingLink: {
-                  ...trackingLinkSchema,
-                  properties: {
-                    ...trackingLinkSchema.properties,
-                    fullUrl: { type: 'string', description: 'Complete tracking URL' }
-                  }
-                }
-              }
-            },
-            message: { type: 'string', example: 'Lien mis à jour avec succès' }
-          }
-        },
-        400: {
-          description: 'Invalid request data (bad URL or token format)',
-          ...errorResponseSchema
-        },
-        403: {
-          description: 'Access denied - only creator can update',
-          ...errorResponseSchema
-        },
-        404: {
-          description: 'Tracking link not found',
-          ...errorResponseSchema
-        },
-        409: {
-          description: 'Conflict - new token already exists',
-          ...errorResponseSchema
-        },
-        500: {
-          description: 'Internal server error',
-          ...errorResponseSchema
-        }
-      }
-    }
-  }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
-    try {
-      const { token } = request.params as { token: string };
-      const body = request.body as {
-        originalUrl?: string;
-        expiresAt?: string | null;
-        isActive?: boolean;
-        newToken?: string;
-      };
-
-      if (!isRegisteredUser(request.authContext)) {
-        return sendForbidden(reply, 'Utilisateur enregistré requis');
-      }
-
-      const userId = request.authContext.registeredUser!.id;
-
-      const trackingLink = await trackingLinkService.getTrackingLinkByToken(token);
-
-      if (!trackingLink || isForeignAddressLink(trackingLink, request.authContext)) {
-        return sendNotFound(reply, 'Lien de tracking non trouvé');
-      }
-
-      if (!mayManageTrackingLink(trackingLink, { id: userId, role: request.authContext.registeredUser!.role })) {
-        return sendForbidden(reply, 'Seul le créateur peut modifier ce lien');
-      }
-
-      if (body.newToken && !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,48}[a-zA-Z0-9]$/.test(body.newToken)) {
-        return sendBadRequest(reply, 'Le token doit contenir 2-50 caractères alphanumériques et ne peut pas commencer ou finir par un tiret');
-      }
-
-      const isPrivileged = permissionsService.hasPermission(
-        request.authContext.registeredUser!.role as UserRoleEnum, 'canModerateContent'
-      );
-      if (body.newToken && body.newToken.length < 5 && !isPrivileged) {
-        return sendBadRequest(reply, 'Le token doit contenir au moins 5 caractères');
-      }
-
-      // `new URL()` ne fait que parser : `javascript:` et `data:` passaient,
-      // et l'édition rouvrait donc le vecteur que la création interdit.
-      if (body.originalUrl && !isHttpUrl(body.originalUrl)) {
-        return sendBadRequest(reply, 'URL invalide : http(s) uniquement');
-      }
-      if (body.originalUrl !== undefined && !isServableTrackingTarget(body.originalUrl)) {
-        return refuserCibleSecrete(reply);
-      }
-
-      const updatedLink = await trackingLinkService.updateTrackingLink({
-        token,
-        originalUrl: body.originalUrl,
-        expiresAt: body.expiresAt === null ? null : (body.expiresAt ? new Date(body.expiresAt) : undefined),
-        isActive: body.isActive,
-        newToken: body.newToken
-      });
-
-      return sendSuccess(reply, { trackingLink: enrichTrackingLink(updatedLink) }, { message: 'Lien mis à jour avec succès' });
-
-    } catch (error) {
-      if (error instanceof TrackingTargetCarriesEmailSecretError) {
-        return refuserCibleSecrete(reply);
-      }
-      if (error instanceof Error) {
-        if (error.message === 'Tracking link not found') {
-          return sendNotFound(reply, 'Lien de tracking non trouvé');
-        }
-        if (error.message === 'Token already exists') {
-          return sendConflict(reply, 'Ce token existe déjà');
-        }
-      }
-
-      logError(fastify.log, 'Update tracking link error:', error);
-      return sendInternalError(reply, 'Erreur interne du serveur');
-    }
-  });
-
+  registerUpdateRoute({ fastify, trackingLinkService, authRequired });
   registerCheckTokenRoute({ fastify, trackingLinkService, authRequired });
 }

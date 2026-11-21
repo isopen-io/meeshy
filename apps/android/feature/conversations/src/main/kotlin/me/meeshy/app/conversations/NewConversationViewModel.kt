@@ -22,6 +22,8 @@ import me.meeshy.sdk.model.CreationEncryptionMode
 import me.meeshy.sdk.model.CreationEncryptionOffer
 import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.CreateConversationRequest
+import me.meeshy.sdk.model.e2ee.EndToEndParticipantWithoutDevice
+import me.meeshy.sdk.model.e2ee.PeerFirstName
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.user.UserRepository
@@ -54,6 +56,8 @@ data class NewConversationUiState(
     /** Les modes de chiffrement dépliés sous la ligne « Chiffrement · <mode> » (iOS `showsEncryptionOptions`). */
     val encryptionExpanded: Boolean = false,
     val openingUserId: String? = null,
+    /** Le prénom de l'invité qu'un refus `E2EE_PARTICIPANT_WITHOUT_DEVICE` nomme (#20076) ; vide : la phrase sans nom. */
+    val withoutDeviceFirstName: String = "",
 ) {
     /** What the selection draws (iOS `NewConversationShape`). */
     val shape: NewConversationShape get() = NewConversationLogic.shape(selected.size, groupRequested)
@@ -96,7 +100,13 @@ data class NewConversationUiState(
 }
 
 /** A creation failure, told in words (parity iOS `new_conversation.error.blocked` / `conversation.new.create.error`). */
-enum class NewConversationError { BLOCKED, CREATE_FAILED }
+enum class NewConversationError {
+    BLOCKED,
+
+    /** 409 `E2EE_PARTICIPANT_WITHOUT_DEVICE` (#20073) : l'invité n'a aucun appareil chiffré, rien n'est créé. */
+    PARTICIPANT_WITHOUT_DEVICE,
+    CREATE_FAILED,
+}
 
 /**
  * Drives the "new conversation" picker (port of iOS `NewConversationView`):
@@ -223,7 +233,7 @@ class NewConversationViewModel @Inject constructor(
                 when (val result = conversationRepository.create(request.type, request.title, request.participantIds, request.encryptionMode)) {
                     is NetworkResult.Success ->
                         _state.update { it.copy(isCreating = false, openingUserId = null, createdConversationId = result.data.id) }
-                    is NetworkResult.Failure -> onCreateFailed(request, result.error.code)
+                    is NetworkResult.Failure -> onCreateFailed(request, result.error.code, openingUserId)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -233,7 +243,7 @@ class NewConversationViewModel @Inject constructor(
         }
     }
 
-    private suspend fun onCreateFailed(request: CreateConversationRequest, code: String?) {
+    private suspend fun onCreateFailed(request: CreateConversationRequest, code: String?, inviteeId: String?) {
         val pendingId = if (code == OFFLINE_CODE) {
             conversationRepository.createOptimistic(request.type, request.title, request.participantIds, request.encryptionMode)
         } else {
@@ -241,7 +251,12 @@ class NewConversationViewModel @Inject constructor(
         }
         _state.update {
             if (pendingId != null) it.copy(isCreating = false, openingUserId = null, queuedOffline = true)
-            else it.copy(isCreating = false, openingUserId = null, error = creationErrorOf(code))
+            else it.copy(
+                isCreating = false,
+                openingUserId = null,
+                error = creationErrorOf(code),
+                withoutDeviceFirstName = withoutDeviceFirstNameOf(it, inviteeId),
+            )
         }
     }
 
@@ -394,8 +409,17 @@ class NewConversationViewModel @Inject constructor(
         _state.update { it.copy(results = emptyList(), isSearching = false, hasMore = false, answeredQuery = query, searchFailed = true) }
     }
 
-    private fun creationErrorOf(code: String?): NewConversationError =
-        if (code == USER_BLOCKED_CODE) NewConversationError.BLOCKED else NewConversationError.CREATE_FAILED
+    private fun creationErrorOf(code: String?): NewConversationError = when {
+        code == USER_BLOCKED_CODE -> NewConversationError.BLOCKED
+        EndToEndParticipantWithoutDevice.matches(code) -> NewConversationError.PARTICIPANT_WITHOUT_DEVICE
+        else -> NewConversationError.CREATE_FAILED
+    }
+
+    /** La création ne nomme personne (#20073) : un tête-à-tête n'a qu'un invité, c'est lui. */
+    private fun withoutDeviceFirstNameOf(state: NewConversationUiState, inviteeId: String?): String {
+        val invitee = (state.results + state.contacts).firstOrNull { it.id == inviteeId } ?: return ""
+        return PeerFirstName.of(invitee.displayName.ifBlank { invitee.username })
+    }
 
     private fun projectedRows(results: List<me.meeshy.sdk.net.api.UserSearchResult>) =
         NewConversationLogic.withBlocked(

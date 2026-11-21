@@ -73,6 +73,29 @@ final class EndToEndLinkEmbedLawTests: XCTestCase {
         XCTAssertEqual(resolved.conversationCardTarget, .shareLink(identifier: "mshy_x"))
     }
 
+    // MARK: - Carte de profil (serveur, #19519)
+
+    func test_init_clearProfileLink_mountsTheProfileCard() throws {
+        let short = try text(clear("Parle à Aïssa : https://meeshy.me/@aissa"))
+        let long = try text(clear("https://meeshy.me/u/aissa"))
+
+        XCTAssertEqual(short.profileCardHandle, "aissa")
+        XCTAssertEqual(long.profileCardHandle, "aissa")
+        XCTAssertNil(short.conversationCardTarget, "une fiche n'est pas une conversation")
+    }
+
+    func test_init_decryptedProfileLink_asksTheServerNothing() throws {
+        let resolved = try text(decrypted("https://meeshy.me/@aissa"))
+
+        XCTAssertNil(resolved.profileCardHandle)
+    }
+
+    func test_init_foreignHostProfilePath_isNoProfileCard() throws {
+        let resolved = try text(clear("https://evil.example/@aissa"))
+
+        XCTAssertNil(resolved.profileCardHandle)
+    }
+
     // MARK: - Façade vidéo (vignette chez l'hébergeur)
 
     func test_init_decryptedVideoAddress_mountsNoVideoFacade() throws {

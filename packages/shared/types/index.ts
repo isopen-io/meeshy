@@ -785,6 +785,8 @@ export * from './conversation-bridge.js';
 export * from './contact-card.js';
 export * from './relation.js';
 export * from './relation-level-response.js';
+export * from './relation-circles-summary.js';
+export * from './story-highlight.js';
 export * from './bring.js';
 export * from './talkie.js';
 // Les schémas zod de l'écoute et de la position partagée ne passent pas par le
@@ -819,6 +821,66 @@ export type {
 } from './battery.js';
 // Mon profil synchronisé entre mes appareils (#18924) : les types seuls, le schéma reste hors du baril.
 export type { OwnProfileField, OwnProfileSnapshot, ProfileUpdatedEventData } from './own-profile-sync.js';
+export {
+  INACTIVITY_DELAY_HOURS,
+  INACTIVITY_CHECK_CONFIG,
+  INACTIVITY_ANNOUNCEMENT_KINDS,
+  WELLNESS_CHECK_NOTIFICATION_TYPE,
+  INACTIVITY_ALERT_NOTIFICATION_TYPE,
+} from './inactivity-check.js';
+export type {
+  InactivityDelayHours,
+  InactivityCheckConfig,
+  InactivityAnnouncement,
+  InactivityAnnouncementKind,
+  InactivityAlertState,
+  InactivityAlertEventData,
+  InactivityClearedEventData,
+  InactivitySnapshot,
+  InactivityCheckSettings,
+  InactivityCheckSettingsUpdate,
+  InactivityCheckPersonSettings,
+  InactivityLastPosition,
+  InactivityLastBattery,
+  WellnessOkAck,
+} from './inactivity-check.js';
+export { PHONE_CALL_ANNOUNCEMENT_KINDS, PHONE_CALL_CONFIG } from './phone-call.js';
+export type {
+  PhoneCallAnnouncement,
+  PhoneCallAnnouncementKind,
+  PhoneCallConfig,
+  PhoneCallState,
+  PhoneCallStartedEventData,
+  PhoneCallEndedEventData,
+  PhoneCallSnapshot,
+  PhoneCallAck,
+  PhoneCallReport,
+  PhoneCallEmitterSettings,
+  PhoneCallPersonSettings,
+} from './phone-call.js';
+export {
+  FALL_CLEARED_REASONS,
+  FALL_CONSENT_MINIMUM_AGE,
+  FALL_CONSENT_VERSION,
+  FALL_DETECTION_CONFIG,
+  SAFETY_ALERT_CLEARED_PUSH_TYPE,
+  SAFETY_ALERT_PUSH_TYPE,
+} from './fall-detection.js';
+export type {
+  FallAnnouncement,
+  FallClearedEventData,
+  FallClearedReason,
+  FallConsentSettings,
+  FallConsentUpdate,
+  FallDetectedEventData,
+  FallDetectionConfig,
+  FallOkAck,
+  FallPersonSettings,
+  FallReport,
+  FallReportAck,
+  FallSnapshot,
+  FallState,
+} from './fall-detection.js';
 export * from './phone-reachability-constants.js';
 export type {
   PhoneReachabilityAnnouncement,
@@ -834,6 +896,7 @@ export type {
 } from './phone-reachability.js';
 export * from './shared-location-constants.js';
 export * from './blood-location.js';
+export * from './contact-exchange.js';
 export type {
   SharedLocationPosition,
   SharedLocationStartPayload,
@@ -844,6 +907,8 @@ export type {
   SharedLocationEndedEventData,
   SharedLocationSnapshot,
 } from './shared-location.js';
+// La fin d'un partage de position portée à l'appareil suspendu (#19463)
+export * from './shared-location-live-activity.js';
 
 // ===== LA CAPTURE D'UN CONTENU QUI DISPARAÎT (#9617) =====
 export * from './content-capture.js';

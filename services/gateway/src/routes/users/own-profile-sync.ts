@@ -7,7 +7,7 @@
  * | événement | audience | charge |
  * |---|---|---|
  * | `user:updated` | les PARTENAIRES (`emitUserUpdatedToPartners`) | le profil PUBLIC, filtré par `publicProfileChanges` |
- * | `profile:updated` | MES appareils (`user:<moi>`) | l'instantané PROPRE : langues, nom, photo, bannière |
+ * | `profile:updated` | MES appareils (`user:<moi>`) | l'instantané PROPRE : langues, nom, photo, bannière, accent |
  *
  * La charge propre se compose ICI, champ par champ, depuis la ligne écrite :
  * un appelant qui passerait la ligne `User` entière (`email`, `phoneNumber`,
@@ -24,11 +24,18 @@ import {
   type ProfileUpdatedEventData,
 } from '@meeshy/shared/types/own-profile-sync';
 
+import { servedProfileAccentColor } from '@meeshy/shared/utils/profile-accent';
+
 import { logError } from '../../utils/logger';
 import { broadcastToUser } from '../../utils/socket-broadcast';
 
-/** Ce que la ligne écrite doit porter pour composer l'instantané. */
+/**
+ * Ce que la ligne écrite doit porter pour composer l'instantané. `profileAccentColor` y est
+ * REQUIS (#19201) : une ligne lue sans lui ferait partir `null`, donc effacerait l'accent sur
+ * mes autres appareils — le compilateur refuse un `select` qui l'oublie.
+ */
 export type OwnProfileRow = OwnProfileSnapshot & {
+  readonly profileAccentColor: string | null;
   readonly id: string;
   readonly updatedAt: Date;
 };
@@ -48,6 +55,7 @@ export function ownProfileUpdatedPayload(row: OwnProfileRow): ProfileUpdatedEven
       username: row.username,
       avatar: row.avatar ?? null,
       banner: row.banner ?? null,
+      profileAccentColor: servedProfileAccentColor(row.profileAccentColor),
     },
   });
   return parsed.success ? parsed.data : null;

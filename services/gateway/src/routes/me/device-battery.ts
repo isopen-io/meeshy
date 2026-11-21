@@ -6,6 +6,7 @@ import { captureBatteryAudience, forgetBatteryOf, refreshBatteryAudience, report
 import { readBatteryEmitterSettings, writeBatteryEmitterSettings } from '../../services/battery/batterySettings';
 import { phoneReachabilityRelayDepsOf } from '../../services/phoneReachability/phoneReachabilityDeps';
 import { notePhoneAlive } from '../../services/phoneReachability/phoneReachabilityRelay';
+import { refreshInactivityServedAfter } from '../../services/inactivityCheck/inactivityDeps';
 import { relationIoOf } from '../../socketio/relationEvents';
 import { logError } from '../../utils/logger';
 import { sendBadRequest, sendInternalError, sendSuccess } from '../../utils/response';
@@ -95,6 +96,7 @@ export default async function deviceBatteryMeRoutes(fastify: FastifyInstance): P
       if (!settings.sharingEnabled) {
         await forgetBatteryOf(relay, userId).catch((error: unknown) => logError(fastify.log, 'Battery state not forgotten after global cut:', error));
       }
+      await refreshInactivityServedAfter({ prisma: fastify.prisma, io: relationIoOf(fastify), report: (error) => logError(fastify.log, 'Inactivity not refreshed after battery setting:', error) }, userId);
       return sendSuccess(reply, settings);
     } catch (error) {
       logError(fastify.log, 'Battery settings write error:', error);

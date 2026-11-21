@@ -83,6 +83,16 @@ public nonisolated struct MeeshyMedallionRecipe: Sendable, Equatable {
     public static let waveStartOpacity: Double = 0.5
     public static let waveEndScale: Double = 2.4
 
+    /// Le tour du contour organique (`mxMorph` de la planche : 8 s, aller-retour fondu dans la boucle).
+    public static let morphPeriodSeconds: Double = 8
+
+    /// La phase du contour organique après `elapsed` secondes, de 0 à 2π ; un non-nombre vaut 0.
+    public static func morphPhase(elapsed: Double) -> Double {
+        guard elapsed.isFinite else { return 0 }
+        let turns = elapsed / morphPeriodSeconds
+        return (turns - turns.rounded(.down)) * 2 * Double.pi
+    }
+
     /// L'onde `index` sur `count` après `elapsed` secondes : son échelle et son opacité.
     public static func wave(index: Int, count: Int, elapsed: Double) -> MeeshyMedallionWave {
         let share = count > 0 ? Double(min(max(index, 0), count - 1)) / Double(count) : 0
@@ -119,6 +129,8 @@ public nonisolated struct MeeshyMedallionRecipe: Sendable, Equatable {
     public let waveCount: Int
     public let showsStillRing: Bool
     public let animates: Bool
+    /// Le contour organique ondule en continu (`motion.morph` de la planche, #19785) ; jamais sous mouvement réduit.
+    public let morphs: Bool
     public let isLocked: Bool
     public let showsLockGlyph: Bool
     public let outlineWidth: Double
@@ -161,6 +173,7 @@ public nonisolated struct MeeshyMedallionRecipe: Sendable, Equatable {
             waveCount: reduceMotion ? 0 : waves,
             showsStillRing: reduceMotion && waves > 0,
             animates: !reduceMotion && (waves > 0 || rotates),
+            morphs: !reduceMotion && resolvedShape == .blob,
             isLocked: isLocked,
             showsLockGlyph: isLocked,
             outlineWidth: isLocked ? lockedOutline : 0

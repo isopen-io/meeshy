@@ -335,3 +335,154 @@ final class ConversationHeaderFlameTests: XCTestCase {
             .appendingPathComponent(relative)
     }
 }
+
+// MARK: - L'acte du Rêve qui avance, vu à l'envoi (#17367, tranche iOS #19716)
+
+/// Miroir de `act-advance-pill.test.tsx` (web) : l'envoi arme le guet, la lecture suivante du bloc `game` dit l'acte
+/// qui avance, et rien ne parle hors du guet ni sous « Jeu masqué ».
+@MainActor
+final class ConversationActAdvanceWatchTests: XCTestCase {
+
+    private final class FakeSource: PlayerBannerSourcing, @unchecked Sendable {
+        var cachedBlock: GameBlock?
+        var fetchedBlock: GameBlock?
+        private(set) var fetchCalls = 0
+
+        func cached() async -> GameBlock? { cachedBlock }
+
+        func fetch() async -> GameBlock? {
+            fetchCalls += 1
+            return fetchedBlock
+        }
+    }
+
+    private final class Clock {
+        var date = Date(timeIntervalSince1970: 1_800_000_000)
+    }
+
+    private func day(medium: Int) -> GameBlock {
+        GameFixture.game(missions: [
+            GameFixture.mission(id: "a", difficulty: .easy, target: 1, progress: 1),
+            GameFixture.mission(id: "b", difficulty: .medium, target: 5, progress: medium),
+            GameFixture.mission(id: "c", difficulty: .hard, target: 8, progress: 0),
+        ])
+    }
+
+    private func makeSUT(cached: GameBlock?, hidden: Bool = false)
+        -> (sut: ConversationActAdvanceWatch, source: FakeSource, clock: Clock, announced: () -> [GameActAdvance]) {
+        let source = FakeSource()
+        source.cachedBlock = cached
+        let clock = Clock()
+        var announced: [GameActAdvance] = []
+        let sut = ConversationActAdvanceWatch(source: source, isHidden: { hidden }, now: { clock.date },
+                                              announce: { announced.append($0) })
+        return (sut, source, clock, { announced })
+    }
+
+    func test_receive_afterASend_showsTheActThatAdvanced_andAnnouncesItOnce() async {
+        let (sut, _, _, announced) = makeSUT(cached: day(medium: 2))
+
+        await sut.arm()
+        sut.receive(day(medium: 3))
+
+        let advance = GameActAdvance(difficulty: .medium, progress: 3, target: 5)
+        XCTAssertEqual(sut.shown, advance)
+        XCTAssertEqual(announced(), [advance], "VoiceOver l'entend une fois, sans que le focus quitte la saisie")
+    }
+
+    func test_receive_withoutASend_showsNothing() {
+        let (sut, _, _, _) = makeSUT(cached: day(medium: 2))
+
+        sut.receive(day(medium: 2))
+        sut.receive(day(medium: 3))
+
+        XCTAssertNil(sut.shown, "une avancée sans envoi (un autre appareil) ne s'attribue pas à cette conversation")
+    }
+
+    func test_receive_afterTheArmedWindow_showsNothing() async {
+        let (sut, _, clock, _) = makeSUT(cached: day(medium: 2))
+        await sut.arm()
+
+        clock.date = clock.date.addingTimeInterval(ConversationActAdvanceWatch.armedSeconds + 1)
+        sut.receive(day(medium: 3))
+
+        XCTAssertNil(sut.shown)
+    }
+
+    func test_arm_whenTheGameIsHidden_showsNothingEvenWhenAnActAdvances() async {
+        let (sut, _, _, announced) = makeSUT(cached: day(medium: 2), hidden: true)
+
+        await sut.arm()
+        sut.receive(day(medium: 3))
+
+        XCTAssertNil(sut.shown)
+        XCTAssertTrue(announced().isEmpty)
+    }
+
+    func test_receive_whenNoActMoved_showsNothing() async {
+        let (sut, _, _, _) = makeSUT(cached: day(medium: 2))
+
+        await sut.arm()
+        sut.receive(day(medium: 2))
+
+        XCTAssertNil(sut.shown)
+    }
+
+    func test_arm_withAnEmptyCache_takesTheFirstReadingAsBefore() async {
+        let (sut, _, _, _) = makeSUT(cached: nil)
+
+        await sut.arm()
+        sut.receive(day(medium: 3))
+        XCTAssertNil(sut.shown, "sans lecture d'avant, rien ne se compare : jamais une avancée inventée")
+
+        sut.receive(day(medium: 4))
+        XCTAssertEqual(sut.shown, GameActAdvance(difficulty: .medium, progress: 4, target: 5))
+    }
+
+    func test_missionsUpdated_whileArmed_rereadsTheBlockOnce_andShowsTheAdvance() async {
+        let (sut, source, _, _) = makeSUT(cached: day(medium: 2))
+        source.fetchedBlock = day(medium: 3)
+
+        await sut.arm()
+        await sut.missionsUpdated()
+
+        XCTAssertEqual(source.fetchCalls, 1)
+        XCTAssertEqual(sut.shown, GameActAdvance(difficulty: .medium, progress: 3, target: 5))
+    }
+
+    func test_missionsUpdated_withoutASend_sendsNoRequest() async {
+        let (sut, source, _, _) = makeSUT(cached: day(medium: 2))
+
+        await sut.missionsUpdated()
+
+        XCTAssertEqual(source.fetchCalls, 0, "hors du guet, `game:missions-updated` ne coûte aucune requête ici")
+    }
+
+    func test_stateUpdated_carryingTheBlock_showsTheAdvanceWithoutARequest() async {
+        let (sut, source, _, _) = makeSUT(cached: day(medium: 2))
+
+        await sut.arm()
+        await sut.stateUpdated(GameUpdatedEvent(gameRevision: 2, reason: "mission", game: day(medium: 3)))
+
+        XCTAssertEqual(source.fetchCalls, 0)
+        XCTAssertEqual(sut.shown, GameActAdvance(difficulty: .medium, progress: 3, target: 5))
+    }
+
+    func test_cacheWritten_whileArmed_readsTheCacheAndShowsTheAdvance() async {
+        let (sut, source, _, _) = makeSUT(cached: day(medium: 2))
+        await sut.arm()
+
+        source.cachedBlock = day(medium: 3)
+        await sut.cacheWritten()
+
+        XCTAssertEqual(sut.shown, GameActAdvance(difficulty: .medium, progress: 3, target: 5))
+    }
+
+    func test_label_saysTheActAndItsProgress() {
+        let label = ConversationActAdvancePill.label(for: GameActAdvance(difficulty: .medium, progress: 3, target: 5))
+
+        XCTAssertTrue(label.contains(GameCopy.difficultyName(.medium)), label)
+        XCTAssertTrue(label.contains("3") && label.contains("5"), label)
+        XCTAssertFalse(label.contains("%"), "aucun spécificateur ne reste dans le texte rendu : \(label)")
+    }
+}

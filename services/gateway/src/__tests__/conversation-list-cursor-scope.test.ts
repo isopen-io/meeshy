@@ -68,9 +68,14 @@ describe('le curseur de GET /conversations', () => {
   it('résout le curseur du lecteur en une borne', async () => {
     const prisma = prismaQuiRespecteLeScope({ lastMessageAt: QUAND });
 
+    // L'identité de la ligne de bord voyage AVEC son rang depuis #19881 : c'est
+    // elle qui départage deux conversations de rang identique à la frontière
+    // d'une page, et elle n'est pas calculée — `beforeCursor` EST cet id, que
+    // cette résolution vient d'autoriser dans le scope du lecteur.
     expect(await resolveListCursor({ prisma, beforeCursor: UNE_CONVERSATION, userId: LECTEUR })).toEqual({
       genre: 'borne',
       rang: QUAND,
+      id: UNE_CONVERSATION,
     });
   });
 
@@ -81,6 +86,7 @@ describe('le curseur de GET /conversations', () => {
     expect(await resolveListCursor({ prisma, beforeCursor: UNE_CONVERSATION, userId: LECTEUR })).toEqual({
       genre: 'borne',
       rang: activite,
+      id: UNE_CONVERSATION,
     });
   });
 
@@ -91,6 +97,7 @@ describe('le curseur de GET /conversations', () => {
     expect(await resolveListCursor({ prisma, beforeCursor: UNE_CONVERSATION, userId: LECTEUR })).toEqual({
       genre: 'borne',
       rang: QUAND,
+      id: UNE_CONVERSATION,
     });
   });
 

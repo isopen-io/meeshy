@@ -39,6 +39,16 @@ describe('decodeSharedLocation', () => {
     expect(decodeSharedLocation(served())).toEqual(served());
   });
 
+  test('garde le cercle servi (#17013, #17966)', () => {
+    expect(decodeSharedLocation(served({ circle: 'BLOOD' }))?.circle).toBe('BLOOD');
+  });
+
+  test('un cercle inconnu ou absent ne traverse pas : le marqueur reste neutre, rien n’est deviné', () => {
+    expect(decodeSharedLocation(served({ circle: 'ACQUAINTANCE' }))).toEqual(served());
+    expect(decodeSharedLocation(served({ circle: 7 }))).toEqual(served());
+    expect(Object.keys(decodeSharedLocation(served()) ?? {})).not.toContain('circle');
+  });
+
   test('une précision inconnue se lit « city » — jamais plus fine', () => {
     expect(decodeSharedLocation(served({ precision: 'street' }))?.precision).toBe('city');
   });
@@ -131,6 +141,11 @@ describe('MON partage, tel que la passerelle le sert (#18389)', () => {
       recipients: [{ userId: ID.toLowerCase(), precision: 'exact', expiresAt: '2026-11-14T09:00:00.000Z' }],
       expiresAt: '2026-11-14T09:00:00.000Z',
     });
+  });
+
+  test('le démarrage servi (`startedAt`, #18580) est gardé tel quel ; absent ou illisible, il n’existe pas', () => {
+    expect(decodeOwnSharedLocation({ recipients: [row], expiresAt: null, startedAt: '2026-11-14T08:00:00.000Z' })?.startedAt).toBe('2026-11-14T08:00:00.000Z');
+    expect(decodeOwnSharedLocation({ recipients: [row], expiresAt: null, startedAt: 12 })?.startedAt).toBeUndefined();
   });
 
   test('une ligne illisible se saute ; une précision inconnue se lit « ville »', () => {

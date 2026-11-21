@@ -6,6 +6,7 @@ import me.meeshy.sdk.media.MediaLoss
 import me.meeshy.sdk.net.withMutationId
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.withAccountTicket
 
 /** Result of delivering one outbox mutation over the network. */
 public sealed interface SendResult {
@@ -140,7 +141,7 @@ public class OutboxDrainer(
                     AuthorVerdict.WAIT -> continue
                     AuthorVerdict.EXHAUST_NO_AUTHOR -> {
                         outbox.markExhausted(row.cmid, OutboxAuthorGuard.REASON_NO_AUTHOR)
-                        onExhausted(settled(row, OutboxAuthorGuard.REASON_NO_AUTHOR))
+                        exhaust(ticket, settled(row, OutboxAuthorGuard.REASON_NO_AUTHOR))
                         exhausted++
                         continue
                     }
@@ -166,7 +167,7 @@ public class OutboxDrainer(
                         }
                         val reason = cascadeReason(failed)
                         outbox.markExhausted(row.cmid, reason)
-                        onExhausted(settled(row, reason))
+                        exhaust(ticket, settled(row, reason))
                         exhausted++
                         continue
                     }
@@ -177,7 +178,7 @@ public class OutboxDrainer(
             if (sender == null) {
                 val reason = "No sender registered for ${row.kind}"
                 outbox.markExhausted(row.cmid, reason)
-                onExhausted(settled(row, reason))
+                exhaust(ticket, settled(row, reason))
                 exhausted++
                 continue
             }
@@ -188,7 +189,7 @@ public class OutboxDrainer(
                     }
                 OutboxAdmissionVerdict.WITHHOLD -> {
                     outbox.markExhausted(row.cmid, OutboxPlaintextAdmission.REASON_END_TO_END)
-                    onExhausted(settled(row, OutboxPlaintextAdmission.REASON_END_TO_END))
+                    exhaust(ticket, settled(row, OutboxPlaintextAdmission.REASON_END_TO_END))
                     exhausted++
                     continue
                 }
@@ -201,7 +202,7 @@ public class OutboxDrainer(
                     val waits = outbox.defer(row.cmid, OutboxPlaintextAdmission.REASON_MODE_UNCONFIRMED, retryAfter, DEFERRED_MAX_WAIT_MS)
                     if (!independent) outbox.waitBehind(lane, row.cmid, OutboxPlaintextAdmission.REASON_MODE_UNCONFIRMED)
                     if (!waits) {
-                        onExhausted(settled(row, null))
+                        exhaust(ticket, settled(row, null))
                         exhausted++
                         continue
                     }
@@ -212,7 +213,7 @@ public class OutboxDrainer(
                 // #13628 — la passerelle refuse de servir la conversation (403, 410, son 404 CONVERSATION_NOT_FOUND) : la ligne ne bloque pas sa file à jamais.
                 OutboxAdmissionVerdict.UNREACHABLE -> {
                     outbox.markExhausted(row.cmid, OutboxPlaintextAdmission.REASON_CONVERSATION_UNREACHABLE)
-                    onExhausted(settled(row, OutboxPlaintextAdmission.REASON_CONVERSATION_UNREACHABLE))
+                    exhaust(ticket, settled(row, OutboxPlaintextAdmission.REASON_CONVERSATION_UNREACHABLE))
                     exhausted++
                     continue
                 }
@@ -243,7 +244,7 @@ public class OutboxDrainer(
                     val attempts = (outbox.row(row.cmid)?.attempts ?: row.attempts) + 1
                     val backoff = OutboxBackoff.delayMs(kind, attempts)
                     if (outbox.markFailed(row.cmid, "Transient delivery failure", backoff) == OutboxState.EXHAUSTED) {
-                        onExhausted(settled(row, "Transient delivery failure"))
+                        exhaust(ticket, settled(row, "Transient delivery failure"))
                         exhausted++
                     }
                     return DrainReport(delivered, exhausted, stoppedOnTransientFailure = true)
@@ -256,7 +257,7 @@ public class OutboxDrainer(
                     if (outbox.defer(row.cmid, result.reason, DEFERRED_RETRY_MS, DEFERRED_MAX_WAIT_MS)) {
                         return blocked(delivered, exhausted)
                     }
-                    onExhausted(settled(row, null))
+                    exhaust(ticket, settled(row, null))
                     exhausted++
                 }
                 is SendResult.PermanentFailure -> {
@@ -265,7 +266,7 @@ public class OutboxDrainer(
                     } else {
                         outbox.markExhausted(row.cmid, result.reason)
                     }
-                    onExhausted(settled(row, result.reason))
+                    exhaust(ticket, settled(row, result.reason))
                     exhausted++
                 }
             }
@@ -277,6 +278,11 @@ public class OutboxDrainer(
             stoppedOnBlockedDependency = waitingMedia,
             heldBack = heldBack,
         )
+    }
+
+    /** #19422 — le dénouement d'une ligne s'exécute sous le compte qui l'a jugée, jamais sous celui adopté entre-temps. */
+    private suspend fun exhaust(ticket: AccountTicket?, row: OutboxEntity) {
+        withAccountTicket(ticket) { onExhausted(row) }
     }
 
     /**

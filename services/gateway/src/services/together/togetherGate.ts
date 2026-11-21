@@ -7,7 +7,9 @@
  *    l'autre, le privilège d'équipe et le bouclier des mineurs selon la matrice ;
  * 3. le média est une pièce jointe AUDIO ou VIDÉO d'un message non supprimé, ni à vue
  *    unique (pièce ou message), ni éphémère, de la conversation nommée ;
- * 4. les deux sont membres ACTIFS de cette conversation ;
+ * 4. les deux sont membres ACTIFS de cette conversation — actifs, ni bannis, ni
+ *    partis, ni l'ayant supprimée « pour eux » (les trois colonnes de départ,
+ *    #19690) ;
  * 5. la conversation est OUVERTE : ni close (`isActive: false`, `closedAt`), ni supprimée
  *    (#17147). Une clôture garde messages et participants actifs : sans cette lecture, une
  *    séance y continuait, rejugée ou non.
@@ -20,6 +22,8 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { TogetherMediaKind } from '@meeshy/shared/types/together';
 import { pairAccess, type PairAccessDb } from '../relations/pairAccess';
 import { ACCOUNT_STATE_SELECT, isUsableAccount } from '../relations/usableAccount';
+import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
+import { unsetOrNull } from '../../utils/prisma-unset';
 
 export type TogetherGateDb = PairAccessDb & Pick<PrismaClient, 'participant' | 'messageAttachment' | 'conversation'>;
 
@@ -58,14 +62,52 @@ async function playableMedia(prisma: TogetherGateDb, subject: TogetherSubject): 
   return togetherMediaOf(attachment.mimeType);
 }
 
+/**
+ * Les prédicats d'ABSENCE des TROIS colonnes de départ, composés par `AND`
+ * (#19690).
+ *
+ * `leftAt: null` et `bannedAt: null` en ÉGALITÉ n'appariaient pas une clé
+ * ABSENTE — l'état de tout membre qui n'est ni parti ni banni, Prisma n'écrivant
+ * pas un `DateTime?` qu'on ne lui donne pas. Cette fonction rendait donc `false`
+ * pour presque toutes les paires, et la séance « Ensemble » était INERTE pour la
+ * population entière. La règle était récitée treize lignes plus bas pour
+ * `closedAt` (`openConversation`) et oubliée pour ces voisines.
+ *
+ * `AND` de PRÉDICATS COMPLETS, et non un double spread : `PARTICIPATION_VIVANTE`
+ * et `unsetOrNull` rendent chacun une clé `OR`, dont la seconde écraserait la
+ * première. Jamais un `AND` des deux BRANCHES d'un même prédicat
+ * (`AND: [{ leftAt: null }, { leftAt: { isSet: false } }]`) : cette conjonction
+ * est IMPOSSIBLE et n'apparie aucun document.
+ *
+ * `deletedForMe` est la TROISIÈME, et elle est ici parce que ce correctif la
+ * rendait atteignable. `Participant` porte trois colonnes de départ que le dépôt
+ * lit ENSEMBLE à l'endroit qui en dépend (`routes/sync/conversations.ts`), et
+ * `delete-for-me` écrit `{ deletedForMe: now, isActive: false }` d'un seul geste
+ * — donc `isActive: true` suffisait pour une ligne BIEN écrite. Restent les
+ * lignes HÉRITÉES d'avant #17072, qui portent `isActive: true` ET `deletedForMe`
+ * posé : l'égalité nue les refusait par ACCIDENT, et la forme juste les
+ * admettrait. Une conversation que `core-list` cache à ce lecteur et que la
+ * corbeille liste encore n'a pas à ressurgir en invitation live. Règle du
+ * cycle 84 : réparer ce qui rendait une donnée invisible oblige à décider, dans
+ * le même lot, si elle a le droit d'être vue.
+ *
+ * ─── CE QUE CETTE CLAUSE NE JUGE PAS, et où c'est instruit ───────────────────
+ *
+ * Elle juge l'APPARTENANCE, pas le DROIT DE LECTURE du lecteur sur le média :
+ * ni plancher d'historique, ni `canViewHistory`, ni cycle de vie par lecteur
+ * (#9589). La loi unique qui les tient — `resolveAttachmentReadVerdict` — prend
+ * une `FastifyRequest`, que ce chemin socket n'a pas : **#19756**.
+ *
+ * Et elle ne lit pas `messageRequestAt`, quand la porte JUMELLE (la sonnerie,
+ * `callRingPolicy`) refuse de sonner dès qu'une demande est en attente. C'est
+ * une question de produit, pas un oubli : **#19757**.
+ */
 async function bothActiveMembers(prisma: TogetherGateDb, subject: TogetherSubject): Promise<boolean> {
   const rows = await prisma.participant.findMany({
     where: {
       conversationId: subject.conversationId,
       userId: { in: [subject.hostId, subject.guestId] },
-      isActive: true,
-      leftAt: null,
-      bannedAt: null,
+      AND: [PARTICIPATION_VIVANTE, unsetOrNull('leftAt'), unsetOrNull('deletedForMe')],
     },
     select: { userId: true },
   });

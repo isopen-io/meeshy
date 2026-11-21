@@ -39,4 +39,19 @@ class PostEngagementPatchTest {
         assertThat(PostEngagementPatch.commented(post, commentCount = 2)).isNull()
         assertThat(PostEngagementPatch.commented(post, commentCount = -1)).isEqualTo(post.copy(commentCount = 0))
     }
+
+    @Test
+    fun `a bookmark takes the served state and the served count`() {
+        assertThat(PostEngagementPatch.bookmarked(post, bookmarked = true, bookmarkCount = 4))
+            .isEqualTo(post.copy(isBookmarkedByMe = true, bookmarkCount = 4))
+    }
+
+    @Test
+    fun `a bookmark already applied changes nothing, and a served count never goes below zero`() {
+        val saved = post.copy(isBookmarkedByMe = true, bookmarkCount = 4)
+
+        assertThat(PostEngagementPatch.bookmarked(saved, bookmarked = true, bookmarkCount = 4)).isNull()
+        assertThat(PostEngagementPatch.bookmarked(saved, bookmarked = false, bookmarkCount = -1))
+            .isEqualTo(saved.copy(isBookmarkedByMe = false, bookmarkCount = 0))
+    }
 }

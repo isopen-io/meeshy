@@ -160,12 +160,12 @@ const SURFACES: Record<string, Classification> = {
       "rend aucun contenu de message. Masquer un message de SA propre vue ne le " +
       'retire pas de la comptabilité de lecture des autres participants.',
   },
-  'me/export.ts': {
+  'me/export-sections.ts': {
     kind: 'exempt',
     reads: 1,
     why:
-      "Export RGPD des messages que l'utilisateur a ÉCRITS. Le masquage est une " +
-      "préférence d'affichage, pas un effacement : l'export doit rendre la donnée " +
+      "Export RGPD des messages que l'utilisateur a ÉCRITS (#20163). Le masquage est " +
+      "une préférence d'affichage, pas un effacement : l'export doit rendre la donnée " +
       'telle que le responsable de traitement la détient.',
   },
   'user-deletions.ts': {
@@ -356,6 +356,9 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   // qu'il a masqué de sa vue (historique effacé, messages supprimés pour lui)
   // ne lui est pas retraduit. Un invité sans compte n'a rien à masquer.
   'message-translation/ArrivalHistoryBackfill.ts': { kind: 'applies', reads: 1, applications: 1 },
+  // #19200 — « En commun », Liens : fenêtre de compte et page ; le masquage personnel est jugé EN MÉMOIRE
+  // (`hiddenFromReader`, marqueurs exigés par `IN_MEMORY_HIDING_SURFACES`), la fenêtre compte ce que la page sert.
+  'relations/sharedLinks.ts': { kind: 'applies', reads: 2, applications: 0 },
 
   /**
    * #5759 — les succès de « parole » et « retouche ». Trois lectures, toutes
@@ -547,9 +550,9 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       'Global pour proposer des personnes à suivre, jamais un contenu servi. ' +
       "Le masquage personnel porte sur l'historique affiché, pas sur qui parle.",
   },
+  'relations/pairHistory.ts': { kind: 'exempt', reads: 1, why: "« Notre histoire » (#19378) : des DATES et un comptage, jamais un contenu servi — effacer son historique ne défait pas qu'on se soit parlé." },
   'posts/directContactVisibility.ts': {
-    kind: 'exempt',
-    reads: 1,
+    kind: 'exempt', reads: 1,
     why:
       "Lien d'un choisi d'un post ONLY (#14105) : ne lit que les `senderId` des messages qu'il a " +
       "lui-même écrits dans une conversation directe avec l'auteur, pour décider s'il est prévenu, " +
@@ -706,13 +709,9 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
    * un aperçu. Même raison que `attachments/fileRouteVerdict.ts` ci-dessus :
    * rien n'est SERVI, donc rien à masquer.
    */
-  'world/worldSeedOperations.ts': {
-    kind: 'exempt',
-    reads: 1,
-    why:
+  'world/worldSeedOperations.ts': { kind: 'exempt', reads: 1, why:
       "Compte les messages d'UNE conversation (le seed World Wide) pour décider " +
-      "si sa purge doit être refusée — aucun contenu, auteur ni aperçu servi.",
-  },
+      "si sa purge doit être refusée — aucun contenu, auteur ni aperçu servi." },
 };
 
 /**
@@ -783,6 +782,7 @@ const IN_MEMORY_HIDING_SURFACES: Record<string, readonly string[]> = {
    * vert quand on retire le filtre (cycle 62 bis). Un marqueur doit tomber avec
    * ce qu'il garde.
    */
+  'relations/sharedLinks.ts': ['loadPersonalHistoryHidingByConversation(', 'hiddenFromReader('],
   'ConversationBridgeService.ts': [
     'loadPersonalHistoryHidingByUser(',
     'exclusiveFloorMsFor(',

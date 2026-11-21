@@ -20,6 +20,8 @@ export const TRANSLATED_TRACK_NOT_WRITTEN = 'TRANSLATED_TRACK_NOT_WRITTEN';
 
 export type TrackLocation = { readonly path?: string; readonly url?: string };
 
+type TrackedEntry = TrackLocation & { readonly deletedAt?: Date | string | null };
+
 /**
  * Fusionne les traductions entrantes dans celles qui sont inscrites. Une
  * entrée dont la piste n'a pas pu s'écrire (ni `path` ni `url`) GARDE la
@@ -27,7 +29,10 @@ export type TrackLocation = { readonly path?: string; readonly url?: string };
  * disque, et c'est cette référence qui le fera effacer avec la pièce (vue
  * unique, éphémère, suppression). Sans elle, il deviendrait orphelin.
  */
-export function mergeTranslationEntries(existing: AttachmentTranslations, incoming: AttachmentTranslations): AttachmentTranslations {
+export function mergeTranslationEntries<T extends TrackedEntry = AttachmentTranslations[string]>(
+  existing: Readonly<Record<string, T>>,
+  incoming: Readonly<Record<string, NoInfer<T>>>
+): Record<string, T> {
   const kept = Object.fromEntries(
     Object.entries(incoming).map(([language, entry]) => {
       const previous = existing[language];
@@ -54,14 +59,14 @@ export async function saveTranslatedTrack(
   const localPath = path.resolve(track.translatedDir, track.filename);
   const location = { path: localPath, url: `/api/v1/attachments/file/translated/${track.filename}` };
   if (!track.binary && !track.base64) {
-    logger.warn(`   ⚠️ Aucun binaire disponible pour ${track.language}, url=${location.url}`);
+    logger.warn(`   ⚠️ Aucun binaire disponible pour ${track.attachmentId} (${track.language})`);
     return location;
   }
   try {
     await fs.mkdir(track.translatedDir, { recursive: true });
     const bytes = track.binary || Buffer.from(track.base64 as string, 'base64');
     await writeTranslatedTrack(prisma, { absolutePath: localPath, bytes, attachmentId: track.attachmentId, language: track.language });
-    logger.info(`   📁 Audio sauvegardé (${track.binary ? 'multipart' : 'base64'}): ${track.filename} (${(bytes.length / 1024).toFixed(1)}KB)`);
+    logger.info(`   📁 Audio sauvegardé (${track.binary ? 'multipart' : 'base64'}): ${track.attachmentId} (${track.language}, ${(bytes.length / 1024).toFixed(1)}KB)`);
     return location;
   } catch (error) {
     // Une ligne COMPTABLE par piste perdue (le rejeu automatique est à venir).

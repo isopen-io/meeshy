@@ -40,6 +40,12 @@ class SharedLocationOwnTest {
     }
 
     @Test
+    fun `le demarrage servi est garde tel quel, absent il n'existe pas`() {
+        assertThat(served("""{"recipients":[],"startedAt":"2026-11-14T12:00:00.000Z"}""")?.startedAt).isEqualTo("2026-11-14T12:00:00.000Z")
+        assertThat(served("""{"recipients":[]}""")?.startedAt).isNull()
+    }
+
+    @Test
     fun `une reponse sans liste lisible ne dit pas que plus rien n'est partage`() {
         assertThat(served("""{}""")).isNull()
         assertThat(served("""{"recipients":null}""")).isNull()

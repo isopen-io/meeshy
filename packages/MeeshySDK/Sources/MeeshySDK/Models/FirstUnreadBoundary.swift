@@ -93,7 +93,10 @@ public enum FirstUnreadBoundary {
             joinedAt: joinedAt,
             viewerId: viewerId
         )
-        let hasChronologicalRank = (lastReadMessageCreatedAt ?? lastReadAt ?? joinedAt) != nil
+        let hasChronologicalRank = (readCursorFloor(
+            lastReadMessageCreatedAt: lastReadMessageCreatedAt,
+            lastReadAt: lastReadAt
+        ) ?? joinedAt) != nil
         let candidates = hasChronologicalRank
             ? ordered
             : unreadCountHint.map { Array(ordered.suffix(max(0, $0))) } ?? ordered
@@ -121,6 +124,17 @@ public enum FirstUnreadBoundary {
     ///   (`caughtUpToMessageId`) quels que soient les messages sautés : il
     ///   devient la frontière, et rien n'était non lu à cet instant. Absent
     ///   de la fenêtre, il ne déplace rien.
+    ///
+    /// **Miroir Kotlin depuis #19662** : `FirstUnreadBoundary.remainingUnread`
+    /// (`apps/android/core/model/.../FirstUnreadBoundary.kt`), les dix cas de
+    /// `FirstUnreadRemainingTests` rejoués un pour un. Il n'a encore AUCUN
+    /// appelant côté Android, et pour une raison qui n'est pas un oubli de
+    /// câblage : Android poste à l'OUVERTURE un `caughtUpToMessageId`
+    /// inconditionnel (`ReadReceiptLanguages.declare`, appelé par
+    /// `markConversationReadOnOpening`), donc le curseur serveur saute au
+    /// message le plus récent de la fenêtre sans aucune preuve d'affichage et
+    /// il ne RESTE rien à restituer. iOS ne pose ce champ que quand le lot VU
+    /// contient le plus récent (`ConversationCatchUpLaw`). Suivi : #19703.
     public static func remainingUnread(
         messages: [FirstUnreadCandidateMessage],
         lastReadMessageId: String?,
@@ -162,6 +176,22 @@ public enum FirstUnreadBoundary {
         return candidates.count - consumed
     }
 
+    /// La DESCENTE du curseur de lecture — miroir de `readCursorFloorOf()`
+    /// (`packages/shared/utils/read-cursor-floor.ts`, #19599), qui porte la loi
+    /// complète : la POSITION d'abord, l'HORLOGE en repli, et l'arbitrage `??`
+    /// contre le `min` du gateway — qui est un cliquet de NON-RÉGRESSION et ne
+    /// se transpose PAS à un séparateur, lequel descend la position depuis son
+    /// origine.
+    ///
+    /// Ce miroir ne peut pas importer la loi TS : il en porte donc UNE graphie,
+    /// ici, et `resolve` comme `orderedCandidates` l'appellent. Il en portait
+    /// DEUX jusqu'à #19599, dans la même unité — une jumelle divergente n'a pas
+    /// besoin d'un autre fichier pour naître. Le cliquet
+    /// `read-cursor-floor-single-spelling.test.ts` le tient.
+    static func readCursorFloor(lastReadMessageCreatedAt: Date?, lastReadAt: Date?) -> Date? {
+        lastReadMessageCreatedAt ?? lastReadAt
+    }
+
     private static func orderedCandidates(
         messages: [FirstUnreadCandidateMessage],
         lastReadMessageId: String?,
@@ -170,7 +200,10 @@ public enum FirstUnreadBoundary {
         joinedAt: Date?,
         viewerId: String
     ) -> [FirstUnreadCandidateMessage] {
-        let boundaryTime = lastReadMessageCreatedAt ?? lastReadAt ?? joinedAt
+        let boundaryTime = readCursorFloor(
+            lastReadMessageCreatedAt: lastReadMessageCreatedAt,
+            lastReadAt: lastReadAt
+        ) ?? joinedAt
 
         return messages
             .filter { $0.senderId != viewerId }

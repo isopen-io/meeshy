@@ -60,6 +60,9 @@ public nonisolated enum MeeshyTileHaptic: String, Sendable, Equatable, CaseItera
 public nonisolated struct MeeshyTile<ID: Hashable & Sendable>: Equatable, Sendable, Identifiable {
     public let id: ID
     public let title: String
+    /// La seconde ligne de la légende (le pack, le modèle équipé), plus discrète
+    /// que le titre ; lue après lui. `nil` : une seule ligne, comme avant.
+    public let subtitle: String?
     public let accessibilityLabel: String?
     public let hint: String?
     public let placeholderSystemImage: String?
@@ -69,6 +72,7 @@ public nonisolated struct MeeshyTile<ID: Hashable & Sendable>: Equatable, Sendab
     public init(
         id: ID,
         title: String,
+        subtitle: String? = nil,
         accessibilityLabel: String? = nil,
         hint: String? = nil,
         placeholderSystemImage: String? = nil,
@@ -77,6 +81,7 @@ public nonisolated struct MeeshyTile<ID: Hashable & Sendable>: Equatable, Sendab
     ) {
         self.id = id
         self.title = title
+        self.subtitle = subtitle
         self.accessibilityLabel = accessibilityLabel
         self.hint = hint
         self.placeholderSystemImage = placeholderSystemImage
@@ -84,11 +89,18 @@ public nonisolated struct MeeshyTile<ID: Hashable & Sendable>: Equatable, Sendab
         self.previewVersion = previewVersion
     }
 
-    /// Le nom lu : `accessibilityLabel ?? title`. Vide si la vignette n'a ni
-    /// l'un ni l'autre, ce que la bande refuse.
+    /// Le nom lu : `accessibilityLabel`, sinon le titre suivi du sous-titre. Vide
+    /// si la vignette n'a ni l'un ni l'autre, ce que la bande refuse.
     public var name: String {
         if let accessibilityLabel, !accessibilityLabel.isEmpty { return accessibilityLabel }
-        return title
+        guard let shownSubtitle, !title.isEmpty else { return title }
+        return title + ", " + shownSubtitle
+    }
+
+    /// Le sous-titre qui se montre : jamais une ligne vide.
+    public var shownSubtitle: String? {
+        guard let subtitle, !subtitle.isEmpty else { return nil }
+        return subtitle
     }
 
     public var hasAccessibleName: Bool { !name.isEmpty }
@@ -152,6 +164,10 @@ public nonisolated enum MeeshyTileMetrics {
     public static let nameGap = MeeshySpacing.xs
     public static let nameFontSize = MeeshyFont.footnoteSize
     public static let nameMaxLines = 2
+    /// Le sous-titre : une ligne, plus petite et plus discrète que le nom.
+    public static let subtitleFontSize = MeeshyFont.captionSize
+    public static let subtitleMaxLines = 1
+    public static let subtitleOpacity = 0.62
     /// La piste d'un carrousel ne descend jamais sous cette hauteur : un pouce
     /// posé un peu au-dessus ou au-dessous d'une vignette défile quand même.
     public static let carouselMinimumHeight = MeeshyControlSize.tapTarget * 2

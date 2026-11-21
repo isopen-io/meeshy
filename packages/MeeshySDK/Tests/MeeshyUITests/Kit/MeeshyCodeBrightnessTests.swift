@@ -7,6 +7,7 @@ import Foundation
 /// retour au premier plan repousse l'écran tant qu'une carte est là. Témoin de la
 /// fiche : « la luminosité revient à sa valeur à la disparition, en arrière-plan ».
 @Suite("MeeshyCodeBrightness")
+@MainActor
 struct MeeshyCodeBrightnessTests {
 
     @Test("deux cartes à l'écran : la valeur d'avant ne revient qu'au départ de la dernière, dans un ordre comme dans l'autre")

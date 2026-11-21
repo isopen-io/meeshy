@@ -71,8 +71,19 @@
 	<string>Meeshy needs access to your camera to take photos and videos for messages, video calls, and AR experiences.</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Meeshy uses your contacts to find friends who are already on Meeshy and let you know when one of them joins. No one is contacted on your behalf.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Meeshy finds the phone next to yours when you share your profile without contact. Nothing is sent until you choose what to give.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_meeshy-cx._tcp</string>
+		<string>_meeshy-cx._udp</string>
+	</array>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Meeshy uses Face ID to provide secure and convenient authentication.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>With your consent, Meeshy reads only the time of falls your Apple Watch detects, to alert your Blood links right away. No other health data is read or sent.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Meeshy never writes any health data. Health access only reads the time of falls your Apple Watch detects, to alert your Blood links right away.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Meeshy uses your location to share your current location with contacts and find nearby friends.</string>
 	<key>NSAlarmKitUsageDescription</key>
@@ -81,6 +92,8 @@
 	<string>Meeshy reads the song playing in Apple Music to share it with the Close friends you granted it to, and only with them.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Meeshy needs access to your microphone for voice messages, video calls, and audio recording.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Meeshy uses your phone's activity (walking, cycling, driving) to show the people you share your exact location with how you are moving, and only them.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Meeshy needs permission to save photos and videos to your library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

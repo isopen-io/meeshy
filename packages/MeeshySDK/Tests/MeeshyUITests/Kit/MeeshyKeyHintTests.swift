@@ -110,8 +110,8 @@ struct MeeshyKeyHintTests {
         #expect(elements.first?.isRule == false)
         #expect(elements.last?.isRule == false)
         #expect(MeeshyKeyLegendLaw.elements([]).isEmpty)
-        #expect(!MeeshyKeyLegendLaw.rendersContainer(itemCount: 0))
-        #expect(MeeshyKeyLegendLaw.rendersContainer(itemCount: 2))
+        #expect(!MeeshyKeyLegendLaw.rendersContainer(itemCount: 0, hasKeyboard: true))
+        #expect(MeeshyKeyLegendLaw.rendersContainer(itemCount: 2, hasKeyboard: true))
     }
 
     @Test("garde de source : aucun écouteur de clavier, aucun type du domaine, aucun verre dessiné, aucune couleur en dur")

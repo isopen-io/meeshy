@@ -19,7 +19,8 @@ import {
  */
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-export const SOURCE = readFileSync(join(HERE, '../../public/sw-push.js'), 'utf8');
+/** `sw-push.js` et `sw-push-talkie.js` partagent la portée globale du worker, dans l'ordre de `SERVICE_WORKER_SCRIPTS`. */
+export const SOURCE = ['sw-push.js', 'sw-push-talkie.js'].map((name) => readFileSync(join(HERE, '../../public', name), 'utf8')).join('\n');
 
 /** Le CODE seul : un doc-comment qui NOMME un champ interdit le documente, il ne le lit pas. */
 export const CODE = SOURCE.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');

@@ -7,12 +7,13 @@ import Foundation
 /// (`packages/shared/utils/progression-layout.ts`, `PROGRESSION_CONCEPTS`) et une fois ici : deux clients qui la
 /// composeraient chacun de leur côté finiraient par ranger « Ligue » à deux places différentes.
 ///
-/// L'ordre des `case` EST l'ordre de l'écran (`allCases`).
+/// L'ordre des `case` EST l'ordre de l'écran (`allCases`). Le RANG ouvre la liste (#17394) : c'est l'objet du Jeu, et
+/// il ne recule jamais ; le niveau, qui baisse à chaque frappe, se lit juste après.
 public enum ProgressionConcept: String, Sendable, CaseIterable, Identifiable, Hashable {
+    case glory
     case level
     case points
     case meesh
-    case glory
     case flame
     case missions
     case league

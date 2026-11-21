@@ -84,18 +84,17 @@ public enum MeeshyTranslationMarkWords {
     /// « Traduit de l'italien » / « Original en italien » ; sans langue : « Traduit » / « Original ».
     public static func mention(mode: MeeshyTranslationMarkMode, languageName: String?,
                                bundle: Bundle? = nil, locale: Locale = .current) -> String {
-        let bundle = bundle ?? .module
         let name = languageName ?? ""
         if mode == .original {
             guard !name.isEmpty else {
-                return String(localized: "kit.translation_mark.original", defaultValue: "Original", bundle: bundle, locale: locale)
+                return String(localized: "kit.translation_mark.original", defaultValue: "Original", bundle: bundle ?? .module, locale: locale)
             }
-            return String(localized: "kit.translation_mark.original_from", defaultValue: "Original \(name)", bundle: bundle, locale: locale)
+            return String(localized: "kit.translation_mark.original_from", defaultValue: "Original \(name)", bundle: bundle ?? .module, locale: locale)
         }
         guard !name.isEmpty else {
-            return String(localized: "kit.translation_mark.translated", defaultValue: "Traduit", bundle: bundle, locale: locale)
+            return String(localized: "kit.translation_mark.translated", defaultValue: "Traduit", bundle: bundle ?? .module, locale: locale)
         }
-        return String(localized: "kit.translation_mark.translated_from", defaultValue: "Traduit \(name)", bundle: bundle, locale: locale)
+        return String(localized: "kit.translation_mark.translated_from", defaultValue: "Traduit \(name)", bundle: bundle ?? .module, locale: locale)
     }
 
     /// Le verbe de la bascule : l'original quand la traduction est servie, et inversement.

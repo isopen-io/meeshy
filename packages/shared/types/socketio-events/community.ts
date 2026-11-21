@@ -53,8 +53,12 @@ export interface CommunityUpdatedEventData {
  */
 export type CommunityMemberRole = 'admin' | 'moderator' | 'member';
 
-/** Comment la personne est entrée : d'elle-même, ou par un tiers (invitation, ajout). */
-export type CommunityMemberJoinVia = 'self' | 'invited';
+/**
+ * Comment la personne est entrée : d'elle-même, par un tiers (invitation,
+ * ajout), ou par le lien de la communauté (#19429 — additif : un ancien
+ * décodeur qui ne connaît pas `link` le lit comme une entrée d'elle-même).
+ */
+export type CommunityMemberJoinVia = 'self' | 'invited' | 'link';
 
 /** Comment la personne est sortie : d'elle-même, ou retirée par un administrateur. */
 export type CommunityMemberLeftReason = 'left' | 'removed';
@@ -81,5 +85,65 @@ export interface CommunityMemberRoleUpdatedEventData {
   readonly userId: string;
   readonly role: CommunityMemberRole;
   readonly memberCount: number;
+  readonly at: string;
+}
+
+/**
+ * `community:deleted` (#19590, dernière tranche de #16857) — la communauté
+ * n'existe plus pour ses membres : supprimée par son créateur (`deleted`) ou
+ * désactivée par l'équipe (`deactivated`).
+ *
+ * Audience : la room personnelle de chaque membre ACTIF et du créateur, lue
+ * AVANT l'écriture (la suppression efface les lignes d'appartenance), une fois
+ * chacun. Jamais un ancien membre, jamais un non-membre.
+ *
+ * La charge ne dit que QUOI a disparu et QUAND : ni membres, ni créateur, ni
+ * identité. Le client retire la communauté de ses caches ; une relecture du
+ * détail repasse par les gardes de la passerelle (404). Une réactivation par
+ * l'équipe est annoncée par `community:updated`. `at` est une chaîne ISO.
+ */
+export type CommunityDeletedReason = 'deleted' | 'deactivated';
+
+export interface CommunityDeletedEventData {
+  readonly communityId: string;
+  readonly reason: CommunityDeletedReason;
+  readonly at: string;
+}
+
+/**
+ * `community:join-requested` (#19429) — une personne demande à entrer dans une
+ * communauté qui valide chaque entrée. Diffusé sur la room personnelle
+ * `user:<id>` des administrateurs, des modérateurs et du créateur SEULEMENT :
+ * jamais un membre simple, jamais la personne qui demande.
+ *
+ * La charge ne nomme la personne que par son identifiant : le profil et le
+ * pays se relisent par `GET /communities/:id/join-requests`, qui repasse par
+ * les gardes de la passerelle. `pendingCount` compte les demandes en attente
+ * après l'écriture ; `at` est une chaîne ISO.
+ */
+export interface CommunityJoinRequestedEventData {
+  readonly communityId: string;
+  readonly requestId: string;
+  readonly userId: string;
+  readonly pendingCount: number;
+  readonly at: string;
+}
+
+/**
+ * `community:join-request-decided` (#19879) — la décision sur la demande
+ * d'entrée du LECTEUR, posée sur sa seule room personnelle `user:<id>`.
+ * Aujourd'hui seul le refus voyage : une acceptation s'annonce déjà par
+ * `community:member-joined`, qui atteint la room de la personne admise.
+ *
+ * La charge ne dit ni QUI a tranché, ni la demande d'un autre : la
+ * communauté, la décision, la date à partir de laquelle une nouvelle demande
+ * est possible (`retryAt`, chaîne ISO) et l'instant de la décision (`at`).
+ */
+export type CommunityJoinRequestDecision = 'rejected';
+
+export interface CommunityJoinRequestDecidedEventData {
+  readonly communityId: string;
+  readonly decision: CommunityJoinRequestDecision;
+  readonly retryAt: string;
   readonly at: string;
 }

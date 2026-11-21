@@ -160,7 +160,7 @@ public actor ConversationStore {
         for incoming in convs {
             let existing = conversations[incoming.id]
             var merged = incoming
-            if let existing, existing.userState.version > incoming.userState.version {
+            if let existing, existing.userState.holdsLocalPreferences(over: incoming.userState) {
                 merged.userState = existing.userState.preferencesGrafted(onto: incoming.userState)
             }
             // `openConversationId: nil` — le gate « conversation ouverte » n'a
@@ -610,6 +610,7 @@ public actor ConversationStore {
             // ≥ 1 so the UI badge appears immediately.
             if s.unreadCount == 0 { s.unreadCount = 1 }
             s.lastReadAt = nil
+            s.readThroughServerAt = nil
         case .deleteForUser:
             s.deletedForUserAt = Date()
         case .leave:

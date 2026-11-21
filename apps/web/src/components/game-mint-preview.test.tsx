@@ -6,7 +6,7 @@ import { gameBlockFixture } from '@/lib/api/game-fixture';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { GameMintPreview } from './game-mint-preview';
+import { GameMintPreview, ceremonyGlory } from './game-mint-preview';
 import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
 import { translateGame } from '@/lib/i18n-game-catalog';
 import { formatCount } from '@/lib/view/game-copy';
@@ -240,5 +240,21 @@ describe('une frappe fermée par une dette ou par un rang', () => {
 
   test('sans dette ni verrou : aucun message de blocage', () => {
     expect(renderToStaticMarkup(<GameMintPreview {...props()} />)).not.toContain('data-game-mint-blocked');
+  });
+});
+
+describe('la gloire que la cérémonie reçoit (#19855)', () => {
+  test('la gloire servie avant le geste et celle que l’aperçu promet', () => {
+    const game = gameBlockFixture();
+    expect(ceremonyGlory(game.mint, game.glory)).toEqual({ before: game.glory.glory, gained: game.mint.gloryGained, mythic: false });
+  });
+
+  test('le Mythe servi se transmet', () => {
+    const game = gameBlockFixture();
+    expect(ceremonyGlory(game.mint, { ...game.glory, rank: 'mythe' })?.mythic).toBe(true);
+  });
+
+  test('sans gloire servie : rien, la cérémonie reste telle qu’avant', () => {
+    expect(ceremonyGlory(gameBlockFixture().mint, undefined)).toBeNull();
   });
 });

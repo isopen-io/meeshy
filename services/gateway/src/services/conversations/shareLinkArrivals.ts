@@ -13,8 +13,10 @@
  *   client renvoie telle quelle. Un curseur illisible est refusé, jamais
  *   interprété.
  * - **Projection fermée** : la lecture ne charge que ce que la ligne affiche
- *   (nom, visage, type, langue, date, pays) ; l'identifiant, la présence et
- *   l'IP d'un arrivant ne sont pas lus, donc ne peuvent pas partir. Le visage
+ *   (nom, visage, type, langue, date, pays) et, pour son gestionnaire (#19283),
+ *   le compte d'un inscrit et l'e-mail qu'un invité a laissé — servi MASQUÉ
+ *   (`maskGuestEmail`), jamais en clair. La présence, l'IP et l'e-mail d'un
+ *   COMPTE ne sont pas lus, donc ne peuvent pas partir. Le visage
  *   (#12571) est celui que les arrivées récentes servent déjà aux mêmes
  *   lecteurs, résolu par la loi partagée `resolveParticipantAvatar`.
  */
@@ -22,7 +24,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
-import type { ShareLinkArrivalEntry, ShareLinkArrivalsPage } from '@meeshy/shared/types/share-link-stats';
+import { maskGuestEmail, type ShareLinkArrivalEntry, type ShareLinkArrivalsPage } from '@meeshy/shared/types/share-link-stats';
 
 export type ArrivalsCursor = { readonly joinedAt: Date; readonly id: string };
 
@@ -54,18 +56,43 @@ export const arrivalLanguage = (row: {
   readonly user: { readonly systemLanguage: string | null } | null;
 }): string | null => arrivalLanguageKey(row.type === 'anonymous' ? row.language : row.user?.systemLanguage ?? row.language);
 
+/**
+ * Ce qu'une arrivée porte pour son gestionnaire (#19283), UNE fois pour les
+ * statistiques et la liste : le compte d'un INSCRIT (« Voir la fiche », que la
+ * loi des cercles garde ensuite), l'e-mail masqué d'un INVITÉ. Le type décide,
+ * jamais la présence d'une colonne : un invité ne sert aucun compte, un
+ * inscrit aucune adresse — même si sa ligne en garde une d'un autre temps.
+ */
+export const ARRIVAL_OWNER_SELECT = {
+  userId: true,
+  anonymousSession: { select: { profile: { select: { email: true } } } },
+} as const;
+
+export type ArrivalOwnerRow = {
+  readonly type: string;
+  readonly userId?: string | null;
+  readonly anonymousSession?: { readonly profile?: { readonly email?: string | null } | null } | null;
+};
+
+export const arrivalOwnerFields = (row: ArrivalOwnerRow): { userId: string | null; emailMasked: string | null } =>
+  row.type === 'anonymous'
+    ? { userId: null, emailMasked: maskGuestEmail(row.anonymousSession?.profile?.email) }
+    : { userId: row.userId ?? null, emailMasked: null };
+
 const ARRIVAL_SELECT = {
   id: true,
   type: true,
+  userId: true,
   displayName: true,
   avatar: true,
   language: true,
   joinedAt: true,
   joinCountry: true,
+  anonymousSession: ARRIVAL_OWNER_SELECT.anonymousSession,
   user: { select: { systemLanguage: true, avatar: true } },
 } as const;
 
-type ArrivalRow = {
+type ArrivalRow = ArrivalOwnerRow & {
   readonly id: string;
   readonly type: string;
   readonly displayName: string;
@@ -83,6 +110,7 @@ const toEntry = (row: ArrivalRow): ShareLinkArrivalEntry => ({
   country: row.joinCountry,
   language: arrivalLanguage(row),
   joinedAt: row.joinedAt.toISOString(),
+  ...arrivalOwnerFields(row),
 });
 
 const after = (cursor: ArrivalsCursor | null) =>

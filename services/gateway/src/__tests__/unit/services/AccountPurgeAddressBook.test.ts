@@ -92,8 +92,13 @@ function base() {
     externalConversationPeer: table([]),
     // Les adresses de fiche (#18863) : un compte qui n'en a publié aucune.
     profileAddress: table([]),
+    storyHighlight: table([]),
+    communityJoinRequest: table([]),
     trackingLink: table([]),
     trackingLinkClick: table([]),
+    // Les visites du lien de profil (#19206) : aucune.
+    profileLinkVisitDay: table([]),
+    emailInvitation: table([]),
     conversationShareLink: table([]),
     userContact,
     contactJoinNotice,

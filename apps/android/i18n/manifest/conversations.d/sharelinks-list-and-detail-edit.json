@@ -65,34 +65,24 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "shareLink.detail.askedOnArrival",
           "androidName": "shareLink_detail_askedOnArrival",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "shareLink.detail.concurrent",
           "androidName": "shareLink_detail_concurrent",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "shareLink.detail.concurrentMax",
           "androidName": "shareLink_detail_concurrentMax",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "shareLink.detail.configuration",
           "androidName": "shareLink_detail_configuration",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "shareLink.detail.createdOn",
           "androidName": "shareLink_detail_createdOn",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -179,22 +169,16 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "shareLink.detail.never",
           "androidName": "shareLink_detail_never",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "shareLink.detail.optional",
           "androidName": "shareLink_detail_optional",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "shareLink.detail.required",
           "androidName": "shareLink_detail_required",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -221,22 +205,16 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "shareLink.detail.uses",
           "androidName": "shareLink_detail_uses",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "shareLink.detail.usesUnlimited",
           "androidName": "shareLink_detail_usesUnlimited",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "share.links.copy.a11y",
           "androidName": "share_links_copy_a11y",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "app",

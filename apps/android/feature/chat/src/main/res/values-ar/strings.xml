@@ -4,4 +4,5 @@
     <string name="viewer_doc_open_with">فتح بتطبيق آخر</string>
     <string name="viewer_text_show_source">عرض المصدر</string>
     <string name="viewer_text_show_rendered">عرض النتيجة</string>
+    <string name="report_message_sent">تم إرسال البلاغ</string>
 </resources>

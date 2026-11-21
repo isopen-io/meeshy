@@ -33,6 +33,7 @@ import { TURNCredentialService } from './TURNCredentialService';
 import { ActiveCallClaim, type ActiveCallChangedListener } from './calls/activeCallClaim';
 import { fireAndForget } from './calls/fireAndForget';
 import { LoneSurvivorGrace } from './calls/loneSurvivorGrace';
+import { isDuoCall } from './calls/answeredCallRoster';
 import { LIVE_MESSAGE_MARK } from './messaging/liveMessage';
 import { isConversationClosed } from './messaging/conversationWriteAdmission';
 import type { CallHistoryItem } from './callHistory';
@@ -49,10 +50,8 @@ import { KeyedMutex } from '../utils/keyed-mutex';
 import { accountParticipantIds, LIVE_CALL_PARTICIPATION } from './calls/liveCallParticipations';
 import { prismaCallCaptureJournal, toTranscriptCaptures } from './calls/callCaptureJournal';
 import type { CallTranscriptCapture } from '@meeshy/shared/types/call-capture';
-
-/** Floor a finite, non-negative byte counter; anything else → null. */
-const clampNonNegativeInt = (value?: number | null): number | null =>
-  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : null;
+import { persistCallStats as persistCallStatsOn } from './calls/callStatsPersistence';
+import { CALL_BYTE_COUNTER_SELECT, effectiveCallBytes } from './calls/callByteCounters';
 
 // Mirror of `CALL_TERMINAL_STATUSES` (@meeshy/shared/types/video-call),
 // typed on the Prisma enum — keep both lists in sync.
@@ -274,7 +273,7 @@ export class CallService {
   // evict its 2s `call:signal` session cache entry. Mirrors callEndedBroadcaster.
   private signalCacheInvalidator: ((callId: string) => void) | null = null;
 
-  private readonly activeCallClaim: ActiveCallClaim;
+  readonly activeCallClaim: ActiveCallClaim;
 
   // Wired in server.ts to CallEventsHandler.broadcastParticipantLeftForRest.
   // Sibling of callEndedBroadcaster: the REST end/leave routes have no `io`,
@@ -1340,10 +1339,14 @@ export class CallService {
     return (error as { code?: string } | null)?.code === 'P2034';
   }
 
-  /** A missing conversation reads as NOT direct — fail toward never ending a call others may still be on. */
-  private async isDirectConversation(conversationId: string): Promise<boolean> {
-    const conversation = await this.prisma.conversation.findUnique({ where: { id: conversationId }, select: { type: true } });
-    return conversation?.type === 'direct';
+  /**
+   * Un DUO (conversation directe, personne d'invité) se termine au premier départ ; un appel direct devenu
+   * groupe par invitation suit la règle du groupe (#19238). Une conversation absente n'est pas un duo —
+   * on ne termine jamais un appel que d'autres occupent peut-être encore.
+   */
+  private async isDuoSession(call: { readonly conversationId: string; readonly invitedUserIds?: readonly string[] | null }): Promise<boolean> {
+    const conversation = await this.prisma.conversation.findUnique({ where: { id: call.conversationId }, select: { type: true } });
+    return isDuoCall({ conversation, invitedUserIds: call.invitedUserIds ?? null });
   }
 
   /**
@@ -1582,7 +1585,7 @@ export class CallService {
       }
 
       // Mirror the normal direct/last-participant decision below.
-      const idemIsDirect = await this.isDirectConversation(existing.conversationId);
+      const idemIsDirect = await this.isDuoSession(existing);
       const idemRemaining = existing.participants.filter((p) => !p.leftAt).length;
       if (!idemIsDirect && idemRemaining > 1) {
         // Group call with others still active and this leaver already gone:
@@ -1714,7 +1717,7 @@ export class CallService {
     // call stayed open, no call:ended was broadcast, and the caller's ringback kept
     // playing until they manually hung up. GROUP calls still continue until the
     // last participant leaves.
-    const isDirectCall = data.snapshot?.isDirectCall ?? await this.isDirectConversation(call.conversationId);
+    const isDirectCall = data.snapshot?.isDirectCall ?? await this.isDuoSession(call);
 
     // Vague 183 — `isLastParticipant` is decided FRESH inside the
     // transaction (see below), never from `call.participants` here. That
@@ -2116,8 +2119,8 @@ export class CallService {
     // "not direct" — fail toward NOT destroying a call that may still be
     // live for others.
     const isDirectCall = options?.session
-      ? options.session.conversation?.type === 'direct'
-      : await this.isDirectConversation(call.conversationId);
+      ? isDuoCall({ conversation: options.session.conversation ?? null, invitedUserIds: options.session.invitedUserIds ?? null })
+      : await this.isDuoSession(call);
     if (options?.preJoinDecline) {
       if (!isDirectCall) {
         logger.info('ℹ️ Pre-join decline on a group call — session continues for other invitees', {
@@ -2517,65 +2520,14 @@ export class CallService {
   }
 
   /**
-   * Persist the latest client-reported call statistics onto the CallSession so
-   * the call-summary message can surface "data spent" + network quality.
-   *
-   * WebRTC `bytesSent`/`bytesReceived` are cumulative monotonic counters, so we
-   * keep the MAX seen (defensive against out-of-order/duplicate reports); the
-   * last report before teardown therefore yields the call totals. The quality
-   * tier is overwritten with the most recent non-empty value. Best-effort and
-   * never throws — a failed stats write must not break call signaling.
+   * Persist the latest client-reported call statistics (bytes + network
+   * quality) for the call-summary message — `calls/callStatsPersistence.ts`.
    */
   async persistCallStats(
     callId: string,
     stats: { bytesSent?: number | null; bytesReceived?: number | null; level?: string | null }
   ): Promise<void> {
-    const data: Prisma.CallSessionUpdateInput = {};
-    const current = await this.prisma.callSession
-      .findUnique({ where: { id: callId }, select: { bytesSent: true, bytesReceived: true } })
-      .catch(() => null);
-    if (current === null) {
-      return;
-    }
-    // "Data spent" is a per-DEVICE figure. Each participant reports its OWN
-    // cumulative sent/received, so maxing the two fields independently across
-    // participants would mix endpoints and over-count asymmetric calls (e.g.
-    // one side sends video). Instead, keep the (sent, received) pair from the
-    // single report with the largest TOTAL — a coherent one-device view that is
-    // also monotonic across a given participant's growing counters.
-    const reportSent = clampNonNegativeInt(stats.bytesSent);
-    const reportReceived = clampNonNegativeInt(stats.bytesReceived);
-    if (reportSent !== null || reportReceived !== null) {
-      const nextSent = reportSent ?? current.bytesSent ?? 0;
-      const nextReceived = reportReceived ?? current.bytesReceived ?? 0;
-      const currentTotal = (current.bytesSent ?? 0) + (current.bytesReceived ?? 0);
-      if (nextSent + nextReceived > currentTotal) {
-        data.bytesSent = nextSent;
-        data.bytesReceived = nextReceived;
-      }
-    }
-    if (stats.level === 'excellent' || stats.level === 'good' || stats.level === 'fair' || stats.level === 'poor') {
-      data.networkQuality = stats.level;
-    }
-    if (Object.keys(data).length === 0) {
-      return;
-    }
-    // Scope the write to the exact (bytesSent, bytesReceived) snapshot read
-    // above via `updateMany`'s `where`, not a plain `update`. Two participants
-    // (or a duplicate/out-of-order report from the same one) can call this
-    // concurrently; without this guard, whichever `update()` commits last wins
-    // outright — even carrying a SMALLER total — silently corrupting the
-    // "data spent" figure with a lost update. If the row changed underneath
-    // us, `count` is 0 and this report is dropped: acceptable for best-effort
-    // telemetry, and the next report recomputes against a fresher snapshot.
-    await this.prisma.callSession
-      .updateMany({ where: { id: callId, bytesSent: current.bytesSent, bytesReceived: current.bytesReceived }, data })
-      .catch((error) => {
-        logger.warn('Failed to persist call stats', {
-          callId,
-          error: error instanceof Error ? error.message : String(error)
-        });
-      });
+    await persistCallStatsOn(this.prisma, callId, stats);
   }
 
   /**
@@ -2617,8 +2569,7 @@ export class CallService {
         duration: true,
         answeredAt: true,
         metadata: true,
-        bytesSent: true,
-        bytesReceived: true,
+        ...CALL_BYTE_COUNTER_SELECT,
         networkQuality: true,
         invitedUserIds: true,
         conversation: { select: { type: true } }
@@ -2682,8 +2633,7 @@ export class CallService {
       durationSeconds: call.duration,
       callId: call.id,
       initiatorId: call.initiatorId,
-      bytesSent: call.bytesSent,
-      bytesReceived: call.bytesReceived,
+      ...effectiveCallBytes(call),
       networkQuality: call.networkQuality,
       answeredAt: call.answeredAt,
       endedById

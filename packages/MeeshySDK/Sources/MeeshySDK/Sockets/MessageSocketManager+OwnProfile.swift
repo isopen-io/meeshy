@@ -17,11 +17,14 @@ public struct OwnProfileSnapshot: Decodable, Sendable, Equatable {
     public let username: String
     public let avatar: String?
     public let banner: String?
+    /// L'accent choisi (#19201, iOS #19391) : une passerelle qui ne le porte pas encore ne touche pas celui que je
+    /// tiens (`.unchanged`) ; `null` le remet à l'automatique.
+    public let profileAccentColor: ProfileAccentChange
 
     public init(
         systemLanguage: String, regionalLanguage: String?, customDestinationLanguage: String?,
         displayName: String?, firstName: String, lastName: String, username: String,
-        avatar: String?, banner: String?
+        avatar: String?, banner: String?, profileAccentColor: ProfileAccentChange = .unchanged
     ) {
         self.systemLanguage = systemLanguage
         self.regionalLanguage = regionalLanguage
@@ -32,6 +35,26 @@ public struct OwnProfileSnapshot: Decodable, Sendable, Equatable {
         self.username = username
         self.avatar = avatar
         self.banner = banner
+        self.profileAccentColor = profileAccentColor
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case systemLanguage, regionalLanguage, customDestinationLanguage, displayName
+        case firstName, lastName, username, avatar, banner, profileAccentColor
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.systemLanguage = try container.decode(String.self, forKey: .systemLanguage)
+        self.regionalLanguage = try container.decodeIfPresent(String.self, forKey: .regionalLanguage)
+        self.customDestinationLanguage = try container.decodeIfPresent(String.self, forKey: .customDestinationLanguage)
+        self.displayName = try container.decodeIfPresent(String.self, forKey: .displayName)
+        self.firstName = try container.decode(String.self, forKey: .firstName)
+        self.lastName = try container.decode(String.self, forKey: .lastName)
+        self.username = try container.decode(String.self, forKey: .username)
+        self.avatar = try container.decodeIfPresent(String.self, forKey: .avatar)
+        self.banner = try container.decodeIfPresent(String.self, forKey: .banner)
+        self.profileAccentColor = ProfileAccentChange.decode(from: container, forKey: .profileAccentColor)
     }
 }
 

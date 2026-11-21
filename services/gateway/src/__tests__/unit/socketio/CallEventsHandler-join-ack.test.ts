@@ -21,6 +21,7 @@ import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 
 const mockJoinCall = jest.fn<any>();
 const mockGenerateIceServers = jest.fn<any>().mockReturnValue([]);
+const mockFinalizeCallSummary = jest.fn<any>();
 
 jest.mock('../../../services/CallService', () => {
   // Mirrors the real CallAlreadyEndedError (services/CallService.ts) — same
@@ -39,6 +40,7 @@ jest.mock('../../../services/CallService', () => {
       joinCall: mockJoinCall,
       generateIceServers: mockGenerateIceServers,
       clearRingingTimeout: jest.fn(),
+      finalizeCallSummary: mockFinalizeCallSummary,
     })),
     CallAlreadyEndedError,
   };
@@ -332,6 +334,33 @@ describe('CallEventsHandler — call:join acks every failure branch', () => {
           error: { code: 'CALL_ENDED', message: 'This call has already ended', endReason: 'connectionLost' }
         })
       );
+    });
+  });
+
+  // #19778 — la carte d'un appel terminé offrait encore « Rejoindre » : son
+  // message était resté `call-live` (édition terminale jamais écrite ou jamais
+  // reçue). Le join refusé CALL_ENDED est la preuve que l'appel est fini : il
+  // relance la finalisation idempotente, qui réécrit et rediffuse la carte.
+  describe('#19778 — un join refusé CALL_ENDED répare la carte restée « en cours »', () => {
+    it('finalise le résumé de CET appel quand joinCall lève CallAlreadyEndedError', async () => {
+      const prisma = makePrisma();
+      (prisma.participant.findFirst as any).mockResolvedValue({ id: 'participant-abc' });
+      mockJoinCall.mockRejectedValue(new CallAlreadyEndedError('completed'));
+
+      await setupAndJoin({ prisma });
+
+      expect(mockFinalizeCallSummary).toHaveBeenCalledTimes(1);
+      expect(mockFinalizeCallSummary).toHaveBeenCalledWith(CALL_ID);
+    });
+
+    it('ne finalise rien pour un échec de join qui ne dit pas que l\'appel est fini', async () => {
+      const prisma = makePrisma();
+      (prisma.participant.findFirst as any).mockResolvedValue({ id: 'participant-abc' });
+      mockJoinCall.mockRejectedValue(new Error('CALL_NOT_FOUND: Call session not found'));
+
+      await setupAndJoin({ prisma });
+
+      expect(mockFinalizeCallSummary).not.toHaveBeenCalled();
     });
   });
 });

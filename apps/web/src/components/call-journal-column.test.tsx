@@ -97,10 +97,11 @@ const mount = (overrides: Partial<ActiveCall>, wide: boolean) => {
 /* Une colonne qui repart reste montée le temps de son mouvement (`data-leaving`) : elle n'est plus « ouverte ». */
 const COLUMN = '[data-call-journal-column]:not([data-leaving])';
 
+/* #19670 : la seule porte du journal est « Journal » au pied des sous-titres. */
+const JOURNAL = '[data-call-control-pill] [data-call-captions-journal]';
+
 const openJournal = async (view: ReturnType<typeof mount>) => {
-  view.press('[data-call-more]');
-  await view.settle();
-  view.press('[data-call-control="journal"]');
+  view.press(JOURNAL);
   await view.settle();
 };
 
@@ -130,13 +131,13 @@ describe('le journal en colonne de verre (W1, W2)', () => {
       expect(column?.className.split(' ')).toContain('glass-call-prominent');
       expect(column?.querySelectorAll('[data-call-journal-entry]')).toHaveLength(2);
       expect(view.find('[data-call-control-pill] [data-call-journal-panel]')).toBeNull();
-      expect([...view.host.querySelectorAll('[data-call-captions-panel]')].filter((panel) => panel.closest('[data-leaving]') === null)).toEqual([]);
+      /* #19670, W1 : ouverte depuis le pied des sous-titres, la colonne les laisse dans la pilule, « Journal » enfoncé. */
+      expect(view.find(JOURNAL)?.getAttribute('aria-pressed')).toBe('true');
       view.press('[data-call-more]');
       expect(view.find('[data-call-control-pill] [data-call-captions-panel]')).not.toBeNull();
       expect(view.find(COLUMN)).not.toBeNull();
+      expect(view.find('[data-call-control="journal"]')).toBeNull();
       view.press('[data-call-more]');
-      expect(view.find('[data-call-control="journal"]')?.getAttribute('aria-expanded')).toBe('true');
-      expect(view.find('[data-call-control="journal"]')?.getAttribute('aria-controls')).toBe(column?.querySelector('[data-call-journal-panel]')?.id ?? 'absent');
       expect(view.find('[data-call-screen]')?.getAttribute('data-call-journal-dock')).toBe('column');
       view.done();
     });
@@ -154,8 +155,7 @@ describe('le journal en colonne de verre (W1, W2)', () => {
     expect(title?.nextElementSibling?.hasAttribute('data-call-journal-view')).toBe(true);
     /* #17964 : le pied « Journal » est celui de la pilule ; la colonne garde le sien, au pied de la bande, qui la referme. */
     expect(column?.querySelector('[data-call-journal-toggle], [data-call-journal-foot]')).toBeNull();
-    view.press('[data-call-more]');
-    view.press('[data-call-control="journal"]');
+    view.press(JOURNAL);
     expect(view.find(COLUMN)).toBeNull();
     expect(view.find('[data-call-screen]')?.hasAttribute('data-call-journal-dock')).toBe(false);
     view.done();
@@ -220,8 +220,8 @@ describe('le journal en colonne de verre (W1, W2)', () => {
     expect(slid('[data-call-stage-surface]')).toContainEqual([`translateX(${half}px)`, 'none']);
     expect(slid('[data-call-plane]:not([data-call-header-slot])')).toContainEqual([`translateX(${half}px)`, 'none']);
     expect(slid('[data-call-banner-stack]')).toContainEqual([`translateX(${half}px)`, 'none']);
-    expect(slid('[data-call-rail-slot="trailing"]')).toContainEqual([`translateX(${half}px)`, 'none']);
-    expect(slid('[data-call-rail-slot="leading"]')).toEqual([]);
+    /* #19670 : la colonne s'ouvre depuis les sous-titres, (…) fermé : aucun rail n'est là pour glisser. */
+    expect(view.find('[data-call-rail-slot]')).toBeNull();
     if (animate === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'animate');
     else Object.defineProperty(HTMLElement.prototype, 'animate', animate);
     if (measure !== undefined) Object.defineProperty(Element.prototype, 'getBoundingClientRect', measure);
@@ -243,8 +243,7 @@ describe('le journal en colonne de verre (W1, W2)', () => {
     const column = view.find(COLUMN);
     const entering = played.find((move) => move.element === column);
     expect(entering?.frames.map((frame) => frame.transform)).toEqual(['translateX(100%)', 'translateX(0)']);
-    view.press('[data-call-more]');
-    view.press('[data-call-control="journal"]');
+    view.press(JOURNAL);
     await view.settle();
     const leaving = played.filter((move) => move.element === column).at(-1);
     expect(leaving?.frames.map((frame) => frame.transform)).toEqual(['translateX(0)', 'translateX(100%)']);
@@ -267,6 +266,9 @@ describe('le journal en colonne de verre (W1, W2)', () => {
   test('en duo (W1), la colonne reste ouverte quand (…) s’ouvre : le rail « l’appel » s’arrête à elle, celui de « mon image » garde son bord (#17327)', async () => {
     const view = mount({}, true);
     await openJournal(view);
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('idle');
+    view.press('[data-call-more]');
+    await view.settle();
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('menu');
     expect(view.find(COLUMN)).not.toBeNull();
     expect(view.find('[data-call-journal-column] [data-call-journal-panel]')).not.toBeNull();
@@ -295,8 +297,7 @@ describe('le journal en colonne de verre (W1, W2)', () => {
     await openJournal(view);
     view.press('[data-call-more]');
     expect(view.find(COLUMN)).not.toBeNull();
-    view.press('[data-call-more]');
-    view.press('[data-call-control="journal"]');
+    view.press(JOURNAL);
     expect(view.find(COLUMN)).toBeNull();
     view.done();
   });
@@ -334,16 +335,14 @@ describe('le journal en colonne de verre (W1, W2)', () => {
     view.done();
   });
 
-  test('#17932 — colonne ouverte, « Journal » du rail est le même disque blanc ; le retoucher referme la colonne', async () => {
+  test('#19670 — colonne ouverte, (…) sort ses rails sans aucun « Journal » : sa seule porte est le pied des sous-titres', async () => {
     const view = mount({}, true);
     await openJournal(view);
-    const rail = view.find('[data-call-rail] [data-call-control="journal"]');
-    expect(rail?.getAttribute('aria-expanded')).toBe('true');
-    expect(whiteDisc(rail)).toEqual(ACTIVE);
-    view.press('[data-call-rail] [data-call-control="journal"]');
+    view.press('[data-call-more]');
     await view.settle();
-    expect(view.find(COLUMN)).toBeNull();
-    expect(view.find('[data-call-rail] [data-call-control="journal"]')?.getAttribute('aria-expanded')).toBe('false');
+    expect(view.find('[data-call-rail]')).not.toBeNull();
+    expect(view.find('[data-call-rail] [data-call-control="journal"]')).toBeNull();
+    expect(view.find(COLUMN)).not.toBeNull();
     view.done();
   });
 

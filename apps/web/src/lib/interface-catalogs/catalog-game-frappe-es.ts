@@ -12,6 +12,8 @@ const es = {
   'game.frappe.say.gold': 'La n.º {number} es de oro. Tus ancestros la vieron.',
   'game.frappe.say.prism': 'La n.º {number} es de prisma: todos los idiomas brillan en ella.',
   'game.frappe.glory': '+{glory} de gloria',
+  'game.frappe.glory_toward': '{glory} de gloria hasta {rank}',
+  'game.frappe.risen': 'Te llaman {rank}',
   'game.frappe.refused.shadow': 'Una sombra cubre tu luz. Tus próximas chispas la disiparán, y acuñaremos.',
   'game.frappe.refused.locked': 'Tu Legado espera un rango más alto. Tu gloria lo abrirá, y acuñaremos.',
   'game.frappe.refused.light': 'Tu luz aún no alcanza. Tus próximas chispas la alimentarán.',

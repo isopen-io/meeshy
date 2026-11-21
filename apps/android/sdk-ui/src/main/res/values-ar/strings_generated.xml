@@ -450,6 +450,7 @@
     <string name="reading_mode_summary_title">الملخص</string>
     <string name="retouch_crop_original">الأصلي</string>
     <string name="retouch_effect_angel">ملاك</string>
+    <string name="retouch_effect_baby">طفل</string>
     <string name="retouch_effect_demon">شيطان</string>
     <string name="retouch_effect_none">بلا</string>
     <string name="retouch_effect_smoothing">تنعيم البشرة</string>
@@ -515,7 +516,6 @@
     <string name="retouch_tool_text">نص</string>
     <string name="retouch_tool_trim">قص</string>
     <string name="skeleton_feed_post_loading">جارٍ تحميل منشور</string>
-    <string name="skeleton_link_row_loading">جارٍ تحميل رابط</string>
     <string name="skeleton_profile_loading">جارٍ تحميل الملف الشخصي</string>
     <string name="skeleton_stories_loading">جارٍ تحميل القصص</string>
     <string name="slide_rail_delete_cancel">إلغاء</string>
@@ -581,7 +581,6 @@
     <string name="talkie_send_rate_limited">مداخلات كثيرة جدًا: أعد المحاولة بعد لحظة.</string>
     <string name="talkie_send_recording_copy">جارٍ تسجيل رسالة صوتية…</string>
     <string name="talkie_send_talking">أنت تتحدث إلى %1$s…</string>
-    <string name="talkie_send_voice">لا يمكن إيصال جهاز اللاسلكي الآن: أرسل رسالة صوتية بدلًا من ذلك.</string>
     <string name="talkie_send_waking">جارٍ إيقاظ %1$s…</string>
     <string name="time_lastSeen_beforeYesterdayAt">شوهد أول أمس في %1$s</string>
     <string name="time_lastSeen_dateAt">شوهد في %1$s الساعة %2$s</string>

@@ -170,4 +170,53 @@ final class CircleReceptionBlockViewModelTests: XCTestCase {
 
         XCTAssertEqual(asked.count, 0)
     }
+
+    // MARK: - « Notifications de ses nouveautés » (#19433, serveur #19434)
+
+    func test_newsNotify_notServed_isNotOffered() async {
+        let service = MockBringService()
+        service.settingsResult = .success(RelationPersonSettings(userId: "bob", bringBlocked: false))
+        let sut = CircleReceptionBlockViewModel(userId: "bob", personSwitch: .subscription(.news), service: service)
+
+        await sut.load()
+
+        XCTAssertFalse(sut.isServed)
+    }
+
+    func test_newsNotify_served_isOfferedWithItsValue() async {
+        let service = MockBringService()
+        service.settingsResult = .success(RelationPersonSettings(userId: "bob", bringBlocked: false, newsNotify: true))
+        let sut = CircleReceptionBlockViewModel(userId: "bob", personSwitch: .subscription(.news), service: service)
+
+        await sut.load()
+
+        XCTAssertTrue(sut.isServed)
+        XCTAssertTrue(sut.isOn)
+    }
+
+    func test_newsNotify_writesOnlyTheSubscription() async {
+        let service = MockBringService()
+        service.settingsResult = .success(RelationPersonSettings(userId: "bob", bringBlocked: false, newsNotify: true))
+        service.setBlockedResult = .success(RelationPersonSettings(userId: "bob", bringBlocked: false, newsNotify: false))
+        let sut = CircleReceptionBlockViewModel(userId: "bob", personSwitch: .subscription(.news), service: service)
+        await sut.load()
+
+        let saved = await sut.setOn(false)
+
+        XCTAssertTrue(saved)
+        XCTAssertFalse(sut.isOn)
+        XCTAssertEqual(service.subscriptionWrites, [false])
+        XCTAssertTrue(service.blockedWrites.isEmpty)
+        XCTAssertTrue(service.grantWrites.isEmpty)
+    }
+
+    func test_receptionSwitches_areAlwaysServed() async {
+        let service = MockBringService()
+        service.settingsResult = .success(RelationPersonSettings(userId: "bob", bringBlocked: false))
+        let sut = CircleReceptionBlockViewModel(userId: "bob", setting: .bring, service: service)
+
+        await sut.load()
+
+        XCTAssertTrue(sut.isServed)
+    }
 }

@@ -11,7 +11,7 @@
  * identifiants, vers un nom de domaine public (aucune adresse IP, aucun nom interne).
  * C'est la même règle côté écriture (passerelle) et pour les clients qui prévalident.
  */
-import { isRelationLevel, relationLevelIfAtLeast, type RelationLevel } from '../types/relation.js';
+import { RELATION_LEVELS, isRelationLevel, relationLevelIfAtLeast, type RelationLevel } from '../types/relation.js';
 
 export const ADDRESS_TITLE_MAX_LENGTH = 24;
 export const ADDRESS_URL_MAX_LENGTH = 2048;
@@ -114,6 +114,28 @@ export const servedAddresses = (rows: ReadonlyArray<AddressColumns>, reader: Add
     .sort((a, b) => a.position - b.position)
     .map((row) => served(row, reader.isSelf && isAddressCircle(row.circle) ? row.circle : undefined));
 
+/** Une rangée verrouillée de la fiche : le cercle qui ouvre ces adresses et leur nombre — rien d'autre. */
+export type LockedAddressCount = { readonly circle: RelationLevel; readonly count: number };
+
+/** `reachable` faux : blocage ou compte désactivé, le lecteur ne peut atteindre aucun cercle. */
+export type LockedAddressReader = AddressReader & { readonly reachable: boolean };
+
+/**
+ * Ce qui est fermé se voit, verrouillé (loi 4 de la planche, #19274) : combien d'adresses
+ * affichées chaque cercle plus proche ouvrirait. La MÊME loi que la fiche
+ * (`addressOpensTo`) : une adresse servie n'est jamais comptée, une adresse comptée n'est
+ * jamais servie. Seuls le cercle et le compte partent — ni titre, ni URL, ni glyphe, ni
+ * jeton, ni identifiant. Une adresse masquée ou à cercle illisible ne se compte pas.
+ */
+export const lockedAddressCounts = (rows: ReadonlyArray<AddressColumns>, reader: LockedAddressReader): LockedAddressCount[] => {
+  if (reader.isSelf || !reader.reachable) return [];
+  const locked = rows.filter((row) => row.isShown && isAddressCircle(row.circle) && !addressOpensTo(row.circle, reader));
+  return RELATION_LEVELS.flatMap((circle): LockedAddressCount[] => {
+    const count = locked.filter((row) => row.circle === circle).length;
+    return count === 0 ? [] : [{ circle, count }];
+  });
+};
+
 /** « Voir comme » : ce que lirait un lecteur de ce cercle, depuis la lecture du propriétaire. */
 export const addressesSeenAs = (own: ReadonlyArray<ServedAddress>, level: RelationLevel): ServedAddress[] =>
   own.flatMap((address): ServedAddress[] => {
@@ -121,3 +143,17 @@ export const addressesSeenAs = (own: ReadonlyArray<ServedAddress>, level: Relati
     const { circle: _circle, ...visible } = address;
     return [visible];
   });
+
+/**
+ * « Voir comme », moitié FERMÉE (loi 4) : les rangées verrouillées qu'un lecteur du cercle
+ * `level` recevrait, depuis les adresses du propriétaire (cercle connu). La MÊME loi que
+ * `lockedAddressCounts` : un lecteur synthétique atteint ses cercles, n'est pas soi.
+ */
+export const lockedAddressesSeenAs = (own: ReadonlyArray<ServedAddress>, level: RelationLevel): LockedAddressCount[] => {
+  const reader: LockedAddressReader = { isSelf: false, viewerLevel: level, reachable: true };
+  const locked = own.filter((address) => isAddressCircle(address.circle) && !addressOpensTo(address.circle, reader));
+  return RELATION_LEVELS.flatMap((circle): LockedAddressCount[] => {
+    const count = locked.filter((address) => address.circle === circle).length;
+    return count === 0 ? [] : [{ circle, count }];
+  });
+};

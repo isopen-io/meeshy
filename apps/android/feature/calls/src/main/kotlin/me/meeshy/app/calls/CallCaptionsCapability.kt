@@ -145,6 +145,7 @@ class CallCaptionsController internal constructor(
     private val notice: CallCaptionsRefusalNotice,
     private val clock: () -> Long,
     private val scope: CoroutineScope,
+    private val binding: CallConversationBinding = CallConversationBinding(),
 ) : CallFeatureController {
 
     @Inject
@@ -155,6 +156,7 @@ class CallCaptionsController internal constructor(
         session: SessionRepository,
         regime: LedgerCallConversationRegime,
         notice: ToastCallCaptionsRefusalNotice,
+        binding: CallConversationBinding = CallConversationBinding(),
     ) : this(
         wires = CallCaptionsWires(
             relayed = signals.translatedSegments,
@@ -168,6 +170,7 @@ class CallCaptionsController internal constructor(
         notice = notice,
         clock = System::currentTimeMillis,
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+        binding = binding,
     )
 
     private val _state = MutableStateFlow(CallCaptionsState())
@@ -208,12 +211,13 @@ class CallCaptionsController internal constructor(
         when (next) {
             is CallState.Ended, CallState.Idle -> reset()
             else -> {
+                binding.bind(session)
                 callId = session.callId.ifBlank { callId }
                 peerName = session.config.peerName
                 peerId = session.config.peerId.ifBlank { peerId }
                 if (listening.isEmpty()) listening = listen()
                 stampCallStart(next)
-                resolveGate(session.config.conversationId)
+                resolveGate(binding.current)
             }
         }
     }
@@ -280,6 +284,9 @@ class CallCaptionsController internal constructor(
                 if (event.callId != callId) return@onEach
                 val self = session.currentUser.value?.id
                 _state.update { it.copy(listeners = it.listeners.applying(event.speakerId, event.active, self)) }
+            },
+            binding.conversationId.drop(1).onEach { moved ->
+                if (moved.isNotBlank() && callId.isNotBlank() && moved != conversationId) resolveGate(moved)
             },
             wires.participantsLeft.onEach { left ->
                 if (left.callId != callId) return@onEach
@@ -404,16 +411,7 @@ class CallCaptionsActionHandler @Inject constructor(
     override fun perform() = captions.advance()
 }
 
-/** « Journal » in the call's row: every sentence of the call, in a sheet the screen opens. */
-@Singleton
-class CallCaptionsJournalActionHandler @Inject constructor() : CallActionHandler {
-    override fun present(state: CallUiState): CallActionPresentation? =
-        if (state.status == CallStatus.CONNECTED) CallCaptionsPresenter.journal(state.captions) else null
-
-    override fun perform() = Unit
-}
-
-/** The two buttons, pure. */
+/** The Captions button, pure. */
 object CallCaptionsPresenter {
     fun captions(chip: CallCaptionsChip): CallActionPresentation = CallActionPresentation(
         icon = MeeshyIcons.Subtitles,
@@ -428,19 +426,6 @@ object CallCaptionsPresenter {
             else -> R.string.call_captions_state_off
         },
     )
-
-    /** Absent where captions cannot exist: an end-to-end call has no journal to open. */
-    fun journal(chip: CallCaptionsChip): CallActionPresentation? =
-        if (chip.gate.allowsCaptions) {
-            CallActionPresentation(
-                MeeshyIcons.ListChecklist,
-                R.string.call_captions_journal_title,
-                hintRes = R.string.call_captions_journal_hint,
-                captionRes = R.string.call_captions_journal,
-            )
-        } else {
-            null
-        }
 }
 
 @Module
@@ -454,9 +439,4 @@ interface CallCaptionsCapabilityModule {
     @IntoMap
     @CallActionKey(CallAction.Captions)
     fun bindCaptionsHandler(impl: CallCaptionsActionHandler): CallActionHandler
-
-    @Binds
-    @IntoMap
-    @CallActionKey(CallAction.Journal)
-    fun bindJournalHandler(impl: CallCaptionsJournalActionHandler): CallActionHandler
 }

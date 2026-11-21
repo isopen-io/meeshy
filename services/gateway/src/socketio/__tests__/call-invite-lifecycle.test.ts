@@ -195,3 +195,22 @@ describe('une invitation d’appel se résout toujours : décroché, refusé ou 
     expect(h.timers.filter((t) => !t.cancelled)).toHaveLength(1);
   });
 });
+
+describe('pendingFor — les invitations qui sonnent encore comptent dans le plafond (#19650)', () => {
+  it('rend les invitées dont la sonnerie court, pour CET appel seulement', async () => {
+    const h = harness();
+    h.lifecycle.arm(h.io, invitation());
+    h.lifecycle.arm(h.io, { ...invitation(), inviteeUserId: 'bob' });
+    h.lifecycle.arm(h.io, { ...invitation(), callId: 'other-call', inviteeUserId: 'carol' });
+
+    expect([...h.lifecycle.pendingFor(CALL)].sort()).toEqual([LEA, 'bob'].sort());
+    expect(h.lifecycle.pendingFor('other-call')).toEqual(['carol']);
+  });
+
+  it('une invitation qui s’est soldée ne compte plus', async () => {
+    const h = harness();
+    h.lifecycle.arm(h.io, invitation());
+    await h.fire();
+    expect(h.lifecycle.pendingFor(CALL)).toEqual([]);
+  });
+});

@@ -40,7 +40,7 @@ final class ComposerLookStripFilterTests: XCTestCase {
     func test_kind_eruptionIsImageWide_theOthersNeedAFace() {
         XCTAssertEqual(ComposerLookStripFilterRule.kind(of: .effect(.volcano)), .imageEffect,
                        "l'Éruption gradue l'image et fait monter la lave sans lire de visage")
-        for effet in [CallFaceEffect.smoothing, .toad, .angel, .demon] {
+        for effet in [CallFaceEffect.smoothing, .toad, .angel, .demon, .baby] {
             XCTAssertEqual(ComposerLookStripFilterRule.kind(of: .effect(effet)), .faceEffect, "\(effet)")
         }
     }
@@ -58,6 +58,7 @@ final class ComposerLookStripFilterTests: XCTestCase {
         XCTAssertEqual(ComposerLookStripFilterRule.mood(of: .effect(.angel)), .feerique)
         XCTAssertEqual(ComposerLookStripFilterRule.mood(of: .effect(.demon)), .morbide)
         XCTAssertEqual(ComposerLookStripFilterRule.mood(of: .effect(.volcano)), .fantastique)
+        XCTAssertEqual(ComposerLookStripFilterRule.mood(of: .effect(.baby)), .jovial)
         XCTAssertNil(ComposerLookStripFilterRule.mood(of: .effect(.smoothing)), "lisser ne change pas l'ambiance")
         XCTAssertNil(ComposerLookStripFilterRule.mood(of: .filter(.film)))
         XCTAssertNil(ComposerLookStripFilterRule.mood(of: .untouched))
@@ -89,7 +90,7 @@ final class ComposerLookStripFilterTests: XCTestCase {
 
     func test_items_mood_intersectsWithTheType() {
         let jovialVisage = ComposerLookStripFilter(type: .faceEffects, mood: .jovial)
-        XCTAssertEqual(ComposerLookStripFilterRule.items(jovialVisage), [.effect(.none), .effect(.toad)])
+        XCTAssertEqual(ComposerLookStripFilterRule.items(jovialVisage), [.effect(.none), .effect(.toad), .effect(.baby)])
         let jovial = ComposerLookStripFilterRule.items(ComposerLookStripFilter(type: .all, mood: .jovial))
         XCTAssertEqual(jovial.first, .untouched)
         XCTAssertTrue(jovial.contains(.effect(.toad)))

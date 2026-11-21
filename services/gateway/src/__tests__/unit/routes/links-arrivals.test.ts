@@ -4,8 +4,10 @@
  *
  * Mêmes lecteurs que les statistiques (`loadShareLinkForManagement`, la vraie
  * règle) ; la vraie sérialisation est exercée : une arrivée ne sort qu'avec
- * nom, visage, badge sans compte, pays, langue et date — ce que la ligne PORTE
- * à côté (identifiant, présence, IP, e-mail) ne part pas.
+ * nom, visage, badge sans compte, pays, langue et date — plus, pour son
+ * gestionnaire, le compte d'un inscrit et l'e-mail MASQUÉ d'un invité (#19283).
+ * Ce que la ligne PORTE à côté (identifiant de participant, présence, IP,
+ * e-mail en clair, e-mail du compte) ne part pas.
  *
  * @jest-environment node
  */
@@ -136,7 +138,7 @@ describe('arrivées d’un lien — ce qui part', () => {
     const { prisma } = fakePrisma({
       rows: [
         arrivalRow(1),
-        arrivalRow(2, { type: 'user', displayName: 'Ana', language: 'en', joinCountry: null, user: { systemLanguage: 'pt-BR' } }),
+        arrivalRow(2, { type: 'user', userId: '507f1f77bcf86cd799439044', displayName: 'Ana', language: 'en', joinCountry: null, user: { systemLanguage: 'pt-BR' } }),
       ],
     });
     const app = await buildApp(prisma, CREATOR_ID);
@@ -144,13 +146,13 @@ describe('arrivées d’un lien — ce qui part', () => {
     const data = (await getArrivals(app)).json().data;
 
     expect(data.arrivals).toEqual([
-      { displayName: 'invité 1', avatar: null, isAnonymous: true, country: 'FR', language: 'fr', joinedAt: '2026-09-24T09:59:00.000Z' },
-      { displayName: 'Ana', avatar: null, isAnonymous: false, country: null, language: 'pt', joinedAt: '2026-09-24T09:58:00.000Z' },
+      { displayName: 'invité 1', avatar: null, isAnonymous: true, country: 'FR', language: 'fr', joinedAt: '2026-09-24T09:59:00.000Z', userId: null, emailMasked: null },
+      { displayName: 'Ana', avatar: null, isAnonymous: false, country: null, language: 'pt', joinedAt: '2026-09-24T09:58:00.000Z', userId: '507f1f77bcf86cd799439044', emailMasked: null },
     ]);
     await app.close();
   });
 
-  it('rien de ce que la ligne porte à côté ne part : ni identifiant, ni présence, ni IP, ni e-mail — le visage seul est servi (#12571)', async () => {
+  it('rien de ce que la ligne porte à côté ne part : ni identifiant de participant, ni présence, ni IP, ni e-mail en clair — le visage seul est servi (#12571)', async () => {
     const { prisma } = fakePrisma({
       rows: [arrivalRow(1, {
         avatar: '2026/09/nova/photo.png',
@@ -158,6 +160,7 @@ describe('arrivées d’un lien — ce qui part', () => {
         lastActiveAt: new Date(),
         ipAddress: '203.0.113.7',
         userId: '507f1f77bcf86cd799439099',
+        anonymousSession: { profile: { email: 'nova.secret@entreprise.org', firstName: 'Nova', lastName: 'Secret' } },
         user: { systemLanguage: 'fr', email: 'nova@example.org', avatar: 'compte/a.png', isOnline: true },
       })],
     });
@@ -166,9 +169,11 @@ describe('arrivées d’un lien — ce qui part', () => {
     const res = await getArrivals(app);
     const [arrival] = res.json().data.arrivals;
 
-    expect(Object.keys(arrival).sort()).toEqual(['avatar', 'country', 'displayName', 'isAnonymous', 'joinedAt', 'language']);
+    expect(Object.keys(arrival).sort()).toEqual(['avatar', 'country', 'displayName', 'emailMasked', 'isAnonymous', 'joinedAt', 'language', 'userId']);
     expect(arrival.avatar).toBe('2026/09/nova/photo.png');
-    for (const leak of [rowId(1), 'compte/a.png', 'isOnline', 'lastActiveAt', '203.0.113.7', 'nova@example.org', '507f1f77bcf86cd799439099']) {
+    expect(arrival.userId).toBeNull();
+    expect(arrival.emailMasked).toBe('n•••@•••.org');
+    for (const leak of [rowId(1), 'compte/a.png', 'isOnline', 'lastActiveAt', '203.0.113.7', 'nova@example.org', '507f1f77bcf86cd799439099', 'secret', 'entreprise', 'Secret']) {
       expect(res.body).not.toContain(leak);
     }
     await app.close();
@@ -197,9 +202,41 @@ describe('arrivées d’un lien — ce qui part', () => {
 
     const args = participantFindMany.mock.calls[0]?.[0] as unknown as { select: Record<string, unknown> };
     expect(args.select).toEqual({
-      id: true, type: true, displayName: true, avatar: true, language: true, joinedAt: true, joinCountry: true,
+      id: true, type: true, userId: true, displayName: true, avatar: true, language: true, joinedAt: true, joinCountry: true,
+      anonymousSession: { select: { profile: { select: { email: true } } } },
       user: { select: { systemLanguage: true, avatar: true } },
     });
+    await app.close();
+  });
+});
+
+describe('arrivées d’un lien — de quoi ouvrir la fiche d’un arrivant (#19283)', () => {
+  it('un inscrit qui a laissé une adresse à une autre époque ne la voit jamais servie : seul l’invité porte un e-mail masqué', async () => {
+    const { prisma } = fakePrisma({
+      rows: [arrivalRow(1, {
+        type: 'user', userId: '507f1f77bcf86cd799439055',
+        anonymousSession: { profile: { email: 'ana@exemple.sn' } },
+        user: { systemLanguage: 'fr', avatar: null },
+      })],
+    });
+    const app = await buildApp(prisma, CREATOR_ID);
+
+    const res = await getArrivals(app);
+    const [arrival] = res.json().data.arrivals;
+
+    expect(arrival.userId).toBe('507f1f77bcf86cd799439055');
+    expect(arrival.emailMasked).toBeNull();
+    expect(res.body).not.toContain('exemple');
+    await app.close();
+  });
+
+  it('un invité sans adresse n’a pas d’e-mail masqué', async () => {
+    const { prisma } = fakePrisma({ rows: [arrivalRow(1, { anonymousSession: { profile: { email: null } } })] });
+    const app = await buildApp(prisma, CREATOR_ID);
+
+    const [arrival] = (await getArrivals(app)).json().data.arrivals;
+
+    expect(arrival.emailMasked).toBeNull();
     await app.close();
   });
 });

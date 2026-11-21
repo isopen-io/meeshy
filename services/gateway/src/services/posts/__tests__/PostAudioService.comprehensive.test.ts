@@ -80,6 +80,7 @@ const makeMockPrisma = (
   },
   userPreferences: { findUnique: jest.fn().mockResolvedValue(null) },
   postMedia: {
+    findUnique: jest.fn().mockResolvedValue({ translations: null }),
     update: jest.fn().mockResolvedValue({}),
   },
   post: {

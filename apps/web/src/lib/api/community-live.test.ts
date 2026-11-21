@@ -7,6 +7,7 @@ import type { CommunityUpdatedEventData } from '@meeshy/shared/types/socketio-ev
 import type { SocketClient } from '../net/socket';
 import { communitiesQueryKey, communityQueryKey, type CommunityPage, type CommunitySummary } from './communities';
 import { applyCommunityUpdatedEvent, bindCommunityLive } from './community-live';
+import { communityJoinRequestsQueryKey } from './community-join-requests';
 
 /**
  * **L'IDENTITÉ D'UNE COMMUNAUTÉ SUIT SES RÉGLAGES** (#18435) — `community:updated`.
@@ -122,5 +123,47 @@ describe('bindCommunityLive', () => {
 
     stop();
     expect(handlers.has(SERVER_EVENTS.COMMUNITY_UPDATED)).toBe(false);
+  });
+
+  test('écoute community:join-requested : la liste des demandes de la communauté se relit (#19871)', () => {
+    const handlers = new Map<string, (payload: unknown) => void>();
+    const socket: SocketClient = {
+      connected: true,
+      connect: () => undefined,
+      disconnect: () => undefined,
+      on: (name, handler) => { handlers.set(name, handler as (payload: unknown) => void); },
+      off: (name) => { handlers.delete(name); },
+      emit: () => undefined,
+    };
+    const client = new QueryClient();
+    client.setQueryData(communityJoinRequestsQueryKey('c1'), { pages: [], pageParams: [null] });
+
+    const stop = bindCommunityLive({ socket, queryClient: client });
+    handlers.get(SERVER_EVENTS.COMMUNITY_JOIN_REQUESTED)?.({ communityId: 'c1', requestId: 'q1', userId: 'u', pendingCount: 1, at: '2026-11-19T10:00:00.000Z' });
+    expect(client.getQueryState(communityJoinRequestsQueryKey('c1'))?.isInvalidated).toBe(true);
+
+    stop();
+    expect(handlers.has(SERVER_EVENTS.COMMUNITY_JOIN_REQUESTED)).toBe(false);
+  });
+
+  test('écoute community:join-request-decided : le détail passe à « Demande refusée » (#19879)', () => {
+    const handlers = new Map<string, (payload: unknown) => void>();
+    const socket: SocketClient = {
+      connected: true,
+      connect: () => undefined,
+      disconnect: () => undefined,
+      on: (name, handler) => { handlers.set(name, handler as (payload: unknown) => void); },
+      off: (name) => { handlers.delete(name); },
+      emit: () => undefined,
+    };
+    const client = new QueryClient();
+    client.setQueryData<CommunitySummary>(communityQueryKey('c-req'), { id: 'c-req', identifier: 'c-req', name: 'Club', description: null, avatar: null, banner: null, isPrivate: false, createdBy: 'u-owner', memberCount: 3, conversationCount: 0, viewerRole: null, requiresJoinApproval: true, viewerJoinRequest: 'pending' });
+
+    const stop = bindCommunityLive({ socket, queryClient: client });
+    handlers.get(SERVER_EVENTS.COMMUNITY_JOIN_REQUEST_DECIDED)?.({ communityId: 'c-req', decision: 'rejected', retryAt: '2026-11-26T10:00:00.000Z', at: '2026-11-19T10:00:00.000Z' });
+    expect(client.getQueryData<CommunitySummary>(communityQueryKey('c-req'))?.viewerJoinRetryAt).toBe('2026-11-26T10:00:00.000Z');
+
+    stop();
+    expect(handlers.has(SERVER_EVENTS.COMMUNITY_JOIN_REQUEST_DECIDED)).toBe(false);
   });
 });

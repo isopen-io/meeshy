@@ -3,6 +3,7 @@ import { useRef, type ReactNode } from 'react';
 import type { UserPresenceStatus } from '@meeshy/shared/utils/user-presence';
 
 import { translateCircles } from '@/lib/i18n-circles-catalog';
+import { relationLevelIcon, relationLevelLabel, relationLevelTint } from '@/lib/relations/level-labels';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { SharedLocation } from '@/lib/api/shared-locations';
 import { metersToPixels, screenPoint, tilesCovering, TILE_SIZE, type MapView } from '@/lib/map/slippy';
@@ -22,6 +23,9 @@ import { MeeshyMapPin } from './kit/meeshy-map-pin';
  * - **Rien n'est fabriqué hors de la charge servie** : l'épingle est posée sur la position
  *   TRONQUÉE que le serveur a rendue, le cercle de flou a le rayon SERVI, l'anneau de
  *   présence n'existe que si une présence a été servie.
+ * - **Le cercle se voit et s'entend** (#17013) : l'épingle prend la couleur et l'icône du
+ *   cercle que le SERVEUR a jugé pour moi (`circle`), et le lecteur d'écran le nomme. Sans
+ *   cercle servi (serveur antérieur), l'épingle reste neutre : aucun client ne le recalcule.
  * - **Accessible** : la carte est un `application` focalisable (flèches = glisser, + / − =
  *   zoom) ; la LISTE dit la même chose que les épingles, pour qui n'a pas la carte.
  * - **Pure** : l'état (vue, positions, noms) est tenu par `shared-locations-map.tsx`.
@@ -68,7 +72,8 @@ const KEY_PAN_PIXELS = 80;
 const keepsItsTouch = (event: { stopPropagation(): void }): void => event.stopPropagation();
 
 export function rowText({ language, location, person, formatTime }: { readonly language: InterfaceLanguage; readonly location: SharedLocation; readonly person: SharedLocationPerson; readonly formatTime: (iso: string) => string }): string {
-  const params = { name: person.name ?? translateCircles(language, 'positions.someone'), time: formatTime(location.expiresAt) };
+  const name = person.name ?? translateCircles(language, 'positions.someone');
+  const params = { name: location.circle === undefined ? name : `${name} · ${relationLevelLabel(language, location.circle)}`, time: formatTime(location.expiresAt) };
   const byPrecision = {
     exact: () => translateCircles(language, 'positions.row.exact', params),
     neighborhood: () => translateCircles(language, 'positions.row.neighborhood', params),
@@ -119,7 +124,22 @@ function Pin({
         className="absolute grid place-items-center"
         style={{ left: at.x - PIN_SIZE / 2, top: at.y - PIN_SIZE / 2, width: PIN_SIZE, height: PIN_SIZE, zIndex: selected ? 1 : 0 }}
       >
-        <MeeshyMapPin label={text} isSelected={selected} precision="exact" {...(onSelect === undefined ? {} : { onPress: () => onSelect(location.userId) })}>
+        <MeeshyMapPin
+          label={text}
+          isSelected={selected}
+          precision="exact"
+          {...(location.circle === undefined
+            ? {}
+            : {
+                tint: relationLevelTint(location.circle),
+                badge: (
+                  <span data-shared-location-circle={location.circle} aria-hidden="true">
+                    {relationLevelIcon(location.circle)}
+                  </span>
+                ),
+              })}
+          {...(onSelect === undefined ? {} : { onPress: () => onSelect(location.userId) })}
+        >
           <MeeshyAvatarMorph id={location.userId} size={PIN_AVATAR}>
             <Avatar
               initials={person.initials}

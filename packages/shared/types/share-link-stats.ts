@@ -43,6 +43,52 @@ export const shareLinkPreviewConversationSchema = z.object({
   createdAt: z.string(),
 });
 
+/**
+ * L'E-MAIL D'UN INVITÉ, MASQUÉ (#19283) — la ligne « e-mail fourni b•••@•••.sn »
+ * de la planche Lien-Partage. Le gestionnaire d'un lien apprend qu'un invité a
+ * laissé une adresse, jamais laquelle : première lettre du nom, extension du
+ * domaine, et trois points médians fixes de chaque côté — ni la longueur du nom
+ * ni le domaine ne partent. Plus fermé que le masque du parrainage
+ * (`ma•••••@gmail.com`) : là l'adresse est celle que l'invitant a lui-même
+ * tapée ; ici c'est un tiers qui l'a donnée à la conversation, pas au
+ * gestionnaire du lien, et un domaine d'entreprise suffit à l'identifier.
+ */
+const EMAIL_MASK = '•••';
+
+export function maskGuestEmail(email: string | null | undefined): string | null {
+  const trimmed = email?.trim() ?? '';
+  if (trimmed === '') return null;
+  const at = trimmed.lastIndexOf('@');
+  if (at <= 0 || at === trimmed.length - 1) return EMAIL_MASK;
+  const first = trimmed.charAt(0).toLowerCase();
+  const domain = trimmed.slice(at + 1).toLowerCase();
+  const dot = domain.lastIndexOf('.');
+  const extension = dot >= 0 && dot < domain.length - 1 ? domain.slice(dot + 1) : null;
+  return extension === null
+    ? `${first}${EMAIL_MASK}@${EMAIL_MASK}`
+    : `${first}${EMAIL_MASK}@${EMAIL_MASK}.${extension}`;
+}
+
+/**
+ * Ce qu'une arrivée ajoute pour son gestionnaire (#19283), additif et
+ * facultatif au décodage (un serveur plus ancien ne les sert pas) :
+ * - `userId` : le compte d'un arrivant INSCRIT, pour « Voir la fiche » (qui
+ *   passe ensuite par la loi des cercles comme toute fiche) ; `null` pour un
+ *   invité ;
+ * - `emailMasked` : l'adresse qu'un invité a laissée en entrant, masquée par
+ *   {@link maskGuestEmail} ; `null` sans adresse et pour un inscrit — l'e-mail
+ *   d'un compte ne se lit jamais ici.
+ */
+const arrivalOwnerFields = {
+  userId: z.string().nullable().optional(),
+  emailMasked: z.string().nullable().optional(),
+};
+
+const arrivalOwnerJsonProperties = {
+  userId: { type: 'string', nullable: true, description: 'Account of a registered arrival (to open its profile), null for a guest' },
+  emailMasked: { type: 'string', nullable: true, description: 'Masked e-mail a guest left when joining (b•••@•••.sn), never the address; null otherwise' },
+} as const;
+
 export const shareLinkArrivalSchema = z.object({
   participantId: z.string(),
   displayName: z.string(),
@@ -53,6 +99,7 @@ export const shareLinkArrivalSchema = z.object({
   language: z.string().nullable(),
   /** Instant ISO 8601. */
   joinedAt: z.string(),
+  ...arrivalOwnerFields,
 });
 
 export type ShareLinkArrival = z.infer<typeof shareLinkArrivalSchema>;
@@ -119,6 +166,7 @@ export const shareLinkStatsJsonSchema = {
           country: { type: 'string', nullable: true, description: 'ISO 3166-1 alpha-2' },
           language: { type: 'string', nullable: true },
           joinedAt: { type: 'string', format: 'date-time' },
+          ...arrivalOwnerJsonProperties,
         },
       },
     },
@@ -129,8 +177,8 @@ export const shareLinkStatsJsonSchema = {
  * LA LISTE COMPLÈTE DES ARRIVÉES D'UN LIEN (#7813) — `GET
  * /api/v1/links/:linkId/arrivals?cursor=&limit=`, mêmes lecteurs que les
  * statistiques. Une arrivée n'y porte QUE ce que la ligne affiche : nom, visage,
- * badge « sans compte », pays, langue et date. Ni identifiant ni présence : la
- * liste se lit, elle n'ouvre aucun profil. Le visage (`avatar`, #12571) est AJOUTÉ
+ * badge « sans compte », pays, langue et date — et, pour son gestionnaire, le
+ * compte d'un inscrit et l'e-mail masqué d'un invité (#19283). Jamais la présence. Le visage (`avatar`, #12571) est AJOUTÉ
  * à la page — additif, un ancien client l'ignore — pour que la liste complète
  * montre la photo que les arrivées récentes montraient déjà, aux mêmes lecteurs.
  *
@@ -150,6 +198,7 @@ export const shareLinkArrivalEntrySchema = z.object({
   language: z.string().nullable(),
   /** Instant ISO 8601. */
   joinedAt: z.string(),
+  ...arrivalOwnerFields,
 });
 
 export type ShareLinkArrivalEntry = z.infer<typeof shareLinkArrivalEntrySchema>;
@@ -179,6 +228,7 @@ export const shareLinkArrivalsPageJsonSchema = {
           country: { type: 'string', nullable: true, description: 'ISO 3166-1 alpha-2' },
           language: { type: 'string', nullable: true },
           joinedAt: { type: 'string', format: 'date-time' },
+          ...arrivalOwnerJsonProperties,
         },
       },
     },

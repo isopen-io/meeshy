@@ -4,11 +4,13 @@ package me.meeshy.sdk.model.call
  * A panel the call screen can open; mirrors iOS `CallScreenPanel`. #17343 — Record, React AND the Journal are drawn in
  * the pill; Add people, which presents the friends list, stays a sheet under the rows.
  */
-enum class CallScreenPanel(val action: CallAction, val isDrawnInThePill: Boolean) {
+enum class CallScreenPanel(val action: CallAction?, val isDrawnInThePill: Boolean) {
     React(CallAction.React, true),
     Record(CallAction.Recording, true),
     People(CallAction.AddPeople, false),
-    Journal(CallAction.Journal, true),
+
+    /** #19670 — no (…) action opens the journal: it only makes sense with captions, its one door is their band. */
+    Journal(null, true),
     ;
 
     /**
@@ -86,10 +88,16 @@ sealed interface CallScreenLayer {
 
     fun exitingMode(): CallScreenLayer = if (activeMode == null) this else Idle
 
+    /** #19670 — turning captions off closes the journal: it only makes sense with them. An (…) opened over it stays open. */
+    fun closingJournal(): CallScreenLayer = when {
+        this is Panel && panel == CallScreenPanel.Journal -> Idle
+        this is MenuOverJournal -> Menu
+        else -> this
+    }
+
     fun reconciled(actions: CallActionSet): CallScreenLayer = when (this) {
-        is Panel -> if (panel.action !in actions) Menu else this
-        MenuOverJournal -> if (CallScreenPanel.Journal.action !in actions) Menu else this
+        is Panel -> if (panel.action?.let { it !in actions } == true) Menu else this
         is Mode -> if (mode.action !in actions) Idle else this
-        Idle, Menu -> this
+        Idle, Menu, MenuOverJournal -> this
     }
 }

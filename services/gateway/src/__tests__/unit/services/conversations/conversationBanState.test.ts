@@ -42,15 +42,28 @@ describe('resolveBanWrite — un ancien membre, déjà parti', () => {
       BAN_AT
     );
 
-    expect(data).toEqual({ bannedAt: BAN_AT });
+    expect(data).toEqual({ bannedAt: BAN_AT, isActive: false });
     expect(membershipEnded).toBe(false);
   });
 
-  it("ne réécrit rien d'autre que la marque du bannissement", () => {
+  /**
+   * #19688 (audit adversarial) — ce témoin exigeait qu'`isActive` soit ABSENT,
+   * et c'est ce qui laissait la MOITIÉ MIROIR de la course ouverte : le
+   * bannissement lit une ligne inactive, une porte de rentrée commet, puis le
+   * bannissement commet sur un `where: { id }` sans garde d'état, et la ligne
+   * finit `isActive: true, bannedAt ≠ null` — l'état interdit, par l'autre
+   * bout. Reposer `isActive: false` est un no-op sur une ligne réellement
+   * inactive, et le recouvrement de la rentrée dans la course.
+   *
+   * Ce que ce témoin garde VRAIMENT, et qui n'a pas bougé, c'est `leftAt` : la
+   * date du départ d'origine ne se réécrit pas — `resolveUnbanWrite` la compare
+   * à `bannedAt` pour savoir si le bannissement avait PRIS l'appartenance.
+   */
+  it("ne réécrit pas la date du départ, et repose seulement l'exclusion", () => {
     const { data } = resolveBanWrite({ isActive: false, leftAt: LEFT_LONG_AGO }, BAN_AT);
 
-    expect(data).not.toHaveProperty('isActive');
     expect(data).not.toHaveProperty('leftAt');
+    expect(data).toHaveProperty('isActive', false);
   });
 });
 

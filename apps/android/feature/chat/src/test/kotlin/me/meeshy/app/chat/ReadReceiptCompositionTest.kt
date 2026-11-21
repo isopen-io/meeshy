@@ -3,6 +3,7 @@ package me.meeshy.app.chat
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiTextTranslation
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import org.junit.Test
 
 /** La langue lue est résolue à la composition de l'accusé : bascule manuelle, prisme, original. */
@@ -64,6 +65,26 @@ class ReadReceiptCompositionTest {
         val declaration = compose(listOf(other(1)), unread = 0, arrived = other(2, "en", "fr"))!!
 
         assertThat(declaration.messageIds).containsExactly(id(2))
+    }
+
+    // #19424 — la frontière de lecture est l'instant SERVEUR du message jusqu'où le lecteur a rattrapé, pas celui du
+    // dernier message que la ligne de liste tient : un message arrivé après l'accusé n'est pas lu.
+    @Test
+    fun `the receipt carries the server instant of the message it catches up to`() {
+        val first = other(1).copy(createdAt = "2026-11-17T10:00:00.000Z")
+        val caughtUp = other(2).copy(createdAt = "2026-11-17T10:05:00.000Z")
+
+        val declaration = compose(listOf(first, caughtUp))!!
+
+        assertThat(declaration.caughtUpToMessageId).isEqualTo(id(2))
+        assertThat(declaration.readThroughAt).isEqualTo(isoToEpochMillisOrNull("2026-11-17T10:05:00.000Z"))
+    }
+
+    @Test
+    fun `a caught-up message without a readable instant leaves the frontier unknown`() {
+        val declaration = compose(listOf(other(1)))!!
+
+        assertThat(declaration.readThroughAt).isNull()
     }
 
     @Test

@@ -29,16 +29,12 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "shareLink.detail.recentArrivals",
           "androidName": "shareLink_detail_recentArrivals",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "shareLink.detail.noAccountBadge",
           "androidName": "shareLink_detail_noAccountBadge",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "app",

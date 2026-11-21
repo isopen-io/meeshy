@@ -18,8 +18,14 @@ final class SpyProfileRelationshipState: ProfileRelationshipStateProviding {
 
     func status(for userId: String) -> FriendshipStatus { statuses[userId] ?? .none }
     func isBlocked(userId: String) -> Bool { blockedIds.contains(userId) }
-    func didSendRequest(to receiverId: String, requestId: String) { events.append("didSend:\(receiverId):\(requestId)") }
-    func didCancelRequest(to receiverId: String) { events.append("didCancel:\(receiverId)") }
+    func didSendRequest(to receiverId: String, requestId: String) {
+        events.append("didSend:\(receiverId):\(requestId)")
+        statuses[receiverId] = .pendingSent(requestId: requestId)
+    }
+    func didCancelRequest(to receiverId: String) {
+        events.append("didCancel:\(receiverId)")
+        statuses[receiverId] = FriendshipStatus.none
+    }
     func didAcceptRequest(from senderId: String) { events.append("didAccept:\(senderId)") }
     func rollbackAccept(senderId: String, requestId: String) { events.append("rollbackAccept:\(senderId):\(requestId)") }
     func didRejectRequest(from senderId: String) { events.append("didReject:\(senderId)") }
@@ -37,22 +43,31 @@ final class StubProfileSocialActions: ProfileSocialActionsProviding {
     var unblockResult: Result<Void, Error> = .success(())
     var reportResult: Result<Void, Error> = .success(())
     var postsResult: Result<[APIPost], Error> = .success([])
+    var pendingRequests: [String: FriendRequest] = [:]
 
     private(set) var sendCalls: [String] = []
     private(set) var deleteCalls: [String] = []
     private(set) var respondCalls: [(requestId: String, accepted: Bool)] = []
     private(set) var blockCalls: [String] = []
     private(set) var unblockCalls: [String] = []
-    private(set) var reportCalls: [(userId: String, reportType: String)] = []
+    private(set) var reportCalls: [(userId: String, reportType: String, reason: String?)] = []
+    private(set) var reportAttachedMessageIds: [[String]] = []
 
-    func sendFriendRequest(to userId: String) async throws -> FriendRequest {
+    private(set) var sentMessages: [String?] = []
+
+    func sendFriendRequest(to userId: String, message: String?) async throws -> FriendRequest {
         sendCalls.append(userId)
+        sentMessages.append(message)
         return try sendResult.get()
     }
 
     func deleteFriendRequest(_ requestId: String) async throws {
         deleteCalls.append(requestId)
         try deleteResult.get()
+    }
+
+    func pendingFriendRequest(_ requestId: String) async -> FriendRequest? {
+        pendingRequests[requestId]
     }
 
     func respondToFriendRequest(_ requestId: String, accepted: Bool) async throws {
@@ -70,8 +85,9 @@ final class StubProfileSocialActions: ProfileSocialActionsProviding {
         try unblockResult.get()
     }
 
-    func reportUser(_ userId: String, reportType: String) async throws {
-        reportCalls.append((userId, reportType))
+    func reportUser(_ userId: String, reportType: String, reason: String?, attachedMessageIds: [String]) async throws {
+        reportCalls.append((userId, reportType, reason))
+        reportAttachedMessageIds.append(attachedMessageIds)
         try reportResult.get()
     }
 
@@ -109,7 +125,8 @@ enum ProfileDependencyDoubles {
         )
     }
 
-    static func makeFriendRequest(id: String = "req-1") -> FriendRequest {
-        FriendRequest(id: id, senderId: "me", receiverId: "u-bob", status: "pending", createdAt: Date(timeIntervalSince1970: 0))
+    static func makeFriendRequest(id: String = "req-1", message: String? = nil,
+                                  createdAt: Date = Date(timeIntervalSince1970: 0)) -> FriendRequest {
+        FriendRequest(id: id, senderId: "me", receiverId: "u-bob", message: message, status: "pending", createdAt: createdAt)
     }
 }

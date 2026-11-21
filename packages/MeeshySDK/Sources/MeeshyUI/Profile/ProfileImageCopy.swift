@@ -8,6 +8,6 @@ public enum ProfileImageCopy {
     }
 
     public static var openFullscreenHint: String {
-        String(localized: "profile.avatar.viewFullscreen.hint", defaultValue: "Ouvre la photo en plein écran", bundle: .module)
+        String(localized: "profile.avatar.viewFullscreen.a11y", defaultValue: "Ouvre la photo en plein écran", bundle: .module)
     }
 }

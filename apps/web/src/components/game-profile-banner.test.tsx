@@ -11,12 +11,10 @@ import { formatCount } from '@/lib/view/game-copy';
 import { AVATAR_CLEARANCE, GLORY_GLYPH, GameProfileBanner, SPARK_GLYPH, type BannerStanding } from './game-profile-banner';
 
 /**
- * LE JEU SUR LA BANNIÈRE DU PROFIL (#10231, précision porteur 2026-10-11) —
- * « les détails de points à gauche de la bannière et le reste de rang à
- * droite » ; #10951, porteur 2026-10-19). Au DÉBUT (gauche, droite en RTL) :
- * le nom du palier au-dessus du cercle, les étincelles en grand à droite ; à
- * la FIN : la Gloire, puis le blason, le rang et sa division dessous. Un
- * libellé par groupe.
+ * LE JEU SUR LA BANNIÈRE DU PROFIL (#10231, #10951 ; le rang en tête depuis la
+ * décision porteur du 2026-11-10, #17375, #19764). Au DÉBUT (gauche, droite en
+ * RTL) : le rang, son blason et sa Gloire ; à la FIN : le nom du palier, le
+ * cercle et les étincelles dessous. Un libellé par groupe.
  */
 /** La langue de l'interface se lit sur `<html lang>` : on la pose là, sans rien persister. */
 const setInterfaceLanguage = (language: InterfaceLanguage): void => {
@@ -57,7 +55,7 @@ const standing = (over: Partial<BannerStanding> = {}): BannerStanding => ({
 const words = (node: Element | null | undefined): string => (node?.textContent ?? '').replace(/\s+/g, ' ').trim();
 const styleOf = (node: Element | null | undefined): string => node?.getAttribute('style') ?? '';
 
-describe('au début de la bannière : le nom du palier au-dessus du cercle, les étincelles dessous (porteur 2026-10-19, #10951)', () => {
+describe('à la fin de la bannière : le nom du palier au-dessus du cercle, les étincelles dessous (porteur 2026-10-19, #10951)', () => {
   test('le nom du palier se pose AU-DESSUS du cercle ; ni « Niveau N », ni record, ni reste', async () => {
     const host = await mount(<GameProfileBanner standing={standing({ levelMax: 40 })} />);
     const start = host.querySelector('[data-profile-banner-level]');
@@ -88,11 +86,11 @@ describe('au début de la bannière : le nom du palier au-dessus du cercle, les 
     expect(host.querySelector('[data-profile-banner-lifetime]') === null).toBe(true);
   });
 
-  test('il s’ancre au DÉBUT (gauche, droite en RTL), le rang à la FIN', async () => {
+  test('le rang s’ancre au DÉBUT (gauche, droite en RTL) et se lit le premier, le niveau à la FIN (#17375, #19764)', async () => {
     const host = await mount(<GameProfileBanner standing={standing()} />);
     const band = host.querySelector('[data-profile-banner-game]');
     const groups = [...(band?.children ?? [])].map((child) => [...child.attributes].map((a) => a.name).find((name) => name.startsWith('data-profile-banner-')));
-    expect(groups).toEqual(['data-profile-banner-level', 'data-profile-banner-rank']);
+    expect(groups).toEqual(['data-profile-banner-rank', 'data-profile-banner-level']);
     expect(styleOf(band)).toContain('inset-inline-start');
     expect(styleOf(band)).toContain('inset-inline-end');
     expect(styleOf(band)).not.toMatch(/(^|[^-])(left|right)\s*:/);
@@ -107,7 +105,7 @@ describe('au début de la bannière : le nom du palier au-dessus du cercle, les 
   });
 });
 
-describe('à la fin de la bannière : le nom du rang en haut, le blason, la Gloire en bas (porteur 2026-11-09, #17202)', () => {
+describe('au début de la bannière : le nom du rang en haut, le blason, la Gloire en bas (porteur 2026-11-09, #17202)', () => {
   test('le nom du rang AVEC sa division AU-DESSUS du blason, puis « ♛ 41 250 » dessous', async () => {
     const host = await mount(<GameProfileBanner standing={standing()} />);
     const end = host.querySelector('[data-profile-banner-rank]');
@@ -195,12 +193,12 @@ describe('les deux cadres aux angles bas de la bannière', () => {
     expect(classes(host, '[data-profile-banner-game]')).toContain('items-stretch');
   });
 
-  test('chaque cadre : coins bas carrés ; le bord de DÉBUT du niveau et le bord de FIN du rang ne sont plus arrondis (coins logiques, RTL compris)', async () => {
+  test('chaque cadre : coins bas carrés ; seul le coin haut tourné vers l’avatar s’arrondit (coins logiques, RTL compris)', async () => {
     const host = await mount(<GameProfileBanner standing={standing()} />);
-    // Le niveau (étincelles) : seul son coin haut de FIN est arrondi.
-    expect(classes(host, '[data-profile-banner-level]').filter((name) => /^rounded(-|$)/.test(name))).toEqual(['rounded-se-card']);
-    // Le rang : seul son coin haut de DÉBUT est arrondi.
-    expect(classes(host, '[data-profile-banner-rank]').filter((name) => /^rounded(-|$)/.test(name))).toEqual(['rounded-ss-card']);
+    // Le rang, au DÉBUT : seul son coin haut de FIN est arrondi.
+    expect(classes(host, '[data-profile-banner-rank]').filter((name) => /^rounded(-|$)/.test(name))).toEqual(['rounded-se-card']);
+    // Le niveau (étincelles), à la FIN : seul son coin haut de DÉBUT est arrondi.
+    expect(classes(host, '[data-profile-banner-level]').filter((name) => /^rounded(-|$)/.test(name))).toEqual(['rounded-ss-card']);
   });
 
   test('aucune classe physique (gauche/droite) : tout est logique', async () => {

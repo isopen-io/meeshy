@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La vérification d'inactivité (#18738) : android-only tant que les clés inactivity.* ne sont pas au catalogue iOS. -->
+<resources>
+    <string name="inactivity_someone">eine vertraute Person</string>
+    <string name="inactivity_pill_alert">%1$s hat nicht auf „Alles in Ordnung?“ geantwortet</string>
+    <string name="inactivity_pill_responded">%1$s geht es gut</string>
+    <string name="inactivity_card_since">Keine Aktivität seit %1$s</string>
+    <string name="inactivity_battery">Akku %1$d %%</string>
+    <string name="inactivity_open_map">Letzten Standort ansehen</string>
+    <string name="inactivity_a11y">Keine Aktivität von %1$s</string>
+    <string name="inactivity_share_person">%1$s benachrichtigen, wenn ich nicht antworte</string>
+    <string name="inactivity_share_person_scope">%1$s wird benachrichtigt, wenn ich nicht auf „Alles in Ordnung?“ antworte.</string>
+    <string name="inactivity_share_off">Die Inaktivitätsprüfung ist ausgeschaltet.</string>
+    <string name="inactivity_delay_title">Inaktivitätsprüfung</string>
+    <string name="inactivity_delay_scope">Ohne Antwort auf „Alles in Ordnung?“ wird dein Blut benachrichtigt.</string>
+    <string name="inactivity_delay_6h">6 Std.</string>
+    <string name="inactivity_delay_12h">12 Std.</string>
+    <string name="inactivity_delay_24h">24 Std.</string>
+    <string name="inactivity_delay_off">Aus</string>
+    <string name="inactivity_wellness_ok">Mir geht es gut</string>
+</resources>

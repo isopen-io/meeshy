@@ -5147,7 +5147,7 @@ final class CallManagerAnalyticsTests: XCTestCase {
             ?? source.endIndex
         let body = String(source[funcRange.lowerBound..<bodyEnd])
         XCTAssertTrue(
-            body.contains("analytics.callInitiatedDate = Date()"),
+            body.contains("analytics.callInitiatedUptime = call.liveClock.monotonicNow"),
             "startCall must stamp analyticsCallInitiatedDate so setupTimeMs measures " +
             "the interval from initiation to first connected state."
         )
@@ -5164,7 +5164,7 @@ final class CallManagerAnalyticsTests: XCTestCase {
             ?? source.endIndex
         let body = String(source[funcRange.lowerBound..<bodyEnd])
         XCTAssertTrue(
-            body.contains("analytics.callInitiatedDate = Date()"),
+            body.contains("analytics.callInitiatedUptime = call.liveClock.monotonicNow"),
             "handleIncomingCallNotification must stamp analyticsCallInitiatedDate so setupTimeMs " +
             "measures the interval from incoming ring to first connected state."
         )
@@ -5199,7 +5199,7 @@ final class CallManagerAnalyticsTests: XCTestCase {
             XCTFail("emitCallAnalyticsIfNeeded not found in CallManager.swift"); return
         }
         XCTAssertTrue(
-            source.contains("initiatedAt: callInitiatedDate"),
+            source.contains("initiatedAt: callInitiatedUptime"),
             "setupTimeMs must use analyticsCallInitiatedDate (set at call initiation) — " +
             "using callStartDate would always produce 0 because it is set at the same " +
             "instant as analyticsConnectedDate (both in transitionToConnected)."
@@ -6274,13 +6274,13 @@ final class CallAnsweredElsewherePushTests: XCTestCase {
 @MainActor
 final class CallSetupMetricsTests: XCTestCase {
 
-    private let t0 = Date(timeIntervalSince1970: 1_000_000)
+    private let t0: TimeInterval = 1_000_000
 
     func test_bothAnchors_present_splitsRingFromNegotiation() {
         let metrics = CallReliabilityPolicy.callSetupMetrics(
             initiatedAt: t0,
-            negotiationStartAt: t0.addingTimeInterval(20),   // 20 s de sonnerie
-            connectedAt: t0.addingTimeInterval(21.5)          // 1.5 s de négo
+            negotiationStartAt: t0 + 20,   // 20 s de sonnerie
+            connectedAt: t0 + 21.5          // 1.5 s de négo
         )
         XCTAssertEqual(metrics.setupTimeMs, 21_500)
         XCTAssertEqual(metrics.negotiationTimeMs, 1_500)
@@ -6288,7 +6288,7 @@ final class CallSetupMetricsTests: XCTestCase {
 
     func test_neverConnected_bothMinusOne() {
         let metrics = CallReliabilityPolicy.callSetupMetrics(
-            initiatedAt: t0, negotiationStartAt: t0.addingTimeInterval(5), connectedAt: nil
+            initiatedAt: t0, negotiationStartAt: t0 + 5, connectedAt: nil
         )
         XCTAssertEqual(metrics.setupTimeMs, -1)
         XCTAssertEqual(metrics.negotiationTimeMs, -1)
@@ -6296,7 +6296,7 @@ final class CallSetupMetricsTests: XCTestCase {
 
     func test_missingNegotiationAnchor_negotiationMinusOne_setupStillComputed() {
         let metrics = CallReliabilityPolicy.callSetupMetrics(
-            initiatedAt: t0, negotiationStartAt: nil, connectedAt: t0.addingTimeInterval(3)
+            initiatedAt: t0, negotiationStartAt: nil, connectedAt: t0 + 3
         )
         XCTAssertEqual(metrics.setupTimeMs, 3_000)
         XCTAssertEqual(metrics.negotiationTimeMs, -1)
@@ -6304,7 +6304,7 @@ final class CallSetupMetricsTests: XCTestCase {
 
     func test_missingInitiatedAnchor_setupMinusOne_negotiationStillComputed() {
         let metrics = CallReliabilityPolicy.callSetupMetrics(
-            initiatedAt: nil, negotiationStartAt: t0, connectedAt: t0.addingTimeInterval(2)
+            initiatedAt: nil, negotiationStartAt: t0, connectedAt: t0 + 2
         )
         XCTAssertEqual(metrics.setupTimeMs, -1)
         XCTAssertEqual(metrics.negotiationTimeMs, 2_000)
@@ -6323,7 +6323,7 @@ final class CallSetupMetricsTests: XCTestCase {
             source.contains("callSetupMetrics"),
             "emitCallAnalyticsIfNeeded must compute metrics via the pure CallReliabilityPolicy.callSetupMetrics"
         )
-        let anchorCount = source.components(separatedBy: "analytics.negotiationStartDate = Date()").count - 1
+        let anchorCount = source.components(separatedBy: "analytics.negotiationStartUptime = ").count - 1
         XCTAssertGreaterThanOrEqual(
             anchorCount, 2,
             "The negotiation anchor must be stamped on BOTH sides: answerCall (callee) and participant-joined (caller)"
@@ -6346,7 +6346,7 @@ final class CallSetupMetricsTests: XCTestCase {
 @MainActor
 final class CallAnalyticsSnapshotTests: XCTestCase {
 
-    private let t0 = Date(timeIntervalSince1970: 2_000_000)
+    private let t0: TimeInterval = 2_000_000
 
     func test_distribution_includesOpenWindow_withoutMutation() {
         let accumulated: [VideoQualityLevel: Double] = [.excellent: 60]
@@ -6354,7 +6354,7 @@ final class CallAnalyticsSnapshotTests: XCTestCase {
             accumulatedSeconds: accumulated,
             openWindowLevel: .poor,
             openWindowSince: t0,
-            now: t0.addingTimeInterval(40)
+            now: t0 + 40
         )
         XCTAssertEqual(dist["excellent"] ?? 0, 0.6, accuracy: 0.001)
         XCTAssertEqual(dist["poor"] ?? 0, 0.4, accuracy: 0.001)
@@ -6381,7 +6381,7 @@ final class CallAnalyticsSnapshotTests: XCTestCase {
         let dist = CallReliabilityPolicy.qualityDistribution(
             accumulatedSeconds: [.excellent: 10],
             openWindowLevel: .poor,
-            openWindowSince: t0.addingTimeInterval(100),   // "since" dans le futur
+            openWindowSince: t0 + 100,   // "since" dans le futur
             now: t0
         )
         XCTAssertEqual(dist["excellent"] ?? 0, 1.0, accuracy: 0.001)
@@ -6410,7 +6410,7 @@ final class CallAnalyticsSnapshotTests: XCTestCase {
         )
         let recorder = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager+AnalyticsRecorder.swift")
         XCTAssertTrue(
-            recorder.contains("    func payload(now: Date, context: CallAnalyticsContext)"),
+            recorder.contains("    func payload(uptime: TimeInterval, context: CallAnalyticsContext)"),
             "The analytics payload is built by a NON-mutating CallAnalyticsRecorder.payload — the compiler then forbids folding the open window into the accumulators"
         )
         XCTAssertFalse(recorder.contains("mutating func payload("), "payload must stay non-mutating")
@@ -6478,8 +6478,8 @@ final class CallManagerBubblePositionTests: XCTestCase {
         XCTAssertEqual(CallManager.shared.bubbleVerticalFraction, 0.08, accuracy: 0.0001)
     }
 
-    func test_bubbleSizeTier_defaultsToCircle() {
-        XCTAssertEqual(CallManager.shared.bubbleSizeTier, .circle)
+    func test_bubbleSizeTier_defaultsToSmallVignette() {
+        XCTAssertEqual(CallManager.shared.bubbleSizeTier, .small)
     }
 
     /// `resetEndedStateForNewCall` is private and touches live singleton/CallKit

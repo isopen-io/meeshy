@@ -26,10 +26,9 @@ import { createSocialTranslateRateLimitConfig } from './socialRateLimit';
 import { withMutationLog, withMutationVerdict, MutationResultGone } from '../../utils/withMutationLog';
 import { MutationInFlight } from '../../services/MutationLogService';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
-import { hoistLocationOnto } from '../../services/location/sharedPlace';
-import { hoistStickerOnto } from '../../services/stickers/messageSticker';
 import { admitQuotedPostMedia } from '../../services/posts/quotedPostMediaSnapshot';
 import { serveCitedPostMedia } from '../../services/posts/citedPostMediaBackfill';
+import { hoistCommentCarriers } from './commentCarriers';
 import {
   loadCommentPostAcl,
   canUserConsumeThread,
@@ -37,7 +36,6 @@ import {
   resolveInteractionTarget,
   resolveConsumptionTarget,
 } from '../../services/posts/postVisibility';
-import { servedPerson } from '../../services/appearance/authorProfileDecor';
 
 /**
  * Hisse `metadata.trackingLinks` ([{ url, token }]) en top-level sur le payload
@@ -52,24 +50,6 @@ function hoistCommentTrackingLinks<T extends Record<string, unknown>>(comment: T
     return { ...comment, trackingLinks: tl } as T;
   }
   return comment;
-}
-
-/**
- * Hisse `metadata.location` et `metadata.sticker` (#9080) en top-level
- * `location` / `sticker` sur un commentaire — appliqué à la liste (GET), aux
- * réponses (GET replies), à la création (POST) et à l'édition (PATCH), donc
- * aussi aux payloads socket qui en partent. Mêmes sources UNIQUES que les
- * messages (`hoistLocationOnto`, `hoistStickerOnto`) et que l'aperçu embarqué
- * dans un post (`hoistLocationDeep`) — pas de copie locale de la logique.
- */
-function hoistCommentCarriers<T extends Record<string, unknown>>(comment: T): T {
-  return withServedCommentAuthor(hoistStickerOnto(hoistLocationOnto(comment)));
-}
-
-/** #10945 — l'auteur part avec son contour résolu (`profileDecor`), jamais avec la colonne brute. */
-function withServedCommentAuthor<T extends Record<string, unknown>>(comment: T): T {
-  const author = comment.author as { equippedAvatarRing?: string | null } | null | undefined;
-  return author === null || author === undefined ? comment : { ...comment, author: servedPerson(author) };
 }
 
 /**

@@ -23,7 +23,16 @@ import { describe, it, expect } from '@jest/globals';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const DOORS_DIR = join(__dirname, '../../../routes/conversations');
+const SRC = join(__dirname, '../../..');
+/**
+ * Les portes vivent sous `routes/conversations/` — et, depuis #19650, sous
+ * `services/conversations/` quand deux transports les partagent : l'ajout d'un
+ * membre (`memberAdmission.ts`) sert `POST …/participants` ET l'invitation
+ * pendant un appel. Le fichier qui DÉFINIT le marqueur n'est pas une porte.
+ */
+const DOOR_DIRS = ['routes/conversations', 'services/conversations'];
+const MARKER_DEFINITION = 'services/conversations/joinSystemMessage.ts';
+const read = (path: string): string => readFileSync(join(SRC, path), 'utf8');
 
 /** Le marqueur d'une porte d'adhésion : elle poste le message système d'arrivée. */
 const DOOR_MARKER = 'postJoinSystemMessage(';
@@ -37,14 +46,14 @@ const FAN_OUT = 'announceMembershipAdmission(';
  */
 const EXEMPT: ReadonlyArray<{ readonly file: string; readonly reason: string }> = [
   {
-    file: 'link-admission.ts',
+    file: 'routes/conversations/link-admission.ts',
     reason:
       "jointure PAR LIEN : l'arrivant est l'auteur du geste et reçoit la conversation dans la réponse "
       + "qu'il attend. Il n'est pas un tiers à prévenir — il annonce son arrivée aux autres "
       + '(`announceMemberArrival`), ce qu\'il fait déjà.',
   },
   {
-    file: 'link-admission-guest.ts',
+    file: 'routes/conversations/link-admission-guest.ts',
     reason:
       "invité SANS COMPTE : il n'a pas de room personnelle d'utilisateur à adresser, et il ne peut pas "
       + "être le SUJET de l'arrivée (`ConversationParticipantJoinedEventData` déclare `userId` NON "
@@ -53,9 +62,12 @@ const EXEMPT: ReadonlyArray<{ readonly file: string; readonly reason: string }> 
 ];
 
 const doorFiles = (): string[] =>
-  readdirSync(DOORS_DIR)
-    .filter((name) => name.endsWith('.ts'))
-    .filter((name) => readFileSync(join(DOORS_DIR, name), 'utf8').includes(DOOR_MARKER))
+  DOOR_DIRS.flatMap((dir) =>
+    readdirSync(join(SRC, dir))
+      .filter((name) => name.endsWith('.ts'))
+      .map((name) => `${dir}/${name}`)
+  )
+    .filter((path) => path !== MARKER_DEFINITION && read(path).includes(DOOR_MARKER))
     .sort();
 
 describe("les portes d'adhésion partagent le site unique de leurs trois diffusions (#17032)", () => {
@@ -65,14 +77,14 @@ describe("les portes d'adhésion partagent le site unique de leurs trois diffusi
   it('le balayage trouve bien les portes — sans quoi il ne peut rien garder', () => {
     const doors = doorFiles();
     expect(doors.length).toBeGreaterThanOrEqual(4);
-    expect(doors).toContain('sharing-invite.ts');
-    expect(doors).toContain('participants-writes.ts');
+    expect(doors).toContain('routes/conversations/sharing-invite.ts');
+    expect(doors).toContain('services/conversations/memberAdmission.ts');
   });
 
   it('chaque porte appelle le site unique, ou figure dans l’inventaire avec sa raison', () => {
     const exemptFiles = new Set(EXEMPT.map((entry) => entry.file));
     const silent = doorFiles().filter(
-      (name) => !exemptFiles.has(name) && !readFileSync(join(DOORS_DIR, name), 'utf8').includes(FAN_OUT),
+      (name) => !exemptFiles.has(name) && !read(name).includes(FAN_OUT),
     );
 
     // Quand ce témoin tombe, la réparation est l'APPEL — pas une ligne de plus
@@ -91,8 +103,8 @@ describe("les portes d'adhésion partagent le site unique de leurs trois diffusi
   });
 
   it('les deux portes non exemptées émettent les trois, et par le MÊME appel', () => {
-    ['sharing-invite.ts', 'participants-writes.ts'].forEach((name) => {
-      const source = readFileSync(join(DOORS_DIR, name), 'utf8');
+    ['routes/conversations/sharing-invite.ts', 'services/conversations/memberAdmission.ts'].forEach((name) => {
+      const source = read(name);
       expect(source).toContain(FAN_OUT);
       // Et aucune des trois n'est retapée à côté : c'est ce qui a produit la
       // divergence que ce lot referme.
@@ -126,8 +138,8 @@ describe("les portes d'adhésion partagent le site unique de leurs trois diffusi
  * sans que personne y pense.
  */
 describe("l'admission dans la room précède le message d'arrivée (#18384)", () => {
-  /** Les deux façons d'admettre : l'appel direct, et le relais que la porte par lien passe à son cœur. */
-  const ADMISSION = ['joinUserToConversationRoom(', 'admitToRoom('];
+  /** Les façons d'admettre : l'appel direct, et le relais que la porte reçoit de son transport (lien, ajout partagé #19650). */
+  const ADMISSION = ['joinUserToConversationRoom(', 'admitToRoom(', 'ports.joinRoom('];
 
   const premierIndex = (source: string, marqueurs: readonly string[]): number => {
     const found = marqueurs.map((m) => source.indexOf(m)).filter((i) => i >= 0);
@@ -140,7 +152,7 @@ describe("l'admission dans la room précède le message d'arrivée (#18384)", ()
 
   it("aucune porte ne poste l'arrivée avant d'avoir admis l'arrivant", () => {
     const inversees = doorFiles()
-      .map((name) => ({ name, source: readFileSync(join(DOORS_DIR, name), 'utf8') }))
+      .map((name) => ({ name, source: read(name) }))
       .filter(({ source }) => premierIndex(source, ADMISSION) >= 0)
       .filter(({ source }) => premierIndex(source, ADMISSION) > source.indexOf(DOOR_MARKER))
       .map(
@@ -160,7 +172,7 @@ describe("l'admission dans la room précède le message d'arrivée (#18384)", ()
    */
   it("l'admission est ATTENDUE, jamais lancée en arrière-plan", () => {
     const nonAttendues = doorFiles()
-      .map((name) => ({ name, source: readFileSync(join(DOORS_DIR, name), 'utf8') }))
+      .map((name) => ({ name, source: read(name) }))
       .filter(({ source }) => /(?<!await )(?<!\. *)\bsocketManager\.joinUserToConversationRoom\(|(?<!await )\binviteSocketManager\.joinUserToConversationRoom\(/.test(source))
       .map(({ name }) => `${name} — admet l'arrivant sans attendre : la fenêtre devient intermittente.`);
 

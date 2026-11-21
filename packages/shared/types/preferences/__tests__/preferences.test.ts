@@ -213,6 +213,7 @@ describe('NotificationPreferenceSchema', () => {
       contactActivityEnabled: false,
       deviceBatteryEnabled: false,
       deviceUnreachableEnabled: false,
+      locationShareEnabled: false,
       gameEnabled: false,
       gamePhotoEnabled: false,
       bringEnabled: false,
@@ -227,6 +228,11 @@ describe('NotificationPreferenceSchema', () => {
   test('« Quand un contact revient sur Meeshy » est reçu par défaut (#8285)', () => {
     expect(NotificationPreferenceSchema.parse({}).contactActivityEnabled).toBe(true);
     expect(NOTIFICATION_PREFERENCE_DEFAULTS.contactActivityEnabled).toBe(true);
+  });
+
+  test('« Partages de position » est reçu par défaut (#19204)', () => {
+    expect(NotificationPreferenceSchema.parse({}).locationShareEnabled).toBe(true);
+    expect(NOTIFICATION_PREFERENCE_DEFAULTS.locationShareEnabled).toBe(true);
   });
 
   test('« Le téléphone de mes Proches est injoignable » est reçu par défaut (#18737)', () => {

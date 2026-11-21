@@ -4,6 +4,7 @@ import { MemberRole } from '@meeshy/shared/types/role-types';
 import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { newMemberRefusal } from '../../services/conversations/newMemberAdmission';
+import { PARTICIPATION_VIVANTE } from './utils/access-control';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
   conversationParticipantSchema,
@@ -19,12 +20,13 @@ import {
   resolveConversationEntry,
   REJOIN_PARTICIPANT_STATE
 } from '../../services/conversations/conversationEntryAdmission';
+import { commitParticipantRejoin } from '../../services/conversations/rejoinParticipantWrite';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
 import { announceMembershipAdmission } from './membershipAdmissionFanOut';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { EngagementService } from '../../services/engagement/EngagementService';
-import { serializeConversationParticipant } from '@meeshy/shared/utils/participant-helpers';
+import { serializeConversationParticipant, type SerializableParticipantRow } from '@meeshy/shared/utils/participant-helpers';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { viewerFromRequest } from '../users/presence-gate';
 import {
@@ -32,6 +34,7 @@ import {
   loadSalonCommunity,
   planSalonEntry,
 } from '../../services/conversations/communityMembershipSync';
+import { communityMemberAnnouncerFrom } from '../../services/community-member-broadcast';
 
 const logger = enhancedLogger.child({ module: 'ConversationInviteRoute' });
 
@@ -124,7 +127,24 @@ export function registerInviteRoute(
         where: { id: conversationId },
         include: {
           participants: {
-            where: { isActive: true, type: 'user' },
+            // #20104 — la PARTICIPATION VIVANTE, et dans la CLAUSE : c'est le
+            // seul endroit qu'un balayage de source sait lire (#20050). Cette
+            // liste a UN consommateur dans cette route — la porte de l'inviteur
+            // vingt lignes plus bas — et un membre actif-et-banni la franchissait,
+            // faisant entrer qui il veut dans une conversation dont il est exclu ;
+            // « inviter » écrit ici un `Participant` immédiatement ACTIF.
+            //
+            // L'inventaire du cliquet d'audiences classait ce site
+            // « porte-sur-un-sur-ensemble » en interdisant de resserrer, au motif
+            // que « la même lecture tient `newMemberRefusal`, un refus par
+            // égalité exacte ». **Mesuré faux** : `newMemberRefusal` ne lit que
+            // `type` et `encryptionMode` (`conversations/newMemberAdmission.ts`)
+            // — le tête-à-tête chiffré de #16188 se tient par `isEndToEndDirect`,
+            // qui ne compte personne. Et `resolveConversationEntry` relit ses
+            // propres lignes avec leur `bannedAt` ; `isConversationClosed` ne lit
+            // que des colonnes de la conversation. Aucun refus ne dépend du
+            // sur-ensemble ici, donc rien n'oblige à juger la loi en code.
+            where: { ...PARTICIPATION_VIVANTE, type: 'user' },
             select: {
               id: true,
               userId: true,
@@ -215,11 +235,13 @@ export function registerInviteRoute(
       // Connaissance : il entre par sa boîte de demandes, et l'invitation ne s'annonce pas.
       const opening = await decideDirectOpening(fastify.prisma, { senderId: inviterId, recipientId: userId });
 
-      // `conversation.participants` est chargé avec `where: { isActive: true }` :
-      // il ne pouvait donc PAS voir la ligne d'un banni ni celle d'un ancien
-      // membre, et le `create` qui suit leur fabriquait une ligne neuve et
-      // active — un bannissement défait sans passer par `POST …/unban`, plus une
-      // seconde ligne `Participant` pour la même paire.
+      // `conversation.participants` est chargé sous `PARTICIPATION_VIVANTE`
+      // (#20104, et sous `isActive` nu avant lui) : il ne peut donc PAS voir la
+      // ligne d'un banni ni celle d'un ancien membre, et le `create` qui suivait
+      // leur fabriquait une ligne neuve et active — un bannissement défait sans
+      // passer par `POST …/unban`, plus une seconde ligne `Participant` pour la
+      // même paire. Resserrer la clause ÉLARGIT ce que cette note décrit : un
+      // banni y était déjà invisible, un membre désactivé aussi.
       const entry = await resolveConversationEntry({
         prisma: fastify.prisma,
         conversationId,
@@ -296,12 +318,26 @@ export function registerInviteRoute(
         }
       };
 
-      const newMember = entry.outcome === 'rejoin' && entry.participantId
-        ? await fastify.prisma.participant.update({
-            where: { id: entry.participantId },
+      // #19688 — la garde est AUSSI dans le `where` de l'écriture : un
+      // bannissement commis entre la décision ci-dessus et cette ligne ne doit
+      // pas être rallumé. Le refus est celui que la porte rend déjà en amont.
+      const rejoin = entry.outcome === 'rejoin' && entry.participantId
+        ? await commitParticipantRejoin<SerializableParticipantRow>({
+            prisma: fastify.prisma,
+            participantId: entry.participantId,
             data: { ...REJOIN_PARTICIPANT_STATE, ...invitedMemberFields },
             include: invitedMemberInclude
           })
+        : null;
+      if (rejoin?.outcome === 'banned') {
+        return sendForbidden(reply, 'This user is banned from the conversation — lift the ban first');
+      }
+      if (rejoin?.outcome === 'vanished') {
+        return sendNotFound(reply, 'User not found');
+      }
+
+      const newMember = rejoin
+        ? rejoin.participant
         : await fastify.prisma.participant.create({
             data: {
               conversationId: conversationId,
@@ -316,7 +352,7 @@ export function registerInviteRoute(
       if (entry.outcome === 'rejoin' && entry.participantId) {
         invalidateParticipantLookup(entry.participantId, conversationId);
       }
-      if (community) await applyCommunityAdmission(fastify.prisma, community.communityId, communityAdmission);
+      if (community) await applyCommunityAdmission(fastify.prisma, community.communityId, communityAdmission, communityMemberAnnouncerFrom(fastify));
       announceConversationLanguageChange({ kind: 'arrival', conversationId, language: invitedMemberFields.language, readerUserId: userId });
 
       // `social.conversation_invite` (#8959) — même crédit que

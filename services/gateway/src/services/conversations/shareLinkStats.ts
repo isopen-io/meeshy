@@ -14,13 +14,21 @@
  * - `arrivalsByCountry` : `Participant.joinCountry`, sans les inconnus ;
  * - `recentArrivals` : les vingt dernières, les plus récentes d'abord.
  *
- * Rien de la présence ni de l'IP d'un arrivant n'est lu : la projection est
- * fermée, elle ne peut pas servir ce qu'elle ne charge pas.
+ * Rien de la présence ni de l'IP d'un arrivant n'est lu, ni l'e-mail d'un
+ * compte : la projection est fermée, elle ne peut pas servir ce qu'elle ne
+ * charge pas. Le compte d'un inscrit et l'e-mail MASQUÉ d'un invité (#19283)
+ * viennent de `arrivalOwnerFields`, partagé avec la liste complète.
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
-import { arrivalLanguage, arrivalLanguageKey as languageKey } from './shareLinkArrivals';
+import {
+  ARRIVAL_OWNER_SELECT,
+  arrivalLanguage,
+  arrivalLanguageKey as languageKey,
+  arrivalOwnerFields,
+  type ArrivalOwnerRow,
+} from './shareLinkArrivals';
 import {
   SHARE_LINK_RECENT_ARRIVALS_CAP,
   type ShareLinkArrival,
@@ -39,7 +47,7 @@ function mergeTallies(entries: Tally): Tally {
   return [...merged.entries()].filter(([, count]) => count > 0).sort(byCountDesc);
 }
 
-type RecentArrivalRow = {
+type RecentArrivalRow = ArrivalOwnerRow & {
   readonly id: string;
   readonly type: string;
   readonly displayName: string;
@@ -59,6 +67,7 @@ function toArrival(row: RecentArrivalRow): ShareLinkArrival {
     country: row.joinCountry,
     language: arrivalLanguage(row),
     joinedAt: row.joinedAt.toISOString(),
+    ...arrivalOwnerFields(row),
   };
 }
 
@@ -91,6 +100,7 @@ export async function computeShareLinkStats(
         language: true,
         joinedAt: true,
         joinCountry: true,
+        ...ARRIVAL_OWNER_SELECT,
         user: { select: { avatar: true, systemLanguage: true } },
       },
     }),

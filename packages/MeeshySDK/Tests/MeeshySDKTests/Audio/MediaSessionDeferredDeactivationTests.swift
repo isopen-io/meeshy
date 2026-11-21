@@ -43,11 +43,7 @@ struct MediaSessionDeferredDeactivationTests {
 
     /// Toute prise de session compte : lecture, enregistrement, rôle.
     @Test func everySessionClaim_bumpsTheGeneration() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Sources/MeeshySDK/Media/MediaSessionCoordinator.swift")
-        let code = try String(contentsOf: url, encoding: .utf8)
+        let code = try MediaSessionCoordinatorSourceUnit.read()
         for signature in ["public nonisolated func activatePlaybackSync(",
                           "public nonisolated func activateRecording(",
                           "public func request("] {

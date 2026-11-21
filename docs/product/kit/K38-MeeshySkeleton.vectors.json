@@ -70,5 +70,7 @@
       "aspect": 1.5,
       "hauteur": 200
     }
-  ]
+  ],
+  "colonneNote": "Une liste au premier chargement (pages de liens, billets) : la même silhouette répétée, trois par défaut, bornée de 1 à 6, espacées de 8 — jamais une roue.",
+  "colonne": {"defaut": 3, "min": 1, "max": 6, "ecart": 8}
 }

@@ -4,4 +4,5 @@
     <string name="viewer_doc_open_with">Apri con un\'altra app</string>
     <string name="viewer_text_show_source">Mostra il sorgente</string>
     <string name="viewer_text_show_rendered">Mostra il risultato</string>
+    <string name="report_message_sent">Segnalazione inviata</string>
 </resources>

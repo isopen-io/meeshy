@@ -17,7 +17,7 @@ type PublicProfileChanges = UserUpdatedEventData['changes'];
  * `role`…) ne fuit pas, le surplus est retiré. Une clé ABSENTE reste absente —
  * le delta ne fabrique aucun effacement.
  */
-const PUBLIC_PROFILE_FIELDS = ['displayName', 'firstName', 'lastName', 'username', 'avatar', 'banner'] as const;
+const PUBLIC_PROFILE_FIELDS = ['displayName', 'firstName', 'lastName', 'username', 'avatar', 'banner', 'profileAccentColor'] as const;
 
 export function publicProfileChanges(changes: PublicProfileChanges): PublicProfileChanges {
   return Object.fromEntries(

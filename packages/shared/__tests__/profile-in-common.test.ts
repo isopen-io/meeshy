@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   IN_COMMON_PARTS,
   IN_COMMON_PART_CIRCLE,
+  IN_COMMON_DEFAULT_PARTS,
   resolveInCommonParts,
   type InCommonPart,
 } from '../utils/profile-in-common';
@@ -25,12 +26,23 @@ const PLANCHE: Readonly<Record<InCommonPart, RelationLevel>> = {
   communities: 'COMMUNITY',
   friends: 'FRIEND',
   media: 'ACQUAINTANCE',
+  history: 'ACQUAINTANCE',
 };
 
 describe('resolveInCommonParts — « En commun », chaque partie gardée par son cercle (#19200)', () => {
   it('annonce le cercle de la planche pour chaque partie', () => {
-    expect(IN_COMMON_PARTS).toEqual(['communities', 'friends', 'media']);
+    expect(IN_COMMON_PARTS).toEqual(['communities', 'friends', 'media', 'history']);
     expect(IN_COMMON_PART_CIRCLE).toEqual(PLANCHE);
+  });
+
+  it('« Notre histoire » est une partie OPTIONNELLE : un client qui ne la demande pas ne la reçoit pas (#19378)', () => {
+    expect(IN_COMMON_DEFAULT_PARTS).toEqual(['communities', 'friends', 'media']);
+  });
+
+  it('« Notre histoire » s’ouvre à la Connaissance, comme les médias, et reste fermée à un Communauté', () => {
+    expect(resolveInCommonParts(inputAt('ACQUAINTANCE')).history).toEqual({ state: 'open', circle: 'ACQUAINTANCE' });
+    expect(resolveInCommonParts(inputAt('PUBLIC', { sharesCommunity: true })).history).toEqual({ state: 'locked', circle: 'ACQUAINTANCE' });
+    expect(resolveInCommonParts(inputAt('BLOOD', { grantedByTarget: 'PUBLIC' })).history.state).toBe('locked');
   });
 
   it.each(IN_COMMON_PARTS)('%s : ouverte au cercle et au-dessus, fermée un rang dessous', (part) => {
@@ -50,7 +62,7 @@ describe('resolveInCommonParts — « En commun », chaque partie gardée par so
 
   it('sans communauté ni lien : tout est fermé', () => {
     const parts = resolveInCommonParts(inputAt('PUBLIC'));
-    expect(IN_COMMON_PARTS.map((part) => parts[part].state)).toEqual(['locked', 'locked', 'locked']);
+    expect(IN_COMMON_PARTS.map((part) => parts[part].state)).toEqual(['locked', 'locked', 'locked', 'locked']);
   });
 
   it('le cercle se juge sur le PLUS BAS des deux accords', () => {
@@ -76,7 +88,7 @@ describe('resolveInCommonParts — « En commun », chaque partie gardée par so
 
   it('deux comptes de l’équipe ont entre eux les outils de cercle (#16623)', () => {
     const parts = resolveInCommonParts(inputAt('PUBLIC', { viewerRole: 'MODERATOR', targetRole: 'ADMIN' }));
-    expect(IN_COMMON_PARTS.map((part) => parts[part].state)).toEqual(['open', 'open', 'open']);
+    expect(IN_COMMON_PARTS.map((part) => parts[part].state)).toEqual(['open', 'open', 'open', 'open']);
   });
 
   it('aucune partie ne porte de bouclier des mineurs, de consentement ni d’action adressée', () => {
@@ -89,6 +101,6 @@ describe('resolveInCommonParts — « En commun », chaque partie gardée par so
 
   it('un ADMIN face à un utilisateur ordinaire n’a que son lien', () => {
     const parts = resolveInCommonParts(inputAt('PUBLIC', { viewerRole: 'BIGBOSS' }));
-    expect(IN_COMMON_PARTS.map((part) => parts[part].state)).toEqual(['locked', 'locked', 'locked']);
+    expect(IN_COMMON_PARTS.map((part) => parts[part].state)).toEqual(['locked', 'locked', 'locked', 'locked']);
   });
 });

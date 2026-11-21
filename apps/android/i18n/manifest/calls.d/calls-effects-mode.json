@@ -45,6 +45,10 @@
           "status": "android-only"
         },
         {
+          "androidName": "call_effects_face_baby",
+          "status": "android-only"
+        },
+        {
           "androidName": "call_effects_settings",
           "status": "android-only"
         },

@@ -15,6 +15,7 @@ jest.mock('../../../utils/logger-enhanced', () => {
 });
 
 import { announceAddedToCommunity, scheduleCommunityAddedAnnouncement } from '../community-added';
+import { findManyIn } from '../../../__tests__/helpers/mongo-where';
 
 const COMMUNITY = '507f1f77bcf86cd799439aaa';
 const ACTOR = '507f1f77bcf86cd799439011';
@@ -38,8 +39,13 @@ function world(options: {
     community: { findFirst: jest.fn(async (_args: { where: Record<string, unknown> }) => community) },
     user: {
       findUnique: jest.fn(async () => actor),
-      findMany: jest.fn(async (args: { where: { id: { in: string[] } } & Record<string, unknown>; select: Record<string, unknown> }) =>
-        recipients.filter((r) => args.where.id.in.includes(r.id))),
+      // Les destinataires sont LUS sous la loi « compte vivant », et le double
+      // l'ÉVALUE : les lignes sont à la forme NOMINALE de production — ni
+      // `deletedAt` ni `deactivatedAt`, qu'aucune création de compte n'écrit
+      // (#19799). Répondre depuis la seule liste accepte une égalité nue qui,
+      // en base, ne nomme personne.
+      findMany: jest.fn(async (args: Record<string, unknown>) =>
+        findManyIn(recipients.map((r) => ({ isActive: true, ...r }))).findMany(args)),
     },
   };
   const createNotification = jest.fn(async (params: { userId: string }) => {
@@ -106,13 +112,36 @@ describe('announceAddedToCommunity', () => {
     expect(sent(createNotification).map((n) => n.userId)).toEqual([ANNA]);
   });
 
-  it("ne lit les destinataires que parmi les comptes vivants", async () => {
-    const { deps, prisma } = world();
+  /**
+   * Le témoin d'avant assertait la CLAUSE contre sa propre copie
+   * (`toMatchObject({ isActive: true, deactivatedAt: null, deletedAt: null })`) :
+   * il passait aussi bien avec une clause juste qu'avec une clause qui, en base,
+   * ne nomme personne — et c'est ainsi que le défaut #19799 a traversé une suite
+   * verte. Il assert désormais le RÉSULTAT, contre des lignes à la forme
+   * nominale de production.
+   */
+  it("prévient un compte vivant dont « pas encore supprimé » n'écrit aucune colonne", async () => {
+    const { deps, createNotification } = world({ recipients: [recipient(ANNA, 'fr')] });
 
-    await announceAddedToCommunity(deps, { communityId: COMMUNITY, actorId: ACTOR, recipientIds: [ANNA] });
+    const count = await announceAddedToCommunity(deps, { communityId: COMMUNITY, actorId: ACTOR, recipientIds: [ANNA] });
 
-    const where = prisma.user.findMany.mock.calls[0]?.[0]?.where;
-    expect(where).toMatchObject({ isActive: true, deactivatedAt: null, deletedAt: null });
+    expect(count).toBe(1);
+    expect(sent(createNotification).map((n) => n.userId)).toEqual([ANNA]);
+  });
+
+  it.each([
+    ['désactivé', { deactivatedAt: new Date('2026-10-01T00:00:00.000Z') }],
+    ['supprimé', { deletedAt: new Date('2026-10-01T00:00:00.000Z') }],
+    ['inactif', { isActive: false }],
+  ])("ne prévient pas un compte %s", async (_etat, mort) => {
+    const { deps, createNotification } = world({
+      recipients: [{ ...recipient(ANNA, 'fr'), ...mort }, recipient(BOB, 'en')],
+    });
+
+    const count = await announceAddedToCommunity(deps, { communityId: COMMUNITY, actorId: ACTOR, recipientIds: [ANNA, BOB] });
+
+    expect(count).toBe(1);
+    expect(sent(createNotification).map((n) => n.userId)).toEqual([BOB]);
   });
 
   it("se tait sur une communauté désactivée ou disparue", async () => {

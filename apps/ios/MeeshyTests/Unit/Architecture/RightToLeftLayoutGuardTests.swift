@@ -40,8 +40,10 @@ import XCTest
 final class RightToLeftLayoutGuardTests: XCTestCase {
 
     /// Fichiers dont les flèches ET les chevrons décrivent une timeline ou une
-    /// géométrie — jamais une direction de lecture.
-    private static let directionalByDesign: Set<String> = []
+    /// géométrie — jamais une direction de lecture. `MeeshyFiguresRecipe` : la
+    /// flèche de tendance « stable » est l'axe du temps d'une courbe, sœur de
+    /// `arrow.up.right` / `arrow.down.right`, qui ne se retournent pas non plus.
+    private static let directionalByDesign: Set<String> = ["MeeshyFiguresRecipe.swift"]
 
     private func repoRoot() -> URL {
         URL(fileURLWithPath: #filePath)

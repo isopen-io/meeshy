@@ -36,6 +36,8 @@ export const CALL_SERVER_EVENTS: readonly string[] = [
   SERVER_EVENTS.CALL_FORCE_LEAVE,
   SERVER_EVENTS.CALL_ICE_SERVERS_REFRESHED,
   SERVER_EVENTS.CALL_PARTICIPANT_INVITED,
+  /* Le tête-à-tête qui invite vit désormais dans le groupe des présents (#19650). */
+  SERVER_EVENTS.CALL_CONVERSATION_CHANGED,
   SERVER_EVENTS.CALL_INVITE_DECLINED,
   SERVER_EVENTS.CALL_INVITE_EXPIRED,
   SERVER_EVENTS.CALL_MUTED_BY_MODERATOR,
@@ -72,6 +74,7 @@ export function bridgeCallEvents(socket: SocketClient, { loadLiveFrame = () => i
       socket.emitWithAck === undefined
         ? Promise.reject(new Error('ack-unsupported'))
         : socket.emitWithAck(event, payload, timeoutMs),
+    reconnect: () => socket.recycle?.(),
   });
   const handlers = CALL_SERVER_EVENTS.map((event) => {
     const history = CALL_HISTORY_EVENTS.has(event) ? queryClient : undefined;

@@ -18,8 +18,17 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { readFileSync, readdirSync, statSync } from 'fs';
+import { readFileSync } from 'fs';
 import { join, relative } from 'path';
+import {
+  REACTIVATION_MARKERS,
+  callBodies,
+  nudeWriteBodies,
+  productionFiles,
+  reactivationSites,
+  writtenPart,
+  REJOIN_COMMIT_FILE,
+} from '../helpers/participant-reactivation-scan';
 
 const SRC = join(__dirname, '..', '..');
 
@@ -36,17 +45,19 @@ const GUARDED: ReadonlyArray<Reactivation & { readonly guard: string }> = [
   {
     file: 'routes/conversations/link-admission.ts',
     marker: 'REJOIN_PARTICIPANT_STATE',
-    guard: "resolveConversationEntry (via services/conversations/linkAdmission.ts) refuse 'banned' en 403 BANNED",
+    guard: "commitParticipantRejoin porte unsetOrNull(bannedAt) dans le where (#19688) ; resolveConversationEntry refuse déjà 'banned' en amont",
   },
   {
-    file: 'routes/conversations/participants-writes.ts',
+    // #19650 — l'ajout d'un membre vit, partagé par la route et l'appel, dans
+    // `services/conversations/memberAdmission.ts`.
+    file: 'services/conversations/memberAdmission.ts',
     marker: 'REJOIN_PARTICIPANT_STATE',
-    guard: "resolveConversationEntry rend 'banned' avant toute réintégration",
+    guard: "commitParticipantRejoin porte unsetOrNull(bannedAt) dans le where (#19688) ; resolveConversationEntry rend déjà 'banned' en amont",
   },
   {
     file: 'routes/conversations/sharing-invite.ts',
     marker: 'REJOIN_PARTICIPANT_STATE',
-    guard: "resolveConversationEntry rend 'banned' avant toute réintégration",
+    guard: "commitParticipantRejoin porte unsetOrNull(bannedAt) dans le where (#19688) ; resolveConversationEntry rend déjà 'banned' en amont",
   },
   {
     file: 'routes/conversations/participant-ban-core.ts',
@@ -55,53 +66,19 @@ const GUARDED: ReadonlyArray<Reactivation & { readonly guard: string }> = [
   },
 ];
 
-const MARKERS = ['isActive: true', 'REJOIN_PARTICIPANT_STATE', 'unban.data'] as const;
+const MARKERS = REACTIVATION_MARKERS;
 
 const ENTRY_DECIDER: Readonly<Record<string, string>> = {
   'routes/conversations/link-admission.ts': 'services/conversations/linkAdmission.ts',
 };
 
-function productionFiles(dir: string): string[] {
-  return readdirSync(dir).flatMap((name) => {
-    const path = join(dir, name);
-    if (statSync(path).isDirectory()) {
-      return name === '__tests__' || name === 'node_modules' ? [] : productionFiles(path);
-    }
-    return name.endsWith('.ts') && !name.endsWith('.test.ts') && !name.endsWith('.d.ts') ? [path] : [];
-  });
-}
-
-function callBodies(source: string): string[] {
-  const opener = /\.participant\.(update|updateMany|upsert)\(/g;
-  const bodies: string[] = [];
-  for (let match = opener.exec(source); match; match = opener.exec(source)) {
-    const start = match.index + match[0].length;
-    let depth = 1;
-    let end = start;
-    while (end < source.length && depth > 0) {
-      if (source[end] === '(') depth += 1;
-      if (source[end] === ')') depth -= 1;
-      end += 1;
-    }
-    bodies.push(source.slice(start, end));
-  }
-  return bodies;
-}
-
-/** Ce que l'appel ÉCRIT : un `isActive: true` du `where` filtre, il ne rallume rien. */
-function writtenPart(body: string): string {
-  const written = /\b(data|update)\s*:/.exec(body);
-  return written ? body.slice(written.index) : body;
-}
-
-function sweepReactivations(): Reactivation[] {
-  return productionFiles(SRC).flatMap((path) => {
-    const file = relative(SRC, path);
-    return callBodies(readFileSync(path, 'utf8')).map(writtenPart).flatMap((written) =>
-      MARKERS.filter((marker) => written.includes(marker)).map((marker) => ({ file, marker }))
-    );
-  });
-}
+/**
+ * #19688 — le scanner vit dans `helpers/participant-reactivation-scan.ts`,
+ * partagé avec le cliquet frère (#16964). Il y était recopié, et les deux
+ * copies sont devenues aveugles ENSEMBLE le jour où les trois portes de
+ * rentrée sont passées par une unité partagée. L'en-tête du helper le mesure.
+ */
+const sweepReactivations = (): Reactivation[] => reactivationSites(SRC);
 
 const key = (r: Reactivation) => `${r.file} :: ${r.marker}`;
 
@@ -169,5 +146,54 @@ describe('les écritures qui rallument une participation sont toutes inventorié
     const restore = callBodies(source).filter((body) => writtenPart(body).includes('isActive: true'));
     expect(restore).toHaveLength(1);
     expect(restore[0]).toContain("unsetOrNull('bannedAt')");
+  });
+
+  /**
+   * #19688 — la TROISIÈME question, et c'est celle que ce balayage posait de
+   * la façon la plus rassurante.
+   *
+   * Il acceptait, comme garde d'une rentrée, que `resolveConversationEntry`
+   * refuse un banni EN AMONT. C'est vrai de la LECTURE, et faux de la FENÊTRE :
+   * `resolveBanWrite` n'écrit QUE `bannedAt` quand la cible est déjà inactive,
+   * si bien qu'un bannissement commis entre la décision et l'écriture laissait
+   * celle-ci rallumer `isActive: true` sur une ligne BANNIE. Trois des quatre
+   * portes étaient dans ce cas ; la quatrième — `restore-for-me`, gardée par le
+   * témoin ci-dessus — portait la garde dans son `where` et DISAIT pourquoi.
+   *
+   * > **Une garde posée en AMONT d'une écriture garde une LECTURE.** La
+   * > question à poser à une rentrée n'est pas « le banni est-il refusé ? »
+   * > mais **« l'état que l'écriture POSE est-il encore légitime au moment où
+   * > elle commet ? »** — et seule la clause de l'écriture peut y répondre.
+   *
+   * La garde n'est plus un argument écrit dans un inventaire : elle est dans le
+   * `where`, une fois, chez `commitParticipantRejoin`. Toute porte qui écrit
+   * `REJOIN_PARTICIPANT_STATE` par un `prisma.participant.update` NU rougit ici
+   * — c'est la seule réparation, jamais une ligne d'inventaire.
+   */
+  it('aucune porte ne commet une rentrée par un update NU — toutes passent par commitParticipantRejoin', () => {
+    const nus = productionFiles(SRC)
+      .filter((path) => relative(SRC, path) !== REJOIN_COMMIT_FILE)
+      .filter((path) =>
+        nudeWriteBodies(readFileSync(path, 'utf8'))
+          .map(writtenPart)
+          .some((written) => written.includes('REJOIN_PARTICIPANT_STATE'))
+      )
+      .map((path) => relative(SRC, path));
+
+    expect(nus.sort()).toEqual([]);
+  });
+
+  it('la rentrée se commet par une unité UNIQUE, qui porte la garde dans son where', () => {
+    const writer = readFileSync(join(SRC, 'services/conversations/rejoinParticipantWrite.ts'), 'utf8');
+    const rejoiners = GUARDED.filter((entry) => entry.marker === 'REJOIN_PARTICIPANT_STATE');
+
+    expect({
+      portes: rejoiners.length,
+      appellent: rejoiners.filter(({ file }) =>
+        readFileSync(join(SRC, file), 'utf8').includes('commitParticipantRejoin')
+      ).length,
+      garde: writer.includes("unsetOrNull('bannedAt')"),
+      relitLaCause: writer.includes('P2025') && writer.includes('bannedAt: true'),
+    }).toEqual({ portes: rejoiners.length, appellent: rejoiners.length, garde: true, relitLaCause: true });
   });
 });

@@ -41,6 +41,8 @@ const SITES_JUSTIFIES: Readonly<Record<string, string>> = {
     "PartnerProfile.userId est requis (@unique, relation owner) : aucun profil d'éditeur n'en est privé, la négation n'écarte rien (#16274).",
   'services/packs/PublisherNames.ts#userId':
     "PartnerProfile.userId est requis (@unique, relation owner) : aucun profil d'éditeur n'en est privé, la négation n'écarte rien (#16274).",
+  'services/relations/sharedMedia.ts#mimeType':
+    "MessageAttachment.mimeType est requis : l'onglet Fichiers d'« En commun » (#19200) n'écarte aucune pièce sans type.",
   'services/posts/postReach.ts#sessionId':
     'PostEngagement.sessionId est requis (@unique) ; seul E2EERevokedIdentity.sessionId (#13013) est optionnel.',
   'services/posts/viewerEngagement.ts#parentId':

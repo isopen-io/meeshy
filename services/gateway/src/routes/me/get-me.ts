@@ -96,6 +96,7 @@ import {
   resolveAutoTranslateEnabled,
 } from '../../utils/auto-translate-preference';
 import { sendSuccess, sendUnauthorized, sendNotFound } from '../../utils/response.js';
+import { publicMediaUrlFromEnv } from '../../services/attachments/publicMediaUrl';
 import { formatUserResponse, type UserResponseData } from '../auth/types';
 import { parseFieldList, parseTokenList, restrictFields } from '../../utils/sparse-fieldset';
 import type { UnifiedAuthContext, UnifiedAuthRequest } from '../../middleware/auth';
@@ -375,6 +376,62 @@ async function withProfileDecor(
 }
 
 /**
+ * « Ma voix » (#19374) — l'échantillon du TITULAIRE, public OU privé.
+ *
+ * `deriveVoiceFields` (`routes/users/public-profile.ts`) est la loi des AUTRES
+ * portes : elle ne sert l'échantillon que si `voicePublicAt` est posé, au
+ * titulaire comme aux tiers. Un échantillon privé n'était donc lisible nulle
+ * part par son propriétaire, et la vitrine ne pouvait ni le jouer ni dire
+ * « Privée ». Cette lecture-ci est LOCALE à la lecture de soi — la seule route
+ * dont l'appelant est, par construction, le titulaire — et ne remplace pas la
+ * loi des autres portes.
+ *
+ * Le `select` ne demande que les trois colonnes servies : `qualityScore`,
+ * `referenceAudioId`, l'empreinte et ses chemins ne quittent jamais la base par
+ * ici. Comme le décor, la lecture ne s'ouvre que si une clé de voix est SERVIE,
+ * et une panne n'affirme rien (aucune clé plutôt qu'un « privée » inventé).
+ */
+const OWN_VOICE_KEYS = ['voicePublic', 'voiceSampleUrl', 'voiceSampleDurationMs'] as const;
+
+export type OwnVoiceFields = {
+  readonly voicePublic: boolean;
+  readonly voiceSampleUrl?: string;
+  readonly voiceSampleDurationMs?: number;
+};
+
+export function deriveOwnVoiceFields(
+  row: { voicePublicAt: Date | null; referenceAudioUrl: string | null; totalDurationMs: number | null } | null
+): OwnVoiceFields {
+  if (!row?.referenceAudioUrl) return { voicePublic: false };
+  return {
+    voicePublic: row.voicePublicAt !== null,
+    voiceSampleUrl: publicMediaUrlFromEnv(row.referenceAudioUrl),
+    ...(row.totalDurationMs !== null ? { voiceSampleDurationMs: row.totalDurationMs } : {}),
+  };
+}
+
+async function withOwnVoiceSample(
+  request: FastifyRequest,
+  authContext: UnifiedAuthContext,
+  fields: readonly string[] | undefined,
+  served: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  if (authContext.type !== 'user' || !authContext.userId) return served;
+  const wanted = fields !== undefined && fields.length > 0 ? fields : null;
+  if (wanted !== null && !OWN_VOICE_KEYS.some((key) => wanted.includes(key))) return served;
+  try {
+    const row = await request.server.prisma.userVoiceModel.findUnique({
+      where: { userId: authContext.userId },
+      select: { voicePublicAt: true, referenceAudioUrl: true, totalDurationMs: true },
+    });
+    const voice = deriveOwnVoiceFields(row);
+    return { ...served, ...(wanted === null ? voice : pickFields(voice, wanted)) };
+  } catch {
+    return served;
+  }
+}
+
+/**
  * Le SEUL calcul de « qui suis-je ». Enregistré par `me/index.ts` (adresse
  * CIBLE) et par `auth/magic-link.ts` (ALIAS déprécié) — voir le doc-comment
  * de tête. Ne rien recalculer ici indépendamment ailleurs dans le dépôt : un
@@ -399,11 +456,16 @@ export async function handleGetMe(request: FastifyRequest, reply: FastifyReply):
     return;
   }
 
-  const filtered = await withProfileDecor(
+  const filtered = await withOwnVoiceSample(
     request,
     authContext,
     fields,
-    await withAutoTranslatePreference(request, authContext, pickFields(base, fields))
+    await withProfileDecor(
+      request,
+      authContext,
+      fields,
+      await withAutoTranslatePreference(request, authContext, pickFields(base, fields))
+    )
   );
 
   if (!expand.includes('security')) {
@@ -495,6 +557,18 @@ const meUserSchema = {
       ...servedProfileDecorJsonSchema,
       nullable: true,
       description: 'Equipped avatar ring, design banner and banner frame (#10632, #10932), additive.',
+    },
+    voicePublic: {
+      type: 'boolean',
+      description: 'The holder\'s own voice sample is public (#19374). Served to the holder only; other doors keep deriveVoiceFields.',
+    },
+    voiceSampleUrl: {
+      type: 'string',
+      description: 'The holder\'s own voice sample, public OR private (#19374), absolute. Absent when no sample exists.',
+    },
+    voiceSampleDurationMs: {
+      type: 'number',
+      description: 'Duration of the holder\'s own voice sample in milliseconds (#19374).',
     },
     security: {
       type: 'object',

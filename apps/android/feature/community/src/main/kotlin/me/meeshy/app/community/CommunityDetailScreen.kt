@@ -32,6 +32,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +48,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -56,8 +58,10 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import me.meeshy.feature.community.R
 import me.meeshy.sdk.model.Community
 import me.meeshy.sdk.model.CommunityAccess
+import me.meeshy.sdk.model.CommunityJoinRefusal
 import me.meeshy.sdk.model.CommunityLoadFailure
 import me.meeshy.sdk.model.CommunityDetailAction
+import me.meeshy.sdk.model.ShareLinkDateFormat
 import me.meeshy.ui.component.FeedbackKind
 import me.meeshy.ui.component.FeedbackToastHost
 import me.meeshy.ui.component.FeedbackToastRequest
@@ -69,6 +73,7 @@ import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
+import java.time.Instant
 
 /** Ce que l'hôte sait faire depuis le détail ; une destination absente (`null`) retire son bouton plutôt que de le laisser inerte. */
 data class CommunityDetailNavigation(
@@ -182,6 +187,7 @@ private fun LoadedDetail(
             ActionsSection(
                 access = access,
                 isJoining = state.isJoining,
+                join = JoinFace(state.requiresJoinApproval, state.joinRequestPending, state.joinRefusal, state.joinDeclinedUntil),
                 communityId = community.id,
                 navigation = navigation,
                 onJoin = onJoin,
@@ -351,6 +357,7 @@ private fun StatItem(modifier: Modifier, value: Int, label: String, icon: ImageV
 private fun ActionsSection(
     access: CommunityAccess,
     isJoining: Boolean,
+    join: JoinFace,
     communityId: String,
     navigation: CommunityDetailNavigation,
     onJoin: () -> Unit,
@@ -372,7 +379,15 @@ private fun ActionsSection(
     Column(Modifier.padding(horizontal = 16.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             actions.forEach { action ->
-                val (icon, label) = action.face()
+                if (action == CommunityDetailAction.JOIN && join.declined) {
+                    JoinStatusTile(MeeshyIcons.Block, stringResource(R.string.community_join_declined), Modifier.weight(1f))
+                    return@forEach
+                }
+                if (action == CommunityDetailAction.JOIN && join.pending) {
+                    JoinStatusTile(MeeshyIcons.Schedule, stringResource(R.string.community_join_requested), Modifier.weight(1f))
+                    return@forEach
+                }
+                val (icon, label) = if (action == CommunityDetailAction.JOIN) join.face() else action.face()
                 ActionButton(
                     icon = icon,
                     label = label,
@@ -391,6 +406,7 @@ private fun ActionsSection(
                 )
             }
         }
+        if (access.canJoin) join.notice()?.let { (text, isRefusal) -> JoinNotice(text, isRefusal) }
         if (access.canLeave) {
             val error = MeeshyTheme.tokens.error
             Row(
@@ -418,6 +434,60 @@ private fun CommunityDetailAction.face(): Pair<ImageVector, String> = when (this
     CommunityDetailAction.CHANNEL -> MeeshyIcons.ForumFilled to stringResource(R.string.community_detail_action_channel)
     CommunityDetailAction.SETTINGS -> MeeshyIcons.SettingsFilled to stringResource(R.string.community_detail_action_settings)
     CommunityDetailAction.JOIN -> MeeshyIcons.SignIn to stringResource(R.string.community_detail_action_join)
+}
+
+/** Ce que le détail dit de l'entrée quand la communauté la valide (#19870, miroir `joinAction` iOS). */
+@Immutable
+private data class JoinFace(
+    val asks: Boolean,
+    val pending: Boolean,
+    val refusal: CommunityJoinRefusal?,
+    val declinedUntil: Instant? = null,
+) {
+    /** Refusée : la date servie, ou le 403 `COMMUNITY_JOIN_COOLDOWN` le temps que le détail relu la serve. */
+    val declined: Boolean get() = declinedUntil != null || refusal == CommunityJoinRefusal.COOLDOWN
+}
+
+@Composable
+private fun JoinFace.face(): Pair<ImageVector, String> =
+    if (asks) MeeshyIcons.HelpOutline to stringResource(R.string.community_join_request) else CommunityDetailAction.JOIN.face()
+
+@Composable
+private fun JoinFace.notice(): Pair<String, Boolean>? = when {
+    declinedUntil != null ->
+        stringResource(R.string.community_join_declined_until, ShareLinkDateFormat.dayAndTime(declinedUntil.toEpochMilli())) to true
+    pending -> stringResource(R.string.community_join_requested_waiting) to false
+    else -> null
+}
+
+/** La demande envoyée ou refusée est un STATUT, pas un bouton : rien à toucher tant qu'on attend. */
+@Composable
+private fun JoinStatusTile(icon: ImageVector, label: String, modifier: Modifier) {
+    val tokens = MeeshyTheme.tokens
+    Column(
+        modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(tokens.backgroundSecondary.copy(alpha = 0.5f))
+            .semantics(mergeDescendants = true) { contentDescription = label }
+            .padding(vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(icon, null, tint = tokens.textSecondary, modifier = Modifier.size(22.dp))
+        Text(label, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = tokens.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun JoinNotice(text: String, isRefusal: Boolean) {
+    val tokens = MeeshyTheme.tokens
+    Text(
+        text,
+        modifier = Modifier.fillMaxWidth(),
+        fontSize = 13.sp,
+        color = if (isRefusal) tokens.error else tokens.textSecondary,
+        textAlign = TextAlign.Center,
+    )
 }
 
 @Composable

@@ -36,6 +36,8 @@ import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-
 import { deferAfterResponse, type AfterResponse } from '../../utils/after-response.js';
 import type { NotificationService } from './NotificationService.js';
 import { getSharedNotificationService } from './notification-service-registry.js';
+import { USABLE_ACCOUNT_WHERE } from '../relations/usableAccount';
+import { unescapeSerializedText } from '../../utils/serialized-text';
 
 const logger = enhancedLogger.child({ module: 'CommunityAdded' });
 
@@ -53,12 +55,12 @@ export type CommunityAddedRequest = {
   readonly recipientIds: readonly string[];
 };
 
-const ESCAPED_ENTITIES: Readonly<Record<string, string>> = {
-  '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&#x27;': "'", '&nbsp;': ' ',
-};
-
-function asWritten(name: string): string {
-  return name.replace(/&(?:amp|lt|gt|quot|#39|#x27|nbsp);/g, (entity) => ESCAPED_ENTITIES[entity] ?? entity);
+/**
+ * Le nom tel qu'écrit : les lignes écrites avant #16786 le portent échappé, une bannière n'est pas du HTML.
+ * Inoffensif sur une ligne écrite depuis, qui ne porte plus d'entité ajoutée.
+ */
+export function asWritten(name: string): string {
+  return unescapeSerializedText(name);
 }
 
 export async function announceAddedToCommunity(
@@ -81,7 +83,7 @@ export async function announceAddedToCommunity(
   if (!actor) return 0;
 
   const recipients = await deps.prisma.user.findMany({
-    where: { id: { in: ids }, isActive: true, deactivatedAt: null, deletedAt: null },
+    where: { id: { in: ids }, ...USABLE_ACCOUNT_WHERE },
     select: { id: true, ...RECIPIENT_LANG_SELECT },
     take: ids.length,
   });

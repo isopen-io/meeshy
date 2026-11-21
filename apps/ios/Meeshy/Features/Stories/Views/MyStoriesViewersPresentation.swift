@@ -33,7 +33,7 @@ struct MyStoriesViewersPresentation: ViewModifier {
                     }
                 )
             }
-            .sheet(item: $selectedProfile) { user in
+            .profileCover(item: $selectedProfile) { user in
                 profileSheet(for: user)
             }
     }
@@ -46,7 +46,5 @@ struct MyStoriesViewersPresentation: ViewModifier {
             presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
             postsContent: ProfilePostsOpener.postsContent { selectedProfile = nil }, dependencies: .live
         )
-        .presentationDetents([.large, .medium])
-        .presentationDragIndicator(.visible)
     }
 }

@@ -124,6 +124,7 @@ public struct MeeshyKeyLegend<Leading: View>: View {
     private let leading: Leading
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.meeshyHasKeyboard) private var hasKeyboard
 
     public init(items: [MeeshyKeyLegendItem],
                 container: MeeshyKeyLegendContainer = .none,
@@ -135,7 +136,7 @@ public struct MeeshyKeyLegend<Leading: View>: View {
 
     @ViewBuilder
     public var body: some View {
-        if MeeshyKeyLegendLaw.rendersContainer(itemCount: items.count) {
+        if MeeshyKeyLegendLaw.rendersContainer(itemCount: items.count, hasKeyboard: hasKeyboard) {
             let flow = MeeshyKeyFlowLayout(spacing: CGFloat(MeeshyKeyLegendLaw.groupSpacing),
                                            lineSpacing: MeeshySpacing.sm)
             switch container {

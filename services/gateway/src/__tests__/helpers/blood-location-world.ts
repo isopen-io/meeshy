@@ -181,6 +181,8 @@ export function bloodLocationWorld(seed: BloodLocationWorldSeed = {}) {
     consultations,
     settings,
     userRows,
+    /** Les seules alertes de proximité, toutes rooms confondues — sans le signal `location:blood-moved` (#19400). */
+    proximites: (): Emission[] => emissions.filter((e) => e.event === 'location:blood-proximity'),
     /** Ce qu'une room a reçu, événement par événement. */
     vers: (userId: string, event?: string): Emission[] => emissions.filter((e) => e.room === `user:${userId}` && (event === undefined || e.event === event)),
     avancer: (ms: number): void => {

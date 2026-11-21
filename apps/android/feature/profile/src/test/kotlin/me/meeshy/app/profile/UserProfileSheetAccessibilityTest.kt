@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.feature.profile.R
@@ -80,7 +81,8 @@ class UserProfileSheetAccessibilityTest {
         body(UserProfileSheetUiState(user = bob, isLoadingProfile = true))
 
         compose.onNodeWithTag(PROFILE_SHEET_SKELETON_TAG, useUnmergedTree = true).assertExists()
-        compose.onNodeWithText(context.getString(R.string.profile_loadFailed_message)).assertDoesNotExist()
+        compose.onNodeWithText(context.getString(R.string.profile_state_error_title)).assertDoesNotExist()
+        compose.onNodeWithText(context.getString(R.string.profile_state_nobody_title)).assertDoesNotExist()
     }
 
     @Test
@@ -88,16 +90,45 @@ class UserProfileSheetAccessibilityTest {
         var retried = 0
         body(UserProfileSheetUiState(user = bob, loadFailed = true), onRetry = { retried++ })
 
-        compose.onNodeWithText(context.getString(R.string.profile_loadFailed_message)).assertIsDisplayed()
-        compose.onNodeWithTag(PROFILE_RETRY_TAG).performClick()
+        compose.onNodeWithText(context.getString(R.string.profile_state_error_title)).assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.common_retry)).performSemanticsAction(SemanticsActions.OnClick)
         assertThat(retried).isEqualTo(1)
     }
 
     @Test
-    fun `un refus garde le message sans Reessayer`() {
-        body(UserProfileSheetUiState(user = bob))
+    fun `un refus dit Personne ici sans Reessayer et Retour referme la feuille`() {
+        var closed = 0
+        body(UserProfileSheetUiState(user = bob), onClose = { closed++ })
 
-        compose.onNodeWithText(context.getString(R.string.profile_loadFailed_message)).assertIsDisplayed()
-        compose.onNodeWithTag(PROFILE_RETRY_TAG).assertDoesNotExist()
+        compose.onNodeWithText(context.getString(R.string.profile_state_nobody_title)).assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.common_retry)).assertDoesNotExist()
+        compose.onNodeWithText(context.getString(R.string.profile_state_nobody_back)).performClick()
+        assertThat(closed).isEqualTo(1)
+    }
+
+    @Test
+    fun `bloque par la cible dit Personne ici et ne garde aucune identite`() {
+        body(UserProfileSheetUiState(user = bob, isBlockedByTarget = true))
+
+        compose.onNodeWithText(context.getString(R.string.profile_state_nobody_title)).assertIsDisplayed()
+        compose.onNodeWithText("Bob").assertDoesNotExist()
+    }
+
+    @Test
+    fun `une panne hors ligne le dit au lieu d'accuser le serveur`() {
+        body(UserProfileSheetUiState(user = bob, loadFailed = true, isOffline = true))
+
+        compose.onNodeWithText(context.getString(R.string.profile_state_offline_title)).assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.profile_state_error_title)).assertDoesNotExist()
+    }
+
+    @Test
+    fun `Personne ici ne prete pas le nom de la personne au titre de volet`() {
+        body(UserProfileSheetUiState(user = bob, isBlockedByTarget = true))
+
+        compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, "Bob")).assertDoesNotExist()
+        compose.onNode(
+            SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, context.getString(R.string.profile_state_nobody_title)),
+        ).assertExists()
     }
 }

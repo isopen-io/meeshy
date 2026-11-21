@@ -31,18 +31,21 @@ final class ShareLinkDetailViewModel: ObservableObject {
     @Published private(set) var isDeleted = false
 
     private let service: ShareLinkManaging
+    private let removeParticipant: @concurrent @Sendable (String, String) async throws -> Void
     private let onLinkChanged: @MainActor (MyShareLink) -> Void
     private let onLinkDeleted: @MainActor (String) -> Void
 
     init(
         link: MyShareLink,
         service: ShareLinkManaging = ShareLinkService.shared,
+        removeParticipant: @escaping @concurrent @Sendable (String, String) async throws -> Void,
         onLinkChanged: @escaping @MainActor (MyShareLink) -> Void = { _ in },
         onLinkDeleted: @escaping @MainActor (String) -> Void = { _ in }
     ) {
         self.link = link
         self.draft = link.settings
         self.service = service
+        self.removeParticipant = removeParticipant
         self.onLinkChanged = onLinkChanged
         self.onLinkDeleted = onLinkDeleted
     }
@@ -58,6 +61,34 @@ final class ShareLinkDetailViewModel: ObservableObject {
             stats = .loaded(try await service.fetchLinkStats(linkId: link.linkId))
         } catch {
             stats = .unavailable
+        }
+    }
+
+    /// La pile de l'en-tête (#19496, planche `Lien-Partage`) : les dernières arrivées, une fois les statistiques lues.
+    var headFaces: [LinksFaceMember] {
+        guard case .loaded(let snapshot) = stats else { return [] }
+        return LinksFaceMember.stack(snapshot.recentArrivals.map { LinksFaceMember(arrival: $0) })
+    }
+
+    // MARK: - Arrivals
+
+    /// Retirer un arrivant demande la conversation que le lien ouvre ; sans elle, le geste n'est pas offert.
+    var canRemoveArrivals: Bool { link.conversation?.id != nil }
+
+    /// Optimiste : la rangée part tout de suite, et revient si le serveur refuse.
+    @discardableResult
+    func removeArrival(participantId: String) async -> Bool {
+        guard let conversationId = link.conversation?.id, case .loaded(let snapshot) = stats,
+              let index = snapshot.recentArrivals.firstIndex(where: { $0.participantId == participantId }) else { return false }
+        let removed = snapshot.recentArrivals[index]
+        stats = .loaded(snapshot.removingArrival(participantId))
+        do {
+            try await removeParticipant(conversationId, participantId)
+            return true
+        } catch {
+            // Seule CETTE arrivée revient, sur les statistiques courantes : un autre retrait accepté entre-temps tient.
+            if case .loaded(let current) = stats { stats = .loaded(current.restoringArrival(removed, at: index)) }
+            return false
         }
     }
 
@@ -97,6 +128,31 @@ final class ShareLinkDetailViewModel: ObservableObject {
             return true
         } catch {
             publish(snapshot)
+            return false
+        }
+    }
+
+    // MARK: - Remettre le compteur à zéro (#19505)
+
+    /// Offert dès qu'une entrée a été comptée.
+    var canResetUses: Bool { link.currentUses > 0 }
+
+    /// Optimiste : le compteur tombe à zéro tout de suite. Il n'y reste que si le serveur SERT le compteur remis
+    /// (#19283) ; un refus, ou un serveur qui ne connaît pas la remise, rend le compteur d'avant.
+    @discardableResult
+    func resetUses() async -> Bool {
+        guard canResetUses else { return false }
+        let previous = link.currentUses
+        publish(link.withCurrentUses(0))
+        do {
+            guard let served = try await service.resetLinkUses(linkId: link.linkId) else {
+                publish(link.withCurrentUses(previous))
+                return false
+            }
+            publish(link.withCurrentUses(served))
+            return true
+        } catch {
+            publish(link.withCurrentUses(previous))
             return false
         }
     }

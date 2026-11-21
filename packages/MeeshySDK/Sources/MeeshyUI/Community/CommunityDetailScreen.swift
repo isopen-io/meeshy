@@ -413,10 +413,17 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                         showSettings = true
                     }
                 } else if !viewModel.isMember {
-                    actionButton(icon: "arrow.forward.circle.fill", title: String(localized: "community.detail.action.join", defaultValue: "Rejoindre", bundle: .module)) {
-                        Task { await viewModel.joinCommunity() }
-                    }
+                    joinAction
                 }
+            }
+
+            if !viewModel.isMember, let notice = joinNotice {
+                Text(notice.text)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular, design: .rounded))
+                    .foregroundStyle(notice.isRefusal ? MeeshyColors.error : theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .accessibilityIdentifier("community.join.notice")
             }
 
             if viewModel.isMember && !viewModel.isCreator {
@@ -438,6 +445,79 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, MeeshySpacing.lg)
+    }
+
+    /// Une communauté qui valide chaque entrée (#19869) se DEMANDE ; la demande
+    /// envoyée est un statut, pas un bouton — rien à toucher tant qu'on attend.
+    @ViewBuilder
+    private var joinAction: some View {
+        if viewModel.joinRequestPending {
+            VStack(spacing: MeeshySpacing.xsPlus) {
+                Image(systemName: "clock")
+                    .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .regular, design: .rounded))
+                    .foregroundStyle(theme.textSecondary)
+                Text(String(localized: "community.join.requested", defaultValue: "Demande envoyée", bundle: .module))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium, design: .rounded))
+                    .foregroundStyle(theme.textSecondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, MeeshySpacing.md)
+            .background(theme.backgroundSecondary.opacity(0.5))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("community.join.requested")
+        } else if declinedUntil != nil {
+            VStack(spacing: MeeshySpacing.xsPlus) {
+                Image(systemName: "xmark.circle")
+                    .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .regular, design: .rounded))
+                    .foregroundStyle(theme.textSecondary)
+                Text(String(localized: "community.join.declined", defaultValue: "Demande refusée", bundle: .module))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium, design: .rounded))
+                    .foregroundStyle(theme.textSecondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, MeeshySpacing.md)
+            .background(theme.backgroundSecondary.opacity(0.5))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("community.join.declined")
+        } else {
+            actionButton(
+                icon: viewModel.requiresJoinApproval ? "person.crop.circle.badge.questionmark" : "arrow.forward.circle.fill",
+                title: viewModel.requiresJoinApproval
+                    ? String(localized: "community.join.request", defaultValue: "Demander à rejoindre", bundle: .module)
+                    : String(localized: "community.detail.action.join", defaultValue: "Rejoindre", bundle: .module)
+            ) {
+                Task { await viewModel.joinCommunity() }
+            }
+        }
+    }
+
+    /// Le refus tient jusqu'à la date servie (#19948), relue à chaque rendu :
+    /// la date passée, l'écran offre de nouveau de demander.
+    private var declinedUntil: Date? {
+        guard !viewModel.joinRequestPending, let until = viewModel.joinDeclinedUntil, until > Date() else { return nil }
+        return until
+    }
+
+    /// « Vous pourrez en refaire une à partir du 27 novembre à 10:00. » — la
+    /// date dans la langue et le calendrier du lecteur.
+    static func declinedUntilText(until: Date, locale: Locale = .current) -> String {
+        let date = until.formatted(.dateTime.day().month(.wide).hour().minute().locale(locale))
+        return String(localized: "community.join.declined.until", defaultValue: "Vous pourrez en refaire une à partir du \(date).", bundle: .module)
+    }
+
+    private var joinNotice: (text: String, isRefusal: Bool)? {
+        if let until = declinedUntil {
+            return (Self.declinedUntilText(until: until), true)
+        }
+        if viewModel.joinRefusal == .cooldown {
+            return (String(localized: "community.join.cooldown", defaultValue: "Votre dernière demande a été refusée : réessayez 7 jours après ce refus.", bundle: .module), true)
+        }
+        if viewModel.joinRequestPending {
+            return (String(localized: "community.join.requested.waiting", defaultValue: "Un administrateur ou un modérateur doit l’accepter.", bundle: .module), false)
+        }
+        return nil
     }
 
     private func actionButton(icon: String, title: String, action: @escaping () -> Void) -> some View {

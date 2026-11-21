@@ -283,7 +283,10 @@ describe('ROUTE_TABLE (#4278)', () => {
     // 101 : #19156 ajoute `e2ee-device-trust` — le relais de la confirmation d'un appareil par code
     // (`POST`/`GET /api/v1/e2ee/devices/self/verifications`, `POST …/verifications/ack`). Aucun alias,
     // aucune route retirée ni renommée ; le manifeste gagne exactement ses trois routes.
-    expect(ROUTE_TABLE.length).toBe(101);
+    // 102 : #19205 ajoute `contact-exchange` — le partage sans contact (`POST /api/v1/me/contact-exchange`,
+    // `POST /api/v1/contact-exchange/:token/accept`), derrière `CONTACT_EXCHANGE_ENABLED`. Aucun alias,
+    // aucune route retirée ni renommée ; le manifeste gagne exactement ses deux routes.
+    expect(ROUTE_TABLE.length).toBe(102);
   });
 });
 

@@ -49,11 +49,4 @@ nonisolated enum CallReducedPresence: Equatable, Sendable {
         guard let visibleConversationId, let callConversationId else { return false }
         return visibleConversationId == callConversationId
     }
-
-    /// Le palier que la bulle rend : la vignette ne descend jamais au cercle,
-    /// qui ne montrerait pas la vidéo ; ailleurs, le palier choisi au pincement.
-    static func effectiveTier(stored: CallBubbleSizeTier, presence: CallReducedPresence) -> CallBubbleSizeTier {
-        guard presence == .vignette, case .circle = stored else { return stored }
-        return .small
-    }
 }

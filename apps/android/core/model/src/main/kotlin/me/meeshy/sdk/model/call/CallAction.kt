@@ -46,7 +46,6 @@ enum class CallAction(val id: String, val family: CallActionFamily) {
     AddPeople("addPeople", CallActionFamily.TheCall),
     React("react", CallActionFamily.TheCall),
     Capture("capture", CallActionFamily.TheCall),
-    Journal("journal", CallActionFamily.TheCall),
     ;
 
     companion object {

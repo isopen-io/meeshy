@@ -292,6 +292,10 @@ public interface MessageDao {
     @Query("DELETE FROM messages WHERE sendState IS NULL AND viewOnceOpenedAt IS NULL")
     public suspend fun clearPurgeable()
 
+    /** Les clés des lignes que [clearPurgeable] va retirer : leurs lignes filles partent avec elles (#19440). */
+    @Query("SELECT id, serverId, conversationId FROM messages WHERE sendState IS NULL AND viewOnceOpenedAt IS NULL")
+    public suspend fun purgeableKeys(): List<MessageKeys>
+
     /** Rétention — les lignes confirmées par le serveur plus vieilles que [cutoff] (une ligne optimiste n'est jamais purgée). */
     @Query("SELECT id, serverId, conversationId FROM messages WHERE sendState IS NULL AND createdAt < :cutoff LIMIT :limit")
     public suspend fun retentionKeysOlderThan(cutoff: Long, limit: Int): List<MessageKeys>

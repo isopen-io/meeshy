@@ -133,6 +133,7 @@ private fun ChatComposerDock(host: ChatHostContext) {
     }
     val editPending = rememberPendingRetouch(actions)
     Column {
+        EndToEndPeerWithoutDeviceBannerHost(host.peerWithoutDevice, accentColor)
         MentionSuggestionStrip(
             mention = state.mention,
             accentColor = accentColor,

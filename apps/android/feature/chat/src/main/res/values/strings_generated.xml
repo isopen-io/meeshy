@@ -17,6 +17,11 @@
     <string name="attachment_stage_thumbnailing">Preview</string>
     <string name="attachment_sticker">Sticker</string>
     <string name="audio_fullscreen_language_choose">Translate audio</string>
+    <string name="chat_act_advance">%1$s · %2$d of %3$d</string>
+    <string name="chat_act_advance_easy">Act I</string>
+    <string name="chat_act_advance_gold">Golden Act</string>
+    <string name="chat_act_advance_hard">Act III</string>
+    <string name="chat_act_advance_medium">Act II</string>
     <string name="chat_action_copy">Copy</string>
     <string name="chat_action_copy_link">Copy link</string>
     <string name="chat_action_delete_for_everyone">Delete for everyone</string>
@@ -69,6 +74,11 @@
         <item quantity="one">Delete %1$d message?</item>
         <item quantity="other">Delete %1$d messages?</item>
     </plurals>
+    <string name="chat_e2ee_peer_without_device_title">%1$s can’t receive encrypted messages</string>
+    <string name="chat_e2ee_peer_without_device_title_anonymous">Your contact can’t receive encrypted messages</string>
+    <string name="chat_e2ee_peer_without_device_write_plain">Write without encryption</string>
+    <string name="chat_e2ee_readable_direct_failed">Could not open. Try again.</string>
+    <string name="chat_e2ee_readable_direct_offline">Offline: reconnect to open it.</string>
     <string name="chat_effect_blurred">Blur</string>
     <string name="chat_effect_duration_15s">15 s</string>
     <string name="chat_effect_duration_1m">1 min</string>
@@ -362,6 +372,8 @@
     <string name="encryption_mode_hybrid_label">Hybrid</string>
     <string name="encryption_mode_server_description">Encrypted on our servers, readable by them: translation and search work.</string>
     <string name="encryption_mode_server_label">Server</string>
+    <string name="encryption_participant_without_device_anonymous">A member can’t receive encrypted messages yet: nothing was turned on.</string>
+    <string name="encryption_participant_without_device_named">%1$s can’t receive encrypted messages yet: nothing was turned on.</string>
     <string name="encryption_summary_end_to_end">End-to-end encrypted: only participants can read</string>
     <string name="encryption_summary_hybrid">Encrypted on our servers, with verification between compatible devices</string>
     <string name="encryption_summary_none">Not encrypted</string>
@@ -600,11 +612,10 @@
     <string name="recentMedia_resolveFailed_multiple">%1$d media items couldn\'t be prepared — use the full photo library</string>
     <string name="report_message_details_header">Details (optional)</string>
     <string name="report_message_details_placeholder">Describe the issue…</string>
-    <string name="report_message_sent">Report sent</string>
     <string name="report_message_submit">Send report</string>
     <string name="report_message_title">Why are you reporting this message?</string>
     <string name="report_reason_harassment">Harassment</string>
-    <string name="report_reason_hate_speech">Hate speech</string>
+    <string name="report_reason_hate_speech">Hate</string>
     <string name="report_reason_impersonation">Impersonation</string>
     <string name="report_reason_inappropriate">Inappropriate content</string>
     <string name="report_reason_other">Other</string>

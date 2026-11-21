@@ -22,11 +22,11 @@ class GroupCallRosterTest {
 
     @Test
     fun `the capacity is the gateway's, me included`() {
-        val full = roster("a", "b", "c", "d", "e")
+        val full = roster("a", "b", "c", "d")
         assertThat(full.capacity).isEqualTo(CallRules.MAX_PARTICIPANTS)
-        assertThat(full.participantCount).isEqualTo(6)
+        assertThat(full.participantCount).isEqualTo(5)
         assertThat(full.isFull).isTrue()
-        assertThat(full.admitting(GroupCallArrival("f")).members).hasSize(5)
+        assertThat(full.admitting(GroupCallArrival("e")).members).hasSize(4)
     }
 
     @Test

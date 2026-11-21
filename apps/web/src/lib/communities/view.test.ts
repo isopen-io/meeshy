@@ -107,4 +107,28 @@ describe('membershipActionOf — miroir `CommunityDetailView.actionsSection` (#6
   test('sans lecteur identifié, rien', () => {
     expect(membershipActionOf(summary({ viewerRole: null, createdBy: 'u-owner' }), null)).toBe('none');
   });
+  test('une communauté qui valide chaque entrée se DEMANDE (#19868)', () => {
+    expect(membershipActionOf(summary({ viewerRole: null, createdBy: 'u-owner', requiresJoinApproval: true }), 'u-me')).toBe('request');
+  });
+
+  test('une demande déjà en attente se lit « Demande envoyée », jamais un second envoi (#19868)', () => {
+    expect(
+      membershipActionOf(summary({ viewerRole: null, createdBy: 'u-owner', requiresJoinApproval: true, viewerJoinRequest: 'pending' }), 'u-me'),
+    ).toBe('requested');
+  });
+
+  test('un refus récent se lit « Demande refusée » jusqu’à sa date, puis la demande redevient possible (#19879)', () => {
+    const refused = summary({ viewerRole: null, createdBy: 'u-owner', requiresJoinApproval: true, viewerJoinRequest: null, viewerJoinRetryAt: '2026-11-26T10:00:00.000Z' });
+    expect(membershipActionOf(refused, 'u-me', new Date('2026-11-20T10:00:00.000Z'))).toBe('declined');
+    expect(membershipActionOf(refused, 'u-me', new Date('2026-11-26T10:00:00.000Z'))).toBe('request');
+  });
+
+  test('une demande en attente l’emporte sur un vieux refus (#19879)', () => {
+    const both = summary({ viewerRole: null, createdBy: 'u-owner', requiresJoinApproval: true, viewerJoinRequest: 'pending', viewerJoinRetryAt: '2026-11-26T10:00:00.000Z' });
+    expect(membershipActionOf(both, 'u-me', new Date('2026-11-20T10:00:00.000Z'))).toBe('requested');
+  });
+
+  test('un membre d’une communauté qui valide chaque entrée la QUITTE (#19868)', () => {
+    expect(membershipActionOf(summary({ viewerRole: 'member', createdBy: 'u-owner', requiresJoinApproval: true }), 'u-me')).toBe('leave');
+  });
 });

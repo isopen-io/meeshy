@@ -97,6 +97,16 @@ describe('NotificationService.emitUserUpdated', () => {
     });
   });
 
+  it('porte la couleur d’accent de la vitrine, `null` compris (retour à l’automatique) (#19201)', async () => {
+    const mockPrisma = makePrismaMock([{ userId: 'partner-B' }]);
+    const service = new NotificationService(mockPrisma);
+    service.setSocketIO(mockIO);
+
+    await service.emitUserUpdated({ userId: 'user-A', changes: { profileAccentColor: null } });
+
+    expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.USER_UPDATED, { userId: 'user-A', changes: { profileAccentColor: null } });
+  });
+
   it('un champ ABSENT reste absent : le delta ne fabrique aucun effacement (#8889)', async () => {
     const mockPrisma = makePrismaMock([{ userId: 'partner-B' }]);
     const service = new NotificationService(mockPrisma);

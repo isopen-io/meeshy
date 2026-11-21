@@ -199,8 +199,8 @@ final class CallViewLayoutGuardTests: XCTestCase {
         }
         let block = String(code[start.upperBound ..< end.lowerBound])
         XCTAssertTrue(
-            block.contains(".avatarRingWithin(") && block.contains("ProfileDecorResolver.ring(remoteProfile?.profileDecor?.avatarRing)"),
-            "Le disque d'avatar doit poser `avatarRingWithin` avec le contour équipé du " +
+            block.contains(".avatarRing(") && block.contains("ProfileDecorResolver.ring(remoteProfile?.profileDecor?.avatarRing)"),
+            "Le disque d'avatar doit poser `avatarRing` avec le contour équipé du " +
             "correspondant (`remoteProfile?.profileDecor?.avatarRing`)."
         )
     }

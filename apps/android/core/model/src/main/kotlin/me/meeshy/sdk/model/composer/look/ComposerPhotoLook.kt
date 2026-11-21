@@ -15,9 +15,10 @@ public enum class CallFaceEffect(public val raw: String) {
     TOAD("toad"),
     ANGEL("angel"),
     DEMON("demon"),
-    VOLCANO("volcano");
+    VOLCANO("volcano"),
+    BABY("baby");
 
-    public val isStylized: Boolean get() = this == TOAD || this == ANGEL || this == DEMON || this == VOLCANO
+    public val isStylized: Boolean get() = this == TOAD || this == ANGEL || this == DEMON || this == VOLCANO || this == BABY
 
     public val needsFace: Boolean get() = this != NONE && this != VOLCANO
 }

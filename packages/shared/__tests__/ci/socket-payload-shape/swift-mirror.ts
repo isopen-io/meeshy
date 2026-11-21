@@ -6,7 +6,9 @@
 //
 // ─── Ce qu'il y a à lire, et pourquoi c'est mécanisable ───────────────────
 //
-// Le câblage iOS n'a que DEUX idiomes, et c'est une mesure (2026-11-14) :
+// Le câblage iOS n'a que DEUX idiomes, et c'est une mesure (2026-11-14) — plus
+// leurs RELAIS, une fonction générique qui appelle `route(` pour une famille
+// d'événements (`relayCallControl`, #19650, lu par `routeRelays`) :
 //
 //   · `m.route(.event, Type.self) { … }` — la route DÉCODÉE, seule forme qui
 //     nomme un type, donc la seule confrontable ;
@@ -51,6 +53,23 @@ import { extname, join } from 'node:path';
 
 import { REPO } from './mirror-contract';
 
+/**
+ * Les RELAIS de route : une fonction générique du même fichier qui reçoit `(_ event: SocketEvent, _ type: T.Type, …)`
+ * et appelle `route(` dans son corps (`relayCallControl`, #19650). Son appel `relais(.event, Type.self)` nomme une
+ * charge exactement comme `route(.event, Type.self)` : il rejoint la confrontation ordinaire, au lieu de sortir du
+ * balayage en silence.
+ */
+const RELAY_DECLARATION = /\bfunc\s+(\w+)\s*<[^>\n]*>\s*\(\s*_\s+\w+\s*:\s*SocketEvent\s*,\s*_\s+\w+\s*:\s*\w+\.Type\b/g;
+
+function routeRelays(source: string): readonly string[] {
+  return [...source.matchAll(RELAY_DECLARATION)]
+    .filter((match) => {
+      const bodyStart = source.indexOf('{', (match.index as number) + match[0].length);
+      return bodyStart >= 0 && /\broute\(/.test(source.slice(bodyStart + 1, closingBraceIndex(source, bodyStart + 1)));
+    })
+    .map((match) => match[1]);
+}
+
 export const SWIFT_ROOTS = ['packages/MeeshySDK/Sources/MeeshySDK', 'apps/ios/Meeshy'] as const;
 
 export const SOCKET_EVENT_SWIFT = 'packages/MeeshySDK/Sources/MeeshySDK/Sockets/SocketEvent.swift';
@@ -68,7 +87,15 @@ export const MINIMUM_SWIFT_ROUTES = 120;
  * `ServerToClientEvents` déclare, et aux 110 que la garde Kotlin atteint. Le chiffre vit ICI pour
  * qu'une extension de la lecture ait un endroit où se voir monter, plutôt qu'une prose à vieillir.
  */
-export const SWIFT_SWEPT_EVENTS_AT_LAST_MEASURE = 162;
+// 166 le 2026-11-18 : les six contrôles d'appel passent par le relais `relayCallControl` (#19650), que `routeRelays` lit —
+// les cinq anciens y étaient sortis du balayage en silence (165 → 160), `call:conversation-changed` est neuf.
+// 167 le 2026-11-18 : iOS lit `community:deleted` (#19591), sur le modèle de `community:updated`.
+// 169 le 2026-11-19 : `inactivity:alert` et `inactivity:cleared` (#18738), après la fusion de dev.
+// 171 le 2026-11-19 : `phone-call:started` et `phone-call:ended` (#18753), iOS lit « en appel ».
+// 173 le 2026-11-19 : `fall:detected` et `fall:cleared` (#18748), iOS lit la chute détectée.
+// 174 le 2026-11-20 : `community:join-requested` (#19877), les intendants iOS relisent les demandes d'entrée.
+// 175 le 2026-11-20 : `community:join-request-decided` (#19948), le demandeur iOS lit le refus de sa demande.
+export const SWIFT_SWEPT_EVENTS_AT_LAST_MEASURE = 175;
 
 export type SwiftProperty = {
   /** La clé du FIL : le `CodingKeys` s'il existe, sinon le nom Swift. */
@@ -319,6 +346,18 @@ export const readSwift = () => {
         kind: 'decoding',
         candidates: [match[2]],
       });
+    }
+    for (const relay of routeRelays(source)) {
+      for (const match of source.matchAll(new RegExp(`\\b${relay}\\(\\s*\\.(\\w+)\\s*,\\s*(\\w+)\\.self`, 'g'))) {
+        routes.push({
+          file,
+          caseName: match[1],
+          event: events.get(match[1]),
+          typeName: match[2],
+          kind: 'decoding',
+          candidates: [match[2]],
+        });
+      }
     }
     for (const match of source.matchAll(/\braw\(\s*\.(\w+)\s*\)\s*\{/g)) {
       const bodyStart = (match.index as number) + match[0].length;

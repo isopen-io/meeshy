@@ -3,6 +3,7 @@
     <string name="call_status_reconnecting">Reconnexion (%1$d)…</string>
     <string name="call_pill_ongoing">Appel en cours avec %1$s</string>
     <string name="call_pill_reopen">Revenir à l\'appel</string>
+    <string name="call_pill_collapse">Réduire en vignette</string>
     <string name="call_history_outgoing">Appel sortant</string>
     <string name="call_quality_excellent">Connexion excellente</string>
     <string name="call_quality_fair">Connexion moyenne</string>
@@ -12,4 +13,5 @@
     <string name="call_peer_quality_degraded">La connexion de %1$s est instable</string>
     <string name="call_peer_muted">%1$s a coupé son micro</string>
     <string name="call_peer_camera_off">%1$s a désactivé sa caméra</string>
+    <string name="call_status_connected">Connectés</string>
 </resources>

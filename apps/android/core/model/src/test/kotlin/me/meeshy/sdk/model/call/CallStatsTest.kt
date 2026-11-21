@@ -36,7 +36,7 @@ class CallStatsTest {
         val stats = CallStats.reduce(listOf(entry("i", "inbound-rtp", kind = "audio")))
         assertThat(stats.packetsLost).isEqualTo(0)
         assertThat(stats.inboundAudioPackets).isEqualTo(0)
-        assertThat(stats.bytesReceived).isEqualTo(0)
+        assertThat(stats.bytesReceived).isEqualTo(0L)
         assertThat(stats.jitterMs).isEqualTo(0.0)
     }
 
@@ -80,6 +80,81 @@ class CallStatsTest {
         assertThat(stats.availableOutgoingBitrateBps).isEqualTo(800_000)
     }
 
+    // --- reduce: the SELECTED pair carries the rtt (#19899) ----------------
+
+    private fun pair(
+        id: String,
+        rttSeconds: Double,
+        bitrate: Double? = null,
+        state: String = "succeeded",
+        nominated: Boolean = false,
+    ) = CallStats.RawEntry(
+        id = id,
+        type = "candidate-pair",
+        values = buildMap<String, Double> {
+            put("currentRoundTripTime", rttSeconds)
+            put("nominated", if (nominated) 1.0 else 0.0)
+            bitrate?.let { put("availableOutgoingBitrate", it) }
+        },
+        strings = mapOf("state" to state),
+    )
+
+    private fun transport(selectedPairId: String) = CallStats.RawEntry(
+        id = "T",
+        type = "transport",
+        strings = mapOf("selectedCandidatePairId" to selectedPairId),
+    )
+
+    @Test
+    fun `the rtt is read on the transport's selected pair, never on a later unelected pair`() {
+        val stats = CallStats.reduce(
+            listOf(
+                transport(selectedPairId = "elected"),
+                pair("elected", rttSeconds = 0.04, bitrate = 2_000_000.0),
+                pair("probe", rttSeconds = 0.9, bitrate = 150_000.0, state = "in-progress"),
+            ),
+        )
+        assertThat(stats.roundTripTimeMs).isWithin(1e-9).of(40.0)
+        assertThat(stats.availableOutgoingBitrateBps).isEqualTo(2_000_000)
+    }
+
+    @Test
+    fun `without a transport the nominated succeeded pair carries the rtt`() {
+        val stats = CallStats.reduce(
+            listOf(
+                pair("elected", rttSeconds = 0.06, bitrate = 1_200_000.0, nominated = true),
+                pair("probe", rttSeconds = 0.5, bitrate = 90_000.0, state = "waiting"),
+            ),
+        )
+        assertThat(stats.roundTripTimeMs).isWithin(1e-9).of(60.0)
+        assertThat(stats.availableOutgoingBitrateBps).isEqualTo(1_200_000)
+    }
+
+    @Test
+    fun `with no elected pair the last pair carrying an rtt still wins, as before`() {
+        val stats = CallStats.reduce(
+            listOf(
+                pair("a", rttSeconds = 0.06, bitrate = 1_200_000.0, state = "in-progress"),
+                pair("b", rttSeconds = 0.5, bitrate = 90_000.0, state = "waiting"),
+            ),
+        )
+        assertThat(stats.roundTripTimeMs).isWithin(1e-9).of(500.0)
+        assertThat(stats.availableOutgoingBitrateBps).isEqualTo(90_000)
+    }
+
+    @Test
+    fun `an elected pair that reports no rtt falls back to the previous reading`() {
+        val elected = CallStats.RawEntry(
+            id = "elected",
+            type = "candidate-pair",
+            values = mapOf("nominated" to 1.0),
+            strings = mapOf("state" to "succeeded"),
+        )
+        val stats = CallStats.reduce(listOf(elected, pair("other", rttSeconds = 0.08, bitrate = 300_000.0, state = "waiting")))
+        assertThat(stats.roundTripTimeMs).isWithin(1e-9).of(80.0)
+        assertThat(stats.availableOutgoingBitrateBps).isEqualTo(300_000)
+    }
+
     // --- reduce: inbound-rtp per kind --------------------------------------
 
     @Test
@@ -100,7 +175,7 @@ class CallStatsTest {
         assertThat(stats.inboundAudioPackets).isEqualTo(500)
         assertThat(stats.inboundVideoPackets).isEqualTo(0)
         assertThat(stats.packetsLost).isEqualTo(5)
-        assertThat(stats.bytesReceived).isEqualTo(64_000)
+        assertThat(stats.bytesReceived).isEqualTo(64_000L)
         // jitter reported in seconds -> milliseconds mean.
         assertThat(stats.jitterMs).isEqualTo(20.0)
     }
@@ -171,7 +246,7 @@ class CallStatsTest {
             ),
         )
         assertThat(stats.outboundPacketsSent).isEqualTo(1_680)
-        assertThat(stats.bandwidth).isEqualTo(960_000)
+        assertThat(stats.bandwidth).isEqualTo(960_000L)
     }
 
     // --- reduce: codec resolution ------------------------------------------

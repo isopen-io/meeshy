@@ -61,6 +61,15 @@ class CallSkinRetouchTest {
         assertThat(CallSkinRetouchPlan.make(VideoFilterConfig().selectingFaceEffect(CallFaceEffect.Angel), healthy, false)).isNull()
     }
 
+    @Test
+    fun `le bebe garde une peau lissee, jamais plus faible que BABY_SMOOTHING, et la cede quand l appareil peine (#19779)`() {
+        val faint = VideoFilterConfig(skinSmoothingIntensity = 0.1f).selectingFaceEffect(CallFaceEffect.Baby)
+        assertThat(CallSkinRetouchPlan.make(faint, healthy, false)!!.smoothing).isEqualTo(CallSkinRetouchPlan.BABY_SMOOTHING)
+        val strong = VideoFilterConfig(skinSmoothingIntensity = 0.8f).selectingFaceEffect(CallFaceEffect.Baby)
+        assertThat(CallSkinRetouchPlan.make(strong, healthy, false)!!.smoothing).isEqualTo(0.8f)
+        assertThat(CallSkinRetouchPlan.make(strong.copy(naturalComplexionEnabled = false), overloaded(5), false)).isNull()
+    }
+
     private val box = FaceBox(100f, 100f, 200f, 260f)
 
     @Test

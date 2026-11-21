@@ -29,6 +29,8 @@ data class GroupCallDirectory(
     private fun mergedName(known: GroupCallArrival, later: GroupCallArrival): GroupCallArrival = known.copy(
         displayName = later.displayName ?: known.displayName,
         avatarUrl = later.avatarUrl ?: known.avatarUrl,
+        isAudioEnabled = later.isAudioEnabled ?: known.isAudioEnabled,
+        isVideoEnabled = later.isVideoEnabled ?: known.isVideoEnabled,
     )
 
     companion object {
@@ -52,7 +54,13 @@ data class GroupCallDirectory(
                 names = present.associate { participant ->
                     val user = participant.user
                     val name = user?.displayName.nonBlank() ?: user?.username.nonBlank()
-                    participant.userId to GroupCallArrival(participant.userId, displayName = name, avatarUrl = user?.avatar.nonBlank())
+                    participant.userId to GroupCallArrival(
+                        participant.userId,
+                        displayName = name,
+                        avatarUrl = user?.avatar.nonBlank(),
+                        isAudioEnabled = participant.isMuted?.not(),
+                        isVideoEnabled = participant.isVideoOff?.not(),
+                    )
                 },
                 presentIds = present.mapTo(LinkedHashSet()) { it.userId },
             )
@@ -78,6 +86,19 @@ fun GroupCallRoster.named(directory: GroupCallDirectory): GroupCallRoster =
         val avatar = known.avatarUrl.takeIf { member.avatarUrl.isNullOrBlank() }
         if (name == null && avatar == null) return@fold roster
         roster.admitting(GroupCallArrival(member.userId, displayName = name, avatarUrl = avatar))
+    }
+
+/**
+ * La caméra et le micro que la session servie dit de chaque membre (#19650), posés sur ceux dont aucun événement
+ * ([asserted] : `call:participant-joined` détaillé, `call:media-toggled`) n'a encore parlé — un événement est plus
+ * récent qu'une lecture. Ce que la session tait ne se fabrique pas.
+ */
+fun GroupCallRoster.withMediaFrom(directory: GroupCallDirectory, asserted: Set<String>): GroupCallRoster =
+    members.fold(this) { roster, member ->
+        if (member.userId in asserted) return@fold roster
+        val known = directory.names[member.userId] ?: return@fold roster
+        if (known.isAudioEnabled == null && known.isVideoEnabled == null) return@fold roster
+        roster.admitting(GroupCallArrival(member.userId, isAudioEnabled = known.isAudioEnabled, isVideoEnabled = known.isVideoEnabled))
     }
 
 /**

@@ -34,6 +34,7 @@ describe('PostAudioService — le broadcast de fin de pipeline', () => {
   it('aplatit la relation en clé exposée', async () => {
     const prisma = {
       postMedia: {
+        findUnique: jest.fn<any>().mockResolvedValue({ translations: null }),
         update: jest.fn<any>().mockResolvedValue({ commentId: null }),
       },
       post: {

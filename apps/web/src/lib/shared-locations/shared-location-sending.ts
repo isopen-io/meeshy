@@ -21,13 +21,14 @@ export type SharedLocationRecipient = { readonly userId: string; readonly precis
 export type SharedLocationStartPayload = {
   readonly recipients: readonly SharedLocationRecipient[];
   readonly durationMinutes: SharedLocationDurationMinutes;
-  readonly position: SharedLocationFix;
+  /** Absente : liste seule (#19284), la passerelle reprend la position du partage en cours. */
+  readonly position?: SharedLocationFix;
 };
 
 /** Ce que l'interface dit d'un envoi qui n'a pas abouti. `unconfirmed` : l'accusé n'est pas revenu, la passerelle a PU prendre l'envoi. */
 export type SharedLocationSendOutcome = 'invalid' | 'not-sharing' | 'rate-limited' | 'unavailable' | 'offline' | 'unconfirmed' | 'failed';
 export type SharedLocationVerdict =
-  | { readonly kind: 'started'; readonly expiresAt: number }
+  | { readonly kind: 'started'; readonly expiresAt: number; readonly startedAt?: string }
   | { readonly kind: 'refused'; readonly outcome: SharedLocationSendOutcome };
 
 const MAX_ACCURACY_METERS = 100_000;
@@ -55,12 +56,13 @@ export function sharedLocationStartPayloadOf({
 }: {
   readonly recipients: readonly SharedLocationRecipient[];
   readonly durationMinutes: SharedLocationDurationMinutes;
-  readonly fix: SharedLocationFix;
+  /** `null` : liste seule (#19284), la passerelle reprend la position du partage en cours. */
+  readonly fix: SharedLocationFix | null;
 }): SharedLocationStartPayload | null {
   const latest = new Map(recipients.filter((r) => OBJECT_ID.test(r.userId)).map((r) => [r.userId.toLowerCase(), r] as const));
   const ordered = [...latest.entries()].map(([userId, { precision, expiresInSeconds }]) => ({ userId, precision, ...(expiresInSeconds === undefined ? {} : { expiresInSeconds }) }));
   if (ordered.length === 0 || ordered.length > SHARED_LOCATION_RECIPIENTS_MAX) return null;
-  return { recipients: ordered, durationMinutes, position: fix };
+  return fix === null ? { recipients: ordered, durationMinutes } : { recipients: ordered, durationMinutes, position: fix };
 }
 
 /**
@@ -86,9 +88,10 @@ const objectOf = (raw: unknown): Wire | null => (typeof raw === 'object' && raw 
 export function readSharedLocationAck(raw: unknown): SharedLocationVerdict {
   const ack = objectOf(raw);
   if (ack?.success === true) {
-    const expiresAt = objectOf(ack.data)?.expiresAt;
-    const at = typeof expiresAt === 'string' ? Date.parse(expiresAt) : Number.NaN;
-    return Number.isNaN(at) ? { kind: 'refused', outcome: 'failed' } : { kind: 'started', expiresAt: at };
+    const data = objectOf(ack.data);
+    const at = typeof data?.expiresAt === 'string' ? Date.parse(data.expiresAt) : Number.NaN;
+    if (Number.isNaN(at)) return { kind: 'refused', outcome: 'failed' };
+    return typeof data?.startedAt === 'string' ? { kind: 'started', expiresAt: at, startedAt: data.startedAt } : { kind: 'started', expiresAt: at };
   }
   const code = typeof ack?.code === 'string' ? ack.code : '';
   return { kind: 'refused', outcome: REFUSALS[code] ?? 'failed' };

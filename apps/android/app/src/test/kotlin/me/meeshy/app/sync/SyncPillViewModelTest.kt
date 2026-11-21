@@ -62,6 +62,18 @@ class SyncPillViewModelTest {
         val phone = object : SyncPillPhoneReachabilitySource {
             override val announcements: Flow<SyncPillPhoneReachabilityItem> = phoneItems
         }
+        val inactivityItems = MutableSharedFlow<SyncPillInactivityItem>(extraBufferCapacity = 8)
+        val inactivity = object : SyncPillInactivitySource {
+            override val announcements: Flow<SyncPillInactivityItem> = inactivityItems
+        }
+        val phoneCallItems = MutableSharedFlow<SyncPillPhoneCallItem>(extraBufferCapacity = 8)
+        val phoneCall = object : SyncPillPhoneCallSource {
+            override val announcements: Flow<SyncPillPhoneCallItem> = phoneCallItems
+        }
+        val fallItems = MutableSharedFlow<SyncPillFallItem>(extraBufferCapacity = 8)
+        val fall = object : SyncPillFallSource {
+            override val announcements: Flow<SyncPillFallItem> = fallItems
+        }
     }
 
     @Before
@@ -72,7 +84,16 @@ class SyncPillViewModelTest {
 
     private fun TestScope.viewModel(f: Fakes): SyncPillViewModel {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val vm = SyncPillViewModel(f.store, f.queue, f.typing, f.battery, f.phone) { testScheduler.currentTime }
+        val vm = SyncPillViewModel(
+            f.store,
+            f.queue,
+            f.typing,
+            f.battery,
+            f.phone,
+            f.inactivity,
+            phoneCallSource = f.phoneCall,
+            fallSource = f.fall,
+        ) { testScheduler.currentTime }
         backgroundScope.launch { vm.uiState.collect { } }
         runCurrent()
         return vm
@@ -121,6 +142,76 @@ class SyncPillViewModelTest {
         f.phoneItems.emit(reachable)
         runCurrent()
         assertThat(vm.uiState.value.rows.map { it.literalLabel }).containsExactly(reachable.label)
+    }
+
+    @Test
+    fun `une alerte d'inactivite defile, disparait, et le retour la remplace sur un nouvel evenement`() = runTest {
+        val f = Fakes()
+        val vm = viewModel(f)
+        val alert = SyncPillInactivityItem("inactivity:u2:alert:1", "u2", "Jacques n'a pas répondu à « Tout va bien ? »")
+        f.inactivityItems.emit(alert)
+        runCurrent()
+        assertThat(vm.uiState.value.rows.map { it.literalLabel }).containsExactly(alert.label)
+        assertThat(vm.uiState.value.rows.single().glyph).isEqualTo(me.meeshy.sdk.model.syncpill.SyncPillGlyph.INACTIVITY)
+
+        advanceTimeBy(6_001)
+        runCurrent()
+        assertThat(vm.uiState.value.rows).isEmpty()
+
+        f.inactivityItems.emit(alert)
+        runCurrent()
+        assertThat(vm.uiState.value.rows).isEmpty()
+
+        val responded = SyncPillInactivityItem("inactivity:u2:responded:2", "u2", "Jacques va bien")
+        f.inactivityItems.emit(responded)
+        runCurrent()
+        assertThat(vm.uiState.value.rows.map { it.literalLabel }).containsExactly(responded.label)
+    }
+
+    @Test
+    fun `une chute detectee defile en tete, disparait, et le retour la remplace pour la meme personne`() = runTest {
+        val f = Fakes()
+        val vm = viewModel(f)
+        f.phoneCallItems.emit(SyncPillPhoneCallItem("phone-call:u3:started:1", "u3", "Jacques est en appel"))
+        val detected = SyncPillFallItem("fall:u2:detected:1", "u2", "Une chute a été détectée sur la montre d'Awa")
+        f.fallItems.emit(detected)
+        runCurrent()
+        assertThat(vm.uiState.value.rows.first().literalLabel).isEqualTo(detected.label)
+        assertThat(vm.uiState.value.rows.first().glyph).isEqualTo(me.meeshy.sdk.model.syncpill.SyncPillGlyph.FALL)
+
+        val responded = SyncPillFallItem("fall:u2:responded:2", "u2", "Awa va bien")
+        f.fallItems.emit(responded)
+        runCurrent()
+        assertThat(vm.uiState.value.rows.map { it.literalLabel }).contains(responded.label)
+        assertThat(vm.uiState.value.rows.map { it.literalLabel }).doesNotContain(detected.label)
+
+        advanceTimeBy(6_001)
+        runCurrent()
+        assertThat(vm.uiState.value.rows).isEmpty()
+    }
+
+    @Test
+    fun `en appel defile, disparait, et le raccroche le remplace pour la meme personne`() = runTest {
+        val f = Fakes()
+        val vm = viewModel(f)
+        val started = SyncPillPhoneCallItem("phone-call:u2:started:1", "u2", "Jacques est en appel")
+        f.phoneCallItems.emit(started)
+        runCurrent()
+        assertThat(vm.uiState.value.rows.map { it.literalLabel }).containsExactly(started.label)
+        assertThat(vm.uiState.value.rows.single().glyph).isEqualTo(me.meeshy.sdk.model.syncpill.SyncPillGlyph.PHONE_CALL)
+
+        val ended = SyncPillPhoneCallItem("phone-call:u2:ended:2", "u2", "Jacques a raccroché")
+        f.phoneCallItems.emit(ended)
+        runCurrent()
+        assertThat(vm.uiState.value.rows.map { it.literalLabel }).containsExactly(ended.label)
+
+        advanceTimeBy(6_001)
+        runCurrent()
+        assertThat(vm.uiState.value.rows).isEmpty()
+
+        f.phoneCallItems.emit(ended)
+        runCurrent()
+        assertThat(vm.uiState.value.rows).isEmpty()
     }
 
     @Test

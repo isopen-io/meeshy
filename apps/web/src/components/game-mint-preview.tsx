@@ -1,7 +1,8 @@
-import type { GameMintPreview as MintPreview } from '@meeshy/shared/types/game';
+import type { GameGlory, GameMintPreview as MintPreview } from '@meeshy/shared/types/game';
 import { meeshDisplayEdition, meeshEdition, type MeeshEdition } from '@meeshy/shared/utils/game/mint';
 
 import { GameBird } from '@/components/game';
+import type { MintCeremonyGlory } from '@/components/game/mint-ceremony';
 import { MintStrike } from '@/components/game-mint-strike';
 import { divisionLabel, editionName, formatCount, gameText, pointsLabel, rankName } from '@/lib/view/game-copy';
 
@@ -43,8 +44,14 @@ export type GameMintPreviewProps = {
   readonly celebration: MintCelebration | null;
   /** Incrémenté à chaque intention de frappe : fait jouer Mee et Meo. */
   readonly strikeKey?: number;
+  /** La Gloire servie (#19855) : la cérémonie finit sur le pas vers le rang suivant. */
+  readonly glory?: GameGlory | undefined;
   readonly onMint: () => void;
 };
+
+/** Ce que la cérémonie reçoit de la Gloire (#19855) : celle d'avant le geste, celle que l'aperçu promet, le Mythe servi. */
+export const ceremonyGlory = (mint: MintPreview, glory: GameGlory | undefined): MintCeremonyGlory | null =>
+  glory === undefined ? null : { before: glory.glory, gained: mint.gloryGained, mythic: glory.rank === 'mythe' };
 
 /**
  * Pourquoi la frappe est fermée, quand ce n'est PAS faute d'étincelles (porteur, 2026-10-16) : une DETTE d'étincelles à
@@ -83,13 +90,13 @@ function meeLine(mint: MintPreview): { readonly text: string; readonly fact: str
 }
 
 export function GameMintPreview(props: GameMintPreviewProps) {
-  const { mint, held, online, minting, error, celebration, strikeKey = 0, onMint } = props;
+  const { mint, held, online, minting, error, celebration, strikeKey = 0, glory, onMint } = props;
   const mee = meeLine(mint);
 
   return (
     <GameCard id="game-mint" labelledBy="game-mint-title" tint={GAME_WARM}>
       <div data-game-mint-band="" className="grid w-full place-items-center py-1">
-        <MintStrike size={112} strikeKey={strikeKey} next={{ number: mint.number, edition: mint.edition }} confirmed={celebration} />
+        <MintStrike size={112} strikeKey={strikeKey} next={{ number: mint.number, edition: mint.edition }} confirmed={celebration} glory={ceremonyGlory(mint, glory)} />
       </div>
 
       <h2 id="game-mint-title" data-fact="mint_next" className="text-body font-bold" style={{ color: GAME_INK }}>

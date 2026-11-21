@@ -5,7 +5,7 @@ import MeeshyUI
 /// Cold-start placeholder for a single Contacts-hub row (avatar + two text
 /// lines). Mirrors the row shape every tab already renders once data lands
 /// (avatar, name, subtitle) so the vertical rhythm survives the swap to live
-/// rows — same idea as `SkeletonLinkRow`, sized for a contact/call row instead
+/// rows — same idea as the ticket column `MeeshySkeletonColumn`, sized for a contact/call row instead
 /// of a link row.
 ///
 /// Leaf view: no `@ObservedObject`/`@StateObject`, no singleton read besides

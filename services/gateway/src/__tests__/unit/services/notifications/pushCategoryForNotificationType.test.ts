@@ -38,6 +38,10 @@ describe('pushCategoryForNotificationType', () => {
     expect(pushCategoryForNotificationType('call_declined')).toBe('MEESHY_CALL_MISSED');
   });
 
+  it('« Tout va bien ? » porte la catégorie de son action « Je vais bien » (#18738), sans dépendre de la NSE', () => {
+    expect(pushCategoryForNotificationType('wellness_check')).toBe('MEESHY_WELLNESS_CHECK');
+  });
+
   it('returns undefined for unmapped types (no misleading actions)', () => {
     expect(pushCategoryForNotificationType('system')).toBeUndefined();
     expect(pushCategoryForNotificationType('login_new_device')).toBeUndefined();

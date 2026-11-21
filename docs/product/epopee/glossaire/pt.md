@@ -76,7 +76,7 @@ O tom: o jogo trata o herói por **você** (português do Brasil), nunca por « 
 - **Os vinte estados**: **Faísca** (chave `etincelle`, nunca « Brasa »), Lampejo, **Claridade** (chave `lumiere`, nunca « Luz »), Brilho, Raio, Aurora, Cometa, Estrela, Constelação, Galáxia, depois Nebulosa, Pulsar, Quasar, Supernova, Magnetar, Aglomerado, Superaglomerado, Cosmos, Infinito, Singularidade.
 - **A prova**: a cada dez níveis, de 10 a 100, os ancestrais pedem uma prova (uma Meesh, um sonho, uma Chama, um título). Enquanto ela não for vencida, a luz espera.
 - **O título abre a luz**: a Supernova é o limite abaixo de Embaixador, Embaixador abre até a Singularidade, Oráculo tira todo limite.
-- **A**: anel « 34 » · Brilho; « Nível 34 ».
+- **A**: anel « 34 » · Brilho; « Nível 34 ». Lidos em voz alta, a faixa e o anel dizem « Sua luz no nível 34 » (#19892).
 - **B**: « Sua luz agora é Brilho », depois em pequeno « nível 34 · 3.200 faíscas até o nível 35 ».
 - **Banidas**: « ainda N antes do nível X » → « N faíscas até o nível X »; « etapa » → « prova »; « recorde de nível » → « o auge da sua luz »; « faixa » → « estado ».
 

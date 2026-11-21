@@ -38,8 +38,8 @@ internal class CallFaceStroke {
 
 /**
  * **LES EFFETS DE VISAGE STYLISÉS SUR LA CARTE GRAPHIQUE** (#13706) — iOS `CallFaceEffectsRenderer`: crapaud, ange,
- * démon, éruption, drawn on the frame the encoder reads, after the colour. One full-frame pass ([CallFaceShaders.
- * STYLIZE]) then the drawings — halo, horns, warts, eye glows, embers — as sprites turned with the face. The drawings
+ * démon, éruption, bébé (#19779 : ses joues roses, sa peau lissée par la retouche `CallSkinRetouchPlan`), drawn on
+ * the frame the encoder reads, after the colour. One full-frame pass ([CallFaceShaders.STYLIZE]) then the drawings — halo, horns, warts, eye glows, embers — as sprites turned with the face. The drawings
  * are painted ONCE into textures (the halo and the horn are iOS's drawings, the spot is iOS's radial gradient) and
  * only placed afterwards.
  *
@@ -68,6 +68,7 @@ internal class CallFaceEffectsGl(private val quad: FloatBuffer, private val quad
             CallFaceEffect.Angel -> if (hasFace) halo(stroke, face!!)
             CallFaceEffect.Demon -> if (hasFace) demon(stroke, face!!)
             CallFaceEffect.Volcano -> if (stroke.isAnimated) embers(stroke)
+            CallFaceEffect.Baby -> if (hasFace) blush(stroke, face!!)
             CallFaceEffect.None, CallFaceEffect.Smoothing -> Unit
         }
         GLES20.glDisable(GLES20.GL_BLEND)
@@ -101,7 +102,8 @@ internal class CallFaceEffectsGl(private val quad: FloatBuffer, private val quad
         orient(program, stroke)
         program.uniform("faceOn", if (face != null) 1f else 0f)
         if (face != null) {
-            for (i in 0 until 4) program.uniform4(BUMPS[i], face.bumps, i * 4)
+            val bumps = if (stroke.effect == CallFaceEffect.Baby) face.babyBumps else face.bumps
+            for (i in 0 until 4) program.uniform4(BUMPS[i], bumps, i * 4)
             program.uniform4("faceBox", face.faceBox, 0)
         }
         val lava = CallFaceEffectGeometry.lavaHeight(stroke.time, stroke.uprightHeight)
@@ -131,6 +133,13 @@ internal class CallFaceEffectsGl(private val quad: FloatBuffer, private val quad
         val radius = CallFaceEffectGeometry.eyeGlowRadius(face.face!!.bounds, stroke.time)
         additive()
         for (i in 0 until 2) spot(stroke, face.eyes[i * 2], face.eyes[i * 2 + 1], radius, 1f, 0.12f, 0.04f, 0.95f)
+    }
+
+    /** #19779 — the baby's two pink cheeks (iOS `spot`, 32 % opaque). */
+    private fun blush(stroke: CallFaceStroke, face: CallFaceFrame) {
+        val radius = face.face!!.bounds.width * 0.16f
+        sourceOver()
+        for (i in 0 until 2) spot(stroke, face.cheeks[i * 2], face.cheeks[i * 2 + 1], radius, 1f, 0.55f, 0.62f, 0.32f)
     }
 
     private fun embers(stroke: CallFaceStroke) {
@@ -216,6 +225,7 @@ internal class CallFaceEffectsGl(private val quad: FloatBuffer, private val quad
         CallFaceEffect.Angel -> 2f
         CallFaceEffect.Demon -> 3f
         CallFaceEffect.Volcano -> 4f
+        CallFaceEffect.Baby -> 5f
         CallFaceEffect.None, CallFaceEffect.Smoothing -> 0f
     }
 

@@ -269,6 +269,7 @@ services:
     restart: unless-stopped
     logging: *journald-logging
     environment:
+      - GATEWAY_DRAIN_MS=20000
       - DATABASE_TYPE=${DATABASE_TYPE:-MONGODB}
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=redis://redis:6379
@@ -461,12 +462,16 @@ services:
       - meeshy-network
       - meeshy-data
       - meeshy-agent-network
+    # #19280 — au SIGTERM la passerelle répond /health en 503 (vidange, `utils/shutdown-drain.ts`) :
+    # Traefik n'écarte un conteneur que `unhealthy`, et ce délai (2 échecs x 5 s) borne l'attente
+    # `GATEWAY_DRAIN_MS`. Pendant ce temps, toute requête neuve reçoit 503 + CORS de la passerelle.
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      interval: 5s
+      timeout: 3s
+      retries: 2
       start_period: 30s
+    stop_grace_period: 45s
     labels:
       - "traefik.enable=true"
       # #10323 — la passerelle a plusieurs réseaux (#10289, #11451) : Traefik la joint par le réseau d'entrée,

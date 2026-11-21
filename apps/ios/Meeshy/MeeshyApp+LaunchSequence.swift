@@ -180,6 +180,7 @@ extension MeeshyApp {
         }
         OutboxLiveActivityCoordinator.shared.start()
         LiveActivityCommandBinding.shared.install()
+        LocationShareLiveActivityCoordinator.shared.followAccounts()
     }
 
     func resolveStoredSession() async {
@@ -198,6 +199,7 @@ extension MeeshyApp {
         VitrineStage.ouvrir(apres: launchSplash.$phase)
         #endif
         launchSplash.reach(.conversationList)
+        Task { await ClosePeopleWidgetFeed.publishFromCache() }
         ConversationListVMOwner.prewarm(userId: AuthManager.shared.currentUser?.id ?? "")
         _ = await CacheCoordinator.shared.conversations.load(for: "list")
         Task {

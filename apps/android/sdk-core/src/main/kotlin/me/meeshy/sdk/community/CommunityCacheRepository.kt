@@ -14,10 +14,13 @@ import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.model.ApiCommunity
 import me.meeshy.sdk.model.ApiCommunityMember
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.CommunityDeletedEvent
+import me.meeshy.sdk.model.CommunityJoinRequestDecidedEvent
 import me.meeshy.sdk.model.CommunityMemberChange
 import me.meeshy.sdk.model.CommunityUpdatedEvent
 import me.meeshy.sdk.model.applying
 import me.meeshy.sdk.model.applyingMember
+import me.meeshy.sdk.model.withoutCommunity
 import me.meeshy.sdk.model.ContentFetchFailure
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
@@ -124,6 +127,36 @@ class CommunityCacheRepository(
         when {
             next != null -> cache.update(MEMBERS_NAMESPACE, change.communityId, members, ticket) { next }
             change.kind == CommunityMemberChange.Kind.JOINED -> revalidating(membersSource(change.communityId))
+        }
+    }
+
+    /**
+     * `community:deleted` (#19592, web `community-deleted-live.ts`) : la communauté sort de la première
+     * page tenue, sans relance réseau, et sa fiche, ses membres et ses channels sont oubliés. Un écran
+     * qui la REGARDE repart à froid : il relit, la passerelle rend 404, et l'écran dessine le refus
+     * qu'il sait déjà dessiner — au lieu de garder actionnable une communauté qui n'existe plus.
+     */
+    suspend fun applyDeleted(event: CommunityDeletedEvent) {
+        val communityId = event.disappearedId ?: return
+        val ticket = cache.ticket()
+        val page = ListSerializer(ApiCommunity.serializer())
+        cache.get(LIST_NAMESPACE, FIRST_PAGE, page)?.value?.withoutCommunity(communityId)?.let { next ->
+            cache.update(LIST_NAMESPACE, FIRST_PAGE, page, ticket) { next }
+        }
+        forget(communityId)
+    }
+
+    /**
+     * `community:join-request-decided` (#19949, web `applyCommunityJoinRequestDecidedEvent`) : la fiche
+     * DÉJÀ tenue passe de « Demande envoyée » à « Demande refusée » avec la date de la charge, sans
+     * relecture ni rajeunir l'instant de lecture. Une communauté que l'appareil ne tient pas n'y est
+     * pas posée.
+     */
+    suspend fun applyJoinRequestDecided(event: CommunityJoinRequestDecidedEvent) {
+        val ticket = cache.ticket()
+        val detail = ApiCommunity.serializer()
+        cache.get(DETAIL_NAMESPACE, event.communityId, detail)?.value?.applying(event)?.let { next ->
+            cache.update(DETAIL_NAMESPACE, event.communityId, detail, ticket) { next }
         }
     }
 

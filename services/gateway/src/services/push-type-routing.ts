@@ -87,12 +87,23 @@ const E2EE_DEVICE_VERIFICATION_FLOORS: Readonly<Record<PushRoutingClient, string
   ios: null, 'android-native': null, 'android-shell': null, web: null,
 };
 
+/**
+ * `location_share_ended` (#19463) : le data-only silencieux qui retire l'Activité en direct, l'écran verrouillé et
+ * la notification en cours d'un partage de position terminé. Un ancien Android natif en ferait une bannière vide ;
+ * aucun client publié ne le route encore, chaque lot client pose ici sa première version DANS la même PR. Le jeton
+ * d'Activité en direct (`POST /me/live-activity-tokens`) ne dépend pas de ces planchers.
+ */
+const LOCATION_SHARE_ENDED_FLOORS: Readonly<Record<PushRoutingClient, string | null>> = {
+  ios: null, 'android-native': null, 'android-shell': null, web: null,
+};
+
 export const PUSH_TYPE_ROUTING_FLOORS: PushTypeRoutingFloors = new Map([
   ['game_photo_moment', { ios: null, 'android-native': null, 'android-shell': '2.23.0', web: '2.23.0' }],
   ['bring_stopped', BRING_STOPPED_FLOORS],
   ['talkie_incoming', TALKIE_INCOMING_FLOORS],
   ['battery_pull', BATTERY_PULL_FLOORS],
   ['e2ee_device_verification', E2EE_DEVICE_VERIFICATION_FLOORS],
+  ['location_share_ended', LOCATION_SHARE_ENDED_FLOORS],
 ]);
 
 const ANDROID_NATIVE_BUNDLE = /^me\.meeshy\.(app|android)(\.|$)/;

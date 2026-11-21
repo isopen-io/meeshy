@@ -11,6 +11,9 @@ public protocol PhoneReachabilityServiceProviding: Sendable {
     func state(userId: String) async throws -> PhoneReachabilityState?
     func personSettings(userId: String) async throws -> PhoneReachabilityPersonSettings
     func updatePersonSettings(userId: String, isShared: Bool) async throws -> PhoneReachabilityPersonSettings
+    /// `PUT /relations/:userId/phone-reachability/settings { alertMe }` — être prévenu, ou non, quand SON téléphone
+    /// devient injoignable (#19433, serveur #19435). Ne s'écrit que si le serveur a servi `alertMe`.
+    func updateAlert(userId: String, alertsMe: Bool) async throws -> PhoneReachabilityPersonSettings
     func emitterSettings() async throws -> PhoneReachabilityEmitterSettings
     func updateEmitterSettings(sharingEnabled: Bool) async throws -> PhoneReachabilityEmitterSettings
     /// `POST /me/device/alive` — la réponse de mon téléphone à un push silencieux `device_probe`.
@@ -50,6 +53,14 @@ public final class PhoneReachabilityService: PhoneReachabilityServiceProviding, 
         let response: APIResponse<PhoneReachabilityPersonSettings> = try await api.put(
             RelationsEndpoint.byUserIdPhoneReachabilitySettings(userId: userId),
             body: PhoneReachabilityPersonSettingsUpdate(isShared: isShared)
+        )
+        return response.data
+    }
+
+    public func updateAlert(userId: String, alertsMe: Bool) async throws -> PhoneReachabilityPersonSettings {
+        let response: APIResponse<PhoneReachabilityPersonSettings> = try await api.put(
+            RelationsEndpoint.byUserIdPhoneReachabilitySettings(userId: userId),
+            body: PhoneReachabilityAlertUpdate(alertsMe: alertsMe)
         )
         return response.data
     }

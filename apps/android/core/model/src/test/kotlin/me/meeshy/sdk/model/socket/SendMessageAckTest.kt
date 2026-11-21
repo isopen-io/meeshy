@@ -49,6 +49,15 @@ class SendMessageAckTest {
     }
 
     @Test
+    fun `sans horloge serveur la bulle prend la seconde que prouve l'id serveur, jamais l'horloge de l'appareil`() {
+        val bubble = ApiMessage(id = "cid_1", conversationId = "c1", createdAt = "2026-11-01T09:05:00Z")
+
+        val reconciled = bubble.acknowledgedBy(SendMessageAck("6ae6ff90a1b2c3d4e5f60718", "cid_1"))
+
+        assertThat(reconciled.createdAt).isEqualTo("2026-11-01T09:00:00Z")
+    }
+
+    @Test
     fun `le repli n'est permis que pour un échec réseau ou un 5xx`() {
         assertThat(SocketSendFallbackPolicy.allowsFallback(null, "NETWORK")).isTrue()
         assertThat(SocketSendFallbackPolicy.allowsFallback(503, null)).isTrue()

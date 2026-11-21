@@ -9,9 +9,13 @@ public nonisolated enum MeeshyGlassButtonKind: String, Sendable, Equatable, Case
     case soft
 }
 
-/// Les quatre diamètres de la planche. La cible tactile occupe au moins
-/// `MeeshyControlSize.tapTarget`, quel que soit le diamètre dessiné.
+/// Les quatre diamètres de la planche, et la pastille d'action de coin (32) : un
+/// appareil photo posé sur un avatar modifiable (planche `Moi-Edition`). La cible
+/// tactile occupe au moins `MeeshyControlSize.tapTarget`, quel que soit le
+/// diamètre dessiné. Les vecteurs rangent `s32` sous `cornerSizes`, à part des
+/// tailles partagées.
 public nonisolated enum MeeshyGlassButtonSize: String, Sendable, Equatable, CaseIterable {
+    case s32
     case s36
     case s40
     case s44
@@ -24,6 +28,7 @@ public nonisolated enum MeeshyGlassButtonSize: String, Sendable, Equatable, Case
 
     public var diameter: Double {
         switch self {
+        case .s32: return Double(MeeshyControlSize.compact)
         case .s36: return Double(MeeshyControlSize.regular)
         case .s40: return Double(MeeshyControlSize.large)
         case .s44: return Double(MeeshyControlSize.tapTarget)
@@ -45,6 +50,7 @@ public nonisolated enum MeeshyGlassButtonSize: String, Sendable, Equatable, Case
     /// les jetons d'icône : le Dynamic Type ne le touche pas.
     public var glyphSize: Double {
         switch self {
+        case .s32: return Double(MeeshyIconSize.sm)
         case .s36, .s40: return Double(MeeshyIconSize.lg)
         case .s44: return Double(MeeshyIconSize.xl)
         case .s48: return Double(MeeshyIconSize.xxl)

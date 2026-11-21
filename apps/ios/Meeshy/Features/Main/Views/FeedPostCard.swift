@@ -757,7 +757,7 @@ struct FeedPostCard: View {
                 }
             )
         }
-        .sheet(item: $selectedProfileUser) { user in
+        .profileCover(item: $selectedProfileUser) { user in
             let mood = moodLookup?(user.userId ?? "")
             let isPostAuthor = user.userId == post.authorId
             UserProfileSheet(
@@ -781,8 +781,7 @@ struct FeedPostCard: View {
                     }))
                 }, dependencies: .live
             )
-            .presentationDetents([.large, .medium])
-            .presentationDragIndicator(.visible).closesForConversationOpening(.sheet)
+            .closesForConversationOpening(.sheet)
         }
         .fullScreenCover(item: $fullscreenPlace) { item in
             // Même surface plein écran que la bulle de message : carte +

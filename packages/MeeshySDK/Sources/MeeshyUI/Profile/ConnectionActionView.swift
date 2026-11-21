@@ -96,7 +96,7 @@ public struct ConnectionActionView: View {
                 addButton()
             }
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: state)
+        .meeshyMotion(.morph, value: state)
     }
 
     // MARK: - Sub-views

@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import me.meeshy.sdk.model.phonereachability.PhoneAliveResultWire
 import me.meeshy.sdk.model.phonereachability.PhoneReachabilityEmitterSettings
+import me.meeshy.sdk.model.phonereachability.PhoneReachabilityEmitterSettingsBody
 import me.meeshy.sdk.model.phonereachability.PhoneReachabilityPersonSettingsBody
 import me.meeshy.sdk.model.phonereachability.PhoneReachabilityPersonSettingsWire
 import me.meeshy.sdk.model.relation.RelationLevel
@@ -45,7 +46,7 @@ interface PhoneReachabilitySettingsGateway {
 /** Les appels REST — isolés pour que les tests les pilotent à la main. */
 internal class PhoneReachabilitySettingsCalls(
     val emitter: suspend () -> NetworkResult<PhoneReachabilityEmitterSettings>,
-    val setEmitter: suspend (PhoneReachabilityEmitterSettings) -> NetworkResult<PhoneReachabilityEmitterSettings>,
+    val setEmitter: suspend (PhoneReachabilityEmitterSettingsBody) -> NetworkResult<PhoneReachabilityEmitterSettings>,
     val person: suspend (String) -> NetworkResult<PhoneReachabilityPersonSettingsWire>,
     val setPerson: suspend (String, PhoneReachabilityPersonSettingsBody) -> NetworkResult<PhoneReachabilityPersonSettingsWire>,
     val level: suspend (String) -> String?,
@@ -81,7 +82,7 @@ class PhoneReachabilitySettingsRepository internal constructor(
     override suspend fun setSharing(enabled: Boolean): Boolean {
         val before = _sharingEnabled.value
         _sharingEnabled.value = enabled
-        val served = calls.setEmitter(PhoneReachabilityEmitterSettings(enabled)).getOrNull()
+        val served = calls.setEmitter(PhoneReachabilityEmitterSettingsBody(enabled)).getOrNull()
         _sharingEnabled.value = served?.sharingEnabled ?: before
         return served != null
     }

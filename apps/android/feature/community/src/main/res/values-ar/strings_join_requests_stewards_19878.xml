@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Les demandes d'entrée que tranchent les intendants (#19878) — mêmes mots que les clés iOS community.members.requests.* (#19877). -->
+<resources>
+    <string name="community_members_requests_section">طلبات قيد الانتظار</string>
+    <string name="community_members_requests_more">عرض المزيد من الطلبات</string>
+    <string name="community_members_requests_accept_label">قبول طلب %1$s</string>
+    <string name="community_members_requests_reject_label">رفض طلب %1$s</string>
+    <string name="community_members_requests_asked">طُلب في %1$s</string>
+    <string name="community_members_requests_reject">رفض</string>
+    <string name="community_members_requests_reject_confirm_body">لن يتمكن %1$s من الطلب مجددًا قبل سبعة أيام.</string>
+    <string name="community_members_requests_accepted">أصبح %1$s جزءًا من المجتمع.</string>
+    <string name="community_members_requests_gone">تمت معالجة هذا الطلب بالفعل.</string>
+    <string name="community_members_requests_failed">لم يتم تطبيق القرار. حاول مرة أخرى.</string>
+</resources>

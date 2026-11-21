@@ -146,6 +146,7 @@ describe('computeUserStats', () => {
         'postsCount',
         'reelsCount',
         'storiesCount',
+        'statusesCount',
         'totalConversations',
         'totalMessages',
         'totalTranslations',

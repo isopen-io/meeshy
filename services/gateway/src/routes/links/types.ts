@@ -81,7 +81,8 @@ export const updateLinkSchema = z.object({
   requireBirthday: z.boolean().optional(),
   allowedCountries: CHAMP_PAYS_INERTE,
   allowedLanguages: z.array(z.string()).optional(),
-  allowedIpRanges: z.array(z.string()).optional()
+  allowedIpRanges: z.array(z.string()).optional(),
+  resetUses: z.boolean().optional()
 });
 
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
@@ -165,6 +166,7 @@ export const shareLinkSchema = {
     createdBy: { type: 'string', description: 'Creator user ID' },
     isActive: { type: 'boolean', description: 'Link active status', default: true },
     maxUses: { type: 'number', nullable: true, description: 'Maximum uses allowed' },
+    currentUses: { type: 'integer', description: 'Uses counted so far (PATCH resetUses puts it back to 0, #19283)' },
     maxConcurrentUsers: { type: 'number', nullable: true, description: 'Maximum concurrent users' },
     maxUniqueSessions: { type: 'number', nullable: true, description: 'Maximum unique sessions' },
     expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Expiration timestamp' },
@@ -616,7 +618,8 @@ export const updateLinkBodySchema = {
     requireBirthday: { type: 'boolean' },
     allowedCountries: { type: 'array', items: { type: 'string' } },
     allowedLanguages: { type: 'array', items: { type: 'string' } },
-    allowedIpRanges: { type: 'array', items: { type: 'string' } }
+    allowedIpRanges: { type: 'array', items: { type: 'string' } },
+    resetUses: { type: 'boolean', description: 'true puts the use counter (currentUses) back to 0 — link creator or conversation moderators only (#19283)' }
   }
 } as const;
 

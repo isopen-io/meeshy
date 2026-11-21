@@ -68,9 +68,17 @@ class ProfileLoadReducerTest {
     }
 
     @Test
-    fun `404 on empty cache is a failure with retry`() {
+    fun `404 on empty cache is nobody here, a refusal without retry, never a failure`() {
         val state = reduce(empty, ProfileLoadEvent.ProfileFailed(ProfileFailure.Http(404)))
         assertThat(state.isBlockedByTarget).isFalse()
+        assertThat(state.profileLoadFailed).isFalse()
+        assertThat(state.isLoadingProfile).isFalse()
+        assertThat(state.profile).isNull()
+    }
+
+    @Test
+    fun `a server error on empty cache stays a failure with retry`() {
+        val state = reduce(empty, ProfileLoadEvent.ProfileFailed(ProfileFailure.Http(500)))
         assertThat(state.profileLoadFailed).isTrue()
     }
 

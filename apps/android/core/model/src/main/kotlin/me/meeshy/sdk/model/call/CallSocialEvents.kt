@@ -74,3 +74,20 @@ data class CallPreviewRequested(
     val callId: String,
     val userId: String,
 )
+
+/**
+ * `call:conversation-changed` (#19650) — un tête-à-tête qui invite un tiers est rattaché au groupe qui réunit
+ * exactement les présents (trouvé ou créé). Le média ne coupe pas : la signalisation est par `callId`. Le direct
+ * d'origine ([previousConversationId]) reste intact.
+ */
+data class CallConversationChanged(
+    val callId: String,
+    val conversationId: String,
+    val previousConversationId: String,
+    val conversationType: String,
+    /** Titre du groupe ; `null` pour un groupe sans titre, que le client compose depuis ses membres. */
+    val conversationTitle: String?,
+    val memberUserIds: List<String>,
+    /** `true` quand la passerelle vient de créer le groupe. */
+    val created: Boolean,
+)

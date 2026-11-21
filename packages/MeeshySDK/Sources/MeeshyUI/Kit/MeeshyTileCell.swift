@@ -35,6 +35,7 @@ struct MeeshyTileFace<ID: Hashable & Sendable, Preview: View>: View {
     @Environment(\.colorScheme) var colorScheme
     @State var isHovered = false
     @ScaledMetric(relativeTo: .footnote) var nameSize: CGFloat = MeeshyTileMetrics.nameFontSize
+    @ScaledMetric(relativeTo: .caption) var subtitleSize: CGFloat = MeeshyTileMetrics.subtitleFontSize
 
     var body: some View {
         let recipe = self.recipe
@@ -44,6 +45,9 @@ struct MeeshyTileFace<ID: Hashable & Sendable, Preview: View>: View {
             visual(recipe: recipe, ink: ink, isDark: isDark)
             if spec.names == .each, !spec.tile.title.isEmpty {
                 name(ink: ink)
+            }
+            if spec.names == .each, let subtitle = spec.tile.shownSubtitle {
+                caption(subtitle, ink: ink)
             }
         }
         .scaleEffect(spec.isNeighbour ? MeeshyTileRecipe.neighbourScale : 1)
@@ -120,6 +124,19 @@ struct MeeshyTileFace<ID: Hashable & Sendable, Preview: View>: View {
             .lineLimit(MeeshyTileMetrics.nameMaxLines)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
+            .frame(width: spec.fillsWidth ? nil : spec.tileSize.width)
+            .accessibilityHidden(true)
+    }
+}
+
+extension MeeshyTileFace {
+    /// La seconde ligne de la légende, muette : le nom lu de la vignette la porte déjà.
+    func caption(_ text: String, ink: Color) -> some View {
+        Text(verbatim: text)
+            .font(Font.system(size: subtitleSize, weight: .medium))
+            .foregroundStyle(ink.opacity(MeeshyTileMetrics.subtitleOpacity))
+            .lineLimit(MeeshyTileMetrics.subtitleMaxLines)
+            .multilineTextAlignment(.center)
             .frame(width: spec.fillsWidth ? nil : spec.tileSize.width)
             .accessibilityHidden(true)
     }

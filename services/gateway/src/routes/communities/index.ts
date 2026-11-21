@@ -16,6 +16,7 @@ import { registerMemberRoutes } from './members';
 import { registerMembershipRoutes } from './membership';
 import { registerSettingsRoutes } from './settings';
 import { registerSearchRoutes } from './search';
+import { registerEntryRoutes } from './entries';
 
 /**
  * Enregistre les routes de gestion des communautes.
@@ -28,7 +29,8 @@ export async function communityRoutes(fastify: FastifyInstance) {
     registerMemberRoutes(fastify),
     registerMembershipRoutes(fastify),
     registerSettingsRoutes(fastify),
-    registerSearchRoutes(fastify)
+    registerSearchRoutes(fastify),
+    registerEntryRoutes(fastify)
   ]);
 }
 

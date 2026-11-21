@@ -80,6 +80,11 @@ export const relationsExportSchema = {
       type: 'array',
       items: { type: 'object', properties: { observerId: { type: 'string' }, observedId: { type: 'string' }, consultedAt: { type: 'string' } } },
     },
+    /** À qui mes partages temporaires récents ont servi ma position, jusqu'à quand, à quelle précision (#19202) — gardé un jour après la fin. */
+    sharedLocationEnds: {
+      type: 'array',
+      items: { type: 'object', properties: { userId: { type: 'string' }, endsAt: { type: 'string' }, precision: { type: 'string' } } },
+    },
     hasMore: {
       type: 'object',
       properties: {

@@ -40,6 +40,10 @@ private struct MeeshyStoryComposerKey: EnvironmentKey {
     static let defaultValue: StoryViewModel? = nil
 }
 
+private struct MeeshyStatusComposerKey: EnvironmentKey {
+    static let defaultValue: StatusViewModel? = nil
+}
+
 private struct MeeshyComposeSeedRequestKey: EnvironmentKey {
     static let defaultValue: ((ComposerSeedTarget) -> Void)? = nil
 }
@@ -105,6 +109,12 @@ extension EnvironmentValues {
     /// `nil` ⇒ la surface n'a pas d'hôte de présentation, donc pas d'entrée
     /// (loi 4). C'est le même contrat de dégradation que les résolveurs
     /// voisins : l'absence retire, elle ne trappe pas.
+    /// Le modèle des statuts, pour la porte du composer de mood ouverte depuis ma fiche (« Mon statut »).
+    var meeshyStatusComposer: StatusViewModel? {
+        get { self[MeeshyStatusComposerKey.self] }
+        set { self[MeeshyStatusComposerKey.self] = newValue }
+    }
+
     var meeshyComposeSeedRequest: ((ComposerSeedTarget) -> Void)? {
         get { self[MeeshyComposeSeedRequestKey.self] }
         set { self[MeeshyComposeSeedRequestKey.self] = newValue }
@@ -128,11 +138,9 @@ extension View {
             // #10956, #11412 — la présence servie ET son battement, pour les avatars des vues du SDK
             // (membres, frappe, notifications, profil) : MeeshyUI ne lit aucun singleton de l'app.
             .meeshyPresence(resolver: { PresenceManager.shared.knownPresenceState(for: $0) }, refresh: PresenceManager.shared.refreshPublisher)
-            // #6085 — le MODÈLE lui-même, pas un résolveur : la porte publie par
-            // `publishStoryInBackground`, dont la signature a treize arguments.
-            // Les emballer dans une fermeture aurait recopié ici le contrat du
-            // publieur, c'est-à-dire créé la seconde vérité que la porte existe
-            // pour éviter.
+            // #6085 — les MODÈLES eux-mêmes, pas des résolveurs : les portes publient par leur modèle, et
+            // emballer son contrat dans une fermeture créerait la seconde vérité que la porte existe pour éviter.
             .environment(\.meeshyStoryComposer, story)
+            .environment(\.meeshyStatusComposer, status)
     }
 }

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profile_state_error_title">Dieses Profil lässt sich gerade nicht öffnen</string>
+    <string name="profile_state_error_message">Deine Verbindung ist in Ordnung. Das Problem liegt bei uns und dauert nie lange.</string>
+    <string name="profile_state_offline_title">Du bist offline</string>
+    <string name="profile_state_offline_message">Dieses Profil öffnet sich, sobald du wieder online bist.</string>
+    <string name="profile_state_nobody_title">Niemand hier</string>
+    <string name="profile_state_nobody_message">Dieses Profil existiert nicht oder ist für dich nicht sichtbar.</string>
+    <string name="profile_state_nobody_back">Zurück</string>
+    <string name="profile_state_cached_message">Offline · zuletzt gespeichertes Profil</string>
+    <string name="profile_report_sheet_title">%1$s melden</string>
+    <string name="profile_report_sheet_hint">Anonym. Unser Team liest es innerhalb von 24 Std.</string>
+    <string name="profile_report_sheet_question">Was ist passiert?</string>
+    <string name="profile_report_also_block">%1$s auch blockieren</string>
+    <string name="profile_report_send">Melden</string>
+</resources>

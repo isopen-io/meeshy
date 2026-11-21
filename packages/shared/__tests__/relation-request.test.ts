@@ -91,9 +91,16 @@ describe('rel-demandes — les événements du lien', () => {
     expect(SERVER_EVENTS.RELATION_RITUAL_COMPLETED).toBe('relation:ritual-completed');
   });
 
-  it('aucun événement de baisse n’existe', () => {
+  it('le seul événement de baisse est celui de l’ACTEUR (#19366) : aucun ne s’adresse à celui qu’on baisse', () => {
     const names = Object.values(SERVER_EVENTS).filter((name) => name.startsWith('relation:'));
-    expect(names.filter((name) => /lower|drop|down|exit|left/.test(name))).toEqual([]);
+    expect(names.filter((name) => /lower|drop|down|exit|left/.test(name))).toEqual(['relation:level-lowered']);
+  });
+
+  it('bloquer et débloquer s’annoncent à mes appareils sous des noms « by-me » (#19366)', () => {
+    expect(SERVER_EVENTS.RELATION_LEVEL_LOWERED).toBe('relation:level-lowered');
+    expect(SERVER_EVENTS.USER_BLOCKED_BY_ME).toBe('user:blocked-by-me');
+    expect(SERVER_EVENTS.USER_UNBLOCKED_BY_ME).toBe('user:unblocked-by-me');
+    expect(Object.values(SERVER_EVENTS).filter((name) => /block/.test(name)).sort()).toEqual(['user:blocked-by-me', 'user:unblocked-by-me']);
   });
 });
 

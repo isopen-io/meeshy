@@ -8,13 +8,18 @@ import SwiftUI
 /// Agnostique : des textes déjà écrits et un nom de glyphe. Elle ne sait pas ce que
 /// le geste fait, ne dessine aucun fond (le disque vient de `MeeshyGlassButtonFace`)
 /// et ne confirme rien. En attente ou désactivée, ni action ni tic. `isEnabled`
-/// suit `.disabled(_:)`. La taille vient de la grille qui la range.
+/// suit `.disabled(_:)`. La taille vient de la grille qui la range. Un raccourci
+/// (`shortcut`) est donné une fois : la même combinaison devient la frappe reconnue
+/// et la touche K55 sous le libellé, montrée seulement si la commande répond.
+/// La pastille se dit par `badgeLabel` quand l'hôte en donne un (« 2 messages non
+/// lus »), telle qu'elle se voit sinon.
 public struct MeeshyLabeledAction: View {
     private let title: String
     private let systemImage: String
     private let value: String?
     private let valueKind: MeeshyLabeledActionValueKind
     private let badge: String?
+    private let badgeLabel: String?
     private let kind: MeeshyGlassButtonKind
     private let isPending: Bool
     private let isFeatured: Bool
@@ -22,19 +27,24 @@ public struct MeeshyLabeledAction: View {
     private let hint: String?
     private let label: String?
     private let pendingLabel: String?
+    private let shortcut: MeeshyKeyCombo?
     private let action: () -> Void
 
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.meeshyActionGridSize) private var gridSize
+    @Environment(\.meeshyHasKeyboard) private var hasKeyboard
+    @Environment(\.meeshyKeyPlatform) private var keyPlatform
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    @State private var isHovered = false
 
     public init(title: String,
                 systemImage: String,
                 value: String? = nil,
                 valueKind: MeeshyLabeledActionValueKind = .accent,
                 badge: String? = nil,
+                badgeLabel: String? = nil,
                 kind: MeeshyGlassButtonKind = .normal,
                 isPending: Bool = false,
                 isFeatured: Bool = false,
@@ -42,12 +52,14 @@ public struct MeeshyLabeledAction: View {
                 hint: String? = nil,
                 label: String? = nil,
                 pendingLabel: String? = nil,
+                shortcut: MeeshyKeyCombo? = nil,
                 action: @escaping () -> Void) {
         self.title = title
         self.systemImage = systemImage
         self.value = value
         self.valueKind = valueKind
         self.badge = badge
+        self.badgeLabel = badgeLabel
         self.kind = kind
         self.isPending = isPending
         self.isFeatured = isFeatured
@@ -55,6 +67,7 @@ public struct MeeshyLabeledAction: View {
         self.hint = hint
         self.label = label
         self.pendingLabel = pendingLabel
+        self.shortcut = shortcut
         self.action = action
     }
 
@@ -64,32 +77,49 @@ public struct MeeshyLabeledAction: View {
     }
 
     private var spokenValue: String {
-        [isPending ? pendingLabel : nil, value, badge].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+        MeeshyLabeledActionSpeech.value(pending: isPending ? pendingLabel : nil, value: value, badge: badge,
+                                        badgeLabel: badgeLabel)
+    }
+
+    /// Le raccourci se dit à la voix là où sa touche se voit : « raccourci : Commande M ».
+    private func spokenHint(shownKeys: MeeshyKeyCombo?) -> String {
+        let spokenKeys = shownKeys.flatMap { keys in
+            hasKeyboard ? MeeshyKeyHintRule.spokenWithPrefix(keys: keys, platform: keyPlatform, prefix: nil) : nil
+        }
+        return [hint, spokenKeys].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
     }
 
     public var body: some View {
         let recipe = self.recipe
+        let shownKeys = MeeshyKeyShortcutLaw.displayed(shortcut, isActionable: recipe.isActionable)
         return Button(action: { if recipe.isActionable { action() } }) { EmptyView() }
             .buttonStyle(MeeshyLabeledActionStyle { isPressed in
-                column(recipe: recipe, isPressed: isPressed && recipe.isActionable)
+                column(recipe: recipe, isPressed: isPressed && recipe.isActionable, shownKeys: shownKeys)
             })
+            .meeshyPointerMagnet(in: RoundedRectangle(cornerRadius: MeeshyRadius.md), isActive: recipe.isActionable)
+            .onHover { hovering in isHovered = hovering }
+            .meeshyKeyShortcut(shortcut)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(label ?? title)
             .accessibilityValue(spokenValue)
-            .accessibilityHint(hint ?? "")
+            .accessibilityHint(spokenHint(shownKeys: shownKeys))
             .accessibilityAddTraits(.isButton)
     }
 
-    private func column(recipe: MeeshyLabeledActionRecipe, isPressed: Bool) -> some View {
+    private func column(recipe: MeeshyLabeledActionRecipe, isPressed: Bool, shownKeys: MeeshyKeyCombo?) -> some View {
         let isDark = colorScheme == .dark
         return VStack(spacing: CGFloat(recipe.labelGap)) {
             disc(recipe: recipe, isPressed: isPressed)
+                .meeshyPointerLift(in: Circle(), tint: tint, isHovered: isHovered && recipe.isActionable)
             Text(title)
                 .font(MeeshyFont.relative(CGFloat(recipe.labelFontSize), weight: .semibold))
                 .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
+            if let shownKeys {
+                MeeshyKeyHint(keys: shownKeys, context: .inset, size: .compact)
+            }
             if let value {
                 valuePill(value, recipe: recipe, isDark: isDark)
                     .padding(.top, CGFloat(recipe.valueGap - recipe.labelGap))

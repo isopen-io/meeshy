@@ -24,6 +24,7 @@ from pathlib import Path
 from datetime import datetime
 from enum import Enum
 
+from utils.served_time import served_utc
 from utils.voice_cache_guard import (
     INVALID_USER_ID_DETAIL,
     VoiceCacheIdRejected,
@@ -451,7 +452,7 @@ def create_voice_api_router(
                 status=job.status.value,
                 progress=job.progress,
                 current_step=job.current_step,
-                created_at=job.created_at.isoformat()
+                created_at=served_utc(job.created_at)
             )
 
         except Exception as e:
@@ -459,15 +460,20 @@ def create_voice_api_router(
                 temp_path.unlink()
             raise HTTPException(status_code=500, detail=str(e))
 
+    async def _owned_job(job_id: str, authorization: Optional[str]):
+        caller = get_user_id(authorization)
+        job = await translation_pipeline.get_job(job_id)
+        if not job or job.user_id != caller:
+            raise HTTPException(status_code=404, detail="Job not found")
+        return job
+
     @router.get("/voice/job/{job_id}", response_model=JobResponse)
-    async def get_job_status(job_id: str):
+    async def get_job_status(job_id: str, authorization: Optional[str] = Header(None)):
         """Récupérer le status d'un job de traduction."""
         if not translation_pipeline:
             raise HTTPException(status_code=503, detail="Translation pipeline not available")
 
-        job = await translation_pipeline.get_job(job_id)
-        if not job:
-            raise HTTPException(status_code=404, detail="Job not found")
+        job = await _owned_job(job_id, authorization)
 
         return JobResponse(
             id=job.id,
@@ -476,17 +482,18 @@ def create_voice_api_router(
             current_step=job.current_step,
             result=job.result,
             error=job.error,
-            created_at=job.created_at.isoformat(),
-            started_at=job.started_at.isoformat() if job.started_at else None,
-            completed_at=job.completed_at.isoformat() if job.completed_at else None
+            created_at=served_utc(job.created_at),
+            started_at=served_utc(job.started_at),
+            completed_at=served_utc(job.completed_at)
         )
 
     @router.delete("/voice/job/{job_id}")
-    async def cancel_job(job_id: str):
+    async def cancel_job(job_id: str, authorization: Optional[str] = Header(None)):
         """Annuler un job en attente."""
         if not translation_pipeline:
             raise HTTPException(status_code=503, detail="Translation pipeline not available")
 
+        await _owned_job(job_id, authorization)
         success = await translation_pipeline.cancel_job(job_id)
         if not success:
             raise HTTPException(status_code=400, detail="Job cannot be cancelled (already processing or completed)")

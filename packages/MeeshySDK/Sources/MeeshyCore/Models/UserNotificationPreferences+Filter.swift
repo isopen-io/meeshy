@@ -185,6 +185,8 @@ public extension UserNotificationPreferences {
             return true  // art. 16 DSA : le déclarant apprend TOUJOURS l'issue de son signalement
         case .contentRemoved:
             return true  // art. 17 DSA : l'auteur reçoit TOUJOURS l'exposé des motifs d'un retrait
+        case .wellnessCheck, .inactivityAlert:
+            return true  // signaux de sécurité (#18738) : le délai et le partage par personne les règlent, aucun type
         }
     }
 

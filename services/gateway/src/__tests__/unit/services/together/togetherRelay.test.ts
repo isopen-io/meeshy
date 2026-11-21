@@ -86,11 +86,28 @@ function cacheEnMemoire(clock: () => number) {
   };
 }
 
+/**
+ * La ligne NOMINALE de production : `leftAt` et `bannedAt` sont ABSENTS du
+ * document. Prisma n'écrit pas un `DateTime?` qu'on ne lui donne pas, et aucun
+ * chemin de création de `Participant` ne les pose (mesuré #19690) — c'est donc
+ * l'état de l'immense majorité des membres, ceux qui ne sont ni partis ni bannis.
+ *
+ * La fixture portait `leftAt: null, bannedAt: null` EXPLICITEMENT, et c'est
+ * ainsi que le défaut a vécu : sous MongoDB `{ champ: null }` est une égalité
+ * qui n'apparie pas une clé absente, si bien qu'un témoin posé sur une ligne
+ * portant les nulls ne peut pas tomber sur un filtre qui les exige.
+ */
 const membre = (userId: string, conversationId = CONV, extra: Row = {}): Row => ({
   id: `p-${userId}-${conversationId}`,
   userId,
   conversationId,
   isActive: true,
+  ...extra,
+});
+
+/** La ligne d'un chemin qui a REMIS les colonnes à zéro — l'autre état « pas encore ». */
+const membreAuxNullsExplicites = (userId: string, conversationId = CONV, extra: Row = {}): Row => ({
+  ...membre(userId, conversationId),
   leftAt: null,
   bannedAt: null,
   ...extra,
@@ -185,6 +202,22 @@ describe('inviter — dès Proche, sur un média audio ou vidéo d\'une conversa
     expect(await inviter(m, SANG, AUDIO)).toMatchObject({ success: true, data: { media: 'audio' } });
   });
 
+  /**
+   * #19690 — les DEUX états « pas encore » sont des membres actifs, et le témoin
+   * porte sur celui que le filtre ratait : la ligne dont les colonnes sont
+   * ABSENTES. Posé sur la seule ligne aux nulls explicites, il ne pouvait pas
+   * tomber — c'est ce qui a laissé la séance « Ensemble » inerte pour la
+   * population entière.
+   */
+  it.each([
+    ['ni leftAt ni bannedAt dans le document (la ligne nominale)', membre],
+    ['leftAt et bannedAt remis à zéro explicitement', membreAuxNullsExplicites],
+  ])('invite un Proche dont la participation porte %s', async (_forme, ligne) => {
+    const m = monde({ participants: [ligne(HOTE), ligne(PROCHE)] });
+
+    expect(await inviter(m)).toMatchObject({ success: true, data: { media: 'video' } });
+  });
+
   it.each([
     ['un Ami', AMI, VIDEO, CONV],
     ['qui m\'a bloqué', BLOQUEUR, VIDEO, CONV],
@@ -209,6 +242,20 @@ describe('inviter — dès Proche, sur un média audio ou vidéo d\'une conversa
 
   it('refuse quand l\'invité est banni de la conversation, même resté actif', async () => {
     const m = monde({ participants: [membre(HOTE), membre(PROCHE, CONV, { bannedAt: new Date(T0 - 1) })] });
+    expect(await inviter(m)).toEqual(REFUS);
+  });
+
+  /**
+   * #19690 — la TROISIÈME colonne de départ, et le témoin existe parce que le
+   * correctif de ce lot rendait cette ligne atteignable. `delete-for-me` écrit
+   * `{ deletedForMe, isActive: false }` d'un seul geste : la ligne ci-dessous est
+   * la forme HÉRITÉE d'avant #17072, restée active. L'égalité nue la refusait par
+   * ACCIDENT ; `PARTICIPATION_VIVANTE` + `unsetOrNull('leftAt')` seuls
+   * l'admettraient, et une conversation que `core-list` cache à ce lecteur
+   * ressurgirait en invitation live.
+   */
+  it('refuse quand l\'invité a supprimé la conversation « pour lui », même resté actif', async () => {
+    const m = monde({ participants: [membre(HOTE), membre(PROCHE, CONV, { deletedForMe: new Date(T0 - 1) })] });
     expect(await inviter(m)).toEqual(REFUS);
   });
 

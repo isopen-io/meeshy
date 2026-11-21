@@ -147,4 +147,5 @@ class SharedLocationRosterTest {
         assertThat(roster.deadlinedRecipients(nowMillis = hour - 200L).first().expiresInSeconds).isEqualTo(1)
         assertThat(roster.deadlinedRecipients(nowMillis = hour).map { it.userId }).containsExactly(bob)
     }
+
 }

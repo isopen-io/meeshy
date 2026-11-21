@@ -13,7 +13,8 @@ struct MeeshyGlassButtonTests {
 
     @Test("diamètre, glyphe, cible et débord de chaque taille suivent les vecteurs", arguments: MeeshyGlassButtonSize.allCases)
     func recipe_size_followsTheVectors(size: MeeshyGlassButtonSize) throws {
-        let row = try Self.rows("sizes").first { $0["size"] as? String == size.rawValue }.unwrapped()
+        let rows = try Self.rows("sizes") + Self.rows("cornerSizes")
+        let row = try rows.first { $0["size"] as? String == size.rawValue }.unwrapped()
         let recipe = MeeshyGlassButtonRecipe.resolve(kind: .normal, size: size)
         #expect(recipe.diameter == row["diameter"] as? Double)
         #expect(recipe.glyphSize == row["glyph"] as? Double)
@@ -28,6 +29,26 @@ struct MeeshyGlassButtonTests {
         #expect(recipe.targetSide >= Double(MeeshyControlSize.tapTarget))
         #expect(recipe.targetSide >= recipe.diameter)
         #expect(Double(MeeshyControlSize.tapTarget) == tapTargets["ios"] as? Double)
+    }
+
+    @Test("la pastille d'action de coin (s32) dessine 32 et garde une cible de 44 : 6 de débord de chaque côté")
+    func recipe_cornerSize_drawsSmallButKeepsTheTapTarget() throws {
+        let row = try #require(try Self.rows("cornerSizes").first)
+        #expect(row["size"] as? String == MeeshyGlassButtonSize.s32.rawValue)
+        #expect(row["role"] as? String == "corner-action")
+        let recipe = MeeshyGlassButtonRecipe.resolve(kind: .normal, size: .s32)
+        #expect(recipe.diameter == 32)
+        #expect(recipe.targetSide == Double(MeeshyControlSize.tapTarget))
+        #expect(MeeshyGlassButtonSize.s32.hitSlack == 6)
+        #expect(recipe.glyphSize < MeeshyGlassButtonRecipe.resolve(kind: .normal, size: .s36).glyphSize)
+    }
+
+    @Test("les tailles de coin n'entrent pas dans les tailles partagées : Android et le web les lisent à part")
+    func vectors_cornerSizes_stayOutOfTheSharedSizes() throws {
+        let shared = try Self.rows("sizes").compactMap { $0["size"] as? String }
+        let corner = try Self.rows("cornerSizes").compactMap { $0["size"] as? String }
+        #expect(Set(shared).isDisjoint(with: Set(corner)))
+        #expect(Set(shared + corner) == Set(MeeshyGlassButtonSize.allCases.map(\.rawValue)))
     }
 
     // MARK: - Matière : fond, verre demandé, appui, survol

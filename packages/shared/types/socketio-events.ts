@@ -69,6 +69,7 @@ export * from './socketio-events/preferences.js';
 export * from './socketio-events/community.js';
 export * from './socketio-events/category.js';
 export * from './socketio-events/link.js';
+export * from './socketio-events/link-activity.js';
 export * from './socketio-events/agent.js';
 export * from './socketio-events/socket.js';
 export * from './socketio-events/event-maps.js';

@@ -6,6 +6,7 @@ import { protectedPreview } from '../notifications/notification-preview';
 import { messageReadership, blockedReaderKeys } from '../../socketio/editedAudience';
 import { pendingRequestUserIds } from './pendingMessageRequests';
 import { departedAccountUserIds } from './departedAccounts';
+import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
 
 /**
  * Le masque servi quand la relecture des drapeaux ne conclut pas — message
@@ -413,7 +414,20 @@ async function notifyNewlyMentioned(
         // existait déjà ; il ne manquait que la colonne — et une projection
         // trop étroite rend une loi impossible en aval sans qu'aucun témoin ne
         // rougisse.
-        select: { participants: { where: { isActive: true }, select: { userId: true, messageRequestAt: true, user: { select: { isActive: true, deletedAt: true } } } } },
+        // #20100 bis — la LOI, pas `isActive` nu, et c'est l'audit adversarial du
+        // premier jet qui l'a mesuré. Ce relevé ne sert PAS que des exclusions :
+        // il compose aussi le `memberIds` passé en 3e argument de
+        // `createMentionNotificationsBatch`, dont le filtre interne
+        // (`if (!memberIds.includes(userId)) return false`) est la porte
+        // d'ADMISSION du lot de mentions. Et rien ne borne en amont :
+        // `MentionService.validateMentionPermissions` épelle bien la loi — mais
+        // seulement en portées `interlocutor` et `members`. En portée
+        // `directory` (conversation `public`, `global`, `broadcast`) elle valide
+        // « tout compte existant », sans filtre d'appartenance, et le dit sur
+        // place. Un banni-mais-actif AJOUTÉ par une ÉDITION recevait donc une
+        // bannière portant le texte édité, sur sa room `user:<id>` — la seule
+        // qui lui reste.
+        select: { participants: { where: { ...PARTICIPATION_VIVANTE }, select: { userId: true, messageRequestAt: true, user: { select: { isActive: true, deletedAt: true } } } } },
       }),
     ]);
     if (!sender || !conversation) return;
@@ -475,12 +489,31 @@ async function notifyNewlyMentioned(
     // confidentialité qui dépend du câblage de l'appelant échoue en montrant
     // PLUS » — et parce que trois des quatre transports d'édition sont des
     // routes REST qui ne passent pas par le handler socket.
+    // Les membres VIVANTS, une fois : la clause de la lecture les a déjà
+    // bornés, et les deux usages d'en dessous doivent voir le MÊME ensemble.
+    const memberUserIds = conversation.participants
+      .map((participant) => participant.userId)
+      .filter((userId): userId is string => userId !== null);
+
     const pending = pendingRequestUserIds(conversation.participants);
 
     // #18910 — un compte supprimé ou désactivé reste membre après la purge : une édition ne le fait pas sonner.
     const departed = departedAccountUserIds(conversation.participants);
 
-    const admitted = newlyMentionedUserIds.filter((userId) => !blocked.has(userId) && !pending.has(userId) && !departed.has(userId));
+    // #20100 bis — l'APPARTENANCE VIVANTE est un critère d'admission ICI, et pas
+    // seulement chez l'appelé. `createMentionNotificationsBatch` refuse déjà ce
+    // qui n'est pas dans son 3e argument, donc le resserrement du `where`
+    // ci-dessus suffit à fermer la fuite ; mais compter sur le filtre du
+    // collaborateur, c'est la forme exacte de « une garde de confidentialité qui
+    // dépend du câblage de l'appelant » — deux paragraphes plus haut, sur cette
+    // même unité. Un banni-mais-actif validé en portée `directory` restait sinon
+    // dans la liste REMISE, et la seule chose qui l'arrêtait vivait chez
+    // quelqu'un d'autre.
+    const liveMembers = new Set(memberUserIds);
+
+    const admitted = newlyMentionedUserIds.filter(
+      (userId) => liveMembers.has(userId) && !blocked.has(userId) && !pending.has(userId) && !departed.has(userId)
+    );
     if (admitted.length === 0) return;
 
     await notificationService.createMentionNotificationsBatch(
@@ -497,9 +530,7 @@ async function notifyNewlyMentioned(
         messageId: message.id,
         messageExpiresAt: message.expiresAt ?? null,
       },
-      conversation.participants
-        .map((participant) => participant.userId)
-        .filter((userId): userId is string => userId !== null)
+      memberUserIds
     );
   } catch (error) {
     onError?.(error);

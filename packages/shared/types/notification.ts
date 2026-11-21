@@ -7,8 +7,29 @@
  */
 
 import type { PostType } from './post.js';
+import type { BaseNotificationMetadata } from './notification-base-metadata.js';
 import type { NotificationAttachmentWire } from './notification-attachment-wire.js';
 import type { NotificationContentDetail } from './notification-content-detail.js';
+import type {
+  ContactRecentlyActiveNotificationMetadata,
+  RelationAcquaintanceNotificationMetadata,
+  DeviceBatteryNotificationMetadata,
+  DeviceUnreachableNotificationMetadata,
+  WellnessCheckNotificationMetadata,
+  InactivityAlertNotificationMetadata,
+  LocationShareStartedNotificationMetadata,
+  LocationShareRequestedNotificationMetadata,
+} from './notification-circle-metadata.js';
+export type {
+  ContactRecentlyActiveNotificationMetadata,
+  RelationAcquaintanceNotificationMetadata,
+  DeviceBatteryNotificationMetadata,
+  DeviceUnreachableNotificationMetadata,
+  WellnessCheckNotificationMetadata,
+  InactivityAlertNotificationMetadata,
+  LocationShareStartedNotificationMetadata,
+  LocationShareRequestedNotificationMetadata,
+} from './notification-circle-metadata.js';
 
 // =====================================================
 // NOTIFICATION TYPES & ENUMS
@@ -65,6 +86,14 @@ export enum NotificationTypeEnum {
   DEVICE_BATTERY = 'device_battery',
   /** Le téléphone d'un Proche ou d'un Sang est injoignable, ou répond de nouveau (#18737). */
   DEVICE_UNREACHABLE = 'device_unreachable',
+  /** « Tout va bien ? » — à soi, quand son téléphone est resté inactif au-delà du délai choisi (#18738). */
+  WELLNESS_CHECK = 'wellness_check',
+  /** Un Sang n'a pas répondu à « Tout va bien ? », ou vient de répondre (#18738). */
+  INACTIVITY_ALERT = 'inactivity_alert',
+  /** Un lien me partage sa position et a choisi de me prévenir (#19204) : un nom et une durée, jamais une position. */
+  LOCATION_SHARE_STARTED = 'location_share_started',
+  /** Un destinataire me demande de prolonger ou de refaire mon partage de position (#19204). */
+  LOCATION_SHARE_REQUESTED = 'location_share_requested',
 
   // ===== INTERACTION EVENTS =====
   USER_MENTIONED = 'user_mentioned',
@@ -398,9 +427,7 @@ export interface NotificationDelivery {
 /**
  * Metadata de base commune à toutes les notifications
  */
-interface BaseNotificationMetadata {
-  readonly action?: 'view_message' | 'view_conversation' | 'view_post' | 'join_conversation' | 'accept_or_reject_contact' | 'view_profile' | 'open_call' | 'view_details' | 'view_community' | 'update_app' | 'none';
-}
+export type { BaseNotificationMetadata } from './notification-base-metadata.js';
 
 /**
  * Metadata pour new_message
@@ -628,53 +655,6 @@ export interface ContactJoinedNotificationMetadata extends BaseNotificationMetad
   readonly joinerCount: number;
 }
 
-/**
- * Metadata pour contact_recently_active (#8285) — « X était sur Meeshy
- * récemment ». `userId` est la personne revenue : le toucher ouvre son profil.
- * Aucune heure de connexion ne voyage — la notification dit « récemment »,
- * jamais « à 14 h 02 ».
- */
-export interface ContactRecentlyActiveNotificationMetadata extends BaseNotificationMetadata {
-  readonly action: 'view_profile';
-  readonly userId: string;
-}
-
-/**
- * Metadata pour relation_acquaintance (#13932) — la Connaissance née toute seule.
- * `userId` est l'AUTRE personne : le toucher ouvre son profil. Aucun compte
- * d'interactions ne voyage : la notification dit le résultat, pas la mesure.
- */
-export interface RelationAcquaintanceNotificationMetadata extends BaseNotificationMetadata {
-  readonly action: 'view_profile';
-  readonly userId: string;
-  readonly relationLevel: 'ACQUAINTANCE';
-  readonly origin: 'auto-acquaintance';
-}
-
-/**
- * Metadata pour device_battery (#14147) — la batterie d'un Proche ou d'un Sang.
- * `userId` est l'ÉMETTEUR : le toucher ouvre son profil. Seul le palier se range :
- * ni le niveau (il n'est que dans le corps), ni l'appareil, ni l'estimation, ni
- * l'heure du relevé. La ligne expire avec l'état (24 h) : aucun historique.
- */
-export interface DeviceBatteryNotificationMetadata extends BaseNotificationMetadata {
-  readonly action: 'view_profile';
-  readonly userId: string;
-  readonly batteryKind: 'critical' | 'probably-off' | 'back-on' | 'charging' | 'recharged';
-}
-
-/**
- * Metadata pour device_unreachable (#18737) — le téléphone d'un Proche ou d'un Sang.
- * `userId` est l'ÉMETTEUR : le toucher ouvre son profil. Seuls le genre et la cause probable se
- * rangent ; l'heure du dernier signe de vie n'est que dans le corps. La ligne expire avec l'état.
- */
-export interface DeviceUnreachableNotificationMetadata extends BaseNotificationMetadata {
-  readonly action: 'view_profile';
-  readonly userId: string;
-  readonly reachabilityKind: 'unreachable' | 'reachable';
-  readonly cause?: 'battery' | 'network';
-}
-
 /** Le contenu qu'un retrait par la modération a visé (#11149). */
 export type RemovedContentType = 'message' | 'post' | 'reel' | 'story' | 'comment';
 
@@ -757,6 +737,10 @@ export type NotificationMetadata =
   | RelationAcquaintanceNotificationMetadata
   | DeviceBatteryNotificationMetadata
   | DeviceUnreachableNotificationMetadata
+  | WellnessCheckNotificationMetadata
+  | InactivityAlertNotificationMetadata
+  | LocationShareStartedNotificationMetadata
+  | LocationShareRequestedNotificationMetadata
   | ContentRemovedNotificationMetadata
   | GameDuoNotificationMetadata
   | GameLeagueResultNotificationMetadata

@@ -56,33 +56,32 @@ final class CallControlsLayoutTests: XCTestCase {
 
     // MARK: - Groupe « l'appel »
 
-    func test_theCall_minimal_offersCaptionsJournalAddPeopleAndReact() {
-        XCTAssertEqual(CallActionSet.resolve(context()).theCall, [.captions, .addPeople, .journal, .react])
+    func test_theCall_minimal_offersCaptionsAddPeopleAndReact() {
+        XCTAssertEqual(CallActionSet.resolve(context()).theCall, [.captions, .addPeople, .react])
     }
 
-    /// #8579 — le journal de l'appel a sa porte dans « L'appel », sous-titres
-    /// affichés ou non.
-    func test_theCall_journal_isAlwaysOffered() {
-        for isConnected in [true, false] {
-            XCTAssertTrue(CallActionSet.resolve(context(isConnected: isConnected)).theCall.contains(.journal))
-        }
+    /// #19670 — le journal n'a de sens qu'avec les sous-titres : sa seule porte est le pied de leur
+    /// bande, jamais le rail « l'appel » ni la rangée du groupe.
+    func test_actionCatalog_neverOffersTheJournal_itsDoorIsTheCaptionsBand() {
+        XCTAssertFalse(CallAction.allCases.map(\.rawValue).contains("journal"))
+        XCTAssertNil(CallScreenPanel.journal.action)
     }
 
     /// #8433 · #8439 — ajouter et réagir n'ont de sens qu'une fois l'appel établi.
     func test_theCall_notYetConnected_offersNeitherAddNorReact() {
-        XCTAssertEqual(CallActionSet.resolve(context(isConnected: false)).theCall, [.captions, .journal])
+        XCTAssertEqual(CallActionSet.resolve(context(isConnected: false)).theCall, [.captions])
     }
 
-    /// #17329 — l'ordre tranché : Sous-titres · Enregistrer · Ajouter · Journal · Réagir ·
-    /// Capture. L'image dans l'image a quitté la liste : son bouton est dans l'en-tête.
-    func test_theCall_everythingAvailable_ordersCaptionsRecordAddJournalReactCapture() {
+    /// #17329 — l'ordre tranché : Sous-titres · Enregistrer · Ajouter · Réagir · Capture (#19670 :
+    /// le Journal en est sorti). L'image dans l'image a quitté la liste : son bouton est dans l'en-tête.
+    func test_theCall_everythingAvailable_ordersCaptionsRecordAddReactCapture() {
         let actions = CallActionSet.resolve(context(isVideoEnabled: true, mayRecord: true))
-        XCTAssertEqual(actions.theCall, [.captions, .recording, .addPeople, .journal, .react, .capture])
+        XCTAssertEqual(actions.theCall, [.captions, .recording, .addPeople, .react, .capture])
     }
 
     func test_theCall_recordingNotAllowed_isAbsent() {
         let actions = CallActionSet.resolve(context())
-        XCTAssertEqual(actions.theCall, [.captions, .addPeople, .journal, .react])
+        XCTAssertEqual(actions.theCall, [.captions, .addPeople, .react])
     }
 
     func test_actionCatalog_neverOffersPictureInPicture_itLivesInTheHeader() {
@@ -103,7 +102,7 @@ final class CallControlsLayoutTests: XCTestCase {
     /// #9287 — le cadre en direct se choisit DANS la capture : aucune entrée à part.
     func test_theCall_videoDuo_framesLiveThroughCaptureOnly() {
         let actions = CallActionSet.resolve(context(isVideoEnabled: true, mayRecord: true))
-        XCTAssertEqual(actions.theCall, [.captions, .recording, .addPeople, .journal, .react, .capture])
+        XCTAssertEqual(actions.theCall, [.captions, .recording, .addPeople, .react, .capture])
     }
 
     func test_theCall_videoNotYetConnected_offersNoCapture() {

@@ -10,6 +10,8 @@ import { appVersionFloorPreHandler } from '../../middleware/app-version-floor';
 import { sendSuccess, sendInternalError } from '../../utils/response';
 import { logError } from '../../utils/logger';
 import { listRelationLinks } from '../../services/relations/relationLinks';
+import { summarizeRelationCircles } from '../../services/relations/circlesSummary';
+import { sendWithETag } from '../../utils/etag';
 import { thresholdsNow } from '../../services/relations/relationRequestGate';
 import { bringServiceEnabled } from '../../services/bring/bringPush';
 import { bloodLocationEnabledFor } from '../../services/bloodLocation/bloodLocationFlag';
@@ -28,6 +30,19 @@ const configView = (viewerId: string) => ({
   // La position du Sang est-elle ouverte à CE compte (#13937 : drapeau ET liste blanche) ? Faux ⇒ aucun écran.
   services: { bring: bringServiceEnabled(), bloodLocation: bloodLocationEnabledFor(viewerId) },
 });
+
+const countSchema = { type: 'integer', minimum: 0 } as const;
+
+const summarySchema = {
+  type: 'object',
+  properties: {
+    counts: {
+      type: 'object',
+      properties: { COMMUNITY: countSchema, ACQUAINTANCE: countSchema, FRIEND: countSchema, CLOSE: countSchema, BLOOD: countSchema },
+    },
+    pendingRequests: countSchema,
+  },
+} as const;
 
 const configSchema = {
   type: 'object',
@@ -51,7 +66,7 @@ const configSchema = {
 } as const;
 
 /**
- * La LECTURE des cercles (#13933) : `GET /relations`, `/relations/config` ; `/relations/:userId` est servi par `level.ts` (#13998). Aucune route ne lisait un lien, son niveau ni sa
+ * La LECTURE des cercles (#13933) : `GET /relations`, `/relations/config`, `/relations/summary` (#19375) ; `/relations/:userId` est servi par `level.ts` (#13998). Aucune route ne lisait un lien, son niveau ni sa
  * progression — les routes de demande n'exposent que l'état d'une DEMANDE.
  */
 export function registerRelationReads(fastify: FastifyInstance): void {
@@ -84,6 +99,27 @@ export function registerRelationReads(fastify: FastifyInstance): void {
       return sendSuccess(reply, await listRelationLinks(fastify.prisma, { viewerId: request.user!.userId, now: new Date() }));
     } catch (error) {
       logError(fastify.log, 'List relations error:', error);
+      return sendInternalError(reply, 'Erreur interne du serveur');
+    }
+  });
+
+  fastify.get('/summary', {
+    onRequest: [fastify.authenticate],
+    preHandler: [appVersionFloorPreHandler, reads.middleware()],
+    schema: {
+      description: 'How many people I reach in each circle (Community included) and how many received requests await me. An aggregate: no identity, no presence.',
+      tags: ['relations'],
+      summary: 'My circles, counted',
+      response: { 200: { type: 'object', properties: { success: { type: 'boolean' }, data: summarySchema } }, ...errorResponses },
+      security: [{ bearerAuth: [] }],
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const summary = await summarizeRelationCircles(fastify.prisma, { viewerId: request.user!.userId, now: new Date() });
+      if (sendWithETag(request, reply, summary)) return reply;
+      return sendSuccess(reply, summary);
+    } catch (error) {
+      logError(fastify.log, 'Summarize relations error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });

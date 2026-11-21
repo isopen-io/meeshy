@@ -15,7 +15,7 @@
  *
  * Le niveau visé illisible est refusé en amont (`RELATION_LEVEL_INVALID`, 400).
  */
-import { relationRungAfter, type RelationLevel, type RelationRequestLevel } from '../types/relation.js';
+import { relationLevelIfAtLeast, relationRungAfter, type RelationLevel, type RelationRequestLevel } from '../types/relation.js';
 
 export type RelationRequestRefusalCode = 'RELATION_PHASE_SKIP' | 'RELATION_COOLDOWN' | 'RELATION_NOT_ELIGIBLE';
 
@@ -48,4 +48,22 @@ export function evaluateRelationRequest(input: RelationRequestInput): RelationRe
   if (input.cooldownUntil !== null && input.cooldownUntil.getTime() > input.now.getTime()) return refuse('RELATION_COOLDOWN');
   if (SERIES_LEVELS.has(input.targetLevel) && input.eligibleFor !== input.targetLevel) return refuse('RELATION_NOT_ELIGIBLE');
   return { allowed: true };
+}
+
+/**
+ * « Accepter les demandes de connexion » (`privacy.allowContactRequests`, #19362).
+ *
+ * Fermé, le réglage retient les NOUVELLES demandes : celles d'une personne avec
+ * qui la cible n'a aucun lien d'au moins Connaissance. Une montée de cran entre
+ * personnes déjà liées reste permise. Absent, le réglage vaut ouvert (son défaut).
+ * Une seule loi pour le refus de l'envoi et l'annonce sur la fiche.
+ */
+export const CONTACT_REQUESTS_CLOSED = 'CONTACT_REQUESTS_CLOSED' as const;
+
+export function contactRequestsOpen(input: {
+  readonly allowContactRequests: boolean | undefined;
+  readonly currentLevel: RelationLevel;
+}): boolean {
+  if (input.allowContactRequests !== false) return true;
+  return relationLevelIfAtLeast(input.currentLevel, 'ACQUAINTANCE') !== null;
 }

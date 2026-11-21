@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type ComponentType } from 'react';
 import { meeshDisplayEdition, type MeeshEdition } from '@meeshy/shared/utils/game/mint';
 
 import { MintScene } from '@/components/game';
-import type { MintCeremonyProps } from '@/components/game/mint-ceremony';
+import type { MintCeremonyGlory, MintCeremonyProps } from '@/components/game/mint-ceremony';
 import { CHOREOGRAPHY_DURATION_MS } from '@/lib/game/choreography';
 import { registerStrikeStage, strikeGate, type StrikeGate } from '@/lib/game/strike-gate';
 
@@ -36,6 +36,11 @@ export type MintStrikeProps = {
   readonly next: MintStrikeCoin;
   /** La pièce confirmée par la passerelle, quand elle l'est. */
   readonly confirmed?: MintStrikeCoin | null;
+  /**
+   * La gloire du joueur et celle que la frappe apporte (#19855) : la cérémonie finit sur le pas vers le rang suivant.
+   * Lue AU GESTE : la gloire rafraîchie pendant la scène ne compte pas deux fois. Absente devant un ancien serveur.
+   */
+  readonly glory?: MintCeremonyGlory | null;
   /** Pour les témoins : la porte de la frappe. Défaut : celle de l'application. */
   readonly gate?: StrikeGate;
 };
@@ -43,7 +48,7 @@ export type MintStrikeProps = {
 type Struck = { readonly key: number; readonly coin: MintStrikeCoin | null; readonly stale: MintStrikeCoin | null };
 
 type CeremonyScene = ComponentType<MintCeremonyProps>;
-type Ceremony = { readonly key: number; readonly coin: MintStrikeCoin; readonly Scene: CeremonyScene };
+type Ceremony = { readonly key: number; readonly coin: MintStrikeCoin; readonly glory: MintCeremonyGlory | null; readonly Scene: CeremonyScene };
 
 let ceremonyModule: Promise<CeremonyScene> | null = null;
 
@@ -61,7 +66,7 @@ export function loadMintCeremony(): Promise<CeremonyScene> {
 
 const FALLBACK_SETTLE_MS = CHOREOGRAPHY_DURATION_MS.mint + 60;
 
-export function MintStrike({ size, strikeKey, next, confirmed = null, gate = strikeGate }: MintStrikeProps) {
+export function MintStrike({ size, strikeKey, next, confirmed = null, glory = null, gate = strikeGate }: MintStrikeProps) {
   const [struck, setStruck] = useState<Struck>({ key: strikeKey, coin: null, stale: null });
   if (struck.key !== strikeKey) setStruck({ key: strikeKey, coin: next, stale: confirmed });
   const [ceremony, setCeremony] = useState<Ceremony | null>(null);
@@ -74,6 +79,8 @@ export function MintStrike({ size, strikeKey, next, confirmed = null, gate = str
 
   const coin = struck.key === strikeKey ? struck.coin : next;
   const striking = coin ?? next;
+  const gloryAtStrike = useRef(glory);
+  if (ceremony === null) gloryAtStrike.current = glory;
 
   useEffect(() => {
     if (strikeKey === firstKey.current || !gate.claim()) return undefined;
@@ -81,7 +88,7 @@ export function MintStrike({ size, strikeKey, next, confirmed = null, gate = str
     let fallback: ReturnType<typeof setTimeout> | undefined;
     loadMintCeremony().then(
       (Scene) => {
-        if (alive) setCeremony({ key: strikeKey, coin: striking, Scene });
+        if (alive) setCeremony({ key: strikeKey, coin: striking, glory: gloryAtStrike.current, Scene });
       },
       () => {
         if (!alive) return;
@@ -104,7 +111,15 @@ export function MintStrike({ size, strikeKey, next, confirmed = null, gate = str
         <MintScene size={size} face={coin === null ? 'obverse' : 'reverse'} edition={meeshDisplayEdition(shown.number)} number={shown.number} playKey={inlineKey} />
       </span>
       {ceremony === null || Scene === undefined ? null : (
-        <Scene key={ceremony.key} edition={ceremony.coin.edition} number={ceremony.coin.number} gate={gate} target={() => stage.current} onDone={() => setCeremony(null)} />
+        <Scene
+          key={ceremony.key}
+          edition={ceremony.coin.edition}
+          number={ceremony.coin.number}
+          gate={gate}
+          glory={ceremony.glory}
+          target={() => stage.current}
+          onDone={() => setCeremony(null)}
+        />
       )}
     </>
   );

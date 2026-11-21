@@ -38,6 +38,11 @@ struct BubbleCallNoticeView: View, Equatable {
     /// Timer). Pure presentation state, excluded from Equatable by nature.
     @State private var livePulse = false
 
+    /// #19790 — « en cours » attend la confirmation du serveur sur CET appel
+    /// (`CallNoticeLiveness`) : une copie locale qui a raté la fin de l'appel ne
+    /// propose plus « Rejoindre ». État de présentation, hors de l'égalité.
+    @State private var liveness: CallNoticeLiveness = .unverified
+
     // `Equatable` est MANUEL sur cette vue (voir `==` juste dessous), donc deux
     // propriétés `@Environment` ne cassent rien ici — contrairement à
     // `BubbleEditedIndicator`, `Equatable` par synthèse, qui passe par
@@ -52,7 +57,7 @@ struct BubbleCallNoticeView: View, Equatable {
         lhs.notice == rhs.notice && lhs.accentHex == rhs.accentHex && lhs.isDark == rhs.isDark
     }
 
-    private var summary: CallSummaryMetadata { notice.summary }
+    private var summary: CallSummaryMetadata { CallNoticeLiveness.presented(notice.summary, liveness: liveness) }
     private var isOutgoing: Bool { notice.isOutgoing }
 
     var body: some View {
@@ -115,6 +120,10 @@ struct BubbleCallNoticeView: View, Equatable {
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, MeeshySpacing.xs)
+        .task(id: notice.summary.callId) {
+            guard notice.summary.isLive else { return }
+            liveness = await CallNoticeLivenessChecker.shared.liveness(callId: notice.summary.callId)
+        }
     }
 
     private var card: some View {

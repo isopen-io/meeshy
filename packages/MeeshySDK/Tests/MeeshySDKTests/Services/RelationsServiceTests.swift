@@ -94,6 +94,22 @@ final class RelationsServiceTests: XCTestCase {
         XCTAssertEqual(served.first?.precision, .city)
     }
 
+    func test_sharedLocationsSnapshot_readsWhoIsPausedByGhost_withoutAnyPosition() async throws {
+        let (service, api) = makeSUT()
+        api.stubWire("/relations/locations", json: """
+        {"success":true,"data":{"items":[
+          {"userId":"u1","latitude":48.85,"longitude":2.35,"precision":"city","radiusMeters":8000,
+           "updatedAt":"2026-11-13T10:00:00.000Z","expiresAt":"2026-11-13T11:00:00.000Z"},
+          {"userId":"kwame","paused":"ghost","circle":"BLOOD"}
+        ]}}
+        """)
+
+        let served = try await service.sharedLocationsSnapshot(within: nil)
+
+        XCTAssertEqual(served.items.map(\.userId), ["u1"])
+        XCTAssertEqual(served.ghosts, [SharedLocationGhost(userId: "kwame", circle: .blood)])
+    }
+
     func test_sharedLocations_withBounds_sendsTheBboxTheGatewayReads() async throws {
         let (service, api) = makeSUT()
         api.stubWire("/relations/locations", json: #"{"success":true,"data":{"items":[]}}"#)
@@ -142,6 +158,54 @@ final class RelationsServiceTests: XCTestCase {
                 _ = try await service.ownSharedLocation()
                 XCTFail("une liste illisible ne doit pas se lire comme vide : \(body)")
             } catch {}
+        }
+    }
+
+    func test_ownSharedLocation_readsWhetherTheBatteryRidesAlong_absentIsUnknown() async throws {
+        let (service, api) = makeSUT()
+        api.stubWire("/relations/locations/mine", json: """
+        {"success":true,"data":{"recipients":[
+          {"userId":"aaaaaaaaaaaaaaaaaaaaaaaa","precision":"exact","expiresAt":"2026-11-15T11:00:00.000Z"}
+        ],"expiresAt":"2026-11-15T11:00:00.000Z","shareBattery":true}}
+        """)
+        let served = try await service.ownSharedLocation()
+        XCTAssertEqual(served.shareBattery, true)
+
+        let (legacy, legacyApi) = makeSUT()
+        legacyApi.stubWire("/relations/locations/mine", json: #"{"success":true,"data":{"recipients":[],"expiresAt":null}}"#)
+        let old = try await legacy.ownSharedLocation()
+        XCTAssertNil(old.shareBattery)
+    }
+
+    // MARK: - Demander à prolonger, redemander (#19204, #19476)
+
+    func test_requestSharedLocation_postsTheKindToTheEmitter_andCarriesNoPosition() async {
+        let (service, api) = makeSUT()
+        api.stubWire("/relations/u1/location/request", json: #"{"success":true,"data":{"requestedAt":"2026-11-17T10:00:00.000Z"}}"#)
+
+        let outcome = await service.requestSharedLocation(from: "u1", kind: .extend)
+
+        XCTAssertEqual(outcome, .sent)
+        XCTAssertEqual(api.lastRequest?.endpoint, "/relations/u1/location/request")
+        XCTAssertEqual(api.lastRequest?.method, "POST")
+        XCTAssertEqual(api.lastRequest?.bodyJSON?["kind"] as? String, "extend")
+        XCTAssertEqual(api.lastRequest?.bodyJSON?.count, 1)
+    }
+
+    func test_requestSharedLocation_readsEachRefusalAsWhatTheScreenSays() async {
+        let cases: [(Error, SharedLocationRequestOutcome)] = [
+            (MeeshyError.server(statusCode: 429, message: "trop tôt"), .tooSoon),
+            (MeeshyError.forbidden(reason: nil, body: nil), .closed),
+            (MeeshyError.server(statusCode: 404, message: "Route not found"), .notServed),
+            (MeeshyError.network(.noConnection), .offline),
+            (URLError(.notConnectedToInternet), .offline),
+            (MeeshyError.server(statusCode: 503, message: "indisponible"), .failed),
+        ]
+        for (error, expected) in cases {
+            let (service, api) = makeSUT()
+            api.stubError("/relations/u1/location/request", error: error)
+            let outcome = await service.requestSharedLocation(from: "u1", kind: .reask)
+            XCTAssertEqual(outcome, expected, "\(error)")
         }
     }
 

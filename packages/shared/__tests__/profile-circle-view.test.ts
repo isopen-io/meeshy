@@ -3,6 +3,7 @@ import {
   PROFILE_CAPABILITIES,
   profileFieldOpen,
   profileFieldServed,
+  profileCirclesReachable,
   resolveProfileCircleView,
   resolveProfileCircleViewAs,
   resolveProfilePresenceAs,
@@ -262,5 +263,19 @@ describe('« Voir comme » rend ce que reçoit un VRAI lecteur du cercle — âg
 
   it('sans préférence : exactement la présence d un vrai lecteur de chaque cercle (non-régression)', () => {
     for (const level of RELATION_LEVELS) expect(resolveProfilePresenceAs({ level, ...owner }), level).toEqual(presenceAt(level));
+  });
+});
+
+describe('profileCirclesReachable : le lecteur peut-il encore atteindre un cercle de la cible ? (#19274)', () => {
+  it.each(RELATION_LEVELS)('lien %s, sans blocage : oui', (level) => {
+    expect(profileCirclesReachable(resolveProfileCircleView(inputAt(level)))).toBe(true);
+  });
+
+  it('blocage dans un sens ou l’autre : non, même entre Sang', () => {
+    expect(profileCirclesReachable(resolveProfileCircleView(inputAt('BLOOD', { blockedEitherWay: true })))).toBe(false);
+  });
+
+  it('cible désactivée : non', () => {
+    expect(profileCirclesReachable(resolveProfileCircleView(inputAt('FRIEND', { targetDeactivated: true })))).toBe(false);
   });
 });

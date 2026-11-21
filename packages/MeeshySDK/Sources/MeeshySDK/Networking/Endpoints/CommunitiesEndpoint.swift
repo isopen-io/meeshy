@@ -15,8 +15,12 @@ public enum CommunitiesEndpoint: MeeshyEndpoint, Sendable {
     case byId(id: String)
     case byIdConversations(id: String)
     case byIdConversationsByConversationId(id: String, conversationId: String)
+    case byIdEntriesStats(id: String)
     case byIdInvite(id: String)
     case byIdJoin(id: String)
+    case byIdJoinRequests(id: String)
+    case byIdJoinRequestsByRequestIdAccept(id: String, requestId: String)
+    case byIdJoinRequestsByRequestIdReject(id: String, requestId: String)
     case byIdLeave(id: String)
     case byIdMembers(id: String)
     case byIdMembersByMemberId(id: String, memberId: String)
@@ -31,8 +35,12 @@ public enum CommunitiesEndpoint: MeeshyEndpoint, Sendable {
         case .byId(let id): return "/api/v1/communities/\(id)"
         case .byIdConversations(let id): return "/api/v1/communities/\(id)/conversations"
         case .byIdConversationsByConversationId(let id, let conversationId): return "/api/v1/communities/\(id)/conversations/\(conversationId)"
+        case .byIdEntriesStats(let id): return "/api/v1/communities/\(id)/entries/stats"
         case .byIdInvite(let id): return "/api/v1/communities/\(id)/invite"
         case .byIdJoin(let id): return "/api/v1/communities/\(id)/join"
+        case .byIdJoinRequests(let id): return "/api/v1/communities/\(id)/join-requests"
+        case .byIdJoinRequestsByRequestIdAccept(let id, let requestId): return "/api/v1/communities/\(id)/join-requests/\(requestId)/accept"
+        case .byIdJoinRequestsByRequestIdReject(let id, let requestId): return "/api/v1/communities/\(id)/join-requests/\(requestId)/reject"
         case .byIdLeave(let id): return "/api/v1/communities/\(id)/leave"
         case .byIdMembers(let id): return "/api/v1/communities/\(id)/members"
         case .byIdMembersByMemberId(let id, let memberId): return "/api/v1/communities/\(id)/members/\(memberId)"

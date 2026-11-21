@@ -11,6 +11,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { communityPostAudienceIdsOf, type CommunityPostRef } from '../../services/posts/communityVisibility';
 import { emitServerEvent, type ServerEventName, type ServerEventPayload } from '../serverEmit';
 import { withAudienceListFor, withoutAudienceList } from '../../services/posts/audienceList';
+import { withServedCarrierMedia, withServedPostMedia } from '../../services/posts/servedPostMedia';
 import { withoutBlockedRecipients } from '../../utils/blocking';
 import { amisAcceptes } from '../../services/friendship';
 import { circleAudienceIds } from '../../services/posts/postAudience';
@@ -298,9 +299,10 @@ export class SocialEventsHandler {
     authorId: string,
     event: E,
     payloadFor: (post: Post) => SocialEventPayload<E>,
-    post: Post,
+    loaded: Post,
     postRoomId?: string,
   ): void {
+    const post = withServedPostMedia(loaded);
     const authorRoom = ROOMS.feed(authorId);
     const audiencePayload = payloadFor(withoutAudienceList(post));
     const audienceRooms = recipientIds.filter((id) => id !== authorId).map((id) => ROOMS.feed(id));
@@ -640,7 +642,7 @@ export class SocialEventsHandler {
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
     const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
-    this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_ADDED, data);
+    this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_ADDED, { ...data, comment: withServedCarrierMedia(data.comment) });
   }
 
   /**
@@ -658,7 +660,7 @@ export class SocialEventsHandler {
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
     const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
-    this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_UPDATED, data);
+    this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_UPDATED, { ...data, comment: withServedCarrierMedia(data.comment) });
   }
 
   async broadcastCommentDeleted(
@@ -743,7 +745,7 @@ export class SocialEventsHandler {
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
     const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
-    this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_MEDIA_UPDATED, data);
+    this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_MEDIA_UPDATED, { ...data, comment: withServedCarrierMedia(data.comment) });
   }
 
   /**

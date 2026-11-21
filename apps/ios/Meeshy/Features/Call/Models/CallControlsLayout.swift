@@ -6,7 +6,8 @@ import Foundation
 /// (« Mon image », « L'appel »). #17327 — la disposition suit le nombre de
 /// participants (`CallControlsDisposition`) : à deux, un rail par famille sur
 /// les bords ; à plusieurs, une rangée légendée par famille dans la pilule.
-/// #8578 — une seule chose à la fois : `CallScreenLayer`. La conversation n'est PAS une action : sa
+/// #8578 — une seule chose à la fois : `CallScreenLayer`. #19670 — le Journal n'est PAS une action :
+/// il n'a de sens qu'avec les sous-titres, et sa seule porte est leur pied. La conversation non plus : sa
 /// seule porte est le bouton de l'en-tête (#8436), comme Image dans l'image (#17329,
 /// `CallHeaderRule`). Ce fichier tient les RÈGLES
 /// (quelles actions, où, quand) ; les vues ne font que les dessiner.
@@ -27,7 +28,6 @@ enum CallAction: String, CaseIterable, Sendable {
     /// #8552 — capturer l'appel en une image montée, ou chaque visage. #9287 — c'est aussi
     /// là que se choisit le cadre en direct d'un duo : capture et cadre sont une seule fonction.
     case capture
-    case journal
 }
 
 /// Ce que l'appel permet, lu une fois par rendu depuis `CallManager`.
@@ -108,7 +108,7 @@ struct CallActionSet: Equatable, Sendable {
         let add: [CallAction] = context.isConnected ? [.addPeople] : []
         let react: [CallAction] = context.isConnected ? [.react] : []
         let capture: [CallAction] = context.isConnected && context.showsVideo ? [.capture] : []
-        return [.captions] + recording + add + [.journal] + react + capture
+        return [.captions] + recording + add + react + capture
     }
 }
 

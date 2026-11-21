@@ -11,6 +11,7 @@ final class CallDialRouterTests: XCTestCase {
     private final class ActiveCallStub: ActiveCallServiceProviding, @unchecked Sendable {
         var session: ActiveCallSession?
         func activeCall(conversationId: String) async throws -> ActiveCallSession? { session }
+        func callSession(callId: String) async throws -> ActiveCallSession? { session }
     }
 
     private func session(conversationId: String = "conv-1", rows: [(String, Bool)], type: String? = "video") -> ActiveCallSession {

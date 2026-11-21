@@ -1,19 +1,20 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
-  BUBBLE_BAR,
   BUBBLE_KEY,
   BUBBLE_TIERS,
-  bubbleBarRows,
   bubbleOrigin,
   bubbleSize,
   bubbleTranslate,
   BUBBLE_SETTLE_TRANSITION,
+  GLIDE_PROJECTION_MS,
+  glideBubble,
+  MAX_GLIDE,
+  releaseVelocity,
   DEFAULT_BUBBLE,
   fittingTier,
   isBubbleTap,
   nudgeBubble,
-  offersOutputChoice,
   PILL_COLLAPSE_DISTANCE,
   pillSwipeOutcome,
   pinchTier,
@@ -112,7 +113,7 @@ describe('les tailles de la bulle (#8145)', () => {
   const SMALL_PHONE = { width: 320, height: 568 };
   const HEADER_AND_COMPOSER = { top: 64, bottom: 120 };
 
-  test('trois paliers, du plus petit au plus grand, la barre comprise', () => {
+  test('trois paliers, du plus petit au plus grand — la personne seule, sans barre (#19696)', () => {
     const [small, medium, large] = BUBBLE_TIERS.map((tier) => bubbleSize('video', tier));
     expect(BUBBLE_TIERS).toEqual(['small', 'medium', 'large']);
     expect(small!.width).toBeLessThan(medium!.width);
@@ -122,10 +123,9 @@ describe('les tailles de la bulle (#8145)', () => {
     expect(bubbleSize('video')).toEqual(small!);
   });
 
-  test('la barre passe à la ligne plutôt que de rogner une cible de 44', () => {
-    expect(bubbleBarRows(136, 3)).toBe(1);
-    expect(bubbleBarRows(136, 4)).toBe(2);
-    expect(bubbleSize('video', 'small', 4).height - bubbleSize('video', 'small', 3).height).toBe(BUBBLE_BAR);
+  test('#19696 — la bulle n’a plus de barre de commandes : sa hauteur est celle de son cadre', () => {
+    expect(bubbleSize('video', 'small')).toEqual({ width: 136, height: 180 });
+    expect(bubbleSize('portrait', 'small')).toEqual({ width: 136, height: 104 });
   });
 
   test('au pincement : écarter les doigts grandit, les rapprocher rapetisse, d’un palier par quart de zoom', () => {
@@ -157,7 +157,7 @@ describe('les tailles de la bulle (#8145)', () => {
     for (const viewport of [PHONE_SPACE, SMALL_PHONE]) {
       for (const tier of BUBBLE_TIERS) {
         for (const kind of ['video', 'portrait'] as const) {
-          const size = bubbleSize(kind, fittingTier(tier, viewport, HEADER_AND_COMPOSER, (candidate) => bubbleSize(kind, candidate, 4)), 4);
+          const size = bubbleSize(kind, fittingTier(tier, viewport, HEADER_AND_COMPOSER, (candidate) => bubbleSize(kind, candidate)));
           for (const fraction of [0, 1]) {
             for (const edge of ['left', 'right'] as const) {
               const origin = bubbleOrigin({ edge, fraction }, viewport, HEADER_AND_COMPOSER, size);
@@ -175,16 +175,8 @@ describe('les tailles de la bulle (#8145)', () => {
     const landscape = { width: 844, height: 420 };
     const sizeOf = (tier: 'small' | 'medium' | 'large') => bubbleSize('video', tier);
     expect(fittingTier('large', PHONE, INSETS, sizeOf)).toBe('large');
-    expect(fittingTier('large', landscape, { top: 64, bottom: 96 }, sizeOf)).toBe('small');
+    expect(fittingTier('large', landscape, { top: 64, bottom: 96 }, sizeOf)).toBe('medium');
     expect(fittingTier('medium', PHONE, INSETS, sizeOf)).toBe('medium');
-  });
-});
-
-describe('« Sortie audio » dans la bulle (#9097)', () => {
-  test('offert là où l’on choisit la sortie : setSinkId du navigateur, ou les routes de la coque', () => {
-    expect(offersOutputChoice({ shell: false, sinks: true })).toBe(true);
-    expect(offersOutputChoice({ shell: true, sinks: false })).toBe(true);
-    expect(offersOutputChoice({ shell: false, sinks: false })).toBe(false);
   });
 });
 
@@ -198,7 +190,7 @@ describe('bubbleTranslate — la bulle se déplace en `translate`, jamais en lef
   });
 
   test('l’aimantation au bord ne joue QUE `translate`, au tempo de l’ancienne transition', () => {
-    expect(BUBBLE_SETTLE_TRANSITION).toBe('translate 180ms ease-out');
+    expect(BUBBLE_SETTLE_TRANSITION).toBe('translate 420ms cubic-bezier(0.22, 1, 0.36, 1)');
   });
 });
 
@@ -215,3 +207,36 @@ describe('le glissé de la capsule (P18.10)', () => {
     expect(pillSwipeOutcome({ travelled: -PILL_COLLAPSE_DISTANCE, sharing: true })).toBe('stay');
   });
 });
+
+describe('#19701 — la vignette glisse avec élan', () => {
+  test('la vitesse du lâcher se lit sur les derniers instants du doigt', () => {
+    expect(releaseVelocity([])).toEqual({ x: 0, y: 0 });
+    expect(releaseVelocity([{ x: 10, y: 10, t: 0 }])).toEqual({ x: 0, y: 0 });
+    expect(releaseVelocity([{ x: 0, y: 0, t: 0 }, { x: 50, y: -20, t: 50 }])).toEqual({ x: 1, y: -0.4 });
+  });
+
+  test('un échantillon trop ancien ne fausse pas la vitesse : un doigt arrêté avant de lâcher ne lance rien', () => {
+    expect(releaseVelocity([{ x: 0, y: 0, t: 0 }, { x: 80, y: 0, t: 300 }])).toEqual({ x: 0, y: 0 });
+  });
+
+  test('lâchée doucement, elle reste où le doigt l’a laissée ; jetée, elle poursuit sa course', () => {
+    expect(glideBubble({ x: 30, y: 10 }, { x: 0, y: 0 })).toEqual({ x: 30, y: 10 });
+    expect(glideBubble({ x: 30, y: 10 }, { x: 1, y: -0.5 })).toEqual({ x: 30 + GLIDE_PROJECTION_MS, y: 10 - 0.5 * GLIDE_PROJECTION_MS });
+  });
+
+  test('un jet violent est borné sur chaque axe : elle ne traverse pas l’écran', () => {
+    expect(glideBubble({ x: 0, y: 0 }, { x: 50, y: -50 })).toEqual({ x: MAX_GLIDE, y: -MAX_GLIDE });
+  });
+
+  test('jetée vers l’autre bord, elle change de bord ; sans l’élan, elle serait restée', () => {
+    const viewport = { width: 390, height: 844 };
+    const size = bubbleSize('video');
+    const insets = { top: 64, bottom: 120 };
+    const origin = { left: 390 - 12 - size.width, top: 300 };
+    const moved = { x: -60, y: 0 };
+    const centerOf = (point: { readonly x: number; readonly y: number }) => ({ x: origin.left + point.x + size.width / 2, y: origin.top + point.y + size.height / 2 });
+    expect(snapBubble(centerOf(moved), viewport, insets, size).edge).toBe('right');
+    expect(snapBubble(centerOf(glideBubble(moved, { x: -1.2, y: 0 })), viewport, insets, size).edge).toBe('left');
+  });
+});
+

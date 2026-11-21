@@ -31,7 +31,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -133,8 +135,11 @@ fun CallPill(
     peerUserId: String = "",
     names: CallHeaderNames = CallHeaderNames(givenName = null, groupName = null),
     reduceMotion: Boolean = LocalReduceMotion.current,
+    onCollapse: (() -> Unit)? = null,
 ) {
     val reopenLabel = stringResource(R.string.call_pill_reopen)
+    val collapseLabel = stringResource(R.string.call_pill_collapse)
+    val collapseActions = onCollapse?.let { collapse -> listOf(CustomAccessibilityAction(collapseLabel) { collapse(); true }) }.orEmpty()
     val title = CallReducedCaption.title(names.givenName, names.groupName, displayName = state.peerName)
     val ongoingLabel = stringResource(R.string.call_pill_ongoing, title ?: state.peerName)
     // #17767 — « Arrêter » prend et rend la place de la barre par un fondu et une échelle courts (loi 17).
@@ -145,9 +150,9 @@ fun CallPill(
         label = "callPillShareSwap",
     ) { sharing ->
         if (sharing) {
-            CallPillSharing(state, title, reopenLabel, ongoingLabel, onClick, onStopScreenShare)
+            CallPillSharing(state, title, reopenLabel, ongoingLabel, collapseActions, onClick, onStopScreenShare)
         } else {
-            CallPillIdle(state, title, peerAvatarUrl, peerUserId, reopenLabel, ongoingLabel, onClick, onToggleMute, onToggleSpeaker, onHangUp)
+            CallPillIdle(state, title, peerAvatarUrl, peerUserId, reopenLabel, ongoingLabel, collapseActions, onClick, onToggleMute, onToggleSpeaker, onHangUp)
         }
     }
 }
@@ -168,6 +173,7 @@ private fun CallPillSharing(
     title: String?,
     reopenLabel: String,
     ongoingLabel: String,
+    collapseActions: List<CustomAccessibilityAction>,
     onClick: () -> Unit,
     onStopScreenShare: () -> Unit,
 ) {
@@ -183,7 +189,7 @@ private fun CallPillSharing(
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm, Alignment.Start),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            CallPillReopenArea(reopenLabel, ongoingLabel, onClick) {
+            CallPillReopenArea(reopenLabel, ongoingLabel, collapseActions, onClick) {
                 CallPillSharingIdentity(CallReducedCaption.caption(title, pillStatusLine(state)))
             }
             CallShareStopButton(onStopScreenShare)
@@ -199,6 +205,7 @@ private fun CallPillIdle(
     peerUserId: String,
     reopenLabel: String,
     ongoingLabel: String,
+    collapseActions: List<CustomAccessibilityAction>,
     onClick: () -> Unit,
     onToggleMute: () -> Unit,
     onToggleSpeaker: () -> Unit,
@@ -218,7 +225,7 @@ private fun CallPillIdle(
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm, Alignment.Start),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CallPillReopenArea(reopenLabel, ongoingLabel, onClick) {
+        CallPillReopenArea(reopenLabel, ongoingLabel, collapseActions, onClick) {
             CallPillIdentity(state = state, title = title, peerAvatarUrl = peerAvatarUrl, accent = accent)
         }
         CallPillControls(
@@ -235,6 +242,7 @@ private fun CallPillIdle(
 private fun RowScope.CallPillReopenArea(
     reopenLabel: String,
     ongoingLabel: String,
+    collapseActions: List<CustomAccessibilityAction>,
     onClick: () -> Unit,
     content: @Composable RowScope.() -> Unit,
 ) {
@@ -242,7 +250,10 @@ private fun RowScope.CallPillReopenArea(
         modifier = Modifier
             .weight(1f)
             .clickable(onClickLabel = reopenLabel, onClick = onClick)
-            .semantics { contentDescription = ongoingLabel },
+            .semantics {
+                contentDescription = ongoingLabel
+                if (collapseActions.isNotEmpty()) customActions = collapseActions
+            },
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md, Alignment.Start),
         verticalAlignment = Alignment.CenterVertically,
         content = content,
@@ -317,7 +328,7 @@ private fun RowScope.CallPillSharingIdentity(caption: String) {
  * for the minimisable phases; a non-minimisable status never reaches the pill.
  */
 @Composable
-private fun pillStatusLine(state: CallUiState): String = when (state.status) {
+internal fun pillStatusLine(state: CallUiState): String = when (state.status) {
     CallStatus.CONNECTED -> state.durationLabel ?: stringResource(R.string.call_status_connected)
     CallStatus.OUTGOING_RINGING -> stringResource(R.string.call_status_ringing)
     CallStatus.CONNECTING -> stringResource(R.string.call_status_connecting)
@@ -326,7 +337,7 @@ private fun pillStatusLine(state: CallUiState): String = when (state.status) {
 }
 
 @Composable
-private fun pillStatusColor(status: CallStatus): Color = when (status) {
+internal fun pillStatusColor(status: CallStatus): Color = when (status) {
     CallStatus.CONNECTED -> MeeshyTheme.tokens.success
     CallStatus.RECONNECTING -> MeeshyTheme.tokens.error
     CallStatus.OUTGOING_RINGING, CallStatus.CONNECTING -> MeeshyTheme.tokens.warning

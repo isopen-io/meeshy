@@ -71,6 +71,8 @@ import me.meeshy.ui.component.location.LocationFullscreen
 import me.meeshy.ui.component.video.MeeshyVideoViewer
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
+import me.meeshy.sdk.model.reading.focal.FocalLiveCalls
+import me.meeshy.ui.component.focal.LocalFocalLiveCallId
 
 /**
  * List layer: the message list with its scroll behaviours (open scroll, auto-scroll on a new
@@ -470,7 +472,14 @@ internal fun ChatListHost(
         else -> Unit
     }
     val fileTransfers = remember(state.fileDownload, host.downloadedFileIds) { bubbleFileTransfersOf(state.fileDownload, host.downloadedFileIds) }
-    CompositionLocalProvider(LocalBubbleFileTransfers provides fileTransfers, LocalViewOnceConsumer provides viewOnceConsumer) {
+    // #19790 — une carte d'appel ne propose « Rejoindre » que si le serveur confirme son appel ; une carte « en cours »
+    // qu'il ne confirme pas fait relire l'appel actif (une fois par ensemble, jamais en boucle).
+    val liveCallId = state.activeCall?.id
+    val unconfirmedLive = remember(state.messages, liveCallId) {
+        FocalLiveCalls.unconfirmed(state.messages.mapNotNull { bubble -> bubble.callSummary?.takeIf { it.isLive }?.callId }, liveCallId)
+    }
+    LaunchedEffect(unconfirmedLive) { if (unconfirmedLive.isNotEmpty()) actions.refreshActiveCall() }
+    CompositionLocalProvider(LocalBubbleFileTransfers provides fileTransfers, LocalViewOnceConsumer provides viewOnceConsumer, LocalFocalLiveCallId provides liveCallId) {
     Box(modifier = modifier.fillMaxSize()) {
         when {
             state.loadingPhase(host.landing.isLoadingNewer).isBlockingSpinnerNeeded -> Box(Modifier.padding(top = topInset, bottom = bottomInset)) { ChatSkeleton() }

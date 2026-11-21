@@ -28,8 +28,7 @@ import {
   getUserPresenceStatus,
   PRESENCE_IDLE_WINDOW_MS,
 } from '@meeshy/shared/utils/user-presence';
-import { unsetOrNull } from '../utils/prisma-unset';
-import { isUsableAccount } from './relations/usableAccount';
+import { isUsableAccount, USABLE_ACCOUNT_WHERE } from './relations/usableAccount';
 import type { PrivacyPreferencesService } from './PrivacyPreferencesService';
 
 export const ONLINE_COUNT_ANONYMITY_FLOOR = 10;
@@ -47,7 +46,7 @@ export async function countOnlineMembers(params: OnlineCountParams): Promise<num
   const { prisma, privacy, communityId, viewerId } = params;
   const now = params.now ?? new Date();
   const others = { communityId, isActive: true, userId: { not: viewerId } };
-  const living = { isActive: true, AND: [unsetOrNull('deletedAt'), unsetOrNull('deactivatedAt')] };
+  const living = USABLE_ACCOUNT_WHERE;
 
   const population = await prisma.communityMember.count({ where: { ...others, user: { is: living } } });
   if (population < ONLINE_COUNT_ANONYMITY_FLOOR) return null;

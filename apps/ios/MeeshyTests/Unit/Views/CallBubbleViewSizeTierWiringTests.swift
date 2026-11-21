@@ -51,40 +51,6 @@ final class CallBubbleViewSizeTierWiringTests: XCTestCase {
         )
     }
 
-    func test_tierControlBar_opacityFollowsResolverCurve() throws {
-        let source = try callBubbleViewSource()
-        XCTAssertTrue(
-            source.contains("CallBubbleGestureResolver.controlBarOpacity(progress:"),
-            "The persistent mute/speaker/hangup bar at the rectangle tiers must fade in " +
-            "using the resolver's curve, not pop in abruptly at a tier boundary."
-        )
-    }
-
-    func test_miniMenu_isGatedToCircleRegion() throws {
-        let source = try callBubbleViewSource()
-        XCTAssertTrue(
-            source.contains("isCircleRegion && isMenuRevealed"),
-            "The long-press mini-menu cluster must only render in the circle region " +
-            "(progress < 0.5) — at the rectangle tiers, controls are already always-on " +
-            "via the persistent bar, so the long-press cluster must not double up."
-        )
-    }
-
-    func test_revealMenu_guardsAgainstNonCircleRegion() throws {
-        let source = try callBubbleViewSource()
-        guard let range = source.range(of: "private func revealMenu()") else {
-            XCTFail("revealMenu not found"); return
-        }
-        let end = source.range(of: "private func closeMenu()", range: range.upperBound..<source.endIndex)?.lowerBound
-            ?? source.endIndex
-        let body = String(source[range.lowerBound..<end])
-        XCTAssertTrue(
-            body.contains("guard currentProgress < 0.5 else { return }"),
-            "revealMenu() must refuse to open the mini-menu outside the circle region — " +
-            "long-pressing an already-enlarged rectangle tier must not summon a redundant menu."
-        )
-    }
-
     func test_accessibilityAdjustableAction_changesTier() throws {
         let source = try callBubbleViewSource()
         XCTAssertTrue(

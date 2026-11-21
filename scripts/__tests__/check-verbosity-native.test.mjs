@@ -52,6 +52,52 @@ test('dépassement : plus de libellés longs ou d’explications que le budget �
   assert.match(problems[1], /explication/);
 });
 
+test('les libellés refusés sont NOMMÉS, pas seulement comptés (#19710)', () => {
+  const budgets = budgetsOf({ 'ios:MeeshyUI/profile': counters(10, 30, 0, 3) });
+  const offenders = {
+    'ios:MeeshyUI/profile': {
+      long: [
+        { key: 'profile.nextCircles.close.how', value: 'a'.repeat(131) },
+        { key: 'profile.nextCircles.blood.how', value: 'b'.repeat(118) },
+      ],
+      explanations: [],
+    },
+  };
+  const { problems } = nativeVerdict({ measured: { 'ios:MeeshyUI/profile': counters(10, 30, 2, 3) }, budgets, previous: budgets, offenders });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /profile\.nextCircles\.close\.how/);
+  assert.match(problems[0], /profile\.nextCircles\.blood\.how/);
+  assert.match(problems[0], /131/);
+});
+
+test('la liste des libellés refusés est bornée : au-delà de dix, le reste est annoncé (#19710)', () => {
+  const budgets = budgetsOf({ 'android:sdk-ui': counters(99, 99, 0, 0) });
+  const long = Array.from({ length: 13 }, (unused, index) => ({ key: `cle${index}`, value: 'x'.repeat(90) }));
+  const { problems } = nativeVerdict({
+    measured: { 'android:sdk-ui': counters(99, 99, 13, 0) },
+    budgets,
+    previous: budgets,
+    offenders: { 'android:sdk-ui': { long, explanations: [] } },
+  });
+  assert.match(problems[0], /cle9/);
+  assert.doesNotMatch(problems[0], /cle10/);
+  assert.match(problems[0], /et 3 de plus/);
+});
+
+test('sans relevé des coupables, le verdict est celui d’avant — un compteur de VOLUME ne liste rien (#19710)', () => {
+  const budgets = budgetsOf({ 'android:sdk-ui': counters(10, 30, 1, 2) });
+  const { problems, notes } = nativeVerdict({
+    measured: { 'android:sdk-ui': counters(12, 34, 2, 2) },
+    budgets,
+    previous: budgets,
+    offenders: { 'android:sdk-ui': { long: [{ key: 'cleUnique', value: 'y'.repeat(90) }], explanations: [] } },
+  });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /cleUnique/);
+  assert.equal(notes.length, 2);
+  for (const note of notes) assert.doesNotMatch(note, /y{10}/);
+});
+
 test('dépassement de volume : signalé, sans rougir — chaque feature ajoute des libellés', () => {
   const budgets = budgetsOf({ 'android:sdk-ui': counters(10, 30, 1, 2) });
   const { problems, notes } = nativeVerdict({ measured: { 'android:sdk-ui': counters(12, 34, 1, 2) }, budgets, previous: budgets });

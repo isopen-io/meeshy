@@ -105,11 +105,11 @@ describe('le point du barreau « Ma Légende »', () => {
     expect(barreauDuJeu()?.getAttribute('aria-label')).toBe('Ma Légende');
   });
 
-  test('avant que les actes s’ouvrent, une Offrande « prête » ne fait aucun point', () => {
+  test('avant le niveau 5, l’Offrande prête du premier Rêve fait son point (#17370)', () => {
     servir({ chest: 'ready', unlocked: false });
     monterOuvert();
 
-    expect(point()).toBeNull();
+    expect(point()).not.toBeNull();
   });
 
   test('cache vide : aucun point', () => {

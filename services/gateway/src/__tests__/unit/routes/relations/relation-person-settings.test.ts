@@ -46,7 +46,7 @@ import { relationsRoutes } from '../../../../routes/relations';
 import { freezeClock, thawClock } from '../../../helpers/relation-app';
 import { AUTRE, MOI, NOW, buildBringApp, lien, type BringAppOptions, type BringTestApp } from '../../../helpers/bring-app';
 
-const AUCUN_PARTAGE = { listeningCategoryShared: false, listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false };
+const AUCUN_PARTAGE = { bloodLocationMuted: false, listeningCategoryShared: false, listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false };
 
 const appli = (options: BringAppOptions = { liens: [lien('CLOSE', 'CLOSE')] }): Promise<BringTestApp> =>
   buildBringApp(async (a) => { await a.register(relationsRoutes, { prefix: '/api/v1/relations' }); }, options);
@@ -195,5 +195,49 @@ describe('#13934 — retirer la catégorie retire aussi le titre', () => {
     expect(retire.body.data).toMatchObject({ listeningCategoryShared: false, listeningTitleShared: false });
     expect(reaccorde.body.data).toMatchObject({ listeningCategoryShared: true, listeningTitleShared: false });
     expect(app.reglages.get(`${AUTRE}:${MOI}`)).toMatchObject({ listeningCategoryWithdrawnAt: null, listeningTitleWithdrawnAt: NOW });
+  });
+});
+
+describe('#19454 — bloodLocationMuted : ne plus recevoir la position continue d\'un Sang', () => {
+  it('se coupe sur MA ligne, se relit et se rouvre, sans toucher au consentement de l\'émetteur', async () => {
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')] });
+    app.reglages.set(`${MOI}:${AUTRE}`, { ownerId: MOI, otherId: AUTRE, locationShared: true, locationHistoryShared: true, proximityShared: true });
+    const pose = await regler(app, { bloodLocationMuted: true });
+    const relu = await lire(app);
+    const rouvert = await regler(app, { bloodLocationMuted: false });
+    await app.close();
+
+    expect(pose.body.data).toEqual({ userId: MOI, bringBlocked: false, talkieBlocked: false, togetherBlocked: false, ...AUCUN_PARTAGE, bloodLocationMuted: true });
+    expect(relu.body.data).toEqual(pose.body.data);
+    expect(rouvert.body.data.bloodLocationMuted).toBe(false);
+    expect(app.reglages.get(`${AUTRE}:${MOI}`)).toMatchObject({ bloodLocationMutedAt: null });
+    expect(app.reglages.get(`${MOI}:${AUTRE}`)).toMatchObject({ locationShared: true, locationHistoryShared: true, proximityShared: true });
+    expect(app.reglages.get(`${MOI}:${AUTRE}`)?.bloodLocationMutedAt).toBeUndefined();
+  });
+
+  it('se date au moment de la coupure', async () => {
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')] });
+    await regler(app, { bloodLocationMuted: true });
+    await app.close();
+
+    expect(app.reglages.get(`${AUTRE}:${MOI}`)).toMatchObject({ bloodLocationMutedAt: NOW });
+  });
+
+  it('sans lien, rien ne s\'écrit : le même 404 qu\'une personne inconnue', async () => {
+    const app = await appli({ liens: [] });
+    const res = await regler(app, { bloodLocationMuted: true });
+    await app.close();
+
+    expect(res.status).toBe(404);
+    expect(app.reglages.size).toBe(0);
+  });
+
+  it('une valeur qui n\'est pas un booléen : 400', async () => {
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')] });
+    const res = await regler(app, { bloodLocationMuted: 'oui' });
+    await app.close();
+
+    expect(res.status).toBe(400);
+    expect(app.reglages.size).toBe(0);
   });
 });

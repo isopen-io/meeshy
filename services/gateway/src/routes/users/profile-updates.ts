@@ -4,9 +4,11 @@
  * budget de taille) — la façade de ré-export vit là-bas.
  */
 import { normalizeCityInput } from '@meeshy/shared/utils/profile-city';
+import { servedProfileAccentColor } from '@meeshy/shared/utils/profile-accent';
+import { announceProfileAccentToPartners } from './profile-accent';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { logError } from '../../utils/logger';
+import { logError, logWarn } from '../../utils/logger';
 import { capitalizeName, normalizeDisplayName } from '../../utils/normalize';
 import {
   updateUserProfileSchema,
@@ -36,6 +38,7 @@ import {
 } from '../../utils/auto-translate-preference';
 import { applyCategoryWriteEffects } from '../me/preferences/preference-registry';
 import { calculateProfileCompletionRate } from '../../utils/profile-completion';
+import { announceProfileChanged, touchesProfileFiche } from '../../services/notifications/profile-changed';
 import { releaseParticipantAvatarSnapshots } from '../../services/participantAvatarSnapshots';
 import { identityImageIsCallers, IDENTITY_IMAGE_NOT_OWNED } from '../../services/attachments/identityImageOwnership';
 import { refreshParticipantNameSnapshots } from '../../services/participantNameSnapshots';
@@ -185,6 +188,8 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       // (`null` = elle seule). Le cercle est une valeur de l'échelle, déjà validée par Zod.
       if (body.city !== undefined) updateData.city = normalizeCityInput(body.city);
       if (body.cityCircle !== undefined) updateData.cityCircle = body.cityCircle;
+      // #19201 : la couleur d'accent de la vitrine, déjà canonisée par Zod (liste fermée, `null` = automatique).
+      if (body.profileAccentColor !== undefined) updateData.profileAccentColor = body.profileAccentColor;
 
       // UNE lecture de la ligne avant l'écriture, ouverte seulement quand un
       // champ du corps en a besoin : un NOM (la borne de #13825 ne juge que les
@@ -362,12 +367,24 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         fastify.socketIOHandler?.getManager?.()?.refreshUserTypingIdentity(userId!);
       }
 
+      const accentChanged = body.profileAccentColor !== undefined;
+      if (accentChanged) {
+        announceProfileAccentToPartners(fastify, userId!, servedProfileAccentColor(updatedUser.profileAccentColor));
+      }
+
       // #18924 — MES autres appareils : la charge PROPRE (langues comprises), sur
       // `user:<moi>` seulement. Les partenaires ont `user:updated` ci-dessus, et sa
       // charge publique ; une écriture qui ne touche aucun champ de l'instantané
-      // (bio, ville, réglages) ne diffuse rien.
-      if (langChanged || nameChanged) {
+      // (bio, ville, réglages) ne diffuse rien. L'accent (#19201) en est un.
+      if (langChanged || nameChanged || accentChanged) {
         announceOwnProfileUpdated(fastify, updatedUser);
+      }
+
+      // #19384 — la fiche que les AUTRES lisent a changé (bio, ville, langues, voix) :
+      // signal sans contenu vers ses lecteurs, qui la revalident par If-None-Match.
+      if (touchesProfileFiche(body)) {
+        void announceProfileChanged(fastify, { userId: userId! })
+          .catch((error: unknown) => logWarn(fastify.log, '[PROFILE_UPDATE] profile-changed announce failed', error));
       }
 
       creditProfileMilestones(fastify, userId!, profileMilestonesReached(

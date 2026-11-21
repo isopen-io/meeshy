@@ -109,7 +109,7 @@ describe('arrêter', () => {
   });
 
 
-  test('sans relevé (liste reprise d’un rechargement, permission retirée), retirer une personne arrête TOUT', async () => {
+  test('passerelle d’avant la liste seule, sans relevé (liste reprise d’un rechargement, permission retirée) : retirer une personne arrête TOUT', async () => {
     const roster = rosterOps.adding(rosterOps.adding(EMPTY_ROSTER, { userId: AMI, precision: 'city', durationMinutes: 60, now: T0 }), {
       userId: AUTRE,
       precision: 'city',
@@ -117,9 +117,10 @@ describe('arrêter', () => {
       now: T0,
     });
     const world = makeWorld({ stored: encodeSharedLocationRoster(roster), granted: false });
+    world.startQueue.push(async () => ({ kind: 'refused', outcome: 'invalid' }));
     await world.center.stopSharing(AMI);
     expect(world.source.prompts).toBe(0);
-    expect(world.starts).toHaveLength(0);
+    expect(world.starts).toEqual([{ recipients: [{ userId: AUTRE, precision: 'city' }], durationMinutes: 60 }]);
     expect(world.stops()).toBe(1);
     expect(world.center.entry(AUTRE)).toBeNull();
   });
@@ -399,19 +400,20 @@ describe('un « Arrêter » hors ligne part au retour du réseau (#18388, iso #1
     await world.center.share({ userId: AUTRE, precision: 'city', durationMinutes: 60 });
     world.startQueue.push(async () => ({ kind: 'refused', outcome: 'offline' }));
     await world.center.stopSharing(AMI);
-    world.startQueue.push(async () => ({ kind: 'refused', outcome: 'invalid' }));
+    world.startQueue.push(async () => ({ kind: 'refused', outcome: 'rate-limited' }));
     await world.center.reconcile();
     expect(world.stops()).toBe(1);
     expect(world.stored()).toEqual(EMPTY_ROSTER);
   });
 
-  test('une dernière position plus vieille qu’un battement n’est pas republiée comme fraîche : l’appareil est redemandé', async () => {
+  test('passerelle d’avant la liste seule : une dernière position plus vieille qu’un battement n’est pas republiée comme fraîche, l’appareil est redemandé', async () => {
     const world = makeWorld();
     await world.center.share({ userId: AMI, precision: 'city', durationMinutes: 60 });
     await world.center.share({ userId: AUTRE, precision: 'city', durationMinutes: 60 });
     world.clock.now += 5 * 60_000;
     const moved: SharedLocationFix = { latitude: 45.764, longitude: 4.8357 };
     world.source.result = { kind: 'fix', fix: moved };
+    world.startQueue.push(async () => ({ kind: 'refused', outcome: 'invalid' }));
     await world.center.stopSharing(AMI);
     expect(world.starts.at(-1)?.position).toEqual(moved);
   });

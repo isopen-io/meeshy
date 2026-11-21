@@ -22,6 +22,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CallService } from '../services/CallService';
 import { logger } from '../utils/logger';
 import { resolveInvitedGuestParticipantId } from '../services/calls/callInvitation';
+import { isDuoCall } from '../services/calls/answeredCallRoster';
 import { participantKeyWhere } from './departed-member-participant-where';
 
 /** Ce que ces résolveurs empruntent à l'instance — résolu à l'APPEL, jamais capturé. */
@@ -125,7 +126,7 @@ export async function resolveActiveCallParticipantDetailed(
       participantId: activeParticipant.participantId,
       userId: activeParticipant.participant?.userId ?? activeParticipant.participantId,
       mode: callSession.mode,
-      isDirectCall: callSession.conversation?.type === 'direct',
+      isDirectCall: isDuoCall({ conversation: callSession.conversation ?? null, invitedUserIds: callSession.invitedUserIds ?? null }),
       hasOtherActiveParticipants: callSession.participants.some(
         (p) => !p.leftAt && p.id !== activeParticipant.id
       ),

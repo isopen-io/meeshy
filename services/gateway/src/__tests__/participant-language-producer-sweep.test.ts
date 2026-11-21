@@ -53,7 +53,8 @@ const SRC = join(__dirname, '..');
 
 /** Les écritures CONFORMES mesurées sur `dev` le 2026-09-01. */
 const CONFORMES_CONNUES = [
-  'routes/conversations/participants-writes.ts',
+  // #19650 — l'ajout d'un membre a quitté `participants-writes.ts` pour être partagé avec l'appel.
+  'services/conversations/memberAdmission.ts',
   'services/messaging/MessagingService.ts',
 ] as const;
 
@@ -106,7 +107,7 @@ describe('balayage : tout producteur de `Participant.language` vient du site uni
 describe('le balayage TOMBE sous la mutation qu’il nomme', () => {
   it('nomme un site conforme RÉEL dont on remet la forme `systemLanguage ?? \'en\'`', () => {
     const conforme = readFileSync(
-      join(SRC, 'routes/conversations/participants-writes.ts'),
+      join(SRC, 'services/conversations/memberAdmission.ts'),
       'utf8',
     );
     const mute = conforme.replace(
@@ -121,13 +122,13 @@ describe('le balayage TOMBE sous la mutation qu’il nomme', () => {
     // au lieu de nommer la mutation.
     const voisin = 'services/conversations/conversationEntryAdmission.ts';
     const racine = bacAvec({
-      'routes/conversations/participants-writes.ts': mute,
+      'services/conversations/memberAdmission.ts': mute,
       [voisin]: readFileSync(join(SRC, voisin), 'utf8'),
     });
 
     expect(producteursHorsSite(racine)).toEqual([
-      expect.stringContaining('routes/conversations/participants-writes.ts'),
-      expect.stringContaining('routes/conversations/participants-writes.ts'),
+      expect.stringContaining('services/conversations/memberAdmission.ts'),
+      expect.stringContaining('services/conversations/memberAdmission.ts'),
     ]);
     expect(producteursHorsSite(racine)[0]).toContain('userToAdd.systemLanguage');
   });
@@ -201,16 +202,50 @@ describe('chaque inventaire gelé PORTE quelque chose', () => {
   // #4713 a extrait le noyau des deux gestes de bannissement ; les deux
   // écritures opaques ont suivi dans `participant-ban-core.ts`, inchangées.
   // Seule la CLÉ change — ce gel est indexé par FICHIER.
-  it('le gel des écritures OPAQUES couvre le noyau du bannissement, et le dit', () => {
-    expect(Object.keys(ECRITURES_OPAQUES)).toEqual(['routes/conversations/participant-ban-core.ts']);
+  //
+  // #19688 en a ajouté une seconde : l'unité partagée qui COMMET les rentrées
+  // reçoit sa charge en paramètre. Les deux gels disent la même chose sous deux
+  // formes — « la valeur n'est pas dans ce fichier » — et aucune n'absout : les
+  // trois portes de rentrée sont jugées à LEUR appel, où elles sortent
+  // `conforme`.
+  it('le gel des écritures OPAQUES couvre le noyau du bannissement et le commit de rentrée, et le dit', () => {
+    expect(Object.keys(ECRITURES_OPAQUES).sort()).toEqual([
+      'routes/conversations/participant-ban-core.ts',
+      'services/conversations/rejoinParticipantWrite.ts',
+    ]);
     expect(ECRITURES_OPAQUES['routes/conversations/participant-ban-core.ts']).toContain('conversationBanState');
+    expect(ECRITURES_OPAQUES['services/conversations/rejoinParticipantWrite.ts']).toContain('PARAMÈTRE');
 
     const sansGel = ecrituresNonResolues(SRC, {});
 
     expect(sansGel.length).toBeGreaterThan(0);
     for (const nomme of sansGel) {
-      expect(nomme).toContain('routes/conversations/participant-ban-core.ts');
+      expect(Object.keys(ECRITURES_OPAQUES).some((gele) => nomme.includes(gele))).toBe(true);
     }
+  });
+
+  /**
+   * #19688 — la garde qui empêche le verdict FAUX de revenir.
+   *
+   * Un `data` posé en RACCOURCI (`{ where, data }`) n'a pas de valeur dans
+   * l'objet : `valeurDeCle` rend `undefined`, et le balayage concluait
+   * « aucun objet de données » ⇒ `sans-langue`, soit « ce site n'écrit pas la
+   * colonne ». C'est un VERDICT là où il n'y a qu'une ignorance, et il tombe du
+   * côté qui ABSOUT — exactement ce que l'en-tête du balayage interdit.
+   */
+  it('un `data` en RACCOURCI rend `non-resolue`, jamais `sans-langue`', () => {
+    const racine = bacAvec({
+      'services/raccourci.ts': [
+        "export async function ecrire(prisma: never, id: string, data: Record<string, unknown>) {",
+        '  return prisma.participant.update({ where: { id }, data });',
+        '}',
+      ].join('\n'),
+    });
+
+    expect(ecrituresNonResolues(racine, {})).toEqual([
+      expect.stringContaining('services/raccourci.ts'),
+    ]);
+    expect(fichiersSansLangue(racine)).toEqual([]);
   });
 });
 

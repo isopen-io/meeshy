@@ -49,7 +49,7 @@ internal object RetouchFaceDetector {
 
 /**
  * **LES EFFETS DE VISAGE SUR UNE PRISE** (#12733) — miroir de `CallFaceEffectsRenderer.render(_:upright:face:)` (iOS) :
- * Lissage de peau, Crapaud, Ange, Démon, Éruption, peints sur le canevas Android. [face] est en pixels de [image] ;
+ * Lissage de peau, Crapaud, Ange, Démon, Éruption, Bébé (#19779), peints sur le canevas Android. [face] est en pixels de [image] ;
  * sans visage, un effet qui en demande un garde ce qu'il sait peindre sans lui (la teinte, la lueur), comme sur iOS.
  */
 internal object RetouchFaceEffects {
@@ -62,6 +62,7 @@ internal object RetouchFaceEffects {
         CallFaceEffect.ANGEL -> RetouchFaceEffectStyles.angel(image, face)
         CallFaceEffect.DEMON -> RetouchFaceEffectStyles.demon(image, face)
         CallFaceEffect.VOLCANO -> RetouchFaceEffectStyles.volcano(image)
+        CallFaceEffect.BABY -> RetouchFaceEffectStyles.baby(image, face)
     }
 
     internal fun mutableCopy(image: Bitmap): Bitmap = image.copy(Bitmap.Config.ARGB_8888, true)

@@ -98,6 +98,14 @@ export const affiliateStatsResponseSchema = {
         completedReferrals: { type: 'number', description: 'Referrals that completed onboarding' },
         pendingReferrals: { type: 'number', description: 'Referrals still pending' },
         expiredReferrals: { type: 'number', description: 'Referrals whose window expired' },
+        visits: { type: 'number', description: "L'entonnoir (#19207) : clics comptés sur tous les jetons de l'appelant" },
+        registrations: { type: 'number', description: "L'entonnoir (#19207) : filleuls inscrits depuis toujours" },
+        registrationsThisMonth: { type: 'number', description: "L'entonnoir (#19207) : filleuls inscrits depuis le premier du mois UTC" },
+        active: {
+          type: 'number',
+          nullable: true,
+          description: "L'entonnoir (#19207) : filleuls vus dans les 30 derniers jours — null tant que REFERRAL_ACTIVITY_ENABLED est éteint",
+        },
         referrals: {
           type: 'array',
           description: 'Individual referral relations, most recent first',
@@ -106,6 +114,12 @@ export const affiliateStatsResponseSchema = {
             properties: {
               id: { type: 'string' },
               status: { type: 'string', enum: ['pending', 'completed', 'expired'] },
+              activity: {
+                type: 'string',
+                enum: ['active', 'inactive'],
+                nullable: true,
+                description: 'Vu sur Meeshy dans les 30 derniers jours (#19207) — absent tant que REFERRAL_ACTIVITY_ENABLED est éteint, null si le filleul masque son statut en ligne ; jamais une date',
+              },
               createdAt: { type: 'string', format: 'date-time' },
               completedAt: { type: 'string', format: 'date-time', nullable: true },
               referredUser: referredUserResponseSchema,

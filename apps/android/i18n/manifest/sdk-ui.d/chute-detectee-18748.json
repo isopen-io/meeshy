@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "androidName": "fall_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fall_battery",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fall_card_at",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fall_me_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fall_me_unavailable",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fall_open_map",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fall_pill_detected",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fall_pill_responded",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fall_share_person",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fall_share_person_scope",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fall_someone",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

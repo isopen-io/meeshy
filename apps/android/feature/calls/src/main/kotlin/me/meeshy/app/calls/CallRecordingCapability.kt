@@ -29,9 +29,17 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import me.meeshy.ui.icons.MeeshyIcons
 
-/** L'appel en cours tel que le contrôleur d'enregistrement le lit ; mis à jour à chaque transition. */
+/**
+ * L'appel en cours tel que le contrôleur d'enregistrement le lit ; mis à jour à chaque transition. Sa conversation
+ * est celle où l'appel vit MAINTENANT ([CallConversationBinding], #19650) : un enregistrement fait après la bascule
+ * vers le groupe des présents s'y rattache.
+ */
 @Singleton
-class CallRecordingCallHost @Inject constructor() : CallRecordingHost {
+class CallRecordingCallHost @Inject constructor(
+    private val binding: CallConversationBinding,
+) : CallRecordingHost {
+    constructor() : this(CallConversationBinding())
+
     @Volatile
     override var recordingCallId: String? = null
         private set
@@ -41,18 +49,24 @@ class CallRecordingCallHost @Inject constructor() : CallRecordingHost {
         private set
 
     @Volatile
-    override var conversationId: String? = null
-        private set
+    private var configuredConversationId: String? = null
+
+    override val conversationId: String?
+        get() {
+            val callId = recordingCallId ?: return null
+            val bound = binding.bound.value
+            return bound.conversationId.takeIf { bound.callId == callId && it.isNotBlank() } ?: configuredConversationId
+        }
 
     fun update(callId: String, conversationId: String, established: Boolean) {
         recordingCallId = callId.ifBlank { null }
-        this.conversationId = conversationId.ifBlank { null }
+        configuredConversationId = conversationId.ifBlank { null }
         isEstablished = established
     }
 
     fun clear() {
         recordingCallId = null
-        conversationId = null
+        configuredConversationId = null
         isEstablished = false
     }
 }

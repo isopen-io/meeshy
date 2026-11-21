@@ -969,15 +969,14 @@ describe('MessageTranslationService — branch supplement', () => {
     });
 
     it('routes post/story audio to PostAudioService and returns early when postId+postMediaId set (lines 892-913)', async () => {
-      // Covers: if (data.postId && data.postMediaId && data.translatedAudios.length > 0) → TRUE branch
-      //         ta.audioMimeType ?? 'audio/mp3' → NULL branch (line 901 alt#1)
-      //         (ta.segments ?? []).map(...) → NULL branch (line 905 alt#1)
+      // #19749 — la voie nommée n'écrit qu'après avoir trouvé le média et son post ; mime et segments nuls → défauts.
+      Object.assign(prisma, { postMedia: { findUnique: jest.fn(async () => ({ id: '6650a1b2c3d4e5f6a7b8c9f1', postId: '6650a1b2c3d4e5f6a7b8c9f0', comment: null })) } });
       mockZmqClient.emit('audioProcessCompleted', {
         taskId: 'task-post-story-1',
         messageId: 'msg-post-1',
         attachmentId: 'att-post-1',
-        postId: 'story-post-abc',
-        postMediaId: 'story-media-abc',
+        postId: '6650a1b2c3d4e5f6a7b8c9f0',
+        postMediaId: '6650a1b2c3d4e5f6a7b8c9f1',
         transcription: { text: '', language: 'en', confidence: 0.9, source: 'whisper', durationMs: 0, segments: [] },
         translatedAudios: [
           {
@@ -998,8 +997,8 @@ describe('MessageTranslationService — branch supplement', () => {
 
       expect(mockHandleAudioTranslationsReady).toHaveBeenCalledWith(
         expect.objectContaining({
-          postId: 'story-post-abc',
-          postMediaId: 'story-media-abc',
+          postId: '6650a1b2c3d4e5f6a7b8c9f0',
+          postMediaId: '6650a1b2c3d4e5f6a7b8c9f1',
           translations: expect.objectContaining({
             fr: expect.objectContaining({
               type: 'audio',

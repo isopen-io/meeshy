@@ -34,6 +34,20 @@ const PLURAL_RELATIONS = new Set(['participants', 'participations']);
 const SINGULAR_RELATION = 'participant';
 const NESTED_WRITES = new Set(['create', 'createMany', 'connectOrCreate', 'upsert', 'update', 'updateMany', 'connect', 'set']);
 const MAX_RESOLUTION_DEPTH = 8;
+/**
+ * #19688 — l'unité PARTAGÉE qui commet une rentrée. Trois portes ne commettent
+ * plus par `prisma.participant.update(` mais par elle, et ce recensement « par
+ * EFFET » a cessé de les voir le jour où elles ont changé de graphie : trois
+ * écritures activantes ont quitté l'inventaire sans qu'il rougisse, et une
+ * QUATRIÈME porte qui rallumerait une participation par cette fonction sans
+ * appeler aucune loi d'entrée serait passée inaperçue — exactement le défaut de
+ * #16188 que ce recensement existe pour attraper.
+ *
+ * Son premier argument porte un `data` comme un délégué Prisma : il se juge
+ * donc comme une mise à jour, avec le même verdict conservateur.
+ */
+const REJOIN_COMMIT = 'commitParticipantRejoin';
+
 const RAW_COLLECTION = 'Participant';
 const RAW_COMMAND_WRITES = new Set(['insert', 'update', 'findAndModify']);
 const RAW_DRIVER_WRITES = new Set([
@@ -199,6 +213,17 @@ function rawWriteOf(node: ts.Node, constants: ReadonlyMap<string, ts.Expression 
   return undefined;
 }
 
+/**
+ * L'appel de l'unité partagée de rentrée, sous ses deux graphies — nue, et avec
+ * ses arguments de type (`commitParticipantRejoin<ParticipantRow>(…)`). La
+ * DÉCLARATION de la fonction n'est pas un appel, donc elle ne compte pas.
+ */
+const isRejoinCommit = (expression: ts.Expression): boolean => {
+  const callee = unwrap(expression);
+  if (ts.isIdentifier(callee)) return callee.text === REJOIN_COMMIT;
+  return ts.isPropertyAccessExpression(callee) && callee.name.text === REJOIN_COMMIT;
+};
+
 /** Les écritures de `Participant` d'un texte source, avec leur verdict d'activation. */
 export function participantWritesOf(file: string, text: string): readonly ParticipantWrite[] {
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
@@ -215,6 +240,14 @@ export function participantWritesOf(file: string, text: string): readonly Partic
       && node.expression.expression.name.text === SINGULAR_RELATION) {
       const operation = node.expression.name.text;
       writes.push({ file, line: lineOf(node), operation, activates: delegateWriteActivates(operation, node.arguments[0], constants) });
+    }
+    if (ts.isCallExpression(node) && isRejoinCommit(node.expression)) {
+      writes.push({
+        file,
+        line: lineOf(node),
+        operation: REJOIN_COMMIT,
+        activates: delegateWriteActivates('update', node.arguments[0], constants),
+      });
     }
     if (ts.isPropertyAssignment(node)) {
       const relation = nameOf(node.name);

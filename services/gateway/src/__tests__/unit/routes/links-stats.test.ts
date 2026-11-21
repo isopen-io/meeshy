@@ -229,8 +229,8 @@ describe('statistiques d’un lien — les chiffres', () => {
     const data = (await getStats(app)).json().data;
 
     expect(data.recentArrivals).toEqual([
-      { participantId: 'p-1', displayName: 'nova', avatar: null, isAnonymous: true, country: 'FR', language: 'fr', joinedAt: '2026-09-24T10:00:00.000Z' },
-      { participantId: 'p-2', displayName: 'Ana', avatar: '/api/v1/attachments/file/ana.png', isAnonymous: false, country: null, language: 'pt', joinedAt: '2026-09-23T08:00:00.000Z' },
+      { participantId: 'p-1', displayName: 'nova', avatar: null, isAnonymous: true, country: 'FR', language: 'fr', joinedAt: '2026-09-24T10:00:00.000Z', userId: null, emailMasked: null },
+      { participantId: 'p-2', displayName: 'Ana', avatar: '/api/v1/attachments/file/ana.png', isAnonymous: false, country: null, language: 'pt', joinedAt: '2026-09-23T08:00:00.000Z', userId: null, emailMasked: null },
     ]);
     await app.close();
   });
@@ -244,6 +244,56 @@ describe('statistiques d’un lien — les chiffres', () => {
     expect(body).not.toContain('isOnline');
     expect(body).not.toContain('lastActiveAt');
     expect(body).not.toContain('203.0.113.7');
+    await app.close();
+  });
+});
+
+describe('statistiques d’un lien — de quoi ouvrir la fiche d’un arrivant (#19283)', () => {
+  it('un inscrit porte son compte, un invité son e-mail masqué — jamais l’adresse ni l’e-mail du compte', async () => {
+    const { prisma } = fakePrisma({
+      recent: [
+        arrivalRow({ anonymousSession: { profile: { email: 'binta.diallo@orange.sn' } } }),
+        arrivalRow({
+          id: 'p-2', type: 'user', userId: '507f1f77bcf86cd799439044', displayName: 'Ana',
+          anonymousSession: { profile: { email: 'ana@ancien.fr' } },
+          user: { avatar: null, systemLanguage: 'pt', email: 'ana@compte.fr' },
+        }),
+      ],
+    });
+    const app = await buildApp(prisma, CREATOR_ID);
+
+    const res = await getStats(app);
+    const [guest, member] = res.json().data.recentArrivals;
+
+    expect(guest).toMatchObject({ userId: null, emailMasked: 'b•••@•••.sn' });
+    expect(member).toMatchObject({ userId: '507f1f77bcf86cd799439044', emailMasked: null });
+    for (const leak of ['binta', 'orange', 'ancien', 'ana@compte.fr']) expect(res.body).not.toContain(leak);
+    await app.close();
+  });
+
+  it('la lecture ne charge que le compte et l’e-mail d’invité, jamais l’e-mail d’un compte', async () => {
+    const { prisma, participantFindMany } = fakePrisma();
+    const app = await buildApp(prisma, CREATOR_ID);
+
+    await getStats(app);
+
+    const args = participantFindMany.mock.calls[0]?.[0] as { select: Record<string, unknown> };
+    expect(args.select).toMatchObject({ userId: true, anonymousSession: { select: { profile: { select: { email: true } } } } });
+    expect(JSON.stringify(args.select.user)).not.toContain('email');
+    await app.close();
+  });
+
+  it('un simple membre ne reçoit ni compte ni e-mail masqué d’aucun arrivant', async () => {
+    const { prisma } = fakePrisma({
+      memberRole: 'member', caller: STRANGER_ID,
+      recent: [arrivalRow({ anonymousSession: { profile: { email: 'binta@orange.sn' } } })],
+    });
+    const app = await buildApp(prisma, STRANGER_ID);
+
+    const res = await getStats(app);
+
+    expect(res.statusCode).toBe(403);
+    expect(res.body).not.toContain('•••');
     await app.close();
   });
 });

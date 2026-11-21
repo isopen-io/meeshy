@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="fiche_faces_label">Profilseiten</string>
+    <string name="fiche_face_vitrine">Vitrine</string>
+    <string name="fiche_face_links">Links</string>
+    <string name="fiche_face_actions">Aktionen</string>
+    <string name="fiche_section_talk">Sprechen</string>
+    <string name="fiche_section_together">Zusammen</string>
+    <string name="fiche_section_where">Wo die Person ist</string>
+    <string name="fiche_section_card">Das Profil</string>
+    <string name="fiche_section_not_open">Noch nicht offen</string>
+    <string name="fiche_action_write">Schreiben</string>
+    <string name="fiche_action_write_request">Nachricht anfragen</string>
+    <string name="fiche_action_call">Anrufen</string>
+    <string name="fiche_action_video">Video</string>
+    <string name="fiche_card_share">Profil senden</string>
+    <string name="fiche_card_our_circle">Unser Kreis</string>
+    <string name="fiche_links_title">Profil-Link</string>
+    <string name="fiche_links_hint">Öffnet die Vitrine in der öffentlichen Ansicht</string>
+    <string name="fiche_links_copy">Link kopieren</string>
+    <string name="fiche_links_qr">QR-Code</string>
+    <string name="fiche_links_send">An Freund senden</string>
+    <string name="fiche_links_empty">Für diese Person gibt es keinen Link zum Teilen.</string>
+    <string name="fiche_circle_title">%1$s und du</string>
+    <string name="fiche_circle_common">Euer gemeinsames Niveau ist das niedrigere der beiden.</string>
+    <string name="fiche_circle_they_grant">%1$s gewährt dir</string>
+    <string name="fiche_circle_you_grant">Du gewährst %1$s</string>
+    <string name="fiche_circle_at_least">%1$s oder mehr</string>
+    <string name="fiche_circle_opens">Was %1$s euch öffnet</string>
+    <string name="fiche_circle_opens_more">Mit %1$s zusätzlich</string>
+    <string name="fiche_circle_missing_they">Es fehlt: %1$s gewährt dir %2$s</string>
+    <string name="fiche_circle_missing_you">Es fehlt: du gewährst %1$s %2$s</string>
+</resources>

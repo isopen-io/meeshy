@@ -44,6 +44,14 @@ class StoryMediaLookMappingTest {
     }
 
     @Test
+    fun `le bebe se relit, et se garde, sous son identifiant (#19779)`() {
+        assertThat(StoryMediaLookMapping.photoLook(StoryMediaLook(faceEffect = "baby")).effect).isEqualTo(CallFaceEffect.BABY)
+        assertThat(CallFaceEffect.BABY.isStylized).isTrue()
+        assertThat(CallFaceEffect.BABY.needsFace).isTrue()
+        assertThat(CallFaceEffect.entries.map { it.raw }.last()).isEqualTo("baby")
+    }
+
+    @Test
     fun `un identifiant inconnu se peint aucun`() {
         val read = StoryMediaLookMapping.photoLook(StoryMediaLook(filterPreset = "sepia-2027", frameId = "frame:inconnu", faceEffect = "wizard"))
 

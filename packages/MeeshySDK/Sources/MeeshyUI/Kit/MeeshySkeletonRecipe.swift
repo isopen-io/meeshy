@@ -58,6 +58,16 @@ public nonisolated enum MeeshySkeletonRecipe {
         }
     }
 
+    /// Une liste au premier chargement : la même silhouette répétée, trois par défaut, espacées de 8.
+    public static let defaultColumnCount = 3
+    public static let columnSpacing: Double = 8
+    static let maxColumnCount = 6
+
+    /// Combien de silhouettes une colonne pose : bornée de 1 à 6, une demande absurde ne remplit pas l'écran.
+    public static func columnCount(_ requested: Int) -> Int {
+        min(max(requested, 1), maxColumnCount)
+    }
+
     /// Le reflet balaie après le délai, jamais sous mouvement réduit : l'aplat reste fixe.
     public static func sheenAnimates(reduceMotion: Bool, hasWaitedDelay: Bool) -> Bool {
         hasWaitedDelay && !reduceMotion

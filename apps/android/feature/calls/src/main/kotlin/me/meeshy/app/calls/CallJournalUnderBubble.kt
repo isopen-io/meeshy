@@ -44,6 +44,9 @@ import me.meeshy.ui.theme.MeeshyTheme
  * un indicateur sobre attend le replay (A1.14, iOS `ProgressView`). L'attente, le vide et le journal se relaient en fondu
  * ([FocalCallJournalFace], sans taille animée). La lecture des pages s'arrête quand la bulle quitte l'écran (A1.6).
  */
+/** #19687 — the whole journal under the call card fits 400 dp and scrolls on its own (iOS `CallJournalUnderCardSizing`, web 25 rem). */
+internal val CallJournalUnderBubbleListMaxHeight = 400.dp
+
 @Composable
 fun CallJournalUnderBubble(
     conversationId: String,
@@ -80,6 +83,7 @@ fun CallJournalUnderBubble(
                 accent = request.accent,
                 onRetry = viewModel::retry,
                 onDelete = viewModel::delete,
+                listMaxHeight = CallJournalUnderBubbleListMaxHeight,
             )
         }
     }

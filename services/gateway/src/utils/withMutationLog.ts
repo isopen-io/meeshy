@@ -52,6 +52,20 @@ import {
   MutationLogService,
   MutationLogDuplicate,
 } from '../services/MutationLogService';
+import { ConflictError } from '../errors/custom-errors';
+
+/**
+ * #19567 — le journal est indexé par (compte, cmid), sans le geste. Un cmid
+ * inscrit par un AUTRE geste ne désigne pas le résultat de celui-ci : le
+ * rejouer servirait une ressource que la route n'a pas produite, et l'exécuter
+ * de nouveau contournerait l'idempotence. Un client honnête tire un cmid neuf
+ * par geste ; ce cas n'a pas d'autre issue qu'un refus.
+ */
+export class MutationIdReusedError extends ConflictError {
+  constructor() {
+    super('This client mutation id was already used for another action', 'MUTATION_ID_REUSED');
+  }
+}
 
 /**
  * Ce que COÛTE la ré-exécution de `op()` quand le résultat antérieur n'est
@@ -159,6 +173,7 @@ export async function withMutationOutcome<T>(
     return { status: 'applied', result: await svc.recordOrReturn({ userId, clientMutationId: cmid, kind, op }) };
   } catch (err) {
     if (!(err instanceof MutationLogDuplicate)) throw err;
+    if (err.kind !== kind) throw new MutationIdReusedError();
 
     if (err.resultId) {
       const replayed = await onDuplicate(err.resultId);

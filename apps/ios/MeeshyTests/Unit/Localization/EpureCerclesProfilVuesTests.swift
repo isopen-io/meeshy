@@ -1,5 +1,6 @@
 import XCTest
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// L'épure 2/3 (#17584, #18088) : la fiche du participant porte le verbe en titre et des noms en rangées (règle 3), l'assistant
@@ -221,5 +222,94 @@ final class EpureCerclesProfilVuesTests: XCTestCase {
                 XCTAssertNotEqual(value, values["fr"], "[\(language)] \(key) traduit, pas copié")
             }
         }
+    }
+
+    // MARK: - Épure des cercles, des liens et du profil : l'explication derrière un (i), le reste retiré
+
+    private static var infoNotes: [(note: MeeshyInfoNote, key: String, file: String, reader: String)] {
+        [
+            (LinkCreationCopy.addressNote, "links.create.address", "Features/Links/Create/LinkCreationPieces.swift",
+             "LinkCreationCopy.addressNote"),
+            (LinkCreationCopy.utmNote, "links.create.tracking.utm", "Features/Links/Views/CreateTrackingLinkView.swift",
+             "LinkCreationCopy.utmNote"),
+            (ProfileLinksCopy.qrShowsInvitationNote, "profile.card.qrShows.invitation", "Features/Profile/Links/ProfileCardView.swift",
+             "ProfileLinksCopy.qrShowsInvitationNote"),
+            (ContactlessCopy.phoneNote, "profile.contactless.gift.phone", "Features/Profile/Contactless/ContactlessExchangeSection.swift",
+             "ContactlessCopy.phoneNote"),
+        ]
+    }
+
+    func test_epure_explanations_areBehindAnInfoNamedByItsQuestion_inSevenLanguages() throws {
+        let catalog = try app()
+        for entry in Self.infoNotes {
+            let note = entry.note
+            let key = entry.key
+            XCTAssertEqual(note.question, served("\(key).question"), key)
+            XCTAssertEqual(note.text, served("\(key).note"), key)
+            XCTAssertTrue(try XCTUnwrap(catalog["\(key).question"]?["fr"], key).hasSuffix("?"), key)
+            for suffix in ["question", "note"] {
+                let values = try XCTUnwrap(catalog["\(key).\(suffix)"], "\(key).\(suffix)")
+                for language in Self.otherLanguages {
+                    let value = try XCTUnwrap(values[language], "[\(language)] \(key).\(suffix)")
+                    XCTAssertNotEqual(value, values["fr"], "[\(language)] \(key).\(suffix) traduit, pas copié")
+                }
+            }
+        }
+    }
+
+    func test_epure_explanations_leaveTheScreenAtRest_andOpenFromTheirInfo() throws {
+        for entry in Self.infoNotes {
+            let source = try appCode(entry.file)
+            XCTAssertTrue(source.contains("MeeshyInfoNoted(note: \(entry.reader)"), "\(entry.key) : derrière le (i), pas au repos")
+        }
+        XCTAssertTrue(try appCode("Features/Links/Create/LinkCreationPieces.swift")
+            .contains("isAcceptable ? nil : LinkCreationCopy.addressInvalid"), "sous le champ, la règle enfreinte seulement")
+        XCTAssertTrue(ProfileCardQRShows.allCases.allSatisfy { $0.choiceItem.detail == nil }, "les tuiles du QR se nomment par leur titre")
+    }
+
+    /// Ce qui redit le titre ou l'action quitte les sept langues ; ce qui n'avait aucun lecteur aussi.
+    func test_epure_repeatsAndDeadEntries_areGoneFromBothCatalogs() throws {
+        let app = try app()
+        let ui = try ui()
+        for key in [
+            "profile.stats.a11y.hint", "circles.ours.raiseFailed.detail", "links.create.tracking.external.detail",
+            "links.create.tracking.unique.detail", "links.create.share.entries.detail", "links.create.address.caption",
+            "links.create.tracking.utm.detail", "profile.card.qrShows.showcase.detail", "profile.card.qrShows.invitation.detail",
+            "profile.vitrine.voice.publicToggle.hint", "profile.contactless.gift.vitrine.detail",
+            "profile.contactless.gift.friendRequest.detail", "profile.contactless.gift.phone.detail",
+        ] {
+            XCTAssertNil(app[key], key)
+        }
+        for key in ["profile.tab.details", "profile.linkCard.closed.hint"] { XCTAssertNil(ui[key], key) }
+    }
+
+    /// Une indication VoiceOver n'est pas une explication à l'écran : elle garde son texte, sous une clé `.a11y`.
+    func test_epure_voiceOverHints_keepTheirTextUnderAnA11yKey() throws {
+        let app = try app()
+        let ui = try ui()
+        let appHints = [
+            "circles.proposal.accept": "Votre cercle commun passe à %@", "circles.proposal.decline": "%@ n'en sera pas averti(e)",
+            "profile.contact.open": "Ouvre Sécurité, où se change et se vérifie ce contact", "profile.circles.open": "Ouvre Mes cercles",
+            "profile.edit.decor": "Ouvre le choix du décor", "profile.decor.image": "Choisir une image de bannière",
+        ]
+        let uiHints = [
+            "profile.avatar.viewFullscreen": "Ouvre la photo en plein écran", "profile.close": "Ferme le profil",
+            "profile.vitrine.pending.cancel": "Retire ce message de la file et du fil", "profile.vitrine.withThem.seeAll": "Ouvre la face Actions",
+        ]
+        for (catalog, hints) in [(app, appHints), (ui, uiHints)] {
+            for (key, french) in hints {
+                XCTAssertNil(catalog["\(key).hint"], key)
+                let values = try XCTUnwrap(catalog["\(key).a11y"], key)
+                XCTAssertEqual(values["fr"], french, key)
+                XCTAssertEqual(values.count, Self.otherLanguages.count + 1, key)
+            }
+        }
+    }
+
+    func test_reportEncryptedConsent_holdsInEightyCharacters_inSevenLanguages() throws {
+        let values = try XCTUnwrap(try ui()["profile.report.attach.e2ee.message"])
+        XCTAssertEqual(values.count, Self.otherLanguages.count + 1)
+        for (language, value) in values { XCTAssertLessThanOrEqual(value.count, 80, "[\(language)] \(value)") }
+        XCTAssertTrue(try XCTUnwrap(values["fr"]).contains("modérateurs"))
     }
 }

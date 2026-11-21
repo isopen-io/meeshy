@@ -209,7 +209,7 @@ private fun CallButtons(enabled: Boolean, onCall: (isVideo: Boolean) -> Unit) {
 }
 
 @Composable
-private fun ConnectionActionButton(action: ProfileConnectionAction, callbacks: ProfileActionCallbacks) {
+internal fun ConnectionActionButton(action: ProfileConnectionAction, callbacks: ProfileActionCallbacks) {
     val muted = MeeshyTheme.tokens.textSecondary
     when (action) {
         ProfileConnectionAction.REQUEST -> ProfileActionButton(
@@ -265,7 +265,7 @@ internal fun SendMessageButton(isOpening: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ProfileActionButton(
+internal fun ProfileActionButton(
     icon: ImageVector,
     label: String,
     color: Color,
@@ -298,7 +298,7 @@ private fun ProfileActionButton(
 }
 
 @Composable
-private fun ConnectionContextRow(banner: ProfileContextBanner, name: String) {
+internal fun ConnectionContextRow(banner: ProfileContextBanner, name: String) {
     val (icon, text) = when (banner) {
         ProfileContextBanner.RECEIVED -> Icons.Filled.PersonAdd to stringResource(R.string.profile_connection_context_received, name)
         ProfileContextBanner.SENT -> Icons.Filled.Schedule to stringResource(R.string.profile_connection_context_sent, name)
@@ -318,7 +318,7 @@ private fun ConnectionContextRow(banner: ProfileContextBanner, name: String) {
 }
 
 @Composable
-private fun ConnectedPill() {
+internal fun ConnectedPill() {
     Row(
         modifier = Modifier
             .fillMaxWidth()

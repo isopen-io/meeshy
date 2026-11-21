@@ -10,6 +10,8 @@ const fr = {
   'game.frappe.say.gold': 'La n° {number} est d’or. Tes aïeux l’ont vue.',
   'game.frappe.say.prism': 'La n° {number} est de prisme\u00a0: toutes les langues y brillent.',
   'game.frappe.glory': '+{glory} de gloire',
+  'game.frappe.glory_toward': '{glory} de gloire jusqu’à {rank}',
+  'game.frappe.risen': 'On t’appelle {rank}',
   'game.frappe.refused.shadow': 'Une ombre voile ta lumière. Tes prochaines étincelles la dissiperont, et on frappera.',
   'game.frappe.refused.locked': 'Ton Héritage attend un rang plus haut. Ta gloire l’ouvrira, et on frappera.',
   'game.frappe.refused.light': 'Ta lumière ne suffit pas encore. Tes prochaines étincelles la nourriront.',

@@ -10,17 +10,27 @@
  * introuvable, mal formée, ou soi-même rend la réponse d'un inconnu : 200 et
  * tout fermé (loi 9), jamais un 404 qui distinguerait « absent » de « privé ».
  *
+ * « Notre histoire » (#19378) est une partie OPTIONNELLE, dès Connaissance :
+ * servie seulement quand `parts` la nomme. Ouverte, elle porte ses `items`
+ * (`{ kind, level?, count?, at }`) et la réponse en porte la projection d'un mot
+ * par étape que lit le client iOS (`data.history`). Fermée, `data.history` est
+ * absent.
+ *
  * Les amis en commun révèlent un lien entre la cible et un tiers : leur partie
  * ne part que si `IN_COMMON_FRIENDS_ENABLED=true` (éteint par défaut).
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { RELATION_LEVELS } from '@meeshy/shared/types/relation';
-import { IN_COMMON_PARTS, isInCommonPart, type InCommonPart } from '@meeshy/shared/utils/profile-in-common';
+import { IN_COMMON_DEFAULT_PARTS, IN_COMMON_PARTS, isInCommonPart, type InCommonPart } from '@meeshy/shared/utils/profile-in-common';
+import { pairHistoryItemWire, pairHistoryWire, type PairHistoryItem } from '@meeshy/shared/utils/profile-pair-history';
+import { RELATION_REQUEST_LEVELS } from '@meeshy/shared/types/relation';
 import { sendForbidden, sendInternalError, sendSuccess } from '../../utils/response';
 import { logError } from '../../utils/logger';
 import { commonCommunities, commonFriends, readInCommonParts } from '../../services/relations/inCommon';
-import { SHARED_MEDIA_KINDS, isSharedMediaKind, sharedMedia } from '../../services/relations/sharedMedia';
+import { pairHistory } from '../../services/relations/pairHistory';
+import { SHARED_ATTACHMENT_KINDS, SHARED_MEDIA_KINDS, isSharedMediaKind } from '../../services/relations/sharedMedia';
+import { sharedMediaPart } from '../../services/relations/sharedLinks';
 import { profileViewerId } from './profile-block-gate';
 
 export const inCommonFriendsEnabled = (): boolean => process.env.IN_COMMON_FRIENDS_ENABLED === 'true';
@@ -69,7 +79,7 @@ const mediaSchema = {
   additionalProperties: false,
   properties: {
     id: { type: 'string' },
-    kind: { type: 'string', enum: [...SHARED_MEDIA_KINDS] },
+    kind: { type: 'string', enum: [...SHARED_ATTACHMENT_KINDS] },
     messageId: { type: 'string', nullable: true },
     conversationId: { type: 'string' },
     originalName: { type: 'string' },
@@ -82,6 +92,18 @@ const mediaSchema = {
     width: { type: 'number', nullable: true },
     height: { type: 'number', nullable: true },
     uploadedBy: { type: 'string' },
+    createdAt: { type: 'string', format: 'date-time' },
+  },
+} as const;
+
+const linkSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    messageId: { type: 'string' },
+    conversationId: { type: 'string' },
+    url: { type: 'string' },
+    domain: { type: 'string' },
     createdAt: { type: 'string', format: 'date-time' },
   },
 } as const;
@@ -115,11 +137,45 @@ const mediaPartSchema = {
     counts: countsSchema,
     countsCapped: { type: 'boolean', description: 'Counts read over the most recent attachments only' },
     items: { type: 'array', items: mediaSchema },
+    links: { type: 'array', items: linkSchema, description: 'Present only when mediaKind=link — links read in the text of shared messages' },
     pagination: {
       type: 'object',
       additionalProperties: false,
       properties: { limit: { type: 'number' }, hasMore: { type: 'boolean' }, nextCursor: { type: 'string', nullable: true } },
     },
+  },
+} as const;
+
+const historyItemSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['kind', 'at'],
+  properties: {
+    kind: { type: 'string', enum: ['first-message', 'level', 'messages-milestone'] },
+    level: { type: 'string', enum: [...RELATION_REQUEST_LEVELS], description: 'Present only when kind=level — a level of the COMMON circle' },
+    count: { type: 'number', description: 'Present only when kind=messages-milestone' },
+    at: { type: 'string', format: 'date-time' },
+  },
+} as const;
+
+const historyPartSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['state', 'circle'],
+  properties: {
+    state: stateSchema,
+    circle: circleSchema,
+    items: { type: 'array', items: historyItemSchema, description: 'Present only when open, oldest first' },
+  },
+} as const;
+
+const historyStepSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['kind', 'at'],
+  properties: {
+    kind: { type: 'string', description: 'firstMessage | acquaintance | friend | close | blood | messages1000 | messages10000' },
+    at: { type: 'string', format: 'date-time' },
   },
 } as const;
 
@@ -138,18 +194,30 @@ export const inCommonResponseSchema = {
             communities: listPartSchema(communitySchema),
             friends: listPartSchema(friendSchema),
             media: mediaPartSchema,
+            history: historyPartSchema,
           },
         },
+        history: { type: 'array', items: historyStepSchema, description: 'Present only when the history part is asked and open — one word per step' },
       },
     },
   },
 } as const;
 
-/** Les parties demandées, dans l'ordre de la fiche ; inconnues ignorées ; aucune = toutes. */
+/** Les parties demandées, dans l'ordre de la fiche ; inconnues ignorées ; aucune = toutes sauf l'histoire (optionnelle). */
 const wantedParts = (raw: string | undefined): readonly InCommonPart[] => {
   const asked = new Set((raw ?? '').split(',').map((part) => part.trim()).filter(isInCommonPart));
-  const parts = asked.size === 0 ? IN_COMMON_PARTS : IN_COMMON_PARTS.filter((part) => asked.has(part));
+  const parts = asked.size === 0 ? IN_COMMON_DEFAULT_PARTS : IN_COMMON_PARTS.filter((part) => asked.has(part));
   return inCommonFriendsEnabled() ? parts : parts.filter((part) => part !== 'friends');
+};
+
+type ServedPart = { readonly state: string; readonly items?: readonly unknown[] };
+
+/** L'histoire ouverte part en deux projections d'UNE lecture : ses items riches, et un mot par étape (`data.history`). */
+const withHistory = (parts: Record<string, ServedPart>) => {
+  const history = parts.history;
+  if (!history || history.state !== 'open') return { parts };
+  const items = (history.items ?? []) as readonly PairHistoryItem[];
+  return { parts: { ...parts, history: { ...history, items: items.map(pairHistoryItemWire) } }, history: pairHistoryWire(items) };
 };
 
 export async function getUserInCommon(fastify: FastifyInstance) {
@@ -166,9 +234,9 @@ export async function getUserInCommon(fastify: FastifyInstance) {
         querystring: {
           type: 'object',
           properties: {
-            parts: { type: 'string', description: 'Comma-separated subset of communities,friends,media (default: all)' },
+            parts: { type: 'string', description: 'Comma-separated subset of communities,friends,media,history (default: communities,friends,media — history is served only when asked)' },
             mediaKind: { type: 'string', enum: [...SHARED_MEDIA_KINDS], description: 'Filter the media page by kind' },
-            cursor: { type: 'string', description: 'Media keyset cursor — the id of the last item of the previous page' },
+            cursor: { type: 'string', description: 'Media keyset cursor — the id of the last item (the message id for links) of the previous page' },
             limit: { type: 'number', minimum: 1, maximum: 100, default: MEDIA_LIMIT_DEFAULT, description: 'Media page size' },
             listLimit: { type: 'number', minimum: 1, maximum: 100, default: LIST_LIMIT_DEFAULT, description: 'Communities and friends list size' },
           },
@@ -198,8 +266,9 @@ export async function getUserInCommon(fastify: FastifyInstance) {
             const verdict = verdicts[part];
             if (verdict.state !== 'open') return [part, verdict] as const;
             if (part === 'communities') return [part, { ...verdict, ...(await commonCommunities(fastify.prisma, { ...pair, limit: listLimit })) }] as const;
+            if (part === 'history') return [part, { ...verdict, items: await pairHistory(fastify.prisma, pair) }] as const;
             if (part === 'friends') return [part, { ...verdict, ...(await commonFriends(fastify.prisma, { ...pair, limit: listLimit })) }] as const;
-            const media = await sharedMedia(fastify.prisma, {
+            const media = await sharedMediaPart(fastify.prisma, {
               ...pair,
               kind: isSharedMediaKind(query.mediaKind) ? query.mediaKind : undefined,
               cursor,
@@ -208,7 +277,7 @@ export async function getUserInCommon(fastify: FastifyInstance) {
             return [part, { ...verdict, ...media }] as const;
           }),
         );
-        return sendSuccess(reply, { parts: Object.fromEntries(served) });
+        return sendSuccess(reply, withHistory(Object.fromEntries(served)));
       } catch (error) {
         logError(fastify.log, '[users/in-common] Failed to resolve what the pair shares', error);
         return sendInternalError(reply, 'Impossible de lire ce que vous avez en commun');

@@ -60,6 +60,29 @@ public final class TrackingLinkService: Sendable {
         )
     }
 
+    /// La carte des visiteurs depuis `since` : des zones agrégées (pays, ville sous plancher de k-anonymat), jamais
+    /// un clic isolé. Un serveur antérieur à #19412 n'en sert aucune.
+    public func fetchVisitorPlaces(token: String, since: Date) async throws -> TrackingLinkPlaceStats {
+        let response: APIResponse<TrackingLinkPlaceStats> = try await api.request(
+            TrackingLinksEndpoint.byTokenStats(token: token),
+            queryItems: [URLQueryItem(name: "startDate", value: WireDate.string(from: since))]
+        )
+        return response.data
+    }
+
+    struct UpdatedTrackingLinkData: Decodable {
+        let trackingLink: TrackingLink
+    }
+
+    /// Modifie un lien et rend celui que le serveur a retenu : c'est lui qui fait foi.
+    public func updateLink(token: String, changes: TrackingLinkChanges) async throws -> TrackingLink {
+        let response: APIResponse<UpdatedTrackingLinkData> = try await api.patch(
+            TrackingLinksEndpoint.byToken(token: token),
+            body: changes
+        )
+        return response.data.trackingLink
+    }
+
     /// Supprime un lien
     public func deleteLink(token: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.delete(

@@ -314,6 +314,80 @@ const pinch = async (cdp, center, fromGap, toGap, steps = 12) => {
 };
 
 /**
+ * LE CENTRE D'UNE CIBLE QUI LUI APPARTIENT (#20035, #20040, #20108, #20151).
+ *
+ * `boundingBox()` dit où la cible EST ; il ne dit pas qu'un toucher à cet
+ * endroit LUI parvient. Entre les deux, il y a tout ce qui s'en va.
+ *
+ * Mesuré image par image sur le gabarit 568 × 320, après la fermeture des
+ * rails : `data-call-layer` passe à `idle` dès la PREMIÈRE image, alors que
+ * quatre transitions CSS courent encore ~320 ms. Pendant les deux premières,
+ * le centre du bouton « Journal » du pied des sous-titres est occupé par la
+ * COLONNE DE RAIL QUI SORT — `document.elementFromPoint` y rend
+ * `DIV.flex min-h-0 flex-col items-center`, que le bouton ne contient pas.
+ * Un toucher qui tombe dans cette fenêtre part au rail sortant : le panneau
+ * ne s'ouvre jamais, et la lecture suivante de `[data-call-journal]` échoue.
+ * À l'image 3, le bouton possède son centre et le journal s'ouvre : 0 rouge
+ * sur 20 depuis.
+ *
+ * C'est le défaut que quatre issues ont décrit sans le nommer, et sa forme
+ * explique ce qu'aucune hypothèse de dérive n'expliquait : **une seule pose
+ * rougit** parce que 568 × 320 est la seule qui touche un contrôle DANS la
+ * pilule juste après avoir refermé les rails — les autres redimensionnent la
+ * fenêtre et ne touchent plus rien.
+ *
+ * L'attente est donc celle de la POSSESSION, pas celle des animations. Un
+ * `railsSettled` de plus refermerait cette fenêtre-ci (les transitions la
+ * couvrent) et manquerait la suivante : un recouvrement n'a pas besoin
+ * d'animer pour avaler un toucher. On attend que la cible possède son centre
+ * sur deux images consécutives, rect stable — jamais un délai arbitraire, qui
+ * ne mesure rien et se périme au premier coureur plus lent.
+ *
+ * Une cible qui ne possède JAMAIS son centre fait LEVER, en nommant ce qui
+ * l'occupe : ce n'est pas un flottement, c'est la loi 4 du dépôt — un
+ * contrôle existe s'il a un effet — et le `try/catch` de la pose en fait une
+ * ligne d'invariant rompu au lieu d'un toucher perdu en silence.
+ */
+const OWNS_LIMIT = 3000;
+const centerOfSelector = async (page, selector) => {
+  const posed = await page.evaluate(
+    ([target, limit]) =>
+      new Promise((resolve) => {
+        const started = performance.now();
+        let previous = null;
+        const read = () => {
+          const element = document.querySelector(target);
+          if (element === null) {
+            if (performance.now() - started > limit) resolve({ found: false });
+            else requestAnimationFrame(read);
+            return;
+          }
+          const box = element.getBoundingClientRect();
+          const rect = { x: box.left + box.width / 2, y: box.top + box.height / 2, w: box.width, h: box.height };
+          const hit = document.elementFromPoint(rect.x, rect.y);
+          const owns = hit !== null && element.contains(hit);
+          const still = previous !== null && Math.abs(rect.x - previous.x) < 0.5 && Math.abs(rect.y - previous.y) < 0.5 && Math.abs(rect.w - previous.w) < 0.5 && Math.abs(rect.h - previous.h) < 0.5;
+          if (owns && previous !== null && previous.owns && still) {
+            resolve({ found: true, owns: true, center: [rect.x, rect.y] });
+            return;
+          }
+          if (performance.now() - started > limit) {
+            resolve({ found: true, owns: false, center: [rect.x, rect.y], occupant: hit === null ? 'rien' : `${hit.tagName}${hit.className === '' ? '' : `.${String(hit.className).slice(0, 48)}`}`, rect: { x: Math.round(box.x), y: Math.round(box.y), w: Math.round(box.width), h: Math.round(box.height) } });
+            return;
+          }
+          previous = { ...rect, owns };
+          requestAnimationFrame(read);
+        };
+        requestAnimationFrame(read);
+      }),
+    [selector, OWNS_LIMIT],
+  );
+  if (!posed.found) return [0, 0];
+  if (!posed.owns) throw new Error(`la cible \`${selector}\` n'a jamais possédé son centre en ${OWNS_LIMIT} ms — rect ${JSON.stringify(posed.rect)}, le centre appartient à ${posed.occupant}`);
+  return posed.center;
+};
+
+/**
  * Glisse chaque piste qui déborde, de droite à gauche, et rend son `scrollLeft` avant/après.
  *
  * Le glissé ne dépasse pas ce que la piste peut défiler (#8619) : un doigt qui
@@ -323,11 +397,6 @@ const pinch = async (cdp, center, fromGap, toGap, steps = 12) => {
  * en plein glissé, 7 glissés sur 10 perdus après la rangée de 54 px tirée de
  * 296 px, 0 sur 10 sans elle). Chaque invariant ne dépend ainsi que de sa piste.
  */
-const centerOfSelector = async (page, selector) => {
-  const box = await page.locator(selector).first().boundingBox();
-  return box === null ? [0, 0] : [box.x + box.width / 2, box.y + box.height / 2];
-};
-
 const dragEach = async (page, cdp, selector) => {
   const count = await page.locator(selector).count();
   const results = [];
@@ -391,7 +460,7 @@ try {
       check(mineRail?.onStart === true && callRail?.onEnd === true, `${label} : « mon image » à gauche, « l'appel » à droite (${JSON.stringify(rails.map((rail) => [rail.family, rail.box.left, rail.box.right]))})`);
       check(rails.every((rail) => rail.role === 'toolbar' && rail.orientation === 'vertical' && rail.overflowY === 'auto' && rail.middle && rail.onScreen && rail.edge >= 8), `${label} : chaque rail est une colonne verticale qui défile si l'écran est court, au milieu, hors des bords (${JSON.stringify(rails.map((rail) => [rail.role, rail.orientation, rail.overflowY, rail.middle, rail.edge]))})`);
       check((await page.$('[data-call-control-pill="pill"]')) !== null && (await page.$('[data-call-control-pill="grown"]')) === null && (await page.$('[data-call-row]')) === null, `${label} : la pilule ne grandit pas, aucune rangée dedans`);
-      check(JSON.stringify(callRail?.keys.filter((key) => key !== 'pip')) === JSON.stringify(['captions', 'record', 'invite', 'journal', 'react']), `${label} : « l'appel » : Sous-titres, Enregistrer, Ajouter, Journal, Réagir (${callRail?.keys.join(' · ')})`);
+      check(JSON.stringify(callRail?.keys.filter((key) => key !== 'pip')) === JSON.stringify(['captions', 'record', 'invite', 'react']), `${label} : « l'appel » : Sous-titres, Enregistrer, Ajouter, Réagir — le Journal vit au pied des sous-titres, #19670 (${callRail?.keys.join(' · ')})`);
       check(mineRail !== undefined && mineRail.keys.includes('camera') && mineRail.keys.every((key) => ['camera', 'screen'].includes(key)), `${label} : caméra éteinte, « mon image » : Caméra et Écran seuls (${mineRail?.keys.join(' · ')})`);
       check((await page.$('[data-call-control="capture"]')) === null, `${label} : en audio, pas de « Capturer »`);
       check(rails.every((rail) => rail.sizes.length > 0 && rail.sizes.every((size) => size >= TAP_FLOOR) && rail.disc && !rail.blur), `${label} : boutons de ${TAP_FLOOR}, chacun son disque de verre et pas de flou à lui (#17345)`);
@@ -557,7 +626,7 @@ try {
       const videoCall = videoRails.find((rail) => rail.family === 'call');
       check(videoMine?.onStart === true && videoCall?.onEnd === true, `vidéo : « mon image » à gauche, « l'appel » à droite (${JSON.stringify(videoRails.map((rail) => [rail.family, rail.box.left, rail.box.right]))})`);
       check(JSON.stringify(videoMine?.keys.filter((key) => !['flip', 'camera-picker'].includes(key))) === JSON.stringify(['camera', 'effects', 'screen']) && (videoMine.keys[1] === 'flip' || videoMine.keys[1] === 'camera-picker' || !videoMine.keys.some((key) => ['flip', 'camera-picker'].includes(key))), `vidéo : « mon image » : Caméra · (Retourner) · Effets · Écran (${videoMine?.keys.join(' · ')})`);
-      check(JSON.stringify(videoCall?.keys.filter((key) => key !== 'pip')) === JSON.stringify(['captions', 'record', 'invite', 'journal', 'react', 'capture']), `vidéo : « l'appel » : Sous-titres, Enregistrer, Ajouter, Journal, Réagir, Capture (${videoCall?.keys.join(' · ')})`);
+      check(JSON.stringify(videoCall?.keys.filter((key) => key !== 'pip')) === JSON.stringify(['captions', 'record', 'invite', 'react', 'capture']), `vidéo : « l'appel » : Sous-titres, Enregistrer, Ajouter, Réagir, Capture (${videoCall?.keys.join(' · ')})`);
       check(videoRails.every((rail) => rail.sizes.every((size) => size >= TAP_FLOOR) && rail.onScreen), `vidéo : ${TAP_FLOOR} px chacun, à l'écran (${JSON.stringify(videoRails.map((rail) => [rail.family, rail.sizes, rail.box]))})`);
       check((await page.$('[data-call-row="mine"]')) === null && (await page.locator('[data-call-control="camera"]').count()) === 1, 'vignette : le (…) ne double pas les commandes de ma caméra');
       await capture(page, 'controles-rails-video-dark');
@@ -695,7 +764,8 @@ try {
         const track = page.locator(`[data-call-rail="${rail.family}"] [data-call-rail-scroll]`);
         await track.evaluate((element) => void (element.scrollTop = 0));
         const x = rail.box.x + rail.box.width / 2;
-        const span = Math.min(rail.box.height - 24, rail.room * 0.8);
+        /* Au moins le seuil d'un glissé : sous lui, Chromium lit un toucher, qui range les commandes (#19670 : le rail « l'appel », sans Journal, ne déborde plus que de quelques pixels). */
+        const span = Math.min(rail.box.height - 24, Math.max(rail.room * 0.8, 24));
         const start = rail.box.y + rail.box.height - 12;
         await drag(cdp, { x, y: start }, { x, y: start - span });
         const moved = await track
@@ -830,8 +900,13 @@ try {
         await page.evaluate(() => {
           for (const [id, text] of [['j-1', 'Bonjour'], ['j-2', 'On se voit demain'], ['j-3', 'À tout à l’heure']]) window.__meeshyFixtureCallPeer?.speak?.({ id, text, translatedText: text });
         });
+        /* #19670 : le journal n'a de porte qu'au pied des sous-titres — on les allume, puis on touche « Journal ». */
         await openActions(page);
-        await page.touchscreen.tap(...(await centerOfSelector(page, '[data-call-control="journal"]')));
+        await page.touchscreen.tap(...(await centerOfSelector(page, '[data-call-rail="call"] [data-call-captions]')));
+        await page.touchscreen.tap(...(await centerOfSelector(page, '[data-call-more]')));
+        await until(page, () => document.querySelector('[data-call-screen]')?.getAttribute('data-call-layer') === 'idle');
+        check(await appears(page, '[data-call-control-pill] [data-call-captions-journal]'), `${label} : les sous-titres allumés portent « Journal » à leur pied`);
+        await page.touchscreen.tap(...(await centerOfSelector(page, '[data-call-control-pill] [data-call-captions-journal]')));
         check(await appears(page, '[data-call-control-pill] [data-call-journal-panel]'), `${label} : « Journal » ouvre le journal DANS la pilule`);
         await until(page, () => document.querySelector('[data-call-audio-stage]')?.getAttribute('data-call-audio-stage') === 'compact');
         await stageSettled(page);

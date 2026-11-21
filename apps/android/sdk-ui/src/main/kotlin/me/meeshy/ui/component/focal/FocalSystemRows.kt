@@ -77,8 +77,9 @@ internal fun FocalSpecialRowView(
     when (row) {
         FocalSpecialRow.Deleted -> FocalDeletedRow(onLongPress = callbacks.onLongPress)
         FocalSpecialRow.CallNotice -> content.callSummary?.let { summary ->
+            val liveCallId = LocalFocalLiveCallId.current
             FocalCallNoticeRow(
-                notice = remember(summary, content.callIsOutgoing) { FocalCallNoticePresenter.of(summary, content.callIsOutgoing) },
+                notice = remember(summary, content.callIsOutgoing, liveCallId) { FocalCallNoticePresenter.of(summary, content.callIsOutgoing, liveCallId) },
                 createdAtIso = content.createdAtIso,
                 accentColor = accentColor,
                 onCallBack = callbacks.onCallBack,

@@ -87,13 +87,13 @@ describe('je partage mon écran : l’appel réduit en capsule (#16664)', () => 
 });
 
 describe('la bulle', () => {
-  test('remplace la pastille : revenir, micro, raccrocher — et la consigne clavier pour la déplacer', () => {
+  test('remplace la pastille : la personne et la durée, revenir — aucun bouton d’appel (#19696) — et la consigne clavier pour la déplacer', () => {
     expect(overlay(call({ display: 'bubble' }))).toBe('');
     const html = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />);
     expect(html).toContain('data-call-bubble="right"');
     expect(html).toContain('aria-label="Revenir à l’appel"');
-    expect(html).toContain('data-call-bubble-control="mic"');
-    expect(html).toContain('data-call-bubble-control="hangup"');
+    expect(html).toContain('data-call-bubble-caption=""');
+    expect(html).not.toContain('data-call-bubble-control');
     expect(html).toContain('Les flèches déplacent la bulle');
     expect(html).not.toContain('data-call-screen');
     expect(html).not.toContain('aria-modal');
@@ -104,8 +104,10 @@ describe('la bulle', () => {
     expect(overlay(call({ display: 'bubble', phase: { kind: 'ended', reason: 'remote', detail: null } }))).toContain('data-call-screen="ended"');
   });
 
-  test('sans vidéo, le navigateur n’a rien à faire flotter : pas de bouton image dans l’image', () => {
-    expect(renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />)).not.toContain('data-call-bubble-control="pip"');
+  test('#19696 — même avec une vidéo et une sortie au choix, la bulle ne porte ni micro, ni sortie, ni image dans l’image, ni raccrocher', () => {
+    const html = withSinks(true, () => renderToStaticMarkup(<CallBubble call={call({ display: 'bubble', members: { 'u-a': peer({ cameraOn: true }) }, remoteStreams: { 'u-a': liveVideo } })} />));
+    expect(html).not.toContain('data-call-bubble-control');
+    expect(html).toContain('data-call-bubble-caption=""');
   });
 });
 
@@ -141,20 +143,28 @@ describe('un écran partagé dans la bulle (#8164)', () => {
   });
 });
 
-describe('la sortie audio depuis la bulle (#9097)', () => {
-  test('« Sortie audio » est dans la bulle là où le navigateur choisit la sortie ; absent sinon', () => {
-    const offered = withSinks(true, () => renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />));
-    expect(offered).toContain('data-call-bubble-control="output"');
-    expect(offered).toContain('aria-label="Sortie audio"');
-    expect(offered).toContain('aria-haspopup="dialog"');
-    expect(withSinks(false, () => renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />))).not.toContain('data-call-bubble-control="output"');
-  });
-});
-
 describe('l’écran d’appel', () => {
   test('en appel, l’en-tête ouvre les périphériques ; pendant la sonnerie, non', () => {
     expect(renderToStaticMarkup(<CallScreen call={call()} />)).toContain('aria-label="Sortie audio"');
     expect(renderToStaticMarkup(<CallScreen call={call({ phase: { kind: 'incoming' }, direction: 'incoming' })} />)).not.toContain('Sortie audio');
+  });
+});
+
+describe('#19701 — une seule vignette, au-dessus de tout', () => {
+  test('elle entre dans la couche supérieure du navigateur (popover manuel), sans les marges ni la bordure par défaut d’un popover', () => {
+    const html = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />);
+    const frame = tagOf(html, 'data-call-bubble="');
+    expect(frame).toContain('popover="manual"');
+    for (const reset of ['right:auto', 'bottom:auto', 'margin:0', 'padding:0', 'border:0']) expect(frame).toContain(reset);
+  });
+
+  test('en audio comme en vidéo, c’est la même vignette : seul ce qu’elle montre change', () => {
+    const audio = tagOf(renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />), 'data-call-bubble="');
+    const video = tagOf(renderToStaticMarkup(<CallBubble call={call({ display: 'bubble', members: { 'u-a': peer({ cameraOn: true }) }, remoteStreams: { 'u-a': liveVideo } })} />), 'data-call-bubble="');
+    expect(audio).toContain('rounded-card');
+    expect(video).toContain('rounded-card');
+    expect(audio).not.toContain('rounded-full');
+    expect(video).not.toContain('rounded-full');
   });
 });
 
@@ -164,7 +174,7 @@ describe('la bulle ne déplace que son `translate` (#11314)', () => {
     expect(html).toContain('left:0');
     expect(html).toContain('top:0');
     expect(html).toContain('translate:');
-    expect(html).toContain('transition:translate 180ms ease-out');
+    expect(html).toContain('transition:translate 420ms cubic-bezier(0.22, 1, 0.36, 1)');
     expect(html).not.toMatch(/transition:[^;"]*(left|top|width|height)/);
   });
 });

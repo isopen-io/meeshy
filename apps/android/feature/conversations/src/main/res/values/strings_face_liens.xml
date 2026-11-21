@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="links_face_profile_tag">My profile link</string>
+    <string name="links_face_copy">Copy</string>
+    <string name="links_face_qr">QR</string>
+    <string name="links_face_send">Send</string>
+    <string name="links_face_qr_open_a11y">Enlarge my profile QR</string>
+    <string name="links_face_qr_a11y">Profile QR code</string>
+    <string name="links_face_qr_share_image">Share the QR image</string>
+    <string name="links_face_close">Close</string>
+    <string name="links_face_addresses_title">My addresses</string>
+    <string name="links_face_address_hidden">hidden on my profile</string>
+    <string name="links_face_address_a11y">%1$s, %2$s</string>
+</resources>

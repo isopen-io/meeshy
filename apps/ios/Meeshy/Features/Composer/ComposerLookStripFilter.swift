@@ -101,7 +101,7 @@ nonisolated enum ComposerLookStripFilterRule {
 
     private static func effectMood(_ effet: CallFaceEffect) -> CallFrameMood? {
         switch effet {
-        case .toad: return .jovial
+        case .toad, .baby: return .jovial
         case .angel: return .feerique
         case .demon: return .morbide
         case .volcano: return .fantastique

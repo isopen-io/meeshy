@@ -4,4 +4,5 @@
     <string name="viewer_doc_open_with">Mit anderer App öffnen</string>
     <string name="viewer_text_show_source">Quelltext anzeigen</string>
     <string name="viewer_text_show_rendered">Darstellung anzeigen</string>
+    <string name="report_message_sent">Meldung gesendet</string>
 </resources>

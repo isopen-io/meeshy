@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La carte comme action (#18890) : mots de la carte des positions partagées. -->
+<resources>
+    <string name="location_map_close">Close the map</string>
+    <string name="location_map_layers">Change the map background</string>
+    <string name="location_map_recenter">Recenter the map</string>
+    <string name="location_map_view_exact">Exact view</string>
+    <string name="location_map_view_neighborhood">Neighborhood view</string>
+    <string name="location_map_view_city">City view</string>
+    <string name="location_map_remaining_minutes">%1$d min left</string>
+    <string name="location_map_remaining_hours">%1$d h %2$02d left</string>
+    <string name="location_map_shared_for_hour">Shared for 1 h</string>
+    <string name="location_map_shared_for_hours">Shared for 8 h</string>
+    <string name="location_map_fresh_live">Live position · updated %1$d s ago</string>
+    <string name="location_map_fresh_stale">Updated %1$d min ago</string>
+    <string name="location_map_directions">Directions</string>
+    <string name="location_map_write">Write</string>
+    <string name="location_map_call">Call</string>
+    <string name="location_map_share_mine">Share mine</string>
+    <string name="location_map_not_sharing">%1$s isn\'t sharing their location</string>
+    <string name="location_map_not_sharing_message">You\'ll see it here as soon as it\'s shared with you.</string>
+    <string name="location_map_nearby_open">Map of my close ones</string>
+    <string name="location_map_nearby_title">Around you</string>
+    <string name="location_map_nearby_empty">Nobody shares their location with you</string>
+    <string name="location_map_nearby_empty_message">The locations your close ones share appear here, at the precision they choose.</string>
+</resources>

@@ -67,18 +67,8 @@ extension AuthManager {
     /// when `pending == nil` it returns the server user unchanged (the common
     /// login/session path is unaffected).
     static func resolveServerUserWithOptimistic(
-        _ server: MeeshyUser, pending: ProfileSnapshot?
+        _ server: MeeshyUser, pending: ProfileSnapshot?, carrying fields: ProfileGuardFields = .all
     ) -> (user: MeeshyUser, clearedPending: Bool) {
-        guard let pending else { return (server, false) }
-        if server.displayName == pending.displayName,
-           server.bio == pending.bio,
-           server.avatar == pending.avatarUrl {
-            return (server, true)
-        }
-        return (
-            server.withProfileChanges(
-                displayName: pending.displayName, bio: pending.bio, avatar: pending.avatarUrl),
-            false
-        )
+        ProfileGuardFields.resolve(server, pending: pending, carrying: fields)
     }
 }

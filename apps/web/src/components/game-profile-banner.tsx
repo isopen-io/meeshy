@@ -9,19 +9,18 @@ import { LevelRing } from './game/level-ring';
 import { RankBlason } from './game/rank-blason';
 
 /**
- * **LE JEU, POSÉ SUR LA BANNIÈRE** (#10092, #10231 — précision porteur
- * 2026-10-11 : « les détails de points à gauche de la bannière et le reste de
- * rang à droite » ; #10601 — directive porteur 2026-10-14 : aux deux ANGLES BAS,
- * le bas du cadre épousant la limite basse de la bannière, des fonds allégés).
+ * **LE JEU, POSÉ SUR LA BANNIÈRE** (#10092, #10231 ; #10601 — directive porteur
+ * 2026-10-14 : aux deux ANGLES BAS, le bas du cadre épousant la limite basse de
+ * la bannière, des fonds allégés ; le RANG EN TÊTE depuis la décision porteur du
+ * 2026-11-10, #17375, #19764 — « c'est l'objet du jeu : devenir Légende »).
  *
  *   · à l'angle bas du DÉBUT (gauche ; droite en RTL), en colonne : le nom du
- *     palier, le cercle — qui porte le niveau, sa progression et le prestige —
- *     puis les étincelles dessous, par leur glyphe (« ✦ 18 347 » — porteur
- *     2026-10-19, #10951) ; le record et ce qu'il manque vivent dans le
- *     libellé d'accessibilité ;
- *   · à l'angle bas de la FIN, en colonne : la Gloire (« ♛ 18 790 »)
- *     au-dessus du blason du rang, son nom ET sa division dessous
- *     (« Murmure V ») — la Gloire fait le rang, elle le coiffe.
+ *     rang et sa division (« Murmure V »), son blason, puis la Gloire dessous
+ *     (« ♛ 18 790 ») — lus les premiers ;
+ *   · à l'angle bas de la FIN, en colonne : le nom du palier, le cercle — qui
+ *     porte le niveau, sa progression et le prestige — puis les étincelles
+ *     dessous, par leur glyphe (« ✦ 18 347 » — porteur 2026-10-19, #10951) ;
+ *     le record et ce qu'il manque vivent dans le libellé d'accessibilité.
  *
  * Chaque cadre a les coins HAUTS arrondis et les coins BAS carrés, posés sur le
  * bord bas : la découpe de la bannière (`overflow-hidden rounded-card`) taille
@@ -61,11 +60,12 @@ export const AVATAR_CLEARANCE = 106;
 const GROUP =
   'flex min-w-0 bg-[color-mix(in_srgb,var(--color-media-backdrop)_24%,transparent)] px-2 pb-1.5 pt-1 text-on-media [text-shadow:0_0_1px_var(--color-scrim-strong),0_0_3px_var(--color-scrim),0_1px_2px_var(--color-scrim)]';
 /**
- * Les coins HAUTS, en propriétés LOGIQUES (RTL compris) : le cadre du niveau (étincelles) n'est plus arrondi à son bord de
- * DÉBUT, celui du rang à son bord de FIN — les deux n'arrondissent que le coin qui regarde l'avatar. Les coins bas restent carrés.
+ * Les coins HAUTS, en propriétés LOGIQUES (RTL compris) : le cadre du rang, au DÉBUT, n'arrondit que son coin haut de FIN ;
+ * celui du niveau (étincelles), à la FIN, que son coin haut de DÉBUT — chacun le coin qui regarde l'avatar. Les coins bas
+ * restent carrés.
  */
-const LEVEL_CORNERS = 'rounded-se-card';
-const RANK_CORNERS = 'rounded-ss-card';
+const RANK_CORNERS = 'rounded-se-card';
+const LEVEL_CORNERS = 'rounded-ss-card';
 /** Les deux cadres ont TOUJOURS la même taille (#10951) : chacun la moitié de ce que l'avatar laisse, la même hauteur (`items-stretch`). */
 const GROUP_STYLE = { width: `calc((100% - ${AVATAR_CLEARANCE}px) / 2)` } as const;
 
@@ -111,19 +111,6 @@ export function GameProfileBanner({ standing }: { readonly standing: BannerStand
       className="@container pointer-events-none absolute flex items-stretch justify-between"
       style={{ insetInlineStart: 0, insetInlineEnd: 0, bottom: 0 }}
     >
-      <div data-profile-banner-level="" role="img" aria-label={levelLabel(standing, language)} className={`${GROUP} ${LEVEL_CORNERS} flex-col items-center justify-center gap-0.5`} style={GROUP_STYLE}>
-        <span aria-hidden="true" data-profile-banner-level-name="" className="max-w-full truncate text-mini font-semibold leading-none">
-          {levelTierName(tier, language)}
-        </span>
-        <span aria-hidden="true" className="shrink-0">
-          <LevelRing level={level} tier={tier} progress={progress} size={40} prestige={prestige} />
-        </span>
-        {points === null ? null : (
-          <span aria-hidden="true" data-profile-banner-points={points} className="max-w-full truncate text-body font-bold leading-tight tabular-nums">
-            {glyphAmount(SPARK_GLYPH, points, language)}
-          </span>
-        )}
-      </div>
       <div data-profile-banner-rank="" role="img" aria-label={rankLabel(standing, language)} className={`${GROUP} ${RANK_CORNERS} flex-col items-center justify-center gap-0.5`} style={GROUP_STYLE}>
         <span aria-hidden="true" data-profile-banner-rank-name="" className="max-w-full truncate text-check font-semibold">
           {rankLine}
@@ -134,6 +121,19 @@ export function GameProfileBanner({ standing }: { readonly standing: BannerStand
         {glory === null ? null : (
           <span aria-hidden="true" data-profile-banner-glory={glory} className="max-w-full truncate text-body font-bold leading-tight tabular-nums">
             {glyphAmount(GLORY_GLYPH, glory, language)}
+          </span>
+        )}
+      </div>
+      <div data-profile-banner-level="" role="img" aria-label={levelLabel(standing, language)} className={`${GROUP} ${LEVEL_CORNERS} flex-col items-center justify-center gap-0.5`} style={GROUP_STYLE}>
+        <span aria-hidden="true" data-profile-banner-level-name="" className="max-w-full truncate text-mini font-semibold leading-none">
+          {levelTierName(tier, language)}
+        </span>
+        <span aria-hidden="true" className="shrink-0">
+          <LevelRing level={level} tier={tier} progress={progress} size={40} prestige={prestige} />
+        </span>
+        {points === null ? null : (
+          <span aria-hidden="true" data-profile-banner-points={points} className="max-w-full truncate text-body font-bold leading-tight tabular-nums">
+            {glyphAmount(SPARK_GLYPH, points, language)}
           </span>
         )}
       </div>

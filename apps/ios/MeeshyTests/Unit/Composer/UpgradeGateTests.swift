@@ -246,7 +246,7 @@ final class UpgradeGateTests: XCTestCase {
     }
 
     func test_lesDeuxRacines_amorcentLePlancherAuDemarrage() throws {
-        for racine in ["Meeshy/Features/Main/Views/RootView.swift",
+        for racine in ["Meeshy/Features/Main/Views/RootView+Services.swift",
                        "Meeshy/Features/Main/Views/iPadRootView.swift"] {
             let texte = try source(racine)
 

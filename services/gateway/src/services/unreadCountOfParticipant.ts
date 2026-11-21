@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@meeshy/shared/prisma/client";
+import { readFloorOf } from './messaging/readFloor';
 import { logger } from "../utils/logger";
 import {
   CAPTURE_NOTICE_CANDIDATE_WHERE,
@@ -111,16 +112,16 @@ export async function readUnreadCount(
       });
     }
 
-    // Plancher = position CHRONOLOGIQUE du curseur, pas l'horloge murale.
-    // En mode exact le curseur s'arrête au préfixe contigu : `lastReadAt` vaut
-    // `now` (postérieur à tous les messages en base) tandis que
-    // `lastReadMessageCreatedAt` est le `createdAt` du dernier message
-    // réellement lu. Compter `createdAt > lastReadAt` déclarerait lus les
-    // messages sautés — le badge tomberait à 0 (design lecture-exacte §3 :
-    // « le badge reste haut »). Repli sur `lastReadAt` pour les curseurs
-    // hérités sans clé chronologique, puis `joinedAt`.
-    const floor: Date | null =
-      cursor?.lastReadMessageCreatedAt ?? cursor?.lastReadAt ?? participant.joinedAt ?? null;
+    // Plancher = la loi (`messaging/readFloor.ts`), pas l'idiome (#19299).
+    // Compter `createdAt > lastReadAt` déclarerait lus les messages sautés — le
+    // badge tomberait à 0 (design lecture-exacte §3 : « le badge reste haut »).
+    //
+    // Les deux `findUnique` ci-dessus ne portent AUCUN `select` : ils ramènent
+    // la ligne entière, donc l'exigence de type de `ReadFloorCursor` n'avait
+    // rien à attraper ici — c'est un site où la discipline tenait pour une
+    // raison qui n'est pas la discipline. Le troisième terme (`joinedAt`) reste
+    // au site : il n'appartient pas au curseur, il appartient au COMPTAGE.
+    const floor: Date | null = readFloorOf(cursor) ?? participant.joinedAt ?? null;
 
     const window = {
       conversationId,

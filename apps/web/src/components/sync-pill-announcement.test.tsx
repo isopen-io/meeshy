@@ -65,6 +65,36 @@ describe('le défilement', () => {
     expect(host.querySelector('[data-phone-glyph="reachable"]')).not.toBeNull();
   });
 
+  test('l’alerte d’inactivité d’un Sang se dit avec un sablier, son retour avec une coche (#18738)', async () => {
+    const store = createPillAnnouncementStore();
+    store.getState().announce(said({ key: 'inactivity:jacques', text: 'Jacques n’a pas répondu à « Tout va bien ? »', icon: { kind: 'inactivity', responded: false } }));
+    const host = await mount(<Probe store={store} suppressed={false} />);
+    expect(host.querySelector('[data-inactivity-glyph="alert"]')).not.toBeNull();
+    expect(host.querySelector('[data-battery-glyph]')).toBeNull();
+    await act(async () => store.getState().announce(said({ id: 'a2', key: 'inactivity:jacques', text: 'Jacques va bien', tone: 'good', icon: { kind: 'inactivity', responded: true } })));
+    expect(host.querySelector('[data-inactivity-glyph="responded"]')).not.toBeNull();
+  });
+
+  test('« en appel » se dit avec un combiné, la fin avec un combiné raccroché (#18753)', async () => {
+    const store = createPillAnnouncementStore();
+    store.getState().announce(said({ key: 'call:jacques', text: 'Jacques est en appel', tone: 'good', icon: { kind: 'call', active: true } }));
+    const host = await mount(<Probe store={store} suppressed={false} />);
+    expect(host.querySelector('[data-call-glyph="active"]')).not.toBeNull();
+    expect(host.querySelector('[data-battery-glyph]')).toBeNull();
+    await act(async () => store.getState().announce(said({ id: 'a2', key: 'call:jacques', text: 'Jacques a raccroché', tone: 'good', icon: { kind: 'call', active: false } })));
+    expect(host.querySelector('[data-call-glyph="ended"]')).not.toBeNull();
+  });
+
+  test('une chute détectée se dit avec une silhouette, le retour avec une coche (#18748)', async () => {
+    const store = createPillAnnouncementStore();
+    store.getState().announce(said({ key: 'fall:awa', text: 'Une chute a été détectée sur la montre de Awa', icon: { kind: 'fall', responded: false } }));
+    const host = await mount(<Probe store={store} suppressed={false} />);
+    expect(host.querySelector('[data-fall-glyph="detected"]')).not.toBeNull();
+    expect(host.querySelector('[data-battery-glyph]')).toBeNull();
+    await act(async () => store.getState().announce(said({ id: 'a2', key: 'fall:awa', text: 'Awa va bien', tone: 'good', icon: { kind: 'fall', responded: true } })));
+    expect(host.querySelector('[data-fall-glyph="responded"]')).not.toBeNull();
+  });
+
   test('retenue tant que la pastille dit plus urgent', async () => {
     const store = createPillAnnouncementStore();
     store.getState().announce(said());

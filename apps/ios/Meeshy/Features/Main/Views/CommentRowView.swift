@@ -362,7 +362,7 @@ struct CommentRowView: View, Equatable {
             },
             alignment: .bottom
         )
-        .sheet(item: $selectedProfileUser) { user in
+        .profileCover(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
                 moodEmoji: moodEmojiResolver?(user.userId ?? ""),
@@ -370,8 +370,6 @@ struct CommentRowView: View, Equatable {
                 presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
                 postsContent: ProfilePostsOpener.postsContent { selectedProfileUser = nil }, dependencies: .live
             )
-            .presentationDetents([.large, .medium])
-            .presentationDragIndicator(.visible)
         }
         .fullScreenCover(item: $rowFullscreenPlace) { item in
             // Même surface plein écran que la bulle et la card feed :

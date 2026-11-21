@@ -94,6 +94,7 @@ import * as TranslationNonBlocking from './routes/translation-non-blocking';
 import * as TranslationBlocking from './routes/translation';
 import { translationJobsRoutes } from './routes/translation-jobs';
 import { geoIpDatabaseStatus } from './services/GeoIPService';
+import { boundedProbe } from './utils/bounded-probe';
 import { attachMetricsServer, metricsServerConfig } from './services/metrics/metricsServer';
 import { processMediaStageMetrics } from './services/metrics/mediaStageMetrics';
 
@@ -116,6 +117,9 @@ export interface RouteRegistrationDeps {
   orphanMediaCleanup: OrphanMediaCleanupService;
 }
 
+/** La sonde du traducteur dans `/health`, bien sous le délai du contrôle de santé Docker (3 s). */
+const TRANSLATION_HEALTH_PROBE_MS = 1000;
+
 /**
  * Enregistre l'intégralité des routes REST du gateway sur l'instance Fastify
  * fournie. Corps identique à l'ancien `MeeshyServer.setupRoutes()`.
@@ -131,7 +135,10 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
       try {
         const [userCount, translationHealthy] = await Promise.all([
           deps.prisma.user.count(),
-          deps.translationService.healthCheck().catch(() => false)
+          // #19280 — bornée : un traducteur qui ne répond plus se lit `down`,
+          // jamais comme une sonde qui ne revient pas (Traefik écarterait la
+          // passerelle entière après deux contrôles de 3 s).
+          boundedProbe(() => deps.translationService.healthCheck(), TRANSLATION_HEALTH_PROBE_MS)
         ]);
 
         const health = {

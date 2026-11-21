@@ -25,7 +25,7 @@
  * Rétrocompatibilité : une valeur sans préfixe `v1:` est une valeur écrite
  * avant ce module ; `openSecret` la rend telle quelle.
  */
-import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
+import { createCipheriv, createDecipheriv, createHmac, hkdfSync, randomBytes } from 'crypto';
 import { logger } from './logger';
 
 export const SECRETS_AT_REST_KEY_ENV = 'SECRETS_AT_REST_KEY';
@@ -149,4 +149,21 @@ export function secretHint(stored: string | null | undefined, context: string): 
   } catch {
     return null;
   }
+}
+
+const DEV_PSEUDONYM_KEY = Buffer.from('meeshy-development-pseudonym-key', 'utf8');
+
+/**
+ * Un nom OPAQUE et STABLE pour `value` sous l'usage `purpose` : HMAC-SHA256 d'une clé dérivée
+ * (HKDF) de `SECRETS_AT_REST_KEY`, jamais la clé de scellement elle-même. Sert à nommer une clé de
+ * cache ou un identifiant de regroupement de push sans y écrire l'identifiant d'un compte. Sans clé
+ * hors développement/test, LÈVE, comme `sealSecret`.
+ */
+export function sealedPseudonym(purpose: string, value: string): string {
+  const key = readKey();
+  if (!key && !plaintextTolerated()) {
+    throw new SecretAtRestUnavailableError(`${SECRETS_AT_REST_KEY_ENV} is required to name a pseudonymous key outside development/test`);
+  }
+  const derived = key ? Buffer.from(hkdfSync('sha256', key, Buffer.alloc(0), `meeshy-pseudonym:${purpose}`, KEY_BYTES)) : DEV_PSEUDONYM_KEY;
+  return createHmac('sha256', derived).update(`${purpose}:${value.toLowerCase()}`).digest('hex');
 }

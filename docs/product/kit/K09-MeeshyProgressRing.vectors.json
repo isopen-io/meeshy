@@ -53,5 +53,22 @@
     { "langue": "en", "texte": "In progress", "indetermine": true },
     { "langue": "ar", "texte": "قيد التنفيذ", "indetermine": true },
     { "langue": "ar_SA", "pourcentage": 62, "chiffresDuLecteur": true }
+  ],
+  "decompteNote": "Mode countdown (profil, Carte-Proches) : diamètre 34, arc qui se VIDE (part restante), aucun chiffre, glyphe facultatif au centre. Reste absent = partage continu (anneau plein, jamais retiré). Minutes arrondies au-dessus ; un total inconnu rend l'anneau plein tant qu'il reste du temps. Valeur dite : « reste 42 min », « reste 7 h 05 », « en continu », « terminé ».",
+  "decompteDiametre": 34,
+  "decompte": [
+    {"reste": 2520, "total": 3600, "fraction": 0.7, "minutes": 42},
+    {"reste": 21600, "total": 28800, "fraction": 0.75, "minutes": 360},
+    {"reste": 90, "total": 3600, "fraction": 0.025, "minutes": 2},
+    {"reste": null, "total": null, "fraction": 1, "minutes": null, "continu": true},
+    {"reste": 0, "total": 3600, "fraction": 0, "minutes": 0, "echu": true},
+    {"reste": -10, "total": 3600, "fraction": 0, "minutes": 0, "echu": true},
+    {"reste": 5000, "total": 3600, "fraction": 1, "minutes": 60}
+  ],
+  "decompteValeursDites": [
+    {"langue": "fr", "reste": 2520, "texte": "reste 42 min"},
+    {"langue": "fr", "reste": 25500, "texte": "reste 7 h 05"},
+    {"langue": "fr", "reste": null, "texte": "en continu"},
+    {"langue": "fr", "reste": 0, "texte": "terminé"}
   ]
 }

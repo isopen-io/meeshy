@@ -16,6 +16,7 @@ import {
   shutdownEncryptionService,
   encryptionService as encryptionServiceProxy,
 } from '../../../services/EncryptionService';
+import { findManyIn } from '../../helpers/mongo-where';
 
 // In-memory key storage for tests
 const keyStorage = new Map<string, {
@@ -57,15 +58,12 @@ const mockPrisma = {
       const key = keyStorage.get(args.where.id);
       return Promise.resolve(key || null);
     }),
-    findMany: jest.fn((args: any) => {
-      const results: any[] = [];
-      keyStorage.forEach((value) => {
-        if (!args?.where?.purpose || args.where.purpose === value.purpose) {
-          results.push(value);
-        }
-      });
-      return Promise.resolve(results);
-    }),
+    // #19755 — le `where` est ÉVALUÉ contre les documents (`matchesMongoWhere`,
+    // qui distingue une clé ABSENTE d'une clé nulle). Ce double n'appariait que
+    // `purpose`, donc il rendait ses lignes quel que soit le filtre : il ne
+    // pouvait pas voir que la lecture du coffre n'en retenait aucune, et il
+    // servait la clé d'une AUTRE conversation sans broncher.
+    findMany: jest.fn((args: any) => findManyIn([...keyStorage.values()] as any).findMany(args)),
     update: jest.fn((args: any) => {
       const key = keyStorage.get(args.where.id);
       if (key) {
@@ -476,43 +474,6 @@ describe('EncryptionService - Extended Coverage', () => {
       await service.initialize();
       await service.shutdown();
     });
-
-    it('should load existing conversation key mappings from DB', async () => {
-      const keyId = 'preloaded-key-id';
-      const convId = 'conv-preloaded';
-      keyStorage.set(keyId, {
-        id: keyId,
-        encryptedKey: 'enc',
-        iv: 'iv',
-        authTag: 'tag',
-        algorithm: 'aes-256-gcm',
-        purpose: 'conversation',
-        conversationId: convId,
-        createdAt: new Date(),
-        lastAccessedAt: null,
-      });
-
-      const service = new EncryptionService(mockPrisma);
-      await service.initialize();
-
-      const vault = (service as any).keyVault;
-      expect(vault.conversationKeyMap.has(convId)).toBe(true);
-      expect(vault.conversationKeyMap.get(convId)).toBe(keyId);
-      await service.shutdown();
-    });
-
-    it('should throw when keyVault initialize fails', async () => {
-      const failPrisma = {
-        ...mockPrisma,
-        serverEncryptionKey: {
-          ...mockPrisma.serverEncryptionKey,
-          findMany: jest.fn().mockRejectedValue(new Error('DB connection error')),
-        },
-      } as any;
-
-      const service = new EncryptionService(failPrisma);
-      await expect(service.initialize()).rejects.toThrow('DB connection error');
-    });
   });
 
   describe('getKey - database load path', () => {
@@ -708,7 +669,9 @@ describe('EncryptionService - Extended Coverage', () => {
       const service = new EncryptionService(failPrisma);
       await service.initialize();
 
-      await expect(service.getOrCreateConversationKey('conv-fail')).rejects.toThrow('Key gen failure');
+      // #19786 — l'échec propagé est CLASSÉ (503 rejouable, jamais 400 permanent) ; sa cause reste lisible.
+      const error = await service.getOrCreateConversationKey('conv-fail').catch((e: unknown) => e);
+      expect((error as { underlying?: Error }).underlying).toMatchObject({ message: 'Key gen failure' });
 
       const locks = (service as any).keyGenerationLocks as Map<string, any>;
       expect(locks.has('conv-fail')).toBe(false);
@@ -991,12 +954,12 @@ describe('EncryptionService - Extended Coverage', () => {
       const vault = (service as any).keyVault;
       const convId = 'conv-double-check-real';
 
-      let callCount = 0;
-      jest.spyOn(vault, 'getConversationKeyId').mockImplementation(() => {
-        callCount++;
-        if (callCount === 1) return undefined;
-        return 'existing-key-after-lock';
-      });
+      // #19755 — les deux étages lisent DEUX choses : le chemin rapide relit la
+      // base (`conversationKeyId`, read-through), le double-contrôle sous verrou
+      // ne lit que la CARTE (`getConversationKeyId`) — ce qu'un appelant
+      // concurrent du même processus vient d'y poser.
+      jest.spyOn(vault, 'conversationKeyId').mockImplementation(() => Promise.resolve(undefined));
+      jest.spyOn(vault, 'getConversationKeyId').mockImplementation(() => 'existing-key-after-lock');
 
       const result = await service.getOrCreateConversationKey(convId);
       expect(result).toBe('existing-key-after-lock');

@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
-import { getDistinctConversationPartnerUserIds } from '../conversation-partners';
+import { getDirectConversationPartnerUserIds, getDistinctConversationPartnerUserIds } from '../conversation-partners';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 function createMockPrisma(overrides: {
@@ -79,5 +79,22 @@ describe('getDistinctConversationPartnerUserIds', () => {
     };
     expect(secondCallArgs.where.conversationId.in).toEqual(['conv-1']);
     expect(secondCallArgs.where.isActive).toBe(true);
+  });
+});
+
+describe('getDirectConversationPartnerUserIds', () => {
+  it('ne lit que les conversations DIRECTES du sujet, puis leurs autres participants actifs, sans doublon', async () => {
+    const { prisma, calls } = createMockPrisma({
+      participantFindMany: () => [{ conversationId: 'd1' }, { conversationId: 'd2' }],
+      participant2FindMany: () => [{ userId: 'B' }, { userId: 'B' }, { userId: null }, { userId: 'C' }],
+    });
+
+    expect(await getDirectConversationPartnerUserIds(prisma, 'A')).toEqual(['B', 'C']);
+    expect(calls[0]).toEqual(expect.objectContaining({
+      where: { userId: 'A', isActive: true, conversation: { is: { type: 'direct' } } },
+    }));
+    expect(calls[1]).toEqual(expect.objectContaining({
+      where: { conversationId: { in: ['d1', 'd2'] }, isActive: true, userId: { not: 'A' } },
+    }));
   });
 });

@@ -7,7 +7,8 @@ import UserNotifications
 /// LA BATTERIE DES PROCHES SUR iOS (#14147) — pour toute la durée de l'app, les deux rôles :
 ///
 /// - **émetteur** : le téléphone relève sa batterie selon `BatteryReportCadence` tant que l'app a du temps
-///   d'exécution, et relève MAINTENANT sur `battery:pull-requested` (le push silencieux passe par `reportNow`) ;
+///   d'exécution, et relève MAINTENANT sur `battery:pull-requested` (le push silencieux passe par `reportNow`) —
+///   sauf quand la passerelle nomme le demandeur : la demande attend alors « Envoyer » (`BatteryPullInbox`, #19565) ;
 /// - **lecteur** : `battery:changed` / `battery:cleared` tiennent l'état cache-first (`BatteryStateStore`), et leur
 ///   annonce, quand la passerelle en sert une, défile dans la SyncPill (`BatteryAnnouncementFeed`). Le push
 ///   `device_battery` reçu app ouverte devient la même annonce, sans bannière.
@@ -20,6 +21,7 @@ final class BatteryCenter {
     let store: BatteryStateStore
     let feed: BatteryAnnouncementFeed
     let reporter: BatteryReportingProviding
+    let pullInbox: BatteryPullInbox
 
     private let viewerId: () -> String?
     private let snapshot: @Sendable @concurrent () async throws -> [BatteryReaderState]
@@ -32,6 +34,7 @@ final class BatteryCenter {
         store: BatteryStateStore,
         feed: BatteryAnnouncementFeed,
         reporter: BatteryReportingProviding,
+        pullInbox: BatteryPullInbox = BatteryPullInbox(),
         viewerId: @escaping () -> String?,
         snapshot: @escaping @Sendable @concurrent () async throws -> [BatteryReaderState],
         displayName: @escaping @Sendable @concurrent (String) async -> String?,
@@ -43,6 +46,7 @@ final class BatteryCenter {
         self.store = store
         self.feed = feed
         self.reporter = reporter
+        self.pullInbox = pullInbox
         self.viewerId = viewerId
         self.snapshot = snapshot
         self.displayName = displayName
@@ -54,7 +58,7 @@ final class BatteryCenter {
             .relay(through: lane) { [weak self] event in await self?.receive(event) }
             .store(in: &cancellables)
         pullRequests
-            .relay(through: lane) { [weak self] _ in await self?.reportNow() }
+            .relay(through: lane) { [weak self] event in await self?.receive(event) }
             .store(in: &cancellables)
         connected
             .removeDuplicates()
@@ -107,11 +111,30 @@ final class BatteryCenter {
         await reporter.reportNow()
     }
 
+    /// Une demande sans auteur se relève aussitôt (le comportement d'avant) ; une demande NOMMÉE attend la personne.
+    func receive(_ event: BatteryPullRequested) async {
+        guard !pullInbox.hold(event) else { return }
+        await reportNow()
+    }
+
+    /// « Envoyer » : la demande part de l'écran tout de suite, le relevé suit ; un échec la rend et rend `false`.
+    @discardableResult
+    func send(_ requestId: String) async -> Bool {
+        guard let request = pullInbox.take(requestId) else { return false }
+        let outcome = await reportNow()
+        guard outcome == .tracked || outcome == .ignored else {
+            pullInbox.restore(request)
+            return false
+        }
+        return true
+    }
+
     /// Le compte change : l'état des autres ne survit pas au compte, l'émetteur suit la session.
     func accountChanged(to userId: String?) {
         guard userId != nil else {
             reporter.stop()
             store.reset()
+            pullInbox.reset()
             feed.reset()
             return
         }
@@ -187,13 +210,18 @@ extension BatteryCenter {
     }
 
     /// Le push silencieux `battery_pull` : relever MAINTENANT, hors cadence (la socket si elle est là, sinon REST),
-    /// puis rendre la main à iOS. Rend `false` pour tout autre push.
+    /// puis rendre la main à iOS — sauf demande NOMMÉE, qui attend « Envoyer ». Rend `false` pour tout autre push.
     static func handledPullWake(
         _ userInfo: [AnyHashable: Any],
         completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) -> Bool {
         guard handlesPullPush(userInfo) else { return false }
+        let event = BatteryPullRequested(pushUserInfo: userInfo)
         Task { @MainActor in
+            guard !shared.pullInbox.hold(event) else {
+                completionHandler(.newData)
+                return
+            }
             let outcome = await shared.reportNow()
             completionHandler(outcome == .tracked || outcome == .ignored ? .newData : .noData)
         }

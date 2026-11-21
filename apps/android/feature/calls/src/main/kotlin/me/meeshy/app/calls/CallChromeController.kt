@@ -90,6 +90,9 @@ internal class CallChromeController(private val clock: () -> Long = System::curr
 
     fun reconcile(actions: CallActionSet) = update { it.reconciled(actions) }
 
+    /** #19670 — captions turned off take the journal with them. */
+    fun closeJournal() = update { it.closingJournal() }
+
     private fun update(transform: (CallScreenLayer) -> CallScreenLayer) {
         _state.update { it.copy(layer = transform(it.layer)) }
     }

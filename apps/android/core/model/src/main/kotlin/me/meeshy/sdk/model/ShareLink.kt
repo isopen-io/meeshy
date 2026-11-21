@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 
 /** Public share link info — port of ShareLinkInfo (ShareLinkModels.swift). */
@@ -163,6 +165,12 @@ data class JoinedConversation(
     val allowedAttachmentKinds: List<String>? = null,
 )
 
+/**
+ * Les huit droits partent TOUJOURS : `MeeshyApi.json` n'encode pas les défauts, et la passerelle complète
+ * un droit absent par le SIEN (`share-link-mint.ts` : images et pseudo à `true`) — un lien créé images refusées
+ * ou pseudo facultatif les aurait accordés (#19794).
+ */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class CreateShareLinkRequest(
     val conversationId: String,
@@ -172,14 +180,14 @@ data class CreateShareLinkRequest(
     val maxUses: Int? = null,
     val maxConcurrentUsers: Int? = null,
     val expiresAt: String? = null,
-    val allowAnonymousMessages: Boolean = true,
-    val allowAnonymousFiles: Boolean = false,
-    val allowAnonymousImages: Boolean = false,
-    val allowViewHistory: Boolean = false,
-    val requireAccount: Boolean = false,
-    val requireNickname: Boolean = false,
-    val requireEmail: Boolean = false,
-    val requireBirthday: Boolean = false,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val allowAnonymousMessages: Boolean = true,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val allowAnonymousFiles: Boolean = false,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val allowAnonymousImages: Boolean = false,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val allowViewHistory: Boolean = false,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val requireAccount: Boolean = false,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val requireNickname: Boolean = false,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val requireEmail: Boolean = false,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val requireBirthday: Boolean = false,
 )
 
 /**

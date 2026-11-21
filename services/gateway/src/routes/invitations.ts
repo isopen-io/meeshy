@@ -7,6 +7,8 @@ import { createInvitationRateLimitConfig } from '../middleware/rate-limit';
 import { requireEmailVerification } from '../middleware/auth';
 import { generateUniqueAffiliateToken } from './affiliate';
 import { EngagementService } from '../services/engagement/EngagementService';
+import { invitationOptOutUrl, isInvitationOptedOut } from '../services/referrals/emailInvitations';
+import { invitationMailerOf, invitationUrlOf, registerSentInvitationRoutes } from './invitations-sent';
 
 const sendEmailInvitationSchema = z.object({
   email: z.email(),
@@ -53,6 +55,11 @@ export async function invitationRoutes(fastify: FastifyInstance) {
         return sendConflict(reply, 'Cet utilisateur est deja sur Meeshy', { code: 'USER_ALREADY_EXISTS' });
       }
 
+      // #19207 — une adresse désinscrite ne reçoit plus d'invitation, de personne.
+      if (await isInvitationOptedOut(fastify.prisma, email)) {
+        return sendConflict(reply, 'Cette adresse ne souhaite plus recevoir d\'invitation', { code: 'INVITATION_OPTED_OUT' });
+      }
+
       const senderName = user.displayName ?? user.username;
 
       // Relation d'invitation PERSISTÉE (#3691) : un jeton d'affiliation dédié
@@ -78,10 +85,9 @@ export async function invitationRoutes(fastify: FastifyInstance) {
         },
       });
 
-      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3100';
-      const invitationUrl = `${baseUrl}/signup/affiliate/${token}`;
+      const invitationUrl = invitationUrlOf(token);
 
-      const emailService = (fastify as unknown as { emailService?: { sendInvitationEmail: (data: InvitationEmailData) => Promise<unknown> } }).emailService;
+      const emailService = invitationMailerOf(fastify);
 
       if (emailService) {
         await emailService.sendInvitationEmail({
@@ -89,6 +95,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
           senderName,
           senderAvatar: user.avatar,
           downloadUrl: invitationUrl,
+          optOutUrl: invitationOptOutUrl(email),
           language: recipientLanguage(user, 'fr'),
         });
         // `social.email_invite` (#8959) — seulement quand l'e-mail est PARTI :
@@ -109,12 +116,6 @@ export async function invitationRoutes(fastify: FastifyInstance) {
       return sendInternalError(reply, 'Erreur lors de l\'envoi de l\'invitation', { code: 'INTERNAL_ERROR' });
     }
   });
-}
 
-interface InvitationEmailData {
-  to: string;
-  senderName: string;
-  senderAvatar?: string | null;
-  downloadUrl: string;
-  language?: string;
+  await registerSentInvitationRoutes(fastify);
 }

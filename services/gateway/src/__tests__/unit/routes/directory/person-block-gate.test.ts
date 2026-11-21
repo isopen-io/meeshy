@@ -94,7 +94,7 @@ function prismaDouble(options: {
   const jaiBloque = options.jaiBloque ?? [];
   const mOntBloque = options.mOntBloque ?? [];
   return {
-    profileAddress: { findMany: async () => [] },
+    profileAddress: { findMany: async () => [] }, communityMember: { findMany: async () => [] },
     user: {
       findFirst: jest.fn<any>(async (args?: any) => {
         const where = args?.where ?? {};

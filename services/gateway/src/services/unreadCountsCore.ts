@@ -69,9 +69,11 @@ export interface UnreadFloor {
 
 /**
  * Résout le plancher d'UN participant. `cursorFloor` est déjà réduit par
- * l'appelant à `lastReadMessageCreatedAt ?? lastReadAt` (la position
- * CHRONOLOGIQUE du curseur, jamais l'horloge murale — un message sauté par
- * une lecture exacte-partielle reste compté, cf. design lecture-exacte §3).
+ * l'appelant à travers `readFloorOf` (`messaging/readFloor.ts`) : la position
+ * CHRONOLOGIQUE du curseur, jamais l'horloge murale — un message sauté par une
+ * lecture exacte-partielle reste compté, cf. design lecture-exacte §3. Ne pas
+ * retaper la descente ici : c'est pour l'avoir retapée six fois que deux sites
+ * ne l'avaient pas (#19299).
  */
 export function unreadFloorFor(
   participant: { readonly id: string; readonly joinedAt: Date | null },

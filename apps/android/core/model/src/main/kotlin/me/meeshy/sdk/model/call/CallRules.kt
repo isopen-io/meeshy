@@ -38,5 +38,5 @@ object CallRules {
     const val PUSH_TTL_MS: Long = 45_000
 
     /** Participants simultanés tant que l'appel est un maillage sans SFU. */
-    const val MAX_PARTICIPANTS: Int = 6
+    const val MAX_PARTICIPANTS: Int = 5
 }

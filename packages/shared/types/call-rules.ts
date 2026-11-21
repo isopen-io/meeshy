@@ -74,11 +74,13 @@ export const CALL_PUSH_TTL_MS = 45_000;
 
 /**
  * Plafond de participants SIMULTANÉS. Sans SFU, chaque pair envoie son flux à
- * tous les autres : à N participants, N−1 envois montants par appareil. À 6,
- * cinq flux vidéo (~500 kb/s chacun) tiennent dans la voie montante d'un
- * mobile en 4G ; au-delà, le maillage se dégrade pour tout le monde.
+ * tous les autres : à N participants, N−1 envois montants par appareil. Un
+ * appel de groupe réunit MOINS de 6 personnes (décision porteur 2026-11-18,
+ * #19650) : à 5, quatre flux vidéo (~500 kb/s chacun) tiennent dans la voie
+ * montante d'un mobile en 4G avec de la marge ; au-delà, le maillage se
+ * dégrade pour tout le monde.
  */
-export const CALL_MAX_PARTICIPANTS = 6;
+export const CALL_MAX_PARTICIPANTS = 5;
 
 /** Borne haute que le plafond ne franchit pas tant qu'il n'y a pas de SFU. */
 export const CALL_MESH_CEILING = 8;

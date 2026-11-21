@@ -148,7 +148,7 @@ struct ParticipantsView: View {
             ) { event in
                 participants.removeAll { $0.userId == event.userId }
             }
-            .sheet(item: Binding(
+            .profileCover(item: Binding(
                 get: { profileParticipantId.map(IdentifiedString.init) },
                 set: { profileParticipantId = $0?.value }
             )) { target in
@@ -620,7 +620,8 @@ struct ParticipantsView: View {
                 for: conversationId,
                 forceRefresh: forceRefresh
             )
-            let fetched = await ParticipantService.shared.revalidatedFirstPage(for: conversationId) ?? served
+            let fetched = await ParticipantService.shared.pageToPaint(
+                afterLoading: served, for: conversationId, forceRefresh: forceRefresh)
             participants = fetched
             hasMore = await ParticipantService.shared.hasMore(for: conversationId)
             // Pas de `save()` ici : `ParticipantService.fetchNextPage` vient de

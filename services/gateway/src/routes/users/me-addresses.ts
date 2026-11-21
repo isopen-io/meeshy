@@ -5,6 +5,7 @@
  * adresse qu'au cercle choisi (`profile-addresses.ts`). Toujours l'utilisateur authentifié :
  * l'identifiant d'une adresse d'autrui est un 404, jamais un 403 qui la confirmerait.
  */
+import { logWarn } from '../../utils/logger';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { ADDRESS_GLYPHS, ADDRESS_TITLE_MAX_LENGTH } from '@meeshy/shared/utils/profile-addresses';
@@ -12,6 +13,7 @@ import { RELATION_LEVELS } from '@meeshy/shared/types/relation';
 import { ProfileAddressService, type AddressInput, type Outcome } from '../../services/profile-addresses/ProfileAddressService';
 import { sendBadRequest, sendConflict, sendNotFound, sendSuccess, sendUnauthorized } from '../../utils/response';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
+import { announceProfileChanged } from '../../services/notifications/profile-changed';
 import type { AuthenticatedRequest } from './types';
 
 const addressSchema = {
@@ -56,6 +58,14 @@ function answer<T>(reply: FastifyReply, outcome: Outcome<T>, statusCode = 200): 
 
 export async function meAddressRoutes(fastify: FastifyInstance) {
   const service = new ProfileAddressService(fastify.prisma);
+  // #19384 — une adresse acceptée change la fiche de ses lecteurs : ils la revalident.
+  const announced = <T>(userId: string, outcome: Outcome<T>): Outcome<T> => {
+    if (outcome.ok === true) {
+      void announceProfileChanged(fastify, { userId })
+        .catch((error: unknown) => logWarn(fastify.log, '[me/addresses] profile-changed announce failed', error));
+    }
+    return outcome;
+  };
   const guard = async (request: FastifyRequest, reply: FastifyReply): Promise<string | null> => {
     const userId = ownerOf(request);
     if (userId === null) sendUnauthorized(reply, 'Authentication required', { code: AUTH_ERROR_CODES.UNAUTHORIZED });
@@ -83,7 +93,7 @@ export async function meAddressRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{ Body: AddressInput }>, reply) => {
     const userId = await guard(request, reply);
     if (userId === null) return;
-    return answer(reply, await service.create(userId, request.body ?? {}), 201);
+    return answer(reply, announced(userId, await service.create(userId, request.body ?? {})), 201);
   });
 
   fastify.put('/users/me/addresses/order', {
@@ -97,7 +107,7 @@ export async function meAddressRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{ Body: { ids: string[] } }>, reply) => {
     const userId = await guard(request, reply);
     if (userId === null) return;
-    const outcome = await service.reorder(userId, request.body.ids);
+    const outcome = announced(userId, await service.reorder(userId, request.body.ids));
     return outcome.ok === true ? sendSuccess(reply, { addresses: outcome.value }) : answer(reply, outcome);
   });
 
@@ -112,7 +122,7 @@ export async function meAddressRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{ Params: { id: string }; Body: AddressInput }>, reply) => {
     const userId = await guard(request, reply);
     if (userId === null) return;
-    return answer(reply, await service.update(userId, request.params.id, request.body ?? {}));
+    return answer(reply, announced(userId, await service.update(userId, request.params.id, request.body ?? {})));
   });
 
   fastify.delete('/users/me/addresses/:id', {
@@ -125,7 +135,7 @@ export async function meAddressRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
     const userId = await guard(request, reply);
     if (userId === null) return;
-    const outcome = await service.remove(userId, request.params.id);
+    const outcome = announced(userId, await service.remove(userId, request.params.id));
     return outcome.ok === true ? sendSuccess(reply, { deleted: true }) : answer(reply, outcome);
   });
 }

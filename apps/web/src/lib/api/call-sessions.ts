@@ -157,12 +157,16 @@ export async function loadConversationActiveCall(deps: Deps, conversationId: str
  * L'appel que le bouton du fil rejoint (#9111) : la réponse de la passerelle
  * l'emporte, TYPE COMPRIS — après un rechargement ouvert sur le fil, la ligne
  * de liste manque, et rejoindre en audio un appel vidéo laissait le revenant
- * sans caméra. Avant la réponse (`undefined`), la ligne de liste sert.
+ * sans caméra. Avant la réponse (`undefined`), la ligne de liste sert — mais
+ * pas après un sondage en ÉCHEC (#19778) : la ligne n'est alors confirmée par
+ * rien, et elle rejoignait un appel fini.
  */
 export function joinableCall(
   served: ConversationActiveCall | null | undefined,
   hint: { readonly id: string; readonly kind: string } | null,
+  probe: { readonly failed: boolean } = { failed: false },
 ): ConversationActiveCall | null {
   if (served !== undefined) return served;
-  return hint === null ? null : { callId: hint.id, media: hint.kind === 'video' ? 'video' : 'audio' };
+  if (probe.failed || hint === null) return null;
+  return { callId: hint.id, media: hint.kind === 'video' ? 'video' : 'audio' };
 }

@@ -82,6 +82,11 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         didSet { teardown.update { $0.loadTask = loadTask } }
     }
     public private(set) var currentUrl: String?
+    /// Le dernier chargement a échoué (hors ligne, 404, fichier illisible) : l'écran peut le dire et proposer de
+    /// réessayer. Retombe à faux au prochain chargement ou à l'arrêt.
+    @Published public private(set) var loadFailed = false
+    /// Un lecteur existe vraiment pour `currentUrl` : un son seulement DEMANDÉ n'est pas chargé.
+    public var hasLoadedPlayer: Bool { player != nil }
     private var listenStartTime: Date?
 
     /// Capture fidèle de l'interaction : une entrée par écoute réellement
@@ -226,6 +231,11 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
                 guard !Task.isCancelled else { return }
                 Self.log.error("play(urlString) cache fetch echec (\(resolved, privacy: .public)): \(error.localizedDescription, privacy: .public)")
                 isLoading = false
+                // Même sortie que `playData` et `playLocal` : sans elle `currentUrl` restait posé sans lecteur, et le
+                // toucher suivant reprenait un son jamais chargé — le disque ne répondait plus.
+                currentUrl = nil
+                loadFailed = true
+                releaseSession()
                 // B5 fix — notify the parent (coordinator / autoplay registry)
                 // that this audio is done so the queue can advance past the
                 // broken head. Without this the queue stalled silently on
@@ -267,6 +277,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
                 // restait tenue et la file ne passait jamais au vocal suivant.
                 isLoading = false
                 currentUrl = nil
+                loadFailed = true
                 releaseSession()
                 onPlaybackFinished?()
                 return
@@ -289,6 +300,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         case .failure(let error):
             Self.log.error("playData AVAudioPlayer init echec (\(data.count, privacy: .public)o): \(error.localizedDescription, privacy: .public)")
             isLoading = false
+            loadFailed = true
             // Même sortie que l'échec de téléchargement : sans elle la file restait sur ce vocal, le bouton
             // lecture ne rechargeait rien et la session audio n'était jamais rendue.
             currentUrl = nil
@@ -317,6 +329,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         // Un arrêt pendant le chargement laissait la bulle sur son indicateur, la tâche annulée sortant sans le
         // remettre.
         if isLoading { isLoading = false }
+        if loadFailed { loadFailed = false }
         timer?.invalidate()
         timer = nil
         if isPlaying { isPlaying = false }

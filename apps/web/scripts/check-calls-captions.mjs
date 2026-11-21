@@ -285,21 +285,20 @@ try {
       // ------------------------------------------------ 4. le journal (#8579)
       const expected = withSpeech ? ['peer', 'mine'] : ['peer'];
       const journalEntries = () => page.$$eval('[data-call-journal-entry]', (items) => items.map((item) => item.getAttribute('data-call-journal-entry')));
+      /* #19670 : le journal n'est plus une action du (…) — sa seule porte est « Journal » au pied des sous-titres allumés. */
       const openJournal = async () => {
-        await openActions(page);
-        await page.click('[data-call-control="journal"]');
+        await closeActions(page);
+        await page.click('[data-call-control-pill] [data-call-captions-journal]');
         return appears(page, '[data-call-journal-panel]');
       };
       await openActions(page);
-      const journalButton = page.locator('[data-call-rail="call"] [data-call-control="journal"]');
-      const journalSize = await tapSize(journalButton);
-      check(journalSize.ok, `${label} : « Journal » est dans le rail « L'appel » et fait au moins ${TAP_FLOOR} (${JSON.stringify(journalSize.size)})`);
+      check((await page.$('[data-call-control="journal"]')) === null, `${label} : le rail « L'appel » ne porte pas « Journal »`);
       const callRow = await page.$$eval('[data-call-rail="call"] button', (buttons) => buttons.map((button) => button.getAttribute('data-call-control') ?? (button.hasAttribute('data-call-captions') ? 'captions' : button.hasAttribute('data-call-record') ? 'record' : '')));
-      check(JSON.stringify(callRow.filter((key) => key !== 'pip').slice(0, 5)) === JSON.stringify(['captions', 'record', 'invite', 'journal', 'react']), `${label} : « Journal » suit « Ajouter » dans « L'appel » (${callRow.join(' · ')})`);
-      await journalButton.click();
+      check(JSON.stringify(callRow.filter((key) => key !== 'pip').slice(0, 4)) === JSON.stringify(['captions', 'record', 'invite', 'react']), `${label} : « L'appel » : Sous-titres, Enregistrer, Ajouter, Réagir (${callRow.join(' · ')})`);
+      await openJournal();
       check(await appears(page, '[data-call-journal-panel]'), `${label} : « Journal » ouvre le journal`);
-      check(await page.waitForFunction(() => document.querySelector('[data-call-row], [data-call-rail]') === null, undefined, { timeout: 3000 }).then(() => true, () => false), `${label} : le journal REMPLACE les rails`);
-      check((await page.$('[data-call-captions-panel]')) === null, `${label} : le bandeau des sous-titres se retire le temps de lire le journal`);
+      check(await page.waitForFunction(() => document.querySelector('[data-call-row], [data-call-rail]') === null, undefined, { timeout: 3000 }).then(() => true, () => false), `${label} : le journal ne sort aucun rail`);
+      check(await vanishes(page, '[data-call-captions-panel]'), `${label} : le bandeau des sous-titres se retire le temps de lire le journal`);
       check(JSON.stringify(await journalEntries()) === JSON.stringify(expected), `${label} : le journal porte les voix dans l'ordre (${JSON.stringify(await journalEntries())})`);
       const peerOf = () =>
         page.$eval('[data-call-journal-entry="peer"]', (entry) => ({
@@ -389,8 +388,13 @@ try {
       await cc.click();
       await closeActions(page);
       check(await vanishes(page, '[data-call-captions-panel]'), `${label} : les sous-titres coupés`);
-      check(await openJournal(), `${label} : le journal s'ouvre, sous-titres coupés`);
-      check(JSON.stringify(await journalEntries()) === JSON.stringify(expected), `${label} : il a gardé tout l'appel, sous-titres coupés (${JSON.stringify(await journalEntries())})`);
+      check((await page.$('[data-call-captions-journal], [data-call-control="journal"]')) === null, `${label} : sous-titres coupés, aucune porte n'ouvre le journal (#19670)`);
+      await openActions(page);
+      await cc.click();
+      await closeActions(page);
+      check(await appears(page, '[data-call-captions-panel="translated"]'), `${label} : les sous-titres rallumés`);
+      check(await openJournal(), `${label} : le journal se rouvre depuis leur pied`);
+      check(JSON.stringify(await journalEntries()) === JSON.stringify(expected), `${label} : il a gardé tout l'appel, sous-titres coupés puis rallumés (${JSON.stringify(await journalEntries())})`);
       await page.keyboard.press('Escape');
       check(await vanishes(page, '[data-call-journal-panel]'), `${label} : Échap ferme le journal`);
       check((await page.$('[data-call-screen="connected"]')) !== null, `${label} : sans réduire l'appel`);

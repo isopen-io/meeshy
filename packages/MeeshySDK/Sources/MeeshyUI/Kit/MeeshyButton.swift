@@ -69,6 +69,7 @@ public struct MeeshyButton<Trailing: View>: View {
     public var body: some View {
         VStack(spacing: MeeshySpacing.xs) {
             control
+                .meeshyPointerLift(in: Capsule(), tint: tint)
             if let reason = MeeshyButtonWords.hint(disabledReason: disabledReason, isEnabled: isEnabled) {
                 Text(verbatim: reason)
                     .meeshyScaledFont(MeeshyFont.smallSize)
@@ -416,21 +417,24 @@ private struct MeeshyButtonHoldWaves: View {
                 TimelineView(.animation) { context in
                     let elapsed = context.date.timeIntervalSinceReferenceDate
                     ZStack {
-                        ForEach(0..<decor.waveCount, id: \.self) { index in
-                            let wave = MeeshyButtonHoldDecor.wave(index: index, count: decor.waveCount,
-                                                                  elapsed: elapsed)
-                            Circle()
-                                .strokeBorder(tone, lineWidth: CGFloat(MeeshyButtonHoldDecor.waveStroke))
-                                .frame(width: diameter, height: diameter)
-                                .scaleEffect(CGFloat(wave.scale))
-                                .opacity(wave.opacity)
-                        }
+                        ForEach((0..<decor.waveCount).map { index in
+                            AsyncRenderRow(id: index, content: waveRing(index: index, elapsed: elapsed))
+                        }, content: asyncRenderRowContent)
                     }
                 }
             }
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+
+    private func waveRing(index: Int, elapsed: TimeInterval) -> some View {
+        let wave = MeeshyButtonHoldDecor.wave(index: index, count: decor.waveCount, elapsed: elapsed)
+        return Circle()
+            .strokeBorder(tone, lineWidth: CGFloat(MeeshyButtonHoldDecor.waveStroke))
+            .frame(width: diameter, height: diameter)
+            .scaleEffect(CGFloat(wave.scale))
+            .opacity(wave.opacity)
     }
 }
 

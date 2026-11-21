@@ -238,6 +238,14 @@ export class GlobalAchievements {
           // `uploadedBy` (indexé) plutôt que `message.sender.userId` : deux
           // `$lookup` imbriqués par pièce jointe. `messageId` posé = une pièce
           // jointe réellement ENVOYÉE, pas un téléversement abandonné.
+          //
+          // #20113 — ce compte inclut désormais les COPIES (transfert,
+          // diffusion), que l'ancien espace de clés en excluait par accident :
+          // elles portaient un `Participant.id` et n'appariaient jamais. C'est
+          // assumé — une pièce transférée EST une pièce envoyée, et le libellé
+          // du succès parle d'envoi — mais il faut le dire : transférer la même
+          // photo N fois compte N. Aucune rétro-inflation : les lignes
+          // héritées gardent l'ancien espace jusqu'à #20114.
           const n = await this.prisma.messageAttachment.count({
             where: {
               uploadedBy: event.userId,

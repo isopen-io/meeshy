@@ -419,6 +419,29 @@ button.focus-stamp::after {
   opacity: 1;
 }
 
+/* L'ACTE QUI AVANCE (#17367) — sous la pilule de jour, jamais sur elle ni sur le
+   composeur ; entrée en `opacity`/`transform` seulement (aucune image perdue
+   pendant la frappe), immobile sous « réduire les animations ». */
+.thread-act-pill {
+  top: calc(var(--day-pill-top) + 2.5rem);
+  animation: thread-act-pill-in 220ms ease-out both;
+}
+@keyframes thread-act-pill-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .thread-act-pill {
+    animation: none;
+  }
+}
+
 /* LE BOUTON « DÉFILER VERS LE BAS » — cible tactile ≥ 44 px
    (`min-h-11 min-w-11`, Tailwind), capsule qui s'élargit pour l'aperçu
    riche (`ConversationScrollControlsView.swift`, « repos = cercle parfait ;

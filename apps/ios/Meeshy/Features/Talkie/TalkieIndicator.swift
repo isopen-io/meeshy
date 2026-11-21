@@ -27,7 +27,8 @@ enum TalkieBannerLaw {
 /// L'indicateur d'un talkie reçu : qui parle, « Couper » pour le faire taire ICI, et « Parler » à maintenir pour lui
 /// répondre sans ouvrir sa fiche ni la conversation (#18820). NON MODAL — le Bring prend l'écran, le talkie jamais : il
 /// se pose en haut, sous la barre d'état, par-dessus les feuilles et le plein écran, et l'app reste utilisable dessous.
-/// VoiceOver l'annonce.
+/// VoiceOver l'annonce ; son arrivée vibre, et sonne si Meeshy n'est pas en silence (#19732). Le nom tient sur deux
+/// lignes plutôt que d'être tronqué.
 struct TalkieIndicator: View {
     let speaker: TalkieSpeaker
     let isLive: Bool
@@ -38,8 +39,13 @@ struct TalkieIndicator: View {
     @StateObject private var offer: TalkieOfferModel
     @State private var withdrawn = false
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
     @State private var pulsing = false
+
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
 
     init(speaker: TalkieSpeaker, isLive: Bool, sender: TalkieSender, holding: Binding<Bool>, onMute: @escaping () -> Void) {
         self.speaker = speaker
@@ -58,7 +64,7 @@ struct TalkieIndicator: View {
 
     private var title: String {
         guard isLive else { return ProfileTalkieWording.talking(name: name) }
-        return String(format: String(localized: "talkie.incoming.title", defaultValue: "%@ vous parle", bundle: .main), name)
+        return String(format: String(localized: "talkie.incoming.title", defaultValue: "%@ te parle", bundle: .main), name)
     }
 
     private var actions: [TalkieBannerAction] {
@@ -75,7 +81,8 @@ struct TalkieIndicator: View {
             Text(title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
-                .lineLimit(1)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: MeeshySpacing.sm)
             if actions.contains(.mute) { muteButton }
             if actions.contains(.talk) {
@@ -83,7 +90,8 @@ struct TalkieIndicator: View {
             }
         }
         .padding(.horizontal, MeeshySpacing.lg)
-        .background(Capsule().fill(.ultraThinMaterial))
+        .padding(.vertical, MeeshySpacing.xs)
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous).fill(.ultraThinMaterial))
         .padding(.horizontal, MeeshySpacing.lg)
         .accessibilityElement(children: .contain)
         .task(id: speaker.fromUserId) { await offer.load() }
@@ -98,6 +106,7 @@ struct TalkieIndicator: View {
         }
         .onAppear {
             UIAccessibility.post(notification: .announcement, argument: title)
+            if isLive { TalkieCuePlayer.incoming() }
             guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) { pulsing = true }
         }
@@ -240,7 +249,10 @@ final class TalkieBannerPresenter: ObservableObject {
         hideTask = nil
         guard window == nil, let scene = CallWindowScene.target() else { return }
         let overlay = CallPassthroughWindow(windowScene: scene)
-        let controller = UIHostingController(rootView: TalkieBannerRoot(center: center, presenter: self))
+        // Sa propre fenêtre, hors de la racine de l'app : la préférence « Réduire les animations » de Meeshy s'y pose ici.
+        let root = TalkieBannerRoot(center: center, presenter: self)
+            .environment(\.meeshyForceReduceMotion, MeeshyAccessibilityPreferences.shared.reduceMotion)
+        let controller = UIHostingController(rootView: root)
         controller.view.backgroundColor = .clear
         overlay.windowLevel = Self.windowLevel
         overlay.overrideUserInterfaceStyle = DeviceLayout.measurementWindow?.overrideUserInterfaceStyle ?? .unspecified

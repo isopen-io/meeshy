@@ -223,7 +223,7 @@ struct AudioFullscreenPage: View, Equatable {
         // continuer (mini-player + carte système) — le moteur est
         // coordinator-owned, plus cette page (ni stop, ni unregister ici).
         .sheet(isPresented: $showTranslationSheet) { translationSheet }
-        .sheet(item: $selectedProfileUser) { user in profileSheet(user) }
+        .profileCover(item: $selectedProfileUser) { user in profileSheet(user) }
         // Transcription serveur (long-press) : le résultat revient par socket.
         .onReceive(
             MessageSocketManager.shared.transcriptionReady
@@ -241,6 +241,16 @@ struct AudioFullscreenPage: View, Equatable {
                 .filter { $0.attachmentId == attachment.id }
                 .receive(on: DispatchQueue.main)
         ) { event in appendTranslatedAudio(from: event) }
+    }
+
+    private func profileSheet(_ user: ProfileSheetUser) -> some View {
+        UserProfileSheet(
+            user: user,
+            moodEmoji: moodEmojiProvider?(user.userId ?? ""),
+            onMoodTap: moodTapProvider.flatMap { $0(user.userId ?? "") },
+            presenceProvider: { knownPresence(of: $0) },
+            postsContent: ProfilePostsOpener.postsContent { selectedProfileUser = nil }, dependencies: .live
+        )
     }
 
     // MARK: - Dispositions

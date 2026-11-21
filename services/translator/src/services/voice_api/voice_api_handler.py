@@ -415,13 +415,15 @@ class VoiceAPIHandler:
 
     async def _handle_job_status(self, request_data: Dict) -> VoiceAPIResult:
         """Handle get job status request"""
-        job_id = request_data.get('jobId')
-        return await self.operation_handlers.handle_job_status(job_id)
+        return await self.operation_handlers.handle_job_status(
+            request_data.get('jobId'), request_data.get('userId')
+        )
 
     async def _handle_job_cancel(self, request_data: Dict) -> VoiceAPIResult:
         """Handle cancel job request"""
-        job_id = request_data.get('jobId')
-        return await self.operation_handlers.handle_job_cancel(job_id)
+        return await self.operation_handlers.handle_job_cancel(
+            request_data.get('jobId'), request_data.get('userId')
+        )
 
     # ═══════════════════════════════════════════════════════════════════════════
     # ANALYTICS REQUEST HANDLERS

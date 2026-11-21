@@ -48,6 +48,7 @@ const OTHER_USER_ID = '507f1f77bcf86cd799439077';
 // tête du double, il fait échouer tout `where` qui perdrait `userId` : la
 // garde plate (#5191) le trouverait, jamais `null`.
 const INTRUDER_USER_ID = '507f1f77bcf86cd799439066';
+const BANNED_AT = new Date('2026-11-01T00:00:00Z');
 
 const mockLink = {
   id: '507f1f77bcf86cd799439099',
@@ -59,7 +60,7 @@ const mockLink = {
   maxUses: 100,
   expiresAt: null,
   createdAt: new Date('2025-01-01'),
-  conversation: { id: 'conv-1', title: 'Test Chat', type: 'group', description: 'Desc' },
+  conversation: { id: 'conv-1', title: 'Test Chat', type: 'group', description: 'Desc', memberCount: 8 },
   creator: { id: OTHER_USER_ID, username: 'creator1', firstName: 'C', lastName: 'R', displayName: null, avatar: null },
   description: 'Un lien de test',
   maxConcurrentUsers: 10,
@@ -131,14 +132,14 @@ function membershipParticipant(role: string) {
 
 // ─── App factory ──────────────────────────────────────────────────────────────
 
-async function buildApp(authContext: any = { registeredUser: { id: USER_ID } }): Promise<FastifyInstance> {
+async function buildApp(authContext: any = { registeredUser: { id: USER_ID } }, prisma: unknown = makePrisma()): Promise<FastifyInstance> {
   mockAuthMiddleware.mockImplementation(async (req: any) => {
     (req as any).authContext = authContext;
   });
   mockIsRegisteredUser.mockImplementation((ctx: any) => ctx?.registeredUser !== undefined);
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-  app.decorate('prisma', makePrisma() as any);
+  app.decorate('prisma', prisma as any);
   await registerUserRoutes(app);
   await app.ready();
   return app;
@@ -325,6 +326,48 @@ describe('GET /links?conversationId= — non-member', () => {
   });
 });
 
+/**
+ * #20183 — la jumelle de #20135 côté LECTURE. Les liens d'une conversation sont
+ * ses codes d'entrée VIVANTS : les servir à un membre exclu lui rend le passage
+ * qu'on vient de lui retirer — et pour un modérateur banni, c'est la liste
+ * ENTIÈRE, pas seulement la sienne.
+ *
+ * La ligne « active ET bannie » est un état que la base PORTE : bannir un
+ * membre déjà inactif n'écrit que `bannedAt` (`conversationBanState`), et
+ * `restore-for-me` rallumait `isActive` sans le lire (#10436, sans migration).
+ */
+describe('GET /links?conversationId= — membre actif-et-BANNI (#20183)', () => {
+  let app: FastifyInstance;
+  let prisma: any;
+  beforeAll(async () => {
+    mockIsRegisteredUser.mockReturnValue(true);
+    mockAuthMiddleware.mockImplementation(async (req: any) => {
+      (req as any).authContext = { registeredUser: { id: USER_ID, role: 'USER' } };
+    });
+    prisma = makePrisma({
+      participant: {
+        findFirst: jest.fn<any>(
+          findFirstHonouringWhere([
+            { conversationId: CONV_ID, userId: INTRUDER_USER_ID, isActive: true, role: 'moderator' },
+            { conversationId: CONV_ID, userId: USER_ID, isActive: true, role: 'moderator', bannedAt: BANNED_AT },
+          ])
+        ),
+      },
+    });
+    app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('prisma', prisma as any);
+    await registerUserRoutes(app);
+    await app.ready();
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('reçoit le 404 d\'une conversation inconnue, et aucun lien n\'est lu', async () => {
+    const res = await app.inject({ method: 'GET', url: `/links?conversationId=${CONV_ID}` });
+    expect(res.statusCode).toBe(404);
+    expect(prisma.conversationShareLink.findMany).not.toHaveBeenCalled();
+  });
+});
+
 describe('GET /links?conversationId= — membre NON modérateur', () => {
   let app: FastifyInstance;
   let prisma: any;
@@ -441,10 +484,36 @@ describe('GET /links — expand=conversation,creator', () => {
   it('avec expand=conversation,creator : les deux objets sont servis', async () => {
     const res = await app.inject({ method: 'GET', url: '/links?expand=conversation,creator' });
     const item = res.json().data[0];
-    expect(item.conversation).toEqual({ id: 'conv-1', title: 'Test Chat', type: 'group', description: 'Desc' });
+    expect(item.conversation).toEqual({ id: 'conv-1', title: 'Test Chat', type: 'group', description: 'Desc', memberCount: 8 });
     expect(item.creator).toEqual(
       expect.objectContaining({ id: OTHER_USER_ID, username: 'creator1' })
     );
+  });
+
+  // #19283 — « Mène à Studio · 8 membres » : l'effectif de la conversation
+  // cible part avec son expansion, compté par la colonne dénormalisée, jamais
+  // par une lecture de ses membres.
+  it('avec expand=conversation : l’effectif de la conversation est servi et chargé, sans lire ses membres', async () => {
+    const findMany = jest.fn<any>().mockResolvedValue([mockLink]);
+    const local = await buildApp({ registeredUser: { id: USER_ID, role: 'USER' } }, makePrisma({ conversationShareLink: { findMany } }));
+
+    const res = await local.inject({ method: 'GET', url: '/links?expand=conversation' });
+
+    expect(res.json().data[0].conversation.memberCount).toBe(8);
+    const select = (findMany.mock.calls[0]?.[0] as { select: { conversation: { select: Record<string, unknown> } } }).select;
+    expect(select.conversation.select).toEqual(expect.objectContaining({ memberCount: true }));
+    expect(select.conversation.select).not.toHaveProperty('participants');
+    await local.close();
+  });
+
+  it('un lien dont la conversation n’a pas d’effectif lu rend 0, jamais un champ absent', async () => {
+    const findMany = jest.fn<any>().mockResolvedValue([{ ...mockLink, conversation: { id: 'conv-1', title: 'T', type: 'group', description: null } }]);
+    const local = await buildApp({ registeredUser: { id: USER_ID, role: 'USER' } }, makePrisma({ conversationShareLink: { findMany } }));
+
+    const res = await local.inject({ method: 'GET', url: '/links?expand=conversation' });
+
+    expect(res.json().data[0].conversation.memberCount).toBe(0);
+    await local.close();
   });
 
   // Troisième volet d'`expand`, au-delà des deux nommés au critère 1 :

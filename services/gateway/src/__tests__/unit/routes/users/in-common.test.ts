@@ -41,12 +41,13 @@ const matches = (row: AnyRow | null | undefined, where: AnyRow | undefined): boo
     if (cond === null) return key in row && value === null;
     if (cond instanceof Date) return value instanceof Date && value.getTime() === cond.getTime();
     if (typeof cond !== 'object') return value === cond;
-    const ops = ['in', 'has', 'startsWith', 'lt', 'gte', 'isSet', 'not'];
+    const ops = ['in', 'has', 'startsWith', 'contains', 'lt', 'gte', 'isSet', 'not'];
     if (Object.keys(cond).some((op) => ops.includes(op))) {
       const c = cond as AnyRow;
       if ('in' in c && !c.in.includes(value)) return false;
       if ('has' in c && !(value ?? []).includes(c.has)) return false;
       if ('startsWith' in c && !(typeof value === 'string' && value.startsWith(c.startsWith))) return false;
+      if ('contains' in c && !(typeof value === 'string' && value.includes(c.contains))) return false;
       if ('lt' in c && !(value < c.lt)) return false;
       if ('gte' in c && !(value >= c.gte)) return false;
       if ('isSet' in c && (key in row) !== c.isSet) return false;
@@ -76,6 +77,7 @@ type Store = {
   participants: AnyRow[];
   conversations: AnyRow[];
   attachments: AnyRow[];
+  messages: AnyRow[];
   deletions: AnyRow[];
   preferences: AnyRow[];
 };
@@ -169,6 +171,7 @@ const baseStore = (pairLevel: string): Store => ({
   participants: [],
   conversations: [],
   attachments: [],
+  messages: [],
   deletions: [],
   preferences: [],
 });
@@ -193,6 +196,7 @@ const prisma = () =>
     conversation: table(() => store.conversations),
     conversationShareLink: table(() => []),
     messageAttachment: table(() => store.attachments),
+    message: table(() => store.messages),
     userConversationPreferences: table(() => []),
     userMessageDeletion: table(() => store.deletions),
     userPreferences: table(() => store.preferences),
@@ -394,7 +398,7 @@ describe('les médias des conversations partagées', () => {
     await build();
     const { body } = await get(T, '?parts=media');
     const media = body.data.parts.media;
-    expect(media.counts).toEqual({ image: 2, video: 1, audio: 1, file: 1 });
+    expect(media.counts).toEqual({ image: 2, video: 1, audio: 1, file: 1, link: 0 });
     expect(media.countsCapped).toBe(false);
     expect((media.items as AnyRow[]).every((item) => item.conversationId === 'k1')).toBe(true);
     expect(media.items).toHaveLength(5);
@@ -441,5 +445,135 @@ describe('les médias des conversations partagées', () => {
     const media = (await get(T, '?parts=media')).body.data.parts.media;
     expect(media.items.map((i: AnyRow) => i.id)).not.toContain(hidden.id);
     expect(media.counts.image).toBe(1);
+  });
+});
+
+describe('une conversation rendue obsolète ou supprimée pour moi ne sort pas par la fiche', () => {
+  const scopeStore = () => {
+    store = baseStore('ACQUAINTANCE');
+    store.conversations = [
+      { id: 'k1', encryptionMode: null, isActive: true },
+      { id: 'k4', encryptionMode: null, isActive: false, deletedAt: new Date('2026-06-02') },
+      { id: 'k5', encryptionMode: null, isActive: true },
+    ];
+    store.participants = [
+      participant(V, 'k1'),
+      participant(T, 'k1'),
+      participant(V, 'k4'),
+      participant(T, 'k4'),
+      { ...participant(V, 'k5'), deletedForMe: new Date('2026-06-02') },
+      participant(T, 'k5'),
+    ];
+  };
+
+  it('ni ses pièces ni leurs nombres', async () => {
+    scopeStore();
+    store.attachments = [attachment('k1', 'image/jpeg'), attachment('k4', 'image/jpeg'), attachment('k5', 'video/mp4')];
+    await build();
+    const media = (await get(T, '?parts=media')).body.data.parts.media;
+    expect(media.items.map((i: AnyRow) => i.conversationId)).toEqual(['k1']);
+    expect(media.counts).toEqual({ image: 1, video: 0, audio: 0, file: 0, link: 0 });
+  });
+
+  it('ni ses liens ni leur nombre', async () => {
+    scopeStore();
+    const text = (id: string, conversationId: string, content: string): AnyRow => ({
+      ...message(conversationId),
+      id,
+      content,
+      messageSource: 'user',
+    });
+    store.messages = [
+      text('65c00000000000000000aa01', 'k1', 'https://ok.example'),
+      text('65c00000000000000000aa02', 'k4', 'https://obsolete.example'),
+      text('65c00000000000000000aa03', 'k5', 'https://supprimee.example'),
+    ];
+    await build();
+    const media = (await get(T, '?parts=media&mediaKind=link')).body.data.parts.media;
+    expect(media.links.map((l: AnyRow) => l.domain)).toEqual(['ok.example']);
+    expect(media.counts.link).toBe(1);
+  });
+});
+
+describe('les liens des conversations partagées — l’onglet « Liens » de la planche', () => {
+  const linkStore = () => {
+    store = baseStore('ACQUAINTANCE');
+    store.conversations = [
+      { id: 'k1', encryptionMode: null },
+      { id: 'k2', encryptionMode: 'e2ee' },
+      { id: 'k3', encryptionMode: null },
+    ];
+    store.participants = [participant(V, 'k1'), participant(T, 'k1'), participant(V, 'k2'), participant(T, 'k2'), participant(V, 'k3')];
+  };
+  let mseq = 0;
+  const textMessage = (conversationId: string, content: string, extra: AnyRow = {}): AnyRow => {
+    mseq += 1;
+    return {
+      ...message(conversationId),
+      id: `65c0000000000000000000${String(mseq).padStart(2, '0')}`,
+      content,
+      messageSource: 'user',
+      createdAt: new Date(Date.UTC(2026, 5, 1, 0, mseq)),
+      ...extra,
+    };
+  };
+
+  it('compte et liste les liens, chacun avec son domaine — rien d’une conversation chiffrée ou où la cible n’est pas', async () => {
+    linkStore();
+    store.messages = [
+      textMessage('k1', 'le tram https://www.carris.pt/28 et **https://meeshy.me/a**'),
+      textMessage('k1', 'pas de lien ici, ni http seul'),
+      textMessage('k1', 'écris à moi@exemple.fr'),
+      textMessage('k2', 'secret https://chiffre.example/x'),
+      textMessage('k3', 'ailleurs https://autre.example/y'),
+    ];
+    await build();
+    const media = (await get(T, '?parts=media&mediaKind=link')).body.data.parts.media;
+    expect(media.counts.link).toBe(2);
+    expect(media.items).toEqual([]);
+    expect(media.links.map((l: AnyRow) => [l.url, l.domain, l.conversationId])).toEqual([
+      ['https://www.carris.pt/28', 'carris.pt', 'k1'],
+      ['https://meeshy.me/a', 'meeshy.me', 'k1'],
+    ]);
+  });
+
+  it('exclut vue unique, éphémère, flouté, chiffré, supprimé, système et l’effet posé par son seul bit', async () => {
+    linkStore();
+    store.messages = [
+      textMessage('k1', 'ok https://ok.example'),
+      textMessage('k1', 'https://vu.example', { isViewOnce: true }),
+      textMessage('k1', 'https://flou.example', { isBlurred: true }),
+      textMessage('k1', 'https://chiffre.example', { isEncrypted: true }),
+      textMessage('k1', 'https://ephemere.example', { expiresAt: new Date('2099-01-01') }),
+      textMessage('k1', 'https://efface.example', { deletedAt: new Date() }),
+      textMessage('k1', 'https://systeme.example', { messageSource: 'system' }),
+      textMessage('k1', 'https://effet.example', { effectFlags: 0xffff }),
+    ];
+    await build();
+    const media = (await get(T, '?parts=media&mediaKind=link')).body.data.parts.media;
+    expect(media.links.map((l: AnyRow) => l.domain)).toEqual(['ok.example']);
+    expect(media.counts.link).toBe(1);
+  });
+
+  it('un message supprimé pour moi ne sort pas, et la page suit son curseur', async () => {
+    linkStore();
+    const hidden = textMessage('k1', 'https://cache.example');
+    store.messages = [textMessage('k1', 'https://un.example'), textMessage('k1', 'https://deux.example'), hidden];
+    store.deletions = [{ userId: V, messageId: hidden.id, message: { conversationId: 'k1' } }];
+    await build();
+    const first = (await get(T, '?parts=media&mediaKind=link&limit=1')).body.data.parts.media;
+    expect(first.counts.link).toBe(2);
+    expect(first.links.map((l: AnyRow) => l.domain)).toEqual(['deux.example']);
+    expect(first.pagination.hasMore).toBe(true);
+    const second = (await get(T, `?parts=media&mediaKind=link&limit=1&cursor=${first.pagination.nextCursor}`)).body.data.parts.media;
+    expect(second.links.map((l: AnyRow) => l.domain)).toEqual(['un.example']);
+  });
+
+  it('sous Connaissance, aucun lien ni nombre', async () => {
+    store = baseStore('PUBLIC');
+    store.messages = [textMessage('k1', 'https://ok.example')];
+    await build();
+    const media = (await get(T, '?parts=media&mediaKind=link')).body.data.parts.media;
+    expect(media).toEqual({ state: 'locked', circle: 'ACQUAINTANCE' });
   });
 });

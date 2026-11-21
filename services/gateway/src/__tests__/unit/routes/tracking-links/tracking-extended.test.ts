@@ -26,7 +26,7 @@ jest.mock('../../../../middleware/admin-permissions.middleware', () => ({
 }));
 
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  trackingLinkSchema: { type: 'object', additionalProperties: true },
+  trackingLinkSchema: { type: 'object', additionalProperties: true, properties: {} },
   errorResponseSchema: { type: 'object', properties: {} },
   validationErrorResponseSchema: { type: 'object', properties: {} },
 }));

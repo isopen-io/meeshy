@@ -299,7 +299,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-rail-side="leading"] [data-call-rail="mine"]')).not.toBeNull();
     expect(view.find('[data-call-rail-side="trailing"] [data-call-rail="call"]')).not.toBeNull();
     expect(railLabels(view.host, 'mine')).toEqual(['Activer la caméra', 'Partager l’écran']);
-    expect(railLabels(view.host, 'call')).toEqual(['Afficher les sous-titres traduits', 'Enregistrer l’appel', 'Ajouter des personnes à l’appel', 'Ouvrir le journal de l’appel', 'Envoyer une réaction']);
+    expect(railLabels(view.host, 'call')).toEqual(['Afficher les sous-titres traduits', 'Enregistrer l’appel', 'Ajouter des personnes à l’appel', 'Envoyer une réaction']);
     const rail = view.find('[data-call-rail="call"]');
     expect(rail?.getAttribute('role')).toBe('toolbar');
     expect(rail?.getAttribute('aria-orientation')).toBe('vertical');
@@ -464,7 +464,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     const video = mount({ cameraOn: true, members: { 'u-peer': member() } });
     video.press('[data-call-more]');
     await frame();
-    expect(railLabels(video.host, 'call')).toEqual(['Afficher les sous-titres traduits', 'Enregistrer l’appel', 'Ajouter des personnes à l’appel', 'Ouvrir le journal de l’appel', 'Envoyer une réaction', 'Capturer l’appel']);
+    expect(railLabels(video.host, 'call')).toEqual(['Afficher les sous-titres traduits', 'Enregistrer l’appel', 'Ajouter des personnes à l’appel', 'Envoyer une réaction', 'Capturer l’appel']);
     video.done();
     const audio = mount({ members: { 'u-peer': member() } });
     audio.press('[data-call-more]');
@@ -728,21 +728,20 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     view.done();
   });
 
-  test('« Journal », entre Ajouter et Réagir, ouvre TOUT l’appel à la place des rails — et le bandeau se tait (#8579, #17327)', async () => {
+  test('#19670 — le rail « l’appel » ne porte plus « Journal » : le pied des sous-titres ouvre TOUT l’appel, et le bandeau se tait (#8579, #17327)', async () => {
     const said = (n: number) => ({ id: `w-${n}`, speakerId: 'u-peer', speakerName: 'Amina', original: `Line ${n}`, translated: `Ligne ${n}`, pair: { from: 'en', to: 'fr' }, isFinal: true, at: n, mine: false });
     const view = mount({ members: { 'u-peer': member() }, captionsMode: 'translated', captions: Array.from({ length: 250 }, (_, n) => said(n)) });
     view.press('[data-call-more]');
     await frame();
     const row = [...view.host.querySelectorAll('[data-call-rail="call"] button')];
     const at = (selector: string) => row.findIndex((button) => button.matches(selector));
-    expect(at('[data-call-control="journal"]')).toBe(at('[data-call-control="invite"]') + 1);
-    expect(at('[data-call-control="react"]')).toBe(at('[data-call-control="journal"]') + 1);
-    expect(view.find('[data-call-control="journal"]')?.getAttribute('aria-label')).toBe('Ouvrir le journal de l’appel');
-    const railGlyph = [...view.host.querySelectorAll('[data-call-control="journal"] svg path')].map((path) => path.getAttribute('d'));
-    view.press('[data-call-control="journal"]');
+    expect(view.find('[data-call-control="journal"]')).toBeNull();
+    expect(at('[data-call-control="react"]')).toBe(at('[data-call-control="invite"]') + 1);
+    view.press('[data-call-more]');
+    await frame();
+    view.press('[data-call-control-pill] [data-call-captions-journal]');
     await settle(() => import('./call-journal-panel'));
-    /* Le même pictogramme au rail et dans « Journal » actif, au pied du journal (loi 1, P6). */
-    expect([...view.host.querySelectorAll('[data-call-journal-toggle] svg path')].map((path) => path.getAttribute('d'))).toEqual(railGlyph);
+    expect(view.host.querySelectorAll('[data-call-journal-toggle] svg path').length).toBeGreaterThan(0);
     expect(view.find('[data-call-row]')).toBeNull();
     expect(railsState(view.host)).not.toBe('shown');
     expect(view.host.querySelectorAll('[data-call-journal-entry]')).toHaveLength(250);
@@ -878,9 +877,9 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     const original = callActions.minimize;
     const minimized: number[] = [];
     callActions.minimize = () => void minimized.push(1);
-    const view = mount({ members: { 'u-peer': member() } });
-    view.press('[data-call-more]');
-    view.press('[data-call-control="journal"]');
+    const view = mount({ members: { 'u-peer': member() }, captionsMode: 'translated' });
+    await settle(() => import('./call-captions-panel'));
+    view.press('[data-call-control-pill] [data-call-captions-journal]');
     await settle(() => import('./call-journal-panel'));
     act(() => (document.activeElement as HTMLElement | null)?.blur());
     act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));

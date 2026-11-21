@@ -136,8 +136,22 @@ final class CallScreenLayerTests: XCTestCase {
         XCTAssertFalse(CallScreenLayer.mode(.effects).showsFamilyRows)
     }
 
-    func test_panel_eachPointsAtItsOwnAction() {
-        XCTAssertEqual(CallScreenPanel.allCases.map(\.action), [.react, .recording, .addPeople, .journal])
+    func test_panel_eachPointsAtItsOwnAction_exceptTheJournal() {
+        XCTAssertEqual(CallScreenPanel.allCases.map(\.action), [.react, .recording, .addPeople, nil])
+    }
+
+    /// #19670 — couper les sous-titres referme le journal, et seulement lui.
+    func test_closingJournal_openJournal_returnsToIdle() {
+        XCTAssertEqual(CallScreenLayer.panel(.journal).closingJournal(), .idle)
+    }
+
+    func test_closingJournal_menuOverJournal_keepsTheMenuOpen() {
+        XCTAssertEqual(CallScreenLayer.menuOverJournal.closingJournal(), .menu)
+    }
+
+    func test_closingJournal_anyOtherLayer_isUntouched() {
+        let layers: [CallScreenLayer] = [.idle, .menu, .panel(.react), .panel(.people), .mode(.effects)]
+        XCTAssertTrue(layers.allSatisfy { $0.closingJournal() == $0 })
     }
 
     // MARK: - Un mode libère l'écran
@@ -299,6 +313,15 @@ final class CallScreenLayerTests: XCTestCase {
         XCTAssertTrue(chipBody.contains("MeeshyColors.indigo950"), "icône et texte sombres sur le blanc")
         XCTAssertTrue(chipBody.contains(".toggleStateAccessibility(isToggle: true, isActive: isOpen)"), "VoiceOver dit son état")
         XCTAssertTrue(chipBody.contains("minHeight: 44"))
+    }
+
+    /// #19670 — la porte du journal est le pied des sous-titres, et couper les sous-titres le referme.
+    func test_captionsOff_closesTheJournal_andThePillOffersNoJournalAction() throws {
+        let transcript = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Transcript.swift"))
+        let off = try XCTUnwrap(transcript.range(of: "case .off:"))
+        XCTAssertTrue(transcript[off.upperBound...].prefix(400).contains("layer = layer.closingJournal()"))
+        XCTAssertTrue(transcript.contains("onOpenJournal: opensJournal ? { togglePanel(.journal) } : nil"), "la bande garde sa porte")
+        XCTAssertFalse(AppSourceGuard.stripComments(try AppSourceGuard.callViewSource()).contains("journalActionButton"))
     }
 
     private func journalLine(origin: String, served: String? = nil, awaiting: Bool = false) -> CallCaptionLine {

@@ -106,6 +106,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 import { NotificationService } from '../../../services/notifications/NotificationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { CIRCLE_NOTIFY_KEYS } from '@meeshy/shared/utils/relation-levels';
+import { NOT_DELETED } from '../../../services/posts/softDelete';
 import { sharedFriendships } from '../../helpers/shared-friendships';
 import { aliveAndUnblocked, everyoneLinkedInThisBlock } from '../../helpers/linked-to-everyone';
 
@@ -242,12 +243,12 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
 
       await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
 
+      // #19803 — cette assertion ÉPINGLAIT l'égalité nue, donc elle attestait le
+      // défaut. L'attendu vient désormais de la PRODUCTION, et le COMPORTEMENT
+      // est gardé par `unit/story-comment-fanout-nominal-form.test.ts`.
       expect(prisma.postComment.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({
-            postId: POST_ID,
-            deletedAt: null,
-          }),
+          where: expect.objectContaining({ postId: POST_ID, deletedAt: NOT_DELETED }),
         })
       );
 

@@ -18,6 +18,7 @@ import {
   updateBloodLocationSettings,
 } from '../../../../services/bloodLocation/bloodLocationService';
 import { ADULT_BIRTH } from '../../../helpers/messaging-circle-world';
+import { settled } from '../../../helpers/settled';
 import {
   A_300_M,
   A_5_KM,
@@ -49,7 +50,7 @@ describe('enregistrer — scellé, borné à 30 jours, jamais en clair', () => {
   it('range la position scellée, sans coordonnée ni identifiant en clair, pour 30 jours', async () => {
     process.env.SECRETS_AT_REST_KEY = KEY;
     const w = bloodWorldAvecConsentements();
-    const result = await recordBloodLocation(w.deps, SANG, PARIS);
+    const result = await settled(recordBloodLocation(w.deps, SANG, PARIS));
 
     expect(result).toEqual({ recorded: true });
     const [row] = w.points.rows;
@@ -63,7 +64,7 @@ describe('enregistrer — scellé, borné à 30 jours, jamais en clair', () => {
   it('le fantôme global : rien n\'est enregistré, jamais', async () => {
     const w = bloodWorldAvecConsentements();
     await updateBloodLocationSettings(w.deps, SANG, { ghost: true });
-    const result = await recordBloodLocation(w.deps, SANG, PARIS);
+    const result = await settled(recordBloodLocation(w.deps, SANG, PARIS));
 
     expect(result).toEqual({ recorded: false });
     expect(w.points.rows).toEqual([]);
@@ -79,9 +80,9 @@ describe('enregistrer — scellé, borné à 30 jours, jamais en clair', () => {
 describe('lire l\'historique — Sang consentant seulement', () => {
   it('un Sang qui m\'a accordé l\'historique me rend ses points, du plus récent au plus ancien, déchiffrés', async () => {
     const w = bloodWorldAvecConsentements();
-    await recordBloodLocation(w.deps, SANG, PARIS);
+    await settled(recordBloodLocation(w.deps, SANG, PARIS));
     w.avancer(10 * MINUTE);
-    await recordBloodLocation(w.deps, SANG, A_300_M);
+    await settled(recordBloodLocation(w.deps, SANG, A_300_M));
 
     const verdict = await readBloodLocationHistory(w.deps, MOI, SANG, {});
 
@@ -96,14 +97,14 @@ describe('lire l\'historique — Sang consentant seulement', () => {
 
   it('sans consentement de l\'émetteur, le Sang ne lit rien : RELATION_CONSENT_REQUIRED', async () => {
     const w = bloodLocationWorld({ consents: [[SANG, MOI, { locationHistoryShared: false }]] });
-    await recordBloodLocation(w.deps, SANG, PARIS);
+    await settled(recordBloodLocation(w.deps, SANG, PARIS));
 
     await expect(readBloodLocationHistory(w.deps, MOI, SANG, {})).resolves.toEqual({ kind: 'forbidden', code: 'RELATION_CONSENT_REQUIRED' });
   });
 
   it('un retrait de consentement coupe la lecture suivante : la base est relue à chaque appel', async () => {
     const w = bloodWorldAvecConsentements();
-    await recordBloodLocation(w.deps, SANG, PARIS);
+    await settled(recordBloodLocation(w.deps, SANG, PARIS));
     expect((await readBloodLocationHistory(w.deps, MOI, SANG, {})).kind).toBe('ok');
 
     w.consentir(SANG, MOI, { locationHistoryShared: false });
@@ -115,7 +116,7 @@ describe('lire l\'historique — Sang consentant seulement', () => {
     const w = bloodLocationWorld({
       consents: [PROCHE, AMI, BLOQUE].map((id) => [MOI, id, TOUT_PARTAGE] as const).concat([[MOI, '6400000000000000000000ee', TOUT_PARTAGE]]),
     });
-    await recordBloodLocation(w.deps, MOI, PARIS);
+    await settled(recordBloodLocation(w.deps, MOI, PARIS));
 
     const lecteurs = [PROCHE, AMI, BLOQUE, '6400000000000000000000ee'];
     const verdicts = await Promise.all(lecteurs.map((id) => readBloodLocationHistory(w.deps, id, MOI, {})));
@@ -124,7 +125,7 @@ describe('lire l\'historique — Sang consentant seulement', () => {
 
   it('chacun lit son propre historique, sans journal de consultation', async () => {
     const w = bloodWorldAvecConsentements();
-    await recordBloodLocation(w.deps, MOI, PARIS);
+    await settled(recordBloodLocation(w.deps, MOI, PARIS));
 
     const verdict = await readBloodLocationHistory(w.deps, MOI, MOI, {});
 
@@ -134,11 +135,11 @@ describe('lire l\'historique — Sang consentant seulement', () => {
 
   it('la fenêtre `since` et la borne `limit` s\'appliquent', async () => {
     const w = bloodWorldAvecConsentements();
-    await recordBloodLocation(w.deps, SANG, PARIS);
+    await settled(recordBloodLocation(w.deps, SANG, PARIS));
     w.avancer(2 * HEURE);
-    await recordBloodLocation(w.deps, SANG, A_300_M);
+    await settled(recordBloodLocation(w.deps, SANG, A_300_M));
     w.avancer(2 * HEURE);
-    await recordBloodLocation(w.deps, SANG, A_5_KM);
+    await settled(recordBloodLocation(w.deps, SANG, A_5_KM));
 
     const recent = await readBloodLocationHistory(w.deps, MOI, SANG, { since: new Date(T0 + HEURE).toISOString(), limit: 1 });
 
@@ -154,7 +155,7 @@ describe('lire l\'historique — Sang consentant seulement', () => {
       ],
       consents: [[AUTRE_MODERATEUR, MODERATEUR, { locationHistoryShared: true }]],
     });
-    await recordBloodLocation(w.deps, AUTRE_MODERATEUR, PARIS);
+    await settled(recordBloodLocation(w.deps, AUTRE_MODERATEUR, PARIS));
 
     expect((await readBloodLocationHistory(w.deps, MODERATEUR, AUTRE_MODERATEUR, {})).kind).toBe('ok');
   });
@@ -163,7 +164,7 @@ describe('lire l\'historique — Sang consentant seulement', () => {
 describe('le fantôme — indétectable', () => {
   it('global : le lecteur reçoit la même réponse vide qu\'un Sang sans historique', async () => {
     const w = bloodWorldAvecConsentements();
-    await recordBloodLocation(w.deps, SANG, PARIS);
+    await settled(recordBloodLocation(w.deps, SANG, PARIS));
     const sansFantome = await readBloodLocationHistory(w.deps, MOI, AUTRE_SANG, {});
 
     await updateBloodLocationSettings(w.deps, SANG, { ghost: true });
@@ -177,13 +178,13 @@ describe('le fantôme — indétectable', () => {
     process.env.SECRETS_AT_REST_KEY = KEY;
     const w = bloodWorldAvecConsentements({});
     w.consentir(SANG, AUTRE_SANG, TOUT_PARTAGE);
-    await recordBloodLocation(w.deps, SANG, PARIS);
+    await settled(recordBloodLocation(w.deps, SANG, PARIS));
     await updateBloodLocationSettings(w.deps, SANG, { ghost: true, userId: MOI });
     w.avancer(MINUTE);
-    await recordBloodLocation(w.deps, SANG, A_300_M);
+    await settled(recordBloodLocation(w.deps, SANG, A_300_M));
     await updateBloodLocationSettings(w.deps, SANG, { ghost: false, userId: MOI });
     w.avancer(MINUTE);
-    await recordBloodLocation(w.deps, SANG, A_5_KM);
+    await settled(recordBloodLocation(w.deps, SANG, A_5_KM));
 
     const moi = await readBloodLocationHistory(w.deps, MOI, SANG, {});
     expect(moi.kind === 'ok' && moi.items.map((p) => p.latitude)).toEqual([A_5_KM.latitude, PARIS.latitude]);
@@ -203,7 +204,7 @@ describe('le fantôme — indétectable', () => {
 describe('le journal des consultations — du seul observé', () => {
   it('chaque lecture d\'un autre est notée ; l\'observé lit qui l\'a consulté, personne d\'autre', async () => {
     const w = bloodWorldAvecConsentements();
-    await recordBloodLocation(w.deps, SANG, PARIS);
+    await settled(recordBloodLocation(w.deps, SANG, PARIS));
     await readBloodLocationHistory(w.deps, MOI, SANG, {});
     w.avancer(MINUTE);
     await readBloodLocationHistory(w.deps, MOI, SANG, {});
@@ -264,8 +265,8 @@ describe('le journal des consultations — du seul observé', () => {
 describe('effacer — chacun efface le sien', () => {
   it('efface tout l\'historique du compte, et lui seul', async () => {
     const w = bloodWorldAvecConsentements();
-    await recordBloodLocation(w.deps, MOI, PARIS);
-    await recordBloodLocation(w.deps, SANG, PARIS);
+    await settled(recordBloodLocation(w.deps, MOI, PARIS));
+    await settled(recordBloodLocation(w.deps, SANG, PARIS));
 
     await expect(eraseBloodLocationHistory(w.deps, MOI)).resolves.toEqual({ erased: 1 });
     expect(w.points.rows.map((r) => r.ownerId)).toEqual([SANG]);
@@ -277,10 +278,10 @@ describe('la proximité — une alerte aux deux, une par paire toutes les 2 h', 
 
   it('deux Sangs qui se partagent la proximité, à 300 m : les deux reçoivent l\'alerte, sans coordonnée', async () => {
     const w = proxi();
-    await recordBloodLocation(w.deps, MOI, A_300_M);
+    await settled(recordBloodLocation(w.deps, MOI, A_300_M));
     w.avancer(MINUTE);
-    await recordBloodLocation(w.deps, SANG, PARIS);
-    await recordBloodLocation(w.deps, MOI, A_300_M);
+    await settled(recordBloodLocation(w.deps, SANG, PARIS));
+    await settled(recordBloodLocation(w.deps, MOI, A_300_M));
 
     const versMoi = w.vers(MOI, SERVER_EVENTS.BLOOD_PROXIMITY);
     const versSang = w.vers(SANG, SERVER_EVENTS.BLOOD_PROXIMITY);
@@ -291,86 +292,86 @@ describe('la proximité — une alerte aux deux, une par paire toutes les 2 h', 
 
   it('une seule alerte par paire toutes les 2 h, puis de nouveau', async () => {
     const w = proxi();
-    await recordBloodLocation(w.deps, SANG, PARIS);
+    await settled(recordBloodLocation(w.deps, SANG, PARIS));
     w.poser(MOI, A_300_M, w.horloge() - MINUTE);
-    await recordBloodLocation(w.deps, MOI, A_300_M);
+    await settled(recordBloodLocation(w.deps, MOI, A_300_M));
     w.avancer(30 * MINUTE);
-    await recordBloodLocation(w.deps, MOI, A_300_M);
+    await settled(recordBloodLocation(w.deps, MOI, A_300_M));
     expect(w.vers(MOI, SERVER_EVENTS.BLOOD_PROXIMITY)).toHaveLength(1);
 
     w.avancer(2 * HEURE);
-    await recordBloodLocation(w.deps, SANG, PARIS);
-    await recordBloodLocation(w.deps, MOI, A_300_M);
+    await settled(recordBloodLocation(w.deps, SANG, PARIS));
+    await settled(recordBloodLocation(w.deps, MOI, A_300_M));
     expect(w.vers(MOI, SERVER_EVENTS.BLOOD_PROXIMITY)).toHaveLength(2);
   });
 
   it('rien si l\'un des deux ne partage pas la proximité', async () => {
     const w = bloodLocationWorld({ consents: [[SANG, MOI, TOUT_PARTAGE], [MOI, SANG, { proximityShared: false }]] });
-    await recordBloodLocation(w.deps, SANG, PARIS);
+    await settled(recordBloodLocation(w.deps, SANG, PARIS));
     w.poser(MOI, A_300_M, w.horloge() - MINUTE);
-    await recordBloodLocation(w.deps, MOI, A_300_M);
-    expect(w.emissions).toEqual([]);
+    await settled(recordBloodLocation(w.deps, MOI, A_300_M));
+    expect(w.proximites()).toEqual([]);
   });
 
   it('rien si l\'un des deux est en fantôme, global ou ciblé', async () => {
     const global = proxi();
     await updateBloodLocationSettings(global.deps, SANG, { ghost: true });
-    await recordBloodLocation(global.deps, SANG, PARIS);
+    await settled(recordBloodLocation(global.deps, SANG, PARIS));
     global.poser(MOI, A_300_M, global.horloge() - MINUTE);
-    await recordBloodLocation(global.deps, MOI, A_300_M);
-    expect(global.emissions).toEqual([]);
+    await settled(recordBloodLocation(global.deps, MOI, A_300_M));
+    expect(global.proximites()).toEqual([]);
 
     const cible = proxi();
-    await recordBloodLocation(cible.deps, SANG, PARIS);
+    await settled(recordBloodLocation(cible.deps, SANG, PARIS));
     await updateBloodLocationSettings(cible.deps, SANG, { ghost: true, userId: MOI });
     cible.poser(MOI, A_300_M, cible.horloge() - MINUTE);
-    await recordBloodLocation(cible.deps, MOI, A_300_M);
-    expect(cible.emissions).toEqual([]);
+    await settled(recordBloodLocation(cible.deps, MOI, A_300_M));
+    expect(cible.proximites()).toEqual([]);
   });
 
   it('rien au-delà du rayon réglé, et un rayon réglé plus large déclenche à l\'évaluation suivante de la paire', async () => {
     const w = proxi();
-    await recordBloodLocation(w.deps, SANG, A_5_KM);
+    await settled(recordBloodLocation(w.deps, SANG, A_5_KM));
     w.poser(MOI, PARIS, w.horloge() - MINUTE);
-    await recordBloodLocation(w.deps, MOI, PARIS);
-    expect(w.emissions).toEqual([]);
+    await settled(recordBloodLocation(w.deps, MOI, PARIS));
+    expect(w.proximites()).toEqual([]);
 
     await updateBloodLocationSettings(w.deps, MOI, { userId: SANG, proximityRadiusMeters: 5000 });
     await updateBloodLocationSettings(w.deps, SANG, { userId: MOI, proximityRadiusMeters: 5000 });
     w.avancer(15 * MINUTE);
-    await recordBloodLocation(w.deps, MOI, PARIS);
+    await settled(recordBloodLocation(w.deps, MOI, PARIS));
     expect(w.vers(SANG, SERVER_EVENTS.BLOOD_PROXIMITY)).toHaveLength(1);
   });
 
   it('une position de l\'autre vieille de plus d\'une heure ne compte pas', async () => {
     const w = proxi();
-    await recordBloodLocation(w.deps, SANG, PARIS);
+    await settled(recordBloodLocation(w.deps, SANG, PARIS));
     w.avancer(90 * MINUTE);
     w.poser(MOI, A_300_M, w.horloge() - MINUTE);
-    await recordBloodLocation(w.deps, MOI, A_300_M);
-    expect(w.emissions).toEqual([]);
+    await settled(recordBloodLocation(w.deps, MOI, A_300_M));
+    expect(w.proximites()).toEqual([]);
   });
 
   it('un magasin de cadence en panne : aucune alerte, et l\'enregistrement réussit quand même', async () => {
     const w = bloodWorldAvecConsentements({ cooldownDown: true });
-    await recordBloodLocation(w.deps, SANG, PARIS);
+    await settled(recordBloodLocation(w.deps, SANG, PARIS));
     w.poser(MOI, A_300_M, w.horloge() - MINUTE);
     await expect(recordBloodLocation(w.deps, MOI, A_300_M)).resolves.toEqual({ recorded: true });
-    expect(w.emissions).toEqual([]);
+    expect(w.proximites()).toEqual([]);
   });
 
   it('un retrait de la proximité coupe l\'alerte suivante : le consentement est relu en base à chaque émission', async () => {
     const w = proxi();
-    await recordBloodLocation(w.deps, MOI, A_300_M);
+    await settled(recordBloodLocation(w.deps, MOI, A_300_M));
     w.avancer(MINUTE);
-    await recordBloodLocation(w.deps, SANG, PARIS);
-    await recordBloodLocation(w.deps, MOI, A_300_M);
+    await settled(recordBloodLocation(w.deps, SANG, PARIS));
+    await settled(recordBloodLocation(w.deps, MOI, A_300_M));
     expect(w.vers(SANG, SERVER_EVENTS.BLOOD_PROXIMITY)).toHaveLength(1);
 
     w.consentir(SANG, MOI, { proximityShared: false });
     w.avancer(3 * HEURE);
-    await recordBloodLocation(w.deps, SANG, PARIS);
-    await recordBloodLocation(w.deps, MOI, A_300_M);
+    await settled(recordBloodLocation(w.deps, SANG, PARIS));
+    await settled(recordBloodLocation(w.deps, MOI, A_300_M));
 
     expect(w.vers(SANG, SERVER_EVENTS.BLOOD_PROXIMITY)).toHaveLength(1);
     expect(w.vers(MOI, SERVER_EVENTS.BLOOD_PROXIMITY)).toHaveLength(1);
@@ -378,27 +379,27 @@ describe('la proximité — une alerte aux deux, une par paire toutes les 2 h', 
 
   it('un Proche ou un Ami voisin ne reçoit jamais d\'alerte', async () => {
     const w = bloodLocationWorld({ consents: [[PROCHE, MOI, TOUT_PARTAGE], [MOI, PROCHE, TOUT_PARTAGE]] });
-    await recordBloodLocation(w.deps, PROCHE, PARIS);
+    await settled(recordBloodLocation(w.deps, PROCHE, PARIS));
     w.poser(MOI, A_300_M, w.horloge() - MINUTE);
-    await recordBloodLocation(w.deps, MOI, A_300_M);
-    expect(w.emissions).toEqual([]);
+    await settled(recordBloodLocation(w.deps, MOI, A_300_M));
+    expect(w.proximites()).toEqual([]);
   });
 });
 
 describe('le drapeau vaut pour les DEUX comptes — hors liste blanche, rien ne part ni ne se sert', () => {
   it('un Sang sorti de la liste blanche ne reçoit plus aucune alerte, et son voisin non plus à cause de lui', async () => {
     const w = bloodWorldAvecConsentements({ horsDrapeau: [SANG] });
-    await recordBloodLocation(w.deps, SANG, PARIS);
+    await settled(recordBloodLocation(w.deps, SANG, PARIS));
 
     w.poser(MOI, A_300_M, w.horloge() - MINUTE);
-    await recordBloodLocation(w.deps, MOI, A_300_M);
+    await settled(recordBloodLocation(w.deps, MOI, A_300_M));
 
-    expect(w.emissions).toEqual([]);
+    expect(w.proximites()).toEqual([]);
   });
 
   it('l\'historique rangé avant la sortie de la liste blanche n\'est plus servi, et la lecture ne laisse aucune trace', async () => {
     const w = bloodWorldAvecConsentements({ horsDrapeau: [SANG] });
-    await recordBloodLocation(w.deps, SANG, PARIS);
+    await settled(recordBloodLocation(w.deps, SANG, PARIS));
 
     await expect(readBloodLocationHistory(w.deps, MOI, SANG, {})).resolves.toEqual({ kind: 'ok', items: [] });
     expect(w.consultations.rows).toEqual([]);

@@ -77,13 +77,14 @@ private val PRECISION_ORDER = listOf(SharedLocationPrecision.CITY, SharedLocatio
  * puis la ligne dit « X voit ta position (…) jusqu'à HH:MM » et « Arrêter » d'un geste, tant que ça dure. La permission
  * demandée est celle « pendant l'utilisation » (`PermissionNature.LOCATION`), au moment du partage, jamais avant.
  * Proposer exige [offered] (dès Ami) ; ARRÊTER ne l'exige jamais : un partage en cours reste arrêtable depuis la fiche,
- * même quand la personne est passée sous Ami.
+ * même quand la personne est passée sous Ami. [heading], quand il est donné, titre la rangée et se tait avec elle.
  */
 @Composable
 internal fun ProfileShareLocationRow(
     userId: String,
     displayName: String,
     offered: Boolean,
+    heading: String? = null,
     viewModel: ProfileShareLocationViewModel = hiltViewModel(key = "share-location-$userId"),
 ) {
     LaunchedEffect(userId) { viewModel.load(userId) }
@@ -92,21 +93,24 @@ internal fun ProfileShareLocationRow(
     val scope = rememberCoroutineScope()
     var choosing by rememberSaveable(userId) { mutableStateOf(false) }
     if (state.entry == null && !offered) return
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f))
-            .padding(MeeshySpacing.md),
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-    ) {
-        val entry = state.entry
-        if (entry != null) {
-            SharingLine(entry, displayName, isBusy = state.isBusy, onStop = viewModel::stop)
-        } else {
-            ShareButton(displayName, isBusy = state.isBusy, onClick = { choosing = true })
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
+        heading?.let { SectionHeading(it) }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f))
+                .padding(MeeshySpacing.md),
+            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+        ) {
+            val entry = state.entry
+            if (entry != null) {
+                SharingLine(entry, displayName, isBusy = state.isBusy, onStop = viewModel::stop)
+            } else {
+                ShareButton(displayName, isBusy = state.isBusy, onClick = { choosing = true })
+            }
+            state.problem?.let { problem -> ProblemLine(problem, onShown = viewModel::consumeProblem) }
         }
-        state.problem?.let { problem -> ProblemLine(problem, onShown = viewModel::consumeProblem) }
     }
     if (choosing) {
         ShareLocationChoiceSheet(
@@ -202,7 +206,7 @@ private fun ProblemLine(problem: SharedLocationShareProblem, onShown: () -> Unit
 /** La feuille du choix : durée et précision, la ville par défaut (on ouvre plus, jamais l'inverse). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ShareLocationChoiceSheet(
+internal fun ShareLocationChoiceSheet(
     displayName: String,
     onDismiss: () -> Unit,
     onShare: (SharedLocationPrecision, SharedLocationShareDuration) -> Unit,

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:chat": {
+      "resDir": "feature/chat/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.act.advance",
+          "androidName": "chat_act_advance",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.difficulty.easy",
+          "androidName": "chat_act_advance_easy",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.difficulty.medium",
+          "androidName": "chat_act_advance_medium",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.difficulty.hard",
+          "androidName": "chat_act_advance_hard",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.difficulty.gold",
+          "androidName": "chat_act_advance_gold",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

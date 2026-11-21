@@ -64,3 +64,30 @@ describe('GET /calls/history — participants d’un appel de groupe', () => {
     ]);
   });
 });
+
+describe('GET /calls/history — octets au-delà de 2 Go (#20152)', () => {
+  it('sert 3 Go et 2^53 − 1 entiers, sous les noms bytesSent / bytesReceived', () => {
+    const stringify = fastJson(historyResponseSchema() as any);
+    const body = JSON.parse(
+      stringify({
+        success: true,
+        data: [
+          {
+            callId: 'call-v',
+            conversationId: 'conv-v',
+            conversationType: 'direct',
+            direction: 'outgoing',
+            isVideo: true,
+            startedAt: '2026-09-20T10:00:00.000Z',
+            durationSec: 7200,
+            bytesSent: 3_000_000_000,
+            bytesReceived: Number.MAX_SAFE_INTEGER,
+            peer: null,
+            participants: [],
+          },
+        ],
+      }),
+    );
+    expect(body.data[0]).toMatchObject({ bytesSent: 3_000_000_000, bytesReceived: Number.MAX_SAFE_INTEGER });
+  });
+});

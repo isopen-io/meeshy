@@ -269,7 +269,6 @@
     <string name="call_start_audio">Llamada de audio</string>
     <string name="call_start_video">Videollamada</string>
     <string name="call_starter_busy">Ya hay una llamada en curso</string>
-    <string name="call_status_connected">Conectados</string>
     <string name="call_status_connecting">Conectando…</string>
     <string name="call_status_incoming">Llamada entrante…</string>
     <string name="call_status_ringing">Sonando…</string>

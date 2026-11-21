@@ -8,7 +8,9 @@ public struct ProfileSheetUser: Identifiable, Equatable {
         lhs.id == rhs.id &&
         lhs.avatarURL == rhs.avatarURL &&
         lhs.bannerURL == rhs.bannerURL &&
-        lhs.profileDecor == rhs.profileDecor
+        lhs.profileDecor == rhs.profileDecor &&
+        lhs.city == rhs.city &&
+        lhs.profileAccentColor == rhs.profileAccentColor
     }
 
     public var id: String { userId ?? participantId ?? username }
@@ -41,6 +43,13 @@ public struct ProfileSheetUser: Identifiable, Equatable {
     public let voiceQuality: Double?
     /// Contour d'avatar et bannière de design équipés (#10632) ; `nil` = rendu historique.
     public let profileDecor: ServedProfileDecor?
+    /// La ville déclarée que le serveur m'a servie (#18862, #19388) — seulement si son cercle m'ouvre ; `nil` = rien.
+    public let city: String?
+    /// L'accent qu'il a CHOISI pour sa vitrine (#19201, #19391), une teinte de la liste ; `nil` = automatique.
+    public let profileAccentColor: String?
+    /// La face sur laquelle la fiche s'ouvre (#19732) : la Vitrine, sauf demande d'un raccourci. Elle ne change pas QUI
+    /// on ouvre, l'égalité l'ignore.
+    public private(set) var openingFace: RelationFace = .vitrine
 
     public init(
         userId: String? = nil, username: String, displayName: String? = nil,
@@ -53,7 +62,9 @@ public struct ProfileSheetUser: Identifiable, Equatable {
         voicePublic: Bool? = nil, voiceSampleUrl: String? = nil,
         voiceSampleDurationMs: Int? = nil, voiceQuality: Double? = nil,
         participantId: String? = nil, isAnonymous: Bool = false,
-        profileDecor: ServedProfileDecor? = nil
+        profileDecor: ServedProfileDecor? = nil,
+        city: String? = nil,
+        profileAccentColor: String? = nil
     ) {
         self.userId = userId
         self.participantId = participantId
@@ -78,10 +89,18 @@ public struct ProfileSheetUser: Identifiable, Equatable {
         self.voiceSampleDurationMs = voiceSampleDurationMs
         self.voiceQuality = voiceQuality
         self.profileDecor = profileDecor
+        self.city = ProfileCity.normalized(city)
+        self.profileAccentColor = ProfileAccent.tone(wire: profileAccentColor)?.wire
     }
 
     public var resolvedDisplayName: String {
         displayName ?? username
+    }
+
+    public func opening(on face: RelationFace) -> ProfileSheetUser {
+        var copy = self
+        copy.openingFace = face
+        return copy
     }
 }
 
@@ -209,7 +228,9 @@ extension ProfileSheetUser {
             voiceSampleUrl: user.voiceSampleUrl,
             voiceSampleDurationMs: user.voiceSampleDurationMs,
             voiceQuality: user.voiceQuality,
-            profileDecor: user.profileDecor
+            profileDecor: user.profileDecor,
+            city: user.declaredCity,
+            profileAccentColor: user.profileAccentColor
         )
     }
 }

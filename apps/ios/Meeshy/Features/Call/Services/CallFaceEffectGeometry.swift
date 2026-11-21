@@ -61,6 +61,15 @@ nonisolated struct CallFaceLandmarks: Equatable, Sendable {
     }
 }
 
+/// #19779 — une déformation de Core Image posée sur le visage : une bosse
+/// (`CIBumpDistortion`) qui agrandit, un pincement (`CIPinchDistortion`) qui
+/// resserre.
+nonisolated struct CallFaceDistortion: Equatable, Sendable {
+    let center: CGPoint
+    let radius: CGFloat
+    let scale: CGFloat
+}
+
 nonisolated struct CallEmber: Equatable, Sendable {
     let center: CGPoint
     let radius: CGFloat
@@ -101,6 +110,18 @@ nonisolated enum CallFaceEffectGeometry {
             CGPoint(x: face.minX + face.width * 0.26, y: face.minY + face.height * 0.36),
             CGPoint(x: face.minX + face.width * 0.74, y: face.minY + face.height * 0.36)
         ]
+    }
+
+    /// #19779 — le Bébé : les deux yeux agrandis, sur les vrais yeux quand ils sont lus.
+    static func babyEyeBumps(for landmarks: CallFaceLandmarks) -> [CallFaceDistortion] {
+        eyeCenters(for: landmarks).map {
+            CallFaceDistortion(center: $0, radius: landmarks.bounds.width * 0.15, scale: 0.42)
+        }
+    }
+
+    /// #19779 — le bas du visage (origine en bas) légèrement resserré : un menton de bébé.
+    static func babyChinPinch(for face: CGRect) -> CallFaceDistortion {
+        CallFaceDistortion(center: CGPoint(x: face.midX, y: face.minY + face.height * 0.22), radius: face.width * 0.42, scale: 0.22)
     }
 
     static func wartCenters(for face: CGRect, count: Int, seed: UInt64) -> [CGPoint] {

@@ -299,6 +299,8 @@ class AudioHandler:
                     f"[TRANSLATOR] Paramètres clonage personnalisés: {cloning_params}"
                 )
 
+            post_reference = self._post_reference(request_data)
+
             # Callback pour publier la transcription dès qu'elle est prête
             # (avant la traduction pour une réponse plus rapide à la gateway)
             async def on_transcription_ready(transcription_data: dict):
@@ -315,7 +317,7 @@ class AudioHandler:
                     logger.info(f"   ⏱️ Durée: {transcription.duration_ms}ms")
                     logger.info(f"   📝 TEXTE: \"{shown(transcription.text)}\"")
                     logger.info("=" * 70)
-                await self._publish_transcription_result(task_id, transcription_data)
+                await self._publish_transcription_result(task_id, transcription_data, post_reference)
 
             # Callback pour publier chaque traduction dès qu'elle est prête
             # (envoi progressif des traductions au lieu d'attendre la fin).
@@ -385,7 +387,7 @@ class AudioHandler:
 
             # Publier le résultat
             logger.info(f"📤 [TRANSLATOR] Publication résultat audio: {task_id}")
-            await self._publish_audio_result(task_id, result, processing_time)
+            await self._publish_audio_result(task_id, result, processing_time, post_reference)
             logger.info(f"✅ [TRANSLATOR] Résultat audio publié: {task_id}")
             self._forget_translated_audio_files(result)
 
@@ -427,6 +429,11 @@ class AudioHandler:
                 error=AUDIO_PATH_REJECTED_MESSAGE if rejected else "Audio processing failed",
                 error_code=AUDIO_PATH_REJECTED if rejected else "processing_failed"
             )
+
+    @staticmethod
+    def _post_reference(request_data: dict) -> dict:
+        """#19749 — le post et le média d'une requête audio de post, recopiés tels quels dans ses événements."""
+        return {key: request_data[key] for key in ('postId', 'postMediaId') if request_data.get(key)}
 
     @staticmethod
     def _forget_translated_audio_files(result) -> int:
@@ -483,7 +490,7 @@ class AudioHandler:
         )
         return True
 
-    async def _publish_audio_result(self, task_id: str, result, processing_time: int):
+    async def _publish_audio_result(self, task_id: str, result, processing_time: int, post_reference: Optional[dict] = None):
         """
         Publie le résultat du processing audio via PUB en multipart.
 
@@ -683,7 +690,8 @@ class AudioHandler:
                 'processingTimeMs': processing_time,
                 'timestamp': time.time(),
                 # Mapping des frames binaires
-                'binaryFrames': binary_frames_info
+                'binaryFrames': binary_frames_info,
+                **(post_reference or {}),
             }
 
             if new_voice_profile_metadata:
@@ -709,7 +717,7 @@ class AudioHandler:
         except Exception as e:
             logger.error(f"❌ [TRANSLATOR] Erreur publication audio result multipart: {type(e).__name__}")
 
-    async def _publish_transcription_result(self, task_id: str, transcription_data: dict):
+    async def _publish_transcription_result(self, task_id: str, transcription_data: dict, post_reference: Optional[dict] = None):
         """
         Publie le résultat de transcription seule via PUB (avant traduction).
 
@@ -753,7 +761,8 @@ class AudioHandler:
                 'attachmentId': transcription_data['attachment_id'],
                 'transcription': transcription_dict,
                 'processingTimeMs': transcription_data['processing_time_ms'],
-                'timestamp': time.time()
+                'timestamp': time.time(),
+                **(post_reference or {}),
             }
 
             if self.pub_socket:

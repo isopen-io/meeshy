@@ -9,7 +9,7 @@ import type { TalkieSink } from './talkie-player';
 /**
  * **LE TALKIE QUI A RÉVEILLÉ CE NAVIGATEUR** (#17141, #17144) — un Proche a
  * parlé pendant que l'onglet était fermé ou endormi. Le service worker
- * (`public/sw-push.js`) a posé « X vous parle » ; le toucher (ou « Écouter »)
+ * (`public/sw-push-talkie.js`) a posé « X vous parle » ; le toucher (ou « Écouter »)
  * remet ici une INTENTION, par deux portes : l'adresse d'un onglet NEUF
  * (`?talkie=<id>` SEULEMENT, retirée aussitôt), ou le message qu'un onglet DÉJÀ
  * OUVERT reçoit du worker.
@@ -29,7 +29,7 @@ import type { TalkieSink } from './talkie-player';
  * plus longtemps ne se rejoue plus.
  */
 
-/** JUMEAUX de `TALKIE_PARAM` et `TALKIE_WAKE_MESSAGE` dans `public/sw-push.js`. */
+/** JUMEAUX de `TALKIE_PARAM` et `TALKIE_WAKE_MESSAGE` dans `public/sw-push-talkie.js`. */
 export const TALKIE_PARAM = 'talkie';
 export const TALKIE_WAKE_MESSAGE = 'TALKIE_WAKE';
 /** Le nom client → serveur du rattrapage (contrat de #17142). */

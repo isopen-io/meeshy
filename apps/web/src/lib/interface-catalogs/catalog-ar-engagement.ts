@@ -20,6 +20,11 @@ const arEngagement = {
   'engagement.card.open': 'افتح اللعبة',
   'engagement.card.hide': 'إخفاء اللهب',
   'engagement.card.title': 'في هذه المحادثة',
+  'engagement.act.easy': 'الفصل الأول',
+  'engagement.act.medium': 'الفصل الثاني',
+  'engagement.act.hard': 'الفصل الثالث',
+  'engagement.act.gold': 'الفصل الذهبي',
+  'engagement.act.advance': '{act} · ⁦{progress}⁩ من ⁦{target}⁩',
 } as const;
 
 export default arEngagement;

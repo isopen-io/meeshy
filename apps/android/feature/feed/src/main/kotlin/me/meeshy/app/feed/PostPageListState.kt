@@ -128,6 +128,16 @@ data class PostPageListState(
         return copy(posts = posts.map { if (it.id == postId) merged else it })
     }
 
+    /**
+     * Un geste vivant reçu de la passerelle ([patch] : `PostEngagementPatch`, ses compteurs ABSOLUS) se pose sur [postId].
+     * Inerte (même instance) si le post est absent ou si le patch n'apporte rien (`null`).
+     */
+    fun patched(postId: String, patch: (ApiPost) -> ApiPost?): PostPageListState {
+        val index = posts.indexOfFirst { it.id == postId }
+        val next = posts.getOrNull(index)?.let(patch) ?: return this
+        return copy(posts = posts.take(index) + next + posts.drop(index + 1))
+    }
+
     /** Une suppression refusée : [post] reprend sa place [index] (bornée à la liste). Inerte s'il y est déjà. */
     fun restored(post: ApiPost, index: Int): PostPageListState {
         if (posts.any { it.id == post.id }) return this

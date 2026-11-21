@@ -7,6 +7,7 @@ import dagger.hilt.components.SingletonComponent
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.phonereachability.PhoneAliveResultWire
 import me.meeshy.sdk.model.phonereachability.PhoneReachabilityEmitterSettings
+import me.meeshy.sdk.model.phonereachability.PhoneReachabilityEmitterSettingsBody
 import me.meeshy.sdk.model.phonereachability.PhoneReachabilityPersonSettingsBody
 import me.meeshy.sdk.model.phonereachability.PhoneReachabilityPersonSettingsWire
 import me.meeshy.sdk.model.phonereachability.PhoneReachabilitySnapshotWire
@@ -34,7 +35,7 @@ interface PhoneReachabilityApi {
     suspend fun emitterSettings(): ApiResponse<PhoneReachabilityEmitterSettings>
 
     @PUT(ApiRoutesMe.DEVICE_REACHABILITY_SETTINGS)
-    suspend fun setEmitterSettings(@Body body: PhoneReachabilityEmitterSettings): ApiResponse<PhoneReachabilityEmitterSettings>
+    suspend fun setEmitterSettings(@Body body: PhoneReachabilityEmitterSettingsBody): ApiResponse<PhoneReachabilityEmitterSettings>
 
     /** Le rattrapage à la connexion : les téléphones injoignables qu'on me sert. */
     @GET(ApiRoutesRelations.PHONE_REACHABILITY)

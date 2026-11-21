@@ -71,6 +71,59 @@ final class ProfilePhoneReachabilityViewModelTests: XCTestCase {
         XCTAssertEqual(sut.settings?.isShared, true)
         XCTAssertNotNil(sut.notice)
     }
+
+    // MARK: - « Me prévenir s'il devient injoignable » (#19433, serveur #19435)
+
+    func test_load_alertNotServed_offersNoAlert() async {
+        let (sut, _, _) = makeSUT()
+        await sut.load(asksConsent: false)
+        XCTAssertFalse(sut.offersAlert)
+    }
+
+    func test_load_alertServed_offersIt() async {
+        let (sut, service, _) = makeSUT()
+        service.personSettingsResult = .success(PhoneReachabilityPersonSettings(userId: "peer", isShared: false, alertsMe: true))
+        await sut.load(asksConsent: false)
+        XCTAssertTrue(sut.offersAlert)
+        XCTAssertEqual(sut.settings?.alertsMe, true)
+    }
+
+    func test_setAlertsMe_isOptimistic_andWritesOnlyTheAlert() async {
+        let (sut, service, _) = makeSUT()
+        service.personSettingsResult = .success(PhoneReachabilityPersonSettings(userId: "peer", isShared: true, alertsMe: true))
+        service.updateAlertResult = .success(PhoneReachabilityPersonSettings(userId: "peer", isShared: true, alertsMe: false))
+        await sut.load(asksConsent: false)
+
+        await sut.setAlertsMe(false)
+
+        XCTAssertEqual(service.updateAlertCalls, [false])
+        XCTAssertTrue(service.updatePersonSettingsCalls.isEmpty)
+        XCTAssertEqual(sut.settings?.alertsMe, false)
+        XCTAssertEqual(sut.settings?.isShared, true)
+    }
+
+    func test_setAlertsMe_refused_rollsBackAndSaysSo() async {
+        let (sut, service, _) = makeSUT()
+        service.personSettingsResult = .success(PhoneReachabilityPersonSettings(userId: "peer", isShared: false, alertsMe: true))
+        service.updateAlertResult = .failure(URLError(.notConnectedToInternet))
+        await sut.load(asksConsent: false)
+
+        await sut.setAlertsMe(false)
+
+        XCTAssertEqual(sut.settings?.alertsMe, true)
+        XCTAssertNotNil(sut.notice)
+    }
+
+    func test_setShared_keepsTheServedAlert() async {
+        let (sut, service, _) = makeSUT()
+        service.personSettingsResult = .success(PhoneReachabilityPersonSettings(userId: "peer", isShared: false, alertsMe: true))
+        await sut.load(asksConsent: false)
+
+        await sut.setShared(true)
+
+        XCTAssertEqual(sut.settings?.isShared, true)
+        XCTAssertEqual(sut.settings?.alertsMe, true)
+    }
 }
 
 /// Le réglage global de l'émetteur : prévenir mes Proches si mon téléphone est injoignable.

@@ -149,6 +149,9 @@ function makePrisma(opts: {
         encryptionEnabledBy: USER_ID,
       }),
     },
+    e2EEDevice: {
+      findMany: jest.fn(async ({ where }: { where: { userId: { in: string[] } } }) => where.userId.in.map((userId) => ({ userId }))),
+    },
     participant: {
       findFirst: jest.fn().mockResolvedValue(senderParticipant),
     },

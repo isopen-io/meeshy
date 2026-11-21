@@ -49,6 +49,8 @@ struct ParticipantProfileSheet: View {
     @Environment(\.colorScheme) private var colorScheme
     private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
     @Environment(\.dismiss) private var dismiss
+    /// En plein écran (`profileCover`, #19674), la tête dit « Retour » (‹) ; en feuille, la croix.
+    @Environment(\.profilePresentationStyle) private var presentationStyle
     /// #10111 — la fiche s'ouvre depuis le cache et se synchronise dès l'ouverture.
     @StateObject private var loader: ParticipantProfileLoader
     @State private var rightsWriteInFlight = false
@@ -156,8 +158,10 @@ struct ParticipantProfileSheet: View {
     private var closeToolbar: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
             MeeshyGlassButton(
-                systemImage: "xmark",
-                label: String(localized: "common.close", defaultValue: "Fermer", bundle: .main),
+                systemImage: presentationStyle == .cover ? presentationStyle.leadingSymbol : "xmark",
+                label: presentationStyle == .cover
+                    ? String(localized: "common.back", defaultValue: "Retour", bundle: .main)
+                    : String(localized: "common.close", defaultValue: "Fermer", bundle: .main),
                 size: .s36
             ) {
                 dismiss()

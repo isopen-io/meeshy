@@ -69,6 +69,9 @@ public nonisolated struct MeeshyTicketRecipe: Sendable, Equatable {
     public let showsBack: Bool
     public let flipRotation: Double
     public let flipCrossfades: Bool
+    /// #20013 : le plus petit facteur auquel le titre se resserre avant de se tronquer — 0,75 sur un rail compact, où
+    /// 150 pt ne laissent pas « Ajouter » entier à 17 pt ; 1 ailleurs.
+    public let titleMinimumScale: Double
 
     public static func resolve(
         size: MeeshyTicketSize,
@@ -104,11 +107,22 @@ public nonisolated struct MeeshyTicketRecipe: Sendable, Equatable {
             showsContent: kind != .loading,
             showsBack: isFlipped,
             flipRotation: isFlipped && !reduceMotion ? 180 : 0,
-            flipCrossfades: reduceMotion
+            flipCrossfades: reduceMotion,
+            titleMinimumScale: size == .compact ? 0.75 : 1
         )
     }
 
     /// La hauteur du corps, jusqu'au pointillé : 125 en héros, 77 en rangée, 61 en compact.
+    /// Le nom dit du billet : le libellé passé, sinon titre, code, chiffre et état ; puis la pastille de titre (K41)
+    /// quand il y en a une.
+    public static func spokenName(label: String?, title: String, code: String, figure: String?,
+                                  statusLabel: String?, titleBadge: String?) -> String {
+        let name = label ?? [title, code, figure, statusLabel].compactMap { $0 }.filter { !$0.isEmpty }
+            .joined(separator: ", ")
+        guard let titleBadge, !titleBadge.isEmpty else { return name }
+        return name.isEmpty ? titleBadge : "\(name), \(titleBadge)"
+    }
+
     public static func cut(for size: MeeshyTicketSize) -> Double {
         switch size {
         case .hero: return 125

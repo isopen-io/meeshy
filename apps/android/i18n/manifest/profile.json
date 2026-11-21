@@ -67,10 +67,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "ui",
-          "iosKey": "profile.action.sendMessage",
           "androidName": "profile_action_send_message",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "androidName": "profile_activity_average",
@@ -93,10 +91,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "ui",
-          "iosKey": "profile.blocked.byMe",
           "androidName": "profile_blocked_by_me",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "ui",
@@ -187,10 +183,8 @@
           "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "share.links.copy.a11y",
           "androidName": "profile_share_copy",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "androidName": "profile_share_message",
@@ -255,10 +249,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "ui",
-          "iosKey": "profile.status.connected",
           "androidName": "profile_status_connected",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "app",

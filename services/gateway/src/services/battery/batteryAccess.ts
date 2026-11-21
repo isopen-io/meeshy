@@ -44,6 +44,13 @@ type Params = {
   readonly subjectIs: PairAccessSubject;
   readonly now: Date;
   readonly feature?: StoredConsentFeature;
+  /**
+   * L'accord de batterie des partages de position en cours (#19204) : pour chaque émetteur
+   * (minuscules), les lecteurs (minuscules) à qui son partage l'accorde. Il vaut consentement de
+   * l'émetteur pour `device.battery` seulement — la loi reste le plafond, la coupure globale ferme,
+   * et le fantôme global (#19203), qui met le partage en pause, met sa batterie en pause aussi.
+   */
+  readonly sharedGrants?: ReadonlyMap<string, ReadonlySet<string>>;
 };
 
 const emitterOf = (params: Params, otherId: string): string => (params.subjectIs === 'target' ? params.subjectId : otherId);
@@ -52,7 +59,7 @@ const readerOf = (params: Params, otherId: string): string => (params.subjectIs 
 async function accountsOf(prisma: BatteryDb, ids: readonly string[]) {
   const rows = await prisma.user.findMany({
     where: { id: { in: [...new Set(ids)] } },
-    select: { id: true, batterySharingDisabledAt: true, ...ACCOUNT_STATE_SELECT },
+    select: { id: true, batterySharingDisabledAt: true, locationGhostAt: true, ...ACCOUNT_STATE_SELECT },
   });
   return new Map(rows.map((row) => [row.id, row]));
 }
@@ -74,6 +81,11 @@ async function receiveModes(prisma: BatteryDb, params: Params): Promise<Readonly
   })) as ReadonlyArray<{ ownerId: string; otherId: string; batteryReceive: string | null }>;
   return new Map(rows.map((row) => [params.subjectIs === 'target' ? row.ownerId : row.otherId, parseReceiveMode(row.batteryReceive)]));
 }
+
+/** Le partage de position en cours de l'émetteur accorde-t-il sa batterie à ce lecteur (#19204) ? */
+const grantedBySharedLocation = (params: Params, feature: StoredConsentFeature, otherId: string): boolean =>
+  feature === 'device.battery' &&
+  params.sharedGrants?.get(emitterOf(params, otherId).toLowerCase())?.has(readerOf(params, otherId).toLowerCase()) === true;
 
 /**
  * L'accès de chaque autre personne : `allowed` dit ce que la loi ET l'émetteur ouvrent,
@@ -98,13 +110,12 @@ export async function batteryAccessAmong(prisma: BatteryDb, params: Params): Pro
     otherIds,
     subjectIs: params.subjectIs,
     now: params.now,
-    consentOf: (id) =>
-      resolveEmitterConsent({
-        feature,
-        stored: stored.get(id),
-        effectiveLevel: levelOf(id),
-        globallyDisabled: Boolean(accounts.get(emitterOf(scoped, id))?.batterySharingDisabledAt),
-      }),
+    consentOf: (id) => {
+      const emitter = accounts.get(emitterOf(scoped, id));
+      const globallyDisabled = Boolean(emitter?.batterySharingDisabledAt);
+      if (!globallyDisabled && emitter?.locationGhostAt == null && grantedBySharedLocation(scoped, feature, id)) return 'granted';
+      return resolveEmitterConsent({ feature, stored: stored.get(id), effectiveLevel: levelOf(id), globallyDisabled });
+    },
   });
 
   return new Map(

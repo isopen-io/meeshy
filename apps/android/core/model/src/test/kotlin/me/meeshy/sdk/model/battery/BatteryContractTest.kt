@@ -117,4 +117,12 @@ class BatteryContractTest {
         val body = json.encodeToString(BatteryPersonSettingsBody.serializer(), BatteryPersonSettingsBody(receive = "pill"))
         assertThat(body).isEqualTo("""{"receive":"pill"}""")
     }
+
+    @Test
+    fun `reactiver partager ma batterie envoie la cle sur le fil, la valeur par defaut comprise`() {
+        val on = json.encodeToString(BatteryEmitterSettingsBody.serializer(), BatteryEmitterSettingsBody(sharingEnabled = true))
+        val off = json.encodeToString(BatteryEmitterSettingsBody.serializer(), BatteryEmitterSettingsBody(sharingEnabled = false))
+        assertThat(on).isEqualTo("""{"sharingEnabled":true}""")
+        assertThat(off).isEqualTo("""{"sharingEnabled":false}""")
+    }
 }

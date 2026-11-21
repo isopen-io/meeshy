@@ -1,10 +1,20 @@
 import SwiftUI
 
-/// Les formes de l'échelle : des pastilles à compte, la pilule d'un niveau, des anneaux.
+/// Les formes de l'échelle : des pastilles à compte, la pilule d'un niveau, des anneaux,
+/// et l'échelle VERTICALE (`ladder`) : des nœuds reliés, le plus haut niveau en haut.
 public nonisolated enum MeeshyCircleScaleForm: String, Sendable, Equatable, CaseIterable {
     case dots
     case pill
     case rings
+    case ladder
+}
+
+/// Un nœud de l'échelle verticale : atteint (sous le niveau courant), courant, ou à venir
+/// (au-dessus, en tirets). Sans niveau courant, tout est atteint et rien ne s'allume.
+public nonisolated enum MeeshyCircleScaleLadderNode: String, Sendable, Equatable, CaseIterable {
+    case reached
+    case current
+    case ahead
 }
 
 /// Les tailles : `compact` est la pilule de 26 (ou les crans de 12) dans une rangée.
@@ -96,6 +106,25 @@ public nonisolated struct MeeshyCircleScaleRecipe: Sendable, Equatable {
         let fromTop = total - 1 - min(max(level, 0), total - 1)
         let index = total <= 3 ? fromTop * 2 : fromTop
         return intensityFromTop[min(index, intensityFromTop.count - 1)]
+    }
+
+    /// L'échelle verticale : un nœud de 26, 5 entre deux rangées, un trait de 2 qui les relie,
+    /// un halo de 4 autour du niveau courant.
+    public static let ladderNodeDiameter: Double = 26
+    public static let ladderRowGap: Double = 5
+    public static let ladderLineWidth: Double = 2
+    public static let ladderHaloWidth: Double = 4
+
+    /// L'ordre de lecture de l'échelle verticale : le plus haut niveau en haut.
+    public static func ladderOrder(count: Int) -> [Int] {
+        Array((0..<max(count, 0)).reversed())
+    }
+
+    /// L'état d'un nœud : courant, atteint en dessous, à venir au-dessus.
+    public static func ladderNode(level: Int, current: Int?) -> MeeshyCircleScaleLadderNode {
+        guard let current else { return .reached }
+        if level == current { return .current }
+        return level < current ? .reached : .ahead
     }
 
     /// Le rang ramené dans `0..<count` ; `nil` reste `nil` (« Mes cercles » n'allume rien).

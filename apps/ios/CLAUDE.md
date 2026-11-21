@@ -890,13 +890,15 @@ matrice du Pattern I4 en nomme cinq (garde : `SkeletonColdStartGuardTests`) :
 | Messages | `SkeletonMessageBubble` | SDK — idem |
 | Feed | `SkeletonFeedList` (→ `SkeletonFeedPost`) | app — `Views/Skeletons/` |
 | Stories | `SkeletonStoryTrayRow` (→ `SkeletonStoryThumb`) | app — `Views/Skeletons/` |
-| Profil | `SkeletonProfileHeader` | app — `Views/Skeletons/` |
+| Profil | `ProfileVitrineSkeleton` (fait de `MeeshySkeleton`, K38) | app — `Views/Skeletons/` |
 
 Six autres écrans en ont un sans que la bible l'ait exigé : `ContactsSkeletonList`,
 `SkeletonLinkRow`/`SkeletonLinkList`, `LentilleSkeletonRow`, `NearbySkeletonRow`,
-`LivingSummarySkeleton`. Un squelette neuf se bâtit sur `SkeletonShape` +
-`skeletonShimmer()` (Reduce Motion géré par `ShimmerModifier`), et chaque rangée
-porte `.accessibilityElement(children: .ignore)` + un libellé de chargement.
+`LivingSummarySkeleton`. **Un squelette neuf se bâtit sur l'atome du kit
+`MeeshySkeleton` (K38, `MeeshyUI/Kit`)** — une liste sur `MeeshySkeletonColumn`,
+gardé par `MeeshySkeletonLaw` (cache vide seulement) — jamais sur `SkeletonShape` +
+`skeletonShimmer()`, qui ne servent plus que les squelettes hérités ; et chaque gabarit
+porte `.accessibilityElement(children: .ignore)` + un libellé de chargement (#19594).
 
 ### LoadState Enum
 Every data-loading ViewModel MUST expose `loadState: LoadState`:

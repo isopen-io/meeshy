@@ -147,6 +147,23 @@ final class ShareLinkServiceTests: XCTestCase {
         XCTAssertFalse(mock.lastRequest?.bodyJSON?.keys.contains("expiresAt") ?? true, "« Jamais » n'écrit pas expiresAt: null")
     }
 
+    func test_createShareLink_allowedLanguages_travelOnlyWhenChosen() async throws {
+        let rawResponse = CreateShareLinkResponse(
+            linkId: "lk_new", conversationId: "conv1",
+            shareLink: CreateShareLinkResponse.ShareLinkDetail(
+                id: "sl_new", linkId: "lk_new", name: nil,
+                description: nil, expiresAt: nil, isActive: true
+            )
+        )
+        mock.stub("/links", result: APIResponse<CreateShareLinkResponse>(success: true, data: rawResponse, error: nil))
+
+        _ = try await service.createShareLink(request: CreateShareLinkRequest(conversationId: "conv1", allowedLanguages: ["fr", "wo"]))
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["allowedLanguages"] as? [String], ["fr", "wo"])
+
+        _ = try await service.createShareLink(request: CreateShareLinkRequest(conversationId: "conv1"))
+        XCTAssertFalse(mock.lastRequest?.bodyJSON?.keys.contains("allowedLanguages") ?? true, "Toutes les langues : la clé ne part pas")
+    }
+
     // MARK: - toggleLink
 
     func test_toggleLink_callsCorrectEndpoint() async throws {
@@ -270,6 +287,48 @@ final class ShareLinkServiceTests: XCTestCase {
         XCTAssertTrue(body.keys.contains("maxUses"), "an omitted field leaves the old limit in place on the gateway")
         XCTAssertTrue(body["maxUses"] is NSNull)
         XCTAssertTrue(body["expiresAt"] is NSNull)
+    }
+
+    // MARK: - resetLinkUses (#19505)
+
+    func test_resetLinkUses_patchesResetUsesOnly_andReturnsTheServedCounter() async throws {
+        mock.stub("/links/mshy_abc", result: APIResponse<ShareLinkUsesReset>(
+            success: true, data: ShareLinkUsesReset(currentUses: 0), error: nil))
+
+        let served = try await service.resetLinkUses(linkId: "mshy_abc")
+
+        let body = try XCTUnwrap(mock.lastRequest?.bodyJSON)
+        XCTAssertEqual(mock.lastRequest?.method, "PATCH")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/links/mshy_abc")
+        XCTAssertEqual(body["resetUses"] as? Bool, true)
+        XCTAssertEqual(body.count, 1, "the reset never rewrites the link settings")
+        XCTAssertEqual(served, 0)
+    }
+
+    func test_resetLinkUses_olderServerWithoutCounter_returnsNil() async throws {
+        mock.stub("/links/mshy_abc", result: APIResponse<ShareLinkUsesReset>(
+            success: true, data: ShareLinkUsesReset(currentUses: nil), error: nil))
+
+        let served = try await service.resetLinkUses(linkId: "mshy_abc")
+
+        XCTAssertNil(served)
+    }
+
+    func test_shareLinkUsesReset_decodesALinkWithoutCounterAsAbsent() throws {
+        let data = Data(#"{"id":"row-1","linkId":"mshy_abc","isActive":true}"#.utf8)
+
+        let decoded = try JSONDecoder().decode(ShareLinkUsesReset.self, from: data)
+
+        XCTAssertNil(decoded.currentUses)
+    }
+
+    func test_withCurrentUses_changesOnlyTheCounter() {
+        let link = makeMyShareLink()
+
+        let reset = link.withCurrentUses(0)
+
+        XCTAssertEqual(reset.currentUses, 0)
+        XCTAssertEqual(reset.withCurrentUses(link.currentUses), link)
     }
 
     // MARK: - deleteLink

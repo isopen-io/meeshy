@@ -63,6 +63,13 @@ class EngagementProgressRepository(
     suspend fun cachedRarities(): Map<String, GameRarityEntry>? =
         GameBlockParser.raritiesFromEngagement(cache.get(NAMESPACE, KEY, JsonElement.serializer())?.value)
 
+    /**
+     * La progression du DERNIER bloc connu, lue au disque seul — jamais au réseau : le guet de l'acte qui avance (#17367)
+     * y lit l'« avant » d'un envoi et l'« après » d'une relecture. `null` à froid, compte vidé ou charge illisible.
+     */
+    suspend fun cachedProgress(): ApiEngagementProgress? =
+        cache.get(NAMESPACE, KEY, JsonElement.serializer())?.value?.let(::read)
+
     /** Force le réseau (tirer pour rafraîchir) et pose la charge au cache ; lève sur un échec, le cache reste. */
     suspend fun refresh() = source().revalidate()
 

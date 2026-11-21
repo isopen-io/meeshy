@@ -49,7 +49,7 @@ import { SW_RUNTIME_CACHES } from '../src/lib/sw-caches.js';
  *    adresse ; la coque Android reçoit le même partage par un intent, pas par
  *    ce worker.
  */
-export const SERVICE_WORKER_SCRIPTS = ['sw-institutional.js', 'sw-legacy-purge.js', 'sw-retired-caches.js', 'sw-push.js', 'sw-share-target.js', 'sw-recent-media.js'] as const;
+export const SERVICE_WORKER_SCRIPTS = ['sw-institutional.js', 'sw-legacy-purge.js', 'sw-retired-caches.js', 'sw-push.js', 'sw-push-talkie.js', 'sw-share-target.js', 'sw-recent-media.js'] as const;
 
 /**
  * LE SEUL SCRIPT QUE LA COQUE GARDE (#11326) : `sw-recent-media.js` resert
@@ -259,6 +259,7 @@ export function meeshyPwa(): PluginOption {
         'sw-legacy-purge.js',
         'sw-retired-caches.js',
         'sw-push.js',
+        'sw-push-talkie.js',
         'sw-share-target.js',
         'sw-recent-media.js',
         'assets/*.woff2',

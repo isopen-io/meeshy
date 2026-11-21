@@ -487,3 +487,27 @@ describe('ExpiredStoriesCleanupService — notifications des posts détruits', (
     expect(fake.prisma.$runCommandRaw).toHaveBeenCalled();
   });
 });
+
+// #19750 — la piste TTS d'un vocal de story n'est désignée que par
+// `translations.<langue>.url`. Le double ne rend la colonne QUE si le `select`
+// la demande, comme Prisma : c'est la lecture réelle de la passe qui est jugée.
+describe('ExpiredStoriesCleanupService — pistes traduites des stories expirées', () => {
+  it('efface le fichier de chaque piste traduite avec le média', async () => {
+    const TRACK_FR = '/api/v1/attachments/file/translated/media-of-story1_fr.mp3';
+    const fake = makeFakePrisma({ storyIds: ['story1'], repostIds: [], comments: [] });
+    fake.prisma.postMedia.findMany = jest.fn(async (args: any) => [{
+      id: 'media-of-story1',
+      fileUrl: '/f/story1.m4a',
+      thumbnailUrl: null,
+      ...(args?.select?.translations
+        ? { translations: { fr: { type: 'audio', path: '/app/uploads/translated/media-of-story1_fr.mp3', url: TRACK_FR } } }
+        : {}),
+    }]);
+    const storage = { delete: jest.fn<(fileUrl: string) => Promise<void>>().mockResolvedValue(undefined) };
+    const service = new ExpiredStoriesCleanupService(fake.prisma as any, { hardDeleteAgeMs: 0, mediaStorage: storage as any });
+
+    await service.cleanup();
+
+    expect(storage.delete.mock.calls.map(([url]) => url).sort()).toEqual([TRACK_FR, '/f/story1.m4a']);
+  });
+});

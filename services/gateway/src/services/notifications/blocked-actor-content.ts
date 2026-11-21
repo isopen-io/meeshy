@@ -46,6 +46,9 @@ export const ACTOR_CONTENT_TYPES: ReadonlySet<NotificationType> = new Set<Notifi
   'comment_reaction',
   'story_new_comment',
   'story_thread_reply',
+  // Partage de position (#19204) : l'émetteur prévient, le destinataire demande — jamais à un bloqué.
+  'location_share_started',
+  'location_share_requested',
 ]);
 
 export async function refusesActorContent(

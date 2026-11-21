@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-dqytex` |
+| Branche de travail de la session courante | `claude/practical-fermat-h5vgy2` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -52,7 +52,72 @@ normal.
 | **85w** | 2026-11-12 | `claude/practical-fermat-l2dnwf` | → `dev` | ✅ mergé |
 | **86w** | 2026-11-13 | `claude/practical-fermat-u8t5dq` | → `dev` | ✅ mergé |
 | **87w** | 2026-11-14 | `claude/practical-fermat-vayul2` | → `dev` | ✅ mergé |
-| **88w** | 2026-11-15 | `claude/practical-fermat-dqytex` | [#18635](https://github.com/isopen-io/meeshy/pull/18635) → `dev` | ⏳ ouverte |
+| **88w** | 2026-11-15 | `claude/practical-fermat-dqytex` | [#18635](https://github.com/isopen-io/meeshy/pull/18635) → `dev` | ✅ mergé |
+| **89w** | 2026-11-19 | `claude/practical-fermat-6cktea` | → `dev` | ✅ mergé |
+| **90w** | 2026-11-20 | `claude/practical-fermat-awbeqk` | → `dev` | ✅ mergé |
+| **91w** | 2026-11-21 | `claude/practical-fermat-h5vgy2` | [#20161](https://github.com/isopen-io/meeshy/pull/20161) → `dev` | ⏳ ouverte |
+
+**91w** — maintenabilité / cohérence : **le gate d'harmonie #8879 passe à 0** (5 →
+0, liste entièrement vidée). Ses 4 derniers cas étaient tous calculés ou de
+masque, aucun chrome brut. **Un seul est une vraie correction** : le letterbox de
+l'aperçu de scène admin (`routes/admin-post-preview.tsx:246`) passe de `'#000'` au
+jeton `var(--color-media-backdrop)` (= `#000000` byte-identique, dérivé de
+`MeeshyColors.swift`), le **même** que les visionneuses plein écran
+`media-viewer.tsx:550` / `viewer-scene-page.tsx:94` peignent déjà — une jumelle en
+dur unifiée sur son rôle (cohérence de positionnement). Les trois autres sont des
+**exemptions motivées à la ligne** : masque de luminance de la troncature d'aperçu
+(`message-menu.tsx:830,831`, `black` = opaque, cf. edgeFadeMask 85w), voile
+dynamique composé (`conversation-backdrop.tsx:68`, `rgba(${veilColor}, ${veil})`,
+`veilColor` scheme-aware `9,9,11`/`255,255,255`), et couleur calculée depuis la roue
+du prisme (`rank-blason.tsx:115`, `hsl()`, repli jeton `var(--game-prism-k)`, famille
+`lib/accent`). **Aucun pixel ne change** (un `#000000` byte-identique + des
+commentaires). Témoins : `check-design-harmony.test.ts` (describe « les quatre
+derniers cas du gate (91w) », 44→46) + les 4 composants (98/98, non-régression).
+Gate **5 → 0** ; `tsc` 0. Housekeeping : 90w confirmée mergée (famille des replis
+sur `dev`, gate mesuré 5/4 à l'ouverture, inchangé) ; appariement analyses↔plans
+1:1 revérifié (45w→90w, **70/70**), **0 vrai doublon** de numéro `w`. Analyse :
+`docs/analyses/uiux/2026-11-21-iteration-91w.md`.
+
+**90w** — maintenabilité / cohérence de thème : quatre styles inline écrivaient
+`var(--jeton, littéral)` et le gate prenait le littéral pour du chrome en dur —
+`battery-panel.tsx:312` (`var(--color-ios-on-brand, #fff)`),
+`shared-location-card.tsx:34` (`var(--color-on-brand, #fff)`),
+`profile-relation-face.tsx:112` et `vitrine-preview.tsx:71`
+(`var(--color-ios-fill, rgba(127,127,127,.14))`) — **4 des 9** violations. Les trois
+jetons sont déclarés sans condition (`@theme inline` → `:root`, `ios.css:56,63` /
+`app.css:59`, garde `declared-tokens.test.ts`), donc le littéral n'est **jamais
+rendu** ; mais on le GARDE — pour les deux boutons de marque, une encre absente sur
+aplat saturé rendrait le texte illisible (contraste défensif, pas du chrome).
+**Exemption motivée à la ligne** (`/* harmony-exempt: repli d'un jeton de charte
+défini (--color-…), jamais rendu … */` dans l'objet `style`), pas un retrait (le
+filet de contraste reste), pas un chemin exempté — les fichiers restent scannés.
+Même régime que `face-rig` (89w) et le masque de luminance appel (85w). **Aucun
+pixel ne change** (commentaires seuls). Témoins : `check-design-harmony.test.ts`
+(describe « les replis d'un jeton de charte défini », 42→44) + les 4 composants et
+voisins (59/59, non-régression). Gate **9 → 5 violations** (−4, exactement la
+famille des replis), **8 → 4 fichiers** ; `tsc` 0. Housekeeping : 89w confirmée
+mergée (`face-rig` hors liste sur `dev`, gate mesuré 9/8 à l'ouverture) ;
+appariement analyses↔plans 1:1 revérifié (74w→89w, 16/16), **0 vrai doublon** de
+numéro `w` (regex complète `iteration-[0-9]+w[a-z]?` → vide). Analyse :
+`docs/analyses/uiux/2026-11-20-iteration-90w.md`.
+
+**89w** — maintenabilité / cohérence de thème : le gréement de visage des effets
+d'appel (`lib/calls/face-rig.ts`, #19779) peint dans `paintMask` un dégradé radial
+`rgba(0,0,0,1) → rgba(0,0,0,1) → rgba(0,0,0,0)` sur un canvas HORS DOM — **3 des 12**
+violations du gate (remonté de 5/4 à **12/9** à l'ouverture, `dev` ayant reçu
+plusieurs poches neuves). Ce n'est **pas une couleur** : le canvas sert UNIQUEMENT de
+**masque alpha**, composé en `globalCompositeOperation = 'destination-in'` (ligne 112)
+où seule l'ALPHA découpe l'œil agrandi — le noir n'est jamais rendu comme teinte. La
+charte ne nomme aucun jeton pour une rampe d'alpha de compositing : même régime que le
+masque de luminance de la famille appel (85w) et l'onde canvas (84w). **Exemption
+motivée à la ligne** (`// harmony-exempt: alpha de masque (destination-in), pas une
+couleur` ×3 + commentaire d'en-tête), pas un jeton, pas un chemin exempté — le fichier
+reste scanné. **Aucun pixel ne change** (commentaires seuls). Témoins :
+`check-design-harmony.test.ts` (describe « le masque de l'œil (face-rig) », 40→42) +
+`face-rig.test.ts` (10/10, non-régression). Gate **12 → 9 violations** (−3, exactement
+`face-rig`), **9 → 8 fichiers** ; `tsc` 0. Housekeeping : 88w confirmée mergée (#18635,
+`text-on-media` sur `dev`) ; appariement analyses↔plans 1:1 revérifié (45w→88w), 0
+doublon de numéro `w`. Analyse : `docs/analyses/uiux/2026-11-19-iteration-89w.md`.
 
 **88w** — cohérence de thème / maintenabilité : la barre de composition d'un
 commentaire d'export (`routes/comment-compose-bar.tsx:100`) peignait le ▶
@@ -253,16 +318,22 @@ du code supprimé et ne se rejouent pas.** La routine repart d'une revue fraîch
 l'`apps/web` actuel (Vite + Preact). Toutes sont annotées `CORRIGÉ` et closes pour
 leur époque.
 
-## Prochaine itération : **89w**
-Revue fraîche `apps/web` — voir les pistes 89w+ en pied de
-`docs/analyses/uiux/2026-11-15-iteration-88w.md` (gate d'harmonie à **5/4** après
-88w). Les cibles restantes sont désormais **des composants CALCULÉS, pas des
-littéraux** — chacune réclame un verdict « exemption motivée à la ligne » plutôt
-qu'un jeton : `message-menu` (`, black` ×2, masque de LUMINANCE — candidat exempt
-motivé ou helper `edgeFadeMask` 85w), `conversation-backdrop` (voile DYNAMIQUE
-`rgba(${view.veilColor}, ${view.veil})`), `rank-blason` (`hsl(` DYNAMIQUE de la roue
-du prisme), `admin-post-preview` (letterbox `#000`, candidat exempt motivé, cf. 76w) ;
-+ axe épuration, toujours non entamé.
-**Toujours REMESURER le gate à l'ouverture** : 5/4 après 88w ; il peut remonter si
-`dev` reçoit une poche neuve entre deux tours (9/7 → 28/11 entre 83w et 84w ; 13/10
-→ 17/12 entre 84w et 85w ; 10/8 stable entre 85w et 86w ; 8/7 → 6/5 entre 86w et 87w).
+## Prochaine itération : **92w** — l'axe ÉPURATION
+
+**Le gate d'harmonie #8879 est CLOS (0/0 après 91w).** Le prochain grand axe est
+l'**épuration** (directive porteur « logique épurée, pas de surcharge par
+fenêtre » ; dimension 12 « simplicité d'usage ») : chercher les **écrans web
+empilant plus d'une action primaire par fenêtre**, mesurés contre la disposition
+iOS correspondante (`apps/ios` + MeeshySDK comme référence de parité, **jamais
+modifiés**). Pistes de départ en pied de `docs/analyses/uiux/2026-11-21-iteration-91w.md` :
+barres d'action denses (en-têtes de fil, feuilles de réglages), écrans montrant
+d'emblée ce qui devrait vivre derrière un `(i)`, `⋯` ou « Plus » (cf. chantier
+#17584), alignements/espacements non conformes, états vide/chargement/erreur/
+hors-ligne manquants.
+
+**Toujours REMESURER le gate d'harmonie à l'ouverture** : 0 après 91w, mais il
+remonte dès que `dev` reçoit une poche de chrome neuve (historique : 9/7 → 28/11
+entre 83w et 84w ; 13/10 → 17/12 entre 84w et 85w ; 10/8 stable entre 85w et 86w ;
+8/7 → 6/5 entre 86w et 87w ; 5/4 → 12/9 entre 88w et 89w ; 12/9 → 9/8 → 5/4 après
+89w/90w ; **5/4 → 0 après 91w**). S'il est remonté, le vider reste prioritaire
+(une seule famille par tour) avant de reprendre l'épuration.

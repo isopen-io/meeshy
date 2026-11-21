@@ -23,6 +23,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { mediaSelect } from './postIncludes';
 import { quotedPostMediaFromMetadata } from './quotedPostMediaSnapshot';
+import { servedMediaRow } from './servedPostMedia';
 
 /**
  * Hisse l'instantané FIGÉ en top-level `quotedPostMedia` — même geste que
@@ -77,6 +78,6 @@ export async function serveCitedPostMedia<T extends Record<string, unknown>>(
     // erreur à signaler.
     if (!ligne || ligne.postId !== c['postId']) return c;
     const { postId: _porteur, ...media } = ligne;
-    return { ...c, quotedMedia: media } as T;
+    return { ...c, quotedMedia: servedMediaRow(media) } as T;
   });
 }

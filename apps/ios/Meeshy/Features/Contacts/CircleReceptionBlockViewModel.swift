@@ -8,14 +8,27 @@ import MeeshyUI
 ///   Bring » (#13936, dès Ami), « Couper son talkie » (#16673, dès Proche) ;
 /// - un PARTAGE de mon activité, refusé par défaut, dont l'interrupteur allumé est un ACCORD : « Ce que j'écoute »
 ///   (#16803, dès Proche).
+/// - un ABONNEMENT à ce que fait la personne, en exception au cran par cercle : « Notifications de ses nouveautés »
+///   (#19433), qui n'existe que si le serveur le sert (#19434).
 nonisolated enum CirclePersonSwitch: Equatable, Sendable {
     case reception(RelationReceptionSetting)
     case share(RelationShareGrant)
+    case subscription(RelationSubscription)
 
     func isOn(in settings: RelationPersonSettings) -> Bool {
         switch self {
         case .reception(let setting): return settings.isBlocked(setting)
         case .share(let grant): return settings.isGranted(grant)
+        case .subscription(let subscription): return settings.isSubscribed(subscription) ?? false
+        }
+    }
+
+    /// Un abonnement, ou une préférence récente, absent de la réponse n'est pas servi : l'interrupteur n'existe pas.
+    func isServed(in settings: RelationPersonSettings) -> Bool {
+        switch self {
+        case .reception(let setting): return settings.isServed(setting)
+        case .share: return true
+        case .subscription(let subscription): return settings.isSubscribed(subscription) != nil
         }
     }
 }
@@ -33,6 +46,8 @@ final class CircleReceptionBlockViewModel: ObservableObject {
     let personSwitch: CirclePersonSwitch
 
     @Published private(set) var isOn = false
+    /// Le serveur a servi ce réglage ; faux tant qu'il n'a pas répondu, et pour un abonnement qu'il ne connaît pas.
+    @Published private(set) var isServed = false
     @Published private(set) var isSaving = false
     @Published var notice: String?
 
@@ -60,6 +75,7 @@ final class CircleReceptionBlockViewModel: ObservableObject {
     func load() async {
         guard let served = try? await service.personSettings(userId: userId) else { return }
         isOn = personSwitch.isOn(in: served)
+        isServed = personSwitch.isServed(in: served)
     }
 
     /// Instantané -> local -> réseau -> retour arrière.
@@ -90,6 +106,8 @@ final class CircleReceptionBlockViewModel: ObservableObject {
             return try await service.setReceptionBlocked(setting, userId: userId, blocked: next)
         case .share(let grant):
             return try await service.setShareGranted(grant, userId: userId, granted: next)
+        case .subscription(let subscription):
+            return try await service.setSubscribed(subscription, userId: userId, subscribed: next)
         }
     }
 }

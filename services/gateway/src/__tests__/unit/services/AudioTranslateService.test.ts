@@ -6,7 +6,6 @@
  */
 
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
-import { EventEmitter } from 'events';
 
 // ─── logger mock ────────────────────────────────────────────────────────────
 jest.mock('../../../utils/logger', () => ({
@@ -16,29 +15,6 @@ jest.mock('../../../utils/logger', () => ({
 // ─── attachment-audio types mock ─────────────────────────────────────────────
 jest.mock('@meeshy/shared/types/attachment-audio', () => ({}));
 
-// ─── ZMQ client mock ─────────────────────────────────────────────────────────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type MockFn = jest.Mock<any>;
-
-class MockZmqClient extends EventEmitter {
-  sendVoiceAPIRequest: MockFn = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
-  sendTranscriptionOnlyRequest: MockFn = jest.fn<() => Promise<string>>();
-}
-
-// ─── Prisma mock factory ──────────────────────────────────────────────────────
-function createMockPrisma() {
-  return {
-    messageAttachment: {
-      findUnique: jest.fn() as MockFn,
-      update: jest.fn<() => Promise<any>>().mockResolvedValue({}) as MockFn,
-    },
-    userVoiceModel: {
-      findUnique: jest.fn() as MockFn,
-      upsert: jest.fn() as MockFn,
-    },
-  };
-}
-
 // ─── Import after mocks ───────────────────────────────────────────────────────
 import {
   AudioTranslateService,
@@ -47,59 +23,17 @@ import {
   resetAudioTranslateService,
 } from '../../../services/AudioTranslateService';
 
-// ─── Shared fixtures ──────────────────────────────────────────────────────────
-const VOICE_TRANSLATE_SYNC_TIMEOUT = 16 * 60_000;
-const ASYNC_SUBMIT_TIMEOUT = 5_000;
-const DEFAULT_TIMEOUT = 60_000;
-
-const mockTranslationResult = {
-  translationId: 'trans-001',
-  originalAudio: {
-    transcription: 'Hello world',
-    language: 'en',
-    durationMs: 2000,
-    confidence: 0.95,
-  },
-  translations: [
-    {
-      targetLanguage: 'fr',
-      translatedText: 'Bonjour le monde',
-      audioUrl: 'https://cdn.meeshy.me/audio/fr.mp3',
-      durationMs: 2100,
-      voiceCloned: true,
-      voiceQuality: 0.92,
-    },
-  ],
-  processingTimeMs: 3500,
-};
-
-const mockTranscriptionResult = {
-  taskId: 'task-transcribe-111',
-  messageId: 'msg-111',
-  attachmentId: 'att-111',
-  transcription: {
-    text: 'Hello from audio',
-    language: 'en',
-    confidence: 0.97,
-    durationMs: 1500,
-    source: 'whisper',
-    segments: [{ text: 'Hello from audio', startMs: 0, endMs: 1500 }],
-  },
-  processingTimeMs: 800,
-};
-
-// ─── Helper: emit voiceAPISuccess after capturing the taskId ──────────────────
-function emitVoiceSuccess(zmq: MockZmqClient, result: any): void {
-  const calls = zmq.sendVoiceAPIRequest.mock.calls;
-  const req = calls[calls.length - 1][0] as { taskId: string };
-  zmq.emit('voiceAPISuccess', { taskId: req.taskId, result, processingTimeMs: 100 });
-}
-
-function emitVoiceError(zmq: MockZmqClient, error: string, errorCode: string): void {
-  const calls = zmq.sendVoiceAPIRequest.mock.calls;
-  const req = calls[calls.length - 1][0] as { taskId: string };
-  zmq.emit('voiceAPIError', { taskId: req.taskId, error, errorCode });
-}
+import {
+  ASYNC_SUBMIT_TIMEOUT,
+  DEFAULT_TIMEOUT,
+  MockZmqClient,
+  VOICE_TRANSLATE_SYNC_TIMEOUT,
+  createMockPrisma,
+  emitVoiceError,
+  emitVoiceSuccess,
+  mockTranscriptionResult,
+  mockTranslationResult,
+} from '../../helpers/audio-translate-service-doubles';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tests
@@ -444,6 +378,53 @@ describe('AudioTranslateService', () => {
       expect(prisma.messageAttachment.update).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: 'att-to-save' } })
       );
+    });
+
+    it('persists a translation without audio (#19648) with neither url nor path, and keeps the voiced one', async () => {
+      prisma.messageAttachment.findUnique.mockResolvedValue({ translations: null });
+
+      const promise = service.translateSync('user-1', {
+        targetLanguages: ['fr', 'de'],
+        attachmentId: 'att-text-only',
+        saveToDatabase: true,
+      });
+      emitVoiceSuccess(zmq, {
+        ...mockTranslationResult,
+        translations: [
+          ...mockTranslationResult.translations,
+          { targetLanguage: 'de', translatedText: 'Hallo Welt', audioUrl: null, audioBase64: null, durationMs: 0, voiceCloned: false, voiceQuality: 0 },
+        ],
+        voiceProfile: null,
+      });
+      await promise;
+
+      const saved = (prisma.messageAttachment.update.mock.calls[0][0] as { data: { translations: Record<string, Record<string, unknown>> } }).data.translations;
+      expect(saved.de.transcription).toBe('Hallo Welt');
+      expect(saved.de).not.toHaveProperty('url');
+      expect(saved.de).not.toHaveProperty('path');
+      expect(saved.fr.url).toBe('https://cdn.meeshy.me/audio/fr.mp3');
+    });
+
+    it('persists an empty audioUrl from a translator of the previous version (#19648) with neither url nor path', async () => {
+      prisma.messageAttachment.findUnique.mockResolvedValue({ translations: null });
+
+      const promise = service.translateSync('user-1', {
+        targetLanguages: ['de'],
+        attachmentId: 'att-legacy-empty',
+        saveToDatabase: true,
+      });
+      emitVoiceSuccess(zmq, {
+        ...mockTranslationResult,
+        translations: [
+          { targetLanguage: 'de', translatedText: 'Hallo Welt', audioUrl: '', durationMs: 0, voiceCloned: false, voiceQuality: 0 },
+        ],
+      });
+      await promise;
+
+      const saved = (prisma.messageAttachment.update.mock.calls[0][0] as { data: { translations: Record<string, Record<string, unknown>> } }).data.translations;
+      expect(saved.de.transcription).toBe('Hallo Welt');
+      expect(saved.de).not.toHaveProperty('url');
+      expect(saved.de).not.toHaveProperty('path');
     });
 
     it('uses VOICE_TRANSLATE_SYNC_TIMEOUT for the request', async () => {

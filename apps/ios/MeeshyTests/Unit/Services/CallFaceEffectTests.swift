@@ -9,17 +9,17 @@ final class CallFaceEffectTests: XCTestCase {
     // MARK: - Catalogue
 
     func test_allCases_followTheSharedDesignOrder() {
-        XCTAssertEqual(CallFaceEffect.allCases.map(\.rawValue), ["none", "smoothing", "toad", "angel", "demon", "volcano"])
+        XCTAssertEqual(CallFaceEffect.allCases.map(\.rawValue), ["none", "smoothing", "toad", "angel", "demon", "volcano", "baby"])
     }
 
     func test_isStylized_onlyThePlayfulPresets() {
-        XCTAssertEqual(CallFaceEffect.allCases.filter(\.isStylized), [.toad, .angel, .demon, .volcano])
+        XCTAssertEqual(CallFaceEffect.allCases.filter(\.isStylized), [.toad, .angel, .demon, .volcano, .baby])
     }
 
     func test_needsFace_volcanoWorksWithoutAFace() {
         XCTAssertFalse(CallFaceEffect.volcano.needsFace)
         XCTAssertFalse(CallFaceEffect.none.needsFace)
-        XCTAssertTrue([CallFaceEffect.smoothing, .toad, .angel, .demon].allSatisfy(\.needsFace))
+        XCTAssertTrue([CallFaceEffect.smoothing, .toad, .angel, .demon, .baby].allSatisfy(\.needsFace))
     }
 
     func test_analyticsName_none_isNil() {
@@ -41,6 +41,13 @@ final class CallFaceEffectTests: XCTestCase {
         var config = VideoFilterConfig.default
         config.skinSmoothingEnabled = true
         XCTAssertEqual(config.activeFaceEffect, .smoothing)
+    }
+
+    func test_selectingFaceEffect_baby_isActiveAndClearsTheLegacyFlag() {
+        let config = VideoFilterConfig.default.selectingFaceEffect(.smoothing).selectingFaceEffect(.baby)
+        XCTAssertFalse(config.skinSmoothingEnabled)
+        XCTAssertEqual(config.activeFaceEffect, .baby)
+        XCTAssertEqual(CallFaceEffect.baby.analyticsName, "face:baby")
     }
 
     func test_activeFaceEffect_stylizedPreset_winsOverSmoothingFlag() {

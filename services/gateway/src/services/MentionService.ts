@@ -19,6 +19,7 @@ import { mentionableScope } from './mentions/mentionableScope';
 // est partiel. Le site unique de la règle est ici ; le barrel n'en est qu'un relais.
 import { MESSAGE_PROTECTION_SELECT } from '../routes/conversations/messageProtectionProjection';
 import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
+import { USABLE_ACCOUNT_WHERE } from './relations/usableAccount';
 // Le prédicat PUR vit dans un module FEUILLE, et il est ré-exporté ici pour
 // ses importeurs historiques — voir `messaging/pendingMessageRequests.ts`
 // pour la raison, qui est un défaut mesuré, pas un goût d'architecture.
@@ -614,8 +615,22 @@ export class MentionService {
     if (!conversation) return false;
 
     if (mentionableScope(conversation.type) === 'directory') {
+      // Un compte VIVANT seulement, et par la loi NOMMÉE : composé à la main
+      // (`deletedAt: null`), ce filtre n'appariait AUCUN compte, la colonne
+      // n'étant écrite par aucune création (#19799). La loi y ajoute en plus
+      // `deactivatedAt`, que `isAddableUser` lit déjà : un compte désactivé ne se
+      // mentionne pas.
+      //
+      // **Aucun symptôme de production n'a été observé, et il ne pouvait pas
+      // l'être : `canMentionUser` n'a AUCUN appelant de production** (mesuré le
+      // 2026-11-19 — ses seules occurrences du dépôt sont sa définition et ses
+      // témoins). Ce qui est réparé ici est donc une FORME, pas une panne : une
+      // forme morte est un patron qui se recopie (règle du dépôt sur
+      // `messageResponseSchema`), et c'est à ce titre qu'elle est corrigée. Le
+      // sort de la méthode elle-même — la rendre vivante ou la retirer — est
+      // #19814.
       const user = await this.prisma.user.findUnique({
-        where: { id: userId, isActive: true, deletedAt: null },
+        where: { id: userId, ...USABLE_ACCOUNT_WHERE },
         select: { id: true }
       });
       return !!user;

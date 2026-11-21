@@ -82,7 +82,7 @@
     <string name="feed_reel_republished_by">Republicado por %1$s</string>
     <string name="feed_reel_views">Vistas</string>
     <string name="feed_report_reason_harassment">Acoso</string>
-    <string name="feed_report_reason_hate_speech">Discurso de odio</string>
+    <string name="feed_report_reason_hate_speech">Odio</string>
     <string name="feed_report_reason_impersonation">Suplantación de identidad</string>
     <string name="feed_report_reason_inappropriate">Contenido inapropiado</string>
     <string name="feed_report_reason_other">Otro</string>
@@ -204,7 +204,6 @@
     <string name="status_composer_mood_question">¿Cómo te sientes?</string>
     <string name="status_composer_publish">Publicar</string>
     <string name="status_composer_publish_disabled_hint">Elige un emoji para publicar tu estado</string>
-    <string name="status_composer_title">Estado</string>
     <string name="status_composer_visibility_community">Comunidades</string>
     <string name="status_composer_visibility_friends">Amigos</string>
     <string name="status_composer_visibility_private">Privado</string>

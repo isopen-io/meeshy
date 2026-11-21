@@ -29,7 +29,7 @@ import timber.log.Timber
  * `CacheCoordinator.subscribeToPostEngagement` does: `post:liked` / `post:unliked` and `comment:added` /
  * `comment:deleted` write the gateway's ABSOLUTE counts ([PostEngagementPatch]) into the feed and its detail
  * ([PostRepository]) and into every author's grid ([UserPostsCacheRepository]); `post:deleted` takes the post out of all
- * of them. They only reached the feed's in-memory overlay: the profile grid opened after a like showed the old count, and
+ * of them; `post:bookmarked` (the viewer's own) also reaches the saved posts' disk copy (#19426). They only reached the feed's in-memory overlay: the profile grid opened after a like showed the old count, and
  * a post deleted elsewhere stayed in it.
  *
  * The heart follows only the viewer's OWN gesture; anyone's moves the count. The writes run one at a time ([writes]): a
@@ -55,6 +55,7 @@ class PostEngagementBinding @Inject constructor(
             launch { socket.postUnliked.collectArrived { liked(it.postId, it.likesCount, it.userId, liked = false) } }
             launch { socket.commentAdded.collectArrived { everywhere(it.postId) { post -> PostEngagementPatch.commented(post, it.commentCount) } } }
             launch { socket.commentDeleted.collectArrived { everywhere(it.postId) { post -> PostEngagementPatch.commented(post, it.commentCount) } } }
+            launch { socket.postBookmarked.collectArrived { saved(it.postId, it.bookmarked, it.bookmarkCount) } }
             launch { socket.postDeleted.collectArrived { removed(it.postId) } }
         }
     }
@@ -67,6 +68,18 @@ class PostEngagementBinding @Inject constructor(
     private suspend fun liked(postId: String, count: Int, actorId: String, liked: Boolean) {
         val mine = liked.takeIf { actorId.isNotBlank() && actorId == session.currentUser.value?.id }
         everywhere(postId) { PostEngagementPatch.liked(it, count, mine) }
+    }
+
+    /**
+     * `post:bookmarked` is personal to the viewer: every copy takes the state, an un-saved post leaves the saved list, and
+     * a post saved that the list lacks makes it revalidate at the next open (#19426).
+     */
+    private suspend fun saved(postId: String, bookmarked: Boolean, count: Int) = isolated(postId) {
+        val ticket = userPosts.ticket()
+        val patch = { post: ApiPost -> PostEngagementPatch.bookmarked(post, bookmarked, count) }
+        posts.applyEngagement(postId, patch)
+        userPosts.patchEverywhere(postId, patch, ticket)
+        if (bookmarked) userPosts.bookmarkedElsewhere(postId, ticket) else userPosts.removeFromBookmarks(postId, ticket)
     }
 
     private suspend fun everywhere(postId: String, patch: (ApiPost) -> ApiPost?) = isolated(postId) {

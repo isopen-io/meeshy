@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profile_blocked_by_me">Sie haben diesen Benutzer blockiert</string>
+    <string name="profile_language_choose">Auswählen</string>
+    <string name="profile_language_none">Keine</string>
+    <string name="profile_loadFailed_message">Dieses Profil konnte nicht geladen werden.</string>
+    <string name="profile_section_languages">SPRACHEN</string>
+    <string name="profile_share_copy">Link kopieren</string>
+    <string name="profile_toast_report_sent">Meldung gesendet</string>
+    <string name="profile_toast_report_failed">Meldung konnte nicht gesendet werden</string>
+    <string name="profile_stats_a11y_hint">Öffnet die detaillierte Statistik</string>
+    <string name="profile_tab_details">Details</string>
+    <string name="profile_action_send_message">Nachricht senden</string>
+    <string name="profile_section_about">Info</string>
+    <string name="profile_stats_memberSince">Mitglied seit</string>
+    <string name="profile_status_connected">Verbunden</string>
+    <string name="profile_voice_title">Stimme</string>
+    <string name="shared_location_share_action_a11y">Meinen Standort mit %1$s teilen</string>
+</resources>

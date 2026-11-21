@@ -493,8 +493,10 @@ export interface VoiceTranslationOriginalAudio {
 export interface VoiceTranslationOutput {
   targetLanguage: string;
   translatedText: string;
-  audioBase64?: string;
-  audioUrl?: string;
+  /** null quand aucune piste n'a été synthétisée (#19648) */
+  audioBase64?: string | null;
+  /** null quand aucune piste n'a été synthétisée (TTS en échec, #16340, #19648) */
+  audioUrl?: string | null;
   durationMs: number;
   voiceCloned: boolean;
   voiceQuality: number;
@@ -503,7 +505,7 @@ export interface VoiceTranslationOutput {
 }
 
 export interface VoiceTranslationProfile {
-  profileId: string;
+  profileId: string | null;
   quality: number;
   isNew: boolean;
 }
@@ -512,7 +514,8 @@ export interface VoiceTranslationResult {
   translationId: string;
   originalAudio: VoiceTranslationOriginalAudio;
   translations: VoiceTranslationOutput[];
-  voiceProfile?: VoiceTranslationProfile;
+  /** null quand la voix n'a pas été clonée (#19648) */
+  voiceProfile?: VoiceTranslationProfile | null;
   processingTimeMs: number;
 }
 

@@ -287,6 +287,72 @@ describe('MessageProcessor.saveMessage', () => {
     expect(msgCreate).not.toHaveBeenCalled();
   });
 
+  /**
+   * #20113 — la copie d'un transfert pose l'identité de COMPTE du transférant.
+   *
+   * Elle y posait `senderId`, qui est un `Message.senderId`, donc un
+   * `Participant.id`. Le champ est SERVI aux clients et gouverne l'affordance
+   * « supprimer cette pièce » ; les quatre écrivains de téléversement y mettent
+   * l'identité de compte, et `GlobalAchievements` la compte comme telle.
+   *
+   * Ces trois témoins vivent ICI, et non dans `MessageProcessor.test.ts` : ce
+   * dernier est hors budget au titre de la dette héritée (1 598 lignes au gel),
+   * et le dépôt interdit d'y ajouter — on extrait d'abord. Ce fichier est le
+   * bon hôte sans rien dupliquer : c'est lui qui décrit déjà ce que la copie
+   * d'un transfert écrit champ par champ.
+   */
+  describe('#20113 — `uploadedBy` porte l’identité de COMPTE', () => {
+    const PIECE = {
+      id: 'orig-att', fileName: 'f.jpg', originalName: 'f.jpg', mimeType: 'image/jpeg',
+      fileSize: 10, filePath: '/uploads/f.jpg', fileUrl: 'https://cdn/f.jpg',
+    };
+
+    const forwardOnePiece = async () => {
+      attFindMany.mockResolvedValueOnce([PIECE]).mockResolvedValue([]);
+      attCreate.mockResolvedValue({ ...PIECE });
+      await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id', forwardImposes: null });
+      return attCreate.mock.calls[0][0].data;
+    };
+
+    it('pose le `userId` du transférant inscrit, jamais son `Participant.id`', async () => {
+      partFindUnique.mockResolvedValue({ userId: 'user-1' });
+
+      expect((await forwardOnePiece()).uploadedBy).toBe('user-1');
+    });
+
+    it("pose le `Participant.id` d'un transférant ANONYME — c'est son identité d'authentification", async () => {
+      partFindUnique.mockResolvedValue({ userId: null });
+
+      expect((await forwardOnePiece()).uploadedBy).toBe(SENDER_ID);
+    });
+
+    it("marque la copie d'un transférant INVITÉ comme anonyme — sinon il ne peut plus la supprimer (#20142)", async () => {
+      partFindUnique.mockResolvedValue({ userId: null });
+
+      expect((await forwardOnePiece()).isAnonymous).toBe(true);
+    });
+
+    it("ne marque PAS anonyme la copie d'un transférant inscrit (#20142)", async () => {
+      partFindUnique.mockResolvedValue({ userId: 'user-1' });
+
+      expect((await forwardOnePiece()).isAnonymous).toBe(false);
+    });
+
+    it('replie sur le comportement d’avant quand la lecture du participant LÈVE, et ne fait pas échouer le transfert', async () => {
+      partFindUnique.mockRejectedValue(new Error('mongo down'));
+
+      // Le repli est le `Participant.id` : la ligne reste reconnue par
+      // `ownsAsUploader`, alors qu'échouer ferait naître une pièce sans
+      // déposant — bien pire que l'ancien défaut. Et le repli n'invente PAS
+      // d'anonymat : l'affirmer sur une ligne dont on n'a pas lu le déposant
+      // ouvrirait la branche anonyme du `DELETE` (#20142).
+      const written = await forwardOnePiece();
+      expect(written.uploadedBy).toBe(SENDER_ID);
+      expect(written.isAnonymous).toBe(false);
+      expect(attCreate).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('diffusion via copyAttachmentsFromMessageId', () => {
     const SOURCE_MSG_ID = 'orig-msg-id';
 

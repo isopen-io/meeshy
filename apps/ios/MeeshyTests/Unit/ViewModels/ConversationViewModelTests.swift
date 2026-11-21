@@ -3062,6 +3062,8 @@ final class ConversationViewModelTests: XCTestCase {
             onCalled?()
             return try result.get()
         }
+
+        func callSession(callId: String) async throws -> ActiveCallSession? { nil }
     }
 
     private func makeAnonymousSession(conversationId: String) -> AnonymousSessionContext {

@@ -112,9 +112,44 @@ jest.mock('../../../services/ConversationMessageStatsService', () => ({
   },
 }));
 
+/**
+ * #19939 — le verdict de plan signé, doublé CIBLÉ (`requireActual` + surcharge).
+ *
+ * `readerSignedPlanForMessageIdBestEffort` interroge la base pour savoir si une
+ * pièce se lit PAR LECTEUR. Le doubler ici laisse les témoins existants
+ * inchangés (son défaut rend `null`, soit « aucune pièce liée au lecteur », ce
+ * que leurs fixtures sans pièce jointe produisaient déjà) et permet d'exercer
+ * les deux autres verdicts, que seul un plan réel atteint.
+ */
+const mockEditSignedPlan = jest.fn() as jest.Mock<any>;
+jest.mock('../../readerSignedDelivery', () => ({
+  ...(jest.requireActual('../../readerSignedDelivery') as object),
+  readerSignedPlanForMessageIdBestEffort: (...a: any[]) => mockEditSignedPlan(...a),
+}));
+
 // ── After all mocks, import the class ──────────────────────────────────────
 
 import { MessageHandler, type MessageHandlerDependencies } from '../MessageHandler';
+import { PLAN_UNAVAILABLE } from '../../planOutcome';
+
+/**
+ * #19939 — le défaut du plan vit au niveau du FICHIER, pas d'un `describe`.
+ *
+ * `jest.clearAllMocks()` efface les APPELS, jamais l'IMPLÉMENTATION, et ce
+ * fichier ne pose ni `resetMocks` ni `restoreMocks`. Posé dans un seul
+ * `describe`, le verdict `PLAN_UNAVAILABLE` d'un témoin FUYAIT vers les
+ * `describe` suivants, où `emitEditedToReaders` se tait — sept témoins voisins
+ * tombaient dès qu'on retirait ce défaut, et le harnais n'était juste que par
+ * son ORDRE. Mesuré par l'audit adversarial du lot.
+ *
+ * `null` est aussi ce que la vraie fonction rend sous ce harnais : sans
+ * `ATTACHMENT_URL_SIGNING_KEY`, `readerSignedPlanForMessageId` sort avant toute
+ * requête. Le double ne fabrique donc aucune fiction.
+ */
+beforeEach(() => {
+  mockEditSignedPlan.mockReset();
+  mockEditSignedPlan.mockResolvedValue(null);
+});
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -760,6 +795,81 @@ describe('MessageHandler — handleMessageEdit', () => {
       eventType: 'edited',
       payload: expect.objectContaining({ id: VALID_MSG_ID, content: 'Edited content' }),
     }));
+  });
+
+  /**
+   * #19939 — l'édition SIGNE sa remise directe et ENFILAIT l'adresse NUE.
+   *
+   * `emitEditedToReaders` reçoit `editPlan` et sert à chaque lecteur CONNECTÉ
+   * un `fileUrl` signé pour SA ligne `Participant`. Quarante lignes plus bas,
+   * l'enfilage posait `payload: editedPayload` — la charge GÉNÉRIQUE — dans une
+   * entrée Redis qui vit 48 h, soit le canal le PLUS exposé des deux.
+   */
+  it('#19939 — un plan PAR LECTEUR : l’entrée enfilée porte l’adresse SIGNÉE de son destinataire', async () => {
+    const enqueue = jest.fn().mockResolvedValue(undefined);
+    const offlineUserId = 'user-offline-signed-00112233';
+    const NAKED = 'https://cdn.meeshy.test/flame/secret.jpg';
+    deps = makeDeps({ deliveryQueue: { enqueue } as any });
+    handler = new MessageHandler(deps);
+    deps.socketToUser.set('socket-1', USER_ID);
+    deps.connectedUsers.set(USER_ID, makeSocketUser());
+    mockGetConnectedUser.mockImplementation((id: string, map: Map<string, any>) => {
+      const u = map.get(id);
+      return u ? { user: u, realUserId: u.id } : null;
+    });
+    mockEditSignedPlan.mockResolvedValue({
+      signFor: (payload: Record<string, unknown>, participantId: string) => ({
+        ...payload,
+        attachments: [{ id: 'att-1', fileUrl: `${NAKED}?sig=for-${participantId}` }],
+      }),
+    });
+
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(
+      makeMessageRecord({ attachments: [{ id: 'att-1', fileUrl: NAKED }] })
+    );
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+    (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([
+      { id: PARTICIPANT_ID, userId: USER_ID },
+      { id: 'part-offline-signed', userId: offlineUserId },
+    ]);
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    const queued = JSON.stringify((enqueue.mock.calls as any[])[0][1].payload);
+    expect(queued).toContain('?sig=for-part-offline-signed');
+    expect(queued).not.toContain(`"${NAKED}"`);
+  });
+
+  /**
+   * Le sous-cas qui NOMME la règle (#18619) : ne pas savoir adresser une pièce
+   * peut-être protégée n'autorise pas à l'écrire en clair dans Redis pour 48 h.
+   * L'émission directe se tait déjà ; l'enfilage écrivait quand même.
+   */
+  it('#19939 — PLAN_UNAVAILABLE : RIEN n’est écrit dans la file', async () => {
+    const enqueue = jest.fn().mockResolvedValue(undefined);
+    deps = makeDeps({ deliveryQueue: { enqueue } as any });
+    handler = new MessageHandler(deps);
+    deps.socketToUser.set('socket-1', USER_ID);
+    deps.connectedUsers.set(USER_ID, makeSocketUser());
+    mockGetConnectedUser.mockImplementation((id: string, map: Map<string, any>) => {
+      const u = map.get(id);
+      return u ? { user: u, realUserId: u.id } : null;
+    });
+    mockEditSignedPlan.mockResolvedValue(PLAN_UNAVAILABLE);
+
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+    (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([
+      { id: PARTICIPANT_ID, userId: USER_ID },
+      { id: 'part-offline-unavail', userId: 'user-offline-unavail-0011' },
+    ]);
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(enqueue).not.toHaveBeenCalled();
   });
 
   it('enqueues the edit for an offline anonymous participant keyed by participant id', async () => {

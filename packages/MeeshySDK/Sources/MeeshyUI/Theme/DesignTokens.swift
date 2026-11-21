@@ -30,6 +30,10 @@ public nonisolated enum MeeshyRadius {
     public static let xlPlus: CGFloat = 22
     public static let xxl: CGFloat = 24
     public static let full: CGFloat = .infinity
+
+    public static func card(_ radius: CGFloat) -> RoundedRectangle {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+    }
 }
 
 // MARK: - Typography Sizes

@@ -24,19 +24,17 @@ private fun resDir(): File {
 }
 
 private fun pluralItems(folder: String, name: String): Map<String, String> {
-    val file = File(resDir(), "values$folder/strings_generated.xml")
-    check(file.isFile) { "missing ${file.path}" }
-    val document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file)
-    val plurals = document.getElementsByTagName("plurals")
-    for (index in 0 until plurals.length) {
-        val node = plurals.item(index)
-        if (node.attributes.getNamedItem("name").nodeValue != name) continue
-        val items = node.childNodes
-        return (0 until items.length).map { items.item(it) }
-            .filter { it.nodeName == "item" }
-            .associate { it.attributes.getNamedItem("quantity").nodeValue to it.textContent }
-    }
-    error("plurals $name absent de values$folder")
+    val files = File(resDir(), "values$folder").listFiles { file -> file.name.endsWith(".xml") }.orEmpty().sortedBy { it.name }
+    check(files.isNotEmpty()) { "missing values$folder" }
+    val node = files.asSequence()
+        .map { DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(it).getElementsByTagName("plurals") }
+        .flatMap { plurals -> (0 until plurals.length).asSequence().map { plurals.item(it) } }
+        .firstOrNull { it.attributes.getNamedItem("name").nodeValue == name }
+        ?: error("plurals $name absent de values$folder")
+    val items = node.childNodes
+    return (0 until items.length).map { items.item(it) }
+        .filter { it.nodeName == "item" }
+        .associate { it.attributes.getNamedItem("quantity").nodeValue to it.textContent }
 }
 
 private fun generatedNames(folder: String): Set<String> {

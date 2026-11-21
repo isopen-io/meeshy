@@ -53,4 +53,5 @@
     <string name="nearby_distance_meters">à %1$d m</string>
     <string name="nearby_distance_km">à %1$.1f km</string>
     <string name="status_composer_emoji_too_long">Emoji trop long</string>
+    <string name="status_composer_title">Statut</string>
 </resources>

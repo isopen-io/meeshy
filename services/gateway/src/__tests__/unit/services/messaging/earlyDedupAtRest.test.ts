@@ -69,6 +69,11 @@ function harness() {
     serverEncryptionKey: {
       create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => { keys.set(String(data.id), data); return data; }),
       findUnique: jest.fn(async ({ where }: { where: { id: string } }) => keys.get(where.id) ?? null),
+      // #19755 — le coffre relit la clé de conversation à la demande. Un double
+      // PARTIEL de la table des clés jette sur une méthode absente, et le coffre
+      // échoue OUVERT : il forge une clé neuve. On rend ici la table.
+      findMany: jest.fn(async ({ where }: { where?: Record<string, unknown> }) =>
+        [...keys.values()].filter((row) => where?.conversationId === undefined || row.conversationId === where.conversationId)),
       update: jest.fn(async () => ({})),
     },
   };

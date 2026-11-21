@@ -39,6 +39,7 @@ import me.meeshy.sdk.model.game.GameNumberFormat
 import me.meeshy.sdk.model.game.GameTextArg
 import me.meeshy.ui.component.game.LevelRing
 import me.meeshy.ui.component.game.RankBlason
+import me.meeshy.ui.profile.ProfileGamePiece
 import me.meeshy.ui.profile.ProfileGameSlot
 import me.meeshy.ui.theme.MeeshyFontSize
 import me.meeshy.ui.theme.MeeshyRadius
@@ -53,8 +54,8 @@ private val GROUP_MIN_WIDTH = 96.dp
 private const val SEPARATOR = ", "
 
 /**
- * **L'emplacement du jeu sur la bannière d'un membre** (miroir de `ProfileSheetEnvironment`, iOS) : le niveau à l'angle bas
- * du DÉBUT, le rang à l'angle bas de la FIN, ce que le serveur sert selon SES réglages et rien d'autre. Fourni une fois à la
+ * **L'emplacement du jeu sur la bannière d'un membre** (miroir de `ProfileSheetEnvironment`, iOS) : le rang à l'angle bas
+ * du DÉBUT, le niveau à l'angle bas de la FIN (#19764), ce que le serveur sert selon SES réglages et rien d'autre. Fourni une fois à la
  * racine de l'application ; les bannières de TOUS les profils (le mien comme ceux des autres) le lisent.
  */
 fun gameProfileSlot(): ProfileGameSlot = ProfileGameSlot(
@@ -103,7 +104,7 @@ private fun LevelGroup(badge: GameBannerBadge) {
         badge.pocket?.let { gameString(GameCopyLaws.points(it)) },
     ).joinToString(SEPARATOR)
     val pocket = badge.pocket?.let { amount(SPARK_GLYPH, GameNumberFormat.formatCount(it, locale)) }
-    BannerGroup(startFacing = true, label = label) {
+    BannerGroup(startFacing = ProfileGamePiece.LEVEL.sitsAtStart, label = label) {
         Text(tierName, style = banner(MeeshyFontSize.small, FontWeight.Medium), color = Color.White.copy(alpha = 0.92f), maxLines = 1, overflow = TextOverflow.Ellipsis)
         LevelRing(
             level = badge.level,
@@ -136,7 +137,7 @@ private fun RankGroup(badge: GameBannerBadge) {
         rankName,
         badge.glory?.let { gameString(GameCopyLaws.gloryAmount(GameTextArg.Count(it))) },
     ).joinToString(SEPARATOR)
-    BannerGroup(startFacing = false, label = label) {
+    BannerGroup(startFacing = ProfileGamePiece.RANK.sitsAtStart, label = label) {
         RANK_GROUP_LINES.forEach { line ->
             when (line) {
                 RankLine.NAME -> Text(rankName, style = banner(MeeshyFontSize.footnote, FontWeight.SemiBold), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -156,7 +157,7 @@ private fun RankGroup(badge: GameBannerBadge) {
 
 /**
  * Le cadre d'un groupe : collé à son bord de la bannière, il n'a d'arrondi QU'au coin haut tourné vers le milieu (le
- * niveau est au DÉBUT : son coin haut de FIN ; le rang à la FIN : son coin haut de DÉBUT) ; ses coins bas sont carrés. Un
+ * rang est au DÉBUT : son coin haut de FIN ; le niveau à la FIN : son coin haut de DÉBUT) ; ses coins bas sont carrés. Un
  * voile léger, sans matière floutée — la bannière se voit au travers. Le doigt le traverse : ce n'est pas un bouton.
  */
 @Composable

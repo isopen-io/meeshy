@@ -1,0 +1,118 @@
+{
+  "composant": "MeeshyMapPin",
+  "cle": "K36",
+  "note": "Vecteurs de parité (fiche K36 § 03, § 06). Le disque de flou n'existe qu'à partir d'un rayon de 32 ; la grappe dit « 99+ » au-delà de 99 et se tait sous 2 ; la légende est coupée à 18 caractères.",
+  "disque": [
+    {
+      "precision": "exact",
+      "rayon": 0,
+      "dessine": false,
+      "diametre": 0
+    },
+    {
+      "precision": "area",
+      "rayon": 22,
+      "dessine": false,
+      "diametre": 0
+    },
+    {
+      "precision": "area",
+      "rayon": 32,
+      "dessine": true,
+      "diametre": 64
+    },
+    {
+      "precision": "area",
+      "rayon": 53,
+      "dessine": true,
+      "diametre": 106
+    },
+    {
+      "precision": "wide",
+      "rayon": 86,
+      "dessine": true,
+      "diametre": 172
+    }
+  ],
+  "tailles": [
+    {
+      "genre": "other",
+      "selectionnee": false,
+      "contenu": 48,
+      "liseré": 3
+    },
+    {
+      "genre": "other",
+      "selectionnee": true,
+      "contenu": 56,
+      "liseré": 3
+    },
+    {
+      "genre": "own",
+      "selectionnee": false,
+      "contenu": 38,
+      "liseré": 2.5
+    },
+    {
+      "genre": "own",
+      "selectionnee": true,
+      "contenu": 38,
+      "liseré": 2.5
+    }
+  ],
+  "grappe": [
+    {
+      "compte": 0,
+      "texte": null,
+      "contenus": 0
+    },
+    {
+      "compte": 1,
+      "texte": null,
+      "contenus": 0
+    },
+    {
+      "compte": 2,
+      "texte": "2",
+      "contenus": 2
+    },
+    {
+      "compte": 3,
+      "texte": "3",
+      "contenus": 3
+    },
+    {
+      "compte": 12,
+      "texte": "12",
+      "contenus": 3
+    },
+    {
+      "compte": 99,
+      "texte": "99",
+      "contenus": 3
+    },
+    {
+      "compte": 100,
+      "texte": "99+",
+      "contenus": 3
+    }
+  ],
+  "legende": [
+    {
+      "texte": "",
+      "attendu": null
+    },
+    {
+      "texte": "quartier",
+      "attendu": "quartier"
+    },
+    {
+      "texte": "il y a 12 min",
+      "attendu": "il y a 12 min"
+    },
+    {
+      "texte": "une légende bien trop longue",
+      "attendu": "une légende bien…"
+    }
+  ]
+}

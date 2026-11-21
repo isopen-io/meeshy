@@ -77,11 +77,7 @@ struct MediaSessionReleaseAfterPauseTests {
     }
 
     private static func coordinatorSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Sources/MeeshySDK/Media/MediaSessionCoordinator.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        try MediaSessionCoordinatorSourceUnit.read()
     }
 }
 #endif

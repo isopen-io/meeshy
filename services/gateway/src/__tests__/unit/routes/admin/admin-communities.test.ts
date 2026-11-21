@@ -666,4 +666,38 @@ describe('communautés — le geste se voit chez les membres (#18435)', () => {
     expect(emitted.filter((e) => e.event === 'community:updated')).toEqual([]);
     await app.close();
   });
+
+  it('désactiver une communauté diffuse community:deleted (désactivée) à ses membres actifs et au créateur (#19590)', async () => {
+    const { app, emitted } = await buildWithSocket(communityRow());
+    expect((await patch(app, { isActive: false, reason: REASON_TEXT })).statusCode).toBe(200);
+    await settle();
+
+    const deletions = emitted.filter((e) => e.event === 'community:deleted');
+    expect(deletions.map((e) => e.room).sort()).toEqual([`user:${AWA}`, `user:${JEAN}`].sort());
+    expect(Object.keys(deletions[0]?.payload).sort()).toEqual(['at', 'communityId', 'reason']);
+    expect(deletions[0]?.payload).toMatchObject({ communityId: COMMUNITY, reason: 'deactivated' });
+    await app.close();
+  });
+
+  it("réactiver ou changer la seule confidentialité n'annonce aucune disparition (#19590)", async () => {
+    const inactive = await buildWithSocket(communityRow({ isActive: false, deletedAt: new Date('2026-09-20') }));
+    await patch(inactive.app, { isActive: true, reason: REASON_TEXT });
+    await settle();
+    expect(inactive.emitted.filter((e) => e.event === 'community:deleted')).toEqual([]);
+    await inactive.app.close();
+
+    const active = await buildWithSocket(communityRow());
+    await patch(active.app, { isPrivate: true, reason: REASON_TEXT });
+    await settle();
+    expect(active.emitted.filter((e) => e.event === 'community:deleted')).toEqual([]);
+    await active.app.close();
+  });
+
+  it("une désactivation refusée (motif trop bref) n'annonce rien (#19590)", async () => {
+    const { app, emitted } = await buildWithSocket(communityRow());
+    expect((await patch(app, { isActive: false, reason: 'trop bref' })).statusCode).toBe(400);
+    await settle();
+    expect(emitted).toEqual([]);
+    await app.close();
+  });
 });

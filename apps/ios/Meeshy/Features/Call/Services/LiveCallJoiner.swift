@@ -31,6 +31,7 @@ struct LiveCallJoiner {
         do {
             let session = try await activeCallService.activeCall(conversationId: request.conversationId)
             guard let session, session.id == request.callId else {
+                await CallNoticeLivenessChecker.shared.markEnded(callId: request.callId)
                 FeedbackToastManager.shared.show(
                     String(localized: "bubble.call.join.ended", defaultValue: "L'appel est terminé", bundle: .main),
                     type: .info

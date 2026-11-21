@@ -341,6 +341,22 @@ public final class AuthService: AuthServiceProviding, PasswordResetProviding, @u
         return response.data.user.security?.hasPassword
     }
 
+    /// #19512 — ce compte a-t-il des clés de chiffrement de bout en bout ? Lu sur
+    /// `GET /auth/me?expand=security` (`security.hasSignalKeys`, un bundle de
+    /// pré-clés ACTIF — la seule source vraie : `User.signalIdentityKeyPublic`
+    /// n'est alimenté par aucun chemin d'écriture). `nil` quand la passerelle ne
+    /// sert pas le champ : ma vitrine n'affirme alors rien.
+    public func hasSignalKeys() async throws -> Bool? {
+        let response: APIResponse<MeSecurityResponseData> = try await api.request(
+            AuthEndpoint.me,
+            queryItems: [
+                URLQueryItem(name: "fields", value: "id"),
+                URLQueryItem(name: "expand", value: "security"),
+            ]
+        )
+        return response.data.user.security?.hasSignalKeys
+    }
+
     // MARK: - Email Verification
 
     // `verifyEmail(token:)` a été RETIRÉE (#4588). Elle visait
@@ -423,8 +439,8 @@ public final class AuthService: AuthServiceProviding, PasswordResetProviding, @u
     }
 }
 
-/// `GET /auth/me?expand=security` — la seule chose que l'écran du mot de passe
-/// en lit (#9186).
+/// `GET /auth/me?expand=security` — ce que l'écran du mot de passe (#9186) et
+/// ma vitrine (#19512) en lisent.
 public struct MeSecurityResponseData: Decodable, Sendable {
     public let user: User
 
@@ -434,5 +450,7 @@ public struct MeSecurityResponseData: Decodable, Sendable {
 
     public struct Security: Decodable, Sendable {
         public let hasPassword: Bool?
+        /// #19512 — un bundle de pré-clés actif ; `nil` sur une passerelle qui ne le sert pas.
+        public var hasSignalKeys: Bool? = nil
     }
 }

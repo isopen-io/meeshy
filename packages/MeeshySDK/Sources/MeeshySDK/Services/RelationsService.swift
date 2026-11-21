@@ -76,11 +76,17 @@ public final class RelationsService: RelationsProviding, Sendable {
     }
 
     public func sharedLocations(within bounds: SharedLocationBounds?) async throws -> [SharedLocationChanged] {
+        try await sharedLocationsSnapshot(within: bounds).items
+    }
+
+    /// Le même rattrapage, avec ceux dont la position est en pause par fantôme (#19562) : vide tant que la passerelle
+    /// ne les sert pas.
+    public func sharedLocationsSnapshot(within bounds: SharedLocationBounds?) async throws -> SharedLocationSnapshot {
         let query = bounds.map { [URLQueryItem(name: "bbox", value: $0.queryValue)] }
         let response: APIResponse<SharedLocationSnapshot> = try await api.request(
             RelationsEndpoint.locations, method: "GET", body: nil, queryItems: query
         )
-        return response.data.items
+        return response.data
     }
 
     public func ownSharedLocation() async throws -> SharedLocationOwnSnapshot {
@@ -105,6 +111,14 @@ public final class RelationsService: RelationsProviding, Sendable {
         return response.data
     }
 
+    private struct LocationRequestBody: Encodable {
+        let kind: String
+    }
+
+    private struct LocationRequested: Decodable {
+        let requestedAt: String?
+    }
+
     private struct LevelBody: Encodable {
         let level: String
     }
@@ -113,5 +127,19 @@ public final class RelationsService: RelationsProviding, Sendable {
         let phase: String
         let token: String?
         let consents: RelationRitualConsents?
+    }
+}
+
+extension RelationsService: SharedLocationRequesting {
+    /// `POST /relations/:userId/location/request` — `{ kind }` seul : ni position, ni message.
+    public func requestSharedLocation(from userId: String, kind: SharedLocationRequestKind) async -> SharedLocationRequestOutcome {
+        do {
+            let _: APIResponse<LocationRequested> = try await api.post(
+                RelationsEndpoint.byUserIdLocationRequest(userId: userId), body: LocationRequestBody(kind: kind.rawValue)
+            )
+            return .sent
+        } catch {
+            return SharedLocationRequestOutcome.from(error)
+        }
     }
 }

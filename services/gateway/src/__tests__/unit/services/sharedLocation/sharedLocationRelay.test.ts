@@ -68,12 +68,34 @@ describe('la projection — la précision donnée, rien de plus riche à côté'
   });
 });
 
+describe('le mouvement (#19887) — servi à la précision exacte seulement', () => {
+  const state = {
+    recipients: [],
+    position: { ...PARIS, motion: 'walking' as const },
+    updatedAt: new Date(T0).toISOString(),
+    expiresAt: new Date(T0 + HEURE).toISOString(),
+  };
+
+  it('exacte : le mouvement voyage avec la position', () => {
+    expect(projectSharedLocation(EMETTEUR, state, { precision: 'exact', circle: 'CLOSE' })).toMatchObject({ motion: 'walking' });
+  });
+
+  it('quartier et ville : aucun mouvement, il révélerait le rythme que le flou cache', () => {
+    expect(projectSharedLocation(EMETTEUR, state, { precision: 'neighborhood', circle: 'CLOSE' })).not.toHaveProperty('motion');
+    expect(projectSharedLocation(EMETTEUR, state, { precision: 'city', circle: 'BLOOD' })).not.toHaveProperty('motion');
+  });
+
+  it('sans mouvement envoyé, rien ne se fabrique', () => {
+    expect(projectSharedLocation(EMETTEUR, { ...state, position: PARIS }, { precision: 'exact', circle: 'CLOSE' })).not.toHaveProperty('motion');
+  });
+});
+
 describe('démarrer — chaque destinataire reçoit SA projection, et lui seul', () => {
   it('un Ami choisi en exact reçoit la position exacte, un Proche en quartier son quartier, un Sang sans choix la ville', async () => {
     const m = monde();
     const ack = await demarrer(m);
 
-    expect(ack).toEqual({ success: true, data: { expiresAt: new Date(T0 + HEURE).toISOString() } });
+    expect(ack).toEqual({ success: true, data: { expiresAt: new Date(T0 + HEURE).toISOString(), startedAt: new Date(T0).toISOString() } });
     expect(m.vers(AMI).map((e) => [e.event, e.data.precision, e.data.latitude])).toEqual([[SERVER_EVENTS.SHARED_LOCATION_CHANGED, 'exact', 48.8566]]);
     expect(m.vers(PROCHE).map((e) => [e.data.precision, e.data.latitude])).toEqual([['neighborhood', 48.855]]);
     expect(m.vers(SANG).map((e) => [e.data.precision, e.data.latitude])).toEqual([['city', 48.85]]);
@@ -239,6 +261,26 @@ describe('le rattrapage — `GET /relations/locations` sert les partages tronqu�
 
     expect((await sharedLocationSnapshotFor(m.deps, SANG, { bbox: autourDuCentreDeVille })).items).toHaveLength(1);
     expect((await sharedLocationSnapshotFor(m.deps, SANG, { bbox: autourDuPointReel })).items).toEqual([]);
+  });
+
+  it('#19887 : le mouvement survit au magasin, servi à l\'exact et à lui seul', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.avancer(60_000);
+    await updateSharedLocation(m.deps, EMETTEUR, { ...PARIS, motion: 'cycling' });
+
+    expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items).toEqual([expect.objectContaining({ precision: 'exact', motion: 'cycling' })]);
+    expect((await sharedLocationSnapshotFor(m.deps, PROCHE, {})).items[0]).not.toHaveProperty('motion');
+    expect((await sharedLocationSnapshotFor(m.deps, SANG, {})).items[0]).not.toHaveProperty('motion');
+  });
+
+  it('#19887 : un mouvement inconnu est refusé, et la position servie ne bouge pas', async () => {
+    const m = monde();
+    await demarrer(m);
+    const ack = await updateSharedLocation(m.deps, EMETTEUR, { ...PLUS_LOIN, motion: 'flying' });
+
+    expect(ack).toMatchObject({ success: false });
+    expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items[0]).toMatchObject({ latitude: PARIS.latitude });
   });
 
   it('un partage échu n\'est plus servi', async () => {
@@ -445,6 +487,18 @@ describe('ce qui ne change pas ne part pas — un lecteur flouté n\'apprend pas
     expect(m.vers(PROCHE)).toEqual([]);
     expect(m.vers(AMI).map((e) => e.data.latitude)).toEqual([48.8571]);
   });
+
+  it('#19887 : un mouvement qui change sur place part chez l\'exact, jamais chez le flouté', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.emissions.length = 0;
+    m.avancer(60_000);
+    await updateSharedLocation(m.deps, EMETTEUR, { ...PARIS, motion: 'running' });
+
+    expect(m.vers(SANG)).toEqual([]);
+    expect(m.vers(PROCHE)).toEqual([]);
+    expect(m.vers(AMI).map((e) => e.data.motion)).toEqual(['running']);
+  });
 });
 
 describe('le magasin strict — contre-audit de #16986 (A, B, C)', () => {
@@ -591,7 +645,7 @@ describe('contre-audit adversarial de 86fa2ae — la fin ne part qu\'à qui a vu
     const m = monde();
     m.echouerProchaineLecture(1);
 
-    expect(await demarrer(m, [{ userId: AMI, precision: 'exact' }])).toEqual({ success: true, data: { expiresAt: new Date(T0 + HEURE).toISOString() } });
+    expect(await demarrer(m, [{ userId: AMI, precision: 'exact' }])).toEqual({ success: true, data: { expiresAt: new Date(T0 + HEURE).toISOString(), startedAt: new Date(T0).toISOString() } });
     expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items).toHaveLength(1);
     expect(await stopSharedLocation(m.deps, EMETTEUR)).toEqual({ success: true });
     expect(m.vers(AMI).at(-1)?.event).toBe(SERVER_EVENTS.SHARED_LOCATION_ENDED);

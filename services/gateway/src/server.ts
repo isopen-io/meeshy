@@ -25,6 +25,7 @@ import { configureAtRestFileAccess } from './services/attachments/atRest/atRestF
 import { atRestFileAccessFor } from './services/attachments/atRest/atRestFileAccessFor';
 import { startTranslatorForget } from './services/translatorForgetBootstrap';
 import { startAtRestFileSweep } from './jobs/at-rest-file-sweep';
+import { startFriendRequestMessageTranslation } from './services/friend-requests/FriendRequestMessageTranslationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 // Extrait dans `./gateway-logger` pour que `route-registration.ts` puisse
 // logger sans importer `server.ts` (effets de bord au chargement du module —
@@ -52,6 +53,8 @@ import { createDeviceLocaleMiddleware } from './middleware/deviceLocale';
 import { createDeviceCountryMiddleware } from './middleware/deviceCountry';
 import { requestIdPlugin } from './middleware/request-id';
 import { CORS_METHODS, CORS_EXPOSED_HEADERS } from './config/cors-methods';
+import { writeCrashLog } from './utils/crash-log';
+import { createShutdownDrain, registerShutdownDrain, resolveDrainMs, runTwoPhaseShutdown } from './utils/shutdown-drain';
 import { fastifyCorsOrigin, isCorsRejection, CORS_REJECTION_MESSAGE } from './config/cors-origins';
 import { conditionalGetOnSend } from './utils/etag';
 import { resolveTrustProxy } from './config/trust-proxy';
@@ -610,6 +613,9 @@ class MeeshyServer {
       exposedHeaders: CORS_EXPOSED_HEADERS
     });
 
+    // #19280 — vidange de l'arrêt : 503 + CORS de la passerelle, santé unhealthy.
+    registerShutdownDrain(this.server, this.shutdownDrain);
+
     // OpenAPI/Swagger documentation
     await this.server.register(swagger, {
       openapi: {
@@ -930,6 +936,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       await this.translationService.initialize();
       startTranslatorForget({ zmq: this.translationService.getZmqClient(), redis: getCacheStore().getNativeClient() as never }); // #13102
       startAtRestFileSweep(this.prisma); // #13100
+      startFriendRequestMessageTranslation(this.server, this.prisma); // #19361 — l'écouteur du mot d'une demande, avant tout retour
       const isHealthy = await this.translationService.healthCheck();
       if (isHealthy) {
         logger.info('✓ Translation service initialized successfully');
@@ -1211,7 +1218,18 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     }
   }
 
+  private readonly shutdownDrain = createShutdownDrain();
+
   public async stop(): Promise<void> {
+    await runTwoPhaseShutdown({
+      drain: this.shutdownDrain,
+      drainMs: resolveDrainMs(process.env),
+      sleep: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+      close: () => this.closeServices(),
+    });
+  }
+
+  private async closeServices(): Promise<void> {
     logger.info('🛑 Shutting down server...');
 
     try {
@@ -1333,47 +1351,6 @@ process.on('SIGINT', async () => {
     process.exit(1);
   }
 });
-
-// Helper pour écrire les crash logs dans un fichier
-function writeCrashLog(type: string, error: unknown, promise?: Promise<unknown>): void {
-  const timestamp = new Date().toISOString();
-  const crashDir = path.join(process.cwd(), 'logs');
-  const crashFile = path.join(crashDir, 'gateway-crashes.log');
-
-  // Créer le dossier logs s'il n'existe pas
-  if (!fs.existsSync(crashDir)) {
-    fs.mkdirSync(crashDir, { recursive: true });
-  }
-
-  // Construire le message de crash détaillé
-  let crashMessage = `\n${'='.repeat(80)}\n`;
-  crashMessage += `[${timestamp}] ${type}\n`;
-  crashMessage += `${'='.repeat(80)}\n`;
-
-  if (error instanceof Error) {
-    crashMessage += `Name: ${error.name}\n`;
-    crashMessage += `Message: ${error.message}\n`;
-    crashMessage += `Stack:\n${error.stack || 'No stack trace'}\n`;
-    if ((error as any).cause) {
-      crashMessage += `Cause: ${JSON.stringify((error as any).cause, null, 2)}\n`;
-    }
-  } else {
-    crashMessage += `Reason: ${JSON.stringify(error, null, 2)}\n`;
-    crashMessage += `Type: ${typeof error}\n`;
-  }
-
-  if (promise) {
-    crashMessage += `Promise: ${promise.toString()}\n`;
-  }
-
-  crashMessage += `${'='.repeat(80)}\n`;
-
-  // Écrire dans le fichier
-  fs.appendFileSync(crashFile, crashMessage);
-
-  // Aussi logger dans la console avec le stack complet
-  logger.error('Crash', { message: crashMessage });
-}
 
 process.on('uncaughtException', (error) => {
   logger.error('❌ UNCAUGHT EXCEPTION - See logs/gateway-crashes.log for details');

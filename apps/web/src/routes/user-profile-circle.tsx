@@ -13,7 +13,7 @@ import { translateCircles, type CirclesCatalogKey } from '@/lib/i18n-circles-cat
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { CIRCLE_LEVELS, demotionOf, pendingRaiseOf, progressSummary, raiseOffer, type Demotion } from '@/lib/relations/circles';
 import { performLowerRelation } from '@/lib/relations/lower-relation';
-import { relationLevelIcon, relationLevelLabel } from '@/lib/relations/level-labels';
+import { relationLevelIcon, relationLevelLabel, relationLevelTint } from '@/lib/relations/level-labels';
 import { useCirclesCatalog } from '@/lib/use-circles-catalog';
 import { progressText } from '@/lib/relations/progress-text';
 import { BRAND, BRAND_FILL, FOCUS, INK, INK_2 } from './user-profile-style';
@@ -42,13 +42,6 @@ import { BRAND, BRAND_FILL, FOCUS, INK, INK_2 } from './user-profile-style';
  *   confirmation qui dit le départ, l'arrivée, le silence et les 30 jours.
  *   Optimiste : le niveau change au geste, se défait sur un refus.
  */
-
-const LEVEL_TINT: Readonly<Record<(typeof CIRCLE_LEVELS)[number], string>> = {
-  BLOOD: 'var(--color-error)',
-  CLOSE: 'var(--color-warning)',
-  FRIEND: 'var(--color-success)',
-  ACQUAINTANCE: 'var(--ios-info)',
-};
 
 const DANGER = 'var(--color-error)';
 
@@ -85,7 +78,7 @@ export const ProfileCircleRowView = memo(function ProfileCircleRowView({
       <div
         data-profile-circle={level}
         className="flex items-center gap-3 rounded-card px-3.5 py-3"
-        style={{ backgroundColor: `color-mix(in srgb, ${LEVEL_TINT[level]} 10%, transparent)` }}
+        style={{ backgroundColor: `color-mix(in srgb, ${relationLevelTint(level)} 10%, transparent)` }}
       >
         <p className="grid min-w-0 flex-1 gap-0.5" aria-label={[title, line].filter((part): part is string => part !== null).join(', ')}>
           <span aria-hidden="true" className="text-body font-bold" style={{ color: INK }}>

@@ -48,6 +48,8 @@ export type FrameEnv = {
   readonly blur?: () => BlurStage | null;
   /** L'étage des lens (W14) — absent : une lens posée ne se joue pas ici, l'image part comme avant. */
   readonly lens?: LensStage;
+  /** Le gréement du visage (#19779, `face-rig-port.ts`) : rendu, avec son modèle, à la fermeture du moteur. */
+  readonly faceRig?: { readonly close: () => void };
 };
 
 export type Timings = { readonly frames: number; readonly p50: number; readonly p95: number; readonly max: number };
@@ -146,6 +148,7 @@ export function createFrameEngine(initial: FrameSettings, env: FrameEnv): FrameE
       blur?.close();
       blur = null;
       env.lens?.close();
+      env.faceRig?.close();
     },
   };
 }

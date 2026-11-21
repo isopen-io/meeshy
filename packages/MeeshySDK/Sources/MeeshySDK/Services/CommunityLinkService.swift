@@ -24,7 +24,8 @@ public final class CommunityLinkService: Sendable {
                 baseUrl: baseUrl,
                 memberCount: community.memberCount ?? 0,
                 isActive: community.isActive,
-                createdAt: community.createdAt
+                createdAt: community.createdAt,
+                memberPreviews: community.memberPreviews
             )
         }
     }
@@ -46,4 +47,5 @@ struct APICommunityMini: Decodable {
     let isActive: Bool
     let memberCount: Int?
     let createdAt: Date
+    let memberPreviews: [LinksFaceMember]?
 }

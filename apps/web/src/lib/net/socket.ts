@@ -33,6 +33,11 @@ export type SocketClient = {
   readonly connected: boolean;
   connect(): void;
   disconnect(): void;
+  /** Abandonne le transport, même « connecté », et rouvre sans attendre (#19776) :
+   * après un changement de réseau, la connexion TCP d'avant peut être morte
+   * sans le savoir. Facultatif : le bouchon de fixtures et les faux sockets
+   * de témoin n'ont pas de transport à recycler. */
+  recycle?(): void;
   on<T = unknown>(event: string, handler: SocketHandler<T>): void;
   off<T = unknown>(event: string, handler: SocketHandler<T>): void;
   emit(event: string, payload?: unknown): void;

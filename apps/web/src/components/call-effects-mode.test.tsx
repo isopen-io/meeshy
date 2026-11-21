@@ -130,12 +130,13 @@ describe('CallEffectsMode', () => {
     view.done();
   });
 
-  test('« Visage » d’abord : les six effets, « Aucun » coché ; « Couleur » montre les huit ambiances d’iOS', () => {
+  test('« Visage » d’abord : les sept effets, « Aucun » coché ; « Couleur » montre les huit ambiances d’iOS', () => {
     const view = mount();
     const categories = view.all('[data-call-effects-category]');
     expect(categories.map((button) => button.textContent)).toEqual(['Visage', 'Couleur']);
     expect(categories.map((button) => button.getAttribute('aria-pressed'))).toEqual(['true', 'false']);
-    expect(view.all('[data-carousel-item]').map((item) => item.getAttribute('data-carousel-item'))).toEqual(['none', 'smoothing', 'toad', 'angel', 'demon', 'volcano']);
+    expect(view.all('[data-carousel-item]').map((item) => item.getAttribute('data-carousel-item'))).toEqual(['none', 'smoothing', 'toad', 'angel', 'demon', 'volcano', 'baby']);
+    expect(view.all('[data-carousel-item]').map((item) => item.getAttribute('aria-label'))).toEqual(['Aucun', 'Lissage de peau', 'Crapaud', 'Ange', 'Démon', 'Éruption', 'Bébé']);
     expect(view.find('[aria-checked="true"]')?.getAttribute('data-carousel-item')).toBe('none');
     view.press('[data-call-effects-category="color"]');
     expect(view.all('[data-carousel-item]').map((item) => item.getAttribute('data-carousel-item'))).toEqual(['natural', 'golden', 'film', 'softNight', 'bright', 'velvet', 'sky', 'monochrome']);
@@ -153,13 +154,13 @@ describe('CallEffectsMode', () => {
   });
 
   test('→ PARCOURT jusqu’au voisin sans l’appliquer (#18186 : seule l’activation choisit) ; au bout, rien ne boucle', () => {
-    const view = mount({ effects: { ...NO_EFFECTS, faceEffect: 'volcano' } });
-    const last = view.find('[data-carousel-item="volcano"]') as HTMLElement;
+    const view = mount({ effects: { ...NO_EFFECTS, faceEffect: 'baby' } });
+    const last = view.find('[data-carousel-item="baby"]') as HTMLElement;
     act(() => last.focus());
     act(() => last.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })));
     expect(document.activeElement).toBe(last);
     act(() => last.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })));
-    expect(document.activeElement?.getAttribute('data-carousel-item')).toBe('demon');
+    expect(document.activeElement?.getAttribute('data-carousel-item')).toBe('volcano');
     expect(view.applied).toEqual([]);
     view.done();
   });

@@ -4,6 +4,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.app.battery.BatteryPushHandler
 import me.meeshy.app.bring.BringPushHandler
+import me.meeshy.app.fall.FallPushHandler
+import me.meeshy.app.inactivity.InactivityPushHandler
 import me.meeshy.app.phonereachability.PhoneReachabilityPushHandler
 import me.meeshy.app.talkie.TalkieWakeHandler
 import me.meeshy.sdk.call.CallFreshnessChecker
@@ -31,7 +33,11 @@ import javax.inject.Singleton
  *     or the SyncPill instead of the banner ;
  *  7. a **phone reachability** push (`device_probe`, `device_unreachable` app open — #18737)
  *     ([PhoneReachabilityPushHandler]) — a silent `POST /me/device/alive`, or the SyncPill instead of the banner ;
- *  8. anything else : the message pipeline ([MessageNotificationPresenter]).
+ *  8. an **inactivity alert** (`inactivity_alert` app open — #18738) ([InactivityPushHandler]) — the SyncPill instead of
+ *     the banner ; `wellness_check` always reaches the pipeline, which adds « Je vais bien » ;
+ *  9. a **safety alert** (`safety_alert`, `safety_alert_cleared` — the fall detected, #18748) ([FallPushHandler]) — the
+ *     clearing always removes the state ; app open, neither makes a banner ;
+ * 10. anything else : the message pipeline ([MessageNotificationPresenter]).
  *
  * Each stage is isolated (the async EventEmitter rule) : a rendering failure never deprives
  * the observers, an observer failure never deprives the others.
@@ -47,6 +53,8 @@ class PushMessageDispatcher @Inject constructor(
     private val talkieHandler: TalkieWakeHandler,
     private val batteryHandler: BatteryPushHandler,
     private val phoneReachabilityHandler: PhoneReachabilityPushHandler,
+    private val inactivityHandler: InactivityPushHandler,
+    private val fallHandler: FallPushHandler,
     private val messagePresenter: MessageNotificationPresenter,
     private val freshness: CallFreshnessChecker,
     observers: Set<@JvmSuppressWildcards PushObserver>,
@@ -105,6 +113,8 @@ class PushMessageDispatcher @Inject constructor(
                 talkieHandler.handle(push.data) -> Unit
                 batteryHandler.handle(push) -> Unit
                 phoneReachabilityHandler.handle(push) -> Unit
+                inactivityHandler.handle(push) -> Unit
+                fallHandler.handle(push) -> Unit
                 else -> messagePresenter.present(push)
             }
         }

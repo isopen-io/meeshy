@@ -205,6 +205,28 @@ const FACE_GLYPH: Readonly<Record<FaceEffect, ReactNode>> = {
       <circle cx="12.4" cy="7" r="0.9" fill="#ff5a00" />
     </>
   ),
+  baby: (
+    <>
+      {/* harmony-exempt: illustration d un effet de visage, teintes propres a chaque effet */}
+      <circle cx="12" cy="13" r="8" fill="#ffd9bf" />
+      {/* harmony-exempt: illustration d un effet de visage, teintes propres a chaque effet */}
+      <path d="M11 5.2c.4-1.6 2.4-1.9 2.9-.7.3.8-.4 1.4-1 1.1" stroke="#b9774a" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+      {/* harmony-exempt: illustration d un effet de visage, teintes propres a chaque effet */}
+      <circle cx="8.8" cy="12.2" r="2.1" fill="#2b2118" />
+      {/* harmony-exempt: illustration d un effet de visage, teintes propres a chaque effet */}
+      <circle cx="15.2" cy="12.2" r="2.1" fill="#2b2118" />
+      {/* harmony-exempt: illustration d un effet de visage, teintes propres a chaque effet */}
+      <circle cx="9.5" cy="11.5" r="0.7" fill="#fff" />
+      {/* harmony-exempt: illustration d un effet de visage, teintes propres a chaque effet */}
+      <circle cx="15.9" cy="11.5" r="0.7" fill="#fff" />
+      {/* harmony-exempt: illustration d un effet de visage, teintes propres a chaque effet */}
+      <ellipse cx="6.8" cy="15.6" rx="1.6" ry="1.1" fill="#ff9fb3" opacity="0.85" />
+      {/* harmony-exempt: illustration d un effet de visage, teintes propres a chaque effet */}
+      <ellipse cx="17.2" cy="15.6" rx="1.6" ry="1.1" fill="#ff9fb3" opacity="0.85" />
+      {/* harmony-exempt: illustration d un effet de visage, teintes propres a chaque effet */}
+      <path d="M10.6 17c.9.7 1.9.7 2.8 0" stroke="#c0605a" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+    </>
+  ),
 };
 
 const SWATCH: Readonly<Record<VideoPreset, string>> = {

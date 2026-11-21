@@ -32,8 +32,9 @@ import {
 import { sendSuccess, sendError, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { refuserCommeIntrouvable } from './utils/access-control';
 import { applyCommunityAdmission, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
-import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
-import { presenceFor, viewerFromRequest } from '../users/presence-gate';
+import { communityMemberAnnouncerFrom } from '../../services/community-member-broadcast';
+import { viewerFromRequest } from '../users/presence-gate';
+import { gateParticipantsPresence } from './participants-presence';
 import {
   generateConversationIdentifier,
   generateCompactConversationIdentifier,
@@ -43,7 +44,7 @@ import type {
   ConversationParams,
   CreateConversationBody
 } from './types';
-import { announceConversationClosed } from '../../socketio/announceConversationClosed';
+import { announceConversationClosed, audienceDeRetractation } from '../../socketio/announceConversationClosed';
 import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure';
 import { eraseExternalPeerOnClose } from '../../services/external-conversation/erase-external-peers';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
@@ -54,6 +55,7 @@ import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice';
 import { directLookupWheres, firstFound } from '../../services/conversations/directPair';
+import { highestRankedConversation } from '../../services/conversations/highestRanked';
 import {
   decideCreationRegime,
   directReopeningFor,
@@ -67,7 +69,8 @@ import { isServerAtRestUnavailable } from '../../services/messaging/serverAtRest
 import { announceConversationNew } from '../../services/conversations/obsoleteCapability';
 import { ENCRYPTION_ACTIVATION_RESTRICTED_CODE } from '../../utils/encryption-activation-policy';
 import { ENCRYPTION_MODE_UNSUPPORTED_CODE } from '@meeshy/shared/utils/conversation-creation-encryption';
-import { E2EE_DIRECT_NOT_A_PAIR_MESSAGE, E2EE_ERROR_CODES } from '@meeshy/shared/types/e2ee-directory';
+import { E2EE_DIRECT_NOT_A_PAIR_MESSAGE, E2EE_ERROR_CODES, E2EE_PARTICIPANT_WITHOUT_DEVICE_MESSAGE } from '@meeshy/shared/types/e2ee-directory';
+import { membersWithoutEndToEndDevice } from '../../services/e2ee/members-without-device';
 import { activeMembershipOf } from '../communities/serialization';
 import {
   composeConversationUpdate,
@@ -77,9 +80,7 @@ import {
 
 const logger = enhancedLogger.child({ module: 'conversations/core' });
 
-/**
- * Enregistre `POST /conversations` (création d'une conversation).
- */
+/** Enregistre `POST /conversations` (création d'une conversation). */
 export function registerCreateConversationRoute(
   fastify: FastifyInstance,
   prisma: PrismaClient,
@@ -251,12 +252,24 @@ export function registerCreateConversationRoute(
           { userId, peerId: uniqueParticipantIds[0] },
           { plaintext: reopening === 'readable', endToEnd: reopening === 'end-to-end' },
         );
-        const existingDirect = await firstFound(lookups, (where) => prisma.conversation.findFirst({
-          where,
-          // Des doublons historiques existent (5 DM atabeth↔jcnm datant
-          // d'avant ce fix) : rouvrir la plus RÉCEMMENT ACTIVE, pas une
-          // arbitraire — sinon l'utilisateur retombe sur une DM morte.
-          orderBy: { lastMessageAt: 'desc' },
+        // Des doublons historiques existent (5 DM atabeth↔jcnm datant d'avant ce
+        // fix) : rouvrir la plus RÉCEMMENT ACTIVE, pas une arbitraire — sinon
+        // l'utilisateur retombe sur une DM morte.
+        //
+        // #19835 — « active » est le RANG (max(`lastMessageAt`,
+        // `lastActivityAt`), #9026), pas le dernier message : le doublon où l'on
+        // vient de réagir, de s'appeler ou d'épingler est le vivant.
+        //
+        // **L'ORDRE DES DEUX DÉCISIONS EST STRUCTUREL : `firstFound` DEHORS (le
+        // régime), le rang DEDANS** (#12966, #12949). L'inverse confie le régime
+        // à DEUX résolutions indépendantes — un flux par colonne, lancés
+        // ensemble — et un `e2ee` apparu entre les deux lectures fait servir LE
+        // CLAIR. Mesuré, avec les deux imbrications :
+        // `__tests__/unit/services/conversations/conversation-reopen-regime-before-rank.test.ts`.
+        const existingDirect = await firstFound(lookups, (where) => highestRankedConversation((stream) => prisma.conversation.findFirst({
+          where: { ...where, ...stream.where },
+          orderBy: stream.orderBy,
+          // #20103 — sans `where` : lecture d'IDENTITÉ (l'appelant, le créateur), pas une audience.
           include: {
             participants: {
               include: {
@@ -272,7 +285,7 @@ export function registerCreateConversationRoute(
               }
             }
           }
-        }));
+        })));
         if (existingDirect) {
           const callerParticipant = existingDirect.participants.find((p: any) => p.userId === userId);
           const creatorParticipant = existingDirect.participants.find((p: any) => isMemberCreator(p.role ?? 'member'));
@@ -328,6 +341,11 @@ export function registerCreateConversationRoute(
             title: existingDirect.title || null
           }, { statusCode: 200 });
         }
+      }
+
+      // #20073 — un tête-à-tête chiffré ne naît que si chacun a un appareil chiffré ; personne n'est nommé.
+      if (type === 'direct' && regime.mode === 'e2ee' && (await membersWithoutEndToEndDevice(prisma, [userId, ...uniqueParticipantIds])).length > 0) {
+        return sendError(reply, 409, E2EE_PARTICIPANT_WITHOUT_DEVICE_MESSAGE, { code: E2EE_ERROR_CODES.PARTICIPANT_WITHOUT_DEVICE });
       }
 
       // #14107 — chaque membre nommé : direct dès Connaissance, sinon une DEMANDE
@@ -406,6 +424,10 @@ export function registerCreateConversationRoute(
             ]
           }
         },
+        // #20103 — sans `where`, et sans objet d'en avoir un : la conversation
+        // vient de NAÎTRE dans le `create` ci-dessus, donc chacune de ses lignes
+        // de participation est vivante par construction. Cette liste sert la
+        // réponse REST au créateur, jamais une audience.
         include: {
           participants: {
             include: {
@@ -447,7 +469,7 @@ export function registerCreateConversationRoute(
       // Si la conversation est créée dans une communauté, ses participants y
       // entrent selon le plan admis plus haut (#16639, `planCommunityAdmission`).
       if (communityId && communityAdmission?.kind === 'admitted') {
-        await applyCommunityAdmission(prisma, communityId, communityAdmission);
+        await applyCommunityAdmission(prisma, communityId, communityAdmission, communityMemberAnnouncerFrom(fastify));
       }
 
       // Pour les DMs, pas de titre — le frontend résout le nom de l'interlocuteur
@@ -592,9 +614,7 @@ function refuseCreationRegime(reply: FastifyReply, refusal: CreationRegimeRefusa
   });
 }
 
-/**
- * Enregistre `PUT`/`PATCH /conversations/:id` (mise à jour des métadonnées).
- */
+/** Enregistre `PUT`/`PATCH /conversations/:id` (mise à jour des métadonnées). */
 export function registerUpdateConversationRoute(
   fastify: FastifyInstance,
   prisma: PrismaClient,
@@ -762,32 +782,14 @@ export function registerUpdateConversationRoute(
       // Gate de présence des co-participants. `conversationParticipantSchema`
       // DÉCLARE `isOnline`/`lastActiveAt`, et l'`include` ci-dessus ramène tous
       // les scalaires de `Participant` : ces deux champs atteignaient le fil
-      // BRUTS. Régime STRICT (2026-08-25) : self/ADMIN+/ami seuls voient la
-      // présence d'un co-participant ; un id ABSENT de la carte (participant
-      // sans compte) est masqué, sauf pour un viewer ADMIN+.
-      //
-      // Défini ici, appliqué aux DEUX sorties : la branche « rien à écrire »
-      // rend les mêmes lignes que la branche nominale, donc la même donnée à
-      // garder. Une porte posée sur une seule des deux n'est pas une porte.
+      // BRUTS. `gateParticipantsPresence` porte la règle (régime STRICT du
+      // 2026-08-25) et vit désormais dans son unité — appliquée aux DEUX
+      // sorties ci-dessous, car une porte posée sur une seule n'est pas une
+      // porte, et la branche « rien à écrire » rend les mêmes lignes.
       const updatePresenceViewer = viewerFromRequest(request);
-      const gatePresence = async <P extends { userId: string | null; isOnline: boolean | null; lastActiveAt: Date | null }>(
+      const gatePresence = <P extends { userId: string | null; isOnline: boolean | null; lastActiveAt: Date | null }>(
         participants: P[]
-      ) => {
-        const vis = await getPresenceVisibilityService(prisma).resolveForTargets(
-          updatePresenceViewer,
-          participants
-            .map((p) => p.userId)
-            .filter((uid): uid is string => !!uid)
-        );
-        return participants.map((p) => {
-          const prefs = presenceFor(updatePresenceViewer, vis, p.userId);
-          return {
-            ...p,
-            isOnline: prefs.showOnline ? p.isOnline : false,
-            lastActiveAt: prefs.showLastSeenTimestamp ? p.lastActiveAt : null,
-          };
-        });
-      };
+      ) => gateParticipantsPresence({ prisma, viewer: updatePresenceViewer }, participants);
 
       if (Object.keys(updateData).length === 0) {
         const unchanged = await prisma.conversation.findUnique({
@@ -812,7 +814,13 @@ export function registerUpdateConversationRoute(
       // La room de conversation ne suffit pas : un participant posé sur l'écran
       // de LISTE n'est joignable que par sa room personnelle — sans elle, un
       // renommage n'atteignait que ceux qui avaient le fil ouvert. Le helper
-      // partagé (#7845) écarte les inactifs et chaîne les rooms.
+      // partagé (#7845) chaîne les rooms et écarte les participations non
+      // VIVANTES : ce qu'il annonce est du CONTENU — titre, description, avatar,
+      // bannière — et un membre actif-et-BANNI n'y a pas droit (#20103 ; la
+      // raison entière est écrite sur l'unité, qui est le site qui décide). Son
+      // type exige `bannedAt`, et l'`include` ci-dessus le ramène avec tous les
+      // scalaires de `Participant` : c'est le compilateur qui garantit que la
+      // colonne est là, et non une relecture de la projection.
       broadcastConversationUpdated({
         io: fastify.socketIOHandler?.getManager()?.getIO(),
         conversationId,
@@ -855,9 +863,7 @@ export function registerUpdateConversationRoute(
   });
 }
 
-/**
- * Enregistre `DELETE /conversations/:id` (suppression douce d'une conversation).
- */
+/** Enregistre `DELETE /conversations/:id` (suppression douce d'une conversation). */
 export function registerDeleteConversationRoute(
   fastify: FastifyInstance,
   prisma: PrismaClient,
@@ -964,12 +970,15 @@ export function registerDeleteConversationRoute(
       // éteint aussi ce qu'il portait de vivant (les partages de position en
       // cours), et cette décision ne se répète pas sur les trois chemins de
       // clôture — elle vit dans l'unité qui les sert tous.
+      //
+      // Son audience passe par `audienceDeRetractation` : large délibérément, et
+      // la raison est sur l'unité de clôture (#20103).
       const closureManager = fastify.socketIOHandler?.getManager()
       announceConversationClosed({
         io: closureManager?.getIO(),
         manager: closureManager,
         conversationId,
-        participants: closedConversation.participants.filter(p => p.isActive),
+        participants: audienceDeRetractation(closedConversation.participants),
         closedBy: userId,
         closedAt: now
       })

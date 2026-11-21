@@ -24,15 +24,17 @@ object RecentWindowPrune {
      *   milliseconde que la plus ancienne servie, d'id inférieur, peut être celle que la limite a coupée — vivante ; son
      *   rang est son id serveur, jamais la clé locale d'une bulle réconciliée ;
      * - jamais une ligne que la page sert, sous aucune de ses clés (id, id serveur, `cid_`) ;
-     * - aucune si un instant servi est illisible : il ne prouverait rien de la coupe (fail-closed).
+     * - aucune si un instant servi est illisible : il ne prouverait rien de la coupe (fail-closed) ;
+     * - [reachesOldest] : la page sert TOUT l'historique (`pagination.hasMore == false`, #19423) — plus rien n'existe sous
+     *   sa coupe, et une ligne détenue plus ancienne que la plus ancienne servie est partie elle aussi.
      * Une page vide déclare parties toutes les lignes détenues avant elle.
      */
-    fun gone(held: List<Held>, heldBefore: Set<String>, page: List<Served>): List<String> {
+    fun gone(held: List<Held>, heldBefore: Set<String>, page: List<Served>, reachesOldest: Boolean = false): List<String> {
         val instants = page.map { it.createdAt ?: return emptyList() }
         val served = page.flatMapTo(HashSet()) { listOfNotNull(it.id, it.clientMessageId) }
         val cut = page.zip(instants).minWithOrNull(compareBy<Pair<Served, Long>>({ it.second }, { it.first.id }))
         return held
-            .filter { row -> row.id in heldBefore && row.id !in served && row.serverId !in served && ranksAbove(row, cut) }
+            .filter { row -> row.id in heldBefore && row.id !in served && row.serverId !in served && (reachesOldest || ranksAbove(row, cut)) }
             .map { it.id }
     }
 

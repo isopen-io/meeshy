@@ -315,6 +315,55 @@ describe('withMutationLog', () => {
     });
   });
 
+  describe('with clientMutationId — the same id logged by ANOTHER gesture (#19567)', () => {
+    const otherKind = 'blockUser';
+
+    it.each(['converges', 'diverges'] as const)(
+      'never replays nor re-runs a result logged by another gesture, and refuses with 409 MUTATION_ID_REUSED (%s)',
+      async (replayCost) => {
+        const cmid = 'cmid_550e8400-e29b-41d4-a716-446655440019';
+        const { svc, fastify } = makeMocks();
+        svc.recordOrReturn.mockRejectedValue(new MutationLogDuplicate('someone-else', otherKind));
+        const onDuplicate = jest.fn().mockResolvedValue(makeItem('someone-else'));
+        const op = jest.fn().mockResolvedValue(makeItem());
+
+        const outcome = withMutationOutcome({
+          request: makeRequest(cmid),
+          fastify,
+          userId,
+          kind,
+          replayCost,
+          op,
+          onDuplicate,
+        });
+
+        await expect(outcome).rejects.toMatchObject({ statusCode: 409, code: 'MUTATION_ID_REUSED' });
+        expect(onDuplicate).not.toHaveBeenCalled();
+        expect(op).not.toHaveBeenCalled();
+      },
+    );
+
+    it('still replays a duplicate logged by the SAME gesture', async () => {
+      const cmid = 'cmid_550e8400-e29b-41d4-a716-446655440020';
+      const { svc, fastify } = makeMocks();
+      svc.recordOrReturn.mockRejectedValue(new MutationLogDuplicate('item-replayed', kind));
+      const onDuplicate = jest.fn().mockResolvedValue(makeItem('item-replayed'));
+
+      const outcome = await withMutationOutcome({
+        request: makeRequest(cmid),
+        fastify,
+        userId,
+        kind,
+        replayCost: 'diverges',
+        op: jest.fn(),
+        onDuplicate,
+      });
+
+      expect(outcome).toEqual({ status: 'replayed', result: makeItem('item-replayed') });
+      expect(onDuplicate).toHaveBeenCalledWith('item-replayed');
+    });
+  });
+
   describe('with clientMutationId — non-duplicate error', () => {
     it('re-throws errors that are not MutationLogDuplicate', async () => {
       const cmid = 'cmid_550e8400-e29b-41d4-a716-446655440005';

@@ -644,8 +644,16 @@ final class CallTranscriptionServiceSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Call/Services/CallTranscriptionService.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+            .appendingPathComponent("Meeshy/Features/Call/Services")
+        return try ["CallTranscriptionService.swift", "CallTranscriptionService+Capture.swift"]
+            .map { try String(contentsOf: url.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
+    }
+
+    private func nextMemberStart(after index: String.Index, in source: String) -> String.Index {
+        let candidates = ["\n    private func ", "\n    func "]
+            .compactMap { source.range(of: $0, range: index..<source.endIndex)?.lowerBound }
+        return candidates.min() ?? source.endIndex
     }
 
     func test_stopLocalCapture_removesTapUnconditionally() throws {
@@ -658,12 +666,10 @@ final class CallTranscriptionServiceSourceGuardTests: XCTestCase {
         // captions attempt for the rest of the app session (CallTranscriptionService
         // is a CallManager-owned singleton, not per-call).
         let source = try serviceSource()
-        guard let range = source.range(of: "private func stopLocalCapture") else {
+        guard let range = source.range(of: "func stopLocalCapture") else {
             XCTFail("stopLocalCapture not found"); return
         }
-        let nextFunc = source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound
-            ?? source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound
-            ?? source.endIndex
+        let nextFunc = nextMemberStart(after: range.upperBound, in: source)
         let body = String(source[range.lowerBound..<nextFunc])
         XCTAssertFalse(
             body.contains("guard audioEngine.isRunning else { return }"),
@@ -678,11 +684,10 @@ final class CallTranscriptionServiceSourceGuardTests: XCTestCase {
 
     func test_startLocalCapture_registersInterruptionObserver() throws {
         let source = try serviceSource()
-        guard let range = source.range(of: "private func startLocalCapture") else {
+        guard let range = source.range(of: "func startLocalCapture") else {
             XCTFail("startLocalCapture not found"); return
         }
-        let nextFunc = source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound
-            ?? source.endIndex
+        let nextFunc = nextMemberStart(after: range.upperBound, in: source)
         let body = String(source[range.lowerBound..<nextFunc])
         XCTAssertTrue(
             body.contains("observeAudioInterruptions()"),
@@ -717,11 +722,10 @@ final class CallTranscriptionServiceSourceGuardTests: XCTestCase {
     // so `isTranscribing`/`lastError` reflect reality and the UI can degrade.
     func test_handleAudioInterruption_whenEngineRestartFails_degradesViaApplyRecognitionError() throws {
         let source = try serviceSource()
-        guard let range = source.range(of: "private func handleAudioInterruption(") else {
+        guard let range = source.range(of: "func handleAudioInterruption(") else {
             XCTFail("handleAudioInterruption not found"); return
         }
-        let nextFunc = source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound
-            ?? source.endIndex
+        let nextFunc = nextMemberStart(after: range.upperBound, in: source)
         let body = String(source[range.lowerBound..<nextFunc])
         guard let catchRange = body.range(of: "} catch {") else {
             XCTFail("handleAudioInterruption has no catch block for audioEngine.start()"); return
@@ -737,11 +741,10 @@ final class CallTranscriptionServiceSourceGuardTests: XCTestCase {
 
     func test_handleAudioEngineConfigurationChange_whenEngineRestartFails_degradesViaApplyRecognitionError() throws {
         let source = try serviceSource()
-        guard let range = source.range(of: "private func handleAudioEngineConfigurationChange(") else {
+        guard let range = source.range(of: "func handleAudioEngineConfigurationChange(") else {
             XCTFail("handleAudioEngineConfigurationChange not found"); return
         }
-        let nextFunc = source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound
-            ?? source.endIndex
+        let nextFunc = nextMemberStart(after: range.upperBound, in: source)
         let body = String(source[range.lowerBound..<nextFunc])
         guard let catchRange = body.range(of: "} catch {") else {
             XCTFail("handleAudioEngineConfigurationChange has no catch block for audioEngine.start()"); return

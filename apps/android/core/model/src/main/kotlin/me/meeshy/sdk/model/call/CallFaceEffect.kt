@@ -12,20 +12,23 @@ enum class CallFaceEffect(val id: String) {
     Angel("angel"),
     Demon("demon"),
     Volcano("volcano"),
+
+    /** #19779 — au bout : un identifiant ne change jamais de rang (web, iOS, analytics). */
+    Baby("baby"),
     ;
 
     /** A stylized effect redraws the face (or the scene) instead of retouching it. */
     val isStylized: Boolean
         get() = when (this) {
             None, Smoothing -> false
-            Toad, Angel, Demon, Volcano -> true
+            Toad, Angel, Demon, Volcano, Baby -> true
         }
 
     /** Whether the effect needs a detected face to draw anything. */
     val needsFace: Boolean
         get() = when (this) {
             None, Volcano -> false
-            Smoothing, Toad, Angel, Demon -> true
+            Smoothing, Toad, Angel, Demon, Baby -> true
         }
 
     val analyticsName: String? get() = if (this == None) null else "face:$id"

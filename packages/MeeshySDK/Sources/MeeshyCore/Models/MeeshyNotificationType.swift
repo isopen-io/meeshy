@@ -49,6 +49,12 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
     /// Le téléphone d'un Proche ou d'un Sang est injoignable, ou répond de nouveau (#18737). L'acteur est la personne ;
     /// le toucher ouvre son profil. App ouverte, la SyncPill la dit à la place.
     case deviceUnreachable = "device_unreachable"
+    /// « Tout va bien ? » (#18738) : mon téléphone est resté inactif au-delà de mon délai. Adressée à SOI ; le toucher ou
+    /// l'action « Je vais bien » répondent. Signal de sécurité : aucun interrupteur par type.
+    case wellnessCheck = "wellness_check"
+    /// Un Sang n'a pas répondu à « Tout va bien ? », ou vient de répondre (#18738). L'acteur est la personne ; le toucher
+    /// ouvre son profil. Signal de sécurité : aucun interrupteur par type.
+    case inactivityAlert = "inactivity_alert"
 
     // Interaction events
     case userMentioned = "user_mentioned"
@@ -190,6 +196,8 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .relationAcquaintance: return "person.crop.circle.badge.checkmark"
         case .deviceBattery: return "battery.25"
         case .deviceUnreachable: return "iphone.slash"
+        case .wellnessCheck: return "hand.wave.fill"
+        case .inactivityAlert: return "person.fill.questionmark"
         case .communityInvite, .legacyGroupInvite: return "person.3.fill"
         case .communityJoined, .memberJoined, .legacyGroupJoined: return "person.badge.checkmark"
         case .communityLeft, .memberLeft, .legacyGroupLeft: return "person.badge.minus"
@@ -246,7 +254,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .userMentioned, .mention, .legacyMention:
             return "9B59B6"
         case .friendRequest, .contactRequest, .legacyFriendRequest, .friendAccepted, .contactAccepted, .legacyFriendAccepted, .legacyStatusUpdate,
-             .contactJoined, .contactRecentlyActive, .relationAcquaintance, .deviceBattery, .deviceUnreachable:
+             .contactJoined, .contactRecentlyActive, .relationAcquaintance, .deviceBattery, .deviceUnreachable, .wellnessCheck:
             return "4ECDC4"
         case .communityInvite, .communityJoined, .communityLeft, .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged, .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft:
             return "F8B500"
@@ -261,7 +269,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .legacyAffiliateSignup:
             return "2ECC71"
         case .securityAlert, .loginNewDevice, .legacySystemAlert, .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
-             .contentRemoved:
+             .contentRemoved, .inactivityAlert:
             return "EF4444"
         case .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted, .voiceCloneReady:
             return "08D9D6"

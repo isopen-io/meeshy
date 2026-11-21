@@ -102,6 +102,9 @@ const DB_CONVERSATION = {
 function makePrisma() {
   return {
     user: { findUnique: jest.fn().mockResolvedValue(DB_USER), findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
+    // #19362 — le réglage « accepter les demandes » de la cible, lu à l'envoi.
+    userPreferences: { findMany: jest.fn(async () => []) },
+    userPreference: { findMany: jest.fn(async () => []) },
     friendRequest: {
       findFirst: jest.fn().mockResolvedValue(null),
       // Même distinction qu'ailleurs dans le dépôt (#4162) : `select` → lecture

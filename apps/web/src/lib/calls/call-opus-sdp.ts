@@ -14,9 +14,9 @@ export type OpusShape = { readonly maxAverageBitrate: number; readonly maxPlayba
 
 const OPUS_RTPMAP = /^a=rtpmap:(\d+) opus\/48000/i;
 
-type Wanted = ReadonlyArray<readonly [string, string]>;
+export type Wanted = ReadonlyArray<readonly [string, string]>;
 
-function withParameters(existing: string, wanted: Wanted): string {
+export function withParameters(existing: string, wanted: Wanted): string {
   const pairs = existing.split(';').map((pair) => pair.trim()).filter((pair) => pair !== '');
   const keyOf = (pair: string): string => (pair.split('=')[0] ?? '').toLowerCase();
   const present = new Set(pairs.map(keyOf));
@@ -27,7 +27,7 @@ function withParameters(existing: string, wanted: Wanted): string {
   return [...kept, ...wanted.filter(([key]) => !present.has(key)).map(([key, value]) => `${key}=${value}`)].join(';');
 }
 
-function sectionsOf(lines: readonly string[]): readonly (readonly string[])[] {
+export function sectionsOf(lines: readonly string[]): readonly (readonly string[])[] {
   return lines.reduce<readonly (readonly string[])[]>((sections, line) => {
     if (line.startsWith('m=') || sections.length === 0) return [...sections, [line]];
     return [...sections.slice(0, -1), [...(sections.at(-1) ?? []), line]];

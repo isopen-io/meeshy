@@ -432,6 +432,7 @@
     <string name="reading_mode_summary_title">Resumo</string>
     <string name="retouch_crop_original">Original</string>
     <string name="retouch_effect_angel">Anjo</string>
+    <string name="retouch_effect_baby">Bebê</string>
     <string name="retouch_effect_demon">Demônio</string>
     <string name="retouch_effect_none">Nenhum</string>
     <string name="retouch_effect_smoothing">Suavizar pele</string>
@@ -497,7 +498,6 @@
     <string name="retouch_tool_text">Texto</string>
     <string name="retouch_tool_trim">Cortar</string>
     <string name="skeleton_feed_post_loading">Carregando uma publicação</string>
-    <string name="skeleton_link_row_loading">Carregando um link</string>
     <string name="skeleton_profile_loading">Carregando o perfil</string>
     <string name="skeleton_stories_loading">Carregando os stories</string>
     <string name="slide_rail_delete_cancel">Cancelar</string>
@@ -563,7 +563,6 @@
     <string name="talkie_send_rate_limited">Falas demais: tente de novo em um instante.</string>
     <string name="talkie_send_recording_copy">Gravando mensagem de voz…</string>
     <string name="talkie_send_talking">Você está falando com %1$s…</string>
-    <string name="talkie_send_voice">O walkie-talkie não passa agora: envie uma mensagem de voz.</string>
     <string name="talkie_send_waking">Acordando %1$s…</string>
     <string name="time_lastSeen_beforeYesterdayAt">Visto anteontem às %1$s</string>
     <string name="time_lastSeen_dateAt">Visto em %1$s às %2$s</string>

@@ -92,12 +92,12 @@ class CallControlsDispositionTest {
     }
 
     @Test
-    fun `the call is captions, record, add, journal, react, capture`() {
+    fun `the call is captions, record, add, react, capture`() {
         val call = CallControlsDisposition.Rails.railRows(actions(), CallScreenLayer.Menu)
             .first { it.family == CallActionFamily.TheCall }
         assertThat(call.actions).containsExactly(
             CallAction.Captions, CallAction.Recording, CallAction.AddPeople,
-            CallAction.Journal, CallAction.React, CallAction.Capture,
+            CallAction.React, CallAction.Capture,
         ).inOrder()
     }
 

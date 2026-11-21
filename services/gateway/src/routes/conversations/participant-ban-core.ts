@@ -8,6 +8,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js'
 import { liftBanOnly, resolveBanWrite, resolveUnbanWrite } from '../../services/conversations/conversationBanState'
 import { returningMemberRefusalFor } from '../../services/conversations/newMemberAdmission'
 import { applyCommunityAdmission, loadSalonCommunity, planSalonEntry } from '../../services/conversations/communityMembershipSync'
+import { communityMemberAnnouncerOverIO } from '../../services/community-member-broadcast'
 import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount'
 import { endConversationMembership } from '../../socketio/endConversationMembership'
 import { resolveTargetParticipant, identifyTarget } from './utils/target-participant'
@@ -389,7 +390,7 @@ export async function leverBannissementDeParticipant(
     data: unban.data,
   })
   if (community && communityAdmission.kind === 'admitted') {
-    await applyCommunityAdmission(prisma, community.communityId, communityAdmission)
+    await applyCommunityAdmission(prisma, community.communityId, communityAdmission, communityMemberAnnouncerOverIO(prisma, socketIO?.getManager()?.getIO()))
   }
   invalidateParticipantLookup(targetParticipant.id, id)
   if (unban.membershipRestored) {

@@ -41,17 +41,18 @@ struct GameMissionsView: View {
     var rerollSpend: SpendPreview { GameSpend.preview(held: game.treasury.held, cost: GameMissions.rerollPrice) }
 
     /// La rangée du changement : posée tant qu'une mission du jour reste à faire dans le jour, même quand le serveur
-    /// retire le changement faute de Meesh (`rerollAvailable`) — pour dire combien il en manque.
+    /// retire le changement faute de Meesh (`rerollAvailable`) — pour dire combien il en manque. Changer un acte reste au
+    /// niveau 5 : le premier Rêve (#17370) ne le propose pas.
     func rerollShown(now: Date = Date()) -> Bool {
         let end = GameMissionClock.endOfDay(missions.dayKey, timezone: accountTimezone)
         let dayOpen = end.map { now < $0 } ?? true
         let pending = missions.items.contains { !$0.isCompleted }
-        return dayOpen && pending && (missions.rerollAvailable || !rerollSpend.affordable)
+        return missions.unlocked && dayOpen && pending && (missions.rerollAvailable || !rerollSpend.affordable)
     }
 
     var body: some View {
         GameCard(anchor: .missions, title: String(localized: "game.missions.title", defaultValue: "Le rêve de cette nuit", bundle: .main)) {
-            if !missions.unlocked {
+            if missions.showsDoorOnly {
                 GameNote(text: GameCopy.missionsLockedWhat)
                 GameNote(text: GameCopy.missionsLocked(level: GameCopy.formatCount(game.level.shown.level)))
                 GameFactChipRow(
@@ -73,6 +74,9 @@ struct GameMissionsView: View {
                         defaultValue: "Heure du Prisme : \(GameCopy.clock(minuteOfDay: hour.startMinute)) – \(GameCopy.clock(minuteOfDay: hour.endMinute)) — chaque acte compte double.",
                         bundle: .main
                     ))
+                }
+                if let sparks = missions.fullDreamIn {
+                    GameNote(text: GameCopy.fullDreamLine(sparks: sparks))
                 }
                 ForEach(missions.items) { mission in
                     GameMissionRow(
@@ -124,6 +128,12 @@ struct GameMissionsView: View {
             }
         }
     }
+}
+
+extension GameBlock.Missions {
+    /// Sous le niveau 5, le premier Rêve (#17370) se joue comme les autres : seule la carte d'un serveur antérieur, qui
+    /// ne sert aucun acte, reste une porte fermée.
+    var showsDoorOnly: Bool { !unlocked && items.isEmpty }
 }
 
 /// La plage d'une carte : celle de la mission personnelle (deux heures), ou la fin du jour de jeu pour les trois du jour.

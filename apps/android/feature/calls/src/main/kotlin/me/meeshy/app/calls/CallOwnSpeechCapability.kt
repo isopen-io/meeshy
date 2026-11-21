@@ -71,6 +71,7 @@ class CallOwnSpeechController internal constructor(
     private val clock: () -> Long,
     private val mint: () -> String,
     private val scope: CoroutineScope,
+    private val binding: CallConversationBinding = CallConversationBinding(),
 ) : CallFeatureController {
 
     @Inject
@@ -82,6 +83,7 @@ class CallOwnSpeechController internal constructor(
         ledger: EndToEndRegimeLedger,
         captions: CallCaptionsController,
         session: SessionRepository,
+        binding: CallConversationBinding = CallConversationBinding(),
     ) : this(
         wires = CallOwnSpeechWires(
             muted = holder.microphoneMuted,
@@ -96,10 +98,10 @@ class CallOwnSpeechController internal constructor(
         clock = System::currentTimeMillis,
         mint = { UUID.randomUUID().toString().lowercase() },
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+        binding = binding,
     )
 
     private var callId = ""
-    private var conversationId = ""
     private var language = ""
     private var recognizerTag: String? = null
     private var stream: OwnSpeechStream? = null
@@ -112,7 +114,7 @@ class CallOwnSpeechController internal constructor(
             next is CallState.Ended || next == CallState.Idle -> reset()
             next.carriesMedia -> {
                 callId = session.callId.ifBlank { callId }
-                conversationId = session.config.conversationId.ifBlank { conversationId }
+                binding.bind(session)
                 if (watching == null) {
                     watching = combine(captions.state, wires.muted) { state, muted -> state to muted }
                         .onEach { (state, muted) -> reconcile(state, muted) }
@@ -205,6 +207,7 @@ class CallOwnSpeechController internal constructor(
             stop()
             return false
         }
+        val conversationId = binding.current
         if (!captions.state.value.gate.allowsCaptions || conversationId.isBlank()) {
             stop()
             return false
@@ -225,7 +228,6 @@ class CallOwnSpeechController internal constructor(
         resolving = null
         recognizerTag = null
         callId = ""
-        conversationId = ""
         language = ""
     }
 }

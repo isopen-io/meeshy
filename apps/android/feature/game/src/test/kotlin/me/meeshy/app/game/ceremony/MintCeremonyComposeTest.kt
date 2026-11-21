@@ -55,7 +55,7 @@ class MintCeremonyComposeTest {
         compose.mainClock.autoAdvance = false
         compose.setContent {
             CompositionLocalProvider(LocalGameHaptics provides haptics, LocalReduceMotion provides reduce) {
-                MeeshyTheme { MintCeremonyCover(request, settlement, glory = 1000, prepared = null) { finishes++ } }
+                MeeshyTheme { MintCeremonyCover(request, settlement, prepared = null) { finishes++ } }
             }
         }
     }

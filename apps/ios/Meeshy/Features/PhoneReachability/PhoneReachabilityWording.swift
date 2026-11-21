@@ -72,6 +72,10 @@ enum PhoneReachabilityWording {
 
 /// Les mots du téléphone injoignable sur une fiche et dans les réglages.
 enum PhoneReachabilitySettingsWording {
+    /// « Me prévenir s'il devient injoignable » (#19433) : SON téléphone, MA notification.
+    static var alertMe: String {
+        String(localized: "phoneReachability.alert.me", defaultValue: "Me prévenir s'il devient injoignable", bundle: .main)
+    }
     static func shareWith(name: String) -> String {
         String(format: String(localized: "phoneReachability.share.with", defaultValue: "Prévenir %@ si mon téléphone est injoignable", bundle: .main), name)
     }

@@ -1,4 +1,5 @@
 import { maskedAttachment, protectedPreview } from '../notifications/notification-preview';
+import { mediaSideContentMayTravel } from '../attachments/mediaSideContent';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import {
   hasPerReaderEphemeralDeadline,
@@ -131,6 +132,74 @@ export const quotedMessageIsProtected = (quoted: QuotedMessageRow | null | undef
     quoted.isViewOnce || quoted.isBlurred || quoted.isEncrypted || (flags & MASKING_FLAGS) !== 0
   );
 };
+
+/**
+ * #20018 — **ce que la loi de contenu latéral retient sur le message PORTEUR,
+ * la citation le reprenait en entier à l'événement suivant.**
+ *
+ * `mediaSideContentMayTravel` ferme la transcription, la description et les
+ * traductions dès que le message qui porte la pièce est éphémère (échéance
+ * POSÉE, pas seulement échue), supprimé, masqué ou chiffré. Un vocal éphémère
+ * sort donc de `message:new` sans un mot — et le `message:new` de la RÉPONSE
+ * qui le cite servait la ligne brute, sur un canal sans sérialiseur.
+ *
+ * ─── Pourquoi le prédicat de citation ne lit toujours PAS `expiresAt` ────────
+ *
+ * Parce que l'en-tête de ce module l'interdit, et qu'il a raison : « l'éphémère
+ * n'est pas une protection au sens de la citation — son texte est lisible dans
+ * le fil jusqu'à l'expiration, et la citation vit dans ce même fil », en
+ * SYMÉTRIE avec `APIMessageReplyTo.isProtected` côté iOS. Masquer la citation
+ * entière ferait taire à la passerelle un texte que le client affiche.
+ *
+ * Cette décision porte sur la CHAÎNE CITÉE. Elle ne dit rien de ce qui voyage
+ * À CÔTÉ d'elle — leçon 275, à son endroit le plus étroit. Et les deux ne se
+ * valent pas : le texte cité meurt avec le fil à l'expiration, **la
+ * transcription est une COPIE DURABLE qui lui survit**. La citation garde donc
+ * son texte, et ses pièces passent par la loi du porteur.
+ *
+ * ─── Pourquoi on retire ICI plus que `servedSideContent` ne retire ──────────
+ *
+ * `servedSideContent` laisse les MOTS des pistes traduites, et ce n'est pas un
+ * oubli : le contrat partagé déclare `transcription` REQUISE sur chaque piste,
+ * `fast-json-stringify` LÈVE sur une requise absente, et retirer la clé rendait
+ * la liste REST et `/sync` en 500 (dette écrite, #20015).
+ *
+ * **Ce blocage n'existe pas sur ce chemin-ci, et c'est mesuré** :
+ * `messageSchema.replyTo.attachments.items`
+ * (`packages/shared/types/api-schemas/message.ts`) déclare douze champs et
+ * **ni `transcription` ni `translations`**. REST les supprime donc déjà — il n'y
+ * a aucune clé requise à violer — et le seul canal qui les transportait est le
+ * socket, qui n'a pas de sérialiseur du tout. La LOI reste unique
+ * (`mediaSideContentMayTravel`) ; ce qui diffère est ce que chaque contrat
+ * permet de retirer, et le dire ici est ce qui empêche de lire cet écart comme
+ * une jumelle divergente.
+ *
+ * ─── Pourquoi `undefined` et non `null` ─────────────────────────────────────
+ *
+ * Fail-closed, chaque clé est POSÉE pour écraser ce que le site d'appel a
+ * répandu avant — même raison, et même idiome, que `servedDeletedQuote` vingt
+ * lignes plus haut, qui pose `translations: undefined`.
+ *
+ * La valeur n'est pas indifférente : **dans ce dépôt, `translations: null` est
+ * l'idiome d'un EFFACEMENT en base** — « ce message n'a plus les traductions
+ * qu'il avait » — et il engage l'effacement de la table VOISINE des versions
+ * scellées, que rien ne relie à `Message` (#9899, gardé par
+ * `__tests__/shared-translation-erasure-guard.test.ts`). Ici rien n'est effacé :
+ * la colonne reste intacte et le message PORTEUR la sert toujours ; c'est cette
+ * CHARGE-ci qui ne la transporte pas. Écrire `null` aurait dit, dans la langue
+ * du dépôt, exactement le contraire de ce que fait ce code — et la garde de
+ * #9899 l'a signalé, à juste titre.
+ *
+ * `undefined` dit « absente de la charge » : la clé disparaît à la
+ * sérialisation du socket, et le schéma REST ne la déclare de toute façon pas.
+ */
+const QUOTED_SIDE_CONTENT_WITHHELD = {
+  transcription: undefined,
+  translations: undefined,
+  alt: undefined,
+  altLanguage: undefined,
+  altTranslations: undefined,
+} as const;
 
 /** Le strict discriminant d'une pièce jointe masquée : de quoi choisir une icône, rien de plus. */
 const maskedQuotedAttachment = (att: Record<string, unknown>): Record<string, unknown> => ({
@@ -394,6 +463,14 @@ export function servedQuotedAttachments(
       isBlurred: row['isBlurred'] as boolean | null | undefined,
       effectFlags: row['effectFlags'] as number | null | undefined,
     };
-    return isProtected || maskedAttachment(protection) ? maskedQuotedAttachment(row) : att;
+    if (isProtected || maskedAttachment(protection)) return maskedQuotedAttachment(row);
+    const pieceProtection = {
+      ...protection,
+      isEncrypted: row['isEncrypted'] as boolean | null | undefined,
+      encryptionMode: row['encryptionMode'] as string | null | undefined,
+    };
+    return mediaSideContentMayTravel(pieceProtection, quoted ?? null)
+      ? att
+      : { ...row, ...QUOTED_SIDE_CONTENT_WITHHELD };
   });
 }

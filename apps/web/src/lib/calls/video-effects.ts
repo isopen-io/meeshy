@@ -17,7 +17,7 @@ export { BRIGHTNESS_LIMIT, effectsFilter, VIDEO_PRESET_CATALOG, VIDEO_PRESETS, t
  * vois dans ma vignette est ce que l'autre voit.
  *
  * Les EFFETS DE VISAGE (#8551) — lissage de peau, crapaud, ange, démon,
- * éruption volcanique — se choisissent un à la fois, par-dessus la couleur :
+ * éruption volcanique, bébé (#19779) — se choisissent un à la fois, par-dessus la couleur :
  * ils demandent le même traitement d'images, même quand la couleur est
  * naturelle (`needsFramePipeline`). Leur dessin vit avec le traitement
  * (`face-effects.ts`), jamais ici.
@@ -33,8 +33,8 @@ export { BRIGHTNESS_LIMIT, effectsFilter, VIDEO_PRESET_CATALOG, VIDEO_PRESETS, t
  * réunit ce que le traitement reçoit pour une caméra donnée.
  */
 
-/** Les effets de visage, dans l'ordre partagé avec iOS (`CallFaceEffect`). */
-export const FACE_EFFECTS = ['none', 'smoothing', 'toad', 'angel', 'demon', 'volcano'] as const;
+/** Les effets de visage, dans l'ordre partagé avec iOS et Android (`CallFaceEffect`) ; « Bébé » (#19779) au bout : un identifiant ne change jamais de rang. */
+export const FACE_EFFECTS = ['none', 'smoothing', 'toad', 'angel', 'demon', 'volcano', 'baby'] as const;
 
 export type FaceEffect = (typeof FACE_EFFECTS)[number];
 

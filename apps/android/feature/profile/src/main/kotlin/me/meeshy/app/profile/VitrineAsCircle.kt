@@ -2,13 +2,9 @@ package me.meeshy.app.profile
 
 import androidx.annotation.StringRes
 import me.meeshy.feature.profile.R
-import me.meeshy.sdk.model.AgeClass
-import me.meeshy.sdk.model.PlatformRole
-import me.meeshy.sdk.model.relation.RelationAccess
-import me.meeshy.sdk.model.relation.RelationAccessInput
-import me.meeshy.sdk.model.relation.RelationConsent
 import me.meeshy.sdk.model.relation.RelationFeature
 import me.meeshy.sdk.model.relation.RelationLevel
+import me.meeshy.sdk.model.relation.RelationOpenings
 
 /**
  * Ce que la Vitrine peut montrer ou fermer selon le cercle (« Voir comme », #18887). Chaque capacité nomme la feature de la
@@ -59,24 +55,10 @@ internal object VitrineAsCircle {
     val levels: List<RelationLevel> = RelationLevel.entries
 
     fun view(level: RelationLevel): VitrineView {
-        val (open, closed) = VitrineCapability.entries.partition { allows(level, it.feature) }
+        val (open, closed) = VitrineCapability.entries.partition { RelationOpenings.isOpen(level, it.feature) }
         val locked = closed
-            .map { VitrineLock(it, opensAt = opensAt(it.feature)) }
+            .map { VitrineLock(it, opensAt = RelationOpenings.opensAt(it.feature)) }
             .sortedBy { it.opensAt }
         return VitrineView(level, open, locked)
     }
-
-    private fun opensAt(feature: RelationFeature): RelationLevel =
-        levels.first { allows(it, feature) }
-
-    private fun allows(level: RelationLevel, feature: RelationFeature): Boolean = RelationAccess.resolve(
-        RelationAccessInput(
-            viewerId = VIEWER, targetId = OWNER, grantedByViewer = level, grantedByTarget = level,
-            sharesCommunity = false, blockedEitherWay = false, viewerMinor = AgeClass.UNKNOWN, targetMinor = AgeClass.UNKNOWN,
-            viewerRole = PlatformRole.USER, feature = feature, consent = RelationConsent.GRANTED,
-        ),
-    ).allowed
-
-    private const val VIEWER = "preview-viewer"
-    private const val OWNER = "preview-owner"
 }

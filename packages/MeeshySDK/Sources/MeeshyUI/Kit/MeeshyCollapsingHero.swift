@@ -11,6 +11,10 @@ import SwiftUI
 /// Un seul avatar et un seul titre voyagent du début à la fin : le titre est lu
 /// une fois, comme un en-tête, avec son sous-titre. La barre repliée devient un
 /// bouton nommé par `collapsedTapLabel` quand l'hôte donne `onCollapsedTap`.
+/// Une feuille, qui n'a pas de barre d'état au-dessus d'elle, donne `topInset`.
+/// L'épinglage ne vibre pas : un changement de vue n'a pas de retour haptique (#19783). Sous « Réduire les animations »
+/// (système ou forcé dans Meeshy), l'identité ne glisse plus : elle passe dans la barre
+/// par un fondu.
 public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, AvatarSlot: View>: View {
     private let progress: Double
     private let title: String
@@ -18,16 +22,24 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
     private let alignment: MeeshyCollapsingHeroAlignment
     private let expandedHeight: Double
     private let collapsedHeight: Double
+    private let topInset: Double?
     private let tone: MeeshyGlassTone?
     private let isLoading: Bool
     private let collapsedTapLabel: String?
     private let onCollapsedTap: (() -> Void)?
+    /// La bannière reste DANS la barre repliée, floutée par son verre, au lieu de s'effacer (fiche de profil, #19780) ;
+    /// la barre se replie alors avec l'identité, et n'est plus que sa rangée une fois l'identité arrivée (#19987).
+    private let keepsBannerInBar: Bool
+    /// Ce que le cadre illustré de l'avatar peint sous son bord : le nom descend d'autant (#19925).
+    private let avatarSpill: Double
     private let banner: Banner
     private let leading: Leading
     private let trailing: Trailing
     private let avatar: ((CGFloat) -> AvatarSlot)?
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
 
     public init(progress: Double,
                 title: String,
@@ -35,10 +47,13 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
                 alignment: MeeshyCollapsingHeroAlignment = .leading,
                 expandedHeight: Double = MeeshyCollapsingHeroRecipe.expandedHeight,
                 collapsedHeight: Double = MeeshyCollapsingHeroRecipe.collapsedHeight,
+                topInset: Double? = nil,
                 tone: MeeshyGlassTone? = nil,
                 isLoading: Bool = false,
                 collapsedTapLabel: String? = nil,
                 onCollapsedTap: (() -> Void)? = nil,
+                keepsBannerInBar: Bool = false,
+                avatarSpill: Double = 0,
                 @ViewBuilder banner: () -> Banner,
                 @ViewBuilder leading: () -> Leading,
                 @ViewBuilder trailing: () -> Trailing,
@@ -49,10 +64,13 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
         self.alignment = alignment
         self.expandedHeight = expandedHeight
         self.collapsedHeight = collapsedHeight
+        self.topInset = topInset
         self.tone = tone
         self.isLoading = isLoading
         self.collapsedTapLabel = collapsedTapLabel
         self.onCollapsedTap = onCollapsedTap
+        self.keepsBannerInBar = keepsBannerInBar
+        self.avatarSpill = avatarSpill
         self.banner = banner()
         self.leading = leading()
         self.trailing = trailing()
@@ -62,7 +80,9 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
     private var recipe: MeeshyCollapsingHeroRecipe {
         MeeshyCollapsingHeroRecipe.resolve(
             progress: progress, expandedHeight: expandedHeight, collapsedHeight: collapsedHeight,
-            alignment: alignment, hasAvatar: avatar != nil, hasSubtitle: subtitle != nil
+            alignment: alignment, hasAvatar: avatar != nil, hasSubtitle: subtitle != nil,
+            reduceMotion: MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion),
+            foldsWithIdentity: keepsBannerInBar
         )
     }
 
@@ -70,7 +90,7 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
         let recipe = self.recipe
         let isDark = colorScheme == .dark
         return GeometryReader { proxy in
-            let top = proxy.safeAreaInsets.top > 0 ? Double(proxy.safeAreaInsets.top) : 54
+            let top = MeeshyCollapsingHeroRecipe.controlTop(safeArea: Double(proxy.safeAreaInsets.top), topInset: topInset)
             ZStack(alignment: .topLeading) {
                 bannerLayer(recipe: recipe, width: proxy.size.width)
                 barLayer(recipe: recipe)
@@ -93,63 +113,98 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
             }
         }
         .frame(width: width, height: CGFloat(recipe.height + recipe.bannerStretch), alignment: .top)
-        .clipped()
-        .opacity(recipe.bannerOpacity)
+        .clipShape(MeeshyCollapsingHeroBarShape(cornerRadius: CGFloat(
+            MeeshyCollapsingHeroRecipe.bannerCornerRadius(recipe, keepsBannerInBar: keepsBannerInBar))))
+        .opacity(MeeshyCollapsingHeroRecipe.bannerOpacity(recipe, keepsBannerInBar: keepsBannerInBar))
         .accessibilityHidden(true)
     }
 
     private func barLayer(recipe: MeeshyCollapsingHeroRecipe) -> some View {
         Color.clear
-            .meeshyGlass(in: MeeshyCollapsingHeroBarShape(cornerRadius: CGFloat(MeeshyCollapsingHeroRecipe.barCornerRadius)),
-                         tone: tone)
+            .meeshyGlass(in: MeeshyCollapsingHeroBarShape(cornerRadius: CGFloat(
+                MeeshyCollapsingHeroRecipe.glassCornerRadius(keepsBannerInBar: keepsBannerInBar))), tone: tone)
             .opacity(recipe.glassOpacity)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
 
     private func identity(recipe: MeeshyCollapsingHeroRecipe, width: Double, top: Double, isDark: Bool) -> some View {
-        let travel = min(MeeshyCollapsingHeroRecipe.clamped(progress) / MeeshyCollapsingHeroRecipe.finishShare, 1)
+        let travel = recipe.identityTravel
         let avatarSize = recipe.avatarSize
         let centered = alignment == .center
-        let expandedX = centered ? (width - MeeshyCollapsingHeroRecipe.avatarExpanded) / 2 : 20
+        let expandedX = centered ? (width - MeeshyCollapsingHeroRecipe.avatarExpanded) / 2
+            : MeeshyCollapsingHeroRecipe.avatarInset(avatarSpill: avatarSpill)
         let collapsedX = MeeshyCollapsingHeroRecipe.controlInsetCollapsed + MeeshyCollapsingHeroRecipe.controlTarget + 12
         let x = expandedX + (collapsedX - expandedX) * travel
         let expandedY = expandedHeight - 86
         let collapsedY = top + MeeshyCollapsingHeroRecipe.controlTarget / 2 - MeeshyCollapsingHeroRecipe.avatarCollapsed / 2
         let y = expandedY + (collapsedY - expandedY) * travel
-        let textExpandedY = expandedHeight - 86 + MeeshyCollapsingHeroRecipe.avatarExpanded + 10
+        let textExpandedY = expandedHeight - 86 + MeeshyCollapsingHeroRecipe.avatarExpanded
+            + MeeshyCollapsingHeroRecipe.titleGap(avatarSpill: avatarSpill)
         let textCollapsedY = top + 6
         let textY = textExpandedY + (textCollapsedY - textExpandedY) * travel
         let textExpandedX: Double = centered ? 0 : 20
         let textX = textExpandedX + (collapsedX + MeeshyCollapsingHeroRecipe.avatarCollapsed + 10 - textExpandedX) * travel
         return ZStack(alignment: .topLeading) {
             if let avatar, avatarSize > 0 {
-                avatar(CGFloat(avatarSize))
-                    .frame(width: CGFloat(avatarSize), height: CGFloat(avatarSize))
-                    .offset(x: CGFloat(x), y: CGFloat(y))
+                Group {
+                    if isLoading {
+                        MeeshySkeleton(shape: .circle(diameter: avatarSize))
+                    } else {
+                        avatar(CGFloat(avatarSize))
+                    }
+                }
+                .frame(width: CGFloat(avatarSize), height: CGFloat(avatarSize))
+                .offset(x: CGFloat(x), y: CGFloat(y))
             }
             titleBlock(recipe: recipe, isDark: isDark, centered: centered && travel < 0.5)
                 .frame(width: CGFloat(max(width - textX - 16, 0)), alignment: centered && travel < 0.5 ? .center : .leading)
                 .offset(x: CGFloat(textX), y: CGFloat(textY))
         }
+        .opacity(recipe.identityOpacity)
     }
 
+    @ViewBuilder
     private func titleBlock(recipe: MeeshyCollapsingHeroRecipe, isDark: Bool, centered: Bool) -> some View {
-        VStack(alignment: centered ? .center : .leading, spacing: 2) {
+        if isLoading {
+            loadingTitleBlock(centered: centered)
+        } else {
+            nameBlock(recipe: recipe, isDark: isDark, centered: centered)
+        }
+    }
+
+    private func nameBlock(recipe: MeeshyCollapsingHeroRecipe, isDark: Bool, centered: Bool) -> some View {
+        let onMedia = MeeshyCollapsingHeroRecipe.titleInk(keepsBannerInBar: keepsBannerInBar,
+                                                          travel: recipe.identityTravel) == .onMedia
+        return VStack(alignment: centered ? .center : .leading, spacing: 2) {
             Text(title)
                 .font(MeeshyKitFont.exact(recipe.titleSize, weight: .heavy, design: .rounded))
-                .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
+                .foregroundStyle(onMedia ? MeeshyColors.onMedia : MeeshyColors.textPrimary(isDark: isDark))
                 .lineLimit(1)
                 .truncationMode(.tail)
             if let subtitle, recipe.subtitleSize > 0 {
                 Text(subtitle)
                     .font(MeeshyKitFont.exact(recipe.subtitleSize, weight: .medium))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(onMedia ? MeeshyColors.onMediaSecondary : Color.accentColor)
                     .lineLimit(1)
             }
         }
+        .shadow(color: onMedia ? .black.opacity(0.28) : .clear, radius: 2, y: 1)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
+    }
+
+    /// Premier chargement (cache vide) : le nom et le pseudo sont des squelettes K38, muets pour le lecteur d'écran.
+    private func loadingTitleBlock(centered: Bool) -> some View {
+        VStack(alignment: centered ? .center : .leading, spacing: MeeshySpacing.sm) {
+            MeeshySkeleton(shape: .card(
+                aspect: MeeshyCollapsingHeroRecipe.loadingTitleWidth / MeeshyCollapsingHeroRecipe.loadingTitleHeight,
+                radius: MeeshyCollapsingHeroRecipe.loadingTitleRadius))
+                .frame(maxWidth: CGFloat(MeeshyCollapsingHeroRecipe.loadingTitleWidth))
+            MeeshySkeleton(shape: .line(widthRatio: 1))
+                .frame(width: CGFloat(MeeshyCollapsingHeroRecipe.loadingSubtitleWidth))
+        }
+        .accessibilityHidden(true)
     }
 
     private func controls(recipe: MeeshyCollapsingHeroRecipe, top: Double) -> some View {
@@ -166,19 +221,22 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
     @ViewBuilder
     private func collapsedButton(recipe: MeeshyCollapsingHeroRecipe) -> some View {
         if recipe.barOwnsIdentity, let onCollapsedTap {
+            let height = CGFloat(collapsedHeight)
+            let inset = CGFloat(MeeshyCollapsingHeroRecipe.controlInsetExpanded + MeeshyCollapsingHeroRecipe.controlTarget)
             Color.clear
-                .frame(height: CGFloat(collapsedHeight))
+                .frame(height: height)
                 .contentShape(Rectangle())
-                .padding(.horizontal, CGFloat(MeeshyCollapsingHeroRecipe.controlInsetExpanded + MeeshyCollapsingHeroRecipe.controlTarget))
+                .padding(.horizontal, inset)
                 .onTapGesture(perform: onCollapsedTap)
                 .accessibilityElement()
                 .accessibilityLabel(collapsedTapLabel ?? title)
                 .accessibilityAddTraits(.isButton)
+                .accessibilityAction { onCollapsedTap() }
         }
     }
 }
 
-/// La barre repliée : un rectangle aux coins bas arrondis de 28.
+/// La barre repliée : un rectangle aux coins bas arrondis de `cornerRadius` (droits à 0).
 nonisolated struct MeeshyCollapsingHeroBarShape: Shape {
     let cornerRadius: CGFloat
 
@@ -205,6 +263,7 @@ extension MeeshyCollapsingHero where AvatarSlot == EmptyView {
                 alignment: MeeshyCollapsingHeroAlignment = .leading,
                 expandedHeight: Double = MeeshyCollapsingHeroRecipe.expandedHeight,
                 collapsedHeight: Double = MeeshyCollapsingHeroRecipe.collapsedHeight,
+                topInset: Double? = nil,
                 tone: MeeshyGlassTone? = nil,
                 isLoading: Bool = false,
                 collapsedTapLabel: String? = nil,
@@ -213,7 +272,7 @@ extension MeeshyCollapsingHero where AvatarSlot == EmptyView {
                 @ViewBuilder leading: () -> Leading,
                 @ViewBuilder trailing: () -> Trailing) {
         self.init(progress: progress, title: title, subtitle: subtitle, alignment: alignment,
-                  expandedHeight: expandedHeight, collapsedHeight: collapsedHeight, tone: tone,
+                  expandedHeight: expandedHeight, collapsedHeight: collapsedHeight, topInset: topInset, tone: tone,
                   isLoading: isLoading, collapsedTapLabel: collapsedTapLabel, onCollapsedTap: onCollapsedTap,
                   banner: banner, leading: leading, trailing: trailing, avatar: nil)
     }

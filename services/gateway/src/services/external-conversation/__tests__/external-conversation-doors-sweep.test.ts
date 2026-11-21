@@ -70,7 +70,7 @@ describe('un seul membre Meeshy : chaque porte d’entrée consulte la loi uniqu
 
   it('le balayage trouve les portes connues (une garde qui ne voit rien reste verte)', () => {
     expect(doors).toEqual(expect.arrayContaining([
-      'routes/conversations/participants-writes.ts',
+      'services/conversations/memberAdmission.ts',
       'routes/conversations/sharing-invite.ts',
       'routes/links/utils/share-link-mint.ts',
       'services/conversations/linkAdmission.ts',

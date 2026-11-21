@@ -127,6 +127,92 @@ describe('performJoinCommunity', () => {
   });
 });
 
+describe('demander à entrer dans une communauté qui valide chaque entrée (#19868)', () => {
+  const validating = (overrides: Partial<CommunitySummary> = {}) => club({ viewerRole: null, requiresJoinApproval: true, ...overrides });
+
+  test('le détail décode la validation des entrées et la demande du lecteur', () => {
+    const wire = { id: 'm-club', name: 'Club', requiresJoinApproval: true, currentUserJoinRequest: 'pending' };
+    const decoded = decodeCommunity(wire);
+    expect([decoded?.requiresJoinApproval, decoded?.viewerJoinRequest]).toEqual([true, 'pending']);
+    expect(decodeCommunity({ ...wire, currentUserJoinRequest: null })?.viewerJoinRequest).toBeNull();
+    expect('viewerJoinRequest' in (decodeCommunity({ id: 'm-club', name: 'Club' }) ?? {})).toBe(false);
+  });
+
+  test('le POST annonce qu’il sait lire une demande en attente', async () => {
+    const bodies: unknown[] = [];
+    const fetchImpl = async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      bodies.push(init?.body === undefined ? undefined : JSON.parse(String(init.body)));
+      return new Response(JSON.stringify({ success: true, data: { status: 'pending', requestId: 'r1' } }), { status: 202, headers: { 'content-type': 'application/json' } });
+    };
+    const deps: CommunityActionDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: 'https://gate.test', fetchImpl: fetchImpl as typeof fetch, timeoutMs: 0 }),
+      queryClient: new QueryClient(),
+      isOnline: () => true,
+    };
+    await performJoinCommunity({ community: validating(), deps });
+    expect(bodies).toEqual([{ acceptsPending: true }]);
+  });
+
+  test('AU GESTE, la demande est posée — personne de plus, aucun rôle', async () => {
+    const { deps, queryClient, release } = depsReplying({ status: 202, body: { success: true, data: { status: 'pending', requestId: 'r1' } } });
+    queryClient.setQueryData(communityQueryKey('m-club'), validating());
+    const pending = performJoinCommunity({ community: validating(), deps });
+    const optimistic = queryClient.getQueryData<CommunitySummary>(communityQueryKey('m-club'));
+    expect([optimistic?.viewerRole, optimistic?.memberCount, optimistic?.viewerJoinRequest]).toEqual([null, 10, 'pending']);
+    release();
+    expect(await pending).toEqual({ status: 'requested' });
+  });
+
+  test('une demande n’entre pas dans « mes communautés » et ne relit rien de réservé aux membres', async () => {
+    const { deps, queryClient, release } = depsReplying({ status: 202, body: { success: true, data: { status: 'pending', requestId: 'r1' } } });
+    seedList(queryClient, communitiesQueryKey(''), [club({ id: 'm-autre' })]);
+    queryClient.setQueryData(communityPostsQueryKey('m-club'), { pages: [], pageParams: [] });
+    release();
+    await performJoinCommunity({ community: validating(), deps });
+    expect(listIds(queryClient, communitiesQueryKey(''))).toEqual(['m-autre']);
+    expect(queryClient.getQueryState(communityPostsQueryKey('m-club'))?.isInvalidated).toBe(false);
+  });
+
+  test('un cache périmé (entrée directe crue) se corrige sur la réponse : demande, pas membre', async () => {
+    const { deps, queryClient, release } = depsReplying({ status: 202, body: { success: true, data: { status: 'pending', requestId: 'r1' } } });
+    queryClient.setQueryData(communityQueryKey('m-club'), club({ viewerRole: null }));
+    seedList(queryClient, communitiesQueryKey(''), [club({ id: 'm-autre' })]);
+    release();
+    expect(await performJoinCommunity({ community: club({ viewerRole: null }), deps })).toEqual({ status: 'requested' });
+    const detail = queryClient.getQueryData<CommunitySummary>(communityQueryKey('m-club'));
+    expect([detail?.viewerRole, detail?.memberCount, detail?.viewerJoinRequest, detail?.requiresJoinApproval]).toEqual([null, 10, 'pending', true]);
+    expect(listIds(queryClient, communitiesQueryKey(''))).toEqual(['m-autre']);
+  });
+
+  test('refusée il y a moins de sept jours : le cache d’avant, et le délai se dit', async () => {
+    const { deps, queryClient, release } = depsReplying({ status: 403, body: { success: false, error: 'declined', code: 'COMMUNITY_JOIN_COOLDOWN' } });
+    const before = validating();
+    queryClient.setQueryData(communityQueryKey('m-club'), before);
+    release();
+    expect(await performJoinCommunity({ community: before, deps })).toEqual({ status: 'cooldown' });
+    expect(queryClient.getQueryData(communityQueryKey('m-club'))).toEqual(before);
+  });
+
+  test('un échec réseau rend exactement le cache d’avant', async () => {
+    const { deps, queryClient, release } = depsReplying({ status: 500, body: { success: false, error: 'boom' } });
+    const before = validating();
+    queryClient.setQueryData(communityQueryKey('m-club'), before);
+    release();
+    expect(await performJoinCommunity({ community: before, deps })).toEqual({ status: 'error' });
+    expect(queryClient.getQueryData(communityQueryKey('m-club'))).toEqual(before);
+  });
+
+  test('déjà membre (409, accepté entre-temps) : membre, le détail se relit', async () => {
+    const { deps, queryClient, release } = depsReplying({ status: 409, body: { success: false, error: 'already' } });
+    queryClient.setQueryData(communityQueryKey('m-club'), validating());
+    release();
+    expect(await performJoinCommunity({ community: validating(), deps })).toEqual({ status: 'joined' });
+    const detail = queryClient.getQueryData<CommunitySummary>(communityQueryKey('m-club'));
+    expect([detail?.viewerRole, detail?.viewerJoinRequest]).toEqual(['member', null]);
+  });
+});
+
 describe('performLeaveCommunity', () => {
   test('la carte quitte TOUTES les listes en cache au geste, et le détail n’est plus membre', async () => {
     const { deps, queryClient, release } = depsReplying({ status: 200, body: { success: true, data: { message: 'ok' } } });

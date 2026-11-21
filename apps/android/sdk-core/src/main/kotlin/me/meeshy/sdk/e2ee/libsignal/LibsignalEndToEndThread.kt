@@ -24,6 +24,7 @@ import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.sdk.outbox.OutboxKind
@@ -59,6 +60,7 @@ internal class LibsignalEndToEndThread @Inject constructor(
         language: String?,
         sender: MeeshyUser,
         replyToId: String?,
+        effects: MessageEffects,
     ): String {
         val cid = OutboxIds.cid()
         val now = clock.nowMillis()
@@ -85,7 +87,9 @@ internal class LibsignalEndToEndThread @Inject constructor(
                 kind = OutboxKind.SEND_E2EE_MESSAGE,
                 lane = OutboxLanes.forMessage(conversationId),
                 targetId = conversationId,
-                payload = MeeshyApi.json.encodeToString(EndToEndSendPayload(conversationId, peerUserId, cid)),
+                payload = MeeshyApi.json.encodeToString(
+                    EndToEndSendPayload(conversationId, peerUserId, cid, effects.takeIf { it != MessageEffects() }),
+                ),
                 cmid = cid,
             ),
         )

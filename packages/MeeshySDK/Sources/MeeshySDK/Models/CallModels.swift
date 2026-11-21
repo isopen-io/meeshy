@@ -261,19 +261,27 @@ public struct ActiveCallParticipant: Codable, Sendable, Equatable {
     public let user: ActiveCallParticipantUser?
     /// The gateway keeps a departed member's row (`leftAt` set) in the session.
     public let leftAt: String?
+    /// Media state served by `toCallParticipantResponse` (#19650) — `nil` when
+    /// an older gateway omits it: the member's own state stays unknown.
+    public let isMuted: Bool?
+    public let isVideoOff: Bool?
 
     public var hasLeft: Bool { leftAt != nil }
 
-    public init(userId: String, user: ActiveCallParticipantUser? = nil, leftAt: String? = nil) {
+    public init(userId: String, user: ActiveCallParticipantUser? = nil, leftAt: String? = nil, isMuted: Bool? = nil, isVideoOff: Bool? = nil) {
         self.userId = userId
         self.user = user
         self.leftAt = leftAt
+        self.isMuted = isMuted
+        self.isVideoOff = isVideoOff
     }
 
     private enum CodingKeys: String, CodingKey {
         case userId
         case user
         case leftAt
+        case isMuted
+        case isVideoOff
     }
 
     /// Resilient decode: `userId` is the gateway's top-level participant key
@@ -288,6 +296,8 @@ public struct ActiveCallParticipant: Codable, Sendable, Equatable {
         let nestedUser = try container.decodeIfPresent(ActiveCallParticipantUser.self, forKey: .user)
         self.user = nestedUser
         self.leftAt = try container.decodeIfPresent(String.self, forKey: .leftAt)
+        self.isMuted = try container.decodeIfPresent(Bool.self, forKey: .isMuted)
+        self.isVideoOff = try container.decodeIfPresent(Bool.self, forKey: .isVideoOff)
         if let topLevel = try container.decodeIfPresent(String.self, forKey: .userId), !topLevel.isEmpty {
             self.userId = topLevel
         } else if let fallback = nestedUser?.id {

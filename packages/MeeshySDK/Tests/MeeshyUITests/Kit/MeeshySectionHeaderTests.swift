@@ -93,4 +93,28 @@ struct MeeshySectionHeaderTests {
             #expect(!(try KitAtomVectors.code(file)).contains("UIBlurEffect"), "\(file)")
         }
     }
+
+    @Test("la pastille de titre (K41) se dit après le titre et son compte, et rien ne se dit sans elle")
+    func titleBadge_isSpokenAfterTheTitleAndItsCount() {
+        let withBadge = MeeshySectionHeaderRecipe.spokenTitle(title: "Mes adresses", count: 3, titleBadge: "Nouveau")
+        #expect(withBadge == "Mes adresses, 3, Nouveau")
+        let withoutCount = MeeshySectionHeaderRecipe.spokenTitle(title: "Mes adresses", count: nil, titleBadge: "Nouveau")
+        #expect(withoutCount == "Mes adresses, Nouveau")
+        let withoutBadge = MeeshySectionHeaderRecipe.spokenTitle(title: "Mes adresses", count: 3, titleBadge: nil)
+        #expect(withoutBadge == "Mes adresses, 3")
+        let emptyBadge = MeeshySectionHeaderRecipe.spokenTitle(title: "Mes adresses", count: 0, titleBadge: "")
+        #expect(emptyBadge == "Mes adresses")
+    }
+
+    @Test("le détail de fin (« 4 arrêts ») suit Dynamic Type en 12,5 secondaire, et se dit après le titre")
+    func detail_isRelativeSecondary_andSpokenAfterTheTitle() throws {
+        #expect(MeeshySectionHeaderRecipe.detailFontSize == 12.5)
+        let spoken = MeeshySectionHeaderRecipe.spokenRow(spokenTitle: "Aujourd'hui, 6,4 km", detail: "4 arrêts")
+        #expect(spoken == "Aujourd'hui, 6,4 km, 4 arrêts")
+        let silent = MeeshySectionHeaderRecipe.spokenRow(spokenTitle: "Aujourd'hui, 6,4 km", detail: "")
+        #expect(silent == "Aujourd'hui, 6,4 km")
+        let code = try KitAtomVectors.code("MeeshySectionHeader.swift")
+        #expect(code.contains("MeeshyFont.relative(CGFloat(MeeshySectionHeaderRecipe.detailFontSize)"))
+        #expect(code.contains("MeeshyColors.textSecondary(isDark: isDark)"))
+    }
 }

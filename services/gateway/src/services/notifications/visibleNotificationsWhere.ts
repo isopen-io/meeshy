@@ -50,6 +50,17 @@ export function visibleNotificationsWhere(
     // `null` d'abord : c'est le cas de l'écrasante majorité des lignes (toute
     // notification qui ne pointe pas un contenu éphémère), et la seule branche
     // que les données antérieures à ce prédicat peuvent emprunter.
+    //
+    // #19755 — l'égalité est NUE, et c'est MESURÉ, pas un oubli. Sous MongoDB
+    // elle ne retient pas un document dont la clé est ABSENTE ; ici la colonne
+    // est écrite à CHAQUE création, par l'unique `prisma.notification.create` du
+    // dépôt (`expiresAt: params.expiresAt || null`), et aucun script n'en crée.
+    // La forme à DEUX branches est de plus celle que l'index sert
+    // (`@@index([userId, isRead, expiresAt])`, migration mongodb 010) pour que
+    // `emitCountsUpdate` — une fois par notification créée — reste index-only.
+    // Une troisième branche d'absence toucherait ce chemin chaud pour les seules
+    // lignes antérieures à la colonne. Décision gelée, avec sa mesure, dans
+    // `__tests__/soft-state-equality-filter-guard.test.ts`.
     OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
   };
 }

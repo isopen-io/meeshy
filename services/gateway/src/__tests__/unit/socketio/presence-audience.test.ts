@@ -241,29 +241,50 @@ describe('presenceStatusEmissions', () => {
 });
 
 describe('TEAM_COLLEAGUES_WHERE — les collègues de l\'équipe destinataires de `user:status` (#16623)', () => {
+  /**
+   * La forme que la PRODUCTION crée : ni `deletedAt` ni `deactivatedAt`.
+   *
+   * Aucun des deux chemins de création de compte n'écrit ces colonnes
+   * (`registration.service.ts`, `user-management.service.ts`), donc l'absence est
+   * l'état de tout compte jamais désactivé ni supprimé — la population entière.
+   * Les écrire `null` à la main dans une fixture est plus explicite, plus lisible,
+   * et ne peut pas tomber : c'est l'état MINORITAIRE, celui qu'un chemin a remis
+   * à zéro (#19799, même défaut de fixture qu'au cycle 180).
+   */
+  const compte = (id: string, role: string, reste: MongoDocument = {}): MongoDocument =>
+    ({ id, role, isActive: true, ...reste });
+
+  const retenus = (comptes: readonly MongoDocument[]): string[] =>
+    comptes
+      .filter((c) => matchesMongoWhere(c, TEAM_COLLEAGUES_WHERE as unknown as MongoDocument))
+      .map((c) => c.id as string);
+
   it('retient ANALYST, AUDIT et MODERATOR actifs, jamais un utilisateur ordinaire ni un administrateur (déjà servi)', () => {
-    const comptes = [
-      { id: 'analyst', role: 'ANALYST', isActive: true, deletedAt: null, deactivatedAt: null },
-      { id: 'audit', role: 'AUDIT', isActive: true, deletedAt: null, deactivatedAt: null },
-      { id: 'moderator', role: 'MODERATOR', isActive: true, deletedAt: null, deactivatedAt: null },
-      { id: 'user', role: 'USER', isActive: true, deletedAt: null, deactivatedAt: null },
-      { id: 'agent', role: 'AGENT', isActive: true, deletedAt: null, deactivatedAt: null },
-      { id: 'bigboss', role: 'BIGBOSS', isActive: true, deletedAt: null, deactivatedAt: null },
-    ];
-    const retenus = comptes.filter((c) => matchesMongoWhere(c as unknown as MongoDocument, TEAM_COLLEAGUES_WHERE as unknown as MongoDocument));
-    expect(retenus.map((c) => c.id)).toEqual(['analyst', 'audit', 'moderator']);
+    expect(retenus([
+      compte('analyst', 'ANALYST'),
+      compte('audit', 'AUDIT'),
+      compte('moderator', 'MODERATOR'),
+      compte('user', 'USER'),
+      compte('agent', 'AGENT'),
+      compte('bigboss', 'BIGBOSS'),
+    ])).toEqual(['analyst', 'audit', 'moderator']);
   });
 
-  it('ne retient que les collègues actifs, ni supprimés ni désactivés', () => {
+  it.each([
+    ['les deux colonnes ABSENTES — la forme nominale de production', {}],
+    ['les deux colonnes à `null` explicite — l\'état qu\'un chemin a remis à zéro', { deletedAt: null, deactivatedAt: null }],
+  ])('retient un collègue dont « pas encore » s\'écrit avec %s', (_forme, pasEncore) => {
+    expect(retenus([compte('actif', 'MODERATOR', pasEncore)])).toEqual(['actif']);
+  });
+
+  it('ne retient ni un compte inactif, ni un supprimé, ni un désactivé', () => {
     const passe = new Date('2026-10-01T00:00:00Z');
-    const comptes = [
-      { id: 'actif', role: 'MODERATOR', isActive: true, deletedAt: null, deactivatedAt: null },
-      { id: 'inactif', role: 'MODERATOR', isActive: false, deletedAt: null, deactivatedAt: null },
-      { id: 'supprime', role: 'MODERATOR', isActive: true, deletedAt: passe, deactivatedAt: null },
-      { id: 'desactive', role: 'MODERATOR', isActive: true, deletedAt: null, deactivatedAt: passe },
-      { id: 'admin', role: 'ADMIN', isActive: true, deletedAt: null, deactivatedAt: null },
-    ];
-    const retenus = comptes.filter((c) => matchesMongoWhere(c as unknown as MongoDocument, TEAM_COLLEAGUES_WHERE as unknown as MongoDocument));
-    expect(retenus.map((c) => c.id)).toEqual(['actif']);
+    expect(retenus([
+      compte('actif', 'MODERATOR'),
+      compte('inactif', 'MODERATOR', { isActive: false }),
+      compte('supprime', 'MODERATOR', { deletedAt: passe }),
+      compte('desactive', 'MODERATOR', { deactivatedAt: passe }),
+      compte('admin', 'ADMIN'),
+    ])).toEqual(['actif']);
   });
 });

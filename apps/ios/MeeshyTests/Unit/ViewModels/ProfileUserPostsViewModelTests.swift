@@ -173,6 +173,38 @@ final class ProfileUserPostsViewModelTests: XCTestCase {
                        "la nouvelle instance reprend au curseur persisté, pas à la page 1")
     }
 
+    /// La Vitrine montre « mes trois dernières » : la revalidation SWR relit la TÊTE (page 1), jamais la page d'après
+    /// le curseur profond persisté, et la fusionne devant la queue cachée sans perdre ce curseur.
+    func test_loadInitial_staleCache_revalidatesTheHead_notThePageAfterTheDeepCursor() async throws {
+        let (sut, mock) = makeSUT()
+        try await CacheCoordinator.shared.feed.saveAsStale([Self.makeFeedPost(id: "B"), Self.makeFeedPost(id: "C")],
+                                                           for: Self.cacheKey)
+        await CacheCoordinator.shared.feed.saveCursor(nextCursor: "X", hasMore: true, for: Self.cacheKey)
+        mock.getUserPostsResultsQueue = [.success(Self.makePage(ids: ["A", "B"], hasMore: true, nextCursor: "page2"))]
+
+        await sut.loadInitial()
+        try await waitForCondition { sut.posts.first?.id == "A" }
+
+        XCTAssertNil(mock.lastGetUserPostsCursor, "la revalidation part de la page 1")
+        XCTAssertEqual(sut.posts.prefix(3).map(\.id), ["A", "B", "C"])
+        mock.getUserPostsResultsQueue = [.success(Self.makePage(ids: ["D"], hasMore: false, nextCursor: nil))]
+        await sut.loadMore()
+        XCTAssertEqual(mock.lastGetUserPostsCursor, "X", "la page suivante reprend au curseur profond, intact")
+    }
+
+    /// Un vide caché repasse par le réseau : la publication faite ailleurs remplace « Rien de publié ».
+    func test_loadInitial_freshEmptyCache_stillAsksTheServer() async throws {
+        let (sut, mock) = makeSUT()
+        try await CacheCoordinator.shared.feed.save([], for: Self.cacheKey)
+        await CacheCoordinator.shared.feed.saveCursor(nextCursor: nil, hasMore: false, for: Self.cacheKey)
+        mock.getUserPostsResultsQueue = [.success(Self.makePage(ids: ["A"], hasMore: false, nextCursor: nil))]
+
+        await sut.loadInitial()
+
+        XCTAssertEqual(mock.getUserPostsCallCount, 1)
+        XCTAssertEqual(sut.posts.map(\.id), ["A"])
+    }
+
     /// Le déclencheur par carte préfetch à ≤3 de la fin de la fenêtre rendue.
     func test_loadMoreIfNeeded_nearEndOfRenderWindow_triggersReveal() async {
         let (sut, mock) = makeSUT()

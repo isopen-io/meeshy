@@ -160,13 +160,42 @@ describe('#13933 — POST /relations/:userId/level — baisser ou sortir', () =>
     expect(res.body.data.effectiveLevel).toBe('PUBLIC');
   });
 
-  it('est SILENCIEUX : aucune notification, aucun événement, vers personne', async () => {
+  it('est SILENCIEUX pour l’autre : aucune notification, aucun événement vers sa room (RG-07)', async () => {
     const app = await appli({ liens: [lien('CLOSE', 'CLOSE')] });
     await app.call('POST', `${PREFIXE}/${AUTRE}/level`, { level: 'ACQUAINTANCE' });
     await app.close();
 
-    expect(app.emissions).toEqual([]);
+    expect(app.emissions.filter((e) => e.room !== `user:${MOI}`)).toEqual([]);
     expect(Object.values(app.notifier).flatMap((fn) => fn.mock.calls)).toEqual([]);
+  });
+
+  it('prévient MES autres appareils (#19366) : `relation:level-lowered` vers ma seule room, avec l’identifiant de l’autre', async () => {
+    const app = await appli({ liens: [lien('BLOOD', 'CLOSE')] });
+    await app.call('POST', `${PREFIXE}/${AUTRE}/level`, { level: 'ACQUAINTANCE' });
+    await app.close();
+
+    expect(app.emissions).toEqual([{
+      room: `user:${MOI}`,
+      event: 'relation:level-lowered',
+      payload: { userId: AUTRE, grantedByMe: 'ACQUAINTANCE', effectiveLevel: 'ACQUAINTANCE', at: NOW.toISOString() },
+    }]);
+  });
+
+  it('la charge ne porte que le lien : ni cool-down, ni accord de l’autre, ni nom (#19366)', async () => {
+    const app = await appli({ liens: [lien('CLOSE', 'CLOSE')] });
+    await app.call('POST', `${PREFIXE}/${AUTRE}/level`, { level: 'FRIEND' });
+    await app.close();
+
+    const charges = app.emissions.filter((e) => e.event === 'relation:level-lowered').map((e) => Object.keys(e.payload as object).sort());
+    expect(charges).toEqual([['at', 'effectiveLevel', 'grantedByMe', 'userId']]);
+  });
+
+  it('une montée refusée (RELATION_NOT_A_DROP) ne prévient personne (#19366)', async () => {
+    const app = await appli({ liens: [lien('FRIEND', 'FRIEND')] });
+    await app.call('POST', `${PREFIXE}/${AUTRE}/level`, { level: 'CLOSE' });
+    await app.close();
+
+    expect(app.emissions).toEqual([]);
   });
 
   it('pose le cool-down de 30 jours sur l’AUTRE (RG-08), pas sur celui qui baisse', async () => {

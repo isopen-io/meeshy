@@ -298,7 +298,7 @@ describe('zmq-helpers', () => {
     });
 
     it('exposes the namespaces the social pipelines claim', () => {
-      expect([...TRANSLATION_TARGET_NAMESPACES]).toEqual(['post', 'comment', 'story', 'media-caption', 'media-alt', 'message-attachment-caption', 'message-attachment-alt', 'direct-text', 'call-caption']);
+      expect([...TRANSLATION_TARGET_NAMESPACES]).toEqual(['post', 'comment', 'story', 'media-caption', 'media-alt', 'message-attachment-caption', 'message-attachment-alt', 'direct-text', 'call-caption', 'friend-request']);
     });
 
     it('extracts the namespace of a social target, null for a bare message id', () => {

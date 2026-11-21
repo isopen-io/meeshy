@@ -307,4 +307,360 @@ final class CommunityDetailViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.community?.name, "Alpha")
     }
+
+    // MARK: - community:member-* (#18767)
+
+    private func memberSUT(
+        reader: String = "u-mod", role: String? = "moderator", removed: @escaping @MainActor (String) async -> Void = { _ in }
+    ) -> (CommunityDetailViewModel, MockCommunityService) {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator", currentUserRole: role))
+        let viewModel = CommunityDetailViewModel(
+            communityId: "c1", service: service, currentUserId: { reader },
+            communityUpdates: Empty().eraseToAnyPublisher(), memberChanges: Empty().eraseToAnyPublisher(),
+            myCommunities: MyCommunitiesWrites(add: { _ in }, remove: removed)
+        )
+        return (viewModel, service)
+    }
+
+    func test_memberChange_tiers_recopieLEffectifSansToucherAuRoleNiAuReseau() async {
+        let (viewModel, service) = memberSUT()
+        await viewModel.load()
+
+        await viewModel.apply(CommunityStubs.memberChange(userId: "u-other", memberCount: 14, role: .admin))
+
+        XCTAssertEqual(viewModel.community?.memberCount, 14)
+        XCTAssertEqual(viewModel.currentUserRole, .moderator, "un tiers promu ne déplace pas le rôle du lecteur")
+        XCTAssertFalse(viewModel.isAdmin)
+        XCTAssertEqual(service.getCallCount, 1, "aucune relance réseau")
+    }
+
+    func test_memberChange_lecteurPromu_gereAussitot() async {
+        let (viewModel, service) = memberSUT()
+        await viewModel.load()
+
+        await viewModel.apply(CommunityStubs.memberChange(userId: "u-mod", role: .admin))
+
+        XCTAssertEqual(viewModel.currentUserRole, .admin)
+        XCTAssertTrue(viewModel.isAdmin)
+        XCTAssertEqual(service.getCallCount, 1)
+    }
+
+    func test_memberChange_lecteurRetire_perdSesDroits_quitteMesCommunautes_etRelitLaFiche() async {
+        let removed = RemovedCommunities()
+        let (viewModel, service) = memberSUT(removed: { removed.ids.append($0) })
+        await viewModel.load()
+        service.getResult = .failure(APIError.serverError(403, nil))
+
+        await viewModel.apply(CommunityStubs.memberChange(userId: "u-mod", memberCount: 8, role: nil))
+
+        XCTAssertFalse(viewModel.isMember)
+        XCTAssertFalse(viewModel.isAdmin)
+        XCTAssertTrue(viewModel.conversations.isEmpty)
+        XCTAssertEqual(removed.ids, ["c1"])
+        XCTAssertEqual(service.getCallCount, 2, "la fiche se relit : une communauté privée cesse d'être servie")
+    }
+
+    func test_memberChange_lecteurEntreAilleurs_relitLaFiche() async {
+        let (viewModel, service) = memberSUT(reader: "u-new", role: nil)
+        await viewModel.load()
+        XCTAssertFalse(viewModel.isMember)
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator", currentUserRole: "member"))
+
+        await viewModel.apply(CommunityStubs.memberChange(userId: "u-new", role: .member))
+
+        XCTAssertTrue(viewModel.isMember)
+        XCTAssertEqual(service.getCallCount, 2)
+    }
+
+    func test_memberChange_autreCommunaute_neTouchePasLeDetail() async {
+        let (viewModel, service) = memberSUT()
+        await viewModel.load()
+
+        await viewModel.apply(CommunityStubs.memberChange(communityId: "c2", userId: "u-mod", memberCount: 40, role: nil))
+
+        XCTAssertTrue(viewModel.isMember)
+        XCTAssertNotEqual(viewModel.community?.memberCount, 40)
+        XCTAssertEqual(service.getCallCount, 1)
+    }
+
+    // MARK: - community:deleted (#19591)
+
+    func test_disappearance_rendLaFicheIndisponible_sansGeste_etQuitteMesCommunautes() async {
+        let removed = RemovedCommunities()
+        let (viewModel, service) = memberSUT(reader: "u-creator", role: "admin", removed: { removed.ids.append($0) })
+        await viewModel.load()
+        service.getResult = .failure(APIError.serverError(404, nil))
+
+        await viewModel.applyDisappearance(of: "c1")
+
+        XCTAssertNil(viewModel.community)
+        XCTAssertEqual(viewModel.loadFailure, .refused, "l'écran dit que la communauté n'est plus disponible")
+        XCTAssertFalse(viewModel.isMember)
+        XCTAssertFalse(viewModel.isAdmin)
+        XCTAssertFalse(viewModel.isCreator, "plus aucun geste de créateur n'est offert")
+        XCTAssertTrue(viewModel.conversations.isEmpty)
+        XCTAssertFalse(viewModel.isLoading, "la relecture est silencieuse")
+        XCTAssertEqual(removed.ids, ["c1"])
+        XCTAssertEqual(service.getCallCount, 2, "la fiche se relit")
+    }
+
+    func test_disappearance_uneFicheEncoreServie_revient() async {
+        let (viewModel, _) = memberSUT()
+        await viewModel.load()
+
+        await viewModel.applyDisappearance(of: "c1")
+
+        XCTAssertNotNil(viewModel.community)
+        XCTAssertNil(viewModel.loadFailure)
+        XCTAssertEqual(viewModel.currentUserRole, .moderator)
+    }
+
+    func test_disappearance_autreCommunaute_neTouchePasLeDetail() async {
+        let removed = RemovedCommunities()
+        let (viewModel, service) = memberSUT(removed: { removed.ids.append($0) })
+        await viewModel.load()
+
+        await viewModel.applyDisappearance(of: "c2")
+
+        XCTAssertNotNil(viewModel.community)
+        XCTAssertTrue(viewModel.isMember)
+        XCTAssertTrue(removed.ids.isEmpty)
+        XCTAssertEqual(service.getCallCount, 1)
+    }
+
+    // #19869 — une communauté qui valide chaque entrée se DEMANDE : « Demande
+    // envoyée » dès le toucher, jamais un faux membre, et le refus récent se dit.
+
+    private func approvalSUT(
+        joinRequest: String? = nil, added: @escaping @MainActor (APICommunity) async -> Void = { _ in }
+    ) -> (CommunityDetailViewModel, MockCommunityService) {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(
+            createdBy: "u-creator", requiresJoinApproval: true, currentUserJoinRequest: joinRequest
+        ))
+        service.joinResult = .success(.pending(requestId: "req-1"))
+        let viewModel = CommunityDetailViewModel(
+            communityId: "c1", service: service, currentUserId: { "u-visitor" },
+            communityUpdates: Empty().eraseToAnyPublisher(), memberChanges: Empty().eraseToAnyPublisher(),
+            deletions: Empty().eraseToAnyPublisher(),
+            myCommunities: MyCommunitiesWrites(add: added, remove: { _ in })
+        )
+        return (viewModel, service)
+    }
+
+    func test_load_communauteQuiValideChaqueEntree_offreDeDemander() async {
+        let (viewModel, _) = approvalSUT()
+
+        await viewModel.load()
+
+        XCTAssertTrue(viewModel.requiresJoinApproval)
+        XCTAssertFalse(viewModel.joinRequestPending)
+        XCTAssertFalse(viewModel.isMember)
+    }
+
+    func test_load_demandeDuLecteurEnAttente_seLitDemandeEnvoyee() async {
+        let (viewModel, _) = approvalSUT(joinRequest: "pending")
+
+        await viewModel.load()
+
+        XCTAssertTrue(viewModel.joinRequestPending)
+        XCTAssertFalse(viewModel.isMember)
+    }
+
+    func test_join_demandeAcceptee_enAttente_neFaitPasMembre_niNEntreDansMesCommunautes() async {
+        let added = RemovedCommunities()
+        let (viewModel, service) = approvalSUT(added: { added.ids.append($0.id) })
+        await viewModel.load()
+
+        await viewModel.joinCommunity()
+
+        XCTAssertTrue(viewModel.joinRequestPending)
+        XCTAssertFalse(viewModel.isMember, "une demande ne fait membre de rien")
+        XCTAssertTrue(added.ids.isEmpty, "« mes communautés » attend l'acceptation")
+        XCTAssertEqual(service.getCallCount, 1, "aucune relecture : rien n'a changé pour le lecteur")
+    }
+
+    func test_join_demandeEnvoyee_estOptimiste_puisDefaiteSurUnEchec() async {
+        let (viewModel, service) = approvalSUT()
+        await viewModel.load()
+        service.joinResult = .failure(MeeshyError.server(statusCode: 500, message: "boom"))
+        let seen = SeenFlags()
+        let watch = viewModel.$joinRequestPending.sink { seen.values.append($0) }
+
+        await viewModel.joinCommunity()
+        watch.cancel()
+
+        XCTAssertEqual(seen.values, [false, true, false], "« Demande envoyée » dès le toucher, défaite au refus")
+        XCTAssertNil(viewModel.joinRefusal)
+    }
+
+    func test_join_refusRecent_ditLeDelai() async {
+        let (viewModel, service) = approvalSUT()
+        await viewModel.load()
+        let body = Data(#"{"success":false,"error":"declined recently","code":"COMMUNITY_JOIN_COOLDOWN"}"#.utf8)
+        service.joinResult = .failure(MeeshyError.forbidden(reason: "declined recently", body: body))
+
+        await viewModel.joinCommunity()
+
+        XCTAssertEqual(viewModel.joinRefusal, .cooldown)
+        XCTAssertFalse(viewModel.joinRequestPending)
+    }
+
+    func test_join_demandeDejaEnvoyee_neRenvoieRien() async {
+        let (viewModel, service) = approvalSUT(joinRequest: "pending")
+        await viewModel.load()
+
+        await viewModel.joinCommunity()
+
+        XCTAssertEqual(service.joinCallCount, 0)
+    }
+
+    func test_join_cacheQuiCroitLEntreeDirecte_litLaDemandeServie() async {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator"))
+        service.joinResult = .success(.pending(requestId: "req-1"))
+        let viewModel = CommunityDetailViewModel(
+            communityId: "c1", service: service, currentUserId: { "u-visitor" },
+            communityUpdates: Empty().eraseToAnyPublisher(), memberChanges: Empty().eraseToAnyPublisher(),
+            deletions: Empty().eraseToAnyPublisher(), myCommunities: MyCommunitiesWrites(add: { _ in }, remove: { _ in })
+        )
+        await viewModel.load()
+
+        await viewModel.joinCommunity()
+
+        XCTAssertTrue(viewModel.joinRequestPending)
+        XCTAssertTrue(viewModel.requiresJoinApproval)
+        XCTAssertFalse(viewModel.isMember)
+    }
+
+    // #19948 — le refus d'une demande se lit « Demande refusée — nouvelle
+    // demande possible le … » : servi par le détail, ou annoncé en direct.
+
+    private static let now = WireDate.date(from: "2026-11-20T10:00:00.000Z")!
+    private static let retryAt = "2026-11-27T10:00:00.000Z"
+
+    private func declinedSUT(
+        retryAt: String? = nil, joinRequest: String? = nil
+    ) -> (CommunityDetailViewModel, MockCommunityService, PassthroughSubject<CommunityJoinRequestDecidedEvent, Never>) {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(
+            createdBy: "u-creator", requiresJoinApproval: true,
+            currentUserJoinRequest: joinRequest, currentUserJoinRetryAt: retryAt
+        ))
+        service.joinResult = .success(.pending(requestId: "req-1"))
+        let decisions = PassthroughSubject<CommunityJoinRequestDecidedEvent, Never>()
+        let viewModel = CommunityDetailViewModel(
+            communityId: "c1", service: service, currentUserId: { "u-visitor" },
+            communityUpdates: Empty().eraseToAnyPublisher(), memberChanges: Empty().eraseToAnyPublisher(),
+            deletions: Empty().eraseToAnyPublisher(), joinDecisions: decisions.eraseToAnyPublisher(),
+            myCommunities: MyCommunitiesWrites(add: { _ in }, remove: { _ in }), now: { Self.now }
+        )
+        return (viewModel, service, decisions)
+    }
+
+    private func refusal(_ communityId: String = "c1") -> CommunityJoinRequestDecidedEvent {
+        CommunityJoinRequestDecidedEvent(communityId: communityId, decision: "rejected", retryAt: Self.retryAt, at: "2026-11-20T10:00:00.000Z")
+    }
+
+    func test_load_refusServiAVenir_seLitDemandeRefusee() async {
+        let (viewModel, _, _) = declinedSUT(retryAt: Self.retryAt)
+
+        await viewModel.load()
+
+        XCTAssertEqual(viewModel.joinDeclinedUntil, WireDate.date(from: Self.retryAt))
+        XCTAssertFalse(viewModel.joinRequestPending)
+    }
+
+    func test_load_refusPasse_offreDeRedemander() async {
+        let (viewModel, _, _) = declinedSUT(retryAt: "2026-11-19T10:00:00.000Z")
+
+        await viewModel.load()
+
+        XCTAssertNil(viewModel.joinDeclinedUntil)
+    }
+
+    func test_refusAnnonce_passeDeDemandeEnvoyeeADemandeRefusee_sansRelecture() async throws {
+        let (viewModel, service, decisions) = declinedSUT(joinRequest: "pending")
+        await viewModel.load()
+        XCTAssertTrue(viewModel.joinRequestPending)
+
+        decisions.send(refusal())
+        for _ in 0..<100 where viewModel.joinDeclinedUntil == nil {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        XCTAssertFalse(viewModel.joinRequestPending)
+        XCTAssertEqual(viewModel.joinDeclinedUntil, WireDate.date(from: Self.retryAt))
+        XCTAssertEqual(service.getCallCount, 1, "la charge dit tout : aucune relecture")
+    }
+
+    func test_refusAnnonce_autreCommunaute_neTouchePasLeDetail() async {
+        let (viewModel, _, _) = declinedSUT(joinRequest: "pending")
+        await viewModel.load()
+
+        viewModel.apply(refusal("c-other"))
+
+        XCTAssertTrue(viewModel.joinRequestPending)
+        XCTAssertNil(viewModel.joinDeclinedUntil)
+    }
+
+    func test_refusAnnonce_lecteurDejaEntre_neLeRetrogradePas() async {
+        let (viewModel, service, _) = declinedSUT()
+        service.getResult = .success(CommunityStubs.community(
+            createdBy: "u-creator", currentUserRole: "member", requiresJoinApproval: true
+        ))
+        await viewModel.load()
+
+        viewModel.apply(refusal())
+
+        XCTAssertTrue(viewModel.isMember)
+        XCTAssertNil(viewModel.joinDeclinedUntil)
+    }
+
+    func test_join_avantLaDateDuRefus_nEnvoieRien() async {
+        let (viewModel, service, _) = declinedSUT(retryAt: Self.retryAt)
+        await viewModel.load()
+
+        await viewModel.joinCommunity()
+
+        XCTAssertEqual(service.joinCallCount, 0)
+        XCTAssertFalse(viewModel.joinRequestPending)
+    }
+
+    func test_memberChange_entreeApresUnRefus_effaceLeRefus() async {
+        let (viewModel, service, _) = declinedSUT(retryAt: Self.retryAt)
+        await viewModel.load()
+        service.getResult = .success(CommunityStubs.community(
+            createdBy: "u-creator", currentUserRole: "member", requiresJoinApproval: true
+        ))
+
+        await viewModel.apply(CommunityStubs.memberChange(userId: "u-visitor", role: .member))
+
+        XCTAssertTrue(viewModel.isMember)
+        XCTAssertNil(viewModel.joinDeclinedUntil)
+    }
+
+    func test_memberChange_demandeAcceptee_faitMembre_etEffaceLaDemande() async {
+        let (viewModel, service) = approvalSUT(joinRequest: "pending")
+        await viewModel.load()
+        service.getResult = .success(CommunityStubs.community(
+            createdBy: "u-creator", currentUserRole: "member", requiresJoinApproval: true
+        ))
+
+        await viewModel.apply(CommunityStubs.memberChange(userId: "u-visitor", role: .member))
+
+        XCTAssertTrue(viewModel.isMember)
+        XCTAssertFalse(viewModel.joinRequestPending)
+    }
+}
+
+@MainActor
+private final class RemovedCommunities {
+    var ids: [String] = []
+}
+
+@MainActor
+private final class SeenFlags {
+    var values: [Bool] = []
 }

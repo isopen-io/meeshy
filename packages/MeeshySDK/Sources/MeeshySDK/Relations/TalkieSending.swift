@@ -7,7 +7,7 @@ import Foundation
 /// Ce que l'interface dit d'une prise de parole qui n'a pas abouti. Un blocage et un repli rendent la MÊME issue
 /// (`voice`) : l'émetteur ne doit jamais deviner qu'on a coupé SA voix.
 public enum TalkieSendOutcome: String, Sendable, Equatable {
-    /// Pas (ou plus) de lien d'au moins Proche : la ligne disparaît, ni grisée ni expliquée.
+    /// Pas (ou plus) de lien d’au moins Proche : la carte du profil le dit ; ailleurs, le bouton se retire.
     case notAllowed
     case voice
     case e2ee

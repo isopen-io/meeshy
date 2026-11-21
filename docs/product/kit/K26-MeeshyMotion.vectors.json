@@ -133,5 +133,67 @@
       "plage": 220,
       "avancement": 1
     }
+  ],
+  "cascadeMontee": {
+    "decalagePt": 18,
+    "echelleDepart": 0.97,
+    "note": "keyframes c8R de Sys-Mouvement § 08 : un bloc des rangs 0 à 3 part 18 pt plus bas, à l'échelle 0,97 ; au-delà du rang 3, il se fond sans bouger."
+  },
+  "cascadeFenetreMs": 600,
+  "cascadeArrivee": [
+    {
+      "rang": 0,
+      "ecouleMs": 0,
+      "entree": "rise",
+      "retardMs": 0
+    },
+    {
+      "rang": 2,
+      "ecouleMs": 0,
+      "entree": "rise",
+      "retardMs": 160
+    },
+    {
+      "rang": 3,
+      "ecouleMs": 100,
+      "entree": "rise",
+      "retardMs": 140
+    },
+    {
+      "rang": 3,
+      "ecouleMs": 600,
+      "entree": "rise",
+      "retardMs": 0
+    },
+    {
+      "rang": 4,
+      "ecouleMs": 0,
+      "entree": "fade",
+      "retardMs": 240
+    },
+    {
+      "rang": 9,
+      "ecouleMs": 0,
+      "entree": "fade",
+      "retardMs": 240
+    },
+    {
+      "rang": 1,
+      "ecouleMs": 601,
+      "entree": "immediate",
+      "retardMs": 0
+    },
+    {
+      "rang": 3,
+      "ecouleMs": 120000,
+      "entree": "immediate",
+      "retardMs": 0
+    },
+    {
+      "rang": 1,
+      "ecouleMs": null,
+      "entree": "immediate",
+      "retardMs": 0
+    }
   ]
 }

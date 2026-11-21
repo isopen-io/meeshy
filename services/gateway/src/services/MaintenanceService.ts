@@ -19,6 +19,7 @@ import { purgeAccountIsolatedData, anonymizeUserIdentity } from './AccountPurgeS
 import { endSharedLocationAfter } from './sharedLocation/sharedLocationDeps';
 import { purgeMediaOfDeletedAccount } from './purgeDeletedAccountMedia';
 import { deactivateCommunityMembershipsOfDeletedAccount } from './deactivateDeletedAccountCommunityMemberships';
+import { communityMemberAnnouncerOverIO } from './community-member-broadcast';
 import { cleanupExpiredData as sweepExpiredData, type ShareLinkRevocationLive } from './cleanupExpiredData';
 import {
   RECIPIENT_LANG_SELECT,
@@ -472,6 +473,21 @@ export class MaintenanceService {
       // Trouver tous les attachments qui :
       // 1. Ne sont pas liés à un message (messageId null)
       // 2. Ont été créés il y a plus de 24 heures
+      //
+      // #19801 — CE QUE CETTE CLAUSE APPARIE, ET CE QU'ELLE N'APPARIE PAS.
+      // `{ messageId: null }` est une ÉGALITÉ sous MongoDB : elle exige la clé
+      // PRÉSENTE et nulle. Elle repose donc entièrement sur la discipline
+      // d'ÉCRITURE des créateurs, qui posent tous la clé — `UploadProcessor`
+      // (`messageId: messageId || null`) et `tus-handler` (branche MESSAGE,
+      // depuis #19801). Un futur créateur qui l'omettrait redeviendrait
+      // invisible ici, SANS erreur : ce balayage rendrait une liste vide et
+      // journaliserait qu'il n'a rien trouvé.
+      //
+      // Elle n'apparie pas l'ARRIÉRÉ laissé par `tus-handler` avant #19801 (clé
+      // absente), et c'est VOULU : `...unsetOrNull('messageId')` le ramasserait
+      // d'un coup, c'est-à-dire purgerait une population que personne n'a
+      // mesurée — ce que la directive porteur du 2026-10-03 interdit sans feu
+      // vert. Le sort de cet arriéré est une décision séparée (#19801).
       const orphanedAttachments = await this.prisma.messageAttachment.findMany({
         where: {
           messageId: null,
@@ -800,9 +816,12 @@ export class MaintenanceService {
    * départ volontaire et le retrait admin (#5760/#5799/#5800) —
    * `isActive: false` + `leftAt` — jamais un `deleteMany`, pour la même
    * raison qu'eux : l'historique de modération de la communauté survit.
+   * Le départ s'annonce aux membres restants par le serveur Socket.IO injecté
+   * (#18769) ; sans serveur, il n'y a aucune socket à prévenir.
    */
   private deactivateCommunityMembershipsOfExpiredAccount(userId: string): Promise<void> {
-    return this.bestEffortDeletionStep(userId, 'Community membership deactivation', () => deactivateCommunityMembershipsOfDeletedAccount(this.prisma, userId));
+    const announce = communityMemberAnnouncerOverIO(this.prisma, this.shareLinkRevocationLive?.resolveIO?.());
+    return this.bestEffortDeletionStep(userId, 'Community membership deactivation', () => deactivateCommunityMembershipsOfDeletedAccount(this.prisma, userId, announce));
   }
 
   /**

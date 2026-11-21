@@ -438,6 +438,14 @@ describe('partage d’écran (#8063)', () => {
     return h;
   };
 
+  test('la boucle de qualité sait que j’envoie mon écran, pour en garder la résolution (#19777)', async () => {
+    const h = await connected();
+    h.advance(2_000);
+    expect(h.qualityDeps()?.sharingScreen?.()).toBe(false);
+    await h.engine.toggleScreen();
+    expect(h.qualityDeps()?.sharingScreen?.()).toBe(true);
+  });
+
   test('dans un appel vocal, partager envoie l’écran sur chaque lien et l’annonce', async () => {
     const h = await connected();
     await h.engine.toggleScreen();
@@ -738,6 +746,14 @@ describe('la qualité d’un appel se mesure, s’adapte et se voit (#8047)', ()
       isVideo: false,
       endReason: 'local',
     });
+  });
+
+  test('au raccroché, la qualité médiatique part du DERNIER relevé, sans relire `getStats` sur des liens fermés (#19876)', async () => {
+    const peer = { freezeCount: 2, totalFreezesDuration: 0.9, jitterBufferDelay: 4.8, jitterBufferEmittedCount: 96, concealedSamples: 480, nackCount: 12, pliCount: 3, qualityLimitationReason: 'bandwidth', candidateType: 'relay', relayProtocol: 'udp' };
+    const h = await connected([{ total: total({ rtt: 200, packetLoss: 2, jitter: 20 }), stage: 'sending', codec: 'VP8', profile: 'wifi', audioBitrate: 32_000, path: 'relay', media: { [PEER]: peer } }]);
+    await h.sampleQuality();
+    h.engine.hangup();
+    expect(h.emitted.find(([event]) => event === CLIENT_EVENTS.CALL_ANALYTICS)?.[1]).toMatchObject({ freezeCount: 2, totalFreezesDuration: 0.9, jitterBufferDelay: 50, concealedSamples: 480, nackCount: 12, pliCount: 3, qualityLimitationReason: 'bandwidth', mos: 3.76, candidateType: 'relay', relayProtocol: 'udp' });
   });
 
   test('des sous-titres AFFICHÉS comptent dans le rapport ; reçus mais masqués, non', async () => {

@@ -5,6 +5,7 @@ import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.MessageTombstoning
 import me.meeshy.sdk.model.PendingTombstone
 import me.meeshy.sdk.model.QuotePropagation
+import me.meeshy.sdk.session.AccountTicket
 
 /**
  * La suppression d'un message et son retour arrière — miroir de `markDeleted` / `markUndeleted`
@@ -52,7 +53,11 @@ internal class MessageTombstoneWriter(
      * pièces. Sans instantané, la ligne attend le prochain rafraîchissement pour retrouver son texte.
      */
     suspend fun markUndeleted(messageId: String, snapshot: ApiMessage? = null): Boolean =
-        updater.update(messageId, requireSynced = false) { message ->
+        markUndeleted(updater.ticket(), messageId, snapshot)
+
+    /** [markUndeleted] sous [ticket], pris AVANT la relecture qui le décide : rien n'atterrit chez le compte suivant (#19422). */
+    suspend fun markUndeleted(ticket: AccountTicket?, messageId: String, snapshot: ApiMessage?): Boolean =
+        updater.update(ticket, messageId, requireSynced = false) { message ->
             if (message.deletedAt == null) {
                 message
             } else if (snapshot == null) {

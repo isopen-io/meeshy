@@ -283,6 +283,15 @@ class NotificationTypeToggleTest {
     }
 
     @Test
+    fun inactivitySignalsHaveNoToggleAndSurviveEveryToggleOff() {
+        listOf("wellness_check", "inactivity_alert").forEach { type ->
+            assertThat(NotificationTypeToggle.isEnabled(type, allOff)).isTrue()
+            assertThat(NotificationTypeToggle.isEnabled(type, allOn.copy(systemEnabled = false))).isTrue()
+            assertThat(NotificationTypeToggle.coveredTypes).contains(type)
+        }
+    }
+
+    @Test
     fun deviceUnreachableFollowsItsOwnToggle() {
         assertThat(NotificationTypeToggle.isEnabled("device_unreachable", allOn)).isTrue()
         assertThat(NotificationTypeToggle.isEnabled("device_unreachable", allOn.copy(deviceUnreachableEnabled = false))).isFalse()

@@ -163,6 +163,7 @@ function pieceOf(concept: ProgressionConcept, view: EngagementWithGame, host: Fi
             error={actions.errors.mint}
             celebration={actions.celebration}
             strikeKey={actions.strikeKey}
+            glory={game.glory}
             onMint={actions.mint}
             />
           </>

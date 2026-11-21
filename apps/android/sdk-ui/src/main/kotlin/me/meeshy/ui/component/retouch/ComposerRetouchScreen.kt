@@ -64,7 +64,7 @@ public sealed interface ComposerRetouchResult {
 
 /** Les effets que la retouche Android sait peindre sur une photo (#12733) : ceux de l'appel, dans son ordre. */
 public val RetouchRenderableEffects: List<CallFaceEffect> =
-    listOf(CallFaceEffect.SMOOTHING, CallFaceEffect.TOAD, CallFaceEffect.ANGEL, CallFaceEffect.DEMON, CallFaceEffect.VOLCANO)
+    listOf(CallFaceEffect.SMOOTHING, CallFaceEffect.TOAD, CallFaceEffect.ANGEL, CallFaceEffect.DEMON, CallFaceEffect.VOLCANO, CallFaceEffect.BABY)
 
 /** Les outils de la retouche d'une photo sur Android : Recadrer et Texte. */
 public val RetouchPhotoTools: List<ComposerEditTool> = listOf(ComposerEditTool.CROP, ComposerEditTool.TEXT)

@@ -91,7 +91,7 @@
     <string name="feed_reel_republished_by">أعاد نشره %1$s</string>
     <string name="feed_reel_views">المشاهدات</string>
     <string name="feed_report_reason_harassment">تحرّش</string>
-    <string name="feed_report_reason_hate_speech">خطاب كراهية</string>
+    <string name="feed_report_reason_hate_speech">كراهية</string>
     <string name="feed_report_reason_impersonation">انتحال الهوية</string>
     <string name="feed_report_reason_inappropriate">محتوى غير لائق</string>
     <string name="feed_report_reason_other">أخرى</string>
@@ -225,7 +225,6 @@
     <string name="status_composer_mood_question">كيف تشعر؟</string>
     <string name="status_composer_publish">نشر</string>
     <string name="status_composer_publish_disabled_hint">اختر رمزًا تعبيريًا لنشر حالتك</string>
-    <string name="status_composer_title">الحالة</string>
     <string name="status_composer_visibility_community">المجتمعات</string>
     <string name="status_composer_visibility_friends">الأصدقاء</string>
     <string name="status_composer_visibility_private">خاص</string>

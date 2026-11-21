@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="fiche_faces_label">Faces do perfil</string>
+    <string name="fiche_face_vitrine">Vitrine</string>
+    <string name="fiche_face_links">Links</string>
+    <string name="fiche_face_actions">Ações</string>
+    <string name="fiche_section_talk">Falar</string>
+    <string name="fiche_section_together">Juntos</string>
+    <string name="fiche_section_where">Onde está</string>
+    <string name="fiche_section_card">O perfil</string>
+    <string name="fiche_section_not_open">Ainda não aberto</string>
+    <string name="fiche_action_write">Escrever</string>
+    <string name="fiche_action_write_request">Pedir para escrever</string>
+    <string name="fiche_action_call">Ligar</string>
+    <string name="fiche_action_video">Vídeo</string>
+    <string name="fiche_card_share">Enviar o perfil</string>
+    <string name="fiche_card_our_circle">Nosso círculo</string>
+    <string name="fiche_links_title">O link do perfil</string>
+    <string name="fiche_links_hint">Abre a vitrine, vista Pública</string>
+    <string name="fiche_links_copy">Copiar link</string>
+    <string name="fiche_links_qr">QR code</string>
+    <string name="fiche_links_send">Enviar a um amigo</string>
+    <string name="fiche_links_empty">Não há link para compartilhar desta pessoa.</string>
+    <string name="fiche_circle_title">%1$s e você</string>
+    <string name="fiche_circle_common">O nível de vocês é o mais baixo dos dois.</string>
+    <string name="fiche_circle_they_grant">%1$s concede a você</string>
+    <string name="fiche_circle_you_grant">Você concede a %1$s</string>
+    <string name="fiche_circle_at_least">%1$s ou mais</string>
+    <string name="fiche_circle_opens">O que %1$s abre para vocês</string>
+    <string name="fiche_circle_opens_more">Com %1$s, além disso</string>
+    <string name="fiche_circle_missing_they">Falta: que %1$s conceda %2$s a você</string>
+    <string name="fiche_circle_missing_you">Falta: que você conceda %2$s a %1$s</string>
+</resources>

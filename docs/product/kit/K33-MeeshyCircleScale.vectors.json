@@ -122,5 +122,23 @@
     "disabledOpacity": 0.4,
     "centre": 40,
     "repere": 48
-  }
+  },
+  "formes": [
+    "dots",
+    "pill",
+    "rings",
+    "ladder"
+  ],
+  "echelleNote": "Disposition `ladder` (profil, Autre-Cercle, Voir comme) : verticale, le plus haut niveau en haut, nœuds de 26 reliés par un trait de 2, 5 entre deux rangées, niveau courant plein avec un halo de 4, niveaux au-dessus en tirets ; sans niveau courant, tout est atteint.",
+  "echelle": {"noeud": 26, "ecart": 5, "trait": 2, "halo": 4},
+  "echelleOrdre": [
+    {"niveaux": 6, "ordre": [5, 4, 3, 2, 1, 0]},
+    {"niveaux": 0, "ordre": []}
+  ],
+  "echelleNoeuds": [
+    {"niveau": 0, "courant": 4, "etat": "reached"},
+    {"niveau": 4, "courant": 4, "etat": "current"},
+    {"niveau": 5, "courant": 4, "etat": "ahead"},
+    {"niveau": 5, "courant": null, "etat": "reached"}
+  ]
 }

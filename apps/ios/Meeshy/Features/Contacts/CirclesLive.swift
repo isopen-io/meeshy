@@ -12,6 +12,17 @@ nonisolated enum CirclesLinkStore {
     }
 }
 
+/// Les demandes reçues telles que « Demandes » les a gardées (#19449) : la fiche y peint une proposition de cercle avant
+/// le réseau. Sans magasin (les témoins), aucune.
+nonisolated enum ReceivedCircleRequests {
+    static let live: @concurrent @Sendable () async -> [FriendRequest] = {
+        await CacheCoordinator.shared.friendRequests
+            .loadIgnoringExpiry(for: FriendshipCache.PersistenceKeys.receivedRequests)?.items ?? []
+    }
+
+    static let none: @concurrent @Sendable () async -> [FriendRequest] = { [] }
+}
+
 extension CirclesViewModel {
     convenience init() {
         self.init(
@@ -19,7 +30,8 @@ extension CirclesViewModel {
             friendService: FriendService.shared,
             people: CirclePeopleDirectory.shared,
             offlineQueue: OfflineQueue.shared,
-            networkMonitor: NetworkMonitor.shared
+            networkMonitor: NetworkMonitor.shared,
+            publishClosePeople: { links, people in ClosePeopleWidgetFeed.publish(links: links, people: people) }
         )
     }
 }
@@ -43,6 +55,7 @@ extension ProfileCircleViewModel {
             friendService: FriendService.shared,
             offlineQueue: OfflineQueue.shared,
             networkMonitor: NetworkMonitor.shared,
+            cachedReceived: ReceivedCircleRequests.live,
             forgetFriendship: { userId in
                 FriendshipCache.shared.didRemoveFriend(userId)
                 await FriendshipCache.shared.invalidatePersistedFriendCaches()
@@ -61,7 +74,7 @@ enum SharedLocationsLiveHolder {
         if let current, current.userId == userId { return current.live }
         let live = SharedLocationsLive(
             viewerId: { userId },
-            snapshot: { bounds in try await RelationsService.shared.sharedLocations(within: bounds) },
+            served: { bounds in try await RelationsService.shared.sharedLocationsSnapshot(within: bounds) },
             connected: MessageSocketManager.shared.$connectionState
                 .map { $0 == .connected }
                 .eraseToAnyPublisher()
@@ -73,13 +86,15 @@ enum SharedLocationsLiveHolder {
 
 extension SharedLocationsMapViewModel {
     convenience init() {
+        let live = SharedLocationsLiveHolder.live()
         self.init(
-            live: SharedLocationsLiveHolder.live(),
+            live: live,
             people: CirclePeopleDirectory.shared,
             presence: { PresenceManager.shared.knownPresenceState(for: $0) },
             presenceRefresh: PresenceManager.shared.refreshSignal.$presenceVersion
                 .map { _ in () }
-                .eraseToAnyPublisher()
+                .eraseToAnyPublisher(),
+            endings: SharedLocationEndingsLog.log(for: live).$endings.eraseToAnyPublisher()
         )
     }
 }

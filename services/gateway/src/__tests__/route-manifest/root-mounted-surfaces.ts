@@ -220,6 +220,12 @@ export const ROOT_MOUNTED_SURFACES: readonly DeclaredRootSurface[] = [
     reason: '@fastify/cors — négociation CORS par hook ; la réponse OPTIONS est un miroir, jamais une route déclarée.',
   },
   {
+    callee: 'registerShutdownDrain',
+    via: 'call',
+    kind: 'no-routes',
+    reason: "Pose le hook de vidange de l'arrêt (utils/shutdown-drain.ts, #19280) : 503 + CORS pendant la vidange — aucune route déclarée.",
+  },
+  {
     callee: 'swagger',
     via: 'register',
     kind: 'no-routes',
@@ -267,6 +273,14 @@ export const ROOT_MOUNTED_SURFACES: readonly DeclaredRootSurface[] = [
     via: 'call',
     kind: 'no-routes',
     reason: "plugins/route-usage.plugin.ts — hook onResponse du compteur d'accès (#4275), aucune route.",
+  },
+  {
+    callee: 'startFriendRequestMessageTranslation',
+    via: 'call',
+    kind: 'no-routes',
+    reason:
+      "services/friend-requests/FriendRequestMessageTranslationService.ts (#19361) — écouteur de la traduction du mot d'une " +
+      "demande, qui ne lit l'instance que pour diffuser `friend-request:updated` au destinataire ; aucune route (vérifié : aucun verbe HTTP dans le module).",
   },
   {
     callee: 'this.socketIOHandler.setupSocketIO',

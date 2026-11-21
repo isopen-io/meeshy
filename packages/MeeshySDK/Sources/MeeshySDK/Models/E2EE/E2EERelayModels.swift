@@ -36,6 +36,10 @@ public enum E2EEErrorCode {
     public static let directAlreadyEndToEnd = "E2EE_DIRECT_ALREADY_END_TO_END"
     /// Le tête-à-tête n'a pas exactement deux membres inscrits (#12966).
     public static let directNotAPair = "E2EE_DIRECT_NOT_A_PAIR"
+    /// Un membre n'a aucun appareil chiffrant actif (409, #20073) : la bascule
+    /// ou la création d'un direct en bout en bout est refusée, rien n'est activé.
+    /// La bascule nomme les membres (`withoutDeviceUserIds`), la création non.
+    public static let participantWithoutDevice = "E2EE_PARTICIPANT_WITHOUT_DEVICE"
     /// Seul un membre actif de la conversation y envoie un signal chiffré (#13142).
     public static let signalForbidden = "E2EE_SIGNAL_FORBIDDEN"
     /// Une route de signal en clair (réaction, frappe, accusé, modification,
@@ -57,6 +61,11 @@ public enum E2EEErrorCode {
     /// Les codes que la passerelle sert sur l'ENVOI d'un message : ils se
     /// lisent sur toute adresse, comme le refus d'un clair (#11379).
     public static let relayRefusals: Set<String> = [devicesMismatch, clientOutdated, deviceNotBound, envelopesInvalid, regimeChanged]
+
+    /// Les codes que la passerelle sert sur la bascule de régime et la
+    /// création d'un tête-à-tête : ils se lisent sur toute adresse, faute de
+    /// quoi l'écran ne voit qu'un 409 opaque (#20073).
+    public static let regimeRefusals: Set<String> = [participantWithoutDevice, directAlreadyEndToEnd, directNotAPair]
 }
 
 /// Un appareil désigné par la passerelle (Sesame).

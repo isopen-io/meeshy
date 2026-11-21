@@ -25,7 +25,7 @@
     <string name="reels_mute">Silenciar</string>
     <string name="reels_open_failure_back">Volver</string>
     <string name="reels_report_reason_harassment">Acoso</string>
-    <string name="reels_report_reason_hate_speech">Discurso de odio</string>
+    <string name="reels_report_reason_hate_speech">Odio</string>
     <string name="reels_report_reason_impersonation">Suplantación de identidad</string>
     <string name="reels_report_reason_inappropriate">Contenido inapropiado</string>
     <string name="reels_report_reason_other">Otro</string>

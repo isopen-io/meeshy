@@ -123,6 +123,6 @@ describe("ce que le miroir SWIFT DÉCLARE et que le contrat ne porte nulle part"
         return mirror !== undefined && mirror.customDecoder && mirror.file.includes('/Sockets/');
       })
       .sort();
-    expect(manual.length, `types de fil à init(from:) manuel : ${manual.join(', ')}`).toBe(15);
+    expect(manual.length, `types de fil à init(from:) manuel : ${manual.join(', ')}`).toBe(16);
   });
 });

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="fiche_faces_label">أوجه الملف الشخصي</string>
+    <string name="fiche_face_vitrine">الواجهة</string>
+    <string name="fiche_face_links">الروابط</string>
+    <string name="fiche_face_actions">الإجراءات</string>
+    <string name="fiche_section_talk">تحدّث</string>
+    <string name="fiche_section_together">معًا</string>
+    <string name="fiche_section_where">مكانه</string>
+    <string name="fiche_section_card">ملفه</string>
+    <string name="fiche_section_not_open">لم يُفتح بعد</string>
+    <string name="fiche_action_write">اكتب</string>
+    <string name="fiche_action_write_request">اطلب المراسلة</string>
+    <string name="fiche_action_call">اتصل</string>
+    <string name="fiche_action_video">فيديو</string>
+    <string name="fiche_card_share">أرسل ملفه</string>
+    <string name="fiche_card_our_circle">دائرتنا</string>
+    <string name="fiche_links_title">رابط ملفه</string>
+    <string name="fiche_links_hint">يفتح واجهته بالعرض العام</string>
+    <string name="fiche_links_copy">انسخ الرابط</string>
+    <string name="fiche_links_qr">رمز QR</string>
+    <string name="fiche_links_send">أرسل إلى صديق</string>
+    <string name="fiche_links_empty">لا يوجد رابط لمشاركته لهذا الشخص.</string>
+    <string name="fiche_circle_title">%1$s وأنت</string>
+    <string name="fiche_circle_common">مستواكما المشترك هو الأدنى بين المستويين.</string>
+    <string name="fiche_circle_they_grant">%1$s يمنحك</string>
+    <string name="fiche_circle_you_grant">أنت تمنح %1$s</string>
+    <string name="fiche_circle_at_least">%1$s أو أكثر</string>
+    <string name="fiche_circle_opens">ما يفتحه %1$s لكما</string>
+    <string name="fiche_circle_opens_more">مع %1$s، إضافةً</string>
+    <string name="fiche_circle_missing_they">الناقص: أن يمنحك %1$s مستوى %2$s</string>
+    <string name="fiche_circle_missing_you">الناقص: أن تمنح %1$s مستوى %2$s</string>
+</resources>

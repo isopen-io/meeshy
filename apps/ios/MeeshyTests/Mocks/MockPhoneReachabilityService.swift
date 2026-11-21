@@ -12,6 +12,7 @@ final class MockPhoneReachabilityService: PhoneReachabilityServiceProviding, @un
         PhoneReachabilityPersonSettings(userId: "peer", isShared: false)
     )
     var updatePersonSettingsResult: Result<PhoneReachabilityPersonSettings, Error>?
+    var updateAlertResult: Result<PhoneReachabilityPersonSettings, Error>?
     var emitterSettingsResult: Result<PhoneReachabilityEmitterSettings, Error> = .success(
         PhoneReachabilityEmitterSettings(sharingEnabled: true)
     )
@@ -20,6 +21,7 @@ final class MockPhoneReachabilityService: PhoneReachabilityServiceProviding, @un
 
     private(set) var aliveCallCount = 0
     private(set) var updatePersonSettingsCalls: [Bool] = []
+    private(set) var updateAlertCalls: [Bool] = []
     private(set) var updateEmitterSettingsCalls: [Bool] = []
 
     func snapshot() async throws -> [PhoneReachabilityState] { try snapshotResult.get() }
@@ -32,6 +34,12 @@ final class MockPhoneReachabilityService: PhoneReachabilityServiceProviding, @un
         lock.withLock { updatePersonSettingsCalls.append(isShared) }
         if let updatePersonSettingsResult { return try updatePersonSettingsResult.get() }
         return PhoneReachabilityPersonSettings(userId: userId, isShared: isShared)
+    }
+
+    func updateAlert(userId: String, alertsMe: Bool) async throws -> PhoneReachabilityPersonSettings {
+        lock.withLock { updateAlertCalls.append(alertsMe) }
+        if let updateAlertResult { return try updateAlertResult.get() }
+        return PhoneReachabilityPersonSettings(userId: userId, isShared: false, alertsMe: alertsMe)
     }
 
     func emitterSettings() async throws -> PhoneReachabilityEmitterSettings { try emitterSettingsResult.get() }

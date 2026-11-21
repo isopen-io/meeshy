@@ -123,8 +123,8 @@ final class AvatarBannerNoRetryWiringTests: XCTestCase {
             XCTAssertFalse(body.contains("Text(initial)"), "\(label) ne garde plus d'initiale sous la photo.")
             XCTAssertFalse(body.contains("CachedAsyncImage("), "\(label) n'est pas un composant d'avatar.")
         }
-        XCTAssertTrue(circle.contains(".avatarRingWithin("), "Le contour équipé reste posé une fois sur le grand cercle.")
-        XCTAssertTrue(incoming.contains(".avatarRingWithin("))
+        XCTAssertTrue(circle.contains(".avatarRing("), "Le contour équipé reste posé une fois sur le grand cercle.")
+        XCTAssertTrue(incoming.contains(".avatarRing("))
     }
 
     func test_storyCommentRow_avatarIsAnAvatarComponent() throws {

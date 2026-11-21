@@ -27,9 +27,22 @@ export function applyGameUpdated(queryClient: QueryClient, payload: unknown): vo
   void queryClient.invalidateQueries({ queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY });
 }
 
+/**
+ * `game:missions-updated` (#16425) — un acte du Rêve a avancé ou s'est terminé, ou l'Offrande s'est ouverte : la
+ * progression se relit. Invalidation pure ; le cache reste peint jusqu'à la relecture (#17367 lit l'avancée qui en sort).
+ */
+export function applyGameMissionsUpdated(queryClient: QueryClient): void {
+  void queryClient.invalidateQueries({ queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY });
+}
+
 export function bindGameStateSync(params: { readonly socket: SocketClient; readonly queryClient: QueryClient }): () => void {
   const { socket, queryClient } = params;
   const onUpdated = (payload: unknown): void => applyGameUpdated(queryClient, payload);
+  const onMissions = (): void => applyGameMissionsUpdated(queryClient);
   socket.on(SERVER_EVENTS.GAME_UPDATED, onUpdated);
-  return () => socket.off(SERVER_EVENTS.GAME_UPDATED, onUpdated);
+  socket.on(SERVER_EVENTS.GAME_MISSIONS_UPDATED, onMissions);
+  return () => {
+    socket.off(SERVER_EVENTS.GAME_UPDATED, onUpdated);
+    socket.off(SERVER_EVENTS.GAME_MISSIONS_UPDATED, onMissions);
+  };
 }

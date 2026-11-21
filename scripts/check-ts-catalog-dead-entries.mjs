@@ -534,6 +534,29 @@ export const callersIn = (contents, nsNames) => {
 // `applyKnownLiveExceptions` la fait rougir (PÉRIMÉE) le jour où son appelant
 // arrive — la déclaration doit alors partir dans le même commit.
 const PENDING_CLIENT_ENTRIES = {
+  // Le jeton d'Activité en direct d'un partage de position (#19463, chantier #18857) : l'iPhone qui affiche
+  // « Léo partage sa position » le confie à la passerelle, qui clôt l'Activité si le partage finit avant son terme.
+  'me.liveActivityTokens': { issue: 19463, reason: 'POST /me/live-activity-tokens — l\'Activité en direct close par la passerelle à la fin du partage' },
+  // Les entrées d'un lien de communauté (#19429, besoin #19290, chantier #18857) : iOS les lira d'abord
+  // (fiche `Lien-Communaute`) ; le web et Android avec leur fiche de lien.
+  'communities.byIdEntriesStats': { issue: 19429, reason: 'GET /communities/:id/entries/stats — « N entrées par ce lien », « N cette semaine », la série sur 30 jours' },
+  // Stories « à la une » servies par la passerelle (#19394, chantier #18857) : les clients liront le rail
+  // « À la une » de la Vitrine (K20) et l'auteur composera ses albums.
+  'users.byIdHighlights': { issue: 19394, reason: 'GET /users/:id/highlights — le rail « À la une » de la fiche, chaque story sous sa propre audience' },
+  'users.meHighlights': { issue: 19394, reason: 'GET · POST /users/me/highlights — mes albums à la une (lecture, création)' },
+  'users.meHighlightsById': { issue: 19394, reason: 'PATCH · DELETE /users/me/highlights/:id — modifier ou supprimer un album à la une' },
+  'users.meHighlightsOrder': { issue: 19394, reason: 'PUT /users/me/highlights/order — réordonner mes albums à la une' },
+  // « Mes cercles » compté par la passerelle, Communauté comprise (#19375, chantier #18857) : iOS le lira
+  // d'abord (rangée « Mes cercles » de la fiche) ; le web et Android le liront avec leur profil.
+  'relations.summary': { issue: 19375, reason: 'GET /relations/summary — le compte de chaque cercle et des demandes en attente, rangée « Mes cercles »' },
+  // Le profil de la planche (#18857, PR serveur #19316) : le serveur sert avant le tour client web.
+  'contactExchange.byTokenAccept': { issue: 19205, reason: 'POST /contact-exchange/:token/accept — accepter un partage sans contact (web)' },
+  'me.contactExchange': { issue: 19205, reason: 'POST /me/contact-exchange — émettre le jeton du partage sans contact (web)' },
+  'me.locationGhost': { issue: 19203, reason: 'PUT /me/location/ghost — le fantôme global de position (web)' },
+  'relations.byUserIdLocationRequest': { issue: 19204, reason: 'POST /relations/:userId/location/request — prolonger ou redemander un partage (web)' },
+  'users.meProfileLinkStats': { issue: 19206, reason: 'GET /users/me/profile-link/stats — les visites de mon lien (web)' },
+  'invitations.emailByIdResend': { issue: 19207, reason: 'POST /invitations/email/:id/resend — relancer une invitation (web)' },
+  'invitations.emailOptOut': { issue: 19321, reason: 'POST /invitations/email/opt-out — la page web de désinscription' },
   // La boîte de demandes (#14107, PR #14449) : le serveur sert « Accepter » avant le tour client, qui le portera.
   'conversations.byIdMessageRequestAccept': { issue: 14107, reason: 'POST /conversations/:id/message-request/accept — le bouton « Accepter » de la boîte de demandes (web)' },
   // #11327 (S26) — `/api/v1/lens` : le crédit « Lens par X », le logo du filigrane et le ping d'usage, que la
@@ -571,6 +594,12 @@ const PENDING_CLIENT_ENTRIES = {
   // Le téléphone injoignable (#18737) : le signe de vie ne vient que d'un TÉLÉPHONE (iOS, Android répondent à la
   // sonde silencieuse — le web n'en est pas un), et le web lit l'état d'une personne par le rattrapage et le direct.
   'me.deviceAlive': { issue: 18737, reason: 'POST /me/device/alive — la réponse du téléphone à la sonde silencieuse, appelée par iOS et Android seulement' },
+  'me.deviceCall': { issue: 18753, reason: 'POST /me/device/call — le rapport « en appel » du téléphone suivi, appelé par iOS et Android seulement ; un navigateur ne voit pas les appels' },
+  // La chute détectée (#18748) : la passerelle sert le socle avant les lots clients ; le rapport ne vient que d'un iPhone
+  // (HealthKit) : « Je vais bien » et l’accord ne vivent que dans l’app iPhone ; le web lit le rattrapage et le réglage par personne.
+  'me.healthFall': { issue: 18748, reason: 'POST /me/health/fall — le rapport de chute de l’iPhone (HealthKit), appelé par iOS seulement' },
+  'me.healthFallOk': { issue: 18748, reason: 'POST /me/health/fall/ok — « Je vais bien », appelé par iOS seulement (le web ne rapporte aucune chute)' },
+  'me.healthFallSettings': { issue: 18748, reason: 'GET · PUT /me/health/fall/settings — l’accord explicite, recueilli par iOS seulement' },
   'relations.byUserIdPhoneReachability': { issue: 18737, reason: 'GET /relations/:userId/phone-reachability — l’état d’une personne, lu par iOS et Android ; le web suit le rattrapage et `phone:*`' },
   // Le relais de la confirmation d'un appareil par code (#19156, spec 2026-11-17 § 5.2) : la passerelle le sert avant
   // les lots clients de la spécification (§ 10 : web lot 6, iOS lots 3-4, Android lot 5), portés par #18906.

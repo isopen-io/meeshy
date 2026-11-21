@@ -34,6 +34,8 @@ export interface NotificationPreference {
   readonly deviceBatteryEnabled?: boolean;
   /** « Le téléphone de mes Proches et de mes Sangs est injoignable » (#18737) — absent = reçu. */
   readonly deviceUnreachableEnabled?: boolean;
+  /** « Partages de position » (#19204) : prévenu d'un partage, demande de prolonger — absent = reçu. */
+  readonly locationShareEnabled?: boolean;
   /** « Jeu » (#9490) — absent = reçu. */
   readonly gameEnabled?: boolean;
   /** « Moments à immortaliser » (#10175, D8) : le push d'une étape franchie app fermée — absent = reçu. */
@@ -165,6 +167,9 @@ export function isNotificationTypeEnabled(
       return prefs.deviceBatteryEnabled !== false;
     case 'device_unreachable':
       return prefs.deviceUnreachableEnabled !== false;
+    case 'location_share_started':
+    case 'location_share_requested':
+      return prefs.locationShareEnabled !== false;
     case 'game_duo_invited':
     case 'game_duo_accepted':
     case 'game_league_result':

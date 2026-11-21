@@ -322,6 +322,20 @@ struct MeeshyTileStripTests {
         #expect(MeeshyTile(id: "a", title: "", accessibilityLabel: "Aucun").hasAccessibleName)
     }
 
+    @Test("le sous-titre se lit après le titre ; l'accessibilityLabel de l'hôte prime ; un sous-titre vide ne se montre pas")
+    func tile_subtitle_isReadAfterTheTitle() {
+        let equipped = MeeshyTile(id: "ring", title: "Contour d'avatar", subtitle: "Néon Dakar")
+        #expect(equipped.name == "Contour d'avatar, Néon Dakar")
+        #expect(equipped.shownSubtitle == "Néon Dakar")
+        let named = MeeshyTile(id: "ring", title: "Contour", subtitle: "Néon", accessibilityLabel: "Mon contour")
+        #expect(named.name == "Mon contour")
+        let blank = MeeshyTile(id: "ring", title: "Bannière", subtitle: "")
+        #expect(blank.shownSubtitle == nil)
+        #expect(blank.name == "Bannière")
+        #expect(MeeshyTile(id: "ring", title: "Bannière").shownSubtitle == nil)
+        #expect(MeeshyTile(id: "ring", title: "Bannière", subtitle: "Aurore") != MeeshyTile(id: "ring", title: "Bannière", subtitle: "Néon"))
+    }
+
     @Test("bande et grille : un bouton par vignette ; carrousel : UN élément ajustable")
     func accessibility_role_perLayout() {
         #expect(MeeshyTileStripAccessibility.role(for: .strip) == .choice)

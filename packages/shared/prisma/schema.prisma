@@ -131,8 +131,11 @@ model User {
   city                      String?
   /// Cercle (RelationLevel) à partir duquel la ville se lit ; null = la personne seule.
   cityCircle                String?
+  /// Couleur d'accent de la vitrine (#19201) : une teinte de PROFILE_ACCENT_HEXES ; null = accent calculé.
+  profileAccentColor        String?
   /// Adresses personnelles publiées sur la fiche (#18863).
   profileAddresses          ProfileAddress[]
+  storyHighlights           StoryHighlight[]
   email                     String   @unique
   phoneNumber               String?
   /// Code de parrainage INTRINSÈQUE au compte — distinct d'un AffiliateToken
@@ -208,6 +211,20 @@ model User {
   /// date (#18737, le fantôme de TEL-01) : aucun Proche ni Sang ne la reçoit, et le téléphone n'est plus
   /// sondé. Optionnel, sans migration.
   unreachableSharingDisabledAt DateTime?
+  /// Non nul = le compte a COUPÉ sa vérification d'inactivité pour tous depuis cette date (#18738, TEL-02) :
+  /// aucune question « Tout va bien ? », aucun Sang prévenu. Optionnel, sans migration.
+  inactivityCheckDisabledAt DateTime?
+  /// Le délai sans activité avant « Tout va bien ? », en heures (6, 12 ou 24) ; nul = le défaut (12 h).
+  /// Une valeur hors de la liste vaut le défaut. Optionnel, sans migration.
+  inactivityCheckDelayHours Int?
+  /// Non nul = le compte a coupé le partage d'« EN APPEL » pour tous depuis cette date (#18753, ACT-01) :
+  /// rien n'est rangé ni servi. Optionnel, sans migration.
+  callSharingDisabledAt     DateTime?
+  /// Non nul = l'ACCORD EXPLICITE de prévenir mes Sangs d'une chute détectée, donné à cette date (#18748,
+  /// SAN-01, donnée de santé art. 9 RGPD). Nul = rien n'est collecté ni servi : jamais actif par défaut.
+  fallAlertConsentedAt      DateTime?
+  /// La version du texte d'accord lue (`FALL_CONSENT_VERSION`) ; nulle sans accord. Optionnel, sans migration.
+  fallAlertConsentVersion   String?
   /// Pays appareil (Locale.current.region iOS) propage sur CHAQUE requete via
   /// X-Meeshy-Country, persiste par le middleware gateway deviceCountry.
   /// Signal continu (contrairement a registrationCountry, capture une seule
@@ -499,6 +516,7 @@ model User {
 
   createdCommunities      Community[]              @relation("CommunityCreator")
   communityMemberships    CommunityMember[]
+  communityJoinRequests   CommunityJoinRequest[]
   conversationPreferences ConversationPreference[]
   createdShareLinks       ConversationShareLink[]  @relation("ShareLinkCreator")
   receivedFriendRequests  FriendRequest[]          @relation("FriendRequestReceiver")
@@ -2077,6 +2095,13 @@ model FriendRequest {
   receiverId  String    @db.ObjectId
   /// Message optionnel accompagnant la demande d'amitié
   message     String?
+  /// Langue DÉTECTÉE du `message` à l'envoi (#19361). `null` : pas de mot, ou
+  /// une ligne antérieure à la traduction des demandes.
+  messageOriginalLanguage String?
+  /// Traductions du `message`, rangées par le translator (#19361) :
+  /// `{ "<langue>": { text, translationModel, confidenceScore, createdAt } }`.
+  /// Jamais servie brute : `servirParties` en descend le Prisme du DESTINATAIRE.
+  messageTranslations Json?
   /// pending, accepted, rejected, blocked
   status      String    @default("pending")
   /// When the request was accepted/rejected
@@ -2217,6 +2242,31 @@ model PairInteractionDay {
   @@index([userHighId, day])
 }
 
+/// LES VISITES DE MON LIEN DE PROFIL, par jour UTC (#19206, chantier #18857).
+///
+/// Une ligne par propriétaire et par jour : `visits` compte les ouvertures de sa fiche par
+/// `/@pseudo` (redirigé vers `/directory/people/:handle`), `/u/:username` ou
+/// `/directory/people/:handle`. AGRÉGAT seulement : aucune IP, aucun identifiant de visiteur,
+/// aucune ville. Ni le propriétaire ni un robot d'aperçu ne comptent ; le dédoublonnage se fait
+/// en Redis par fenêtre de trente minutes, sous une empreinte HMAC du jour qui ne se garde pas.
+///
+/// Incrément ATOMIQUE sans lecture (`increment`), reprise en incrément sur `P2002`. Seul le
+/// propriétaire lit (`GET /users/me/profile-link/stats`) ; purgée avec le compte, exportée.
+///
+/// Expiration : `expiresAt` porte un index TTL (`expireAfterSeconds: 0`) posé par
+/// `migrations/2026-11-17-profile-link-visit-day-indexes.mongodb.js`, hors `db push`.
+/// Conservation 40 jours (`PROFILE_LINK_VISIT_RETENTION_DAYS`).
+model ProfileLinkVisitDay {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  /// Minuit UTC du jour compté.
+  day       DateTime
+  visits    Int      @default(0)
+  expiresAt DateTime
+
+  @@unique([userId, day])
+}
+
 /// Les CONSENTEMENTS d'une personne envers UNE AUTRE, écrits au rituel du Sang
 /// (#13933, cercles de proximité, RG-09). Une ligne par couple ORIENTÉ (`ownerId`
 /// règle, `otherId` en bénéficie) : la loi d'accès dit le PLAFOND de ce que le niveau
@@ -2270,6 +2320,22 @@ model RelationFeatureSetting {
   unreachableShared          Boolean?
   /// Quand ce partage a été RETIRÉ (trace).
   unreachableWithdrawnAt     DateTime?
+  /// Partage de l'ALERTE D'INACTIVITÉ de `ownerId` à `otherId` (#18738), TRI-ÉTAT : nul = le défaut du
+  /// niveau effectif (accordé entre Sangs et dans l'équipe), `true` = accordé, `false` = refusé.
+  /// Optionnel, sans migration.
+  inactivityShared           Boolean?
+  /// Quand ce partage a été RETIRÉ (trace).
+  inactivityWithdrawnAt      DateTime?
+  /// Partage d'« EN APPEL » de `ownerId` à `otherId` (#18753), TRI-ÉTAT : nul = le défaut du niveau
+  /// effectif (accordé entre Sangs et dans l'équipe), `true` = accordé, `false` = refusé. Optionnel.
+  callShared                 Boolean?
+  /// Quand ce partage a été RETIRÉ (trace).
+  callWithdrawnAt            DateTime?
+  /// Alerte de chute de `ownerId` à `otherId` (#18748), TRI-ÉTAT : nul = le défaut du niveau effectif
+  /// (accordé entre Sangs et dans l'équipe une fois l'accord global donné), `false` = retiré. Optionnel.
+  fallShared                 Boolean?
+  /// Quand ce partage a été RETIRÉ (trace).
+  fallWithdrawnAt            DateTime?
   /// Non nul = `ownerId` est en FANTÔME CIBLÉ pour `otherId` depuis cette date (#13937) : l'autre ne
   /// reçoit ni historique ni alerte de proximité, et rien ne lui dit pourquoi. Ce n'est pas un
   /// consentement : une ligne née d'un fantôme laisse ses quatre partages faux.
@@ -2284,6 +2350,10 @@ model RelationFeatureSetting {
   /// Non nul = `ownerId` a coupé les invitations « regarder ou écouter ensemble » de `otherId`
   /// (#17023) : préférence de réception, active par défaut ; la séance déjà rejointe continue.
   togetherBlockedAt     DateTime?
+  /// Non nul = `ownerId` ne veut plus RECEVOIR la position continue de `otherId` (#19454) :
+  /// préférence de réception, active par défaut ; ni son point sur ma carte, ni l'alerte de
+  /// proximité de la paire ne m'arrivent. Ne touche pas au consentement de `otherId`.
+  bloodLocationMutedAt  DateTime?
   consentedAt           DateTime @default(now())
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
@@ -2439,8 +2509,11 @@ model Community {
   createdBy   String    @db.ObjectId
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  /// « Valider chaque entrée » (#19429) : rejoindre crée une DEMANDE qu'un administrateur ou un modérateur accepte ou refuse. Absent = entrée directe.
+  requiresJoinApproval Boolean? @default(false)
 
   members             CommunityMember[]
+  joinRequests        CommunityJoinRequest[]
   creator             User                       @relation("CommunityCreator", fields: [createdBy], references: [id])
   sharedConversations ConversationShare[]        @relation("CommunityShares")
   Conversation        Conversation[]
@@ -2460,9 +2533,43 @@ model CommunityMember {
   isActive    Boolean   @default(true)
   /// When the member left the community (null if still active)
   leftAt      DateTime?
+  /// Comment la personne est entrée (#19429) : self, invited, link. Absent sur les lignes d'avant.
+  joinedVia   String?
+  /// Pays de l'arrivant à l'entrée, code ISO 3166-1 alpha-2 — jamais la ville (#19429).
+  joinCountry String?
 
   user      User      @relation(fields: [userId], references: [id])
   community Community @relation(fields: [communityId], references: [id])
+
+  @@index([communityId, isActive, joinedAt])
+  // Lectures par personne : « mes communautés », accès d'un post COMMUNITY, purge, export (#14227)
+  @@index([userId, isActive])
+  // Une personne dans une communauté : contrôle d'accès, invitation, adhésion (#14227)
+  @@index([communityId, userId])
+}
+
+/// Demande d'entrée dans une communauté qui valide chaque entrée (#19429).
+model CommunityJoinRequest {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  communityId String    @db.ObjectId
+  userId      String    @db.ObjectId
+  /// pending, accepted, rejected, expired (#19872 : non tranchée en 30 jours, close quand son auteur redemande)
+  status      String    @default("pending")
+  /// Comment la demande est arrivée : self ou link
+  via         String?
+  /// Code ISO 3166-1 alpha-2 de l'arrivant, jamais la ville
+  country     String?
+  createdAt   DateTime  @default(now())
+  decidedAt   DateTime?
+  decidedBy   String?   @db.ObjectId
+  /// Acceptation au sort SCELLÉ (#20003) : entrée prouvée ou demande remplacée ; la réparation des orphelines ne la relit plus. Nul ou absent : à vérifier.
+  entryVerifiedAt DateTime?
+
+  user      User      @relation(fields: [userId], references: [id])
+  community Community @relation(fields: [communityId], references: [id])
+
+  @@index([communityId, status, createdAt])
+  @@index([userId, communityId])
 }
 
 /// Statistiques d'utilisation d'un utilisateur
@@ -2611,12 +2718,27 @@ model EmailInvitation {
   email            String
   affiliateTokenId String   @db.ObjectId
   sentAt           DateTime @default(now())
+  /// Relances envoyées (#19207) : une par 72 h, trois au plus (`invitationResendWindow`).
+  /// Absent sur les lignes d'avant le lot, lu comme zéro.
+  resendCount      Int?     @default(0)
+  lastResentAt     DateTime?
 
   sender         User           @relation("EmailInvitationSender", fields: [senderId], references: [id])
   affiliateToken AffiliateToken @relation(fields: [affiliateTokenId], references: [id])
 
   @@index([senderId])
   @@index([email])
+}
+
+/// Une adresse qui ne veut plus d'invitation (#19207). Le serveur n'en garde qu'une
+/// empreinte HMAC à clé secrète (`READER_KEY_HMAC_SECRET`, domaine `invitation-opt-out:`),
+/// jamais l'adresse : comme pour le carnet d'adresses (#9225), un non-inscrit n'est pas
+/// gardé en clair. Écrite par le lien « Ne plus recevoir d'invitation » de l'e-mail,
+/// lue par l'envoi et la relance, qui la refusent.
+model EmailInvitationOptOut {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  emailHash String   @unique
+  createdAt DateTime @default(now())
 }
 
 /// Lien de tracking pour compter les clics sur les liens partagés
@@ -2662,6 +2784,9 @@ model TrackingLink {
   messageId      String?   @db.ObjectId // Message contenant le lien
   totalClicks    Int       @default(0) // Nombre total de clics
   uniqueClicks   Int       @default(0) // Nombre de clics uniques (par IP/fingerprint)
+  /// Compter les visiteurs uniques (#19418) : `false` ⇒ un clic n'incrémente jamais `uniqueClicks`.
+  /// Absent ou null = vrai, le comportement de tout lien antérieur.
+  countUnique    Boolean?
   isActive       Boolean   @default(true) // Le lien est-il actif
   expiresAt      DateTime? // Date d'expiration (null = pas d'expiration)
   createdAt      DateTime  @default(now())
@@ -2693,6 +2818,27 @@ model ProfileAddress {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, position])
+}
+
+/// Album « à la une » d'une personne (#19394, décision #19393) : des stories de SON auteur,
+/// rangées sous un titre et un glyphe. Mettre une story à la une n'élargit jamais son
+/// audience : la lecture (`GET /users/:id/highlights`) ne sert à un lecteur que les stories
+/// que leur propre visibilité lui ouvre, y compris après leur échéance ; un album vide pour
+/// lui est omis. `storyIds` garde l'ordre de l'album ; une story supprimée s'y ignore.
+model StoryHighlight {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId   String   @db.ObjectId
+  title     String
+  /// Nom d'icône du jeu de la planche (`map-pin`, `moon`…).
+  glyph     String
+  storyIds  String[] @default([]) @db.ObjectId
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, order])
 }
 
 /// Clic sur un lien de tracking
@@ -2934,6 +3080,15 @@ model CallSession {
   /// surface "data spent" in the call-summary message. Null when never reported.
   bytesSent     Int?
   bytesReceived Int?
+  /// Les MÊMES cumuls, exacts au-delà de 2 Go (#20152). `Int` est un int32 : une
+  /// visio longue dépasse 2^31 − 1 octets, et iOS/Android remontent jusqu'à
+  /// 2^53 − 1. Un double représente exactement tout entier jusqu'à cette borne.
+  /// Écrits à côté des champs `Int` (qui reçoivent la même valeur saturée à
+  /// 2^31 − 1 pour les anciens lecteurs) ; lus champ par champ comme le plus
+  /// grand des deux (une passerelle antérieure n'écrit que l'`Int`). Absents
+  /// sur les enregistrements antérieurs.
+  bytesSentTotal     Float?
+  bytesReceivedTotal Float?
   /// Overall network quality tier observed during the call:
   /// excellent | good | fair | poor. Null when never reported (e.g. missed).
   networkQuality String?
@@ -2972,6 +3127,13 @@ model CallSession {
   /// avec la session, d'où une liste sur la session plutôt qu'un modèle. Écrit
   /// par `services/calls/callInvitation.ts`.
   invitedUserIds String[] @default([]) @db.ObjectId
+
+  /// La conversation DIRECTE d'origine d'un appel rattaché à un groupe par la
+  /// première invitation (#19650) : `conversationId` est alors le groupe, et le
+  /// tête-à-tête garde sa réservation et sa bulle jusqu'à la fin. Écrite UNE
+  /// fois par `services/calls/callConversationRebranch.ts`, absente sinon. Lue
+  /// par `callId` seulement (aucun index), jamais servie aux clients.
+  originConversationId String? @db.ObjectId
 
   /// Les réactions envoyées pendant l'appel, comptées par emoji (#8439) :
   /// `{ "👍": 3, "🎉": 1 }`, emojis de `CALL_REACTION_EMOJIS` seulement.

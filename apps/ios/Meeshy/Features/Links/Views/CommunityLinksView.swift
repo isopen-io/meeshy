@@ -4,13 +4,11 @@ import MeeshySDK
 import MeeshyUI
 
 struct CommunityLinksView: View {
-    private var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var viewModel = CommunityLinksViewModel()
 
     @Environment(\.routerCommands) private var router
 
     private let accent = MeeshyColors.communityAccent
-    private let accentHex = MeeshyColors.communityAccentHex
 
     var body: some View {
         LinksPage(
@@ -22,125 +20,58 @@ struct CommunityLinksView: View {
             )
         ) {
             VStack(spacing: MeeshySpacing.xl) {
-                communityStatsOverview.padding(.horizontal, MeeshySpacing.lg)
+                if !viewModel.links.isEmpty {
+                    communityStatsOverview.padding(.horizontal, MeeshySpacing.lg)
+                }
                 communityLinksSection.padding(.horizontal, MeeshySpacing.lg)
             }
             .padding(.top, MeeshySpacing.sm).padding(.bottom, 40)
         }
-        .refreshable { await viewModel.load() }
+        .refreshable { await viewModel.refresh() }
         .task { await viewModel.load() }
     }
 
+    /// Les chiffres de mes communautés : la bande du kit (K34), un seul élément pour VoiceOver (#19601).
     private var communityStatsOverview: some View {
-        HStack(spacing: MeeshySpacing.md) {
-            communityStatCard("\(viewModel.stats.totalCommunities)", label: String(localized: "community.links.stat.groups", defaultValue: "Groupes", bundle: .main), icon: "person.3.fill")
-            communityStatCard("\(viewModel.stats.activeCommunities)", label: String(localized: "community.links.stat.active", defaultValue: "Actifs", bundle: .main), icon: "checkmark.circle.fill")
-            communityStatCard("\(viewModel.stats.totalMembers)", label: String(localized: "community.links.stat.members", defaultValue: "Membres", bundle: .main), icon: "person.fill")
-        }
+        let stats = viewModel.stats
+        return MeeshyFigureBand(items: [
+            MeeshyFigureItem(value: stats.totalCommunities.formatted(), unit: String(localized: "community.links.stat.groups", defaultValue: "Groupes", bundle: .main)),
+            MeeshyFigureItem(value: stats.activeCommunities.formatted(), unit: String(localized: "community.links.stat.active", defaultValue: "Actifs", bundle: .main)),
+            MeeshyFigureItem(value: stats.totalMembers.formatted(), unit: String(localized: "community.links.stat.members", defaultValue: "Membres", bundle: .main)),
+        ], size: .compact, emptyLabel: ProfileActivityBand.emptyLabel)
     }
 
-    private func communityStatCard(_ value: String, label: String, icon: String) -> some View {
-        VStack(spacing: MeeshySpacing.xsPlus) {
-            Image(systemName: icon).font(MeeshyFont.relative(MeeshyIconSize.xl))
-                .foregroundColor(accent)
-                .accessibilityHidden(true)
-            Text(value).font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold)).foregroundStyle(theme.textPrimary)
-            Text(label).font(MeeshyFont.relative(MeeshyFont.footnoteSize)).foregroundStyle(theme.textSecondary)
-        }
-        .frame(maxWidth: .infinity).padding(MeeshySpacing.mdPlus)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                .fill(theme.surfaceGradient(tint: accentHex))
-                .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .stroke(accent.opacity(MeeshyOpacity.light), lineWidth: 1))
-        )
-        .accessibilityElement(children: .combine)
-    }
-
+    /// Mes communautés en billets du kit (#19601) : l'en-tête K44, les états dessinés, et chaque communauté en billet
+    /// de rangée — ses membres et leurs visages (K48), Copier le lien d'invitation, ouvrir son détail.
     private var communityLinksSection: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            Text(String(localized: "community.links.section.mine", defaultValue: "MES COMMUNAUTÉS", bundle: .main)).font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                .foregroundColor(theme.textSecondary).kerning(0.8)
-                .accessibilityAddTraits(.isHeader)
-
-            if viewModel.isLoading {
-                // Instant App: cold-start (empty cache) shows structural
-                // skeleton rows, never a spinner. `isLoading` is set true
-                // only on `.expired`/`.empty` with no cached links.
-                SkeletonLinkList()
-            } else if viewModel.links.isEmpty {
-                // Consolidation design-system : délègue au primitive partagé
-                // EmptyStateView (compact) plutôt que ré-implémenter le VStack
-                // hero-glyphe/titre/sous-titre (doctrine dédup 183i/205i). Hérite
-                // spring d'apparition + a11y combinée. Glyphe teinté à l'accent
-                // communauté via accentHex. 0 clé i18n neuve (les 2 clés existent).
-                EmptyStateView(
-                    icon: "person.3.fill",
-                    title: String(localized: "community.links.empty.title", defaultValue: "Aucune communauté administrée", bundle: .main),
-                    accentColor: accentHex,
-                    compact: true
-                )
-                .padding(.vertical, MeeshySpacing.xxl)
-            } else {
-                VStack(spacing: MeeshySpacing.sm) {
-                    ForEach(viewModel.links) { link in
-                        NavigationLink(destination: CommunityLinkDetailView(link: link)) {
-                            communityLinkRow(link)
-                        }.buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-    }
-
-    private func copyJoinLink(_ link: CommunityLink) {
-        LinksClipboard.copy(link.joinUrl)
-    }
-
-    private func communityLinkRow(_ link: CommunityLink) -> some View {
-        HStack(spacing: MeeshySpacing.md) {
-            ZStack {
-                Circle().fill(accent.opacity(MeeshyOpacity.light)).frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
-                // Glyphe dans un cercle de dimension fixe 40×40 : figé (déborderait s'il scalait) + masqué VoiceOver (doctrine 86i)
-                Image(systemName: "person.3.fill").font(MeeshyFont.fixedGlyph(MeeshyIconSize.sm))
-                    .foregroundColor(accent)
-                    .accessibilityHidden(true)
-            }
-            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                Text(link.name).font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundStyle(theme.textPrimary).lineLimit(1)
-                Text(String(localized: "community.links.row.subtitle", defaultValue: "\(link.memberCount) membres · \(link.identifier)", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.smallSize)).foregroundColor(theme.textMuted).lineLimit(1)
-            }
-            Spacer()
-            MeeshyGlassButton(
-                systemImage: "doc.on.doc",
-                label: String(localized: "common.copyLink", defaultValue: "Copier le lien", bundle: .main),
-                size: .s36,
-                glyphTint: accent,
-                haptic: .none,
-                action: { copyJoinLink(link) }
+        LinksPageSection(
+            title: String(localized: "community.links.section.mine", defaultValue: "MES COMMUNAUTÉS", bundle: .main),
+            count: viewModel.links.count,
+            phase: LinksPageLaw.phase(isLoading: viewModel.isLoading, didFail: viewModel.loadFailed,
+                                      hasLinks: !viewModel.links.isEmpty),
+            tint: accent,
+            empty: LinksPageEmpty(
+                title: String(localized: "community.links.empty.title", defaultValue: "Aucune communauté administrée", bundle: .main),
+                createTitle: String(localized: "community.links.create.a11y", defaultValue: "Créer une communauté", bundle: .main),
+                onCreate: { router.push(.communityCreate) }
+            ),
+            onRetry: { Task { await viewModel.refresh() } }
+        ) {
+            LinksPageTicketList(
+                tickets: viewModel.links.map { LinksFaceSummary.ticket(community: $0) },
+                accent: accent,
+                footnote: { _ in nil },
+                destination: { ticket in destination(of: ticket) },
+                onSwitch: { _, _ in }
             )
-            // Nested inside the row's NavigationLink, this Button is unreachable by
-            // VoiceOver — the link absorbs its whole label as one element. Hide the
-            // duplicate glyph here and re-expose the copy as an `.accessibilityAction`
-            // on the combined row below, so VoiceOver users can still copy the invite.
-            .accessibilityHidden(true)
-            Image(systemName: "chevron.forward").font(MeeshyFont.relative(MeeshyIconSize.xs)).foregroundStyle(theme.textMuted)
-                .accessibilityHidden(true)
         }
-        .padding(MeeshySpacing.mdPlus)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                .fill(theme.surfaceGradient(tint: accentHex))
-                .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .stroke(accent.opacity(MeeshyOpacity.light), lineWidth: 1))
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityHint(String(localized: "community.links.row.open.a11y", defaultValue: "Ouvre les détails de la communauté", bundle: .main))
-        .accessibilityAction(named: String(localized: "common.copyLink", defaultValue: "Copier le lien", bundle: .main)) {
-            copyJoinLink(link)
+    }
+
+    private func destination(of ticket: LinksFaceTicket) -> ProfileCreatedLinkDestination {
+        guard let link = viewModel.links.first(where: { "community:\($0.id)" == ticket.id }) else {
+            return .route(.communityLinks)
         }
+        return .community(link)
     }
 }
 
@@ -153,6 +84,8 @@ class CommunityLinksViewModel: ObservableObject {
     nonisolated deinit {}
     @Published var links: [CommunityLink] = []
     @Published var isLoading = false
+    /// La dernière relecture a échoué : sans rien en cache, la page dit l'erreur et offre « Réessayer ».
+    @Published var loadFailed = false
 
     var stats: CommunityLinkStats { CommunityLinkService.shared.stats(links: links) }
 
@@ -164,16 +97,19 @@ class CommunityLinksViewModel: ObservableObject {
             return
         case .stale(let data, _):
             links = data
-            await refreshFromAPI()
+            await refresh()
         case .expired, .empty:
             isLoading = links.isEmpty
-            await refreshFromAPI()
+            await refresh()
         }
     }
 
-    private func refreshFromAPI() async {
-        links = (try? await CommunityLinkService.shared.listCommunityLinks()) ?? []
-        await bestEffort("communityLinksView.communityLinks.save", category: .cache) { try await CacheCoordinator.shared.communityLinks.save(links, for: "list") }
+    /// Relit la liste ; un échec garde ce que la page montrait (cache d'abord).
+    func refresh() async {
+        let fetched = try? await CommunityLinkService.shared.listCommunityLinks()
+        links = LinksPageLaw.kept(current: links, fetched: fetched)
+        loadFailed = fetched == nil
+        if let fetched { await bestEffort("communityLinksView.communityLinks.save", category: .cache) { try await CacheCoordinator.shared.communityLinks.save(fetched, for: "list") } }
         isLoading = false
     }
 }

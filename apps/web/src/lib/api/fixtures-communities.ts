@@ -1,6 +1,6 @@
 import type { ApiResult } from './http';
 import type { CommunitySettingsBody } from './community-settings';
-import type { CommunityConversationPage, CommunityPage, CommunitySummary, CreateCommunityBody, MembershipGesture } from './communities';
+import type { CommunityConversationPage, CommunityPage, CommunitySummary, CreateCommunityBody, MembershipChange, MembershipGesture } from './communities';
 import { COMMUNITIES_PAGE_SIZE, searchTermOf } from './communities';
 import { VIEWER_ID } from './fixtures-base';
 import type { FeedPage } from './feed-pages';
@@ -117,7 +117,7 @@ export function fixtureCommunity(communityId: string): CommunitySummary | null {
 }
 
 /** Rejoindre / quitter, avec les refus de la passerelle (403 privée ou créateur, 409 déjà membre, 404 déjà parti). */
-export function fixtureChangeMembership(communityId: string, gesture: MembershipGesture): ApiResult<null> {
+export function fixtureChangeMembership(communityId: string, gesture: MembershipGesture): ApiResult<MembershipChange> {
   const mine = state.communities.find(sameCommunity(communityId));
   const outside = state.outside.find(sameCommunity(communityId));
   if (gesture === 'join') {
@@ -126,13 +126,13 @@ export function fixtureChangeMembership(communityId: string, gesture: Membership
     if (outside.isPrivate) return { ok: false, status: 403, error: 'Cannot join a private community without an invite' };
     state.outside = state.outside.filter((community) => community.id !== outside.id);
     state.communities = [{ ...outside, memberCount: outside.memberCount + 1 }, ...state.communities];
-    return { ok: true, data: null };
+    return { ok: true, data: 'changed' };
   }
   if (mine === undefined) return { ok: false, status: 404, error: 'You are not a member of this community' };
   if (mine.createdBy === VIEWER_ID) return { ok: false, status: 403, error: 'Community creator cannot leave their own community.' };
   state.communities = state.communities.filter((community) => community.id !== mine.id);
   state.outside = [{ ...mine, memberCount: Math.max(0, mine.memberCount - 1) }, ...state.outside];
-  return { ok: true, data: null };
+  return { ok: true, data: 'changed' };
 }
 
 export function fixtureCommunityConversations(communityId: string): CommunityConversationPage {

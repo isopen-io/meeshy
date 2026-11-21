@@ -132,12 +132,16 @@ export function progressionLayout(progress: EngagementProgress): readonly Progre
  * LES CONCEPTS DE « PROGRESSION » (#9563) — une ligne sur la première page, une
  * fiche, un bloc au tableau de bord. L'ordre est écrit ICI, une fois : le web le
  * parcourt, iOS en tient le miroir (`ProgressionConcepts.swift`).
+ *
+ * Le RANG ouvre la liste (#17394, décision du 2026-11-10, #17375) : c'est
+ * l'objet du Jeu, et il ne recule jamais ; le niveau, qui baisse à chaque
+ * frappe, se lit juste après.
  */
 export const PROGRESSION_CONCEPTS = [
+  'glory',
   'level',
   'points',
   'meesh',
-  'glory',
   'flame',
   'missions',
   'league',

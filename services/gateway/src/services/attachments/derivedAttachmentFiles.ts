@@ -55,6 +55,23 @@ export function imageVariantKeys(imageVariants: unknown): readonly string[] {
   return variantCandidates(imageVariants).filter((key) => !key.split('/').includes('..'));
 }
 
+/**
+ * Les adresses des pistes TTS d'une carte `translations` (`PostMedia` comme
+ * `MessageAttachment`, #19750), telles que la ligne les porte — c'est sous
+ * cette forme qu'un stockage les efface et qu'un `Sound` les citerait. Seul
+ * `url` désigne un fichier du stockage : `path` est un chemin disque absolu,
+ * écrit par un autre conteneur selon le producteur. Une adresse qui ne désigne
+ * aucun de nos fichiers, ou dont la clé remonte (`..`), n'est jamais rendue.
+ */
+export function translationTrackUrls(translations: unknown): readonly string[] {
+  if (!isRecord(translations)) return [];
+  return Object.values(translations).flatMap((track) => {
+    if (!isRecord(track) || typeof track.url !== 'string') return [];
+    const key = storageKeyFromMediaUrl(track.url);
+    return key === null || key.split('/').includes('..') ? [] : [track.url];
+  });
+}
+
 function translationTrackCandidates(translations: unknown): readonly string[] {
   if (!isRecord(translations)) return [];
   return Object.values(translations).flatMap((track) => {

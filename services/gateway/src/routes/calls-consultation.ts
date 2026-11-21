@@ -26,6 +26,7 @@ import { viewerFromRequest } from './users/presence-gate';
 import { clearCallHistory, hideCallFromHistory } from '../services/calls/callHistoryList';
 import { refuserCommeIntrouvable } from './conversations/utils/access-control';
 import { CallParams, CallRouteDeps } from './calls-shared';
+import { originConversationActiveCallId } from '../services/calls/originConversationCall';
 
 interface ConversationParams {
   conversationId: string;
@@ -33,6 +34,10 @@ interface ConversationParams {
 
 export function registerCallsConsultationRoutes(fastify: FastifyInstance, deps: CallRouteDeps): void {
   const { prisma, callService, requiredAuth } = deps;
+  const originCallOf = async (conversationId: string) => {
+    const callId = await originConversationActiveCallId(prisma, conversationId);
+    return callId ? callService.getCallSession(callId) : null;
+  };
 
   /**
    * GET /api/calls/:callId
@@ -367,9 +372,9 @@ export function registerCallsConsultationRoutes(fastify: FastifyInstance, deps: 
         return refuserCommeIntrouvable(reply);
       }
 
-      const callSession = await callService.getActiveCallForConversation(
-        conversationId
-      );
+      // #19650 — un appel parti dans son groupe reste servi depuis le tête-à-tête d'origine.
+      const callSession = (await callService.getActiveCallForConversation(conversationId))
+        ?? (await originCallOf(conversationId));
 
       return sendSuccess(reply, toCallSessionResponse(callSession));
     } catch (error: any) {

@@ -158,7 +158,53 @@ export class E2EEEnvelopeRelay {
     return count;
   }
 
-  /** Chaque appareil actif de chaque participant inscrit et actif de la conversation. */
+  /**
+   * Chaque appareil actif de chaque participant inscrit et ACTIF de la
+   * conversation — `isActive` NU, et c'est une DÉCISION, pas un oubli.
+   *
+   * ── POURQUOI PAS LA LOI ÉTROITE, ALORS QUE C'EST UNE AUDIENCE (#20091) ────
+   *
+   * Ce site a été resserré sur la loi de participation vivante dans un premier
+   * jet de #20091, puis **REMIS à la clause nue par l'audit adversarial du
+   * lot**, qui a mesuré FAUSSE la prémisse du resserrement. Elle disait : « le
+   * client compose son envoi depuis la participation que les portes servent, et
+   * toutes épellent la loi ». Mesuré :
+   *
+   * | ce qui sert la liste au client | clause |
+   * |---|---|
+   * | `conversationDetailInclude.participants` (`core-selects.ts`) | `isActive: true` NU |
+   * | le `select` de la LISTE de conversations (`core-selects.ts`) | `isActive: true` NU |
+   * | `GET …/participants` (`participants-reads.ts`) | `isActive: true` NU |
+   * | `mayReadKeysOf` (`key-access.ts`), qui autorise la lecture des clés | `isActive: true` NU |
+   *
+   * Resserrer ICI ne fait donc pas CONVERGER l'annuaire avec ce que l'émetteur
+   * adresse : cela les fait DIVERGER. Et `compareDeviceSets` exige l'égalité
+   * EXACTE, donc la divergence n'est pas une dégradation — c'est un
+   * `409 E2EE_DEVICES_MISMATCH` sur CHAQUE envoi, que la boucle de résolution
+   * Sesame du client ne répare pas (elle oublie les sessions puis rescelle
+   * depuis la MÊME liste servie).
+   *
+   * Et le chiffrement de bout en bout est réservé aux PAIRES
+   * (`endToEndDirectOnly`, `pairOfMembers`, `routes/conversation-encryption.ts`).
+   * Dans une paire, **le membre banni-mais-actif EST le seul pair** : ce que le
+   * resserrement « protège » est la remise du chiffré à la seule personne à qui
+   * le message était destiné, et ce qu'il coûte est l'impossibilité DÉFINITIVE
+   * d'écrire, dans une conversation que rien ne ramène en clair (#12949).
+   *
+   * > **Une audience trop large derrière une égalité EXACTE devient une panne ou
+   * > une fuite — et il faut mesurer LAQUELLE avant de choisir son bord.** Ici
+   * > la « fuite » n'a aucun tiers, et la panne est permanente et mal étiquetée
+   * > (« Chiffrement indisponible »). Le resserrement était net-NÉGATIF.
+   *
+   * Ce qui le rendrait juste est un lot à soi, #20093 : faire converger les
+   * QUATRE lectures ci-dessus, puis refuser par un code NOMMÉ que le client sait
+   * rediriger — jamais un 409 Sesame générique. D'ici là cette clause reste nue,
+   * et son témoin la GÈLE pour que personne ne la resserre seule.
+   *
+   * `userId: { not: null }` ne désigne personne : c'est le filtre de NULLITÉ qui
+   * garde les membres ayant un compte — un participant anonyme n'a pas
+   * d'appareil chiffré.
+   */
   private async directoryOf(conversationId: string) {
     const participants = await this.prisma.participant.findMany({
       where: { conversationId, isActive: true, userId: { not: null } },

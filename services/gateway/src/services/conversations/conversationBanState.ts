@@ -65,7 +65,14 @@ export interface ParticipantBanState {
 }
 
 export type BanUpdateData =
-  | { readonly bannedAt: Date }
+  /**
+   * La cible était DÉJÀ dehors : on marque l'interdiction et on REPOSE
+   * `isActive: false` — no-op sur une ligne inactive, et recouvrement d'une
+   * rentrée qui aurait gagné la course (#19688). `leftAt` n'y figure pas : la
+   * date du départ d'origine est gardée.
+   */
+  | { readonly bannedAt: Date; readonly isActive: false }
+  /** La cible était VIVANTE : le bannissement EST son départ, et le date. */
   | { readonly bannedAt: Date; readonly isActive: false; readonly leftAt: Date };
 
 export type UnbanUpdateData =
@@ -90,10 +97,30 @@ export interface UnbanTransition {
  *
  * `isActive` absent de la lecture ne prouve aucun départ antérieur — on écrit
  * alors ce que le bannissement a toujours écrit.
+ *
+ * #19688 (audit adversarial) — cette branche écrivait `{ bannedAt }` SEUL, et
+ * c'était la MOITIÉ MIROIR de la course que les trois portes de rentrée
+ * viennent de fermer. Dans l'ordre inverse — le bannissement LIT une ligne
+ * inactive, une rentrée commet, puis le bannissement commet sur un
+ * `where: { id }` sans garde d'état — la ligne finissait
+ * **`isActive: true, bannedAt ≠ null`** : exactement l'état interdit, par
+ * l'autre bout, et COLLANT (rebannir est refusé en `400 « déjà banni »`).
+ *
+ * Le correctif est dans la DONNÉE, et il est strictement meilleur qu'une garde
+ * de `where` ici : `isActive: false` est un **no-op** sur une ligne réellement
+ * inactive, et il ÉCRASE la rentrée qui aurait gagné la course — ce qui est le
+ * bon verdict, un banni étant dehors. `leftAt` n'est PAS réécrit : garder la
+ * date du départ d'origine est la raison d'être de cette branche.
+ *
+ * `membershipEnded` reste `false`, et c'est assumé : il se décide sur ce que la
+ * LECTURE a vu, et dans la course il sous-compte d'une unité une appartenance
+ * que la rentrée venait de rendre. Un compteur de membres qui dérive dans une
+ * course rare n'a pas le même coût qu'une évasion de bannissement ; le dériver
+ * du résultat de l'écriture est un lot à lui (suivi ouvert).
  */
 export function resolveBanWrite(participant: ParticipantBanState, bannedAt: Date): BanTransition {
   if (participant.isActive === false) {
-    return { data: { bannedAt }, membershipEnded: false };
+    return { data: { bannedAt, isActive: false }, membershipEnded: false };
   }
 
   return {

@@ -17,6 +17,11 @@
     <string name="attachment_stage_thumbnailing">Vorschau</string>
     <string name="attachment_sticker">Sticker</string>
     <string name="audio_fullscreen_language_choose">Audio übersetzen</string>
+    <string name="chat_act_advance">%1$s · %2$d von %3$d</string>
+    <string name="chat_act_advance_easy">Akt I</string>
+    <string name="chat_act_advance_gold">Goldener Akt</string>
+    <string name="chat_act_advance_hard">Akt III</string>
+    <string name="chat_act_advance_medium">Akt II</string>
     <string name="chat_action_copy">Kopieren</string>
     <string name="chat_action_copy_link">Link kopieren</string>
     <string name="chat_action_delete_for_everyone">Für alle löschen</string>
@@ -69,6 +74,11 @@
         <item quantity="one">%1$d Nachricht löschen?</item>
         <item quantity="other">%1$d Nachrichten löschen?</item>
     </plurals>
+    <string name="chat_e2ee_peer_without_device_title">%1$s kann keine verschlüsselten Nachrichten empfangen</string>
+    <string name="chat_e2ee_peer_without_device_title_anonymous">Dein Gegenüber kann keine verschlüsselten Nachrichten empfangen</string>
+    <string name="chat_e2ee_peer_without_device_write_plain">Ohne Verschlüsselung schreiben</string>
+    <string name="chat_e2ee_readable_direct_failed">Öffnen nicht möglich. Versuche es erneut.</string>
+    <string name="chat_e2ee_readable_direct_offline">Offline: Verbinde dich erneut, um sie zu öffnen.</string>
     <string name="chat_effect_blurred">Unschärfe</string>
     <string name="chat_effect_duration_15s">15 s</string>
     <string name="chat_effect_duration_1m">1 Min.</string>
@@ -362,6 +372,8 @@
     <string name="encryption_mode_hybrid_label">Hybrid</string>
     <string name="encryption_mode_server_description">Auf unseren Servern verschlüsselt, für sie lesbar: Übersetzung und Suche funktionieren.</string>
     <string name="encryption_mode_server_label">Server</string>
+    <string name="encryption_participant_without_device_anonymous">Ein Mitglied kann noch keine verschlüsselten Nachrichten empfangen.</string>
+    <string name="encryption_participant_without_device_named">%1$s kann noch keine verschlüsselten Nachrichten empfangen.</string>
     <string name="encryption_summary_end_to_end">Ende-zu-Ende-verschlüsselt: Nur Teilnehmende lesen</string>
     <string name="encryption_summary_hybrid">Auf unseren Servern verschlüsselt, mit Prüfung zwischen kompatiblen Geräten</string>
     <string name="encryption_summary_none">Nicht verschlüsselt</string>
@@ -600,11 +612,10 @@
     <string name="recentMedia_resolveFailed_multiple">%1$d Medien konnten nicht vorbereitet werden – nutze die gesamte Fotomediathek</string>
     <string name="report_message_details_header">Details (optional)</string>
     <string name="report_message_details_placeholder">Beschreibe das Problem…</string>
-    <string name="report_message_sent">Meldung gesendet</string>
     <string name="report_message_submit">Meldung senden</string>
     <string name="report_message_title">Warum meldest du diese Nachricht?</string>
     <string name="report_reason_harassment">Belästigung</string>
-    <string name="report_reason_hate_speech">Hassrede</string>
+    <string name="report_reason_hate_speech">Hass</string>
     <string name="report_reason_impersonation">Identitätsdiebstahl</string>
     <string name="report_reason_inappropriate">Unangemessener Inhalt</string>
     <string name="report_reason_other">Andere</string>

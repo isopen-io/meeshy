@@ -8,6 +8,9 @@ import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-b
 import type { TranscriptLine, TranscriptNote } from '@/lib/calls/call-transcript';
 import { authorInk } from '@/lib/view/author-ink';
 
+import { readFileSync } from 'node:fs';
+
+import { BOUNDED_JOURNAL_CLASS } from './call-journal-fold';
 import { CallTranscriptLines } from './call-transcript-panel';
 
 /**
@@ -226,5 +229,24 @@ describe('une phrase du journal se lit d’un trait (A1.19)', () => {
     await loadInterfaceCatalog('en');
     const html = renderToStaticMarkup(<CallTranscriptLines lines={[line()]} language="en" original />);
     expect(spokenOf(entryOf(html))).toEqual(['Awa, 00:04 : Can you hear me?. Translated : Tu m’entends ?']);
+  });
+});
+
+describe('#19687 — sous la carte du fil, le journal ENTIER tient dans une zone qui défile seule', () => {
+  test('la zone plafonne sa hauteur et défile, au clavier aussi', () => {
+    const classes = BOUNDED_JOURNAL_CLASS.split(' ');
+    for (const needed of ['max-h-[25rem]', 'overflow-y-auto', 'overscroll-contain']) expect(classes).toContain(needed);
+    const fold = readFileSync(new URL('./call-journal-fold.tsx', import.meta.url), 'utf8');
+    expect(fold).toContain('<div tabIndex={0} className={BOUNDED_JOURNAL_CLASS} data-call-transcript-scroll="">');
+  });
+
+  test('le journal lui-même ne coupe rien : 300 phrases, 300 lignes', () => {
+    const many = Array.from({ length: 300 }, (_, n) => line({ id: `s-${n}`, offsetMs: n * 1_000, text: `Phrase ${n}` }));
+    const html = renderToStaticMarkup(<CallTranscriptLines lines={many} language="fr" original={false} />);
+    expect(html.match(/data-call-transcript-line=/g)?.length).toBe(300);
+  });
+
+  test('la page de détail garde sa hauteur : seule la carte du fil borne le journal', () => {
+    expect(readFileSync(new URL('../routes/call-detail-parts.tsx', import.meta.url), 'utf8')).not.toContain('data-call-transcript-scroll');
   });
 });

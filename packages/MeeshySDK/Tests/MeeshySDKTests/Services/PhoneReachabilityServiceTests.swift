@@ -42,6 +42,30 @@ final class PhoneReachabilityServiceTests: XCTestCase {
         XCTAssertTrue(served.isShared)
     }
 
+    func test_personSettings_alertMeAbsent_isNotServed() async throws {
+        let (service, api) = makeSUT()
+        api.stubWire("/relations/u1/phone-reachability/settings",
+                     json: #"{"success":true,"data":{"userId":"u1","shared":false}}"#)
+
+        let served = try await service.personSettings(userId: "u1")
+
+        XCTAssertNil(served.alertsMe)
+    }
+
+    func test_updateAlert_putsOnlyTheAlertChoice() async throws {
+        let (service, api) = makeSUT()
+        api.stubWire("/relations/u1/phone-reachability/settings",
+                     json: #"{"success":true,"data":{"userId":"u1","shared":true,"alertMe":false}}"#)
+
+        let served = try await service.updateAlert(userId: "u1", alertsMe: false)
+
+        XCTAssertEqual(api.lastRequest?.method, "PUT")
+        XCTAssertEqual(api.lastRequest?.bodyJSON?.keys.sorted(), ["alertMe"])
+        XCTAssertEqual(api.lastRequest?.bodyJSON?["alertMe"] as? Bool, false)
+        XCTAssertEqual(served.alertsMe, false)
+        XCTAssertTrue(served.isShared)
+    }
+
     func test_emitterSettings_readAndWrite() async throws {
         let (service, api) = makeSUT()
         api.stubWire("/me/device/reachability/settings", json: #"{"success":true,"data":{"sharingEnabled":false}}"#)

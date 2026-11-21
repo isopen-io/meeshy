@@ -274,7 +274,7 @@ final class CallModeRulesTests: XCTestCase {
     }
 
     func test_faces_followTheSharedDesignOrder() {
-        XCTAssertEqual(CallEffectsModeRule.faces, [.none, .smoothing, .toad, .angel, .demon, .volcano])
+        XCTAssertEqual(CallEffectsModeRule.faces, [.none, .smoothing, .toad, .angel, .demon, .volcano, .baby])
     }
 
     func test_colors_naturalFirst() {

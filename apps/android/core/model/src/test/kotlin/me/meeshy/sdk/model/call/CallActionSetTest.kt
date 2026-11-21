@@ -14,18 +14,24 @@ class CallActionSetTest {
     ) = CallActionContext(isDesktop, isVideoEnabled, hasSelectableCameras, isConnected, mayRecord, showsVideo)
 
     @Test
-    fun `audio call not connected offers only camera, captions and journal`() {
+    fun `audio call not connected offers only camera and captions`() {
         val set = CallActionSet.resolve(context(isConnected = false))
         assertThat(set.myImage).containsExactly(CallAction.Camera)
-        assertThat(set.theCall).containsExactly(CallAction.Captions, CallAction.Journal).inOrder()
+        assertThat(set.theCall).containsExactly(CallAction.Captions).inOrder()
     }
 
     @Test
-    fun `the call is captions, record, add, journal, react, capture (the order decided on 17329)`() {
+    fun `the journal is never an action of the call - its one door is the captions band (19670)`() {
+        assertThat(CallAction.entries.map { it.id }).doesNotContain("journal")
+        assertThat(CallScreenPanel.Journal.action).isNull()
+    }
+
+    @Test
+    fun `the call is captions, record, add, react, capture (the order decided on 17329, without the journal since 19670)`() {
         val set = CallActionSet.resolve(context(isVideoEnabled = true, mayRecord = true))
         assertThat(set.theCall).containsExactly(
             CallAction.Captions, CallAction.Recording, CallAction.AddPeople,
-            CallAction.Journal, CallAction.React, CallAction.Capture,
+            CallAction.React, CallAction.Capture,
         ).inOrder()
     }
 
@@ -36,7 +42,7 @@ class CallActionSetTest {
             CallAction.Camera, CallAction.FlipCamera, CallAction.Effects, CallAction.ScreenShare,
         ).inOrder()
         assertThat(set.theCall).containsExactly(
-            CallAction.Captions, CallAction.Recording, CallAction.AddPeople, CallAction.Journal,
+            CallAction.Captions, CallAction.Recording, CallAction.AddPeople,
             CallAction.React, CallAction.Capture,
         ).inOrder()
     }

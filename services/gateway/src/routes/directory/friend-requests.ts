@@ -86,6 +86,22 @@ export const demandeAvecPresenceSchema = {
       enum: ['ACQUAINTANCE', 'FRIEND', 'CLOSE', 'BLOOD', null],
       description: 'The relation level the request aims at — null reads FRIEND (rows older than the circles)',
     },
+    // #19361 — servis au seul DESTINATAIRE (`servirMot`) ; `message` reste l'original.
+    messageOriginalLanguage: {
+      type: 'string',
+      nullable: true,
+      description: 'Language detected for `message` when sent — served to the receiver only',
+    },
+    messageTranslation: {
+      type: 'object',
+      nullable: true,
+      description: 'The `message` in the reader\'s Prism (ranks 1→4) — null: show the original. Receiver only',
+      properties: {
+        language: { type: 'string' },
+        text: { type: 'string' },
+      },
+      required: ['language', 'text'],
+    },
     sender: { ...partieAvecPresenceSchema, description: 'Sender user info' },
     receiver: { ...partieAvecPresenceSchema, description: 'Receiver user info' },
   },

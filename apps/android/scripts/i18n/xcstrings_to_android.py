@@ -12,6 +12,10 @@ rencontre le même nom, il s'arrête.
 Codes de sortie : 0 propre · 1 fichiers périmés (--check) · 2 génération impossible
 (manifeste invalide, clé introuvable, quantité plurielle absente, collision de nom...).
 
+Une génération impossible à cause des ENTRÉES les relève TOUTES avant de conclure, son nombre
+d'abord (#19707) : s'arrêter à la première mesurait la présence de la dette, jamais sa taille — et
+c'est ainsi que 44 entrées ont pu s'accumuler (#19654), chaque session n'en voyant qu'une.
+
 Règles : voir manifest_schema.py (manifeste), specifier_converter.py (spécificateurs),
 android_xml_writer.py (échappements, <b>), plural_emitter.py (CLDR), xcstrings_reader.py
 (entrées stale, repli sur la clé source, pt-BR vers values-pt).
@@ -58,10 +62,38 @@ class GenerationError(ValueError):
     pass
 
 
+@dataclass(frozen=True)
+class EntryFailure:
+    """Une ENTRÉE de manifeste que le catalogue ne sait pas servir. Elles se RELÈVENT toutes avant de
+    conclure (#19707) : un vérificateur qui s'arrête au premier défaut mesure la PRÉSENCE d'une dette,
+    jamais sa TAILLE — et une dette sans taille ne se priorise pas, donc ne se solde pas. C'est ainsi
+    que 44 entrées ont pu s'accumuler (#19654), chaque session n'en voyant qu'une."""
+
+    module: str
+    ios_key: Optional[str]
+    catalog: Optional[str]
+    android_name: str
+    reason: str
+
+    def __str__(self) -> str:
+        return f"{self.module}, « {self.ios_key} » ({self.catalog}) → {self.android_name} : {self.reason}"
+
+
+class EntryFailures(GenerationError):
+    """Le relevé COMPLET : son nombre d'abord — c'est lui qu'une session cite, et c'est lui qui manquait."""
+
+    def __init__(self, failures: Sequence[EntryFailure]) -> None:
+        self.failures: List[EntryFailure] = list(failures)
+        modules = len({failure.module for failure in self.failures})
+        header = f"{len(self.failures)} entrée(s) dans {modules} module(s)"
+        super().__init__(header + "".join(f"\n  {failure}" for failure in self.failures))
+
+
 @dataclass
 class Generation:
     files: Dict[Path, str] = field(default_factory=dict)
     warnings: List[str] = field(default_factory=list)
+    failures: List[EntryFailure] = field(default_factory=list)
 
 
 class _Catalogs:
@@ -187,10 +219,16 @@ def _check_collisions(module: ModuleManifest, folder: Path, resources: Sequence[
             )
 
 
-def _generate_module(module: ModuleManifest, catalogs: _Catalogs, android_root: Path, generation: Generation) -> None:
+def _resolve_module(
+    module: ModuleManifest, catalogs: _Catalogs, android_root: Path, generation: Generation
+) -> Optional[Dict[str, List[Resource]]]:
+    """Les ressources de chaque langue, ou `None` si le module n'adopte rien. Une entrée que le catalogue
+    ne sert pas est RELEVÉE dans `generation.failures` et la boucle continue : c'est ce qui donne au
+    rapport sa taille. Ce qui n'est pas une entrée — un module absent du disque — reste fail-fast, parce
+    que son message n'a pas la même forme et le mélanger rendrait le relevé illisible."""
     adopted = module.adopted()
     if not adopted:
-        return
+        return None
     if not (android_root / module_directory(module.module)).is_dir():
         raise GenerationError(f"module {module.module} : dossier {module_directory(module.module)}/ introuvable")
     per_locale: Dict[str, List[Resource]] = {locale.code: [] for locale in ANDROID_LOCALES}
@@ -198,11 +236,18 @@ def _generate_module(module: ModuleManifest, catalogs: _Catalogs, android_root: 
         try:
             resolved = _resolve_entry(entry, catalogs, generation.warnings)
         except _ERRORS as error:
-            raise GenerationError(
-                f"module {module.module}, « {entry.ios_key} » ({entry.catalog}) → {entry.android_name} : {error}"
-            ) from error
+            generation.failures.append(
+                EntryFailure(module.module, entry.ios_key, entry.catalog, entry.android_name, str(error))
+            )
+            continue
         for language, resource in (resolved or {}).items():
             per_locale[language].append(resource)
+    return per_locale
+
+
+def _render_module(
+    module: ModuleManifest, per_locale: Dict[str, List[Resource]], android_root: Path, generation: Generation
+) -> None:
     for locale in ANDROID_LOCALES:
         folder = android_root / module.res_dir / locale.folder
         _check_collisions(module, folder, per_locale[locale.code], android_root)
@@ -213,10 +258,17 @@ def _generate_module(module: ModuleManifest, catalogs: _Catalogs, android_root: 
 
 
 def generate(manifest: Manifest, *, repo_root: Path, android_root: Path) -> Generation:
+    """Deux passes, et l'ordre est la raison d'être du lot : TOUT résoudre d'abord, pour que le relevé
+    des entrées fautives soit complet, et ne rendre les documents qu'ensuite. Rendre au fil de l'eau
+    laisserait une collision de noms ou une erreur d'écriture du module 3 masquer les entrées du module 1."""
     generation = Generation()
     catalogs = _Catalogs(repo_root)
-    for module in manifest.modules:
-        _generate_module(module, catalogs, android_root, generation)
+    resolved = [(module, _resolve_module(module, catalogs, android_root, generation)) for module in manifest.modules]
+    if generation.failures:
+        raise EntryFailures(generation.failures)
+    for module, per_locale in resolved:
+        if per_locale is not None:
+            _render_module(module, per_locale, android_root, generation)
     return generation
 
 

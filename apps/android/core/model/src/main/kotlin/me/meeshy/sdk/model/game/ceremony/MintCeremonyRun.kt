@@ -2,8 +2,12 @@ package me.meeshy.sdk.model.game.ceremony
 
 import kotlin.math.max
 import me.meeshy.sdk.model.game.GameErrorCode
+import me.meeshy.sdk.model.game.GameGlory
 import me.meeshy.sdk.model.game.GameMint
 import me.meeshy.sdk.model.game.GameMintPreview
+import me.meeshy.sdk.model.game.GloryAfterGain
+import me.meeshy.sdk.model.game.GloryLaws
+import me.meeshy.sdk.model.game.GloryRank
 import me.meeshy.sdk.model.game.MeeshEdition
 import me.meeshy.sdk.model.game.MeeshMintResponse
 import me.meeshy.sdk.model.game.engagement.MeeshMintOutcome
@@ -51,12 +55,38 @@ public sealed interface MintCeremonyAnswer {
 }
 
 /**
+ * LA GLOIRE DE LA FRAPPE (#19860, miroir de `MintCeremonyGlory` iOS et du web) : la Gloire du joueur AVANT le geste, celle
+ * que l'aperçu promet et le Mythe servi. La scène finit sur la gloire gagnée ET le pas vers le rang suivant.
+ */
+public data class MintCeremonyGlory(val before: Int, val gained: Int, val mythic: Boolean) {
+
+    /** La gloire que la scène écrit : celle que l'aperçu sert, la constante de la frappe en repli. */
+    val shownGain: Int get() = if (gained > 0) gained else GloryLaws.POINTS_MINT
+
+    /** Le pas vers le rang suivant : la marche franchie, ou la gloire qui manque ; `null` pour le Mythe et en Légende I. */
+    val step: GloryAfterGain? get() = GloryLaws.afterGain(before, shownGain, mythic)
+
+    public companion object {
+        /** Lue AU GESTE : la Gloire que la passerelle rafraîchit pendant la scène ne compte pas deux fois. */
+        public fun of(mint: GameMintPreview, glory: GameGlory): MintCeremonyGlory =
+            MintCeremonyGlory(before = glory.glory, gained = mint.gloryGained, mythic = glory.rank == GloryRank.Mythe)
+    }
+}
+
+/**
  * UNE cérémonie demandée par un toucher : la pièce que l'écran annonçait, et la dernière frappe réglée au moment du
  * toucher — la réponse qui compte est la PREMIÈRE réglée après lui. [edition] est la LOI (la chorégraphie), [look] le
- * DESSIN (#11483, la plus haute édition atteinte).
+ * DESSIN (#11483, la plus haute édition atteinte). [glory] : la gloire du joueur au toucher et celle que la frappe
+ * apporte (#19860) ; absente, « +1 000 de gloire » seul.
  */
-public data class MintCeremonyRequest(val number: Int, val edition: MeeshEdition, val settledKey: Int) {
-    public constructor(number: Int, edition: MeeshEdition, settled: GameMintSettlement?) : this(number, edition, settled?.key ?: 0)
+public data class MintCeremonyRequest(
+    val number: Int,
+    val edition: MeeshEdition,
+    val settledKey: Int,
+    val glory: MintCeremonyGlory? = null,
+) {
+    public constructor(number: Int, edition: MeeshEdition, settled: GameMintSettlement?, glory: MintCeremonyGlory? = null) :
+        this(number, edition, settled?.key ?: 0, glory)
 
     val look: MeeshEdition get() = GameMint.displayEdition(number)
 

@@ -53,10 +53,11 @@ class CallLiveFrameController internal constructor(
     private val social: CallSocialSignalManager,
     private val session: SessionRepository,
     private val scope: CoroutineScope,
+    private val binding: CallConversationBinding = CallConversationBinding(),
 ) : CallFeatureController {
     @Inject
-    constructor(social: CallSocialSignalManager, session: SessionRepository) :
-        this(social, session, CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate))
+    constructor(social: CallSocialSignalManager, session: SessionRepository, binding: CallConversationBinding = CallConversationBinding()) :
+        this(social, session, CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate), binding)
 
     private val _state = MutableStateFlow(CallLiveFrameState())
 
@@ -72,7 +73,6 @@ class CallLiveFrameController internal constructor(
 
     @Volatile private var callId: String? = null
 
-    @Volatile private var conversationId: String? = null
     private var listening: Job? = null
 
     override fun onTransition(previous: CallState, next: CallState, session: CallSessionInfo) {
@@ -84,7 +84,7 @@ class CallLiveFrameController internal constructor(
                     _state.value = CallLiveFrameState()
                     callId = id
                 }
-                conversationId = session.config.conversationId.ifBlank { null }
+                binding.bind(session)
                 if (listening == null) listening = social.frameSelected.onEach(::receive).launchIn(scope)
             }
         }
@@ -151,7 +151,13 @@ class CallLiveFrameController internal constructor(
     )
 
     /** Ce que l'appel sait de sa conversation, sans rien attendre : de quoi résoudre les textes du cadre (#13687). */
-    fun callContext(): CallFrameCallContext = CallFrameCallContext(conversationId, knownGroupTitle = null, isGroupCall = false)
+    fun callContext(): CallFrameCallContext = CallFrameCallContext(conversationId(), knownGroupTitle = null, isGroupCall = false)
+
+    /** La conversation où vit l'appel MAINTENANT ([CallConversationBinding], #19650), `null` hors appel. */
+    private fun conversationId(): String? {
+        val bound = binding.bound.value
+        return bound.conversationId.takeIf { bound.callId == callId.orEmpty() && it.isNotBlank() }
+    }
 
     private fun myName(): String? = session.currentUser.value?.effectiveDisplayName?.takeIf { it.isNotBlank() }
 
@@ -159,7 +165,6 @@ class CallLiveFrameController internal constructor(
         listening?.cancel()
         listening = null
         callId = null
-        conversationId = null
         _state.value = CallLiveFrameState()
         _notices.value = null
     }

@@ -873,6 +873,16 @@ describe('Admin content routes — #4384 : la charge d’une pièce jointe prot�
     expect(libre.metadata).toEqual({ exif: {} });
   });
 
+  it('#19672 — la pièce ORDINAIRE ne sert pas le chemin disque de ses pistes traduites', async () => {
+    const [libre] = await servirLesPiecesJointes([{
+      ...ATTACHMENT_ORDINAIRE,
+      translations: { en: { transcription: 'hello everyone', url: '2026/08/x/ok-en.mp3', path: '/app/uploads/translated/att-libre_en.mp3' } },
+    }]);
+
+    expect(libre.translations).toEqual({ en: { transcription: 'hello everyone', url: '2026/08/x/ok-en.mp3' } });
+    expect(JSON.stringify(libre)).not.toContain('/app/uploads');
+  });
+
   it('CHARGE les deux colonnes qu’un TEXTE exige — une garde sans sa colonne ne garde rien', async () => {
     await servirLesPiecesJointes([]);
 

@@ -255,7 +255,7 @@ const PANEL_OPENER: Readonly<Record<CallPanelKind, string>> = {
   people: '[data-call-control="invite"]',
   react: '[data-call-control="react"]',
   record: '[data-call-record]',
-  journal: '[data-call-control="journal"]',
+  journal: '[data-call-more]',
 };
 
 const MORE = '[data-call-more]';
@@ -438,7 +438,8 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
     people: set.call.includes('invite'),
     react: set.call.includes('react'),
     record: set.call.includes('record'),
-    journal: joined,
+    /* #19670 : le journal n'a de sens qu'avec les sous-titres — les couper le referme. */
+    journal: joined && call.captionsMode !== 'off',
   };
   const shown = live ? layerOffered(layer, offer) : IDLE;
   const chrome = layerChrome(shown);

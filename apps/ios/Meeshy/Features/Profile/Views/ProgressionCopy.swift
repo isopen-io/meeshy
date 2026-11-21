@@ -131,7 +131,7 @@ enum ProgressionCopy {
     }
 
     /// SF Symbol — le même vocabulaire iconographique que le reste de l'app
-    /// (`NotificationModels.systemIcon`, `UserStatsView`).
+    /// (`NotificationModels.systemIcon`).
     static func symbol(for axis: EngagementAxisKey) -> String {
         axis.symbolName
     }

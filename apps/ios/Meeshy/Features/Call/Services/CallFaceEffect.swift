@@ -7,18 +7,20 @@ nonisolated enum CallFaceEffect: String, CaseIterable, Sendable {
     case angel
     case demon
     case volcano
+    /// #19779 — au bout : un identifiant ne change jamais de rang (web, Android, analytics).
+    case baby
 
     var isStylized: Bool {
         switch self {
         case .none, .smoothing: return false
-        case .toad, .angel, .demon, .volcano: return true
+        case .toad, .angel, .demon, .volcano, .baby: return true
         }
     }
 
     var needsFace: Bool {
         switch self {
         case .none, .volcano: return false
-        case .smoothing, .toad, .angel, .demon: return true
+        case .smoothing, .toad, .angel, .demon, .baby: return true
         }
     }
 
@@ -31,7 +33,7 @@ nonisolated extension VideoFilterConfig {
     var activeFaceEffect: CallFaceEffect {
         switch faceEffect {
         case .none, .smoothing: return skinSmoothingEnabled ? .smoothing : .none
-        case .toad, .angel, .demon, .volcano: return faceEffect
+        case .toad, .angel, .demon, .volcano, .baby: return faceEffect
         }
     }
 

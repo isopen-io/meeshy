@@ -29,6 +29,18 @@ object SocketEventNames {
     const val PHONE_UNREACHABLE = "phone:unreachable"
     const val PHONE_REACHABLE = "phone:reachable"
 
+    // vérification d'inactivité (#18738, TEL-02) : serveur -> client, `user:<Sang>` ; aucun événement montant
+    const val INACTIVITY_ALERT = "inactivity:alert"
+    const val INACTIVITY_CLEARED = "inactivity:cleared"
+
+    // en appel (#18753, ACT-01) : serveur -> client, `user:<Sang>` ; aucun événement montant (POST /me/device/call)
+    const val PHONE_CALL_STARTED = "phone-call:started"
+    const val PHONE_CALL_ENDED = "phone-call:ended"
+
+    // chute détectée (#18748, SAN-01) : serveur -> client, `user:<Sang>` ; aucun événement montant (POST /me/health/fall, iPhone)
+    const val FALL_DETECTED = "fall:detected"
+    const val FALL_CLEARED = "fall:cleared"
+
     // connection health
     const val HEARTBEAT_ACK = "heartbeat:ack"
 
@@ -37,6 +49,9 @@ object SocketEventNames {
     const val CALL_ANALYTICS = "call:analytics"
     const val CALL_BACKGROUNDED = "call:backgrounded"
     const val CALL_CHECK_ACTIVE = "call:check-active"
+
+    /** Serveur → room de l'appel : l'appel vit désormais dans le groupe des présents (#19650). */
+    const val CALL_CONVERSATION_CHANGED = "call:conversation-changed"
     const val CALL_END = "call:end"
     const val CALL_ENDED = "call:ended"
     const val CALL_ERROR = "call:error"
@@ -109,6 +124,9 @@ object SocketEventNames {
     const val COMMENT_UPDATED = "comment:updated"
 
     // community
+    const val COMMUNITY_DELETED = "community:deleted"
+    const val COMMUNITY_JOIN_REQUEST_DECIDED = "community:join-request-decided"
+    const val COMMUNITY_JOIN_REQUESTED = "community:join-requested"
     const val COMMUNITY_MEMBER_JOINED = "community:member-joined"
     const val COMMUNITY_MEMBER_LEFT = "community:member-left"
     const val COMMUNITY_MEMBER_ROLE_UPDATED = "community:member-role-updated"
@@ -203,6 +221,7 @@ object SocketEventNames {
     const val PRESENCE_SNAPSHOT = "presence:snapshot"
 
     // game
+    const val GAME_MISSIONS_UPDATED = "game:missions-updated"
     const val GAME_UPDATED = "game:updated"
 
     // pack
@@ -318,6 +337,12 @@ object SocketEventNames {
         BATTERY_REPORT,
         PHONE_UNREACHABLE,
         PHONE_REACHABLE,
+        INACTIVITY_ALERT,
+        INACTIVITY_CLEARED,
+        PHONE_CALL_STARTED,
+        PHONE_CALL_ENDED,
+        FALL_DETECTED,
+        FALL_CLEARED,
         AUDIO_TRANSCRIPTION_READY,
         AUDIO_TRANSLATION_READY,
         AUTH_SESSION_REVOKED,
@@ -327,6 +352,7 @@ object SocketEventNames {
         CALL_ANALYTICS,
         CALL_BACKGROUNDED,
         CALL_CHECK_ACTIVE,
+        CALL_CONVERSATION_CHANGED,
         CALL_END,
         CALL_ENDED,
         CALL_ERROR,
@@ -391,6 +417,9 @@ object SocketEventNames {
         COMMENT_TRANSLATION_UPDATED,
         COMMENT_UNLIKED,
         COMMENT_UPDATED,
+        COMMUNITY_DELETED,
+        COMMUNITY_JOIN_REQUEST_DECIDED,
+        COMMUNITY_JOIN_REQUESTED,
         COMMUNITY_MEMBER_JOINED,
         COMMUNITY_MEMBER_LEFT,
         COMMUNITY_MEMBER_ROLE_UPDATED,
@@ -410,6 +439,7 @@ object SocketEventNames {
         E2EE_ENVELOPE,
         ENGAGEMENT_CONVERSATION_UPDATED,
         ENGAGEMENT_POST_UPDATED,
+        GAME_MISSIONS_UPDATED,
         GAME_UPDATED,
         LOCATION_LIVE_START,
         LOCATION_LIVE_STARTED,

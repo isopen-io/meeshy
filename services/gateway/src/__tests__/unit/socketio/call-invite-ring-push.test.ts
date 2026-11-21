@@ -44,7 +44,12 @@ const harness = () => {
   const deps = callInviteDependencies({
     io: io as never,
     prisma,
-    callService: { getCallSession: jest.fn<any>(), generateIceServers: jest.fn<any>().mockReturnValue([]) },
+    callService: {
+      getCallSession: jest.fn<any>(),
+      generateIceServers: jest.fn<any>().mockReturnValue([]),
+      activeCallClaim: {} as never,
+      createLiveCallMessage: jest.fn<any>(),
+    },
     rateLimiter: { checkLimit: jest.fn<any>() },
     pushService: () => ({ sendToUser }) as never,
     invitations: { arm: jest.fn() } as unknown as CallInvitationLifecycle,

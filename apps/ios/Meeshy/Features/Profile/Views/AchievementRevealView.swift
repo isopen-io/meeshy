@@ -75,7 +75,8 @@ struct AchievementRevealView: View {
     var author: PhotoAuthor? = PhotoAuthor.current()
 
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
     private var isDark: Bool { colorScheme == .dark }
 
     @State private var apparu = false
@@ -322,7 +323,7 @@ struct AchievementRevealView: View {
             // dit « ta-daa ». Le servir à ce qui n'est pas encore acquis
             // félicite pour rien — même erreur que la couleur, une couche
             // au-dessus. Avec un liseré de rareté, ils tournent plus loin : la plaque les précède.
-            if !reduceMotion && occasion.estObtenu {
+            if MeeshyMotion.showsParticles(.celebrate, reduce: reduceMotion) && occasion.estObtenu {
                 ForEach(0..<12, id: \.self) { i in
                     Capsule()
                         .fill(teinte.opacity(0.35))
@@ -470,13 +471,17 @@ struct AchievementRevealView: View {
         // consultation ferait fêter, plusieurs fois par jour, quelque chose qui
         // n'arrive plus — et userait le signal qui compte.
         if occasion.estCelebration { HapticFeedback.success() } else { HapticFeedback.light() }
-        guard !reduceMotion else {
-            // POSÉ, pas animé — et le halo reste à son échelle de repos.
-            apparu = true
-            halo = true
-            return
-        }
-        withAnimation(.spring(response: 0.55, dampingFraction: 0.62)) { apparu = true }
-        withAnimation(.easeOut(duration: 0.9).delay(0.1)) { halo = true }
+        // `motion.celebrate` (K26, #19528) : la médaille rebondit sous le ressort `morph`, le halo suit au rang 1
+        // de la cascade. Sous réduction, le repli est fixe : POSÉ, pas animé, et sans particule.
+        let celebrate = MeeshyMotion.animation(named: .celebrate, reduce: reduceMotion)
+        let followUp = MeeshyMotion.animation(named: .reveal, reduce: reduceMotion)?
+            .delay(MeeshyMotion.followUpDelay(reduce: reduceMotion))
+        withAnimation(celebrate) { apparu = true }
+        withAnimation(followUp) { halo = true }
+    }
+
+    /// « Réduire les animations », du système ou forcé dans Meeshy.
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
     }
 }

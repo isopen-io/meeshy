@@ -1,4 +1,5 @@
 import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
+import { READ_FLOOR_SELECT, type ReadFloorCursor } from '../services/messaging/readFloor';
 import type { FastifyInstance } from 'fastify';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { ReadStatusUpdatedEventData, ReadStatusSummary } from '@meeshy/shared/types/socketio-events';
@@ -71,7 +72,7 @@ export interface ReadStatusBridgeBuilder {
     readonly candidates: readonly { readonly conversationId: string; readonly unreadCount: number }[];
     readonly cursorsByParticipant?: ReadonlyMap<
       string,
-      { readonly lastReadAt: Date | null; readonly lastReadMessageCreatedAt: Date | null }
+      ReadFloorCursor
     >;
   }): Promise<ReadonlyMap<string, { readonly bridge: ConversationBridge }>>;
 }
@@ -113,7 +114,17 @@ export interface ReadStatusBroadcastArgs {
    * **Le champ ne dépend PAS du `type`, et c'est le lot #16961 qui l'a tranché**
    * (il était réservé à `read`, si bien qu'un accusé de REMISE diffusait le
    * résumé du dernier message du fil au lieu de celui qu'il venait
-   * d'acquitter — l'écriture étant, elle, déjà par message).
+   * d'acquitter).
+   *
+   * ⚠️ #16961 s'appuyait sur « l'écriture étant, elle, déjà par message », et
+   * cette prémisse était FAUSSE : `delivered` appelait bien le service une fois
+   * par id, mais sans lui passer de périmètre, si bien que chaque appel figeait
+   * la FENÊTRE depuis le curseur — messages POSTÉRIEURS compris. La DIFFUSION
+   * que ce lot a corrigée était donc juste, et l'écriture qu'elle décrivait ne
+   * l'était pas. Corrigé par #20084, qui remet le périmètre exact au service.
+   * La leçon n'est pas « #16961 avait tort » — sa correction tient — mais
+   * qu'une correction bâtie sur une prémisse non mesurée laisse la moitié qu'elle
+   * n'a pas regardée.
    *
    * Ce qu'il veut dire est donc : **le lot exact que cette écriture a figé**,
    * et le site qui a COMPOSÉ l'écriture est le seul à le savoir. C'est lui qui
@@ -234,7 +245,7 @@ export async function broadcastReadStatus(
             // et non sur l'horloge murale. Le lire ici épargne à la passe de
             // rejouer cette requête, et l'ancre sur le MÊME instantané que le
             // compteur émis à côté.
-            select: { lastReadAt: true, lastReadMessageCreatedAt: true },
+            select: READ_FLOOR_SELECT,
           }),
           readStatusService.getUnreadCount(args.participantId, args.conversationId),
         ]).then(([cursor, unreadCount]) => ({
