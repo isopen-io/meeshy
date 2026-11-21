@@ -1727,3 +1727,8 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Prochain lot : moitié client de #20087 (iOS + Android : un partage servi `manual` réuni ne republie jamais la position
   de l'appareil ; « Partager » depuis l'appareil devant un point choisi demande), puis #20115, puis annoncer
   `acceptsManualSource` (#19557), puis #20054, #20056, #20086.
+
+## 2026-11-21 — réveil de 1 h : moitié client de #20087 (en cours)
+
+- Reprise : #20116 fusionnée (7495763da). Aucune PR de la routine ouverte. Branche `claude/cercles-20087-source-cliente`
+  réservée avant toute écriture.
