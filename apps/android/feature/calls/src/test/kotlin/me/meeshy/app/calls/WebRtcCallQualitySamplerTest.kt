@@ -24,8 +24,8 @@ class WebRtcCallQualitySamplerTest {
 
     @Test
     fun `une lecture toutes les cinq secondes, la perte est celle de l'intervalle`() = runTest {
-        val first = CallStats(roundTripTimeMs = 40.0, packetsLost = 10, inboundPacketsReceived = 90, bandwidth = 1_000, bytesReceived = 2_000)
-        val second = CallStats(roundTripTimeMs = 50.0, packetsLost = 10, inboundPacketsReceived = 190, bandwidth = 3_000, bytesReceived = 6_000, jitterMs = 7.0)
+        val first = CallStats(roundTripTimeMs = 40.0, packetsLost = 10, inboundPacketsReceived = 90, bandwidth = 1_000L, bytesReceived = 2_000L)
+        val second = CallStats(roundTripTimeMs = 50.0, packetsLost = 10, inboundPacketsReceived = 190, bandwidth = 3_000L, bytesReceived = 6_000L, jitterMs = 7.0)
         sampler(first, second).samples.test {
             advanceTimeBy(4_999)
             expectNoEvents()

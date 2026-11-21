@@ -31,8 +31,8 @@ data class CallPersistedQualitySummary(
 /** Les dernières statistiques connues d'un appel, lues du dernier relevé de qualité (aucune valeur inventée). */
 fun CallQualitySample.toPersistedStats(): CallStats = CallStats(
     roundTripTimeMs = rttMs,
-    bandwidth = bytesSent.coerceIn(0, Int.MAX_VALUE.toLong()).toInt(),
-    bytesReceived = bytesReceived.coerceIn(0, Int.MAX_VALUE.toLong()).toInt(),
+    bandwidth = CallStatValue.bytes(bytesSent),
+    bytesReceived = CallStatValue.bytes(bytesReceived),
     availableOutgoingBitrateBps = availableOutgoingBitrateBps,
     jitterMs = jitterMs,
 )
