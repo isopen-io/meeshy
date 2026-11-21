@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
+import { findFirstIn } from '../../../helpers/mongo-where';
 import { isMeeshyMediaUrl, meeshyMediaHostsFromEnv } from '../../../../services/attachments/meeshyMediaHosts';
 import { identityImageIsCallers } from '../../../../services/attachments/identityImageOwnership';
 
@@ -14,12 +15,21 @@ const USER_ID = '507f1f77bcf86cd799439011';
 const OWN = '2026/11/507f1f77bcf86cd799439011/avatar_neuf.webp';
 const HOSTS = new Set(['gate.meeshy.me', 'gate.staging.meeshy.me']);
 
+/**
+ * #20113 — le double APPLIQUE le `where` à des LIGNES, il ne le réécrit pas.
+ *
+ * Il affirmait `where.uploadedBy === USER_ID && where.OR.some(…)`, donc il
+ * encodait la FORME de la requête et sa propre copie de la condition : il
+ * rendait vrai tout ce que l'appelant lui demandait, et un changement d'espace
+ * de clés ou de forme ne pouvait pas s'y voir. C'est ce qui a laissé passer la
+ * réouverture de #16811 mesurée par l'audit de #20113.
+ */
 function ownerPrisma() {
   return {
     messageAttachment: {
-      findFirst: jest.fn<any>().mockImplementation(async ({ where }: any) =>
-        where.uploadedBy === USER_ID && where.OR.some((c: any) => c.filePath === OWN) ? { id: 'att-own' } : null,
-      ),
+      findFirst: jest.fn(findFirstIn([
+        { id: 'att-own', uploadedBy: USER_ID, mimeType: 'image/webp', filePath: OWN, fileUrl: OWN },
+      ])),
     },
   };
 }

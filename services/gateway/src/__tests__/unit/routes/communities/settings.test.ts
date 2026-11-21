@@ -28,6 +28,7 @@ jest.mock('../../../../utils/sanitize', () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { communityRoutes } from '../../../../routes/communities/index';
+import { findFirstIn } from '../../../helpers/mongo-where';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -323,9 +324,14 @@ describe("PUT /communities/:id — l'image désigne un fichier du créateur (#16
       id: COMMUNITY_ID, createdBy: USER_ID, identifier: 'mshy_test', isPrivate: false,
       avatar: stored.avatar ?? null, banner: stored.banner ?? null,
     });
-    prisma.messageAttachment.findFirst = jest.fn<any>().mockImplementation(async ({ where }: any) =>
-      where.uploadedBy === USER_ID && where.OR.some((c: any) => c.filePath === OWN) ? { id: 'att-own' } : null,
-    );
+    // #20113 — le double APPLIQUE le `where` à des LIGNES. Il affirmait
+    // `where.uploadedBy === USER_ID && where.OR.some(…)`, donc il encodait la
+    // forme de la requête et sa propre copie de la condition : il rendait vrai
+    // ce que l'appelant lui demandait, et un changement d'espace de clés ne
+    // pouvait pas s'y voir.
+    prisma.messageAttachment.findFirst = jest.fn<any>(findFirstIn([
+      { id: 'att-own', uploadedBy: USER_ID, mimeType: 'image/webp', filePath: OWN, fileUrl: OWN },
+    ]));
     return prisma;
   };
 

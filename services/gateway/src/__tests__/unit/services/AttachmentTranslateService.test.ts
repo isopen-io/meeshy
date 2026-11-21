@@ -71,11 +71,10 @@ const createMockAttachment = (overrides: Record<string, any> = {}) => ({
   duration: 3000,
   transcription: null,
   translations: null,
-  message: {
-    id: 'msg-123',
-    conversationId: 'conv-123',
-    senderId: 'user-123'
-  },
+  // #20113 F5 — pièce LIBRE par défaut : dès qu'un message la porte, c'est la
+  // CONVERSATION qui admet, pas le dépôt. Les témoins d'un porteur le passent.
+  messageId: null,
+  message: null,
   ...overrides
 });
 
@@ -138,20 +137,6 @@ describe('AttachmentTranslateService', () => {
     jest.clearAllMocks();
     prisma = new PrismaClient();
     service = new AttachmentTranslateService(prisma, mockZmqClient);
-    /**
-     * #20113 F5 — l'appelant est MEMBRE VIVANT de la conversation du fixture.
-     *
-     * Ces suites décrivent le routage par type et les codes d'erreur, pas
-     * l'accès. Elles s'appuyaient jusqu'ici sur le court-circuit « je l'ai
-     * déposée », qui répondait `true` avant même de regarder l'appartenance —
-     * un court-circuit qui survivait au départ de la conversation et à un
-     * bannissement, et que `callerMayUseAttachment` a fermé. L'appartenance est
-     * donc posée ICI, à l'état nominal ; les témoins d'ACCÈS la surchargent
-     * chacun avec la leur.
-     */
-    prisma.participant.findFirst.mockResolvedValue({
-      id: 'participant-user-123', conversationId: 'conv-123', userId: 'user-123', isActive: true,
-    });
   });
 
   // =========================================================================
