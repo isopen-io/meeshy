@@ -19,7 +19,7 @@ import { validatePagination } from '../../utils/pagination';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendBadRequest, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendConflict, sendPaginatedSuccess } from '../../utils/response';
-import { participationEstVivante, refuserCommeIntrouvable } from '../conversations/utils/access-control';
+import { PARTICIPATION_VIVANTE, participationEstVivante, refuserCommeIntrouvable } from '../conversations/utils/access-control';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { identityImageIsCallers, IDENTITY_IMAGE_NOT_OWNED } from '../../services/attachments/identityImageOwnership';
 import { countOnlineMembers } from '../../services/community-online-count';
@@ -582,15 +582,22 @@ const community = await fastify.prisma.community.findFirst({
       //   la liste exhaustive des membres d'UNE conversation appelle déjà
       //   `GET /conversations/:id/participants` (paginée séparément).
       // #19541 — ce que le membre peut OUVRIR, au même filtre que
-      // `GET /conversations` (`core-list.ts`) : une participation ACTIVE (ni
-      // partie, ni bannie) dans une conversation ACTIVE (ni fermée, ni rendue
+      // `GET /conversations` (`core-list.ts`) : une participation VIVANTE (ni
+      // partie, ni BANNIE) dans une conversation ACTIVE (ni fermée, ni rendue
       // obsolète — les deux écritures posent `isActive: false`). Le total
       // paginé lit le même `where`.
+      //
+      // #20209 — ce commentaire AFFIRMAIT « ni bannie » au-dessus d'une clause
+      // qui ne portait que `isActive: true`, et invoquait comme preuve une
+      // jumelle qui ne la portait pas davantage. **Un commentaire qui invoque
+      // une jumelle comme preuve de conformité est une affirmation DOUBLE** —
+      // la règle, et le fait que l'autre site l'applique — et les deux moitiés
+      // étaient fausses. Les deux clauses épellent la loi depuis ce lot.
       const whereClause = {
         communityId: id,
         isActive: true,
         participants: {
-          some: { userId: userId, isActive: true }
+          some: { userId: userId, ...PARTICIPATION_VIVANTE }
         }
       };
 

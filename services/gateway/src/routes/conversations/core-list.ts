@@ -61,6 +61,7 @@ import { announcesCapability, appendVary, CLIENT_CAPABILITIES, CLIENT_CAPABILITI
 import { participantProfileDecor } from '../../services/appearance/profileDecor';
 import { authorProfileDecor } from '../../services/appearance/authorProfileDecor';
 import { startupPackIndex } from '../../services/packs/PackIndex';
+import { PARTICIPATION_VIVANTE } from './utils/access-control';
 import {
   conversationListQuerySelect,
   conversationLastMessagePreviewSelect,
@@ -193,7 +194,18 @@ export function registerConversationListRoute(
         participants: {
           some: {
             userId: userId,
-            isActive: true,
+            // #20209 — la PARTICIPATION VIVANTE, par `AND` et JAMAIS par
+            // étalement. Cette clause porte déjà une clé `OR` (le `deletedForMe`
+            // ci-dessous) : `...PARTICIPATION_VIVANTE` l'ÉCRASERAIT en silence —
+            // le seul piège d'`unsetOrNull` (`utils/prisma-unset.ts`) — et ferait
+            // disparaître de la liste toute conversation supprimée « pour moi ».
+            //
+            // Sous `isActive` nu, la conversation dont un membre est EXCLU
+            // figurait encore dans sa liste principale. Quatrième genre de porte
+            // keyée sur l'appelant (#20155) : l'appelant nommé dans un FILTRE DE
+            // RELATION, que le balayage des audiences ne traverse pas — par
+            // décision écrite, et juste pour ce qu'il mesure.
+            AND: [PARTICIPATION_VIVANTE],
             OR: [
               { deletedForMe: null },
               { deletedForMe: { isSet: false } }
