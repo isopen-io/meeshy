@@ -29,6 +29,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -53,6 +54,8 @@ internal data class MintCeremonyWords(
     val ancestorsLine: String,
     val say: String,
     val glory: String,
+    /** Le pas vers le rang suivant, sous la gloire gagnée (#19860) ; absent pour le Mythe, en Légende I, ou sans gloire lue. */
+    val gloryStep: String? = null,
 )
 
 /** Pose une boîte de la scène — coin haut-gauche ([x], [y]), taille [w] × [h] en unités de la scène — dans l'écran. */
@@ -123,6 +126,10 @@ internal fun MintCeremonyScene(
             CoinLayers(frame, look, number, year, fit, palette)
             StageText(words.glory, fit, Stage.DEFAULT_TARGET.x - 80, Stage.DEFAULT_TARGET.y - 24 - 40 * frame.glory.rise, 160.0, 18.0,
                 sp(13.0), palette.gloryInk, FontWeight.ExtraBold, alpha = frame.glory.opacity)
+            words.gloryStep?.let { step ->
+                StageText(step, fit, Stage.DEFAULT_TARGET.x - 110, Stage.DEFAULT_TARGET.y - 6 - 40 * frame.glory.rise, 220.0, 14.0,
+                    sp(10.0), palette.gloryInk, FontWeight.SemiBold, alpha = frame.glory.opacity * 0.9, singleLine = true)
+            }
         }
     }
     }
@@ -141,10 +148,13 @@ private fun StageText(
     weight: FontWeight,
     alpha: Double = 1.0,
     italic: Boolean = false,
+    singleLine: Boolean = false,
 ) {
     Text(
         text,
         Modifier.stageBox(fit, x, y, w, h).graphicsLayer { this.alpha = alpha.toFloat() },
+        maxLines = if (singleLine) 1 else Int.MAX_VALUE,
+        overflow = if (singleLine) TextOverflow.Ellipsis else TextOverflow.Clip,
         style = TextStyle(color = color, fontSize = size, fontWeight = weight, fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal,
             textAlign = TextAlign.Center),
     )
