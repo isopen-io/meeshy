@@ -18,6 +18,8 @@ const frContentCard = {
   'content.card.favorites.one': '{count} favori',
   'content.card.favorites.other': '{count} favoris',
   'content.card.saved': 'enregistré',
+  'content.card.slideshow': 'Diaporama',
+  'content.card.slideshow.page': 'Page {index} sur {count}',
 } as const;
 
 export type ContentCardCatalogSlice = Readonly<Record<keyof typeof frContentCard, string>>;

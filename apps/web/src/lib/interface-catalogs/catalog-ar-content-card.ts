@@ -10,6 +10,8 @@ const arContentCard = {
   'content.card.favorites.one': '{count} مفضلة',
   'content.card.favorites.other': '{count} مفضلات',
   'content.card.saved': 'محفوظ',
+  'content.card.slideshow': 'عرض شرائح',
+  'content.card.slideshow.page': 'الصفحة {index} من {count}',
 } satisfies ContentCardCatalogSlice;
 
 export default arContentCard;

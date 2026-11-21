@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState, type CSSProperties, type MouseEvent } from 'react';
+import { useMemo, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
 
 import type { ContentKind, ContentPathTarget } from '@meeshy/shared/utils/content-link';
 
@@ -10,19 +10,23 @@ import {
   contentTargetStateOf,
   type ContentCardDeps,
 } from '@/lib/api/content-card';
-import { isMediaAbsent, noteMediaAbsent } from '@/lib/api/media-absent';
-import { contentCardModelOf, type ContentCardMedia, type ContentCardModel } from '@/lib/feed/content-card';
+import { contentCardModelOf, type ContentCardModel } from '@/lib/feed/content-card';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { contentRouteOf, type ContentLinkCandidates } from '@/lib/links/content-link';
-import { mediaImageCrossOrigin } from '@/lib/net/api-runtime-cache';
 import { compactCount } from '@/lib/view/compact-count';
-import { DURATION_BADGE_OPACITY, videoDurationLabel } from '@/lib/view/media-grid-layout';
 import { openLinkProps } from '@/lib/view/reading-telemetry';
 import { useMinute } from '@/lib/view/use-minute';
 import { Link } from '@/routes/route-table';
 
-import { Glyph, GlyphSvg, type GlyphShape } from './glyph';
+import {
+  ContentCardMediaBlock,
+  ContentCardSceneBlock,
+  ContentCardSlideshow,
+  ContentCardSoundBlock,
+  ON_MEDIA_BACKDROP,
+} from './content-card-visual';
+import { GlyphSvg, type GlyphShape } from './glyph';
 import { GLYPHS } from './glyphs';
 import { CONTENT_CARD_GLYPHS } from './glyphs-content-card';
 import { PrismPastille } from './message-blocks';
@@ -59,7 +63,6 @@ const CARD_WIDTH = 280;
 const CARD_RADIUS = 16;
 const AVATAR_SIDE = 20;
 const MOOD_EMOJI_SIZE = 28;
-const PLAY_DIAMETER = 40;
 
 const INK = 'var(--color-ios-ink)';
 const INK_2 = 'var(--color-ios-ink-2)';
@@ -74,8 +77,6 @@ const shell: CSSProperties = {
   color: INK,
   overflow: 'hidden',
 };
-
-const onMediaBackdrop = `color-mix(in srgb, var(--color-media-backdrop) ${Math.round(DURATION_BADGE_OPACITY * 100)}%, transparent)`;
 
 /** Un clic dans la carte ne remonte pas jusqu'aux gestes de la bulle (sélection, double appui). */
 const contained = (event: MouseEvent) => event.stopPropagation();
@@ -160,7 +161,7 @@ function ContentPostCard({
   );
   if (state.kind === 'loading') return <ContentCardSkeleton language={language} />;
   if (state.kind === 'unavailable') return <ContentUnavailable type={target.type} language={language} />;
-  return model === undefined ? null : <ContentCard model={model} token={token} language={language} />;
+  return model === undefined ? null : <ContentCard model={model} token={token} language={language} readerLanguages={readerLanguages} />;
 }
 
 function ContentCardSkeleton({ language }: { readonly language: InterfaceLanguage }) {
@@ -217,38 +218,82 @@ function cardLabelOf(model: ContentCardModel, language: InterfaceLanguage): stri
   return [head, body, figures].filter((part) => part !== '').join('. ');
 }
 
-function ContentCard({ model, token, language }: { readonly model: ContentCardModel; readonly token: string | null; readonly language: InterfaceLanguage }) {
+/** Le bloc visuel porte-t-il une face (image, diaporama, scène) ? La pastille du type s'y pose ; sinon, avant le nom. */
+const hasFace = (model: ContentCardModel): boolean => model.visual.kind === 'media' || model.visual.kind === 'slideshow' || model.visual.kind === 'scene';
+
+/**
+ * LA PORTE DU GESTE : le lien suivi tel quel (le clic se compte), sinon
+ * l'adresse du contenu à sa place. La carte en pose une ; chaque page d'un
+ * diaporama en pose une autre, muette (le lien de la carte la prononce déjà).
+ */
+function OpenLink({ model, token, children, ...rest }: { readonly model: ContentCardModel; readonly token: string | null; readonly children: ReactNode } & Readonly<Record<string, unknown>>) {
   const open = openLinkProps(model.postId, 'link_preview');
-  const shared = {
-    'aria-label': cardLabelOf(model, language),
-    'aria-description': translate(language, 'content.card.hint'),
-    draggable: false,
-    'data-content-card-open': '',
-    style: { ...shell, display: 'block', width: '100%', outlineColor: 'var(--color-ios-brand)' },
-    ...(open.onClick === undefined ? {} : { onClick: open.onClick }),
-  } as const;
-  const body = (
-    <span aria-hidden="true" className="block">
-      {model.media === undefined ? null : <MediaBlock media={model.media} type={model.type} accent={model.author.accentColor} language={language} />}
-      <span className="grid gap-1.5 px-3 py-2.5">
-        <AuthorRow model={model} language={language} />
-        <TextRow model={model} language={language} />
-        <StatsRow model={model} language={language} />
-      </span>
-    </span>
+  const shared = { draggable: false, ...(open.onClick === undefined ? {} : { onClick: open.onClick }), ...rest };
+  return token === null ? (
+    <Link to={contentRouteOf(model.routeType)} params={{ post: model.postId }} search={open.search} {...shared}>
+      {children}
+    </Link>
+  ) : (
+    <Link to="trackingLink" params={{ token }} {...shared}>
+      {children}
+    </Link>
   );
-  /* La porte du geste : le lien suivi tel quel (le clic se compte), sinon l'adresse du contenu à sa place. */
+}
+
+function ContentCard({ model, token, language, readerLanguages }: { readonly model: ContentCardModel; readonly token: string | null; readonly language: InterfaceLanguage; readonly readerLanguages: readonly string[] }) {
+  const accent = model.author.accentColor;
+  const chip = (onMedia: boolean) => <TypeChip type={model.type} language={language} onMedia={onMedia} />;
+  const { visual } = model;
+  const page = (face: ReactNode) => (
+    <OpenLink model={model} token={token} tabIndex={-1} aria-hidden="true" data-content-card-page-open="" className="block size-full">
+      {face}
+    </OpenLink>
+  );
+  const face =
+    visual.kind === 'media' ? (
+      <ContentCardMediaBlock media={visual.media} accent={accent} chip={chip} />
+    ) : visual.kind === 'scene' && model.scene !== undefined ? (
+      <ContentCardSceneBlock scene={model.scene} index={visual.index} accent={accent} readerLanguages={readerLanguages} authorName={model.author.name} chip={chip} />
+    ) : null;
   return (
-    <div data-content-card="card" data-content-type={model.type} className="mt-1.5" style={{ width: CARD_WIDTH, maxWidth: '100%' }} onClick={contained}>
-      {token === null ? (
-        <Link to={contentRouteOf(model.routeType)} params={{ post: model.postId }} search={open.search} {...shared} className="block transition-transform focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98]">
-          {body}
-        </Link>
-      ) : (
-        <Link to="trackingLink" params={{ token }} {...shared} className="block transition-transform focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.98]">
-          {body}
-        </Link>
-      )}
+    <div
+      data-content-card="card"
+      data-content-type={model.type}
+      className="mt-1.5 transition-transform has-[>a:active]:scale-[0.98]"
+      style={{ ...shell, width: CARD_WIDTH }}
+      onClick={contained}
+    >
+      {visual.kind === 'slideshow' ? (
+        <ContentCardSlideshow
+          pages={visual.pages}
+          scene={model.scene}
+          accent={accent}
+          readerLanguages={readerLanguages}
+          authorName={model.author.name}
+          language={language}
+          chip={chip}
+          renderOpen={page}
+        />
+      ) : null}
+      {visual.kind === 'sound' ? <ContentCardSoundBlock sound={visual.sound} postId={model.postId} accent={accent} language={language} /> : null}
+      <OpenLink
+        model={model}
+        token={token}
+        aria-label={cardLabelOf(model, language)}
+        aria-description={translate(language, 'content.card.hint')}
+        data-content-card-open=""
+        className="block focus-visible:outline-2 focus-visible:-outline-offset-2"
+        style={{ display: 'block', width: '100%', outlineColor: 'var(--color-ios-brand)', borderRadius: CARD_RADIUS }}
+      >
+        <span aria-hidden="true" className="block">
+          {face}
+          <span className="grid gap-1.5 px-3 py-2.5">
+            <AuthorRow model={model} language={language} />
+            <TextRow model={model} language={language} />
+            <StatsRow model={model} language={language} />
+          </span>
+        </span>
+      </OpenLink>
     </div>
   );
 }
@@ -258,73 +303,10 @@ function TypeChip({ type, language, onMedia }: { readonly type: ContentKind; rea
     <span
       data-content-card-type
       className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-check font-semibold ${onMedia ? 'text-on-media' : ''}`}
-      style={onMedia ? { backgroundColor: onMediaBackdrop } : { backgroundColor: 'var(--color-ios-surface)', color: INK_2 }}
+      style={onMedia ? { backgroundColor: ON_MEDIA_BACKDROP } : { backgroundColor: 'var(--color-ios-surface)', color: INK_2 }}
     >
       <GlyphSvg glyph={TYPE_GLYPH[type]} size={12} />
       {translate(language, TYPE_LABEL[type])}
-    </span>
-  );
-}
-
-/**
- * LE BLOC MÉDIA — la vignette recadrée en remplissage, sur l'aplat du
- * ThumbHash puis l'accent de l'auteur tant qu'elle n'est pas là. Une vignette
- * morte est retenue par le registre de session (`noteMediaAbsent`) : un fil
- * qui remonte la carte ne la redemande pas, l'aplat reste.
- */
-function MediaBlock({ media, type, accent, language }: { readonly media: ContentCardMedia; readonly type: ContentKind; readonly accent: string; readonly language: InterfaceLanguage }) {
-  const [, setFailures] = useState(0);
-  const src = media.src !== undefined && !isMediaAbsent(media.src) ? media.src : undefined;
-  return (
-    <span
-      data-content-card-media={media.kind}
-      className="relative block overflow-hidden"
-      style={{
-        width: '100%',
-        aspectRatio: String(media.aspectRatio),
-        maxHeight: media.maxHeight,
-        backgroundColor: `color-mix(in srgb, ${accent} 35%, var(--color-ios-card))`,
-        ...(media.placeholder === undefined ? {} : { backgroundImage: `url("${media.placeholder}")`, backgroundSize: 'cover' }),
-      }}
-    >
-      {src === undefined ? null : (
-        <img
-          src={src}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          crossOrigin={mediaImageCrossOrigin(src)}
-          onError={() => {
-            noteMediaAbsent(src);
-            setFailures((count) => count + 1);
-          }}
-          className="absolute inset-0 size-full object-cover"
-        />
-      )}
-      <span className="absolute start-2 top-2">
-        <TypeChip type={type} language={language} onMedia />
-      </span>
-      {media.more > 0 ? (
-        <span data-content-card-more className="absolute end-2 top-2 rounded-full px-2 py-0.5 text-check font-bold text-on-media" style={{ backgroundColor: onMediaBackdrop }}>
-          +{media.more}
-        </span>
-      ) : null}
-      {media.kind === 'video' ? (
-        <span data-content-card-play className="absolute inset-0 grid place-items-center">
-          <span className="grid place-items-center rounded-full text-on-media" style={{ width: PLAY_DIAMETER, height: PLAY_DIAMETER, backgroundColor: onMediaBackdrop }}>
-            <Glyph name="fillPlay" size={18} />
-          </span>
-        </span>
-      ) : null}
-      {media.kind === 'video' && media.durationMs !== undefined ? (
-        <span
-          data-content-card-duration
-          className="absolute bottom-2 end-2 rounded-full px-1.5 py-0.5 text-mini font-medium text-on-media tabular-nums"
-          style={{ backgroundColor: onMediaBackdrop }}
-        >
-          {videoDurationLabel(media.durationMs)}
-        </span>
-      ) : null}
     </span>
   );
 }
@@ -333,7 +315,7 @@ function AuthorRow({ model, language }: { readonly model: ContentCardModel; read
   const { author } = model;
   return (
     <span data-content-card-author className="flex min-w-0 items-center gap-1.5 text-mini">
-      {model.media === undefined ? <TypeChip type={model.type} language={language} onMedia={false} /> : null}
+      {hasFace(model) ? null : <TypeChip type={model.type} language={language} onMedia={false} />}
       <PeerAvatar
         presenceKey={author.id}
         ringRef={author.ring}
@@ -374,7 +356,7 @@ function TextRow({ model, language }: { readonly model: ContentCardModel; readon
             style={{
               color: INK,
               display: '-webkit-box',
-              WebkitLineClamp: model.media === undefined ? 3 : 2,
+              WebkitLineClamp: hasFace(model) ? 2 : 3,
               WebkitBoxOrient: 'vertical',
               overflow: 'hidden',
               overflowWrap: 'anywhere',

@@ -10,6 +10,8 @@ const enContentCard = {
   'content.card.favorites.one': '{count} favorite',
   'content.card.favorites.other': '{count} favorites',
   'content.card.saved': 'saved',
+  'content.card.slideshow': 'Slideshow',
+  'content.card.slideshow.page': 'Page {index} of {count}',
 } satisfies ContentCardCatalogSlice;
 
 export default enContentCard;

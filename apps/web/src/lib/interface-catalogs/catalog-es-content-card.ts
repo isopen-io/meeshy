@@ -10,6 +10,8 @@ const esContentCard = {
   'content.card.favorites.one': '{count} favorito',
   'content.card.favorites.other': '{count} favoritos',
   'content.card.saved': 'guardado',
+  'content.card.slideshow': 'Presentación',
+  'content.card.slideshow.page': 'Página {index} de {count}',
 } satisfies ContentCardCatalogSlice;
 
 export default esContentCard;

@@ -49,15 +49,13 @@ function shownOf(model: ContentCardModel): Expected {
       return {
         kind: 'sound',
         attachmentId: visual.sound.attachmentId,
-        url: visual.sound.src,
+        url: visual.sound.url,
         ...(visual.sound.durationSeconds === undefined ? {} : { durationSeconds: visual.sound.durationSeconds }),
       };
     case 'scene':
       return { kind: 'scene', index: visual.index, carrierId: model.scene?.carrier.postId ?? '' };
   }
 }
-
-const servedOf = (expected: Expected): Expected => (expected.kind === 'sound' ? { ...expected, url: attachmentSrc(expected.url) } : expected);
 
 describe('contentCardModelOf — le bloc visuel rejoue les vecteurs partagés', () => {
   test('le fichier est lu, couvre les cinq rendus, et une boucle vide ne peut pas passer', () => {
@@ -67,7 +65,7 @@ describe('contentCardModelOf — le bloc visuel rejoue les vecteurs partagés', 
 
   for (const vector of vectors) {
     test(vector._label, () => {
-      expect(shownOf(contentCardModelOf(vector.post, params))).toEqual(servedOf(vector.expected));
+      expect(shownOf(contentCardModelOf(vector.post, params))).toEqual(vector.expected);
     });
   }
 

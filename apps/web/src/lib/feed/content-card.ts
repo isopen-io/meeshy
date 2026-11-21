@@ -92,7 +92,8 @@ export type ContentCardStats = {
 export type ContentCardSound = {
   /** L'identité de la piste : le média audio, ou `<post>-audio` pour le son de fond du contenu. */
   readonly attachmentId: string;
-  readonly src: string;
+  /** L'adresse SERVIE : le lecteur la résout (`attachmentSrc`), comme toute pièce. */
+  readonly url: string;
   readonly durationSeconds?: number;
 };
 
@@ -236,12 +237,12 @@ function soundOf(shown: Shown, shownId: string): ContentCardSound | undefined {
   const audio = orderedOf(shown.media).find((item) => feedMediaKindOf(item.mimeType) === 'audio' && textOf(item.fileUrl) !== undefined);
   if (audio !== undefined) {
     const durationSeconds = secondsOf(audio.duration);
-    return { attachmentId: audio.id, src: attachmentSrc(audio.fileUrl!), ...(durationSeconds === undefined ? {} : { durationSeconds }) };
+    return { attachmentId: audio.id, url: audio.fileUrl!, ...(durationSeconds === undefined ? {} : { durationSeconds }) };
   }
   const url = textOf(shown.audioUrl);
   if (url === undefined) return undefined;
   const durationSeconds = secondsOf(shown.audioDuration);
-  return { attachmentId: `${shownId}-audio`, src: attachmentSrc(url), ...(durationSeconds === undefined ? {} : { durationSeconds }) };
+  return { attachmentId: `${shownId}-audio`, url, ...(durationSeconds === undefined ? {} : { durationSeconds }) };
 }
 
 /** Le porteur de la scène : les médias du contenu MONTRÉ, résolus (le même repli de vignette que le fil). */
