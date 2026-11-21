@@ -33,6 +33,8 @@ struct ShareMyLocationSheet: View {
     /// « Choisir sur la carte » (#19558) : la feuille partage le point que l'épingle désigne, jamais un relevé.
     @State private var choosingPoint = false
     @State private var pointViewport: LocationMapViewport?
+    /// Le partage montre un point choisi (#20087) : « Partager » demande avant d'y montrer la position réelle.
+    @State private var confirmsReplacingPoint = false
     /// Ma position déjà connue, pour la seule pilule « De passage à » (#19560) : jamais un relevé de plus.
     @State private var me: SharedLocationFix?
     @StateObject private var places = LocationPlaceNamer()
@@ -73,6 +75,13 @@ struct ShareMyLocationSheet: View {
         .presentationDragIndicator(.visible)
         .adaptiveOnChange(of: scenePhase) { _, phase in
             denial = denial.next(phase)
+        }
+        .confirmationDialog(ShareMyLocationCopy.replacePointTitle, isPresented: $confirmsReplacingPoint,
+                            titleVisibility: .visible) {
+            Button(ShareMyLocationCopy.replacePointConfirm) { Task { await share(replacingPoint: true) } }
+            Button(ShareMyLocationCopy.replacePointKeep, role: .cancel) {}
+        } message: {
+            Text(ShareMyLocationCopy.replacePointMessage)
         }
         .task { me = LocationMapOwnPosition.lastKnown() }
     }
@@ -286,14 +295,19 @@ struct ShareMyLocationSheet: View {
         recipients.filter { chosen.contains($0.userId) }.map(\.name)
     }
 
-    private func share() async {
+    private func share(replacingPoint: Bool = false) async {
         let targets = recipients.filter { chosen.contains($0.userId) }
         let offers = center.servesShareOptions != false
         for target in targets {
             if let problem = await center.share(with: target.userId, precision: precision, term: duration,
-                                                notify: offers && notify, battery: offers ? battery : nil) {
+                                                notify: offers && notify, battery: offers ? battery : nil,
+                                                replacingPoint: replacingPoint) {
                 guard problem != .locationDenied else {
                     denial = ShareMyLocationDenial(isDenied: true)
+                    return
+                }
+                guard problem != .replacesChosenPoint else {
+                    confirmsReplacingPoint = true
                     return
                 }
                 FeedbackToastManager.shared.showError(ShareLocationWording.problem(problem))
@@ -347,6 +361,20 @@ struct ShareMyLocationSheet: View {
 enum ShareMyLocationCopy {
     static var title: String { String(localized: "sharedLocation.share.action", defaultValue: "Partager ma position", bundle: .main) }
     static var with: String { String(localized: "locationMap.share.with", defaultValue: "avec", bundle: .main) }
+    static var replacePointTitle: String {
+        String(localized: "locationMap.share.replacePoint.title", defaultValue: "Montrer ta position réelle ?", bundle: .main)
+    }
+    static var replacePointMessage: String {
+        String(localized: "locationMap.share.replacePoint.message",
+               defaultValue: "Ton partage montre un point choisi sur la carte. Tous ceux qui le voient verront ta position réelle à la place.",
+               bundle: .main)
+    }
+    static var replacePointConfirm: String {
+        String(localized: "locationMap.share.replacePoint.confirm", defaultValue: "Montrer ma position réelle", bundle: .main)
+    }
+    static var replacePointKeep: String {
+        String(localized: "locationMap.share.replacePoint.keep", defaultValue: "Garder le point choisi", bundle: .main)
+    }
     static var chooseLabel: String { String(localized: "locationMap.share.choose", defaultValue: "Avec qui", bundle: .main) }
     static var hourUnit: String { String(localized: "locationMap.share.hour", defaultValue: "heure", bundle: .main) }
     static var hoursUnit: String { String(localized: "locationMap.share.hours", defaultValue: "heures", bundle: .main) }

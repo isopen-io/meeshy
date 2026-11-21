@@ -160,7 +160,8 @@ struct SharedLocationRoster: Equatable, Codable {
     /// chacun des appareils du compte. Ses personnes et leurs échéances remplacent les miennes ; un retrait en attente
     /// d'ici GAGNE (la personne reste hors de la liste, son retrait se rejoue) tant que la passerelle la sert encore, et
     /// s'éteint dès qu'elle ne la sert plus. Une personne servie dont l'échéance est passée ou l'identifiant illisible
-    /// n'entre pas.
+    /// n'entre pas. La SOURCE servie fait foi aussi (#20087) : un point choisi par un autre appareil le reste ici, et
+    /// cet appareil ne republie jamais sa position réelle à sa place ; une passerelle qui ne la dit pas ne change rien.
     func withServed(_ served: SharedLocationOwnSnapshot, now: Date) -> SharedLocationRoster {
         let readable = served.recipients.compactMap { recipient -> (String, SharedLocationOwnRecipient)? in
             let id = recipient.userId.lowercased()
@@ -173,7 +174,8 @@ struct SharedLocationRoster: Equatable, Codable {
             kept[id] = Entry(precision: recipient.precision, until: recipient.expiresAt)
         }
         return SharedLocationRoster(entries: next, withdrawals: withdrawals.filter { servedIds.contains($0.key) },
-                                    battery: served.shareBattery ?? sharesBattery, fixedPoint: isFixedPoint)
+                                    battery: served.shareBattery ?? sharesBattery,
+                                    fixedPoint: served.source.map { $0 == .manual } ?? isFixedPoint)
     }
 
     private static func isObjectId(_ id: String) -> Bool {
