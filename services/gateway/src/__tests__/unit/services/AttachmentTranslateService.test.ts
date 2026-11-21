@@ -71,11 +71,10 @@ const createMockAttachment = (overrides: Record<string, any> = {}) => ({
   duration: 3000,
   transcription: null,
   translations: null,
-  message: {
-    id: 'msg-123',
-    conversationId: 'conv-123',
-    senderId: 'user-123'
-  },
+  // #20113 F5 — pièce LIBRE par défaut : dès qu'un message la porte, c'est la
+  // CONVERSATION qui admet, pas le dépôt. Les témoins d'un porteur le passent.
+  messageId: null,
+  message: null,
   ...overrides
 });
 

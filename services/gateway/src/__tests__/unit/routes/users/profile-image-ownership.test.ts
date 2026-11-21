@@ -34,6 +34,7 @@ jest.mock('../../../../routes/auth/types', () => ({
 }));
 
 import { updateUserAvatar, updateUserBanner } from '../../../../routes/users/profile';
+import { findFirstIn } from '../../../helpers/mongo-where';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 const OWN = '2026/11/507f1f77bcf86cd799439011/avatar_neuf.webp';
@@ -50,9 +51,18 @@ function makePrisma(stored: { readonly avatar?: string | null; readonly banner?:
       update: jest.fn<any>().mockResolvedValue(account),
     },
     messageAttachment: {
-      findFirst: jest.fn<any>().mockImplementation(async ({ where }: any) =>
-        where.uploadedBy === USER_ID && where.OR.some((c: any) => c.filePath === OWN) ? { id: 'att-own' } : null,
-      ),
+      /**
+       * #20113 — le double APPLIQUE le `where` à des LIGNES.
+       *
+       * Il affirmait `where.uploadedBy === USER_ID && where.OR.some(…)` : il
+       * encodait la FORME de la requête et sa propre copie de la condition,
+       * donc il rendait vrai ce que l'appelant lui demandait. Un changement
+       * d'espace de clés ne pouvait pas s'y voir — et c'est ce qui a laissé
+       * passer la réouverture de #16811 mesurée par l'audit de #20113.
+       */
+      findFirst: jest.fn<any>(findFirstIn([
+        { id: 'att-own', uploadedBy: USER_ID, mimeType: 'image/webp', filePath: OWN, fileUrl: OWN },
+      ])),
     },
     participant: { updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
   };

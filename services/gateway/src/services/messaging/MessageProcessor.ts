@@ -6,6 +6,7 @@
 import * as path from 'path';
 import { composeMessageEffectFlags, ephemeralSendFields } from './ephemeralSendFields';
 import { copiedAttachmentFields } from './copiedAttachmentFields';
+import { resolveUploaderIdentity } from '../attachments/uploaderIdentity';
 import { exitProtectedCopy } from './copyExitProtection';
 import type { ForwardImposition } from './forwardAdmission';
 import { declaredReplyProtection } from './replyProtectionContagion';
@@ -764,6 +765,8 @@ export class MessageProcessor {
 
       if (originalAttachments.length === 0) return;
 
+      const uploader = await resolveUploaderIdentity(this.prisma, senderId);
+
       const createdAttachments = await Promise.all(
         originalAttachments.map((att, rank) =>
           this.prisma.messageAttachment.create({
@@ -772,7 +775,11 @@ export class MessageProcessor {
               messageId: newMessageId, rank,
               forwardedFromAttachmentId: att.id,
               isForwarded: true,
-              uploadedBy: senderId,
+              // #20113 — l'identité de COMPTE du transférant, jamais son
+              // `Participant.id` : `uploadedBy` est lu comme un identifiant
+              // d'utilisateur par tous ses lecteurs, et il gouverne côté client
+              // l'affordance « supprimer cette pièce ».
+              uploadedBy: uploader,
             }
           })
         )
