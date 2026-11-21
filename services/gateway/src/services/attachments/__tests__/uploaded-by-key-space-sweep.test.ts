@@ -51,10 +51,16 @@ const FROZEN: Readonly<Record<string, readonly KeySpace[]>> = {
   'services/attachments/identityImageOwnership.ts': ['account'],
   'services/calls/callRecordingLink.ts': ['account'],
   'routes/admin/user-profile-images.ts': ['account'],
-  // Les quatre qui APPARIENT à l'échelle d'un compte entier, donc les seuls
-  // pour qui une ligne héritée manquante se VOIT. Suivi : #20114.
-  'routes/me/export-sections.ts': ['account-blind-to-legacy'],
-  'services/purgeDeletedAccountMedia.ts': ['account-blind-to-legacy'],
+  // #20129 — les DEUX sites dont une ligne héritée manquante se VOIT
+  // apparient désormais les deux espaces : l'export RGPD (art. 15) et la purge
+  // de fin de période de grâce (art. 17). Aucune migration n'a été nécessaire,
+  // la liste des participants étant déjà calculée par la route pour ses
+  // voisines.
+  'routes/me/export-sections.ts': ['account'],
+  'services/purgeDeletedAccountMedia.ts': ['account'],
+  // Les trois COMPTEURS restent aveugles, et c'est dit : un sous-compte
+  // d'affichage n'est pas un manquement, et les corriger changerait des succès
+  // déjà attribués. Hygiène de la colonne : #20114.
   'services/achievements/GlobalAchievements.ts': ['account-blind-to-legacy'],
   'routes/admin/user-member-stats.ts': ['account-blind-to-legacy'],
   'routes/admin/users.ts': ['account-blind-to-legacy'],
@@ -85,11 +91,12 @@ describe('#20113 — l’espace de clés de `uploadedBy`', () => {
   });
 
   it('ne compte pas plus de sites AVEUGLES aux lignes héritées qu’au gel', () => {
-    // Un cliquet, pas un plancher : en solder un (par une reprise des lignes
-    // héritées, #20114) est attendu ; en ajouter un ne l'est jamais.
+    // Un cliquet, pas un plancher : en solder un est attendu, en ajouter un ne
+    // l'est jamais. Il est passé de 5 à 3 en #20129, en apparient les deux
+    // espaces aux deux seuls sites où l'omission se VOIT — sans migration.
     const aveugles = Object.values(FROZEN).flat().filter((space) => space === 'account-blind-to-legacy');
 
-    expect(aveugles.length).toBeLessThanOrEqual(5);
+    expect(aveugles.length).toBeLessThanOrEqual(3);
   });
 
   /**

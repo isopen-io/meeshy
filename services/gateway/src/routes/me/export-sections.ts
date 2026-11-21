@@ -186,9 +186,32 @@ export async function exportReactions(prisma: PrismaClient, participantIds: read
   };
 }
 
-/** Même raison de séparation que `exportReactions` : deux tables, deux propriétaires. */
-export async function exportMedia(prisma: PrismaClient, userId: string, page: ExportPage) {
-  const attachmentWhere = { uploadedBy: userId, isAnonymous: false };
+/**
+ * Même raison de séparation que `exportReactions` : deux tables, deux propriétaires.
+ *
+ * ─── ET DEUX ESPACES DE CLÉS DANS `uploadedBy` (#20129) ────────────────────
+ *
+ * `MessageAttachment.uploadedBy` portait l'identité de COMPTE pour les quatre
+ * écrivains de téléversement et le `Participant.id` pour les deux écrivains de
+ * COPIE. #20113 a unifié les écrivains ; **les lignes déjà écrites gardent
+ * l'ancien espace**, et rien ne les réécrit.
+ *
+ * Apparier `uploadedBy: userId` ratait donc les médias TRANSFÉRÉS de
+ * l'utilisateur — une omission dans un export d'article 15, sans erreur et
+ * sans trace. Les deux espaces sont appariés ensemble, et la liste des
+ * participants est celle que `exportReactions` reçoit déjà : calculée UNE fois
+ * par la route (`export.ts`), pour ses voisines comme pour celle-ci.
+ *
+ * `PostMedia.uploaderId` n'a, lui, qu'un seul écrivain et qu'un seul espace :
+ * il n'a rien à élargir, et le dire évite de l'élargir « par symétrie ».
+ */
+export async function exportMedia(
+  prisma: PrismaClient,
+  participantIds: readonly string[],
+  userId: string,
+  page: ExportPage
+) {
+  const attachmentWhere = { uploadedBy: { in: [userId, ...participantIds] }, isAnonymous: false };
   const postMediaWhere = { uploaderId: userId };
 
   const [attachments, attachmentsTotal, postMedia, postMediaTotal] = await Promise.all([
