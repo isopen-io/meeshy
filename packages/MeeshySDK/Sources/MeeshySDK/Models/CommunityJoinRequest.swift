@@ -100,3 +100,28 @@ public struct CommunityJoinRequestedEvent: Decodable, Sendable, Equatable {
         self.pendingCount = pendingCount; self.at = at
     }
 }
+
+/// `community:join-request-decided` (#19879) — posé sur la room personnelle du
+/// DEMANDEUR seul quand un intendant refuse sa demande (iOS #19948). Miroir de
+/// `CommunityJoinRequestDecidedEventData`
+/// (`packages/shared/types/socketio-events/community.ts`). La charge ne dit pas
+/// qui a tranché : la communauté, la décision, la date à partir de laquelle une
+/// nouvelle demande est possible (`retryAt`) et l'instant de la décision (`at`).
+public struct CommunityJoinRequestDecidedEvent: Decodable, Sendable, Equatable {
+    public let communityId: String
+    public let decision: String
+    public let retryAt: String
+    public let at: String
+
+    public init(communityId: String, decision: String, retryAt: String, at: String) {
+        self.communityId = communityId; self.decision = decision; self.retryAt = retryAt; self.at = at
+    }
+
+    /// La date de la nouvelle demande possible — pour un REFUS seulement, et
+    /// seulement si elle se lit : une décision inconnue ou une date illisible ne
+    /// dit rien, et l'écran garde ce qu'il montrait.
+    public var refusedUntil: Date? {
+        guard decision == "rejected", !communityId.isEmpty else { return nil }
+        return WireDate.date(from: retryAt)
+    }
+}

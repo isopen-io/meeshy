@@ -94,6 +94,8 @@ public enum SocketEvent: String, CaseIterable, Sendable {
     case communityDeleted = "community:deleted"
     /// Une demande d'entrée vient d'arriver (#19429) — iOS la lit depuis #19877, intendants seuls.
     case communityJoinRequested = "community:join-requested"
+    /// Le refus de la demande du LECTEUR (#19879) — iOS le lit depuis #19948, demandeur seul.
+    case communityJoinRequestDecided = "community:join-request-decided"
     /// L'effectif d'une communauté (#18766) — iOS l'applique depuis #18767.
     case communityMemberJoined = "community:member-joined"
     case communityMemberLeft = "community:member-left"

@@ -112,13 +112,6 @@ const ASYMETRIES: readonly {
     ],
   },
   {
-    absents: ['ios'],
-    raison:
-      "la décision sur sa propre demande d'entrée en communauté : le web (#19879) et Android (#19949) "
-      + "la lisent en direct ; le miroir iOS est #19948.",
-    events: ['community:join-request-decided'],
-  },
-  {
     absents: ['web', 'ios'],
     raison:
       "signaux que seul le miroir ANDROID cite : la pièce jointe prête côté SDK Kotlin et le "
