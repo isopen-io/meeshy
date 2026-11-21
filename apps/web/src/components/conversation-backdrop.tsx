@@ -65,6 +65,7 @@ export function ConversationBackdrop({
       return (
         <div className="thread-backdrop" data-appearance="photo" aria-hidden>
           <div className="thread-backdrop-photo" style={{ backgroundImage: `url("${view.src.replace(/["\\\n]/g, encodeURIComponent)}")`, filter: view.blur > 0 ? `blur(${view.blur}px)` : 'none' } as CSSProperties} />
+          {/* harmony-exempt: voile dynamique composé — view.veilColor est une cote de scheme (sombre 9,9,11 / clair 255,255,255), view.veil une opacité réglable par l'utilisateur ; composition, pas un littéral de chrome */}
           <div className="thread-backdrop-veil" style={{ backgroundColor: `rgba(${view.veilColor}, ${view.veil})` }} />
         </div>
       );

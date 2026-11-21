@@ -424,6 +424,38 @@ describe("les replis d'un jeton de charte défini — un filet de contraste, jam
   });
 });
 
+describe('les quatre derniers cas du gate — calcul, masque et letterbox (91w)', () => {
+  // Les quatre littéraux qui restaient (gate 5/4 après 90w) ne sont PAS du
+  // chrome brut : un masque de luminance (message-menu), un voile dynamique
+  // composé (conversation-backdrop), une couleur calculée depuis la roue du
+  // prisme (rank-blason), et un letterbox de scène (admin-post-preview). Trois
+  // sont exemptés à la ligne avec leur raison ; le quatrième n'est PAS une
+  // exemption mais une UNIFICATION : le letterbox admin prend le jeton
+  // `--color-media-backdrop` (= #000000, byte-identique) que les visionneuses
+  // plein écran (media-viewer, viewer-scene-page) peignent déjà. Gate → 0.
+  const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../src/${rel}`, import.meta.url)), 'utf8');
+  const exempted = [
+    'components/message-menu.tsx',
+    'components/conversation-backdrop.tsx',
+    'components/game/rank-blason.tsx',
+  ] as const;
+  const adminPreview = 'routes/admin-post-preview.tsx';
+
+  test('aucun des quatre fichiers ne laisse de violation au gate', () => {
+    for (const rel of [...exempted, adminPreview]) {
+      expect({ rel, violations: scanSource(read(rel)) }).toEqual({ rel, violations: [] });
+      expect(exemptionOf(rel)).toBe(null);
+    }
+  });
+
+  test('le letterbox admin est unifié sur le jeton (pas une exemption), les trois autres sont exemptés à la ligne', () => {
+    expect(read(adminPreview)).toContain('backgroundColor: ');
+    expect(read(adminPreview)).toContain('var(--color-media-backdrop)');
+    expect(read(adminPreview)).not.toContain("backgroundColor: '#000'");
+    for (const rel of exempted) expect(read(rel)).toContain('harmony-exempt:');
+  });
+});
+
 describe('auditSources — le rapport', () => {
   test('compte par fichier, ignore les exemptés et le hors-périmètre', () => {
     const [first] = EXEMPT_PATHS as readonly { prefix: string }[];

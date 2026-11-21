@@ -112,7 +112,7 @@ function CrestShape({ piece, material, uid, index }: { readonly piece: CrestPiec
 
 /** La couleur d'un rayon du halo : la roue du prisme depuis la teinte de l'émission, ou les jetons du prisme sans émission. */
 const rayColor = (hue: number | null, k: number, count: number): string =>
-  hue === null ? `var(--game-prism-${k % 5})` : `hsl(${Math.round(hue + (360 * k) / count) % 360} 80% 56%)`;
+  hue === null ? `var(--game-prism-${k % 5})` : `hsl(${Math.round(hue + (360 * k) / count) % 360} 80% 56%)`; // harmony-exempt: couleur calculée depuis la roue du prisme (teinte de l'émission) ; sans émission, le repli est le jeton var(--game-prism-k) — famille lib/accent
 
 function MythicHalo({ edition, compact, uid }: { readonly edition: number | null; readonly compact: boolean; readonly uid: string }) {
   const halo = mythicHalo(edition);
