@@ -403,14 +403,34 @@ export function registerSharingRoutes(
         orderBy: { createdAt: 'desc' }
       });
 
-      // NOTE: Cannot use sendSuccess() — response includes a top-level `isModerator`
-      // field that iOS SDK (ConversationLinksResponse) and web parse at root level.
-      // Migration to sendSuccess requires a coordinated client update (breaking change).
-      return reply.send({
-        success: true,
-        data: links.map(l => ({ ...l, participantCount: l.currentUses })),
-        isModerator
-      });
+      // #20190 — `sendSuccess`, le producteur UNIQUE que le `CLAUDE.md` impose.
+      //
+      // Cette route le contournait par `reply.send`, sous une NOTE qui disait :
+      // « Cannot use sendSuccess() — response includes a top-level
+      // `isModerator` field that iOS SDK (ConversationLinksResponse) and web
+      // parse at root level. Migration to sendSuccess requires a coordinated
+      // client update (breaking change). » **Les trois affirmations sont
+      // fausses**, mesurées le 2026-11-21 : `ConversationLinksResponse`
+      // n'existe NULLE PART dans le dépôt ; aucun client ne lit `isModerator`
+      // de cette route (la seule occurrence est une propriété PRIVÉE d'une vue
+      // iOS sans rapport) ; et aucun client n'APPELLE cette route — ses deux
+      // seules occurrences sont les catalogues d'adresses GÉNÉRÉS depuis
+      // `route-manifest.json`, zéro site d'appel sur les trois clients.
+      //
+      // Et le champ que ce contournement existait pour préserver n'atteignait
+      // AUCUN fil : le schéma de réponse ci-dessus ne déclare ni `isModerator`
+      // ni `participantCount`, et fast-json-stringify applique
+      // `additionalProperties: false` par défaut. Le contournement protégeait
+      // un champ que son propre schéma supprimait — et il n'y a donc pas de
+      // changement de contrat ici, seulement du code mort qui part.
+      //
+      // `isModerator` SURVIT comme variable : il gouverne la SÉLECTION
+      // (`createdBy` ci-dessus), la seule chose qu'il décidait vraiment. Le
+      // successeur de cette adresse sert la même information sous
+      // `meta.viewerIsModerator` (`routes/links/user.ts`), et lui la DÉCLARE.
+      //
+      // `participantCount: l.currentUses` partait de même : composé, supprimé.
+      return sendSuccess(reply, links);
     } catch (error) {
       logger.error('Error fetching conversation links', error as Error);
       return sendInternalError(reply, 'Error retrieving conversation links');
