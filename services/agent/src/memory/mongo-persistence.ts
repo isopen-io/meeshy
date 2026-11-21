@@ -666,11 +666,24 @@ export class MongoPersistence {
 
     const allConvIds = merged.map((c: { id: string }) => c.id);
 
-    const [existingRoles, eligibleParticipantCounts] = await Promise.all([
-      this.prisma.agentUserRole.groupBy({
-        by: ['conversationId'],
+    const [roleHolders, eligibleParticipantCounts] = await Promise.all([
+      // #20208 — un rôle ne compte que si son porteur est encore un
+      // participant VIVANT.
+      //
+      // C'était un `groupBy` qui comptait les rôles SANS regarder la
+      // participation, et `hasRoles` court-circuitait la MESURE d'éligibilité
+      // que #20111 venait de resserrer : un fil dont tous les rôles sont des
+      // bannis ou des partis était retenu à CHAQUE passe, pour que
+      // `getControlledUsers` — fail-closed depuis #20111 — n'en serve aucun.
+      // Un scan à vide, indéfiniment, puisque rien ne périme un rôle.
+      //
+      // Le retrait au bannissement et au départ (`releaseAgentRoleFor`, côté
+      // passerelle) ferme la source ; cette lecture-ci couvre les lignes DÉJÀ
+      // EN BASE, qu'aucune écriture future ne rattrape. Les deux moitiés ne se
+      // substituent pas l'une à l'autre.
+      this.prisma.agentUserRole.findMany({
         where: { conversationId: { in: allConvIds } },
-        _count: true,
+        select: { conversationId: true, userId: true },
       }),
       this.prisma.participant.groupBy({
         by: ['conversationId'],
@@ -700,7 +713,19 @@ export class MongoPersistence {
       }),
     ]);
 
-    const roleCountMap = new Map(existingRoles.map((r) => [r.conversationId, r._count]));
+    // La participation VIVANTE des porteurs de rôle, en UNE lecture bornée aux
+    // conversations candidates. La paire `conversationId|userId` est la clé :
+    // un rôle vaut pour SA conversation, jamais pour une autre.
+    const roleHolderIds = [...new Set(roleHolders.flatMap((r: { userId: string | null }) => (r.userId ? [r.userId] : [])))];
+    const vivants = roleHolderIds.length === 0 ? [] : await this.prisma.participant.findMany({
+      where: { conversationId: { in: allConvIds }, ...PARTICIPATION_VIVANTE, userId: { in: roleHolderIds } },
+      select: { conversationId: true, userId: true },
+    });
+    const paireVivante = new Set(vivants.map((p: { conversationId: string; userId: string | null }) => `${p.conversationId}|${p.userId}`));
+    const roleCountMap = roleHolders.reduce<Map<string, number>>((tally, r: { conversationId: string; userId: string | null }) => {
+      if (!r.userId || !paireVivante.has(`${r.conversationId}|${r.userId}`)) return tally;
+      return tally.set(r.conversationId, (tally.get(r.conversationId) ?? 0) + 1);
+    }, new Map());
     const eligibleCountMap = new Map(eligibleParticipantCounts.map((p) => [p.conversationId, p._count]));
 
     const filtered = merged.filter((c: { id: string; agentConfig: any }) => {

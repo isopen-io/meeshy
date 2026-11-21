@@ -34,4 +34,5 @@
     <string name="profile_status_connected">Connected</string>
     <string name="profile_voice_title">Voice</string>
     <string name="shared_location_share_action_a11y">Share my location with %1$s</string>
+    <string name="shared_location_replace_point_message">Everyone who sees your chosen point will see your real location instead.</string>
 </resources>

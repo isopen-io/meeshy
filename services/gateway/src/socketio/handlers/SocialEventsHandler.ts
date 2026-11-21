@@ -12,7 +12,7 @@ import { communityPostAudienceIdsOf, type CommunityPostRef } from '../../service
 import { emitServerEvent, type ServerEventName, type ServerEventPayload } from '../serverEmit';
 import { withAudienceListFor, withoutAudienceList } from '../../services/posts/audienceList';
 import { withServedCarrierMedia, withServedPostMedia } from '../../services/posts/servedPostMedia';
-import { withoutBlockedRecipients } from '../../utils/blocking';
+import { getBlockRelatedUserIds, withoutBlockedRecipients } from '../../utils/blocking';
 import { amisAcceptes } from '../../services/friendship';
 import { circleAudienceIds } from '../../services/posts/postAudience';
 import { POST_CIRCLE_VISIBILITIES, postCircleAudienceFloor } from '@meeshy/shared/utils/relation-levels';
@@ -97,6 +97,16 @@ type SocialEventPayload<E extends SocialEventName> = ServerEventPayload<E>;
 export interface SocialEventsHandlerDependencies {
   io: SocketIOServer;
   prisma: PrismaClient;
+}
+
+/**
+ * L'auteur d'un commentaire diffusé. Les producteurs le SÉLECTIONNENT sous
+ * `author` (`CREATED_COMMENT_SELECT`, `updateComment`, `PostAudioService`) et
+ * jamais à plat : lire `authorId` seul ne trouverait personne, et la diffusion
+ * partirait sans filtre (#20216). `authorId` reste lu pour une charge qui le porte.
+ */
+export function commentAuthorIdOf(comment: { readonly author?: { readonly id?: string } | null; readonly authorId?: string } | null | undefined): string | undefined {
+  return comment?.author?.id ?? comment?.authorId;
 }
 
 export class SocialEventsHandler {
@@ -624,6 +634,29 @@ export class SocialEventsHandler {
   }
 
   /**
+   * L'émetteur d'un événement qui porte le CONTENU d'un commentaire (#20216) :
+   * les rooms du fil, moins la room personnelle de chaque compte qu'un blocage
+   * sépare du COMMENTATEUR, dans un sens ou dans l'autre — la loi de la liste
+   * REST (#20205), appliquée au direct. Sans elle, qui a bloqué B et garde le
+   * détail du post ouvert recevait le commentaire de B dans la room du post.
+   *
+   * Fermé : une lecture des blocages qui échoue rend `null`, et l'appelant
+   * n'émet rien — le lecteur relira le fil par le REST, qui sait quoi taire.
+   * Un commentateur inconnu n'a personne à taire.
+   */
+  private async commentEmitter(rooms: string[], commentAuthorId: string | null | undefined) {
+    const target = this.io.to(rooms);
+    if (!commentAuthorId) return target;
+    try {
+      const separated = [...(await getBlockRelatedUserIds(this.prisma, commentAuthorId))];
+      return separated.length > 0 ? target.except(separated.map((id) => ROOMS.user(id))) : target;
+    } catch (error) {
+      logger.error('comment broadcast — block resolution failed, emission dropped', { commentAuthorId, error });
+      return null;
+    }
+  }
+
+  /**
    * Recipients of a comment-scoped event = the feed rooms allowed by the POST's
    * visibility (NOT the author's full friend list) + the post author + the
    * join-gated post room. Without the visibility filter, a comment on an
@@ -641,8 +674,8 @@ export class SocialEventsHandler {
     visibilityUserIds: string[],
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
-    const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
-    this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_ADDED, { ...data, comment: withServedCarrierMedia(data.comment) });
+    const emitter = await this.commentEmitter(this.commentBroadcastRooms(recipients, postAuthorId, data.postId), commentAuthorIdOf(data.comment));
+    emitter?.emit(SERVER_EVENTS.COMMENT_ADDED, { ...data, comment: withServedCarrierMedia(data.comment) });
   }
 
   /**
@@ -659,8 +692,8 @@ export class SocialEventsHandler {
     visibilityUserIds: string[],
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
-    const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
-    this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_UPDATED, { ...data, comment: withServedCarrierMedia(data.comment) });
+    const emitter = await this.commentEmitter(this.commentBroadcastRooms(recipients, postAuthorId, data.postId), commentAuthorIdOf(data.comment));
+    emitter?.emit(SERVER_EVENTS.COMMENT_UPDATED, { ...data, comment: withServedCarrierMedia(data.comment) });
   }
 
   async broadcastCommentDeleted(
@@ -720,15 +753,20 @@ export class SocialEventsHandler {
     this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_TRANSLATION_UPDATED, data);
   }
 
+  /**
+   * `commentAuthorId` : la charge ne nomme pas le commentateur, l'appelant le
+   * passe pour que la traduction se taise chez qui en est séparé (#20216).
+   */
   async broadcastCommentTranslationUpdated(
     data: CommentTranslationUpdatedEventData,
     postAuthorId: string,
     visibility: string | null | undefined,
     visibilityUserIds: string[],
+    commentAuthorId?: string | null,
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
-    const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
-    this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, data);
+    const emitter = await this.commentEmitter(this.commentBroadcastRooms(recipients, postAuthorId, data.postId), commentAuthorId);
+    emitter?.emit(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, data);
   }
 
   /**
@@ -744,8 +782,8 @@ export class SocialEventsHandler {
     visibilityUserIds: string[],
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
-    const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
-    this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_MEDIA_UPDATED, { ...data, comment: withServedCarrierMedia(data.comment) });
+    const emitter = await this.commentEmitter(this.commentBroadcastRooms(recipients, postAuthorId, data.postId), commentAuthorIdOf(data.comment));
+    emitter?.emit(SERVER_EVENTS.COMMENT_MEDIA_UPDATED, { ...data, comment: withServedCarrierMedia(data.comment) });
   }
 
   /**
@@ -761,11 +799,12 @@ export class SocialEventsHandler {
     postAuthorId: string,
     visibility: string | null | undefined,
     visibilityUserIds: string[],
+    commentAuthorId?: string | null,
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
     if (data.commentId) {
-      const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
-      this.io.to(rooms).emit(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, data);
+      const emitter = await this.commentEmitter(this.commentBroadcastRooms(recipients, postAuthorId, data.postId), commentAuthorId);
+      emitter?.emit(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, data);
       return;
     }
     this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, data);
@@ -781,11 +820,12 @@ export class SocialEventsHandler {
     postAuthorId: string,
     visibility: string | null | undefined,
     visibilityUserIds: string[],
+    commentAuthorId?: string | null,
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
     if (data.commentId) {
-      const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
-      this.io.to(rooms).emit(SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, data);
+      const emitter = await this.commentEmitter(this.commentBroadcastRooms(recipients, postAuthorId, data.postId), commentAuthorId);
+      emitter?.emit(SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, data);
       return;
     }
     this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, data);

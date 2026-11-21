@@ -16,4 +16,5 @@
     <string name="profile_status_connected">متصلون</string>
     <string name="profile_voice_title">الصوت</string>
     <string name="shared_location_share_action_a11y">مشاركة موقعي مع %1$s</string>
+    <string name="shared_location_replace_point_message">من يرى النقطة التي اخترتها سيرى موقعك الحقيقي بدلًا منها.</string>
 </resources>

@@ -226,9 +226,11 @@ export class MediaAltTranslationService {
       });
       if (!media) return;
 
-      const postId = media.postId ?? (media.commentId
-        ? (await this.prisma.postComment.findUnique({ where: { id: media.commentId }, select: { postId: true } }))?.postId
-        : undefined);
+      // L'auteur du commentaire tait la diffusion chez qui en est séparé (#20216).
+      const comment = media.commentId
+        ? await this.prisma.postComment.findUnique({ where: { id: media.commentId }, select: { postId: true, authorId: true } })
+        : null;
+      const postId = media.postId ?? comment?.postId;
       if (!postId) return;
 
       const post = await this.prisma.post.findUnique({
@@ -243,7 +245,7 @@ export class MediaAltTranslationService {
         ...(media.commentId ? { commentId: media.commentId } : {}),
         language: targetLanguage,
         translation: translationData,
-      }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err: unknown) => {
+      }, post.authorId, post.visibility, post.visibilityUserIds ?? [], comment?.authorId).catch((err: unknown) => {
         log.error('MediaAltTranslation: broadcast failed', err instanceof Error ? err : new Error(String(err)), { mediaId, targetLanguage });
       });
     } catch (err) {

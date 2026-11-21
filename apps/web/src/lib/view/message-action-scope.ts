@@ -60,7 +60,7 @@ type ScopeParticipant = {
  * même chose de « Supprimer pour moi », de la réaction et du signalement. Le
  * client dit fermé ce qu'il ne sait pas (aucune conversation lue), et rien ne
  * survit à ce que le serveur a dit : `isMember: false` — servi, ou posé par la
- * fin d'appartenance reçue fil ouvert (`realtime-membership-ended.ts`) — ou la
+ * fin d'appartenance reçue fil ouvert (`realtime-membership.ts`) — ou la
  * ligne du lecteur servie inactive. `isActive` seul, comme la passerelle
  * (`user-deletions.ts`) : rejoindre efface `leftAt`, qui ne décide rien.
  */

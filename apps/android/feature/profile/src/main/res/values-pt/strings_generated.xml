@@ -110,6 +110,9 @@
     <string name="shared_location_precision_city">No nível da cidade</string>
     <string name="shared_location_precision_exact">Localização exata</string>
     <string name="shared_location_precision_neighborhood">No nível do bairro</string>
+    <string name="shared_location_replace_point_confirm">Mostrar minha localização real</string>
+    <string name="shared_location_replace_point_keep">Manter o ponto escolhido</string>
+    <string name="shared_location_replace_point_title">Mostrar sua localização real?</string>
     <string name="shared_location_share_action">Compartilhar minha localização</string>
     <string name="shared_location_share_active">%1$s vê sua localização (%2$s) até %3$s</string>
     <string name="shared_location_share_confirm">Compartilhar</string>

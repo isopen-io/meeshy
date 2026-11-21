@@ -18,6 +18,7 @@ import { eraseExternalPeerOnClose } from '../../services/external-conversation/e
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice'
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges'
+import { releaseAgentRoleFor } from '../../services/conversations/releaseAgentRole'
 
 const logger = enhancedLogger.child({ module: 'ConversationLeave' })
 
@@ -195,6 +196,16 @@ export function registerLeaveRoutes(
         await prisma.participant.update(leaveSelf)
       }
       invalidateParticipantLookup(participant.id, id)
+
+      // Partir rend le RÔLE D'AGENT qui parlait à sa place (#20208) — la
+      // JUMELLE du bannissement, et elle a été trouvée en posant la question du
+      // dépôt AU MOMENT du correctif plutôt que trois cycles plus tard : le
+      // départ volontaire ne touchait pas davantage `AgentUserRole`, et pour la
+      // même raison (seuls `admin/agent-reset` et la purge de conversation y
+      // touchaient). Même site unique, mêmes arbitrages — best-effort, parce
+      // que la lecture d'aval est fail-closed depuis #20111.
+      await releaseAgentRoleFor({ prisma, conversationId: id, userId: participant.userId })
+
       announceConversationLanguageChange({ kind: 'departure', conversationId: id })
 
       // #7593 — la ligne de liste des restants dit « X a quitté la conversation ».

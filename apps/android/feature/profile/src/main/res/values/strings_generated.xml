@@ -110,6 +110,9 @@
     <string name="shared_location_precision_city">To the city</string>
     <string name="shared_location_precision_exact">Exact location</string>
     <string name="shared_location_precision_neighborhood">To the neighborhood</string>
+    <string name="shared_location_replace_point_confirm">Show my real location</string>
+    <string name="shared_location_replace_point_keep">Keep the chosen point</string>
+    <string name="shared_location_replace_point_title">Show your real location?</string>
     <string name="shared_location_share_action">Share my location</string>
     <string name="shared_location_share_active">%1$s sees your location (%2$s) until %3$s</string>
     <string name="shared_location_share_confirm">Share</string>

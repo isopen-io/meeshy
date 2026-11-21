@@ -18,6 +18,7 @@ import type { PasserelleSocketDeConversation } from './utils/participant-geste-s
 import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice'
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges'
 import { guestShareLinkId } from '../../services/shareLinkReadGate'
+import { releaseAgentRoleFor } from '../../services/conversations/releaseAgentRole'
 
 const logger = enhancedLogger.child({ module: 'ConversationBanCore' })
 
@@ -176,6 +177,14 @@ export async function bannirParticipant(
   // embarquée en repli (#10465). La fermeture est bornée à CETTE conversation :
   // une ligne héritée dont la session nommerait le lien d'une autre ne donne
   // pas au modérateur d'ici le pouvoir de le fermer.
+  // Bannir rend aussi le RÔLE D'AGENT qui parlait à sa place (#20208). Sans
+  // ce retrait, la ligne survivait au bannissement et ne se périmait jamais —
+  // `touchUserRoles` la rajeunissant chaque fois qu'elle SERT. La LECTURE est
+  // fermée depuis #20111 : ce retrait ne garde donc rien de plus contre la
+  // parole, il rend la place au vivier, la vérité à l'administration, et il
+  // évite les scans à vide d'un fil dont tous les rôles sont des sortis.
+  await releaseAgentRoleFor({ prisma, conversationId: id, userId: targetParticipant.userId })
+
   let closedShareLinkId: string | null = null
   const entryShareLinkId = guestShareLinkId(targetParticipant)
   if (entryShareLinkId) {
