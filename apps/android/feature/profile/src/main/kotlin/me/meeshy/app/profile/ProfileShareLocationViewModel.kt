@@ -26,7 +26,15 @@ data class ProfileShareLocationState(
     val isBusy: Boolean = false,
     /** Ce qui n'a pas abouti, dit une fois puis consommé. */
     val problem: SharedLocationShareProblem? = null,
+    /**
+     * Le partage montre un point choisi à la main sur un autre appareil (#20212) : le choix fait attend la réponse à
+     * « Montrer ta position réelle ? ». Rien n'est parti.
+     */
+    val replacingPoint: ProfileShareChoice? = null,
 )
+
+/** Ce que la personne verra de ma position, et pour combien de temps. */
+data class ProfileShareChoice(val precision: SharedLocationPrecision, val duration: SharedLocationShareDuration)
 
 /**
  * « Partager ma position » sur la fiche d'un Ami (#16985), iso `ProfileShareLocationRow.swift` (#16983). La ligne ne
@@ -40,13 +48,15 @@ class ProfileShareLocationViewModel @Inject constructor(
 
     private val userId = MutableStateFlow<String?>(null)
     private val problem = MutableStateFlow<SharedLocationShareProblem?>(null)
+    private val replacing = MutableStateFlow<ProfileShareChoice?>(null)
 
     val state: StateFlow<ProfileShareLocationState> =
-        combine(userId, sharing.roster, sharing.isBusy, problem) { id, roster, busy, notice ->
+        combine(userId, sharing.roster, sharing.isBusy, problem, replacing) { id, roster, busy, notice, pending ->
             ProfileShareLocationState(
                 entry = id?.let { roster.entry(it) },
                 isBusy = busy,
                 problem = notice,
+                replacingPoint = pending,
             )
         }.stateIn(viewModelScope, SharingStarted.Eagerly, ProfileShareLocationState())
 
@@ -57,8 +67,27 @@ class ProfileShareLocationViewModel @Inject constructor(
 
     /** Après le choix de la feuille : la permission a déjà été demandée par l'écran. */
     fun share(precision: SharedLocationPrecision, duration: SharedLocationShareDuration) {
+        send(ProfileShareChoice(precision, duration), replacingPoint = false)
+    }
+
+    /** « Montrer ma position réelle » : le choix en attente part, la position réelle remplace le point choisi. */
+    fun confirmReplacingPoint() {
+        val choice = replacing.value ?: return
+        replacing.value = null
+        send(choice, replacingPoint = true)
+    }
+
+    /** « Garder le point choisi » : rien ne part. */
+    fun keepChosenPoint() {
+        replacing.value = null
+    }
+
+    private fun send(choice: ProfileShareChoice, replacingPoint: Boolean) {
         val id = userId.value ?: return
-        viewModelScope.launch { problem.value = sharing.share(id, precision, duration) }
+        viewModelScope.launch {
+            val answer = sharing.share(id, choice.precision, choice.duration, replacingPoint)
+            if (answer == SharedLocationShareProblem.ReplacesChosenPoint) replacing.value = choice else problem.value = answer
+        }
     }
 
     fun stop() {

@@ -50,8 +50,9 @@ personne ne va vérifier derrière. Ce qui est tenu, et ce qui ne l'est pas :
 | **ÉLECTION** — qui entre sous contrôle | `getPotentialControlledUsers`, `getLeastActiveParticipants` | **oui** |
 | **MESURE** — quelles conversations valent un scan | le `participant.groupBy` de `getEligibleConversations` | **oui** |
 | **LIVRAISON** — qui l'agent sert, juste avant de parler | `getControlledUsers`, appelé par les TROIS chemins (`reactive-handler`, `conversation-scanner`, `server.ts`) | **oui**, fail-closed |
-| **le rôle déjà DÉTENU** — `AgentUserRole` au bannissement | `participant-ban-core.ts` (passerelle) | **non — #20208** |
-| le fil retenu sur `hasRoles` seul, donc scanné pour rien | `getEligibleConversations` | **non — #20208** |
+| **le rôle déjà DÉTENU** — `AgentUserRole` au bannissement ET au départ | `releaseAgentRoleFor` (passerelle), appelé par `participant-ban-core.ts` et `leave.ts` | **oui — #20208** |
+| le fil retenu sur `hasRoles` seul, donc scanné pour rien | `getEligibleConversations` | **oui — #20208** |
+| l'épinglage manuel d'un ADMIN survit au bannissement | `AgentConfig.manualUserIds` | **non, par DÉCISION** — voir ci-dessous |
 
 La LIVRAISON était le trou, et c'est un audit adversarial qui l'a ouvert : elle
 ne lisait **aucune** participation — `agentUserRole.findMany({ where: {
@@ -69,6 +70,39 @@ fabriquait un contrôlé sans lire `Participant` du tout.
 
 L'épinglage manuel garde exactement ce qu'il a toujours contourné —
 **l'horloge d'inactivité** — jamais l'appartenance.
+
+### Sortir quelqu'un REND son rôle (#20208)
+
+`releaseAgentRoleFor` (`services/gateway/src/services/conversations/releaseAgentRole.ts`)
+est le site UNIQUE, appelé par le bannissement **et par le départ volontaire** —
+la jumelle, qui ne touchait pas davantage `AgentUserRole`.
+
+Pourquoi ce retrait, alors que la lecture est déjà fail-closed : **écrire la
+colonne rend les lectures exactes pour les lignes À VENIR, le prédicat de
+lecture les rend exactes pour celles DÉJÀ EN BASE.** Ce que seul le retrait
+gagne : le fil cesse d'être scanné pour rien, la place revient au vivier, et
+l'administration cesse de montrer un sorti comme « contrôlé ».
+
+Trois arbitrages, chacun avec sa raison mesurée :
+
+- **Une SUPPRESSION, pas un champ `releasedAt`.** `AgentUserRole` porte un
+  travail d'analyse (ton, catchphrases, 23 traits) — mais `AgentGlobalProfile`
+  est une ligne PAR UTILISATEUR, alimentée à chaque construction de profil, et
+  `getPotentialControlledUsers` la projette pour amorcer une élection neuve.
+  **L'analyse survit au retrait** ; seule la liaison à CETTE conversation part.
+- **Un débannissement ne ressuscite pas le rôle.** La personne redevient
+  éligible à une élection, qui repartira de son profil global : elle ne
+  récupère pas sa place par un geste de modération.
+- **`AgentConfig.manualUserIds` reste INTACT.** Aucune fuite (la lecture le
+  neutralise, fail-closed), et bannir est un geste de MODÉRATION quand
+  l'épinglage est une instruction d'ADMINISTRATION : retirer silencieusement un
+  id de cette liste laisserait un modérateur réécrire la configuration d'un
+  administrateur. Reste un écart d'AFFICHAGE — l'administration montre un banni
+  comme épinglé —, de surface et non de pouvoir.
+
+**Best-effort, et ce qui l'autorise** : un échec du retrait ne fait pas échouer
+le bannissement ni le départ, parce que la lecture d'aval est déjà fail-closed.
+Sans cette garde en aval, ce best-effort serait une faute.
 
 Pourquoi ce n'est pas une garde cosmétique : elles portaient `isActive: true`
 NU, et la ligne `{ isActive: true, bannedAt ≠ null }` **existe en base** —

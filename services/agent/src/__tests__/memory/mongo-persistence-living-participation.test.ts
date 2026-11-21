@@ -146,12 +146,16 @@ describe('#20111 — la MESURE d’éligibilité compte comme ses sélecteurs', 
     agentConfig: null,
   };
 
-  const persistenceAvec = (rows: readonly Record<string, unknown>[]) => {
-    const participant = groupByIn(rows);
+  const persistenceAvec = (rows: readonly Record<string, unknown>[], roles: readonly { conversationId: string; userId: string | null }[] = []) => {
+    const parGroupe = groupByIn(rows);
+    const parLigne = findManyIn(rows);
     const prisma = {
       conversation: { findMany: (args: { where?: Record<string, unknown> }) => Promise.resolve(args.where?.agentConfig ? [] : [conversationEligible]) },
-      agentUserRole: { groupBy: () => Promise.resolve([]) },
-      participant: { groupBy: participant.groupBy },
+      // #20208 — `hasRoles` ne compte plus un rôle dont le porteur n'est plus
+      // un participant vivant : la lecture est passée d'un `groupBy` aveugle à
+      // un `findMany` des porteurs, recoupé avec la participation VIVANTE.
+      agentUserRole: { findMany: () => Promise.resolve([...roles]) },
+      participant: { groupBy: parGroupe.groupBy, findMany: parLigne.findMany },
     } as never;
     return new MongoPersistence(prisma);
   };
@@ -297,5 +301,92 @@ describe('#20111 — la LIVRAISON relit la participation, pas seulement l’éle
     const controles = await persistence.getControlledUsers(CONVERSATION);
 
     expect(controles.map((c) => c.userId)).toEqual(['debanni']);
+  });
+});
+
+/**
+ * #20208 — UN RÔLE D'AGENT NE RETIENT UN FIL QUE SI SON PORTEUR Y VIT ENCORE.
+ *
+ * `getEligibleConversations` retenait une conversation sur `hasRoles` **seul**,
+ * sans regarder la participation — ce qui court-circuitait la MESURE
+ * d'éligibilité que #20111 venait de resserrer. Un fil dont tous les rôles sont
+ * des bannis ou des partis était donc retenu à CHAQUE passe, pour que
+ * `getControlledUsers` — fail-closed depuis #20111 — n'en serve aucun : un scan
+ * à vide, indéfiniment, puisque rien ne périme un rôle (`touchUserRoles` le
+ * rajeunit chaque fois qu'il SERT).
+ *
+ * C'est la MESURE qui dit si ce lot a servi, et c'est pourquoi elle est ici
+ * plutôt que dans un commentaire.
+ */
+describe('#20208 — un rôle ne retient le fil que si son porteur y vit', () => {
+  const conversationEligible = {
+    id: CONVERSATION,
+    type: 'group',
+    isActive: true,
+    lastMessageAt: new Date(),
+    agentConfig: null,
+  };
+
+  const persistenceAvec = (rows: readonly Record<string, unknown>[], roles: readonly { conversationId: string; userId: string | null }[]) => {
+    const parGroupe = groupByIn(rows);
+    const parLigne = findManyIn(rows);
+    const prisma = {
+      conversation: { findMany: (args: { where?: Record<string, unknown> }) => Promise.resolve(args.where?.agentConfig ? [] : [conversationEligible]) },
+      agentUserRole: { findMany: () => Promise.resolve([...roles]) },
+      participant: { groupBy: parGroupe.groupBy, findMany: parLigne.findMany },
+    } as never;
+    return new MongoPersistence(prisma);
+  };
+
+  it('ne retient PAS un fil dont le seul porteur de rôle est BANNI', async () => {
+    const persistence = persistenceAvec([dormantBanni('banni')], [{ conversationId: CONVERSATION, userId: 'banni' }]);
+
+    await expect(persistence.getEligibleConversations()).resolves.toEqual([]);
+  });
+
+  it('retient le fil dès qu’un porteur de rôle est VIVANT', async () => {
+    const persistence = persistenceAvec(
+      [dormantVivant('vivant'), dormantBanni('banni')],
+      [{ conversationId: CONVERSATION, userId: 'vivant' }, { conversationId: CONVERSATION, userId: 'banni' }],
+    );
+
+    const retenues = await persistence.getEligibleConversations();
+
+    expect(retenues.map((c: { id: string }) => c.id)).toEqual([CONVERSATION]);
+  });
+
+  /**
+   * Un rôle dont le porteur n'a AUCUNE ligne de participation — compte purgé,
+   * jamais membre — ne retient rien non plus : la paire
+   * `conversationId|userId` est absente de l'ensemble vivant.
+   */
+  it('ne retient PAS un fil dont le porteur de rôle n’a aucune participation', async () => {
+    const persistence = persistenceAvec([], [{ conversationId: CONVERSATION, userId: 'fantome' }]);
+
+    await expect(persistence.getEligibleConversations()).resolves.toEqual([]);
+  });
+
+  /**
+   * Un rôle SANS `userId` ne désigne personne : il ne retient pas le fil, et
+   * surtout **il ne fait pas partir de requête de participation** — un
+   * `userId: { in: [undefined] }` viserait n'importe qui (#14448).
+   *
+   * La fixture ne porte AUCUN participant, pour que le fil ne puisse être
+   * retenu que par le chemin des rôles. La première version de ce témoin y
+   * avait laissé un dormant VIVANT : le fil était alors retenu par
+   * `hasEligible`, légitimement, et le témoin accusait le code d'un défaut
+   * qu'il n'avait pas. **Une fixture qui laisse ouverte une seconde raison de
+   * passer ne teste pas la première.**
+   */
+  it('ignore un rôle sans identifiant de porteur, sans interroger la participation', async () => {
+    const parLigne = findManyIn([]);
+    const prisma = {
+      conversation: { findMany: (args: { where?: Record<string, unknown> }) => Promise.resolve(args.where?.agentConfig ? [] : [conversationEligible]) },
+      agentUserRole: { findMany: () => Promise.resolve([{ conversationId: CONVERSATION, userId: null }]) },
+      participant: { groupBy: groupByIn([]).groupBy, findMany: parLigne.findMany },
+    } as never;
+
+    await expect(new MongoPersistence(prisma).getEligibleConversations()).resolves.toEqual([]);
+    expect(parLigne.calls).toHaveLength(0);
   });
 });

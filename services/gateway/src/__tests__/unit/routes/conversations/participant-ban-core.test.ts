@@ -103,6 +103,12 @@ function fabriquerPrisma(options: {
       findMany: jest.fn<any>().mockResolvedValue([{ id: 'part-acteur', userId: ACTEUR_ID }]),
     },
     conversationShareLink: { updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
+    // #20208 — bannir rend le RÔLE D'AGENT. Le double le porte parce que la
+    // production l'appelle : sans lui, le `releaseAgentRoleFor` best-effort
+    // avalerait un `TypeError` et le témoin ci-dessous passerait au VERT sur
+    // une production qui ne retire rien. Un double incomplet ne cache pas un
+    // défaut ici — il en FABRIQUE un faux vert.
+    agentUserRole: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
   };
 }
 
@@ -383,5 +389,64 @@ describe('leverBannissementDeParticipant — un tête-à-tête chiffré de bout 
       data: { bannedAt: null, isActive: true, leftAt: null },
     });
     expect(actifs(lignes)).toEqual([ACTEUR_ID, CIBLE_USER_ID]);
+  });
+});
+
+/**
+ * #20208 — SORTIR QUELQU'UN REND LE RÔLE D'AGENT QUI PARLAIT À SA PLACE.
+ *
+ * #20111 a fermé la LECTURE (`getControlledUsers` relit la participation
+ * vivante, fail-closed) ; l'écriture restait ouverte, et la ligne ne se périme
+ * jamais — `touchUserRoles` la rajeunit chaque fois qu'elle SERT.
+ *
+ * Ces témoins assertent sur l'ÉCRITURE, pas sur le statut du verdict : c'est la
+ * règle du dépôt (« un témoin d'écriture assert sur l'EFFET, jamais sur le
+ * statut »), et elle compte doublement ici parce que le retrait est
+ * best-effort — un appel absent ne changerait AUCUN code de retour.
+ */
+describe('#20208 — bannir rend le rôle d’agent', () => {
+  it('supprime le rôle de la CIBLE dans CETTE conversation', async () => {
+    const prisma = fabriquerPrisma();
+    const socket = fabriquerSocket();
+
+    const verdict = await bannirParticipant(demande(prisma, socket.passerelle));
+
+    expect(verdict.genre).toBe('ok');
+    expect((prisma as any).agentUserRole.deleteMany).toHaveBeenCalledWith({
+      where: { conversationId: CONV_ID, userId: CIBLE_USER_ID },
+    });
+  });
+
+  /**
+   * Un invité de lien n'a pas de `User.id`, donc aucun rôle possible — et la
+   * requête ne doit PAS partir : `userId: undefined` est IGNORÉ par Prisma,
+   * donc le `where` viserait TOUS les rôles de la conversation (#14448).
+   */
+  it('ne lance AUCUN retrait pour une cible sans compte', async () => {
+    const prisma = fabriquerPrisma({ cible: { ...CIBLE_ACTIVE, userId: null } });
+    const socket = fabriquerSocket();
+
+    await bannirParticipant(demande(prisma, socket.passerelle));
+
+    expect((prisma as any).agentUserRole.deleteMany).not.toHaveBeenCalled();
+  });
+
+  /**
+   * BEST-EFFORT : le bannissement est ÉCRIT même si le retrait du rôle échoue.
+   * Ce qui l'autorise est que la lecture d'aval est fail-closed (#20111) — un
+   * rôle qui survit ne fait plus parler personne.
+   */
+  it('écrit le bannissement même si le retrait du rôle échoue', async () => {
+    const prisma = fabriquerPrisma();
+    (prisma as any).agentUserRole.deleteMany = jest.fn<any>().mockRejectedValue(new Error('mongo down'));
+    const socket = fabriquerSocket();
+
+    const verdict = await bannirParticipant(demande(prisma, socket.passerelle));
+
+    expect(verdict.genre).toBe('ok');
+    expect(prisma.participant.update).toHaveBeenCalledWith({
+      where: { id: CIBLE_PART_ID },
+      data: expect.objectContaining({ isActive: false }),
+    });
   });
 });

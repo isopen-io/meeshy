@@ -15,6 +15,10 @@ import type { Conversation, Message } from './types';
 import { createTypingStore } from './typing-store';
 
 /**
+ * **L'APPARTENANCE DU LECTEUR, DANS LES DEUX SENS** (#11415 puis #20227) — ce
+ * fichier garde le BRANCHEMENT des deux directions : retirer l'un des
+ * `socket.on` fait tomber son témoin.
+ *
  * **LE LECTEUR QUI QUITTE UNE CONVERSATION OUVERTE N'Y EST PLUS MEMBRE** (#11415)
  * — la passerelle adresse `conversation:participant-left` et
  * `conversation:participant-banned` à la salle `user:<id>` du partant. Le
@@ -143,5 +147,99 @@ describe('#11415 — la fin d’appartenance du lecteur atteint le fil ouvert', 
     destroy();
     socket.fire(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, { conversationId: 'c-1', participantId: 'p-viewer', userId: VIEWER, displayName: 'Léa', leftAt: '2026-10-24T11:30:00.000Z' });
     expect(offersDeleteForMe(queryClient, 'c-1')).toBe(true);
+  });
+});
+
+/**
+ * #20227 — ET LE DÉBANNISSEMENT REND L'APPARTENANCE.
+ *
+ * La passerelle émet `conversation:participant-unbanned` avec
+ * `membershipRestored` et un effectif ABSOLU, et RE-REJOINT la cible à la room
+ * de conversation (`participant-ban-core.ts`). Le web n'avait AUCUN applieur :
+ * mesuré, zéro occurrence de « unbanned » dans `apps/web/src`, quand iOS et
+ * Android appliquent les deux sens.
+ *
+ * La ligne et le détail gardaient donc `isMember: false` — donc plus de
+ * réponse, plus de réaction, plus de « Supprimer pour moi », mentions ignorées
+ * — pendant que les messages continuaient d'arriver en direct. Et rien ne
+ * guérissait tout seul : la liste se rafraîchit par un delta borné par
+ * `Conversation.updatedAt`, qu'un débannissement ne touche pas (il n'écrit
+ * qu'un `participant.update`), donc seul le réconcilie complet de 15 minutes
+ * la repeignait.
+ *
+ * Le témoin passe par le VRAI consommateur (`deleteOfferOf`), pas par le
+ * drapeau : ce qui compte est que le geste revienne.
+ */
+describe('#20227 — le débannissement rend l’appartenance au lecteur', () => {
+  const banni = { conversationId: 'c-1', participantId: 'p-viewer', userId: VIEWER, bannedBy: { id: 'u-admin' }, bannedAt: '2026-10-24T11:30:00.000Z' };
+
+  test('banni puis débanni : le geste revient', () => {
+    const { socket, queryClient, destroy } = connect();
+    queryClient.setQueryData(conversationQueryKey('c-1'), detail('c-1'));
+
+    socket.fire(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, banni);
+    expect(offersDeleteForMe(queryClient, 'c-1')).toBe(false);
+
+    socket.fire(SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED, {
+      conversationId: 'c-1', participantId: 'p-viewer', userId: VIEWER, membershipRestored: true, memberCount: 3,
+    });
+
+    expect(queryClient.getQueryData<Conversation>(conversationQueryKey('c-1'))?.isMember).toBe(true);
+    expect(offersDeleteForMe(queryClient, 'c-1')).toBe(true);
+    destroy();
+  });
+
+  /**
+   * « Le bannissement est levé dans tous les cas ; l'appartenance, non » — le
+   * site d'émission le dit, et les compteurs suivent CE champ, pas l'événement.
+   * Lever le ban d'un ancien membre ne le fait pas rentrer.
+   */
+  test('levée SANS restauration d’appartenance : le lecteur n’est pas remis dedans', () => {
+    const { socket, queryClient, destroy } = connect();
+    queryClient.setQueryData(conversationQueryKey('c-1'), detail('c-1'));
+
+    socket.fire(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, banni);
+    socket.fire(SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED, {
+      conversationId: 'c-1', participantId: 'p-viewer', userId: VIEWER, membershipRestored: false,
+    });
+
+    expect(offersDeleteForMe(queryClient, 'c-1')).toBe(false);
+    destroy();
+  });
+
+  test('le débannissement d’un AUTRE ne remet pas le lecteur dedans', () => {
+    const { socket, queryClient, destroy } = connect();
+    queryClient.setQueryData(conversationQueryKey('c-1'), detail('c-1'));
+
+    socket.fire(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, banni);
+    socket.fire(SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED, {
+      conversationId: 'c-1', participantId: 'p-other', userId: 'u-other', membershipRestored: true, memberCount: 4,
+    });
+
+    expect(offersDeleteForMe(queryClient, 'c-1')).toBe(false);
+    destroy();
+  });
+
+  test('une charge illisible n’est pas appliquée', () => {
+    const { socket, queryClient, destroy } = connect();
+    queryClient.setQueryData(conversationQueryKey('c-1'), detail('c-1'));
+
+    socket.fire(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, banni);
+    socket.fire(SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED, { conversationId: 'c-1', membershipRestored: true });
+    socket.fire(SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED, null);
+
+    expect(offersDeleteForMe(queryClient, 'c-1')).toBe(false);
+    destroy();
+  });
+
+  test('détruite, la connexion n’écoute plus le débannissement', () => {
+    const { socket, queryClient, destroy } = connect();
+    queryClient.setQueryData(conversationQueryKey('c-1'), detail('c-1'));
+    socket.fire(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, banni);
+    destroy();
+    socket.fire(SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED, {
+      conversationId: 'c-1', participantId: 'p-viewer', userId: VIEWER, membershipRestored: true, memberCount: 3,
+    });
+    expect(offersDeleteForMe(queryClient, 'c-1')).toBe(false);
   });
 });
