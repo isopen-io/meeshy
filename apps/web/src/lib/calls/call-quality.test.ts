@@ -9,8 +9,8 @@ const report = (entries: readonly Entry[]): { forEach: (fn: (entry: Entry) => vo
 const stats = (overrides: { readonly lost?: number; readonly received?: number; readonly audioBytes?: number; readonly videoBytes?: number; readonly rtt?: number; readonly jitter?: number } = {}) =>
   report([
     { type: 'candidate-pair', nominated: true, state: 'succeeded', currentRoundTripTime: (overrides.rtt ?? 80) / 1000 },
-    { type: 'inbound-rtp', kind: 'audio', packetsLost: overrides.lost ?? 0, packetsReceived: overrides.received ?? 1000, bytesReceived: overrides.audioBytes ?? 40_000, jitter: (overrides.jitter ?? 12) / 1000 },
-    { type: 'inbound-rtp', kind: 'video', packetsLost: 0, packetsReceived: 0, bytesReceived: overrides.videoBytes ?? 500_000, jitter: 0.004 },
+    { type: 'inbound-rtp', kind: 'audio', packetsLost: overrides.lost ?? 0, packetsReceived: overrides.received ?? 1000, bytesReceived: overrides.audioBytes ?? 40_000, jitter: (overrides.jitter ?? 12) / 1000, codecId: 'c-opus' },
+    { type: 'inbound-rtp', kind: 'video', packetsLost: 0, packetsReceived: 0, bytesReceived: overrides.videoBytes ?? 500_000, jitter: 0.004, codecId: 'c-vp8' },
     { type: 'outbound-rtp', kind: 'video', bytesSent: 700_000, codecId: 'c-vp8' },
     { type: 'outbound-rtp', kind: 'audio', bytesSent: 50_000, codecId: 'c-opus' },
     { type: 'codec', id: 'c-vp8', mimeType: 'video/VP8' },
@@ -27,12 +27,12 @@ describe('la qualité d’un lien, lue dans getStats (#8047)', () => {
     expect(qualityLevel({ packetLoss: 0, rtt: 500 })).toBe('poor');
   });
 
-  test('un relevé donne la latence, la gigue audio, les compteurs et le codec émis', () => {
+  test('un relevé donne la latence, la gigue audio, les compteurs et le codec REÇU, l’audio d’abord (#20256)', () => {
     const read = readStats(stats({ rtt: 120, jitter: 30 }), 1_000);
     expect(read.rtt).toBeCloseTo(120);
     expect(read.jitter).toBeCloseTo(30);
     expect(read.bytesSent).toBe(750_000);
-    expect(read.codec).toBe('VP8');
+    expect(read.codec).toBe('opus');
   });
 
   /**
@@ -69,9 +69,9 @@ describe('la qualité d’un lien, lue dans getStats (#8047)', () => {
     expect(metricGrade('rtt', 450)).toBe('poor');
   });
 
-  test('sans vidéo émise, le codec est celui de l’audio', () => {
-    const read = readStats(report([{ type: 'outbound-rtp', kind: 'audio', bytesSent: 10, codecId: 'c' }, { type: 'codec', id: 'c', mimeType: 'audio/opus' }]), 0);
-    expect(read.codec).toBe('opus');
+  test('sans audio reçu, le codec est celui de la vidéo reçue ; le codec émis ne compte pas (#20256)', () => {
+    const read = readStats(report([{ type: 'outbound-rtp', kind: 'audio', bytesSent: 10, codecId: 'o' }, { type: 'inbound-rtp', kind: 'video', codecId: 'v' }, { type: 'codec', id: 'o', mimeType: 'audio/opus' }, { type: 'codec', id: 'v', mimeType: 'video/VP8' }]), 0);
+    expect(read.codec).toBe('VP8');
   });
 
   test('la perte et les débits sont des TAUX sur l’intervalle, jamais le cumul de l’appel', () => {
