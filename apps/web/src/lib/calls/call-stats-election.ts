@@ -35,9 +35,9 @@ export function receivedCodecMime(entries: readonly StatsEntry[]): string | null
   return streams.map((entry) => mimes.get(nonEmpty(entry.codecId) ?? '')).find((mime) => mime !== undefined) ?? null;
 }
 
-const LIMITATION_RANK: Readonly<Record<string, number>> = { bandwidth: 3, cpu: 2, other: 1 };
+const LIMITATION_RANK: ReadonlyMap<string, number> = new Map([['bandwidth', 3], ['cpu', 2], ['other', 1]]);
 
-const limitationRank = (reason: string): number => LIMITATION_RANK[reason] ?? 0;
+const limitationRank = (reason: string): number => LIMITATION_RANK.get(reason) ?? 0;
 
 /** La cause la plus contraignante des `outbound-rtp` vidéo : bandwidth > cpu > other > le reste ; égalité ⇒ plus petit id. */
 export function strongestLimitation(entries: readonly StatsEntry[]): string | null {

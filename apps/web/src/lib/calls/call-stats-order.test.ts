@@ -63,6 +63,12 @@ describe('le codec affiché est le codec REÇU, quel que soit l’ordre des flux
 });
 
 describe('la limitation retenue est la plus contraignante, quel que soit l’ordre des flux (#20256)', () => {
+  test('une cause qui nomme une clé du prototype ne passe pas devant bandwidth', () => {
+    ['constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf'].forEach((reason) => {
+      expect(everyOrder([outbound('OA', reason), outbound('OB', 'bandwidth')], reasonOf)).toEqual(['bandwidth']);
+    });
+  });
+
   test('bandwidth l’emporte sur cpu', () => {
     expect(everyOrder([outbound('OA', 'cpu'), outbound('OB', 'bandwidth')], reasonOf)).toEqual(['bandwidth']);
   });
