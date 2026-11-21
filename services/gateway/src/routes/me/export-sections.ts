@@ -38,6 +38,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { validatePagination } from '../../utils/pagination';
 import { AT_REST_MESSAGE_SELECT, revealAtRestRowsForWire, type AtRestKeyring } from '../../services/messaging/serverAtRest';
+import { unsetOrNull } from '../../utils/prisma-unset';
 import { publicMediaUrlFromEnv } from '../../services/attachments/publicMediaUrl';
 import { NOT_DELETED } from '../../services/posts/softDelete';
 import { exportPackData } from '../../services/packs/PackPrivacy';
@@ -342,9 +343,25 @@ export const MESSAGES_LIMIT = 10000;
  * DIRE à l'utilisateur relève du texte d'accompagnement, qui n'existe pas encore
  * (#20138 porte le même besoin pour les médias).
  *
- * `deletedAt: null` est juste ici, contrairement à `Post` et `PostComment`
- * (#19909) : `LIVE_MESSAGE_MARK` est la discipline d'écriture que tous les
- * créateurs de `Message` répandent, donc la clé est PRÉSENTE.
+ * ─── `deletedAt` SE LIT EN DISANT L'ABSENCE, MÊME SUR `Message` ─────────────
+ *
+ * `Message` a résolu le piège MongoDB par la discipline d'ÉCRITURE
+ * (`LIVE_MESSAGE_MARK`, répandu par ses six créateurs), là où `Post` l'a résolu
+ * par la LECTURE (#19909). Le filtre `deletedAt: null` est donc juste **du
+ * code** — et faux **des données** : `liveMessage.ts` dit lui-même que deux de
+ * ces créateurs (les messages d'appel de `CallService`) avaient PERDU le
+ * marqueur, la constante n'y est arrivée que le 2026-11-18, et **aucune
+ * migration ne rattrape la colonne**. Les lignes d'appel écrites avant cette
+ * date ont donc `deletedAt` ABSENTE, et une égalité nue les omettrait de
+ * l'export EN SILENCE, avec un `messagesCount` juste — le défaut exact de
+ * #19909, sur le modèle qui servait de contre-exemple.
+ *
+ * D'où `unsetOrNull`, qui apparie les deux formes. C'est strictement un gain :
+ * les trois transports de suppression ÉCRIVENT une date, donc aucune ligne
+ * rappelée n'a la clé absente. La population réelle de lignes sans clé n'est
+ * PAS mesurée (il n'y a pas de base dans les conteneurs de session) — c'est la
+ * raison de choisir la forme qui apparie les deux plutôt que d'affirmer
+ * laquelle existe.
  */
 export async function exportMessages(
   prisma: PrismaClient,
@@ -354,10 +371,11 @@ export async function exportMessages(
   const rows = await prisma.message.findMany({
     where: {
       senderId: { in: [...participantIds] },
-      deletedAt: null,
+      ...unsetOrNull('deletedAt'),
     },
     select: {
       id: true,
+      conversationId: true,
       content: true,
       originalLanguage: true,
       messageType: true,

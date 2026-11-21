@@ -112,21 +112,44 @@ const LIGNE_CLAIRE: MongoDocument = {
   deletedAt: null,
 };
 
+/**
+ * La ligne `e2ee` porte un chiffré RÉEL, et c'est le point du témoin : c'est la
+ * SEULE famille que `revealAtRest` rend INTACTE (retour anticipé avant tout
+ * trousseau), donc la seule qui a BESOIN de `…ForWire` pour que le chiffré ne
+ * sorte pas. Sur une ligne scellée, `servedClearAtRest` met déjà les deux
+ * colonnes à `null` : un témoin écrit sur elle seule reste VERT même si le
+ * délestage disparaît. L'audit adversarial du lot l'a mesuré en rendant le
+ * délestage conditionnel au régime — huit témoins verts, et l'enveloppe
+ * libsignal du client (`registrationId` / `deviceId` / `type`, soit son
+ * identité d'APPAREIL, écrite par `MessageProcessor`) dans l'archive.
+ */
 const LIGNE_E2EE: MongoDocument = {
   id: 'm-e2ee',
   conversationId: '507f1f77bcf86cd799439013',
   senderId: 'u-1',
   content: '',
-  isEncrypted: false,
+  isEncrypted: true,
   encryptionMode: 'e2ee',
-  encryptedContent: null,
-  encryptionMetadata: null,
+  encryptedContent: 'Q0hJRkZSRS1FMkVF',
+  encryptionMetadata: { registrationId: 42, deviceId: 7, type: 3 },
   originalLanguage: 'zxx',
   messageType: 'text',
   messageSource: 'user',
   createdAt: new Date('2026-11-03T10:00:00Z'),
   editedAt: null,
   deletedAt: null,
+};
+
+/**
+ * Une ligne `server` SANS `conversationId` : `revealAtRest` sort avant toute
+ * ouverture (il lui faut la conversation pour interroger le coffre), donc elle
+ * ressort INTACTE comme la ligne `e2ee`. Seconde famille que seul `…ForWire`
+ * protège.
+ */
+const LIGNE_SCELLEE_SANS_CONVERSATION: MongoDocument = {
+  ...LIGNE_SCELLEE,
+  id: 'm-sans-conversation',
+  conversationId: null,
 };
 
 const base = (rows: readonly MongoDocument[]) => {
@@ -153,6 +176,19 @@ describe("l'export RGPD ouvre le sceau au repos de ses messages (#20163)", () =>
 
     expect(servi).not.toHaveProperty('encryptedContent');
     expect(servi).not.toHaveProperty('encryptionMetadata');
+  });
+
+  it('retire le chiffré des DEUX familles que rien n’ouvre — `e2ee` et une ligne scellée sans conversation', async () => {
+    const { keyring } = trousseauOuvrant();
+    const { prisma } = base([LIGNE_E2EE, LIGNE_SCELLEE_SANS_CONVERSATION]);
+
+    const servis = await exportMessages(prisma, ['u-1'], keyring);
+
+    expect(servis).toHaveLength(2);
+    for (const servi of servis) {
+      expect(servi).not.toHaveProperty('encryptedContent');
+      expect(servi).not.toHaveProperty('encryptionMetadata');
+    }
   });
 
   it('DIT le régime plutôt que de le taire : la ligne servie garde `encryptionMode`', async () => {
@@ -182,6 +218,7 @@ describe("l'export RGPD ouvre le sceau au repos de ses messages (#20163)", () =>
     const [servi] = await exportMessages(prisma, ['u-1'], keyring);
 
     expect(servi?.encryptionMode).toBe('e2ee');
+    expect(servi?.content).toBe('');
     expect(demandes).toEqual([]);
   });
 
