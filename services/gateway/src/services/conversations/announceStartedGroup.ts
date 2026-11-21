@@ -105,10 +105,44 @@ export async function announceStartedGroup(deps: AnnounceStartedGroupDeps, conve
   );
   if (invitees.length === 0) return;
 
+  // ── QUI A LE DROIT D'ÊTRE NOMMÉ DANS LA CHARGE D'ARRIVÉE (#20110) ─────────
+  //
+  // #20100 a resserré l'AUDIENCE — qui REÇOIT — et laissé le sur-ensemble
+  // alimenter ce que la charge DIT. Un membre actif-et-banni était donc nommé à
+  // chaque invité légitime dans `participantIds`, et son `displayName` pouvait
+  // **être le titre du groupe** (`generateDefaultConversationTitle` compose « les
+  // deux premiers autres membres, et N autre(s) »), titre émis à tous les
+  // invités ET persisté dans la notification d'invitation.
+  //
+  // C'est la leçon 275 appliquée à une arrivée : une protection se mesure sur
+  // tout ce que la charge TRANSPORTE, pas sur sa seule liste de destinataires.
+  //
+  // La réponse, écrite ici parce que c'est le site qui la décide : **un membre
+  // dont la participation n'est pas VIVANTE n'est pas nommé.** Il n'a accès ni à
+  // la room ni au REST de la conversation ; l'annoncer comme membre à ceux qui
+  // y entrent affirme une appartenance que toutes les autres portes refusent.
+  //
+  // **Le créateur fait exception, et elle ne coûte rien** : `creatorId` le nomme
+  // dans la MÊME charge et la bannière dit « X vous a ajouté », donc le retirer
+  // de la liste ne cacherait rien et romprait la promesse du contrat
+  // (`ConversationNewEventData.participantIds` — « tous les participants y
+  // compris le créateur »). `generateDefaultConversationTitle` l'écarte de toute
+  // façon du titre, par son `currentUserId`.
+  //
+  // **Mesuré avant de resserrer** : aucun client ne LIT `participantIds` de cet
+  // événement — les trois écouteurs rechargent la ligne (`ConversationDiscoveryRowFetcher`
+  // iOS, `ConversationRepository` Android, le fil web) et toutes les occurrences
+  // clientes du nom sont le CORPS DE CRÉATION (client → serveur). Resserrer ne
+  // peut donc pas faire diverger une liste d'une autre, à l'inverse de
+  // l'annuaire d'appareils que #20093 laisse large pour cette raison précise.
+  const nommables = members.filter(
+    (participant) => participant.userId === creator.userId || participationEstVivante(participant)
+  );
+
   const title = conversation.title && conversation.title.trim() !== ''
     ? conversation.title
     : generateDefaultConversationTitle(
-        members.map((participant) => ({
+        nommables.map((participant) => ({
           id: participant.userId,
           displayName: participant.user?.displayName,
           username: participant.user?.username,
@@ -123,7 +157,7 @@ export async function announceStartedGroup(deps: AnnounceStartedGroupDeps, conve
     conversationType: conversation.type,
     title,
     creatorId: creator.userId,
-    participantIds: members.map((participant) => participant.userId),
+    participantIds: nommables.map((participant) => participant.userId),
     createdAt: conversation.createdAt.toISOString(),
   };
   if (deps.io) {
@@ -164,6 +198,33 @@ export async function announceStartedGroup(deps: AnnounceStartedGroupDeps, conve
  * donc ne sont jamais appelés depuis un groupe qu'ils ne voient pas. Un groupe
  * déjà démarré, un groupe d'avant #14644 (champ absent) et un tête-à-tête ne
  * sont pas touchés. Rend `true` si la bascule a été gagnée ici.
+ */
+/**
+ * ─── UNE BASCULE WRITE-ONCE AVANT UNE ANNONCE QUI PEUT NE PAS PARTIR ────────
+ *
+ * `firstMessageSentAt` bascule AVANT l'annonce, et son `updateMany` est gardé
+ * par `firstMessageSentAt: null` : il ne réapparie JAMAIS. Si, à l'instant du
+ * premier message, tous les membres non-créateurs sont bannis, `invitees` est
+ * vide, `announceStartedGroup` rend sans rien émettre — et `conversation:new`
+ * comme l'invitation sont **perdus pour toujours**, y compris après une levée
+ * de bannissement.
+ *
+ * **C'est une DÉCISION, pas un oubli** (#20110, constat 3), et elle tient à
+ * trois choses :
+ *
+ * 1. le cas exige que le SEUL autre membre d'un groupe soit banni au moment
+ *    précis du premier message — sinon `invitees` est non vide ;
+ * 2. la perte est RÉCUPÉRABLE : `GET /conversations` sert la conversation au
+ *    membre dont le bannissement est levé, donc rien n'est inaccessible, seule
+ *    la bannière d'arrivée manque ;
+ * 3. l'inverse — basculer APRÈS l'annonce, ou ne pas basculer quand l'audience
+ *    est vide — ferait rejouer l'annonce à chaque message suivant, c'est-à-dire
+ *    échangerait une bannière manquante contre une bannière répétée, qui est le
+ *    défaut que #14644 a fermé.
+ *
+ * Ce comportement est NEUF depuis #20100 (avant lui, un banni-mais-actif
+ * comptait comme invité) : il est écrit ici pour qu'il ne se redécouvre pas
+ * comme un bug.
  */
 export async function startSilentGroup(deps: AnnounceStartedGroupDeps, conversationId: string): Promise<boolean> {
   const flipped = await deps.prisma.conversation.updateMany({
