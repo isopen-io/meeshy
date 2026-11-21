@@ -2238,3 +2238,38 @@ socket jusqu'au client.
 2. **#20121** : rendre l'élection ICE indépendante de l'ordre des entrées, sur iOS et Android.
 3. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
 4. #20043 : la dette d'horloge murale côté Android.
+
+## Cycle 66 — 2026-11-21
+
+- **Base** : `origin/dev` @ `5b369794a`, puis `3dba240ce` (fusionné dans la branche). #20153 (#20132, cycle 65) est fusionnée.
+- **Branche** : `claude/determined-volta-r0c5cr`.
+- **Objectif** : #20152. La passerelle enregistre les octets d'un appel au-delà de 2^31, et `networkQuality` ne se perd plus avec eux.
+- **Livré** (passerelle et schéma partagé) :
+  - Schéma Prisma : on ajoute `CallSession.bytesSentTotal` et `bytesReceivedTotal` (`Float?`, exacts jusqu'à 2^53 − 1).
+    - Les `Int?` hérités gardent leur type et reçoivent la valeur saturée à 2^31 − 1.
+    - Pas de migration.
+  - `services/calls/callByteCounters.ts` (logique pure) :
+    - `boundByteCounter` borne une mesure à [0, 2^53 − 1] ; une mesure aberrante vaut `null`, jamais tronquée.
+    - `effectiveCallBytes` lit `max(Total, Int)` champ par champ, ce qui couvre une ancienne passerelle qui écrit après la nouvelle.
+    - `planCallByteWrite` fait un CAS sur les quatre champs bruts, un champ nul se comparant « nul OU absent » (`isSet: false`).
+  - `services/calls/callStatsPersistence.ts` : la qualité réseau a sa propre écriture, par `id`. Elle survit à une écriture d'octets rejetée, à une course perdue et à une lecture en échec.
+  - `CallService.persistCallStats` ne fait plus que déléguer (2869 → 2814 lignes). Sa copie de `clampNonNegativeInt` est retirée.
+  - Le résumé d'appel, `callHistory` et `callHistoryList` lisent les octets effectifs. La forme REST et socket ne change pas, et fast-json-stringify sert 3e9 intact sous `integer` (testé).
+- **Tests** : `callByteCounters.test.ts` (22 témoins), plus des ajouts au résumé, à l'historique et à la sérialisation.
+  - Rouge, sur l'historique et le résumé : 2 échecs sur 51, la valeur lue étant 2147483647 au lieu de 3e9.
+  - Rouge, sur R3 : 2 échecs sur 22 ; un total périmé masquait l'Int, et une mesure de 1,2 Go aurait écrasé 1,5 Go.
+  - Mutations : 9 échecs sans `isSet` et sans saturation ; 3 échecs sans l'écriture séparée de la qualité.
+  - Vert : les suites d'appel passent, 176 suites et 2083 tests. `tsc` est à 0 sur gateway et shared.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves.
+  - R1 (moyenne) : rien n'a tourné contre une vraie MongoDB ; il n'y en a pas dans le conteneur. La sonde montre que le validateur Prisma 6.19 accepte un `Int` à 3e9 : l'échec redouté par l'issue n'est pas établi. En revanche, l'ancien `where { bytesSent: null }` ne trouvait sans doute jamais un champ ABSENT, et le premier rapport (octets ET qualité) ne s'écrivait pas. À vérifier : **#20185**.
+  - R2 (moyenne) : le résumé d'appel Android plafonne `bytesTotal` en `Int`, voir **#20184**.
+  - R3 (faible) : traitée.
+- **Limites** : rien n'a été vérifié sur MongoDB réelle ni sur appareil. #20152 reste ouverte jusqu'à la recette #20185.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée : fusionner `dev` dans la branche, relancer les suites d'appel, puis fusionner la PR.
+1. **#20185** : recette sur le staging. Elle ferme #20152 si elle passe. Si l'accès au staging manque, la laisser ouverte et passer au point 2.
+2. **#20184** : `bytesTotal` en Long sur Android. Le lot est petit, et se prouve avec `jvm-check -PjvmCheckModelOnly`, puis `android.yml`.
+3. **#20121** : rendre l'élection ICE indépendante de l'ordre des entrées.
+4. #11932, #12236, #16933, #20043.

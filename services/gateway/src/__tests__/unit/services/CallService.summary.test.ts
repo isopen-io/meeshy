@@ -147,6 +147,28 @@ describe('CallService.createCallSummaryMessage', () => {
     });
   });
 
+  it('surfaces more than 2 GB from the exact totals, not the saturated int32 fields (#20152)', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue(
+      makeSession({
+        metadata: { type: 'video' },
+        bytesSent: 2_147_483_647,
+        bytesReceived: 1_000_000_000,
+        bytesSentTotal: 3_000_000_000,
+        bytesReceivedTotal: 1_000_000_000
+      })
+    );
+    seedInitiatorParticipant(prisma);
+    prisma.message.create.mockResolvedValue({ id: 'm1', conversationId: CONVERSATION_ID });
+
+    await sut.createCallSummaryMessage(CALL_ID);
+
+    const read = prisma.callSession.findUnique.mock.calls[0][0] as { select: Record<string, unknown> };
+    expect(read.select).toMatchObject({ bytesSentTotal: true, bytesReceivedTotal: true });
+    const arg = prisma.message.create.mock.calls[0][0] as Written;
+    expect(arg.data.metadata).toMatchObject({ bytesTotal: 4_000_000_000, bytesEstimated: false });
+  });
+
   it('labels a completed video call from metadata.type', async () => {
     const { sut, prisma } = makeSUT();
     prisma.callSession.findUnique.mockResolvedValue(makeSession({ metadata: { type: 'video' }, duration: 65 }));
@@ -483,6 +505,10 @@ describe('CallService.persistCallStats', () => {
 
   const lastUpdateData = (prisma: ReturnType<typeof createMockPrisma>) =>
     (prisma.callSession.updateMany.mock.calls[0]?.[0] as Written | undefined)?.data;
+  const updateDataWith = (prisma: ReturnType<typeof createMockPrisma>, key: string) =>
+    prisma.callSession.updateMany.mock.calls
+      .map(([args]) => (args as Written).data)
+      .find((data) => key in data);
 
   it('stores the (sent, received) pair as a coherent unit, not per-field max', async () => {
     const { sut, prisma } = makeSUT();
@@ -490,11 +516,13 @@ describe('CallService.persistCallStats', () => {
 
     await sut.persistCallStats(CALL_ID, { bytesSent: 500_000, bytesReceived: 1_500_000, level: 'good' });
 
-    expect(lastUpdateData(prisma)).toEqual({
+    expect(updateDataWith(prisma, 'bytesSentTotal')).toEqual({
+      bytesSentTotal: 500_000,
+      bytesReceivedTotal: 1_500_000,
       bytesSent: 500_000,
-      bytesReceived: 1_500_000,
-      networkQuality: 'good'
+      bytesReceived: 1_500_000
     });
+    expect(updateDataWith(prisma, 'networkQuality')).toEqual({ networkQuality: 'good' });
   });
 
   it('keeps the pair with the larger TOTAL (avoids cross-participant over-count)', async () => {
@@ -526,13 +554,14 @@ describe('CallService.persistCallStats', () => {
     expect(lastUpdateData(prisma)).toEqual({ networkQuality: 'poor' });
   });
 
-  it('is a no-op when the call no longer exists', async () => {
+  it('writes no bytes when the call no longer exists; the quality write is scoped by id alone (#20152)', async () => {
     const { sut, prisma } = makeSUT();
     prisma.callSession.findUnique.mockResolvedValue(null);
 
     await sut.persistCallStats(CALL_ID, { bytesSent: 1, bytesReceived: 1, level: 'good' });
 
-    expect(prisma.callSession.updateMany).not.toHaveBeenCalled();
+    expect(prisma.callSession.updateMany).toHaveBeenCalledTimes(1);
+    expect(prisma.callSession.updateMany).toHaveBeenCalledWith({ where: { id: CALL_ID }, data: { networkQuality: 'good' } });
   });
 
   it('ignores an unknown quality tier', async () => {
@@ -551,8 +580,16 @@ describe('CallService.persistCallStats', () => {
     await sut.persistCallStats(CALL_ID, { bytesSent: 900, bytesReceived: 900 });
 
     expect(prisma.callSession.updateMany).toHaveBeenCalledWith({
-      where: { id: CALL_ID, bytesSent: 100, bytesReceived: 200 },
-      data: { bytesSent: 900, bytesReceived: 900 }
+      where: {
+        id: CALL_ID,
+        AND: [
+          { OR: [{ bytesSent: 100 }] },
+          { OR: [{ bytesReceived: 200 }] },
+          { OR: [{ bytesSentTotal: null }, { bytesSentTotal: { isSet: false } }] },
+          { OR: [{ bytesReceivedTotal: null }, { bytesReceivedTotal: { isSet: false } }] }
+        ]
+      },
+      data: { bytesSentTotal: 900, bytesReceivedTotal: 900, bytesSent: 900, bytesReceived: 900 }
     });
   });
 

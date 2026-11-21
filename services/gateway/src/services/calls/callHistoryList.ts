@@ -14,6 +14,7 @@ import {
   type CallHistoryRow
 } from '../callHistory';
 import { resolveGroupCallParticipants } from './callHistoryParticipants';
+import { CALL_BYTE_COUNTER_SELECT } from './callByteCounters';
 import { answeredCallRoster, callsTrackingAnswers, isDuoCall, type CallRosterLine, type RosterCall } from './answeredCallRoster';
 import { journalConversationsMatching, normalizedJournalQuery } from './callHistorySearch';
 
@@ -183,8 +184,7 @@ export async function listCallHistory(
       answeredAt: true,
       endedAt: true,
       duration: true,
-      bytesSent: true,
-      bytesReceived: true,
+      ...CALL_BYTE_COUNTER_SELECT,
       metadata: true,
       reactionCounts: true,
       invitedUserIds: true,

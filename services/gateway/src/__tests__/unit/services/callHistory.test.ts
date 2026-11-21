@@ -122,6 +122,21 @@ describe('callHistory pure helpers', () => {
       expect(item.endedAt).toBe('2026-06-20T10:01:05.000Z');
     });
 
+    it('serves more than 2 GB from the exact totals, int32 fields saturated (#20152)', () => {
+      const item = buildCallHistoryItem(
+        baseRow({ bytesSent: 2_147_483_647, bytesReceived: 5, bytesSentTotal: 3_000_000_000, bytesReceivedTotal: 5 }),
+        'me',
+        null,
+        false
+      );
+      expect(item).toMatchObject({ bytesSent: 3_000_000_000, bytesReceived: 5 });
+    });
+
+    it('reads an old row that only has the int32 fields', () => {
+      const item = buildCallHistoryItem(baseRow({ bytesSent: 1000, bytesReceived: 2000 }), 'me', null, false);
+      expect(item).toMatchObject({ bytesSent: 1000, bytesReceived: 2000 });
+    });
+
     it('marks a missed incoming call with null timestamps and no peer', () => {
       const item = buildCallHistoryItem(
         baseRow({

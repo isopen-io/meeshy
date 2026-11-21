@@ -4940,7 +4940,7 @@ describe('CallService - persistCallStats', () => {
 
     expect(mockPrisma.callSession.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ id: 'call-123', bytesSent: 100, bytesReceived: 200 }),
+        where: expect.objectContaining({ id: 'call-123', AND: expect.arrayContaining([{ OR: [{ bytesSent: 100 }] }]) }),
         data: expect.objectContaining({ bytesSent: 500, bytesReceived: 600 })
       })
     );
@@ -5142,8 +5142,8 @@ describe('CallService - persistCallStats', () => {
     ).resolves.toBeUndefined();
 
     expect(mockPrisma.callSession.updateMany).toHaveBeenCalledWith({
-      where: { id: 'call-123', bytesSent: 0, bytesReceived: 0 },
-      data: { bytesSent: 500, bytesReceived: 600 }
+      where: expect.objectContaining({ id: 'call-123', AND: expect.arrayContaining([{ OR: [{ bytesSent: 0 }] }]) }),
+      data: { bytesSentTotal: 500, bytesReceivedTotal: 600, bytesSent: 500, bytesReceived: 600 }
     });
     // A 0-count match must not throw or retry — best-effort telemetry.
   });
