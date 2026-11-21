@@ -154,8 +154,12 @@ export function uploadedByOfAccount(
 const PARTICIPANT_KEY_BATCH = 200;
 
 /**
- * Les clés d'un compte, par fournées, pour un balayage qui n'a que son
- * `userId` en main (la purge de fin de grâce).
+ * Les identifiants de PARTICIPATION d'un compte, par fournées, pour un balayage
+ * qui n'a que son `userId` en main (la purge de fin de grâce). Le site d'appel
+ * en fait des clés par {@link uploadedByOfAccount} — la loi reste à UN endroit,
+ * et le `where` reste LISIBLE à l'endroit où il est posé (c'est ce que le
+ * cliquet `uploaded-by-key-space-sweep` balaie : une forme abrégée
+ * `{ uploadedBy }` lui serait invisible, donc muette là où il doit parler).
  *
  * Pourquoi des FOURNÉES et non une liste : le nombre de participations d'un
  * compte est le nombre de conversations qu'il a rejointes — borné par
@@ -168,16 +172,17 @@ const PARTICIPANT_KEY_BATCH = 200;
  * la purge — `purgeAccountIsolatedData` les garde délibérément, « ce qu'un AUTRE
  * participant continue de VOIR ».
  *
- * Chaque fournée porte `userId`, donc la toute première purge l'espace nominal
- * quoi qu'il arrive. Une lecture en ÉCHEC rend exactement le comportement
- * d'avant #20129 (le compte seul) plutôt que rien : la fournée manquée est
+ * Elle rend TOUJOURS au moins une fournée, vide s'il n'y a aucune participation
+ * ou si la lecture a ÉCHOUÉ : `uploadedByOfAccount` y ajoutant `userId`, la
+ * purge de l'espace nominal a lieu quoi qu'il arrive — exactement le
+ * comportement d'avant #20129 plutôt que rien, et la fournée manquée est
  * rejouée par la passe de maintenance suivante.
  */
-export async function* accountUploaderKeyBatches(
+export async function* accountParticipantIdBatches(
   prisma: UploaderIdentityPrisma,
   userId: string,
   batchSize: number = PARTICIPANT_KEY_BATCH
-): AsyncGenerator<{ in: string[] }> {
+): AsyncGenerator<readonly string[]> {
   let skip = 0;
   let yielded = false;
 
@@ -193,16 +198,16 @@ export async function* accountUploaderKeyBatches(
       });
     } catch (error: unknown) {
       logger.warn('account participant keys lookup failed — account key only for this pass', { userId, error });
-      if (!yielded) yield uploadedByOfAccount(userId, []);
+      if (!yielded) yield [];
       return;
     }
 
     if (rows.length === 0) {
-      if (!yielded) yield uploadedByOfAccount(userId, []);
+      if (!yielded) yield [];
       return;
     }
 
-    yield uploadedByOfAccount(userId, rows.map((row) => row.id));
+    yield rows.map((row) => row.id);
     yielded = true;
 
     if (rows.length < batchSize) return;

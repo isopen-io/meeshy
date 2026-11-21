@@ -35,9 +35,11 @@ import {
 import { exportSessions } from '../../../../routes/me/export-security';
 import { matchesMongoWhere } from '../../../helpers/mongo-where';
 import { NOT_DELETED } from '../../../../services/posts/softDelete';
+import { uploadedByOfAccount } from '../../../../services/attachments/uploaderIdentity';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 const OTHER_USER_ID = '507f1f77bcf86cd799439012';
+const PARTICIPANT_ID = '507f1f77bcf86cd799439021';
 const NOW = new Date('2026-10-08T12:00:00.000Z');
 const daysBeforeNow = (days: number) => new Date(NOW.getTime() - days * 24 * 60 * 60 * 1000);
 const liveSession = (userId: string) => ({
@@ -170,9 +172,16 @@ describe('exportReactions', () => {
 describe('exportMedia', () => {
   it('excludes anonymous uploads and queries both attachment tables by owner', async () => {
     const prisma = fakePrisma();
-    await exportMedia(prisma, USER_ID, { limit: 500, offset: 0 });
+    await exportMedia(prisma, [PARTICIPANT_ID], USER_ID, { limit: 500, offset: 0 });
+    // #20129 — l'attendu est la LOI, importée de la production : recopier
+    // `{ uploadedBy: USER_ID }` ici ferait d'un changement d'espace de clés un
+    // témoin vert (c'est le constat F1 de l'audit de #20113). La couverture de
+    // COMPORTEMENT — « une ligne héritée est-elle servie ? » — vit dans
+    // `src/__tests__/unit/export-et-purge-des-medias-herites.test.ts`.
     expect(prisma.messageAttachment.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { uploadedBy: USER_ID, isAnonymous: false } })
+      expect.objectContaining({
+        where: { uploadedBy: uploadedByOfAccount(USER_ID, [PARTICIPANT_ID]), isAnonymous: false },
+      })
     );
     expect(prisma.postMedia.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { uploaderId: USER_ID } })
@@ -240,7 +249,7 @@ describe("adresses de média servies par l'export", () => {
         count: jest.fn<any>().mockResolvedValue(1),
       },
     });
-    const sections = await exportMedia(prisma, USER_ID, { limit: 500, offset: 0 });
+    const sections = await exportMedia(prisma, [], USER_ID, { limit: 500, offset: 0 });
     expect(sections.attachments.items[0]).toMatchObject({
       fileUrl: `${BASE}/api/v1/attachments/file/2026%2F09%2F507f1f77bcf86cd799439011%2Fphoto.jpeg`,
     });
@@ -253,7 +262,7 @@ describe("adresses de média servies par l'export", () => {
         count: jest.fn<any>().mockResolvedValue(1),
       },
     });
-    const sections = await exportMedia(prisma, USER_ID, { limit: 500, offset: 0 });
+    const sections = await exportMedia(prisma, [], USER_ID, { limit: 500, offset: 0 });
     expect(sections.postMedia.items[0]).toMatchObject({
       fileUrl: `${BASE}/api/v1/attachments/file/2026%2F09%2F507f1f77bcf86cd799439011%2Fphoto.jpeg`,
     });
@@ -266,7 +275,7 @@ describe("adresses de média servies par l'export", () => {
         count: jest.fn<any>().mockResolvedValue(1),
       },
     });
-    const sections = await exportMedia(prisma, USER_ID, { limit: 500, offset: 0 });
+    const sections = await exportMedia(prisma, [], USER_ID, { limit: 500, offset: 0 });
     expect(sections.attachments.items[0]).toMatchObject({ fileUrl: `${BASE}${ROUTE_RELATIVE}` });
   });
 
@@ -281,7 +290,7 @@ describe("adresses de média servies par l'export", () => {
         count: jest.fn<any>().mockResolvedValue(1),
       },
     });
-    const sections = await exportMedia(prisma, USER_ID, { limit: 500, offset: 0 });
+    const sections = await exportMedia(prisma, [], USER_ID, { limit: 500, offset: 0 });
     expect(sections.attachments.items[0]).toMatchObject({ fileUrl: DEJA_ABSOLUE });
     expect(sections.postMedia.items[0]).toMatchObject({ fileUrl: DEJA_ABSOLUE });
   });
@@ -305,7 +314,7 @@ describe("adresses de média servies par l'export", () => {
         count: jest.fn<any>().mockResolvedValue(1),
       },
     });
-    const sections = await exportMedia(prisma, USER_ID, { limit: 500, offset: 0 });
+    const sections = await exportMedia(prisma, [], USER_ID, { limit: 500, offset: 0 });
     expect(sections.attachments.items[0]).toEqual({
       ...ligne,
       fileUrl: `${BASE}/api/v1/attachments/file/2026%2F09%2F507f1f77bcf86cd799439011%2Fphoto.jpeg`,
@@ -319,7 +328,7 @@ describe("adresses de média servies par l'export", () => {
         count: jest.fn<any>().mockResolvedValue(9),
       },
     });
-    const sections = await exportMedia(prisma, USER_ID, { limit: 1, offset: 0 });
+    const sections = await exportMedia(prisma, [], USER_ID, { limit: 1, offset: 0 });
     expect(sections.attachments.total).toBe(9);
     expect(sections.attachments.hasMore).toBe(true);
   });

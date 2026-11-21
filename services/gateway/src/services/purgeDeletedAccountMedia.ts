@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { POST_MEDIA_FILE_COLUMNS, reclaimMediaRowBytes, type PostMediaByteRemover } from './posts/reclaimPostMediaBytes';
-import { accountUploaderKeyBatches } from './attachments/uploaderIdentity';
+import { accountParticipantIdBatches, uploadedByOfAccount } from './attachments/uploaderIdentity';
 
 const log = enhancedLogger.child({ module: 'purgeDeletedAccountMedia' });
 
@@ -96,12 +96,12 @@ async function purgeAttachments(
 ): Promise<number> {
   let deleted = 0;
 
-  // #20129 — les DEUX espaces de clés, fournée de clés par fournée de clés. Le
-  // filtre d'ids en échec est PAR fournée de clés : un attachment qui résiste
-  // n'appartient qu'à une seule d'entre elles, et le porter d'une fournée à
-  // l'autre ferait grandir un `notIn` pour rien.
-  for await (const uploadedBy of accountUploaderKeyBatches(prisma, userId)) {
-    deleted += await purgeAttachmentsOfKeys(prisma, attachmentRemover, uploadedBy, batchSize);
+  // #20129 — les DEUX espaces de clés, fournée de participations par fournée de
+  // participations. Le filtre d'ids en échec est PAR fournée : un attachment qui
+  // résiste n'appartient qu'à une seule d'entre elles, et le porter d'une
+  // fournée à l'autre ferait grandir un `notIn` pour rien.
+  for await (const participantIds of accountParticipantIdBatches(prisma, userId)) {
+    deleted += await purgeAttachmentsOfKeys(prisma, attachmentRemover, userId, participantIds, batchSize);
   }
 
   return deleted;
@@ -110,7 +110,8 @@ async function purgeAttachments(
 async function purgeAttachmentsOfKeys(
   prisma: PrismaClient,
   attachmentRemover: DeletedAccountAttachmentRemover,
-  uploadedBy: { in: string[] },
+  userId: string,
+  participantIds: readonly string[],
   batchSize: number,
 ): Promise<number> {
   let deleted = 0;
@@ -119,7 +120,7 @@ async function purgeAttachmentsOfKeys(
   for (;;) {
     const batch = await prisma.messageAttachment.findMany({
       where: {
-        uploadedBy,
+        uploadedBy: uploadedByOfAccount(userId, participantIds),
         isAnonymous: false,
         ...(failedIds.size > 0 ? { id: { notIn: [...failedIds] } } : {}),
       },
