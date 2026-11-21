@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
+import { peersSeenWithDeviceKey } from '@/lib/e2ee/peer-device-key';
 import { notebookDbName } from '@/lib/game-photo/notebook';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -124,6 +125,20 @@ describe('le compte supprimé NOMMÉ quitte l’appareil, carnet compris', () =>
     expect(accountVault.list().map((account) => account.user.id)).toEqual([BOB.id]);
     expect(bases.has(notebookDbName(ADA.id))).toBe(false);
     expect(bases.has(notebookDbName(BOB.id))).toBe(true);
+  });
+});
+
+describe('la mémoire des pairs chiffrés part avec le compte supprimé (#20197)', () => {
+  test('Ada supprimée : sa mémoire « déjà vu avec un appareil » part, celle de Bob reste', async () => {
+    await deviceWithAdaAndBob();
+    globalThis.localStorage.setItem(peersSeenWithDeviceKey(ADA.id), '["u-cyd"]');
+    globalThis.localStorage.setItem(peersSeenWithDeviceKey(BOB.id), '["u-cyd"]');
+    sessionStore.getState().establish({ user: BOB, token: 'jwt-bob', sessionToken: 'sess-bob', expiresIn: 3_600 });
+
+    await retireDeletedAccount(ADA.id);
+
+    expect(globalThis.localStorage.getItem(peersSeenWithDeviceKey(ADA.id))).toBeNull();
+    expect(globalThis.localStorage.getItem(peersSeenWithDeviceKey(BOB.id))).toBe('["u-cyd"]');
   });
 });
 

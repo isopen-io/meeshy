@@ -11,6 +11,7 @@ import type { InterfaceLanguage } from './interface-language';
 import { CREATION_ENCRYPTION_KEY, CREATION_INFO_KEY, CREATION_UNAVAILABILITY_KEY } from './conversation-new/encryption';
 import { FACT_KEY, PLAINTEXT_DIRECT_KEY, REGIME_SUMMARY_KEY, TOPIC_KEY } from './view/conversation-encryption-explanation';
 import { SWITCH_KEY, SWITCH_REFUSAL_KEY } from './view/conversation-encryption-switch';
+import { PEER_WITHOUT_DEVICE_KEY } from './view/end-to-end-peer-without-device';
 
 /**
  * LE CATALOGUE DU CHIFFREMENT D'UNE CONVERSATION (#12880) — même discipline
@@ -51,6 +52,7 @@ describe('chaque langue porte toutes les clés conversationEncryption.* du fran�
       ...Object.values(CREATION_UNAVAILABILITY_KEY),
       ...Object.values(SWITCH_KEY),
       ...Object.values(SWITCH_REFUSAL_KEY),
+      ...Object.values(PEER_WITHOUT_DEVICE_KEY).flatMap((keys) => (typeof keys === 'string' ? [keys] : [keys.named, keys.anonymous])),
     ]);
     expect(sorted(read)).toEqual(sorted(Object.keys(french)));
   });

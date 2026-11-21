@@ -21,17 +21,33 @@ export type PlaintextDirectPorts = {
   readonly go: (conversationId: string) => void;
 };
 
+/**
+ * LA CONVERSATION LISIBLE DE LA PAIRE, VÉRIFIÉE (#20075) — retrouvée ou créée,
+ * ni celle d'où l'on part, ni une conversation servie ou vue chiffrée : le
+ * geste du bandeau y mène, l'envoi redirigé y écrit (`readable-redirect.ts`).
+ */
+export type ReadableDirectDestination = { readonly kind: 'ready'; readonly conversationId: string } | { readonly kind: 'failed' | 'offline' };
+
+export async function readableDirectDestination(
+  ports: Pick<PlaintextDirectPorts, 'online' | 'open'>,
+  params: { readonly peerId: string; readonly fromConversationId: string },
+): Promise<ReadableDirectDestination> {
+  if (!ports.online()) return { kind: 'offline' };
+  const result = await ports.open(params.peerId).catch(() => null);
+  if (result === null || !result.ok) return { kind: 'failed' };
+  const served = result.data;
+  const sealed = endToEndSealed(endToEndRegimeLedger.getState(), { conversationId: served.id, servedMode: served.encryptionMode });
+  if (served.id === params.fromConversationId || sealed) return { kind: 'failed' };
+  return { kind: 'ready', conversationId: served.id };
+}
+
 export async function openPlaintextDirect(
   ports: PlaintextDirectPorts,
   params: { readonly peerId: string; readonly fromConversationId: string },
 ): Promise<PlaintextDirectOutcome> {
-  if (!ports.online()) return 'offline';
-  const result = await ports.open(params.peerId).catch(() => null);
-  if (result === null || !result.ok) return 'failed';
-  const served = result.data;
-  const sealed = endToEndSealed(endToEndRegimeLedger.getState(), { conversationId: served.id, servedMode: served.encryptionMode });
-  if (served.id === params.fromConversationId || sealed) return 'failed';
-  ports.go(served.id);
+  const destination = await readableDirectDestination(ports, params);
+  if (destination.kind !== 'ready') return destination.kind;
+  ports.go(destination.conversationId);
   return 'opened';
 }
 
