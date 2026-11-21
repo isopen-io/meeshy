@@ -55,7 +55,7 @@ normal.
 | **88w** | 2026-11-15 | `claude/practical-fermat-dqytex` | [#18635](https://github.com/isopen-io/meeshy/pull/18635) → `dev` | ✅ mergé |
 | **89w** | 2026-11-19 | `claude/practical-fermat-6cktea` | → `dev` | ✅ mergé |
 | **90w** | 2026-11-20 | `claude/practical-fermat-awbeqk` | → `dev` | ✅ mergé |
-| **91w** | 2026-11-21 | `claude/practical-fermat-h5vgy2` | → `dev` | ⏳ ouverte |
+| **91w** | 2026-11-21 | `claude/practical-fermat-h5vgy2` | [#20161](https://github.com/isopen-io/meeshy/pull/20161) → `dev` | ⏳ ouverte |
 
 **91w** — maintenabilité / cohérence : **le gate d'harmonie #8879 passe à 0** (5 →
 0, liste entièrement vidée). Ses 4 derniers cas étaient tous calculés ou de
