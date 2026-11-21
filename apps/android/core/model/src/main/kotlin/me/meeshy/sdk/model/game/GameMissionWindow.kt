@@ -40,7 +40,8 @@ public object GameMissionCardLaws {
     /**
      * La rangée du changement : posée tant qu'un acte du jour reste à faire DANS le jour, même quand la passerelle retire
      * le changement faute de Meesh (`rerollAvailable`) — pour dire combien il en manque. Passé minuit du compte, elle
-     * disparaît : changer un acte d'un jour fini n'a plus de sens.
+     * disparaît : changer un acte d'un jour fini n'a plus de sens. Changer un acte reste au niveau 5 : le premier Rêve
+     * (#17370) ne le propose pas.
      */
     public fun rerollRowShown(
         missions: GameMissions,
@@ -51,7 +52,7 @@ public object GameMissionCardLaws {
         val end = GameMissionClock.endOfDayMillis(missions.dayKey, timezone)
         val dayOpen = end?.let { nowMillis < it } ?: true
         val pending = missions.items.any { !it.isCompleted }
-        return dayOpen && pending && (missions.rerollAvailable || !affordable)
+        return missions.unlocked && dayOpen && pending && (missions.rerollAvailable || !affordable)
     }
 
     /** Le bouton « Changer » d'un acte : tant que la plage court (ou qu'aucune n'est lisible) et que l'acte n'est pas fait. */

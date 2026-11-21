@@ -885,7 +885,7 @@ export function registerFeedRoutes(
           }
           const resultat = await chargerPostsProches(
             prisma,
-            { lat: q.lat, lng: q.lng, radiusKm: q.radiusKm, cursor: q.cursor, limit: q.limit },
+            { lat: q.lat, lng: q.lng, radiusKm: q.radiusKm, cursor: q.cursor, limit: q.limit, viewerUserId: viewerId },
             reader,
           );
           const page = rankedListingPage(resultat, 'nearby');

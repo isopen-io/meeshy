@@ -5,6 +5,7 @@
  * handler that needs to gate access by post visibility).
  */
 
+import { snapshotAuthorNotSeparated } from './separatedCompanions';
 import { PrismaClient, PostType, PostVisibility } from '@meeshy/shared/prisma/client';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { doUsersShareCommunity, isCommunityReadableBy } from './communityVisibility';
@@ -161,7 +162,7 @@ export function buildPostVisibilityOrFilter(
     ],
   };
   if (blockedAuthorIds.length === 0) return audience;
-  return { AND: [audience, { authorId: { notIn: [...blockedAuthorIds] } }] };
+  return { AND: [audience, { authorId: { notIn: [...blockedAuthorIds] } }, snapshotAuthorNotSeparated(blockedAuthorIds)] };
 }
 
 /**

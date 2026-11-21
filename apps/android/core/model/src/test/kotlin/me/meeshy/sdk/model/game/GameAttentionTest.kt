@@ -7,11 +7,10 @@ import org.junit.Test
 class GameAttentionTest {
 
     private fun law(
-        unlocked: Boolean = true,
         chest: ChestStatus = ChestStatus.Locked,
         flame: FlameStatus = FlameStatus.Lit,
         days: Int = 4,
-    ) = GameAttention.of(unlocked, chest, flame, days)
+    ) = GameAttention.of(chest, flame, days)
 
     @Test
     fun `l'Offrande servie prete se signale`() {
@@ -25,8 +24,13 @@ class GameAttentionTest {
     }
 
     @Test
-    fun `avant le niveau 5 aucune Offrande ne se signale, meme servie prete`() {
-        assertThat(law(unlocked = false, chest = ChestStatus.Ready).chestReady).isFalse()
+    fun `avant le niveau 5, l'Offrande du premier Reve servie prete se signale - la loi ne lit que l'Offrande (#17370)`() {
+        val base = checkNotNull(GameBlockParser.parse(GameBlockFixtures.block()))
+        val firstDream = base.copy(
+            missions = base.missions.copy(unlocked = false),
+            chest = base.chest.copy(status = ChestStatus.Ready),
+        )
+        assertThat(GameAttention.of(firstDream, hidden = false).chestReady).isTrue()
     }
 
     @Test

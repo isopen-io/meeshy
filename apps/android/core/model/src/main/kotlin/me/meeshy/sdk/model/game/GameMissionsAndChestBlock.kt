@@ -64,13 +64,24 @@ public data class GamePersonalMission(
 public data class GameMissions(
     val dayKey: String,
     val prismDay: Boolean,
-    /** Niveau 5 atteint. */
+    /** Niveau 5 atteint : le Rêve complet. En dessous, [items] porte le premier Rêve, d'un acte (#17370). */
     val unlocked: Boolean,
     val items: List<GameMission>,
     val rerollAvailable: Boolean,
     /** `null` d'un ancien serveur ou si illisible : elle tombe SEULE. */
     @EncodeDefault val personal: GamePersonalMission? = null,
-)
+    /**
+     * Sous le niveau 5 : les étincelles qui manquent avant le Rêve complet (#17370). `null` d'un serveur antérieur ou si
+     * illisible (le champ tombe seul).
+     */
+    @EncodeDefault val fullDreamIn: Int? = null,
+) {
+    /**
+     * Sous le niveau 5, le premier Rêve (#17370) se joue comme les autres : seule la carte d'un serveur antérieur, qui
+     * ne sert aucun acte, reste une porte fermée. Miroir de `GameBlock.Missions.showsDoorOnly` (iOS).
+     */
+    val showsDoorOnly: Boolean get() = !unlocked && items.isEmpty()
+}
 
 /** Ce que le coffre peut contenir — affiché avant l'ouverture. */
 @Serializable
@@ -164,6 +175,7 @@ internal fun parseMissions(obj: JsonObject): GameMissions = GameMissions(
     items = obj.reqArray("items").map { parseMission(it as? JsonObject ?: throw GameParseException("items")) },
     rerollAvailable = obj.reqBool("rerollAvailable"),
     personal = obj.lenient("personal", ::parsePersonalMission),
+    fullDreamIn = obj.optInt("fullDreamIn")?.takeIf { it >= 0 },
 )
 
 internal fun parseChestOdds(obj: JsonObject): ChestOdds = ChestOdds(

@@ -6,6 +6,8 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendUnauthorized, sendBadRequest } from '../../utils/response';
 import { postInclude, NOT_DELETED, type PostPayload } from '../../services/posts/postIncludes';
 import { withMentions } from '../../services/posts/postReferences';
+import { separatedIdsOf, snapshotAuthorNotSeparated } from '../../services/posts/separatedCompanions';
+import { readerSeparatedFrom } from '../../services/posts/separatedReader';
 import { withViewerPostState } from '../../services/posts/viewerPostState';
 import { wireReaderFromRequest, type WireReader } from '../../services/posts/storyEffectsV3';
 import { hoistLocationDeep } from '../../services/location/sharedPlace';
@@ -82,10 +84,12 @@ export async function chargerPostsParHashtag(
     return { data: [], pagination: { limit, hasMore: false, nextCursor: null } };
   }
 
-  const [communityCoMemberIds, readableCommunityIds] = await Promise.all([
+  const [communityCoMemberIds, readableCommunityIds, served] = await Promise.all([
     getCommunityCoMemberIds(prisma, viewerUserId),
     getReadableCommunityIds(prisma, viewerUserId),
+    readerSeparatedFrom(prisma, viewerUserId, reader),
   ]);
+  const separatedIds = separatedIdsOf(served);
 
   // `hasMore` se calcule APRÈS le filtrage d'audience, jamais avant (#4339,
   // critère 3 de #4149). L'ancienne forme lisait `limit + 1` LIENS
@@ -125,6 +129,7 @@ export async function chargerPostsParHashtag(
         id: { in: links.map((l) => l.postId) },
         type: { in: ['POST', 'REEL'] },
         deletedAt: NOT_DELETED,
+        ...(separatedIds.length > 0 ? { authorId: { notIn: separatedIds }, AND: [snapshotAuthorNotSeparated(separatedIds)] } : {}),
         OR: [
           { authorId: viewerUserId },
           { visibility: 'PUBLIC' },
@@ -165,7 +170,7 @@ export async function chargerPostsParHashtag(
   const avecEtat = await withViewerPostState(prisma, viewerUserId, page.map((s) => s.post));
 
   return {
-    data: avecEtat.map((post) => withMentions(hoistLocationDeep(post), reader)),
+    data: avecEtat.map((post) => withMentions(hoistLocationDeep(post), served)),
     pagination: { limit, hasMore, nextCursor },
   };
 }
