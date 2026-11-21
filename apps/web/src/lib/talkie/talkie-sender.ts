@@ -65,9 +65,15 @@ export type TalkieDelivery = 'live' | 'waking';
 
 export type TalkieSenderState = { readonly phase: TalkieSendPhase };
 
+/**
+ * `talkie` : la voix sort en direct. `voice-message` (#20241) : le téléphone du destinataire est injoignable depuis
+ * plusieurs minutes — aucun `talkie:start`, le micro s'ouvre et la voix part en message vocal dans le direct.
+ */
+export type TalkiePressMode = 'talkie' | 'voice-message';
+
 export type TalkieSender = {
   readonly store: StoreApi<TalkieSenderState>;
-  press(toUserId: string): void;
+  press(toUserId: string, options?: { readonly mode?: TalkiePressMode }): void;
   release(): Promise<void>;
   /**
    * La passerelle a fermé une prise de parole : si c'est la mienne, tout s'arrête. `joined` (voix réveillée seulement) :
@@ -86,6 +92,8 @@ export type TalkieVoiceCopy = {
   readonly durationMs: number;
   readonly toUserId: string;
   readonly conversationId: string | null;
+  /** Un message vocal LAISSÉ (#20241) : seulement la conversation directe, ouverte au besoin. */
+  readonly directOnly?: true;
 };
 
 /** Envoie la copie en message vocal ; rend `false` si elle n'est pas partie. */
@@ -158,6 +166,8 @@ type Session = {
   cancelLimit: (() => void) | null;
   /** Le talkie est refusé en voix : on n'émet plus, on enregistre pour la copie vocale. */
   copying: boolean;
+  /** Un message vocal LAISSÉ (#20241) : aucune prise de parole, la voix part dans le direct. */
+  readonly voiceMessage: boolean;
   conversationId: string | null;
   /** Toutes les trames captées, gardées tant qu'une copie peut être demandée (repli ou réveil). */
   kept: readonly Uint8Array[];
@@ -294,7 +304,9 @@ export function createTalkieSender({
     s.cancelLimit?.();
     await stopMic(s);
     settleIdle(s, null);
-    await sendCopy({ frames: s.kept, durationMs: s.keptMs, toUserId: s.toUserId, conversationId: s.conversationId });
+    if (!s.voiceMessage) return sendCopy({ frames: s.kept, durationMs: s.keptMs, toUserId: s.toUserId, conversationId: s.conversationId });
+    if (s.kept.length === 0) return undefined;
+    return sendCopy({ frames: s.kept, durationMs: s.keptMs, toUserId: s.toUserId, conversationId: null, directOnly: true });
   }
 
   const startCopy = (s: Session, conversationId: string | null): Promise<void> | undefined => {
@@ -326,35 +338,28 @@ export function createTalkieSender({
     if (s.released) void finish(s, null);
   };
 
-  const press = (toUserId: string): void => {
-    if (session !== null) return;
-    const live = socket();
-    if (live === null || !live.connected || live.emitWithAck === undefined) {
-      onOutcome('offline');
-      return;
-    }
-    const s: Session = {
-      toUserId,
-      opened: null,
-      capture: null,
-      accepting: true,
-      released: false,
-      finishing: false,
-      queue: [],
-      current: EMPTY_FRAGMENT,
-      seq: 0,
-      sentBytes: 0,
-      cancelLimit: null,
-      copying: false,
-      conversationId: null,
-      kept: [],
-      keptBytes: 0,
-      keptMs: 0,
-    };
-    session = s;
-    store.setState({ phase: { kind: 'starting', toUserId } });
+  const sessionFor = (toUserId: string, voiceMessage: boolean): Session => ({
+    toUserId,
+    opened: null,
+    capture: null,
+    accepting: true,
+    released: false,
+    finishing: false,
+    queue: [],
+    current: EMPTY_FRAGMENT,
+    seq: 0,
+    sentBytes: 0,
+    cancelLimit: null,
+    copying: false,
+    voiceMessage,
+    conversationId: null,
+    kept: [],
+    keptBytes: 0,
+    keptMs: 0,
+  });
 
-    const mic: Promise<boolean> = capture({ onFrame: onFrame(s) }).then(
+  const openMic = (s: Session): Promise<boolean> =>
+    capture({ onFrame: onFrame(s) }).then(
       (handle) => {
         if (s.finishing || s.released) {
           s.accepting = false;
@@ -364,6 +369,29 @@ export function createTalkieSender({
       },
       () => false,
     );
+
+  /** Un message vocal laissé (#20241) : rien ne passe par la socket, le micro enregistre jusqu'au relâcher. */
+  const pressVoiceMessage = (toUserId: string): void => {
+    const s = sessionFor(toUserId, true);
+    session = s;
+    s.copying = true;
+    store.setState({ phase: { kind: 'recording-copy', toUserId } });
+    s.cancelLimit = schedule(() => void finishCopy(s), TALKIE_MAX_DURATION_MS);
+    void openMic(s).then((micReady) => (micReady || s.finishing ? undefined : refuse(s, 'mic-denied')));
+  };
+
+  const press = (toUserId: string, { mode = 'talkie' }: { readonly mode?: TalkiePressMode } = {}): void => {
+    if (session !== null) return;
+    if (mode === 'voice-message') return pressVoiceMessage(toUserId);
+    const live = socket();
+    if (live === null || !live.connected || live.emitWithAck === undefined) {
+      onOutcome('offline');
+      return;
+    }
+    const s = sessionFor(toUserId, false);
+    session = s;
+    store.setState({ phase: { kind: 'starting', toUserId } });
+    const mic = openMic(s);
 
     void live
       .emitWithAck(TALKIE_CLIENT_EVENTS.TALKIE_START, { toUserId, codec: TALKIE_WEB_CODEC }, TALKIE_START_ACK_MS)
