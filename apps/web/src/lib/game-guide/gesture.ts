@@ -52,7 +52,7 @@ const possible = (gesture: GuideGesture, view: EngagementWithGame): boolean => {
     case 'first-points':
       return true;
     case 'easy-mission':
-      return game.missions.unlocked;
+      return game.missions.unlocked || game.missions.items.some((mission) => mission.difficulty === 'easy');
     case 'flame-next-day':
       return game.flame.days >= 1;
   }

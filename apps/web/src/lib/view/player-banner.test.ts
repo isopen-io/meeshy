@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from 'bun:test';
 
 import type { GameBlockFacts } from '@meeshy/shared/utils/game/game-block';
 
-import { ALL_LEVEL_STEPS, gameBlockFixture, gameBlockWithExtrasFixture, gameExtrasFactsFixture } from '@/lib/api/game-fixture';
+import { ALL_LEVEL_STEPS, gameBlockFixture, gameBlockWithExtrasFixture, gameExtrasFactsFixture, gameFactsFixture } from '@/lib/api/game-fixture';
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 
@@ -30,8 +30,11 @@ const NEWCOMER: Partial<GameBlockFacts> = {
   debitablePoints: 1000,
 };
 
+/** Le nouveau joueur sans aucun acte servi (serveur antérieur à #17370) : le premier Rêve a ses propres témoins. */
+const NEWCOMER_NO_DREAM: Partial<GameBlockFacts> = { ...NEWCOMER, missions: [] };
+
 /** Tout à zéro : niveau 1, aucun point, aucune Meesh, aucune Gloire, aucune Flamme. */
-const ZERO: Partial<GameBlockFacts> = { ...NEWCOMER, score: 0, debitablePoints: 0 };
+const ZERO: Partial<GameBlockFacts> = { ...NEWCOMER_NO_DREAM, score: 0, debitablePoints: 0 };
 
 const shown = (facts: Partial<GameBlockFacts>) => {
   const model = playerBannerModel(gameBlockFixture(facts));
@@ -127,7 +130,7 @@ describe('seulement ce qui a du sens (#9536)', () => {
 
 describe('ce que lit le lecteur d’écran — une phrase complète', () => {
   test('fr : le nouveau joueur, son niveau, son palier et sa marche vers le suivant', () => {
-    const model = shown(NEWCOMER);
+    const model = shown(NEWCOMER_NO_DREAM);
     expect(playerBannerLabel(model, 'fr')).toMatch(/^Ta lumière au niveau \d+, Étincelle, \d+ % vers le \d+$/);
   });
 
@@ -221,7 +224,7 @@ describe('les étincelles du bandeau sont la poche', () => {
 
 describe('trophées, mission du jour et saison', () => {
   test('rien à zéro : aucune de ces trois pièces', () => {
-    const model = shown(NEWCOMER);
+    const model = shown(NEWCOMER_NO_DREAM);
     expect(model.trophies).toBeNull();
     expect(model.missions).toBeNull();
     expect(model.season).toBeNull();
@@ -240,10 +243,17 @@ describe('trophées, mission du jour et saison', () => {
     expect(model?.missions).toEqual({ done: game.missions.items.filter((m) => m.completedAt !== null).length, total: game.missions.items.length });
   });
 
-  test('missions verrouillées : pas de pièce', () => {
+  test('missions verrouillées sans acte servi (serveur antérieur) : pas de pièce', () => {
     const game = gameBlockFixture({ ...ZERO, score: 12, debitablePoints: 12 });
     expect(game.missions.unlocked).toBe(false);
     expect(playerBannerModel(game)?.missions ?? null).toBeNull();
+  });
+
+  test('le premier Rêve, sous le niveau 5 : sa pièce dit son acte unique (#17370)', () => {
+    const [easy] = gameFactsFixture().missions;
+    const game = gameBlockFixture({ ...ZERO, missions: [{ ...easy!, progress: 0, completedAt: null }] });
+    expect(game.missions.unlocked).toBe(false);
+    expect(playerBannerModel(game)?.missions).toEqual({ done: 0, total: 1 });
   });
 
   test('une saison ouverte : les étoiles gagnées', () => {

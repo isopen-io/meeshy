@@ -153,7 +153,7 @@ function missions(view: EngagementWithGame): ConceptState | null {
   const game = view.game;
   if (game === undefined) return null;
   const { missions: served, chest } = game;
-  if (!served.unlocked) return said(gameText('game.missions.locked', { level: count(shownLevelOf(game.level).level) }), 'missions_unlock_level', 'level');
+  if (!served.unlocked && served.items.length === 0) return said(gameText('game.missions.locked', { level: count(shownLevelOf(game.level).level) }), 'missions_unlock_level', 'level');
   const total = served.items.length;
   const done = served.items.filter((item) => item.completedAt !== null).length;
   const progress = { done: count(done), total: count(total) };

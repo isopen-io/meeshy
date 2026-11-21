@@ -271,6 +271,7 @@ const pt = {
   'game.mint.blocked_by_debt': 'Uma sombra cobre {debt} faíscas da sua luz: suas próximas faíscas vão dissipá-la. Enquanto ela estiver aí, não dá para cunhar.',
   'game.missions.title': 'O sonho desta noite',
   'game.missions.locked': 'O sonho se abre no nível 5 · você está no nível {level}.',
+  'game.missions.full_dream_in': 'Seu primeiro sonho completo chega em {sparks}.',
   'game.missions.prism_day': 'Dia do Prisma: um dos atos se passa num idioma diferente do seu.',
   'game.missions.prism_hour': 'Hora do Prisma: {start} – {end} — cada ato conta em dobro.',
   'game.missions.offline': 'Sem conexão: trocar um ato ou abrir a Oferenda volta com a conexão.',

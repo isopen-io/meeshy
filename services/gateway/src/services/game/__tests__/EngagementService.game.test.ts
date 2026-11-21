@@ -98,6 +98,7 @@ describe('Vent arrière — 7 niveaux ou plus sous le record (#10896)', () => {
   it('un compte sans record (antérieur au jeu) n’a pas de Vent arrière', async () => {
     const db = fakeGameDb();
     seedUser(db, { engagementScore: 1000 });
+    missionsAwaitOtherGestures(db);
 
     await service(db).recordActivity(USER, 'content.text_message');
 

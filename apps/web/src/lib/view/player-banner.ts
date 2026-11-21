@@ -121,7 +121,7 @@ export function playerBannerModel(game: GameBlock): PlayerBannerModel | null {
     league: league?.access === 'open' && league.current !== null ? { league: league.current.league, place: league.current.rank } : null,
     flame: BURNING.has(flame.status) && flame.form !== null && flame.days > 0 ? { form: flame.form, days: flame.days } : null,
     trophies: (game.trophies?.items.length ?? 0) > 0 ? (game.trophies?.items.length ?? 0) : null,
-    missions: game.missions.unlocked && game.missions.items.length > 0 ? { done: game.missions.items.filter((m) => m.completedAt !== null).length, total: game.missions.items.length } : null,
+    missions: game.missions.items.length > 0 ? { done: game.missions.items.filter((m) => m.completedAt !== null).length, total: game.missions.items.length } : null,
     season: game.season === null || game.season === undefined ? null : { stars: game.season.stars },
     treasury: treasury.held > 0 ? treasury.tier : null,
     attention: gameAttention(game, { hidden: false }),

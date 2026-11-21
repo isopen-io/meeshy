@@ -271,6 +271,7 @@ const de = {
   'game.mint.tailwind_value': '7 Level unter deinem hellsten Licht',
   'game.missions.title': 'Der Traum dieser Nacht',
   'game.missions.locked': 'Der Traum öffnet bei Level 5 · du bist auf Level {level}.',
+  'game.missions.full_dream_in': 'Dein erster vollständiger Traum kommt in {sparks}.',
   'game.missions.prism_day': 'Prisma-Tag: Einer der Akte spielt in einer anderen Sprache als deiner.',
   'game.missions.prism_hour': 'Prisma-Stunde: {start} – {end} — jeder Akt zählt doppelt.',
   'game.missions.offline': 'Offline: Einen Akt tauschen oder die Gabe öffnen geht mit der Verbindung weiter.',

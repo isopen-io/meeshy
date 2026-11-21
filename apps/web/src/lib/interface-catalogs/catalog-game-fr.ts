@@ -288,6 +288,7 @@ const fr = {
   'game.mint.tailwind_value': 'À 7 niveaux sous ta plus haute lumière',
   'game.missions.title': 'Le rêve de cette nuit',
   'game.missions.locked': 'Le rêve s’ouvre au niveau 5 · tu es au niveau {level}.',
+  'game.missions.full_dream_in': 'Ton premier rêve complet arrive dans {sparks}.',
   'game.missions.prism_day': 'Jour du Prisme : un des actes se joue dans une autre langue que la tienne.',
   'game.missions.prism_hour': 'Heure du Prisme : {start} – {end} — chaque acte compte double.',
   'game.missions.offline': 'Hors ligne : changer un acte ou ouvrir l’Offrande reprendra en ligne.',

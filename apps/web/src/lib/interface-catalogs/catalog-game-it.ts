@@ -271,6 +271,7 @@ const it = {
   'game.mint.tailwind_value': 'A 7 livelli sotto la tua luce più alta',
   'game.missions.title': 'Il sogno di stanotte',
   'game.missions.locked': 'Il sogno si apre al livello 5 · sei al livello {level}.',
+  'game.missions.full_dream_in': 'Il tuo primo sogno completo arriva tra {sparks}.',
   'game.missions.prism_day': 'Giorno del Prisma: uno degli atti si gioca in una lingua diversa dalla tua.',
   'game.missions.prism_hour': 'Ora del Prisma: {start} – {end} — ogni atto conta doppio.',
   'game.missions.offline': 'Offline: cambiare un atto o aprire l’Offerta riprenderà online.',

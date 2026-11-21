@@ -271,6 +271,7 @@ const es = {
   'game.mint.blocked_by_debt': 'Una sombra cubre {debt} chispas de tu luz: tus próximas chispas la disiparán. Mientras esté ahí, no se acuña.',
   'game.missions.title': 'El sueño de esta noche',
   'game.missions.locked': 'El sueño se abre en el nivel 5 · estás en el nivel {level}.',
+  'game.missions.full_dream_in': 'Tu primer sueño completo llega en {sparks}.',
   'game.missions.prism_day': 'Día del Prisma: uno de los actos se juega en un idioma distinto al tuyo.',
   'game.missions.prism_hour': 'Hora del Prisma: {start} – {end} — cada acto cuenta doble.',
   'game.missions.offline': 'Sin conexión: cambiar un acto o abrir la Ofrenda se reanudará en línea.',
