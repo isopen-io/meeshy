@@ -52,6 +52,7 @@ jest.mock('../../../utils/logger-enhanced', () => {
 });
 
 import { purgeMediaOfDeletedAccount } from '../../../services/purgeDeletedAccountMedia';
+import { uploadedByOfAccount } from '../../../services/attachments/uploaderIdentity';
 
 const USER_ID = 'user-deleted-1';
 
@@ -69,17 +70,30 @@ function buildPrisma(params: {
   attachmentPages?: AttachmentRow[][];
   postMediaPages?: PostMediaRow[][];
   sounds?: Array<{ fileUrl: string | null; coverUrl: string | null }>;
+  /** #20129 — les sièges du compte, que la purge lit pour le second espace de clés. */
+  seatIds?: string[];
+  /** La lecture des sièges LÈVE (lag de réplica) : le balayage est incomplet. */
+  seatsUnreadable?: boolean;
 }) {
   const {
     attachmentPages = [[{ id: 'att-1' }], []],
     postMediaPages = [[{ id: 'pm-1', fileUrl: '/f/pm-1.jpg', thumbnailUrl: null }], []],
     sounds = [],
+    seatIds = [],
+    seatsUnreadable = false,
   } = params;
 
   let attachmentPageIndex = 0;
   let postMediaPageIndex = 0;
 
   return {
+    participant: {
+      findMany: jest.fn<(args: unknown) => Promise<Array<{ id: string }>>>().mockImplementation(async (args) => {
+        if (seatsUnreadable) throw new Error('replica lag');
+        const { skip = 0, take } = args as { skip?: number; take?: number };
+        return seatIds.slice(skip, take === undefined ? undefined : skip + take).map((id) => ({ id }));
+      }),
+    },
     messageAttachment: {
       findMany: jest.fn<(args: unknown) => Promise<AttachmentRow[]>>().mockImplementation(async () => {
         const page = attachmentPages[attachmentPageIndex] ?? [];
@@ -127,13 +141,47 @@ const postMediaFindManyArgs = (prisma: unknown, callIndex = 0) =>
     | { where: Record<string, unknown>; take?: number }
     | undefined;
 
+describe('#20129 — un balayage INCOMPLET se dit', () => {
+  it('une lecture des sièges qui LÈVE purge l’espace nominal et rend `complete: false`', async () => {
+    const prisma = buildPrisma({ seatsUnreadable: true, attachmentPages: [[{ id: 'att-1' }], []], postMediaPages: [[]] });
+
+    const result = await purgeMediaOfDeletedAccount(prisma, buildAttachmentRemover(), buildMediaService(), USER_ID);
+
+    // L'espace nominal est purgé — `uploadedByOfAccount` y met toujours le
+    // compte — et l'appelant apprend que le reste est PERDU : aucune passe ne
+    // revient sur une demande qui n'est plus `CONFIRMED` (#10021).
+    expect(result.attachmentsDeleted).toBe(1);
+    expect(result.complete).toBe(false);
+    expect(attachmentFindManyArgs(prisma)?.where).toMatchObject({ uploadedBy: uploadedByOfAccount(USER_ID, []) });
+  });
+
+  it('apparie les sièges LUS, fournée par fournée, sans jamais relire un siège', async () => {
+    const prisma = buildPrisma({ seatIds: ['p-1', 'p-2'], attachmentPages: [[]], postMediaPages: [[]] });
+
+    const result = await purgeMediaOfDeletedAccount(prisma, buildAttachmentRemover(), buildMediaService(), USER_ID);
+
+    expect(result.complete).toBe(true);
+    expect(attachmentFindManyArgs(prisma)?.where).toMatchObject({
+      uploadedBy: uploadedByOfAccount(USER_ID, ['p-1', 'p-2']),
+    });
+  });
+});
+
 describe('purgeMediaOfDeletedAccount', () => {
   describe('MessageAttachment', () => {
-    it('cible `uploadedBy: userId, isAnonymous: false` — même filtre que export-sections.ts', async () => {
+    it('cible les DEUX espaces de clés de `uploadedBy` — même loi que export-sections.ts (#20129)', async () => {
       const prisma = buildPrisma({});
       await purgeMediaOfDeletedAccount(prisma, buildAttachmentRemover(), buildMediaService(), USER_ID);
 
-      expect(attachmentFindManyArgs(prisma)?.where).toMatchObject({ uploadedBy: USER_ID, isAnonymous: false });
+      // L'attendu est la LOI, importée de la production : recopier
+      // `{ uploadedBy: USER_ID }` ici ferait d'un changement d'espace de clés un
+      // témoin vert. Ce que ce témoin garde est la FORME de la clause ; la
+      // couverture de comportement — « une ligne héritée est-elle purgée ? » —
+      // vit dans `src/__tests__/unit/export-et-purge-des-medias-herites.test.ts`.
+      expect(attachmentFindManyArgs(prisma)?.where).toMatchObject({
+        uploadedBy: uploadedByOfAccount(USER_ID, []),
+        isAnonymous: false,
+      });
     });
 
     it('appelle `AttachmentService.deleteAttachment` pour chaque attachment — jamais un `deleteMany` direct', async () => {
@@ -249,6 +297,9 @@ describe('purgeMediaOfDeletedAccount', () => {
 
     const result = await purgeMediaOfDeletedAccount(prisma, buildAttachmentRemover(), buildMediaService(), USER_ID);
 
-    expect(result).toEqual({ attachmentsDeleted: 0, postMediaDeleted: 0 });
+    // `complete` est la moitié qui compte quand rien n'a été supprimé : « rien à
+    // purger » et « je n'ai pas pu lire ce qu'il y avait à purger » rendaient le
+    // même couple de zéros avant #20129.
+    expect(result).toEqual({ attachmentsDeleted: 0, postMediaDeleted: 0, complete: true });
   });
 });

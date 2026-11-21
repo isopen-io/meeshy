@@ -1,7 +1,8 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { POST_MEDIA_FILE_COLUMNS, reclaimMediaRowBytes, type PostMediaByteRemover } from './posts/reclaimPostMediaBytes';
-import { accountParticipantIdBatches, uploadedByOfAccount } from './attachments/uploaderIdentity';
+import { uploadedByOfAccount } from './attachments/uploaderIdentity';
+import { accountSeatIdBatches } from './participants/accountParticipantIds';
 
 const log = enhancedLogger.child({ module: 'purgeDeletedAccountMedia' });
 
@@ -71,7 +72,8 @@ const DEFAULT_BATCH_SIZE = 200;
  *
  * Exclusion explicite (`notIn`) des ids déjà tentés cette PASSE : sans elle,
  * un attachment dont la suppression échoue resterait éligible pour toujours
- * et boucler la fournée sans jamais progresser — même garde qu'#5689.
+ * et boucler la fournée sans jamais progresser — même garde qu'#5689. Elle est
+ * tenue pour la PASSE entière, pas par fournée de sièges (voir plus bas).
  *
  * ─── LES DEUX ESPACES DE CLÉS DE `uploadedBy` (#20129) ──────────────────────
  *
@@ -79,9 +81,15 @@ const DEFAULT_BATCH_SIZE = 200;
  * de #20113 : les copies TRANSFÉRÉES, écrites avant avec un `Participant.id`,
  * restaient en base — et leurs octets avec elles, hors de portée de tout
  * balayage futur, après que `privacy.json` a promis « suppression définitive ».
- * Elles sont appariées par les clés de participation du compte
- * (`accountUploaderKeyBatches`), que les lignes `Participant` survivent à la
- * purge rend lisibles ici.
+ * Elles sont appariées par les sièges du compte (`accountSeatIdBatches`), que
+ * les lignes `Participant` survivent à la purge rend lisibles ici.
+ *
+ * **Un balayage INCOMPLET se dit.** Si la lecture des sièges échoue en route, ce
+ * qui reste n'est pas repris : `processAccountDeletionRequests` n'élit que les
+ * demandes `CONFIRMED`, et la demande ne l'est plus. Le résultat porte donc
+ * `complete`, et le journal de fin le DIT — sans quoi un `info` annonçant
+ * « purgé » couvrirait une perte d'octets irréversible. Rejouer une étape de
+ * suppression jusqu'au succès est #10021.
  *
  * Ce qu'#5689 couvre déjà, et pourquoi il ne suffisait pas :
  * `anonymizeMessagesOfDeletedAccount` tourne AVANT et supprime les pièces des
@@ -93,18 +101,26 @@ async function purgeAttachments(
   attachmentRemover: DeletedAccountAttachmentRemover,
   userId: string,
   batchSize: number,
-): Promise<number> {
+): Promise<{ deleted: number; complete: boolean }> {
   let deleted = 0;
+  let complete = true;
 
-  // #20129 — les DEUX espaces de clés, fournée de participations par fournée de
-  // participations. Le filtre d'ids en échec est PAR fournée : un attachment qui
-  // résiste n'appartient qu'à une seule d'entre elles, et le porter d'une
-  // fournée à l'autre ferait grandir un `notIn` pour rien.
-  for await (const participantIds of accountParticipantIdBatches(prisma, userId)) {
-    deleted += await purgeAttachmentsOfKeys(prisma, attachmentRemover, userId, participantIds, batchSize);
+  // #20129 — les DEUX espaces de clés, fournée de sièges par fournée de sièges.
+  //
+  // `failedIds` vit ICI, hors de la boucle de fournées, et la raison est
+  // l'invariant de `uploadedByOfAccount` : il met `userId` dans CHAQUE fournée,
+  // donc une pièce de l'espace NOMINAL appartient à toutes. Le garder par
+  // fournée faisait retenter la même pièce résistante une fois par fournée —
+  // 250 fois pour un compte à 50 000 participations, chaque tentative précédée
+  // d'un `findMany` dont le `notIn` regrossissait depuis zéro.
+  const failedIds = new Set<string>();
+
+  for await (const batch of accountSeatIdBatches(prisma, userId)) {
+    if (!batch.complete) complete = false;
+    deleted += await purgeAttachmentsOfKeys(prisma, attachmentRemover, userId, batch.ids, batchSize, failedIds);
   }
 
-  return deleted;
+  return { deleted, complete };
 }
 
 async function purgeAttachmentsOfKeys(
@@ -113,9 +129,9 @@ async function purgeAttachmentsOfKeys(
   userId: string,
   participantIds: readonly string[],
   batchSize: number,
+  failedIds: Set<string>,
 ): Promise<number> {
   let deleted = 0;
-  const failedIds = new Set<string>();
 
   for (;;) {
     const batch = await prisma.messageAttachment.findMany({
@@ -198,12 +214,22 @@ export async function purgeMediaOfDeletedAccount(
   mediaService: PostMediaByteRemover,
   userId: string,
   options: PurgeDeletedAccountMediaOptions = {},
-): Promise<{ attachmentsDeleted: number; postMediaDeleted: number }> {
+): Promise<{ attachmentsDeleted: number; postMediaDeleted: number; complete: boolean }> {
   const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
 
-  const attachmentsDeleted = await purgeAttachments(prisma, attachmentRemover, userId, batchSize);
+  const attachments = await purgeAttachments(prisma, attachmentRemover, userId, batchSize);
   const postMediaDeleted = await purgePostMedia(prisma, mediaService, userId, batchSize);
 
-  log.info('deleted-account media purged', { userId, attachmentsDeleted, postMediaDeleted });
-  return { attachmentsDeleted, postMediaDeleted };
+  if (attachments.complete) {
+    log.info('deleted-account media purged', { userId, attachmentsDeleted: attachments.deleted, postMediaDeleted });
+  } else {
+    // Pas un `warn` : ce sont des octets d'un compte supprimé qui RESTENT, et
+    // aucune passe ne reviendra les chercher (#10021).
+    log.error('deleted-account media purge INCOMPLETE — attachment seats partly unread, bytes left behind', {
+      userId,
+      attachmentsDeleted: attachments.deleted,
+      postMediaDeleted,
+    });
+  }
+  return { attachmentsDeleted: attachments.deleted, postMediaDeleted, complete: attachments.complete };
 }

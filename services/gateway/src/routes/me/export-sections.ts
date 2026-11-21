@@ -191,19 +191,27 @@ export async function exportReactions(prisma: PrismaClient, participantIds: read
  * Les sections dont la requête a besoin des identifiants de PARTICIPATION du
  * compte, et pas seulement de son `userId`.
  *
- * C'est la liste qui décide si `me/export.ts` calcule `participantIds` — une
- * lecture faite UNE fois et réutilisée. Elle vit ici, à côté des sections qui en
- * dépendent, parce que c'est le seul endroit où l'on sait pourquoi : `messages`
- * apparie `senderId`, `reactions` `participantId`, et `media` le second espace
- * de clés de `uploadedBy` (#20129). Une section qui en aura besoin demain
- * s'inscrit ici, et la route n'a rien à apprendre.
+ * C'est la liste qui décide si `me/export.ts` lit les sièges du compte
+ * (`accountSeatIds`) — une lecture faite UNE fois et réutilisée. Elle vit ici, à
+ * côté des sections qui en dépendent, parce que c'est le seul endroit où l'on
+ * sait pourquoi : `messages` apparie `senderId`, `reactions` `participantId`,
+ * `media` le second espace de clés de `uploadedBy` (#20129), et `calls` le
+ * `participantId` de `CallParticipant`.
  *
  * Le défaut qu'elle ferme : `media` manquait à cette condition, donc la liste
  * n'était pas calculée quand l'export ne demandait QUE les médias — et
  * `exportMedia` ne la recevait pas du tout, alors que la valeur était calculée
  * dix lignes plus haut pour ses voisines.
+ *
+ * **`calls` y a été INSCRITE après coup, et c'est la leçon 261.** Le premier jet
+ * de cette liste affirmait deux choses : « ces sections consomment la liste »
+ * (vrai) et « ce sont les sections qui en ont besoin » (jamais vérifié).
+ * `exportCallTelemetry` en avait besoin et la relisait chez elle, avec son
+ * propre `where` — une quatrième lecture de la même liste dans la même requête.
+ * Une section qui en aura besoin demain s'inscrit ici ; la vérification, elle,
+ * ne se déduit pas de la liste.
  */
-export const SECTIONS_NEEDING_PARTICIPANT_IDS = ['messages', 'reactions', 'media'] as const;
+export const SECTIONS_NEEDING_PARTICIPANT_IDS = ['messages', 'reactions', 'media', 'calls'] as const;
 
 export function needsParticipantIds(requestedTypes: readonly string[]): boolean {
   return SECTIONS_NEEDING_PARTICIPANT_IDS.some((section) => requestedTypes.includes(section));

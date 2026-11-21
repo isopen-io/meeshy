@@ -30,6 +30,7 @@ import { exportSharedLocationEndsOf } from '../../services/sharedLocation/shared
 import { exportProfileLinkVisitsOf } from '../../services/profile-link-visits/profileLinkVisits';
 import { exportSentInvitationsOf } from '../../services/referrals/emailInvitations';
 import { exportCallTelemetry } from '../../services/calls/callTelemetryPrivacy';
+import { accountSeatIds } from '../../services/participants/accountParticipantIds';
 import { PROFILE_ADDRESS_EXPORT_SELECT, withExportedAddresses } from './export-addresses';
 
 const logger = enhancedLogger.child({ module: 'DataExport' });
@@ -685,11 +686,7 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
         // ligne n'a rien à apprendre.
         let pIds: string[] = [];
         if (needsParticipantIds(requestedTypes)) {
-          const participantIds = await fastify.prisma.participant.findMany({
-            where: { userId, type: 'user' },
-            select: { id: true },
-          });
-          pIds = participantIds.map((p) => p.id);
+          pIds = await accountSeatIds(fastify.prisma, userId);
         }
 
         if (requestedTypes.includes('messages')) {
@@ -849,7 +846,7 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
         }
 
         if (requestedTypes.includes('calls')) {
-          const section = await exportCallTelemetry(fastify.prisma, userId, page);
+          const section = await exportCallTelemetry(fastify.prisma, pIds, page);
           exportData.calls = section.items;
           exportData.callsCount = section.total;
           exportData.callsHasMore = section.hasMore;

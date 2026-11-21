@@ -139,78 +139,21 @@ export async function ownsAsUploader(
  * sections voisines. C'est la projection du paramètre, pas la donnée, qui
  * rendait la réponse impossible en aval (leçon 276).
  *
- * `userId` figure TOUJOURS dans les clés rendues, même quand la liste des
- * participants est vide ou que sa lecture a échoué : l'espace nominal ne dépend
- * pas d'une lecture auxiliaire.
+ * `userId` figure TOUJOURS dans les clés rendues, même quand la liste des sièges
+ * est vide ou que sa lecture a échoué : l'espace nominal ne dépend pas d'une
+ * lecture auxiliaire. La liste des sièges se lit par `accountSeatIds` /
+ * `accountSeatIdBatches` (`services/participants/accountParticipantIds.ts`) —
+ * un seul `where` pour les trois sites qui la demandent.
+ *
+ * **Et un `userId` FALSY rend `{ in: [] }`, qui n'apparie RIEN.** C'est un
+ * durcissement, pas un détail : `uploadedBy: userId` avec un `userId` vide
+ * rendait `uploadedBy: undefined`, que Prisma IGNORE — donc un `where` qui
+ * apparie TOUT, c'est-à-dire, du côté de la purge, la destruction de toutes les
+ * pièces jointes du dépôt. Un témoin le garde.
  */
 export function uploadedByOfAccount(
   userId: string,
   participantIds: readonly string[]
 ): { in: string[] } {
   return { in: [...new Set([userId, ...participantIds])].filter((key) => !!key) };
-}
-
-/** Participants lus par fournée : une liste bornée, jamais un `findMany` nu. */
-const PARTICIPANT_KEY_BATCH = 200;
-
-/**
- * Les identifiants de PARTICIPATION d'un compte, par fournées, pour un balayage
- * qui n'a que son `userId` en main (la purge de fin de grâce). Le site d'appel
- * en fait des clés par {@link uploadedByOfAccount} — la loi reste à UN endroit,
- * et le `where` reste LISIBLE à l'endroit où il est posé (c'est ce que le
- * cliquet `uploaded-by-key-space-sweep` balaie : une forme abrégée
- * `{ uploadedBy }` lui serait invisible, donc muette là où il doit parler).
- *
- * Pourquoi des FOURNÉES et non une liste : le nombre de participations d'un
- * compte est le nombre de conversations qu'il a rejointes — borné par
- * construction, mais par rien d'écrit. Un `findMany` nu rejoindrait la dette
- * gelée par `unbounded-findmany-guard.test.ts`, et un `take` SEUL tronquerait en
- * silence, c'est-à-dire laisserait des octets d'un compte supprimé hors de
- * portée de tout balayage futur. La pagination rend les deux impossibles.
- *
- * Elle est stable sans curseur : rien ne supprime de ligne `Participant` pendant
- * la purge — `purgeAccountIsolatedData` les garde délibérément, « ce qu'un AUTRE
- * participant continue de VOIR ».
- *
- * Elle rend TOUJOURS au moins une fournée, vide s'il n'y a aucune participation
- * ou si la lecture a ÉCHOUÉ : `uploadedByOfAccount` y ajoutant `userId`, la
- * purge de l'espace nominal a lieu quoi qu'il arrive — exactement le
- * comportement d'avant #20129 plutôt que rien, et la fournée manquée est
- * rejouée par la passe de maintenance suivante.
- */
-export async function* accountParticipantIdBatches(
-  prisma: UploaderIdentityPrisma,
-  userId: string,
-  batchSize: number = PARTICIPANT_KEY_BATCH
-): AsyncGenerator<readonly string[]> {
-  let skip = 0;
-  let yielded = false;
-
-  for (;;) {
-    let rows: Array<{ id: string }>;
-    try {
-      rows = await prisma.participant.findMany({
-        where: { userId },
-        select: { id: true },
-        orderBy: { id: 'asc' },
-        take: batchSize,
-        skip,
-      });
-    } catch (error: unknown) {
-      logger.warn('account participant keys lookup failed — account key only for this pass', { userId, error });
-      if (!yielded) yield [];
-      return;
-    }
-
-    if (rows.length === 0) {
-      if (!yielded) yield [];
-      return;
-    }
-
-    yield rows.map((row) => row.id);
-    yielded = true;
-
-    if (rows.length < batchSize) return;
-    skip += rows.length;
-  }
 }

@@ -18,6 +18,7 @@
  * voisine de la purge.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { accountSeatIds } from '../participants/accountParticipantIds';
 
 export type CallTelemetryPrivacyClient = Pick<PrismaClient, 'participant' | 'callParticipant'>;
 
@@ -36,17 +37,18 @@ export type CallTelemetryExportSection = {
   readonly hasMore: boolean;
 };
 
-async function participantIdsOf(prisma: CallTelemetryPrivacyClient, userId: string): Promise<string[]> {
-  const participants = await prisma.participant.findMany({ where: { userId }, select: { id: true } });
-  return participants.map((participant) => participant.id);
-}
-
+/**
+ * #20129 — les sièges du compte arrivent de la route, qui les lit UNE fois pour
+ * toutes ses sections (`accountSeatIds`). Cette unité en portait son propre
+ * lecteur, avec son propre `where` : troisième producteur de la même liste, dans
+ * la même requête d'export, et une divergence que rien ne gardait.
+ */
 export async function exportCallTelemetry(
   prisma: CallTelemetryPrivacyClient,
-  userId: string,
+  seatIds: readonly string[],
   page: { readonly limit: number; readonly offset: number },
 ): Promise<CallTelemetryExportSection> {
-  const ids = await participantIdsOf(prisma, userId);
+  const ids = [...seatIds];
   if (ids.length === 0) return { items: [], total: 0, hasMore: false };
 
   const where = { participantId: { in: ids } };
@@ -72,7 +74,9 @@ export async function exportCallTelemetry(
 }
 
 export async function eraseCallTelemetryOf(prisma: CallTelemetryPrivacyClient, userId: string): Promise<number> {
-  const ids = await participantIdsOf(prisma, userId);
+  // L'effacement n'a pas de route pour lui passer la liste : il la lit par le
+  // site unique, jamais par un `where` de son cru (#20129).
+  const ids = await accountSeatIds(prisma, userId);
   if (ids.length === 0) return 0;
   const erased = await prisma.callParticipant.updateMany({
     where: { participantId: { in: ids } },

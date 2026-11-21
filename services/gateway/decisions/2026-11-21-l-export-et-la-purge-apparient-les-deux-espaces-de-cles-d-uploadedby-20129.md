@@ -39,19 +39,55 @@ par jointure, pour UNE ligne (`ownsAsUploader`), et APPARIER les deux espaces,
 pour un COMPTE (`uploadedByOfAccount`). La troisième existe parce que la deuxième
 ne se transpose pas : **une requête de masse ne peut pas joindre.**
 
-### Pourquoi par fournées à la purge
+### Un seul producteur de la liste des sièges
+
+`accountSeatsWhere` / `accountSeatIds` / `accountSeatIdBatches`
+(`services/participants/accountParticipantIds.ts`) : **un seul `where`**,
+`{ userId }`. Trois sites le réécrivaient — l'export en
+`{ userId, type: 'user' }`, la purge et la télémétrie d'appel en `{ userId }` —
+et la divergence était un piège armé : dix lignes sous la clause de l'export, la
+section `contacts` écrit `{ userId, type: 'user', isActive: true }`, et
+quelqu'un l'alignera « par cohérence » un jour, ce qui ferait disparaître de
+l'archive de l'art. 15 les médias transférés dans les conversations QUITTÉES,
+sans qu'un témoin tombe. Le `type` classe le SIÈGE, pas l'identité qu'il porte ;
+le resserrement est inerte sur l'arbre d'aujourd'hui (aucun écrivain ne pose
+`userId` sur un siège `anonymous`, et il n'existe aucun écrivain de siège `bot`).
+
+`exportCallTelemetry` et `eraseCallTelemetryOf` y passent aussi : la requête
+d'export faisait QUATRE lectures de la même liste, et la section `calls`
+manquait à la liste qui décide du calcul — l'énumération affirmait « ce sont les
+sections qui en ont besoin » sans l'avoir vérifié (leçon 261).
+
+### Pourquoi par fournées à la purge, et ce qu'une fournée manquée coûte
 
 Le nombre de participations d'un compte est borné par construction, par rien
-d'écrit. Un `findMany` nu rejoint une dette gelée ; **un `take` seul tronquerait
-en silence** — c'est-à-dire laisserait des octets d'un compte supprimé
-indéfiniment, après une promesse de suppression définitive. La pagination
-(`accountParticipantIdBatches`) rend les deux impossibles, et elle est stable
-sans curseur : `purgeAccountIsolatedData` garde délibérément les lignes
-`Participant`.
+d'écrit. **Un `take` seul tronquerait en silence** — c'est-à-dire laisserait des
+octets d'un compte supprimé indéfiniment, après une promesse de suppression
+définitive. La pagination est stable sans curseur : `purgeAccountIsolatedData`
+garde délibérément les lignes `Participant`.
 
-Une lecture de participations en ÉCHEC rend exactement le comportement d'avant
-#20129 (l'espace nominal seul), jamais rien : la fournée manquée est rejouée par
-la passe de maintenance suivante.
+**Il n'y a PAS de passe suivante**, et c'est la correction d'une affirmation que
+ce lot avait d'abord écrite à trois endroits : `processAccountDeletionRequests`
+n'élit que les demandes `CONFIRMED`, et la demande ne l'est plus quand ces
+étapes tournent — le seul rejeu manuel (`routes/account-deletion.ts`) n'appelle
+même pas ce balayage. Une lecture de sièges en échec laisse donc des octets
+**perdus jusqu'à #10021**. Le résultat porte `complete`, le journal de fin passe
+en `error` et DIT l'incomplétude : un `info` annonçant « purgé » couvrirait une
+perte irréversible.
+
+La descente porte en plus un **plafond de pages** (500). Un `for (;;)` dont la
+sortie dépend d'une dépendance n'a aucune borne de vivacité, et celle-ci tourne
+dans la passe HORAIRE : une page qui ne progresse pas y bouclait pour toujours.
+Le plafond en fait une incomplétude annoncée — et un témoin qui rougit en 24 ms
+au lieu de PENDRE, ce qui, en CI, ne se distingue pas d'un environnement cassé.
+
+### Le durcissement qui n'avait pas été dit
+
+Avant ce lot, `uploadedBy: userId` avec un `userId` falsy rendait
+`uploadedBy: undefined`, que **Prisma IGNORE** : un `where` qui apparie TOUT.
+Du côté de la purge, c'était la destruction de toutes les pièces jointes du
+dépôt. `uploadedByOfAccount` rend `{ in: [] }`, qui n'apparie rien, et trois
+témoins le gardent.
 
 ### Ce qui n'est PAS décidé ici
 

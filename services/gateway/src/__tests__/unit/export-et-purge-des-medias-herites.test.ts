@@ -122,7 +122,10 @@ describe("l'export RGPD contient les médias TRANSFÉRÉS du compte (#20129)", (
     expect(needsParticipantIds(['messages'])).toBe(true);
     expect(needsParticipantIds(['reactions'])).toBe(true);
     expect(needsParticipantIds(['profile', 'contacts'])).toBe(false);
-    expect([...SECTIONS_NEEDING_PARTICIPANT_IDS]).toEqual(['messages', 'reactions', 'media']);
+    // `calls` y a été inscrite après l'audit : `exportCallTelemetry` avait
+    // besoin de la même liste et la relisait chez elle, avec son propre `where`.
+    expect(needsParticipantIds(['calls'])).toBe(true);
+    expect([...SECTIONS_NEEDING_PARTICIPANT_IDS]).toEqual(['messages', 'reactions', 'media', 'calls']);
   });
 
   it("la route LIT cette condition plutôt que d'en réécrire une", async () => {
@@ -132,6 +135,8 @@ describe("l'export RGPD contient les médias TRANSFÉRÉS du compte (#20129)", (
 
     expect(route).toContain('needsParticipantIds(requestedTypes)');
     expect(route).toContain('exportMedia(fastify.prisma, pIds, userId, page)');
+    expect(route).toContain('accountSeatIds(fastify.prisma, userId)');
+    expect(route).toContain('exportCallTelemetry(fastify.prisma, pIds, page)');
   });
 });
 
@@ -190,9 +195,14 @@ describe('la purge de fin de grâce voit les médias HÉRITÉS du compte (#20129
 
     const result = await purgeMediaOfDeletedAccount(harness.prisma, remover, mediaService, USER_ID, { batchSize: 2 });
 
-    // Le comportement d'AVANT #20129 : l'espace nominal est purgé, la fournée
-    // manquée est rejouée par la passe de maintenance suivante.
+    // L'espace nominal est purgé — jamais rien — et le balayage se DIT
+    // incomplet : il n'y a pas de passe suivante
+    // (`processAccountDeletionRequests` n'élit que les demandes `CONFIRMED`, et
+    // la demande ne l'est plus), donc la fournée manquée est PERDUE jusqu'à
+    // #10021. Annoncer un rejeu qui n'existe pas est plus coûteux que de
+    // l'annoncer perdu.
     expect(result.attachmentsDeleted).toBe(1);
+    expect(result.complete).toBe(false);
     expect(harness.remaining()).toEqual(['att-transfere-herite']);
   });
 
