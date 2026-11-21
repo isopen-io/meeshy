@@ -80,7 +80,7 @@ export const FLAME_FREEZE_GIFT_SEEN_KEY = 'flame-freeze-gift';
  * passerelle), une seule fois. Un serveur antérieur ne sert pas le champ : rien ne se montre.
  */
 export function announcesFreezeGift(block: {
-  readonly flame: { readonly freezeGifted?: boolean };
+  readonly flame: { readonly freezeGifted?: boolean | undefined };
   readonly guideSeen: readonly string[];
 }): boolean {
   return block.flame.freezeGifted === true && !block.guideSeen.includes(FLAME_FREEZE_GIFT_SEEN_KEY);

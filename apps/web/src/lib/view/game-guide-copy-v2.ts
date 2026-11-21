@@ -10,7 +10,8 @@ import { actionLabel, type GuideCopy } from './game-guide-copy';
 /**
  * CE QUE DISENT MEE ET MEO, VAGUE 2 (#9481) — les huit moments de la loi
  * (`guide-v2.ts`) : première ligue, montée, descente, début et fin de saison,
- * trophée, Prestige, tampon de l'Atlas. Même structure que `game-guide-copy.ts` :
+ * trophée, Prestige, tampon de l'Atlas, et la première Veilleuse offerte (#20169).
+ * Même structure que `game-guide-copy.ts` :
  * ce qui vient d'arriver → ce que ça veut dire → l'étape d'après → un bouton, avec
  * une version COURTE pour les fois suivantes. La loi choisit le moment et rend ses
  * chiffres ; elle ne prononce rien.
@@ -31,7 +32,7 @@ const ACTION_KEYS: Readonly<Record<GuideActionV2, ActionKey>> = {
 };
 
 export const actionLabelV2 = (action: GuideMomentV2['action'], language: Language = currentInterfaceLanguage()): string =>
-  action === 'see-level' ? actionLabel(action, language) : translateGame(language, ACTION_KEYS[action]);
+  action === 'see-level' || action === 'see-flame' ? actionLabel(action, language) : translateGame(language, ACTION_KEYS[action]);
 
 export function momentCopyV2(moment: GuideMomentV2, language: Language = currentInterfaceLanguage()): GuideCopy {
   const number = (count: number): string => formatCount(count, language);
@@ -120,5 +121,12 @@ export function momentCopyV2(moment: GuideMomentV2, language: Language = current
         short: translateGame(language, 'game.guide.moment.atlas_stamp.short', { language: name }),
       });
     }
+    case 'flame-freeze-gift':
+      return copy({
+        what: translateGame(language, 'game.guide.moment.flame_freeze_gift.what'),
+        means: translateGame(language, 'game.guide.moment.flame_freeze_gift.means'),
+        next: translateGame(language, 'game.guide.moment.flame_freeze_gift.next', { count: number(moment.data.freezes) }),
+        short: translateGame(language, 'game.guide.moment.flame_freeze_gift.short'),
+      });
   }
 }
