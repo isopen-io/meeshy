@@ -302,6 +302,8 @@ const sameServed = (a: SharedLocationChangedEventData | null, b: SharedLocationC
  * ceux qui ont reçu. Avec `previous`, un destinataire dont la projection n'a pas bougé ne
  * reçoit rien : un lecteur flouté n'apprend pas quand l'appareil se déplace dans sa maille.
  * Ceux qui vont recevoir sont notés servis AVANT l'envoi : la fin ne part que vers eux.
+ * Le pointeur est relu juste avant l'envoi (#20115) : une session remplacée pendant que
+ * l'éventail lisait l'accès — un point choisi arrivé entre-temps — ne sert plus rien.
  */
 async function fanOut(
   deps: SharedLocationRelayDeps,
@@ -319,6 +321,10 @@ async function fanOut(
   });
   const sent = deliveries.map((delivery) => delivery.readerId);
   await markSharedLocationSeen(deps.cache, emitterId, state, sent, deps.now());
+  if (sent.length > 0 && (await currentSharedLocationSession(deps.cache, emitterId)) !== state.sessionId) {
+    await unmarkSharedLocationSeen(deps.cache, emitterId, state.sessionId, sent);
+    return { access, served: [], fresh: [] };
+  }
   deliveries.forEach((delivery) => serve(deps.io, delivery.readerId, delivery.projection));
   await closeStaleReaders(deps, emitterId, state, access);
   const revoked = await revokedSince(deps, emitterId, state, sent);
@@ -444,6 +450,28 @@ function listOnlyState(
   return { recipients, position: current.position, updatedAt: current.updatedAt, expiresAt, ...startedAt, ...servableFrom, ...shareBattery, ...source };
 }
 
+/**
+ * Un démarrage sans source a pris le pointeur à un point choisi arrivé APRÈS sa lecture
+ * (#20115) : la garde de `previous` n'a pas pu le voir. Le point choisi redevient courant sous
+ * une session neuve — la remplacée part « à retirer » —, ceux qui l'ont vu reçoivent de nouveau
+ * le point, et le démarrage, qu'aucun lecteur n'a vu, est refusé comme s'il avait lu le point.
+ */
+async function restoreChosenPoint(
+  deps: SharedLocationRelayDeps,
+  emitterId: string,
+  params: { readonly generation: string; readonly chosen: SharedLocationState; readonly now: number },
+): Promise<SharedLocationAck> {
+  const restored: SharedLocationState = { ...params.chosen, sessionId: randomUUID() };
+  await storeSharedLocation(deps.cache, emitterId, restored, params.now);
+  const claim = await claimSharedLocation(deps.cache, emitterId, params.generation, restored, params.now);
+  if (!claim.claimed) {
+    await dropSharedLocationSession(deps.cache, emitterId, restored.sessionId);
+    return STOPPED;
+  }
+  await drainRetiring(deps, emitterId);
+  return FIXED_POINT;
+}
+
 /** Plus rien à servir : la liste seule vaut un arrêt. */
 async function stoppedByListOnly(deps: SharedLocationRelayDeps, emitterId: string): Promise<SharedLocationAck> {
   await advanceSharedLocationGeneration(deps.cache, emitterId);
@@ -507,6 +535,10 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
     if (!claim.claimed) {
       await dropSharedLocationSession(deps.cache, emitterId, state.sessionId);
       return STOPPED;
+    }
+    if (position && parsed.data.source === undefined && claim.displaced !== null && claim.displaced !== previous?.sessionId) {
+      const displaced = await readSharedLocationSession(deps.cache, emitterId, claim.displaced, now);
+      if (displaced?.source === 'manual') return await restoreChosenPoint(deps, emitterId, { generation, chosen: displaced, now });
     }
     if (!position) {
       const displaced = claim.displaced === null ? null : await readSharedLocationSession(deps.cache, emitterId, claim.displaced, now);
@@ -728,7 +760,8 @@ export type LocationGhostChange = 'entered' | 'left' | 'unchanged';
  * et leur fin se range parmi les partages terminés comme à un arrêt : rien ne distingue le
  * fantôme d'un arrêt (#13937). Le partage reste rangé et les positions suivantes s'y écrivent sans partir. À la SORTIE, rien
  * ne part : la session est marquée, et seule une position postérieure se sert de nouveau — au
- * direct comme au rattrapage. Même sans cet appel, la position suivante relit le fantôme.
+ * direct comme au rattrapage. Un point CHOISI (#19557) n'a pas de position suivante : il se sert
+ * de nouveau dès la sortie (#20115). Même sans cet appel, la position suivante relit le fantôme.
  */
 export async function reflectSharedLocationGhost(deps: SharedLocationRelayDeps, emitterId: string, change: LocationGhostChange): Promise<void> {
   if (change === 'unchanged') return;
@@ -740,7 +773,7 @@ export async function reflectSharedLocationGhost(deps: SharedLocationRelayDeps, 
     await noteSharedLocationStopped(deps.cache, emitterId, now).catch(() => undefined);
     return;
   }
-  await holdUntilNextPosition(deps, emitterId, state, now);
+  await resumeAfterGhost(deps, emitterId, state, now);
 }
 
 const GHOST_EXIT_HOLD_ATTEMPTS = 5;
@@ -749,16 +782,31 @@ const GHOST_EXIT_HOLD_ATTEMPTS = 5;
  * La sortie retient le partage COURANT, quel qu'il soit : un démarrage ou une liste seule d'un
  * autre appareil peut prendre le pointeur entre la lecture et la retenue, et recopier un point
  * pris en fantôme. On relit et on retient de nouveau ; à court d'essais, on lève — la sortie
- * reste fail-closed.
+ * reste fail-closed. Un point choisi n'est pas retenu mais REJOUÉ, daté de la sortie : rien
+ * d'antérieur au fantôme ne voyage, puisque le point est celui que l'émetteur montre encore.
  */
-async function holdUntilNextPosition(deps: SharedLocationRelayDeps, emitterId: string, first: SharedLocationState, now: number): Promise<void> {
-  const servableFrom = new Date(now).toISOString();
+async function resumeAfterGhost(deps: SharedLocationRelayDeps, emitterId: string, first: SharedLocationState, now: number): Promise<void> {
+  const exitedAt = new Date(now).toISOString();
   let state: SharedLocationState | null = first;
   for (let attempt = 0; attempt < GHOST_EXIT_HOLD_ATTEMPTS && state; attempt += 1) {
-    if (await storeSharedLocationIfCurrent(deps.cache, emitterId, { ...state, servableFrom }, now)) return;
+    const resumed: SharedLocationState = state.source === 'manual' ? { ...state, updatedAt: exitedAt, servableFrom: exitedAt } : { ...state, servableFrom: exitedAt };
+    if (await storeSharedLocationIfCurrent(deps.cache, emitterId, resumed, now)) {
+      if (resumed.source === 'manual') await republishChosenPoint(deps, emitterId, resumed);
+      return;
+    }
     state = await readSharedLocation(deps.cache, emitterId, now);
   }
   if (state) throw new Error('Partage non retenu à la sortie du fantôme');
+}
+
+/** Le point choisi rejoué à la sortie du fantôme sert chaque destinataire ouvert, et sa fin redevient à dire. */
+async function republishChosenPoint(deps: SharedLocationRelayDeps, emitterId: string, state: SharedLocationState): Promise<void> {
+  const { served } = await fanOut(deps, emitterId, state);
+  if ((await currentSharedLocationSession(deps.cache, emitterId)) === state.sessionId) {
+    await noteFreshEnds(deps, emitterId, state, served);
+    return;
+  }
+  await reconcile(deps, emitterId, served);
 }
 
 /**
