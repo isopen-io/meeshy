@@ -257,3 +257,114 @@ final class CallQualityNetworkContextTests: XCTestCase {
         XCTAssertEqual(sut.network?.profile, .degraded)
     }
 }
+
+// MARK: - #20121 — l'élection ne dépend pas de l'ordre du relevé
+
+/// `RTCStatisticsReport.statistics` est un dictionnaire : l'ordre de ses entrées
+/// est celui du hachage. Un même relevé, lu dans n'importe quel ordre, élit la
+/// même paire et en tire le même RTT, le même débit et la même route (miroir
+/// Android `CallStatsElectionOrderTest`).
+@MainActor
+final class CallStatsElectionOrderTests: XCTestCase {
+
+    private struct Reading: Hashable {
+        let pairId: String?
+        let rttMs: Double
+        let bitrate: Int
+        let relayed: Bool?
+    }
+
+    private func candidate(_ id: String, type: String, local: Bool = true) -> CallStats.RawEntry {
+        CallStats.RawEntry(id: id, type: local ? "local-candidate" : "remote-candidate", strings: ["candidateType": type])
+    }
+
+    private func pair(_ id: String, local: String, remote: String, priority: Double? = nil, nominated: Bool = true,
+                      state: String = "succeeded", rtt: Double? = nil, bitrate: Double? = nil) -> CallStats.RawEntry {
+        let measures = ["priority": priority, "currentRoundTripTime": rtt, "availableOutgoingBitrate": bitrate].compactMapValues { $0 }
+        return CallStats.RawEntry(
+            id: id,
+            type: "candidate-pair",
+            values: measures.merging(["nominated": nominated ? 1 : 0]) { current, _ in current },
+            strings: ["localCandidateId": local, "remoteCandidateId": remote, "state": state]
+        )
+    }
+
+    private func transport(_ id: String, selecting pairId: String) -> CallStats.RawEntry {
+        CallStats.RawEntry(id: id, type: "transport", strings: ["selectedCandidatePairId": pairId])
+    }
+
+    private func orders(_ entries: [CallStats.RawEntry]) -> [[CallStats.RawEntry]] {
+        let rotations = { (list: [CallStats.RawEntry]) in list.indices.map { Array(list[$0...] + list[..<$0]) } }
+        return rotations(entries) + rotations(Array(entries.reversed()))
+    }
+
+    private func readings(_ entries: [CallStats.RawEntry]) -> Set<Reading> {
+        Set(orders(entries).map { order in
+            let stats = CallStats.reduce(entries: order)
+            return Reading(pairId: CallStats.selectedCandidatePair(in: order)?.id, rttMs: stats.roundTripTimeMs,
+                           bitrate: stats.availableOutgoingBitrateBps, relayed: stats.relayed)
+        })
+    }
+
+    func test_selectedCandidatePair_twoTransports_electsTheSmallestTransportIdInEveryOrder() {
+        let report = [
+            transport("T02", selecting: "CP1"),
+            transport("T01", selecting: "CP2"),
+            pair("CP1", local: "L1", remote: "R1", priority: 200, rtt: 0.05, bitrate: 2_000_000),
+            pair("CP2", local: "L2", remote: "R2", priority: 100, bitrate: 800_000),
+            pair("CP3", local: "L3", remote: "R3", priority: 50, nominated: false, state: "in-progress", rtt: 0.3),
+            candidate("L1", type: "relay"), candidate("R1", type: "relay", local: false),
+            candidate("L2", type: "host"), candidate("R2", type: "srflx", local: false)
+        ]
+
+        XCTAssertEqual(readings(report), [Reading(pairId: "CP2", rttMs: 50, bitrate: 800_000, relayed: false)])
+    }
+
+    func test_selectedCandidatePair_twoNominatedPairs_electsTheHighestPriorityInEveryOrder() {
+        let report = [
+            pair("CP1", local: "L1", remote: "R1", priority: 100, rtt: 0.2, bitrate: 300_000),
+            pair("CP2", local: "L2", remote: "R2", priority: 300, rtt: 0.04, bitrate: 1_500_000),
+            pair("CP3", local: "L3", remote: "R3", priority: 500, nominated: false, state: "in-progress", rtt: 0.9, bitrate: 50_000),
+            candidate("L1", type: "relay"), candidate("R1", type: "srflx", local: false),
+            candidate("L2", type: "host"), candidate("R2", type: "host", local: false)
+        ]
+
+        XCTAssertEqual(readings(report), [Reading(pairId: "CP2", rttMs: 40, bitrate: 1_500_000, relayed: false)])
+    }
+
+    func test_reduce_noElectedPair_readsTheMeasureOnTheHighestPriorityThenSmallestId() {
+        let report = [
+            pair("CP2", local: "L2", remote: "R2", nominated: false, state: "in-progress", rtt: 0.12, bitrate: 900_000),
+            pair("CP1", local: "L1", remote: "R1", nominated: false, state: "in-progress", rtt: 0.05),
+            pair("CP0", local: "L0", remote: "R0", priority: 10, nominated: false, state: "waiting")
+        ]
+
+        XCTAssertEqual(readings(report), [Reading(pairId: nil, rttMs: 50, bitrate: 900_000, relayed: nil)])
+    }
+
+    func test_selectedCandidatePair_equalPriority_electsTheSmallestId() {
+        let report = [
+            pair("CPb", local: "L2", remote: "R2", priority: 7, rtt: 0.08),
+            pair("CPa", local: "L1", remote: "R1", priority: 7, rtt: 0.02)
+        ]
+
+        XCTAssertEqual(Set(orders(report).map { CallStats.selectedCandidatePair(in: $0)?.id }), ["CPa"])
+    }
+
+    func test_selectedCandidatePair_transportNamingAnAbsentPair_yieldsToTheNextTransport() {
+        let report = [
+            transport("T01", selecting: "ghost"),
+            transport("T02", selecting: "CP2"),
+            pair("CP1", local: "L1", remote: "R1", priority: 900, rtt: 0.3),
+            pair("CP2", local: "L2", remote: "R2", priority: 1, nominated: false, state: "in-progress", rtt: 0.01)
+        ]
+
+        XCTAssertEqual(Set(orders(report).map { CallStats.selectedCandidatePair(in: $0)?.id }), ["CP2"])
+    }
+
+    func test_rawProjection_readsThePairPriority() {
+        let entry = CallStats.RawEntry(id: "CP1", type: "candidate-pair", raw: ["priority": NSNumber(value: 4_611_686_018_427_387_904 as UInt64)])
+
+        XCTAssertEqual(entry.values["priority"], 4_611_686_018_427_387_904)
+    }
+}
