@@ -1,8 +1,8 @@
-# Une cible immobile n'est pas une cible atteignable
+## Une cible immobile n'est pas une cible atteignable
 
 **2026-11-21 — #20151, #20108, #20040, #20035 (cycle 201).**
 
-## La leçon
+### La leçon
 
 `boundingBox()` dit **où** une cible est. Il ne dit pas qu'un toucher à cet
 endroit **lui parvient**. Entre les deux, il y a tout ce qui s'en va.
@@ -18,7 +18,7 @@ panneau ne s'ouvre jamais.
 **La question n'était pas « où est-elle ? » mais « à qui appartient cet
 endroit ? »**
 
-## Ce que quatre issues ont cherché, et pourquoi elles ne l'ont pas trouvé
+### Ce que quatre issues ont cherché, et pourquoi elles ne l'ont pas trouvé
 
 Les quatre descriptions successives (#20035, #20040, #20108, #20151) ont toutes
 posé la même hypothèse : une **dérive de la cible** entre le calcul du centre et
@@ -39,7 +39,7 @@ qui réfute l'hypothèse, et elle coûtait quatre exécutions.
 > trop forte de la troisième (« il ne reproduit pas ») — mais sur
 > l'intermittence, pas sur le mécanisme.
 
-## Le discriminant qui était là depuis le début
+### Le discriminant qui était là depuis le début
 
 **Une seule pose sur quatre rougissait.** Les quatre issues l'ont noté, et
 toutes l'ont expliqué par la contrainte de hauteur (320 px, la plus serrée).
@@ -55,7 +55,7 @@ La pose n'était pas la plus *contrainte*, elle était la seule **exposée**.
 > cause de degré, la seconde une cause de nature. Ici la différence était dans
 > la SÉQUENCE du garde, pas dans les dimensions de la fenêtre.
 
-## La forme du correctif : la possession, pas les animations
+### La forme du correctif : la possession, pas les animations
 
 Le fichier avait déjà `railsSettled` et `stageSettled`, et il les appelle quand
 les rails **entrent** — pas quand ils **sortent**. Ajouter l'appel manquant
@@ -74,7 +74,7 @@ sans qu'une ligne d'appel change.
 Et jamais un délai : un `waitForTimeout` ne mesure rien et se périme au premier
 coureur plus lent.
 
-## Le corollaire sur les gardes intermittentes
+### Le corollaire sur les gardes intermittentes
 
 Une cible qui ne possède **jamais** son centre fait désormais **lever**, en
 nommant le rect et l'occupant. Ce n'est pas une prudence, c'est la **loi 4** du
@@ -88,7 +88,7 @@ fois (#19670) ; le garde ne doit pas pouvoir le traverser muet.
 > plus coûteux qu'un cliquet absent — il consomme l'attention qu'il réclame,
 > puis la perd.
 
-## La preuve, et pourquoi elle se compte en rejeux
+### La preuve, et pourquoi elle se compte en rejeux
 
 | mesure | résultat |
 |---|---|
