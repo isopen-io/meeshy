@@ -11,8 +11,7 @@ import {
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { applyHistoryFloor, historyReaderFromAuthContext, loadReaderHistoryFloor } from '../../services/historyFloor';
 import { readerShareLinkHasExpired, refuseExpiredShareLink } from '../../services/shareLinkReadGate';
-import { attachmentMediaSelect, MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
-import { servedAttachmentTranslations } from '../../services/attachments/servedAttachmentTranslations';
+import { attachmentMediaSelect, attachmentProtectionSelect, MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
 import { sendSuccess, sendNotFound, sendInternalError } from '../../utils/response';
 import { servePostReplyCitations } from '../../services/messaging/servedPostReply';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
@@ -27,6 +26,7 @@ import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedS
 import { loadQuotedEphemeralReaders, type EphemeralReaderResolution } from './ephemeralReaderDeadlines';
 import { keepAliveForReader, withInheritedExpiry } from '../../services/messaging/quoteCascade';
 import { readerParticipantIdOf } from './readerParticipant';
+import { servedSideContent } from '../../services/attachments/mediaSideContent';
 import { signMessagesAttachmentsForReader } from '../../services/attachments/signServedAttachments';
 import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
 import { captureNoticeWithheldFrom } from '../../services/messaging/captureNoticeVisibility';
@@ -91,7 +91,14 @@ const threadMessageSelect = {
       }
     }
   },
-  attachments: { select: attachmentMediaSelect, orderBy: MESSAGE_ATTACHMENT_ORDER },
+  // #20017 — les drapeaux de PROTECTION de la pièce : `attachmentMediaSelect`
+  // porte `transcription` et `translations` et aucun d'entre eux, donc la loi
+  // du contenu latéral ne pourrait rien garder sans eux (`maskedAttachment` ne
+  // regarde que les drapeaux PRÉSENTS). Le PORTEUR, lui, est déjà complet —
+  // `MESSAGE_PROTECTION_SELECT` + `deletedAt` + `AT_REST_MESSAGE_SELECT`
+  // couvrent les sept colonnes de `MESSAGE_SIDE_PROTECTION_SELECT`, et le
+  // message du fil EST le porteur de ses pièces : aucune requête de plus.
+  attachments: { select: { ...attachmentMediaSelect, ...attachmentProtectionSelect }, orderBy: MESSAGE_ATTACHMENT_ORDER },
   replyTo: {
     select: {
       id: true,
@@ -214,14 +221,27 @@ function serializeThreadMessage<T extends Record<string, unknown>>(message: T): 
     // disque de chaque piste ; le schéma du fil (`additionalProperties: true`)
     // ne le retire pas.
     ...(Array.isArray(message.attachments)
-      ? { attachments: message.attachments.map(servedThreadAttachment) }
+      ? { attachments: message.attachments.map((att) => servedThreadAttachment(att, message)) }
       : {}),
   };
 }
 
-function servedThreadAttachment(attachment: unknown): unknown {
-  if (!attachment || typeof attachment !== 'object' || !('translations' in attachment)) return attachment;
-  return { ...attachment, translations: servedAttachmentTranslations(attachment.translations) };
+/**
+ * #19672 retirait le CHEMIN DISQUE de chaque piste. #20017 ajoute le reste de
+ * la loi : `servedAttachmentTranslations` est la moitié que `servedSideContent`
+ * contient déjà, et la transcription comme la description partaient dans le
+ * même objet littéral — le schéma du fil étant `additionalProperties: true`,
+ * il ne retient RIEN.
+ *
+ * Le porteur est le message du fil lui-même, passé ici plutôt que relu : il est
+ * déjà chargé avec ses sept colonnes de protection (cf. `threadMessageSelect`).
+ */
+function servedThreadAttachment(attachment: unknown, carrier: unknown): unknown {
+  if (!attachment || typeof attachment !== 'object') return attachment;
+  return {
+    ...attachment,
+    ...servedSideContent({ ...(attachment as Record<string, unknown>), message: carrier } as Parameters<typeof servedSideContent>[0]),
+  };
 }
 
 /**
