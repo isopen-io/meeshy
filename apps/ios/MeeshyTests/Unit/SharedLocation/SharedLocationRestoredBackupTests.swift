@@ -690,4 +690,39 @@ final class SharedLocationServedSourceTests: XCTestCase {
         XCTAssertTrue(message.contains("Bob"))
         XCTAssertNotEqual(message, ShareMyLocationCopy.replacePointMessage)
     }
+
+    func test_aGatewayThatNamesNoStart_stillAsksAgainWhenSomeoneWasAdded() async {
+        let sut = makeSUT()
+        sut.served.snapshot = served([alice], source: .manual)
+        let asked = await question(sut)
+        sut.served.snapshot = served([alice, carol], source: .manual)
+
+        let problem = await sut.center.share(with: bob, precision: .city, term: .bounded(.oneHour), replacing: asked)
+
+        XCTAssertNil(asked?.startedAt)
+        XCTAssertEqual(problem?.pointReplacement?.recipientIds, [alice, carol])
+        XCTAssertTrue(sut.emitter.starts.isEmpty)
+    }
+
+    func test_aConfirmationRefusedAsAChosenPoint_asksAgainWithTheServedShare() async {
+        let sut = makeSUT()
+        sut.served.snapshot = served([alice], source: .manual, startedAt: "S1")
+        let asked = await question(sut)
+        sut.emitter.startVerdict = .refused(.fixedPoint)
+        let reread = SharedLocationPointReplacement(startedAt: "S1", recipientIds: [alice])
+
+        let problem = await sut.center.share(with: bob, precision: .city, term: .bounded(.oneHour), replacing: asked)
+
+        XCTAssertEqual(asked, reread)
+        XCTAssertEqual(problem?.pointReplacement, reread)
+        XCTAssertNil(sut.center.entry(for: bob))
+    }
+
+    func test_theMessage_countsThoseItDoesNotName() {
+        let message = ShareMyLocationCopy.replacePointMessage((named: ["Alice"], others: 2))
+
+        XCTAssertTrue(message.contains("Alice"))
+        XCTAssertTrue(message.contains(ShareMyLocationCopy.replacePointOthers(2)))
+        XCTAssertTrue(ShareMyLocationCopy.replacePointOthers(2).contains("2"))
+    }
 }
