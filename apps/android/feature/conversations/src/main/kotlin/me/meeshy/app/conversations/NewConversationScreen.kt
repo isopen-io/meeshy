@@ -80,7 +80,7 @@ fun NewConversationScreen(
     state.error?.let { error ->
         AlertDialog(
             onDismissRequest = viewModel::dismissError,
-            text = { Text(stringResource(error.messageRes())) },
+            text = { Text(creationErrorText(error, state.withoutDeviceFirstName)) },
             confirmButton = {
                 TextButton(onClick = viewModel::dismissError) { Text(stringResource(R.string.new_conversation_ok)) }
             },
@@ -115,8 +115,18 @@ fun NewConversationScreen(
 /** iOS closes the sheet, then pushes the conversation 0.3 s later so the dismissal can start first. */
 private const val NAVIGATION_DELAY_MS = 300L
 
+/** Le refus d'un invité sans appareil chiffré le nomme (#20076) ; les autres échecs ont leur phrase. */
+@Composable
+private fun creationErrorText(error: NewConversationError, withoutDeviceFirstName: String): String =
+    if (error == NewConversationError.PARTICIPANT_WITHOUT_DEVICE && withoutDeviceFirstName.isNotEmpty()) {
+        stringResource(R.string.new_conversation_error_participant_without_device_named, withoutDeviceFirstName)
+    } else {
+        stringResource(error.messageRes())
+    }
+
 internal fun NewConversationError.messageRes(): Int = when (this) {
     NewConversationError.BLOCKED -> R.string.new_conversation_error_blocked
+    NewConversationError.PARTICIPANT_WITHOUT_DEVICE -> R.string.new_conversation_error_participant_without_device_anonymous
     NewConversationError.CREATE_FAILED -> R.string.new_conversation_error_create
 }
 

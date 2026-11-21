@@ -328,6 +328,8 @@ internal fun ChatSheetsHost(host: ChatHostContext) {
             isDirect = state.isKnownDirect,
             accentColor = accentColor,
             onDismiss = { sheets.encryption = false },
+            peerUserId = state.directPeerUserId,
+            peerName = state.conversationTitle,
         )
     }
 

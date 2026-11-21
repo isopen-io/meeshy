@@ -49,6 +49,14 @@ enum BatteryLiveState {
     static func stream(of userId: String) -> AnyPublisher<BatteryReaderState?, Never> {
         stream(of: userId, in: BatteryStateStore.shared.$states.eraseToAnyPublisher())
     }
+
+    /// L'icône de la fiche, à côté du grand avatar (#20178) : le même symbole, la même teinte et la même phrase que
+    /// l'icône des lignes.
+    static func signal(for state: BatteryReaderState) -> ProfileBatterySignal {
+        ProfileBatterySignal(systemImage: BatteryAnnouncementWording.iconName(for: state),
+                             tint: BatteryGlyph.tint(for: state),
+                             spoken: BatteryAnnouncementWording.spoken(state))
+    }
 }
 
 /// L'icône posée sur un avatar ou dans l'en-tête : rien hors épisode, l'icône dès que le cache la connaît.

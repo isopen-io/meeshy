@@ -1,0 +1,5 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="e2ee_send_redirected_to_readable">لا يمكن لـ %1$s تلقي الرسائل المشفّرة: أُرسلت الرسالة في محادثتكما غير المشفّرة.</string>
+    <string name="e2ee_send_redirected_to_readable_anonymous">لا يمكن لمراسلك تلقي الرسائل المشفّرة: أُرسلت الرسالة في محادثتكما غير المشفّرة.</string>
+</resources>

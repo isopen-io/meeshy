@@ -15,6 +15,7 @@ import me.meeshy.sdk.model.e2ee.ConversationEncryptionContent
 import me.meeshy.sdk.model.e2ee.ConversationEncryptionModeChoice
 import me.meeshy.sdk.model.e2ee.ConversationEncryptionStatus
 import me.meeshy.sdk.model.e2ee.ConversationEncryptionView
+import me.meeshy.sdk.model.e2ee.EndToEndParticipantWithoutDevice
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import javax.inject.Inject
@@ -40,6 +41,9 @@ enum class ConversationEncryptionNotice {
 
     /** 409 `E2EE_DIRECT_NOT_A_PAIR` : ce tête-à-tête ne réunit pas exactement deux membres inscrits. */
     DIRECT_NOT_A_PAIR,
+
+    /** 409 `E2EE_PARTICIPANT_WITHOUT_DEVICE` (#20073) : un membre n'a aucun appareil chiffré, rien n'est activé. */
+    PARTICIPANT_WITHOUT_DEVICE,
     FAILED,
 }
 
@@ -55,7 +59,16 @@ data class ConversationEncryptionUiState(
     val notice: ConversationEncryptionNotice? = null,
     /** Le passage au bout en bout attend sa confirmation : on n'en revient jamais (#12949, #16044). */
     val confirmsEndToEnd: Boolean = false,
+    /** Le pair d'un tête-à-tête, que le refus `E2EE_PARTICIPANT_WITHOUT_DEVICE` nomme (#20076). */
+    val peerUserId: String? = null,
+    val peerName: String? = null,
+    /** Les membres sans appareil chiffré que le dernier refus a nommés. */
+    val withoutDeviceUserIds: List<String> = emptyList(),
 ) {
+    /** Le prénom que la phrase du refus adresse ; vide : la phrase sans nom (un autre membre, ou moi). */
+    val withoutDeviceFirstName: String
+        get() = EndToEndParticipantWithoutDevice.namedFirstName(peerUserId, peerName, withoutDeviceUserIds)
+
     /** Ni statut servi ni conversation retenue chiffrée : rien ne permet de dire le régime, la feuille ne devine pas. */
     val readFailed: Boolean get() = !isLoading && status == null && !sealed
 
@@ -106,11 +119,13 @@ class ConversationEncryptionViewModel @Inject constructor(
      * sur un changement de mode périmé. Le registre est relu AVANT le réseau ; la lecture se fait sans
      * revenir au chargement quand un régime est déjà connu.
      */
-    fun load(conversationId: String, isDirect: Boolean) {
+    fun load(conversationId: String, isDirect: Boolean, peerUserId: String? = null, peerName: String? = null) {
         if (_state.value.conversationId == conversationId) {
             _state.update {
                 it.copy(
                     isDirect = isDirect,
+                    peerUserId = peerUserId,
+                    peerName = peerName,
                     sealed = sealedOf(it, conversationId),
                     selected = it.selected.takeIf { mode -> mode.isOfferedFor(isDirect) } ?: ConversationEncryptionModeChoice.SERVER,
                     confirmsEndToEnd = false,
@@ -123,6 +138,8 @@ class ConversationEncryptionViewModel @Inject constructor(
             conversationId = conversationId,
             isDirect = isDirect,
             sealed = ledger.isSealed(conversationId),
+            peerUserId = peerUserId,
+            peerName = peerName,
         )
         read()
     }
@@ -201,7 +218,9 @@ class ConversationEncryptionViewModel @Inject constructor(
                 }
                 is NetworkResult.Failure -> {
                     val notice = noticeOf(result.error, ConversationEncryptionNotice.FAILED)
-                    _state.update { it.copy(isSwitching = false, sealed = sealedOf(it, id), notice = notice) }
+                    _state.update {
+                        it.copy(isSwitching = false, sealed = sealedOf(it, id), notice = notice, withoutDeviceUserIds = result.error.withoutDeviceUserIds)
+                    }
                     if (notice in REREAD_AFTER) refreshKeepingNotice(id, notice)
                 }
             }
@@ -232,6 +251,7 @@ class ConversationEncryptionViewModel @Inject constructor(
             ConversationEncryptionRepository.DIRECT_NOT_A_PAIR to ConversationEncryptionNotice.DIRECT_NOT_A_PAIR,
             ConversationEncryptionRepository.ACTIVATION_RESTRICTED to ConversationEncryptionNotice.RESTRICTED,
             ConversationEncryptionRepository.ALREADY_ENABLED to ConversationEncryptionNotice.ALREADY_ENABLED,
+            EndToEndParticipantWithoutDevice.CODE to ConversationEncryptionNotice.PARTICIPANT_WITHOUT_DEVICE,
             "NETWORK" to ConversationEncryptionNotice.OFFLINE,
         )
 

@@ -107,11 +107,17 @@ export type EncryptionSwitchRefusal =
   | 'unavailable'
   | 'offline'
   | 'failed'
-  | 'refused';
+  | 'refused'
+  | 'participant-without-device';
 
+/**
+ * #20073 — un membre n'a aucun appareil chiffré : rien n'est activé, et la
+ * passerelle nomme les membres en cause (`withoutDeviceUserIds`, #20075).
+ */
 export type EncryptionSwitchOutcome =
   | { readonly kind: 'switched'; readonly mode: CreationEncryptionMode }
-  | { readonly kind: EncryptionSwitchRefusal };
+  | { readonly kind: 'participant-without-device'; readonly withoutDeviceUserIds: readonly string[] }
+  | { readonly kind: Exclude<EncryptionSwitchRefusal, 'participant-without-device'> };
 
 export type EncryptionSwitchPorts = {
   readonly online: () => boolean;
@@ -134,16 +140,17 @@ const servedModeOf = (data: unknown): CreationEncryptionMode | null => {
 export const SWITCH_REFUSAL_CODES = {
   irreversible: 'E2EE_IRREVERSIBLE',
   regimeChanged: 'E2EE_REGIME_CHANGED',
+  participantWithoutDevice: 'E2EE_PARTICIPANT_WITHOUT_DEVICE',
 } as const;
 
-const REFUSALS: Readonly<Record<string, EncryptionSwitchRefusal>> = {
+const REFUSALS: Readonly<Record<string, Exclude<EncryptionSwitchRefusal, 'participant-without-device'>>> = {
   [SWITCH_REFUSAL_CODES.irreversible]: 'irreversible',
   [SWITCH_REFUSAL_CODES.regimeChanged]: 'regime-changed',
   ENCRYPTION_ALREADY_ENABLED: 'regime-changed',
   ENCRYPTION_ACTIVATION_RESTRICTED: 'restricted',
 };
 
-const refusalOf = (status: number, code: string | undefined): EncryptionSwitchRefusal => {
+const refusalOf = (status: number, code: string | undefined): Exclude<EncryptionSwitchRefusal, 'participant-without-device'> => {
   const known = code === undefined ? undefined : REFUSALS[code];
   if (known !== undefined) return known;
   if (status === 403) return 'forbidden';
@@ -171,6 +178,9 @@ export async function switchConversationEncryption(
   const result = await ports.post(params.target).catch(() => null);
   if (result === null) return { kind: 'failed' };
   if (!result.ok) {
+    if (result.code === SWITCH_REFUSAL_CODES.participantWithoutDevice) {
+      return { kind: 'participant-without-device', withoutDeviceUserIds: result.withoutDeviceUserIds ?? [] };
+    }
     const kind = refusalOf(result.status, result.code);
     return kind === 'irreversible' ? sealEndToEnd() : { kind };
   }
@@ -213,4 +223,5 @@ export const SWITCH_REFUSAL_KEY = {
   offline: 'conversationEncryption.switch.offline',
   failed: 'conversationEncryption.switch.failed',
   refused: 'conversationEncryption.switch.failed',
+  'participant-without-device': 'conversationEncryption.participantWithoutDevice.anonymous',
 } as const satisfies Record<EncryptionSwitchRefusal, ConversationEncryptionCatalogKey>;

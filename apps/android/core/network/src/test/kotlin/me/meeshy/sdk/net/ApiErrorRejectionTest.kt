@@ -45,6 +45,31 @@ class ApiErrorRejectionTest {
     }
 
     @Test
+    fun `E2EE_PARTICIPANT_WITHOUT_DEVICE porte les membres sans appareil chiffre, a la racine`() = runTest {
+        val error = failureOf(
+            refused(409, """{"success":false,"code":"E2EE_PARTICIPANT_WITHOUT_DEVICE","error":"x","withoutDeviceUserIds":["u2"]}"""),
+        )
+        assertThat(error.code).isEqualTo("E2EE_PARTICIPANT_WITHOUT_DEVICE")
+        assertThat(error.withoutDeviceUserIds).containsExactly("u2")
+        assertThat(failureOf(refused(409, """{"success":false,"code":"E2EE_PARTICIPANT_WITHOUT_DEVICE"}""")).withoutDeviceUserIds).isEmpty()
+    }
+
+    /** #20182 (5) — une liste mal formée ne fait pas perdre le 409 : seuls les identifiants lisibles restent. */
+    @Test
+    fun `des membres sans appareil mal formes n'emportent pas le refus`() = runTest {
+        val scalar = failureOf(
+            refused(409, """{"success":false,"code":"E2EE_PARTICIPANT_WITHOUT_DEVICE","withoutDeviceUserIds":"u2"}"""),
+        )
+        assertThat(scalar.code).isEqualTo("E2EE_PARTICIPANT_WITHOUT_DEVICE")
+        assertThat(scalar.withoutDeviceUserIds).isEmpty()
+        val mixed = failureOf(
+            refused(409, """{"success":false,"code":"E2EE_PARTICIPANT_WITHOUT_DEVICE","withoutDeviceUserIds":[1,"u3",null,{"id":"u4"},""]}"""),
+        )
+        assertThat(mixed.code).isEqualTo("E2EE_PARTICIPANT_WITHOUT_DEVICE")
+        assertThat(mixed.withoutDeviceUserIds).containsExactly("u3")
+    }
+
+    @Test
     fun `un detenteur mal forme n'emporte pas le refus`() = runTest {
         val error = failureOf(refused(409, """{"success":false,"code":"EMAIL_TAKEN","emailOwner":{"maskedDisplayName":1}}"""))
         assertThat(error.code).isEqualTo("EMAIL_TAKEN")

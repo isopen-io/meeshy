@@ -44,6 +44,11 @@ data class ApiResponse<T>(
     val retryAfter: Double? = null,
     /** Les consentements à donner d'un 403 de pièce jointe (`/attachments/:id/translate`). */
     val requiredConsents: List<String>? = null,
+    /**
+     * Les membres sans appareil chiffré d'un 409 `E2EE_PARTICIPANT_WITHOUT_DEVICE` (bascule, #20073), à la racine, lus en
+     * tolérance par `EndToEndParticipantWithoutDevice.userIdsFrom` (#20182).
+     */
+    val withoutDeviceUserIds: JsonElement? = null,
     /** La pagination par curseur des routes qui ne passent pas par `sendSuccess` (`messages/search`), à la racine. */
     val cursorPagination: CursorPagination? = null,
     /**

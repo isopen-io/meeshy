@@ -81,6 +81,7 @@ struct StoryRingCell: View, Equatable {
                     moodEmoji: moodEmoji,
                     presenceState: renderInputs.presence,
                     ring: group.authorRing,
+                    circleUserId: group.id,
                     onMoodTap: onMoodTap,
                     contextMenuItems: [
                         AvatarContextMenuItem(label: StoryTrayCopy.viewStories, icon: "play.circle.fill") {

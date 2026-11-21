@@ -254,6 +254,8 @@
     <string name="new_conversation_encryption_collapsed">Ridotta</string>
     <string name="new_conversation_encryption_expanded">Espansa</string>
     <string name="new_conversation_error_create">Impossibile creare la conversazione</string>
+    <string name="new_conversation_error_participant_without_device_anonymous">Un membro non può ancora ricevere messaggi cifrati: nulla è attivato.</string>
+    <string name="new_conversation_error_participant_without_device_named">%1$s non può ancora ricevere messaggi crittografati: non è stato attivato nulla.</string>
     <string name="new_conversation_group_title">Nome del gruppo (obbligatorio)</string>
     <string name="new_conversation_group_toggle">Nuovo gruppo</string>
     <string name="new_conversation_no_user_found">Nessun utente trovato</string>

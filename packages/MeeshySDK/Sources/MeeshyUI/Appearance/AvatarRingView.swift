@@ -133,6 +133,9 @@ public struct AvatarRingLayout: Equatable {
     public var ringScale: CGFloat { CGFloat(decor?.scale ?? 1) }
     /// Le côté peint, film compris : la boîte normalisée.
     public var paintedSide: CGFloat { decor.map { CGFloat($0.side) } ?? box }
+    /// Le fondu radial des films (retour porteur du 2026-11-21) : un halo ne montre jamais le bord carré de sa
+    /// zone de dessin. `nil` sans film — l'anneau seul tient dans sa boîte.
+    public var edgeFade: AvatarRingEdgeFade? { decor.map { _ in AvatarRingEdgeFade(ringScale: ringScale) } }
 
     public static func make(_ design: AvatarRingDesign, avatarSize: CGFloat, storyRingSize: CGFloat? = nil,
                             decor showsDecor: Bool = true) -> AvatarRingLayout {
@@ -140,6 +143,19 @@ public struct AvatarRingLayout: Equatable {
         let decor = showsDecor ? design.decor?.fit(box: Double(box)) : nil
         let baseScale = AvatarRingGeometry.avatarScale(avatarSize: avatarSize, storyRingSize: storyRingSize)
         return AvatarRingLayout(box: box, contentScale: baseScale * CGFloat(decor?.scale ?? 1), decor: decor)
+    }
+}
+
+/// Le fondu d'un film de cadre, en fractions de sa demi-largeur : plein jusqu'à `opaqueUntil` (le contour
+/// réduit qu'il encadre y tient), transparent dès `clearAt` — le cercle inscrit, donc ni les bords ni les coins
+/// du carré ne se voient jamais.
+public struct AvatarRingEdgeFade: Equatable, Sendable {
+    public let opaqueUntil: CGFloat
+    public let clearAt: CGFloat
+
+    init(ringScale: CGFloat) {
+        opaqueUntil = min(max(0.8, ringScale), 0.9)
+        clearAt = 1
     }
 }
 
@@ -169,7 +185,7 @@ private struct AvatarRingFrameModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .scaleEffect(layout.contentScale)
-            .background { AvatarRingDecorFilm(film: design.decor?.back, fit: layout.decor, animates: animates) }
+            .background { AvatarRingDecorFilm(film: design.decor?.back, fit: layout.decor, fade: layout.edgeFade, animates: animates) }
             .overlay {
                 ZStack {
                     if layout.drawsStill {
@@ -183,7 +199,7 @@ private struct AvatarRingFrameModifier: ViewModifier {
                 }
                 .frame(width: box, height: box)
             }
-            .overlay { AvatarRingDecorFilm(film: design.decor?.front, fit: layout.decor, animates: animates) }
+            .overlay { AvatarRingDecorFilm(film: design.decor?.front, fit: layout.decor, fade: layout.edgeFade, animates: animates) }
     }
 }
 
@@ -196,12 +212,26 @@ private struct AvatarRingFrameModifier: ViewModifier {
 struct AvatarRingDecorFilm: View {
     let film: PackAssetRef?
     let fit: AvatarRingDecorFit?
+    let fade: AvatarRingEdgeFade?
     let animates: Bool
 
     var body: some View {
         if let film, let fit {
+            let side = CGFloat(fit.side)
             PackLottieLayer(ref: film, animates: animates)
-                .frame(width: CGFloat(fit.side), height: CGFloat(fit.side))
+                .frame(width: side, height: side)
+                .mask { Self.fadeMask(fade, side: side) }
+        }
+    }
+
+    @ViewBuilder
+    static func fadeMask(_ fade: AvatarRingEdgeFade?, side: CGFloat) -> some View {
+        if let fade {
+            RadialGradient(stops: [.init(color: .black, location: fade.opaqueUntil),
+                                   .init(color: .clear, location: fade.clearAt)],
+                           center: .center, startRadius: 0, endRadius: side / 2)
+        } else {
+            Color.black
         }
     }
 }

@@ -138,6 +138,8 @@ fun ChatScreen(
     val capabilities by (governance?.capabilities ?: NO_CAPABILITIES).collectAsStateWithLifecycle()
     val viewerRole by (governance?.viewerRole ?: NO_VIEWER_ROLE).collectAsStateWithLifecycle()
     val unreadAtOpening by viewModel.unreadAtOpening.collectAsStateWithLifecycle()
+    val peerWithoutDevice = remember(viewModel) { viewModel.controllers.find<EndToEndPeerWithoutDeviceController>() }
+    EndToEndPeerWithoutDeviceEffect(peerWithoutDevice, onOpenConversation)
     val host = rememberChatHostContext(
         state = state,
         composerText = viewModel.composerText,
@@ -171,6 +173,7 @@ fun ChatScreen(
         listGate = viewModel.listGate,
         viewerRole = viewerRole,
         unreadAtOpening = unreadAtOpening,
+        peerWithoutDevice = peerWithoutDevice,
     )
 
     val cardsViewModel: ChatContactCardsViewModel = hiltViewModel()

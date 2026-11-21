@@ -133,6 +133,36 @@ class E2eeMessageExchangeTest {
         assertThat(server.wireLog.filter { it.contains("envelopes") }).isEmpty()
     }
 
+    /** #20181 — un pair dont cet appareil a connu une session, puis dont la liste se vide : un refus, jamais une redirection. */
+    @Test
+    fun aRecipientOnceKnown_whoseListEmpties_isUnreachable_notWithoutDevice() = runTest {
+        val server = FakeE2eeServer()
+        val a = E2eeTestDevice(server, alice).enroll()
+        E2eeTestDevice(server, bob).enroll()
+        send(a, bob, content("un"))
+        server.active(bob).forEach { it.retired = true }
+
+        val error = runCatching { a.sealer.seal(content("deux", "cid_2"), bob) }.exceptionOrNull()
+
+        assertThat(error).isInstanceOf(E2eeSealException.RecipientDevicesUnreachable::class.java)
+        assertThat((error as E2eeSealException.RecipientDevicesUnreachable).listed).isFalse()
+    }
+
+    /** #20181 — des appareils listés sans bundle servi : aucune session ne s'ouvre, c'est un refus, jamais une redirection. */
+    @Test
+    fun aRecipientListedWithoutBundle_isUnreachable_notWithoutDevice() = runTest {
+        val server = FakeE2eeServer()
+        val a = E2eeTestDevice(server, alice).enroll()
+        E2eeTestDevice(server, bob).enroll()
+        server.withholdBundles = true
+
+        val error = runCatching { a.sealer.seal(content("x"), bob) }.exceptionOrNull()
+
+        assertThat(error).isInstanceOf(E2eeSealException.RecipientDevicesUnreachable::class.java)
+        assertThat((error as E2eeSealException.RecipientDevicesUnreachable).listed).isTrue()
+        assertThat(server.wireLog.filter { it.contains("envelopes") }).isEmpty()
+    }
+
     @Test
     fun anotherRefusal_isNotRetried() = runTest {
         val server = FakeE2eeServer()

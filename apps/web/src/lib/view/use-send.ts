@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useStore } from 'zustand/react';
+import type { StoreApi } from 'zustand/vanilla';
 
+import { createDirectConversation } from '@/lib/api/conversations';
+import { apiDeps } from '@/lib/api/deps';
 import { isPermanentFailure } from '@/lib/api/outcome';
 import { appQueryClient } from '@/lib/api/query-client';
 import { discardSendAction, retrySendAction, sendAction } from '@/lib/api/query';
-import type { Message, Participant } from '@/lib/api/types';
+import type { Conversation, Message, Participant } from '@/lib/api/types';
+import { peerDeviceReach, type PeerDeviceReachState } from '@/lib/e2ee/peer-device-reach';
 import { translate } from '@/lib/i18n-catalog';
+import { isConversationEncryptionCatalogLoaded, translateConversationEncryption } from '@/lib/i18n-conversation-encryption-catalog';
 import { isMessagePiecesCatalogLoaded, translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
@@ -17,8 +22,39 @@ import { confirmedCountOf, entriesOf, outboxStore } from '@/lib/send/outbox-stor
 import { sendFailureReason } from '@/lib/send/failure-reason';
 import { plaintextWithheld } from '@/lib/send/served-regime';
 import { E2EE_PLAINTEXT_WITHHELD } from '@/lib/end-to-end-regime-ledger';
+import type { Draft } from '@/lib/send/perform-send';
+import { href, navigate } from '@/routes/route-table';
 
+import { PLAINTEXT_DIRECT_KEY } from './conversation-encryption-explanation';
 import type { LocalDelivery } from './message';
+import { directPeerOf } from './plaintext-direct-gesture';
+import { readableRedirectNotices, redirectsToReadable, sendWithheld, type ReadableRedirectPorts, type WithheldSendOutcome } from './readable-redirect';
+
+/**
+ * LE CHEMIN D'UN ENVOI RETENU (#20075) — vers le tête-à-tête lisible quand le
+ * pair est su sans appareil chiffré (`readable-redirect.ts`). Injectable pour
+ * les témoins ; par défaut, la passerelle, le routeur et l'outbox réels.
+ */
+export type ReadableRedirect = { readonly reach: StoreApi<PeerDeviceReachState>; readonly ports: ReadableRedirectPorts };
+
+const defaultReadableRedirect = (viewerId: string, online: boolean): ReadableRedirect => ({
+  reach: peerDeviceReach,
+  ports: {
+    online: () => online,
+    open: (peerId) => createDirectConversation(apiDeps, peerId, { plaintext: true }),
+    go: (conversationId) => navigate(href('thread', { conversation: conversationId })),
+    send: (conversationId, draft) => void sendAction({ conversationId, draft, viewerId, online }),
+    notices: readableRedirectNotices,
+  },
+});
+
+/** Le refus dit : le bout en bout, ou pourquoi la conversation lisible ne s'est pas ouverte. */
+function announceWithheld(announce: (message: string) => void, outcome: Exclude<WithheldSendOutcome, 'redirected'>): void {
+  const language = currentInterfaceLanguage();
+  const opening = outcome !== 'withheld' && isConversationEncryptionCatalogLoaded(language) ? translateConversationEncryption(language, PLAINTEXT_DIRECT_KEY[outcome]) : undefined;
+  const reason = opening ?? sendFailureReason({ ok: false, status: 0, error: '', code: E2EE_PLAINTEXT_WITHHELD }, language);
+  announce(reason === undefined ? translate(language, 'announce.messageNotSent') : translate(language, 'announce.messageNotSent.reason', { reason }));
+}
 
 /**
  * LE HOOK D'ENVOI (#5813, étape 7) — SANS RÈGLE : toute règle (débounce,
@@ -39,6 +75,9 @@ export function useSend(params: {
    * `use-live-announcer.ts`).
    */
   readonly announce: (message: string) => void;
+  /** La conversation servie : son pair nomme le tête-à-tête lisible d'un envoi retenu (#20075). */
+  readonly conversation?: Conversation | undefined;
+  readonly readableRedirect?: ReadableRedirect;
 }): {
   /** Les locaux de CETTE conversation (`entries[i].message`), mémoïsés :
    * une identité STABLE tant que l'outbox de cette conversation n'a pas
@@ -105,8 +144,11 @@ export function useSend(params: {
    */
   readonly discard: (messageId: string) => void;
 } {
-  const { conversationId, viewerId, sender, announce } = params;
+  const { conversationId, viewerId, sender, announce, conversation, readableRedirect } = params;
   const online = useOnline();
+  const peer = useMemo(() => (conversation === undefined ? undefined : directPeerOf(conversation, viewerId)), [conversation, viewerId]);
+  const peerId = peer?.id;
+  const peerName = peer?.name ?? '';
   const entries = useStore(outboxStore, (s) => entriesOf(s, conversationId));
 
   const pending = useMemo(() => entries.map((entry) => entry.message), [entries]);
@@ -147,37 +189,46 @@ export function useSend(params: {
       place: SharedPlace | null = null,
       sticker: MessageSticker | null = null,
     ) => {
-      /* #13171 — vue chiffrée de bout en bout : rien ne naît, l'annonce dit où écrire. */
+      const draft: Draft = {
+        content: text,
+        originalLanguage: language,
+        ...(replyTo === null ? {} : { replyToId: replyTo.id, replyTo }),
+        ...(attachments.length === 0 ? {} : { attachments }),
+        /* Une protection VIDE ne pose pas la clé — sur la VALEUR, jamais
+           sur l'identité (revue-correction) : `composer.tsx` compose son
+           objet par `useMemo`, donc il n'est JAMAIS `NO_PROTECTION` et le
+           test d'identité laissait toujours passer `protection: {}`. Sans
+           conséquence observable (`protectionFieldsOf({})` rend les mêmes
+           défauts), mais un garde qui ne garde rien ment sur le brouillon
+           que `outbox-store` conserve. */
+        ...(Object.keys(protection).length === 0 ? {} : { protection }),
+        ...(place === null ? {} : { place }),
+        ...(sticker === null ? {} : { sticker }),
+      };
+      /* #13171 — vue chiffrée de bout en bout : rien ne naît ici. #20075 — un
+         pair su sans appareil chiffré : le message part dans le tête-à-tête
+         lisible de la paire ; sinon l'annonce dit où écrire. */
       if (plaintextWithheld(conversationId, appQueryClient)) {
-        const language = currentInterfaceLanguage();
-        const reason = sendFailureReason({ ok: false, status: 0, error: '', code: E2EE_PLAINTEXT_WITHHELD }, language);
-        announce(reason === undefined ? translate(language, 'announce.messageNotSent') : translate(language, 'announce.messageNotSent.reason', { reason }));
+        const redirect = readableRedirect ?? defaultReadableRedirect(viewerId, online);
+        const withheldPeer = peerId === undefined ? undefined : { id: peerId, name: peerName };
+        if (!redirectsToReadable(redirect.reach.getState(), withheldPeer)) return announceWithheld(announce, 'withheld');
+        void sendWithheld({ fromConversationId: conversationId, peer: withheldPeer, draft, reach: redirect.reach.getState(), ports: redirect.ports }).then(
+          (outcome) => {
+            if (outcome !== 'redirected') announceWithheld(announce, outcome);
+          },
+          () => announceWithheld(announce, 'failed'),
+        );
         return;
       }
       void sendAction({
         conversationId,
-        draft: {
-          content: text,
-          originalLanguage: language,
-          ...(replyTo === null ? {} : { replyToId: replyTo.id, replyTo }),
-          ...(attachments.length === 0 ? {} : { attachments }),
-          /* Une protection VIDE ne pose pas la clé — sur la VALEUR, jamais
-             sur l'identité (revue-correction) : `composer.tsx` compose son
-             objet par `useMemo`, donc il n'est JAMAIS `NO_PROTECTION` et le
-             test d'identité laissait toujours passer `protection: {}`. Sans
-             conséquence observable (`protectionFieldsOf({})` rend les mêmes
-             défauts), mais un garde qui ne garde rien ment sur le brouillon
-             que `outbox-store` conserve. */
-          ...(Object.keys(protection).length === 0 ? {} : { protection }),
-          ...(place === null ? {} : { place }),
-          ...(sticker === null ? {} : { sticker }),
-        },
+        draft,
         viewerId,
         ...(sender === undefined ? {} : { sender }),
         online,
       });
     },
-    [conversationId, viewerId, sender, online, announce],
+    [conversationId, viewerId, sender, online, announce, peerId, peerName, readableRedirect],
   );
 
   const retry = useCallback(

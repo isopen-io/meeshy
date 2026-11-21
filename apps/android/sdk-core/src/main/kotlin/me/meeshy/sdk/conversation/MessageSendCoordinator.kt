@@ -105,11 +105,55 @@ internal class MessageSendCoordinator(
         clientMessageId: String? = null,
         attachmentReplyToId: String? = null,
         copyAttachmentsFromMessageId: String? = null,
-    ): String {
+    ): String = enqueueOptimistic(
+        conversationId = conversationId,
+        content = content,
+        originalLanguage = originalLanguage,
+        sender = sender,
+        replyToId = replyToId,
+        storyReplyToId = storyReplyToId,
+        forwardedFromId = forwardedFromId,
+        forwardedFromConversationId = forwardedFromConversationId,
+        effects = effects,
+        messageType = messageType,
+        attachmentUploadCmids = attachmentUploadCmids,
+        attachments = attachments,
+        location = location,
+        forwardedAttachmentIds = forwardedAttachmentIds,
+        sticker = sticker,
+        clientMessageId = clientMessageId,
+        attachmentReplyToId = attachmentReplyToId,
+        copyAttachmentsFromMessageId = copyAttachmentsFromMessageId,
+    ).cid
+
+    /**
+     * [sendOptimistic], qui dit en plus si la ligne est EN FILE (#20182) : une file pleine ou une écriture qui échoue laisse
+     * la bulle en échec et rend `isQueued = false` ; un rejeu sous un `cid_` déjà né est en file tant que sa bulle n'a pas échoué.
+     */
+    suspend fun enqueueOptimistic(
+        conversationId: String,
+        content: String,
+        originalLanguage: String,
+        sender: MeeshyUser,
+        replyToId: String? = null,
+        storyReplyToId: String? = null,
+        forwardedFromId: String? = null,
+        forwardedFromConversationId: String? = null,
+        effects: MessageEffects = MessageEffects(),
+        messageType: String = "text",
+        attachmentUploadCmids: List<String> = emptyList(),
+        attachments: List<ApiMessageAttachment> = emptyList(),
+        location: SharedPlace? = null,
+        forwardedAttachmentIds: List<String>? = null,
+        sticker: MessageSticker? = null,
+        clientMessageId: String? = null,
+        attachmentReplyToId: String? = null,
+        copyAttachmentsFromMessageId: String? = null,
+    ): QueuedSend {
         require(clientMessageId == null || OutboxIds.isValidCid(clientMessageId)) { "clientMessageId must be a cid_ id" }
         val cid = clientMessageId ?: OutboxIds.cid()
         // A replay of the same share (reopened sheet, retry after a partial series) finds its bubble: nothing is born twice.
-        if (clientMessageId != null && messageDao.find(cid) != null) return cid
+        if (clientMessageId != null) messageDao.find(cid)?.let { return QueuedSend(cid, it.sendState != LocalSendState.FAILED.name) }
         val ticket = outboxRepository.currentTicket()
         val now = clock.nowMillis()
         val wire = MessageEffectsEncoder.encode(effects, Instant.ofEpochMilli(now))
@@ -185,6 +229,7 @@ internal class MessageSendCoordinator(
                 ticket,
             )
             if (queued is OutboxEnqueueResult.QueueFull) markSendFailed(cid)
+            return QueuedSend(cid, isQueued = queued !is OutboxEnqueueResult.QueueFull)
         } catch (closed: AccountClosedException) {
             stager.withdraw(cid)
             throw closed
@@ -192,8 +237,8 @@ internal class MessageSendCoordinator(
             throw cancelled
         } catch (failure: Exception) {
             withContext(NonCancellable) { stager.failEnqueue(cid, failure) }
+            return QueuedSend(cid, isQueued = false)
         }
-        return cid
     }
 
     /**
@@ -226,6 +271,9 @@ internal class MessageSendCoordinator(
         val bubble = messageDao.find(cmid)?.let { runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(it.payload) }.getOrNull() } ?: return
         reconcileSent(cmid, bubble.acknowledgedBy(ack))
     }
+
+    /** Retire la bulle [cmid] dont l'envoi est parti dans une autre conversation (#20076) ; l'aperçu de liste suit. */
+    suspend fun withdrawLocal(cmid: String) = dropBubble(cmid)
 
     /** Retire la bulle optimiste [cmid] et, avec elle, les aperçus locaux de ses médias. */
     private suspend fun dropBubble(cmid: String) {
@@ -427,3 +475,6 @@ internal class MessageSendCoordinator(
         val PIECE_TYPES = setOf("image", "video", "audio", "file")
     }
 }
+
+/** Un envoi optimiste et ce que l'outbox en a fait (#20182) : `isQueued = false`, la bulle est en échec, rien ne partira. */
+data class QueuedSend(val cid: String, val isQueued: Boolean)

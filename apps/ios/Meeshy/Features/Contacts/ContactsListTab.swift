@@ -170,6 +170,7 @@ private struct ContactRow: View, Equatable {
                     moodEmoji: moodEmoji,
                     presenceState: presence,
                     ring: user.avatarRing,
+                    circleUserId: user.id,
                     onMoodTap: onMoodTap
                 )
 

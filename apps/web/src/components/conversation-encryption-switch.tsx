@@ -9,7 +9,7 @@ import {
   encryptionSwitchTargets,
   type EncryptionModeSwitchGesture,
   type EncryptionStatus,
-  type EncryptionSwitchRefusal,
+  type EncryptionSwitchOutcome,
   SWITCH_KEY,
   SWITCH_REFUSAL_KEY,
 } from '@/lib/view/conversation-encryption-switch';
@@ -36,7 +36,7 @@ import { InfoHintButton, InfoHintText, useInfoHint } from './info-hint';
 
 type Translate = (key: ConversationEncryptionCatalogKey, params?: Readonly<Record<string, string>>) => string;
 
-type Feedback = { readonly kind: 'switched'; readonly mode: CreationEncryptionMode } | { readonly kind: EncryptionSwitchRefusal };
+type Feedback = EncryptionSwitchOutcome;
 
 
 const MUTED = 'var(--color-ios-ink-2)';

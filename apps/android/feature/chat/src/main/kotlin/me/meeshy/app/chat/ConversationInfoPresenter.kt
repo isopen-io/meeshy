@@ -53,6 +53,8 @@ fun ConversationInfoPresenter(
             isDirect = !isGroup,
             accentColor = seed.accentColor,
             onDismiss = onDismiss,
+            peerUserId = seed.peerUserId,
+            peerName = seed.title,
         )
         InfoSubSheet.APPEARANCE -> ConversationAppearanceSheet(
             conversationId = seed.conversationId,

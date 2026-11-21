@@ -216,7 +216,14 @@ struct StoryHeaderView: View {
     /// republication (icône + @handle visuels que ce label unique remplace).
     private func computeProfileLabel(for group: StoryGroup) -> String {
         let label = authorLabel(for: group)
-        return StoryHeaderTime.showsPendingClock(for: currentStory) ? "\(label), \(UnsentPublicationsCopy.waiting)" : label
+        let waiting = StoryHeaderTime.showsPendingClock(for: currentStory) ? UnsentPublicationsCopy.waiting : nil
+        return ([label, waiting, audiencePlan?.spoken].compactMap { $0 }).joined(separator: ", ")
+    }
+
+    /// L'audience servie de la story affichée (#20179) ; le détail n'est préparé que pour l'auteur.
+    private var audiencePlan: StoryAudiencePlan? {
+        StoryAudiencePlan.make(visibility: currentStory?.visibility, userIds: currentStory?.visibilityUserIds,
+                               isAuthor: isOwnStory)
     }
 
     private func authorLabel(for group: StoryGroup) -> String {
@@ -260,6 +267,7 @@ struct StoryHeaderView: View {
                                     avatarURL: group.avatarURL,
                                     presenceState: PresenceManager.shared.presenceState(for: group.id, served: group.authorPresence),
                                     ring: group.authorRing,
+                                    circleUserId: group.id,
                                     onViewProfile: { selectedProfileUser = .from(storyGroup: group) },
                                     contextMenuItems: [
                                         AvatarContextMenuItem(
@@ -284,7 +292,7 @@ struct StoryHeaderView: View {
                                 }
                             }
                         },
-                        nameBadge: { pendingClock },
+                        nameBadge: { nameBadges },
                         accessory: {
                             if let story = currentStory, story.repostOfId != nil {
                                 HStack(spacing: MeeshySpacing.xsPlus) {
@@ -395,6 +403,14 @@ struct StoryHeaderView: View {
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
+        }
+    }
+
+    @ViewBuilder
+    private var nameBadges: some View {
+        HStack(spacing: MeeshySpacing.xsPlus) {
+            pendingClock
+            if let audiencePlan { StoryAudienceBadge(plan: audiencePlan).equatable() }
         }
     }
 
