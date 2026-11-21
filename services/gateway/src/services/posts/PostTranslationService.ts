@@ -452,7 +452,7 @@ export class PostTranslationService {
 
       const comment = await this.prisma.postComment.findUnique({
         where: { id: commentId },
-        select: { postId: true },
+        select: { postId: true, authorId: true },
       });
 
       if (comment) {
@@ -472,7 +472,7 @@ export class PostTranslationService {
               confidenceScore: confidenceScore ?? 1,
               createdAt: new Date().toISOString(),
             },
-          }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err: unknown) => {
+          }, post.authorId, post.visibility, post.visibilityUserIds ?? [], comment.authorId).catch((err: unknown) => {
             log.error('CommentTranslation: broadcast failed', err instanceof Error ? err : new Error(String(err)), { commentId, targetLanguage });
           });
         }
