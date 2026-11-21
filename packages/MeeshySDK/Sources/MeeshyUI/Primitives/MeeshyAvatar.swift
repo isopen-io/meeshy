@@ -247,6 +247,9 @@ public struct MeeshyAvatar: View {
     /// personne (`profileDecor.avatarRing`, #10945) — la RÉFÉRENCE, que
     /// l'avatar résout lui-même par le catalogue (#10946). `nil` ⇒ aucun contour.
     public let ring: ServedProfileDecorItem?
+    /// La personne dont la pastille de cercle se peint en bas à gauche (#20178), lue dans `avatarCircleLevels` ;
+    /// `nil` : aucune pastille.
+    public let circleUserId: String?
     public var onTap: (() -> Void)? = nil
     public var onViewProfile: (() -> Void)? = nil
     public var onViewStory: (() -> Void)? = nil
@@ -264,7 +267,7 @@ public struct MeeshyAvatar: View {
                 secondaryColor: String? = nil, avatarURL: String? = nil, thumbHash: String? = nil,
                 storyState: StoryRingState = .none, moodEmoji: String? = nil,
                 presenceState: PresenceState? = nil, isHere: ConversationHere = .absent,
-                ring: ServedProfileDecorItem? = nil, enablePulse: Bool? = nil,
+                ring: ServedProfileDecorItem? = nil, circleUserId: String? = nil, enablePulse: Bool? = nil,
                 isDark: Bool = ThemeManager.shared.mode.isDark,
                 onTap: (() -> Void)? = nil, onViewProfile: (() -> Void)? = nil,
                 onViewStory: (() -> Void)? = nil, onMoodTap: ((CGPoint) -> Void)? = nil,
@@ -274,6 +277,7 @@ public struct MeeshyAvatar: View {
         self.storyState = storyState; self.moodEmoji = moodEmoji; self.presenceState = presenceState
         self.isHere = isHere
         self.ring = ring
+        self.circleUserId = circleUserId
         self.ringDesign = kind == .user ? ProfileDecorResolver.ring(ring) : nil
         self.enablePulse = enablePulse ?? context.defaultPulse; self.isDark = isDark
         self.onTap = onTap; self.onViewProfile = onViewProfile; self.onViewStory = onViewStory
@@ -290,6 +294,7 @@ public struct MeeshyAvatar: View {
 
     @State private var tapScale: CGFloat = 1.0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.avatarCircleLevels) private var circleLevels
     /// Le point a changé depuis l'apparition de l'avatar : seul un VRAI
     /// changement fait onduler « ici » — une liste qui s'affiche ne pulse pas.
     @State private var presenceChanged = false
@@ -338,18 +343,40 @@ public struct MeeshyAvatar: View {
     /// VoiceOver : le nom, son humeur (#10528), et « dans la conversation »
     /// quand le pair y est.
     private var accessibilityName: String {
-        Self.spokenName(name: name, moodEmoji: effectiveMoodEmoji, isHere: shownPresence == .here)
+        Self.spokenName(name: name, moodEmoji: effectiveMoodEmoji, isHere: shownPresence == .here, circle: shownCircle)
+    }
+
+    /// Le cercle de la personne, servi par l'app : aucun pour une entité, ni sur un avatar trop petit pour le lire.
+    private var shownCircle: RelationLevel? {
+        guard kind == .user, AvatarCircleBadge.isDrawn(avatarSize: context.size) else { return nil }
+        return circleLevels.level(for: circleUserId)
+    }
+
+    @ViewBuilder
+    private var circleBadge: some View {
+        if let level = shownCircle {
+            let diameter = AvatarCircleBadge.diameter(avatarSize: context.size)
+            AvatarCircleBadgeView(level: level, diameter: diameter, ringColor: theme.backgroundPrimary)
+                .equatable()
+                .offset(AvatarCircleBadge.centerOffset(
+                    avatarSize: context.size,
+                    frameSize: effectiveStoryState == .none ? context.size : context.ringSize,
+                    diameter: diameter
+                ))
+                .allowsHitTesting(false)
+        }
     }
 
     /// La pastille d'humeur masque le point et n'est lue par personne : sans
     /// ce libellé, l'humeur n'existait que pour l'œil.
-    public static func spokenName(name: String, moodEmoji: String?, isHere: Bool) -> String {
+    public static func spokenName(name: String, moodEmoji: String?, isHere: Bool, circle: RelationLevel? = nil) -> String {
         let mood = moodEmoji.flatMap { emoji -> String? in
             guard !emoji.isEmpty else { return nil }
             return String(localized: "avatar.a11y.mood", defaultValue: "humeur \(emoji)", bundle: .module)
         }
         let here = isHere ? AvatarPresenceDot.here.localizedLabel : nil
-        return ([name] + [mood, here].compactMap { $0 }).joined(separator: ", ")
+        let shownCircle = AvatarCircleBadge.shownLevel(circle).map(AvatarCircleBadge.spoken)
+        return ([name] + [shownCircle, mood, here].compactMap { $0 }).joined(separator: ", ")
     }
 
     private var hasTapHandler: Bool {
@@ -436,6 +463,7 @@ public struct MeeshyAvatar: View {
             decor: ringShowsDecor
         )
         .overlay(alignment: .bottomTrailing) { presenceBadge }
+        .overlay(alignment: .bottomLeading) { circleBadge }
         .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.42, dampingFraction: 0.5),
                    value: shownPresence?.transitionKey)
         .adaptiveOnChange(of: shownPresence?.transitionKey) { _, _ in presenceChanged = true }

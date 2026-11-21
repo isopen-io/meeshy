@@ -19,28 +19,8 @@ nonisolated enum ProfileActionsCopy {
         String(localized: "profile.actions.show", defaultValue: "Montrer", bundle: .main)
     }
 
-    static var share: String {
-        String(localized: "profile.actions.share", defaultValue: "Partager", bundle: .main)
-    }
-
-    static var seenAs: String {
-        String(localized: "profile.actions.seenAs", defaultValue: "Voir comme", bundle: .main)
-    }
-
-    static var edit: String {
-        String(localized: "profile.actions.edit", defaultValue: "Modifier", bundle: .main)
-    }
-
     static var mood: String {
         String(localized: "profile.actions.mood", defaultValue: "Mon statut", bundle: .main)
-    }
-
-    static var legend: String {
-        String(localized: "profile.actions.legend", defaultValue: "Ma Légende", bundle: .main)
-    }
-
-    static var myQR: String {
-        String(localized: "profile.actions.myQR", defaultValue: "Mon QR", bundle: .main)
     }
 
     static var scan: String {
@@ -121,18 +101,6 @@ nonisolated enum ProfileActionsCopy {
         String(localized: "profile.actions.account", defaultValue: "Mon compte", bundle: .main)
     }
 
-    static var statsTitle: String {
-        String(localized: "profile.actions.stats", defaultValue: "Statistiques", bundle: .main)
-    }
-
-    /// « 12 480 messages · 86 conversations » ; rien tant que les compteurs ne sont pas servis.
-    static func statsSubtitle(_ stats: UserStats?, locale: Locale) -> String? {
-        guard let stats else { return nil }
-        let format = String(localized: "profile.actions.stats.counts", defaultValue: "%1$@ messages · %2$@ conversations", bundle: .main)
-        let style = IntegerFormatStyle<Int>.number.locale(locale)
-        return String(format: format, stats.totalMessages.formatted(style), stats.totalConversations.formatted(style))
-    }
-
     static var securityTitle: String {
         String(localized: "profile.actions.security", defaultValue: "Sécurité", bundle: .main)
     }
@@ -147,10 +115,6 @@ nonisolated enum ProfileActionsCopy {
             return String(localized: "profile.actions.security.email", defaultValue: "E-mail à vérifier", bundle: .main)
         }
         return nil
-    }
-
-    static var settingsTitle: String {
-        String(localized: "profile.actions.settings", defaultValue: "Réglages", bundle: .main)
     }
 
     static var logout: String {

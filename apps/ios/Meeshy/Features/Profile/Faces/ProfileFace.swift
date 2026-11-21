@@ -2,17 +2,16 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Les trois faces de mon profil (loi 1, #18869) : la Vitrine dit qui je suis, les Liens ce qui amène vers moi, les
-/// Actions ce que je peux faire. L'ordre des cas est l'ordre du sélecteur.
+/// Les deux faces de mon profil (#18869, #20177) : la Vitrine dit qui je suis et où
+/// me trouver (mes adresses), les Actions ce que je peux faire — dont mon lien de profil et mes liens créés. La face
+/// Liens n'existe plus ; la page « Mes liens » garde sa composition. L'ordre des cas est l'ordre du sélecteur.
 nonisolated enum ProfileFace: String, CaseIterable, Hashable, Sendable {
     case vitrine
-    case links
     case actions
 
     var title: String {
         switch self {
         case .vitrine: return String(localized: "profile.face.vitrine", defaultValue: "Vitrine", bundle: .main)
-        case .links: return String(localized: "profile.face.links", defaultValue: "Liens", bundle: .main)
         case .actions: return String(localized: "profile.face.actions", defaultValue: "Actions", bundle: .main)
         }
     }
@@ -20,7 +19,6 @@ nonisolated enum ProfileFace: String, CaseIterable, Hashable, Sendable {
     var systemImage: String {
         switch self {
         case .vitrine: return "person.crop.square"
-        case .links: return "link"
         case .actions: return "bolt"
         }
     }
@@ -29,7 +27,6 @@ nonisolated enum ProfileFace: String, CaseIterable, Hashable, Sendable {
     var currentSystemImage: String {
         switch self {
         case .vitrine: return "person.crop.square.fill"
-        case .links: return "link"
         case .actions: return "bolt.fill"
         }
     }
@@ -57,13 +54,12 @@ nonisolated enum ProfileFace: String, CaseIterable, Hashable, Sendable {
         String(localized: "profile.face.share", defaultValue: "Partager mon profil", bundle: .main)
     }
 
-    /// Le bouton posé à côté du sélecteur dépend de la face (planches `Main`, `Moi-Liens`, `Moi-Actions`) : partager ma
-    /// vitrine quand mon lien existe, créer un lien sur les Liens, rien sur les Actions.
+    /// Le bouton posé à côté du sélecteur (#20177) : sur ma Vitrine, rien — « Parler » à moi-même ne répondrait pas ;
+    /// sur les Actions, partager mon profil hors de Meeshy dès que mon lien existe.
     func accessory(canShare: Bool) -> ProfileFaceAccessory? {
         switch self {
-        case .vitrine: return canShare ? .share : nil
-        case .links: return .createLink
-        case .actions: return nil
+        case .vitrine: return nil
+        case .actions: return canShare ? .share : nil
         }
     }
 }
@@ -71,25 +67,22 @@ nonisolated enum ProfileFace: String, CaseIterable, Hashable, Sendable {
 /// Le bouton de fin du sélecteur de faces, avec son glyphe et le libellé que VoiceOver lit.
 nonisolated enum ProfileFaceAccessory: Hashable, Sendable {
     case share
-    case createLink
 
     var systemImage: String {
         switch self {
         case .share: return "square.and.arrow.up"
-        case .createLink: return "plus"
         }
     }
 
     var label: String {
         switch self {
         case .share: return ProfileFace.shareLabel
-        case .createLink: return ProfileLinksCopy.createLink
         }
     }
 }
 
 /// Le sélecteur de faces, en bas, dans la zone du pouce (loi 5) : le choix segmenté du kit (K03, glyphe de tête plein
-/// pour la face courante) posé dans un verre dense, et à côté le bouton propre à la face (K01) — il change avec elle
+/// pour la face courante) posé dans un verre dense, et à côté le bouton propre à la face (K01) — il paraît avec elle
 /// selon la table K26.
 struct ProfileFaceSelector: View {
     @Binding var face: ProfileFace
