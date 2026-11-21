@@ -55,22 +55,8 @@ extension Router {
             case .userLinks:
                 replaceStack(with: .links)
 
-            case .postDetail(let postId):
-                push(.postDetail(postId))
-
-            case .storyDetail(let postId):
-                // Un lien tapé dans l'app prend la voie du lancement système :
-                // la racine ouvre le lecteur sur CETTE story par `StoryDoor`,
-                // comme le même lien reçu de l'extérieur (#7808).
-                DeepLinkRouter.shared.pendingDeepLink = .storyDetail(postId: postId)
-
-            case .reel(let postId):
-                // Même voie que le lancement système : la racine ouvre le
-                // réel par `ReelDoor`, dans le lecteur de réels (#7805).
-                DeepLinkRouter.shared.pendingDeepLink = .reel(postId: postId)
-
-            case .mood(let postId):
-                push(.moodSpotlight(statusId: postId))
+            case .postDetail, .storyDetail, .reel, .mood:
+                openContent(destination)
 
             case .community(let id):
                 push(.communityDetail(id))
@@ -93,6 +79,20 @@ extension Router {
             case .referral, .call, .external:
                 break
             }
+        }
+    }
+
+    /// Un contenu touché dans l'app s'ouvre là où il vit, par la voie du
+    /// lancement système quand la racine tient la porte : la story par
+    /// `StoryDoor` (#7808), le réel par `ReelDoor` (#7805), l'humeur en plein
+    /// écran (#20211), le post dans son détail.
+    private func openContent(_ destination: DeepLinkDestination) {
+        switch destination {
+        case .postDetail(let postId): push(.postDetail(postId))
+        case .storyDetail(let postId): DeepLinkRouter.shared.pendingDeepLink = .storyDetail(postId: postId)
+        case .reel(let postId): DeepLinkRouter.shared.pendingDeepLink = .reel(postId: postId)
+        case .mood(let postId): push(.moodSpotlight(statusId: postId))
+        default: break
         }
     }
 
