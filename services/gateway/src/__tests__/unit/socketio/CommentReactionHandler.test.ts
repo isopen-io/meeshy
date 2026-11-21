@@ -240,6 +240,24 @@ describe('CommentReactionHandler', () => {
     });
   });
 
+  // #20216 — réagir au commentaire d'un auteur séparé (blocage, ou lecture en panne : fermé)
+  it.each([
+    ['séparé', jest.fn<any>().mockResolvedValue({ id: 'x' }), false],
+    ['lecture en panne', jest.fn<any>().mockRejectedValue(new Error('panne')), false],
+    ['aucun blocage', jest.fn<any>().mockResolvedValue(null), true],
+  ])('handleAddReaction (#20216) — auteur du commentaire : %s', async (_cas, findFirst, posee) => {
+    const data = { commentId: COMMENT_ID, postId: POST_ID, emoji: EMOJI };
+    const callback = jest.fn();
+    mockValidate.mockReturnValue({ success: true, data });
+    mockReactionService.addReaction.mockResolvedValue(sampleReactionData);
+    mockReactionService.createUpdateEvent.mockResolvedValue(sampleUpdateEvent);
+    mockPrisma.user = { findFirst };
+    mockPrisma.postComment.findFirst.mockResolvedValue({ postId: POST_ID, authorId: ANOTHER_USER_ID, post: { authorId: ANOTHER_USER_ID, visibility: 'PUBLIC', visibilityUserIds: [] } });
+    await handler.handleAddReaction(createMockSocket() as any, data, callback);
+    expect(mockReactionService.addReaction).toHaveBeenCalledTimes(posee ? 1 : 0);
+    if (!posee) expect(callback).toHaveBeenCalledWith({ success: false, error: 'Comment not found' });
+  });
+
   // ===== handleAddReaction =====
 
   describe('handleAddReaction', () => {

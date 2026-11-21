@@ -390,15 +390,20 @@ export async function loadCommentPostAcl(
 ): Promise<CommentThreadAcl | null> {
   const comment = await prisma.postComment.findFirst({
     where: { id: commentId, deletedAt: NOT_DELETED },
-    select: { postId: true, post: { select: { ...POST_ACL_SELECT, isQuote: true, repostOfId: true, originalRepostOfId: true } } },
+    select: { postId: true, authorId: true, post: { select: { ...POST_ACL_SELECT, isQuote: true, repostOfId: true, originalRepostOfId: true } } },
   });
   if (!comment?.post) return null;
-  return { postId: comment.postId, post: comment.post };
+  return { postId: comment.postId, authorId: comment.authorId, post: comment.post };
 }
 
-/** Le post qui porte un commentaire, et ce qui dit s'il est une republication simple. */
+/**
+ * Le post qui porte un commentaire, et ce qui dit s'il est une republication simple.
+ * `authorId` est l'auteur du COMMENTAIRE (#20216) : une action sur un commentaire
+ * se refuse à qui un blocage en sépare (`commentAuthorSeparatedFrom`).
+ */
 export type CommentThreadAcl = {
   readonly postId: string;
+  readonly authorId?: string | null;
   readonly post: PostVisibilityRecord & {
     readonly isQuote?: boolean;
     readonly repostOfId?: string | null;

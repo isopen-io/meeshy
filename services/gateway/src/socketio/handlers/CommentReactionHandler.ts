@@ -29,6 +29,7 @@ import {
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { SocketRateLimiter } from '../../utils/socket-rate-limiter.js';
 import { loadCommentPostAcl, canUserInteractWithThread, canUserConsumeThread } from '../../services/posts/postVisibility.js';
+import { commentAuthorSeparatedFrom } from '../../services/posts/separatedCommentAuthors.js';
 
 const logger = enhancedLogger.child({ module: 'CommentReactionHandler' });
 
@@ -128,7 +129,11 @@ export class CommentReactionHandler {
       // adresser la diffusion (voir `postId` ci-dessous).
       // Refus indistinct d'un commentaire inexistant — pas d'oracle.
       const thread = await loadCommentPostAcl(this.prisma, validated.commentId);
-      if (!thread || !(await canUserInteractWithThread(this.prisma, thread, userId))) {
+      if (
+        !thread ||
+        !(await canUserInteractWithThread(this.prisma, thread, userId)) ||
+        (await commentAuthorSeparatedFrom(this.prisma, thread, userId))
+      ) {
         this.logger.warn('[CommentReactionHandler] comment:reaction-add denied (visibility)', { userId, commentId: validated.commentId });
         if (callback) callback({ success: false, error: 'Comment not found' });
         return;

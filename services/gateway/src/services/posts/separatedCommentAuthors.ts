@@ -19,6 +19,7 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { blockedIdsAroundViewer } from '../ContactDirectoryService';
+import { isBlockedWithAny } from '../../utils/blocking';
 
 export async function separatedCommentAuthors(
   prisma: PrismaClient,
@@ -30,4 +31,22 @@ export async function separatedCommentAuthors(
 /** Rien à écarter ⇒ aucune clause : un `notIn: []` coûterait un niveau de plan pour rien. */
 export function withoutSeparatedAuthors(separated: readonly string[]) {
   return separated.length > 0 ? [{ authorId: { notIn: [...separated] } }] : [];
+}
+
+/**
+ * Une ACTION sur un commentaire (le traduire, y réagir) se refuse à qui un
+ * blocage sépare de son auteur, dans un sens ou dans l'autre (#20216) : la
+ * liste le tait, un identifiant gardé d'avant le blocage ne le rouvre pas. Le
+ * refus prend la forme d'un commentaire absent. Fermé : une lecture qui ne
+ * conclut pas répond « séparé ».
+ *
+ * Retirer SA réaction reste permis : le geste ne sert rien du commentaire et
+ * défait ce que le lecteur avait posé avant le blocage.
+ */
+export function commentAuthorSeparatedFrom(
+  prisma: Pick<PrismaClient, 'user'>,
+  thread: { readonly authorId?: string | null },
+  viewerId: string,
+): Promise<boolean> {
+  return isBlockedWithAny(prisma, viewerId, [thread.authorId]);
 }
