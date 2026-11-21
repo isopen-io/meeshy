@@ -118,7 +118,7 @@
   },
   "optionalDependencies": {
     "@capacitor/android": "8.6.0",
-    "@capacitor/cli": "8.6.0",
+    "@capacitor/cli": "8.6.2",
     "@capacitor/core": "8.6.0",
     "@capacitor/ios": "8.6.0"
   }
