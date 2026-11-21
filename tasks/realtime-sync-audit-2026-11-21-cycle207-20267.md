@@ -115,12 +115,20 @@ différentes : c'est ce qui distingue deux défauts d'un seul défaut vu deux fo
 - Il ne tranche pas #20268 : écrire le lecteur du réordonnancement de
   communautés, retirer l'émission ou retirer la déclaration est une décision
   produit, et les trois ont leur coût écrit dans l'issue.
-- Il ne ferme pas la limite « cité ≠ branché ». Elle reste, et elle est
-  mesurable : un relevé des BRANCHEMENTS doit reconnaître au moins trois formes
-  (`socket.on(NOM, h)`, une table de couples, une LISTE de noms parcourue — ce
-  que fait `call-socket-bridge.ts` pour vingt-six noms). Un premier essai ne
-  voyant que la première forme a rendu 60 faux positifs ; il a été **JETÉ, pas
-  gelé** (cycle 107). Ce serait un lot à lui, et son issue reste à ouvrir quand
-  la forme aura été instruite.
+- Il ne ferme pas la limite « cité ≠ branché » — mais il lui donne sa TAILLE,
+  sur le web : des **167** événements que le CODE de `apps/web/src` cite, **163**
+  ont un branchement reconnaissable sous l'une de QUATRE formes
+  (`socket.on(NOM, h)`, une table de couples `[NOM, h]`, une carte
+  `{ [NOM]: h }`, une LISTE de noms parcourue — ce que fait
+  `call-socket-bridge.ts` pour vingt-six noms), et les **quatre** restants sont
+  des listes EXPORTÉES que leur hôte parcourt dans un AUTRE fichier
+  (`COMMUNITY_MEMBER_EVENTS` → `community-live.ts`,
+  `CALL_LIVE_FRAME_SERVER_EVENTS`, `CALL_RECORDING_SERVER_EVENTS`). **La classe
+  est VIDE pour le web** ; iOS et Android ne sont pas mesurés. Un relevé de
+  branchements serait un lot à lui : son premier essai, qui ne voyait que
+  `socket.on(`, rendait **soixante** faux positifs — il a été **JETÉ, pas
+  gelé** (cycle 107), et c'est pour cela que le chiffre ci-dessus est donné avec
+  les formes qu'il reconnaît, jamais seul. « Une limite assumée sans chiffre ne
+  dit pas s'il y a un trou d'un site ou de quatre-vingt-dix. »
 - `pack:installation-updated` manque à deux clients sur trois : la question
   « faut-il l'y porter ? » appartient au lot des vitrines, pas à l'instrument.

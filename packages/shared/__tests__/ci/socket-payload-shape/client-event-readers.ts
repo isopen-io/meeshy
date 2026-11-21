@@ -114,6 +114,20 @@ const constantValues = (): { readonly values: ReadonlyMap<string, string>; reado
  * personne ne connaît. Un nom cité sans être branché resterait invisible ici —
  * c'est une limite, pas un silence : elle est écrite.
  *
+ * **Et elle a une TAILLE, mesurée sur le web au cycle 207** (#20267), parce
+ * qu'une limite assumée sans chiffre ne dit pas s'il y a un trou d'un site ou
+ * de quatre-vingt-dix : sur les 167 événements que le CODE de `apps/web/src`
+ * cite, 163 ont un branchement reconnaissable sous l'une de quatre formes
+ * (`socket.on(NOM, h)`, une table de couples `[NOM, h]`, une carte
+ * `{ [NOM]: h }`, une LISTE de noms parcourue), et les quatre restants sont des
+ * listes EXPORTÉES que leur hôte parcourt dans un AUTRE fichier
+ * (`COMMUNITY_MEMBER_EVENTS`, `CALL_LIVE_FRAME_SERVER_EVENTS`,
+ * `CALL_RECORDING_SERVER_EVENTS`) — donc branchés. **La classe est vide pour le
+ * web aujourd'hui** ; iOS et Android ne sont pas mesurés. Un relevé de
+ * BRANCHEMENTS serait un lot à lui : son premier essai, qui ne voyait que
+ * `socket.on(`, rendait soixante faux positifs — il a été JETÉ, pas gelé
+ * (cycle 107).
+ *
  * **Les COMMENTAIRES sont retirés d'abord** (#20267). Sans cela, la phrase qui
  * dit « cet onglet n'écoute pas l'événement » compte comme un lecteur : six
  * citations du relevé étaient des doc-comments, dont DEUX qui NIAIENT l'écoute
