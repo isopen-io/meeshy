@@ -136,7 +136,7 @@ export async function registerMembershipRoutes(
   fastify.post('/communities/:id/join', {
     onRequest: [fastify.authenticate],
     schema: {
-      description: 'Join a public community. The authenticated user is added as a member with the "member" role. Private communities cannot be joined directly - use an invite instead. Optional body `{ via: "link" }` records an entry through the community link (#19429). A public community that validates each entry (`requiresJoinApproval`) records a join request instead: a client that sends `{ acceptsPending: true }` gets 202 with the pending request, an older client gets 409 `COMMUNITY_JOIN_PENDING`; a request within 7 days of a refusal gets 403 `COMMUNITY_JOIN_COOLDOWN`.',
+      description: 'Join a public community. The authenticated user is added as a member with the "member" role. Private communities cannot be joined directly - use an invite instead. Optional body `{ via: "link" }` records an entry through the community link (#19429). A public community that validates each entry (`requiresJoinApproval`) records a join request instead: a client that sends `{ acceptsPending: true }` gets 202 with the pending request, an older client gets 409 `COMMUNITY_JOIN_PENDING`; a request within 7 days of a refusal gets 403 `COMMUNITY_JOIN_COOLDOWN`; joining `via: "link"` while a steward paused the link gets 403 `COMMUNITY_LINK_PAUSED` (#19661).',
       tags: ['communities'],
       summary: 'Join a public community',
       params: {
@@ -221,7 +221,7 @@ export async function registerMembershipRoutes(
       const community = await fastify.prisma.community.findFirst({
         // #8876 — on ne rejoint pas une communauté désactivée par l'administration.
         where: { id, isActive: true },
-        select: { id: true, isPrivate: true, createdBy: true, requiresJoinApproval: true }
+        select: { id: true, isPrivate: true, createdBy: true, requiresJoinApproval: true, joinLinkPausedAt: true }
       });
 
       if (!community) {
@@ -232,6 +232,11 @@ export async function registerMembershipRoutes(
       // des entrées n'ouvre pas une porte que l'invitation fermait.
       if (community.isPrivate) {
         return sendForbidden(reply, 'Cannot join a private community without an invite');
+      }
+
+      // #19661 — un lien suspendu ne fait plus entrer, ni ne fait demander ; les autres portes restent.
+      if (via === 'link' && community.joinLinkPausedAt) {
+        return sendForbidden(reply, 'This community link is paused', { code: 'COMMUNITY_LINK_PAUSED' });
       }
 
       // « Valider chaque entrée » (#19429) : une DEMANDE, jamais une adhésion directe.

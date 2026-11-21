@@ -156,13 +156,28 @@ export function communityForViewer<T extends CommunityWithCount & { readonly cre
   community: T,
   viewerId: string,
 ) {
+  const currentUserRole = viewerCommunityRole({
+    isCreator: community.createdBy === viewerId,
+    activeRole: community.members[0]?.role ?? null,
+  });
   return {
     ...flattenCommunityCounts(community),
-    currentUserRole: viewerCommunityRole({
-      isCreator: community.createdBy === viewerId,
-      activeRole: community.members[0]?.role ?? null,
-    }),
+    ...joinLinkStateFor(community.joinLinkPausedAt, currentUserRole),
+    currentUserRole,
   };
+}
+
+const STEWARD_ROLES: ReadonlySet<string> = new Set(['admin', 'moderator']);
+
+/**
+ * L'état du lien d'entrée tel que le lecteur a le droit de le lire (#19661) : tout lecteur sait si le lien est en
+ * pause (`joinLinkPaused`) ; seul un intendant (rôle admin ou modérateur actif, ou créateur, servi `admin`) lit
+ * l'INSTANT de la pause — pour les autres, il dirait quand un geste de modération a eu lieu.
+ */
+export function joinLinkStateFor(pausedAt: unknown, currentUserRole: string | null) {
+  const paused = pausedAt instanceof Date || typeof pausedAt === 'string';
+  const steward = currentUserRole !== null && STEWARD_ROLES.has(currentUserRole);
+  return { joinLinkPaused: paused, joinLinkPausedAt: steward && paused ? pausedAt : null };
 }
 
 /**
