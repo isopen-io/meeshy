@@ -33,11 +33,40 @@ ordinaire. La divergence ne se voit :
 - **ni dans une revue de diff** — il n'y a pas de code fautif à lire, il manque
   un `socket.on`.
 
-Le seul endroit où elle est visible est un `grep` du NOM de l'événement dans
-chaque client. D'où la question, à poser pour toute paire faire/défaire
-(bannir/débannir, épingler/désépingler, archiver/désarchiver, bloquer/débloquer,
+D'où la question, à poser pour toute paire faire/défaire (bannir/débannir,
+épingler/désépingler, archiver/désarchiver, bloquer/débloquer,
 masquer/restaurer) : **les deux sens ont-ils un consommateur, sur CHAQUE
-client ?** — et elle se répond en une commande, jamais en lisant le code.
+client ?** — elle ne se répond pas en lisant le code.
+
+**Et elle est DÉJÀ OUTILLÉE : ne pas la reposer à la main.**
+`packages/shared/__tests__/ci/socket-event-platform-parity-gate.test.ts`
+(#18342, cycle 161) inventorie, pour chaque événement du contrat, quelle
+plateforme ne le CITE pas — c'est exactement cette mesure, en cliquet à deux
+sens depuis des cycles. La première version de cette leçon affirmait que « le
+seul endroit où la divergence est visible est un `grep` par client » : **c'est
+faux, et c'est la faute la plus coûteuse de ce lot** — j'ai redécouvert à la
+main une classe que le dépôt mesure en continu, au lieu de lire son inventaire
+d'abord.
+
+Conséquence directe, et elle s'est produite : **le cliquet est tombé sur mon
+propre lot, et quelqu'un d'autre a dû le relever.** Faire lire un événement à une
+plateforme l'oblige à SORTIR de l'inventaire, et retirer cette ligne fait partie
+du correctif — la règle est écrite dans le cliquet lui-même (« un événement qui
+gagne son troisième lecteur doit SORTIR de l'inventaire »). Je ne l'ai pas fait ;
+le commit `0111884c9` l'a fait après moi.
+
+> **Avant de chercher une divergence entre clients, chercher le cliquet qui la
+> mesure.** Et quand on en répare une, demander *quel inventaire devient faux
+> parce que je viens de la réparer ?* — un cliquet à deux sens rougit aussi sur
+> le progrès.
+
+**Et l'inventaire porte une position produit qu'il faut lire avant de qualifier
+un défaut** : pour la famille `absents: ['web']`, il dit « `apps/web` suit
+l'interface iOS (directive porteur 2026-09-07) … **aucun n'est un défaut en
+soi** ; la liste ne doit que rétrécir ». Une absence web inventoriée est donc
+une feature NON PORTÉE, pas un bug — le débannissement ne faisait exception que
+parce que son ALLER était porté, ce qui rend l'absence du RETOUR
+contradictoire, et visible comme une restriction qui s'applique encore.
 
 **Les deux corollaires de forme**
 
