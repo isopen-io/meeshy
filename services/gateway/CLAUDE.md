@@ -737,7 +737,52 @@ co-appartenance ne vaut rien : la route passe TOUTES ses lignes par
 `resolveForTargets(viewer, ids)`, et `hasAccess` ne gouverne plus que la liste.
 Le seul régime est le strict ; la seule variable est le viewer.
 
-## Une audience de diffusion lit la participation VIVANTE — et le cliquet qui le garde balaie `src/` ENTIER
+## Une audience de diffusion lit la participation VIVANTE — et le cliquet qui le garde balaie DEUX paquets
+
+**La loi vit dans `@meeshy/shared/utils/participation-vivante` depuis #20111**,
+et `routes/conversations/utils/access-control.ts` la RÉ-EXPORTE sous le même nom
+— le cliquet la reconnaît à cette orthographe, et la renommer reclasserait son
+inventaire entier. Ce qui a forcé le déménagement : **`services/agent` lit
+`Participant` lui aussi et ne pouvait rien importer de la passerelle.** Ses
+trois lectures — les deux sélecteurs de membres DORMANTS, qui décident à la
+place de QUI l'agent va parler, et la MESURE qui élit les conversations à
+scanner — portaient `isActive` NU. Un membre actif-et-banni y était éligible :
+l'agent publiait un message signé de quelqu'un d'EXCLU dans le fil dont il est
+exclu — pas une fuite de lecture, une **INJECTION de contenu attribuée à une
+personne bannie**. `unsetOrNull` / `differsOrUnset` ont déménagé avec elle
+(`@meeshy/shared/utils/prisma-unset`) ; `src/utils/prisma-unset.ts` est une
+coquille de ré-export, et les **53 fichiers** de la passerelle qui importent
+ce chemin sont inchangés (mesuré ; `tsc` le prouve).
+
+**La portée du balayage est une LISTE DE RACINES, plus un `path.resolve`**, et
+elle NOMME ce qu'elle laisse dehors (`AUDIENCE_ROOTS` /
+`AUDIENCE_SCOPE`) : `services/gateway/src` (préfixe vide, l'orthographe
+historique) et `services/agent/src` (préfixe `@meeshy/agent/`).
+`services/translator` (Python, aucun client Prisma), `packages/shared` (qui
+DÉCLARE la loi et n'interroge rien) et `apps/*` (aucun client Prisma instancié)
+sont dehors parce qu'ils n'ont **aucune lecture à garder**.
+
+**`scripts/` en a, lui, et sa ligne a dû être réécrite** — 6 lectures de
+`Participant` dans 4 fichiers, dont `mesure-succession-plafonds.ts` qui porte une
+portée écrite sur `isActive` NU, c'est-à-dire exactement le discriminant du
+balayage. Sa raison de sortie n'est donc PAS « aucune lecture à garder » mais
+**« hors CI, aucune surface servie, aucune de ces lectures ne décide d'une
+autorisation »** : des outils de migration et de mesure qu'un humain lance à la
+main. C'est écrit dans une table, pas déduit d'un chemin, et une racine déclarée
+absente du disque JETTE.
+
+> **Une racine EXCLUE porte une raison, et la raison est une affirmation comme
+> les autres.** Le premier jet de cette table a écrit « aucun accès base » de
+> `scripts/` — faux, et faux précisément là où la leçon du lot demande que
+> l'exclusion soit « vérifiable ». Le remède n'est pas d'entrer la racine : la
+> bonne raison existait, elle n'avait pas été cherchée.
+
+> **#20091 avait déplacé la portée de `src/socketio/` à `src/` — d'un
+> RÉPERTOIRE, pas d'un PAQUET.** La leçon qu'il écrivait (« une portée est une
+> affirmation, et c'est celle que personne ne relit, parce qu'elle ne ressemble
+> pas à un inventaire ») valait d'un cran de plus que celui où il l'a appliquée.
+> Devant une portée corrigée, demander : **de quel cran l'a-t-on bougée, et
+> y a-t-il un cran au-dessus ?** Un `path.resolve` ne dit jamais où il s'arrête.
 
 `PARTICIPATION_VIVANTE` (`isActive: true` **et** `bannedAt` nul ou absent) est
 la loi que les portes d'accès DEVRAIENT épeler — et **elle n'est pas tenue
@@ -829,8 +874,12 @@ correctif est celle-ci (#16690) :
 | **COMBIEN ils sont** (mesure) | afficher un nombre | dire ce que le nombre alimente ; la troncature et le sur-comptage y sont des nombres FAUX, pas des fuites |
 
 Une ligne `isActive: true, bannedAt ≠ null` **existe en base** : son producteur
-est fermé (#19688, #10436), aucune migration n'a repris les lignes existantes,
-et sa room `user:<id>` est rejointe INCONDITIONNELLEMENT.
+est fermé (#19688, #10436), la migration qui reprendrait les lignes existantes
+EXISTE (#16690,
+`packages/shared/prisma/migrations/2026-11-07-participant-active-and-banned.mongodb.js`)
+et n'a été exécutée NULLE PART, et sa room `user:<id>` est rejointe
+INCONDITIONNELLEMENT. **La population n'est donc pas mesurée** : ce que ce §
+décrit est un risque instruit, jamais un incident constaté.
 
 **Le cliquet voit DEUX formes d'audience depuis #20100**, et la seconde n'a pas de
 portée à lire :

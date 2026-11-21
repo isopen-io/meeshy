@@ -690,6 +690,8 @@ export type WireReader = {
   readonly canvasCaps?: number;
   readonly readerLanguage?: string;
   readonly broadcast?: boolean;
+  /** #16894 — ceux qu'un blocage sépare du lecteur : leur contenu ne voyage pas dans un post servi (`separatedCompanions.ts`). */
+  readonly separatedUserIds?: ReadonlySet<string>;
 };
 
 export const WIRE_BROADCAST: WireReader = { broadcast: true };

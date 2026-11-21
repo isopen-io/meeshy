@@ -185,7 +185,7 @@ extension CallStats {
             "currentRoundTripTime", "availableOutgoingBitrate",
             "packetsLost", "packetsReceived",
             "packetsSent", "bytesSent", "bytesReceived", "jitter", "audioLevel",
-            "nominated", "freezeCount", "totalFreezesDuration", "framesPerSecond",
+            "nominated", "priority", "freezeCount", "totalFreezesDuration", "framesPerSecond",
             "jitterBufferDelay", "jitterBufferEmittedCount", "concealedSamples", "nackCount", "pliCount"
         ]
 
@@ -226,22 +226,34 @@ extension CallStats {
         return candidateTypes.contains("relay")
     }
 
-    /// #20098 — the SELECTED ICE pair, always a `candidate-pair`: the one the
-    /// transport's `selectedCandidatePairId` names, else (that id absent or
-    /// naming an entry of another type) the nominated succeeded pair; `nil`
-    /// otherwise. Route, RTT and available outgoing bitrate all read it, as on
-    /// Android (`CallStats.selectedCandidatePair`, #19953).
+    /// #20098 — the SELECTED ICE pair, always a `candidate-pair`: the one named
+    /// by the transport of smallest id whose `selectedCandidatePairId` names an
+    /// existing pair, else the nominated succeeded pair first in
+    /// `electionOrder`; `nil` otherwise. Route, RTT and available outgoing
+    /// bitrate all read it, as on Android (`CallStats.selectedCandidatePair`).
     static func selectedCandidatePair(in entries: [RawEntry]) -> RawEntry? {
-        let pairs = entries.filter { $0.type == "candidate-pair" }
-        let selectedId = entries.first { $0.type == "transport" }?.strings["selectedCandidatePairId"]
-        let nominated = pairs.first { $0.strings["state"] == "succeeded" && ($0.values["nominated"] ?? 0) > 0 }
-        return selectedId.flatMap { id in pairs.last { $0.id == id } } ?? nominated
+        let pairs = electionOrder(entries)
+        let byId = Dictionary(pairs.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let named = entries
+            .filter { $0.type == "transport" }
+            .sorted { $0.id < $1.id }
+            .compactMap { transport in transport.strings["selectedCandidatePairId"].flatMap { byId[$0] } }
+            .first
+        return named ?? pairs.first { $0.strings["state"] == "succeeded" && ($0.values["nominated"] ?? 0) > 0 }
+    }
+
+    /// #20121 — the `candidate-pair` entries by strongest `priority`, then smallest `id` (unique in a report, W3C): never the report's order.
+    private static func electionOrder(_ entries: [RawEntry]) -> [RawEntry] {
+        let rank = { (entry: RawEntry) in CallStatValue.measured(entry.values["priority"] ?? 0) }
+        return entries
+            .filter { $0.type == "candidate-pair" }
+            .sorted { rank($0) != rank($1) ? rank($0) > rank($1) : $0.id < $1.id }
     }
 
     /// #20098 — a pair measure read on the elected pair; with no elected pair,
-    /// or one lacking the field, on the last `candidate-pair` carrying it.
+    /// or one lacking the field, on the pair carrying it first in `electionOrder`.
     private static func pairMeasure(_ key: String, elected: RawEntry?, in entries: [RawEntry]) -> Double? {
-        elected?.values[key] ?? entries.last { $0.type == "candidate-pair" && $0.values[key] != nil }?.values[key]
+        elected?.values[key] ?? electionOrder(entries).first { $0.values[key] != nil }?.values[key]
     }
 
     /// Pure reducer (§5.7 fix for bug j). Resolves the real codec name via
@@ -249,7 +261,8 @@ extension CallStats {
     /// reference id, e.g. `"COT01_111"`, instead of `"opus"`/`"H264"`) and keeps
     /// inbound audio/video separate. RTT and available outgoing bitrate come
     /// from the SELECTED pair (#20098); with no elected pair, or an elected
-    /// pair lacking the field, the last `candidate-pair` carrying it wins.
+    /// pair lacking the field, the pair carrying it first in `electionOrder`
+    /// (strongest `priority`, then smallest `id`, #20121).
     static func reduce(entries: [RawEntry]) -> CallStats {
         var packetsLost = 0
         var bytesSent = 0

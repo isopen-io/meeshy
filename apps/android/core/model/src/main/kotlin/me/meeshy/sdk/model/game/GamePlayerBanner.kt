@@ -136,7 +136,7 @@ public data class GamePlayerBanner(
                 league = leagueOf(game.league),
                 flame = flameOf(game.flame),
                 trophies = game.trophies?.items?.size?.takeIf { it > 0 },
-                dailyMission = game.missions.takeIf { it.unlocked && it.items.isNotEmpty() }
+                dailyMission = game.missions.takeIf { it.items.isNotEmpty() }
                     ?.let { missions -> DailyMission(done = missions.items.count { it.isCompleted }, total = missions.items.size) },
                 season = game.season?.let { Season(it.number) },
                 treasury = if (held > 0) game.treasury.tier else null,

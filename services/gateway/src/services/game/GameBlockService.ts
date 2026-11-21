@@ -187,6 +187,7 @@ export class GameBlockService {
       lastActiveDay: facts.lastActiveDay,
       broken: brokenFlame(facts),
       freezes: facts.freezes,
+      freezeGiftDay: facts.freezeGiftDay,
       lastRelightDay: facts.lastRelightDay,
       missions: day.rows.map(toGameMission),
       ...(personal && personal.startsAt && personal.endsAt

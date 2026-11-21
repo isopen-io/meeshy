@@ -258,6 +258,8 @@ describe('posts/postIncludes — canonical shared selects', () => {
           'visibility',
           'moderationHiddenAt',
           'deletedAt',
+          // #16894 — l'auteur d'ORIGINE d'une copie décide du blocage, retiré par la projection.
+          'snapshotAuthorId',
         ].sort(),
       );
     });

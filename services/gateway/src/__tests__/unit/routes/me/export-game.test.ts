@@ -101,6 +101,27 @@ describe('exportGame', () => {
     expect(game.progress).toMatchObject({ prestige: 2, prestigeLevelRecords: [150, 100] });
   });
 
+  it('exporte le jour où la première Veilleuse a été offerte (#20169)', async () => {
+    const db = fakeGameDb();
+    seed(db);
+    Object.assign(db.user.rows[0]!, { flameFreezeGiftDay: '2026-10-05' });
+
+    const game = await exportGame(db.prisma, USER, PAGE);
+
+    expect(game.progress).toMatchObject({ flameFreezeGiftDay: '2026-10-05' });
+  });
+
+  it('exporte le jour du dernier retour (#20218), nul quand il n’y en a pas', async () => {
+    const back = fakeGameDb();
+    seed(back);
+    Object.assign(back.user.rows[0]!, { gameWelcomeBackDay: '2026-10-20' });
+    const never = fakeGameDb();
+    seed(never);
+
+    expect((await exportGame(back.prisma, USER, PAGE)).progress).toMatchObject({ gameWelcomeBackDay: '2026-10-20' });
+    expect((await exportGame(never.prisma, USER, PAGE)).progress).toMatchObject({ gameWelcomeBackDay: null });
+  });
+
   it('rend les réglages, le pseudonyme et chaque liste du compte', async () => {
     const db = fakeGameDb();
     seed(db);

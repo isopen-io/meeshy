@@ -1,11 +1,11 @@
 import type { StoreApi } from 'zustand/vanilla';
 
-import { mayPersistConversationContent } from '@/lib/end-to-end-regime-ledger';
+import { E2EE_PLAINTEXT_WITHHELD, mayPersistConversationContent } from '@/lib/end-to-end-regime-ledger';
 
 import { attachmentPreviewOf } from './attachments';
 import type { DeviceRecords } from './device-records';
 import type { OutboxEntry, OutboxState } from './outbox-store';
-import { retrySend, type SendDeps } from './perform-send';
+import { retrySend, UPLOAD_PARTIAL, type SendDeps } from './perform-send';
 
 /**
  * LA FILE DES ENVOIS DU FIL, DURABLE (#14698, jumelle web de #14696) — l'outbox
@@ -41,13 +41,65 @@ export type OutboxDurability = {
   readonly settled: () => Promise<void>;
 };
 
+/**
+ * LES REFUS FRAPPÉS LOCALEMENT, PAR LEUR CODE (#20223).
+ *
+ * `status: 0` veut dire « aucune réponse HTTP », ce que la file lit — à raison —
+ * comme « la requête n'a jamais atteint le serveur, rejoue-la ». Deux refus
+ * empruntent cette forme SANS avoir fait de requête, et ils sont DÉTERMINISTES :
+ * la tentative suivante relit le même état et refuse à l'identique.
+ *
+ * Une LISTE BLANCHE de codes, jamais une heuristique sur le texte : une
+ * coupure réseau n'a pas de code, et c'est ce qui la distingue. Le resserrement
+ * ne vide pas la classe de rejeu, il en retire ce qui ne peut pas aboutir.
+ *
+ * Et ce n'est pas une politesse d'affichage : sans ce tri, `replay` s'ARRÊTE
+ * sur un tel refus (`stillCutOff`) et abandonne tous les envois derrière lui,
+ * toutes conversations confondues. Tant que l'ordre se lisait sur l'horloge de
+ * tentative, la réécriture de celle-ci renvoyait le bloqueur en queue de file
+ * et la file finissait par avancer — c'est le DÉSORDRE qui la débloquait. En
+ * stabilisant la clé d'ordre, le même lot DOIT retirer le bloqueur, sinon il
+ * fige en tête pour toujours ce que le défaut précédent faisait glisser.
+ */
+const LOCAL_REFUSAL_CODES: ReadonlySet<string> = new Set([E2EE_PLAINTEXT_WITHHELD, UPLOAD_PARTIAL]);
+
+const refusedLocally = (entry: OutboxEntry): boolean =>
+  entry.lastError?.code !== undefined && LOCAL_REFUSAL_CODES.has(entry.lastError.code);
+
 const neverReachedServer = (entry: OutboxEntry): boolean =>
-  entry.delivery === 'failed' && (entry.lastError === undefined || entry.lastError.status === 0);
+  entry.delivery === 'failed'
+  && (entry.lastError === undefined || (entry.lastError.status === 0 && !refusedLocally(entry)));
+
+/**
+ * L'HORLOGE DE COMPOSITION — la clé d'ordre de la file (#20223).
+ *
+ * `startedAt` est l'horloge de la tentative COURANTE (`outbox-store.ts`), que
+ * `markPending` réécrit à chaque rejeu : s'en servir pour trier faisait passer
+ * devant le message composé APRÈS, dès qu'un premier rejeu échouait — et
+ * l'inversion survivait au redémarrage, la valeur réécrite étant persistée.
+ *
+ * `message.createdAt` est posée UNE fois par `localMessageOf` et le magasin ne
+ * la touche jamais (il n'écrit que `delivery`, `startedAt`, `attempts`,
+ * `lastError`, `upload` ; une entrée confirmée est RETIRÉE). C'est la même clé
+ * que la jumelle iOS, qui trie par `Column("createdAt").asc` et exclut
+ * explicitement `createdAt` des colonnes qu'une tentative réécrit
+ * (`OutboxFlusher.attemptStateColumns`).
+ *
+ * Normalisée, parce que la valeur traverse IndexedDB : une `Date` en mémoire,
+ * et un repli sur l'horloge de tentative pour toute ligne restaurée dont la
+ * valeur ne se lit pas — mieux vaut l'ordre d'avant que pas d'ordre.
+ */
+const composedAt = (entry: OutboxEntry): number => {
+  const composed = new Date(entry.message.createdAt as unknown as string | number | Date).getTime();
+  return Number.isFinite(composed) ? composed : entry.startedAt;
+};
+
+const byComposition = (a: OutboxEntry, b: OutboxEntry): number => composedAt(a) - composedAt(b);
 
 export const queuedSendsInOrder = (state: OutboxState): readonly { readonly conversationId: string; readonly entry: OutboxEntry }[] =>
   Object.entries(state.entries)
     .flatMap(([conversationId, entries]) => entries.filter(neverReachedServer).map((entry) => ({ conversationId, entry })))
-    .sort((a, b) => a.entry.startedAt - b.entry.startedAt);
+    .sort((a, b) => byComposition(a.entry, b.entry));
 
 const withoutLocalPreviews = (entry: OutboxEntry): OutboxEntry => {
   const { attachments: _previews, ...message } = entry.message;
@@ -77,7 +129,7 @@ const merged = (state: OutboxState, stored: StoredOutbox): OutboxState['entries'
     const present = new Set((entries[conversationId] ?? []).map((entry) => entry.message.clientMessageId));
     const missing = rows.filter((entry) => !present.has(entry.message.clientMessageId)).map(revived);
     if (missing.length === 0) return entries;
-    const next = [...missing, ...(entries[conversationId] ?? [])].sort((a, b) => a.startedAt - b.startedAt);
+    const next = [...missing, ...(entries[conversationId] ?? [])].sort(byComposition);
     return { ...entries, [conversationId]: next };
   }, state.entries);
 

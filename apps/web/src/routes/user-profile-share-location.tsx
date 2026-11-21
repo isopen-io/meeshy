@@ -55,6 +55,8 @@ export const SHARE_LOCATION_PROBLEM_KEY = {
   invalid: 'shareLocation.failed',
   'not-sharing': 'shareLocation.failed',
   unavailable: 'shareLocation.failed',
+  'fixed-point': 'shareLocation.failed',
+  'replaces-chosen-point': 'shareLocation.replacePoint.title',
   failed: 'shareLocation.failed',
 } as const satisfies Readonly<Record<SharedLocationShareProblem, CirclesCatalogKey>>;
 
@@ -186,6 +188,43 @@ export function ShareLocationChoiceSheet({
   );
 }
 
+/**
+ * « Montrer votre position réelle ? » (#20126, iso la confirmation de `ShareMyLocationSheet.swift`) : un autre appareil
+ * montre un point choisi sur la carte, et partager d'ici le remplacerait chez TOUS ceux qui le voient. Rien n'est parti ;
+ * garder le point est le geste par défaut, en premier.
+ */
+export function ReplaceChosenPointSheet({ language, onConfirm, onKeep }: { readonly language: InterfaceLanguage; readonly onConfirm: () => void; readonly onKeep: () => void }) {
+  return (
+    <Sheet title={translateCircles(language, 'shareLocation.replacePoint.title')} presentation="bottom" bodyAs="div" closeLabel={translate(language, 'common.cancel')} onClose={onKeep} dialogData={{ 'data-share-location-replace-point': '' }}>
+      <div className="grid gap-3 px-4 pb-4">
+        <p className="text-body" style={{ color: INK }}>
+          {translateCircles(language, 'shareLocation.replacePoint.message')}
+        </p>
+        <button
+          type="button"
+          data-share-location-keep-point=""
+          onClick={onKeep}
+          className={`grid place-items-center rounded-chip px-4 text-body active:scale-[0.98] font-bold ${FOCUS}`}
+          style={{ minHeight: 48, color: 'var(--color-on-state)', backgroundColor: 'var(--ios-indigo-600)', outlineColor: BRAND }}
+        >
+          {translateCircles(language, 'shareLocation.replacePoint.keep')}
+        </button>
+        <button
+          type="button"
+          data-share-location-show-real=""
+          onClick={onConfirm}
+          className={`grid place-items-center rounded-chip px-4 text-body active:scale-[0.98] font-semibold ${FOCUS}`}
+          style={{ minHeight: 48, color: BRAND, backgroundColor: SURFACE, outlineColor: BRAND }}
+        >
+          {translateCircles(language, 'shareLocation.replacePoint.confirm')}
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
+type ShareChoice = { readonly precision: SharedLocationPrecision; readonly durationMinutes: SharedLocationDurationMinutes };
+
 type RowProps = {
   readonly language: InterfaceLanguage;
   readonly person: PersonSummary;
@@ -202,6 +241,7 @@ export function ProfileShareLocationRow({ center = sharedLocationSharingCenter()
 function LiveShareLocationRow({ language, person, offered, onNotice, center }: RowProps & { readonly center: SharedLocationSharingCenter }) {
   const ready = useCirclesCatalog(language);
   const [choosing, setChoosing] = useState(false);
+  const [replacing, setReplacing] = useState<ShareChoice | null>(null);
   useStore(center.store, (state) => state.roster);
   const busy = useStore(center.store, (state) => state.busy);
   if (!ready || !center.showsRow(person.id, offered)) return null;
@@ -209,6 +249,11 @@ function LiveShareLocationRow({ language, person, offered, onNotice, center }: R
   const tell = (problem: SharedLocationShareProblem | null): void => {
     if (problem !== null) onNotice(translateCircles(language, SHARE_LOCATION_PROBLEM_KEY[problem]));
   };
+  const share = (choice: ShareChoice, replacingPoint: boolean): void =>
+    void center.share({ userId: person.id, ...choice, replacingPoint }).then((problem) => {
+      if (problem === 'replaces-chosen-point') setReplacing(choice);
+      else tell(problem);
+    });
   return (
     <>
       <ProfileShareLocationRowView
@@ -224,9 +269,19 @@ function LiveShareLocationRow({ language, person, offered, onNotice, center }: R
           language={language}
           name={name}
           onClose={() => setChoosing(false)}
-          onShare={({ precision, durationMinutes }) => {
+          onShare={(choice) => {
             setChoosing(false);
-            void center.share({ userId: person.id, precision, durationMinutes }).then(tell);
+            share(choice, false);
+          }}
+        />
+      ) : null}
+      {replacing !== null ? (
+        <ReplaceChosenPointSheet
+          language={language}
+          onKeep={() => setReplacing(null)}
+          onConfirm={() => {
+            setReplacing(null);
+            share(replacing, true);
           }}
         />
       ) : null}

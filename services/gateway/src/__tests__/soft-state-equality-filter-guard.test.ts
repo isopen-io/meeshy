@@ -244,10 +244,34 @@ const DISCIPLINE_D_ECRITURE: Readonly<Record<string, { readonly sites: number; r
  * importées — aucun n'est un littéral de `where`. Gelé pour qu'un NEUVIÈME se
  * fasse ouvrir : une limite publiée sans sa liste protège le site qu'elle cache,
  * et c'est ce qui a coûté `visibleNotificationsWhere` au cycle 180.
+ *
+ * ── LE NEUVIÈME S'EST FAIT OUVRIR, ET C'EST UN DÉMÉNAGEMENT (#20111) ─────────
+ *
+ * `PARTICIPATION_VIVANTE` était RÉSOLVABLE jusqu'au 2026-11-21 : elle était un
+ * `const` de `routes/conversations/utils/access-control.ts`, donc ce balayage
+ * voyait son littéral et pouvait vérifier qu'elle ne cachait pas un
+ * `bannedAt: null` nu. #20111 l'a déplacée dans `@meeshy/shared` pour que
+ * `services/agent` — qui lit `Participant` et ne peut rien importer de la
+ * passerelle — puisse l'épeler. Elle est donc devenue une constante IMPORTÉE,
+ * c'est-à-dire la catégorie exacte que ce paragraphe décrit.
+ *
+ * > **Déplacer une constante hors d'un paquet la retire des instruments de ce
+ * > paquet.** Le gain (un second paquet peut l'importer) et la perte (un
+ * > cliquet ne la voit plus) arrivent dans le MÊME commit, et seul le gain est
+ * > visible — la perte ne se signale que si un cliquet rougit, ce qui n'arrive
+ * > que par chance. La question à poser à tout déménagement : **qu'est-ce qui,
+ * > à l'ancienne adresse, savait lire ce que je déplace ?**
+ *
+ * **La couverture perdue est RENDUE, chez le paquet qui porte désormais la
+ * loi** : `packages/shared/utils/__tests__/participation-vivante.test.ts` garde
+ * exactement ce que ce balayage garantissait d'elle — que chaque branche de son
+ * `OR` contraint `bannedAt`, donc qu'aucune n'est une porte de sortie, et que
+ * l'absence est dite dans le MÊME `OR` que le `null`. Une ligne d'inventaire
+ * sans cette contrepartie serait une absolution, pas une limite.
  */
 const HORS_DE_PORTEE: readonly string[] = [
-  'CALL_TERMINAL_STATUSES', 'PRIVILEGED_PLATFORM_ROLES', 'axes', 'directConversationIds',
-  'observedIds', 'ownerIds', 'readerParticipantIds', 'weekKeys',
+  'CALL_TERMINAL_STATUSES', 'PARTICIPATION_VIVANTE', 'PRIVILEGED_PLATFORM_ROLES', 'axes',
+  'directConversationIds', 'observedIds', 'ownerIds', 'readerParticipantIds', 'weekKeys',
 ];
 
 const FIXTURE_FILTRE_NU = `
