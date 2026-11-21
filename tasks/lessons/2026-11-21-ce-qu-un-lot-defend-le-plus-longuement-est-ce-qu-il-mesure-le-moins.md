@@ -1,7 +1,9 @@
 ## Ce qu'un lot DÉFEND le plus longuement est ce qu'il MESURE le moins
 
-**2026-11-21, cycle 197 (#20129).** Trois constats d'un audit adversarial, une
-seule forme. Le correctif était juste ; c'est la PREUVE qui ne l'était pas.
+**2026-11-21, cycle 197 bis (#20143, sur le chemin de #20129).** Trois constats
+d'un audit adversarial, une seule forme. Le correctif était juste ; c'est la
+PREUVE qui ne l'était pas — et deux de ces constats valaient aussi de la version
+d'une session parallèle, fusionnée entre-temps.
 
 ### Les trois mesures
 

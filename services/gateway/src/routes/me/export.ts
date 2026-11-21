@@ -674,17 +674,19 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
             : user;
         }
 
-        // Calculée UNE fois, réutilisée par `messages`, `reactions` et `media` :
-        // une seconde `participant.findMany` nue ferait passer ce fichier de 2 à
-        // 3 `findMany` sans `take`, au-delà de la dette gelée par
+        // Calculée UNE fois, réutilisée par `messages` et `reactions` : une
+        // seconde `participant.findMany` nue ferait passer ce fichier de 2 à 3
+        // `findMany` sans `take`, au-delà de la dette gelée par
         // `unbounded-findmany-guard.test.ts`.
-        //
-        // #20129 — la liste des sections qui en dépendent vit dans
-        // `export-sections.ts`, avec les sections elles-mêmes : `media` manquait
-        // à la condition écrite ici, donc l'export des médias SEULS ne la
-        // calculait pas. Une section ajoutée demain s'inscrit là-bas, et cette
-        // ligne n'a rien à apprendre.
         let pIds: string[] = [];
+        // #20129 — `media` est entrée dans cette condition parce que
+        // `exportMedia` a besoin de la même liste (`uploadedBy` porte DEUX
+        // espaces de clés pour les lignes écrites avant #20113). La liste des
+        // sections qui en dépendent vit DÉSORMAIS avec les sections elles-mêmes
+        // (`SECTIONS_NEEDING_PARTICIPANT_IDS`), et `calls` l'a rejointe : elle
+        // avait besoin de la même liste et la relisait chez elle, avec son
+        // propre `where` — quatrième lecture de la même chose dans la même
+        // requête. La lecture, elle, passe par le producteur unique.
         if (needsParticipantIds(requestedTypes)) {
           pIds = await accountSeatIds(fastify.prisma, userId);
         }

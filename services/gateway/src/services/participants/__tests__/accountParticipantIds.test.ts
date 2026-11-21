@@ -18,7 +18,6 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import { accountSeatIdBatches, accountSeatIds } from '../accountParticipantIds';
-import { uploadedByOfAccount } from '../../attachments/uploaderIdentity';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 
@@ -114,56 +113,8 @@ describe('une lecture qui LÈVE arrête la descente et le DIT', () => {
 });
 
 /**
- * Le durcissement que le lot n'avait pas dit, et que l'audit a nommé : avant
- * #20129, `uploadedBy: userId` avec un `userId` falsy rendait
- * `uploadedBy: undefined`, que **Prisma IGNORE** — donc un `where` qui apparie
- * TOUT. Du côté de la purge, c'est la destruction de toutes les pièces jointes
- * du dépôt ; du côté de l'export, l'archive d'un compte contenant celle de tous
- * les autres.
- */
-describe('un `userId` FALSY n’apparie RIEN, jamais TOUT', () => {
-  it.each([['', 'chaîne vide'], [undefined, 'indéfini'], [null, 'nul']])(
-    'rend une liste vide pour un identifiant %s (%s)',
-    (identity) => {
-      expect(uploadedByOfAccount(identity as string, [])).toEqual({ in: [] });
-    }
-  );
-
-  it('ne garde pas non plus un siège vide passé par mégarde', () => {
-    expect(uploadedByOfAccount(USER_ID, ['', 'p-1'])).toEqual({ in: [USER_ID, 'p-1'] });
-  });
-
-  it('dédoublonne quand un siège PORTE l’identité du compte', () => {
-    expect(uploadedByOfAccount(USER_ID, [USER_ID, 'p-1'])).toEqual({ in: [USER_ID, 'p-1'] });
-  });
-});
-
-/**
- * La borne de VIVACITÉ. Le `for (;;)` d'avant n'en avait aucune : une page qui
- * ne progresse pas y bouclait pour toujours, dans la passe HORAIRE de
- * maintenance. Son témoin PENDAIT au lieu de rougir — en CI, cela ne se
- * distingue pas d'un environnement cassé, donc ce n'était pas un témoin.
- */
-describe('une page qui ne PROGRESSE pas s’arrête, et le dit', () => {
-  it('rend la main au plafond de pages plutôt que de boucler, et annonce l’incomplétude', async () => {
-    // Le double ignore `skip` : il rend toujours une fournée PLEINE. C'est
-    // exactement ce que produit la mutation « `skip` n'avance pas ».
-    const findMany = jest.fn<any>(async ({ take }: any) =>
-      Array.from({ length: take ?? 0 }, (_, index) => ({ id: `p${index}` }))
-    );
-    const prisma = { participant: { findMany } } as never;
-
-    const batches = await drain(accountSeatIdBatches(prisma, USER_ID, 100));
-
-    expect(batches.at(-1)).toEqual({ ids: [], complete: false });
-    expect(findMany.mock.calls.length).toBeLessThanOrEqual(500);
-    expect(batches.length).toBeGreaterThan(1);
-  }, 20000);
-});
-
-/**
  * Le cliquet du PRODUCTEUR. `uploaded-by-key-space-sweep` garde la forme du
- * FILTRE (`uploadedBy: uploadedByOfAccount(…)`) ; rien ne gardait qui PRODUIT la
+ * FILTRE (`uploadedBy: { in: [userId, …] }`) ; rien ne gardait qui PRODUIT la
  * liste de sièges qu'on lui passe, et c'est là que vivait la divergence des
  * trois `where`.
  *

@@ -1,6 +1,7 @@
 ## Un cliquet peut cesser de VOIR sans qu'on touche à son discriminant
 
-**2026-11-21, cycle 197 (#20129).** Trouvé sur moi-même, en relisant un vert.
+**2026-11-21, cycle 197 bis (#20143, sur le chemin de #20129).** Trouvé sur
+moi-même, en relisant un vert.
 
 ### Ce qui s'est passé
 

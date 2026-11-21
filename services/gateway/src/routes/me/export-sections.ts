@@ -38,7 +38,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { validatePagination } from '../../utils/pagination';
 import { publicMediaUrlFromEnv } from '../../services/attachments/publicMediaUrl';
-import { uploadedByOfAccount } from '../../services/attachments/uploaderIdentity';
 import { NOT_DELETED } from '../../services/posts/softDelete';
 import { exportPackData } from '../../services/packs/PackPrivacy';
 
@@ -188,28 +187,23 @@ export async function exportReactions(prisma: PrismaClient, participantIds: read
 }
 
 /**
- * Les sections dont la requête a besoin des identifiants de PARTICIPATION du
- * compte, et pas seulement de son `userId`.
+ * Les sections dont la requête a besoin des SIÈGES du compte, et pas seulement
+ * de son `userId`.
  *
- * C'est la liste qui décide si `me/export.ts` lit les sièges du compte
- * (`accountSeatIds`) — une lecture faite UNE fois et réutilisée. Elle vit ici, à
- * côté des sections qui en dépendent, parce que c'est le seul endroit où l'on
- * sait pourquoi : `messages` apparie `senderId`, `reactions` `participantId`,
- * `media` le second espace de clés de `uploadedBy` (#20129), et `calls` le
- * `participantId` de `CallParticipant`.
+ * C'est la liste qui décide si `me/export.ts` lit les sièges (`accountSeatIds`)
+ * — une lecture faite UNE fois et réutilisée. Elle vit ici, à côté des sections
+ * qui en dépendent, parce que c'est le seul endroit où l'on sait pourquoi :
+ * `messages` apparie `senderId`, `reactions` `participantId`, `media` le second
+ * espace de clés de `uploadedBy`, et `calls` le `participantId` de
+ * `CallParticipant`.
  *
- * Le défaut qu'elle ferme : `media` manquait à cette condition, donc la liste
- * n'était pas calculée quand l'export ne demandait QUE les médias — et
- * `exportMedia` ne la recevait pas du tout, alors que la valeur était calculée
- * dix lignes plus haut pour ses voisines.
- *
- * **`calls` y a été INSCRITE après coup, et c'est la leçon 261.** Le premier jet
- * de cette liste affirmait deux choses : « ces sections consomment la liste »
- * (vrai) et « ce sont les sections qui en ont besoin » (jamais vérifié).
- * `exportCallTelemetry` en avait besoin et la relisait chez elle, avec son
- * propre `where` — une quatrième lecture de la même liste dans la même requête.
- * Une section qui en aura besoin demain s'inscrit ici ; la vérification, elle,
- * ne se déduit pas de la liste.
+ * **`calls` y a été inscrite après coup, et c'est la leçon 261.** La condition
+ * écrite dans la route affirmait deux choses : « ces sections consomment la
+ * liste » (vrai) et « ce sont les sections qui en ont besoin » (jamais
+ * vérifié). `exportCallTelemetry` en avait besoin et la relisait chez elle, avec
+ * son propre `where` — une quatrième lecture de la même liste dans la même
+ * requête d'export. Une section qui en aura besoin demain s'inscrit ici ; la
+ * vérification, elle, ne se déduit pas de la liste.
  */
 export const SECTIONS_NEEDING_PARTICIPANT_IDS = ['messages', 'reactions', 'media', 'calls'] as const;
 
@@ -218,16 +212,23 @@ export function needsParticipantIds(requestedTypes: readonly string[]): boolean 
 }
 
 /**
- * Même raison de séparation que `exportReactions` : deux tables, deux
- * propriétaires — et, comme elle, DEUX conventions de propriétaire du côté des
- * pièces jointes.
+ * Même raison de séparation que `exportReactions` : deux tables, deux propriétaires.
  *
- * `MessageAttachment.uploadedBy` porte l'identité de compte depuis #20113 ; les
- * lignes écrites avant — les copies transférées — portent un `Participant.id`.
- * Les apparier toutes est une obligation d'EXPORT (art. 15) : un média
- * transféré par le compte est une donnée du compte, et rien ne la rattrape
- * ailleurs. `PostMedia.uploaderId` n'a qu'un espace (aucun écrivain de copie),
- * et reste apparié par égalité.
+ * ─── ET DEUX ESPACES DE CLÉS DANS `uploadedBy` (#20129) ────────────────────
+ *
+ * `MessageAttachment.uploadedBy` portait l'identité de COMPTE pour les quatre
+ * écrivains de téléversement et le `Participant.id` pour les deux écrivains de
+ * COPIE. #20113 a unifié les écrivains ; **les lignes déjà écrites gardent
+ * l'ancien espace**, et rien ne les réécrit.
+ *
+ * Apparier `uploadedBy: userId` ratait donc les médias TRANSFÉRÉS de
+ * l'utilisateur — une omission dans un export d'article 15, sans erreur et
+ * sans trace. Les deux espaces sont appariés ensemble, et la liste des
+ * participants est celle que `exportReactions` reçoit déjà : calculée UNE fois
+ * par la route (`export.ts`), pour ses voisines comme pour celle-ci.
+ *
+ * `PostMedia.uploaderId` n'a, lui, qu'un seul écrivain et qu'un seul espace :
+ * il n'a rien à élargir, et le dire évite de l'élargir « par symétrie ».
  */
 export async function exportMedia(
   prisma: PrismaClient,
@@ -235,7 +236,7 @@ export async function exportMedia(
   userId: string,
   page: ExportPage
 ) {
-  const attachmentWhere = { uploadedBy: uploadedByOfAccount(userId, participantIds), isAnonymous: false };
+  const attachmentWhere = { uploadedBy: { in: [userId, ...participantIds] }, isAnonymous: false };
   const postMediaWhere = { uploaderId: userId };
 
   const [attachments, attachmentsTotal, postMedia, postMediaTotal] = await Promise.all([

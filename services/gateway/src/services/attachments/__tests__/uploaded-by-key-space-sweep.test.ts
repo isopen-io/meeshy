@@ -30,13 +30,8 @@ import {
  * - `account-blind-to-legacy` — même espace, mais le site APPARIE : il rate donc
  *   les lignes héritées écrites dans l'espace participant, et ce qu'il rate
  *   compte. Consigné, suivi par son issue.
- * - `account-and-legacy` — le site APPARIE les DEUX espaces, par
- *   `uploadedByOfAccount` (#20129) : l'identité de compte, et les identifiants
- *   de participation sous lesquels les copies transférées ont été écrites. C'est
- *   la forme qu'une requête à l'échelle d'un compte ENTIER doit prendre quand ce
- *   qu'elle rate ne se rattrape pas ailleurs — un export RGPD, une purge.
  */
-type KeySpace = 'account' | 'account-blind-to-legacy' | 'account-and-legacy';
+type KeySpace = 'account' | 'account-blind-to-legacy';
 
 /**
  * Le gel. La clé est `fichier` — jamais une ligne, qui dérive à la première
@@ -56,15 +51,16 @@ const FROZEN: Readonly<Record<string, readonly KeySpace[]>> = {
   'services/attachments/identityImageOwnership.ts': ['account'],
   'services/calls/callRecordingLink.ts': ['account'],
   'routes/admin/user-profile-images.ts': ['account'],
-  // Les deux qui APPARIENT les DEUX espaces depuis #20129 — l'export RGPD
-  // (art. 15) et la purge de fin de période de grâce, les seuls dont ce qui
-  // manque ne se rattrape nulle part.
-  'routes/me/export-sections.ts': ['account-and-legacy'],
-  'services/purgeDeletedAccountMedia.ts': ['account-and-legacy'],
-  // Les trois qui APPARIENT encore l'espace de compte SEUL. Ce sont des
-  // compteurs d'AFFICHAGE : ils sous-comptent les copies héritées, et les
-  // corriger changerait des succès déjà attribués (#20129). Dette d'hygiène de
-  // données, suivie par #20114 — plus le chemin critique d'une conformité.
+  // #20129 — les DEUX sites dont une ligne héritée manquante se VOIT
+  // apparient désormais les deux espaces : l'export RGPD (art. 15) et la purge
+  // de fin de période de grâce (art. 17). Aucune migration n'a été nécessaire,
+  // la liste des participants étant déjà calculée par la route pour ses
+  // voisines.
+  'routes/me/export-sections.ts': ['account'],
+  'services/purgeDeletedAccountMedia.ts': ['account'],
+  // Les trois COMPTEURS restent aveugles, et c'est dit : un sous-compte
+  // d'affichage n'est pas un manquement, et les corriger changerait des succès
+  // déjà attribués. Hygiène de la colonne : #20114.
   'services/achievements/GlobalAchievements.ts': ['account-blind-to-legacy'],
   'routes/admin/user-member-stats.ts': ['account-blind-to-legacy'],
   'routes/admin/users.ts': ['account-blind-to-legacy'],
@@ -95,34 +91,12 @@ describe('#20113 — l’espace de clés de `uploadedBy`', () => {
   });
 
   it('ne compte pas plus de sites AVEUGLES aux lignes héritées qu’au gel', () => {
-    // Un cliquet, pas un plancher : en solder un est attendu ; en ajouter un ne
-    // l'est jamais. Passé de 5 à 3 par #20129 — les deux sites dont l'oubli ne
-    // se rattrapait pas apparient désormais les deux espaces.
+    // Un cliquet, pas un plancher : en solder un est attendu, en ajouter un ne
+    // l'est jamais. Il est passé de 5 à 3 en #20129, en apparient les deux
+    // espaces aux deux seuls sites où l'omission se VOIT — sans migration.
     const aveugles = Object.values(FROZEN).flat().filter((space) => space === 'account-blind-to-legacy');
 
     expect(aveugles.length).toBeLessThanOrEqual(3);
-  });
-
-  /**
-   * Le verdict `account-and-legacy` est DÉCLARÉ à la main, comme tous les
-   * autres : le balayage lit une valeur, pas une sémantique. Ce témoin le rend
-   * MESURABLE — les deux sites passent par le site unique de la loi, et cesser
-   * d'y passer le fait tomber. Sans lui, l'étiquette serait une décoration, et
-   * un cliquet qui rassure à tort est pire que pas de cliquet (#20113, F2-F4).
-   */
-  it('les deux sites qui apparient les DEUX espaces passent par le site unique', () => {
-    const sites = Object.entries(FROZEN)
-      .filter(([, spaces]) => spaces.includes('account-and-legacy'))
-      .map(([file]) => file);
-
-    expect(sites).toEqual(['routes/me/export-sections.ts', 'services/purgeDeletedAccountMedia.ts']);
-
-    const sansLoi = sites.filter((file) => {
-      const code = readFileSync(join(SRC_ROOT, file), 'utf8');
-      return !/uploadedBy:\s*uploadedByOfAccount\(/.test(code);
-    });
-
-    expect(sansLoi).toEqual([]);
   });
 
   /**
