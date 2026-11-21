@@ -7,7 +7,7 @@ import { sendSuccess, sendNotFound } from '../../utils/response'
 import { SERVER_EVENTS, ROOMS, type ConversationDeletedEventData } from '@meeshy/shared/types/socketio-events'
 import { resolveConversationId } from '../../utils/conversation-id-cache'
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
-import { announceConversationClosed } from '../../socketio/announceConversationClosed'
+import { announceConversationClosed, audienceDeRetractation } from '../../socketio/announceConversationClosed'
 import { endConversationMembership } from '../../socketio/endConversationMembership'
 import { resoudreSuccessionDuCreateur } from '../../services/conversations/creatorSuccession'
 import { announceParticipantRoleWithCapabilities } from '../../services/conversations/obsoleteCapability'
@@ -162,7 +162,9 @@ export async function performConversationDeleteForMe(
       ])
       // #17117 — le numéro de l'ami d'une conversation externe ne survit pas au fil.
       await eraseExternalPeerOnClose(prisma, closed)
-      closedAudience = (closed.participants ?? []).filter(p => p.isActive)
+      // `audienceDeRetractation` et non un filtre local : la règle — large,
+      // délibérément — vit sur l'unité de clôture avec sa raison (#20103).
+      closedAudience = audienceDeRetractation(closed.participants)
     }
   } else {
     // Aucune écriture jumelle à accorder : le masquage est tout le geste.

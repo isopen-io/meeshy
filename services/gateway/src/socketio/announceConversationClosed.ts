@@ -88,6 +88,42 @@ export interface ConversationClosureAnnouncement {
  * `emitToConversationParticipants`, pour qu'un appelant puisse les journaliser
  * sans reconstruire l'ensemble.
  */
+/**
+ * ─── L'AUDIENCE D'UNE RÉTRACTATION, ET POURQUOI ELLE EST LARGE (#20103) ─────
+ *
+ * Les quatre chemins de clôture (`leave.ts`, `delete-for-me.ts`,
+ * `core-lifecycle.ts`, `obsoleteConversation.ts`, plus la route souveraine)
+ * ramènent leur audience PAR l'écriture de clôture, sur une projection
+ * `participants` SANS `where` : elle rend donc tout le monde — partis, retirés,
+ * désactivés, bannis. Chacun filtrait ensuite en CODE, sur `isActive` NU, et
+ * quatre copies de la même ligne sont quatre occasions de diverger — c'est le
+ * prix que cette unité existe pour ne plus payer (cf. l'en-tête).
+ *
+ * **`isActive` nu, et non `participationEstVivante` : c'est une DÉCISION, prise
+ * sur ce que la charge TRANSPORTE.** `conversation:closed` ne porte aucun
+ * contenu (`conversationId`, `closedBy`, `closedAt`) : il RETRACTE une ligne.
+ * Un membre actif-et-BANNI garde ce fil dans sa liste — les deux clients la
+ * persistent (cache disque iOS, `staleTime: Infinity` web) — et seul cet
+ * événement, ou un tombstone `closedAt` au prochain delta, la lui retire.
+ * Resserrer ici échangerait une fuite INEXISTANTE contre un fil fantôme : ce
+ * serait retourner la garde contre la personne qu'elle protège, ce que #20093
+ * refuse ailleurs pour la même raison.
+ *
+ * C'est l'INVERSE exact de `broadcastConversationUpdated`, dont la charge porte
+ * le titre, la description, l'avatar et la bannière, et qui écarte donc un
+ * banni (#20110 est la fuite qu'il ferme). Les deux règles sont justes parce
+ * que les deux charges ne disent pas la même chose — et c'est l'USAGE de la
+ * liste, jamais la forme de la projection, qui tranche.
+ *
+ * Ce qui reste exclu : une participation INACTIVE. Un membre parti ou retiré
+ * n'a plus la ligne, donc il n'y a rien à lui retracter.
+ */
+export function audienceDeRetractation<T extends { readonly isActive: boolean }>(
+  participants: readonly T[] | null | undefined
+): T[] {
+  return (participants ?? []).filter((participant) => participant.isActive === true);
+}
+
 export function announceConversationClosed(
   params: ConversationClosureAnnouncement
 ): string[] {
