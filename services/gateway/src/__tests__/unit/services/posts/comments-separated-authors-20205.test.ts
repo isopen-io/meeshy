@@ -171,4 +171,20 @@ describe('GET /posts/:id/comments/:commentId/replies — les réponses taisent l
     const page = await service.getReplies('p1', undefined, 20, 'lecteur');
     expect(authorsOf(page.items)).toEqual(['bob', 'bloque', 'bloqueur']);
   });
+
+  it('garde le filtre sous le curseur : la page suivante tait aussi l\'auteur séparé', async () => {
+    const thread = [
+      topLevel('p3', 'alice', 10),
+      replyTo('p3', '690000000000000000000101', 'bob', 11),
+      replyTo('p3', '690000000000000000000102', 'bloque', 12),
+      replyTo('p3', '690000000000000000000103', 'carol', 13),
+      replyTo('p3', '690000000000000000000104', 'bloque', 14),
+      replyTo('p3', '690000000000000000000105', 'dan', 15),
+    ];
+    const service = makeStore({ rows: thread, blockedByViewer: ['bloque'] });
+    const first = await service.getReplies('p3', undefined, 1, 'lecteur');
+    expect(authorsOf(first.items)).toEqual(['bob']);
+    const second = await service.getReplies('p3', first.nextCursor ?? undefined, 20, 'lecteur');
+    expect(authorsOf(second.items)).toEqual(['carol', 'dan']);
+  });
 });
