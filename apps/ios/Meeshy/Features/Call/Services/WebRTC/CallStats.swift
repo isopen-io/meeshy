@@ -214,29 +214,43 @@ extension CallStats {
         }
     }
 
-    /// #8698 — the route of the SELECTED ICE pair: the transport's
-    /// `selectedCandidatePairId`, else the nominated succeeded pair. Relayed as
-    /// soon as either end is a `relay` candidate; `nil` when nothing is known.
+    /// #8698 — the route of the SELECTED ICE pair (`selectedCandidatePair`).
+    /// Relayed as soon as either end is a `relay` candidate; `nil` when nothing
+    /// is known.
     static func relayedRoute(in entries: [RawEntry]) -> Bool? {
-        let byId = Dictionary(entries.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let selectedId = entries.first { $0.type == "transport" }?.strings["selectedCandidatePairId"]
-        let nominated = entries.first {
-            $0.type == "candidate-pair" && $0.strings["state"] == "succeeded" && ($0.values["nominated"] ?? 0) > 0
-        }
-        guard let pair = selectedId.flatMap({ byId[$0] }) ?? nominated else { return nil }
+        let byId = Dictionary(entries.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+        guard let pair = selectedCandidatePair(in: entries) else { return nil }
         let candidateTypes = [pair.strings["localCandidateId"], pair.strings["remoteCandidateId"]]
             .compactMap { $0.flatMap { byId[$0]?.strings["candidateType"] } }
         guard !candidateTypes.isEmpty else { return nil }
         return candidateTypes.contains("relay")
     }
 
+    /// #20098 — the SELECTED ICE pair, always a `candidate-pair`: the one the
+    /// transport's `selectedCandidatePairId` names, else (that id absent or
+    /// naming an entry of another type) the nominated succeeded pair; `nil`
+    /// otherwise. Route, RTT and available outgoing bitrate all read it, as on
+    /// Android (`CallStats.selectedCandidatePair`, #19953).
+    static func selectedCandidatePair(in entries: [RawEntry]) -> RawEntry? {
+        let pairs = entries.filter { $0.type == "candidate-pair" }
+        let selectedId = entries.first { $0.type == "transport" }?.strings["selectedCandidatePairId"]
+        let nominated = pairs.first { $0.strings["state"] == "succeeded" && ($0.values["nominated"] ?? 0) > 0 }
+        return selectedId.flatMap { id in pairs.last { $0.id == id } } ?? nominated
+    }
+
+    /// #20098 — a pair measure read on the elected pair; with no elected pair,
+    /// or one lacking the field, on the last `candidate-pair` carrying it.
+    private static func pairMeasure(_ key: String, elected: RawEntry?, in entries: [RawEntry]) -> Double? {
+        elected?.values[key] ?? entries.last { $0.type == "candidate-pair" && $0.values[key] != nil }?.values[key]
+    }
+
     /// Pure reducer (§5.7 fix for bug j). Resolves the real codec name via
     /// `codecId → codec.mimeType` (the legacy code stored the stats-graph
     /// reference id, e.g. `"COT01_111"`, instead of `"opus"`/`"H264"`) and keeps
-    /// inbound audio/video separate.
+    /// inbound audio/video separate. RTT and available outgoing bitrate come
+    /// from the SELECTED pair (#20098); with no elected pair, or an elected
+    /// pair lacking the field, the last `candidate-pair` carrying it wins.
     static func reduce(entries: [RawEntry]) -> CallStats {
-        var rtt = 0.0
-        var availableOutgoingBitrateBps = 0
         var packetsLost = 0
         var bytesSent = 0
         var bytesReceived = 0
@@ -258,9 +272,6 @@ extension CallStats {
 
         for entry in entries {
             switch entry.type {
-            case "candidate-pair":
-                if let value = entry.values["currentRoundTripTime"] { rtt = CallStatValue.measured(value * 1000) }
-                if let bps = entry.values["availableOutgoingBitrate"] { availableOutgoingBitrateBps = CallStatValue.count(bps) }
             case "inbound-rtp":
                 if let lost = entry.values["packetsLost"] { packetsLost = CallStatValue.sum(packetsLost, CallStatValue.count(lost)) }
                 let received = CallStatValue.count(entry.values["packetsReceived"] ?? 0)
@@ -290,6 +301,10 @@ extension CallStats {
         let resolvedCodec: String? = primaryCodecId
             .flatMap { codecMime[$0] }
             .map { mime in mime.split(separator: "/").last.map(String.init) ?? mime }
+
+        let elected = selectedCandidatePair(in: entries)
+        let rtt = pairMeasure("currentRoundTripTime", elected: elected, in: entries).map { CallStatValue.measured($0 * 1000) } ?? 0
+        let availableOutgoingBitrateBps = pairMeasure("availableOutgoingBitrate", elected: elected, in: entries).map(CallStatValue.count) ?? 0
 
         let jitterMs = audioJitterCount > 0 ? CallStatValue.measured((audioJitterSum / Double(audioJitterCount)) * 1000) : 0
 
