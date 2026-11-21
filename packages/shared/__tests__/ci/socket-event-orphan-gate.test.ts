@@ -45,7 +45,7 @@ import { readContractPayloads } from './socket-payload-shape/mirror-contract';
 import { eventsNamedByClients } from './socket-payload-shape/client-event-readers';
 
 const SANS_LECTEUR: ReadonlyMap<string, string> = new Map([
-  ['authenticated', 'ÉMIS — `AuthHandler` le pousse à CHAQUE authentification de socket (deux sites). Aucun client ne le cite ; ils lisent l\'accusé de la poignée de main.'],
+  ['user:preferences-community-reordered', "ÉMIS — `routes/community-preferences.ts` après chaque réordonnancement, sur la room personnelle (#18915, cycle 128 : un nom NEUF plutôt qu'un élargissement de `user:preferences-reordered`, dont le décodeur iOS est strict). Mesuré au cycle 207 (#20267) : AUCUN client ne le cite. Android passait pour son lecteur parce que `PreferencesSocketManager.kt` écrit « `user:preferences-community-reordered` stays unheard: measured, nothing under `apps/android` caches a community-preference row » — une NÉGATION que le relevé comptait comme une citation. Décision à prendre (#20268) : écrire le lecteur là où la ligne est cachée, ou retirer l'émission."],
   ['agent:admin-event', 'ÉMIS — `AgentAdminRelay` vers la room des agents admin. Aucune surface cliente ne le lit.'],
   ['link:message:new', "ÉMIS — `linkMessageEmissions` et le rejeu hors ligne. `services/gateway/CLAUDE.md` lui prêtait « son unique auditeur (le web) » ; la prémisse est CORRIGÉE depuis le cycle 161 — aucun client ne cite ce nom ni sa constante, et le raisonnement du cycle 114 tient pour une raison plus forte."],
   ['location:blood-proximity', 'ÉMIS — `bloodProximity.ts`, DEUX `emit` par alerte. Le client du mode Sang n\'est peut-être pas encore écrit (#13928).'],
