@@ -73,8 +73,8 @@ public data class CallStats(
         val deltaLost = (packetsLost - (previous?.packetsLost ?: 0)).coerceAtLeast(0)
         val deltaReceived =
             (inboundPacketsReceived - (previous?.inboundPacketsReceived ?: 0)).coerceAtLeast(0)
-        val denom = deltaLost + deltaReceived
-        val lossRatio = if (denom > 0) deltaLost.toDouble() / denom else 0.0
+        val denom = deltaLost.toDouble() + deltaReceived
+        val lossRatio = if (denom > 0) deltaLost / denom else 0.0
         return CallQualitySample(rttMs = roundTripTimeMs, packetLoss = lossRatio)
     }
 
@@ -120,7 +120,8 @@ public data class CallStats(
          *   `mimeType` (`"audio/opus"` → `"opus"`); unknown → `null`.
          *
          * An empty list yields the all-zero snapshot. Missing numeric fields default
-         * to `0`. The reducer never throws.
+         * to `0`, and an aberrant one (NaN, infinite, negative) reads as unmeasured
+         * `0` through [CallStatValue], a finite one beyond `Int.MAX_VALUE` saturates (#20122). The reducer never throws.
          */
         /**
          * The route of the SELECTED ICE pair (iOS `relayedRoute`): the transport's
@@ -173,34 +174,36 @@ public data class CallStats(
             for (entry in entries) {
                 when (entry.type) {
                     "candidate-pair" -> {
-                        entry.values["currentRoundTripTime"]?.let { rtt = it * 1000 }
+                        entry.values["currentRoundTripTime"]?.let { rtt = CallStatValue.measured(it * 1000) }
                         entry.values["availableOutgoingBitrate"]?.let {
-                            availableOutgoingBitrateBps = it.toInt()
+                            availableOutgoingBitrateBps = CallStatValue.count(it)
                         }
                     }
 
                     "inbound-rtp" -> {
-                        entry.values["packetsLost"]?.let { packetsLost += it.toInt() }
-                        val received = (entry.values["packetsReceived"] ?: 0.0).toInt()
-                        val receivedBytes = (entry.values["bytesReceived"] ?: 0.0).toInt()
+                        entry.values["packetsLost"]?.let {
+                            packetsLost = CallStatValue.sum(packetsLost, CallStatValue.count(it))
+                        }
+                        val received = CallStatValue.count(entry.values["packetsReceived"] ?: 0.0)
+                        val receivedBytes = CallStatValue.count(entry.values["bytesReceived"] ?: 0.0)
                         if (entry.kind == "video") {
-                            inboundVideo += received
-                            inboundVideoBytes += receivedBytes
+                            inboundVideo = CallStatValue.sum(inboundVideo, received)
+                            inboundVideoBytes = CallStatValue.sum(inboundVideoBytes, receivedBytes)
                         } else {
-                            inboundAudio += received
-                            inboundAudioBytes += receivedBytes
-                            entry.values["jitter"]?.let {
+                            inboundAudio = CallStatValue.sum(inboundAudio, received)
+                            inboundAudioBytes = CallStatValue.sum(inboundAudioBytes, receivedBytes)
+                            entry.values["jitter"]?.takeIf { it.isFinite() && it >= 0.0 }?.let {
                                 audioJitterSum += it
                                 audioJitterCount += 1
                             }
                         }
-                        bytesReceived += receivedBytes
+                        bytesReceived = CallStatValue.sum(bytesReceived, receivedBytes)
                         if (primaryCodecId == null) primaryCodecId = entry.codecId
                     }
 
                     "outbound-rtp" -> {
-                        outbound += (entry.values["packetsSent"] ?: 0.0).toInt()
-                        bytesSent += (entry.values["bytesSent"] ?: 0.0).toInt()
+                        outbound = CallStatValue.sum(outbound, CallStatValue.count(entry.values["packetsSent"] ?: 0.0))
+                        bytesSent = CallStatValue.sum(bytesSent, CallStatValue.count(entry.values["bytesSent"] ?: 0.0))
                     }
 
                     else -> Unit
@@ -212,21 +215,21 @@ public data class CallStats(
                 ?.let { mime -> mime.split("/").filter(String::isNotEmpty).lastOrNull() ?: mime }
 
             val jitterMs =
-                if (audioJitterCount > 0) (audioJitterSum / audioJitterCount) * 1000 else 0.0
+                if (audioJitterCount > 0) CallStatValue.measured((audioJitterSum / audioJitterCount) * 1000) else 0.0
 
             val elected = selectedCandidatePair(entries)?.values
 
             return CallStats(
-                roundTripTimeMs = elected?.get("currentRoundTripTime")?.let { it * 1000 } ?: rtt,
+                roundTripTimeMs = elected?.get("currentRoundTripTime")?.let { CallStatValue.measured(it * 1000) } ?: rtt,
                 packetsLost = packetsLost,
                 bandwidth = bytesSent,
                 bytesReceived = bytesReceived,
                 codec = resolvedCodec,
-                inboundPacketsReceived = inboundAudio + inboundVideo,
+                inboundPacketsReceived = CallStatValue.sum(inboundAudio, inboundVideo),
                 inboundAudioPackets = inboundAudio,
                 inboundVideoPackets = inboundVideo,
                 outboundPacketsSent = outbound,
-                availableOutgoingBitrateBps = elected?.get("availableOutgoingBitrate")?.toInt()
+                availableOutgoingBitrateBps = elected?.get("availableOutgoingBitrate")?.let(CallStatValue::count)
                     ?: availableOutgoingBitrateBps,
                 jitterMs = jitterMs,
                 inboundAudioBytes = inboundAudioBytes,
