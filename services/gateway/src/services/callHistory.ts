@@ -11,6 +11,7 @@
  */
 
 import { parseCallReactionCounts, type CallReactionCounts } from '@meeshy/shared/types/call-controls';
+import { effectiveCallBytes } from './calls/callByteCounters';
 
 export type CallDirection = 'incoming' | 'outgoing' | 'missed';
 
@@ -79,6 +80,9 @@ export interface CallHistoryRow {
   duration: number | null;
   bytesSent: number | null;
   bytesReceived: number | null;
+  /** Exact cumulative counters beyond int32 (#20152) — absent on older rows. */
+  bytesSentTotal?: number | null;
+  bytesReceivedTotal?: number | null;
   metadata: unknown;
   /** `CallSession.reactionCounts` as stored — read without trust. */
   reactionCounts?: unknown;
@@ -161,8 +165,7 @@ export function buildCallHistoryItem(
     answeredAt: row.answeredAt ? row.answeredAt.toISOString() : null,
     endedAt: row.endedAt ? row.endedAt.toISOString() : null,
     durationSec: deriveDurationSec(row),
-    bytesSent: clampNonNegativeInt(row.bytesSent),
-    bytesReceived: clampNonNegativeInt(row.bytesReceived),
+    ...effectiveCallBytes(row),
     peer,
     participants: [...participants],
     reactionCounts: parseCallReactionCounts(row.reactionCounts),

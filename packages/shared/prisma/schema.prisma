@@ -3078,6 +3078,14 @@ model CallSession {
   /// surface "data spent" in the call-summary message. Null when never reported.
   bytesSent     Int?
   bytesReceived Int?
+  /// Les MÊMES cumuls, exacts au-delà de 2 Go (#20152). `Int` est un int32 : une
+  /// visio longue dépasse 2^31 − 1 octets, et iOS/Android remontent jusqu'à
+  /// 2^53 − 1. Un double représente exactement tout entier jusqu'à cette borne.
+  /// Écrits à côté des champs `Int` (qui reçoivent la même valeur saturée à
+  /// 2^31 − 1 pour les anciens lecteurs) ; lus en premier, l'`Int` n'étant que
+  /// le repli des enregistrements antérieurs. Absents sur ces derniers.
+  bytesSentTotal     Float?
+  bytesReceivedTotal Float?
   /// Overall network quality tier observed during the call:
   /// excellent | good | fair | poor. Null when never reported (e.g. missed).
   networkQuality String?
