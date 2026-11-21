@@ -170,6 +170,7 @@ fun OwnProfileScreen(
                 onEvent = onEvent,
                 ring = { user -> decorCatalog?.let { ProfileDecorLayersPolicy.resolve(user.banner, user.servedDecor, it, blockedByTarget = false).ring } },
                 banner = { ProfileBanner(user = it, modifier = Modifier.fillMaxSize()) },
+                ownPosition = { OwnPositionHero() },
             )
         }
         OwnProfileErrorCapsule(capsule.value)
@@ -275,6 +276,7 @@ internal fun OwnProfileBody(
     onEvent: (OwnProfileUiEvent) -> Unit,
     banner: @Composable BoxScope.(MeeshyUser) -> Unit,
     ring: (MeeshyUser) -> AvatarRingDesign? = { null },
+    ownPosition: @Composable () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -327,6 +329,8 @@ internal fun OwnProfileBody(
                 onPickLanguage = onPickLanguage,
                 onEvent = onEvent,
             )
+            // Ma dernière position connue (#20242) : le bloc héros, seulement quand ma position part et que l'appareil la connaît.
+            ownPosition()
             // Partager ma batterie, pour tous (#14147) : la coupure globale, côté émetteur, dans MON profil.
             BatterySharingSwitch()
             // Prévenir mes Proches si mon téléphone est injoignable (#18737) : la coupure globale, dans MON profil.

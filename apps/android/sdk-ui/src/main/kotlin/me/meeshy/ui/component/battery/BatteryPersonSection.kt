@@ -34,7 +34,9 @@ import me.meeshy.sdk.battery.BatteryPersonSettings
 import me.meeshy.sdk.battery.BatteryPullOutcome
 import me.meeshy.sdk.battery.BatterySettingsGateway
 import me.meeshy.sdk.model.battery.BatteryPersonRules
+import me.meeshy.sdk.model.phonereachability.BatteryPullOffer
 import me.meeshy.ui.R
+import me.meeshy.ui.component.phonereachability.rememberPhoneUnreachableLasting
 
 /** Les réglages de batterie de la session, fournis à la racine (`MainActivity`) ; absents, aucune section ne s'affiche. */
 val LocalBatterySettings = staticCompositionLocalOf<BatterySettingsGateway?> { null }
@@ -51,7 +53,8 @@ enum class BatteryPersonSurface { PERSON_FICHE, CONVERSATION_INFO, PROFILE }
 /**
  * La batterie d'une personne, à l'endroit où on la cherche (#14147), disposée comme iOS :
  * - partout : le détail de son état quand elle est en épisode (« il y a X min » vieillit chaque minute) ;
- * - fiche et profil de la personne : « Demander un relevé » pour un Sang, épisode servi ou non ;
+ * - fiche et profil de la personne : « Demander un relevé » pour un Sang, épisode servi ou non — sauf quand son téléphone
+ *   est injoignable depuis plusieurs minutes (#20241) : il ne répondrait pas, la rangée ne se propose pas ;
  * - fiche : « Partager ma batterie avec X » dès Proche, et UNE proposition au Proche, case non cochée ;
  * - infos de conversation : ce que je reçois d'elle (tout, critique, SyncPill, rien).
  * Rien ne s'affiche sans lien qui le permette, et aucune attente ne masque un état déjà tenu.
@@ -66,6 +69,7 @@ fun BatteryPersonSection(userId: String, name: String, surface: BatteryPersonSur
     var pullOutcome by remember(userId) { mutableStateOf<BatteryPullOutcome?>(null) }
     val sharingEnabled by gateway.sharingEnabled.collectAsStateWithLifecycle()
     val nowMs by rememberMinuteClock()
+    val unreachableLasting = rememberPhoneUnreachableLasting(userId)
 
     LaunchedEffect(gateway, userId) {
         settings = gateway.personSettings(userId)
@@ -76,7 +80,8 @@ fun BatteryPersonSection(userId: String, name: String, surface: BatteryPersonSur
         state?.let { served -> BatteryDetailCard(state = served, nowMs = nowMs) }
         val loaded = settings ?: return@Column
         if (!BatteryPersonRules.mayShare(loaded.level)) return@Column
-        if (BatteryPersonRules.offersPull(loaded.level, onPerson = surface != BatteryPersonSurface.CONVERSATION_INFO)) {
+        val canPull = BatteryPersonRules.offersPull(loaded.level, onPerson = surface != BatteryPersonSurface.CONVERSATION_INFO)
+        if (BatteryPullOffer.offers(canPull, lasting = unreachableLasting)) {
             BatteryPullRow(pullOutcome = pullOutcome, onPull = { scope.launch { pullOutcome = gateway.pull(userId) } })
         }
         when (surface) {

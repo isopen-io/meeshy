@@ -538,11 +538,14 @@
     <string name="talkie_send_hold">Zum Sprechen halten</string>
     <string name="talkie_send_hold_a11y">Gedrückt halten, um mit %1$s zu sprechen</string>
     <string name="talkie_send_hold_hint">Doppeltippen und halten, sprechen, dann loslassen.</string>
+    <string name="talkie_send_leave_voice">Sprachnachricht hinterlassen</string>
+    <string name="talkie_send_leave_voice_a11y">%1$s eine Sprachnachricht hinterlassen</string>
     <string name="talkie_send_limit">Höchstens dreißig Sekunden: Die Durchsage wurde beendet.</string>
     <string name="talkie_send_mic_denied">Erlaube das Mikrofon, um das Walkie-Talkie zu nutzen.</string>
     <string name="talkie_send_offline">Offline: Das Walkie-Talkie konnte nicht gesendet werden.</string>
     <string name="talkie_send_rate_limited">Zu viele Durchsagen: Versuche es gleich noch einmal.</string>
     <string name="talkie_send_recording_copy">Sprachnachricht wird aufgenommen…</string>
+    <string name="talkie_send_sent_as_voice">Als Sprachnachricht gesendet</string>
     <string name="talkie_send_talking">Du sprichst mit %1$s…</string>
     <string name="talkie_send_waking">%1$s wird geweckt…</string>
     <string name="time_lastSeen_beforeYesterdayAt">Vorgestern um %1$s gesehen</string>

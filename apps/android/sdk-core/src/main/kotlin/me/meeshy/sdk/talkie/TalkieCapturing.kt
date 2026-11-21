@@ -23,6 +23,12 @@ interface TalkieVoiceCopying {
      */
     suspend fun send(frames: List<ByteArray>, toUserId: String, conversationId: String?): Boolean
 
+    /**
+     * Le message vocal laissé à un proche injoignable (#20241) : toujours dans notre conversation DIRECTE, ouverte au
+     * besoin. `false` : rien n'est parti.
+     */
+    suspend fun sendDirect(frames: List<ByteArray>, toUserId: String): Boolean = send(frames, toUserId, conversationId = null)
+
     /** Une copie confiée à la file d'envoi que celle-ci a fini par abandonner : l'émetteur doit le voir (#17255). */
     val failures: Flow<Unit> get() = emptyFlow()
 }

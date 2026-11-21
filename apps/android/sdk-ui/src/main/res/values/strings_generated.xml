@@ -538,11 +538,14 @@
     <string name="talkie_send_hold">Hold to talk</string>
     <string name="talkie_send_hold_a11y">Hold to talk to %1$s</string>
     <string name="talkie_send_hold_hint">Double-tap and hold, talk, then release.</string>
+    <string name="talkie_send_leave_voice">Leave a voice message</string>
+    <string name="talkie_send_leave_voice_a11y">Leave %1$s a voice message</string>
     <string name="talkie_send_limit">Thirty seconds at most: the talk has stopped.</string>
     <string name="talkie_send_mic_denied">Allow the microphone to use the walkie-talkie.</string>
     <string name="talkie_send_offline">Offline: the walkie-talkie could not be sent.</string>
     <string name="talkie_send_rate_limited">Too many talks: try again in a moment.</string>
     <string name="talkie_send_recording_copy">Recording a voice message…</string>
+    <string name="talkie_send_sent_as_voice">Sent as a voice message</string>
     <string name="talkie_send_talking">You are talking to %1$s…</string>
     <string name="talkie_send_waking">Waking %1$s…</string>
     <string name="time_lastSeen_beforeYesterdayAt">Seen two days ago at %1$s</string>

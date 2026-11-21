@@ -2,6 +2,7 @@ package me.meeshy.ui.component.talkie
 
 import androidx.annotation.StringRes
 import me.meeshy.sdk.model.relation.TalkieHeaderDelivery
+import me.meeshy.sdk.model.relation.TalkieHoldDelivery
 import me.meeshy.sdk.model.relation.TalkieSendOutcome
 import me.meeshy.sdk.model.relation.TalkieSendPhase
 import me.meeshy.ui.R
@@ -25,10 +26,22 @@ public object TalkieWording {
         TalkieSendOutcome.LIMIT -> R.string.talkie_send_limit
     }
 
+    /**
+     * Ce que dit l'issue d'un message vocal CHOISI (téléphone injoignable, #20241) : « Parti en message vocal », jamais
+     * comme un repli ; toute autre issue se dit comme d'habitude.
+     */
+    @StringRes
+    public fun notice(outcome: TalkieSendOutcome, delivery: TalkieHoldDelivery): Int =
+        if (delivery == TalkieHoldDelivery.VOICE_MESSAGE && outcome == TalkieSendOutcome.VOICE) {
+            R.string.talkie_send_sent_as_voice
+        } else {
+            notice(outcome)
+        }
+
     /** Le libellé du bouton de fiche, selon la phase ; ceux qui nomment l'autre prennent son nom en argument. */
     @StringRes
-    public fun label(phase: TalkieSendPhase, waking: Boolean): Int = when (phase) {
-        TalkieSendPhase.Idle -> R.string.talkie_send_hold
+    public fun label(phase: TalkieSendPhase, waking: Boolean, delivery: TalkieHoldDelivery = TalkieHoldDelivery.LIVE): Int = when (phase) {
+        TalkieSendPhase.Idle -> holdReminder(delivery)
         is TalkieSendPhase.Starting -> R.string.talkie_send_connecting
         is TalkieSendPhase.Talking -> if (waking) R.string.talkie_send_waking else R.string.talkie_send_talking
         is TalkieSendPhase.RecordingCopy -> R.string.talkie_send_recording_copy
@@ -41,6 +54,21 @@ public object TalkieWording {
         phase is TalkieSendPhase.Talking && waking -> R.string.talkie_send_waking
         else -> R.string.talkie_send_talking
     }
+
+    /** Ce que le bouton au repos dit, et ce qu'un simple toucher rappelle : le geste, dans le mode où il est (#20241). */
+    @StringRes
+    public fun holdReminder(delivery: TalkieHoldDelivery): Int =
+        if (delivery == TalkieHoldDelivery.VOICE_MESSAGE) R.string.talkie_send_leave_voice else R.string.talkie_send_hold
+
+    /** Le nom TalkBack du bouton (`%1$s` = l'autre) : « Laisser un message vocal à X » quand son téléphone est injoignable. */
+    @StringRes
+    public fun holdA11y(delivery: TalkieHoldDelivery): Int =
+        if (delivery == TalkieHoldDelivery.VOICE_MESSAGE) R.string.talkie_send_leave_voice_a11y else R.string.talkie_send_hold_a11y
+
+    /** L'aide dit le GESTE, le même dans les deux modes : le nom du bouton dit déjà où part la voix. */
+    @StringRes
+    @Suppress("UNUSED_PARAMETER")
+    public fun holdHint(delivery: TalkieHoldDelivery): Int = R.string.talkie_send_hold_hint
 
     @StringRes
     public fun badge(delivery: TalkieHeaderDelivery): Int = when (delivery) {

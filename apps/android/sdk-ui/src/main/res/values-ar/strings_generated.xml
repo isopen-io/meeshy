@@ -558,11 +558,14 @@
     <string name="talkie_send_hold">اضغط مطولًا للتحدث</string>
     <string name="talkie_send_hold_a11y">اضغط مطولًا للتحدث إلى %1$s</string>
     <string name="talkie_send_hold_hint">انقر مرتين مع الاستمرار، تحدّث، ثم ارفع إصبعك.</string>
+    <string name="talkie_send_leave_voice">اترك رسالة صوتية</string>
+    <string name="talkie_send_leave_voice_a11y">اترك رسالة صوتية لـ %1$s</string>
     <string name="talkie_send_limit">ثلاثون ثانية كحد أقصى: توقفت المداخلة.</string>
     <string name="talkie_send_mic_denied">اسمح باستخدام الميكروفون لاستعمال جهاز اللاسلكي.</string>
     <string name="talkie_send_offline">غير متصل: تعذّر إرسال جهاز اللاسلكي.</string>
     <string name="talkie_send_rate_limited">مداخلات كثيرة جدًا: أعد المحاولة بعد لحظة.</string>
     <string name="talkie_send_recording_copy">جارٍ تسجيل رسالة صوتية…</string>
+    <string name="talkie_send_sent_as_voice">أُرسل كرسالة صوتية</string>
     <string name="talkie_send_talking">أنت تتحدث إلى %1$s…</string>
     <string name="talkie_send_waking">جارٍ إيقاظ %1$s…</string>
     <string name="time_lastSeen_beforeYesterdayAt">شوهد أول أمس في %1$s</string>

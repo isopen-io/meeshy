@@ -88,6 +88,11 @@
     <string name="profile_username">اسم المستخدم</string>
     <string name="profile_verified">موثّق</string>
     <string name="profile_view_posts">المنشورات</string>
+    <string name="profile_where_hero_last_known">آخر موقع معروف</string>
+    <string name="profile_where_own_title">موقعي</string>
+    <string name="profile_where_stamp_at">عند %1$s</string>
+    <string name="profile_where_stamp_just_now">الآن</string>
+    <string name="profile_where_stamp_minutes">منذ %1$d د</string>
     <string name="report_close">إغلاق</string>
     <string name="report_details_header">تفاصيل (اختياري)</string>
     <string name="report_error">تعذّر إرسال البلاغ</string>

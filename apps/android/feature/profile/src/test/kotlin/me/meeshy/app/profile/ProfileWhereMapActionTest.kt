@@ -8,9 +8,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertContentDescriptionEquals
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.location.GeoPoint
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
 import org.junit.Test
@@ -86,5 +89,31 @@ class ProfileWhereMapActionTest {
 
         val alreadyGoing = ProfileWhereMapOffers.of(canMessage = true, offersCall = true, offersLocation = true, sharingWithThem = true)
         assertThat(alreadyGoing.shareMine).isFalse()
+    }
+
+    @Test
+    fun `a served position is a hero map with its last known time, and a tap opens the map`() {
+        val sevenMinutesAgo = System.currentTimeMillis() - 7 * 60_000L - 10_000L
+        compose.setContent {
+            MeeshyTheme {
+                ProfileWhereMapEntry(
+                    userId = person,
+                    sharedWithMe = true,
+                    entry = { open -> ProfileWhereHero(title = "Léo", point = GeoPoint(48.85, 2.35), atMillis = sevenMinutesAgo, onTap = open) },
+                ) { Text(map) }
+            }
+        }
+        compose.onNodeWithText(open).assertDoesNotExist()
+        compose.onNodeWithTag(PROFILE_WHERE_HERO_TAG).assertContentDescriptionEquals("Léo, Last known position · 7 min ago")
+        compose.onNodeWithTag(PROFILE_WHERE_HERO_TAG).performClick()
+        compose.onNodeWithText(map).assertIsDisplayed()
+    }
+
+    @Test
+    fun `a position served without a time says only that it is the last known one`() {
+        compose.setContent {
+            MeeshyTheme { ProfileWhereHero(title = "Léo", point = GeoPoint(48.85, 2.35), atMillis = null, onTap = {}) }
+        }
+        compose.onNodeWithTag(PROFILE_WHERE_HERO_TAG).assertContentDescriptionEquals("Léo, Last known position")
     }
 }
