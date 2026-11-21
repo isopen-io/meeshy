@@ -17,6 +17,10 @@
  * reste ; ce qu'il faisait d'habitude est oublié le temps de reprendre. L'objectif allégé ne dépasse jamais
  * l'ordinaire : `missionTarget` borne tout objectif par le plancher.
  *
+ * Le JOUR du retour seul, l'Offrande est GARDÉE par les aïeux (#20266) : elle est prête dès que le Rêve du jour est
+ * tiré, sans attendre ses actes (`isKeptOfferingDay`). Son contenu reste celui de la loi du coffre (`chest.ts`), sur
+ * l'effort du Rêve allégé ; aucune Offrande ne s'ajoute, il y en a toujours une par jour.
+ *
  * Pure, sans horloge : les jours sont des clés `AAAA-MM-JJ` du fuseau du compte. Une clé illisible ne fabrique
  * aucun retour.
  */
@@ -53,6 +57,12 @@ export function isEasedDreamDay(params: { readonly welcomeDay: string | null; re
   if (!readable(welcomeDay) || !isDayKey(today)) return false;
   const since = dayDiff(welcomeDay, today);
   return since >= 0 && since < WELCOME_BACK_EASED_DAYS;
+}
+
+/** L'Offrande de `today` est-elle gardée par les aïeux ? Le seul jour du retour (#20266). */
+export function isKeptOfferingDay(params: { readonly welcomeDay: string | null; readonly today: string }): boolean {
+  const { welcomeDay, today } = params;
+  return readable(welcomeDay) && isDayKey(today) && welcomeDay === today;
 }
 
 /** Le profil d'un Rêve allégé : les capacités du compte, sans ses habitudes. */
