@@ -1,16 +1,16 @@
-# L'export RGPD et la purge apparient les DEUX espaces de clés de `uploadedBy`
+## L'export RGPD et la purge apparient les DEUX espaces de clés de `uploadedBy`
 
 **2026-11-21 — #20129** (suite de #20113, et désamorçage de #20114 comme chemin
 critique de conformité).
 
-## Le contexte
+### Le contexte
 
 `MessageAttachment.uploadedBy` portait deux espaces de clés jusqu'à #20113 :
 l'identité de COMPTE pour les quatre écrivains de téléversement, le
 `Participant.id` pour les deux écrivains de COPIE. Les écrivains sont unifiés ;
 les lignes déjà écrites gardent l'ancien espace, et rien ne les réécrit.
 
-## La décision
+### La décision
 
 **Une requête à l'échelle d'un compte ENTIER dont ce qui manque ne se rattrape
 nulle part apparie les DEUX espaces, maintenant, sans attendre de migration.**
@@ -26,7 +26,7 @@ Les trois autres sites aveugles (`GlobalAchievements`,
 inchangés, et c'est à dire** : un sous-compte d'AFFICHAGE n'est pas un
 manquement, et les corriger changerait des succès déjà attribués.
 
-## La loi, et où elle vit
+### La loi, et où elle vit
 
 `uploadedByOfAccount(userId, participantIds)`
 (`services/attachments/uploaderIdentity.ts`) rend le filtre des deux espaces.
@@ -39,7 +39,7 @@ par jointure, pour UNE ligne (`ownsAsUploader`), et APPARIER les deux espaces,
 pour un COMPTE (`uploadedByOfAccount`). La troisième existe parce que la deuxième
 ne se transpose pas : **une requête de masse ne peut pas joindre.**
 
-## Pourquoi par fournées à la purge
+### Pourquoi par fournées à la purge
 
 Le nombre de participations d'un compte est borné par construction, par rien
 d'écrit. Un `findMany` nu rejoint une dette gelée ; **un `take` seul tronquerait
@@ -53,7 +53,7 @@ Une lecture de participations en ÉCHEC rend exactement le comportement d'avant
 #20129 (l'espace nominal seul), jamais rien : la fournée manquée est rejouée par
 la passe de maintenance suivante.
 
-## Ce qui n'est PAS décidé ici
+### Ce qui n'est PAS décidé ici
 
 La reprise des lignes héritées (#20114) reste une migration de données de
 production, donc une décision du porteur (directive #9223). Elle garde sa valeur

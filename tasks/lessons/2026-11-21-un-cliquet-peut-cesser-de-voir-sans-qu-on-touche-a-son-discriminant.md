@@ -1,8 +1,8 @@
-# Un cliquet peut cesser de VOIR sans qu'on touche à son discriminant
+## Un cliquet peut cesser de VOIR sans qu'on touche à son discriminant
 
 **2026-11-21, cycle 197 (#20129).** Trouvé sur moi-même, en relisant un vert.
 
-## Ce qui s'est passé
+### Ce qui s'est passé
 
 Le cycle 196 a gelé les sites qui posent ou apparient
 `MessageAttachment.uploadedBy`, par un balayage dont le discriminant est
@@ -23,7 +23,7 @@ inexistant le remplaçait dans l'inventaire.
 
 Personne n'avait touché au balayage. Le code avait changé de FORME.
 
-## La règle
+### La règle
 
 > La question à poser après tout refactor d'un site GELÉ n'est pas « le cliquet
 > passe-t-il ? » mais **« voit-il encore ce qu'il prétend voir ? »**. Elle se
@@ -35,7 +35,7 @@ l'écriture ; ici, il était juste, et c'est le dépôt qui s'est déplacé hors
 champ. Les deux rendent le même vert, et seul le second ne laisse aucune trace
 dans l'historique du cliquet.
 
-## Les deux corollaires qui ont changé le code
+### Les deux corollaires qui ont changé le code
 
 1. **Un site gelé se laisse LIRE à l'endroit où il décide.** La structure a été
    reprise pour que le `where` soit composé là où il est posé
@@ -48,7 +48,7 @@ dans l'historique du cliquet.
    les deux sites passent par le site unique de la loi — et il tombe sur une
    recopie inline de cette loi, qui aurait été indistinguable au verdict.
 
-## Le signal faible à retenir
+### Le signal faible à retenir
 
 Le soupçon est venu d'une coïncidence suspecte : le cliquet passait **du premier
 coup** après un refactor qui déplaçait la forme exacte qu'il balaie. Un gel qui
