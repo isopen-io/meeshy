@@ -67,7 +67,7 @@ import {
  * UN POINT CHOISI NE SE REMPLACE PAS EN SILENCE (#20126, iso #20087) : quand la passerelle sert un point choisi à la
  * main par un autre appareil (`source: 'manual'`, marque `<clé>.fixedPoint`), cet onglet ne suit plus la position de
  * l'appareil et n'en envoie aucune ; « Partager » d'ici rend `replaces-chosen-point` sans rien demander ni envoyer, et
- * ne fait passer les destinataires à la position réelle qu'avec `replacingPoint` (la charge porte `source: 'device'`).
+ * ne fait passer les destinataires à la position réelle qu'avec `replacing`, la question posée (#20248) (la charge porte `source: 'device'`).
  */
 
 export type SharedLocationFixResult = { readonly kind: 'fix'; readonly fix: SharedLocationFix } | { readonly kind: 'denied' } | { readonly kind: 'unavailable' };
@@ -610,7 +610,14 @@ export function createSharedLocationSharingCenter({
     share: ({ userId, precision, durationMinutes, replacing }) =>
       gated(async (): Promise<SharedLocationShareProblem | SharedLocationReplacesChosenPoint | null> => {
         if (!isLive()) return 'failed';
-        if (replacing === undefined && showsChosenPoint()) return askedReplacement();
+        if (replacing === undefined && showsChosenPoint()) {
+          /* Rechargé, ou averti par un autre onglet : le démarrage servi n'est pas encore connu d'ici, la question le relit. */
+          const asked = await acrossAccountTabs(async () => {
+            if (servedStart === null) await readServed();
+            return showsChosenPoint() ? askedReplacement() : null;
+          });
+          if (asked !== null) return asked;
+        }
         const current = await fixes.currentFix();
         if (current.kind === 'denied') return 'location-denied';
         if (current.kind === 'unavailable') return 'location-unavailable';

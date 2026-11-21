@@ -270,4 +270,16 @@ describe('la confirmation vaut pour le partage montré (#20248)', () => {
     });
     expect(askedBy(await world.center.share({ ...partage, replacing: asked }))).toEqual({ startedAt: 'S3', recipientIds: [AMI] });
   });
+
+  test('rechargé devant un point choisi, la première question est déjà datée : une seule confirmation suffit', async () => {
+    const memory = new Map<string, string>();
+    const world = makeWorld({ memory, served: datedWith('S1', AMI) });
+    await world.center.sync();
+    const reloaded = makeWorld({ memory, served: datedWith('S1', AMI) });
+    await reloaded.advance(0);
+    const asked = askedBy(await reloaded.center.share(partage));
+    expect(asked).toEqual({ startedAt: 'S1', recipientIds: [AMI] });
+    expect(await reloaded.center.share({ ...partage, replacing: asked })).toBeNull();
+    expect(reloaded.starts.at(-1)?.source).toBe('device');
+  });
 });
