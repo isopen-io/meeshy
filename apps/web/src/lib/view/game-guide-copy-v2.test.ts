@@ -20,6 +20,7 @@ const EVENTS: Readonly<Record<(typeof GUIDE_MOMENT_KEYS_V2)[number], GuideEventV
   trophy: { kind: 'trophy', trophyKey: 'trophy.league-cup.2026-10-26.jade.gold' },
   prestige: { kind: 'prestige', prestige: 2, gloryGained: 1000 },
   'atlas-stamp': { kind: 'atlas-stamp', language: 'ja', stamped: 5, total: 83 },
+  'flame-freeze-gift': { kind: 'flame-freeze-gift', freezes: 1 },
 };
 
 describe('les huit moments, dans les sept langues', () => {
@@ -78,5 +79,15 @@ describe('les huit moments, dans les sept langues', () => {
     expect(actionLabelV2('see-trophies', 'fr')).toBe('Voir mes trophées');
     expect(actionLabelV2('see-atlas', 'fr')).toBe('Voir mon Atlas');
     expect(actionLabelV2('see-level', 'fr')).toBe('Voir ma lumière');
+  });
+});
+
+describe('la première Veilleuse offerte (#20169)', () => {
+  test('Meo la dit sans reproche et mène à la Flamme', () => {
+    const copy = momentCopyV2(guideMomentV2(EVENTS['flame-freeze-gift'], []), 'fr');
+    expect(copy.what).toBe('Une Veilleuse t’est offerte.');
+    expect(copy.means).toBe('Trois jours de Flamme : les aïeux t’en confient une. Elle garde ta Flamme allumée un jour où tu ne viens pas.');
+    expect(copy.action).toBe('Voir ma Flamme');
+    expect(momentCopyV2(guideMomentV2(EVENTS['flame-freeze-gift'], ['flame-freeze-gift']), 'fr').short).toBe('Une Veilleuse t’est offerte pour ta Flamme.');
   });
 });
