@@ -18,6 +18,7 @@ public enum CommunitiesEndpoint: MeeshyEndpoint, Sendable {
     case byIdEntriesStats(id: String)
     case byIdInvite(id: String)
     case byIdJoin(id: String)
+    case byIdJoinLink(id: String)
     case byIdJoinRequests(id: String)
     case byIdJoinRequestsByRequestIdAccept(id: String, requestId: String)
     case byIdJoinRequestsByRequestIdReject(id: String, requestId: String)
@@ -38,6 +39,7 @@ public enum CommunitiesEndpoint: MeeshyEndpoint, Sendable {
         case .byIdEntriesStats(let id): return "/api/v1/communities/\(id)/entries/stats"
         case .byIdInvite(let id): return "/api/v1/communities/\(id)/invite"
         case .byIdJoin(let id): return "/api/v1/communities/\(id)/join"
+        case .byIdJoinLink(let id): return "/api/v1/communities/\(id)/join-link"
         case .byIdJoinRequests(let id): return "/api/v1/communities/\(id)/join-requests"
         case .byIdJoinRequestsByRequestIdAccept(let id, let requestId): return "/api/v1/communities/\(id)/join-requests/\(requestId)/accept"
         case .byIdJoinRequestsByRequestIdReject(let id, let requestId): return "/api/v1/communities/\(id)/join-requests/\(requestId)/reject"
