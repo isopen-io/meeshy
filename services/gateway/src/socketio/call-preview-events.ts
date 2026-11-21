@@ -6,6 +6,7 @@ import type { CallSignalEvent } from '@meeshy/shared/types/video-call';
 import type { MeeshyIOServer, MeeshySocket } from './typed-socket';
 import type { CallService } from '../services/CallService';
 import { SOCKET_RATE_LIMITS, type SocketRateLimiter } from '../utils/socket-rate-limiter';
+import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import { socketSignalSchema } from '../validation/call-schemas';
 import { ACCEPTED, gatedCallControl, refused } from './call-control-gate';
 
@@ -61,8 +62,31 @@ export function callPreviewDependencies(input: {
         conversationType: session.conversation?.type ?? 'unknown',
       };
     },
+    // #20261 — la PARTICIPATION VIVANTE, et dans la CLAUSE.
+    //
+    // C'est le SEUL contrôle d'appartenance de `calleeRefusal`, qui gouverne
+    // les DEUX verbes de l'aperçu (`CALL_PREVIEW_REQUEST`,
+    // `CALL_PREVIEW_SIGNAL`) : le relais WebRTC de la caméra et du micro de
+    // l'appelant AVANT tout décroché. Rien ne relit `Participant` en aval —
+    // `loadCall` ne lit que `CallSession` — donc la question « qui AUTORISE ce
+    // que cette clause rend ? » (#20183) se répond ici et nulle part ailleurs.
+    //
+    // Sous `isActive` nu, un participant `isActive: true, bannedAt ≠ null` le
+    // franchissait. C'est un PIÈGE ARMÉ et non une panne vivante, et la nuance
+    // est mesurée : `resolveBanWrite` écrit toujours `isActive: false` à côté
+    // de `bannedAt`, donc un bannissement d'aujourd'hui ne produit pas cet
+    // état — seules les lignes HÉRITÉES d'avant #19688 / #10436 le portent, et
+    // aucune migration ne les a reprises. Le geste est pourtant atteignable en
+    // tête-à-tête : la route de bannissement n'a AUCUNE garde par type de
+    // conversation, et l'ouvreur d'un direct porte `role: 'creator'`, donc
+    // au-dessus du plancher MODERATOR.
+    //
+    // Le resserrement ne retire rien à personne d'autre : un banni du chemin
+    // nominal était déjà exclu, et un membre vivant n'a pas de `bannedAt`.
     isMember: async (conversationId, userId) =>
-      (await prisma.participant.count({ where: { conversationId, userId, isActive: true } })) > 0,
+      (await prisma.participant.count({
+        where: { conversationId, userId, ...PARTICIPATION_VIVANTE },
+      })) > 0,
   };
 }
 
