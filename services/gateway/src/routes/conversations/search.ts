@@ -145,7 +145,10 @@ export function registerSearchRoutes(
               OR: [
                 { type: 'public' },
                 { type: 'global' },
-                { participants: { some: { userId, isActive: true } } },
+                // #20209 — la PARTICIPATION VIVANTE : sans elle, un membre
+                // EXCLU retrouvait par la recherche la conversation dont il
+                // est banni, et son contenu indexé avec.
+                { participants: { some: { userId, ...PARTICIPATION_VIVANTE } } },
               ],
             },
             // #17117 — un ancien client ne trouve pas de conversation externe (`utils/list-viewer-scope.ts`).
