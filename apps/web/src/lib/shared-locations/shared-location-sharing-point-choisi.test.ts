@@ -4,6 +4,7 @@ import { describe, expect, test } from 'bun:test';
 import { decodeOwnSharedLocation } from '@/lib/api/shared-locations';
 import { AMI, AUTRE, HOUR, makeWorld, PARIS, T0 } from '@/test-support/shared-location-sharing-world';
 
+import type { SharedLocationPointReplacement } from './shared-location-point-replacement';
 import { readSharedLocationAck, sharedLocationStartPayloadOf } from './shared-location-sending';
 
 /**
@@ -16,7 +17,12 @@ import { readSharedLocationAck, sharedLocationStartPayloadOf } from './shared-lo
  */
 
 const iso = (ms: number): string => new Date(ms).toISOString();
+const QUESTION = { kind: 'replaces-chosen-point' } as const;
 const TROISIEME = 'd'.repeat(24);
+const askedBy = (answer: unknown) => {
+  if (typeof answer !== 'object' || answer === null || !('asked' in answer)) throw new Error(`pas une question : ${String(answer)}`);
+  return (answer as { readonly asked: SharedLocationPointReplacement }).asked;
+};
 const servedWith = (source: string | undefined, ...ids: readonly string[]) => ({
   recipients: ids.map((userId) => ({ userId, precision: 'city' as const, expiresAt: iso(T0 + HOUR) })),
   expiresAt: ids.length === 0 ? null : iso(T0 + HOUR),
@@ -151,7 +157,7 @@ describe('les gardes de l’onglet tiennent sans compter sur la passerelle (audi
     await world.center.sync();
     world.server.served = servedWith('manual', AMI);
     world.startQueue.push(async () => ({ kind: 'refused', outcome: 'fixed-point' }));
-    expect(await world.center.share({ userId: TROISIEME, precision: 'city', durationMinutes: 60 })).toBe('replaces-chosen-point');
+    expect(await world.center.share({ userId: TROISIEME, precision: 'city', durationMinutes: 60 })).toMatchObject(QUESTION);
     expect(world.memory.get('roster.received')).toBe('1');
   });
 });
@@ -165,7 +171,7 @@ describe('« Partager » d’ici devant un point choisi demande d’abord', () =
 
   test('sans accord, rien ne part : ni relevé demandé, ni démarrage', async () => {
     const world = await devantUnPoint();
-    expect(await world.center.share({ userId: TROISIEME, precision: 'city', durationMinutes: 60 })).toBe('replaces-chosen-point');
+    expect(await world.center.share({ userId: TROISIEME, precision: 'city', durationMinutes: 60 })).toMatchObject(QUESTION);
     expect(world.starts).toEqual([]);
     expect(world.source.prompts).toBe(0);
     expect(world.center.entry(TROISIEME)).toBeNull();
@@ -173,7 +179,8 @@ describe('« Partager » d’ici devant un point choisi demande d’abord', () =
 
   test('avec accord, la position réelle part explicitement, et cet onglet devient celui qui publie', async () => {
     const world = await devantUnPoint();
-    expect(await world.center.share({ userId: TROISIEME, precision: 'city', durationMinutes: 60, replacingPoint: true })).toBeNull();
+    const asked = askedBy(await world.center.share({ userId: TROISIEME, precision: 'city', durationMinutes: 60 }));
+    expect(await world.center.share({ userId: TROISIEME, precision: 'city', durationMinutes: 60, replacing: asked })).toBeNull();
     expect(world.starts.at(-1)?.source).toBe('device');
     expect(world.starts.at(-1)?.recipients.map((r) => r.userId)).toEqual([AMI, TROISIEME].sort());
     expect(world.source.following).toBe(1);
@@ -184,7 +191,7 @@ describe('« Partager » d’ici devant un point choisi demande d’abord', () =
     const world = await publiant();
     world.server.served = servedWith('manual', AMI);
     world.startQueue.push(async () => ({ kind: 'refused', outcome: 'fixed-point' }));
-    expect(await world.center.share({ userId: TROISIEME, precision: 'city', durationMinutes: 60 })).toBe('replaces-chosen-point');
+    expect(await world.center.share({ userId: TROISIEME, precision: 'city', durationMinutes: 60 })).toMatchObject(QUESTION);
     expect(world.source.following).toBe(0);
     expect(world.center.entry(TROISIEME)).toBeNull();
   });
@@ -195,5 +202,84 @@ describe('« Partager » d’ici devant un point choisi demande d’abord', () =
     await world.center.sync();
     expect(await world.center.share({ userId: TROISIEME, precision: 'city', durationMinutes: 60 })).toBeNull();
     expect(world.starts.at(-1)?.source).toBeUndefined();
+  });
+});
+
+describe('la confirmation vaut pour le partage montré (#20248)', () => {
+  const datedWith = (startedAt: string, ...ids: readonly string[]) => ({ ...servedWith('manual', ...ids), startedAt });
+  const devantUnPointDate = async (startedAt = 'S1', ...ids: readonly string[]) => {
+    const world = makeWorld({ served: datedWith(startedAt, ...(ids.length === 0 ? [AMI] : ids)) });
+    await world.center.sync();
+    return world;
+  };
+  const partage = { userId: TROISIEME, precision: 'city', durationMinutes: 60 } as const;
+
+  test('la question porte le démarrage servi et ceux qui voient le point', async () => {
+    const world = await devantUnPointDate('S1', AMI, AUTRE);
+    expect(askedBy(await world.center.share(partage))).toEqual({ startedAt: 'S1', recipientIds: [AMI, AUTRE].sort() });
+  });
+
+  test('la réponse relit le partage servi avant d’agir', async () => {
+    const world = await devantUnPointDate();
+    const asked = askedBy(await world.center.share(partage));
+    const reads = world.server.reads;
+    expect(await world.center.share({ ...partage, replacing: asked })).toBeNull();
+    expect(world.server.reads).toBeGreaterThan(reads);
+    expect(world.starts.at(-1)?.source).toBe('device');
+  });
+
+  test('un autre démarrage depuis la question : rien ne part, la question se repose à jour', async () => {
+    const world = await devantUnPointDate();
+    const asked = askedBy(await world.center.share(partage));
+    world.server.served = datedWith('S2', AMI);
+    expect(askedBy(await world.center.share({ ...partage, replacing: asked }))).toEqual({ startedAt: 'S2', recipientIds: [AMI] });
+    expect(world.starts).toEqual([]);
+  });
+
+  test('quelqu’un ajouté ailleurs depuis : rien ne part, et la question le compte', async () => {
+    const world = await devantUnPointDate();
+    const asked = askedBy(await world.center.share(partage));
+    world.server.served = datedWith('S1', AMI, AUTRE);
+    expect(askedBy(await world.center.share({ ...partage, replacing: asked }))).toEqual({ startedAt: 'S1', recipientIds: [AMI, AUTRE].sort() });
+    expect(world.starts).toEqual([]);
+  });
+
+  test('quelqu’un sorti depuis : la réponse vaut encore', async () => {
+    const world = await devantUnPointDate('S1', AMI, AUTRE);
+    const asked = askedBy(await world.center.share(partage));
+    world.server.served = datedWith('S1', AMI);
+    expect(await world.center.share({ ...partage, replacing: asked })).toBeNull();
+    expect(world.starts.at(-1)?.source).toBe('device');
+    expect(world.starts.at(-1)?.recipients.map((r) => r.userId)).toEqual([AMI, TROISIEME].sort());
+  });
+
+  test('une relecture en panne au moment de la réponse : rien ne part', async () => {
+    const world = await devantUnPointDate();
+    const asked = askedBy(await world.center.share(partage));
+    world.server.served = null;
+    expect(await world.center.share({ ...partage, replacing: asked })).toBe('offline');
+    expect(world.starts).toEqual([]);
+  });
+
+  test('un refus « point choisi » à l’envoi repose la question datée du partage relu', async () => {
+    const world = await devantUnPointDate();
+    const asked = askedBy(await world.center.share(partage));
+    world.startQueue.push(async () => {
+      world.server.served = datedWith('S3', AMI);
+      return { kind: 'refused', outcome: 'fixed-point' };
+    });
+    expect(askedBy(await world.center.share({ ...partage, replacing: asked }))).toEqual({ startedAt: 'S3', recipientIds: [AMI] });
+  });
+
+  test('rechargé devant un point choisi, la première question est déjà datée : une seule confirmation suffit', async () => {
+    const memory = new Map<string, string>();
+    const world = makeWorld({ memory, served: datedWith('S1', AMI) });
+    await world.center.sync();
+    const reloaded = makeWorld({ memory, served: datedWith('S1', AMI) });
+    await reloaded.advance(0);
+    const asked = askedBy(await reloaded.center.share(partage));
+    expect(asked).toEqual({ startedAt: 'S1', recipientIds: [AMI] });
+    expect(await reloaded.center.share({ ...partage, replacing: asked })).toBeNull();
+    expect(reloaded.starts.at(-1)?.source).toBe('device');
   });
 });
