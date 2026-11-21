@@ -11,6 +11,7 @@ import {
 } from '../../utils/response.js';
 import { MemberRole } from '@meeshy/shared/types/role-types';
 import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
+import { PARTICIPATION_VIVANTE } from '../conversations/utils/access-control';
 import {
   createUnifiedAuthMiddleware,
   UnifiedAuthRequest,
@@ -73,7 +74,22 @@ export async function loadShareLinkForManagement(
       conversation: {
         include: {
           participants: {
-            where: { userId, isActive: true }
+            // #20135 — la PARTICIPATION VIVANTE, et dans la CLAUSE : cette
+            // liste n'a qu'UN consommateur, `isConversationAdmin` vingt lignes
+            // plus bas, et aucun refus ne dépend du sur-ensemble. Sous
+            // `isActive` nu, un modérateur actif-et-BANNI administrait les
+            // liens de partage d'une conversation dont il est exclu —
+            // révoquer, réactiver, changer l'expiration ou le plafond d'usage
+            // (`PATCH /links/:linkId`, `/toggle`, `/extend`, qui passent tous
+            // les trois par cette unique lecture depuis #4170).
+            //
+            // La clause plutôt qu'un prédicat en code : c'est le seul endroit
+            // qu'un balayage de source sait lire (#20050). Noter que le
+            // balayage des audiences ne voit PAS ce site — son `where` nomme
+            // une PERSONNE, donc ce n'est pas une audience à ses yeux — si
+            // bien que cette famille de portes n'a aucun cliquet. Suivi : la
+            // lacune est consignée par l'issue du lot.
+            where: { userId, ...PARTICIPATION_VIVANTE }
           }
         }
       }

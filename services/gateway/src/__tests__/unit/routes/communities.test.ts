@@ -215,6 +215,10 @@ describe('GET /communities/mine', () => {
   afterAll(async () => { await app.close(); });
 
   it('returns 200 with user communities', async () => {
+    // L'`include: { community }` de la route garantit la communauté sur chaque adhésion (#20063 la lit).
+    (app as any).prisma.communityMember.findMany.mockResolvedValueOnce([
+      { ...mockMember, community: { id: COMM_ID, name: 'Club', identifier: 'mshy_club', avatar: null, isPrivate: false } },
+    ]);
     const res = await app.inject({ method: 'GET', url: '/communities/mine' });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);

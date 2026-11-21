@@ -93,9 +93,9 @@ class CallLiveStatsLawsTest {
                 CallStats.RawEntry("v", "inbound-rtp", kind = "video", values = mapOf("bytesReceived" to 9_000.0)),
             ),
         )
-        assertThat(stats.inboundAudioBytes).isEqualTo(1_000)
-        assertThat(stats.inboundVideoBytes).isEqualTo(9_000)
-        assertThat(stats.bytesReceived).isEqualTo(10_000)
+        assertThat(stats.inboundAudioBytes).isEqualTo(1_000L)
+        assertThat(stats.inboundVideoBytes).isEqualTo(9_000L)
+        assertThat(stats.bytesReceived).isEqualTo(10_000L)
     }
 
     @Test

@@ -9,7 +9,7 @@ import { validatePagination } from '../../utils/pagination';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendPaginatedSuccess, sendInternalError, createPaginationMeta } from '../../utils/response.js';
 import { resolveCommunityMemberPresence } from '../../services/community-member-presence';
-import { COMMUNITY_ACTIVE_COUNTS } from './serialization';
+import { COMMUNITY_ACTIVE_COUNTS, communityTextAsWritten } from './serialization';
 
 const logger = enhancedLogger.child({ module: 'CommunitySearchRoutes' });
 
@@ -197,7 +197,7 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
       const memberVisibility = await resolveCommunityMemberPresence(fastify, request, communities);
 
       // Transformer les donnees pour le frontend
-      const communitiesWithCount = communities.map(community => ({
+      const communitiesWithCount = communities.map(community => communityTextAsWritten({
         id: community.id,
         name: community.name,
         identifier: community.identifier,
