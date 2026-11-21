@@ -9,8 +9,8 @@ import type { MissionDifficulty } from './missions.js';
  * acte vient d'avancer. Seul un MÊME acte (même `id`) d'une MÊME journée (`dayKey`) se compare : un nouveau jour ou un
  * acte relancé n'est pas une avancée. Deux actes avancés ensemble : le premier dans l'ordre du jour parle.
  *
- * `null` ⇒ aucune pastille : « Jeu masqué », lecture absente (cache vide, ancien serveur), actes pas encore ouverts,
- * aucune progression montée. Aucune notification n'en découle (#17368).
+ * `null` ⇒ aucune pastille : « Jeu masqué », lecture absente (cache vide, ancien serveur), aucun acte servi,
+ * aucune progression montée. L'acte unique du premier Rêve (#17370, sous le niveau 5) se compare comme les autres. Aucune notification n'en découle (#17368).
  */
 export type ActAdvance = {
   readonly difficulty: MissionDifficulty;
@@ -22,7 +22,6 @@ export type ActAdvance = {
 export type ActAdvanceSource = {
   readonly missions: {
     readonly dayKey: string;
-    readonly unlocked: boolean;
     readonly items: ReadonlyArray<{
       readonly id: string;
       readonly difficulty: MissionDifficulty;
@@ -38,7 +37,7 @@ export function actAdvance(
   options: { readonly hidden: boolean },
 ): ActAdvance | null {
   if (options.hidden || before == null || after == null) return null;
-  if (!after.missions.unlocked || before.missions.dayKey !== after.missions.dayKey) return null;
+  if (before.missions.dayKey !== after.missions.dayKey) return null;
   const previous = new Map(before.missions.items.map((item) => [item.id, item.progress] as const));
   const moved = after.missions.items.find((item) => {
     const was = previous.get(item.id);

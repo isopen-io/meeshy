@@ -23,7 +23,7 @@ import { EngagementService } from '../../../../services/engagement/EngagementSer
 import { PostReactionService } from '../../../../services/PostReactionService';
 import { DailyGestureGate, DailyGestureLimitReached } from '../../../../services/engagement/DailyGestureGate';
 import { loadViewerPostPoints } from '../../../../services/engagement/viewerPostPoints';
-import { fakeGameDb, seedUser, type FakeGameDb } from '../../../../services/game/__tests__/fakeGameDb';
+import { dreamAwaitingAnotherGesture, fakeGameDb, seedUser, type FakeGameDb } from '../../../../services/game/__tests__/fakeGameDb';
 import type { RepostPassage } from '../../../../services/posts/postVisibility';
 
 jest.mock('../../../../utils/logger-enhanced', () => ({
@@ -55,6 +55,7 @@ function setup(scale: EngagementScale = DEFAULT_ENGAGEMENT_SCALE, options: { rea
   const db = fakeGameDb();
   for (const id of [READER, AUTHOR, REPOSTER]) {
     seedUser(db, { emailVerifiedAt: new Date('2026-01-01T00:00:00Z'), engagementScore: 0 }, id);
+    dreamAwaitingAnotherGesture(db, id);
   }
   const emissions: Emission[] = [];
   const io = {

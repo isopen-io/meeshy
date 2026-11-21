@@ -51,6 +51,7 @@ import me.meeshy.sdk.model.game.MeeshEdition
 import me.meeshy.sdk.model.game.MintFailureKind
 import me.meeshy.sdk.model.game.MintFrameBlocker
 import me.meeshy.sdk.model.game.MintMee
+import me.meeshy.sdk.model.game.ceremony.MintCeremonyGlory
 import me.meeshy.sdk.model.game.ceremony.MintCeremonyRequest
 import me.meeshy.sdk.model.game.ceremony.PreparedMintCeremony
 import me.meeshy.ui.accessibility.LocalReduceMotion
@@ -155,7 +156,7 @@ internal fun MintGestures(
                 busyTitle = stringResource(R.string.game_mint_minting),
                 detail = stringResource(R.string.game_mint_chip_glory, count(glory)),
                 onClick = {
-                    ceremony = MintCeremonyRequest(game.mint.number, edition, gestures.mintSettlement)
+                    ceremony = MintCeremonyRequest(game.mint.number, edition, gestures.mintSettlement, MintCeremonyGlory.of(game.mint, game.glory))
                     onCeremonyStarted()
                     onMint()
                 },
@@ -178,7 +179,7 @@ internal fun MintGestures(
         }
         if (!gestures.minting) GameErrorLine(mintFailureText(gestures, game))
     }
-    MintCeremonyCover(ceremony, gestures.mintSettlement, glory = game.mint.gloryGained, prepared = prepared) {
+    MintCeremonyCover(ceremony, gestures.mintSettlement, prepared = prepared) {
         ceremony = null
         onCeremonyEnded()
     }
@@ -215,8 +216,9 @@ private fun blockerText(blocker: MintFrameBlocker): String = when (blocker) {
     )
 }
 
+/** Le nom d'un rang et sa division en chiffres romains : « Conteur II » ; le Mythe, sans division, par son seul nom. */
 @Composable
-private fun rankLabel(rank: GloryRank, division5: Int?): String {
+internal fun rankLabel(rank: GloryRank, division5: Int?): String {
     val name = gameString(GameCopyLaws.rankName(rank))
     val roman = division5?.let { listOf("I", "II", "III", "IV", "V").getOrNull(it - 1) } ?: return name
     return "$name $roman"

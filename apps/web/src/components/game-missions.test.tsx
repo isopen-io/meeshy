@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { act } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { gameBlockFixture } from '@/lib/api/game-fixture';
+import { gameBlockFixture, gameFactsFixture } from '@/lib/api/game-fixture';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -211,6 +211,31 @@ describe('avant le niveau 5', () => {
     expect(page).toContain('Requis 5');
     expect(page).not.toContain('Il manque');
     expect(page).not.toContain('Ouvrir l’Offrande');
+  });
+
+  const firstDream = (completed: boolean) => {
+    const [easy] = gameFactsFixture().missions;
+    return props({ score: 1_900, levelRecord: null, missions: [{ ...easy!, progress: completed ? easy!.target : 1, completedAt: completed ? '2026-10-05T08:00:00.000Z' : null }] });
+  };
+
+  test('le premier Rêve se joue : un acte, et les étincelles qui manquent avant le Rêve complet (#17370)', () => {
+    const page = text(renderToStaticMarkup(<GameMissions {...firstDream(false)} />));
+    expect(page).toContain('Envoyer 5 messages');
+    expect(page).toContain('Acte I');
+    expect(page).not.toContain('Acte II');
+    expect(page).toContain('Ton premier rêve complet arrive dans 600 étincelles');
+    expect(page).not.toContain('Le rêve s’ouvre au niveau 5');
+  });
+
+  test('le premier Rêve ne propose pas de changer son acte (#17370)', () => {
+    const html = renderToStaticMarkup(<GameMissions {...firstDream(false)} />);
+    expect(html).not.toContain('data-game-spend-reroll');
+    expect(text(html)).not.toContain('Changer');
+  });
+
+  test('son acte fait, l’Offrande du premier Rêve s’ouvre (#17370)', () => {
+    const page = text(renderToStaticMarkup(<GameMissions {...firstDream(true)} />));
+    expect(page).toContain('Ouvrir l’Offrande');
   });
 });
 

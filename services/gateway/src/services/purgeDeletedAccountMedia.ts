@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { POST_MEDIA_FILE_COLUMNS, reclaimMediaRowBytes, type PostMediaByteRemover } from './posts/reclaimPostMediaBytes';
+import { accountSeatIdBatches } from './participants/accountParticipantIds';
 
 const log = enhancedLogger.child({ module: 'purgeDeletedAccountMedia' });
 
@@ -61,14 +62,6 @@ export interface PurgeDeletedAccountMediaOptions {
   batchSize?: number;
 }
 
-/**
- * Le plafond de clés de participant lues pour un compte. 10 000 : une borne
- * EXPLICITE sur une liste déjà bornée par le nombre de conversations du compte
- * — elle ne tronque rien de réaliste, elle empêche une lecture sans fin si la
- * colonne venait à porter autre chose.
- */
-const PARTICIPANT_KEY_CAP = 10_000;
-
 const DEFAULT_BATCH_SIZE = 200;
 
 /**
@@ -80,50 +73,59 @@ const DEFAULT_BATCH_SIZE = 200;
  * un attachment dont la suppression échoue resterait éligible pour toujours
  * et boucler la fournée sans jamais progresser — même garde qu'#5689.
  */
-/**
- * Les clés sous lesquelles ce compte a pu déposer un média, HORS son `User.id`.
- *
- * Une lecture en échec rend la liste VIDE plutôt que de lever : la purge d'un
- * compte supprimé est une tâche de fond rejouable, et purger le seul espace de
- * compte vaut mieux que ne rien purger. La prochaine passe reprendra le reste.
- */
-async function ownerKeysOf(prisma: PrismaClient, userId: string): Promise<readonly string[]> {
-  try {
-    const participants = await prisma.participant.findMany({
-      where: { userId },
-      select: { id: true },
-      take: PARTICIPANT_KEY_CAP,
-    });
-    return participants.map((participant) => participant.id);
-  } catch (err) {
-    log.warn('deleted-account participant keys unreadable — purging the account key only', { userId, err });
-    return [];
-  }
-}
-
 async function purgeAttachments(
   prisma: PrismaClient,
   attachmentRemover: DeletedAccountAttachmentRemover,
   userId: string,
   batchSize: number,
-): Promise<number> {
+): Promise<{ deleted: number; complete: boolean }> {
   let deleted = 0;
-  const failedIds = new Set<string>();
+  let complete = true;
+
   // #20129 — `uploadedBy` porte DEUX espaces de clés pour les lignes écrites
   // avant #20113 : l'identité de compte pour les quatre écrivains de
   // téléversement, le `Participant.id` pour les deux écrivains de COPIE. Une
   // purge qui n'apparie que le compte laisse donc derrière elle les médias
   // TRANSFÉRÉS par le compte qu'on efface.
   //
-  // La liste est bornée par construction — un compte n'a qu'autant de
-  // participants que de conversations — et `take` le DIT, pour que le cliquet
-  // des lectures non bornées n'ait pas à le deviner.
-  const owners = [userId, ...(await ownerKeysOf(prisma, userId))];
+  // Les sièges arrivent PAGINÉS, et le drapeau `complete` voyage avec eux : la
+  // lecture plafonnée qui tenait ce rôle tronquait en SILENCE au-delà de son
+  // plafond, et son échec rendait une liste vide sous un `warn` annonçant un
+  // rejeu qui n'existe pas. Détail et mesure : le producteur unique.
+  //
+  // `failedIds` est tenu pour la PASSE entière, pas par fournée de sièges :
+  // l'identité du compte figure dans CHAQUE fournée, donc une pièce de l'espace
+  // nominal appartient à toutes, et la retenir par fournée la faisait retenter
+  // autant de fois qu'il y a de fournées.
+  const failedIds = new Set<string>();
+
+  for await (const seats of accountSeatIdBatches(prisma, userId)) {
+    if (!seats.complete) complete = false;
+    deleted += await purgeAttachmentsOfOwners(
+      prisma,
+      attachmentRemover,
+      [userId, ...seats.ids],
+      batchSize,
+      failedIds,
+    );
+  }
+
+  return { deleted, complete };
+}
+
+async function purgeAttachmentsOfOwners(
+  prisma: PrismaClient,
+  attachmentRemover: DeletedAccountAttachmentRemover,
+  owners: readonly string[],
+  batchSize: number,
+  failedIds: Set<string>,
+): Promise<number> {
+  let deleted = 0;
 
   for (;;) {
     const batch = await prisma.messageAttachment.findMany({
       where: {
-        uploadedBy: { in: owners },
+        uploadedBy: { in: [...owners] },
         isAnonymous: false,
         ...(failedIds.size > 0 ? { id: { notIn: [...failedIds] } } : {}),
       },
@@ -201,12 +203,23 @@ export async function purgeMediaOfDeletedAccount(
   mediaService: PostMediaByteRemover,
   userId: string,
   options: PurgeDeletedAccountMediaOptions = {},
-): Promise<{ attachmentsDeleted: number; postMediaDeleted: number }> {
+): Promise<{ attachmentsDeleted: number; postMediaDeleted: number; complete: boolean }> {
   const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
 
-  const attachmentsDeleted = await purgeAttachments(prisma, attachmentRemover, userId, batchSize);
+  const attachments = await purgeAttachments(prisma, attachmentRemover, userId, batchSize);
   const postMediaDeleted = await purgePostMedia(prisma, mediaService, userId, batchSize);
 
-  log.info('deleted-account media purged', { userId, attachmentsDeleted, postMediaDeleted });
-  return { attachmentsDeleted, postMediaDeleted };
+  if (attachments.complete) {
+    log.info('deleted-account media purged', { userId, attachmentsDeleted: attachments.deleted, postMediaDeleted });
+  } else {
+    // Pas un `warn` : ce sont des octets d'un compte supprimé qui RESTENT, et
+    // aucune passe ne reviendra les chercher — `processAccountDeletionRequests`
+    // n'élit que les demandes `CONFIRMED`, et celle-ci ne l'est plus (#20139).
+    log.error('deleted-account media purge INCOMPLETE — seats partly unread, bytes left behind', {
+      userId,
+      attachmentsDeleted: attachments.deleted,
+      postMediaDeleted,
+    });
+  }
+  return { attachmentsDeleted: attachments.deleted, postMediaDeleted, complete: attachments.complete };
 }

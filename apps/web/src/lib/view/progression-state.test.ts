@@ -125,8 +125,13 @@ describe('la Flamme, les missions, la ligue, la saison : l’étape où l’on e
     expect(state('missions', playing)).toBe('Le rêve de cette nuit : 1 sur 3 actes, et 2 à réaliser pour voir l’Offrande.');
   });
 
-  test('avant le niveau 5, les missions disent où elles s’ouvrent et où tu en es', () => {
+  test('avant le niveau 5, le premier Rêve dit où il en est (#17370)', () => {
     const early = withFacts({ score: 400, levelRecord: 2 });
+    expect(state('missions', early)).not.toContain('Le rêve s’ouvre au niveau 5');
+  });
+
+  test('avant le niveau 5 devant un serveur antérieur, les missions disent où elles s’ouvrent et où tu en es', () => {
+    const early = withFacts({ score: 400, levelRecord: 2, missions: [] });
     expect(state('missions', early)).toContain('Le rêve s’ouvre au niveau 5');
     expect(state('missions', early)).toContain('tu es au niveau 2');
   });

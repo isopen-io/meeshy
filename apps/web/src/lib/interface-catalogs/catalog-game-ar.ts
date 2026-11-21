@@ -271,6 +271,7 @@ const ar = {
   'game.mint.blocked_by_debt': 'ظلّ يحجب \u2066{debt}\u2069 شرارة من نورك: شراراتك القادمة ستبدّده. وما دام قائمًا، لا سكّ.',
   'game.missions.title': 'حلم هذه الليلة',
   'game.missions.locked': 'يُفتح الحلم عند المستوى 5 · أنت في المستوى {level}.',
+  'game.missions.full_dream_in': 'يصل حلمك الكامل الأول بعد {sparks}.',
   'game.missions.prism_day': 'يوم المنشور: أحد الفصول يُؤدّى بلغة غير لغتك.',
   'game.missions.prism_hour': 'ساعة المنشور: {start} – {end} — كل فصل يُحتسب مضاعفًا.',
   'game.missions.offline': 'بلا اتصال: سيعود تبديل الفصل وفتح العطيّة مع عودة الاتصال.',

@@ -642,11 +642,13 @@
     <string name="game_frappe_ancestors_prism">cada milésima moeda reúne todos os idiomas</string>
     <string name="game_frappe_ancestors_title">Seus ancestrais se manifestam</string>
     <string name="game_frappe_glory">+%1$s de glória</string>
+    <string name="game_frappe_glory_toward">%1$s de glória até %2$s</string>
     <string name="game_frappe_light">sua luz</string>
     <string name="game_frappe_refused_light">Sua luz ainda não basta. Suas próximas faíscas vão alimentá-la.</string>
     <string name="game_frappe_refused_locked">Sua Herança espera um título mais alto. Sua glória vai abri-la, e a gente cunha.</string>
     <string name="game_frappe_refused_offline">Sem conexão por enquanto. Assim que ela voltar, a gente cunha.</string>
     <string name="game_frappe_refused_unknown">A cunhagem não aconteceu. Nada se perde: sua luz está intacta.</string>
+    <string name="game_frappe_risen">Chamam você de %1$s</string>
     <string name="game_frappe_say_gold">A nº %1$s é de ouro. Seus ancestrais a viram.</string>
     <string name="game_frappe_say_prism">A nº %1$s é de prisma: todos os idiomas brilham nela.</string>
     <string name="game_frappe_say_silver">A nº %1$s entra na sua Herança.</string>

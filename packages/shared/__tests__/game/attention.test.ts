@@ -2,12 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { gameAttention, hasGameAttention, NO_GAME_ATTENTION, type GameAttentionSource } from '../../utils/game/attention.js';
 
 const source = (overrides: {
-  readonly unlocked?: boolean;
   readonly chest?: GameAttentionSource['chest']['status'];
   readonly flame?: GameAttentionSource['flame']['status'];
   readonly days?: number;
 } = {}): GameAttentionSource => ({
-  missions: { unlocked: overrides.unlocked ?? true },
   chest: { status: overrides.chest ?? 'locked' },
   flame: { status: overrides.flame ?? 'lit', days: overrides.days ?? 4 },
 });
@@ -22,8 +20,9 @@ describe('gameAttention — ce que le Jeu signale hors de ses écrans (#17796)',
     expect(gameAttention(source({ chest: 'claimed' }), { hidden: false }).chestReady).toBe(false);
   });
 
-  it('avant le niveau 5, aucune Offrande ne se signale, même servie prête', () => {
-    expect(gameAttention(source({ unlocked: false, chest: 'ready' }), { hidden: false }).chestReady).toBe(false);
+  it('avant le niveau 5, l’Offrande du premier Rêve servie prête se signale : la loi ne lit que l’Offrande (#17370)', () => {
+    const firstDream = { ...source({ chest: 'ready' }), missions: { unlocked: false } };
+    expect(gameAttention(firstDream, { hidden: false }).chestReady).toBe(true);
   });
 
   it('la Flamme servie à risque se signale', () => {

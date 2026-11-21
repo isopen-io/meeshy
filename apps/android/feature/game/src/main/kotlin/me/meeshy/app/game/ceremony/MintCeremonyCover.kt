@@ -38,9 +38,12 @@ import androidx.compose.ui.window.DialogProperties
 import java.time.LocalDate
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import me.meeshy.app.game.gestures.rankLabel
 import me.meeshy.app.game.pages.count
 import me.meeshy.feature.game.R
 import me.meeshy.sdk.model.game.GameHapticPattern
+import me.meeshy.sdk.model.game.GloryAfterGain
+import me.meeshy.sdk.model.game.GloryLaws
 import me.meeshy.sdk.model.game.MeeshEdition
 import me.meeshy.sdk.model.game.ceremony.GameMintCeremony
 import me.meeshy.sdk.model.game.ceremony.GameMintSettlement
@@ -65,12 +68,11 @@ internal const val MINT_CEREMONY_TAG = "game.mint.ceremony"
 internal fun MintCeremonyCover(
     request: MintCeremonyRequest?,
     settlement: GameMintSettlement?,
-    glory: Int,
     prepared: PreparedMintCeremony?,
     onFinish: () -> Unit,
 ) {
     if (request == null) return
-    key(request) { MintCeremonyHost(request, settlement, glory, prepared, onFinish) }
+    key(request) { MintCeremonyHost(request, settlement, prepared, onFinish) }
 }
 
 /**
@@ -82,7 +84,6 @@ internal fun MintCeremonyCover(
 private fun MintCeremonyHost(
     request: MintCeremonyRequest,
     settlement: GameMintSettlement?,
-    glory: Int,
     prepared: PreparedMintCeremony?,
     onFinish: () -> Unit,
 ) {
@@ -142,7 +143,8 @@ private fun MintCeremonyHost(
         ancestors = stringResource(R.string.game_frappe_ancestors_title),
         ancestorsLine = stringResource(if (run.edition == MeeshEdition.Prism) R.string.game_frappe_ancestors_prism else R.string.game_frappe_ancestors_gold),
         say = run.refusal?.let { stringResource(refusedText(it)) } ?: stringResource(sayText(run.edition), count(run.number)),
-        glory = stringResource(R.string.game_frappe_glory, count(glory)),
+        glory = stringResource(R.string.game_frappe_glory, count(request.glory?.shownGain ?: GloryLaws.POINTS_MINT)),
+        gloryStep = request.glory?.step?.let { mintCeremonyGloryStep(it) },
     )
     val skipHint = stringResource(R.string.game_frappe_skip)
     val year = remember { LocalDate.now().year }
@@ -173,6 +175,16 @@ private fun MintCeremonyHost(
             )
         }
     }
+}
+
+/**
+ * Le pas vers le rang suivant, sous la gloire gagnée (#19860) : « On t’appelle Conteur II », ou « 1 200 de gloire
+ * jusqu’à Conteur II » — les mêmes clés et les mêmes mots qu'iOS et le web.
+ */
+@Composable
+internal fun mintCeremonyGloryStep(step: GloryAfterGain): String = when (step) {
+    is GloryAfterGain.Risen -> stringResource(R.string.game_frappe_risen, rankLabel(step.rank, step.division5))
+    is GloryAfterGain.Toward -> stringResource(R.string.game_frappe_glory_toward, count(step.gloryMissing), rankLabel(step.rank, step.division5))
 }
 
 private fun sayText(edition: MeeshEdition): Int = when (edition) {

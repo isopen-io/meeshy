@@ -642,11 +642,13 @@
     <string name="game_frappe_ancestors_prism">كل قطعة ألفية تجمع كل اللغات</string>
     <string name="game_frappe_ancestors_title">أجدادك يتجلّون</string>
     <string name="game_frappe_glory">⁦+%1$s⁩ من المجد</string>
+    <string name="game_frappe_glory_toward">%1$s من المجد حتى %2$s</string>
     <string name="game_frappe_light">نورك</string>
     <string name="game_frappe_refused_light">نورك لا يكفي بعد. شراراتك القادمة ستغذّيه.</string>
     <string name="game_frappe_refused_locked">إرثك ينتظر رتبة أعلى. مجدك سيفتحه، ثم نسكّ.</string>
     <string name="game_frappe_refused_offline">لا اتصال الآن. حين يعود، نسكّ.</string>
     <string name="game_frappe_refused_unknown">لم يتمّ السكّ. لا شيء ضاع: نورك سليم.</string>
+    <string name="game_frappe_risen">لقبك %1$s</string>
     <string name="game_frappe_say_gold">Meesh رقم %1$s ذهبية. رآها أجدادك.</string>
     <string name="game_frappe_say_prism">Meesh رقم %1$s موشورية: كل اللغات تسطع فيها.</string>
     <string name="game_frappe_say_silver">Meesh رقم %1$s تنضمّ إلى إرثك.</string>

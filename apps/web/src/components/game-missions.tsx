@@ -11,7 +11,7 @@ import { timerLabel } from '@/lib/view/game-copy-v2';
 import { Chest, useChoreography } from '@/components/game';
 import { Glyph } from '@/components/glyph';
 import { ProgressBar } from '@/components/progress-bar';
-import { difficultyName, formatCount, gameText, meeshCount, missionTitle, pointsLabel } from '@/lib/view/game-copy';
+import { difficultyName, formatCount, fullDreamLine, gameText, meeshCount, missionTitle, pointsLabel } from '@/lib/view/game-copy';
 import { chestRewardLines, starFragmentsLabel } from '@/lib/view/game-chest-copy';
 import { chestDetail, missionDetail } from '@/lib/view/game-detail';
 
@@ -358,9 +358,10 @@ function lastWindowEnd(missions: GameMissionsBlock): number {
 
 export function GameMissions(props: GameMissionsProps) {
   const { missions, chest, starFragments, held, level, prismHour, online, pendingRerollId, chestOpening, onReroll, onClaim, errors, onPhotoMission } = props;
-  const now = useClockNow(props.now, missions.unlocked ? lastWindowEnd(missions) : 0);
+  const now = useClockNow(props.now, missions.items.length > 0 ? lastWindowEnd(missions) : 0);
 
-  if (!missions.unlocked) {
+  /* Sous le niveau 5, le premier Rêve (#17370) se joue comme les autres ; seul un serveur antérieur le tait. */
+  if (!missions.unlocked && missions.items.length === 0) {
     return (
       <GameCard id="game-missions" labelledBy="game-missions-title">
         <h2 id="game-missions-title" className="text-body font-bold" style={{ color: GAME_INK }}>
@@ -378,7 +379,7 @@ export function GameMissions(props: GameMissionsProps) {
   /* Le serveur retire le changement faute de Meesh (`rerollAvailable`) : la ligne reste, pour dire combien il en manque. */
   const rows = missions.items.map((mission) => ({ mission, clock: dailyMissionClock({ dayKey: missions.dayKey, completed: mission.completedAt !== null, now }) }));
   const rerollable = rows.some(({ mission, clock: timer }) => mission.completedAt === null && (timer?.actionable ?? true));
-  const rerollShown = rerollable && (missions.rerollAvailable || !reroll.affordable);
+  const rerollShown = missions.unlocked && rerollable && (missions.rerollAvailable || !reroll.affordable);
   const done = { count: missions.items.filter((mission) => mission.completedAt !== null).length, total: missions.items.length };
 
   return (
@@ -394,6 +395,11 @@ export function GameMissions(props: GameMissionsProps) {
       {prismHour === null ? null : (
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
           {gameText('game.missions.prism_hour', { start: clock(prismHour.startMinute), end: clock(prismHour.endMinute) })}
+        </p>
+      )}
+      {missions.fullDreamIn === undefined ? null : (
+        <p data-game-first-dream="" className="text-caption" style={{ color: GAME_INK_2 }}>
+          {fullDreamLine(missions.fullDreamIn)}
         </p>
       )}
       <ul className="flex flex-col gap-2">

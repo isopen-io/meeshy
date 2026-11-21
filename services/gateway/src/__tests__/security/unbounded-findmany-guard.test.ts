@@ -343,7 +343,13 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   // total du depot est inchange ; seule la CLE change, parce que ce cliquet est
   // indexe par FICHIER. Ne pas lire cette ligne comme une nouvelle dette.
   'links/utils/share-link-mint.ts': 2,
-  'me/export.ts': 2,
+  // #20129 — passe de 2 a 1, et ce n'est PAS une dette remboursee : la lecture
+  // des sieges du compte a DEMENAGE dans `services/participants/accountParticipantIds.ts`
+  // (producteur unique, que trois sites reecrivaient). Elle y est toujours non
+  // bornee, et ce cliquet ne balaie que `routes/` — le total du depot est
+  // inchange, seule la PORTEE de l'instrument a change. Le balayage de fond qui
+  // ne peut pas se permettre une liste entiere pagine, lui (`accountSeatIdBatches`).
+  'me/export.ts': 1,
   'posts/hashtag.ts': 1,
   // `posts/interactions.ts` a perdu le sien en meme temps que ses routes : il
   // vit desormais dans `posts/impressions.ts`, inchange. `postConsumptionGate`

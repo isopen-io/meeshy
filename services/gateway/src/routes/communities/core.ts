@@ -19,7 +19,7 @@ import { validatePagination } from '../../utils/pagination';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendBadRequest, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendConflict, sendPaginatedSuccess } from '../../utils/response';
-import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
+import { participationEstVivante, refuserCommeIntrouvable } from '../conversations/utils/access-control';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { identityImageIsCallers, IDENTITY_IMAGE_NOT_OWNED } from '../../services/attachments/identityImageOwnership';
 import { countOnlineMembers } from '../../services/community-online-count';
@@ -737,7 +737,18 @@ const community = await fastify.prisma.community.findFirst({
           type: true,
           encryptionMode: true,
           communityId: true,
-          participants: { select: { userId: true, role: true, isActive: true } }
+          participants: {
+            // `bannedAt` EST la moitié de la loi, et la projection est le
+            // seul endroit où elle peut entrer (#20136) : `participationEstVivante`
+            // lit `row.bannedAt == null`, et un champ NON PROJETÉ vaut
+            // `undefined`, dont `undefined == null` est VRAI. Juger la loi sans
+            // charger la colonne est donc un no-op MUET — la garde a l'air
+            // posée, elle rend `true` pour un banni, et aucun témoin de garde
+            // ne peut le voir. « Un `where` n'est pas une projection », et un
+            // prédicat jugé APRÈS lecture ne vaut que ce que la lecture a
+            // demandé.
+            select: { userId: true, role: true, isActive: true, bannedAt: true },
+          }
         }
       });
 
@@ -753,8 +764,15 @@ const community = await fastify.prisma.community.findFirst({
       // rattacher à la sienne n'importe quelle conversation du système dont il
       // connaissait l'identifiant, et en recevoir la liste des participants
       // dans la réponse (#4191).
+      // #20136 — la PARTICIPATION VIVANTE, et deux écarts corrigés d'un coup.
+      // `p.isActive !== false` admettait une ligne dont `isActive` est ABSENT ou
+      // nul — « non faux » n'est pas « vrai » — et ne disait RIEN de `bannedAt` :
+      // un administrateur de conversation BANNI rattachait « sa » conversation à
+      // une communauté. Le second écart est le plus discret des deux, et c'est
+      // celui qu'un correctif pressé laisse derrière lui.
       const participantAppelant = conversation.participants.find(
-        (p: { userId: string | null; isActive?: boolean }) => p.userId === userId && p.isActive !== false
+        (p: { userId: string | null; isActive?: boolean; bannedAt?: Date | null }) =>
+          p.userId === userId && participationEstVivante(p)
       );
       const administreLaConversation = Boolean(
         participantAppelant &&
@@ -811,8 +829,20 @@ const community = await fastify.prisma.community.findFirst({
             createdBy: community.createdBy,
             isPrivate: true,
             actorRole: community.members[0]?.role ?? null,
+            // #20136 — LA MÊME LOI, et c'est ici qu'elle pèse le plus lourd :
+            // cette liste n'affiche rien, elle ÉCRIT. `applyCommunityAdmission`
+            // crée une ligne `CommunityMember` pour chacun, donc un participant
+            // banni de la conversation devenait MEMBRE de la communauté privée
+            // à laquelle on la rattache — une appartenance qu'aucune autre porte
+            // ne lui aurait donnée, obtenue par un geste qui parle d'autre chose.
+            //
+            // La porte vingt lignes plus haut et cette liste lisent le MÊME
+            // relevé sous le MÊME prédicat : les deux écarts avaient une seule
+            // cause, ils ont une seule correction.
             participantIds: conversation.participants
-              .filter((p: { userId: string | null; isActive?: boolean }) => p.isActive !== false)
+              .filter((p: { userId: string | null; isActive?: boolean; bannedAt?: Date | null }) =>
+                participationEstVivante(p)
+              )
               .flatMap((p: { userId: string | null }) => (p.userId ? [p.userId] : [])),
             admitActor: false,
           })

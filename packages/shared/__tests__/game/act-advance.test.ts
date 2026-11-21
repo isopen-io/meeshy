@@ -5,9 +5,10 @@ type Act = ActAdvanceSource['missions']['items'][number];
 
 const act = (id: string, difficulty: Act['difficulty'], progress: number, target: number): Act => ({ id, difficulty, progress, target });
 
-const game = (items: readonly Act[], overrides: { readonly dayKey?: string; readonly unlocked?: boolean } = {}): ActAdvanceSource => ({
-  missions: { dayKey: overrides.dayKey ?? '2026-11-18', unlocked: overrides.unlocked ?? true, items },
-});
+const game = (items: readonly Act[], overrides: { readonly dayKey?: string; readonly unlocked?: boolean } = {}): ActAdvanceSource => {
+  const missions = { dayKey: overrides.dayKey ?? '2026-11-18', unlocked: overrides.unlocked ?? true, items };
+  return { missions };
+};
 
 const day = (medium: number, hard = 0) => game([act('a', 'easy', 1, 1), act('b', 'medium', medium, 5), act('c', 'hard', hard, 8)]);
 
@@ -48,8 +49,12 @@ describe('actAdvance — un acte du Rêve qui avance se voit à l’envoi (#1736
     expect(actAdvance(day(2), game([act('a', 'easy', 1, 1), act('z', 'medium', 3, 5), act('c', 'hard', 0, 8)]), { hidden: false })).toBeNull();
   });
 
-  it('actes pas encore ouverts : rien', () => {
-    expect(actAdvance(game([act('b', 'medium', 2, 5)], { unlocked: false }), game([act('b', 'medium', 3, 5)], { unlocked: false }), { hidden: false })).toBeNull();
+  it('avant le niveau 5, l’acte du premier Rêve qui avance se voit aussi (#17370)', () => {
+    expect(actAdvance(game([act('a', 'easy', 0, 3)], { unlocked: false }), game([act('a', 'easy', 1, 3)], { unlocked: false }), { hidden: false })).toEqual({ difficulty: 'easy', progress: 1, target: 3 });
+  });
+
+  it('aucun acte servi (ancien serveur, sous le niveau 5) : rien', () => {
+    expect(actAdvance(game([], { unlocked: false }), game([], { unlocked: false }), { hidden: false })).toBeNull();
   });
 
   it('sans lecture d’avant ou d’après (cache vide, ancien serveur) : rien, jamais une exception', () => {
