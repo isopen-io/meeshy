@@ -422,6 +422,9 @@ model User {
   flameFreezes        Int?
   /// Jour civil (`AAAA-MM-JJ`, fuseau du compte) du dernier rallumage — une fois par mois.
   lastRelightDay      String?
+  /// Jour civil (`AAAA-MM-JJ`, fuseau du compte) où la première Veilleuse a été offerte (#17371) : les clients
+  /// l'annoncent ce jour-là (#20169). Absent : jamais offerte, ou offerte avant que le jour s'écrive.
+  flameFreezeGiftDay  String?
   /// La série perdue quand la Flamme s'est éteinte, et son dernier jour actif
   /// d'AVANT la rupture : ce que le rallumage rend (fenêtre de 48 h).
   brokenStreakDays    Int?

@@ -313,6 +313,8 @@ export const gameFlameSchema = z.object({
   relightPrice: nonNegativeInt,
   status: z.enum(['none', 'lit', 'at-risk', 'covered', 'out']),
   canRelight: z.boolean(),
+  /** La première Veilleuse a été offerte AUJOURD'HUI (#20169). Tolérant : absent devant un serveur antérieur. */
+  freezeGifted: z.boolean().optional().catch(undefined),
 });
 
 export const gameBoostsSchema = z.object({
