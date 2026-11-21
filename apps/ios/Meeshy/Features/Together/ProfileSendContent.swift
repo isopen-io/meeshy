@@ -131,7 +131,7 @@ final class ProfileSendContentViewModel: ObservableObject {
 
 // MARK: - La grille (#20243)
 
-extension ProfileSendContentKind {
+nonisolated extension ProfileSendContentKind {
     /// Une publication se tient en 4:5 ; un réel et une story dans le portrait de la scène.
     var cardAspectRatio: CGFloat { self == .publication ? 4.0 / 5.0 : SceneShape.aspect }
 }
