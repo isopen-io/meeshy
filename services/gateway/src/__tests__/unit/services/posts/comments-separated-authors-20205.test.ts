@@ -72,8 +72,14 @@ const makeStore = (options: {
     options.blockLookupFails ? Promise.reject(new Error('base indisponible')) : Promise.resolve(value);
   const prisma = {
     postComment: {
-      findMany: async ({ where, take }: { where: Where; take: number }) =>
-        options.rows.filter((row) => matches(row, where)).slice(0, take).map(asServed),
+      findMany: async ({ where, take, orderBy }: { where: Where; take: number; orderBy: Array<{ createdAt?: string }> }) => {
+        const direction = orderBy[0]?.createdAt === 'asc' ? 1 : -1;
+        return options.rows
+          .filter((row) => matches(row, where))
+          .sort((a, b) => direction * (a.createdAt.getTime() - b.createdAt.getTime()))
+          .slice(0, take)
+          .map(asServed);
+      },
       findFirst: async ({ where }: { where: Where }) => {
         const row = options.rows.find((r) => matches(r, where));
         return row ? { id: row.id, authorId: row.authorId } : null;

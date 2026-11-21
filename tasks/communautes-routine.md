@@ -805,3 +805,12 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Aucun client touché, aucun contrat changé (`repostOf` est déjà nullable, l'aperçu peut déjà compter moins de trois commentaires).
 - Revue adversariale avant la PR : non bloquante pour `dev`. Corrigés dans le lot : la COPIE d'une story ou d'un statut d'un auteur séparé (`snapshotAuthorId`, qui survit au détachement de la source) voyageait encore — écartée par la requête (`snapshotAuthorNotSeparated`, champ absent compris) et, quand elle est la source d'une republication, `repostOf: null` (colonne lue par `repostOfInclude`, jamais servie) ; la lecture du blocage remise dans le `Promise.all` de tête (fil, stories) ; `viewerUserId` rendu obligatoire pour « à proximité » ; le commentaire faux sur les diffusions (« chaque client relit par le REST » : le web fusionne la charge reçue) corrigé ; témoins profil et favoris (une seule lecture du blocage). Suivis ouverts : #20204 (fiche, like, diffusions, statuts), #20205 (liste complète des commentaires sans blocage), #20206 (son, et pagination de « à proximité » dans `$geoNear`).
 
+
+## 2026-11-21 — réveil 13:38 UTC
+
+- Début du run : #20207 (blocage, compagnons d'un post) ouverte depuis 12:18, `ci.yml` 44903236491 vert sur `9c3056b8a` ; `dev` avait avancé de 8 commits sans fichier commun : fusionnée dans `dev` (`6026f8bce`). #16894 commentée avec sa preuve, reste ouverte (#20204, #20205, #20206).
+- Lot : #20205 — la liste complète des commentaires d'un post et les réponses d'un commentaire écartent l'auteur qu'un blocage sépare du lecteur, dans les deux sens.
+- Passerelle : `services/posts/separatedCommentAuthors.ts` (`blockedIdsAroundViewer`, la loi des fils) ; `PostCommentService.getComments` pose `authorId notIn` DANS la requête (page pleine, `hasMore` juste) ; `getReplies` aussi, et ne sert rien sous le commentaire d'un auteur séparé. Échec fermé : une lecture des blocages qui lève fait échouer la liste.
+- Décision : `commentCount` / `replyCount` restent BRUTS (ils ne nomment personne ; un compte par lecteur coûterait une requête par commentaire). Écrite dans le module.
+- Témoins : `unit/services/posts/comments-separated-authors-20205.test.ts` (8, double Prisma qui applique `where`, `orderBy` et `take` ; rouge prouvé : 6 échecs avant le code). Le harnais `PostCommentService.test.ts` reçoit un double `user` sans blocage.
+- Aucun client touché, aucun contrat changé.
