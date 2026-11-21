@@ -67,8 +67,8 @@ enum GameCopy {
 
     /// Sous le niveau 5, le premier Rêve tient en un acte (#17370) : les étincelles qui manquent avant le Rêve complet.
     static func fullDreamLine(sparks: Int) -> String {
-        let count = points(sparks)
-        return String(localized: "game.missions.full_dream_in", defaultValue: "Ton premier rêve complet arrive dans \(count).", bundle: .main)
+        let missing = points(sparks)
+        return String(localized: "game.missions.full_dream_in", defaultValue: "Ton premier rêve complet arrive dans \(missing).", bundle: .main)
     }
 
     static func meeshes(_ count: Int) -> String {

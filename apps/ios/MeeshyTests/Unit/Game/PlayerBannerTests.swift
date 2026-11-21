@@ -446,8 +446,8 @@ final class PlayerBannerTests: XCTestCase {
         GameFixture.game(score: 0, glory: 0, held: 0, flameDays: 0, flameStatus: .none, missions: [])
     }
 
-    func test_aPlayerAtZero_seesTheBannerOfTheirFirstDream_fromTheFirstDay() async {
-        let first = GameFixture.game(score: 0, glory: 0, held: 0, flameDays: 0, flameStatus: .none,
+    func test_aNewPlayer_seesThePieceOfTheirFirstDream() async {
+        let first = GameFixture.game(score: 25, glory: 0, held: 0, flameDays: 0, flameStatus: .none,
                                      missions: [GameFixture.mission(id: "m0")], rerollAvailable: false)
         let source = FakeSource()
         source.cachedBlock = first
@@ -455,7 +455,7 @@ final class PlayerBannerTests: XCTestCase {
         let sut = store(source)
         await sut.activate()
         XCTAssertEqual(sut.banner?.dailyMission, GamePlayerBanner.DailyMission(done: 0, total: 1),
-                       "le premier Rêve (#17370) a sa pièce : un joueur à zéro voit un bandeau dès son premier jour")
+                       "le premier Rêve (#17370) a sa pièce, « 0 sur 1 », dès les premières étincelles")
     }
 
     func test_aPlayerWhoDidNothingYet_hasNoBannerAtAll() async {
