@@ -36,6 +36,8 @@ function basePrisma(overrides: Record<string, unknown> = {}) {
     post: {
       findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
     },
+    // #16894 — les deux lectures du blocage (`getBlockRelatedUserIds`) : personne ici.
+    user: { findMany: jest.fn(async () => []), findUnique: jest.fn(async () => ({ blockedUserIds: [] })) },
     communityMember: {
       findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
     },

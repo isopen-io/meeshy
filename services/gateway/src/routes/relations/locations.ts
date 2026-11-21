@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { parseSharedLocationIncludes, SHARED_LOCATION_CIRCLES, SHARED_LOCATION_MOTIONS } from '@meeshy/shared/types/shared-location';
+import { parseSharedLocationIncludes, SHARED_LOCATION_CIRCLES, SHARED_LOCATION_MOTIONS, type SharedLocationOwnSnapshot } from '@meeshy/shared/types/shared-location';
 import { readRestVersionClaim, upgradeRequirementFor } from '../../middleware/app-version-floor';
 import { bloodLocationDepsOf } from '../../services/bloodLocation/bloodLocationDeps';
 import { bloodLocationEnabledFor } from '../../services/bloodLocation/bloodLocationFlag';
@@ -90,8 +90,18 @@ export const ownSharedLocationSchema = {
     shareBattery: { type: 'boolean' },
     startedAt: { type: 'string' },
     source: { type: 'string', enum: ['device', 'manual'] },
+    acceptsManualSource: { type: 'boolean' },
   },
 } as const;
+
+/**
+ * Ce que `/relations/locations/mine` sert : mon partage, plus l'ANNONCE que cette passerelle accepte un point
+ * choisi à la main (`source: 'manual'`, #19557). C'est le seul signal qu'un client lit pour proposer « Choisir sur
+ * la carte » ; il est servi avec ou sans partage en cours, puisque le client le lit AVANT de partager.
+ */
+export function servedOwnSharedLocation(own: SharedLocationOwnSnapshot): SharedLocationOwnSnapshot {
+  return { ...own, acceptsManualSource: true };
+}
 
 /** `minLongitude,minLatitude,maxLongitude,maxLatitude` ; absent = toute la carte ; illisible = `null`. */
 export function parseBbox(raw: unknown): SharedLocationBbox | undefined | null {
@@ -193,7 +203,7 @@ export function registerOwnSharedLocation(fastify: FastifyInstance): void {
     try {
       const own = await ownSharedLocationFor(sharedLocationRelayDepsOf({ prisma: fastify.prisma, io: undefined }), request.user!.userId);
       reply.header('Cache-Control', 'private, no-store');
-      return sendSuccess(reply, own);
+      return sendSuccess(reply, servedOwnSharedLocation(own));
     } catch (error) {
       logError(fastify.log, 'Own shared location error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');

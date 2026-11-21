@@ -1773,3 +1773,20 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   Lua joué une fois contre un vrai `redis-server` local (hors dépôt).
 - Prochain lot : annoncer `acceptsManualSource` (#19557, avec les préconditions du commentaire de #20115 : schéma de
   `ownSharedLocationSchema`, plancher `MIN_APP_VERSION`), puis #20126 (web + Android), #20127, #20054, #20056, #20086.
+
+## 2026-11-21 — réveil de 11 h : annoncer « Choisir sur la carte » (#19557)
+
+- Reprise : aucune PR de la routine ouverte ; #20173 (#20115) fusionnée par le porteur à 9 h 46. Aucune branche vivante
+  n'écrit `routes/relations/locations.ts`.
+- Lot : la dernière moitié de #19557. `GET /relations/locations/mine` sert `acceptsManualSource: true`, avec ou sans
+  partage en cours (`servedOwnSharedLocation`), et `ownSharedLocationSchema` le DÉCLARE — sans quoi fast-json-stringify
+  l'aurait retiré (précondition 1 du commentaire de #20115). `SharedLocationOwnSnapshot` le porte, additif.
+- Précondition 2 (plancher `MIN_APP_VERSION`) : NON posé, par mesure. « Choisir sur la carte » (#19558, 18 nov.) et la
+  lecture de la source (#20128, 21 nov.) sont tous deux sous `MARKETING_VERSION` 1.1.8 : aucun plancher de version ne les
+  sépare. Le seul effet d'un binaire intermédiaire est un échec générique devant un point choisi depuis un AUTRE appareil
+  (la passerelle refuse, `FIXED_POINT`) — aucune fuite. Précondition 3 (repli `INVALID`) : sans objet dès l'annonce,
+  le client ne proposant le point choisi qu'à une passerelle qui l'accepte.
+- Web et Android ne lisent pas l'annonce (ils n'ont pas de point choisi) : leur part reste #20126.
+- Gates : témoin de sérialisation 3/3, mutation (clé retirée du schéma) ⇒ 2 rouges ; suites position + routes de
+  relations 35 suites / 444 tests ; `tsc` 0.
+- Prochain lot : #20126 (web + Android lisent la source servie), puis #20127, #20054, #20056, #20086.

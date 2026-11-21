@@ -41,6 +41,12 @@ import { buildPostVisibilityOrFilter } from './postVisibility';
  * lecteur (`getReadableCommunityIds`), sans cache, pour que quitter une
  * communauté privée la ferme aussitôt.
  *
+ * ## Le blocage déjà lu (#16894)
+ *
+ * Un appelant qui a déjà lu les séparations du lecteur (`readerSeparatedFrom`,
+ * pour retirer ce qui VOYAGE avec un post) les passe en dernier argument : la
+ * même lecture sert le filtre de liste et le post servi, une fois par requête.
+ *
  * G5 — audience feed = friends ∪ contacts DM (divergence assumée vs
  * `PostService`, décision produit en attente — story-sota §4) : elle ne porte que
  * `FRIENDS` et `EXCEPT`, jamais les cercles, qui n'admettent aucun contact DM.
@@ -50,10 +56,11 @@ export async function buildFeedVisibilityFilter(
   viewerId: string,
   friendIds: string[],
   communityCoMemberIds: string[] = [],
-  cache?: CacheStore
+  cache?: CacheStore,
+  separated?: ReadonlySet<string>
 ) {
   const [blockedAuthorIds, circles, readableCommunityIds] = await Promise.all([
-    blockedIdsAroundViewer(prisma, viewerId),
+    separated !== undefined ? [...separated] : blockedIdsAroundViewer(prisma, viewerId),
     loadFeedCircles({ prisma, cache, userId: viewerId }),
     getReadableCommunityIds(prisma, viewerId),
   ]);
@@ -66,11 +73,11 @@ export async function buildFeedVisibilityFilter(
  * cercles, communautés lisibles). Pour les listes qui n'ont pas déjà ces
  * ensembles en main — recherche globale, favoris (#17182).
  */
-export async function viewerPostAudience(prisma: PrismaClient, viewerId: string, cache?: CacheStore) {
+export async function viewerPostAudience(prisma: PrismaClient, viewerId: string, cache?: CacheStore, separated?: ReadonlySet<string>) {
   const [friendIds, directContactIds, communityCoMemberIds] = await Promise.all([
     loadFeedFriendIds({ prisma, cache, userId: viewerId }),
     loadFeedDirectContactIds({ prisma, cache, userId: viewerId }),
     getCommunityCoMemberIds(prisma, viewerId, cache),
   ]);
-  return buildFeedVisibilityFilter(prisma, viewerId, [...new Set([...friendIds, ...directContactIds])], communityCoMemberIds, cache);
+  return buildFeedVisibilityFilter(prisma, viewerId, [...new Set([...friendIds, ...directContactIds])], communityCoMemberIds, cache, separated);
 }
