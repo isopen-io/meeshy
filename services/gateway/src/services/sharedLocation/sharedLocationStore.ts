@@ -146,19 +146,23 @@ export async function storeSharedLocation(cache: SharedLocationCache, userId: st
   await cache.set(keyOf(userId, state.sessionId), sealed(userId, state), ttlOf(state, now));
 }
 
-/** Rend `state` courant si la génération est encore `generation` ; rend la session REMPLACÉE (atomique). */
+/**
+ * Rend `state` courant si la génération est encore `generation` — et, avec `expected`, si le pointeur désigne encore
+ * cette session (`null` : aucune) ; rend la session REMPLACÉE (atomique). `moved` : seul le pointeur avait bougé.
+ */
 export async function claimSharedLocation(
   cache: SharedLocationCache,
   userId: string,
   generation: string,
   state: SharedLocationState,
   now: number,
-): Promise<{ readonly claimed: boolean; readonly displaced: string | null }> {
+  expected?: string | null,
+): Promise<{ readonly claimed: boolean; readonly displaced: string | null; readonly moved: boolean }> {
   const result = await cache.claim(
     pointerKeys(userId),
-    { generation, session: state.sessionId, ttlSeconds: ttlOf(state, now) },
+    { generation, session: state.sessionId, ttlSeconds: ttlOf(state, now), ...(expected === undefined ? {} : { expected }) },
   );
-  return { claimed: result.claimed, displaced: validSession(result.displaced) };
+  return { claimed: result.claimed, displaced: validSession(result.displaced), moved: result.moved === true };
 }
 
 /** Une nouvelle position, écrite SEULEMENT si sa session est encore courante (atomique). */
