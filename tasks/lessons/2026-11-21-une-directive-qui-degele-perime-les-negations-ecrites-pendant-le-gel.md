@@ -4,7 +4,7 @@
 d'état est une AFFIRMATION » (cycle 94, cycle 203, leçon du 2026-11-20 sur les
 symétries).
 
-## Le fait
+### Le fait
 
 Le site d'émission de `participant:rights-updated` justifiait la forme RÉDUITE
 de sa charge par une phrase qui NOMMAIT ses consommateurs :
@@ -19,7 +19,7 @@ Mesurée, elle était fausse **sur ses deux moitiés, et pas pour la même raiso
 | « côté web » | une AFFIRMATION jamais vraie | un consommateur supposé, jamais écrit (0 occurrence) |
 | « Android n'a pas de consommateur » | une NÉGATION devenue fausse | le dégel du Kotlin natif (#11570) |
 
-## La leçon
+### La leçon
 
 La famille connue dit qu'un commentaire d'état survit à ce qui l'a périmé. Ce lot
 ajoute **quelle directive le périme, et dans quel sens** : une directive qui
@@ -33,7 +33,7 @@ ressemblent pas à des affirmations mais à des constats de terrain.
 > EXISTE se démentit au premier défaut, affirmer qu'il N'EXISTE PAS ne se
 > démentit jamais — elle se contente d'autoriser à ne pas chercher.
 
-## Ce qu'on fait
+### Ce qu'on fait
 
 - Devant toute phrase « cette plateforme ne lit pas / n'a pas de X », la
   **compter** avant de s'y fier — c'est une commande, pas une relecture :

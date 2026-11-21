@@ -4,7 +4,7 @@
 (cycle 94), et la jumelle immédiate du cycle 206 (« une négation est
 l'affirmation la moins relue du dépôt »).
 
-## Le fait
+### Le fait
 
 `client-event-readers.ts` répond « quelles plateformes LISENT cet événement ? »
 pour DEUX cliquets — l'orphelin total et l'asymétrie à trois clients. Il balaie
@@ -19,7 +19,7 @@ le relevé en concluait** :
   `user:preferences-community-reordered` **stays unheard** » ⇒ compté comme son
   lecteur, ce qui a tenu un ORPHELIN hors des deux inventaires.
 
-## La leçon
+### La leçon
 
 > Pour un balayage textuel, **une phrase qui dit « je n'écoute pas X » est la
 > meilleure preuve que X est lu ici**. Le relevé ne mesure pas une propriété du
@@ -29,7 +29,7 @@ Et le sens de l'erreur est celui qui ENDORT : un lecteur de trop, donc une
 asymétrie ou un orphelin de moins. Un cliquet qui crie à tort finit désarmé
 (cycle 107) ; un cliquet qui se TAIT à tort n'est jamais remis en cause.
 
-## Ce qu'on fait
+### Ce qu'on fait
 
 - **Tout balayage de source retire les commentaires d'abord**, et le dépôt a
   déjà l'outil : `withoutComments` (`mirror-contract.ts`), exporté, employé par

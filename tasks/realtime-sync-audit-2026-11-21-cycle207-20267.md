@@ -132,3 +132,19 @@ différentes : c'est ce qui distingue deux défauts d'un seul défaut vu deux fo
   dit pas s'il y a un trou d'un site ou de quatre-vingt-dix. »
 - `pack:installation-updated` manque à deux clients sur trois : la question
   « faut-il l'y porter ? » appartient au lot des vitrines, pas à l'instrument.
+
+### Un accident du lot, consigné
+
+Les deux fichiers de leçon ont été écrits avec leurs sous-titres en `## `, ce
+que `journal-one-file-per-entry-guard` (passerelle) refuse : un fichier de
+`tasks/lessons/` commence par `## ` et ne porte **qu'un seul** titre de ce
+niveau hors bloc de code. Le gate l'a dit en une seconde, et il tourne dans les
+« Gardes du dépôt » de la CI.
+
+> **Les gardes de DOCUMENTATION se rejouent comme les autres.** Un lot dont la
+> moitié est de la prose n'a pas moins de gates à passer : il en a d'AUTRES, et
+> ce sont ceux qu'on oublie, parce qu'écrire un journal ne ressemble pas à
+> toucher au code. Les deux commandes du lot :
+> `npx jest src/__tests__/journal-one-file-per-entry-guard.test.ts src/__tests__/lessons-numbering-single-key-guard.test.ts`
+> (et, pour balayer large, `npx jest --testPathPatterns 'src/__tests__/[^/]*(guard|sweep)[^/]*\.test\.ts'`
+> — 24 suites, 209 témoins verts sur l'arbre de ce lot).
