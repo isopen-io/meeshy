@@ -48,6 +48,7 @@ const OTHER_USER_ID = '507f1f77bcf86cd799439077';
 // tête du double, il fait échouer tout `where` qui perdrait `userId` : la
 // garde plate (#5191) le trouverait, jamais `null`.
 const INTRUDER_USER_ID = '507f1f77bcf86cd799439066';
+const BANNED_AT = new Date('2026-11-01T00:00:00Z');
 
 const mockLink = {
   id: '507f1f77bcf86cd799439099',
@@ -322,6 +323,48 @@ describe('GET /links?conversationId= — non-member', () => {
     const res = await app.inject({ method: 'GET', url: `/links?conversationId=${CONV_ID}` });
     expect(res.statusCode).toBe(404);
     expect(res.json()).toMatchObject({ success: false, error: 'Conversation not found' });
+  });
+});
+
+/**
+ * #20183 — la jumelle de #20135 côté LECTURE. Les liens d'une conversation sont
+ * ses codes d'entrée VIVANTS : les servir à un membre exclu lui rend le passage
+ * qu'on vient de lui retirer — et pour un modérateur banni, c'est la liste
+ * ENTIÈRE, pas seulement la sienne.
+ *
+ * La ligne « active ET bannie » est un état que la base PORTE : bannir un
+ * membre déjà inactif n'écrit que `bannedAt` (`conversationBanState`), et
+ * `restore-for-me` rallumait `isActive` sans le lire (#10436, sans migration).
+ */
+describe('GET /links?conversationId= — membre actif-et-BANNI (#20183)', () => {
+  let app: FastifyInstance;
+  let prisma: any;
+  beforeAll(async () => {
+    mockIsRegisteredUser.mockReturnValue(true);
+    mockAuthMiddleware.mockImplementation(async (req: any) => {
+      (req as any).authContext = { registeredUser: { id: USER_ID, role: 'USER' } };
+    });
+    prisma = makePrisma({
+      participant: {
+        findFirst: jest.fn<any>(
+          findFirstHonouringWhere([
+            { conversationId: CONV_ID, userId: INTRUDER_USER_ID, isActive: true, role: 'moderator' },
+            { conversationId: CONV_ID, userId: USER_ID, isActive: true, role: 'moderator', bannedAt: BANNED_AT },
+          ])
+        ),
+      },
+    });
+    app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('prisma', prisma as any);
+    await registerUserRoutes(app);
+    await app.ready();
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('reçoit le 404 d\'une conversation inconnue, et aucun lien n\'est lu', async () => {
+    const res = await app.inject({ method: 'GET', url: `/links?conversationId=${CONV_ID}` });
+    expect(res.statusCode).toBe(404);
+    expect(prisma.conversationShareLink.findMany).not.toHaveBeenCalled();
   });
 });
 

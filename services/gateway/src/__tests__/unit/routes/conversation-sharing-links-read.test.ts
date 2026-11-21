@@ -358,4 +358,24 @@ describe('GET /conversations/:conversationId/links', () => {
     await route.handler(req, reply);
     expect(mockSendInternalError).toHaveBeenCalledWith(reply, expect.any(String));
   });
+
+  /**
+   * #20183 — la jumelle de #20135, qui a fermé l'ADMINISTRATION d'un lien à un
+   * modérateur actif-et-banni sans que personne regarde les portes de LECTURE.
+   * Les liens d'une conversation sont ses codes d'entrée VIVANTS : les servir à
+   * un membre exclu lui rend le passage qu'on vient de lui retirer.
+   *
+   * Bannir un membre déjà inactif n'écrit que `bannedAt`
+   * (`conversationBanState`), et `restore-for-me` rallumait `isActive` sans le
+   * lire (#10436, sans migration) : la ligne « active ET bannie » est donc un
+   * état que la base PORTE, pas une hypothèse.
+   */
+  it('#20183 — rend le 404 d\'une conversation inconnue à un membre actif-et-BANNI', async () => {
+    const { prisma, reply, route } = getLinksRoute();
+    seedMembership(prisma, { role: 'moderator', bannedAt: new Date('2026-11-01T00:00:00Z') });
+    const req = makeRequest({ params: { conversationId: CONV_ID } });
+    await route.handler(req, reply);
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
+    expect(prisma.conversationShareLink.findMany).not.toHaveBeenCalled();
+  });
 });

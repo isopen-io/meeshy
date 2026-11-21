@@ -28,6 +28,7 @@ import { apiPath } from '@meeshy/shared/api/prefix';
 import { registerInviteRoute } from './sharing-invite';
 import { linkActivityRelayOf } from '../../socketio/linkActivityEvents';
 
+import { PARTICIPATION_VIVANTE } from './utils/access-control';
 const logger = enhancedLogger.child({ module: 'ConversationSharingRoutes' });
 
 /**
@@ -340,7 +341,13 @@ export function registerSharingRoutes(
         where: {
           conversationId,
           userId,
-          isActive: true
+          // #20183 — la PARTICIPATION VIVANTE. Les liens d'une conversation
+          // sont ses codes d'entrée VIVANTS : les servir à un membre exclu lui
+          // rend le passage qu'on vient de lui retirer, et pour un modérateur
+          // banni c'est la liste ENTIÈRE (le rang se lit sur cette même ligne,
+          // vingt lignes plus bas). Jumelle de #20135, qui avait fermé
+          // l'ADMINISTRATION des liens sans que personne regarde leur LECTURE.
+          ...PARTICIPATION_VIVANTE
         }
       });
 

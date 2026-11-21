@@ -265,11 +265,16 @@ export const MEASURED_NOT_INSTRUCTED: Readonly<Record<string, string>> = {
   'routes/anonymous.ts#0': 'mesure-effectif-servi',
   'routes/anonymous.ts#1': 'mesure-effectif-servi',
   'routes/anonymous.ts#2': 'mesure-effectif-servi',
-  'routes/links/utils/prisma-queries.ts#0': 'mesure-effectif-servi',
+  // #20183 — DÉCALÉES D'UN RANG, et c'est ce que la clé est censée faire voir.
+  // `findActiveUserParticipant` (rang 0 du fichier) était une PORTE en clause
+  // nue, donc invisible à ce relevé ; elle épelle désormais la loi, donc elle
+  // ENTRE au rang 0 — `judge` juge la LOI avant l'identité — et pousse les cinq
+  // mesures d'effectif d'un rang. Aucune d'elles n'a changé.
   'routes/links/utils/prisma-queries.ts#1': 'mesure-effectif-servi',
   'routes/links/utils/prisma-queries.ts#2': 'mesure-effectif-servi',
   'routes/links/utils/prisma-queries.ts#3': 'mesure-effectif-servi',
   'routes/links/utils/prisma-queries.ts#4': 'mesure-effectif-servi',
+  'routes/links/utils/prisma-queries.ts#5': 'mesure-effectif-servi',
   'routes/conversations/participants-reads.ts#0': 'mesure-effectif-servi',
   'routes/conversations/participants-reads.ts#1': 'mesure-effectif-servi',
   'services/conversationCard.ts#0': 'mesure-effectif-servi',
@@ -322,7 +327,9 @@ export const MEASURED_NOT_INSTRUCTED: Readonly<Record<string, string>> = {
   'services/messaging/messagePostSaveEffects.ts#0': 'mesure-jeu-et-priorite',
   'services/relations/messageInteractions.ts#0': 'mesure-jeu-et-priorite',
   'routes/conversations/participant-removal.ts#1': 'effectif-et-depart',
-  'routes/links/utils/share-link-mint.ts#0': 'audience-a-instruire',
+  // #20183 — décalée d'un rang pour la même raison : la porte de FABRICATION
+  // (rang 0) épelle désormais la loi et entre au relevé.
+  'routes/links/utils/share-link-mint.ts#1': 'audience-a-instruire',
   'services/calls/unrespondedParticipants.ts#0': 'audience-a-instruire',
   // Les quatre que le discriminant CORRIGÉ de #20100 a fait entrer : il prenait
   // `{ notIn: … }`, `{ gt: … }` et `NOT: { userId }` pour la désignation d'une

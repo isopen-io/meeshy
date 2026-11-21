@@ -17,6 +17,7 @@ import { gatewayKeyring } from '../../services/messaging/atRestTranslationSource
 import { loadQuotedEphemeralReaders } from '../conversations/ephemeralReaderDeadlines';
 import { mapMessageProtectionFields } from '../conversations/messageProtectionProjection';
 import { keepAliveForReader, withInheritedExpiry } from '../../services/messaging/quoteCascade';
+import { PARTICIPATION_VIVANTE } from '../conversations/utils/access-control';
 import {
   HISTORY_FLOOR_PARTICIPANT_SELECT,
   historyReaderFromAuthContext,
@@ -162,7 +163,13 @@ export async function registerMessagesRetrievalRoutes(fastify: FastifyInstance) 
           where: {
             conversationId: shareLink.conversationId,
             userId: hybridRequest.user.id,
-            isActive: true
+            // #20183 — la PARTICIPATION VIVANTE : `hasAccess = !!member` deux
+            // lignes plus bas, puis 403. C'est la porte de LECTURE la plus
+            // directe de son lot — sous `isActive` nu, un membre exclu lisait
+            // le fil de la conversation par une adresse qui n'est pas celle du
+            // fil, donc hors de la garde que `GET /conversations/:id/messages`
+            // applique.
+            ...PARTICIPATION_VIVANTE
           },
           select: { id: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT }
         });

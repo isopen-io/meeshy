@@ -747,17 +747,77 @@ partout.** Le compte vit dans les témoins du cliquet
 écrit ici deux fois, et le cycle 195 l'a déplacé de ~100/~22 à 87/43 **sans que
 le dépôt change** — c'est le DISCRIMINANT qui avait changé. Un compte recopié
 dans un document dérive au premier élargissement de l'instrument qui le produit.
-Deux lectures comptent particulièrement,
-et ce sont des issues ouvertes, pas des détails : `POST /conversations/:id/messages`
-(`messages-send.ts`) n'appelle pas `canAccessConversation` et admet sur
-`isActive` nu — un banni-mais-actif peut encore ENVOYER — et `assertMember` du
-relais de signal E2EE fait de même.
 
 > **Ne pas lire la phrase « c'est la loi de toute porte » comme une mesure.**
 > C'est une cible. Le cycle 194 a écrit l'absolu ici, et son audit adversarial
 > l'a mesuré faux le jour même — un document qui dit vrai sur le principe et
 > faux sur l'état est plus coûteux qu'un document absent (§ cliquet de la table
 > des routes).
+
+**Et ce paragraphe l'a lui-même payé une seconde fois.** Il affirmait, jusqu'au
+cycle 202, que `POST /conversations/:id/messages` (`messages-send.ts`) « admet
+sur `isActive` nu — un banni-mais-actif peut encore ENVOYER ». **Mesuré FAUX**
+(#20183) : la clause nue de ce fichier est un RÉSOLVEUR d'identifiant, et
+l'autorisation vit en aval — `MessagingService.handleMessage` relit la ligne
+(`findUnique`, `bannedAt` PROJETÉ) et refuse (#10440) ; le cache de lecture
+porte `bannedAt` et les deux sites de bannissement l'invalident
+(`participant-ban-core.ts`) ; la branche ANONYME, qui ne lit rien du tout, tombe
+sur la même garde plus le contrôle `p.conversationId !== conversationId` et les
+refus de `ensureParticipantFromMember` (#10443, #16724). La même phrase vit dans
+#20093, qui en est la source.
+
+> **Une clause nue n'est pas une fuite — « un audit qui liste des `select:` ne
+> liste pas des fuites » vaut aussi des `where:`.** La question n'est pas
+> « cette clause est-elle la bonne ? » mais **« qui AUTORISE ce que cette clause
+> rend ? »**, et il faut suivre la valeur jusqu'au site qui refuse. Une porte
+> que deux documents déclarent ouverte envoie réparer ce qui tient, et détourne
+> des six qui ne tenaient pas (voir le § suivant).
+
+**CINQ portes de la famille des LIENS DE PARTAGE étaient bien nues, et elles
+sont fermées** (#20183, cycle 202) : la FABRICATION d'un lien
+(`share-link-mint.ts`, les deux routes), les deux LISTES **avec
+`?conversationId=`** (`GET /conversations/:id/links`,
+`GET /links?conversationId=`), la FICHE d'un lien
+(`findActiveUserParticipant`) et ses MESSAGES (`messages-retrieval.ts`).
+#20135 n'avait fermé que l'ADMINISTRATION d'un lien ; la fabrication est la plus
+grave des cinq — un lien fabriqué par un banni n'a aucun passé, donc rien à
+refuser à l'inconnu qui l'emprunte : **le bannissement se contourne par
+procuration.** (Au présent : voir la dette ci-dessous.)
+
+**La famille n'est PAS fermée, et le dire au passé serait la troisième fois que
+ce paragraphe se trompe sur l'état.** Ce que l'audit adversarial du lot a
+mesuré, et qui reste OUVERT :
+
+- **Le CRÉATEUR d'un lien garde ses droits même banni** — `isCreator` de
+  `loadShareLinkForManagement` nomme l'appelant par une colonne de PROPRIÉTÉ
+  (`ConversationShareLink.createdBy`), sans lire aucune participation. C'est une
+  DÉCISION du cycle 200, gelée par un témoin
+  (`links-admin-host-not-creator.test.ts` § « sert le CRÉATEUR du lien même
+  banni »), et ce lot ne la retourne PAS. Mais l'audit a mesuré qu'elle couvre
+  plus que sa propre justification (« le droit sur son PROPRE lien ») : elle
+  porte `/toggle` — **réactiver un lien qu'un admin vient de désactiver** — et
+  `/arrivals` — le nom, le pays, la langue et la date de CHAQUE arrivée, y
+  compris après son bannissement — et le bannissement **ne désactive pas les
+  liens que la cible a créés** (`participant-ban-core.ts` ne ferme que le lien
+  par lequel elle est ENTRÉE). Avec `GET /links` **sans** `?conversationId=`,
+  qui sert au banni le `linkId` de ses propres liens sans aucun contrôle
+  d'appartenance, la chaîne est complète. **Issue de décision produit : #20189.**
+- **La fiche d'un lien reste lisible par l'aperçu public** (`canPreview`), et le
+  salon GLOBAL « meeshy » est admis inconditionnellement pour tout compte
+  authentifié. Le resserrement de la porte 4 retire le grant de MEMBRE, pas ces
+  deux-là — c'est écrit sur le site.
+- **La porte de l'INVITÉ anonyme n'était pas nue au sens utile** : son
+  autorisation vit en aval (`guestAccessEnd`, #10470). Le lot l'avait comptée
+  parmi ses portes et resserrée ; mesuré, c'était un no-op de sécurité ET une
+  régression de l'ORDRE UNIQUE des causes (#10457). **Reverti**, avec un témoin
+  qui tombe si quelqu'un le rejoue.
+
+> **Et le lot a commis, dans le même commit, l'erreur qu'il venait de
+> documenter deux paragraphes plus haut.** Il a corrigé l'affirmation fausse sur
+> `messages-send.ts` — « qui AUTORISE ce que cette clause rend ? » — puis compté
+> une sixième porte dont l'autorisation vivait en aval, dans le même fichier,
+> soixante-dix lignes plus bas. **Écrire une règle ne l'applique pas au lot qui
+> l'écrit** : la relire contre son propre diff est une étape, pas une évidence.
 
 Les DIFFUSEURS la doivent aussi, et la distinction qui décide du sens d'un
 correctif est celle-ci (#16690) :
