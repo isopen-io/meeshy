@@ -7,10 +7,11 @@ package me.meeshy.sdk.model.game
  * Miroir de `gameActsRing` (`packages/shared/utils/game/acts-ring.ts`) et de `GameActsRing` iOS
  * (`packages/MeeshySDK/.../Game/GameActsRing.swift`), rejoué sur les mêmes cas. Le client ne recalcule AUCUNE règle :
  * le jour du joueur, ses actes et leur réalisation sont décidés par la passerelle et servis dans le bloc `game`
- * (`missions.unlocked`, `missions.items[].completedAt`). La loi LIT ce bloc — le cache d'abord.
+ * (`missions.items[].completedAt`). La loi LIT ce bloc — le cache d'abord.
  *
- * `null` ⇒ aucun anneau : « Jeu masqué », aucun bloc (cache vide, ancien serveur), actes pas encore ouverts (avant le
- * niveau 5) ou jour servi sans acte. Aucune notification n'en découle (#17368).
+ * `null` ⇒ aucun anneau : « Jeu masqué », aucun bloc (cache vide, ancien serveur), ou jour servi sans acte — dont un
+ * ancien serveur sous le niveau 5. Le premier Rêve (#17370) a un acte : un anneau d'un segment. Aucune notification
+ * n'en découle (#17368).
  */
 public data class GameActsRing(val done: Int, val total: Int) {
 
@@ -20,7 +21,7 @@ public data class GameActsRing(val done: Int, val total: Int) {
     public companion object {
         /** La loi, sur la seule part du bloc qu'elle lit. */
         public fun of(missions: GameMissions, hidden: Boolean): GameActsRing? {
-            if (hidden || !missions.unlocked || missions.items.isEmpty()) return null
+            if (hidden || missions.items.isEmpty()) return null
             return GameActsRing(done = missions.items.count { it.isCompleted }, total = missions.items.size)
         }
 
