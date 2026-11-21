@@ -52,6 +52,7 @@ const hex = (n: number) => n.toString(16).padStart(24, '0');
 
 type Request = {
   id: string;
+  communityId: string;
   userId: string;
   status: string;
   createdAt: Date;
@@ -115,6 +116,7 @@ const acceptance = (n: number, overrides: Partial<Request> = {}): Request => {
   const decidedAt = new Date(NOW.getTime() - ORPHAN_ACCEPTANCE_GRACE_MS - n * 60_000);
   return {
     id: hex(0x1000 + n),
+    communityId: COMM,
     userId: hex(0x2000 + n),
     status: 'accepted',
     createdAt: new Date(decidedAt.getTime() - 3_600_000),
@@ -303,7 +305,10 @@ describe('POST /communities/:id/join-requests/:requestId/accept scelle l\'accept
 
     expect(res.statusCode).toBe(200);
     expect(seals(prisma)).toEqual([
-      { where: { id: REQUEST, communityId: COMM, status: 'accepted' }, data: { entryVerifiedAt: expect.any(Date) } },
+      {
+        where: expect.objectContaining({ id: { in: [REQUEST] }, communityId: COMM, status: 'accepted' }),
+        data: { entryVerifiedAt: expect.any(Date) },
+      },
     ]);
   });
 

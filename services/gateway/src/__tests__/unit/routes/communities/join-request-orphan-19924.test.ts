@@ -207,6 +207,7 @@ describe('reopenOrphanedAcceptances — la réparation d\'une acceptation sans e
       status: 'accepted',
       decidedAt: { lte: new Date(NOW.getTime() - ORPHAN_ACCEPTANCE_GRACE_MS) },
       createdAt: { gte: new Date(NOW.getTime() - JOIN_REQUEST_TTL_MS) },
+      OR: [{ entryVerifiedAt: null }, { entryVerifiedAt: { isSet: false } }],
     });
     expect(read.take).toBeGreaterThan(0);
     expect(read.take).toBeLessThanOrEqual(100);
