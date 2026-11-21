@@ -85,7 +85,7 @@ function fieldsOf(clause: MongoDocument): string[] {
   );
 }
 
-const FIELD_OPERATORS = new Set(['isSet', 'equals', 'not', 'gt', 'lt', 'gte', 'lte', 'in', 'notIn', 'is', 'has', 'isEmpty', 'some', 'none']);
+const FIELD_OPERATORS = new Set(['isSet', 'equals', 'not', 'gt', 'lt', 'gte', 'lte', 'in', 'notIn', 'is', 'has', 'isEmpty', 'some', 'none', 'startsWith']);
 
 const isPlainDocument = (value: unknown): boolean =>
   typeof value === 'object' && value !== null && !(value instanceof Date) && !Array.isArray(value);
@@ -107,6 +107,13 @@ const relatedDocuments = (row: MongoDocument, key: string): MongoDocument[] =>
 function matchesFieldFilter(row: MongoDocument, key: string, filter: MongoDocument): boolean {
   return Object.entries(filter).every(([operator, operand]) => {
     if (operator === 'isSet') return has(row, key) === operand;
+    // `startsWith`, ajouté par #20113 : la garde des images d'identité filtre
+    // `mimeType: { startsWith: 'image/' }`, et sans cet opérateur le double
+    // prendrait le filtre pour un document imbriqué — il refuserait la ligne
+    // qui apparie, c'est-à-dire exactement le cas qu'un témoin veut voir.
+    if (operator === 'startsWith') {
+      return typeof row[key] === 'string' && typeof operand === 'string' && (row[key] as string).startsWith(operand);
+    }
     if (operator === 'equals') {
       if (operand === null) return has(row, key) && row[key] === null;
       return has(row, key) && sameValue(row[key], operand);
