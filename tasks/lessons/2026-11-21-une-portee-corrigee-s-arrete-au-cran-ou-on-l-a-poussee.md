@@ -1,4 +1,4 @@
-## 2026-11-21 — Une portée corrigée s'arrête au cran où on l'a poussée (#20111, routine messagerie, cycle 203)
+## 2026-11-21 — Une portée corrigée s'arrête au cran où on l'a poussée (#20111, routine messagerie, cycle 204)
 
 **Famille** : #20091 → #20100 → #20111. **Voisine** :
 leçon 261 (une énumération porte DEUX affirmations).
@@ -152,3 +152,17 @@ couverture serait partie sans trace.
 
 Et le remède n'est jamais la seule ligne d'inventaire : **la couverture se REND
 chez le paquet qui reçoit**, sinon l'exemption est une absolution.
+
+### Post-scriptum : « cycle 203 » a été pris deux fois le même jour
+
+Ce lot s'est d'abord numéroté 203. Une autre session a publié son propre
+« cycle 203 » et l'a fusionnée dans `dev` pendant que celui-ci était en audit.
+
+Les deux fichiers ne collisionnent pas — le numéro d'issue les sépare — mais le
+NUMÉRO, lui, ne désigne plus rien. C'est #5102 appliqué au compteur de cette
+routine : **un identifiant qui ne s'alloue pas collisionne**, et « cycle N » n'a
+aucun allocateur.
+
+Ce lot a cédé (renuméroté 204), par la règle d'asymétrie du dépôt : l'autre
+était déjà sur `dev`, celui-ci ne l'était pas, et rien ne référençait son
+chemin. **Celui qui n'a rien écrit cède** — ici « écrit » veut dire « fusionné ».

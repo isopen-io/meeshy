@@ -1,4 +1,4 @@
-## Cycle 203 — l'agent ne parle plus à la place d'un membre BANNI, et le balayage des audiences voit DEUX paquets (#20111)
+## Cycle 204 — l'agent ne parle plus à la place d'un membre BANNI, et le balayage des audiences voit DEUX paquets (#20111)
 
 **Date** : 2026-11-21. **Base** : `dev` à `9f7a74ca9`. **Issue** : #20111
 (suivi de #20100, parent #20091).
@@ -287,3 +287,19 @@ et non sur la forme du `where`.
   les témoins de COMPORTEMENT de l'agent qui l'attrapent (5 rouges sur 7). La
   phrase du lot — « un témoin qui compare la clause reçue ne vérifie que sa
   propre copie » — vaut donc **aussi de son propre cliquet**.
+
+### Note de numérotation : « cycle 203 » a été pris deux fois le même jour
+
+Ce journal s'est d'abord appelé `…-cycle203-20111.md`. Une autre session a
+publié `…-cycle203-20190.md` (« une NOTE qui justifie d'enfreindre une règle du
+dépôt ») et l'a fusionnée dans `dev` pendant que ce lot était en audit.
+
+Les deux FICHIERS ne collisionnent pas — le numéro d'issue les sépare — mais le
+NUMÉRO DE CYCLE, lui, ne désigne plus rien : grepper « cycle 203 » rend deux
+lots sans rapport. C'est exactement #5102 : **un identifiant qui ne s'alloue pas
+collisionne**, et le compteur de cycles de cette routine n'a aucun allocateur.
+
+Ce lot a cédé et s'est renuméroté **204**, par la règle d'asymétrie du dépôt
+appliquée au cas présent : l'autre était déjà sur `dev`, celui-ci ne l'était
+pas, et rien dans le dépôt ne référençait ce chemin. Céder a coûté un `git mv` ;
+l'autre sens aurait coûté une réécriture d'un journal fusionné.
