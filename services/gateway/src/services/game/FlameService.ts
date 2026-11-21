@@ -11,7 +11,8 @@
  *    un gel acheté ou une Flamme rallumée entre la lecture et l'écriture fait
  *    reprendre le calcul, jamais écraser l'achat ;
  *    Le 3e jour de la première Flamme de sa vie, le joueur reçoit sa première
- *    Veilleuse (`firstFreezeGift`, #17371), écrite dans le même geste ;
+ *    Veilleuse (`firstFreezeGift`, #17371), écrite dans le même geste avec
+ *    son jour, que le bloc annonce ce jour-là (#20169) ;
  *  - `buyFreeze` : 1 Meesh, 2 en réserve au plus ;
  *  - `relight` : 3 Meeshes, dans les 48 h, une fois par mois.
  *
@@ -44,6 +45,7 @@ export const FLAME_USER_SELECT = {
   timezone: true,
   flameFreezes: true,
   lastRelightDay: true,
+  flameFreezeGiftDay: true,
   brokenStreakDays: true,
   brokenStreakLastDay: true,
 } as const;
@@ -56,6 +58,7 @@ export type FlameUserRow = {
   readonly timezone?: string | null;
   readonly flameFreezes?: number | null;
   readonly lastRelightDay?: string | null;
+  readonly flameFreezeGiftDay?: string | null;
   readonly brokenStreakDays?: number | null;
   readonly brokenStreakLastDay?: string | null;
 };
@@ -67,6 +70,8 @@ export type FlameFacts = {
   readonly lastActiveDay: string | null;
   readonly freezes: number;
   readonly lastRelightDay: string | null;
+  /** Le jour où la première Veilleuse a été offerte (#20169). */
+  readonly freezeGiftDay: string | null;
   readonly brokenStreak: number | null;
   readonly brokenLastDay: string | null;
 };
@@ -82,6 +87,7 @@ export function flameFactsOf(row: FlameUserRow, now: Date): FlameFacts {
     lastActiveDay: row.lastStreakDate ? civilDayKey(row.lastStreakDate) : null,
     freezes: count(row.flameFreezes),
     lastRelightDay: row.lastRelightDay ?? null,
+    freezeGiftDay: row.flameFreezeGiftDay ?? null,
     brokenStreak: row.brokenStreakDays ?? null,
     brokenLastDay: row.brokenStreakLastDay ?? null,
   };
@@ -152,6 +158,7 @@ export function planStreak(facts: FlameFacts): StreakPlan {
       longestStreakDays: longest,
       lastStreakDate: markerOfDayKey(facts.today),
       ...(transition.freezesUsed > 0 || gift.gifted ? { flameFreezes: gift.freezes } : {}),
+      ...(gift.gifted ? { flameFreezeGiftDay: facts.today } : {}),
       ...(transition.outcome === 'broken' && transition.lostStreak > 0 && facts.lastActiveDay !== null
         ? { brokenStreakDays: transition.lostStreak, brokenStreakLastDay: facts.lastActiveDay }
         : {}),
