@@ -1,4 +1,4 @@
-## Cycle 199 — le garde touche une cible qu'il ne POSSÈDE pas encore (#20151, #20108, #20040, #20035)
+## Cycle 201 — le garde touche une cible qu'il ne POSSÈDE pas encore (#20151, #20108, #20040, #20035)
 
 **Date** : 2026-11-21. **Base** : `dev` à `ed391159a`. **Issues** : #20151, #20108,
 #20040, #20035 — **une seule**, décrite quatre fois. **Milestone** : #287.
