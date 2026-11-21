@@ -72,7 +72,6 @@ const ASYMETRIES: readonly {
       'conversation:join-error',
       'conversation:joined',
       'conversation:left',
-      'conversation:participant-unbanned',
       'conversation:stats',
       'e2ee:envelope',
       'heartbeat:ack',
