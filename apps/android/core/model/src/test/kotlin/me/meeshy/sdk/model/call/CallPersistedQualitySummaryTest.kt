@@ -22,4 +22,24 @@ class CallPersistedQualitySummaryTest {
         assertThat(summary.remoteUser).isNull()
         assertThat(summary.durationSeconds).isEqualTo(0)
     }
+
+    @Test
+    fun `the persisted stats keep a byte cumul beyond 2 GB`() {
+        val sample = CallQualitySample(rttMs = 30.0, packetLoss = 0.0, bytesSent = 3_000_000_000L, bytesReceived = 4_500_000_000L)
+
+        val stats = sample.toPersistedStats()
+
+        assertThat(stats.bandwidth).isEqualTo(3_000_000_000L)
+        assertThat(stats.bytesReceived).isEqualTo(4_500_000_000L)
+    }
+
+    @Test
+    fun `the persisted stats read an aberrant byte count as unmeasured`() {
+        val sample = CallQualitySample(rttMs = 30.0, packetLoss = 0.0, bytesSent = -7L, bytesReceived = Long.MAX_VALUE)
+
+        val stats = sample.toPersistedStats()
+
+        assertThat(stats.bandwidth).isEqualTo(0L)
+        assertThat(stats.bytesReceived).isEqualTo(0L)
+    }
 }
