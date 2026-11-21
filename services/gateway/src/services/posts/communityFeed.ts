@@ -3,7 +3,8 @@ import { PostType } from '@meeshy/shared/prisma/client';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 
 import { decodeCursor, encodeCursor } from '../../routes/posts/types';
-import { blockedIdsAroundViewer } from '../ContactDirectoryService';
+import { separatedIdsOf, snapshotAuthorNotSeparated } from './separatedCompanions';
+import { readerSeparatedFrom } from './separatedReader';
 import { hoistLocationDeep } from '../location/sharedPlace';
 import { isActiveCommunityMember } from './communityVisibility';
 import { NOT_DELETED, postInclude } from './postIncludes';
@@ -70,7 +71,8 @@ export async function loadCommunityFeed(
   const access = await communityFeedAccess(prisma, params.communityId, params.viewerUserId);
   if (access === 'none') return { items: [], nextCursor: null, hasMore: false };
 
-  const blockedAuthorIds = params.viewerUserId === undefined ? [] : await blockedIdsAroundViewer(prisma, params.viewerUserId);
+  const served = await readerSeparatedFrom(prisma, params.viewerUserId, params.reader);
+  const blockedAuthorIds = separatedIdsOf(served);
   const cursorData = params.cursor ? decodeCursor(params.cursor) : null;
 
   const posts = await prisma.post.findMany({
@@ -79,7 +81,7 @@ export async function loadCommunityFeed(
       deletedAt: NOT_DELETED,
       type: { in: [PostType.POST, PostType.REEL] },
       visibility: access === 'member' ? { in: ['PUBLIC', 'COMMUNITY'] } : 'PUBLIC',
-      ...(blockedAuthorIds.length > 0 ? { authorId: { notIn: blockedAuthorIds } } : {}),
+      ...(blockedAuthorIds.length > 0 ? { authorId: { notIn: blockedAuthorIds }, AND: [snapshotAuthorNotSeparated(blockedAuthorIds)] } : {}),
       ...(cursorData
         ? {
             OR: [
@@ -102,7 +104,7 @@ export async function loadCommunityFeed(
   const withState = await withViewerPostState(prisma, params.viewerUserId, items);
 
   return {
-    items: withState.map((post) => withMentions(hoistLocationDeep(post), params.reader)),
+    items: withState.map((post) => withMentions(hoistLocationDeep(post), served)),
     nextCursor,
     hasMore,
   };

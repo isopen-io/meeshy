@@ -26,6 +26,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-15 | Sur Android, toucher la bannière in-app « ajouté à la communauté » ouvre la communauté | voir réveil du 2026-11-15 17:38 | #18670 | voir réveil du 2026-11-15 17:38 |
 | 2026-11-15 | Rejoindre, quitter ou changer de rôle dans une communauté se voit aussitôt chez ses membres (passerelle, web) | voir réveil du 2026-11-15 23:38 | #18766 | voir réveil du 2026-11-15 23:38 |
 | 2026-11-18 | Supprimer ou désactiver une communauté se voit aussitôt chez ses membres (passerelle, web) | voir réveil du 2026-11-18 05:38 | #19590 | voir réveil du 2026-11-18 05:38 |
+| 2026-11-21 | Un blocage retire aussi la source d'une republication et l'aperçu des commentaires de l'auteur séparé (passerelle) | voir réveil du 2026-11-21 11:38 | #16894 | voir réveil du 2026-11-21 11:38 |
 
 ## 2026-11-07 — lot 1
 
@@ -790,4 +791,17 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Témoins : `join-request-entry-verified-20003.test.ts` (12, magasin en mémoire qui applique filtres et écritures ; rouge prouvé : 9 échecs sans le code) ; deux anciens témoins suivis (le filtre du balayage, la donnée de clôture).
 - Gates locaux : passerelle `tsc --noEmit` vert ; suites communautés + `community-member-writer-sweep` + `tsc-never-loaded-tests-ratchet` : 45 fichiers, 691 tests verts.
 - Reste : la mesure sur staging (nombre de lectures par ouverture de la liste) ; aucun client touché.
+- 2026-11-21 09:47 : #20175 fusionnée dans `dev` (`38650cccc`) par le porteur ; #20003 fermée avec sa preuve ; suivi de mesure sur staging #20191.
+
+## 2026-11-21 — réveil 11:38 UTC
+
+- Début du run : aucune PR de la routine ouverte, aucune branche `claude/communautes-*` vivante.
+- Fermées avec leur preuve, déjà livrées sur `dev` : #16784 (la confirmation de suppression iOS et Android dit que les conversations restent, sept langues) et #16741 (entrer par la bascule en privée est annoncé au nouveau membre dans sa langue et part en `community:member-joined`).
+- Lot : #16894 (passerelle). Le lecteur porte ceux qu'un blocage sépare de lui (`WireReader.separatedUserIds`), lus UNE fois par requête par `readerSeparatedFrom` (`services/posts/separatedReader.ts`, même loi que le filtre de liste : `blockedIdsAroundViewer`) ; `withMentions` applique `withoutSeparatedCompanions` (`services/posts/separatedCompanions.ts`, pur) : la source d'une republication d'un auteur séparé part en `repostOf: null` (forme d'un original disparu, déjà rendue par les trois clients) et ses commentaires sortent de l'aperçu.
+- Portes branchées (dix, toutes de liste) : fil, stories, réels, profil, favoris, communauté, recherche globale, albums de stories, hashtag, à proximité. `buildFeedVisibilityFilter` / `viewerPostAudience` reçoivent la séparation déjà lue (aucune double lecture). Hashtag et à proximité n'écartaient PAS l'auteur bloqué de leur requête : ils l'écartent.
+- Hors lot, en suivi (#20204) : la fiche `GET /posts/:postId`, les réponses de like / unlike, les diffusions `WIRE_BROADCAST` et la découverte des statuts (qui n'écarte pas l'auteur bloqué). Raison : la fiche et le like passent par une quinzaine de harnais de route sans `user` dans leur double ; le lot les aurait réécrits sans rien prouver de plus.
+- Témoins : `services/posts/__tests__/separatedCompanions.test.ts` (7 ; rouge prouvé : 2 échecs sans la ligne de `withMentions`) et `__tests__/unit/services/posts-separated-companions-doors.test.ts` (4 portes ; rouge prouvé : 2 échecs sans le branchement). Quatre harnais suivis (hashtag ×2, à proximité, découverte, albums) : ils reçoivent les deux lectures du blocage.
+- Gates locaux : passerelle `tsc --noEmit` vert ; 319 suites, 4 472 tests verts (posts, fil, recherche, albums, communautés, sécurité, budgets de taille, `tsc-never-loaded-tests-ratchet`, `detached-promise-catch-sweep`).
+- Aucun client touché, aucun contrat changé (`repostOf` est déjà nullable, l'aperçu peut déjà compter moins de trois commentaires).
+- Revue adversariale avant la PR : non bloquante pour `dev`. Corrigés dans le lot : la COPIE d'une story ou d'un statut d'un auteur séparé (`snapshotAuthorId`, qui survit au détachement de la source) voyageait encore — écartée par la requête (`snapshotAuthorNotSeparated`, champ absent compris) et, quand elle est la source d'une republication, `repostOf: null` (colonne lue par `repostOfInclude`, jamais servie) ; la lecture du blocage remise dans le `Promise.all` de tête (fil, stories) ; `viewerUserId` rendu obligatoire pour « à proximité » ; le commentaire faux sur les diffusions (« chaque client relit par le REST » : le web fusionne la charge reçue) corrigé ; témoins profil et favoris (une seule lecture du blocage). Suivis ouverts : #20204 (fiche, like, diffusions, statuts), #20205 (liste complète des commentaires sans blocage), #20206 (son, et pagination de « à proximité » dans `$geoNear`).
 

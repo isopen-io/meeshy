@@ -3,6 +3,7 @@ import type { GlobalSearchPagination, GlobalSearchPostType } from '@meeshy/share
 
 import type { CacheStore } from '../CacheStore';
 import { viewerPostAudience } from '../posts/feedVisibility';
+import { readerSeparatedFrom } from '../posts/separatedReader';
 import { NOT_DELETED, postInclude } from '../posts/postIncludes';
 import { withMentions, type WireReader } from '../posts/postReferences';
 import { withViewerPostState } from '../posts/viewerPostState';
@@ -83,7 +84,8 @@ export async function searchPostsForViewer(prisma: PrismaClient, params: GlobalP
   const { viewerId, query, types, limit, reader, cache } = params;
   const needle = query.trim().toLowerCase();
   const cursor = params.cursor ? decodeCursor(params.cursor) : null;
-  const audience = await viewerPostAudience(prisma, viewerId, cache);
+  const served = await readerSeparatedFrom(prisma, viewerId, reader);
+  const audience = await viewerPostAudience(prisma, viewerId, cache, served.separatedUserIds);
   const base = {
     deletedAt: NOT_DELETED,
     type: { in: [...types] },
@@ -110,7 +112,7 @@ export async function searchPostsForViewer(prisma: PrismaClient, params: GlobalP
 
   const withState = await withViewerPostState(prisma, viewerId, page as never[]);
   return {
-    data: withState.map((post) => withMentions(hoistLocationDeep(post), reader)),
+    data: withState.map((post) => withMentions(hoistLocationDeep(post), served)),
     pagination: { limit, hasMore: nextCursor !== null, nextCursor },
   };
 }
