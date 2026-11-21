@@ -58,32 +58,92 @@ const ASYMETRIES: readonly {
   readonly raison: string;
   readonly events: readonly string[];
 }[] = [
+  /*
+   * LA FAMILLE « ABSENTS DU WEB » A ÉTÉ REMESURÉE AU CYCLE 208 (#20271), et sa
+   * raison unique — « chantier 2.0 : ces signaux ne sont pas encore portés » —
+   * était FAUSSE pour quatorze de ses vingt entrées. Ce n'est pas une nuance de
+   * rédaction : « pas encore porté » décrit un RETARD, donc il envoie le lot
+   * suivant écrire un écouteur — là où le web reçoit déjà le fait par un AUTRE
+   * événement (le délta générique de pièce jointe, la notification, la ligne de
+   * préférences versionnée), où il n'emploie pas le protocole du tout, ou où le
+   * chemin a été RETIRÉ par décision. Porter l'écouteur y produirait une
+   * double application, pas une parité.
+   *
+   * Une raison d'inventaire est une AFFIRMATION (leçon du 2026-11-21), et
+   * celle-ci portait vingt événements d'un seul geste.
+   */
   {
     absents: ['web'],
     raison:
-      "chantier 2.0 : `apps/web` suit l'interface iOS (directive porteur 2026-09-07) et ces signaux temps réel "
-      + "ne sont pas encore portés. Aucun n'est un défaut en soi ; la liste ne doit que rétrécir.",
+      'le web REÇOIT DÉJÀ le fait, par un AUTRE événement qu\'il écoute — porter ces trois-là y ferait une '
+      + 'DOUBLE application : le site qui diffuse une traduction audio émet, dans la même unité, un '
+      + '`message:attachment-updated` portant la pièce jointe RE-SÉRIALISÉE ENTIÈRE, traduction fraîche '
+      + 'incluse (`MeeshySocketIOManager._broadcastTranslationEvent` → `_broadcastAttachmentUpdated`, les '
+      + 'trois branches), et le web l\'applique (`onAttachmentUpdated`). Mesuré au cycle 208.',
+    events: ['audio:translation-ready', 'audio:translations-completed', 'audio:translations-progressive'],
+  },
+  {
+    absents: ['web'],
+    raison:
+      "le web n'emploie pas ce PROTOCOLE : il n'émet jamais `conversation:join` — "
+      + '`AuthHandler._joinUserConversations` rejoint TOUTES les rooms de participation à '
+      + "l'authentification elle-même, et `apps/web/src/lib/api/socket.ts` l'écrit en tête (« ce que ce "
+      + "module NE FAIT PAS »). Un ACQUITTEMENT de jonction, son refus et son pendant de sortie n'ont donc "
+      + 'aucun destinataire web par CONSTRUCTION. Même forme pour les statistiques : le web lit '
+      + '`GET /conversations/:id/stats` (`conversation-stats.ts`), jamais la réponse socket que ce nom porte.',
+    events: ['conversation:join-error', 'conversation:joined', 'conversation:left', 'conversation:stats'],
+  },
+  {
+    absents: ['web'],
+    raison:
+      'chemin RETIRÉ du web par décision, jamais porté puis perdu : le battement applicatif du web a été '
+      + "supprimé au cycle 78 — « le web en émettait un à 90 s, NU : aucun `latencyHintMs` calculable, aucun "
+      + "écouteur pour l'ack », et la présence du web ne tient plus qu'au pong du moteur "
+      + '(`AuthHandler.handleEnginePong`). `CLIENT_EVENTS.HEARTBEAT` ne subsiste que pour iOS, qui en tire '
+      + 'son RTT. Écrire un écouteur ici remettrait le battement que ce cycle a retiré.',
+    events: ['heartbeat:ack'],
+  },
+  {
+    absents: ['web'],
+    raison:
+      'le fait atteint le web par un AUTRE canal, mesuré : une MENTION voyage par la notification — la '
+      + 'passerelle écrit la ligne (`createMentionNotification`, et `notifyNewlyMentioned` sur le chemin '
+      + "d'édition) et le web écoute `notification:new` puis `notification:counts` "
+      + "(`notifications-realtime.ts`) ; l'ORDRE d'une conversation posé sur un autre appareil arrive dans "
+      + "l'instantané COMPLET et VERSIONNÉ de `user:preferences-updated`, dont `orderInCategory` fait "
+      + 'partie depuis #18925 (`conversation-preferences-sync.ts`). `mention:created` et '
+      + '`user:preferences-reordered` sont les chemins iOS et Android du même fait.',
+    events: ['mention:created', 'user:preferences-reordered'],
+  },
+  {
+    absents: ['web'],
+    raison:
+      "rien à AFFICHER sur le web, parce qu'il n'y a aucun état en attente à défaire : une traduction de "
+      + "TEXTE absente fait servir l'ORIGINAL (règle 1 du Prisme, `resolvePrismTranslation` rend `null`), et "
+      + "le web ne rend aucun « en cours de traduction » sur une bulle — ses seuls indicateurs de ce genre "
+      + 'vivent dans les sous-titres d\'appel et la visionneuse audio, dont l\'échec a son propre écouteur '
+      + '(`audio-translation:failed`, branché). Un écouteur ici n\'aurait rien à éteindre.',
+    events: ['translation:failed'],
+  },
+  {
+    absents: ['web'],
+    raison:
+      "features que le web ne porte PAS ENCORE — la seule famille où « pas encore porté » est la mesure : "
+      + "aucune surface de réaction par emoji sur un commentaire ni sur une humeur (le web a les J'AIME de "
+      + 'commentaire, `comment:liked` / `comment:unliked`, branchés). Le partage de position EN DIRECT, '
+      + "l'enveloppe chiffrée de bout en bout et la traduction d'une story n'ont pas été remesurés au cycle "
+      + '208 : ils gardent la raison de chantier (`apps/web` suit l\'interface iOS, directive du '
+      + "2026-09-07), et c'est à instruire, pas une absence instruite.",
     events: [
-      'audio:translation-ready',
-      'audio:translations-completed',
-      'audio:translations-progressive',
       'comment:reaction-added',
       'comment:reaction-removed',
-      'conversation:join-error',
-      'conversation:joined',
-      'conversation:left',
-      'conversation:stats',
       'e2ee:envelope',
-      'heartbeat:ack',
       'location:live-started',
       'location:live-stopped',
       'location:live-updated',
-      'mention:created',
       'status:reacted',
       'status:unreacted',
       'story:translation-updated',
-      'translation:failed',
-      'user:preferences-reordered',
     ],
   },
   {
