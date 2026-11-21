@@ -197,7 +197,7 @@ public struct GamePlayerBanner: Equatable, Sendable {
         let trophyCount = game.trophies?.items.count ?? 0
         self.trophies = trophyCount > 0 ? trophyCount : nil
         let missions = game.missions
-        self.dailyMission = missions.unlocked && !missions.items.isEmpty
+        self.dailyMission = !missions.items.isEmpty
             ? DailyMission(done: missions.items.filter(\.isCompleted).count, total: missions.items.count) : nil
         self.season = game.season.map { Season(number: $0.number) }
         self.attention = GameAttention.of(game, hidden: false)
