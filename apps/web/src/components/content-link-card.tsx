@@ -226,15 +226,15 @@ const hasFace = (model: ContentCardModel): boolean => model.visual.kind === 'med
  * l'adresse du contenu à sa place. La carte en pose une ; chaque page d'un
  * diaporama en pose une autre, muette (le lien de la carte la prononce déjà).
  */
-function OpenLink({ model, token, children, ...rest }: { readonly model: ContentCardModel; readonly token: string | null; readonly children: ReactNode } & Readonly<Record<string, unknown>>) {
+function OpenLink({ model, token, className, children, ...rest }: { readonly model: ContentCardModel; readonly token: string | null; readonly className: string; readonly children: ReactNode } & Readonly<Record<string, unknown>>) {
   const open = openLinkProps(model.postId, 'link_preview');
   const shared = { draggable: false, ...(open.onClick === undefined ? {} : { onClick: open.onClick }), ...rest };
   return token === null ? (
-    <Link to={contentRouteOf(model.routeType)} params={{ post: model.postId }} search={open.search} {...shared}>
+    <Link to={contentRouteOf(model.routeType)} params={{ post: model.postId }} search={open.search} {...shared} className={`transition-opacity active:opacity-90 ${className}`}>
       {children}
     </Link>
   ) : (
-    <Link to="trackingLink" params={{ token }} {...shared}>
+    <Link to="trackingLink" params={{ token }} {...shared} className={`transition-opacity active:opacity-90 ${className}`}>
       {children}
     </Link>
   );
@@ -259,7 +259,7 @@ function ContentCard({ model, token, language, readerLanguages }: { readonly mod
     <div
       data-content-card="card"
       data-content-type={model.type}
-      className="mt-1.5 transition-transform has-[>a:active]:scale-[0.98]"
+      className="mt-1.5"
       style={{ ...shell, width: CARD_WIDTH }}
       onClick={contained}
     >
