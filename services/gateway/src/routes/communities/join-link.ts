@@ -19,6 +19,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response.js';
 import { isCommunitySteward } from '../../services/community-entries';
+import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 
 const logger = enhancedLogger.child({ module: 'CommunityJoinLinkRoutes' });
 
@@ -72,7 +73,7 @@ export async function registerJoinLinkRoutes(fastify: FastifyInstance) {
     }
   }, async (request, reply) => {
     const viewerId = viewerIdOf(request);
-    if (!viewerId) return sendUnauthorized(reply, 'User must be authenticated');
+    if (!viewerId) return sendUnauthorized(reply, 'User must be authenticated', { code: AUTH_ERROR_CODES.UNAUTHORIZED });
 
     const parsed = JoinLinkStateSchema.safeParse(request.body ?? {});
     if (!parsed.success) return sendBadRequest(reply, 'Invalid join link state', { code: 'INVALID_JOIN_LINK_STATE' });
