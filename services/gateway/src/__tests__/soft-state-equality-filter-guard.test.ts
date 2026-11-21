@@ -63,7 +63,10 @@
  *
  * ─── CE QUE CE CLIQUET NE GARDE PAS, et sa TAILLE ────────────────────────────
  *
- * Il ne tient que TROIS colonnes, et il ne lit que
+ * Il ne tient que SEPT colonnes (`COLONNES` ci-dessous est la liste qui fait
+ * foi ; cette phrase a dit « trois » jusqu'à #19802, deux élargissements après —
+ * un compte écrit à côté de la liste qu'il compte se périme au premier ajout),
+ * et il ne lit que
  * `services/gateway/src` — `packages/shared`, `scripts/` et les migrations sont
  * hors champ. Le même balayage sur TOUTES les colonnes optionnelles rend un
  * ordre de grandeur de **120 sites** (2026-11-18), dominés par
@@ -106,7 +109,7 @@ const SRC_DIR = join(__dirname, '..');
  * `Notification`, `Post`, `ShareLink`, `UserDevice`, `Sound`) et le rang
  * d'activité (`Conversation.lastActivityAt`, #19800).
  */
-const COLONNES = new Set(['leftAt', 'bannedAt', 'expiresAt', 'lastActivityAt']);
+const COLONNES = new Set(['leftAt', 'bannedAt', 'expiresAt', 'lastActivityAt', 'messageId', 'verifiedAt', 'lastReminderAt']);
 
 /**
  * **Une colonne n'est pas un piège sur tous les modèles qui la portent**, et
@@ -140,6 +143,23 @@ const COLONNES = new Set(['leftAt', 'bannedAt', 'expiresAt', 'lastActivityAt']);
  */
 const MODELES_PAR_COLONNE: Readonly<Record<string, readonly string[]>> = {
   lastActivityAt: ['conversation'],
+  // `messageId` est porté par une douzaine de modèles, et il n'est OPTIONNEL
+  // que sur `MessageAttachment` (#19801) — `AttachmentStatusEntry`,
+  // `AttachmentReaction`, `AttachmentFileAtRest` le déclarent REQUIS, où
+  // l'égalité nue est exacte et `isSet` ne compile même pas (cycle 182,
+  // constat A). La portée se mesure, elle ne s'absout pas par une phrase.
+  messageId: ['messageAttachment'],
+  // #19802 — les deux colonnes de « pas encore fait ». MESURÉ sur
+  // `schema.prisma`, et la première version de ce commentaire disait faux :
+  // `verifiedAt` vit sur DEUX modèles, `PartnerProfile` ET `AtomLink`, tous
+  // deux `DateTime?`, donc tous deux piégeux. Borner la colonne au seul
+  // `partnerProfile` aurait laissé échapper tout futur `{ verifiedAt: null }`
+  // résolu sur `atomLink` — c'est la forme « une limite qu'on écrit au lieu de
+  // la mesurer protège le site qu'elle cache », dans le fichier qui la dénonce.
+  // Aucun site vivant sur `atomLink` aujourd'hui ; la borne le couvre quand il
+  // en naîtra un. `lastReminderAt` est bien sur un seul modèle (mesuré).
+  verifiedAt: ['partnerProfile', 'atomLink'],
+  lastReminderAt: ['accountDeletionRequest'],
 };
 
 /** Ce site est-il sur un modèle où sa colonne est OPTIONNELLE — donc piégeuse ? */
@@ -167,6 +187,54 @@ const DISCIPLINE_D_ECRITURE: Readonly<Record<string, { readonly sites: number; r
     + 'notification créée. Y ajouter une troisième branche d’absence toucherait un '
     + 'chemin chaud pour couvrir les seules lignes ANTÉRIEURES à la colonne, '
     + 'qu’aucun chemin vivant ne crée : la forme ATTESTÉE gagne (cycle 180, constat I).' },
+  // `sites` compte les LECTURES nues de ce fichier pour cette colonne (une), pas
+  // les créateurs (cinq) : la clé est un FICHIER, et le compte existe pour qu'une
+  // SECONDE égalité nue posée ici n'entre pas sous l'absolution écrite pour sa
+  // voisine. J'ai d'abord écrit 5, et le témoin l'a dit — un champ compte ce que
+  // son témoin compte, jamais ce que son nom suggère.
+  'services/MaintenanceService.ts#messageId': { sites: 1, raison:
+    'MessageAttachment.messageId a CINQ créateurs, et les cinq posent la colonne '
+    + 'depuis #19801 — `copyAttachments`, `MessageProcessor` (un identifiant réel), '
+    + '`UploadProcessor` ×2 (`messageId || null`, qui ferme aussi le cas `undefined`) '
+    + 'et `tus-handler` (`messageId: null`, la ligne que #19801 a posée). La '
+    + 'discipline n’est pas AFFIRMÉE ici : elle est tenue par son propre cliquet, '
+    + '`attachment-pending-key-guard`, inventaire d’infractions VIDE, qui rougit sur '
+    + 'un créateur neuf qui l’omettrait ET sur une valeur pouvant rendre `undefined` '
+    + '(que Prisma ignore comme une clé absente). '
+    + 'Et la troisième branche est REFUSÉE ici pour une raison qui n’est pas de '
+    + 'performance : `...unsetOrNull` ramasserait l’ARRIÉRÉ laissé par `tus-handler` '
+    + 'AVANT #19801 — une population que personne n’a mesurée — et ce balayage '
+    + 'SUPPRIME la ligne et ses octets, sans borne ni pagination. C’est une purge de '
+    + 'données de production, qui attend le feu vert du porteur (directive du '
+    + '2026-10-03). Son sort est la seconde moitié de #19801.' },
+  'services/packs/LensPartners.ts#verifiedAt': { sites: 1, raison:
+    'PartnerProfile.verifiedAt a TROIS créateurs, et les trois posent la colonne '
+    + 'depuis #19802 : `LensPartners` (par le `data` qu’il répand dans son `create`), '
+    + 'l’éditeur officiel de `PackPublishers` (une date RÉELLE — il naît vérifié) et '
+    + 'l’éditeur créé à la publication d’un pack, le seul site qui était nu. Mesure '
+    + 'du lot : l’issue #19802 annonçait les TROIS nus ; deux l’écrivaient déjà, et '
+    + 'l’un par un spread que l’énumération de clés littérales ne pouvait pas voir. '
+    + 'Témoin de la discipline : `__tests__/unit/pending-state-write-discipline.test.ts`.' },
+  // ATTENTION — CETTE LIGNE N'EST PAS UNE DETTE, C'EST UNE GARDE.
+  'services/MaintenanceService.ts#lastReminderAt': { sites: 1, raison:
+    'CETTE ÉGALITÉ NUE EST CE QUI TIENT LA PASSE DE RAPPELS INERTE, et elle doit le '
+    + 'rester. Mesuré par l’audit adversarial du cycle 184, en lisant la passe de bout '
+    + 'en bout : son statut cible, `GRACE_PERIOD_EXPIRED`, est écrit par l’étape qui '
+    + 'PURGE et ANONYMISE le compte, dans la MÊME itération. Si cette clause appariait '
+    + 'ce qu’elle prétend apparier, chaque demande recevrait un courriel la nuit où le '
+    + 'compte est détruit, puis tous les sept jours SANS FIN (aucun plafond sur '
+    + '`reminderCount` ; rien ne fait sortir une ligne de ce statut), vers '
+    + '`…@deleted.meeshy.invalid` — l’adresse que l’anonymisation écrit, non vide, donc '
+    + 'que la garde `if (!user?.email)` ne retient pas, et un TLD réservé : 100 % de '
+    + 'rebonds durs sur le domaine d’envoi de production — avec deux liens déjà '
+    + 'expirés (les jetons tournent, `tokenExpiresAt` non). '
+    + 'AUCUN créateur ne pose donc la colonne, délibérément : #19802 avait posé la '
+    + 'discipline d’écriture et l’a RETIRÉE quand l’audit a montré qu’elle était '
+    + 'l’interrupteur. Témoin de l’absence voulue : '
+    + '`__tests__/unit/pending-state-write-discipline.test.ts` § « la clé N’est PAS '
+    + 'posée ». Réparer la passe (statut visé, plafond, TTL, exclusion des comptes '
+    + 'purgés) est une décision du porteur — elle écrit à de vraies personnes depuis '
+    + 'le domaine de production : #19900.' },
 };
 
 /**

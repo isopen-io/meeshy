@@ -131,9 +131,10 @@ final class ProfilePrismLanguagesTests: XCTestCase {
         XCTAssertLessThan(form.lowerBound, otherwise.lowerBound, "et le repos rend l'identité en texte, sans elle")
         XCTAssertLessThan(otherwise.lowerBound, rest.lowerBound, "et le repos rend l'identité en texte, sans elle")
         let order = ["identityBlock.meeshyCascade(rank: 0)", "ProfileCirclesSection(", "activitySection.meeshyCascade(rank: 2)",
-                     "voiceBlock.meeshyCascade(rank: 3)", "ProfilePublicationsSection("]
+                     "legendSection.meeshyCascade(rank: 3)", "appearanceSection.meeshyCascade(rank: 4)",
+                     "voiceBlock.meeshyCascade(rank: 5)", "ProfilePublicationsSection("]
         let positions = try order.map { try XCTUnwrap(face.range(of: $0), $0).lowerBound }
-        XCTAssertEqual(positions, positions.sorted(), "identité, cercles, activité, voix, publications")
+        XCTAssertEqual(positions, positions.sorted(), "identité, cercles, activité, Légende, apparence, voix, publications")
     }
 
     func test_restingBio_saysNothingWhenEmpty_neverAPlaceholder() {

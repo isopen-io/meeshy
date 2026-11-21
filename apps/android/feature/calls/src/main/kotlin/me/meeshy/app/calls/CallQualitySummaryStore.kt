@@ -20,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import me.meeshy.sdk.model.call.CallPersistedQualitySummary
+import me.meeshy.sdk.model.call.CallStatValue
 import me.meeshy.sdk.model.call.CallStats
 
 import javax.inject.Qualifier
@@ -40,7 +41,12 @@ class InMemoryCallQualitySummaryStore : CallQualitySummaryStoring {
     }
 }
 
-/** Durable : un seul résumé, écrasé à chaque fin d'appel. Les statistiques absentes restent absentes. */
+/**
+ * Durable : un seul résumé, écrasé à chaque fin d'appel. Les statistiques absentes restent absentes.
+ * Les octets s'écrivent sous des clés `Long` d'un autre nom que les anciennes clés `Int` (#20132) :
+ * relire une clé `Int` déjà écrite comme `Long` lèverait une `ClassCastException`. Un résumé écrit
+ * avant la mise à jour se relit par ces anciennes clés ([CallStatValue.storedBytes]).
+ */
 class DataStoreCallQualitySummaryStore(
     private val dataStore: DataStore<Preferences>,
 ) : CallQualitySummaryStoring {
@@ -73,7 +79,7 @@ class DataStoreCallQualitySummaryStore(
         prefs[RTT] = s.roundTripTimeMs
         prefs[JITTER] = s.jitterMs
         prefs[PACKETS_LOST] = s.packetsLost
-        prefs[BANDWIDTH] = s.bandwidth
+        prefs[BYTES_SENT] = s.bandwidth
         prefs[BYTES_RECEIVED] = s.bytesReceived
         prefs[INBOUND_PACKETS] = s.inboundPacketsReceived
         prefs[OUTBOUND_PACKETS] = s.outboundPacketsSent
@@ -85,8 +91,8 @@ class DataStoreCallQualitySummaryStore(
         roundTripTimeMs = prefs[RTT] ?: 0.0,
         jitterMs = prefs[JITTER] ?: 0.0,
         packetsLost = prefs[PACKETS_LOST] ?: 0,
-        bandwidth = prefs[BANDWIDTH] ?: 0,
-        bytesReceived = prefs[BYTES_RECEIVED] ?: 0,
+        bandwidth = CallStatValue.storedBytes(stored = prefs[BYTES_SENT], legacy = prefs[LEGACY_BANDWIDTH]),
+        bytesReceived = CallStatValue.storedBytes(stored = prefs[BYTES_RECEIVED], legacy = prefs[LEGACY_BYTES_RECEIVED]),
         inboundPacketsReceived = prefs[INBOUND_PACKETS] ?: 0,
         outboundPacketsSent = prefs[OUTBOUND_PACKETS] ?: 0,
         availableOutgoingBitrateBps = prefs[AVAILABLE_BITRATE] ?: 0,
@@ -102,8 +108,10 @@ class DataStoreCallQualitySummaryStore(
         val RTT = doublePreferencesKey("rtt_ms")
         val JITTER = doublePreferencesKey("jitter_ms")
         val PACKETS_LOST = intPreferencesKey("packets_lost")
-        val BANDWIDTH = intPreferencesKey("bandwidth")
-        val BYTES_RECEIVED = intPreferencesKey("bytes_received")
+        val BYTES_SENT = longPreferencesKey("bytes_sent_long")
+        val BYTES_RECEIVED = longPreferencesKey("bytes_received_long")
+        val LEGACY_BANDWIDTH = intPreferencesKey("bandwidth")
+        val LEGACY_BYTES_RECEIVED = intPreferencesKey("bytes_received")
         val INBOUND_PACKETS = intPreferencesKey("inbound_packets")
         val OUTBOUND_PACKETS = intPreferencesKey("outbound_packets")
         val AVAILABLE_BITRATE = intPreferencesKey("available_bitrate_bps")

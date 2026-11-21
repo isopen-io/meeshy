@@ -47,7 +47,7 @@ struct StoryTrayView: View {
     /// la dégage des bulles flottantes (#9363), et doit la contenir.
     static let trayHeight: CGFloat = StoryEntryMetrics.height
 
-    /// #15157 — la place que mon cadre illustré réserve dans la bande (aucune sans film).
+    /// La place que mon cadre réserve dans la bande (#19988 ; aucune sans cadre).
     static var decorReserve: StoryEntryMetrics.DecorReserve {
         StoryEntryMetrics.decorReserve(ProfileDecorResolver.ring(AuthManager.shared.currentUser?.profileDecor?.avatarRing))
     }
@@ -365,7 +365,6 @@ private struct MyStoryButton: View {
                         return items
                     }()
                 )
-                .ringDecorRoom(decorReserve.room)
                 // Le libellé porte sur la cible RÉELLEMENT tapée — l'avatar — et
                 // sur elle seule. `MeeshyAvatar` s'annonce avec le nom de la
                 // personne (« Moi »), ce qui ne dit rien de la destination ;

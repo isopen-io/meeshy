@@ -121,6 +121,16 @@ describe('message:expired atteint chaque participant actif, où qu’il soit (#1
     });
 
     expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ eventType: 'deleted', actorUserId: 'u-sender' }));
-    expect(sink.find((e) => e.event === SERVER_EVENTS.MESSAGE_DELETED)?.rooms).toBe(`conversation:${CONV}`);
+    // #19943 — cette ligne épinglait la room ÉTROITE de la suppression, de
+    // façon INCIDENTE : le témoin s'intitule « une suppression garde son
+    // acteur », et c'est l'enfilage au-dessus qu'il garde. Elle est rouverte
+    // sciemment — la suppression partage désormais l'audience de l'expiration,
+    // et ce qui reste ASYMÉTRIQUE entre les deux est l'ACTEUR, pas l'audience.
+    expect(sink.find((e) => e.event === SERVER_EVENTS.MESSAGE_DELETED)?.rooms).toEqual([
+      `conversation:${CONV}`,
+      'user:u-sender',
+      'user:u-reader',
+      'user:p-guest',
+    ]);
   });
 });

@@ -27,6 +27,9 @@ export const byUserIdBatteryPull = (userId: string): string => `/api/v1/relation
 /** GET · PUT /api/v1/relations/:userId/battery/settings */
 export const byUserIdBatterySettings = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/battery/settings`;
 
+/** GET · PUT /api/v1/relations/:userId/fall/settings */
+export const byUserIdFallSettings = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/fall/settings`;
+
 /** GET · PUT /api/v1/relations/:userId/inactivity/settings */
 export const byUserIdInactivitySettings = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/inactivity/settings`;
 
@@ -56,6 +59,9 @@ export const byUserIdSettings = (userId: string): string => `/api/v1/relations/$
 
 /** GET /api/v1/relations/config */
 export const config = '/api/v1/relations/config';
+
+/** GET /api/v1/relations/falls */
+export const falls = '/api/v1/relations/falls';
 
 /** GET /api/v1/relations/inactivity */
 export const inactivity = '/api/v1/relations/inactivity';

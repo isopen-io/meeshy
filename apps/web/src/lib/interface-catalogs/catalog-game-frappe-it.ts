@@ -12,6 +12,8 @@ const it = {
   'game.frappe.say.gold': 'La n. {number} è d’oro. I tuoi antenati l’hanno vista.',
   'game.frappe.say.prism': 'La n. {number} è di prisma: tutte le lingue vi brillano.',
   'game.frappe.glory': '+{glory} di gloria',
+  'game.frappe.glory_toward': '{glory} di gloria fino a {rank}',
+  'game.frappe.risen': 'Ti chiamano {rank}',
   'game.frappe.refused.shadow': 'Un’ombra vela la tua luce. Le tue prossime scintille la dissiperanno, e conieremo.',
   'game.frappe.refused.locked': 'La tua Eredità attende un rango più alto. La tua gloria la aprirà, e conieremo.',
   'game.frappe.refused.light': 'La tua luce non basta ancora. Le tue prossime scintille la nutriranno.',

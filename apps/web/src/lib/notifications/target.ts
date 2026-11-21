@@ -136,9 +136,10 @@ const REQUEST_TYPES: ReadonlySet<string> = new Set(['friend_request', 'contact_r
  * (`device_battery`, #14147) ouvre sa fiche, où se lit le détail de l'épisode ; son téléphone injoignable
  * (`device_unreachable`, #18737) aussi, où se lisent l'heure et la cause probable ; et l'alerte d'inactivité d'un
  * Sang (`inactivity_alert`, #18738), où se lisent « Aucune activité depuis… », la batterie et la carte. La question
- * « Tout va bien ? » (`wellness_check`) n'en est PAS : son acteur est soi, et la toucher répond « Je vais bien ».
+ * L'alerte de sécurité d'un Sang (`safety_alert`, la chute détectée, #18748) et sa levée aussi : le push est
+ * GÉNÉRIQUE, la fiche dit le reste. « Tout va bien ? » (`wellness_check`) n'en est PAS : son acteur est soi, et la toucher répond « Je vais bien ».
  */
-const PROFILE_TYPES: ReadonlySet<string> = new Set(['contact_joined', 'contact_recently_active', 'device_battery', 'device_unreachable', 'inactivity_alert']);
+const PROFILE_TYPES: ReadonlySet<string> = new Set(['contact_joined', 'contact_recently_active', 'device_battery', 'device_unreachable', 'inactivity_alert', 'safety_alert', 'safety_alert_cleared']);
 
 /**
  * UN APPEL MANQUÉ SANS CONVERSATION NOMMÉE (#9177, suite de #9115) — une

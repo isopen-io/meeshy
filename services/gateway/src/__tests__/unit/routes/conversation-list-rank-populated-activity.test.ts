@@ -22,7 +22,8 @@
 import { describe, it, expect } from '@jest/globals';
 import { loadRankedConversationPage, type ListRankRow, type RowsQuery } from '../../../routes/conversations/utils/list-rank';
 import { listRankFromColumns } from '@meeshy/shared/utils/conversation-list-rank';
-import { matchesMongoWhere, type MongoDocument } from '../../helpers/mongo-where';
+import type { MongoDocument } from '../../helpers/mongo-where';
+import { moteurDeRang } from '../../helpers/list-rank-engine';
 
 const at = (iso: string) => new Date(iso);
 
@@ -44,24 +45,16 @@ const rows: readonly (ListRankRow & MongoDocument)[] = [
 const rang = (row: ListRankRow) => listRankFromColumns(row)!.getTime();
 const attendu = [...rows].sort((x, y) => rang(y) - rang(x)).map((r) => r.id);
 
-const trie = (where: MongoDocument, key: string, skip: number, take: number) =>
-  rows.filter((r) => matchesMongoWhere(r, where))
-    .sort((x, y) => ((y[key] as Date | undefined)?.getTime() ?? 0) - ((x[key] as Date | undefined)?.getTime() ?? 0))
-    .slice(skip, skip + take);
-
-const moteur = {
-  conversation: {
-    findMany: async (args: { where: MongoDocument; orderBy: Record<string, 'asc' | 'desc'>; take: number }) =>
-      trie(args.where, Object.keys(args.orderBy)[0], 0, args.take),
-  },
-};
-
-const page = (curseur: unknown, limit: number) =>
-  loadRankedConversationPage({
-    prisma: moteur as never,
-    readRows: async (q: RowsQuery) => trie(q.where as MongoDocument, 'lastMessageAt', q.skip, q.take) as never,
+const page = (curseur: unknown, limit: number) => {
+  const moteur = moteurDeRang(rows as readonly MongoDocument[]);
+  return loadRankedConversationPage({
+    prisma: moteur.prisma as never,
+    readRows: moteur.readRows as never,
     where: {}, curseur: curseur as never, deltaOrder: false, limit, offset: 0,
   }).then((s) => s.map((r) => r.id));
+};
+
+const borneSur = (ligne: ListRankRow) => ({ genre: 'borne', rang: listRankFromColumns(ligne)!, id: ligne.id });
 
 describe('pagination par curseur, colonne PEUPLÉE', () => {
   it('l’ordre global est celui du rang', async () => {
@@ -72,14 +65,14 @@ describe('pagination par curseur, colonne PEUPLÉE', () => {
   it('page 1 puis page 2 par le curseur : aucune ligne perdue, aucune servie deux fois', async () => {
     const p1 = await page({ genre: 'absent' }, 2);
     const dernier = rows.find((r) => r.id === p1[p1.length - 1])!;
-    const p2 = await page({ genre: 'borne', rang: listRankFromColumns(dernier)! }, 10);
+    const p2 = await page(borneSur(dernier), 10);
     expect([...p1, ...p2]).toEqual(attendu);
     expect(new Set([...p1, ...p2]).size).toBe(attendu.length);
   });
 
   it('page 2 depuis une ligne REMONTÉE borne bien sur le rang, pas sur le dernier message', async () => {
     const remontee = rows.find((r) => r.id === 'b-remontee')!;
-    const suite = await page({ genre: 'borne', rang: listRankFromColumns(remontee)! }, 10);
+    const suite = await page(borneSur(remontee), 10);
     expect(suite).toEqual(['c-msg', 'd-remontee', 'e-msg-vieux']);
   });
 });

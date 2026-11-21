@@ -86,6 +86,8 @@ export const E2EE_ERROR_CODES = {
   DIRECT_ALREADY_END_TO_END: 'E2EE_DIRECT_ALREADY_END_TO_END',
   /** Un tête-à-tête ne se chiffre de bout en bout qu'entre exactement deux membres actifs (#12966). */
   DIRECT_NOT_A_PAIR: 'E2EE_DIRECT_NOT_A_PAIR',
+  /** Un membre n'a aucun appareil chiffré actif : le bout en bout ne s'active pas, la conversation serait morte (#20073). */
+  PARTICIPANT_WITHOUT_DEVICE: 'E2EE_PARTICIPANT_WITHOUT_DEVICE',
   /** Un tête-à-tête chiffré de bout en bout reste à deux : aucune porte n'y fait entrer un troisième membre (#16188). */
   DIRECT_STAYS_A_PAIR: 'E2EE_DIRECT_STAYS_A_PAIR',
   BINDING_INVALID: 'E2EE_DEVICE_BINDING_INVALID',
@@ -145,6 +147,15 @@ export const E2EE_DIRECT_STAYS_A_PAIR_MESSAGE =
  */
 export const E2EE_DIRECT_ALREADY_END_TO_END_MESSAGE =
   'You already have an end-to-end encrypted conversation with this person. Open it to chat encrypted; this one stays readable by the server.';
+
+/**
+ * Le texte servi avec `E2EE_PARTICIPANT_WITHOUT_DEVICE` (#20073). La bascule
+ * nomme les membres sans appareil chiffré (`withoutDeviceUserIds`) ; la création
+ * ne nomme personne (aucun sondage des clés d'un tiers). Un ancien client
+ * l'affiche tel quel (#9223).
+ */
+export const E2EE_PARTICIPANT_WITHOUT_DEVICE_MESSAGE =
+  'End-to-end encryption needs an encrypting device for every member, and one of you has none yet: it was not turned on.';
 
 /** Le texte servi avec `E2EE_DIRECT_NOT_A_PAIR` (#12966). */
 export const E2EE_DIRECT_NOT_A_PAIR_MESSAGE =

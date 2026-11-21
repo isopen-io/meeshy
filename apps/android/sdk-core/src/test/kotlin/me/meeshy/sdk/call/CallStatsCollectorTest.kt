@@ -43,11 +43,39 @@ class CallStatsCollectorTest {
         assertThat(stats.roundTripTimeMs).isWithin(1e-9).of(50.0)
         assertThat(stats.availableOutgoingBitrateBps).isEqualTo(900_000)
         assertThat(stats.packetsLost).isEqualTo(2)
-        assertThat(stats.inboundAudioBytes).isEqualTo(8_000)
-        assertThat(stats.bandwidth).isEqualTo(7_000)
+        assertThat(stats.inboundAudioBytes).isEqualTo(8_000L)
+        assertThat(stats.bandwidth).isEqualTo(7_000L)
         assertThat(stats.jitterMs).isWithin(1e-9).of(12.0)
         assertThat(stats.codec).isEqualTo("opus")
         assertThat(stats.relayed).isTrue()
+    }
+
+    @Test
+    fun `les gels, la limitation et le relais sont lus sous les types de libwebrtc, sans adresse (#19895)`() = runTest {
+        val report = report(
+            stat("P", "candidate-pair", mapOf("localCandidateId" to "L", "state" to "succeeded", "nominated" to true)),
+            stat("L", "local-candidate", mapOf("candidateType" to "relay", "relayProtocol" to "tls", "address" to "203.0.113.7", "port" to 3478, "url" to "turn:turn.example:3478")),
+            stat("IV", "inbound-rtp", mapOf("kind" to "video", "freezeCount" to 3L, "totalFreezesDuration" to 1.5, "nackCount" to 7L, "pliCount" to 2L)),
+            stat("IA", "inbound-rtp", mapOf("kind" to "audio", "jitterBufferDelay" to 4.0, "jitterBufferEmittedCount" to BigInteger.valueOf(100), "concealedSamples" to BigInteger.valueOf(480))),
+            stat("OV", "outbound-rtp", mapOf("kind" to "video", "qualityLimitationReason" to "bandwidth")),
+        )
+        val stats = CallStatsCollector { handle(report) }.collect()!!
+        assertThat(stats.relayed).isTrue()
+        with(stats.media) {
+            assertThat(freezeCount).isEqualTo(3.0)
+            assertThat(totalFreezesDuration).isEqualTo(1.5)
+            assertThat(nackCount).isEqualTo(7.0)
+            assertThat(pliCount).isEqualTo(2.0)
+            assertThat(jitterBufferDelay).isEqualTo(4.0)
+            assertThat(jitterBufferEmittedCount).isEqualTo(100.0)
+            assertThat(concealedSamples).isEqualTo(480.0)
+            assertThat(qualityLimitationReason).isEqualTo("bandwidth")
+            assertThat(candidateType).isEqualTo("relay")
+            assertThat(relayProtocol).isEqualTo("tls")
+        }
+        val projected = CallStatsCollector.rawEntries(report).first { it.id == "L" }
+        assertThat(projected.strings.keys).containsNoneOf("address", "url")
+        assertThat(projected.values.keys).doesNotContain("port")
     }
 
     @Test

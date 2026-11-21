@@ -128,3 +128,22 @@ export interface CommunityJoinRequestedEventData {
   readonly pendingCount: number;
   readonly at: string;
 }
+
+/**
+ * `community:join-request-decided` (#19879) — la décision sur la demande
+ * d'entrée du LECTEUR, posée sur sa seule room personnelle `user:<id>`.
+ * Aujourd'hui seul le refus voyage : une acceptation s'annonce déjà par
+ * `community:member-joined`, qui atteint la room de la personne admise.
+ *
+ * La charge ne dit ni QUI a tranché, ni la demande d'un autre : la
+ * communauté, la décision, la date à partir de laquelle une nouvelle demande
+ * est possible (`retryAt`, chaîne ISO) et l'instant de la décision (`at`).
+ */
+export type CommunityJoinRequestDecision = 'rejected';
+
+export interface CommunityJoinRequestDecidedEventData {
+  readonly communityId: string;
+  readonly decision: CommunityJoinRequestDecision;
+  readonly retryAt: string;
+  readonly at: string;
+}

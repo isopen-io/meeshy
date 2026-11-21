@@ -522,6 +522,12 @@ struct ConversationEncryptionDetailSheet: View {
                                   defaultValue: "Une conversation chiffrée de bout en bout existe déjà avec cette personne : ouvrez-la.",
                                   bundle: .main)
             HapticFeedback.error()
+        } catch let error as MeeshyError where EndToEndParticipantWithoutDeviceRefusal.matches(error) {
+            errorMessage = EndToEndParticipantWithoutDeviceRefusal.message(
+                peerUserId: peer?.userId, peerName: peer?.name,
+                withoutDeviceUserIds: EndToEndParticipantWithoutDeviceRefusal.withoutDeviceUserIds(in: error)
+            )
+            HapticFeedback.error()
         } catch let error as MeeshyError where error.e2eeCode == E2EEErrorCode.directNotAPair {
             errorMessage = String(localized: "conversation.encryption.detail.directNotAPair",
                                   defaultValue: "Ce tête-à-tête ne réunit pas exactement deux membres inscrits : le chiffrement de bout en bout n’y est pas possible.",

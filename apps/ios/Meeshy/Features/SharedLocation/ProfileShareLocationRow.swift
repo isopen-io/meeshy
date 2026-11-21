@@ -200,6 +200,8 @@ enum ShareLocationWording {
             return String(localized: "sharedLocation.share.unavailable", defaultValue: "Position introuvable pour le moment, réessaie", bundle: .main)
         case .withdrawalPending:
             return String(localized: "sharedLocation.share.stopPending", defaultValue: "Le partage s'arrêtera dès le retour du réseau", bundle: .main)
+        case .replacesChosenPoint:
+            return String(localized: "locationMap.share.replacePoint.title", defaultValue: "Montrer ta position réelle ?", bundle: .main)
         case .refused(.offline), .refused(.unconfirmed):
             return String(localized: "sharedLocation.share.offline", defaultValue: "Le partage de position a besoin du réseau", bundle: .main)
         case .refused(.rateLimited):

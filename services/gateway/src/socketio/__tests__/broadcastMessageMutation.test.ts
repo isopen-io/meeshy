@@ -130,8 +130,12 @@ describe('broadcastMessageMutation', () => {
       payload,
     });
 
+    // #19943 — l'audience d'une suppression est celle de son jumeau `expired` :
+    // la room de conversation SUIVIE des rooms personnelles des participants
+    // vivants. L'assertion portait `room: 'conversation:conv-1'` seule ; elle
+    // est rouverte SCIEMMENT, l'élargissement étant le lot.
     expect(emitted).toContainEqual({
-      room: 'conversation:conv-1',
+      room: ['conversation:conv-1', 'user:user-B'],
       event: SERVER_EVENTS.MESSAGE_DELETED,
       payload,
     });

@@ -237,12 +237,18 @@ final class ProfileSectionsTests: XCTestCase {
         }
         let profile = try code("Meeshy/Features/Profile/Views/ProfileView.swift")
         XCTAssertTrue(profile.contains("MeeshySectionHeader(title: ProfileActivityBand.title)"), "Mon activité porte l'en-tête K44")
+        XCTAssertTrue(profile.contains("legendSection.meeshyCascade(rank: 3)"), "#19986 : Ma Légende est une section, pas la queue de Mon activité")
+        XCTAssertTrue(profile.contains("MeeshySectionHeader(title: ProfileDecorEntry.sectionTitle)"),
+                      "#19986 : « Contour et bannière » se range sous son titre « Apparence »")
     }
 
     func test_circlesSection_putsTheRequestsInItsHeader_andInvitesWithTheButtonOfTheKit() throws {
         let circles = try code("Meeshy/Features/Profile/Views/ProfileCirclesSection.swift")
         XCTAssertTrue(circles.contains("accessory: { requestsButton }"), "« N demandes à répondre » est l'accessoire de l'en-tête")
         XCTAssertTrue(circles.contains("MeeshyButton(Self.inviteTitle"), "« Inviter quelqu'un » est le bouton K40")
+        XCTAssertTrue(circles.contains("kind: .tinted, size: .s44, width: .fill, tint: tint"),
+                      "#19986 : teinté à l'accent, jamais le verre clair qui s'écrivait blanc sur blanc")
+        XCTAssertFalse(circles.contains("kind: .glass"), "#19986 : le verre par défaut rend l'invitation illisible")
         XCTAssertFalse(circles.contains("ProfileNavigationRow("), "plus de rangées sous l'échelle : la planche n'en dessine pas")
         XCTAssertTrue(circles.contains("onOpen(.requests)"))
         XCTAssertTrue(circles.contains("onOpen(.invite)"))
@@ -329,7 +335,8 @@ final class ProfileSectionsTests: XCTestCase {
         XCTAssertFalse(profile.contains(".onTapGesture"), "un toucher nu ne répond pas avant le zoom")
         XCTAssertTrue(profile.contains("photoButton(ProfileOwnBanner.openablePhoto(of: user))"))
         XCTAssertTrue(profile.contains("photoButton(user?.avatar)"))
-        XCTAssertTrue(profile.contains(".zoomTransitionSource(id: url ?? \"\", in: photoZoomSpace)"))
+        XCTAssertTrue(profile.contains(".zoomTransitionSource(id: url ?? \"\", in: opens ? photoZoomSpace : nil)"),
+                      "#19925 : seule une photo qui s'ouvre est source du zoom, qui découpe ce qu'il enveloppe")
     }
 
     func test_profileView_securitySheet_declaresItselfToTheSurfaceRegistry() throws {

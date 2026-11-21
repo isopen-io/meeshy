@@ -1,5 +1,8 @@
 import type { CallAnalyticsEvent, CallQualityDistribution, ConnectionQualityLevel, ConnectionQualityStats } from '@meeshy/shared/types/video-call';
 
+import { estimateCallMos } from '@meeshy/shared/utils/call-mos';
+
+import { combineMediaQuality, type MediaQuality } from './call-analytics-stats';
 import type { PeerQuality } from './call-quality';
 
 /**
@@ -31,7 +34,21 @@ export type Telemetry = {
   readonly codec: string | null;
   readonly captionsShown: boolean;
   readonly effects: readonly string[];
+  /**
+   * #19876 — le dernier relevé des compteurs cumulés de CHAQUE pair, par pair :
+   * un pair parti ou dont le dernier `getStats` a échoué garde le sien ; un lien
+   * reconstruit pour le même pair remplace son entrée. Borné par le nombre de pairs.
+   */
+  readonly peers: Readonly<Record<string, MediaQuality>>;
+  readonly mediaSamples: number;
+  readonly jitterSum: number;
+  readonly limitations: Readonly<Record<LimitationReason, number>>;
 };
+
+const LIMITATION_REASONS = ['bandwidth', 'cpu', 'none', 'other'] as const;
+type LimitationReason = (typeof LIMITATION_REASONS)[number];
+const isLimitationReason = (reason: string | null): reason is LimitationReason => LIMITATION_REASONS.some((known) => known === reason);
+const NO_LIMITATIONS: Readonly<Record<LimitationReason, number>> = { bandwidth: 0, cpu: 0, none: 0, other: 0 };
 
 export type TelemetrySample = { readonly level: ConnectionQualityLevel; readonly rtt: number; readonly packetLoss: number };
 
@@ -40,7 +57,7 @@ export type AnalyticsContext = { readonly callId: string; readonly now: number; 
 const NO_LEVELS: CallQualityDistribution = { excellent: 0, good: 0, fair: 0, poor: 0 };
 
 export function createTelemetry(startedAt: number): Telemetry {
-  return { startedAt, negotiatingAt: null, connectedAt: null, reconnections: 0, networkTransitions: 0, samples: 0, rttSum: 0, lossSum: 0, maxLoss: 0, levels: NO_LEVELS, codec: null, captionsShown: false, effects: [] };
+  return { startedAt, negotiatingAt: null, connectedAt: null, reconnections: 0, networkTransitions: 0, samples: 0, rttSum: 0, lossSum: 0, maxLoss: 0, levels: NO_LEVELS, codec: null, captionsShown: false, effects: [], peers: {}, mediaSamples: 0, jitterSum: 0, limitations: NO_LIMITATIONS };
 }
 
 /** Le décroché, ou l'arrivée du pair : ce qui sépare la sonnerie humaine de la négociation WebRTC. */
@@ -76,6 +93,54 @@ export function withSample(telemetry: Telemetry, sample: TelemetrySample): Telem
   };
 }
 
+const nonNegative = (value: number): number => (Number.isFinite(value) ? Math.max(value, 0) : 0);
+
+/**
+ * #19876 — un relevé média (`CallAnalyticsRecorder.recordMedia`, iOS) : les
+ * compteurs cumulés de chaque pair relevé remplacent les siens, la gigue s'ajoute pour le MOS,
+ * et chaque pair compte sa cause de limitation.
+ */
+export function withMedia(telemetry: Telemetry, peers: Readonly<Record<string, MediaQuality>>, jitterMs: number): Telemetry {
+  const read = Object.values(peers);
+  if (read.length === 0) return telemetry;
+  const limitations = read.map((peer) => peer.qualityLimitationReason).filter(isLimitationReason).reduce((counts, reason) => ({ ...counts, [reason]: counts[reason] + 1 }), telemetry.limitations);
+  return { ...telemetry, peers: { ...telemetry.peers, ...peers }, mediaSamples: telemetry.mediaSamples + 1, jitterSum: telemetry.jitterSum + nonNegative(jitterMs), limitations };
+}
+
+/** La cause la plus fréquente ; à égalité, la première dans l'ordre alphabétique, comme iOS. */
+const dominantLimitation = (counts: Readonly<Record<LimitationReason, number>>): LimitationReason | null =>
+  LIMITATION_REASONS.reduce<LimitationReason | null>((best, reason) => (counts[reason] > (best === null ? 0 : counts[best]) ? reason : best), null);
+
+const present = <K extends string, V>(key: K, value: V | null): Partial<Record<K, V>> => (value === null ? {} : ({ [key]: value } as Record<K, V>));
+
+const measure = (value: number | null): number | null => (value !== null && Number.isFinite(value) && value >= 0 ? value : null);
+
+const count = (value: number | null): number | null => {
+  const rounded = value === null ? null : Math.round(value);
+  return rounded !== null && rounded >= 0 && rounded <= Number.MAX_SAFE_INTEGER ? rounded : null;
+};
+
+/** Les champs de qualité (#11277), chacun SEULEMENT s'il a été mesuré : un client n'invente aucune valeur. */
+function mediaFields(telemetry: Telemetry, averageRtt: number, averagePacketLoss: number): Partial<CallAnalyticsEvent> {
+  const { mediaSamples } = telemetry;
+  const media = combineMediaQuality(Object.values(telemetry.peers));
+  if (media === null || mediaSamples === 0) return {};
+  const emitted = media.jitterBufferEmittedCount ?? 0;
+  const mos = estimateCallMos({ roundTripTimeMs: averageRtt, jitterMs: telemetry.jitterSum / mediaSamples, packetLossPercent: averagePacketLoss });
+  return {
+    ...present('freezeCount', count(media.freezeCount)),
+    ...present('totalFreezesDuration', measure(media.totalFreezesDuration)),
+    ...present('qualityLimitationReason', dominantLimitation(telemetry.limitations)),
+    ...present('jitterBufferDelay', media.jitterBufferDelay === null || emitted <= 0 ? null : measure((media.jitterBufferDelay * 1000) / emitted)),
+    ...present('concealedSamples', count(media.concealedSamples)),
+    ...present('nackCount', count(media.nackCount)),
+    ...present('pliCount', count(media.pliCount)),
+    mos: Math.round(mos * 100) / 100,
+    ...present('candidateType', media.candidateType?.slice(0, 20) ?? null),
+    ...present('relayProtocol', media.relayProtocol?.slice(0, 20) ?? null),
+  };
+}
+
 const BROWSERS: ReadonlyArray<readonly [RegExp, string]> = [
   [/Edg\//, 'Edge'],
   [/OPR\//, 'Opera'],
@@ -100,11 +165,13 @@ export function deviceLabel(userAgent: string): string {
   return parts.length === 0 ? 'web' : parts.join(' · ');
 }
 
-const share = (count: number, total: number): number => (total === 0 ? 0 : count / total);
+const share = (count: number, total: number): number => nonNegative(count / total);
 
 export function analyticsPayload(telemetry: Telemetry, context: AnalyticsContext): CallAnalyticsEvent {
   const { samples, levels, connectedAt } = telemetry;
   const since = (from: number | null): number => (connectedAt === null || from === null ? -1 : Math.max(0, connectedAt - from));
+  const averageRtt = share(telemetry.rttSum, samples);
+  const averagePacketLoss = share(telemetry.lossSum, samples);
   return {
     callId: context.callId,
     setupTimeMs: since(telemetry.startedAt),
@@ -112,10 +179,10 @@ export function analyticsPayload(telemetry: Telemetry, context: AnalyticsContext
     durationSeconds: connectedAt === null ? 0 : Math.max(0, Math.round((context.now - connectedAt) / 1000)),
     reconnectionCount: telemetry.reconnections,
     networkTransitions: telemetry.networkTransitions,
-    averageRtt: share(telemetry.rttSum, samples),
-    averagePacketLoss: share(telemetry.lossSum, samples),
-    maxPacketLoss: telemetry.maxLoss,
-    codec: telemetry.codec ?? 'unknown',
+    averageRtt,
+    averagePacketLoss,
+    maxPacketLoss: nonNegative(telemetry.maxLoss),
+    codec: (telemetry.codec ?? 'unknown').slice(0, 50),
     effectsUsed: telemetry.effects,
     filtersUsed: telemetry.effects.some(isColorFilter),
     transcriptionUsed: telemetry.captionsShown,
@@ -124,6 +191,7 @@ export function analyticsPayload(telemetry: Telemetry, context: AnalyticsContext
     deviceModel: context.deviceModel.slice(0, 100),
     isVideo: context.isVideo,
     endReason: context.endReason,
+    ...mediaFields(telemetry, averageRtt, averagePacketLoss),
   };
 }
 

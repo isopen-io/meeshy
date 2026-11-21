@@ -44,6 +44,7 @@ const de = {
   'game.rank.mythe': 'Mythos',
   'game.rank.mythe_seat': 'Mythos Nr. {number}',
   'game.banner.level': 'Level {level}',
+  'game.banner.light': 'Dein Licht auf Level {level}',
   'game.banner.to_next': '{percent} % bis Level {level}',
   'game.banner.top': 'ganz oben',
   'game.banner.capped': '{rank} öffnet mehr',

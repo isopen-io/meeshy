@@ -1,5 +1,6 @@
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { listRankFromColumns } from '@meeshy/shared/utils/conversation-list-rank';
+import { outranks, rankStreamByActivity, rankStreamByMessage, type RankedConversationRow } from '../../../services/conversations/highestRanked';
 import type { CurseurDeListe } from '../list-cursor';
 
 /**
@@ -107,7 +108,7 @@ export interface RankedPagePrisma {
   readonly conversation: {
     findMany(args: {
       where: Prisma.ConversationWhereInput;
-      orderBy: Prisma.ConversationOrderByWithRelationInput;
+      orderBy: Prisma.ConversationOrderByWithRelationInput | Prisma.ConversationOrderByWithRelationInput[];
       take: number;
       select: typeof LIST_RANK_SELECT;
     }): Promise<ListRankRow[]>;
@@ -125,30 +126,92 @@ export interface RankedPageRequest<Row extends ListRankRow> {
   readonly offset: number;
 }
 
-/** Borne `rang < R`, en deux clauses — une par flux. */
-function rankBound(bound: Date): {
+/** La ligne de bord : son rang, et son identité quand il y en a une à départager. */
+interface Borne {
+  readonly rang: Date;
+  /** `null` pour la QUEUE du tri, qu'aucune ligne ne suit — rien à départager. */
+  readonly id: string | null;
+}
+
+/**
+ * Borne `(rang, id) < (R, C)` — l'ordre LEXICOGRAPHIQUE de la clé de tri
+ * globale, en clauses par flux (#19881).
+ *
+ * ## Pourquoi l'id, et pourquoi il ne coûte rien
+ *
+ * `rang < R` seul PERD une ligne : deux conversations de rang identique
+ * encadrant une frontière de page, et celle qui n'était pas sur la page 1 est
+ * écartée de la page 2 par la borne stricte, puis la page 3 borne plus bas que
+ * son rang. Elle n'apparaît sur AUCUNE page (mesuré). Atteignable —
+ * `lastMessageAt` est `DateTime @default(now())` et `messagePostSaveEffects` y
+ * écrit `new Date()` — et davantage depuis #19800, le rang d'une ligne REMONTÉE
+ * pouvant valoir exactement le `lastMessageAt` d'une autre.
+ *
+ * L'identité n'est pas calculée : `beforeCursor` EST un `Conversation.id`, que
+ * `resolveListCursor` a déjà lu et autorisé dans le scope du lecteur. Aucun
+ * format de curseur ne change, donc rien à instruire côté rétrocompatibilité.
+ *
+ * ## Pourquoi l'ordre sur l'id est le MÊME des deux côtés
+ *
+ * MongoDB compare un ObjectId octet par octet, ce qui est exactement l'ordre
+ * lexicographique de son hexadécimal : `{ id: { lt: C } }` et
+ * `orderBy: { id: 'desc' }` s'accordent. C'est de cet accord que dépend le
+ * départage, et c'est pourquoi les deux `orderBy` le portent.
+ *
+ * ## Ce que les clauses supposent
+ *
+ * Jamais de `NOT` : sur MongoDB, Prisma écarte de toute négation le document où
+ * la clé est ABSENTE (#8309), et c'est le cas de `lastActivityAt` sur toute
+ * conversation sans activité. Chaque `OR` qui doit apparier l'absence porte donc
+ * ses deux branches POSITIVES (`null` et `isSet: false`) SŒURS.
+ *
+ * `lastMessageAt`, lui, est tenu pour PRÉSENT — le schéma le déclare
+ * `DateTime @default(now())`, non nullable, donc Prisma l'écrit à chaque
+ * création. Les clauses `lte` / `lt` qui le portent n'apparieraient pas un
+ * document sans la clé ; aucun chemin n'en produit, et l'ancienne borne faisait
+ * la même hypothèse.
+ */
+function rankBound({ rang, id }: Borne): {
   readonly byMessage: Prisma.ConversationWhereInput[];
   readonly byActivity: Prisma.ConversationWhereInput[];
 } {
+  const activiteSous: Prisma.ConversationWhereInput = {
+    OR: [{ lastActivityAt: { lt: rang } }, { lastActivityAt: null }, { lastActivityAt: { isSet: false } }],
+  };
+  const rangStrict = {
+    byMessage: [{ lastMessageAt: { lt: rang } }, activiteSous] as Prisma.ConversationWhereInput[],
+    byActivity: [{ lastActivityAt: { lt: rang } }, { lastMessageAt: { lt: rang } }] as Prisma.ConversationWhereInput[],
+  };
+  if (id === null) return rangStrict;
+
+  const activiteAuPlus: Prisma.ConversationWhereInput = {
+    OR: [{ lastActivityAt: { lte: rang } }, { lastActivityAt: null }, { lastActivityAt: { isSet: false } }],
+  };
   return {
     byMessage: [
-      { lastMessageAt: { lt: bound } },
-      { OR: [{ lastActivityAt: { lt: bound } }, { lastActivityAt: null }, { lastActivityAt: { isSet: false } }] },
+      { lastMessageAt: { lte: rang } },
+      { OR: [{ AND: rangStrict.byMessage }, { AND: [{ id: { lt: id } }, activiteAuPlus] }] },
     ],
-    byActivity: [{ lastActivityAt: { lt: bound } }, { lastMessageAt: { lt: bound } }],
+    byActivity: [
+      { lastActivityAt: { lte: rang } },
+      { lastMessageAt: { lte: rang } },
+      { OR: [{ AND: rangStrict.byActivity }, { id: { lt: id } }] },
+    ],
   };
 }
 
-function boundOf(curseur: RankedPageRequest<ListRankRow>['curseur']): Date | null {
-  if (curseur.genre === 'borne') return curseur.rang;
+function boundOf(curseur: RankedPageRequest<ListRankRow>['curseur']): Borne | null {
+  // `?? null` n'est pas une politesse : Prisma IGNORE un champ `undefined`, donc
+  // `{ id: { lt: undefined } }` apparierait TOUT et la branche de départage
+  // admettrait la page précédente en entier. Un id absent retombe donc sur la
+  // borne STRICTE — le comportement d'avant #19881, qui perd le départage et
+  // jamais la borne.
+  if (curseur.genre === 'borne') return { rang: curseur.rang, id: curseur.id ?? null };
   // Les rangs nuls sortent en QUEUE d'un tri `desc` : rien ne suit une
-  // conversation sans message (voir `list-cursor.ts`).
-  if (curseur.genre === 'queue') return new Date(0);
+  // conversation sans message (voir `list-cursor.ts`). Aucune ligne à départager,
+  // donc aucune identité à porter.
+  if (curseur.genre === 'queue') return { rang: new Date(0), id: null };
   return null;
-}
-
-function rankMillis(row: ListRankRow): number {
-  return listRankFromColumns(row)?.getTime() ?? Number.NEGATIVE_INFINITY;
 }
 
 function isLifted(row: ListRankRow): boolean {
@@ -157,7 +220,32 @@ function isLifted(row: ListRankRow): boolean {
   return !row.lastMessageAt || rank.getTime() > row.lastMessageAt.getTime();
 }
 
-/** Les ids de la page, fusionnés par rang décroissant (A d'abord à égalité, ordre stable). */
+/**
+ * `ListRankRow` → la forme que le comparateur partagé EXIGE (#19904).
+ *
+ * `RankedConversationRow` déclare ses trois colonnes REQUISES, et c'est une
+ * garde : un `select` qui en oublie une rend un rang faux sans que rien ne
+ * rougisse. On ne l'affaiblit donc pas pour s'y assigner — on NORMALISE une clé
+ * absente en `null`, ce que Prisma fait déjà de son côté. `ListRankRow` les
+ * garde optionnelles parce que les témoins construisent des DOCUMENTS Mongo, où
+ * une clé jamais écrite est absente et non nulle (`__tests__/helpers/mongo-where.ts`) ;
+ * c'est la seule différence, et elle est de harnais, pas de production.
+ */
+const classable = (row: ListRankRow): RankedConversationRow => ({
+  id: row.id,
+  lastMessageAt: row.lastMessageAt ?? null,
+  lastActivityAt: row.lastActivityAt ?? null,
+});
+
+/**
+ * Les ids de la page, fusionnés par `(rang desc, id desc)`.
+ *
+ * Le départage est EXPLICITE depuis #19881. Il s'appuyait avant sur la stabilité
+ * du tri, c'est-à-dire sur l'ordre des DEUX lectures qui alimentent cette
+ * fusion — un ordre que rien ne garantissait, les deux `orderBy` n'ayant pas de
+ * clé de départage. Deux lignes de rang égal pouvaient donc sortir dans un ordre
+ * et être bornées dans l'autre.
+ */
 export function mergeByRank(
   byMessage: readonly ListRankRow[],
   lifted: readonly ListRankRow[],
@@ -170,7 +258,7 @@ export function mergeByRank(
     return true;
   });
   return [...unique]
-    .sort((a, b) => rankMillis(b) - rankMillis(a))
+    .sort((a, b) => (outranks(classable(a), classable(b)) ? -1 : 1))
     .slice(window.offset, window.offset + window.limit)
     .map((row) => row.id);
 }
@@ -184,22 +272,27 @@ export async function loadRankedConversationPage<Row extends ListRankRow>(
     return readRows({ where, orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }], skip: offset, take: limit });
   }
 
+  const [parMessage, parActivite] = [rankStreamByMessage(), rankStreamByActivity()];
   const bound = boundOf(curseur);
   const clauses = bound ? rankBound(bound) : { byMessage: [], byActivity: [] };
   const byMessageWhere: Prisma.ConversationWhereInput = clauses.byMessage.length
     ? { AND: [where, ...clauses.byMessage] }
     : where;
+  // `parActivite.where` — « les lignes qui portent une activité » appartient au
+  // FLUX, pas à cet appelant (#19904). Le redéclarer ici en faisait une règle
+  // tenue par deux sites, dont un seul rougirait si elle changeait.
   const byActivityWhere: Prisma.ConversationWhereInput = {
-    AND: [where, { lastActivityAt: { not: null } }, ...clauses.byActivity],
+    AND: [where, parActivite.where as Prisma.ConversationWhereInput, ...clauses.byActivity],
   };
   const window = offset + limit;
-  const byMessageOrder = { lastMessageAt: 'desc' } as const;
+  const byMessageOrder = parMessage.orderBy;
+  const byActivityOrder = parActivite.orderBy;
 
   const [firstRows, withActivity] = await Promise.all([
     readRows({ where: byMessageWhere, orderBy: byMessageOrder, skip: offset, take: limit }),
     prisma.conversation.findMany({
       where: byActivityWhere,
-      orderBy: { lastActivityAt: 'desc' },
+      orderBy: byActivityOrder,
       take: window,
       select: LIST_RANK_SELECT,
     }),

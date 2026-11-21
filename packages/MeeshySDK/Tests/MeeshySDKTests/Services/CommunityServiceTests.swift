@@ -190,15 +190,64 @@ final class CommunityServiceTests: XCTestCase {
     // MARK: - join
 
     func test_join_callsCorrectEndpoint() async throws {
-        let member = makeMember()
-        let response = APIResponse<APICommunityMember>(success: true, data: member, error: nil)
-        mock.stub("/communities/comm1/join", result: response)
+        mock.stubWire("/communities/comm1/join", json: """
+        {"success":true,"data":{"id":"mem1","communityId":"comm1","userId":"user1","role":"member"}}
+        """)
 
         let result = try await service.join(communityId: "comm1")
 
         XCTAssertEqual(mock.lastRequest?.endpoint, "/communities/comm1/join")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
-        XCTAssertEqual(result.id, "mem1")
+        guard case .joined(let member) = result else { return XCTFail("attendu : membre écrit, reçu \(result)") }
+        XCTAssertEqual(member.id, "mem1")
+        XCTAssertTrue(result.isJoined)
+    }
+
+    func test_join_announcesThatItReadsAPendingRequest() async throws {
+        mock.stubWire("/communities/comm1/join", json: """
+        {"success":true,"data":{"status":"pending","requestId":"req-9"}}
+        """)
+
+        _ = try await service.join(communityId: "comm1")
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["acceptsPending"] as? Bool, true)
+    }
+
+    func test_join_communityThatValidatesEachEntry_decodesThePendingRequest() async throws {
+        mock.stubWire("/communities/comm1/join", json: """
+        {"success":true,"data":{"status":"pending","requestId":"req-9"}}
+        """)
+
+        let result = try await service.join(communityId: "comm1")
+
+        guard case .pending(let requestId) = result else { return XCTFail("attendu : demande en attente, reçu \(result)") }
+        XCTAssertEqual(requestId, "req-9")
+        XCTAssertFalse(result.isJoined)
+    }
+
+    func test_joinRefusal_cooldownCode_isReadFromTheForbiddenBody() {
+        let body = Data(#"{"success":false,"error":"Your last request to join was declined recently","code":"COMMUNITY_JOIN_COOLDOWN"}"#.utf8)
+
+        XCTAssertEqual(CommunityJoinRefusal.classify(MeeshyError.forbidden(reason: nil, body: body)), .cooldown)
+    }
+
+    func test_joinRefusal_otherForbidden_isNotACooldown() {
+        let body = Data(#"{"success":false,"error":"Cannot join a private community without an invite"}"#.utf8)
+
+        XCTAssertNil(CommunityJoinRefusal.classify(MeeshyError.forbidden(reason: nil, body: body)))
+        XCTAssertNil(CommunityJoinRefusal.classify(MeeshyError.server(statusCode: 500, message: "boom")))
+    }
+
+    func test_get_decodesTheReadersPendingRequest() async throws {
+        mock.stubWire("/communities/comm1", json: """
+        {"success":true,"data":{"id":"comm1","identifier":"mshy_comm1","name":"Alpha","isPrivate":false,
+         "createdBy":"u","createdAt":"2026-09-01T10:00:00.000Z","requiresJoinApproval":true,"currentUserJoinRequest":"pending"}}
+        """)
+
+        let community = try await service.get(communityId: "comm1")
+
+        XCTAssertEqual(community.requiresJoinApproval, true)
+        XCTAssertEqual(community.currentUserJoinRequest, "pending")
     }
 
     // MARK: - leave

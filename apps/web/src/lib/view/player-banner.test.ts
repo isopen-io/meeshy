@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from 'bun:test';
 
 import type { GameBlockFacts } from '@meeshy/shared/utils/game/game-block';
 
-import { ALL_LEVEL_STEPS, gameBlockFixture, gameBlockWithExtrasFixture, gameExtrasFactsFixture } from '@/lib/api/game-fixture';
+import { ALL_LEVEL_STEPS, gameBlockFixture, gameBlockWithExtrasFixture, gameExtrasFactsFixture, gameFactsFixture } from '@/lib/api/game-fixture';
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 
@@ -30,8 +30,11 @@ const NEWCOMER: Partial<GameBlockFacts> = {
   debitablePoints: 1000,
 };
 
+/** Le nouveau joueur sans aucun acte servi (serveur antérieur à #17370) : le premier Rêve a ses propres témoins. */
+const NEWCOMER_NO_DREAM: Partial<GameBlockFacts> = { ...NEWCOMER, missions: [] };
+
 /** Tout à zéro : niveau 1, aucun point, aucune Meesh, aucune Gloire, aucune Flamme. */
-const ZERO: Partial<GameBlockFacts> = { ...NEWCOMER, score: 0, debitablePoints: 0 };
+const ZERO: Partial<GameBlockFacts> = { ...NEWCOMER_NO_DREAM, score: 0, debitablePoints: 0 };
 
 const shown = (facts: Partial<GameBlockFacts>) => {
   const model = playerBannerModel(gameBlockFixture(facts));
@@ -127,8 +130,8 @@ describe('seulement ce qui a du sens (#9536)', () => {
 
 describe('ce que lit le lecteur d’écran — une phrase complète', () => {
   test('fr : le nouveau joueur, son niveau, son palier et sa marche vers le suivant', () => {
-    const model = shown(NEWCOMER);
-    expect(playerBannerLabel(model, 'fr')).toMatch(/^Niveau \d+, Étincelle, \d+ % vers le \d+$/);
+    const model = shown(NEWCOMER_NO_DREAM);
+    expect(playerBannerLabel(model, 'fr')).toMatch(/^Ta lumière au niveau \d+, Étincelle, \d+ % vers le \d+$/);
   });
 
   test('fr : au niveau 1, le total de points est dit — il n’y a pas de niveau à lire', () => {
@@ -138,7 +141,7 @@ describe('ce que lit le lecteur d’écran — une phrase complète', () => {
 
   test('fr : tout ce qui existe, dans l’ordre de la rangée compacte — le rang en tête, puis l’anneau et le milieu (#19705, #17394)', () => {
     const model = shownExtras({ balance: 12, streak: 23, glory: 620 });
-    expect(playerBannerLabel(model, 'fr')).toMatch(/^Murmure IV, gloire 620, [\d\s\u202f]+ de gloire jusqu’à Murmure III, Niveau \d+, \p{L}+, \d+ % vers le \d+, Flamme 23 jours, 12 Meeshes, Rêve : \d+ sur \d+, Héritage : Escarcelle, joute de Jade · \d+(re|e)$/u);
+    expect(playerBannerLabel(model, 'fr')).toMatch(/^Murmure IV, gloire 620, [\d\s\u202f]+ de gloire jusqu’à Murmure III, Ta lumière au niveau \d+, \p{L}+, \d+ % vers le \d+, Flamme 23 jours, 12 Meeshes, Rêve : \d+ sur \d+, Héritage : Escarcelle, joute de Jade · \d+(re|e)$/u);
   });
 
   test('fr : trophées et saison ne sont dits que dans la disposition grand texte, où ils restent (#11125)', () => {
@@ -158,7 +161,7 @@ describe('ce que lit le lecteur d’écran — une phrase complète', () => {
 
   test('en : l’ordinal anglais de la place', () => {
     const model = shownExtras({ balance: 12, streak: 23 });
-    expect(playerBannerLabel(model, 'en')).toMatch(/^\p{L}+ [IV]+, glory \d+, .*, Level \d+, .*, Flame 23 days, .*, Dream: \d+ of \d+, Legacy: Pouch, Jade joust · \d+(st|nd|rd|th)$/u);
+    expect(playerBannerLabel(model, 'en')).toMatch(/^\p{L}+ [IV]+, glory \d+, .*, Your light at level \d+, .*, Flame 23 days, .*, Dream: \d+ of \d+, Legacy: Pouch, Jade joust · \d+(st|nd|rd|th)$/u);
   });
 
   test('aucune langue ne laisse une clé nue, un paramètre en clair ou un « undefined »', () => {
@@ -221,7 +224,7 @@ describe('les étincelles du bandeau sont la poche', () => {
 
 describe('trophées, mission du jour et saison', () => {
   test('rien à zéro : aucune de ces trois pièces', () => {
-    const model = shown(NEWCOMER);
+    const model = shown(NEWCOMER_NO_DREAM);
     expect(model.trophies).toBeNull();
     expect(model.missions).toBeNull();
     expect(model.season).toBeNull();
@@ -240,10 +243,17 @@ describe('trophées, mission du jour et saison', () => {
     expect(model?.missions).toEqual({ done: game.missions.items.filter((m) => m.completedAt !== null).length, total: game.missions.items.length });
   });
 
-  test('missions verrouillées : pas de pièce', () => {
+  test('missions verrouillées sans acte servi (serveur antérieur) : pas de pièce', () => {
     const game = gameBlockFixture({ ...ZERO, score: 12, debitablePoints: 12 });
     expect(game.missions.unlocked).toBe(false);
     expect(playerBannerModel(game)?.missions ?? null).toBeNull();
+  });
+
+  test('le premier Rêve, sous le niveau 5 : sa pièce dit son acte unique (#17370)', () => {
+    const [easy] = gameFactsFixture().missions;
+    const game = gameBlockFixture({ ...ZERO, missions: [{ ...easy!, progress: 0, completedAt: null }] });
+    expect(game.missions.unlocked).toBe(false);
+    expect(playerBannerModel(game)?.missions).toEqual({ done: 0, total: 1 });
   });
 
   test('une saison ouverte : les étoiles gagnées', () => {
@@ -273,9 +283,9 @@ describe('un nom accessible par pièce', () => {
     expect(bare.trophies).toBeNull();
   });
 
-  test('les noms disent la pièce : le niveau et son palier, les étincelles et la marche vers le suivant', () => {
+  test('les noms disent la pièce : ta lumière, son niveau et son palier (#17394, #19892), les étincelles et la marche vers le suivant', () => {
     const labels = playerBannerPieceLabels(playerBannerModel(gameBlockFixture(NEWCOMER))!, 'fr');
-    expect(labels.level).toMatch(/^Niveau \d+, /);
+    expect(labels.level).toMatch(/^Ta lumière au niveau \d+, /);
     expect(labels.sparks).toContain('Étincelles');
     expect(labels.sparks).toMatch(/vers le/);
   });

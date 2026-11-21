@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Les demandes d'entrée que tranchent les intendants (#19878) — mêmes mots que les clés iOS community.members.requests.* (#19877). -->
+<resources>
+    <string name="community_members_requests_section">Pending requests</string>
+    <string name="community_members_requests_more">See more requests</string>
+    <string name="community_members_requests_accept_label">Accept %1$s’s request</string>
+    <string name="community_members_requests_reject_label">Decline %1$s’s request</string>
+    <string name="community_members_requests_asked">Asked on %1$s</string>
+    <string name="community_members_requests_reject">Decline</string>
+    <string name="community_members_requests_reject_confirm_body">%1$s won’t be able to ask again for seven days.</string>
+    <string name="community_members_requests_accepted">%1$s is now part of the community.</string>
+    <string name="community_members_requests_gone">This request has already been handled.</string>
+    <string name="community_members_requests_failed">The decision didn’t go through. Try again.</string>
+</resources>

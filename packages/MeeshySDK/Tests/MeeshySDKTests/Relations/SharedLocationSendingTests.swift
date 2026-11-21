@@ -14,9 +14,9 @@ struct SharedLocationSendingTests {
 
     @Test func unRelevéDansLeGlobe_partAvecSaPrécisionBornée() {
         let fix = SharedLocationFix(latitude: 48.85, longitude: 2.35, accuracy: 250_000)
-        #expect(fix?.wire["latitude"] == 48.85)
-        #expect(fix?.wire["longitude"] == 2.35)
-        #expect(fix?.wire["accuracy"] == SharedLocationContract.maxRadiusMeters)
+        #expect(fix?.wire["latitude"] as? Double == 48.85)
+        #expect(fix?.wire["longitude"] as? Double == 2.35)
+        #expect(fix?.wire["accuracy"] as? Double == SharedLocationContract.maxRadiusMeters)
     }
 
     @Test func unRelevéHorsDuGlobe_neSeConstruitPas() {

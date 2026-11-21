@@ -52,7 +52,7 @@ class ProgressionConceptModelTest {
         val block = game()
         val served = ProgressionConcepts.served(progress(block), block).map { it.wire }
 
-        assertThat(served.take(6)).containsExactly("level", "points", "meesh", "glory", "flame", "missions").inOrder()
+        assertThat(served.take(6)).containsExactly("glory", "level", "points", "meesh", "flame", "missions").inOrder()
         assertThat(served).doesNotContain("league")
         assertThat(served).doesNotContain("atlas")
     }

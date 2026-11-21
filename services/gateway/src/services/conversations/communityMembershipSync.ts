@@ -2,6 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CommunityMemberJoinVia } from '@meeshy/shared/types/socketio-events';
 import type { CommunityMemberAnnounce, CommunityMemberChange } from '../community-member-broadcast';
 import { USABLE_ACCOUNT_WHERE } from '../relations/usableAccount';
+import { closePendingJoinRequests } from '../community-join-request-lifecycle';
 
 export type CommunityMembershipSyncPrisma = Pick<PrismaClient, 'communityMember' | 'user'>;
 
@@ -146,7 +147,7 @@ export async function planCommunityAdmission(
  * il a touchées, et ne s'annonce pas — la course gagnante l'a fait.
  */
 export async function applyCommunityAdmission(
-  prisma: Pick<PrismaClient, 'communityMember'>,
+  prisma: Pick<PrismaClient, 'communityMember' | 'communityJoinRequest'>,
   communityId: string,
   admission: Extract<CommunityAdmission, { kind: 'admitted' }>,
   announce: CommunityMemberAnnounce,
@@ -169,6 +170,10 @@ export async function applyCommunityAdmission(
   }
   const written = [...reactivated, ...admission.creations];
   announce(written.map((entrant): CommunityMemberChange => ({ kind: 'joined', communityId, ...entrant })));
+  // #19872 — entrer par un salon clôt une demande d'entrée restée en attente. Tout le plan :
+  // une réactivation qu'une course a déjà faite laisse la personne membre quand même.
+  const admitted = [...admission.reactivations, ...admission.creations].map((entrant) => entrant.userId);
+  await closePendingJoinRequests(prisma, { communityId, userIds: admitted, decidedBy: null });
   return written;
 }
 

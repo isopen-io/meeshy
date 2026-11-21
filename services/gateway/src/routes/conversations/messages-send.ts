@@ -30,6 +30,7 @@ import { refuserCommeIntrouvable } from './utils/access-control';
 import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
+import { CLIENT_MESSAGE_ID_TAKEN, CLIENT_MESSAGE_ID_TAKEN_MESSAGE } from '../../services/messaging/clientMessageIdOwnership';
 import {
   ENCRYPTION_ENVELOPE_SHAPE,
   noSilentDowngrade,
@@ -242,7 +243,7 @@ export function registerSendMessageRoute(
         403: errorResponseSchema,
         404: errorResponseSchema,
         409: {
-          description: 'Envoi libsignal refusé (#3706) : E2EE_DEVICES_MISMATCH (Sesame) ou E2EE_REGIME_CHANGED',
+          description: 'Conflit : envoi libsignal refusé (#3706 — E2EE_DEVICES_MISMATCH / E2EE_REGIME_CHANGED), ou clientMessageId déjà pris dans la conversation par un autre expéditeur (#19960 — CLIENT_MESSAGE_ID_TAKEN : renvoyer sous une clé neuve)',
           ...errorResponseSchema,
           properties: {
             ...errorResponseSchema.properties,
@@ -528,6 +529,13 @@ export function registerSendMessageRoute(
             code: ErrorCode.MESSAGE_SEND_RETRYABLE,
             details: { retryAfter }
           });
+        }
+        // #19960 — la clé d'idempotence est tenue par un AUTRE expéditeur :
+        // `409`, pas `400`. La distinction porte : un `400` dit « ta requête
+        // est malformée », quand la requête est bien formée et que c'est la
+        // CLÉ qui doit changer avant tout renvoi.
+        if (result.code === CLIENT_MESSAGE_ID_TAKEN) {
+          return sendError(reply, 409, result.error || CLIENT_MESSAGE_ID_TAKEN_MESSAGE, { code: result.code });
         }
         if (isForwardRefusalCode(result.code) || result.code === E2EE_PLAINTEXT_REFUSED || result.code === SERVER_AT_REST_CIPHERTEXT_REFUSED) {
           return sendBadRequest(reply, result.error || 'Invalid message request', { code: result.code });

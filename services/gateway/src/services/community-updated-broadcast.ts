@@ -27,6 +27,7 @@ import { deferAfterResponse, type AfterResponse } from '../utils/after-response.
 import type { FastifyInstance } from 'fastify';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { broadcastToUser } from '../utils/socket-broadcast';
+import { unescapeSerializedText } from '../utils/serialized-text';
 
 const logger = enhancedLogger.child({ module: 'CommunityUpdatedBroadcast' });
 
@@ -65,8 +66,8 @@ export async function broadcastCommunityUpdated(
   const payload: CommunityUpdatedEventData = {
     communityId: community.id,
     identifier: community.identifier,
-    name: community.name,
-    description: community.description,
+    name: unescapeSerializedText(community.name),
+    description: community.description === null ? null : unescapeSerializedText(community.description),
     avatar: community.avatar,
     banner: community.banner,
     isPrivate: community.isPrivate,

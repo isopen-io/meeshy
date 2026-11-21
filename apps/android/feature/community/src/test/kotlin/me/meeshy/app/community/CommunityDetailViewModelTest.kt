@@ -25,6 +25,8 @@ import me.meeshy.sdk.community.InMemoryCommunityAppearanceStore
 import me.meeshy.sdk.model.ApiCommunity
 import me.meeshy.sdk.model.ApiCommunityMember
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.CommunityJoinOutcome
+import me.meeshy.sdk.model.CommunityJoinRefusal
 import me.meeshy.sdk.model.CommunityLoadFailure
 import me.meeshy.sdk.model.ContentFetchFailure
 import me.meeshy.sdk.net.ApiError
@@ -33,6 +35,7 @@ import me.meeshy.sdk.session.SessionRepository
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import java.time.Instant
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class CommunityDetailViewModelTest {
@@ -116,7 +119,7 @@ class CommunityDetailViewModelTest {
     fun `joining is optimistic and confirmed by the server`() = runTest {
         val vm = viewModel()
         detail.emit(CacheResult.Fresh(community(role = null), 0))
-        val gate = CompletableDeferred<NetworkResult<ApiCommunityMember>>()
+        val gate = CompletableDeferred<NetworkResult<CommunityJoinOutcome>>()
         coEvery { repository.join("c1") } coAnswers { gate.await() }
 
         vm.join()
@@ -125,7 +128,7 @@ class CommunityDetailViewModelTest {
         assertThat(vm.state.value.community?.memberCount).isEqualTo(5)
         assertThat(vm.state.value.isJoining).isTrue()
 
-        gate.complete(NetworkResult.Success(ApiCommunityMember(id = "m", userId = "me")))
+        gate.complete(NetworkResult.Success(CommunityJoinOutcome.Joined(ApiCommunityMember(id = "m", userId = "me"))))
 
         assertThat(vm.effects.first()).isEqualTo(CommunityDetailEffect.Joined)
         assertThat(vm.state.value.isJoining).isFalse()
@@ -143,6 +146,124 @@ class CommunityDetailViewModelTest {
         assertThat(vm.state.value.access?.isMember).isFalse()
         assertThat(vm.state.value.community?.memberCount).isEqualTo(4)
         assertThat(vm.effects.first()).isEqualTo(CommunityDetailEffect.ActionFailed)
+    }
+
+    private fun asking(role: String? = null, request: String? = null) = community(role = null).copy(
+        currentUserRole = role, requiresJoinApproval = true, currentUserJoinRequest = request,
+    )
+
+    @Test
+    fun `a member served by role alone can leave and is offered no join (16602)`() = runTest {
+        val vm = viewModel()
+        detail.emit(CacheResult.Fresh(community(role = null).copy(currentUserRole = "member"), 0))
+
+        assertThat(vm.state.value.access?.isMember).isTrue()
+        assertThat(vm.state.value.access?.canLeave).isTrue()
+        assertThat(vm.state.value.access?.canJoin).isFalse()
+    }
+
+    @Test
+    fun `asking to join shows the request at once without making the reader a member (19870)`() = runTest {
+        val vm = viewModel()
+        detail.emit(CacheResult.Fresh(asking(), 0))
+        val gate = CompletableDeferred<NetworkResult<CommunityJoinOutcome>>()
+        coEvery { repository.join("c1") } coAnswers { gate.await() }
+
+        vm.join()
+
+        assertThat(vm.state.value.joinRequestPending).isTrue()
+        assertThat(vm.state.value.access?.isMember).isFalse()
+        assertThat(vm.state.value.community?.memberCount).isEqualTo(4)
+
+        gate.complete(NetworkResult.Success(CommunityJoinOutcome.Pending("r1")))
+
+        assertThat(vm.state.value.joinRequestPending).isTrue()
+        assertThat(vm.state.value.isJoining).isFalse()
+        assertThat(vm.state.value.access?.isMember).isFalse()
+        coVerify(exactly = 0) { cache.refreshList() }
+    }
+
+    @Test
+    fun `a pending request served by the detail cannot be sent twice`() = runTest {
+        val vm = viewModel()
+        detail.emit(CacheResult.Fresh(asking(request = "pending"), 0))
+
+        vm.join()
+
+        assertThat(vm.state.value.joinRequestPending).isTrue()
+        coVerify(exactly = 0) { repository.join(any()) }
+    }
+
+    @Test
+    fun `a server that answers pending undoes an optimistic membership`() = runTest {
+        val vm = viewModel()
+        detail.emit(CacheResult.Fresh(community(role = null), 0))
+        coEvery { repository.join("c1") } returns NetworkResult.Success(CommunityJoinOutcome.Pending("r1"))
+
+        vm.join()
+
+        assertThat(vm.state.value.joinRequestPending).isTrue()
+        assertThat(vm.state.value.requiresJoinApproval).isTrue()
+        assertThat(vm.state.value.access?.isMember).isFalse()
+        assertThat(vm.state.value.community?.memberCount).isEqualTo(4)
+    }
+
+    @Test
+    fun `a request refused within seven days is said, not retried`() = runTest {
+        val vm = viewModel()
+        detail.emit(CacheResult.Fresh(asking(), 0))
+        coEvery { repository.join("c1") } returns NetworkResult.Failure(ApiError("declined", code = "COMMUNITY_JOIN_COOLDOWN", httpStatus = 403))
+
+        vm.join()
+
+        assertThat(vm.state.value.joinRequestPending).isFalse()
+        assertThat(vm.state.value.joinRefusal).isEqualTo(CommunityJoinRefusal.COOLDOWN)
+        coVerify { cache.refreshDetail("c1") }
+    }
+
+    @Test
+    fun `a refusal served by the detail says until when and sends nothing (19949)`() = runTest {
+        val vm = viewModel()
+        detail.emit(CacheResult.Fresh(asking().copy(currentUserJoinRetryAt = "2099-11-27T12:00:00.000Z"), 0))
+
+        vm.join()
+
+        assertThat(vm.state.value.joinDeclinedUntil).isEqualTo(Instant.parse("2099-11-27T12:00:00Z"))
+        assertThat(vm.state.value.joinRequestPending).isFalse()
+        coVerify(exactly = 0) { repository.join(any()) }
+    }
+
+    @Test
+    fun `the live refusal turns request sent into request declined without a reload (19949)`() = runTest {
+        val vm = viewModel()
+        val sent = asking(request = "pending")
+        detail.emit(CacheResult.Fresh(sent, 0))
+        assertThat(vm.state.value.joinRequestPending).isTrue()
+
+        detail.emit(CacheResult.Fresh(sent.copy(currentUserJoinRequest = null, currentUserJoinRetryAt = "2099-11-27T12:00:00.000Z"), 0))
+
+        assertThat(vm.state.value.joinRequestPending).isFalse()
+        assertThat(vm.state.value.joinDeclinedUntil).isEqualTo(Instant.parse("2099-11-27T12:00:00Z"))
+        coVerify(exactly = 0) { cache.refreshDetail(any()) }
+    }
+
+    @Test
+    fun `a past refusal offers to ask again (19949)`() = runTest {
+        val vm = viewModel()
+        detail.emit(CacheResult.Fresh(asking().copy(currentUserJoinRetryAt = "2020-01-01T00:00:00.000Z"), 0))
+
+        assertThat(vm.state.value.joinDeclinedUntil).isNull()
+        assertThat(vm.state.value.access?.canJoin).isTrue()
+    }
+
+    @Test
+    fun `an accepted request turns the reader into a member and clears the notice`() = runTest {
+        val vm = viewModel()
+        detail.emit(CacheResult.Fresh(asking(request = "pending"), 0))
+        detail.emit(CacheResult.Fresh(asking(role = "member"), 0))
+
+        assertThat(vm.state.value.joinRequestPending).isFalse()
+        assertThat(vm.state.value.access?.isMember).isTrue()
     }
 
     @Test

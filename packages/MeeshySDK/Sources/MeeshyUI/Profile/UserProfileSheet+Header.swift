@@ -66,13 +66,18 @@ extension UserProfileSheet {
         MeeshyCollapsingHero(
             progress: progress,
             title: displayUser.resolvedDisplayName,
-            subtitle: "@\(displayUser.username)",
+            subtitle: ProfileHandleLine.text(
+                username: displayUser.username, memberSince: displayUser.createdAt,
+                locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "fr"),
+                inBar: ProfileHeroPlan.barShowsRelation(progress: progress, topInset: heroTopInset)),
             alignment: .leading,
             expandedHeight: ProfileHeroPlan.expandedHeight,
             collapsedHeight: ProfileHeroPlan.collapsedHeight(topInset: heroTopInset),
             topInset: heroTopInset,
             isLoading: phase == .skeleton,
             keepsBannerInBar: true,
+            avatarSpill: Double(AvatarRingGeometry.spill(
+                shownAvatarRing, avatarSize: CGFloat(MeeshyCollapsingHeroRecipe.avatarExpanded))),
             banner: { heroBanner(progress: progress) },
             leading: { heroCloseButton },
             trailing: { heroTrailing(progress: progress) },
@@ -274,6 +279,7 @@ extension UserProfileSheet {
             onViewStory: ringState != .none ? onViewStory : nil,
             onMoodTap: shownMoodEmoji == nil ? nil : onMoodTap
         ) }
+        // Le cadre à sa taille normalisée (#19988) ; le nom descend de ce qu'il peint sous l'avatar (#19925).
         .avatarRing(
             shownAvatarRing,
             avatarSize: context.size,

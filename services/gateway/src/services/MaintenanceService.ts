@@ -473,6 +473,21 @@ export class MaintenanceService {
       // Trouver tous les attachments qui :
       // 1. Ne sont pas liés à un message (messageId null)
       // 2. Ont été créés il y a plus de 24 heures
+      //
+      // #19801 — CE QUE CETTE CLAUSE APPARIE, ET CE QU'ELLE N'APPARIE PAS.
+      // `{ messageId: null }` est une ÉGALITÉ sous MongoDB : elle exige la clé
+      // PRÉSENTE et nulle. Elle repose donc entièrement sur la discipline
+      // d'ÉCRITURE des créateurs, qui posent tous la clé — `UploadProcessor`
+      // (`messageId: messageId || null`) et `tus-handler` (branche MESSAGE,
+      // depuis #19801). Un futur créateur qui l'omettrait redeviendrait
+      // invisible ici, SANS erreur : ce balayage rendrait une liste vide et
+      // journaliserait qu'il n'a rien trouvé.
+      //
+      // Elle n'apparie pas l'ARRIÉRÉ laissé par `tus-handler` avant #19801 (clé
+      // absente), et c'est VOULU : `...unsetOrNull('messageId')` le ramasserait
+      // d'un coup, c'est-à-dire purgerait une population que personne n'a
+      // mesurée — ce que la directive porteur du 2026-10-03 interdit sans feu
+      // vert. Le sort de cet arriéré est une décision séparée (#19801).
       const orphanedAttachments = await this.prisma.messageAttachment.findMany({
         where: {
           messageId: null,

@@ -55,6 +55,7 @@ import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice';
 import { directLookupWheres, firstFound } from '../../services/conversations/directPair';
+import { highestRankedConversation } from '../../services/conversations/highestRanked';
 import {
   decideCreationRegime,
   directReopeningFor,
@@ -68,7 +69,8 @@ import { isServerAtRestUnavailable } from '../../services/messaging/serverAtRest
 import { announceConversationNew } from '../../services/conversations/obsoleteCapability';
 import { ENCRYPTION_ACTIVATION_RESTRICTED_CODE } from '../../utils/encryption-activation-policy';
 import { ENCRYPTION_MODE_UNSUPPORTED_CODE } from '@meeshy/shared/utils/conversation-creation-encryption';
-import { E2EE_DIRECT_NOT_A_PAIR_MESSAGE, E2EE_ERROR_CODES } from '@meeshy/shared/types/e2ee-directory';
+import { E2EE_DIRECT_NOT_A_PAIR_MESSAGE, E2EE_ERROR_CODES, E2EE_PARTICIPANT_WITHOUT_DEVICE_MESSAGE } from '@meeshy/shared/types/e2ee-directory';
+import { membersWithoutEndToEndDevice } from '../../services/e2ee/members-without-device';
 import { activeMembershipOf } from '../communities/serialization';
 import {
   composeConversationUpdate,
@@ -78,9 +80,7 @@ import {
 
 const logger = enhancedLogger.child({ module: 'conversations/core' });
 
-/**
- * Enregistre `POST /conversations` (création d'une conversation).
- */
+/** Enregistre `POST /conversations` (création d'une conversation). */
 export function registerCreateConversationRoute(
   fastify: FastifyInstance,
   prisma: PrismaClient,
@@ -252,12 +252,23 @@ export function registerCreateConversationRoute(
           { userId, peerId: uniqueParticipantIds[0] },
           { plaintext: reopening === 'readable', endToEnd: reopening === 'end-to-end' },
         );
-        const existingDirect = await firstFound(lookups, (where) => prisma.conversation.findFirst({
-          where,
-          // Des doublons historiques existent (5 DM atabeth↔jcnm datant
-          // d'avant ce fix) : rouvrir la plus RÉCEMMENT ACTIVE, pas une
-          // arbitraire — sinon l'utilisateur retombe sur une DM morte.
-          orderBy: { lastMessageAt: 'desc' },
+        // Des doublons historiques existent (5 DM atabeth↔jcnm datant d'avant ce
+        // fix) : rouvrir la plus RÉCEMMENT ACTIVE, pas une arbitraire — sinon
+        // l'utilisateur retombe sur une DM morte.
+        //
+        // #19835 — « active » est le RANG (max(`lastMessageAt`,
+        // `lastActivityAt`), #9026), pas le dernier message : le doublon où l'on
+        // vient de réagir, de s'appeler ou d'épingler est le vivant.
+        //
+        // **L'ORDRE DES DEUX DÉCISIONS EST STRUCTUREL : `firstFound` DEHORS (le
+        // régime), le rang DEDANS** (#12966, #12949). L'inverse confie le régime
+        // à DEUX résolutions indépendantes — un flux par colonne, lancés
+        // ensemble — et un `e2ee` apparu entre les deux lectures fait servir LE
+        // CLAIR. Mesuré, avec les deux imbrications :
+        // `__tests__/unit/services/conversations/conversation-reopen-regime-before-rank.test.ts`.
+        const existingDirect = await firstFound(lookups, (where) => highestRankedConversation((stream) => prisma.conversation.findFirst({
+          where: { ...where, ...stream.where },
+          orderBy: stream.orderBy,
           include: {
             participants: {
               include: {
@@ -273,7 +284,7 @@ export function registerCreateConversationRoute(
               }
             }
           }
-        }));
+        })));
         if (existingDirect) {
           const callerParticipant = existingDirect.participants.find((p: any) => p.userId === userId);
           const creatorParticipant = existingDirect.participants.find((p: any) => isMemberCreator(p.role ?? 'member'));
@@ -329,6 +340,11 @@ export function registerCreateConversationRoute(
             title: existingDirect.title || null
           }, { statusCode: 200 });
         }
+      }
+
+      // #20073 — un tête-à-tête chiffré ne naît que si chacun a un appareil chiffré ; personne n'est nommé.
+      if (type === 'direct' && regime.mode === 'e2ee' && (await membersWithoutEndToEndDevice(prisma, [userId, ...uniqueParticipantIds])).length > 0) {
+        return sendError(reply, 409, E2EE_PARTICIPANT_WITHOUT_DEVICE_MESSAGE, { code: E2EE_ERROR_CODES.PARTICIPANT_WITHOUT_DEVICE });
       }
 
       // #14107 — chaque membre nommé : direct dès Connaissance, sinon une DEMANDE
@@ -593,9 +609,7 @@ function refuseCreationRegime(reply: FastifyReply, refusal: CreationRegimeRefusa
   });
 }
 
-/**
- * Enregistre `PUT`/`PATCH /conversations/:id` (mise à jour des métadonnées).
- */
+/** Enregistre `PUT`/`PATCH /conversations/:id` (mise à jour des métadonnées). */
 export function registerUpdateConversationRoute(
   fastify: FastifyInstance,
   prisma: PrismaClient,
@@ -856,9 +870,7 @@ export function registerUpdateConversationRoute(
   });
 }
 
-/**
- * Enregistre `DELETE /conversations/:id` (suppression douce d'une conversation).
- */
+/** Enregistre `DELETE /conversations/:id` (suppression douce d'une conversation). */
 export function registerDeleteConversationRoute(
   fastify: FastifyInstance,
   prisma: PrismaClient,

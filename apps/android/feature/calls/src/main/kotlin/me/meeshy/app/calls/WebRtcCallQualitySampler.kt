@@ -55,17 +55,18 @@ class WebRtcCallQualitySampler internal constructor(
                     rttMs = stats.roundTripTimeMs,
                     packetLossPercent = interval.packetLoss * 100.0,
                     jitterMs = stats.jitterMs,
-                    inboundAudioBytes = stats.inboundAudioBytes.toLong(),
-                    inboundVideoBytes = stats.inboundVideoBytes.toLong(),
+                    inboundAudioBytes = stats.inboundAudioBytes,
+                    inboundVideoBytes = stats.inboundVideoBytes,
                     relayed = stats.relayed,
                 ),
             )
             emit(
                 interval.copy(
                     jitterMs = stats.jitterMs,
-                    bytesSent = stats.bandwidth.toLong(),
-                    bytesReceived = stats.bytesReceived.toLong(),
+                    bytesSent = stats.bandwidth,
+                    bytesReceived = stats.bytesReceived,
                     availableOutgoingBitrateBps = stats.availableOutgoingBitrateBps,
+                    media = stats.media,
                 ),
             )
         }

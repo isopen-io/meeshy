@@ -31,7 +31,7 @@ const ActionLink = ({ href, label, ...rest }: { readonly href: string; readonly 
     target="_blank"
     rel="noopener noreferrer"
     className="grid min-h-[48px] place-items-center rounded-card px-4 text-body font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
-    style={{ backgroundColor: 'var(--color-brand)', color: 'var(--color-on-brand, #fff)' }}
+    style={{ backgroundColor: 'var(--color-brand)', /* harmony-exempt: repli d'un jeton de charte défini (--color-on-brand), jamais rendu — filet de contraste de l'encre sur l'aplat de marque */ color: 'var(--color-on-brand, #fff)' }}
   >
     {label}
   </a>

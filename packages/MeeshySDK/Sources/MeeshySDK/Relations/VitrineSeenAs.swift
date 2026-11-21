@@ -87,6 +87,7 @@ public enum VitrineLadder {
         .presenceDnd, .audienceClose, .audienceBlood, .deviceBatteryPull, .callRing,
         .safetyInactivity,
         .deviceCall,
+        .healthFall,
     ]
 
     public static let steps: [Step] = RelationLevel.allCases.map { level in

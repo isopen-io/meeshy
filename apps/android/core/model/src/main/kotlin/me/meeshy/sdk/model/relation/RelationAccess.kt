@@ -96,6 +96,7 @@ public enum class RelationFeature(
     DEVICE_UNREACHABLE("device.unreachable", RelationLevel.CLOSE, requiresConsent = true, emitterConsentDefaultLevel = RelationLevel.BLOOD),
     SAFETY_INACTIVITY("safety.inactivity", RelationLevel.BLOOD, requiresConsent = true, emitterConsentDefaultLevel = RelationLevel.BLOOD),
     DEVICE_CALL("device.call", RelationLevel.BLOOD, requiresConsent = true, emitterConsentDefaultLevel = RelationLevel.BLOOD),
+    HEALTH_FALL("health.fall", RelationLevel.BLOOD, requiresConsent = true, emitterConsentDefaultLevel = RelationLevel.BLOOD),
     ACQUAINTANCE_AUTO("acquaintance.auto", RelationLevel.PUBLIC, isDirected = true, isClosedToTeam = true),
     ;
 

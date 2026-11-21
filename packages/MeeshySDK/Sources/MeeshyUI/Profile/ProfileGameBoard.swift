@@ -85,15 +85,18 @@ public nonisolated struct ProfileGameBoard: Equatable, Sendable {
 public struct ProfileGameBoardView: View {
     private let board: ProfileGameBoard
     private let tint: Color
+    private let title: String
 
-    public init(board: ProfileGameBoard, tint: Color) {
+    /// `title` : « Sa Légende » par défaut ; ma fiche dit « Ma Légende » (#19925).
+    public init(board: ProfileGameBoard, tint: Color, title: String? = nil) {
         self.board = board
         self.tint = tint
+        self.title = title ?? ProfileVitrineCopy.gameTitle
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            MeeshySectionHeader(title: ProfileVitrineCopy.gameTitle)
+            MeeshySectionHeader(title: title)
             MeeshyGroupCard(tint: tint) {
                 VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
                     standing

@@ -56,7 +56,7 @@ final class LentilleRowMuxSourceGuardTests: XCTestCase {
         for path in rows {
             let code = normalizedCode(try source(at: path))
             XCTAssertTrue(code.contains("ring: isDirect ? conversation.participantRing : nil,"), "\(path) doit passer le contour du pair d'une directe à l'avatar, qui le pose dans son empreinte (#10946)")
-            XCTAssertFalse(code.contains(".avatarRingWithin("), "\(path) ne réenveloppe pas l'avatar : un second contour s'y dessinerait")
+            XCTAssertFalse(code.contains(".avatarRing("), "\(path) ne réenveloppe pas l'avatar : un second contour s'y dessinerait")
         }
     }
 

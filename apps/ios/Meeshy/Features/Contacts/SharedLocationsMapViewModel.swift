@@ -19,6 +19,13 @@ struct SharedLocationPin: Identifiable, Equatable {
     /// Le cercle servi avec la position (#17966) ; `nil` : non servi, la carte dessine un marqueur neutre.
     var circle: RelationLevel? = nil
     var updatedAt: Date = .distantPast
+    /// Le mouvement servi avec la position (#19887, précision exacte seulement) ; `nil` : non servi.
+    var motion: SharedLocationMotion? = nil
+
+    /// Le mouvement à montrer maintenant : aucun dès que la position a cinq minutes.
+    func shownMotion(now: Date = Date()) -> SharedLocationMotion? {
+        SharedLocationMotion.shown(motion, updatedAt: updatedAt, now: now)
+    }
 
     var detail: String {
         let until = deadline.formatted(date: .omitted, time: .shortened)
@@ -218,7 +225,8 @@ final class SharedLocationsMapViewModel: ObservableObject {
             deadline: entry.deadline,
             avatarURL: known[userId]?.avatarURL,
             circle: entry.circle,
-            updatedAt: entry.updatedAt
+            updatedAt: entry.updatedAt,
+            motion: entry.motion
         )
     }
 

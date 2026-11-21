@@ -3,7 +3,7 @@ import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { MessageMutationManager } from './broadcastMessageMutation';
 import type { QueuedPayloadFor } from './queuedEventContract';
 import type { ServerEmitTarget } from './serverEmit';
-import { conversationAudienceRooms, loadLiveParticipantTargets } from './conversationAudienceRooms';
+import { conversationAudienceRooms, filterLiveAudience, loadLiveAudience } from './conversationAudienceRooms';
 
 type ViewOnceFact =
   | { eventType: 'consumed'; payload: QueuedPayloadFor<'consumed'> }
@@ -73,12 +73,14 @@ export async function broadcastViewOnceFact(params: ViewOnceFactParams): Promise
       ? { eventType: 'consumed', payload: params.payload }
       : { eventType: 'view-once-purged', payload: params.payload };
 
-  const audience = await loadLiveParticipantTargets(prisma, conversationId, onError);
+  // #20007 — le plafond TRONQUE au lieu de JETER : au-delà de 2 000 vivants, un
+  // fait de vue unique n'est plus perdu pour qui est resté sur la liste.
+  const audience = await loadLiveAudience(prisma, conversationId, { onError });
   try {
     const io = manager.getIO();
     if (fact.eventType === 'consumed') {
       const openerKey = fact.payload.userId;
-      const others = audience.filter((participant) => (participant.userId ?? participant.id) !== openerKey);
+      const others = filterLiveAudience(audience, (participant) => (participant.userId ?? participant.id) !== openerKey);
       emitFact(io?.to(conversationAudienceRooms(conversationId, others)), {
         eventType: 'consumed',
         payload: withoutOpener(fact.payload),

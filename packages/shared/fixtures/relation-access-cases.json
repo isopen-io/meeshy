@@ -3994,6 +3994,99 @@
         "reason": "level",
         "requiresConsent": true
       }
+    },
+    {
+      "id": "fall-blood-consented",
+      "matrix": "Chute détectée (#18748)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "BLOOD",
+        "grantedByTarget": "BLOOD",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "health.fall",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "BLOOD",
+        "reason": "level",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "fall-blood-withdrawn",
+      "matrix": "Chute détectée (#18748)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "BLOOD",
+        "grantedByTarget": "BLOOD",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "health.fall",
+        "consent": "refused"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "BLOOD",
+        "reason": "consent",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "fall-close-gets-nothing",
+      "matrix": "Chute détectée (#18748)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "CLOSE",
+        "grantedByTarget": "CLOSE",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "USER",
+        "feature": "health.fall",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": false,
+        "effectiveLevel": "CLOSE",
+        "reason": "level",
+        "requiresConsent": false
+      }
+    },
+    {
+      "id": "team-analyst-admin-health-fall",
+      "matrix": "Chute détectée (#18748)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "ANALYST",
+        "feature": "health.fall",
+        "targetRole": "ADMIN",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "BLOOD",
+        "reason": "level",
+        "requiresConsent": true
+      }
     }
   ]
 }

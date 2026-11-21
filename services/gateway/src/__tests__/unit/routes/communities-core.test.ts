@@ -43,7 +43,13 @@ jest.mock('../../../utils/pagination', () => ({
 }));
 
 jest.mock('../../../utils/sanitize.js', () => ({
-  SecuritySanitizer: { sanitizeText: (s: string) => s },
+  SecuritySanitizer: { sanitizeText: (s: string) => s, sanitizePlainText: (s: string) => s },
+}));
+
+const scheduleJoinRequested = jest.fn();
+jest.mock('../../../services/community-join-request-broadcast', () => ({
+  ...(jest.requireActual('../../../services/community-join-request-broadcast') as object),
+  scheduleCommunityJoinRequestedFrom: (...args: unknown[]) => scheduleJoinRequested(...args),
 }));
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
@@ -386,13 +392,34 @@ describe('GET /communities/:id — demande d\'entrée du lecteur (#19868)', () =
     return { res, findJoinRequest };
   }
 
+  it('une acceptation orpheline rouverte par le détail s\'annonce aux intendants (#20002)', async () => {
+    scheduleJoinRequested.mockClear();
+    const decidedAt = new Date(Date.now() - 3_600_000);
+    const orphan = { id: 'req-orphan', userId: USER_ID, decidedAt, decidedBy: OTHER_USER_ID, createdAt: new Date(decidedAt.getTime() - 60_000) };
+    const app = await buildApp('USER', {
+      community: { findFirst: jest.fn<any>().mockResolvedValue(validating) },
+      communityMember: { findMany: jest.fn<any>().mockResolvedValue([]), findFirst: jest.fn<any>().mockResolvedValue(null) },
+      communityJoinRequest: {
+        findMany: jest.fn<any>(async ({ where }: any) => (where.status === 'accepted' ? [orphan] : [{ ...orphan, status: 'accepted' }])),
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+        findFirst: jest.fn<any>().mockResolvedValue({ id: 'req-orphan' }),
+      },
+    });
+    const res = await app.inject({ method: 'GET', url: `/communities/${COMMUNITY_ID}` });
+    await app.close();
+
+    expect(res.json().data.currentUserJoinRequest).toBe('pending');
+    expect(scheduleJoinRequested).toHaveBeenCalledWith(expect.anything(), { communityId: COMMUNITY_ID, requestId: 'req-orphan', userId: USER_ID });
+    expect(JSON.stringify(res.json())).not.toContain('req-orphan');
+  });
+
   it('sert « pending » au non-membre qui a une demande en attente, lue sur SA demande seulement', async () => {
     const { res, findJoinRequest } = await detailWith(validating, { id: 'req-1' });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.currentUserJoinRequest).toBe('pending');
     expect(res.json().data.requiresJoinApproval).toBe(true);
     expect(findJoinRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { communityId: COMMUNITY_ID, userId: USER_ID, status: 'pending' } }),
+      expect.objectContaining({ where: { communityId: COMMUNITY_ID, userId: USER_ID, status: 'pending', createdAt: { gte: expect.any(Date) } } }),
     );
   });
 
@@ -786,6 +813,30 @@ describe('POST /communities/:id/conversations/:conversationId — success', () =
   });
 });
 
+describe('POST /communities/:id/conversations/:conversationId — effectif actif (#19541)', () => {
+  const update = jest.fn<any>().mockResolvedValue({ ...mockConversation, memberCount: 0, _count: { messages: 0, participants: 2 } });
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    app = await buildApp('USER', {
+      community: {
+        findFirst: jest.fn<any>().mockResolvedValue({ id: COMMUNITY_ID, createdBy: USER_ID, members: [{ userId: USER_ID, role: 'admin' }] }),
+        findUnique: jest.fn<any>().mockResolvedValue(null),
+      },
+      conversation: { findFirst: jest.fn<any>().mockResolvedValue(mockConversation), update },
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('sert l\'effectif ACTIF compté à la lecture, jamais la colonne morte, et ne nomme que les actifs', async () => {
+    const res = await app.inject({ method: 'POST', url: `/communities/${COMMUNITY_ID}/conversations/${CONVERSATION_ID}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.memberCount).toBe(2);
+    const include = update.mock.calls[0]?.[0]?.include;
+    expect(include?._count?.select?.participants).toEqual({ where: { isActive: true } });
+    expect(include?.participants?.where).toEqual({ isActive: true });
+  });
+});
+
 describe('POST /communities/:id/conversations/:conversationId — DB error', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
@@ -804,5 +855,65 @@ describe('POST /communities/:id/conversations/:conversationId — DB error', () 
     });
     expect(res.statusCode).toBe(500);
     expect(res.json().success).toBe(false);
+  });
+});
+
+// #19879 — le détail dit au lecteur refusé QUAND il pourra redemander
+describe('GET /communities/:id — date de la prochaine demande après un refus (#19879)', () => {
+  const validating = { ...mockCommunity, createdBy: OTHER_USER_ID, isPrivate: false, requiresJoinApproval: true, members: [] };
+  const decidedAt = new Date(Date.now() - 2 * 24 * 3_600_000);
+
+  async function detailWith(community: unknown, rows: { pending: unknown; rejected: unknown }) {
+    const findJoinRequest = jest.fn<any>(async ({ where }: any) => (where.status === 'rejected' ? rows.rejected : rows.pending));
+    const app = await buildApp('USER', {
+      community: { findFirst: jest.fn<any>().mockResolvedValue(community) },
+      communityJoinRequest: { findFirst: findJoinRequest },
+    });
+    const res = await app.inject({ method: 'GET', url: `/communities/${COMMUNITY_ID}` });
+    await app.close();
+    return { res, findJoinRequest };
+  }
+
+  it('sert la fin du délai de sept jours au non-membre refusé récemment, lue sur SA demande seulement', async () => {
+    const { res, findJoinRequest } = await detailWith(validating, { pending: null, rejected: { decidedAt } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.currentUserJoinRequest).toBeNull();
+    expect(res.json().data.currentUserJoinRetryAt).toBe(new Date(decidedAt.getTime() + 7 * 24 * 3_600_000).toISOString());
+    const lookup = findJoinRequest.mock.calls.find((c: any) => c[0].where.status === 'rejected')?.[0] as any;
+    expect(lookup.where).toEqual({ communityId: COMMUNITY_ID, userId: USER_ID, status: 'rejected', decidedAt: { gte: expect.any(Date) } });
+  });
+
+  it('ne sert ni qui a refusé, ni l\'identifiant de la demande', async () => {
+    const { res } = await detailWith(validating, { pending: null, rejected: { id: 'req-9', decidedAt, decidedBy: 'steward-7' } });
+    const served = JSON.stringify(res.json().data);
+    expect(served).not.toContain('req-9');
+    expect(served).not.toContain('steward-7');
+  });
+
+  it('sert null sans refus récent, et quand une demande est en attente', async () => {
+    expect((await detailWith(validating, { pending: null, rejected: null })).res.json().data.currentUserJoinRetryAt).toBeNull();
+    const withPending = await detailWith(validating, { pending: { id: 'req-1' }, rejected: { decidedAt } });
+    expect(withPending.res.json().data.currentUserJoinRequest).toBe('pending');
+    expect(withPending.res.json().data.currentUserJoinRetryAt).toBeNull();
+  });
+
+  it('ne lit aucun refus pour un membre ni pour une communauté à entrée directe', async () => {
+    const member = await detailWith({ ...validating, members: [{ userId: USER_ID, role: 'member' }] }, { pending: null, rejected: { decidedAt } });
+    expect(member.res.json().data.currentUserJoinRetryAt).toBeNull();
+    expect(member.findJoinRequest).not.toHaveBeenCalled();
+    const open = await detailWith({ ...validating, requiresJoinApproval: false }, { pending: null, rejected: { decidedAt } });
+    expect(open.res.json().data.currentUserJoinRetryAt).toBeNull();
+    expect(open.findJoinRequest).not.toHaveBeenCalled();
+  });
+
+  it('une lecture qui lève ne fait pas tomber le détail (null)', async () => {
+    const app = await buildApp('USER', {
+      community: { findFirst: jest.fn<any>().mockResolvedValue(validating) },
+      communityJoinRequest: { findFirst: jest.fn<any>(async ({ where }: any) => { if (where.status === 'rejected') throw new Error('mongo'); return null; }) },
+    });
+    const res = await app.inject({ method: 'GET', url: `/communities/${COMMUNITY_ID}` });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.currentUserJoinRetryAt).toBeNull();
   });
 });

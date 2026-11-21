@@ -53,10 +53,22 @@ enum GameProfileBoardRules {
     }
 }
 
+/// Ce que la carte pose tant qu'aucun jeu n'est servi : rien chez un autre, l'entrée « Ma Légende » sur ma fiche.
+enum GameProfileBoardFallback: Equatable {
+    case nothing
+    case legend(ProfileLegendSummary?)
+}
+
 /// La carte « Sa Légende » qu'injecte l'app dans la Vitrine (`ProfileGameSection.card`).
 struct GameProfileBoardSource: View {
     let userId: String
     let tint: Color
+    /// Le titre de la carte : « Sa Légende » chez un autre, « Ma Légende » sur ma fiche (#19925).
+    var title: String? = nil
+    /// Toucher la carte mène quelque part (ma fiche : le tableau de bord Progression) ; `nil` : la carte se lit.
+    var onOpen: (() -> Void)? = nil
+    /// Ce qui se pose tant qu'aucun jeu n'est servi.
+    var fallback: GameProfileBoardFallback = .nothing
     var loader = GameShowcaseLoader()
     var standingLoader = GameUserGameLoader()
 
@@ -68,8 +80,10 @@ struct GameProfileBoardSource: View {
         ZStack(alignment: .leading) {
             GameLoadAnchor()
             if let board = GameProfileBoardRules.board(read, for: userId, hidden: prefs.prefs.hidden) {
-                ProfileGameBoardView(board: board, tint: tint)
+                card(board)
                     .transition(.opacity)
+            } else if case .legend(let summary) = fallback, let onOpen {
+                ProfileProgressionEntry(summary: summary, action: onOpen)
             }
         }
         .task(id: userId) {
@@ -78,6 +92,22 @@ struct GameProfileBoardSource: View {
                                                          standing: standingLoader, paintCached: { read = $0 }) {
                 read = fresh
             }
+        }
+    }
+
+    @ViewBuilder
+    private func card(_ board: ProfileGameBoard) -> some View {
+        let view = ProfileGameBoardView(board: board, tint: tint, title: title)
+        if let onOpen {
+            Button {
+                HapticFeedback.light()
+                onOpen()
+            } label: { view.contentShape(Rectangle()) }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityIdentifier("profile.legend")
+        } else {
+            view
         }
     }
 }

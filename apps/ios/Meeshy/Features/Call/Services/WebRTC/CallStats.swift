@@ -214,29 +214,43 @@ extension CallStats {
         }
     }
 
-    /// #8698 — the route of the SELECTED ICE pair: the transport's
-    /// `selectedCandidatePairId`, else the nominated succeeded pair. Relayed as
-    /// soon as either end is a `relay` candidate; `nil` when nothing is known.
+    /// #8698 — the route of the SELECTED ICE pair (`selectedCandidatePair`).
+    /// Relayed as soon as either end is a `relay` candidate; `nil` when nothing
+    /// is known.
     static func relayedRoute(in entries: [RawEntry]) -> Bool? {
-        let byId = Dictionary(entries.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let selectedId = entries.first { $0.type == "transport" }?.strings["selectedCandidatePairId"]
-        let nominated = entries.first {
-            $0.type == "candidate-pair" && $0.strings["state"] == "succeeded" && ($0.values["nominated"] ?? 0) > 0
-        }
-        guard let pair = selectedId.flatMap({ byId[$0] }) ?? nominated else { return nil }
+        let byId = Dictionary(entries.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+        guard let pair = selectedCandidatePair(in: entries) else { return nil }
         let candidateTypes = [pair.strings["localCandidateId"], pair.strings["remoteCandidateId"]]
             .compactMap { $0.flatMap { byId[$0]?.strings["candidateType"] } }
         guard !candidateTypes.isEmpty else { return nil }
         return candidateTypes.contains("relay")
     }
 
+    /// #20098 — the SELECTED ICE pair, always a `candidate-pair`: the one the
+    /// transport's `selectedCandidatePairId` names, else (that id absent or
+    /// naming an entry of another type) the nominated succeeded pair; `nil`
+    /// otherwise. Route, RTT and available outgoing bitrate all read it, as on
+    /// Android (`CallStats.selectedCandidatePair`, #19953).
+    static func selectedCandidatePair(in entries: [RawEntry]) -> RawEntry? {
+        let pairs = entries.filter { $0.type == "candidate-pair" }
+        let selectedId = entries.first { $0.type == "transport" }?.strings["selectedCandidatePairId"]
+        let nominated = pairs.first { $0.strings["state"] == "succeeded" && ($0.values["nominated"] ?? 0) > 0 }
+        return selectedId.flatMap { id in pairs.last { $0.id == id } } ?? nominated
+    }
+
+    /// #20098 — a pair measure read on the elected pair; with no elected pair,
+    /// or one lacking the field, on the last `candidate-pair` carrying it.
+    private static func pairMeasure(_ key: String, elected: RawEntry?, in entries: [RawEntry]) -> Double? {
+        elected?.values[key] ?? entries.last { $0.type == "candidate-pair" && $0.values[key] != nil }?.values[key]
+    }
+
     /// Pure reducer (§5.7 fix for bug j). Resolves the real codec name via
     /// `codecId → codec.mimeType` (the legacy code stored the stats-graph
     /// reference id, e.g. `"COT01_111"`, instead of `"opus"`/`"H264"`) and keeps
-    /// inbound audio/video separate.
+    /// inbound audio/video separate. RTT and available outgoing bitrate come
+    /// from the SELECTED pair (#20098); with no elected pair, or an elected
+    /// pair lacking the field, the last `candidate-pair` carrying it wins.
     static func reduce(entries: [RawEntry]) -> CallStats {
-        var rtt = 0.0
-        var availableOutgoingBitrateBps = 0
         var packetsLost = 0
         var bytesSent = 0
         var bytesReceived = 0
@@ -258,28 +272,25 @@ extension CallStats {
 
         for entry in entries {
             switch entry.type {
-            case "candidate-pair":
-                if let value = entry.values["currentRoundTripTime"] { rtt = value * 1000 }
-                if let bps = entry.values["availableOutgoingBitrate"] { availableOutgoingBitrateBps = Int(bps) }
             case "inbound-rtp":
-                if let lost = entry.values["packetsLost"] { packetsLost += Int(lost) }
-                let received = Int(entry.values["packetsReceived"] ?? 0)
-                let receivedBytes = Int(entry.values["bytesReceived"] ?? 0)
+                if let lost = entry.values["packetsLost"] { packetsLost = CallStatValue.sum(packetsLost, CallStatValue.count(lost)) }
+                let received = CallStatValue.count(entry.values["packetsReceived"] ?? 0)
+                let receivedBytes = CallStatValue.count(entry.values["bytesReceived"] ?? 0)
                 if entry.kind == "video" {
-                    inboundVideo += received
-                    inboundVideoBytes += receivedBytes
+                    inboundVideo = CallStatValue.sum(inboundVideo, received)
+                    inboundVideoBytes = CallStatValue.sum(inboundVideoBytes, receivedBytes)
                 } else {
-                    inboundAudio += received
-                    inboundAudioBytes += receivedBytes
+                    inboundAudio = CallStatValue.sum(inboundAudio, received)
+                    inboundAudioBytes = CallStatValue.sum(inboundAudioBytes, receivedBytes)
                     // libwebrtc reports jitter in seconds; accumulate for mean across audio streams
-                    if let j = entry.values["jitter"] { audioJitterSum += j; audioJitterCount += 1 }
+                    if let j = entry.values["jitter"], j.isFinite, j >= 0 { audioJitterSum += j; audioJitterCount += 1 }
                     audioLevel = max(audioLevel, entry.values["audioLevel"] ?? 0)
                 }
-                bytesReceived += receivedBytes
+                bytesReceived = CallStatValue.sum(bytesReceived, receivedBytes)
                 if primaryCodecId == nil { primaryCodecId = entry.codecId }
             case "outbound-rtp":
-                outbound += Int(entry.values["packetsSent"] ?? 0)
-                bytesSent += Int(entry.values["bytesSent"] ?? 0)
+                outbound = CallStatValue.sum(outbound, CallStatValue.count(entry.values["packetsSent"] ?? 0))
+                bytesSent = CallStatValue.sum(bytesSent, CallStatValue.count(entry.values["bytesSent"] ?? 0))
             case "media-source" where entry.kind == "audio":
                 localAudioLevel = max(localAudioLevel, entry.values["audioLevel"] ?? 0)
             default:
@@ -291,7 +302,11 @@ extension CallStats {
             .flatMap { codecMime[$0] }
             .map { mime in mime.split(separator: "/").last.map(String.init) ?? mime }
 
-        let jitterMs = audioJitterCount > 0 ? (audioJitterSum / Double(audioJitterCount)) * 1000 : 0
+        let elected = selectedCandidatePair(in: entries)
+        let rtt = pairMeasure("currentRoundTripTime", elected: elected, in: entries).map { CallStatValue.measured($0 * 1000) } ?? 0
+        let availableOutgoingBitrateBps = pairMeasure("availableOutgoingBitrate", elected: elected, in: entries).map(CallStatValue.count) ?? 0
+
+        let jitterMs = audioJitterCount > 0 ? CallStatValue.measured((audioJitterSum / Double(audioJitterCount)) * 1000) : 0
 
         return CallStats(
             roundTripTimeMs: rtt,
@@ -299,7 +314,7 @@ extension CallStats {
             bandwidth: bytesSent,
             bytesReceived: bytesReceived,
             codec: resolvedCodec,
-            inboundPacketsReceived: inboundAudio + inboundVideo,
+            inboundPacketsReceived: CallStatValue.sum(inboundAudio, inboundVideo),
             inboundAudioPackets: inboundAudio,
             inboundVideoPackets: inboundVideo,
             outboundPacketsSent: outbound,
@@ -343,14 +358,41 @@ nonisolated struct CallMediaQuality: Equatable, Sendable {
         let somme = { (flux: [CallStats.RawEntry], cle: String) in flux.reduce(0.0) { $0 + ($1.values[cle] ?? 0) } }
         let emissions = somme(audio, "jitterBufferEmittedCount")
         return CallMediaQuality(
-            freezeCount: Int(somme(video, "freezeCount")),
-            totalFreezesDuration: somme(video, "totalFreezesDuration"),
+            freezeCount: CallStatValue.count(somme(video, "freezeCount")),
+            totalFreezesDuration: CallStatValue.measured(somme(video, "totalFreezesDuration")),
             framesPerSecond: video.compactMap { $0.values["framesPerSecond"] }.max() ?? 0,
             qualityLimitationReason: entries.first { $0.type == "outbound-rtp" && $0.kind == "video" }?
                 .strings["qualityLimitationReason"],
-            jitterBufferDelayMs: emissions > 0 ? somme(audio, "jitterBufferDelay") / emissions * 1000 : nil,
-            concealedSamples: Int(somme(audio, "concealedSamples")),
-            nackCount: Int(somme(video, "nackCount")),
-            pliCount: Int(somme(video, "pliCount")))
+            jitterBufferDelayMs: emissions > 0 ? CallStatValue.measured(somme(audio, "jitterBufferDelay") / emissions * 1000) : nil,
+            concealedSamples: CallStatValue.count(somme(audio, "concealedSamples")),
+            nackCount: CallStatValue.count(somme(video, "nackCount")),
+            pliCount: CallStatValue.count(somme(video, "pliCount")))
+    }
+}
+
+// MARK: - Aberrant values (#19933)
+
+/// **Une mesure aberrante n'est pas une mesure** : `getStats` peut rendre NaN,
+/// l'infini, un négatif ou un compteur démesuré. Une valeur non finie ou
+/// négative vaut 0 (non mesurée), et un compteur au-delà de 2^53 − 1 aussi,
+/// comme sur le web : la passerelle (zod 4, `.int()`) refuse tout le
+/// `call:analytics` pour un entier hors de `Number.MAX_SAFE_INTEGER`. Les cumuls
+/// plafonnent au même seuil, si bien que la somme de deux compteurs ne déborde
+/// jamais `Int` en aval (`WebRTCService.intervalLossRatio`).
+nonisolated enum CallStatValue {
+    static let maxSafeCount = 9_007_199_254_740_991
+
+    static func measured(_ value: Double) -> Double {
+        value.isFinite && value > 0 ? value : 0
+    }
+
+    static func count(_ value: Double) -> Int {
+        let valid = measured(value)
+        return valid > Double(maxSafeCount) ? 0 : Int(valid)
+    }
+
+    static func sum(_ lhs: Int, _ rhs: Int) -> Int {
+        let (total, overflow) = lhs.addingReportingOverflow(rhs)
+        return overflow ? maxSafeCount : min(total, maxSafeCount)
     }
 }

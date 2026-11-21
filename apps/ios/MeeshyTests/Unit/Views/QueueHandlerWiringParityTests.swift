@@ -29,7 +29,7 @@ final class QueueHandlerWiringParityTests: XCTestCase {
 
     func test_storyPublishExecutor_isWiredInBothRoots() throws {
         let roots = [
-            "Meeshy/Features/Main/Views/RootView.swift",
+            "Meeshy/Features/Main/Views/RootView+Services.swift",
             "Meeshy/Features/Main/Views/iPadRootView.swift"
         ]
 

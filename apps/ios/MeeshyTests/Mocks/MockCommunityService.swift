@@ -7,16 +7,23 @@ enum CommunityStubs {
         name: String = "Alpha",
         createdBy: String = "u-creator",
         members: [APICommunityMember]? = nil,
-        currentUserRole: String? = nil
+        currentUserRole: String? = nil,
+        requiresJoinApproval: Bool? = nil,
+        currentUserJoinRequest: String? = nil,
+        currentUserJoinRetryAt: String? = nil
     ) -> APICommunity {
         let membersJSON = members
             .flatMap { try? JSONEncoder().encode($0) }
             .map { String(decoding: $0, as: UTF8.self) } ?? "null"
         let roleJSON = currentUserRole.map { "\"\($0)\"" } ?? "null"
+        let approvalJSON = requiresJoinApproval.map { "\($0)" } ?? "null"
+        let requestJSON = currentUserJoinRequest.map { "\"\($0)\"" } ?? "null"
+        let retryJSON = currentUserJoinRetryAt.map { "\"\($0)\"" } ?? "null"
         let json = """
         {"id":"\(id)","identifier":"mshy_\(id)","name":"\(name)","isPrivate":false,
          "createdBy":"\(createdBy)","createdAt":"2026-09-01T10:00:00.000Z","members":\(membersJSON),
-         "currentUserRole":\(roleJSON)}
+         "currentUserRole":\(roleJSON),"requiresJoinApproval":\(approvalJSON),"currentUserJoinRequest":\(requestJSON),
+         "currentUserJoinRetryAt":\(retryJSON)}
         """
         return JSONStub.decode(json)
     }
@@ -25,6 +32,17 @@ enum CommunityStubs {
         JSONStub.decode("""
         {"id":"\(id)","communityId":"c1","userId":"\(userId)","role":"\(role)"}
         """)
+    }
+
+    static func joinRequest(id: String, userId: String, name: String = "Ana") -> APICommunityJoinRequest {
+        APICommunityJoinRequest(
+            id: id, userId: userId, name: name, username: name.lowercased(), avatar: nil, country: "FR",
+            createdAt: Date(timeIntervalSince1970: 1_790_000_000)
+        )
+    }
+
+    static func joinRequested(communityId: String = "c1", requestId: String = "r9", userId: String = "u-asker") -> CommunityJoinRequestedEvent {
+        CommunityJoinRequestedEvent(communityId: communityId, requestId: requestId, userId: userId, pendingCount: 1, at: "2026-11-20T10:00:00.000Z")
     }
 
     static func communityUpdated(communityId: String = "c1", name: String, isPrivate: Bool = true, memberCount: Int = 9) -> CommunityUpdatedEvent {
@@ -123,7 +141,28 @@ final class MockCommunityService: CommunityServiceProviding, @unchecked Sendable
         try voidResult.get()
     }
 
-    func join(communityId: String) async throws -> APICommunityMember { try addMemberResult.get() }
+    var joinResult: Result<CommunityJoinOutcome, Error> = .success(.joined(CommunityStubs.member(id: "m", userId: "u", role: "member")))
+    private(set) var joinCallCount = 0
+    func join(communityId: String) async throws -> CommunityJoinOutcome {
+        joinCallCount += 1
+        return try joinResult.get()
+    }
+
+    var joinRequestsResult: Result<CommunityJoinRequestPage, Error> = .success(CommunityJoinRequestPage(requests: [], nextCursor: nil))
+    private(set) var joinRequestsCallCount = 0
+    private(set) var lastJoinRequestsCursor: String?
+    func joinRequests(communityId: String, cursor: String?, limit: Int) async throws -> CommunityJoinRequestPage {
+        joinRequestsCallCount += 1
+        lastJoinRequestsCursor = cursor
+        return try joinRequestsResult.get()
+    }
+
+    var decideResult: Result<APICommunityMember?, Error> = .success(nil)
+    private(set) var decisions: [(requestId: String, decision: CommunityJoinRequestDecision)] = []
+    func decideJoinRequest(communityId: String, requestId: String, decision: CommunityJoinRequestDecision) async throws -> APICommunityMember? {
+        decisions.append((requestId, decision))
+        return try decideResult.get()
+    }
 
     func leave(communityId: String) async throws {
         leaveCallCount += 1

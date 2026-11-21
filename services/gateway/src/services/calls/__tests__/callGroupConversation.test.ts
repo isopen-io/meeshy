@@ -1,5 +1,6 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { createCallGroup, exactMembers, findExactCallGroups } from '../callGroupConversation';
+import { findConversationsIn, type DirectDoc } from '../../../__tests__/helpers/direct-pair-world';
 
 const CALL = '64b7f0c2a1b2c3d4e5f60718';
 
@@ -30,22 +31,37 @@ const group = (id: string, ids: string[], overrides: Partial<Group> = {}): Group
   ...overrides,
 });
 
-const fakePrisma = (groups: Group[], liveCalls: Record<string, string> = {}) => ({
+/**
+ * Le double ÉVALUE le `where` entier, il ne le ré-interprète pas (#19906 bis).
+ *
+ * Il a longtemps lu `where.AND` comme une liste de clauses de participation —
+ * `where.AND.map((clause) => clause.participants.some.userId)` — ce qui en faisait
+ * un double qui mentait par ce qu'il ACCEPTE : il ignorait en silence tout ce que
+ * la production ajoutait au `where`, et il a cassé bruyamment (`TypeError`) le jour
+ * où l'éligibilité y est descendue. Les deux moitiés de ce défaut sont dans la
+ * doctrine du dépôt : un double partiel perd ce que le module GAGNE, et un double
+ * ment aussi par ce qu'il accepte.
+ *
+ * `findConversationsIn` délègue à `matchesMongoWhere` : la relation `participants`
+ * (`some` / `every` / `none`), les prédicats `unsetOrNull` de l'éligibilité, la
+ * séparation de la clé ABSENTE et de la clé NULLE, l'ordre et la borne. Le double
+ * ne décide donc plus de ce que la requête veut dire — il l'applique.
+ */
+const fakePrisma = (groups: Group[], liveCalls: Record<string, string> = {}) => {
+  const monde = findConversationsIn(groups as unknown as DirectDoc[]);
+  return {
   conversation: {
-    findMany: jest.fn(async ({ where }: { where: { AND: Array<{ participants: { some: { userId: string } } }> } }) => {
-      const required = where.AND.map((clause) => clause.participants.some.userId);
-      return groups
-        .filter((g) => g.type === 'group')
-        .filter((g) => required.every((u) => g.participants.some((p) => p.userId === u && p.isActive)))
-        .map((g) => ({ ...g, participants: g.participants.filter((p) => p.isActive) }));
-    }),
+    findMany: jest.fn(async (args: never) =>
+      (await monde.findMany(args)).map((g) => ({ ...g, participants: g.participants.filter((p) => p.isActive) }))
+    ),
   },
   callSession: {
     findMany: jest.fn(async ({ where }: { where: { id: { in: string[] } } }) =>
       where.id.in.filter((id) => liveCalls[id]).map((id) => ({ id, status: liveCalls[id] }))
     ),
   },
-});
+  };
+};
 
 const find = (groups: Group[], liveCalls: Record<string, string> = {}) =>
   findExactCallGroups(fakePrisma(groups, liveCalls) as never, { callId: CALL, memberUserIds: ['alice', 'bob', 'dave'] });

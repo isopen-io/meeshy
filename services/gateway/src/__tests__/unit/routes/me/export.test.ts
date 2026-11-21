@@ -330,6 +330,23 @@ describe('GET /export — couleur d’accent de la vitrine (#19201)', () => {
   });
 });
 
+describe('GET /export — accord aux alertes de chute (#18748)', () => {
+  it('lit et rend la date et la version de l’accord dans la section profile', async () => {
+    const consentedAt = new Date('2026-11-19T09:00:00.000Z');
+    const mocks = {
+      ...makeMocks(),
+      userFindUnique: jest.fn<any>().mockResolvedValue({ ...mockUser, fallAlertConsentedAt: consentedAt, fallAlertConsentVersion: '2026-11-19' }),
+    };
+    const { app } = await buildApp({ mocks });
+    const res = await app.inject({ method: 'GET', url: '/export?types=profile' });
+    expect(res.statusCode).toBe(200);
+    const [{ select }] = mocks.userFindUnique.mock.calls[0] as [{ select: Record<string, boolean> }];
+    expect(select).toMatchObject({ fallAlertConsentedAt: true, fallAlertConsentVersion: true });
+    expect(res.json().data.profile).toMatchObject({ fallAlertConsentedAt: consentedAt.toISOString(), fallAlertConsentVersion: '2026-11-19' });
+    await app.close();
+  });
+});
+
 describe('GET /export — visites de mon lien de profil (#19206)', () => {
   it('rend, dans la section profile, chaque jour compté et son nombre de visites', async () => {
     const profileLinkVisits = jest.fn<any>().mockResolvedValue([{ day: new Date('2026-11-17T00:00:00.000Z'), visits: 57 }]);

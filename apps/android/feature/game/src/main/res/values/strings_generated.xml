@@ -642,11 +642,13 @@
     <string name="game_frappe_ancestors_prism">every thousandth coin unites every language</string>
     <string name="game_frappe_ancestors_title">Your ancestors send a sign</string>
     <string name="game_frappe_glory">+%1$s glory</string>
+    <string name="game_frappe_glory_toward">%1$s glory to %2$s</string>
     <string name="game_frappe_light">your light</string>
     <string name="game_frappe_refused_light">Your light isn’t enough yet. Your next sparks will feed it.</string>
     <string name="game_frappe_refused_locked">Your Legacy is waiting for a higher rank. Your glory will open it, and we’ll mint.</string>
     <string name="game_frappe_refused_offline">No connection right now. As soon as it’s back, we mint.</string>
     <string name="game_frappe_refused_unknown">The mint didn’t happen. Nothing is lost: your light is whole.</string>
+    <string name="game_frappe_risen">They call you %1$s</string>
     <string name="game_frappe_say_gold">No. %1$s is gold. Your ancestors saw it.</string>
     <string name="game_frappe_say_prism">No. %1$s is prism: every language shines in it.</string>
     <string name="game_frappe_say_silver">No. %1$s joins your Legacy.</string>
@@ -765,7 +767,7 @@
     <string name="game_level_cap_reached">Level %1$s: the highest your rank opens. The %2$s rank opens what comes next.</string>
     <string name="game_level_cap_short">opens at the %1$s rank</string>
     <string name="game_level_held">Your light already opens the way: %1$s to pass level %2$s.</string>
-    <string name="game_level_ring_a11y">Level %1$s, %2$s, %3$s phase of your light</string>
+    <string name="game_level_ring_a11y">Your light at level %1$s, %2$s, %3$s phase</string>
     <string name="game_level_step_done">passed</string>
     <string name="game_level_step_flame">keep a %1$s-day Flame</string>
     <string name="game_level_step_line">Level %1$s trial: %2$s</string>

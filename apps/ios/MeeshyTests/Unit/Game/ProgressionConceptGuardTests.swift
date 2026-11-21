@@ -318,7 +318,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
         }
 
         XCTAssertEqual(GameRulesGlossary.keys.map { $0.rawValue }, [
-            "level", "steps", "points", "meesh", "treasury", "glory", "flame", "missions", "chest", "league", "season", "duo",
+            "glory", "level", "steps", "points", "meesh", "treasury", "flame", "missions", "chest", "league", "season", "duo",
             "prestige", "elans", "tailwind", "badges", "defis", "succes", "showcase", "atlas",
         ])
         let entries = GameRulesGlossary.entries

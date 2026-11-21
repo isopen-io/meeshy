@@ -540,9 +540,6 @@ const PENDING_CLIENT_ENTRIES = {
   // Les entrées d'un lien de communauté (#19429, besoin #19290, chantier #18857) : iOS les lira d'abord
   // (fiche `Lien-Communaute`) ; le web et Android avec leur fiche de lien.
   'communities.byIdEntriesStats': { issue: 19429, reason: 'GET /communities/:id/entries/stats — « N entrées par ce lien », « N cette semaine », la série sur 30 jours' },
-  'communities.byIdJoinRequests': { issue: 19429, reason: 'GET /communities/:id/join-requests — « En attente de validation »' },
-  'communities.byIdJoinRequestsByRequestIdAccept': { issue: 19429, reason: 'POST …/join-requests/:requestId/accept — le bouton Accepter' },
-  'communities.byIdJoinRequestsByRequestIdReject': { issue: 19429, reason: 'POST …/join-requests/:requestId/reject — le bouton Refuser' },
   // Stories « à la une » servies par la passerelle (#19394, chantier #18857) : les clients liront le rail
   // « À la une » de la Vitrine (K20) et l'auteur composera ses albums.
   'users.byIdHighlights': { issue: 19394, reason: 'GET /users/:id/highlights — le rail « À la une » de la fiche, chaque story sous sa propre audience' },
@@ -598,6 +595,11 @@ const PENDING_CLIENT_ENTRIES = {
   // sonde silencieuse — le web n'en est pas un), et le web lit l'état d'une personne par le rattrapage et le direct.
   'me.deviceAlive': { issue: 18737, reason: 'POST /me/device/alive — la réponse du téléphone à la sonde silencieuse, appelée par iOS et Android seulement' },
   'me.deviceCall': { issue: 18753, reason: 'POST /me/device/call — le rapport « en appel » du téléphone suivi, appelé par iOS et Android seulement ; un navigateur ne voit pas les appels' },
+  // La chute détectée (#18748) : la passerelle sert le socle avant les lots clients ; le rapport ne vient que d'un iPhone
+  // (HealthKit) : « Je vais bien » et l’accord ne vivent que dans l’app iPhone ; le web lit le rattrapage et le réglage par personne.
+  'me.healthFall': { issue: 18748, reason: 'POST /me/health/fall — le rapport de chute de l’iPhone (HealthKit), appelé par iOS seulement' },
+  'me.healthFallOk': { issue: 18748, reason: 'POST /me/health/fall/ok — « Je vais bien », appelé par iOS seulement (le web ne rapporte aucune chute)' },
+  'me.healthFallSettings': { issue: 18748, reason: 'GET · PUT /me/health/fall/settings — l’accord explicite, recueilli par iOS seulement' },
   'relations.byUserIdPhoneReachability': { issue: 18737, reason: 'GET /relations/:userId/phone-reachability — l’état d’une personne, lu par iOS et Android ; le web suit le rattrapage et `phone:*`' },
   // Le relais de la confirmation d'un appareil par code (#19156, spec 2026-11-17 § 5.2) : la passerelle le sert avant
   // les lots clients de la spécification (§ 10 : web lot 6, iOS lots 3-4, Android lot 5), portés par #18906.

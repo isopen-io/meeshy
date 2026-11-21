@@ -105,6 +105,7 @@ const esComposerAttach = {
   'composer.guest.refused.size': '«{name}» es demasiado grande: {max} como máximo.',
   'send.failure.guestKind': 'este archivo no se acepta aquí',
   'send.failure.attachmentRight': 'aún no puedes enviar este tipo de archivo adjunto en esta conversación',
+  'send.failure.attachmentExpired': 'el archivo adjunto ya no estaba disponible: inténtalo de nuevo y se enviará otra vez',
   'send.failure.guestTooLarge': 'este archivo es demasiado grande aquí ({max} como máximo)',
   'send.failure.formatRefused': 'este formato de foto (HEIC) aún no se acepta',
   'profile.image.formatRefused': 'Este formato de foto (HEIC) aún no se acepta. Elige una foto JPEG o PNG.',

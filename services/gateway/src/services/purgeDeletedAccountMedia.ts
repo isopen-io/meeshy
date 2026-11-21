@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { POST_MEDIA_FILE_COLUMNS, reclaimMediaRowBytes, type PostMediaByteRemover } from './posts/reclaimPostMediaBytes';
+import { accountSeatIdBatches } from './participants/accountParticipantIds';
 
 const log = enhancedLogger.child({ module: 'purgeDeletedAccountMedia' });
 
@@ -77,14 +78,54 @@ async function purgeAttachments(
   attachmentRemover: DeletedAccountAttachmentRemover,
   userId: string,
   batchSize: number,
+): Promise<{ deleted: number; complete: boolean }> {
+  let deleted = 0;
+  let complete = true;
+
+  // #20129 — `uploadedBy` porte DEUX espaces de clés pour les lignes écrites
+  // avant #20113 : l'identité de compte pour les quatre écrivains de
+  // téléversement, le `Participant.id` pour les deux écrivains de COPIE. Une
+  // purge qui n'apparie que le compte laisse donc derrière elle les médias
+  // TRANSFÉRÉS par le compte qu'on efface.
+  //
+  // Les sièges arrivent PAGINÉS, et le drapeau `complete` voyage avec eux : la
+  // lecture plafonnée qui tenait ce rôle tronquait en SILENCE au-delà de son
+  // plafond, et son échec rendait une liste vide sous un `warn` annonçant un
+  // rejeu qui n'existe pas. Détail et mesure : le producteur unique.
+  //
+  // `failedIds` est tenu pour la PASSE entière, pas par fournée de sièges :
+  // l'identité du compte figure dans CHAQUE fournée, donc une pièce de l'espace
+  // nominal appartient à toutes, et la retenir par fournée la faisait retenter
+  // autant de fois qu'il y a de fournées.
+  const failedIds = new Set<string>();
+
+  for await (const seats of accountSeatIdBatches(prisma, userId)) {
+    if (!seats.complete) complete = false;
+    deleted += await purgeAttachmentsOfOwners(
+      prisma,
+      attachmentRemover,
+      [userId, ...seats.ids],
+      batchSize,
+      failedIds,
+    );
+  }
+
+  return { deleted, complete };
+}
+
+async function purgeAttachmentsOfOwners(
+  prisma: PrismaClient,
+  attachmentRemover: DeletedAccountAttachmentRemover,
+  owners: readonly string[],
+  batchSize: number,
+  failedIds: Set<string>,
 ): Promise<number> {
   let deleted = 0;
-  const failedIds = new Set<string>();
 
   for (;;) {
     const batch = await prisma.messageAttachment.findMany({
       where: {
-        uploadedBy: userId,
+        uploadedBy: { in: [...owners] },
         isAnonymous: false,
         ...(failedIds.size > 0 ? { id: { notIn: [...failedIds] } } : {}),
       },
@@ -162,12 +203,23 @@ export async function purgeMediaOfDeletedAccount(
   mediaService: PostMediaByteRemover,
   userId: string,
   options: PurgeDeletedAccountMediaOptions = {},
-): Promise<{ attachmentsDeleted: number; postMediaDeleted: number }> {
+): Promise<{ attachmentsDeleted: number; postMediaDeleted: number; complete: boolean }> {
   const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
 
-  const attachmentsDeleted = await purgeAttachments(prisma, attachmentRemover, userId, batchSize);
+  const attachments = await purgeAttachments(prisma, attachmentRemover, userId, batchSize);
   const postMediaDeleted = await purgePostMedia(prisma, mediaService, userId, batchSize);
 
-  log.info('deleted-account media purged', { userId, attachmentsDeleted, postMediaDeleted });
-  return { attachmentsDeleted, postMediaDeleted };
+  if (attachments.complete) {
+    log.info('deleted-account media purged', { userId, attachmentsDeleted: attachments.deleted, postMediaDeleted });
+  } else {
+    // Pas un `warn` : ce sont des octets d'un compte supprimé qui RESTENT, et
+    // aucune passe ne reviendra les chercher — `processAccountDeletionRequests`
+    // n'élit que les demandes `CONFIRMED`, et celle-ci ne l'est plus (#20139).
+    log.error('deleted-account media purge INCOMPLETE — seats partly unread, bytes left behind', {
+      userId,
+      attachmentsDeleted: attachments.deleted,
+      postMediaDeleted,
+    });
+  }
+  return { attachmentsDeleted: attachments.deleted, postMediaDeleted, complete: attachments.complete };
 }

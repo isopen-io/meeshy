@@ -17,6 +17,7 @@ import { viewerFromRequest } from '../users/presence-gate';
 import { gateCoMemberPresence, type MemberUser } from './member-presence';
 import { isAddableUser } from './addable-user';
 import { scheduleCommunityMemberBroadcastFrom, communityMemberRoleOf } from '../../services/community-member-broadcast';
+import { closePendingJoinRequests } from '../../services/community-join-request-lifecycle';
 import { scheduleCommunityAddedAnnouncement } from '../../services/notifications/community-added';
 import { communityGuardsItsSalons, exitCommunitySalons } from '../../services/conversations/communitySalonExit';
 import { AVATAR_RING_COLUMN, servedPerson } from '../../services/appearance/authorProfileDecor';
@@ -396,6 +397,7 @@ const community = await fastify.prisma.community.findFirst({
         scheduleCommunityMemberBroadcastFrom(fastify, {
           kind: 'joined', communityId: id, userId: validatedData.userId, role: communityMemberRoleOf(member.role), via: 'invited',
         });
+        await closePendingJoinRequests(fastify.prisma, { communityId: id, userIds: [validatedData.userId], decidedBy: userId });
       }
 
       // Critère STRICT avec le viewer réel (l'admin qui vient d'ajouter le

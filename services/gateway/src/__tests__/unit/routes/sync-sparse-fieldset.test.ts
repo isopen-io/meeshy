@@ -142,6 +142,13 @@ describe('#4173 c.5(a) — `fields` réduit la REQUÊTE de chaque collection', (
       // pas remonter la chaîne, et une réponse survivrait à l'éphémère qu'elle
       // cite. Lue pour la MÉCANIQUE, servie seulement si `?fields=` la nomme.
       'replyToId',
+      // #19960 — épinglée parce qu'elle est MATIÈRE DE GARDE : la clé
+      // d'idempotence n'est servie qu'à son auteur, et la comparaison lit
+      // `senderId`. Sans l'épingler, `?fields=messages.clientMessageId` la
+      // laissait `undefined` et la garde rendait `null` À L'AUTEUR, sur sa
+      // propre clé — `sparse-fieldset.ts` l'interdit en toutes lettres : une
+      // garde ne dépend jamais d'un paramètre d'appelant.
+      'senderId',
       'updatedAt',
       // #11269 — l'estampille de purge, épinglée : lue pour la projection par lecteur, jamais servie.
       'viewOnceBurnedAt',
@@ -182,7 +189,9 @@ describe('#4173 c.5(a) — `fields` réduit la REQUÊTE de chaque collection', (
     expect(Object.keys(changedSelect(prisma.message.findMany)).sort())
       .toEqual([
         'conversationId', 'createdAt', 'effectFlags', 'ephemeralDuration', 'expiresAt', 'id',
-        'messageSource', 'messageType', 'replyToId', 'updatedAt', 'viewOnceBurnedAt',
+        // #19960 — `senderId` est épinglé : il est la matière de la garde qui
+        // ne sert la clé d'idempotence qu'à son auteur.
+        'messageSource', 'messageType', 'replyToId', 'senderId', 'updatedAt', 'viewOnceBurnedAt',
       ]);
     await app.close();
   });

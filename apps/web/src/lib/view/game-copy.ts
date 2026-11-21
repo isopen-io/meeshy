@@ -70,6 +70,10 @@ export const pointsLabel = (count: number, language: Language = currentInterface
 export const convertiblePointsLabel = (count: number, language: Language = currentInterfaceLanguage()): string =>
   translateGamePlural(language, 'game.points.convertible', count);
 
+/** Sous le niveau 5, le premier Rêve tient en un acte (#17370) : les étincelles qui manquent avant le Rêve complet. */
+export const fullDreamLine = (sparks: number, language: Language = currentInterfaceLanguage()): string =>
+  translateGame(language, 'game.missions.full_dream_in', { sparks: convertiblePointsLabel(sparks, language) });
+
 export const meeshCount = (count: number, language: Language = currentInterfaceLanguage()): string =>
   count === 0 ? translateGame(language, 'game.meeshes.none') : translateGamePlural(language, 'game.meeshes', count);
 

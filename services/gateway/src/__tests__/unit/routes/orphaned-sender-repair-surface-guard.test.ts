@@ -130,7 +130,10 @@ const ROUTE_SURFACES: Record<string, Classification> = {
   // ── Exemptes, avec leur raison ────────────────────────────────────────────
   'admin/user-reports.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'admin/user-member-stats.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
-  'attachments/metadata.ts': { kind: 'exempt', reads: 4, why: DOES_NOT_SELECT_SENDER },
+  // #20019 — la quatrième lecture (le `conversationId` du message porteur, pour
+  // adresser `attachment:deleted`) a déménagé dans
+  // `socketio/broadcastAttachmentDeleted.ts` avec le fan-out.
+  'attachments/metadata.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
   // #9927 — lit le TYPE de la conversation du message visé (règle des 13-17 ans), jamais son expéditeur.
   'attachments/upload.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'conversations/messages-advanced-reads.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
@@ -179,6 +182,9 @@ const SOCKETIO_SURFACES: Record<string, Classification> = {
   'utils/participant-resolver.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'utils/personalPreviewOverride.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'announceCitedPostWithdrawal.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #20019 — lit le `conversationId` du message porteur pour adresser le retrait
+  // d'UNE pièce ; jamais son expéditeur.
+  'broadcastAttachmentDeleted.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #9646 — relit les CINQ colonnes de protection d'un message édité ou dont
   // une pièce est enrichie, pour décider de la remise par lecteur. Jamais
   // `sender`. Absent du garde du masquage personnel : une `findUnique`, hors
@@ -308,6 +314,13 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // personne.
   'MessageReadStatusService.ts': { kind: 'exempt', reads: 11, why: DOES_NOT_SELECT_SENDER },
   'messaging/anonymizeDeletedAccountMessages.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #19960 — « quelqu'un d'autre tient-il cette clé ? », la SEULE lecture du
+  // dépôt qui apparie un `clientMessageId` sans expéditeur. Elle ne vit que
+  // sur le chemin d'échec d'une violation d'unicité, et son `select` est
+  // `{ id: true }` : elle ne nomme personne et ne rend rien à personne — seule
+  // l'EXISTENCE d'une ligne l'intéresse. La relecture qui SERT (le rejeu
+  // nominal) passe, elle, par `messageDedupProjection.ts`, qui répare.
+  'messaging/clientMessageIdOwnership.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #11381 — le texte à retraduire (colonnes au repos seules, jamais `sender`).
   'messaging/atRestTranslationSource.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7451 — la fenêtre du gel : `select: { id: true }`, rien d'autre.

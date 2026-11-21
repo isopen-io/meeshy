@@ -392,6 +392,70 @@ describe("le masque de l'œil (face-rig) — un alpha, pas une couleur", () => {
   });
 });
 
+describe("les replis d'un jeton de charte défini — un filet de contraste, jamais rendu", () => {
+  // `var(--token, littéral)` dans un style inline : le littéral n'est que le
+  // REPLI d'un jeton DÉCLARÉ en `@theme inline` (→ :root) dans ios.css / app.css
+  // (`--color-ios-on-brand`, `--color-on-brand`, `--color-ios-fill`), donc jamais
+  // rendu en pratique (garde `styles/declared-tokens.test.ts`). On le GARDE — c'est
+  // un filet de contraste si le jeton manquait au montage : une encre claire absente
+  // sur un aplat de marque rendrait le texte ILLISIBLE — et on l'exempte À LA LIGNE
+  // avec sa raison, le fichier restant du chrome scanné pour tout le reste.
+  const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../src/${rel}`, import.meta.url)), 'utf8');
+  const files = [
+    'components/battery-panel.tsx',
+    'components/shared-location-card.tsx',
+    'components/profile-relation-face.tsx',
+    'components/vitrine-preview.tsx',
+  ] as const;
+
+  test('aucun des quatre replis ne laisse de violation au gate', () => {
+    for (const rel of files) {
+      expect({ rel, violations: scanSource(read(rel)) }).toEqual({ rel, violations: [] });
+      expect(exemptionOf(rel)).toBe(null);
+    }
+  });
+
+  test('le repli est exempté à la ligne, pas retiré (le filet de contraste reste)', () => {
+    expect(read('components/battery-panel.tsx')).toContain('var(--color-ios-on-brand, #fff)');
+    expect(read('components/shared-location-card.tsx')).toContain('var(--color-on-brand, #fff)');
+    expect(read('components/profile-relation-face.tsx')).toContain('var(--color-ios-fill, rgba(127,127,127,.14))');
+    expect(read('components/vitrine-preview.tsx')).toContain('var(--color-ios-fill, rgba(127,127,127,.14))');
+    for (const rel of files) expect(read(rel)).toContain('harmony-exempt:');
+  });
+});
+
+describe('les quatre derniers cas du gate — calcul, masque et letterbox (91w)', () => {
+  // Les quatre littéraux qui restaient (gate 5/4 après 90w) ne sont PAS du
+  // chrome brut : un masque de luminance (message-menu), un voile dynamique
+  // composé (conversation-backdrop), une couleur calculée depuis la roue du
+  // prisme (rank-blason), et un letterbox de scène (admin-post-preview). Trois
+  // sont exemptés à la ligne avec leur raison ; le quatrième n'est PAS une
+  // exemption mais une UNIFICATION : le letterbox admin prend le jeton
+  // `--color-media-backdrop` (= #000000, byte-identique) que les visionneuses
+  // plein écran (media-viewer, viewer-scene-page) peignent déjà. Gate → 0.
+  const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../src/${rel}`, import.meta.url)), 'utf8');
+  const exempted = [
+    'components/message-menu.tsx',
+    'components/conversation-backdrop.tsx',
+    'components/game/rank-blason.tsx',
+  ] as const;
+  const adminPreview = 'routes/admin-post-preview.tsx';
+
+  test('aucun des quatre fichiers ne laisse de violation au gate', () => {
+    for (const rel of [...exempted, adminPreview]) {
+      expect({ rel, violations: scanSource(read(rel)) }).toEqual({ rel, violations: [] });
+      expect(exemptionOf(rel)).toBe(null);
+    }
+  });
+
+  test('le letterbox admin est unifié sur le jeton (pas une exemption), les trois autres sont exemptés à la ligne', () => {
+    expect(read(adminPreview)).toContain('backgroundColor: ');
+    expect(read(adminPreview)).toContain('var(--color-media-backdrop)');
+    expect(read(adminPreview)).not.toContain("backgroundColor: '#000'");
+    for (const rel of exempted) expect(read(rel)).toContain('harmony-exempt:');
+  });
+});
+
 describe('auditSources — le rapport', () => {
   test('compte par fichier, ignore les exemptés et le hors-périmètre', () => {
     const [first] = EXEMPT_PATHS as readonly { prefix: string }[];

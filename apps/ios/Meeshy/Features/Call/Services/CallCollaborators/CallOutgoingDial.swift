@@ -101,7 +101,7 @@ final class CallOutgoingDial: CallOutgoingDialProviding {
             return false
         }
 
-        call.analytics.callInitiatedDate = Date()
+        call.analytics.callInitiatedUptime = call.liveClock.monotonicNow
 
         // Optimistic local state — `currentCallId` is reassigned to the real
         // gateway-issued ObjectId once the ACK lands.
@@ -353,7 +353,7 @@ final class CallOutgoingDial: CallOutgoingDialProviding {
             return false
         }
 
-        call.analytics.callInitiatedDate = Date()
+        call.analytics.callInitiatedUptime = call.liveClock.monotonicNow
         call.currentCallId = callId
         CallResumeLedger.shared.begin(callId)
         call.remoteUserId = remoteUserId

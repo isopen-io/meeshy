@@ -46,22 +46,32 @@ public class CallStatsCollector internal constructor(
                     kind = (members["kind"] as? String) ?: (members["mediaType"] as? String),
                     codecId = members["codecId"] as? String,
                     mimeType = members["mimeType"] as? String,
-                    values = NUMERIC_KEYS.mapNotNull { key ->
-                        (members[key] as? Number)?.let { key to it.toDouble() }
-                    }.toMap(),
+                    values = NUMERIC_KEYS.mapNotNull { key -> numeric(members[key])?.let { key to it } }.toMap(),
                     strings = STRING_KEYS.mapNotNull { key ->
                         (members[key] as? String)?.let { key to it }
                     }.toMap(),
                 )
             }
 
+        /** libwebrtc rend `nominated` en `Boolean` : projeté en 1/0 pour que la paire nominée se lise. */
+        private fun numeric(value: Any?): Double? = when (value) {
+            is Number -> value.toDouble()
+            is Boolean -> if (value) 1.0 else 0.0
+            else -> null
+        }
+
         private val NUMERIC_KEYS = listOf(
             "currentRoundTripTime", "availableOutgoingBitrate", "packetsLost", "packetsReceived",
             "packetsSent", "bytesSent", "bytesReceived", "jitter", "audioLevel", "nominated",
+            // #19895 — gels, NACK/PLI, tampon de gigue, échantillons masqués.
+            "freezeCount", "totalFreezesDuration", "nackCount", "pliCount",
+            "jitterBufferDelay", "jitterBufferEmittedCount", "concealedSamples",
         )
 
+        /** Du candidat local, seuls `candidateType` et `relayProtocol` : jamais adresse, port, ufrag ni URL. */
         private val STRING_KEYS = listOf(
             "selectedCandidatePairId", "localCandidateId", "remoteCandidateId", "candidateType", "state",
+            "relayProtocol", "qualityLimitationReason",
         )
     }
 }

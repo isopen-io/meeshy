@@ -45,6 +45,11 @@ extension GameText {
         String(localized: "game2.banner.level", defaultValue: "Niveau \(level)", bundle: .main)
     }
 
+    /// « Ta lumière au niveau 34 » : le niveau du bandeau se présente comme ta lumière, en second après le rang (#17394).
+    static func bannerLight(level: String) -> String {
+        String(localized: "game2.banner.light", defaultValue: "Ta lumière au niveau \(level)", bundle: .main)
+    }
+
     static func bannerToNext(percent: String, level: String) -> String {
         String(localized: "game2.banner.to_next", defaultValue: "\(percent) % vers le \(level)", bundle: .main)
     }

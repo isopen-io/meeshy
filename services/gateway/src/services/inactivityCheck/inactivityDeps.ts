@@ -13,6 +13,7 @@ import { batteryLastReadingFor } from '../battery/batteryRelay';
 import { bloodLocationDepsOf } from '../bloodLocation/bloodLocationDeps';
 import { bloodLastPointFor } from '../bloodLocation/bloodLocationMap';
 import { isTrackedPhone, retractPairNotifications } from '../phoneReachability/phoneReachabilityDeps';
+import { refreshFallServedAfter } from '../fallDetection/fallDeps';
 import { inactivityPusherOf, wellnessAskerOf } from './inactivityPush';
 import { refreshInactivityServedOf, type InactivityPair, type InactivityRelayDeps } from './inactivityRelay';
 
@@ -44,7 +45,8 @@ export function inactivityRelayDepsOf(params: { readonly prisma: PrismaClient; r
 
 /**
  * Un partage qui accompagne l'alerte vient de changer (fantôme ou consentement de position,
- * historique effacé, batterie coupée) : l'alerte en cours se re-juge chez chaque Sang. Best-effort,
+ * historique effacé, batterie coupée) : l'alerte en cours se re-juge chez chaque Sang — et l'épisode
+ * de chute en cours aussi (#18748), qui porte la même position et la même batterie. Best-effort,
  * jamais levant : la route qui l'appelle a déjà fait son travail.
  */
 export async function refreshInactivityServedAfter(
@@ -56,4 +58,5 @@ export async function refreshInactivityServedAfter(
   } catch (error) {
     params.report(error);
   }
+  await refreshFallServedAfter(params, emitterId);
 }

@@ -243,7 +243,7 @@ function PreviewScene({ language, fiche, mode }: { readonly language: AdminLangu
 
   return (
     <div className="grid justify-items-center gap-2" data-admin-preview-scene={mode}>
-      <div className="relative overflow-hidden rounded-card" style={{ aspectRatio: '9 / 16', height: 'min(70vh, 640px)', backgroundColor: '#000' }}>
+      <div className="relative overflow-hidden rounded-card" style={{ aspectRatio: '9 / 16', height: 'min(70vh, 640px)', backgroundColor: 'var(--color-media-backdrop)' }}>
         <Suspense fallback={<AdminSkeleton rows={2} />}>
           <ScenePlayer key={`${fiche.id}-${index}`} document={document} sceneIndex={index} mode={mode} playing carrier={carrier} preferredLanguages={[language]} />
         </Suspense>

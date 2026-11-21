@@ -117,20 +117,28 @@ nonisolated enum ProfileLinksCopy {
         }
     }
 
-    /// Ce que le chiffre d'un billet compte, posé à côté de lui.
+    /// Ce que le chiffre d'un billet compte, posé à côté de lui, accordé au chiffre (#20013 : « 1 arrivée »).
     static func figureCaption(_ figure: LinksFaceFigure) -> String {
         switch figure {
         case .arrivals(_, let cap?):
             let format = String(localized: "profile.links.figure.arrivalsOf", defaultValue: "/ %@ arrivées", bundle: .main)
             return String(format: format, cap.formatted())
-        case .arrivals:
-            return String(localized: "profile.links.figure.arrivals", defaultValue: "arrivées", bundle: .main)
-        case .clicks:
-            return String(localized: "profile.links.figure.clicks", defaultValue: "clics", bundle: .main)
-        case .members:
-            return String(localized: "profile.links.figure.members", defaultValue: "membres", bundle: .main)
-        case .referrals:
-            return String(localized: "profile.links.figure.referrals", defaultValue: "filleuls", bundle: .main)
+        case .arrivals(let count, _):
+            return count == 1
+                ? String(localized: "profile.links.figure.arrivals.one", defaultValue: "arrivée", bundle: .main)
+                : String(localized: "profile.links.figure.arrivals", defaultValue: "arrivées", bundle: .main)
+        case .clicks(let count):
+            return count == 1
+                ? String(localized: "profile.links.figure.clicks.one", defaultValue: "clic", bundle: .main)
+                : String(localized: "profile.links.figure.clicks", defaultValue: "clics", bundle: .main)
+        case .members(let count):
+            return count == 1
+                ? String(localized: "profile.links.figure.members.one", defaultValue: "membre", bundle: .main)
+                : String(localized: "profile.links.figure.members", defaultValue: "membres", bundle: .main)
+        case .referrals(let count):
+            return count == 1
+                ? String(localized: "profile.links.figure.referrals.one", defaultValue: "filleul", bundle: .main)
+                : String(localized: "profile.links.figure.referrals", defaultValue: "filleuls", bundle: .main)
         }
     }
 

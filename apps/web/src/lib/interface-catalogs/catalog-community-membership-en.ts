@@ -18,6 +18,8 @@ const enCommunityMembership = {
   'community.membership.request': 'Ask to join',
   'community.membership.requested': 'Request sent',
   'community.membership.requested.hint': 'An admin or moderator needs to accept it.',
+  'community.membership.declined': 'Request declined',
+  'community.membership.declined.hint': 'You can ask again from {date}.',
   'community.membership.error.cooldown': 'Your last request was declined: you can ask again 7 days after it.',
   'community.settings.open': "Settings",
   'community.members.open': 'Members',
@@ -71,6 +73,16 @@ const enCommunityMembership = {
   'community.posts.error.offline': "Offline: posts will show up when the network is back.",
   'community.posts.retry': "Try again",
   'community.posts.loadingMore': "Loading more",
+  'community.members.requests.section': "Pending requests",
+  'community.members.requests.asked': "Requested {date}",
+  'community.members.requests.accept': "Accept",
+  'community.members.requests.reject': "Decline",
+  'community.members.requests.acceptLabel': "Accept {name}’s request",
+  'community.members.requests.rejectLabel': "Decline {name}’s request",
+  'community.members.requests.reject.confirm.body': "{name} won’t be able to ask again for seven days.",
+  'community.members.requests.gone': "This request has already been handled.",
+  'community.members.requests.accepted': "{name} is now a member of the community.",
+  'community.members.requests.more': "Show more requests",
 } as const satisfies CommunityMembershipCatalog;
 
 export default enCommunityMembership;

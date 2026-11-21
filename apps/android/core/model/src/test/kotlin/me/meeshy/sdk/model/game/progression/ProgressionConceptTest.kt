@@ -10,9 +10,9 @@ class ProgressionConceptTest {
     private fun served(source: ProgressionConceptSource) = ProgressionConcepts.served(source).map { it.wire }
 
     @Test
-    fun `les quinze concepts sont dans l ordre de l ecran`() {
+    fun `les quinze concepts sont dans l ordre de l ecran, le rang en tete et le niveau ensuite`() {
         assertThat(ProgressionConcept.entries.map { it.wire }).containsExactly(
-            "level", "points", "meesh", "glory", "flame", "missions", "league", "season", "prestige",
+            "glory", "level", "points", "meesh", "flame", "missions", "league", "season", "prestige",
             "elans", "badges", "defis", "succes", "showcase", "atlas",
         ).inOrder()
     }
@@ -32,7 +32,7 @@ class ProgressionConceptTest {
     @Test
     fun `le bloc game ouvre points meesh glory missions et rien de plus`() {
         assertThat(served(ProgressionConceptSource(game = true))).containsExactly(
-            "level", "points", "meesh", "glory", "flame", "missions", "elans", "badges", "succes",
+            "glory", "level", "points", "meesh", "flame", "missions", "elans", "badges", "succes",
         ).inOrder()
     }
 

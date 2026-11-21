@@ -41,6 +41,7 @@ import {
   freezeMessageStatus,
   type FreezeMessageStatusParams,
 } from './messaging/freezeMessageStatus';
+import { cascadeReadToDelivered } from './messaging/readDeliveryCascade';
 import {
   DELIVERY_FLOOR_SELECT,
   deliveryFloorOf,
@@ -154,14 +155,27 @@ export function buildCursorFreshnessGuard(params: {
  * (#18614).
  *
  * `messageIds` nomme les messages RÉELLEMENT remis, quand l'appelant en a la
- * liste exacte. Le rejeu hors ligne est le seul dans ce cas : il refuse des
- * entrées (émission qui lève, plancher d'historique, message mort) et la file
- * en évince d'autres à son plafond, si bien que ce qui est parti est un
- * sous-ensemble STRICT de la fenêtre du curseur.
+ * liste exacte. DEUX appelants sont dans ce cas :
+ *
+ *   • le **rejeu hors ligne**, qui refuse des entrées (émission qui lève,
+ *     plancher d'historique, message mort) et dont la file évince d'autres à
+ *     son plafond — ce qui est parti est un sous-ensemble STRICT de la fenêtre ;
+ *   • la porte **`delivered`** de `receipts.ts` (#20084), que la NSE iOS et le
+ *     service worker web appellent pour un destinataire **HORS LIGNE** qu'un
+ *     push vient de réveiller. APNs ne gardant qu'une notification par
+ *     appareil, un seul message est rapporté là où plusieurs ont été envoyés.
  *
  * Omettre la clé garde la FENÊTRE, qui est la sémantique juste des appelants
- * en ligne (`receipts.ts`, `messages-list.ts`,
- * `autoDeliverToOnlineRecipients`) : chez eux, tout ce qui précède EST arrivé.
+ * **en ligne** : `receipts.ts` par sa porte `received` (toute la conversation
+ * en une passe), `messages-list.ts` (remise automatique à la lecture) et
+ * `autoDeliverToOnlineRecipients`. Chez eux, tout ce qui précède EST arrivé.
+ *
+ * ⚠️ Ce doc-comment rangeait `receipts.ts` **en bloc** parmi les appelants en
+ * ligne, et c'est ce qui a tenu le défaut de #20084 en vie : le fichier a DEUX
+ * portes, dont l'une sert la population exactement INVERSE. Un appelant ne se
+ * classe pas par son FICHIER mais par ce que sa porte sait de son lecteur —
+ * « tout ce qui précède est arrivé » est une affirmation sur le RÉSEAU du
+ * destinataire, jamais sur le module qui écrit.
  */
 export type MarkReceivedScope = {
   readonly messageIds?: readonly string[];
@@ -628,9 +642,10 @@ export class MessageReadStatusService {
 
       // ── LE PÉRIMÈTRE EXACT (#18731) ────────────────────────────────────────
       //
-      // Quand l'appelant NOMME ce qu'il a remis — le rejeu hors ligne, seul
-      // dans ce cas (#18614) — les deux écritures de cette méthode ne
-      // connaissent pas le même ensemble :
+      // Quand l'appelant NOMME ce qu'il a remis — le rejeu hors ligne, et la
+      // porte `delivered` de `receipts.ts` depuis #20084 (NSE iOS / service
+      // worker, destinataire HORS LIGNE) — les deux écritures de cette méthode
+      // ne connaissent pas le même ensemble :
       //
       //   • `freezeMessageStatus({ messageIds })` grave l'ensemble EXACT ;
       //   • `_advanceCursor({ messageId })` sautait jusqu'au plus RÉCENT de
@@ -726,10 +741,18 @@ export class MessageReadStatusService {
       // #18614 — le PÉRIMÈTRE du gel. Ici, `freezeMessageStatus` résout une
       // PLAGE (`createdAt > since`), c'est-à-dire TOUT message non supprimé de
       // la conversation créé depuis le curseur précédent. C'est la sémantique
-      // juste des quatre appelants qui disent « tout ce qui précède est
-      // arrivé » — un lecteur EN LIGNE, dans le fil — et ce bloc ne sert plus
-      // qu'eux depuis #18731 : le périmètre EXACT est rendu plus haut, où
-      // l'ordre gel-puis-curseur lui est propre.
+      // juste des appelants qui disent « tout ce qui précède est arrivé » — un
+      // lecteur EN LIGNE, dans le fil — c'est-à-dire la porte `received` de
+      // `receipts.ts`, `messages-list.ts` et `autoDeliverToOnlineRecipients`.
+      // Le périmètre EXACT est rendu plus haut, où l'ordre gel-puis-curseur lui
+      // est propre.
+      //
+      // ⚠️ Cette note disait « ce bloc ne sert plus qu'eux depuis #18731 ».
+      // C'était FAUX jusqu'à #20084 : la porte `delivered` y tombait, parce
+      // qu'elle passait sa liste exacte en `latestMessageId` au lieu
+      // d'`options.messageIds`. Une affirmation de la forme « ce bloc ne sert
+      // plus que X » se vérifie contre les APPELANTS, jamais contre l'intention
+      // du lot qui l'a écrite.
       //
       // `undefined` vaut « je n'ai pas calculé » et garde la fenêtre ; une
       // liste VIDE vaut « j'ai livré, et rien ». La distinction est celle de
@@ -1088,49 +1111,52 @@ export class MessageReadStatusService {
         });
       }
 
-      // Read implies delivered: a message can never be read without first having
-      // been delivered. When a recipient opens a conversation whose newest
-      // message was never marked received (they were offline when it arrived, so
-      // no delivery receipt / auto-deliver ran), advancing only the read cursor
-      // leaves the delivery frontier behind the read frontier — the sender then
-      // sees the "read" tick ahead of the "delivered" tick (readCount > deliveredCount),
-      // an impossible state. Also advance the delivery cursor and freeze
-      // deliveredAt/receivedAt for the same window. Both operations are idempotent
-      // (the cursor guard no-ops when delivery is already ahead; the freeze is
-      // write-once), so this is a cheap no-op on the healthy delivered-then-read path.
-      const deliveredAdvanced = await this._advanceCursor({
-        participantId,
-        conversationId,
-        messageId,
-        now,
-        // Le vrai `cursorExists`, pas un `true` codé en dur : en mode exact où le
-        // curseur de lecture n'a pas avancé (message suivant non lu) ET où aucun
-        // curseur n'existait, l'avance de lecture n'a rien créé — coder `true`
-        // fait alors interpréter le miss de l'`updateMany` comme « déjà en
-        // avance », donc SANS création : le curseur de livraison reste inexistant
-        // et le gel `deliveredAt` est sauté, laissant l'état impossible
-        // « lu > livré ». Le vrai flag crée le curseur de livraison quand il
-        // manque ; la course concurrente reste couverte par le catch P2002 de
-        // `_advanceCursor`. Sur le chemin sain (curseur déjà là), l'`updateMany`
-        // matche et le flag n'est jamais consulté.
-        cursorExists,
-        idField: "lastDeliveredMessageId",
-        atField: "lastDeliveredAt",
-        resetUnreadCount: false,
-      });
-      if (deliveredAdvanced) {
-        await this.freezeMessageStatus({
+      // « Lu » implique « remis », et la cascade se borne à la frontière de la
+      // lecture qu'elle suit (#20105). La règle, ses trois coûts et la raison
+      // pour laquelle la borne est une VALEUR transmise plutôt qu'une règle
+      // retapée vivent chez elle : `messaging/readDeliveryCascade.ts`.
+      await cascadeReadToDelivered(
+        {
+          freeze: (params) => this.freezeMessageStatus(params),
+          advanceDeliveryCursor: (deliveredMessageId) =>
+            this._advanceCursor({
+              participantId,
+              conversationId,
+              messageId: deliveredMessageId,
+              now,
+              // Le vrai `cursorExists`, jamais un `true` codé en dur : quand
+              // l'avance de lecture n'a rien créé, `true` ferait lire le miss de
+              // l'`updateMany` comme « déjà en avance », donc sans création — le
+              // curseur de livraison resterait inexistant, le gel sauté, et
+              // l'état impossible « lu > livré » en place. La course concurrente
+              // reste couverte par le catch P2002 d'`_advanceCursor`.
+              cursorExists,
+              idField: "lastDeliveredMessageId",
+              atField: "lastDeliveredAt",
+              resetUnreadCount: false,
+            }),
+          provenDeliveredPrefix: (since) =>
+            this._computeExactDeliveredCursorTarget({
+              participantId,
+              conversationId,
+              since,
+            }),
+        },
+        {
           participantId,
           conversationId,
-          // #19261 — la POSITION, comme le mode fenêtre ci-dessus. Cette
-          // cascade est la JUMELLE de ce site, et une règle qu'il faut retaper
-          // à chaque endroit est une règle qu'un endroit finira par ne pas
-          // avoir : les deux sont reprises dans le même lot.
           since: prevDeliveredPosition,
           at: now,
-          field: "deliveredAt",
-        });
-      }
+          // La frontière vient de la moitié LECTURE, telle qu'elle l'a résolue —
+          // `exactMessageIds` est la liste que son gel a honorée, `caughtUpAt`
+          // la borne haute du sien, et `caughtUpId ?? messageId` le message sur
+          // lequel son curseur s'est posé. Aucune des trois n'est recalculée
+          // ici : c'est tout l'objet du lot.
+          frontier: exactMessageIds
+            ? { kind: "exact", messageIds: exactMessageIds }
+            : { kind: "window", until: caughtUpAt, cursorTo: caughtUpId ?? messageId },
+        }
+      );
 
       logger.info(
         `[MessageReadStatus] Participant ${participantId} marked conversation ${conversationId} as read`

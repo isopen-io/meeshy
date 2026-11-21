@@ -105,6 +105,7 @@ const enComposerAttach = {
   'composer.guest.refused.size': '“{name}” is too large: {max} at most.',
   'send.failure.guestKind': 'this file isn’t accepted here',
   'send.failure.attachmentRight': 'you can’t send this type of attachment in this conversation yet',
+  'send.failure.attachmentExpired': 'the attachment was no longer available: try again and it will be sent anew',
   'send.failure.guestTooLarge': 'this file is too large here ({max} at most)',
   'send.failure.formatRefused': 'this photo format (HEIC) isn’t accepted yet',
   'profile.image.formatRefused': 'This photo format (HEIC) isn’t accepted yet. Choose a JPEG or PNG photo.',

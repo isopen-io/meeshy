@@ -1,3 +1,4 @@
+import { communityTextAsWritten } from '../communities/serialization';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { issueSearchId } from '../../services/social/searchFingerprint';
 import { logError } from '../../utils/logger';
@@ -357,7 +358,7 @@ export async function getDashboardStats(fastify: FastifyInstance) {
         };
       });
 
-      const transformedCommunities = recentCommunities.map((community: any) => ({
+      const transformedCommunities = recentCommunities.map((community: any) => communityTextAsWritten({
         id: community.id,
         name: community.name,
         description: community.description,

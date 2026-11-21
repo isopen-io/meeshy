@@ -35,6 +35,19 @@ public struct PushDeviceIdentity: Sendable, Equatable {
         return seeded
     }
 
+    /// L'identifiant d'installation SEULEMENT s'il est tenu par le trousseau, `nil` sinon (#19929). Avant le premier
+    /// déverrouillage, le trousseau ne se lit ni ne s'écrit : `installationId` rend alors un identifiant de passage, qui
+    /// suffit à un jeton push mais ferait prendre cet appareil pour un autre à qui juge « écrit ailleurs ».
+    public static func settledInstallationId(keychain: any KeychainStoring, vendorId: () -> String?) -> String? {
+        let id = installationId(keychain: keychain, vendorId: vendorId)
+        return keychain.load(forKey: installationIdKey, account: nil) == id ? id : nil
+    }
+
+    @MainActor
+    public static func settledInstallationId(keychain: any KeychainStoring = KeychainManager.shared) -> String? {
+        settledInstallationId(keychain: keychain, vendorId: { UIDevice.current.identifierForVendor?.uuidString })
+    }
+
     @MainActor
     public static func current(keychain: any KeychainStoring = KeychainManager.shared) -> PushDeviceIdentity {
         let info = Bundle.main.infoDictionary

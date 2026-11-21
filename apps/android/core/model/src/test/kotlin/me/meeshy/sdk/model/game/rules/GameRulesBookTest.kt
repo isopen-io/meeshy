@@ -14,7 +14,7 @@ class GameRulesBookTest {
     @Test
     fun `the glossary lists every progression concept, each followed by what completes it`() {
         assertThat(GameRulesBook.glossary.map { it.wire }).containsExactly(
-            "level", "steps", "points", "meesh", "treasury", "glory", "flame", "missions", "chest", "league",
+            "glory", "level", "steps", "points", "meesh", "treasury", "flame", "missions", "chest", "league",
             "season", "duo", "prestige", "elans", "tailwind", "badges", "defis", "succes", "showcase", "atlas",
         ).inOrder()
         assertThat(GameRulesBook.glossary.filterIsInstance<GlossaryKey.Concept>().map { it.concept })

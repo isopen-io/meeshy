@@ -1506,3 +1506,251 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests (2 046) rc=0,
   couleurs d'accent rc=0.
 - Prochain lot recommandé : inchangé (fusion de #19768 au dégel, puis #19767, plafond `untilStopped`, #19682 décidée).
+
+## 2026-11-19 — réveil de 11 h : aucune position avant la relecture du partage servi (#19767)
+
+- Reprise : #19768 fusionnée dans `dev` (f3be4322a), #19681 fermée. #19682 attend toujours la décision du porteur.
+- Lot : #19767. iOS et Android suivent l'appareil au relancement mais n'envoient aucun relevé avant la première
+  relecture du partage servi (`awaitsServedTruth`) ; une relecture qui échoue, ou un « Partager » d'ici, lève l'attente.
+  iOS : la liste porte l'identifiant d'installation (`PushDeviceIdentity`, trousseau `ThisDeviceOnly`) de l'appareil
+  qui l'a écrite ; restaurée depuis la sauvegarde iCloud d'un AUTRE appareil, elle est reçue et sans démarrage gardé.
+  Une liste d'avant la marque est adoptée telle quelle puis marquée. Android épargné (`allowBackup="false"`).
+- Témoins : iOS `SharedLocationSharingSyncTests` (relevé avant relecture, relecture confirmée, relecture en échec,
+  « Partager » avant relecture, sauvegarde restaurée ailleurs, même appareil, liste d'avant la marque) ; Android
+  `SharedLocationSharingSyncTest` (trois cas). Swift et `sdk-core` se prouvent par la CI.
+- Gardes iOS : règles maison (42) rc=0, cohésion rc=0, couleurs d'accent rc=0 ; inscription des tests rc=1, rouge
+  HÉRITÉ de `dev` (cd0157b87 : `AnchoredSheetNamingGuardTests.swift` absent du pbxproj), étranger au lot.
+- Contre-audit : un BLOQUANT corrigé (la marque d'appareil était réécrite avant que la liste reçue soit enregistrée :
+  la cession ne tenait qu'un lancement — la liste est désormais écrite « reçue », sans démarrage, avant la marque) et
+  un repli fermé (une passerelle d'avant la liste seule ne reçoit pas la position de l'appareil avant la relecture ; le
+  retrait reste en attente). Restent assumés : une relecture en échec lève l'attente (critère de l'issue), une liste
+  d'avant la marque restaurée ailleurs publie encore (décision au porteur).
+- Prochain lot recommandé : fusion de cette PR, plafond `untilStopped` de `listOnlyState`, #19682 une fois décidée.
+
+## 2026-11-19 — réveil de 11 h 14 : #19864 (relevé avant relecture, #19767) recalée sur dev
+
+- Reprise : #19864 toujours ouverte, tête d8648e64d intacte ; la CI des PR reste gelée (30 vérifications « skipped »).
+  #19682 toujours sans décision du porteur. Aucun nouveau lot ouvert.
+- `origin/dev` (fd1bb9f46 : pistes vocales de post, profil iOS, pbxproj régénéré) fusionnée à la main, sans conflit et
+  sans fichier commun avec le lot.
+- Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, couleurs d'accent rc=0, et inscription des
+  tests (2 055) rc=0 — le rouge hérité de `dev` (AnchoredSheetNamingGuardTests) est soldé par a14f751ff.
+- Prochain lot recommandé : fusion de #19864 au dégel, puis le plafond `untilStopped` de `listOnlyState`, #19682 décidée.
+
+## 2026-11-19 — réveil de 13 h : #19864 recalée sur dev (7ef068889)
+
+- Reprise : #19864 toujours ouverte, tête e44bb5cb5 intacte ; la CI des PR reste gelée (35 vérifications « skipped »).
+  #19682 toujours sans décision du porteur. Aucun nouveau lot ouvert.
+- `origin/dev` (7ef068889 : carte iOS — épingles en éventail, feuilles rangeables, talkie à l'appui long ; rang de
+  liste ; communautés) fusionnée à la main, sans conflit : `dev` n'a touché que les écrans de carte iOS, jamais
+  `SharedLocationSharingCenter` ni le centre Android.
+- Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests (2 055) rc=0,
+  couleurs d'accent rc=0. Swift et `sdk-core` Android se prouvent par la CI de la PR, au dégel.
+- Prochain lot recommandé : fusion de #19864 au dégel, puis plafond `untilStopped` de `listOnlyState`, #19682 décidée.
+
+## 2026-11-19 — réveil de 15 h : #19864 (relevé avant relecture) recalée sur dev (07609bfa9)
+
+- Reprise : #19864 toujours ouverte, tête 4228a2fcc intacte ; la CI des PR reste gelée (35 vérifications « skipped »,
+  `dev` lui-même sans vérification jouée). #19682 toujours sans décision du porteur. Aucun nouveau lot ouvert.
+- `origin/dev` (07609bfa9 : mouvement sur l'épingle, pièces jointes reprenables, qualité d'appel web) fusionnée à la
+  main, sans conflit. `dev` a touché `SharedLocationSharingHolder` (l'émetteur est désormais enveloppé par
+  `SharedLocationMotionTaggingEmitter`) : la ligne du magasin marqué par l'identifiant d'installation est gardée,
+  et `didMove` garde sa retenue `awaitsServedTruth` avant tout envoi, mouvement compris. Android non touché par `dev`.
+- Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests (2 056) rc=0,
+  couleurs d'accent rc=0. Swift et `sdk-core` Android se prouvent par la CI de la PR, au dégel.
+- Prochain lot recommandé : inchangé (fusion de #19864 au dégel, plafond `untilStopped` de `listOnlyState`, #19682
+  décidée).
+
+## 2026-11-19 — réveil de 17 h : #19864 recalée sur dev (1c183a31c)
+
+- Reprise : #19864 toujours ouverte, tête cd6681ff1 intacte ; la CI des PR reste gelée (35 vérifications « skipped »
+  sur sa tête). #19682 toujours sans décision du porteur. Aucun nouveau lot ouvert.
+- `origin/dev` (1c183a31c : demandes d'entrée des communautés, discipline des états en attente) fusionnée à la main,
+  sans conflit et sans fichier commun avec le lot.
+- Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests (2 056) rc=0,
+  couleurs d'accent rc=0. Swift et `sdk-core` Android se prouvent par la CI de la PR, au dégel.
+- Prochain lot recommandé : fusion de #19864 au dégel, puis plafond `untilStopped` de `listOnlyState`, #19682 décidée.
+
+## 2026-11-19 — réveil de 19 h : #19864 recalée sur dev 56b3abc7c
+
+- Reprise : #19864 toujours ouverte, tête 9dd6c1e6e intacte ; la CI des PR reste gelée (35 vérifications « skipped »).
+  #19682 toujours sans décision du porteur. Aucun nouveau lot ouvert.
+- `origin/dev` (56b3abc7c : rang « la plus récemment active », métriques d'appel Android et web, file des partenaires)
+  fusionnée à la main, sans conflit et sans fichier commun avec le lot ; `dev` n'a touché ni iOS ni le SDK.
+- Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests (2 056) rc=0,
+  couleurs d'accent rc=0.
+- Prochain lot recommandé : inchangé (fusion de #19864 au dégel, plafond `untilStopped` de `listOnlyState`, #19682
+  une fois décidée).
+
+## 2026-11-19 — réveil de 21 h : #19864 recalée sur dev d156266e8
+
+- Reprise : #19864 toujours ouverte, tête 86c9e9584 intacte ; la CI des PR reste gelée (35 vérifications « skipped »).
+  #19682 toujours sans décision du porteur. Aucun nouveau lot ouvert.
+- `origin/dev` (d156266e8 : profil iOS, concepts de progression, demandes d'entrée des communautés) fusionnée à la
+  main, sans conflit et sans fichier commun avec le lot (`dev` touche `LocationMapPinsLayer.swift`, hors lot).
+- Gardes iOS sur l'arbre fusionné : règles maison rc=0, cohésion rc=0, inscription des tests (2 056) rc=0, couleurs
+  d'accent rc=0. Swift et `sdk-core` Android se prouvent par la CI de la PR, au dégel.
+- Prochain lot recommandé : inchangé (fusion de #19864 au dégel, plafond `untilStopped` de `listOnlyState`, #19682
+  une fois décidée).
+
+## 2026-11-19 — reprise de #19864 après son retrait de la vague de fusion
+
+- Cause : devant une passerelle d'avant la liste seule, l'appareil relancé qui attend la relecture rendait `Refused(UNCONFIRMED)` ; le témoin déjà sur dev `SharedLocationSharingCenterTest:344` attend l'arrêt complet. Correctif sur les deux miroirs : `stopAll` (un arrêt n'a pas besoin de la position, aucune position d'ici ne part avant la relecture). Mes deux témoins du lot suivent (arrêt, rien de la position, liste vide).
+- `dev` b560659a8 fusionnée à la main ; gardes iOS vertes sur l'arbre fusionné (house_rules 42, cohesion, registration 2056 inscrits, accent 168/408). `android.yml` déclenché sur la branche, comme demandé sur la PR.
+- Restent en lots suivants : #19928 (relecture en échec à garder muette), #19929 (liste restaurée effacée et reconstruite, empreinte de l'identifiant d'installation).
+
+## 2026-11-20 — réveil de 23 h (19 nov.) : #19864 prouvée sur Android
+
+- Reprise : #19864 corrigée à 22 h 25 après son retrait de la vague de fusion (arrêt complet devant une passerelle
+  d'avant la liste seule). Aucun nouveau lot ouvert : la routine mène sa PR.
+- `android.yml` (`workflow_dispatch`, run 44628440305) sur 8d9b953d4 : **vert** — assemble + tests unitaires, chaînes,
+  routes, jetons et graphe des modules. La tête suivante ne touche que ce journal.
+- `origin/dev` c0784d9c3 fusionnée à la main, sans conflit (seules les demandes d'entrée des communautés bougent).
+  Gardes iOS sur l'arbre fusionné : règles maison, cohésion, inscription des tests, toutes rc=0. La CI iOS des PR
+  reste gelée.
+- Prochain lot recommandé : fusion de #19864, puis #19928 (relecture en échec gardée muette), #19929, plafond
+  `untilStopped`, #19682 une fois décidée.
+
+## 2026-11-20 — réveil de 1 h : #19864 (relevé avant relecture) recalée sur dev (b66be57f7)
+
+- Reprise : #19864 toujours ouverte, tête cd9041f9b intacte ; la CI des PR reste gelée (vérifications « skipped »),
+  le porteur fusionne par vagues. Preuve Android déjà acquise (run `android.yml` 44628440305 vert sur 8d9b953d4).
+  Aucun nouveau lot ouvert : #19928 et #19929 touchent les mêmes centres et attendent la fusion de #19864.
+- `origin/dev` (b66be57f7 : appels Android, pièces jointes, pagination des conversations) fusionnée à la main, sans
+  conflit ; `dev` n'a touché aucun fichier de relation, de position ni `PushDeviceIdentity` depuis c0784d9c3.
+- Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests (2 056) rc=0,
+  couleurs d'accent (408) rc=0. Swift reste à prouver par `ios.yml`.
+- Prochain lot recommandé : fusion de #19864, puis #19928 (relecture en échec gardée muette), #19929, plafond
+  `untilStopped`, #19682 une fois décidée.
+
+## 2026-11-20 — réveil de 5 h : la suite iOS de #19864 est verte
+
+- Reprise : #19864 ouverte, tête 72c172d19 (témoin `test_aListFromBeforeTheMark_isAdoptedAsIs_andStampedForNextTime`
+  corrigé au réveil de 3 h, après le rouge de la tranche 3 du run 44652457362). Aucun nouveau lot ouvert.
+  #19682 attend toujours la décision du porteur.
+- Preuve iOS : `ios.yml` run 44677003851 (`workflow_dispatch` sur 72c172d19) VERT — build, quatre tranches de tests,
+  verdict. Preuve Android : run 44628440305 vert (code du lot inchangé depuis).
+- `origin/dev` (2ac2ba716) fusionnée à la main, sans conflit et sans fichier commun avec le lot. Gardes iOS sur
+  l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests (2 056) rc=0, accent (408) rc=0.
+- Prochain lot recommandé : fusion de #19864 par le porteur (CI des PR gelée), puis #19928, #19929, plafond
+  `untilStopped`, #19682 une fois décidée.
+
+## 2026-11-20 — réveil de 7 h : #19864 fusionnée, lot #19928 ouvert
+
+- #19864 fusionnée dans `dev` par le porteur (64516f16b, tête 72c172d19), #19767 fermée. L'entrée de journal de 5 h,
+  poussée après la fusion, est reprise ici.
+- Lot : #19928 (une relecture en échec garde l'appareil muet), branche `claude/cercles-19928-panne-muette`.
+- Mise en œuvre (6bc63e9da, 4d6e43a03), iOS et Android : la relecture de `/relations/locations/mine` a trois issues — une réponse lève l'attente, un 404 (passerelle d'avant la route) aussi, toute autre erreur est une PANNE qui garde l'appareil muet et rejoue la relecture toutes les 30 s. `reconcile` relit d'abord quand la liste n'est pas soldée ; sous attente, un retrait en attente part quand même (liste seule, sans position), et le suivi GPS s'arrête quand plus aucun destinataire ne reste. `wipe` remet l'attente à faux.
+- Audit adversarial avant PR : F1 (retrait bloqué), F2 (GPS), F3 (rejeu après wipe), F4 (double relecture) corrigés dans 4d6e43a03 ; F5 (404 de Traefik pendant un déploiement) et F6 (« Arrêter » avant la relecture retire un ajout d'un autre appareil, antérieur au lot) → #19999 ; F7 → décision #19997.
+- Gardes iOS rc=0 sur 4d6e43a03 (house_rules, cohesion, test_registration, accent). Swift et Kotlin ne compilent pas ici : preuve par ios.yml et android.yml en workflow_dispatch.
+- Décisions ouvertes : #19682 (arrondi de startedAt), #19997 (adopter ou céder sans accusé de démarrage).
+- Prochain lot : #19929, puis le plafond `untilStopped` de `listOnlyState`, puis #19999 ; #19682 et #19997 une fois tranchées.
+
+## 2026-11-20 — réveil de 11 h : lot #20029 (404 d'un intermédiaire) → PR #20042
+
+- Reprise : #20000 fusionnée (133a21ad2), #19928 fermée. Aucune PR de la routine ouverte. Lot : #20029, portage du
+  commit 7657978cf (PR #20025 fermée en doublon) sur les sites purs de #20000.
+- iOS `SharedLocationServedRead.answer` et Android `ownSharedLocationAnswer` : seul un 404 au message « Route GET:… not
+  found » (Fastify, la passerelle n'a pas de `setNotFoundHandler`) vaut passerelle d'avant ; Traefik, portail captif,
+  corps vide ⇒ panne, attente gardée. Android : `ApiError.servedMessage` additif, rempli dans `ApiCall.kt`.
+- Témoins rouges poussés d'abord (8bc93b087), correctif e341b5182. Gardes iOS rc=0 (règles maison 42, cohésion,
+  inscription 2 060, accent 408) ; tête contient `dev` 95ab23af5. CI des PR « skipped » : `ios.yml` et `android.yml`
+  lancés en `workflow_dispatch` sur la branche.
+- Prochain lot : #19929 (sauvegarde restaurée : liste effacée et reconstruite, identifiant en empreinte), puis le plafond
+  `untilStopped` de `listOnlyState`, puis #19999 ; #19682 et #19997 attendent la décision du porteur.
+
+## 2026-11-20 — réveil de 13 h : #20042 recalée sur dev (a34b3344b)
+
+- Reprise : #20042 ouverte, tête b76cdc840. `android.yml` (run 44726589593) VERT sur e341b5182. `ios.yml` (run
+  44726594411) ROUGE au build des tests, hors lot : `SafetyAlertNotificationTests.swift:16` appelait depuis un contexte
+  non isolé une méthode `@MainActor` — défaut de `dev`, corrigé sur `dev` par 9d55ba1d6.
+- `origin/dev` (a34b3344b) fusionnée à la main, sans conflit. Gardes iOS sur l'arbre fusionné : règles maison, cohésion,
+  inscription des tests, accent, toutes rc=0. `ios.yml` relancé en `workflow_dispatch` sur la nouvelle tête.
+- Prochain lot : fusion de #20042, puis #19929, le plafond `untilStopped` de `listOnlyState`, #19999 ; #19682 et
+  #19997 attendent la décision du porteur.
+## 2026-11-20 — réveil de 13 h : lot #19929 (sauvegarde restaurée)
+
+- Reprise : #20000 (#19928, relecture en échec gardée muette) fusionnée dans `dev` à 10 h. Le réveil du 16 nov. s'était
+  arrêté sur une limite d'usage avant tout travail.
+- Lot : #19929, branche `claude/cercles-19929-restauration`. iOS + SDK seulement : Android a la sauvegarde désactivée
+  (`allowBackup="false"` + `data_extraction_rules.xml`), aucune liste ne peut y être restaurée.
+- Mise en œuvre : une liste écrite par un autre appareil s'EFFACE (liste, marque « reçue », démarrage, retraits en
+  attente) et la relecture du partage servi la reconstruit, reçue — plus d'arrêt ni de liste périmée partis d'une
+  sauvegarde. La marque d'appareil devient `SHA256(compte:installation)` ; une marque en clair d'avant vaut pour cet
+  appareil et se réécrit. `PushDeviceIdentity.settledInstallationId` rend `nil` quand le trousseau ne tient pas
+  l'identifiant : rien n'est jugé, la marque ne bouge pas. Branchement de production testé
+  (`SharedLocationSharingHolder.rosterStore`).
+- Témoins : `SharedLocationRestoredBackupTests` (nouveau fichier, la section #19767 de `SharedLocationSharingSyncTests`
+  y a déménagé pour tenir le budget), `PushDeviceIdentityTests`.
+- Audit adversarial : non bloquant. Empreinte préfixée par un domaine (F4) dans le lot. Suivis ouverts : #20054 (M1, un
+  arrêt en attente perdu en silence si l'appareil légitime ne se reconnaît plus), #20055 (M2, antérieur : « Partager »
+  avant la première relecture remplace la liste de l'autre appareil), #20056 (F1, sauvegarde d'avant toute marque).
+  F2 (identifiant absent ⇒ rien n'est jugé) assumé, comme avant le lot.
+- Prochain lot : fusion de cette PR (CI iOS en `workflow_dispatch`), puis #20055 (iOS + Android), le plafond
+  `untilStopped` de `listOnlyState`, #19999, #20054 ; #19682 et #19997 une fois tranchées.
+
+## 2026-11-20 — réveil de 17 h : lot #19999 + #20055 (relire avant de composer)
+
+- Reprise : #20042 et #20058 fusionnées dans `dev` (#20029 et #19929 fermées). Aucune PR de la routine ouverte. Le
+  plafond `untilStopped` de `listOnlyState` reste sans objet : la passerelle ne sert pas encore « jusqu'à l'arrêt ».
+- Lot : #19999 et #20055 ensemble (même mécanisme), branche `claude/cercles-19999-relire-avant-de-composer`, iOS +
+  Android. Un drapeau `hasReadServed` (vrai tant que la DERNIÈRE relecture a répondu) : « Partager » relit d'abord si
+  besoin et réunit le partage servi, une panne le refuse (`offline`) ; « Arrêter » relit d'abord et se compose sur la
+  liste servie, une panne garde #19928 (le retrait part, fail-closed) ; une passerelle d'avant ne lève pas l'attente
+  avant un « Arrêter ».
+- Audit adversarial : non bloquant. Corrigés dans le lot : M1 (une relecture en panne remet le drapeau à faux), M3 (un
+  appareil récepteur ne republie jamais SA position dans le repli d'avant la liste seule), F1 (motif juste sur un
+  changement de compte), F2 (relire avant de juger les capacités), F3 (« Arrêter » d'une personne déjà retirée
+  n'envoie rien), F5 (témoins). Suivis ouverts : #20087 (M2, la relecture ne dit pas la source : un point choisi peut
+  devenir position réelle), #20086 (facette de #20055 : état « partage lancé ailleurs, en attente de connexion »).
+- Gardes iOS rc=0 (règles maison 42, cohésion, inscription 2 063, accent 408) ; Swift et Kotlin prouvés par `ios.yml`
+  et `android.yml` en `workflow_dispatch`.
+- Prochain lot : fusion de cette PR, puis #20054, #20056, #20086, #20087 ; #19682 et #19997 attendent la décision du
+  porteur.
+
+## 2026-11-20 — réveil de 23 h : lot #19557 (moitié serveur) + #20087 (moitié serveur)
+
+- Reprise : #20088 fusionnée (b79d1f006), #19999 et #20055 fermées. Aucune PR de la routine ouverte.
+- Constat : #20087 suppose une source que la passerelle ne connaissait pas — #19557 (point choisi à la main) n'avait
+  jamais été servi côté passerelle. Lot : les deux moitiés SERVEUR ensemble, branche
+  `claude/cercles-20087-source-servie`.
+- Mise en œuvre : `location:share-start` accepte `source?: 'device' | 'manual'` (absente ⇒ device ; manual exige une
+  position) ; l'état scellé garde `source: 'manual'`, la liste seule la reprend ; `GET /relations/locations/mine` sert
+  `source` (additif) ; `location:share-update` sur un point choisi rend `SHARED_LOCATION_FIXED_POINT` sans rien écrire ni
+  servir. Le lecteur ne reçoit rien de la source.
+- `acceptsManualSource` n'est PAS annoncé : « Choisir sur la carte » reste éteint tant qu'iOS et Android ne lisent pas la
+  source servie (moitié client de #20087) — sinon le défaut M2 deviendrait atteignable.
+- Audit adversarial : non bloquant tant que `acceptsManualSource` n'est pas annoncé. Corrigés dans le lot : un
+  démarrage AVEC position SANS source ne remplace plus un point choisi (`FIXED_POINT` ; « device » doit être dit), et un
+  point choisi ne garde ni mouvement ni précision réelle. Suivi #20115 (sortie du fantôme muette pour un point choisi,
+  courses mise à jour / démarrage), à solder AVANT l'annonce.
+- Prochain lot : moitié client de #20087 (iOS + Android : un partage servi `manual` réuni ne republie jamais la position
+  de l'appareil ; « Partager » depuis l'appareil devant un point choisi demande), puis #20115, puis annoncer
+  `acceptsManualSource` (#19557), puis #20054, #20056, #20086.
+
+## 2026-11-21 — réveil de 1 h : moitié client de #20087 (iOS)
+
+- Reprise : #20116 fusionnée (7495763da). Aucune PR de la routine ouverte. Branche `claude/cercles-20087-source-cliente`
+  réservée avant toute écriture.
+- Constat : seul iOS sait CHOISIR un point (#19558). Le web et Android ne connaissent pas le point choisi ; la passerelle
+  les protège déjà (`SHARED_LOCATION_FIXED_POINT`), il leur manque de lire la source et de demander : suivi #20126.
+- Lot iOS : le SDK lit `source` dans la relecture (inconnue ⇒ manual, absente ⇒ rien ne change) et ne fait voyager
+  `source: 'device'` que pour REMPLACER un point choisi (`replacesChosenPoint`) — une passerelle d'avant #20116 refuse la
+  clé, et seule une passerelle qui sert un point peut en avoir un à remplacer. La liste réunie suit la source servie ; un
+  point choisi ailleurs arrête le suivi de l'appareil ; « Partager » devant un point choisi rend `.replacesChosenPoint`
+  sans rien envoyer ni demander à l'appareil, la feuille demande « Montrer ta position réelle ? » puis rejoue.
+- Le fichier de test neuf n'a pas pu être inscrit au projet (`ios-xcodegen-sync` désactivé) : la classe
+  `SharedLocationServedSourceTests` vit dans `SharedLocationRestoredBackupTests.swift`.
+- Gardes iOS : règles maison 42, cohésion rc=0, inscription 2 063, localisation, accent 168/408 ; vitest
+  `packages/shared/__tests__/ci` 216/216. Swift prouvé par `ios.yml` + `sdk-tests.yml` en `workflow_dispatch`.
+- PR #20128. Suivis ouverts par l'audit : #20127 (confirmation liée au partage montré), commentaire sur #20115.
+
+## 2026-11-21 — réveil de 5 h : fusion de #20128
+
+- Reprise : `ios.yml` (44850786079), `sdk-tests.yml` (44850788553) et `ci.yml` (44850791219) VERTS sur ccd964264.
+  Une autre session a fusionné `dev` dans la branche à 4 h 47 (c2185cdfc) ; `origin/dev` (36970d31d, trois commits de
+  passerelle sans recouvrement) refusionnée à la main, sans conflit.
+- Gardes iOS sur l'arbre fusionné : règles maison 42, cohésion rc=0, inscription 2 063, accent 168/408, catalogue JSON
+  valide. PR fusionnée dans `dev`, #20087 fermée à la main.
+- Prochain lot : #20115 (sortie du fantôme pour un point choisi) avant d'annoncer `acceptsManualSource` (#19557), puis
+  #20126 (web + Android), #20127, #20054, #20056, #20086.

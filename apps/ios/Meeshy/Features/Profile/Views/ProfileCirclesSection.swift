@@ -50,11 +50,15 @@ struct ProfileCirclesSection: View {
                     if let phrase = Self.emptyPhrase(for: summary, hasServedLinks: hasServedLinks) {
                         emptyLine(phrase).meeshyTransition(.opacity)
                     }
+                    // L'invitation ferme la carte des cercles (#19986) : teintée à l'accent, lisible sur tout fond,
+                    // et rangée avec ce qu'elle agrandit plutôt que posée seule dessous.
+                    MeeshyButton(Self.inviteTitle, systemImage: "person.badge.plus",
+                                 kind: .tinted, size: .s44, width: .fill, tint: tint,
+                                 action: { onOpen(.invite) })
+                        .padding(.top, MeeshySpacing.md)
+                        .accessibilityIdentifier("profile.circles.invite")
                 }
             }
-            MeeshyButton(Self.inviteTitle, systemImage: "person.badge.plus", kind: .glass, size: .s44,
-                         action: { onOpen(.invite) })
-                .accessibilityIdentifier("profile.circles.invite")
         }
         .meeshyMotion(.morph, value: summary)
         .meeshyMotion(.morph, value: phase)

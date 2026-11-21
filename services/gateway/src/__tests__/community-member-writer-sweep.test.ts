@@ -77,6 +77,18 @@ describe("les écrivains de CommunityMember disent comment l'effectif l'apprend"
     expect(unwired).toEqual([]);
   });
 
+  it("chaque écrivain qui fait ENTRER clôt la demande d'entrée en attente (#19872) — et celui-là, il clôt ?", () => {
+    const ENTRY_WRITERS = [
+      'routes/communities/admission.ts',
+      'routes/communities/members.ts',
+      'routes/communities/membership.ts',
+      'services/conversations/communityMembershipSync.ts',
+    ];
+    const unclosed = ENTRY_WRITERS.filter((path) => !/closePendingJoinRequests\(/.test(readFileSync(join(SRC_ROOT, path), 'utf8')));
+    expect(unclosed).toEqual([]);
+    expect(ENTRY_WRITERS.every((path) => path in WRITERS)).toBe(true);
+  });
+
   it('un écrivain muet est une dette nommée par son issue, jamais un oubli', () => {
     const silent = Object.values(WRITERS).filter((a): a is Extract<Announcement, { kind: 'silent' }> => a.kind === 'silent');
     expect(silent.every((a) => /^#\d+$/.test(a.issue))).toBe(true);

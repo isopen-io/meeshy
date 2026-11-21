@@ -178,6 +178,7 @@ public struct MeeshyTicket<Stub: View, Leading: View, Trailing: View, Status: Vi
                         .textCase(size == .hero ? .uppercase : nil)
                         .strikethrough(struck)
                         .lineLimit(1)
+                        .minimumScaleFactor(CGFloat(recipe.titleMinimumScale))
                     if let titleBadge, !titleBadge.isEmpty {
                         MeeshyBadge(.label(titleBadge), surface: .solid, kind: .accent, tint: tint)
                             .transition(.opacity)

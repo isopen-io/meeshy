@@ -45,7 +45,8 @@ const instantOf = (value: unknown): string | null => {
 const numberIn = (value: unknown, min: number, max: number): number | null =>
   typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max ? value : null;
 
-function decodePosition(raw: unknown): InactivityLastPosition | null {
+/** La dernière position servie, partagée avec la chute détectée (#18748) : rien d'autre que ses quatre champs. */
+export function decodeLastPosition(raw: unknown): InactivityLastPosition | null {
   const wire = objectOf(raw);
   const latitude = numberIn(wire?.latitude, -90, 90);
   const longitude = numberIn(wire?.longitude, -180, 180);
@@ -55,7 +56,8 @@ function decodePosition(raw: unknown): InactivityLastPosition | null {
   return { latitude, longitude, ...(accuracy === null ? {} : { accuracy }), recordedAt };
 }
 
-function decodeBattery(raw: unknown): InactivityLastBattery | null {
+/** La dernière batterie servie, partagée avec la chute détectée (#18748). */
+export function decodeLastBattery(raw: unknown): InactivityLastBattery | null {
   const wire = objectOf(raw);
   const level = numberIn(wire?.level, 0, 100);
   const measuredAt = instantOf(wire?.measuredAt);
@@ -68,8 +70,8 @@ export function decodeInactivityState(raw: unknown): InactivityAlertState | null
   const inactiveSince = instantOf(wire?.inactiveSince);
   const alertedAt = instantOf(wire?.alertedAt);
   if (userId === null || inactiveSince === null || alertedAt === null) return null;
-  const lastPosition = decodePosition(wire?.lastPosition);
-  const lastBattery = decodeBattery(wire?.lastBattery);
+  const lastPosition = decodeLastPosition(wire?.lastPosition);
+  const lastBattery = decodeLastBattery(wire?.lastBattery);
   return { userId, inactiveSince, alertedAt, ...(lastPosition === null ? {} : { lastPosition }), ...(lastBattery === null ? {} : { lastBattery }) };
 }
 

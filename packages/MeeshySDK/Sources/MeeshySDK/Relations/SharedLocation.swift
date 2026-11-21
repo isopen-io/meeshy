@@ -37,9 +37,13 @@ public struct SharedLocationChanged: Decodable, Sendable, Equatable {
     /// `circle` (#17966), ADDITIF : le cercle d'où vient l'émetteur POUR MOI (Ami, Proche, Sang). Un serveur antérieur
     /// ne le sert pas, une valeur hors des trois cercles se lit comme absente : la carte dessine alors un marqueur neutre.
     public let circle: RelationLevel?
+    /// `motion` (#19887), ADDITIF : servi au seul lecteur à la précision exacte. Absent, inconnu ou illisible : `nil`,
+    /// et la position se lit quand même.
+    public let motion: SharedLocationMotion?
 
     public init(userId: String, latitude: Double, longitude: Double, precision: SharedLocationPrecision,
-                radiusMeters: Double, updatedAt: Date, expiresAt: Date, circle: RelationLevel? = nil) {
+                radiusMeters: Double, updatedAt: Date, expiresAt: Date, circle: RelationLevel? = nil,
+                motion: SharedLocationMotion? = nil) {
         self.userId = userId
         self.latitude = latitude
         self.longitude = longitude
@@ -48,6 +52,7 @@ public struct SharedLocationChanged: Decodable, Sendable, Equatable {
         self.updatedAt = updatedAt
         self.expiresAt = expiresAt
         self.circle = circle.flatMap { SharedLocationCircle.served.contains($0) ? $0 : nil }
+        self.motion = motion
     }
 
     /// La durée de vie servie, bornée par le contrat : une échéance absurde ne garde jamais une position affichée.
@@ -55,7 +60,7 @@ public struct SharedLocationChanged: Decodable, Sendable, Equatable {
         min(SharedLocationContract.maxLifetime, max(0, expiresAt.timeIntervalSince(updatedAt)))
     }
 
-    private enum CodingKeys: String, CodingKey { case userId, latitude, longitude, precision, radiusMeters, updatedAt, expiresAt, circle }
+    private enum CodingKeys: String, CodingKey { case userId, latitude, longitude, precision, radiusMeters, updatedAt, expiresAt, circle, motion }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -83,8 +88,9 @@ public struct SharedLocationChanged: Decodable, Sendable, Equatable {
             throw DecodingError.dataCorruptedError(forKey: .updatedAt, in: c, debugDescription: "instant illisible")
         }
         let circle = ((try? c.decodeIfPresent(String.self, forKey: .circle)) ?? nil).flatMap(RelationLevel.init(rawValue:))
+        let motion = ((try? c.decodeIfPresent(String.self, forKey: .motion)) ?? nil).flatMap(SharedLocationMotion.init(rawValue:))
         self.init(userId: userId, latitude: latitude, longitude: longitude, precision: precision,
-                  radiusMeters: radius, updatedAt: updatedAt, expiresAt: expiresAt, circle: circle)
+                  radiusMeters: radius, updatedAt: updatedAt, expiresAt: expiresAt, circle: circle, motion: motion)
     }
 }
 
@@ -259,14 +265,20 @@ public struct SharedLocationOwnSnapshot: Decodable, Sendable, Equatable {
     /// UN SEUL APPAREIL PUBLIE (#18580) : le dernier démarrage AVEC position, renouvelé par chaque « Partager », gardé
     /// par la liste seule. `nil` : passerelle antérieure — l'appareil ne cède alors jamais.
     public let startedAt: String?
+    /// D'où vient le point du partage en cours (#20087) : `manual`, un point choisi à la main ; `device`, le relevé d'un
+    /// appareil. `nil` : la passerelle ne le dit pas (antérieure à #20116, ou aucun partage) — rien n'est changé ici. Une
+    /// source inconnue se lit `manual` : on ne remplace jamais un point par la position réelle sur un doute.
+    public let source: SharedLocationPositionSource?
 
     public init(
         recipients: [SharedLocationOwnRecipient],
         shareBattery: Bool? = nil,
         acceptsManualSource: Bool = false,
         acceptsUntilStopped: Bool = false,
-        startedAt: String? = nil
+        startedAt: String? = nil,
+        source: SharedLocationPositionSource? = nil
     ) {
+        self.source = source
         self.recipients = recipients
         self.shareBattery = shareBattery
         self.acceptsManualSource = acceptsManualSource
@@ -274,7 +286,7 @@ public struct SharedLocationOwnSnapshot: Decodable, Sendable, Equatable {
         self.startedAt = startedAt
     }
 
-    private enum CodingKeys: String, CodingKey { case recipients, shareBattery, acceptsManualSource, acceptsUntilStopped, startedAt }
+    private enum CodingKeys: String, CodingKey { case recipients, shareBattery, acceptsManualSource, acceptsUntilStopped, startedAt, source }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -283,6 +295,14 @@ public struct SharedLocationOwnSnapshot: Decodable, Sendable, Equatable {
         acceptsManualSource = ((try? c.decodeIfPresent(Bool.self, forKey: .acceptsManualSource)) ?? nil) ?? false
         acceptsUntilStopped = ((try? c.decodeIfPresent(Bool.self, forKey: .acceptsUntilStopped)) ?? nil) ?? false
         startedAt = (try? c.decodeIfPresent(String.self, forKey: .startedAt)) ?? nil
+        source = Self.servedSource(in: c)
+    }
+
+    /// Une clé absente ou nulle ne dit rien ; une clé présente mais illisible (autre chaîne, autre type) dit un point
+    /// qu'on ne remplace pas.
+    private static func servedSource(in c: KeyedDecodingContainer<CodingKeys>) -> SharedLocationPositionSource? {
+        guard c.contains(.source), (try? c.decodeNil(forKey: .source)) == false else { return nil }
+        return (try? c.decode(String.self, forKey: .source)).flatMap(SharedLocationPositionSource.init(rawValue:)) ?? .manual
     }
 
     private struct Lenient: Decodable {

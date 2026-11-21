@@ -136,4 +136,15 @@ final class TalkieLongHoldTests: XCTestCase {
     func test_theVoiceOpens_onlyAfterAQuickTapWouldHaveEnded() {
         XCTAssertGreaterThanOrEqual(TalkieLongHold.minimumDuration, TalkieHoldLook.quickTapLimit)
     }
+
+    func test_justEnded_releaseRightAfterAHold_isNotATap() {
+        let end = Date(timeIntervalSince1970: 1_000)
+        XCTAssertTrue(TalkieLongHold.justEnded(at: end, now: end.addingTimeInterval(0.2)))
+        XCTAssertFalse(TalkieLongHold.justEnded(at: end, now: end.addingTimeInterval(TalkieLongHold.releaseWindow + 0.1)))
+    }
+
+    func test_justEnded_whileHolding_orNeverHeld() {
+        XCTAssertTrue(TalkieLongHold.justEnded(at: .distantFuture, now: Date()))
+        XCTAssertFalse(TalkieLongHold.justEnded(at: nil, now: Date()))
+    }
 }

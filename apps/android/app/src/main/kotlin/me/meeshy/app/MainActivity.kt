@@ -54,6 +54,8 @@ import me.meeshy.sdk.battery.BatteryConsentLedger
 import me.meeshy.sdk.battery.BatterySettingsGateway
 import me.meeshy.sdk.battery.BatteryStore
 import me.meeshy.app.inactivity.WellnessTapAnswer
+import me.meeshy.sdk.fall.FallSettingsGateway
+import me.meeshy.sdk.fall.FallStore
 import me.meeshy.sdk.inactivity.InactivitySettingsGateway
 import me.meeshy.sdk.inactivity.InactivityStore
 import me.meeshy.sdk.phonecall.PhoneCallSettingsGateway
@@ -76,6 +78,8 @@ import me.meeshy.ui.component.LocalPresenceStore
 import me.meeshy.ui.component.battery.LocalBatteryConsentLedger
 import me.meeshy.ui.component.battery.LocalBatterySettings
 import me.meeshy.ui.component.battery.LocalBatteryStore
+import me.meeshy.ui.component.fall.LocalFallSettings
+import me.meeshy.ui.component.fall.LocalFallStore
 import me.meeshy.ui.component.inactivity.LocalInactivitySettings
 import me.meeshy.ui.component.inactivity.LocalInactivityStore
 import me.meeshy.ui.component.phonecall.LocalPhoneCallSettings
@@ -154,6 +158,13 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var phoneCallSettings: PhoneCallSettingsGateway
+
+    /** La chute détectée des Sangs (#18748) : [LocalFallStore] la fournit à l'en-tête, aux fiches, au profil. */
+    @Inject
+    lateinit var fallStore: FallStore
+
+    @Inject
+    lateinit var fallSettings: FallSettingsGateway
 
     /** Le toucher de « Tout va bien ? » répond « Je vais bien » (#18738). */
     @Inject
@@ -289,6 +300,8 @@ class MainActivity : ComponentActivity() {
                         LocalInactivitySettings provides inactivitySettings,
                         LocalPhoneCallStore provides phoneCallStore,
                         LocalPhoneCallSettings provides phoneCallSettings,
+                        LocalFallStore provides fallStore,
+                        LocalFallSettings provides fallSettings,
                         LocalConversationViewers provides conversationViewing.viewers,
                         // Le niveau et le rang d'un membre, posés sur sa bannière (iOS `ProfileSheetEnvironment`).
                         LocalProfileGameSlot provides gameSlot,

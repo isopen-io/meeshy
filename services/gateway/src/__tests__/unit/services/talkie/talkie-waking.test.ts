@@ -10,6 +10,7 @@ import { describe, it, expect, jest, afterEach } from '@jest/globals';
 import { TALKIE_JOIN_WINDOW_MS, TALKIE_MAX_DURATION_MS, TALKIE_SEALED_CODEC } from '@meeshy/shared/types/talkie';
 import { TalkieRelay, TALKIE_WAKING_PROCESS_MAX_BYTES, type TalkieRelayDeps } from '../../../../services/talkie/talkieRelay';
 import type { TalkieVerdict } from '../../../../services/talkie/talkieGate';
+import { findConversationsIn } from '../../../helpers/direct-pair-world';
 
 const FROM = '507f1f77bcf86cd799439011';
 const TO = '507f1f77bcf86cd799439022';
@@ -499,17 +500,37 @@ describe('#17142 (audit) — ce qui borne le rattrapage et la copie', () => {
     expect(Math.min(...ttls) * 1000).toBeGreaterThanOrEqual(TALKIE_MAX_DURATION_MS + TALKIE_JOIN_WINDOW_MS);
   });
 
+  /**
+   * #19910 — ce témoin assertait la FORME de la clause (`toHaveBeenCalledWith`
+   * sur un `findFirst` rendant TOUJOURS `null`) : il épinglait entre autres
+   * `NOT: { AND: … }`, donc il passait au vert avec une clause qui n'apparie
+   * RIEN — ce qui était exactement le défaut. Il assert désormais l'EFFET,
+   * contre des documents évalués. Le détail prédicat par prédicat vit dans
+   * `unit/services/talkie/talkie-fallback-admission.test.ts`.
+   */
   it('la copie ne vise qu’un échange privé que le serveur lit : direct ou groupe, jamais chiffré', async () => {
     const { mostRecentSharedConversation } = await import('../../../../services/talkie/talkieFallback');
-    const findFirst = jest.fn(async (_args: unknown) => null);
+    const nominale = (id: string, fields: Record<string, unknown> = {}) => ({
+      id,
+      type: 'direct',
+      isActive: true,
+      isAnnouncementChannel: false,
+      defaultWriteRole: 'everyone',
+      lastMessageAt: new Date('2026-11-10T10:00:00Z'),
+      participants: [],
+      ...fields,
+    });
+    const docs = [
+      nominale('c-communaute', { type: 'group', communityId: '507f1f77bcf86cd799439011', lastMessageAt: new Date('2026-11-20T10:00:00Z') }),
+      nominale('c-chiffree', { encryptionMode: 'e2ee', lastMessageAt: new Date('2026-11-21T10:00:00Z') }),
+      nominale('c-lisible'),
+    ];
     const prisma = {
-      participant: { findMany: async () => [{ conversationId: 'c1' }] },
-      conversation: { findFirst },
+      participant: { findMany: async () => docs.map((d) => ({ conversationId: d.id })) },
+      conversation: findConversationsIn(docs),
     };
-    await mostRecentSharedConversation(prisma as never, FROM, TO);
-    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ type: { in: ['direct', 'group'] }, NOT: expect.objectContaining({ AND: expect.any(Array) }) }),
-    }));
+
+    expect(await mostRecentSharedConversation(prisma as never, FROM, TO)).toBe('c-lisible');
   });
 });
 

@@ -121,13 +121,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // brand est visible pendant le refresh.
         UIRefreshControl.appearance().tintColor = .clear
 
-        // NotificationCoordinator must be wired as early as possible so unread/badge
-        // state stays aligned even if no view is yet in the hierarchy.
-        // Accessing @MainActor state requires an explicit hop since the delegate
+        // NotificationCoordinator (unread/badge) and the HealthKit fall observer (#18748, woken in background) are
+        // wired at launch, before any view is in the hierarchy. The explicit hop is needed since the delegate
         // method's isolation is inferred from UIKit preconcurrency annotations.
         Task { @MainActor in
             NotificationCoordinator.shared.widgetSink = WidgetDataManager.shared
             NotificationCoordinator.shared.start()
+            FallDetectionCenter.start()
         }
 
         return true
@@ -204,7 +204,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             }
             return
         }
-        if Self.handledEndToEndWake(userInfo, completionHandler: completionHandler) || BatteryCenter.handledPullWake(userInfo, completionHandler: completionHandler) || PhoneReachabilityCenter.handledProbeWake(userInfo, completionHandler: completionHandler) { return }
+        if Self.handledEndToEndWake(userInfo, completionHandler: completionHandler) || BatteryCenter.handledPullWake(userInfo, completionHandler: completionHandler) || PhoneReachabilityCenter.handledProbeWake(userInfo, completionHandler: completionHandler) || FallDetectionCenter.handledClearingWake(userInfo, completionHandler: completionHandler) { return }
         // Multi-device : un autre appareil du compte a décroché — pendant
         // socketless de `call:already-answered` (voir sendCallCancellationPushes
         // côté gateway pour le rationale réseau). Le device qui a décroché
@@ -534,7 +534,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         register(Set([
             messageCategory, mentionCategory, friendRequestCategory, socialCategory, socialCommentableCategory,
             callIncomingCategory, callMissedCategory, legacyCallCategory, LockedConversationNotificationCategory.category,
-        ] + NotificationDetailCategories.categories(reply: replyAction, markRead: markReadAction, bundle: bundle) + [bringNotificationCategory(bundle: bundle), WellnessCheckNotificationCategory.category(bundle: bundle)]))
+        ] + NotificationDetailCategories.categories(reply: replyAction, markRead: markReadAction, bundle: bundle) + [bringNotificationCategory(bundle: bundle), WellnessCheckNotificationCategory.category(bundle: bundle), SafetyAlertNotificationCategory.category(bundle: bundle)]))
     }
 
     /// #17442 — la bannière d'un Bring (catégorie posée par la passerelle, `BRING_PUSH_CATEGORY`) : « Arrêter » l'éteint
@@ -742,7 +742,7 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         let userInfo = notification.request.content.userInfo
-        if BatteryCenter.routesForegroundPush(notification.request.content) || PhoneReachabilityCenter.routesForegroundPush(notification.request.content) || routeBringPush(userInfo) { return completionHandler([]) }
+        if BatteryCenter.routesForegroundPush(notification.request.content) || PhoneReachabilityCenter.routesForegroundPush(notification.request.content) || FallDetectionCenter.routesForegroundPush(userInfo) || routeBringPush(userInfo) { return completionHandler([]) }
         if routeTalkieWake(userInfo) { return completionHandler([]) }
         let convId = userInfo["conversationId"] as? String
         let messageId = userInfo["messageId"] as? String

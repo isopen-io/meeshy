@@ -14,10 +14,31 @@
  * portable : embeddings binaires (`UserVoiceModel.embedding`,
  * `chatterboxConditionals`), jetons de session (`sessionToken`,
  * `refreshToken`, `deviceFingerprint`).
+ *
+ * ─── `deletedAt` SE LIT EN DISANT L'ABSENCE (#19909) ─────────────────────────
+ *
+ * Les trois sections de publication portaient `deletedAt: null`. Sous Prisma +
+ * MongoDB c'est une **ÉGALITÉ** : elle exige la clé PRÉSENTE. Or aucun des
+ * quatre créateurs de `Post` et de `PostComment` ne l'écrit (`PostService` —
+ * création et les deux reposts — et `PostCommentService.create`), donc les trois
+ * clauses n'appariaient **aucune ligne** : l'export RGPD ne rendait ni post, ni
+ * reel, ni story, ni statut, ni commentaire, pour aucun compte.
+ *
+ * Et le défaut ne ressemblait pas à une panne, parce que le `where` est partagé
+ * par `findMany` ET `count` : `items: []` AVEC `total: 0`. L'archive ne se
+ * présentait pas comme tronquée mais comme « vous n'avez rien publié » —
+ * indistinguable d'un compte vide. C'est « la liste vide est plus dangereuse
+ * que la réponse vide » (`services/gateway/CLAUDE.md`) appliqué à une
+ * obligation légale (RGPD art. 15 et 20) au lieu d'un écran d'administration.
+ *
+ * La forme juste était déjà nommée et utilisée **105 fois** sur ces deux
+ * modèles : `deletedAt: NOT_DELETED` (`{ isSet: false }`), la discipline
+ * INVERSE qui dit « non supprimé = clé ABSENTE ». Ces trois sites l'ignoraient.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { validatePagination } from '../../utils/pagination';
 import { publicMediaUrlFromEnv } from '../../services/attachments/publicMediaUrl';
+import { NOT_DELETED } from '../../services/posts/softDelete';
 import { exportPackData } from '../../services/packs/PackPrivacy';
 
 const DEFAULT_LIMIT = 500;
@@ -66,7 +87,7 @@ function withServedMediaUrl<T extends { readonly fileUrl: string }>(row: T): T {
 }
 
 export async function exportPosts(prisma: PrismaClient, userId: string, page: ExportPage) {
-  const where = { authorId: userId, type: { in: ['POST' as const, 'REEL' as const] }, deletedAt: null };
+  const where = { authorId: userId, type: { in: ['POST' as const, 'REEL' as const] }, deletedAt: NOT_DELETED };
   const [items, total] = await Promise.all([
     prisma.post.findMany({
       where,
@@ -84,7 +105,7 @@ export async function exportPosts(prisma: PrismaClient, userId: string, page: Ex
 }
 
 export async function exportStories(prisma: PrismaClient, userId: string, page: ExportPage) {
-  const where = { authorId: userId, type: { in: ['STORY' as const, 'STATUS' as const] }, deletedAt: null };
+  const where = { authorId: userId, type: { in: ['STORY' as const, 'STATUS' as const] }, deletedAt: NOT_DELETED };
   const [items, total] = await Promise.all([
     prisma.post.findMany({
       where,
@@ -102,7 +123,7 @@ export async function exportStories(prisma: PrismaClient, userId: string, page: 
 }
 
 export async function exportComments(prisma: PrismaClient, userId: string, page: ExportPage) {
-  const where = { authorId: userId, deletedAt: null };
+  const where = { authorId: userId, deletedAt: NOT_DELETED };
   const [items, total] = await Promise.all([
     prisma.postComment.findMany({
       where,
@@ -165,9 +186,57 @@ export async function exportReactions(prisma: PrismaClient, participantIds: read
   };
 }
 
-/** Même raison de séparation que `exportReactions` : deux tables, deux propriétaires. */
-export async function exportMedia(prisma: PrismaClient, userId: string, page: ExportPage) {
-  const attachmentWhere = { uploadedBy: userId, isAnonymous: false };
+/**
+ * Les sections dont la requête a besoin des SIÈGES du compte, et pas seulement
+ * de son `userId`.
+ *
+ * C'est la liste qui décide si `me/export.ts` lit les sièges (`accountSeatIds`)
+ * — une lecture faite UNE fois et réutilisée. Elle vit ici, à côté des sections
+ * qui en dépendent, parce que c'est le seul endroit où l'on sait pourquoi :
+ * `messages` apparie `senderId`, `reactions` `participantId`, `media` le second
+ * espace de clés de `uploadedBy`, et `calls` le `participantId` de
+ * `CallParticipant`.
+ *
+ * **`calls` y a été inscrite après coup, et c'est la leçon 261.** La condition
+ * écrite dans la route affirmait deux choses : « ces sections consomment la
+ * liste » (vrai) et « ce sont les sections qui en ont besoin » (jamais
+ * vérifié). `exportCallTelemetry` en avait besoin et la relisait chez elle, avec
+ * son propre `where` — une quatrième lecture de la même liste dans la même
+ * requête d'export. Une section qui en aura besoin demain s'inscrit ici ; la
+ * vérification, elle, ne se déduit pas de la liste.
+ */
+export const SECTIONS_NEEDING_PARTICIPANT_IDS = ['messages', 'reactions', 'media', 'calls'] as const;
+
+export function needsParticipantIds(requestedTypes: readonly string[]): boolean {
+  return SECTIONS_NEEDING_PARTICIPANT_IDS.some((section) => requestedTypes.includes(section));
+}
+
+/**
+ * Même raison de séparation que `exportReactions` : deux tables, deux propriétaires.
+ *
+ * ─── ET DEUX ESPACES DE CLÉS DANS `uploadedBy` (#20129) ────────────────────
+ *
+ * `MessageAttachment.uploadedBy` portait l'identité de COMPTE pour les quatre
+ * écrivains de téléversement et le `Participant.id` pour les deux écrivains de
+ * COPIE. #20113 a unifié les écrivains ; **les lignes déjà écrites gardent
+ * l'ancien espace**, et rien ne les réécrit.
+ *
+ * Apparier `uploadedBy: userId` ratait donc les médias TRANSFÉRÉS de
+ * l'utilisateur — une omission dans un export d'article 15, sans erreur et
+ * sans trace. Les deux espaces sont appariés ensemble, et la liste des
+ * participants est celle que `exportReactions` reçoit déjà : calculée UNE fois
+ * par la route (`export.ts`), pour ses voisines comme pour celle-ci.
+ *
+ * `PostMedia.uploaderId` n'a, lui, qu'un seul écrivain et qu'un seul espace :
+ * il n'a rien à élargir, et le dire évite de l'élargir « par symétrie ».
+ */
+export async function exportMedia(
+  prisma: PrismaClient,
+  participantIds: readonly string[],
+  userId: string,
+  page: ExportPage
+) {
+  const attachmentWhere = { uploadedBy: { in: [userId, ...participantIds] }, isAnonymous: false };
   const postMediaWhere = { uploaderId: userId };
 
   const [attachments, attachmentsTotal, postMedia, postMediaTotal] = await Promise.all([

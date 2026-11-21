@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:community": {
+      "resDir": "feature/community/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "community.members.requests.section",
+          "androidName": "community_members_requests_section",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.members.requests.more",
+          "androidName": "community_members_requests_more",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.members.requests.acceptLabel",
+          "androidName": "community_members_requests_accept_label",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.members.requests.rejectLabel",
+          "androidName": "community_members_requests_reject_label",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.members.requests.asked",
+          "androidName": "community_members_requests_asked",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.members.requests.reject",
+          "androidName": "community_members_requests_reject",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.members.requests.reject.confirm.body",
+          "androidName": "community_members_requests_reject_confirm_body",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.members.requests.accepted",
+          "androidName": "community_members_requests_accepted",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.members.requests.gone",
+          "androidName": "community_members_requests_gone",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.members.requests.failed",
+          "androidName": "community_members_requests_failed",
+          "status": "candidate"
+        }
+      ]
+    }
+  }
+}

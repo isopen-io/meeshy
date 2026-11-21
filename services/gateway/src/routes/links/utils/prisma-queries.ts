@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
-import { attachmentMediaSelect, MESSAGE_ATTACHMENT_ORDER } from '../../../services/attachments/attachmentIncludes';
+import { attachmentMediaSelect, attachmentProtectionSelect, MESSAGE_ATTACHMENT_ORDER } from '../../../services/attachments/attachmentIncludes';
+import { MESSAGE_SIDE_PROTECTION_SELECT } from '../../../services/attachments/mediaSideContent';
 import { applyHistoryFloor } from '../../../services/historyFloor';
 import { withOrphanedSenderRepair } from '../../../services/messaging/withOrphanedSenderRepair';
 
@@ -315,7 +316,25 @@ export async function getConversationMessagesWithDetails(
     skip: offset,
     include: {
       sender: senderInclude,
-      attachments: { select: attachmentMediaSelect, orderBy: MESSAGE_ATTACHMENT_ORDER },
+      // #20017 — la loi du contenu latéral ne peut RIEN garder sans ces deux
+      // ajouts, et c'est ce qui rendait le défaut invisible : `maskedAttachment`
+      // ne regarde que les drapeaux PRÉSENTS, et `mediaSideContentMayTravel`
+      // rend `true` quand le porteur est absent. `attachmentMediaSelect` porte
+      // `transcription` et `translations` et AUCUN drapeau de protection — son
+      // propre doc-comment nomme ce fichier parmi les cinq qu'un lot de
+      // CAPACITÉ (R4) a enrichis du couple Prisme ; aucun lot de PROTECTION
+      // n'a suivi. Les drapeaux servent deux fois : ils arment la loi ici, et
+      // sans eux le client d'un visiteur anonyme lit le silence comme « rien à
+      // protéger » (l'INVERSION que `api-schemas/message.ts` décrit pour la
+      // citation).
+      attachments: {
+        select: {
+          ...attachmentMediaSelect,
+          ...attachmentProtectionSelect,
+          message: { select: MESSAGE_SIDE_PROTECTION_SELECT },
+        },
+        orderBy: MESSAGE_ATTACHMENT_ORDER,
+      },
       replyTo: {
         include: {
           sender: senderInclude

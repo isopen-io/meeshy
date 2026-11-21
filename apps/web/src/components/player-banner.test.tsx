@@ -250,7 +250,8 @@ describe('le toucher : chaque pièce ouvre SA fiche (porteur 2026-10-16)', () =>
   });
 
   test('une pièce absente n\'a pas de lien', async () => {
-    const host = await mount(<PlayerBanner model={newcomer()} />);
+    // Aucun acte servi (serveur antérieur à #17370) : le premier Rêve, lui, a sa pièce.
+    const host = await mount(<PlayerBanner model={modelOf(gameBlockFixture({ ...NEWCOMER, missions: [] }))} />);
     for (const concept of ['meesh', 'glory', 'league', 'flame', 'showcase', 'missions', 'season']) expect(hrefOf(host, concept)).toBeNull();
   });
 

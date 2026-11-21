@@ -43,9 +43,9 @@ class CallAnalyticsController @Inject constructor(
         this.host = host
     }
 
-    /** A call begins: open a fresh accumulator anchored at now. */
+    /** A call begins: open a fresh accumulator anchored on the monotonic clock. */
     fun begin() {
-        analytics = CallAnalytics(startedAtMs = clock.nowMs())
+        analytics = CallAnalytics(startedAtMs = clock.elapsedMs())
         lastSample = null
         stopSnapshots()
         quality.begin()
@@ -61,7 +61,7 @@ class CallAnalyticsController @Inject constructor(
     /** Folds the FSM edge, and reports the call once it ends. */
     fun onTransition(previous: CallState, next: CallState) {
         if (previous !is CallState.Connected && next is CallState.Connected) {
-            analytics = analytics?.connected(clock.nowMs())
+            analytics = analytics?.connected(clock.elapsedMs())
             startSnapshots()
         }
         if (next is CallState.Reconnecting && previous != next) {

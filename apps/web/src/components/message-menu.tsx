@@ -827,7 +827,7 @@ export function MessageMenu({
                 ? {
                     maxHeight: Math.max(0, placement.previewClipHeight - 2 * surface.padding),
                     overflow: 'hidden',
-                    maskImage: `linear-gradient(to bottom, black calc(100% - ${PREVIEW_CLIP_FADE}px), transparent)`,
+                    maskImage: `linear-gradient(to bottom, black calc(100% - ${PREVIEW_CLIP_FADE}px), transparent)`, // harmony-exempt: masque de luminance (maskImage/WebkitMaskImage) — « black » = opaque, « transparent » = découpé, jamais rendu comme couleur ; cf. edgeFadeMask 85w
                     WebkitMaskImage: `linear-gradient(to bottom, black calc(100% - ${PREVIEW_CLIP_FADE}px), transparent)`,
                   }
                 : undefined

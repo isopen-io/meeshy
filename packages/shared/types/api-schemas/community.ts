@@ -40,7 +40,8 @@ export const communitySchema = {
     conversationCount: { type: 'number', description: 'Number of conversations' },
     currentUserRole: { type: 'string', nullable: true, description: "Reader's active role (admin, moderator, member); null when not a member. Served by GET /communities/:id" },
     onlineMemberCount: { type: 'number', nullable: true, description: 'Other active members online now, as an anonymous aggregate; null when the community is too small for a count to stay anonymous. Served by GET /communities/:id (#18014)' },
-    currentUserJoinRequest: { type: 'string', enum: ['pending'], nullable: true, description: "Reader's own join request: 'pending' when a non-member awaits an answer from a community that validates each entry; null otherwise. Served by GET /communities/:id (#19868)" }
+    currentUserJoinRequest: { type: 'string', enum: ['pending'], nullable: true, description: "Reader's own join request: 'pending' when a non-member awaits an answer from a community that validates each entry; null otherwise. Served by GET /communities/:id (#19868)" },
+    currentUserJoinRetryAt: { type: 'string', format: 'date-time', nullable: true, description: "When the reader, refused less than 7 days ago by a community that validates each entry, may ask again (ISO); null otherwise. Never who refused. Served by GET /communities/:id (#19879)" }
   }
 } as const;
 

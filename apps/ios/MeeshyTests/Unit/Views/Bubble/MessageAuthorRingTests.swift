@@ -75,7 +75,7 @@ final class MessageAuthorRingTests: XCTestCase {
     func test_guard_bubbleFooterPassesTheServedRingToTheAvatar() throws {
         let footer = try source("Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift")
         XCTAssertTrue(footer.contains("ring: sender.ring,"))
-        XCTAssertFalse(footer.contains(".avatarRingWithin("))
+        XCTAssertFalse(footer.contains(".avatarRing("))
         let layout = try source("Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Footer.swift")
         XCTAssertTrue(layout.contains("ring: message.senderRing"))
     }
@@ -83,7 +83,7 @@ final class MessageAuthorRingTests: XCTestCase {
     func test_guard_focalAndScriptHeaderPassTheServedRingToTheAvatar() throws {
         let header = try source("Meeshy/Features/Focal/Row/FocalIdentityHeader.swift")
         XCTAssertTrue(header.contains("ring: senderRing,"))
-        XCTAssertFalse(header.contains(".avatarRingWithin("))
+        XCTAssertFalse(header.contains(".avatarRing("))
         let row = try source("Meeshy/Features/Focal/Row/FocalRow.swift")
             + "\n" + source("Meeshy/Features/Focal/Row/FocalFocusChrome.swift")
         XCTAssertEqual(row.components(separatedBy: "senderRing: input.senderRing").count - 1, 2, "les deux en-têtes de la rangée plate")
@@ -146,6 +146,7 @@ final class MessageAuthorRingTests: XCTestCase {
         "MeeshyUI/Profile/UserProfileSheet+ConversationsTab.swift": (1, "entité — les conversations d'un profil"),
         "Auth/LinkSignInConfirmationSheet.swift": (1, "soi, avant toute session — aucun profil servi"),
         "Auth/Signup/SignupView+Card.swift": (1, "soi, compte en création — aucun contour équipé"),
+        "MeeshyUI/Community/CommunityJoinRequestsSection.swift": (1, "demande d'entrée — `APICommunityJoinRequest` servie ne porte pas le contour (#10957)"),
         "Onboarding/OnboardingProfileCard.swift": (1, "soi, compte en création — l'aperçu « Montre-toi » précède tout contour équipé"),
         "Game/Photo/GameAuthorPlateView.swift": (1, "décor, illustration ou son — aucune personne"),
         "Main/Views/WidgetPreviewView.swift": (1, "décor, illustration ou son — aucune personne"),

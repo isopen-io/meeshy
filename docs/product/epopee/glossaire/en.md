@@ -101,7 +101,7 @@ The tone: plain, warm English written for a 13-year-old, one idea per sentence. 
 - **The twenty phases**: **Spark** (key `etincelle`, never “Ember”), Glimmer, **Gleam** (key `lumiere`, never “Light”), Radiance, Ray, Dawn, Comet, Star, Constellation, Galaxy, then Nebula, Pulsar, Quasar, Supernova, Magnetar, Cluster, Supercluster, Cosmos, Infinity, Singularity.
 - **The trial**: every ten levels, from 10 to 100, the ancestors ask for a trial (a Meesh, a dream, a Flame, a rank). Until it is passed, the light waits.
 - **The rank opens the light**: Supernova is the limit below Ambassador, Ambassador opens up to Singularity, Oracle lifts every limit.
-- **A**: ring “34” · Radiance; “Level 34”.
+- **A**: ring “34” · Radiance; “Level 34”. Read aloud, the banner and the ring say “Your light at level 34” (#19892).
 - **B**: “Your light shines as Radiance”, then in small type “level 34 · 3,200 sparks to level 35”.
 - **Banned**: “N more before level X” → “N sparks to level X”; “step”, “tier” → “trial”, “phase”; “level record” → “your highest light”.
 

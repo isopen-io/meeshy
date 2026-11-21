@@ -782,12 +782,32 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
           // #3907 — la réciprocité `showReadReceipts` gouverne AUSSI ce flux.
           //
           // Cet événement pousse `userId`, `playPositionMs`, `durationMs` et
-          // `percentage` à TOUTE la room, et le web les persiste en cache
-          // (`use-socket-cache-sync.ts`). Un participant qui a désactivé ses
+          // `percentage` à TOUTE la room. Un participant qui a désactivé ses
           // accusés y annonçait donc en direct où il en est dans un vocal —
-          // plus intime que l'accusé texte qu'il a refusé, et sans qu'aucune
-          // porte de lecture ne puisse le rattraper : le cache du destinataire
-          // le tient déjà.
+          // plus intime que l'accusé texte qu'il a refusé.
+          //
+          // La raison tient à une ASYMÉTRIE, et à elle seule : la lecture REST
+          // qui sert ces mêmes positions (`getAttachmentStatuses`) applique
+          // `_attachmentReadReceiptOptOuts`, ce flux direct est le seul qui ne
+          // repasse pas par elle. Sans la garde ci-dessous, il n'y a aucune
+          // porte de lecture pour rattraper ce qu'il a dit.
+          //
+          // La raison écrite ici jusqu'au 2026-11-20 était « le web les
+          // persiste en cache (`use-socket-cache-sync.ts`) » : ce fichier
+          // n'existe plus, et le web n'enregistre rien de cet événement — il
+          // INVALIDE `attachmentStatusDetailsQueryKey`. La garde était juste et
+          // sa raison morte, ce qui est pire qu'une raison absente : qui la
+          // relisait pouvait conclure que la garde avait cessé de servir.
+          //
+          // ─── Et pourquoi cette famille n'a PAS d'entrée de file (#20045) ──
+          //
+          // Parce qu'une relecture sert la vérité : `getAttachmentStatuses`
+          // sert `lastPlayPositionMs` par participant, et les deux requêtes de
+          // la feuille web (`message-receipts-sheet.tsx`) sont en
+          // `staleTime: 0` — toute ouverture refait la requête. Le direct
+          // n'économise qu'un aller-retour sur une feuille déjà ouverte.
+          // Le verdict est déclaré, et tenu, par `UNQUEUED_FAMILY_VERDICT`
+          // (`socketio/unqueuedFamilyVerdict.ts`).
           //
           // Il n'est pas SILENCIÉ pour autant : la diffusion se replie sur SA
           // room à lui, pour que ses propres appareils restent synchronisés.

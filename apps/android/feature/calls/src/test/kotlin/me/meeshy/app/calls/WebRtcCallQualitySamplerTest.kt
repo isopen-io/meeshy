@@ -6,6 +6,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.call.CallQualityStatsFeed
+import me.meeshy.sdk.model.call.CallMediaQuality
 import me.meeshy.sdk.model.call.CallStats
 import org.junit.Test
 
@@ -23,8 +24,8 @@ class WebRtcCallQualitySamplerTest {
 
     @Test
     fun `une lecture toutes les cinq secondes, la perte est celle de l'intervalle`() = runTest {
-        val first = CallStats(roundTripTimeMs = 40.0, packetsLost = 10, inboundPacketsReceived = 90, bandwidth = 1_000, bytesReceived = 2_000)
-        val second = CallStats(roundTripTimeMs = 50.0, packetsLost = 10, inboundPacketsReceived = 190, bandwidth = 3_000, bytesReceived = 6_000, jitterMs = 7.0)
+        val first = CallStats(roundTripTimeMs = 40.0, packetsLost = 10, inboundPacketsReceived = 90, bandwidth = 1_000L, bytesReceived = 2_000L)
+        val second = CallStats(roundTripTimeMs = 50.0, packetsLost = 10, inboundPacketsReceived = 190, bandwidth = 3_000L, bytesReceived = 6_000L, jitterMs = 7.0)
         sampler(first, second).samples.test {
             advanceTimeBy(4_999)
             expectNoEvents()
@@ -47,6 +48,17 @@ class WebRtcCallQualitySamplerTest {
             advanceTimeBy(10_000)
             runCurrent()
             assertThat(awaitItem().rttMs).isEqualTo(30.0)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `l'echantillon porte la lecture media au rapport d'appel (#19895)`() = runTest {
+        val media = CallMediaQuality(freezeCount = 2.0, candidateType = "relay", relayProtocol = "udp")
+        sampler(CallStats(roundTripTimeMs = 30.0, media = media)).samples.test {
+            advanceTimeBy(5_000)
+            runCurrent()
+            assertThat(awaitItem().media).isEqualTo(media)
             cancelAndIgnoreRemainingEvents()
         }
     }

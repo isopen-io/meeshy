@@ -11,6 +11,7 @@ import { ChromeActionDisc, CHROME_ACTION_HIT_CLASS } from './chrome-action';
 import { Glyph } from './glyph';
 import { ReadingModeChip } from './reading-mode-chip';
 import { ThreadCallButton } from './thread-call-button';
+import { ThreadFallLine } from './thread-fall-line';
 import { ThreadInactivityLine } from './thread-inactivity-line';
 import { ThreadPhoneCallLine } from './thread-phone-call-line';
 import { ThreadShareButton } from './thread-share-button';
@@ -419,6 +420,8 @@ export function ThreadHeader({
                 {subtitleText}
               </p>
             ) : null}
+            {/* LA CHUTE DÉTECTÉE D'UN SANG (#18748) : « Chute détectée à 16:42 », tant qu'elle est servie et non expirée. */}
+            {group ? null : <ThreadFallLine userId={peerKey} language={currentInterfaceLanguage()} />}
             {/* L'ALERTE D'INACTIVITÉ D'UN SANG (#18738) : « Aucune activité depuis 08:00 », tant qu'elle est servie. */}
             {group ? null : <ThreadInactivityLine userId={peerKey} language={currentInterfaceLanguage()} />}
             {/* « EN APPEL » D'UN SANG (#18753) : « En appel depuis 12 min », jamais avec qui. */}

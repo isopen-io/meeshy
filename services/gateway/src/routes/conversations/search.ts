@@ -188,6 +188,12 @@ export function registerSearchRoutes(
             include: conversationSearchPreviewInclude,
           },
         },
+        // #19835 — cette surface RESTE sur `lastMessageAt`, et c'est une décision :
+        // on cherche un MESSAGE, pas une activité. Trier les résultats d'une
+        // recherche de texte sur le rang (max(`lastMessageAt`, `lastActivityAt`),
+        // #9026) remonterait une conversation où l'on vient de réagir au-dessus de
+        // celle où le mot cherché a été écrit le plus récemment. La question ne se
+        // repose pas sans une décision produit qui dise l'inverse.
         orderBy: { lastMessageAt: 'desc' },
         take: 50,
       });

@@ -18,7 +18,7 @@ import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-ope
 import { EngagementService } from '../../../../services/engagement/EngagementService';
 import { loadViewerPostPoints } from '../../../../services/engagement/viewerPostPoints';
 import { postPointsRowId, purgePostPoints } from '../../../../services/engagement/PostPointsRecorder';
-import { fakeGameDb, seedUser, uniqueViolation, writeConflict, type FakeGameDb } from '../../../../services/game/__tests__/fakeGameDb';
+import { dreamAwaitingAnotherGesture, fakeGameDb, seedUser, uniqueViolation, writeConflict, type FakeGameDb } from '../../../../services/game/__tests__/fakeGameDb';
 
 jest.mock('../../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }) },
@@ -40,6 +40,7 @@ function setup(options: { readonly emitFails?: boolean } = {}) {
   const db = fakeGameDb();
   for (const id of [READER, AUTHOR, OTHER_READER]) {
     seedUser(db, { emailVerifiedAt: new Date('2026-01-01T00:00:00Z') }, id);
+    dreamAwaitingAnotherGesture(db, id);
   }
   const emissions: Emission[] = [];
   const io = {

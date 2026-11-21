@@ -642,11 +642,13 @@
     <string name="game_frappe_ancestors_prism">jede tausendste Münze vereint alle Sprachen</string>
     <string name="game_frappe_ancestors_title">Deine Ahnen zeigen sich</string>
     <string name="game_frappe_glory">+%1$s Ruhm</string>
+    <string name="game_frappe_glory_toward">%1$s Ruhm bis %2$s</string>
     <string name="game_frappe_light">dein Licht</string>
     <string name="game_frappe_refused_light">Dein Licht reicht noch nicht. Deine nächsten Funken nähren es.</string>
     <string name="game_frappe_refused_locked">Dein Erbe wartet auf einen höheren Rang. Dein Ruhm öffnet es, dann prägen wir.</string>
     <string name="game_frappe_refused_offline">Gerade keine Verbindung. Sobald sie zurück ist, prägen wir.</string>
     <string name="game_frappe_refused_unknown">Das Prägen hat nicht stattgefunden. Nichts ist verloren: Dein Licht ist unversehrt.</string>
+    <string name="game_frappe_risen">Man nennt dich %1$s</string>
     <string name="game_frappe_say_gold">Nr. %1$s ist aus Gold. Deine Ahnen haben sie gesehen.</string>
     <string name="game_frappe_say_prism">Nr. %1$s ist aus Prisma: Alle Sprachen leuchten darin.</string>
     <string name="game_frappe_say_silver">Nr. %1$s kommt in dein Erbe.</string>
@@ -765,7 +767,7 @@
     <string name="game_level_cap_reached">Level %1$s: das höchste, das dein Rang öffnet. Der Rang %2$s öffnet die nächsten.</string>
     <string name="game_level_cap_short">öffnet ab Rang %1$s</string>
     <string name="game_level_held">Dein Licht öffnet schon den Weg: %1$s, um Level %2$s zu erreichen.</string>
-    <string name="game_level_ring_a11y">Level %1$s, %2$s, %3$s Gestalt deines Lichts</string>
+    <string name="game_level_ring_a11y">Dein Licht auf Level %1$s, %2$s, %3$s Gestalt</string>
     <string name="game_level_step_done">bestanden</string>
     <string name="game_level_step_flame">eine Flamme von %1$s Tagen halten</string>
     <string name="game_level_step_line">Prüfung für Level %1$s: %2$s</string>

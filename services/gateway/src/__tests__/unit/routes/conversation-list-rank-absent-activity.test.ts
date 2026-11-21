@@ -14,7 +14,8 @@
  */
 import { describe, it, expect } from '@jest/globals';
 import { loadRankedConversationPage, type ListRankRow, type RowsQuery } from '../../../routes/conversations/utils/list-rank';
-import { matchesMongoWhere, type MongoDocument } from '../../helpers/mongo-where';
+import type { MongoDocument } from '../../helpers/mongo-where';
+import { moteurDeRang } from '../../helpers/list-rank-engine';
 
 const at = (iso: string) => new Date(iso);
 
@@ -28,34 +29,21 @@ const conversations: readonly (ListRankRow & MongoDocument)[] = [
 
 const rank = (row: ListRankRow) => Math.max(row.lastMessageAt?.getTime() ?? 0, row.lastActivityAt?.getTime() ?? 0);
 
-const read = (where: MongoDocument, take: number, skip = 0) =>
-  conversations
-    .filter((row) => matchesMongoWhere(row, where))
-    .sort((a, b) => (b.lastMessageAt?.getTime() ?? 0) - (a.lastMessageAt?.getTime() ?? 0))
-    .slice(skip, skip + take);
-
-const prisma = {
-  conversation: {
-    findMany: async (args: { where: MongoDocument; orderBy: Record<string, 'asc' | 'desc'>; take: number }) => {
-      const key = Object.keys(args.orderBy)[0] as 'lastMessageAt' | 'lastActivityAt';
-      return conversations
-        .filter((row) => matchesMongoWhere(row, args.where))
-        .sort((a, b) => (b[key]?.getTime() ?? 0) - (a[key]?.getTime() ?? 0))
-        .slice(0, args.take);
-    },
-  },
-};
-
-const page = (bound: Date, limit: number) =>
-  loadRankedConversationPage({
-    prisma: prisma as never,
-    readRows: async (query: RowsQuery) => read(query.where as MongoDocument, query.take, query.skip),
+const page = (bound: Date, limit: number) => {
+  const moteur = moteurDeRang(conversations as readonly MongoDocument[]);
+  return loadRankedConversationPage({
+    prisma: moteur.prisma as never,
+    readRows: moteur.readRows as never,
     where: {},
+    // Pas d'id : cette suite borne sur un INSTANT choisi, pas sur une ligne
+    // existante. `boundOf` retombe alors sur la borne STRICTE — exactement ce
+    // que cette suite garde depuis #8309, et ce que #19881 ne change pas.
     curseur: { genre: 'borne', rang: bound } as never,
     deltaOrder: false,
     limit,
     offset: 0,
   });
+};
 
 describe('le curseur de la liste borne sur le rang sans perdre les conversations sans activité (#8309)', () => {
   it('sert, après la borne, la conversation qui ne porte pas la clé lastActivityAt', async () => {

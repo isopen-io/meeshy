@@ -18,6 +18,8 @@ const itCommunityMembership = {
   'community.membership.request': 'Chiedi di unirti',
   'community.membership.requested': 'Richiesta inviata',
   'community.membership.requested.hint': 'Un amministratore o un moderatore deve accettarla.',
+  'community.membership.declined': 'Richiesta rifiutata',
+  'community.membership.declined.hint': 'Potrai richiederlo di nuovo dal {date}.',
   'community.membership.error.cooldown': 'La tua ultima richiesta è stata rifiutata: potrai chiedere di nuovo 7 giorni dopo.',
   'community.settings.open': "Impostazioni",
   'community.members.open': 'Membri',
@@ -71,6 +73,16 @@ const itCommunityMembership = {
   'community.posts.error.offline': "Offline: i post appariranno quando tornerà la rete.",
   'community.posts.retry': "Riprova",
   'community.posts.loadingMore': "Caricamento di altri post",
+  'community.members.requests.section': "Richieste in attesa",
+  'community.members.requests.asked': "Richiesta del {date}",
+  'community.members.requests.accept': "Accetta",
+  'community.members.requests.reject': "Rifiuta",
+  'community.members.requests.acceptLabel': "Accetta la richiesta di {name}",
+  'community.members.requests.rejectLabel': "Rifiuta la richiesta di {name}",
+  'community.members.requests.reject.confirm.body': "{name} non potrà chiedere di nuovo prima di sette giorni.",
+  'community.members.requests.gone': "Questa richiesta è già stata gestita.",
+  'community.members.requests.accepted': "{name} ora fa parte della community.",
+  'community.members.requests.more': "Mostra altre richieste",
 } as const satisfies CommunityMembershipCatalog;
 
 export default itCommunityMembership;
