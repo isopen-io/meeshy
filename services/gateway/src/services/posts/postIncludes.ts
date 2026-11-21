@@ -271,6 +271,9 @@ export const repostOfInclude = Prisma.validator<Prisma.Post$repostOfArgs>()({
     visibility: true,
     moderationHiddenAt: true,
     deletedAt: true,
+    // #16894 — la source peut être la COPIE d'un contenu éphémère : son auteur
+    // d'origine décide aussi du blocage. Lu ici, jamais servi (`separatedCompanions`).
+    snapshotAuthorId: true,
     author: { select: postAuthorSelect },
     media: mediaInclude,
     createdAt: true,

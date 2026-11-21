@@ -15,6 +15,7 @@ import { postMentionInclude } from './postIncludes';
 import { withServedRepostCredits } from './repostCreditChips';
 import { withServedDerivedContent } from './storyContentComposition';
 import { negotiateWireStoryEffects, type WireReader } from './storyEffectsV3';
+import { withoutSeparatedCompanions } from './separatedCompanions';
 import { servedPerson } from '../appearance/authorProfileDecor';
 import { withServedPostMedia } from './servedPostMedia';
 
@@ -153,7 +154,7 @@ export function withMentions<T extends { postMentions?: unknown; mentions?: unkn
   post: T,
   reader?: WireReader
 ): Omit<T, 'postMentions' | 'mentions'> & { mentions: PostReference[] } {
-  const { postMentions, mentions, ...rest } = post;
+  const { postMentions, mentions, ...rest } = withoutSeparatedCompanions(post, reader?.separatedUserIds);
   const flat = postMentions === undefined && Array.isArray(mentions)
     ? { ...rest, mentions: mentions as PostReference[] }
     : { ...rest, mentions: toPostReferences(postMentions as never) };
