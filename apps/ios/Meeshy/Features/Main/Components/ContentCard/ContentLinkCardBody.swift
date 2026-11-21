@@ -2,29 +2,50 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Le contenu de la carte (contrat § 4) : le bloc média, puis la ligne
-/// d'auteur, le texte servi par le Prisme et la ligne de statistiques. Feuille
-/// `Equatable` : elle ne se réévalue que si la carte change.
+/// Le contenu de la carte (contrat § 4, #20211) : le bloc visuel élu par
+/// `ContentCard.visual`, puis la ligne d'auteur, le texte servi par le Prisme
+/// et la ligne de statistiques. Feuille `Equatable` : elle ne se réévalue que
+/// si la carte change.
+///
+/// Deux éléments pour VoiceOver au plus : la carte, un bouton qui se dit en
+/// une phrase et ouvre le contenu ; et, quand le bloc visuel se manipule — le
+/// diaporama qu'on fait défiler, le son qu'on écoute —, ce bloc lui-même.
 struct ContentLinkCardBody: View, Equatable {
     let card: ContentCard
     let accentColor: String
     let isDark: Bool
+    var preferredLanguages: [String] = []
+    var onOpen: () -> Void = {}
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.card == rhs.card && lhs.accentColor == rhs.accentColor && lhs.isDark == rhs.isDark
+            && lhs.preferredLanguages == rhs.preferredLanguages
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let media = card.media {
-                ContentLinkCardMedia(media: media, kind: card.kind, extraCount: card.extraMediaCount, accentColor: accentColor)
-                    .equatable()
+            ContentLinkCardVisual(card: card, accentColor: accentColor,
+                                  preferredLanguages: preferredLanguages, onOpen: onOpen)
+                .equatable()
+            Button(action: onOpen) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
+                    ContentLinkCardAuthorLine(card: card, accentColor: accentColor, isDark: isDark)
+                    ContentLinkCardText(emoji: card.moodEmoji, text: card.text,
+                                        lineLimit: card.visual == .none ? 3 : 2, isDark: isDark)
+                    ContentLinkCardStats(stats: card.stats, isBookmarkedByMe: card.isBookmarkedByMe, isDark: isDark)
+                        .equatable()
+                }
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.smPlus)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
-                ContentLinkCardAuthorLine(card: card, accentColor: accentColor, isDark: isDark)
-                ContentLinkCardText(emoji: card.moodEmoji, text: card.text, lineLimit: card.media == nil ? 3 : 2, isDark: isDark)
-                ContentLinkCardStats(stats: card.stats, isBookmarkedByMe: card.isBookmarkedByMe, isDark: isDark)
-                    .equatable()
-            }
-            .padding(.horizontal, MeeshySpacing.md)
-            .padding(.vertical, MeeshySpacing.smPlus)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(ContentLinkCardCopy.accessibilityLabel(for: card))
+            .accessibilityHint(ContentLinkCardCopy.opensHint)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityIdentifier("content-link-card")
         }
         .modifier(ContentLinkCardSurface(isDark: isDark))
     }
@@ -41,7 +62,7 @@ struct ContentLinkCardAuthorLine: View {
 
     var body: some View {
         HStack(spacing: MeeshySpacing.xsPlus) {
-            if card.media == nil {
+            if card.visual == .none {
                 ContentLinkCardKindPill(kind: card.kind, accentColor: accentColor, onMedia: false)
             }
             MeeshyAvatar(name: card.author.name, context: .custom(ContentLinkCardLayout.avatarSide),

@@ -27,6 +27,9 @@ struct ContentLinkCard: View {
 
     @StateObject private var model: ContentLinkCardViewModel
     @Environment(\.openURL) private var openURL
+    /// Le Prisme du lecteur, lu une fois par carte : la scène peint ses textes
+    /// dans la langue du lecteur, comme le fil (`ReaderPrism`).
+    private let preferredLanguages: [String] = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
 
     init(match: ContentLinkMatch, accentColor: String, isDark: Bool,
          fallback: Fallback = .linkPreview, excludedPostId: String? = nil,
@@ -51,18 +54,9 @@ struct ContentLinkCard: View {
         case .loading:
             ContentLinkCardSkeleton(isDark: isDark)
         case .card(let card):
-            Button {
-                open()
-            } label: {
-                ContentLinkCardBody(card: card, accentColor: accentColor, isDark: isDark)
-                    .equatable()
-            }
-            .buttonStyle(.plain)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(ContentLinkCardCopy.accessibilityLabel(for: card))
-            .accessibilityHint(ContentLinkCardCopy.opensHint)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityIdentifier("content-link-card")
+            ContentLinkCardBody(card: card, accentColor: accentColor, isDark: isDark,
+                                preferredLanguages: preferredLanguages, onOpen: open)
+                .equatable()
         case .unavailable(let kind):
             ContentLinkCardUnavailable(kind: kind, isDark: isDark)
                 .equatable()

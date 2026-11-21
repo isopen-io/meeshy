@@ -44,6 +44,9 @@ enum DeepLinkDestination: Equatable {
     /// Un réel NOMMÉ (`/reel/<id>`, `/reels?seed=<id>`, `meeshy://reel/<id>`) :
     /// il s'ouvre dans le lecteur de réels, comme depuis le fil.
     case reel(postId: String)
+    /// Une humeur (`/mood/<id>`, #20211) : elle s'ouvre en plein écran, comme
+    /// depuis sa notification.
+    case mood(postId: String)
     /// Une communauté (`/communities/<id>`, `meeshy://community/<id>`).
     case community(id: String)
     /// `meeshy://conversations/recent` — widget et App Shortcut.
@@ -313,8 +316,8 @@ enum DeepLinkParser {
         case "reel": return id.map { .reel(postId: $0) }
         case "reels": return reelsSeed(components: components, url: url).map { .reel(postId: $0) }
         // Humeur — `/mood/<id>` (#19332), l'adresse que le partage suivi grave
-        // pour un STATUS : le détail du post, comme sa cible typée suivie.
-        case "mood": return id.map { .postDetail(postId: $0) }
+        // pour un STATUS : son plein écran, comme sa cible typée suivie (#20211).
+        case "mood": return id.map { .mood(postId: $0) }
         // Communauté — `/communities/<id>` ; `/communities/new` est l'écran de
         // création du web, pas une communauté.
         case "community", "communities": return id.flatMap(communityIdentifier).map { .community(id: $0) }
@@ -424,6 +427,9 @@ enum DeepLink: Equatable {
     case storyDetail(postId: String)
     /// Un réel nommé — ouvert par `ReelDoor` dans le lecteur de réels.
     case reel(postId: String)
+    /// Une humeur — ouverte en plein écran (`MoodSpotlightView`), la page que
+    /// sa notification ouvre (#20211).
+    case mood(postId: String)
     case community(id: String)
     case recentConversation
     case unreadConversations
@@ -465,7 +471,7 @@ enum DeepLink: Equatable {
         switch self {
         case .joinLink, .chatLink, .magicLink, .emailVerificationLink, .externalLink, .unresolvedTrackedLink, .callRequest:
             return false
-        case .trackedLink, .conversation, .postDetail, .storyDetail, .reel, .community,
+        case .trackedLink, .conversation, .postDetail, .storyDetail, .reel, .mood, .community,
              .recentConversation, .unreadConversations, .userProfile, .ownProfile, .userLinks, .hashtag, .game, .packShop:
             return true
         }
@@ -656,7 +662,8 @@ final class DeepLinkRouter: ObservableObject {
             // fabrique du SDK distingue les deux et laisse l'écran résoudre.
             case "PROFILE": return .userProfile(username: targetId)
             case "REEL": return .reel(postId: targetId)
-            case "POST", "STATUS": return .postDetail(postId: targetId)
+            case "STATUS": return .mood(postId: targetId)
+            case "POST": return .postDetail(postId: targetId)
             default: break
             }
         }
@@ -701,6 +708,7 @@ final class DeepLinkRouter: ObservableObject {
         switch destination {
         case .storyDetail(let id):        return .storyDetail(postId: id)
         case .reel(let id):               return .reel(postId: id)
+        case .mood(let id):               return .mood(postId: id)
         case .community(let id):          return .community(id: id)
         case .recentConversation:         return .recentConversation
         case .unreadConversations:        return .unreadConversations
@@ -770,7 +778,7 @@ final class DeepLinkRouter: ObservableObject {
     /// Le contenu qu'un lien amène sur un écran détail (post, story, réel).
     static func contentId(of link: DeepLink) -> String? {
         switch link {
-        case .postDetail(let id), .storyDetail(let id), .reel(let id): return id
+        case .postDetail(let id), .storyDetail(let id), .reel(let id), .mood(let id): return id
         default: return nil
         }
     }

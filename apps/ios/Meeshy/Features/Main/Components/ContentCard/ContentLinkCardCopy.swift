@@ -50,6 +50,17 @@ enum ContentLinkCardCopy {
         String(localized: "bubble.media.a11y.viewCount", defaultValue: "\(count) vues", bundle: .main)
     }
 
+    /// « 2/5 » sur l'image : des chiffres, que chaque langue lit tels quels.
+    static func pagePosition(_ page: Int, of count: Int) -> String {
+        "\(page)/\(count)"
+    }
+
+    /// « Média 2 sur 5 » — les mots du carrousel du fil.
+    static func slideshow(_ page: Int, of count: Int) -> String {
+        String(format: String(localized: "feed.carousel.a11y.position", defaultValue: "Média %1$d sur %2$d", bundle: .main),
+               page, count)
+    }
+
     static func favorites(_ count: Int) -> String {
         String(localized: "contentCard.stat.favorites", defaultValue: "\(count) favoris", bundle: .main)
     }

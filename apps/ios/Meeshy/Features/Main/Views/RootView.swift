@@ -474,6 +474,10 @@ struct RootView: View {
             // exists for in-app feed taps; the deep link just reuses it.
             router.push(.postDetail(postId))
 
+        case .mood(let postId):
+            // Une humeur : son plein écran, la page de sa notification (#20211).
+            router.push(.moodSpotlight(statusId: postId))
+
         case .reel(let postId):
             // Un réel nommé : même porte que sa notification (#7805).
             notificationNavigator.openReelFromNotification(postId: postId)

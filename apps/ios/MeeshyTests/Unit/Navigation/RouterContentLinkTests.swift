@@ -37,4 +37,15 @@ final class RouterContentLinkTests: XCTestCase {
         XCTAssertEqual(DeepLinkRouter.shared.pendingDeepLink, .reel(postId: "r1"))
         XCTAssertTrue(router.path.isEmpty)
     }
+
+    /// #20211 — une humeur touchée dans l'app s'ouvre en plein écran, la page
+    /// que sa notification ouvre déjà, jamais le détail d'un post.
+    func test_handleDeepLink_lienDHumeur_ouvreLHumeurEnPleinEcran() {
+        let router = Router()
+
+        router.handleDeepLink(URL(string: "https://meeshy.me/mood/m1")!)
+
+        XCTAssertEqual(router.path, [.moodSpotlight(statusId: "m1")])
+        XCTAssertNil(DeepLinkRouter.shared.pendingDeepLink)
+    }
 }

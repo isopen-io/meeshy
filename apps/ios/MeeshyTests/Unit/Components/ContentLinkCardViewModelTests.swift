@@ -148,6 +148,21 @@ final class ContentLinkCardViewModelTests: XCTestCase {
                        "un réel cité par l'ancienne adresse s'ouvre dans le lecteur de réels")
     }
 
+    /// #20211 — chaque type s'ouvre là où il vit : la story dans la visionneuse,
+    /// le réel dans les réels, l'humeur en plein écran, le post dans sa vue.
+    func test_destinationURL_eachType_opensWhereItLives() throws {
+        let expected = ["POST": "post", "REEL": "reel", "STORY": "story", "STATUS": "mood"]
+        for (type, segment) in expected {
+            let (sut, _) = makeSUT(cached: .fresh(.card(makeCard(type: type)), age: 1))
+            let url = try XCTUnwrap(sut.destinationURL(linkURL: "https://meeshy.me/l/Ab3xYz", webOrigin: "https://meeshy.me"))
+
+            XCTAssertEqual(url.absoluteString, "https://meeshy.me/\(segment)/\(cardPostId)", type)
+            XCTAssertNotNil(DeepLinkParser.parse(url), type)
+        }
+        let mood = try XCTUnwrap(URL(string: "https://meeshy.me/mood/\(cardPostId)"))
+        XCTAssertEqual(DeepLinkParser.parse(mood), .mood(postId: cardPostId))
+    }
+
     func test_destinationURL_trackedLink_opensTheTrackedLinkItself() {
         let (sut, _) = makeSUT(target: .tracked(token: "Ab3xYz"), cached: .fresh(.card(makeCard()), age: 1))
 
@@ -184,9 +199,13 @@ final class ContentLinkCardViewModelTests: XCTestCase {
     /// spécificateur qui survit dirait au lecteur « %lld vues ».
     func test_copy_substitutesEveryArgument_whateverTheLanguage() {
         for produced in [ContentLinkCardCopy.views(3), ContentLinkCardCopy.favorites(1),
-                         ContentLinkCardCopy.byAuthor(.status, author: "Amani")] {
+                         ContentLinkCardCopy.byAuthor(.status, author: "Amani"),
+                         ContentLinkCardCopy.slideshow(2, of: 5)] {
             XCTAssertFalse(produced.contains("%"), "« \(produced) » garde un spécificateur brut")
         }
         XCTAssertTrue(ContentLinkCardCopy.byAuthor(.status, author: "Amani").contains("Amani"))
+        XCTAssertTrue(ContentLinkCardCopy.slideshow(2, of: 5).contains("2"))
+        XCTAssertTrue(ContentLinkCardCopy.slideshow(2, of: 5).contains("5"))
+        XCTAssertEqual(ContentLinkCardCopy.pagePosition(2, of: 5), "2/5")
     }
 }

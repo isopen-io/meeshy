@@ -167,6 +167,9 @@ extension iPadRootView {
             // iPad surfaces the post detail in the right column, matching
             // the existing post-notification handling above.
             rightPanelRoute = .postDetail(postId)
+        case .mood(let postId):
+            // Même porte que l'iPhone : l'humeur en plein écran (#20211).
+            rightPanelRoute = .moodSpotlight(statusId: postId)
         case .reel(let postId):
             // Même porte que l'iPhone : le lecteur de réels (#7805, #7806).
             openReel(postId: postId)

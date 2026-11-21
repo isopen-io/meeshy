@@ -73,17 +73,19 @@ final class DeepLinkSingleParserTests: XCTestCase {
         XCTAssertTrue(makeRouter().handle(url: URL(string: "https://meeshy.me/l/abc123")!))
     }
 
-    /// #19332 — `/mood/<id>`, l'adresse d'une humeur, s'ouvre DANS l'app, à la
-    /// place que le lien suivi d'un STATUS lui donne déjà : le détail du post.
-    func test_parse_moodAddress_opensLikeATrackedStatusTarget() throws {
+    /// #20211 — `/mood/<id>`, l'adresse d'une humeur, s'ouvre DANS l'app, en
+    /// plein écran — la page que sa notification ouvre déjà — et le lien suivi
+    /// d'un STATUS mène au même endroit.
+    func test_parse_moodAddress_opensTheMoodFullScreen_likeATrackedStatusTarget() throws {
         let mood = try XCTUnwrap(URL(string: "https://meeshy.me/mood/66f0c0ffee0000000000c0de"))
         let trackedStatus = DeepLinkRouter.trackedDestination(
             for: ResolvedTrackedLink(kind: "tracking", targetType: "STATUS", targetId: "66f0c0ffee0000000000c0de"),
             token: "Ab3xYz"
         )
 
-        XCTAssertEqual(DeepLinkParser.parse(mood), .postDetail(postId: "66f0c0ffee0000000000c0de"))
+        XCTAssertEqual(DeepLinkParser.parse(mood), .mood(postId: "66f0c0ffee0000000000c0de"))
         XCTAssertEqual(DeepLinkRouter.link(for: DeepLinkParser.parse(mood)), trackedStatus)
+        XCTAssertEqual(trackedStatus, .mood(postId: "66f0c0ffee0000000000c0de"))
         XCTAssertTrue(InAppLinks.opensInApp(mood), "une humeur touchée dans l'app ne part plus dans Safari")
     }
 }

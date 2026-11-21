@@ -24,6 +24,9 @@ public struct ContentCard: Equatable, Sendable {
             case video
         }
 
+        /// L'identifiant du média servi (`PostMedia.id`) — celui qu'un objet de
+        /// scène désigne par `postMediaId`.
+        public let id: String
         public let kind: Kind
         /// La vignette ; pour une image, le fichier lui-même à défaut. Une vidéo
         /// sans vignette n'a que son ThumbHash.
@@ -56,6 +59,11 @@ public struct ContentCard: Equatable, Sendable {
     public let extraMediaCount: Int
     public let stats: Stats
     public let isBookmarkedByMe: Bool
+    /// Ce que le bloc visuel montre (#20211) : diaporama, image de garde, son,
+    /// scène composée, ou rien.
+    public let visual: Visual
+    /// La scène composée à dessiner, quand le contenu en porte une.
+    public let scene: Scene?
 
     /// Le portrait d'un réel ou d'une story : la scène, lue dans sa loi (`SceneShape.aspect`).
     public static let portraitAspectRatio = Double(SceneShape.aspect)
@@ -67,7 +75,7 @@ public struct ContentCard: Equatable, Sendable {
     ///   n'en sert pas un des quatre.
     public init(post: APIPost, preferredLanguages: [String], announcedKind: PostType? = nil) {
         let shown = ShownContent(post: post)
-        let visual = shown.media.first { $0.mediaType == .image || $0.mediaType == .video }
+        let firstVisual = shown.media.first { $0.mediaType == .image || $0.mediaType == .video }
         postId = post.id
         kind = Self.postType(of: post.type) ?? announcedKind ?? .post
         author = Author(shown.author)
@@ -77,11 +85,16 @@ public struct ContentCard: Equatable, Sendable {
                                        preferredLanguages: preferredLanguages) ?? shown.content
         )
         moodEmoji = shown.type == .status ? Self.nonBlank(shown.moodEmoji) : nil
-        media = visual.map { Media($0, portrait: shown.type == .reel || shown.type == .story) }
-        extraMediaCount = visual == nil ? 0 : max(0, shown.media.count - 1)
+        media = firstVisual.map { Media($0, portrait: shown.type == .reel || shown.type == .story) }
+        extraMediaCount = firstVisual == nil ? 0 : max(0, shown.media.count - 1)
         stats = Stats(views: post.viewCount ?? 0, likes: post.likeCount ?? 0,
                       comments: post.commentCount ?? 0, bookmarks: post.bookmarkCount ?? 0)
         isBookmarkedByMe = post.isBookmarkedByMe ?? false
+        let portrait = shown.type == .reel || shown.type == .story
+        let pages = shown.media.filter { $0.mediaType == .image || $0.mediaType == .video }
+            .map { Media($0, portrait: portrait) }
+        scene = Scene(shown: shown)
+        visual = Self.visual(pages: pages, sound: Sound(shown: shown), document: scene?.document)
     }
 
     static func postType(of type: String?) -> PostType? {
@@ -106,7 +119,8 @@ public struct ContentCard: Equatable, Sendable {
 
 /// Le contenu dont la carte montre l'auteur, le texte et les médias : le post
 /// lui-même, ou l'original d'une republication qui n'a ni texte ni média.
-private struct ShownContent {
+struct ShownContent {
+    let id: String
     let type: PostType?
     let author: APIAuthor
     let createdAt: Date
@@ -115,23 +129,30 @@ private struct ShownContent {
     let translations: [String: APIPostTranslationEntry]?
     let moodEmoji: String?
     let media: [APIPostMedia]
+    let storyEffects: StoryEffects?
+    let audioUrl: String?
+    let audioDurationMs: Int?
 
     init(post: APIPost) {
         let ownMedia = post.media ?? []
         let isBareRepost = ContentCard.nonBlank(post.content) == nil && ownMedia.isEmpty
         guard isBareRepost, let original = post.repostOf else {
-            self.init(type: post.type, author: post.author, createdAt: post.createdAt, content: post.content,
+            self.init(id: post.id, type: post.type, author: post.author, createdAt: post.createdAt, content: post.content,
                       originalLanguage: post.originalLanguage, translations: post.translations,
-                      moodEmoji: post.moodEmoji, media: ownMedia)
+                      moodEmoji: post.moodEmoji, media: ownMedia, storyEffects: post.storyEffects,
+                      audioUrl: post.audioUrl, audioDurationMs: post.audioDuration)
             return
         }
-        self.init(type: original.type, author: original.author, createdAt: original.createdAt, content: original.content,
-                  originalLanguage: original.originalLanguage, translations: original.translations,
-                  moodEmoji: original.moodEmoji, media: original.media ?? [])
+        self.init(id: original.id, type: original.type, author: original.author, createdAt: original.createdAt,
+                  content: original.content, originalLanguage: original.originalLanguage,
+                  translations: original.translations, moodEmoji: original.moodEmoji, media: original.media ?? [],
+                  storyEffects: original.storyEffects, audioUrl: original.audioUrl, audioDurationMs: nil)
     }
 
-    private init(type: String?, author: APIAuthor, createdAt: Date, content: String?, originalLanguage: String?,
-                 translations: [String: APIPostTranslationEntry]?, moodEmoji: String?, media: [APIPostMedia]) {
+    private init(id: String, type: String?, author: APIAuthor, createdAt: Date, content: String?,
+                 originalLanguage: String?, translations: [String: APIPostTranslationEntry]?, moodEmoji: String?,
+                 media: [APIPostMedia], storyEffects: StoryEffects?, audioUrl: String?, audioDurationMs: Int?) {
+        self.id = id
         self.type = ContentCard.postType(of: type)
         self.author = author
         self.createdAt = createdAt
@@ -140,6 +161,9 @@ private struct ShownContent {
         self.translations = translations
         self.moodEmoji = moodEmoji
         self.media = media
+        self.storyEffects = storyEffects
+        self.audioUrl = audioUrl
+        self.audioDurationMs = audioDurationMs
     }
 }
 
@@ -154,6 +178,7 @@ extension ContentCard.Author {
 extension ContentCard.Media {
     init(_ media: APIPostMedia, portrait: Bool) {
         let isVideo = media.mediaType == .video
+        id = media.id
         kind = isVideo ? .video : .image
         let thumbnail = ContentCard.nonBlank(media.thumbnailUrl)
         imageURL = isVideo ? thumbnail : thumbnail ?? ContentCard.nonBlank(media.fileUrl)
