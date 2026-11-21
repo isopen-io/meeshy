@@ -105,6 +105,13 @@ function makePrisma(overrides: Record<string, any> = {}) {
     conversationShareLink: {
       updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
+    // #20208 — partir rend le RÔLE D'AGENT qui parlait à la place du partant.
+    // Le double le porte parce que la production l'appelle : sans lui, le
+    // `releaseAgentRoleFor` best-effort avalerait un `TypeError` et le témoin
+    // passerait au VERT sur une production qui ne retire rien.
+    agentUserRole: {
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+    },
     // La clôture et le départ committent ensemble (cycle 69).
     $transaction: jest.fn<any>((ops: any) => Promise.all(ops)),
     ...overrides,
@@ -389,5 +396,48 @@ describe('POST /conversations/:id/leave — le créateur reste protégé quelle 
 
     expect(res.statusCode).toBe(200);
     await app.close();
+  });
+});
+
+/**
+ * #20208 — PARTIR REND LE RÔLE D'AGENT, la JUMELLE du bannissement.
+ *
+ * `AgentUserRole` dit « l'agent parle à la place de X dans la conversation C ».
+ * Le bannissement ne la supprimait pas, et **le départ volontaire non plus** —
+ * la seconde moitié, trouvée en posant au correctif la question que ce dépôt
+ * impose (« cette entité a-t-elle une jumelle ? ») AU MOMENT du correctif, et
+ * non trois cycles plus tard comme pour `reorderConversationPreferences`.
+ *
+ * Le témoin assert sur l'ÉCRITURE : le retrait est best-effort, donc son
+ * absence ne changerait aucun code de retour.
+ */
+describe('#20208 — partir rend le rôle d’agent', () => {
+  it('supprime le rôle du PARTANT dans CETTE conversation', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ prisma });
+
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave` });
+
+    expect(res.statusCode).toBe(200);
+    // L'identifiant RÉSOLU, pas celui de l'URL : le retrait doit viser la
+    // conversation que le reste du geste a écrite, sans quoi il supprimerait un
+    // rôle dans un fil keyé par un identifiant lisible.
+    expect(prisma.agentUserRole.deleteMany).toHaveBeenCalledWith({
+      where: { conversationId: RESOLVED_CONV_ID, userId: USER_ID },
+    });
+  });
+
+  it('écrit le départ même si le retrait du rôle échoue', async () => {
+    const prisma = makePrisma({
+      agentUserRole: { deleteMany: jest.fn<any>().mockRejectedValue(new Error('mongo down')) },
+    });
+    const app = await buildApp({ prisma });
+
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave` });
+
+    expect(res.statusCode).toBe(200);
+    expect(prisma.participant.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ isActive: false }) }),
+    );
   });
 });
