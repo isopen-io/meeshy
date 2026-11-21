@@ -11,8 +11,9 @@ import Foundation
 // compare : un nouveau jour ou un acte relancé n'est pas une avancée. Deux actes avancés ensemble : le premier dans
 // l'ordre du jour parle.
 //
-// `nil` ⇒ aucune pastille : « Jeu masqué », lecture absente (cache vide, ancien serveur), actes pas encore ouverts,
-// aucune progression montée. Aucune notification n'en découle (#17368).
+// `nil` ⇒ aucune pastille : « Jeu masqué », lecture absente (cache vide, ancien serveur), aucun acte servi, aucune
+// progression montée. L'acte unique du premier Rêve (#17370, sous le niveau 5) se compare comme les autres. Aucune
+// notification n'en découle (#17368).
 
 public struct GameActAdvance: Equatable, Sendable {
     public let difficulty: MissionDifficulty
@@ -28,7 +29,7 @@ public struct GameActAdvance: Equatable, Sendable {
     /// La loi, sur la seule part du bloc qu'elle lit.
     public static func between(_ before: GameBlock.Missions?, _ after: GameBlock.Missions?, hidden: Bool) -> GameActAdvance? {
         guard !hidden, let before, let after else { return nil }
-        guard after.unlocked, before.dayKey == after.dayKey else { return nil }
+        guard before.dayKey == after.dayKey else { return nil }
         let previous = Dictionary(before.items.map { ($0.id, $0.progress) }, uniquingKeysWith: { first, _ in first })
         let moved = after.items.first { item in
             guard let was = previous[item.id] else { return false }

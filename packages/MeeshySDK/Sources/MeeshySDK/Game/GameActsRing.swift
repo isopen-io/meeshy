@@ -6,11 +6,12 @@ import Foundation
 //
 // Autour du bouton du menu, un segment s'allume par acte du rêve du jour réalisé. Le client ne recalcule AUCUNE
 // règle : le jour du joueur, ses actes et leur réalisation sont décidés par la passerelle et servis dans le bloc
-// `game` (`missions.unlocked`, `missions.items[].completedAt`). La loi LIT ce bloc — le cache d'abord — et dit combien
-// d'actes sont faits sur ceux du jour.
+// `game` (`missions.items[].completedAt`). La loi LIT ce bloc — le cache d'abord — et dit combien d'actes sont faits sur
+// ceux du jour.
 //
-// `nil` ⇒ aucun anneau : « Jeu masqué », aucun bloc (cache vide, ancien serveur), actes pas encore ouverts (avant le
-// niveau 5) ou jour servi sans acte. Aucune notification n'en découle (#17368).
+// `nil` ⇒ aucun anneau : « Jeu masqué », aucun bloc (cache vide, ancien serveur), ou jour servi sans acte — dont un ancien
+// serveur sous le niveau 5. Le premier Rêve (#17370) a un acte : un anneau d'un segment. Aucune notification n'en découle
+// (#17368).
 
 public struct GameActsRing: Equatable, Sendable {
     public let done: Int
@@ -23,7 +24,7 @@ public struct GameActsRing: Equatable, Sendable {
 
     /// La loi, sur la seule part du bloc qu'elle lit.
     public static func of(missions: GameBlock.Missions, hidden: Bool) -> GameActsRing? {
-        guard !hidden, missions.unlocked, !missions.items.isEmpty else { return nil }
+        guard !hidden, !missions.items.isEmpty else { return nil }
         return GameActsRing(done: missions.items.filter(\.isCompleted).count, total: missions.items.count)
     }
 

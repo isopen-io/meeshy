@@ -653,7 +653,7 @@ extension ProgressionConceptModel {
     private static func missionsState(_ game: GameBlock?) -> ProgressionFactText? {
         guard let game else { return nil }
         let missions = game.missions
-        guard missions.unlocked else {
+        guard !missions.showsDoorOnly else {
             return ProgressionFactText(GameCopy.missionsLocked(level: count(game.level.shown.level)), .missionsUnlockLevel, .level)
         }
         let total = missions.items.count
