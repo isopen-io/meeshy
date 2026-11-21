@@ -33,6 +33,7 @@ jest.mock('../../../../services/community-join-request-broadcast', () => {
 
 import { registerMembershipRoutes } from '../../../../routes/communities/membership';
 import { registerJoinLinkRoutes } from '../../../../routes/communities/join-link';
+import { communityForViewer } from '../../../../routes/communities/serialization';
 
 const VIEWER = '507f1f77bcf86cd799430011';
 const CREATOR = '507f1f77bcf86cd799430022';
@@ -242,14 +243,51 @@ describe('POST /communities/:id/join — un lien en pause ne fait plus entrer', 
   });
 });
 
+describe('le détail et la liste — l\'état du lien selon le lecteur (communityForViewer)', () => {
+  const community = (fixture: { pausedAt: Date | null; members?: { role: string }[]; createdBy?: string }) => ({
+    id: COMM,
+    name: 'C',
+    createdBy: fixture.createdBy ?? CREATOR,
+    joinLinkPausedAt: fixture.pausedAt,
+    members: fixture.members ?? [],
+    _count: { members: 3, Conversation: 1 },
+  });
+
+  it.each([
+    ['un MODÉRATEUR', { members: [{ role: 'moderator' }] }],
+    ['un ADMINISTRATEUR', { members: [{ role: 'admin' }] }],
+    ['le CRÉATEUR', { createdBy: VIEWER }],
+  ])('%s lit l\'instant de la pause', (_label, fixture) => {
+    const served = communityForViewer(community({ pausedAt: PAUSED_AT, ...fixture }), VIEWER);
+    expect(served.joinLinkPaused).toBe(true);
+    expect(served.joinLinkPausedAt).toBe(PAUSED_AT);
+  });
+
+  it.each([
+    ['un MEMBRE simple', { members: [{ role: 'member' }] }],
+    ['un non-membre', {}],
+  ])('%s sait que le lien est en pause, jamais QUAND', (_label, fixture) => {
+    const served = communityForViewer(community({ pausedAt: PAUSED_AT, ...fixture }), VIEWER);
+    expect(served.joinLinkPaused).toBe(true);
+    expect(served.joinLinkPausedAt).toBeNull();
+  });
+
+  it('un lien actif (champ nul ou absent) se dit actif à tout lecteur', () => {
+    expect(communityForViewer(community({ pausedAt: null, createdBy: VIEWER }), VIEWER)).toMatchObject({ joinLinkPaused: false, joinLinkPausedAt: null });
+    const { joinLinkPausedAt: _absent, ...older } = community({ pausedAt: null });
+    expect(communityForViewer(older, VIEWER)).toMatchObject({ joinLinkPaused: false, joinLinkPausedAt: null });
+  });
+});
+
 describe('communitySchema — l\'état du lien traverse le sérialiseur', () => {
-  it('sert joinLinkPausedAt (instant ISO, ou null)', async () => {
+  it('sert joinLinkPaused et joinLinkPausedAt (instant ISO, ou null)', async () => {
     const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-    app.get('/c', { schema: { response: { 200: communitySchema } } }, async () => ({ id: COMM, name: 'C', joinLinkPausedAt: PAUSED_AT }));
-    app.get('/n', { schema: { response: { 200: communitySchema } } }, async () => ({ id: COMM, name: 'C', joinLinkPausedAt: null }));
+    const envelope = { type: 'object', properties: { success: { type: 'boolean' }, data: communitySchema } };
+    app.get('/c', { schema: { response: { 200: envelope } } }, async () => ({ success: true, data: { id: COMM, name: 'C', joinLinkPaused: true, joinLinkPausedAt: PAUSED_AT } }));
+    app.get('/n', { schema: { response: { 200: envelope } } }, async () => ({ success: true, data: { id: COMM, name: 'C', joinLinkPaused: true, joinLinkPausedAt: null } }));
     await app.ready();
     apps.push(app);
-    expect((await app.inject({ method: 'GET', url: '/c' })).json().joinLinkPausedAt).toBe(PAUSED_AT.toISOString());
-    expect((await app.inject({ method: 'GET', url: '/n' })).json().joinLinkPausedAt).toBeNull();
+    expect((await app.inject({ method: 'GET', url: '/c' })).json().data).toMatchObject({ joinLinkPaused: true, joinLinkPausedAt: PAUSED_AT.toISOString() });
+    expect((await app.inject({ method: 'GET', url: '/n' })).json().data).toMatchObject({ joinLinkPaused: true, joinLinkPausedAt: null });
   });
 });

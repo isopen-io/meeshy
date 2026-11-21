@@ -30,6 +30,9 @@ export const byIdInvite = (id: string): string => `/api/v1/communities/${encodeU
 /** POST /api/v1/communities/:id/join */
 export const byIdJoin = (id: string): string => `/api/v1/communities/${encodeURIComponent(id)}/join`;
 
+/** PUT /api/v1/communities/:id/join-link */
+export const byIdJoinLink = (id: string): string => `/api/v1/communities/${encodeURIComponent(id)}/join-link`;
+
 /** GET /api/v1/communities/:id/join-requests */
 export const byIdJoinRequests = (id: string): string => `/api/v1/communities/${encodeURIComponent(id)}/join-requests`;
 

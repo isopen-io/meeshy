@@ -2518,6 +2518,8 @@ model Community {
   updatedAt   DateTime  @updatedAt
   /// « Valider chaque entrée » (#19429) : rejoindre crée une DEMANDE qu'un administrateur ou un modérateur accepte ou refuse. Absent = entrée directe.
   requiresJoinApproval Boolean? @default(false)
+  /// Le lien d'entrée suspendu par un intendant (#19661) : nul ou absent = actif. On n'entre plus PAR LE LIEN ; les autres portes restent.
+  joinLinkPausedAt     DateTime?
 
   members             CommunityMember[]
   joinRequests        CommunityJoinRequest[]
