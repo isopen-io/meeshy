@@ -94,7 +94,8 @@ export const MINIMUM_SWIFT_ROUTES = 120;
 // 171 le 2026-11-19 : `phone-call:started` et `phone-call:ended` (#18753), iOS lit « en appel ».
 // 173 le 2026-11-19 : `fall:detected` et `fall:cleared` (#18748), iOS lit la chute détectée.
 // 174 le 2026-11-20 : `community:join-requested` (#19877), les intendants iOS relisent les demandes d'entrée.
-export const SWIFT_SWEPT_EVENTS_AT_LAST_MEASURE = 174;
+// 175 le 2026-11-20 : `community:join-request-decided` (#19948), le demandeur iOS lit le refus de sa demande.
+export const SWIFT_SWEPT_EVENTS_AT_LAST_MEASURE = 175;
 
 export type SwiftProperty = {
   /** La clé du FIL : le `CodingKeys` s'il existe, sinon le nom Swift. */

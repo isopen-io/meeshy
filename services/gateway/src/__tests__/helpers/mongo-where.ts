@@ -85,7 +85,7 @@ function fieldsOf(clause: MongoDocument): string[] {
   );
 }
 
-const FIELD_OPERATORS = new Set(['isSet', 'equals', 'not', 'gt', 'lt', 'gte', 'lte', 'in', 'notIn', 'is', 'has', 'isEmpty', 'some', 'none']);
+const FIELD_OPERATORS = new Set(['isSet', 'equals', 'not', 'gt', 'lt', 'gte', 'lte', 'in', 'notIn', 'is', 'has', 'isEmpty', 'some', 'none', 'startsWith']);
 
 const isPlainDocument = (value: unknown): boolean =>
   typeof value === 'object' && value !== null && !(value instanceof Date) && !Array.isArray(value);
@@ -107,6 +107,13 @@ const relatedDocuments = (row: MongoDocument, key: string): MongoDocument[] =>
 function matchesFieldFilter(row: MongoDocument, key: string, filter: MongoDocument): boolean {
   return Object.entries(filter).every(([operator, operand]) => {
     if (operator === 'isSet') return has(row, key) === operand;
+    // `startsWith`, ajouté par #20113 : la garde des images d'identité filtre
+    // `mimeType: { startsWith: 'image/' }`, et sans cet opérateur le double
+    // prendrait le filtre pour un document imbriqué — il refuserait la ligne
+    // qui apparie, c'est-à-dire exactement le cas qu'un témoin veut voir.
+    if (operator === 'startsWith') {
+      return typeof row[key] === 'string' && typeof operand === 'string' && (row[key] as string).startsWith(operand);
+    }
     if (operator === 'equals') {
       if (operand === null) return has(row, key) && row[key] === null;
       return has(row, key) && sameValue(row[key], operand);
@@ -212,9 +219,10 @@ type FindManyArgs = {
   readonly select?: MongoDocument;
   readonly orderBy?: MongoDocument | readonly MongoDocument[];
   readonly take?: number;
+  readonly skip?: number;
 };
 
-const SUPPORTED_FIND_MANY_ARGS = new Set(['where', 'select', 'orderBy', 'take']);
+const SUPPORTED_FIND_MANY_ARGS = new Set(['where', 'select', 'orderBy', 'take', 'skip']);
 const SUPPORTED_NESTED_SELECT_ARGS = new Set(['select', 'include', 'where', 'take']);
 
 /**
@@ -349,7 +357,11 @@ export function findManyIn<T extends MongoDocument>(rows: readonly T[]) {
     const matched = rows.filter((row) => matchesMongoWhere(row, args.where));
     const orderBy = args.orderBy === undefined ? [] : Array.isArray(args.orderBy) ? args.orderBy : [args.orderBy as MongoDocument];
     const sorted = orderBy.length === 0 ? matched : [...matched].sort(compareBy(orderBy));
-    const taken = args.take === undefined ? sorted : sorted.slice(0, args.take);
+    // `skip` AVANT `take`, l'ordre de Prisma — et supporté depuis #20129, parce
+    // qu'un double qui refuse un argument LÉGITIME force les témoins à éviter
+    // la forme réelle de l'appel, donc à ne plus la décrire.
+    const skipped = args.skip === undefined ? sorted : sorted.slice(Number(args.skip));
+    const taken = args.take === undefined ? skipped : skipped.slice(0, args.take);
     return Promise.resolve(taken.map((row) => (args.select ? project(row, args.select) : { ...row })));
   };
   return { findMany, calls };

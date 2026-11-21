@@ -75,7 +75,10 @@ function makePreloadedAttachment(overrides: Record<string, unknown> = {}) {
 function makePrisma() {
   return {
     messageAttachment: { findUnique: jest.fn() },
-    participant: { findFirst: jest.fn() },
+    // #20113 F5 — l'appelant est MEMBRE VIVANT : dès qu'un message porte la
+    // pièce, c'est la conversation qui admet, pas le dépôt. Le sujet de cette
+    // suite est le NOMBRE de lectures de la ligne, pas l'accès.
+    participant: { findFirst: jest.fn(async () => ({ id: 'p-1', conversationId: 'conv-1', userId: USER_ID, isActive: true })) },
   } as unknown as PrismaClient;
 }
 

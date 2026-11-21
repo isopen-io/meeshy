@@ -19,6 +19,7 @@ import { isMemberCreator } from '@meeshy/shared/types/role-types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { announceConversationNew } from './obsoleteCapability';
+import { participationEstVivante } from '../../routes/conversations/utils/access-control';
 
 const logger = enhancedLogger.child({ module: 'AnnounceStartedGroup' });
 
@@ -58,10 +59,31 @@ export async function announceStartedGroup(deps: AnnounceStartedGroupDeps, conve
       title: true,
       createdAt: true,
       participants: {
+        // `isActive` NU, délibérément — et la loi s'applique un cran plus bas,
+        // sur l'AUDIENCE seule (#20100).
+        //
+        // Cette lecture répond à DEUX questions dans une requête, et le dépôt
+        // n'offre pas de second chemin pour la première : le créateur ne se
+        // reconnaît qu'au `role` de sa LIGNE DE PARTICIPATION (`Conversation`
+        // n'a aucune colonne d'auteur, mesuré sur `schema.prisma`). Resserrer
+        // ce `where` ferait donc disparaître un créateur banni-mais-actif du
+        // relevé, `creator` serait introuvable, et l'unité rendrait AVANT
+        // d'annoncer quoi que ce soit : plus aucun invité LÉGITIME ne recevrait
+        // son invitation. Resserrer la réception en retournant la garde contre
+        // la personne qu'elle protège est exactement ce que #20093 refuse
+        // ailleurs.
         where: { isActive: true },
         select: {
           userId: true,
           role: true,
+          // Les DEUX colonnes de `participationEstVivante`, et `isActive` n'est
+          // pas redondant avec le `where` : la fonction exige `isActive === true`
+          // — un champ non PROJETÉ vaut `undefined`, donc elle rendrait `false`
+          // pour TOUT LE MONDE et l'annonce ne partirait à personne. Le
+          // compilateur ne le voit pas (les deux champs sont optionnels), et un
+          // `where` n'est pas une projection.
+          isActive: true,
+          bannedAt: true,
           messageRequestAt: true,
           user: { select: { id: true, displayName: true, username: true, avatar: true, firstName: true, lastName: true } },
         },
@@ -73,7 +95,14 @@ export async function announceStartedGroup(deps: AnnounceStartedGroupDeps, conve
   const members = conversation.participants.filter((participant): participant is typeof participant & { userId: string } => typeof participant.userId === 'string');
   const creator = members.find((participant) => isMemberCreator(participant.role ?? 'member'));
   if (!creator) return;
-  const invitees = members.filter((participant) => participant.userId !== creator.userId);
+  // L'AUDIENCE, et c'est ici qu'elle se resserre (#20100) : ces identités
+  // reçoivent `conversation:new` sur leur room personnelle ET une bannière
+  // « X vous a ajouté ». Un membre actif-et-banni n'a accès ni à la room de la
+  // conversation ni à son REST ; lui annoncer qu'il vient d'y être ajouté est
+  // une invitation à une porte fermée, et elle porte le TITRE du groupe.
+  const invitees = members.filter(
+    (participant) => participant.userId !== creator.userId && participationEstVivante(participant)
+  );
   if (invitees.length === 0) return;
 
   const title = conversation.title && conversation.title.trim() !== ''
