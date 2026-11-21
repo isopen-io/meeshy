@@ -677,7 +677,11 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
         // `findMany` sans `take`, au-delà de la dette gelée par
         // `unbounded-findmany-guard.test.ts`.
         let pIds: string[] = [];
-        if (requestedTypes.includes('messages') || requestedTypes.includes('reactions')) {
+        // #20129 — `media` entre dans cette condition : `exportMedia` a besoin de
+        // la même liste, parce que `uploadedBy` porte DEUX espaces de clés pour
+        // les lignes écrites avant #20113. Aucune lecture de plus — c'est la
+        // MÊME, déjà calculée une fois pour ses voisines.
+        if (requestedTypes.includes('messages') || requestedTypes.includes('reactions') || requestedTypes.includes('media')) {
           const participantIds = await fastify.prisma.participant.findMany({
             where: { userId, type: 'user' },
             select: { id: true },
@@ -797,7 +801,7 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
         }
 
         if (requestedTypes.includes('media')) {
-          const sections = await exportMedia(fastify.prisma, userId, page);
+          const sections = await exportMedia(fastify.prisma, pIds, userId, page);
           exportData.media = {
             attachments: sections.attachments.items,
             postMedia: sections.postMedia.items,

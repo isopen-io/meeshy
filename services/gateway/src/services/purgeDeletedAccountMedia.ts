@@ -61,6 +61,14 @@ export interface PurgeDeletedAccountMediaOptions {
   batchSize?: number;
 }
 
+/**
+ * Le plafond de clés de participant lues pour un compte. 10 000 : une borne
+ * EXPLICITE sur une liste déjà bornée par le nombre de conversations du compte
+ * — elle ne tronque rien de réaliste, elle empêche une lecture sans fin si la
+ * colonne venait à porter autre chose.
+ */
+const PARTICIPANT_KEY_CAP = 10_000;
+
 const DEFAULT_BATCH_SIZE = 200;
 
 /**
@@ -72,6 +80,27 @@ const DEFAULT_BATCH_SIZE = 200;
  * un attachment dont la suppression échoue resterait éligible pour toujours
  * et boucler la fournée sans jamais progresser — même garde qu'#5689.
  */
+/**
+ * Les clés sous lesquelles ce compte a pu déposer un média, HORS son `User.id`.
+ *
+ * Une lecture en échec rend la liste VIDE plutôt que de lever : la purge d'un
+ * compte supprimé est une tâche de fond rejouable, et purger le seul espace de
+ * compte vaut mieux que ne rien purger. La prochaine passe reprendra le reste.
+ */
+async function ownerKeysOf(prisma: PrismaClient, userId: string): Promise<readonly string[]> {
+  try {
+    const participants = await prisma.participant.findMany({
+      where: { userId },
+      select: { id: true },
+      take: PARTICIPANT_KEY_CAP,
+    });
+    return participants.map((participant) => participant.id);
+  } catch (err) {
+    log.warn('deleted-account participant keys unreadable — purging the account key only', { userId, err });
+    return [];
+  }
+}
+
 async function purgeAttachments(
   prisma: PrismaClient,
   attachmentRemover: DeletedAccountAttachmentRemover,
@@ -80,11 +109,21 @@ async function purgeAttachments(
 ): Promise<number> {
   let deleted = 0;
   const failedIds = new Set<string>();
+  // #20129 — `uploadedBy` porte DEUX espaces de clés pour les lignes écrites
+  // avant #20113 : l'identité de compte pour les quatre écrivains de
+  // téléversement, le `Participant.id` pour les deux écrivains de COPIE. Une
+  // purge qui n'apparie que le compte laisse donc derrière elle les médias
+  // TRANSFÉRÉS par le compte qu'on efface.
+  //
+  // La liste est bornée par construction — un compte n'a qu'autant de
+  // participants que de conversations — et `take` le DIT, pour que le cliquet
+  // des lectures non bornées n'ait pas à le deviner.
+  const owners = [userId, ...(await ownerKeysOf(prisma, userId))];
 
   for (;;) {
     const batch = await prisma.messageAttachment.findMany({
       where: {
-        uploadedBy: userId,
+        uploadedBy: { in: owners },
         isAnonymous: false,
         ...(failedIds.size > 0 ? { id: { notIn: [...failedIds] } } : {}),
       },
