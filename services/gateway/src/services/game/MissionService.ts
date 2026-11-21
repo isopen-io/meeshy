@@ -46,6 +46,7 @@ import {
   resolveGameDayKey,
   type DrawnMission,
   type MissionDifficulty,
+  type MissionProfile,
   type MissionSignal,
 } from '@meeshy/shared/utils/game/missions';
 import { PERSONAL_MISSION_SLOT, isPersonalMissionOpen } from '@meeshy/shared/utils/game/personal-mission';
@@ -55,6 +56,7 @@ import { GloryService } from './GloryService';
 import { MeeshSpend } from './MeeshSpend';
 import { chestHoursIntoDay, dayKeyOf, minuteOfDayInTimezone } from './gameClock';
 import { MISSION_PROFILE_USER_SELECT, missionProfileOf } from './MissionHabits';
+import { easedProfile, isEasedDreamDay, welcomeBackDay } from '@meeshy/shared/utils/game/welcome-back';
 import { meeshTotalsFromLedger } from '../meesh/MeeshService';
 import { starFragmentsOf } from './StarFragments';
 import { stampGameRevisionAfterWrite } from './GameRevision';
@@ -75,7 +77,14 @@ export const GAME_BONUS_AXIS: EngagementAxisKey = 'content.text_message';
 /** Trois missions par jour : facile, moyenne, difficile (ou Or). */
 export const DAILY_MISSION_SLOTS = 3;
 
-const USER_GAME_SELECT = { ...FLAME_USER_SELECT, ...MISSION_PROFILE_USER_SELECT, ...SPARKS_USER_SELECT } as const;
+/** Le jour du retour (#20218) : le Rêve de ce jour et des deux suivants est allégé. */
+const WELCOME_BACK_USER_SELECT = { gameWelcomeBackDay: true } as const;
+
+const USER_GAME_SELECT = { ...FLAME_USER_SELECT, ...MISSION_PROFILE_USER_SELECT, ...SPARKS_USER_SELECT, ...WELCOME_BACK_USER_SELECT } as const;
+
+/** Le profil du tirage de `dayKey` : allégé du jour du retour aux deux suivants (#20218). */
+const profileOfDay = (profile: MissionProfile, welcomeDay: string | null | undefined, dayKey: string): MissionProfile =>
+  isEasedDreamDay({ welcomeDay: welcomeDay ?? null, today: dayKey }) ? easedProfile(profile) : profile;
 
 /**
  * Les trois missions du JOUR, à l'exclusion de la mission personnelle (#9539, emplacement 3) : le coffre,
@@ -345,9 +354,10 @@ export class MissionService {
     if (isDreamWhole(existing.map((row) => row.slot))) return { dayKey, unlocked, rows: existing };
     const taken = new Set(existing.map((row) => row.slot));
 
-    const [treasury, profile] = await Promise.all([
+    const [treasury, profile, welcomeDay] = await Promise.all([
       meeshTotalsFromLedger(this.prisma, userId).then((totals) => totals.balance),
       missionProfileOf({ prisma: this.prisma, userId, user: user ?? null, now }),
+      this.welcomeBack({ userId, dayKey, lastWelcomeDay: user?.gameWelcomeBackDay ?? null, recent }),
     ]);
     const draw = (unlocked ? drawDailyMissions : drawFirstDream)({
       userId,
@@ -355,7 +365,7 @@ export class MissionService {
       level,
       flameDays,
       treasury,
-      profile,
+      profile: profileOfDay(profile, welcomeDay, dayKey),
     });
 
     // De l'emplacement 2 vers l'emplacement 0 : un tirage complet interrompu ne laisse jamais l'acte facile seul, la
@@ -393,6 +403,28 @@ export class MissionService {
       unlocked,
       rows: await this.prisma.dailyMission.findMany({ where: { userId, dayKey, slot: { lt: DAILY_MISSION_SLOTS } }, orderBy: { slot: 'asc' } }),
     };
+  }
+
+  /**
+   * Le jour du retour en vigueur pour `dayKey` (#20218) : la loi le décide depuis la journée de jeu précédente, et
+   * un retour qui commence se GRAVE avant le tirage — un tirage interrompu puis repris reste allégé. L'écriture est
+   * conditionnelle au jour LU : deux tirages concurrents écrivent le même jour, jamais un retour par-dessus un autre.
+   */
+  private async welcomeBack(params: {
+    readonly userId: string;
+    readonly dayKey: string;
+    readonly lastWelcomeDay: string | null;
+    readonly recent: readonly Pick<DailyMission, 'dayKey'>[];
+  }): Promise<string | null> {
+    const { userId, dayKey, lastWelcomeDay } = params;
+    const previousGameDay = params.recent.find((row) => row.dayKey < dayKey)?.dayKey ?? null;
+    const day = welcomeBackDay({ previousGameDay, today: dayKey, lastWelcomeDay });
+    if (day === null || day === lastWelcomeDay) return day;
+    const unchanged = lastWelcomeDay === null
+      ? { OR: [{ gameWelcomeBackDay: null }, { gameWelcomeBackDay: { isSet: false } }] }
+      : { gameWelcomeBackDay: lastWelcomeDay };
+    await this.prisma.user.updateMany({ where: { id: userId, ...unchanged }, data: { gameWelcomeBackDay: day } });
+    return day;
   }
 
   /**
@@ -571,9 +603,9 @@ export class MissionService {
         const status = flameStatus({ lastActiveDay: facts.lastActiveDay, today: dayKey, streak: facts.streak, freezes: facts.freezes });
         const day = await tx.gameDay.findUnique({ where: { userId_dayKey: { userId, dayKey } }, select: { rerollCount: true } });
         const all = await tx.dailyMission.findMany({ where: { userId, dayKey, slot: { lt: DAILY_MISSION_SLOTS } }, orderBy: { slot: 'asc' } });
-        const profile = await missionProfileOf({ prisma: this.prisma, userId, user: account ?? null, now });
+        const usual = await missionProfileOf({ prisma: this.prisma, userId, user: account ?? null, now });
         const next = rerollDailyMission({
-          profile,
+          profile: profileOfDay(usual, account?.gameWelcomeBackDay, dayKey),
           userId,
           dayKey,
           level: currentLevelOf(account),

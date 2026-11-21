@@ -2,13 +2,14 @@ import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, test } from 'bun:test';
 
 import { createHttpTransport } from '@/lib/api/http';
+import { E2EE_PLAINTEXT_WITHHELD } from '@/lib/end-to-end-regime-ledger';
 import type { ImagePreparer } from '@/lib/media/prepare-image-upload';
 
 import { pendingAttachmentOf } from './attachments';
 import { memoryDeviceRecords } from './device-records';
-import { createOutboxDurability, outboxRecordKey } from './outbox-durability';
+import { createOutboxDurability, outboxRecordKey, queuedSendsInOrder } from './outbox-durability';
 import { createOutboxStore, entriesOf } from './outbox-store';
-import { performSend, type SendDeps } from './perform-send';
+import { performSend, UPLOAD_PARTIAL, type SendDeps } from './perform-send';
 
 /**
  * #14698 — on compose et envoie d'autres messages pendant qu'une pièce jointe
@@ -175,5 +176,142 @@ describe('hors ligne, la file est durable et part dans l’ordre au retour du r�
     expect(outbox.getState().entries).toEqual({});
     const stored = (await records.load(outboxRecordKey('u-a'))) as Record<string, readonly unknown[]> | undefined;
     expect(stored?.['c-a']).toHaveLength(1);
+  });
+});
+
+/**
+ * #20223 — l'ORDRE de la file, et le refus LOCAL qui l'arrêtait.
+ *
+ * Les deux défauts sont NOUÉS, et c'est ce que ces témoins prouvent :
+ *
+ * 1. `queuedSendsInOrder` triait sur `entry.startedAt` — « l'horloge de la
+ *    tentative COURANTE » par sa propre documentation (`outbox-store.ts`), que
+ *    `markPending` ÉCRASE à chaque rejeu. Un premier rejeu qui échoue renvoyait
+ *    donc son entrée en FIN de file, et le message composé APRÈS partait AVANT.
+ * 2. Un refus frappé LOCALEMENT porte `status: 0` (conversation scellée,
+ *    pièces introuvables), donc passait pour « n'a jamais atteint le serveur ».
+ *    `replay` s'arrêtait dessus, abandonnant toute la file.
+ *
+ * Le nœud : le défaut 1 MASQUAIT le défaut 2 — la réécriture de `startedAt`
+ * renvoyait le bloqueur en queue, si bien que la file finissait par avancer.
+ * Stabiliser la clé SANS traiter le refus local fige le bloqueur en tête pour
+ * toujours. Les deux moitiés sont donc un seul lot.
+ */
+describe('#20223 — la file part dans l’ordre de COMPOSITION, et un refus local ne l’arrête pas', () => {
+  /** Échoue les `n` premiers POST de message en `status: 0`, puis sert l'accusé. */
+  function flakyFetch(failures: number) {
+    const calls: { readonly url: string; readonly body: unknown }[] = [];
+    let seen = 0;
+    let counter = 0;
+    const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const body = typeof init?.body === 'string' ? JSON.parse(init.body) : init?.body;
+      if (!url.includes('/messages')) return new Response('{}', { status: 200 });
+      seen += 1;
+      if (seen <= failures) throw new TypeError('Failed to fetch');
+      calls.push({ url, body });
+      counter += 1;
+      const sent = body as { readonly clientMessageId: string };
+      return new Response(
+        JSON.stringify({ success: true, data: { id: `srv-${counter}`, clientMessageId: sent.clientMessageId, conversationId: 'c-a', senderId: 'u-viewer', createdAt: '2026-11-21T10:00:00.000Z' } }),
+        { status: 200 },
+      );
+    }) as typeof fetch;
+    return { impl, calls };
+  }
+
+  const contenus = (calls: readonly { readonly body: unknown }[]) =>
+    calls.map((call) => (call.body as { readonly content?: string }).content);
+
+  test('un premier rejeu qui échoue ne renvoie pas son message en fin de file', async () => {
+    const { impl, calls } = flakyFetch(1);
+    const outbox = createOutboxStore();
+    const offline = depsOf(impl, outbox, false);
+
+    await performSend({ conversationId: 'c-a', draft: { content: 'A', originalLanguage: 'fr' }, viewerId: 'u-viewer', deps: { ...offline, now: () => 1 } });
+    await performSend({ conversationId: 'c-a', draft: { content: 'B', originalLanguage: 'fr' }, viewerId: 'u-viewer', deps: { ...offline, now: () => 2 } });
+
+    const durability = createOutboxDurability({
+      outbox,
+      records: memoryDeviceRecords(),
+      activeViewer: () => 'u-viewer',
+      // L'horloge de tentative avance : c'est elle qui réécrivait la clé d'ordre.
+      deps: () => ({ ...depsOf(impl, outbox, true), now: () => 9_000 }),
+    });
+
+    await durability.flush();
+    await durability.flush();
+
+    expect(contenus(calls)).toEqual(['A', 'B']);
+  });
+
+  test('un refus LOCAL (`status: 0` frappé sans requête) n’arrête pas les envois suivants', async () => {
+    const { impl, calls } = flakyFetch(0);
+    const outbox = createOutboxStore();
+    const offline = depsOf(impl, outbox, false);
+
+    await performSend({ conversationId: 'c-a', draft: { content: 'scellé', originalLanguage: 'fr' }, viewerId: 'u-viewer', deps: { ...offline, now: () => 1 } });
+    await performSend({ conversationId: 'c-b', draft: { content: 'derrière', originalLanguage: 'fr' }, viewerId: 'u-viewer', deps: { ...offline, now: () => 2 } });
+    const scelle = entriesOf(outbox.getState(), 'c-a')[0]!.message.clientMessageId;
+    outbox.getState().markFailed('c-a', scelle, {
+      ok: false,
+      status: 0,
+      error: 'Cette conversation est chiffrée de bout en bout : rien n’y part en clair',
+      code: E2EE_PLAINTEXT_WITHHELD,
+    });
+
+    await createOutboxDurability({ outbox, records: memoryDeviceRecords(), activeViewer: () => 'u-viewer', deps: () => depsOf(impl, outbox, true) }).flush();
+
+    expect(contenus(calls)).toEqual(['derrière']);
+    expect(entriesOf(outbox.getState(), 'c-a')[0]?.delivery).toBe('failed');
+  });
+
+  test('un refus local de pièces introuvables n’est pas rejoué seul non plus', async () => {
+    const { impl, calls } = flakyFetch(0);
+    const outbox = createOutboxStore();
+    const offline = depsOf(impl, outbox, false);
+
+    await performSend({ conversationId: 'c-a', draft: { content: 'sans ses pièces', originalLanguage: 'fr' }, viewerId: 'u-viewer', deps: { ...offline, now: () => 1 } });
+    const id = entriesOf(outbox.getState(), 'c-a')[0]!.message.clientMessageId;
+    outbox.getState().markFailed('c-a', id, { ok: false, status: 0, error: 'Pièces jointes introuvables pour cet envoi', code: UPLOAD_PARTIAL });
+
+    await createOutboxDurability({ outbox, records: memoryDeviceRecords(), activeViewer: () => 'u-viewer', deps: () => depsOf(impl, outbox, true) }).flush();
+
+    expect(calls).toHaveLength(0);
+    expect(entriesOf(outbox.getState(), 'c-a')[0]?.delivery).toBe('failed');
+  });
+
+  /**
+   * Une COUPURE reste une coupure : un `status: 0` SANS code vient d'un `fetch`
+   * rejeté, et c'est exactement ce que la file doit rejouer. Le lot resserre la
+   * classe de rejeu sur les refus NOMMÉS, il ne la vide pas.
+   */
+  test('une coupure réseau (`status: 0` sans code) reste rejouable', async () => {
+    const { impl, calls } = flakyFetch(1);
+    const outbox = createOutboxStore();
+
+    await performSend({ conversationId: 'c-a', draft: { content: 'coupé', originalLanguage: 'fr' }, viewerId: 'u-viewer', deps: depsOf(impl, outbox, true) });
+    expect(entriesOf(outbox.getState(), 'c-a')[0]?.delivery).toBe('failed');
+
+    await createOutboxDurability({ outbox, records: memoryDeviceRecords(), activeViewer: () => 'u-viewer', deps: () => depsOf(impl, outbox, true) }).flush();
+
+    expect(contenus(calls)).toEqual(['coupé']);
+  });
+
+  test('l’ordre se lit sur une horloge que le rejeu ne réécrit pas', async () => {
+    const outbox = createOutboxStore();
+    const { impl } = flakyFetch(0);
+    const offline = depsOf(impl, outbox, false);
+
+    await performSend({ conversationId: 'c-a', draft: { content: 'A', originalLanguage: 'fr' }, viewerId: 'u-viewer', deps: { ...offline, now: () => 1 } });
+    await performSend({ conversationId: 'c-b', draft: { content: 'B', originalLanguage: 'fr' }, viewerId: 'u-viewer', deps: { ...offline, now: () => 2 } });
+    const premier = entriesOf(outbox.getState(), 'c-a')[0]!.message.clientMessageId;
+
+    // La tentative de A est relancée : son horloge de tentative passe DEVANT
+    // celle de B, et l'ordre de composition ne doit pas bouger.
+    outbox.getState().markPending('c-a', premier, 9_000);
+    outbox.getState().markFailed('c-a', premier, { ok: false, status: 0, error: 'coupé' });
+
+    expect(queuedSendsInOrder(outbox.getState()).map((queued) => queued.entry.message.content)).toEqual(['A', 'B']);
   });
 });

@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { listRankFromColumns } from '@meeshy/shared/utils/conversation-list-rank';
 
+import { PARTICIPATION_VIVANTE } from './utils/access-control';
 /**
  * **LE CURSEUR DE `GET /conversations`, RÉSOLU DANS LE SCOPE DU LECTEUR**
  * (#6991).
@@ -83,8 +84,11 @@ export async function resolveListCursor({
   // Le scope est la garde. `isActive: true` reprend le prédicat que cette même
   // route applique déjà à sa clause principale : un participant retiré ne doit
   // pas continuer à paginer la conversation qu'il a quittée.
+  // #20209 — la PARTICIPATION VIVANTE, comme la clause principale de cette
+  // même liste : un membre EXCLU ne doit pas continuer à paginer la
+  // conversation dont il est banni, pas plus que celle qu'il a quittée.
   const conversation = await prisma.conversation.findFirst({
-    where: { id: beforeCursor, participants: { some: { userId, isActive: true } } },
+    where: { id: beforeCursor, participants: { some: { userId, ...PARTICIPATION_VIVANTE } } },
     select: { lastMessageAt: true, lastActivityAt: true }
   });
 
