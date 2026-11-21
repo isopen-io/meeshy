@@ -117,7 +117,7 @@ internal class CallReliabilityMonitor(
             watchdog = watchdog.connectingCaughtUp()
             return true
         }
-        val tick = watchdog.connecting(nowMs = clock.nowMs(), awaitingRemoteOffer = media.awaitingRemoteOffer)
+        val tick = watchdog.connecting(nowMs = clock.elapsedMs(), awaitingRemoteOffer = media.awaitingRemoteOffer)
         watchdog = tick.watchdog
         when (tick.step) {
             ConnectingStep.Waiting -> Unit
@@ -136,7 +136,7 @@ internal class CallReliabilityMonitor(
         val epoch = connectionEpoch
         if (!watchdog.halfOpen.needsEvaluation(epoch)) return
         val counts = media.packetCounts() ?: return
-        val step = watchdog.halfOpen.evaluate(epoch, counts.inbound, counts.outbound, clock.nowMs())
+        val step = watchdog.halfOpen.evaluate(epoch, counts.inbound, counts.outbound, clock.elapsedMs())
         watchdog = watchdog.withHalfOpen(step.state)
         if (step.outcome == HalfOpenOutcome.HealHalfOpen) trigger.request(host, media)
     }

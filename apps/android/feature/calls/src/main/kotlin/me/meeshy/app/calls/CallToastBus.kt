@@ -55,7 +55,7 @@ class CallToastBus @Inject constructor(
     fun info(message: String): Boolean = post(CallToast(message, FeedbackKind.Info))
 
     private fun admit(message: String): Boolean = synchronized(recent) {
-        val now = clock.nowMs()
+        val now = clock.elapsedMs()
         recent.values.removeAll { now - it >= DEDUPE_WINDOW_MS }
         if (message in recent) return@synchronized false
         recent[message] = now
