@@ -5,6 +5,7 @@ import { newMemberRefusal } from '../../../services/conversations/newMemberAdmis
 import { actorHasMinimumRole, actsWithCreatorRights, type ConversationActor } from '@meeshy/shared/utils/conversation-authority';
 import { isConversationClosed } from '../../../services/messaging/conversationWriteAdmission';
 import { resolveConversationId } from '../../../utils/conversation-id-cache';
+import { PARTICIPATION_VIVANTE } from '../../conversations/utils/access-control';
 import { SecuritySanitizer } from '../../../utils/sanitize';
 import { logError } from '../../../utils/logger';
 import { sendNotFound, sendForbidden, sendError } from '../../../utils/response';
@@ -194,7 +195,21 @@ export async function mintConversationShareLink(params: MintShareLinkParams): Pr
         select: { id: true, type: true, encryptionMode: true, title: true, isActive: true, closedAt: true }
       }),
       prisma.participant.findFirst({
-        where: { conversationId: resolvedId, userId, isActive: true }
+        // #20183 — la PARTICIPATION VIVANTE, et c'est la porte la plus grave
+        // des six de son lot : les cinq autres sont des fuites de LECTURE,
+        // celle-ci est un CONTOURNEMENT du bannissement par procuration. Sous
+        // `isActive` nu, un membre actif-et-banni fabriquait encore une URL
+        // vers la conversation dont il est exclu — et ce lien, lui, n'a aucun
+        // passé : `resolveConversationEntry` refuse le banni, il n'a rien à
+        // refuser à l'inconnu qui l'emprunte. Un membre exclu pouvait donc
+        // faire entrer qui il veut, et publier la conversation à qui la
+        // demande, par les DEUX portes que ce module unifie (#4169).
+        //
+        // Dans la CLAUSE, pas en aval : c'est le seul endroit qu'un balayage de
+        // source sait lire (#20050), et la ligne rendue alimente ensuite la
+        // garde de RANG (`mayMintShareLink`) — un banni ne doit pas être « un
+        // membre dont on juge le rang », il doit être absent.
+        where: { conversationId: resolvedId, userId, ...PARTICIPATION_VIVANTE }
       })
     ]);
 

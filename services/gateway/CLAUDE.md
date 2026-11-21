@@ -747,17 +747,41 @@ partout.** Le compte vit dans les témoins du cliquet
 écrit ici deux fois, et le cycle 195 l'a déplacé de ~100/~22 à 87/43 **sans que
 le dépôt change** — c'est le DISCRIMINANT qui avait changé. Un compte recopié
 dans un document dérive au premier élargissement de l'instrument qui le produit.
-Deux lectures comptent particulièrement,
-et ce sont des issues ouvertes, pas des détails : `POST /conversations/:id/messages`
-(`messages-send.ts`) n'appelle pas `canAccessConversation` et admet sur
-`isActive` nu — un banni-mais-actif peut encore ENVOYER — et `assertMember` du
-relais de signal E2EE fait de même.
 
 > **Ne pas lire la phrase « c'est la loi de toute porte » comme une mesure.**
 > C'est une cible. Le cycle 194 a écrit l'absolu ici, et son audit adversarial
 > l'a mesuré faux le jour même — un document qui dit vrai sur le principe et
 > faux sur l'état est plus coûteux qu'un document absent (§ cliquet de la table
 > des routes).
+
+**Et ce paragraphe l'a lui-même payé une seconde fois.** Il affirmait, jusqu'au
+cycle 202, que `POST /conversations/:id/messages` (`messages-send.ts`) « admet
+sur `isActive` nu — un banni-mais-actif peut encore ENVOYER ». **Mesuré FAUX**
+(#20183) : la clause nue de ce fichier est un RÉSOLVEUR d'identifiant, et
+l'autorisation vit en aval — `MessagingService.handleMessage` relit la ligne
+(`findUnique`, `bannedAt` PROJETÉ) et refuse (#10440) ; le cache de lecture
+porte `bannedAt` et les deux sites de bannissement l'invalident
+(`participant-ban-core.ts`) ; la branche ANONYME, qui ne lit rien du tout, tombe
+sur la même garde plus le contrôle `p.conversationId !== conversationId` et les
+refus de `ensureParticipantFromMember` (#10443, #16724). La même phrase vit dans
+#20093, qui en est la source.
+
+> **Une clause nue n'est pas une fuite — « un audit qui liste des `select:` ne
+> liste pas des fuites » vaut aussi des `where:`.** La question n'est pas
+> « cette clause est-elle la bonne ? » mais **« qui AUTORISE ce que cette clause
+> rend ? »**, et il faut suivre la valeur jusqu'au site qui refuse. Une porte
+> que deux documents déclarent ouverte envoie réparer ce qui tient, et détourne
+> des six qui ne tenaient pas (voir le § suivant).
+
+**Les six portes de la famille des LIENS DE PARTAGE, elles, étaient bien nues,
+et elles sont fermées** (#20183, cycle 202) : la FABRICATION d'un lien
+(`share-link-mint.ts`, les deux routes), les deux LISTES
+(`GET /conversations/:id/links`, `GET /links?conversationId=`), la FICHE d'un
+lien (`findActiveUserParticipant`), ses MESSAGES (`messages-retrieval.ts`) et la
+porte de l'INVITÉ anonyme (`messages.ts`). #20135 n'avait fermé que
+l'ADMINISTRATION d'un lien ; la fabrication est la plus grave des six — un lien
+fabriqué par un banni n'a aucun passé, donc rien à refuser à l'inconnu qui
+l'emprunte : **le bannissement se contournait par procuration.**
 
 Les DIFFUSEURS la doivent aussi, et la distinction qui décide du sens d'un
 correctif est celle-ci (#16690) :

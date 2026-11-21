@@ -38,6 +38,7 @@ import { LIVE_MESSAGE_MARK } from '../../services/messaging/liveMessage';
 import { getEncryptionService } from '../../services/EncryptionService';
 import { sealsAtRest, sealTextAtRest } from '../../services/messaging/atRestWrite';
 import { isServerAtRestUnavailable, servedClearAtRest } from '../../services/messaging/serverAtRest';
+import { PARTICIPATION_VIVANTE } from '../conversations/utils/access-control';
 import {
   E2EE_PLAINTEXT_REFUSAL_MESSAGE,
   E2EE_PLAINTEXT_REFUSED,
@@ -274,7 +275,13 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         where: {
           sessionTokenHash: tokenHash,
           type: 'anonymous',
-          isActive: true
+          // #20183 — la PARTICIPATION VIVANTE. La SECONDE lecture, plus bas,
+          // reste délibérément large (ni `isActive` ni `bannedAt`) : c'est elle
+          // qui distingue « accès FINI » de « session inconnue », et le refus
+          // d'un invité banni tombe donc dans le `410 GUEST_ACCESS_REVOKED`
+          // que ce fichier avait déjà écrit pour lui (#10492) — jamais dans le
+          // 401, qu'un client REJOUE.
+          ...PARTICIPATION_VIVANTE
         }
       });
 

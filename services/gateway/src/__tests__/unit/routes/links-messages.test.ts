@@ -191,7 +191,10 @@ describe('POST /links/:id/messages — anonymous: invité actif-et-BANNI (#20183
       headers: ANON_HEADERS, payload: VALID_BODY,
     });
     expect(res.statusCode).toBe(410);
-    expect(res.json()).toMatchObject({ code: 'GUEST_ACCESS_REVOKED' });
+    // `error` est une CHAÎNE PLATE, et c'est là que `sendError` pose le code
+    // (`utils/response.ts`, § CLAUDE.md « Un schéma d'ERREUR se confronte à
+    // l'enveloppe ») — pas sous une clé `code`.
+    expect(res.json()).toMatchObject({ success: false, error: 'GUEST_ACCESS_REVOKED' });
   });
 });
 
