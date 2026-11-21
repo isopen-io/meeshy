@@ -36,6 +36,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 
 import { resolveListCursor } from '../routes/conversations/list-cursor';
+import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 
 const LECTEUR = 'u-lecteur';
 const UNE_CONVERSATION = '68f3808baf186ffd9583b0fa';
@@ -138,9 +139,15 @@ describe('le curseur de GET /conversations', () => {
     // il manque justement celui qu'on a oublié d'énumérer. Comparer l'objet
     // complet fait aussi rougir tout champ AJOUTÉ sans être voulu.
     const [premierAppel] = findFirst.mock.calls;
+    // #20209 — la loi PAR SA CONSTANTE, jamais re-épelée ici : ce témoin gelait
+    // `isActive: true` NU, et c'est exactement à cela qu'il servait — il est
+    // tombé devant le lot qui resserre la clause, et a obligé à voir qu'un
+    // membre EXCLU continuait de paginer la conversation dont il est banni.
+    // Re-écrire la clause à la main en ferait une JUMELLE libre de diverger de
+    // la loi.
     expect(premierAppel?.[0]?.where).toEqual({
       id: UNE_CONVERSATION,
-      participants: { some: { userId: LECTEUR, isActive: true } },
+      participants: { some: { userId: LECTEUR, ...PARTICIPATION_VIVANTE } },
     });
   });
 });
