@@ -106,6 +106,34 @@ Un seul rouge survit à l'isolement, identique sur `dev` et avec le lot :
 `check-access-column` à 1440×900, qui dit lui-même « aucun contenu perceptible
 trouvé — le témoin ne mesure rien ». Instruit dans #20279.
 
+### « Trois orthographes » est une affirmation — mesurée
+
+Le tableau ci-dessus énumère des sites, donc il porte DEUX affirmations (leçon
+261) : « ces trois-là font cette lecture » (vérifiable) et « ce sont les sites
+où elle se fait » (presque jamais vérifiée). Relevé, après le correctif :
+
+```
+grep -rn "participants\??\.\(find\|some\|filter\)" apps/web/src --include=*.ts --include=*.tsx \
+  | grep -v '\.test\.' | grep -E 'userId|viewer|\.id ==='
+```
+
+**Quatre sites, et un seul lit la ligne du LECTEUR** — les trois autres
+répondent à une autre question, et leur colonne unique y est juste :
+
+| site | la question | verdict |
+|---|---|---|
+| `lib/view/viewer-participant.ts` | « quelle est MA ligne ? » | le site unique de ce lot |
+| `lib/view/conversation.ts` → `peerOf` | « qui est l'AUTRE, en tête-à-tête ? » | juste — un invité de lien ne peut PAS être dans une conversation `direct` (`share-link-mint.ts` : `Cannot create share links for direct conversations`), donc la forme négative `p.userId !== viewerId` n'a pas de ligne sans `userId` à sélectionner par accident |
+| `lib/calls/call-montage-circle.ts` → `handleIn` | « quel est le PSEUDO de ce compte ? » | juste — un invité n'a ni `user` ni pseudo, rendre `null` est le bon verdict |
+| `lib/api/fixtures-starred.ts` | « qui est l'autre » (fixtures) | hors production |
+
+La forme NÉGATIVE (`p.userId !== viewerId`) méritait d'être ouverte et pas
+seulement comptée : elle sélectionnerait la ligne du lecteur LUI-MÊME dès qu'un
+participant n'a pas de `userId` (`undefined !== 'p-invite'` est vrai), et le
+titre du fil afficherait au visiteur son propre nom. **Ce qui la sauve n'est pas
+sa forme mais une garde de la passerelle**, à deux services de là — c'est-à-dire
+exactement le genre de raison qui cesse d'être vraie sans que ce fichier change.
+
 ### Une collision de numéro de cycle, et ce qu'elle redit
 
 Ce journal s'est d'abord appelé `cycle207`. **`cycle207` et `cycle208` étaient
