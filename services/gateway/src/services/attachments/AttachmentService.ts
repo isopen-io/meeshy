@@ -344,7 +344,11 @@ export class AttachmentService {
         messageId: true,
         fileName: true,
         fileUrl: true,
-        filePath: true,
+        // `filePath` N'EST PAS chargé (#20048) : cette lecture est la seule du
+        // dépôt dont le résultat est SÉRIALISÉ (`GET /attachments/:id/metadata`),
+        // et le chemin de stockage du serveur n'a aucun lecteur client. Les
+        // lectures internes qui ont besoin du chemin disque l'ont par
+        // `getFilePath` / `getThumbnailPath`, qui ne servent rien sur le fil.
         mimeType: true,
         fileSize: true,
         duration: true,
