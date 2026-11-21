@@ -92,7 +92,7 @@ export function readStats(report: StatsReportLike, at: number): StatsRead {
   const remote = entries.find((entry) => entry.type === 'remote-inbound-rtp' && typeof entry.roundTripTime === 'number');
   const sum = (list: readonly StatsEntry[], field: string, kind?: string): number => positive(list.filter((entry) => kind === undefined || entry.kind === kind).reduce((total, entry) => total + numberOf(entry[field]), 0));
   const local = pair === undefined ? undefined : entries.find((entry) => entry.type === 'local-candidate' && entry.id === pair.localCandidateId);
-  const estimate = pairMeasure(entries, pair, 'availableOutgoingBitrate');
+  const estimate = pair?.availableOutgoingBitrate;
   const uplink = entries.find((entry) => entry.type === 'remote-inbound-rtp' && entry.kind === 'video' && typeof entry.fractionLost === 'number');
   return {
     at,

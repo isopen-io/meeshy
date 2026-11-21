@@ -130,6 +130,16 @@ describe('la paire ICE élue ne dépend pas de l’ordre du relevé (#20256)', (
     expect(everyOrder(aberrant, linkOf)).toEqual([{ rtt: 300, bitrate: null, path: 'relay', candidateType: 'relay' }]);
   });
 
+  test('le débit sortant estimé ne se lit QUE sur la paire élue : une autre paire ne porte aucun trafic, et son estimation ferait changer le palier vidéo', () => {
+    const entries = [
+      transport('T1', 'CP1'),
+      pair('CP1', 'L1', { priority: 10, currentRoundTripTime: 0.05 }),
+      pair('CP2', 'L1', { priority: 500, currentRoundTripTime: 0.3, availableOutgoingBitrate: 120_000 }),
+      local('L1', 'host'),
+    ];
+    expect(everyOrder(entries, linkOf)).toEqual([{ rtt: 50, bitrate: null, path: 'direct', candidateType: 'host' }]);
+  });
+
   test('une mesure absente de la paire élue se lit sur la paire suivante qui la porte, dans l’ordre d’élection', () => {
     const entries = [
       transport('T1', 'CP1'),

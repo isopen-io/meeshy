@@ -2347,11 +2347,15 @@ socket jusqu'au client.
     - **Codec affiché = codec REÇU.** On considère les `inbound-rtp` qui ont un `codecId`, l'audio d'abord (un `kind` absent compte comme audio), puis le plus petit id, et on garde le premier dont le codec se résout. Avant, le web prenait le codec ÉMIS, vidéo d'abord. Le champ `codec` de `call:analytics` a désormais le même sens sur les trois plateformes. Sa forme ne change pas (sous-type MIME, coupé à 50 caractères).
       - **Repli** : quand rien de reçu ne se résout, on prend le codec ÉMIS, dans le même ordre. C'est le cas d'un pair muet ou d'un flux à sens unique. Le gate navigateur `check-calls-quality.mjs`, dont le pair de test ne fait que recevoir, a rougi sans ce repli : `call:analytics` partait avec `unknown`. Le mobile rend encore `nil` dans ce cas, voir **#20280**.
     - **Limitation** : la cause la plus contraignante (bandwidth > cpu > other > le reste). À égalité, le plus petit id. Les rangs sont dans une `Map`, si bien qu'une clé du prototype vaut 0 (QA R1).
-    - **Paire ICE** : la règle de #20121 (le transport, sinon la paire nominée de plus forte priorité), et la mesure manquante lue sur la paire suivante. Le web était le dernier miroir de cette règle.
-- **Tests** : `call-stats-order.test.ts`, 20 cas, chacun joué dans toutes les rotations du relevé et de son inverse.
+    - **Paire ICE** : la règle de #20121 (le transport, sinon la paire nominée de plus forte priorité). Le RTT manquant se lit sur la paire suivante. Le web était le dernier miroir de cette règle.
+      - **Exception, le débit sortant estimé** : il ne se lit QUE sur la paire élue. Avec le repli de #20121, le gate `check-calls-effects-perf.mjs` rougissait par intermittence (« aucune tâche longue pendant les glissés du zoom »).
+        - Branche : 2 échecs sur 7 en local, 1 sur 2 en CI. `dev` : 0 sur 8. Sans le repli : 0 sur 6.
+        - Cause : l'estimation d'une paire sans trafic changeait le palier vidéo, et `setParameters` reconfigurait l'encodeur au milieu du geste.
+        - Le mobile garde ce repli : voir **#20284**.
+- **Tests** : `call-stats-order.test.ts`, 21 cas, chacun joué dans toutes les rotations du relevé et de son inverse.
   - Rouge : 15 échecs sur 17 sur le code de dev ; 1 échec sur 1 pour R1.
   - Réécrits : 3 tests figeaient le codec émis (`call-quality`, `call-quality-loop`, `call-analytics-hostile-stats`).
-  - Vert, sur l'arbre fusionné : `bun test src/lib/calls`, 2469 tests, 0 échec. `tsc` donne 0, le build donne 0. `check-calls-quality.mjs` passe en local (code de sortie 0, codec `opus`).
+  - Vert, sur l'arbre fusionné : `bun test src/lib/calls`, 2470 tests, 0 échec. `tsc` donne 0, le build donne 0. `check-calls-quality.mjs` passe en local (code de sortie 0, codec `opus`), `check-calls-effects-perf.mjs` aussi.
   - Suite web complète : 34 979 réussis et 1 échec. Ce dernier, `act-leak-guard.test.ts`, échoue à l'identique sur `origin/dev` : c'est un problème d'environnement local (bun 1.4.4), pas un effet du lot.
   - Mutations faites par la QA : M1 à M7 échouent toutes, de 1 à 5 échecs chacune.
 - **QA** (indépendante) : favorable avec réserves.
@@ -2361,7 +2365,7 @@ socket jusqu'au client.
     - `subtype()` ne découpe pas le mime comme le mobile ;
     - le web ne lit pas `mediaType` en repli de `kind` ;
     - un appel vidéo web rapporte désormais `opus`, le codec audio passant d'abord, comme sur mobile.
-- **Découvert** : **#20273**. Le web dit « direct » quand c'est le candidat DISTANT qui est relay.
+- **Découvert** : **#20273** (le web dit « direct » quand c'est le candidat DISTANT qui est relay), **#20280** (le mobile n'a pas de repli sur le codec émis), **#20284** (sur mobile, le débit estimé se lit sur une paire sans trafic).
 - **Limites** : la règle n'a pas été vérifiée dans un vrai navigateur pendant un appel. La parité du codec et de la limitation dépend de la fusion de #20258.
 
 ### Cycle suivant : par où reprendre
@@ -2369,5 +2373,5 @@ socket jusqu'au client.
 0. **#20258** : si le run `ios.yml` 44931575416 est vert, fusionner `dev` dans la branche puis fusionner la PR. S'il est encore en file, le relancer, ou le laisser courir.
 1. Si la PR de ce cycle (#20256) n'est pas fusionnée : fusionner `dev`, rejouer `bun test src/lib/calls`, puis fusionner.
 2. **#20257** : les analytics iOS ne comptent que les quatre causes connues. Le lot est petit, en Swift, et se prouve par `ios.yml`.
-3. **#20273** : la route relayée côté web.
+3. **#20284** : le débit estimé sur mobile (fluidité), puis **#20280** et **#20273**.
 4. #20185 (recette staging), #11932, #12236, #16933, #20043.
