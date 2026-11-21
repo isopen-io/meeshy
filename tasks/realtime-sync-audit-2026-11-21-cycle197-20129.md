@@ -220,10 +220,15 @@ et chaque lecture jugeable là où elle est posée.
 
 ## Ce qui RESTE, en issues
 
-- **#10021** (« rejouer une étape de suppression jusqu'au succès ») devient le
-  chemin critique de la promesse « suppression définitive ».
-- `exportMedia` sert des pièces de messages SUPPRIMÉS ou EXPIRÉS, là où la
-  section `messages` filtre — préexistant, élargi par ce lot.
-- L'archive ne porte **ni provenance** (`isForwarded`, art. 15(1)(g)) **ni
-  marque de chiffrement** (`isEncrypted`/`encryptionMode`, art. 20) : des octets
-  chiffrés y sont présentés comme un média ordinaire, sans clé et sans le dire.
+- **#20139** — une étape de suppression qui échoue n'est rejouée par PERSONNE, et
+  le `complete: false` que ce lot introduit n'est lu par personne non plus
+  (la leçon 122 appliquée à un verdict de purge). #10021 en est le fond.
+- **#20140** — `exportMedia` sert des pièces de messages SUPPRIMÉS ou EXPIRÉS, là
+  où la section `messages` filtre. Préexistant, élargi par ce lot, et c'est une
+  DÉCISION à trancher : les deux sections ne peuvent pas rester en désaccord.
+- **#20138** — l'archive ne porte **ni provenance** (`isForwarded`, art. 15(1)(g))
+  **ni marque de chiffrement** (`isEncrypted`/`encryptionMode`, art. 20) : des
+  octets chiffrés y sont présentés comme un média ordinaire, sans clé et sans le
+  dire.
+- **#20114** garde sa valeur d'hygiène de données, sans être le chemin critique
+  d'une conformité.

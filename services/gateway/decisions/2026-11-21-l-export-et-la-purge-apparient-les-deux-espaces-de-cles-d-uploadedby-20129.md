@@ -89,9 +89,16 @@ Du côté de la purge, c'était la destruction de toutes les pièces jointes du
 dépôt. `uploadedByOfAccount` rend `{ in: [] }`, qui n'apparie rien, et trois
 témoins le gardent.
 
-### Ce qui n'est PAS décidé ici
+### Ce qui n'est PAS décidé ici, et où ça vit
 
 La reprise des lignes héritées (#20114) reste une migration de données de
 production, donc une décision du porteur (directive #9223). Elle garde sa valeur
 d'hygiène — une colonne à deux espaces est une dette — et perd son caractère
 d'urgence.
+
+Trois questions voisines, ouvertes par l'audit de ce lot et instruites ailleurs :
+**#20139** (une étape de suppression qui échoue n'est rejouée par personne — et
+le `complete` introduit ici n'est lu par personne), **#20140** (l'export des
+médias sert les pièces de messages supprimés ou expirés, là où la section
+`messages` filtre), **#20138** (l'archive ne marque ni la provenance ni le
+chiffrement).
