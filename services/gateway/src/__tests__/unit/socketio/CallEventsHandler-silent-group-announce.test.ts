@@ -70,9 +70,14 @@ const groupRow = () => ({
   type: 'group',
   title: 'Équipe',
   createdAt: new Date('2026-11-02T09:00:00.000Z'),
+  // `isActive` et `bannedAt` sont PROJETÉS par `announceStartedGroup` depuis
+  // #20100 : l'audience des invités se juge APRÈS lecture
+  // (`participationEstVivante`), le créateur restant cherché sur le
+  // sur-ensemble. Une fixture qui les omet rend la loi fausse pour TOUT LE
+  // MONDE — un champ non projeté vaut `undefined` — et plus rien n'est annoncé.
   participants: [
-    { userId: CALLER, role: 'creator', messageRequestAt: null, user: { id: CALLER, displayName: 'Caller', username: 'caller', avatar: null, firstName: null, lastName: null } },
-    { userId: ALICE, role: 'member', messageRequestAt: null, user: { id: ALICE, displayName: 'Alice', username: 'alice', avatar: null, firstName: null, lastName: null } },
+    { userId: CALLER, role: 'creator', isActive: true, bannedAt: null, messageRequestAt: null, user: { id: CALLER, displayName: 'Caller', username: 'caller', avatar: null, firstName: null, lastName: null } },
+    { userId: ALICE, role: 'member', isActive: true, bannedAt: null, messageRequestAt: null, user: { id: ALICE, displayName: 'Alice', username: 'alice', avatar: null, firstName: null, lastName: null } },
   ],
 });
 
