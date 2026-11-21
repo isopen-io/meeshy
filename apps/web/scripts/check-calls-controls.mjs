@@ -314,6 +314,80 @@ const pinch = async (cdp, center, fromGap, toGap, steps = 12) => {
 };
 
 /**
+ * LE CENTRE D'UNE CIBLE QUI LUI APPARTIENT (#20035, #20040, #20108, #20151).
+ *
+ * `boundingBox()` dit où la cible EST ; il ne dit pas qu'un toucher à cet
+ * endroit LUI parvient. Entre les deux, il y a tout ce qui s'en va.
+ *
+ * Mesuré image par image sur le gabarit 568 × 320, après la fermeture des
+ * rails : `data-call-layer` passe à `idle` dès la PREMIÈRE image, alors que
+ * quatre transitions CSS courent encore ~320 ms. Pendant les deux premières,
+ * le centre du bouton « Journal » du pied des sous-titres est occupé par la
+ * COLONNE DE RAIL QUI SORT — `document.elementFromPoint` y rend
+ * `DIV.flex min-h-0 flex-col items-center`, que le bouton ne contient pas.
+ * Un toucher qui tombe dans cette fenêtre part au rail sortant : le panneau
+ * ne s'ouvre jamais, et la lecture suivante de `[data-call-journal]` échoue.
+ * À l'image 3, le bouton possède son centre et le journal s'ouvre : 0 rouge
+ * sur 20 depuis.
+ *
+ * C'est le défaut que quatre issues ont décrit sans le nommer, et sa forme
+ * explique ce qu'aucune hypothèse de dérive n'expliquait : **une seule pose
+ * rougit** parce que 568 × 320 est la seule qui touche un contrôle DANS la
+ * pilule juste après avoir refermé les rails — les autres redimensionnent la
+ * fenêtre et ne touchent plus rien.
+ *
+ * L'attente est donc celle de la POSSESSION, pas celle des animations. Un
+ * `railsSettled` de plus refermerait cette fenêtre-ci (les transitions la
+ * couvrent) et manquerait la suivante : un recouvrement n'a pas besoin
+ * d'animer pour avaler un toucher. On attend que la cible possède son centre
+ * sur deux images consécutives, rect stable — jamais un délai arbitraire, qui
+ * ne mesure rien et se périme au premier coureur plus lent.
+ *
+ * Une cible qui ne possède JAMAIS son centre fait LEVER, en nommant ce qui
+ * l'occupe : ce n'est pas un flottement, c'est la loi 4 du dépôt — un
+ * contrôle existe s'il a un effet — et le `try/catch` de la pose en fait une
+ * ligne d'invariant rompu au lieu d'un toucher perdu en silence.
+ */
+const OWNS_LIMIT = 3000;
+const centerOfSelector = async (page, selector) => {
+  const posed = await page.evaluate(
+    ([target, limit]) =>
+      new Promise((resolve) => {
+        const started = performance.now();
+        let previous = null;
+        const read = () => {
+          const element = document.querySelector(target);
+          if (element === null) {
+            if (performance.now() - started > limit) resolve({ found: false });
+            else requestAnimationFrame(read);
+            return;
+          }
+          const box = element.getBoundingClientRect();
+          const rect = { x: box.left + box.width / 2, y: box.top + box.height / 2, w: box.width, h: box.height };
+          const hit = document.elementFromPoint(rect.x, rect.y);
+          const owns = hit !== null && element.contains(hit);
+          const still = previous !== null && Math.abs(rect.x - previous.x) < 0.5 && Math.abs(rect.y - previous.y) < 0.5 && Math.abs(rect.w - previous.w) < 0.5 && Math.abs(rect.h - previous.h) < 0.5;
+          if (owns && previous !== null && previous.owns && still) {
+            resolve({ found: true, owns: true, center: [rect.x, rect.y] });
+            return;
+          }
+          if (performance.now() - started > limit) {
+            resolve({ found: true, owns: false, center: [rect.x, rect.y], occupant: hit === null ? 'rien' : `${hit.tagName}${hit.className === '' ? '' : `.${String(hit.className).slice(0, 48)}`}`, rect: { x: Math.round(box.x), y: Math.round(box.y), w: Math.round(box.width), h: Math.round(box.height) } });
+            return;
+          }
+          previous = { ...rect, owns };
+          requestAnimationFrame(read);
+        };
+        requestAnimationFrame(read);
+      }),
+    [selector, OWNS_LIMIT],
+  );
+  if (!posed.found) return [0, 0];
+  if (!posed.owns) throw new Error(`la cible \`${selector}\` n'a jamais possédé son centre en ${OWNS_LIMIT} ms — rect ${JSON.stringify(posed.rect)}, le centre appartient à ${posed.occupant}`);
+  return posed.center;
+};
+
+/**
  * Glisse chaque piste qui déborde, de droite à gauche, et rend son `scrollLeft` avant/après.
  *
  * Le glissé ne dépasse pas ce que la piste peut défiler (#8619) : un doigt qui
@@ -323,11 +397,6 @@ const pinch = async (cdp, center, fromGap, toGap, steps = 12) => {
  * en plein glissé, 7 glissés sur 10 perdus après la rangée de 54 px tirée de
  * 296 px, 0 sur 10 sans elle). Chaque invariant ne dépend ainsi que de sa piste.
  */
-const centerOfSelector = async (page, selector) => {
-  const box = await page.locator(selector).first().boundingBox();
-  return box === null ? [0, 0] : [box.x + box.width / 2, box.y + box.height / 2];
-};
-
 const dragEach = async (page, cdp, selector) => {
   const count = await page.locator(selector).count();
   const results = [];
