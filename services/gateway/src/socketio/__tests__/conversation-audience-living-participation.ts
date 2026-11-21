@@ -249,6 +249,63 @@ export type UnjudgeableRead = {
 const AUDIENCE_ROOT = path.resolve(__dirname, '..', '..');
 
 /**
+ * ET LA PORTÉE A BOUGÉ UNE SECONDE FOIS — de `services/gateway` à
+ * `services/` (#20111).
+ *
+ * #20091 a déplacé la portée de `src/socketio/` à `src/` ENTIER, et son
+ * doc-comment ci-dessus dit pourquoi : une portée est une AFFIRMATION, et
+ * c'est celle que personne ne relit, parce qu'elle ne ressemble pas à un
+ * inventaire — c'est un `path.resolve`. **Elle a bougé d'un répertoire, pas
+ * d'un PAQUET**, et `services/agent` lit `Participant` lui aussi : ses trois
+ * sélecteurs de membres DORMANTS portaient `isActive` NU, hors de toute vue.
+ *
+ * Le site était DOUBLEMENT masqué — hors de la racine, **et** derrière le
+ * `notIn` que le discriminant d'identité prenait pour la désignation d'une
+ * personne (corrigé par #20100, mais hors de sa portée).
+ *
+ * ── CE QUE LA PORTÉE LAISSE DEHORS, ET POURQUOI ─────────────────────────────
+ *
+ * Nommé ici plutôt que déduit d'un chemin, puisque c'est tout l'objet du lot :
+ *
+ * | paquet | lit `Participant` ? | dans la portée ? |
+ * |---|---|---|
+ * | `services/gateway/src` | oui, partout | **oui** |
+ * | `services/agent/src` | oui — les sélecteurs de dormants | **oui** (#20111) |
+ * | `services/translator` | non — Python, aucun client Prisma | non |
+ * | `packages/shared` | il DÉCLARE la loi et les types, n'interroge rien | non |
+ * | `apps/*` | aucun accès base | non |
+ * | `scripts/` | hors CI, pas de surface servie | non |
+ *
+ * Les trois derniers ne sont pas une dette : ils n'ont aucune lecture à
+ * garder. Le jour où l'un en acquiert une, c'est cette table qu'il faut
+ * relire — et le témoin `audience-law-scope.test.ts` § « la portée couvre les
+ * paquets qui lisent `Participant` » rougit si une racine déclarée disparaît.
+ *
+ * ── POURQUOI LE PRÉFIXE DE LA PASSERELLE EST VIDE ───────────────────────────
+ *
+ * La clé d'inventaire d'un site est `<préfixe><chemin>#<rang>`. Celui de la
+ * passerelle est VIDE — l'orthographe historique — et celui de l'agent porte
+ * son nom de paquet. L'asymétrie est un choix, et il se mesure : repréfixer la
+ * passerelle reclasserait **99 clés d'inventaire** pour aucun signal
+ * supplémentaire, et un inventaire recopié à la main est l'endroit où une
+ * ligne se perd. Ce qu'une clé doit garantir est qu'elle désigne EXACTEMENT un
+ * fichier, et un préfixe `@meeshy/agent/` ne peut par construction collisionner
+ * avec aucun chemin relatif de la passerelle (aucun ne commence par `@`).
+ *
+ * **Une racine déclarée et ABSENTE du disque JETTE.** Un balayage qui saute en
+ * silence une racine qu'il annonce est exactement la portée fausse que ce
+ * paragraphe existe pour empêcher — « un inventaire vide et un balayage
+ * aveugle sont le même vert ».
+ */
+const AUDIENCE_ROOTS: ReadonlyArray<{ readonly prefix: string; readonly dir: string }> = [
+  { prefix: '', dir: AUDIENCE_ROOT },
+  { prefix: '@meeshy/agent/', dir: path.resolve(AUDIENCE_ROOT, '..', '..', 'agent', 'src') },
+];
+
+/** Les racines déclarées, pour le témoin de portée — qui les veut toutes présentes. */
+export const AUDIENCE_SCOPE = AUDIENCE_ROOTS.map(({ prefix, dir }) => ({ prefix, dir }));
+
+/**
  * Dépouille les commentaires en PRÉSERVANT le compte de lignes : un numéro de
  * ligne calculé sur une source raccourcie désigne la mauvaise ligne, et un
  * cliquet qui pointe à côté se lit comme un cliquet qui se trompe.
@@ -599,6 +656,8 @@ export function sweepConversationAudiences(): AudienceSite[] {
 function walkParticipantReads(): { audiences: AudienceSite[]; unjudgeable: UnjudgeableRead[] } {
   const audiences: AudienceSite[] = [];
   const unjudgeable: UnjudgeableRead[] = [];
+  let prefix = '';
+  let root = AUDIENCE_ROOT;
   const walk = (dir: string): void => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name);
@@ -608,7 +667,7 @@ function walkParticipantReads(): { audiences: AudienceSite[]; unjudgeable: Unjud
       }
       if (!entry.name.endsWith('.ts') || entry.name.endsWith('.test.ts')) continue;
       const src = stripComments(fs.readFileSync(full, 'utf8'));
-      const file = path.relative(AUDIENCE_ROOT, full);
+      const file = `${prefix}${path.relative(root, full)}`;
       const lineOf = (index: number): number => src.slice(0, index).split('\n').length;
       let match: RegExpExecArray | null;
 
@@ -672,7 +731,14 @@ function walkParticipantReads(): { audiences: AudienceSite[]; unjudgeable: Unjud
       }
     }
   };
-  walk(AUDIENCE_ROOT);
+  for (const declared of AUDIENCE_ROOTS) {
+    if (!fs.existsSync(declared.dir)) {
+      throw new Error(`balayage des audiences: racine déclarée ABSENTE — ${declared.dir}. Une portée qui rétrécit en silence est le défaut de #20091.`);
+    }
+    prefix = declared.prefix;
+    root = declared.dir;
+    walk(declared.dir);
+  }
   // Le rang d'inventaire d'un site est son rang dans son FICHIER, et les deux
   // relevés ne balaient pas la même passe : sans ce tri, la clé d'un site
   // dépendrait de l'ORDRE DES SCANNERS plutôt que de la source. Il est sans

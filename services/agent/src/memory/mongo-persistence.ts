@@ -1,4 +1,5 @@
 import type { PrismaClient, UserRole } from '@meeshy/shared/prisma/client';
+import { PARTICIPATION_VIVANTE } from '@meeshy/shared/utils/participation-vivante';
 import type { ToneProfile, ControlledUser, TraitValue } from '../graph/state';
 import { toneProfileToGlobalFields } from './profile-merger';
 
@@ -402,24 +403,25 @@ export class MongoPersistence {
     return results;
   }
 
-  async getInactiveUsers(conversationId: string, thresholdHours: number, excludedRoles: string[], excludedUserIds: string[]) {
-    const threshold = new Date(Date.now() - thresholdHours * 60 * 60 * 1000);
-    const participants = await this.prisma.participant.findMany({
-      where: {
-        conversationId,
-        isActive: true,
-        lastActiveAt: { lt: threshold },
-        userId: { not: null, notIn: excludedUserIds },
-        user: { role: { notIn: excludedRoles as UserRole[] } },
-      },
-      select: {
-        user: { select: { id: true, displayName: true, username: true, bio: true, systemLanguage: true } },
-      },
-    });
-    return participants
-      .flatMap((p) => (p.user ? [p.user] : []));
-  }
-
+  /**
+   * UN MEMBRE BANNI N'EST PAS ANIMÉ (#20111).
+   *
+   * Cette lecture décide **à la place de qui l'agent va parler**. Elle portait
+   * `isActive: true` NU, et la ligne `{ isActive: true, bannedAt ≠ null }`
+   * existe en base — bannir pendant qu'une participation est inactive n'écrit
+   * que `bannedAt` (`conversationBanState.ts`), et aucune migration n'a repris
+   * les lignes existantes. Un membre actif-et-banni était donc éligible, et
+   * l'agent publiait un message signé de quelqu'un d'EXCLU dans le fil dont il
+   * est exclu : pas une fuite de lecture, une INJECTION de contenu attribuée à
+   * une personne bannie.
+   *
+   * `PARTICIPATION_VIVANTE` vient de `@meeshy/shared` et ne se réécrit pas :
+   * `bannedAt: null` seul fermerait l'agent à TOUTE la population (la colonne
+   * est ABSENTE du document de qui n'a jamais été banni). C'est pour cette
+   * lecture-ci, et ses deux sœurs, que la loi a déménagé dans le paquet
+   * partagé — elle vivait dans la passerelle, que ce service ne peut pas
+   * importer.
+   */
   async getPotentialControlledUsers(
     conversationId: string,
     limit: number,
@@ -469,7 +471,7 @@ export class MongoPersistence {
     const participants = await this.prisma.participant.findMany({
       where: {
         conversationId,
-        isActive: true,
+        ...PARTICIPATION_VIVANTE,
         lastActiveAt: { lt: threshold },
         userId: { not: null, notIn: [...excludedUserIds, ...existingRoleUserIds] },
         user: {
@@ -496,6 +498,7 @@ export class MongoPersistence {
     return tirerAuSort(participants.flatMap((p) => (p.user ? [p.user] : [])), limit);
   }
 
+  /** Le repli du sélecteur ci-dessus — même loi, pour la même raison (#20111). */
   async getLeastActiveParticipants(
     conversationId: string,
     limit: number,
@@ -507,7 +510,7 @@ export class MongoPersistence {
     const participants = await this.prisma.participant.findMany({
       where: {
         conversationId,
-        isActive: true,
+        ...PARTICIPATION_VIVANTE,
         userId: { not: null, notIn: [...excludedUserIds, ...existingControlledUserIds] },
         user: {
           // Même loi que ci-dessus : la connexion décide, jamais l'activité.
@@ -625,7 +628,13 @@ export class MongoPersistence {
         by: ['conversationId'],
         where: {
           conversationId: { in: allConvIds },
-          isActive: true,
+          ...PARTICIPATION_VIVANTE,
+          // La MESURE porte la même loi que les deux sélecteurs qu'elle garde
+          // (#20111). Ici un banni n'est pas une fuite — c'est un nombre FAUX :
+          // ce comptage élit les conversations qui valent un scan, et compter
+          // un banni comme éligible envoyait scanner un fil dont les trois
+          // sélecteurs d'aval ne retiendront personne. Un compte doit dire la
+          // même chose que ce qu'il alimente.
           userId: { not: null },
           // Même loi qu'en aval : la CONNEXION décide, pas l'activité.
           //

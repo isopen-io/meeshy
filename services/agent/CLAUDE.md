@@ -34,6 +34,44 @@ L'agent **Animateur** est activé par défaut sur toutes les conversations pour 
 3.  **Support (SAV)**: Agent dédié à la résolution de tickets ou à l'aide utilisateur. Utilise souvent le rôle `AGENT` sur son profil.
 4.  **FAQ**: Répond aux questions fréquentes basées sur une base de connaissances.
 
+## 🚫 L'agent ne parle JAMAIS à la place d'un membre BANNI (#20111)
+
+**Toute lecture de `Participant` de ce service porte `PARTICIPATION_VIVANTE`**
+— `isActive: true` **et** `bannedAt` nul ou absent —, importée de
+`@meeshy/shared/utils/participation-vivante`, jamais réécrite.
+
+Les trois lectures concernées vivent dans `src/memory/mongo-persistence.ts` :
+`getPotentialControlledUsers` et `getLeastActiveParticipants` (les sélecteurs
+de membres dormants, qui décident **à la place de qui l'agent va parler**) et
+le `participant.groupBy` de `getEligibleConversations` (la MESURE qui élit les
+conversations à scanner).
+
+Pourquoi ce n'est pas une garde cosmétique : elles portaient `isActive: true`
+NU, et la ligne `{ isActive: true, bannedAt ≠ null }` **existe en base** —
+bannir pendant qu'une participation est inactive n'écrit que `bannedAt`
+(`conversationBanState.ts` de la passerelle), et aucune migration n'a repris
+les lignes existantes. Un membre actif-et-banni était donc éligible, et l'agent
+publiait un message signé de quelqu'un d'**exclu** dans le fil dont il est
+exclu. Ce n'est pas une fuite de lecture : c'est une **injection de contenu
+attribuée à une personne bannie**.
+
+Deux pièges, tous deux mesurés :
+
+- **`bannedAt: null` seul ÉTEINT la feature.** La colonne est ABSENTE du
+  document de qui n'a jamais été banni, et Prisma n'apparie pas une clé absente
+  par une égalité à `null` : l'agent ne trouverait plus personne. D'où
+  `unsetOrNull`, et d'où la loi PARTAGÉE plutôt qu'une transcription locale.
+- **Un témoin qui compare le `where` reçu à celui qu'il attend ne vérifie que
+  sa propre copie**, et passe aussi bien avec la clause juste qu'avec celle qui
+  éteint tout. `src/__tests__/memory/mongo-persistence-living-participation.test.ts`
+  ÉVALUE le `where` contre des documents nus (`findManyIn` / `groupByIn`, le
+  seul évaluateur de `where` MongoDB du dépôt, importé de la passerelle), et
+  assert sur les utilisateurs RENDUS.
+
+Le cliquet des audiences de la passerelle balaie désormais ce paquet
+(`AUDIENCE_ROOTS`, préfixe `@meeshy/agent/`) : une quatrième lecture posée sur
+`isActive` nu le fait rougir.
+
 ## 👤 Utilisateurs Agentic
 
 Un utilisateur est considéré comme "Agentic" lorsqu'il possède le rôle global `AGENT`. Il n'est pas un humain mais un bot géré par le service d'agent.

@@ -1,4 +1,4 @@
-import { unsetOrNull } from './prisma-unset';
+import { unsetOrNull } from './prisma-unset.js';
 
 /**
  * Une participation VIVANTE : active ET non bannie — UNE définition pour
