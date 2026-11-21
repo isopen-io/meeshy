@@ -108,7 +108,7 @@ export const UNQUEUED_FAMILY_VERDICT = {
     kind: 'reload-serves-truth',
     emittedAt: 'routes/messages-writes.ts',
     because:
-      "`getAttachmentStatuses` sert `lastPlayPositionMs` par participant, exclusions `showReadReceipts` appliquées ; et le web n'ENREGISTRE rien de l'événement — il invalide `attachmentStatusDetailsQueryKey`, les deux requêtes de `message-receipts-sheet.tsx` étant en `staleTime: 0`. Toute ouverture de la feuille refait la requête.",
+      "`getAttachmentStatuses` sert `lastPlayPositionMs` par participant, exclusions `showReadReceipts` appliquées ; et le web n'ENREGISTRE rien de l'événement — il invalide `attachmentStatusDetailsQueryKey`, les deux requêtes de `message-receipts-sheet.tsx` étant en `staleTime: 0`. Toute ouverture de la feuille refait la requête, et un témoin WEB le tient (#20148) : `message-receipts-sheet.test.tsx`, « ouvrir la feuille REFAIT la requête ». Sans lui, ce verdict pouvait devenir faux en silence par une optimisation de cache.",
   },
   'message:pending-delivered': {
     kind: 'cannot-be-queued',
