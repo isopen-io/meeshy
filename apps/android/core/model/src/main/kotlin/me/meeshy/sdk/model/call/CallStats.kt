@@ -109,8 +109,9 @@ public data class CallStats(
          *   [availableOutgoingBitrateBps] (`availableOutgoingBitrate`, truncated) are
          *   read on the SELECTED pair ([selectedCandidatePair], #19899) — a probing
          *   pair listed after it no longer overwrites the live path's figures. When no
-         *   pair is elected, or the elected one lacks the field, the last
-         *   `candidate-pair` carrying it wins, as before.
+         *   pair is elected, or the elected one lacks the field, the `candidate-pair`
+         *   carrying it first in the election order (strongest `priority`, then
+         *   smallest `id`, #20121) gives it — never the report's order.
          * - `inbound-rtp` sums [packetsLost] and [bytesReceived]; splits
          *   `packetsReceived` into [inboundAudioPackets] / [inboundVideoPackets] by
          *   [RawEntry.kind]; accumulates the audio jitter mean; and remembers the
@@ -126,8 +127,7 @@ public data class CallStats(
          * The reducer never throws.
          */
         /**
-         * The route of the SELECTED ICE pair (iOS `relayedRoute`): the transport's
-         * `selectedCandidatePairId`, else the nominated succeeded pair. Relayed as soon
+         * The route of the SELECTED ICE pair (iOS `relayedRoute`, [selectedCandidatePair]). Relayed as soon
          * as either end is a `relay` candidate; `null` when nothing is known.
          */
         public fun relayedRoute(entries: List<RawEntry>): Boolean? {
@@ -141,22 +141,29 @@ public data class CallStats(
         }
 
         /**
-         * The SELECTED ICE pair, always a `candidate-pair`: the one the transport's
-         * `selectedCandidatePairId` names, else — that id absent or naming an entry of
-         * another type — the nominated succeeded pair (#19953).
+         * The SELECTED ICE pair, always a `candidate-pair`: the one named by the transport of
+         * smallest id whose `selectedCandidatePairId` names an existing pair, else — no such
+         * transport — the nominated succeeded pair first in [electionOrder] (#19953, #20121).
          */
         public fun selectedCandidatePair(entries: List<RawEntry>): RawEntry? {
-            val pairs = entries.filter { it.type == "candidate-pair" }
-            val selectedId = entries.firstOrNull { it.type == "transport" }?.strings?.get("selectedCandidatePairId")
-            val nominated = pairs.firstOrNull {
-                it.strings["state"] == "succeeded" && (it.values["nominated"] ?: 0.0) > 0.0
-            }
-            return selectedId?.let { id -> pairs.lastOrNull { it.id == id } } ?: nominated
+            val pairs = electionOrder(entries)
+            val byId = pairs.associateBy { it.id }
+            return entries
+                .filter { it.type == "transport" }
+                .sortedBy { it.id }
+                .firstNotNullOfOrNull { transport -> transport.strings["selectedCandidatePairId"]?.let(byId::get) }
+                ?: pairs.firstOrNull { it.strings["state"] == "succeeded" && (it.values["nominated"] ?: 0.0) > 0.0 }
         }
 
+        /** #20121 — the `candidate-pair` entries by strongest `priority`, then smallest `id` (unique in a report, W3C): never the report's order. */
+        private fun electionOrder(entries: List<RawEntry>): List<RawEntry> = entries
+            .filter { it.type == "candidate-pair" }
+            .sortedWith(compareByDescending<RawEntry> { CallStatValue.measured(it.values["priority"] ?: 0.0) }.thenBy { it.id })
+
+        private fun pairMeasure(key: String, elected: RawEntry?, entries: List<RawEntry>): Double? =
+            elected?.values?.get(key) ?: electionOrder(entries).firstNotNullOfOrNull { it.values[key] }
+
         public fun reduce(entries: List<RawEntry>): CallStats {
-            var rtt = 0.0
-            var availableOutgoingBitrateBps = 0
             var packetsLost = 0
             var bytesSent = 0L
             var bytesReceived = 0L
@@ -175,13 +182,6 @@ public data class CallStats(
 
             for (entry in entries) {
                 when (entry.type) {
-                    "candidate-pair" -> {
-                        entry.values["currentRoundTripTime"]?.let { rtt = CallStatValue.measured(it * 1000) }
-                        entry.values["availableOutgoingBitrate"]?.let {
-                            availableOutgoingBitrateBps = CallStatValue.count(it)
-                        }
-                    }
-
                     "inbound-rtp" -> {
                         entry.values["packetsLost"]?.let {
                             packetsLost = CallStatValue.sum(packetsLost, CallStatValue.count(it))
@@ -219,10 +219,10 @@ public data class CallStats(
             val jitterMs =
                 if (audioJitterCount > 0) CallStatValue.measured((audioJitterSum / audioJitterCount) * 1000) else 0.0
 
-            val elected = selectedCandidatePair(entries)?.values
+            val elected = selectedCandidatePair(entries)
 
             return CallStats(
-                roundTripTimeMs = elected?.get("currentRoundTripTime")?.let { CallStatValue.measured(it * 1000) } ?: rtt,
+                roundTripTimeMs = pairMeasure("currentRoundTripTime", elected, entries)?.let { CallStatValue.measured(it * 1000) } ?: 0.0,
                 packetsLost = packetsLost,
                 bandwidth = bytesSent,
                 bytesReceived = bytesReceived,
@@ -231,8 +231,7 @@ public data class CallStats(
                 inboundAudioPackets = inboundAudio,
                 inboundVideoPackets = inboundVideo,
                 outboundPacketsSent = outbound,
-                availableOutgoingBitrateBps = elected?.get("availableOutgoingBitrate")?.let(CallStatValue::count)
-                    ?: availableOutgoingBitrateBps,
+                availableOutgoingBitrateBps = pairMeasure("availableOutgoingBitrate", elected, entries)?.let(CallStatValue::count) ?: 0,
                 jitterMs = jitterMs,
                 inboundAudioBytes = inboundAudioBytes,
                 inboundVideoBytes = inboundVideoBytes,

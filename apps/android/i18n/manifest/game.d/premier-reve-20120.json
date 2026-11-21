@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.missions.full_dream_in",
+          "androidName": "game_missions_full_dream_in",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

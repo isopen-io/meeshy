@@ -35,9 +35,11 @@ export async function exportGame(prisma: PrismaClient, userId: string, page: Exp
           prestigeLevelRecords: true,
           flameFreezes: true,
           lastRelightDay: true,
+          flameFreezeGiftDay: true,
           guideSeen: true,
           publicLeagueConsentAt: true,
           publicLeagueConsentVersion: true,
+          gameWelcomeBackDay: true,
         },
       }),
       prisma.gameProfile.findUnique({ where: { userId } }),
@@ -128,9 +130,11 @@ export async function exportGame(prisma: PrismaClient, userId: string, page: Exp
             prestigeLevelRecords: account.prestigeLevelRecords ?? [],
             flameFreezes: account.flameFreezes,
             lastRelightDay: account.lastRelightDay,
+            flameFreezeGiftDay: account.flameFreezeGiftDay ?? null,
             guideSeen: account.guideSeen,
             publicLeagueConsentAt: account.publicLeagueConsentAt,
             publicLeagueConsentVersion: account.publicLeagueConsentVersion,
+            gameWelcomeBackDay: account.gameWelcomeBackDay ?? null,
           };
         })()
       : account,

@@ -17,6 +17,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { matchesMongoWhere, type MongoDocument } from '../../../helpers/mongo-where';
 
 jest.mock('../../../../utils/logger-enhanced.js', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), info: jest.fn(), warn: jest.fn() }) },
@@ -32,7 +33,12 @@ const READER = '507f1f77bcf86cd799439011';
 const COMMUNITY = '507f1f77bcf86cd799439021';
 const userId = (n: number) => `507f1f77bcf86cd7994390${String(30 + n)}`;
 
-type ParticipantRow = { readonly id: string; readonly userId: string; readonly isActive: boolean; readonly role: string; readonly joinedAt: Date };
+type ParticipantRow = {
+  readonly id: string; readonly userId: string; readonly isActive: boolean;
+  readonly role: string; readonly joinedAt: Date;
+  /** #20209 — ABSENT par défaut, comme dans la base : une ligne jamais bannie ne porte pas la colonne. */
+  readonly bannedAt?: Date;
+};
 type ConversationRow = {
   readonly id: string;
   readonly communityId: string;
@@ -66,6 +72,7 @@ const salon = (id: string, rows: readonly ParticipantRow[], isActive = true): Co
 const OPEN = '507f1f77bcf86cd799439101';
 const LEFT = '507f1f77bcf86cd799439102';
 const OBSOLETE = '507f1f77bcf86cd799439103';
+const BANNED = '507f1f77bcf86cd799439104';
 
 const fixtures = (): readonly ConversationRow[] => [
   // 3 actifs (dont le lecteur) et 2 partis
@@ -76,21 +83,49 @@ const fixtures = (): readonly ConversationRow[] => [
     participant(userId(3), false, 3),
     participant(userId(4), false, 4),
   ]),
-  // le lecteur l'a quitté (ou en a été banni : même écriture, `isActive: false`)
+  // le lecteur l'a QUITTÉ — `isActive: false`
   salon(LEFT, [participant(READER, false, 0), participant(userId(1), true, 1)]),
+  // #20209 — le lecteur en est BANNI, et sa ligne est restée ACTIVE.
+  //
+  // Le commentaire d'origine de la fixture ci-dessus disait « ou en a été banni :
+  // même écriture, `isActive: false` ». C'est vrai du chemin NOMINAL depuis
+  // #19688, et FAUX des lignes héritées d'avant #10436 — celles que ce milestone
+  // entier vise, et dont le dépôt dit qu'elles existent en base sans qu'aucune
+  // migration les ait reprises. Le témoin qui s'appelle « ne sert ni le salon
+  // quitté ou BANNI » ne modélisait donc que le salon QUITTÉ : il ne pouvait pas
+  // voir le seul état pour lequel la loi existe.
+  salon(BANNED, [
+    { ...participant(READER, true, 0), bannedAt: new Date('2026-11-01T00:00:00Z') },
+    participant(userId(1), true, 1),
+  ]),
   // fermé ou rendu obsolète : `isActive: false` sur la conversation
   salon(OBSOLETE, [participant(READER, true, 0)], false),
 ];
 
-type Where = { readonly communityId?: string; readonly isActive?: boolean; readonly participants?: { readonly some?: Partial<ParticipantRow> } };
+/**
+ * #20209 — LA SÉMANTIQUE MONGO DU DÉPÔT, et non plus une égalité écrite à la
+ * main.
+ *
+ * Le matcheur précédent était `Object.entries(filter).every(([k, v]) => row[k] === v)` :
+ * une égalité STRICTE, clé par clé. Il ne savait exprimer **aucune** des formes
+ * de la loi — ni `OR`, ni `{ isSet: false }`, ni `AND` — si bien qu'il rendait
+ * `false` sur toute clause qui en porte une, et que resserrer la production
+ * faisait disparaître TOUTES les lignes.
+ *
+ * Pire, dans l'autre sens : un filtre dont il ne comprend pas une clé
+ * l'évalue `undefined === valeur`, donc refuse — **il mentait par ce qu'il
+ * REFUSE**, le jumeau du « double qui ment par ce qu'il ACCEPTE ».
+ *
+ * `matchesMongoWhere` est la seule sémantique du dépôt, elle traverse les
+ * filtres de relation (`some`/`every`/`none`) et elle sait qu'un champ ABSENT
+ * n'est pas un champ à `null` — ce dont la garde `bannedAt` dépend
+ * entièrement.
+ */
+const matchesRow = (row: ParticipantRow, filter: unknown) =>
+  matchesMongoWhere(row as unknown as MongoDocument, filter as MongoDocument);
 
-const matchesRow = (row: ParticipantRow, filter: Partial<ParticipantRow>) =>
-  Object.entries(filter).every(([k, v]) => (row as Record<string, unknown>)[k] === v);
-
-const matches = (c: ConversationRow, where: Where) =>
-  (where.communityId === undefined || c.communityId === where.communityId) &&
-  (where.isActive === undefined || c.isActive === where.isActive) &&
-  (where.participants?.some === undefined || c.participants.some(p => matchesRow(p, where.participants!.some!)));
+const matches = (c: ConversationRow, where: unknown) =>
+  matchesMongoWhere(c as unknown as MongoDocument, where as MongoDocument);
 
 type CountSelect = Record<string, true | { where?: Partial<ParticipantRow> }>;
 

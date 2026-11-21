@@ -130,6 +130,8 @@ function makePrismaDouble(opts: {
         return typeof take === 'number' ? tous.slice(depuis, depuis + take) : tous.slice(depuis);
       }),
     },
+    // #16894 — les deux lectures du blocage (`getBlockRelatedUserIds`) : personne ici.
+    user: { findMany: jest.fn(async () => []), findUnique: jest.fn(async () => ({ blockedUserIds: [] })) },
     communityMember: {
       // Aucun scénario de ce fichier n'exige de co-membre de communauté —
       // l'audience PUBLIC + auteur suffit à prouver le gate.

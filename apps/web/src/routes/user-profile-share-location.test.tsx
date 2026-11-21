@@ -145,4 +145,46 @@ describe('la ligne branchée', () => {
     expect(host.querySelector('[data-share-location-stop]')).toBeNull();
     expect(host.querySelector<HTMLButtonElement>('[data-share-location]')).not.toBeNull();
   });
+
+  test('devant un point choisi ailleurs, « Partager » demande d’abord ; « Garder le point choisi » n’envoie rien (#20126)', async () => {
+    const asked: Array<{ readonly replacingPoint?: boolean }> = [];
+    const notices: string[] = [];
+    const { center } = makeCenter();
+    const pointed = { ...center, share: async (request: { readonly replacingPoint?: boolean }) => (asked.push(request), request.replacingPoint === true ? null : ('replaces-chosen-point' as const)) };
+    const host = await mount(<ProfileShareLocationRow language="fr" person={ADA} offered onNotice={(m) => notices.push(m)} center={pointed} />);
+    await settle();
+    await click(host.querySelector<HTMLButtonElement>('[data-share-location]'));
+    await settle();
+    await click(document.querySelector<HTMLButtonElement>('[data-share-location-confirm]'));
+    await settle();
+    const dialog = document.querySelector('[data-share-location-replace-point]');
+    expect(dialog?.textContent).toContain('Montrer votre position réelle ?');
+    expect(dialog?.textContent).toContain('Tous ceux qui le voient verront votre position réelle à la place.');
+    await click(document.querySelector<HTMLButtonElement>('[data-share-location-keep-point]'));
+    await settle();
+    expect(document.querySelector('[data-share-location-replace-point]')).toBeNull();
+    expect(asked).toHaveLength(1);
+    expect(notices).toEqual([]);
+  });
+
+  test('« Montrer ma position réelle » rejoue le même choix en remplaçant le point (#20126)', async () => {
+    const asked: Array<{ readonly precision: string; readonly durationMinutes: number; readonly replacingPoint?: boolean }> = [];
+    const { center } = makeCenter();
+    const pointed = {
+      ...center,
+      share: async (request: { readonly userId: string; readonly precision: 'city' | 'neighborhood' | 'exact'; readonly durationMinutes: 60 | 480; readonly replacingPoint?: boolean }) =>
+        (asked.push(request), request.replacingPoint === true ? null : ('replaces-chosen-point' as const)),
+    };
+    const host = await mount(<ProfileShareLocationRow language="fr" person={ADA} offered onNotice={noop} center={pointed} />);
+    await settle();
+    await click(host.querySelector<HTMLButtonElement>('[data-share-location]'));
+    await settle();
+    await click(document.querySelector<HTMLButtonElement>('[data-share-location-confirm]'));
+    await settle();
+    await click(document.querySelector<HTMLButtonElement>('[data-share-location-show-real]'));
+    await settle();
+    expect(asked.map((request) => request.replacingPoint === true)).toEqual([false, true]);
+    expect(asked[1]).toMatchObject({ precision: 'city', durationMinutes: 60 });
+    expect(document.querySelector('[data-share-location-replace-point]')).toBeNull();
+  });
 });

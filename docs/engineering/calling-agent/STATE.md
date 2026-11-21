@@ -2273,3 +2273,63 @@ socket jusqu'au client.
 2. **#20184** : `bytesTotal` en Long sur Android. Le lot est petit, et se prouve avec `jvm-check -PjvmCheckModelOnly`, puis `android.yml`.
 3. **#20121** : rendre l'élection ICE indépendante de l'ordre des entrées.
 4. #11932, #12236, #16933, #20043.
+
+## Cycle 67 — 2026-11-21
+
+- **Base** : `origin/dev` @ `9f7a74ca9`. #20187 (#20152, cycle 66) est fusionnée.
+- **Branche** : `claude/determined-volta-h96meu`.
+- **Objectif** : #20184. Sur Android, le résumé d'appel affiche les données consommées au-delà de 2 Go (« 4 GB », plus « 2.1 GB »).
+- **#20185** (recette staging de #20152) : non jouée, ce conteneur n'a pas d'accès authentifié au staging. Elle reste ouverte.
+- **Livré** (Android, `core/model`, commit `e503cb822`) :
+  - `CallSummaryMetadata.bytesTotal` passe en `Long?` et `formatDataSize` prend un `Long`.
+  - Le décodage est borné : une valeur négative ou non finie vaut `null` ; au-delà de 2^53 − 1, la valeur sature à cette borne.
+  - Le rendu est identique à `formatCallDataSize` (web) et à iOS pour toute valeur réelle. Le payload ne change pas, et `CallSummaryMetadata` n'est persisté nulle part : il se reconstruit depuis `metadata`.
+- **Tests** : `CallSummaryDataSizeTest`, 6 témoins (4 Go mesuré et estimé, borne des 2 Go, 2^53 − 1, saturation à 1e19, négatif).
+  - Rouge : échec de compilation, `formatDataSize` attendait un `Int`.
+  - Vert local : `jvm-check -PjvmCheckModelOnly --rerun-tasks` donne 19 291 tests, 0 échec. La QA l'a rejoué (même chiffre).
+  - CI : `android.yml` en `workflow_dispatch` sur `e503cb822`. Le résultat est dans la PR.
+- **QA** (indépendante) : favorable. Nits, aucun introduit par le lot :
+  - Android accepte un nombre servi en chaîne (`doubleOrNull`), iOS et le web non.
+  - Une valeur fractionnaire ou `1e19` fait échouer tout le décodage du résumé sur iOS, alors qu'Android la tolère.
+  - Aucun témoin ne fige les cas chaîne, fractionnaire et 0.
+- **Limites** : rien n'a été vérifié sur appareil.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée : lire son run `android.yml`, fusionner `dev` dans la branche, puis fusionner la PR.
+1. **#20185** : recette sur le staging, si un accès existe.
+2. **#20121** : rendre l'élection ICE indépendante de l'ordre des entrées, sur iOS et Android.
+3. #11932, #12236, #16933, #20043.
+
+## Cycle 68 — 2026-11-21
+
+- **Base** : `origin/dev` @ `c9240b50c`. #20203 (#20184, cycle 67) est fusionnée.
+- **Branche** : `claude/determined-volta-2nmf8r`.
+- **#20185** (recette staging de #20152) : non jouée. Ce conteneur n'a toujours pas d'accès authentifié au staging.
+- **Objectif** : #20121. L'élection de la paire ICE, et le RTT, le débit sortant et la route relayée qu'on y lit, ne dépendent plus de l'ordre des entrées de `getStats`. Sur iOS, `report.statistics` est un `Dictionary`.
+- **Livré** (iOS `CallStats.swift`, Android `CallStats.kt` et `CallStatsCollector.kt`) : la même règle dans les deux miroirs.
+  1. Transport : celui de plus petit id dont `selectedCandidatePairId` nomme une `candidate-pair` existante.
+  2. Sinon : la paire `succeeded` et nominée de plus forte `priority`, puis de plus petit id. Une priorité NaN, négative ou absente vaut 0.
+  3. Une mesure absente de la paire élue se lit sur la première paire de ce même ordre qui la porte, et non plus sur la dernière rencontrée.
+  - `priority` est désormais projeté (iOS `RawEntry.numericKeys`, Android `NUMERIC_KEYS`).
+  - Avec un transport et une paire nominée, le résultat est identique à avant. Le payload ne change pas.
+- **Tests** : `CallStatsElectionOrderTest` (Android, 5 cas) et `CallStatsElectionOrderTests` (iOS, 5 cas plus la projection de `priority`). Chaque cas évalue le relevé dans ses rotations et dans les rotations de son inverse.
+  - Deux témoins figeaient le défaut (« la dernière paire gagne ») ; ils sont réécrits.
+  - Rouge Android : 5 échecs sur 5 sur le code de dev.
+  - Vert : `jvm-check -PjvmCheckModelOnly --rerun-tasks` donne 19 309 tests, 0 échec. La QA l'a rejoué.
+  - Mutations faites par la QA : sans le tri d'élection, 5 échecs ; sans le tri des transports, 1 échec.
+  - Gardes iOS (house rules, cohésion, inscription des tests, accent) : 0.
+  - CI : `ios.yml` run 44915977124 (suites ciblées) et `android.yml` run 44915980549, en `workflow_dispatch` sur `f46e8e080`.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves.
+  - R1 (faible) : sur des ids de paire dupliqués, iOS garde la première entrée et Android la dernière. libwebrtc ne produit pas ce cas. Versée dans #20221.
+  - R2 (moyenne, procédurale) : le Swift n'a pas été compilé ici. `ios.yml` doit être vert avant la fusion.
+  - R3 (faible, théorique) : l'ordre des chaînes diffère entre Swift et Kotlin hors ASCII.
+- **Découvert** : **#20221**. Le codec affiché (`primaryCodecId`, premier `inbound-rtp`) et `qualityLimitationReason` (premier `outbound-rtp` vidéo) dépendent encore de l'ordre.
+- **Limites** : rien n'a été vérifié sur appareil. La présence réelle de `priority` dans libwebrtc 146 n'a pas été observée.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée : lire les runs `ios.yml` et `android.yml`, fusionner `dev` dans la branche, puis fusionner la PR.
+1. **#20221** : rendre indépendants de l'ordre le codec affiché et la limitation de qualité, et dédoublonner les ids de la même façon (R1).
+2. **#20185** : recette sur le staging, si un accès existe.
+3. #11932, #12236, #16933, #20043.

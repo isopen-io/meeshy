@@ -39,6 +39,7 @@ import {
 } from '@/lib/send/compose-protection';
 import { composerChromeAccentStyle, composerIconTintStyle } from '@/lib/send/composer-accent';
 import type { ComposerDraft } from '@/lib/send/draft-store';
+import type { ComposerRefill } from '@/lib/send/composer-refill';
 import type { StickyProtection } from '@/lib/send/protection-preference';
 import { NO_IMPOSED_PROTECTION, contaminatedComposeProtection, imposedLocksOf } from '@/lib/send/reply-contagion';
 import type { ImposedReplyProtection } from '@meeshy/shared/utils/reply-protection-contagion';
@@ -139,6 +140,7 @@ export const Composer = memo(function Composer({
   onDraftChange,
   maxLength,
   guestAttachments,
+  refill,
 }: {
   /** LE PRISME DU LECTEUR (#5828) — repli de la langue d'écriture quand
    * aucune détection ne tranche : `useComposeLanguage` lit `preferred[0]`,
@@ -196,6 +198,8 @@ export const Composer = memo(function Composer({
    * accepte ; `guestAttachmentKindsFor` (`lib/send/guest-attachment-policy.ts`)
    * les lit sur la session. Absent ⇒ les droits de `rights`, comme avant. */
   guestAttachments?: GuestAttachments;
+  /** Le brouillon d'un envoi qui n'est pas parti (#20075, #20197) — texte, pièces, lieu —, repris une fois, avant ce qu'on a tapé depuis. */
+  refill?: ComposerRefill;
   /**
    * LA GRAINE DU BROUILLON RESTAURÉ (#6175) — lue UNE fois au montage
    * (`useState` paresseux ci-dessous), jamais relue après : c'est l'hôte
@@ -361,6 +365,17 @@ export const Composer = memo(function Composer({
    * l'identifiant ; c'est `thread.tsx`, qui possède `replyTarget`, qui le
    * composera dans une itération à venir (§1.2 point 6).
    */
+  useEffect(() => {
+    if (refill === undefined) return;
+    refill.consume();
+    const next = refill.text === '' || text === '' ? refill.text + text : `${refill.text}\n${text}`;
+    setText(next);
+    compose.setText(next);
+    if (refill.attachments.length > 0) setPending((current) => [...refill.attachments, ...current]);
+    if (refill.place !== null && locator.place === null) locator.restore(refill.place);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- repris UNE fois par texte rendu, jamais à la frappe.
+  }, [refill]);
+
   useEffect(() => {
     onDraftChange?.({ text, language: compose.language, protection });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `onDraftChange` est fourni par l'hôte, pas une dépendance de CE rapport (motif `onTextChange`/`onSend` du fichier).

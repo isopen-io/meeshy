@@ -37,7 +37,7 @@ const makeReactionRow = (commentId: string, emoji: string) => ({ commentId, emoj
 
 let mockPostCommentFindMany: jest.Mock;
 let mockCommentReactionFindMany: jest.Mock;
-let mockPrisma: Pick<PrismaClient, 'postComment' | 'commentReaction' | 'post'>;
+let mockPrisma: Pick<PrismaClient, 'postComment' | 'commentReaction' | 'post' | 'user'>;
 
 beforeEach(() => {
   mockPostCommentFindMany = jest.fn();
@@ -103,6 +103,12 @@ beforeEach(() => {
       updateManyAndReturn: jest.fn(),
       fields: {} as any,
     } as unknown as PrismaClient['post'],
+    // Les listes de commentaires lisent les blocages du lecteur (#20205) :
+    // personne n'a bloqué personne dans ce harnais.
+    user: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn().mockResolvedValue({ blockedUserIds: [] }),
+    } as unknown as PrismaClient['user'],
   } as unknown as PrismaClient;
 });
 
