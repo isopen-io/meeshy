@@ -428,6 +428,10 @@ model User {
   brokenStreakLastDay String?
   /// Clés de guide déjà vues (étapes d'intégration et moments de Mee et Meo).
   guideSeen           String[] @default([])
+  /// Jour civil (`AAAA-MM-JJ`, fuseau du compte) du dernier RETOUR (#20218, #17373) : la première journée de jeu
+  /// après sept jours sans journée de jeu, une fois par période de trente jours. Le Rêve de ce jour et des deux
+  /// suivants est allégé. Absent : aucun retour depuis que le jour s'écrit (aucune reprise de données).
+  gameWelcomeBackDay  String?
 
   /// Le consentement à la ligue PUBLIQUE (#9384, conformité A-1/A-14) — daté par
   /// le SERVEUR, retirable d'un geste. Même régime que les `*ConsentAt` voisins :
