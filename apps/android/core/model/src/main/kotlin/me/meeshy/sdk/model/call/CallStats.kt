@@ -23,9 +23,9 @@ public data class CallStats(
     /** Cumulative inbound packets lost across all kinds. */
     val packetsLost: Int = 0,
     /** Cumulative bytes sent (paired with [bytesReceived] to report data spent). */
-    val bandwidth: Int = 0,
+    val bandwidth: Long = 0L,
     /** Cumulative bytes received. */
-    val bytesReceived: Int = 0,
+    val bytesReceived: Long = 0L,
     /** Resolved codec name (e.g. `"opus"`, `"H264"`), or `null` when unknown. */
     val codec: String? = null,
     /** Cumulative inbound packets received (audio + video). */
@@ -45,9 +45,9 @@ public data class CallStats(
     /** Mean inbound-audio jitter in milliseconds (libwebrtc reports seconds). */
     val jitterMs: Double = 0.0,
     /** Cumulative inbound **audio** bytes (drives the audio kb/s of the quality sheet). */
-    val inboundAudioBytes: Int = 0,
+    val inboundAudioBytes: Long = 0L,
     /** Cumulative inbound **video** bytes. */
-    val inboundVideoBytes: Int = 0,
+    val inboundVideoBytes: Long = 0L,
     /** `true` when the selected ICE pair rides a TURN relay, `false` when direct, `null` while unknown. */
     val relayed: Boolean? = null,
     /** Gels, limitation, tampon de gigue et route de cette lecture (#19895) ; tout `null` = rien de mesuré. */
@@ -121,7 +121,9 @@ public data class CallStats(
          *
          * An empty list yields the all-zero snapshot. Missing numeric fields default
          * to `0`, and an aberrant one (NaN, infinite, negative) reads as unmeasured
-         * `0` through [CallStatValue], a finite one beyond `Int.MAX_VALUE` saturates (#20122). The reducer never throws.
+         * `0` through [CallStatValue]. A finite packet count beyond `Int.MAX_VALUE` saturates (#20122); byte
+         * counters are `Long`, read as `0` beyond 2^53 − 1 and summed with saturation at it (#20132).
+         * The reducer never throws.
          */
         /**
          * The route of the SELECTED ICE pair (iOS `relayedRoute`): the transport's
@@ -156,12 +158,12 @@ public data class CallStats(
             var rtt = 0.0
             var availableOutgoingBitrateBps = 0
             var packetsLost = 0
-            var bytesSent = 0
-            var bytesReceived = 0
+            var bytesSent = 0L
+            var bytesReceived = 0L
             var inboundAudio = 0
             var inboundVideo = 0
-            var inboundAudioBytes = 0
-            var inboundVideoBytes = 0
+            var inboundAudioBytes = 0L
+            var inboundVideoBytes = 0L
             var outbound = 0
             var primaryCodecId: String? = null
             var audioJitterSum = 0.0
@@ -185,25 +187,25 @@ public data class CallStats(
                             packetsLost = CallStatValue.sum(packetsLost, CallStatValue.count(it))
                         }
                         val received = CallStatValue.count(entry.values["packetsReceived"] ?: 0.0)
-                        val receivedBytes = CallStatValue.count(entry.values["bytesReceived"] ?: 0.0)
+                        val receivedBytes = CallStatValue.bytes(entry.values["bytesReceived"] ?: 0.0)
                         if (entry.kind == "video") {
                             inboundVideo = CallStatValue.sum(inboundVideo, received)
-                            inboundVideoBytes = CallStatValue.sum(inboundVideoBytes, receivedBytes)
+                            inboundVideoBytes = CallStatValue.sumBytes(inboundVideoBytes, receivedBytes)
                         } else {
                             inboundAudio = CallStatValue.sum(inboundAudio, received)
-                            inboundAudioBytes = CallStatValue.sum(inboundAudioBytes, receivedBytes)
+                            inboundAudioBytes = CallStatValue.sumBytes(inboundAudioBytes, receivedBytes)
                             entry.values["jitter"]?.takeIf { it.isFinite() && it >= 0.0 }?.let {
                                 audioJitterSum += it
                                 audioJitterCount += 1
                             }
                         }
-                        bytesReceived = CallStatValue.sum(bytesReceived, receivedBytes)
+                        bytesReceived = CallStatValue.sumBytes(bytesReceived, receivedBytes)
                         if (primaryCodecId == null) primaryCodecId = entry.codecId
                     }
 
                     "outbound-rtp" -> {
                         outbound = CallStatValue.sum(outbound, CallStatValue.count(entry.values["packetsSent"] ?: 0.0))
-                        bytesSent = CallStatValue.sum(bytesSent, CallStatValue.count(entry.values["bytesSent"] ?: 0.0))
+                        bytesSent = CallStatValue.sumBytes(bytesSent, CallStatValue.bytes(entry.values["bytesSent"] ?: 0.0))
                     }
 
                     else -> Unit
