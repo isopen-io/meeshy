@@ -326,13 +326,29 @@ describe('MessageProcessor.saveMessage', () => {
       expect((await forwardOnePiece()).uploadedBy).toBe(SENDER_ID);
     });
 
+    it("marque la copie d'un transférant INVITÉ comme anonyme — sinon il ne peut plus la supprimer (#20142)", async () => {
+      partFindUnique.mockResolvedValue({ userId: null });
+
+      expect((await forwardOnePiece()).isAnonymous).toBe(true);
+    });
+
+    it("ne marque PAS anonyme la copie d'un transférant inscrit (#20142)", async () => {
+      partFindUnique.mockResolvedValue({ userId: 'user-1' });
+
+      expect((await forwardOnePiece()).isAnonymous).toBe(false);
+    });
+
     it('replie sur le comportement d’avant quand la lecture du participant LÈVE, et ne fait pas échouer le transfert', async () => {
       partFindUnique.mockRejectedValue(new Error('mongo down'));
 
       // Le repli est le `Participant.id` : la ligne reste reconnue par
       // `ownsAsUploader`, alors qu'échouer ferait naître une pièce sans
-      // déposant — bien pire que l'ancien défaut.
-      expect((await forwardOnePiece()).uploadedBy).toBe(SENDER_ID);
+      // déposant — bien pire que l'ancien défaut. Et le repli n'invente PAS
+      // d'anonymat : l'affirmer sur une ligne dont on n'a pas lu le déposant
+      // ouvrirait la branche anonyme du `DELETE` (#20142).
+      const written = await forwardOnePiece();
+      expect(written.uploadedBy).toBe(SENDER_ID);
+      expect(written.isAnonymous).toBe(false);
       expect(attCreate).toHaveBeenCalledTimes(1);
     });
   });

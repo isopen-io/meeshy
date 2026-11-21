@@ -6,7 +6,7 @@
 import * as path from 'path';
 import { composeMessageEffectFlags, ephemeralSendFields } from './ephemeralSendFields';
 import { copiedAttachmentFields } from './copiedAttachmentFields';
-import { resolveUploaderIdentity } from '../attachments/uploaderIdentity';
+import { resolveUploaderStamp } from '../attachments/uploaderIdentity';
 import { exitProtectedCopy } from './copyExitProtection';
 import type { ForwardImposition } from './forwardAdmission';
 import { declaredReplyProtection } from './replyProtectionContagion';
@@ -765,7 +765,7 @@ export class MessageProcessor {
 
       if (originalAttachments.length === 0) return;
 
-      const uploader = await resolveUploaderIdentity(this.prisma, senderId);
+      const uploader = await resolveUploaderStamp(this.prisma, senderId);
 
       const createdAttachments = await Promise.all(
         originalAttachments.map((att, rank) =>
@@ -775,11 +775,12 @@ export class MessageProcessor {
               messageId: newMessageId, rank,
               forwardedFromAttachmentId: att.id,
               isForwarded: true,
-              // #20113 — l'identité de COMPTE du transférant, jamais son
-              // `Participant.id` : `uploadedBy` est lu comme un identifiant
-              // d'utilisateur par tous ses lecteurs, et il gouverne côté client
-              // l'affordance « supprimer cette pièce ».
-              uploadedBy: uploader,
+              // #20113 / #20142 — l'EMPREINTE du transférant : son identité de
+              // compte ET son anonymat, qui répondent à la même question.
+              // Posée APRÈS `copiedAttachmentFields`, dont elle corrige le
+              // `isAnonymous: false` inconditionnel — sans quoi un invité qui
+              // transfère ne peut plus supprimer sa propre copie.
+              ...uploader,
             }
           })
         )

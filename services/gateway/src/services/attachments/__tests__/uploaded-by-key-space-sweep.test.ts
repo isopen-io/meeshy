@@ -42,10 +42,17 @@ const FROZEN: Readonly<Record<string, readonly KeySpace[]>> = {
   // ── Les écrivains ───────────────────────────────────────────────────────
   'routes/uploads/tus-handler.ts': ['account', 'account'],
   'services/attachments/UploadProcessor.ts': ['account', 'account'],
-  // Les deux écrivains de COPIE, unifiés par #20113 : ils passaient un
-  // `Participant.id`, ils posent l'identité de compte.
-  'services/messaging/MessageProcessor.ts': ['account'],
-  'services/messaging/copyAttachments.ts': ['account'],
+  // Les deux écrivains de COPIE n'y figurent PLUS depuis #20142 : ils posent le
+  // champ par ÉPANDAGE de l'empreinte (`...uploaderStampOf(…)`), pour que
+  // `uploadedBy` et `isAnonymous` ne puissent plus se contredire. Le nom du
+  // champ n'apparaît alors nulle part, donc ce balayage textuel ne les voit
+  // pas — et c'est le témoin « posent l'empreinte du site unique » qui les garde.
+  //
+  // En échange, le SITE UNIQUE entre dans l'inventaire, et c'est un gain : la
+  // décision d'espace de clés des copies se lit désormais à UN endroit, nommé
+  // ici. Ses trois usages sont les deux branches de l'empreinte (compte,
+  // invité) et le repli de sa résolution.
+  'services/attachments/uploaderIdentity.ts': ['account', 'account', 'account'],
 
   // ── Les requêtes par valeur ─────────────────────────────────────────────
   'services/attachments/identityImageOwnership.ts': ['account'],
@@ -113,11 +120,17 @@ describe('#20113 — l’espace de clés de `uploadedBy`', () => {
    * Ce qui se mesure vraiment, et qui suffit : les deux écrivains de copie
    * PASSENT par le site unique. S'ils cessaient, leur propre témoin tomberait.
    */
-  it('les deux écrivains de copie passent par le site unique de l’identité', () => {
-    const sansSiteUnique = ['services/messaging/copyAttachments.ts', 'services/messaging/MessageProcessor.ts']
-      .filter((file) => !readFileSync(join(SRC_ROOT, file), 'utf8').includes("from '../attachments/uploaderIdentity'"));
+  it('les deux écrivains de copie posent l’EMPREINTE du site unique, pas un champ à la main', () => {
+    // Deux exigences, et les deux comptent : l'IMPORT du site unique, et
+    // l'ÉPANDAGE de ce qu'il rend. Un site qui importerait l'empreinte pour
+    // n'en lire qu'un champ recréerait la divergence que #20142 ferme.
+    const copieurs = ['services/messaging/copyAttachments.ts', 'services/messaging/MessageProcessor.ts'];
+    const defaillants = copieurs.filter((file) => {
+      const code = readFileSync(join(SRC_ROOT, file), 'utf8');
+      return !code.includes("from '../attachments/uploaderIdentity'") || !/\.\.\.(uploader|uploaderStampOf\()/.test(code);
+    });
 
-    expect(sansSiteUnique).toEqual([]);
+    expect(defaillants).toEqual([]);
   });
 });
 

@@ -10,63 +10,17 @@
  * le serveur peut faire la jointure qui lui donnerait un sens.
  *
  * Deux responsabilités distinctes vivent donc ici, et il faut les séparer :
- *  - **écrire** l'identité de compte (`userId ?? id`), la convention du dépôt ;
+ *  - **écrire** l'EMPREINTE du déposant — identité de compte (`userId ?? id`) et
+ *    anonymat, ensemble (#20142) ;
  *  - **reconnaître** les lignes HÉRITÉES, écrites avant l'unification et que
  *    rien ne réécrit — c'est tout ce que `ownsAsUploader` garde désormais.
  */
 import { describe, it, expect, jest } from '@jest/globals';
-import {
-  ownsAsUploader,
-  resolveUploaderIdentity,
-  uploaderIdentityOf,
-} from '../uploaderIdentity';
+import { ownsAsUploader, resolveUploaderStamp, uploaderStampOf } from '../uploaderIdentity';
 
 const PARTICIPANT = '507f1f77bcf86cd799439011';
 const USER = '507f1f77bcf86cd799439022';
 const OTHER_USER = '507f1f77bcf86cd799439033';
-
-/**
- * Les littéraux ne portent QUE `userId`, et c'est le contrat : la fonction ne
- * demande rien d'autre, et lui passer un `id` ne compilerait pas sous
- * `tsconfig.test.json` (`TS2353`) — le seul typecheck qui atteigne les tests.
- */
-describe('uploaderIdentityOf', () => {
-  it("rend le `userId` d'un inscrit", () => {
-    expect(uploaderIdentityOf({ userId: USER }, PARTICIPANT)).toBe(USER);
-  });
-
-  it("rend le `Participant.id` d'un anonyme — c'est SON identité d'authentification", () => {
-    expect(uploaderIdentityOf({ userId: null }, PARTICIPANT)).toBe(PARTICIPANT);
-  });
-
-  it('rend le repli quand la ligne de participant est absente', () => {
-    // Le repli est le comportement d'AVANT l'unification : une ligne écrite
-    // ainsi reste reconnue par `ownsAsUploader`. Échouer serait pire —
-    // la pièce naîtrait sans déposant.
-    expect(uploaderIdentityOf(null, PARTICIPANT)).toBe(PARTICIPANT);
-  });
-});
-
-describe('resolveUploaderIdentity', () => {
-  const prismaWith = (impl: () => Promise<unknown>) =>
-    ({ participant: { findUnique: jest.fn(impl) } }) as unknown as Parameters<typeof resolveUploaderIdentity>[0];
-
-  it('lit le participant UNE fois, et ne demande que son `userId`', async () => {
-    const prisma = prismaWith(async () => ({ id: PARTICIPANT, userId: USER }));
-
-    expect(await resolveUploaderIdentity(prisma, PARTICIPANT)).toBe(USER);
-    expect(prisma.participant.findUnique).toHaveBeenCalledWith({
-      where: { id: PARTICIPANT },
-      select: { userId: true },
-    });
-  });
-
-  it('replie sur le `Participant.id` quand la lecture LÈVE — jamais de pièce sans déposant', async () => {
-    const prisma = prismaWith(async () => { throw new Error('mongo down'); });
-
-    await expect(resolveUploaderIdentity(prisma, PARTICIPANT)).resolves.toBe(PARTICIPANT);
-  });
-});
 
 describe('ownsAsUploader — la compatibilité des lignes HÉRITÉES', () => {
   const prismaWith = (row: unknown) =>
@@ -120,5 +74,60 @@ describe('ownsAsUploader — la compatibilité des lignes HÉRITÉES', () => {
     const prisma = ({ participant: { findUnique: jest.fn(async () => { throw new Error('mongo down'); }) } }) as unknown as Parameters<typeof ownsAsUploader>[0];
 
     await expect(ownsAsUploader(prisma, PARTICIPANT, USER)).resolves.toBe(false);
+  });
+});
+
+/**
+ * #20142 — `uploadedBy` et `isAnonymous` répondent à LA MÊME question — *qui a
+ * fait cette ligne ?* — et doivent donc voyager ensemble.
+ *
+ * `copiedAttachmentFields` posait `isAnonymous: false` sans condition, parce
+ * qu'il ne connaît pas le copieur. Un invité qui transférait une pièce ne
+ * pouvait donc plus la supprimer : la branche anonyme du `DELETE` exige les
+ * DEUX (`uploadedBy === userId && isAnonymous`), et le bouton était pourtant
+ * offert par le web, qui ne regarde que `uploadedBy`.
+ */
+describe('uploaderStampOf', () => {
+  it("rend l'empreinte d'un inscrit : son `userId`, et PAS anonyme", () => {
+    expect(uploaderStampOf({ userId: USER }, PARTICIPANT)).toEqual({ uploadedBy: USER, isAnonymous: false });
+  });
+
+  it("rend l'empreinte d'un invité : son `Participant.id`, et ANONYME", () => {
+    expect(uploaderStampOf({ userId: null }, PARTICIPANT)).toEqual({ uploadedBy: PARTICIPANT, isAnonymous: true });
+  });
+
+  it('participant absent : le repli d’AVANT, et jamais une anonymité inventée', () => {
+    // Le repli est le `Participant.id` avec `isAnonymous: false` — exactement
+    // ce que le code écrivait avant #20142. Affirmer l'anonymat sur une ligne
+    // dont on n'a pas lu le déposant OUVRIRAIT la branche anonyme du `DELETE`
+    // à quiconque porte cet identifiant.
+    expect(uploaderStampOf(null, PARTICIPANT)).toEqual({ uploadedBy: PARTICIPANT, isAnonymous: false });
+  });
+});
+
+describe('resolveUploaderStamp', () => {
+  const prismaWith = (impl: () => Promise<unknown>) =>
+    ({ participant: { findUnique: jest.fn(impl) } }) as unknown as Parameters<typeof resolveUploaderStamp>[0];
+
+  it('lit le participant UNE fois, et ne demande que son `userId`', async () => {
+    const prisma = prismaWith(async () => ({ userId: USER }));
+
+    expect(await resolveUploaderStamp(prisma, PARTICIPANT)).toEqual({ uploadedBy: USER, isAnonymous: false });
+    expect(prisma.participant.findUnique).toHaveBeenCalledWith({
+      where: { id: PARTICIPANT },
+      select: { userId: true },
+    });
+  });
+
+  it("rend l'empreinte ANONYME d'un invité", async () => {
+    expect(await resolveUploaderStamp(prismaWith(async () => ({ userId: null })), PARTICIPANT))
+      .toEqual({ uploadedBy: PARTICIPANT, isAnonymous: true });
+  });
+
+  it('replie sur le comportement d’avant quand la lecture LÈVE', async () => {
+    const prisma = prismaWith(async () => { throw new Error('mongo down'); });
+
+    await expect(resolveUploaderStamp(prisma, PARTICIPANT))
+      .resolves.toEqual({ uploadedBy: PARTICIPANT, isAnonymous: false });
   });
 });
