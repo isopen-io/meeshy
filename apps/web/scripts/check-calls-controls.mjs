@@ -314,6 +314,52 @@ const pinch = async (cdp, center, fromGap, toGap, steps = 12) => {
 };
 
 /**
+ * **ON NE FRAPPE QUE CE QU'ON ATTEINT** (#20151) — rend le centre de la cible
+ * quand elle est POSÉE *et* que ce centre l'atteint vraiment.
+ *
+ * Mesurer une boîte puis frapper ses coordonnées suppose que, d'ici au
+ * toucher, rien ne s'est mis entre les deux. Un rail qui REPART reste
+ * touchable jusqu'au bout de sa sortie (#17643, comme iOS) : 300 ms durant,
+ * `[data-call-rail-scroll]` recouvre le pied des sous-titres, et un toucher
+ * calculé sur « Journal » part dans le rail. Mesuré sur le gabarit 568 × 320,
+ * sortie des rails ralentie à 3 s : l'ancien geste n'ouvre le journal 0 fois
+ * sur 5, celui-ci 5 fois sur 5 ; sans ralentissement, `elementFromPoint` au
+ * centre calculé tombait déjà sur le rail 2 fois sur 4, et seule la vitesse de
+ * la machine sauvait le toucher — d'où un rouge une fois sur quelques
+ * exécutions en CI, sur ce bloc seul.
+ *
+ * On attend donc que plus AUCUNE animation finie ne tourne (les pulsations sans
+ * fin, `typingDot`, ne se terminent jamais : elles ne sont pas attendues) et
+ * que le point atteigne la cible — jamais un délai arbitraire. Une cible
+ * durablement recouverte échoue en le DISANT, au lieu des deux lignes muettes
+ * « le panneau n'apparaît pas ».
+ */
+const posed = (page, selector) =>
+  page
+    .waitForFunction(
+      (target) => {
+        const element = document.querySelector(target);
+        if (element === null) return null;
+        const moving = (document.querySelector('[data-call-screen]') ?? document).getAnimations({ subtree: true }).some((animation) => animation.playState === 'running' && animation.effect?.getComputedTiming().endTime !== Infinity);
+        if (moving) return null;
+        const box = element.getBoundingClientRect();
+        const point = [box.left + box.width / 2, box.top + box.height / 2];
+        const at = document.elementFromPoint(point[0], point[1]);
+        return at !== null && (element === at || element.contains(at)) ? point : null;
+      },
+      selector,
+      { timeout: 8000 },
+    )
+    .then((handle) => handle.jsonValue());
+
+/** Un toucher au doigt sur une cible posée et atteignable (`posed`). */
+const tapOn = async (page, selector) => {
+  const point = await posed(page, selector).catch(() => null);
+  if (point === null) throw new Error(`« ${selector} » ne s'est pas posée, ou reste recouverte : rien à frapper`);
+  await page.touchscreen.tap(...point);
+};
+
+/**
  * Glisse chaque piste qui déborde, de droite à gauche, et rend son `scrollLeft` avant/après.
  *
  * Le glissé ne dépasse pas ce que la piste peut défiler (#8619) : un doigt qui
@@ -323,11 +369,6 @@ const pinch = async (cdp, center, fromGap, toGap, steps = 12) => {
  * en plein glissé, 7 glissés sur 10 perdus après la rangée de 54 px tirée de
  * 296 px, 0 sur 10 sans elle). Chaque invariant ne dépend ainsi que de sa piste.
  */
-const centerOfSelector = async (page, selector) => {
-  const box = await page.locator(selector).first().boundingBox();
-  return box === null ? [0, 0] : [box.x + box.width / 2, box.y + box.height / 2];
-};
-
 const dragEach = async (page, cdp, selector) => {
   const count = await page.locator(selector).count();
   const results = [];
@@ -820,11 +861,11 @@ try {
       check(rest.clearOfPill && rest.belowHeader, `${label} : ni l'avatar ni la durée ne touchent la pilule ou l'en-tête (${JSON.stringify([rest.clearOfPill, rest.belowHeader])})`);
       await capture(page, `controles-vocal-${width}x${height}`);
 
-      await page.touchscreen.tap(...(await centerOfSelector(page, '[data-call-more]')));
+      await tapOn(page, '[data-call-more]');
       check(await appears(page, '[data-call-rails="shown"]'), `${label} : un toucher sur (…) ouvre les actions`);
       await railsSettled(page);
       check(fits(await pillFit(page)), `${label} : (…) ouvert, la pilule reste entière dans l'écran`);
-      await page.touchscreen.tap(...(await centerOfSelector(page, '[data-call-more]')));
+      await tapOn(page, '[data-call-more]');
       await until(page, () => document.querySelector('[data-call-screen]')?.getAttribute('data-call-layer') === 'idle');
 
       if (width === 568 && height === 320) {
@@ -833,11 +874,11 @@ try {
         });
         /* #19670 : le journal n'a de porte qu'au pied des sous-titres — on les allume, puis on touche « Journal ». */
         await openActions(page);
-        await page.touchscreen.tap(...(await centerOfSelector(page, '[data-call-rail="call"] [data-call-captions]')));
-        await page.touchscreen.tap(...(await centerOfSelector(page, '[data-call-more]')));
+        await tapOn(page, '[data-call-rail="call"] [data-call-captions]');
+        await tapOn(page, '[data-call-more]');
         await until(page, () => document.querySelector('[data-call-screen]')?.getAttribute('data-call-layer') === 'idle');
         check(await appears(page, '[data-call-control-pill] [data-call-captions-journal]'), `${label} : les sous-titres allumés portent « Journal » à leur pied`);
-        await page.touchscreen.tap(...(await centerOfSelector(page, '[data-call-control-pill] [data-call-captions-journal]')));
+        await tapOn(page, '[data-call-control-pill] [data-call-captions-journal]');
         check(await appears(page, '[data-call-control-pill] [data-call-journal-panel]'), `${label} : « Journal » ouvre le journal DANS la pilule`);
         await until(page, () => document.querySelector('[data-call-audio-stage]')?.getAttribute('data-call-audio-stage') === 'compact');
         await stageSettled(page);
