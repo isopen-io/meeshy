@@ -278,6 +278,9 @@ public enum SharedLocationSendOutcome: String, Sendable, Equatable {
     /// L'accusé n'est pas revenu à temps : la passerelle a PU prendre l'envoi. Jamais lu comme « rien n'est parti » —
     /// le centre garde « Arrêter » à portée tant que le doute n'est pas levé (#18166).
     case unconfirmed
+    /// Une position d'appareil sur un partage dont le point est CHOISI à la main (#20087) : rien n'a été écrit ni
+    /// servi. L'appareil relit ce que la passerelle sert, et l'écran demande avant de remplacer le point.
+    case fixedPoint
     case failed
 
     private static let refusals: [String: SharedLocationSendOutcome] = [
@@ -285,6 +288,7 @@ public enum SharedLocationSendOutcome: String, Sendable, Equatable {
         "SHARED_LOCATION_NOT_SHARING": .notSharing,
         "SHARED_LOCATION_RATE_LIMITED": .rateLimited,
         "SHARED_LOCATION_UNAVAILABLE": .unavailable,
+        "SHARED_LOCATION_FIXED_POINT": .fixedPoint,
     ]
 
     /// Un code que ce client ne connaît pas vaut un échec, jamais une raison inventée.

@@ -41,6 +41,11 @@ struct SharedLocationServedSourceTests {
 
     @Test func uneSourceInconnue_seLitCommeUnPointChoisi() throws {
         #expect(try snapshot(#"{"recipients":[],"source":"beacon"}"#).source == .manual)
+        #expect(try snapshot(#"{"recipients":[],"source":5}"#).source == .manual)
+    }
+
+    @Test func leRefusDUnPointChoisi_aSaPropreRaison() {
+        #expect(SharedLocationSendOutcome.ofRefusal("SHARED_LOCATION_FIXED_POINT") == .fixedPoint)
     }
 
     // MARK: - La charge

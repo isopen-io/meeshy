@@ -259,8 +259,10 @@ final class SharedLocationSharingCenter: ObservableObject {
             }
             guard self.isLive else { return .refused(.failed) }
             let next = self.adding(userId, precision: precision, term: term, battery: battery).withFixedPoint(false)
-            return await self.publish(next, fix: fix, previous: self.roster, claimsPublishing: true, notify: notify,
-                                      replacesChosenPoint: showsPoint)
+            let problem = await self.publish(next, fix: fix, previous: self.roster, claimsPublishing: true, notify: notify,
+                                             replacesChosenPoint: showsPoint)
+            guard problem == .refused(.fixedPoint) else { return problem }
+            return await self.readServedTruth() && self.roster.isFixedPoint ? .replacesChosenPoint : problem
         }
     }
 
@@ -427,13 +429,25 @@ final class SharedLocationSharingCenter: ObservableObject {
 
     /// Un relevé de l'appareil pendant le partage ; sauté si une publication tient le verrou, le suivant passera. Rien ne
     /// part tant qu'un retrait attend : le serveur sert peut-être encore la personne retirée.
+    /// Un point choisi ailleurs que cette liste ignorait encore (#20087) coupe le suivi aussitôt, et le centre relit.
     func didMove(to fix: SharedLocationFix) async {
         guard gate.tryEnter() else { return }
-        defer { gate.leave() }
-        guard isLive, !received, !awaitsServedTruth, roster.hasRecipients, !roster.isFixedPoint, !roster.hasPendingWithdrawals, SharedLocationUpdateGate.shouldSend(fix, now: now(), last: lastSent) else { return }
+        let meetsAChosenPoint = await sendMove(fix)
+        gate.leave()
+        if meetsAChosenPoint { await sync() }
+    }
+
+    private func sendMove(_ fix: SharedLocationFix) async -> Bool {
+        guard isLive, !received, !awaitsServedTruth, roster.hasRecipients, !roster.isFixedPoint, !roster.hasPendingWithdrawals, SharedLocationUpdateGate.shouldSend(fix, now: now(), last: lastSent) else { return false }
         lastSent = .init(fix: fix, at: now())
         let verdict = await emitter.update(fix)
-        if isLive, case .refused(.notSharing) = verdict { wipe() }
+        guard isLive else { return false }
+        switch verdict {
+        case .refused(.notSharing): wipe()
+        case .refused(.fixedPoint): stopFollowingDevice(); return true
+        default: break
+        }
+        return false
     }
 
     /// Le compte change : cet appareil cesse de suivre la position pour lui, toute réponse encore en vol est écartée, le
@@ -589,6 +603,8 @@ final class SharedLocationSharingCenter: ObservableObject {
             forgetPublishedStart(ifSent: fix)
             engage(previous.union(next), fix: fix)
             return .refused(.unconfirmed)
+        case .refused(.fixedPoint):
+            return .refused(.fixedPoint)
         case .refused(let outcome):
             forgetPublishedStart(ifSent: fix)
             return .refused(outcome)

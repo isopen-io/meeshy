@@ -295,8 +295,14 @@ public struct SharedLocationOwnSnapshot: Decodable, Sendable, Equatable {
         acceptsManualSource = ((try? c.decodeIfPresent(Bool.self, forKey: .acceptsManualSource)) ?? nil) ?? false
         acceptsUntilStopped = ((try? c.decodeIfPresent(Bool.self, forKey: .acceptsUntilStopped)) ?? nil) ?? false
         startedAt = (try? c.decodeIfPresent(String.self, forKey: .startedAt)) ?? nil
-        source = ((try? c.decodeIfPresent(String.self, forKey: .source)) ?? nil)
-            .map { SharedLocationPositionSource(rawValue: $0) ?? .manual }
+        source = Self.servedSource(in: c)
+    }
+
+    /// Une clé absente ou nulle ne dit rien ; une clé présente mais illisible (autre chaîne, autre type) dit un point
+    /// qu'on ne remplace pas.
+    private static func servedSource(in c: KeyedDecodingContainer<CodingKeys>) -> SharedLocationPositionSource? {
+        guard c.contains(.source), (try? c.decodeNil(forKey: .source)) == false else { return nil }
+        return (try? c.decode(String.self, forKey: .source)).flatMap(SharedLocationPositionSource.init(rawValue:)) ?? .manual
     }
 
     private struct Lenient: Decodable {

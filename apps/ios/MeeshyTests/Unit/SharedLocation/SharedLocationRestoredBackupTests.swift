@@ -416,10 +416,15 @@ final class SharedLocationServedSourceTests: XCTestCase {
     private let bob = "bbbbbbbbbbbbbbbbbbbbbbbb"
     private let me = "cccccccccccccccccccccccc"
     private let t0 = Date(timeIntervalSince1970: 1_000_000)
-    private let mine = "2026-01-01T00:00:00.000Z"
 
     private final class Served {
         var snapshot: SharedLocationOwnSnapshot?
+        var reads = 0
+    }
+
+    private final class Clock {
+        var now: Date
+        init(_ now: Date) { self.now = now }
     }
 
     private struct SUT {
@@ -428,19 +433,20 @@ final class SharedLocationServedSourceTests: XCTestCase {
         let fixes: FakeSharedLocationFixSource
         let store: FakeSharedLocationRosterStore
         let served: Served
+        let clock: Clock
     }
 
     private func makeSUT(store: FakeSharedLocationRosterStore = FakeSharedLocationRosterStore()) -> SUT {
         let emitter = FakeSharedLocationEmitter()
         let fixes = FakeSharedLocationFixSource()
         let served = Served()
-        let t0 = self.t0
+        let clock = Clock(t0)
         let me = self.me
         let center = SharedLocationSharingCenter(
-            emitter: emitter, fixes: fixes, store: store, now: { t0 }, owner: me, currentAccount: { me },
-            wakes: FakeSharedLocationWakeScheduler(), served: { served.snapshot }
+            emitter: emitter, fixes: fixes, store: store, now: { clock.now }, owner: me, currentAccount: { me },
+            wakes: FakeSharedLocationWakeScheduler(), served: { served.reads += 1; return served.snapshot }
         )
-        return SUT(center: center, emitter: emitter, fixes: fixes, store: store, served: served)
+        return SUT(center: center, emitter: emitter, fixes: fixes, store: store, served: served, clock: clock)
     }
 
     private func served(
@@ -480,18 +486,6 @@ final class SharedLocationServedSourceTests: XCTestCase {
     }
 
     // MARK: - « Partager » devant un point choisi ailleurs
-
-    func test_aPointChosenOnAnotherDevice_neverMakesThisDeviceSendItsPosition() async {
-        let sut = makeSUT()
-        sut.served.snapshot = served([alice], source: .manual)
-        await sut.center.sync()
-
-        await sut.center.didMove(to: SharedLocationFix(latitude: 45, longitude: 5)!)
-
-        XCTAssertTrue(sut.center.roster.isFixedPoint)
-        XCTAssertFalse(sut.fixes.isFollowing)
-        XCTAssertTrue(sut.emitter.updates.isEmpty)
-    }
 
     func test_sharingFromTheDevice_inFrontOfAPointChosenElsewhere_sendsNothingAndAsks() async {
         let sut = makeSUT()
@@ -546,13 +540,19 @@ final class SharedLocationServedSourceTests: XCTestCase {
 
     // MARK: - Un autre appareil choisit un point pendant que celui-ci publie
 
-    func test_aPointChosenElsewhereWhileThisDevicePublishes_stopsFollowingTheDevice() async {
+    /// L'accusé du démarrage d'ici n'a pas dit `startedAt` (accusé perdu, ou passerelle qui ne le dit pas) : le démarrage
+    /// servi est pris pour le sien, et seule la source dit que ce n'est plus sa position qui est montrée.
+    private func publishingWithoutKnownStart() async -> SUT {
         let sut = makeSUT()
-        sut.emitter.startVerdict = .started(expiresAt: t0.addingTimeInterval(3600), startedAt: mine)
         _ = await sut.center.share(with: alice, precision: .city, duration: .oneHour)
         XCTAssertTrue(sut.fixes.isFollowing)
+        return sut
+    }
 
-        sut.served.snapshot = served([alice], source: .manual, startedAt: mine)
+    func test_aPointChosenElsewhereWhileThisDevicePublishes_stopsFollowingTheDevice() async {
+        let sut = await publishingWithoutKnownStart()
+
+        sut.served.snapshot = served([alice], source: .manual, startedAt: "2026-01-01T00:00:05.000Z")
         await sut.center.sync()
         sut.fixes.subject.send(SharedLocationFix(latitude: 45, longitude: 5)!)
         await settle()
@@ -560,5 +560,36 @@ final class SharedLocationServedSourceTests: XCTestCase {
         XCTAssertTrue(sut.center.roster.isFixedPoint)
         XCTAssertFalse(sut.fixes.isFollowing)
         XCTAssertTrue(sut.emitter.updates.isEmpty)
+    }
+
+    // MARK: - Une liste qui ignorait encore le point choisi (refus `SHARED_LOCATION_FIXED_POINT`)
+
+    func test_aMoveRefusedAsAChosenPoint_stopsFollowing_andReadsTheServedShare() async {
+        let sut = await publishingWithoutKnownStart()
+        sut.served.snapshot = served([alice], source: .manual)
+        sut.emitter.updateVerdict = .refused(.fixedPoint)
+        let reads = sut.served.reads
+        sut.clock.now = t0.addingTimeInterval(120)
+
+        await sut.center.didMove(to: SharedLocationFix(latitude: 45, longitude: 5)!)
+
+        XCTAssertEqual(sut.emitter.updates.count, 1)
+        XCTAssertFalse(sut.fixes.isFollowing)
+        XCTAssertGreaterThan(sut.served.reads, reads)
+        XCTAssertTrue(sut.center.roster.isFixedPoint)
+    }
+
+    func test_aShareRefusedAsAChosenPoint_readsTheServedShare_andAsks() async {
+        let sut = makeSUT()
+        sut.served.snapshot = served([alice], source: .device)
+        await sut.center.sync()
+        sut.served.snapshot = served([alice], source: .manual)
+        sut.emitter.startVerdict = .refused(.fixedPoint)
+
+        let problem = await sut.center.share(with: bob, precision: .city, duration: .oneHour)
+
+        XCTAssertEqual(problem, .replacesChosenPoint)
+        XCTAssertTrue(sut.center.roster.isFixedPoint)
+        XCTAssertNil(sut.center.entry(for: bob))
     }
 }
