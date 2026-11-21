@@ -215,6 +215,9 @@ const de = {
   'shareLocation.stopPending': 'Die Freigabe endet, sobald du wieder online bist.',
   'shareLocation.replacePoint.title': 'Deinen echten Standort zeigen?',
   'shareLocation.replacePoint.message': 'Du teilst einen auf der Karte gewählten Punkt. Alle, die ihn sehen, sehen stattdessen deinen echten Standort.',
+  'shareLocation.replacePoint.messageNamed': 'Du teilst einen auf der Karte gewählten Punkt. Dein echter Standort ersetzt ihn bei {names}.',
+  'shareLocation.replacePoint.others.one': '{count} weiteren Person',
+  'shareLocation.replacePoint.others.other': '{count} weiteren Personen',
   'shareLocation.replacePoint.confirm': 'Meinen echten Standort zeigen',
   'shareLocation.replacePoint.keep': 'Gewählten Punkt behalten',
 } as const satisfies CirclesCatalog;

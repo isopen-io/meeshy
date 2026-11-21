@@ -18,6 +18,7 @@ public object ApiRoutesCommunities {
     public const val BY_ID_ENTRIES_STATS: String = "communities/{id}/entries/stats"
     public const val BY_ID_INVITE: String = "communities/{id}/invite"
     public const val BY_ID_JOIN: String = "communities/{id}/join"
+    public const val BY_ID_JOIN_LINK: String = "communities/{id}/join-link"
     public const val BY_ID_JOIN_REQUESTS: String = "communities/{id}/join-requests"
     public const val BY_ID_JOIN_REQUESTS_BY_REQUEST_ID_ACCEPT: String = "communities/{id}/join-requests/{requestId}/accept"
     public const val BY_ID_JOIN_REQUESTS_BY_REQUEST_ID_REJECT: String = "communities/{id}/join-requests/{requestId}/reject"
