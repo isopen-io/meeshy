@@ -32,10 +32,11 @@ class CallStatValueTest {
     }
 
     @Test
-    fun `count truncates a measured value and reads beyond the safe bound as unmeasured`() {
+    fun `count truncates a measured value, saturates a finite one beyond the bound, and zeroes the aberrant`() {
         assertThat(CallStatValue.count(42.9)).isEqualTo(42)
         assertThat(CallStatValue.count(Int.MAX_VALUE.toDouble())).isEqualTo(Int.MAX_VALUE)
-        listOf(Double.NaN, Double.POSITIVE_INFINITY, -3.0, 3e9).forEach {
+        assertThat(CallStatValue.count(3e9)).isEqualTo(Int.MAX_VALUE)
+        listOf(Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, -3.0).forEach {
             assertThat(CallStatValue.count(it)).isEqualTo(0)
         }
     }
@@ -60,7 +61,7 @@ class CallStatValueTest {
     fun `an aberrant available bitrate reads as unmeasured`() {
         assertThat(bitrateOf(Double.POSITIVE_INFINITY)).isEqualTo(0)
         assertThat(bitrateOf(Double.NaN)).isEqualTo(0)
-        assertThat(bitrateOf(3e9)).isEqualTo(0)
+        assertThat(bitrateOf(3e9)).isEqualTo(Int.MAX_VALUE)
     }
 
     // --- reduce : gigue -----------------------------------------------------
@@ -99,7 +100,7 @@ class CallStatValueTest {
 
     @Test
     fun `aberrant counters all reduce to the empty snapshot`() {
-        listOf(Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, -12.0, 3e9).forEach { aberrant ->
+        listOf(Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, -12.0).forEach { aberrant ->
             val stats = CallStats.reduce(
                 listOf(
                     entry("p", "candidate-pair", values = mapOf("availableOutgoingBitrate" to aberrant)),
@@ -133,6 +134,20 @@ class CallStatValueTest {
         assertThat(stats.bytesReceived).isEqualTo(Int.MAX_VALUE)
         assertThat(stats.outboundPacketsSent).isEqualTo(Int.MAX_VALUE)
         assertThat(stats.bandwidth).isEqualTo(Int.MAX_VALUE)
+    }
+
+    @Test
+    fun `a counter crossing the Int bound never makes the cumulative bytes go back`() {
+        fun tick(video: Double) = CallStats.reduce(
+            listOf(
+                entry("oa", "outbound-rtp", "audio", mapOf("bytesSent" to 4e7)),
+                entry("ov", "outbound-rtp", "video", mapOf("bytesSent" to video)),
+                entry("iv", "inbound-rtp", "video", mapOf("bytesReceived" to video)),
+            ),
+        )
+        assertThat(tick(2.2e9).bandwidth).isAtLeast(tick(2.1e9).bandwidth)
+        assertThat(tick(2.2e9).bytesReceived).isAtLeast(tick(2.1e9).bytesReceived)
+        assertThat(tick(2.2e9).inboundVideoBytes).isEqualTo(Int.MAX_VALUE)
     }
 
     @Test

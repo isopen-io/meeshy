@@ -120,8 +120,8 @@ public data class CallStats(
          *   `mimeType` (`"audio/opus"` → `"opus"`); unknown → `null`.
          *
          * An empty list yields the all-zero snapshot. Missing numeric fields default
-         * to `0`, and an aberrant one (NaN, infinite, negative, beyond `Int.MAX_VALUE`)
-         * reads as unmeasured `0` through [CallStatValue] (#20122). The reducer never throws.
+         * to `0`, and an aberrant one (NaN, infinite, negative) reads as unmeasured
+         * `0` through [CallStatValue], a finite one beyond `Int.MAX_VALUE` saturates (#20122). The reducer never throws.
          */
         /**
          * The route of the SELECTED ICE pair (iOS `relayedRoute`): the transport's
