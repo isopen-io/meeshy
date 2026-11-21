@@ -11,7 +11,12 @@
 
 import { describe, it, expect } from '@jest/globals';
 
-import { disclosableEntryRights, resolveParticipantRights } from '../../../services/participantRights';
+import {
+  disclosableEntryRights,
+  participantRowWithServedRights,
+  resolveParticipantRights,
+  servedParticipantSendRights,
+} from '../../../services/participantRights';
 
 const permissions = {
   canSendMessages: true,
@@ -147,5 +152,73 @@ describe('disclosableEntryRights — ce qu\'une fiche a le droit de dire', () =>
 
     expect(servi).not.toBe(complet);
     expect(complet.canViewHistory).toBe(true);
+  });
+});
+
+/**
+ * #20277 — ce qu'une LIGNE SERVIE porte comme droits.
+ *
+ * Ces témoins tiennent la loi là où elle s'applique : **sur l'objet, avant
+ * toute sérialisation**. C'est leur raison d'être, et elle a été mesurée en
+ * écrivant le lot : le témoin de route jumeau (`app.inject`) ne peut PAS tomber
+ * sur l'absence de `anonymousSession` ni sur celle de `canViewHistory`, parce
+ * que `conversationParticipantSchema` ne déclare ni l'un ni l'autre et que
+ * fast-json-stringify les retire quoi qu'il arrive. Un témoin posé là
+ * atteste la DISCRÉTION DU SÉRIALISEUR, jamais la décision du code — et c'est
+ * exactement ce que le dépôt appelle un piège armé : la première personne qui
+ * déclare la clé publie ce que personne n'avait décidé de publier.
+ */
+describe('#20277 — servedParticipantSendRights / participantRowWithServedRights', () => {
+  const snapshot = { ...permissions, canViewHistory: true };
+
+  it('sert les SEPT droits d émission, et rien de plus', () => {
+    expect(Object.keys(servedParticipantSendRights({ permissions: snapshot })).sort()).toEqual([
+      'canSendAudios',
+      'canSendFiles',
+      'canSendImages',
+      'canSendLinks',
+      'canSendLocations',
+      'canSendMessages',
+      'canSendVideos',
+    ]);
+  });
+
+  it('retire `canViewHistory` À LA SOURCE — un fait de modération (#4056), jamais retenu par un schéma', () => {
+    expect(servedParticipantSendRights({ permissions: snapshot })).not.toHaveProperty('canViewHistory');
+    expect(
+      servedParticipantSendRights({
+        permissions: snapshot,
+        anonymousSession: { rights: { canViewHistory: false } },
+      }),
+    ).not.toHaveProperty('canViewHistory');
+  });
+
+  it('applique la surcharge dans les DEUX sens', () => {
+    expect(
+      servedParticipantSendRights({ permissions: snapshot, anonymousSession: { rights: { canSendImages: false } } })
+        .canSendImages,
+    ).toBe(false);
+    expect(
+      servedParticipantSendRights({ permissions: snapshot, anonymousSession: { rights: { canSendFiles: true } } })
+        .canSendFiles,
+    ).toBe(true);
+  });
+
+  it('la ligne servie ne porte PAS la source de la surcharge', () => {
+    const served = participantRowWithServedRights({
+      id: 'p-guest',
+      displayName: 'Invité',
+      permissions: snapshot,
+      anonymousSession: { rights: { canSendImages: false } },
+    });
+    expect(served).not.toHaveProperty('anonymousSession');
+    expect(served.permissions.canSendImages).toBe(false);
+    expect(served).toMatchObject({ id: 'p-guest', displayName: 'Invité' });
+  });
+
+  it('une ligne SANS surcharge garde tout le reste et sert l instantané', () => {
+    const served = participantRowWithServedRights({ id: 'p-1', role: 'admin', permissions: snapshot });
+    expect(served).toMatchObject({ id: 'p-1', role: 'admin' });
+    expect(served.permissions).toEqual(permissions);
   });
 });

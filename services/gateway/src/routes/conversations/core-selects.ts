@@ -235,6 +235,24 @@ export const conversationDetailInclude = {
       avatar: true,
       role: true,
       permissions: true,
+      // #20277 — la SURCHARGE de droits, et ELLE SEULE.
+      //
+      // `permissions` au-dessus est l'INSTANTANÉ du join ; ce que la passerelle
+      // APPLIQUE est l'ensemble résolu (`resolveEntryRights`,
+      // `middleware/auth.ts`), où `anonymousSession.rights` passe DEVANT. Sans
+      // cette colonne, le détail — la lecture d'amorce que les trois clients
+      // montent à chaque ouverture de fil — servait l'instantané périmé : un
+      // droit retiré à un visiteur sans compte lui laissait sa tuile jusqu'au
+      // premier `participant:rights-updated`, donc pour toujours s'il n'était
+      // pas connecté au moment du geste.
+      //
+      // Le commentaire d'iter 35 (F8) ci-dessus reste JUSTE : c'est le document
+      // embarqué ENTIER qui a été retiré du `select`, `sessionTokenHash` et le
+      // profil de l'invité compris. Le `select` imbriqué ne ramène que les huit
+      // booléens de la surcharge — pas de jointure, pas de requête de plus, et
+      // rien de sensible n'est rehydraté. Le document est déjà lu : c'est une
+      // projection, pas une lecture.
+      anonymousSession: { select: { rights: true } },
       isActive: true,
       isOnline: true,
       lastActiveAt: true,
