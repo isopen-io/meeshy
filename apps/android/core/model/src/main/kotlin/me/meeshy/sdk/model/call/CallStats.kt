@@ -114,11 +114,11 @@ public data class CallStats(
          *   smallest `id`, #20121) gives it — never the report's order.
          * - `inbound-rtp` sums [packetsLost] and [bytesReceived]; splits
          *   `packetsReceived` into [inboundAudioPackets] / [inboundVideoPackets] by
-         *   [RawEntry.kind]; accumulates the audio jitter mean; and remembers the
-         *   FIRST inbound entry's [RawEntry.codecId] as the primary codec.
+         *   [RawEntry.kind]; and accumulates the audio jitter mean.
          * - `outbound-rtp` sums [outboundPacketsSent] and [bandwidth] (`bytesSent`).
-         * - the primary codec id is resolved to a name via its `codec` entry's
-         *   `mimeType` (`"audio/opus"` → `"opus"`); unknown → `null`.
+         * - the codec shown is the first `inbound-rtp` in [streamOrder] whose non-empty
+         *   [RawEntry.codecId] resolves to a `codec` entry's `mimeType`
+         *   (`"audio/opus"` → `"opus"`, #20221); none resolves → `null`.
          *
          * An empty list yields the all-zero snapshot. Missing numeric fields default
          * to `0`, and an aberrant one (NaN, infinite, negative) reads as unmeasured
@@ -160,6 +160,10 @@ public data class CallStats(
             .filter { it.type == "candidate-pair" }
             .sortedWith(compareByDescending<RawEntry> { CallStatValue.measured(it.values["priority"] ?: 0.0) }.thenBy { it.id })
 
+        /** #20221 — rtp entries audio first (`kind != "video"`), then smallest `id`: never the report's order. */
+        private fun streamOrder(entries: List<RawEntry>): List<RawEntry> =
+            entries.sortedWith(compareBy<RawEntry> { it.kind == "video" }.thenBy { it.id })
+
         private fun pairMeasure(key: String, elected: RawEntry?, entries: List<RawEntry>): Double? =
             elected?.values?.get(key) ?: electionOrder(entries).firstNotNullOfOrNull { it.values[key] }
 
@@ -172,7 +176,6 @@ public data class CallStats(
             var inboundAudioBytes = 0L
             var inboundVideoBytes = 0L
             var outbound = 0
-            var primaryCodecId: String? = null
             var audioJitterSum = 0.0
             var audioJitterCount = 0
 
@@ -200,7 +203,6 @@ public data class CallStats(
                             }
                         }
                         bytesReceived = CallStatValue.sumBytes(bytesReceived, receivedBytes)
-                        if (primaryCodecId == null) primaryCodecId = entry.codecId
                     }
 
                     "outbound-rtp" -> {
@@ -212,8 +214,8 @@ public data class CallStats(
                 }
             }
 
-            val resolvedCodec: String? = primaryCodecId
-                ?.let { codecMime[it] }
+            val resolvedCodec: String? = streamOrder(entries.filter { it.type == "inbound-rtp" && !it.codecId.isNullOrEmpty() })
+                .firstNotNullOfOrNull { codecMime[it.codecId] }
                 ?.let { mime -> mime.split("/").filter(String::isNotEmpty).lastOrNull() ?: mime }
 
             val jitterMs =
