@@ -68,7 +68,7 @@ import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
 import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount';
 import { endConversationMembership } from '../../socketio/endConversationMembership';
-import { announceConversationClosed } from '../../socketio/announceConversationClosed';
+import { announceConversationClosed, audienceDeRetractation } from '../../socketio/announceConversationClosed';
 import { cutTogetherWhere } from '../../services/together/togetherDeps';
 import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure';
 import { eraseExternalPeerOnClose } from '../../services/external-conversation/erase-external-peers';
@@ -137,7 +137,26 @@ const SELECT_ECRITURE = {
   ...CONVERSATION_METADATA_SELECT,
   closedBy: true,
   deletedAt: true,
-  participants: { select: { id: true, userId: true, isActive: true } },
+  // ── QUI CONSOMME CETTE LISTE, ET OÙ LA LOI SE JUGE (#20103) ───────────────
+  //
+  // Aucun `where` ici, donc la projection rend TOUS les participants — partis,
+  // retirés, désactivés, bannis. C'est délibéré, et la loi se juge chez les
+  // DEUX consommateurs, qui n'ont pas la même règle parce qu'ils ne portent
+  // pas la même charge :
+  //
+  // 1. `broadcastConversationUpdated` (plus bas) — du CONTENU (titre,
+  //    description, avatar, bannière). Il filtre sur `participationEstVivante`
+  //    dans son unité, et son TYPE exige `bannedAt` : c'est pourquoi la colonne
+  //    est projetée ici, et le compilateur est la garde (un champ non projeté
+  //    vaut `undefined`, et `undefined == null` est vrai — #20136).
+  // 2. `announceConversationClosed` (plus bas) — une RÉTRACTATION, qui ne porte
+  //    aucun contenu. Son audience reste `isActive` nu, volontairement plus
+  //    LARGE : retenir la clôture à un banni lui laisserait un fil fantôme dans
+  //    sa liste. La différence est dite sur chacun des deux appels.
+  //
+  // `bannedAt` ne part dans AUCUNE réponse : les trois champs de participation
+  // sont retirés de la ligne servie (`const { participants: _p, … }`).
+  participants: { select: { id: true, userId: true, isActive: true, bannedAt: true } },
 } as const;
 
 /**
@@ -265,6 +284,10 @@ export function registerConversationSettingsSovereignRoutes(fastify: FastifyInst
 
       const { manager, io: serveur } = io(fastify);
       if (Object.keys(changedFields).length > 0) {
+        // La liste est passée ENTIÈRE : l'unité est le site qui décide, et elle
+        // écarte les participations non vivantes (#20103). Un filtre posé ici
+        // en plus ne protégerait rien et ferait croire que la règle vit à deux
+        // endroits.
         broadcastConversationUpdated({
           io: serveur,
           conversationId,
@@ -274,11 +297,13 @@ export function registerConversationSettingsSovereignRoutes(fastify: FastifyInst
         });
       }
       if (ferme) {
+        // `audienceDeRetractation` : large délibérément, et c'est l'inverse du
+        // voisin ci-dessus (#20103). La raison est sur l'unité de clôture.
         announceConversationClosed({
           io: serveur,
           manager,
           conversationId,
-          participants: apres.participants.filter((p) => p.isActive),
+          participants: audienceDeRetractation(apres.participants),
           closedBy: adminId,
           closedAt: maintenant,
         });

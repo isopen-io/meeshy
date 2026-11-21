@@ -6,9 +6,8 @@ import Testing
 @Suite("Jeu Meeshy — ce que le Jeu signale hors de ses écrans")
 struct GameAttentionTests {
 
-    private func law(unlocked: Bool = true, chest: GameBlock.Chest.Status = .locked, flame: FlameStatus = .lit,
-                     days: Int = 4) -> GameAttention {
-        GameAttention(missionsUnlocked: unlocked, chest: chest, flame: flame, flameDays: days)
+    private func law(chest: GameBlock.Chest.Status = .locked, flame: FlameStatus = .lit, days: Int = 4) -> GameAttention {
+        GameAttention(chest: chest, flame: flame, flameDays: days)
     }
 
     @Test("l'Offrande servie prête se signale")
@@ -22,9 +21,9 @@ struct GameAttentionTests {
         #expect(!law(chest: .claimed).chestReady)
     }
 
-    @Test("avant le niveau 5, aucune Offrande ne se signale, même servie prête")
-    func lockedMissionsHideTheChest() {
-        #expect(!law(unlocked: false, chest: .ready).chestReady)
+    @Test("avant le niveau 5, l'Offrande du premier Rêve servie prête se signale : la loi ne lit que l'Offrande (#17370)")
+    func firstDreamOfferingRaises() {
+        #expect(law(chest: .ready).chestReady)
     }
 
     @Test("la Flamme servie à risque se signale")

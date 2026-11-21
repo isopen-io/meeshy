@@ -2270,6 +2270,21 @@ export class MessageReadStatusService {
     attachmentId: string,
     viewerUserId?: string
   ): Promise<string[]> {
+    // ── UNE LISTE QUI SOUSTRAIT DOIT ÊTRE LARGE (#20103) ────────────────────
+    //
+    // Aucun `where`, donc TOUS les participants — partis, retirés, désactivés,
+    // bannis — et aucune loi de participation jugée ensuite. C'est voulu, et la
+    // raison est dans l'USAGE : cette liste ne nomme pas une audience, elle sert
+    // à RETIRER des lignes du relevé d'accusés (ci-dessous, `optedOut`).
+    //
+    // La resserrer ferait donc l'inverse de ce qu'une garde doit faire : un
+    // membre banni qui avait coupé ses accusés sortirait de l'ensemble des
+    // opt-out, et son horodatage de lecture REPARAÎTRAIT dans le relevé. Ce qui
+    // protège ici, c'est l'étendue — exactement comme pour l'annuaire
+    // d'appareils que #20093 laisse large pour cette raison précise.
+    //
+    // (Ce qui borne la VISIBILITÉ du relevé est une autre porte, en amont :
+    // `getAttachmentStatusDetails` et son plancher d'historique.)
     const attachment = await this.prisma.messageAttachment.findUnique({
       where: { id: attachmentId },
       select: {

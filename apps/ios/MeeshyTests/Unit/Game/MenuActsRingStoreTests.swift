@@ -52,12 +52,20 @@ final class MenuActsRingStoreTests: XCTestCase {
         XCTAssertNil(sut.ring, "cache vide (ou ancien serveur) : aucun anneau, jamais un anneau vide inventé")
     }
 
-    func test_activate_beforeLevelFive_showsNoRing() async {
-        let (sut, _) = makeSUT(cached: GameFixture.game(score: 0, missions: acts([true, false, false])))
+    func test_activate_beforeLevelFive_withAnOlderServer_showsNoRing() async {
+        let (sut, _) = makeSUT(cached: GameFixture.game(score: 0, missions: []))
 
         await sut.activate(hidden: false)
 
-        XCTAssertNil(sut.ring, "les actes ne sont pas ouverts avant le niveau 5")
+        XCTAssertNil(sut.ring, "un serveur antérieur ne sert aucun acte avant le niveau 5 : aucun anneau")
+    }
+
+    func test_activate_beforeLevelFive_theFirstDreamHasAOneSegmentRing() async {
+        let (sut, _) = makeSUT(cached: GameFixture.game(score: 0, missions: acts([true])))
+
+        await sut.activate(hidden: false)
+
+        XCTAssertEqual(sut.ring, GameActsRing(done: 1, total: 1), "le premier Rêve (#17370) a un acte : un segment")
     }
 
     func test_activate_whenTheGameIsHidden_readsNothingAndShowsNoRing() async {

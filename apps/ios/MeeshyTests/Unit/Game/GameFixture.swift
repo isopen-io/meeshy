@@ -34,6 +34,7 @@ enum GameFixture {
         freezes: Int = 0,
         canRelight: Bool = false,
         missions: [GameBlock.Mission]? = nil,
+        fullDreamIn: Int? = nil,
         rerollAvailable: Bool = true,
         chestStatus: GameBlock.Chest.Status = .locked,
         chestReward: DailyChest? = nil,
@@ -67,7 +68,8 @@ enum GameFixture {
             ),
             treasury: GameTreasury.standing(held: held),
             mint: mint,
-            missions: GameBlock.Missions(dayKey: "2026-10-05", prismDay: false, unlocked: shown.level >= 5, items: items, rerollAvailable: rerollAvailable),
+            missions: GameBlock.Missions(dayKey: "2026-10-05", prismDay: false, unlocked: shown.level >= 5, items: items, rerollAvailable: rerollAvailable,
+                                     fullDreamIn: fullDreamIn),
             chest: GameBlock.Chest(status: chestStatus, odds: GameChest.odds, reward: chestReward),
             flame: GameBlock.Flame(
                 days: flameDays, form: GameFlame.form(forDays: flameDays), bonusPercent: GameFlame.bonusPercent(forDays: flameDays),

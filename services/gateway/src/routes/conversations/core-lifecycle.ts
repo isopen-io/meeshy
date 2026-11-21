@@ -33,8 +33,8 @@ import { sendSuccess, sendError, sendForbidden, sendNotFound, sendInternalError 
 import { refuserCommeIntrouvable } from './utils/access-control';
 import { applyCommunityAdmission, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
 import { communityMemberAnnouncerFrom } from '../../services/community-member-broadcast';
-import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
-import { presenceFor, viewerFromRequest } from '../users/presence-gate';
+import { viewerFromRequest } from '../users/presence-gate';
+import { gateParticipantsPresence } from './participants-presence';
 import {
   generateConversationIdentifier,
   generateCompactConversationIdentifier,
@@ -44,7 +44,7 @@ import type {
   ConversationParams,
   CreateConversationBody
 } from './types';
-import { announceConversationClosed } from '../../socketio/announceConversationClosed';
+import { announceConversationClosed, audienceDeRetractation } from '../../socketio/announceConversationClosed';
 import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure';
 import { eraseExternalPeerOnClose } from '../../services/external-conversation/erase-external-peers';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
@@ -269,6 +269,7 @@ export function registerCreateConversationRoute(
         const existingDirect = await firstFound(lookups, (where) => highestRankedConversation((stream) => prisma.conversation.findFirst({
           where: { ...where, ...stream.where },
           orderBy: stream.orderBy,
+          // #20103 — sans `where` : lecture d'IDENTITÉ (l'appelant, le créateur), pas une audience.
           include: {
             participants: {
               include: {
@@ -423,6 +424,10 @@ export function registerCreateConversationRoute(
             ]
           }
         },
+        // #20103 — sans `where`, et sans objet d'en avoir un : la conversation
+        // vient de NAÎTRE dans le `create` ci-dessus, donc chacune de ses lignes
+        // de participation est vivante par construction. Cette liste sert la
+        // réponse REST au créateur, jamais une audience.
         include: {
           participants: {
             include: {
@@ -777,32 +782,14 @@ export function registerUpdateConversationRoute(
       // Gate de présence des co-participants. `conversationParticipantSchema`
       // DÉCLARE `isOnline`/`lastActiveAt`, et l'`include` ci-dessus ramène tous
       // les scalaires de `Participant` : ces deux champs atteignaient le fil
-      // BRUTS. Régime STRICT (2026-08-25) : self/ADMIN+/ami seuls voient la
-      // présence d'un co-participant ; un id ABSENT de la carte (participant
-      // sans compte) est masqué, sauf pour un viewer ADMIN+.
-      //
-      // Défini ici, appliqué aux DEUX sorties : la branche « rien à écrire »
-      // rend les mêmes lignes que la branche nominale, donc la même donnée à
-      // garder. Une porte posée sur une seule des deux n'est pas une porte.
+      // BRUTS. `gateParticipantsPresence` porte la règle (régime STRICT du
+      // 2026-08-25) et vit désormais dans son unité — appliquée aux DEUX
+      // sorties ci-dessous, car une porte posée sur une seule n'est pas une
+      // porte, et la branche « rien à écrire » rend les mêmes lignes.
       const updatePresenceViewer = viewerFromRequest(request);
-      const gatePresence = async <P extends { userId: string | null; isOnline: boolean | null; lastActiveAt: Date | null }>(
+      const gatePresence = <P extends { userId: string | null; isOnline: boolean | null; lastActiveAt: Date | null }>(
         participants: P[]
-      ) => {
-        const vis = await getPresenceVisibilityService(prisma).resolveForTargets(
-          updatePresenceViewer,
-          participants
-            .map((p) => p.userId)
-            .filter((uid): uid is string => !!uid)
-        );
-        return participants.map((p) => {
-          const prefs = presenceFor(updatePresenceViewer, vis, p.userId);
-          return {
-            ...p,
-            isOnline: prefs.showOnline ? p.isOnline : false,
-            lastActiveAt: prefs.showLastSeenTimestamp ? p.lastActiveAt : null,
-          };
-        });
-      };
+      ) => gateParticipantsPresence({ prisma, viewer: updatePresenceViewer }, participants);
 
       if (Object.keys(updateData).length === 0) {
         const unchanged = await prisma.conversation.findUnique({
@@ -827,7 +814,13 @@ export function registerUpdateConversationRoute(
       // La room de conversation ne suffit pas : un participant posé sur l'écran
       // de LISTE n'est joignable que par sa room personnelle — sans elle, un
       // renommage n'atteignait que ceux qui avaient le fil ouvert. Le helper
-      // partagé (#7845) écarte les inactifs et chaîne les rooms.
+      // partagé (#7845) chaîne les rooms et écarte les participations non
+      // VIVANTES : ce qu'il annonce est du CONTENU — titre, description, avatar,
+      // bannière — et un membre actif-et-BANNI n'y a pas droit (#20103 ; la
+      // raison entière est écrite sur l'unité, qui est le site qui décide). Son
+      // type exige `bannedAt`, et l'`include` ci-dessus le ramène avec tous les
+      // scalaires de `Participant` : c'est le compilateur qui garantit que la
+      // colonne est là, et non une relecture de la projection.
       broadcastConversationUpdated({
         io: fastify.socketIOHandler?.getManager()?.getIO(),
         conversationId,
@@ -977,12 +970,15 @@ export function registerDeleteConversationRoute(
       // éteint aussi ce qu'il portait de vivant (les partages de position en
       // cours), et cette décision ne se répète pas sur les trois chemins de
       // clôture — elle vit dans l'unité qui les sert tous.
+      //
+      // Son audience passe par `audienceDeRetractation` : large délibérément, et
+      // la raison est sur l'unité de clôture (#20103).
       const closureManager = fastify.socketIOHandler?.getManager()
       announceConversationClosed({
         io: closureManager?.getIO(),
         manager: closureManager,
         conversationId,
-        participants: closedConversation.participants.filter(p => p.isActive),
+        participants: audienceDeRetractation(closedConversation.participants),
         closedBy: userId,
         closedAt: now
       })

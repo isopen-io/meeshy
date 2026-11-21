@@ -10,6 +10,8 @@
  *    pour le rallumage de 48 h. L'écriture est CONDITIONNELLE aux valeurs lues :
  *    un gel acheté ou une Flamme rallumée entre la lecture et l'écriture fait
  *    reprendre le calcul, jamais écraser l'achat ;
+ *    Le 3e jour de la première Flamme de sa vie, le joueur reçoit sa première
+ *    Veilleuse (`firstFreezeGift`, #17371), écrite dans le même geste ;
  *  - `buyFreeze` : 1 Meesh, 2 en réserve au plus ;
  *  - `relight` : 3 Meeshes, dans les 48 h, une fois par mois.
  *
@@ -24,6 +26,7 @@ import {
   advanceFlame,
   canBuyFreeze,
   canRelight,
+  firstFreezeGift,
   flameStatus,
   relightFlame,
   type FlameOutcome,
@@ -112,6 +115,8 @@ export type StreakPlan = {
   readonly streak: number;
   readonly longest: number;
   readonly previousLongest: number;
+  /** La première Veilleuse vient d'être offerte (#17371). */
+  readonly freezeGifted: boolean;
   /** Ce que le compte doit porter ensuite ; `null` ⇒ rien à écrire (déjà actif aujourd'hui). */
   readonly data: Prisma.UserUpdateManyMutationInput | null;
 };
@@ -125,19 +130,28 @@ export function planStreak(facts: FlameFacts): StreakPlan {
     freezes: facts.freezes,
   });
   if (transition.outcome === 'same-day') {
-    return { outcome: 'same-day', streak: facts.streak, longest: facts.longest, previousLongest: facts.longest, data: null };
+    return {
+      outcome: 'same-day',
+      streak: facts.streak,
+      longest: facts.longest,
+      previousLongest: facts.longest,
+      freezeGifted: false,
+      data: null,
+    };
   }
   const longest = Math.max(facts.longest, transition.streak);
+  const gift = firstFreezeGift({ previousLongest: facts.longest, streak: transition.streak, freezes: transition.freezes });
   return {
     outcome: transition.outcome,
     streak: transition.streak,
     longest,
     previousLongest: facts.longest,
+    freezeGifted: gift.gifted,
     data: {
       currentStreakDays: transition.streak,
       longestStreakDays: longest,
       lastStreakDate: markerOfDayKey(facts.today),
-      ...(transition.freezesUsed > 0 ? { flameFreezes: transition.freezes } : {}),
+      ...(transition.freezesUsed > 0 || gift.gifted ? { flameFreezes: gift.freezes } : {}),
       ...(transition.outcome === 'broken' && transition.lostStreak > 0 && facts.lastActiveDay !== null
         ? { brokenStreakDays: transition.lostStreak, brokenStreakLastDay: facts.lastActiveDay }
         : {}),
