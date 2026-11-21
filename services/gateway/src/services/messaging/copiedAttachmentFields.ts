@@ -99,6 +99,11 @@ export function copiedAttachmentFields<A extends SourceAttachment>(att: A) {
     videoCodec: att.videoCodec,
     pageCount: att.pageCount,
     lineCount: att.lineCount,
+    // #20142 — un DÉFAUT, que l'appelant RECOUVRE par l'empreinte du copieur
+    // (`uploaderStampOf`). Ce module ne connaît pas le copieur, donc il ne peut
+    // pas répondre « qui a fait cette ligne ? » : il pose la valeur la moins
+    // permissive, et c'est l'appelant qui dit la vérité. Le laisser SEUL
+    // empêchait un invité de supprimer la pièce qu'il venait de transférer.
     isAnonymous: false,
     transcription: (att.transcription ?? undefined) as Json<A, 'transcription'>,
     translations: (att.translations ?? undefined) as Json<A, 'translations'>,

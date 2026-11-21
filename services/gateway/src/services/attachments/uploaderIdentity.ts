@@ -31,42 +31,71 @@ export type UploaderIdentityPrisma = Pick<PrismaClient, 'participant'>;
  * déviation, pas la norme.**
  *
  * Deux responsabilités vivent ici, et elles ne se confondent pas :
- *  - {@link uploaderIdentityOf} / {@link resolveUploaderIdentity} ÉCRIVENT
- *    l'identité de compte (`userId ?? id`, la convention que le dépôt applique
- *    partout où une identité de participant sert de clé de compte) ;
+ *  - {@link uploaderStampOf} / {@link resolveUploaderStamp} ÉCRIVENT l'EMPREINTE
+ *    du déposant — son identité de compte (`userId ?? id`, la convention que le
+ *    dépôt applique partout où une identité de participant sert de clé de
+ *    compte) ET son anonymat, les deux ensemble (#20142) ;
  *  - {@link ownsAsUploader} RECONNAÎT les lignes héritées, écrites avant
  *    l'unification et que rien ne réécrit.
  */
 
 /**
- * L'identité de compte d'un participant chargé.
+ * **L'EMPREINTE du déposant : son identité ET son anonymat (#20142).**
  *
- * Le repli (participant absent) est le comportement d'AVANT l'unification, et
- * c'est délibéré : une ligne écrite ainsi reste reconnue par
- * {@link ownsAsUploader}, alors qu'échouer ferait naître une pièce sans
- * déposant — bien pire que l'ancien défaut.
+ * `uploadedBy` et `isAnonymous` répondent à LA MÊME question — *qui a fait
+ * cette ligne ?* — et les quatre écrivains de téléversement les posent
+ * ensemble, depuis le même contexte d'authentification. Les deux écrivains de
+ * COPIE posaient `isAnonymous: false` sans condition, depuis
+ * `copiedAttachmentFields`, qui **ne connaît pas le copieur**.
+ *
+ * Le coût : un invité qui transférait une pièce ne pouvait plus la supprimer.
+ * La branche anonyme de `DELETE /attachments/:id` exige les DEUX
+ * (`uploadedBy === userId && isAnonymous`), et le web OFFRE pourtant le bouton,
+ * qui ne regarde que `uploadedBy` — donc une affordance qui échoue, pire qu'une
+ * affordance absente.
+ *
+ * Les rendre ENSEMBLE est ce qui empêche la divergence de revenir : il n'y a
+ * plus d'endroit où l'un se pose sans l'autre.
+ *
+ * **Le repli n'invente jamais d'anonymat.** Participant illisible ou absent ⇒
+ * `{ uploadedBy: participantId, isAnonymous: false }`, exactement ce que le
+ * code écrivait avant. Affirmer l'anonymat d'une ligne dont on n'a pas lu le
+ * déposant OUVRIRAIT la branche anonyme du `DELETE` à quiconque porte cet
+ * identifiant — un repli ne doit pas être plus permissif que la vérité.
  */
-export function uploaderIdentityOf(
+export type UploaderStamp = {
+  readonly uploadedBy: string;
+  readonly isAnonymous: boolean;
+};
+
+export function uploaderStampOf(
   participant: { readonly userId?: string | null } | null | undefined,
   fallbackParticipantId: string
-): string {
-  return participant?.userId ?? fallbackParticipantId;
+): UploaderStamp {
+  const userId = participant?.userId ?? null;
+  if (userId !== null) return { uploadedBy: userId, isAnonymous: false };
+  return {
+    uploadedBy: fallbackParticipantId,
+    // ANONYME seulement quand la ligne du participant a été LUE et dit que ce
+    // participant n'a pas de compte. Un participant absent n'est pas un invité.
+    isAnonymous: participant !== null && participant !== undefined,
+  };
 }
 
 /** La même, quand seul l'identifiant du participant est en main. */
-export async function resolveUploaderIdentity(
+export async function resolveUploaderStamp(
   prisma: UploaderIdentityPrisma,
   participantId: string
-): Promise<string> {
+): Promise<UploaderStamp> {
   try {
     const participant = await prisma.participant.findUnique({
       where: { id: participantId },
       select: { userId: true },
     });
-    return uploaderIdentityOf(participant, participantId);
+    return uploaderStampOf(participant, participantId);
   } catch (error: unknown) {
-    logger.warn('uploader identity lookup failed — falling back to the participant id', { participantId, error });
-    return participantId;
+    logger.warn('uploader stamp lookup failed — falling back to the participant id, not anonymous', { participantId, error });
+    return { uploadedBy: participantId, isAnonymous: false };
   }
 }
 
