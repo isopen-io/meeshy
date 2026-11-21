@@ -2273,3 +2273,30 @@ socket jusqu'au client.
 2. **#20184** : `bytesTotal` en Long sur Android. Le lot est petit, et se prouve avec `jvm-check -PjvmCheckModelOnly`, puis `android.yml`.
 3. **#20121** : rendre l'élection ICE indépendante de l'ordre des entrées.
 4. #11932, #12236, #16933, #20043.
+
+## Cycle 67 — 2026-11-21
+
+- **Base** : `origin/dev` @ `9f7a74ca9`. #20187 (#20152, cycle 66) est fusionnée.
+- **Branche** : `claude/determined-volta-h96meu`.
+- **Objectif** : #20184. Sur Android, le résumé d'appel affiche les données consommées au-delà de 2 Go (« 4 GB », plus « 2.1 GB »).
+- **#20185** (recette staging de #20152) : non jouée, ce conteneur n'a pas d'accès authentifié au staging. Elle reste ouverte.
+- **Livré** (Android, `core/model`, commit `e503cb822`) :
+  - `CallSummaryMetadata.bytesTotal` passe en `Long?` et `formatDataSize` prend un `Long`.
+  - Le décodage est borné : une valeur négative ou non finie vaut `null` ; au-delà de 2^53 − 1, la valeur sature à cette borne.
+  - Le rendu est identique à `formatCallDataSize` (web) et à iOS pour toute valeur réelle. Le payload ne change pas, et `CallSummaryMetadata` n'est persisté nulle part : il se reconstruit depuis `metadata`.
+- **Tests** : `CallSummaryDataSizeTest`, 6 témoins (4 Go mesuré et estimé, borne des 2 Go, 2^53 − 1, saturation à 1e19, négatif).
+  - Rouge : échec de compilation, `formatDataSize` attendait un `Int`.
+  - Vert local : `jvm-check -PjvmCheckModelOnly --rerun-tasks` donne 19 291 tests, 0 échec. La QA l'a rejoué (même chiffre).
+  - CI : `android.yml` en `workflow_dispatch` sur `e503cb822`. Le résultat est dans la PR.
+- **QA** (indépendante) : favorable. Nits, aucun introduit par le lot :
+  - Android accepte un nombre servi en chaîne (`doubleOrNull`), iOS et le web non.
+  - Une valeur fractionnaire ou `1e19` fait échouer tout le décodage du résumé sur iOS, alors qu'Android la tolère.
+  - Aucun témoin ne fige les cas chaîne, fractionnaire et 0.
+- **Limites** : rien n'a été vérifié sur appareil.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée : lire son run `android.yml`, fusionner `dev` dans la branche, puis fusionner la PR.
+1. **#20185** : recette sur le staging, si un accès existe.
+2. **#20121** : rendre l'élection ICE indépendante de l'ordre des entrées, sur iOS et Android.
+3. #11932, #12236, #16933, #20043.
