@@ -265,14 +265,20 @@ public struct SharedLocationOwnSnapshot: Decodable, Sendable, Equatable {
     /// UN SEUL APPAREIL PUBLIE (#18580) : le dernier démarrage AVEC position, renouvelé par chaque « Partager », gardé
     /// par la liste seule. `nil` : passerelle antérieure — l'appareil ne cède alors jamais.
     public let startedAt: String?
+    /// D'où vient le point du partage en cours (#20087) : `manual`, un point choisi à la main ; `device`, le relevé d'un
+    /// appareil. `nil` : la passerelle ne le dit pas (antérieure à #20116, ou aucun partage) — rien n'est changé ici. Une
+    /// source inconnue se lit `manual` : on ne remplace jamais un point par la position réelle sur un doute.
+    public let source: SharedLocationPositionSource?
 
     public init(
         recipients: [SharedLocationOwnRecipient],
         shareBattery: Bool? = nil,
         acceptsManualSource: Bool = false,
         acceptsUntilStopped: Bool = false,
-        startedAt: String? = nil
+        startedAt: String? = nil,
+        source: SharedLocationPositionSource? = nil
     ) {
+        self.source = source
         self.recipients = recipients
         self.shareBattery = shareBattery
         self.acceptsManualSource = acceptsManualSource
@@ -280,7 +286,7 @@ public struct SharedLocationOwnSnapshot: Decodable, Sendable, Equatable {
         self.startedAt = startedAt
     }
 
-    private enum CodingKeys: String, CodingKey { case recipients, shareBattery, acceptsManualSource, acceptsUntilStopped, startedAt }
+    private enum CodingKeys: String, CodingKey { case recipients, shareBattery, acceptsManualSource, acceptsUntilStopped, startedAt, source }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -289,6 +295,14 @@ public struct SharedLocationOwnSnapshot: Decodable, Sendable, Equatable {
         acceptsManualSource = ((try? c.decodeIfPresent(Bool.self, forKey: .acceptsManualSource)) ?? nil) ?? false
         acceptsUntilStopped = ((try? c.decodeIfPresent(Bool.self, forKey: .acceptsUntilStopped)) ?? nil) ?? false
         startedAt = (try? c.decodeIfPresent(String.self, forKey: .startedAt)) ?? nil
+        source = Self.servedSource(in: c)
+    }
+
+    /// Une clé absente ou nulle ne dit rien ; une clé présente mais illisible (autre chaîne, autre type) dit un point
+    /// qu'on ne remplace pas.
+    private static func servedSource(in c: KeyedDecodingContainer<CodingKeys>) -> SharedLocationPositionSource? {
+        guard c.contains(.source), (try? c.decodeNil(forKey: .source)) == false else { return nil }
+        return (try? c.decode(String.self, forKey: .source)).flatMap(SharedLocationPositionSource.init(rawValue:)) ?? .manual
     }
 
     private struct Lenient: Decodable {

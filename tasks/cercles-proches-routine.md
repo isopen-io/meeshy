@@ -1727,3 +1727,30 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Prochain lot : moitié client de #20087 (iOS + Android : un partage servi `manual` réuni ne republie jamais la position
   de l'appareil ; « Partager » depuis l'appareil devant un point choisi demande), puis #20115, puis annoncer
   `acceptsManualSource` (#19557), puis #20054, #20056, #20086.
+
+## 2026-11-21 — réveil de 1 h : moitié client de #20087 (iOS)
+
+- Reprise : #20116 fusionnée (7495763da). Aucune PR de la routine ouverte. Branche `claude/cercles-20087-source-cliente`
+  réservée avant toute écriture.
+- Constat : seul iOS sait CHOISIR un point (#19558). Le web et Android ne connaissent pas le point choisi ; la passerelle
+  les protège déjà (`SHARED_LOCATION_FIXED_POINT`), il leur manque de lire la source et de demander : suivi #20126.
+- Lot iOS : le SDK lit `source` dans la relecture (inconnue ⇒ manual, absente ⇒ rien ne change) et ne fait voyager
+  `source: 'device'` que pour REMPLACER un point choisi (`replacesChosenPoint`) — une passerelle d'avant #20116 refuse la
+  clé, et seule une passerelle qui sert un point peut en avoir un à remplacer. La liste réunie suit la source servie ; un
+  point choisi ailleurs arrête le suivi de l'appareil ; « Partager » devant un point choisi rend `.replacesChosenPoint`
+  sans rien envoyer ni demander à l'appareil, la feuille demande « Montrer ta position réelle ? » puis rejoue.
+- Le fichier de test neuf n'a pas pu être inscrit au projet (`ios-xcodegen-sync` désactivé) : la classe
+  `SharedLocationServedSourceTests` vit dans `SharedLocationRestoredBackupTests.swift`.
+- Gardes iOS : règles maison 42, cohésion rc=0, inscription 2 063, localisation, accent 168/408 ; vitest
+  `packages/shared/__tests__/ci` 216/216. Swift prouvé par `ios.yml` + `sdk-tests.yml` en `workflow_dispatch`.
+- PR #20128. Suivis ouverts par l'audit : #20127 (confirmation liée au partage montré), commentaire sur #20115.
+
+## 2026-11-21 — réveil de 5 h : fusion de #20128
+
+- Reprise : `ios.yml` (44850786079), `sdk-tests.yml` (44850788553) et `ci.yml` (44850791219) VERTS sur ccd964264.
+  Une autre session a fusionné `dev` dans la branche à 4 h 47 (c2185cdfc) ; `origin/dev` (36970d31d, trois commits de
+  passerelle sans recouvrement) refusionnée à la main, sans conflit.
+- Gardes iOS sur l'arbre fusionné : règles maison 42, cohésion rc=0, inscription 2 063, accent 168/408, catalogue JSON
+  valide. PR fusionnée dans `dev`, #20087 fermée à la main.
+- Prochain lot : #20115 (sortie du fantôme pour un point choisi) avant d'annoncer `acceptsManualSource` (#19557), puis
+  #20126 (web + Android), #20127, #20054, #20056, #20086.
