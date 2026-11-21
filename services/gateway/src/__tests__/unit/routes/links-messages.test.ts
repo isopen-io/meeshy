@@ -21,6 +21,7 @@
 import { describe, it, expect, jest, beforeAll, afterAll } from '@jest/globals';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { findFirstIn } from '../../helpers/mongo-where';
 
 // ─── Mocks — hissés au sommet de CE module, donc déclarés ici ────────────────
 
@@ -157,6 +158,40 @@ describe('POST /links/:id/messages — anonymous: participant not found', () => 
       headers: ANON_HEADERS, payload: VALID_BODY,
     });
     expect(res.statusCode).toBe(401);
+  });
+});
+
+/**
+ * #20183 — l'invité anonyme ACTIF-ET-BANNI. Sixième et dernière porte de la
+ * famille des liens : c'est celle de l'appelant lui-même.
+ *
+ * Le refus attendu n'est PAS le 401 du voisin ci-dessus, et c'est tout
+ * l'intérêt du site : un 401 se REJOUE (le client renvoie sa session), là où un
+ * accès TERMINÉ doit se dire une fois pour toutes. La seconde lecture du
+ * handler — délibérément SANS `isActive` (#10492) — distingue « session
+ * inconnue » de « accès retiré », et rend le `410 GUEST_ACCESS_REVOKED` que
+ * servent déjà les autres portes d'invité. Le resserrement de la PREMIÈRE
+ * lecture tombe donc exactement dans la branche que le fichier avait déjà
+ * écrite pour lui.
+ */
+describe('POST /links/:id/messages — anonymous: invité actif-et-BANNI (#20183)', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    const prisma = makePrisma();
+    prisma.participant.findFirst = findFirstIn([
+      { ...mockAnonParticipant, bannedAt: new Date('2026-11-01T00:00:00Z') },
+    ] as never) as never;
+    app = await buildApp({ prisma });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('rend 410 GUEST_ACCESS_REVOKED, jamais un 401 rejouable', async () => {
+    const res = await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: VALID_BODY,
+    });
+    expect(res.statusCode).toBe(410);
+    expect(res.json()).toMatchObject({ code: 'GUEST_ACCESS_REVOKED' });
   });
 });
 
