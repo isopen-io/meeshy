@@ -25,6 +25,8 @@ export const FLAME_FREEZE_MAX = 2;
 /** En Meeshes. */
 export const FLAME_FREEZE_PRICE = 1;
 export const FLAME_RELIGHT_PRICE = 3;
+/** Le jour de Flamme où la première Veilleuse est offerte (#17371). */
+export const FLAME_FIRST_FREEZE_GIFT_DAY = 3;
 /** Jours calendaires de fenêtre après l'extinction (48 h). */
 export const FLAME_RELIGHT_WINDOW_DAYS = 2;
 /** Bonus de Flamme : 2 % par jour de série, plafond 50 %. */
@@ -50,6 +52,24 @@ export function canBuyFreeze(params: { readonly freezes: number; readonly balanc
   if (days0(params.freezes) >= FLAME_FREEZE_MAX) return { allowed: false, reason: 'at-maximum' };
   if (days0(params.balance) < FLAME_FREEZE_PRICE) return { allowed: false, reason: 'insufficient-balance' };
   return { allowed: true };
+}
+
+/**
+ * La PREMIÈRE Veilleuse est offerte (#17371) : le jour où la Flamme atteint son
+ * 3e jour pour la première fois de la vie du joueur — le record d'avant le geste
+ * n'y était pas encore. Une fois par joueur, sans marqueur à stocker : le record
+ * ne redescend jamais. Une réserve pleine ne reçoit rien.
+ */
+export function firstFreezeGift(params: {
+  readonly previousLongest: number;
+  readonly streak: number;
+  readonly freezes: number;
+}): { readonly gifted: boolean; readonly freezes: number } {
+  const freezes = days0(params.freezes);
+  const firstTime = days0(params.previousLongest) < FLAME_FIRST_FREEZE_GIFT_DAY;
+  const reached = days0(params.streak) >= FLAME_FIRST_FREEZE_GIFT_DAY;
+  if (!firstTime || !reached || freezes >= FLAME_FREEZE_MAX) return { gifted: false, freezes };
+  return { gifted: true, freezes: freezes + 1 };
 }
 
 export type FlameOutcome = 'started' | 'same-day' | 'continued' | 'protected' | 'broken';
