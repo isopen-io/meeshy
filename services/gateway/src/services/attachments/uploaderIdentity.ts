@@ -119,3 +119,93 @@ export async function ownsAsUploader(
     return false;
   }
 }
+
+/**
+ * **Les DEUX espaces de clés qu'une pièce de CE compte a pu porter (#20129).**
+ *
+ * {@link ownsAsUploader} répond pour UNE ligne, par une jointure. Une requête à
+ * l'échelle d'un compte entier ne peut pas joindre : elle doit apparier, et
+ * `uploadedBy: userId` n'apparie que les lignes écrites APRÈS l'unification de
+ * #20113. Les lignes héritées — les copies transférées, écrites avec un
+ * `Participant.id` — y sont invisibles, et deux sites rataient ce que personne
+ * ne peut rattraper plus tard :
+ *
+ *  - l'**export RGPD** (art. 15) ne contenait pas les médias transférés du
+ *    compte ;
+ *  - la **purge** de fin de période de grâce ne voyait pas leurs octets.
+ *
+ * Aucune migration n'est requise pour cela : la clé qui les trouve est
+ * l'identifiant des participants du compte, que l'export calcule DÉJÀ pour ses
+ * sections voisines. C'est la projection du paramètre, pas la donnée, qui
+ * rendait la réponse impossible en aval (leçon 276).
+ *
+ * `userId` figure TOUJOURS dans les clés rendues, même quand la liste des
+ * participants est vide ou que sa lecture a échoué : l'espace nominal ne dépend
+ * pas d'une lecture auxiliaire.
+ */
+export function uploadedByOfAccount(
+  userId: string,
+  participantIds: readonly string[]
+): { in: string[] } {
+  return { in: [...new Set([userId, ...participantIds])].filter((key) => !!key) };
+}
+
+/** Participants lus par fournée : une liste bornée, jamais un `findMany` nu. */
+const PARTICIPANT_KEY_BATCH = 200;
+
+/**
+ * Les clés d'un compte, par fournées, pour un balayage qui n'a que son
+ * `userId` en main (la purge de fin de grâce).
+ *
+ * Pourquoi des FOURNÉES et non une liste : le nombre de participations d'un
+ * compte est le nombre de conversations qu'il a rejointes — borné par
+ * construction, mais par rien d'écrit. Un `findMany` nu rejoindrait la dette
+ * gelée par `unbounded-findmany-guard.test.ts`, et un `take` SEUL tronquerait en
+ * silence, c'est-à-dire laisserait des octets d'un compte supprimé hors de
+ * portée de tout balayage futur. La pagination rend les deux impossibles.
+ *
+ * Elle est stable sans curseur : rien ne supprime de ligne `Participant` pendant
+ * la purge — `purgeAccountIsolatedData` les garde délibérément, « ce qu'un AUTRE
+ * participant continue de VOIR ».
+ *
+ * Chaque fournée porte `userId`, donc la toute première purge l'espace nominal
+ * quoi qu'il arrive. Une lecture en ÉCHEC rend exactement le comportement
+ * d'avant #20129 (le compte seul) plutôt que rien : la fournée manquée est
+ * rejouée par la passe de maintenance suivante.
+ */
+export async function* accountUploaderKeyBatches(
+  prisma: UploaderIdentityPrisma,
+  userId: string,
+  batchSize: number = PARTICIPANT_KEY_BATCH
+): AsyncGenerator<{ in: string[] }> {
+  let skip = 0;
+  let yielded = false;
+
+  for (;;) {
+    let rows: Array<{ id: string }>;
+    try {
+      rows = await prisma.participant.findMany({
+        where: { userId },
+        select: { id: true },
+        orderBy: { id: 'asc' },
+        take: batchSize,
+        skip,
+      });
+    } catch (error: unknown) {
+      logger.warn('account participant keys lookup failed — account key only for this pass', { userId, error });
+      if (!yielded) yield uploadedByOfAccount(userId, []);
+      return;
+    }
+
+    if (rows.length === 0) {
+      if (!yielded) yield uploadedByOfAccount(userId, []);
+      return;
+    }
+
+    yield uploadedByOfAccount(userId, rows.map((row) => row.id));
+    yielded = true;
+
+    if (rows.length < batchSize) return;
+    skip += rows.length;
+  }
+}

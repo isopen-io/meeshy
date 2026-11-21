@@ -38,6 +38,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { validatePagination } from '../../utils/pagination';
 import { publicMediaUrlFromEnv } from '../../services/attachments/publicMediaUrl';
+import { uploadedByOfAccount } from '../../services/attachments/uploaderIdentity';
 import { NOT_DELETED } from '../../services/posts/softDelete';
 import { exportPackData } from '../../services/packs/PackPrivacy';
 
@@ -186,9 +187,47 @@ export async function exportReactions(prisma: PrismaClient, participantIds: read
   };
 }
 
-/** Même raison de séparation que `exportReactions` : deux tables, deux propriétaires. */
-export async function exportMedia(prisma: PrismaClient, userId: string, page: ExportPage) {
-  const attachmentWhere = { uploadedBy: userId, isAnonymous: false };
+/**
+ * Les sections dont la requête a besoin des identifiants de PARTICIPATION du
+ * compte, et pas seulement de son `userId`.
+ *
+ * C'est la liste qui décide si `me/export.ts` calcule `participantIds` — une
+ * lecture faite UNE fois et réutilisée. Elle vit ici, à côté des sections qui en
+ * dépendent, parce que c'est le seul endroit où l'on sait pourquoi : `messages`
+ * apparie `senderId`, `reactions` `participantId`, et `media` le second espace
+ * de clés de `uploadedBy` (#20129). Une section qui en aura besoin demain
+ * s'inscrit ici, et la route n'a rien à apprendre.
+ *
+ * Le défaut qu'elle ferme : `media` manquait à cette condition, donc la liste
+ * n'était pas calculée quand l'export ne demandait QUE les médias — et
+ * `exportMedia` ne la recevait pas du tout, alors que la valeur était calculée
+ * dix lignes plus haut pour ses voisines.
+ */
+export const SECTIONS_NEEDING_PARTICIPANT_IDS = ['messages', 'reactions', 'media'] as const;
+
+export function needsParticipantIds(requestedTypes: readonly string[]): boolean {
+  return SECTIONS_NEEDING_PARTICIPANT_IDS.some((section) => requestedTypes.includes(section));
+}
+
+/**
+ * Même raison de séparation que `exportReactions` : deux tables, deux
+ * propriétaires — et, comme elle, DEUX conventions de propriétaire du côté des
+ * pièces jointes.
+ *
+ * `MessageAttachment.uploadedBy` porte l'identité de compte depuis #20113 ; les
+ * lignes écrites avant — les copies transférées — portent un `Participant.id`.
+ * Les apparier toutes est une obligation d'EXPORT (art. 15) : un média
+ * transféré par le compte est une donnée du compte, et rien ne la rattrape
+ * ailleurs. `PostMedia.uploaderId` n'a qu'un espace (aucun écrivain de copie),
+ * et reste apparié par égalité.
+ */
+export async function exportMedia(
+  prisma: PrismaClient,
+  participantIds: readonly string[],
+  userId: string,
+  page: ExportPage
+) {
+  const attachmentWhere = { uploadedBy: uploadedByOfAccount(userId, participantIds), isAnonymous: false };
   const postMediaWhere = { uploaderId: userId };
 
   const [attachments, attachmentsTotal, postMedia, postMediaTotal] = await Promise.all([

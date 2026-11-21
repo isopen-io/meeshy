@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { POST_MEDIA_FILE_COLUMNS, reclaimMediaRowBytes, type PostMediaByteRemover } from './posts/reclaimPostMediaBytes';
+import { accountUploaderKeyBatches } from './attachments/uploaderIdentity';
 
 const log = enhancedLogger.child({ module: 'purgeDeletedAccountMedia' });
 
@@ -71,6 +72,21 @@ const DEFAULT_BATCH_SIZE = 200;
  * Exclusion explicite (`notIn`) des ids déjà tentés cette PASSE : sans elle,
  * un attachment dont la suppression échoue resterait éligible pour toujours
  * et boucler la fournée sans jamais progresser — même garde qu'#5689.
+ *
+ * ─── LES DEUX ESPACES DE CLÉS DE `uploadedBy` (#20129) ──────────────────────
+ *
+ * `uploadedBy: userId` n'appariait que les lignes écrites après l'unification
+ * de #20113 : les copies TRANSFÉRÉES, écrites avant avec un `Participant.id`,
+ * restaient en base — et leurs octets avec elles, hors de portée de tout
+ * balayage futur, après que `privacy.json` a promis « suppression définitive ».
+ * Elles sont appariées par les clés de participation du compte
+ * (`accountUploaderKeyBatches`), que les lignes `Participant` survivent à la
+ * purge rend lisibles ici.
+ *
+ * Ce qu'#5689 couvre déjà, et pourquoi il ne suffisait pas :
+ * `anonymizeMessagesOfDeletedAccount` tourne AVANT et supprime les pièces des
+ * messages du compte une par une — mais pas celles d'un message déjà
+ * `deletedAt` avant son passage, ni une pièce jamais rattachée.
  */
 async function purgeAttachments(
   prisma: PrismaClient,
@@ -79,12 +95,31 @@ async function purgeAttachments(
   batchSize: number,
 ): Promise<number> {
   let deleted = 0;
+
+  // #20129 — les DEUX espaces de clés, fournée de clés par fournée de clés. Le
+  // filtre d'ids en échec est PAR fournée de clés : un attachment qui résiste
+  // n'appartient qu'à une seule d'entre elles, et le porter d'une fournée à
+  // l'autre ferait grandir un `notIn` pour rien.
+  for await (const uploadedBy of accountUploaderKeyBatches(prisma, userId)) {
+    deleted += await purgeAttachmentsOfKeys(prisma, attachmentRemover, uploadedBy, batchSize);
+  }
+
+  return deleted;
+}
+
+async function purgeAttachmentsOfKeys(
+  prisma: PrismaClient,
+  attachmentRemover: DeletedAccountAttachmentRemover,
+  uploadedBy: { in: string[] },
+  batchSize: number,
+): Promise<number> {
+  let deleted = 0;
   const failedIds = new Set<string>();
 
   for (;;) {
     const batch = await prisma.messageAttachment.findMany({
       where: {
-        uploadedBy: userId,
+        uploadedBy,
         isAnonymous: false,
         ...(failedIds.size > 0 ? { id: { notIn: [...failedIds] } } : {}),
       },

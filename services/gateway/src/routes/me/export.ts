@@ -10,6 +10,7 @@ import {
   exportComments,
   exportReactions,
   exportMedia,
+  needsParticipantIds,
   exportVoiceProfile,
   exportPacks,
 } from './export-sections';
@@ -672,12 +673,18 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
             : user;
         }
 
-        // Calculée UNE fois, réutilisée par `messages` et `reactions` : une
-        // seconde `participant.findMany` nue ferait passer ce fichier de 2 à 3
-        // `findMany` sans `take`, au-delà de la dette gelée par
+        // Calculée UNE fois, réutilisée par `messages`, `reactions` et `media` :
+        // une seconde `participant.findMany` nue ferait passer ce fichier de 2 à
+        // 3 `findMany` sans `take`, au-delà de la dette gelée par
         // `unbounded-findmany-guard.test.ts`.
+        //
+        // #20129 — la liste des sections qui en dépendent vit dans
+        // `export-sections.ts`, avec les sections elles-mêmes : `media` manquait
+        // à la condition écrite ici, donc l'export des médias SEULS ne la
+        // calculait pas. Une section ajoutée demain s'inscrit là-bas, et cette
+        // ligne n'a rien à apprendre.
         let pIds: string[] = [];
-        if (requestedTypes.includes('messages') || requestedTypes.includes('reactions')) {
+        if (needsParticipantIds(requestedTypes)) {
           const participantIds = await fastify.prisma.participant.findMany({
             where: { userId, type: 'user' },
             select: { id: true },
@@ -797,7 +804,7 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
         }
 
         if (requestedTypes.includes('media')) {
-          const sections = await exportMedia(fastify.prisma, userId, page);
+          const sections = await exportMedia(fastify.prisma, pIds, userId, page);
           exportData.media = {
             attachments: sections.attachments.items,
             postMedia: sections.postMedia.items,
