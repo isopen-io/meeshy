@@ -194,14 +194,24 @@ final class SharedLocationSharingSyncTests: XCTestCase {
         XCTAssertFalse(relaunched.fixes.isFollowing)
     }
 
-    func test_sharingFromTheDeviceAfterAChosenPoint_followsTheDeviceAgain() async {
+    func test_sharingFromTheDeviceAfterAChosenPoint_asksFirst_thenFollowsTheDeviceAgain() async {
         let sut = await makeManualSUT()
         _ = await sut.center.sharePoint(lisbon, with: alice, precision: .city, duration: .oneHour)
+        let sent = sut.emitter.starts.count
 
-        _ = await sut.center.share(with: bob, precision: .city, duration: .oneHour)
+        let asked = await sut.center.share(with: bob, precision: .city, duration: .oneHour)
 
+        XCTAssertEqual(asked, .replacesChosenPoint)
+        XCTAssertEqual(sut.emitter.starts.count, sent)
+        XCTAssertEqual(sut.fixes.asks, 0)
+        XCTAssertTrue(sut.center.roster.isFixedPoint)
+
+        let confirmed = await sut.center.share(with: bob, precision: .city, term: .bounded(.oneHour), replacingPoint: true)
+
+        XCTAssertNil(confirmed)
         XCTAssertFalse(sut.center.roster.isFixedPoint)
         XCTAssertEqual(sut.emitter.starts.last?.source, .device)
+        XCTAssertEqual(sut.emitter.starts.last?.replacesChosenPoint, true)
         XCTAssertTrue(sut.fixes.isFollowing)
     }
 

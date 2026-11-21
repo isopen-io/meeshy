@@ -30,6 +30,9 @@ enum SharedLocationShareProblem: Equatable {
     case refused(SharedLocationSendOutcome)
     /// « Arrêter » n'a pas pu partir : l'intention est gardée, et le centre la fait partir dès le retour du réseau.
     case withdrawalPending
+    /// Le partage montre un point CHOISI à la main (#20087) : « Partager » depuis l'appareil y montrerait la position
+    /// réelle à tous ses destinataires. Rien n'est parti ; l'écran le demande, puis rejoue avec `replacingPoint`.
+    case replacesChosenPoint
 }
 
 /// Réveille le centre après un délai : l'échéance de la personne la plus proche, ou le rejeu d'une échéance qui n'a pas
@@ -231,19 +234,23 @@ final class SharedLocationSharingCenter: ObservableObject {
     }
 
     /// Le même geste pour un terme : une durée servie, ou « jusqu'à ce que j'arrête » (#19616), refusé tant que la
-    /// passerelle ne l'annonce pas. Le cercle Sang est rejugé par elle.
+    /// passerelle ne l'annonce pas. Le cercle Sang est rejugé par elle. Devant un point choisi (#20087), rien ne part
+    /// sans `replacingPoint` : la position réelle remplacerait le point chez tous ses destinataires.
     @discardableResult
     func share(
         with userId: String,
         precision: SharedLocationPrecision,
         term: SharedLocationShareTerm,
         notify: Bool = false,
-        battery: Bool? = nil
+        battery: Bool? = nil,
+        replacingPoint: Bool = false
     ) async -> SharedLocationShareProblem? {
         await locked {
             guard await self.readBeforeComposing() else { return self.isLive ? .refused(.offline) : .refused(.failed) }
             guard self.isLive else { return .refused(.failed) }
             guard self.accepts(term) else { return .refused(.unavailable) }
+            let showsPoint = self.roster.pruned(now: self.now()).isFixedPoint
+            guard replacingPoint || !showsPoint else { return .replacesChosenPoint }
             let fix: SharedLocationFix
             switch await self.fixes.currentFix() {
             case .fix(let current): fix = current
@@ -252,7 +259,8 @@ final class SharedLocationSharingCenter: ObservableObject {
             }
             guard self.isLive else { return .refused(.failed) }
             let next = self.adding(userId, precision: precision, term: term, battery: battery).withFixedPoint(false)
-            return await self.publish(next, fix: fix, previous: self.roster, claimsPublishing: true, notify: notify)
+            return await self.publish(next, fix: fix, previous: self.roster, claimsPublishing: true, notify: notify,
+                                      replacesChosenPoint: showsPoint)
         }
     }
 
@@ -394,6 +402,8 @@ final class SharedLocationSharingCenter: ObservableObject {
             return true
         }
         adopt(next)
+        if next.isFixedPoint, !before.isFixedPoint { stopFollowingDevice() }
+        if !next.isFixedPoint { pinnedFix = nil }
         if !next.hasRecipients {
             stopFollowingDevice()
             markReceived(false)
@@ -539,7 +549,8 @@ final class SharedLocationSharingCenter: ObservableObject {
         fix: SharedLocationFix,
         previous: SharedLocationRoster,
         claimsPublishing: Bool = false,
-        notify: Bool = false
+        notify: Bool = false,
+        replacesChosenPoint: Bool = false
     ) async -> SharedLocationShareProblem? {
         let offersOptions = servesShareOptions != false
         let next = wanted.settled.withBattery(wanted.sharesBattery && offersOptions)
@@ -548,7 +559,8 @@ final class SharedLocationSharingCenter: ObservableObject {
         guard let request = SharedLocationStartRequest(
             recipients: recipients, duration: next.serverDuration(now: instant), fix: fix,
             notifyRecipients: notify && offersOptions, shareBattery: next.sharesBattery,
-            source: next.isFixedPoint ? .manual : .device, untilStopped: next.isOpenEnded
+            source: next.isFixedPoint ? .manual : .device, replacesChosenPoint: replacesChosenPoint,
+            untilStopped: next.isOpenEnded
         ) else {
             return .refused(.invalid)
         }
