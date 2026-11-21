@@ -462,7 +462,7 @@ internal class ChatComposerController(
                 } else if (clipboard != null) {
                     sendClipboardContent(text, clipboard, user, replyToId, effects)
                 } else if (endToEndPeer != null) {
-                    endToEnd.sendText(conversationId, endToEndPeer, text, sentLanguage, user, replyToId)
+                    endToEnd.sendText(conversationId, endToEndPeer, text, sentLanguage, user, replyToId, effects)
                 } else {
                     messageRepository.sendOptimistic(
                         conversationId = conversationId,

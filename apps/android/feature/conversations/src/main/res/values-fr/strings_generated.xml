@@ -254,6 +254,8 @@
     <string name="new_conversation_encryption_collapsed">Réduite</string>
     <string name="new_conversation_encryption_expanded">Développée</string>
     <string name="new_conversation_error_create">Impossible de créer la conversation</string>
+    <string name="new_conversation_error_participant_without_device_anonymous">Un membre ne peut pas encore recevoir de messages chiffrés : rien n’est activé.</string>
+    <string name="new_conversation_error_participant_without_device_named">%1$s ne peut pas encore recevoir de messages chiffrés : rien n’a été activé.</string>
     <string name="new_conversation_group_title">Nom du groupe (obligatoire)</string>
     <string name="new_conversation_group_toggle">Nouveau groupe</string>
     <string name="new_conversation_no_user_found">Aucun utilisateur trouvé</string>

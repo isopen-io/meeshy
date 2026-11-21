@@ -82,6 +82,11 @@
         <item quantity="many">حذف %1$d رسالة؟</item>
         <item quantity="other">حذف %1$d رسالة؟</item>
     </plurals>
+    <string name="chat_e2ee_peer_without_device_title">لا يمكن لـ %1$s تلقي الرسائل المشفّرة</string>
+    <string name="chat_e2ee_peer_without_device_title_anonymous">لا يمكن لمراسلك تلقي الرسائل المشفّرة</string>
+    <string name="chat_e2ee_peer_without_device_write_plain">الكتابة دون تشفير</string>
+    <string name="chat_e2ee_readable_direct_failed">تعذّر الفتح. أعد المحاولة.</string>
+    <string name="chat_e2ee_readable_direct_offline">غير متصل: أعد الاتصال لفتحها.</string>
     <string name="chat_effect_blurred">تمويه</string>
     <string name="chat_effect_duration_15s">15 ث</string>
     <string name="chat_effect_duration_1m">1 د</string>
@@ -391,6 +396,8 @@
     <string name="encryption_mode_hybrid_label">هجين</string>
     <string name="encryption_mode_server_description">مشفّر على خوادمنا ويمكنها قراءته: تعمل الترجمة والبحث.</string>
     <string name="encryption_mode_server_label">الخادم</string>
+    <string name="encryption_participant_without_device_anonymous">لا يمكن لأحد الأعضاء تلقي الرسائل المشفّرة بعد: لم يُفعَّل شيء.</string>
+    <string name="encryption_participant_without_device_named">لا يمكن لـ %1$s تلقي الرسائل المشفّرة بعد: لم يُفعَّل شيء.</string>
     <string name="encryption_summary_end_to_end">مشفّرة تمامًا بين الطرفين: المشاركون وحدهم يقرؤون</string>
     <string name="encryption_summary_hybrid">مشفّرة على خوادمنا، مع التحقق بين الأجهزة المتوافقة</string>
     <string name="encryption_summary_none">غير مشفّرة</string>

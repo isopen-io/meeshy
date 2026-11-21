@@ -18,8 +18,19 @@ import me.meeshy.core.e2ee.wire.E2eeServedIds
 import org.signal.libsignal.protocol.UntrustedIdentityException
 
 public sealed class E2eeSealException(message: String) : Exception(message) {
-    /** Le correspondant n'a aucun appareil enrôlé : il n'a pas de version de Meeshy qui chiffre. Rien ne part, rien en clair. */
+    /**
+     * Le correspondant n'a JAMAIS chiffré pour cet appareil : l'annuaire ne liste aucun appareil, et cet appareil n'a ni
+     * session ni identité épinglée pour lui. Seul cas où l'envoi se redirige seul vers le tête-à-tête lisible (#20181).
+     */
     public class RecipientHasNoDevice(public val userId: String) : E2eeSealException("recipient has no e2ee device")
+
+    /**
+     * Le correspondant a chiffré, mais aucun de ses appareils ne s'ouvre (#20181) : [listed] — des appareils listés sans
+     * session ouvrable (bundle absent) ; sinon, une liste vide alors que cet appareil a connu une session ou une identité
+     * pour lui. Un refus : rien ne part en clair sans le geste de l'utilisateur.
+     */
+    public class RecipientDevicesUnreachable(public val userId: String, public val listed: Boolean) :
+        E2eeSealException("recipient e2ee devices unreachable")
 
     /** L'annuaire a refusé la liste plus de fois que Sesame ne le justifie : la liste change sous nos pieds, ou le serveur ment. */
     public class DevicesMismatchUnresolved : E2eeSealException("devices mismatch unresolved")
@@ -70,8 +81,9 @@ public class E2eeMessageSealer(
 
     internal suspend fun seal(unpadded: ByteArray, peerUserId: String): E2eeSealedMessage {
         if (!E2eeServedIds.isAccount(peerUserId) || local.isMe(peerUserId)) throw E2eeSealException.InvalidPeer()
-        val peerTargets = targets(peerUserId)
-        if (peerTargets.isEmpty()) throw E2eeSealException.RecipientHasNoDevice(peerUserId)
+        val listed = listedDevices(peerUserId)
+        val peerTargets = withSessions(peerUserId, listed)
+        if (peerTargets.isEmpty()) throw unreachable(peerUserId, listed.isNotEmpty())
         val own = ownTargets()
         val recipients = peerTargets + own.approved
         val plaintext = E2eePadding.padded(unpadded, recipients.size)
@@ -94,11 +106,14 @@ public class E2eeMessageSealer(
 
     private class OwnTargets(val approved: List<Target>, val unapproved: List<Int>)
 
-    /** Les appareils actifs d'un utilisateur, chacun avec une session à jour. */
-    private suspend fun targets(userId: String): List<Target> {
-        val listed = directory.devices(userId).devices.filter { E2eeServedIds.isDevice(it.deviceId) }
-        return withSessions(userId, listed)
-    }
+    /** Les appareils actifs que l'annuaire liste pour un utilisateur. */
+    private suspend fun listedDevices(userId: String): List<E2eeDeviceListing> =
+        directory.devices(userId).devices.filter { E2eeServedIds.isDevice(it.deviceId) }
+
+    /** Jamais connu ⇒ « sans appareil » (redirection) ; connu, ou listé sans session ouvrable ⇒ injoignable (refus), #20181. */
+    private fun unreachable(peerUserId: String, listed: Boolean): E2eeSealException =
+        if (!listed && !cipher.hasKnown(peerUserId)) E2eeSealException.RecipientHasNoDevice(peerUserId)
+        else E2eeSealException.RecipientDevicesUnreachable(peerUserId, listed)
 
     /** Mes autres appareils : approuvés (ils reçoivent leur enveloppe) ou non (`unapprovedOwnDevices`, spec § 3.5). */
     private suspend fun ownTargets(): OwnTargets {

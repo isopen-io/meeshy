@@ -652,4 +652,42 @@ class ConversationEncryptionViewModelTest {
         assertThat(ChatUiState(conversationId = "c1", isGroup = false, directPeerUserId = "u2").isKnownDirect).isTrue()
         assertThat(ChatUiState(conversationId = "c1", isGroup = true, directPeerUserId = "u2").isKnownDirect).isFalse()
     }
+
+    private fun withoutDevice(vararg ids: String) =
+        NetworkResult.Failure(ApiError("x", "E2EE_PARTICIPANT_WITHOUT_DEVICE", 409, withoutDeviceUserIds = ids.toList()))
+
+    private suspend fun kotlinx.coroutines.test.TestScope.refusedEndToEnd(
+        refusal: NetworkResult.Failure,
+        peerUserId: String? = "u2",
+    ): ConversationEncryptionViewModel {
+        val provider = mockk<ConversationEncryptionProviding>()
+        coEvery { provider.status("c1") } returns ok("server")
+        coEvery { provider.enable("c1", ConversationEncryptionModeChoice.E2EE) } returns refusal
+        val vm = viewModel(provider)
+        vm.load("c1", isDirect = true, peerUserId = peerUserId, peerName = "Alice Martin")
+        advanceUntilIdle()
+        vm.select(ConversationEncryptionModeChoice.E2EE)
+        vm.switchMode()
+        vm.confirmEndToEnd()
+        advanceUntilIdle()
+        return vm
+    }
+
+    /** #20076 (#20073) — un membre sans appareil chiffré : rien n'est activé, et la phrase nomme le pair. */
+    @Test
+    fun `a refusal for a member without device says so, naming the peer`() = runTest {
+        val vm = refusedEndToEnd(withoutDevice("u2"))
+
+        assertThat(vm.state.value.notice).isEqualTo(ConversationEncryptionNotice.PARTICIPANT_WITHOUT_DEVICE)
+        assertThat(vm.state.value.withoutDeviceFirstName).isEqualTo("Alice")
+        assertThat(vm.state.value.view().regime).isEqualTo(ConversationEncryptionRegime.SERVER)
+    }
+
+    @Test
+    fun `a refusal naming another member keeps the sentence without a name`() = runTest {
+        val vm = refusedEndToEnd(withoutDevice("me"))
+
+        assertThat(vm.state.value.notice).isEqualTo(ConversationEncryptionNotice.PARTICIPANT_WITHOUT_DEVICE)
+        assertThat(vm.state.value.withoutDeviceFirstName).isEmpty()
+    }
 }
