@@ -3,48 +3,22 @@ import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import type { UnifiedAuthContext } from '../../../middleware/auth';
 import { ErrorCode } from '@meeshy/shared/types/errors';
 import { sendNotFound, sendUnauthorized } from '../../../utils/response';
-import { unsetOrNull } from '../../../utils/prisma-unset';
+import { PARTICIPATION_VIVANTE, participationEstVivante } from '@meeshy/shared/utils/participation-vivante';
 
 /**
- * Une participation VIVANTE : active ET non bannie — UNE définition pour
- * l'invité et pour l'inscrit, sur toutes les portes de lecture (REST et
- * socket) (#7389).
+ * LA LOI DE LA PARTICIPATION VIVANTE — ré-exportée, plus définie ici (#20111).
  *
- * `isActive: true` seul ne suffit pas. Un bannissement d'un membre ACTIF écrit
- * bien `isActive: false`, mais celui d'un membre déjà INACTIF (parti, ou qui a
- * supprimé la conversation pour lui) n'écrit que `bannedAt`
- * (`resolveBanWrite`, `services/conversations/conversationBanState.ts`) ; et
- * `POST /conversations/:id/restore-for-me` (`routes/user-deletions.ts`)
- * rallumait ensuite `isActive` sans lire `bannedAt` — fermé par #10436, qui
- * refuse la restauration d'un banni et porte la garde dans le `where` de
- * l'écriture. (Ce n'est PAS la restauration de compte de
- * `routes/me/delete-account.ts` : elle écrit `User.isActive`, jamais une
- * participation.) Les réintégrations (lien, invitation, ajout) passent par
- * `resolveConversationEntry`, qui refuse un banni ; le débannissement remet
- * `bannedAt` à `null` dans la même écriture. La garde de lecture reste
- * porteuse pour les lignes actives ET bannies déjà en base : elle ne vivait
- * que sur la branche INVITÉ, et l'inscrit concerné relisait le fil, la
- * recherche et les épinglés, et rejoignait la room à la connexion socket.
+ * Son unique définition, avec le doc-comment qui l'instruit, vit dans
+ * `@meeshy/shared/utils/participation-vivante` : `services/agent` lit
+ * `Participant` lui aussi et ne peut rien importer de la passerelle, si bien
+ * que ses trois sélecteurs de membres dormants vivaient sur `isActive` NU.
  *
- * `unsetOrNull` et non `bannedAt: null` : la colonne est ABSENTE du document de
- * tout participant jamais banni, et l'égalité à `null` fermerait la
- * conversation à toute la population (`utils/prisma-unset.ts`). Elle porte une
- * clé `OR` : un `where` qui a déjà le sien passe par `AND`.
+ * Le NOM ne change pas, et ce n'est pas un détail de confort : le cliquet des
+ * audiences reconnaît la loi à cette orthographe
+ * (`LAW_SPELLINGS`, `socketio/__tests__/conversation-audience-living-participation.ts`),
+ * et la renommer reclasserait son inventaire entier sans rien garder de plus.
  */
-export const PARTICIPATION_VIVANTE = {
-  isActive: true,
-  ...unsetOrNull('bannedAt')
-} as const;
-
-/**
- * `PARTICIPATION_VIVANTE` jugée sur une ligne DÉJÀ lue — pour une porte qui
- * doit distinguer une participation MORTE (désactivée ou bannie) d'une ligne
- * absente, et ne peut donc pas filtrer dans son `where` (#10449). Même règle :
- * active (`true`, pas seulement « non fausse ») et `bannedAt` nul ou absent.
- */
-export function participationEstVivante(row: { readonly isActive?: boolean | null; readonly bannedAt?: Date | null }): boolean {
-  return row.isActive === true && row.bannedAt == null;
-}
+export { PARTICIPATION_VIVANTE, participationEstVivante };
 
 /**
  * The two identities an auth context can name a `Participant` row with.

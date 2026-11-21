@@ -343,6 +343,47 @@ export function findUniqueIn<T extends MongoDocument>(rows: readonly T[]) {
   };
 }
 
+type GroupByArgs = {
+  readonly by: readonly string[];
+  readonly where?: MongoDocument;
+  readonly _count?: unknown;
+};
+
+const SUPPORTED_GROUP_BY_ARGS = new Set(['by', 'where', '_count']);
+
+/**
+ * `groupBy` sur une collection en mémoire — `where` évalué contre les documents
+ * (même sémantique que ci-dessus), puis un seau par combinaison des clés `by`.
+ *
+ * Ajouté par #20111, et pour la raison qui vaut de tout ce fichier : une MESURE
+ * porte la même loi de participation que les sélecteurs qu'elle garde, et un
+ * témoin qui compare la clause reçue à celle qu'il attend ne vérifie que sa
+ * propre copie. Seul `_count: true` est servi — la forme agrégée que ce dépôt
+ * emploie ; toute autre agrégation jette plutôt que de rendre un nombre
+ * inventé.
+ */
+export function groupByIn<T extends MongoDocument>(rows: readonly T[]) {
+  const calls: GroupByArgs[] = [];
+  const groupBy = (args: GroupByArgs): Promise<MongoDocument[]> => {
+    const unknown = Object.keys(args).filter((arg) => !SUPPORTED_GROUP_BY_ARGS.has(arg));
+    if (unknown.length > 0) return Promise.reject(new Error(`double Mongo: argument non supporté « ${unknown.join(', ')} »`));
+    if (args._count !== true) return Promise.reject(new Error('double Mongo: seul `_count: true` est servi par `groupByIn`'));
+    calls.push(args);
+    const buckets = new Map<string, MongoDocument>();
+    for (const row of rows.filter((candidate) => matchesMongoWhere(candidate, args.where))) {
+      const key = JSON.stringify(args.by.map((field) => row[field] ?? null));
+      const bucket = buckets.get(key);
+      if (bucket === undefined) {
+        buckets.set(key, { ...Object.fromEntries(args.by.map((field) => [field, row[field] ?? null])), _count: 1 });
+        continue;
+      }
+      bucket._count = (bucket._count as number) + 1;
+    }
+    return Promise.resolve([...buckets.values()]);
+  };
+  return { groupBy, calls };
+}
+
 /**
  * `findMany` sur une collection en mémoire : `where` évalué contre les
  * documents (sémantique ci-dessus), `select` projeté comme Prisma le projette,
