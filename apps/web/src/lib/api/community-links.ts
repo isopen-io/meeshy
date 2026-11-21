@@ -42,6 +42,8 @@ export type CommunityLink = {
   readonly role: CommunityRole;
   readonly memberCount: number | null;
   readonly createdAt: string | null;
+  /** `null` : la passerelle ne sert pas encore l'état (#20255) — aucune bascule n'est offerte, rien n'est inventé. */
+  readonly joinLinkPaused: boolean | null;
 };
 
 export type CommunityLinksSummary = { readonly communities: number; readonly publicCommunities: number; readonly members: number | null };
@@ -57,6 +59,7 @@ const WireCommunity = z.object({
   role: z.string(),
   memberCount: z.optional(z.nullable(z.number())),
   createdAt: optionalText,
+  joinLinkPaused: z.optional(z.nullable(z.boolean())),
 });
 
 const ROLES: readonly CommunityRole[] = ['admin', 'moderator'];
@@ -80,6 +83,7 @@ export function decodeCommunityLink(raw: unknown): CommunityLink | null {
     role,
     memberCount: typeof wire.memberCount === 'number' && Number.isFinite(wire.memberCount) && wire.memberCount >= 0 ? Math.floor(wire.memberCount) : null,
     createdAt: createdAt !== null && !Number.isNaN(Date.parse(createdAt)) ? createdAt : null,
+    joinLinkPaused: typeof wire.joinLinkPaused === 'boolean' ? wire.joinLinkPaused : null,
   };
 }
 
