@@ -150,7 +150,7 @@ private struct TalkieBannerTalkButton: View {
             .modifier(PhoneUnreachableLastingReader(userId: userId, lasting: $unreachableLasting))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(ProfileTalkieWording.holdA11y(name: name, delivery: delivery))
-            .accessibilityHint(ProfileTalkieWording.holdHint(delivery))
+            .accessibilityHint(ProfileTalkieWording.holdHint)
             .accessibilityAddTraits([.isButton, .updatesFrequently])
             .accessibilityIdentifier("talkie.incoming.talk")
     }

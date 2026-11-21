@@ -93,7 +93,7 @@ struct ConversationHeaderTalkieButton: View {
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(ProfileTalkieWording.holdA11y(name: peerName, delivery: delivery))
                     .accessibilityValue(look == .live ? liveValue : "")
-                    .accessibilityHint(ProfileTalkieWording.holdHint(delivery))
+                    .accessibilityHint(ProfileTalkieWording.holdHint)
                     .accessibilityAddTraits([.isButton, .updatesFrequently])
                     .accessibilityIdentifier("conversation.header.talkie")
             }

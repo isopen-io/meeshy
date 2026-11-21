@@ -125,7 +125,7 @@ struct ProfileTalkieRow: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(ProfileTalkieWording.holdA11y(name: displayName, delivery: delivery))
             .accessibilityValue(live ? spokenValue : "")
-            .accessibilityHint(ProfileTalkieWording.holdHint(delivery))
+            .accessibilityHint(ProfileTalkieWording.holdHint)
             .accessibilityAddTraits([.isButton, .updatesFrequently])
             .accessibilityIdentifier("talkie.send")
     }
@@ -281,13 +281,6 @@ enum ProfileTalkieWording {
     static func holdA11y(name: String, delivery: TalkieDelivery) -> String {
         guard delivery == .voiceMessage else { return holdA11y(name: name) }
         return String(format: String(localized: "talkie.send.leaveVoice.a11y", defaultValue: "Laisser un message vocal à %@", bundle: .main), name)
-    }
-
-    static func holdHint(_ delivery: TalkieDelivery) -> String {
-        guard delivery == .voiceMessage else { return holdHint }
-        return String(localized: "talkie.send.leaveVoice.hint",
-                      defaultValue: "Son téléphone est injoignable. Touche deux fois et maintiens, parle, puis relâche : ta voix part en message vocal.",
-                      bundle: .main)
     }
 
     /// Ce qu'un simple toucher rappelle : le geste, dans le mode où il est.

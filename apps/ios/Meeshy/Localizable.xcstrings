@@ -380300,53 +380300,6 @@
         }
       }
     },
-    "talkie.send.leaveVoice.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "هاتفه غير متاح. انقر مرتين مع الاستمرار، تحدّث ثم ارفع إصبعك: يُرسَل صوتك كرسالة صوتية."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Das Telefon ist nicht erreichbar. Doppeltippen und halten, sprechen, dann loslassen: Deine Stimme wird als Sprachnachricht gesendet."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Their phone can't be reached. Double-tap and hold, speak, then release: your voice is sent as a voice message."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Su teléfono no está disponible. Toca dos veces y mantén, habla y suelta: tu voz se envía como mensaje de voz."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Son téléphone est injoignable. Touche deux fois et maintiens, parle, puis relâche : ta voix part en message vocal."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il suo telefono non è raggiungibile. Tocca due volte e tieni premuto, parla, poi rilascia: la tua voce parte come messaggio vocale."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O telefone está inacessível. Toque duas vezes e segure, fale e solte: sua voz vai como mensagem de voz."
-          }
-        }
-      }
-    },
     "profile.where.stamp.justNow": {
       "extractionState": "manual",
       "localizations": {
