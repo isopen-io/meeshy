@@ -2204,3 +2204,37 @@ socket jusqu'au client.
 2. **#20121** : rendre l'élection ICE indépendante de l'ordre des entrées, sur iOS et Android.
 3. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
 4. #20043 : la dette d'horloge murale côté Android.
+
+## Cycle 65 — 2026-11-21
+
+- **Base** : `origin/dev` @ `ed391159a`. #20133 (#20122, cycle 64) est fusionnée.
+- **Branche** : `claude/determined-volta-0fahcl`.
+- **Objectif** : #20132. Sur Android, les quatre compteurs d'octets d'un appel se comptent en `Long`, au-delà de 2 Go, avec la borne 2^53 − 1 d'iOS.
+- **Livré** (Android : `core/model` et `feature/calls`) :
+  - `CallStats` : `bandwidth`, `bytesReceived`, `inboundAudioBytes` et `inboundVideoBytes` sont des `Long`. Les compteurs de paquets et `availableOutgoingBitrateBps` restent des `Int` qui saturent (#20122).
+  - `CallStatValue` reçoit `MAX_SAFE_BYTES = 2^53 − 1`, `bytes(Double)`, `bytes(Long)`, `sumBytes` et `storedBytes`.
+    - Comme sur iOS, une lecture au-delà de la borne vaut 0 : c'est une borne de vraisemblance, environ neuf siècles à 2,5 Mb/s.
+    - La somme de plusieurs flux sature à la borne.
+  - `toPersistedStats` ne ramène plus les octets à un `Int`, et `WebRtcCallQualitySampler` n'a plus de conversions.
+  - **Rétrocompatibilité sur l'appareil** : `CallQualitySummaryStore` écrit sous de nouvelles clés `Long`, `bytes_sent_long` et `bytes_received_long`.
+    - Un résumé écrit avant la mise à jour se relit par les anciennes clés `Int`, `bandwidth` et `bytes_received` (`storedBytes`).
+    - Garder le même nom de clé en `Long` aurait levé une `ClassCastException`.
+    - En cas de retour arrière, le dernier résumé affiche 0 octet, sans crash.
+  - Le payload vers la passerelle ne change pas : `CallQuality.kt` portait déjà des `Long`.
+- **Tests** : `CallStatValueTest` passe à 21 témoins ; on en ajoute dans `CallPersistedQualitySummaryTest`, et dans `CallQualitySummaryStoreTest`, que seule la CI exécute (aller-retour à 3e9 et 5e9, relecture des anciennes clés).
+  - Rouge : 22 erreurs de compilation, l'API étant absente sur dev. Les champs `Int` comparés à des `Long` échouent aussi.
+  - Vert local : `jvm-check -PjvmCheckModelOnly --rerun-tasks` donne 19 267 tests, 0 échec. La QA l'a rejoué.
+  - CI : `android.yml` run 44872368258 (`workflow_dispatch`, sha `32b4c6b64`).
+- **QA** (`auditeur-adversarial`) : favorable avec réserves.
+  - R1 : la CI doit être verte avant la fusion.
+  - R2 (moyenne, hors diff) : `CallSession.bytesSent` et `bytesReceived` sont des `Int?` dans Prisma, et `persistCallStats` avale l'erreur. Au-delà de 2^31, l'écriture risque d'échouer sans bruit, et la `networkQuality` du même `updateMany` avec elle. Versée dans **#20152**.
+  - R3 (faible) : après un retour arrière, le dernier résumé affiche 0 octet.
+- **Limites** : rien n'a été vérifié sur appareil.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée : lire le run 44872368258, fusionner `dev` dans la branche, puis fusionner la PR.
+1. **#20152** : la passerelle enregistre les octets au-delà de 2^31. Écrire d'abord le témoin contre une vraie base MongoDB ; changer le stockage seulement s'il rougit, de façon rétrocompatible.
+2. **#20121** : rendre l'élection ICE indépendante de l'ordre des entrées, sur iOS et Android.
+3. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
+4. #20043 : la dette d'horloge murale côté Android.
