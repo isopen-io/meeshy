@@ -2333,3 +2333,40 @@ socket jusqu'au client.
 1. **#20221** : rendre indépendants de l'ordre le codec affiché et la limitation de qualité, et dédoublonner les ids de la même façon (R1).
 2. **#20185** : recette sur le staging, si un accès existe.
 3. #11932, #12236, #16933, #20043.
+
+## Cycle 70 — 2026-11-21
+
+- **Base** : `origin/dev` @ `11a5aa46b`, puis `25454555e`, fusionné dans la branche.
+- **Branche** : `claude/determined-volta-6tq2ks`.
+- **Lot du cycle 69 (#20258, #20221)** : la PR n'est pas fusionnée.
+  - Le run `ios.yml` 44931575416 attend un runner macOS depuis 18:39. Ses gardes iOS sont vertes, mais le Swift n'est pas compilé.
+  - `dev` a été fusionné dans sa branche (`fec5348a3`). Depuis la PR, aucun Swift n'a changé sur dev, donc le run sur `2dc59c47` reste la preuve valable.
+- **Objectif** : #20256. Le web lit `getStats` selon les règles d'iOS et d'Android, quel que soit l'ordre du relevé.
+- **Livré** (web, `apps/web/src/lib/calls/`) :
+  - `call-stats-election.ts` : un nouveau module pur, consommé par `readStats` et `readMediaQuality`. Il porte trois règles.
+    - **Codec affiché = codec REÇU.** On considère les `inbound-rtp` qui ont un `codecId`, l'audio d'abord (un `kind` absent compte comme audio), puis le plus petit id, et on garde le premier dont le codec se résout. Avant, le web prenait le codec ÉMIS, vidéo d'abord. Le champ `codec` de `call:analytics` a désormais le même sens sur les trois plateformes. Sa forme ne change pas (sous-type MIME, coupé à 50 caractères).
+    - **Limitation** : la cause la plus contraignante (bandwidth > cpu > other > le reste). À égalité, le plus petit id. Les rangs sont dans une `Map`, si bien qu'une clé du prototype vaut 0 (QA R1).
+    - **Paire ICE** : la règle de #20121 (le transport, sinon la paire nominée de plus forte priorité), et la mesure manquante lue sur la paire suivante. Le web était le dernier miroir de cette règle.
+- **Tests** : `call-stats-order.test.ts`, 18 cas, chacun joué dans toutes les rotations du relevé et de son inverse.
+  - Rouge : 15 échecs sur 17 sur le code de dev ; 1 échec sur 1 pour R1.
+  - Réécrits : 3 tests figeaient le codec émis (`call-quality`, `call-quality-loop`, `call-analytics-hostile-stats`).
+  - Vert, sur l'arbre fusionné : `bun test src/lib/calls`, 2467 tests, 0 échec. `tsc` donne 0, le build donne 0.
+  - Suite web complète : 34 979 réussis et 1 échec. Ce dernier, `act-leak-guard.test.ts`, échoue à l'identique sur `origin/dev` : c'est un problème d'environnement local (bun 1.4.4), pas un effet du lot.
+  - Mutations faites par la QA : M1 à M7 échouent toutes, de 1 à 5 échecs chacune.
+- **QA** (indépendante) : favorable avec réserves.
+  - R1 (clés du prototype) : corrigée.
+  - R2 (`dev` absent de la branche) : corrigée.
+  - Pour information :
+    - `subtype()` ne découpe pas le mime comme le mobile ;
+    - le web ne lit pas `mediaType` en repli de `kind` ;
+    - un appel vidéo web rapporte désormais `opus`, le codec audio passant d'abord, comme sur mobile.
+- **Découvert** : **#20273**. Le web dit « direct » quand c'est le candidat DISTANT qui est relay.
+- **Limites** : la règle n'a pas été vérifiée dans un vrai navigateur pendant un appel. La parité du codec et de la limitation dépend de la fusion de #20258.
+
+### Cycle suivant : par où reprendre
+
+0. **#20258** : si le run `ios.yml` 44931575416 est vert, fusionner `dev` dans la branche puis fusionner la PR. S'il est encore en file, le relancer, ou le laisser courir.
+1. Si la PR de ce cycle (#20256) n'est pas fusionnée : fusionner `dev`, rejouer `bun test src/lib/calls`, puis fusionner.
+2. **#20257** : les analytics iOS ne comptent que les quatre causes connues. Le lot est petit, en Swift, et se prouve par `ios.yml`.
+3. **#20273** : la route relayée côté web.
+4. #20185 (recette staging), #11932, #12236, #16933, #20043.
