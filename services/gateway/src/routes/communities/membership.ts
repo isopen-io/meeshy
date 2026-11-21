@@ -22,6 +22,7 @@ import {
   sendBadRequest
 } from '../../utils/response.js';
 import { CommunityRole } from './types';
+import { communityTextAsWritten } from './serialization';
 import { communityGuardsItsSalons, exitCommunitySalons } from '../../services/conversations/communitySalonExit';
 import { isAddableUser } from './addable-user';
 import { scheduleCommunityMemberBroadcastFrom } from '../../services/community-member-broadcast';
@@ -120,7 +121,7 @@ export async function registerMembershipRoutes(
       });
 
       const data = memberships.map(m => ({
-        ...m.community,
+        ...communityTextAsWritten(m.community),
         role: m.role
       }));
 

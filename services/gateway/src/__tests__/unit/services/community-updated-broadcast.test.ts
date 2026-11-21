@@ -114,7 +114,8 @@ describe('broadcastCommunityUpdated', () => {
     expect(sent[0]?.payload).toEqual({
       communityId: COMMUNITY,
       identifier: 'mshy_club',
-      name: 'Club &amp; amis',
+      // #20063 — une ligne nommée avant #16786 part telle qu'écrite.
+      name: 'Club & amis',
       description: 'Le club',
       avatar: 'community/avatar.webp',
       banner: null,

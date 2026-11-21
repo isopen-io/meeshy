@@ -2,6 +2,7 @@
  * Mise en forme des communautés pour la réponse HTTP.
  */
 import { userMinimalSchema } from '@meeshy/shared/types/api-schemas';
+import { unescapeSerializedText } from '../../utils/serialized-text';
 
 type CommunityWithCount = {
   _count: { members: number; Conversation: number };
@@ -29,9 +30,26 @@ type CommunityWithCount = {
 export function flattenCommunityCounts(community: CommunityWithCount) {
   const { _count, members: _members, ...rest } = community;
   return {
-    ...rest,
+    ...communityTextAsWritten(rest),
     memberCount: _count.members,
     conversationCount: _count.Conversation
+  };
+}
+
+/**
+ * Le nom et la description d'une communauté TELS QU'ÉCRITS (#20063). Avant #16786, une entrée qui portait un `<`
+ * était stockée sérialisée par DOMPurify (« Tom &amp; Jerry &lt;3 ») ; les écritures depuis sont telles
+ * qu'écrites, mais les lignes anciennes gardent leurs entités. Les servir décodées, à chaque porte qu'un client
+ * lit, répare les trois clients — applications déjà installées comprises — sans migration de données. Une seule
+ * passe (`unescapeSerializedText`) : « &amp;lt; » se lit « &lt; », jamais « < ». Un champ absent ou non textuel
+ * sort inchangé.
+ */
+export function communityTextAsWritten<T extends object>(community: T): T {
+  const text = community as { readonly name?: unknown; readonly description?: unknown };
+  return {
+    ...community,
+    ...(typeof text.name === 'string' ? { name: unescapeSerializedText(text.name) } : {}),
+    ...(typeof text.description === 'string' ? { description: unescapeSerializedText(text.description) } : {}),
   };
 }
 

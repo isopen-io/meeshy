@@ -147,6 +147,21 @@ describe('GET /users/me/dashboard-stats (authenticated)', () => {
   });
 });
 
+describe('GET /users/me/dashboard-stats (communauté nommée avant #16786)', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    app = await buildApp('authenticated', {
+      community: { findMany: jest.fn().mockResolvedValue([{ ...mockCommunity, name: 'Tom &amp; Jerry &lt;3', description: '3 &gt; 2' }]) },
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('#20063 — sert le nom et la description tels qu\u2019écrits', async () => {
+    const res = await app.inject({ method: 'GET', url: '/users/me/dashboard-stats' });
+    expect(res.json().data.recentCommunities[0]).toMatchObject({ name: 'Tom & Jerry <3', description: '3 > 2' });
+  });
+});
+
 describe('GET /users/me/dashboard-stats (direct conversation without title)', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
