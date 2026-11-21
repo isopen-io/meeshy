@@ -37,4 +37,10 @@ describe('ce qu’un tap sur une personne produit', () => {
     expect(outcome).toEqual({ kind: 'failure', message: CREATION_OFFLINE });
     expect(CREATION_OFFLINE).not.toMatch(/s’ouvrira|s'ouvrira/);
   });
+
+  test('409 E2EE_PARTICIPANT_WITHOUT_DEVICE (#20073) : rien n’est créé, la cause se dit — elle ne nomme personne', () => {
+    expect(
+      creationOutcomeOf({ result: { ok: false, status: 409, error: 'x', code: 'E2EE_PARTICIPANT_WITHOUT_DEVICE' }, online: true }),
+    ).toEqual({ kind: 'participant-without-device' });
+  });
 });

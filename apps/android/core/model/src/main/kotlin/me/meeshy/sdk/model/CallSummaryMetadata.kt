@@ -20,7 +20,7 @@ data class CallSummaryMetadata(
     val outcome: Outcome,
     val durationSeconds: Int,
     /** Octets échangés, ou `null` quand rien n'a été mesuré (appel manqué ou refusé). */
-    val bytesTotal: Int?,
+    val bytesTotal: Long?,
     /** `true` quand [bytesTotal] est ESTIMÉ à partir de la durée plutôt que mesuré. */
     val bytesEstimated: Boolean,
     val networkQuality: NetworkQuality?,
@@ -89,13 +89,22 @@ data class CallSummaryMetadata(
                 callType = callType,
                 outcome = outcome,
                 durationSeconds = metadata.number("durationSeconds")?.toInt() ?: 0,
-                bytesTotal = metadata.number("bytesTotal")?.toInt(),
+                bytesTotal = bytesTotal(metadata),
                 bytesEstimated = metadata.flag("bytesEstimated") ?: false,
                 networkQuality = NetworkQuality.entries.firstOrNull { it.wireName == metadata.text("networkQuality") },
                 isLive = live,
                 endedByInitiator = metadata.flag("endedByInitiator"),
                 participants = participants(metadata),
             )
+        }
+
+        /** Plus grand entier exact d'un nombre JSON (`Number.MAX_SAFE_INTEGER`) : au-delà, la valeur sature. */
+        private const val MAX_JSON_SAFE_BYTES = 9_007_199_254_740_991L
+
+        /** Une valeur négative ou non finie vaut absence : aucune donnée consommée ne s'en déduit. */
+        private fun bytesTotal(metadata: JsonObject?): Long? {
+            val served = metadata.number("bytesTotal")?.takeIf { it.isFinite() && it >= 0 } ?: return null
+            return if (served >= MAX_JSON_SAFE_BYTES) MAX_JSON_SAFE_BYTES else served.toLong()
         }
 
         /** Décodage TOLÉRANT (iOS `try?`) : une clé malformée vaut absence, jamais un échec de décodage de la carte. */
@@ -121,7 +130,7 @@ data class CallSummaryMetadata(
         }
 
         /** Unités décimales (1 KB = 1000 o) — miroir de `formatCallDataSize`. */
-        fun formatDataSize(bytes: Int): String {
+        fun formatDataSize(bytes: Long): String {
             if (bytes <= 0) return "0 KB"
             val kb = bytes / 1000.0
             if (kb < 1) return "1 KB"

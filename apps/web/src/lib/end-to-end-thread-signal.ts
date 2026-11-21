@@ -12,7 +12,7 @@ import { sharedTranslationServerReadsMessage } from '@meeshy/shared/utils/shared
 
 /** Ce que le signal lit d'un message — tout `unknown` : un `Message` servi comme une ligne brute du cache. */
 type SignalSource = {
-  readonly [K in 'messageType' | 'messageSource' | 'metadata' | 'systemEvent' | 'isEncrypted' | 'encryptionMode' | 'encryptionMetadata' | 'deletedAt' | 'createdAt']?: unknown;
+  readonly [K in 'messageType' | 'messageSource' | 'metadata' | 'systemEvent' | 'isEncrypted' | 'encryptionMode' | 'encryptionMetadata' | 'deletedAt' | 'createdAt' | 'senderId']?: unknown;
 };
 
 /** Le fil appartient-il à un tête-à-tête ? Inconnu se lit « groupe » : retenir sans apprendre. */
@@ -110,4 +110,15 @@ export function endToEndShownSince(messages: readonly SignalSource[], options: {
     .map((message) => instantOf(message.createdAt))
     .filter((at): at is number => at !== null);
   return instants.length === 0 ? null : Math.min(...instants);
+}
+
+/**
+ * Le PAIR a-t-il écrit chiffré de bout en bout dans ce fil ? (#20181, constat A
+ * de l'audit du lot web) — alors il a eu un appareil chiffré, quoi que serve
+ * ensuite l'annuaire : la mémoire « déjà vu avec un appareil » l'apprend du fil
+ * même quand le stockage du navigateur a été vidé. Un message système, ou le
+ * mien, ne dit rien du pair.
+ */
+export function peerWroteEndToEnd(messages: readonly SignalSource[], peerId: string): boolean {
+  return peerId !== '' && messages.some((message) => message.senderId === peerId && !isSystem(message) && carriesEndToEnd(message));
 }

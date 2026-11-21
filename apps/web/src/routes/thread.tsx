@@ -300,7 +300,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    * (`readerLocale`), qui décrit qui LIT, pas qui ÉCRIT.
    */
   const { pending, deliveryOf, startedAtOf, reasonOf, permanentOf, send, retry, discard } = useSend({
-    conversationId,
+    conversationId, conversation,
     viewerId: viewer.id ?? '',
     ...(selfSender === undefined ? {} : { sender: selfSender }),
     announce: announcer.announce,

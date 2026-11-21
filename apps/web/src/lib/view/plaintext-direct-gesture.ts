@@ -4,6 +4,17 @@ import type { Conversation } from '@/lib/api/types';
 import { peerOf } from './conversation';
 import { openPlaintextDirect, type PlaintextDirectGesture } from './plaintext-direct';
 
+/** Le pair inscrit d'un tête-à-tête et le nom qui l'adresse — `undefined` hors direct ou sans compte (#20075). */
+export type DirectPeer = { readonly id: string; readonly name: string };
+
+export function directPeerOf(conversation: Conversation, viewerId: string, fallbackName = ''): DirectPeer | undefined {
+  const peer = peerOf(conversation, viewerId);
+  const id = peer?.userId ?? undefined;
+  if (peer === undefined || typeof id !== 'string' || id === '') return undefined;
+  const name = [peer.displayName, peer.user?.displayName, peer.user?.username].find((candidate) => typeof candidate === 'string' && candidate.trim() !== '');
+  return { id, name: name ?? fallbackName };
+}
+
 /**
  * **LE GESTE « OUVRIR UNE CONVERSATION NON CHIFFRÉE AVEC <NOM> », CÂBLÉ**
  * (#12966) — pour la fiche Chiffrement d'un tête-à-tête : le pair est l'autre
@@ -20,15 +31,14 @@ export function plaintextDirectGesture(params: {
   readonly online: () => boolean;
   readonly go: (conversationId: string) => void;
 }): PlaintextDirectGesture | undefined {
-  const peer = peerOf(params.conversation, params.viewerId);
-  const peerId = peer?.userId ?? undefined;
-  if (peer === undefined || typeof peerId !== 'string' || peerId === '') return undefined;
+  const peer = directPeerOf(params.conversation, params.viewerId, params.fallbackName);
+  if (peer === undefined) return undefined;
   return {
-    peerName: [peer.displayName, peer.user?.displayName, peer.user?.username].find((name) => typeof name === 'string' && name.trim() !== '') ?? params.fallbackName,
+    peerName: peer.name,
     open: () =>
       openPlaintextDirect(
         { online: params.online, open: (id) => createDirectConversation(params.deps, id, { plaintext: true }), go: params.go },
-        { peerId, fromConversationId: params.conversation.id },
+        { peerId: peer.id, fromConversationId: params.conversation.id },
       ),
   };
 }

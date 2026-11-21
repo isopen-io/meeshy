@@ -8,6 +8,8 @@ import { loadConversationEncryptionCatalog } from '@/lib/i18n-conversation-encry
 import type { LocalMessage } from '@/lib/send/local-message';
 import type { PlaintextDirectGesture, PlaintextDirectOutcome } from '@/lib/view/plaintext-direct';
 import { outboxStore } from '@/lib/send/outbox-store';
+import { createPeerDeviceReachStore } from '@/lib/e2ee/peer-device-reach';
+import { createReadableRedirectNotices } from '@/lib/view/readable-redirect';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -264,5 +266,176 @@ describe('l’état final d’un tête-à-tête chiffré sur le web : lisible, s
 
     const minor = await mount(<Probe conversation={conversation('c-minor', { type: 'direct', viewerWriteRestriction: 'minor-global' })} plaintextDirect={value} />);
     expect(action(minor)).toBeNull();
+  });
+});
+
+describe('un tête-à-tête chiffré dont le pair n’a aucun appareil chiffré (#20075, jumelle de #20074)', () => {
+  const PARTICIPANTS = [
+    { id: 'p-moi', userId: 'u-moi', displayName: 'Moi' },
+    { id: 'p-ana', userId: 'u-ana', displayName: 'Ana Diallo' },
+  ];
+  const sealedDirect = (id: string) => conversation(id, { type: 'direct', encryptionMode: 'e2ee', participants: PARTICIPANTS });
+  const opener = () => {
+    const calls: string[] = [];
+    const value: PlaintextDirectGesture = {
+      peerName: 'Ana Diallo',
+      open: async () => {
+        calls.push('open');
+        return 'opened';
+      },
+    };
+    return { calls, value };
+  };
+  const counter = (devices: number | null) => {
+    const asked: string[] = [];
+    return { asked, count: async (userId: string) => (asked.push(userId), devices) };
+  };
+  const banner = (host: Element) => host.querySelector('[data-peer-without-device]');
+
+  function Lock({ served, store, count, plaintextDirect, notices, messages }: {
+    readonly served: Conversation;
+    readonly messages?: readonly Message[];
+    readonly store: ReturnType<typeof createPeerDeviceReachStore>;
+    readonly count: (userId: string) => Promise<number | null>;
+    readonly plaintextDirect?: PlaintextDirectGesture;
+    readonly notices?: ReturnType<typeof createReadableRedirectNotices>;
+  }) {
+    return (
+      <ThreadWriteLock
+        conversationId={served.id}
+        conversation={served}
+        messages={messages}
+        viewerId="u-moi"
+        title="Ana Diallo"
+        plaintextDirect={plaintextDirect}
+        peerDevices={{ store, count }}
+        {...(notices === undefined ? {} : { notices })}
+      >
+        <textarea data-probe-field />
+      </ThreadWriteLock>
+    );
+  }
+
+  test('le pair est su sans appareil : le bandeau le dit au-dessus du composeur, qui reste', async () => {
+    const store = createPeerDeviceReachStore(null);
+    store.getState().confirmWithoutDevice('u-ana');
+    const { calls, value } = opener();
+    const host = await mount(<Lock served={sealedDirect('c-pwd-known')} store={store} count={counter(0).count} plaintextDirect={value} />);
+    await act(async () => {
+      await import('./sealed-direct-chunk');
+    });
+
+    expect(host.querySelector('[data-probe-field]')).not.toBeNull();
+    expect(host.querySelector('[data-write-restriction]')).toBeNull();
+    expect(banner(host)?.querySelector('[data-peer-without-device-title]')?.textContent).toBe('Ana ne peut pas recevoir de messages chiffrés');
+    const write = host.querySelector<HTMLButtonElement>('[data-peer-without-device-write-plain]');
+    expect(write?.textContent).toBe('Écrire sans chiffrement');
+    await act(async () => {
+      write?.click();
+    });
+    expect(calls).toEqual(['open']);
+  });
+
+  test('à l’ouverture, la liste des appareils du pair est relue ; vide, le composeur revient avec le bandeau', async () => {
+    const store = createPeerDeviceReachStore(null);
+    const { asked, count } = counter(0);
+    const host = await mount(<Lock served={sealedDirect('c-pwd-learn')} store={store} count={count} plaintextDirect={opener().value} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(asked).toEqual(['u-ana']);
+    expect(banner(host)).not.toBeNull();
+    expect(host.querySelector('[data-probe-field]')).not.toBeNull();
+  });
+
+  test('un pair qui a un appareil chiffré, ou une lecture qui échoue : le bandeau d’avant, aucun composeur', async () => {
+    for (const devices of [1, null]) {
+      const store = createPeerDeviceReachStore(null);
+      const host = await mount(<Lock served={sealedDirect(`c-pwd-${String(devices)}`)} store={store} count={counter(devices).count} plaintextDirect={opener().value} />);
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(banner(host)).toBeNull();
+      expect(host.querySelector('[data-probe-field]')).toBeNull();
+      expect(host.querySelector('[data-write-restriction]')).not.toBeNull();
+      unmountAll();
+    }
+  });
+
+  test('un appareil déjà connu pour ce pair, puis une liste vide (#20181) : le bandeau et son geste, sans composeur', async () => {
+    const store = createPeerDeviceReachStore(null);
+    store.getState().noteDevice('u-ana');
+    const { calls, value } = opener();
+    const host = await mount(<Lock served={sealedDirect('c-pwd-seen')} store={store} count={counter(0).count} plaintextDirect={value} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(banner(host)?.querySelector('[data-peer-without-device-title]')?.textContent).toBe('Ana ne peut pas recevoir de messages chiffrés');
+    expect(host.querySelector('[data-probe-field]')).toBeNull();
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-peer-without-device-write-plain]')?.click();
+    });
+    expect(calls).toEqual(['open']);
+  });
+
+  test('un groupe chiffré : jamais ce bandeau, ni de lecture d’appareils', async () => {
+    const store = createPeerDeviceReachStore(null);
+    store.getState().confirmWithoutDevice('u-ana');
+    const { asked, count } = counter(0);
+    const group = conversation('c-pwd-group', { type: 'group', encryptionMode: 'e2ee', participants: PARTICIPANTS });
+    const host = await mount(<Lock served={group} store={store} count={count} />);
+    expect(banner(host)).toBeNull();
+    expect(host.querySelector('[data-probe-field]')).toBeNull();
+    expect(asked).toEqual([]);
+  });
+
+  test('une conversation lisible ne lit aucun appareil', async () => {
+    const { asked, count } = counter(0);
+    await mount(<Lock served={conversation('c-pwd-plain', { type: 'direct', encryptionMode: 'server', participants: PARTICIPANTS })} store={createPeerDeviceReachStore(null)} count={count} />);
+    expect(asked).toEqual([]);
+  });
+
+  test('la conversation d’arrivée d’un envoi redirigé dit pourquoi, au-dessus de son composeur', async () => {
+    const notices = createReadableRedirectNotices();
+    notices.getState().post({ conversationId: 'c-readable', peerName: 'Ana Diallo', quoteDropped: false });
+    const readable = conversation('c-readable', { type: 'direct', encryptionMode: 'server', participants: PARTICIPANTS });
+    const host = await mount(<Lock served={readable} store={createPeerDeviceReachStore(null)} count={counter(0).count} notices={notices} />);
+    expect(host.querySelector('[data-readable-redirect-notice]')?.textContent).toBe('Ana ne reçoit pas le chiffré : message parti dans votre conversation en clair.');
+    expect(host.querySelector('[data-probe-field]')).not.toBeNull();
+    unmountAll();
+
+    const other = await mount(<Lock served={conversation('c-other', { type: 'direct', encryptionMode: 'server' })} store={createPeerDeviceReachStore(null)} count={counter(0).count} notices={notices} />);
+    expect(other.querySelector('[data-readable-redirect-notice]')).toBeNull();
+  });
+
+  test('le message redirigé répondait à une citation : l’avis dit qu’elle n’a pas suivi (#20197)', async () => {
+    const notices = createReadableRedirectNotices();
+    notices.getState().post({ conversationId: 'c-readable-quote', peerName: 'Ana Diallo', quoteDropped: true });
+    const readable = conversation('c-readable-quote', { type: 'direct', encryptionMode: 'server', participants: PARTICIPANTS });
+    const host = await mount(<Lock served={readable} store={createPeerDeviceReachStore(null)} count={counter(0).count} notices={notices} />);
+    expect(host.querySelector('[data-readable-redirect-quote]')?.textContent).toBe('La citation n’a pas suivi : elle reste dans la conversation chiffrée.');
+  });
+
+  const sealedFrom = (senderId: string) => ({ id: `m-${senderId}`, senderId, messageType: 'text', content: '', encryptionMode: 'e2ee', createdAt: '2026-11-21T09:00:00.000Z' }) as unknown as Message;
+
+  test('le pair a écrit chiffré dans ce fil (#20181, constat A) : un appareil connu, même mémoire vide — le bandeau et son geste, sans composeur', async () => {
+    const store = createPeerDeviceReachStore(null);
+    const host = await mount(<Lock served={sealedDirect('c-pwd-wrote')} store={store} count={counter(0).count} plaintextDirect={opener().value} messages={[sealedFrom('u-ana')]} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(store.getState().seenWithDevice['u-ana']).toBe(true);
+    expect(banner(host)).not.toBeNull();
+    expect(host.querySelector('[data-probe-field]')).toBeNull();
+  });
+
+  test('seul MON message chiffré dans le fil : rien n’est appris du pair, la redirection automatique reste', async () => {
+    const store = createPeerDeviceReachStore(null);
+    const host = await mount(<Lock served={sealedDirect('c-pwd-mine')} store={store} count={counter(0).count} plaintextDirect={opener().value} messages={[sealedFrom('u-moi')]} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(store.getState().seenWithDevice['u-ana']).toBeUndefined();
+    expect(host.querySelector('[data-probe-field]')).not.toBeNull();
   });
 });
