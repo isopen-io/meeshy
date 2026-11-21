@@ -37,6 +37,7 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { validatePagination } from '../../utils/pagination';
+import { AT_REST_MESSAGE_SELECT, revealAtRestRowsForWire, type AtRestKeyring } from '../../services/messaging/serverAtRest';
 import { publicMediaUrlFromEnv } from '../../services/attachments/publicMediaUrl';
 import { NOT_DELETED } from '../../services/posts/softDelete';
 import { exportPackData } from '../../services/packs/PackPrivacy';
@@ -298,6 +299,77 @@ export async function exportVoiceProfile(prisma: PrismaClient, userId: string) {
   return profile.referenceAudioUrl
     ? { ...profile, referenceAudioUrl: publicMediaUrlFromEnv(profile.referenceAudioUrl) }
     : profile;
+}
+
+/** Le plafond de la section `messages` — hérité de `me/export.ts`, qui le portait. */
+export const MESSAGES_LIMIT = 10000;
+
+/**
+ * Les messages ENVOYÉS par le compte (RGPD art. 15(3) et 20(1)) — **ouverts**
+ * quand la conversation les scelle au repos (#20163).
+ *
+ * La section sélectionnait `content` et rien de l'enveloppe, quand
+ * `MessageProcessor` écrit `content: ''` dès qu'un message part dans une
+ * conversation `server` ou `hybrid`, le texte vivant dans `encryptedContent`.
+ * L'archive rendait donc une ligne par message avec un texte VIDE, et un
+ * `messagesCount` JUSTE : elle ne se présentait pas comme tronquée mais comme
+ * « vous n'avez rien écrit ». C'est « la liste vide est plus dangereuse que la
+ * réponse vide » appliqué à une obligation légale, comme #19909 une section
+ * plus bas.
+ *
+ * Rien de neuf n'est écrit ici : `AT_REST_MESSAGE_SELECT` et
+ * `revealAtRestRowsForWire` sont la loi que QUATORZE lecteurs de la passerelle
+ * appliquent déjà (fil, threads, liste, épinglés, sync, liens, tableau de bord,
+ * socket, édition). L'export était le seul à ne pas ouvrir le sceau — et le
+ * seul dont la sortie est opposable au titre d'un droit.
+ *
+ * ─── LA VARIANTE `…ForWire` N'EST PAS UN DÉTAIL ─────────────────────────────
+ *
+ * Le schéma de réponse déclare cette section
+ * `items: { type: 'object', additionalProperties: true }` — OUVERT : tout ce que
+ * la ligne porte SORT. Élargir le `select` sans déporter le chiffré publierait
+ * `encryptedContent` et `encryptionMetadata` dans l'archive. `…ForWire` retire
+ * les deux clés ; `isEncrypted` et `encryptionMode` RESTENT, et c'est voulu —
+ * ils DISENT le régime, là où le silence était la moitié du défaut (art. 12(1)).
+ *
+ * ─── LES DEUX CAS QUI NE S'OUVRENT PAS, TRAITÉS EXPLICITEMENT ───────────────
+ *
+ * Un sceau que le coffre n'ouvre pas ressort `isEncrypted: true` et
+ * `content: ''` (`servedSealed`) : l'archive DIT qu'elle n'a pas pu l'ouvrir, au
+ * lieu de laisser croire à un message vide. Une conversation chiffrée de BOUT
+ * EN BOUT ressort telle quelle, le trousseau n'étant jamais sollicité : il n'y a
+ * rien à ouvrir côté serveur, et la clé n'y est pas. Ce que l'archive doit alors
+ * DIRE à l'utilisateur relève du texte d'accompagnement, qui n'existe pas encore
+ * (#20138 porte le même besoin pour les médias).
+ *
+ * `deletedAt: null` est juste ici, contrairement à `Post` et `PostComment`
+ * (#19909) : `LIVE_MESSAGE_MARK` est la discipline d'écriture que tous les
+ * créateurs de `Message` répandent, donc la clé est PRÉSENTE.
+ */
+export async function exportMessages(
+  prisma: PrismaClient,
+  participantIds: readonly string[],
+  keyring: AtRestKeyring
+) {
+  const rows = await prisma.message.findMany({
+    where: {
+      senderId: { in: [...participantIds] },
+      deletedAt: null,
+    },
+    select: {
+      id: true,
+      content: true,
+      originalLanguage: true,
+      messageType: true,
+      messageSource: true,
+      createdAt: true,
+      editedAt: true,
+      ...AT_REST_MESSAGE_SELECT,
+    },
+    orderBy: { createdAt: 'desc' },
+    take: MESSAGES_LIMIT,
+  });
+  return revealAtRestRowsForWire(rows, keyring);
 }
 
 /**
