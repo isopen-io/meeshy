@@ -25,13 +25,18 @@ const PARTICIPANT = '507f1f77bcf86cd799439011';
 const USER = '507f1f77bcf86cd799439022';
 const OTHER_USER = '507f1f77bcf86cd799439033';
 
+/**
+ * Les littéraux ne portent QUE `userId`, et c'est le contrat : la fonction ne
+ * demande rien d'autre, et lui passer un `id` ne compilerait pas sous
+ * `tsconfig.test.json` (`TS2353`) — le seul typecheck qui atteigne les tests.
+ */
 describe('uploaderIdentityOf', () => {
   it("rend le `userId` d'un inscrit", () => {
-    expect(uploaderIdentityOf({ id: PARTICIPANT, userId: USER }, PARTICIPANT)).toBe(USER);
+    expect(uploaderIdentityOf({ userId: USER }, PARTICIPANT)).toBe(USER);
   });
 
   it("rend le `Participant.id` d'un anonyme — c'est SON identité d'authentification", () => {
-    expect(uploaderIdentityOf({ id: PARTICIPANT, userId: null }, PARTICIPANT)).toBe(PARTICIPANT);
+    expect(uploaderIdentityOf({ userId: null }, PARTICIPANT)).toBe(PARTICIPANT);
   });
 
   it('rend le repli quand la ligne de participant est absente', () => {
@@ -90,6 +95,19 @@ describe('ownsAsUploader — la compatibilité des lignes HÉRITÉES', () => {
     const prisma = prismaWith({ userId: USER });
 
     expect(await ownsAsUploader(prisma, 'system', USER)).toBe(false);
+    expect(prisma.participant.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("refuse un APPELANT sans identité, et ne lit pas la base (#20113 F6)", async () => {
+    // `tsconfig.json` du gateway porte `strictNullChecks: false` : la signature
+    // `userId: string` accepte `null` et `undefined` SANS erreur de compilation.
+    // Le prédicat ouvre un accès — il refuse donc explicitement, plutôt que de
+    // compter sur `null === null` pour ne jamais se produire.
+    const prisma = prismaWith({ userId: null });
+
+    expect(await ownsAsUploader(prisma, PARTICIPANT, null as unknown as string)).toBe(false);
+    expect(await ownsAsUploader(prisma, PARTICIPANT, undefined as unknown as string)).toBe(false);
+    expect(await ownsAsUploader(prisma, PARTICIPANT, '')).toBe(false);
     expect(prisma.participant.findUnique).not.toHaveBeenCalled();
   });
 

@@ -31,51 +31,84 @@ import { blankOutNonCode, walk } from '../../../__tests__/detached-promise-catch
  *
  * ## Le discriminant, et ce qu'il ne mesure PAS
  *
- * Est relevée toute affectation `uploadedBy: <expression>` dans du code de
- * production (commentaires et chaînes effacés), sauf :
+ * Le fichier est balayé EN ENTIER (pas ligne à ligne) : une affectation que
+ * Prettier a coupée après les deux-points échappait au balayage précédent, et
+ * deux usages sur une même ligne n'en comptaient qu'un. La valeur est lue
+ * jusqu'à sa virgule ou son accolade de MÊME profondeur, donc un appel de
+ * fonction n'est plus tronqué à sa première virgule.
+ *
+ * Sont écartés, et seulement eux :
  *  - la PROJECTION d'un `select` (`uploadedBy: true`) ;
  *  - le RECOPIAGE champ à champ (`uploadedBy: row.uploadedBy`…), qui ne choisit
  *    aucun espace — il hérite de celui de sa source ;
- *  - une propriété de SCHÉMA JSON (`uploadedBy: { type: … }`) ou de TYPE
- *    (`uploadedBy: string | null`), qui ne pose aucune valeur.
+ *  - une déclaration de TYPE (`uploadedBy: string | null`), qui ne pose rien ;
+ *  - une propriété de SCHÉMA JSON, reconnue par ses CLÉS (`type`,
+ *    `description`, `nullable`, `properties`, `format`, `items`) et non par sa
+ *    forme : `uploadedBy: { … }` est aussi la forme d'un FILTRE Prisma
+ *    (`{ in: … }`, `{ equals: … }`, `{ not: … }`), et l'écarter sur l'accolade
+ *    seule laissait passer toute la catégorie que ce balayage revendique.
  *
  * Il ne mesure pas la JUSTESSE d'un verdict déclaré : il garde qu'un verdict
- * EXISTE. Un site rangé `account-id-space` qui poserait en réalité un
- * participant passerait au vert — c'est le témoin de ce site qui l'attrape.
- * Et il est TEXTUEL : un écrivain qui passerait par un nom calculé
- * (`data[key] = …`) lui échappe.
+ * EXISTE. Un site rangé `account` qui poserait en réalité un participant
+ * passerait au vert — c'est le témoin de ce site qui l'attrape.
+ *
+ * Deux limites restent, déclarées faute de pouvoir être fermées par du texte :
+ *  1. un écrivain qui passerait par un nom calculé (`data['uploadedBy'] = …`) ;
+ *  2. une valeur HISSÉE dans une locale (`const uploader = …` puis
+ *     `uploadedBy: uploader`) : le balayage voit le nom de la locale, jamais ce
+ *     qu'elle contient. C'est la forme que ce lot a lui-même produite, et c'est
+ *     pourquoi aucun témoin ne prétend juger la valeur POSÉE.
  */
 export type UploadedByKeyUse = {
   /** Chemin relatif à `src/`, la forme dont un inventaire se lit. */
   readonly file: string;
-  /** L'expression affectée, dépouillée — jamais un numéro de ligne, qui dérive. */
+  /** L'expression affectée, lue jusqu'à sa virgule de même profondeur. */
   readonly value: string;
 };
 
+/** Les clés qui font d'un objet un SCHÉMA JSON plutôt qu'un filtre Prisma. */
+const SCHEMA_KEYS = /\b(type|description|nullable|properties|format|items)\s*:/;
+
 /** Ce qui n'affecte aucune valeur, ou n'en choisit pas l'espace. */
-const NOT_A_WRITE = [
-  /^uploadedBy\s*:\s*true\b/,
-  /^uploadedBy\s*:\s*\{/,
-  /^(readonly\s+)?uploadedBy\??\s*:\s*(string|String|number)\b/,
-  /^uploadedBy\s*:\s*\(?\w+\.uploadedBy\b/,
-];
+export function choosesNoKeySpace(value: string): boolean {
+  if (/^true\b/.test(value)) return true;
+  if (/^(string|String|number)\b/.test(value)) return true;
+  if (/^\(?\w+\.uploadedBy\b/.test(value)) return true;
+  if (value.startsWith('{') && SCHEMA_KEYS.test(value)) return true;
+  return false;
+}
+
+/** La valeur, lue jusqu'à la virgule ou l'accolade de MÊME profondeur. */
+export function readValue(code: string, from: number): string {
+  const closers: string[] = [];
+  let out = '';
+  for (let i = from; i < code.length; i += 1) {
+    const c = code[i];
+    if (closers.length === 0 && (c === ',' || c === '}' || c === ';' || c === '\n')) break;
+    if (c === '(') closers.push(')');
+    else if (c === '{') closers.push('}');
+    else if (c === '[') closers.push(']');
+    else if (c === closers[closers.length - 1]) closers.pop();
+    out += c;
+  }
+  return out.trim().replace(/\s+/g, ' ');
+}
 
 export function scanUploadedByKeyUses(srcRoot: string): readonly UploadedByKeyUse[] {
-  const writers: UploadedByKeyUse[] = [];
+  const uses: UploadedByKeyUse[] = [];
   for (const file of walk(srcRoot)) {
     const code = blankOutNonCode(readFileSync(file, 'utf8'));
-    for (const line of code.split('\n')) {
-      const match = /uploadedBy\s*:\s*[^,}]+/.exec(line);
-      if (!match) continue;
-      const expression = match[0].trim().replace(/\s+/g, ' ');
-      if (NOT_A_WRITE.some((pattern) => pattern.test(expression))) continue;
-      writers.push({
+    const pattern = /\buploadedBy\s*\??\s*:\s*/g;
+    for (let match = pattern.exec(code); match !== null; match = pattern.exec(code)) {
+      const value = readValue(code, match.index + match[0].length);
+      if (value.length === 0 || choosesNoKeySpace(value)) continue;
+      uses.push({
         file: relative(srcRoot, file).split(sep).join('/'),
-        value: expression.replace(/^uploadedBy\s*:\s*/, '').slice(0, 80),
+        value: value.slice(0, 100),
       });
     }
   }
-  return writers;
+  return uses;
 }
 
 export const SRC_ROOT = join(__dirname, '../../..');

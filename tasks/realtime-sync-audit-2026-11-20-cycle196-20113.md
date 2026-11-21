@@ -90,3 +90,106 @@ tomber — la forme de la leçon 261 appliquée à un témoin, pas à une énum�
   cette pièce » — le web compare `uploadedBy`, iOS et Android lisent un verdict
   de MESSAGE. L'unification rend celle du web correcte au lieu de fausse ; elle
   ne les met pas d'accord (dimension 6).
+
+## L'audit adversarial a rendu le lot BLOQUANT, et il avait raison
+
+Lancé avant fusion parce que le lot touche un prédicat de contrôle d'accès
+(directive porteur 2026-10-03). Verdict : **bloquant sur un constat**, et six
+autres à solder. Ce qu'il a cassé est l'hypothèse CENTRALE du lot — « unifier
+sur l'identité de compte ne peut qu'améliorer, puisque tous les lecteurs lisent
+déjà `uploadedBy` comme un `User.id` ». Vrai pour les lecteurs qui refusaient à
+tort. **Faux pour un lecteur dont le métier est de refuser**, et pour qui
+apparier PLUS de lignes est une perte.
+
+### F1 — une photo reçue en privé devenait l'avatar PUBLIC de qui la transfère
+
+`identityImageOwnership.ts` (#16811) apparie « une ligne `MessageAttachment` de
+type image, **TÉLÉVERSÉE par l'appelant**, qui porte ce fichier ». Le mot
+« téléversée » n'était tenu par **aucune colonne** : il l'était par ACCIDENT,
+parce qu'une copie transférée portait un `Participant.id` et que la garde
+compare un `User.id`. Mon unification faisait disparaître l'accident — et la
+garde avec.
+
+`copiedAttachmentFields` reprend `filePath`, `fileUrl` et `mimeType` à
+l'identique (« le MÊME blob »), `/attachments/file/*` sert par chemin **sans
+authentification**, et `unlinkIfUnreferenced` compte les lignes qui citent un
+`filePath` mais **jamais les avatars** : la photo y restait après que son auteur
+a supprimé son message, puis son compte.
+
+Fermé dans ce lot, et **mieux qu'avant** : la garde refuse désormais toute ligne
+portant une marque de transfert (`unsetOrNull('forwardedFromAttachmentId')`,
+parce que la colonne d'un téléversement est ABSENTE, pas nulle). « Téléversée »
+est tenu par une colonne, plus par une coïncidence d'espaces de clés. La copie
+d'une DIFFUSION n'en porte aucune, et c'est juste : `copyAttachments` exige que
+le demandeur soit l'expéditeur de la source, donc elle ne recopie que ses
+propres octets.
+
+> **Aucun témoin ne pouvait tomber**, et c'est la vraie leçon : le témoin
+> existant double Prisma par `where.uploadedBy === USER_ID && …`. Un double
+> AUTO-RÉALISATEUR valide un changement d'espace de clés au lieu de le voir. Le
+> nouveau témoin APPLIQUE le `where` ligne par ligne (`matchesMongoWhere`, à qui
+> ce lot ajoute `startsWith`).
+
+### F5 — le court-circuit « je l'ai déposée » survivait au bannissement
+
+`VoiceProfileService.verifyAttachmentAccess` et
+`AttachmentTranslateService.verifyUserAccess` — jumeaux ligne pour ligne —
+répondaient `true` sur `uploadedBy === userId` **avant** de consulter
+l'appartenance. Le trou préexistait pour les téléversements ; mon unification
+l'étendait aux copies, donc à toute pièce transférée par qui a ensuite quitté la
+conversation ou s'y est fait bannir.
+
+Fermé par `attachmentUseAdmission.callerMayUseAttachment`, site unique qui
+INVERSE l'ordre des deux questions — le porteur d'abord, le déposant ensuite —
+comme le font déjà `attachmentReadVerdict` et `routes/attachments/metadata.ts`.
+Et un porteur **non chargé** refuse : `messageId` posé sans `conversationId` est
+une projection incomplète, pas une pièce libre ; répondre `true` y ferait d'un
+`select` oublié une porte ouverte.
+
+### F2, F3, F4 — le cliquet ne mesurait pas ce qu'il annonçait
+
+Trois trous du discriminant, tous mesurés :
+- un **filtre** Prisma (`{ in: … }`, `{ equals: … }`) était écarté comme un
+  schéma JSON, sur la seule présence de l'accolade — c'est-à-dire **toute la
+  catégorie que le balayage revendique** ;
+- une affectation coupée après les deux-points (ce que produit Prettier)
+  n'était pas vue du tout ;
+- deux usages sur une même ligne n'en comptaient qu'un.
+
+Le balayage lit désormais le fichier EN ENTIER, capture la valeur jusqu'à sa
+virgule de même profondeur, et distingue schéma et filtre par les CLÉS de
+l'objet. Il porte ses propres **pièges** en témoins.
+
+Et le témoin « aucun site ne pose un `Participant.id` » a été **retiré** : il
+était vide par construction (les deux écrivains posent une locale ou nomment
+leur repli), donc il passait quelle que soit la valeur réellement posée. Un
+cliquet qui rassure à tort est pire que pas de cliquet. Ce qui se mesure
+vraiment le remplace : les deux écrivains PASSENT par le site unique.
+
+### F6, F8, F9 — soldés
+
+- **F6** : le `!= null` que j'avais introduit « sans changer le comportement »
+  était bien un durcissement. Tracé : aucun appelant ne passe aujourd'hui une
+  identité nulle. Mais la fonction est devenue PUBLIQUE sous un `tsconfig` à
+  `strictNullChecks: false`, donc elle refuse l'appelant sans identité
+  explicitement, avec son témoin.
+- **F8** : `toHaveLength(5)` contredisait son commentaire (« solder un site est
+  attendu ») — c'est un cliquet, donc `toBeLessThanOrEqual`.
+- **F9** : le compte de succès « pièces envoyées » inclut désormais les copies.
+  Assumé, et écrit au site : transférer la même photo N fois compte N.
+
+### F10 — #20114 était surjouée sur la purge
+
+`anonymizeMessagesOfDeletedAccount` (#5689) tourne **avant**
+`purgeDeletedAccountMedia`, trouve les messages par `senderId in participantIds`
+et supprime leurs pièces une par une — or une copie transférée a toujours un
+`messageId`, et ce message est celui du compte supprimé. Le trou résiduel se
+limite aux messages déjà `deletedAt` avant le passage de #5689. L'export RGPD,
+lui, reste exact et sans recours. Corrigé sur l'issue.
+
+### Ce que l'audit a cherché et NON trouvé
+Destruction d'octets partagés, ré-attachement d'une pièce au message d'autrui,
+enregistrements d'appel, lecture des octets et du détail, croisement
+anonyme ↔ inscrit, rétrocompatibilité des trois clients (iOS **jette** la valeur
+servie et la réécrit en `Participant.id` — la prémisse « tous ses lecteurs la
+lisent comme un `User.id` » était donc fausse pour iOS, sans conséquence ici).

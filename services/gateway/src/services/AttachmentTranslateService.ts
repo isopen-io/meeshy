@@ -23,6 +23,7 @@ import {
 } from './attachments/attachmentIncludes';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { diffTranslationTargets } from '../utils/translation-targets';
+import { callerMayUseAttachment } from './attachments/attachmentUseAdmission';
 
 const logger = enhancedLogger.child({ module: 'AttachmentTranslateService' });
 
@@ -246,25 +247,17 @@ export class AttachmentTranslateService {
     return 'unknown';
   }
 
+  /**
+   * #20113 F5 — porte PARTAGÉE : `callerMayUseAttachment`.
+   *
+   * Ce fichier en portait un exemplaire, jumeau ligne pour ligne de celui de
+   * l'autre service, et tous deux demandaient « l'ai-je déposée ? » AVANT
+   * l'appartenance — un court-circuit qui survivait au départ de la
+   * conversation et à un bannissement. La règle, son ordre et sa raison vivent
+   * désormais à un seul endroit.
+   */
   private async verifyUserAccess(userId: string, attachment: AttachmentTranslateRowPayload): Promise<boolean> {
-    // User uploaded the attachment
-    if (attachment.uploadedBy === userId) {
-      return true;
-    }
-
-    // User is part of the conversation
-    if (attachment.message?.conversationId) {
-      const member = await this.prisma.participant.findFirst({
-        where: {
-          conversationId: attachment.message.conversationId,
-          userId: userId,
-          isActive: true
-        }
-      });
-      return !!member;
-    }
-
-    return false;
+    return callerMayUseAttachment(this.prisma, userId, attachment);
   }
 
   /** #13100 — le clair, que le fichier soit scellé au repos ou non. */

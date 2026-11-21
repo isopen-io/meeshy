@@ -12,7 +12,14 @@
  * `User.id`.
  */
 import { describe, it, expect } from '@jest/globals';
-import { scanUploadedByKeyUses, SRC_ROOT } from './uploaded-by-key-space-sweep';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import {
+  choosesNoKeySpace,
+  readValue,
+  scanUploadedByKeyUses,
+  SRC_ROOT,
+} from './uploaded-by-key-space-sweep';
 
 /**
  * L'espace qu'un site suppose.
@@ -82,15 +89,68 @@ describe('#20113 — l’espace de clés de `uploadedBy`', () => {
     // héritées, #20114) est attendu ; en ajouter un ne l'est jamais.
     const aveugles = Object.values(FROZEN).flat().filter((space) => space === 'account-blind-to-legacy');
 
-    expect(aveugles).toHaveLength(5);
+    expect(aveugles.length).toBeLessThanOrEqual(5);
   });
 
-  it('aucun site ne pose un `Participant.id` : plus un seul écrivain hors de la convention', () => {
-    // Le discriminant est TEXTUEL et ne peut pas juger une expression ; ce
-    // témoin garde donc ce qu'il peut : qu'aucun écrivain ne nomme
-    // explicitement un identifiant de participant.
-    const suspects = uses.filter((use) => /participantId|requesterParticipantId|senderId/.test(use.value));
+  /**
+   * Il n'y a PAS de témoin « aucun site ne pose un `Participant.id` », et c'est
+   * une décision.
+   *
+   * Un tel témoin avait été écrit ; il était vide par construction. Les deux
+   * écrivains de copie posent `uploader` et
+   * `uploaderIdentityOf(requester, params.requesterParticipantId)` : le premier
+   * est une LOCALE, dont le balayage ne voit que le nom, et le second nomme son
+   * repli — donc le témoin passait quelle que soit la valeur réellement posée.
+   * Un cliquet qui rassure à tort est pire que pas de cliquet.
+   *
+   * Ce qui se mesure vraiment, et qui suffit : les deux écrivains de copie
+   * PASSENT par le site unique. S'ils cessaient, leur propre témoin tomberait.
+   */
+  it('les deux écrivains de copie passent par le site unique de l’identité', () => {
+    const sansSiteUnique = ['services/messaging/copyAttachments.ts', 'services/messaging/MessageProcessor.ts']
+      .filter((file) => !readFileSync(join(SRC_ROOT, file), 'utf8').includes("from '../attachments/uploaderIdentity'"));
 
-    expect(suspects).toEqual([]);
+    expect(sansSiteUnique).toEqual([]);
+  });
+});
+
+/**
+ * Les PIÈGES du discriminant — ce qu'il doit voir et ce qu'il doit ignorer.
+ *
+ * Trois trous mesurés par l'audit adversarial du lot : un filtre Prisma écarté
+ * comme s'il était un schéma JSON (`{ in: … }`), une affectation coupée par
+ * Prettier après les deux-points, et deux usages sur une même ligne dont un
+ * seul était compté. Chacun laissait passer, en silence, la catégorie même que
+ * ce balayage revendique.
+ */
+describe('#20113 — les pièges du discriminant', () => {
+  it('garde un FILTRE Prisma, et n’en fait pas un schéma JSON', () => {
+    expect(choosesNoKeySpace('{ in: ids }')).toBe(false);
+    expect(choosesNoKeySpace('{ equals: userId }')).toBe(false);
+    expect(choosesNoKeySpace('{ not: userId }')).toBe(false);
+  });
+
+  it('écarte un schéma JSON par ses CLÉS, jamais par son accolade', () => {
+    expect(choosesNoKeySpace("{ type: 'string', description: 'Uploader id' }")).toBe(true);
+    expect(choosesNoKeySpace("{ type: 'string', nullable: true }")).toBe(true);
+  });
+
+  it('écarte la projection, la déclaration de type et le recopiage', () => {
+    expect(choosesNoKeySpace('true')).toBe(true);
+    expect(choosesNoKeySpace('string | null')).toBe(true);
+    expect(choosesNoKeySpace('row.uploadedBy')).toBe(true);
+    expect(choosesNoKeySpace('(raw.uploadedBy as string | null)')).toBe(true);
+  });
+
+  it('lit une valeur jusqu’à sa virgule de MÊME profondeur — un appel n’est pas tronqué', () => {
+    expect(readValue('uploaderIdentityOf(requester, pid), rank: 0 }', 0))
+      .toBe('uploaderIdentityOf(requester, pid)');
+    expect(readValue('{ in: [a, b] }, select: 1', 0)).toBe('{ in: [a, b] }');
+  });
+
+  it('voit les DEUX usages d’une même ligne', () => {
+    const uses = [...'{ uploadedBy: alpha }, nested: { uploadedBy: beta }'.matchAll(/\buploadedBy\s*\??\s*:\s*/g)];
+
+    expect(uses).toHaveLength(2);
   });
 });

@@ -81,6 +81,14 @@ export async function resolveUploaderIdentity(
  * lignes HÉRITÉES. Il ne peut pas partir pour autant : rien ne réécrit les
  * lignes déjà en base.
  *
+ * Le `!= null` sur `participant.userId` et le refus en tête sur `userId` sont
+ * un DURCISSEMENT par rapport à l'original (`participant?.userId === userId`),
+ * pas un déplacement : sur l'arbre d'aujourd'hui aucun appelant ne passe une
+ * identité nulle — tracé depuis `routes/attachments/metadata.ts` jusqu'à
+ * `middleware/auth.ts`, la branche inscrite pose toujours un ObjectId — mais
+ * la fonction est désormais PUBLIQUE, et le prochain appelant ne sera pas
+ * gardé par cette trace.
+ *
  * Elle reconnaît le propriétaire sous les deux identifiants, et **seulement
  * s'il s'agit de SON participant** : l'identifiant d'un participant d'autrui,
  * anonyme ou inconnu ne donne rien. Une lecture en échec refuse — fail-closed,
@@ -91,6 +99,12 @@ export async function ownsAsUploader(
   uploadedBy: string | null | undefined,
   userId: string
 ): Promise<boolean> {
+  // #20113 F6 — le refus explicite de l'APPELANT sans identité. Le `tsconfig`
+  // du gateway porte `strictNullChecks: false` : la signature `userId: string`
+  // accepte `null` et `undefined` sans erreur de compilation, et ce prédicat
+  // OUVRE un accès. Il ne doit donc pas dépendre de ce qu'une comparaison
+  // rendrait par chance.
+  if (!userId) return false;
   if (!uploadedBy) return false;
   if (uploadedBy === userId) return true;
   if (!OBJECT_ID_PATTERN.test(uploadedBy)) return false;
