@@ -29,6 +29,9 @@ sealed interface DeepLinkDestination {
     data object UserLinks : DeepLinkDestination
     data class PostDetail(val postId: String) : DeepLinkDestination
     data class StoryDetail(val postId: String) : DeepLinkDestination
+
+    /** L'humeur partagée (`/mood/<id>`, cible suivie STATUS) : elle s'ouvre en plein écran (#20233, iOS `MoodSpotlight`). */
+    data class Mood(val postId: String) : DeepLinkDestination
     data class Reel(val postId: String) : DeepLinkDestination
     data class Community(val id: String) : DeepLinkDestination
     data object RecentConversation : DeepLinkDestination

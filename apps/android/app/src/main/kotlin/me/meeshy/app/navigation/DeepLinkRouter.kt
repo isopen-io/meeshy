@@ -54,6 +54,7 @@ internal object DeepLinkRouter {
         is DeepLinkDestination.Post -> DeepLinkAction.Navigate(Routes.postDetail(destination.id))
         is DeepLinkDestination.PostDetail -> DeepLinkAction.Navigate(Routes.postDetail(destination.postId))
         is DeepLinkDestination.StoryDetail -> DeepLinkAction.Navigate(Routes.postDetail(destination.postId))
+        is DeepLinkDestination.Mood -> DeepLinkAction.Navigate(Routes.moodSpotlight(destination.postId))
         is DeepLinkDestination.Reel -> DeepLinkAction.Navigate(Routes.reels(destination.postId))
         is DeepLinkDestination.Community -> DeepLinkAction.Navigate(CommunityRoutes.detail(destination.id))
         DeepLinkDestination.RecentConversation -> DeepLinkAction.OpenRecentConversation

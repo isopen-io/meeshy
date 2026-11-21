@@ -15,20 +15,27 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import me.meeshy.app.startup.AppLocalsProvider
 import me.meeshy.sdk.linkcard.ContentCardService
+import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.contentcard.ContentCard
 import me.meeshy.sdk.model.contentcard.ContentLinkCardState
 import me.meeshy.sdk.model.deeplink.ContentLinkTarget
 import me.meeshy.ui.component.contentcard.ContentLinkCards
+import me.meeshy.ui.component.contentcard.LocalContentCardScenePainter
+import me.meeshy.ui.component.contentcard.LocalContentCardSoundPlayer
 import me.meeshy.ui.component.contentcard.LocalContentLinkCards
 
 /**
- * La route qu'ouvre le toucher d'une carte de contenu (#19331) : celle que la table unique du routeur de liens
- * ([DeepLinkRouter]) donne à l'adresse canonique du contenu — post et story au détail du post, réel au lecteur de
- * réels, humeur au détail de son post —, jamais un navigateur.
+ * La route qu'ouvre le toucher d'une carte de contenu (#19331, #20233) : là où le contenu vit, comme iOS — la story dans
+ * la visionneuse de son auteur, et sinon celle que la table unique du routeur de liens ([DeepLinkRouter]) donne à
+ * l'adresse canonique du contenu (post au détail, réel au lecteur de réels, humeur en plein écran) ; jamais un
+ * navigateur. Une story dont l'auteur n'est pas servi s'ouvre à son post.
  */
 internal object ContentLinkRoute {
-    fun of(card: ContentCard): String? =
-        (DeepLinkRouter.action(ContentLinkTarget.webUrl(DeepLinkRouter.WEB_ORIGIN, card.type, card.postId)) as? DeepLinkAction.Navigate)?.route
+    fun of(card: ContentCard): String? {
+        val author = card.author.id?.takeIf { it.isNotBlank() }
+        if (card.type == PostType.STORY && author != null) return Routes.story(author, card.postId)
+        return (DeepLinkRouter.action(ContentLinkTarget.webUrl(DeepLinkRouter.WEB_ORIGIN, card.type, card.postId)) as? DeepLinkAction.Navigate)?.route
+    }
 }
 
 /**
@@ -62,7 +69,12 @@ class ContentLinkCardsProvider @Inject constructor(
         val appNavigator = LocalAppNavigator.current
         val scope = rememberCoroutineScope()
         val cards = remember(service, appNavigator, scope) { AppContentLinkCards(service, appNavigator, scope) }
-        CompositionLocalProvider(LocalContentLinkCards provides cards, content = content)
+        CompositionLocalProvider(
+            LocalContentLinkCards provides cards,
+            LocalContentCardScenePainter provides contentCardScenePainter,
+            LocalContentCardSoundPlayer provides contentCardSoundPlayer,
+            content = content,
+        )
     }
 }
 
