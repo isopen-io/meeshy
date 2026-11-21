@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
-import { FlameService, flameFactsOf, planStreak } from '../FlameService';
+import { FlameService, flameFactsOf, planStreak, writeStreak } from '../FlameService';
 import { GameRefusal } from '../GameRefusal';
 import { fakeGameDb, seedUser, USER, type FakeGameDb } from './fakeGameDb';
 
@@ -207,8 +207,50 @@ describe('planStreak — la transition de série appliquée au geste du jour', (
     expect(plan.data).not.toHaveProperty('flameFreezes');
   });
 
+  it('le 3e jour de la première Flamme : une Veilleuse est offerte, écrite avec la série (#17371)', () => {
+    const plan = planStreak(facts({ currentStreakDays: 2, longestStreakDays: 2 }));
+    expect(plan).toMatchObject({ outcome: 'continued', streak: 3, freezeGifted: true });
+    expect(plan.data).toMatchObject({ currentStreakDays: 3, flameFreezes: 1 });
+  });
+
+  it('un jour couvert par un gel qui mène au 3e jour : le gel part, la Veilleuse offerte arrive', () => {
+    const plan = planStreak(
+      facts({ currentStreakDays: 2, longestStreakDays: 2, lastStreakDate: new Date('2026-10-03T00:00:00Z'), flameFreezes: 1 }),
+    );
+    expect(plan).toMatchObject({ outcome: 'protected', streak: 3, freezeGifted: true });
+    expect(plan.data).toMatchObject({ flameFreezes: 1 });
+  });
+
+  it('un joueur qui a déjà tenu trois jours ne reçoit plus de Veilleuse offerte en repassant par le 3e jour', () => {
+    const plan = planStreak(facts({ currentStreakDays: 2, longestStreakDays: 9 }));
+    expect(plan).toMatchObject({ streak: 3, freezeGifted: false });
+    expect(plan.data).not.toHaveProperty('flameFreezes');
+  });
+
   it('premier geste d’un compte sans série : la série démarre à 1', () => {
     const plan = planStreak(facts({ currentStreakDays: 0, lastStreakDate: null }));
     expect(plan).toMatchObject({ outcome: 'started', streak: 1 });
+  });
+});
+
+describe('writeStreak — la Veilleuse offerte arrive dans la réserve du compte (#17371)', () => {
+  it('le geste du 3e jour écrit la série ET la Veilleuse offerte', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { currentStreakDays: 2, longestStreakDays: 2, lastStreakDate: new Date('2026-10-04T00:00:00Z'), timezone: 'UTC' });
+
+    const written = await writeStreak(db as never, USER, NOW);
+
+    expect(written?.plan).toMatchObject({ streak: 3, freezeGifted: true });
+    const row = await db.user.findUnique({ where: { id: USER } });
+    expect(row).toMatchObject({ currentStreakDays: 3, flameFreezes: 1 });
+  });
+
+  it('un compte antérieur au Jeu, sans champ de gel : la Veilleuse s\'écrit quand même', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { currentStreakDays: 2, longestStreakDays: 2, lastStreakDate: new Date('2026-10-04T00:00:00Z') });
+
+    await writeStreak(db as never, USER, NOW);
+
+    expect(await db.user.findUnique({ where: { id: USER } })).toMatchObject({ flameFreezes: 1 });
   });
 });

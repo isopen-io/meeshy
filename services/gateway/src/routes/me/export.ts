@@ -10,6 +10,7 @@ import {
   exportComments,
   exportReactions,
   exportMedia,
+  exportMessages,
   needsParticipantIds,
   exportVoiceProfile,
   exportPacks,
@@ -31,11 +32,11 @@ import { exportProfileLinkVisitsOf } from '../../services/profile-link-visits/pr
 import { exportSentInvitationsOf } from '../../services/referrals/emailInvitations';
 import { exportCallTelemetry } from '../../services/calls/callTelemetryPrivacy';
 import { accountSeatIds } from '../../services/participants/accountParticipantIds';
+import { gatewayKeyring } from '../../services/messaging/atRestTranslationSource';
 import { PROFILE_ADDRESS_EXPORT_SELECT, withExportedAddresses } from './export-addresses';
 
 const logger = enhancedLogger.child({ module: 'DataExport' });
 
-const MESSAGES_LIMIT = 10000;
 
 type ExportType =
   | 'profile'
@@ -692,24 +693,10 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
         }
 
         if (requestedTypes.includes('messages')) {
-          const messages = await fastify.prisma.message.findMany({
-            where: {
-              senderId: { in: pIds },
-              deletedAt: null,
-            },
-            select: {
-              id: true,
-              conversationId: true,
-              content: true,
-              originalLanguage: true,
-              messageType: true,
-              messageSource: true,
-              createdAt: true,
-              editedAt: true,
-            },
-            orderBy: { createdAt: 'desc' },
-            take: MESSAGES_LIMIT,
-          });
+          // #20163 — la section OUVRE le sceau au repos (`exportMessages`) : elle
+          // servait un `content` vide pour tout message d'une conversation
+          // `server`/`hybrid`, avec un compte juste.
+          const messages = await exportMessages(fastify.prisma, pIds, gatewayKeyring(fastify.prisma));
 
           exportData.messages = messages;
           exportData.messagesCount = messages.length;

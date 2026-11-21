@@ -22,7 +22,7 @@ jest.mock('../../services/together/togetherDeps', () => ({
   cutTogetherWhere: (scope: unknown) => cutTogetherWhere(scope),
 }));
 
-import { announceConversationClosed } from '../announceConversationClosed';
+import { announceConversationClosed, audienceDeRetractation } from '../announceConversationClosed';
 
 const CONV_ID = '507f1f77bcf86cd799439011';
 const CLOSED_BY = 'user-closer-001';
@@ -186,5 +186,35 @@ describe('announceConversationClosed', () => {
       process.off('unhandledRejection', listener);
     }
     expect(unhandled).toEqual([]);
+  });
+});
+
+describe("#20103 — l'audience d'une RÉTRACTATION est large, délibérément", () => {
+  /**
+   * La règle est l'INVERSE de celle de `broadcastConversationUpdated`, et c'est
+   * mesuré ici parce qu'une raison écrite est une affirmation : sans témoin, un
+   * balayage « resserre tous les filtres de participation » l'emporterait en
+   * passant, et échangerait une fuite inexistante contre un fil fantôme.
+   */
+  const banni = { id: 'p-banni', userId: 'user-banni', isActive: true, bannedAt: new Date('2026-11-01T00:00:00.000Z') };
+  const vivant = { id: 'p-vivant', userId: 'user-vivant', isActive: true, bannedAt: null };
+  const parti = { id: 'p-parti', userId: 'user-parti', isActive: false, bannedAt: null };
+
+  it('RETIENT un membre actif-et-banni — seul cet événement lui retire la ligne de sa liste', () => {
+    expect(audienceDeRetractation([vivant, banni, parti])).toEqual([vivant, banni]);
+  });
+
+  it('écarte une participation inactive — il n\'y a rien à retracter à qui n\'a plus la ligne', () => {
+    expect(audienceDeRetractation([parti])).toEqual([]);
+  });
+
+  it('n\'admet pas une ligne dont `isActive` est absent ou nul — « non faux » n\'est pas « vrai »', () => {
+    expect(audienceDeRetractation([{ id: 'p', userId: 'u', isActive: undefined as never }])).toEqual([]);
+    expect(audienceDeRetractation([{ id: 'p', userId: 'u', isActive: null as never }])).toEqual([]);
+  });
+
+  it('tient une audience absente pour vide, sans lever', () => {
+    expect(audienceDeRetractation(null)).toEqual([]);
+    expect(audienceDeRetractation(undefined)).toEqual([]);
   });
 });

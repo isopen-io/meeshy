@@ -22,6 +22,7 @@ import {
   type ConversationRoomEmitter,
   type ParticipantRoomTarget,
 } from '../../socketio/emitToConversationParticipants';
+import { participationEstVivante } from '../../routes/conversations/utils/access-control';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 
 /**
@@ -82,21 +83,54 @@ export function composeConversationUpdate(body: ConversationMetadataBody): {
 }
 
 /**
- * Annonce `conversation:updated` aux participants ACTIFS : la room de
- * conversation ET la room personnelle de chacun — un membre posé sur l'écran
- * de LISTE a quitté la room du fil, et ne verrait sinon ni le renommage ni la
- * nouvelle image avant un rechargement. `emitToConversationParticipants`
- * chaîne les rooms (une copie par socket) et nomme la room d'un participant
- * sans compte par son `Participant.id`.
+ * Annonce `conversation:updated` aux participants dont la participation est
+ * VIVANTE : la room de conversation ET la room personnelle de chacun — un
+ * membre posé sur l'écran de LISTE a quitté la room du fil, et ne verrait
+ * sinon ni le renommage ni la nouvelle image avant un rechargement.
+ * `emitToConversationParticipants` chaîne les rooms (une copie par socket) et
+ * nomme la room d'un participant sans compte par son `Participant.id`.
  *
  * AUCUNE clé `lastMessage*` : le tri-état client distingue « clé absente »
  * (cet événement ne parle pas du dernier message) de « clé nulle » (la carte
  * du Prisme est périmée).
+ *
+ * ── POURQUOI LA LOI ENTIÈRE, ET PAS `isActive` NU (#20103) ──────────────────
+ *
+ * C'est le site qui DÉCIDE pour ses deux appelants, et la décision se lit sur
+ * ce que la charge TRANSPORTE : `conversation:updated` porte le TITRE, la
+ * description, l'avatar et la bannière. Du CONTENU — pas une rétractation.
+ *
+ * Un membre actif-et-BANNI n'a accès ni à la room du fil ni à son REST : lui
+ * servir le nouveau titre lui rend un contenu qu'aucune autre porte ne lui
+ * donne. C'est mot pour mot la fuite que #20110 a fermée sur la charge
+ * d'ARRIVÉE d'un groupe, rejouée ici sur le RENOMMAGE — et elle était
+ * invisible des deux côtés : la projection des appelants n'a aucun `where`
+ * (donc aucun cliquet de clause ne la voit) et le filtre vivait ici, en code,
+ * sur `isActive` nu.
+ *
+ * **Les annonces de CLÔTURE font l'inverse, et c'est écrit sur leurs sites**
+ * (`leave.ts`, `delete-for-me.ts`, `core-lifecycle.ts`,
+ * `obsoleteConversation.ts`) : `conversation:closed` ne porte aucun contenu et
+ * RETRACTE une ligne. La retenir à un banni lui laisserait un fil fantôme dans
+ * sa liste, donc son audience reste `isActive` nu, volontairement plus large.
+ *
+ * ── ET POURQUOI `bannedAt` EST DANS LE TYPE ────────────────────────────────
+ *
+ * `participationEstVivante` juge une ligne DÉJÀ lue : un champ non PROJETÉ
+ * vaut `undefined`, et `undefined == null` est VRAI — la garde rendrait donc
+ * `true` pour un banni, sans qu'aucun témoin de garde ne puisse le voir
+ * (#20136). Exiger la colonne dans la SIGNATURE met le compilateur sur la
+ * projection de chaque appelant : c'est la seule garde qui ne peut pas être
+ * oubliée en silence. `Date | null | undefined` est admis parce que la colonne
+ * est ABSENTE du document de tout participant jamais banni ; ce qui est
+ * interdit, c'est de ne pas la demander.
  */
 export function broadcastConversationUpdated(params: {
   readonly io: ConversationRoomEmitter | null | undefined;
   readonly conversationId: string;
-  readonly participants: ReadonlyArray<ParticipantRoomTarget & { readonly isActive: boolean }>;
+  readonly participants: ReadonlyArray<
+    ParticipantRoomTarget & { readonly isActive: boolean; readonly bannedAt: Date | null | undefined }
+  >;
   readonly changedFields: ConversationMetadataChanges;
   readonly updatedBy: string;
 }): void {
@@ -105,7 +139,7 @@ export function broadcastConversationUpdated(params: {
   emitToConversationParticipants({
     io,
     conversationId,
-    participants: participants.filter((p) => p.isActive),
+    participants: participants.filter((p) => participationEstVivante(p)),
     event: SERVER_EVENTS.CONVERSATION_UPDATED,
     payload: {
       conversationId,

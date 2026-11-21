@@ -33,6 +33,7 @@ import { deactivateShareLinksOnClose } from './shareLinkClosure';
 import { eraseExternalPeerOnClose, type ExternalPeerEraser } from '../external-conversation/erase-external-peers';
 import {
   announceConversationClosed,
+  audienceDeRetractation,
   type ClosedConversationEphemeralState,
 } from '../../socketio/announceConversationClosed';
 import {
@@ -182,7 +183,10 @@ export async function obsoleteConversation(
 
   await retractConversationNotifications(prisma, conversationId, announcer);
 
-  const audience = obsoleted.participants.filter((participant) => participant.isActive);
+  // `audienceDeRetractation` : large délibérément, raison sur l'unité de clôture
+  // (#20103). `conversation:obsoleted` ci-dessous suit la même règle et pour la
+  // même raison — il annonce une PURGE à venir, jamais un contenu.
+  const audience = audienceDeRetractation(obsoleted.participants);
   announceConversationClosed({ io, manager, conversationId, participants: audience, closedBy: actorId, closedAt: now });
   if (audience.length > 0) {
     emitToConversationParticipants({

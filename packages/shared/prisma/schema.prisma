@@ -2562,6 +2562,8 @@ model CommunityJoinRequest {
   createdAt   DateTime  @default(now())
   decidedAt   DateTime?
   decidedBy   String?   @db.ObjectId
+  /// Acceptation au sort SCELLÉ (#20003) : entrée prouvée ou demande remplacée ; la réparation des orphelines ne la relit plus. Nul ou absent : à vérifier.
+  entryVerifiedAt DateTime?
 
   user      User      @relation(fields: [userId], references: [id])
   community Community @relation(fields: [communityId], references: [id])

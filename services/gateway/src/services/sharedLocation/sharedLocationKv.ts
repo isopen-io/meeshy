@@ -30,8 +30,15 @@ export type SharedLocationKv = {
   del(key: string): Promise<void>;
   /** Pose un terme à une clé existante, sans toucher sa valeur. */
   expire(key: string, ttlSeconds: number): Promise<void>;
-  /** Pose `session` comme pointeur si la génération vaut `generation` ; rend la session REMPLACÉE (aussi rangée « à retirer »). */
-  claim(keys: PointerKeys, args: { readonly generation: string; readonly session: string; readonly ttlSeconds: number }): Promise<{ readonly claimed: boolean; readonly displaced: string | null }>;
+  /**
+   * Pose `session` comme pointeur si la génération vaut `generation` — et, quand `expected` est donné, si le pointeur
+   * désigne encore `expected` (`null` : aucun pointeur) ; rend la session REMPLACÉE (aussi rangée « à retirer »).
+   * `moved` : la génération tenait, c'est le pointeur qui avait bougé.
+   */
+  claim(
+    keys: PointerKeys,
+    args: { readonly generation: string; readonly session: string; readonly ttlSeconds: number; readonly expected?: string | null },
+  ): Promise<{ readonly claimed: boolean; readonly displaced: string | null; readonly moved?: boolean }>;
   /** Écrit `value` sous `state` si le pointeur désigne encore `session`. */
   setIfCurrent(keys: { readonly pointer: string; readonly state: string }, args: { readonly session: string; readonly value: string; readonly ttlSeconds: number }): Promise<boolean>;
   /** Avance la génération, efface le pointeur, et rend la session qu'il désignait (aussi rangée « à retirer »). */
@@ -49,6 +56,7 @@ const CLAIM = `
 local current = redis.call('GET', KEYS[1]) or '0'
 if current ~= ARGV[1] then return {0, ''} end
 local displaced = redis.call('GET', KEYS[2]) or ''
+if ARGV[5] == '1' and displaced ~= ARGV[6] then return {0, '', 1} end
 redis.call('SET', KEYS[2], ARGV[2], 'EX', ARGV[3])
 if displaced ~= '' then
   redis.call('SADD', KEYS[3], displaced)
@@ -90,8 +98,9 @@ export function redisSharedLocationKv(redis: Redis): SharedLocationKv {
       await redis.expire(key, ttlSeconds);
     },
     claim: async (keys, args) => {
-      const [claimed, displaced] = (await redis.eval(CLAIM, 3, keys.generation, keys.pointer, keys.retiring, args.generation, args.session, String(args.ttlSeconds), String(RETIRING_TTL_SECONDS))) as [number, string];
-      return { claimed: claimed === 1, displaced: orNull(displaced) };
+      const expecting = args.expected === undefined ? ['0', ''] : ['1', args.expected ?? ''];
+      const [claimed, displaced, moved] = (await redis.eval(CLAIM, 3, keys.generation, keys.pointer, keys.retiring, args.generation, args.session, String(args.ttlSeconds), String(RETIRING_TTL_SECONDS), ...expecting)) as [number, string, number?];
+      return { claimed: claimed === 1, displaced: orNull(displaced), ...(moved === 1 ? { moved: true } : {}) };
     },
     setIfCurrent: async (keys, args) =>
       (await redis.eval(SET_IF_CURRENT, 2, keys.pointer, keys.state, args.session, args.value, String(args.ttlSeconds))) === 1,
