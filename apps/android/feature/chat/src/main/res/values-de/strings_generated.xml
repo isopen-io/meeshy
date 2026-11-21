@@ -74,6 +74,11 @@
         <item quantity="one">%1$d Nachricht löschen?</item>
         <item quantity="other">%1$d Nachrichten löschen?</item>
     </plurals>
+    <string name="chat_e2ee_peer_without_device_title">%1$s kann keine verschlüsselten Nachrichten empfangen</string>
+    <string name="chat_e2ee_peer_without_device_title_anonymous">Dein Gegenüber kann keine verschlüsselten Nachrichten empfangen</string>
+    <string name="chat_e2ee_peer_without_device_write_plain">Ohne Verschlüsselung schreiben</string>
+    <string name="chat_e2ee_readable_direct_failed">Öffnen nicht möglich. Versuche es erneut.</string>
+    <string name="chat_e2ee_readable_direct_offline">Offline: Verbinde dich erneut, um sie zu öffnen.</string>
     <string name="chat_effect_blurred">Unschärfe</string>
     <string name="chat_effect_duration_15s">15 s</string>
     <string name="chat_effect_duration_1m">1 Min.</string>
@@ -367,6 +372,8 @@
     <string name="encryption_mode_hybrid_label">Hybrid</string>
     <string name="encryption_mode_server_description">Auf unseren Servern verschlüsselt, für sie lesbar: Übersetzung und Suche funktionieren.</string>
     <string name="encryption_mode_server_label">Server</string>
+    <string name="encryption_participant_without_device_anonymous">Ein Mitglied kann noch keine verschlüsselten Nachrichten empfangen.</string>
+    <string name="encryption_participant_without_device_named">%1$s kann noch keine verschlüsselten Nachrichten empfangen.</string>
     <string name="encryption_summary_end_to_end">Ende-zu-Ende-verschlüsselt: Nur Teilnehmende lesen</string>
     <string name="encryption_summary_hybrid">Auf unseren Servern verschlüsselt, mit Prüfung zwischen kompatiblen Geräten</string>
     <string name="encryption_summary_none">Nicht verschlüsselt</string>

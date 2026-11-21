@@ -206,4 +206,19 @@ class NewConversationOneTapTest {
         coVerify(exactly = 0) { conversations.create(any(), any(), any(), any()) }
         assertThat(vm.state.value.openingUserId).isNull()
     }
+
+    /** #20076 (#20073) — un direct chiffré de bout en bout refusé : l'invité n'a aucun appareil chiffré, la phrase le nomme. */
+    @Test
+    fun an_end_to_end_direct_refused_for_a_peer_without_device_names_the_invitee() = runTest(dispatcher) {
+        val refusal = NetworkResult.Failure(ApiError(message = "x", code = "E2EE_PARTICIPANT_WITHOUT_DEVICE", httpStatus = 409))
+        val vm = viewModel(conversationsAnswering(refusal))
+        searched(vm)
+
+        vm.onPersonTapped("u1")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.error).isEqualTo(NewConversationError.PARTICIPANT_WITHOUT_DEVICE)
+        assertThat(vm.state.value.withoutDeviceFirstName).isEqualTo("U1")
+        assertThat(vm.state.value.createdConversationId).isNull()
+    }
 }

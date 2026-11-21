@@ -48,6 +48,9 @@ class FakeE2eeServer {
     val devices = mutableListOf<Device>()
     val mailbox = mutableListOf<Pair<Device, E2eeServedEnvelope>>()
     val wireLog = mutableListOf<String>()
+
+    /** Un annuaire qui LISTE des appareils mais ne sert aucun bundle (#20181) : aucune session ne s'ouvre. */
+    var withholdBundles: Boolean = false
     private var nextMessage = 1
     private var nextEnvelope = 1
 
@@ -90,7 +93,7 @@ class FakeE2eeServer {
         }
 
         override suspend fun bundles(userId: String, deviceIds: List<Int>?): E2eeUserBundles =
-            E2eeUserBundles(userId, active(userId).filter { deviceIds == null || it.deviceId in deviceIds }.map { device ->
+            E2eeUserBundles(userId, active(userId).filter { !withholdBundles && (deviceIds == null || it.deviceId in deviceIds) }.map { device ->
                 val kyber = device.kyber.removeFirstOrNull()
                 E2eeDeviceBundle(
                     device.deviceId, device.registrationId, device.identityKey, device.signedPreKey,
