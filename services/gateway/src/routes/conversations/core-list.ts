@@ -56,12 +56,11 @@ import type { ConversationType } from '@meeshy/shared/types/conversation';
 import { loadViewerBirthDate, servedListRowRestriction } from './viewerWriteRestriction';
 import { loadListViewerCapabilities } from '../../services/conversations/obsoleteCapability';
 import { servedMessageRequest, withoutRequestFields, type MessageRequestListMode, type ServedMessageRequest } from '../../services/messaging/messageRequests';
-import { emptyDirectVisibility, withExternalVisibility, withViewerRequests } from './utils/list-viewer-scope';
+import { conversationListScope, emptyDirectVisibility, withExternalVisibility, withViewerRequests } from './utils/list-viewer-scope';
 import { announcesCapability, appendVary, CLIENT_CAPABILITIES, CLIENT_CAPABILITIES_HEADER } from '../../utils/client-capabilities';
 import { participantProfileDecor } from '../../services/appearance/profileDecor';
 import { authorProfileDecor } from '../../services/appearance/authorProfileDecor';
 import { startupPackIndex } from '../../services/packs/PackIndex';
-import { PARTICIPATION_VIVANTE } from './utils/access-control';
 import {
   conversationListQuerySelect,
   conversationLastMessagePreviewSelect,
@@ -179,41 +178,11 @@ export function registerConversationListRoute(
 
       let t0 = performance.now();
 
-      // Build the where clause with optional filters.
-      //
-      // `deletedForMe` matches en deux temps : valeur null explicite OU champ
-      // absent. Sans le `isSet: false` (filtre MongoDB-only de Prisma), les
-      // documents Participant herites ne possedant pas le champ `deletedForMe`
-      // du tout (cree avant l'introduction du concept, 10 docs sur 716 dans
-      // l'instance prod du 2026-05-11) etaient exclus de la liste — les
-      // conversations DM correspondantes (Bertine, Suz, etc.) disparaissaient
-      // meme apres pull-to-refresh. Le `NOT: { not: null }` precedent et le
-      // `deletedForMe: null` simple ont la meme limite : ils ne matchent que
-      // les champs presents avec valeur null.
-      const whereClause: Prisma.ConversationWhereInput = {
-        participants: {
-          some: {
-            userId: userId,
-            // #20209 — la PARTICIPATION VIVANTE, par `AND` et JAMAIS par
-            // étalement. Cette clause porte déjà une clé `OR` (le `deletedForMe`
-            // ci-dessous) : `...PARTICIPATION_VIVANTE` l'ÉCRASERAIT en silence —
-            // le seul piège d'`unsetOrNull` (`utils/prisma-unset.ts`) — et ferait
-            // disparaître de la liste toute conversation supprimée « pour moi ».
-            //
-            // Sous `isActive` nu, la conversation dont un membre est EXCLU
-            // figurait encore dans sa liste principale. Quatrième genre de porte
-            // keyée sur l'appelant (#20155) : l'appelant nommé dans un FILTRE DE
-            // RELATION, que le balayage des audiences ne traverse pas — par
-            // décision écrite, et juste pour ce qu'il mesure.
-            AND: [PARTICIPATION_VIVANTE],
-            OR: [
-              { deletedForMe: null },
-              { deletedForMe: { isSet: false } }
-            ]
-          }
-        },
-        isActive: true
-      };
+      // Le PÉRIMÈTRE de base — ce que CE lecteur a le droit d'ouvrir — vit dans
+      // `utils/list-viewer-scope.ts` : la participation VIVANTE, et le
+      // `deletedForMe` nul OU absent, que seul un `AND` peut porter ensemble
+      // (#20209). Les deux raisons y sont écrites en entier.
+      const whereClause: Prisma.ConversationWhereInput = conversationListScope(userId);
 
       // Add type filter if specified
       if (typeFilter) {

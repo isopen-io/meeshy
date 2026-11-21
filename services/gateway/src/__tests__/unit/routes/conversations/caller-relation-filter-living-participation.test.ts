@@ -34,6 +34,7 @@ import { describe, it, expect, jest } from '@jest/globals';
 import { matchesMongoWhere, type MongoDocument } from '../../../helpers/mongo-where';
 import { PARTICIPATION_VIVANTE } from '../../../../routes/conversations/utils/access-control';
 import { resolveListCursor } from '../../../../routes/conversations/list-cursor';
+import { conversationListScope } from '../../../../routes/conversations/utils/list-viewer-scope';
 
 const USER = '507f1f77bcf86cd799439011';
 const BANNED_AT = new Date('2026-11-01T00:00:00Z');
@@ -80,16 +81,13 @@ const verdict = (where: MongoDocument, row: MongoDocument): boolean => matchesMo
 // dont les dépendances (chiffrement au repos, engagement, prisme) n'ont rien à
 // voir avec la question posée ici.
 
-const CLAUSE_LISTE = {
-  participants: {
-    some: {
-      userId: USER,
-      AND: [PARTICIPATION_VIVANTE],
-      OR: [{ deletedForMe: null }, { deletedForMe: { isSet: false } }],
-    },
-  },
-  isActive: true,
-} as unknown as MongoDocument;
+/**
+ * #20209 — la clause de la LISTE vient désormais de la PRODUCTION, pas d'une
+ * copie : `conversationListScope` a été extraite de `core-list.ts` par ce lot
+ * (le budget de taille l'exigeait, et c'est la meilleure chose qui soit arrivée
+ * à ce fichier). Les verdicts ci-dessous portent donc sur le site lui-même.
+ */
+const CLAUSE_LISTE = conversationListScope(USER) as unknown as MongoDocument;
 
 const CLAUSE_CURSEUR = {
   id: 'conv-banni',
@@ -243,7 +241,9 @@ describe('#20209 — les quatre sites épellent la loi par sa CONSTANTE', () => 
   const SRC = path.resolve(__dirname, '..', '..', '..', '..');
 
   const sites = [
-    { file: 'routes/conversations/core-list.ts', motif: /participants:\s*\{\s*some:\s*\{\s*userId:\s*userId,[\s\S]{0,1200}?AND:\s*\[PARTICIPATION_VIVANTE\]/ },
+    // La clause de la liste vit désormais dans le module de périmètre, et
+    // `CLAUSE_LISTE` la CAPTURE : cette garde devient une seconde ceinture.
+    { file: 'routes/conversations/utils/list-viewer-scope.ts', motif: /AND:\s*\[PARTICIPATION_VIVANTE\]/ },
     { file: 'routes/conversations/list-cursor.ts', motif: /participants:\s*\{\s*some:\s*\{\s*userId,\s*\.\.\.PARTICIPATION_VIVANTE\s*\}\s*\}/ },
     { file: 'routes/conversations/search.ts', motif: /participants:\s*\{\s*some:\s*\{\s*userId,\s*\.\.\.PARTICIPATION_VIVANTE\s*\}\s*\}/ },
     { file: 'routes/communities/core.ts', motif: /some:\s*\{\s*userId:\s*userId,\s*\.\.\.PARTICIPATION_VIVANTE\s*\}/ },

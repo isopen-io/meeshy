@@ -71,6 +71,27 @@ auxquels ce lot a ajouté un quatrième (filtre de relation).
 > ROUGE doit nommer les trois » supposait qu'ils étaient de la même espèce. On
 > l'apprend en essayant de le tenir, pas en le relisant.
 
+**Et un troisième défaut, celui-là dans ma propre façon de prouver**
+
+La CI a rendu rouge ce que mes gates locaux ne pouvaient pas voir : mon
+commentaire portait `core-list.ts` de 999 à 1011 lignes, et
+`gateway-file-size-budget.test.ts` le tient. J'avais lancé les suites de la
+*surface touchée* ; ce cliquet vit à la RACINE et balaie le dépôt entier.
+
+> **Une sélection de gates par « ce que mon diff touche » ne voit pas les
+> cliquets dont la portée est le DÉPÔT** — taille de fichier, dette de types,
+> table des routes, promesses détachées, cohésion. Ils ne vivent pas près du
+> code qu'on change, et c'est leur raison d'être. Avant de livrer, lancer la
+> suite ENTIÈRE, ou au minimum `src/__tests__/*.test.ts` en plus du répertoire
+> touché.
+
+Et la contrainte a amélioré le lot : le fichier étant à 999 sur `dev`, la
+directive « on extrait d'abord, on ajoute ensuite » a fait sortir le périmètre
+de la liste vers `utils/list-viewer-scope.ts` — où il devient **exporté**, donc
+CAPTURABLE par un témoin, ce qui a converti la moitié des verdicts du lot de
+« décrit la loi » à « exerce le site ». **Un budget de taille n'est pas une
+taxe, c'est une question.**
+
 **Détail**
 
 `tasks/realtime-sync-audit-2026-11-21-cycle204-20209.md`.

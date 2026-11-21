@@ -147,3 +147,50 @@ tout ce milestone vise : les lignes `isActive: true, bannedAt ≠ null` hérité
 d'avant #10436, dont le dépôt dit qu'elles existent en base sans migration. Ce
 n'est pas une fuite de masse — c'est le même sur-ensemble que les cinq portes de
 #20183, atteint par la surface la plus visible du produit.
+
+---
+
+## La CI a rendu ce que ma sélection de gates ne pouvait pas voir
+
+`Tests · gateway · tranche 3/3` **rouge** sur la tête du lot, et la cause était
+à moi : mon commentaire portait `routes/conversations/core-list.ts` de **999 à
+1011 lignes**, au-delà du seuil de 1000 que `gateway-file-size-budget.test.ts`
+tient (règle 1 : aucun fichier neuf hors budget ; règle 3 : le cumul ne remonte
+pas).
+
+**Pourquoi mes gates locaux ne l'ont pas vu.** J'avais lancé
+`src/__tests__/unit/routes/conversations`, `…/communities`,
+`src/socketio/__tests__/` et `src/routes/__tests__/` — la surface *touchée*. Le
+budget de taille vit à la RACINE (`src/__tests__/gateway-file-size-budget.test.ts`)
+et balaie le dépôt ENTIER.
+
+> **Une sélection de gates par « ce que mon diff touche » ne voit pas les
+> cliquets dont la portée est le DÉPÔT.** Taille de fichier, dette de types,
+> table des routes, promesses détachées, cohésion : ils ne vivent pas près du
+> code qu'on change, et c'est précisément leur raison d'être. Le raccourci
+> « je lance les suites du répertoire que je modifie » est juste pour les
+> témoins de comportement et faux pour les cliquets globaux.
+
+### Et la contrainte a rendu le lot MEILLEUR
+
+Le fichier était à **999** sur `dev` : une ligne de marge, zéro après l'import.
+La directive du dépôt est claire — « un fichier qui dépasse se DÉCOUPE […]
+ajouter à un fichier déjà hors budget est interdit : on extrait d'abord, on
+ajoute ensuite ». Le périmètre de base de la liste est donc parti dans
+`utils/list-viewer-scope.ts`, le module dont le doc-comment dit lui-même qu'il
+existe pour cette raison (« extraites de `core-list.ts` (budget de taille) »).
+
+`core-list.ts` : **999 → 980**. Et surtout, `conversationListScope` est
+désormais **exportée** — ce qui règle la faiblesse que ce même journal nommait
+trois paragraphes plus haut :
+
+| témoin | avant l'extraction | après |
+|---|---|---|
+| la LISTE | copie de la clause ⇒ décrit la LOI | **capture la production** ⇒ 2 rouges à la mutation |
+| le CURSEUR | capture déjà | capture |
+| recherche, communauté | copie + garde de source | inchangé (suivi) |
+
+> **Un budget de taille n'est pas une taxe, c'est une question.** Celle-ci était
+> « pourquoi la clause qui décide ce qu'un lecteur peut ouvrir vit-elle dans un
+> littéral inline de mille lignes ? » — et la réponse a rendu la moitié des
+> verdicts de ce lot exerçables contre la production.
