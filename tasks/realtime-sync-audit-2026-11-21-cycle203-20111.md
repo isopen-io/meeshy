@@ -72,7 +72,8 @@ importer est une loi qu'il va réécrire ou ignorer ; ici il l'avait ignorée.
 - `packages/shared/utils/prisma-unset.ts` — `unsetOrNull` / `differsOrUnset`
   déménagés ; `services/gateway/src/utils/prisma-unset.ts` est une **coquille de
   ré-export**, la forme que ce dépôt prescrit déjà après une scission de module.
-  **98 importeurs de la passerelle sont inchangés**, et `tsc` le prouve.
+  **53 fichiers de la passerelle importent ce chemin, et ils sont inchangés** —
+  `tsc` le prouve.
 - `packages/shared/utils/participation-vivante.ts` — la loi et
   `participationEstVivante`, avec le doc-comment qui les instruit.
   `access-control.ts` les ré-exporte **sous le même nom** : le cliquet reconnaît
@@ -130,9 +131,26 @@ Deux décisions de forme, et chacune a sa raison écrite sur le site :
   `services/agent` ; 496 témoins de l'agent verts ; suite complète du gateway
   rejouée.
 
-### Une erreur du lot, gardée pour ce qu'elle mesure
+### DEUX erreurs du lot, gardées pour ce qu'elles mesurent
 
-La seconde passe de documentation a **effacé le spread** `...PARTICIPATION_VIVANTE`
+**1. Un compte écrit sans être posé comme une question.** Les quatre documents du
+lot ont d'abord annoncé « 98 importeurs de la passerelle ». Mesuré : **53**
+fichiers importent `utils/prisma-unset` (52 de production, 1 de test). 98 est le
+compte des fichiers qui **mentionnent** `unsetOrNull` ou `differsOrUnset` —
+commentaires, journaux et balayages de texte compris — c'est-à-dire la réponse à
+une autre question que celle qui était posée (« combien de fichiers casse ce
+déménagement ? »).
+
+Les deux commandes se ressemblent (`grep -rl <nom>` contre
+`grep -rlE '^import .*<chemin>'`) et une seule répond. Le chiffre a été écrit
+dans le même lot que la phrase du § portée qui dit qu'un compte recopié dérive —
+**écrire une règle ne l'applique pas au lot qui l'écrit** (c'est le constat
+textuel du cycle 202, rejoué sur un compte au lieu d'une porte). Corrigé dans
+`services/gateway/CLAUDE.md`, le doc-comment de la coquille et ici ; les deux
+messages de commit du lot portent encore 98, et cette ligne est leur correction.
+
+**2. La garde partie par accident.** La seconde passe de documentation a
+**effacé le spread** `...PARTICIPATION_VIVANTE`
 du site D en réécrivant son commentaire. Le témoin du compte l'a dit tout de
 suite — c'est précisément pour cela qu'il assert sur les conversations RENDUES
 et non sur la forme du `where`.

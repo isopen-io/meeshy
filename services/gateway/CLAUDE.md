@@ -751,7 +751,8 @@ l'agent publiait un message signé de quelqu'un d'EXCLU dans le fil dont il est
 exclu — pas une fuite de lecture, une **INJECTION de contenu attribuée à une
 personne bannie**. `unsetOrNull` / `differsOrUnset` ont déménagé avec elle
 (`@meeshy/shared/utils/prisma-unset`) ; `src/utils/prisma-unset.ts` est une
-coquille de ré-export, et les 98 importeurs de la passerelle sont inchangés.
+coquille de ré-export, et les **53 fichiers** de la passerelle qui importent
+ce chemin sont inchangés (mesuré ; `tsc` le prouve).
 
 **La portée du balayage est une LISTE DE RACINES, plus un `path.resolve`**, et
 elle NOMME ce qu'elle laisse dehors (`AUDIENCE_ROOTS` /

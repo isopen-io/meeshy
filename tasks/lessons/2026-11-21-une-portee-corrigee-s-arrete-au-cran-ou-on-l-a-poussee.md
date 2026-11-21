@@ -72,3 +72,24 @@ accidentelle est celle qui arrive. Un témoin qui compare la clause reçue à ce
 qu'il attend ne vérifie que sa propre copie — et sur `bannedAt`, dont la colonne
 est ABSENTE du document de qui n'a jamais été banni, il passe aussi bien avec la
 clause juste qu'avec celle qui éteint la feature pour tout le monde.
+
+### Et un compte s'écrit en posant la QUESTION, pas en lançant le `grep` le plus proche
+
+Troisième erreur mesurée du même lot, et la plus instructive, parce qu'elle a été
+commise **dans le lot qui écrivait la règle contre elle**.
+
+Les documents ont annoncé « 98 importeurs de la passerelle » pour le fichier
+déménagé. Mesuré : **53**. 98 était le compte de `grep -rl 'unsetOrNull\|differsOrUnset'`
+— les fichiers qui **mentionnent** les deux noms, commentaires, journaux et
+balayages de texte compris. La question posée était tout autre : *combien de
+fichiers ce déménagement casse-t-il ?*, soit
+`grep -rlE "^import .*utils/prisma-unset"`.
+
+> **Deux `grep` qui se ressemblent répondent à deux questions, et une seule est
+> la vôtre.** Avant d'écrire un compte, écrire la question dont il est la
+> réponse, puis vérifier que la commande la pose — un compte est une AFFIRMATION
+> (cycle 93), et « j'ai une commande qui rend un nombre » n'est pas une mesure.
+
+C'est le constat textuel du cycle 202 rejoué sur un compte au lieu d'une porte :
+**écrire une règle ne l'applique pas au lot qui l'écrit.** La relire contre son
+propre diff est une étape, pas une évidence.
