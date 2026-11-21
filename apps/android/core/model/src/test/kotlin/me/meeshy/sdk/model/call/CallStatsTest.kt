@@ -131,15 +131,15 @@ class CallStatsTest {
     }
 
     @Test
-    fun `with no elected pair the last pair carrying an rtt still wins, as before`() {
+    fun `with no elected pair the smallest pair id carrying an rtt wins, never the last listed`() {
         val stats = CallStats.reduce(
             listOf(
-                pair("a", rttSeconds = 0.06, bitrate = 1_200_000.0, state = "in-progress"),
                 pair("b", rttSeconds = 0.5, bitrate = 90_000.0, state = "waiting"),
+                pair("a", rttSeconds = 0.06, bitrate = 1_200_000.0, state = "in-progress"),
             ),
         )
-        assertThat(stats.roundTripTimeMs).isWithin(1e-9).of(500.0)
-        assertThat(stats.availableOutgoingBitrateBps).isEqualTo(90_000)
+        assertThat(stats.roundTripTimeMs).isWithin(1e-9).of(60.0)
+        assertThat(stats.availableOutgoingBitrateBps).isEqualTo(1_200_000)
     }
 
     @Test

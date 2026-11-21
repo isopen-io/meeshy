@@ -168,16 +168,16 @@ final class CallStatsRelayedRouteTests: XCTestCase {
         XCTAssertEqual(stats.availableOutgoingBitrateBps, 900_000)
     }
 
-    func test_reduce_noElectedPair_keepsTheLastPairCarryingTheMeasure() {
+    func test_reduce_noElectedPair_readsTheSmallestPairIdCarryingTheMeasure() {
         let entries = [
-            measuredPair("CP1", local: "L1", remote: "R1", nominated: false, state: "in-progress", rtt: 0.05, bitrate: 900_000),
-            measuredPair("CP2", local: "L2", remote: "R2", nominated: false, state: "in-progress", rtt: 0.12)
+            measuredPair("CP2", local: "L2", remote: "R2", nominated: false, state: "in-progress", rtt: 0.12),
+            measuredPair("CP1", local: "L1", remote: "R1", nominated: false, state: "in-progress", rtt: 0.05, bitrate: 900_000)
         ]
 
         let stats = CallStats.reduce(entries: entries)
 
         XCTAssertNil(CallStats.selectedCandidatePair(in: entries))
-        XCTAssertEqual(stats.roundTripTimeMs, 120, accuracy: 0.001)
+        XCTAssertEqual(stats.roundTripTimeMs, 50, accuracy: 0.001)
         XCTAssertEqual(stats.availableOutgoingBitrateBps, 900_000)
     }
 
