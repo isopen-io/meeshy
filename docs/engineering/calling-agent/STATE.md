@@ -2170,3 +2170,37 @@ socket jusqu'au client.
 2. **#20121** : rendre l'élection indépendante de l'ordre des entrées, sur iOS et Android.
 3. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
 4. Dette d'horloge murale côté Android, d'impact faible : `CallToastBus`, `CallReliabilityMonitor`, `CallCaptureViewModel`. Ouvrir une issue si elle n'existe pas.
+
+## Cycle 64 — 2026-11-21
+
+- **Base** : `origin/dev` @ `feab8d070`. #20123 (#20098, cycle 63) est fusionnée.
+- **Branche** : `claude/determined-volta-3gsw8y`.
+- **Objectif** : #20122. Sur Android, un RTT, une gigue, un débit ou un compteur aberrants (NaN, ±infini, négatif) se lisent 0 dans `CallStats`, comme sur iOS (#19933), et les cumuls ne débordent plus.
+- **Livré** (Android, `core/model`) :
+  - `CallStatValue` (nouveau) : `measured` (fini et > 0, sinon 0), `count` et `sum` (cumul en Long, plafonné à `Int.MAX_VALUE`).
+  - **Écart voulu avec iOS** : `count` SATURE à `Int.MAX_VALUE` une valeur finie au-delà de la borne, au lieu de rendre 0. Sur Android, la borne est une limite de représentation (`Int` 32 bits), pas une borne de vraisemblance. Un flux vidéo franchit 2^31 octets en moins de 2 h, et rendre 0 aurait fait reculer les cumuls (réserve QA 1).
+  - `CallStats.reduce` : le RTT et la gigue passent par `measured`, le débit et les compteurs rtp par `count`, et chaque cumul par `sum`. Une gigue non finie ou négative est exclue de la moyenne, comme sur iOS.
+  - `intervalQualitySample` : le dénominateur du ratio de perte se calcule en Double, il ne déborde plus.
+  - Les valeurs normales, la forme de `CallStats` et le payload ne changent pas. `CallMediaQuality` garde son `measured` à `null` (#19895, autre loi).
+- **Tests** : `CallStatValueTest`, 13 témoins.
+  - Sur le `reduce` de dev, 8 tombent : un RTT NaN, -5 ou infini restait tel quel ; une gigue de -10 passait ; la moyenne de gigue valait NaN ; `packetsLost` négatif faisait baisser la somme ; une somme de 2e9 + 2e9 débordait à -294967296 ; le ratio de perte valait 0.0 au lieu de 0.5.
+  - 3 tombent sur la première correction : le témoin de monotonie de la QA (`bandwidth` passait de 2,14e9 à 4e7) et les deux `count(3e9)`.
+  - Vert local : `meeshy.sh jvm-check -PjvmCheckModelOnly --rerun-tasks` donne 19 257 tests, 0 échec. Rejoué par la QA.
+  - CI : `android.yml` en `workflow_dispatch` sur la tête `58864f209`. Le résultat est dans la PR.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves.
+  - R1 (moyenne, traitée) : un compteur d'octets au-delà de 2^31 retombait à 0. Il sature désormais.
+  - R2 (faible) : `CallMediaQuality` garde un `measured` à part, voulu par #19895.
+- **Découvert** : **#20132**. Les compteurs d'octets Android sont des `Int` et plafonnent à environ 2,1 Go cumulés ; ils doivent passer en `Long`, borne 2^53 − 1.
+- **Outillage** : `./meeshy.sh jvm-check -PjvmCheckModelOnly --rerun-tasks` fait tourner `:core:model` dans le conteneur malgré le proxy (le mode normal bute sur libsignal). Sans `--rerun-tasks`, la tâche reste UP-TO-DATE.
+- **Limites** : rien n'a été vérifié sur appareil ni sur un vrai `getStats` libwebrtc.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée :
+   - lire son run `android.yml`, et relancer un `workflow_dispatch` s'il a été annulé ;
+   - fusionner `dev` dans la branche ;
+   - fusionner la PR.
+1. **#20132** : les compteurs d'octets en Long sur Android. Le lot est petit et se prouve en local avec `jvm-check -PjvmCheckModelOnly`, puis par `android.yml`.
+2. **#20121** : rendre l'élection ICE indépendante de l'ordre des entrées, sur iOS et Android.
+3. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
+4. #20043 : la dette d'horloge murale côté Android.
