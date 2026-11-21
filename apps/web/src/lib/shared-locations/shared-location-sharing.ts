@@ -62,6 +62,11 @@ import {
  * `<clé>.received`), et une échéance s'y solde sans rien envoyer — la passerelle tient
  * l'échéance de chacun (#18205). Seul un geste d'ici (« Partager », « Arrêter ») envoie
  * quelque chose ; « Partager » fait de cet onglet celui qui publie.
+ *
+ * UN POINT CHOISI NE SE REMPLACE PAS EN SILENCE (#20126, iso #20087) : quand la passerelle sert un point choisi à la
+ * main par un autre appareil (`source: 'manual'`, marque `<clé>.fixedPoint`), cet onglet ne suit plus la position de
+ * l'appareil et n'en envoie aucune ; « Partager » d'ici rend `replaces-chosen-point` sans rien demander ni envoyer, et
+ * ne fait passer les destinataires à la position réelle qu'avec `replacingPoint` (la charge porte `source: 'device'`).
  */
 
 export type SharedLocationFixResult = { readonly kind: 'fix'; readonly fix: SharedLocationFix } | { readonly kind: 'denied' } | { readonly kind: 'unavailable' };
@@ -83,8 +88,12 @@ export type SharedLocationEmitter = {
   stop(): Promise<boolean>;
 };
 
-/** `withdrawal-pending` : « Arrêter » n'a pas pu partir, le centre le rejouera dès le retour du réseau. */
-export type SharedLocationShareProblem = 'location-denied' | 'location-unavailable' | 'withdrawal-pending' | SharedLocationSendOutcome;
+/**
+ * `withdrawal-pending` : « Arrêter » n'a pas pu partir, le centre le rejouera dès le retour du réseau.
+ * `replaces-chosen-point` : le partage montre un point choisi à la main ; rien n'est parti, l'écran demande puis rejoue
+ * avec `replacingPoint` (#20126).
+ */
+export type SharedLocationShareProblem = 'location-denied' | 'location-unavailable' | 'withdrawal-pending' | 'replaces-chosen-point' | SharedLocationSendOutcome;
 
 export type SharedLocationSharingState = { readonly roster: SharedLocationRoster; readonly busy: boolean };
 
@@ -94,7 +103,13 @@ export type SharedLocationSharingCenter = {
   /** La ligne de la fiche reste tant qu'un partage court vers cette personne, même sous Ami : « Arrêter » ne disparaît jamais avant le partage. */
   showsRow(userId: string, offered: boolean): boolean;
   /** `null` : c'est parti. */
-  share(request: { readonly userId: string; readonly precision: SharedLocationPrecision; readonly durationMinutes: SharedLocationDurationMinutes }): Promise<SharedLocationShareProblem | null>;
+  share(request: {
+    readonly userId: string;
+    readonly precision: SharedLocationPrecision;
+    readonly durationMinutes: SharedLocationDurationMinutes;
+    /** L'utilisateur a accepté que sa position réelle remplace le point choisi (#20126). */
+    readonly replacingPoint?: boolean;
+  }): Promise<SharedLocationShareProblem | null>;
   stopSharing(userId: string): Promise<SharedLocationShareProblem | null>;
   /** Une échéance est passée, ou la socket vient de s'accrocher : solder ce qui doit l'être. */
   reconcile(): Promise<void>;
@@ -228,6 +243,19 @@ export function createSharedLocationSharingCenter({
     }
   };
 
+  /* Le partage servi montre un point choisi à la main ailleurs : la position d'ici ne part pas (#20126). */
+  const fixedPointKey = `${storageKey}.fixedPoint`;
+  let fixedPoint = storage.getItem(fixedPointKey) === '1';
+  const markFixedPoint = (next: boolean): void => {
+    fixedPoint = next;
+    try {
+      if (next) storage.setItem(fixedPointKey, '1');
+      else storage.removeItem(fixedPointKey);
+    } catch {
+      /* En mémoire, la marque tient pour cet onglet. */
+    }
+  };
+
   const roster = (): SharedLocationRoster => store.getState().roster;
   /* Le centre n'agit que pour le compte qui l'a créé, et tant qu'il est connecté : la socket appartient au compte courant. */
   const isLive = (): boolean => !abandoned && owner !== '' && currentAccount() === owner;
@@ -262,7 +290,8 @@ export function createSharedLocationSharingCenter({
     if (rosterOps.equals(kept, roster())) return;
     store.setState({ roster: kept });
     received = storage.getItem(receivedKey) === '1';
-    if (!rosterOps.hasRecipients(kept) || received) {
+    fixedPoint = storage.getItem(fixedPointKey) === '1';
+    if (!rosterOps.hasRecipients(kept) || received || fixedPoint) {
       lastSent = null;
       stopFollowing();
     }
@@ -282,6 +311,7 @@ export function createSharedLocationSharingCenter({
   const wipe = (): void => {
     adopt(EMPTY_ROSTER);
     markReceived(false);
+    markFixedPoint(false);
     lastSent = null;
     notePublishedStart(null);
     disarm();
@@ -304,17 +334,38 @@ export function createSharedLocationSharingCenter({
     arm(Math.min(...delays));
   };
 
+  /* Un point choisi ailleurs que cet onglet ignorait encore (#20126) : le relevé est refusé, le suivi cesse et le centre relit. */
   const didMove = async (fix: SharedLocationFix): Promise<void> => {
     if (!gate.tryEnter()) return;
+    let meetsChosenPoint = false;
     try {
       const current = roster();
-      if (!isLive() || !rosterOps.hasRecipients(current) || rosterOps.hasPendingWithdrawals(current) || !shouldSendSharedLocation(fix, now(), lastSent)) return;
+      if (!isLive() || fixedPoint || !rosterOps.hasRecipients(current) || rosterOps.hasPendingWithdrawals(current) || !shouldSendSharedLocation(fix, now(), lastSent)) return;
       lastSent = { fix, at: now() };
       const verdict = await emitter.update(fix);
-      if (isLive() && verdict.kind === 'refused' && verdict.outcome === 'not-sharing') await wipeUnlessChangedElsewhere(current);
+      if (!isLive() || verdict.kind !== 'refused') return;
+      if (verdict.outcome === 'not-sharing') await wipeUnlessChangedElsewhere(current);
+      if (verdict.outcome === 'fixed-point') {
+        showChosenPoint();
+        meetsChosenPoint = true;
+      }
     } finally {
       gate.leave();
     }
+    if (meetsChosenPoint) await center.sync();
+  };
+
+  const showChosenPoint = (): void => {
+    markFixedPoint(true);
+    lastSent = null;
+    stopFollowing();
+  };
+
+  /* La source servie suit le partage : absente (passerelle d'avant), elle ne dit rien ; sans personne, rien à montrer. */
+  const followServedSource = (served: SharedLocationOwnSnapshot): void => {
+    if (!rosterOps.hasRecipients(roster())) return markFixedPoint(false);
+    if (served.source === 'manual') showChosenPoint();
+    else if (served.source === 'device') markFixedPoint(false);
   };
 
   /* « Pas de partage » répond à la liste d'AVANT l'envoi : un autre onglet a pu en démarrer une depuis, qu'on ne vide pas (#18431). */
@@ -347,7 +398,7 @@ export function createSharedLocationSharingCenter({
   };
 
   const startFollowing = (): void => {
-    if (unfollow !== null) return;
+    if (unfollow !== null || fixedPoint) return;
     unfollow = fixes.follow((fix) => void didMove(fix));
   };
 
@@ -381,9 +432,14 @@ export function createSharedLocationSharingCenter({
    * La liste envoyée solde tous les retraits en attente : c'est elle que le serveur sert dès qu'il l'accepte. Sans
    * position (liste seule, #19284), un seul envoi : une passerelle qui la connaît connaît aussi l'échéance par personne.
    */
-  const publish = async (wanted: SharedLocationRoster, fix: SharedLocationFix | null, previous: SharedLocationRoster): Promise<SharedLocationShareProblem | null> => {
+  const publish = async (
+    wanted: SharedLocationRoster,
+    fix: SharedLocationFix | null,
+    previous: SharedLocationRoster,
+    replacesChosenPoint = false,
+  ): Promise<SharedLocationShareProblem | null> => {
     const next = rosterOps.settled(wanted);
-    const payload = sharedLocationStartPayloadOf({ recipients: rosterOps.deadlinedRecipients(next, now()), durationMinutes: rosterOps.serverDurationMinutes(next, now()), fix });
+    const payload = sharedLocationStartPayloadOf({ recipients: rosterOps.deadlinedRecipients(next, now()), durationMinutes: rosterOps.serverDurationMinutes(next, now()), fix, replacesChosenPoint });
     if (payload === null) return 'invalid';
     if (!isLive()) return 'failed';
     /* Avant l'accusé, la liste gardée couvre les deux : un onglet fermé pendant l'attente garde « Arrêter » pour chacun. */
@@ -391,7 +447,10 @@ export function createSharedLocationSharingCenter({
     const verdict = fix === null ? await emitter.start(payload) : await startTolerant(payload);
     if (!isLive()) return 'failed';
     if (verdict.kind === 'started') {
-      if (fix !== null) notePublishedStart(verdict.startedAt ?? null);
+      if (fix !== null) {
+        notePublishedStart(verdict.startedAt ?? null);
+        markFixedPoint(false);
+      }
       engage(next, fix);
       return null;
     }
@@ -438,7 +497,8 @@ export function createSharedLocationSharingCenter({
     if (listOnly !== 'invalid' && listOnly !== 'not-sharing') return listOnly;
     if (!isLive()) return 'failed';
     if (listOnly === 'not-sharing') return settleNotSharing();
-    const fix = freshLastFix() ?? (await silentFix());
+    /* Devant un point choisi, la position de l'appareil ne le remplace jamais par un repli : tout s'arrête plutôt. */
+    const fix = fixedPoint ? null : (freshLastFix() ?? (await silentFix()));
     if (fix === null) return stopAll();
     if (!isLive()) return 'failed';
     return publish(wanted, fix, roster());
@@ -485,21 +545,52 @@ export function createSharedLocationSharingCenter({
   const locked = (operation: () => Promise<SharedLocationShareProblem | null>): Promise<SharedLocationShareProblem | null> =>
     gated(() => acrossAccountTabs(operation));
 
+  const showsChosenPoint = (): boolean => fixedPoint && rosterOps.hasRecipients(rosterOps.pruned(roster(), now()));
+
+  /* Sous le verrou : la liste, le démarrage et la source que la passerelle sert font foi (#18389, #18580, #20126). */
+  const syncWithServed = async (): Promise<null> => {
+    const truth = await served().catch(() => null);
+    if (truth === null || !isLive()) return null;
+    const before = roster();
+    const next = rosterOps.withServed(before, truth, now());
+    if (rosterOps.equals(next, before)) {
+      if (!received && rosterOps.hasRecipients(next)) followServedStart(truth.startedAt);
+      followServedSource(truth);
+      return null;
+    }
+    adopt(next);
+    if (!rosterOps.hasRecipients(next)) {
+      lastSent = null;
+      stopFollowing();
+      markReceived(false);
+    } else if (!rosterOps.hasRecipients(before)) markReceived(true);
+    else if (!received) followServedStart(truth.startedAt);
+    followServedSource(truth);
+    scheduleDeadline();
+    return null;
+  };
+
   const center: SharedLocationSharingCenter = {
     store,
     entry: (userId) => rosterOps.entry(rosterOps.pruned(roster(), now()), userId),
     showsRow: (userId, offered) => offered || center.entry(userId) !== null,
-    share: ({ userId, precision, durationMinutes }) =>
+    share: ({ userId, precision, durationMinutes, replacingPoint = false }) =>
       gated(async () => {
         if (!isLive()) return 'failed';
+        if (!replacingPoint && showsChosenPoint()) return 'replaces-chosen-point';
         const current = await fixes.currentFix();
         if (current.kind === 'denied') return 'location-denied';
         if (current.kind === 'unavailable') return 'location-unavailable';
         return acrossAccountTabs(async () => {
+          if (!replacingPoint && showsChosenPoint()) return 'replaces-chosen-point';
+          const replaces = replacingPoint && showsChosenPoint();
           markReceived(false);
           const previous = roster();
           const next = rosterOps.adding(rosterOps.pruned(previous, now()), { userId, precision, durationMinutes, now: now() });
-          return publish(next, current.fix, previous);
+          const problem = await publish(next, current.fix, previous, replaces);
+          if (problem !== 'fixed-point' || !isLive()) return problem;
+          await syncWithServed();
+          return fixedPoint ? 'replaces-chosen-point' : problem;
         });
       }),
     stopSharing: (userId) =>
@@ -542,25 +633,7 @@ export function createSharedLocationSharingCenter({
       if (isLive()) reread();
     },
     sync: async () => {
-      await locked(async () => {
-        const truth = await served().catch(() => null);
-        if (truth === null || !isLive()) return null;
-        const before = roster();
-        const next = rosterOps.withServed(before, truth, now());
-        if (rosterOps.equals(next, before)) {
-          if (!received && rosterOps.hasRecipients(next)) followServedStart(truth.startedAt);
-          return null;
-        }
-        adopt(next);
-        if (!rosterOps.hasRecipients(next)) {
-          lastSent = null;
-          stopFollowing();
-          markReceived(false);
-        } else if (!rosterOps.hasRecipients(before)) markReceived(true);
-        else if (!received) followServedStart(truth.startedAt);
-        scheduleDeadline();
-        return null;
-      });
+      await locked(syncWithServed);
     },
     abandon: () => {
       abandoned = true;

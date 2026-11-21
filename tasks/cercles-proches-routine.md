@@ -1773,3 +1773,22 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   Lua joué une fois contre un vrai `redis-server` local (hors dépôt).
 - Prochain lot : annoncer `acceptsManualSource` (#19557, avec les préconditions du commentaire de #20115 : schéma de
   `ownSharedLocationSchema`, plancher `MIN_APP_VERSION`), puis #20126 (web + Android), #20127, #20054, #20056, #20086.
+
+## 2026-11-21 — réveil de 13 h : la moitié web de #20126 (un point choisi ne se remplace pas en silence)
+
+- Reprise : la PR #20202 (#19557, annoncer `acceptsManualSource`) est menée par une autre session vivante (fusion de
+  `dev` et CI relancée à 13 h 03) : ce réveil n'y touche pas. Aucune branche n'écrit `apps/web/src/lib/shared-locations`.
+- Lot : web seul de #20126. Le web lit `source` sur `GET /relations/locations/mine` (inconnue ⇒ `manual`, absente ⇒
+  rien) ; devant un point choisi l'onglet ne suit plus la position et n'en envoie aucune (marque `<clé>.fixedPoint`,
+  relue au rechargement et entre onglets) ; un relevé refusé `FIXED_POINT` coupe le suivi et relit ; « Partager » rend
+  `replaces-chosen-point` sans demander de relevé ni rien envoyer, la fiche demande « Montrer votre position réelle ? »
+  (« Garder le point choisi » en premier), puis rejoue le même choix avec `source: 'device'`. Un démarrage refusé
+  `FIXED_POINT` (point choisi ailleurs pendant l'envoi) relit et demande. « Arrêter » devant un point choisi republie la
+  liste seule et ne se replie jamais sur la position de l'appareil.
+- Android : issue de suivi #20212 (même milestone). La confirmation liée au partage montré et les noms concernés restent
+  #20127.
+- Gates : `bun test` complet 34 928 verts, 2 rouges dont 1 hérité (`act-leak-guard`, rouge sans le lot) et 1 corrigé
+  dans le lot (cliquet des boutons sans réponse d'appui : `active:scale-[0.98]` sur les deux boutons neufs) ; `tsc` 0 ;
+  `vite build` vert ; poids vert ; les gates navigateur (verbosité, Playwright) ne tournent pas en conteneur, ils se
+  prouvent en CI.
+- Prochain lot : #20212 (Android), puis #20127, #20054, #20056, #20086.

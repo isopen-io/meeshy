@@ -213,6 +213,10 @@ const ar = {
   'shareLocation.rateLimited': 'إرسالات كثيرة جدًا، حاول بعد لحظة.',
   'shareLocation.failed': 'لم تتم مشاركة الموقع، حاول مرة أخرى.',
   'shareLocation.stopPending': 'ستتوقف المشاركة فور عودة الاتصال.',
+  'shareLocation.replacePoint.title': 'هل تريد إظهار موقعك الحقيقي؟',
+  'shareLocation.replacePoint.message': 'أنت تشارك نقطة اخترتها على الخريطة. كل من يراها سيرى موقعك الحقيقي بدلًا منها.',
+  'shareLocation.replacePoint.confirm': 'إظهار موقعي الحقيقي',
+  'shareLocation.replacePoint.keep': 'الإبقاء على النقطة المختارة',
 } as const satisfies CirclesCatalog;
 
 export default ar;
