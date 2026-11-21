@@ -24,6 +24,7 @@ import {
 import type { CacheStore } from '../CacheStore';
 import { hoistLocationDeep } from '../location/sharedPlace';
 import { viewerPostAudience } from './feedVisibility';
+import { readerSeparatedFrom } from './separatedReader';
 import { postInclude, NOT_DELETED } from './postIncludes';
 import { withMentions, type WireReader } from './postReferences';
 import { withViewerPostState } from './viewerPostState';
@@ -110,15 +111,16 @@ export async function readStoryHighlights(prisma: PrismaClient, params: ReadPara
 }
 
 async function readableStories(prisma: PrismaClient, params: ReadParams, ids: readonly string[]): Promise<ServedStory[]> {
+  const served = await readerSeparatedFrom(prisma, params.viewerId, params.reader);
   const audience = params.viewerId
-    ? await viewerPostAudience(prisma, params.viewerId, params.cache)
+    ? await viewerPostAudience(prisma, params.viewerId, params.cache, served.separatedUserIds)
     : { visibility: PostVisibility.PUBLIC };
   const posts = await prisma.post.findMany({
     where: { ...ownerStoriesWhere(params.ownerId, ids), AND: [audience] },
     select: postInclude,
   });
   const withState = await withViewerPostState(prisma, params.viewerId, posts);
-  return withState.map((post) => withMentions(hoistLocationDeep(post), params.reader));
+  return withState.map((post) => withMentions(hoistLocationDeep(post), served));
 }
 
 async function ownsEveryStory(prisma: PrismaClient, ownerId: string, ids: readonly string[]): Promise<boolean> {

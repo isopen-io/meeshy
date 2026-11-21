@@ -89,7 +89,9 @@ import java.util.Locale
 
 /**
  * LES MISSIONS DU JOUR ET L'OFFRANDE (iOS `GameMissionsView`) — trois actes, leur avancement, un changement par jour
- * (1 Meesh), et l'Offrande qui s'ouvre quand tout est fait.
+ * (1 Meesh), et l'Offrande qui s'ouvre quand tout est fait. Sous le niveau 5, le premier Rêve (#17370) tient en un acte,
+ * sans changement, et dit les étincelles qui manquent avant le Rêve complet ; seul un serveur antérieur, qui ne sert
+ * aucun acte, laisse la porte fermée.
  *
  * Avant chaque geste, ce qu'il dépense ou exige se dit : le prix d'un changement contre les Meeshes en poche, les actes
  * que l'Offrande attend, le niveau qui ouvre les missions. **Rien n'est inventé côté client** : les actes, leur objectif,
@@ -106,7 +108,7 @@ internal fun MissionsGestures(
 ) {
     val missions = game.missions
     GameCard(title = stringResource(R.string.game_missions_title)) {
-        if (!missions.unlocked) {
+        if (missions.showsDoorOnly) {
             GameNote(gameString(GameCopyLaws.missionsLocked(game.level.shown.level)))
             return@GameCard
         }
@@ -118,6 +120,7 @@ internal fun MissionsGestures(
             val locale = currentLocale()
             GameNote(stringResource(R.string.game_missions_prism_hour, clockText(hour.startMinute, locale), clockText(hour.endMinute, locale)))
         }
+        missions.fullDreamIn?.let { sparks -> GameNote(stringResource(R.string.game_missions_full_dream_in, points(sparks))) }
         val rerollSpend = GameSpend.preview(held = game.treasury.held.toLong(), cost = GameMissionLaws.REROLL_PRICE.toLong())
         missions.items.forEach { mission ->
             MissionRow(
