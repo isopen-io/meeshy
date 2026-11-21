@@ -44,6 +44,7 @@ import { consentBirthDate } from './voice-cloning-gate';
 import { writeBirthDateOnce } from './auth/birth-date-write';
 import { EngagementService } from './engagement/EngagementService';
 import { guardedTimeout } from '../utils/guarded-timer';
+import { callerMayUseAttachment } from './attachments/attachmentUseAdmission';
 // Logger dédié pour VoiceProfileService
 const logger = enhancedLogger.child({ module: 'VoiceProfileService' });
 
@@ -264,25 +265,17 @@ export class VoiceProfileService extends EventEmitter {
     throw new Error('Either attachmentId or audioData must be provided');
   }
 
+  /**
+   * #20113 F5 — porte PARTAGÉE : `callerMayUseAttachment`.
+   *
+   * Ce fichier en portait un exemplaire, jumeau ligne pour ligne de celui de
+   * l'autre service, et tous deux demandaient « l'ai-je déposée ? » AVANT
+   * l'appartenance — un court-circuit qui survivait au départ de la
+   * conversation et à un bannissement. La règle, son ordre et sa raison vivent
+   * désormais à un seul endroit.
+   */
   private async verifyAttachmentAccess(userId: string, attachment: any): Promise<boolean> {
-    // User uploaded the attachment
-    if (attachment.uploadedBy === userId) {
-      return true;
-    }
-
-    // User is part of the conversation
-    if (attachment.message?.conversationId) {
-      const member = await this.prisma.participant.findFirst({
-        where: {
-          conversationId: attachment.message.conversationId,
-          userId: userId,
-          isActive: true
-        }
-      });
-      return !!member;
-    }
-
-    return false;
+    return callerMayUseAttachment(this.prisma, userId, attachment);
   }
 
   private mimeTypeToFormat(mimeType: string): string {
