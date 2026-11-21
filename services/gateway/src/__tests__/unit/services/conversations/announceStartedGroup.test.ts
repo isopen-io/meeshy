@@ -167,3 +167,76 @@ describe('#14690 — conversation:new porte les capacités de SON destinataire',
     expect(emitted.every((e) => !('viewerCapabilities' in e.payload))).toBe(true);
   });
 });
+
+describe("#20110 — ce que la charge d'arrivée NOMME", () => {
+  /**
+   * Alice est actif-et-BANNI, Bob est vivant. La ligne d'Alice précède celle de
+   * Bob, donc son `displayName` serait le PREMIER nom du titre par défaut : le
+   * titre d'un groupe pouvait être le nom de quelqu'un qui en est exclu.
+   */
+  const avecAliceBannie = (title: string | null) => {
+    const row = conversation('group', title);
+    return {
+      ...row,
+      participants: row.participants.map((participant) =>
+        participant.userId === ALICE
+          ? { ...participant, bannedAt: new Date('2026-11-01T00:00:00.000Z') }
+          : participant
+      ),
+    };
+  };
+
+  it("ne nomme pas un membre actif-et-banni dans `participantIds`", async () => {
+    const { emitted } = await annoncer(avecAliceBannie('Équipe'));
+
+    const nouvelles = emitted.filter((e) => e.event === SERVER_EVENTS.CONVERSATION_NEW);
+    expect(nouvelles.length).toBeGreaterThan(0);
+    for (const { payload } of nouvelles) {
+      // #20100 avait resserré l'AUDIENCE ; la CHARGE nommait encore l'exclu à
+      // chaque invité légitime.
+      expect(payload.participantIds).not.toContain(ALICE);
+      // La mesure INVERSE, sans laquelle « ne nomme personne » passerait aussi :
+      // les vivants sont toujours nommés, créateur compris.
+      expect(payload.participantIds).toEqual(expect.arrayContaining([CREATOR, BOB]));
+    }
+  });
+
+  it("ne compose pas le titre par défaut avec le nom d'un membre banni", async () => {
+    const { emitted } = await annoncer(avecAliceBannie(null));
+
+    const nouvelles = emitted.filter((e) => e.event === SERVER_EVENTS.CONVERSATION_NEW);
+    expect(nouvelles.length).toBeGreaterThan(0);
+    for (const { payload } of nouvelles) {
+      // Le titre est émis à tous les invités ET persisté dans la notification
+      // d'invitation : c'est la forme la plus durable de la fuite.
+      expect(payload.title).not.toContain('Alice');
+      expect(payload.title).toBe('Bob');
+    }
+  });
+
+  it("nomme le créateur même banni — `creatorId` le nomme déjà, et le titre l'écarte", async () => {
+    const row = conversation('group', null);
+    const creatorBanni = {
+      ...row,
+      participants: row.participants.map((participant) =>
+        participant.userId === CREATOR
+          ? { ...participant, bannedAt: new Date('2026-11-01T00:00:00.000Z') }
+          : participant
+      ),
+    };
+
+    const { emitted } = await annoncer(creatorBanni);
+
+    const nouvelles = emitted.filter((e) => e.event === SERVER_EVENTS.CONVERSATION_NEW);
+    expect(nouvelles.length).toBeGreaterThan(0);
+    for (const { payload } of nouvelles) {
+      // L'exception écrite sur le site : le retirer ne cacherait rien (la même
+      // charge porte `creatorId`, et la bannière dit « X vous a ajouté »), et
+      // romprait la promesse du contrat.
+      expect(payload.creatorId).toBe(CREATOR);
+      expect(payload.participantIds).toContain(CREATOR);
+      // Et il n'entre jamais dans le titre, que `currentUserId` écarte.
+      expect(payload.title).not.toContain('Créa');
+    }
+  });
+});
