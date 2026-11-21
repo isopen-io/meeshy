@@ -94,6 +94,13 @@ public class SharedLocationStartRequest private constructor(
     public val recipients: List<SharedLocationRecipient>,
     public val duration: SharedLocationShareDuration,
     public val fix: SharedLocationFix?,
+    /**
+     * La position réelle REMPLACE le point choisi à la main qu'un autre appareil montre (#20212) : la charge porte
+     * `source: 'device'`. Sans elle, la passerelle refuse un démarrage avec position devant un point choisi
+     * (`FIXED_POINT`) ; une passerelle d'avant #19557 ne sert jamais de point choisi, la clé ne part donc que pour le
+     * remplacer, et jamais sans position.
+     */
+    public val replacesChosenPoint: Boolean = false,
 ) {
     /** Une liste seule ne porte aucune position. */
     public val isListOnly: Boolean get() = fix == null
@@ -106,12 +113,13 @@ public class SharedLocationStartRequest private constructor(
      * alors chacun à son échéance, comme avant.
      */
     public fun withoutDeadlines(): SharedLocationStartRequest =
-        SharedLocationStartRequest(recipients.map { it.copy(expiresInSeconds = null) }, duration, fix)
+        SharedLocationStartRequest(recipients.map { it.copy(expiresInSeconds = null) }, duration, fix, replacesChosenPoint)
 
     public fun wire(): Map<String, Any> = buildMap {
         put("recipients", recipients.map { it.wire() })
         put("durationMinutes", duration.minutes)
         fix?.let { put("position", it.wire()) }
+        if (fix != null && replacesChosenPoint) put("source", "device")
     }
 
     public companion object {
@@ -128,7 +136,8 @@ public class SharedLocationStartRequest private constructor(
             recipients: List<SharedLocationRecipient>,
             duration: SharedLocationShareDuration,
             fix: SharedLocationFix,
-        ): SharedLocationStartRequest? = ordered(recipients)?.let { SharedLocationStartRequest(it, duration, fix) }
+            replacesChosenPoint: Boolean = false,
+        ): SharedLocationStartRequest? = ordered(recipients)?.let { SharedLocationStartRequest(it, duration, fix, replacesChosenPoint) }
 
         /** La liste seule (#19287) : un retrait ou une échéance, sans position. `null` : comme [of]. */
         public fun listOnly(
@@ -160,6 +169,9 @@ public enum class SharedLocationSendOutcome {
      * centre garde « Arrêter » à portée tant que le doute n'est pas levé.
      */
     UNCONFIRMED,
+
+    /** Le partage montre un point choisi à la main ailleurs (#20212) : rien n'a été écrit, la position réelle ne l'a pas remplacé. */
+    FIXED_POINT,
     FAILED;
 
     public companion object {
@@ -168,6 +180,7 @@ public enum class SharedLocationSendOutcome {
             "SHARED_LOCATION_NOT_SHARING" to NOT_SHARING,
             "SHARED_LOCATION_RATE_LIMITED" to RATE_LIMITED,
             "SHARED_LOCATION_UNAVAILABLE" to UNAVAILABLE,
+            "SHARED_LOCATION_FIXED_POINT" to FIXED_POINT,
             "NO_SOCKET" to OFFLINE,
         )
 
