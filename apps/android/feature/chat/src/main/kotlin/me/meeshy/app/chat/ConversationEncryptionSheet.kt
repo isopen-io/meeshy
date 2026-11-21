@@ -69,10 +69,12 @@ internal fun ConversationEncryptionSheet(
     isDirect: Boolean,
     accentColor: Color,
     onDismiss: () -> Unit,
+    peerUserId: String? = null,
+    peerName: String? = null,
     viewModel: ConversationEncryptionViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    LaunchedEffect(conversationId, isDirect) { viewModel.load(conversationId, isDirect) }
+    LaunchedEffect(conversationId, isDirect, peerUserId, peerName) { viewModel.load(conversationId, isDirect, peerUserId, peerName) }
     val view = state.view()
 
     ModalBottomSheet(
@@ -106,7 +108,7 @@ internal fun ConversationEncryptionSheet(
                     }
                 }
             }
-            state.notice?.takeIf { !state.readFailed }?.let { NoticeText(it.textRes(), error = true) }
+            state.notice?.takeIf { !state.readFailed }?.let { NoticeText(noticeText(it, state.withoutDeviceFirstName), error = true) }
         }
     }
     if (state.confirmsEndToEnd) EndToEndConfirmation(viewModel::confirmEndToEnd, viewModel::cancelEndToEnd)
@@ -172,10 +174,22 @@ private fun ReadFailedBlock(notice: ConversationEncryptionNotice?, onRetry: () -
     }
 }
 
+/** Le refus d'un membre sans appareil chiffré nomme le pair quand il le peut (#20076) ; les autres avis ont leur phrase. */
 @Composable
-private fun NoticeText(res: Int, error: Boolean = false) {
+private fun noticeText(notice: ConversationEncryptionNotice, withoutDeviceFirstName: String): String =
+    if (notice == ConversationEncryptionNotice.PARTICIPANT_WITHOUT_DEVICE && withoutDeviceFirstName.isNotEmpty()) {
+        stringResource(R.string.encryption_participant_without_device_named, withoutDeviceFirstName)
+    } else {
+        stringResource(notice.textRes())
+    }
+
+@Composable
+private fun NoticeText(res: Int, error: Boolean = false) = NoticeText(stringResource(res), error)
+
+@Composable
+private fun NoticeText(text: String, error: Boolean = false) {
     Text(
-        text = stringResource(res),
+        text = text,
         style = MaterialTheme.typography.bodySmall,
         color = if (error) MeeshyPalette.Error else MeeshyTheme.tokens.textSecondary,
         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },

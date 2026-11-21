@@ -5,6 +5,22 @@ import XCTest
 /// Témoins de comportement de `MeeshyToggleRow` (K06), lus par la recette en valeurs.
 final class MeeshyToggleRowTests: XCTestCase {
 
+    // MARK: - Colonne du symbole (#20030)
+
+    @MainActor
+    func test_symbol_occupiesTheSameColumn_whateverItsGlyph() {
+        let widths = ["mappin.and.ellipse", "theatermasks", "bell", "i.circle"].map { name in
+            UIHostingController(rootView: MeeshyToggleRowSymbol(name)).sizeThatFits(in: CGSize(width: 400, height: 200)).width
+        }
+        XCTAssertEqual(Set(widths.map { ($0 * 2).rounded() }).count, 1, "les titres d'une carte commencent à la même abscisse : \(widths)")
+    }
+
+    @MainActor
+    func test_symbol_columnHoldsTheWidestGlyph_plusItsMargin() {
+        let width = UIHostingController(rootView: MeeshyToggleRowSymbol("theatermasks")).sizeThatFits(in: CGSize(width: 400, height: 200)).width
+        XCTAssertEqual(width, MeeshyToggleRowRecipe.symbolColumnWidth + MeeshySpacing.md, accuracy: 0.5)
+    }
+
     // MARK: - Hauteur et contenu
 
     func test_resolve_anyAccessory_keepsMinimumHeightOf46Points() {

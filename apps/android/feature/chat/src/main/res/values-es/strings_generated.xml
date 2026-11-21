@@ -76,6 +76,11 @@
         <item quantity="many">¿Eliminar %1$d mensajes?</item>
         <item quantity="other">¿Eliminar %1$d mensajes?</item>
     </plurals>
+    <string name="chat_e2ee_peer_without_device_title">%1$s no puede recibir mensajes cifrados</string>
+    <string name="chat_e2ee_peer_without_device_title_anonymous">Tu contacto no puede recibir mensajes cifrados</string>
+    <string name="chat_e2ee_peer_without_device_write_plain">Escribir sin cifrado</string>
+    <string name="chat_e2ee_readable_direct_failed">No se pudo abrir. Inténtalo de nuevo.</string>
+    <string name="chat_e2ee_readable_direct_offline">Sin conexión: vuelve a conectarte para abrirla.</string>
     <string name="chat_effect_blurred">Desenfoque</string>
     <string name="chat_effect_duration_15s">15 s</string>
     <string name="chat_effect_duration_1m">1 min</string>
@@ -373,6 +378,8 @@
     <string name="encryption_mode_hybrid_label">Híbrido</string>
     <string name="encryption_mode_server_description">Cifrado en nuestros servidores, legible por ellos: la traducción y la búsqueda funcionan.</string>
     <string name="encryption_mode_server_label">Servidor</string>
+    <string name="encryption_participant_without_device_anonymous">Un miembro aún no puede recibir mensajes cifrados: no se activó nada.</string>
+    <string name="encryption_participant_without_device_named">%1$s todavía no puede recibir mensajes cifrados: no se activó nada.</string>
     <string name="encryption_summary_end_to_end">Cifrada de extremo a extremo: solo los participantes leen</string>
     <string name="encryption_summary_hybrid">Cifrada en nuestros servidores, con verificación entre dispositivos compatibles</string>
     <string name="encryption_summary_none">No cifrada</string>

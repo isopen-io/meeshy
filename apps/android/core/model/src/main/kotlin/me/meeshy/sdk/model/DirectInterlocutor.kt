@@ -150,6 +150,13 @@ fun directConversationRequest(userId: String): CreateConversationRequest =
     )
 
 /**
+ * La demande du tête-à-tête LISIBLE de la paire (#20076, iOS `openReadableDirect`) : `plaintext: true` ne rouvre que celui
+ * que le serveur lit, et en crée un à côté du chiffré s'il n'y en a pas.
+ */
+fun readableDirectConversationRequest(userId: String): CreateConversationRequest =
+    directConversationRequest(userId).copy(plaintext = true)
+
+/**
  * La photo d'une ligne de conversation (#12569, miroir d'iOS `isDirect ? participantAvatarURL :
  * avatar` et du web `avatarOf`) : celle du pair en direct, celle de la conversation sinon. Jamais
  * l'une à la place de l'autre : un direct sans photo de pair reste en initiales, il ne prête pas la

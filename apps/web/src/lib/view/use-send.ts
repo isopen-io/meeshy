@@ -4,7 +4,7 @@ import { useStore } from 'zustand/react';
 import { isPermanentFailure } from '@/lib/api/outcome';
 import { appQueryClient } from '@/lib/api/query-client';
 import { discardSendAction, retrySendAction, sendAction } from '@/lib/api/query';
-import type { Message, Participant } from '@/lib/api/types';
+import type { Conversation, Message, Participant } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import { isMessagePiecesCatalogLoaded, translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -16,9 +16,10 @@ import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import { confirmedCountOf, entriesOf, outboxStore } from '@/lib/send/outbox-store';
 import { sendFailureReason } from '@/lib/send/failure-reason';
 import { plaintextWithheld } from '@/lib/send/served-regime';
-import { E2EE_PLAINTEXT_WITHHELD } from '@/lib/end-to-end-regime-ledger';
+import type { Draft } from '@/lib/send/perform-send';
 
 import type { LocalDelivery } from './message';
+import type { ReadableRedirect } from './withheld-send-run';
 
 /**
  * LE HOOK D'ENVOI (#5813, étape 7) — SANS RÈGLE : toute règle (débounce,
@@ -39,6 +40,9 @@ export function useSend(params: {
    * `use-live-announcer.ts`).
    */
   readonly announce: (message: string) => void;
+  /** La conversation servie : son pair nomme le tête-à-tête lisible d'un envoi retenu (#20075). */
+  readonly conversation?: Conversation | undefined;
+  readonly readableRedirect?: ReadableRedirect;
 }): {
   /** Les locaux de CETTE conversation (`entries[i].message`), mémoïsés :
    * une identité STABLE tant que l'outbox de cette conversation n'a pas
@@ -105,7 +109,7 @@ export function useSend(params: {
    */
   readonly discard: (messageId: string) => void;
 } {
-  const { conversationId, viewerId, sender, announce } = params;
+  const { conversationId, viewerId, sender, announce, conversation, readableRedirect } = params;
   const online = useOnline();
   const entries = useStore(outboxStore, (s) => entriesOf(s, conversationId));
 
@@ -147,37 +151,40 @@ export function useSend(params: {
       place: SharedPlace | null = null,
       sticker: MessageSticker | null = null,
     ) => {
-      /* #13171 — vue chiffrée de bout en bout : rien ne naît, l'annonce dit où écrire. */
+      const draft: Draft = {
+        content: text,
+        originalLanguage: language,
+        ...(replyTo === null ? {} : { replyToId: replyTo.id, replyTo }),
+        ...(attachments.length === 0 ? {} : { attachments }),
+        /* Une protection VIDE ne pose pas la clé — sur la VALEUR, jamais
+           sur l'identité (revue-correction) : `composer.tsx` compose son
+           objet par `useMemo`, donc il n'est JAMAIS `NO_PROTECTION` et le
+           test d'identité laissait toujours passer `protection: {}`. Sans
+           conséquence observable (`protectionFieldsOf({})` rend les mêmes
+           défauts), mais un garde qui ne garde rien ment sur le brouillon
+           que `outbox-store` conserve. */
+        ...(Object.keys(protection).length === 0 ? {} : { protection }),
+        ...(place === null ? {} : { place }),
+        ...(sticker === null ? {} : { sticker }),
+      };
+      /* #13171 — vue chiffrée de bout en bout : rien ne naît ici. #20075 —
+         `withheld-send-run` décide : le tête-à-tête lisible, ou le refus. */
       if (plaintextWithheld(conversationId, appQueryClient)) {
-        const language = currentInterfaceLanguage();
-        const reason = sendFailureReason({ ok: false, status: 0, error: '', code: E2EE_PLAINTEXT_WITHHELD }, language);
-        announce(reason === undefined ? translate(language, 'announce.messageNotSent') : translate(language, 'announce.messageNotSent.reason', { reason }));
+        void import('@/components/sealed-direct-chunk').then(
+          (run) => run.runWithheldSend({ fromConversationId: conversationId, conversation, draft, viewerId, online, announce, readableRedirect }),
+          () => announce(translate(currentInterfaceLanguage(), 'announce.messageNotSent')),
+        );
         return;
       }
       void sendAction({
         conversationId,
-        draft: {
-          content: text,
-          originalLanguage: language,
-          ...(replyTo === null ? {} : { replyToId: replyTo.id, replyTo }),
-          ...(attachments.length === 0 ? {} : { attachments }),
-          /* Une protection VIDE ne pose pas la clé — sur la VALEUR, jamais
-             sur l'identité (revue-correction) : `composer.tsx` compose son
-             objet par `useMemo`, donc il n'est JAMAIS `NO_PROTECTION` et le
-             test d'identité laissait toujours passer `protection: {}`. Sans
-             conséquence observable (`protectionFieldsOf({})` rend les mêmes
-             défauts), mais un garde qui ne garde rien ment sur le brouillon
-             que `outbox-store` conserve. */
-          ...(Object.keys(protection).length === 0 ? {} : { protection }),
-          ...(place === null ? {} : { place }),
-          ...(sticker === null ? {} : { sticker }),
-        },
+        draft,
         viewerId,
         ...(sender === undefined ? {} : { sender }),
         online,
       });
     },
-    [conversationId, viewerId, sender, online, announce],
+    [conversationId, viewerId, sender, online, announce, conversation, readableRedirect],
   );
 
   const retry = useCallback(

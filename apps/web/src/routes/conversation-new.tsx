@@ -29,6 +29,7 @@ import {
 } from '@/lib/conversation-new/group';
 import { useOnline } from '@/lib/net/online';
 import { useServedGlobalRole } from '@/lib/view/use-admin-access';
+import { creationRefusalText } from '@/lib/view/end-to-end-peer-without-device';
 import { coldStateOf, type ColdState } from '@/lib/view/cold-state';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useExhaustPages } from '@/lib/view/use-exhaust-pages';
@@ -164,11 +165,16 @@ export default function ConversationNewScreen() {
   const create = useMutation({
     mutationFn: (params: { readonly participantId: string; readonly encryptionMode: CreationEncryptionMode }) =>
       createDirectConversation(apiDeps, params.participantId, { encryptionMode: params.encryptionMode }),
-    onSuccess: (result) => {
+    onSuccess: (result, variables) => {
       /* UN ÉCHEC SE VOIT (revue #5652) — sans cette lecture, un tap sur un
          contact ne faisait RIEN du tout, ni navigation ni message. Un contrôle
          sans effet est le défaut que la loi 4 du dépôt interdit. */
       const outcome = creationOutcomeOf({ result, online });
+      if (outcome.kind === 'participant-without-device') {
+        const person = [...friends, ...(results.data ?? [])].find((candidate) => candidate.id === variables.participantId);
+        void creationRefusalText(currentInterfaceLanguage(), person?.displayName ?? person?.username ?? null).then(setCreationFailure, () => setCreationFailure(CREATION_FAILED));
+        return;
+      }
       if (outcome.kind === 'failure') {
         setCreationFailure(outcome.message);
         return;

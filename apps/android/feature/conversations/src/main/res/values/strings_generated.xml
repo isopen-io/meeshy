@@ -251,6 +251,8 @@
     <string name="new_conversation_encryption_collapsed">Collapsed</string>
     <string name="new_conversation_encryption_expanded">Expanded</string>
     <string name="new_conversation_error_create">Couldn\'t create the conversation</string>
+    <string name="new_conversation_error_participant_without_device_anonymous">A member can’t receive encrypted messages yet: nothing was turned on.</string>
+    <string name="new_conversation_error_participant_without_device_named">%1$s can’t receive encrypted messages yet: nothing was turned on.</string>
     <string name="new_conversation_group_title">Group name (required)</string>
     <string name="new_conversation_group_toggle">New group</string>
     <string name="new_conversation_no_user_found">No user found</string>

@@ -167,5 +167,6 @@ internal fun ConversationEncryptionNotice.textRes(): Int = when (this) {
     ConversationEncryptionNotice.ALREADY_ENABLED -> R.string.encryption_already_enabled
     ConversationEncryptionNotice.DIRECT_ALREADY_END_TO_END -> R.string.encryption_detail_direct_already_end_to_end
     ConversationEncryptionNotice.DIRECT_NOT_A_PAIR -> R.string.encryption_detail_direct_not_a_pair
+    ConversationEncryptionNotice.PARTICIPANT_WITHOUT_DEVICE -> R.string.encryption_participant_without_device_anonymous
     ConversationEncryptionNotice.FAILED -> R.string.encryption_action_failed
 }

@@ -45,6 +45,9 @@ public nonisolated struct MeeshyToggleRowRecipe: Sendable, Equatable {
     }
 
     public static let rowMinimumHeight: CGFloat = 46
+    /// La colonne du symbole de tête (#20030) : assez large pour le glyphe le plus
+    /// large à `MeeshyIconSize.xxl`, pour que les titres d'une carte s'alignent.
+    public static let symbolColumnWidth: CGFloat = MeeshyIconSize.xxl + MeeshySpacing.sm
     public static let checkboxSide: CGFloat = 24
     public static let disabledOpacity: Double = 0.62
     public static let pressedVeilOpacity: Double = MeeshyOpacity.light

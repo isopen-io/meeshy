@@ -74,6 +74,11 @@
         <item quantity="one">Delete %1$d message?</item>
         <item quantity="other">Delete %1$d messages?</item>
     </plurals>
+    <string name="chat_e2ee_peer_without_device_title">%1$s can’t receive encrypted messages</string>
+    <string name="chat_e2ee_peer_without_device_title_anonymous">Your contact can’t receive encrypted messages</string>
+    <string name="chat_e2ee_peer_without_device_write_plain">Write without encryption</string>
+    <string name="chat_e2ee_readable_direct_failed">Could not open. Try again.</string>
+    <string name="chat_e2ee_readable_direct_offline">Offline: reconnect to open it.</string>
     <string name="chat_effect_blurred">Blur</string>
     <string name="chat_effect_duration_15s">15 s</string>
     <string name="chat_effect_duration_1m">1 min</string>
@@ -367,6 +372,8 @@
     <string name="encryption_mode_hybrid_label">Hybrid</string>
     <string name="encryption_mode_server_description">Encrypted on our servers, readable by them: translation and search work.</string>
     <string name="encryption_mode_server_label">Server</string>
+    <string name="encryption_participant_without_device_anonymous">A member can’t receive encrypted messages yet: nothing was turned on.</string>
+    <string name="encryption_participant_without_device_named">%1$s can’t receive encrypted messages yet: nothing was turned on.</string>
     <string name="encryption_summary_end_to_end">End-to-end encrypted: only participants can read</string>
     <string name="encryption_summary_hybrid">Encrypted on our servers, with verification between compatible devices</string>
     <string name="encryption_summary_none">Not encrypted</string>
