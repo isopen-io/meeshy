@@ -19,7 +19,7 @@ const serialize = fastJson({
 const servi = (own: SharedLocationOwnSnapshot) => JSON.parse(serialize({ success: true, data: servedOwnSharedLocation(own) })).data;
 
 const partage: SharedLocationOwnSnapshot = {
-  recipients: [{ userId: '6300000000000000000000a1', precision: 'approximate', expiresAt: '2026-11-21T12:00:00.000Z' }],
+  recipients: [{ userId: '6300000000000000000000a1', precision: 'neighborhood', expiresAt: '2026-11-21T12:00:00.000Z' }],
   expiresAt: '2026-11-21T12:00:00.000Z',
   shareBattery: false,
   startedAt: '2026-11-21T11:00:00.000Z',
