@@ -768,3 +768,14 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Cliquets partagés : `community:join-request-decided` sort de l'asymétrie (les trois clients le lisent) ; `SWIFT_SWEPT_EVENTS_AT_LAST_MEASURE` 174 → 175. `packages/shared/__tests__/ci/` 216/216 verts.
 - Gates iOS locaux : `check_house_rules.sh` (42 règles), `check_cohesion_budget.sh`, `check_test_registration.sh` (2 063 fichiers), `check-accent-color-hardcoding.mjs` (168 / 408), `check-swift-catalog-dead-entries.mjs` (326), `check_localization.py`. Compilation et tests Swift : par `ios.yml` et `sdk-tests.yml` de la PR.
 - 19:51 : `Gardes iOS (texte)` rouge sur le cliquet du texte natif — une clé en `.hint` compte comme libellé d'explication (budget `MeeshyUI/community` 28, relevé 29). La ligne de date n'explique rien, elle dit un état : clé renommée `community.join.declined.until` (le nom Android). Gotcha : `node scripts/check-verbosity-native.mjs` à lancer avant de pousser toute clé iOS.
+- 2026-11-21 03:55 : `ios.yml`, `sdk-tests.yml` et `ci.yml` verts sur `0ef27159f2` ; #20096 fusionnée dans `dev` (`02b8194cb`), #19948 fermée avec sa preuve.
+
+## 2026-11-21 — réveil 05:38 UTC
+
+- Début du run : aucune PR de la routine ouverte, dernière branche `claude/communautes-*` poussée à 00:18 : rien de vivant.
+- Lot : #20063 — les communautés nommées avant #16786 (« Tom &amp; Jerry &lt;3 ») se lisent telles qu'écrites sur les trois clients.
+- Choix : décodage à la LECTURE côté passerelle plutôt que la migration de l'issue ou un décodage iOS / Android. Une migration exige d'agir sur la base de staging (accès refusé depuis la session) ; un décodage client laissait les applications déjà installées afficher `&amp;`. Le décodage serveur répare les trois clients d'un coup, versions installées comprises, sans toucher aux données, et reste rétrocompatible (le web décode encore : une seconde passe sur un texte sans entité ne change rien).
+- Passerelle : `communityTextAsWritten` (`routes/communities/serialization.ts`, une passe de `unescapeSerializedText`) appliqué dans `flattenCommunityCounts` (liste, détail, création, réglages), la recherche, « mes communautés », le tableau de bord (`recentCommunities`) et la charge de `community:updated`. Les bannières (`asWritten`) le faisaient déjà.
+- Témoins : `legacy-text-served-20063.test.ts` (7, par le vrai sérialiseur ; rouge prouvé : 6 échecs avant le code) et `preferences-dashboard.test.ts` (+1, rouge prouvé). Deux témoins anciens suivis : la charge de `community:updated` attendait `Club &amp; amis` ; le double de `/communities/mine` ne portait pas la communauté que l'`include` garantit.
+- Reste : les noms d'une communauté dans les écrans d'administration web (qui décodent déjà) ; la ligne en base reste échappée jusqu'à une éventuelle migration, que plus rien n'exige.
+
