@@ -251,7 +251,7 @@ function LiveShareLocationRow({ language, person, offered, onNotice, center }: R
   };
   const share = (choice: ShareChoice, replacingPoint: boolean): void =>
     void center.share({ userId: person.id, ...choice, replacingPoint }).then((problem) => {
-      if (problem === 'replaces-chosen-point' && !replacingPoint) setReplacing(choice);
+      if (problem === 'replaces-chosen-point') setReplacing(choice);
       else tell(problem);
     });
   return (

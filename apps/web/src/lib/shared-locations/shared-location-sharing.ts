@@ -361,11 +361,13 @@ export function createSharedLocationSharingCenter({
     stopFollowing();
   };
 
-  /* La source servie suit le partage : absente (passerelle d'avant), elle ne dit rien ; sans personne, rien à montrer. */
+  /*
+   * La source servie suit le partage. Absente, c'est une passerelle d'avant #20116 — qui ne sert jamais de point choisi :
+   * la marque tombe, sans rallumer le suivi (qui publie reste l'affaire de `startedAt`). Sans personne, rien à montrer.
+   */
   const followServedSource = (served: SharedLocationOwnSnapshot): void => {
-    if (!rosterOps.hasRecipients(roster())) return markFixedPoint(false);
-    if (served.source === 'manual') showChosenPoint();
-    else if (served.source === 'device') markFixedPoint(false);
+    if (served.source === 'manual' && rosterOps.hasRecipients(roster())) showChosenPoint();
+    else markFixedPoint(false);
   };
 
   /* « Pas de partage » répond à la liste d'AVANT l'envoi : un autre onglet a pu en démarrer une depuis, qu'on ne vide pas (#18431). */
@@ -584,11 +586,14 @@ export function createSharedLocationSharingCenter({
         return acrossAccountTabs(async () => {
           if (!replacingPoint && showsChosenPoint()) return 'replaces-chosen-point';
           const replaces = replacingPoint && showsChosenPoint();
+          const wasReceived = received;
           markReceived(false);
           const previous = roster();
           const next = rosterOps.adding(rosterOps.pruned(previous, now()), { userId, precision, durationMinutes, now: now() });
           const problem = await publish(next, current.fix, previous, replaces);
           if (problem !== 'fixed-point' || !isLive()) return problem;
+          /* Rien n'a été écrit : l'onglet redevient ce qu'il était, puis relit le point choisi. */
+          markReceived(wasReceived);
           await syncWithServed();
           return fixedPoint ? 'replaces-chosen-point' : problem;
         });
@@ -615,6 +620,7 @@ export function createSharedLocationSharingCenter({
         if (rosterOps.isEmpty(pruned) && !rosterOps.hasRecipients(roster())) {
           adopt(EMPTY_ROSTER);
           markReceived(false);
+          markFixedPoint(false);
           disarm();
           return null;
         }

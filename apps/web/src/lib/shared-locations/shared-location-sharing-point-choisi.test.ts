@@ -105,6 +105,57 @@ describe('un point choisi ailleurs fait taire la position d’ici', () => {
   });
 });
 
+describe('les gardes de l’onglet tiennent sans compter sur la passerelle (audit du lot)', () => {
+  test('un relevé encore en vol après la marque ne part pas', async () => {
+    const world = await publiant();
+    const move = world.source.listener;
+    const sent = world.updates.length;
+    world.server.served = servedWith('manual', AMI);
+    await world.center.sync();
+    world.clock.now += 5 * 60_000;
+    move?.({ latitude: 45.76, longitude: 4.83 });
+    await world.advance(0);
+    expect(world.updates.length).toBe(sent);
+  });
+
+  test('retirer quelqu’un devant un point choisi ne rallume pas le suivi de l’appareil', async () => {
+    const world = makeWorld({ memory: new Map(), served: servedWith(undefined) });
+    await world.center.share({ userId: AMI, precision: 'city', durationMinutes: 60 });
+    await world.center.share({ userId: AUTRE, precision: 'city', durationMinutes: 60 });
+    world.server.served = servedWith('manual', AMI, AUTRE);
+    await world.center.sync();
+    expect(await world.center.stopSharing(AUTRE)).toBeNull();
+    expect(world.starts.at(-1)?.position).toBeUndefined();
+    expect(world.source.following).toBe(0);
+  });
+
+  test('une liste seule refusée devant un point choisi ne se replie jamais sur la position de l’appareil', async () => {
+    const world = makeWorld({ memory: new Map(), served: servedWith('manual', AMI, AUTRE) });
+    await world.center.sync();
+    world.startQueue.push(async () => ({ kind: 'refused', outcome: 'invalid' }));
+    await world.center.stopSharing(AUTRE);
+    expect(world.starts.filter((start) => start.position !== undefined)).toEqual([]);
+  });
+
+  test('une passerelle revenue à une version qui ne dit pas la source lève la marque : elle ne sert jamais de point choisi', async () => {
+    const world = makeWorld({ served: servedWith('manual', AMI) });
+    await world.center.sync();
+    world.server.served = servedWith(undefined, AMI);
+    await world.center.sync();
+    expect(await world.center.share({ userId: TROISIEME, precision: 'city', durationMinutes: 60 })).toBeNull();
+    expect(world.starts.at(-1)?.source).toBeUndefined();
+  });
+
+  test('un refus « point choisi » à l’envoi rend l’onglet tel qu’il était : reçu, il reste reçu', async () => {
+    const world = makeWorld({ served: servedWith(undefined, AMI) });
+    await world.center.sync();
+    world.server.served = servedWith('manual', AMI);
+    world.startQueue.push(async () => ({ kind: 'refused', outcome: 'fixed-point' }));
+    expect(await world.center.share({ userId: TROISIEME, precision: 'city', durationMinutes: 60 })).toBe('replaces-chosen-point');
+    expect(world.memory.get('roster.received')).toBe('1');
+  });
+});
+
 describe('« Partager » d’ici devant un point choisi demande d’abord', () => {
   const devantUnPoint = async () => {
     const world = makeWorld({ served: servedWith('manual', AMI) });

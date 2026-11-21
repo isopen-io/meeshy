@@ -1785,6 +1785,11 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   (« Garder le point choisi » en premier), puis rejoue le même choix avec `source: 'device'`. Un démarrage refusé
   `FIXED_POINT` (point choisi ailleurs pendant l'envoi) relit et demande. « Arrêter » devant un point choisi republie la
   liste seule et ne se replie jamais sur la position de l'appareil.
+- Audit adversarial : non bloquant. Corrigé dans le lot : trois gardes de l'onglet que la passerelle seule tenait ont
+  leur témoin (relevé en vol après la marque, suivi non rallumé par un retrait, aucun repli sur la position devant un
+  point choisi) ; une source absente lève la marque (une passerelle d'avant ne sert jamais de point choisi) ; un refus
+  `FIXED_POINT` à l'envoi rend `received` tel qu'il était ; la liste vidée par l'échéance lève la marque ; l'écran
+  redemande au lieu d'afficher le titre en toast. Noté : une source inconnue se lit `manual` (choix fail-closed).
 - Android : issue de suivi #20212 (même milestone). La confirmation liée au partage montré et les noms concernés restent
   #20127.
 - Gates : `bun test` complet 34 928 verts, 2 rouges dont 1 hérité (`act-leak-guard`, rouge sans le lot) et 1 corrigé
