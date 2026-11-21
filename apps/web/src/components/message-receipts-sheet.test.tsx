@@ -357,10 +357,12 @@ describe('MessageReceiptsSheet — le pourcentage écouté / regardé (#7361, W8
    */
   test('ouvrir la feuille REFAIT la requête : une valeur périmée du cache est remplacée par celle du serveur (#20148)', async () => {
     const rows = await servedRows();
+    const [first] = rows;
+    if (first === undefined) throw new Error('la fixture « att-test-6 » doit servir une ligne');
     const served = Math.round(
       positionFraction({
-        positionMs: rows[0]?.lastPlayPositionMs,
-        complete: rows[0]?.listenedComplete ?? false,
+        positionMs: first.lastPlayPositionMs ?? null,
+        complete: first.listenedComplete,
         durationMs: 20_000,
       }) * 100,
     );
