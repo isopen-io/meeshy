@@ -43,6 +43,7 @@ class ProfileWhereSectionTest {
             userId: String,
             precision: SharedLocationPrecision,
             duration: SharedLocationShareDuration,
+            replacingPoint: Boolean,
         ): SharedLocationShareProblem? = null
         override suspend fun stopSharing(userId: String): SharedLocationShareProblem? = null
     }
