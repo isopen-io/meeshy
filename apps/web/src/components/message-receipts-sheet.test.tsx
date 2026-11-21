@@ -334,6 +334,52 @@ describe('MessageReceiptsSheet — le pourcentage écouté / regardé (#7361, W8
     expect(card?.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe(String(expected));
   });
 
+  /**
+   * #20148 — **L'OUVERTURE REFAIT LA REQUÊTE**, et ce fait soutient un verdict
+   * de la passerelle.
+   *
+   * `UNQUEUED_FAMILY_VERDICT` (`services/gateway/src/socketio/unqueuedFamilyVerdict.ts`)
+   * déclare `attachment-status:updated` en `reload-serves-truth` — donc AUCUNE
+   * entrée de file hors ligne — et sa raison écrite est, pour moitié, ce
+   * fichier-ci : « le web n'enregistre rien de l'événement, il INVALIDE, et les
+   * deux requêtes de la feuille sont en `staleTime: 0` ; toute ouverture refait
+   * la requête ».
+   *
+   * Rien ne tenait ce fait. Une optimisation raisonnable — `staleTime: 30_000`
+   * sur une feuille qu'on rouvre souvent — rendrait ce verdict FAUX en silence
+   * et ramènerait le défaut de #20019 : un lecteur revenu voit une position
+   * périmée, sans erreur et sans trace.
+   *
+   * Le témoin mesure le COMPORTEMENT, pas la configuration : il sème une valeur
+   * périmée dans le cache, ouvre la feuille, et exige que ce qui s'affiche
+   * vienne du SERVEUR. Il tient donc le fait quelle que soit la mécanique qui
+   * le produit — `staleTime`, `refetchOnMount`, ou ce qui les remplacera.
+   */
+  test('ouvrir la feuille REFAIT la requête : une valeur périmée du cache est remplacée par celle du serveur (#20148)', async () => {
+    const rows = await servedRows();
+    const served = Math.round(
+      positionFraction({
+        positionMs: rows[0]?.lastPlayPositionMs,
+        complete: rows[0]?.listenedComplete ?? false,
+        durationMs: 20_000,
+      }) * 100,
+    );
+    expect(served).not.toBe(50);
+
+    // Une position PÉRIMÉE, déjà en cache avant l'ouverture : c'est ce qu'un
+    // lecteur absent aurait sous les yeux si la feuille se contentait du cache.
+    appQueryClient.setQueryData(
+      attachmentStatusDetailsQueryKey('att-test-6'),
+      rows.map((row) => ({ ...row, lastPlayPositionMs: 10_000, listenedComplete: false })),
+    );
+
+    const host = await mountSheet({ conversationId: 'c-deploiement', messageId: 'm-x', attachments: [audio] });
+    await mounter.settle();
+
+    const card = host.querySelector('[data-message-receipts-attachment="att-test-6"]');
+    expect(card?.querySelector('[data-message-receipts-percent]')?.textContent).toBe(`${served}%`);
+  });
+
   test('une ligne REMPLACÉE dans le cache (refetch après `attachment-status:updated`) fait bouger le % et la barre sans rouvrir la feuille', async () => {
     const rows = await servedRows();
     const host = await mountSheet({ conversationId: 'c-deploiement', messageId: 'm-x', attachments: [audio] });
