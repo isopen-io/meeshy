@@ -101,7 +101,7 @@ struct ContentLinkCardSlideshow: View {
             @unknown default: break
             }
         }
-        .accessibilityAction(perform: onOpen)
+        .accessibilityAction { onOpen() }
         .accessibilityIdentifier("content-link-card-slideshow")
     }
 
