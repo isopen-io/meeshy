@@ -79,6 +79,55 @@ l'inconnu qui emprunte son lien. Cinq des six portes rendaient de
 l'INFORMATION ; celle-là rendait une CAPACITÉ, et c'est la seule qui rouvrait la
 conversation.
 
+**Le lot qui a écrit cette leçon l'a violée dans le MÊME commit**
+
+Ce n'est pas une anecdote : c'est la moitié la plus utile de la leçon, et son
+audit adversarial l'a mesurée. Le lot a corrigé l'affirmation fausse sur
+`messages-send.ts` — puis compté, quinze lignes plus bas dans le même document,
+une **sixième porte** dont l'autorisation vivait en aval, dans le même fichier,
+soixante-dix lignes plus bas (`guestAccessEnd`, #10470, qui appelle
+`participationEstVivante`). Mesuré : les six clauses remises à `isActive` nu
+laissent le témoin de cette porte-là VERT.
+
+> **Écrire une règle ne l'applique pas au lot qui l'écrit.** La relire contre
+> son propre diff est une étape, pas une évidence — et elle se fait sur le
+> diff, jamais de mémoire, parce qu'au moment où l'on écrit la règle on est
+> persuadé de l'appliquer.
+
+**Et « resserrer en défense en profondeur » n'est jamais gratuit**
+
+C'était l'excuse disponible pour garder la sixième clause : inutile, mais
+inoffensive. Elle était fausse. La ligne ne revenant plus, un 410 PRÉCOCE
+partait avant le contrôle d'échéance, et un invité banni dont le lien était
+ÉCHU lisait « accès retiré » au lieu de « lien expiré » — l'inverse de l'ORDRE
+UNIQUE des causes que #10457 avait unifié pour qu'un même invité ne lise pas
+deux causes selon le chemin.
+
+> Avant de resserrer une clause « puisque c'est gratuit », demander **ce qui
+> DÉPEND de la ligne qu'on retire**. Ici, l'ORDRE en dépendait : la branche
+> d'aval se prononce sur ce que la branche d'amont a trouvé.
+
+**Une famille de portes a plusieurs GENRES, et une sonde n'en voit qu'un**
+
+La sonde de ce lot cherchait une porte dans une lecture de `Participant`. La
+septième porte de la même famille nomme l'appelant par une colonne de
+**PROPRIÉTÉ** d'une autre table (`ConversationShareLink.createdBy === userId`),
+sans lire aucune participation. Les 237 portes relevées / 211 nues ne disent
+donc rien de ce second genre.
+
+> C'est « un balayage qui cherche UN idiome mesure sa popularité, pas une
+> propriété » appliqué au **MODÈLE LU**, et non à la forme du `where`. Devant un
+> relevé de portes, demander : *par quelle COLONNE cette famille peut-elle
+> encore nommer l'appelant ?*
+
+Corollaire d'arbitrage : cette septième porte était **déjà décidée large** et
+**gelée par un témoin** du lot précédent, écrit « pour qu'un lot futur ne la
+resserre pas par symétrie ». La bonne réponse n'était donc ni de la resserrer ni
+de l'ignorer, mais de **mesurer ce que la décision couvre réellement** — elle
+portait la réactivation d'un lien désactivé par un admin et le roster de toutes
+les arrivées — et d'en faire une issue `décision-produit` (#20189).
+
 **Détail**
 
-`tasks/realtime-sync-audit-2026-11-21-cycle202-20183.md`.
+`tasks/realtime-sync-audit-2026-11-21-cycle202-20183.md` § « L'audit
+adversarial, et ce qu'il a retourné du lot ».

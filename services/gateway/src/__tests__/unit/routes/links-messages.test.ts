@@ -162,17 +162,19 @@ describe('POST /links/:id/messages — anonymous: participant not found', () => 
 });
 
 /**
- * #20183 — l'invité anonyme ACTIF-ET-BANNI. Sixième et dernière porte de la
- * famille des liens : c'est celle de l'appelant lui-même.
+ * #20183 — l'invité anonyme ACTIF-ET-BANNI reçoit le `410 GUEST_ACCESS_REVOKED`,
+ * et **ce n'est pas la clause de cette route qui le lui sert.**
  *
- * Le refus attendu n'est PAS le 401 du voisin ci-dessus, et c'est tout
- * l'intérêt du site : un 401 se REJOUE (le client renvoie sa session), là où un
- * accès TERMINÉ doit se dire une fois pour toutes. La seconde lecture du
- * handler — délibérément SANS `isActive` (#10492) — distingue « session
- * inconnue » de « accès retiré », et rend le `410 GUEST_ACCESS_REVOKED` que
- * servent déjà les autres portes d'invité. Le resserrement de la PREMIÈRE
- * lecture tombe donc exactement dans la branche que le fichier avait déjà
- * écrite pour lui.
+ * Le lot #20183 avait compté cette lecture parmi ses portes et l'avait
+ * resserrée ; son audit adversarial a mesuré que l'autorisation vit
+ * soixante-dix lignes plus bas, dans `guestAccessEnd` (#10470), qui appelle
+ * `participationEstVivante`. Le resserrement était donc un no-op de sécurité —
+ * et une RÉGRESSION sur l'ordre des causes (#10457) : la ligne ne revenant
+ * plus, le 410 précoce partait avant le contrôle d'échéance.
+ *
+ * Ce témoin reste, pour la raison inverse de celle qui l'a fait naître : il
+ * atteste que la garde AVAL suffit, sous la clause NUE. Il tombe si quelqu'un
+ * retire `guestAccessEnd` de ce chemin — la seule mutation qui compte ici.
  */
 describe('POST /links/:id/messages — anonymous: invité actif-et-BANNI (#20183)', () => {
   let app: FastifyInstance;
@@ -185,7 +187,7 @@ describe('POST /links/:id/messages — anonymous: invité actif-et-BANNI (#20183
   });
   afterAll(async () => { await app.close(); });
 
-  it('rend 410 GUEST_ACCESS_REVOKED, jamais un 401 rejouable', async () => {
+  it('rend 410 GUEST_ACCESS_REVOKED par la garde AVAL, sous une clause nue', async () => {
     const res = await app.inject({
       method: 'POST', url: `/links/${MSHY_ID}/messages`,
       headers: ANON_HEADERS, payload: VALID_BODY,
@@ -195,6 +197,26 @@ describe('POST /links/:id/messages — anonymous: invité actif-et-BANNI (#20183
     // (`utils/response.ts`, § CLAUDE.md « Un schéma d'ERREUR se confronte à
     // l'enveloppe ») — pas sous une clé `code`.
     expect(res.json()).toMatchObject({ success: false, error: 'GUEST_ACCESS_REVOKED' });
+  });
+
+  it("sert « Ce lien a expiré » quand le lien est ÉCHU — l'ORDRE UNIQUE des causes (#10457), que le resserrement inversait", async () => {
+    const prisma = makePrisma();
+    prisma.participant.findFirst = findFirstIn([
+      { ...mockAnonParticipant, bannedAt: new Date('2026-11-01T00:00:00Z') },
+    ] as never) as never;
+    prisma.conversationShareLink.findUnique = jest.fn<any>().mockImplementation(async (opts: any) => {
+      const base = opts?.where?.id === LINK_DB_ID ? mockParticipantShareLink : mockShareLink;
+      return { ...base, expiresAt: new Date('2020-01-01T00:00:00Z') };
+    });
+    const app2 = await buildApp({ prisma });
+
+    const res = await app2.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: VALID_BODY,
+    });
+    expect(res.statusCode).toBe(410);
+    expect(res.json()).toMatchObject({ success: false, error: 'Ce lien a expiré' });
+    await app2.close();
   });
 });
 

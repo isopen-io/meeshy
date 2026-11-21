@@ -421,6 +421,15 @@ export async function mintConversationShareLink(params: MintShareLinkParams): Pr
   try {
     const admins = await prisma.participant.findMany({
       where: {
+        // AUDIENCE, pas une porte : « qui prévenir », jamais « qui a le droit ».
+        // Elle reste en `isActive` nu, et y spreader `...PARTICIPATION_VIVANTE`
+        // serait un BUG, pas un resserrement : cette clause porte DÉJÀ une clé
+        // `OR`, que le spread écraserait en silence — le seul piège
+        // d'`unsetOrNull` (`utils/prisma-unset.ts`), et il notifierait ici TOUS
+        // les membres actifs au lieu des seuls admins et créateurs. Un `where`
+        // qui a déjà son `OR` passe par `AND`. Conséquence assumée en
+        // attendant : un admin actif-et-banni reçoit encore cette notification
+        // (relevé par l'audit de #20183, consigné, hors périmètre).
         conversationId,
         isActive: true,
         OR: [{ role: 'admin' }, { role: 'creator' }],

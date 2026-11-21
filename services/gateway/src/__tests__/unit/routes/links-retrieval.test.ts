@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, jest, beforeAll, afterAll } from '@jest/globals';
+import { participationEstVivante } from '../../../routes/conversations/utils/access-control';
 import Fastify, { FastifyInstance } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
@@ -63,10 +64,23 @@ async function lastParticipants(): Promise<any[]> {
   return shareLink?.conversation?.participants ?? [];
 }
 
+/**
+ * Le double de `findActiveUserParticipant`, aligné sur la PRODUCTION — qui
+ * épelle `PARTICIPATION_VIVANTE` depuis #20183, donc `isActive` **et**
+ * `bannedAt` nul ou ABSENT (`participationEstVivante`, la même loi jugée sur
+ * une ligne déjà lue).
+ *
+ * Il ne lisait que `isActive`, et un double plus PERMISSIF que la production
+ * est un piège armé : rien n'est faux tant qu'aucun témoin ne sème de ligne
+ * bannie, et le premier qui en sème attesterait VERT le comportement d'avant
+ * le resserrement. « Un double ment aussi par ce qu'il ACCEPTE. »
+ */
 const mockFindActiveUserParticipant = jest.fn<any>().mockImplementation(
   async (_prisma: unknown, _conversationId: string, userId: string) => {
     const participants = await lastParticipants();
-    const found = participants.find((p: any) => p.type === 'user' && p.userId === userId && p.isActive);
+    const found = participants.find(
+      (p: any) => p.type === 'user' && p.userId === userId && participationEstVivante(p)
+    );
     return found ? { id: found.id } : null;
   }
 );

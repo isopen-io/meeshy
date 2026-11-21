@@ -129,6 +129,18 @@ export async function findActiveUserParticipant(
     // Dans la clause et non en aval, bien que cette lecture serve AUSSI
     // `userType` : un banni n'est pas « un membre dont on masque des champs »,
     // il est absent.
+    //
+    // CE QUE CE RESSERREMENT NE FAIT PAS, mesuré par l'audit adversarial du
+    // lot, parce qu'une garde partielle annoncée totale est pire qu'une garde
+    // absente : il retire le SEUL grant de membre. Un banni garde exactement
+    // ce qu'un INCONNU obtient — l'aperçu public (`canPreview` : lien actif,
+    // `allowViewHistory`, non échu, conversation ouverte), messages compris —
+    // et le salon GLOBAL « meeshy » reste admis INCONDITIONNELLEMENT pour tout
+    // compte authentifié (`retrieval.ts`, avant toute lecture de participation).
+    // Ce que le lot ferme est donc : l'accès de membre quand l'aperçu public
+    // est fermé, l'étiquette `userType: 'member'`, et le `redirectTo` qui
+    // envoie vers le fil. Fermer `canPreview` ou le cas « meeshy » pour un
+    // banni est une décision de produit, pas ce correctif.
     where: { conversationId, userId, type: 'user', ...PARTICIPATION_VIVANTE },
     select: { id: true }
   });

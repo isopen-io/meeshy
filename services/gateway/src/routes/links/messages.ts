@@ -38,7 +38,6 @@ import { LIVE_MESSAGE_MARK } from '../../services/messaging/liveMessage';
 import { getEncryptionService } from '../../services/EncryptionService';
 import { sealsAtRest, sealTextAtRest } from '../../services/messaging/atRestWrite';
 import { isServerAtRestUnavailable, servedClearAtRest } from '../../services/messaging/serverAtRest';
-import { PARTICIPATION_VIVANTE } from '../conversations/utils/access-control';
 import {
   E2EE_PLAINTEXT_REFUSAL_MESSAGE,
   E2EE_PLAINTEXT_REFUSED,
@@ -275,13 +274,27 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         where: {
           sessionTokenHash: tokenHash,
           type: 'anonymous',
-          // #20183 — la PARTICIPATION VIVANTE. La SECONDE lecture, plus bas,
-          // reste délibérément large (ni `isActive` ni `bannedAt`) : c'est elle
-          // qui distingue « accès FINI » de « session inconnue », et le refus
-          // d'un invité banni tombe donc dans le `410 GUEST_ACCESS_REVOKED`
-          // que ce fichier avait déjà écrit pour lui (#10492) — jamais dans le
-          // 401, qu'un client REJOUE.
-          ...PARTICIPATION_VIVANTE
+          isActive: true,
+          // `isActive: true` et RIEN de plus — clause délibérément NUE sur le
+          // bannissement (#20183, audit
+          // adversarial). Cette lecture n'autorise rien : l'autorisation vit
+          // soixante-dix lignes plus bas, dans `guestAccessEnd` (#10470), qui
+          // appelle `participationEstVivante` et rend `'revoked'` pour toute
+          // ligne portant `bannedAt` — un invité banni reçoit donc DÉJÀ le
+          // `410 GUEST_ACCESS_REVOKED`, sans rien ici.
+          //
+          // Le lot #20183 l'avait resserrée en la comptant parmi ses portes.
+          // Mesuré, c'était un no-op de sécurité ET une régression : la ligne
+          // ne revenant plus, le 410 PRÉCOCE de `guestAccessEnded` (ligne
+          // ~330) partait AVANT le contrôle d'échéance, si bien qu'un invité
+          // banni dont le lien était ÉCHU lisait « accès retiré » au lieu de
+          // « lien expiré » — l'inverse de l'ORDRE UNIQUE des causes que
+          // #10457 a posé (`link-expired` d'abord, `revoked` ensuite) pour
+          // qu'un même invité ne lise pas deux causes selon le chemin.
+          //
+          // > Une clause nue n'est pas une fuite, et resserrer « en défense en
+          // > profondeur » n'est gratuit que si l'on a mesuré ce qui dépend de
+          // > la ligne qu'on retire. Ici, l'ORDRE en dépendait.
         }
       });
 

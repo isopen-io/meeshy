@@ -773,15 +773,51 @@ refus de `ensureParticipantFromMember` (#10443, #16724). La même phrase vit dan
 > que deux documents déclarent ouverte envoie réparer ce qui tient, et détourne
 > des six qui ne tenaient pas (voir le § suivant).
 
-**Les six portes de la famille des LIENS DE PARTAGE, elles, étaient bien nues,
-et elles sont fermées** (#20183, cycle 202) : la FABRICATION d'un lien
-(`share-link-mint.ts`, les deux routes), les deux LISTES
-(`GET /conversations/:id/links`, `GET /links?conversationId=`), la FICHE d'un
-lien (`findActiveUserParticipant`), ses MESSAGES (`messages-retrieval.ts`) et la
-porte de l'INVITÉ anonyme (`messages.ts`). #20135 n'avait fermé que
-l'ADMINISTRATION d'un lien ; la fabrication est la plus grave des six — un lien
-fabriqué par un banni n'a aucun passé, donc rien à refuser à l'inconnu qui
-l'emprunte : **le bannissement se contournait par procuration.**
+**CINQ portes de la famille des LIENS DE PARTAGE étaient bien nues, et elles
+sont fermées** (#20183, cycle 202) : la FABRICATION d'un lien
+(`share-link-mint.ts`, les deux routes), les deux LISTES **avec
+`?conversationId=`** (`GET /conversations/:id/links`,
+`GET /links?conversationId=`), la FICHE d'un lien
+(`findActiveUserParticipant`) et ses MESSAGES (`messages-retrieval.ts`).
+#20135 n'avait fermé que l'ADMINISTRATION d'un lien ; la fabrication est la plus
+grave des cinq — un lien fabriqué par un banni n'a aucun passé, donc rien à
+refuser à l'inconnu qui l'emprunte : **le bannissement se contourne par
+procuration.** (Au présent : voir la dette ci-dessous.)
+
+**La famille n'est PAS fermée, et le dire au passé serait la troisième fois que
+ce paragraphe se trompe sur l'état.** Ce que l'audit adversarial du lot a
+mesuré, et qui reste OUVERT :
+
+- **Le CRÉATEUR d'un lien garde ses droits même banni** — `isCreator` de
+  `loadShareLinkForManagement` nomme l'appelant par une colonne de PROPRIÉTÉ
+  (`ConversationShareLink.createdBy`), sans lire aucune participation. C'est une
+  DÉCISION du cycle 200, gelée par un témoin
+  (`links-admin-host-not-creator.test.ts` § « sert le CRÉATEUR du lien même
+  banni »), et ce lot ne la retourne PAS. Mais l'audit a mesuré qu'elle couvre
+  plus que sa propre justification (« le droit sur son PROPRE lien ») : elle
+  porte `/toggle` — **réactiver un lien qu'un admin vient de désactiver** — et
+  `/arrivals` — le nom, le pays, la langue et la date de CHAQUE arrivée, y
+  compris après son bannissement — et le bannissement **ne désactive pas les
+  liens que la cible a créés** (`participant-ban-core.ts` ne ferme que le lien
+  par lequel elle est ENTRÉE). Avec `GET /links` **sans** `?conversationId=`,
+  qui sert au banni le `linkId` de ses propres liens sans aucun contrôle
+  d'appartenance, la chaîne est complète. **Issue de décision produit : #20189.**
+- **La fiche d'un lien reste lisible par l'aperçu public** (`canPreview`), et le
+  salon GLOBAL « meeshy » est admis inconditionnellement pour tout compte
+  authentifié. Le resserrement de la porte 4 retire le grant de MEMBRE, pas ces
+  deux-là — c'est écrit sur le site.
+- **La porte de l'INVITÉ anonyme n'était pas nue au sens utile** : son
+  autorisation vit en aval (`guestAccessEnd`, #10470). Le lot l'avait comptée
+  parmi ses portes et resserrée ; mesuré, c'était un no-op de sécurité ET une
+  régression de l'ORDRE UNIQUE des causes (#10457). **Reverti**, avec un témoin
+  qui tombe si quelqu'un le rejoue.
+
+> **Et le lot a commis, dans le même commit, l'erreur qu'il venait de
+> documenter deux paragraphes plus haut.** Il a corrigé l'affirmation fausse sur
+> `messages-send.ts` — « qui AUTORISE ce que cette clause rend ? » — puis compté
+> une sixième porte dont l'autorisation vivait en aval, dans le même fichier,
+> soixante-dix lignes plus bas. **Écrire une règle ne l'applique pas au lot qui
+> l'écrit** : la relire contre son propre diff est une étape, pas une évidence.
 
 Les DIFFUSEURS la doivent aussi, et la distinction qui décide du sens d'un
 correctif est celle-ci (#16690) :

@@ -157,3 +157,126 @@ de diffusion lit la participation VIVANTE », commentaire sur #20093).
 - **#20093 reste ouverte** : l'annuaire E2EE et les quatre lectures qui servent
   la liste de membres. Ce lot ne touche pas le chemin chiffré ; il retire de son
   dossier l'affirmation fausse sur `messages-send.ts`.
+
+---
+
+## L'audit adversarial, et ce qu'il a retourné du lot
+
+Lancé sur la branche livrée, consigne : chercher un resserrement net-négatif,
+une septième porte, un témoin qui ne peut pas tomber. **Verdict : BLOQUANT**, et
+il avait raison sur trois des quatre points qui comptent.
+
+### 1. La SIXIÈME porte n'en était pas une — et c'est l'erreur du lot lui-même
+
+`routes/links/messages.ts` était comptée parmi « six portes qui admettaient sur
+`isActive` NU ». **Faux** : son autorisation vit soixante-dix lignes plus bas,
+dans `guestAccessEnd` (#10470), qui appelle `participationEstVivante` et rend
+`'revoked'` pour toute ligne portant `bannedAt`. Un invité banni recevait DÉJÀ
+son 410.
+
+Mesuré par l'auditeur, deux mutations : les six clauses remises à `isActive` nu
+laissent `links-messages.test.ts` **VERT** (les cinq autres suites tombent) ; et
+sous une clause nue avec `guestAccessEnd` nourri d'une participation saine, le
+témoin tombe — **le 410 venait de la garde aval, jamais du resserrement.**
+
+Pire que l'inutilité : **le resserrement INVERSAIT l'ordre unique des causes**
+(#10457). La ligne ne revenant plus, le 410 PRÉCOCE de `guestAccessEnded`
+partait avant le contrôle d'échéance — un invité banni dont le lien était ÉCHU
+lisait « accès retiré » au lieu de « lien expiré », l'inverse exact de l'ordre
+que #10457 a unifié pour qu'un même invité ne lise pas deux causes selon le
+chemin.
+
+**Reverti.** Le témoin reste, pour la raison INVERSE de celle qui l'a fait
+naître : il atteste que la garde AVAL suffit, sous clause nue, et un second
+témoin gèle l'ordre des causes. Mesuré : rejouer le resserrement le fait tomber.
+
+> **Le lot a commis, dans le même commit, l'erreur qu'il venait de documenter.**
+> Il a corrigé l'affirmation fausse sur `messages-send.ts` — « la question n'est
+> pas *cette clause est-elle la bonne ?* mais *qui AUTORISE ce que cette clause
+> rend ?* » — puis compté une porte dont l'autorisation vivait en aval, dans le
+> même fichier. **Écrire une règle ne l'applique pas au lot qui l'écrit** : la
+> relire contre son propre diff est une étape, pas une évidence. Et le
+> resserrement « gratuit, en défense en profondeur » ne l'est jamais sans avoir
+> mesuré ce qui DÉPEND de la ligne qu'on retire — ici, l'ORDRE.
+
+### 2. La SEPTIÈME porte existe, et c'est une DÉCISION, pas un oubli
+
+`isCreator = link.createdBy === userId` (`routes/links/management.ts`) nomme
+l'appelant par une colonne de **PROPRIÉTÉ** d'une AUTRE table, sans lire aucune
+participation. La sonde de ce lot ne pouvait pas la voir : son discriminant
+cherche une porte dans une lecture de `Participant`.
+
+> **La famille « porte keyée sur l'appelant » a au moins DEUX genres** —
+> *participation* et *propriété* — et le relevé n'a couvert que le premier. Les
+> 237/211 ne disent rien du second. C'est « un balayage qui cherche UN idiome
+> mesure sa popularité » appliqué au MODÈLE lu, pas à la forme du `where`.
+
+L'auditeur l'a classée « trou vivant ». **Elle est en réalité gelée par un
+témoin du cycle 200** (`links-admin-host-not-creator.test.ts` § « sert le
+CRÉATEUR du lien même banni »), écrit explicitement « pour qu'un lot futur ne le
+resserre pas par symétrie », et #20155 la porte dans son inventaire des portes
+qui DOIVENT rester larges. L'auditeur a manqué ce témoin.
+
+Mais sa MESURE tient, et elle est le vrai constat : **la décision couvre
+beaucoup plus que sa justification.** « Le droit sur son PROPRE lien » ne décrit
+ni `/toggle` — réactiver un lien qu'un admin vient de désactiver, un geste de
+modération de l'entrée pris contre un administrateur vivant — ni `/arrivals` —
+nom, pays, langue et date de CHAQUE arrivée, y compris après le bannissement. Et
+le bannissement **ne désactive pas les liens que la cible a créés**
+(`participant-ban-core.ts` ne ferme que celui par lequel elle est ENTRÉE).
+
+Avec `GET /links` **sans** `?conversationId=` — `where = { createdBy: userId }`,
+aucun contrôle d'appartenance, au-dessus du `if` que ce lot resserre — la chaîne
+est complète : lire le code de son lien, puis le rouvrir. **Une garde qui n'est
+effective que si l'appelant veut bien se désigner.**
+
+Les deux ne sont pas deux défauts : **deux conséquences d'une seule décision.**
+D'où une issue `décision-produit` assignée au porteur, **#20189**, avec ses trois
+réponses tenables — et rien de resserré ici : retourner une décision gelée par un
+témoin dans le lot qui découvre son coût est exactement ce que ce témoin existe
+pour empêcher.
+
+### 3. La porte 4 est PARTIELLE, et le dire importe
+
+`hasAccess = memberRow !== null || canPreview` : le resserrement retire le SEUL
+grant de membre. Un banni garde exactement ce qu'un INCONNU obtient — l'aperçu
+public, messages compris — et le salon GLOBAL « meeshy » reste admis
+inconditionnellement pour tout compte authentifié, **avant** toute lecture de
+participation. Ce que le lot ferme est donc : l'accès de membre quand l'aperçu
+public est fermé, l'étiquette `userType: 'member'`, et le `redirectTo`. Écrit sur
+le site, et dans `CLAUDE.md`.
+
+> **Une garde partielle annoncée totale est pire qu'une garde absente** — c'est
+> la règle du dépôt sur les énumérations, appliquée à une CLAUSE : « ne lit plus
+> le fil » était faux à l'adresse sœur.
+
+### 4. Ce que l'auditeur a attaqué SANS rien trouver
+
+Il a relevé tous les écrivains de `bannedAt` : `resolveUnbanWrite` et
+`liftBanOnly` posent **toujours** `bannedAt: null` ; `commitParticipantRejoin` et
+`restore-for-me` portent `unsetOrNull('bannedAt')` dans le `where` de leur
+écriture ; `resolveConversationEntry` teste `bannedAt != null` AVANT
+`already-member`. **Aucun chemin ne produit `isActive: true, bannedAt ≠ null`
+pour quelqu'un qui n'est pas réellement banni** — donc aucun resserrement de ce
+lot ne paie sur une population légitime. Aucune des cinq lectures n'alimente une
+comparaison EXACTE (`directoryOf` est intact), donc pas de répétition de #20093.
+Les doubles sont honnêtes : la fixture `VIVANT` ne porte aucune clé `bannedAt`,
+donc les témoins « VIVANT admis » passent par la branche `{ isSet: false }`, pas
+par chance. Aucune des cinq clauses touchées n'avait de `OR` préexistant, donc
+aucun écrasement introduit.
+
+### 5. Les quatre constats mineurs, et leur sort
+
+| constat | sort |
+|---|---|
+| le double de `links-retrieval.test.ts` ignore `bannedAt`, donc PLUS permissif que la production (piège armé) | **corrigé** — il appelle `participationEstVivante` |
+| l'audience d'admins de `share-link-mint.ts` porte DÉJÀ un `OR` : y spreader la loi l'écraserait | **commenté sur place** — c'est le site que la prochaine passe « fermons les audiences » ouvrirait en premier |
+| `GET /conversations/:id/links` supprime `isModerator` et `participantCount` sur le fil, sous un commentaire qui affirme que iOS et le web les lisent | **issue #20190** (forme 2, route dépréciée, hors périmètre) |
+| la porte 1 refuse en **403** (oracle d'existence) là où #8116 impose le 404 des portes 2 et 3 | **consigné** — préexistant, incohérence de famille |
+
+### Ce que l'audit change au compte du lot
+
+**CINQ portes**, pas six. Et la famille n'est **pas** fermée : la dette est écrite
+dans `CLAUDE.md` au PRÉSENT, avec ses deux issues (#20189, #20190) — parce que
+c'est la troisième fois que ce paragraphe se voit reprocher d'avoir dit l'absolu
+là où il fallait dire l'état.
