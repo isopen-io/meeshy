@@ -36,7 +36,24 @@ export const messageAttachmentSchema = {
     originalName: { type: 'string', description: 'Original filename' },
     mimeType: { type: 'string', description: 'MIME type (image/jpeg, application/pdf, etc.)' },
     fileSize: { type: 'number', description: 'File size in bytes' },
-    filePath: { type: 'string', description: 'Relative file path' },
+    // `filePath` et `thumbnailPath` NE SONT PAS DÉCLARÉS, et c'est la garde
+    // (#20048). Ce sont les chemins de STOCKAGE du serveur
+    // (`attachments/2026/11/<conversationId>/memo_8b1f0c1e.m4a`) : la racine,
+    // le partitionnement et la convention de nommage sont ce qui transforme une
+    // traversée de chemin, un rendu d'erreur bavard ou un accès S3 mal borné en
+    // lecture CIBLÉE — de la reconnaissance offerte, et sans aucun lecteur
+    // (mesuré : les quatre décodeurs d'API ne déclarent ni l'un ni l'autre).
+    //
+    // Le contrat est la moitié qui coupe l'ÉMISSION ; le `select` de
+    // `getAttachmentWithMetadata` est celle qui coupe le CHARGEMENT, et les
+    // deux ont été retirées ensemble — « compter sur une omission de schéma
+    // pour retenir un secret est un piège armé, pas une protection »
+    // (`services/gateway/CLAUDE.md`, règle du cycle 84), et réciproquement un
+    // `select` seul laisserait la déclaration publier la prochaine route qui
+    // réutilise ce schéma. Ce qu'un client lit est `fileUrl` / `thumbnailUrl`.
+    //
+    // La COLONNE Prisma et ses deux index restent : une douzaine de lectures
+    // internes résolvent le chemin disque pour lire les octets.
     fileUrl: { type: 'string', description: 'Full URL for access' },
 
     // BUG2 A' — réactions par-image (sinon fast-json-stringify les strippe)
@@ -104,7 +121,6 @@ export const messageAttachmentSchema = {
     // Image metadata
     width: { type: 'number', nullable: true, description: 'Image width in pixels' },
     height: { type: 'number', nullable: true, description: 'Image height in pixels' },
-    thumbnailPath: { type: 'string', nullable: true, description: 'Thumbnail file path' },
     thumbnailUrl: { type: 'string', nullable: true, description: 'Thumbnail URL' },
     thumbHash: { type: 'string', nullable: true, description: 'ThumbHash base64 for instant placeholder (~33 chars)' },
     imageVariants: {
