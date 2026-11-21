@@ -265,12 +265,30 @@ export async function appliquerDroitsDeParticipant(
  * contrat n'est donc pas un rang mais la forme : la charge réduite
  * n'AFFIRME rien sur l'octroi (clé ABSENTE, jamais `null`), donc un
  * client qui discrimine sur la PRÉSENCE de la clé converge vers le même
- * état quel que soit l'ordre d'arrivée. Les deux consommateurs le font
- * (`carriesHistoryGrant` côté iOS, `!== undefined` côté web) ; Android
- * n'a pas de consommateur. Un client qui recopierait la valeur
- * INCONDITIONNELLEMENT effacerait l'octroi — c'est la règle du § « Un
- * champ que le client lit AUTORITATIVEMENT n'est plus optionnel pour
- * l'émetteur » (CLAUDE.md), appliquée ici.
+ * état quel que soit l'ordre d'arrivée.
+ *
+ * **Les TROIS clients le font** — mesuré le 2026-11-21 (#20228), parce que
+ * la phrase qui vivait ici était fausse sur ses deux moitiés : elle
+ * nommait un consommateur web qui n'existait pas (zéro occurrence dans
+ * `apps/web/src`) et niait un consommateur Android qui existe depuis le
+ * dégel du Kotlin natif (#11570). Un commentaire d'ÉTAT ne rougit jamais :
+ * il survit à ce qui l'a périmé, dans les deux sens.
+ *
+ * | client | consommateur | la règle de PRÉSENCE |
+ * |---|---|---|
+ * | iOS | `ParticipantProfileSheet` | `ParticipantRightsUpdatedEvent.carriesHistoryGrant` |
+ * | Android | `ParticipantProfileViewModel` | `ParticipantRightsUpdatedEventSerializer` → `ParticipantProfileLive.applying` |
+ * | web | `realtime-participant-rights.ts` | les droits servis RECOUVRENT ceux de la ligne du détail ; un droit non NOMMÉ n'affirme rien |
+ *
+ * Le web porte la règle sur `permissions.canViewHistory` et non sur
+ * `historyVisibleFrom` : le détail ne SERT pas l'octroi par date
+ * (`conversationDetailInclude`), donc le booléen voisin est tout ce qu'il
+ * a à protéger — et c'est la clé que la charge de la room retire (#4009).
+ *
+ * Un client qui recopierait la valeur INCONDITIONNELLEMENT effacerait
+ * l'octroi — c'est la règle du § « Un champ que le client lit
+ * AUTORITATIVEMENT n'est plus optionnel pour l'émetteur » (CLAUDE.md),
+ * appliquée ici.
  */
 async function annoncerDroits(options: {
   readonly prisma: PrismaClient;

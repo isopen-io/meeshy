@@ -78,6 +78,7 @@ import {
   noteEphemeralDelivery,
 } from './realtime-ephemeral';
 import { catchUpFirstAuthentication, catchUpThreadMessage, createUnknownRowCatchUp, relaunchConversationList } from './realtime-thread-catch-up';
+import { participantRightsUpdatedListener } from './realtime-participant-rights';
 import { viewerRoleUpdatedListener } from './realtime-viewer-role';
 import { bindSocialRealtime } from './realtime-social';
 import { STARRED_MESSAGES_QUERY_ROOT, applyStarredEvent } from './starred-messages-cache';
@@ -855,6 +856,8 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   };
 
   const onViewerRoleUpdated = viewerRoleUpdatedListener(deps.queryClient, deps.viewerId); /* #15987 — `realtime-viewer-role.ts` */
+  /* `participant:rights-updated` (#20228) — les droits servis recouvrent ceux de la ligne NOMMÉE du détail ; un droit absent n'affirme rien. Règle : `realtime-participant-rights.ts`. */
+  const onParticipantRightsUpdated = participantRightsUpdatedListener(deps.queryClient);
   /* Les publications, les stories et leurs commentaires (#18914) — `realtime-social.ts`. */
   const unbindSocial = bindSocialRealtime({ socket, queryClient: deps.queryClient, viewerId: deps.viewerId });
   socket.on<unknown>(SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
@@ -865,6 +868,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_ENCRYPTION_CHANGED, onEncryptionChanged);
   socket.on<unknown>(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, onViewerRoleUpdated);
+  socket.on<unknown>(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, onParticipantRightsUpdated);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
@@ -948,6 +952,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_ENCRYPTION_CHANGED, onEncryptionChanged);
       socket.off<unknown>(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, onViewerRoleUpdated);
+      socket.off<unknown>(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, onParticipantRightsUpdated);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
