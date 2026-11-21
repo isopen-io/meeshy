@@ -865,6 +865,7 @@
     <string name="game_mission_write_conversations_other">In %1$s verschiedenen Unterhaltungen schreiben</string>
     <string name="game_mission_write_someone_new_one">Jemandem zum ersten Mal schreiben</string>
     <string name="game_mission_write_someone_new_other">%1$s Personen zum ersten Mal schreiben</string>
+    <string name="game_missions_full_dream_in">Dein erster vollständiger Traum kommt in %1$s.</string>
     <string name="game_missions_locked">Der Traum öffnet bei Level 5 · du bist auf Level %1$s.</string>
     <string name="game_missions_prism_day">Prisma-Tag: Einer der Akte spielt in einer anderen Sprache als deiner.</string>
     <string name="game_missions_prism_hour">Prisma-Stunde: %1$s – %2$s — jeder Akt zählt doppelt.</string>

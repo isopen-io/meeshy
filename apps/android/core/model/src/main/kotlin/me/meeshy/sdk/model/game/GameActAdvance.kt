@@ -11,14 +11,15 @@ package me.meeshy.sdk.model.game
  * compare : un nouveau jour ou un acte relancé n'est pas une avancée. Deux actes avancés ensemble : le premier dans
  * l'ordre du jour parle.
  *
- * `null` ⇒ aucune pastille : « Jeu masqué », lecture absente (cache vide, ancien serveur), actes pas encore ouverts,
- * aucune progression montée. Aucune notification n'en découle (#17368).
+ * `null` ⇒ aucune pastille : « Jeu masqué », lecture absente (cache vide, ancien serveur), aucun acte servi, aucune
+ * progression montée. L'acte unique du premier Rêve (#17370, sous le niveau 5) se compare comme les autres. Aucune
+ * notification n'en découle (#17368).
  */
 public data class GameActAdvance(val difficulty: MissionDifficulty, val progress: Int, val target: Int) {
     public companion object {
         public fun between(before: GameMissions?, after: GameMissions?, hidden: Boolean): GameActAdvance? {
             if (hidden || before == null || after == null) return null
-            if (!after.unlocked || before.dayKey != after.dayKey) return null
+            if (before.dayKey != after.dayKey) return null
             val previous = before.items.associate { it.id to it.progress }
             val moved = after.items.firstOrNull { item -> previous[item.id]?.let { item.progress > it } == true }
                 ?: return null

@@ -108,7 +108,7 @@ public object ProgressionConceptStates {
     private fun missionsState(game: GameBlock?): FicheStateLine? {
         val block = game ?: return null
         val missions = block.missions
-        if (!missions.unlocked) {
+        if (missions.showsDoorOnly) {
             return FicheStateLine(
                 GameCopyLaws.missionsLocked(block.level.shown.level),
                 ConceptFact.MissionsUnlockLevel, ConceptFact.Level,
