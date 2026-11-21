@@ -380,6 +380,53 @@
         }
       }
     },
+    "NSHealthUpdateUsageDescription" : {
+      "comment" : "Privacy - Health Update Usage Description",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا يكتب Meeshy أي بيانات صحية أبدًا. يقتصر الوصول إلى «صحتي» على قراءة وقت حالات السقوط التي ترصدها ساعة Apple Watch، لتنبيه أفراد عائلتك فورًا."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy schreibt niemals Gesundheitsdaten. Der Health-Zugriff liest nur den Zeitpunkt der Stürze, die deine Apple Watch erkennt, um deine Blut-Kontakte sofort zu benachrichtigen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy never writes any health data. Health access only reads the time of falls your Apple Watch detects, to alert your Blood links right away."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy nunca escribe datos de salud. El acceso a Salud solo lee la hora de las caídas que detecta tu Apple Watch, para avisar enseguida a tus Sangre."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy n'écrit jamais aucune donnée de santé. L'accès à Santé sert seulement à lire l'heure des chutes que votre Apple Watch détecte, pour prévenir vos Sangs tout de suite."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy non scrive mai dati sanitari. L'accesso a Salute legge solo l'ora delle cadute rilevate dal tuo Apple Watch, per avvisare subito i tuoi Sangue."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Meeshy nunca grava dados de saúde. O acesso ao Saúde só lê o horário das quedas que seu Apple Watch detecta, para avisar seus Sangue na hora."
+          }
+        }
+      }
+    },
     "NSLocalNetworkUsageDescription" : {
       "comment" : "Privacy - Local Network Usage Description",
       "localizations" : {
