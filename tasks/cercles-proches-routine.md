@@ -1688,3 +1688,42 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   F2 (identifiant absent ⇒ rien n'est jugé) assumé, comme avant le lot.
 - Prochain lot : fusion de cette PR (CI iOS en `workflow_dispatch`), puis #20055 (iOS + Android), le plafond
   `untilStopped` de `listOnlyState`, #19999, #20054 ; #19682 et #19997 une fois tranchées.
+
+## 2026-11-20 — réveil de 17 h : lot #19999 + #20055 (relire avant de composer)
+
+- Reprise : #20042 et #20058 fusionnées dans `dev` (#20029 et #19929 fermées). Aucune PR de la routine ouverte. Le
+  plafond `untilStopped` de `listOnlyState` reste sans objet : la passerelle ne sert pas encore « jusqu'à l'arrêt ».
+- Lot : #19999 et #20055 ensemble (même mécanisme), branche `claude/cercles-19999-relire-avant-de-composer`, iOS +
+  Android. Un drapeau `hasReadServed` (vrai tant que la DERNIÈRE relecture a répondu) : « Partager » relit d'abord si
+  besoin et réunit le partage servi, une panne le refuse (`offline`) ; « Arrêter » relit d'abord et se compose sur la
+  liste servie, une panne garde #19928 (le retrait part, fail-closed) ; une passerelle d'avant ne lève pas l'attente
+  avant un « Arrêter ».
+- Audit adversarial : non bloquant. Corrigés dans le lot : M1 (une relecture en panne remet le drapeau à faux), M3 (un
+  appareil récepteur ne republie jamais SA position dans le repli d'avant la liste seule), F1 (motif juste sur un
+  changement de compte), F2 (relire avant de juger les capacités), F3 (« Arrêter » d'une personne déjà retirée
+  n'envoie rien), F5 (témoins). Suivis ouverts : #20087 (M2, la relecture ne dit pas la source : un point choisi peut
+  devenir position réelle), #20086 (facette de #20055 : état « partage lancé ailleurs, en attente de connexion »).
+- Gardes iOS rc=0 (règles maison 42, cohésion, inscription 2 063, accent 408) ; Swift et Kotlin prouvés par `ios.yml`
+  et `android.yml` en `workflow_dispatch`.
+- Prochain lot : fusion de cette PR, puis #20054, #20056, #20086, #20087 ; #19682 et #19997 attendent la décision du
+  porteur.
+
+## 2026-11-20 — réveil de 23 h : lot #19557 (moitié serveur) + #20087 (moitié serveur)
+
+- Reprise : #20088 fusionnée (b79d1f006), #19999 et #20055 fermées. Aucune PR de la routine ouverte.
+- Constat : #20087 suppose une source que la passerelle ne connaissait pas — #19557 (point choisi à la main) n'avait
+  jamais été servi côté passerelle. Lot : les deux moitiés SERVEUR ensemble, branche
+  `claude/cercles-20087-source-servie`.
+- Mise en œuvre : `location:share-start` accepte `source?: 'device' | 'manual'` (absente ⇒ device ; manual exige une
+  position) ; l'état scellé garde `source: 'manual'`, la liste seule la reprend ; `GET /relations/locations/mine` sert
+  `source` (additif) ; `location:share-update` sur un point choisi rend `SHARED_LOCATION_FIXED_POINT` sans rien écrire ni
+  servir. Le lecteur ne reçoit rien de la source.
+- `acceptsManualSource` n'est PAS annoncé : « Choisir sur la carte » reste éteint tant qu'iOS et Android ne lisent pas la
+  source servie (moitié client de #20087) — sinon le défaut M2 deviendrait atteignable.
+- Audit adversarial : non bloquant tant que `acceptsManualSource` n'est pas annoncé. Corrigés dans le lot : un
+  démarrage AVEC position SANS source ne remplace plus un point choisi (`FIXED_POINT` ; « device » doit être dit), et un
+  point choisi ne garde ni mouvement ni précision réelle. Suivi #20115 (sortie du fantôme muette pour un point choisi,
+  courses mise à jour / démarrage), à solder AVANT l'annonce.
+- Prochain lot : moitié client de #20087 (iOS + Android : un partage servi `manual` réuni ne republie jamais la position
+  de l'appareil ; « Partager » depuis l'appareil devant un point choisi demande), puis #20115, puis annoncer
+  `acceptsManualSource` (#19557), puis #20054, #20056, #20086.

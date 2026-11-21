@@ -50,11 +50,13 @@ import {
   SHARED_LOCATION_RECIPIENT_DEADLINE_MAX_SECONDS,
   SHARED_LOCATION_MOTIONS,
   SHARED_LOCATION_RECIPIENTS_MAX,
+  SHARED_LOCATION_SOURCES,
   type SharedLocationCircle,
   type SharedLocationErrorCode,
   type SharedLocationMotion,
   type SharedLocationPrecision,
   type SharedLocationRequestKind,
+  type SharedLocationSource,
 } from './shared-location-constants.js';
 
 export * from './shared-location-constants.js';
@@ -103,8 +105,15 @@ export const sharedLocationStartPayloadSchema = z
      * loi de la batterie (`device.battery`, dès Proche, sans blocage) reste le plafond.
      */
     shareBattery: z.boolean().optional(),
+    /**
+     * La source de `position` (#19557) : absente ⇒ `device`. `manual` exige une position — un point choisi sans
+     * point n'a pas de sens ; une liste seule garde la source du partage qu'elle reprend. Un serveur d'avant refuse
+     * la clé (`INVALID`) : le client ne propose « Choisir sur la carte » que sur `acceptsManualSource`.
+     */
+    source: z.enum(SHARED_LOCATION_SOURCES).optional(),
   })
-  .strict();
+  .strict()
+  .refine((payload) => payload.source !== 'manual' || payload.position !== undefined);
 export type SharedLocationStartPayload = z.infer<typeof sharedLocationStartPayloadSchema>;
 
 export const sharedLocationUpdatePayloadSchema = sharedLocationPositionSchema;
@@ -223,6 +232,12 @@ export type SharedLocationOwnSnapshot = {
    * antérieur, l'appareil ne cède pas.
    */
   readonly startedAt?: string;
+  /**
+   * D'où vient le point du partage en cours (#20087) : `manual`, un point choisi à la main ; `device`, le relevé
+   * d'un appareil. Un appareil qui réunit ce partage ne fait jamais passer un destinataire d'un point choisi à sa
+   * position réelle sans que l'utilisateur le demande. ADDITIF : absent d'un serveur antérieur (ou sans partage).
+   */
+  readonly source?: SharedLocationSource;
 };
 
 /**
