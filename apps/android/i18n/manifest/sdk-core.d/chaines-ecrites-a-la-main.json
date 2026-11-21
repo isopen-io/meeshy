@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-core": {
+      "resDir": "sdk-core/src/main/res",
+      "entries": [
+        { "androidName": "live_location_channel_name", "status": "android-only" },
+        { "androidName": "live_location_notification_title", "status": "android-only" },
+        { "androidName": "live_location_notification_stop", "status": "android-only" },
+        { "androidName": "session_lost_pending_sends", "status": "android-only" }
+      ]
+    }
+  }
+}

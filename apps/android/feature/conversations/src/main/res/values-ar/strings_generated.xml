@@ -263,6 +263,8 @@
     <string name="new_conversation_encryption_collapsed">مطوية</string>
     <string name="new_conversation_encryption_expanded">موسّعة</string>
     <string name="new_conversation_error_create">تعذّر إنشاء المحادثة</string>
+    <string name="new_conversation_error_participant_without_device_anonymous">لا يمكن لأحد الأعضاء تلقي الرسائل المشفّرة بعد: لم يُفعَّل شيء.</string>
+    <string name="new_conversation_error_participant_without_device_named">لا يمكن لـ %1$s تلقي الرسائل المشفّرة بعد: لم يُفعَّل شيء.</string>
     <string name="new_conversation_group_title">اسم المجموعة (إلزامي)</string>
     <string name="new_conversation_group_toggle">مجموعة جديدة</string>
     <string name="new_conversation_no_user_found">لم يتم العثور على مستخدم</string>

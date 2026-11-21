@@ -51,6 +51,8 @@ data class ApiError(
     val retryAfterSeconds: Int? = null,
     /** Les consentements qu'un 403 demande (null = refus ordinaire). */
     val requiredConsents: List<String>? = null,
+    /** Les membres sans appareil chiffré qu'une bascule au bout en bout nomme (`E2EE_PARTICIPANT_WITHOUT_DEVICE`, #20073). */
+    val withoutDeviceUserIds: List<String> = emptyList(),
     /**
      * Le `message` de l'enveloppe, tel que la réponse l'a servi (`null` : pas d'enveloppe JSON lisible). [message] préfère
      * `error`, qui pour le « route inconnue » de Fastify ne dit que « Not Found » ; celui-ci garde « Route GET:… not

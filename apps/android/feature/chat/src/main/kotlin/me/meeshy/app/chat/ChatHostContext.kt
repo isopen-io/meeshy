@@ -151,6 +151,8 @@ internal class ChatHostContext(
      * lu seulement quand l'aperçu de l'appui long s'ouvre. Recréé à chaque ouverture : tout repart replié.
      */
     val expandedLongMessages: MutableSet<String> = mutableSetOf(),
+    /** #20076 — le bandeau « ne peut pas recevoir de messages chiffrés » au-dessus du compositeur ; `null` sans contrôleur. */
+    val peerWithoutDevice: EndToEndPeerWithoutDeviceController? = null,
 )
 
 /** Ce que l'en-tête lit du [ChatEngagementController], sans connaître le contrôleur. */
@@ -204,6 +206,7 @@ internal fun rememberChatHostContext(
     listGate: ChatListUpdateGate? = null,
     viewerRole: String? = null,
     unreadAtOpening: Int? = null,
+    peerWithoutDevice: EndToEndPeerWithoutDeviceController? = null,
 ): ChatHostContext {
     val sheets = remember { ChatSheetVisibility() }
     // A plain map, not snapshot state: written from onGloballyPositioned without forcing
@@ -211,7 +214,7 @@ internal fun rememberChatHostContext(
     val bubbleFrames = remember { mutableMapOf<String, Rect>() }
     val chrome = remember(listGate) { ChatChromeState(listGate) }
     val expandedLongMessages = remember { mutableSetOf<String>() }
-    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement, downloadedFileIds, takeLandingMessageId, landing, composerClosure, capabilities, viewerRole, unreadAtOpening, expandedLongMessages)
+    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames, header, chrome, readingMode, pendingPlace, selection, engagement, downloadedFileIds, takeLandingMessageId, landing, composerClosure, capabilities, viewerRole, unreadAtOpening, expandedLongMessages, peerWithoutDevice)
 }
 
 /** The ViewModel's user-intent entry points, as plain callbacks. */
