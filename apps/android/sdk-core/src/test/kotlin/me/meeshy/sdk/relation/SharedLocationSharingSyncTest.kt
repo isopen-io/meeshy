@@ -953,7 +953,7 @@ class SharedLocationSharingSyncTest {
         SharedLocationPointReplacement(startedAt, ids.toSet())
 
     @Test
-    fun `l'accord donne a un AUTRE demarrage ne vaut rien : la question se repose a jour et rien ne part`() = runTest {
+    fun `l'accord donne a un AUTRE demarrage ne vaut rien, la question se repose a jour et rien ne part`() = runTest {
         val device = Device(this)
         runCurrent()
         device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
@@ -971,7 +971,7 @@ class SharedLocationSharingSyncTest {
     }
 
     @Test
-    fun `un point relance ailleurs PENDANT l'attente du releve n'est pas ecrase : la reponse se relit apres le releve`() = runTest {
+    fun `un point relance ailleurs PENDANT l'attente du releve n'est pas ecrase, la reponse se relit apres le releve`() = runTest {
         val device = Device(this)
         runCurrent()
         device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
@@ -989,7 +989,7 @@ class SharedLocationSharingSyncTest {
     }
 
     @Test
-    fun `un compte qui change efface le demarrage servi : la question d'avant ne vaut rien`() = runTest {
+    fun `un compte qui change efface le demarrage servi, la question d'avant ne vaut rien`() = runTest {
         val device = Device(this)
         runCurrent()
         device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
