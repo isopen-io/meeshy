@@ -90,3 +90,30 @@ export function canInviteOf(community: CommunitySummary): boolean {
   if (role === null || role === undefined) return false;
   return !community.isPrivate || role === 'admin' || role === 'moderator';
 }
+
+/** Une arrivée par l'adresse PARTAGÉE de la communauté (`?via=link`, #20330) — toute autre ouverture est directe. */
+export function arrivesThroughLink(search: URLSearchParams): boolean {
+  return search.get('via') === 'link';
+}
+
+/**
+ * Ce que l'écran dit sous le geste d'entrée (#20330) : l'échec du geste s'il y
+ * en a un ; sinon, arrivé par un lien qu'un intendant a mis en pause, la pause
+ * se dit AVANT le geste — le détail la sert à tout lecteur (#19661). Rien
+ * d'avance sans lien, avec un lien actif ou un état non servi, ni à un membre.
+ */
+export function membershipNoticeOf<Failure extends string>({
+  action,
+  throughLink,
+  community,
+  failure,
+}: {
+  readonly action: MembershipAction;
+  readonly throughLink: boolean;
+  readonly community: CommunitySummary;
+  readonly failure: Failure | null;
+}): Failure | 'linkPaused' | null {
+  if (failure !== null) return failure;
+  const entering = action === 'join' || action === 'request';
+  return entering && throughLink && community.joinLinkPaused === true ? 'linkPaused' : null;
+}
