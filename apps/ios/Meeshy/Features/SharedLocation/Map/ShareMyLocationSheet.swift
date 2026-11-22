@@ -34,7 +34,8 @@ struct ShareMyLocationSheet: View {
     @State private var choosingPoint = false
     @State private var pointViewport: LocationMapViewport?
     /// Le partage montre un point choisi (#20087) : « Partager » demande avant d'y montrer la position réelle.
-    @State private var confirmsReplacingPoint = false
+    /// La question « Montrer ta position réelle ? » en cours, et le partage qu'elle décrit (#20127).
+    @State private var askedReplacement: SharedLocationPointReplacement?
     /// Ma position déjà connue, pour la seule pilule « De passage à » (#19560) : jamais un relevé de plus.
     @State private var me: SharedLocationFix?
     @StateObject private var places = LocationPlaceNamer()
@@ -76,12 +77,12 @@ struct ShareMyLocationSheet: View {
         .adaptiveOnChange(of: scenePhase) { _, phase in
             denial = denial.next(phase)
         }
-        .confirmationDialog(ShareMyLocationCopy.replacePointTitle, isPresented: $confirmsReplacingPoint,
-                            titleVisibility: .visible) {
-            Button(ShareMyLocationCopy.replacePointConfirm) { Task { await share(replacingPoint: true) } }
+        .confirmationDialog(ShareMyLocationCopy.replacePointTitle, isPresented: asksToReplacePoint,
+                            titleVisibility: .visible, presenting: askedReplacement) { asked in
+            Button(ShareMyLocationCopy.replacePointConfirm) { Task { await share(replacing: asked) } }
             Button(ShareMyLocationCopy.replacePointKeep, role: .cancel) {}
-        } message: {
-            Text(ShareMyLocationCopy.replacePointMessage)
+        } message: { asked in
+            Text(ShareMyLocationCopy.replacePointMessage(asked.audience(knownNames: recipients.map { ($0.userId, $0.name) })))
         }
         .task { me = LocationMapOwnPosition.lastKnown() }
     }
@@ -295,19 +296,23 @@ struct ShareMyLocationSheet: View {
         recipients.filter { chosen.contains($0.userId) }.map(\.name)
     }
 
-    private func share(replacingPoint: Bool = false) async {
+    private var asksToReplacePoint: Binding<Bool> {
+        Binding(get: { askedReplacement != nil }, set: { shown in if !shown { askedReplacement = nil } })
+    }
+
+    private func share(replacing asked: SharedLocationPointReplacement? = nil) async {
         let targets = recipients.filter { chosen.contains($0.userId) }
         let offers = center.servesShareOptions != false
         for target in targets {
             if let problem = await center.share(with: target.userId, precision: precision, term: duration,
                                                 notify: offers && notify, battery: offers ? battery : nil,
-                                                replacingPoint: replacingPoint) {
+                                                replacing: asked) {
                 guard problem != .locationDenied else {
                     denial = ShareMyLocationDenial(isDenied: true)
                     return
                 }
-                guard problem != .replacesChosenPoint else {
-                    confirmsReplacingPoint = true
+                if let question = problem.pointReplacement {
+                    askedReplacement = question
                     return
                 }
                 FeedbackToastManager.shared.showError(ShareLocationWording.problem(problem))
@@ -368,6 +373,20 @@ enum ShareMyLocationCopy {
         String(localized: "locationMap.share.replacePoint.message",
                defaultValue: "Ton partage montre un point choisi sur la carte. Tous ceux qui le voient verront ta position réelle à la place.",
                bundle: .main)
+    }
+
+    /// Nomme ceux qui passeront du point à la position réelle (#20127) : trois noms au plus, puis « et N autres ».
+    static func replacePointMessage(_ audience: (named: [String], others: Int)) -> String {
+        let people = audience.named + (audience.others > 0 ? [replacePointOthers(audience.others)] : [])
+        guard !people.isEmpty else { return replacePointMessage }
+        let format = String(localized: "locationMap.share.replacePoint.messageNamed",
+                            defaultValue: "Ton partage montre un point choisi sur la carte. Ta position réelle le remplacera chez %@.",
+                            bundle: .main)
+        return String(format: format, ListFormatter.localizedString(byJoining: people))
+    }
+
+    static func replacePointOthers(_ count: Int) -> String {
+        String.localizedStringWithFormat(String(localized: "locationMap.share.replacePoint.others", bundle: .main), count)
     }
     static var replacePointConfirm: String {
         String(localized: "locationMap.share.replacePoint.confirm", defaultValue: "Montrer ma position réelle", bundle: .main)
