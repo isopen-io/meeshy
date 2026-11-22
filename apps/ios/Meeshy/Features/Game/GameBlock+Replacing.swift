@@ -200,7 +200,8 @@ extension GameBlock.Flame {
             freezePrice: freezePrice,
             relightPrice: relightPrice,
             status: status ?? self.status,
-            canRelight: canRelight ?? self.canRelight
+            canRelight: canRelight ?? self.canRelight,
+            freezeGifted: freezeGifted
         )
     }
 }

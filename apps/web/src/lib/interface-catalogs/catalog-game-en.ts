@@ -688,7 +688,7 @@ const en = {
   'game.guide.moment.atlas_stamp.next': '{stamped} of {total} languages in your passport.',
   'game.guide.moment.atlas_stamp.short': 'Stamp: {language}.',
   'game.guide.moment.flame_freeze_gift.what': 'A Vigil is yours, as a gift.',
-  'game.guide.moment.flame_freeze_gift.means': 'Three days of Flame: your ancestors entrust you with one. It keeps your Flame lit on a day you don’t come.',
+  'game.guide.moment.flame_freeze_gift.means': 'Your ancestors entrust it to you: it keeps your Flame lit on a day you miss.',
   'game.guide.moment.flame_freeze_gift.next': 'Vigils in reserve: {count}.',
   'game.guide.moment.flame_freeze_gift.short': 'A Vigil for your Flame, as a gift.',
   'game.photo.kicker.trophy': 'New trophy',

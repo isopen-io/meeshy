@@ -700,7 +700,7 @@ const ar = {
   'game.guide.moment.atlas_stamp.next': '⁦{stamped}⁩ لغة من ⁦{total}⁩ في جواز سفرك.',
   'game.guide.moment.atlas_stamp.short': 'ختم: {language}.',
   'game.guide.moment.flame_freeze_gift.what': 'أُهدي إليك قنديل.',
-  'game.guide.moment.flame_freeze_gift.means': 'ثلاثة أيام من اللهب: يأتمنك أجدادك على قنديل. يُبقي لهبك مشتعلًا في يوم لا تأتي فيه.',
+  'game.guide.moment.flame_freeze_gift.means': 'يأتمنك أجدادك عليه: يُبقي لهبك مشتعلًا في يوم تغيب فيه.',
   'game.guide.moment.flame_freeze_gift.next': 'القناديل في الاحتياط: \u2066{count}\u2069.',
   'game.guide.moment.flame_freeze_gift.short': 'أُهدي إليك قنديل للهبك.',
   'game.photo.kicker.trophy': 'كأس جديدة',
