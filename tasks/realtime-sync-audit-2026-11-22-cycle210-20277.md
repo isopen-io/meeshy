@@ -149,6 +149,29 @@ différent : trois booléens APLATIS, pas un objet `permissions`.
 
 Suivi : **#20292** (ouverte par ce lot, avec la mesure site par site).
 
+**Et le relevé des lecteurs CLIENTS, fait pour #20292, en a rendu un second,
+pire que lui.** `participant:rights-updated` a **un seul** abonné sur iOS —
+`ParticipantProfileSheet`, la fiche qu'un HÔTE ouvre sur quelqu'un d'autre.
+L'autorité du LECTEUR lui-même (`ConversationViewerAuthority.canSendMessages`,
+qui décide de Répondre et d'Épingler par `MessageActionPolicy`) descend de
+`AnonymousSessionContext.permissions`, c'est-à-dire de l'instantané de la
+JONCTION, écrit UNE fois dans le trousseau (`MeeshyApp.swift:261`) et jamais
+réécrit. Et iOS ne décode AUCUN `permissions` sur le participant du détail
+(`ConversationModels.swift`) — il ne lit donc même pas le champ que ce lot vient
+de rendre juste.
+
+Un droit retiré par l'hôte laisse donc, sur iOS, « Répondre » offert **pour
+toute la vie de la session, par-delà la fermeture de l'app**. C'est #20228 (le
+web) non fait sur iOS. Suivi : **#20294**.
+
+> **Un relevé de consommateurs répond à une autre question que celle qui l'a
+> motivé.** Celui-ci servait à savoir si #20292 était urgent — il a répondu non
+> (aucun lecteur des trois booléens aplatis, donc un piège armé) **et** a nommé,
+> dans le même balayage, un défaut VIVANT sur une surface que la question ne
+> visait pas. La règle du cycle 105 — « relever les consommateurs avant de
+> changer la forme » — vaut aussi quand on ne change rien : le relevé est un
+> instrument de mesure, pas une formalité de lot.
+
 ### La preuve
 
 | mutation | témoins qui tombent |
