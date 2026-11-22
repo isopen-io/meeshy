@@ -49,6 +49,8 @@ import { PUBLIC_PROFILE_QUERY_PREFIX } from './public-profile';
 import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATION_LISTS_KEY, type NotificationsDeps } from './notifications';
 import { bindPublicationRoomTransport } from './publication-rooms';
 import { createNotificationLiveHandlers } from './notifications-live';
+import { resyncAfterSeqGap } from './notifications-realtime';
+import { createSyncSeqTracker } from './sync-seq';
 import {
   applyConversationUnreadUpdated,
   applyConversationUpdated,
@@ -683,6 +685,18 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * dans `notifications-live.ts` (le budget de ce fichier est plein).
    */
   const notificationLive = createNotificationLiveHandlers({ queryClient: deps.queryClient, now: deps.now, notificationsApi: deps.notificationsApi });
+  /* LE CURSEUR `_seq` DU SYNCENGINE (#18601) — observé AVANT la livraison, donc
+     il avance même si le décodage échoue ensuite et même si aucun écran
+     n'écoute. `notification:new` est le SEUL événement que la passerelle
+     estampille (mesuré : les deux sites d'`emitWithSeq` l'émettent), donc
+     l'observer est une observation COMPLÈTE — un curseur global observé
+     partiellement fabriquerait des trous là où rien n'est perdu. */
+  const syncSeqTracker = createSyncSeqTracker({ onGap: () => resyncAfterSeqGap(deps.queryClient) });
+  const seqStampedEvent = SERVER_EVENTS.NOTIFICATION_NEW;
+  const onNotificationNew = (payload: unknown): void => {
+    syncSeqTracker.observe(payload);
+    notificationLive.onNew(payload);
+  };
 
   /**
    * `friend-request:*` (#6321) — LES DEMANDES D'AMITIÉ SUIVENT LA PASSERELLE :
@@ -903,7 +917,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_COUNTDOWN_STARTED, onMessageCountdownStarted);
   socket.on<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_STARRED, onMessageStarred);
-  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, notificationLive.onNew);
+  socket.on<unknown>(seqStampedEvent, onNotificationNew);
   socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_READ, notificationLive.onRead);
   socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_READ_BULK, notificationLive.onReadBulk);
   socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED, notificationLive.onDeleted);
@@ -987,7 +1001,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_COUNTDOWN_STARTED, onMessageCountdownStarted);
       socket.off<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_STARRED, onMessageStarred);
-      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, notificationLive.onNew);
+      socket.off<unknown>(seqStampedEvent, onNotificationNew);
       socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_READ, notificationLive.onRead);
       socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_READ_BULK, notificationLive.onReadBulk);
       socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED, notificationLive.onDeleted);
