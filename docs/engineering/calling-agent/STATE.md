@@ -2500,11 +2500,17 @@ socket jusqu'au client.
   - R2 (faible) : le panneau web lit `performance.now()` en dur. Versée dans **#20320**.
   - R4 : iOS a le même défaut. Versé dans **#20319**.
 - **Découvert** : **#20319**. Sur iOS, `CallTranscriptionSegmentFactory.swift:26,65` prend l'heure de l'orateur, et `CallCaptionLine.swift:148` en tire l'échéance. Le commentaire de `CallTranscriptionSegment.swift:26-29` est périmé.
+- **CI** :
+  - `android.yml` 44991551537 (sur `72d8f060b`) : **vert**.
+  - `ci.yml` 44991645673 : « Qualité TS » rouge, car `measure-weight` donnait `call_engine` à 16,02 Ko pour un plafond de 16. Corrigé dans `421f061a3` : l'horloge `elapsed` passe de `CaptionsContext` (fourni par le moteur) à `CaptionsDeps` (fourni par `call-captions-runtime`, chargé à la demande), et `call_engine` revient à 16 Ko.
+  - `ci.yml` 44993112988 (sur `421f061a3`) : **vert**.
+  - Puis `dev` @ `483222222` a été fusionné dans la branche (aucun fichier commun), et les tests d'appel web et `tsc` ont été rejoués : 2 516 tests, 0 échec.
+  - `call_engine` est exactement à son plafond, sans marge : le prochain octet du moteur devra sortir dans un chunk à la demande, ou le plafond devra être remesuré.
 - **Limites** : rien n'a été vérifié sur appareil ni dans un navigateur pendant un appel. Selon le navigateur, `performance.now()` peut ne pas avancer pendant une mise en veille.
 
 ### Cycle suivant : par où reprendre
 
-0. Si la PR de ce cycle n'est pas fusionnée : lire le run `android.yml` 44991551537, fusionner `dev` dans la branche, puis fusionner la PR.
+0. Si la PR #20322 n'est pas fusionnée, fusionner `dev` dans la branche, puis la PR.
 1. **#20319** : le miroir iOS. Les modèles et la fabrique sont dans le périmètre. `CallCaptionsViews.swift` est à coordonner avec la routine iOS. La preuve est `ios.yml`.
 2. **#20299** (règle unique du chrome Android), **#20320** (web, petit lot), puis **#20300** (iOS).
 3. #20257, #20284, #20280, #20273, #20288.
