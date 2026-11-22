@@ -5,6 +5,7 @@ import { kindOf } from './message';
 import type { Delivery } from './message';
 import { forwardAttributionOf, forwardLabelOf, systemRowLabel, systemRowOf } from './message-badges';
 import { bodyKindOf, moodCitationOf, placeOf, storyCitationOf } from './message-body';
+import { statusLabel } from './message-status-label';
 import { endToEndSealed } from './end-to-end-sealed';
 import { time } from '@/lib/grouping';
 import { rendersContent, type ProtectionKind, type RevealPhase } from '@/lib/reading-mode/protection';
@@ -108,22 +109,6 @@ export function attachmentSegments(attachments: readonly Attachment[] | undefine
   if (counts.file > 0) segments.push(pluralize(counts.file, 'fichier', 'fichiers'));
   if (counts.contact > 0) segments.push(pluralize(counts.contact, 'contact', 'contacts'));
   return segments;
-}
-
-/** Le mot d'accusé, dans le vocabulaire déjà servi par le pied de rangée (`Check`, `message-blocks.tsx`). */
-function deliveryWord(delivery: Delivery | null): string | undefined {
-  switch (delivery) {
-    case 'pending':
-      return 'en cours d’envoi';
-    case 'sent':
-      return 'envoyé';
-    case 'delivered':
-      return 'distribué';
-    case 'read':
-      return 'lu';
-    case null:
-      return undefined;
-  }
 }
 
 /** Les réactions, dans l'ordre stable de `Object.entries` — même vocabulaire que `reactionEntries`. */
@@ -342,10 +327,11 @@ export function composeMessageLabel({
 
   segments.push(time(message.createdAt));
 
-  if (isMine) {
-    const word = deliveryWord(delivery);
-    if (word !== undefined) segments.push(word);
-  }
+  /* L'ACCUSÉ reprend le vocabulaire TRADUIT du pied de rangée (`statusLabel`,
+     `message-status-label`), jamais une jumelle en dur : un lecteur d'écran
+     entend l'état d'envoi dans SA langue, le même mot que l'œil lit — et non
+     « lu »/« envoyé » en français, ni « distribué » là où le pied dit « remis ». */
+  if (isMine && delivery !== null) segments.push(statusLabel(delivery, language));
 
   /* #11375 — la modification d'un modérateur se PRONONCE comme elle se voit. */
   if (message.isEdited) segments.push(editedByThirdParty(message) ? translate(language, 'message.editedByModerator') : 'modifié');
