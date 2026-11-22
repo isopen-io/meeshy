@@ -1,8 +1,8 @@
-# Un témoin de non-fuite posé derrière un sérialiseur qui supprime déjà la clé atteste la discrétion du sérialiseur
+## Un témoin de non-fuite posé derrière un sérialiseur qui supprime déjà la clé atteste la discrétion du sérialiseur (2026-11-22, #20277, cycle 210)
 
 **2026-11-22, cycle 210 de la routine temps réel, #20277.**
 
-## Ce qui s'est passé
+### Ce qui s'est passé
 
 Le lot chargeait `anonymousSession.rights` pour que `GET /conversations/:id`
 serve les droits RÉSOLUS d'un visiteur sans compte. Cet objet porte
@@ -19,7 +19,7 @@ témoin est resté **VERT**. `conversationParticipantSchema` ne déclare ni
 `anonymousSession` ni `canViewHistory` : fast-json-stringify les retire quoi que
 la fabrique remette.
 
-## La règle
+### La règle
 
 **La règle « assert sur la valeur servie » garde une FUITE. Elle ne garde pas un
 RETRAIT.**
@@ -35,7 +35,7 @@ Le seul niveau où un témoin de retrait peut tomber est celui de **l'objet, ava
 sérialisation** : la loi, la fabrique, le helper. C'est là que la décision vit,
 donc c'est là que son témoin doit vivre.
 
-## Et le témoin de route se garde quand même
+### Et le témoin de route se garde quand même
 
 Il ne devient pas inutile : il garde que rien de tout cela n'atteint le fil
 AUJOURD'HUI, et c'est le piège armé du cycle 84 posé à l'endroit — le jour où
@@ -47,14 +47,14 @@ et nommer le témoin qui, lui, tombe. Un témoin dont la limite n'est pas écrit
 lit comme une garde complète, et la prochaine personne ne cherchera pas la
 seconde.
 
-## Le test du test
+### Le test du test
 
 Devant tout témoin de non-fuite, poser la mutation la plus bête : **faire
 produire la clé par le code, et vérifier que le témoin ROUGIT.** S'il reste vert,
 le témoin ne garde pas le code — il garde le schéma. Chercher alors le niveau où
 la décision est prise.
 
-## Famille
+### Famille
 
 - Cycle 84 — « une non-fuite ACCIDENTELLE se garde par un témoin » : la même
   situation, vue du côté du piège. Cette leçon-ci dit où poser le témoin.

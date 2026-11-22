@@ -172,6 +172,28 @@ web) non fait sur iOS. Suivi : **#20294**.
 > changer la forme » — vaut aussi quand on ne change rien : le relevé est un
 > instrument de mesure, pas une formalité de lot.
 
+### Un accident du lot, consigné
+
+La suite complète du gateway a été lancée **avant** que le journal et la leçon ne
+soient écrits : elle est revenue verte, et la CI a rougi sur
+`journal-one-file-per-entry-guard` — le fichier de leçon commençait par `# ` et
+portait des sous-titres `## `, là où la loi du dépôt (#7711) exige que chaque
+fichier de `tasks/lessons/` soit UNE entrée, donc `## ` en première ligne et un
+seul `## ` hors bloc de code.
+
+> **Un gate lancé avant la fin du lot mesure un arbre qui n'est pas celui qu'on
+> livre**, et il rend un vert qui se lit comme une preuve. Ce n'est pas une
+> question de discipline mais d'ORDRE : les gates de DOCUMENTATION portent sur
+> des fichiers qu'un lot écrit en dernier, après le code et après sa preuve —
+> c'est-à-dire exactement après le moment où l'on a lancé la suite. Le
+> contre-poison est de relancer les gates de dépôt (ceux qui balaient `tasks/`,
+> `CLAUDE.md`, les cartes de journaux) **après la dernière écriture**, jamais
+> avec le reste.
+
+La leçon a aussi reçu son entrée dans la carte `tasks/lessons.md`, qui n'est pas
+gardée par ce cliquet — il ne vérifie que la résolution des liens EXISTANTS, pas
+l'exhaustivité de la carte. Une entrée manquante n'y rougit nulle part.
+
 ### La preuve
 
 | mutation | témoins qui tombent |
