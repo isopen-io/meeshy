@@ -35,12 +35,13 @@ final class ProfileFacesLayoutTests: XCTestCase {
 
     private struct ActionsPage: View {
         let me: MeeshyUser
+        var prefix = ""
 
         var body: some View {
             VStack(spacing: MeeshySpacing.xxl) {
-                Measured(name: "links", content: ProfileLinksFace(user: me, accentColor: "6366F1",
+                Measured(name: prefix + "links", content: ProfileLinksFace(user: me, accentColor: "6366F1",
                                                                    showsAddresses: false, onOpen: { _ in }))
-                Measured(name: "actions", content: ProfileActionsFace(user: me, stats: nil, accentColor: "6366F1",
+                Measured(name: prefix + "actions", content: ProfileActionsFace(user: me, stats: nil, accentColor: "6366F1",
                                                                        onAction: { _ in },
                                                                        prefs: UserPreferencesManager.shared))
             }
@@ -70,23 +71,40 @@ final class ProfileFacesLayoutTests: XCTestCase {
         window.frame = CGRect(x: 0, y: 0, width: 402, height: 874)
         window.rootViewController = host
         window.isHidden = false
-        RunLoop.main.run(until: Date().addingTimeInterval(2))
-        window.isHidden = true
+        defer { window.isHidden = true }
+        // Les faces chargent leurs données (liens, réglages) : on attend que les hauteurs ne bougent plus, une
+        // seconde durant, jamais un délai fixe — sur une CI lente, deux secondes figeaient une face à moitié chargée.
+        let deadline = Date().addingTimeInterval(12)
+        var last = probe.heights
+        var stableSince = Date()
+        while Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.25))
+            if probe.heights != last {
+                last = probe.heights
+                stableSince = Date()
+            } else if !last.isEmpty, Date().timeIntervalSince(stableSince) >= 1 {
+                break
+            }
+        }
         return probe.heights
     }
 
     func test_actionsFace_inSegmentedPages_keepsEachBlockAtItsOwnHeight() throws {
         let me = user()
-        let alone = try heights(of: ScrollView { ActionsPage(me: me).padding(.horizontal, 16) })
-        let paged = try heights(of: ScrollView {
-            MeeshySegmentedPages(selection: 1, order: [0, 1]) { _ in ActionsPage(me: me) }
-                .padding(.horizontal, 16)
+        // Les deux dispositions vivent dans la MÊME fenêtre, au même instant : elles voient les mêmes données chargées,
+        // et seule la pose en pages les distingue.
+        let measured = try heights(of: VStack(spacing: 0) {
+            ScrollView { ActionsPage(me: me, prefix: "alone.").padding(.horizontal, 16) }
+            ScrollView {
+                MeeshySegmentedPages(selection: 1, order: [0, 1]) { _ in ActionsPage(me: me, prefix: "paged.") }
+                    .padding(.horizontal, 16)
+            }
         })
 
-        let aloneLinks = try XCTUnwrap(alone["links"])
-        let aloneActions = try XCTUnwrap(alone["actions"])
-        XCTAssertEqual(try XCTUnwrap(paged["links"]), aloneLinks, accuracy: 1)
-        XCTAssertEqual(try XCTUnwrap(paged["actions"]), aloneActions, accuracy: 1)
+        for block in ["links", "actions"] {
+            let alone = try XCTUnwrap(measured["alone." + block], block)
+            XCTAssertEqual(try XCTUnwrap(measured["paged." + block], block), alone, accuracy: 1, "\(block) : \(measured)")
+        }
     }
 
     func test_segmentedPage_isLaidOutAtItsIdealHeight_whateverTheZStackProposes() throws {

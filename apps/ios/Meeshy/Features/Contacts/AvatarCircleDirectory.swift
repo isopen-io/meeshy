@@ -63,7 +63,9 @@ final class AvatarCircleDirectory: ObservableObject {
         }
         guard let fresh = try? await RelationsService.shared.links() else { return }
         apply(links: fresh, viewerId: viewerId)
-        try? await store.save(fresh, for: CirclesViewModel.cacheKey)
+        await bestEffort("avatarCircleDirectory.links.save", category: .cache) {
+            try await store.save(fresh, for: CirclesViewModel.cacheKey)
+        }
     }
 
     private func publish() {
