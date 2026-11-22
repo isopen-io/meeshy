@@ -49,6 +49,11 @@ import {
  * livraison) — il ne l'a pas fait des cycles 163 à 213, et ce paragraphe l'a
  * dit pendant ce temps.
  *
+ * ET OBSERVER N'EST PAS ANNONCER (#18575) : `GET /sync` ne calcule un trou que
+ * pour un client qui lui ENVOIE son curseur (`hasGap`). iOS et Android
+ * l'annoncent ; le web l'observe sans l'annoncer, donc il a la détection EN
+ * SESSION et pas celle de la RECONNEXION — ce que le cliquet mesure aussi.
+ *
  * L'état se LIT donc au cliquet, jamais dans ce commentaire :
  * `packages/shared/__tests__/ci/socket-seq-lockstep-gate.test.ts` dérive des
  * sources les deux ensembles — ce que cette fonction estampille et ce que

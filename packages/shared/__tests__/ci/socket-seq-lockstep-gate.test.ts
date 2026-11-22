@@ -20,6 +20,8 @@ import {
   seqObservedByPlatform,
   seqStampSites,
   seqStampedEvents,
+  PLATFORMS_ANNOUNCING_SEQ,
+  seqAnnouncingPlatforms,
 } from './socket-payload-shape/seq-lockstep';
 
 describe('le curseur `_seq` est observé par chaque client qui en a un', () => {
@@ -88,4 +90,18 @@ describe('le curseur `_seq` est observé par chaque client qui en a un', () => {
       expect(reason).toMatch(/#\d+/);
     }
   });
+
+  /**
+   * **OBSERVER N'EST PAS ANNONCER** (#18575) — `GET /sync` ne calcule un trou
+   * que pour un client qui lui ANNONCE son curseur (`hasGap`), et un client qui
+   * observe sans annoncer a la détection EN SESSION, pas celle de la
+   * RECONNEXION. La clause l'écrivait en prose ; elle se mesure désormais, dans
+   * les deux sens : une plateforme qui se met à annoncer doit ENTRER dans
+   * l'inventaire, celle qui cesse doit en SORTIR.
+   */
+  it('les plateformes qui ANNONCENT leur curseur à `/sync` sont exactement celles de l’inventaire', () => {
+    const measured = [...seqAnnouncingPlatforms()].sort();
+    expect(measured, `annoncent le curseur (mesuré) : ${measured.join(', ')}`).toEqual([...PLATFORMS_ANNOUNCING_SEQ].sort());
+  });
+
 });

@@ -356,6 +356,16 @@ export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
     //
     // Une session anonyme n'a pas de curseur à lire : `UserEventSeq` est
     // INDEXÉE par `User.id`, et un `Participant.id` n'y désigne rien.
+    //
+    // OBSERVER N'EST PAS ANNONCER (#18575) : ce gap ne couvre QUE les clients
+    // qui envoient `seq` ici. Un client qui observe le curseur à la réception
+    // sans l'annoncer a la détection EN SESSION, pas celle de la RECONNEXION —
+    // c'est le cas d'`apps/web` depuis #18601, qui n'appelle pas `/sync` du
+    // tout (sa porte est `?updatedSince=`, décision écrite dans
+    // `apps/web/src/lib/api/conversations-delta.ts`). Qui annonce ne se lit
+    // PAS ici : le cliquet `socket-seq-lockstep-gate` le mesure des sources,
+    // § « les plateformes qui ANNONCENT leur curseur à `/sync` », et rougit
+    // dans les deux sens.
     const checkpointSeq = identity.kind === 'anonymous'
       ? 0
       : await sequenceService.currentSeq(identity.userId);
