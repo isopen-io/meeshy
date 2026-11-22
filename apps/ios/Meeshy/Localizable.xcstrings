@@ -300777,43 +300777,43 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Au plus deux par jour, sur tous tes appareils. Hauts faits et Alliance passent toujours."
+            "value": "Au plus deux par jour, hors hauts faits et Alliance, sur tous tes appareils."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "At most two a day, on all your devices. Feats and the Alliance always get through."
+            "value": "At most two a day, besides feats and the Alliance, on all your devices."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Como máximo dos al día, en todos tus dispositivos. Hazañas y Alianza llegan siempre."
+            "value": "Como máximo dos al día, salvo hazañas y Alianza, en todos tus dispositivos."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Höchstens zwei pro Tag, auf allen deinen Geräten. Heldentaten und Bündnis kommen immer an."
+            "value": "Höchstens zwei pro Tag, außer Heldentaten und Bündnis, auf allen deinen Geräten."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Al massimo due al giorno, su tutti i tuoi dispositivi. Imprese e Alleanza arrivano sempre."
+            "value": "Al massimo due al giorno, tranne imprese e Alleanza, su tutti i tuoi dispositivi."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "No máximo duas por dia, em todos os seus aparelhos. Façanhas e Aliança sempre chegam."
+            "value": "No máximo duas por dia, fora façanhas e Aliança, em todos os seus aparelhos."
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إشعاران على الأكثر في اليوم، على جميع أجهزتك. المآثر والتحالف تصلك دائمًا."
+            "value": "إشعاران على الأكثر في اليوم، عدا المآثر والتحالف، على جميع أجهزتك."
           }
         }
       }

@@ -750,7 +750,7 @@ const pt = {
   'game.photo.kicker.achievement_rarity': 'Façanha cumprida · {rarity}',
   'game.standing.treasury': 'Herança: {tier}',
   'game.settings.notifications.title': 'Notificações',
-  'game.settings.notifications.body': 'No máximo duas por dia, em todos os seus aparelhos. Façanhas e Aliança sempre chegam.',
+  'game.settings.notifications.body': 'No máximo duas por dia, fora façanhas e Aliança, em todos os seus aparelhos.',
   'game.settings.notifications.note_q': 'Quantas notificações por dia?',
   'game.settings.notifications.switch': 'Aliança, torneio, viagem',
   'game.settings.notifications.photo_switch': 'Momentos para eternizar',

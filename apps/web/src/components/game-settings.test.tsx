@@ -104,7 +104,7 @@ describe('les notifications du jeu', () => {
     const html = renderToStaticMarkup(<GameSettings {...props({ gameNotifications: true, onGameNotifications: () => undefined })} />);
     expect(text(html)).not.toContain('Notifications du jeu');
     expect(text(html)).toContain('Au plus deux par jour');
-    expect(text(html)).toContain('Hauts faits et Alliance passent toujours.');
+    expect(text(html)).toContain('hors hauts faits et Alliance');
   });
 
   test('réglage du compte éteint : l’interrupteur est décoché', () => {

@@ -767,7 +767,7 @@ const fr = {
   'game.photo.kicker.achievement_rarity': 'Haut fait accompli · {rarity}',
   'game.standing.treasury': 'Héritage : {tier}',
   'game.settings.notifications.title': 'Notifications',
-  'game.settings.notifications.body': 'Au plus deux par jour, sur tous tes appareils. Hauts faits et Alliance passent toujours.',
+  'game.settings.notifications.body': 'Au plus deux par jour, hors hauts faits et Alliance, sur tous tes appareils.',
   'game.settings.notifications.note_q': 'Combien de notifications par jour ?',
   'game.settings.notifications.switch': 'Alliance, joute, voyage',
   'game.settings.notifications.photo_switch': 'Moments à immortaliser',
