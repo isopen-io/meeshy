@@ -45,7 +45,9 @@ enum DeepLinkDestination: Equatable {
     /// il s'ouvre dans le lecteur de réels, comme depuis le fil.
     case reel(postId: String)
     /// Une communauté (`/communities/<id>`, `meeshy://community/<id>`).
-    case community(id: String)
+    /// `viaLink` : l'adresse PARTAGÉE de la communauté (`?via=link`, #20330) —
+    /// rejoindre depuis elle compte l'entrée comme venue du lien (#20332).
+    case community(id: String, viaLink: Bool = false)
     /// `meeshy://conversations/recent` — widget et App Shortcut.
     case recentConversation
     /// `meeshy://conversations/unread` — widgets « Non lus ».
@@ -313,7 +315,9 @@ enum DeepLinkParser {
         case "reels": return reelsSeed(components: components, url: url).map { .reel(postId: $0) }
         // Communauté — `/communities/<id>` ; `/communities/new` est l'écran de
         // création du web, pas une communauté.
-        case "community", "communities": return id.flatMap(communityIdentifier).map { .community(id: $0) }
+        case "community", "communities":
+            let viaLink = queryValue("via", in: url) == "link"
+            return id.flatMap(communityIdentifier).map { .community(id: $0, viaLink: viaLink) }
         // `/feeds/post/<id>` — l'URL de partage canonique d'un post ;
         // `/feeds/p/<id>` en est l'alias court.
         case "feeds":
@@ -420,7 +424,7 @@ enum DeepLink: Equatable {
     case storyDetail(postId: String)
     /// Un réel nommé — ouvert par `ReelDoor` dans le lecteur de réels.
     case reel(postId: String)
-    case community(id: String)
+    case community(id: String, viaLink: Bool = false)
     case recentConversation
     case unreadConversations
     case userProfile(username: String, face: RelationFace = .vitrine)
@@ -697,7 +701,7 @@ final class DeepLinkRouter: ObservableObject {
         switch destination {
         case .storyDetail(let id):        return .storyDetail(postId: id)
         case .reel(let id):               return .reel(postId: id)
-        case .community(let id):          return .community(id: id)
+        case .community(let id, let viaLink): return .community(id: id, viaLink: viaLink)
         case .recentConversation:         return .recentConversation
         case .unreadConversations:        return .unreadConversations
         case .postDetail(let id):         return .postDetail(postId: id)

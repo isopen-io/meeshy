@@ -37,4 +37,16 @@ final class RouterContentLinkTests: XCTestCase {
         XCTAssertEqual(DeepLinkRouter.shared.pendingDeepLink, .reel(postId: "r1"))
         XCTAssertTrue(router.path.isEmpty)
     }
+
+    /// L'adresse PARTAGÉE d'une communauté (#20332) ouvre le détail en disant
+    /// que le lecteur arrive par le lien ; l'adresse nue, non.
+    func test_handleDeepLink_adressePartageeDUneCommunaute_ouvreLeDetailArriveParLeLien() {
+        let shared = Router()
+        shared.handleDeepLink(URL(string: "https://meeshy.me/communities/mshy_club?via=link")!)
+        XCTAssertEqual(shared.path, [.communityDetail("mshy_club", viaLink: true)])
+
+        let bare = Router()
+        bare.handleDeepLink(URL(string: "https://meeshy.me/communities/mshy_club")!)
+        XCTAssertEqual(bare.path, [.communityDetail("mshy_club")])
+    }
 }
