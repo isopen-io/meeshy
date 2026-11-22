@@ -13,6 +13,7 @@ import {
   type CommunityDraft,
   type CommunityPage,
   type CommunitySummary,
+  type JoinDoor,
 } from './communities';
 
 /**
@@ -87,7 +88,7 @@ export async function performCreateCommunity({
  * double geste sur deux onglets ne doit pas rendre une erreur qui ment.
  */
 
-export type JoinCommunityOutcome = { readonly status: 'joined' | 'requested' | 'refused' | 'cooldown' | 'offline' | 'error' };
+export type JoinCommunityOutcome = { readonly status: 'joined' | 'requested' | 'refused' | 'cooldown' | 'linkPaused' | 'offline' | 'error' };
 export type LeaveCommunityOutcome = { readonly status: 'left' | 'offline' | 'error' };
 
 type CacheEntry = readonly [readonly unknown[], unknown];
@@ -134,6 +135,12 @@ const removeFromLists = (queryClient: QueryClient, communityId: string) =>
  * d'avant et se dit.
  */
 const COOLDOWN = 'COMMUNITY_JOIN_COOLDOWN';
+/** Arrivé par le lien qu'un intendant a mis en pause (#19661, #20330) : refusé avant toute adhésion ou demande. */
+const LINK_PAUSED = 'COMMUNITY_LINK_PAUSED';
+
+const forbiddenOutcomeOf = (code: string | undefined): JoinCommunityOutcome => ({
+  status: code === COOLDOWN ? 'cooldown' : code === LINK_PAUSED ? 'linkPaused' : 'refused',
+});
 
 const settleRequested = (queryClient: QueryClient, snapshot: readonly CacheEntry[], communityId: string): JoinCommunityOutcome => {
   restore(queryClient, snapshot);
@@ -144,9 +151,11 @@ const settleRequested = (queryClient: QueryClient, snapshot: readonly CacheEntry
 export async function performJoinCommunity({
   community,
   deps,
+  via,
 }: {
   readonly community: CommunitySummary;
   readonly deps: CommunityActionDeps;
+  readonly via?: JoinDoor;
 }): Promise<JoinCommunityOutcome> {
   if (!deps.isOnline()) return { status: 'offline' };
   const { queryClient } = deps;
@@ -158,12 +167,12 @@ export async function performJoinCommunity({
     patchDetail(queryClient, community.id, (cached) => ({ ...cached, viewerRole: 'member', memberCount: cached.memberCount + 1 }));
   }
 
-  const result = await changeMembership(deps, community.id, 'join');
+  const result = await changeMembership(deps, community.id, 'join', via);
   if (result.ok && result.data === 'pending') return settleRequested(queryClient, snapshot, community.id);
   if (!result.ok && result.status !== 409) {
     restore(queryClient, snapshot);
     if (result.status !== 403) return { status: 'error' };
-    return { status: result.code === COOLDOWN ? 'cooldown' : 'refused' };
+    return forbiddenOutcomeOf(result.code);
   }
   if (!result.ok || validating) {
     restore(queryClient, snapshot);

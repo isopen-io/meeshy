@@ -21,6 +21,7 @@ const itCommunityMembership = {
   'community.membership.declined': 'Richiesta rifiutata',
   'community.membership.declined.hint': 'Potrai richiederlo di nuovo dal {date}.',
   'community.membership.error.cooldown': 'La tua ultima richiesta è stata rifiutata: potrai chiedere di nuovo 7 giorni dopo.',
+  'community.membership.error.linkPaused': 'Gli ingressi tramite questo link sono sospesi: un amministratore della community lo ha messo in pausa.',
   'community.settings.open': "Impostazioni",
   'community.members.open': 'Membri',
   'community.members.title': 'Membri',

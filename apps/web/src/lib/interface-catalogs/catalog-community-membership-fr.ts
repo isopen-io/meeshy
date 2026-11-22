@@ -19,6 +19,7 @@ const frCommunityMembership = {
   'community.membership.declined': 'Demande refusée',
   'community.membership.declined.hint': 'Vous pourrez en refaire une à partir du {date}.',
   'community.membership.error.cooldown': 'Votre dernière demande a été refusée : vous pourrez en refaire une 7 jours après ce refus.',
+  'community.membership.error.linkPaused': 'Les arrivées par ce lien sont suspendues : un administrateur de la communauté l’a mis en pause.',
   'community.settings.open': "Réglages",
   'community.members.open': 'Membres',
   'community.members.title': 'Membres',
