@@ -38,8 +38,9 @@ function fakeConnection(network: Network) {
         { type: 'candidate-pair', nominated: true, state: 'succeeded', currentRoundTripTime: network.rtt / 1000, localCandidateId: 'l1', ...(network.estimate === undefined ? {} : { availableOutgoingBitrate: network.estimate }) },
         ...(network.uplinkLoss === undefined ? [] : [{ type: 'remote-inbound-rtp', kind: 'video', roundTripTime: network.rtt / 1000, fractionLost: network.uplinkLoss / 100 }]),
         { type: 'local-candidate', id: 'l1', candidateType: network.relay === true ? 'relay' : 'srflx' },
-        { type: 'inbound-rtp', kind: 'audio', packetsReceived: received, packetsLost: lost, bytesReceived: received * 100, jitter: 0.01 },
+        { type: 'inbound-rtp', kind: 'audio', packetsReceived: received, packetsLost: lost, bytesReceived: received * 100, jitter: 0.01, codecId: 'a' },
         { type: 'outbound-rtp', kind: 'video', bytesSent: 10, codecId: 'v' },
+        { type: 'codec', id: 'a', mimeType: 'audio/opus' },
         { type: 'codec', id: 'v', mimeType: 'video/VP8' },
       ];
       return { forEach: (fn: (entry: Encoding) => void) => entries.forEach(fn) };
@@ -151,13 +152,13 @@ describe('la boucle de qualité d’un appel (#8047)', () => {
     expect(await h.loop.tick()).not.toBeNull();
   });
 
-  test('le relevé rend le total, le niveau et le codec ; sans lien, rien', async () => {
+  test('le relevé rend le total, le niveau et le codec reçu ; sans lien, rien', async () => {
     const h = harness();
     expect(await h.loop.tick()).toBeNull();
     h.add('a');
     const [tick] = await h.advance(2_000);
     expect(tick?.total.level).toBe('excellent');
-    expect(tick?.codec).toBe('VP8');
+    expect(tick?.codec).toBe('opus');
   });
 
   test('le rapport `call:quality-report` suit le schéma de la passerelle (horodatage ISO, débits par nature)', () => {
