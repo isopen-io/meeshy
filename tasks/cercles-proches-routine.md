@@ -1908,3 +1908,19 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gates : voir la PR. Clients (iOS, web, Android) : restent sous #20249, un lot chacun.
 - Prochain lot : web de #20249 (envoyer la clé sur `acceptsExpectedStart`, relire et redemander sur `STARTED_ELSEWHERE`),
   puis Android, puis iOS après #20250 ; #20308, #20054, #20056.
+
+## 2026-11-22 — réveil de 9 h : la moitié web de #20249 (une réponse nomme le partage montré)
+
+- Reprise : #20250 (iOS de #20127) et #20329 (passerelle de #20249) ont été fusionnées dans `dev` ; #20127 est fermée.
+  Aucune branche vivante n'écrit les chemins web de la position.
+- Lot : web de #20249. La relecture décode `acceptsExpectedStart` ; une réponse à « Montrer votre position réelle ? »
+  nomme le partage montré (`expectedStartedAt`, le `startedAt` tel que servi, seulement s'il a la forme ISO que la
+  passerelle relit). Sur `STARTED_ELSEWHERE` (partage arrêté compris) ou `INVALID` d'une charge PARTIE avec la clé, rien
+  n'a été appliqué : l'onglet relit, repose la question à jour si un point choisi est encore montré, sinon rend l'échec
+  sans rien relancer (la décision prise ailleurs tient). Jamais renvoyé sans la clé ; le repli sans échéances la garde.
+- Audit adversarial : non bloquant pour la vie privée. Corrigé dans le lot : un refus LOCAL (au-delà du plafond de
+  destinataires) relançait la même question en boucle ; un `startedAt` servi non ISO aurait bouclé de même. Noté, non
+  corrigé : un refus certain efface encore `publishedStart` (comme `fixed-point` avant le lot, sans fuite) ; un partage
+  servi sans `startedAt` part sans la clé (sessions d'avant #18580, comportement d'avant).
+- Gates : voir la PR. Android et iOS de #20249 : un lot chacun.
+- Prochain lot : Android de #20249, puis iOS ; #20308, #20054, #20056.

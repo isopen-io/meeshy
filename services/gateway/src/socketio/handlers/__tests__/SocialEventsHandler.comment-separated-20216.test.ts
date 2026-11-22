@@ -11,9 +11,10 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SocialEventsHandler } from '../SocialEventsHandler';
+import { resetSeparationCacheForTests } from '../../separatedRooms';
 
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }) },
@@ -39,17 +40,23 @@ function monter(blocages: Blocages) {
       return true;
     },
   });
-  const lireBlocages = (forme: (b: Exclude<Blocages, 'panne'>) => unknown) =>
-    jest.fn(async () => {
-      if (blocages === 'panne') throw new Error('mongo indisponible');
-      return forme(blocages);
-    });
+  /* Les DEUX sens se lisent par `user.findMany` depuis #20236 — « qui a bloqué
+     l'un de ces sujets ? » (`blockedUserIds.hasSome`) puis « qui ces sujets
+     ont-ils bloqué ? » (`id: { in }`) : deux lectures quel que soit le nombre
+     de sujets, là où une lecture par sujet les multipliait. Le double suit la
+     production ; un double resté sur `findUnique` témoignerait d'un monde qui
+     n'existe plus. */
+  const lireBlocages = jest.fn(async (args: any) => {
+    if (blocages === 'panne') throw new Error('mongo indisponible');
+    if (args?.where?.blockedUserIds?.hasSome) return blocages.bloquentLeCommentateur.map((id) => ({ id }));
+    return (args?.where?.id?.in ?? []).map(() => ({ blockedUserIds: blocages.bloquesParLeCommentateur }));
+  });
   const prisma = {
     friendRequest: { findMany: jest.fn(async () => []) },
     userRelation: { findUnique: jest.fn(async () => null), findMany: jest.fn(async () => []) },
     user: {
-      findMany: lireBlocages((b) => b.bloquentLeCommentateur.map((id) => ({ id }))),
-      findUnique: lireBlocages((b) => ({ blockedUserIds: b.bloquesParLeCommentateur })),
+      findMany: lireBlocages,
+      findUnique: jest.fn(async () => null),
       findFirst: jest.fn(async () => null),
     },
   } as unknown as PrismaClient;
@@ -96,6 +103,12 @@ const diffusions: ReadonlyArray<readonly [string, (h: SocialEventsHandler) => Pr
 ];
 
 describe('#20216 — la diffusion d’un commentaire tait l’auteur séparé du lecteur', () => {
+  /* La séparation se garde dans un cache PARTAGÉ par le processus depuis
+     #20236 — une seule chose à invalider quand un blocage bouge. Chaque témoin
+     repart donc d'une ardoise vide, sans quoi il lirait la réponse du
+     précédent (mesuré : les vecteurs « aucun blocage » passaient au rouge). */
+  beforeEach(() => resetSeparationCacheForTests());
+
   it.each(diffusions)('%s exclut la room personnelle de chaque compte séparé du commentateur, dans les deux sens', async (evenement, diffuser) => {
     const { handler, emissions } = monter({
       bloquentLeCommentateur: [LECTEUR_QUI_A_BLOQUE],

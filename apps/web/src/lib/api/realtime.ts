@@ -254,7 +254,7 @@ function syncConnection(): void {
 watchIdentityScopedStores({ session: sessionStore, outbox: outboxStore, conversations: conversationStore, typing: typingStore, engagement: engagementStore, endToEndRegime: endToEndRegimeLedger });
 /* LA SESSION SUIT LE PROFIL SERVI (#18914) — une langue, un nom ou une photo
    changés sur un autre appareil arrivent par `GET /me`, relu à chaque
-   (re)connexion (`CATCH_UP_PERSONAL_FAMILIES`), avec le même assemblage que
+   (re)connexion (`CATCH_UP_FAMILIES`), avec le même assemblage que
    les gestes du profil. */
 followServedProfile(appProfileActionDeps());
 /* LE CLIENT SE DÉCLARE (#9611) — appris après la première peinture, publié

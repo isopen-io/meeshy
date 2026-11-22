@@ -81,6 +81,14 @@ describe('CommunityMembershipAction', () => {
     expect(html).toContain('7 days');
   });
 
+  test('un lien en pause se dit comme tel, dans la langue du lecteur (#20330)', () => {
+    const fr = renderToStaticMarkup(<CommunityMembershipAction language="fr" action="join" {...base} failure="linkPaused" />);
+    expect(fr).toContain('role="alert"');
+    expect(fr).toContain('Les arrivées par ce lien sont suspendues');
+    const en = renderToStaticMarkup(<CommunityMembershipAction language="en" action="join" {...base} failure="linkPaused" />);
+    expect(en).toContain('Joining through this link is paused');
+  });
+
   test('« Demande refusée » est un ÉTAT annoncé, qui dit la date de la prochaine demande dans la langue (#19879)', () => {
     const fr = renderToStaticMarkup(<CommunityMembershipAction language="fr" action="declined" retryAt="2026-11-26T12:00:00.000Z" {...base} />);
     expect(fr).toContain('data-community-join-declined');

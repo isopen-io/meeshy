@@ -120,7 +120,14 @@ export function summarizeCommunityLinks(links: readonly CommunityLink[]): Commun
   return { communities: links.length, publicCommunities: links.filter((link) => !link.isPrivate).length, members };
 }
 
-export const communityLinkUrl = (origin: string, identifier: string): string => `${origin}/communities/${encodeURIComponent(identifier)}`;
+/**
+ * L'adresse PARTAGÉE d'une communauté (#20330) : sa page, marquée `?via=link`
+ * pour que l'entrée par elle se compte et se refuse quand le lien est en pause
+ * (#19661). Les trois clients écrivent la même ; `/chat/<identifiant>` ne
+ * résout qu'un lien de CONVERSATION et n'ouvrait jamais la communauté.
+ */
+export const communityLinkUrl = (origin: string, identifier: string): string =>
+  `${origin}/communities/${encodeURIComponent(identifier)}?via=link`;
 
 export const findCommunityLink = (links: readonly CommunityLink[] | undefined, key: string): CommunityLink | undefined =>
   links?.find((link) => link.id === key || link.identifier === key);

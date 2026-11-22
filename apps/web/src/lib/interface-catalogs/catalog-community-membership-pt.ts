@@ -21,6 +21,7 @@ const ptCommunityMembership = {
   'community.membership.declined': 'Pedido recusado',
   'community.membership.declined.hint': 'Você poderá pedir de novo a partir de {date}.',
   'community.membership.error.cooldown': 'O seu último pedido foi recusado: poderá pedir novamente 7 dias depois.',
+  'community.membership.error.linkPaused': 'As entradas por este link estão suspensas: um administrador da comunidade colocou-o em pausa.',
   'community.settings.open': "Definições",
   'community.members.open': 'Membros',
   'community.members.title': 'Membros',

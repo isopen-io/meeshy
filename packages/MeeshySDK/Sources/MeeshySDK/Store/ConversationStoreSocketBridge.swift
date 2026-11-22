@@ -156,6 +156,16 @@ public final class ConversationStoreSocketBridge {
             categoryDeleted: socket.categoryDeleted.eraseToAnyPublisher(),
             categoriesReordered: socket.categoriesReordered.eraseToAnyPublisher(),
             didReconnect: socket.didReconnect.eraseToAnyPublisher(),
+            // Le front MONTANT de `isConnected`, sans `dropFirst()`, et c'est
+            // délibéré : le pont s'active APRÈS le plan d'ouverture de session,
+            // donc le socket peut déjà être connecté à l'abonnement. Laisser
+            // tomber la valeur courante rejouerait exactement le défaut qu'on
+            // corrige — plus aucun rattrapage avant le premier accroc réseau.
+            didConnect: socket.$isConnected
+                .removeDuplicates()
+                .filter { $0 }
+                .map { _ in () }
+                .eraseToAnyPublisher(),
             onReadingModePreferenceChanged: onReadingModePreferenceChanged
         )
     }
@@ -179,6 +189,7 @@ public final class ConversationStoreSocketBridge {
         categoryDeleted: AnyPublisher<CategoryDeletedSocketEvent, Never>,
         categoriesReordered: AnyPublisher<CategoriesReorderedSocketEvent, Never>,
         didReconnect: AnyPublisher<Void, Never> = Empty().eraseToAnyPublisher(),
+        didConnect: AnyPublisher<Void, Never> = Empty().eraseToAnyPublisher(),
         onReadingModePreferenceChanged: (@Sendable (_ conversationId: String, _ readingMode: String) -> Void)? = nil
     ) {
         cancellables.removeAll()
@@ -204,7 +215,8 @@ public final class ConversationStoreSocketBridge {
             categoryUpdated: categoryUpdated,
             categoryDeleted: categoryDeleted,
             categoriesReordered: categoriesReordered,
-            didReconnect: didReconnect
+            didReconnect: didReconnect,
+            didConnect: didConnect
         )
         wireConversationEvents(feeds, on: events)
         wireMembershipEvents(feeds, on: events)
@@ -394,11 +406,20 @@ public final class ConversationStoreSocketBridge {
     // Les rattrapages réseau ont leur file : un `flushOutbox` ou une
     // hydratation lents ne retiennent aucun événement.
     //
-    // Les préférences par conversation se relisent à chaque reconnexion ET
-    // après la première hydratation du store (#18916) : `didReconnect` ne part
-    // pas au premier connect, et `applyServedPreferences` ignore une
-    // conversation que le store ne connaît pas encore. Le filigrane vit le
-    // temps d'une activation — un autre compte repart de zéro.
+    // **Une seule fenêtre, une seule liste** (#20341). Ce que ces gestes
+    // rattrapent est « le socket n'écoutait pas » ; le déclencheur est donc
+    // TOUTE connexion, la PREMIÈRE comprise, et non `didReconnect` seul, qui
+    // n'en est qu'un sous-ensemble strict. La liste des gestes est
+    // déclarée UNE fois (`ConversationWindowCatchUp`) et itérée par les deux
+    // branches : il n'y a plus de place où un geste puisse manquer à l'une.
+    //
+    // Les deux branches ne diffèrent que par leur DÉCLENCHEUR, et la seconde
+    // n'existe que pour le geste qui exige un store peuplé — sa raison est
+    // écrite sur `requiresHydratedStore`, et elle n'est pas de confort : jouer
+    // ce geste trop tôt PERD ses lignes au lieu de les retarder.
+    //
+    // Le filigrane vit le temps d'une activation — un autre compte repart de
+    // zéro.
     private func wireCatchUp(_ feeds: ConversationStoreSocketFeeds, on lane: OrderedEventLane) {
         let store = self.store
         let categoryStore = self.categoryStore
@@ -406,18 +427,36 @@ public final class ConversationStoreSocketBridge {
         let watermark = Locked<Date?>(nil)
         let owner = self.currentUserId
         let persisted = self.watermarkStore
+        // L'ordre des deux événements n'est contrôlé par personne : au
+        // démarrage à froid la liste vient du cache DISQUE, donc l'hydratation
+        // précède souvent la connexion. Ces deux témoins rendent la couverture
+        // exacte dans les DEUX ordres, chaque geste partant une seule fois.
+        let storeHydrated = Locked<Bool>(false)
+        let socketConnected = Locked<Bool>(false)
 
-        feeds.didReconnect
+        // **Les DEUX sources, fusionnées, et ce n'est pas une ceinture de
+        // sécurité gratuite.** `handleTransportConnected` émet `didReconnect`
+        // et pose `isConnected = true` dans DEUX `Task { @MainActor }`
+        // distincts : un `.connect` re-émis sans `.disconnect` préalable laisse
+        // `isConnected` déjà vrai, donc `removeDuplicates()` mange le front
+        // montant alors que `didReconnect` part. S'en remettre au seul front
+        // perdrait ce cas — c'est-à-dire REGRESSERAIT par rapport à
+        // aujourd'hui. La fusion ne peut, elle, que rattraper plus.
+        //
+        // Le prix est un doublon sur une reconnexion nominale, où les deux
+        // sources parlent. Le `debounce` le coalesce — même motif et même
+        // raison que `OutboxRetryScheduler.startObservingMutationEnqueued`
+        // (« une rafale ne déclenche qu'un seul flush groupé ») : sans lui, une
+        // reconnexion coûterait deux `flushOutbox(force:)` et deux lectures de
+        // catégories.
+        Publishers.Merge(feeds.didConnect, feeds.didReconnect)
+            .debounce(for: .milliseconds(250), scheduler: DispatchQueue.main)
             .relay(through: lane) { _ in
-                await store.flushOutbox()
-                do {
-                    try await categoryStore.hydrate()
-                } catch {
-                    // Les catégories restent celles du dernier chargement.
-                    Logger.socket.error("Category store hydration failed after socket event: \(error.localizedDescription, privacy: .public)")
-                }
-                await Self.catchUpServedPreferences(
-                    into: store, fetchingWith: fetchChanged, watermark: watermark, owner: owner, persistedIn: persisted)
+                socketConnected.mutate { $0 = true }
+                await Self.performCatchUp(
+                    ConversationWindowCatchUp.onConnect(storeHydrated: storeHydrated.read { $0 }),
+                    into: store, categoryStore: categoryStore, fetchingWith: fetchChanged,
+                    watermark: watermark, owner: owner, persistedIn: persisted)
             }
             .store(in: &cancellables)
 
@@ -425,10 +464,43 @@ public final class ConversationStoreSocketBridge {
             .first { @Sendable conversations in !conversations.isEmpty }
             .map { @Sendable _ in () }
             .relay(through: lane) { _ in
-                await Self.catchUpServedPreferences(
-                    into: store, fetchingWith: fetchChanged, watermark: watermark, owner: owner, persistedIn: persisted)
+                storeHydrated.mutate { $0 = true }
+                await Self.performCatchUp(
+                    ConversationWindowCatchUp.onFirstHydration(socketConnected: socketConnected.read { $0 }),
+                    into: store, categoryStore: categoryStore, fetchingWith: fetchChanged,
+                    watermark: watermark, owner: owner, persistedIn: persisted)
             }
             .store(in: &cancellables)
+    }
+
+    /// Joue les gestes de rattrapage que la branche lui remet, dans l'ordre de
+    /// la liste. **Site UNIQUE** : c'est ce qui rend impossible qu'une branche
+    /// porte un geste que l'autre ignore.
+    nonisolated static func performCatchUp(
+        _ gestures: [ConversationWindowCatchUp],
+        into store: ConversationStore,
+        categoryStore: UserCategoryStore,
+        fetchingWith fetchChanged: @Sendable @concurrent (_ changedSince: Date?) async throws -> [APIConversationPreferences],
+        watermark: Locked<Date?>,
+        owner: @Sendable @concurrent () async -> String?,
+        persistedIn persisted: ConversationPreferencesWatermarkStore
+    ) async {
+        for gesture in gestures {
+            switch gesture {
+            case .outbox:
+                await store.flushOutbox()
+            case .categories:
+                do {
+                    try await categoryStore.hydrate()
+                } catch {
+                    // Les catégories restent celles du dernier chargement.
+                    Logger.socket.error("Category store hydration failed after socket event: \(error.localizedDescription, privacy: .public)")
+                }
+            case .servedPreferences:
+                await catchUpServedPreferences(
+                    into: store, fetchingWith: fetchChanged, watermark: watermark, owner: owner, persistedIn: persisted)
+            }
+        }
     }
 
     nonisolated static func catchUpServedPreferences(

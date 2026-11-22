@@ -100,6 +100,54 @@ final class GameGuideEventsV2Tests: XCTestCase {
         XCTAssertFalse(GameGuideCard.ofMomentV2(first).photo, "une première ligue ne se photographie pas")
     }
 
+    // MARK: - La première Veilleuse offerte (#20252)
+
+    private func game(freezeGifted: Bool?, seen: [String] = []) -> GameBlock {
+        let base = GameFixture.game(flameDays: 3, freezes: 1, guideSeen: seen)
+        let flame = base.flame
+        return base.replacing(flame: GameBlock.Flame(
+            days: flame.days, form: flame.form, bonusPercent: flame.bonusPercent, freezes: flame.freezes,
+            maxFreezes: flame.maxFreezes, freezePrice: flame.freezePrice, relightPrice: flame.relightPrice,
+            status: flame.status, canRelight: flame.canRelight, freezeGifted: freezeGifted))
+    }
+
+    func test_standing_tellsTheFreezeGiftOnItsDay_once() {
+        XCTAssertEqual(GameGuideEventsV2.standing(game: game(freezeGifted: true), seen: []), [.flameFreezeGift(freezes: 1)])
+        XCTAssertEqual(GameGuideEventsV2.standing(game: game(freezeGifted: true, seen: ["flame-freeze-gift"]), seen: []), [])
+        XCTAssertEqual(GameGuideEventsV2.standing(game: game(freezeGifted: true), seen: ["flame-freeze-gift"]), [])
+        XCTAssertEqual(GameGuideEventsV2.standing(game: game(freezeGifted: nil), seen: []), [])
+        XCTAssertEqual(GameGuideEventsV2.standing(game: game(freezeGifted: false), seen: []), [])
+    }
+
+    func test_transition_tellsTheFreezeGiftWhenItArrives_notWhenItWasAlreadyThere() {
+        XCTAssertEqual(GameGuideEventsV2.transition(from: game(freezeGifted: nil), to: game(freezeGifted: true)),
+                       [.flameFreezeGift(freezes: 1)])
+        XCTAssertEqual(GameGuideEventsV2.transition(from: game(freezeGifted: true), to: game(freezeGifted: true)), [])
+    }
+
+    func test_theFreezeGiftMoment_isSaidByMeo_andOpensTheFlameFiche() throws {
+        let chosen = GameGuideV2.chooseMoment(events: [.wave2(.flameFreezeGift(freezes: 1))], seen: [String]())
+        guard case .wave2(let moment) = try XCTUnwrap(chosen) else { return XCTFail("un moment de la vague 2") }
+        XCTAssertEqual(moment.speaker, .meo)
+        XCTAssertEqual(moment.action, .seeFlame)
+        let card = GameGuideCard.ofMomentV2(moment)
+        XCTAssertNil(card.wave2Page)
+        XCTAssertEqual(card.action, .seeFlame)
+        XCTAssertFalse(card.photo, "une Veilleuse offerte ne se photographie pas")
+        XCTAssertEqual(card.copy.what, GameText.guideMomentFlameFreezeGiftWhat)
+        XCTAssertEqual(card.copy.next, GameText.guideMomentFlameFreezeGiftNext(count: GameCopy.formatCount(1)))
+        XCTAssertEqual(card.copy.action, GameGuideCopy.actionLabel(.seeFlame))
+    }
+
+    func test_theFreezeGiftMoment_passesAfterTheFlameAtRisk_andBeforeAnAtlasStamp() {
+        let chosen = GameGuideV2.chooseMoment(
+            events: [.wave2(.atlasStamp(language: "ja", stamped: 4, total: 89)), .wave2(.flameFreezeGift(freezes: 1))],
+            seen: [String]())
+        XCTAssertEqual(chosen?.keyValue, "flame-freeze-gift")
+        let rank = { (key: String) in GameGuideV2.momentPriorityAll.firstIndex(of: key) ?? -1 }
+        XCTAssertEqual(rank("flame-freeze-gift"), rank("flame-at-risk") + 1)
+    }
+
     func test_thePrestigeMoment_opensThePrestigePage() {
         let prestige = GuideMomentV2(key: .prestige, speaker: .duo, mood: .proud, event: .prestige(prestige: 1, gloryGained: 1000),
                                      action: .seeLevel, presentation: .full)
