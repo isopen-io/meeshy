@@ -212,10 +212,23 @@ leur propre issue s'ils méritent une suite :
   où elle pourrait être DÉRIVÉE de `DRAINED_EVENT`.
 - iOS n'est pas relevé sur le lot 1 : la fenêtre y dépend des TTL de
   `CacheCoordinator`, non mesurés — même réserve qu'au cycle 218.
-- `pack:installation-updated` sans écouteur web : **instruit, et ce n'est pas une
-  lacune non vue.** L'asymétrie est INVENTORIÉE avec sa raison dans
+- `pack:installation-updated` sans écouteur web : **instruit par ce cycle, et
+  TRANCHÉ PAR UNE AUTRE SESSION dans le même cycle — à son avantage.** Mon
+  relevé a mesuré que l'asymétrie était INVENTORIÉE avec sa raison dans
   `socket-event-platform-parity-gate.test.ts` (« iOS et le web […] relisent leurs
-  vitrines par REST »), et la mesure la confirme — les vitrines lisent
-  `packQueryKeys(domain).installed` avec un `staleTime` de 5 min. La raison
-  inventoriée tient donc, **à 5 minutes près**, et la question « cette fenêtre
-  est-elle la bonne ? » appartient au lot des vitrines que l'inventaire nomme.
+  vitrines par REST »), que la mesure la confirmait (`packQueryKeys(domain).installed`,
+  `staleTime` de 5 min), et j'en ai conclu que « la raison inventoriée tient, à
+  cinq minutes près ». #20354, fusionné dans `dev` pendant ce cycle, a branché
+  l'écouteur web (`lib/packs/installation-sync.ts`) et sorti le web de
+  l'inventaire, qui ne porte plus qu'`absents: ['ios']`.
+
+  > **C'était la moins bonne lecture, et la raison vaut d'être écrite** : j'ai
+  > traité « l'asymétrie est inventoriée avec une raison » comme une réponse à
+  > « cette fenêtre est-elle acceptable ? ». Ce sont deux questions, et la
+  > seconde n'avait pas été posée. Le lot 1 de CE MÊME cycle ferme une fenêtre
+  > structurellement IDENTIQUE — un `staleTime` qui tient un cache périmé après
+  > qu'un événement a été manqué — ce qui rend l'indulgence d'autant moins
+  > défendable. **Un inventaire d'asymétries dit ce qui a été DÉCIDÉ, jamais ce
+  > qui est BON** ; le relire comme un verdict de produit est la même faute que
+  > de lire un doc-comment de fenêtre comme une mesure (lot 1, et #20349 au
+  > cycle 218).
