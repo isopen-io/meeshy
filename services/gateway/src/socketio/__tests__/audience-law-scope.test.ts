@@ -22,8 +22,11 @@
  * @jest-environment node
  */
 import { describe, it, expect } from '@jest/globals';
+import * as fs from 'fs';
 import {
   sweepConversationAudiences,
+  assertRootExists,
+  AUDIENCE_SCOPE,
   DELIBERATELY_WIDE,
   MEASURED_NOT_INSTRUCTED,
 } from './conversation-audience-living-participation';
@@ -87,5 +90,76 @@ describe('#20091 — le balayage des audiences voit tout `src/`, pas un réperto
 
     expect(Object.keys(DELIBERATELY_WIDE).length + Object.keys(MEASURED_NOT_INSTRUCTED).length).toBe(bare);
     expect(Object.keys(MEASURED_NOT_INSTRUCTED).length).toBeLessThanOrEqual(75);
+  });
+});
+
+/**
+ * #20111 — LA PORTÉE A BOUGÉ D'UN RÉPERTOIRE, PAS D'UN PAQUET.
+ *
+ * #20091 et ses témoins ci-dessus gardent « tout `src/` » ; ils ne disaient
+ * rien de `services/`. `services/agent` lit `Participant` pour choisir à la
+ * place de QUI l'agent va parler, sur `isActive` NU — doublement masqué : hors
+ * de la racine, et derrière le `notIn` que le discriminant d'identité prenait
+ * pour la désignation d'une personne.
+ *
+ * **Ces témoins gardent le BALAYAGE, pas la conformité.** Les trois sites de
+ * l'agent épellent la loi depuis #20111 : sans eux, resserrer la portée à la
+ * seule passerelle rendrait tous les autres témoins verts — « un inventaire
+ * vide et un balayage aveugle sont le même vert ».
+ */
+describe('#20111 — la portée couvre les paquets qui lisent `Participant`', () => {
+  /**
+   * Le ROUGE propre du refus de racine absente — constat B7 de l'audit
+   * adversarial de #20111. Tant qu'il vivait en ligne dans la boucle, le
+   * remplacer par un `continue` laissait les 36 témoins VERTS : la propriété
+   * était tenue par son voisin ci-dessous, jamais par un rouge à elle. **Une
+   * ceinture sans témoin se lit comme la garde.**
+   */
+  it('JETTE sur une racine déclarée que le disque ne porte pas', () => {
+    expect(() => assertRootExists('/racine/qui/n/existe/pas/20111')).toThrow(/racine déclarée ABSENTE/);
+    for (const { dir } of AUDIENCE_SCOPE) {
+      expect(() => assertRootExists(dir)).not.toThrow();
+    }
+  });
+
+  it('déclare ses racines, et chacune EXISTE sur le disque', () => {
+    expect(AUDIENCE_SCOPE.length).toBeGreaterThanOrEqual(2);
+    for (const { dir } of AUDIENCE_SCOPE) {
+      expect(fs.existsSync(dir)).toBe(true);
+    }
+  });
+
+  /**
+   * Deux préfixes ne peuvent pas désigner le même fichier : c'est la seule
+   * chose qu'une clé d'inventaire doit garantir, et elle tient par
+   * construction tant qu'un seul préfixe est vide.
+   */
+  it('n’a qu’UN préfixe vide, donc aucune clé ambiguë', () => {
+    expect(AUDIENCE_SCOPE.filter(({ prefix }) => prefix === '')).toHaveLength(1);
+    expect(new Set(AUDIENCE_SCOPE.map(({ prefix }) => prefix)).size).toBe(AUDIENCE_SCOPE.length);
+  });
+
+  /**
+   * LE TÉMOIN QUI COMPTE : le balayage relève bien des lectures DANS l'agent.
+   * Un relevé vide ici est indiscernable d'une racine jamais parcourue — et
+   * c'est exactement l'état d'avant #20111, où le cliquet était vert.
+   */
+  it('relève les lectures de `Participant` de `services/agent`', () => {
+    const agent = sweepConversationAudiences().filter((site) => site.file.startsWith('@meeshy/agent/'));
+
+    expect(agent.length).toBeGreaterThanOrEqual(3);
+    expect(agent.every((site) => site.file.startsWith('@meeshy/agent/memory/mongo-persistence.ts'))).toBe(true);
+  });
+
+  /**
+   * Et elles épellent TOUTES la loi — les deux sélecteurs de dormants comme la
+   * MESURE qui élit les conversations à scanner. Ce témoin tombe sous la
+   * mutation qui retire un seul spread : mesuré, 3 témoins rouges sur les deux
+   * suites de cliquet.
+   */
+  it('aucune lecture de l’agent ne vit sur `isActive` nu', () => {
+    const nues = sweepConversationAudiences().filter((site) => site.file.startsWith('@meeshy/agent/') && !site.usesLaw);
+
+    expect(nues).toEqual([]);
   });
 });

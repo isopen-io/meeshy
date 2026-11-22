@@ -1,5 +1,6 @@
 import type { ConnectionQualityLevel } from '@meeshy/shared/types/video-call';
 
+import { pairMeasure, receivedCodecMime, selectedCandidatePair, type StatsEntry } from './call-stats-election';
 import type { SurvivalStage } from './call-survival';
 
 /**
@@ -11,7 +12,6 @@ import type { SurvivalStage } from './call-survival';
  * (150–300 ms sans congestion en 4G).
  */
 
-type StatsEntry = Readonly<Record<string, unknown>>;
 export type StatsReportLike = { readonly forEach: (fn: (entry: StatsEntry) => void) => void };
 
 export type StatsRead = {
@@ -83,23 +83,25 @@ const audioJitterMs = (inbound: readonly StatsEntry[]): number => {
 
 const subtype = (mimeType: unknown): string | null => (typeof mimeType === 'string' && mimeType.includes('/') ? (mimeType.split('/')[1] ?? null) : null);
 
+/** `CallStats.relayedRoute` (iOS) : relayée dès qu'un des deux candidats de la paire élue l'est ; inconnue sans aucun type lu (le `compactMap` d'iOS et d'Android). */
+const routeOf = (entries: readonly StatsEntry[], pair: StatsEntry | undefined): MediaPath | null => {
+  const types = pair === undefined ? [] : entries.filter((entry) => (entry.type === 'local-candidate' && entry.id === pair.localCandidateId) || (entry.type === 'remote-candidate' && entry.id === pair.remoteCandidateId)).map((entry) => entry.candidateType).filter((type) => typeof type === 'string');
+  return types.length === 0 ? null : types.includes('relay') ? 'relay' : 'direct';
+};
+
 export function readStats(report: StatsReportLike, at: number): StatsRead {
   const entries: StatsEntry[] = [];
   report.forEach((entry) => entries.push(entry));
   const inbound = entries.filter((entry) => entry.type === 'inbound-rtp');
   const outbound = entries.filter((entry) => entry.type === 'outbound-rtp');
-  const pair = entries.find((entry) => entry.type === 'candidate-pair' && entry.nominated === true && entry.state === 'succeeded' && typeof entry.currentRoundTripTime === 'number');
+  const pair = selectedCandidatePair(entries);
   const remote = entries.find((entry) => entry.type === 'remote-inbound-rtp' && typeof entry.roundTripTime === 'number');
   const sum = (list: readonly StatsEntry[], field: string, kind?: string): number => positive(list.filter((entry) => kind === undefined || entry.kind === kind).reduce((total, entry) => total + numberOf(entry[field]), 0));
-  const sending = (kind: string): StatsEntry | undefined => outbound.find((entry) => entry.kind === kind && numberOf(entry.bytesSent) > 0);
-  const codecEntry = (sending('video') ?? sending('audio'))?.codecId;
-  const codec = entries.find((entry) => entry.type === 'codec' && entry.id === codecEntry);
-  const local = pair === undefined ? undefined : entries.find((entry) => entry.type === 'local-candidate' && entry.id === pair.localCandidateId);
   const estimate = pair?.availableOutgoingBitrate;
   const uplink = entries.find((entry) => entry.type === 'remote-inbound-rtp' && entry.kind === 'video' && typeof entry.fractionLost === 'number');
   return {
     at,
-    rtt: milliseconds(pair?.currentRoundTripTime ?? remote?.roundTripTime),
+    rtt: milliseconds(pairMeasure(entries, pair, 'currentRoundTripTime') ?? remote?.roundTripTime),
     jitter: audioJitterMs(inbound),
     lost: sum(inbound, 'packetsLost'),
     received: sum(inbound, 'packetsReceived'),
@@ -107,8 +109,8 @@ export function readStats(report: StatsReportLike, at: number): StatsRead {
     videoBytes: sum(inbound, 'bytesReceived', 'video'),
     bytesSent: sum(outbound, 'bytesSent'),
     bytesReceived: sum(inbound, 'bytesReceived'),
-    codec: subtype(codec?.mimeType),
-    path: local === undefined ? null : local.candidateType === 'relay' ? 'relay' : 'direct',
+    codec: subtype(receivedCodecMime(entries)),
+    path: routeOf(entries, pair),
     availableOutgoingBitrate: typeof estimate === 'number' && Number.isFinite(estimate) && estimate > 0 ? estimate : null,
     uplinkLoss: uplink === undefined ? null : numberOf(uplink.fractionLost) * 100,
   };

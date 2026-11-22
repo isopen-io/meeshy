@@ -4,14 +4,18 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  FLAME_FIRST_FREEZE_GIFT_DAY,
+  FLAME_FREEZE_GIFT_SEEN_KEY,
   FLAME_FREEZE_MAX,
   FLAME_FREEZE_PRICE,
   FLAME_RELIGHT_PRICE,
   advanceFlame,
+  announcesFreezeGift,
   canBuyFreeze,
   canRelight,
   flameBonus,
   flameForm,
+  firstFreezeGift,
   flameStatus,
   relightFlame,
 } from '../../utils/game/flame.js';
@@ -183,5 +187,52 @@ describe('le rallumage', () => {
       streak: 12,
       lastActiveDay: '2026-10-03',
     });
+  });
+});
+
+describe('la première Veilleuse offerte (#17371)', () => {
+  it('est offerte au 3e jour de Flamme', () => {
+    expect(FLAME_FIRST_FREEZE_GIFT_DAY).toBe(3);
+    expect(firstFreezeGift({ previousLongest: 2, streak: 3, freezes: 0 })).toEqual({ gifted: true, freezes: 1 });
+  });
+
+  it('ne l\'est pas avant le 3e jour', () => {
+    expect(firstFreezeGift({ previousLongest: 1, streak: 2, freezes: 0 })).toEqual({ gifted: false, freezes: 0 });
+  });
+
+  it('ne l\'est qu\'une fois : un joueur qui a déjà tenu trois jours ne la reçoit plus', () => {
+    expect(firstFreezeGift({ previousLongest: 3, streak: 3, freezes: 0 })).toEqual({ gifted: false, freezes: 0 });
+    expect(firstFreezeGift({ previousLongest: 40, streak: 4, freezes: 1 })).toEqual({ gifted: false, freezes: 1 });
+  });
+
+  it('ne dépasse jamais la réserve', () => {
+    expect(firstFreezeGift({ previousLongest: 2, streak: 3, freezes: FLAME_FREEZE_MAX })).toEqual({
+      gifted: false,
+      freezes: FLAME_FREEZE_MAX,
+    });
+  });
+
+  it('tolère des compteurs absents ou illisibles', () => {
+    expect(firstFreezeGift({ previousLongest: Number.NaN, streak: 3, freezes: -2 })).toEqual({ gifted: true, freezes: 1 });
+  });
+});
+
+describe('le moment « Une Veilleuse t\'est offerte » (#20169)', () => {
+  it('a une clé de guide stable, que le serveur sait garder', () => {
+    expect(FLAME_FREEZE_GIFT_SEEN_KEY).toBe('flame-freeze-gift');
+    expect(FLAME_FREEZE_GIFT_SEEN_KEY.length).toBeLessThanOrEqual(64);
+  });
+
+  it('se montre le jour du cadeau, tant qu\'il n\'a pas été vu', () => {
+    expect(announcesFreezeGift({ flame: { freezeGifted: true }, guideSeen: [] })).toBe(true);
+  });
+
+  it('ne se montre qu\'une fois', () => {
+    expect(announcesFreezeGift({ flame: { freezeGifted: true }, guideSeen: [FLAME_FREEZE_GIFT_SEEN_KEY] })).toBe(false);
+  });
+
+  it('ne se montre ni un autre jour, ni devant un serveur antérieur', () => {
+    expect(announcesFreezeGift({ flame: { freezeGifted: false }, guideSeen: [] })).toBe(false);
+    expect(announcesFreezeGift({ flame: {}, guideSeen: [] })).toBe(false);
   });
 });

@@ -10,9 +10,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.model.relation.SharedLocationPointReplacement
 import me.meeshy.sdk.model.relation.SharedLocationPrecision
 import me.meeshy.sdk.model.relation.SharedLocationRoster
 import me.meeshy.sdk.model.relation.SharedLocationShareDuration
+import me.meeshy.sdk.relation.SharedLocationKnownPeople
 import me.meeshy.sdk.relation.SharedLocationShareProblem
 import me.meeshy.sdk.relation.SharedLocationSharing
 
@@ -26,7 +28,32 @@ data class ProfileShareLocationState(
     val isBusy: Boolean = false,
     /** Ce qui n'a pas abouti, dit une fois puis consommé. */
     val problem: SharedLocationShareProblem? = null,
+    /**
+     * Le partage montre un point choisi à la main sur un autre appareil (#20212) : le choix fait attend la réponse à
+     * « Montrer ta position réelle ? », qui ne vaut que pour le partage qu'elle décrit (#20248). Rien n'est parti.
+     */
+    val replacingPoint: ProfileShareReplacement? = null,
 )
+
+/**
+ * La question « Montrer ta position réelle ? » en cours : le choix qui attend, le partage qu'elle décrit ([asked]) et
+ * les noms que l'appareil connaît déjà pour nommer ceux qui verront la position réelle.
+ */
+data class ProfileShareReplacement(
+    val choice: ProfileShareChoice,
+    val asked: SharedLocationPointReplacement,
+    val knownNames: List<Pair<String, String>> = emptyList(),
+)
+
+/**
+ * Ceux que la question nomme : la personne de la fiche d'abord (son nom vaut celui du carnet), puis les amis du carnet
+ * gardé — seulement s'ils voient le point choisi.
+ */
+fun ProfileShareReplacement.audience(userId: String, displayName: String): SharedLocationPointReplacement.Audience =
+    asked.audience(listOf(userId to displayName) + knownNames)
+
+/** Ce que la personne verra de ma position, et pour combien de temps. */
+data class ProfileShareChoice(val precision: SharedLocationPrecision, val duration: SharedLocationShareDuration)
 
 /**
  * « Partager ma position » sur la fiche d'un Ami (#16985), iso `ProfileShareLocationRow.swift` (#16983). La ligne ne
@@ -36,17 +63,20 @@ data class ProfileShareLocationState(
 @HiltViewModel
 class ProfileShareLocationViewModel @Inject constructor(
     private val sharing: SharedLocationSharing,
+    private val knownPeople: SharedLocationKnownPeople = SharedLocationKnownPeople.NONE,
 ) : ViewModel() {
 
     private val userId = MutableStateFlow<String?>(null)
     private val problem = MutableStateFlow<SharedLocationShareProblem?>(null)
+    private val replacing = MutableStateFlow<ProfileShareReplacement?>(null)
 
     val state: StateFlow<ProfileShareLocationState> =
-        combine(userId, sharing.roster, sharing.isBusy, problem) { id, roster, busy, notice ->
+        combine(userId, sharing.roster, sharing.isBusy, problem, replacing) { id, roster, busy, notice, pending ->
             ProfileShareLocationState(
                 entry = id?.let { roster.entry(it) },
                 isBusy = busy,
                 problem = notice,
+                replacingPoint = pending,
             )
         }.stateIn(viewModelScope, SharingStarted.Eagerly, ProfileShareLocationState())
 
@@ -57,8 +87,34 @@ class ProfileShareLocationViewModel @Inject constructor(
 
     /** Après le choix de la feuille : la permission a déjà été demandée par l'écran. */
     fun share(precision: SharedLocationPrecision, duration: SharedLocationShareDuration) {
+        send(ProfileShareChoice(precision, duration), replacing = null)
+    }
+
+    /**
+     * « Montrer ma position réelle » : le choix en attente part avec la question posée ; le centre la relit contre le
+     * partage servi et, s'il a changé (autre démarrage, personne ajoutée), la question se repose à jour.
+     */
+    fun confirmReplacingPoint() {
+        val pending = replacing.value ?: return
+        replacing.value = null
+        send(pending.choice, replacing = pending.asked)
+    }
+
+    /** « Garder le point choisi » : rien ne part. */
+    fun keepChosenPoint() {
+        replacing.value = null
+    }
+
+    private fun send(choice: ProfileShareChoice, replacing: SharedLocationPointReplacement?) {
         val id = userId.value ?: return
-        viewModelScope.launch { problem.value = sharing.share(id, precision, duration) }
+        viewModelScope.launch {
+            when (val answer = sharing.share(id, choice.precision, choice.duration, replacing)) {
+                is SharedLocationShareProblem.ReplacesChosenPoint ->
+                    this@ProfileShareLocationViewModel.replacing.value =
+                        ProfileShareReplacement(choice, answer.asked, knownPeople.known())
+                else -> problem.value = answer
+            }
+        }
     }
 
     fun stop() {

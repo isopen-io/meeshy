@@ -65,6 +65,11 @@ public class E2eeSessionCipher(
         reader.load(RecordKind.REMOTE_IDENTITY, address.recordKey)
     }
 
+    /** Cet appareil a-t-il déjà connu [userId] chiffré — une session (même archivée) ou une identité épinglée (#20181) ? */
+    public fun hasKnown(userId: String): Boolean = vault.read { reader ->
+        KNOWN_KINDS.any { kind -> reader.keys(kind).any { it.substringBeforeLast('.') == userId } }
+    }
+
     public fun deleteSession(address: E2eeDeviceAddress) {
         vault.write { transaction -> store(transaction).deleteSession(address.protocolAddress()) }
     }
@@ -102,6 +107,8 @@ public class E2eeSessionCipher(
         }
 
     public companion object {
+        private val KNOWN_KINDS = listOf(RecordKind.SESSION, RecordKind.REMOTE_IDENTITY)
+
         /** Le bundle servi par la passerelle, en `PreKeyBundle` libsignal ; une clé illisible lève [E2eeCipherFormatException]. */
         public fun preKeyBundle(bundle: E2eeDeviceBundle): PreKeyBundle {
             fun bytes(base64: String): ByteArray = unbase64(base64) ?: throw E2eeCipherFormatException("malformed bundle")

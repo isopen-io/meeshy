@@ -6,9 +6,15 @@ import org.junit.Test
 
 class CommunityLinkTest {
     @Test
-    fun `l'URL de partage canonique est chat identifiant`() {
+    fun `l'adresse partagee est la page de la communaute marquee via link`() {
         val link = CommunityLink.of("c1", "Café", "mshy-cafe", "https://meeshy.me", 4, true)
-        assertThat(link.joinUrl).isEqualTo("https://meeshy.me/chat/mshy-cafe")
+        assertThat(link.joinUrl).isEqualTo("https://meeshy.me/communities/mshy-cafe?via=link")
+    }
+
+    @Test
+    fun `un identifiant se code dans l'adresse`() {
+        val link = CommunityLink.of("c1", "Café", "café club", "https://meeshy.me/", 4, true)
+        assertThat(link.joinUrl).isEqualTo("https://meeshy.me/communities/caf%C3%A9%20club?via=link")
     }
 
     @Test

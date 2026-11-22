@@ -48,13 +48,22 @@ data class CallMediaQuality(
                 concealedSamples = sumOf(audio, "concealedSamples"),
                 nackCount = sumOf(video, "nackCount"),
                 pliCount = sumOf(video, "pliCount"),
-                qualityLimitationReason = entries.firstNotNullOfOrNull { entry ->
-                    text(entry.strings["qualityLimitationReason"])
-                        ?.takeIf { entry.type == "outbound-rtp" && entry.kind == "video" }
-                },
+                qualityLimitationReason = entries
+                    .filter { it.type == "outbound-rtp" && it.kind == "video" }
+                    .mapNotNull { entry -> text(entry.strings["qualityLimitationReason"])?.let { entry.id to it } }
+                    .sortedWith(compareByDescending<Pair<String, String>> { limitationRank(it.second) }.thenBy { it.first })
+                    .firstOrNull()?.second,
                 candidateType = candidateType,
                 relayProtocol = if (candidateType == "relay") text(local?.strings?.get("relayProtocol")) else null,
             )
+        }
+
+        /** #20221 — la cause la plus contraignante gagne, quel que soit l'ordre du relevé ; égalité ⇒ plus petit `id`. */
+        private fun limitationRank(reason: String): Int = when (reason) {
+            "bandwidth" -> 3
+            "cpu" -> 2
+            "other" -> 1
+            else -> 0
         }
 
         private fun measured(value: Double?): Double? = value?.takeIf { it.isFinite() && it >= 0.0 }

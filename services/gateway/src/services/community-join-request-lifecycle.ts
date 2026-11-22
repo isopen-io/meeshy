@@ -69,10 +69,12 @@ export async function closePendingJoinRequests(
   },
 ): Promise<number> {
   if (input.userIds.length === 0) return 0;
+  const now = input.now ?? new Date();
   try {
+    // L'entrée a déjà eu lieu : la clôture est scellée d'emblée (#20003).
     const { count } = await prisma.communityJoinRequest.updateMany({
       where: { communityId: input.communityId, userId: { in: [...input.userIds] }, status: 'pending' },
-      data: { status: 'accepted', decidedAt: input.now ?? new Date(), decidedBy: input.decidedBy },
+      data: { status: 'accepted', decidedAt: now, decidedBy: input.decidedBy, entryVerifiedAt: now },
     });
     return count;
   } catch (error) {
@@ -88,6 +90,30 @@ export async function closePendingJoinRequests(
 export const ORPHAN_ACCEPTANCE_GRACE_MS = 10 * 60_000;
 
 const ORPHAN_SCAN_LIMIT = 50;
+
+/** Une acceptation pas encore scellée : champ nul, ou absent sur une ligne d'avant #20003. */
+const UNSEALED_ACCEPTANCE = { OR: [{ entryVerifiedAt: null }, { entryVerifiedAt: { isSet: false } }] };
+
+/**
+ * SCELLE des acceptations dont le sort ne peut plus changer (#20003) : la
+ * réparation ne les relira plus. Ne touche qu'une acceptation encore acceptée
+ * et non scellée ; best-effort — un scellement manqué coûte une relecture, rien
+ * de plus.
+ */
+export async function sealVerifiedAcceptances(
+  prisma: Pick<PrismaClient, 'communityJoinRequest'>,
+  input: { readonly communityId: string; readonly requestIds: readonly string[]; readonly now: Date },
+): Promise<void> {
+  if (input.requestIds.length === 0) return;
+  try {
+    await prisma.communityJoinRequest.updateMany({
+      where: { id: { in: [...input.requestIds] }, communityId: input.communityId, status: 'accepted', ...UNSEALED_ACCEPTANCE },
+      data: { entryVerifiedAt: input.now },
+    });
+  } catch (error) {
+    logger.warn('Join request acceptance sealing failed', { communityId: input.communityId, error: String(error) });
+  }
+}
 
 type MembershipTrace = { readonly userId: string; readonly isActive: boolean; readonly leftAt: Date | null };
 
@@ -152,6 +178,7 @@ export async function reopenOrphanedAcceptances(
         status: 'accepted',
         decidedAt: { lte: new Date(now.getTime() - ORPHAN_ACCEPTANCE_GRACE_MS) },
         createdAt: { gte: ttlCutoff(now) },
+        ...UNSEALED_ACCEPTANCE,
       },
       orderBy: [{ decidedAt: 'desc' }, { id: 'desc' }],
       take: ORPHAN_SCAN_LIMIT,
@@ -185,6 +212,14 @@ export async function reopenOrphanedAcceptances(
         !supersededBy(a) &&
         nobodyEnteredSince(a.decidedAt, rows.filter((row) => row.userId === a.userId)),
     );
+    // #20003 — une acceptation relue qui n'est pas orpheline ne le deviendra jamais :
+    // une entrée prouvée ne se défait pas, une demande plus récente reste plus récente.
+    const orphanIds = new Set(orphans.map((a) => a.id));
+    await sealVerifiedAcceptances(prisma, {
+      communityId,
+      requestIds: acceptances.filter((a) => a.decidedAt instanceof Date && !orphanIds.has(a.id)).map((a) => a.id),
+      now,
+    });
     // Une seule par personne : la plus récente décision rouvre, les autres restent closes.
     const perPerson = orphans.filter((a, index) => orphans.findIndex((o) => o.userId === a.userId) === index);
 

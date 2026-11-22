@@ -15,8 +15,13 @@ import type { ApiFailure, ApiResult, HttpTransport } from './http';
  *    ferme sa session PUIS révoque son identité (un appareil volé ne se
  *    réenrôle pas) ; une session qui ne se ferme pas rend 503, rien retiré.
  *
- * Le navigateur n'a aucune pile libsignal (#12975) : il ne s'enrôle pas, il
- * n'approuve rien. L'APPROBATION d'un appareil par un autre vit sur chaque
+ * Le navigateur ne S'ENRÔLE pas et n'approuve rien : mesuré au cycle 211
+ * (#20287), ce port n'appelle que `devices`, `devicesByDeviceId` et
+ * `keysByUserIdDevices` — aucune identité ni prékey à lui ne part d'ici, donc
+ * aucune `registrationId`, donc aucune room d'appareil et aucune enveloppe
+ * `e2ee:envelope` à recevoir. La raison écrite jusqu'ici — « aucune pile
+ * libsignal (#12975) » — a VIEILLI : le pont WASM du web existe depuis #17114
+ * (pont v2, #18992→#18995). C'est l'enrôlement qui manque, pas la pile. L'APPROBATION d'un appareil par un autre vit sur chaque
  * appareil (`E2EEOwnDeviceApprovals`, iOS) et le serveur ne la connaît pas : ce
  * port ne la sert donc pas, et l'écran ne l'invente pas.
  *

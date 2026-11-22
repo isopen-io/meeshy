@@ -169,7 +169,8 @@ extension GameBlock.Missions {
             unlocked: unlocked,
             items: items ?? self.items,
             rerollAvailable: rerollAvailable ?? self.rerollAvailable,
-            personal: personal
+            personal: personal,
+            fullDreamIn: fullDreamIn
         )
     }
 }
@@ -199,7 +200,8 @@ extension GameBlock.Flame {
             freezePrice: freezePrice,
             relightPrice: relightPrice,
             status: status ?? self.status,
-            canRelight: canRelight ?? self.canRelight
+            canRelight: canRelight ?? self.canRelight,
+            freezeGifted: freezeGifted
         )
     }
 }

@@ -8,7 +8,7 @@ import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events'
 import { resolveConversationId } from '../../utils/conversation-id-cache'
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
 import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount'
-import { announceConversationClosed } from '../../socketio/announceConversationClosed'
+import { announceConversationClosed, audienceDeRetractation } from '../../socketio/announceConversationClosed'
 import { endConversationMembership } from '../../socketio/endConversationMembership'
 import { resoudreSuccessionDuCreateur } from '../../services/conversations/creatorSuccession'
 import { announceParticipantRoleWithCapabilities } from '../../services/conversations/obsoleteCapability'
@@ -18,6 +18,7 @@ import { eraseExternalPeerOnClose } from '../../services/external-conversation/e
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice'
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges'
+import { releaseAgentRoleFor } from '../../services/conversations/releaseAgentRole'
 
 const logger = enhancedLogger.child({ module: 'ConversationLeave' })
 
@@ -186,13 +187,25 @@ export function registerLeaveRoutes(
           ])
           // #17117 — le numéro de l'ami d'une conversation externe ne survit pas au fil.
           await eraseExternalPeerOnClose(prisma, closed)
-          closedAudience = (closed.participants ?? []).filter(p => p.isActive)
+          // `audienceDeRetractation` et non un filtre local : la règle — large,
+          // délibérément — vit sur l'unité de clôture avec sa raison (#20103).
+          closedAudience = audienceDeRetractation(closed.participants)
           conversationClosed = true
         }
       } else {
         await prisma.participant.update(leaveSelf)
       }
       invalidateParticipantLookup(participant.id, id)
+
+      // Partir rend le RÔLE D'AGENT qui parlait à sa place (#20208) — la
+      // JUMELLE du bannissement, et elle a été trouvée en posant la question du
+      // dépôt AU MOMENT du correctif plutôt que trois cycles plus tard : le
+      // départ volontaire ne touchait pas davantage `AgentUserRole`, et pour la
+      // même raison (seuls `admin/agent-reset` et la purge de conversation y
+      // touchaient). Même site unique, mêmes arbitrages — best-effort, parce
+      // que la lecture d'aval est fail-closed depuis #20111.
+      await releaseAgentRoleFor({ prisma, conversationId: id, userId: participant.userId })
+
       announceConversationLanguageChange({ kind: 'departure', conversationId: id })
 
       // #7593 — la ligne de liste des restants dit « X a quitté la conversation ».

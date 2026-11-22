@@ -41,11 +41,13 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { RESERVED_SERVER_EVENTS } from '../../types/socketio-events/event-names';
+
 import { readContractPayloads } from './socket-payload-shape/mirror-contract';
 import { eventsNamedByClients } from './socket-payload-shape/client-event-readers';
 
 const SANS_LECTEUR: ReadonlyMap<string, string> = new Map([
-  ['authenticated', 'ÉMIS — `AuthHandler` le pousse à CHAQUE authentification de socket (deux sites). Aucun client ne le cite ; ils lisent l\'accusé de la poignée de main.'],
+  ['user:preferences-community-reordered', "ÉMIS — `routes/community-preferences.ts` après chaque réordonnancement, sur la room personnelle (#18915, cycle 128 : un nom NEUF plutôt qu'un élargissement de `user:preferences-reordered`, dont le décodeur iOS est strict). Mesuré au cycle 207 (#20267) : AUCUN client ne le cite. Android passait pour son lecteur parce que `PreferencesSocketManager.kt` écrit « `user:preferences-community-reordered` stays unheard: measured, nothing under `apps/android` caches a community-preference row » — une NÉGATION que le relevé comptait comme une citation. Décision à prendre (#20268) : écrire le lecteur là où la ligne est cachée, ou retirer l'émission."],
   ['agent:admin-event', 'ÉMIS — `AgentAdminRelay` vers la room des agents admin. Aucune surface cliente ne le lit.'],
   ['link:message:new', "ÉMIS — `linkMessageEmissions` et le rejeu hors ligne. `services/gateway/CLAUDE.md` lui prêtait « son unique auditeur (le web) » ; la prémisse est CORRIGÉE depuis le cycle 161 — aucun client ne cite ce nom ni sa constante, et le raisonnement du cycle 114 tient pour une raison plus forte."],
   ['location:blood-proximity', 'ÉMIS — `bloodProximity.ts`, DEUX `emit` par alerte. Le client du mode Sang n\'est peut-être pas encore écrit (#13928).'],
@@ -102,6 +104,42 @@ describe("l'événement du contrat que personne ne lit (#18342)", () => {
     expect(
       stale,
       `lu ou retiré du contrat — à sortir de l'inventaire : ${stale.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  /**
+   * **UNE RÉSERVATION NE S'AUTO-ATTESTE PAS** (#20295). `RESERVED_SERVER_EVENTS`
+   * déclarait, en prose, que ses trois noms étaient « décodés côté clients » —
+   * mesuré FAUX : aucun des trois n'est cité nulle part hors du contrat, et
+   * l'inventaire ci-dessus les porte depuis toujours sous « ni émis ni lu ».
+   * Deux affirmations contradictoires sur la même donnée, dont une seule se
+   * mesurait.
+   *
+   * Le coût d'une telle phrase n'est pas son inexactitude : c'est qu'elle
+   * ORIENTE. Lue par qui vient écrire le pipeline de traduction en appel, elle
+   * dit « les clients sont prêts, il ne manque que l'émetteur » — et ce lot-là
+   * livrerait un émetteur que personne n'affiche (cycle 122).
+   *
+   * Le doc-comment de la réservation raconte lui-même que la prose qu'il a
+   * remplacée « avait pourri sans que rien ne le signale ». Réécrire la prose
+   * ne l'empêche pas de pourrir à nouveau ; la rendre VÉRIFIABLE, oui — d'où ce
+   * témoin, qui tombe dès qu'un nom réservé trouve un lecteur ou un émetteur
+   * sans sortir de la réservation.
+   */
+  it('un nom RÉSERVÉ est mesuré sans lecteur, et la réservation ne l’affirme plus toute seule', () => {
+    const reserved = [...RESERVED_SERVER_EVENTS];
+    const read = reserved.filter((event) => named.has(event));
+    expect(
+      read,
+      `nom RÉSERVÉ que des clients citent — le service a-t-il atterri ? alors sortir de `
+        + `RESERVED_SERVER_EVENTS et de l'inventaire : ${read.join(', ')}`,
+    ).toEqual([]);
+
+    const unmeasured = reserved.filter((event) => !SANS_LECTEUR.has(event));
+    expect(
+      unmeasured,
+      `nom RÉSERVÉ absent de l'inventaire mesuré — une réservation dit ce qu'elle a MESURÉ, `
+        + `jamais ce qu'elle espère : ${unmeasured.join(', ')}`,
     ).toEqual([]);
   });
 });

@@ -179,6 +179,25 @@ describe('le bloc game', () => {
     });
   });
 
+  it('dit le jour où la première Veilleuse est offerte, celui de la Flamme (#20169)', () => {
+    expect(block({ freezeGiftDay: '2026-10-05' }).flame.freezeGifted).toBe(true);
+    expect(block({ freezeGiftDay: '2026-10-04' }).flame.freezeGifted).toBe(false);
+    expect(block({ freezeGiftDay: null }).flame.freezeGifted).toBe(false);
+    expect(block({ today: '2026-10-05', flameToday: '2026-10-06', freezeGiftDay: '2026-10-06' }).flame.freezeGifted).toBe(true);
+    expect(gameBlockSchema.safeParse(block({ freezeGiftDay: '2026-10-05' })).success).toBe(true);
+  });
+
+  it('garde la forme d\'avant quand la passerelle ne lit pas le jour du cadeau', () => {
+    expect(block().flame).not.toHaveProperty('freezeGifted');
+  });
+
+  it('tolère un freezeGifted illisible sans emporter le bloc', () => {
+    const b = block();
+    const parsed = gameBlockSchema.safeParse({ ...b, flame: { ...b.flame, freezeGifted: 'oui' } });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.flame.freezeGifted).toBeUndefined();
+  });
+
   it('dit qu\'une Flamme éteinte se rallume, avec son prix', () => {
     const b = block({
       lastActiveDay: '2026-10-02',
@@ -245,6 +264,25 @@ describe('le bloc game', () => {
     expect(
       block({ missions: done, chestClaimed: true, chestReward: { points: 120, fragment: true, freeze: false } }).chest,
     ).toMatchObject({ status: 'claimed', reward: { points: 120, fragment: true, freeze: false } });
+  });
+
+  it("au jour du retour, sert l'Offrande gardée par les aïeux : prête sans les trois actes (#20266)", () => {
+    const kept = block({ welcomeBackDay: '2026-10-05' }).chest;
+    expect(kept).toMatchObject({ status: 'ready', kept: true });
+    expect(block({ welcomeBackDay: '2026-10-04' }).chest).toMatchObject({ status: 'locked', kept: false });
+    expect(block().chest.kept).toBeUndefined();
+    expect(block({ welcomeBackDay: '2026-10-05', missions: [] }).chest.status).toBe('locked');
+    expect(
+      block({ welcomeBackDay: '2026-10-05', chestClaimed: true, chestReward: { points: 500, fragment: false, freeze: false } }).chest.status,
+    ).toBe('claimed');
+    expect(gameBlockSchema.safeParse(block({ welcomeBackDay: '2026-10-05' })).success).toBe(true);
+  });
+
+  it("tolère un chest.kept absent ou illisible sans emporter le bloc (#20266)", () => {
+    const served = block({ welcomeBackDay: '2026-10-05' });
+    expect(parseGameBlock(served)?.chest.kept).toBe(true);
+    const parsed = gameBlockSchema.safeParse({ ...served, chest: { ...served.chest, kept: 'oui' } });
+    expect(parsed.success && parsed.data.chest.kept).toBeUndefined();
   });
 
   it('expose les probabilités du coffre avant l\'ouverture, sans contenu', () => {

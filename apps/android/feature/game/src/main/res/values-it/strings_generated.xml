@@ -103,6 +103,10 @@
     <string name="game2_guide_moment_atlas_stamp_next">%1$s lingue su %2$s nel tuo passaporto.</string>
     <string name="game2_guide_moment_atlas_stamp_short">Timbro: %1$s.</string>
     <string name="game2_guide_moment_atlas_stamp_what">Nuovo timbro: %1$s!</string>
+    <string name="game2_guide_moment_flame_freeze_gift_means">I tuoi antenati te la affidano: tiene accesa la tua Fiamma un giorno d’assenza.</string>
+    <string name="game2_guide_moment_flame_freeze_gift_next">Lucerne di riserva: %1$s.</string>
+    <string name="game2_guide_moment_flame_freeze_gift_short">Ti è donata una Lucerna per la tua Fiamma.</string>
+    <string name="game2_guide_moment_flame_freeze_gift_what">Ti è donata una Lucerna.</string>
     <string name="game2_guide_moment_league_first_means">Ogni settimana ti misuri con altri 29 eroi. I primi 7 salgono al cerchio successivo, gli ultimi 5 riscendono, e le scintille ripartono da zero.</string>
     <string name="game2_guide_moment_league_first_next">%1$s fino al cerchio successivo questa settimana.</string>
     <string name="game2_guide_moment_league_first_next_top">Sei già nel cerchio più alto dei tornei.</string>
@@ -865,6 +869,7 @@
     <string name="game_mission_write_conversations_other">Scrivere in %1$s conversazioni diverse</string>
     <string name="game_mission_write_someone_new_one">Scrivere a qualcuno per la prima volta</string>
     <string name="game_mission_write_someone_new_other">Scrivere a %1$s persone per la prima volta</string>
+    <string name="game_missions_full_dream_in">Il tuo primo sogno completo arriva tra %1$s.</string>
     <string name="game_missions_locked">Il sogno si apre al livello 5 · sei al livello %1$s.</string>
     <string name="game_missions_prism_day">Giorno del Prisma: uno degli atti si gioca in una lingua diversa dalla tua.</string>
     <string name="game_missions_prism_hour">Ora del Prisma: %1$s – %2$s — ogni atto conta doppio.</string>

@@ -256,7 +256,7 @@ async function uploadPhase(params: {
           ok: false,
           status: 0,
           error: 'Pièces jointes introuvables pour cet envoi',
-          code: 'UPLOAD_PARTIAL',
+          code: UPLOAD_PARTIAL,
         });
       return null;
     }
@@ -437,6 +437,20 @@ export async function performSend(params: {
 
   await dispatch({ conversationId, message, deps });
 }
+
+/**
+ * LE REFUS LOCAL DES PIÈCES INTROUVABLES (#20223) — un `status: 0` frappé
+ * SANS requête, parce que `message.attachments` annonce des pièces dont
+ * l'entrée ne porte plus la sélection (`upload === undefined`).
+ *
+ * Il porte un CODE parce que `status: 0` veut déjà dire « aucune réponse HTTP »,
+ * donc « la requête n'a jamais atteint le serveur » — ce que la file rejoue.
+ * Celui-ci n'a pas de requête à rejouer : l'état qui le produit est le MÊME à
+ * la tentative suivante. Le code est ce qui permet à la file de le distinguer
+ * d'une coupure (`outbox-durability.ts` § `refusedLocally`), et une chaîne
+ * EXPORTÉE est ce qui permet à un témoin de le nommer sans le recopier.
+ */
+export const UPLOAD_PARTIAL = 'UPLOAD_PARTIAL';
 
 export async function retrySend(params: {
   readonly conversationId: string;

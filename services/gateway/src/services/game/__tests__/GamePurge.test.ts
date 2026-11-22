@@ -77,7 +77,7 @@ describe('exhaustivité de la purge', () => {
 describe('purgeGameData', () => {
   const seed = () => {
     const db = fakeGameDb();
-    seedUser(db, { levelRecord: 40, prestige: 2, prestigeLevelRecords: [120, 100], flameFreezes: 1, guideSeen: ['a'], publicLeagueConsentAt: new Date(), publicLeagueConsentVersion: 'v1' });
+    seedUser(db, { levelRecord: 40, prestige: 2, prestigeLevelRecords: [120, 100], flameFreezes: 1, flameFreezeGiftDay: '2026-10-01', guideSeen: ['a'], publicLeagueConsentAt: new Date(), publicLeagueConsentVersion: 'v1' });
     seedUser(db, { levelRecord: 10 }, OTHER);
     for (const [model, rows] of Object.entries({
       dailyMission: [{ id: 'a', userId: USER }, { id: 'a2', userId: OTHER }],
@@ -135,7 +135,7 @@ describe('purgeGameData', () => {
   it('efface les colonnes de jeu et le consentement de ligue du compte, pas ceux des autres', async () => {
     const db = seed();
     await purgeGameData(db.prisma, USER);
-    expect(db.user.rows.find((u) => u.id === USER)).toMatchObject({ publicLeagueConsentAt: null, publicLeagueConsentVersion: null, levelRecord: null, prestige: null, prestigeLevelRecords: [], flameFreezes: null, guideSeen: [] });
+    expect(db.user.rows.find((u) => u.id === USER)).toMatchObject({ publicLeagueConsentAt: null, publicLeagueConsentVersion: null, levelRecord: null, prestige: null, prestigeLevelRecords: [], flameFreezes: null, flameFreezeGiftDay: null, guideSeen: [] });
     expect(db.user.rows.find((u) => u.id === OTHER)!.levelRecord).toBe(10);
   });
 
@@ -294,6 +294,19 @@ describe('un compte qui a beaucoup joué n’est pas purgé à moitié (#9481)',
     expect(summary.leagueGroupsTouched).toBe(COUNT);
     expect(db.leagueMembership.rows.every((m) => m.userId === PARTNER)).toBe(true);
     expect(db.leagueGroupWeek.rows.every((g) => g.memberCount === 1)).toBe(true);
+  });
+});
+
+describe('le jour du retour (#20218)', () => {
+  it('la purge efface le jour du dernier retour du compte, pas celui des autres', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { gameWelcomeBackDay: '2026-10-20' });
+    seedUser(db, { gameWelcomeBackDay: '2026-10-11' }, OTHER);
+
+    await purgeGameData(db.prisma, USER);
+
+    expect(db.user.rows.find((u) => u.id === USER)!.gameWelcomeBackDay).toBeNull();
+    expect(db.user.rows.find((u) => u.id === OTHER)!.gameWelcomeBackDay).toBe('2026-10-11');
   });
 });
 

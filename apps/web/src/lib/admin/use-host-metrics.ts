@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 
 import type { HostMetricsSnapshot } from '@meeshy/shared/types/admin-ops';
 import { ADMIN_METRICS_CLIENT_EVENTS, ADMIN_METRICS_SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/admin-metrics-event-names';
+import { SESSION_SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/session-event-names';
 
 import type { AdminDeps } from '@/lib/api/admin';
 import { ADMIN_OPS_METRICS_KEY, decodeHostSample, decodeHostSnapshot, loadHostMetrics } from '@/lib/api/admin-ops';
@@ -17,6 +18,18 @@ import { mergeSnapshot } from './host-metrics';
  * l'instantané dans son accusé et chaque échantillon arrive sur `admin-metrics:sample`.
  * Sans socket (ou sans accusé), le REPLI relit `?since=<dernier point>` toutes les 5 s.
  * Quitter l'écran se désabonne et arrête la relecture.
+ *
+ * **LA RECONNEXION** (#20304) — `admin-metrics:subscribe` n'est pas une écoute : c'est
+ * une JONCTION DE ROOM (`AdminMetricsHandler.handleSubscribe`, unique
+ * `socket.join(ROOMS.adminHostMetrics())` du dépôt), et une room appartient à UN socket
+ * serveur. socket.io reconnecte sous le MÊME `SocketClient` — `watchLiveSocket` ne rejoue
+ * donc rien, lui qui ne migre ses observateurs que sur un changement d'OBJET de connexion.
+ * La passerelle reconstruit seule les rooms qu'elle peut inférer (`AuthHandler`) ; celle-ci,
+ * non. L'abonnement est donc rejoué sur `authenticated`, comme `publication-rooms.ts`,
+ * `conversation-viewing.ts` et `call-socket-bridge.ts` le font pour leurs propres salles —
+ * et `disconnect` désarme `live`, sans quoi le repli par sondage, gardé sur `live === true`,
+ * ne prendrait jamais le relais : la page afficherait « En direct » au-dessus de courbes
+ * gelées pour toujours. Un accusé qui REFUSE (`ok: false`, `RATE_LIMITED`) désarme aussi.
  */
 export type LiveSource = (watcher: (socket: SocketClient) => () => void) => Promise<() => void>;
 
@@ -52,19 +65,38 @@ export function useHostMetrics(params: { readonly deps: AdminDeps; readonly enab
         const sample = decodeHostSample(raw);
         if (sample !== null) merge({ samples: [sample] });
       };
+      const subscribe = (): void => {
+        const acknowledged = socket.emitWithAck?.(ADMIN_METRICS_CLIENT_EVENTS.ADMIN_METRICS_SUBSCRIBE, {}, 5000);
+        if (acknowledged === undefined) {
+          setLive(false);
+          return;
+        }
+        acknowledged
+          .then((ack) => {
+            if (stopped) return;
+            const answer = ack as { readonly ok?: unknown; readonly snapshot?: unknown } | null;
+            const snapshot = answer?.ok === true ? decodeHostSnapshot(answer.snapshot) : null;
+            if (snapshot === null) {
+              setLive(false);
+              return;
+            }
+            merge(snapshot);
+            setLive(true);
+          })
+          .catch(() => setLive(false));
+      };
+      const onAuthenticated = () => {
+        if (!stopped) subscribe();
+      };
+      const onDisconnect = () => setLive(false);
       socket.on(ADMIN_METRICS_SERVER_EVENTS.ADMIN_METRICS_SAMPLE, onSample);
-      socket
-        .emitWithAck?.(ADMIN_METRICS_CLIENT_EVENTS.ADMIN_METRICS_SUBSCRIBE, {}, 5000)
-        .then((ack) => {
-          const answer = ack as { readonly ok?: unknown; readonly snapshot?: unknown } | null;
-          const snapshot = answer?.ok === true ? decodeHostSnapshot(answer.snapshot) : null;
-          if (snapshot === null || stopped) return;
-          merge(snapshot);
-          setLive(true);
-        })
-        .catch(() => setLive(false));
+      socket.on(SESSION_SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
+      socket.on('disconnect', onDisconnect);
+      subscribe();
       return () => {
         socket.off(ADMIN_METRICS_SERVER_EVENTS.ADMIN_METRICS_SAMPLE, onSample);
+        socket.off(SESSION_SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
+        socket.off('disconnect', onDisconnect);
         socket.emit(ADMIN_METRICS_CLIENT_EVENTS.ADMIN_METRICS_UNSUBSCRIBE, {});
         setLive(false);
       };

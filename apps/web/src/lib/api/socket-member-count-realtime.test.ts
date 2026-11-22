@@ -83,6 +83,7 @@ const detail = (queryClient: QueryClient): Conversation | undefined => queryClie
 const joined = (extra: Readonly<Record<string, unknown>> = {}) => ({ conversationId: 'c-a', userId: 'u-zoe', displayName: 'Zoé', joinedAt: '2026-11-17T10:00:00.000Z', ...extra });
 const left = (extra: Readonly<Record<string, unknown>> = {}) => ({ conversationId: 'c-a', participantId: 'p-zoe', userId: 'u-zoe', displayName: 'Zoé', leftAt: '2026-11-17T10:00:00.000Z', ...extra });
 const banned = (extra: Readonly<Record<string, unknown>> = {}) => ({ conversationId: 'c-a', participantId: 'p-zoe', userId: 'u-zoe', bannedBy: { id: 'u-admin' }, bannedAt: '2026-11-17T10:00:00.000Z', ...extra });
+const unbanned = (extra: Readonly<Record<string, unknown>> = {}) => ({ conversationId: 'c-a', participantId: 'p-zoe', userId: 'u-zoe', membershipRestored: true, ...extra });
 
 describe('l’effectif SERVI est posé, jamais incrémenté (WEB-14)', () => {
   test('`participant-joined { memberCount: 7 }` pose 7 sur la ligne et la fiche', () => {
@@ -104,6 +105,16 @@ describe('l’effectif SERVI est posé, jamais incrémenté (WEB-14)', () => {
     socket.fire(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, banned({ memberCount: 6 }));
     expect(row(queryClient)?.memberCount).toBe(6);
     expect(detail(queryClient)?.memberCount).toBe(6);
+    destroy();
+  });
+
+  test('#20227 — `participant-unbanned` pose aussi l’effectif servi', () => {
+    const { socket, queryClient, destroy } = connectedWith(group({ memberCount: 6 }));
+
+    socket.fire(SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED, unbanned({ memberCount: 7 }));
+
+    expect(row(queryClient)?.memberCount).toBe(7);
+    expect(detail(queryClient)?.memberCount).toBe(7);
     destroy();
   });
 
@@ -138,6 +149,21 @@ describe('le repli d’une passerelle qui ne sert pas l’effectif', () => {
     socket.fire(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, banned({ membershipEnded: false }));
 
     expect(row(queryClient)?.memberCount).toBe(3);
+    destroy();
+  });
+
+  /**
+   * #20227 — le miroir exact de `membershipEnded: false` : le même événement
+   * dit deux choses, et c'est le CHAMP qui tranche, jamais son nom.
+   */
+  test('une levée de ban n’ajoute un membre que si elle RESTAURE l’appartenance', () => {
+    const { socket, queryClient, destroy } = connectedWith(group({ memberCount: 3 }));
+
+    socket.fire(SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED, unbanned({ membershipRestored: false }));
+    expect(row(queryClient)?.memberCount).toBe(3);
+
+    socket.fire(SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED, unbanned());
+    expect(row(queryClient)?.memberCount).toBe(4);
     destroy();
   });
 

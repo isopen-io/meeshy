@@ -30,6 +30,8 @@ export const communitySchema = {
     banner: { type: 'string', nullable: true, description: 'Community banner URL' },
     isPrivate: { type: 'boolean', description: 'Whether community is private' },
     requiresJoinApproval: { type: 'boolean', nullable: true, description: 'Whether each entry waits for an admin or moderator to accept it (#19429); absent on older communities = direct entry' },
+    joinLinkPaused: { type: 'boolean', description: 'Whether a steward paused the community entry link (#19661). Joining through the link is refused while paused (403 COMMUNITY_LINK_PAUSED); other doors stay open' },
+    joinLinkPausedAt: { type: 'string', format: 'date-time', nullable: true, description: 'When the entry link was paused (#19661); served to admins, moderators and the creator only, null for any other reader or when active' },
     isActive: { type: 'boolean', description: 'Whether community is active' },
     deletedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Deletion timestamp' },
     createdBy: { type: 'string', description: 'Creator user ID' },

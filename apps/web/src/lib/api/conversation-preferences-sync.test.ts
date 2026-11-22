@@ -15,7 +15,7 @@ import { localMessage, threadPages } from '@/test-support/thread-cache';
 import { bindPreferencesLive, createPreferencesSync } from './conversation-preferences-sync';
 import { CONVERSATIONS_QUERY_KEY, conversationQueryKey, findCachedConversation } from './conversations';
 import type { ConversationsInfiniteData } from './conversations-pages';
-import { APP_PREFERENCES_QUERY_KEY } from './me-keys';
+import { APP_PREFERENCES_QUERY_KEY, CIRCLE_NOTIFY_QUERY_KEY, MY_PREFERENCES_QUERY_KEYS } from './me-keys';
 import { messagesQueryKey } from './messages';
 import type { MessagesPage, MessagesPageParam } from './messages-pages';
 import { categoryIdOf, customNameOf, flagsOf, reactionOf } from './preferences';
@@ -270,16 +270,60 @@ describe('vider l’historique sur un autre appareil — le fil ouvert se relit,
   });
 });
 
-describe('user:preferences-updated (portée catégorie) — un réglage d’application changé ailleurs', () => {
-  test('`{ userId, category }` périme les réglages d’application, rien d’autre', () => {
+/**
+ * **TOUTES LES PROJECTIONS DU DOCUMENT, PAS UNE** (#20349). Le témoin
+ * ci-dessous s'appelait « périme les réglages d'application, **rien d'autre** »
+ * et gelait la lacune sous les apparences d'une décision : il n'y avait aucune
+ * raison écrite pour ce « rien d'autre », et `['me','circle-notify']` — les
+ * dix-neuf crans « qui est prévenu » — est un FRÈRE de
+ * `['me','app-preferences']`, donc l'invalidation par préfixe ne l'atteignait
+ * jamais. Un appareil CONNECTÉ, qui recevait pourtant l'événement, affichait
+ * l'ancien cran jusqu'à trente minutes. Le témoin est RETOURNÉ : son « rien
+ * d'autre » ne porte plus que sur ce qui ne projette pas le document.
+ */
+describe('user:preferences-updated (portée catégorie) — un réglage changé ailleurs', () => {
+  test('`{ userId, category }` périme TOUTES les projections du document de réglages', () => {
     const queryClient = seeded();
     queryClient.setQueryData(APP_PREFERENCES_QUERY_KEY, { theme: 'auto' });
+    queryClient.setQueryData(CIRCLE_NOTIFY_QUERY_KEY, { circleStoryPublished: 'close' });
+    const { sync } = syncOn(queryClient);
+
+    sync({ userId: 'u-ada', category: 'notification' });
+
+    for (const queryKey of MY_PREFERENCES_QUERY_KEYS) {
+      expect(isInvalidated(queryClient, queryKey)).toBe(true);
+    }
+  });
+
+  /** Le rang qui tombait : la clé SŒUR, qu'aucun préfixe ne couvre. */
+  test('les crans « qui est prévenu » se périment aussi, eux que le préfixe ne touche pas', () => {
+    const queryClient = seeded();
+    queryClient.setQueryData(CIRCLE_NOTIFY_QUERY_KEY, { circleStoryPublished: 'close' });
+    const { sync } = syncOn(queryClient);
+
+    sync({ userId: 'u-ada', category: 'notification' });
+
+    expect(isInvalidated(queryClient, CIRCLE_NOTIFY_QUERY_KEY)).toBe(true);
+  });
+
+  test('et rien qui ne projette pas le document', () => {
+    const queryClient = seeded();
     const { sync } = syncOn(queryClient);
 
     sync({ userId: 'u-ada', category: 'privacy' });
 
-    expect(isInvalidated(queryClient, APP_PREFERENCES_QUERY_KEY)).toBe(true);
     expect(isInvalidated(queryClient, CONVERSATIONS_QUERY_KEY)).toBe(false);
+  });
+
+  /** Une portée de COMMUNAUTÉ n'est pas une catégorie du document de soi. */
+  test('une charge qui nomme une communauté ne périme aucune projection', () => {
+    const queryClient = seeded();
+    queryClient.setQueryData(CIRCLE_NOTIFY_QUERY_KEY, { circleStoryPublished: 'close' });
+    const { sync } = syncOn(queryClient);
+
+    sync({ userId: 'u-ada', category: 'notification', communityId: 'com-1' });
+
+    expect(isInvalidated(queryClient, CIRCLE_NOTIFY_QUERY_KEY)).toBe(false);
   });
 });
 

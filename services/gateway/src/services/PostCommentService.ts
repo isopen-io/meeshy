@@ -20,6 +20,7 @@ import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { EngagementService } from './engagement/EngagementService';
 import { creditPostEngagement, creditSource, reclaimContentCredits, removalReclaimsAuthorCredits, type PostEngagementRecorder } from './posts/postEngagementCredits';
 import { creditEngagedReaderView } from './posts/postViewCredit';
+import { separatedCommentAuthors, withoutSeparatedAuthors } from './posts/separatedCommentAuthors';
 
 const log = enhancedLogger.child({ module: 'PostCommentService' });
 
@@ -417,6 +418,7 @@ export class PostCommentService {
       deletedAt: NOT_DELETED,
       AND: [
         { OR: [{ parentId: null }, { parentId: { isSet: false } }] },
+        ...withoutSeparatedAuthors(await separatedCommentAuthors(this.prisma, currentUserId)),
       ],
     };
 
@@ -494,9 +496,19 @@ export class PostCommentService {
   async getReplies(commentId: string, cursor?: string, limit: number = 20, currentUserId?: string) {
     const cursorData = cursor ? decodeCursor(cursor) : null;
 
+    const separated = await separatedCommentAuthors(this.prisma, currentUserId);
+    if (separated.length > 0) {
+      const parentBySeparated = await this.prisma.postComment.findFirst({
+        where: { id: commentId, authorId: { in: separated } },
+        select: { id: true },
+      });
+      if (parentBySeparated) return { items: [], nextCursor: null, hasMore: false };
+    }
+
     const where: any = {
       parentId: commentId,
       deletedAt: NOT_DELETED,
+      AND: withoutSeparatedAuthors(separated),
     };
 
     // Replies are ordered ASCENDING (oldest → newest, threaded reading order),

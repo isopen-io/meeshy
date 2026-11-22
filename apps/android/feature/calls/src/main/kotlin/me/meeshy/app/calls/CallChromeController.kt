@@ -17,6 +17,7 @@ internal data class CallChromeState(
     val layer: CallScreenLayer = CallScreenLayer.Idle,
     val isRevealed: Boolean = true,
     val fingersDown: Int = 0,
+    /** Monotonic ([CallClock.elapsedMs]), never an instant: it only measures how long the fade has run. */
     val hiddenAtMillis: Long? = null,
     /** La vignette à la une d'un appel de groupe occupe tout l'écran : l'en-tête et la pilule s'effacent. */
     val isStageFullScreen: Boolean = false,
@@ -28,7 +29,7 @@ internal data class CallChromeState(
  * this class only holds the current value. Mirrors the `layer` / `showControls` state of iOS
  * `CallView`.
  */
-internal class CallChromeController(private val clock: () -> Long = System::currentTimeMillis) {
+internal class CallChromeController(private val clock: CallClock = RealCallClock()) {
 
     private val _state = MutableStateFlow(CallChromeState())
     val state: StateFlow<CallChromeState> = _state.asStateFlow()
@@ -47,13 +48,13 @@ internal class CallChromeController(private val clock: () -> Long = System::curr
     fun acceptsTouches(isTapStage: Boolean, isTouchExplorationOn: Boolean): Boolean {
         val current = _state.value
         val visible = visibility(isTapStage, isTouchExplorationOn).isVisible(CallChromeElement.Controls)
-        val hiddenFor = current.hiddenAtMillis?.let { clock() - it } ?: 0L
+        val hiddenFor = current.hiddenAtMillis?.let { clock.elapsedMs() - it } ?: 0L
         return CallChromeVisibility.acceptsTouches(visible, hiddenFor)
     }
 
     fun onSceneTap(isTapStage: Boolean, isTouchExplorationOn: Boolean) {
         if (!CallChromeVisibility.mayToggleByTap(isTapStage, isTouchExplorationOn)) return
-        _state.update { if (it.isRevealed) it.hidden(clock()) else it.revealed() }
+        _state.update { if (it.isRevealed) it.hidden(clock.elapsedMs()) else it.revealed() }
     }
 
     fun onInteraction(interaction: CallChromeInteraction) {

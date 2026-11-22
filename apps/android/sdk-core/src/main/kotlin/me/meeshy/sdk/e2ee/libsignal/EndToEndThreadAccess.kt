@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.Flow
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.MessageEffects
 
 /**
  * Ce que le fil d'une conversation chiffrée de bout en bout demande à l'E2EE (#14591) : envoyer un TEXTE scellé pour
@@ -12,7 +13,10 @@ import me.meeshy.sdk.model.MeeshyUser
  */
 public interface EndToEndThreadAccess {
 
-    /** Le texte part chiffré ; la bulle optimiste ne porte dans Room que le littéral `[Encrypted]`. Rend son `cid_`. */
+    /**
+     * Le texte part chiffré ; la bulle optimiste ne porte dans Room que le littéral `[Encrypted]`. Rend son `cid_`. [effects]
+     * voyage sur la ligne d'outbox, pour qu'une redirection vers le tête-à-tête lisible garde l'effet du geste (#20182).
+     */
     public suspend fun sendText(
         conversationId: String,
         peerUserId: String,
@@ -20,6 +24,7 @@ public interface EndToEndThreadAccess {
         language: String?,
         sender: MeeshyUser,
         replyToId: String?,
+        effects: MessageEffects = MessageEffects(),
     ): String
 
     /**
@@ -44,6 +49,7 @@ public interface EndToEndThreadAccess {
                 language: String?,
                 sender: MeeshyUser,
                 replyToId: String?,
+                effects: MessageEffects,
             ): String = throw IllegalStateException("end-to-end encryption unavailable")
 
             override fun overlay(

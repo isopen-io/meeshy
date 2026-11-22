@@ -145,4 +145,58 @@ describe('la ligne branchée', () => {
     expect(host.querySelector('[data-share-location-stop]')).toBeNull();
     expect(host.querySelector<HTMLButtonElement>('[data-share-location]')).not.toBeNull();
   });
+
+  const ASKED = { startedAt: 'S1', recipientIds: ['b'.repeat(24), 'd'.repeat(24), 'e'.repeat(24), 'f'.repeat(24)] };
+  const KNOWN = [
+    { userId: 'b'.repeat(24), name: 'Bob' },
+    { userId: 'd'.repeat(24), name: 'Dan' },
+    { userId: 'e'.repeat(24), name: 'Eve' },
+    { userId: 'f'.repeat(24), name: 'Fay' },
+  ];
+  type Request = { readonly userId: string; readonly precision: 'city' | 'neighborhood' | 'exact'; readonly durationMinutes: 60 | 480; readonly replacing?: typeof ASKED };
+  const pointedCenter = (asked: Request[]) => ({
+    ...makeCenter().center,
+    share: async (request: Request) => (asked.push(request), request.replacing === undefined ? { kind: 'replaces-chosen-point' as const, asked: ASKED } : null),
+  });
+  const askToReplace = async (asked: Request[], { notices = [] as string[], known = KNOWN } = {}) => {
+    const host = await mount(<ProfileShareLocationRow language="fr" person={ADA} offered onNotice={(m) => notices.push(m)} center={pointedCenter(asked)} knownPeople={() => known} />);
+    await settle();
+    await click(host.querySelector<HTMLButtonElement>('[data-share-location]'));
+    await settle();
+    await click(document.querySelector<HTMLButtonElement>('[data-share-location-confirm]'));
+    await settle();
+    return document.querySelector('[data-share-location-replace-point]');
+  };
+
+  test('devant un point choisi ailleurs, « Partager » demande d’abord ; « Garder le point choisi » n’envoie rien (#20126)', async () => {
+    const asked: Request[] = [];
+    const notices: string[] = [];
+    const dialog = await askToReplace(asked, { notices });
+    expect(dialog?.textContent).toContain('Montrer votre position réelle ?');
+    await click(document.querySelector<HTMLButtonElement>('[data-share-location-keep-point]'));
+    await settle();
+    expect(document.querySelector('[data-share-location-replace-point]')).toBeNull();
+    expect(asked).toHaveLength(1);
+    expect(notices).toEqual([]);
+  });
+
+  test('la question nomme trois personnes au plus, puis compte les autres (#20248)', async () => {
+    const dialog = await askToReplace([]);
+    expect(dialog?.textContent).toContain('Votre position réelle le remplacera chez Bob, Dan, Eve et 1 autre personne.');
+  });
+
+  test('ceux que cet appareil ne connaît pas se comptent, au pluriel', async () => {
+    const dialog = await askToReplace([], { known: [{ userId: 'b'.repeat(24), name: 'Bob' }] });
+    expect(dialog?.textContent).toContain('chez Bob et 3 autres personnes.');
+  });
+
+  test('« Montrer ma position réelle » rejoue le même choix avec la question posée (#20126, #20248)', async () => {
+    const asked: Request[] = [];
+    await askToReplace(asked);
+    await click(document.querySelector<HTMLButtonElement>('[data-share-location-show-real]'));
+    await settle();
+    expect(asked.map((request) => request.replacing)).toEqual([undefined, ASKED]);
+    expect(asked[1]).toMatchObject({ precision: 'city', durationMinutes: 60 });
+    expect(document.querySelector('[data-share-location-replace-point]')).toBeNull();
+  });
 });

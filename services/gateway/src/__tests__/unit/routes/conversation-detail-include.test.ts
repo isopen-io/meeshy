@@ -38,6 +38,10 @@ describe('conversationDetailInclude (F1 participants cap + F8 strict select)', (
     const select = { ...participants.select };
     delete select.user;
     expect(Object.keys(select).sort()).toEqual([
+      // #20277 — la SURCHARGE de droits, pas un scalaire du wire : elle est lue
+      // pour que la ligne servie porte les droits RÉSOLUS, et elle est retirée
+      // avant le fil (`participantRowWithServedRights`).
+      'anonymousSession',
       'avatar',
       'displayName',
       'id',
@@ -52,6 +56,26 @@ describe('conversationDetailInclude (F1 participants cap + F8 strict select)', (
     ]);
   });
 
+  /**
+   * #20277 — l'instantané du join (`permissions`) NE SUFFIT PAS : la passerelle
+   * applique `anonymousSession.rights ?? permissions` (`resolveEntryRights`), et
+   * `PATCH …/participants/:id/rights` n'écrit QUE la surcharge. Sans cette
+   * projection, le détail sert un droit que le serveur refusera — et aucun
+   * témoin de VALEUR ne peut le voir : un double Prisma rend ce qu'on lui dit,
+   * quel que soit le `select`.
+   */
+  it('#20277 — projette la SURCHARGE de droits, et elle seule : rien du jeton ni du profil de l’invité', () => {
+    expect(participants.select.anonymousSession).toEqual({ select: { rights: true } });
+
+    const anonymousSelect = (participants.select.anonymousSession as { select: Record<string, unknown> }).select;
+    // Le retrait d'iter 35 (F8) tient : c'est le document EMBARQUÉ ENTIER qui
+    // reste dehors — le hash du jeton de session et l'identité de l'invité
+    // (`profile`) ne sont pas rehydratés pour 100 participants par ouverture.
+    for (const field of ['session', 'profile', 'shareLinkId']) {
+      expect(anonymousSelect[field]).toBeUndefined();
+    }
+  });
+
   it('#15717 — loads the ACCOUNT state (user.isActive) that composes accountClosed, and nothing else of the account lifecycle', () => {
     const userSelect = participants.select.user.select;
     expect(userSelect.isActive).toBe(true);
@@ -61,7 +85,10 @@ describe('conversationDetailInclude (F1 participants cap + F8 strict select)', (
   });
 
   it('never hydrates sensitive or dead participant fields (stripped from the wire anyway)', () => {
-    for (const field of ['sessionTokenHash', 'anonymousSession', 'shareLinkId', 'deletedForMe', 'leftAt', 'bannedAt', 'nickname', 'conversationId', 'language']) {
+    // `anonymousSession` a quitté cette liste avec #20277 : il est projeté, mais
+    // RÉDUIT à `rights` — le témoin voisin dit exactement ce qui entre et ce qui
+    // reste dehors.
+    for (const field of ['sessionTokenHash', 'shareLinkId', 'deletedForMe', 'leftAt', 'bannedAt', 'nickname', 'conversationId', 'language']) {
       expect(participants.select[field]).toBeUndefined();
     }
   });

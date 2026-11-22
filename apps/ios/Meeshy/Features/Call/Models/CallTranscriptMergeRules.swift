@@ -12,11 +12,17 @@ enum CallTranscriptMergeRules {
     ///    original est conservé, traduction/nom manquant viennent enrichir.
     /// Dans tous les cas `capturedAt` garde la valeur la plus ancienne (le
     /// début de l'énoncé — l'heure de capture réelle, jamais la réception).
+    /// La réception locale (`receivedAtMonotonic`, #20319) suit les révisions
+    /// jusqu'au FINAL, puis reste : la traduction se demande au final, son
+    /// attente part de la réception du final, et un re-final ne la relance pas.
     static func merged(
         existing: CallTranscriptionSegment, incoming: CallTranscriptionSegment
     ) -> CallTranscriptionSegment {
         let displayName = existing.speakerDisplayName ?? incoming.speakerDisplayName
         let capturedAt = min(existing.capturedAt, incoming.capturedAt)
+        let receivedAtMonotonic = existing.isFinal
+            ? existing.receivedAtMonotonic ?? incoming.receivedAtMonotonic
+            : incoming.receivedAtMonotonic ?? existing.receivedAtMonotonic
         if !existing.isFinal {
             return CallTranscriptionSegment(
                 id: existing.id,
@@ -31,7 +37,8 @@ enum CallTranscriptMergeRules {
                 language: incoming.language,
                 translatedText: incoming.translatedText ?? existing.translatedText,
                 translatedLanguage: incoming.translatedLanguage ?? existing.translatedLanguage,
-                capturedAt: capturedAt
+                capturedAt: capturedAt,
+                receivedAtMonotonic: receivedAtMonotonic
             )
         }
         guard incoming.isFinal else {
@@ -48,7 +55,8 @@ enum CallTranscriptMergeRules {
                 language: existing.language,
                 translatedText: existing.translatedText,
                 translatedLanguage: existing.translatedLanguage,
-                capturedAt: capturedAt
+                capturedAt: capturedAt,
+                receivedAtMonotonic: receivedAtMonotonic
             )
         }
         return CallTranscriptionSegment(
@@ -64,7 +72,8 @@ enum CallTranscriptMergeRules {
             language: existing.language,
             translatedText: incoming.translatedText ?? existing.translatedText,
             translatedLanguage: incoming.translatedLanguage ?? existing.translatedLanguage,
-            capturedAt: capturedAt
+            capturedAt: capturedAt,
+            receivedAtMonotonic: receivedAtMonotonic
         )
     }
 }

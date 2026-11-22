@@ -532,6 +532,96 @@ retombe sur `'fr'`, plusieurs sites sur `'en'`. Le garder au site rend visible l
 question produit — « quelle langue pour un compte sans AUCUNE préférence ? » — sans
 la mêler à un correctif de Prisme.
 
+## Toute porte qui sert les DROITS d'un participant sert l'ensemble RÉSOLU
+
+`Participant.permissions` est l'INSTANTANÉ pris au join ;
+`anonymousSession.rights` est le DELTA qu'un hôte pose sur CE participant, et il
+passe DEVANT. La loi est `services/participantRights.ts`
+(`resolveParticipantRights` → `resolveEntryRights` → `servedParticipantSendRights`),
+et `middleware/auth.ts` la fait respecter à chaque envoi.
+
+**Les deux colonnes DIVERGENT, par décision.** `PATCH …/participants/:id/rights`
+n'écrit QUE la surcharge : un droit ramené à sa valeur du join voit son entrée
+EFFACÉE, pour qu'une surcharge retirée fasse retomber le droit sur sa valeur
+d'origine (`participant-rights-core.ts`). Il n'y a donc **aucune écriture à
+aligner** — devant une lecture qui sert l'instantané, la seule réparation
+possible est de RÉSOUDRE. C'est le constat de #20277, où `GET /conversations/:id`
+— la lecture d'AMORCE que les trois clients montent à chaque ouverture de fil —
+servait l'instantané nu, pendant que `participant:rights-updated` servait le
+résolu : un tiroir de composeur qui s'ouvre puis se ferme à la première socket.
+
+**Et la divergence ment dans les DEUX sens.** Un droit RETIRÉ laissé à `true`
+offre une tuile pour un geste refusé en 403 ; un droit ACCORDÉ laissé à `false`
+cache une tuile pour un geste que le serveur accepte. Le second sens n'apparaît
+qu'une fois le premier corrigé — tant qu'aucun client ne lit les droits, le
+tiroir reste ouvert et le cas « accordé » marche par accident.
+
+> **Un lot qui met un client à lire une donnée hérite de la question de sa
+> JUSTESSE, et aussi de celle de son SENS D'ERREUR.**
+
+Deux pièges de mise en œuvre, tous deux mesurés :
+
+- **La projection ne coûte pas ce qu'on croit.** Charger `anonymousSession`
+  ENTIER rehydrate `sessionTokenHash` et l'identité de l'invité pour 100
+  participants par ouverture — ce qu'iter 35 (F8) avait retiré exprès. Mais
+  `anonymousSession: { select: { rights: true } }` ne ramène que huit booléens
+  d'un document **déjà lu** : une projection, pas une requête, pas une jointure.
+  **Avant d'arbitrer un périmètre sur un coût supposé, mesurer la projection
+  étroite** — ici l'arbitrage « la ligne de l'appelant ou toutes ? » a disparu.
+- **Le `select` est invisible à tout témoin de valeur** (§ Language Resolution,
+  troisième piège) : un double Prisma rend ce qu'on lui dit. Une lecture résolue
+  se garde par DEUX témoins — un de PROJECTION sur la requête, un de VALEUR sur
+  la réponse sérialisée — et aucun ne subsume l'autre.
+
+**`canViewHistory` n'est PAS un droit d'émission** : c'est un fait de MODÉRATION
+(#4056), retiré du push par #4009 et de la fiche par `disclosableEntryRights`.
+Il ne sort d'aucune ligne servie, et le retrait se fait À LA SOURCE —
+`servedParticipantSendRights` dérive son énumération de
+`PARTICIPANT_SEND_RIGHT_NAMES`, et `participantRowWithServedRights` retire la
+source de la surcharge, qui le porte. S'en remettre à l'omission de
+`conversationParticipantSchema` serait un piège armé, pas une protection.
+
+**Les lecteurs de cette loi ne se comptent pas sur le nom du champ.** #20277 a
+demandé « qui sert `permissions` ? » et a trouvé cinq lecteurs ; la question
+juste est « qui dit à un client ce qu'il a le droit d'envoyer ? », et elle en
+rend six — `serializeConversationParticipant` sert `canSendMessages` /
+`canSendFiles` / `canSendImages` **aplatis** depuis l'instantané, sur cinq sites
+dont la collection de SYNCHRONISATION et la diffusion `participant:role-updated`
+(dette mesurée : **#20292**).
+
+> **Une énumération de lecteurs d'une loi se fait sur ce que la loi DÉCIDE, pas
+> sur le nom du champ qui la porte.** Même famille que la leçon 261.
+
+### Un témoin de RETRAIT ne peut pas vivre derrière le sérialiseur
+
+La règle « un témoin de confidentialité assert sur la VALEUR SERVIE » (cycle 83)
+garde une **FUITE** : le sérialiseur y est en aval du défaut, donc si la clé sort
+c'est qu'elle a traversé, et le témoin tombe.
+
+Elle ne garde pas un **RETRAIT**. Quand le schéma ne déclare pas la clé,
+fast-json-stringify la supprime quoi que le code remette : un témoin de route ne
+distingue plus « le code a retiré » de « le schéma a supprimé », et c'est la
+seconde qui répond, parce qu'elle répond toujours. Mesuré en livrant #20277 — le
+témoin de route posé sur le retrait de `anonymousSession` est resté **VERT** sous
+la mutation qui rendait la fabrique bavarde.
+
+Le témoin d'un retrait vit donc au niveau de **l'objet, avant sérialisation** —
+la loi, la fabrique, le helper. Le témoin de route se garde quand même, comme le
+piège armé du cycle 84 (le jour où quelqu'un déclare la clé, c'est lui qui
+l'obligera à voir ce qu'il ouvre), **et son doc-comment ÉCRIT ce qu'il ne prouve
+pas** : un témoin dont la limite n'est pas écrite se lit comme une garde
+complète. Détail :
+`tasks/lessons/2026-11-22-un-temoin-de-non-fuite-derriere-un-serialiseur-qui-supprime-deja-la-cle.md`.
+
+### Et un `any` au site d'appel annule les lois de type qu'il traverse
+
+`participantRowWithServedRights` rend `Omit<T, 'anonymousSession'>`. Appelé sur
+un `any[]`, `Omit<any, …>` ne veut rien dire : le compilateur a perdu jusqu'à
+l'`id` de la ligne, et `membersServedToViewer<T extends { readonly id: string }>`
+l'a refusé (`TS2345`). La réparation n'est pas un cast mais un TYPE NOMMÉ dérivé
+du `select` qui produit la ligne — `ConversationDetailParticipantRow =
+Prisma.ParticipantGetPayload<…>`, la même forme que `ConversationListRow`.
+
 ## Toute porte qui sort un profil de TIERS filtre sa présence
 
 `select: { isOnline: true, lastActiveAt: true }` sur quelqu'un d'AUTRE que
@@ -737,7 +827,52 @@ co-appartenance ne vaut rien : la route passe TOUTES ses lignes par
 `resolveForTargets(viewer, ids)`, et `hasAccess` ne gouverne plus que la liste.
 Le seul régime est le strict ; la seule variable est le viewer.
 
-## Une audience de diffusion lit la participation VIVANTE — et le cliquet qui le garde balaie `src/` ENTIER
+## Une audience de diffusion lit la participation VIVANTE — et le cliquet qui le garde balaie DEUX paquets
+
+**La loi vit dans `@meeshy/shared/utils/participation-vivante` depuis #20111**,
+et `routes/conversations/utils/access-control.ts` la RÉ-EXPORTE sous le même nom
+— le cliquet la reconnaît à cette orthographe, et la renommer reclasserait son
+inventaire entier. Ce qui a forcé le déménagement : **`services/agent` lit
+`Participant` lui aussi et ne pouvait rien importer de la passerelle.** Ses
+trois lectures — les deux sélecteurs de membres DORMANTS, qui décident à la
+place de QUI l'agent va parler, et la MESURE qui élit les conversations à
+scanner — portaient `isActive` NU. Un membre actif-et-banni y était éligible :
+l'agent publiait un message signé de quelqu'un d'EXCLU dans le fil dont il est
+exclu — pas une fuite de lecture, une **INJECTION de contenu attribuée à une
+personne bannie**. `unsetOrNull` / `differsOrUnset` ont déménagé avec elle
+(`@meeshy/shared/utils/prisma-unset`) ; `src/utils/prisma-unset.ts` est une
+coquille de ré-export, et les **53 fichiers** de la passerelle qui importent
+ce chemin sont inchangés (mesuré ; `tsc` le prouve).
+
+**La portée du balayage est une LISTE DE RACINES, plus un `path.resolve`**, et
+elle NOMME ce qu'elle laisse dehors (`AUDIENCE_ROOTS` /
+`AUDIENCE_SCOPE`) : `services/gateway/src` (préfixe vide, l'orthographe
+historique) et `services/agent/src` (préfixe `@meeshy/agent/`).
+`services/translator` (Python, aucun client Prisma), `packages/shared` (qui
+DÉCLARE la loi et n'interroge rien) et `apps/*` (aucun client Prisma instancié)
+sont dehors parce qu'ils n'ont **aucune lecture à garder**.
+
+**`scripts/` en a, lui, et sa ligne a dû être réécrite** — 6 lectures de
+`Participant` dans 4 fichiers, dont `mesure-succession-plafonds.ts` qui porte une
+portée écrite sur `isActive` NU, c'est-à-dire exactement le discriminant du
+balayage. Sa raison de sortie n'est donc PAS « aucune lecture à garder » mais
+**« hors CI, aucune surface servie, aucune de ces lectures ne décide d'une
+autorisation »** : des outils de migration et de mesure qu'un humain lance à la
+main. C'est écrit dans une table, pas déduit d'un chemin, et une racine déclarée
+absente du disque JETTE.
+
+> **Une racine EXCLUE porte une raison, et la raison est une affirmation comme
+> les autres.** Le premier jet de cette table a écrit « aucun accès base » de
+> `scripts/` — faux, et faux précisément là où la leçon du lot demande que
+> l'exclusion soit « vérifiable ». Le remède n'est pas d'entrer la racine : la
+> bonne raison existait, elle n'avait pas été cherchée.
+
+> **#20091 avait déplacé la portée de `src/socketio/` à `src/` — d'un
+> RÉPERTOIRE, pas d'un PAQUET.** La leçon qu'il écrivait (« une portée est une
+> affirmation, et c'est celle que personne ne relit, parce qu'elle ne ressemble
+> pas à un inventaire ») valait d'un cran de plus que celui où il l'a appliquée.
+> Devant une portée corrigée, demander : **de quel cran l'a-t-on bougée, et
+> y a-t-il un cran au-dessus ?** Un `path.resolve` ne dit jamais où il s'arrête.
 
 `PARTICIPATION_VIVANTE` (`isActive: true` **et** `bannedAt` nul ou absent) est
 la loi que les portes d'accès DEVRAIENT épeler — et **elle n'est pas tenue
@@ -747,17 +882,77 @@ partout.** Le compte vit dans les témoins du cliquet
 écrit ici deux fois, et le cycle 195 l'a déplacé de ~100/~22 à 87/43 **sans que
 le dépôt change** — c'est le DISCRIMINANT qui avait changé. Un compte recopié
 dans un document dérive au premier élargissement de l'instrument qui le produit.
-Deux lectures comptent particulièrement,
-et ce sont des issues ouvertes, pas des détails : `POST /conversations/:id/messages`
-(`messages-send.ts`) n'appelle pas `canAccessConversation` et admet sur
-`isActive` nu — un banni-mais-actif peut encore ENVOYER — et `assertMember` du
-relais de signal E2EE fait de même.
 
 > **Ne pas lire la phrase « c'est la loi de toute porte » comme une mesure.**
 > C'est une cible. Le cycle 194 a écrit l'absolu ici, et son audit adversarial
 > l'a mesuré faux le jour même — un document qui dit vrai sur le principe et
 > faux sur l'état est plus coûteux qu'un document absent (§ cliquet de la table
 > des routes).
+
+**Et ce paragraphe l'a lui-même payé une seconde fois.** Il affirmait, jusqu'au
+cycle 202, que `POST /conversations/:id/messages` (`messages-send.ts`) « admet
+sur `isActive` nu — un banni-mais-actif peut encore ENVOYER ». **Mesuré FAUX**
+(#20183) : la clause nue de ce fichier est un RÉSOLVEUR d'identifiant, et
+l'autorisation vit en aval — `MessagingService.handleMessage` relit la ligne
+(`findUnique`, `bannedAt` PROJETÉ) et refuse (#10440) ; le cache de lecture
+porte `bannedAt` et les deux sites de bannissement l'invalident
+(`participant-ban-core.ts`) ; la branche ANONYME, qui ne lit rien du tout, tombe
+sur la même garde plus le contrôle `p.conversationId !== conversationId` et les
+refus de `ensureParticipantFromMember` (#10443, #16724). La même phrase vit dans
+#20093, qui en est la source.
+
+> **Une clause nue n'est pas une fuite — « un audit qui liste des `select:` ne
+> liste pas des fuites » vaut aussi des `where:`.** La question n'est pas
+> « cette clause est-elle la bonne ? » mais **« qui AUTORISE ce que cette clause
+> rend ? »**, et il faut suivre la valeur jusqu'au site qui refuse. Une porte
+> que deux documents déclarent ouverte envoie réparer ce qui tient, et détourne
+> des six qui ne tenaient pas (voir le § suivant).
+
+**CINQ portes de la famille des LIENS DE PARTAGE étaient bien nues, et elles
+sont fermées** (#20183, cycle 202) : la FABRICATION d'un lien
+(`share-link-mint.ts`, les deux routes), les deux LISTES **avec
+`?conversationId=`** (`GET /conversations/:id/links`,
+`GET /links?conversationId=`), la FICHE d'un lien
+(`findActiveUserParticipant`) et ses MESSAGES (`messages-retrieval.ts`).
+#20135 n'avait fermé que l'ADMINISTRATION d'un lien ; la fabrication est la plus
+grave des cinq — un lien fabriqué par un banni n'a aucun passé, donc rien à
+refuser à l'inconnu qui l'emprunte : **le bannissement se contourne par
+procuration.** (Au présent : voir la dette ci-dessous.)
+
+**La famille n'est PAS fermée, et le dire au passé serait la troisième fois que
+ce paragraphe se trompe sur l'état.** Ce que l'audit adversarial du lot a
+mesuré, et qui reste OUVERT :
+
+- **Le CRÉATEUR d'un lien garde ses droits même banni** — `isCreator` de
+  `loadShareLinkForManagement` nomme l'appelant par une colonne de PROPRIÉTÉ
+  (`ConversationShareLink.createdBy`), sans lire aucune participation. C'est une
+  DÉCISION du cycle 200, gelée par un témoin
+  (`links-admin-host-not-creator.test.ts` § « sert le CRÉATEUR du lien même
+  banni »), et ce lot ne la retourne PAS. Mais l'audit a mesuré qu'elle couvre
+  plus que sa propre justification (« le droit sur son PROPRE lien ») : elle
+  porte `/toggle` — **réactiver un lien qu'un admin vient de désactiver** — et
+  `/arrivals` — le nom, le pays, la langue et la date de CHAQUE arrivée, y
+  compris après son bannissement — et le bannissement **ne désactive pas les
+  liens que la cible a créés** (`participant-ban-core.ts` ne ferme que le lien
+  par lequel elle est ENTRÉE). Avec `GET /links` **sans** `?conversationId=`,
+  qui sert au banni le `linkId` de ses propres liens sans aucun contrôle
+  d'appartenance, la chaîne est complète. **Issue de décision produit : #20189.**
+- **La fiche d'un lien reste lisible par l'aperçu public** (`canPreview`), et le
+  salon GLOBAL « meeshy » est admis inconditionnellement pour tout compte
+  authentifié. Le resserrement de la porte 4 retire le grant de MEMBRE, pas ces
+  deux-là — c'est écrit sur le site.
+- **La porte de l'INVITÉ anonyme n'était pas nue au sens utile** : son
+  autorisation vit en aval (`guestAccessEnd`, #10470). Le lot l'avait comptée
+  parmi ses portes et resserrée ; mesuré, c'était un no-op de sécurité ET une
+  régression de l'ORDRE UNIQUE des causes (#10457). **Reverti**, avec un témoin
+  qui tombe si quelqu'un le rejoue.
+
+> **Et le lot a commis, dans le même commit, l'erreur qu'il venait de
+> documenter deux paragraphes plus haut.** Il a corrigé l'affirmation fausse sur
+> `messages-send.ts` — « qui AUTORISE ce que cette clause rend ? » — puis compté
+> une sixième porte dont l'autorisation vivait en aval, dans le même fichier,
+> soixante-dix lignes plus bas. **Écrire une règle ne l'applique pas au lot qui
+> l'écrit** : la relire contre son propre diff est une étape, pas une évidence.
 
 Les DIFFUSEURS la doivent aussi, et la distinction qui décide du sens d'un
 correctif est celle-ci (#16690) :
@@ -769,8 +964,12 @@ correctif est celle-ci (#16690) :
 | **COMBIEN ils sont** (mesure) | afficher un nombre | dire ce que le nombre alimente ; la troncature et le sur-comptage y sont des nombres FAUX, pas des fuites |
 
 Une ligne `isActive: true, bannedAt ≠ null` **existe en base** : son producteur
-est fermé (#19688, #10436), aucune migration n'a repris les lignes existantes,
-et sa room `user:<id>` est rejointe INCONDITIONNELLEMENT.
+est fermé (#19688, #10436), la migration qui reprendrait les lignes existantes
+EXISTE (#16690,
+`packages/shared/prisma/migrations/2026-11-07-participant-active-and-banned.mongodb.js`)
+et n'a été exécutée NULLE PART, et sa room `user:<id>` est rejointe
+INCONDITIONNELLEMENT. **La population n'est donc pas mesurée** : ce que ce §
+décrit est un risque instruit, jamais un incident constaté.
 
 **Le cliquet voit DEUX formes d'audience depuis #20100**, et la seconde n'a pas de
 portée à lire :

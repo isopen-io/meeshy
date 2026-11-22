@@ -120,6 +120,17 @@ public enum GameFlame {
         Double(bonusPercent(forDays: days)) / 100
     }
 
+    /// La clé de guide du moment « Une Veilleuse t'est offerte » : vue une fois, gardée par `game.guideSeen`.
+    public static let freezeGiftSeenKey = "flame-freeze-gift"
+
+    /// Le moment du cadeau se montre le jour où la première Veilleuse est offerte (`flame.freezeGifted`, servi par la
+    /// passerelle), une seule fois. Un serveur antérieur ne sert pas le champ : rien ne se montre.
+    /// Miroir d'`announcesFreezeGift` (`packages/shared/utils/game/flame.ts`).
+    public static func announcesFreezeGift<Seen: Sequence>(freezeGifted: Bool?, guideSeen: Seen) -> Bool
+        where Seen.Element == String {
+        freezeGifted == true && !guideSeen.contains(freezeGiftSeenKey)
+    }
+
     /// `nil` quand l'achat est permis, sinon la raison du refus.
     public static func freezeRefusal(freezes: Int, balance: Int) -> FreezeRefusal? {
         if max(0, freezes) >= freezeMax { return .atMaximum }

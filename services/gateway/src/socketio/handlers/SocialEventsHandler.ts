@@ -13,6 +13,7 @@ import { emitServerEvent, type ServerEventName, type ServerEventPayload } from '
 import { withAudienceListFor, withoutAudienceList } from '../../services/posts/audienceList';
 import { withServedCarrierMedia, withServedPostMedia } from '../../services/posts/servedPostMedia';
 import { withoutBlockedRecipients } from '../../utils/blocking';
+import { createSeparatedRoomsResolver, type SeparatedRoomsResolver } from '../separatedRooms';
 import { amisAcceptes } from '../../services/friendship';
 import { circleAudienceIds } from '../../services/posts/postAudience';
 import { POST_CIRCLE_VISIBILITIES, postCircleAudienceFloor } from '@meeshy/shared/utils/relation-levels';
@@ -99,6 +100,16 @@ export interface SocialEventsHandlerDependencies {
   prisma: PrismaClient;
 }
 
+/**
+ * L'auteur d'un commentaire diffusé. Les producteurs le SÉLECTIONNENT sous
+ * `author` (`CREATED_COMMENT_SELECT`, `updateComment`, `PostAudioService`) et
+ * jamais à plat : lire `authorId` seul ne trouverait personne, et la diffusion
+ * partirait sans filtre (#20216). `authorId` reste lu pour une charge qui le porte.
+ */
+export function commentAuthorIdOf(comment: { readonly author?: { readonly id?: string } | null; readonly authorId?: string } | null | undefined): string | undefined {
+  return comment?.author?.id ?? comment?.authorId;
+}
+
 export class SocialEventsHandler {
   private io: SocketIOServer;
   private prisma: PrismaClient;
@@ -107,9 +118,13 @@ export class SocialEventsHandler {
   private friendsCache: Map<string, { ids: string[]; expiresAt: number }> = new Map();
   private readonly FRIENDS_CACHE_TTL_MS = 30_000; // 30s
 
+  /** La séparation autour des sujets d'une diffusion d'ACTIVITÉ (#20236) — deux lectures pour N sujets, cache court. */
+  private readonly separatedRooms: SeparatedRoomsResolver;
+
   constructor(deps: SocialEventsHandlerDependencies) {
     this.io = deps.io;
     this.prisma = deps.prisma;
+    this.separatedRooms = createSeparatedRoomsResolver({ prisma: deps.prisma });
   }
 
   // ==============================================
@@ -624,6 +639,43 @@ export class SocialEventsHandler {
   }
 
   /**
+   * L'émetteur d'un événement qui porte le CONTENU d'un commentaire (#20216) :
+   * les rooms du fil, moins la room personnelle de chaque compte qu'un blocage
+   * sépare du COMMENTATEUR, dans un sens ou dans l'autre — la loi de la liste
+   * REST (#20205), appliquée au direct. Sans elle, qui a bloqué B et garde le
+   * détail du post ouvert recevait le commentaire de B dans la room du post.
+   *
+   * Fermé : une lecture des blocages qui échoue rend `null`, et l'appelant
+   * n'émet rien — le lecteur relira le fil par le REST, qui sait quoi taire.
+   * Un commentateur inconnu n'a personne à taire.
+   */
+  private async commentEmitter(rooms: string | string[], commentAuthorId: string | null | undefined) {
+    const separated = await this.separatedRooms.roomsAround([commentAuthorId], { keep: commentAuthorId });
+    return separated === null ? null : this.exceptSeparated(rooms, separated);
+  }
+
+  /** La cible, moins les rooms que la loi nomme — aucun `except()` quand il n'y a rien à taire. */
+  private exceptSeparated(rooms: string | string[], separated: readonly string[]) {
+    const target = this.io.to(rooms);
+    return separated.length > 0 ? target.except([...separated]) : target;
+  }
+
+  /**
+   * **LA SÉPARATION AUTOUR D'UNE ACTIVITÉ DE COMMENTAIRE** (#20236), résolue
+   * par l'APPELANT, AVANT sa mutation, et passée aux deux diffusions.
+   *
+   * Ce n'est pas une commodité : rendre ces diffusions asynchrones décorrélait
+   * l'ORDRE du fil de l'ordre des écritures, et leur charge est ABSOLUE
+   * (`likeCount`) — un `comment:unliked` qui double son `comment:liked` fige
+   * chez le lecteur un compteur que la base contredit, et iOS le PERSISTE.
+   * Résolue avant l'écriture, l'émission redevient synchrone juste après elle
+   * (audit adversarial du lot).
+   */
+  commentActivitySeparation(actorId: string, commentAuthorId: string | null | undefined): Promise<readonly string[] | null> {
+    return this.separatedRooms.roomsAround([actorId, commentAuthorId], { keep: actorId });
+  }
+
+  /**
    * Recipients of a comment-scoped event = the feed rooms allowed by the POST's
    * visibility (NOT the author's full friend list) + the post author + the
    * join-gated post room. Without the visibility filter, a comment on an
@@ -641,8 +693,8 @@ export class SocialEventsHandler {
     visibilityUserIds: string[],
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
-    const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
-    this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_ADDED, { ...data, comment: withServedCarrierMedia(data.comment) });
+    const emitter = await this.commentEmitter(this.commentBroadcastRooms(recipients, postAuthorId, data.postId), commentAuthorIdOf(data.comment));
+    emitter?.emit(SERVER_EVENTS.COMMENT_ADDED, { ...data, comment: withServedCarrierMedia(data.comment) });
   }
 
   /**
@@ -659,8 +711,8 @@ export class SocialEventsHandler {
     visibilityUserIds: string[],
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
-    const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
-    this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_UPDATED, { ...data, comment: withServedCarrierMedia(data.comment) });
+    const emitter = await this.commentEmitter(this.commentBroadcastRooms(recipients, postAuthorId, data.postId), commentAuthorIdOf(data.comment));
+    emitter?.emit(SERVER_EVENTS.COMMENT_UPDATED, { ...data, comment: withServedCarrierMedia(data.comment) });
   }
 
   async broadcastCommentDeleted(
@@ -674,14 +726,37 @@ export class SocialEventsHandler {
     this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_DELETED, data);
   }
 
-  broadcastCommentLiked(data: CommentLikedEventData, commentAuthorId: string): void {
-    this.emitToUser(commentAuthorId, SERVER_EVENTS.COMMENT_LIKED, data);
-    // Reach every viewer of the post detail (join-gated post room) so the
-    // comment's like count updates live for them too — not just the comment
-    // author. Payload is ABSOLUTE (likeCount) → idempotent even if the comment
-    // author is in both their feed room and the post room. Mirrors
-    // `broadcastPostLiked`.
-    this.io.to(ROOMS.post(data.postId)).emit(SERVER_EVENTS.COMMENT_LIKED, data);
+  broadcastCommentLiked(data: CommentLikedEventData, commentAuthorId: string, separated: readonly string[] | null): void {
+    this.emitCommentActivity(SERVER_EVENTS.COMMENT_LIKED, data, commentAuthorId, separated);
+  }
+
+  /**
+   * LES DEUX ADRESSES D'UNE ACTIVITÉ DE COMMENTAIRE, sous la même loi (#20236).
+   *
+   * 1. la FEED room de l'auteur — « ton commentaire reçoit un cœur » ;
+   * 2. la room du POST, où lisent les autres : la charge est ABSOLUE
+   *    (`likeCount`), donc idempotente si l'auteur est dans les deux.
+   *
+   * **La première n'est PAS exemptée.** Elle l'était, au motif que la porte de
+   * l'action aurait déjà refusé un acteur séparé de l'auteur — mesuré FAUX :
+   * retirer sa réaction reste permis après un blocage (décision écrite), donc
+   * `DELETE …/like` et `comment:reaction-remove` n'ont pas cette porte, et
+   * l'auteur se voyait annoncer l'activité de qui il a bloqué.
+   *
+   * `separated === null` (lecture impossible) tait les DEUX adresses : un
+   * fail-closed partiel n'est pas un fail-closed.
+   */
+  private emitCommentActivity(
+    event: typeof SERVER_EVENTS.COMMENT_LIKED | typeof SERVER_EVENTS.COMMENT_UNLIKED,
+    data: CommentLikedEventData | CommentUnlikedEventData,
+    commentAuthorId: string,
+    separated: readonly string[] | null,
+  ): void {
+    if (separated === null) return;
+    if (!separated.includes(ROOMS.user(commentAuthorId))) {
+      emitServerEvent(this.io.to(ROOMS.feed(commentAuthorId)), event, data as SocialEventPayload<typeof event>);
+    }
+    emitServerEvent(this.exceptSeparated(ROOMS.post(data.postId), separated), event, data as SocialEventPayload<typeof event>);
   }
 
   /**
@@ -695,9 +770,8 @@ export class SocialEventsHandler {
    * PERSISTE la valeur reçue, si bien que le compte gonflé survivait au
    * redémarrage. Calque de `post:liked` / `post:unliked`.
    */
-  broadcastCommentUnliked(data: CommentUnlikedEventData, commentAuthorId: string): void {
-    this.emitToUser(commentAuthorId, SERVER_EVENTS.COMMENT_UNLIKED, data);
-    this.io.to(ROOMS.post(data.postId)).emit(SERVER_EVENTS.COMMENT_UNLIKED, data);
+  broadcastCommentUnliked(data: CommentUnlikedEventData, commentAuthorId: string, separated: readonly string[] | null): void {
+    this.emitCommentActivity(SERVER_EVENTS.COMMENT_UNLIKED, data, commentAuthorId, separated);
   }
 
   // ==============================================
@@ -720,15 +794,20 @@ export class SocialEventsHandler {
     this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_TRANSLATION_UPDATED, data);
   }
 
+  /**
+   * `commentAuthorId` : la charge ne nomme pas le commentateur, l'appelant le
+   * passe pour que la traduction se taise chez qui en est séparé (#20216).
+   */
   async broadcastCommentTranslationUpdated(
     data: CommentTranslationUpdatedEventData,
     postAuthorId: string,
     visibility: string | null | undefined,
     visibilityUserIds: string[],
+    commentAuthorId?: string | null,
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
-    const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
-    this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, data);
+    const emitter = await this.commentEmitter(this.commentBroadcastRooms(recipients, postAuthorId, data.postId), commentAuthorId);
+    emitter?.emit(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, data);
   }
 
   /**
@@ -744,8 +823,8 @@ export class SocialEventsHandler {
     visibilityUserIds: string[],
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
-    const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
-    this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_MEDIA_UPDATED, { ...data, comment: withServedCarrierMedia(data.comment) });
+    const emitter = await this.commentEmitter(this.commentBroadcastRooms(recipients, postAuthorId, data.postId), commentAuthorIdOf(data.comment));
+    emitter?.emit(SERVER_EVENTS.COMMENT_MEDIA_UPDATED, { ...data, comment: withServedCarrierMedia(data.comment) });
   }
 
   /**
@@ -761,11 +840,12 @@ export class SocialEventsHandler {
     postAuthorId: string,
     visibility: string | null | undefined,
     visibilityUserIds: string[],
+    commentAuthorId?: string | null,
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
     if (data.commentId) {
-      const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
-      this.io.to(rooms).emit(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, data);
+      const emitter = await this.commentEmitter(this.commentBroadcastRooms(recipients, postAuthorId, data.postId), commentAuthorId);
+      emitter?.emit(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, data);
       return;
     }
     this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, data);
@@ -781,11 +861,12 @@ export class SocialEventsHandler {
     postAuthorId: string,
     visibility: string | null | undefined,
     visibilityUserIds: string[],
+    commentAuthorId?: string | null,
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
     if (data.commentId) {
-      const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
-      this.io.to(rooms).emit(SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, data);
+      const emitter = await this.commentEmitter(this.commentBroadcastRooms(recipients, postAuthorId, data.postId), commentAuthorId);
+      emitter?.emit(SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, data);
       return;
     }
     this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, data);

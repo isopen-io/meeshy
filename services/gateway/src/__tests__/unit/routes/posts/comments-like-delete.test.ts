@@ -105,9 +105,11 @@ async function buildApp(
   const prisma = {
     postComment: {
       findUnique: jest.fn().mockResolvedValue({ content: 'hi' }),
-      // La cible d'un DELETE se relit par `select: { authorId, postId }` (#11149).
+      // La cible d'un DELETE se relit par `select: { authorId, postId }` (#11149) ;
+      // la tranche d'ACL (`loadCommentPostAcl`) se reconnaît à `select.post`, et
+      // porte aussi l'auteur du commentaire depuis #20216 (aucun blocage ici).
       findFirst: jest.fn().mockImplementation(async (args: any) =>
-        args?.select?.authorId ? { authorId: commentAuthorId, postId: POST_ID } : { postId: POST_ID, post: publicAcl }),
+        args?.select?.post ? { postId: POST_ID, authorId: commentAuthorId, post: publicAcl } : { authorId: commentAuthorId, postId: POST_ID }),
     },
     post: {
       findUnique: jest.fn().mockResolvedValue(null),
@@ -115,6 +117,7 @@ async function buildApp(
     },
     user: {
       findUnique: jest.fn().mockResolvedValue({ role: opts.commentAuthorRole ?? 'USER', systemLanguage: 'fr' }),
+      findFirst: jest.fn().mockResolvedValue(null),
     },
     adminAuditLog: { create: jest.fn().mockResolvedValue({ id: 'audit-1' }) },
   } as any;
@@ -235,7 +238,10 @@ describe('POST /posts/:postId/comments/:commentId/like — adresse de diffusion'
     broadcastCommentLiked = jest.fn() as jest.Mock;
     createCommentLikeNotification = jest.fn().mockResolvedValue(undefined) as jest.Mock;
     app.decorate('prisma', prisma);
-    app.decorate('socialEvents', { broadcastCommentLiked } as any);
+    /* `commentActivitySeparation` depuis #20236 : la route la lit AVANT sa
+       mutation et en passe le résultat à la diffusion — un double muet ferait
+       lever le site d'appel. `[]` = personne à taire. */
+    app.decorate('socialEvents', { broadcastCommentLiked, commentActivitySeparation: jest.fn(async () => []) } as any);
     app.decorate('notificationService', { createCommentLikeNotification } as any);
     registerCommentRoutes(app, prisma, makeRequiredAuth(true));
     await app.ready();
@@ -259,6 +265,9 @@ describe('POST /posts/:postId/comments/:commentId/like — adresse de diffusion'
     expect(broadcastCommentLiked).toHaveBeenCalledWith(
       expect.objectContaining({ postId: REAL_POST_ID, commentId: COMMENT_ID }),
       LIKE_RESULT.authorId,
+      /* 3e argument depuis #20236 : la séparation, résolue AVANT la mutation et
+         passée à la diffusion pour que celle-ci reste synchrone après elle. */
+      [],
     );
   });
 
@@ -359,7 +368,7 @@ describe('DELETE /posts/:postId/comments/:commentId/like — diffusion', () => {
     } as any;
     broadcastCommentUnliked = jest.fn() as jest.Mock;
     app.decorate('prisma', prisma);
-    app.decorate('socialEvents', { broadcastCommentUnliked } as any);
+    app.decorate('socialEvents', { broadcastCommentUnliked, commentActivitySeparation: jest.fn(async () => []) } as any);
     registerCommentRoutes(app, prisma, makeRequiredAuth(true));
     await app.ready();
   });
@@ -384,6 +393,7 @@ describe('DELETE /posts/:postId/comments/:commentId/like — diffusion', () => {
         likeCount: 0,
       }),
       UNLIKE_RESULT.authorId,
+      [],
     );
   });
 

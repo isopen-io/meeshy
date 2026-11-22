@@ -14,7 +14,7 @@ class FocalCallNoticeTest {
         duration: Int = 49,
         live: Boolean = false,
         endedByInitiator: Boolean? = null,
-        bytes: Int? = null,
+        bytes: Long? = null,
     ) = CallSummaryMetadata(
         callId = "c1", initiatorId = "u1", callType = type, outcome = outcome, durationSeconds = duration,
         bytesTotal = bytes, bytesEstimated = false, networkQuality = null, isLive = live, endedByInitiator = endedByInitiator,

@@ -108,3 +108,55 @@ describe('pendant que l’écran est ouvert', () => {
     expect(transitionGuideEventsV2(view(gameBlockFixture()), view()).map((e) => e.kind)).toEqual([]);
   });
 });
+
+describe('la première Veilleuse offerte (#20169)', () => {
+  const gifted = (game: NonNullable<EngagementWithGame['game']>, freezeGifted: boolean | undefined) => ({
+    ...game,
+    flame: { ...game.flame, freezes: 1, ...(freezeGifted === undefined ? {} : { freezeGifted }) },
+  });
+
+  test('le jour du cadeau, l’ouverture le dit, une seule fois', () => {
+    const game = gifted(gameBlockFixture(), true);
+    expect(standingGuideEventsV2(game, new Set())).toContainEqual({ kind: 'flame-freeze-gift', freezes: 1 });
+    expect(standingGuideEventsV2({ ...game, guideSeen: ['flame-freeze-gift'] }, new Set()).map((e) => e.kind)).not.toContain('flame-freeze-gift');
+    expect(standingGuideEventsV2(game, new Set(['flame-freeze-gift'])).map((e) => e.kind)).not.toContain('flame-freeze-gift');
+  });
+
+  test('un autre jour, ou un serveur antérieur : rien', () => {
+    expect(standingGuideEventsV2(gifted(gameBlockFixture(), false), new Set())).toEqual([]);
+    expect(standingGuideEventsV2(gifted(gameBlockFixture(), undefined), new Set())).toEqual([]);
+  });
+
+  test('le cadeau qui arrive pendant que l’écran est ouvert se dit aussitôt', () => {
+    const before = withGame((game) => gifted(game, false));
+    const after = withGame((game) => gifted(game, true));
+    expect(transitionGuideEventsV2(before, after)).toContainEqual({ kind: 'flame-freeze-gift', freezes: 1 });
+    expect(transitionGuideEventsV2(after, after).map((e) => e.kind)).not.toContain('flame-freeze-gift');
+  });
+});
+
+describe('l’Offrande gardée par les aïeux, le jour du retour (#20327)', () => {
+  const kept = (game: NonNullable<EngagementWithGame['game']>, status: 'locked' | 'ready' | 'claimed', keptFlag: boolean | undefined) => ({
+    ...game,
+    chest: { ...game.chest, status, ...(keptFlag === undefined ? {} : { kept: keptFlag }) },
+  });
+
+  test('tant qu’elle est prête, chaque ouverture le dit, avec les trois jours de Rêve allégé', () => {
+    const game = kept(gameBlockFixture(), 'ready', true);
+    expect(standingGuideEventsV2(game, new Set())).toContainEqual({ kind: 'offering-kept', easedDays: 3 });
+    expect(standingGuideEventsV2(game, new Set(['offering-kept']))).toContainEqual({ kind: 'offering-kept', easedDays: 3 });
+  });
+
+  test('ouverte, un autre jour, ou un serveur antérieur : rien', () => {
+    expect(standingGuideEventsV2(kept(gameBlockFixture(), 'claimed', true), new Set())).toEqual([]);
+    expect(standingGuideEventsV2(kept(gameBlockFixture(), 'ready', false), new Set())).toEqual([]);
+    expect(standingGuideEventsV2(kept(gameBlockFixture(), 'ready', undefined), new Set())).toEqual([]);
+  });
+
+  test('prête pendant que l’écran est ouvert : dite aussitôt, une fois', () => {
+    const before = withGame((game) => kept(game, 'locked', true));
+    const after = withGame((game) => kept(game, 'ready', true));
+    expect(transitionGuideEventsV2(before, after)).toContainEqual({ kind: 'offering-kept', easedDays: 3 });
+    expect(transitionGuideEventsV2(after, after).map((e) => e.kind)).not.toContain('offering-kept');
+  });
+});

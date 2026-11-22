@@ -81,7 +81,7 @@ import { useNewerMessages } from '@/lib/view/use-newer-messages';
 import { useReadTracking } from '@/lib/view/use-read-tracking';
 import { AfterReadSeenContext, useAfterReadConsumption } from '@/lib/view/use-after-read-consumption';
 import { useEngagementRevalidation } from '@/lib/view/use-conversation-engagement';
-import { selfSenderOf } from '@/lib/view/self-sender';
+import { selfSenderOf, viewerParticipationOf } from '@/lib/view/self-sender';
 import { resumeThreadTarget, useUnreadBoundary } from '@/lib/view/unread-boundary';
 import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
 import { threadAnchorOf } from '@/lib/view/thread-anchor';
@@ -177,14 +177,14 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
   const storyRingOf = useAuthorStoryRings(viewer);
 
   /**
-   * LE `Participant` DU LECTEUR DANS cette conversation (#5813, étape 8) —
-   * calculé ICI, AVANT les retours anticipés (`useSend` en a besoin) : la
-   * charge que `sender` exige sur un message ENVOYÉ (avatar, présence…).
-   * `conversation` peut être `undefined` pendant `pending`/`refused`/`error`
-   * (F8) — le résultat est alors `undefined`, sans conséquence tant que le
-   * rendu final ne montre pas encore le fil réel.
+   * LE `Participant` DU LECTEUR (#5813, étape 8) — AVANT les retours anticipés,
+   * par la LOI des deux colonnes (`viewerParticipationOf`, #20264 : un `find`
+   * sur `userId` seul ne trouve JAMAIS la ligne d'un visiteur de lien, et le
+   * tiroir du composeur lisait cette absence « tout est autorisé »). Ce fil en
+   * prend les DROITS ; `selfSenderOf` en prend l'auteur d'un envoi en vol.
+   * `undefined` pendant `pending`/`refused`/`error` (F8), sans conséquence.
    */
-  const viewerParticipant = useMemo(() => conversation?.participants.find((p) => p.userId === viewer.id), [conversation, viewer.id]);
+  const viewerParticipant = useMemo(() => viewerParticipationOf({ participants: conversation?.participants, viewer }), [conversation, viewer]);
   /** L'auteur d'un envoi en vol : un invité y porte le nom qu'il a donné (#10120). */
   const selfSender = useMemo(() => selfSenderOf({ participants: conversation?.participants, viewer }), [conversation, viewer]);
   const composerAccess = useComposerAccess({ session, conversationId, conversation, viewerId: viewer.id, rights: viewerParticipant?.permissions });
@@ -300,7 +300,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    * (`readerLocale`), qui décrit qui LIT, pas qui ÉCRIT.
    */
   const { pending, deliveryOf, startedAtOf, reasonOf, permanentOf, send, retry, discard } = useSend({
-    conversationId,
+    conversationId, conversation,
     viewerId: viewer.id ?? '',
     ...(selfSender === undefined ? {} : { sender: selfSender }),
     announce: announcer.announce,

@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useStore } from 'zustand/react';
 
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 
@@ -6,11 +7,13 @@ import type { Conversation } from '@/lib/api/types';
 import type { SessionState } from '@/lib/api/session';
 import { titleOf } from '@/lib/view/conversation';
 
+import { composerRefills, type ComposerRefill } from './composer-refill';
 import { guestAttachmentKindsFor, type GuestAttachments } from './guest-attachment-policy';
 
 export type ComposerAccess = {
   readonly rights?: ParticipantPermissions;
   readonly guestAttachments?: GuestAttachments;
+  readonly refill?: ComposerRefill;
 };
 
 /**
@@ -18,7 +21,8 @@ export type ComposerAccess = {
  * lecteur, et pour l'invité d'un lien restreint par famille (World Wide :
  * `.txt` et audio) ses familles avec le titre du fil. MÉMOÏSÉ : `Composer` est
  * un `memo`, et des props reconstruites à chaque rendu du fil le
- * redessineraient à chaque frappe d'un pair.
+ * redessineraient à chaque frappe d'un pair. Le texte d'un envoi redirigé qui
+ * a échoué (#20075) revient au composeur de SA conversation (`refill`).
  */
 export function useComposerAccess(params: {
   readonly session: SessionState;
@@ -31,12 +35,14 @@ export function useComposerAccess(params: {
   const kinds = guestAttachmentKindsFor(session, conversationId);
   const kindsKey = kinds === null ? null : kinds.join(',');
   const title = conversation === undefined || kinds === null ? '' : titleOf(conversation, viewerId ?? '');
+  const refill = useStore(composerRefills, (state) => (state.refill?.conversationId === conversationId ? state.refill : null));
   return useMemo(
     () => ({
       ...(rights === undefined ? {} : { rights }),
       ...(kinds === null ? {} : { guestAttachments: { kinds, title } }),
+      ...(refill === null ? {} : { refill: { text: refill.text, attachments: refill.attachments, place: refill.place, consume: () => composerRefills.setState({ refill: null }) } }),
     }),
     // `kinds` se compare par sa VALEUR (`kindsKey`) : la session restaurée en rend un tableau neuf.
-    [rights, kindsKey, title],
+    [rights, kindsKey, title, refill],
   );
 }

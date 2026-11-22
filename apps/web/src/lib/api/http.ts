@@ -101,6 +101,12 @@ export type ApiFailure = {
    * métier ; `decodeEmailOwner` (`email-owner.ts`) le valide là où il sert.
    */
   readonly emailOwner?: unknown;
+  /**
+   * LES MEMBRES SANS APPAREIL CHIFFRÉ d'un `409 E2EE_PARTICIPANT_WITHOUT_DEVICE`
+   * (#20073), posés à la racine par la bascule de chiffrement ; la création
+   * d'un tête-à-tête ne nomme personne et ne pose pas la clé (#20075).
+   */
+  readonly withoutDeviceUserIds?: readonly string[];
 };
 
 export type ApiSuccess<T> = {
@@ -310,6 +316,11 @@ function suggestionsOf(envelope: Record<string, unknown>): readonly string[] {
   return brut.filter((valeur): valeur is string => typeof valeur === 'string');
 }
 
+function withoutDeviceUserIdsOf(envelope: Record<string, unknown>): readonly string[] | undefined {
+  const brut = envelope.withoutDeviceUserIds;
+  return Array.isArray(brut) ? brut.filter((valeur): valeur is string => typeof valeur === 'string') : undefined;
+}
+
 function fieldOf(envelope: Record<string, unknown>): string | undefined {
   if (typeof envelope.field === 'string') return envelope.field;
   if (Array.isArray(envelope.details)) {
@@ -476,6 +487,7 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
     if (guestEnd !== null) options.onGuestAccessEnded?.(guestEnd);
 
     const field = fieldOf(envelope);
+    const withoutDeviceUserIds = withoutDeviceUserIdsOf(envelope);
     return {
       ok: false,
       status: response.status,
@@ -488,6 +500,7 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
         ? { suggestedNickname: envelope.suggestedNickname }
         : {}),
       ...(envelope.emailOwner !== undefined && envelope.emailOwner !== null ? { emailOwner: envelope.emailOwner } : {}),
+      ...(withoutDeviceUserIds === undefined ? {} : { withoutDeviceUserIds }),
     };
   }
 

@@ -185,7 +185,7 @@ extension CallStats {
             "currentRoundTripTime", "availableOutgoingBitrate",
             "packetsLost", "packetsReceived",
             "packetsSent", "bytesSent", "bytesReceived", "jitter", "audioLevel",
-            "nominated", "freezeCount", "totalFreezesDuration", "framesPerSecond",
+            "nominated", "priority", "freezeCount", "totalFreezesDuration", "framesPerSecond",
             "jitterBufferDelay", "jitterBufferEmittedCount", "concealedSamples", "nackCount", "pliCount"
         ]
 
@@ -226,30 +226,54 @@ extension CallStats {
         return candidateTypes.contains("relay")
     }
 
-    /// #20098 — the SELECTED ICE pair, always a `candidate-pair`: the one the
-    /// transport's `selectedCandidatePairId` names, else (that id absent or
-    /// naming an entry of another type) the nominated succeeded pair; `nil`
-    /// otherwise. Route, RTT and available outgoing bitrate all read it, as on
-    /// Android (`CallStats.selectedCandidatePair`, #19953).
+    /// #20098 — the SELECTED ICE pair, always a `candidate-pair`: the one named
+    /// by the transport of smallest id whose `selectedCandidatePairId` names an
+    /// existing pair, else the nominated succeeded pair first in
+    /// `electionOrder`; `nil` otherwise. Route, RTT and available outgoing
+    /// bitrate all read it, as on Android (`CallStats.selectedCandidatePair`);
+    /// the bitrate reads ONLY it (#20284).
     static func selectedCandidatePair(in entries: [RawEntry]) -> RawEntry? {
-        let pairs = entries.filter { $0.type == "candidate-pair" }
-        let selectedId = entries.first { $0.type == "transport" }?.strings["selectedCandidatePairId"]
-        let nominated = pairs.first { $0.strings["state"] == "succeeded" && ($0.values["nominated"] ?? 0) > 0 }
-        return selectedId.flatMap { id in pairs.last { $0.id == id } } ?? nominated
+        let pairs = electionOrder(entries)
+        let byId = Dictionary(pairs.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let named = entries
+            .filter { $0.type == "transport" }
+            .sorted { $0.id < $1.id }
+            .compactMap { transport in transport.strings["selectedCandidatePairId"].flatMap { byId[$0] } }
+            .first
+        return named ?? pairs.first { $0.strings["state"] == "succeeded" && ($0.values["nominated"] ?? 0) > 0 }
+    }
+
+    /// #20121 — the `candidate-pair` entries by strongest `priority`, then smallest `id` (unique in a report, W3C): never the report's order.
+    private static func electionOrder(_ entries: [RawEntry]) -> [RawEntry] {
+        let rank = { (entry: RawEntry) in CallStatValue.measured(entry.values["priority"] ?? 0) }
+        return entries
+            .filter { $0.type == "candidate-pair" }
+            .sorted { rank($0) != rank($1) ? rank($0) > rank($1) : $0.id < $1.id }
+    }
+
+    /// #20221 — rtp entries audio first (`kind != "video"`), then smallest `id`: never the report's order.
+    private static func streamOrder(_ entries: [RawEntry]) -> [RawEntry] {
+        entries.sorted { ($0.kind == "video") != ($1.kind == "video") ? $1.kind == "video" : $0.id < $1.id }
     }
 
     /// #20098 — a pair measure read on the elected pair; with no elected pair,
-    /// or one lacking the field, on the last `candidate-pair` carrying it.
+    /// or one lacking the field, on the pair carrying it first in `electionOrder`.
+    /// Never used for `availableOutgoingBitrate` (#20284).
     private static func pairMeasure(_ key: String, elected: RawEntry?, in entries: [RawEntry]) -> Double? {
-        elected?.values[key] ?? entries.last { $0.type == "candidate-pair" && $0.values[key] != nil }?.values[key]
+        elected?.values[key] ?? electionOrder(entries).first { $0.values[key] != nil }?.values[key]
     }
 
     /// Pure reducer (§5.7 fix for bug j). Resolves the real codec name via
     /// `codecId → codec.mimeType` (the legacy code stored the stats-graph
-    /// reference id, e.g. `"COT01_111"`, instead of `"opus"`/`"H264"`) and keeps
+    /// reference id, e.g. `"COT01_111"`, instead of `"opus"`/`"H264"`) on the
+    /// first `inbound-rtp` of `streamOrder` whose codec resolves (#20221), and keeps
     /// inbound audio/video separate. RTT and available outgoing bitrate come
-    /// from the SELECTED pair (#20098); with no elected pair, or an elected
-    /// pair lacking the field, the last `candidate-pair` carrying it wins.
+    /// from the SELECTED pair (#20098). RTT alone falls back, with no elected
+    /// pair or an elected pair lacking it, to the pair carrying it first in
+    /// `electionOrder` (strongest `priority`, then smallest `id`, #20121). The
+    /// bitrate never does (#20284): a pair that carries no traffic holds a low
+    /// or stale estimate, and the video tier would follow it — no estimate on
+    /// the elected pair reads 0, "no estimate", as on the web (`readStats`).
     static func reduce(entries: [RawEntry]) -> CallStats {
         var packetsLost = 0
         var bytesSent = 0
@@ -259,7 +283,6 @@ extension CallStats {
         var inboundAudioBytes = 0
         var inboundVideoBytes = 0
         var outbound = 0
-        var primaryCodecId: String?
         var audioJitterSum = 0.0
         var audioJitterCount = 0
         var audioLevel = 0.0
@@ -287,7 +310,6 @@ extension CallStats {
                     audioLevel = max(audioLevel, entry.values["audioLevel"] ?? 0)
                 }
                 bytesReceived = CallStatValue.sum(bytesReceived, receivedBytes)
-                if primaryCodecId == nil { primaryCodecId = entry.codecId }
             case "outbound-rtp":
                 outbound = CallStatValue.sum(outbound, CallStatValue.count(entry.values["packetsSent"] ?? 0))
                 bytesSent = CallStatValue.sum(bytesSent, CallStatValue.count(entry.values["bytesSent"] ?? 0))
@@ -298,13 +320,13 @@ extension CallStats {
             }
         }
 
-        let resolvedCodec: String? = primaryCodecId
-            .flatMap { codecMime[$0] }
+        let resolvedCodec: String? = streamOrder(entries.filter { $0.type == "inbound-rtp" && !($0.codecId ?? "").isEmpty })
+            .lazy.compactMap { $0.codecId.flatMap { codecMime[$0] } }.first
             .map { mime in mime.split(separator: "/").last.map(String.init) ?? mime }
 
         let elected = selectedCandidatePair(in: entries)
         let rtt = pairMeasure("currentRoundTripTime", elected: elected, in: entries).map { CallStatValue.measured($0 * 1000) } ?? 0
-        let availableOutgoingBitrateBps = pairMeasure("availableOutgoingBitrate", elected: elected, in: entries).map(CallStatValue.count) ?? 0
+        let availableOutgoingBitrateBps = elected?.values["availableOutgoingBitrate"].map(CallStatValue.count) ?? 0
 
         let jitterMs = audioJitterCount > 0 ? CallStatValue.measured((audioJitterSum / Double(audioJitterCount)) * 1000) : 0
 
@@ -361,12 +383,36 @@ nonisolated struct CallMediaQuality: Equatable, Sendable {
             freezeCount: CallStatValue.count(somme(video, "freezeCount")),
             totalFreezesDuration: CallStatValue.measured(somme(video, "totalFreezesDuration")),
             framesPerSecond: video.compactMap { $0.values["framesPerSecond"] }.max() ?? 0,
-            qualityLimitationReason: entries.first { $0.type == "outbound-rtp" && $0.kind == "video" }?
-                .strings["qualityLimitationReason"],
+            qualityLimitationReason: limitationReason(entries),
             jitterBufferDelayMs: emissions > 0 ? CallStatValue.measured(somme(audio, "jitterBufferDelay") / emissions * 1000) : nil,
             concealedSamples: CallStatValue.count(somme(audio, "concealedSamples")),
             nackCount: CallStatValue.count(somme(video, "nackCount")),
             pliCount: CallStatValue.count(somme(video, "pliCount")))
+    }
+
+    /// #20221 — la cause la plus contraignante des `outbound-rtp` vidéo, quel que
+    /// soit l'ordre du relevé : `bandwidth` > `cpu` > `other` > le reste ;
+    /// égalité ⇒ plus petit `id` ; une chaîne vide n'est pas une cause.
+    private static func limitationReason(_ entries: [CallStats.RawEntry]) -> String? {
+        let reasoned: [(id: String, reason: String)] = entries
+            .filter { $0.type == "outbound-rtp" && $0.kind == "video" }
+            .compactMap { entry in
+                guard let reason = entry.strings["qualityLimitationReason"], !reason.isEmpty else { return nil }
+                return (id: entry.id, reason: reason)
+            }
+        return reasoned.min { lhs, rhs in
+            let (left, right) = (limitationRank(lhs.reason), limitationRank(rhs.reason))
+            return left != right ? left > right : lhs.id < rhs.id
+        }?.reason
+    }
+
+    private static func limitationRank(_ reason: String) -> Int {
+        switch reason {
+        case "bandwidth": return 3
+        case "cpu": return 2
+        case "other": return 1
+        default: return 0
+        }
     }
 }
 

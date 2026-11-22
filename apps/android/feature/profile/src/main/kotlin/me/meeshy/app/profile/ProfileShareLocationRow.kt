@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -31,8 +32,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -44,9 +47,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.PermissionNature
+import me.meeshy.sdk.model.relation.SharedLocationPointReplacement
 import me.meeshy.sdk.model.relation.SharedLocationPrecision
 import me.meeshy.sdk.model.relation.SharedLocationRoster
 import me.meeshy.sdk.model.relation.SharedLocationSendOutcome
@@ -56,6 +61,7 @@ import me.meeshy.feature.profile.R
 import me.meeshy.ui.R as UiR
 import me.meeshy.ui.component.permission.rememberPermissionFlow
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.component.focal.joinParticipantNames
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -64,6 +70,8 @@ import me.meeshy.ui.theme.MeeshyTheme
 internal const val PROFILE_SHARE_LOCATION_TAG = "sharedLocation.share"
 internal const val PROFILE_SHARE_LOCATION_STOP_TAG = "sharedLocation.stop"
 internal const val PROFILE_SHARE_LOCATION_CONFIRM_TAG = "sharedLocation.confirm"
+internal const val PROFILE_SHARE_LOCATION_SHOW_REAL_TAG = "sharedLocation.replacePoint.confirm"
+internal const val PROFILE_SHARE_LOCATION_KEEP_POINT_TAG = "sharedLocation.replacePoint.keep"
 
 /** Le temps pendant lequel un refus reste dit sous la ligne avant de s'effacer. */
 private const val PROBLEM_VISIBLE_MS = 4_000L
@@ -125,6 +133,55 @@ internal fun ProfileShareLocationRow(
             },
         )
     }
+    state.replacingPoint?.let { question ->
+        val audience = question.audience(userId, displayName)
+        ReplaceChosenPointDialog(
+            message = replacePointMessage(audience),
+            onConfirm = viewModel::confirmReplacingPoint,
+            onKeep = viewModel::keepChosenPoint,
+        )
+    }
+}
+
+/**
+ * « chez Ada, Bob, Cyd et 2 autres personnes » : trois noms au plus (#20248, iso `ShareMyLocationCopy.replacePointMessage`
+ * d'iOS et `replacePointMessage` du web) ; personne de nommé ni de compté ⇒ la phrase générale.
+ */
+@Composable
+internal fun replacePointMessage(audience: SharedLocationPointReplacement.Audience): String {
+    val others = if (audience.others > 0) {
+        listOf(pluralStringResource(R.plurals.shared_location_replace_point_others, audience.others, audience.others))
+    } else {
+        emptyList()
+    }
+    val people = audience.named + others
+    if (people.isEmpty()) return stringResource(R.string.shared_location_replace_point_message)
+    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
+    return stringResource(R.string.shared_location_replace_point_message_named, joinParticipantNames(people, locale))
+}
+
+/**
+ * « Montrer ta position réelle ? » (#20212, #20248), iso la confirmation de `ShareMyLocationSheet.swift` : un autre
+ * appareil montre un point choisi sur la carte, et partager d'ici le remplacerait chez ceux qu'elle nomme. Rien n'est
+ * parti ; fermer la question garde le point. La permission a déjà été demandée avec le premier « Partager ».
+ */
+@Composable
+internal fun ReplaceChosenPointDialog(message: String, onConfirm: () -> Unit, onKeep: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onKeep,
+        title = { Text(stringResource(R.string.shared_location_replace_point_title)) },
+        text = { Text(message) },
+        confirmButton = {
+            TextButton(onClick = onConfirm, modifier = Modifier.testTag(PROFILE_SHARE_LOCATION_SHOW_REAL_TAG)) {
+                Text(stringResource(R.string.shared_location_replace_point_confirm), fontWeight = FontWeight.SemiBold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onKeep, modifier = Modifier.testTag(PROFILE_SHARE_LOCATION_KEEP_POINT_TAG)) {
+                Text(stringResource(R.string.shared_location_replace_point_keep))
+            }
+        },
+    )
 }
 
 @Composable
@@ -291,6 +348,7 @@ private fun SharedLocationShareProblem.messageRes(): Int = when (this) {
     SharedLocationShareProblem.LocationDenied -> R.string.shared_location_share_denied
     SharedLocationShareProblem.LocationUnavailable -> R.string.shared_location_share_unavailable
     SharedLocationShareProblem.WithdrawalPending -> R.string.shared_location_share_stop_pending
+    is SharedLocationShareProblem.ReplacesChosenPoint -> R.string.shared_location_replace_point_title
     is SharedLocationShareProblem.Refused -> when (outcome) {
         SharedLocationSendOutcome.OFFLINE, SharedLocationSendOutcome.UNCONFIRMED -> R.string.shared_location_share_offline
         SharedLocationSendOutcome.RATE_LIMITED -> R.string.shared_location_share_rate_limited

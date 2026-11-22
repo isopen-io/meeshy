@@ -9,7 +9,7 @@ import { loadLinkFamiliesCatalog } from '@/lib/i18n-link-families-catalog';
 import { compile, match } from '@/lib/router';
 
 import { AffiliateTokenRow, ReferralList } from './affiliate-links';
-import { communityInfoRows } from './community-link';
+import { communityInfoRows, joinLinkToggleAction } from './community-link';
 import { CommunityLinkRow } from './community-links';
 import { BreakdownCard, FamilyStats, HUB_FAMILIES, LinkFamilyCard } from './link-families-parts';
 import { RecentClicks, utmRows } from './my-tracking-link';
@@ -67,6 +67,7 @@ const community = (overrides: Partial<CommunityLink> = {}): CommunityLink => ({
   role: 'admin',
   memberCount: 248,
   createdAt: null,
+  joinLinkPaused: null,
   ...overrides,
 });
 
@@ -189,5 +190,19 @@ describe('les liens communauté', () => {
   test('le détail ne répète ni l’adresse, ni le rôle, ni la visibilité déjà en en-tête, et pas de date qu’on n’a pas', () => {
     const rows = communityInfoRows('fr', community());
     expect(rows.map((row) => row.key)).toEqual(['members']);
+  });
+
+  test('un lien d’entrée actif se met en pause depuis la barre de la fiche (#20255)', () => {
+    const [action] = joinLinkToggleAction('fr', community({ joinLinkPaused: false }), noop);
+    expect(action?.name).toBe('toggle');
+    expect(action?.label).toBe('Désactiver');
+  });
+
+  test('un lien en pause se relance', () => {
+    expect(joinLinkToggleAction('fr', community({ joinLinkPaused: true }), noop)[0]?.label).toBe('Activer');
+  });
+
+  test('une passerelle qui ne sert pas l’état n’offre aucune bascule', () => {
+    expect(joinLinkToggleAction('fr', community({ joinLinkPaused: null }), noop)).toEqual([]);
   });
 });

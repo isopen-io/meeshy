@@ -191,6 +191,7 @@
         <item quantity="many">%1$d inscrits</item>
         <item quantity="other">%1$d inscrits</item>
     </plurals>
+    <string name="links_common_action_failed">L\'action n\'a pas abouti. Réessaie.</string>
     <string name="links_common_active">Actif</string>
     <string name="links_common_cancel">Annuler</string>
     <string name="links_common_copy">Copier</string>
@@ -199,6 +200,7 @@
     <string name="links_common_share">Partager</string>
     <string name="links_community_create_a11y">Créer une communauté</string>
     <string name="links_community_empty_title">Aucune communauté administrée</string>
+    <string name="links_community_join_link_paused">Les arrivées par ce lien sont suspendues</string>
     <string name="links_community_stat_active">Actifs</string>
     <string name="links_hub_community_description">Gérez les liens d\'invitation vers vos communautés</string>
     <string name="links_hub_share_create_a11y">Créer un lien de partage</string>
@@ -254,6 +256,8 @@
     <string name="new_conversation_encryption_collapsed">Réduite</string>
     <string name="new_conversation_encryption_expanded">Développée</string>
     <string name="new_conversation_error_create">Impossible de créer la conversation</string>
+    <string name="new_conversation_error_participant_without_device_anonymous">Un membre ne peut pas encore recevoir de messages chiffrés : rien n’est activé.</string>
+    <string name="new_conversation_error_participant_without_device_named">%1$s ne peut pas encore recevoir de messages chiffrés : rien n’a été activé.</string>
     <string name="new_conversation_group_title">Nom du groupe (obligatoire)</string>
     <string name="new_conversation_group_toggle">Nouveau groupe</string>
     <string name="new_conversation_no_user_found">Aucun utilisateur trouvé</string>

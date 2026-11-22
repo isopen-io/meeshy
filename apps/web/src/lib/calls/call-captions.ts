@@ -25,7 +25,8 @@ export type CaptionLanguagePair = { readonly from: string; readonly to: string }
 /**
  * La langue D'ORIGINE d'une phrase d'un autre (miroir d'iOS `CallCaptionLine.originLanguage`
  * / `awaitingUntil`) : `foreign` dit qu'elle est HORS du Prisme du lecteur — donc étiquetée
- * (« EN ») —, `awaitingUntil` l'heure (horloge locale) où l'attente d'une traduction retombe.
+ * (« EN ») —, `awaitingUntil` l'instant, sur l'horloge MONOTONE locale (`performance.now()`), où l'attente
+ * d'une traduction retombe — jamais l'horloge murale, qu'un réglage ou NTP fait sauter (#20298).
  */
 export type CaptionOrigin = { readonly language: string; readonly foreign: boolean; readonly awaitingUntil: number | null };
 
@@ -90,20 +91,24 @@ const sameLanguage = (a: string, b: string): boolean => languageCode(a) === lang
  * La langue d'une phrase d'un autre, au regard du Prisme du lecteur (`prism`, la descente
  * de `resolveReaderLanguages`) : étrangère quand aucune langue du lecteur n'est la sienne,
  * et alors une traduction est attendue si la phrase est FINALE et sans traduction encore.
- * Un Prisme vide n'attend rien (rien ne dit vers quelle langue traduire).
+ * Un Prisme vide n'attend rien (rien ne dit vers quelle langue traduire). `received` est
+ * l'instant de RÉCEPTION sur l'horloge monotone : l'heure de l'orateur n'y entre pas (#20298).
  */
-export function captionOrigin(params: { readonly language: string | null; readonly isFinal: boolean; readonly translated: string | null; readonly prism: readonly string[]; readonly now: number }): CaptionOrigin | null {
-  const { language, isFinal, translated, prism, now } = params;
+export function captionOrigin(params: { readonly language: string | null; readonly isFinal: boolean; readonly translated: string | null; readonly prism: readonly string[]; readonly received: number }): CaptionOrigin | null {
+  const { language, isFinal, translated, prism, received } = params;
   if (language === null) return null;
   const foreign = !prism.some((spoken) => sameLanguage(spoken, language));
   const awaiting = foreign && isFinal && translated === null && prism.length > 0;
-  return { language, foreign, awaitingUntil: awaiting ? now + TRANSLATION_WAIT_MS : null };
+  return { language, foreign, awaitingUntil: awaiting ? received + TRANSLATION_WAIT_MS : null };
 }
 
-/** Une traduction est-elle encore attendue à l'instant `now` ? L'attente retombe à son échéance, l'étiquette de la langue reste. */
-export function isAwaitingTranslation(caption: CallCaption, now: number): boolean {
+/** L'horloge MONOTONE des sous-titres, UNE définition (#20320) : le chunk des sous-titres la remet au contrôleur (`CaptionsDeps.elapsed`), qui y pose l'échéance, et le panneau l'y lit par défaut. */
+export const monotonicClock = (): number => performance.now();
+
+/** Une traduction est-elle encore attendue à l'instant `elapsed` (horloge MONOTONE, celle de l'échéance) ? L'attente retombe à son échéance, l'étiquette de la langue reste. */
+export function isAwaitingTranslation(caption: CallCaption, elapsed: number): boolean {
   const until = caption.origin?.awaitingUntil ?? null;
-  return !caption.mine && caption.translated === null && until !== null && now < until;
+  return !caption.mine && caption.translated === null && until !== null && elapsed < until;
 }
 
 /**

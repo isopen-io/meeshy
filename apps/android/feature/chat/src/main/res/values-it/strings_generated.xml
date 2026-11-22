@@ -76,6 +76,11 @@
         <item quantity="many">Eliminare %1$d messaggi?</item>
         <item quantity="other">Eliminare %1$d messaggi?</item>
     </plurals>
+    <string name="chat_e2ee_peer_without_device_title">%1$s non può ricevere messaggi crittografati</string>
+    <string name="chat_e2ee_peer_without_device_title_anonymous">Il tuo interlocutore non può ricevere messaggi crittografati</string>
+    <string name="chat_e2ee_peer_without_device_write_plain">Scrivi senza crittografia</string>
+    <string name="chat_e2ee_readable_direct_failed">Impossibile aprire. Riprova.</string>
+    <string name="chat_e2ee_readable_direct_offline">Offline: riconnettiti per aprirla.</string>
     <string name="chat_effect_blurred">Sfocatura</string>
     <string name="chat_effect_duration_15s">15 s</string>
     <string name="chat_effect_duration_1m">1 min</string>
@@ -373,6 +378,8 @@
     <string name="encryption_mode_hybrid_label">Ibrido</string>
     <string name="encryption_mode_server_description">Crittografato sui nostri server, leggibile da loro: traduzione e ricerca funzionano.</string>
     <string name="encryption_mode_server_label">Server</string>
+    <string name="encryption_participant_without_device_anonymous">Un membro non può ancora ricevere messaggi cifrati: nulla è attivato.</string>
+    <string name="encryption_participant_without_device_named">%1$s non può ancora ricevere messaggi crittografati: non è stato attivato nulla.</string>
     <string name="encryption_summary_end_to_end">Crittografata end-to-end: solo i partecipanti leggono</string>
     <string name="encryption_summary_hybrid">Crittografata sui nostri server, con verifica tra dispositivi compatibili</string>
     <string name="encryption_summary_none">Non crittografata</string>

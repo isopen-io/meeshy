@@ -68,11 +68,16 @@ struct GameActAdvanceTests {
         #expect(GameActAdvance.between(day(2), rerolled, hidden: false) == nil)
     }
 
-    @Test("actes pas encore ouverts : rien")
-    func locked() {
-        let before = game([act("b", .medium, 2, 5)], unlocked: false)
-        let after = game([act("b", .medium, 3, 5)], unlocked: false)
-        #expect(GameActAdvance.between(before, after, hidden: false) == nil)
+    @Test("avant le niveau 5, l'acte du premier Rêve qui avance se voit aussi (#17370)")
+    func firstDreamAdvances() {
+        let before = game([act("a", .easy, 0, 3)], unlocked: false)
+        let after = game([act("a", .easy, 1, 3)], unlocked: false)
+        #expect(GameActAdvance.between(before, after, hidden: false) == GameActAdvance(difficulty: .easy, progress: 1, target: 3))
+    }
+
+    @Test("aucun acte servi (ancien serveur, sous le niveau 5) : rien")
+    func noActServed() {
+        #expect(GameActAdvance.between(game([], unlocked: false), game([], unlocked: false), hidden: false) == nil)
     }
 
     @Test("sans lecture d'avant ou d'après (cache vide, ancien serveur) : rien")

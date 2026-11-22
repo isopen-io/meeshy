@@ -91,7 +91,8 @@ function createMockSocket() {
 
 function createMockIO() {
   const emitFn = jest.fn();
-  const toFn = jest.fn().mockReturnValue({ emit: emitFn });
+  // `except` depuis #20236 : la diffusion d'activité tait les rooms séparées.
+  const toFn = jest.fn().mockReturnValue({ emit: emitFn, except: jest.fn().mockReturnValue({ emit: emitFn }) });
   return { to: toFn, emit: emitFn, _toEmit: emitFn };
 }
 
@@ -129,9 +130,8 @@ function createMockPrisma(commentAuthorId: string = USER_ID) {
       findFirst: jest.fn(),
     },
     userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
-    friendRequest: {
-      findFirst: jest.fn(),
-    },
+    user: { findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(null), findFirst: jest.fn<any>().mockResolvedValue(null) }, // #20236
+    friendRequest: { findFirst: jest.fn() },
     communityMember: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
@@ -238,6 +238,27 @@ describe('CommentReactionHandler', () => {
       connectedUsers: connectedUsers as any,
       socketToUser,
     });
+  });
+
+  // #20216 — réagir, ou relire les réactions, sur le commentaire d'un auteur séparé (blocage, ou lecture en panne : fermé)
+  it.each([
+    ['handleAddReaction', 'séparé', jest.fn<any>().mockResolvedValue({ id: 'x' }), false],
+    ['handleAddReaction', 'lecture en panne', jest.fn<any>().mockRejectedValue(new Error('panne')), false],
+    ['handleAddReaction', 'aucun blocage', jest.fn<any>().mockResolvedValue(null), true],
+    ['handleRequestSync', 'séparé', jest.fn<any>().mockResolvedValue({ id: 'x' }), false],
+    ['handleRequestSync', 'aucun blocage', jest.fn<any>().mockResolvedValue(null), true],
+  ] as const)('%s (#20216) — auteur du commentaire : %s', async (methode, _cas, findFirst, servi) => {
+    const data = { commentId: COMMENT_ID, postId: POST_ID, emoji: EMOJI };
+    const callback = jest.fn();
+    mockValidate.mockReturnValue({ success: true, data });
+    mockReactionService.addReaction.mockResolvedValue(sampleReactionData);
+    mockReactionService.createUpdateEvent.mockResolvedValue(sampleUpdateEvent);
+    mockPrisma.user = { findFirst };
+    mockPrisma.postComment.findFirst.mockResolvedValue({ postId: POST_ID, authorId: ANOTHER_USER_ID, post: { authorId: ANOTHER_USER_ID, visibility: 'PUBLIC', visibilityUserIds: [] } });
+    await (handler as any)[methode](createMockSocket(), data, callback);
+    const service = methode === 'handleAddReaction' ? mockReactionService.addReaction : mockReactionService.getCommentReactions;
+    expect(service).toHaveBeenCalledTimes(servi ? 1 : 0);
+    if (!servi) expect(callback).toHaveBeenCalledWith({ success: false, error: 'Comment not found' });
   });
 
   // ===== handleAddReaction =====

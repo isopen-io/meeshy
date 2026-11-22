@@ -213,7 +213,7 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
     func test_reduce_aberrantCounters_doNotCrashAndCountZero() {
         [Double.nan, .infinity, -.infinity, -12].forEach { aberrant in
             let stats = CallStats.reduce(entries: [
-                Self.entry("p", "candidate-pair", values: ["availableOutgoingBitrate": aberrant]),
+                Self.entry("p", "candidate-pair", values: ["availableOutgoingBitrate": aberrant, "nominated": 1], strings: ["state": "succeeded"]),
                 Self.entry("a", "inbound-rtp", kind: "audio", values: [
                     "packetsLost": aberrant, "packetsReceived": aberrant, "bytesReceived": aberrant,
                 ]),
@@ -230,7 +230,7 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
             Self.entry("a", "inbound-rtp", kind: "audio", values: ["packetsLost": 1e300, "packetsReceived": 1e300, "bytesReceived": 1e300]),
             Self.entry("v", "inbound-rtp", kind: "video", values: ["packetsLost": 1e300, "packetsReceived": 1e300, "bytesReceived": 1e300]),
             Self.entry("o", "outbound-rtp", kind: "audio", values: ["packetsSent": 1e300, "bytesSent": 1e300]),
-            Self.entry("p", "candidate-pair", values: ["availableOutgoingBitrate": 1e300]),
+            Self.entry("p", "candidate-pair", values: ["availableOutgoingBitrate": 1e300, "nominated": 1], strings: ["state": "succeeded"]),
         ])
 
         XCTAssertEqual(stats.packetsLost, 0)
@@ -299,7 +299,8 @@ final class CallManagerAnalyticsRecorderTests: XCTestCase {
     @MainActor
     func test_reduce_validStats_areUnchanged() {
         let stats = CallStats.reduce(entries: [
-            Self.entry("p", "candidate-pair", values: ["currentRoundTripTime": 0.12, "availableOutgoingBitrate": 800_000]),
+            Self.entry("p", "candidate-pair", values: ["currentRoundTripTime": 0.12, "availableOutgoingBitrate": 800_000, "nominated": 1],
+                       strings: ["state": "succeeded"]),
             Self.entry("a", "inbound-rtp", kind: "audio", values: [
                 "packetsLost": 3, "packetsReceived": 500, "bytesReceived": 40_000, "jitter": 0.01,
             ]),

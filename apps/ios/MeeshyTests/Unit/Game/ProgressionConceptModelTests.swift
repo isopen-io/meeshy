@@ -171,14 +171,34 @@ final class ProgressionConceptModelTests: XCTestCase {
         XCTAssertEqual(card.valueFact, .tier)
     }
 
-    func test_missions_lockedBelowLevelFive_sayTheLevel_notZeroOutOfThree() {
-        let low = GameFixture.game(score: 0)
+    func test_missions_lockedBelowLevelFive_beforeAnOldServer_sayTheLevel_notZeroOutOfThree() {
+        let low = GameFixture.game(score: 0, missions: [])
         XCTAssertFalse(low.missions.unlocked, "le témoin veut un jeu d'avant le niveau 5")
 
         let card = ProgressionConceptModel.card(.missions, progress: progress(low), game: low)
 
         XCTAssertEqual(card.value, GameText.doorLeagueLocked(level: GameCopy.formatCount(GameMissions.minLevel)))
         XCTAssertNil(card.line, "une porte fermée se dit par son seuil, sans ligne")
+        XCTAssertNil(card.gauge, "une porte fermée n'a pas de jauge")
+    }
+
+    func test_missions_belowLevelFive_withTheFirstDreamServed_sayZeroOutOfOne_likeTheState() {
+        let low = GameFixture.game(score: 0, missions: [GameFixture.mission(id: "m0")])
+        XCTAssertFalse(low.missions.unlocked, "le témoin veut un jeu d'avant le niveau 5")
+
+        let card = ProgressionConceptModel.card(.missions, progress: progress(low), game: low)
+
+        XCTAssertEqual(card.value, ConceptText.ratio("0", "1"), "la tête dit le premier Rêve, comme l'état de la fiche")
+        XCTAssertEqual(card.gauge, 0, "et sa jauge")
+    }
+
+    func test_missions_belowLevelFive_theFirstDreamDone_fillsItsGauge() {
+        let low = GameFixture.game(score: 0, missions: [GameFixture.mission(id: "m0", progress: 5, completed: true)])
+
+        let card = ProgressionConceptModel.card(.missions, progress: progress(low), game: low)
+
+        XCTAssertEqual(card.value, ConceptText.ratio("1", "1"))
+        XCTAssertEqual(card.gauge, 1)
     }
 
     func test_missions_aReadyOffering_takesTheLine() {
@@ -494,9 +514,17 @@ final class ProgressionConceptModelTests: XCTestCase {
         XCTAssertEqual(state(.missions, GameFixture.game(missions: all, chestStatus: .ready)), ConceptText.stateMissionsReady(done: n(3), total: n(3)))
         XCTAssertEqual(state(.missions, GameFixture.game(missions: all, chestStatus: .claimed)), ConceptText.stateMissionsClaimed(done: n(3), total: n(3)))
 
-        let early = GameFixture.game(score: 400)
+        let early = GameFixture.game(score: 400, missions: [])
         XCTAssertFalse(early.missions.unlocked, "le témoin veut un jeu d'avant le niveau 5")
-        XCTAssertEqual(state(.missions, early), GameCopy.missionsLocked(level: n(early.level.shown.level)))
+        XCTAssertEqual(state(.missions, early), GameCopy.missionsLocked(level: n(early.level.shown.level)),
+                       "devant un serveur antérieur (aucun acte servi), le rêve dit encore où il s'ouvre")
+    }
+
+    func test_state_missions_theFirstDream_saysWhereItIs_beforeLevelFive() {
+        let first = GameFixture.game(score: 400, missions: [GameFixture.mission(id: "m0")], fullDreamIn: 200, rerollAvailable: false)
+        XCTAssertFalse(first.missions.unlocked, "le témoin veut un jeu d'avant le niveau 5")
+        XCTAssertEqual(state(.missions, first), ConceptText.stateMissionsProgress(done: n(0), total: n(1), left: n(1)),
+                       "le premier Rêve (#17370) se joue : il dit son acte unique, jamais le niveau 5")
     }
 
     func test_state_league_saysThePlace_theWeekPoints_andTheZoneWithItsTarget() {

@@ -133,7 +133,7 @@ describe('closePendingJoinRequests — la clôture à l\'entrée', () => {
     expect(closed).toBe(1);
     expect(prisma.communityJoinRequest.updateMany).toHaveBeenCalledWith({
       where: { communityId: COMM, userId: { in: [ARRIVANT] }, status: 'pending' },
-      data: { status: 'accepted', decidedAt: NOW, decidedBy: ADMIN },
+      data: { status: 'accepted', decidedAt: NOW, decidedBy: ADMIN, entryVerifiedAt: NOW },
     });
   });
 

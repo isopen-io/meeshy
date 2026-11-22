@@ -540,7 +540,8 @@ describe('SocialEventsHandler', () => {
       const commentAuthorId = 'comment-author-1';
       const data = { commentId: COMMENT_ID, postId: POST_ID, userId: USER_ID, emoji: '👍' } as any;
 
-      handler.broadcastCommentLiked(data, commentAuthorId);
+      /* 3e argument depuis #20236 : la séparation est résolue par l'APPELANT, AVANT sa mutation, pour que l'émission reste synchrone juste après elle (la charge porte un compteur ABSOLU). `[]` = personne à taire. */
+      handler.broadcastCommentLiked(data, commentAuthorId, []);
 
       expect(io.to).toHaveBeenCalledWith(`feed:${commentAuthorId}`);
     });
@@ -555,7 +556,7 @@ describe('SocialEventsHandler', () => {
       const commentAuthorId = 'comment-author-1';
       const data = { commentId: COMMENT_ID, postId: POST_ID, userId: USER_ID, emoji: '👍', likeCount: 0 } as any;
 
-      handler.broadcastCommentUnliked(data, commentAuthorId);
+      handler.broadcastCommentUnliked(data, commentAuthorId, []);
 
       expect(io.to).toHaveBeenCalledWith(`feed:${commentAuthorId}`);
       expect(io.to).toHaveBeenCalledWith(`post:${POST_ID}`);
@@ -571,7 +572,7 @@ describe('SocialEventsHandler', () => {
       const { handler, io } = buildHandler();
       const data = { commentId: COMMENT_ID, postId: POST_ID, userId: USER_ID, emoji: '👍', likeCount: 0 } as any;
 
-      handler.broadcastCommentUnliked(data, 'comment-author-1');
+      handler.broadcastCommentUnliked(data, 'comment-author-1', []);
 
       const names = emitCalls(io).map(([event]) => event);
       expect(names).toEqual(['comment:unliked', 'comment:unliked']);

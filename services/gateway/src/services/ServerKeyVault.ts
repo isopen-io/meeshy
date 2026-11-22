@@ -111,6 +111,26 @@ export class ServerKeyVault {
   private prisma: PrismaClient;
   private masterKeyState: MasterKeyState;
   private keyCache: Map<string, { key: Buffer; lastAccessed: number; owner: string | null }> = new Map();
+
+  /**
+   * #20163 — les ouvertures EN VOL d'une même clé se partagent UNE lecture.
+   *
+   * `loadKey` vérifie `keyCache` de façon SYNCHRONE puis `await` la base : sous
+   * un `Promise.all` de N lignes — ce que fait `revealAtRestRows`, et ce que
+   * l'export RGPD étend à 10 000 — les N appels franchissent tous la
+   * vérification avant que le premier ne résolve. Le cache n'en absorbait donc
+   * AUCUN, quel que soit le nombre de clés distinctes : N `findUnique` ET N
+   * `update` de `lastAccessedAt` sur le MÊME document, à travers le
+   * PrismaClient partagé de toute la passerelle.
+   *
+   * La promesse est oubliée dès qu'elle est résolue : l'entrée ne survit pas à
+   * la lecture, donc personne ne reçoit un verdict périmé, et un échec n'est pas
+   * mémorisé. Le verdict rendu est identique pour tous les appelants, et le
+   * contrôle d'appartenance reste PAR appel (`getKeyFor` compare
+   * `owner === conversationId` après coup) — partager une lecture ne partage
+   * aucune autorisation.
+   */
+  private keyLoadsInFlight: Map<string, Promise<LoadedKey>> = new Map();
   private conversationKeyMap: Map<string, string> = new Map();
   /** `Conversation.serverEncryptionKeyId`, relu au besoin : la clé que l'ACTIVATION a désignée. */
   private designationCache: Map<string, string> = new Map();
@@ -307,6 +327,18 @@ export class ServerKeyVault {
       return { status: 'ok', key: cached.key, owner: cached.owner };
     }
 
+    const inFlight = this.keyLoadsInFlight.get(keyId);
+    if (inFlight) return inFlight;
+
+    const load = this.readKey(keyId).finally(() => {
+      this.keyLoadsInFlight.delete(keyId);
+    });
+    this.keyLoadsInFlight.set(keyId, load);
+    return load;
+  }
+
+  /** La lecture elle-même, UNE fois par clé en vol (`keyLoadsInFlight`). */
+  private async readKey(keyId: string): Promise<LoadedKey> {
     if (!this.masterKeyState.available) return { status: 'unavailable' };
     const masterKey = this.masterKeyState.key;
 

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-core": {
+      "resDir": "sdk-core/src/main/res",
+      "entries": [
+        { "catalog": "app", "iosKey": "conversation.send.e2ee.redirectedToReadable", "androidName": "e2ee_send_redirected_to_readable", "status": "adopted" },
+        { "catalog": "app", "iosKey": "conversation.send.e2ee.redirectedToReadableAnonymous", "androidName": "e2ee_send_redirected_to_readable_anonymous", "status": "adopted" }
+      ]
+    }
+  }
+}

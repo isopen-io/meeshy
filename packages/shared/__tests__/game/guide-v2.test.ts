@@ -14,6 +14,7 @@ import {
   type GuideEventV2,
 } from '../../utils/game/guide-v2.js';
 import { GUIDE_ACTIONS, GUIDE_MOMENT_KEYS, GUIDE_MOMENT_PRIORITY } from '../../utils/game/guide.js';
+import { FLAME_FREEZE_GIFT_SEEN_KEY } from '../../utils/game/flame.js';
 import { photoMomentId, photoMomentOfGuideEvent } from '../../utils/game/photo-moments.js';
 
 const events: readonly GuideEventV2[] = [
@@ -25,10 +26,12 @@ const events: readonly GuideEventV2[] = [
   { kind: 'trophy', trophyKey: 'trophy.prestige.1' },
   { kind: 'prestige', prestige: 1, gloryGained: 1000 },
   { kind: 'atlas-stamp', language: 'ja', stamped: 4, total: 89 },
+  { kind: 'flame-freeze-gift', freezes: 1 },
+  { kind: 'offering-kept', easedDays: 3 },
 ];
 
 describe('les moments de la vague 2', () => {
-  it('couvrent les neuf moments de la conception, sans toucher aux douze premiers', () => {
+  it('couvrent les dix moments de la conception, sans toucher aux douze premiers', () => {
     expect([...GUIDE_MOMENT_KEYS_V2].sort()).toEqual(events.map((e) => e.kind).sort());
     expect(GUIDE_MOMENT_KEYS).toHaveLength(12);
     expect(GUIDE_MOMENT_KEYS_V2.some((key) => (GUIDE_MOMENT_KEYS as readonly string[]).includes(key))).toBe(false);
@@ -119,5 +122,64 @@ describe('les moments photo', () => {
     expect(photoMomentId({ kind: 'league-up', league: 'ambre', weekKey: '2026-10-12' })).toBe('league-up:2026-10-12:ambre');
     expect(photoMomentId({ kind: 'season', season: 2 })).toBe('season:2');
     expect(photoMomentId({ kind: 'prestige', number: 3 })).toBe('prestige:3');
+  });
+});
+
+describe('le moment « Une Veilleuse t\'est offerte » (#20169)', () => {
+  const gift: GuideEventV2 = { kind: 'flame-freeze-gift', freezes: 1 };
+
+  it('porte la clé « vue » que la passerelle garde, pour ne se dire qu\'une fois', () => {
+    expect(guideMomentV2(gift, []).key).toBe(FLAME_FREEZE_GIFT_SEEN_KEY);
+  });
+
+  it('fait parler Meo, gardienne de la Flamme, et mène à la Flamme', () => {
+    expect(guideMomentV2(gift, [])).toEqual({
+      key: 'flame-freeze-gift',
+      speaker: 'meo',
+      mood: 'cheer',
+      data: { freezes: 1 },
+      action: 'see-flame',
+      presentation: 'full',
+    });
+  });
+
+  it('passe après la Flamme à risque, avant une montée de ligue', () => {
+    const rank = (key: string): number => (GUIDE_MOMENT_PRIORITY_ALL as readonly string[]).indexOf(key);
+    expect(rank('flame-freeze-gift')).toBe(rank('flame-at-risk') + 1);
+    expect(rank('flame-freeze-gift')).toBeLessThan(rank('league-promoted'));
+    expect(chooseGuideMomentAny([{ kind: 'atlas-stamp', language: 'ja', stamped: 1, total: 89 }, gift], [])?.key).toBe('flame-freeze-gift');
+  });
+
+  it('ne se photographie pas', () => {
+    expect(photoMomentOfGuideEvent(gift)).toBeNull();
+  });
+});
+
+describe('le moment « Les aïeux t\'ont gardé ton Offrande » (#20327, #17373)', () => {
+  const kept: GuideEventV2 = { kind: 'offering-kept', easedDays: 3 };
+
+  it('fait parler Mee, qui accueille, et mène à la fiche du Rêve où l\'Offrande s\'ouvre', () => {
+    expect(guideMomentV2(kept, [])).toEqual({
+      key: 'offering-kept',
+      speaker: 'mee',
+      mood: 'cheer',
+      data: { easedDays: 3 },
+      action: 'see-missions',
+      presentation: 'full',
+    });
+    expect(guideMomentV2(kept, ['offering-kept']).presentation).toBe('short');
+  });
+
+  it('accueille avant de parler de la Flamme éteinte, et passe devant le retour de la vague 1', () => {
+    const rank = (key: string): number => (GUIDE_MOMENT_PRIORITY_ALL as readonly string[]).indexOf(key);
+    expect(rank('offering-kept')).toBe(rank('flame-out') - 1);
+    expect(rank('offering-kept')).toBeGreaterThan(rank('season-end'));
+    const opening = [{ kind: 'flame-out', lostDays: 0, relightPrice: 100, canRelight: true } as const, { kind: 'return-after-absence', daysAway: 9 } as const, kept];
+    expect(chooseGuideMomentAny(opening, [])?.key).toBe('offering-kept');
+    expect(chooseGuideMomentAny(opening, ['offering-kept', 'flame-out', 'return-after-absence'])?.key).toBe('offering-kept');
+  });
+
+  it('ne se photographie pas', () => {
+    expect(photoMomentOfGuideEvent(kept)).toBeNull();
   });
 });

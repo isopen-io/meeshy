@@ -301,6 +301,49 @@ final class GameCopyTests: XCTestCase {
         XCTAssertNil(GameCopy.missionTimerLine(.missed, window: nil), "une mission du jour n'a pas de plage à rappeler")
     }
 
+    // MARK: - Le premier Rêve, sous le niveau 5 (#17370, tranche iOS #20119)
+
+    func test_theFirstDreamLine_saysTheSparksBeforeTheFullDream() {
+        let line = GameCopy.fullDreamLine(sparks: 600)
+        XCTAssertTrue(line.contains(GameCopy.points(600)), "la ligne dit les étincelles qui manquent, avec leur pluriel")
+        XCTAssertNotEqual(line, GameCopy.points(600), "la ligne est une phrase, pas un compte")
+    }
+
+    func test_theDreamCard_isOnlyClosedBeforeAnOlderServer() {
+        XCTAssertTrue(GameFixture.game(score: 400, missions: []).missions.showsDoorOnly, "ancien serveur sous le niveau 5 : la porte")
+        XCTAssertFalse(GameFixture.game(score: 400, missions: [GameFixture.mission(id: "m0")]).missions.showsDoorOnly,
+                       "le premier Rêve se joue sous le niveau 5")
+        XCTAssertFalse(GameFixture.game().missions.showsDoorOnly, "le Rêve complet se joue")
+    }
+
+    func test_theFirstDream_offersNoChange_evenWithoutMeesh() {
+        let morning = Date(timeIntervalSince1970: 1_791_194_400)
+        let first = GameFixture.game(score: 400, held: 0, missions: [GameFixture.mission(id: "m0")], rerollAvailable: false)
+        XCTAssertFalse(missionsView(first).rerollShown(now: morning), "changer un acte reste au niveau 5 : le premier Rêve ne propose pas « Changer »")
+        let full = GameFixture.game(held: 0, missions: [GameFixture.mission(id: "m1")], rerollAvailable: false)
+        XCTAssertTrue(missionsView(full).rerollShown(now: morning), "au niveau 5, la rangée reste pour dire combien de Meeshes il manque")
+    }
+
+    func test_theFirstDream_showsItsLine_fromTheServedField() throws {
+        let here = URL(fileURLWithPath: #filePath)
+        let root = here.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let view = try String(contentsOf: root.appendingPathComponent("Meeshy/Features/Game/GameMissionsView.swift"), encoding: .utf8)
+        XCTAssertTrue(view.contains("if let sparks = missions.fullDreamIn"), "la ligne du Rêve complet se lit sur le champ servi")
+        XCTAssertTrue(view.contains("GameCopy.fullDreamLine(sparks: sparks)"))
+        XCTAssertTrue(view.contains("if missions.showsDoorOnly"), "la porte fermée ne vaut plus que devant un serveur antérieur")
+    }
+
+    func test_anOptimisticReplace_keepsTheFullDreamLine() {
+        let first = GameFixture.game(score: 400, missions: [GameFixture.mission(id: "m0")], fullDreamIn: 200)
+        XCTAssertEqual(first.missions.replacing(items: [GameFixture.mission(id: "m0", progress: 1)]).fullDreamIn, 200,
+                       "une avancée appliquée localement ne fait pas disparaître la ligne du Rêve complet")
+    }
+
+    private func missionsView(_ game: GameBlock) -> GameMissionsView {
+        GameMissionsView(game: game, online: true, pendingRerollId: nil, chestOpening: false, errors: GameErrors(),
+                         onReroll: { _ in }, onClaim: {})
+    }
+
     func test_theMissionCard_hidesItsActionOncePastTheEnd() throws {
         let here = URL(fileURLWithPath: #filePath)
         let root = here.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()

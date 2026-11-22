@@ -296,7 +296,7 @@ const MY_IMAGE_PATH: Readonly<Record<ProfileImageKind, string>> = {
  * porte `['me', 'profile']` — la passerelle n'émet `user:updated` que vers les
  * partenaires. Un profil modifié depuis un AUTRE appareil arrive donc à la
  * prochaine (re)connexion du socket, qui relit cette requête
- * (`CATCH_UP_PERSONAL_FAMILIES`, #18914), ou au plus tard au bout de la
+ * (`CATCH_UP_FAMILIES`, #18914), ou au plus tard au bout de la
  * fenêtre ; sa réponse rejoint aussi la SESSION, que lit le Prisme
  * (`served-profile-session.ts`). C'est le bon arbitrage sur une donnée que le
  * lecteur vient de changer lui-même ailleurs, et un mauvais arbitrage sur tout

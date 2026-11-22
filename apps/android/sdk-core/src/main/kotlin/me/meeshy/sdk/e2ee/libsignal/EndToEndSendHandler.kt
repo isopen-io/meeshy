@@ -10,12 +10,15 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.core.e2ee.content.E2eeContent
 import me.meeshy.core.e2ee.device.E2eeEnrollmentException
 import me.meeshy.core.e2ee.seal.E2eeSealException
 import me.meeshy.core.e2ee.store.E2eePlaintextEntry
 import me.meeshy.core.e2ee.wire.E2eeErrorCode
 import me.meeshy.core.e2ee.wire.E2eeRemoteException
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.e2ee.PlaintextErasureLedger
+import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxKindHandler
 import me.meeshy.sdk.outbox.OutboxKindKey
@@ -23,15 +26,27 @@ import me.meeshy.sdk.outbox.SendResult
 import me.meeshy.sdk.session.SessionRepository
 import timber.log.Timber
 
-/** La ligne d'outbox d'un envoi chiffré : AUCUN clair — il attend au coffre, sous le `cid_`. */
+/**
+ * La ligne d'outbox d'un envoi chiffré : AUCUN clair — il attend au coffre, sous le `cid_`. L'effet du geste (vue unique,
+ * éphémère, flou) y voyage pour qu'une redirection vers le tête-à-tête lisible le garde (#20182) ; absent des lignes
+ * écrites avant lui, il vaut « aucun effet ».
+ */
 @Serializable
-internal data class EndToEndSendPayload(val conversationId: String, val peerUserId: String, val clientMessageId: String)
+internal data class EndToEndSendPayload(
+    val conversationId: String,
+    val peerUserId: String,
+    val clientMessageId: String,
+    val effects: MessageEffects? = null,
+)
 
 /**
  * `SEND_E2EE_MESSAGE` (#14591) : relit le clair au coffre, le scelle pour chaque appareil de la directe et de mes appareils
  * approuvés, le remet par l'envoi libsignal, range le clair sous l'identifiant servi, puis réconcilie la bulle.
  *
- * Fail-closed : un clair absent du coffre, un correspondant sans appareil chiffré, un refus de la passerelle autre
+ * Un correspondant qui n'a JAMAIS chiffré pour cet appareil : le texte part dans le tête-à-tête lisible de la paire (#20076).
+ * Un correspondant connu chiffré, ou listé sans session ouvrable : le refus et le bandeau « Écrire sans chiffrement » (#20181).
+ *
+ * Fail-closed : un clair absent du coffre, une redirection impossible, un refus de la passerelle autre
  * qu'un défaut réseau — rien ne repart, et JAMAIS en clair ; la bulle passe en échec, avec « Réessayer ».
  */
 internal class EndToEndSendHandler @Inject constructor(
@@ -39,6 +54,9 @@ internal class EndToEndSendHandler @Inject constructor(
     private val session: SessionRepository,
     private val messageRepository: MessageRepository,
     private val json: Json,
+    private val reach: EndToEndPeerDeviceReach,
+    private val readableRedirect: EndToEndReadableRedirect,
+    private val erasures: PlaintextErasureLedger,
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult {
@@ -49,7 +67,16 @@ internal class EndToEndSendHandler @Inject constructor(
             // Un coffre qui ne s'ouvre pas dit sa raison (#18977) ; un coffre verrouillé se réessaie ; seul un clair ABSENT juge.
             val readable = runtime.plaintext(userId, payload.clientMessageId) as? E2eePlaintextEntry.Readable
                 ?: return SendResult.PermanentFailure(REASON_PLAINTEXT_MISSING)
-            val served = runtime.deliver(userId, payload.conversationId, payload.peerUserId, readable.content, readable.content.replyTo)
+            val served = try {
+                runtime.deliver(userId, payload.conversationId, payload.peerUserId, readable.content, readable.content.replyTo)
+            } catch (_: E2eeSealException.RecipientHasNoDevice) {
+                return redirected(userId, payload, readable.content)
+            } catch (_: E2eeSealException.RecipientDevicesUnreachable) {
+                // #20181 — connu chiffré, ou listé sans session ouvrable : le refus d'avant et le bandeau, jamais seul en clair.
+                reach.confirmUnreachable(payload.peerUserId)
+                return SendResult.PermanentFailure(REASON_NOT_SEALED)
+            }
+            reach.confirmReachable(payload.peerUserId)
             runtime.remember(userId, readable.content, listOf(served.id))
             messageRepository.reconcileSent(payload.clientMessageId, served)
             SendResult.Success
@@ -72,6 +99,29 @@ internal class EndToEndSendHandler @Inject constructor(
 
     override suspend fun onExhausted(row: OutboxEntity) {
         messageRepository.markSendFailed(row.cmid, row.lastError)
+    }
+
+    /**
+     * #20076 (iOS #20074) — le correspondant n'a aucun appareil chiffré : le texte part dans le tête-à-tête LISIBLE de la
+     * paire, qui s'ouvre ; la bulle et son clair quittent le fil chiffré, et la ligne de liste revient au dernier message
+     * réel. Une redirection qui échoue garde le refus d'avant — rien ne part jamais en clair ICI (#12949).
+     */
+    private suspend fun redirected(userId: String, payload: EndToEndSendPayload, content: E2eeContent): SendResult {
+        reach.confirmWithoutDevice(payload.peerUserId)
+        val text = content.text.orEmpty()
+        val delivered = readableRedirect.deliver(
+            payload.conversationId,
+            payload.peerUserId,
+            payload.clientMessageId,
+            text,
+            content.language,
+            payload.effects ?: MessageEffects(),
+        )
+        if (!delivered) return SendResult.PermanentFailure(REASON_NOT_SEALED)
+        messageRepository.withdrawLocal(payload.clientMessageId)
+        // #20182 — un clair que le coffre n'a pas effacé s'inscrit à la file durable des effacements : jamais oublié.
+        if (!runtime.erase(userId, listOf(payload.clientMessageId))) erasures.recordNamed(listOf(payload.clientMessageId))
+        return SendResult.Success
     }
 
     /** Un défaut de transport (5xx, 429, 401 que le rafraîchissement rejouera) ou un appareil à relier se réessaie ; un refus juge. */

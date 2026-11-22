@@ -285,6 +285,20 @@ describe('GET /conversations/:conversationId/links', () => {
     expect(mockSendForbidden).not.toHaveBeenCalled();
   });
 
+  /**
+   * #20190 — ces témoins assertaient `reply._body.isModerator` et
+   * `participantCount`, **deux champs qu'aucun client n'a jamais reçus** : le
+   * schéma de réponse de la route ne les déclare pas, et fast-json-stringify
+   * applique `additionalProperties: false` par défaut. Un témoin posé sur
+   * l'objet du GESTIONNAIRE ne pouvait pas le voir — c'est « un témoin qui
+   * n'exerce pas la SÉRIALISATION atteste un contrat que personne ne
+   * respecte », et c'est ce qui a laissé vivre la NOTE qui prétendait que
+   * `sendSuccess` était impossible ici.
+   *
+   * Ce que le rang décide RÉELLEMENT est la SÉLECTION, et c'est ce qu'ils
+   * assertent désormais. Ce que le FIL porte est gardé par
+   * `conversation-links-deprecation.test.ts`, qui traverse `app.inject()`.
+   */
   it('moderator sees all links (aucun filtre createdBy)', async () => {
     const { prisma, reply, route } = getLinksRoute();
     seedMembership(prisma, { role: 'moderator' });
@@ -294,14 +308,7 @@ describe('GET /conversations/:conversationId/links', () => {
     await route.handler(req, reply);
     const findCall = prisma.conversationShareLink.findMany.mock.calls[0][0];
     expect(findCall.where).not.toHaveProperty('createdBy');
-    expect(reply._body).toMatchObject({
-      success: true,
-      isModerator: true,
-      data: [
-        expect.objectContaining({ id: 'link1', participantCount: 5 }),
-        expect.objectContaining({ id: 'link2', participantCount: 2 }),
-      ],
-    });
+    expect(mockSendSuccess).toHaveBeenCalledWith(reply, mockLinks);
   });
 
   it('admin role also gets all links', async () => {
@@ -312,7 +319,7 @@ describe('GET /conversations/:conversationId/links', () => {
     await route.handler(req, reply);
     const findCall = prisma.conversationShareLink.findMany.mock.calls[0][0];
     expect(findCall.where).not.toHaveProperty('createdBy');
-    expect(reply._body).toMatchObject({ isModerator: true });
+    expect(mockSendSuccess).toHaveBeenCalledWith(reply, []);
   });
 
   it('creator role also gets all links', async () => {
@@ -339,16 +346,25 @@ describe('GET /conversations/:conversationId/links', () => {
     // membre non-moderateur. Un temoin qui asserte l'IMPLEMENTATION plutot que le
     // COMPORTEMENT peut verrouiller un defaut au lieu de le prevenir.
     expect(findCall.where).toHaveProperty('createdBy', USER_ID);
-    expect(reply._body).toMatchObject({ isModerator: false });
+    expect(mockSendSuccess).toHaveBeenCalledWith(reply, [{ id: 'link1', currentUses: 1 }]);
   });
 
-  it('maps currentUses to participantCount in response', async () => {
+  /**
+   * Ce témoin s'appelait « maps currentUses to participantCount in response »
+   * et attestait une correspondance qui **n'atteignait aucun client** : le
+   * schéma ne déclare pas `participantCount`, donc le sérialiseur le
+   * supprimait. Le gestionnaire ne le compose plus (#20190), et ce qui compte
+   * — `currentUses`, que le schéma DÉCLARE — est servi tel quel.
+   */
+  it('sert `currentUses` tel quel, sans jumelle `participantCount` que le schéma supprimait', async () => {
     const { prisma, reply, route } = getLinksRoute();
     seedMembership(prisma, { role: 'member' });
     prisma.conversationShareLink.findMany.mockResolvedValue([{ id: 'l1', currentUses: 7 }]);
     const req = makeRequest({ params: { conversationId: CONV_ID } });
     await route.handler(req, reply);
-    expect(reply._body.data[0]).toMatchObject({ id: 'l1', currentUses: 7, participantCount: 7 });
+    const [, served] = mockSendSuccess.mock.calls[0] as [unknown, Array<Record<string, unknown>>];
+    expect(served[0]).toEqual({ id: 'l1', currentUses: 7 });
+    expect(served[0]).not.toHaveProperty('participantCount');
   });
 
   it('sends internal error on unexpected exception', async () => {
@@ -357,5 +373,25 @@ describe('GET /conversations/:conversationId/links', () => {
     const req = makeRequest({ params: { conversationId: CONV_ID } });
     await route.handler(req, reply);
     expect(mockSendInternalError).toHaveBeenCalledWith(reply, expect.any(String));
+  });
+
+  /**
+   * #20183 — la jumelle de #20135, qui a fermé l'ADMINISTRATION d'un lien à un
+   * modérateur actif-et-banni sans que personne regarde les portes de LECTURE.
+   * Les liens d'une conversation sont ses codes d'entrée VIVANTS : les servir à
+   * un membre exclu lui rend le passage qu'on vient de lui retirer.
+   *
+   * Bannir un membre déjà inactif n'écrit que `bannedAt`
+   * (`conversationBanState`), et `restore-for-me` rallumait `isActive` sans le
+   * lire (#10436, sans migration) : la ligne « active ET bannie » est donc un
+   * état que la base PORTE, pas une hypothèse.
+   */
+  it('#20183 — rend le 404 d\'une conversation inconnue à un membre actif-et-BANNI', async () => {
+    const { prisma, reply, route } = getLinksRoute();
+    seedMembership(prisma, { role: 'moderator', bannedAt: new Date('2026-11-01T00:00:00Z') });
+    const req = makeRequest({ params: { conversationId: CONV_ID } });
+    await route.handler(req, reply);
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found', { code: 'CONVERSATION_NOT_FOUND' });
+    expect(prisma.conversationShareLink.findMany).not.toHaveBeenCalled();
   });
 });

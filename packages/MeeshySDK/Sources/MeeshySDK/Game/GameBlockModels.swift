@@ -267,25 +267,29 @@ public struct GameBlock: Codable, Sendable, Equatable {
     public struct Missions: Codable, Sendable, Equatable {
         public let dayKey: String
         public let prismDay: Bool
-        /// Niveau 5 atteint.
+        /// Niveau 5 atteint : le Rêve complet. En dessous, `items` porte le premier Rêve, d'un acte (#17370).
         public let unlocked: Bool
         public let items: [Mission]
+        /// Sous le niveau 5 : les étincelles qui manquent avant le Rêve complet (#17370). `nil` d'un serveur antérieur
+        /// ou si illisible (le champ tombe seul).
+        public let fullDreamIn: Int?
         public let rerollAvailable: Bool
         /// La mission personnelle du jour (#9539), servie à côté des trois ; `nil` d'un ancien serveur ou si illisible.
         public let personal: PersonalMission?
 
         public init(dayKey: String, prismDay: Bool, unlocked: Bool, items: [Mission], rerollAvailable: Bool,
-                    personal: PersonalMission? = nil) {
+                    personal: PersonalMission? = nil, fullDreamIn: Int? = nil) {
             self.dayKey = dayKey
             self.prismDay = prismDay
             self.unlocked = unlocked
             self.items = items
+            self.fullDreamIn = fullDreamIn
             self.rerollAvailable = rerollAvailable
             self.personal = personal
         }
 
         private enum CodingKeys: String, CodingKey {
-            case dayKey, prismDay, unlocked, items, rerollAvailable, personal
+            case dayKey, prismDay, unlocked, items, fullDreamIn, rerollAvailable, personal
         }
 
         public init(from decoder: Decoder) throws {
@@ -294,6 +298,7 @@ public struct GameBlock: Codable, Sendable, Equatable {
             prismDay = try container.decode(Bool.self, forKey: .prismDay)
             unlocked = try container.decode(Bool.self, forKey: .unlocked)
             items = try container.decode([Mission].self, forKey: .items)
+            fullDreamIn = (try? container.decodeIfPresent(Int.self, forKey: .fullDreamIn)).flatMap { $0.flatMap { $0 >= 0 ? $0 : nil } }
             rerollAvailable = try container.decode(Bool.self, forKey: .rerollAvailable)
             personal = (try? container.decodeIfPresent(PersonalMission.self, forKey: .personal)) ?? nil
         }
@@ -346,9 +351,13 @@ public struct GameBlock: Codable, Sendable, Equatable {
         public let relightPrice: Int
         public let status: FlameStatus
         public let canRelight: Bool
+        /// Vrai le jour où la première Veilleuse est offerte, dans le fuseau du compte. Absent devant un serveur
+        /// antérieur : rien ne s'annonce.
+        public let freezeGifted: Bool?
 
         public init(days: Int, form: FlameFormKey?, bonusPercent: Int, freezes: Int, maxFreezes: Int,
-                    freezePrice: Int, relightPrice: Int, status: FlameStatus, canRelight: Bool) {
+                    freezePrice: Int, relightPrice: Int, status: FlameStatus, canRelight: Bool,
+                    freezeGifted: Bool? = nil) {
             self.days = days
             self.form = form
             self.bonusPercent = bonusPercent
@@ -358,6 +367,7 @@ public struct GameBlock: Codable, Sendable, Equatable {
             self.relightPrice = relightPrice
             self.status = status
             self.canRelight = canRelight
+            self.freezeGifted = freezeGifted
         }
     }
 

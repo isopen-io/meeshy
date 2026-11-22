@@ -1,5 +1,5 @@
 import * as relationsEndpoints from '@meeshy/shared/api/endpoints/relations';
-import { SHARED_LOCATION_CIRCLES, SHARED_LOCATION_DEFAULT_PRECISION, SHARED_LOCATION_PRECISIONS } from '@meeshy/shared/types/shared-location-constants';
+import { SHARED_LOCATION_CIRCLES, SHARED_LOCATION_DEFAULT_PRECISION, SHARED_LOCATION_PRECISIONS, type SharedLocationSource } from '@meeshy/shared/types/shared-location-constants';
 import type { SharedLocationChangedEventData, SharedLocationOwnRecipient, SharedLocationOwnSnapshot } from '@meeshy/shared/types/shared-location';
 
 import { bboxQuery, type GeoBbox } from '@/lib/map/slippy';
@@ -84,9 +84,18 @@ export function decodeOwnSharedLocation(raw: unknown): SharedLocationOwnSnapshot
   const wire = objectOf(raw);
   if (wire === null || !Array.isArray(wire.recipients)) return null;
   const recipients = wire.recipients.flatMap((row) => decodeOwnRecipient(row) ?? []);
-  const own = { recipients, expiresAt: instantOf(wire.expiresAt) };
+  const own = { recipients, expiresAt: instantOf(wire.expiresAt), ...sourceOf(wire.source), ...(wire.acceptsExpectedStart === true ? { acceptsExpectedStart: true } : {}) };
   return typeof wire.startedAt === 'string' ? { ...own, startedAt: wire.startedAt } : own;
 }
+
+/**
+ * D'où vient le point servi (#20126) : absente (passerelle d'avant, ou aucun partage), rien n'est dit ; une valeur
+ * inconnue se lit comme un point choisi — dans le doute, la position réelle ne remplace rien sans qu'on le demande.
+ */
+const sourceOf = (raw: unknown): { readonly source?: SharedLocationSource } => {
+  if (raw === undefined || raw === null) return {};
+  return { source: raw === 'device' ? 'device' : 'manual' };
+};
 
 /** `null` : hors ligne, refus, passerelle d'avant (404) ou données de démonstration — rien n'est conclu. */
 export async function loadOwnSharedLocation(deps: SharedLocationDeps): Promise<SharedLocationOwnSnapshot | null> {

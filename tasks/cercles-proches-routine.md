@@ -1754,3 +1754,188 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   valide. PR fusionnée dans `dev`, #20087 fermée à la main.
 - Prochain lot : #20115 (sortie du fantôme pour un point choisi) avant d'annoncer `acceptsManualSource` (#19557), puis
   #20126 (web + Android), #20127, #20054, #20056, #20086.
+
+## 2026-11-21 — réveil de 7 h : lot #20115 (point choisi après le fantôme, courses)
+
+- Reprise : aucune PR de la routine ouverte. Branche `claude/cercles-20115-fantome-point-choisi`, passerelle seule.
+- Mise en œuvre : à la sortie du fantôme, un point choisi est REJOUÉ (daté de la sortie) au direct et au rattrapage, et
+  sa fin redevient à dire ; une position d'appareil reste retenue jusqu'à la suivante. `fanOut` relit le pointeur avant
+  d'émettre : une mise à jour dont l'éventail est plus lent qu'un point choisi ne sert plus rien. Un démarrage avec
+  position SANS source prend le pointeur à condition qu'il désigne encore la session lue (`claim` avec `expected`,
+  script Lua) : un point choisi arrivé entre-temps n'est jamais remplacé, même un instant (`FIXED_POINT`), et un partage
+  d'appareil qui l'a devancé fait relire et retenter (3 essais, puis `UNAVAILABLE`).
+- Audit adversarial : BLOQUANT sur la première version (une restauration après coup du point choisi défaisait un
+  remplacement `device` légitime) ; corrigé par la prise conditionnelle, qui supprime la fenêtre. Mineurs actés : la
+  sortie du fantôme d'un point choisi part tout de suite (un lecteur flouté apprend l'heure de sortie à l'arrivée de
+  l'événement — c'est ce que l'issue demande) ; la fenêtre résiduelle entre la relecture du pointeur et l'envoi est
+  antérieure au lot et rattrapée par `reconcile`.
+- Gates : suites position 32/32 (401 tests), `tsc` 0, mutation de la prise conditionnelle ⇒ 2 témoins rouges, script
+  Lua joué une fois contre un vrai `redis-server` local (hors dépôt).
+- Prochain lot : annoncer `acceptsManualSource` (#19557, avec les préconditions du commentaire de #20115 : schéma de
+  `ownSharedLocationSchema`, plancher `MIN_APP_VERSION`), puis #20126 (web + Android), #20127, #20054, #20056, #20086.
+
+## 2026-11-21 — réveil de 11 h : annoncer « Choisir sur la carte » (#19557)
+
+- Reprise : aucune PR de la routine ouverte ; #20173 (#20115) fusionnée par le porteur à 9 h 46. Aucune branche vivante
+  n'écrit `routes/relations/locations.ts`.
+- Lot : la dernière moitié de #19557. `GET /relations/locations/mine` sert `acceptsManualSource: true`, avec ou sans
+  partage en cours (`servedOwnSharedLocation`), et `ownSharedLocationSchema` le DÉCLARE — sans quoi fast-json-stringify
+  l'aurait retiré (précondition 1 du commentaire de #20115). `SharedLocationOwnSnapshot` le porte, additif.
+- Précondition 2 (plancher `MIN_APP_VERSION`) : NON posé, par mesure. « Choisir sur la carte » (#19558, 18 nov.) et la
+  lecture de la source (#20128, 21 nov.) sont tous deux sous `MARKETING_VERSION` 1.1.8 : aucun plancher de version ne les
+  sépare. Le seul effet d'un binaire intermédiaire est un échec générique devant un point choisi depuis un AUTRE appareil
+  (la passerelle refuse, `FIXED_POINT`) — aucune fuite. Précondition 3 (repli `INVALID`) : sans objet dès l'annonce,
+  le client ne proposant le point choisi qu'à une passerelle qui l'accepte.
+- Web et Android ne lisent pas l'annonce (ils n'ont pas de point choisi) : leur part reste #20126.
+- Gates : témoin de sérialisation 3/3, mutation (clé retirée du schéma) ⇒ 2 rouges ; suites position + routes de
+  relations 35 suites / 444 tests ; `tsc` 0.
+- Prochain lot : #20126 (web + Android lisent la source servie), puis #20127, #20054, #20056, #20086.
+
+## 2026-11-21 — réveil de 13 h : la moitié web de #20126 (un point choisi ne se remplace pas en silence)
+
+- Reprise : la PR #20202 (#19557, annoncer `acceptsManualSource`) était menée par une autre session vivante (fusion de
+  `dev` et CI relancée à 13 h 03) : ce réveil n'y touche pas. Aucune branche n'écrit `apps/web/src/lib/shared-locations`.
+- Lot : web seul de #20126. Le web lit `source` sur `GET /relations/locations/mine` (inconnue ⇒ `manual`, absente ⇒
+  rien) ; devant un point choisi l'onglet ne suit plus la position et n'en envoie aucune (marque `<clé>.fixedPoint`,
+  relue au rechargement et entre onglets) ; un relevé refusé `FIXED_POINT` coupe le suivi et relit ; « Partager » rend
+  `replaces-chosen-point` sans demander de relevé ni rien envoyer, la fiche demande « Montrer votre position réelle ? »
+  (« Garder le point choisi » en premier), puis rejoue le même choix avec `source: 'device'`. Un démarrage refusé
+  `FIXED_POINT` (point choisi ailleurs pendant l'envoi) relit et demande. « Arrêter » devant un point choisi republie la
+  liste seule et ne se replie jamais sur la position de l'appareil.
+- Audit adversarial : non bloquant. Corrigé dans le lot : trois gardes de l'onglet que la passerelle seule tenait ont
+  leur témoin (relevé en vol après la marque, suivi non rallumé par un retrait, aucun repli sur la position devant un
+  point choisi) ; une source absente lève la marque (une passerelle d'avant ne sert jamais de point choisi) ; un refus
+  `FIXED_POINT` à l'envoi rend `received` tel qu'il était ; la liste vidée par l'échéance lève la marque ; l'écran
+  redemande au lieu d'afficher le titre en toast. Noté : une source inconnue se lit `manual` (choix fail-closed).
+- Android : issue de suivi #20212 (même milestone). La confirmation liée au partage montré et les noms concernés restent
+  #20127.
+- Gates : `bun test` complet 34 928 verts, 2 rouges dont 1 hérité (`act-leak-guard`, rouge sans le lot) et 1 corrigé
+  dans le lot (cliquet des boutons sans réponse d'appui : `active:scale-[0.98]` sur les deux boutons neufs) ; `tsc` 0 ;
+  `vite build` vert ; poids vert ; les gates navigateur (verbosité, Playwright) ne tournent pas en conteneur, ils se
+  prouvent en CI.
+- Prochain lot : #20212 (Android), puis #20127, #20054, #20056, #20086.
+
+## 2026-11-21 — réveil de 15 h : Android lit la source servie (#20212)
+
+- Reprise : la PR #20214 (moitié web de #20126) est menée par le réveil de 13 h, sa CI `ci.yml` en file depuis 14 h 27 :
+  ce réveil n'y touche pas (un push annulerait le run) ; elle a été fusionnée dans `dev` pendant ce réveil (711e1cafc9).
+  Aucune branche vivante n'écrit les chemins Android de la position.
+- Lot : #20212, iso iOS (#20087) et web (#20126). `:core:model` lit `source` (inconnue ⇒ point choisi, absente ⇒ rien ne
+  change), `SharedLocationRoster` garde le point choisi (survit au lancement, s'éteint sans personne), `FIXED_POINT` se lit,
+  et seul un démarrage avec position ET accord porte `source: 'device'`. Le centre ne suit ni n'envoie devant un point
+  choisi, ne republie jamais sa position en repli (tout s'arrête plutôt), et un refus `FIXED_POINT` (relevé ou démarrage)
+  coupe le suivi et relit. La fiche d'un ami demande « Montrer ta position réelle ? », le choix fait attendant la réponse.
+- Libellés : titre, confirmer et garder adoptés du catalogue iOS ; le message iOS (111 caractères en français) aurait
+  fait monter le cliquet de verbosité d'`android:feature/profile` — il est remplacé par une phrase Android de moins de
+  80 caractères dans les 7 langues.
+- Gates locaux : `jvm-check` `:core:model` (`*SharedLocation*`, 7 classes dont la nouvelle, 0 échec), verbosité verte,
+  chaînes générées à jour. Centre, ViewModel et Compose se prouvent par `android.yml` sur la PR.
+- Prochain lot : #20127 (confirmation liée au partage montré, puis web et Android), #20054, #20056, #20086.
+
+## 2026-11-21 — réveil de 17 h : la confirmation vaut pour le partage montré, sur iOS (#20127)
+
+- Reprise : aucune PR de la routine ouverte ; #20230 (Android lit la source servie, #20212) fusionnée par le porteur à
+  17 h 11. Aucune branche vivante n'écrit `apps/ios/Meeshy/Features/SharedLocation`.
+- Lot : la moitié iOS de #20127 (iOS est la référence). La question « Montrer ta position réelle ? » porte
+  `SharedLocationPointReplacement` — le `startedAt` servi (relu, ou rendu par l'accusé du démarrage) et ceux qui voient le
+  point. La feuille le rend à `share(replacing:)` ; le centre RELIT alors le partage servi, même s'il l'a déjà lu, et ne
+  fait partir la position réelle que si le démarrage est le même et que personne n'a été ajouté depuis (une personne
+  sortie ne rend pas la réponse caduque) ; sinon rien ne part et la question se repose avec la liste à jour. Le message
+  nomme trois personnes au plus, dans l'ordre de la feuille, puis « et N autres » (inconnus d'ici compris) — deux clés
+  neuves en sept langues, dont une plurielle.
+- Web et Android : issue de suivi #20248 (même milestone).
+- Gates locaux : `check_localization.py`, `check_house_rules.sh` (42 règles), `check_cohesion_budget.sh`,
+  `check_test_registration.sh`, couleurs codées en dur : verts. iOS ne compile pas en conteneur : preuve par la CI de la
+  PR (`ios.yml`, `sdk-tests.yml` en `workflow_dispatch`).
+- Prochain lot : #20248 (web + Android), puis #20054, #20056, #20086.
+
+## 2026-11-21 — réveil de 21 h : la moitié web de #20248 (la confirmation vaut pour le partage montré)
+
+- Reprise : la PR #20250 (moitié iOS de #20127, tête b4067fea0) attend sa CI iOS (build en cours depuis 21 h 11, tranches
+  SDK en file) : ce réveil n'y pousse rien (un push annulerait le run). Aucune branche n'écrit les chemins web du lot.
+- Lot : web de #20248, iso `SharedLocationPointReplacement` (#20127). `pointReplacementOps` (démarrage servi + ensemble
+  des destinataires ; une personne sortie ne rend pas la réponse caduque) ; le centre garde `servedStart` (relecture et
+  accusé) ; « Partager » devant un point choisi rend `{ kind: 'replaces-chosen-point', asked }`, et la réponse
+  (`replacing`) relit le partage servi sous le verrou des onglets : un autre démarrage ou quelqu'un ajouté ⇒ rien ne
+  part, la question se repose à jour ; relecture en panne ⇒ `offline`. La fiche nomme trois personnes au plus (l'ami
+  de la fiche et les amis acceptés déjà en cache, sans requête), puis « et N autres personnes » ; 3 clés × 7 langues.
+- Audit adversarial : non bloquant. Corrigé dans le lot : une question posée après un rechargement relit d'abord le
+  démarrage servi (sinon une confirmation de trop) ; commentaire périmé. Le jeton ne voyage pas jusqu'à la passerelle
+  (fenêtre d'un aller-retour, iso iOS) : c'est #20249.
+- Gates : suites position + fiche 197/197 ; suite web complète 34 978 verts, 1 rouge hérité (`act-leak-guard`) ;
+  `tsc` 0 ; `vite build` et poids verts ; mutation (démarrage ignoré) ⇒ 3 rouges. Les gates navigateur
+  (`check-profile`, Playwright) ne tournent pas en conteneur.
+- Android : reste à faire sous #20248. Prochain lot : #20250 à fusionner, puis Android de #20248, #20249, #20054, #20056.
+
+## 2026-11-22 — réveil de 3 h : la moitié Android de #20248 (la confirmation vaut pour le partage montré)
+
+- Reprise : la PR #20250 (moitié iOS de #20127, tête 37d0ba52d, `ci.yml` vert) attend toujours sa CI iOS et SDK, en file
+  depuis 1 h 50 UTC (65 runs en file) : ce réveil n'y pousse rien (un push annulerait la file). Aucune branche n'écrit les
+  chemins Android de la position.
+- Lot : Android de #20248, iso `SharedLocationPointReplacement` (iOS #20127, web #20278). `:core:model` porte la question
+  (démarrage servi + destinataires, une personne sortie tolérée) et son audience (trois noms au plus, puis le compte) ;
+  `ReplacesChosenPoint` porte la question ; `share(replacing = …)` relit TOUJOURS le partage servi et la repose à jour si un
+  autre démarrage a eu lieu ou si quelqu'un a été ajouté — rien ne part, aucun relevé n'est demandé ; relecture en panne ⇒
+  `OFFLINE`. `servedStart` suit le dernier démarrage nommé (relu ou accusé), effacé au changement de compte et au `wipe`.
+  La fiche nomme la personne de la fiche et les amis du carnet GARDÉ (`AcceptedContactsSource.cached`, aucune requête),
+  puis « et N autres personnes » (`joinParticipantNames`, ICU, rendu public dans `sdk-ui`).
+- Libellés : les clés iOS `messageNamed` / `others` ne sont pas encore sur `dev` (#20250 non fusionnée) : deux libellés
+  Android écrits à la main, sous 80 caractères dans les 7 langues ; cliquet de verbosité vert, chaînes générées à jour.
+- Gates locaux : `jvm-check` `:core:model` `*SharedLocationPointReplacement*` 6/6. Centre, ViewModel et Compose se
+  prouvent par `android.yml` sur la PR.
+- Audit adversarial : non bloquant. Corrigé dans le lot : une réponse prend la position AVANT de relire (iso le web ;
+  iOS relit avant le relevé, et un point relancé ailleurs pendant l'attente du GPS serait écrasé), la fiche compose ses
+  noms par une loi testée. Noté : la passerelle n'accepte pas de `startedAt` attendu (fenêtre d'un aller-retour, #20249) ;
+  iOS et le web nomment un nom vide là où Android l'écarte.
+- Prochain lot : fusionner #20250 dès sa CI iOS verte (fermer #20127 à la main), puis #20249, #20054, #20056.
+
+## 2026-11-22 — réveil de 7 h : la moitié passerelle de #20249 (un démarrage nomme le partage qu'il remplace)
+
+- Reprise : la PR #20309 (Android de #20248) a été fusionnée dans `dev` à 5 h 39 et #20248 est fermée. La PR #20250
+  (iOS de #20127, tête 6935d929d) est menée par une autre session vivante, sa CI iOS et SDK en file depuis 5 h 43 : ce
+  réveil n'y pousse rien. Aucune branche n'écrit les chemins du lot.
+- Lot : passerelle de #20249. Un démarrage peut porter `expectedStartedAt` (le `startedAt` du partage MONTRÉ dans la
+  confirmation « Montrer ta position réelle ? ») ; si le partage servi ne le porte plus (un autre appareil a démarré,
+  ou plus de partage), la passerelle refuse `SHARED_LOCATION_STARTED_ELSEWHERE` sans rien appliquer. La prise est alors
+  conditionnée au pointeur lu (#20115) et le nom se revérifie à chaque pointeur qui bouge ; une liste seule publiée
+  ailleurs garde `startedAt`, donc le démarrage relit et passe. Clé additive, annoncée par `acceptsExpectedStart` sur
+  `GET /relations/locations/mine` ; sans la clé, rien ne change.
+- Audit adversarial : non bloquant. Corrigé dans le lot : deux démarrages dans la même milliseconde portaient le même
+  `startedAt`, donc le même nom (la personne ajoutée ailleurs disparaissait encore) ; `startedAt` est désormais
+  strictement postérieur à celui du partage remplacé, relu après la prise si le pointeur a bougé. Pour les lots clients :
+  sur `INVALID` après avoir envoyé la clé, relire et redemander (jamais renvoyer sans la clé) ; renvoyer `startedAt` tel
+  que servi ; `STARTED_ELSEWHERE` couvre aussi « le partage s'est arrêté ».
+- Gates : voir la PR. Clients (iOS, web, Android) : restent sous #20249, un lot chacun.
+- Prochain lot : web de #20249 (envoyer la clé sur `acceptsExpectedStart`, relire et redemander sur `STARTED_ELSEWHERE`),
+  puis Android, puis iOS après #20250 ; #20308, #20054, #20056.
+
+## 2026-11-22 — réveil de 9 h : la moitié web de #20249 (une réponse nomme le partage montré)
+
+- Reprise : #20250 (iOS de #20127) et #20329 (passerelle de #20249) ont été fusionnées dans `dev` ; #20127 est fermée.
+  Aucune branche vivante n'écrit les chemins web de la position.
+- Lot : web de #20249. La relecture décode `acceptsExpectedStart` ; une réponse à « Montrer votre position réelle ? »
+  nomme le partage montré (`expectedStartedAt`, le `startedAt` tel que servi, seulement s'il a la forme ISO que la
+  passerelle relit). Sur `STARTED_ELSEWHERE` (partage arrêté compris) ou `INVALID` d'une charge PARTIE avec la clé, rien
+  n'a été appliqué : l'onglet relit, repose la question à jour si un point choisi est encore montré, sinon rend l'échec
+  sans rien relancer (la décision prise ailleurs tient). Jamais renvoyé sans la clé ; le repli sans échéances la garde.
+- Audit adversarial : non bloquant pour la vie privée. Corrigé dans le lot : un refus LOCAL (au-delà du plafond de
+  destinataires) relançait la même question en boucle ; un `startedAt` servi non ISO aurait bouclé de même. Noté, non
+  corrigé : un refus certain efface encore `publishedStart` (comme `fixed-point` avant le lot, sans fuite) ; un partage
+  servi sans `startedAt` part sans la clé (sessions d'avant #18580, comportement d'avant).
+- Gates : voir la PR. Android et iOS de #20249 : un lot chacun.
+- Prochain lot : Android de #20249, puis iOS ; #20308, #20054, #20056.
+
+## 2026-11-22 — réveil de 13 h : la moitié Android de #20249 (une réponse nomme le partage montré)
+
+- Reprise : #20345 (web de #20249) a été fusionnée dans `dev` à 12 h 41 ; aucune PR de la routine ouverte, aucune
+  branche vivante n'écrit les chemins Android de la position.
+- Lot : Android de #20249, iso #20345. La relecture lit `acceptsExpectedStart` (seul un booléen vrai compte) ; le
+  remplacement d'un point choisi porte `expectedStartedAt` (le `startedAt` tel que servi, forme ISO seulement), le repli
+  sans échéances le garde. Sur `STARTED_ELSEWHERE` (arrêt compris) ou `INVALID` d'une charge partie avec la clé, rien
+  n'a été écrit : l'appareil relit, repose la question à jour si un point choisi est encore montré, sinon rend le refus
+  sans rien relancer ; une relecture en panne rend « hors ligne ». Une passerelle relue sans l'annonce fait repartir la
+  charge d'avant. La fiche affiche le nouveau refus comme les autres échecs : aucune chaîne nouvelle.
+- Banc d'essai : `SharingDevice` sort de `SharedLocationSharingSyncTest` (1153 → 1052 lignes) et gagne `onStart` (ce qui
+  se passe ailleurs pendant que le démarrage voyage).
+- Gates : modèles Kotlin (`jvm-check`, `SharedLocation*`) verts ; le centre se prouve par `android.yml` sur la PR.
+- Prochain lot : iOS de #20249, puis #20308, #20054, #20056.

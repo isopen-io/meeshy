@@ -15,14 +15,24 @@ import type { ApiResult } from '@/lib/api/http';
 export const CREATION_FAILED = 'Impossible d’ouvrir cette conversation — réessayez dans un instant.';
 export const CREATION_OFFLINE = 'Hors ligne — reconnectez-vous puis touchez de nouveau la personne.';
 
+/**
+ * `participant-without-device` (#20073, #20075) — un tête-à-tête chiffré de
+ * bout en bout ne naît que si chacun a un appareil chiffré : rien n'est créé,
+ * et l'écran dit la cause dans la langue d'interface, au nom de la personne
+ * touchée (la passerelle ne nomme personne à la création).
+ */
 export type CreationOutcome =
   | { readonly kind: 'open'; readonly conversationId: string }
-  | { readonly kind: 'failure'; readonly message: string };
+  | { readonly kind: 'failure'; readonly message: string }
+  | { readonly kind: 'participant-without-device' };
+
+export const PARTICIPANT_WITHOUT_DEVICE = 'E2EE_PARTICIPANT_WITHOUT_DEVICE';
 
 export function creationOutcomeOf(params: {
   readonly result: ApiResult<{ readonly id: string }>;
   readonly online: boolean;
 }): CreationOutcome {
   if (params.result.ok) return { kind: 'open', conversationId: params.result.data.id };
+  if (params.result.code === PARTICIPANT_WITHOUT_DEVICE) return { kind: 'participant-without-device' };
   return { kind: 'failure', message: params.online ? CREATION_FAILED : CREATION_OFFLINE };
 }

@@ -30,10 +30,21 @@ export function createLiveSocketWatchers() {
     }
   };
 
+  /** Symétrique d'`attach` (#20304) : un détachement qui lève ne retient pas les autres —
+   * sans quoi la boucle de `connect` s'interromprait et laisserait les observateurs
+   * suivants accrochés à la connexion morte, ce que le doc-comment interdit. */
+  const release = (detach: (() => void) | null): void => {
+    try {
+      detach?.();
+    } catch {
+      /* un observateur qui échoue ne retient pas les autres */
+    }
+  };
+
   return {
     /** La connexion courante a changé (`null` : fermée) : tous se détachent de l'ancienne, puis s'accrochent à la nouvelle. */
     connect: (socket: SocketClient | null): void => {
-      for (const { detach } of registrations.values()) detach?.();
+      for (const { detach } of registrations.values()) release(detach);
       current = socket;
       for (const [id, { watcher }] of registrations) registrations.set(id, attach(watcher));
     },
@@ -42,7 +53,7 @@ export function createLiveSocketWatchers() {
       const id = Symbol('live-socket-watcher');
       registrations.set(id, attach(watcher));
       return () => {
-        registrations.get(id)?.detach?.();
+        release(registrations.get(id)?.detach ?? null);
         registrations.delete(id);
       };
     },

@@ -124,6 +124,9 @@ settings:
   # par le compteur CI_BUILD_NUMBER de Xcode Cloud — cf. le bloc
   # CURRENT_PROJECT_VERSION ci-dessus.)
   #
+  # 1.1.9 le 2026-11-22 (#20368) : la 1.1.8 est READY_FOR_DISTRIBUTION, son train est
+  # fermé ; 24 commits iOS/SDK attendent derrière elle.
+  #
   # 1.1.8 le 2026-11-13 (#17911) : la 1.1.7 est READY_FOR_DISTRIBUTION, son train est
   # fermé (ITMS-90186) et tout build qui la porte encore est refusé (ITMS-90062).
   #
@@ -153,7 +156,7 @@ settings:
   # pourtant exactement cela ; c'est la CLI qui ne l'atteint pas. Créer la
   # version sur ASC d'abord, puis relancer `version set` pour les fichiers :
   # il constate alors « already reads 1.0.9 » et écrit les trois sites.
-  MARKETING_VERSION: "1.1.8"
+  MARKETING_VERSION: "1.1.9"
 
   # Équipe de signature (Automatic). Indispensable pour `meeshy.sh device`
   # (déploiement sur appareil réel) : sans DEVELOPMENT_TEAM, la signature

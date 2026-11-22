@@ -5,6 +5,49 @@
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { EXTERNAL_CONVERSATION_TYPE } from '@meeshy/shared/types/external-conversation';
 import { viewerRequestClause, type MessageRequestListMode } from '../../../services/messaging/messageRequests';
+import { PARTICIPATION_VIVANTE } from './access-control';
+
+/**
+ * LE PÉRIMÈTRE DE BASE : les conversations que CE lecteur a le droit d'ouvrir.
+ *
+ * Extraite de `core-list.ts` par #20209, et pas seulement pour le budget de
+ * taille : tant que cette clause vivait dans un littéral inline, aucun témoin
+ * ne pouvait la CAPTURER — il ne pouvait qu'en recopier la forme, et **un
+ * verdict posé sur une copie décrit la LOI, pas le site**. Exportée, elle
+ * s'exerce.
+ *
+ * Deux choses que cette clause doit tenir ensemble, et c'est pourquoi elle est
+ * UNE fonction :
+ *
+ * 1. **La PARTICIPATION VIVANTE, par `AND` et JAMAIS par étalement.** La
+ *    clause porte déjà une clé `OR` (le `deletedForMe` ci-dessous) :
+ *    `...PARTICIPATION_VIVANTE` l'ÉCRASERAIT en silence — le seul piège
+ *    d'`unsetOrNull` (`utils/prisma-unset.ts`) — et ferait disparaître de la
+ *    liste toute conversation dont la ligne héritée ne porte pas le champ.
+ *    Sous `isActive` nu, la conversation dont un membre est EXCLU figurait
+ *    encore dans sa liste principale : quatrième genre de porte keyée sur
+ *    l'appelant (#20155), l'appelant nommé dans un FILTRE DE RELATION, que le
+ *    balayage des audiences ne traverse pas — par décision écrite, et juste
+ *    pour ce qu'il mesure.
+ * 2. **`deletedForMe` nul OU ABSENT.** Sans le `isSet: false` (filtre
+ *    MongoDB-only de Prisma), les documents `Participant` hérités qui ne
+ *    possèdent pas le champ du tout — créés avant l'introduction du concept,
+ *    10 documents sur 716 dans l'instance de production du 2026-05-11 —
+ *    étaient exclus de la liste, et les tête-à-tête correspondants
+ *    disparaissaient même après un tiré-pour-rafraîchir. Un `NOT: { not: null }`
+ *    ou un `deletedForMe: null` simple ont la même limite : ils ne matchent que
+ *    les champs présents avec valeur nulle.
+ */
+export const conversationListScope = (userId: string): Prisma.ConversationWhereInput => ({
+  participants: {
+    some: {
+      userId,
+      AND: [PARTICIPATION_VIVANTE],
+      OR: [{ deletedForMe: null }, { deletedForMe: { isSet: false } }],
+    },
+  },
+  isActive: true,
+});
 
 /**
  * Visibilité DM vide — Prisme design doc 2026-08-04. Posée APRÈS le bloc

@@ -2,9 +2,12 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
+import { DIRECT, harness, PEER, type FakeLink } from '@/test-support/call-engine-harness';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
-import type { CallCaption } from '@/lib/calls/call-captions';
+import { monotonicClock, TRANSLATION_WAIT_MS, type CallCaption } from '@/lib/calls/call-captions';
+import { browserCaptionsDeps } from '@/lib/calls/call-captions-runtime';
 import { speakerColor } from '@/lib/calls/call-speaker-color';
 import { callStore, type ActiveCall } from '@/lib/calls/call-store';
 import { useCaptionReveals } from '@/lib/calls/call-captions-unfold-store';
@@ -223,7 +226,7 @@ describe('les gestes', () => {
   });
 
   test('les trois points retombent en fondu à l’échéance, et le lecteur d’écran n’entend plus l’attente', async () => {
-    const view = mount({ captions: [caption({ id: 'w-es', original: 'Hola a todos', translated: null, pair: null, origin: { language: 'es', foreign: true, awaitingUntil: Date.now() + 40 } })] });
+    const view = mount({ captions: [caption({ id: 'w-es', original: 'Hola a todos', translated: null, pair: null, origin: { language: 'es', foreign: true, awaitingUntil: performance.now() + 40 } })] });
     expect(view.host.querySelector('[data-call-caption-waiting]')?.hasAttribute('data-leaving')).toBe(false);
     expect(view.host.textContent).toContain('Traduction en cours');
     await settle(80);
@@ -233,6 +236,63 @@ describe('les gestes', () => {
     expect(view.host.querySelector('[data-call-caption-waiting]')).toBeNull();
     expect(view.host.querySelector('[data-call-caption-languages]')?.textContent).toBe('ES');
     view.done();
+  });
+
+  for (const [label, jump] of [
+    ['recule', -3_600_000],
+    ['avance', 3_600_000],
+  ] as const) {
+    test(`l’horloge murale ${label} d’une heure pendant l’attente : les points tiennent jusqu’à l’échéance monotone, puis tombent (#20298)`, async () => {
+      const wall = Date.now();
+      const until = performance.now() + 60;
+      const realNow = Date.now;
+      Date.now = () => wall + jump;
+      const view = mount({ captions: [caption({ id: 'w-es', original: 'Hola a todos', translated: null, pair: null, origin: { language: 'es', foreign: true, awaitingUntil: until } })] });
+      try {
+        expect(view.host.querySelector('[data-call-caption-waiting]')?.hasAttribute('data-leaving')).toBe(false);
+        expect(view.host.textContent).toContain('Traduction en cours');
+        await settle(120);
+        expect(view.host.textContent).not.toContain('Traduction en cours');
+      } finally {
+        Date.now = realNow;
+        view.done();
+      }
+    });
+  }
+
+  test('le chunk des sous-titres remet au contrôleur la MÊME horloge que celle que le panneau lit par défaut (#20320)', () => {
+    expect(browserCaptionsDeps().elapsed).toBe(monotonicClock);
+  });
+
+  test('le panneau lit l’horloge monotone du contrôleur : les points tombent quand SA fausse horloge passe l’échéance, sans toucher à performance.now (#20320)', async () => {
+    const h = harness();
+    await h.engine.start(DIRECT);
+    h.engine.handle(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, { callId: 'call-1', participant: { id: 'p-2', userId: PEER, username: 'amina', displayName: 'Amina' } });
+    h.linkState(h.links[0] as FakeLink, 'connected');
+    const channel = { readyState: 'open', send: () => undefined, onmessage: null as ((event: { data: string }) => void) | null, onclose: null };
+    h.links[0]?.deps.onChannel?.(channel as unknown as RTCDataChannel);
+    channel.onmessage?.({ data: JSON.stringify({ type: 'transcript-entry', entry: { id: 'w-es', callId: 'call-1', speakerId: PEER, speakerDisplayName: 'Amina', text: 'Hola a todos', language: 'es', capturedAtMs: 5_000, isFinal: true, confidence: 0.9 } }) });
+    const live = (): ActiveCall => h.call() as ActiveCall;
+    expect(live().captions[0]?.origin?.awaitingUntil).toBe(h.elapsed() + TRANSLATION_WAIT_MS);
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const render = () => act(() => root.render(<CallCaptionsPanel call={live()} language="fr" colorOf={colorOf} surface="glass" clock={h.elapsed} />));
+    render();
+    try {
+      expect(host.querySelector('[data-call-caption-waiting]')?.hasAttribute('data-leaving')).toBe(false);
+      h.advance(TRANSLATION_WAIT_MS - 1);
+      render();
+      expect(host.textContent).toContain('Traduction en cours');
+      h.advance(2);
+      render();
+      expect(host.querySelector('[data-call-caption-waiting]')?.hasAttribute('data-leaving')).toBe(true);
+      expect(host.textContent).not.toContain('Traduction en cours');
+    } finally {
+      act(() => root.unmount());
+      host.remove();
+      h.engine.hangup();
+    }
   });
 
   test('le pied pose le bouton Journal quand l’appel peut l’ouvrir, et il l’ouvre (#17346)', () => {
@@ -361,7 +421,7 @@ describe('les gestes', () => {
 describe('la phrase dit sa langue d’origine et son attente de traduction', () => {
   const spanish = (until: number | null, overrides: Partial<CallCaption> = {}) =>
     caption({ id: 'w-es', original: 'Hola a todos', translated: null, pair: null, origin: { language: 'es', foreign: true, awaitingUntil: until }, ...overrides });
-  const soon = () => Date.now() + 60_000;
+  const soon = () => performance.now() + 60_000;
 
   test('l’original d’une langue étrangère porte sa langue seule, sans flèche', () => {
     const html = panel({ captions: [spanish(null)] });
@@ -378,7 +438,7 @@ describe('la phrase dit sa langue d’origine et son attente de traduction', () 
   });
 
   test('l’échéance passée, les points tombent et l’étiquette de la langue reste', () => {
-    const html = panel({ captions: [spanish(Date.now() - 1)] });
+    const html = panel({ captions: [spanish(performance.now() - 1)] });
     expect(html).not.toContain('data-call-caption-waiting');
     expect(html).toMatch(/data-call-caption-languages="">ES</);
   });

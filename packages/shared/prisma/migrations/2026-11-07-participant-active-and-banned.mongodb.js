@@ -76,7 +76,10 @@ const BATCH_SIZE = Math.min(Number(process.env.BATCH_SIZE || 500) || 500, 5000);
  * faut exclure : `null` ET absent. En MongoDB brut, `{ bannedAt: { $ne: null } }`
  * exclut déjà les deux (une clé absente est `null` pour `$ne`) — l'écrire par
  * `$exists` + `$ne` le rend EXPLICITE, parce que c'est exactement la confusion
- * que ce dépôt a payée quatre fois (`services/gateway/src/utils/prisma-unset.ts`).
+ * que ce dépôt a payée quatre fois (`packages/shared/utils/prisma-unset.ts` —
+ * le récit y a déménagé avec la fonction, #20111 ;
+ * `services/gateway/src/utils/prisma-unset.ts` n'est plus qu'une coquille de
+ * ré-export).
  */
 const FILTER = {
   isActive: true,

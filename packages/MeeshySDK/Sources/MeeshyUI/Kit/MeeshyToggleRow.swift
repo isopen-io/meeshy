@@ -3,16 +3,25 @@ import SwiftUI
 // MARK: - Emplacements
 
 /// Une icône SF Symbol en tête de ligne. Sa couleur vient de la ligne (l'encre du titre).
+/// Elle tient dans une colonne de largeur FIXE (#20030) : quel que soit le glyphe,
+/// les titres d'une même carte commencent à la même abscisse.
 public struct MeeshyToggleRowSymbol: View, Equatable {
     public let name: String
+    @ScaledMetric(relativeTo: .body) private var column = MeeshyToggleRowRecipe.symbolColumnWidth
+    @ScaledMetric(relativeTo: .body) private var height = MeeshyIconSize.xxl
 
     public init(_ name: String) {
         self.name = name
     }
 
+    public static func == (lhs: Self, rhs: Self) -> Bool { lhs.name == rhs.name }
+
     public var body: some View {
         Image(systemName: name)
-            .font(MeeshyFont.relative(MeeshyIconSize.xxl, weight: .regular))
+            .resizable()
+            .fontWeight(.regular)
+            .scaledToFit()
+            .frame(width: column, height: height)
             .padding(.trailing, MeeshySpacing.md)
             .accessibilityHidden(true)
     }

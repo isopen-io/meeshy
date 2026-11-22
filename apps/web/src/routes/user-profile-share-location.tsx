@@ -8,11 +8,13 @@ import { memo, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { Sheet } from '@/components/sheet';
-import type { PersonSummary } from '@/lib/api/friend-requests';
+import { appQueryClient } from '@/lib/api/query-client';
+import { flattenFriendRequests, friendRequestsQueryKey, type FriendRequestsData, type PersonSummary } from '@/lib/api/friend-requests';
 import { translate } from '@/lib/i18n-catalog';
 import { translateCircles, type CirclesCatalogKey } from '@/lib/i18n-circles-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { SharedLocationRosterEntry } from '@/lib/shared-locations/shared-location-roster';
+import { pointReplacementOps, type SharedLocationPointReplacement } from '@/lib/shared-locations/shared-location-point-replacement';
 import type { SharedLocationShareProblem, SharedLocationSharingCenter } from '@/lib/shared-locations/shared-location-sharing';
 import { sharedLocationSharingCenter } from '@/lib/shared-locations/shared-location-sharing-live';
 import { useCirclesCatalog } from '@/lib/use-circles-catalog';
@@ -55,6 +57,8 @@ export const SHARE_LOCATION_PROBLEM_KEY = {
   invalid: 'shareLocation.failed',
   'not-sharing': 'shareLocation.failed',
   unavailable: 'shareLocation.failed',
+  'fixed-point': 'shareLocation.failed',
+  'started-elsewhere': 'shareLocation.failed',
   failed: 'shareLocation.failed',
 } as const satisfies Readonly<Record<SharedLocationShareProblem, CirclesCatalogKey>>;
 
@@ -186,12 +190,78 @@ export function ShareLocationChoiceSheet({
   );
 }
 
+/**
+ * « Montrer votre position réelle ? » (#20126, iso la confirmation de `ShareMyLocationSheet.swift`) : un autre appareil
+ * montre un point choisi sur la carte, et partager d'ici le remplacerait chez tous ceux qui le voient — que le message
+ * nomme (#20248). Rien n'est parti ; garder le point est le geste par défaut, en premier.
+ */
+export function ReplaceChosenPointSheet({
+  language,
+  message,
+  onConfirm,
+  onKeep,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly message: string;
+  readonly onConfirm: () => void;
+  readonly onKeep: () => void;
+}) {
+  return (
+    <Sheet title={translateCircles(language, 'shareLocation.replacePoint.title')} presentation="bottom" bodyAs="div" closeLabel={translate(language, 'common.cancel')} onClose={onKeep} dialogData={{ 'data-share-location-replace-point': '' }}>
+      <div className="grid gap-3 px-4 pb-4">
+        <p className="text-body" style={{ color: INK }}>
+          {message}
+        </p>
+        <button
+          type="button"
+          data-share-location-keep-point=""
+          onClick={onKeep}
+          className={`grid place-items-center rounded-chip px-4 text-body active:scale-[0.98] font-bold ${FOCUS}`}
+          style={{ minHeight: 48, color: 'var(--color-on-state)', backgroundColor: 'var(--ios-indigo-600)', outlineColor: BRAND }}
+        >
+          {translateCircles(language, 'shareLocation.replacePoint.keep')}
+        </button>
+        <button
+          type="button"
+          data-share-location-show-real=""
+          onClick={onConfirm}
+          className={`grid place-items-center rounded-chip px-4 text-body active:scale-[0.98] font-semibold ${FOCUS}`}
+          style={{ minHeight: 48, color: BRAND, backgroundColor: SURFACE, outlineColor: BRAND }}
+        >
+          {translateCircles(language, 'shareLocation.replacePoint.confirm')}
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
+type ShareChoice = { readonly precision: SharedLocationPrecision; readonly durationMinutes: SharedLocationDurationMinutes };
+
+type KnownPerson = { readonly userId: string; readonly name: string };
+
+/** Les amis acceptés que cet appareil a déjà lus : de quoi nommer ceux qui voient le point choisi, sans aucune requête. */
+const acceptedFriendsKnown = (): readonly KnownPerson[] =>
+  flattenFriendRequests(appQueryClient.getQueryData<FriendRequestsData>(friendRequestsQueryKey('accepted'))).flatMap((request) =>
+    [request.sender, request.receiver].flatMap((person) => (person === null ? [] : [{ userId: person.id, name: person.displayName ?? person.username }])),
+  );
+
+/** « chez Ada, Bob, Cyd et 2 autres personnes » : trois noms au plus (#20248, iso `ShareMyLocationCopy.replacePointMessage`). */
+export function replacePointMessage(language: InterfaceLanguage, asked: SharedLocationPointReplacement, known: readonly KnownPerson[]): string {
+  const { named, others } = pointReplacementOps.audience(asked, known);
+  const counted = others === 0 ? [] : [translateCircles(language, new Intl.PluralRules(language).select(others) === 'one' ? 'shareLocation.replacePoint.others.one' : 'shareLocation.replacePoint.others.other', { count: String(others) })];
+  const people = [...named, ...counted];
+  if (people.length === 0) return translateCircles(language, 'shareLocation.replacePoint.message');
+  return translateCircles(language, 'shareLocation.replacePoint.messageNamed', { names: new Intl.ListFormat(language, { style: 'long', type: 'conjunction' }).format(people) });
+}
+
 type RowProps = {
   readonly language: InterfaceLanguage;
   readonly person: PersonSummary;
   /** Dès Ami : l'hôte le lit dans la relation. */
   readonly offered: boolean;
   readonly onNotice: (message: string) => void;
+  /** Qui l'appareil sait nommer ; par défaut, les amis acceptés déjà lus. */
+  readonly knownPeople?: () => readonly KnownPerson[];
 };
 
 /** `center` absent : aucun compte connecté, aucune ligne. */
@@ -199,9 +269,10 @@ export function ProfileShareLocationRow({ center = sharedLocationSharingCenter()
   return center === null ? null : <LiveShareLocationRow {...props} center={center} />;
 }
 
-function LiveShareLocationRow({ language, person, offered, onNotice, center }: RowProps & { readonly center: SharedLocationSharingCenter }) {
+function LiveShareLocationRow({ language, person, offered, onNotice, center, knownPeople = acceptedFriendsKnown }: RowProps & { readonly center: SharedLocationSharingCenter }) {
   const ready = useCirclesCatalog(language);
   const [choosing, setChoosing] = useState(false);
+  const [replacing, setReplacing] = useState<{ readonly choice: ShareChoice; readonly asked: SharedLocationPointReplacement } | null>(null);
   useStore(center.store, (state) => state.roster);
   const busy = useStore(center.store, (state) => state.busy);
   if (!ready || !center.showsRow(person.id, offered)) return null;
@@ -209,6 +280,11 @@ function LiveShareLocationRow({ language, person, offered, onNotice, center }: R
   const tell = (problem: SharedLocationShareProblem | null): void => {
     if (problem !== null) onNotice(translateCircles(language, SHARE_LOCATION_PROBLEM_KEY[problem]));
   };
+  const share = (choice: ShareChoice, replacing?: SharedLocationPointReplacement): void =>
+    void center.share({ userId: person.id, ...choice, ...(replacing === undefined ? {} : { replacing }) }).then((answer) => {
+      if (answer !== null && typeof answer === 'object') setReplacing({ choice, asked: answer.asked });
+      else tell(answer);
+    });
   return (
     <>
       <ProfileShareLocationRowView
@@ -224,9 +300,20 @@ function LiveShareLocationRow({ language, person, offered, onNotice, center }: R
           language={language}
           name={name}
           onClose={() => setChoosing(false)}
-          onShare={({ precision, durationMinutes }) => {
+          onShare={(choice) => {
             setChoosing(false);
-            void center.share({ userId: person.id, precision, durationMinutes }).then(tell);
+            share(choice);
+          }}
+        />
+      ) : null}
+      {replacing !== null ? (
+        <ReplaceChosenPointSheet
+          language={language}
+          message={replacePointMessage(language, replacing.asked, [{ userId: person.id, name }, ...knownPeople()])}
+          onKeep={() => setReplacing(null)}
+          onConfirm={() => {
+            setReplacing(null);
+            share(replacing.choice, replacing.asked);
           }}
         />
       ) : null}

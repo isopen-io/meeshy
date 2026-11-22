@@ -29,6 +29,7 @@ import { levelOnTheWire, mintOnTheWire } from './level-wire.js';
 import { MISSIONS_MIN_LEVEL, MISSION_REROLL_PER_DAY, MISSION_REROLL_PRICE, fullDreamIn, isPrismDay } from './missions.js';
 import { personalMissionState } from './personal-mission.js';
 import { treasuryReserveAccess, treasuryTier } from './treasury.js';
+import { isKeptOfferingDay } from './welcome-back.js';
 import { buildGameBlockExtras, type GameBlockExtrasFacts } from './game-block-extras.js';
 import type { GameBlock, GameChestReward, GameMission } from '../../types/game.js';
 
@@ -108,6 +109,16 @@ export type GameBlockFacts = {
    */
   readonly broken: { readonly streak: number; readonly lastActiveDay: string } | null;
   readonly freezes: number;
+  /**
+   * Le jour où la première Veilleuse a été offerte (#20169), `null` s'il n'y en a pas. Absent : la passerelle ne le
+   * lit pas, et le bloc garde la forme d'avant.
+   */
+  readonly freezeGiftDay?: string | null;
+  /**
+   * Le jour du dernier retour (`User.gameWelcomeBackDay`, #20218) : ce jour-là, l'Offrande est gardée par les aïeux
+   * (#20266). Absent : le bloc ne sert pas `chest.kept`.
+   */
+  readonly welcomeBackDay?: string | null;
   readonly lastRelightDay: string | null;
   readonly missions: readonly GameMissionRecord[];
   /** La mission personnelle du jour (#9539) : sa plage, et l'instant qui fixe son état. Absente : rien n'est servi. */
@@ -176,7 +187,9 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
 
   const unlocked = record >= MISSIONS_MIN_LEVEL;
   const allDone = facts.missions.length > 0 && facts.missions.every((m) => m.completedAt !== null);
-  const chestStatus = facts.chestClaimed ? 'claimed' : allDone ? 'ready' : 'locked';
+  // Le jour du retour, les aïeux ont gardé l'Offrande : prête dès que le Rêve est tiré (#20266).
+  const kept = facts.welcomeBackDay === undefined ? undefined : isKeptOfferingDay({ welcomeDay: facts.welcomeBackDay, today: facts.today });
+  const chestStatus = facts.chestClaimed ? 'claimed' : allDone || (kept === true && facts.missions.length > 0) ? 'ready' : 'locked';
 
   return {
     level,
@@ -248,6 +261,7 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       status: chestStatus,
       odds: { ...CHEST_ODDS },
       reward: chestStatus === 'claimed' ? facts.chestReward : null,
+      ...(kept === undefined ? {} : { kept }),
       // Le contenu CERTAIN et les primes possibles, dits avant l'ouverture (#10011) : l'effort des missions du
       // jour tirées, le cours de la prochaine Meesh du compte, figé au début du jour de jeu (#10219), et l'heure du jour
       // de jeu pour la précocité de la Gloire (#16414).
@@ -270,6 +284,7 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       relightPrice: FLAME_RELIGHT_PRICE,
       status,
       canRelight: relight.allowed,
+      ...(facts.freezeGiftDay === undefined ? {} : { freezeGifted: facts.freezeGiftDay === flameToday }),
     },
     boosts: {
       // Avec les étincelles, le Vent arrière souffle à 7 niveaux ou plus sous le record (#10896) ; sans, la loi d'hier.

@@ -187,6 +187,9 @@ export class GameBlockService {
       lastActiveDay: facts.lastActiveDay,
       broken: brokenFlame(facts),
       freezes: facts.freezes,
+      freezeGiftDay: facts.freezeGiftDay,
+      // Le jour du retour, lu ou gravé par le tirage du jour : ce jour-là, l'Offrande est gardée (#20266).
+      welcomeBackDay: day.welcomeBackDay ?? null,
       lastRelightDay: facts.lastRelightDay,
       missions: day.rows.map(toGameMission),
       ...(personal && personal.startsAt && personal.endsAt

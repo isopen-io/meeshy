@@ -29,6 +29,8 @@ import {
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { SocketRateLimiter } from '../../utils/socket-rate-limiter.js';
 import { loadCommentPostAcl, canUserInteractWithThread, canUserConsumeThread } from '../../services/posts/postVisibility.js';
+import { commentAuthorSeparatedFrom } from '../../services/posts/separatedCommentAuthors.js';
+import { createSeparatedRoomsResolver, type SeparatedRoomsResolver } from '../separatedRooms.js';
 
 const logger = enhancedLogger.child({ module: 'CommentReactionHandler' });
 
@@ -66,6 +68,9 @@ export class CommentReactionHandler {
   private socketToUser: Map<string, string>;
   private readonly logger = logger;
 
+  /** La séparation autour des sujets d'une diffusion d'ACTIVITÉ (#20236). */
+  private readonly separatedRooms: SeparatedRoomsResolver;
+
   constructor(deps: CommentReactionHandlerDependencies) {
     this.io = deps.io;
     this.prisma = deps.prisma;
@@ -73,6 +78,29 @@ export class CommentReactionHandler {
     this.commentReactionService = deps.commentReactionService;
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
+    this.separatedRooms = createSeparatedRoomsResolver({ prisma: deps.prisma });
+  }
+
+  /**
+   * La séparation autour des DEUX sujets que l'événement nomme (#20236) —
+   * l'ACTEUR et l'AUTEUR du commentaire —, lue AVANT la mutation pour que
+   * l'émission reste synchrone après elle (l'ordre du fil porte un compteur
+   * d'agrégation). `null` ⇒ on n'annonce rien : on ne diffuse pas une activité
+   * sans savoir à qui la taire.
+   *
+   * Seul l'ACTEUR s'exempte (`keep`). Exempter aussi l'auteur rouvrait la
+   * fuite sur le chemin de RETRAIT, qui n'a pas de porte
+   * `commentAuthorSeparatedFrom` — retirer sa réaction reste permis après un
+   * blocage, par décision écrite.
+   */
+  private separationAround(actorId: string, commentAuthorId: string | null | undefined): Promise<readonly string[] | null> {
+    return this.separatedRooms.roomsAround([actorId, commentAuthorId], { keep: actorId });
+  }
+
+  /** La room du post, moins ce que la loi nomme — aucun `except()` quand il n'y a rien à taire. */
+  private postRoom(postId: string, separated: readonly string[]) {
+    const target = this.io.to(ROOMS.post(postId));
+    return separated.length > 0 ? target.except([...separated]) : target;
   }
 
   /**
@@ -128,12 +156,18 @@ export class CommentReactionHandler {
       // adresser la diffusion (voir `postId` ci-dessous).
       // Refus indistinct d'un commentaire inexistant — pas d'oracle.
       const thread = await loadCommentPostAcl(this.prisma, validated.commentId);
-      if (!thread || !(await canUserInteractWithThread(this.prisma, thread, userId))) {
+      if (
+        !thread ||
+        !(await canUserInteractWithThread(this.prisma, thread, userId)) ||
+        (await commentAuthorSeparatedFrom(this.prisma, thread, userId))
+      ) {
         this.logger.warn('[CommentReactionHandler] comment:reaction-add denied (visibility)', { userId, commentId: validated.commentId });
         if (callback) callback({ success: false, error: 'Comment not found' });
         return;
       }
       const postId = thread.postId;
+
+      const separated = await this.separationAround(userId, thread.authorId);
 
       const reaction = await this.commentReactionService.addReaction({
         commentId: validated.commentId,
@@ -202,7 +236,7 @@ export class CommentReactionHandler {
         return;
       }
 
-      this.io.to(ROOMS.post(postId)).emit(SERVER_EVENTS.COMMENT_REACTION_ADDED, updateEvent);
+      if (separated !== null) this.postRoom(postId, separated).emit(SERVER_EVENTS.COMMENT_REACTION_ADDED, updateEvent);
 
       // Fire-and-forget: notification errors must not reach the outer catch after
       // success was already confirmed to the client.
@@ -283,6 +317,12 @@ export class CommentReactionHandler {
       // qu'ils ne refetchent pas le fil entier.
       const postId = thread.postId;
 
+      /* Avant la mutation (#20236), et c'est CE chemin qui rend l'exclusion de
+         l'AUTEUR nécessaire : il n'a pas de porte `commentAuthorSeparatedFrom`
+         — retirer sa réaction reste permis après un blocage, par décision
+         écrite — donc l'auteur se voyait annoncer l'activité de qui il a bloqué. */
+      const separated = await this.separationAround(userId, thread.authorId);
+
       const removed = await this.commentReactionService.removeReaction({
         commentId: validated.commentId,
         userId,
@@ -324,7 +364,7 @@ export class CommentReactionHandler {
       };
       if (callback) callback(successResponse);
 
-      this.io.to(ROOMS.post(postId)).emit(SERVER_EVENTS.COMMENT_REACTION_REMOVED, updateEvent);
+      if (separated !== null) this.postRoom(postId, separated).emit(SERVER_EVENTS.COMMENT_REACTION_REMOVED, updateEvent);
 
       // Le symétrique du `_createCommentReactionNotification` du chemin
       // d'ajout. Le retrait couvre les DEUX familles que le commentaire
@@ -398,8 +438,14 @@ export class CommentReactionHandler {
       // légitimement le fil (cf. `postVisibility.ts` § `canUserConsumePost`) —
       // le gater sur les amis stricts en ferait un 404, ce que la lecture REST
       // du même fil n'impose pas.
+      // La liste nominative des réactions d'un commentaire d'un auteur séparé
+      // ne se sert pas plus que le commentaire lui-même (#20216).
       const thread = await loadCommentPostAcl(this.prisma, validated.commentId);
-      if (!thread || !(await canUserConsumeThread(this.prisma, thread, userId))) {
+      if (
+        !thread ||
+        !(await canUserConsumeThread(this.prisma, thread, userId)) ||
+        (await commentAuthorSeparatedFrom(this.prisma, thread, userId))
+      ) {
         this.logger.warn('[CommentReactionHandler] comment:reaction-sync denied (visibility)', { userId, commentId: validated.commentId });
         if (callback) callback({ success: false, error: 'Comment not found' });
         return;

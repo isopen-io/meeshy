@@ -18,9 +18,15 @@ class CallStatValueTest {
         CallStats.reduce(listOf(entry("p", "candidate-pair", values = mapOf("currentRoundTripTime" to seconds))))
             .roundTripTimeMs
 
+    private fun electedPair(values: Map<String, Double>) = CallStats.RawEntry(
+        id = "p",
+        type = "candidate-pair",
+        values = values + ("nominated" to 1.0),
+        strings = mapOf("state" to "succeeded"),
+    )
+
     private fun bitrateOf(bps: Double): Int =
-        CallStats.reduce(listOf(entry("p", "candidate-pair", values = mapOf("availableOutgoingBitrate" to bps))))
-            .availableOutgoingBitrateBps
+        CallStats.reduce(listOf(electedPair(mapOf("availableOutgoingBitrate" to bps)))).availableOutgoingBitrateBps
 
     // --- la loi -------------------------------------------------------------
 
@@ -248,7 +254,7 @@ class CallStatValueTest {
     fun `ordinary readings are unchanged`() {
         val stats = CallStats.reduce(
             listOf(
-                entry("p", "candidate-pair", values = mapOf("currentRoundTripTime" to 0.08, "availableOutgoingBitrate" to 1_500_000.7)),
+                electedPair(mapOf("currentRoundTripTime" to 0.08, "availableOutgoingBitrate" to 1_500_000.7)),
                 entry("a", "inbound-rtp", "audio", mapOf("packetsLost" to 4.0, "packetsReceived" to 900.0, "bytesReceived" to 72_000.0, "jitter" to 0.015)),
                 entry("v", "inbound-rtp", "video", mapOf("packetsLost" to 6.0, "packetsReceived" to 3_000.0, "bytesReceived" to 2_400_000.0)),
                 entry("o", "outbound-rtp", "video", mapOf("packetsSent" to 3_100.0, "bytesSent" to 2_500_000.0)),

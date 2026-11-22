@@ -10,6 +10,7 @@ import { bridgeBannerRevocations } from '@/lib/notifications/banner-revocation';
 import { navigate } from '@/lib/router';
 import { href } from '@/routes/route-table';
 import { outboxStore } from '@/lib/send/outbox-store';
+import { bindQueuedSendsReplay } from '@/lib/send/queued-sends-replay';
 
 import { endRevokedSession } from './account-caches';
 import { retireDeletedAccountLater } from './account-deleted';
@@ -22,6 +23,7 @@ import { bindProfileDecorSync } from '../profile-decor/equip';
 import { bindStickerLibrarySync } from '../stickers/library-sync';
 import { bindGameStateSync } from './game-state-live';
 import { bindPreferencesLiveLazily } from './preferences-live';
+
 import { appRowGestures, replayAppRowGestures } from './app-row-gestures';
 import { bindCommunityLiveLazily } from './community-live-binding';
 import { bindOwnProfileLiveLazily } from './own-profile-live-binding';
@@ -148,6 +150,11 @@ function bridgeCalls(next: RealtimeConnection | null): void {
   const uncommunity = bindCommunityLiveLazily({ socket: next.socket, queryClient: appQueryClient, viewerId: currentViewerId });
   /* La présence vivante (#10571) : `user:status`, `presence:snapshot` et la frappe tiennent chaque pastille à jour. */
   const unpresence = bindPresenceLive({ socket: next.socket, store: presenceStore, viewerId: currentViewerId });
+  /* Les envois en file qui n'ont jamais atteint la passerelle (#20224) : un socket qui se rouvre SANS
+     changement de réseau (redémarrage de la passerelle) ne lève aucun `online`, et la file restait
+     bloquée jusqu'à un geste. Même signal que `replayAppRowGestures` ci-dessus ; iOS porte ce
+     déclencheur depuis `ConversationSocketHandler.triggerSyncIfNeeded`. */
+  const unqueuedSends = bindQueuedSendsReplay({ socket: next.socket });
   /* `notification:deleted` ferme aussi la bannière du service worker (#8752), comme la coque et iOS. */
   const unrevoke = bridgeBannerRevocations(next.socket);
   unbridgeCalls = () => {
@@ -164,6 +171,7 @@ function bridgeCalls(next: RealtimeConnection | null): void {
     unprofile();
     uncommunity();
     unpresence();
+    unqueuedSends();
     unrevoke();
   };
 }
@@ -246,7 +254,7 @@ function syncConnection(): void {
 watchIdentityScopedStores({ session: sessionStore, outbox: outboxStore, conversations: conversationStore, typing: typingStore, engagement: engagementStore, endToEndRegime: endToEndRegimeLedger });
 /* LA SESSION SUIT LE PROFIL SERVI (#18914) — une langue, un nom ou une photo
    changés sur un autre appareil arrivent par `GET /me`, relu à chaque
-   (re)connexion (`CATCH_UP_PERSONAL_FAMILIES`), avec le même assemblage que
+   (re)connexion (`CATCH_UP_FAMILIES`), avec le même assemblage que
    les gestes du profil. */
 followServedProfile(appProfileActionDeps());
 /* LE CLIENT SE DÉCLARE (#9611) — appris après la première peinture, publié

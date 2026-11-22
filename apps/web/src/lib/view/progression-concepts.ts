@@ -395,7 +395,7 @@ function missions(view: EngagementWithGame, now: Date): Body {
   const { missions: served, chest } = game;
   const chestState = gameText(`game.concept.chip.chest.${chest.status}`);
   const chestFact = fact('chest', gameText('game.chest.title'), chestState, element('chest'));
-  if (!served.unlocked) {
+  if (!served.unlocked && served.items.length === 0) {
     return { value: lockedDoor(MISSIONS_MIN_LEVEL), valueId: 'missions_unlock_level', line: null, gauge: null, primary: element('chest'), facts: [chestFact] };
   }
   const done = served.items.filter((item) => item.completedAt !== null).length;

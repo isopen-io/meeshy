@@ -422,12 +422,19 @@ model User {
   flameFreezes        Int?
   /// Jour civil (`AAAA-MM-JJ`, fuseau du compte) du dernier rallumage — une fois par mois.
   lastRelightDay      String?
+  /// Jour civil (`AAAA-MM-JJ`, fuseau du compte) où la première Veilleuse a été offerte (#17371) : les clients
+  /// l'annoncent ce jour-là (#20169). Absent : jamais offerte, ou offerte avant que le jour s'écrive.
+  flameFreezeGiftDay  String?
   /// La série perdue quand la Flamme s'est éteinte, et son dernier jour actif
   /// d'AVANT la rupture : ce que le rallumage rend (fenêtre de 48 h).
   brokenStreakDays    Int?
   brokenStreakLastDay String?
   /// Clés de guide déjà vues (étapes d'intégration et moments de Mee et Meo).
   guideSeen           String[] @default([])
+  /// Jour civil (`AAAA-MM-JJ`, fuseau du compte) du dernier RETOUR (#20218, #17373) : la première journée de jeu
+  /// après sept jours sans journée de jeu, une fois par période de trente jours. Le Rêve de ce jour et des deux
+  /// suivants est allégé. Absent : aucun retour depuis que le jour s'écrit (aucune reprise de données).
+  gameWelcomeBackDay  String?
 
   /// Le consentement à la ligue PUBLIQUE (#9384, conformité A-1/A-14) — daté par
   /// le SERVEUR, retirable d'un geste. Même régime que les `*ConsentAt` voisins :
@@ -2511,6 +2518,8 @@ model Community {
   updatedAt   DateTime  @updatedAt
   /// « Valider chaque entrée » (#19429) : rejoindre crée une DEMANDE qu'un administrateur ou un modérateur accepte ou refuse. Absent = entrée directe.
   requiresJoinApproval Boolean? @default(false)
+  /// Le lien d'entrée suspendu par un intendant (#19661) : nul ou absent = actif. On n'entre plus PAR LE LIEN ; les autres portes restent.
+  joinLinkPausedAt     DateTime?
 
   members             CommunityMember[]
   joinRequests        CommunityJoinRequest[]
@@ -2562,6 +2571,8 @@ model CommunityJoinRequest {
   createdAt   DateTime  @default(now())
   decidedAt   DateTime?
   decidedBy   String?   @db.ObjectId
+  /// Acceptation au sort SCELLÉ (#20003) : entrée prouvée ou demande remplacée ; la réparation des orphelines ne la relit plus. Nul ou absent : à vérifier.
+  entryVerifiedAt DateTime?
 
   user      User      @relation(fields: [userId], references: [id])
   community Community @relation(fields: [communityId], references: [id])
@@ -3078,6 +3089,15 @@ model CallSession {
   /// surface "data spent" in the call-summary message. Null when never reported.
   bytesSent     Int?
   bytesReceived Int?
+  /// Les MÊMES cumuls, exacts au-delà de 2 Go (#20152). `Int` est un int32 : une
+  /// visio longue dépasse 2^31 − 1 octets, et iOS/Android remontent jusqu'à
+  /// 2^53 − 1. Un double représente exactement tout entier jusqu'à cette borne.
+  /// Écrits à côté des champs `Int` (qui reçoivent la même valeur saturée à
+  /// 2^31 − 1 pour les anciens lecteurs) ; lus champ par champ comme le plus
+  /// grand des deux (une passerelle antérieure n'écrit que l'`Int`). Absents
+  /// sur les enregistrements antérieurs.
+  bytesSentTotal     Float?
+  bytesReceivedTotal Float?
   /// Overall network quality tier observed during the call:
   /// excellent | good | fair | poor. Null when never reported (e.g. missed).
   networkQuality String?

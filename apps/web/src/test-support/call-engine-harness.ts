@@ -160,7 +160,7 @@ export function harness(options: { readonly acks?: Record<string, unknown>; read
     tones: { start: (kind) => void tones.push(`start:${kind}`), stop: () => void tones.push('stop'), cue: (kind) => void tones.push(`cue:${kind}`), prime: () => undefined },
     ringLabel: () => 'Appel entrant',
     random: () => options.random ?? 0.99,
-    createCaptions: (ctx) => createCaptions(ctx, { speech: null, language: () => 'fr', prism: () => ['fr'], viewerName: () => 'Moi', newId: () => 'w-1', serverMayHearCaptions: () => true }),
+    createCaptions: (ctx) => createCaptions(ctx, { speech: null, language: () => 'fr', prism: () => ['fr'], viewerName: () => 'Moi', newId: () => 'w-1', elapsed: () => clock, serverMayHearCaptions: () => true }),
     ...(options.cameraEffects === undefined ? {} : { cameraEffects: options.cameraEffects }),
     ...(options.onJoinRefusedEnded === undefined ? {} : { onJoinRefusedEnded: options.onJoinRefusedEnded }),
   };
@@ -185,7 +185,7 @@ export function harness(options: { readonly acks?: Record<string, unknown>; read
   const networkChanged = (): void => networkListeners.forEach((listener) => listener());
   const networkPathChanged = (): void => [...pathListeners].forEach((listener) => listener());
 
-  return { engine, store, emitted, requested, links, tones, displays, cameras, remembered, notices, advance, call, names, linkState, binding, sampleQuality, networkChanged, networkPathChanged, socket, qualityDeps: () => qualityDeps };
+  return { engine, store, elapsed: () => clock, emitted, requested, links, tones, displays, cameras, remembered, notices, advance, call, names, linkState, binding, sampleQuality, networkChanged, networkPathChanged, socket, qualityDeps: () => qualityDeps };
 }
 
 export const DIRECT: StartCallRequest = { conversationId: 'c-1', media: 'audio', title: 'Amina', avatar: null, isGroup: false };

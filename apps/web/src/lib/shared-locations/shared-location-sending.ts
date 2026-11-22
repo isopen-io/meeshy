@@ -23,10 +23,26 @@ export type SharedLocationStartPayload = {
   readonly durationMinutes: SharedLocationDurationMinutes;
   /** Absente : liste seule (#19284), la passerelle reprend la position du partage en cours. */
   readonly position?: SharedLocationFix;
+  /**
+   * `device` : la position réelle REMPLACE le point choisi à la main qu'un autre appareil montre (#20126). Absente, la
+   * passerelle refuse un démarrage avec position devant un point choisi (`FIXED_POINT`) — et une passerelle d'avant
+   * #19557, qui ne connaît pas la clé, ne sert jamais de point choisi : la clé ne part donc que pour le remplacer.
+   */
+  readonly source?: 'device';
+  /**
+   * Le `startedAt` du partage que ce remplacement de point choisi REMPLACE, tel que servi (#20249) : si un autre partage a
+   * démarré depuis, la passerelle refuse (`STARTED_ELSEWHERE`) sans rien appliquer. Ne part que sur `acceptsExpectedStart`.
+   */
+  readonly expectedStartedAt?: string;
 };
 
-/** Ce que l'interface dit d'un envoi qui n'a pas abouti. `unconfirmed` : l'accusé n'est pas revenu, la passerelle a PU prendre l'envoi. */
-export type SharedLocationSendOutcome = 'invalid' | 'not-sharing' | 'rate-limited' | 'unavailable' | 'offline' | 'unconfirmed' | 'failed';
+/**
+ * Ce que l'interface dit d'un envoi qui n'a pas abouti. `unconfirmed` : l'accusé n'est pas revenu, la passerelle a PU
+ * prendre l'envoi. `fixed-point` : le partage montre un point choisi à la main, rien n'a été écrit (#20126).
+ * `started-elsewhere` : le partage nommé par `expectedStartedAt` n'est plus celui servi (un autre démarrage, ou un arrêt),
+ * rien n'a été écrit (#20249).
+ */
+export type SharedLocationSendOutcome = 'invalid' | 'not-sharing' | 'rate-limited' | 'unavailable' | 'offline' | 'unconfirmed' | 'fixed-point' | 'started-elsewhere' | 'failed';
 export type SharedLocationVerdict =
   | { readonly kind: 'started'; readonly expiresAt: number; readonly startedAt?: string }
   | { readonly kind: 'refused'; readonly outcome: SharedLocationSendOutcome };
@@ -53,16 +69,25 @@ export function sharedLocationStartPayloadOf({
   recipients,
   durationMinutes,
   fix,
+  replacesChosenPoint = false,
+  expectedStartedAt = null,
 }: {
   readonly recipients: readonly SharedLocationRecipient[];
   readonly durationMinutes: SharedLocationDurationMinutes;
   /** `null` : liste seule (#19284), la passerelle reprend la position du partage en cours. */
   readonly fix: SharedLocationFix | null;
+  /** L'utilisateur a accepté que sa position réelle remplace le point choisi (#20126) ; sans position, rien à remplacer. */
+  readonly replacesChosenPoint?: boolean;
+  /** Le partage que ce remplacement remplace (#20249) ; `null` : rien à nommer. Sans remplacement, il ne part jamais. */
+  readonly expectedStartedAt?: string | null;
 }): SharedLocationStartPayload | null {
   const latest = new Map(recipients.filter((r) => OBJECT_ID.test(r.userId)).map((r) => [r.userId.toLowerCase(), r] as const));
   const ordered = [...latest.entries()].map(([userId, { precision, expiresInSeconds }]) => ({ userId, precision, ...(expiresInSeconds === undefined ? {} : { expiresInSeconds }) }));
   if (ordered.length === 0 || ordered.length > SHARED_LOCATION_RECIPIENTS_MAX) return null;
-  return fix === null ? { recipients: ordered, durationMinutes } : { recipients: ordered, durationMinutes, position: fix };
+  if (fix === null) return { recipients: ordered, durationMinutes };
+  if (!replacesChosenPoint) return { recipients: ordered, durationMinutes, position: fix };
+  const replacing = { recipients: ordered, durationMinutes, position: fix, source: 'device' } as const;
+  return expectedStartedAt === null ? replacing : { ...replacing, expectedStartedAt };
 }
 
 /**
@@ -79,6 +104,8 @@ const REFUSALS: Readonly<Record<string, SharedLocationSendOutcome>> = {
   [SHARED_LOCATION_ERROR_CODES.NOT_SHARING]: 'not-sharing',
   [SHARED_LOCATION_ERROR_CODES.RATE_LIMITED]: 'rate-limited',
   [SHARED_LOCATION_ERROR_CODES.UNAVAILABLE]: 'unavailable',
+  [SHARED_LOCATION_ERROR_CODES.FIXED_POINT]: 'fixed-point',
+  [SHARED_LOCATION_ERROR_CODES.STARTED_ELSEWHERE]: 'started-elsewhere',
 };
 
 type Wire = Readonly<Record<string, unknown>>;

@@ -5,7 +5,7 @@ import { JournalNoteCaption, noteDirection } from '@/components/call-journal-not
 import { CallJournalToggle } from '@/components/call-journal-toggle';
 import { UnfoldedOriginal } from '@/components/call-unfolded-original';
 import { TypingDots } from '@/components/typing-dots';
-import { CAPTIONS_OVERLAY_LINES, captionLanguageLabel, captionReveal, captionText, isAwaitingTranslation, revealState, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
+import { CAPTIONS_OVERLAY_LINES, captionLanguageLabel, captionReveal, captionText, isAwaitingTranslation, monotonicClock, revealState, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
 import { useCaptionReveals } from '@/lib/calls/call-captions-unfold-store';
 import { callChromeStore } from '@/lib/calls/call-chrome-store';
 import { callCaptionsFooter, callCaptionsFooterLabel, captionFooterLine, EVENT_FOOTER_LINE } from '@/lib/calls/call-captions-footer';
@@ -83,17 +83,20 @@ function WaitingDots({ waiting, label }: { readonly waiting: boolean; readonly l
   );
 }
 
-/** Rend le composant à l'échéance de la prochaine attente : l'attente retombe, l'étiquette de la langue reste. */
-function useWaitingClock(deadlines: readonly (number | null)[]): number {
+/**
+ * Rend le composant à l'échéance de la prochaine attente : l'attente retombe, l'étiquette de la langue reste.
+ * Lit l'horloge MONOTONE sur laquelle le contrôleur pose l'échéance (`CaptionsDeps.elapsed`, #20298) : la même, `monotonicClock`, jamais une seconde (#20320).
+ */
+function useWaitingClock(deadlines: readonly (number | null)[], clock: () => number): number {
   const [, wake] = useState(0);
-  const now = Date.now();
-  const next = Math.min(...deadlines.map((until) => (until !== null && until > now ? until : Number.POSITIVE_INFINITY)));
+  const elapsed = clock();
+  const next = Math.min(...deadlines.map((until) => (until !== null && until > elapsed ? until : Number.POSITIVE_INFINITY)));
   useEffect(() => {
     if (!Number.isFinite(next)) return undefined;
-    const handle = setTimeout(() => wake((tick) => tick + 1), Math.max(0, next - Date.now()));
+    const handle = setTimeout(() => wake((tick) => tick + 1), Math.max(0, next - clock()));
     return () => clearTimeout(handle);
-  }, [next]);
-  return now;
+  }, [next, clock]);
+  return elapsed;
 }
 
 /** L'encre d'une phrase ORIGINALE : seule une traduction prend la couleur de son auteur (`docs/product/appels-vue-finale.md` loi 4). */
@@ -186,6 +189,8 @@ type PanelProps = {
   readonly surface?: CaptionsSurface;
   /** Ouvre tout l'appel à la place des sous-titres : absent, le bouton « Journal » n'est pas posé. */
   readonly onOpenJournal?: (() => void) | undefined;
+  /** L'horloge monotone du contrôleur qui a posé les échéances ; par défaut celle que le chunk des sous-titres lui remet. */
+  readonly clock?: () => number;
 };
 
 /** Où les sous-titres se posent : dans le verre de la pilule (`captions`) ou seuls, à sa place (`captionsAlone`). */
@@ -214,7 +219,7 @@ export function CallCaptionsSlot({ slot, shown, ...panel }: Omit<PanelProps, 'su
   );
 }
 
-export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass', onOpenJournal }: PanelProps) {
+export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass', onOpenJournal, clock = monotonicClock }: PanelProps) {
   /* La colonne du journal est ouverte (W1) quand l'écran lui réserve le bord de fin : « Journal » est alors actif, et le retoucher la referme (#17932). */
   const journalOpen = useStore(callChromeStore, (chrome) => chrome.journalReserve > 0);
   const { revealed, toggle } = useCaptionReveals(call.callId ?? '', 'band');
@@ -223,8 +228,8 @@ export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass', 
   const clockOf = (at: number): string | null => (call.connectedAt === null ? null : formatCallClock((at - call.connectedAt) / 1000));
   const note = call.transcription === 'idle' ? null : NOTE_KEY[call.transcription];
   const speaker = (caption: CallCaption): string => (caption.mine ? translate(language, 'callCaptions.self') : caption.speakerName !== '' ? caption.speakerName : translate(language, 'callCaptions.participant'));
-  const now = useWaitingClock(lines.map((entry) => (entry.type === 'note' ? null : (entry.caption.origin?.awaitingUntil ?? null))));
-  const footer = callCaptionsFooter(lines.map((entry) => (entry.type === 'note' ? EVENT_FOOTER_LINE : captionFooterLine(entry.caption, captionReveal(entry.caption, mode, revealed.has(entry.caption.id)).mode, now))));
+  const elapsed = useWaitingClock(lines.map((entry) => (entry.type === 'note' ? null : (entry.caption.origin?.awaitingUntil ?? null))), clock);
+  const footer = callCaptionsFooter(lines.map((entry) => (entry.type === 'note' ? EVENT_FOOTER_LINE : captionFooterLine(entry.caption, captionReveal(entry.caption, mode, revealed.has(entry.caption.id)).mode, elapsed))));
   const footerText = footer === null ? null : callCaptionsFooterLabel(language, footer);
 
   return (
@@ -243,7 +248,7 @@ export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass', 
             entry.type === 'note' ? (
               <NoteLine key={entry.note.id} note={entry.note} language={language} color={colorOf({ speakerId: entry.note.userId ?? '', speakerName: entry.note.name ?? '' })} clock={clockOf(entry.at)} />
             ) : (
-              <CaptionLine key={entry.caption.id} caption={entry.caption} mode={mode} speaker={speaker(entry.caption)} color={colorOf(entry.caption)} open={revealed.has(entry.caption.id)} waiting={isAwaitingTranslation(entry.caption, now)} language={language} onToggle={toggle} />
+              <CaptionLine key={entry.caption.id} caption={entry.caption} mode={mode} speaker={speaker(entry.caption)} color={colorOf(entry.caption)} open={revealed.has(entry.caption.id)} waiting={isAwaitingTranslation(entry.caption, elapsed)} language={language} onToggle={toggle} />
             ),
           )
         )}

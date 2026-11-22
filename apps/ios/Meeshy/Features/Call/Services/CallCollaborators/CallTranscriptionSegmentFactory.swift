@@ -12,11 +12,12 @@ enum CallTranscriptionSegmentFactory {
     /// `translatedText` — so the UI can offer an original/translated toggle
     /// (`docs/superpowers/specs/2026-07-11-call-captions-multispeaker-design.md`).
     /// `static` and testable without standing up a full `CallManager` + mock
-    /// socket — the only non-deterministic input is `capturedAt` (wall clock
-    /// at receipt, used for ordering + the "since call start" timestamp
-    /// shown per row; `startMs`/`endMs` are the ORIGINATING device's
-    /// ASR-buffer-relative timings and unsuitable for either — see
-    /// `CallTranscriptionSegment.capturedAt` doc comment).
+    /// socket. `capturedAt` is the SPEAKER's wall clock (ordering + the
+    /// "since call start" timestamp shown per row; `startMs`/`endMs` are the
+    /// ORIGINATING device's ASR-buffer-relative timings and unsuitable for
+    /// either — see `CallTranscriptionSegment.capturedAt` doc comment). It
+    /// never measures the translation wait: `CallTranscriptionService` stamps
+    /// the local monotonic reception (`receivedAtMonotonic`, #20319).
     static func makeTranscriptionSegment(from event: CallTranslatedSegmentData) -> CallTranscriptionSegment {
         let seg = event.segment
         // `capturedAtMs` (horloge murale de capture, estampillée par le device

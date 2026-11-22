@@ -111,6 +111,13 @@ export const sharedLocationStartPayloadSchema = z
      * la clé (`INVALID`) : le client ne propose « Choisir sur la carte » que sur `acceptsManualSource`.
      */
     source: z.enum(SHARED_LOCATION_SOURCES).optional(),
+    /**
+     * Le `startedAt` du partage que ce démarrage REMPLACE (#20249) : une confirmation « Montrer ta position réelle ? »
+     * vaut pour le partage montré. Si le partage servi a démarré autrement depuis (ou s'est arrêté), la passerelle
+     * refuse (`STARTED_ELSEWHERE`) sans rien appliquer ; une liste seule, qui ne fait que retirer, le garde. Un
+     * serveur d'avant refuse la clé (`INVALID`) : le client ne l'envoie que sur `acceptsExpectedStart`.
+     */
+    expectedStartedAt: z.string().datetime().optional(),
   })
   .strict()
   .refine((payload) => payload.source !== 'manual' || payload.position !== undefined);
@@ -238,6 +245,17 @@ export type SharedLocationOwnSnapshot = {
    * position réelle sans que l'utilisateur le demande. ADDITIF : absent d'un serveur antérieur (ou sans partage).
    */
   readonly source?: SharedLocationSource;
+  /**
+   * La passerelle accepte-t-elle un point choisi à la main (`source: 'manual'`, #19557) ? Servi avec ou sans partage
+   * en cours : c'est le SEUL signal qu'un client lit pour proposer « Choisir sur la carte ». ADDITIF : absent d'un
+   * serveur antérieur, le client garde « Ouvrir les réglages » seul.
+   */
+  readonly acceptsManualSource?: boolean;
+  /**
+   * La passerelle accepte-t-elle `expectedStartedAt` au démarrage (#20249) ? ADDITIF : absent d'un serveur
+   * antérieur, le client démarre sans la clé, comme avant.
+   */
+  readonly acceptsExpectedStart?: boolean;
 };
 
 /**

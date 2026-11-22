@@ -301,6 +301,8 @@ export const gameChestSchema = z.object({
   reward: chestRewardSchema.nullable(),
   /** Tolérant : un contenu du jour illisible tombe seul, sans emporter le bloc. Absent devant un serveur antérieur. */
   today: chestContentSchema.nullable().optional().catch(undefined),
+  /** Le jour du retour, l'Offrande est gardée par les aïeux : prête sans attendre les actes (#20266). Tolérant. */
+  kept: z.boolean().optional().catch(undefined),
 });
 
 export const gameFlameSchema = z.object({
@@ -313,6 +315,8 @@ export const gameFlameSchema = z.object({
   relightPrice: nonNegativeInt,
   status: z.enum(['none', 'lit', 'at-risk', 'covered', 'out']),
   canRelight: z.boolean(),
+  /** La première Veilleuse a été offerte AUJOURD'HUI (#20169). Tolérant : absent devant un serveur antérieur. */
+  freezeGifted: z.boolean().optional().catch(undefined),
 });
 
 export const gameBoostsSchema = z.object({

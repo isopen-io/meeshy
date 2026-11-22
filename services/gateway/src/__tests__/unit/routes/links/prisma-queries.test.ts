@@ -9,6 +9,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { PARTICIPATION_VIVANTE } from '../../../../routes/conversations/utils/access-control';
 
 // ---------------------------------------------------------------------------
 // Mock attachmentIncludes so the module resolves without the full Prisma
@@ -529,15 +530,26 @@ describe('findActiveUserParticipant — reconnaît LE lecteur (remplace isActive
   // dans son `where` plutôt que dans un `select` à parcourir — indépendante
   // de l'effectif de la conversation : la conversation partagée ne s'ouvrait
   // en aperçu pour ses PROPRES membres que si l'un des deux se perdait.
-  it('filtre par conversationId, userId, type user ET isActive — les quatre conditions de reconnaissance', async () => {
+  it('filtre par conversationId, userId, type user ET la PARTICIPATION VIVANTE — #20183', async () => {
     const prisma = makeMockPrisma();
     const findFirst = prisma.participant.findFirst as jest.Mock;
     findFirst.mockResolvedValue({ id: 'part-1' });
 
     await findActiveUserParticipant(prisma, OBJECT_ID, 'user-42');
 
+    // La LOI par sa constante, jamais re-épelée ici : `PARTICIPATION_VIVANTE`
+    // porte `isActive: true` ET la garde `OR` d'`unsetOrNull('bannedAt')`
+    // (nul OU ABSENT — la colonne manque au document de tout participant
+    // jamais banni). Re-écrire la clause à la main dans le témoin en ferait
+    // une JUMELLE libre de diverger de la loi, exactement ce que ce dépôt
+    // proscrit.
+    //
+    // Ce témoin gelait `isActive: true` NU jusqu'au 2026-11-21, et c'est à
+    // cela qu'il servait : il est tombé devant le lot qui resserre la clause,
+    // obligeant à voir que cette lecture donne `hasAccess` de MEMBRE sur la
+    // fiche d'un lien (`retrieval.ts`) — un membre actif-et-banni le gardait.
     expect(findFirst).toHaveBeenCalledWith({
-      where: { conversationId: OBJECT_ID, userId: 'user-42', type: 'user', isActive: true },
+      where: { conversationId: OBJECT_ID, userId: 'user-42', type: 'user', ...PARTICIPATION_VIVANTE },
       select: { id: true },
     });
   });

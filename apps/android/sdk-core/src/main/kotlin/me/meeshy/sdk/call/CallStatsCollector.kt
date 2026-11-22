@@ -63,6 +63,8 @@ public class CallStatsCollector internal constructor(
         private val NUMERIC_KEYS = listOf(
             "currentRoundTripTime", "availableOutgoingBitrate", "packetsLost", "packetsReceived",
             "packetsSent", "bytesSent", "bytesReceived", "jitter", "audioLevel", "nominated",
+            // #20121 — départage stable des paires ICE.
+            "priority",
             // #19895 — gels, NACK/PLI, tampon de gigue, échantillons masqués.
             "freezeCount", "totalFreezesDuration", "nackCount", "pliCount",
             "jitterBufferDelay", "jitterBufferEmittedCount", "concealedSamples",

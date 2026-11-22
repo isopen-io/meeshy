@@ -44,8 +44,21 @@ function monde(options: {
   participantsEnPanne?: boolean;
   /** `io.to(...).emit(...)` LÈVE — adaptateur ou encodeur en défaut (#17026). */
   emissionEnPanne?: boolean;
+  /**
+   * Les sockets que l'ADAPTATEUR porte, par room — `{ 'conversation:…': 4 }`.
+   * Le défaut (aucune) laisse `clientCount` à zéro, ce qui rend le compteur
+   * `translations_sent` invisible : c'est exactement ce qui a tenu #20222 hors
+   * de portée de tous les témoins de ce fichier.
+   */
+  socketsParRoom?: Readonly<Record<string, number>>;
 }) {
   const stats = { translations_sent: 0, errors: 0 };
+  const roomsDeLAdaptateur = new Map<string, Set<string>>(
+    Object.entries(options.socketsParRoom ?? {}).map(([room, nombre]) => [
+      room,
+      new Set(Array.from({ length: nombre }, (_, index) => `${room}#${index}`)),
+    ]),
+  );
   const emit = jest.fn((event: string) => {
     if (options.emissionEnPanne && event === SERVER_EVENTS.MESSAGE_TRANSLATION) throw new Error('adapter down');
     return undefined;
@@ -78,7 +91,7 @@ function monde(options: {
     deliverTextTranslation(
       {
         prisma: prisma as never,
-        io: { to, sockets: { adapter: { rooms: new Map() } } } as never,
+        io: { to, sockets: { adapter: { rooms: roomsDeLAdaptateur } } } as never,
         normalizeConversationId: async (id) => id,
         enqueueForOfflineParticipants: async (params) => { enfile.push(params); },
         stats,
@@ -207,5 +220,105 @@ describe('la traduction d’un message ne part qu’à ceux qui peuvent le lire'
     expect(m.enfile[0]).toEqual(
       expect.objectContaining({ eventType: 'translation', messageId: MSG, restrictToReadersOfLanguage: 'en' }),
     );
+  });
+});
+
+/**
+ * #20222 — le COMPTEUR, l'autre moitié de la loi du plancher.
+ *
+ * Les gardes d'AUDIENCE de ce chemin sont justes, et les témoins ci-dessus le
+ * prouvent. Ce que personne ne regardait, c'est ce que la livraison DÉCLARE
+ * avoir servi : `stats.translations_sent`, que `GET /admin/monitoring` publie
+ * sous `translationsSent`.
+ *
+ * Il était incrémenté de `clientCount` — les sockets de la room de
+ * CONVERSATION — sous un booléen que la fonction d'émission posait APRÈS la
+ * branche, donc même quand aucune branche n'avait émis. Le commentaire du site
+ * énonçait pourtant la règle juste : « le compteur ne s'incrémente QUE si
+ * l'émission a eu lieu ; sinon il affirmerait avoir servi `clientCount` clients
+ * qui n'ont rien reçu ».
+ *
+ * Ces témoins sont les premiers du fichier à PEUPLER la room de l'adaptateur.
+ * Sans cela `clientCount` vaut zéro et le compteur reste à zéro quelle que soit
+ * la branche — un témoin qui ne peut pas tomber.
+ */
+describe('#20222 — la traduction ne compte que les clients qu’elle a VRAIMENT servis', () => {
+  const ROOM_CONV = ROOMS.conversation(CONV);
+
+  /** Tous arrivés après le message, sans historique : la loi ne laisse AUCUN lecteur. */
+  const tardif = (id: string, userId: string | null): MongoDocument => ({
+    ...invite({ id, userId }),
+    joinedAt: apres(30),
+    shareLinkId: 'lnk-ferme',
+  });
+
+  it('l’audience ENTIÈRE compte les sockets de la room', async () => {
+    const m = monde({
+      participants: [hote, invite({ joinedAt: new Date('2026-10-02T00:00:00Z') })],
+      socketsParRoom: { [ROOM_CONV]: 4 },
+    });
+
+    await m.livrer();
+
+    expect(m.to).toHaveBeenCalledWith(ROOM_CONV);
+    expect(m.stats.translations_sent).toBe(4);
+  });
+
+  it('une audience RESTREINTE ne compte que les sockets des rooms adressées, pas celles de la room', async () => {
+    const m = monde({
+      participants: [hote, invite()],
+      socketsParRoom: { [ROOM_CONV]: 4, [ROOMS.user('u-hote')]: 2 },
+    });
+
+    await m.livrer();
+
+    expect(m.to).toHaveBeenCalledWith([ROOMS.user('u-hote')]);
+    expect(m.stats.translations_sent).toBe(2);
+  });
+
+  /**
+   * Le cœur de #20222 : `rooms: []` est atteignable sans rien de pathologique —
+   * il suffit que TOUS les participants vivants soient sous le plancher. Aucune
+   * branche n'émet, et le compteur créditait quand même la room entière.
+   */
+  it('aucun lecteur autorisé : rien n’est émis, donc RIEN n’est compté', async () => {
+    const m = monde({
+      participants: [tardif('p-1', 'u-1'), tardif('p-2', 'u-2')],
+      socketsParRoom: { [ROOM_CONV]: 4 },
+    });
+
+    await m.livrer();
+
+    expect(m.traductionsEmises()).toBe(0);
+    expect(m.stats.translations_sent).toBe(0);
+  });
+
+  it('une émission qui LÈVE ne compte rien non plus', async () => {
+    const m = monde({
+      participants: [hote, invite({ joinedAt: new Date('2026-10-02T00:00:00Z') })],
+      socketsParRoom: { [ROOM_CONV]: 4 },
+      emissionEnPanne: true,
+    });
+
+    await m.livrer();
+
+    expect(m.stats.translations_sent).toBe(0);
+  });
+
+  /**
+   * Une room personnelle VIDE (le lecteur est autorisé mais hors ligne) : la
+   * remise part, et elle n'atteint aucun client. Le compteur dit zéro, et la
+   * file hors ligne — gardée par ses propres témoins — prend le relais.
+   */
+  it('un lecteur autorisé mais HORS LIGNE est adressé sans être compté', async () => {
+    const m = monde({
+      participants: [hote, invite()],
+      socketsParRoom: { [ROOM_CONV]: 1 },
+    });
+
+    await m.livrer();
+
+    expect(m.to).toHaveBeenCalledWith([ROOMS.user('u-hote')]);
+    expect(m.stats.translations_sent).toBe(0);
   });
 });

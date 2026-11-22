@@ -31,7 +31,7 @@ import {
   isMessageEditedEvent,
 } from './realtime-message-mutations';
 import { applyMessageHiddenForMe, applyMessageRestoredForMe, isMessageHiddenForMeEvent, isMessageRestoredForMeEvent } from './realtime-message-hidden';
-import { applyViewerMembershipEnded, viewerMembershipEndedOf } from './realtime-membership-ended';
+import { applyViewerMembershipEnded, applyViewerMembershipRestored, viewerMembershipEndedOf, viewerMembershipRestoredOf } from './realtime-membership';
 import { applyMemberCountChange, memberCountChangeOf, type MembershipChange } from './realtime-member-count';
 import { applyConversationGone, conversationGoneOf, viewerConversationOf } from './realtime-conversation-gone';
 import { applyMessagePinnedEvent, applyMessageUnpinnedEvent, isMessagePinnedEvent, isMessageUnpinnedEvent } from './realtime-message-pin';
@@ -43,12 +43,14 @@ import { applyMessageReactionUpdate, isMessageReactionUpdate } from './realtime-
 import { FEED_QUERY_KEY } from './feed';
 import { STATUS_MOODS_QUERY_KEY, STORY_TRAY_QUERY_KEY } from './stories';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
-import { MY_PROFILE_QUERY_KEY } from './me-keys';
+import { MY_PREFERENCES_QUERY_KEYS, MY_PROFILE_QUERY_KEY } from './me-keys';
 import { profileRepaintOfUserUpdated, repaintProfile } from './my-portrait';
 import { PUBLIC_PROFILE_QUERY_PREFIX } from './public-profile';
 import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATION_LISTS_KEY, type NotificationsDeps } from './notifications';
 import { bindPublicationRoomTransport } from './publication-rooms';
 import { createNotificationLiveHandlers } from './notifications-live';
+import { resyncAfterSeqGap } from './notifications-realtime';
+import { createSyncSeqTracker } from './sync-seq';
 import {
   applyConversationUnreadUpdated,
   applyConversationUpdated,
@@ -78,6 +80,7 @@ import {
   noteEphemeralDelivery,
 } from './realtime-ephemeral';
 import { catchUpFirstAuthentication, catchUpThreadMessage, createUnknownRowCatchUp, relaunchConversationList } from './realtime-thread-catch-up';
+import { participantRightsUpdatedListener } from './realtime-participant-rights';
 import { viewerRoleUpdatedListener } from './realtime-viewer-role';
 import { bindSocialRealtime } from './realtime-social';
 import { STARRED_MESSAGES_QUERY_ROOT, applyStarredEvent } from './starred-messages-cache';
@@ -135,23 +138,73 @@ import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
  *   la session suit `GET /me` (`served-profile-session.ts`), et cette relecture
  *   est ce qui la ramène sans attendre ses trente minutes de fraîcheur.
  *
+ * - **le FIL SOCIAL et le RAIL DES STORIES** (#18641) parce que les dix `post:*`
+ *   et les six `story:*` de cette connexion n'atteignent un socket qu'une fois
+ *   les salles de publication rejointes (`publicationRooms.rejoin()`, ci-dessous) ;
+ * - **les HUMEURS** (#18914) — le corpus `?scope=statuses` que le rail et les
+ *   pastilles d'avatar lisent — pour la même raison, et par la même salle ;
+ * - **les CATÉGORIES de conversation** (#18641) parce que les quatre `category:*`
+ *   voyagent dans la room PERSONNELLE, rejointe à l'authentification elle aussi.
+ *
  * Les deux familles de la cloche sont NOMMÉES plutôt que leur racine
  * `['notifications']` balayée : c'est refuser d'emporter la prochaine requête
  * qu'on rangera sous cette racine sans l'avoir décidé — la garde
- * `socket.test.ts` y tient une sentinelle.
+ * `socket.test.ts` y tient une sentinelle. Même raison pour les deux `exact`
+ * ci-dessous : `['feed','new-count']` est un ENTIER qui partage la racine du
+ * fil (`feed-new-count.ts`), et `STATUS_MOODS_QUERY_KEY` partage `['stories']`
+ * avec le rail — TanStack comparant par PRÉFIXE, les nommer exactement est la
+ * règle #6974.
  *
  * Les CONVERSATIONS n'y figurent pas, et ce n'est pas un oubli : les deux
  * branches n'en prennent pas la même portée. Une coupure invalide la racine
  * entière (la liste, la case, la page du fil) ; la première connexion n'en
  * prend que la liste et le fil VIVANT, parce que ni la case ni une fenêtre
- * ancrée ne sont nourries par ce que l'intervalle a emporté (#7420).
+ * ancrée ne sont nourries par ce que l'intervalle a emporté (#7420). C'est la
+ * SEULE famille dont la portée diffère entre les deux branches, et c'est
+ * pourquoi elle reste écrite à la main dans `catchUpFirstAuthentication`.
+ *
+ * **LE NOM EST LA MOITIÉ DU CORRECTIF** (#20336, cycle 217). Cette liste
+ * s'appelait `CATCH_UP_PERSONAL_FAMILIES`, un nom de SOUS-CATÉGORIE : #18641 et
+ * #18914 ont ajouté quatre familles de PUBLICATION à la seule branche de
+ * reconnexion, parce qu'une liste de familles « personnelles » n'avait pas de
+ * place pour elles. Le correctif structurel de #18573 — « déclarée une fois » —
+ * n'a donc pas tenu deux lots. Elle est nommée par la PROPRIÉTÉ qu'elle porte :
+ * ce que la fenêtre a emporté, quelle que soit la famille.
  */
-const CATCH_UP_PERSONAL_FAMILIES: readonly (readonly unknown[])[] = [
-  NOTIFICATION_LISTS_KEY,
-  NOTIFICATION_COUNTS_QUERY_KEY,
-  FRIENDS_QUERY_PREFIX,
-  STARRED_MESSAGES_QUERY_ROOT,
-  MY_PROFILE_QUERY_KEY,
+type CatchUpFamily = {
+  readonly queryKey: readonly unknown[];
+  /**
+   * La famille est-elle prise EXACTEMENT, ou par son préfixe ?
+   *
+   * **REQUIS, jamais optionnel** : la portée est la moitié du contrat d'une
+   * famille, et un défaut implicite se lit comme un arbitrage qui n'a pas eu
+   * lieu. C'est la règle que le dépôt applique déjà aux schémas de réponse —
+   * « le silence n'est jamais la réponse » — et elle vaut ici pour la même
+   * raison : deux de ces neuf clés ont un VOISIN sous leur racine
+   * (`['feed','new-count']`, le rail des stories), et une dixième famille
+   * posée sans y penser balaierait le sien.
+   */
+  readonly exact: boolean;
+};
+
+const CATCH_UP_FAMILIES: readonly CatchUpFamily[] = [
+  { queryKey: NOTIFICATION_LISTS_KEY, exact: false },
+  { queryKey: NOTIFICATION_COUNTS_QUERY_KEY, exact: false },
+  { queryKey: FRIENDS_QUERY_PREFIX, exact: false },
+  { queryKey: STARRED_MESSAGES_QUERY_ROOT, exact: false },
+  { queryKey: MY_PROFILE_QUERY_KEY, exact: false },
+  { queryKey: FEED_QUERY_KEY, exact: true },
+  { queryKey: STORY_TRAY_QUERY_KEY, exact: false },
+  { queryKey: STATUS_MOODS_QUERY_KEY, exact: true },
+  { queryKey: CONVERSATION_CATEGORIES_QUERY_KEY, exact: false },
+  /* Les projections du document de réglages (#20349) — RÉPANDUES, jamais
+     nommées une à une : c'est le même ensemble que le gestionnaire de
+     `user:preferences-updated` itère, et le dupliquer ici le laisserait
+     diverger au premier réglage ajouté. `exact: true` est mesuré : ni
+     `['me','app-preferences']` ni `['me','circle-notify']` n'a de descendant,
+     donc rien ne justifie de balayer leur racine `['me']`, qui emporterait le
+     profil et le journal d'appels. */
+  ...MY_PREFERENCES_QUERY_KEYS.map((queryKey) => ({ queryKey, exact: true })),
 ];
 
 function isTypingEvent(payload: unknown): payload is TypingEvent {
@@ -533,7 +586,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
 
   const onParticipantJoined = (payload: unknown): void => applyMembershipCount(payload, 'joined');
 
-  /** `conversation:participant-left` / `-banned` qui nomment le lecteur (#11415) : il n'y est plus membre. Règle : `realtime-membership-ended.ts`. */
+  /** `conversation:participant-left` / `-banned` qui nomment le lecteur (#11415) : il n'y est plus membre. Règle : `realtime-membership.ts`. */
   const onParticipantDeparture =
     (change: Exclude<MembershipChange, 'joined'>) =>
     (payload: unknown): void => {
@@ -543,6 +596,26 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     };
   const onParticipantLeft = onParticipantDeparture('left');
   const onParticipantBanned = onParticipantDeparture('banned');
+
+  /**
+   * `conversation:participant-unbanned` qui nomme le lecteur ET restaure son
+   * appartenance (#20227) : il y est de nouveau membre. Règle :
+   * `realtime-membership.ts`.
+   *
+   * La liste se relit EN ENTIER, comme `conversation:restored` : un
+   * débannissement n'écrit qu'un `participant.update`, donc
+   * `Conversation.updatedAt` ne bouge pas et le delta de liste ne peut PAS
+   * porter ce changement.
+   */
+  const onParticipantUnbanned = (payload: unknown): void => {
+    const restored = viewerMembershipRestoredOf(payload, deps.viewerId());
+    if (restored !== null) {
+      applyViewerMembershipRestored(deps.queryClient, restored);
+      requestFullConversationRead(deps.queryClient);
+      relaunchConversationList(deps.queryClient);
+    }
+    applyMembershipCount(payload, 'unbanned');
+  };
 
   /** `conversation:closed` / `-obsoleted` (#14645) — ligne, détail et messages partent. Règle : `realtime-conversation-gone.ts`. */
   const onConversationGone = (payload: unknown): void => {
@@ -662,6 +735,18 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * dans `notifications-live.ts` (le budget de ce fichier est plein).
    */
   const notificationLive = createNotificationLiveHandlers({ queryClient: deps.queryClient, now: deps.now, notificationsApi: deps.notificationsApi });
+  /* LE CURSEUR `_seq` DU SYNCENGINE (#18601) — observé AVANT la livraison, donc
+     il avance même si le décodage échoue ensuite et même si aucun écran
+     n'écoute. `notification:new` est le SEUL événement que la passerelle
+     estampille (mesuré : les deux sites d'`emitWithSeq` l'émettent), donc
+     l'observer est une observation COMPLÈTE — un curseur global observé
+     partiellement fabriquerait des trous là où rien n'est perdu. */
+  const syncSeqTracker = createSyncSeqTracker({ onGap: () => resyncAfterSeqGap(deps.queryClient) });
+  const seqStampedEvent = SERVER_EVENTS.NOTIFICATION_NEW;
+  const onNotificationNew = (payload: unknown): void => {
+    syncSeqTracker.observe(payload);
+    notificationLive.onNew(payload);
+  };
 
   /**
    * `friend-request:*` (#6321) — LES DEMANDES D'AMITIÉ SUIVENT LA PASSERELLE :
@@ -761,10 +846,21 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * liste des familles n'existait nulle part : #6288, #6321 et #7378 ont chacun
    * ajouté la sienne à la branche de RECONNEXION seule, et une liste qu'il faut
    * retaper à chaque branche est une liste qu'une branche finira par ne pas
-   * avoir. Elle est déclarée une fois (`CATCH_UP_PERSONAL_FAMILIES`), et la
-   * seule différence entre les deux branches reste le PRÉDICAT : une requête
-   * encore en vol n'est jamais doublée au démarrage à froid
+   * avoir. Elle est déclarée une fois (`CATCH_UP_FAMILIES`), et la seule
+   * différence entre les deux branches reste le PRÉDICAT : une requête encore
+   * en vol n'est jamais doublée au démarrage à froid
    * (`catchUpFirstAuthentication`), là où une coupure les relit toutes.
+   *
+   * **ET LA LISTE A ENCORE DIVERGÉ APRÈS CE CORRECTIF** (#20336, cycle 217) :
+   * #18641 et #18914 ont posé le fil, le rail, les humeurs et les catégories en
+   * ligne SOUS la boucle, donc dans la seule branche de reconnexion — la forme
+   * exacte que le paragraphe ci-dessus dénonce, rejouée deux lots après lui.
+   * Ces quatre familles sont entrées dans `CATCH_UP_FAMILIES`, qui a été
+   * renommée pour qu'une famille non « personnelle » y trouve sa place : c'est
+   * le nom, et non l'existence de la liste, qui avait laissé la porte ouverte.
+   * Il ne reste AUCUN `invalidateQueries` en ligne dans cette branche hors la
+   * racine des conversations — un cliquet de source le garde
+   * (`socket-missed-catch-up.test.ts`).
    *
    * SAUF LES SALLES DE PUBLICATION (#7395), rejointes à CHAQUE
    * authentification, la première comprise : un écran ouvert avant que la
@@ -777,7 +873,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     publicationRooms.rejoin();
     if (!authenticatedOnce) {
       authenticatedOnce = true;
-      catchUpFirstAuthentication(deps.queryClient, CATCH_UP_PERSONAL_FAMILIES);
+      catchUpFirstAuthentication(deps.queryClient, CATCH_UP_FAMILIES);
       return;
     }
     /* UNE invalidation couvre les TROIS familles : TanStack compare les clés
@@ -786,47 +882,18 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
        `['conversations', id, 'messages']` (la page du fil). Seules les requêtes
        ACTIVES sont re-jouées — un fil fermé se contente d'être marqué périmé. */
     void deps.queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
-    /* Les familles PERSONNELLES, toutes, sans prédicat : la coupure prouve que
-       ce socket n'a rien vu de l'intervalle. */
-    for (const queryKey of CATCH_UP_PERSONAL_FAMILIES) {
-      void deps.queryClient.invalidateQueries({ queryKey });
-    }
-    /* LE FIL SOCIAL ET LE RAIL DES STORIES AUSSI (#18641) — les dix `post:*`
-       et les six `story:*` que cette connexion écoute écrivent `FEED_QUERY_KEY`
-       et `STORY_TRAY_QUERY_KEY` (`feed-realtime.ts`), et RIEN ne les rattrapait
-       après une coupure du SEUL socket : `refetchOnReconnect` suit
-       `navigator.onLine`, qui ne bascule pas quand la passerelle redémarre, et
-       `staleTime` périme sans rejouer — une requête MONTÉE n'a alors aucun
-       déclencheur. Ces deux-là sont exactement les surfaces qu'on peut REGARDER
-       pendant la coupure ; les autres caisses de cartes (favoris, auteur,
-       communauté, hashtag, commentaires) se rejoignent par une navigation, donc
-       par un montage, donc par une relecture — elles se soignent seules.
-
-       `exact` sur le fil : `['feed', 'new-count']` est un ENTIER qui partage sa
-       racine (`feed-new-count.ts`), et TanStack compare par PRÉFIXE. Même règle
-       qu'au #6974 — nommer la famille, jamais balayer la racine.
+    /* TOUTES les familles de `CATCH_UP_FAMILIES`, sans prédicat : la coupure
+       prouve que ce socket n'a rien vu de l'intervalle. Les raisons, famille
+       par famille, et les deux portées `exact`, sont écrites à la déclaration —
+       ici il n'y a plus qu'une boucle, pour qu'aucun lot ne puisse en ajouter
+       une à cette branche seule (#20336).
 
        LE FIL DES RÉELS RESTE DEHORS, par décision : `card-caches.ts` le déclare
        `frozen: true` (D-66) — son ordre est gelé, il ne se relit ni au focus ni
        à la reconnexion. */
-    void deps.queryClient.invalidateQueries({ queryKey: FEED_QUERY_KEY, exact: true });
-    void deps.queryClient.invalidateQueries({ queryKey: STORY_TRAY_QUERY_KEY });
-    /* ET LES HUMEURS (#18914) — le corpus `?scope=statuses` que le rail et les
-       pastilles d'avatar lisent ; nommé exactement, jamais la racine `['stories']`. */
-    void deps.queryClient.invalidateQueries({ queryKey: STATUS_MOODS_QUERY_KEY, exact: true });
-    /* ET LES CATEGORIES DE CONVERSATION (#18641) — `['conversation-categories']`
-       est une RACINE A PART, jamais couverte par le prefixe `['conversations']`
-       ci-dessus : TanStack compare les cles ELEMENT PAR ELEMENT, et le premier
-       differe deja. Les quatre `category:*` que cette connexion ecoute
-       n'ecrivent que cette cle, et les onglets qu'elle sert vivent sur l'ecran
-       de la liste — donc MONTES pendant la coupure, comme le fil et le rail.
-       iOS la rehydrate sur le meme signal (`didReconnect` →
-       `categoryStore.hydrate()`, « to resync server-side deletions »).
-
-       Ces deux cles voisines sont le piege que ce lot a failli rejouer : une
-       enumeration affirme AUSSI qu'elle est complete, et celle-ci s'etait
-       arretee a ce qui RESSEMBLAIT au defaut (des caisses de cartes). */
-    void deps.queryClient.invalidateQueries({ queryKey: CONVERSATION_CATEGORIES_QUERY_KEY });
+    for (const { queryKey, exact } of CATCH_UP_FAMILIES) {
+      void deps.queryClient.invalidateQueries({ queryKey, exact });
+    }
   };
 
   /** `conversation:encryption-changed` — pour fermer, jamais pour rouvrir le clair (#12949). */
@@ -835,6 +902,8 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   };
 
   const onViewerRoleUpdated = viewerRoleUpdatedListener(deps.queryClient, deps.viewerId); /* #15987 — `realtime-viewer-role.ts` */
+  /* `participant:rights-updated` (#20228) — les droits servis recouvrent ceux de la ligne NOMMÉE du détail ; un droit absent n'affirme rien. Règle : `realtime-participant-rights.ts`. */
+  const onParticipantRightsUpdated = participantRightsUpdatedListener(deps.queryClient);
   /* Les publications, les stories et leurs commentaires (#18914) — `realtime-social.ts`. */
   const unbindSocial = bindSocialRealtime({ socket, queryClient: deps.queryClient, viewerId: deps.viewerId });
   socket.on<unknown>(SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
@@ -845,6 +914,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_ENCRYPTION_CHANGED, onEncryptionChanged);
   socket.on<unknown>(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, onViewerRoleUpdated);
+  socket.on<unknown>(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, onParticipantRightsUpdated);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
@@ -865,6 +935,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED, onParticipantJoined);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, onParticipantLeft);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onParticipantBanned);
+  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED, onParticipantUnbanned);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_CLOSED, onConversationGone);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_OBSOLETED, onConversationGone);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_DELETED, onConversationDeletedForMe);
@@ -878,7 +949,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_COUNTDOWN_STARTED, onMessageCountdownStarted);
   socket.on<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_STARRED, onMessageStarred);
-  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, notificationLive.onNew);
+  socket.on<unknown>(seqStampedEvent, onNotificationNew);
   socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_READ, notificationLive.onRead);
   socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_READ_BULK, notificationLive.onReadBulk);
   socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED, notificationLive.onDeleted);
@@ -927,6 +998,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_ENCRYPTION_CHANGED, onEncryptionChanged);
       socket.off<unknown>(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, onViewerRoleUpdated);
+      socket.off<unknown>(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, onParticipantRightsUpdated);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
@@ -947,6 +1019,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED, onParticipantJoined);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, onParticipantLeft);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onParticipantBanned);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED, onParticipantUnbanned);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_CLOSED, onConversationGone);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_OBSOLETED, onConversationGone);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_DELETED, onConversationDeletedForMe);
@@ -960,7 +1033,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_COUNTDOWN_STARTED, onMessageCountdownStarted);
       socket.off<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_STARRED, onMessageStarred);
-      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, notificationLive.onNew);
+      socket.off<unknown>(seqStampedEvent, onNotificationNew);
       socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_READ, notificationLive.onRead);
       socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_READ_BULK, notificationLive.onReadBulk);
       socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED, notificationLive.onDeleted);

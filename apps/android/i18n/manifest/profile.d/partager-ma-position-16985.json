@@ -23,7 +23,13 @@
         { "catalog": "app", "iosKey": "sharedLocation.share.stopPending", "androidName": "shared_location_share_stop_pending", "status": "adopted" },
         { "catalog": "app", "iosKey": "circles.locations.precision.exact", "androidName": "shared_location_precision_exact", "status": "adopted" },
         { "catalog": "app", "iosKey": "circles.locations.precision.neighborhood", "androidName": "shared_location_precision_neighborhood", "status": "adopted" },
-        { "catalog": "app", "iosKey": "circles.locations.precision.city", "androidName": "shared_location_precision_city", "status": "adopted" }
+        { "catalog": "app", "iosKey": "circles.locations.precision.city", "androidName": "shared_location_precision_city", "status": "adopted" },
+        { "catalog": "app", "iosKey": "locationMap.share.replacePoint.title", "androidName": "shared_location_replace_point_title", "status": "adopted" },
+        { "androidName": "shared_location_replace_point_message", "status": "android-only" },
+        { "androidName": "shared_location_replace_point_message_named", "status": "android-only" },
+        { "androidName": "shared_location_replace_point_others", "kind": "plurals", "status": "android-only" },
+        { "catalog": "app", "iosKey": "locationMap.share.replacePoint.confirm", "androidName": "shared_location_replace_point_confirm", "status": "adopted" },
+        { "catalog": "app", "iosKey": "locationMap.share.replacePoint.keep", "androidName": "shared_location_replace_point_keep", "status": "adopted" }
       ]
     }
   }

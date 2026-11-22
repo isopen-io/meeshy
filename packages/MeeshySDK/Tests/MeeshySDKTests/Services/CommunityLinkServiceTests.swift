@@ -80,7 +80,20 @@ final class CommunityLinkServiceTests: XCTestCase {
         XCTAssertEqual(result[0].name, "Mapped")
         XCTAssertEqual(result[0].memberCount, 10)
         XCTAssertFalse(result[0].isActive)
-        XCTAssertTrue(result[0].joinUrl.contains("mapped-id"))
+        XCTAssertTrue(result[0].joinUrl.hasSuffix("/communities/mapped-id?via=link"))
+    }
+
+    func test_canonicalJoinUrl_isTheCommunityPageMarkedAsALinkArrival() {
+        XCTAssertEqual(CommunityLink.canonicalJoinUrl(baseUrl: "https://meeshy.me", identifier: "mshy_club"),
+                       "https://meeshy.me/communities/mshy_club?via=link")
+        XCTAssertEqual(CommunityLink.canonicalJoinUrl(baseUrl: "https://meeshy.me/", identifier: "café club"),
+                       "https://meeshy.me/communities/caf%C3%A9%20club?via=link")
+    }
+
+    func test_canonicalJoinUrl_neverPointsAtAConversationLink() {
+        let link = CommunityLink(id: "c1", name: "Club", identifier: "mshy_club", baseUrl: "https://meeshy.me",
+                                 memberCount: 1, isActive: true, createdAt: Date(timeIntervalSince1970: 0))
+        XCTAssertFalse(link.joinUrl.contains("/chat/"))
     }
 
     func test_listCommunityLinks_nilMemberCountDefaultsToZero() async throws {
@@ -148,5 +161,66 @@ final class CommunityLinkServiceTests: XCTestCase {
         XCTAssertEqual(result.totalCommunities, 2)
         XCTAssertEqual(result.totalMembers, 30)
         XCTAssertEqual(result.activeCommunities, 0)
+    }
+
+    // MARK: - La pause du lien d'entrée (#20255, servie par #19661)
+
+    func test_listCommunityLinks_readsTheServedPause_andAnOlderServerStaysNil() async throws {
+        mock.stubWire("/communities/mine", json: """
+        {"success":true,"data":[
+          {"id":"a","name":"A","identifier":"a","isActive":true,"memberCount":3,"createdAt":"2026-02-20T14:00:00.000Z","joinLinkPaused":true},
+          {"id":"b","name":"B","identifier":"b","isActive":true,"memberCount":3,"createdAt":"2026-02-20T14:00:00.000Z","joinLinkPaused":false},
+          {"id":"c","name":"C","identifier":"c","isActive":true,"memberCount":3,"createdAt":"2026-02-20T14:00:00.000Z"}
+        ]}
+        """)
+
+        let result = try await service.listCommunityLinks()
+
+        XCTAssertEqual(result.map(\.joinLinkPaused), [true, false, nil])
+    }
+
+    func test_setJoinLinkPaused_putsTheStateOnTheJoinLinkRoute_andReadsTheServedPause() async throws {
+        mock.stubWire("/communities/c1/join-link", json: """
+        {"success":true,"data":{"joinLinkPausedAt":"2026-11-22T01:00:00.000Z"}}
+        """)
+
+        let paused = try await service.setJoinLinkPaused(communityId: "c1", paused: true)
+
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/communities/c1/join-link")
+        XCTAssertEqual(mock.lastRequest?.method, "PUT")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["paused"] as? Bool, true)
+        XCTAssertTrue(paused)
+    }
+
+    func test_setJoinLinkPaused_aResumedLink_isServedNull() async throws {
+        mock.stubWire("/communities/c1/join-link", json: """
+        {"success":true,"data":{"joinLinkPausedAt":null}}
+        """)
+
+        let paused = try await service.setJoinLinkPaused(communityId: "c1", paused: false)
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["paused"] as? Bool, false)
+        XCTAssertFalse(paused)
+    }
+
+    func test_setJoinLinkPaused_propagatesTheRefusal() async {
+        mock.stubError("/communities/c1/join-link", error: MeeshyError.network(.noConnection))
+        do {
+            _ = try await service.setJoinLinkPaused(communityId: "c1", paused: true)
+            XCTFail("Expected error to be thrown")
+        } catch {}
+    }
+
+    func test_communityLink_cachedBeforeThePause_decodesWithoutIt() throws {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let old = makeLink()
+        let cached = try decoder.decode(CommunityLink.self, from: encoder.encode(old))
+        XCTAssertNil(cached.joinLinkPaused)
+        let paused = CommunityLink(id: "c1", name: "A", identifier: "a", baseUrl: "https://meeshy.me", memberCount: 1,
+                                   isActive: true, createdAt: Date(timeIntervalSince1970: 0), joinLinkPaused: true)
+        XCTAssertEqual(try decoder.decode(CommunityLink.self, from: encoder.encode(paused)).joinLinkPaused, true)
     }
 }

@@ -120,6 +120,8 @@ const emptyTable = () => ({ findMany: jest.fn(async () => []), findFirst: jest.f
 const prisma = () => ({
   user: {
     findUnique: jest.fn(async () => store.ownerState ?? { isActive: true, deletedAt: null, deactivatedAt: null }),
+    // #16894 — « qui m'a bloqué », seconde lecture de `getBlockRelatedUserIds`.
+    findMany: jest.fn(async () => []),
   },
   storyHighlight: {
     findMany: jest.fn(async (args: AnyRow = {}) =>

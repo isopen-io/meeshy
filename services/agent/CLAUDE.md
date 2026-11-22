@@ -34,6 +34,106 @@ L'agent **Animateur** est activé par défaut sur toutes les conversations pour 
 3.  **Support (SAV)**: Agent dédié à la résolution de tickets ou à l'aide utilisateur. Utilise souvent le rôle `AGENT` sur son profil.
 4.  **FAQ**: Répond aux questions fréquentes basées sur une base de connaissances.
 
+## 🚫 Un membre BANNI n'est ni élu ni servi par l'agent — les DEUX bouts (#20111)
+
+**Toute lecture de `Participant` de ce service porte `PARTICIPATION_VIVANTE`**
+— `isActive: true` **et** `bannedAt` nul ou absent —, importée de
+`@meeshy/shared/utils/participation-vivante`, jamais réécrite.
+
+**Le titre a dû être réécrit, et il faut dire pourquoi.** Il disait « l'agent ne
+parle JAMAIS à la place d'un membre banni » quand le lot ne gardait que
+l'ÉLECTION. Une garde partielle annoncée totale est pire qu'une garde absente :
+personne ne va vérifier derrière. Ce qui est tenu, et ce qui ne l'est pas :
+
+| ce que c'est | où | tenu ? |
+|---|---|---|
+| **ÉLECTION** — qui entre sous contrôle | `getPotentialControlledUsers`, `getLeastActiveParticipants` | **oui** |
+| **MESURE** — quelles conversations valent un scan | le `participant.groupBy` de `getEligibleConversations` | **oui** |
+| **LIVRAISON** — qui l'agent sert, juste avant de parler | `getControlledUsers`, appelé par les TROIS chemins (`reactive-handler`, `conversation-scanner`, `server.ts`) | **oui**, fail-closed |
+| **le rôle déjà DÉTENU** — `AgentUserRole` au bannissement ET au départ | `releaseAgentRoleFor` (passerelle), appelé par `participant-ban-core.ts` et `leave.ts` | **oui — #20208** |
+| le fil retenu sur `hasRoles` seul, donc scanné pour rien | `getEligibleConversations` | **oui — #20208** |
+| l'épinglage manuel d'un ADMIN survit au bannissement | `AgentConfig.manualUserIds` | **non, par DÉCISION** — voir ci-dessous |
+
+La LIVRAISON était le trou, et c'est un audit adversarial qui l'a ouvert : elle
+ne lisait **aucune** participation — `agentUserRole.findMany({ where: {
+conversationId } })` nu, puis un filtre sur la seule horloge
+`User.lastActiveAt`. Donc **quiconque était élu avant son bannissement restait
+animé indéfiniment**, et un **épinglage manuel** (`AgentConfig.manualUserIds`)
+fabriquait un contrôlé sans lire `Participant` du tout.
+
+> **Une garde posée sur l'ÉLECTION ne garde pas la LIVRAISON.** La question du
+> cycle 202 — « qui AUTORISE ce que cette clause rend ? » — doit se poser dans
+> les DEUX sens : *qui autorise ce que cette clause rend ?* **et** *cette clause
+> est-elle rejouée là où l'effet se produit ?*. Et le cliquet des audiences ne
+> pouvait pas voir ce trou **par construction** : un cliquet qui garde une TABLE
+> ne dit rien d'un chemin qui ne l'interroge pas.
+
+L'épinglage manuel garde exactement ce qu'il a toujours contourné —
+**l'horloge d'inactivité** — jamais l'appartenance.
+
+### Sortir quelqu'un REND son rôle (#20208)
+
+`releaseAgentRoleFor` (`services/gateway/src/services/conversations/releaseAgentRole.ts`)
+est le site UNIQUE, appelé par le bannissement **et par le départ volontaire** —
+la jumelle, qui ne touchait pas davantage `AgentUserRole`.
+
+Pourquoi ce retrait, alors que la lecture est déjà fail-closed : **écrire la
+colonne rend les lectures exactes pour les lignes À VENIR, le prédicat de
+lecture les rend exactes pour celles DÉJÀ EN BASE.** Ce que seul le retrait
+gagne : le fil cesse d'être scanné pour rien, la place revient au vivier, et
+l'administration cesse de montrer un sorti comme « contrôlé ».
+
+Trois arbitrages, chacun avec sa raison mesurée :
+
+- **Une SUPPRESSION, pas un champ `releasedAt`.** `AgentUserRole` porte un
+  travail d'analyse (ton, catchphrases, 23 traits) — mais `AgentGlobalProfile`
+  est une ligne PAR UTILISATEUR, alimentée à chaque construction de profil, et
+  `getPotentialControlledUsers` la projette pour amorcer une élection neuve.
+  **L'analyse survit au retrait** ; seule la liaison à CETTE conversation part.
+- **Un débannissement ne ressuscite pas le rôle.** La personne redevient
+  éligible à une élection, qui repartira de son profil global : elle ne
+  récupère pas sa place par un geste de modération.
+- **`AgentConfig.manualUserIds` reste INTACT.** Aucune fuite (la lecture le
+  neutralise, fail-closed), et bannir est un geste de MODÉRATION quand
+  l'épinglage est une instruction d'ADMINISTRATION : retirer silencieusement un
+  id de cette liste laisserait un modérateur réécrire la configuration d'un
+  administrateur. Reste un écart d'AFFICHAGE — l'administration montre un banni
+  comme épinglé —, de surface et non de pouvoir.
+
+**Best-effort, et ce qui l'autorise** : un échec du retrait ne fait pas échouer
+le bannissement ni le départ, parce que la lecture d'aval est déjà fail-closed.
+Sans cette garde en aval, ce best-effort serait une faute.
+
+Pourquoi ce n'est pas une garde cosmétique : elles portaient `isActive: true`
+NU, et la ligne `{ isActive: true, bannedAt ≠ null }` **existe en base** —
+bannir pendant qu'une participation est inactive n'écrit que `bannedAt`
+(`conversationBanState.ts` de la passerelle). La migration qui reprendrait les
+lignes existantes EXISTE —
+`packages/shared/prisma/migrations/2026-11-07-participant-active-and-banned.mongodb.js`
+(#16690) — et n'a été exécutée **nulle part** : la population n'est donc pas
+mesurée, et ce que ce § décrit est un risque instruit, pas un incident mesuré. Un membre actif-et-banni était donc éligible, et l'agent
+publiait un message signé de quelqu'un d'**exclu** dans le fil dont il est
+exclu. Ce n'est pas une fuite de lecture : c'est une **injection de contenu
+attribuée à une personne bannie**.
+
+Deux pièges, tous deux mesurés :
+
+- **`bannedAt: null` seul ÉTEINT la feature.** La colonne est ABSENTE du
+  document de qui n'a jamais été banni, et Prisma n'apparie pas une clé absente
+  par une égalité à `null` : l'agent ne trouverait plus personne. D'où
+  `unsetOrNull`, et d'où la loi PARTAGÉE plutôt qu'une transcription locale.
+- **Un témoin qui compare le `where` reçu à celui qu'il attend ne vérifie que
+  sa propre copie**, et passe aussi bien avec la clause juste qu'avec celle qui
+  éteint tout. `src/__tests__/memory/mongo-persistence-living-participation.test.ts`
+  ÉVALUE le `where` contre des documents nus (`findManyIn` / `groupByIn`, le
+  **plus complet** des cinq évaluateurs de `where` du dépôt — et le seul sans
+  aucune dépendance, ce pour quoi il s'importe à travers les paquets plutôt que
+  de se recopier), et assert sur les utilisateurs RENDUS.
+
+Le cliquet des audiences de la passerelle balaie désormais ce paquet
+(`AUDIENCE_ROOTS`, préfixe `@meeshy/agent/`) : une quatrième lecture posée sur
+`isActive` nu le fait rougir.
+
 ## 👤 Utilisateurs Agentic
 
 Un utilisateur est considéré comme "Agentic" lorsqu'il possède le rôle global `AGENT`. Il n'est pas un humain mais un bot géré par le service d'agent.

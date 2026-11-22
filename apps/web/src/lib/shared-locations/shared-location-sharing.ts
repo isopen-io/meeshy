@@ -4,6 +4,7 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 
 import type { SafeStorage } from '@/lib/storage';
 
+import { pointReplacementOps, type SharedLocationPointReplacement } from './shared-location-point-replacement';
 import {
   decodeSharedLocationRoster,
   encodeSharedLocationRoster,
@@ -62,6 +63,11 @@ import {
  * `<clé>.received`), et une échéance s'y solde sans rien envoyer — la passerelle tient
  * l'échéance de chacun (#18205). Seul un geste d'ici (« Partager », « Arrêter ») envoie
  * quelque chose ; « Partager » fait de cet onglet celui qui publie.
+ *
+ * UN POINT CHOISI NE SE REMPLACE PAS EN SILENCE (#20126, iso #20087) : quand la passerelle sert un point choisi à la
+ * main par un autre appareil (`source: 'manual'`, marque `<clé>.fixedPoint`), cet onglet ne suit plus la position de
+ * l'appareil et n'en envoie aucune ; « Partager » d'ici rend `replaces-chosen-point` sans rien demander ni envoyer, et
+ * ne fait passer les destinataires à la position réelle qu'avec `replacing`, la question posée (#20248) (la charge porte `source: 'device'`).
  */
 
 export type SharedLocationFixResult = { readonly kind: 'fix'; readonly fix: SharedLocationFix } | { readonly kind: 'denied' } | { readonly kind: 'unavailable' };
@@ -83,8 +89,16 @@ export type SharedLocationEmitter = {
   stop(): Promise<boolean>;
 };
 
-/** `withdrawal-pending` : « Arrêter » n'a pas pu partir, le centre le rejouera dès le retour du réseau. */
+/**
+ * `withdrawal-pending` : « Arrêter » n'a pas pu partir, le centre le rejouera dès le retour du réseau.
+ */
 export type SharedLocationShareProblem = 'location-denied' | 'location-unavailable' | 'withdrawal-pending' | SharedLocationSendOutcome;
+
+/**
+ * Le partage montre un point choisi à la main (#20126) : rien n'est parti. L'écran demande en nommant ceux qui verront la
+ * position réelle, puis rejoue avec la question qu'il a posée (`replacing`, #20248) : elle ne vaut que pour ce partage-là.
+ */
+export type SharedLocationReplacesChosenPoint = { readonly kind: 'replaces-chosen-point'; readonly asked: SharedLocationPointReplacement };
 
 export type SharedLocationSharingState = { readonly roster: SharedLocationRoster; readonly busy: boolean };
 
@@ -94,7 +108,13 @@ export type SharedLocationSharingCenter = {
   /** La ligne de la fiche reste tant qu'un partage court vers cette personne, même sous Ami : « Arrêter » ne disparaît jamais avant le partage. */
   showsRow(userId: string, offered: boolean): boolean;
   /** `null` : c'est parti. */
-  share(request: { readonly userId: string; readonly precision: SharedLocationPrecision; readonly durationMinutes: SharedLocationDurationMinutes }): Promise<SharedLocationShareProblem | null>;
+  share(request: {
+    readonly userId: string;
+    readonly precision: SharedLocationPrecision;
+    readonly durationMinutes: SharedLocationDurationMinutes;
+    /** La question à laquelle l'utilisateur a répondu « Montrer ma position réelle » (#20126, #20248). */
+    readonly replacing?: SharedLocationPointReplacement;
+  }): Promise<SharedLocationShareProblem | SharedLocationReplacesChosenPoint | null>;
   stopSharing(userId: string): Promise<SharedLocationShareProblem | null>;
   /** Une échéance est passée, ou la socket vient de s'accrocher : solder ce qui doit l'être. */
   reconcile(): Promise<void>;
@@ -157,6 +177,10 @@ function createSerialGate() {
     },
   };
 }
+
+/* L'instant tel que la passerelle l'écrit et le relit (`toISOString`, `z.string().datetime()`) : toute autre forme serait refusée en boucle. */
+const WIRE_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
+const isWireInstant = (value: string | null): value is string => value !== null && WIRE_INSTANT.test(value) && !Number.isNaN(Date.parse(value));
 
 export function createSharedLocationSharingCenter({
   emitter,
@@ -228,6 +252,26 @@ export function createSharedLocationSharingCenter({
     }
   };
 
+  /* Le partage servi montre un point choisi à la main ailleurs : la position d'ici ne part pas (#20126). */
+  const fixedPointKey = `${storageKey}.fixedPoint`;
+  let fixedPoint = storage.getItem(fixedPointKey) === '1';
+  const markFixedPoint = (next: boolean): void => {
+    fixedPoint = next;
+    try {
+      if (next) storage.setItem(fixedPointKey, '1');
+      else storage.removeItem(fixedPointKey);
+    } catch {
+      /* En mémoire, la marque tient pour cet onglet. */
+    }
+  };
+
+  /* Le démarrage que la passerelle a nommé en dernier (relu ou accusé) : il date la question « Montrer votre position réelle ? » (#20248). */
+  let servedStart: string | null = null;
+  /* La passerelle a annoncé `acceptsExpectedStart` à la dernière relecture (#20249) : une réponse peut nommer le partage montré. */
+  let acceptsExpectedStart = false;
+  /* Le dernier envoi a-t-il porté la clé jusqu'à la passerelle ? Un refus local (charge invalide) ne la met pas en cause. */
+  let expectedStartSent = false;
+
   const roster = (): SharedLocationRoster => store.getState().roster;
   /* Le centre n'agit que pour le compte qui l'a créé, et tant qu'il est connecté : la socket appartient au compte courant. */
   const isLive = (): boolean => !abandoned && owner !== '' && currentAccount() === owner;
@@ -262,7 +306,8 @@ export function createSharedLocationSharingCenter({
     if (rosterOps.equals(kept, roster())) return;
     store.setState({ roster: kept });
     received = storage.getItem(receivedKey) === '1';
-    if (!rosterOps.hasRecipients(kept) || received) {
+    fixedPoint = storage.getItem(fixedPointKey) === '1';
+    if (!rosterOps.hasRecipients(kept) || received || fixedPoint) {
       lastSent = null;
       stopFollowing();
     }
@@ -282,8 +327,10 @@ export function createSharedLocationSharingCenter({
   const wipe = (): void => {
     adopt(EMPTY_ROSTER);
     markReceived(false);
+    markFixedPoint(false);
     lastSent = null;
     notePublishedStart(null);
+    servedStart = null;
     disarm();
     stopFollowing();
   };
@@ -304,17 +351,40 @@ export function createSharedLocationSharingCenter({
     arm(Math.min(...delays));
   };
 
+  /* Un point choisi ailleurs que cet onglet ignorait encore (#20126) : le relevé est refusé, le suivi cesse et le centre relit. */
   const didMove = async (fix: SharedLocationFix): Promise<void> => {
     if (!gate.tryEnter()) return;
+    let meetsChosenPoint = false;
     try {
       const current = roster();
-      if (!isLive() || !rosterOps.hasRecipients(current) || rosterOps.hasPendingWithdrawals(current) || !shouldSendSharedLocation(fix, now(), lastSent)) return;
+      if (!isLive() || fixedPoint || !rosterOps.hasRecipients(current) || rosterOps.hasPendingWithdrawals(current) || !shouldSendSharedLocation(fix, now(), lastSent)) return;
       lastSent = { fix, at: now() };
       const verdict = await emitter.update(fix);
-      if (isLive() && verdict.kind === 'refused' && verdict.outcome === 'not-sharing') await wipeUnlessChangedElsewhere(current);
+      if (!isLive() || verdict.kind !== 'refused') return;
+      if (verdict.outcome === 'not-sharing') await wipeUnlessChangedElsewhere(current);
+      if (verdict.outcome === 'fixed-point') {
+        showChosenPoint();
+        meetsChosenPoint = true;
+      }
     } finally {
       gate.leave();
     }
+    if (meetsChosenPoint) await center.sync();
+  };
+
+  const showChosenPoint = (): void => {
+    markFixedPoint(true);
+    lastSent = null;
+    stopFollowing();
+  };
+
+  /*
+   * La source servie suit le partage. Absente, c'est une passerelle d'avant #20116 — qui ne sert jamais de point choisi :
+   * la marque tombe, sans rallumer le suivi (qui publie reste l'affaire de `startedAt`). Sans personne, rien à montrer.
+   */
+  const followServedSource = (served: SharedLocationOwnSnapshot): void => {
+    if (served.source === 'manual' && rosterOps.hasRecipients(roster())) showChosenPoint();
+    else markFixedPoint(false);
   };
 
   /* « Pas de partage » répond à la liste d'AVANT l'envoi : un autre onglet a pu en démarrer une depuis, qu'on ne vide pas (#18431). */
@@ -347,7 +417,7 @@ export function createSharedLocationSharingCenter({
   };
 
   const startFollowing = (): void => {
-    if (unfollow !== null) return;
+    if (unfollow !== null || fixedPoint) return;
     unfollow = fixes.follow((fix) => void didMove(fix));
   };
 
@@ -381,17 +451,29 @@ export function createSharedLocationSharingCenter({
    * La liste envoyée solde tous les retraits en attente : c'est elle que le serveur sert dès qu'il l'accepte. Sans
    * position (liste seule, #19284), un seul envoi : une passerelle qui la connaît connaît aussi l'échéance par personne.
    */
-  const publish = async (wanted: SharedLocationRoster, fix: SharedLocationFix | null, previous: SharedLocationRoster): Promise<SharedLocationShareProblem | null> => {
+  const publish = async (
+    wanted: SharedLocationRoster,
+    fix: SharedLocationFix | null,
+    previous: SharedLocationRoster,
+    replacesChosenPoint = false,
+    expectedStartedAt: string | null = null,
+  ): Promise<SharedLocationShareProblem | null> => {
     const next = rosterOps.settled(wanted);
-    const payload = sharedLocationStartPayloadOf({ recipients: rosterOps.deadlinedRecipients(next, now()), durationMinutes: rosterOps.serverDurationMinutes(next, now()), fix });
+    const payload = sharedLocationStartPayloadOf({ recipients: rosterOps.deadlinedRecipients(next, now()), durationMinutes: rosterOps.serverDurationMinutes(next, now()), fix, replacesChosenPoint, expectedStartedAt });
+    expectedStartSent = false;
     if (payload === null) return 'invalid';
     if (!isLive()) return 'failed';
+    expectedStartSent = payload.expectedStartedAt !== undefined;
     /* Avant l'accusé, la liste gardée couvre les deux : un onglet fermé pendant l'attente garde « Arrêter » pour chacun. */
     persist(rosterOps.union(previous, next));
     const verdict = fix === null ? await emitter.start(payload) : await startTolerant(payload);
     if (!isLive()) return 'failed';
     if (verdict.kind === 'started') {
-      if (fix !== null) notePublishedStart(verdict.startedAt ?? null);
+      if (verdict.startedAt !== undefined) servedStart = verdict.startedAt;
+      if (fix !== null) {
+        notePublishedStart(verdict.startedAt ?? null);
+        markFixedPoint(false);
+      }
       engage(next, fix);
       return null;
     }
@@ -438,7 +520,8 @@ export function createSharedLocationSharingCenter({
     if (listOnly !== 'invalid' && listOnly !== 'not-sharing') return listOnly;
     if (!isLive()) return 'failed';
     if (listOnly === 'not-sharing') return settleNotSharing();
-    const fix = freshLastFix() ?? (await silentFix());
+    /* Devant un point choisi, la position de l'appareil ne le remplace jamais par un repli : tout s'arrête plutôt. */
+    const fix = fixedPoint ? null : (freshLastFix() ?? (await silentFix()));
     if (fix === null) return stopAll();
     if (!isLive()) return 'failed';
     return publish(wanted, fix, roster());
@@ -463,7 +546,7 @@ export function createSharedLocationSharingCenter({
   };
 
   /* Le verrou de l'onglet seul : ce qui attend l'utilisateur (une demande de permission) s'y tient, jamais sous celui des autres onglets. */
-  const gated = async (run: () => Promise<SharedLocationShareProblem | null>): Promise<SharedLocationShareProblem | null> => {
+  const gated = async <T,>(run: () => Promise<T>): Promise<T> => {
     await gate.enter();
     try {
       store.setState({ busy: true });
@@ -475,8 +558,8 @@ export function createSharedLocationSharingCenter({
   };
 
   /* Sous le verrou du compte, la liste gardée est relue : un autre onglet a pu la changer pendant l'attente (#18431). */
-  const acrossAccountTabs = (operation: () => Promise<SharedLocationShareProblem | null>): Promise<SharedLocationShareProblem | null> =>
-    acrossTabs(async () => {
+  const acrossAccountTabs = <T,>(operation: () => Promise<T>): Promise<T | 'failed'> =>
+    acrossTabs(async (): Promise<T | 'failed'> => {
       if (!isLive()) return 'failed';
       reread();
       return operation();
@@ -485,21 +568,99 @@ export function createSharedLocationSharingCenter({
   const locked = (operation: () => Promise<SharedLocationShareProblem | null>): Promise<SharedLocationShareProblem | null> =>
     gated(() => acrossAccountTabs(operation));
 
+  const showsChosenPoint = (): boolean => fixedPoint && rosterOps.hasRecipients(rosterOps.pruned(roster(), now()));
+
+  /* La question que poserait le partage servi tel que cet onglet le connaît. */
+  const askedReplacement = (): SharedLocationReplacesChosenPoint => ({
+    kind: 'replaces-chosen-point',
+    asked: pointReplacementOps.of({ startedAt: servedStart, recipientIds: rosterOps.recipients(rosterOps.pruned(roster(), now())).map((r) => r.userId) }),
+  });
+
+  /* Sous le verrou : la liste, le démarrage et la source que la passerelle sert font foi (#18389, #18580, #20126). `false` : rien n'a été relu. */
+  const readServed = async (): Promise<boolean> => {
+    const truth = await served().catch(() => null);
+    if (truth === null || !isLive()) return false;
+    syncWith(truth);
+    return true;
+  };
+
+  const syncWithServed = async (): Promise<null> => {
+    const truth = await served().catch(() => null);
+    if (truth !== null && isLive()) syncWith(truth);
+    return null;
+  };
+
+  const syncWith = (truth: SharedLocationOwnSnapshot): void => {
+    servedStart = truth.startedAt ?? null;
+    acceptsExpectedStart = truth.acceptsExpectedStart === true;
+    const before = roster();
+    const next = rosterOps.withServed(before, truth, now());
+    if (rosterOps.equals(next, before)) {
+      if (!received && rosterOps.hasRecipients(next)) followServedStart(truth.startedAt);
+      followServedSource(truth);
+      return;
+    }
+    adopt(next);
+    if (!rosterOps.hasRecipients(next)) {
+      lastSent = null;
+      stopFollowing();
+      markReceived(false);
+    } else if (!rosterOps.hasRecipients(before)) markReceived(true);
+    else if (!received) followServedStart(truth.startedAt);
+    followServedSource(truth);
+    scheduleDeadline();
+  };
+
   const center: SharedLocationSharingCenter = {
     store,
     entry: (userId) => rosterOps.entry(rosterOps.pruned(roster(), now()), userId),
     showsRow: (userId, offered) => offered || center.entry(userId) !== null,
-    share: ({ userId, precision, durationMinutes }) =>
-      gated(async () => {
+    /*
+     * Devant un point choisi, rien ne part sans `replacing` ; la réponse est relue contre ce que la passerelle sert À CET
+     * INSTANT (#20248) : un autre démarrage, ou quelqu'un ajouté depuis la question, et elle se repose à jour.
+     */
+    share: ({ userId, precision, durationMinutes, replacing }) =>
+      gated(async (): Promise<SharedLocationShareProblem | SharedLocationReplacesChosenPoint | null> => {
         if (!isLive()) return 'failed';
+        if (replacing === undefined && showsChosenPoint()) {
+          /* Rechargé, ou averti par un autre onglet : le démarrage servi n'est pas encore connu d'ici, la question le relit. */
+          const asked = await acrossAccountTabs(async () => {
+            if (servedStart === null) await readServed();
+            return showsChosenPoint() ? askedReplacement() : null;
+          });
+          if (asked !== null) return asked;
+        }
         const current = await fixes.currentFix();
         if (current.kind === 'denied') return 'location-denied';
         if (current.kind === 'unavailable') return 'location-unavailable';
         return acrossAccountTabs(async () => {
+          if (replacing !== undefined && !(await readServed())) return isLive() ? 'offline' : 'failed';
+          const replaces = showsChosenPoint();
+          const question = askedReplacement();
+          if (replaces && (replacing === undefined || !pointReplacementOps.isCovered(question.asked, replacing))) return question;
+          /* La réponse nomme le partage montré, tel que servi (#20249) : la passerelle refuse si un autre a démarré depuis. */
+          const expected = replaces && acceptsExpectedStart && isWireInstant(question.asked.startedAt) ? question.asked.startedAt : null;
+          const wasReceived = received;
           markReceived(false);
           const previous = roster();
           const next = rosterOps.adding(rosterOps.pruned(previous, now()), { userId, precision, durationMinutes, now: now() });
-          return publish(next, current.fix, previous);
+          const problem = await publish(next, current.fix, previous, replaces, expected);
+          if (!isLive()) return problem;
+          if (problem === 'fixed-point') {
+            /* Rien n'a été écrit : l'onglet redevient ce qu'il était, puis relit le point choisi. */
+            markReceived(wasReceived);
+            await syncWithServed();
+            return fixedPoint ? askedReplacement() : problem;
+          }
+          if (!expectedStartSent || (problem !== 'started-elsewhere' && problem !== 'invalid')) return problem;
+          /*
+           * Le partage nommé n'est plus servi (un autre démarrage, un arrêt), ou une passerelle revenue en arrière refuse la
+           * clé : rien n'a été écrit. L'onglet relit et repose la question à jour ; il ne renvoie jamais sans la clé, et ne
+           * relance rien devant un partage qui n'est plus un point choisi — la décision prise ailleurs tient.
+           */
+          markReceived(wasReceived);
+          if (!(await readServed())) return isLive() ? 'offline' : 'failed';
+          return showsChosenPoint() ? askedReplacement() : problem;
         });
       }),
     stopSharing: (userId) =>
@@ -524,6 +685,7 @@ export function createSharedLocationSharingCenter({
         if (rosterOps.isEmpty(pruned) && !rosterOps.hasRecipients(roster())) {
           adopt(EMPTY_ROSTER);
           markReceived(false);
+          markFixedPoint(false);
           disarm();
           return null;
         }
@@ -542,25 +704,7 @@ export function createSharedLocationSharingCenter({
       if (isLive()) reread();
     },
     sync: async () => {
-      await locked(async () => {
-        const truth = await served().catch(() => null);
-        if (truth === null || !isLive()) return null;
-        const before = roster();
-        const next = rosterOps.withServed(before, truth, now());
-        if (rosterOps.equals(next, before)) {
-          if (!received && rosterOps.hasRecipients(next)) followServedStart(truth.startedAt);
-          return null;
-        }
-        adopt(next);
-        if (!rosterOps.hasRecipients(next)) {
-          lastSent = null;
-          stopFollowing();
-          markReceived(false);
-        } else if (!rosterOps.hasRecipients(before)) markReceived(true);
-        else if (!received) followServedStart(truth.startedAt);
-        scheduleDeadline();
-        return null;
-      });
+      await locked(syncWithServed);
     },
     abandon: () => {
       abandoned = true;

@@ -1,9 +1,6 @@
-Meeshy 1.1.8 — llamadas más bonitas, más claras, en tu idioma.
+Meeshy 1.1.9 — comunidades más fáciles de gestionar, llamadas más estables.
 
-• Llamadas rediseñadas: cada botón es de cristal (Liquid Glass en iOS 26), quien habla se ilumina con su color y, en horizontal, caben hasta cuatro personas en una fila.
-• Subtítulos: cada frase indica su idioma y despliega su original con un toque. Tras la llamada, el registro se despliega bajo su burbuja en la conversación.
-• Grabación y pantalla compartida: todos ven quién lo pide y quién acepta, la grabación empieza en Audio o en Vídeo, y «Dejar de compartir» siempre está a mano.
-• Creación: pega una imagen para poner el fondo de la escena o un texto para rellenar la leyenda; el visor ofrece primero Texto, Fondo, Galería y Sticker.
-• Más sencillo en todas partes: el registro, los ajustes y el juego dicen cada cosa una sola vez, y los detalles esperan tras una (i).
-
-Y, por supuesto, correcciones y más fluidez en todas partes.
+• Los administradores de una comunidad pueden pausar el enlace de entrada.
+• Llamadas más estables y subtítulos en directo que aparecen antes.
+• El halo de los marcos de avatar se desvanece con suavidad.
+• En el juego: tu primera Vela de regalo y el inicio de tu primer Sueño.
