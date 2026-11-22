@@ -276,7 +276,6 @@ export const PORTES_MESUREES_NON_INSTRUITES: ReadonlyMap<string, FamilleDePorte>
   ['services/voice-cloning-gate.ts#clause:id: participantId', 'clause-par-cle-primaire'],
   ['services/world/worldConversation.ts#clause:conversationId, userId: account.id', 'clause-d-appartenance'],
   ['services/world/worldParticipantCard.ts#clause:id: participantId, conversationId: world.id', 'clause-d-appartenance'],
-  ['socketio/CallEventsHandler.ts#clause:conversationId: data.conversationId, userId, isActive: true', 'clause-d-appel'],
   ['socketio/MeeshySocketIOManager.ts#clause:id: message.senderId', 'clause-par-cle-primaire'],
   ['socketio/MeeshySocketIOManager.ts#clause:id: userId', 'clause-par-cle-primaire'],
   ['socketio/agent-response-bridge.ts#clause:userId: response.asUserId, conversationId: response.conversationId, i...', 'clause-d-appartenance'],

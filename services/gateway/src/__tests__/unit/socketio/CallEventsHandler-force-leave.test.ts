@@ -12,6 +12,9 @@
  */
 
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
+import { PARTICIPATION_VIVANTE } from '../../../routes/conversations/utils/access-control';
+import { findFirstIn } from '../../helpers/mongo-where';
+import { CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
 
 // ---------------------------------------------------------------------------
 // Module-level mocks
@@ -630,5 +633,86 @@ describe('CallEventsHandler — call:force-leave handler', () => {
         expect.anything()
       );
     });
+  });
+});
+
+/**
+ * #20310 — ET LA PORTE DE `call:force-leave` EXIGE UNE PARTICIPATION VIVANTE.
+ *
+ * Son commentaire d'origine nomme exactement ce qu'elle garde : « a user must
+ * belong to the conversation before they can list / terminate its active
+ * calls … without this gate any authenticated user could iterate over guessed
+ * conversation IDs and force-end every active call ». Elle portait
+ * `isActive: true` NU : un membre ACTIF-ET-BANNI appartenait encore, pour
+ * elle, à la conversation d'où il est exclu — et pouvait donc en terminer tous
+ * les appels.
+ *
+ * Même chaîne que la porte d'ENTRÉE (`call-participants.ts`, même lot) : l'une
+ * fait sonner, l'autre fait raccrocher.
+ *
+ * Le COMPORTEMENT passe par `findFirstIn`, qui refuse ce que le vrai client
+ * refuse — le double par défaut de ce fichier rend `{ id: MEMBERSHIP_ID }`
+ * quel que soit le `where`, donc il resterait VERT sous la mutation.
+ */
+describe('call:force-leave exige une participation VIVANTE (#20310)', () => {
+  // Ce bloc vit HORS du `describe` principal : il porte donc sa propre remise à
+  // zéro. Sans elle, `mockLeaveCall5` cumule les appels d'un témoin à l'autre
+  // et les comptes deviennent faux dans le sens RASSURANT pour le cas nominal.
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({ success: true });
+    mockCreateCallSummaryMessage5.mockResolvedValue(null);
+  });
+
+  const bannedButActive = {
+    id: MEMBERSHIP_ID,
+    conversationId: CONV_ID,
+    userId: USER_ID,
+    isActive: true,
+    bannedAt: new Date('2026-11-01T00:00:00.000Z'),
+  };
+  const living = { id: MEMBERSHIP_ID, conversationId: CONV_ID, userId: USER_ID, isActive: true };
+
+  async function run(row: Record<string, unknown>) {
+    const participantFindFirst = jest.fn<any>(findFirstIn([row]));
+    const prisma = makePrisma({
+      participantFindFirst,
+      callSessionFindMany: jest.fn<any>().mockResolvedValue([makeActiveCallWithParticipant(USER_ID)]),
+    });
+    mockLeaveCall5.mockResolvedValue(makeEndedCallSession());
+    const { socket, handlers, directEmit } = makeSocket();
+    const { io } = makeIo();
+
+    const handler = new CallEventsHandler(prisma);
+    handler.setupCallEvents(socket as any, io, () => USER_ID);
+    await handlers['call:force-leave'](FORCE_LEAVE_DATA);
+
+    return { participantFindFirst, directEmit };
+  }
+
+  it('COMPORTEMENT — un membre actif-et-banni ne termine AUCUN appel, et se voit refusé', async () => {
+    const r = await run(bannedButActive);
+
+    expect(mockLeaveCall5).not.toHaveBeenCalled();
+    expect(r.directEmit).toHaveBeenCalledWith(
+      CALL_EVENTS.ERROR,
+      expect.objectContaining({ code: CALL_ERROR_CODES.NOT_A_PARTICIPANT })
+    );
+  });
+
+  it('COMPORTEMENT — le membre nominal sort toujours : resserrer ne refuse rien de légitime', async () => {
+    await run(living);
+
+    expect(mockLeaveCall5).toHaveBeenCalledTimes(1);
+  });
+
+  it('PROJECTION — le `where` épelle la loi, que nul témoin de valeur ne peut voir', async () => {
+    const r = await run(living);
+
+    expect(r.participantFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { conversationId: CONV_ID, userId: USER_ID, ...PARTICIPATION_VIVANTE },
+      })
+    );
   });
 });
