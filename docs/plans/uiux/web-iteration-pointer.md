@@ -82,7 +82,7 @@ repère règle 7 GOUVERNÉ (`settings-reperes.test.tsx:272`, #17594), pas un dé
 d'épure. **Dette 93w+** : le reste de `composeMessageLabel` garde d'autres segments
 en dur en français (« Sans compte », comptes de pièces, « modifié », « épinglé »,
 « réponse à », « Position », « sticker », « réactions ») — clés neuves ×7 requises,
-à ouvrir en issue. Analyse : `docs/analyses/uiux/2026-11-22-iteration-92w.md`.
+issue **#20326** ouverte. Analyse : `docs/analyses/uiux/2026-11-22-iteration-92w.md`.
 
 **91w** — maintenabilité / cohérence : **le gate d'harmonie #8879 passe à 0** (5 →
 0, liste entièrement vidée). Ses 4 derniers cas étaient tous calculés ou de
@@ -358,7 +358,7 @@ leur époque.
    paquets** : d'abord les segments SANS pluriel (réutiliser `message.pin.*`,
    `message.editedByModerator`, `quote.sender.unknown` quand le vocabulaire existe
    déjà traduit), puis les comptes de pièces avec `.one`/`.other`. Parité :
-   `MessageAccessibilityLabelComposer.swift`. **À ouvrir en issue.**
+   `MessageAccessibilityLabelComposer.swift`. **Issue #20326 ouverte.**
 2. **Épuration** (dim. 12, « logique épurée ») : l'épuration des ÉCRANS est très
    avancée (92w n'a trouvé aucun défaut « phrase au repos » non gouverné) ; la
    dette a11y/i18n ci-dessus est le filon vif. Rester mesuré contre iOS

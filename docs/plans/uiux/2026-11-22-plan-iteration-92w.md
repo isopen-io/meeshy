@@ -39,7 +39,7 @@ rangée.
   (unification avec le pied de rangée). Les 6 autres langues disent enfin l'accusé.
 - **Aucune nouvelle traduction** : les clés `message.status.*` existaient déjà ×7.
 
-## Suite — 93w+ (DETTE, à ouvrir en issue)
+## Suite — 93w+ (DETTE, issue #20326 ouverte)
 
 Le reste de `composeMessageLabel` garde des segments EN DUR EN FRANÇAIS (« Sans
 compte », comptes de pièces jointes, « modifié », « épinglé », « réponse à »,
