@@ -19,6 +19,24 @@ const STICKER_KEYS: PackQueryKeys = {
   detail: (slug) => ['sticker-pack', slug],
 };
 
+/**
+ * **LA VITRINE UNIFIÉE** — `['me','packs','shop', <filtre>]`, une entrée par
+ * filtre sous cette racine.
+ *
+ * Déclarée ICI, et non chez l'écran qui la sert (`unified-shop.tsx`), pour la
+ * même raison que `me-keys.ts` existe (#18914, #20349) : le temps réel doit
+ * NOMMER cette requête pour la périmer, et importer le composant la tirerait,
+ * avec ses ports et ses décodeurs, dans le morceau `realtime`
+ * (`budgets.json › realtime`). Ce module n'importe qu'un TYPE.
+ *
+ * Le SOLDE (`['me','packs','balance']`) n'est pas ici, et c'est une décision :
+ * sa requête est inerte (`enabled: false`, `staleTime: Infinity`) — la périmer
+ * ne déclencherait rien. C'est `loadCatalogue` qui l'écrit, à chaque relecture
+ * de la vitrine ; périmer la vitrine suffit donc à rafraîchir le solde après
+ * un achat fait ailleurs.
+ */
+export const PACK_SHOP_QUERY_ROOT = ['me', 'packs', 'shop'] as const;
+
 export const packQueryKeys = (domain: PackDomain): PackQueryKeys =>
   domain === 'sticker'
     ? STICKER_KEYS

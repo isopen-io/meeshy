@@ -20,6 +20,7 @@ import { bindConversationViewing, viewingStore } from './conversation-viewing';
 import { bindConversationEngagement, engagementStore } from './conversation-engagement';
 import { bindPostEngagement } from './publication-engagement';
 import { bindProfileDecorSync } from '../profile-decor/equip';
+import { bindPackInstallationSync } from '../packs/installation-sync';
 import { bindStickerLibrarySync } from '../stickers/library-sync';
 import { bindGameStateSync } from './game-state-live';
 import { bindPreferencesLiveLazily } from './preferences-live';
@@ -136,6 +137,9 @@ function bridgeCalls(next: RealtimeConnection | null): void {
   const undecor = bindProfileDecorSync({ socket: next.socket, queryClient: appQueryClient });
   /* `sticker:library-updated` (#16515) : un sticker ajouté, remonté ou retiré sur un autre de mes appareils. */
   const unstickers = bindStickerLibrarySync({ socket: next.socket, queryClient: appQueryClient });
+  /* `pack:installation-updated` (#20354) : un pack acheté, GAGNÉ ou retiré sur un autre de mes appareils.
+     Un pack gagné n'a aucun geste local qui l'annonce — sans cet écouteur, le navigateur ne pouvait RIEN en savoir. */
+  const unpacks = bindPackInstallationSync({ socket: next.socket, queryClient: appQueryClient });
   /* `game:updated` (#10900) : une frappe ou un gain faits ailleurs mettent le Jeu à jour, jamais avec un état plus ancien. */
   const ungame = bindGameStateSync({ socket: next.socket, queryClient: appQueryClient });
   /* `user:preferences-updated` (#10663, #18914) : le fond, l'accent, l'épingle, la sourdine, l'archive, le nom personnel,
@@ -165,6 +169,7 @@ function bridgeCalls(next: RealtimeConnection | null): void {
     unengagePosts();
     undecor();
     unstickers();
+    unpacks();
     ungame();
     unpreferences();
     next.socket.off<unknown>(SERVER_EVENTS.AUTHENTICATED, replayAppRowGestures);
