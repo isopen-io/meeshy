@@ -248,6 +248,18 @@ describe('#20337 — le roster d’une réaction de commentaire ne nomme que des
   });
 
   describe('synchronisation — un ack NOMINATIF se filtre par LECTEUR', () => {
+    /**
+     * **LA FIXTURE PORTE LA FORME RÉELLE, ET C'EST LE CORRECTIF DU TÉMOIN.**
+     *
+     * Elle ne portait que `{ emoji, count, userIds, hasCurrentUser }` quand
+     * `getCommentReactions` rendait EN PLUS un `users[]` nominatif (nom affiché,
+     * avatar, horodatage à la seconde). Le harnais ne pouvait donc pas rougir
+     * sur le champ VOISIN, et c'est exactement par là que la fuite est passée :
+     * `rosterServedTo` gardait `userIds` et recopiait `users` par un spread.
+     *
+     * `users[]` est désormais COUPÉ à la source. Le témoin ci-dessous le garde
+     * en posant la forme d'AVANT — si quelqu'un la rétablit, il rougit.
+     */
     const syncBrut = {
       commentId: COMMENT_ID,
       postId: POST_ID,
@@ -257,6 +269,15 @@ describe('#20337 — le roster d’une réaction de commentaire ne nomme que des
       ],
       totalCount: 4,
       userReactions: ['👍'],
+    };
+
+    /** La forme d'AVANT la coupe : `users[]`, index-parallèle à `userIds`. */
+    const syncAvecUsers = {
+      ...syncBrut,
+      reactions: syncBrut.reactions.map((r) => ({
+        ...r,
+        users: r.userIds.map((id) => ({ userId: id, username: `nom-${id}`, avatar: `https://cdn/${id}.jpg`, createdAt: '2026-11-22T10:00:00.000Z' })),
+      })),
     };
 
     it('retire du roster servi les comptes dont un blocage sépare le lecteur, et GARDE le compte', async () => {
@@ -299,6 +320,58 @@ describe('#20337 — le roster d’une réaction de commentaire ne nomme que des
       expect((ack.mock.calls[0] as any[])[0].data.reactions[0].userIds).toEqual([LECTEUR, ACTEUR]);
     });
 
+    /**
+     * **CE QUI PART À CÔTÉ DE LA CHAÎNE GARDÉE** (leçon 275). `users[]` portait
+     * le nom affiché, l'avatar et l'horodatage de CHAQUE réacteur — strictement
+     * plus que `userIds`. Aucun client ne le décodait ; il est coupé à la
+     * source. Le témoin pose la forme d'avant pour que son retour rougisse.
+     */
+    it('ne sert AUCUN champ nominatif voisin du roster — nom, avatar, horodatage', async () => {
+      const prisma = fauxPrisma({ [LECTEUR]: [TIERS_REACTEUR] });
+      const { handler, socket } = fabriquerHandler({ prisma, io: fauxIo([]), acteur: LECTEUR, sync: syncAvecUsers });
+      const ack = jest.fn();
+
+      await handler.handleRequestSync(socket, { commentId: COMMENT_ID, postId: POST_ID } as any, ack as any);
+
+      const servi = (ack.mock.calls[0] as any[])[0];
+      const nommes = JSON.stringify(servi.data);
+      expect(nommes).not.toContain(TIERS_REACTEUR);
+      expect(nommes).not.toContain('nom-');
+      expect(nommes).not.toContain('cdn/');
+    });
+
+    /** `getCommentReactions` ne PRODUIT plus `users[]` : la coupe est à la source. */
+    it('le service ne produit plus aucun champ nominatif enrichi', async () => {
+      const { CommentReactionService } = await import('../../../services/CommentReactionService');
+      const prisma = {
+        commentReaction: { findMany: jest.fn(async () => [
+          { id: 'r1', commentId: COMMENT_ID, userId: TIERS_REACTEUR, emoji: '👍', createdAt: new Date() },
+        ]) },
+        postComment: { findUnique: jest.fn(async () => ({ postId: POST_ID })) },
+        user: { findMany: jest.fn(async () => { throw new Error('aucune lecture de profil ne doit avoir lieu'); }) },
+      } as any;
+      const service = new CommentReactionService(prisma);
+
+      const sync = await service.getCommentReactions({ commentId: COMMENT_ID, currentUserId: LECTEUR });
+
+      expect(JSON.stringify(sync)).not.toContain('username');
+      expect(prisma.user.findMany).not.toHaveBeenCalled();
+    });
+
+    /** Une forme inattendue se REFUSE : un garde qui ne sait pas filtrer ne sert pas. */
+    it('FERMÉ : une forme de roster inattendue est refusée, jamais servie telle quelle', async () => {
+      const prisma = fauxPrisma({ [LECTEUR]: [TIERS_REACTEUR] });
+      const { handler, socket } = fabriquerHandler({
+        prisma, io: fauxIo([]), acteur: LECTEUR,
+        sync: { commentId: COMMENT_ID, postId: POST_ID, reactions: 'pas-un-tableau', totalCount: 0, userReactions: [] },
+      });
+      const ack = jest.fn();
+
+      await handler.handleRequestSync(socket, { commentId: COMMENT_ID, postId: POST_ID } as any, ack as any);
+
+      expect((ack.mock.calls[0] as any[])[0].success).toBe(false);
+    });
+
     it('FERMÉ : une lecture de blocage qui échoue ne sert aucun roster', async () => {
       const { handler, socket } = fabriquerHandler({ prisma: fauxPrisma('panne'), io: fauxIo([]), acteur: LECTEUR, sync: syncBrut });
       const ack = jest.fn();
@@ -306,6 +379,65 @@ describe('#20337 — le roster d’une réaction de commentaire ne nomme que des
       await handler.handleRequestSync(socket, { commentId: COMMENT_ID, postId: POST_ID } as any, ack as any);
 
       expect((ack.mock.calls[0] as any[])[0].success).toBe(false);
+    });
+  });
+
+  /**
+   * **L'ACTEUR EST UN LECTEUR COMME UN AUTRE** (#20337, audit adversarial).
+   *
+   * Rien ne l'empêche de réagir à un commentaire dont le roster nomme un compte
+   * qu'il a bloqué : la porte d'action garde l'ACL du post et l'AUTEUR du
+   * commentaire, jamais les RÉACTEURS — et le chemin de RETRAIT n'a pas même la
+   * porte de l'auteur. Son ACK se filtre (il est nominatif) et il sort de la
+   * diffusion, qui porte le roster entier.
+   */
+  describe('l’acteur ne lit pas, dans son propre événement, l’id d’un compte qu’il a bloqué', () => {
+    it.each([['add'], ['remove']] as const)('l’ACK de comment:reaction-%s est filtré pour l’acteur', async (action) => {
+      const prisma = fauxPrisma({ [ACTEUR]: [TIERS_REACTEUR] });
+      const { handler, socket } = fabriquerHandler({
+        prisma, io: fauxIo([]), acteur: ACTEUR, roster: [ACTEUR, TIERS_REACTEUR],
+      });
+      const ack = jest.fn();
+
+      if (action === 'add') await handler.handleAddReaction(socket, { commentId: COMMENT_ID, postId: POST_ID, emoji: '👍' } as any, ack as any);
+      else await handler.handleRemoveReaction(socket, { commentId: COMMENT_ID, postId: POST_ID, emoji: '👍' } as any, ack as any);
+
+      const servi = (ack.mock.calls[0] as any[])[0];
+      expect(servi.success).toBe(true);
+      expect(servi.data.aggregation.userIds).toEqual([ACTEUR]);
+    });
+
+    it('l’acteur séparé d’un RÉACTEUR sort de la diffusion, qui porte le roster entier', async () => {
+      const emissions: Emission[] = [];
+      const prisma = fauxPrisma({ [ACTEUR]: [TIERS_REACTEUR] });
+      const { handler, socket } = fabriquerHandler({
+        prisma, io: fauxIo(emissions), acteur: ACTEUR, roster: [ACTEUR, TIERS_REACTEUR],
+      });
+
+      await handler.handleAddReaction(socket, { commentId: COMMENT_ID, postId: POST_ID, emoji: '👍' } as any, undefined as any);
+
+      const [emission] = versLePost(emissions);
+      expect(emission?.charge?.aggregation?.userIds).toContain(TIERS_REACTEUR);
+      expect(emission?.exclues).toContain(`user:${ACTEUR}`);
+    });
+
+    /**
+     * Le CONTRÔLE, et il porte la décision de #20236 : séparé du seul AUTEUR,
+     * l'acteur GARDE sa diffusion — `keep` reste son privilège sur SES sujets.
+     * Un correctif qui retirerait `keep` tout court ferait rougir ce témoin.
+     */
+    it('séparé du seul AUTEUR, l’acteur garde sa diffusion (décision de #20236)', async () => {
+      const emissions: Emission[] = [];
+      const prisma = fauxPrisma({ [ACTEUR]: [AUTEUR_COMMENTAIRE] });
+      const { handler, socket } = fabriquerHandler({
+        prisma, io: fauxIo(emissions), acteur: ACTEUR, roster: [ACTEUR],
+      });
+
+      await handler.handleRemoveReaction(socket, { commentId: COMMENT_ID, postId: POST_ID, emoji: '👍' } as any, undefined as any);
+
+      const [emission] = versLePost(emissions);
+      expect(emission?.exclues).not.toContain(`user:${ACTEUR}`);
+      expect(emission?.exclues).toContain(`user:${AUTEUR_COMMENTAIRE}`);
     });
   });
 });

@@ -107,12 +107,32 @@ export class CommentReactionHandler {
    * final, et un client qui doute resynchronise (`comment:reaction-request-sync`).
    * L'`unchanged`/`!removed` en dispense : un no-op ne lit rien.
    */
-  private separationAround(
+  private async separationAround(
     actorId: string,
     commentAuthorId: string | null | undefined,
     roster: readonly (string | null | undefined)[] = [],
   ): Promise<readonly string[] | null> {
-    return this.separatedRooms.roomsAround([actorId, commentAuthorId, ...roster], { keep: actorId });
+    /* DEUX lectures, et elles ne se confondent pas (#20337, audit adversarial
+       du lot) :
+
+       — la PAIRE acteur/auteur (#20236) a une clé STABLE, donc elle reste
+         CACHEABLE, et l'acteur s'y exempte (`keep`) ;
+       — le ROSTER change à chaque événement, donc sa clé est à usage unique :
+         elle passe HORS cache, sans quoi elle évince les entrées des appelants
+         stables, dont les sept diffusions de CONTENU (#20216).
+
+       Et l'acteur ne s'exempte PAS de la séparation que le roster nomme : son
+       privilège est celui de l'ÉMETTEUR sur SES sujets (lui-même, l'auteur
+       de ce qu'il touche), jamais sur un TIERS qui se trouve avoir réagi.
+       L'étendre au roster laissait l'acteur lire l'id d'un compte qu'il a
+       bloqué — le vecteur même que ce lot ferme, avec l'acteur dans le rôle du
+       lecteur. Exclu de la diffusion, il garde son ACK, filtré pour lui. */
+    const [pair, rosterRooms] = await Promise.all([
+      this.separatedRooms.roomsAround([actorId, commentAuthorId], { keep: actorId }),
+      this.separatedRooms.roomsAround(roster, { cached: false }),
+    ]);
+    if (pair === null || rosterRooms === null) return null;
+    return [...new Set([...pair, ...rosterRooms])];
   }
 
   /**
@@ -168,18 +188,72 @@ export class CommentReactionHandler {
    * l'appelant rend un ack d'erreur. On ne sert pas un roster sans savoir ce
    * qu'il doit taire.
    */
-  private async rosterServedTo<T extends { readonly reactions?: readonly { readonly userIds?: readonly string[] }[] }>(
+  /**
+   * **L'ACK EST NOMINATIF, DONC IL SE FILTRE — Y COMPRIS POUR L'ACTEUR** (#20337,
+   * audit adversarial du lot).
+   *
+   * `comment:reaction-add` / `-remove` acquittent avec l'`updateEvent`, roster
+   * compris, et le contrat « ACK == broadcast » veut que ce soit le même objet.
+   * L'acteur est pourtant un LECTEUR comme un autre : rien ne l'empêche de
+   * réagir à un commentaire dont le roster nomme un compte qu'il a bloqué —
+   * `canUserInteractWithThread` garde l'ACL du post et
+   * `commentAuthorSeparatedFrom` n'interroge que l'AUTEUR, jamais les
+   * réacteurs ; et le chemin de RETRAIT n'a même pas cette porte.
+   *
+   * L'ACK n'ayant qu'un destinataire, il se filtre par lui — le seul endroit de
+   * ce chemin où un filtrage par lecteur soit possible. L'acteur ne perd jamais
+   * son propre id.
+   */
+  private async updateEventServedTo<T extends { readonly aggregation?: { readonly userIds?: readonly string[] } }>(
     viewerId: string,
-    sync: T,
+    event: T,
   ): Promise<T> {
+    const userIds = event.aggregation?.userIds;
+    if (!Array.isArray(userIds) || userIds.length === 0) return event;
+    const separated = new Set(await blockedIdsAroundViewer(this.prisma, viewerId));
+    if (separated.size === 0) return event;
+    return {
+      ...event,
+      aggregation: { ...event.aggregation, userIds: userIds.filter((id) => !separated.has(id)) },
+    };
+  }
+
+  private async rosterServedTo<
+    T extends {
+      readonly reactions?: readonly {
+        readonly emoji?: string;
+        readonly count?: number;
+        readonly hasCurrentUser?: boolean;
+        readonly userIds?: readonly string[];
+      }[];
+    },
+  >(viewerId: string, sync: T): Promise<T> {
     const reactions = sync?.reactions;
-    if (!Array.isArray(reactions) || reactions.length === 0) return sync;
+    /* Une forme INATTENDUE se REFUSE, elle ne se sert pas telle quelle : un
+       garde qui ne sait pas filtrer doit lever, pas passer (#20337, audit
+       adversarial — ce prédicat était fail-OPEN). Le `catch` de l'appelant rend
+       alors un ack d'erreur. Un tableau VIDE, lui, est une forme connue : il
+       n'y a rien à taire. */
+    if (reactions === undefined || reactions === null) return sync;
+    if (!Array.isArray(reactions)) {
+      throw new Error('comment:reaction-request-sync — forme de roster inattendue, filtrage impossible');
+    }
+    if (reactions.length === 0) return sync;
     const separated = new Set(await blockedIdsAroundViewer(this.prisma, viewerId));
     if (separated.size === 0) return sync;
+    /* **UNE LISTE BLANCHE, JAMAIS UN SPREAD.** `{ ...reaction, userIds: filtré }`
+       garde la chaîne gardée et RECOPIE tout champ voisin — c'est ainsi que
+       `users[]` (nom affiché, avatar, horodatage) a traversé ce filtre en
+       citant la leçon 275 dans son propre doc-comment. Les quatre champs du
+       contrat sont donc PROJETÉS un par un : un champ nominatif ajouté en amont
+       ne peut plus rider, et s'il est légitime il faudra l'ajouter ICI — c'est
+       fail-closed, le bon défaut pour un filtre de confidentialité. */
     return {
       ...sync,
       reactions: reactions.map((reaction) => ({
-        ...reaction,
+        emoji: reaction.emoji,
+        count: reaction.count,
+        hasCurrentUser: reaction.hasCurrentUser,
         userIds: (reaction.userIds ?? []).filter((id) => !separated.has(id)),
       })),
     };
@@ -306,7 +380,7 @@ export class CommentReactionHandler {
       // `SocketCommentReactionUpdateEvent`. La `reaction` brute cassait le décodage iOS.
       const successResponse: AckResponseOf<'comment:reaction-add'> = {
         success: true,
-        data: updateEvent,
+        data: await this.updateEventServedTo(userId, updateEvent),
       };
       if (callback) callback(successResponse);
 
@@ -445,7 +519,7 @@ export class CommentReactionHandler {
       // identique au broadcast `comment:reaction-removed`, au lieu d'un simple {message}.
       const successResponse: AckResponseOf<'comment:reaction-remove'> = {
         success: true,
-        data: updateEvent,
+        data: await this.updateEventServedTo(userId, updateEvent),
       };
       if (callback) callback(successResponse);
 
