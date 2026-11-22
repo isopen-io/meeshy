@@ -1939,3 +1939,9 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   se passe ailleurs pendant que le démarrage voyage).
 - Gates : modèles Kotlin (`jvm-check`, `SharedLocation*`) verts ; le centre se prouve par `android.yml` sur la PR.
 - Prochain lot : iOS de #20249, puis #20308, #20054, #20056.
+
+## 2026-11-22 — réveil de 19 h : la moitié web de #20416 et de #20308 (en cours)
+
+- Reprise : #20417 (iOS de #20249) attend toujours un Mac (construction iOS en file depuis 16 h, tranche 2 du SDK
+  aussi) ; rien à pousser sur sa branche tant que ces envois attendent. Ce réveil prend la moitié WEB de #20416 et de
+  #20308, qui ne touche aucun chemin iOS.
