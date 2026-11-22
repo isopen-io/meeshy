@@ -2584,3 +2584,42 @@ socket jusqu'au client.
 1. **#20299** (règle unique du chrome Android), **#20320** (web, petit lot), **#20300** (iOS), **#20335**.
 2. #13775 (Android : l'échelle vidéo lit l'estimation, comme iOS), #20348, #20257, #20280, #20273, #20288.
 3. #20185 (recette staging), #11932, #12236, #16933.
+
+## Cycle 76 — 2026-11-22
+
+- **Base** : `origin/dev` @ `0bd554436`, puis `13359bdd5e` fusionnée dans la branche (`e0bff96349`). Le lot du cycle 75 (#20350, #20284) est fusionné.
+- **Branche** : `claude/determined-volta-y2eylj`.
+- **Objectif** : deux petits écarts du web.
+  - **#20273** : la route d'un appel est relayée dès qu'un des deux candidats de la paire élue l'est, comme sur iOS et Android.
+  - **#20320** : le panneau des sous-titres lit l'horloge monotone du contrôleur, et non `performance.now()` en dur.
+- **Livré** (`apps/web/` seulement) :
+  - `call-quality.ts` :
+    - `routeOf` lit les candidats local ET distant de la paire élue, et ne garde que les `candidateType` présents (c'est le `compactMap` d'iOS et d'Android).
+    - La route vaut `relay` si l'un des deux est relay, `direct` si au moins un type est lu et aucun n'est relay, et `null` si aucun type n'est lu.
+    - `candidateType` et `relayProtocol` de `call:analytics` gardent leur sens : le candidat local. Aucun payload ne change, et `StatsRead.path` ne voyage dans aucun.
+  - `monotonicClock` (`call-captions.ts`) est maintenant la seule définition de l'horloge :
+    - `browserCaptionsDeps()` (`call-captions-runtime.ts`) la remet au contrôleur ;
+    - le panneau la lit par défaut, par sa prop `clock` ;
+    - le harnais expose sa fausse horloge (`elapsed`).
+- **Tests** :
+  - #20273 : 6 témoins dans `call-quality.test.ts`.
+    - Rouge : 2 échecs, puis 1 pour la réserve R2.
+    - Mutation de la QA (lecture du local seul) : 2 rouges.
+  - #20320 : dans `call-captions-panel.test.tsx`, le panneau est rendu depuis le harnais avec une fausse horloge, et les points tombent à l'échéance + 1 ms (rouge : 1 échec). Un second témoin vérifie `browserCaptionsDeps().elapsed === monotonicClock` (rouge : l'export manquait).
+    - Mutations : `performance.now()` remis dans le panneau donne 1 rouge ; `() => Date.now()` dans le runtime donne 1 rouge.
+  - Vert, rejoué par l'orchestrateur sur l'arbre fusionné : `bun test src/lib/calls src/components/call-captions-panel.test.tsx` donne 2 524 pass et 0 fail ; `tsc --noEmit` donne 0.
+  - `bun run build` donne 0, et `measure-weight` donne 0 (agents).
+  - Suite web complète : 35 139 pass et 1 fail, `act-leak-guard`. Ce rouge vient du poste : il échoue à l'identique sur `origin/dev` sous bun 1.4.4, alors que la CI tourne en 1.3.14.
+- **QA** (`auditeur-adversarial`, indépendante) : favorable avec réserves.
+  - R1 (moyenne) : la « même source » de l'horloge n'était verrouillée par aucun test. Corrigée dans le lot.
+  - R2 (faible) : un candidat sans type comptait comme direct. Corrigée dans le lot.
+  - R3 (faible) : `call_engine` est à 16 383 o pour un plafond de 16 384 o en gzip -9. Le lot n'y ajoute que 2 o, venus de la table d'import. Consignée sur **#19894**.
+  - R4 (faible) : le réveil du panneau tourne sur le vrai `setTimeout`, que le test ne pilote pas. Il prouve la lecture de l'horloge, pas le réveil.
+- **Limites** : rien n'a été vérifié dans un navigateur, avec un vrai `getStats` et un pair derrière TURN.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée : lire son `ci.yml`. S'il est vert, fusionner `dev` dans la branche, puis la PR.
+1. **#19894** avant tout lot qui touche le moteur web, à qui il reste 1 o de marge. Puis **#20299** (Android, règle unique du chrome), **#20300** (iOS) et **#20335**.
+2. #13775, #20348, #20257, #20280, #20288.
+3. #20185 (recette staging), #11932, #12236, #16933.
