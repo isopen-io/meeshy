@@ -19,22 +19,17 @@ import { mergeSnapshot } from './host-metrics';
  * Sans socket (ou sans accusé), le REPLI relit `?since=<dernier point>` toutes les 5 s.
  * Quitter l'écran se désabonne et arrête la relecture.
  *
- * **ET L'ABONNEMENT SE REFAIT À CHAQUE RÉ-AUTHENTIFICATION** (#20304). C'est le
- * seul des six consommateurs de `watchLiveSocket` qui ne se contente pas
- * d'ÉCOUTER : son `subscribe` fait joindre une room côté passerelle
- * (`AdminMetricsHandler.handleSubscribe`, unique `socket.join(ROOMS.adminHostMetrics())`
- * du dépôt), et une room est tenue PAR SOCKET. Une reconnexion socket.io — celle
- * que `bindAppStatePresence` provoque elle-même après 10 s d'onglet masqué — donne
- * une socket neuve côté serveur, que rien ne remet dans cette room : `AuthHandler`
- * reconstruit `user:`, `feed:`, les conversations et la room d'appareil E2EE, pas
- * celle-ci. Et `createLiveSocketWatchers` ne rejoue ses observateurs que si l'OBJET
- * de connexion change, ce qu'une reconnexion ne fait pas.
- *
- * Le réabonnement vient donc de l'observateur lui-même, sur `authenticated` — le
- * motif de `publication-rooms.ts`, `conversation-viewing.ts` et
- * `call-socket-bridge.ts`. `live` retombe sur `'disconnect'` : sans cela l'écran
- * AFFIRMERAIT le direct au-dessus de courbes gelées, et le repli par sondage, qui
- * est gardé sur `live`, resterait désarmé pour toujours.
+ * **LA RECONNEXION** (#20304) — `admin-metrics:subscribe` n'est pas une écoute : c'est
+ * une JONCTION DE ROOM (`AdminMetricsHandler.handleSubscribe`, unique
+ * `socket.join(ROOMS.adminHostMetrics())` du dépôt), et une room appartient à UN socket
+ * serveur. socket.io reconnecte sous le MÊME `SocketClient` — `watchLiveSocket` ne rejoue
+ * donc rien, lui qui ne migre ses observateurs que sur un changement d'OBJET de connexion.
+ * La passerelle reconstruit seule les rooms qu'elle peut inférer (`AuthHandler`) ; celle-ci,
+ * non. L'abonnement est donc rejoué sur `authenticated`, comme `publication-rooms.ts`,
+ * `conversation-viewing.ts` et `call-socket-bridge.ts` le font pour leurs propres salles —
+ * et `disconnect` désarme `live`, sans quoi le repli par sondage, gardé sur `live === true`,
+ * ne prendrait jamais le relais : la page afficherait « En direct » au-dessus de courbes
+ * gelées pour toujours. Un accusé qui REFUSE (`ok: false`, `RATE_LIMITED`) désarme aussi.
  */
 export type LiveSource = (watcher: (socket: SocketClient) => () => void) => Promise<() => void>;
 
@@ -70,28 +65,30 @@ export function useHostMetrics(params: { readonly deps: AdminDeps; readonly enab
         const sample = decodeHostSample(raw);
         if (sample !== null) merge({ samples: [sample] });
       };
-      /* L'optionalité porte sur TOUTE la chaîne : une socket sans accusé
-         (bouchon de fixtures, faux socket de témoin) ne déclenche ni `then` ni
-         `catch`, et `live` reste faux — donc le sondage tient l'écran. */
       const subscribe = (): void => {
-        socket
-          .emitWithAck?.(ADMIN_METRICS_CLIENT_EVENTS.ADMIN_METRICS_SUBSCRIBE, {}, 5000)
+        const acknowledged = socket.emitWithAck?.(ADMIN_METRICS_CLIENT_EVENTS.ADMIN_METRICS_SUBSCRIBE, {}, 5000);
+        if (acknowledged === undefined) {
+          setLive(false);
+          return;
+        }
+        acknowledged
           .then((ack) => {
+            if (stopped) return;
             const answer = ack as { readonly ok?: unknown; readonly snapshot?: unknown } | null;
             const snapshot = answer?.ok === true ? decodeHostSnapshot(answer.snapshot) : null;
-            if (snapshot === null || stopped) return;
+            if (snapshot === null) {
+              setLive(false);
+              return;
+            }
             merge(snapshot);
             setLive(true);
           })
           .catch(() => setLive(false));
       };
-      const onAuthenticated = (): void => {
+      const onAuthenticated = () => {
         if (!stopped) subscribe();
       };
-      /* La coupure RETIRE l'écran du direct : la room est perdue côté
-         passerelle, donc plus aucun échantillon n'arrivera avant le
-         réabonnement — et c'est `live` qui garde le repli par sondage. */
-      const onDisconnect = (): void => setLive(false);
+      const onDisconnect = () => setLive(false);
       socket.on(ADMIN_METRICS_SERVER_EVENTS.ADMIN_METRICS_SAMPLE, onSample);
       socket.on(SESSION_SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
       socket.on('disconnect', onDisconnect);

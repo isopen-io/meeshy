@@ -51,6 +51,29 @@ socket qui les jette rendrait le défaut invisible. Il lit l'EFFET (« un
 échantillon reçu après la reconnexion atteint-il les jauges ? »), jamais la
 présence d'un écouteur.
 
+## Note de convergence — deux sessions, le même `release()`
+
+Le correctif est celui de `dev` (#20321, cycle 215 d'une session parallèle),
+retenu par la règle #18654 : **la correction déjà sur `dev` se garde**. Ce lot
+avait mesuré le même défaut et écrit le même remède — jusqu'au nom de la
+fonction qui garde le détachement, `release()`, à l'identique — et quatre
+témoins dont deux que l'autre session a aussi écrits. Elle en a deux de plus
+(un ré-abonnement REFUSÉ, et le détachement des DEUX écoutes de cycle de vie),
+et sa version désarme `live` sur un accusé refusé comme sur une socket sans
+accusé, là où celle-ci laissait le refus muet : c'est la version la plus
+complète qui est en place.
+
+Ce qui reste de ce lot est cette leçon, que l'autre session n'a pas tirée. Et
+la convergence est elle-même la mesure d'une chose : quand deux lectures
+indépendantes du même code produisent le même remède au même nom, le défaut
+n'était pas subtil — il était seulement **invisible depuis le client**, qui est
+exactement ce que la règle ci-dessus dit d'aller chercher ailleurs.
+
+Le précédent est consigné au `CLAUDE.md` racine (« Note de convergence (merge
+itération 257 ↔ cycle 123) ») : la règle de tranchage du dépôt — celui qui n'a
+rien écrit cède — ne tranche pas quand les deux ont écrit, et c'est alors
+l'ordre de fusion qui décide.
+
 ## Famille
 
 Jumelle de la leçon « une énumération affirme AUSSI qu'elle est complète » : le

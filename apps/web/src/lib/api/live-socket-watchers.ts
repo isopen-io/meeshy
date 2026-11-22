@@ -30,20 +30,14 @@ export function createLiveSocketWatchers() {
     }
   };
 
-  /**
-   * SE DÉTACHER EST AUSSI FAILLIBLE QUE S'ACCROCHER (#20304). La règle du
-   * module — « un observateur qui échoue ne retient pas les autres » — ne
-   * distingue pas les deux sens, et seul l'un des deux était gardé : un adieu
-   * qui lève interrompait la boucle et laissait les observateurs SUIVANTS
-   * accrochés à la socket morte, ou empêchait une inscription de partir.
-   * Aucun détachement du dépôt ne lève aujourd'hui (ce sont des `socket.off`)
-   * — c'était donc un piège armé, pas une panne.
-   */
+  /** Symétrique d'`attach` (#20304) : un détachement qui lève ne retient pas les autres —
+   * sans quoi la boucle de `connect` s'interromprait et laisserait les observateurs
+   * suivants accrochés à la connexion morte, ce que le doc-comment interdit. */
   const release = (detach: (() => void) | null): void => {
     try {
       detach?.();
     } catch {
-      /* L'adieu raté ne regarde que lui. */
+      /* un observateur qui échoue ne retient pas les autres */
     }
   };
 
