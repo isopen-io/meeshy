@@ -30,6 +30,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { SocketRateLimiter } from '../../utils/socket-rate-limiter.js';
 import { loadCommentPostAcl, canUserInteractWithThread, canUserConsumeThread } from '../../services/posts/postVisibility.js';
 import { commentAuthorSeparatedFrom } from '../../services/posts/separatedCommentAuthors.js';
+import { blockedIdsAroundViewer } from '../../services/ContactDirectoryService.js';
 import { createSeparatedRoomsResolver, type SeparatedRoomsResolver } from '../separatedRooms.js';
 
 const logger = enhancedLogger.child({ module: 'CommentReactionHandler' });
@@ -82,19 +83,106 @@ export class CommentReactionHandler {
   }
 
   /**
-   * La séparation autour des DEUX sujets que l'événement nomme (#20236) —
-   * l'ACTEUR et l'AUTEUR du commentaire —, lue AVANT la mutation pour que
-   * l'émission reste synchrone après elle (l'ordre du fil porte un compteur
-   * d'agrégation). `null` ⇒ on n'annonce rien : on ne diffuse pas une activité
-   * sans savoir à qui la taire.
+   * La séparation autour de TOUS les sujets que l'événement nomme — l'ACTEUR,
+   * l'AUTEUR du commentaire (#20236) et chaque RÉACTEUR du roster (#20337).
+   * `null` ⇒ on n'annonce rien : on ne diffuse pas une activité sans savoir à
+   * qui la taire.
    *
    * Seul l'ACTEUR s'exempte (`keep`). Exempter aussi l'auteur rouvrait la
    * fuite sur le chemin de RETRAIT, qui n'a pas de porte
    * `commentAuthorSeparatedFrom` — retirer sa réaction reste permis après un
    * blocage, par décision écrite.
+   *
+   * **Elle est lue APRÈS la mutation depuis #20337, et il faut dire ce que
+   * cela change.** #20236 la lisait avant, « pour que l'émission reste
+   * synchrone après elle (l'ordre du fil porte un compteur d'agrégation) » —
+   * une phrase juste du chemin LIKE (`SocialEventsHandler`, où l'émission est
+   * bien synchrone) et déjà inexacte ici : `createUpdateEvent` est une LECTURE
+   * EN BASE, donc un `await` siégeait déjà entre la mutation et l'émission.
+   * Nommer le roster EXIGE de lire après lui, puisque lui seul le produit.
+   *
+   * La fenêtre de réordonnancement s'élargit donc d'un `await` ; elle ne
+   * s'ouvre pas. Ces deux événements voyagent sans curseur `_seq` et portent
+   * un compteur ABSOLU — deux lectures concurrentes rendent le même total
+   * final, et un client qui doute resynchronise (`comment:reaction-request-sync`).
+   * L'`unchanged`/`!removed` en dispense : un no-op ne lit rien.
    */
-  private separationAround(actorId: string, commentAuthorId: string | null | undefined): Promise<readonly string[] | null> {
-    return this.separatedRooms.roomsAround([actorId, commentAuthorId], { keep: actorId });
+  private separationAround(
+    actorId: string,
+    commentAuthorId: string | null | undefined,
+    roster: readonly (string | null | undefined)[] = [],
+  ): Promise<readonly string[] | null> {
+    return this.separatedRooms.roomsAround([actorId, commentAuthorId, ...roster], { keep: actorId });
+  }
+
+  /**
+   * **LE ROSTER EST LE TROISIÈME SUJET DE LA DIFFUSION** (#20337).
+   *
+   * `CommentReactionAggregation.userIds` nomme TOUS les réacteurs. Une
+   * diffusion porte UNE charge pour N lecteurs : il n'existe donc aucun
+   * filtrage par lecteur possible dessus, et la seule lecture honnête de la
+   * leçon 275 (« une protection se mesure sur tout ce que la charge
+   * TRANSPORTE ») est que chaque id nommé par la charge est un SUJET de
+   * l'exclusion, au même titre que l'acteur et que l'auteur du commentaire.
+   *
+   * Sans cela : R a bloqué X ; X réagit au commentaire de B ; R n'est séparé
+   * ni de l'acteur ni de B, donc il reçoit l'événement — et y lit l'id de X.
+   *
+   * **Le roster n'est PAS coupé**, bien que `PostReactionAggregation` porte
+   * déjà la coupe (« NO userIds, count only ») : mesuré sur les trois clients,
+   * `CommentHeartLedger.reconcile` (iOS) dérive « mon cœur » de
+   * `reactorUserIds.contains(myUserId)` — et pas de `hasCurrentUser`, calculé
+   * relativement à l'ACTEUR. Un roster tronqué ferait sur-compter d'un cœur
+   * les clients DÉJÀ DÉPLOYÉS à chaque événement d'un tiers. La coupe est une
+   * décision de contrat (rétrocompatibilité, #9223), pas un correctif de
+   * confidentialité — elle se décide avec un train de release, pas ici.
+   *
+   * Coût : `roomsAround` lit les deux sens pour TOUS les sujets en deux
+   * requêtes, quel que soit leur nombre. Ce qui change est le taux de succès
+   * du cache (la clé est le tuple trié des sujets) — le roster d'UN emoji sur
+   * UN commentaire, pas celui du post.
+   */
+  private rosterOf(updateEvent: { readonly aggregation?: { readonly userIds?: readonly string[] } }): readonly string[] {
+    return updateEvent.aggregation?.userIds ?? [];
+  }
+
+  /**
+   * **UN ACK NOMINATIF SE FILTRE PAR LECTEUR** (#20337).
+   *
+   * `comment:reaction-request-sync` rend `reactions[].userIds` : le roster
+   * NOMINATIF de chaque emoji. Un `commentId` suffisait donc à obtenir l'id
+   * d'un compte qu'on a bloqué — la porte d'accès garde l'AUTEUR du
+   * commentaire (`commentAuthorSeparatedFrom`), jamais les RÉACTEURS.
+   *
+   * Contrairement à la diffusion, cette charge n'a qu'UN lecteur : on la
+   * filtre au lieu de la refuser, ce qui est strictement mieux. Le lecteur ne
+   * perd jamais son PROPRE id — on n'est séparé de personne de soi-même —
+   * donc rien de ce qu'il dérive de « suis-je dans le roster ? » ne change.
+   *
+   * **Les COMPTES ne bougent pas.** Un agrégat sans identité n'est pas visé,
+   * et un `count` par lecteur ferait diverger le même commentaire d'un lecteur
+   * à l'autre pour un gain nul — même décision que les compteurs bruts de
+   * `separatedCommentAuthors.ts`.
+   *
+   * FERMÉ : `blockedIdsAroundViewer` propage son échec, et le `catch` de
+   * l'appelant rend un ack d'erreur. On ne sert pas un roster sans savoir ce
+   * qu'il doit taire.
+   */
+  private async rosterServedTo<T extends { readonly reactions?: readonly { readonly userIds?: readonly string[] }[] }>(
+    viewerId: string,
+    sync: T,
+  ): Promise<T> {
+    const reactions = sync?.reactions;
+    if (!Array.isArray(reactions) || reactions.length === 0) return sync;
+    const separated = new Set(await blockedIdsAroundViewer(this.prisma, viewerId));
+    if (separated.size === 0) return sync;
+    return {
+      ...sync,
+      reactions: reactions.map((reaction) => ({
+        ...reaction,
+        userIds: (reaction.userIds ?? []).filter((id) => !separated.has(id)),
+      })),
+    };
   }
 
   /** La room du post, moins ce que la loi nomme — aucun `except()` quand il n'y a rien à taire. */
@@ -167,8 +255,6 @@ export class CommentReactionHandler {
       }
       const postId = thread.postId;
 
-      const separated = await this.separationAround(userId, thread.authorId);
-
       const reaction = await this.commentReactionService.addReaction({
         commentId: validated.commentId,
         userId,
@@ -235,6 +321,11 @@ export class CommentReactionHandler {
         // guard and this handler's own already-absent guard on remove.
         return;
       }
+
+      /* APRÈS `createUpdateEvent`, parce que les sujets incluent le ROSTER que
+         lui seul produit (#20337). L'émission reste synchrone après la lecture,
+         et l'`unchanged` ci-dessus en dispense : un no-op ne lit rien. */
+      const separated = await this.separationAround(userId, thread.authorId, this.rosterOf(updateEvent));
 
       if (separated !== null) this.postRoom(postId, separated).emit(SERVER_EVENTS.COMMENT_REACTION_ADDED, updateEvent);
 
@@ -317,12 +408,6 @@ export class CommentReactionHandler {
       // qu'ils ne refetchent pas le fil entier.
       const postId = thread.postId;
 
-      /* Avant la mutation (#20236), et c'est CE chemin qui rend l'exclusion de
-         l'AUTEUR nécessaire : il n'a pas de porte `commentAuthorSeparatedFrom`
-         — retirer sa réaction reste permis après un blocage, par décision
-         écrite — donc l'auteur se voyait annoncer l'activité de qui il a bloqué. */
-      const separated = await this.separationAround(userId, thread.authorId);
-
       const removed = await this.commentReactionService.removeReaction({
         commentId: validated.commentId,
         userId,
@@ -363,6 +448,13 @@ export class CommentReactionHandler {
         data: updateEvent,
       };
       if (callback) callback(successResponse);
+
+      /* C'est CE chemin qui rend l'exclusion de l'AUTEUR nécessaire (#20236) :
+         il n'a pas de porte `commentAuthorSeparatedFrom` — retirer sa réaction
+         reste permis après un blocage, par décision écrite — donc l'auteur se
+         voyait annoncer l'activité de qui il a bloqué. Et le ROSTER rejoint les
+         sujets (#20337), ce qui impose de lire APRÈS `createUpdateEvent`. */
+      const separated = await this.separationAround(userId, thread.authorId, this.rosterOf(updateEvent));
 
       if (separated !== null) this.postRoom(postId, separated).emit(SERVER_EVENTS.COMMENT_REACTION_REMOVED, updateEvent);
 
@@ -458,7 +550,7 @@ export class CommentReactionHandler {
 
       const successResponse: AckResponseOf<'comment:reaction-request-sync'> = {
         success: true,
-        data: reactionSync,
+        data: await this.rosterServedTo(userId, reactionSync),
       };
       if (callback) callback(successResponse);
     } catch (error: unknown) {
