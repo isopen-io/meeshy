@@ -409,6 +409,15 @@ const FIXED_POINT = failed(SHARED_LOCATION_ERROR_CODES.FIXED_POINT, 'Le partage 
 /** Le partage nommé par `expectedStartedAt` n'est plus celui qui est servi (#20249). */
 const STARTED_ELSEWHERE = failed(SHARED_LOCATION_ERROR_CODES.STARTED_ELSEWHERE, 'Le partage a changé depuis la relecture');
 
+/**
+ * Le `startedAt` d'un démarrage qui remplace `prior` : jamais égal ni antérieur au sien, pour que deux démarrages dans
+ * la même milliseconde ne portent pas le même nom (#20249).
+ */
+const startedAfter = (now: number, prior: SharedLocationState | null): string => {
+  const floor = prior?.startedAt === undefined ? Number.NaN : Date.parse(prior.startedAt) + 1;
+  return new Date(Number.isNaN(floor) ? now : Math.max(now, floor)).toISOString();
+};
+
 /** Le partage servi est-il celui que le démarrage nomme ? Sans nom, oui (anciens clients). */
 const isNamedStart = (expected: string | undefined, served: SharedLocationState | null): boolean =>
   expected === undefined || (served?.startedAt !== undefined && Date.parse(served.startedAt) === Date.parse(expected));
@@ -519,9 +528,10 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
     if (!isNamedStart(expected, previous)) return STARTED_ELSEWHERE;
     if (guarded && previous?.source === 'manual') return FIXED_POINT;
     const sessionId = randomUUID();
+    const basis = previous;
     if (position) {
       state = {
-        sessionId, recipients, position, updatedAt: new Date(now).toISOString(), expiresAt: termIso, startedAt: new Date(now).toISOString(),
+        sessionId, recipients, position, updatedAt: new Date(now).toISOString(), expiresAt: termIso, startedAt: startedAfter(now, previous),
         ...(shareBattery === true ? { shareBattery: true as const } : {}),
         ...(manual ? { source: 'manual' as const } : {}),
       };
@@ -550,6 +560,14 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
     if (!claim.claimed) {
       await dropSharedLocationSession(deps.cache, emitterId, state.sessionId);
       return claim.moved ? UNAVAILABLE : STOPPED;
+    }
+    if (position && claim.displaced !== null && claim.displaced !== basis?.sessionId) {
+      const displaced = await readSharedLocationSession(deps.cache, emitterId, claim.displaced, now);
+      const startedAt = startedAfter(Date.parse(state.startedAt ?? new Date(now).toISOString()), displaced);
+      if (startedAt !== state.startedAt) {
+        state = { ...state, startedAt };
+        if (!(await storeSharedLocationIfCurrent(deps.cache, emitterId, state, now))) return STOPPED;
+      }
     }
     if (!position) {
       const displaced = claim.displaced === null ? null : await readSharedLocationSession(deps.cache, emitterId, claim.displaced, now);

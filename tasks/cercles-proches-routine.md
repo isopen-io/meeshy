@@ -1883,6 +1883,11 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   conditionnée au pointeur lu (#20115) et le nom se revérifie à chaque pointeur qui bouge ; une liste seule publiée
   ailleurs garde `startedAt`, donc le démarrage relit et passe. Clé additive, annoncée par `acceptsExpectedStart` sur
   `GET /relations/locations/mine` ; sans la clé, rien ne change.
+- Audit adversarial : non bloquant. Corrigé dans le lot : deux démarrages dans la même milliseconde portaient le même
+  `startedAt`, donc le même nom (la personne ajoutée ailleurs disparaissait encore) ; `startedAt` est désormais
+  strictement postérieur à celui du partage remplacé, relu après la prise si le pointeur a bougé. Pour les lots clients :
+  sur `INVALID` après avoir envoyé la clé, relire et redemander (jamais renvoyer sans la clé) ; renvoyer `startedAt` tel
+  que servi ; `STARTED_ELSEWHERE` couvre aussi « le partage s'est arrêté ».
 - Gates : voir la PR. Clients (iOS, web, Android) : restent sous #20249, un lot chacun.
 - Prochain lot : web de #20249 (envoyer la clé sur `acceptsExpectedStart`, relire et redemander sur `STARTED_ELSEWHERE`),
   puis Android, puis iOS après #20250 ; #20308, #20054, #20056.

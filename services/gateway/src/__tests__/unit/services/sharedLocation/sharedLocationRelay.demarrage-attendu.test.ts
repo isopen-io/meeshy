@@ -108,6 +108,32 @@ describe('un démarrage qui nomme le partage montré (#20249)', () => {
     expect(await readSharedLocation(m.deps.cache, EMETTEUR, m.deps.now())).toBeNull();
   });
 
+  it('deux démarrages dans la même milliseconde ne portent jamais le même nom : le second ne se confond pas avec le premier', async () => {
+    const m = monde();
+    const montre = startedAtOf(await choisirPoint(m));
+    const ailleurs = startedAtOf(await ajouterAilleurs(m));
+
+    expect(Date.parse(ailleurs)).toBeGreaterThan(Date.parse(montre));
+    expect(await montrerPositionReelle(m, montre)).toMatchObject({ success: false, code: SHARED_LOCATION_ERROR_CODES.STARTED_ELSEWHERE });
+    expect(await servis(m)).toEqual([AMI, SANG].sort());
+  });
+
+  it('un démarrage devancé dans la même milliseconde, après la lecture, prend un nom neuf', async () => {
+    const m = monde();
+    await choisirPoint(m);
+    m.avancer(MINUTE);
+    m.suspendreProchainePrise();
+    const lent = startSharedLocation(m.deps, EMETTEUR, { recipients: AVEC_AMI, durationMinutes: 60, position: PARIS, source: 'device' });
+    await tick();
+    await tick();
+    const devant = startedAtOf(await ajouterAilleurs(m));
+    m.relacherPrise();
+
+    const servi = startedAtOf(await lent);
+    expect(Date.parse(servi)).toBeGreaterThan(Date.parse(devant));
+    expect((await ownSharedLocationFor(m.deps, EMETTEUR)).startedAt).toBe(servi);
+  });
+
   it('une date illisible est refusée comme toute charge illisible', async () => {
     const m = monde();
     await choisirPoint(m);
