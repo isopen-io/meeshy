@@ -101,9 +101,15 @@ final class ProfileFacesLayoutTests: XCTestCase {
             }
         })
 
+        // Le défaut visé est un bloc ÉCRASÉ (rangées superposées) ou ÉTIRÉ (le billet, des centaines de points) : la
+        // pose en pages ne doit ni retirer de hauteur à un bloc, ni lui en ajouter plus que l'arrondi d'une ligne.
+        // Sous iOS 26, la face Actions mesure 4 pt de plus à sa hauteur idéale qu'au fil du défilement (1807 contre
+        // 1803, mesuré sur la CI) ; iOS 27 rend les deux égales.
         for block in ["links", "actions"] {
             let alone = try XCTUnwrap(measured["alone." + block], block)
-            XCTAssertEqual(try XCTUnwrap(measured["paged." + block], block), alone, accuracy: 1, "\(block) : \(measured)")
+            let paged = try XCTUnwrap(measured["paged." + block], block)
+            XCTAssertGreaterThanOrEqual(paged, alone - 1, "\(block) écrasé : \(measured)")
+            XCTAssertLessThanOrEqual(paged, alone + 8, "\(block) étiré : \(measured)")
         }
     }
 
