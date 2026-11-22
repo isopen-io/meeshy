@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-h5vgy2` |
+| Branche de travail de la session courante | `claude/practical-fermat-xtlc3p` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -55,7 +55,34 @@ normal.
 | **88w** | 2026-11-15 | `claude/practical-fermat-dqytex` | [#18635](https://github.com/isopen-io/meeshy/pull/18635) → `dev` | ✅ mergé |
 | **89w** | 2026-11-19 | `claude/practical-fermat-6cktea` | → `dev` | ✅ mergé |
 | **90w** | 2026-11-20 | `claude/practical-fermat-awbeqk` | → `dev` | ✅ mergé |
-| **91w** | 2026-11-21 | `claude/practical-fermat-h5vgy2` | [#20161](https://github.com/isopen-io/meeshy/pull/20161) → `dev` | ⏳ ouverte |
+| **91w** | 2026-11-21 | `claude/practical-fermat-h5vgy2` | [#20161](https://github.com/isopen-io/meeshy/pull/20161) → `dev` | ✅ mergé |
+| **92w** | 2026-11-22 | `claude/practical-fermat-xtlc3p` | → `dev` | ⏳ ouverte |
+
+**92w** — a11y / i18n / maintenabilité (PREMIER tour de l'axe optimisation, le gate
+d'harmonie étant clos) : **le libellé d'accessibilité d'un message annonçait son
+ACCUSÉ en français en dur** pour tous les lecteurs d'écran. `composeMessageLabel`
+(`lib/view/message-a11y-label.ts`) descend bien le catalogue pour la protection, le
+transfert et la modération, mais la fonction locale `deliveryWord` rendait
+`pending/sent/delivered/read` → « en cours d'envoi »/« envoyé »/« distribué »/« lu »
+EN DUR — un lecteur EN/ES/PT/DE/IT/AR entendait « lu » sur SES messages. **Jumelle
+divergente** : le pied de rangée (`message-blocks.tsx`) dit déjà l'accusé via
+`statusLabel` + les clés traduites ×7 `message.status.*`, et `deliveryWord` avait
+même divergé EN français (« distribué » contre le « remis » du pied). Correction :
+`STATUS_KEY`+`statusLabel` extraits vers un module PUR `lib/view/message-status-label.ts`
+(réexporté par `message-blocks`, ses 12 consommateurs inchangés), `deliveryWord`
+supprimée, l'accusé descend `statusLabel(delivery, language)`. **Aucune nouvelle
+traduction** (clés déjà présentes). FR pending/sent/read byte-identiques ;
+`delivered` « distribué » → « remis » (unification avec le pied, cohérence). Témoins :
+`message-a11y-label.test.ts` (38→41, EN « read » pas « lu », FR « remis » pas
+« distribué », non-régression) + consommateurs `statusLabel` 72/72 ; `tsc` 0 ;
+harmonie **0**. Housekeeping : 91w confirmée mergée (#20161) ; appariement
+analyses↔plans 1:1 revérifié 74w→91w (18/18), **0 doublon** `w`. **Écarté, ne pas
+reproposer** : le lead E2EE de l'écran Sécurité (`settings-security.tsx:225`) est un
+repère règle 7 GOUVERNÉ (`settings-reperes.test.tsx:272`, #17594), pas un défaut
+d'épure. **Dette 93w+** : le reste de `composeMessageLabel` garde d'autres segments
+en dur en français (« Sans compte », comptes de pièces, « modifié », « épinglé »,
+« réponse à », « Position », « sticker », « réactions ») — clés neuves ×7 requises,
+à ouvrir en issue. Analyse : `docs/analyses/uiux/2026-11-22-iteration-92w.md`.
 
 **91w** — maintenabilité / cohérence : **le gate d'harmonie #8879 passe à 0** (5 →
 0, liste entièrement vidée). Ses 4 derniers cas étaient tous calculés ou de
@@ -318,18 +345,25 @@ du code supprimé et ne se rejouent pas.** La routine repart d'une revue fraîch
 l'`apps/web` actuel (Vite + Preact). Toutes sont annotées `CORRIGÉ` et closes pour
 leur époque.
 
-## Prochaine itération : **92w** — l'axe ÉPURATION
+## Prochaine itération : **93w** — poursuivre l'optimisation
 
-**Le gate d'harmonie #8879 est CLOS (0/0 après 91w).** Le prochain grand axe est
-l'**épuration** (directive porteur « logique épurée, pas de surcharge par
-fenêtre » ; dimension 12 « simplicité d'usage ») : chercher les **écrans web
-empilant plus d'une action primaire par fenêtre**, mesurés contre la disposition
-iOS correspondante (`apps/ios` + MeeshySDK comme référence de parité, **jamais
-modifiés**). Pistes de départ en pied de `docs/analyses/uiux/2026-11-21-iteration-91w.md` :
-barres d'action denses (en-têtes de fil, feuilles de réglages), écrans montrant
-d'emblée ce qui devrait vivre derrière un `(i)`, `⋯` ou « Plus » (cf. chantier
-#17584), alignements/espacements non conformes, états vide/chargement/erreur/
-hors-ligne manquants.
+**Le gate d'harmonie #8879 reste CLOS (0/0 après 92w).** Deux pistes, dans l'ordre :
+
+1. **Solder la DETTE a11y/i18n ouverte en 92w** (prioritaire car c'est un défaut
+   DÉJÀ identifié, pas une recherche) : le reste de `composeMessageLabel`
+   (`lib/view/message-a11y-label.ts`) garde des segments EN DUR EN FRANÇAIS —
+   « Sans compte » (:250), comptes de pièces jointes (:98-110), « réactions » (:122),
+   « réponse à »/« expéditeur inconnu » (:306), « sticker » (:317), « Position »/
+   « lieu partagé » (:328), « modifié » (:339), « épinglé » (:340). **Par petits
+   paquets** : d'abord les segments SANS pluriel (réutiliser `message.pin.*`,
+   `message.editedByModerator`, `quote.sender.unknown` quand le vocabulaire existe
+   déjà traduit), puis les comptes de pièces avec `.one`/`.other`. Parité :
+   `MessageAccessibilityLabelComposer.swift`. **À ouvrir en issue.**
+2. **Épuration** (dim. 12, « logique épurée ») : l'épuration des ÉCRANS est très
+   avancée (92w n'a trouvé aucun défaut « phrase au repos » non gouverné) ; la
+   dette a11y/i18n ci-dessus est le filon vif. Rester mesuré contre iOS
+   (`apps/ios` + MeeshySDK, **jamais modifiés**). **Écarté, ne pas reproposer** :
+   le lead E2EE de l'écran Sécurité (repère règle 7 gouverné, #17594).
 
 **Toujours REMESURER le gate d'harmonie à l'ouverture** : 0 après 91w, mais il
 remonte dès que `dev` reçoit une poche de chrome neuve (historique : 9/7 → 28/11
