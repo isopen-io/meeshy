@@ -4,6 +4,7 @@
  *
  * @jest-environment node
  */
+import { BLOOD_BUNDLE_VERSION } from '@meeshy/shared/utils/blood-bundle';
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 
 jest.mock('../../../../utils/logger-enhanced', () => ({
@@ -452,5 +453,49 @@ describe('#14924 — course rituel ↔ baisse : un Sang qui tombe pendant l’é
     const lignes = app.reglages();
     expect(lignes).toHaveLength(2);
     lignes.forEach((ligne) => expect(ligne).toMatchObject({ listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false }));
+  });
+});
+
+describe('#20362 — le rituel recueille UN accord, celui du palier entier, versionné', () => {
+  const PALIER = { acceptsBloodBundle: true, version: BLOOD_BUNDLE_VERSION };
+
+  it('l\'accord au palier s\'écrit daté et versionné pour chacun, avec les partages du rituel ouverts', async () => {
+    const app = await appli();
+    const { token } = await jusquAuxDeuxHolds(app);
+    await moi(app, { phase: 'confirm', token, consents: PALIER });
+    const fin = await autre(app, { phase: 'confirm', token, consents: PALIER });
+    await app.close();
+
+    expect(fin.body.data).toMatchObject({ completed: true, level: 'BLOOD' });
+    for (const [ownerId, otherId] of [[MOI, AUTRE], [AUTRE, MOI]]) {
+      expect(app.consents.find((c) => c.ownerId === ownerId)).toMatchObject({
+        otherId, bloodBundleVersion: BLOOD_BUNDLE_VERSION, bloodBundleAcceptedAt: expect.any(Date),
+        listeningTitleShared: true, locationShared: true, locationHistoryShared: true, proximityShared: true,
+      });
+    }
+  });
+
+  it('un ancien client (quatre booléens) achève le rituel sans accord au palier : ses refus restent écrits (C4)', async () => {
+    const app = await appli();
+    const { token } = await jusquAuxDeuxHolds(app);
+    await moi(app, { phase: 'confirm', token, consents: PALIER });
+    const fin = await autre(app, { phase: 'confirm', token, consents: { ...TOUS, locationLive: false } });
+    await app.close();
+
+    expect(fin.body.data).toMatchObject({ completed: true });
+    const ancien = app.consents.find((c) => c.ownerId === AUTRE);
+    expect(ancien).toMatchObject({ locationShared: false, proximityShared: true });
+    expect(ancien?.bloodBundleAcceptedAt ?? null).toBeNull();
+  });
+
+  it('une version périmée ou un accord refusé ne confirme pas : 409 RELATION_BLOOD_BUNDLE_OUTDATED, 400 RELATION_CONSENT_REQUIRED', async () => {
+    const app = await appli();
+    const { token } = await jusquAuxDeuxHolds(app);
+    const perime = await moi(app, { phase: 'confirm', token, consents: { acceptsBloodBundle: true, version: '2020-01-01' } });
+    const refus = await moi(app, { phase: 'confirm', token, consents: { acceptsBloodBundle: false, version: BLOOD_BUNDLE_VERSION } });
+    await app.close();
+
+    expect([perime.status, perime.body.code]).toEqual([409, 'RELATION_BLOOD_BUNDLE_OUTDATED']);
+    expect([refus.status, refus.body.code]).toEqual([400, 'RELATION_CONSENT_REQUIRED']);
   });
 });

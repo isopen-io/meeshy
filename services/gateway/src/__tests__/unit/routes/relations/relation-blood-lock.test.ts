@@ -94,3 +94,34 @@ describe('#20361 — les réglages par personne d\'un Sang verrouillé', () => {
     expect(res.status).toBe(200);
   });
 });
+
+describe('#20367 — PUT /relations/:userId/blood-bundle : un Sang déjà scellé accepte la liste (carte de la décision B)', () => {
+  const accepter = (app: Awaited<ReturnType<typeof appli>>, body: unknown) => app.call('PUT', `/api/v1/relations/${AUTRE}/blood-bundle`, body, MOI);
+
+  it('au Sang réel, à la version courante : l\'accord s\'écrit daté et versionné, et verrouille', async () => {
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')], reglages: [{ ownerId: MOI, otherId: AUTRE, bringBlockedAt: null, batteryShared: false }] });
+    const res = await accepter(app, { version: BLOOD_BUNDLE_VERSION });
+    const coupe = await app.call('PUT', `/api/v1/relations/${AUTRE}/battery/settings`, { shared: false }, MOI);
+    await app.close();
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual({ userId: AUTRE, bloodBundleAccepted: true, version: BLOOD_BUNDLE_VERSION, lockedByLevel: true });
+    expect(app.reglages.get(`${MOI}:${AUTRE}`)).toMatchObject({ bloodBundleAcceptedAt: NOW, bloodBundleVersion: BLOOD_BUNDLE_VERSION, batteryShared: false });
+    expect(coupe.status).toBe(409);
+  });
+
+  it('sous le Sang : 404 sans rien écrire ; version périmée : 409 RELATION_BLOOD_BUNDLE_OUTDATED ; corps illisible : 400', async () => {
+    const proche = await appli({ liens: [lien('CLOSE', 'CLOSE')] });
+    const sous = await accepter(proche, { version: BLOOD_BUNDLE_VERSION });
+    await proche.close();
+    const sang = await appli({ liens: [lien('BLOOD', 'BLOOD')] });
+    const vieux = await accepter(sang, { version: '2020-01-01' });
+    const illisible = await accepter(sang, { version: 3 });
+    await sang.close();
+
+    expect(sous.status).toBe(404);
+    expect(proche.reglages.get(`${MOI}:${AUTRE}`)).toBeUndefined();
+    expect([vieux.status, vieux.body.code]).toEqual([409, 'RELATION_BLOOD_BUNDLE_OUTDATED']);
+    expect(illisible.status).toBe(400);
+  });
+});

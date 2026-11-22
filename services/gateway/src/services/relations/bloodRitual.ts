@@ -33,9 +33,12 @@ import { relationPairKey } from '@meeshy/shared/types/relation';
 import {
   RELATION_RITUAL_CONSENT_KEYS,
   type RelationRitualConsentKey,
+  type RelationRitualBundleConsent,
+  type RelationRitualConfirmation,
   type RelationRitualConsents,
   type RelationRitualPhase,
 } from '@meeshy/shared/types/socketio-events';
+import { isCurrentBloodBundle } from '@meeshy/shared/utils/blood-bundle';
 import type { CacheStore } from '../CacheStore';
 import {
   emitRelationLevelRaised,
@@ -63,6 +66,7 @@ export type RitualCode =
   | 'RELATION_RITUAL_NOT_SYNCHRONISED'
   | 'RELATION_RITUAL_LAPSED'
   | 'RELATION_CONSENT_REQUIRED'
+  | 'RELATION_BLOOD_BUNDLE_OUTDATED'
   | 'RELATION_PHASE_SKIP'
   | 'RELATION_NOT_ELIGIBLE'
   | 'RELATION_RITUAL_BUSY';
@@ -93,7 +97,7 @@ type RitualState = {
   readonly requestId: string;
   readonly expiresAt: number;
   readonly holds: Readonly<Record<string, number>>;
-  readonly confirms: Readonly<Record<string, RelationRitualConsents>>;
+  readonly confirms: Readonly<Record<string, RelationRitualConfirmation>>;
   /** Ouvert sur une demande refusée, pour son seul émetteur : rien n'en part vers l'autre. */
   readonly muted?: boolean;
 };
@@ -142,6 +146,11 @@ async function withLock<T>(cache: CacheStore, key: string, work: () => Promise<T
 const isConsents = (value: unknown): value is RelationRitualConsents =>
   typeof value === 'object' && value !== null &&
   RELATION_RITUAL_CONSENT_KEYS.every((key) => typeof (value as Record<string, unknown>)[key] === 'boolean');
+
+const isBundleConsent = (value: unknown): value is RelationRitualBundleConsent =>
+  typeof value === 'object' && value !== null && (value as Record<string, unknown>).acceptsBloodBundle === true && typeof (value as Record<string, unknown>).version === 'string';
+
+const namesBundle = (value: unknown): boolean => typeof value === 'object' && value !== null && 'acceptsBloodBundle' in value;
 
 const BLOOD_REQUEST_SELECT = { id: true, senderId: true, receiverId: true, status: true } as const;
 
@@ -226,10 +235,22 @@ type Transition =
 const holdIsFresh = (state: RitualState, userId: string, now: number): boolean =>
   state.holds[userId] !== undefined && now - state.holds[userId] <= RITUAL_HOLD_VALID_MS;
 
-function confirmTransition(state: RitualState, actorId: string, otherId: string, consents: unknown, now: number): Transition {
-  if (!isConsents(consents)) {
-    return { kind: 'refuse', outcome: refuse(400, 'RELATION_CONSENT_REQUIRED', 'Chaque partage doit être accepté ou refusé explicitement') };
+/** L'accord reçu, ou le refus motivé : version périmée (409), ou ni l'accord au palier ni les quatre réponses (400). */
+function confirmationOf(consents: unknown): RelationRitualConfirmation | Transition {
+  if (isBundleConsent(consents)) {
+    return isCurrentBloodBundle(consents.version)
+      ? consents
+      : { kind: 'refuse', outcome: refuse(409, 'RELATION_BLOOD_BUNDLE_OUTDATED', 'La liste de ce que le Sang ouvre a changé : relis-la') };
   }
+  if (!namesBundle(consents) && isConsents(consents)) return consents;
+  return { kind: 'refuse', outcome: refuse(400, 'RELATION_CONSENT_REQUIRED', 'Le Sang demande ton accord explicite') };
+}
+
+const isTransition = (value: RelationRitualConfirmation | Transition): value is Transition => 'kind' in value;
+
+function confirmTransition(state: RitualState, actorId: string, otherId: string, consents: unknown, now: number): Transition {
+  const confirmation = confirmationOf(consents);
+  if (isTransition(confirmation)) return confirmation;
   const otherConfirmed = state.confirms[otherId] !== undefined;
   const neverHeld = state.holds[actorId] === undefined || (!otherConfirmed && state.holds[otherId] === undefined);
   if (neverHeld) {
@@ -238,7 +259,7 @@ function confirmTransition(state: RitualState, actorId: string, otherId: string,
   if (!holdIsFresh(state, actorId, now) || (!otherConfirmed && !holdIsFresh(state, otherId, now))) {
     return { kind: 'refuse', drop: true, outcome: refuse(409, 'RELATION_RITUAL_LAPSED', 'L\'autre a lâché, rien n\'est enregistré') };
   }
-  const next: RitualState = { ...state, confirms: { ...state.confirms, [actorId]: consents } };
+  const next: RitualState = { ...state, confirms: { ...state.confirms, [actorId]: confirmation } };
   return otherConfirmed ? { kind: 'complete', state: next } : { kind: 'save', state: next, data: { completed: false }, stage: 'confirmed' };
 }
 
@@ -271,8 +292,21 @@ const CONSENT_COLUMN: Readonly<Record<RelationRitualConsentKey, string>> = {
 const consentColumns = (consents: RelationRitualConsents): Record<string, boolean> =>
   Object.fromEntries(RELATION_RITUAL_CONSENT_KEYS.map((key) => [CONSENT_COLUMN[key], consents[key]]));
 
-async function writeConsents(deps: RitualDeps, ownerId: string, otherId: string, consents: RelationRitualConsents, at: Date) {
-  const columns = { ...consentColumns(consents), consentedAt: at };
+/**
+ * L'accord au palier ouvre aussi les quatre colonnes du rituel : un serveur ramené en arrière, ou un
+ * miroir qui ne lit pas encore l'accord, sert ce que la personne a accepté — jamais moins.
+ */
+const confirmationColumns = (confirmation: RelationRitualConfirmation, at: Date): Record<string, boolean | Date | string> =>
+  isBundleConsent(confirmation)
+    ? {
+      ...Object.fromEntries(RELATION_RITUAL_CONSENT_KEYS.map((key) => [CONSENT_COLUMN[key], true])),
+      bloodBundleAcceptedAt: at,
+      bloodBundleVersion: confirmation.version,
+    }
+    : consentColumns(confirmation);
+
+async function writeConsents(deps: RitualDeps, ownerId: string, otherId: string, consents: RelationRitualConfirmation, at: Date) {
+  const columns = { ...confirmationColumns(consents, at), consentedAt: at };
   await deps.prisma.relationFeatureSetting.upsert({
     where: { ownerId_otherId: { ownerId, otherId } },
     create: { ownerId, otherId, ...columns },

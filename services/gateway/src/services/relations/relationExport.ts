@@ -62,6 +62,8 @@ type ConsentRow = {
   readonly proximityWithdrawnAt?: Date | null;
   readonly ghostAt?: Date | null;
   readonly proximityRadiusMeters?: number | null;
+  readonly bloodBundleAcceptedAt?: Date | null;
+  readonly bloodBundleVersion?: string | null;
 };
 
 type FindMany<Row> = { readonly findMany: (args: never) => Promise<readonly Row[]> };
@@ -104,6 +106,8 @@ const consentOf = (row: ConsentRow) => ({
   consentedAt: row.consentedAt.toISOString(),
   ghostAt: row.ghostAt?.toISOString() ?? null,
   proximityRadiusMeters: row.proximityRadiusMeters ?? null,
+  bloodBundleAcceptedAt: row.bloodBundleAcceptedAt?.toISOString() ?? null,
+  bloodBundleVersion: row.bloodBundleVersion ?? null,
   withdrawnAt: {
     listeningCategoryShared: row.listeningCategoryWithdrawnAt?.toISOString() ?? null,
     listeningTitleShared: row.listeningTitleWithdrawnAt?.toISOString() ?? null,
@@ -142,7 +146,7 @@ export async function exportRelations(prisma: RelationsExportPrisma | PrismaClie
       where: { ownerId: userId },
       select: { otherId: true, listeningCategoryShared: true, listeningTitleShared: true, locationShared: true, locationHistoryShared: true, proximityShared: true, consentedAt: true,
         listeningCategoryWithdrawnAt: true, listeningTitleWithdrawnAt: true, locationWithdrawnAt: true, locationHistoryWithdrawnAt: true, proximityWithdrawnAt: true,
-        ghostAt: true, proximityRadiusMeters: true },
+        ghostAt: true, proximityRadiusMeters: true, bloodBundleAcceptedAt: true, bloodBundleVersion: true },
       orderBy: { consentedAt: 'asc' },
       take,
       skip,
