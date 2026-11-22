@@ -2333,3 +2333,77 @@ socket jusqu'au client.
 1. **#20221** : rendre indépendants de l'ordre le codec affiché et la limitation de qualité, et dédoublonner les ids de la même façon (R1).
 2. **#20185** : recette sur le staging, si un accès existe.
 3. #11932, #12236, #16933, #20043.
+
+## Cycle 70 — 2026-11-21
+
+- **Base** : `origin/dev` @ `11a5aa46b`, puis `25454555e`, fusionné dans la branche.
+- **Branche** : `claude/determined-volta-6tq2ks`.
+- **Lot du cycle 69 (#20258, #20221)** : la PR n'est pas fusionnée.
+  - Le run `ios.yml` 44931575416 attend un runner macOS depuis 18:39. Ses gardes iOS sont vertes, mais le Swift n'est pas compilé.
+  - `dev` a été fusionné dans sa branche (`fec5348a3`). Depuis la PR, aucun Swift n'a changé sur dev, donc le run sur `2dc59c47` reste la preuve valable.
+- **Objectif** : #20256. Le web lit `getStats` selon les règles d'iOS et d'Android, quel que soit l'ordre du relevé.
+- **Livré** (web, `apps/web/src/lib/calls/`) :
+  - `call-stats-election.ts` : un nouveau module pur, consommé par `readStats` et `readMediaQuality`. Il porte trois règles.
+    - **Codec affiché = codec REÇU.** On considère les `inbound-rtp` qui ont un `codecId`, l'audio d'abord (un `kind` absent compte comme audio), puis le plus petit id, et on garde le premier dont le codec se résout. Avant, le web prenait le codec ÉMIS, vidéo d'abord. Le champ `codec` de `call:analytics` a désormais le même sens sur les trois plateformes. Sa forme ne change pas (sous-type MIME, coupé à 50 caractères).
+      - **Repli** : quand rien de reçu ne se résout, on prend le codec ÉMIS, dans le même ordre. C'est le cas d'un pair muet ou d'un flux à sens unique. Le gate navigateur `check-calls-quality.mjs`, dont le pair de test ne fait que recevoir, a rougi sans ce repli : `call:analytics` partait avec `unknown`. Le mobile rend encore `nil` dans ce cas, voir **#20280**.
+    - **Limitation** : la cause la plus contraignante (bandwidth > cpu > other > le reste). À égalité, le plus petit id. Les rangs sont dans une `Map`, si bien qu'une clé du prototype vaut 0 (QA R1).
+    - **Paire ICE** : la règle de #20121 (le transport, sinon la paire nominée de plus forte priorité). Le RTT manquant se lit sur la paire suivante. Le web était le dernier miroir de cette règle.
+      - **Exception, le débit sortant estimé** : il ne se lit QUE sur la paire élue. Avec le repli de #20121, le gate `check-calls-effects-perf.mjs` rougissait par intermittence (« aucune tâche longue pendant les glissés du zoom »).
+        - Branche : 2 échecs sur 7 en local, 1 sur 2 en CI. `dev` : 0 sur 8. Sans le repli : 0 sur 6.
+        - Cause : l'estimation d'une paire sans trafic changeait le palier vidéo, et `setParameters` reconfigurait l'encodeur au milieu du geste.
+        - Le mobile garde ce repli : voir **#20284**.
+- **Tests** : `call-stats-order.test.ts`, 21 cas, chacun joué dans toutes les rotations du relevé et de son inverse.
+  - Rouge : 15 échecs sur 17 sur le code de dev ; 1 échec sur 1 pour R1.
+  - Réécrits : 3 tests figeaient le codec émis (`call-quality`, `call-quality-loop`, `call-analytics-hostile-stats`).
+  - Vert, sur l'arbre fusionné : `bun test src/lib/calls`, 2470 tests, 0 échec. `tsc` donne 0, le build donne 0. `check-calls-quality.mjs` passe en local (code de sortie 0, codec `opus`), `check-calls-effects-perf.mjs` aussi.
+  - Suite web complète : 34 979 réussis et 1 échec. Ce dernier, `act-leak-guard.test.ts`, échoue à l'identique sur `origin/dev` : c'est un problème d'environnement local (bun 1.4.4), pas un effet du lot.
+  - Mutations faites par la QA : M1 à M7 échouent toutes, de 1 à 5 échecs chacune.
+- **QA** (indépendante) : favorable avec réserves.
+  - R1 (clés du prototype) : corrigée.
+  - R2 (`dev` absent de la branche) : corrigée.
+  - Pour information :
+    - `subtype()` ne découpe pas le mime comme le mobile ;
+    - le web ne lit pas `mediaType` en repli de `kind` ;
+    - un appel vidéo web rapporte désormais `opus`, le codec audio passant d'abord, comme sur mobile.
+- **Découvert** : **#20273** (le web dit « direct » quand c'est le candidat DISTANT qui est relay), **#20280** (le mobile n'a pas de repli sur le codec émis), **#20284** (sur mobile, le débit estimé se lit sur une paire sans trafic).
+- **Limites** : la règle n'a pas été vérifiée dans un vrai navigateur pendant un appel. La parité du codec et de la limitation dépend de la fusion de #20258.
+
+### Cycle suivant : par où reprendre
+
+0. **#20258** : si le run `ios.yml` 44931575416 est vert, fusionner `dev` dans la branche puis fusionner la PR. S'il est encore en file, le relancer, ou le laisser courir.
+1. Si la PR de ce cycle (#20256) n'est pas fusionnée : fusionner `dev`, rejouer `bun test src/lib/calls`, puis fusionner.
+2. **#20257** : les analytics iOS ne comptent que les quatre causes connues. Le lot est petit, en Swift, et se prouve par `ios.yml`.
+3. **#20284** : le débit estimé sur mobile (fluidité), puis **#20280** et **#20273**.
+4. #20185 (recette staging), #11932, #12236, #16933, #20043.
+
+## Cycle 71 — 2026-11-21
+
+- **Base** : `origin/dev` @ `5f406e5ff6`, qui inclut #20275 (#20256, cycle 70). Cette fusion a été faite par la session du cycle 70, encore active ; elle pilote aussi #20258. Ce cycle lui cède les deux PR, qui écrivent les fichiers de statistiques.
+- **Branche** : `claude/determined-volta-2eq9xv`.
+- **Objectif** : #20043. Sur Android, la surveillance d'un appel mesure ses délais sur l'horloge monotone : un saut de l'heure murale (NTP, réglage manuel) ne relance plus l'ICE et ne coupe plus l'appel.
+- **Livré** (`apps/android/feature/calls`, commit `ae077ac597`) :
+  - `CallReliabilityMonitor` lit `CallClock.elapsedMs()`, soit `SystemClock.elapsedRealtime()` en production, pour le chien de garde de mise en relation et pour la détection « à moitié ouvert ».
+    - Leurs ancres (`connectingSinceMs`, `epochStartMs`) ne sont posées que par ces mêmes lectures, et `start()` recrée le chien de garde : les deux horloges ne se mélangent pas.
+  - `CallToastBus.admit` lit aussi l'horloge monotone. Un recul de l'heure murale taisait un même texte pendant une heure.
+  - `WebRtcCallQualitySampler` lit aussi l'horloge monotone pour `atMs`. Cette valeur ne sert qu'à l'écart qui donne le débit, et elle ne quitte pas l'appareil.
+  - Restent en heure murale : `CallOngoingController` (`setWhen`) et `CallCaptureController`, dont l'ancre est comparée à `System.currentTimeMillis()` par le chrono du montage (#20288).
+  - Aucun payload ni aucune valeur persistée ne change.
+- **Tests** :
+  - `CallReliabilityMonitorTest` : 4 témoins (sauts de +1 h et −1 h, en `Connecting` et en lien à moitié ouvert), avec un faux `JumpingWallClock`.
+  - `CallToastBusTest` : 2 témoins, et les deux tests existants avancent désormais les deux horloges ensemble.
+  - `WebRtcCallQualitySamplerTest` : 1 témoin, où le débit est de 8,0 kb/s malgré une heure murale qui saute à chaque lecture.
+  - Rouge, raisonné et contre-vérifié par la QA : 7 témoins sur 7 échouent sur le code de dev. Ils n'ont pas été exécutés localement, car le conteneur ne compile pas `feature/calls`.
+  - CI : `android.yml`, run 44963467115 (`workflow_dispatch`, sha `ae077ac597`).
+- **QA** (`auditeur-adversarial`) : favorable avec réserves.
+  - R1 (moyenne, hors périmètre) : `CallChromeController` mesure encore `hiddenFor` sur l'heure murale. Après un recul de l'horloge, les commandes masquées captent les touchers pendant environ une heure. Versée dans **#20290**.
+  - R2 (faible) : le chrono du montage relève de #20288. L'écart affiché des sous-titres est versé dans #20290.
+  - R3 (faible) : rien n'oblige une future implémentation de production à surcharger `elapsedMs`.
+- **Limites** : rien n'a été vérifié sur appareil.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée : lire le run `android.yml` 44963467115, fusionner `dev` dans la branche, puis fusionner la PR.
+1. **#20258** : si la session du cycle 70 l'a laissée ouverte, la reprendre (run `ios.yml` sur la tête de branche).
+2. **#20290** : les commandes masquées et l'horloge murale, un petit lot Android de fiabilité.
+3. #20257, #20284, #20280, #20273, puis #20288.
+4. #20185 (recette staging), #11932, #12236, #16933.
