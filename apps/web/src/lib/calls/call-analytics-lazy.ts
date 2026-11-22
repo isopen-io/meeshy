@@ -17,17 +17,17 @@ type ReportUse = (builders: CallReportBuilders) => void;
  * attend dans une file, avec ce qui valait au moment où il a été demandé, et la
  * file se vide en entier, dans l'ordre, avant qu'un rapport parte en direct
  * (#20426). Un module qui ne charge pas ne coûte que les rapports en attente ;
- * la demande suivante le retente, trois essais au plus par appel, après quoi
- * les rapports sont abandonnés sans bruit.
+ * il n'est retenté qu'une minute après son échec, par la demande suivante, et
+ * les rapports demandés entre-temps sont abandonnés sans bruit.
  */
-export function lazyCallReports(load: () => Promise<CallReportBuilders>): CallReports {
+export function lazyCallReports(load: () => Promise<CallReportBuilders>, now: () => number = Date.now): CallReports {
   let ready: CallReportBuilders | null = null;
   let waiting: ReportUse[] | null = null;
-  let attempts = 0;
+  let failedAt = -Infinity;
   const run = (use: ReportUse): void => {
     if (ready) return use(ready);
     if (waiting) return void waiting.push(use);
-    if (++attempts > 3) return;
+    if (now() - failedAt < 60_000) return;
     const queue = (waiting = [use]);
     load().then(
       (builders) => {
@@ -37,9 +37,11 @@ export function lazyCallReports(load: () => Promise<CallReportBuilders>): CallRe
           } catch {}
         }
         ready = builders;
+        waiting = null;
       },
       () => {
         waiting = null;
+        failedAt = now();
       },
     );
   };
