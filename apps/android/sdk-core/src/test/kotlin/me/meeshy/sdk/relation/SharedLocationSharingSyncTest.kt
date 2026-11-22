@@ -3,20 +3,13 @@ package me.meeshy.sdk.relation
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
-import me.meeshy.sdk.location.LiveLocationFixSource
-import me.meeshy.sdk.location.LocationPermissionGate
 import me.meeshy.sdk.model.LiveLocationFix
-import me.meeshy.sdk.model.relation.SharedLocationFix
 import me.meeshy.sdk.model.relation.SharedLocationOwnRecipient
 import me.meeshy.sdk.model.relation.SharedLocationOwnSnapshot
 import me.meeshy.sdk.model.relation.SharedLocationOwnSnapshotWire
@@ -26,7 +19,6 @@ import me.meeshy.sdk.model.relation.SharedLocationRoster
 import me.meeshy.sdk.model.relation.SharedLocationSendOutcome
 import me.meeshy.sdk.model.relation.SharedLocationShareDuration
 import me.meeshy.sdk.model.relation.SharedLocationSource
-import me.meeshy.sdk.model.relation.SharedLocationStartRequest
 import me.meeshy.sdk.model.relation.SharedLocationStartVerdict
 import me.meeshy.sdk.model.relation.SharedLocationUpdateGate
 import me.meeshy.sdk.net.ApiError
@@ -45,105 +37,13 @@ class SharedLocationSharingSyncTest {
     private val bob = "bbbbbbbbbbbbbbbbbbbbbbbb"
     private val hour = 3_600_000L
 
-    /** Un appareil du compte « me » : son stockage survit à un « relancement » (un second centre sur le même stockage). */
-    private class Device(
-        private val scope: TestScope,
-        val saved: MutableMap<String, String?> = mutableMapOf(),
-        val receivedMarks: MutableMap<String, Boolean> = mutableMapOf(),
-        val startMarks: MutableMap<String, String?> = mutableMapOf(),
-    ) {
-        var servedSnapshot: SharedLocationOwnSnapshot? = null
-        var servedFailure: Exception? = null
-
-        /** Une panne qu'on laisse courir rejoue la relecture toutes les 30 s pour toujours : `runTest`, qui avance
-         * l'horloge virtuelle jusqu'au repos, ne finirait jamais. Le témoin la lève une fois ses assertions faites. */
-        fun endOutage() {
-            servedFailure = null
-        }
-        var servedGate: CompletableDeferred<Unit>? = null
-        var account: String? = "me"
-        val writes = mutableListOf<String>()
-        var startVerdict: SharedLocationStartVerdict = SharedLocationStartVerdict.Started(0L)
-        var updateVerdict: SharedLocationStartVerdict = SharedLocationStartVerdict.Started(0L)
-        val connected = MutableStateFlow(false)
-        val ownChanged = MutableSharedFlow<Unit>(extraBufferCapacity = 4)
-        val starts = mutableListOf<SharedLocationStartRequest>()
-        val updates = mutableListOf<SharedLocationFix>()
-        var stops = 0
-        var reads = 0
-        var fixAsks = 0
-
-        /** Ce qui se passe AILLEURS pendant que l'appareil attend son relevé (un autre appareil du compte). */
-        var onFix: (() -> Unit)? = null
-        val queuedStartVerdicts = ArrayDeque<SharedLocationStartVerdict>()
-        var following = 0
-        val stream = MutableSharedFlow<LiveLocationFix>(extraBufferCapacity = 8)
-
-        val center = SharedLocationSharingCenter(
-            emitter = object : SharedLocationEmitting {
-                override suspend fun start(request: SharedLocationStartRequest): SharedLocationStartVerdict {
-                    starts += request
-                    return queuedStartVerdicts.removeFirstOrNull() ?: startVerdict
-                }
-                override suspend fun update(fix: SharedLocationFix): SharedLocationStartVerdict {
-                    updates += fix
-                    return updateVerdict
-                }
-                override suspend fun stop(): Boolean {
-                    stops++
-                    return true
-                }
-            },
-            fixes = object : LiveLocationFixSource {
-                override suspend fun currentFix(): LiveLocationFix {
-                    fixAsks++
-                    onFix?.invoke()
-                    return LiveLocationFix(48.8566, 2.3522, accuracy = 8.0)
-                }
-                override fun updates(intervalMillis: Long): Flow<LiveLocationFix> {
-                    following++
-                    return stream
-                }
-            },
-            permission = LocationPermissionGate { true },
-            store = object : SharedLocationRosterStoring {
-                override fun load(accountId: String): String? = saved[accountId]
-                override fun save(accountId: String, stored: String?) {
-                    writes += "roster:$accountId"
-                    saved[accountId] = stored
-                }
-                override fun loadReceived(accountId: String): Boolean = receivedMarks[accountId] == true
-                override fun saveReceived(accountId: String, received: Boolean) {
-                    writes += "received:$accountId=$received"
-                    receivedMarks[accountId] = received
-                }
-                override fun loadPublishedStart(accountId: String): String? = startMarks[accountId]
-                override fun savePublishedStart(accountId: String, startedAt: String?) {
-                    startMarks[accountId] = startedAt
-                }
-            },
-            accountId = { account },
-            connected = connected,
-            clock = { scope.currentTime },
-            dispatcher = StandardTestDispatcher(scope.testScheduler),
-            ownChanged = ownChanged,
-            served = {
-                reads++
-                servedGate?.await()
-                servedFailure?.let { throw it }
-                servedSnapshot
-            },
-        )
-
-        fun relaunched(): Device = Device(scope, saved, receivedMarks, startMarks)
-    }
 
     private fun served(vararg pairs: Pair<String, Long>) =
         SharedLocationOwnSnapshot(pairs.map { (id, until) -> SharedLocationOwnRecipient(id, SharedLocationPrecision.CITY, until) })
 
     @Test
     fun `un retrait fait sur un autre appareil s'applique ici a la socket accrochee, sans republier`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
         device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
@@ -161,7 +61,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `un ajout fait ailleurs, annonce, n'est plus efface par le partage suivant d'ici`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
         device.servedSnapshot = served(alice to hour, bob to 2 * hour)
@@ -175,7 +75,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `une relecture qui echoue ne change rien`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
         val before = device.center.roster.value
@@ -190,7 +90,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `la passerelle ne sert plus rien, le suivi s'arrete ici`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
         device.servedSnapshot = served()
@@ -208,7 +108,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `une liste recue d'un autre appareil ne fait jamais partir la position d'ici, meme apres relancement`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.servedSnapshot = served(alice to hour)
 
@@ -229,7 +129,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `l'echeance d'une liste recue se solde sans rien envoyer`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.servedSnapshot = served(alice to hour)
         device.ownChanged.emit(Unit)
@@ -246,7 +146,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `partager depuis ici fait de cet appareil celui qui publie`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.servedSnapshot = served(alice to hour)
         device.ownChanged.emit(Unit)
@@ -262,7 +162,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `un partage refuse sur un appareil qui n'a fait que recevoir le laisse muet, meme apres relancement`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.servedSnapshot = served(alice to hour)
         device.ownChanged.emit(Unit)
@@ -282,7 +182,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `la marque recue s'ecrit avant la liste recue, un processus tue entre les deux se relance muet`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.servedSnapshot = served(alice to hour)
 
@@ -294,7 +194,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `une relecture qui leve ne tue pas la reconciliation des reconnexions suivantes`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.servedFailure = IllegalStateException("convertisseur")
         device.connected.value = true
@@ -313,7 +213,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `une relecture en vol pendant un changement de compte n'ecrit rien pour personne`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.center.restore()
         runCurrent()
@@ -333,7 +233,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `un arreter hors ligne gagne sur la liste servie et part a la reconnexion`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
         device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
@@ -353,7 +253,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `retirer quelqu'un d'une liste recue envoie la liste seule, sans jamais demander la position d'ici`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.servedSnapshot = served(alice to hour, bob to hour)
         device.ownChanged.emit(Unit)
@@ -373,7 +273,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `une liste seule sans partage alors que la passerelle sert encore quelqu'un garde le retrait en attente`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.servedSnapshot = served(alice to hour, bob to hour)
         device.ownChanged.emit(Unit)
@@ -391,7 +291,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `une liste seule sans partage quand la passerelle ne sert plus personne vide la liste sans arreter`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.servedSnapshot = served(alice to hour, bob to hour)
         device.ownChanged.emit(Unit)
@@ -409,7 +309,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `une liste seule sans partage suivie d'une relecture en echec garde le retrait en attente`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.servedSnapshot = served(alice to hour, bob to hour)
         device.ownChanged.emit(Unit)
@@ -431,7 +331,7 @@ class SharedLocationSharingSyncTest {
     private fun servedFrom(startedAt: String?, vararg people: Pair<String, Long>) =
         SharedLocationOwnSnapshot(served(*people).recipients, startedAt)
 
-    private suspend fun TestScope.publishing(device: Device) {
+    private suspend fun TestScope.publishing(device: SharingDevice) {
         runCurrent()
         device.startVerdict = SharedLocationStartVerdict.Started(hour, mine)
         device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
@@ -441,7 +341,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `un autre demarrage servi fait ceder l'appareil qui publiait, aucun releve ne part plus`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         publishing(device)
         val sent = device.updates.size
         device.servedSnapshot = servedFrom(elsewhere, alice to hour, bob to hour)
@@ -463,7 +363,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `la meme personne repartagee ailleurs, liste identique, fait ceder aussi`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         publishing(device)
         device.servedSnapshot = servedFrom(elsewhere, alice to hour)
 
@@ -475,7 +375,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `son propre demarrage relu avec une echeance decalee de dix minutes ne fait pas ceder`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         publishing(device)
         val sent = device.updates.size
         device.servedSnapshot = servedFrom(mine, alice to hour + 600_000L)
@@ -492,7 +392,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `un accuse perdu prend le demarrage servi pour le sien, puis cede au suivant`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.startVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.UNCONFIRMED)
         device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
@@ -510,7 +410,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `une passerelle qui ne nomme pas le demarrage ne fait jamais ceder`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         publishing(device)
         device.servedSnapshot = servedFrom(null, alice to hour, bob to hour)
 
@@ -522,7 +422,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `le demarrage d'un autre compte du telephone ne fait pas ceder le partage de celui-ci`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         publishing(device)
         device.account = "other"
         device.center.clear()
@@ -543,7 +443,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `relance apres qu'un autre appareil a repris le partage, cet appareil cede au lieu de republier`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         publishing(device)
         val relaunched = device.relaunched()
         relaunched.center.restore()
@@ -563,7 +463,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `relance sans reprise ailleurs, cet appareil continue de publier`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         publishing(device)
         val relaunched = device.relaunched()
         relaunched.center.restore()
@@ -583,7 +483,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `relance, un releve arrive avant la relecture ne part pas, et l'appareil cede a celui qui a repris`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         publishing(device)
         val relaunched = device.relaunched()
         relaunched.center.restore()
@@ -606,7 +506,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `relance, une passerelle d'avant la relecture leve l'attente et le releve suivant part`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         publishing(device)
         val relaunched = device.relaunched()
         relaunched.center.restore()
@@ -624,7 +524,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `relance, une relecture en panne garde l'attente, se rejoue, et l'appareil cede a celui qui a repris`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         publishing(device)
         val relaunched = device.relaunched()
         relaunched.center.restore()
@@ -651,7 +551,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `relance, une relecture en panne puis qui confirme mon demarrage laisse partir le releve suivant`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         publishing(device)
         val relaunched = device.relaunched()
         relaunched.center.restore()
@@ -670,7 +570,7 @@ class SharedLocationSharingSyncTest {
         assertThat(relaunched.updates).hasSize(1)
     }
 
-    private suspend fun TestScope.publishingToTwoThenWithdrawingBob(device: Device) {
+    private suspend fun TestScope.publishingToTwoThenWithdrawingBob(device: SharingDevice) {
         publishing(device)
         device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
         runCurrent()
@@ -679,7 +579,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `relance, une echeance passee avant la relecture pendant une panne n'envoie rien et se rejoue`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         device.saved["me"] = SharedLocationRoster.EMPTY
             .adding(alice, SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS, currentTime)
             .adding(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR, currentTime - 2 * hour)
@@ -705,7 +605,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `relance, un arreter en attente part en liste seule malgre une panne prolongee de la relecture`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         publishingToTwoThenWithdrawingBob(device)
         val relaunched = device.relaunched()
         relaunched.servedFailure = IllegalStateException("hors ligne")
@@ -723,7 +623,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `relance, reconcilier avant la relecture relit d'abord et applique la liste servie`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         publishingToTwoThenWithdrawingBob(device)
         val relaunched = device.relaunched()
         relaunched.servedSnapshot = servedFrom(mine, alice to hour)
@@ -762,7 +662,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `relance, partager d'ici avant la relecture fait publier aussitot`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         publishing(device)
         val relaunched = device.relaunched()
         relaunched.center.restore()
@@ -780,7 +680,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `relance, une passerelle d'avant la liste seule ne recoit jamais la position d'ici avant la relecture, le partage s'arrete`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         publishing(device)
         device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
         runCurrent()
@@ -801,7 +701,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `un partage arrete ailleurs oublie le demarrage garde`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         publishing(device)
         device.servedSnapshot = servedFrom(null)
 
@@ -815,7 +715,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `installation neuve, partager relit d'abord et la liste envoyee garde ce qu'un autre appareil partage`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.servedSnapshot = servedFrom(elsewhere, alice to hour)
 
@@ -829,7 +729,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `installation neuve, une relecture en panne refuse le partage sans rien envoyer`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.servedFailure = IllegalStateException("hors ligne")
 
@@ -845,7 +745,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `apres une relecture, partager ne relit pas`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.servedSnapshot = servedFrom(elsewhere, alice to hour)
         device.center.share(carol, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
@@ -858,7 +758,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `relance, arreter avant la relecture garde la personne ajoutee sur un autre appareil`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         publishing(device)
         device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
         runCurrent()
@@ -878,7 +778,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `relance, arreter la derniere personne d'ici avant la relecture n'arrete pas le partage d'un autre appareil`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         publishing(device)
         val relaunched = device.relaunched()
         relaunched.servedSnapshot = servedFrom(elsewhere, alice to hour, carol to hour)
@@ -893,7 +793,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `une relecture en panne apres une relecture reussie fait relire partager, refuse tant qu'elle dure`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.servedSnapshot = servedFrom(elsewhere, alice to hour)
         device.center.share(carol, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
@@ -913,7 +813,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `relance, arreter pendant une panne de la relecture fait partir le retrait en liste seule`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         publishing(device)
         device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
         runCurrent()
@@ -931,7 +831,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `relance, la relecture cede a un autre appareil et une passerelle sans liste seule arrete sans la position d'ici`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         publishing(device)
         val relaunched = device.relaunched()
         relaunched.servedSnapshot = servedFrom(elsewhere, alice to hour, carol to hour)
@@ -954,7 +854,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `l'accord donne a un AUTRE demarrage ne vaut rien, la question se repose a jour et rien ne part`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
         device.center.sync()
@@ -972,7 +872,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `un point relance ailleurs PENDANT l'attente du releve n'est pas ecrase, la reponse se relit apres le releve`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
         device.center.sync()
@@ -990,7 +890,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `un compte qui change efface le demarrage servi, la question d'avant ne vaut rien`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
         device.center.sync()
@@ -1009,7 +909,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `une personne ajoutee depuis la question la rend caduque, et la question la compte`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
         device.center.sync()
@@ -1025,7 +925,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `une personne sortie depuis la question ne la rend pas caduque`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
         device.center.sync()
@@ -1041,7 +941,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `la reponse relit toujours le partage servi, et une relecture en panne n'envoie rien`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
         device.center.sync()
@@ -1060,7 +960,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `un point choisi sur un autre appareil coupe le suivi d'ici et aucun releve ne part`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
         device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
@@ -1076,7 +976,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `partager devant un point choisi demande d'abord, sans rien envoyer ni demander la position`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
         device.center.sync()
@@ -1092,7 +992,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `l'accord remplace le point par la position reelle, et l'appareil publie de nouveau`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
         device.center.sync()
@@ -1111,7 +1011,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `un partage sans accord refuse devant un point que l'appareil ignorait relit puis demande`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.servedSnapshot = served()
         device.startVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.FIXED_POINT)
@@ -1129,7 +1029,7 @@ class SharedLocationSharingSyncTest {
 
     @Test
     fun `un releve refuse devant un point choisi coupe le suivi et relit`() = runTest {
-        val device = Device(this)
+        val device = SharingDevice(this)
         runCurrent()
         device.servedSnapshot = served()
         device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
