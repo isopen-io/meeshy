@@ -121,18 +121,14 @@ export class PostReactionHandler {
     // d'émission ci-dessous : la garde d'un `MeeshySocket` ne vaut que jusqu'au
     // premier paramètre non typé (leçon du cycle 100, `SocialEventsHandler`).
     // `createUpdateEvent` rend déjà exactement cette forme.
-    updateEvent: PostReactionUpdateEventData
+    updateEvent: PostReactionUpdateEventData,
+    separated: readonly string[] | null,
   ): Promise<void> {
-    /* La ligne est lue pour TOUS les emojis depuis #20338, et non pour le seul
-       cœur : `post:reaction-added` / `-removed` nomment un ACTEUR, donc leur
-       diffusion doit taire ce qu'un blocage sépare de lui ET de l'AUTEUR du
-       post — dont l'id ne s'obtient que d'ici. Le chemin du cœur lisait déjà
-       cette ligne ; les autres emojis paient une projection, pas une jointure. */
-    const post = await this.prisma.post.findUnique({
-      where: { id: postId },
-      select: { authorId: true, type: true, likeCount: true, reactionSummary: true, visibility: true, visibilityUserIds: true },
-    });
     if (emoji === HEART_EMOJI) {
+      const post = await this.prisma.post.findUnique({
+        where: { id: postId },
+        select: { authorId: true, type: true, likeCount: true, reactionSummary: true, visibility: true, visibilityUserIds: true },
+      });
       if (post && post.authorId && (post.type === 'POST' || post.type === 'REEL')) {
         const payload = {
           postId,
@@ -142,19 +138,18 @@ export class PostReactionHandler {
           reactionSummary: (post.reactionSummary as Record<string, number>) ?? {},
         };
         if (action === 'add') {
-          await this.socialEvents.broadcastPostLiked(payload, post.authorId, post.visibility, post.visibilityUserIds ?? []);
+          await this.socialEvents.broadcastPostLiked(payload, post.authorId, post.visibility, post.visibilityUserIds ?? [], separated);
         } else {
-          await this.socialEvents.broadcastPostUnliked(payload, post.authorId, post.visibility, post.visibilityUserIds ?? []);
+          await this.socialEvents.broadcastPostUnliked(payload, post.authorId, post.visibility, post.visibilityUserIds ?? [], separated);
         }
         return;
       }
     }
     const event = action === 'add' ? SERVER_EVENTS.POST_REACTION_ADDED : SERVER_EVENTS.POST_REACTION_REMOVED;
-    /* La SEPTIÈME famille de #20338, et la seule qui vive hors de
-       `SocialEventsHandler`. Même loi, mêmes deux sujets ; `null` ⇒ on
-       n'annonce rien : on ne diffuse pas une activité sans savoir à qui la
-       taire. */
-    const separated = await this.socialEvents.activitySeparation(userId, post?.authorId);
+    /* La SEPTIÈME famille de #20338, et la seule hors de `SocialEventsHandler`.
+       `separated` est résolu par l'APPELANT, AVANT sa mutation : la charge porte
+       un agrégat ABSOLU, donc un réordonnancement fige un compteur faux chez le
+       lecteur. `null` ⇒ on n'annonce rien. */
     if (separated === null) return;
     const target = this.io.to(ROOMS.post(postId));
     emitServerEvent(separated.length > 0 ? target.except([...separated]) : target, event, updateEvent);
@@ -228,6 +223,11 @@ export class PostReactionHandler {
 
       // #9584 — venue d'une republication simple, la réaction la crédite
       // AUSSI, pour de vrai : la résolution ci-dessus l'a traversée et la rend.
+      /* AVANT la mutation (#20338) : `target.authorId` est en main depuis
+         `resolveInteractionTarget`, et la charge de la diffusion porte un
+         agrégat ABSOLU — résolue après, elle décorrélait l'ordre du fil de
+         l'ordre des écritures. */
+      const separated = await this.socialEvents.activitySeparation(userId, target.authorId);
       const reaction = await this.postReactionService.addReaction({
         postId: targetPostId,
         userId,
@@ -278,7 +278,7 @@ export class PostReactionHandler {
       // (`PostService.likePost`). Il ne lève jamais.
       await creditEngagedReaderView(this.prisma, { postId: targetPostId, userId });
 
-      this.broadcastReactionChange(targetPostId, validated.emoji, 'add', userId, updateEvent)
+      this.broadcastReactionChange(targetPostId, validated.emoji, 'add', userId, updateEvent, separated)
         .catch(err => this.logger.error('post reaction:add broadcast failed', err, { postId: targetPostId }));
       // Le `.catch` est OBLIGATOIRE, exactement comme sur le broadcast juste
       // au-dessus et sur le jumeau `CommentReactionHandler`. Le lot est détaché :
@@ -367,6 +367,10 @@ export class PostReactionHandler {
       }
       const targetPostId = target.id;
 
+      /* AVANT la mutation (#20338), même raison que la pose : charge ABSOLUE,
+         ordre. Et c'est le chemin où la moitié « auteur » de la loi compte le
+         plus : retirer sa réaction reste permis après un blocage. */
+      const separated = await this.socialEvents.activitySeparation(userId, target.authorId);
       const removed = await this.postReactionService.removeReaction({
         postId: targetPostId,
         userId,
@@ -407,7 +411,7 @@ export class PostReactionHandler {
       };
       if (callback) callback(successResponse);
 
-      this.broadcastReactionChange(targetPostId, validated.emoji, 'remove', userId, updateEvent)
+      this.broadcastReactionChange(targetPostId, validated.emoji, 'remove', userId, updateEvent, separated)
         .catch(err => this.logger.error('post reaction:remove broadcast failed', err, { postId: targetPostId }));
 
       // Le symétrique du `createPostLikeNotification` du chemin d'ajout : la

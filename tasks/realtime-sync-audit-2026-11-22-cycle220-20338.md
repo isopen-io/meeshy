@@ -61,46 +61,105 @@ charges ne portent **aucun roster** (`PostReactionAggregation` est
 l'audience de son propre geste (décision porteur du 2026-09-13). Un témoin le
 garde explicitement, dans les deux sens du blocage.
 
-## Ce que le lot NE fait pas, et il faut le dire
+## Deuxième tour — ma justification d'ordonnancement était FAUSSE
 
-Le critère de fin de l'issue demande que **la séparation soit résolue AVANT la
-mutation**, par analogie avec #20236. **Ce lot la résout dans la diffusion**, et
-voici la mesure qui le justifie plutôt qu'une commodité :
+Le premier jet résolvait la séparation DANS la diffusion et le justifiait ainsi :
 
-- sur ces sept familles, la diffusion est **déjà détachée après la mutation** et
-  **déjà précédée d'une lecture en base** — `getVisibilityFilteredRecipients`
-  pour `post:liked`, le `post.findUnique` de `broadcastReactionChange` pour
-  `post:reaction-*`. La fenêtre de réordonnancement que le critère veut éviter
-  **préexiste et est déjà large** ;
-- la résoudre pré-mutation exigerait de la faire remonter à travers cinq sites
-  d'appel (trois routes REST, deux handlers) qui n'ont pas l'`authorId` en main
-  au bon moment.
+> « sur ces sept familles, la diffusion est déjà détachée après la mutation **et
+> déjà précédée d'une lecture en base** […] La fenêtre de réordonnancement que le
+> critère veut éviter préexiste et est déjà large. »
 
-C'est la même tension que le cycle 219 a rencontrée, et elle a déjà son issue :
-**#20414**, qui doit trancher la doctrine d'ordonnancement pour TOUTE la famille
-d'activité. Ce lot y ajoute sept sites et ne prétend pas la régler — il le dit,
-au lieu de contredire le critère en silence.
+**Mesuré FAUX sur SIX des SEPT familles** par l'audit adversarial, et vérifié par
+moi sur le parent (`git show af4b5ac41c`) :
 
-## Trois harnais corrigés, et les trois sont le même anti-patron
+| famille | lecture avant l'emit, AVANT le lot | verdict |
+|---|---|---|
+| `post:liked` / `-unliked` | oui (`getVisibilityFilteredRecipients`) | la fenêtre préexistait ; le lot l'élargissait |
+| `story:reacted` / `-unreacted` | **aucune** — la méthode était `void`, l'emit synchrone | fenêtre **NEUVE** |
+| `status:reacted` / `-unreacted` | **aucune** — idem | fenêtre **NEUVE** |
+| `post:reaction-added` / `-removed` | **aucune** sur le chemin non-cœur : le `findUnique` vivait DANS `if (emoji === HEART_EMOJI)` | fenêtre **NEUVE**, et la justification était **CIRCULAIRE** — la « lecture qui préexiste » est celle que J'AVAIS sortie du `if` |
 
-Rendre ces méthodes asynchrones a fait rougir dix témoins existants, et **aucun
-ne nommait un défaut du lot** :
+> **Le lot ne constatait pas une fenêtre : il en OUVRAIT quatre.** Et le cache de
+> séparation rend l'inversion quasi déterministe — pour un même couple (acteur,
+> auteur), la première diffusion paie deux lectures et la seconde un hit, donc
+> **la seconde écriture double la première**. L'audit l'a reproduit sur
+> `status:reacted`/`-unreacted` et sur `post:reaction-added`/`-removed`.
+> La charge étant ABSOLUE, le dernier événement reçu gagne : le lecteur garde un
+> compteur que la base contredit, et iOS le PERSISTE. Un agrégat absolu est
+> idempotent sous DOUBLE livraison, **jamais sous RÉORDONNANCEMENT**.
 
-1. **Quatre témoins synchrones** (`SocialEventsHandler.test.ts`) n'attendaient
-   pas une méthode devenue `async` : l'emit n'avait pas encore eu lieu quand
-   l'assertion tombait. Passés en `async` / `await`, assertions inchangées.
-2. **Deux doubles de `socialEvents` PARTIELS** (`PostReactionHandler`, les deux
-   suites) n'avaient pas `activitySeparation` : l'appel JETAIT dans un lot
-   détaché, la diffusion n'avait jamais lieu, et le rouge accusait le code.
-3. **Quatre doubles de diffusion rendaient `undefined`** là où la route attend
-   une promesse à `.catch` (règle `void p`) ⇒ `undefined.catch` ⇒ **500**, pas un
-   échec d'assertion. C'est le défaut exact que le cycle 218 avait déjà payé sur
-   `comments-like-delete.test.ts`.
+**Corrigé** : la séparation est résolue **AVANT la mutation**, chez l'appelant
+(patron de #20236 à `comments.ts:691`), et passée en paramètre **REQUIS** aux
+sept diffusions. Story et statut **redeviennent synchrones** — donc aucune
+fenêtre, et leurs témoins n'ont plus besoin d'`await`. Le `findUnique` revient
+DANS le `if` du cœur.
 
-> **Rendre une méthode asynchrone casse ses témoins de TROIS façons, et aucune
-> n'est une erreur de production** : un témoin qui n'attend pas, un double qui
-> n'a pas la méthode neuve, un double qui ne rend pas de promesse là où
-> l'appelant en détache une. Les trois rougissent en nommant le lot.
+> **Et ce faux a une forme reconnaissable : j'ai cité comme preuve une lecture
+> que mon propre diff venait d'ajouter.** Devant une justification du type « la
+> fenêtre préexiste », la question est : *préexiste-t-elle sur l'arbre d'AVANT,
+> famille par famille ?* — elle se répond par `git show <parent>`, jamais en
+> lisant le code qu'on vient d'écrire.
+
+## Deux gates que je n'avais PAS lancés, et les deux étaient rouges
+
+1. **`src/__tests__/unit/SocialEventsHandler.test.ts`** — la suite JUMELLE, 66
+   témoins sur le même objet, **8 rouges**. Mon périmètre était
+   `src/socketio` + `unit/socketio` + `routes/posts` ; elle vit à la RACINE de
+   `unit/`. J'avais corrigé sa sœur `socketio/handlers/__tests__/` et jamais
+   lancé celle-là.
+2. **`gateway-test-file-size-budget` règle 3** — j'ajoutais 30 lignes à deux
+   fichiers de témoins **déjà hors budget**, ce que le `CLAUDE.md` interdit
+   explicitement (« on extrait d'abord, on ajoute ensuite »).
+
+> **C'est la DEUXIÈME fois dans la même session que je filtre mes gates sur le
+> nom de la feature.** Au cycle 219, le cliquet de la porte d'émission vivait
+> sous `src/socketio/__tests__/` et mon filtre disait `comment*`. Ici la suite
+> jumelle vivait un répertoire plus haut que mon filtre. La règle que je n'avais
+> pas encore tirée : **la suite COMPLÈTE est le seul périmètre qui ne dépende pas
+> de ce que je crois avoir touché** — et je l'avais lancée, sans lire son
+> verdict avant d'annoncer « 367 suites vertes » depuis un run filtré.
+
+La résolution pré-mutation a réglé le second gate **par construction** : story et
+statut redevenant synchrones et la septième famille recevant sa séparation en
+paramètre, les quatre `await` et les six vidanges de microtâches n'ont plus de
+raison d'être. Les deux fichiers hors budget retrouvent leur compte exact (1482
+et 1040 lignes), et les deux ajouts qui restaient nécessaires
+(`activitySeparation` dans leurs doubles) tiennent sur une ligne existante.
+
+## `separated` est REQUIS, et « rien à taire » se déclare
+
+L'audit a relevé que le paramètre était OPTIONNEL sur les deux seams partagés —
+« une garde dont le défaut est l'OUVERTURE n'est pas une garde » : la prochaine
+famille branchée là serait non gardée en silence. Il est désormais requis, et
+`NOTHING_TO_SILENCE` rend l'absence de sujet **déclarative** là où elle est
+légitime (`post:deleted`, qui ne nomme que l'auteur, et les trois diffusions de
+traduction, qui ne nomment personne). Le compilateur a nommé les onze sites.
+
+## Les harnais, après la correction
+
+La résolution pré-mutation a ANNULÉ la plupart des retouches du premier jet :
+story et statut redevenant synchrones, leurs témoins n'ont ni `await` ni vidange
+de microtâches à apprendre. Ce qui reste est mécanique et honnête :
+
+- **les doubles de `socialEvents` reçoivent `activitySeparation`** (sept
+  fichiers) : la route et les deux handlers l'appellent AVANT leur mutation, donc
+  un double qui l'omet fait répondre **500** à la route — pas échouer une
+  assertion. C'est l'anti-patron du double PARTIEL, et le cycle 218 l'avait déjà
+  payé sur `comments-like-delete.test.ts` ;
+- **les appels et les expectations reçoivent l'argument** (32 sites) : le
+  paramètre étant REQUIS, `tsc` a nommé les sites de production et les témoins
+  ont suivi. `[]` y veut dire « personne à taire », ce que ces suites testaient
+  déjà — le filtrage a sa propre suite.
+
+> **Rendre un paramètre REQUIS coûte une passe de harnais, et c'est ce qu'on
+> achète** : la prochaine famille branchée sur ces seams ne pourra pas l'omettre.
+> Un défaut permissif aurait coûté zéro ligne aujourd'hui et un trou silencieux
+> plus tard.
+
+Un reste à instruire, relevé par l'audit : `SocialNotificationsP4B.test.ts`
+RÉIMPLÉMENTE le routage de la route dans un helper local (`routeLikeEvent`), ce
+que le dépôt interdit (« ne JAMAIS ré-implémenter le corps d'une méthode de
+production dans un helper de test »). Pré-existant, non touché par ce lot.
 
 ## Gates
 
@@ -109,3 +168,51 @@ ne nommait un défaut du lot** :
 | témoins du lot | **41 / 41** ; ROUGE prouvé à **28 rouges / 13 verts**, les 13 étant les témoins de contrôle |
 | `src/socketio` + `__tests__/unit/socketio` + `routes/posts` + cliquet des promesses détachées + `routes/__tests__` | **367 suites / 5 279 témoins, 0 rouge** |
 | `tsc --noEmit` (gateway) | **exit 0** |
+
+
+## Ce que l'audit a trouvé SAIN, et qui compte
+
+- **`keep: actorId` est SÛR ici**, vérifié champ par champ ET au producteur
+  runtime sur les sept charges : `getEmojiAggregation` construit littéralement
+  `{ emoji, count }`, et `reactionSummary` n'a qu'un producteur
+  (`updatePostReactionSummary`, un `groupBy(['emoji'])`) ⇒ `{emoji: nombre}`.
+  Aucun `userId`, aucun roster. **Je n'ai pas refait l'erreur du cycle 219** : la
+  distinction avec `CommentReactionAggregation` (qui porte `userIds`) est réelle.
+- **Le chemin du cœur est intact** au caractère près, et un `post === null` prend
+  le même chemin qu'avant.
+- **Le fail-closed est COMPLET, pas partiel**, sur les sept : le `return` précède
+  tout `io.to`, et le témoin assert sur TOUTES les émissions du faux `io` — donc
+  un fail-closed partiel rougirait.
+- **Les `.catch` de la route sont corrects** (attachés à la promesse,
+  `enhancedLogger` en portée, `warn` ne jette pas) — et le cliquet des promesses
+  détachées est vert.
+- **La déduplication est préservée** : `io.to([a, b]).except([c])` reste UNE
+  émission, donc le `+2` du compteur de l'auteur-viewer de story ne revient pas.
+- **Le canal NOTIFICATION était déjà fermé** : `post_like`, `story_reaction`,
+  `status_reaction` ∈ `ACTOR_CONTENT_TYPES`, et `refusesActorContent` refuse sur
+  blocage dans les deux sens, fermé sur panne.
+- **Et une honnêteté sur la portée de ce lot** : sur ces sept chemins, la moitié
+  « auteur » de la loi est **défensive seulement** — POST comme DELETE passent par
+  `resolveInteractionTarget` → `canUserInteractWithPost`, qui refuse déjà un
+  blocage acteur↔auteur. Contrairement aux commentaires (où `DELETE …/like` n'a
+  pas cette porte, le vecteur vivant de #20236), **seule la moitié « tiers » est
+  vivante ici**. Le lot ferme donc une fuite réelle, par une loi dont une moitié
+  est redondante sur ce chemin — ce qui reste juste, et se dit.
+
+## Suivi ouvert par l'audit
+
+- **#20429** — `story:viewed` est la HUITIÈME famille, et sa charge nomme le
+  viewer par son id **et son pseudo** ; elle part au fil de l'auteur sans
+  exclusion.
+- **#20430** — le CONTENU d'un post part à `ROOMS.post` sans séparation
+  (pré-existant, six événements + trois traductions), et **il n'existe aucun
+  cliquet d'ÉNUMÉRATION de la loi** : quatre lots consécutifs ont découvert la
+  famille suivante à la main.
+- **#20415** (élargi) — le cache de séparation reçoit maintenant le torrent des
+  likes avec une clé nouvelle par couple, et son éviction est un `cache.clear()`
+  total, pas un LRU.
+- Relevé, non ouvert : `SocialNotificationsP4B.test.ts` réimplémente le routage
+  de la route dans un helper local, ce que le dépôt interdit ; et
+  `AuthHandler` joint `ROOMS.user` sous `Promise.allSettled`, donc la doctrine
+  « `except` porte sur `user:`, dont un socket est TOUJOURS membre » n'est pas
+  garantie à la lettre.

@@ -87,40 +87,46 @@ function fauxIo(emissions: Emission[]) {
 const familles: ReadonlyArray<readonly [string, (p: PrismaClient, io: any) => Promise<void>]> = [
   ['post:liked', async (prisma, io) => {
     const h = new SocialEventsHandler({ io, prisma });
+    const sep = await h.activitySeparation(ACTEUR, AUTEUR);
     await h.broadcastPostLiked(
       { postId: CIBLE_ID, userId: ACTEUR, emoji: '👍', likeCount: 3, reactionSummary: { '👍': 3 } } as any,
-      AUTEUR, 'PUBLIC', [],
+      AUTEUR, 'PUBLIC', [], sep,
     );
   }],
   ['post:unliked', async (prisma, io) => {
     const h = new SocialEventsHandler({ io, prisma });
+    const sep = await h.activitySeparation(ACTEUR, AUTEUR);
     await h.broadcastPostUnliked(
       { postId: CIBLE_ID, userId: ACTEUR, emoji: '👍', likeCount: 2, reactionSummary: {} } as any,
-      AUTEUR, 'PUBLIC', [],
+      AUTEUR, 'PUBLIC', [], sep,
     );
   }],
   ['story:reacted', async (prisma, io) => {
     const h = new SocialEventsHandler({ io, prisma });
-    await h.broadcastStoryReacted(
-      { storyId: CIBLE_ID, userId: ACTEUR, emoji: '👍', likeCount: 3, reactionSummary: { '👍': 3 } } as any, AUTEUR,
+    const sep = await h.activitySeparation(ACTEUR, AUTEUR);
+    h.broadcastStoryReacted(
+      { storyId: CIBLE_ID, userId: ACTEUR, emoji: '👍', likeCount: 3, reactionSummary: { '👍': 3 } } as any, AUTEUR, sep,
     );
   }],
   ['story:unreacted', async (prisma, io) => {
     const h = new SocialEventsHandler({ io, prisma });
-    await h.broadcastStoryUnreacted(
-      { storyId: CIBLE_ID, userId: ACTEUR, emoji: '👍', likeCount: 2, reactionSummary: {} } as any, AUTEUR,
+    const sep = await h.activitySeparation(ACTEUR, AUTEUR);
+    h.broadcastStoryUnreacted(
+      { storyId: CIBLE_ID, userId: ACTEUR, emoji: '👍', likeCount: 2, reactionSummary: {} } as any, AUTEUR, sep,
     );
   }],
   ['status:reacted', async (prisma, io) => {
     const h = new SocialEventsHandler({ io, prisma });
-    await h.broadcastStatusReacted(
-      { statusId: CIBLE_ID, userId: ACTEUR, emoji: '👍', likeCount: 3, reactionSummary: { '👍': 3 } } as any, AUTEUR,
+    const sep = await h.activitySeparation(ACTEUR, AUTEUR);
+    h.broadcastStatusReacted(
+      { statusId: CIBLE_ID, userId: ACTEUR, emoji: '👍', likeCount: 3, reactionSummary: { '👍': 3 } } as any, AUTEUR, sep,
     );
   }],
   ['status:unreacted', async (prisma, io) => {
     const h = new SocialEventsHandler({ io, prisma });
-    await h.broadcastStatusUnreacted(
-      { statusId: CIBLE_ID, userId: ACTEUR, emoji: '👍', likeCount: 2, reactionSummary: {} } as any, AUTEUR,
+    const sep = await h.activitySeparation(ACTEUR, AUTEUR);
+    h.broadcastStatusUnreacted(
+      { statusId: CIBLE_ID, userId: ACTEUR, emoji: '👍', likeCount: 2, reactionSummary: {} } as any, AUTEUR, sep,
     );
   }],
 ];
@@ -218,7 +224,9 @@ describe('#20338 — post:reaction-* tait aussi ce qu’un blocage sépare', () 
       postId: CIBLE_ID, userId: ACTEUR, emoji: '🎉', action,
       aggregation: { emoji: '🎉', count: 1 }, timestamp: new Date().toISOString(),
     };
-    await (handler as any).broadcastReactionChange(CIBLE_ID, '🎉', action, ACTEUR, updateEvent);
+    const social = new SocialEventsHandler({ io, prisma });
+    const sep = await social.activitySeparation(ACTEUR, AUTEUR);
+    await (handler as any).broadcastReactionChange(CIBLE_ID, '🎉', action, ACTEUR, updateEvent, sep);
   };
 
   it.each([['add'], ['remove']] as const)('post:reaction-%s exclut la room de qui a bloqué l’ACTEUR', async (action) => {

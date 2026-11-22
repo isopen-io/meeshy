@@ -159,13 +159,7 @@ function makePostReactionService(overrides: Record<string, any> = {}) {
 function makeSocialEvents() {
   return {
     broadcastPostLiked: jest.fn<any>().mockResolvedValue(undefined),
-    broadcastPostUnliked: jest.fn<any>().mockResolvedValue(undefined),
-    /* `activitySeparation` depuis #20338 : `post:reaction-*` nomme un ACTEUR, donc
-       sa diffusion demande à la loi qui doit se taire. Un double qui l'omet fait
-       JETER le lot détaché et la diffusion n'a jamais lieu — le rouge accuse
-       alors le code au lieu du harnais (anti-patron du double PARTIEL). `[]` =
-       personne à taire, ce qui préserve l'assertion de ces suites. */
-    activitySeparation: jest.fn<any>().mockResolvedValue([]),
+    broadcastPostUnliked: jest.fn<any>().mockResolvedValue(undefined), activitySeparation: jest.fn<any>().mockResolvedValue([]),
   };
 }
 
@@ -367,12 +361,6 @@ describe('PostReactionHandler', () => {
       const callback = jest.fn<any>();
 
       await handler.handleAddReaction(makeSocket(), { postId: POST_ID, emoji: '🎉' }, callback);
-      /* La diffusion de `post:reaction-*` est DÉTACHÉE et attend désormais deux
-         lectures (la ligne du post, puis la loi de séparation — #20338) : le
-         témoin doit vidanger la file des microtâches avant d'observer l'emit. */
-      await new Promise((resolve) => setImmediate(resolve));
-      await new Promise((resolve) => setImmediate(resolve));
-
 
       expect(socialEvents.broadcastPostLiked).not.toHaveBeenCalled();
       expect(io.to).toHaveBeenCalledWith(`post:${POST_ID}`);
@@ -575,12 +563,6 @@ describe('PostReactionHandler', () => {
       const callback = jest.fn<any>();
 
       await handler.handleRemoveReaction(makeSocket(), { postId: POST_ID, emoji: '🎉' }, callback);
-      /* La diffusion de `post:reaction-*` est DÉTACHÉE et attend désormais deux
-         lectures (la ligne du post, puis la loi de séparation — #20338) : le
-         témoin doit vidanger la file des microtâches avant d'observer l'emit. */
-      await new Promise((resolve) => setImmediate(resolve));
-      await new Promise((resolve) => setImmediate(resolve));
-
 
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
       expect(io.to).toHaveBeenCalledWith(`post:${POST_ID}`);

@@ -73,7 +73,7 @@ function build(posts: Record<string, ReturnType<typeof row>>) {
     postReactionService: { addReaction, createUpdateEvent: jest.fn<any>().mockResolvedValue({ postId: ORIGINAL }) } as never,
     connectedUsers: new Map([[READER, { id: READER, socketId: SOCKET_ID, isAnonymous: false, language: 'fr', userId: READER }]]) as never,
     socketToUser: new Map([[SOCKET_ID, READER]]),
-    socialEvents: { broadcastPostLiked: jest.fn(() => Promise.resolve()) } as never,
+    socialEvents: { broadcastPostLiked: jest.fn(() => Promise.resolve()), activitySeparation: jest.fn(() => Promise.resolve([])) } as never,
   });
   const socket = { id: SOCKET_ID, emit: jest.fn(), join: jest.fn(), leave: jest.fn() };
   return { handler, addReaction, socket };

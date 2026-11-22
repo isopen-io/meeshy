@@ -363,6 +363,7 @@ describe('POST /posts/:id/like — broadcastPostLiked rejects (line 97)', () => 
       broadcastPostBookmarked: jest.fn<any>().mockResolvedValue(undefined),
       broadcastStoryViewed: jest.fn<any>().mockResolvedValue(undefined),
       broadcastPostReposted: jest.fn<any>().mockResolvedValue(undefined),
+          activitySeparation: jest.fn<any>().mockResolvedValue([]),
     });
     registerInteractionRoutes(app, prisma as any, makePreValidationAuth(true));
     await app.ready();
@@ -435,6 +436,7 @@ describe('DELETE /posts/:id/like — broadcastPostUnliked rejects (line 185)', (
       broadcastPostBookmarked: jest.fn<any>().mockResolvedValue(undefined),
       broadcastStoryViewed: jest.fn<any>().mockResolvedValue(undefined),
       broadcastPostReposted: jest.fn<any>().mockResolvedValue(undefined),
+          activitySeparation: jest.fn<any>().mockResolvedValue([]),
     });
     registerInteractionRoutes(app, prisma as any, makePreValidationAuth(true));
     await app.ready();
@@ -526,7 +528,7 @@ describe('DELETE /posts/:id/like — emoji désigné', () => {
     expect(mockUnlikePost.mock.calls.at(-1)?.[2]).toBe('👍');
     expect((app as any).socialEvents.broadcastPostUnliked).toHaveBeenCalledWith(
       expect.objectContaining({ emoji: '👍' }),
-      'author-1', 'PUBLIC', [],
+      'author-1', 'PUBLIC', [], [],
     );
     await app.close();
   });
@@ -547,7 +549,7 @@ describe('DELETE /posts/:id/like — emoji désigné', () => {
     expect(mockUnlikePost.mock.calls.at(-1)?.[2]).toBeUndefined();
     expect((app as any).socialEvents.broadcastPostUnliked).toHaveBeenCalledWith(
       expect.objectContaining({ emoji: '😂' }),
-      'author-1', 'PUBLIC', [],
+      'author-1', 'PUBLIC', [], [],
     );
     await app.close();
   });

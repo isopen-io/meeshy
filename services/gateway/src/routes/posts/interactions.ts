@@ -119,6 +119,21 @@ export function registerInteractionRoutes(
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
       const targetPostId = target.id;
+      /* **AVANT la mutation** (#20338 ; patron de #20236 à `comments.ts:691`).
+         La charge de ces diffusions est ABSOLUE (`likeCount`,
+         `reactionSummary`) : un réordonnancement fige chez le lecteur un
+         compteur que la base contredit, et iOS le PERSISTE. Résolue ici,
+         l'émission redevient synchrone juste après l'écriture.
+
+         Mon premier jet la résolvait DANS la diffusion, en arguant que la
+         fenêtre préexistait. **Mesuré FAUX** par l'audit adversarial : story,
+         statut et le chemin non-cœur des réactions n'avaient AUCUNE lecture
+         avant leur emit — le lot en OUVRAIT quatre au lieu d'en constater une,
+         et le cache de séparation rendait l'inversion quasi déterministe (1re
+         diffusion : deux lectures ; 2de : un hit, donc elle double la 1re). */
+      const activiteSeparee = fastify.socialEvents
+        ? await fastify.socialEvents.activitySeparation(authContext.registeredUser.id, target.authorId)
+        : null;
 
       // Idempotent via clientMutationId. `likePost` is naturally
       // idempotent at the storage layer (the reaction set keeps a
@@ -157,6 +172,7 @@ export function registerInteractionRoutes(
         op: async () => {
           // #9584 — venu d'une republication simple, le like la crédite AUSSI,
           // pour de vrai : la résolution ci-dessus l'a traversée et la rend.
+
           const res = await postService.likePost(targetPostId, authContext.registeredUser.id, emoji, { through: target.redirectedFrom });
           if (!res) throw new Error('POST_NOT_FOUND');
           // Les deux branches rendent la MÊME forme de post : `likePost` porte
@@ -208,14 +224,14 @@ export function registerInteractionRoutes(
             userId: authContext.registeredUser.id,
             emoji,
             ...counters,
-          }, post.authorId).catch((err) => enhancedLogger.warn('[POST /posts/:postId/like]: broadcast story reacted failed', { err }));
+          }, post.authorId, activiteSeparee);
         } else if (post.type === 'STATUS') {
           socialEvents.broadcastStatusReacted({
             statusId: targetPostId,
             userId: authContext.registeredUser.id,
             emoji,
             ...counters,
-          }, post.authorId).catch((err) => enhancedLogger.warn('[POST /posts/:postId/like]: broadcast status reacted failed', { err }));
+          }, post.authorId, activiteSeparee);
         } else {
           // L'audience du broadcast vient de `target`, la tranche ACL de la
           // CIBLE réelle déjà chargée plus haut par `resolveInteractionTarget`
@@ -226,7 +242,7 @@ export function registerInteractionRoutes(
             userId: authContext.registeredUser.id,
             emoji,
             ...counters,
-          }, post.authorId, target.visibility, target.visibilityUserIds,
+          }, post.authorId, target.visibility, target.visibilityUserIds, activiteSeparee,
           ).catch((err) => enhancedLogger.warn('[POST /posts/:postId/like]: broadcast post liked failed', { err }));
         }
       }
@@ -310,6 +326,12 @@ export function registerInteractionRoutes(
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
       const targetPostId = target.id;
+      /* AVANT la mutation, même raison que la pose : charge ABSOLUE, ordre
+         (#20338). Le chemin de RETRAIT n'a pas de porte d'auteur, donc c'est
+         aussi celui où la moitié « auteur » de la loi est VIVANTE. */
+      const activiteSeparee = fastify.socialEvents
+        ? await fastify.socialEvents.activitySeparation(authContext.registeredUser.id, target.authorId)
+        : null;
 
       // Idempotent via clientMutationId. Unlike is also naturally
       // idempotent — re-running over an already-unliked post is a
@@ -366,14 +388,14 @@ export function registerInteractionRoutes(
             userId: authContext.registeredUser.id,
             emoji: removedEmoji,
             ...counters,
-          }, post.authorId).catch((err) => enhancedLogger.warn('[DELETE /posts/:postId/like]: broadcast story unreacted failed', { err }));
+          }, post.authorId, activiteSeparee);
         } else if (post.type === 'STATUS') {
           socialEvents.broadcastStatusUnreacted({
             statusId: targetPostId,
             userId: authContext.registeredUser.id,
             emoji: removedEmoji,
             ...counters,
-          }, post.authorId).catch((err) => enhancedLogger.warn('[DELETE /posts/:postId/like]: broadcast status unreacted failed', { err }));
+          }, post.authorId, activiteSeparee);
         } else {
           // Même source que le jumeau `POST` : la tranche ACL de la CIBLE
           // réelle chargée pour la garde, jamais un défaut reconstruit au
@@ -383,7 +405,7 @@ export function registerInteractionRoutes(
             userId: authContext.registeredUser.id,
             emoji: removedEmoji,
             ...counters,
-          }, post.authorId, target.visibility, target.visibilityUserIds,
+          }, post.authorId, target.visibility, target.visibilityUserIds, activiteSeparee,
           ).catch((err) => enhancedLogger.warn('[DELETE /posts/:postId/like]: broadcast post unliked failed', { err }));
         }
       }

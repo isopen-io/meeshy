@@ -232,7 +232,7 @@ describe('SocialEventsHandler', () => {
         reactionSummary: { heart: 5 },
       };
 
-      await handler.broadcastPostLiked(data, AUTHOR_ID, 'PUBLIC', []);
+      await handler.broadcastPostLiked(data, AUTHOR_ID, 'PUBLIC', [], []);
 
       // M2 — UN SEUL emit sur l'union (2 amis + auteur + post room). Socket.IO
       // dédoublonne → plus de double-livraison pour un ami-viewer.
@@ -261,7 +261,7 @@ describe('SocialEventsHandler', () => {
         reactionSummary: { heart: 4 },
       };
 
-      await handler.broadcastPostUnliked(data, AUTHOR_ID, 'PUBLIC', []);
+      await handler.broadcastPostUnliked(data, AUTHOR_ID, 'PUBLIC', [], []);
 
       // M2 — UN SEUL emit sur l'union (cf. broadcastPostLiked).
       expect(mockIO.to).toHaveBeenCalledTimes(1);
@@ -421,7 +421,7 @@ describe('SocialEventsHandler', () => {
         reactionSummary: { fire: 1 },
       };
 
-      handler.broadcastStoryReacted(data, AUTHOR_ID);
+      handler.broadcastStoryReacted(data, AUTHOR_ID, []);
 
       // Single deduped emit (io.to([...])) → an author watching their own story
       // (in both rooms) receives STORY_REACTED exactly once, no `+2`.
@@ -474,7 +474,7 @@ describe('SocialEventsHandler', () => {
         AUTHOR_ID,
         'EXCEPT',
         [FRIEND_1],
-      );
+       []);
 
       // Single unified emit (M2) → rooms is an array; assert its contents.
       const rooms = mockIO.to.mock.calls[0][0] as string[];
@@ -494,7 +494,7 @@ describe('SocialEventsHandler', () => {
         reactionSummary: { fire: 1 },
       };
 
-      handler.broadcastStatusReacted(data, AUTHOR_ID);
+      handler.broadcastStatusReacted(data, AUTHOR_ID, []);
 
       // Single deduped emit (io.to([...])) → author-viewer counts the emoji once.
       expect(mockIO.to).toHaveBeenCalledTimes(1);
@@ -513,7 +513,7 @@ describe('SocialEventsHandler', () => {
         reactionSummary: { fire: 1 },
       };
 
-      handler.broadcastStatusReacted(data, AUTHOR_ID);
+      handler.broadcastStatusReacted(data, AUTHOR_ID, []);
 
       const rooms = mockIO.to.mock.calls[0][0] as string[];
       expect(rooms).not.toContain(ROOMS.feed(FRIEND_1));
@@ -931,14 +931,14 @@ describe('SocialEventsHandler', () => {
       const calls: Array<{ method: () => Promise<void> | void; expectedEvent: string }> = [
         { method: () => handler.broadcastPostCreated(post, AUTHOR_ID), expectedEvent: SERVER_EVENTS.POST_CREATED },
         { method: () => handler.broadcastPostDeleted('p1', AUTHOR_ID), expectedEvent: SERVER_EVENTS.POST_DELETED },
-        { method: () => handler.broadcastPostLiked(likeData, AUTHOR_ID, 'PUBLIC', []), expectedEvent: SERVER_EVENTS.POST_LIKED },
-        { method: () => handler.broadcastPostUnliked(unlikeData, AUTHOR_ID, 'PUBLIC', []), expectedEvent: SERVER_EVENTS.POST_UNLIKED },
+        { method: () => handler.broadcastPostLiked(likeData, AUTHOR_ID, 'PUBLIC', [], []), expectedEvent: SERVER_EVENTS.POST_LIKED },
+        { method: () => handler.broadcastPostUnliked(unlikeData, AUTHOR_ID, 'PUBLIC', [], []), expectedEvent: SERVER_EVENTS.POST_UNLIKED },
         { method: () => handler.broadcastPostReposted(repostData, AUTHOR_ID), expectedEvent: SERVER_EVENTS.POST_REPOSTED },
         { method: () => handler.broadcastStoryCreated(post, AUTHOR_ID), expectedEvent: SERVER_EVENTS.STORY_CREATED },
         { method: () => handler.broadcastStoryViewed(storyViewData, AUTHOR_ID), expectedEvent: SERVER_EVENTS.STORY_VIEWED },
-        { method: () => handler.broadcastStoryReacted(storyReactData, AUTHOR_ID), expectedEvent: SERVER_EVENTS.STORY_REACTED },
+        { method: () => handler.broadcastStoryReacted(storyReactData, AUTHOR_ID, []), expectedEvent: SERVER_EVENTS.STORY_REACTED },
         { method: () => handler.broadcastStatusCreated(post, AUTHOR_ID), expectedEvent: SERVER_EVENTS.STATUS_CREATED },
-        { method: () => handler.broadcastStatusReacted(statusReactData, AUTHOR_ID), expectedEvent: SERVER_EVENTS.STATUS_REACTED },
+        { method: () => handler.broadcastStatusReacted(statusReactData, AUTHOR_ID, []), expectedEvent: SERVER_EVENTS.STATUS_REACTED },
         { method: () => handler.broadcastCommentAdded(commentAddData, AUTHOR_ID, 'PUBLIC', []), expectedEvent: SERVER_EVENTS.COMMENT_ADDED },
         { method: () => handler.broadcastCommentDeleted(commentDelData, AUTHOR_ID, 'PUBLIC', []), expectedEvent: SERVER_EVENTS.COMMENT_DELETED },
         { method: () => handler.broadcastCommentLiked(commentLikeData, AUTHOR_ID, []), expectedEvent: SERVER_EVENTS.COMMENT_LIKED },
@@ -970,7 +970,7 @@ describe('SocialEventsHandler', () => {
         reactionSummary: { fire: 1 },
       };
 
-      handler.broadcastStoryReacted(data, AUTHOR_ID);
+      handler.broadcastStoryReacted(data, AUTHOR_ID, []);
 
       const calledRooms = mockIO.to.mock.calls.flatMap((call: any[]) => Array.isArray(call[0]) ? call[0] : [call[0]]);
       expect(calledRooms).toContain(ROOMS.feed(AUTHOR_ID));
@@ -989,7 +989,7 @@ describe('SocialEventsHandler', () => {
         reactionSummary: { fire: 1 },
       };
 
-      handler.broadcastStoryReacted(data, AUTHOR_ID);
+      handler.broadcastStoryReacted(data, AUTHOR_ID, []);
 
       const calledRooms = mockIO.to.mock.calls.flatMap((call: any[]) => Array.isArray(call[0]) ? call[0] : [call[0]]);
       expect(calledRooms).not.toContain(ROOMS.feed(FRIEND_1));
@@ -1011,7 +1011,7 @@ describe('SocialEventsHandler', () => {
         reactionSummary: {},
       };
 
-      handler.broadcastStoryUnreacted(data, AUTHOR_ID);
+      handler.broadcastStoryUnreacted(data, AUTHOR_ID, []);
 
       const calledRooms = mockIO.to.mock.calls.flatMap((call: any[]) => Array.isArray(call[0]) ? call[0] : [call[0]]);
       expect(calledRooms).toContain(ROOMS.feed(AUTHOR_ID));
@@ -1024,7 +1024,7 @@ describe('SocialEventsHandler', () => {
       expect(SERVER_EVENTS.STORY_UNREACTED).toBe('story:unreacted');
 
       const data: StoryUnreactedEventData = { storyId: 's1', userId: 'u1', emoji: 'fire', likeCount: 0, reactionSummary: {} };
-      handler.broadcastStoryUnreacted(data, AUTHOR_ID);
+      handler.broadcastStoryUnreacted(data, AUTHOR_ID, []);
 
       const emittedEvents = mockIO.emit.mock.calls.map((call: any[]) => call[0]);
       expect(emittedEvents).toContain('story:unreacted');
@@ -1045,7 +1045,7 @@ describe('SocialEventsHandler', () => {
         reactionSummary: { fire: 1 },
       };
 
-      handler.broadcastStatusReacted(data, AUTHOR_ID);
+      handler.broadcastStatusReacted(data, AUTHOR_ID, []);
 
       const calledRooms = mockIO.to.mock.calls.flatMap((call: any[]) => Array.isArray(call[0]) ? call[0] : [call[0]]);
       expect(calledRooms).toContain(ROOMS.feed(AUTHOR_ID));
@@ -1067,7 +1067,7 @@ describe('SocialEventsHandler', () => {
         reactionSummary: {},
       };
 
-      handler.broadcastStatusUnreacted(data, AUTHOR_ID);
+      handler.broadcastStatusUnreacted(data, AUTHOR_ID, []);
 
       const calledRooms = mockIO.to.mock.calls.flatMap((call: any[]) => Array.isArray(call[0]) ? call[0] : [call[0]]);
       expect(calledRooms).toContain(ROOMS.feed(AUTHOR_ID));
