@@ -868,14 +868,16 @@ final class CommunityLinkDetailTests: XCTestCase {
         let link = CommunityLink(id: "c-1", name: "Beatmakers Dakar", identifier: "beatmakers",
                                  baseUrl: "https://meeshy.me", memberCount: 342, isActive: true,
                                  createdAt: Date(timeIntervalSince1970: 1_750_000_000), joinLinkPaused: listed)
-        let setPaused: (@concurrent @Sendable (String, Bool) async throws -> Bool)? = route ? { _, paused in
-            try await MainActor.run {
+        let write: @concurrent @Sendable (String, Bool) async throws -> Bool = { _, paused in
+            try await MainActor.run { () throws -> Bool in
                 probe.sent.append(paused)
                 probe.seenDuringCall.append(probe.sut?.joinLinkPaused)
                 probe.busyDuringCall.append(probe.sut?.isSettingJoinLink ?? false)
-                return try answer.get() ?? paused
+                let served: Bool? = try answer.get()
+                return served ?? paused
             }
-        } : nil
+        }
+        let setPaused: (@concurrent @Sendable (String, Bool) async throws -> Bool)? = route ? write : nil
         let sut = CommunityLinkDetailViewModel(
             link: link, viewerId: "me",
             loadDetails: { _ in CommunityLinkDetails(isPrivate: false, role: "admin", memberCount: 350, avatar: nil,
