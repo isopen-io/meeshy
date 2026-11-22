@@ -879,3 +879,10 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Témoins : `sdk-core/.../link/CommunityLinkJoinLinkPauseTest.kt` (5), `feature/conversations/.../links/CommunityLinkDetailJoinLinkPauseTest.kt` (10). Android ne compile pas en conteneur : preuve par `android.yml` sur la PR.
 - Revue adversariale : non lancée — lot client seul, aucune garde ni route touchée.
 - Reste de #20255 : le message de l'arrivant (`COMMUNITY_LINK_PAUSED`), joignable seulement quand un client enverra `via: "link"`.
+
+- 2026-11-22 06:52 : #20318 fusionnée dans `dev` (`483222222`) après `android.yml` 44990623971 et `ci.yml` 44990625482 verts sur `f33235729` ; preuve commentée sur #20255.
+
+## 2026-11-22 — réveil 07:38 UTC (bis)
+
+- Début du run : aucune PR de la routine ouverte ; aucune branche vivante sur `CommunityLinkModels.swift`, `CommunityLink.kt` ni `routes/community.tsx`.
+- Lot : #20330 — le lien partagé d'une communauté ouvre la communauté sur les trois plateformes (`/communities/<identifiant>?via=link`, au lieu de `/chat/<identifiant>` qui ne résout qu'un lien de conversation), et le web compte l'entrée par le lien et dit la pause.
