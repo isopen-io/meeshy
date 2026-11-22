@@ -74,9 +74,9 @@ describe('une stat malformée ne casse ni la boucle ni le rapport (#19876, QA)',
 const linkReport = (link: { readonly lost: number; readonly received: number; readonly rtt?: number; readonly mimeType?: string; readonly jitter?: number }) =>
   report([
     { type: 'candidate-pair', id: 'p', state: 'succeeded', nominated: true, currentRoundTripTime: link.rtt ?? 0.05 },
-    { type: 'inbound-rtp', kind: 'audio', packetsLost: link.lost, packetsReceived: link.received, bytesReceived: 1000, jitter: link.jitter ?? 0.01 },
-    { type: 'outbound-rtp', kind: 'video', bytesSent: 500, codecId: 'c' },
-    { type: 'codec', id: 'c', mimeType: link.mimeType ?? 'video/VP8' },
+    { type: 'inbound-rtp', kind: 'audio', packetsLost: link.lost, packetsReceived: link.received, bytesReceived: 1000, jitter: link.jitter ?? 0.01, codecId: 'c' },
+    { type: 'outbound-rtp', kind: 'video', bytesSent: 500 },
+    { type: 'codec', id: 'c', mimeType: link.mimeType ?? 'audio/opus' },
   ]);
 
 const payloadOf = (rates: readonly { readonly level: PeerQuality['level']; readonly rtt: number; readonly packetLoss: number }[], codec: string | null = null) =>
@@ -115,7 +115,7 @@ describe('une perte, une latence ou un codec hors bornes ne font plus rejeter le
   });
 
   test('un codec de 80 caractères est coupé à 50', () => {
-    const read = readStats(linkReport({ lost: 0, received: 10, mimeType: `video/${'x'.repeat(80)}` }), 0);
+    const read = readStats(linkReport({ lost: 0, received: 10, mimeType: `audio/${'x'.repeat(80)}` }), 0);
     const payload = payloadOf([peerRate(read, null)], read.codec);
     expect(payload.codec).toBe('x'.repeat(50));
     expect(socketCallAnalyticsSchema.safeParse(payload).success).toBe(true);

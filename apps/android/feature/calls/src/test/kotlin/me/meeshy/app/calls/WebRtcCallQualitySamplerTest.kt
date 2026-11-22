@@ -17,7 +17,9 @@ class WebRtcCallQualitySamplerTest {
         override fun nowMs() = now.also { now += 5_000L }
     }
 
-    private fun sampler(vararg readings: CallStats?): WebRtcCallQualitySampler {
+    private fun sampler(vararg readings: CallStats?): WebRtcCallQualitySampler = samplerOn(clock, *readings)
+
+    private fun samplerOn(clock: CallClock, vararg readings: CallStats?): WebRtcCallQualitySampler {
         val queue = ArrayDeque(readings.toList())
         return WebRtcCallQualitySampler({ queue.removeFirstOrNull() }, feed, clock, intervalMs = 5_000L)
     }
@@ -73,5 +75,28 @@ class WebRtcCallQualitySamplerTest {
             cancelAndIgnoreRemainingEvents()
         }
         assertThat(feed.readings.value).isNull()
+    }
+
+    @Test
+    fun `le debit se mesure sur l'horloge monotone, pas sur un mur qui saute d'une heure`() = runTest {
+        val jumping = object : CallClock {
+            var wallReads = 0L
+            var monotonicReads = 0L
+            override fun nowMs() = WALL_EPOCH_MS + (wallReads++) * ONE_HOUR_MS
+            override fun elapsedMs() = (++monotonicReads) * 5_000L
+        }
+        samplerOn(jumping, CallStats(inboundAudioBytes = 0L), CallStats(inboundAudioBytes = 5_000L)).samples.test {
+            advanceTimeBy(10_000)
+            runCurrent()
+            awaitItem()
+            awaitItem()
+            assertThat(feed.readings.value?.audioKbps).isWithin(1e-9).of(8.0)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    private companion object {
+        const val WALL_EPOCH_MS = 1_763_700_000_000L
+        const val ONE_HOUR_MS = 3_600_000L
     }
 }

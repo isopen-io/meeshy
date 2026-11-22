@@ -263,13 +263,13 @@ class CallStatsTest {
     }
 
     @Test
-    fun `the first inbound entry wins the primary codec`() {
+    fun `the audio inbound entry wins the primary codec even listed after the video one`() {
         val stats = CallStats.reduce(
             listOf(
                 entry("cAudio", "codec", mimeType = "audio/opus"),
                 entry("cVideo", "codec", mimeType = "video/H264"),
-                entry("ia", "inbound-rtp", kind = "audio", codecId = "cAudio", values = mapOf("packetsReceived" to 10.0)),
                 entry("iv", "inbound-rtp", kind = "video", codecId = "cVideo", values = mapOf("packetsReceived" to 10.0)),
+                entry("ia", "inbound-rtp", kind = "audio", codecId = "cAudio", values = mapOf("packetsReceived" to 10.0)),
             ),
         )
         assertThat(stats.codec).isEqualTo("opus")
