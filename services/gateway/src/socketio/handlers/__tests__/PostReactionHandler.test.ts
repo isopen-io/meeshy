@@ -159,7 +159,7 @@ function makePostReactionService(overrides: Record<string, any> = {}) {
 function makeSocialEvents() {
   return {
     broadcastPostLiked: jest.fn<any>().mockResolvedValue(undefined),
-    broadcastPostUnliked: jest.fn<any>().mockResolvedValue(undefined),
+    broadcastPostUnliked: jest.fn<any>().mockResolvedValue(undefined), activitySeparation: jest.fn<any>().mockResolvedValue([]),
   };
 }
 

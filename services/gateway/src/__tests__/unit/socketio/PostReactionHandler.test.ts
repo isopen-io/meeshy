@@ -215,7 +215,7 @@ describe('PostReactionHandler', () => {
     // `post:reaction-added` (ce mock n'est alors pas sollicité).
     mockSocialEvents = {
       broadcastPostLiked: jest.fn(() => Promise.resolve()),
-      broadcastPostUnliked: jest.fn(() => Promise.resolve()),
+      broadcastPostUnliked: jest.fn(() => Promise.resolve()), activitySeparation: jest.fn(() => Promise.resolve([] as string[])),
     };
 
     mockNotificationService.createPostLikeNotification.mockResolvedValue(null);
@@ -322,8 +322,8 @@ describe('PostReactionHandler', () => {
         ANOTHER_USER_ID,
         // Visibility-aware fan-out (audit C1-bis): the post's visibility is
         // forwarded so a non-PUBLIC post never leaks the like to all friends.
-        expect.anything(),
-        expect.anything(),
+        // 5e arg depuis #20338 : la séparation, résolue AVANT la mutation.
+        expect.anything(), expect.anything(), expect.anything(),
       );
       // Pas de double-émission par-emoji pour le ❤️ (sinon double-comptage client).
       expect(mockIO._toEmit).not.toHaveBeenCalledWith(

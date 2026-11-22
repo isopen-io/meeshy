@@ -148,7 +148,8 @@ async function buildApp() {
   const broadcastStoryReacted = jest.fn<any>().mockResolvedValue(undefined);
   const broadcastStatusReacted = jest.fn<any>().mockResolvedValue(undefined);
   const createPostLikeNotification = jest.fn<any>().mockResolvedValue(undefined);
-  app.decorate('socialEvents', { broadcastPostLiked, broadcastStoryReacted, broadcastStatusReacted } as any);
+  const activitySeparation = jest.fn<any>().mockResolvedValue([]);
+  app.decorate('socialEvents', { broadcastPostLiked, broadcastStoryReacted, broadcastStatusReacted, activitySeparation } as any);
   app.decorate('notificationService', { createPostLikeNotification } as any);
 
   // Topologie réelle : le hook cmid est enregistré AVANT les routes.
@@ -168,7 +169,7 @@ async function like(app: FastifyInstance, cmid?: string, payload: Record<string,
     url: `/posts/${POST_ID}/like`,
     headers: cmid ? { 'x-client-mutation-id': cmid } : {},
     payload,
-  });
+    });
 }
 
 const likedPost = (type: string) => ({
