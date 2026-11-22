@@ -1940,8 +1940,24 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gates : modèles Kotlin (`jvm-check`, `SharedLocation*`) verts ; le centre se prouve par `android.yml` sur la PR.
 - Prochain lot : iOS de #20249, puis #20308, #20054, #20056.
 
-## 2026-11-22 — réveil de 19 h : la moitié web de #20416 et de #20308 (en cours)
+## 2026-11-22 — réveil de 19 h : la moitié web de #20416 et de #20308
 
 - Reprise : #20417 (iOS de #20249) attend toujours un Mac (construction iOS en file depuis 16 h, tranche 2 du SDK
-  aussi) ; rien à pousser sur sa branche tant que ces envois attendent. Ce réveil prend la moitié WEB de #20416 et de
-  #20308, qui ne touche aucun chemin iOS.
+  aussi ; sa tranche 6 rouge vient de témoins étrangers corrigés sur `dev` par b35a94491). Rien à pousser sur sa branche
+  tant que ces envois attendent : un nouvel envoi remplacerait celui en file. Ce réveil prend la moitié WEB de #20416 et
+  de #20308, qui ne touche aucun chemin iOS.
+- Lot : un refus certain (`invalid`, `fixed-point`, `started-elsewhere`, tous rendus par la passerelle avant toute
+  écriture) ne fait plus oublier `publishedStart` ; seul un refus douteux (accusé perdu, panne) l'efface encore. Avant,
+  un « démarré ailleurs » faisait adopter le partage de l'autre appareil comme celui d'ici, et deux appareils publiaient.
+  Un nom vide ou blanc ne se nomme plus dans « Montrer votre position réelle ? » (iso Android).
+- Point 1 de #20416 tranché côté passerelle : `/mine` et le démarrage relisent par le même pointeur et la même
+  ouverture ; un témoin prouve que tout partage nommé par la relecture est accepté par un démarrage qui le nomme (point
+  frais, liste seule republiée, échéance par personne passée, terme à 1 ms). Un terme atteint ENTRE relecture et
+  démarrage rend un refus légitime, et la relecture ne nomme alors plus rien : pas de boucle.
+- Audit adversarial : non bloquant. Noté : `NOTHING_WRITTEN` est une liste écrite à la main, sans lien testé avec les
+  sites de la passerelle.
+- Gates : web `bun test` 35 167 verts, 1 rouge hérité (`act-leak-guard`) ; `tsc` web et passerelle à 0 ; passerelle
+  `sharedLocationRelay.demarrage-attendu` 14/14.
+- Reste : iOS et Android de #20416 (point 2) et iOS de #20308, après la fusion de #20417.
+- Prochain lot : fusionner #20417 quand ses Mac passent, fermer #20249 ; puis iOS + Android de #20416, iOS de #20308,
+  #20054, #20056.
