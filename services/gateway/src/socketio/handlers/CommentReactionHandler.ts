@@ -280,11 +280,23 @@ export class CommentReactionHandler {
        états, et `unknown` se traite selon ce qui est en jeu : fail-CLOSED sur le
        SECRET, fail-OPEN sur la LIVRAISON. Ici le secret est le ROSTER, pas
        l'événement : un roster VIDE ne nomme personne, donc on le vide et on
-       livre. */
+       livre.
+
+       **Et cette dégradation repose sur une propriété d'un AUTRE fichier :**
+       `getBlockRelatedUserIds` (`utils/blocking.ts`) fait ses deux lectures en
+       `Promise.all`, donc l'échec de l'une rejette l'ENSEMBLE. Avec un
+       `allSettled` « pour la résilience », une demi-lecture rendrait un
+       `separated` INCOMPLET — donc un roster PARTIELLEMENT filtré, fail-OPEN
+       sous un `.catch` qui se croit fermé. Le `=== null` ci-dessous distingue
+       « lecture tombée » (`[]`, ne nomme personne) de « aucun blocage »
+       (roster entier) ; il ne peut rien contre une lecture à moitié servie. */
     const separated = await blockedIdsAroundViewer(this.prisma, viewerId)
       .then((ids) => new Set(ids))
       .catch((error: unknown) => {
-        this.logger.warn('roster de l’acteur non filtrable — servi VIDE, l’événement part quand même', { viewerId, error });
+        /* `error`, pas `warn` : un filtre de CONFIDENTIALITÉ vient de cesser
+           de fonctionner. Un `warn` ne sera pas regardé, et la dégradation est
+           silencieuse pour l'utilisateur (son roster est vide, pas absent). */
+        this.logger.error('roster de l’acteur non filtrable — servi VIDE, l’événement part quand même', error, { viewerId });
         return null;
       });
     const served = separated === null ? [] : userIds.filter((id) => !separated.has(id));
