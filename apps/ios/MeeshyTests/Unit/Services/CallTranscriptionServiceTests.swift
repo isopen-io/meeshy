@@ -26,7 +26,8 @@ final class CallTranscriptionServiceTests: XCTestCase {
         language: String = "en",
         translatedText: String? = nil,
         translatedLanguage: String? = nil,
-        capturedAt: Date = Date()
+        capturedAt: Date = Date(),
+        receivedAtMonotonic: TimeInterval? = nil
     ) -> Meeshy.CallTranscriptionSegment {
         Meeshy.CallTranscriptionSegment(
             id: UUID(),
@@ -41,7 +42,8 @@ final class CallTranscriptionServiceTests: XCTestCase {
             language: language,
             translatedText: translatedText,
             translatedLanguage: translatedLanguage,
-            capturedAt: capturedAt
+            capturedAt: capturedAt,
+            receivedAtMonotonic: receivedAtMonotonic
         )
     }
 
@@ -273,6 +275,73 @@ final class CallTranscriptionServiceTests: XCTestCase {
         ))
         XCTAssertEqual(sut.segments.first?.text, "Bonjour le monde.")
         XCTAssertEqual(sut.segments.first?.isFinal, true)
+    }
+
+    // MARK: - Local monotonic reception (#20319)
+
+    private final class MonotonicClockStub {
+        var now: TimeInterval = 0
+    }
+
+    private func makeSUT(clock: MonotonicClockStub) -> CallTranscriptionService {
+        let sut = CallTranscriptionService(
+            socket: MockMessageSocket(),
+            gateResolver: MockCallCaptionsGateResolver(gate: .open),
+            monotonicNow: { clock.now }
+        )
+        sut.setCaptionsGateForTesting(.open)
+        return sut
+    }
+
+    func test_receiveTranslatedSegment_stampsTheLocalMonotonicReception_whateverTheSpeakerWallClock() {
+        let clock = MonotonicClockStub()
+        let sut = makeSUT(clock: clock)
+        clock.now = 500
+        sut.receiveTranslatedSegment(makeSegment(
+            wireId: "w-ahead", speakerId: "remote-user", isFinal: true,
+            capturedAt: Date().addingTimeInterval(3_600)
+        ))
+        clock.now = 510
+        sut.receivePeerEntry(makeSegment(
+            wireId: "w-behind", speakerId: "remote-user-2", isFinal: true,
+            capturedAt: Date().addingTimeInterval(-3_600)
+        ))
+        XCTAssertEqual(sut.segments.first { $0.wireId == "w-ahead" }?.receivedAtMonotonic, 500)
+        XCTAssertEqual(sut.segments.first { $0.wireId == "w-behind" }?.receivedAtMonotonic, 510)
+    }
+
+    func test_receivePeerEntry_partialThenFinal_theWaitRunsFromTheFinalsReception() {
+        let clock = MonotonicClockStub()
+        let sut = makeSUT(clock: clock)
+        clock.now = 10
+        sut.receivePeerEntry(makeSegment(wireId: "u-1", text: "Hel", speakerId: "remote-user", isFinal: false))
+        clock.now = 25
+        sut.receivePeerEntry(makeSegment(wireId: "u-1", text: "Hello.", speakerId: "remote-user", isFinal: true))
+        XCTAssertEqual(sut.segments.first?.receivedAtMonotonic, 25,
+                       "la traduction se demande au final : son attente part de la réception du final")
+    }
+
+    func test_receiveTranslatedSegment_afterAFinal_doesNotRestartTheWait() {
+        let clock = MonotonicClockStub()
+        let sut = makeSUT(clock: clock)
+        clock.now = 40
+        sut.receivePeerEntry(makeSegment(wireId: "u-2", text: "Hello.", speakerId: "remote-user", isFinal: true))
+        clock.now = 47
+        sut.receiveTranslatedSegment(makeSegment(wireId: "u-2", text: "Hello.", speakerId: "remote-user", isFinal: true))
+        clock.now = 49
+        sut.receivePeerEntry(makeSegment(wireId: "u-2", text: "Hell", speakerId: "remote-user", isFinal: false))
+        XCTAssertEqual(sut.segments.first?.receivedAtMonotonic, 40, "un re-final ou une révision tardive ne prolonge pas l'attente")
+    }
+
+    func test_mergedRules_existingPartialWithoutReception_takesTheIncomingOne_andAFinalKeepsItsOwn() {
+        let partial = makeSegment(wireId: "m", isFinal: false)
+        let finalArrival = makeSegment(wireId: "m", isFinal: true, receivedAtMonotonic: 12)
+        XCTAssertEqual(CallTranscriptMergeRules.merged(existing: partial, incoming: finalArrival).receivedAtMonotonic, 12)
+        let stamped = makeSegment(wireId: "m", isFinal: true, receivedAtMonotonic: 3)
+        XCTAssertEqual(CallTranscriptMergeRules.merged(existing: stamped, incoming: finalArrival).receivedAtMonotonic, 3)
+        let unstamped = makeSegment(wireId: "m", isFinal: true)
+        XCTAssertEqual(CallTranscriptMergeRules.merged(existing: unstamped, incoming: finalArrival).receivedAtMonotonic, 12)
+        XCTAssertNil(CallTranscriptMergeRules.merged(existing: unstamped, incoming: unstamped).receivedAtMonotonic)
     }
 
     func test_utteranceFinalizedByMerge_entersThePersistenceAccumulator() {
