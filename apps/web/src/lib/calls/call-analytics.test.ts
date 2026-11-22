@@ -3,7 +3,8 @@ import { describe, expect, test } from 'bun:test';
 import { estimateCallMos } from '@meeshy/shared/utils/call-mos';
 
 import { socketCallAnalyticsSchema } from '../../../../../services/gateway/src/validation/call-schemas';
-import { analyticsPayload, createTelemetry, deviceLabel, markCaptions, markConnected, markNegotiating, markNetworkChange, markReconnecting, withCodec, withMedia, withSample } from './call-analytics';
+import { createTelemetry, markCaptions, markConnected, markNegotiating, markNetworkChange, markReconnecting, withCodec, withMedia, withSample } from './call-analytics';
+import { analyticsPayload, deviceLabel } from './call-analytics-report';
 import type { MediaQuality } from './call-analytics-stats';
 
 const context = { callId: '507f1f77bcf86cd799439099', isVideo: true, endReason: 'local', platform: 'web', deviceModel: 'Chrome · Linux' } as const;

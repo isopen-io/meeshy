@@ -1,8 +1,6 @@
 import type { CallAnalyticsEvent, CallQualityDistribution, ConnectionQualityLevel, ConnectionQualityStats } from '@meeshy/shared/types/video-call';
 
-import { estimateCallMos } from '@meeshy/shared/utils/call-mos';
-
-import { combineMediaQuality, type MediaQuality } from './call-analytics-stats';
+import type { MediaQuality } from './call-analytics-stats';
 import type { PeerQuality } from './call-quality';
 
 /**
@@ -18,6 +16,10 @@ import type { PeerQuality } from './call-quality';
  *
  * Mémoire bornée (un appel peut durer des heures) : des sommes et des
  * compteurs, jamais l'historique des échantillons.
+ *
+ * Ce module ne porte que l'ACCUMULATEUR, synchrone et résident du moteur ; la
+ * COMPOSITION des deux rapports vit dans `call-analytics-report.ts`, chargé à
+ * part (#19894).
  */
 
 export type Telemetry = {
@@ -54,6 +56,9 @@ export type TelemetrySample = { readonly level: ConnectionQualityLevel; readonly
 
 export type AnalyticsContext = { readonly callId: string; readonly now: number; readonly isVideo: boolean; readonly endReason: string; readonly platform: string; readonly deviceModel: string };
 
+/** Ce que le moteur sait d'un appel qui finit : l'appareil, c'est le rapport qui le nomme (#19894). */
+export type EngineAnalyticsContext = Omit<AnalyticsContext, 'deviceModel'>;
+
 const NO_LEVELS: CallQualityDistribution = { excellent: 0, good: 0, fair: 0, poor: 0 };
 
 export function createTelemetry(startedAt: number): Telemetry {
@@ -77,8 +82,6 @@ export function markEffects(telemetry: Telemetry, names: readonly string[]): Tel
   const added = names.filter((name) => !telemetry.effects.includes(name));
   return added.length === 0 ? telemetry : { ...telemetry, effects: [...telemetry.effects, ...added] };
 }
-
-const isColorFilter = (name: string): boolean => name.startsWith('filter:') || name === 'brightness';
 
 export const withCodec = (telemetry: Telemetry, codec: string | null): Telemetry => (codec === null || codec === telemetry.codec ? telemetry : { ...telemetry, codec });
 
@@ -107,112 +110,19 @@ export function withMedia(telemetry: Telemetry, peers: Readonly<Record<string, M
   return { ...telemetry, peers: { ...telemetry.peers, ...peers }, mediaSamples: telemetry.mediaSamples + 1, jitterSum: telemetry.jitterSum + nonNegative(jitterMs), limitations };
 }
 
-/** La cause la plus fréquente ; à égalité, la première dans l'ordre alphabétique, comme iOS. */
-const dominantLimitation = (counts: Readonly<Record<LimitationReason, number>>): LimitationReason | null =>
-  LIMITATION_REASONS.reduce<LimitationReason | null>((best, reason) => (counts[reason] > (best === null ? 0 : counts[best]) ? reason : best), null);
-
-const present = <K extends string, V>(key: K, value: V | null): Partial<Record<K, V>> => (value === null ? {} : ({ [key]: value } as Record<K, V>));
-
-const measure = (value: number | null): number | null => (value !== null && Number.isFinite(value) && value >= 0 ? value : null);
-
-const count = (value: number | null): number | null => {
-  const rounded = value === null ? null : Math.round(value);
-  return rounded !== null && rounded >= 0 && rounded <= Number.MAX_SAFE_INTEGER ? rounded : null;
-};
-
-/** Les champs de qualité (#11277), chacun SEULEMENT s'il a été mesuré : un client n'invente aucune valeur. */
-function mediaFields(telemetry: Telemetry, averageRtt: number, averagePacketLoss: number): Partial<CallAnalyticsEvent> {
-  const { mediaSamples } = telemetry;
-  const media = combineMediaQuality(Object.values(telemetry.peers));
-  if (media === null || mediaSamples === 0) return {};
-  const emitted = media.jitterBufferEmittedCount ?? 0;
-  const mos = estimateCallMos({ roundTripTimeMs: averageRtt, jitterMs: telemetry.jitterSum / mediaSamples, packetLossPercent: averagePacketLoss });
-  return {
-    ...present('freezeCount', count(media.freezeCount)),
-    ...present('totalFreezesDuration', measure(media.totalFreezesDuration)),
-    ...present('qualityLimitationReason', dominantLimitation(telemetry.limitations)),
-    ...present('jitterBufferDelay', media.jitterBufferDelay === null || emitted <= 0 ? null : measure((media.jitterBufferDelay * 1000) / emitted)),
-    ...present('concealedSamples', count(media.concealedSamples)),
-    ...present('nackCount', count(media.nackCount)),
-    ...present('pliCount', count(media.pliCount)),
-    mos: Math.round(mos * 100) / 100,
-    ...present('candidateType', media.candidateType?.slice(0, 20) ?? null),
-    ...present('relayProtocol', media.relayProtocol?.slice(0, 20) ?? null),
-  };
-}
-
-const BROWSERS: ReadonlyArray<readonly [RegExp, string]> = [
-  [/Edg\//, 'Edge'],
-  [/OPR\//, 'Opera'],
-  [/Firefox\/|FxiOS\//, 'Firefox'],
-  [/Chrome\/|CriOS\//, 'Chrome'],
-  [/Safari\//, 'Safari'],
-];
-
-const SYSTEMS: ReadonlyArray<readonly [RegExp, string]> = [
-  [/Android/, 'Android'],
-  [/iPhone|iPad|iPod/, 'iOS'],
-  [/CrOS/, 'ChromeOS'],
-  [/Mac OS X/, 'macOS'],
-  [/Windows/, 'Windows'],
-  [/Linux/, 'Linux'],
-];
-
-/** « Chrome · Android » : ce que `deviceModel` dit d'un navigateur, sans recopier l'agent entier (empreinte). */
-export function deviceLabel(userAgent: string): string {
-  const pick = (table: ReadonlyArray<readonly [RegExp, string]>): string | null => table.find(([pattern]) => pattern.test(userAgent))?.[1] ?? null;
-  const parts = [pick(BROWSERS), pick(SYSTEMS)].filter((part): part is string => part !== null);
-  return parts.length === 0 ? 'web' : parts.join(' · ');
-}
-
-const share = (count: number, total: number): number => nonNegative(count / total);
-
-export function analyticsPayload(telemetry: Telemetry, context: AnalyticsContext): CallAnalyticsEvent {
-  const { samples, levels, connectedAt } = telemetry;
-  const since = (from: number | null): number => (connectedAt === null || from === null ? -1 : Math.max(0, connectedAt - from));
-  const averageRtt = share(telemetry.rttSum, samples);
-  const averagePacketLoss = share(telemetry.lossSum, samples);
-  return {
-    callId: context.callId,
-    setupTimeMs: since(telemetry.startedAt),
-    negotiationTimeMs: since(telemetry.negotiatingAt ?? telemetry.startedAt),
-    durationSeconds: connectedAt === null ? 0 : Math.max(0, Math.round((context.now - connectedAt) / 1000)),
-    reconnectionCount: telemetry.reconnections,
-    networkTransitions: telemetry.networkTransitions,
-    averageRtt,
-    averagePacketLoss,
-    maxPacketLoss: nonNegative(telemetry.maxLoss),
-    codec: (telemetry.codec ?? 'unknown').slice(0, 50),
-    effectsUsed: telemetry.effects,
-    filtersUsed: telemetry.effects.some(isColorFilter),
-    transcriptionUsed: telemetry.captionsShown,
-    qualityDistribution: { excellent: share(levels.excellent, samples), good: share(levels.good, samples), fair: share(levels.fair, samples), poor: share(levels.poor, samples) },
-    platform: context.platform,
-    deviceModel: context.deviceModel.slice(0, 100),
-    isVideo: context.isVideo,
-    endReason: context.endReason,
-    ...mediaFields(telemetry, averageRtt, averagePacketLoss),
-  };
-}
-
 /** `CallQualityReportEvent` tel qu'il VOYAGE : l'horodatage part en ISO (`socketQualityReportSchema` refuse un nombre). */
 export type QualityReportPayload = {
   readonly callId: string;
   readonly stats: Omit<ConnectionQualityStats, 'timestamp'> & { readonly timestamp: string };
 };
 
-export function qualityReport(callId: string, total: PeerQuality, at: number): QualityReportPayload {
-  return {
-    callId,
-    stats: {
-      level: total.level,
-      packetLoss: total.packetLoss,
-      rtt: Math.round(total.rtt),
-      jitter: total.jitter,
-      bitrate: { audio: total.audioKbps, video: total.videoKbps },
-      bytesSent: total.bytesSent,
-      bytesReceived: total.bytesReceived,
-      timestamp: new Date(at).toISOString(),
-    },
-  };
-}
+/**
+ * Les rapports d'un appel (#19894) : `call:analytics` au raccroché et
+ * `call:quality-report` à chaque relevé, composés par un chunk paresseux
+ * (`call-analytics-report.ts`). Chacun part par `send` quand il est prêt —
+ * jamais au prix de l'appel.
+ */
+export type CallReports = {
+  readonly final: (telemetry: Telemetry, context: EngineAnalyticsContext, send: (payload: CallAnalyticsEvent) => void) => void;
+  readonly quality: (callId: string, total: PeerQuality, at: number, send: (payload: QualityReportPayload) => void) => void;
+};
