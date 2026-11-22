@@ -56,7 +56,7 @@ normal.
 | **89w** | 2026-11-19 | `claude/practical-fermat-6cktea` | → `dev` | ✅ mergé |
 | **90w** | 2026-11-20 | `claude/practical-fermat-awbeqk` | → `dev` | ✅ mergé |
 | **91w** | 2026-11-21 | `claude/practical-fermat-h5vgy2` | [#20161](https://github.com/isopen-io/meeshy/pull/20161) → `dev` | ✅ mergé |
-| **92w** | 2026-11-22 | `claude/practical-fermat-xtlc3p` | → `dev` | ⏳ ouverte |
+| **92w** | 2026-11-22 | `claude/practical-fermat-xtlc3p` | [#20325](https://github.com/isopen-io/meeshy/pull/20325) → `dev` | ⏳ ouverte |
 
 **92w** — a11y / i18n / maintenabilité (PREMIER tour de l'axe optimisation, le gate
 d'harmonie étant clos) : **le libellé d'accessibilité d'un message annonçait son
