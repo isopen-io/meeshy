@@ -9,6 +9,7 @@ import {
 } from '@meeshy/shared/utils/relation-levels';
 
 import { unwrap } from './client';
+import { CIRCLE_NOTIFY_QUERY_KEY } from './me-keys';
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
 
@@ -32,7 +33,7 @@ import type { ApiResult, HttpTransport } from './http';
  * d'écriture, motif `app-preferences-actions.ts`).
  */
 
-export const CIRCLE_NOTIFY_QUERY_KEY = ['me', 'circle-notify'] as const;
+export { CIRCLE_NOTIFY_QUERY_KEY };
 
 export type CircleNotifyPreferences = Readonly<Record<CircleNotifyKey, RelationAudienceChoice>>;
 
