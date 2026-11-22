@@ -171,8 +171,9 @@ describe('#14924 audit — la rupture d’une demande Proche acceptée éteint l
     const { status, partages } = await rompreLeSang({ targetLevel: 'CLOSE', relation: PROCHE, partages: CATEGORIE_PARTAGEE });
 
     expect(status).toBe(200);
-    expect(partage(partages, MOI)).toMatchObject({ listeningCategoryShared: false, listeningCategoryWithdrawnAt: expect.any(Date) });
-    expect(partage(partages, AUTRE)).toMatchObject({ listeningCategoryShared: false });
+    // #20361 : la catégorie retirée revient au DÉFAUT du palier (null), qui à Ami est un refus.
+    expect(partage(partages, MOI)).toMatchObject({ listeningCategoryShared: null, listeningCategoryWithdrawnAt: expect.any(Date) });
+    expect(partage(partages, AUTRE)).toMatchObject({ listeningCategoryShared: null });
     expect(partage(partages, AUTRE)).not.toHaveProperty('listeningCategoryWithdrawnAt');
   });
 

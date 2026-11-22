@@ -46,6 +46,19 @@ data class RelationLevelResponse(
 @Serializable
 data class RelationLowerBody(val level: String)
 
+/** Le corps de `PUT /relations/:userId/blood-bundle` (#20362) : la version de la liste de ce que le Sang ouvre, que l'écran a montrée. */
+@Serializable
+data class BloodBundleBody(val version: String)
+
+/** La réponse de `PUT /relations/:userId/blood-bundle` (#20362) : l'accord au palier est posé, le Sang est verrouillé. */
+@Serializable
+data class BloodBundleAcceptance(
+    val userId: String,
+    val bloodBundleAccepted: Boolean,
+    val version: String,
+    val lockedByLevel: Boolean,
+)
+
 /** Les cercles — miroir de `RelationsEndpoint` d'iOS (`RelationsService.swift`, #13938). */
 interface RelationsApi {
     /** Le niveau de lien avec une personne. */
@@ -105,4 +118,8 @@ interface RelationsApi {
     /** Le rituel du Sang : `start` ouvre ou rejoint, `hold` se rejoue tant qu'on tient l'écran, `confirm` scelle. */
     @POST(ApiRoutesRelations.BY_USER_ID_RITUAL)
     suspend fun ritual(@Path("userId") userId: String, @Body body: RelationRitualBody): ApiResponse<RelationRitualStep>
+
+    /** Accepter l'accord au palier d'un Sang déjà scellé (#20362) : `409 RELATION_BLOOD_BUNDLE_OUTDATED` si la version est périmée. */
+    @PUT(ApiRoutesRelations.BY_USER_ID_BLOOD_BUNDLE)
+    suspend fun acceptBloodBundle(@Path("userId") userId: String, @Body body: BloodBundleBody): ApiResponse<BloodBundleAcceptance>
 }
