@@ -2466,3 +2466,52 @@ socket jusqu'au client.
 2. **#20299** (règle unique du chrome Android), puis **#20300** (iOS, à coordonner avec la routine iOS).
 3. #20257, #20284, #20280, #20273, #20288.
 4. #20185 (recette staging), #11932, #12236, #16933.
+
+## Cycle 73 — 2026-11-22
+
+- **Base** : `origin/dev` @ `31109499a`, puis la tête de dev fusionnée dans la branche (`72d8f060b`). Le lot du cycle 72 (#20301, #20290) est fusionné.
+- **Branche** : `claude/determined-volta-gy9sh5`.
+- **Objectif** : #20298. Les points d'attente d'un sous-titre d'appel tombent 8 s après sa réception locale, mesurée sur l'horloge monotone, quelle que soit l'horloge de l'orateur.
+- **Livré** :
+  - **Android** (`core/model`, `feature/calls`) :
+    - `CallJournalSegment.receivedAtElapsedMs` est un champ local, jamais sérialisé. Il est posé à un seul endroit, `CallCaptionsController.receive()` (relais socket et data channel), par `SystemClock.elapsedRealtime()`.
+    - `awaitingUntilMs` vaut cette réception plus `TIMEOUT_MS`, et `rememberSettlingClock` lit la même horloge.
+    - **Fusion** : une ligne déjà finale garde sa réception, donc un re-final ne prolonge pas l'attente. Une ligne partielle prend celle de l'entrant : l'attente part du FINAL, celui qui demande la traduction, comme sur le web (réserve R1 de la QA, corrigée dans le lot).
+    - **Sans réception**, aucune attente n'est affichée. L'étiquette « EN » reste.
+    - Le constructeur interne du contrôleur exige `elapsed` (réserve R3).
+  - **Web** :
+    - Constat : le web ancrait déjà l'échéance sur la réception, mais sur l'horloge murale.
+    - `CaptionsContext.elapsed` est câblé sur `performance.now()`, et `captionOrigin({ received })` part de cette horloge.
+    - `isAwaitingTranslation`, `captionFooterLine` et `useWaitingClock` la lisent aussi. `ctx.now()` ne sert plus qu'à `at`.
+  - `capturedAtMs` et `at` servent encore au tri et à l'heure affichée. Aucun payload ne change. Une ancienne passerelle sans `capturedAtMs` reste servie.
+- **Tests** :
+  - **Android `core/model`** : `CallCaptionTranslationWaitAnchorTest`, 7 cas : orateur en avance d'une heure, orateur en retard d'une heure, partiel puis final, re-final, réception manquante.
+    - Rouge : 6 échecs, puis 1 pour R1.
+    - Vert : `jvm-check -PjvmCheckModelOnly --tests 'me.meeshy.sdk.model.call.*'`, 2 293 tests.
+    - `feature/calls` n'a pas été compilé en local ; la preuve est le run `android.yml` 44991551537 (`workflow_dispatch`, sha `72d8f060b`).
+  - **Web** :
+    - Témoins : orateur ±1 h par le data channel et par la passerelle, horloge murale locale ±1 h pendant l'attente, répétition, message sans `at`, panneau avec `Date.now` décalé.
+    - Rouge : 13 échecs sur 68.
+    - Vert, rejoué par l'orchestrateur sur l'arbre fusionné : `bun test src/lib/calls src/components/call-captions-panel.test.tsx`, 2 516 tests, 0 échec. `tsc` donne 0. Le build donne 0 (agent web).
+  - **Mutations de la QA** : l'ancien ancrage sur Android donne 6 échecs, et la fusion inversée 1. Sur le web, le contrôleur sur `now()` donne 8 échecs, le panneau sur `Date.now()` 5, et `mergedOrigin` inversé 2.
+- **QA** (`auditeur-adversarial`, indépendante) : favorable avec réserves.
+  - R1 (moyenne) : corrigée.
+  - R3 (faible) : corrigée.
+  - R2 (faible) : le panneau web lit `performance.now()` en dur. Versée dans **#20320**.
+  - R4 : iOS a le même défaut. Versé dans **#20319**.
+- **Découvert** : **#20319**. Sur iOS, `CallTranscriptionSegmentFactory.swift:26,65` prend l'heure de l'orateur, et `CallCaptionLine.swift:148` en tire l'échéance. Le commentaire de `CallTranscriptionSegment.swift:26-29` est périmé.
+- **CI** :
+  - `android.yml` 44991551537 (sur `72d8f060b`) : **vert**.
+  - `ci.yml` 44991645673 : « Qualité TS » rouge, car `measure-weight` donnait `call_engine` à 16,02 Ko pour un plafond de 16. Corrigé dans `421f061a3` : l'horloge `elapsed` passe de `CaptionsContext` (fourni par le moteur) à `CaptionsDeps` (fourni par `call-captions-runtime`, chargé à la demande), et `call_engine` revient à 16 Ko.
+  - `ci.yml` 44993112988 (sur `421f061a3`) : **vert**.
+  - Puis `dev` @ `483222222` a été fusionné dans la branche (aucun fichier commun), et les tests d'appel web et `tsc` ont été rejoués : 2 516 tests, 0 échec.
+  - `call_engine` est exactement à son plafond, sans marge : le prochain octet du moteur devra sortir dans un chunk à la demande, ou le plafond devra être remesuré.
+- **Limites** : rien n'a été vérifié sur appareil ni dans un navigateur pendant un appel. Selon le navigateur, `performance.now()` peut ne pas avancer pendant une mise en veille.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR #20322 n'est pas fusionnée, fusionner `dev` dans la branche, puis la PR.
+1. **#20319** : le miroir iOS. Les modèles et la fabrique sont dans le périmètre. `CallCaptionsViews.swift` est à coordonner avec la routine iOS. La preuve est `ios.yml`.
+2. **#20299** (règle unique du chrome Android), **#20320** (web, petit lot), puis **#20300** (iOS).
+3. #20257, #20284, #20280, #20273, #20288.
+4. #20185 (recette staging), #11932, #12236, #16933.

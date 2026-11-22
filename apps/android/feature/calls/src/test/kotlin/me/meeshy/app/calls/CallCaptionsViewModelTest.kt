@@ -43,6 +43,7 @@ class CallCaptionsViewModelTest {
             regime = CallConversationRegime { false },
             notice = CallCaptionsRefusalNotice { },
             clock = { 5_000L },
+            elapsed = { 0L },
             scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
         )
         controller.onTransition(CallState.Idle, CallState.Connected, info)

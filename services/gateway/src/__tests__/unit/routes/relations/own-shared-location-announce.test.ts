@@ -28,11 +28,11 @@ const partage: SharedLocationOwnSnapshot = {
 
 describe('la relecture de mon partage annonce le point choisi', () => {
   it('sans partage en cours : l’annonce est servie (le client la lit AVANT de partager)', () => {
-    expect(servi({ recipients: [], expiresAt: null })).toEqual({ recipients: [], expiresAt: null, acceptsManualSource: true });
+    expect(servi({ recipients: [], expiresAt: null })).toEqual({ recipients: [], expiresAt: null, acceptsManualSource: true, acceptsExpectedStart: true });
   });
 
   it('avec un partage : l’annonce s’ajoute, rien de ce qui était servi ne se perd', () => {
-    expect(servi(partage)).toEqual({ ...partage, acceptsManualSource: true });
+    expect(servi(partage)).toEqual({ ...partage, acceptsManualSource: true, acceptsExpectedStart: true });
   });
 
   it('aucune position ne voyage à côté, même si l’état la portait', () => {
