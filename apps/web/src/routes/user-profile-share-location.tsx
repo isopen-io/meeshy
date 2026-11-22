@@ -58,6 +58,7 @@ export const SHARE_LOCATION_PROBLEM_KEY = {
   'not-sharing': 'shareLocation.failed',
   unavailable: 'shareLocation.failed',
   'fixed-point': 'shareLocation.failed',
+  'started-elsewhere': 'shareLocation.failed',
   failed: 'shareLocation.failed',
 } as const satisfies Readonly<Record<SharedLocationShareProblem, CirclesCatalogKey>>;
 
