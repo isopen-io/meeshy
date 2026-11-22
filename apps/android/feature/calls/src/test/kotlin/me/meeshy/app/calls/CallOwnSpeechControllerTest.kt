@@ -72,6 +72,7 @@ class CallOwnSpeechControllerTest {
             regime = CallConversationRegime { endToEnd },
             notice = CallCaptionsRefusalNotice { },
             clock = { 5_000L },
+            elapsed = { 0L },
             scope = scope,
         )
         var minted = 0

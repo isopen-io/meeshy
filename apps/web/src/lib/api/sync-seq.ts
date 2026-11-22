@@ -41,9 +41,9 @@
 const SEQ_KEY = '_seq';
 
 /** L'état PUR : ce que le lecteur a vu de plus haut, `null` avant le premier événement. */
-export type SyncSeqState = { readonly lastSeq: number | null };
+type SyncSeqState = { readonly lastSeq: number | null };
 
-export const EMPTY_SYNC_SEQ: SyncSeqState = { lastSeq: null };
+const EMPTY_SYNC_SEQ: SyncSeqState = { lastSeq: null };
 
 /**
  * Le curseur porté par une charge socket, ou `null` — une passerelle ANTÉRIEURE
@@ -51,27 +51,34 @@ export const EMPTY_SYNC_SEQ: SyncSeqState = { lastSeq: null };
  * dans les deux cas le lecteur n'apprend rien, il ne conclut surtout pas à un
  * trou.
  */
-export function syncSeqOf(payload: unknown): number | null {
+function syncSeqOf(payload: unknown): number | null {
   if (typeof payload !== 'object' || payload === null) return null;
   const seq = (payload as Record<string, unknown>)[SEQ_KEY];
   return typeof seq === 'number' && Number.isInteger(seq) && seq > 0 ? seq : null;
 }
 
 /** Un saut au-delà de `lastSeq + 1` — et rien d'autre. */
-export function detectSyncGap(state: SyncSeqState, next: number): boolean {
+function detectSyncGap(state: SyncSeqState, next: number): boolean {
   return state.lastSeq !== null && next > state.lastSeq + 1;
 }
 
 /** Le curseur n'avance jamais à reculons : un doublon le laisse où il est. */
-export function recordSyncSeq(state: SyncSeqState, next: number): SyncSeqState {
+function recordSyncSeq(state: SyncSeqState, next: number): SyncSeqState {
   return state.lastSeq === null || next > state.lastSeq ? { lastSeq: next } : state;
 }
 
+/**
+ * **UNE SEULE MÉTHODE, ET C'EST MESURÉ** (#20323). Ce type a porté un `reset()`
+ * et un `lastSeq` que personne n'appelait, et chacun disait quelque chose de
+ * FAUX : le tracker est créé PAR CONNEXION (`createRealtimeConnection`), donc
+ * une reconnexion en fabrique un neuf et rien n'a jamais à être remis à zéro ;
+ * et un curseur lisible de l'extérieur se lit comme un curseur ANNONÇABLE,
+ * alors que le web ne l'annonce pas à `/sync` — c'est la mesure de #18575, et
+ * `hasGap` ne le couvre pas.
+ */
 export type SyncSeqTracker = {
   /** La charge BRUTE, telle que la socket la remet — jamais la valeur décodée. */
   observe(payload: unknown): void;
-  readonly lastSeq: number | null;
-  reset(): void;
 };
 
 /**
@@ -95,12 +102,6 @@ export function createSyncSeqTracker(params: { readonly onGap: (seq: number) => 
       const gap = detectSyncGap(state, seq);
       state = recordSyncSeq(state, seq);
       if (gap) params.onGap(seq);
-    },
-    get lastSeq(): number | null {
-      return state.lastSeq;
-    },
-    reset(): void {
-      state = EMPTY_SYNC_SEQ;
     },
   };
 }

@@ -279,6 +279,24 @@ cd packages/shared && bun run build                           # else SocialEvent
 cd services/gateway && bun run test:coverage                   # 740/740 suites green
 ```
 
+**UN ARTEFACT PÉRIMÉ REND UN ROUGE QUI RESSEMBLE À UN DÉFAUT DU DÉPÔT**
+(#20315). Les trois commandes ci-dessus ne manquent jamais bruyamment : elles
+manquent sous la signature du code que quelqu'un d'autre vient de fusionner.
+Mesuré trois fois dans la nuit du 2026-11-21 au 22, sur un arbre à jour de
+`dev` — trois trace différentes, aucune ne disant « ton arbre n'est pas
+préparé » :
+
+| artefact périmé | ce que le rouge DIT | la commande qui l'efface |
+|---|---|---|
+| `packages/shared/dist` | `TypeError: communitiesEndpoints.byIdJoinLink is not a function` (5 rouges `apps/web`) | `cd packages/shared && bun run build` |
+| `packages/shared/dist` | `Clé du jeu « undefined » lue en « fr » avant que sa partie du catalogue soit chargée` (2 rouges `apps/web`) | idem |
+| client Prisma généré | `TS2353: 'joinLinkPausedAt' does not exist in type 'CommunityUpdateInput'` (`tsc` passerelle) | `cd packages/shared && npx prisma generate --generator client` |
+
+> **Un rouge local qui nomme le code d'un lot fraîchement fusionné se confronte
+> d'abord à l'ARBRE, pas au lot.** La CI construit `shared` et génère le client
+> elle-même, donc elle ne voit jamais ces trois-là : un rouge local que la CI
+> ne reproduit pas est un rouge d'arbre jusqu'à preuve du contraire.
+
 **`bun install` échoue derrière un proxy sortant.** Le postinstall de `grpc-tools`
 télécharge un binaire préconstruit via une URL S3 que le proxy réécrit, et
 `node-pre-gyp` rend `Could not parse s3 bucket name from virtual host url` — l'install

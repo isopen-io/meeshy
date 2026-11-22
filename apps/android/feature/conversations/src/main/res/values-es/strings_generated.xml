@@ -191,6 +191,7 @@
         <item quantity="many">%1$d registros</item>
         <item quantity="other">%1$d registros</item>
     </plurals>
+    <string name="links_common_action_failed">La acción no se completó. Inténtalo de nuevo.</string>
     <string name="links_common_active">Activo</string>
     <string name="links_common_cancel">Cancelar</string>
     <string name="links_common_copy">Copiar</string>
@@ -199,6 +200,7 @@
     <string name="links_common_share">Compartir</string>
     <string name="links_community_create_a11y">Crear una comunidad</string>
     <string name="links_community_empty_title">Ninguna comunidad administrada</string>
+    <string name="links_community_join_link_paused">Las entradas por este enlace están suspendidas</string>
     <string name="links_community_stat_active">Activos</string>
     <string name="links_hub_community_description">Gestiona los enlaces de invitación a tus comunidades</string>
     <string name="links_hub_share_create_a11y">Crear un enlace para compartir</string>

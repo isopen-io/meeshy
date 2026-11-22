@@ -8,6 +8,7 @@ enum CommunityLinkDetailCopy {
     static var animates: String { String(localized: "communityLink.sheet.animates", defaultValue: "Tu l'animes", bundle: .main) }
     static var moderates: String { String(localized: "communityLink.sheet.moderates", defaultValue: "Tu la modères", bundle: .main) }
     static var copyIdentifier: String { String(localized: "communityLink.sheet.copyIdentifier", defaultValue: "Copier l'identifiant", bundle: .main) }
+    static var joinLinkPausedHint: String { String(localized: "communityLink.sheet.joinLinkPaused", defaultValue: "Les arrivées par ce lien sont suspendues", bundle: .main) }
     static var identifierCopied: String { String(localized: "communityLink.sheet.identifierCopied", defaultValue: "Identifiant copié", bundle: .main) }
 
     static func members(_ count: Int) -> String {

@@ -2,11 +2,12 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactElement, typ
 
 import type { Message } from '@/lib/api/types';
 import type { Delivery } from '@/lib/view/message';
+import { statusLabel } from '@/lib/view/message-status-label';
 import { useLongPress } from '@/lib/view/long-press';
 import { forwardLabelOf, type MessageBadge } from '@/lib/view/message-badges';
 import { openReactorsSheet } from '@/lib/view/reactors-sheet-store';
 import { languageColor, flag, languageName } from '@/lib/languages';
-import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { META_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 import { shouldRevealSendingClock } from '@/lib/send/send-clock';
@@ -49,17 +50,10 @@ export const CHECKS: Record<Delivery, { readonly name: GlyphName; readonly size:
   read: { name: 'checks', size: 11, read: true },
 };
 
-const STATUS_KEY = {
-  pending: 'message.status.pending',
-  sent: 'message.status.sent',
-  delivered: 'message.status.delivered',
-  read: 'message.status.read',
-} as const satisfies Record<Delivery, InterfaceCatalogKey>;
-
-/** L'état d'envoi dit dans la langue d'INTERFACE — « envoyé », « sent »… */
-export function statusLabel(status: Delivery, language: InterfaceLanguage = currentInterfaceLanguage()): string {
-  return translate(language, STATUS_KEY[status]);
-}
+/** L'état d'envoi dit dans la langue d'INTERFACE — « envoyé », « sent »… — site
+ * UNIQUE dans `@/lib/view/message-status-label` (92w), réexporté ici pour ses
+ * consommateurs historiques ET partagé avec le libellé d'accessibilité. */
+export { statusLabel };
 
 /**
  * LA PASTILLE DU PRISME — elle ne se montre QUE si le texte affiché est une

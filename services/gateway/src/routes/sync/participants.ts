@@ -56,6 +56,15 @@ export const syncParticipantSelect = Prisma.validator<Prisma.ParticipantSelect>(
   lastActiveAt: true,
   joinedAt: true,
   permissions: true,
+  // #20292 — la PROJECTION de la surcharge, sans quoi la fabrique sert
+  // l'instantané du join. `permissions` est figé à l'entrée ;
+  // `anonymousSession.rights` est le delta que l'hôte pose, et il passe devant.
+  // Cette collection HYDRATE le cache hors-ligne des clients : une valeur fausse
+  // y survit à la fermeture de l'app, ce qui en fait le plus coûteux des cinq
+  // sites de la fabrique. On ne projette QUE `rights` — charger
+  // `anonymousSession` entier rehydraterait `sessionTokenHash` et l'identité de
+  // l'invité, ce qu'iter 35 (F8) avait retiré exprès.
+  anonymousSession: { select: { rights: true } },
   user: {
     select: {
       id: true,

@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import me.meeshy.sdk.model.relation.SharedLocationPointReplacement
 import me.meeshy.sdk.model.relation.SharedLocationPrecision
 import me.meeshy.sdk.model.relation.SharedLocationRoster
 import me.meeshy.sdk.model.relation.SharedLocationShareDuration
@@ -43,7 +44,7 @@ class ProfileWhereSectionTest {
             userId: String,
             precision: SharedLocationPrecision,
             duration: SharedLocationShareDuration,
-            replacingPoint: Boolean,
+            replacing: SharedLocationPointReplacement?,
         ): SharedLocationShareProblem? = null
         override suspend fun stopSharing(userId: String): SharedLocationShareProblem? = null
     }
@@ -80,5 +81,20 @@ class ProfileWhereSectionTest {
         compose.setContent { MeeshyTheme { ProfileWhereSection(userId = person, displayName = "Léo", offered = true, viewModel = vm) } }
         compose.onNodeWithText(heading).assertIsDisplayed()
         compose.onNodeWithTag(PROFILE_SHARE_LOCATION_TAG).assertIsDisplayed()
+    }
+
+    @Test
+    fun `the question names at most three people, then counts the others`() {
+        val audience = SharedLocationPointReplacement.Audience(listOf("Ada", "Bob", "Cyd"), 2)
+        compose.setContent { MeeshyTheme { androidx.compose.material3.Text(replacePointMessage(audience)) } }
+        compose.onNodeWithText("Your real location will replace your chosen point for Ada, Bob, Cyd", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("2 other people.", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `nobody named nor counted keeps the general sentence`() {
+        val audience = SharedLocationPointReplacement.Audience(emptyList(), 0)
+        compose.setContent { MeeshyTheme { androidx.compose.material3.Text(replacePointMessage(audience)) } }
+        compose.onNodeWithText("Everyone who sees your chosen point will see your real location instead.").assertIsDisplayed()
     }
 }

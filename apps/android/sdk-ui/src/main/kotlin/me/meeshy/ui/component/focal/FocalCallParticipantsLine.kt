@@ -14,7 +14,7 @@ import java.util.Locale
  * langue de l'appareil (ICU `ListFormatter`, comme iOS `ListFormatter`). Sous l'API 30 l'ICU de la plateforme n'est
  * pas garanti : la liste se joint alors par des virgules plutôt que de risquer un plantage.
  */
-internal fun joinParticipantNames(names: List<String>, locale: Locale): String =
+fun joinParticipantNames(names: List<String>, locale: Locale): String =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
         android.icu.text.ListFormatter.getInstance(locale).format(names)
     } else {

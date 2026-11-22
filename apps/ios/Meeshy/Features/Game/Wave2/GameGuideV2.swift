@@ -4,7 +4,8 @@ import MeeshySDK
 // MARK: - Les événements du guide, vague 2 (#9481)
 //
 // La loi partagée (`GameGuideV2.chooseMoment`) choisit LE moment ; ce fichier relève ses huit événements dans l'état
-// du jeu, comme `GameGuideEvents` le fait pour la vague 1. Miroir de `apps/web/src/lib/game-guide/events-v2.ts` :
+// du jeu, comme `GameGuideEvents` le fait pour la vague 1 — et la première Veilleuse offerte, dite le jour du cadeau.
+// Miroir de `apps/web/src/lib/game-guide/events-v2.ts` :
 //
 //  - `standing` lit l'ÉTAT à l'ouverture. Seules deux découvertes s'y lisent — la première ligue, le début d'une
 //    saison — et chacune ne se dit qu'UNE fois (tant que sa clé n'est pas vue) ;
@@ -73,6 +74,12 @@ enum GameGuideEventsV2 {
         .seasonStart(season: season.number, themeKey: season.themeKey, steps: GameSeason.steps)
     }
 
+    /// Le jour où la première Veilleuse est offerte, tant que sa clé n'est pas vue.
+    private static func freezeGift(_ game: GameBlock) -> GuideEventV2? {
+        GameFlame.announcesFreezeGift(freezeGifted: game.flame.freezeGifted, guideSeen: game.guideSeen)
+            ? .flameFreezeGift(freezes: game.flame.freezes) : nil
+    }
+
     /// Ce que l'état dit à l'ouverture, et que la personne n'a pas encore entendu.
     static func standing(game: GameBlock, seen: Set<String>) -> [GuideEventV2] {
         var events: [GuideEventV2] = []
@@ -80,6 +87,7 @@ enum GameGuideEventsV2 {
             events.append(.leagueFirst(league: current.league, pointsToPromotion: current.pointsToPromotion))
         }
         if let season = GuideSnapshotV2(game: game).season { events.append(seasonStart(season)) }
+        if let gift = freezeGift(game) { events.append(gift) }
         return events.filter { !seen.contains($0.key.rawValue) }
     }
 
@@ -127,9 +135,11 @@ enum GameGuideEventsV2 {
         return events
     }
 
-    /// Les événements d'une transition entre deux lectures du bloc.
+    /// Les événements d'une transition entre deux lectures du bloc. Le cadeau ne se dit qu'en ARRIVANT : une lecture
+    /// qui le portait déjà l'a annoncé.
     static func transition(from before: GameBlock, to after: GameBlock) -> [GuideEventV2] {
-        between(before: GuideSnapshotV2(game: before), after: GuideSnapshotV2(game: after))
+        let gift = before.flame.freezeGifted == true ? nil : freezeGift(after)
+        return between(before: GuideSnapshotV2(game: before), after: GuideSnapshotV2(game: after)) + (gift.map { [$0] } ?? [])
     }
 }
 
@@ -173,10 +183,11 @@ extension GameGuideCopy {
         case .seeTrophies: GameText.guideActionSeeTrophies
         case .seeAtlas: GameText.guideActionSeeAtlas
         case .seeLevel: actionLabel(.seeLevel)
+        case .seeFlame: actionLabel(.seeFlame)
         }
     }
 
-    /// Les huit moments : ce qui vient d'arriver → ce que ça veut dire → l'étape d'après → un bouton, avec une
+    /// Les moments de la vague 2 : ce qui vient d'arriver → ce que ça veut dire → l'étape d'après → un bouton, avec une
     /// version COURTE pour les fois suivantes. La loi choisit le moment et rend ses chiffres ; elle ne prononce rien.
     static func momentV2(_ moment: GuideMomentV2) -> GuideCopy {
         let action = actionLabelV2(moment.action)
@@ -241,6 +252,11 @@ extension GameGuideCopy {
                 GameText.guideMomentAtlasStampWhat(language: name), GameText.guideMomentAtlasStampMeans,
                 GameText.guideMomentAtlasStampNext(stamped: number(stamped), total: number(total)),
                 GameText.guideMomentAtlasStampShort(language: name)
+            )
+        case .flameFreezeGift(let freezes):
+            return copy(
+                GameText.guideMomentFlameFreezeGiftWhat, GameText.guideMomentFlameFreezeGiftMeans,
+                GameText.guideMomentFlameFreezeGiftNext(count: number(freezes)), GameText.guideMomentFlameFreezeGiftShort
             )
         }
     }

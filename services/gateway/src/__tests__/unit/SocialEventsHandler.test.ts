@@ -680,7 +680,8 @@ describe('SocialEventsHandler', () => {
       };
 
       const commentAuthorId = 'user-comment-author';
-      handler.broadcastCommentLiked(data, commentAuthorId);
+      /* 3e argument depuis #20236 : la séparation est résolue par l'APPELANT, AVANT sa mutation, pour que l'émission reste synchrone juste après elle (la charge porte un compteur ABSOLU). `[]` = personne à taire. */
+      handler.broadcastCommentLiked(data, commentAuthorId, []);
 
       expect(mockIO.to).toHaveBeenCalledTimes(2);
       expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(commentAuthorId));
@@ -697,7 +698,7 @@ describe('SocialEventsHandler', () => {
         likeCount: 1,
       };
 
-      handler.broadcastCommentLiked(data, AUTHOR_ID);
+      handler.broadcastCommentLiked(data, AUTHOR_ID, []);
 
       expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_1));
       expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_2));
@@ -940,7 +941,7 @@ describe('SocialEventsHandler', () => {
         { method: () => handler.broadcastStatusReacted(statusReactData, AUTHOR_ID), expectedEvent: SERVER_EVENTS.STATUS_REACTED },
         { method: () => handler.broadcastCommentAdded(commentAddData, AUTHOR_ID, 'PUBLIC', []), expectedEvent: SERVER_EVENTS.COMMENT_ADDED },
         { method: () => handler.broadcastCommentDeleted(commentDelData, AUTHOR_ID, 'PUBLIC', []), expectedEvent: SERVER_EVENTS.COMMENT_DELETED },
-        { method: () => handler.broadcastCommentLiked(commentLikeData, AUTHOR_ID), expectedEvent: SERVER_EVENTS.COMMENT_LIKED },
+        { method: () => handler.broadcastCommentLiked(commentLikeData, AUTHOR_ID, []), expectedEvent: SERVER_EVENTS.COMMENT_LIKED },
       ];
 
       for (const { method, expectedEvent } of calls) {

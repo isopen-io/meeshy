@@ -186,6 +186,7 @@ async function buildApp(opts: {
 
   if (withSocialEvents) {
     app.decorate('socialEvents', {
+      commentActivitySeparation: jest.fn(async () => []), // #20236 — la route la lit AVANT sa mutation
       broadcastCommentAdded: jest.fn<any>().mockResolvedValue(undefined),
       broadcastCommentLiked: jest.fn<any>().mockResolvedValue(undefined),
       broadcastCommentDeleted: jest.fn<any>().mockResolvedValue(undefined),
@@ -733,6 +734,7 @@ describe('POST /posts/:postId/comments — broadcastCommentAdded rejects (line 1
     const prisma = makeDefaultPrisma();
     app.decorate('prisma', prisma);
     app.decorate('socialEvents', {
+      commentActivitySeparation: jest.fn(async () => []), // #20236 — la route la lit AVANT sa mutation
       broadcastCommentAdded: jest.fn<any>().mockRejectedValue(new Error('Socket error')),
     });
     const requiredAuth = makePreValidationAuth(true);
@@ -1032,6 +1034,7 @@ describe('POST /posts/:postId/comments/:commentId/like — createCommentLikeNoti
     });
     likeApp.decorate('prisma', prisma);
     likeApp.decorate('socialEvents', {
+      commentActivitySeparation: jest.fn(async () => []), // #20236 — la route la lit AVANT sa mutation
       broadcastCommentAdded: jest.fn<any>().mockResolvedValue(undefined),
       broadcastCommentLiked: jest.fn<any>().mockResolvedValue(undefined),
       broadcastCommentDeleted: jest.fn<any>().mockResolvedValue(undefined),
@@ -1062,6 +1065,7 @@ describe('DELETE /posts/:postId/comments/:commentId — broadcastCommentDeleted 
     const prisma = makeDefaultPrisma();
     delApp.decorate('prisma', prisma);
     delApp.decorate('socialEvents', {
+      commentActivitySeparation: jest.fn(async () => []), // #20236 — la route la lit AVANT sa mutation
       broadcastCommentAdded: jest.fn<any>().mockResolvedValue(undefined),
       broadcastCommentLiked: jest.fn<any>().mockResolvedValue(undefined),
       broadcastCommentDeleted: jest.fn<any>().mockRejectedValue(new Error('Socket error')),
@@ -1090,6 +1094,7 @@ function buildDeleteApp(broadcastCommentDeleted: any, prisma: any = makeDefaultP
   const delApp = Fastify({ logger: false });
   delApp.decorate('prisma', prisma);
   delApp.decorate('socialEvents', {
+    commentActivitySeparation: jest.fn(async () => []), // #20236 — la route la lit AVANT sa mutation
     broadcastCommentAdded: jest.fn<any>().mockResolvedValue(undefined),
     broadcastCommentLiked: jest.fn<any>().mockResolvedValue(undefined),
     broadcastCommentDeleted,

@@ -150,6 +150,7 @@ class CallConversationBindingTest {
             regime = CallConversationRegime { conversationId -> read += conversationId; false },
             notice = CallCaptionsRefusalNotice { },
             clock = { 0L },
+            elapsed = { 0L },
             scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
             binding = binding,
         )

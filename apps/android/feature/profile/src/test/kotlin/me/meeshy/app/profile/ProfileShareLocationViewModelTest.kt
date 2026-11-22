@@ -8,10 +8,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.model.relation.SharedLocationPointReplacement
 import me.meeshy.sdk.model.relation.SharedLocationPrecision
 import me.meeshy.sdk.model.relation.SharedLocationRoster
 import me.meeshy.sdk.model.relation.SharedLocationSendOutcome
 import me.meeshy.sdk.model.relation.SharedLocationShareDuration
+import me.meeshy.sdk.relation.SharedLocationKnownPeople
 import me.meeshy.sdk.relation.SharedLocationShareProblem
 import me.meeshy.sdk.relation.SharedLocationSharing
 import org.junit.After
@@ -33,8 +35,9 @@ class ProfileShareLocationViewModelTest {
         val rosterFlow = MutableStateFlow(SharedLocationRoster.EMPTY)
         var restored = 0
         val stopped = mutableListOf<String>()
-        val replacing = mutableListOf<Boolean>()
+        val replacing = mutableListOf<SharedLocationPointReplacement?>()
         var showsChosenPoint = false
+        var question = SharedLocationPointReplacement("t1", setOf("bbbbbbbbbbbbbbbbbbbbbbbb"))
         override val roster: StateFlow<SharedLocationRoster> = rosterFlow
         override val isBusy: StateFlow<Boolean> = MutableStateFlow(false)
         override fun restore() { restored++ }
@@ -42,10 +45,12 @@ class ProfileShareLocationViewModelTest {
             userId: String,
             precision: SharedLocationPrecision,
             duration: SharedLocationShareDuration,
-            replacingPoint: Boolean,
+            replacing: SharedLocationPointReplacement?,
         ): SharedLocationShareProblem? {
-            replacing += replacingPoint
-            if (showsChosenPoint && !replacingPoint) return SharedLocationShareProblem.ReplacesChosenPoint
+            this.replacing += replacing
+            if (showsChosenPoint && (replacing == null || !question.isCoveredBy(replacing))) {
+                return SharedLocationShareProblem.ReplacesChosenPoint(question)
+            }
             if (answer == null) rosterFlow.value = rosterFlow.value.adding(userId, precision, duration, now)
             return answer
         }
@@ -111,12 +116,13 @@ class ProfileShareLocationViewModelTest {
 
         assertThat(vm.state.value.entry).isNull()
         assertThat(vm.state.value.problem).isNull()
-        assertThat(vm.state.value.replacingPoint)
+        assertThat(vm.state.value.replacingPoint?.choice)
             .isEqualTo(ProfileShareChoice(SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS))
+        assertThat(vm.state.value.replacingPoint?.asked).isEqualTo(sharing.question)
 
         vm.confirmReplacingPoint()
 
-        assertThat(sharing.replacing).containsExactly(false, true).inOrder()
+        assertThat(sharing.replacing).containsExactly(null, sharing.question).inOrder()
         assertThat(vm.state.value.replacingPoint).isNull()
         assertThat(vm.state.value.entry)
             .isEqualTo(SharedLocationRoster.Entry(SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS.millis))
@@ -131,8 +137,38 @@ class ProfileShareLocationViewModelTest {
         vm.keepChosenPoint()
         vm.confirmReplacingPoint()
 
-        assertThat(sharing.replacing).containsExactly(false)
+        assertThat(sharing.replacing).containsExactly(null)
         assertThat(vm.state.value.replacingPoint).isNull()
         assertThat(vm.state.value.entry).isNull()
+    }
+
+    @Test
+    fun `une reponse devenue caduque repose la question a jour, avec les noms connus, et rien ne part`() {
+        val sharing = FakeSharing().apply { showsChosenPoint = true }
+        val known = listOf(other to "Bob")
+        val vm = ProfileShareLocationViewModel(sharing, SharedLocationKnownPeople { known }).also { it.load(friend) }
+        vm.share(SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        val first = sharing.question
+        sharing.question = SharedLocationPointReplacement("t2", setOf(other))
+
+        vm.confirmReplacingPoint()
+
+        assertThat(sharing.replacing).containsExactly(null, first).inOrder()
+        assertThat(vm.state.value.replacingPoint?.asked).isEqualTo(SharedLocationPointReplacement("t2", setOf(other)))
+        assertThat(vm.state.value.replacingPoint?.knownNames).isEqualTo(known)
+        assertThat(vm.state.value.entry).isNull()
+    }
+
+    @Test
+    fun `la question nomme la personne de la fiche avant le carnet, et seulement ceux qui voient le point`() {
+        val third = "cccccccccccccccccccccccc"
+        val question = ProfileShareReplacement(
+            choice = ProfileShareChoice(SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR),
+            asked = SharedLocationPointReplacement("t1", setOf(friend, other)),
+            knownNames = listOf(friend to "Léo du carnet", third to "Cyd", other to "Bob"),
+        )
+
+        assertThat(question.audience(friend, "Léo"))
+            .isEqualTo(SharedLocationPointReplacement.Audience(listOf("Léo", "Bob"), 0))
     }
 }

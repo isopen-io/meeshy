@@ -17,4 +17,13 @@
     <string name="profile_voice_title">الصوت</string>
     <string name="shared_location_share_action_a11y">مشاركة موقعي مع %1$s</string>
     <string name="shared_location_replace_point_message">من يرى النقطة التي اخترتها سيرى موقعك الحقيقي بدلًا منها.</string>
+    <string name="shared_location_replace_point_message_named">سيحلّ موقعك الحقيقي محل النقطة التي اخترتها لدى %1$s.</string>
+    <plurals name="shared_location_replace_point_others">
+        <item quantity="zero">%1$d أشخاص آخرين</item>
+        <item quantity="one">%1$d شخص آخر</item>
+        <item quantity="two">%1$d شخصان آخران</item>
+        <item quantity="few">%1$d أشخاص آخرين</item>
+        <item quantity="many">%1$d شخصًا آخر</item>
+        <item quantity="other">%1$d شخص آخر</item>
+    </plurals>
 </resources>

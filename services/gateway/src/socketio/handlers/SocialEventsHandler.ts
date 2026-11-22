@@ -12,7 +12,8 @@ import { communityPostAudienceIdsOf, type CommunityPostRef } from '../../service
 import { emitServerEvent, type ServerEventName, type ServerEventPayload } from '../serverEmit';
 import { withAudienceListFor, withoutAudienceList } from '../../services/posts/audienceList';
 import { withServedCarrierMedia, withServedPostMedia } from '../../services/posts/servedPostMedia';
-import { getBlockRelatedUserIds, withoutBlockedRecipients } from '../../utils/blocking';
+import { withoutBlockedRecipients } from '../../utils/blocking';
+import { createSeparatedRoomsResolver, type SeparatedRoomsResolver } from '../separatedRooms';
 import { amisAcceptes } from '../../services/friendship';
 import { circleAudienceIds } from '../../services/posts/postAudience';
 import { POST_CIRCLE_VISIBILITIES, postCircleAudienceFloor } from '@meeshy/shared/utils/relation-levels';
@@ -117,9 +118,13 @@ export class SocialEventsHandler {
   private friendsCache: Map<string, { ids: string[]; expiresAt: number }> = new Map();
   private readonly FRIENDS_CACHE_TTL_MS = 30_000; // 30s
 
+  /** La séparation autour des sujets d'une diffusion d'ACTIVITÉ (#20236) — deux lectures pour N sujets, cache court. */
+  private readonly separatedRooms: SeparatedRoomsResolver;
+
   constructor(deps: SocialEventsHandlerDependencies) {
     this.io = deps.io;
     this.prisma = deps.prisma;
+    this.separatedRooms = createSeparatedRoomsResolver({ prisma: deps.prisma });
   }
 
   // ==============================================
@@ -644,16 +649,30 @@ export class SocialEventsHandler {
    * n'émet rien — le lecteur relira le fil par le REST, qui sait quoi taire.
    * Un commentateur inconnu n'a personne à taire.
    */
-  private async commentEmitter(rooms: string[], commentAuthorId: string | null | undefined) {
+  private async commentEmitter(rooms: string | string[], commentAuthorId: string | null | undefined) {
+    const separated = await this.separatedRooms.roomsAround([commentAuthorId], { keep: commentAuthorId });
+    return separated === null ? null : this.exceptSeparated(rooms, separated);
+  }
+
+  /** La cible, moins les rooms que la loi nomme — aucun `except()` quand il n'y a rien à taire. */
+  private exceptSeparated(rooms: string | string[], separated: readonly string[]) {
     const target = this.io.to(rooms);
-    if (!commentAuthorId) return target;
-    try {
-      const separated = [...(await getBlockRelatedUserIds(this.prisma, commentAuthorId))];
-      return separated.length > 0 ? target.except(separated.map((id) => ROOMS.user(id))) : target;
-    } catch (error) {
-      logger.error('comment broadcast — block resolution failed, emission dropped', { commentAuthorId, error });
-      return null;
-    }
+    return separated.length > 0 ? target.except([...separated]) : target;
+  }
+
+  /**
+   * **LA SÉPARATION AUTOUR D'UNE ACTIVITÉ DE COMMENTAIRE** (#20236), résolue
+   * par l'APPELANT, AVANT sa mutation, et passée aux deux diffusions.
+   *
+   * Ce n'est pas une commodité : rendre ces diffusions asynchrones décorrélait
+   * l'ORDRE du fil de l'ordre des écritures, et leur charge est ABSOLUE
+   * (`likeCount`) — un `comment:unliked` qui double son `comment:liked` fige
+   * chez le lecteur un compteur que la base contredit, et iOS le PERSISTE.
+   * Résolue avant l'écriture, l'émission redevient synchrone juste après elle
+   * (audit adversarial du lot).
+   */
+  commentActivitySeparation(actorId: string, commentAuthorId: string | null | undefined): Promise<readonly string[] | null> {
+    return this.separatedRooms.roomsAround([actorId, commentAuthorId], { keep: actorId });
   }
 
   /**
@@ -707,14 +726,37 @@ export class SocialEventsHandler {
     this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_DELETED, data);
   }
 
-  broadcastCommentLiked(data: CommentLikedEventData, commentAuthorId: string): void {
-    this.emitToUser(commentAuthorId, SERVER_EVENTS.COMMENT_LIKED, data);
-    // Reach every viewer of the post detail (join-gated post room) so the
-    // comment's like count updates live for them too — not just the comment
-    // author. Payload is ABSOLUTE (likeCount) → idempotent even if the comment
-    // author is in both their feed room and the post room. Mirrors
-    // `broadcastPostLiked`.
-    this.io.to(ROOMS.post(data.postId)).emit(SERVER_EVENTS.COMMENT_LIKED, data);
+  broadcastCommentLiked(data: CommentLikedEventData, commentAuthorId: string, separated: readonly string[] | null): void {
+    this.emitCommentActivity(SERVER_EVENTS.COMMENT_LIKED, data, commentAuthorId, separated);
+  }
+
+  /**
+   * LES DEUX ADRESSES D'UNE ACTIVITÉ DE COMMENTAIRE, sous la même loi (#20236).
+   *
+   * 1. la FEED room de l'auteur — « ton commentaire reçoit un cœur » ;
+   * 2. la room du POST, où lisent les autres : la charge est ABSOLUE
+   *    (`likeCount`), donc idempotente si l'auteur est dans les deux.
+   *
+   * **La première n'est PAS exemptée.** Elle l'était, au motif que la porte de
+   * l'action aurait déjà refusé un acteur séparé de l'auteur — mesuré FAUX :
+   * retirer sa réaction reste permis après un blocage (décision écrite), donc
+   * `DELETE …/like` et `comment:reaction-remove` n'ont pas cette porte, et
+   * l'auteur se voyait annoncer l'activité de qui il a bloqué.
+   *
+   * `separated === null` (lecture impossible) tait les DEUX adresses : un
+   * fail-closed partiel n'est pas un fail-closed.
+   */
+  private emitCommentActivity(
+    event: typeof SERVER_EVENTS.COMMENT_LIKED | typeof SERVER_EVENTS.COMMENT_UNLIKED,
+    data: CommentLikedEventData | CommentUnlikedEventData,
+    commentAuthorId: string,
+    separated: readonly string[] | null,
+  ): void {
+    if (separated === null) return;
+    if (!separated.includes(ROOMS.user(commentAuthorId))) {
+      emitServerEvent(this.io.to(ROOMS.feed(commentAuthorId)), event, data as SocialEventPayload<typeof event>);
+    }
+    emitServerEvent(this.exceptSeparated(ROOMS.post(data.postId), separated), event, data as SocialEventPayload<typeof event>);
   }
 
   /**
@@ -728,9 +770,8 @@ export class SocialEventsHandler {
    * PERSISTE la valeur reçue, si bien que le compte gonflé survivait au
    * redémarrage. Calque de `post:liked` / `post:unliked`.
    */
-  broadcastCommentUnliked(data: CommentUnlikedEventData, commentAuthorId: string): void {
-    this.emitToUser(commentAuthorId, SERVER_EVENTS.COMMENT_UNLIKED, data);
-    this.io.to(ROOMS.post(data.postId)).emit(SERVER_EVENTS.COMMENT_UNLIKED, data);
+  broadcastCommentUnliked(data: CommentUnlikedEventData, commentAuthorId: string, separated: readonly string[] | null): void {
+    this.emitCommentActivity(SERVER_EVENTS.COMMENT_UNLIKED, data, commentAuthorId, separated);
   }
 
   // ==============================================
