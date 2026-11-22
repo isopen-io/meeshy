@@ -125,8 +125,6 @@ export type CallEngineDeps = {
   readonly createLink: (deps: PeerLinkDeps) => PeerLink;
   readonly createStream: (tracks: readonly MediaStreamTrack[]) => MediaStream;
   readonly now: () => number;
-  /** Une horloge MONOTONE (`performance.now()`) : ce qui mesure une durée sans dépendre d'un saut de l'horloge murale (#20298). */
-  readonly elapsed: () => number;
   readonly schedule: (fn: () => void, ms: number) => unknown;
   readonly cancel: (handle: unknown) => void;
   readonly repeat: (fn: () => void, ms: number) => unknown;
@@ -506,7 +504,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       }
       dropPeer(userId);
     };
-    session.captions ??= deps.createCaptions({ callId, read, update, emit, viewerId: deps.viewerId, now: deps.now, elapsed: deps.elapsed, repeat: deps.repeat, stopRepeat: deps.stopRepeat, shown, bye });
+    session.captions ??= deps.createCaptions({ callId, read, update, emit, viewerId: deps.viewerId, now: deps.now, repeat: deps.repeat, stopRepeat: deps.stopRepeat, shown, bye });
     return session.captions;
   };
 

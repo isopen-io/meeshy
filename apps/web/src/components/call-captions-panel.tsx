@@ -85,7 +85,7 @@ function WaitingDots({ waiting, label }: { readonly waiting: boolean; readonly l
 
 /**
  * Rend le composant à l'échéance de la prochaine attente : l'attente retombe, l'étiquette de la langue reste.
- * Lit l'horloge MONOTONE, celle sur laquelle le contrôleur pose l'échéance (`CaptionsContext.elapsed`, #20298).
+ * Lit l'horloge MONOTONE, celle sur laquelle le contrôleur pose l'échéance (`CaptionsDeps.elapsed`, #20298).
  */
 function useWaitingClock(deadlines: readonly (number | null)[]): number {
   const [, wake] = useState(0);

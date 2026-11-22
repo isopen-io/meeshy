@@ -132,7 +132,6 @@ export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
     cameraEffects,
     createStream: defaultCreateStream,
     now: Date.now,
-    elapsed: () => performance.now(),
     schedule: (fn, ms) => setTimeout(fn, ms),
     cancel: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
     repeat: (fn, ms) => setInterval(fn, ms),

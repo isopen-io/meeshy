@@ -90,7 +90,6 @@ function harness(options: { readonly speech?: 'supported' | 'unsupported' | 'den
       emit: (event, payload) => void emitted.push([event, payload]),
       viewerId: () => ME,
       now: () => clock,
-      elapsed: () => elapsed,
       repeat: (fn, ms) => repeats.push({ fn, ms, stopped: false }) - 1,
       stopRepeat: (handle) => {
         const entry = repeats[handle as number];
@@ -99,7 +98,7 @@ function harness(options: { readonly speech?: 'supported' | 'unsupported' | 'den
       shown: () => void (shown += 1),
       bye: (userId) => void byes.push(userId),
     },
-    { speech, language: () => 'fr', prism: () => ['fr'], viewerName: () => 'Moi Même', newId: () => `w-${++ids}`, serverMayHearCaptions: (conversationId) => conversationId === 'c-1' && regime() === 'clear' },
+    { speech, language: () => 'fr', prism: () => ['fr'], viewerName: () => 'Moi Même', newId: () => `w-${++ids}`, elapsed: () => elapsed, serverMayHearCaptions: (conversationId) => conversationId === 'c-1' && regime() === 'clear' },
   );
   return {
     port,
