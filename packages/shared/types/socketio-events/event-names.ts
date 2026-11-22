@@ -719,8 +719,21 @@ export const SERVER_EVENTS = {
  * `call:already-answered`, `call:screen-capture-alert`) dont la passerelle
  * avait entre-temps implémenté l'émission.
  *
- * Ce qui reste : le pipeline de traduction EN APPEL. Les trois noms sont
- * décodés côté clients et attendent le service qui les produira.
+ * Ce qui reste : le pipeline de traduction EN APPEL — et ce que la réservation
+ * dit d'eux est désormais MESURÉ, pas espéré (#20295). Aucun client ne cite ces
+ * trois noms : ni `apps/web`, ni `apps/ios` / `packages/MeeshySDK`, ni
+ * `apps/android`. Le lot qui posera le service devra donc écrire les LECTEURS
+ * dans le même train, sans quoi il livrera un émetteur que personne n'affiche
+ * (le défaut du cycle 122 : « qui AFFICHE ce que ce résolveur élit ? »).
+ *
+ * La phrase précédente — « les trois noms sont décodés côté clients » — était
+ * fausse, et l'inventaire de `socket-event-orphan-gate` les portait pendant ce
+ * temps sous « ni émis ni lu ». C'est la rechute exacte que ce doc-comment
+ * raconte deux paragraphes plus haut : réécrire la prose ne l'empêche pas de
+ * pourrir. La MESURE vit donc maintenant dans ce cliquet — § « un nom RÉSERVÉ
+ * est mesuré sans lecteur » —, qui tombe si l'un de ces noms trouve un lecteur
+ * ou sort de l'inventaire sans sortir d'ici. Ne pas réécrire ici ce que ce
+ * témoin compte.
  *
  * `message:countdown-started` y a figuré le temps d'UN lot : le lot web-v2
  * #7454 l'a déclaré et réservé pour que les trois clients n'écrivent pas le nom
