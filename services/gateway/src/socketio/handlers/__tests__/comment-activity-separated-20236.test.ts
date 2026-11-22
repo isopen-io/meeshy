@@ -152,6 +152,26 @@ async function reaction(prisma: PrismaClient, io: any, action: 'add' | 'remove')
 /** La seule émission qui vise la room du POST — l'autre adresse de `comment:liked` est la room de l'auteur. */
 const versLePost = (emissions: Emission[]) => emissions.filter((e) => e.rooms.includes(`post:${POST_ID}`));
 
+/**
+ * **CE QUE #20337 A CHANGÉ, ET POURQUOI CES TÉMOINS LE METTENT DE CÔTÉ.**
+ *
+ * #20236 exemptait l'ACTEUR de sa propre exclusion par `keep` : « un sujet ne
+ * s'exclut pas de son PROPRE événement ». L'INTENTION est intacte — l'acteur
+ * reçoit toujours son événement — mais sur les deux familles de RÉACTION le
+ * MÉCANISME a changé : depuis #20337 la charge de room porte le roster
+ * nominatif de tous les réacteurs, qu'on ne peut pas filtrer par lecteur ;
+ * l'acteur sort donc de la room et reçoit sa charge SERVIE sur sa room
+ * personnelle, filtrée pour lui, donc sur tous ses appareils.
+ *
+ * Ces témoins gardent la propriété de #20236 — « qui a bloqué l'acteur ou
+ * l'auteur est TU » — et mettent de côté la room de l'acteur, dont la question
+ * est gardée chez elle (`comment-reaction-roster-20337.test.ts`, § « l'acteur
+ * ne lit pas, dans son propre événement, l'id d'un compte qu'il a bloqué »),
+ * où un témoin assert qu'il REÇOIT et pas seulement qu'il n'est pas exclu.
+ */
+const tiersExclus = (emission: Emission | undefined) =>
+  [...(emission?.exclues ?? [])].filter((room) => room !== `user:${ACTEUR}`).sort();
+
 describe('#20236 — l’activité d’un commentaire ne s’annonce pas à qui un blocage sépare', () => {
   /* Le cache est PARTAGÉ par le processus (une seule chose à invalider quand un
      blocage bouge) : chaque témoin repart donc d'une ardoise vide, sans quoi il
@@ -164,7 +184,7 @@ describe('#20236 — l’activité d’un commentaire ne s’annonce pas à qui 
 
     const [emission] = versLePost(emissions);
     expect(emission?.evenement).toBe(evenement);
-    expect(emission?.exclues).toEqual([`user:${SEPARE_DE_L_ACTEUR}`]);
+    expect(tiersExclus(emission)).toEqual([`user:${SEPARE_DE_L_ACTEUR}`]);
   });
 
   it.each(activites)('%s exclut la room de qui a bloqué l’AUTEUR du commentaire', async (evenement, diffuser) => {
@@ -173,7 +193,7 @@ describe('#20236 — l’activité d’un commentaire ne s’annonce pas à qui 
 
     const [emission] = versLePost(emissions);
     expect(emission?.evenement).toBe(evenement);
-    expect(emission?.exclues).toEqual([`user:${SEPARE_DE_L_AUTEUR}`]);
+    expect(tiersExclus(emission)).toEqual([`user:${SEPARE_DE_L_AUTEUR}`]);
   });
 
   it.each(activites)('%s exclut aussi qui l’ACTEUR ou l’AUTEUR a bloqué — les deux sens', async (_evenement, diffuser) => {
@@ -184,7 +204,7 @@ describe('#20236 — l’activité d’un commentaire ne s’annonce pas à qui 
     );
 
     const [emission] = versLePost(emissions);
-    expect([...(emission?.exclues ?? [])].sort()).toEqual([`user:${SEPARE_DE_L_ACTEUR}`, `user:${SEPARE_DE_L_AUTEUR}`]);
+    expect(tiersExclus(emission)).toEqual([`user:${SEPARE_DE_L_ACTEUR}`, `user:${SEPARE_DE_L_AUTEUR}`]);
   });
 
   it.each(activites)('%s n’exclut personne quand aucun blocage ne touche les deux sujets', async (evenement, diffuser) => {
@@ -193,7 +213,7 @@ describe('#20236 — l’activité d’un commentaire ne s’annonce pas à qui 
 
     const [emission] = versLePost(emissions);
     expect(emission?.evenement).toBe(evenement);
-    expect(emission?.exclues).toEqual([]);
+    expect(tiersExclus(emission)).toEqual([]);
   });
 
   /**
@@ -238,14 +258,14 @@ describe('#20236 — l’activité d’un commentaire ne s’annonce pas à qui 
     await like(fauxPrisma({ [AUTEUR_COMMENTAIRE]: [ACTEUR] }, []), fauxIo(emissions), 'unliked');
 
     expect(emissions.some((e) => e.rooms.includes(`feed:${AUTEUR_COMMENTAIRE}`))).toBe(false);
-    expect(versLePost(emissions)[0].exclues).toEqual([`user:${AUTEUR_COMMENTAIRE}`]);
+    expect(tiersExclus(versLePost(emissions)[0])).toEqual([`user:${AUTEUR_COMMENTAIRE}`]);
   });
 
   it('le même vecteur sur la réaction retirée : la room du post tait l’auteur qui a bloqué l’acteur', async () => {
     const emissions: Emission[] = [];
     await reaction(fauxPrisma({ [AUTEUR_COMMENTAIRE]: [ACTEUR] }, []), fauxIo(emissions), 'remove');
 
-    expect(versLePost(emissions)[0].exclues).toEqual([`user:${AUTEUR_COMMENTAIRE}`]);
+    expect(tiersExclus(versLePost(emissions)[0])).toEqual([`user:${AUTEUR_COMMENTAIRE}`]);
   });
 
   /**

@@ -2584,3 +2584,90 @@ socket jusqu'au client.
 1. **#20299** (règle unique du chrome Android), **#20320** (web, petit lot), **#20300** (iOS), **#20335**.
 2. #13775 (Android : l'échelle vidéo lit l'estimation, comme iOS), #20348, #20257, #20280, #20273, #20288.
 3. #20185 (recette staging), #11932, #12236, #16933.
+
+## Cycle 76 — 2026-11-22
+
+- **Base** : `origin/dev` @ `0bd554436`, puis `13359bdd5e` fusionnée dans la branche (`e0bff96349`). Le lot du cycle 75 (#20350, #20284) est fusionné.
+- **Branche** : `claude/determined-volta-y2eylj`.
+- **Objectif** : deux petits écarts du web.
+  - **#20273** : la route d'un appel est relayée dès qu'un des deux candidats de la paire élue l'est, comme sur iOS et Android.
+  - **#20320** : le panneau des sous-titres lit l'horloge monotone du contrôleur, et non `performance.now()` en dur.
+- **Livré** (`apps/web/` seulement) :
+  - `call-quality.ts` :
+    - `routeOf` lit les candidats local ET distant de la paire élue, et ne garde que les `candidateType` présents (c'est le `compactMap` d'iOS et d'Android).
+    - La route vaut `relay` si l'un des deux est relay, `direct` si au moins un type est lu et aucun n'est relay, et `null` si aucun type n'est lu.
+    - `candidateType` et `relayProtocol` de `call:analytics` gardent leur sens : le candidat local. Aucun payload ne change, et `StatsRead.path` ne voyage dans aucun.
+  - `monotonicClock` (`call-captions.ts`) est maintenant la seule définition de l'horloge :
+    - `browserCaptionsDeps()` (`call-captions-runtime.ts`) la remet au contrôleur ;
+    - le panneau la lit par défaut, par sa prop `clock` ;
+    - le harnais expose sa fausse horloge (`elapsed`).
+- **Tests** :
+  - #20273 : 6 témoins dans `call-quality.test.ts`.
+    - Rouge : 2 échecs, puis 1 pour la réserve R2.
+    - Mutation de la QA (lecture du local seul) : 2 rouges.
+  - #20320 : dans `call-captions-panel.test.tsx`, le panneau est rendu depuis le harnais avec une fausse horloge, et les points tombent à l'échéance + 1 ms (rouge : 1 échec). Un second témoin vérifie `browserCaptionsDeps().elapsed === monotonicClock` (rouge : l'export manquait).
+    - Mutations : `performance.now()` remis dans le panneau donne 1 rouge ; `() => Date.now()` dans le runtime donne 1 rouge.
+  - Vert, rejoué par l'orchestrateur sur l'arbre fusionné : `bun test src/lib/calls src/components/call-captions-panel.test.tsx` donne 2 524 pass et 0 fail ; `tsc --noEmit` donne 0.
+  - `bun run build` donne 0, et `measure-weight` donne 0 (agents).
+  - Suite web complète : 35 139 pass et 1 fail, `act-leak-guard`. Ce rouge vient du poste : il échoue à l'identique sur `origin/dev` sous bun 1.4.4, alors que la CI tourne en 1.3.14.
+- **QA** (`auditeur-adversarial`, indépendante) : favorable avec réserves.
+  - R1 (moyenne) : la « même source » de l'horloge n'était verrouillée par aucun test. Corrigée dans le lot.
+  - R2 (faible) : un candidat sans type comptait comme direct. Corrigée dans le lot.
+  - R3 (faible) : `call_engine` est à 16 383 o pour un plafond de 16 384 o en gzip -9. Le lot n'y ajoute que 2 o, venus de la table d'import. Consignée sur **#19894**.
+  - R4 (faible) : le réveil du panneau tourne sur le vrai `setTimeout`, que le test ne pilote pas. Il prouve la lecture de l'horloge, pas le réveil.
+- **Limites** : rien n'a été vérifié dans un navigateur, avec un vrai `getStats` et un pair derrière TURN.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée : lire son `ci.yml`. S'il est vert, fusionner `dev` dans la branche, puis la PR.
+1. **#19894** avant tout lot qui touche le moteur web, à qui il reste 1 o de marge. Puis **#20299** (Android, règle unique du chrome), **#20300** (iOS) et **#20335**.
+2. #13775, #20348, #20257, #20280, #20288.
+3. #20185 (recette staging), #11932, #12236, #16933.
+
+## Cycle 77 — 2026-11-22
+
+- **Base** : `origin/dev` @ `b35a94491`. Le lot du cycle 76 (#20412, #20273 + #20320) est fusionné.
+- **Branche** : `claude/determined-volta-h4pzaa`.
+- **Objectif** : **#19894**. Le chunk web `call_engine` retrouve au moins 1 Ko de marge sous son plafond de 16 Ko, sans que ce plafond soit relevé. Avant le lot, il ne lui restait plus de marge.
+- **Livré** (`apps/web/` seulement) :
+  - La composition des rapports quitte le moteur pour `call-analytics-report.ts`, un chunk à part chargé à la demande :
+    - le payload de `call:analytics` (qualité média, MOS, `combineMediaQuality`) ;
+    - `call:quality-report` ;
+    - `deviceLabel`.
+  - Ce chunk n'importe que des types du moteur.
+  - L'accumulateur (`createTelemetry`, `mark*`, `with*`) reste synchrone dans le moteur, donc aucun relevé ne se perd.
+  - `call-analytics-lazy.ts` précharge le chunk au chargement de `engine-defaults.ts`.
+    - Un rapport demandé avant l'arrivée du chunk part à son arrivée, avec la télémétrie et l'horodatage du moment de la demande.
+    - Un échec de chargement ne lève rien et ne laisse aucun rejet non géré : l'appel continue sans ce rapport, et la demande suivante retente le chargement.
+  - Dans `CallEngineDeps`, la dépendance `reports` remplace `deviceModel`. Aucun payload ni événement socket ne change.
+- **Mesures** (`measure-weight`, gzip -9) :
+
+  | Chunk | Avant | Après |
+  |---|---|---|
+  | `call_engine` | 16 385 o | **15 347 o** |
+  | `call_analytics_report` (nouveau) | — | 1 630 o |
+
+  - La marge de `call_engine` passe à 1 037 o.
+  - Le plafond de `call_analytics_report` est fixé à 3 Ko.
+  - La première peinture ne change pas : 24 requêtes avant et après, et `index` est identique une fois les empreintes de noms normalisées.
+- **Tests** :
+  - Nouveaux témoins : 5 dans `call-analytics-lazy.test.ts`, 3 dans `engine.test.ts` (chunk absent ou en retard : le raccroché aboutit, la qualité s'affiche).
+  - Rouge : module introuvable, puis une mutation sans `.catch` donne 3 rouges.
+  - `bun test src/lib/calls src/components/call-` : 3 448 pass, 0 fail. Rejoué par l'orchestrateur : `call-analytics-lazy` + `engine` donnent 101 pass, 0 fail, et `measure-weight` sort en 0.
+  - `tsc --noEmit` : 0. `check-calls-quality.mjs`, `check-calls-captions.mjs` et `check-calls.mjs` : ok.
+- **QA** (`auditeur-adversarial`, indépendante) : favorable avec réserves.
+  - Identité ancien/nouveau vérifiée par un test de propriété : 20 000 télémétries aléatoires (NaN, ±∞, ex aequo), 60 004 assertions.
+  - 6 mutations, toutes attrapées.
+  - Réserves faibles :
+    - une fenêtre d'ordre en microtâche, et un nouvel essai d'`import()` à chaque relevé après un échec : versées dans **#20426** ;
+    - la marge est juste au-dessus du 1 Ko visé.
+- **Limites** :
+  - Rien n'a été testé sous Safari ni Firefox, ni sur la coque Android.
+  - Si le chunk n'est pas encore arrivé au raccroché, un relevé de qualité différé part après `call:end`. La règle d'admission de `call:quality-report` dans ce cas n'a pas été lue : au pire, ce relevé est perdu.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée : lire son `ci.yml`. S'il est vert, fusionner `dev` dans la branche, puis la PR.
+1. **#20299** (Android, règle unique du chrome), **#20300** et **#20335** (iOS, à coordonner avec la routine iOS), **#20426**.
+2. Si la marge web doit grandir : `rear-camera.ts` peut se charger au retournement de la caméra (environ 0,9 Ko minifié).
+3. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933.

@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
 import { socketCallAnalyticsSchema, socketQualityReportSchema } from '../../../../../services/gateway/src/validation/call-schemas';
-import { analyticsPayload, createTelemetry, qualityReport, withCodec, withMedia, withSample } from './call-analytics';
+import { createTelemetry, withCodec, withMedia, withSample } from './call-analytics';
+import { analyticsPayload, qualityReport } from './call-analytics-report';
 import { readMediaQuality } from './call-analytics-read';
 import { peerRate, readStats, type PeerQuality } from './call-quality';
 

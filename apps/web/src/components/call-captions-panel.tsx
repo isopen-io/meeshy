@@ -5,7 +5,7 @@ import { JournalNoteCaption, noteDirection } from '@/components/call-journal-not
 import { CallJournalToggle } from '@/components/call-journal-toggle';
 import { UnfoldedOriginal } from '@/components/call-unfolded-original';
 import { TypingDots } from '@/components/typing-dots';
-import { CAPTIONS_OVERLAY_LINES, captionLanguageLabel, captionReveal, captionText, isAwaitingTranslation, revealState, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
+import { CAPTIONS_OVERLAY_LINES, captionLanguageLabel, captionReveal, captionText, isAwaitingTranslation, monotonicClock, revealState, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
 import { useCaptionReveals } from '@/lib/calls/call-captions-unfold-store';
 import { callChromeStore } from '@/lib/calls/call-chrome-store';
 import { callCaptionsFooter, callCaptionsFooterLabel, captionFooterLine, EVENT_FOOTER_LINE } from '@/lib/calls/call-captions-footer';
@@ -85,17 +85,17 @@ function WaitingDots({ waiting, label }: { readonly waiting: boolean; readonly l
 
 /**
  * Rend le composant à l'échéance de la prochaine attente : l'attente retombe, l'étiquette de la langue reste.
- * Lit l'horloge MONOTONE, celle sur laquelle le contrôleur pose l'échéance (`CaptionsDeps.elapsed`, #20298).
+ * Lit l'horloge MONOTONE sur laquelle le contrôleur pose l'échéance (`CaptionsDeps.elapsed`, #20298) : la même, `monotonicClock`, jamais une seconde (#20320).
  */
-function useWaitingClock(deadlines: readonly (number | null)[]): number {
+function useWaitingClock(deadlines: readonly (number | null)[], clock: () => number): number {
   const [, wake] = useState(0);
-  const elapsed = performance.now();
+  const elapsed = clock();
   const next = Math.min(...deadlines.map((until) => (until !== null && until > elapsed ? until : Number.POSITIVE_INFINITY)));
   useEffect(() => {
     if (!Number.isFinite(next)) return undefined;
-    const handle = setTimeout(() => wake((tick) => tick + 1), Math.max(0, next - performance.now()));
+    const handle = setTimeout(() => wake((tick) => tick + 1), Math.max(0, next - clock()));
     return () => clearTimeout(handle);
-  }, [next]);
+  }, [next, clock]);
   return elapsed;
 }
 
@@ -189,6 +189,8 @@ type PanelProps = {
   readonly surface?: CaptionsSurface;
   /** Ouvre tout l'appel à la place des sous-titres : absent, le bouton « Journal » n'est pas posé. */
   readonly onOpenJournal?: (() => void) | undefined;
+  /** L'horloge monotone du contrôleur qui a posé les échéances ; par défaut celle que le chunk des sous-titres lui remet. */
+  readonly clock?: () => number;
 };
 
 /** Où les sous-titres se posent : dans le verre de la pilule (`captions`) ou seuls, à sa place (`captionsAlone`). */
@@ -217,7 +219,7 @@ export function CallCaptionsSlot({ slot, shown, ...panel }: Omit<PanelProps, 'su
   );
 }
 
-export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass', onOpenJournal }: PanelProps) {
+export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass', onOpenJournal, clock = monotonicClock }: PanelProps) {
   /* La colonne du journal est ouverte (W1) quand l'écran lui réserve le bord de fin : « Journal » est alors actif, et le retoucher la referme (#17932). */
   const journalOpen = useStore(callChromeStore, (chrome) => chrome.journalReserve > 0);
   const { revealed, toggle } = useCaptionReveals(call.callId ?? '', 'band');
@@ -226,7 +228,7 @@ export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass', 
   const clockOf = (at: number): string | null => (call.connectedAt === null ? null : formatCallClock((at - call.connectedAt) / 1000));
   const note = call.transcription === 'idle' ? null : NOTE_KEY[call.transcription];
   const speaker = (caption: CallCaption): string => (caption.mine ? translate(language, 'callCaptions.self') : caption.speakerName !== '' ? caption.speakerName : translate(language, 'callCaptions.participant'));
-  const elapsed = useWaitingClock(lines.map((entry) => (entry.type === 'note' ? null : (entry.caption.origin?.awaitingUntil ?? null))));
+  const elapsed = useWaitingClock(lines.map((entry) => (entry.type === 'note' ? null : (entry.caption.origin?.awaitingUntil ?? null))), clock);
   const footer = callCaptionsFooter(lines.map((entry) => (entry.type === 'note' ? EVENT_FOOTER_LINE : captionFooterLine(entry.caption, captionReveal(entry.caption, mode, revealed.has(entry.caption.id)).mode, elapsed))));
   const footerText = footer === null ? null : callCaptionsFooterLabel(language, footer);
 
