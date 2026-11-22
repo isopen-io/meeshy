@@ -1961,3 +1961,18 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Reste : iOS et Android de #20416 (point 2) et iOS de #20308, après la fusion de #20417.
 - Prochain lot : fusionner #20417 quand ses Mac passent, fermer #20249 ; puis iOS + Android de #20416, iOS de #20308,
   #20054, #20056.
+
+## 2026-11-22 — réveil de 21 h : la moitié Android de #20416 (point 2)
+
+- Reprise : #20431 (web de #20416 et #20308) a été fusionnée dans `dev`. #20417 (iOS de #20249) est menée par une autre
+  session vivante (merge de `dev` 3023fab02, SDK relancé à 20 h 54 UTC) : ce réveil n'y pousse rien. Aucune branche
+  n'écrit les chemins Android de la position.
+- Lot : Android de #20416, point 2, iso #20431. Un refus certain (`INVALID`, `FIXED_POINT`, `STARTED_ELSEWHERE`, rendus
+  par la passerelle avant toute écriture) ne fait plus oublier `publishedStart` ; un refus douteux l'oublie encore. Avant,
+  un « démarré ailleurs » faisait prendre le partage de l'autre appareil pour celui d'ici. Le point 1 de #20416 est
+  tranché côté passerelle (#20431) ; Android n'a pas le défaut de #20308 (il écarte déjà un nom vide).
+- Audit adversarial : non bloquant. Vérifié dans la passerelle : les trois refus sortent avant toute écriture, ou après
+  suppression d'une session jamais pointée (sinon `UNAVAILABLE`, refus douteux) ; le repli sans échéances ne change rien.
+- Gates : `sdk-core` ne se construit pas en conteneur (dépôt libsignal refusé) : `android.yml` sur la PR fait foi.
+- Reste : iOS de #20416 (point 2) et de #20308, après la fusion de #20417.
+- Prochain lot : fusionner #20417 et fermer #20249 ; puis iOS de #20416 et #20308 ; #20054, #20056.
