@@ -15,6 +15,7 @@ import type { AuthenticatedRequest } from '../users/types';
 import { withMutationLog } from '../../utils/withMutationLog';
 import { getCacheStore } from '../../services/CacheStore';
 import { blockCacheKey } from '../../utils/block-cache';
+import { invalidateSeparationAround } from '../../socketio/separatedRooms';
 import { cancelAutoAcquaintanceOnBlock } from '../../services/relations/autoAcquaintance';
 import { withdrawRitualSharesBetween } from '../../services/relations/ritualShareWithdrawal';
 import { stopBringsAfterUserBlock } from '../bring';
@@ -134,6 +135,13 @@ export async function bloquer(
           where: { id: moi },
           data: { blockedUserIds: { push: cibleId } },
         });
+        /* #20236 — la séparation que les diffusions de commentaire gardent en
+           cache vient de changer : sans ce rappel, le TEXTE d'un commentaire
+           continuerait d'arriver en direct chez qui vient de bloquer, pendant
+           toute la durée du TTL. C'est l'INVALIDATION qui tient la fraîcheur,
+           pas le TTL — et ce site est l'un des DEUX seuls écrivains de
+           `blockedUserIds` du dépôt (mesuré). */
+        invalidateSeparationAround([moi, cibleId]);
         return { id: cibleId };
       },
       onDuplicate: async () => ({ id: cibleId }),
@@ -227,6 +235,9 @@ export async function debloquer(
         where: { id: moi },
         data: { blockedUserIds: { set: courant.blockedUserIds.filter((id) => id !== cibleId) } },
       });
+      /* Jumeau du site de pose (#20236) : le retrait rouvre une audience, et
+         une entrée chaude la garderait fermée. */
+      invalidateSeparationAround([moi, cibleId]);
       return { id: cibleId };
     },
     onDuplicate: async () => ({ id: cibleId }),
