@@ -9,7 +9,8 @@ import { applyServedCommentSetting } from './comment-settings';
 import { FEED_QUERY_KEY } from './feed';
 import { bumpNewPostCount } from './feed-new-count';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
-import { STORY_TRAY_QUERY_KEY } from './stories';
+import { STORY_FEED_QUERY_KEY, STORY_TRAY_QUERY_KEY, storyPostQueryKey, type StoryFeedPost } from './stories';
+import { storyTextTranslationsOf, withStoryTextObjectTranslations } from '@/lib/stories/text-object-translations';
 import { mergedTranslations, nonEmpty, translationDeliveryOf, type TranslationDelivery } from './translation-delivery';
 
 /**
@@ -472,4 +473,67 @@ export function applyStoryChanged(queryClient: QueryClient, payload: unknown): v
   void queryClient.invalidateQueries({ queryKey: STORY_TRAY_QUERY_KEY });
   const event = objectOf(payload);
   applyServedCommentSetting(queryClient, event?.story ?? event?.status);
+}
+
+/**
+ * `story:translation-updated` — LE TEXTE D'UNE SCÈNE de story (#20287), la
+ * quatrième famille de traduction en direct, et la seule qui manquait.
+ *
+ * Mesuré : l'événement part dans la room `feed:<moi>` que le web rejoint à
+ * l'authentification (`AuthHandler`), sur un contenu qu'il sait rendre
+ * (`resolveSceneText`), et ses DEUX jumeaux — `post:translation-updated`,
+ * `comment:translation-updated` — étaient branchés. Une story ouverte pendant
+ * que sa traduction atterrissait restait donc dans la langue d'origine jusqu'au
+ * prochain fetch, là où un post basculait.
+ *
+ * **La charge n'est PAS une `TranslationDelivery`** : elle porte la carte
+ * `{ langue: texte }` ENTIÈRE d'un objet texte, pas le couple
+ * `{ language, translation }` des trois lois ci-dessus — d'où une loi à elle,
+ * plutôt qu'un quatrième appel de `deliveryOf`.
+ *
+ * **Une story vit dans TROIS familles de caisses**, comme le réglage des
+ * commentaires (`comment-settings.ts#writeCommentsDisabled`) : les cartes
+ * (`card-caches.ts`, dont le Flux rend la scène), le corpus du lecteur
+ * (`STORY_FEED_QUERY_KEY`) et la fiche unitaire (`storyPostQueryKey`). Une
+ * REPUBLICATION joue la scène de sa source (`repostOf.storyEffects`) : le
+ * canvas visé s'y trouve sous l'id que l'événement nomme, donc il s'y fusionne
+ * aussi — sans quoi la traduction n'atteindrait pas le lecteur qui regarde la
+ * republication.
+ */
+export function applyStoryTextObjectTranslation(queryClient: QueryClient, payload: unknown): void {
+  const event = objectOf(payload);
+  const postId = event?.postId;
+  const textObjectIndex = event?.textObjectIndex;
+  const translations = storyTextTranslationsOf(event?.translations);
+  if (!nonEmpty(postId) || typeof textObjectIndex !== 'number' || translations === null) return;
+
+  const merged = (storyEffects: unknown): unknown | null =>
+    withStoryTextObjectTranslations({ storyEffects, textObjectIndex, translations });
+
+  /* Une CARTE ne tient que le canvas de la publication elle-même :
+     `FeedRepostOf` ne déclare pas `storyEffects` (mesuré) — c'est le corpus des
+     stories qui porte celui de la source. */
+  updateCardPost(queryClient, postId, (post) => {
+    const own = merged(post.storyEffects);
+    return own === null ? post : { ...post, storyEffects: own };
+  });
+
+  const applyStory = (story: StoryFeedPost): StoryFeedPost => {
+    const source = story.repostOf;
+    const own = story.id === postId ? merged(story.storyEffects) : null;
+    const cited = source !== null && source !== undefined && source.id === postId ? merged(source.storyEffects) : null;
+    if (own === null && cited === null) return story;
+    return {
+      ...story,
+      ...(own === null ? {} : { storyEffects: own }),
+      ...(cited === null || source === null || source === undefined ? {} : { repostOf: { ...source, storyEffects: cited } }),
+    };
+  };
+
+  writeCardCache<readonly StoryFeedPost[]>(queryClient, STORY_FEED_QUERY_KEY, (stories) => {
+    if (stories === undefined) return stories;
+    const next = stories.map(applyStory);
+    return next.some((story, at) => story !== stories[at]) ? next : stories;
+  });
+  writeCardCache<StoryFeedPost>(queryClient, storyPostQueryKey(postId), (story) => (story === undefined ? story : applyStory(story)));
 }

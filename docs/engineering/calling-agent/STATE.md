@@ -2334,6 +2334,39 @@ socket jusqu'au client.
 2. **#20185** : recette sur le staging, si un accès existe.
 3. #11932, #12236, #16933, #20043.
 
+## Cycle 69 — 2026-11-21
+
+- **Base** : `origin/dev` @ `0111884c9`. La PR #20225 (#20121, cycle 68) est fusionnée.
+- **Branche** : `claude/determined-volta-qmoitn`.
+- **#20185** (recette staging de #20152) : pas jouée, le conteneur n'a pas d'accès authentifié au staging.
+- **Objectif** : #20221. Le codec affiché et la cause de limitation ne dépendent plus de l'ordre de `getStats`.
+- **Livré** : iOS `CallStats.swift` et Android `CallStats.kt` / `CallMediaQuality.kt` appliquent la même règle.
+  - **Codec** : parmi les `inbound-rtp` qui portent un `codecId` non vide, on ordonne l'audio d'abord (`kind != "video"`), puis le plus petit id. On retient le premier dont le codec se résout ; aucun ⇒ nil. Avant, c'était le premier rencontré, même s'il ne se résolvait pas.
+  - **Limitation** : parmi les `outbound-rtp` vidéo dont la cause n'est pas vide, on garde la plus contraignante (bandwidth 3 > cpu 2 > other 1 > le reste 0). À égalité, le plus petit id l'emporte. iOS ignore désormais la chaîne vide, comme Android.
+  - Payload inchangé. Avec une seule entrée, le résultat est le même qu'avant (sauf une cause `""` sur iOS, qui vaut maintenant nil).
+- **Tests** : `CallStatsStreamOrderTest` (Android, 10 cas) et `CallStatsStreamOrderTests` (iOS, les mêmes 10 cas). Chaque cas est joué dans toutes les rotations du relevé et de son inverse. `CallStatsTest` figeait l'ancienne règle « le premier inbound gagne » : il est réécrit.
+  - Rouge Android : 7 échecs sur 10 sur le code de dev.
+  - Vert : `jvm-check -PjvmCheckModelOnly --rerun-tasks --tests 'me.meeshy.sdk.model.call.*'`, 2286 tests, 0 échec. La QA l'a rejoué.
+  - Mutations de la QA : sans les tris, 6 échecs ; sans le départage par id, 2 échecs.
+  - Gardes iOS (house rules, cohésion, inscription des tests, accent) : 0 violation.
+  - CI : `android.yml` run 44931579052, en `workflow_dispatch` sur `2dc59c470` : **vert** (assemble, tests unitaires, gardes). `ios.yml` run 44931575416 (suites ciblées `CallStatsStreamOrderTests,CallStatsElectionOrderTests,WebRTCTypesTests,CallManagerAnalyticsRecorderTests`) : ses gardes iOS sont vertes, mais à la clôture du cycle sa compilation attendait encore un runner macOS (en file depuis 18:39 UTC).
+- **PR** : #20258, ouverte. Elle n'est pas fusionnée tant qu'`ios.yml` n'est pas vert (réserve R1).
+- **QA** (indépendante) : favorable avec réserves.
+  - R1 (moyenne, procédurale) : le Swift n'a pas été compilé ici. `ios.yml` doit être vert avant la fusion.
+  - R2 (mineure) : le nom de `WebRTCTypesTests.test_reduce_codec_usesFirstInboundRTPCodecId` décrit encore l'ancienne règle. Versée dans #20257.
+  - R3 (mineure, antérieure au lot) : les analytics iOS comptent toute cause, y compris inconnue, alors qu'Android ne compte que les quatre causes connues. Versée dans #20257.
+  - R4 (information) : avec des ids dupliqués, le tri de Swift n'est pas garanti stable. Le W3C garantit l'unicité des ids.
+- **Découvert** : **#20256**. Le web suit sa propre règle, qui dépend de l'ordre. Pour le codec, il prend celui du premier flux SORTANT, vidéo d'abord. Il faut trancher entre codec émis et codec reçu.
+- **Limites** : rien n'a été vérifié sur appareil.
+
+### Cycle suivant : par où reprendre
+
+0. **PR #20258** : lire le run `ios.yml` 44931575416. S'il est vert, fusionner `dev` dans la branche, puis fusionner la PR. S'il a été annulé ou a expiré, le relancer en `workflow_dispatch` avec les mêmes suites. S'il est rouge, corriger le Swift.
+1. **#20257** : petit lot iOS, sur les analytics et le nom du test.
+2. **#20256** : aligner le web. Proposition : le codec reçu, comme sur le mobile.
+3. **#20185** : la recette sur le staging, si un accès existe.
+4. #11932, #12236, #16933, #20043.
+
 ## Cycle 70 — 2026-11-21
 
 - **Base** : `origin/dev` @ `11a5aa46b`, puis `25454555e`, fusionné dans la branche.
