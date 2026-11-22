@@ -303,12 +303,21 @@ class SharedLocationSharingCenter internal constructor(
         val reread = syncLocked(ticket)
         when {
             !isCurrent(ticket) -> SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
+            reread && refusedForAnotherCause(problem, expected) -> problem
             reread && _roster.value.pruned(clock()).isFixedPoint -> SharedLocationShareProblem.ReplacesChosenPoint(askedReplacement())
             !reread && problem != SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FIXED_POINT) ->
                 SharedLocationShareProblem.Refused(SharedLocationSendOutcome.OFFLINE)
             else -> problem
         }
     }
+
+    /**
+     * Un `INVALID` alors que la relecture sert toujours la clé et le même partage : la clé n'est pas en cause, reposer la
+     * même question tournerait en rond sans jamais dire l'échec.
+     */
+    private fun refusedForAnotherCause(problem: SharedLocationShareProblem?, expected: String?): Boolean =
+        problem == SharedLocationShareProblem.Refused(SharedLocationSendOutcome.INVALID) &&
+            acceptsExpectedStart && askedReplacement().startedAt == expected
 
     /** Un refus certain qui n'a rien écrit et que la relecture peut lever : un point choisi, ou le partage nommé remplacé. */
     private fun rereadsAfter(problem: SharedLocationShareProblem?): Boolean {

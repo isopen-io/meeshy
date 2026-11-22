@@ -159,6 +159,34 @@ class SharedLocationSharingExpectedStartTest {
     }
 
     @Test
+    fun `un refus INVALID qui ne met pas la cle en cause se dit, sans reposer la meme question`() = runTest {
+        val device = SharingDevice(this)
+        runCurrent()
+        device.showing(chosenPoint())
+        device.startVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.INVALID)
+
+        val problem = device.answer()
+
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.Refused(SharedLocationSendOutcome.INVALID))
+        assertThat(device.starts.all { it.wire()["expectedStartedAt"] == shown }).isTrue()
+    }
+
+    @Test
+    fun `un INVALID d'une charge partie sans la cle ne fait rien relire`() = runTest {
+        val device = SharingDevice(this)
+        runCurrent()
+        device.showing(chosenPoint(accepts = false))
+        device.startVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.INVALID)
+        device.onStart = { device.servedSnapshot = chosenPoint(startedAt = elsewhere) }
+        val readsBefore = device.reads
+
+        val problem = device.answer()
+
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.Refused(SharedLocationSendOutcome.INVALID))
+        assertThat(device.reads).isEqualTo(readsBefore + 1)
+    }
+
+    @Test
     fun `une relecture en panne apres le refus n'envoie rien de plus et le dit`() = runTest {
         val device = SharingDevice(this)
         runCurrent()
