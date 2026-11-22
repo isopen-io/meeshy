@@ -867,3 +867,10 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Témoins : `CommunityLinkServiceTests` (+5, sur la charge telle que la passerelle la sert : `stubWire`), `CommunityLinkDetailTests` (+10). iOS ne compile pas en conteneur : preuve par `ios.yml` sur la PR.
 - Revue adversariale : non lancée — lot client seul, aucune garde ni route touchée (la route et sa garde fail-closed sont celles de #19661, revues alors).
 - Reste de #20255 : Android (rangée « Actif » de la fiche du lien) et le message de l'arrivant (`COMMUNITY_LINK_PAUSED`), joignable seulement quand un client enverra `via: "link"`. #20255 reste ouverte.
+
+- 2026-11-22 05:36 : #20296 fusionnée dans `dev` (`6e38e788f`) après `ios.yml` 44978137338, `sdk-tests.yml` 44978140417 et `ci.yml` 44978138934 verts sur `87e317946` ; preuve commentée sur #20255, qui reste ouverte.
+
+## 2026-11-22 — réveil 07:38 UTC
+
+- Début du run : aucune PR de la routine ouverte ; aucune branche vivante sur `feature/conversations/.../links/` ni `sdk-core/.../link/`.
+- Lot : #20255, moitié Android (milestone « Chaque lien se règle, se met en pause et garde son histoire ») — en cours.
