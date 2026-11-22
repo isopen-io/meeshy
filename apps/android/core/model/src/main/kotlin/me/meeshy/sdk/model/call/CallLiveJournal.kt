@@ -43,6 +43,7 @@ data class CallJournalSegment(
     val capturedAtMs: Long,
     val translatedText: String? = null,
     val translatedLanguage: String? = null,
+    val receivedAtElapsedMs: Long? = null,
 ) {
     companion object {
         /**
