@@ -50,6 +50,8 @@ export const RELATION_BLOOD_LOCKED_CODE = 'RELATION_BLOOD_LOCKED' as const;
 export const relationBloodLockFieldsSchema = z.object({
   lockedByLevel: z.boolean().optional(),
   bloodBundleAccepted: z.boolean().optional(),
+  /** Au Sang verrouillé, les partages du rituel (position, titre) le sont aussi — sauf pour un mineur déclaré (C7). */
+  ritualSharesLocked: z.boolean().optional(),
 });
 export type RelationBloodLockFields = z.infer<typeof relationBloodLockFieldsSchema>;
 
@@ -69,6 +71,7 @@ export const relationPersonSettingsSchema = z.object({
   proximityShared: z.boolean(),
   lockedByLevel: z.boolean().optional(),
   bloodBundleAccepted: z.boolean().optional(),
+  ritualSharesLocked: z.boolean().optional(),
 });
 export type RelationPersonSettings = z.infer<typeof relationPersonSettingsSchema>;
 

@@ -90,7 +90,7 @@ export default async function bloodLocationMeRoutes(fastify: FastifyInstance): P
       }
       // #20361 — se cacher d'un Sang pour qui j'ai accepté la liste du Sang : 409, rien n'est écrit.
       const target = parsed.data.userId?.toLowerCase();
-      if (target && (await refusedAsBloodLocked(fastify.prisma, reply, { ownerId: request.user!.userId, otherId: target, cuts: parsed.data.ghost === true }))) return reply;
+      if (target && (await refusedAsBloodLocked(fastify.prisma, reply, { ownerId: request.user!.userId, otherId: target, cuts: parsed.data.ghost === true, minorExempt: true }))) return reply;
       const result = await updateBloodLocationSettings(depsOf(), request.user!.userId, { ...parsed.data, ...(parsed.data.userId ? { userId: parsed.data.userId.toLowerCase() } : {}) });
       if (!result.ok) return sendBadRequest(reply, 'Réglage refusé');
       await refreshInactivityServedAfter({ prisma: fastify.prisma, io: relationIoOf(fastify), report: (error) => logError(fastify.log, 'Inactivity not refreshed after location settings:', error) }, request.user!.userId);

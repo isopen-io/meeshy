@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   RELATION_BLOOD_LOCKED_FEATURES,
+  RELATION_BUNDLE_ONLY_FEATURES,
   RELATION_CONSENT_FEATURES,
   RELATION_LEVEL_DEFAULT_ON,
 } from '../utils/relation-levels';
@@ -90,6 +91,11 @@ describe('une garde LÉGALE ne se lève jamais par le verrou du Sang', () => {
     expect(resolveEmitterConsent({ feature: 'health.fall', stored: null, effectiveLevel: 'BLOOD', legallyBlocked: true })).toBe('refused');
   });
 
+  it('la chute ne s\'évalue jamais sans garde légale explicite : un appel qui l\'oublie est refusé', () => {
+    expect(resolveEmitterConsent({ feature: 'health.fall', stored: true, effectiveLevel: 'BLOOD', bloodBundleAccepted: true })).toBe('refused');
+    expect(resolveEmitterConsent({ feature: 'health.fall', stored: null, effectiveLevel: 'BLOOD' })).toBe('refused');
+  });
+
   it('un Sang qui a donné l\'accord de santé émet la chute, même s\'il l\'avait refusée à cette personne avant l\'accord au palier', () => {
     expect(resolveEmitterConsent({ feature: 'health.fall', stored: false, effectiveLevel: 'BLOOD', bloodBundleAccepted: true, legallyBlocked: false })).toBe('granted');
     expect(resolveEmitterConsent({ feature: 'health.fall', stored: null, effectiveLevel: 'BLOOD', legallyBlocked: false })).toBe('granted');
@@ -117,5 +123,12 @@ describe('la liste versionnée de ce que le Sang ouvre', () => {
     expect(isCurrentBloodBundle(BLOOD_BUNDLE_VERSION)).toBe(true);
     expect(isCurrentBloodBundle('2020-01-01')).toBe(false);
     expect(isCurrentBloodBundle(undefined)).toBe(false);
+  });
+});
+
+describe('une fonction ajoutée à la liste ne s\'ouvre pas en silence (C5)', () => {
+  it('les fonctions du Sang actives SANS accord au palier sont exactement celles d\'avant le 2026-11-22', () => {
+    const sansAccord = BLOOD_BUNDLE_FEATURES.filter((feature) => RELATION_LEVEL_DEFAULT_ON[feature] === 'BLOOD' && !RELATION_BUNDLE_ONLY_FEATURES.has(feature));
+    expect(new Set(sansAccord)).toEqual(new Set(['device.battery.pull', 'safety.inactivity', 'device.call', 'health.fall']));
   });
 });

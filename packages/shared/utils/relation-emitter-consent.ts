@@ -47,7 +47,8 @@ export const resolveEmitterConsent = (params: {
   /** L'émetteur est mineur déclaré : les partages du rituel ne s'ouvrent que sur un accord stocké. */
   readonly emitterMinor?: boolean;
 }): Exclude<RelationConsent, 'unknown'> => {
-  if (params.legallyBlocked === true) return 'refused';
+  // La chute (art. 9) exige que l'appelant DISE la garde légale : oubliée, elle ferme (fail-closed).
+  if (params.legallyBlocked === true || (params.feature === 'health.fall' && params.legallyBlocked !== false)) return 'refused';
   const bundleOnly = RELATION_BUNDLE_ONLY_FEATURES.has(params.feature);
   if (bundleOnly && (params.emitterMinor === true || params.bloodBundleAccepted !== true)) return params.stored === true && params.globallyDisabled !== true ? 'granted' : 'refused';
   if (unlockedByBundle(params)) return 'granted';

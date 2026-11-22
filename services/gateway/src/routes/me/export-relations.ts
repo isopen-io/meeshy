@@ -74,6 +74,7 @@ export const relationsExportSchema = {
           recordedAt: { type: 'string' },
           expiresAt: { type: 'string' },
           hiddenFrom: { type: 'array', items: { type: 'string' } },
+          visibleOnlyTo: { type: 'array', items: { type: 'string' } },
           excludedFromProximity: { type: 'boolean' },
         },
       },

@@ -124,9 +124,10 @@ const servedSettings = (userId: string, row: SettingsRow | null, lock: BloodLock
     togetherBlocked: !lock.locked && Boolean(row?.togetherBlockedAt),
     bloodLocationMuted: !lock.locked && Boolean(row?.bloodLocationMutedAt),
     listeningCategoryShared: lock.locked || row?.listeningCategoryShared === true || categoryDefault,
-    ...(Object.fromEntries(RELATION_RITUAL_SHARES.map((share) => [share, lock.locked || row?.[share] === true])) as Record<(typeof RELATION_RITUAL_SHARES)[number], boolean>),
+    ...(Object.fromEntries(RELATION_RITUAL_SHARES.map((share) => [share, (lock.locked && !lock.ownerMinor) || row?.[share] === true])) as Record<(typeof RELATION_RITUAL_SHARES)[number], boolean>),
     lockedByLevel: lock.locked,
     bloodBundleAccepted: lock.bloodBundleAccepted,
+    ritualSharesLocked: lock.locked && !lock.ownerMinor,
   };
 };
 
@@ -214,9 +215,14 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
       const teamGrant = granted.length > 0 && !contradictory && (await teamMayGrantShares(fastify.prisma, { ownerId, otherId: userId, shares: granted, now }));
       if (granted.length > 0 && !teamGrant) return sendBadRequest(reply, 'Donnees invalides');
       // #20361 — entre Sangs, après MON accord au palier, rien ne se coupe : 409, rien n'est écrit.
-      const cuts = bringBlocked === true || talkieBlocked === true || togetherBlocked === true || bloodLocationMuted === true
-        || listeningCategoryShared === false || shares.some((share) => requested[share] === false);
-      if (cuts && (await bloodLockStateBetween(fastify.prisma, ownerId, userId)).locked) return sendBloodLocked(reply);
+      // Les partages du rituel (position, titre) d'un mineur déclaré restent hors du verrou (C7).
+      const cutsLocked = bringBlocked === true || talkieBlocked === true || togetherBlocked === true || bloodLocationMuted === true
+        || listeningCategoryShared === false;
+      const cutsShares = shares.some((share) => requested[share] === false);
+      if (cutsLocked || cutsShares) {
+        const lock = await bloodLockStateBetween(fastify.prisma, ownerId, userId);
+        if (lock.locked && (cutsLocked || !lock.ownerMinor)) return sendBloodLocked(reply);
+      }
       const current = await readSettings(fastify.prisma, ownerId, userId);
       // La catégorie est active dès Proche sans réglage : la retirer ÉCRIT le refus, même sans accord stocké.
       const categoryCut = listeningCategoryShared === false && current?.listeningCategoryShared !== false;

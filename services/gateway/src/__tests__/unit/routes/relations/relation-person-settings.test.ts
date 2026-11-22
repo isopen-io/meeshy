@@ -49,7 +49,7 @@ import { freezeClock, thawClock } from '../../../helpers/relation-app';
 import { AUTRE, MOI, NOW, buildBringApp, lien, type BringAppOptions, type BringTestApp } from '../../../helpers/bring-app';
 
 // #20361 : la catégorie d'écoute arrive ACTIVE dès Proche ; les partages du rituel attendent l'accord au palier.
-const AUCUN_PARTAGE = { bloodLocationMuted: false, listeningCategoryShared: true, lockedByLevel: false, bloodBundleAccepted: false, listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false };
+const AUCUN_PARTAGE = { bloodLocationMuted: false, listeningCategoryShared: true, lockedByLevel: false, bloodBundleAccepted: false, ritualSharesLocked: false, listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false };
 
 const appli = (options: BringAppOptions = { liens: [lien('CLOSE', 'CLOSE')] }): Promise<BringTestApp> =>
   buildBringApp(async (a) => { await a.register(relationsRoutes, { prefix: '/api/v1/relations' }); }, options);
@@ -268,7 +268,7 @@ describe('#20361 — de Sang à Sang, rien ne se coupe après l\'accord au palie
     const res = await lire(app);
     await app.close();
 
-    expect(res.body.data).toEqual({ userId: MOI, bringBlocked: false, talkieBlocked: false, togetherBlocked: false, bloodLocationMuted: false, listeningCategoryShared: true, listeningTitleShared: true, locationShared: true, locationHistoryShared: true, proximityShared: true, lockedByLevel: true, bloodBundleAccepted: true });
+    expect(res.body.data).toEqual({ userId: MOI, bringBlocked: false, talkieBlocked: false, togetherBlocked: false, bloodLocationMuted: false, listeningCategoryShared: true, listeningTitleShared: true, locationShared: true, locationHistoryShared: true, proximityShared: true, lockedByLevel: true, bloodBundleAccepted: true, ritualSharesLocked: true });
   });
 
   it('sans l\'accord au palier (décision B), ou à une version périmée, la coupure reste possible', async () => {
@@ -289,5 +289,23 @@ describe('#20361 — de Sang à Sang, rien ne se coupe après l\'accord au palie
     await app.close();
 
     expect(res.status).toBe(200);
+  });
+});
+
+describe('#20361 C7 — un mineur déclaré garde le retrait de sa position et de son titre, même après l\'accord au palier', () => {
+  const ACCORD = { ownerId: AUTRE, otherId: MOI, bringBlockedAt: null, bloodBundleAcceptedAt: NOW, bloodBundleVersion: BLOOD_BUNDLE_VERSION, locationShared: true, listeningTitleShared: true };
+  const MINEUR = { [AUTRE]: { birthDate: new Date('2012-01-01T00:00:00.000Z') } };
+
+  it('retirer la position ou le titre : 200 et écrit ; couper le talkie reste 409', async () => {
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')], reglages: [ACCORD], personnes: MINEUR });
+    const position = await regler(app, { locationShared: false });
+    const titre = await regler(app, { listeningTitleShared: false });
+    const talkie = await regler(app, { talkieBlocked: true });
+    const lu = await lire(app);
+    await app.close();
+
+    expect([position.status, titre.status, talkie.status]).toEqual([200, 200, 409]);
+    expect(app.reglages.get(`${AUTRE}:${MOI}`)).toMatchObject({ locationShared: false, listeningTitleShared: false });
+    expect(lu.body.data).toMatchObject({ locationShared: false, listeningTitleShared: false, talkieBlocked: false, lockedByLevel: true, ritualSharesLocked: false });
   });
 });

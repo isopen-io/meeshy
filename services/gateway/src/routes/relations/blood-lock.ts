@@ -1,12 +1,13 @@
 import type { FastifyReply } from 'fastify';
 import { RELATION_BLOOD_LOCKED_CODE } from '@meeshy/shared/types/relation-person-settings';
-import { bloodLockedBetween, bloodLockStateBetween, type BloodLockDb } from '../../services/relations/bloodLock';
+import { bloodLockStateBetween, type BloodLockDb } from '../../services/relations/bloodLock';
 import { sendConflict } from '../../utils/response';
 
 /** Les champs que les réponses de réglages par personne servent EN PLUS (#20361). */
 export const bloodLockResponseProperties = {
   lockedByLevel: { type: 'boolean' },
   bloodBundleAccepted: { type: 'boolean' },
+  ritualSharesLocked: { type: 'boolean' },
 } as const;
 
 export const sendBloodLocked = (reply: FastifyReply): void =>
@@ -21,9 +22,12 @@ export const sendBloodLocked = (reply: FastifyReply): void =>
 export async function refusedAsBloodLocked(
   prisma: BloodLockDb,
   reply: FastifyReply,
-  params: { readonly ownerId: string; readonly otherId: string; readonly cuts: boolean },
+  params: { readonly ownerId: string; readonly otherId: string; readonly cuts: boolean; readonly minorExempt?: boolean },
 ): Promise<boolean> {
-  if (!params.cuts || !(await bloodLockedBetween(prisma, params.ownerId, params.otherId))) return false;
+  if (!params.cuts) return false;
+  const lock = await bloodLockStateBetween(prisma, params.ownerId, params.otherId);
+  // `minorExempt` : la coupure porte sur la position ou le titre, que le mineur déclaré garde (C7).
+  if (!lock.locked || (params.minorExempt === true && lock.ownerMinor)) return false;
   sendBloodLocked(reply);
   return true;
 }

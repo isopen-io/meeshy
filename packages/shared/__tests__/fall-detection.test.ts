@@ -66,14 +66,14 @@ describe('la chute dans la matrice des cercles (#18748)', () => {
   });
 
   it('Sang sans réglage : voit ; Sang retiré : rien ; Proche, même consenti : rien', () => {
-    expect(resolveRelationAccessWithStoredConsent({ ...pair({ grantedByViewer: 'BLOOD', grantedByTarget: 'BLOOD' }), storedConsent: null }).allowed).toBe(true);
-    expect(resolveRelationAccessWithStoredConsent({ ...pair({ grantedByViewer: 'BLOOD', grantedByTarget: 'BLOOD' }), storedConsent: false }).allowed).toBe(false);
-    expect(resolveRelationAccessWithStoredConsent({ ...pair({ grantedByViewer: 'CLOSE', grantedByTarget: 'CLOSE' }), storedConsent: true }).allowed).toBe(false);
+    expect(resolveRelationAccessWithStoredConsent({ ...pair({ grantedByViewer: 'BLOOD', grantedByTarget: 'BLOOD' }), storedConsent: null, legallyBlocked: false }).allowed).toBe(true);
+    expect(resolveRelationAccessWithStoredConsent({ ...pair({ grantedByViewer: 'BLOOD', grantedByTarget: 'BLOOD' }), storedConsent: false, legallyBlocked: false }).allowed).toBe(false);
+    expect(resolveRelationAccessWithStoredConsent({ ...pair({ grantedByViewer: 'CLOSE', grantedByTarget: 'CLOSE' }), storedConsent: true, legallyBlocked: false }).allowed).toBe(false);
   });
 
   it('entre deux comptes de l\'équipe, le niveau rendu est Sang (#16623) ; un administrateur face à un utilisateur : rien', () => {
-    expect(resolveRelationAccessWithStoredConsent({ ...pair({ viewerRole: 'ANALYST', targetRole: 'ADMIN' }), storedConsent: null }).allowed).toBe(true);
-    expect(resolveRelationAccessWithStoredConsent({ ...pair({ viewerRole: 'ADMIN', targetRole: 'USER' }), storedConsent: null }).allowed).toBe(false);
+    expect(resolveRelationAccessWithStoredConsent({ ...pair({ viewerRole: 'ANALYST', targetRole: 'ADMIN' }), storedConsent: null, legallyBlocked: false }).allowed).toBe(true);
+    expect(resolveRelationAccessWithStoredConsent({ ...pair({ viewerRole: 'ADMIN', targetRole: 'USER' }), storedConsent: null, legallyBlocked: false }).allowed).toBe(false);
   });
 });
 

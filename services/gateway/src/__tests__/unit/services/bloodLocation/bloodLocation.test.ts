@@ -18,6 +18,7 @@ import {
   updateBloodLocationSettings,
 } from '../../../../services/bloodLocation/bloodLocationService';
 import { BLOOD_BUNDLE_VERSION } from '@meeshy/shared/utils/blood-bundle';
+import { openSecret } from '../../../../utils/secret-at-rest';
 import { ADULT_BIRTH } from '../../../helpers/messaging-circle-world';
 import { settled } from '../../../helpers/settled';
 import {
@@ -462,5 +463,44 @@ describe('le fantôme global après l\'accord au palier (#20361) — une liste d
 
     expect(sang.kind === 'ok' ? sang.items.length : -1).toBe(1);
     expect(autre.kind === 'ok' ? autre.items : []).toEqual([]);
+  });
+});
+
+describe('#20361 C7 — le fantôme d\'un émetteur mineur déclaré n\'épargne aucun Sang', () => {
+  it('en fantôme global, rien n\'est rangé, même pour le Sang dont il a accepté la liste', async () => {
+    process.env.SECRETS_AT_REST_KEY = KEY;
+    const w = bloodWorldAvecConsentements({ users: [MOI, SANG, AUTRE_SANG, PROCHE, AMI, BLOQUE].map((id) => ({ id, birthDate: id === MOI ? new Date('2012-01-01T00:00:00.000Z') : ADULT_BIRTH })) });
+    w.consentir(MOI, SANG, { ...TOUT_PARTAGE, bloodBundleAcceptedAt: new Date(T0), bloodBundleVersion: BLOOD_BUNDLE_VERSION });
+    await updateBloodLocationSettings(w.deps, MOI, { ghost: true });
+
+    expect(await settled(recordBloodLocation(w.deps, MOI, PARIS))).toEqual({ recorded: false });
+  });
+});
+
+describe('#20361 — défense en profondeur du voile', () => {
+  const ACCORD = { bloodBundleAcceptedAt: new Date(T0), bloodBundleVersion: BLOOD_BUNDLE_VERSION };
+
+  it('un accord resté en base sur une paire qui n\'est plus Sang ne lève aucun fantôme', async () => {
+    process.env.SECRETS_AT_REST_KEY = KEY;
+    const w = bloodWorldAvecConsentements({ links: [[MOI, SANG, 'CLOSE'], [MOI, AUTRE_SANG, 'BLOOD']] });
+    w.consentir(MOI, SANG, { ...TOUT_PARTAGE, ...ACCORD });
+    await updateBloodLocationSettings(w.deps, MOI, { ghost: true });
+
+    expect(await settled(recordBloodLocation(w.deps, MOI, PARIS))).toEqual({ recorded: false });
+  });
+
+  it('un point rangé en fantôme global est illisible d\'un serveur d\'avant (retour arrière fail-closed)', async () => {
+    process.env.SECRETS_AT_REST_KEY = KEY;
+    const w = bloodWorldAvecConsentements();
+    w.consentir(MOI, SANG, { ...TOUT_PARTAGE, ...ACCORD });
+    await updateBloodLocationSettings(w.deps, MOI, { ghost: true });
+    await settled(recordBloodLocation(w.deps, MOI, PARIS));
+
+    const [row] = w.points.rows;
+    const clair = JSON.parse(openSecret(String(row.sealed), `BloodLocationPoint.sealed:${MOI}`)) as Record<string, unknown>;
+    expect(clair.latitude).toBeUndefined();
+    expect(clair.longitude).toBeUndefined();
+    const sang = await readBloodLocationHistory(w.deps, SANG, MOI, {});
+    expect(sang.kind === 'ok' ? sang.items.map((p) => p.latitude) : []).toEqual([PARIS.latitude]);
   });
 });
