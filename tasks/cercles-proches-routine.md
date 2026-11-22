@@ -1924,3 +1924,18 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   servi sans `startedAt` part sans la clé (sessions d'avant #18580, comportement d'avant).
 - Gates : voir la PR. Android et iOS de #20249 : un lot chacun.
 - Prochain lot : Android de #20249, puis iOS ; #20308, #20054, #20056.
+
+## 2026-11-22 — réveil de 13 h : la moitié Android de #20249 (une réponse nomme le partage montré)
+
+- Reprise : #20345 (web de #20249) a été fusionnée dans `dev` à 12 h 41 ; aucune PR de la routine ouverte, aucune
+  branche vivante n'écrit les chemins Android de la position.
+- Lot : Android de #20249, iso #20345. La relecture lit `acceptsExpectedStart` (seul un booléen vrai compte) ; le
+  remplacement d'un point choisi porte `expectedStartedAt` (le `startedAt` tel que servi, forme ISO seulement), le repli
+  sans échéances le garde. Sur `STARTED_ELSEWHERE` (arrêt compris) ou `INVALID` d'une charge partie avec la clé, rien
+  n'a été écrit : l'appareil relit, repose la question à jour si un point choisi est encore montré, sinon rend le refus
+  sans rien relancer ; une relecture en panne rend « hors ligne ». Une passerelle relue sans l'annonce fait repartir la
+  charge d'avant. La fiche affiche le nouveau refus comme les autres échecs : aucune chaîne nouvelle.
+- Banc d'essai : `SharingDevice` sort de `SharedLocationSharingSyncTest` (1153 → 1052 lignes) et gagne `onStart` (ce qui
+  se passe ailleurs pendant que le démarrage voyage).
+- Gates : modèles Kotlin (`jvm-check`, `SharedLocation*`) verts ; le centre se prouve par `android.yml` sur la PR.
+- Prochain lot : iOS de #20249, puis #20308, #20054, #20056.
