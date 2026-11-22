@@ -4,6 +4,8 @@ import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-even
 import { DIRECT, flush, harness, ME, PEER, stream, track, type FakeLink, type FakeTrack } from '@/test-support/call-engine-harness';
 
 import type { CameraEffectsPort } from './camera-effects';
+import { lazyCallReports } from './call-analytics-lazy';
+import { analyticsPayload, qualityReport } from './call-analytics-report';
 import { callLayout } from './call-view';
 import { resetCallTransportForTests } from './call-transport';
 import type { QualityTick } from './call-quality-loop';
@@ -633,6 +635,18 @@ describe('la qualité d’un appel se mesure, s’adapte et se voit (#8047)', ()
     expect(reports()).toHaveLength(2);
   });
 
+  test('un module de rapports qui ne charge pas n’ôte rien au relevé : la qualité se voit, l’appel reste connecté, aucun rapport ne part (#19894)', async () => {
+    const h = harness({ reports: lazyCallReports(() => Promise.reject(new Error('chunk introuvable'))), quality: () => ({ total: total({ level: 'poor', packetLoss: 9, rtt: 480 }), stage: 'frozen', codec: 'VP8', profile: 'wifi', audioBitrate: 32_000, path: 'direct' }) });
+    await h.engine.start(DIRECT);
+    h.engine.handle(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, { callId: 'call-1', participant: { id: 'p-2', userId: PEER, username: 'amina', displayName: 'Amina' } });
+    h.linkState(h.links[0] as FakeLink, 'connected');
+    await h.sampleQuality();
+    await flush();
+    expect(h.call()?.quality).toEqual({ level: 'poor', packetLoss: 9, rtt: 480, jitter: 8, audioKbps: 32, videoKbps: 480, survival: 'frozen' });
+    expect(h.call()?.phase.kind).toBe('connected');
+    expect(h.names(h.emitted)).not.toContain(CLIENT_EVENTS.CALL_QUALITY_REPORT);
+  });
+
   test('un relevé mauvais, même hors fenêtre de rapport, fait demander la note d’après-appel (#8072)', async () => {
     const good = { total: total({ level: 'good' }), stage: 'sending', codec: 'VP8', profile: 'wifi', audioBitrate: 32_000, path: 'direct' } as const;
     const h = await connected([good, { total: total({ level: 'poor', packetLoss: 9 }), stage: 'sending', codec: 'VP8', profile: 'wifi', audioBitrate: 32_000, path: 'direct' }, good]);
@@ -960,6 +974,25 @@ describe('les effets de ma vidéo partent sur la piste ENVOYÉE (#8442)', () => 
     await h.engine.refreshEffects();
     h.engine.hangup();
     expect(h.emitted.find(([event]) => event === CLIENT_EVENTS.CALL_ANALYTICS)?.[1]).toMatchObject({ effectsUsed: ['filter:warm', 'background-blur'], filtersUsed: true });
+  });
+
+  test('un rapport de fin dont le module ne charge pas ne retient pas le raccroché : l’appel se termine, sans `call:analytics` (#19894)', async () => {
+    const h = harness({ reports: lazyCallReports(() => Promise.reject(new Error('chunk introuvable'))) });
+    await h.engine.start(DIRECT);
+    h.engine.hangup();
+    await flush();
+    expect(h.call()?.phase).toEqual({ kind: 'ended', reason: 'local', detail: null });
+    expect(h.names(h.requested)).toContain(CLIENT_EVENTS.CALL_END);
+    expect(h.names(h.emitted)).not.toContain(CLIENT_EVENTS.CALL_ANALYTICS);
+  });
+
+  test('un rapport de fin dont le module arrive après le raccroché part à son arrivée (#19894)', async () => {
+    const h = harness({ reports: lazyCallReports(() => new Promise((resolve) => setTimeout(() => resolve({ analyticsPayload: (telemetry, context) => analyticsPayload(telemetry, { ...context, deviceModel: 'Chrome · Linux' }), qualityReport }), 0))) });
+    await h.engine.start(DIRECT);
+    h.engine.hangup();
+    expect(h.names(h.emitted)).not.toContain(CLIENT_EVENTS.CALL_ANALYTICS);
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    expect(h.emitted.find(([event]) => event === CLIENT_EVENTS.CALL_ANALYTICS)?.[1]).toMatchObject({ callId: 'call-1', endReason: 'local' });
   });
 
   test('sans effet, l’analytique le dit', async () => {

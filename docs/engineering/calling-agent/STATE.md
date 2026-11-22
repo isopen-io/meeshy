@@ -2623,3 +2623,51 @@ socket jusqu'au client.
 1. **#19894** avant tout lot qui touche le moteur web, à qui il reste 1 o de marge. Puis **#20299** (Android, règle unique du chrome), **#20300** (iOS) et **#20335**.
 2. #13775, #20348, #20257, #20280, #20288.
 3. #20185 (recette staging), #11932, #12236, #16933.
+
+## Cycle 77 — 2026-11-22
+
+- **Base** : `origin/dev` @ `b35a94491`. Le lot du cycle 76 (#20412, #20273 + #20320) est fusionné.
+- **Branche** : `claude/determined-volta-h4pzaa`.
+- **Objectif** : **#19894**. Le chunk web `call_engine` retrouve au moins 1 Ko de marge sous son plafond de 16 Ko, sans que ce plafond soit relevé. Avant le lot, il ne lui restait plus de marge.
+- **Livré** (`apps/web/` seulement) :
+  - La composition des rapports quitte le moteur pour `call-analytics-report.ts`, un chunk à part chargé à la demande :
+    - le payload de `call:analytics` (qualité média, MOS, `combineMediaQuality`) ;
+    - `call:quality-report` ;
+    - `deviceLabel`.
+  - Ce chunk n'importe que des types du moteur.
+  - L'accumulateur (`createTelemetry`, `mark*`, `with*`) reste synchrone dans le moteur, donc aucun relevé ne se perd.
+  - `call-analytics-lazy.ts` précharge le chunk au chargement de `engine-defaults.ts`.
+    - Un rapport demandé avant l'arrivée du chunk part à son arrivée, avec la télémétrie et l'horodatage du moment de la demande.
+    - Un échec de chargement ne lève rien et ne laisse aucun rejet non géré : l'appel continue sans ce rapport, et la demande suivante retente le chargement.
+  - Dans `CallEngineDeps`, la dépendance `reports` remplace `deviceModel`. Aucun payload ni événement socket ne change.
+- **Mesures** (`measure-weight`, gzip -9) :
+
+  | Chunk | Avant | Après |
+  |---|---|---|
+  | `call_engine` | 16 385 o | **15 347 o** |
+  | `call_analytics_report` (nouveau) | — | 1 630 o |
+
+  - La marge de `call_engine` passe à 1 037 o.
+  - Le plafond de `call_analytics_report` est fixé à 3 Ko.
+  - La première peinture ne change pas : 24 requêtes avant et après, et `index` est identique une fois les empreintes de noms normalisées.
+- **Tests** :
+  - Nouveaux témoins : 5 dans `call-analytics-lazy.test.ts`, 3 dans `engine.test.ts` (chunk absent ou en retard : le raccroché aboutit, la qualité s'affiche).
+  - Rouge : module introuvable, puis une mutation sans `.catch` donne 3 rouges.
+  - `bun test src/lib/calls src/components/call-` : 3 448 pass, 0 fail. Rejoué par l'orchestrateur : `call-analytics-lazy` + `engine` donnent 101 pass, 0 fail, et `measure-weight` sort en 0.
+  - `tsc --noEmit` : 0. `check-calls-quality.mjs`, `check-calls-captions.mjs` et `check-calls.mjs` : ok.
+- **QA** (`auditeur-adversarial`, indépendante) : favorable avec réserves.
+  - Identité ancien/nouveau vérifiée par un test de propriété : 20 000 télémétries aléatoires (NaN, ±∞, ex aequo), 60 004 assertions.
+  - 6 mutations, toutes attrapées.
+  - Réserves faibles :
+    - une fenêtre d'ordre en microtâche, et un nouvel essai d'`import()` à chaque relevé après un échec : versées dans **#20426** ;
+    - la marge est juste au-dessus du 1 Ko visé.
+- **Limites** :
+  - Rien n'a été testé sous Safari ni Firefox, ni sur la coque Android.
+  - Si le chunk n'est pas encore arrivé au raccroché, un relevé de qualité différé part après `call:end`. La règle d'admission de `call:quality-report` dans ce cas n'a pas été lue : au pire, ce relevé est perdu.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée : lire son `ci.yml`. S'il est vert, fusionner `dev` dans la branche, puis la PR.
+1. **#20299** (Android, règle unique du chrome), **#20300** et **#20335** (iOS, à coordonner avec la routine iOS), **#20426**.
+2. Si la marge web doit grandir : `rear-camera.ts` peut se charger au retournement de la caméra (environ 0,9 Ko minifié).
+3. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933.
