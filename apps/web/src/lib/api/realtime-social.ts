@@ -16,6 +16,7 @@ import {
   applyServedLike,
   applyServedRepost,
   applyStoryChanged,
+  applyStoryTextObjectTranslation,
 } from './feed-realtime';
 import { STATUS_MOODS_QUERY_KEY } from './stories';
 
@@ -320,6 +321,16 @@ export function bindSocialRealtime(deps: SocialRealtimeDeps): () => void {
     applyPostTranslation(deps.queryClient, payload);
   };
 
+  /**
+   * `story:translation-updated` (#20287) — LE TEXTE D'UNE SCÈNE de story. Le
+   * fait arrivait déjà dans la room `feed:<moi>` et n'avait aucun lecteur : la
+   * quatrième famille de traduction, après le post, la légende et le texte
+   * alternatif.
+   */
+  const onStoryTextObjectTranslationUpdated = (payload: unknown): void => {
+    applyStoryTextObjectTranslation(deps.queryClient, payload);
+  };
+
   const onMediaCaptionTranslationUpdated = (payload: unknown): void => {
     applyMediaCaptionTranslation(deps.queryClient, payload);
   };
@@ -342,6 +353,7 @@ export function bindSocialRealtime(deps: SocialRealtimeDeps): () => void {
     [SERVER_EVENTS.STATUS_UPDATED, onStatusUpdated],
     [SERVER_EVENTS.STATUS_DELETED, onStatusMoodChanged],
     [SERVER_EVENTS.STORY_DELETED, onStoryChanged],
+    [SERVER_EVENTS.STORY_TRANSLATION_UPDATED, onStoryTextObjectTranslationUpdated],
     [SERVER_EVENTS.STORY_VIEWED, onStoryViewed],
     [SERVER_EVENTS.STORY_REACTED, onStoryReacted],
     [SERVER_EVENTS.STORY_UNREACTED, onStoryUnreacted],
