@@ -45,6 +45,13 @@ data class ProfileShareReplacement(
     val knownNames: List<Pair<String, String>> = emptyList(),
 )
 
+/**
+ * Ceux que la question nomme : la personne de la fiche d'abord (son nom vaut celui du carnet), puis les amis du carnet
+ * gardé — seulement s'ils voient le point choisi.
+ */
+fun ProfileShareReplacement.audience(userId: String, displayName: String): SharedLocationPointReplacement.Audience =
+    asked.audience(listOf(userId to displayName) + knownNames)
+
 /** Ce que la personne verra de ma position, et pour combien de temps. */
 data class ProfileShareChoice(val precision: SharedLocationPrecision, val duration: SharedLocationShareDuration)
 

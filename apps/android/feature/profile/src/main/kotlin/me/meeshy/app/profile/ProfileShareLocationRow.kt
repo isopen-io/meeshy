@@ -134,7 +134,7 @@ internal fun ProfileShareLocationRow(
         )
     }
     state.replacingPoint?.let { question ->
-        val audience = question.asked.audience(listOf(userId to displayName) + question.knownNames)
+        val audience = question.audience(userId, displayName)
         ReplaceChosenPointDialog(
             message = replacePointMessage(audience),
             onConfirm = viewModel::confirmReplacingPoint,

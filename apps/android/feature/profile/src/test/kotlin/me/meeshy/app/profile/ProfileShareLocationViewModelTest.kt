@@ -158,4 +158,17 @@ class ProfileShareLocationViewModelTest {
         assertThat(vm.state.value.replacingPoint?.knownNames).isEqualTo(known)
         assertThat(vm.state.value.entry).isNull()
     }
+
+    @Test
+    fun `la question nomme la personne de la fiche avant le carnet, et seulement ceux qui voient le point`() {
+        val third = "cccccccccccccccccccccccc"
+        val question = ProfileShareReplacement(
+            choice = ProfileShareChoice(SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR),
+            asked = SharedLocationPointReplacement("t1", setOf(friend, other)),
+            knownNames = listOf(friend to "Léo du carnet", third to "Cyd", other to "Bob"),
+        )
+
+        assertThat(question.audience(friend, "Léo"))
+            .isEqualTo(SharedLocationPointReplacement.Audience(listOf("Léo", "Bob"), 0))
+    }
 }

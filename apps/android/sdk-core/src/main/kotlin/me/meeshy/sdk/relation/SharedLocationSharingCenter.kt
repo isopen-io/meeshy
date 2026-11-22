@@ -266,6 +266,9 @@ class SharedLocationSharingCenter internal constructor(
         duration: SharedLocationShareDuration,
         replacing: SharedLocationPointReplacement?,
     ): SharedLocationShareProblem? = locked { ticket ->
+        // Une réponse à la question prend la position AVANT de relire (iso le web) : la relecture, puis la vérification,
+        // touchent l'envoi, et un démarrage fait ailleurs pendant l'attente du relevé n'est pas écrasé.
+        val early = if (replacing == null) null else locate() ?: return@locked locateProblem()
         val answered = if (replacing == null) readBeforeComposing(ticket) else syncLocked(ticket)
         if (!isCurrent(ticket)) return@locked SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
         if (!answered) return@locked SharedLocationShareProblem.Refused(SharedLocationSendOutcome.OFFLINE)
@@ -276,8 +279,7 @@ class SharedLocationSharingCenter internal constructor(
                 return@locked SharedLocationShareProblem.ReplacesChosenPoint(current)
             }
         }
-        if (!permission.isGranted()) return@locked SharedLocationShareProblem.LocationDenied
-        val fix = deviceFix() ?: return@locked SharedLocationShareProblem.LocationUnavailable
+        val fix = early ?: locate() ?: return@locked locateProblem()
         if (!isCurrent(ticket)) return@locked SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
         val previous = _roster.value
         val next = previous.pruned(clock()).adding(userId, precision, duration, clock()).withFixedPoint(false)
@@ -291,6 +293,12 @@ class SharedLocationSharingCenter internal constructor(
             problem
         }
     }
+
+    /** La permission puis un relevé ; `null` : l'un des deux manque, [locateProblem] dit lequel. */
+    private suspend fun locate(): SharedLocationFix? = if (permission.isGranted()) deviceFix() else null
+
+    private fun locateProblem(): SharedLocationShareProblem =
+        if (permission.isGranted()) SharedLocationShareProblem.LocationUnavailable else SharedLocationShareProblem.LocationDenied
 
     /** La question que poserait le partage servi tel que ce centre le connaît. */
     private fun askedReplacement(): SharedLocationPointReplacement =

@@ -72,6 +72,9 @@ class SharedLocationSharingSyncTest {
         var stops = 0
         var reads = 0
         var fixAsks = 0
+
+        /** Ce qui se passe AILLEURS pendant que l'appareil attend son relevé (un autre appareil du compte). */
+        var onFix: (() -> Unit)? = null
         val queuedStartVerdicts = ArrayDeque<SharedLocationStartVerdict>()
         var following = 0
         val stream = MutableSharedFlow<LiveLocationFix>(extraBufferCapacity = 8)
@@ -94,6 +97,7 @@ class SharedLocationSharingSyncTest {
             fixes = object : LiveLocationFixSource {
                 override suspend fun currentFix(): LiveLocationFix {
                     fixAsks++
+                    onFix?.invoke()
                     return LiveLocationFix(48.8566, 2.3522, accuracy = 8.0)
                 }
                 override fun updates(intervalMillis: Long): Flow<LiveLocationFix> {
@@ -957,7 +961,6 @@ class SharedLocationSharingSyncTest {
         val asked = (device.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.ONE_HOUR)
             as SharedLocationShareProblem.ReplacesChosenPoint).asked
         device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour, startedAt = "2026-11-21T16:00:00.000Z")
-        val asksBefore = device.fixAsks
 
         val problem = device.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.ONE_HOUR, replacing = asked)
 
@@ -965,7 +968,43 @@ class SharedLocationSharingSyncTest {
             SharedLocationShareProblem.ReplacesChosenPoint(chosenPointAsked(alice, startedAt = "2026-11-21T16:00:00.000Z")),
         )
         assertThat(device.starts).isEmpty()
-        assertThat(device.fixAsks).isEqualTo(asksBefore)
+    }
+
+    @Test
+    fun `un point relance ailleurs PENDANT l'attente du releve n'est pas ecrase : la reponse se relit apres le releve`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
+        device.center.sync()
+        device.onFix = { device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour, startedAt = "2026-11-21T16:00:00.000Z") }
+
+        val problem = device.center.share(
+            bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.ONE_HOUR, replacing = chosenPointAsked(alice),
+        )
+
+        assertThat(problem).isEqualTo(
+            SharedLocationShareProblem.ReplacesChosenPoint(chosenPointAsked(alice, startedAt = "2026-11-21T16:00:00.000Z")),
+        )
+        assertThat(device.starts).isEmpty()
+    }
+
+    @Test
+    fun `un compte qui change efface le demarrage servi : la question d'avant ne vaut rien`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
+        device.center.sync()
+        device.account = "other"
+        device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour, startedAt = "2026-11-21T17:00:00.000Z")
+
+        val problem = device.center.share(
+            bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.ONE_HOUR, replacing = chosenPointAsked(alice),
+        )
+
+        assertThat(problem).isEqualTo(
+            SharedLocationShareProblem.ReplacesChosenPoint(chosenPointAsked(alice, startedAt = "2026-11-21T17:00:00.000Z")),
+        )
+        assertThat(device.starts).isEmpty()
     }
 
     @Test
