@@ -16,7 +16,11 @@ import type { MeeshyIOServer as SocketIOServer } from '../typed-socket';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { retractReactionNotifications } from '../../services/notifications/retractReactionNotifications';
-import { CommentReactionService } from '../../services/CommentReactionService';
+import {
+  CommentReactionService,
+  type CommentReactionSync,
+  type CommentReactionUpdateEvent,
+} from '../../services/CommentReactionService';
 import { getConnectedUser, type SocketUser } from '../utils/socket-helpers';
 import type { AckOf, AckResponseOf } from '@meeshy/shared/types/socketio-events';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
@@ -247,19 +251,13 @@ export class CommentReactionHandler {
    * ce chemin où un filtrage par lecteur soit possible. L'acteur ne perd jamais
    * son propre id.
    */
-  private async updateEventServedTo<
-    T extends {
-      readonly aggregation?: {
-        readonly emoji?: string;
-        readonly count?: number;
-        readonly hasCurrentUser?: boolean;
-        readonly userIds?: readonly string[];
-      };
-    },
-  >(viewerId: string, event: T): Promise<T> {
-    const aggregation = event.aggregation;
+  private async updateEventServedTo(
+    viewerId: string,
+    event: CommentReactionUpdateEvent,
+  ): Promise<CommentReactionUpdateEvent> {
+    const aggregation = event.aggregation as CommentReactionUpdateEvent['aggregation'] | undefined;
     if (aggregation === undefined || aggregation === null) return event;
-    const userIds = aggregation.userIds;
+    const userIds = aggregation.userIds as readonly string[] | undefined;
     /* Mêmes trois verdicts que `rosterServedTo`, et dans le même ordre : une
        clé ABSENTE est une forme CONNUE — il n'y a aucun roster à taire, et
        projeter y AJOUTERAIT une clé que la charge ne portait pas, ce qui
@@ -308,17 +306,11 @@ export class CommentReactionHandler {
     };
   }
 
-  private async rosterServedTo<
-    T extends {
-      readonly reactions?: readonly {
-        readonly emoji?: string;
-        readonly count?: number;
-        readonly hasCurrentUser?: boolean;
-        readonly userIds?: readonly string[];
-      }[];
-    },
-  >(viewerId: string, sync: T): Promise<T> {
-    const reactions = sync?.reactions;
+  private async rosterServedTo(
+    viewerId: string,
+    sync: CommentReactionSync,
+  ): Promise<CommentReactionSync> {
+    const reactions = sync?.reactions as CommentReactionSync['reactions'] | undefined;
     /* Une forme INATTENDUE se REFUSE, elle ne se sert pas telle quelle : un
        garde qui ne sait pas filtrer doit lever, pas passer (#20337, audit
        adversarial — ce prédicat était fail-OPEN). Le `catch` de l'appelant rend
@@ -343,7 +335,7 @@ export class CommentReactionHandler {
         emoji: reaction.emoji,
         count: reaction.count,
         hasCurrentUser: reaction.hasCurrentUser,
-        userIds: (reaction.userIds ?? []).filter((id) => !separated.has(id)),
+        userIds: (reaction.userIds ?? []).filter((id: string) => !separated.has(id)),
       })),
     };
   }

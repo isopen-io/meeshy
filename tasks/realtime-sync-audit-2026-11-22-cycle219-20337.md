@@ -486,3 +486,34 @@ une room est un concept serveur, et les cinq consommateurs filtrent par `postId`
   PUBLISH Redis de plus par réaction de commentaire ; et la piste « une seule
   lecture du jeu de blocage de l'acteur » (six lectures par ajout aujourd'hui)
   reste ouverte.
+
+### T3-3 bis — le filtre était GÉNÉRIQUE, donc sa reconstruction n'était vérifiée par RIEN
+
+Trouvé en instruisant ma propre crainte sur le quatrième tour : la liste blanche
+RECONSTRUIT l'agrégation champ par champ, et les deux filtres étaient typés par
+une contrainte structurelle qui déclarait les quatre champs **optionnels**
+(`T extends { aggregation?: { emoji?: string; … } }`). Le compilateur ne
+confrontait donc la reconstruction à AUCUN contrat : un cinquième champ requis
+ajouté à `CommentReactionAggregation` aurait été silencieusement SUPPRIMÉ du fil,
+et c'est exactement la classe du défaut du cycle 101 (`message:edited` servi sans
+`senderId`, rejeté en silence par les décodeurs iOS pendant des mois).
+
+Les deux filtres sont désormais typés sur les types CONCRETS
+(`CommentReactionUpdateEvent`, `CommentReactionSync`). **Mesuré** : sous la
+mutation qui retire `hasCurrentUser` de la reconstruction, `tsc` rend
+
+```
+error TS2741: Property 'hasCurrentUser' is missing in type
+'{ emoji: string; count: number; userIds: any[]; }'
+but required in type 'CommentReactionAggregation'
+```
+
+Sous l'ancienne signature générique, la même mutation compilait. La garde est
+donc un TYPE, pas un espoir — et c'est la règle du cycle 217 : « quand la
+propriété à garder est une propriété de TYPE, la garde doit être un TYPE ».
+
+> **Une liste blanche est un inventaire, et un inventaire se périme.** C'est le
+> prix de la projection : elle ferme la classe du champ qui RIDE (leçon 275) et
+> ouvre celle du champ qui MANQUE. Les deux se ferment, mais pas par le même
+> moyen — la première par la projection, la seconde par le type concret qui la
+> confronte au contrat.
