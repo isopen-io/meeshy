@@ -16,12 +16,14 @@ struct SharedLocationServedSourceTests {
     private func request(
         source: SharedLocationPositionSource,
         replacesChosenPoint: Bool,
-        notify: Bool = false
+        notify: Bool = false,
+        expectedStartedAt: String? = nil
     ) throws -> SharedLocationStartRequest {
         let fix = try #require(SharedLocationFix(latitude: 48.85, longitude: 2.35))
         return try #require(SharedLocationStartRequest(
-            recipients: [SharedLocationRecipient(userId: alice, precision: .city)], duration: .oneHour, fix: fix,
-            notifyRecipients: notify, source: source, replacesChosenPoint: replacesChosenPoint))
+            recipients: [SharedLocationRecipient(userId: alice, precision: .city, expiresInSeconds: 600)], duration: .oneHour,
+            fix: fix, notifyRecipients: notify, source: source, replacesChosenPoint: replacesChosenPoint,
+            expectedStartedAt: expectedStartedAt))
     }
 
     // MARK: - Le cliché de mon partage
@@ -68,5 +70,48 @@ struct SharedLocationServedSourceTests {
         let asked = try request(source: .device, replacesChosenPoint: true, notify: true)
         #expect(asked.legacyFallbacks.map(\.replacesChosenPoint) == [true])
         #expect(asked.withMotion(.walking).replacesChosenPoint)
+    }
+
+    // MARK: - Le partage que la réponse nomme (#20249)
+
+    private let shown = "2026-01-01T00:00:05.000Z"
+
+    @Test func uneRéponse_nommeLePartageMontré() throws {
+        let asked = try request(source: .device, replacesChosenPoint: true, expectedStartedAt: shown)
+        #expect(asked.wire["expectedStartedAt"] as? String == shown)
+        #expect(asked.carriesExpectedStart)
+    }
+
+    @Test func unDémarrageOrdinaire_neNommeAucunPartage() throws {
+        let plain = try request(source: .device, replacesChosenPoint: false, expectedStartedAt: shown)
+        #expect(plain.wire["expectedStartedAt"] == nil)
+        #expect(!plain.carriesExpectedStart)
+        #expect(try request(source: .manual, replacesChosenPoint: true, expectedStartedAt: shown).wire["expectedStartedAt"] == nil)
+    }
+
+    @Test func lesReplis_gardentLePartageNommé() throws {
+        let asked = try request(source: .device, replacesChosenPoint: true, notify: true, expectedStartedAt: shown)
+        #expect(asked.legacyFallbacks.count == 2)
+        #expect(asked.legacyFallbacks.allSatisfy { $0.expectedStartedAt == shown })
+        #expect(asked.withMotion(.walking).expectedStartedAt == shown)
+    }
+
+    @Test func leRefusDUnPartageRemplacéAilleurs_aSaPropreRaison() {
+        #expect(SharedLocationSendOutcome.ofRefusal("SHARED_LOCATION_STARTED_ELSEWHERE") == .startedElsewhere)
+    }
+
+    @Test func laRelecture_ditSiLaPasserelleAccepteLaClé() throws {
+        #expect(try snapshot(#"{"recipients":[],"acceptsExpectedStart":true}"#).acceptsExpectedStart)
+        #expect(!(try snapshot(#"{"recipients":[]}"#).acceptsExpectedStart))
+        #expect(!(try snapshot(#"{"recipients":[],"acceptsExpectedStart":"true"}"#).acceptsExpectedStart))
+    }
+
+    @Test func seulUnInstantDeLaFormeServie_seNomme() {
+        #expect(SharedLocationWireInstant.isWire(shown))
+        #expect(SharedLocationWireInstant.isWire("2026-01-01T00:00:05Z"))
+        #expect(!SharedLocationWireInstant.isWire("S1"))
+        #expect(!SharedLocationWireInstant.isWire("2026-01-01 00:00:05"))
+        #expect(!SharedLocationWireInstant.isWire("2026-13-45T00:00:05.000Z"))
+        #expect(!SharedLocationWireInstant.isWire(nil))
     }
 }
