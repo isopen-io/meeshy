@@ -907,7 +907,11 @@ describe('SocialEventsHandler', () => {
   describe('friends cache eviction — expired entries', () => {
     it('deletes expired entries when cache reaches 500 entries', async () => {
       const { handler } = buildHandler();
-      const cache = (handler as any).friendsCache as Map<string, { ids: string[]; expiresAt: number }>;
+      // #20440 — le cache vit sur `SocialEmissionCore`, que le handler compose.
+      // On l'atteint à travers lui plutôt que par un accesseur sur le handler :
+      // un accesseur dont le SEUL lecteur est ce témoin serait du code mort en
+      // production. L'éviction observée est bien celle du socle (même Map).
+      const cache = (handler as any).core.friendsCache as Map<string, { ids: string[]; expiresAt: number }>;
 
       for (let i = 0; i < 500; i++) {
         cache.set(`expired-${i}`, { ids: [], expiresAt: Date.now() - 1 });
