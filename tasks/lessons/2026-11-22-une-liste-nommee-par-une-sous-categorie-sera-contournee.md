@@ -1,8 +1,8 @@
-# Une liste nommée par une SOUS-CATÉGORIE sera contournée, pas étendue
+## Une liste nommée par une SOUS-CATÉGORIE sera contournée, pas étendue (2026-11-22, #20336, cycle 217)
 
 *Mesuré le 2026-11-22 (#20336, cycle 217), sur `apps/web/src/lib/api/socket.ts`.*
 
-## Le fait
+### Le fait
 
 #18573 avait corrigé une divergence entre deux branches de rattrapage en créant
 la liste que les deux doivent itérer, et avait écrit la leçon sur place : « une
@@ -13,7 +13,7 @@ par ne pas avoir ».
 une seule branche. La liste existait pourtant, déclarée une fois, à trois lignes
 du site fautif.
 
-## La cause
+### La cause
 
 Elle s'appelait `CATCH_UP_PERSONAL_FAMILIES`. #18641 et #18914 ajoutaient des
 familles de PUBLICATION (le fil social, le rail des stories, les humeurs, les
@@ -22,7 +22,7 @@ elles : chaque lot a écrit son `invalidateQueries` en ligne, juste sous la
 boucle, **sans se sentir en faute** — et avec une suite verte, puisqu'aucun
 témoin ne nomme la famille qui n'existe pas encore.
 
-## La règle
+### La règle
 
 > **Le nom d'un site unique n'est pas une étiquette : c'est son prédicat
 > d'appartenance.** C'est lui qu'un lot consulte pour savoir s'il a le droit
@@ -37,7 +37,7 @@ auteur se reconnaîtra-t-il dans ce nom ?*
 C'est la leçon 261 (« un lot ferme une classe dans SA langue ») appliquée non
 pas à une énumération, mais au NOM de la liste qui la porte.
 
-## Les deux corollaires, mesurés dans le même lot
+### Les deux corollaires, mesurés dans le même lot
 
 - **Un témoin de comportement ne peut pas garder un site unique.** Il atteste
   les familles qu'il NOMME ; la suivante n'y est nommée nulle part, par
@@ -52,7 +52,7 @@ pas à une énumération, mais au NOM de la liste qui la porte.
   dire sa portée — même règle que « le silence n'est jamais la réponse » des
   schémas de réponse.
 
-## Et le témoin qui gelait la lacune
+### Et le témoin qui gelait la lacune
 
 Deux témoins disaient « jamais à la première authentification », sans aucune
 raison écrite pour ce `jamais` : ils décrivaient ce que le lot avait FAIT, pas
