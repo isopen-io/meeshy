@@ -211,6 +211,6 @@ enum CallCaptionsFooter: Equatable, Sendable {
     /// #17964 — le pied du journal ouvert dans la pilule, à côté de « Journal » qui le referme :
     /// le même pied que celui des sous-titres, sans attente — le journal n'en dessine aucune.
     static func journal(lines: [CallCaptionLine]) -> CallCaptionsFooter {
-        resolve(lines: lines.map { $0.settled(at: .distantFuture) })
+        resolve(lines: lines.map { $0.settled(at: .infinity) })
     }
 }
