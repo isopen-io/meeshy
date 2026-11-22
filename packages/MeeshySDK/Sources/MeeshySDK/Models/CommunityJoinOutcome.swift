@@ -34,11 +34,17 @@ public enum CommunityJoinOutcome: Decodable, Sendable {
 public enum CommunityJoinRefusal: Equatable, Sendable {
     /// 403 `COMMUNITY_JOIN_COOLDOWN` : une demande refusée il y a moins de sept jours.
     case cooldown
+    /// 403 `COMMUNITY_LINK_PAUSED` (#19661) : un intendant a mis en pause les
+    /// arrivées par le lien de la communauté.
+    case linkPaused
 
     public static func classify(_ error: Error) -> CommunityJoinRefusal? {
         guard case let MeeshyError.forbidden(_, body?) = error,
-              let payload = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
-              payload["code"] as? String == "COMMUNITY_JOIN_COOLDOWN" else { return nil }
-        return .cooldown
+              let payload = try? JSONSerialization.jsonObject(with: body) as? [String: Any] else { return nil }
+        switch payload["code"] as? String {
+        case "COMMUNITY_JOIN_COOLDOWN": return .cooldown
+        case "COMMUNITY_LINK_PAUSED": return .linkPaused
+        default: return nil
+        }
     }
 }

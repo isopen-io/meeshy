@@ -167,7 +167,7 @@ describe('#17178 — le temps réel (SocialEventsHandler)', () => {
     const { handler, rooms } = harness();
 
     await handler.broadcastCommentAdded({ postId: POST_X } as never, AUTEUR, 'COMMUNITY', []);
-    await handler.broadcastPostLiked({ postId: POST_X, userId: MEMBRE_X } as never, AUTEUR, 'COMMUNITY', []);
+    await handler.broadcastPostLiked({ postId: POST_X, userId: MEMBRE_X } as never, AUTEUR, 'COMMUNITY', [], []);
     await handler.broadcastPostTranslationUpdated({ postId: POST_X } as never, AUTEUR, 'COMMUNITY', []);
 
     expect(rooms()).toContain(`feed:${MEMBRE_X}`);

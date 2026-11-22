@@ -64,8 +64,20 @@ final class DeepLinkSingleParserTests: XCTestCase {
     /// L'adresse PARTAGÉE d'une communauté (#20330) ouvre la communauté, jamais un lien de conversation.
     func test_adressePartageeDUneCommunaute_ouvreLaCommunaute() {
         let url = URL(string: CommunityLink.canonicalJoinUrl(baseUrl: "https://meeshy.me", identifier: "mshy_club"))!
-        XCTAssertEqual(DeepLinkParser.parse(url), .community(id: "mshy_club"))
+        XCTAssertEqual(DeepLinkParser.parse(url), .community(id: "mshy_club", viaLink: true))
         XCTAssertEqual(DeepLinkRouter.entry(forLaunchURL: url), .sharedLink)
+    }
+
+    /// L'arrivée par le lien (#20332) survit aux deux voies — lancement système
+    /// et lien tapé dans l'app — et un autre marqueur ne vaut pas le lien.
+    func test_adressePartageeDUneCommunaute_porteLArriveeParLeLien_surLesDeuxVoies() {
+        let url = URL(string: "https://meeshy.me/communities/mshy_club?via=link")!
+        let sut = makeRouter()
+
+        XCTAssertTrue(sut.handle(url: url))
+        XCTAssertEqual(sut.pendingDeepLink, .community(id: "mshy_club", viaLink: true))
+        XCTAssertEqual(DeepLinkParser.parse(URL(string: "https://meeshy.me/communities/mshy_club?via=qr")!),
+                       .community(id: "mshy_club", viaLink: false))
     }
 
     /// Le partage in-app (`/share`) n'est pas une destination de lancement :

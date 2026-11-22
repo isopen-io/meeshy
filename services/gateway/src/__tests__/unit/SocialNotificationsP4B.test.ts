@@ -50,11 +50,11 @@ function routeLikeEvent(
   reactionSummary: Record<string, number>
 ): void {
   if (postType === 'STORY') {
-    socialEvents.broadcastStoryReacted({ storyId: postId, userId, emoji }, authorId);
+    socialEvents.broadcastStoryReacted({ storyId: postId, userId, emoji }, authorId, []);
   } else if (postType === 'STATUS') {
-    socialEvents.broadcastStatusReacted({ statusId: postId, userId, emoji }, authorId);
+    socialEvents.broadcastStatusReacted({ statusId: postId, userId, emoji }, authorId, []);
   } else {
-    socialEvents.broadcastPostLiked({ postId, userId, emoji, likeCount, reactionSummary }, authorId);
+    socialEvents.broadcastPostLiked({ postId, userId, emoji, likeCount, reactionSummary }, authorId, 'PUBLIC', [], []);
   }
 }
 
@@ -71,11 +71,11 @@ function routeUnlikeEvent(
   reactionSummary: Record<string, number>
 ): void {
   if (postType === 'STORY') {
-    socialEvents.broadcastStoryUnreacted({ storyId: postId, userId, emoji: '❤️' }, authorId);
+    socialEvents.broadcastStoryUnreacted({ storyId: postId, userId, emoji: '❤️' }, authorId, []);
   } else if (postType === 'STATUS') {
-    socialEvents.broadcastStatusUnreacted({ statusId: postId, userId, emoji: '❤️' }, authorId);
+    socialEvents.broadcastStatusUnreacted({ statusId: postId, userId, emoji: '❤️' }, authorId, []);
   } else {
-    socialEvents.broadcastPostUnliked({ postId, userId, emoji: '❤️', likeCount, reactionSummary }, authorId);
+    socialEvents.broadcastPostUnliked({ postId, userId, emoji: '❤️', likeCount, reactionSummary }, authorId, [], []);
   }
 }
 
@@ -111,7 +111,8 @@ describe('Phase 4B — B1: Like routing per post type', () => {
 
     expect(socialEvents.broadcastStatusReacted).toHaveBeenCalledWith(
       { statusId: 'status-1', userId: 'user-A', emoji: '❤️' },
-      'author-1'
+      'author-1',
+      []
     );
     expect(socialEvents.broadcastPostLiked).not.toHaveBeenCalled();
     expect(socialEvents.broadcastStoryReacted).not.toHaveBeenCalled();
@@ -122,7 +123,8 @@ describe('Phase 4B — B1: Like routing per post type', () => {
 
     expect(socialEvents.broadcastStoryReacted).toHaveBeenCalledWith(
       { storyId: 'story-1', userId: 'user-A', emoji: '🔥' },
-      'author-1'
+      'author-1',
+      []
     );
     expect(socialEvents.broadcastPostLiked).not.toHaveBeenCalled();
     expect(socialEvents.broadcastStatusReacted).not.toHaveBeenCalled();
@@ -133,7 +135,10 @@ describe('Phase 4B — B1: Like routing per post type', () => {
 
     expect(socialEvents.broadcastPostLiked).toHaveBeenCalledWith(
       { postId: 'post-1', userId: 'user-A', emoji: '❤️', likeCount: 5, reactionSummary: { '❤️': 5 } },
-      'author-1'
+      'author-1',
+      'PUBLIC',
+      [],
+      []
     );
     expect(socialEvents.broadcastStatusReacted).not.toHaveBeenCalled();
     expect(socialEvents.broadcastStoryReacted).not.toHaveBeenCalled();
@@ -159,7 +164,8 @@ describe('Phase 4B — B3: Unlike routing per post type', () => {
 
     expect(socialEvents.broadcastStatusUnreacted).toHaveBeenCalledWith(
       { statusId: 'status-1', userId: 'user-A', emoji: '❤️' },
-      'author-1'
+      'author-1',
+      []
     );
     expect(socialEvents.broadcastPostUnliked).not.toHaveBeenCalled();
   });
@@ -169,7 +175,8 @@ describe('Phase 4B — B3: Unlike routing per post type', () => {
 
     expect(socialEvents.broadcastStoryUnreacted).toHaveBeenCalledWith(
       { storyId: 'story-1', userId: 'user-A', emoji: '❤️' },
-      'author-1'
+      'author-1',
+      []
     );
     expect(socialEvents.broadcastPostUnliked).not.toHaveBeenCalled();
     expect(socialEvents.broadcastStatusUnreacted).not.toHaveBeenCalled();

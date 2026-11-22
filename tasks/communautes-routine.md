@@ -892,3 +892,16 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gates locaux : web `tsc --noEmit` vert ; suite web 35 071 verts, 1 rouge hors lot (`src/test-support/act-leak-guard.test.ts`, qui lance un bun enfant : rouge sous bun 1.4.4 local, la CI tourne en 1.3.14) ; iOS `check_house_rules`, `check_cohesion_budget`, `check_test_registration`, accent et catalogue TS (269 = référence) verts.
 - Revue adversariale : non lancée — aucune route ni garde touchée (le refus et sa garde sont ceux de #19661, revus alors).
 - Reste, suivi #20332 : iOS et Android envoient `via: "link"` et disent la pause à l'arrivant ; un `CommunityLink` iOS en cache garde l'ancienne adresse jusqu'à la relecture réseau.
+
+- 2026-11-22 12:55 : #20331 fusionnée dans `dev` (`d8df8feca`) ; #20330 fermée avec sa preuve.
+
+## 2026-11-22 — réveil 13:38 UTC
+
+- Début du run : aucune PR de la routine ouverte ; aucune branche vivante sur `Features/Community/` ni `DeepLinkRouter.swift`.
+- Lot : #20332, moitié iOS (milestone « Chaque lien se règle, se met en pause et garde son histoire »).
+- SDK : `JoinCommunityRequest(acceptsPending:viaLink:)` envoie `via: "link"` (absent sinon, la passerelle lisant alors une entrée directe) ; `CommunityServiceProviding.join(communityId:viaLink:)`, `join(communityId:)` restant une entrée directe ; `CommunityJoinRefusal.linkPaused` lit `403 COMMUNITY_LINK_PAUSED`. MeeshyUI : `CommunityDetailModeling.linkArrivalPaused` (défaut `false`) et la phrase `community.join.linkPaused` (sept langues, mêmes mots que le web) dans l'avis sous les gestes.
+- App : `DeepLink.community(id:viaLink:)` et `DeepLinkDestination.community(id:viaLink:)` lisent `?via=link` ; `Route.communityDetail(_:viaLink:)` porte l'arrivée jusqu'à `CommunityDetailViewModel(arrivesThroughLink:)` sur iPhone (pile) et iPad (panneau). Le détail lit `joinLinkPaused` : à qui arrive par le lien, la pause se dit avant le geste ; un refus `COMMUNITY_LINK_PAUSED` la dit aussi. Le bouton reste : une communauté publique reste joignable par sa fiche (même choix que le web).
+- Témoins : SDK `CommunityServiceTests` (+3), app `CommunityDetailViewModelTests` (+5), `DeepLinkSingleParserTests` (+1, 1 attendu mis à jour), `RouterContentLinkTests` (+1). iOS ne compile pas en conteneur : preuve par `ios.yml` et `sdk-tests.yml` sur la PR.
+- Gardes locales : `check_house_rules` (42 tenues), `check_cohesion_budget`, `check_test_registration`, accent verts.
+- Revue adversariale : non lancée — lot client seul, aucune route ni garde touchée (le refus et sa garde sont ceux de #19661).
+- Reste de #20332 : Android (même chose) ; le cache `CommunityLink` iOS écrit avant #20330 garde `/chat/` jusqu'à la relecture réseau (non mesuré utile à réécrire).
