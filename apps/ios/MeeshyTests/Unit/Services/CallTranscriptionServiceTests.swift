@@ -306,8 +306,8 @@ final class CallTranscriptionServiceTests: XCTestCase {
             wireId: "w-behind", speakerId: "remote-user-2", isFinal: true,
             capturedAt: Date().addingTimeInterval(-3_600)
         ))
-        XCTAssertEqual(sut.segments.first { $0.wireId == "w-ahead" }?.receivedAtMonotonic, 500)
-        XCTAssertEqual(sut.segments.first { $0.wireId == "w-behind" }?.receivedAtMonotonic, 510)
+        XCTAssertEqual(sut.segments.first(where: { $0.wireId == "w-ahead" })?.receivedAtMonotonic, 500)
+        XCTAssertEqual(sut.segments.first(where: { $0.wireId == "w-behind" })?.receivedAtMonotonic, 510)
     }
 
     func test_receivePeerEntry_partialThenFinal_theWaitRunsFromTheFinalsReception() {
