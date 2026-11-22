@@ -75,6 +75,7 @@ import {
   type SharedLocationCell,
   type SharedLocationState,
 } from './sharedLocationStore';
+import { isNamedStart, startedAfter } from './sharedLocationStartName';
 import { forgetSharedLocationEnds, noteSharedLocationReaderServed, noteSharedLocationReadersServed, noteSharedLocationServed, noteSharedLocationStopped, sharedLocationEndsFor } from './sharedLocationEnds';
 
 export type SharedLocationDb = PairAccessDb;
@@ -408,19 +409,6 @@ const NOT_SHARING = failed(SHARED_LOCATION_ERROR_CODES.NOT_SHARING, 'Aucun parta
 const FIXED_POINT = failed(SHARED_LOCATION_ERROR_CODES.FIXED_POINT, 'Le partage montre un point choisi');
 /** Le partage nommé par `expectedStartedAt` n'est plus celui qui est servi (#20249). */
 const STARTED_ELSEWHERE = failed(SHARED_LOCATION_ERROR_CODES.STARTED_ELSEWHERE, 'Le partage a changé depuis la relecture');
-
-/**
- * Le `startedAt` d'un démarrage qui remplace `prior` : jamais égal ni antérieur au sien, pour que deux démarrages dans
- * la même milliseconde ne portent pas le même nom (#20249).
- */
-const startedAfter = (now: number, prior: SharedLocationState | null): string => {
-  const floor = prior?.startedAt === undefined ? Number.NaN : Date.parse(prior.startedAt) + 1;
-  return new Date(Number.isNaN(floor) ? now : Math.max(now, floor)).toISOString();
-};
-
-/** Le partage servi est-il celui que le démarrage nomme ? Sans nom, oui (anciens clients). */
-const isNamedStart = (expected: string | undefined, served: SharedLocationState | null): boolean =>
-  expected === undefined || (served?.startedAt !== undefined && Date.parse(served.startedAt) === Date.parse(expected));
 
 const coarser = (a: SharedLocationPrecision, b: SharedLocationPrecision): SharedLocationPrecision =>
   SHARED_LOCATION_PRECISIONS.indexOf(a) >= SHARED_LOCATION_PRECISIONS.indexOf(b) ? a : b;
