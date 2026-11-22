@@ -296,7 +296,7 @@ describe('#20361 C7 — un mineur déclaré garde le retrait de sa position et d
   const ACCORD = { ownerId: AUTRE, otherId: MOI, bringBlockedAt: null, bloodBundleAcceptedAt: NOW, bloodBundleVersion: BLOOD_BUNDLE_VERSION, locationShared: true, listeningTitleShared: true };
   const MINEUR = { [AUTRE]: { birthDate: new Date('2012-01-01T00:00:00.000Z') } };
 
-  it('retirer la position ou le titre : 200 et écrit ; couper le talkie reste 409', async () => {
+  it('retirer la position ou le titre : 200, écrit, et l\'accord au palier s\'efface — le talkie n\'est alors plus verrouillé', async () => {
     const app = await appli({ liens: [lien('BLOOD', 'BLOOD')], reglages: [ACCORD], personnes: MINEUR });
     const position = await regler(app, { locationShared: false });
     const titre = await regler(app, { listeningTitleShared: false });
@@ -304,8 +304,9 @@ describe('#20361 C7 — un mineur déclaré garde le retrait de sa position et d
     const lu = await lire(app);
     await app.close();
 
-    expect([position.status, titre.status, talkie.status]).toEqual([200, 200, 409]);
-    expect(app.reglages.get(`${AUTRE}:${MOI}`)).toMatchObject({ locationShared: false, listeningTitleShared: false });
-    expect(lu.body.data).toMatchObject({ locationShared: false, listeningTitleShared: false, talkieBlocked: false, lockedByLevel: true, ritualSharesLocked: false });
+    expect([position.status, titre.status, talkie.status]).toEqual([200, 200, 200]);
+    // Le refus d'un mineur ne se lève pas tout seul à sa majorité : il efface son accord au palier (retour à la carte B).
+    expect(app.reglages.get(`${AUTRE}:${MOI}`)).toMatchObject({ locationShared: false, listeningTitleShared: false, bloodBundleAcceptedAt: null, bloodBundleVersion: null });
+    expect(lu.body.data).toMatchObject({ locationShared: false, listeningTitleShared: false, talkieBlocked: true, lockedByLevel: false, bloodBundleAccepted: false });
   });
 });

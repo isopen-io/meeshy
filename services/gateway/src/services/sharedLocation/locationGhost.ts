@@ -9,6 +9,7 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { LocationGhostState } from '@meeshy/shared/types/shared-location';
+import { isDeclaredMinor } from '@meeshy/shared/utils/age';
 import {
   reflectSharedLocationGhost,
   replaySharedLocationBatteryOf,
@@ -16,7 +17,7 @@ import {
   type SharedLocationRelayDeps,
 } from './sharedLocationRelay';
 
-export type LocationGhostDb = Pick<PrismaClient, 'user'>;
+export type LocationGhostDb = Pick<PrismaClient, 'user'> & Partial<Pick<PrismaClient, 'relationFeatureSetting'>>;
 
 export type LocationGhostWrite = { readonly state: LocationGhostState; readonly change: LocationGhostChange };
 
@@ -25,11 +26,23 @@ const stateOf = (ghostAt: Date | null): LocationGhostState => ({ ghost: ghostAt 
 const ghostAtOf = async (db: LocationGhostDb, userId: string): Promise<Date | null> =>
   (await db.user.findUnique({ where: { id: userId }, select: { locationGhostAt: true } }))?.locationGhostAt ?? null;
 
+/**
+ * Un mineur déclaré qui se met en fantôme global efface ses accords au palier (C7, #20361) : sans
+ * cela, son fantôme se lèverait tout seul envers ses Sangs le jour de sa majorité.
+ */
+async function minorGhostRevokesBundles(db: LocationGhostDb, userId: string): Promise<void> {
+  if (!db.relationFeatureSetting) return;
+  const user = await db.user.findUnique({ where: { id: userId }, select: { birthDate: true } });
+  if (!isDeclaredMinor(user?.birthDate ?? null, new Date())) return;
+  await db.relationFeatureSetting.updateMany({ where: { ownerId: userId }, data: { bloodBundleAcceptedAt: null, bloodBundleVersion: null } });
+}
+
 export async function writeLocationGhost(db: LocationGhostDb, userId: string, ghost: boolean, at: Date): Promise<LocationGhostWrite> {
   const current = await ghostAtOf(db, userId);
   if ((current !== null) === ghost) return { state: stateOf(current), change: 'unchanged' };
   const next = ghost ? at : null;
   await db.user.updateMany({ where: { id: userId }, data: { locationGhostAt: next } });
+  if (ghost) await minorGhostRevokesBundles(db, userId);
   return { state: stateOf(next), change: ghost ? 'entered' : 'left' };
 }
 

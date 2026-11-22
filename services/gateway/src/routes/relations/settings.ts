@@ -219,10 +219,11 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
       const cutsLocked = bringBlocked === true || talkieBlocked === true || togetherBlocked === true || bloodLocationMuted === true
         || listeningCategoryShared === false;
       const cutsShares = shares.some((share) => requested[share] === false);
-      if (cutsLocked || cutsShares) {
-        const lock = await bloodLockStateBetween(fastify.prisma, ownerId, userId);
-        if (lock.locked && (cutsLocked || !lock.ownerMinor)) return sendBloodLocked(reply);
-      }
+      const lock = cutsLocked || cutsShares ? await bloodLockStateBetween(fastify.prisma, ownerId, userId) : null;
+      if (lock?.locked && (cutsLocked || !lock.ownerMinor)) return sendBloodLocked(reply);
+      // Le refus d'un mineur ne doit pas se lever tout seul à sa majorité : il efface son accord au
+      // palier, et la carte B le lui redemandera (C7, décision B).
+      const minorRevokesBundle = lock?.locked === true && lock.ownerMinor && cutsShares;
       const current = await readSettings(fastify.prisma, ownerId, userId);
       // La catégorie est active dès Proche sans réglage : la retirer ÉCRIT le refus, même sans accord stocké.
       const categoryCut = listeningCategoryShared === false && current?.listeningCategoryShared !== false;
@@ -256,6 +257,7 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
         ...(talkieBlocked === true && linked ? { talkieBlockedAt: now } : {}),
         ...(togetherBlocked === true && linked ? { togetherBlockedAt: now } : {}),
         ...(bloodLocationMuted === true && linked ? { bloodLocationMutedAt: now } : {}),
+        ...(minorRevokesBundle ? { bloodBundleAcceptedAt: null, bloodBundleVersion: null } : {}),
       };
 
       // UNE écriture : le retrait (qui n'exige aucun lien), les blocages et l'accord partent ensemble.

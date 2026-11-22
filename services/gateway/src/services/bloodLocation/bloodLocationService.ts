@@ -35,6 +35,7 @@ import { writeLocationGhost } from '../sharedLocation/locationGhost';
 import { pairConsentResolver, relationPairConsentBy } from '../relations/relationConsent';
 import { alertBloodProximity, isPlausibleMove } from './bloodProximity';
 import { signalBloodMoved } from './bloodMoved';
+import { isDeclaredMinor } from '@meeshy/shared/utils/age';
 import { ownersHidingFrom, pointVeilOf } from './bloodLocationVeil';
 import { openPoint, pointVisibleTo, sealPoint } from './bloodLocationSeal';
 import type { BloodLocationDeps } from './bloodLocationTypes';
@@ -213,8 +214,12 @@ export async function updateBloodLocationSettings(deps: BloodLocationDeps, owner
     return { ok: true };
   }
   if (settings.userId === ownerId || !(await locationMayOpenWith(deps, ownerId, settings.userId))) return { ok: false };
+  const owner = settings.ghost === true ? await deps.prisma.user.findUnique({ where: { id: ownerId }, select: { birthDate: true } }) : null;
+  // Le fantôme ciblé d'un mineur efface son accord au palier pour ce Sang (C7) : il ne se lèvera pas à sa majorité.
+  const minorRevokes = owner !== null && isDeclaredMinor(owner.birthDate ?? null, at);
   const data = {
     ...(settings.ghost === undefined ? {} : { ghostAt: settings.ghost ? at : null }),
+    ...(minorRevokes ? { bloodBundleAcceptedAt: null, bloodBundleVersion: null } : {}),
     ...(settings.proximityRadiusMeters === undefined ? {} : { proximityRadiusMeters: clampRadius(settings.proximityRadiusMeters) }),
   };
   await deps.prisma.relationFeatureSetting.upsert({

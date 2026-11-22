@@ -475,6 +475,18 @@ describe('#20361 C7 — le fantôme d\'un émetteur mineur déclaré n\'épargne
 
     expect(await settled(recordBloodLocation(w.deps, MOI, PARIS))).toEqual({ recorded: false });
   });
+
+  it('le fantôme posé mineur ne se lève pas tout seul à sa majorité : il efface son accord au palier', async () => {
+    process.env.SECRETS_AT_REST_KEY = KEY;
+    const w = bloodWorldAvecConsentements({ users: [MOI, SANG, AUTRE_SANG, PROCHE, AMI, BLOQUE].map((id) => ({ id, birthDate: id === MOI ? new Date('2012-01-01T00:00:00.000Z') : ADULT_BIRTH })) });
+    w.consentir(MOI, SANG, { ...TOUT_PARTAGE, bloodBundleAcceptedAt: new Date(T0), bloodBundleVersion: BLOOD_BUNDLE_VERSION });
+    await updateBloodLocationSettings(w.deps, MOI, { ghost: true });
+    const moi = w.userRows.find((u) => u.id === MOI);
+    if (moi) moi.birthDate = ADULT_BIRTH;
+
+    expect(await settled(recordBloodLocation(w.deps, MOI, PARIS))).toEqual({ recorded: false });
+    expect(w.settings.rows.find((r) => r.ownerId === MOI && r.otherId === SANG)?.bloodBundleAcceptedAt ?? null).toBeNull();
+  });
 });
 
 describe('#20361 — défense en profondeur du voile', () => {
