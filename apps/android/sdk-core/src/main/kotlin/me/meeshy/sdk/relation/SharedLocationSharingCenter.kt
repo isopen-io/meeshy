@@ -677,7 +677,8 @@ class SharedLocationSharingCenter internal constructor(
             }
             is SharedLocationStartVerdict.Refused -> {
                 // La passerelle a PU appliquer un démarrage avec position qu'elle refuse ensuite : dans le doute, inconnu.
-                if (fix != null) rememberStart(ticket, null)
+                // Un refus certain (#20416, iso web) n'a rien écrit : le démarrage gardé d'ici tient.
+                if (fix != null && verdict.outcome !in NOTHING_WRITTEN) rememberStart(ticket, null)
                 SharedLocationShareProblem.Refused(verdict.outcome)
             }
         }
@@ -818,6 +819,13 @@ class SharedLocationSharingCenter internal constructor(
 
         /** Une échéance qui n'a pas pu se solder (hors ligne, refus) est rejouée à ce rythme, et à chaque reconnexion. */
         const val RETRY_MS = 30_000L
+
+        /** Les refus que la passerelle rend AVANT toute écriture : charge illisible, point choisi, partage nommé qui n'est plus servi. */
+        val NOTHING_WRITTEN = setOf(
+            SharedLocationSendOutcome.INVALID,
+            SharedLocationSendOutcome.FIXED_POINT,
+            SharedLocationSendOutcome.STARTED_ELSEWHERE,
+        )
     }
 }
 
