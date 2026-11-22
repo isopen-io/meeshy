@@ -7,6 +7,7 @@ import { coqueCourante } from '@/lib/native-shell';
 import { resolveReaderLanguages } from '@/lib/reader';
 import { quickReplyAllowed } from '@/lib/send/served-regime';
 
+import { monotonicClock } from './call-captions';
 import { createCaptions, type CaptionsContext, type CaptionsPort } from './call-captions-controller';
 import { recognitionFor } from './call-shell-speech';
 import { browserSpeech, recognitionOf, type RecognitionConstructor } from './call-speech';
@@ -59,7 +60,7 @@ export function createBrowserCaptions(ctx: CaptionsContext): CaptionsPort {
     prism: readerPrism,
     viewerName,
     newId: utteranceId,
-    elapsed: () => performance.now(),
+    elapsed: monotonicClock,
     // #13720 — fail-closed : régime connu du cache ET en clair, comme la réponse rapide d'un refus d'appel.
     serverMayHearCaptions: (conversationId) => quickReplyAllowed(conversationId, appQueryClient),
   });
