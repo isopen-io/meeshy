@@ -24,15 +24,15 @@ const code = (tag: string): string => (tag.split('-')[0] ?? tag).toUpperCase();
 
 export const EVENT_FOOTER_LINE: FooterLine = { event: true, origin: null, served: null, awaiting: false };
 
-/** Ce qu'une phrase, lue dans ce mode à cet instant, apporte au pied. */
-export function captionFooterLine(caption: CallCaption, mode: CaptionsMode, now: number): FooterLine {
+/** Ce qu'une phrase, lue dans ce mode à l'instant `elapsed` (horloge monotone de l'échéance), apporte au pied. */
+export function captionFooterLine(caption: CallCaption, mode: CaptionsMode, elapsed: number): FooterLine {
   const translatedShown = caption.pair !== null && captionText(caption, mode) !== caption.original;
   const origin = caption.origin?.language ?? caption.pair?.from ?? null;
   return {
     event: false,
     origin: caption.mine || origin === null ? null : code(origin),
     served: translatedShown && caption.pair !== null ? code(caption.pair.to) : null,
-    awaiting: isAwaitingTranslation(caption, now),
+    awaiting: isAwaitingTranslation(caption, elapsed),
   };
 }
 

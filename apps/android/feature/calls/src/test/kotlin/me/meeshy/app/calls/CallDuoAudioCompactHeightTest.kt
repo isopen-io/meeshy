@@ -84,6 +84,7 @@ class CallDuoAudioCompactHeightTest {
             regime = CallConversationRegime { false },
             notice = CallCaptionsRefusalNotice { },
             clock = { 5_000L },
+            elapsed = { 0L },
             scope = CoroutineScope(Dispatchers.Unconfined),
         )
         controller.onTransition(CallState.Idle, CallState.Connected, CallSessionInfo(callId = "call-1", config = CallConfig.EMPTY))
