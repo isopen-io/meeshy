@@ -24,7 +24,7 @@ class CallLiveCaptionLineTest {
     ) = CallJournalSegment(
         key = key, wireId = "w", speakerId = speakerId, speakerDisplayName = name, text = text,
         language = language, isFinal = isFinal, capturedAtMs = 1, translatedText = translatedText,
-        translatedLanguage = translatedLanguage,
+        translatedLanguage = translatedLanguage, receivedAtElapsedMs = 1,
     )
 
     private fun line(segment: CallJournalSegment = seg(), prefersOriginal: Boolean = false, isRevealed: Boolean = false, peerName: String? = "Ada") =
@@ -192,7 +192,7 @@ class CallLiveCaptionLineTest {
     @Test
     fun `the screen redraws only at the next deadline still to come`() {
         val first = lineForFrench(seg(key = "a", translatedText = null, translatedLanguage = null))
-        val second = lineForFrench(seg(key = "b", translatedText = null, translatedLanguage = null).copy(capturedAtMs = 4_000))
+        val second = lineForFrench(seg(key = "b", translatedText = null, translatedLanguage = null).copy(receivedAtElapsedMs = 4_000))
         val done = line()
 
         assertThat(CallLiveCaptionLines.nextDeadline(listOf(first, second, done), nowMs = 0)).isEqualTo(8_001)
@@ -350,5 +350,93 @@ class CallLiveCaptionLineTest {
         assertThat(band.showsOriginal).isFalse()
         assertThat(band.revealed).isEmpty()
         assertThat(journal.togglingReveal("w1").revealed).isEmpty()
+    }
+}
+
+/**
+ * #20298 — the wait for a translation is anchored on the LOCAL reception of the segment, on the monotonic clock,
+ * never on `capturedAtMs` (the speaker's wall clock, relayed): a skew between the two devices neither freezes the
+ * dots for an hour nor removes them.
+ */
+class CallCaptionTranslationWaitAnchorTest {
+
+    private val labels = CallCaptionLabels(me = "Me", unknown = "Unknown")
+    private val frenchReader = CallCaptionReader(userId = "me", name = "Jo", prism = listOf("fr"))
+    private val hour = 3_600_000L
+    private val localWallAtReception = 1_700_000_000_000L
+    private val receivedAt = 42_000L
+
+    private fun awaited(capturedAtMs: Long, receivedAtElapsedMs: Long?, isFinal: Boolean = true) = CallJournalSegment(
+        wireId = "w", speakerId = "peer", speakerDisplayName = "Ada", text = "How are you?", language = "en",
+        isFinal = isFinal, capturedAtMs = capturedAtMs, receivedAtElapsedMs = receivedAtElapsedMs,
+    )
+
+    private fun line(segment: CallJournalSegment) =
+        CallLiveCaptionLines.line(segment, frenchReader, "Ada", prefersOriginal = false, isRevealed = false, labels = labels)
+
+    private fun assertFallsEightSecondsAfterReception(line: CallLiveCaptionLine) {
+        assertThat(line.awaitingUntilMs).isEqualTo(receivedAt + CallCaptionTranslationWait.TIMEOUT_MS)
+        assertThat(line.settled(nowMs = receivedAt + 7_999).isAwaitingTranslation).isTrue()
+        assertThat(line.settled(nowMs = receivedAt + 8_000).isAwaitingTranslation).isFalse()
+    }
+
+    @Test
+    fun `a speaker whose clock runs an hour AHEAD still waits exactly 8 s after the local reception`() {
+        assertFallsEightSecondsAfterReception(line(awaited(capturedAtMs = localWallAtReception + hour, receivedAtElapsedMs = receivedAt)))
+    }
+
+    @Test
+    fun `a speaker whose clock runs an hour BEHIND still waits exactly 8 s after the local reception`() {
+        assertFallsEightSecondsAfterReception(line(awaited(capturedAtMs = localWallAtReception - hour, receivedAtElapsedMs = receivedAt)))
+    }
+
+    @Test
+    fun `a revision after the final never prolongs the wait`() {
+        val journal = CallLiveJournal()
+            .receive(awaited(capturedAtMs = localWallAtReception + hour, receivedAtElapsedMs = receivedAt))
+            .receive(awaited(capturedAtMs = localWallAtReception + hour, receivedAtElapsedMs = receivedAt + 5_000))
+            .receive(awaited(capturedAtMs = localWallAtReception + hour, receivedAtElapsedMs = receivedAt + 7_000))
+
+        assertFallsEightSecondsAfterReception(line(journal.segments.single()))
+    }
+
+    @Test
+    fun `a sentence first partial waits from the reception of its FINAL, the one that asks for a translation`() {
+        val journal = CallLiveJournal()
+            .receive(awaited(capturedAtMs = localWallAtReception, receivedAtElapsedMs = 0, isFinal = false))
+            .receive(awaited(capturedAtMs = localWallAtReception + 9_000, receivedAtElapsedMs = 9_000))
+            .receive(awaited(capturedAtMs = localWallAtReception + 9_000, receivedAtElapsedMs = 12_000))
+        val line = line(journal.segments.single())
+
+        assertThat(line.settled(nowMs = 9_000).isAwaitingTranslation).isTrue()
+        assertThat(line.settled(nowMs = 16_999).isAwaitingTranslation).isTrue()
+        assertThat(line.settled(nowMs = 17_000).isAwaitingTranslation).isFalse()
+    }
+
+    @Test
+    fun `a final without a reception keeps the one of its partial`() {
+        val journal = CallLiveJournal()
+            .receive(awaited(capturedAtMs = localWallAtReception, receivedAtElapsedMs = receivedAt, isFinal = false))
+            .receive(awaited(capturedAtMs = localWallAtReception, receivedAtElapsedMs = null))
+
+        assertFallsEightSecondsAfterReception(line(journal.segments.single()))
+    }
+
+    @Test
+    fun `a revision that brings the first reception keeps it when the line had none`() {
+        val journal = CallLiveJournal()
+            .receive(awaited(capturedAtMs = localWallAtReception, receivedAtElapsedMs = null, isFinal = false))
+            .receive(awaited(capturedAtMs = localWallAtReception, receivedAtElapsedMs = receivedAt))
+
+        assertFallsEightSecondsAfterReception(line(journal.segments.single()))
+    }
+
+    @Test
+    fun `without a local reception no wait is drawn rather than one anchored on the speaker's clock`() {
+        val line = line(awaited(capturedAtMs = localWallAtReception + hour, receivedAtElapsedMs = null))
+
+        assertThat(line.isAwaitingTranslation).isFalse()
+        assertThat(line.languageTag).isEqualTo("EN")
+        assertThat(line.capturedAtMs).isEqualTo(localWallAtReception + hour)
     }
 }

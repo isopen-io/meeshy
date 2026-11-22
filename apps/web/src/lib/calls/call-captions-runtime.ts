@@ -59,6 +59,7 @@ export function createBrowserCaptions(ctx: CaptionsContext): CaptionsPort {
     prism: readerPrism,
     viewerName,
     newId: utteranceId,
+    elapsed: () => performance.now(),
     // #13720 — fail-closed : régime connu du cache ET en clair, comme la réponse rapide d'un refus d'appel.
     serverMayHearCaptions: (conversationId) => quickReplyAllowed(conversationId, appQueryClient),
   });

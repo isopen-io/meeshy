@@ -83,17 +83,20 @@ function WaitingDots({ waiting, label }: { readonly waiting: boolean; readonly l
   );
 }
 
-/** Rend le composant à l'échéance de la prochaine attente : l'attente retombe, l'étiquette de la langue reste. */
+/**
+ * Rend le composant à l'échéance de la prochaine attente : l'attente retombe, l'étiquette de la langue reste.
+ * Lit l'horloge MONOTONE, celle sur laquelle le contrôleur pose l'échéance (`CaptionsDeps.elapsed`, #20298).
+ */
 function useWaitingClock(deadlines: readonly (number | null)[]): number {
   const [, wake] = useState(0);
-  const now = Date.now();
-  const next = Math.min(...deadlines.map((until) => (until !== null && until > now ? until : Number.POSITIVE_INFINITY)));
+  const elapsed = performance.now();
+  const next = Math.min(...deadlines.map((until) => (until !== null && until > elapsed ? until : Number.POSITIVE_INFINITY)));
   useEffect(() => {
     if (!Number.isFinite(next)) return undefined;
-    const handle = setTimeout(() => wake((tick) => tick + 1), Math.max(0, next - Date.now()));
+    const handle = setTimeout(() => wake((tick) => tick + 1), Math.max(0, next - performance.now()));
     return () => clearTimeout(handle);
   }, [next]);
-  return now;
+  return elapsed;
 }
 
 /** L'encre d'une phrase ORIGINALE : seule une traduction prend la couleur de son auteur (`docs/product/appels-vue-finale.md` loi 4). */
@@ -223,8 +226,8 @@ export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass', 
   const clockOf = (at: number): string | null => (call.connectedAt === null ? null : formatCallClock((at - call.connectedAt) / 1000));
   const note = call.transcription === 'idle' ? null : NOTE_KEY[call.transcription];
   const speaker = (caption: CallCaption): string => (caption.mine ? translate(language, 'callCaptions.self') : caption.speakerName !== '' ? caption.speakerName : translate(language, 'callCaptions.participant'));
-  const now = useWaitingClock(lines.map((entry) => (entry.type === 'note' ? null : (entry.caption.origin?.awaitingUntil ?? null))));
-  const footer = callCaptionsFooter(lines.map((entry) => (entry.type === 'note' ? EVENT_FOOTER_LINE : captionFooterLine(entry.caption, captionReveal(entry.caption, mode, revealed.has(entry.caption.id)).mode, now))));
+  const elapsed = useWaitingClock(lines.map((entry) => (entry.type === 'note' ? null : (entry.caption.origin?.awaitingUntil ?? null))));
+  const footer = callCaptionsFooter(lines.map((entry) => (entry.type === 'note' ? EVENT_FOOTER_LINE : captionFooterLine(entry.caption, captionReveal(entry.caption, mode, revealed.has(entry.caption.id)).mode, elapsed))));
   const footerText = footer === null ? null : callCaptionsFooterLabel(language, footer);
 
   return (
@@ -243,7 +246,7 @@ export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass', 
             entry.type === 'note' ? (
               <NoteLine key={entry.note.id} note={entry.note} language={language} color={colorOf({ speakerId: entry.note.userId ?? '', speakerName: entry.note.name ?? '' })} clock={clockOf(entry.at)} />
             ) : (
-              <CaptionLine key={entry.caption.id} caption={entry.caption} mode={mode} speaker={speaker(entry.caption)} color={colorOf(entry.caption)} open={revealed.has(entry.caption.id)} waiting={isAwaitingTranslation(entry.caption, now)} language={language} onToggle={toggle} />
+              <CaptionLine key={entry.caption.id} caption={entry.caption} mode={mode} speaker={speaker(entry.caption)} color={colorOf(entry.caption)} open={revealed.has(entry.caption.id)} waiting={isAwaitingTranslation(entry.caption, elapsed)} language={language} onToggle={toggle} />
             ),
           )
         )}
