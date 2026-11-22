@@ -221,3 +221,41 @@ struct SharedLocationRoster: Equatable, Codable {
         entries.keys.sorted().compactMap { id in entries[id].map { SharedLocationRecipient(userId: id, precision: $0.precision) } }
     }
 }
+
+/// Ce que montrait le partage quand « Montrer ta position réelle ? » a été posée (#20127) : son démarrage servi et ceux
+/// qui voient le point choisi. La confirmation ne vaut que pour CE partage-là : un autre démarrage, ou une personne
+/// ajoutée depuis (un autre appareil du compte), et la question se repose avec la liste à jour. Une personne sortie entre
+/// la question et la réponse ne la rend pas caduque : elle ne verra rien du tout.
+struct SharedLocationPointReplacement: Equatable, Sendable {
+    let startedAt: String?
+    let recipientIds: Set<String>
+
+    init(startedAt: String?, recipientIds: Set<String>) {
+        self.startedAt = startedAt
+        self.recipientIds = Set(recipientIds.map { $0.lowercased() })
+    }
+
+    /// Une réponse donnée à `asked` vaut-elle encore devant ce partage-ci ?
+    func isCovered(by asked: SharedLocationPointReplacement) -> Bool {
+        startedAt == asked.startedAt && recipientIds.isSubset(of: asked.recipientIds)
+    }
+
+    /// Ceux que la question nomme : au plus `limit`, dans l'ordre des noms connus ; les autres, inconnus d'ici compris
+    /// (ajoutés depuis un autre appareil), se comptent.
+    func audience(knownNames: [(userId: String, name: String)], limit: Int = 3) -> (named: [String], others: Int) {
+        let known = knownNames.filter { recipientIds.contains($0.userId.lowercased()) }
+        let unique = known.reduce(into: [(String, String)]()) { kept, pair in
+            guard !kept.contains(where: { $0.0 == pair.userId.lowercased() }) else { return }
+            kept.append((pair.userId.lowercased(), pair.name))
+        }
+        let named = unique.prefix(limit).map(\.1)
+        return (named, recipientIds.count - named.count)
+    }
+}
+
+extension SharedLocationRoster {
+    /// La question à poser devant le point choisi que cette liste montre, depuis ce démarrage servi.
+    func pointReplacement(startedAt: String?) -> SharedLocationPointReplacement {
+        SharedLocationPointReplacement(startedAt: startedAt, recipientIds: Set(recipients.map(\.userId)))
+    }
+}
