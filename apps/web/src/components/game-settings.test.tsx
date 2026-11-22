@@ -87,7 +87,7 @@ describe('« Jeu masqué »', () => {
 
 /**
  * LES NOTIFICATIONS DU JEU (#9490) — un interrupteur « Jeu » dans les réglages du jeu, branché sur la
- * préférence du COMPTE (`notification.gameEnabled`, défaut reçu). Au plus une notification du jeu par jour :
+ * préférence du COMPTE (`notification.gameEnabled`, défaut reçu). Au plus deux notifications du jeu par jour (#17368) :
  * l'écran le dit.
  */
 describe('les notifications du jeu', () => {
@@ -100,10 +100,11 @@ describe('les notifications du jeu', () => {
     expect(calls).toEqual([false]);
   });
 
-  test('le texte dit « au plus une par jour »', () => {
+  test('le texte dit « au plus deux par jour », hauts faits et Alliance en plus (#17368)', () => {
     const html = renderToStaticMarkup(<GameSettings {...props({ gameNotifications: true, onGameNotifications: () => undefined })} />);
     expect(text(html)).not.toContain('Notifications du jeu');
-    expect(text(html)).toContain('Au plus une par jour');
+    expect(text(html)).toContain('Au plus deux par jour');
+    expect(text(html)).toContain('Hauts faits et Alliance passent toujours.');
   });
 
   test('réglage du compte éteint : l’interrupteur est décoché', () => {

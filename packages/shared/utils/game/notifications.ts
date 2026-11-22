@@ -1,8 +1,9 @@
 /**
  * LES NOTIFICATIONS DU JEU (#9490) — la LOI, partagée : quels types existent, combien
  * en part par jour, quelle phrase dit le résultat d'une semaine de ligue.
- * `docs/product/jeu-meeshy-conception.html` partie IX : « une notification de jeu par jour
- * au plus, interrupteur « Jeu » dans les réglages » ; jamais « X t'a dépassé » ; jamais
+ * `docs/product/jeu-meeshy-conception.html` partie IX, révisée par le porteur le 2026-11-10 (#17368) :
+ * deux notifications de jeu par jour au plus, hors exploit et action d'autrui ; interrupteur « Jeu » dans les
+ * réglages ; jamais « X t'a dépassé » ; jamais
  * une heure d'activité ni l'identité d'un pseudonyme.
  *
  * Les textes vivent dans le catalogue de notifications (`notification-strings.ts`, huit
@@ -25,19 +26,28 @@ export type GameNotificationType = (typeof GAME_NOTIFICATION_TYPES)[number];
 export const isGameNotificationType = (value: unknown): value is GameNotificationType =>
   typeof value === 'string' && (GAME_NOTIFICATION_TYPES as readonly string[]).includes(value);
 
-/** Au plus UNE notification de jeu par jour et par destinataire — le jour de SON fuseau. */
-export const GAME_NOTIFICATION_DAILY_CAP = 1;
+/**
+ * Au plus DEUX notifications de jeu par jour et par destinataire — le jour de SON fuseau (décision porteur
+ * 2026-11-10, #17368, qui remplace sur ce point « une par jour » du 2026-10-06, #9490).
+ */
+export const GAME_NOTIFICATION_DAILY_CAP = 2;
 
 /**
- * Les types qui SORTENT du plafond (décision porteur 2026-10-06, #9541) : une invitation ou une acceptation
- * de duo est un message d'un AMI et n'attend pas le lendemain ; la mission du jour est elle-même la
- * notification quotidienne du compte (idempotente par mission). Ils ne se comptent pas et ne prennent pas le
- * créneau du jour : un résultat de ligue le même jour part.
+ * Les types qui SORTENT du plafond : l'action d'un AUTRE (#9541, #17368) — une invitation ou une acceptation
+ * de duo est un message d'un ami et n'attend pas le lendemain. Ils ne se comptent pas et ne prennent aucun
+ * créneau. La mission du jour, elle, compte depuis #17368 : elle n'est ni un exploit ni l'action d'un autre.
  */
-export const GAME_NOTIFICATIONS_OUTSIDE_DAILY_CAP = ['game_duo_invited', 'game_duo_accepted', 'game_mission_window'] as const;
+export const GAME_NOTIFICATIONS_OUTSIDE_DAILY_CAP = ['game_duo_invited', 'game_duo_accepted'] as const;
 
-export const countsAgainstGameDailyCap = (type: GameNotificationType): boolean =>
-  !(GAME_NOTIFICATIONS_OUTSIDE_DAILY_CAP as readonly string[]).includes(type);
+/** Un EXPLOIT sort aussi du plafond (#17368), quel que soit son type : c'est le CONTENU qui le dit, pas le type. */
+export const countsAgainstGameDailyCap = (type: GameNotificationType, options: { readonly exploit?: boolean } = {}): boolean =>
+  options.exploit !== true && !(GAME_NOTIFICATIONS_OUTSIDE_DAILY_CAP as readonly string[]).includes(type);
+
+/** En ligue (la Joute), l'exploit est une coupe ou une montée ; le maintien et la descente n'en sont pas. */
+export const isGameLeagueExploit = (params: {
+  readonly zone: 'promotion' | 'safe' | 'relegation';
+  readonly cup: 'gold' | 'silver' | 'bronze' | null;
+}): boolean => params.cup !== null || params.zone === 'promotion';
 
 export type LeagueResultKey =
   | 'game.leagueCupGold'

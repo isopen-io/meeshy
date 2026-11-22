@@ -750,7 +750,7 @@ const es = {
   'game.photo.kicker.achievement_rarity': 'Hazaña lograda · {rarity}',
   'game.standing.treasury': 'Legado: {tier}',
   'game.settings.notifications.title': 'Notificaciones',
-  'game.settings.notifications.body': 'Como máximo una al día, en todos tus dispositivos.',
+  'game.settings.notifications.body': 'Como máximo dos al día, en todos tus dispositivos. Hazañas y Alianza llegan siempre.',
   'game.settings.notifications.note_q': '¿Cuántas notificaciones al día?',
   'game.settings.notifications.switch': 'Alianza, justa, viaje',
   'game.settings.notifications.photo_switch': 'Momentos por inmortalizar',

@@ -762,7 +762,7 @@ const ar = {
   'game.photo.kicker.achievement_rarity': 'مأثرة محقّقة · {rarity}',
   'game.standing.treasury': 'الإرث: {tier}',
   'game.settings.notifications.title': 'الإشعارات',
-  'game.settings.notifications.body': 'إشعار واحد على الأكثر في اليوم، على جميع أجهزتك.',
+  'game.settings.notifications.body': 'إشعاران على الأكثر في اليوم، على جميع أجهزتك. المآثر والتحالف تصلك دائمًا.',
   'game.settings.notifications.note_q': 'كم إشعارًا في اليوم؟',
   'game.settings.notifications.switch': 'تحالف، مبارزة، رحلة',
   'game.settings.notifications.photo_switch': 'لحظات للتخليد',

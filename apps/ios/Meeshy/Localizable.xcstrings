@@ -300777,43 +300777,43 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Alliance, joute, voyage : au plus une par jour, sur tous tes appareils."
+            "value": "Au plus deux par jour, sur tous tes appareils. Hauts faits et Alliance passent toujours."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Alliance, joust, journey: at most one a day, on all your devices."
+            "value": "At most two a day, on all your devices. Feats and the Alliance always get through."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Alianza, justa, viaje: como máximo una al día, en todos tus dispositivos."
+            "value": "Como máximo dos al día, en todos tus dispositivos. Hazañas y Alianza llegan siempre."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bündnis, Turnier, Reise: höchstens eine pro Tag, auf allen deinen Geräten."
+            "value": "Höchstens zwei pro Tag, auf allen deinen Geräten. Heldentaten und Bündnis kommen immer an."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Alleanza, torneo, viaggio: al massimo una al giorno, su tutti i tuoi dispositivi."
+            "value": "Al massimo due al giorno, su tutti i tuoi dispositivi. Imprese e Alleanza arrivano sempre."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aliança, torneio, viagem: no máximo uma por dia, em todos os seus aparelhos."
+            "value": "No máximo duas por dia, em todos os seus aparelhos. Façanhas e Aliança sempre chegam."
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تحالف، مبارزة، رحلة: إشعار واحد على الأكثر في اليوم، على جميع أجهزتك."
+            "value": "إشعاران على الأكثر في اليوم، على جميع أجهزتك. المآثر والتحالف تصلك دائمًا."
           }
         }
       }

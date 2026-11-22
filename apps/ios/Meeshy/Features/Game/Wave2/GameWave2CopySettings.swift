@@ -41,7 +41,7 @@ extension GameText {
     static var settingsNotificationsNote: MeeshyInfoNote {
         MeeshyInfoNote(
             question: String(localized: "game2.settings.notifications.question", defaultValue: "Combien de notifications le jeu envoie-t-il ?", bundle: .main),
-            text: String(localized: "game2.settings.notifications.body", defaultValue: "Alliance, joute, voyage : au plus une par jour, sur tous tes appareils.", bundle: .main)
+            text: String(localized: "game2.settings.notifications.body", defaultValue: "Au plus deux par jour, sur tous tes appareils. Hauts faits et Alliance passent toujours.", bundle: .main)
         )
     }
 

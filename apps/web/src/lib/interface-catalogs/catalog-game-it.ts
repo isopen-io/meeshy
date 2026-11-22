@@ -750,7 +750,7 @@ const it = {
   'game.photo.kicker.achievement_rarity': 'Impresa compiuta · {rarity}',
   'game.standing.treasury': 'Eredità: {tier}',
   'game.settings.notifications.title': 'Notifiche',
-  'game.settings.notifications.body': 'Al massimo una al giorno, su tutti i tuoi dispositivi.',
+  'game.settings.notifications.body': 'Al massimo due al giorno, su tutti i tuoi dispositivi. Imprese e Alleanza arrivano sempre.',
   'game.settings.notifications.note_q': 'Quante notifiche al giorno?',
   'game.settings.notifications.switch': 'Alleanza, torneo, viaggio',
   'game.settings.notifications.photo_switch': 'Momenti da immortalare',

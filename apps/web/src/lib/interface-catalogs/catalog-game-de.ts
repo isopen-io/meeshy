@@ -750,7 +750,7 @@ const de = {
   'game.photo.kicker.achievement_rarity': 'Heldentat vollbracht · {rarity}',
   'game.standing.treasury': 'Erbe: {tier}',
   'game.settings.notifications.title': 'Mitteilungen',
-  'game.settings.notifications.body': 'Höchstens eine pro Tag, auf allen deinen Geräten.',
+  'game.settings.notifications.body': 'Höchstens zwei pro Tag, auf allen deinen Geräten. Heldentaten und Bündnis kommen immer an.',
   'game.settings.notifications.note_q': 'Wie viele Mitteilungen pro Tag?',
   'game.settings.notifications.switch': 'Bündnis, Turnier, Reise',
   'game.settings.notifications.photo_switch': 'Momente zum Verewigen',
