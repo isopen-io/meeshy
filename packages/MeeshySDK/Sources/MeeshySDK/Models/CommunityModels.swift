@@ -247,9 +247,15 @@ public struct InviteMemberRequest: Encodable {
 /// serveur que ce client sait lire une demande en attente (202).
 public struct JoinCommunityRequest: Encodable {
     public let acceptsPending: Bool
+    /// `"link"` quand le lecteur arrive par l'adresse partagée de la communauté
+    /// (#20332) : l'entrée est comptée comme venue du lien, et refusée (403
+    /// `COMMUNITY_LINK_PAUSED`) quand un intendant l'a mis en pause. Absent
+    /// sinon — la passerelle lit alors une entrée directe.
+    public let via: String?
 
-    public init(acceptsPending: Bool) {
+    public init(acceptsPending: Bool, viaLink: Bool = false) {
         self.acceptsPending = acceptsPending
+        self.via = viaLink ? "link" : nil
     }
 }
 

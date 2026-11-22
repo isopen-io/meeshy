@@ -31,10 +31,17 @@ public protocol CommunityDetailModeling: ObservableObject {
     /// La demande du lecteur a été refusée (#19948) : « Demande refusée »
     /// jusqu'à cette date, puis « Demander à rejoindre ». `nil` sinon.
     var joinDeclinedUntil: Date? { get }
+    /// Le lecteur arrive par le lien de la communauté et un intendant l'a mis
+    /// en pause (#20332) : l'écran le dit avant le geste.
+    var linkArrivalPaused: Bool { get }
 
     func load() async
     func joinCommunity() async
     func leaveCommunity() async
+}
+
+extension CommunityDetailModeling {
+    public var linkArrivalPaused: Bool { false }
 }
 
 @MainActor

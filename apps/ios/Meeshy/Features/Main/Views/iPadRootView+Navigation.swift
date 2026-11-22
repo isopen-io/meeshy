@@ -194,8 +194,8 @@ extension iPadRootView {
             rightPanelRoute = .links
         case .hashtag(let tag):
             rightPanelRoute = .hashtagResults(tag: tag)
-        case .community(let id):
-            rightPanelRoute = .communityDetail(id)
+        case .community(let id, let viaLink):
+            rightPanelRoute = .communityDetail(id, viaLink: viaLink)
         case .unreadConversations:
             // Widgets « Non lus » (#7811) : la liste sur le filtre de la puce. Le panneau ouvert la cachait —
             // l'iPhone revient à la racine, l'iPad referme le panneau.
