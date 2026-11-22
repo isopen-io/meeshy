@@ -43,7 +43,7 @@ import { applyMessageReactionUpdate, isMessageReactionUpdate } from './realtime-
 import { FEED_QUERY_KEY } from './feed';
 import { STATUS_MOODS_QUERY_KEY, STORY_TRAY_QUERY_KEY } from './stories';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
-import { MY_PROFILE_QUERY_KEY } from './me-keys';
+import { MY_PREFERENCES_QUERY_KEYS, MY_PROFILE_QUERY_KEY } from './me-keys';
 import { profileRepaintOfUserUpdated, repaintProfile } from './my-portrait';
 import { PUBLIC_PROFILE_QUERY_PREFIX } from './public-profile';
 import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATION_LISTS_KEY, type NotificationsDeps } from './notifications';
@@ -197,6 +197,14 @@ const CATCH_UP_FAMILIES: readonly CatchUpFamily[] = [
   { queryKey: STORY_TRAY_QUERY_KEY, exact: false },
   { queryKey: STATUS_MOODS_QUERY_KEY, exact: true },
   { queryKey: CONVERSATION_CATEGORIES_QUERY_KEY, exact: false },
+  /* Les projections du document de réglages (#20349) — RÉPANDUES, jamais
+     nommées une à une : c'est le même ensemble que le gestionnaire de
+     `user:preferences-updated` itère, et le dupliquer ici le laisserait
+     diverger au premier réglage ajouté. `exact: true` est mesuré : ni
+     `['me','app-preferences']` ni `['me','circle-notify']` n'a de descendant,
+     donc rien ne justifie de balayer leur racine `['me']`, qui emporterait le
+     profil et le journal d'appels. */
+  ...MY_PREFERENCES_QUERY_KEYS.map((queryKey) => ({ queryKey, exact: true })),
 ];
 
 function isTypingEvent(payload: unknown): payload is TypingEvent {
