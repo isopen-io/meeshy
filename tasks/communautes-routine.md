@@ -30,6 +30,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-21 | La liste complète des commentaires tait l'auteur bloqué (passerelle) | #20215 | #20205 | fusionnée dans dev |
 | 2026-11-21 | Un commentaire d'un auteur bloqué n'arrive plus en direct et ne se traduit ni ne se like (passerelle) | #20237 | #20216 | fusionnée dans dev (`17c7f207a`) |
 | 2026-11-21 | L'intendant d'une communauté met son lien d'entrée en pause, et le lien en pause ne fait plus entrer (passerelle) | voir réveil du 2026-11-21 17:38 | #19661 (première moitié) | voir réveil du 2026-11-21 17:38 |
+| 2026-11-21 | L'intendant d'une communauté met son lien d'entrée en pause depuis la fiche du lien (web) ; « mes communautés » sert l'état (passerelle) | voir réveil du 2026-11-21 23:38 | #20255 (moitié web) | voir réveil du 2026-11-21 23:38 |
 
 ## 2026-11-07 — lot 1
 
@@ -841,3 +842,16 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Android : `CommunityApi.setJoinLinkState` (`PUT communities/{id}/join-link`) et ses deux modèles — le cliquet `RouteManifestRatchetTest` interdit d'agrandir la dette « à porter », donc toute route neuve se porte en Retrofit dans le lot ; témoin `CommunityJoinLinkEndpointTest` (verbe, chemin, corps, décodage). L'écran reste #20255.
 - Témoins : `__tests__/unit/routes/communities/join-link-pause-19661.test.ts` (23 ; rouge prouvé : module absent, puis 2 échecs sous chacune des mutations « garde du join retirée » et « instant servi à tous »).
 - Reste de #19661 : « Supprimer ce lien » (révoquer l'adresse sans toucher à la communauté). #19661 reste ouverte.
+
+- 2026-11-21 23:00 : #20259 fusionnée dans `dev` (`c57460f50`) après `ci.yml` 44952956576 vert ; Android vert sur `d30474025` ; les tranches de tests unitaires iOS du run 44947521614 étaient encore en file à la fusion (et au réveil suivant). Preuve commentée sur #19661, qui reste ouverte (« Supprimer ce lien »).
+
+## 2026-11-21 — réveil 23:38 UTC
+
+- Début du run : aucune PR de la routine ouverte ; aucune branche vivante sur `routes/communities/membership.ts` ni sur les fiches de liens du web.
+- Lot : #20255, moitié web (milestone « Chaque lien se règle, se met en pause et garde son histoire »).
+- Passerelle : `GET /communities/mine` sert `joinLinkPaused` (booléen, additif) par `joinLinkStateFor` — la fiche du lien des trois clients lit CETTE liste, jamais le détail, et ne pouvait donc pas savoir l'état. L'instant de la pause n'y part pas (il reste au détail d'un intendant, #19661).
+- Web : `CommunityLink.joinLinkPaused: boolean | null` (`null` = passerelle plus ancienne, aucune bascule offerte) ; `lib/api/community-join-link.ts` porte `PUT communities.byIdJoinLink` et le geste optimiste avec retour arrière (la réponse fait foi, bascule contraire en vol ⇒ `busy`, hors ligne rien ne part). La fiche `/links/communities/$community` dit « Actif » / « Inactif » dans l'en-tête et porte « Désactiver » / « Activer » dans sa barre — même geste et mêmes mots que la fiche d'un lien de suivi, aucune clé de catalogue nouvelle. Entrée `communities.byIdJoinLink` retirée de `PENDING_CLIENT_ENTRIES` (269 = référence).
+- Décision : la rangée « Actif » de la planche est rendue comme la bascule des autres familles de liens du web (barre d'actions), pas comme un interrupteur isolé : même geste ⇒ même effet dans « Mes liens ».
+- Revue adversariale avant la PR : non bloquante (l'instant ne part pas, un simple membre n'obtient rien que le détail ne lui serve déjà). Corrigé dans le lot : un refus restaurait l'instantané de la liste ENTIÈRE et défaisait la bascule réussie d'une autre communauté entre-temps — seule la ligne refusée revient désormais (témoin dédié).
+- Gates locaux : passerelle `tsc --noEmit` vert, 831 tests verts (communautés, `routes/__tests__`, `module-shadowing`, `tsc-never-loaded-tests-ratchet`) ; web `tsc --noEmit` vert, 446 tests verts (liens, communautés, catalogue des familles) ; catalogue TS 269 = référence.
+- Reste de #20255 : iOS (`CommunityLinks*` lit `joinLinkPaused` de `/communities/mine`), Android, et le message de l'arrivant (`COMMUNITY_LINK_PAUSED`), qui ne devient joignable qu'une fois qu'un client envoie `via: "link"`. #20255 reste ouverte.
