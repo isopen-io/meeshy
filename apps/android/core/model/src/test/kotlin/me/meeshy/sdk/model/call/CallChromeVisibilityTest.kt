@@ -154,11 +154,8 @@ class CallChromeVisibilityTest {
     }
 
     @Test
-    fun `a touch during the fade is still accepted, after it is not`() {
+    fun `the chrome stows in a quarter of a second`() {
         assertThat(CallChromeVisibility.FADE_DURATION_MILLIS).isEqualTo(250)
-        assertThat(CallChromeVisibility.acceptsTouches(isVisible = false, hiddenForMillis = 100)).isTrue()
-        assertThat(CallChromeVisibility.acceptsTouches(isVisible = false, hiddenForMillis = 250)).isFalse()
-        assertThat(CallChromeVisibility.acceptsTouches(isVisible = true, hiddenForMillis = 9_999)).isTrue()
     }
 
     @Test

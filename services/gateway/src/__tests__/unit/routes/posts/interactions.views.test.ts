@@ -582,7 +582,7 @@ describe('POST /posts/:id/view — STORY viewer has no username uses ?? empty st
       createPostRepostNotification: jest.fn<any>().mockResolvedValue(undefined),
     });
     app.decorate('socialEvents', {
-      broadcastStoryViewed: jest.fn<any>().mockResolvedValue(undefined),
+      separationAroundActor: jest.fn<any>().mockResolvedValue([]), broadcastStoryViewed: jest.fn<any>().mockResolvedValue(undefined),
       broadcastPostLiked: jest.fn<any>().mockResolvedValue(undefined),
       broadcastPostUnliked: jest.fn<any>().mockResolvedValue(undefined),
       broadcastStoryReacted: jest.fn<any>().mockResolvedValue(undefined),

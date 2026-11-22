@@ -243,7 +243,7 @@ export async function buildApp(opts: {
       broadcastStatusReacted: jest.fn<any>().mockResolvedValue(undefined),
       broadcastStatusUnreacted: jest.fn<any>().mockResolvedValue(undefined),
       broadcastPostBookmarked: jest.fn<any>().mockResolvedValue(undefined),
-      broadcastStoryViewed: jest.fn<any>().mockResolvedValue(undefined),
+      separationAroundActor: jest.fn<any>().mockResolvedValue([]), broadcastStoryViewed: jest.fn<any>().mockResolvedValue(undefined),
       broadcastPostReposted: jest.fn<any>().mockResolvedValue(undefined),
       /* La loi de séparation (#20338), résolue par la ROUTE avant sa mutation.
          `[]` = personne à taire : ces suites portent sur le routage et les

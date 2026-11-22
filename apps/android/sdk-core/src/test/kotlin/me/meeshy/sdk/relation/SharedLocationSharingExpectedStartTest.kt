@@ -2,6 +2,7 @@ package me.meeshy.sdk.relation
 
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.relation.SharedLocationOwnRecipient
@@ -199,5 +200,65 @@ class SharedLocationSharingExpectedStartTest {
         assertThat(problem).isEqualTo(SharedLocationShareProblem.Refused(SharedLocationSendOutcome.OFFLINE))
         assertThat(device.starts).hasSize(1)
         device.endOutage()
+    }
+
+    private val publishedHere = "2026-11-22T09:00:00.000Z"
+
+    /** Un appareil qui a gardé le démarrage qu'il a publié avant que le point choisi soit posé ailleurs. */
+    private fun deviceThatPublished(scope: TestScope) =
+        SharingDevice(scope, startMarks = mutableMapOf("me" to publishedHere))
+
+    @Test
+    fun `un refus STARTED_ELSEWHERE n'a rien ecrit, le demarrage garde d'ici tient`() = runTest {
+        val device = deviceThatPublished(this)
+        runCurrent()
+        device.showing(chosenPoint())
+        device.startVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.STARTED_ELSEWHERE)
+        device.onStart = { device.servedSnapshot = chosenPoint(startedAt = elsewhere).copy(source = SharedLocationSource.DEVICE) }
+
+        device.answer()
+        runCurrent()
+
+        assertThat(device.startMarks["me"]).isEqualTo(publishedHere)
+    }
+
+    @Test
+    fun `un refus FIXED_POINT n'a rien ecrit, le demarrage garde d'ici tient`() = runTest {
+        val device = deviceThatPublished(this)
+        runCurrent()
+        device.showing(chosenPoint())
+        device.startVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.FIXED_POINT)
+
+        device.answer()
+        runCurrent()
+
+        assertThat(device.startMarks["me"]).isEqualTo(publishedHere)
+    }
+
+    @Test
+    fun `un refus INVALID d'une charge partie avec la cle n'a rien ecrit, le demarrage garde d'ici tient`() = runTest {
+        val device = deviceThatPublished(this)
+        runCurrent()
+        device.showing(chosenPoint())
+        device.startVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.INVALID)
+        device.onStart = { device.servedSnapshot = chosenPoint(accepts = false) }
+
+        device.answer()
+        runCurrent()
+
+        assertThat(device.startMarks["me"]).isEqualTo(publishedHere)
+    }
+
+    @Test
+    fun `un refus douteux oublie encore le demarrage garde, la passerelle a pu prendre l'envoi`() = runTest {
+        val device = deviceThatPublished(this)
+        runCurrent()
+        device.showing(chosenPoint())
+        device.startVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.UNAVAILABLE)
+
+        device.answer()
+        runCurrent()
+
+        assertThat(device.startMarks["me"]).isNull()
     }
 }

@@ -473,7 +473,7 @@ describe('POST /posts/:id/repost — broadcastPostReposted rejects (line 698)', 
       broadcastStatusReacted: jest.fn<any>().mockResolvedValue(undefined),
       broadcastStatusUnreacted: jest.fn<any>().mockResolvedValue(undefined),
       broadcastPostBookmarked: jest.fn<any>().mockResolvedValue(undefined),
-      broadcastStoryViewed: jest.fn<any>().mockResolvedValue(undefined),
+      separationAroundActor: jest.fn<any>().mockResolvedValue([]), broadcastStoryViewed: jest.fn<any>().mockResolvedValue(undefined),
       broadcastPostReposted: jest.fn<any>().mockRejectedValue(new Error('Socket error')),
     });
     registerInteractionRoutes(app, prisma as any, makePreValidationAuth(true));
