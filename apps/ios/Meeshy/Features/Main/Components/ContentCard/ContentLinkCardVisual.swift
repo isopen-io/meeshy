@@ -28,6 +28,7 @@ struct ContentLinkCardVisual: View, Equatable {
                 .equatable()
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onOpen)
+                .accessibilityHidden(true)
         case .slideshow(let pages):
             ContentLinkCardSlideshow(pages: pages, card: card, accentColor: accentColor,
                                      preferredLanguages: preferredLanguages, onOpen: onOpen)
@@ -39,6 +40,7 @@ struct ContentLinkCardVisual: View, Equatable {
                                      preferredLanguages: preferredLanguages, showsKindPill: true)
                     .contentShape(Rectangle())
                     .onTapGesture(perform: onOpen)
+                    .accessibilityHidden(true)
             }
         }
     }
@@ -69,6 +71,7 @@ struct ContentLinkCardSlideshow: View {
                 pageView(item)
                     .contentShape(Rectangle())
                     .onTapGesture(perform: onOpen)
+                    .accessibilityHidden(true)
                     .tag(index)
             }
         }

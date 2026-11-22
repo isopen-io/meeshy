@@ -241,7 +241,8 @@ struct ReelFeedVideoSurface: View {
         // `isMuted == true` laissé par une AUTRE surface (galerie de
         // conversation) garderait `effectiveMuted` vrai et l'icône mentirait
         // (DoD S2 rejet, constat majeur #2).
-        ReelFeedSoundButtonPolicy.apply(soundOn: soundOn && !silenced, to: manager)
+        let soundOn = self.soundOn && !silenced
+        ReelFeedSoundButtonPolicy.apply(soundOn: soundOn, to: manager)
         manager.shouldLoop = true
         // D5 : aucun armement explicite de la session ici — `apply()`
         // ci-dessus a déjà résolu `isMuted`/`isForceMuted` AVANT cet appel, et
