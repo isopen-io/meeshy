@@ -6,7 +6,7 @@
  *  1. **détection** — un lot de comptes marqués « à évaluer » par les écritures du jeu (`PhotoMomentMarks`),
  *     chacun évalué une fois : ligne de base au premier passage, étapes neuves au registre ensuite ;
  *  2. **envoi** — les résumés dus (`GamePhotoMomentService.deliver`) : une notification groupée par compte, au
- *     plus une notification de jeu par jour.
+ *     plus deux notifications de jeu par jour (#17368).
  *
  * Chaque étape est ISOLÉE : un compte qui échoue est journalisé et ne retient ni les autres ni l'envoi ; un
  * passage manqué se rattrape au suivant. Jamais deux passages en même temps dans ce processus.
