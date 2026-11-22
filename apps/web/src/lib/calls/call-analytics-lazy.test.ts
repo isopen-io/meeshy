@@ -98,6 +98,25 @@ describe('les rapports d’un appel chargés à la demande (#19894)', () => {
     expect(sent).toEqual([qualityReport('call-1', total({ level: 'good' }), 1_000), qualityReport('call-1', total({ level: 'fair' }), 6_000), qualityReport('call-1', total({ level: 'poor' }), 11_000)]);
   });
 
+  test('un envoi en attente qui lève n’arrête ni la file ni le direct, et ne laisse aucun rejet (#20426)', async () => {
+    const escaped: unknown[] = [];
+    const onRejection = (reason: unknown): void => void escaped.push(reason);
+    process.on('unhandledRejection', onRejection);
+    const load = deferred<CallReportBuilders>();
+    const reports = lazyCallReports(() => load.promise);
+    const { sent, send } = recorder<QualityReportPayload>();
+    reports.quality('call-1', total({ level: 'good' }), 1_000, () => {
+      throw new Error('transport fermé');
+    });
+    reports.quality('call-1', total({ level: 'fair' }), 6_000, send);
+    load.resolve(builders);
+    await settle();
+    reports.quality('call-1', total({ level: 'poor' }), 11_000, send);
+    process.off('unhandledRejection', onRejection);
+    expect(sent).toEqual([qualityReport('call-1', total({ level: 'fair' }), 6_000), qualityReport('call-1', total({ level: 'poor' }), 11_000)]);
+    expect(escaped).toEqual([]);
+  });
+
   test('un module qui ne charge jamais n’est pas retenté à chaque relevé : trois essais au plus par appel (#20426)', async () => {
     const attempts: number[] = [];
     const reports = lazyCallReports(() => {
