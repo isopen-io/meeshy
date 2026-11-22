@@ -2515,3 +2515,36 @@ socket jusqu'au client.
 2. **#20299** (règle unique du chrome Android), **#20320** (web, petit lot), puis **#20300** (iOS).
 3. #20257, #20284, #20280, #20273, #20288.
 4. #20185 (recette staging), #11932, #12236, #16933.
+
+## Cycle 74 — 2026-11-22
+
+- **Base** : `origin/dev` @ `8dff9d6d0`, qui contient #20322 (#20298, cycle 73). Puis la tête de `dev` @ `5338a58eb5` a été fusionnée dans la branche (`f2b47cf10d`), sans conflit.
+- **Branche** : `claude/determined-volta-brw6qb`.
+- **Objectif** : #20319. Sur iOS, les points d'attente d'un sous-titre d'appel tombent 8 s après sa réception locale, mesurée sur l'horloge monotone, quelle que soit l'horloge de l'orateur. C'est le miroir de #20298 (Android et web).
+- **Livré** (`apps/ios/Meeshy/Features/Call/`, commits `c37c10ff6`, `d73f4b399`, `600b830a4`) :
+  - `CallTranscriptionSegment.receivedAtMonotonic` est un champ local, jamais sérialisé ni persisté (`resetForCallEnd` recopie champ par champ).
+    - Il est posé à un seul endroit, `CallTranscriptionService.upsertRemoteSegment`, qui sert les deux transports (data channel et relais passerelle).
+    - L'horloge est `CallMonotonicClock.seconds()` (`ContinuousClock`, celle du chronomètre d'appel). Elle compte pendant le sommeil de l'appareil, contrairement à `systemUptime`. Elle est injectable (`monotonicNow:`).
+  - `CallCaptionLine.awaitingUntil` passe de `Date?` à `TimeInterval?` sur la même horloge. Sans réception, aucune attente n'est affichée, et l'étiquette « EN » reste.
+  - `CallTranscriptMergeRules` suit la parité avec Android et le web : une ligne partielle prend la réception de l'entrant, une ligne finale garde la sienne. Un re-final ou un partiel tardif ne prolonge donc pas l'attente.
+  - `CallCaptionsBand` (`Views/CallCaptionsViews.swift`) : seule la source d'horloge change, sur 4 lignes, sans aucune disposition. Le fichier appartient à la routine iOS, et aucune de ses branches n'était vivante.
+  - `capturedAt` sert encore au tri et à l'heure affichée. Aucun payload ni Codable ne change.
+- **Tests** :
+  - `CallCaptionLineTests` : orateur +1 h et −1 h, réception absente, garde de source de la bande.
+  - `CallTranscriptionServiceTests` : avec une horloge factice, réception estampillée sur les deux transports malgré une heure murale à ±1 h, partiel à 10 puis final à 25 (on retient 25), final à 40 puis re-final et partiel tardif (on garde 40), règles de fusion pures.
+  - `CallPillTextTests` et `CallScreenLayerTests` sont adaptés au nouveau type.
+  - Rouge, raisonné et contre-vérifié par mutations par la QA : la fusion inversée fait tomber les témoins de fusion, l'ancrage sur `capturedAt` fait tomber les témoins ±1 h. Rien n'est compilé en local (pas de Xcode).
+  - Gardes locales sur l'arbre fusionné : `house_rules` 42/42, `cohesion_budget` exit 0, `test_registration` 2 063 inscrits, couleur d'accent 168/408 conforme.
+  - CI : `ios.yml` run 45006189312 (`workflow_dispatch`, sha `f2b47cf10d`, suites `CallCaptionLineTests`, `CallTranscriptionServiceTests`, `CallPillTextTests`, `CallScreenLayerTests`, `CallTranscriptJournalTests`, `CallTranscriptionSegmentFactoryTests`, `CaptionsModeTests`). Les gardes de texte y sont vertes. Le premier run, 45004227851, a été annulé en file pour être rejoué sur l'arbre fusionné.
+- **QA** (`auditeur-adversarial`, indépendante) : favorable avec réserves.
+  - R1 (moyenne) : `dev` n'était pas fusionnée. C'est fait (`f2b47cf10d`).
+  - R2 (faible) : le délai de la bande n'a qu'une garde de texte. Versée dans **#20335**.
+  - R3 (faible) : les témoins ±1 h de `CallCaptionLineTests` sont en partie tautologiques. La vraie preuve est le témoin du service.
+- **Limites** : rien n'a été vérifié au simulateur ni sur appareil.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée : lire le run `ios.yml` 45006189312. S'il est vert, fusionner `dev` dans la branche, puis la PR.
+1. **#20299** (règle unique du chrome Android), **#20320** (web, petit lot), **#20300** (iOS, fondu des commandes sur `Date()`), puis **#20335**.
+2. #20257, #20284, #20280, #20273, #20288.
+3. #20185 (recette staging), #11932, #12236, #16933.

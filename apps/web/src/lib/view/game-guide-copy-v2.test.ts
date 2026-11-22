@@ -86,7 +86,7 @@ describe('la première Veilleuse offerte (#20169)', () => {
   test('Meo la dit sans reproche et mène à la Flamme', () => {
     const copy = momentCopyV2(guideMomentV2(EVENTS['flame-freeze-gift'], []), 'fr');
     expect(copy.what).toBe('Une Veilleuse t’est offerte.');
-    expect(copy.means).toBe('Trois jours de Flamme : les aïeux t’en confient une. Elle garde ta Flamme allumée un jour où tu ne viens pas.');
+    expect(copy.means).toBe('Les aïeux te la confient : elle garde ta Flamme allumée un jour d’absence.');
     expect(copy.action).toBe('Voir ma Flamme');
     expect(momentCopyV2(guideMomentV2(EVENTS['flame-freeze-gift'], ['flame-freeze-gift']), 'fr').short).toBe('Une Veilleuse t’est offerte pour ta Flamme.');
   });

@@ -928,11 +928,11 @@ export const FocalRow = memo(function FocalRow({
             /* `aria-hidden` INCONDITIONNEL (revue #5935, défauts majeurs
                1/4 — élargi depuis le seul cas `elected`). L'heure et
                l'accusé sont DÉJÀ dans `rowLabel` (`time(...)` et
-               `deliveryWord`, `message-a11y-label.ts`) : sur une rangée
+               `statusLabel`, `message-a11y-label.ts`) : sur une rangée
                ORDINAIRE, `<time>` n'était pas encore masqué et l'arbre AX
                réel le portait deux fois (`[time] → [StaticText] "11:43"`,
                frère non `ignored` de l'`article`). `Check` ne porte qu'un
-               `role="img"` déjà absorbé par le même libellé (`deliveryWord`)
+               `role="img"` déjà absorbé par le même libellé (`statusLabel`)
                — rien de focalisable ici, seulement du texte redondant. Sur
                la rangée ÉLUE, cela tient l'ancienne garde (`FocusStamp` la
                remplace en clair) sans avoir plus besoin de la condition. */

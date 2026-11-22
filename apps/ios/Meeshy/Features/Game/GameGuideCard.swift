@@ -67,7 +67,8 @@ enum GameGuideCard {
     }
 
     /// La carte d'un moment de la vague 2 (#9481) : mêmes champs, la destination est une PAGE du jeu. L'`action` de
-    /// la loi d'origine n'a pas de sens ici — elle reste `seeProgress`, et `wave2Page` la supplante.
+    /// la loi d'origine n'a de sens que pour « voir la Flamme » (sa fiche) ; sinon elle reste `seeProgress`, et
+    /// `wave2Page` la supplante.
     static func ofMomentV2(_ moment: GuideMomentV2) -> GuideCard {
         let emblem = GamePhotoMomentsV2.emblem(of: moment.event)
         let photo = emblem.map(GamePhotoMoments.ofEmblemV2)
@@ -76,7 +77,7 @@ enum GameGuideCard {
             speaker: moment.speaker,
             mood: moment.mood,
             copy: GameGuideCopy.momentV2(moment),
-            action: .seeProgress,
+            action: GameGuideTarget.cardAction(for: moment.action),
             presentation: moment.presentation,
             step: nil,
             photo: photo != nil,

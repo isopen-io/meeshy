@@ -351,9 +351,13 @@ public struct GameBlock: Codable, Sendable, Equatable {
         public let relightPrice: Int
         public let status: FlameStatus
         public let canRelight: Bool
+        /// Vrai le jour où la première Veilleuse est offerte, dans le fuseau du compte. Absent devant un serveur
+        /// antérieur : rien ne s'annonce.
+        public let freezeGifted: Bool?
 
         public init(days: Int, form: FlameFormKey?, bonusPercent: Int, freezes: Int, maxFreezes: Int,
-                    freezePrice: Int, relightPrice: Int, status: FlameStatus, canRelight: Bool) {
+                    freezePrice: Int, relightPrice: Int, status: FlameStatus, canRelight: Bool,
+                    freezeGifted: Bool? = nil) {
             self.days = days
             self.form = form
             self.bonusPercent = bonusPercent
@@ -363,6 +367,7 @@ public struct GameBlock: Codable, Sendable, Equatable {
             self.relightPrice = relightPrice
             self.status = status
             self.canRelight = canRelight
+            self.freezeGifted = freezeGifted
         }
     }
 
