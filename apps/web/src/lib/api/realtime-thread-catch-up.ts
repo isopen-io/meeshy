@@ -144,9 +144,17 @@ const servedAndAtRest = (query: { readonly state: { readonly dataUpdatedAt: numb
  * Dans les deux cas, seules les requêtes DÉJÀ SERVIES et au repos repartent
  * (`servedAndAtRest`), et seules les requêtes OBSERVÉES sont re-jouées
  * (`refetchType: 'active'` par défaut) ; une famille dont aucun écran n'est
- * ouvert est seulement marquée périmée. C'est ce qui rend l'élargissement
- * GRATUIT sur le chemin de la première peinture : une famille jamais servie, ou
- * encore en vol, ne coûte aucune requête.
+ * ouvert est seulement marquée périmée.
+ *
+ * **CE QUE L'ÉLARGISSEMENT COÛTE, exactement** : une famille jamais servie ou
+ * encore en vol ne coûte RIEN. Mais le cache de requêtes est PERSISTÉ
+ * (`dehydrate`/`hydrate`, `query-client.ts` — seules les clés souveraines,
+ * `admin` et hors-disque en sortent), donc au démarrage à froid une famille
+ * RESTAURÉE est servie et au repos : elle repart, si un écran l'observe. C'est
+ * le prix de la justesse, et c'est le MÊME que les cinq familles personnelles
+ * paient déjà — pas une gratuité. Dire « gratuit » serait faux là où ce lot
+ * agit le plus : sur un cache restauré, qui est précisément le cas où la
+ * fenêtre a emporté quelque chose.
  */
 export type CatchUpFamilyScope = {
   readonly queryKey: readonly unknown[];

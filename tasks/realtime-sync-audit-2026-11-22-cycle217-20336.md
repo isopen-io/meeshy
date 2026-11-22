@@ -99,12 +99,26 @@ est à soixante lignes.
   la racine des conversations et la boucle. Quand il tombe, la réparation est
   d'entrer la famille dans la liste, jamais d'élargir le compte.
 
-## L'élargissement est GRATUIT sur le chemin de la première peinture
+## Ce que l'élargissement coûte, exactement
 
-`servedAndAtRest` + `refetchType: 'active'` : une famille jamais servie, ou
-encore en vol, ne coûte aucune requête — seules repartent celles qui étaient
-déjà servies, au repos, et observées, c'est-à-dire exactement celles qui ont une
+`servedAndAtRest` + `refetchType: 'active'` : seules repartent les familles déjà
+servies, au repos, et OBSERVÉES — c'est-à-dire exactement celles qui ont une
 fenêtre. Trois témoins par famille le mesurent.
+
+**La première rédaction de ce paragraphe disait « GRATUIT », et c'était faux.**
+Le cache de requêtes du web est PERSISTÉ (`dehydrate`/`hydrate`,
+`query-client.ts` ; seules les clés souveraines, `admin` et hors-disque en
+sortent), donc au démarrage à froid une famille RESTAURÉE est servie et au
+repos : elle repart. Le coût réel est d'UNE relecture par famille restaurée et
+observée — sur l'écran de la liste, les catégories ; sur le fil social, le fil,
+le rail et les humeurs.
+
+C'est le prix de la justesse, et c'est le MÊME que les cinq familles
+personnelles paient depuis #18573. Mais le nommer « gratuit » l'effaçait
+précisément là où ce lot agit le plus : **sur un cache restauré, qui est le cas
+où la fenêtre a vraiment emporté quelque chose.** Une affirmation de coût est
+une affirmation comme une autre — elle se mesure contre le mécanisme qui la
+dément, ici la persistance, et pas contre le prédicat seul.
 
 ## Preuve du ROUGE
 
