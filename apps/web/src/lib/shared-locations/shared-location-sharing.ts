@@ -150,6 +150,9 @@ export const SHARED_LOCATION_RETRY_MS = 30_000;
 const DEADLINE_SLACK_MS = 1_000;
 /** Au-delà, `setTimeout` se déclenche aussitôt : on se réveille au plus tard à ce terme, et on réarme. */
 const MAX_TIMER_MS = 2_147_483_647;
+/** Les refus que la passerelle rend AVANT toute écriture : charge illisible, point choisi, partage nommé qui n'est plus servi. */
+const NOTHING_WRITTEN: ReadonlySet<SharedLocationSendOutcome> = new Set(['invalid', 'fixed-point', 'started-elsewhere']);
+
 /** Un retrait qui échoue pour l'une de ces raisons attend le réseau ; refusé pour toute autre, on arrête tout plutôt que laisser la personne servie. */
 const WITHDRAWAL_WAITS_ON: ReadonlySet<SharedLocationShareProblem> = new Set(['offline', 'unconfirmed']);
 
@@ -477,8 +480,11 @@ export function createSharedLocationSharingCenter({
       engage(next, fix);
       return null;
     }
-    /* La passerelle a PU appliquer un démarrage avec position qu'elle refuse ensuite (accusé perdu, panne après la prise) : dans le doute, inconnu — deux appareils publient plutôt qu'aucun. */
-    if (fix !== null) notePublishedStart(null);
+    /*
+     * La passerelle a PU appliquer un démarrage avec position qu'elle refuse ensuite (accusé perdu, panne après la prise) : dans le doute,
+     * inconnu — deux appareils publient plutôt qu'aucun. Un refus certain (#20416) n'a rien écrit : le démarrage gardé tient.
+     */
+    if (fix !== null && !NOTHING_WRITTEN.has(verdict.outcome)) notePublishedStart(null);
     if (verdict.outcome === 'unconfirmed') engage(rosterOps.union(previous, next), fix);
     else persist(roster());
     return verdict.outcome;
