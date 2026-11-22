@@ -12,6 +12,8 @@ data class CommunityLink(
     val memberCount: Int = 0,
     val isActive: Boolean = false,
     val createdAt: String? = null,
+    /** Le lien d'entrée est en pause (#20255), lu de `GET /communities/mine` ; `null` : passerelle qui ne le sert pas. */
+    val joinLinkPaused: Boolean? = null,
 ) {
     companion object {
         /** URL canonique de partage `/chat/<identifiant>` (`/join` n'est plus qu'une 308 legacy). */
