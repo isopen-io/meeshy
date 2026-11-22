@@ -250,14 +250,14 @@ struct CallCaptionsBand: View {
     let onToggleOriginal: (UUID) -> Void
     let onOpenJournal: (() -> Void)?
 
-    @State private var now = Date()
+    @State private var now = CallMonotonicClock.seconds()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var settledLines: [CallCaptionLine] {
         lines.map { $0.settled(at: now) }
     }
 
-    private var nextDeadline: Date? {
+    private var nextDeadline: TimeInterval? {
         lines.compactMap(\.awaitingUntil).filter { $0 > now }.min()
     }
 
@@ -302,13 +302,13 @@ struct CallCaptionsBand: View {
     /// « traduction en cours » ne restent affichés à vie.
     private func settleAtNextDeadline() async {
         guard let deadline = nextDeadline else { return }
-        let remaining = deadline.timeIntervalSinceNow
+        let remaining = deadline - CallMonotonicClock.seconds()
         do {
             try await Task.sleep(for: .seconds(max(remaining, 0)))
         } catch {
             return
         }
-        now = max(Date(), deadline)
+        now = max(CallMonotonicClock.seconds(), deadline)
     }
 
     @ViewBuilder

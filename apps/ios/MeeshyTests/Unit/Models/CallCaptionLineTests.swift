@@ -15,7 +15,9 @@ final class CallCaptionLineTests: XCTestCase {
         language: String = "en",
         translatedText: String? = "Bonjour",
         translatedLanguage: String? = "fr",
-        isFinal: Bool = true
+        isFinal: Bool = true,
+        capturedAt: Date = Date(timeIntervalSince1970: 0),
+        receivedAtMonotonic: TimeInterval? = 1_000
     ) -> Meeshy.CallTranscriptionSegment {
         Meeshy.CallTranscriptionSegment(
             id: UUID(),
@@ -28,7 +30,8 @@ final class CallCaptionLineTests: XCTestCase {
             language: language,
             translatedText: translatedText,
             translatedLanguage: translatedLanguage,
-            capturedAt: Date(timeIntervalSince1970: 0)
+            capturedAt: capturedAt,
+            receivedAtMonotonic: receivedAtMonotonic
         )
     }
 
@@ -115,7 +118,48 @@ final class CallCaptionLineTests: XCTestCase {
     func test_make_finalRemoteOriginalOutsideThePrism_awaitsItsTranslationUntilTheDeadline() {
         let sut = awaiting()
         XCTAssertTrue(sut.isAwaitingTranslation)
-        XCTAssertEqual(sut.awaitingUntil, Date(timeIntervalSince1970: 0).addingTimeInterval(CallCaptionTranslationWait.timeout))
+        XCTAssertEqual(sut.awaitingUntil, 1_000 + CallCaptionTranslationWait.timeout)
+    }
+
+    // #20319 — l'attente part de la RÉCEPTION locale (horloge monotone), jamais de
+    // l'horloge murale de l'orateur : un décalage d'une heure ne la fige ni ne la supprime.
+
+    private func awaitingFromSpeaker(clockSkew: TimeInterval, receivedAtMonotonic: TimeInterval? = 1_000) -> CallCaptionLine {
+        line(segment(
+            translatedText: nil, translatedLanguage: nil,
+            capturedAt: Date().addingTimeInterval(clockSkew),
+            receivedAtMonotonic: receivedAtMonotonic
+        ))
+    }
+
+    func test_make_speakerClockAnHourAhead_theWaitEndsEightSecondsAfterTheLocalReception() {
+        let sut = awaitingFromSpeaker(clockSkew: 3_600)
+        XCTAssertEqual(sut.awaitingUntil, 1_008)
+        XCTAssertTrue(sut.settled(at: 1_007.9).isAwaitingTranslation)
+        XCTAssertFalse(sut.settled(at: 1_008).isAwaitingTranslation, "les points tombent 8 s après la réception, pas une heure plus tard")
+    }
+
+    func test_make_speakerClockAnHourBehind_theWaitStillShowsForEightSecondsAfterTheLocalReception() {
+        let sut = awaitingFromSpeaker(clockSkew: -3_600)
+        XCTAssertEqual(sut.awaitingUntil, 1_008)
+        XCTAssertTrue(sut.settled(at: 1_000).isAwaitingTranslation, "une horloge en retard ne supprime pas les points")
+        XCTAssertFalse(sut.settled(at: 1_008).isAwaitingTranslation)
+    }
+
+    func test_make_withoutALocalReception_drawsNoWaitButKeepsTheOriginLabel() {
+        let sut = awaitingFromSpeaker(clockSkew: 0, receivedAtMonotonic: nil)
+        XCTAssertNil(sut.awaitingUntil)
+        XCTAssertFalse(sut.isAwaitingTranslation)
+        XCTAssertEqual(sut.languageTag, "EN")
+        XCTAssertEqual(sut.originLanguage, "EN")
+    }
+
+    func test_captionsBand_measuresTheWaitOnTheSameMonotonicClock() throws {
+        let source = try String(contentsOfFile: #filePath
+            .replacingOccurrences(of: "MeeshyTests/Unit/Models/CallCaptionLineTests.swift", with: "Meeshy/Features/Call/Views/CallCaptionsViews.swift"))
+        XCTAssertTrue(source.contains("@State private var now = CallMonotonicClock.seconds()"))
+        XCTAssertFalse(source.contains("@State private var now = Date()"))
+        XCTAssertFalse(source.contains("deadline.timeIntervalSinceNow"))
     }
 
     func test_make_partialRemoteOriginal_isLabelledButNeverAwaits() {
@@ -159,7 +203,7 @@ final class CallCaptionLineTests: XCTestCase {
     func test_settled_beforeTheDeadline_stillAwaits_andAfterIt_givesUpButKeepsTheLabel() throws {
         let sut = awaiting()
         let deadline = try XCTUnwrap(sut.awaitingUntil)
-        XCTAssertTrue(sut.settled(at: deadline.addingTimeInterval(-0.1)).isAwaitingTranslation)
+        XCTAssertTrue(sut.settled(at: deadline - 0.1).isAwaitingTranslation)
         let given = sut.settled(at: deadline)
         XCTAssertFalse(given.isAwaitingTranslation)
         XCTAssertEqual(given.languageTag, "EN")

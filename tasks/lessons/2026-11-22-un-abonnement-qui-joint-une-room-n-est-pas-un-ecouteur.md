@@ -1,4 +1,4 @@
-## Un abonnement qui JOINT UNE ROOM n'est pas un écouteur — et rien, côté client, ne les distingue
+## Un abonnement qui JOINT UNE ROOM n'est pas un écouteur — et rien, côté client, ne les distingue (2026-11-22, #20304)
 
 **2026-11-22 · #20304 · cycle 217 de la routine temps réel**
 

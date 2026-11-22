@@ -414,7 +414,7 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
    * **LES DEUX AUTHENTIFICATIONS, pas la seconde seule** (#18573). Ce témoin
    * affirmait que la PREMIÈRE ne touchait pas les demandes d'amitié — un
    * contrôle qui gelait la lacune : la fenêtre de la première connexion prend
-   * la famille exactement comme une coupure (`CATCH_UP_PERSONAL_FAMILIES`).
+   * la famille exactement comme une coupure (`CATCH_UP_FAMILIES`).
    * Les deux branches la couvrent donc, et la fraîcheur est rétablie entre les
    * deux firings pour que la seconde ait quelque chose à périmer.
    */

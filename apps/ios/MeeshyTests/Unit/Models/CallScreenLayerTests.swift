@@ -333,7 +333,7 @@ final class CallScreenLayerTests: XCTestCase {
         )
         line.originLanguage = origin
         line.servedLanguage = served
-        line.awaitingUntil = awaiting ? Date(timeIntervalSince1970: 8) : nil
+        line.awaitingUntil = awaiting ? 8 : nil
         return line
     }
 }
