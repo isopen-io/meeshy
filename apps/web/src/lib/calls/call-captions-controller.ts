@@ -55,7 +55,10 @@ export type CaptionsContext = {
   readonly update: (fn: (call: ActiveCall) => ActiveCall) => void;
   readonly emit: (event: string, payload: unknown) => void;
   readonly viewerId: () => string;
+  /** L'horloge MURALE : l'heure d'une ligne (`at`), qui range le journal et s'affiche. */
   readonly now: () => number;
+  /** L'horloge MONOTONE (`performance.now()`) : l'échéance de l'attente d'une traduction, qu'un saut de l'horloge murale ne déplace pas (#20298). */
+  readonly elapsed: () => number;
   readonly repeat: (fn: () => void, ms: number) => unknown;
   readonly stopRepeat: (handle: unknown) => void;
   /** Des sous-titres ont été AFFICHÉS — `call:analytics` › `transcriptionUsed` (#8047). */
@@ -207,7 +210,7 @@ export function createCaptions(ctx: CaptionsContext, deps: CaptionsDeps): Captio
     }
     const call = live();
     if (call === null || message.callId !== ctx.callId) return;
-    const origin = captionOrigin({ language: message.language, isFinal: message.isFinal, translated: null, prism: deps.prism(), now: ctx.now() });
+    const origin = captionOrigin({ language: message.language, isFinal: message.isFinal, translated: null, prism: deps.prism(), received: ctx.elapsed() });
     add({ id: message.id, speakerId: userId, speakerName: call.members[userId]?.name || message.speakerName, original: message.text, translated: null, pair: null, origin, isFinal: message.isFinal, at: message.at > 0 ? message.at : ctx.now(), mine: false });
   };
 
@@ -216,7 +219,7 @@ export function createCaptions(ctx: CaptionsContext, deps: CaptionsDeps): Captio
     const call = live();
     if (decoded === null || call === null || decoded.callId !== ctx.callId || decoded.caption.speakerId === ctx.viewerId()) return;
     const speakerName = decoded.speakerName ?? call.members[decoded.caption.speakerId]?.name ?? '';
-    const origin = captionOrigin({ language: decoded.language, isFinal: decoded.caption.isFinal, translated: decoded.caption.translated, prism: deps.prism(), now: ctx.now() });
+    const origin = captionOrigin({ language: decoded.language, isFinal: decoded.caption.isFinal, translated: decoded.caption.translated, prism: deps.prism(), received: ctx.elapsed() });
     add({ ...decoded.caption, speakerName, origin, at: decoded.caption.at > 0 ? decoded.caption.at : ctx.now(), mine: false });
   };
 

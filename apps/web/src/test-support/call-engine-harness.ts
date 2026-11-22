@@ -132,6 +132,7 @@ export function harness(options: { readonly acks?: Record<string, unknown>; read
     },
     createStream: (tracks) => stream(tracks as unknown as FakeTrack[]),
     now: () => clock,
+    elapsed: () => clock,
     schedule: (fn, ms) => {
       const id = nextTimer++;
       timers.set(id, { fn, at: clock + ms });

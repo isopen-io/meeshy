@@ -68,7 +68,7 @@ describe('l’étiquette de langue d’une ligne traduite (#8393)', () => {
  */
 describe('la langue d’origine d’une phrase', () => {
   const prism = ['fr', 'en'];
-  const origin = (overrides: Partial<Parameters<typeof captionOrigin>[0]> = {}) => captionOrigin({ language: 'es', isFinal: true, translated: null, prism, now: 10_000, ...overrides });
+  const origin = (overrides: Partial<Parameters<typeof captionOrigin>[0]> = {}) => captionOrigin({ language: 'es', isFinal: true, translated: null, prism, received: 10_000, ...overrides });
 
   test('une langue hors du Prisme est étrangère, et une traduction y est attendue jusqu’à l’échéance', () => {
     expect(origin()).toEqual({ language: 'es', foreign: true, awaitingUntil: 10_000 + TRANSLATION_WAIT_MS });

@@ -1,7 +1,7 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { CallCaption } from '@/lib/calls/call-captions';
@@ -242,7 +242,8 @@ describe('les gestes', () => {
     test(`l’horloge murale ${label} d’une heure pendant l’attente : les points tiennent jusqu’à l’échéance monotone, puis tombent (#20298)`, async () => {
       const wall = Date.now();
       const until = performance.now() + 60;
-      const clock = spyOn(Date, 'now').mockImplementation(() => wall + jump);
+      const realNow = Date.now;
+      Date.now = () => wall + jump;
       const view = mount({ captions: [caption({ id: 'w-es', original: 'Hola a todos', translated: null, pair: null, origin: { language: 'es', foreign: true, awaitingUntil: until } })] });
       try {
         expect(view.host.querySelector('[data-call-caption-waiting]')?.hasAttribute('data-leaving')).toBe(false);
@@ -250,7 +251,7 @@ describe('les gestes', () => {
         await settle(120);
         expect(view.host.textContent).not.toContain('Traduction en cours');
       } finally {
-        clock.mockRestore();
+        Date.now = realNow;
         view.done();
       }
     });
