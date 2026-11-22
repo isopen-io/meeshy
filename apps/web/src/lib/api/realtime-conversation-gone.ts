@@ -33,13 +33,33 @@ export function viewerConversationOf(payload: unknown, viewerId: string): string
   return (payload as Readonly<Record<string, unknown>>).userId === viewerId ? conversationId : null;
 }
 
-/** Une relecture de la liste partie avant l'évènement ne rend pas la ligne (#18914) : le retrait passe par le journal. */
-export function applyConversationGone(queryClient: QueryClient, conversationId: string): void {
+/**
+ * LOI UNIQUE « cette conversation quitte la LISTE » (#18914, #20302) — la
+ * moitié de `applyConversationGone` qui ne touche QUE la ligne.
+ *
+ * Une relecture de la liste partie avant l'évènement ne doit pas rendre la
+ * ligne : le retrait passe donc par le journal des écritures vives, jamais par
+ * un `setQueryData` nu. Et il est IDEMPOTENT — c'est ce sur quoi la passerelle
+ * compte pour ne pas gater ses éventails de départ (`participant-ban-core.ts`,
+ * `leave.ts`) : rejouer le retrait d'une ligne déjà partie ne change rien.
+ *
+ * Elle est séparée d'`applyConversationGone` parce que la fin d'APPARTENANCE
+ * (#11415) retire la ligne SANS purger le détail : le fil ouvert y reste
+ * ouvert et dégrade son menu, il ne se referme pas sous le lecteur. Les deux
+ * appelants ne partagent donc que ce retrait-ci, et le partager à la main les
+ * aurait fait diverger au premier correctif de journal.
+ */
+export function removeConversationRow(queryClient: QueryClient, conversationId: string): void {
   writeLive<ConversationsInfiniteData>(queryClient, CONVERSATIONS_QUERY_KEY, (data) => {
     if (data === undefined || !Array.isArray(data.pages)) return data;
     if (!data.pages.some((page) => page.conversations.some((c) => c.id === conversationId))) return data;
     return { ...data, pages: data.pages.map((page) => ({ ...page, conversations: page.conversations.filter((c) => c.id !== conversationId) })) };
   });
+}
+
+/** La ligne part ET le détail est purgé : la conversation n'a plus rien à montrer (#14645, #18914). */
+export function applyConversationGone(queryClient: QueryClient, conversationId: string): void {
+  removeConversationRow(queryClient, conversationId);
   queryClient.removeQueries({ queryKey: conversationQueryKey(conversationId) });
 }
 

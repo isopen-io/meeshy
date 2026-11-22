@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import type { AttachmentReactionUpdateEventData } from '@meeshy/shared/types/socketio-events/reaction';
 
+import { patchMediaHubMessages } from './media-hub-cache';
 import { findCachedThreadMessage, patchThreadMessages } from './messages';
 import type { Message } from './types';
 
@@ -86,5 +87,19 @@ export function applyAttachmentReactionUpdate(
               : a,
           ),
         };
-  patchThreadMessages(queryClient, data.conversationId, (messages) => messages.map((m) => (m.id === data.messageId ? counted(m) : m)));
+  const onRow = (messages: readonly Message[]): readonly Message[] =>
+    messages.map((m) => (m.id === data.messageId ? counted(m) : m));
+
+  patchThreadMessages(queryClient, data.conversationId, onRow);
+  /**
+   * L'INDEX DES MÉDIAS AUSSI (#20303) — le geste LOCAL écrit les deux
+   * (`attachment-reaction.ts`, #8180 : « la visionneuse qui en est ouverte y
+   * relit sa page »), et cet applieur RÉCONCILIE ce geste avec le résumé
+   * absolu du serveur. N'écrire que le fil laissait la copie de l'index
+   * jamais réconciliée : la visionneuse ouverte depuis « Médias » initialise
+   * son ensemble « les miennes » sur `currentUserReactions`, si bien qu'une
+   * réaction posée sur un autre appareil n'y était pas rendue comme sienne —
+   * et la toucher planifiait un `add` au lieu d'un `remove`.
+   */
+  patchMediaHubMessages(queryClient, data.conversationId, onRow);
 }

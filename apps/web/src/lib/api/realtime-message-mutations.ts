@@ -6,6 +6,7 @@ import { quotedIsProtected } from '@/lib/view/quoted-protection';
 import { decodeAttachment } from './decode';
 
 import { deleteLastMessage, editLastMessage } from './list-preview';
+import { patchMediaHubMessages } from './media-hub-cache';
 import { findCachedThreadMessage, latestSurvivingThreadMessage, patchThreadMessages } from './messages';
 import { belongsTo, quotes, tombstone } from './quote-tombstone';
 import type { Attachment, Message } from './types';
@@ -202,6 +203,22 @@ export function applyMessageDeleted(queryClient: QueryClient, data: MessageDelet
       return { ...m, replyTo: tombstone(m.replyTo as Message, deletedAt) };
     });
   });
+
+  /**
+   * L'INDEX DES MÉDIAS AUSSI (#20303) — une racine de requête SÉPARÉE
+   * (`mediaHubConversationKey`, #8180), que ce puits ne touchait pas : la
+   * tuile du message rappelé restait dans la grille, et la visionneuse plein
+   * écran ouverte depuis elle servait le fichier qu'on venait de retirer.
+   *
+   * La rangée SORT au lieu d'y devenir une pierre tombale : un index de MÉDIAS
+   * n'a plus rien à montrer d'un message dont le média est parti — c'est le
+   * verdict qu'applique déjà `stripFromHub` (#13611) quand il ne reste aucune
+   * pièce, et celui de `hideRowsForReader` (#10587) pour « supprimer pour
+   * moi ». Ce chemin était le seul des trois à ne pas l'écrire.
+   */
+  patchMediaHubMessages(queryClient, data.conversationId, (messages) =>
+    messages.some((m) => m.id === data.messageId) ? messages.filter((m) => m.id !== data.messageId) : messages,
+  );
 
   deleteLastMessage(queryClient, data.conversationId, data.messageId, new Date(deletedAt), latestSurvivingThreadMessage(queryClient, data.conversationId, data.messageId));
 }

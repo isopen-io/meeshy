@@ -9,7 +9,8 @@ import { createOutboxStore } from '@/lib/send/outbox-store';
 import { menuConversationOf, menuViewerOf } from '@/lib/view/message-action-scope';
 import { deleteOfferOf } from '@/lib/view/message-deletion';
 
-import { conversationQueryKey } from './conversations';
+import { CONVERSATIONS_QUERY_KEY, conversationQueryKey } from './conversations';
+import { flattenConversationPages, type ConversationsInfiniteData } from './conversations-pages';
 import { createRealtimeConnection, type RealtimeDeps } from './socket';
 import type { Conversation, Message } from './types';
 import { createTypingStore } from './typing-store';
@@ -241,5 +242,124 @@ describe('#20227 — le débannissement rend l’appartenance au lecteur', () =>
       conversationId: 'c-1', participantId: 'p-viewer', userId: VIEWER, membershipRestored: true, memberCount: 3,
     });
     expect(offersDeleteForMe(queryClient, 'c-1')).toBe(false);
+  });
+});
+
+/**
+ * #20302 — ET LA LIGNE DE LISTE S'EN VA.
+ *
+ * #11415 a posé le puits d'appartenance et prouvé sa moitié qui ATTEINT le
+ * pixel : le détail que le fil ouvert relit. L'autre moitié —
+ * `patchConversation(… isMember: false)` — n'atteignait RIEN. Relevé des
+ * lecteurs d'`isMember` dans `apps/web/src` : la carte d'un lien, le menu d'un
+ * message, les deux unités de mention, le menu d'une ligne, le filtre du
+ * talkie. **Aucun ne décide qu'une ligne SE REND** — ni `applyFilter`
+ * (`lib/lens/filters.ts`) ni `flattenConversationPages` ne portent de prédicat
+ * d'appartenance. La ligne restait, avec son aperçu et sa pastille.
+ *
+ * La passerelle ÉNONCE pourtant le contrat sur ses deux sites d'émission
+ * (`participant-ban-core.ts`, `leave.ts`) : « ses appareils gardaient une
+ * ligne que `GET /conversations` ne sert plus … Le retrait côté client est
+ * idempotent ». iOS (`applyConversationDeleted`) et Android (`purge`)
+ * l'honorent tous les deux ; le web était le seul à ne pas le faire.
+ *
+ * Et rien ne guérissait seul : la liste se rafraîchit par un delta borné par
+ * `Conversation.updatedAt`, qu'un départ comme un bannissement laissent
+ * intact — ils n'écrivent qu'un `participant.update`. C'est la raison déjà
+ * mesurée pour #20227.
+ *
+ * **Le témoin passe par le VRAI consommateur** — `flattenConversationPages`,
+ * le `select` de la liste, donc ce que l'écran rend — jamais par le drapeau :
+ * c'est précisément un drapeau vert au-dessus d'un écran faux qui a tenu ce
+ * défaut invisible.
+ *
+ * **Le DÉTAIL n'est pas purgé**, et c'est la décision de #11415 : le fil
+ * OUVERT reste ouvert et dégrade son menu, il ne se referme pas sous le
+ * lecteur. `applyConversationGone` ne convient donc pas tel quel ; c'est sa
+ * moitié « journal de liste » qui est la loi partagée.
+ */
+describe('#20302 — un départ ou un bannissement qui me nomme retire ma ligne', () => {
+  const seedList = (queryClient: QueryClient) => {
+    queryClient.setQueryData<ConversationsInfiniteData>(CONVERSATIONS_QUERY_KEY, {
+      pages: [
+        {
+          conversations: ['c-1', 'c-2'].map((id) => ({ id, type: 'group', participants: [] }) as unknown as Conversation),
+          pagination: { limit: 30, offset: 0, total: 2, hasMore: false },
+          cursorPagination: { limit: 30, hasMore: false, nextCursor: null },
+        },
+      ],
+      pageParams: [undefined],
+    });
+  };
+
+  /** Ce que la liste REND : son `select`, pas les pages brutes. */
+  const rendered = (queryClient: QueryClient): readonly string[] => {
+    const data = queryClient.getQueryData<ConversationsInfiniteData>(CONVERSATIONS_QUERY_KEY);
+    return data === undefined ? [] : flattenConversationPages(data).map((c) => c.id);
+  };
+
+  const parti = { conversationId: 'c-1', participantId: 'p-viewer', userId: VIEWER, displayName: 'Léa', leftAt: '2026-10-24T11:30:00.000Z' };
+  const banni = { conversationId: 'c-1', participantId: 'p-viewer', userId: VIEWER, bannedBy: { id: 'u-admin' }, bannedAt: '2026-10-24T11:30:00.000Z' };
+
+  test('témoin : les deux lignes sont rendues avant l’événement', () => {
+    const { queryClient, destroy } = connect();
+    seedList(queryClient);
+    expect(rendered(queryClient)).toEqual(['c-1', 'c-2']);
+    destroy();
+  });
+
+  for (const [nom, event, payload] of [
+    ['quitter depuis un autre appareil', SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, parti],
+    ['être banni', SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, banni],
+  ] as const) {
+    test(`${nom} : la ligne quitte la liste, le détail reste pour le fil ouvert`, () => {
+      const { socket, queryClient, destroy } = connect();
+      seedList(queryClient);
+      queryClient.setQueryData(conversationQueryKey('c-1'), detail('c-1'));
+
+      socket.fire(event, payload);
+
+      expect(rendered(queryClient)).toEqual(['c-2']);
+      // #11415 — le fil ouvert garde son détail et dégrade son menu.
+      expect(queryClient.getQueryData<Conversation>(conversationQueryKey('c-1'))).toBeDefined();
+      expect(offersDeleteForMe(queryClient, 'c-1')).toBe(false);
+      destroy();
+    });
+  }
+
+  test('le départ d’un AUTRE ne retire aucune ligne', () => {
+    const { socket, queryClient, destroy } = connect();
+    seedList(queryClient);
+    socket.fire(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, { ...parti, participantId: 'p-other', userId: 'u-other' });
+    expect(rendered(queryClient)).toEqual(['c-1', 'c-2']);
+    destroy();
+  });
+
+  test('une charge illisible ne retire aucune ligne', () => {
+    const { socket, queryClient, destroy } = connect();
+    seedList(queryClient);
+    socket.fire(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, { conversationId: 'c-1' });
+    socket.fire(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, null);
+    expect(rendered(queryClient)).toEqual(['c-1', 'c-2']);
+    destroy();
+  });
+
+  /** Le retrait est IDEMPOTENT — c'est ce sur quoi la passerelle compte pour ne pas gater son éventail. */
+  test('rejoué, le même départ ne change plus rien', () => {
+    const { socket, queryClient, destroy } = connect();
+    seedList(queryClient);
+    socket.fire(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, parti);
+    socket.fire(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, parti);
+    socket.fire(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, banni);
+    expect(rendered(queryClient)).toEqual(['c-2']);
+    destroy();
+  });
+
+  test('détruite, la connexion ne retire plus rien', () => {
+    const { socket, queryClient, destroy } = connect();
+    seedList(queryClient);
+    destroy();
+    socket.fire(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, parti);
+    expect(rendered(queryClient)).toEqual(['c-1', 'c-2']);
   });
 });
