@@ -24,7 +24,7 @@ import type { SessionProfileFields, SessionStoreApi, SessionUser } from './sessi
  * l'appareil — la moitié « serveur » de `confirm()` (`profile-actions.ts`),
  * avec ses champs (`sessionFieldsOfProfile`, écrite une fois pour les deux).
  * Le socket relit cette requête à chaque (re)connexion
- * (`CATCH_UP_PERSONAL_FAMILIES`, `socket.ts`).
+ * (`CATCH_UP_FAMILIES`, `socket.ts`).
  *
  * Ne se projette JAMAIS :
  *  - un cache réhydraté ni une écriture locale (`manual`) : le geste qui

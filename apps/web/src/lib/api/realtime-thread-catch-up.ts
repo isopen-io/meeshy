@@ -126,27 +126,52 @@ const servedAndAtRest = (query: { readonly state: { readonly dataUpdatedAt: numb
  * - les CONVERSATIONS, dont seules la liste et le fil VIVANT sont relus — ni la
  *   case d'une conversation, ni une fenêtre ancrée (#7420, du passé) :
  *   `message:new` ne les nourrit pas ;
- * - les familles PERSONNELLES que l'appelant NOMME
- *   (`CATCH_UP_PERSONAL_FAMILIES`, `socket.ts`), prises par leur racine : la
- *   cloche, les demandes d'amitié, les messages favoris. Ce sont les MÊMES que
- *   la branche de reconnexion, et c'est le point du lot — la fenêtre est la
- *   même, donc la liste aussi. Seul le PRÉDICAT les sépare.
+ * - les familles que l'appelant NOMME (`CATCH_UP_FAMILIES`, `socket.ts`) : la
+ *   cloche, les demandes d'amitié, les messages favoris, le profil du lecteur,
+ *   le fil social, le rail des stories, les humeurs et les catégories. Ce sont
+ *   les MÊMES que la branche de reconnexion, et c'est le point du lot — la
+ *   fenêtre est la même, donc la liste aussi. Seul le PRÉDICAT les sépare.
+ *
+ * **CETTE PHRASE A ÉTÉ FAUSSE DEUX LOTS DURANT** (#20336, cycle 217). Elle
+ * affirmait déjà « ce sont les MÊMES », et #18641 puis #18914 ont ajouté quatre
+ * familles à la seule branche de reconnexion sans qu'elle cesse d'être écrite
+ * ici. **Une affirmation d'identité entre deux branches ne se maintient pas
+ * toute seule** : ce qui la tient est que l'appelant n'ait qu'UNE liste à
+ * passer aux deux, et que la portée (`exact`) voyage AVEC la clé plutôt que
+ * d'être retapée au site. Chaque famille porte donc sa portée, et aucune
+ * branche ne la décide.
  *
  * Dans les deux cas, seules les requêtes DÉJÀ SERVIES et au repos repartent
  * (`servedAndAtRest`), et seules les requêtes OBSERVÉES sont re-jouées
  * (`refetchType: 'active'` par défaut) ; une famille dont aucun écran n'est
  * ouvert est seulement marquée périmée.
+ *
+ * **CE QUE L'ÉLARGISSEMENT COÛTE, exactement** : une famille jamais servie ou
+ * encore en vol ne coûte RIEN. Mais le cache de requêtes est PERSISTÉ
+ * (`dehydrate`/`hydrate`, `query-client.ts` — seules les clés souveraines,
+ * `admin` et hors-disque en sortent), donc au démarrage à froid une famille
+ * RESTAURÉE est servie et au repos : elle repart, si un écran l'observe. C'est
+ * le prix de la justesse, et c'est le MÊME que les cinq familles personnelles
+ * paient déjà — pas une gratuité. Dire « gratuit » serait faux là où ce lot
+ * agit le plus : sur un cache restauré, qui est précisément le cas où la
+ * fenêtre a emporté quelque chose.
  */
+export type CatchUpFamilyScope = {
+  readonly queryKey: readonly unknown[];
+  /** REQUIS : la portée voyage avec la clé, jamais avec la branche (`socket.ts`). */
+  readonly exact: boolean;
+};
+
 export function catchUpFirstAuthentication(
   queryClient: QueryClient,
-  personalFamilies: readonly (readonly unknown[])[],
+  families: readonly CatchUpFamilyScope[],
 ): void {
   void queryClient.invalidateQueries({
     queryKey: CONVERSATIONS_QUERY_KEY,
     predicate: (query) => servedAndAtRest(query) && isListOrLiveThread(query.queryKey),
   });
-  for (const queryKey of personalFamilies) {
-    void queryClient.invalidateQueries({ queryKey, predicate: servedAndAtRest });
+  for (const { queryKey, exact } of families) {
+    void queryClient.invalidateQueries({ queryKey, exact, predicate: servedAndAtRest });
   }
 }
 

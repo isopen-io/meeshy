@@ -5,7 +5,9 @@ import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags'
 import type { Attachment, Message } from '@/lib/api/types';
 
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 
+import type { Delivery } from './message';
 import { composeMessageLabel } from './message-a11y-label';
 
 type Sender = NonNullable<Message['sender']>;
@@ -594,5 +596,41 @@ describe('composeMessageLabel — les effets décoratifs (#6175)', () => {
     });
     expect(label).toContain('éphémère');
     expect(label).not.toMatch(/effets|confettis|secousse|scintillant/);
+  });
+});
+
+/**
+ * L'ACCUSÉ SE DIT DANS LA LANGUE DU LECTEUR (92w, a11y/i18n) — `deliveryWord`,
+ * une JUMELLE EN DUR EN FRANÇAIS, cède au vocabulaire TRADUIT et PARTAGÉ du pied
+ * de rangée (`statusLabel`, `message-status-label`). Un lecteur d'écran
+ * anglophone (hispanophone, arabophone…) entendait « lu »/« envoyé » sur SES
+ * propres messages pendant que tout le reste du libellé descendait le catalogue ;
+ * et la jumelle avait même divergé EN français — « distribué » là où le pied dit
+ * « remis » pour l'état `delivered`.
+ */
+describe('composeMessageLabel — l’accusé reprend le vocabulaire traduit du pied (92w)', () => {
+  const mine = (delivery: Delivery | null, language: InterfaceLanguage): string =>
+    composeMessageLabel({ language, protection: 'standard', message: message(), isMine: true, servedText: 'Bonjour', delivery });
+
+  test('dans la langue du lecteur : l’anglais entend « read »/« sent », jamais « lu »/« envoyé »', async () => {
+    await loadInterfaceCatalog('en');
+    expect(mine('read', 'en')).toBe('Bonjour, 09:02, read');
+    expect(mine('read', 'en')).not.toContain('lu');
+    expect(mine('sent', 'en')).toBe('Bonjour, 09:02, sent');
+  });
+
+  test('en français, `delivered` reprend « remis » du pied (fini la jumelle « distribué »)', async () => {
+    await loadInterfaceCatalog('fr');
+    expect(mine('delivered', 'fr')).toBe('Bonjour, 09:02, remis');
+    expect(mine('delivered', 'fr')).not.toContain('distribué');
+  });
+
+  test('non-régression française : pending/sent/read inchangés ; rien sur un message d’autrui', async () => {
+    await loadInterfaceCatalog('fr');
+    expect(mine('pending', 'fr')).toBe('Bonjour, 09:02, en cours d’envoi');
+    expect(mine('sent', 'fr')).toBe('Bonjour, 09:02, envoyé');
+    expect(mine('read', 'fr')).toBe('Bonjour, 09:02, lu');
+    const received = composeMessageLabel({ language: 'fr', protection: 'standard', message: message(), isMine: false, servedText: 'Bonjour', delivery: 'read' });
+    expect(received).toBe('Bruno Bêta, Bonjour, 09:02');
   });
 });
