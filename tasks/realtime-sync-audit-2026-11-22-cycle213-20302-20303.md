@@ -1,7 +1,7 @@
-# Cycle 213 — deux mutations temps réel qui n'atteignaient pas le PIXEL, sur le même écran (#20302, #20303)
+# Cycle 213 — deux mutations qui n'atteignaient pas le PIXEL, et une porte d'appel qu'un banni franchissait (#20302, #20303, #20310)
 
 **Date** : 2026-11-22. **Base** : `dev` à `33f05d700` (qui contient le cycle 210).
-**Issues livrées** : #20302, #20303. **Issues ouvertes** : #20304, #20305, #20306.
+**Issues livrées** : #20302, #20303, #20310. **Issues ouvertes** : #20304, #20305, #20306, #20311, #20313.
 
 ## D'où vient ce lot
 
@@ -75,6 +75,31 @@ n'y était pas rendue comme sienne — et la toucher planifiait un `add` au lieu
 d'un `remove`. **Un contrôle INERTE**, la forme que le `CLAUDE.md` nomme déjà
 au cycle 123 du Prisme.
 
+### #20310 — la porte d'entrée d'un appel lisait `isActive` nu
+
+`resolveParticipantId` (`socketio/call-participants.ts`) est l'UNIQUE porte
+d'appartenance de `call:initiate` et de `call:join`. Elle portait la clause nue.
+
+> **L'asymétrie est dans le même bloc, soixante lignes plus bas.** L'éventail
+> qui décide QUI SONNE épelle `...PARTICIPATION_VIVANTE`. Un membre
+> actif-et-banni ne pouvait donc pas être SONNÉ — mais il pouvait SONNER, et
+> `call:join` le mettait dans la salle d'appel, donc sur le fil des offres SDP
+> et des candidats ICE d'une conversation dont il est exclu. Toutes les autres
+> portes le refusaient déjà.
+
+`call:force-leave` portait la même clause, et son propre commentaire dit ce
+qu'elle garde : « a user must belong to the conversation before they can list /
+terminate its active calls ».
+
+**Pourquoi aucun des deux cliquets ne le voyait**, mesuré : celui des PORTES ne
+le voit pas (la clé est cachée derrière le spread `...participantKeyWhere`,
+donc son discriminant d'identité rend `false`) ; celui des AUDIENCES ne le
+PUBLIE que dans `sweepUnjudgeableParticipantReads()`, une liste que son témoin
+se contente de COMPTER. `call-participants.ts` n'était donc dans aucun des cinq
+inventaires — **pendant que les deux clauses de `CallService` qu'il alimente y
+figuraient.** La tête de la chaîne était invisible aux deux cliquets, son
+milieu inventorié.
+
 ## Ce que le cycle a appris
 
 ### Un témoin ROUGE peut l'être pour la mauvaise raison
@@ -115,6 +140,22 @@ Et le relevé qui l'attrape est mécanique : `grep` les LECTEURS du champ, puis
 demander de chacun *décide-t-il de ce qui se rend ?*. Six lecteurs, zéro sur la
 question posée.
 
+### Un double ad-hoc rend un faux ROUGE sur un correctif JUSTE
+
+Le correctif de #20310 a fait tomber DEUX témoins existants qui n'avaient aucun
+rapport avec le défaut : leurs doubles Prisma étaient des comparateurs écrits à
+la main qui savaient lire `OR` et rien d'autre. Le `where` réparé compose deux
+branches `OR` sous un `AND` ; ils rendaient donc `null` pour une ligne
+parfaitement légitime.
+
+> C'est la leçon du 2026-11-21 (« un double ad-hoc ment aussi par ce qu'il
+> REFUSE ») rencontrée en production d'un lot, et elle mérite d'être redite
+> dans ce sens-là : **un faux VERT finit par se découvrir par un incident ; un
+> faux ROUGE se découvre en ABANDONNANT le correctif**, et personne n'écrit de
+> journal pour dire qu'il a renoncé parce qu'un test s'y opposait. Les deux
+> doubles sont passés à `matchesMongoWhere` / `findFirstIn`, la sémantique
+> partagée.
+
 ### Trois balayages disjoints valent mieux qu'un balayage profond
 
 Les trois audits du cycle ont rendu 2 défauts confirmés et livrés, 1 confirmé et
@@ -140,6 +181,18 @@ TTL). Les deux sont écrites ici pour que le prochain cycle ne les re-balaie pas
   autres appareils du même compte : la joignabilité est décidée par COMPTE, et
   le compte est connecté. `enqueuePersonalMessageMark` existe pour exactement
   ce problème sur trois autres familles, et n'a pas été appliqué ici.
+- **#20311** — la position EN DIRECT est le troisième membre de la famille
+  frappe / regard, et le seul resté sur `isActive` nu. Déjà inventoriée
+  « mesurée, pas instruite » ; ce qui la fait passer à un verdict, c'est
+  l'argument de FAMILLE (deux des trois verbes ont reçu la loi).
+- **#20313** — iOS : le minuteur de lecture à 4 Hz ne s'arrête ni quand le fil
+  quitte l'écran, ni quand l'app passe en arrière-plan. L'écran a pourtant déjà
+  un crochet « j'ai quitté », qui démonte quatre autres choses.
+- **Et le reste de la chaîne d'appel**, hors de ce lot : les deux re-contrôles
+  de `CallService` (`initiateCall`, `joinCall`, dont la branche INVITÉ remplace
+  l'activité par `{ userId }`) et `call:check-active`. Ils sont inventoriés
+  « mesurés, non instruits » ; ce lot ferme la TÊTE, qui est ce qui rend la
+  chaîne exploitable.
 
 ## Gates
 
@@ -149,4 +202,9 @@ TTL). Les deux sont écrites ici pour que le prochain cycle ne les re-balaie pas
 | `bun test src/lib/api/realtime-message-mutations.test.ts` | ROUGE 2/32 avant, **32 verts** après, ROUGE 2/32 au retrait du correctif |
 | `bun test src/lib/api/realtime-attachment-reactions.test.ts` | ROUGE 3/15 avant, **15 verts** après |
 | `bun test src/lib/` (web) | **20 995 verts / 0 rouge**, 1 649 fichiers |
+| `bun test src/` (web, arbre fusionné) | **34 323 verts / 1 rouge** — le rouge est #20285, préexistant et environnemental (bun 1.4.4 local contre 1.3.14 en CI), hors du diff |
 | `npx tsc --noEmit` (web) | **0 erreur** |
+| `npx jest ./src/socketio/__tests__/call-entry-living-participation.test.ts` | ROUGE 3/6 avant, **6 verts** après |
+| `npx jest …/CallEventsHandler-force-leave.test.ts` | ROUGE 2/19 avant, **19 verts** après |
+| `npx jest ./src/socketio ./src/__tests__/unit/socketio ./src/services/calls` | **4 127 verts / 0 rouge**, 314 suites |
+| `npx tsc --noEmit` (passerelle) | **0 erreur** |
