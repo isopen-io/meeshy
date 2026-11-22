@@ -437,11 +437,11 @@ describe('SocialEventsHandler', () => {
   });
 
   describe('broadcastStoryReacted', () => {
-    it('emits story:reacted to author feed room AND story post room in a single deduped emit', () => {
+    it('emits story:reacted to author feed room AND story post room in a single deduped emit', async () => {
       const { handler, io } = buildHandler();
       const data = { storyId: STORY_ID, userId: USER_ID, emoji: '❤️' } as any;
 
-      handler.broadcastStoryReacted(data, AUTHOR_ID);
+      await handler.broadcastStoryReacted(data, AUTHOR_ID);
 
       // Single `io.to([...])` call → Socket.IO dedupes a socket present in both
       // rooms (author watching their own story) → no `+2` double-count.
@@ -453,11 +453,11 @@ describe('SocialEventsHandler', () => {
   });
 
   describe('broadcastStoryUnreacted', () => {
-    it('emits story:unreacted to author feed room AND story post room in a single deduped emit', () => {
+    it('emits story:unreacted to author feed room AND story post room in a single deduped emit', async () => {
       const { handler, io } = buildHandler();
       const data = { storyId: STORY_ID, userId: USER_ID, emoji: '❤️' } as any;
 
-      handler.broadcastStoryUnreacted(data, AUTHOR_ID);
+      await handler.broadcastStoryUnreacted(data, AUTHOR_ID);
 
       expect(io.to).toHaveBeenCalledTimes(1);
       const roomsArg = (io.to as jest.Mock<any>).mock.calls[0][0] as string[];
@@ -493,11 +493,11 @@ describe('SocialEventsHandler', () => {
   });
 
   describe('broadcastStatusReacted', () => {
-    it('emits status:reacted to author feed room AND status post room in a single deduped emit', () => {
+    it('emits status:reacted to author feed room AND status post room in a single deduped emit', async () => {
       const { handler, io } = buildHandler();
       const data = { statusId: STATUS_ID, userId: USER_ID, emoji: '🎉' } as any;
 
-      handler.broadcastStatusReacted(data, AUTHOR_ID);
+      await handler.broadcastStatusReacted(data, AUTHOR_ID);
 
       expect(io.to).toHaveBeenCalledTimes(1);
       const roomsArg = (io.to as jest.Mock<any>).mock.calls[0][0] as string[];
@@ -507,11 +507,11 @@ describe('SocialEventsHandler', () => {
   });
 
   describe('broadcastStatusUnreacted', () => {
-    it('emits status:unreacted to author feed room AND status post room in a single deduped emit', () => {
+    it('emits status:unreacted to author feed room AND status post room in a single deduped emit', async () => {
       const { handler, io } = buildHandler();
       const data = { statusId: STATUS_ID, userId: USER_ID, emoji: '🎉' } as any;
 
-      handler.broadcastStatusUnreacted(data, AUTHOR_ID);
+      await handler.broadcastStatusUnreacted(data, AUTHOR_ID);
 
       expect(io.to).toHaveBeenCalledTimes(1);
       const roomsArg = (io.to as jest.Mock<any>).mock.calls[0][0] as string[];

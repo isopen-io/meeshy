@@ -123,11 +123,16 @@ export class PostReactionHandler {
     // `createUpdateEvent` rend déjà exactement cette forme.
     updateEvent: PostReactionUpdateEventData
   ): Promise<void> {
+    /* La ligne est lue pour TOUS les emojis depuis #20338, et non pour le seul
+       cœur : `post:reaction-added` / `-removed` nomment un ACTEUR, donc leur
+       diffusion doit taire ce qu'un blocage sépare de lui ET de l'AUTEUR du
+       post — dont l'id ne s'obtient que d'ici. Le chemin du cœur lisait déjà
+       cette ligne ; les autres emojis paient une projection, pas une jointure. */
+    const post = await this.prisma.post.findUnique({
+      where: { id: postId },
+      select: { authorId: true, type: true, likeCount: true, reactionSummary: true, visibility: true, visibilityUserIds: true },
+    });
     if (emoji === HEART_EMOJI) {
-      const post = await this.prisma.post.findUnique({
-        where: { id: postId },
-        select: { authorId: true, type: true, likeCount: true, reactionSummary: true, visibility: true, visibilityUserIds: true },
-      });
       if (post && post.authorId && (post.type === 'POST' || post.type === 'REEL')) {
         const payload = {
           postId,
@@ -145,7 +150,14 @@ export class PostReactionHandler {
       }
     }
     const event = action === 'add' ? SERVER_EVENTS.POST_REACTION_ADDED : SERVER_EVENTS.POST_REACTION_REMOVED;
-    emitServerEvent(this.io.to(ROOMS.post(postId)), event, updateEvent);
+    /* La SEPTIÈME famille de #20338, et la seule qui vive hors de
+       `SocialEventsHandler`. Même loi, mêmes deux sujets ; `null` ⇒ on
+       n'annonce rien : on ne diffuse pas une activité sans savoir à qui la
+       taire. */
+    const separated = await this.socialEvents.activitySeparation(userId, post?.authorId);
+    if (separated === null) return;
+    const target = this.io.to(ROOMS.post(postId));
+    emitServerEvent(separated.length > 0 ? target.except([...separated]) : target, event, updateEvent);
   }
 
   /**

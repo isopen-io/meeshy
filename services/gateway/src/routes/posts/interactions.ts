@@ -208,14 +208,14 @@ export function registerInteractionRoutes(
             userId: authContext.registeredUser.id,
             emoji,
             ...counters,
-          }, post.authorId);
+          }, post.authorId).catch((err) => enhancedLogger.warn('[POST /posts/:postId/like]: broadcast story reacted failed', { err }));
         } else if (post.type === 'STATUS') {
           socialEvents.broadcastStatusReacted({
             statusId: targetPostId,
             userId: authContext.registeredUser.id,
             emoji,
             ...counters,
-          }, post.authorId);
+          }, post.authorId).catch((err) => enhancedLogger.warn('[POST /posts/:postId/like]: broadcast status reacted failed', { err }));
         } else {
           // L'audience du broadcast vient de `target`, la tranche ACL de la
           // CIBLE réelle déjà chargée plus haut par `resolveInteractionTarget`
@@ -366,14 +366,14 @@ export function registerInteractionRoutes(
             userId: authContext.registeredUser.id,
             emoji: removedEmoji,
             ...counters,
-          }, post.authorId);
+          }, post.authorId).catch((err) => enhancedLogger.warn('[DELETE /posts/:postId/like]: broadcast story unreacted failed', { err }));
         } else if (post.type === 'STATUS') {
           socialEvents.broadcastStatusUnreacted({
             statusId: targetPostId,
             userId: authContext.registeredUser.id,
             emoji: removedEmoji,
             ...counters,
-          }, post.authorId);
+          }, post.authorId).catch((err) => enhancedLogger.warn('[DELETE /posts/:postId/like]: broadcast status unreacted failed', { err }));
         } else {
           // Même source que le jumeau `POST` : la tranche ACL de la CIBLE
           // réelle chargée pour la garde, jamais un défaut reconstruit au

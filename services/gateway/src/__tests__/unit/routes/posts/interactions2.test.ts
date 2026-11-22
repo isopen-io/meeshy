@@ -112,10 +112,15 @@ function makeSocialEvents() {
   return {
     broadcastPostLiked: jest.fn<any>().mockResolvedValue(undefined),
     broadcastPostUnliked: jest.fn<any>().mockResolvedValue(undefined),
-    broadcastStoryReacted: jest.fn<any>(),
-    broadcastStatusReacted: jest.fn<any>(),
-    broadcastStoryUnreacted: jest.fn<any>(),
-    broadcastStatusUnreacted: jest.fn<any>(),
+    /* Ces quatre rendent une PROMESSE depuis #20338 : la diffusion attend la loi
+       de séparation, et la route la détache avec un `.catch` obligatoire (règle
+       `void p`). Un double qui rend `undefined` fait donc `undefined.catch` —
+       un 500, pas un échec d'assertion. C'est le défaut exact que le cycle 218
+       avait déjà payé sur `comments-like-delete.test.ts`. */
+    broadcastStoryReacted: jest.fn<any>().mockResolvedValue(undefined),
+    broadcastStatusReacted: jest.fn<any>().mockResolvedValue(undefined),
+    broadcastStoryUnreacted: jest.fn<any>().mockResolvedValue(undefined),
+    broadcastStatusUnreacted: jest.fn<any>().mockResolvedValue(undefined),
     broadcastStoryViewed: jest.fn<any>(),
     broadcastPostBookmarked: jest.fn<any>(),
     broadcastPostReposted: jest.fn<any>().mockResolvedValue(undefined),

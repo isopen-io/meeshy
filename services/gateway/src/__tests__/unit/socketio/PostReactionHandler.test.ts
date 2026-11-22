@@ -216,6 +216,8 @@ describe('PostReactionHandler', () => {
     mockSocialEvents = {
       broadcastPostLiked: jest.fn(() => Promise.resolve()),
       broadcastPostUnliked: jest.fn(() => Promise.resolve()),
+      // `activitySeparation` depuis #20338 — voir la note du double jumeau.
+      activitySeparation: jest.fn(() => Promise.resolve([] as string[])),
     };
 
     mockNotificationService.createPostLikeNotification.mockResolvedValue(null);
@@ -266,6 +268,12 @@ describe('PostReactionHandler', () => {
       mockReactionService.createUpdateEvent.mockResolvedValue(sampleUpdateEvent);
 
       await handler.handleAddReaction(socket as any, data, callback);
+      /* La diffusion de `post:reaction-*` est DÉTACHÉE et attend désormais deux
+         lectures (la ligne du post, puis la loi de séparation — #20338) : le
+         témoin doit vidanger la file des microtâches avant d'observer l'emit. */
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
 
       expect(mockReactionService.addReaction).toHaveBeenCalledWith({
         postId: POST_ID,
@@ -394,6 +402,12 @@ describe('PostReactionHandler', () => {
       });
 
       await handler.handleAddReaction(socket as any, data, callback);
+      /* La diffusion de `post:reaction-*` est DÉTACHÉE et attend désormais deux
+         lectures (la ligne du post, puis la loi de séparation — #20338) : le
+         témoin doit vidanger la file des microtâches avant d'observer l'emit. */
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
 
       expect(mockSocialEvents.broadcastPostLiked).not.toHaveBeenCalled();
       expect(mockIO._toEmit).toHaveBeenCalledWith(
@@ -508,6 +522,12 @@ describe('PostReactionHandler', () => {
       mockReactionService.createUpdateEvent.mockResolvedValue(sampleUpdateEvent);
 
       await handler.handleAddReaction(socket as any, data, callback);
+      /* La diffusion de `post:reaction-*` est DÉTACHÉE et attend désormais deux
+         lectures (la ligne du post, puis la loi de séparation — #20338) : le
+         témoin doit vidanger la file des microtâches avant d'observer l'emit. */
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
 
       // Notification service is called with actorId === postAuthorId — service skips internally
       expect(mockNotificationService.createPostLikeNotification).toHaveBeenCalledTimes(1);
@@ -667,6 +687,12 @@ describe('PostReactionHandler', () => {
       });
 
       await handler.handleRemoveReaction(socket as any, data, callback);
+      /* La diffusion de `post:reaction-*` est DÉTACHÉE et attend désormais deux
+         lectures (la ligne du post, puis la loi de séparation — #20338) : le
+         témoin doit vidanger la file des microtâches avant d'observer l'emit. */
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
 
       expect(mockReactionService.removeReaction).toHaveBeenCalledWith({
         postId: POST_ID,
