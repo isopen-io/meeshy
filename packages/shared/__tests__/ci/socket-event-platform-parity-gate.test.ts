@@ -130,21 +130,30 @@ const ASYMETRIES: readonly {
     raison:
       "features que le web ne porte PAS ENCORE — la seule famille où « pas encore porté » est la mesure : "
       + "aucune surface de réaction par emoji sur un commentaire ni sur une humeur (le web a les J'AIME de "
-      + 'commentaire, `comment:liked` / `comment:unliked`, branchés). Le partage de position EN DIRECT, '
-      + "l'enveloppe chiffrée de bout en bout et la traduction d'une story n'ont pas été remesurés au cycle "
-      + '208 : ils gardent la raison de chantier (`apps/web` suit l\'interface iOS, directive du '
-      + "2026-09-07), et c'est à instruire, pas une absence instruite.",
-    events: [
-      'comment:reaction-added',
-      'comment:reaction-removed',
-      'e2ee:envelope',
-      'location:live-started',
-      'location:live-stopped',
-      'location:live-updated',
-      'status:reacted',
-      'status:unreacted',
-      'story:translation-updated',
-    ],
+      + 'commentaire, `comment:liked` / `comment:unliked`, branchés).',
+    events: ['comment:reaction-added', 'comment:reaction-removed', 'status:reacted', 'status:unreacted'],
+  },
+  {
+    absents: ['web'],
+    raison:
+      "le web porte une AUTRE famille pour un AUTRE besoin, mesuré au cycle 211 (#20287) : ces trois-là sont "
+      + 'les positions vivantes DANS UNE CONVERSATION (room `conversation:<id>`, `LocationHandler`), quand le '
+      + 'web sert le partage de position des CERCLES — `location:share-changed` / `location:share-ended`, room '
+      + "`user:<moi>`, #16984 et #18345 —, qu'il reçoit ET émet (`shared-locations-live.ts`). Deux audiences "
+      + "distinctes (les participants d'un fil contre les personnes d'un cercle), donc un périmètre produit, "
+      + "pas une dette de portage de CE nom : `apps/web/src` ne cite aucun `location:live-*`.",
+    events: ['location:live-started', 'location:live-stopped', 'location:live-updated'],
+  },
+  {
+    absents: ['web'],
+    raison:
+      "absence par CONSTRUCTION, mesurée au cycle 211 (#20287) : l'unique audience de cette enveloppe est la "
+      + "room d'APPAREIL (`envelope-delivery.ts`, `ROOMS.device(user, deviceId, registrationId)`), et le web "
+      + "ne s'ENRÔLE pas — il n'appelle que `devices`, `devicesByDeviceId` et `keysByUserIdDevices`, donc il "
+      + "n'a aucune `registrationId` à lui et n'est dans aucune room d'appareil. Un écouteur n'aurait rien à "
+      + "recevoir ; il appartient au lot qui livrera l'enrôlement (le pont libsignal du web existe depuis "
+      + '#17114).',
+    events: ['e2ee:envelope'],
   },
   {
     absents: ['android'],

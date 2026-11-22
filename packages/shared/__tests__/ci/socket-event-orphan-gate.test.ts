@@ -41,6 +41,8 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { RESERVED_SERVER_EVENTS } from '../../types/socketio-events/event-names';
+
 import { readContractPayloads } from './socket-payload-shape/mirror-contract';
 import { eventsNamedByClients } from './socket-payload-shape/client-event-readers';
 
@@ -102,6 +104,42 @@ describe("l'événement du contrat que personne ne lit (#18342)", () => {
     expect(
       stale,
       `lu ou retiré du contrat — à sortir de l'inventaire : ${stale.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  /**
+   * **UNE RÉSERVATION NE S'AUTO-ATTESTE PAS** (#20295). `RESERVED_SERVER_EVENTS`
+   * déclarait, en prose, que ses trois noms étaient « décodés côté clients » —
+   * mesuré FAUX : aucun des trois n'est cité nulle part hors du contrat, et
+   * l'inventaire ci-dessus les porte depuis toujours sous « ni émis ni lu ».
+   * Deux affirmations contradictoires sur la même donnée, dont une seule se
+   * mesurait.
+   *
+   * Le coût d'une telle phrase n'est pas son inexactitude : c'est qu'elle
+   * ORIENTE. Lue par qui vient écrire le pipeline de traduction en appel, elle
+   * dit « les clients sont prêts, il ne manque que l'émetteur » — et ce lot-là
+   * livrerait un émetteur que personne n'affiche (cycle 122).
+   *
+   * Le doc-comment de la réservation raconte lui-même que la prose qu'il a
+   * remplacée « avait pourri sans que rien ne le signale ». Réécrire la prose
+   * ne l'empêche pas de pourrir à nouveau ; la rendre VÉRIFIABLE, oui — d'où ce
+   * témoin, qui tombe dès qu'un nom réservé trouve un lecteur ou un émetteur
+   * sans sortir de la réservation.
+   */
+  it('un nom RÉSERVÉ est mesuré sans lecteur, et la réservation ne l’affirme plus toute seule', () => {
+    const reserved = [...RESERVED_SERVER_EVENTS];
+    const read = reserved.filter((event) => named.has(event));
+    expect(
+      read,
+      `nom RÉSERVÉ que des clients citent — le service a-t-il atterri ? alors sortir de `
+        + `RESERVED_SERVER_EVENTS et de l'inventaire : ${read.join(', ')}`,
+    ).toEqual([]);
+
+    const unmeasured = reserved.filter((event) => !SANS_LECTEUR.has(event));
+    expect(
+      unmeasured,
+      `nom RÉSERVÉ absent de l'inventaire mesuré — une réservation dit ce qu'elle a MESURÉ, `
+        + `jamais ce qu'elle espère : ${unmeasured.join(', ')}`,
     ).toEqual([]);
   });
 });

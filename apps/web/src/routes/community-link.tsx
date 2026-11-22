@@ -1,18 +1,22 @@
 import { useQuery } from '@tanstack/react-query';
+import { useCallback, useMemo } from 'react';
 import { useStore } from 'zustand/react';
 
+import { performSetCommunityJoinLinkPaused, type CommunityJoinLinkDeps } from '@/lib/api/community-join-link';
 import { communityLinksQueryOptions, communityLinkUrl, findCommunityLink, type CommunityLink } from '@/lib/api/community-links';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
-import { translate } from '@/lib/i18n-catalog';
+import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import type { LinkFamilyOutcome } from '@/lib/api/link-family-actions';
 import { translateLinkFamilies } from '@/lib/i18n-link-families-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useUrlSharing } from '@/lib/links/use-url-sharing';
 import { useOnline } from '@/lib/net/online';
 import { useParams } from '@/lib/router';
-import { COMMUNITY_TINT, DetailActions, DetailHero, DetailSkeleton, FamilyRefused, FamilySection, InfoList, type InfoRow } from '@/routes/link-families-parts';
-import { LinksAnnouncement, LinksGlyph, LinksHeader, LinksLoadError, LinksOfflineNotice } from '@/routes/links-parts';
+import { COMMUNITY_TINT, DetailActions, DetailHero, DetailSkeleton, FamilyRefused, FamilySection, InfoList, type DetailAction, type InfoRow } from '@/routes/link-families-parts';
+import { LinksAnnouncement, LinksGlyph, LinksHeader, LinksLoadError, LinksOfflineNotice, statusLabel } from '@/routes/links-parts';
+import { useTapGate } from '@/lib/view/tap-gate';
 import { roleLabel, visibilityLabel } from '@/routes/community-links';
 import { href, navigate } from '@/routes/route-table';
 
@@ -20,6 +24,13 @@ import { href, navigate } from '@/routes/route-table';
  * **LE LIEN D'UNE COMMUNAUTÉ** (#6410) — miroir `CommunityLinkDetailView.swift` :
  * carte d'en-tête, barre d'actions (copier, partager, ouvrir la communauté),
  * puis les informations que l'en-tête ne porte pas déjà : membres, création.
+ *
+ * **Le lien d'entrée se met en pause** (#20255, passerelle #19661) : quand la
+ * liste sert `joinLinkPaused`, l'en-tête dit « Actif » ou « Inactif » et la
+ * barre porte la bascule, optimiste avec retour arrière — même geste que la
+ * fiche d'un lien de suivi. Seules les arrivées PAR LE LIEN s'arrêtent ; la
+ * communauté et ses membres n'en dépendent pas. Une passerelle qui ne sert pas
+ * l'état n'offre aucune bascule (rien n'est inventé).
  *
  * **La communauté se lit dans la liste de SES communautés administrées** :
  * une communauté dont il n'est que membre, ou celle d'un autre, rend le refus —
@@ -35,6 +46,25 @@ export function communityInfoRows(language: InterfaceLanguage, link: CommunityLi
   ];
 }
 
+const TOGGLE_FAILURE: Readonly<Record<Exclude<LinkFamilyOutcome, 'done' | 'busy'>, InterfaceCatalogKey>> = {
+  offline: 'links.announce.offline',
+  failed: 'links.announce.toggleFailed',
+};
+
+export function joinLinkToggleAction(language: InterfaceLanguage, link: CommunityLink, onToggle: () => void): readonly DetailAction[] {
+  if (link.joinLinkPaused === null) return [];
+  const active = !link.joinLinkPaused;
+  return [
+    {
+      name: 'toggle',
+      label: translate(language, active ? 'links.detail.disable' : 'links.detail.activate'),
+      glyph: <LinksGlyph name={active ? 'pauseCircle' : 'playCircle'} size={20} />,
+      tint: active ? 'var(--color-warning)' : 'var(--color-success)',
+      onClick: onToggle,
+    },
+  ];
+}
+
 export default function CommunityLinkScreen() {
   const { community } = useParams<'/links/communities/$community'>();
   const language = currentInterfaceLanguage();
@@ -42,7 +72,21 @@ export default function CommunityLinkScreen() {
   const signedIn = useStore(sessionStore, (state) => state.session.status === 'authenticated');
   const list = useQuery({ ...communityLinksQueryOptions(apiDeps), enabled: apiDeps.source === 'fixtures' || signedIn }, appQueryClient);
   const sharing = useUrlSharing(language);
+  const { announce } = sharing.announcer;
   const link = findCommunityLink(list.data, community);
+  const deps: CommunityJoinLinkDeps = useMemo(() => ({ ...apiDeps, queryClient: appQueryClient, isOnline: () => navigator.onLine }), []);
+  const admitTap = useTapGate();
+  const toggle = useCallback(
+    (current: CommunityLink) => {
+      if (!admitTap() || current.joinLinkPaused === null) return;
+      const paused = !current.joinLinkPaused;
+      void performSetCommunityJoinLinkPaused({ link: current, paused, deps }).then((outcome) => {
+        if (outcome === 'busy') return;
+        announce(translate(language, outcome === 'done' ? (paused ? 'links.announce.disabled' : 'links.announce.activated') : TOGGLE_FAILURE[outcome]));
+      });
+    },
+    [admitTap, announce, deps, language],
+  );
   const title = link === undefined ? translateLinkFamilies(language, 'links.hub.community.title') : link.name;
 
   const content = (() => {
@@ -53,12 +97,12 @@ export default function CommunityLinkScreen() {
         <>
           <DetailHero
             tint={COMMUNITY_TINT}
-            active
+            active={link.joinLinkPaused !== true}
             glyph={<LinksGlyph name="usersThree" size={28} />}
             title={link.name}
             address={url.replace(/^https?:\/\//u, '')}
             chips={[roleLabel(language, link), visibilityLabel(language, link)]}
-            status={null}
+            status={link.joinLinkPaused === null ? null : statusLabel(language, !link.joinLinkPaused)}
           />
           <DetailActions
             actions={[
@@ -77,6 +121,7 @@ export default function CommunityLinkScreen() {
                 tint: 'var(--ios-indigo-500)',
                 onClick: () => navigate(href('community', { community: link.id })),
               },
+              ...joinLinkToggleAction(language, link, () => toggle(link)),
             ]}
           />
           {infoRows.length === 0 ? null : (
