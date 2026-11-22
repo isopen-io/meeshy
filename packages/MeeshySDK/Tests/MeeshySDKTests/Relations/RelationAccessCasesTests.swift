@@ -140,7 +140,7 @@ struct RelationAccessCasesTests {
     }
 
     @Test func theEmitterConsentDefaultIsTheOneOfTheTypeScriptTable() throws {
-        let table = try block(after: "export const RELATION_EMITTER_CONSENT_DEFAULT_LEVEL", until: "};", in: try levelsSource())
+        let table = try block(after: "export const RELATION_LEVEL_DEFAULT_ON", until: "};", in: try levelsSource())
         let rows = try matches("(?:'([\\w.]+)'|(\\w+)):\\s*'([A-Z]+)'", in: table)
         let declared = Dictionary(uniqueKeysWithValues: rows.map { row in (row.first ?? "", row.last ?? "") })
         let mirrored = Dictionary(uniqueKeysWithValues: RelationFeature.allCases.compactMap { feature in

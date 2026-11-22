@@ -170,23 +170,58 @@ export const RELATION_EMITTER_CONSENT_FEATURES: ReadonlySet<RelationFeature> = n
 ]);
 
 /**
- * LE CONSENTEMENT DE L'ÉMETTEUR ACCORDÉ PAR DÉFAUT À PARTIR D'UN NIVEAU (#14147, décision
- * porteur du 2026-11-14) — la batterie entre Sangs part sans confirmation, retirable par
- * personne ou pour tous ; entre Proches, elle attend un accord donné une fois, jamais
- * pré-coché. La colonne de la paire est TRI-ÉTAT : nulle = ce défaut, `true` = accordé,
- * `false` = refusé. Une feature absente de cette table garde le sens historique : seul un
- * accord stocké l'ouvre. Résolution : `resolveEmitterConsent` (`relation-emitter-consent.ts`).
+ * CHAQUE PALIER ARRIVE AVEC SES FONCTIONS ACTIVES (directive porteur du 2026-11-22, #20359,
+ * #20361 ; remplace la table #14147). Le consentement de l'émetteur est ACCORDÉ par défaut
+ * dès que le niveau effectif atteint la valeur de cette table : à Proche, la catégorie
+ * d'écoute, la batterie et l'injoignabilité ; à Sang, tout le reste. La colonne de la paire
+ * est TRI-ÉTAT : nulle = ce défaut, `true` = accordé, `false` = refusé (réglable sous le
+ * Sang). Une feature absente de cette table garde le sens historique : seul un accord stocké
+ * l'ouvre (la position temporaire, un geste par partage). Résolution : `resolveEmitterConsent`
+ * (`relation-emitter-consent.ts`).
  *
  * Écrite en LITTÉRAL : les miroirs Swift et Kotlin relisent cette table dans ce fichier.
  */
-export const RELATION_EMITTER_CONSENT_DEFAULT_LEVEL: Readonly<Partial<Record<RelationFeature, RelationLevel>>> = {
-  'device.battery': 'BLOOD',
+export const RELATION_LEVEL_DEFAULT_ON: Readonly<Partial<Record<RelationFeature, RelationLevel>>> = {
+  'listening.category': 'CLOSE',
+  'device.battery': 'CLOSE',
+  'device.unreachable': 'CLOSE',
+  'listening.title': 'BLOOD',
+  'location.live': 'BLOOD',
+  'location.history': 'BLOOD',
+  'location.proximity': 'BLOOD',
   'device.battery.pull': 'BLOOD',
-  'device.unreachable': 'BLOOD',
   'safety.inactivity': 'BLOOD',
   'device.call': 'BLOOD',
   'health.fall': 'BLOOD',
 };
+
+/**
+ * DE SANG À SANG RIEN NE SE COUPE, SAUF LE SANG LUI-MÊME (directive porteur du 2026-11-22,
+ * #20361). Au niveau effectif Sang (équipe comprise, #16623), une fois l'accord au palier
+ * donné (`bloodBundleAccepted`, #20362), ni un refus stocké, ni une coupure globale, ni un
+ * blocage de réception ne ferment ces features ; la route qui les COUPE répond
+ * `409 RELATION_BLOOD_LOCKED`. Restreindre, c'est redescendre à Proche.
+ *
+ * Hors du verrou : la position temporaire (un geste par partage), le blocage, la chute
+ * refusée sous 15 ans et l'accord GLOBAL de détection de chute (art. 9 RGPD), jugés hors de
+ * cette table par leurs orchestrateurs.
+ */
+export const RELATION_BLOOD_LOCKED_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
+  'bring',
+  'talkie',
+  'together',
+  'listening.category',
+  'listening.title',
+  'location.live',
+  'location.history',
+  'location.proximity',
+  'device.battery',
+  'device.battery.pull',
+  'device.unreachable',
+  'safety.inactivity',
+  'device.call',
+  'health.fall',
+]);
 
 /**
  * Les features dont la loi exige `consent: 'granted'` — l'UNION des deux natures

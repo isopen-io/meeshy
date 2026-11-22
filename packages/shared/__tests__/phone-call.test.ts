@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   RELATION_CONSENT_FEATURES,
   RELATION_DIRECTED_FEATURES,
-  RELATION_EMITTER_CONSENT_DEFAULT_LEVEL,
+  RELATION_LEVEL_DEFAULT_ON,
   RELATION_EMITTER_CONSENT_FEATURES,
   RELATION_FEATURE_MIN_LEVEL,
   RELATION_FEATURES,
@@ -45,7 +45,7 @@ describe('« en appel » dans la matrice des cercles (#18753)', () => {
     expect(RELATION_FEATURE_MIN_LEVEL['device.call']).toBe('BLOOD');
     expect(RELATION_EMITTER_CONSENT_FEATURES.has('device.call')).toBe(true);
     expect(RELATION_CONSENT_FEATURES.has('device.call')).toBe(true);
-    expect(RELATION_EMITTER_CONSENT_DEFAULT_LEVEL['device.call']).toBe('BLOOD');
+    expect(RELATION_LEVEL_DEFAULT_ON['device.call']).toBe('BLOOD');
     expect(RELATION_DIRECTED_FEATURES.has('device.call')).toBe(false);
   });
 

@@ -54,7 +54,7 @@ public enum class RelationFeature(
     public val isMinorApartForTeam: Boolean = false,
     /**
      * Le niveau à partir duquel le consentement de l'ÉMETTEUR est accordé PAR DÉFAUT
-     * (`RELATION_EMITTER_CONSENT_DEFAULT_LEVEL`, #14147) : la batterie part entre Sangs sans confirmation, retirable ;
+     * (`RELATION_LEVEL_DEFAULT_ON`, #20361) : chaque palier arrive avec ses fonctions actives (batterie dès Proche) ;
      * entre Proches elle attend un accord. `null` = seul un accord stocké ouvre.
      */
     public val emitterConsentDefaultLevel: RelationLevel? = null,
@@ -76,16 +76,16 @@ public enum class RelationFeature(
     AUDIENCE_ACQUAINTANCES("audience.acquaintances", RelationLevel.ACQUAINTANCE, isMinorApartForTeam = true),
     AUDIENCE_CLOSE("audience.close", RelationLevel.CLOSE, isMinorApartForTeam = true),
     AUDIENCE_BLOOD("audience.blood", RelationLevel.BLOOD, isMinorApartForTeam = true),
-    LISTENING_CATEGORY("listening.category", RelationLevel.CLOSE, requiresConsent = true),
-    LISTENING_TITLE("listening.title", RelationLevel.BLOOD, requiresConsent = true),
+    LISTENING_CATEGORY("listening.category", RelationLevel.CLOSE, requiresConsent = true, emitterConsentDefaultLevel = RelationLevel.CLOSE),
+    LISTENING_TITLE("listening.title", RelationLevel.BLOOD, requiresConsent = true, emitterConsentDefaultLevel = RelationLevel.BLOOD),
     TALKIE("talkie", RelationLevel.CLOSE, requiresConsent = true, isDirected = true),
     TOGETHER("together", RelationLevel.CLOSE, isDirected = true),
     BRING("bring", RelationLevel.FRIEND, requiresConsent = true, isDirected = true),
-    LOCATION_LIVE("location.live", RelationLevel.BLOOD, requiresConsent = true),
+    LOCATION_LIVE("location.live", RelationLevel.BLOOD, requiresConsent = true, emitterConsentDefaultLevel = RelationLevel.BLOOD),
     LOCATION_TEMPORARY("location.temporary", RelationLevel.FRIEND, requiresConsent = true),
-    LOCATION_HISTORY("location.history", RelationLevel.BLOOD, requiresConsent = true),
-    LOCATION_PROXIMITY("location.proximity", RelationLevel.BLOOD, requiresConsent = true),
-    DEVICE_BATTERY("device.battery", RelationLevel.CLOSE, requiresConsent = true, emitterConsentDefaultLevel = RelationLevel.BLOOD),
+    LOCATION_HISTORY("location.history", RelationLevel.BLOOD, requiresConsent = true, emitterConsentDefaultLevel = RelationLevel.BLOOD),
+    LOCATION_PROXIMITY("location.proximity", RelationLevel.BLOOD, requiresConsent = true, emitterConsentDefaultLevel = RelationLevel.BLOOD),
+    DEVICE_BATTERY("device.battery", RelationLevel.CLOSE, requiresConsent = true, emitterConsentDefaultLevel = RelationLevel.CLOSE),
     DEVICE_BATTERY_PULL(
         "device.battery.pull",
         RelationLevel.BLOOD,
@@ -93,7 +93,7 @@ public enum class RelationFeature(
         isDirected = true,
         emitterConsentDefaultLevel = RelationLevel.BLOOD,
     ),
-    DEVICE_UNREACHABLE("device.unreachable", RelationLevel.CLOSE, requiresConsent = true, emitterConsentDefaultLevel = RelationLevel.BLOOD),
+    DEVICE_UNREACHABLE("device.unreachable", RelationLevel.CLOSE, requiresConsent = true, emitterConsentDefaultLevel = RelationLevel.CLOSE),
     SAFETY_INACTIVITY("safety.inactivity", RelationLevel.BLOOD, requiresConsent = true, emitterConsentDefaultLevel = RelationLevel.BLOOD),
     DEVICE_CALL("device.call", RelationLevel.BLOOD, requiresConsent = true, emitterConsentDefaultLevel = RelationLevel.BLOOD),
     HEALTH_FALL("health.fall", RelationLevel.BLOOD, requiresConsent = true, emitterConsentDefaultLevel = RelationLevel.BLOOD),

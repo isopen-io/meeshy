@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   RELATION_CONSENT_FEATURES,
   RELATION_DIRECTED_FEATURES,
-  RELATION_EMITTER_CONSENT_DEFAULT_LEVEL,
+  RELATION_LEVEL_DEFAULT_ON,
   RELATION_EMITTER_CONSENT_FEATURES,
   RELATION_FEATURE_MIN_LEVEL,
   RELATION_FEATURES,
@@ -61,7 +61,7 @@ describe('la chute dans la matrice des cercles (#18748)', () => {
     expect(RELATION_FEATURE_MIN_LEVEL['health.fall']).toBe('BLOOD');
     expect(RELATION_EMITTER_CONSENT_FEATURES.has('health.fall')).toBe(true);
     expect(RELATION_CONSENT_FEATURES.has('health.fall')).toBe(true);
-    expect(RELATION_EMITTER_CONSENT_DEFAULT_LEVEL['health.fall']).toBe('BLOOD');
+    expect(RELATION_LEVEL_DEFAULT_ON['health.fall']).toBe('BLOOD');
     expect(RELATION_DIRECTED_FEATURES.has('health.fall')).toBe(false);
   });
 
