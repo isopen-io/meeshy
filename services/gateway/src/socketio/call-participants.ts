@@ -24,6 +24,7 @@ import { logger } from '../utils/logger';
 import { resolveInvitedGuestParticipantId } from '../services/calls/callInvitation';
 import { isDuoCall } from '../services/calls/answeredCallRoster';
 import { participantKeyWhere } from './departed-member-participant-where';
+import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 
 /** Ce que ces résolveurs empruntent à l'instance — résolu à l'APPEL, jamais capturé. */
 export type CallParticipantResolverDeps = {
@@ -35,7 +36,18 @@ export async function resolveParticipantId(deps: CallParticipantResolverDeps, us
   const participant = await deps.prisma.participant.findFirst({
     // #10473 — la clé d'un invité de lien est son `Participant.id`, son
     // `userId` est nul : la colonne se choisit sur la clé.
-    where: { ...participantKeyWhere(userId), conversationId, isActive: true },
+    //
+    // #20310 — et la PARTICIPATION doit être VIVANTE. Cette porte portait
+    // `isActive: true` NU, alors que l'éventail qui décide QUI SONNE épelle la
+    // loi soixante lignes plus bas (`CallEventsHandler`) : un membre
+    // actif-et-banni ne pouvait pas être SONNÉ, mais il pouvait SONNER — et
+    // `call:join` le mettait dans la salle d'appel, donc sur le fil des offres
+    // SDP et des candidats ICE d'une conversation dont il est exclu.
+    //
+    // Composé par `AND`, JAMAIS par spread : `participantKeyWhere` et
+    // `PARTICIPATION_VIVANTE` rendent CHACUN une clé `OR`, et un double spread
+    // n'en laisserait qu'une — la seconde écrasant la première en silence.
+    where: { conversationId, AND: [participantKeyWhere(userId), PARTICIPATION_VIVANTE] },
     select: { id: true }
   });
   return participant?.id ?? null;

@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 
 import { patchConversation, patchConversationDetail } from './conversations';
+import { removeConversationRow } from './realtime-conversation-gone';
 
 /**
  * L'APPARTENANCE DU LECTEUR, DANS LES DEUX SENS (#11415, #20227) — les
@@ -9,10 +10,10 @@ import { patchConversation, patchConversationDetail } from './conversations';
  * les deux faces), la conversation dit ce qu'il en est — dans le détail que le
  * fil relit, et dans la liste.
  *
- * | événement | verdict |
- * |---|---|
- * | `conversation:participant-left` / `-banned` | `isMember: false` |
- * | `conversation:participant-unbanned`, `membershipRestored: true` | `isMember: true` |
+ * | événement | le DÉTAIL | la LIGNE de liste |
+ * |---|---|---|
+ * | `conversation:participant-left` / `-banned` | `isMember: false` | **elle part** (#20302) |
+ * | `conversation:participant-unbanned`, `membershipRestored: true` | `isMember: true` | relecture complète (#20227) |
  *
  * Le détail servi ne porte que des lignes ACTIVES : la ligne du lecteur n'y
  * passe jamais « inactive », elle disparaît. Sans ce puits, le fil ouvert
@@ -50,9 +51,30 @@ export function viewerMembershipEndedOf(payload: unknown, viewerId: string): Vie
   return textOf(p.userId) === viewerId || textOf(p.participantId) === viewerId ? { conversationId } : null;
 }
 
+/**
+ * **La LIGNE part, le DÉTAIL reste** (#20302, qui complète #11415).
+ *
+ * Le détail garde `isMember: false` : c'est lui qui atteint le pixel du fil
+ * OUVERT (`menuViewerOf` → `viewerIsActiveMember`), et le fil ne se referme
+ * pas sous le lecteur — il dégrade son menu.
+ *
+ * La LIGNE, elle, s'en va. Le `patchConversation(… isMember: false)` qui
+ * vivait ici n'atteignait RIEN : aucun lecteur d'`isMember` ne décide qu'une
+ * ligne se rend (ni `applyFilter`, ni `flattenConversationPages`), si bien que
+ * la conversation restait dans la liste avec son aperçu et sa pastille,
+ * jusqu'à une relecture complète. La passerelle énonce pourtant le contrat sur
+ * ses deux sites d'émission — « ses appareils gardaient une ligne que
+ * `GET /conversations` ne sert plus … Le retrait côté client est idempotent »
+ * (`participant-ban-core.ts`, `leave.ts`) — et iOS
+ * (`applyConversationDeleted`) comme Android (`purge`) l'honoraient déjà.
+ *
+ * Le sens RETOUR n'a rien à défaire : `conversation:participant-unbanned` avec
+ * `membershipRestored` relit la liste EN ENTIER (#20227), donc la ligne
+ * revient d'elle-même.
+ */
 export function applyViewerMembershipEnded(queryClient: QueryClient, ended: ViewerMembershipEnded): void {
   patchConversationDetail(queryClient, ended.conversationId, (c) => ({ ...c, isMember: false }));
-  patchConversation(queryClient, ended.conversationId, (c) => ({ ...c, isMember: false }));
+  removeConversationRow(queryClient, ended.conversationId);
 }
 
 /**
