@@ -65,9 +65,10 @@ final class AvatarBannerNoRetryWiringTests: XCTestCase {
 
         // #17907 — Fermer et Réglages flottent en surimpression du défilement, comme sur la fiche profil :
         // aucun débordement du contenu ne peut les recouvrir.
-        XCTAssertTrue(source.contains(".overlay(alignment: .topLeading) { closeButton }"),
+        let sheet = try appSource("Meeshy/Features/Main/Components/ConversationInfoSheet.swift")
+        XCTAssertTrue(sheet.contains(".overlay(alignment: .topLeading) { closeButton }"),
                       "Close must float above the scrolling content, so no overflow can cover it.")
-        XCTAssertTrue(source.contains(".overlay(alignment: .topTrailing) { settingsButton }"),
+        XCTAssertTrue(sheet.contains(".overlay(alignment: .topTrailing) { settingsButton }"),
                       "Settings must float above the scrolling content, so no overflow can cover it.")
     }
 
