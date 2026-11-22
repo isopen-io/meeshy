@@ -16,6 +16,7 @@ fun CommunityMini.toCommunityLink(webOrigin: String): CommunityLink = CommunityL
     memberCount = memberCount ?: 0,
     isActive = isActive,
     createdAt = createdAt,
+    joinLinkPaused = joinLinkPaused,
 )
 
 fun List<CommunityLink>.toStats(): CommunityLinkStats = CommunityLinkStats(

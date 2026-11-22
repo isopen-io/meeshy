@@ -5,6 +5,7 @@ import {
   WELCOME_BACK_PERIOD_DAYS,
   easedProfile,
   isEasedDreamDay,
+  isKeptOfferingDay,
   welcomeBackDay,
 } from '../../utils/game/welcome-back.js';
 import { MISSION_CAPABILITIES, MISSION_TEMPLATES, drawDailyMissions, missionTarget, type MissionProfile } from '../../utils/game/missions.js';
@@ -83,5 +84,18 @@ describe('easedProfile — un Rêve allégé se tire comme celui d’un compte q
       const eased = missionTarget({ template, difficulty: template.difficulty, level: 40, profile: easedProfile(profile) });
       expect(eased).toBeLessThanOrEqual(usual);
     }
+  });
+});
+
+describe('isKeptOfferingDay — au jour du retour, les aïeux ont gardé l’Offrande (#20266, #17373)', () => {
+  it('le seul jour du retour : ni la veille, ni les deux jours allégés qui suivent', () => {
+    expect(isKeptOfferingDay({ welcomeDay: '2026-11-17', today: '2026-11-17' })).toBe(true);
+    expect(isKeptOfferingDay({ welcomeDay: '2026-11-17', today: '2026-11-18' })).toBe(false);
+    expect(isKeptOfferingDay({ welcomeDay: '2026-11-17', today: '2026-11-16' })).toBe(false);
+  });
+
+  it('aucun retour ou une clé illisible : aucune Offrande gardée', () => {
+    expect(isKeptOfferingDay({ welcomeDay: null, today: '2026-11-17' })).toBe(false);
+    expect(isKeptOfferingDay({ welcomeDay: 'jadis', today: 'jadis' })).toBe(false);
   });
 });
