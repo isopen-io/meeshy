@@ -22,7 +22,11 @@ import { participantAccountClosure } from '@meeshy/shared/utils/participant-help
 import { canViewExactMemberCount, presentMemberCount } from '@meeshy/shared/utils/member-visibility';
 import type { ConversationParams } from './types';
 import { conversationDetailWithEngagementResponseSchema, loadViewerEngagementsOrEmpty } from './engagement';
-import { conversationDetailInclude, conversationUserPreferencesSelect } from './core-selects';
+import {
+  conversationDetailInclude,
+  conversationUserPreferencesSelect,
+  type ConversationDetailParticipantRow,
+} from './core-selects';
 import { loadReadCursorBoundaries } from './read-cursor-projection';
 import { loadViewerBirthDate } from './viewerWriteRestriction';
 import { loadViewerCapabilities, obsoleteViewerOf } from '../../services/conversations/obsoleteCapability';
@@ -545,7 +549,7 @@ export function registerConversationDetailRoute(
                * surcharge, qui n'a rien à faire sur le fil.
                */
               return {
-                ...participantRowWithServedRights(m),
+                ...participantRowWithServedRights<ConversationDetailParticipantRow>(m),
                 ...(profileDecor === undefined ? {} : { profileDecor }),
                 ...participantAccountClosure(m),
                 isOnline: vis.showOnline ? (liveOnline === undefined ? m.isOnline : liveOnline) : false,

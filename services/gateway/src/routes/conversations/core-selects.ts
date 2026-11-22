@@ -278,6 +278,19 @@ export const conversationDetailInclude = {
 } as const;
 
 /**
+ * La ligne de participant que le DÉTAIL charge — `anonymousSession.rights`
+ * compris (#20277).
+ *
+ * Nommée pour que la loi des droits s'applique sur un TYPE et non sur `any` :
+ * `participantRowWithServedRights` rend `Omit<T, 'anonymousSession'>`, ce qui ne
+ * veut rien dire quand `T` est `any`, et le compilateur perdait alors jusqu'à
+ * l'`id` de la ligne.
+ */
+export type ConversationDetailParticipantRow = Prisma.ParticipantGetPayload<{
+  select: (typeof conversationDetailInclude)['participants']['select'];
+}>;
+
+/**
  * **CE QUE LA LIGNE DE LISTE CHARGE — et le schéma wire dit ce qu'elle doit
  * charger** (audit de cohérence iOS ↔ passerelle, 2026-09-11).
  *
