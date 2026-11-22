@@ -22,12 +22,17 @@ import { participantAccountClosure } from '@meeshy/shared/utils/participant-help
 import { canViewExactMemberCount, presentMemberCount } from '@meeshy/shared/utils/member-visibility';
 import type { ConversationParams } from './types';
 import { conversationDetailWithEngagementResponseSchema, loadViewerEngagementsOrEmpty } from './engagement';
-import { conversationDetailInclude, conversationUserPreferencesSelect } from './core-selects';
+import {
+  conversationDetailInclude,
+  conversationUserPreferencesSelect,
+  type ConversationDetailParticipantRow,
+} from './core-selects';
 import { loadReadCursorBoundaries } from './read-cursor-projection';
 import { loadViewerBirthDate } from './viewerWriteRestriction';
 import { loadViewerCapabilities, obsoleteViewerOf } from '../../services/conversations/obsoleteCapability';
 import { servedMessageRequest, type ServedMessageRequest } from '../../services/messaging/messageRequests';
 import { memberCountServedToViewer, membersServedToViewer } from '../../services/guests/guestMemberVisibility';
+import { participantRowWithServedRights } from '../../services/participantRights';
 import { participantProfileDecor } from '../../services/appearance/profileDecor';
 import { startupPackIndex } from '../../services/packs/PackIndex';
 import { viewerWriteRestrictionOf } from '@meeshy/shared/utils/global-minor-restriction';
@@ -536,8 +541,15 @@ export function registerConversationDetailRoute(
               const liveOnline = fastify.presenceChecker?.isOnline(m.userId ?? m.id);
               const vis = presenceFor(detailPresenceViewer, presenceVis, m.userId);
               const profileDecor = participantProfileDecor(startupPackIndex(), m.user);
+              /**
+               * #20277 — les droits servis sont ceux que la passerelle
+               * APPLIQUERA, jamais l'instantané du join. La loi est unique
+               * (`services/participantRights.ts`) ; ce site ne fait que
+               * l'appeler, et la fabrique retire au passage la source de la
+               * surcharge, qui n'a rien à faire sur le fil.
+               */
               return {
-                ...m,
+                ...participantRowWithServedRights<ConversationDetailParticipantRow>(m),
                 ...(profileDecor === undefined ? {} : { profileDecor }),
                 ...participantAccountClosure(m),
                 isOnline: vis.showOnline ? (liveOnline === undefined ? m.isOnline : liveOnline) : false,

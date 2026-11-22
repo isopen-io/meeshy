@@ -57,12 +57,7 @@ const SWIFT_EVENT_ENUM = 'packages/MeeshySDK/Sources/MeeshySDK/Sockets/SocketEve
  * Il ne porte aucun verdict de produit : décider si le web doit observer le
  * curseur appartient à #18601, pas à ce fichier.
  */
-export const PLATFORMS_WITHOUT_SEQ_CURSOR: ReadonlyMap<ClientPlatform, string> = new Map<ClientPlatform, string>([
-  [
-    'web',
-    "#18601 — aucune occurrence de `_seq`, `observeSyncSeq`, `lastSeq` ni `checkpointSeq` au sens du SyncEngine sous `apps/web/src` ; l'observateur que trois doc-comments du dépôt nommaient (`notification-socketio.singleton.ts`) appartenait au web LEGACY, sorti du dépôt au #7668.",
-  ],
-]);
+export const PLATFORMS_WITHOUT_SEQ_CURSOR: ReadonlyMap<ClientPlatform, string> = new Map<ClientPlatform, string>([]);
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.kt', '.swift']);
 

@@ -32,7 +32,9 @@ export type GuideEventV2 =
   | { readonly kind: 'season-end'; readonly season: number; readonly stepsReached: number; readonly completed: boolean; readonly gloryGained: number }
   | { readonly kind: 'trophy'; readonly trophyKey: string }
   | { readonly kind: 'prestige'; readonly prestige: number; readonly gloryGained: number }
-  | { readonly kind: 'atlas-stamp'; readonly language: string; readonly stamped: number; readonly total: number };
+  | { readonly kind: 'atlas-stamp'; readonly language: string; readonly stamped: number; readonly total: number }
+  /** La première Veilleuse, offerte au 3e jour de Flamme (#20169). Sa clé est `FLAME_FREEZE_GIFT_SEEN_KEY`. */
+  | { readonly kind: 'flame-freeze-gift'; readonly freezes: number };
 
 export type GuideMomentKeyV2 = GuideEventV2['kind'];
 
@@ -45,6 +47,7 @@ export const GUIDE_MOMENT_KEYS_V2: readonly GuideMomentKeyV2[] = [
   'trophy',
   'prestige',
   'atlas-stamp',
+  'flame-freeze-gift',
 ];
 
 type DataOf<K extends GuideMomentKeyV2> = Omit<Extract<GuideEventV2, { kind: K }>, 'kind'>;
@@ -55,7 +58,7 @@ export type GuideMomentV2 = {
     readonly speaker: GuideSpeaker;
     readonly mood: GuideMood;
     readonly data: DataOf<K>;
-    readonly action: GuideActionV2 | 'see-level';
+    readonly action: GuideActionV2 | 'see-level' | 'see-flame';
     readonly presentation: 'full' | 'short';
   };
 }[GuideMomentKeyV2];
@@ -80,6 +83,8 @@ function personaOf(event: GuideEventV2): Persona {
       return { speaker: 'duo', mood: 'proud', action: 'see-level' };
     case 'atlas-stamp':
       return { speaker: 'mee', mood: 'cheer', action: 'see-atlas' };
+    case 'flame-freeze-gift':
+      return { speaker: 'meo', mood: 'cheer', action: 'see-flame' };
   }
 }
 
@@ -90,7 +95,7 @@ export function guideMomentV2(event: GuideEventV2, seen: Iterable<string>): Guid
 }
 
 /**
- * Du plus important au moins important, sur les vingt et un moments : ce qui
+ * Du plus important au moins important, sur tous les moments : ce qui
  * change le rang, ce qui se reçoit pour toujours (Prestige, trophée) puis ce qui
  * éteint ou protège passent avant. L'ordre relatif des treize moments actuels
  * est celui de `GUIDE_MOMENT_PRIORITY`, inchangé.
@@ -104,6 +109,7 @@ export const GUIDE_MOMENT_PRIORITY_ALL: readonly (GuideMomentKey | GuideMomentKe
   'season-end',
   'flame-out',
   'flame-at-risk',
+  'flame-freeze-gift',
   'league-promoted',
   'league-relegated',
   'new-tier',
