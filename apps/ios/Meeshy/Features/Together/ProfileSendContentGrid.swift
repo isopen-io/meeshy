@@ -89,9 +89,7 @@ struct ProfileSendContentCard: View, Equatable {
             .background(tint.opacity(MeeshyOpacity.light))
             .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
             .overlay { selectionRing }
-            .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
-            .onTapGesture(perform: onSelect)
-            .modifier(ProfileSendContentCardAccessibility(
+            .modifier(ProfileSendContentCardInteraction(
                 role: ProfileSendContentCardRole(showcase.visual), label: label, isSelected: isSelected,
                 onSelect: onSelect))
             .accessibilityIdentifier("profile.sendContent.card.\(post.id)")
@@ -262,12 +260,13 @@ private struct ProfileSendContentSoundFace: View {
                         .lineLimit(3)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onSelect)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(label)
             .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
             .accessibilityAction(.default) { onSelect() }
-            Spacer(minLength: 0)
             AudioPlayerView(attachment: attachment, context: .messageBubble, chrome: .flatMinimal,
                             accentColor: accentColor)
         }
@@ -297,9 +296,10 @@ enum ProfileSendContentCardRole {
     }
 }
 
-/// VoiceOver : la carte se dit en une phrase (genre, puis texte), se choisit par l'action par défaut et se dit
-/// « sélectionnée » une fois choisie.
-private struct ProfileSendContentCardAccessibility: ViewModifier {
+/// Le toucher et VoiceOver d'une carte, posés ENSEMBLE : la carte se choisit d'un toucher, se dit en une phrase
+/// (genre, puis texte), se choisit par l'action par défaut et se dit « sélectionnée » une fois choisie. Le diaporama
+/// et le son portent les leurs dans leur face, à côté de leurs propres contrôles.
+private struct ProfileSendContentCardInteraction: ViewModifier {
     let role: ProfileSendContentCardRole
     let label: String
     let isSelected: Bool
@@ -309,6 +309,8 @@ private struct ProfileSendContentCardAccessibility: ViewModifier {
         switch role {
         case .card:
             content
+                .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
+                .onTapGesture(perform: onSelect)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(label)
                 .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
