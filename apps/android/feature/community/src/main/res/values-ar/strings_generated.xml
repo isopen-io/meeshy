@@ -38,6 +38,7 @@
     <string name="community_detail_leave_label">مغادرة المجتمع</string>
     <string name="community_detail_menu_leave">مغادرة</string>
     <string name="community_detail_menu_settings">الإعدادات</string>
+    <string name="community_join_link_paused">الانضمام عبر هذا الرابط متوقف.</string>
     <string name="community_list_create_accessibility_label">إنشاء مجتمع</string>
     <string name="community_list_empty_create_button">إنشاء مجتمع</string>
     <string name="community_list_empty_title">لا توجد مجتمعات</string>
