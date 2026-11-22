@@ -8,7 +8,7 @@ import type { SocketClient } from '@/lib/net/socket';
  * `realtime` est au plafond de `budgets.json`, et le schéma du contrat n'a rien
  * à y faire (motif `bindPreferencesLiveLazily`). Un événement arrivé avant le
  * module est rattrapé par la relecture de `GET /me` à l'authentification
- * (`CATCH_UP_PERSONAL_FAMILIES`). Si le socket tombe avant l'arrivée du module,
+ * (`CATCH_UP_FAMILIES`). Si le socket tombe avant l'arrivée du module,
  * l'abonnement n'a pas lieu (le disposer le sait).
  */
 export function bindOwnProfileLiveLazily(params: { readonly socket: SocketClient; readonly queryClient: QueryClient }): () => void {

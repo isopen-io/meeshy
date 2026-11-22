@@ -1,5 +1,6 @@
 import { QueryClient, QueryObserver } from '@tanstack/react-query';
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
@@ -11,7 +12,7 @@ import { localMessage, threadPages } from '@/test-support/thread-cache';
 import { CONVERSATIONS_QUERY_KEY, CONVERSATION_CATEGORIES_QUERY_KEY, conversationQueryKey } from './conversations';
 import { FEED_QUERY_KEY } from './feed';
 import { FEED_NEW_COUNT_KEY } from './feed-new-count';
-import { STORY_TRAY_QUERY_KEY } from './stories';
+import { STATUS_MOODS_QUERY_KEY, STORY_TRAY_QUERY_KEY } from './stories';
 import type { ConversationsPage } from './conversations-pages';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
 import { MY_PROFILE_QUERY_KEY } from './me-keys';
@@ -332,25 +333,70 @@ describe('#10573 — la PREMIÈRE authentification rattrape ce que la liste et l
  * Parité iOS, qui avait déjà tranché : `FeedViewModel+Socket` (rts-01),
  * `StoryViewModel` (rts-02) et `categoryStore.hydrate()`
  * (`test_didReconnect_rehydratesCategoryStore`).
+ *
+ * **CE `describe` A GELÉ LA LACUNE QUE SON FICHIER DÉNONCE** (#20336, cycle
+ * 217). Son témoin disait « jamais à la première authentification », et ce
+ * `jamais` n'avait AUCUNE raison écrite : le doc-comment ci-dessus instruit
+ * pourquoi ces familles doivent le rejeu de COUPURE, jamais pourquoi elles ne
+ * devraient pas celui du DÉMARRAGE. C'est mot pour mot ce que le bloc #10573
+ * reproche à l'assertion de la cloche d'avant #18573, soixante lignes plus
+ * haut — « l'assertion gelait une lacune sous les apparences d'une décision ».
+ * La fenêtre est la MÊME (#10573 : « le socket se branche APRÈS la première
+ * peinture »), donc la liste aussi ; seul le PRÉDICAT les sépare.
  */
-describe('#18641 — la RE-authentification rattrape le fil, le rail et les catégories', () => {
-  test('les trois familles se périment à la RECONNEXION, jamais à la première authentification', () => {
-    const { socket, queryClient, destroy } = connect();
-    queryClient.setQueryData(FEED_QUERY_KEY, { pages: [], pageParams: [] });
-    queryClient.setQueryData(STORY_TRAY_QUERY_KEY, []);
-    queryClient.setQueryData(CONVERSATION_CATEGORIES_QUERY_KEY, []);
+describe('#18641 / #20336 — les DEUX authentifications rattrapent le fil, le rail, les humeurs et les catégories', () => {
+  const PUBLICATION_FAMILIES = [
+    ['le fil social', FEED_QUERY_KEY],
+    ['le rail des stories', STORY_TRAY_QUERY_KEY],
+    ['les humeurs (#18914)', STATUS_MOODS_QUERY_KEY],
+    ['les catégories de conversation', CONVERSATION_CATEGORIES_QUERY_KEY],
+  ] as const;
 
-    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
-    expect(queryClient.getQueryState(FEED_QUERY_KEY)?.isInvalidated).toBe(false);
-    expect(queryClient.getQueryState(STORY_TRAY_QUERY_KEY)?.isInvalidated).toBe(false);
-    expect(queryClient.getQueryState(CONVERSATION_CATEGORIES_QUERY_KEY)?.isInvalidated).toBe(false);
+  for (const [nom, queryKey] of PUBLICATION_FAMILIES) {
+    test(`${nom} : déjà servie et au repos ⇒ relue dès la PREMIÈRE authentification`, () => {
+      const { socket, queryClient, destroy } = connect();
+      queryClient.setQueryData(queryKey, { quoi: 'servi avant que le socket entre dans les rooms' });
 
-    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
-    expect(queryClient.getQueryState(FEED_QUERY_KEY)?.isInvalidated).toBe(true);
-    expect(queryClient.getQueryState(STORY_TRAY_QUERY_KEY)?.isInvalidated).toBe(true);
-    expect(queryClient.getQueryState(CONVERSATION_CATEGORIES_QUERY_KEY)?.isInvalidated).toBe(true);
-    destroy();
-  });
+      socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+
+      expect(isInvalidated(queryClient, queryKey)).toBe(true);
+      destroy();
+    });
+
+    test(`${nom} : encore en vol au démarrage ⇒ pas doublée`, () => {
+      const { socket, queryClient, destroy } = connect();
+      const server: Server = { calls: 0, respond: never };
+      const stop = observe(queryClient, queryKey, server, Number.POSITIVE_INFINITY);
+      expect(server.calls).toBe(1);
+
+      socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+
+      expect(server.calls).toBe(1);
+      expect(isInvalidated(queryClient, queryKey)).toBe(false);
+      stop();
+      destroy();
+    });
+
+    test(`${nom} : jamais servie ⇒ rien n’est demandé`, () => {
+      const { socket, queryClient, destroy } = connect();
+
+      socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+
+      expect(queryClient.getQueryState(queryKey)).toBeUndefined();
+      destroy();
+    });
+
+    test(`${nom} : se périme aussi à la RECONNEXION, sans prédicat`, () => {
+      const { socket, queryClient, destroy } = connect();
+      socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+      queryClient.setQueryData(queryKey, { quoi: 'servi avant la coupure' });
+
+      socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+
+      expect(isInvalidated(queryClient, queryKey)).toBe(true);
+      destroy();
+    });
+  }
 
   /**
    * LA SENTINELLE : `['feed', 'new-count']` est un ENTIER qui partage la racine
@@ -444,5 +490,65 @@ describe('#18573 — la première authentification rattrape les familles PERSONN
     socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
 
     expect(isInvalidated(queryClient, MY_PROFILE_QUERY_KEY)).toBe(true);
+  });
+});
+
+/**
+ * **LE CLIQUET DE LA BRANCHE UNIQUE** (#20336, cycle 217) — ce que les témoins
+ * de comportement ci-dessus ne peuvent pas voir.
+ *
+ * Un témoin de comportement atteste les familles QU'IL NOMME. La cinquième
+ * famille, celle qu'un lot futur ajoutera, n'y est par construction nommée nulle
+ * part : c'est exactement ainsi que #18641 et #18914 ont rouvert la lacune que
+ * #18573 venait de fermer, avec une suite verte à chaque fois.
+ *
+ * Ce cliquet garde la FORME : dans `onAuthenticated`, il ne doit exister que
+ * DEUX `invalidateQueries` — la racine des conversations, seule famille dont la
+ * portée diffère légitimement entre les deux branches (#7420), et la boucle sur
+ * `CATCH_UP_FAMILIES`. Un `invalidateQueries` de plus est, par construction, une
+ * famille posée dans une seule branche.
+ *
+ * **Quand il tombe, la réparation est d'entrer la famille dans
+ * `CATCH_UP_FAMILIES`** — avec sa portée et sa raison — jamais d'élargir ce
+ * compte : il n'y a pas de rattrapage à une seule branche qui soit légitime.
+ */
+describe('#20336 — aucune famille ne peut entrer dans une seule des deux branches', () => {
+  const source = readFileSync(new URL('./socket.ts', import.meta.url), 'utf8');
+
+  /** Le corps d'`onAuthenticated`, du `=> {` jusqu'à son `};` de fermeture. */
+  const onAuthenticatedBody = (): string => {
+    const start = source.indexOf('const onAuthenticated = (): void => {');
+    expect(start).toBeGreaterThan(-1);
+    const end = source.indexOf('\n  };', start);
+    expect(end).toBeGreaterThan(start);
+    return source.slice(start, end);
+  };
+
+  test('le rattrapage de REconnexion n’invalide que les conversations et la liste déclarée', () => {
+    const body = onAuthenticatedBody();
+
+    expect(body.match(/invalidateQueries/g)?.length).toBe(2);
+    expect(body).toContain('invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY })');
+    expect(body).toContain('for (const { queryKey, exact } of CATCH_UP_FAMILIES)');
+  });
+
+  test('la PREMIÈRE authentification reçoit la MÊME liste, et c’est la seule qu’elle reçoive', () => {
+    const body = onAuthenticatedBody();
+
+    expect(body).toContain('catchUpFirstAuthentication(deps.queryClient, CATCH_UP_FAMILIES)');
+    expect(body.match(/catchUpFirstAuthentication\(/g)?.length).toBe(1);
+  });
+
+  /**
+   * LA SENTINELLE DE PORTÉE : la portée voyage AVEC la clé, dans la liste. Si
+   * elle redevenait une décision du site d'appel, les deux branches pourraient
+   * de nouveau diverger sans qu'aucun témoin de famille tombe.
+   */
+  test('les deux portées `exact` sont déclarées dans la liste, jamais au site d’appel', () => {
+    const declaration = source.slice(source.indexOf('const CATCH_UP_FAMILIES'), source.indexOf('];', source.indexOf('const CATCH_UP_FAMILIES')));
+
+    expect(declaration).toContain('queryKey: FEED_QUERY_KEY, exact: true');
+    expect(declaration).toContain('queryKey: STATUS_MOODS_QUERY_KEY, exact: true');
+    expect(onAuthenticatedBody()).not.toContain('exact: true');
   });
 });
