@@ -103,6 +103,10 @@
     <string name="game2_guide_moment_atlas_stamp_next">%1$s de %2$s idiomas no seu passaporte.</string>
     <string name="game2_guide_moment_atlas_stamp_short">Carimbo: %1$s.</string>
     <string name="game2_guide_moment_atlas_stamp_what">Novo carimbo: %1$s!</string>
+    <string name="game2_guide_moment_flame_freeze_gift_means">Seus ancestrais a confiam a você: mantém sua Chama acesa num dia de ausência.</string>
+    <string name="game2_guide_moment_flame_freeze_gift_next">Lamparinas de reserva: %1$s.</string>
+    <string name="game2_guide_moment_flame_freeze_gift_short">Você ganhou uma Lamparina para a sua Chama.</string>
+    <string name="game2_guide_moment_flame_freeze_gift_what">Você ganhou uma Lamparina.</string>
     <string name="game2_guide_moment_league_first_means">Toda semana, você se mede com outros 29 heróis. Os 7 primeiros sobem para o círculo seguinte, os 5 últimos voltam a descer, e as faíscas recomeçam do zero.</string>
     <string name="game2_guide_moment_league_first_next">%1$s até o círculo seguinte nesta semana.</string>
     <string name="game2_guide_moment_league_first_next_top">Você já está no círculo mais alto dos torneios.</string>

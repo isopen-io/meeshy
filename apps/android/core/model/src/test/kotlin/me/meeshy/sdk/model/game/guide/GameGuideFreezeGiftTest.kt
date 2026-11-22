@@ -9,10 +9,10 @@ import me.meeshy.sdk.model.game.GameBlockParser
 import me.meeshy.sdk.model.game.GameFlameLaw
 import me.meeshy.sdk.model.game.GameGuideTarget
 import me.meeshy.sdk.model.game.GameNavigationMap
+import me.meeshy.sdk.model.game.guide.GuideTestGames.beginner
 import me.meeshy.sdk.model.game.progression.ProgressionConcept
 import me.meeshy.sdk.model.game.rules.GuideMood
 import me.meeshy.sdk.model.game.rules.GuideSpeaker
-import me.meeshy.sdk.model.game.guide.GuideTestGames.beginner
 import org.junit.Test
 
 /**

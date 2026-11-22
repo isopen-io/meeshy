@@ -200,6 +200,7 @@ public fun GameFlame.replacing(
     relightPrice = relightPrice,
     status = status ?: this.status,
     canRelight = canRelight ?: this.canRelight,
+    freezeGifted = freezeGifted,
 )
 
 public fun GameBoosts.replacing(tailwind: Double? = null): GameBoosts =

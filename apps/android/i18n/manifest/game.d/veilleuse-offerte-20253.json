@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.flame_freeze_gift.means",
+          "androidName": "game2_guide_moment_flame_freeze_gift_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.flame_freeze_gift.next",
+          "androidName": "game2_guide_moment_flame_freeze_gift_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.flame_freeze_gift.short",
+          "androidName": "game2_guide_moment_flame_freeze_gift_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.flame_freeze_gift.what",
+          "androidName": "game2_guide_moment_flame_freeze_gift_what",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
