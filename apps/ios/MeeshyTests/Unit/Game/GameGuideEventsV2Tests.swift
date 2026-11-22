@@ -148,6 +148,62 @@ final class GameGuideEventsV2Tests: XCTestCase {
         XCTAssertEqual(rank("flame-freeze-gift"), rank("flame-at-risk") + 1)
     }
 
+    // MARK: - L'Offrande gardée par les aïeux (#20403)
+
+    private func keptGame(status: GameBlock.Chest.Status, kept: Bool?, seen: [String] = []) -> GameBlock {
+        let base = GameFixture.game(chestStatus: status, guideSeen: seen)
+        let chest = base.chest
+        return base.replacing(chest: GameBlock.Chest(status: chest.status, odds: chest.odds, reward: chest.reward,
+                                                     today: chest.today, kept: kept))
+    }
+
+    func test_standing_tellsTheKeptOffering_whileItIsReady_evenOnceSeen() {
+        let said: [GuideEventV2] = [.offeringKept(easedDays: GameWelcomeBack.easedDays)]
+        XCTAssertEqual(GameGuideEventsV2.standing(game: keptGame(status: .ready, kept: true), seen: []), said)
+        XCTAssertEqual(GameGuideEventsV2.standing(game: keptGame(status: .ready, kept: true, seen: ["offering-kept"]),
+                                                  seen: ["offering-kept"]), said, "une urgence douce se redit tant qu'elle est prête")
+        XCTAssertEqual(GameGuideEventsV2.standing(game: keptGame(status: .claimed, kept: true), seen: []), [], "ouverte, elle ne se redit plus")
+        XCTAssertEqual(GameGuideEventsV2.standing(game: keptGame(status: .ready, kept: false), seen: []), [])
+        XCTAssertEqual(GameGuideEventsV2.standing(game: keptGame(status: .ready, kept: nil), seen: []), [], "un serveur antérieur ne la sert pas")
+    }
+
+    func test_transition_tellsTheKeptOfferingWhenItArrives_notWhenItWasAlreadyThere() {
+        XCTAssertEqual(GameGuideEventsV2.transition(from: keptGame(status: .locked, kept: nil), to: keptGame(status: .ready, kept: true)),
+                       [.offeringKept(easedDays: 3)])
+        XCTAssertEqual(GameGuideEventsV2.transition(from: keptGame(status: .ready, kept: true), to: keptGame(status: .ready, kept: true)), [])
+        XCTAssertEqual(GameGuideEventsV2.transition(from: keptGame(status: .ready, kept: true), to: keptGame(status: .claimed, kept: true)), [])
+    }
+
+    func test_theKeptOfferingMoment_isSaidByMee_andOpensTheDreamFiche() throws {
+        let chosen = GameGuideV2.chooseMoment(events: [.wave2(.offeringKept(easedDays: 3))], seen: [String]())
+        guard case .wave2(let moment) = try XCTUnwrap(chosen) else { return XCTFail("un moment de la vague 2") }
+        XCTAssertEqual(moment.speaker, .mee)
+        XCTAssertEqual(moment.mood, .cheer)
+        XCTAssertEqual(moment.action, .seeMissions)
+        let card = GameGuideCard.ofMomentV2(moment)
+        XCTAssertNil(card.wave2Page)
+        XCTAssertEqual(card.action, .seeMissions)
+        XCTAssertEqual(GameGuideTarget.target(for: card.action), .scroll(.missions))
+        XCTAssertFalse(card.photo, "une Offrande gardée ne se photographie pas")
+        XCTAssertEqual(card.copy.what, GameText.guideMomentOfferingKeptWhat)
+        XCTAssertEqual(card.copy.next, GameText.guideMomentOfferingKeptNext(days: GameCopy.days(3)))
+        XCTAssertEqual(card.copy.action, GameGuideCopy.actionLabel(.seeMissions))
+    }
+
+    func test_theKeptOfferingMoment_passesJustBeforeTheFlameOut() {
+        let chosen = GameGuideV2.chooseMoment(
+            events: [.original(.flameAtRisk(days: 3)), .wave2(.offeringKept(easedDays: 3))], seen: [String]())
+        XCTAssertEqual(chosen?.keyValue, "offering-kept")
+        let rank = { (key: String) in GameGuideV2.momentPriorityAll.firstIndex(of: key) ?? -1 }
+        XCTAssertEqual(rank("offering-kept"), rank("flame-out") - 1)
+        XCTAssertEqual(rank("offering-kept"), rank("season-end") + 1)
+    }
+
+    func test_anOptimisticOpening_keepsTheKeptMark() {
+        let opened = keptGame(status: .ready, kept: true).chest.replacing(status: .claimed, reward: .some(nil))
+        XCTAssertEqual(opened.kept, true)
+    }
+
     func test_thePrestigeMoment_opensThePrestigePage() {
         let prestige = GuideMomentV2(key: .prestige, speaker: .duo, mood: .proud, event: .prestige(prestige: 1, gloryGained: 1000),
                                      action: .seeLevel, presentation: .full)

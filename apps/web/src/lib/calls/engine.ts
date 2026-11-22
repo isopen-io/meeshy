@@ -21,7 +21,7 @@ import {
   type DecodedInitiated,
   type DecodedPerson,
 } from './call-decode';
-import { analyticsPayload, createTelemetry, markCaptions, markConnected, markEffects, markNegotiating, markNetworkChange, markReconnecting, qualityReport, withCodec, withMedia, withSample } from './call-analytics';
+import { createTelemetry, markCaptions, markConnected, markEffects, markNegotiating, markNetworkChange, markReconnecting, withCodec, withMedia, withSample, type CallReports } from './call-analytics';
 import { mediaFailureOf, stopStream, type Facing, type MediaFailure } from './call-media';
 import {
   adoptJoinedSession,
@@ -137,7 +137,7 @@ export type CallEngineDeps = {
   /** Le CHEMIN réseau qui change (#19776) — la socket est recyclée et ICE relancé ; le navigateur par défaut. */
   readonly watchNetworkPath?: (onChange: () => void) => () => void;
   readonly platform: () => string;
-  readonly deviceModel: () => string;
+  readonly reports: CallReports;
   /** Le tirage de l'échantillon de la note d'après-appel (#8072) ; `Math.random` par défaut. */
   readonly random?: () => number;
   /** Les sous-titres d'un appel (#8048) — un chunk à part, chargé au premier besoin. */
@@ -298,7 +298,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     const call = read();
     if (call === null || call.phase.kind === 'ended') return;
     const retry = session.retry;
-    if (call.callId !== null) emit(CLIENT_EVENTS.CALL_ANALYTICS, analyticsPayload(session.telemetry, { callId: call.callId, now: deps.now(), isVideo: call.media === 'video', endReason: reason, platform: deps.platform(), deviceModel: deps.deviceModel() }));
+    if (call.callId !== null) deps.reports.final(session.telemetry, { callId: call.callId, now: deps.now(), isVideo: call.media === 'video', endReason: reason, platform: deps.platform() }, (payload) => emit(CLIENT_EVENTS.CALL_ANALYTICS, payload));
     stopTimers();
     teardownMedia();
     deps.tones.stop();
@@ -487,7 +487,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     if (total.level === 'poor') session.troubled = true;
     if (deps.now() - session.lastQualityReport < QUALITY_REPORT_MS) return;
     session.lastQualityReport = deps.now();
-    emit(CLIENT_EVENTS.CALL_QUALITY_REPORT, qualityReport(callId, total, deps.now()));
+    deps.reports.quality(callId, total, deps.now(), (payload) => emit(CLIENT_EVENTS.CALL_QUALITY_REPORT, payload));
   };
 
   /** Le contrôleur des sous-titres de CET appel (#8048), construit au premier besoin : un segment, le bouton, un canal de données. */
