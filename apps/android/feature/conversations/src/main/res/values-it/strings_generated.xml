@@ -199,6 +199,7 @@
     <string name="links_common_share">Condividi</string>
     <string name="links_community_create_a11y">Crea una community</string>
     <string name="links_community_empty_title">Nessuna community gestita</string>
+    <string name="links_community_join_link_paused">Gli ingressi tramite questo link sono sospesi</string>
     <string name="links_community_stat_active">Attivi</string>
     <string name="links_hub_community_description">Gestisci i link d\'invito alle tue community</string>
     <string name="links_hub_share_create_a11y">Crea un link di condivisione</string>

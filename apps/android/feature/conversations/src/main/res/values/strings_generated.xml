@@ -196,6 +196,7 @@
     <string name="links_common_share">Share</string>
     <string name="links_community_create_a11y">Create a community</string>
     <string name="links_community_empty_title">No communities managed</string>
+    <string name="links_community_join_link_paused">Joining through this link is paused</string>
     <string name="links_community_stat_active">Active</string>
     <string name="links_hub_community_description">Manage the invitation links to your communities</string>
     <string name="links_hub_share_create_a11y">Create a share link</string>

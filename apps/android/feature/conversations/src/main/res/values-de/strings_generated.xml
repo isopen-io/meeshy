@@ -196,6 +196,7 @@
     <string name="links_common_share">Teilen</string>
     <string name="links_community_create_a11y">Community erstellen</string>
     <string name="links_community_empty_title">Keine verwalteten Communities</string>
+    <string name="links_community_join_link_paused">Beitritte über diesen Link sind pausiert</string>
     <string name="links_community_stat_active">Aktiv</string>
     <string name="links_hub_community_description">Verwalte die Einladungslinks zu deinen Communitys</string>
     <string name="links_hub_share_create_a11y">Freigabelink erstellen</string>
