@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { localMessage, threadOf, threadPages } from '@/test-support/thread-cache';
 
+import { mediaHubConversationKey } from './media-hub-cache';
 import { messagesQueryKey } from './messages';
 import { applyAttachmentReactionUpdate, isAttachmentReactionUpdate } from './realtime-attachment-reactions';
 import type { Attachment, Message } from './types';
@@ -156,5 +157,65 @@ describe('#18124 — « ma réaction » ne bascule que pour le geste du LECTEUR'
     expect(isAttachmentReactionUpdate(event({ userId: 42 }))).toBe(false);
     expect(isAttachmentReactionUpdate(event({ userId: null }))).toBe(true);
     expect(isAttachmentReactionUpdate(event({ userId: undefined }))).toBe(true);
+  });
+});
+
+/**
+ * #20303 — ET L'INDEX DES MÉDIAS REÇOIT LE MÊME RÉSUMÉ.
+ *
+ * Le geste LOCAL écrit les deux index, et dit pourquoi (#8180 — « la
+ * visionneuse qui en est ouverte y relit sa page ») ; l'applieur TEMPS RÉEL,
+ * qui RÉCONCILIE ce geste avec le résumé absolu du serveur, n'écrivait que le
+ * fil. La copie de l'index n'était donc jamais réconciliée.
+ *
+ * Le symptôme est étroit mais réel, et c'est un contrôle INERTE : la tuile ne
+ * rend pas de pastille, mais la visionneuse plein écran ouverte depuis
+ * « Médias » initialise son ensemble « les miennes » depuis
+ * `currentUserReactions` (`viewer-media-actions.tsx`). Une ❤️ posée depuis le
+ * téléphone n'y est pas rendue comme sienne, et la toucher planifie un `add`
+ * au lieu d'un `remove` (`attachmentReactionPlan`).
+ */
+describe('#20303 — le résumé servi atteint aussi l’index des médias', () => {
+  const seedHub = (client: QueryClient, attachments: readonly Attachment[]): void => {
+    client.setQueryData(mediaHubConversationKey('c-a'), threadPages([localMessage({ id: 'm-1', conversationId: 'c-a', attachments: [...attachments] })]));
+  };
+
+  const hubPiecesOf = (client: QueryClient): readonly Attachment[] =>
+    (client.getQueryData<{ pages: { messages: Message[] }[] }>(mediaHubConversationKey('c-a'))?.pages ?? []).flatMap((p) => p.messages).find((m) => m.id === 'm-1')?.attachments ?? [];
+
+  test('le résumé absolu remplace celui de la pièce dans les DEUX index', () => {
+    const client = seeded([piece({ reactionSummary: { '😍': 1 } })]);
+    seedHub(client, [piece({ reactionSummary: { '😍': 1 } })]);
+    const payload = event({ reactionSummary: { '😍': 1, '🔥': 2 } });
+    if (!isAttachmentReactionUpdate(payload)) throw new Error('charge invalide');
+
+    applyAttachmentReactionUpdate(client, payload, VIEWER);
+
+    expect(piecesOf(client)[0]?.reactionSummary).toEqual({ '😍': 1, '🔥': 2 });
+    expect(hubPiecesOf(client)[0]?.reactionSummary).toEqual({ '😍': 1, '🔥': 2 });
+  });
+
+  /** C'est CE champ que la visionneuse de l'écran des médias relit pour savoir ce qui est à moi. */
+  test('« ma réaction » posée ailleurs est rendue dans l’index des médias', () => {
+    const client = seeded([piece({ reactionSummary: {}, currentUserReactions: [] })]);
+    seedHub(client, [piece({ reactionSummary: {}, currentUserReactions: [] })]);
+    const payload = event({ userId: VIEWER, emoji: '❤️', action: 'add', reactionSummary: { '❤️': 1 } });
+    if (!isAttachmentReactionUpdate(payload)) throw new Error('charge invalide');
+
+    applyAttachmentReactionUpdate(client, payload, VIEWER);
+
+    expect(hubPiecesOf(client)[0]?.currentUserReactions).toEqual(['❤️']);
+  });
+
+  test('le geste d’un TIERS ne s’attribue pas au lecteur dans l’index des médias', () => {
+    const client = seeded([piece({ reactionSummary: {}, currentUserReactions: [] })]);
+    seedHub(client, [piece({ reactionSummary: {}, currentUserReactions: [] })]);
+    const payload = event({ reactionSummary: { '🔥': 1 } });
+    if (!isAttachmentReactionUpdate(payload)) throw new Error('charge invalide');
+
+    applyAttachmentReactionUpdate(client, payload, VIEWER);
+
+    expect(hubPiecesOf(client)[0]?.currentUserReactions ?? []).toEqual([]);
+    expect(hubPiecesOf(client)[0]?.reactionSummary).toEqual({ '🔥': 1 });
   });
 });

@@ -2333,3 +2333,185 @@ socket jusqu'au client.
 1. **#20221** : rendre indépendants de l'ordre le codec affiché et la limitation de qualité, et dédoublonner les ids de la même façon (R1).
 2. **#20185** : recette sur le staging, si un accès existe.
 3. #11932, #12236, #16933, #20043.
+
+## Cycle 69 — 2026-11-21
+
+- **Base** : `origin/dev` @ `0111884c9`. La PR #20225 (#20121, cycle 68) est fusionnée.
+- **Branche** : `claude/determined-volta-qmoitn`.
+- **#20185** (recette staging de #20152) : pas jouée, le conteneur n'a pas d'accès authentifié au staging.
+- **Objectif** : #20221. Le codec affiché et la cause de limitation ne dépendent plus de l'ordre de `getStats`.
+- **Livré** : iOS `CallStats.swift` et Android `CallStats.kt` / `CallMediaQuality.kt` appliquent la même règle.
+  - **Codec** : parmi les `inbound-rtp` qui portent un `codecId` non vide, on ordonne l'audio d'abord (`kind != "video"`), puis le plus petit id. On retient le premier dont le codec se résout ; aucun ⇒ nil. Avant, c'était le premier rencontré, même s'il ne se résolvait pas.
+  - **Limitation** : parmi les `outbound-rtp` vidéo dont la cause n'est pas vide, on garde la plus contraignante (bandwidth 3 > cpu 2 > other 1 > le reste 0). À égalité, le plus petit id l'emporte. iOS ignore désormais la chaîne vide, comme Android.
+  - Payload inchangé. Avec une seule entrée, le résultat est le même qu'avant (sauf une cause `""` sur iOS, qui vaut maintenant nil).
+- **Tests** : `CallStatsStreamOrderTest` (Android, 10 cas) et `CallStatsStreamOrderTests` (iOS, les mêmes 10 cas). Chaque cas est joué dans toutes les rotations du relevé et de son inverse. `CallStatsTest` figeait l'ancienne règle « le premier inbound gagne » : il est réécrit.
+  - Rouge Android : 7 échecs sur 10 sur le code de dev.
+  - Vert : `jvm-check -PjvmCheckModelOnly --rerun-tasks --tests 'me.meeshy.sdk.model.call.*'`, 2286 tests, 0 échec. La QA l'a rejoué.
+  - Mutations de la QA : sans les tris, 6 échecs ; sans le départage par id, 2 échecs.
+  - Gardes iOS (house rules, cohésion, inscription des tests, accent) : 0 violation.
+  - CI : `android.yml` run 44931579052, en `workflow_dispatch` sur `2dc59c470` : **vert** (assemble, tests unitaires, gardes). `ios.yml` run 44931575416 (suites ciblées `CallStatsStreamOrderTests,CallStatsElectionOrderTests,WebRTCTypesTests,CallManagerAnalyticsRecorderTests`) : ses gardes iOS sont vertes, mais à la clôture du cycle sa compilation attendait encore un runner macOS (en file depuis 18:39 UTC).
+- **PR** : #20258, ouverte. Elle n'est pas fusionnée tant qu'`ios.yml` n'est pas vert (réserve R1).
+- **QA** (indépendante) : favorable avec réserves.
+  - R1 (moyenne, procédurale) : le Swift n'a pas été compilé ici. `ios.yml` doit être vert avant la fusion.
+  - R2 (mineure) : le nom de `WebRTCTypesTests.test_reduce_codec_usesFirstInboundRTPCodecId` décrit encore l'ancienne règle. Versée dans #20257.
+  - R3 (mineure, antérieure au lot) : les analytics iOS comptent toute cause, y compris inconnue, alors qu'Android ne compte que les quatre causes connues. Versée dans #20257.
+  - R4 (information) : avec des ids dupliqués, le tri de Swift n'est pas garanti stable. Le W3C garantit l'unicité des ids.
+- **Découvert** : **#20256**. Le web suit sa propre règle, qui dépend de l'ordre. Pour le codec, il prend celui du premier flux SORTANT, vidéo d'abord. Il faut trancher entre codec émis et codec reçu.
+- **Limites** : rien n'a été vérifié sur appareil.
+
+### Cycle suivant : par où reprendre
+
+0. **PR #20258** : lire le run `ios.yml` 44931575416. S'il est vert, fusionner `dev` dans la branche, puis fusionner la PR. S'il a été annulé ou a expiré, le relancer en `workflow_dispatch` avec les mêmes suites. S'il est rouge, corriger le Swift.
+1. **#20257** : petit lot iOS, sur les analytics et le nom du test.
+2. **#20256** : aligner le web. Proposition : le codec reçu, comme sur le mobile.
+3. **#20185** : la recette sur le staging, si un accès existe.
+4. #11932, #12236, #16933, #20043.
+
+## Cycle 70 — 2026-11-21
+
+- **Base** : `origin/dev` @ `11a5aa46b`, puis `25454555e`, fusionné dans la branche.
+- **Branche** : `claude/determined-volta-6tq2ks`.
+- **Lot du cycle 69 (#20258, #20221)** : la PR n'est pas fusionnée.
+  - Le run `ios.yml` 44931575416 attend un runner macOS depuis 18:39. Ses gardes iOS sont vertes, mais le Swift n'est pas compilé.
+  - `dev` a été fusionné dans sa branche (`fec5348a3`). Depuis la PR, aucun Swift n'a changé sur dev, donc le run sur `2dc59c47` reste la preuve valable.
+- **Objectif** : #20256. Le web lit `getStats` selon les règles d'iOS et d'Android, quel que soit l'ordre du relevé.
+- **Livré** (web, `apps/web/src/lib/calls/`) :
+  - `call-stats-election.ts` : un nouveau module pur, consommé par `readStats` et `readMediaQuality`. Il porte trois règles.
+    - **Codec affiché = codec REÇU.** On considère les `inbound-rtp` qui ont un `codecId`, l'audio d'abord (un `kind` absent compte comme audio), puis le plus petit id, et on garde le premier dont le codec se résout. Avant, le web prenait le codec ÉMIS, vidéo d'abord. Le champ `codec` de `call:analytics` a désormais le même sens sur les trois plateformes. Sa forme ne change pas (sous-type MIME, coupé à 50 caractères).
+      - **Repli** : quand rien de reçu ne se résout, on prend le codec ÉMIS, dans le même ordre. C'est le cas d'un pair muet ou d'un flux à sens unique. Le gate navigateur `check-calls-quality.mjs`, dont le pair de test ne fait que recevoir, a rougi sans ce repli : `call:analytics` partait avec `unknown`. Le mobile rend encore `nil` dans ce cas, voir **#20280**.
+    - **Limitation** : la cause la plus contraignante (bandwidth > cpu > other > le reste). À égalité, le plus petit id. Les rangs sont dans une `Map`, si bien qu'une clé du prototype vaut 0 (QA R1).
+    - **Paire ICE** : la règle de #20121 (le transport, sinon la paire nominée de plus forte priorité). Le RTT manquant se lit sur la paire suivante. Le web était le dernier miroir de cette règle.
+      - **Exception, le débit sortant estimé** : il ne se lit QUE sur la paire élue. Avec le repli de #20121, le gate `check-calls-effects-perf.mjs` rougissait par intermittence (« aucune tâche longue pendant les glissés du zoom »).
+        - Branche : 2 échecs sur 7 en local, 1 sur 2 en CI. `dev` : 0 sur 8. Sans le repli : 0 sur 6.
+        - Cause : l'estimation d'une paire sans trafic changeait le palier vidéo, et `setParameters` reconfigurait l'encodeur au milieu du geste.
+        - Le mobile garde ce repli : voir **#20284**.
+- **Tests** : `call-stats-order.test.ts`, 21 cas, chacun joué dans toutes les rotations du relevé et de son inverse.
+  - Rouge : 15 échecs sur 17 sur le code de dev ; 1 échec sur 1 pour R1.
+  - Réécrits : 3 tests figeaient le codec émis (`call-quality`, `call-quality-loop`, `call-analytics-hostile-stats`).
+  - Vert, sur l'arbre fusionné : `bun test src/lib/calls`, 2470 tests, 0 échec. `tsc` donne 0, le build donne 0. `check-calls-quality.mjs` passe en local (code de sortie 0, codec `opus`), `check-calls-effects-perf.mjs` aussi.
+  - Suite web complète : 34 979 réussis et 1 échec. Ce dernier, `act-leak-guard.test.ts`, échoue à l'identique sur `origin/dev` : c'est un problème d'environnement local (bun 1.4.4), pas un effet du lot.
+  - Mutations faites par la QA : M1 à M7 échouent toutes, de 1 à 5 échecs chacune.
+- **QA** (indépendante) : favorable avec réserves.
+  - R1 (clés du prototype) : corrigée.
+  - R2 (`dev` absent de la branche) : corrigée.
+  - Pour information :
+    - `subtype()` ne découpe pas le mime comme le mobile ;
+    - le web ne lit pas `mediaType` en repli de `kind` ;
+    - un appel vidéo web rapporte désormais `opus`, le codec audio passant d'abord, comme sur mobile.
+- **Découvert** : **#20273** (le web dit « direct » quand c'est le candidat DISTANT qui est relay), **#20280** (le mobile n'a pas de repli sur le codec émis), **#20284** (sur mobile, le débit estimé se lit sur une paire sans trafic).
+- **Limites** : la règle n'a pas été vérifiée dans un vrai navigateur pendant un appel. La parité du codec et de la limitation dépend de la fusion de #20258.
+
+### Cycle suivant : par où reprendre
+
+0. **#20258** : si le run `ios.yml` 44931575416 est vert, fusionner `dev` dans la branche puis fusionner la PR. S'il est encore en file, le relancer, ou le laisser courir.
+1. Si la PR de ce cycle (#20256) n'est pas fusionnée : fusionner `dev`, rejouer `bun test src/lib/calls`, puis fusionner.
+2. **#20257** : les analytics iOS ne comptent que les quatre causes connues. Le lot est petit, en Swift, et se prouve par `ios.yml`.
+3. **#20284** : le débit estimé sur mobile (fluidité), puis **#20280** et **#20273**.
+4. #20185 (recette staging), #11932, #12236, #16933, #20043.
+
+## Cycle 71 — 2026-11-21
+
+- **Base** : `origin/dev` @ `5f406e5ff6`, qui inclut #20275 (#20256, cycle 70). Cette fusion a été faite par la session du cycle 70, encore active ; elle pilote aussi #20258. Ce cycle lui cède les deux PR, qui écrivent les fichiers de statistiques.
+- **Branche** : `claude/determined-volta-2eq9xv`.
+- **Objectif** : #20043. Sur Android, la surveillance d'un appel mesure ses délais sur l'horloge monotone : un saut de l'heure murale (NTP, réglage manuel) ne relance plus l'ICE et ne coupe plus l'appel.
+- **Livré** (`apps/android/feature/calls`, commit `ae077ac597`) :
+  - `CallReliabilityMonitor` lit `CallClock.elapsedMs()`, soit `SystemClock.elapsedRealtime()` en production, pour le chien de garde de mise en relation et pour la détection « à moitié ouvert ».
+    - Leurs ancres (`connectingSinceMs`, `epochStartMs`) ne sont posées que par ces mêmes lectures, et `start()` recrée le chien de garde : les deux horloges ne se mélangent pas.
+  - `CallToastBus.admit` lit aussi l'horloge monotone. Un recul de l'heure murale taisait un même texte pendant une heure.
+  - `WebRtcCallQualitySampler` lit aussi l'horloge monotone pour `atMs`. Cette valeur ne sert qu'à l'écart qui donne le débit, et elle ne quitte pas l'appareil.
+  - Restent en heure murale : `CallOngoingController` (`setWhen`) et `CallCaptureController`, dont l'ancre est comparée à `System.currentTimeMillis()` par le chrono du montage (#20288).
+  - Aucun payload ni aucune valeur persistée ne change.
+- **Tests** :
+  - `CallReliabilityMonitorTest` : 4 témoins (sauts de +1 h et −1 h, en `Connecting` et en lien à moitié ouvert), avec un faux `JumpingWallClock`.
+  - `CallToastBusTest` : 2 témoins, et les deux tests existants avancent désormais les deux horloges ensemble.
+  - `WebRtcCallQualitySamplerTest` : 1 témoin, où le débit est de 8,0 kb/s malgré une heure murale qui saute à chaque lecture.
+  - Rouge, raisonné et contre-vérifié par la QA : 7 témoins sur 7 échouent sur le code de dev. Ils n'ont pas été exécutés localement, car le conteneur ne compile pas `feature/calls`.
+  - CI : `android.yml`, run 44963467115 (`workflow_dispatch`, sha `ae077ac597`).
+- **QA** (`auditeur-adversarial`) : favorable avec réserves.
+  - R1 (moyenne, hors périmètre) : `CallChromeController` mesure encore `hiddenFor` sur l'heure murale. Après un recul de l'horloge, les commandes masquées captent les touchers pendant environ une heure. Versée dans **#20290**.
+  - R2 (faible) : le chrono du montage relève de #20288. L'écart affiché des sous-titres est versé dans #20290.
+  - R3 (faible) : rien n'oblige une future implémentation de production à surcharger `elapsedMs`.
+- **Limites** : rien n'a été vérifié sur appareil.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée : lire le run `android.yml` 44963467115, fusionner `dev` dans la branche, puis fusionner la PR.
+1. **#20258** : si la session du cycle 70 l'a laissée ouverte, la reprendre (run `ios.yml` sur la tête de branche).
+2. **#20290** : les commandes masquées et l'horloge murale, un petit lot Android de fiabilité.
+3. #20257, #20284, #20280, #20273, puis #20288.
+4. #20185 (recette staging), #11932, #12236, #16933.
+
+## Cycle 72 — 2026-11-22
+
+- **Base** : `origin/dev` @ `753ec87e7`, qui contient #20258 (#20221) et #20291 (#20043) : les lots des cycles 69 à 71 sont tous fusionnés.
+- **Branche** : `claude/determined-volta-fmhcj4`.
+- **Objectif** : #20290. Sur Android, les commandes d'un appel masquées par un toucher mesurent leur fondu sur l'horloge monotone. Un recul de l'heure murale ne les laisse plus capter les touchers pendant une heure, et une avance ne coupe plus le fondu.
+- **Livré** (`apps/android/feature/calls`, commits `f3dda9bc3` puis `0c9b8083e`) :
+  - `CallChromeController` prend un `CallClock` (défaut `RealCallClock()`) au lieu de `() -> Long = System::currentTimeMillis`. `hiddenAtMillis` n'est posé et relu que par `elapsedMs()`, et aucun autre site ne le lit. Le seul site de production, `CallScreen.kt`, garde le défaut.
+  - **Sous-titres laissés en heure murale, à dessein.** L'échéance d'attente d'une traduction, `awaitingUntilMs = capturedAtMs + délai`, part de `capturedAtMs`. Ce champ est un instant mural posé par l'appareil de l'orateur et relayé par le socket (`CallTranslatedSegmentRef.capturedAtMs`). Le comparer au monotone local mélangerait deux horloges.
+  - La loi partagée `CallChromeVisibility.acceptsTouches` n'a pas changé : elle traite encore un `hiddenFor` négatif comme « dans le fondu », comme son miroir iOS.
+- **Tests** : `CallChromeControllerTest`, 2 témoins avec un faux `JumpingWallClock` (recul d'une heure suivi de 250 ms, avance d'une heure suivie de 249 ms).
+  - Rouge, raisonné : sur le commit `f3dda9bc3`, `hiddenFor` vaut −3 599 750 (accepté à tort) puis 3 600 249 (refusé à tort).
+  - CI : `android.yml`, run 44976960280 (`workflow_dispatch`, sha `0c9b8083e`).
+- **QA** (`auditeur-adversarial`, indépendante) : favorable avec réserves. Les témoins tombent puis passent pour la bonne raison, et la compilation relue à la main ne montre pas de problème.
+  - **R1 (moyenne, maintenabilité)** : `CallChromeController.acceptsTouches()` n'a **aucun appelant en production**. Le vrai gardien est `CallChromeFade` (`delay(fade)`, déjà monotone). Le défaut visé par #20290 n'était donc pas observable sur Android. Ce lot corrige la règle, mais pas un symptôme. La règle unique est l'objet de **#20299**.
+  - **R2 (faible à moyenne)** : les points d'attente des sous-titres comparent l'heure murale locale au `capturedAtMs` de l'orateur. Un décalage d'horloge entre les appareils suffit à les figer environ une heure ou à les supprimer, et le web a le même défaut. Versé dans **#20298**.
+  - **R3 (faible)** : le miroir iOS (`CallControlGlass.swift:161-168`) mesure le fondu sur `Date()`. Versé dans **#20300**.
+- **Limites** : rien n'a été vérifié sur appareil.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée : lire le run `android.yml` 44976960280, fusionner `dev` dans la branche, puis fusionner la PR.
+1. **#20298** : l'attente des sous-titres ancrée sur la réception locale, sur Android et le web. C'est le seul défaut visible trouvé ce cycle.
+2. **#20299** (règle unique du chrome Android), puis **#20300** (iOS, à coordonner avec la routine iOS).
+3. #20257, #20284, #20280, #20273, #20288.
+4. #20185 (recette staging), #11932, #12236, #16933.
+
+## Cycle 73 — 2026-11-22
+
+- **Base** : `origin/dev` @ `31109499a`, puis la tête de dev fusionnée dans la branche (`72d8f060b`). Le lot du cycle 72 (#20301, #20290) est fusionné.
+- **Branche** : `claude/determined-volta-gy9sh5`.
+- **Objectif** : #20298. Les points d'attente d'un sous-titre d'appel tombent 8 s après sa réception locale, mesurée sur l'horloge monotone, quelle que soit l'horloge de l'orateur.
+- **Livré** :
+  - **Android** (`core/model`, `feature/calls`) :
+    - `CallJournalSegment.receivedAtElapsedMs` est un champ local, jamais sérialisé. Il est posé à un seul endroit, `CallCaptionsController.receive()` (relais socket et data channel), par `SystemClock.elapsedRealtime()`.
+    - `awaitingUntilMs` vaut cette réception plus `TIMEOUT_MS`, et `rememberSettlingClock` lit la même horloge.
+    - **Fusion** : une ligne déjà finale garde sa réception, donc un re-final ne prolonge pas l'attente. Une ligne partielle prend celle de l'entrant : l'attente part du FINAL, celui qui demande la traduction, comme sur le web (réserve R1 de la QA, corrigée dans le lot).
+    - **Sans réception**, aucune attente n'est affichée. L'étiquette « EN » reste.
+    - Le constructeur interne du contrôleur exige `elapsed` (réserve R3).
+  - **Web** :
+    - Constat : le web ancrait déjà l'échéance sur la réception, mais sur l'horloge murale.
+    - `CaptionsContext.elapsed` est câblé sur `performance.now()`, et `captionOrigin({ received })` part de cette horloge.
+    - `isAwaitingTranslation`, `captionFooterLine` et `useWaitingClock` la lisent aussi. `ctx.now()` ne sert plus qu'à `at`.
+  - `capturedAtMs` et `at` servent encore au tri et à l'heure affichée. Aucun payload ne change. Une ancienne passerelle sans `capturedAtMs` reste servie.
+- **Tests** :
+  - **Android `core/model`** : `CallCaptionTranslationWaitAnchorTest`, 7 cas : orateur en avance d'une heure, orateur en retard d'une heure, partiel puis final, re-final, réception manquante.
+    - Rouge : 6 échecs, puis 1 pour R1.
+    - Vert : `jvm-check -PjvmCheckModelOnly --tests 'me.meeshy.sdk.model.call.*'`, 2 293 tests.
+    - `feature/calls` n'a pas été compilé en local ; la preuve est le run `android.yml` 44991551537 (`workflow_dispatch`, sha `72d8f060b`).
+  - **Web** :
+    - Témoins : orateur ±1 h par le data channel et par la passerelle, horloge murale locale ±1 h pendant l'attente, répétition, message sans `at`, panneau avec `Date.now` décalé.
+    - Rouge : 13 échecs sur 68.
+    - Vert, rejoué par l'orchestrateur sur l'arbre fusionné : `bun test src/lib/calls src/components/call-captions-panel.test.tsx`, 2 516 tests, 0 échec. `tsc` donne 0. Le build donne 0 (agent web).
+  - **Mutations de la QA** : l'ancien ancrage sur Android donne 6 échecs, et la fusion inversée 1. Sur le web, le contrôleur sur `now()` donne 8 échecs, le panneau sur `Date.now()` 5, et `mergedOrigin` inversé 2.
+- **QA** (`auditeur-adversarial`, indépendante) : favorable avec réserves.
+  - R1 (moyenne) : corrigée.
+  - R3 (faible) : corrigée.
+  - R2 (faible) : le panneau web lit `performance.now()` en dur. Versée dans **#20320**.
+  - R4 : iOS a le même défaut. Versé dans **#20319**.
+- **Découvert** : **#20319**. Sur iOS, `CallTranscriptionSegmentFactory.swift:26,65` prend l'heure de l'orateur, et `CallCaptionLine.swift:148` en tire l'échéance. Le commentaire de `CallTranscriptionSegment.swift:26-29` est périmé.
+- **CI** :
+  - `android.yml` 44991551537 (sur `72d8f060b`) : **vert**.
+  - `ci.yml` 44991645673 : « Qualité TS » rouge, car `measure-weight` donnait `call_engine` à 16,02 Ko pour un plafond de 16. Corrigé dans `421f061a3` : l'horloge `elapsed` passe de `CaptionsContext` (fourni par le moteur) à `CaptionsDeps` (fourni par `call-captions-runtime`, chargé à la demande), et `call_engine` revient à 16 Ko.
+  - `ci.yml` 44993112988 (sur `421f061a3`) : **vert**.
+  - Puis `dev` @ `483222222` a été fusionné dans la branche (aucun fichier commun), et les tests d'appel web et `tsc` ont été rejoués : 2 516 tests, 0 échec.
+  - `call_engine` est exactement à son plafond, sans marge : le prochain octet du moteur devra sortir dans un chunk à la demande, ou le plafond devra être remesuré.
+- **Limites** : rien n'a été vérifié sur appareil ni dans un navigateur pendant un appel. Selon le navigateur, `performance.now()` peut ne pas avancer pendant une mise en veille.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR #20322 n'est pas fusionnée, fusionner `dev` dans la branche, puis la PR.
+1. **#20319** : le miroir iOS. Les modèles et la fabrique sont dans le périmètre. `CallCaptionsViews.swift` est à coordonner avec la routine iOS. La preuve est `ios.yml`.
+2. **#20299** (règle unique du chrome Android), **#20320** (web, petit lot), puis **#20300** (iOS).
+3. #20257, #20284, #20280, #20273, #20288.
+4. #20185 (recette staging), #11932, #12236, #16933.

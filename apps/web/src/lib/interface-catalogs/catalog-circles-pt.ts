@@ -224,6 +224,9 @@ const pt = {
   'shareLocation.stopPending': 'A partilha vai parar assim que a rede voltar.',
   'shareLocation.replacePoint.title': 'Mostrar sua localização real?',
   'shareLocation.replacePoint.message': 'Você está compartilhando um ponto escolhido no mapa. Todos que o veem verão sua localização real no lugar.',
+  'shareLocation.replacePoint.messageNamed': 'Você está compartilhando um ponto escolhido no mapa. Sua localização real vai substituí-lo para {names}.',
+  'shareLocation.replacePoint.others.one': '{count} outra pessoa',
+  'shareLocation.replacePoint.others.other': '{count} outras pessoas',
   'shareLocation.replacePoint.confirm': 'Mostrar minha localização real',
   'shareLocation.replacePoint.keep': 'Manter o ponto escolhido',
 } as const satisfies CirclesCatalog;

@@ -226,6 +226,9 @@ const fr = {
   'shareLocation.stopPending': 'Le partage s’arrêtera dès le retour du réseau.',
   'shareLocation.replacePoint.title': 'Montrer votre position réelle ?',
   'shareLocation.replacePoint.message': 'Votre partage montre un point choisi sur la carte. Tous ceux qui le voient verront votre position réelle à la place.',
+  'shareLocation.replacePoint.messageNamed': 'Votre partage montre un point choisi sur la carte. Votre position réelle le remplacera chez {names}.',
+  'shareLocation.replacePoint.others.one': '{count} autre personne',
+  'shareLocation.replacePoint.others.other': '{count} autres personnes',
   'shareLocation.replacePoint.confirm': 'Montrer ma position réelle',
   'shareLocation.replacePoint.keep': 'Garder le point choisi',
 } as const;

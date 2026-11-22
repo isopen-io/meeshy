@@ -31,8 +31,15 @@ enum SharedLocationShareProblem: Equatable {
     /// « Arrêter » n'a pas pu partir : l'intention est gardée, et le centre la fait partir dès le retour du réseau.
     case withdrawalPending
     /// Le partage montre un point CHOISI à la main (#20087) : « Partager » depuis l'appareil y montrerait la position
-    /// réelle à tous ses destinataires. Rien n'est parti ; l'écran le demande, puis rejoue avec `replacingPoint`.
-    case replacesChosenPoint
+    /// réelle à tous ses destinataires. Rien n'est parti ; l'écran le demande en nommant ceux qui la verront, puis rejoue
+    /// avec la question qu'il a posée (`replacing`, #20127) : elle ne vaut que pour le partage qu'elle décrivait.
+    case replacesChosenPoint(SharedLocationPointReplacement)
+
+    /// La question à poser, quand c'en est une.
+    var pointReplacement: SharedLocationPointReplacement? {
+        guard case .replacesChosenPoint(let asked) = self else { return nil }
+        return asked
+    }
 }
 
 /// Réveille le centre après un délai : l'échéance de la personne la plus proche, ou le rejeu d'une échéance qui n'a pas
@@ -158,6 +165,9 @@ final class SharedLocationSharingCenter: ObservableObject {
     /// La DERNIÈRE relecture a répondu (#20055) : jamais relu, ou relecture en panne depuis, toute liste composée d'ici
     /// peut ignorer ce qu'un autre appareil du compte partage — ou rendre une personne qu'il a retirée.
     private var hasReadServed = false
+    /// Le démarrage que la passerelle a nommé en dernier (`startedAt`, relu ou accusé) : il date la question « Montrer ta
+    /// position réelle ? » (#20127). `nil` : aucun, ou une passerelle qui ne le dit pas.
+    private var servedStart: String?
     private var following = Set<AnyCancellable>()
     private var deadline: AnyCancellable?
     private var socketWatch = Set<AnyCancellable>()
@@ -235,7 +245,9 @@ final class SharedLocationSharingCenter: ObservableObject {
 
     /// Le même geste pour un terme : une durée servie, ou « jusqu'à ce que j'arrête » (#19616), refusé tant que la
     /// passerelle ne l'annonce pas. Le cercle Sang est rejugé par elle. Devant un point choisi (#20087), rien ne part
-    /// sans `replacingPoint` : la position réelle remplacerait le point chez tous ses destinataires.
+    /// sans `replacing` : la position réelle remplacerait le point chez tous ses destinataires. La réponse est relue
+    /// contre ce que la passerelle sert À CET INSTANT (#20127) : un autre démarrage, ou quelqu'un ajouté depuis la
+    /// question, et elle se repose avec la liste à jour — rien n'est parti.
     @discardableResult
     func share(
         with userId: String,
@@ -243,14 +255,18 @@ final class SharedLocationSharingCenter: ObservableObject {
         term: SharedLocationShareTerm,
         notify: Bool = false,
         battery: Bool? = nil,
-        replacingPoint: Bool = false
+        replacing asked: SharedLocationPointReplacement? = nil
     ) async -> SharedLocationShareProblem? {
         await locked {
-            guard await self.readBeforeComposing() else { return self.isLive ? .refused(.offline) : .refused(.failed) }
+            let read = await (asked == nil ? self.readBeforeComposing() : self.readServedTruth())
+            guard read else { return self.isLive ? .refused(.offline) : .refused(.failed) }
             guard self.isLive else { return .refused(.failed) }
             guard self.accepts(term) else { return .refused(.unavailable) }
             let showsPoint = self.roster.pruned(now: self.now()).isFixedPoint
-            guard replacingPoint || !showsPoint else { return .replacesChosenPoint }
+            if showsPoint {
+                let current = self.askedReplacement
+                guard let asked, current.isCovered(by: asked) else { return .replacesChosenPoint(current) }
+            }
             let fix: SharedLocationFix
             switch await self.fixes.currentFix() {
             case .fix(let current): fix = current
@@ -262,8 +278,13 @@ final class SharedLocationSharingCenter: ObservableObject {
             let problem = await self.publish(next, fix: fix, previous: self.roster, claimsPublishing: true, notify: notify,
                                              replacesChosenPoint: showsPoint)
             guard problem == .refused(.fixedPoint) else { return problem }
-            return await self.readServedTruth() && self.roster.isFixedPoint ? .replacesChosenPoint : problem
+            return await self.readServedTruth() && self.roster.isFixedPoint ? .replacesChosenPoint(self.askedReplacement) : problem
         }
+    }
+
+    /// La question que poserait le partage servi tel que ce centre le connaît.
+    private var askedReplacement: SharedLocationPointReplacement {
+        roster.pruned(now: now()).pointReplacement(startedAt: servedStart)
     }
 
     /// Montrer à une personne un point CHOISI à la main sur la carte (#19558) : aucun relevé n'est demandé à l'appareil,
@@ -394,6 +415,7 @@ final class SharedLocationSharingCenter: ObservableObject {
             scheduleDeadline()
         }
         guard let truth = read else { return true }
+        servedStart = truth.startedAt
         if truth.shareBattery != nil { servesShareOptions = true }
         if truth.acceptsManualSource { servesFixedPoint = true }
         if truth.acceptsUntilStopped { servesUntilStopped = true }
@@ -596,6 +618,7 @@ final class SharedLocationSharingCenter: ObservableObject {
         case .started(_, let startedAt):
             if claimsPublishing { claimPublishing() }
             if fix != nil { publishedStart = startedAt }
+            if let startedAt { servedStart = startedAt }
             engage(next, fix: fix)
             return nil
         case .refused(.unconfirmed):
@@ -709,6 +732,7 @@ final class SharedLocationSharingCenter: ObservableObject {
         adopt(.empty)
         markReceived(false)
         publishedStart = nil
+        servedStart = nil
         deadline = nil
         stopFollowingDevice()
     }

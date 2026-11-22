@@ -22,6 +22,11 @@
  */
 
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
+import {
+  resolveParticipantRights,
+  type ParticipantRightsOverride,
+  type ParticipantRightsSource,
+} from '@meeshy/shared/utils/participant-rights';
 
 /**
  * Le delta que l'hôte pose sur un participant. Tout champ est facultatif.
@@ -32,15 +37,7 @@ import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
  * `Partial<ParticipantPermissions>` ici ferait mentir la signature sur ce que
  * Prisma rend réellement.
  */
-export type ParticipantRightsOverride = {
-  readonly [K in keyof ParticipantPermissions]?: boolean | null;
-};
-
-/** Ce qu'il faut d'une ligne `Participant` pour répondre à la question. */
-export type ParticipantRightsSource = {
-  readonly permissions: ParticipantPermissions;
-  readonly anonymousSession?: { readonly rights?: ParticipantRightsOverride | null } | null;
-};
+export type { ParticipantRightsOverride, ParticipantRightsSource };
 
 /**
  * Les droits qu'un hôte peut piloter, énumérés.
@@ -173,6 +170,62 @@ export const FOUNDING_MEMBER_PERMISSIONS: Readonly<ParticipantPermissions> = Obj
 export const PARTICIPANT_SEND_RIGHT_NAMES = PARTICIPANT_RIGHT_NAMES.filter(
   (name): name is Exclude<ParticipantRightName, 'canViewHistory'> => name !== 'canViewHistory',
 );
+
+export type ParticipantSendRightName = Exclude<ParticipantRightName, 'canViewHistory'>;
+
+/**
+ * **Ce qu'une LIGNE DE PARTICIPANT SERVIE porte comme droits** (#20277).
+ *
+ * Une porte qui sert un participant sert l'ensemble RÉSOLU — jamais
+ * `Participant.permissions` seul, qui est l'INSTANTANÉ du join. Les deux
+ * divergent dès le premier `PATCH …/participants/:id/rights`, et la divergence
+ * est VOULUE : la surcharge est un DELTA, et l'instantané reste intact pour que
+ * retirer la surcharge fasse retomber le droit sur sa valeur d'origine
+ * (`participant-rights-core.ts`). Il n'y a donc aucune écriture à aligner — la
+ * seule lecture juste est la lecture RÉSOLUE.
+ *
+ * **Et elle rend les droits d'ÉMISSION, jamais `canViewHistory`.** Le porteur a
+ * tranché le 2026-08-27 que « qui a le droit de voir l'historique » est un fait
+ * de MODÉRATION (#4056) : il ne voyage ni sur `participant:rights-updated`
+ * diffusé à la room (#4009), ni sur la fiche d'un participant lue par un membre
+ * ordinaire (`disclosableEntryRights`). Il ne sortait pas non plus du détail —
+ * mais **par omission de `conversationParticipantSchema`**, c'est-à-dire par
+ * fast-json-stringify, et « compter sur une omission de schéma pour retenir un
+ * secret est un piège armé, pas une protection ». Le retrait se fait ici, à la
+ * SOURCE, et il est dérivé de l'énumération : un huitième droit d'émission
+ * ajouté à `PARTICIPANT_RIGHT_NAMES` est servi sans que personne y pense, et
+ * `canViewHistory` reste dehors sans que personne ait à le retaper.
+ *
+ * La lecture de l'historique a sa propre loi, qui n'est pas un champ de ligne :
+ * `historyFloorFor` (`services/historyFloor.ts`) pour ce qu'on LIT,
+ * `resolveEntryRights` + `disclosableEntryRights` pour ce que la FICHE en dit à
+ * un hôte.
+ */
+export function servedParticipantSendRights(
+  participant: ParticipantRightsSource,
+): Record<ParticipantSendRightName, boolean> {
+  const resolved = resolveParticipantRights(participant);
+  const served = {} as Record<ParticipantSendRightName, boolean>;
+  for (const name of PARTICIPANT_SEND_RIGHT_NAMES) served[name] = resolved[name];
+  return served;
+}
+
+/**
+ * La ligne telle qu'une porte la SERT : ses droits résolus, et **sans la source
+ * de la surcharge** (#20277).
+ *
+ * Le second point n'est pas cosmétique. Charger `anonymousSession.rights` pour
+ * appliquer la loi met l'objet à portée de tout `...row` qui suit, et cet objet
+ * porte `canViewHistory` — le fait de modération que la fonction ci-dessus
+ * retire justement de l'ensemble servi. Le retirer ici ferme les DEUX chemins
+ * d'un coup, et aucun des deux ne dépend du sérialiseur.
+ */
+export function participantRowWithServedRights<T extends ParticipantRightsSource>(
+  row: T,
+): Omit<T, 'anonymousSession'> & { permissions: Record<ParticipantSendRightName, boolean> } {
+  const { anonymousSession: _sourceDeLaSurcharge, ...servedRow } = row;
+  return { ...servedRow, permissions: servedParticipantSendRights(row) };
+}
 
 /**
  * La SIGNATURE de la table héritée — celle que les trois portes de création
@@ -332,23 +385,7 @@ export function disclosableEntryRights(
   return disclosable;
 }
 
-export function resolveParticipantRights(
-  participant: ParticipantRightsSource,
-): ParticipantPermissions {
-  const { permissions } = participant;
-  const rights = participant.anonymousSession?.rights;
-  if (!rights) return { ...permissions };
-
-  return {
-    canSendMessages: rights.canSendMessages ?? permissions.canSendMessages,
-    canSendFiles: rights.canSendFiles ?? permissions.canSendFiles,
-    canSendImages: rights.canSendImages ?? permissions.canSendImages,
-    canSendVideos: rights.canSendVideos ?? permissions.canSendVideos,
-    canSendAudios: rights.canSendAudios ?? permissions.canSendAudios,
-    canSendLocations: rights.canSendLocations ?? permissions.canSendLocations,
-    canSendLinks: rights.canSendLinks ?? permissions.canSendLinks,
-  };
-}
+export { resolveParticipantRights };
 
 /**
  * Le droit de PIÈCE JOINTE qui gouverne un type MIME donné (#5151).

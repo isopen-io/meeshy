@@ -532,6 +532,96 @@ retombe sur `'fr'`, plusieurs sites sur `'en'`. Le garder au site rend visible l
 question produit — « quelle langue pour un compte sans AUCUNE préférence ? » — sans
 la mêler à un correctif de Prisme.
 
+## Toute porte qui sert les DROITS d'un participant sert l'ensemble RÉSOLU
+
+`Participant.permissions` est l'INSTANTANÉ pris au join ;
+`anonymousSession.rights` est le DELTA qu'un hôte pose sur CE participant, et il
+passe DEVANT. La loi est `services/participantRights.ts`
+(`resolveParticipantRights` → `resolveEntryRights` → `servedParticipantSendRights`),
+et `middleware/auth.ts` la fait respecter à chaque envoi.
+
+**Les deux colonnes DIVERGENT, par décision.** `PATCH …/participants/:id/rights`
+n'écrit QUE la surcharge : un droit ramené à sa valeur du join voit son entrée
+EFFACÉE, pour qu'une surcharge retirée fasse retomber le droit sur sa valeur
+d'origine (`participant-rights-core.ts`). Il n'y a donc **aucune écriture à
+aligner** — devant une lecture qui sert l'instantané, la seule réparation
+possible est de RÉSOUDRE. C'est le constat de #20277, où `GET /conversations/:id`
+— la lecture d'AMORCE que les trois clients montent à chaque ouverture de fil —
+servait l'instantané nu, pendant que `participant:rights-updated` servait le
+résolu : un tiroir de composeur qui s'ouvre puis se ferme à la première socket.
+
+**Et la divergence ment dans les DEUX sens.** Un droit RETIRÉ laissé à `true`
+offre une tuile pour un geste refusé en 403 ; un droit ACCORDÉ laissé à `false`
+cache une tuile pour un geste que le serveur accepte. Le second sens n'apparaît
+qu'une fois le premier corrigé — tant qu'aucun client ne lit les droits, le
+tiroir reste ouvert et le cas « accordé » marche par accident.
+
+> **Un lot qui met un client à lire une donnée hérite de la question de sa
+> JUSTESSE, et aussi de celle de son SENS D'ERREUR.**
+
+Deux pièges de mise en œuvre, tous deux mesurés :
+
+- **La projection ne coûte pas ce qu'on croit.** Charger `anonymousSession`
+  ENTIER rehydrate `sessionTokenHash` et l'identité de l'invité pour 100
+  participants par ouverture — ce qu'iter 35 (F8) avait retiré exprès. Mais
+  `anonymousSession: { select: { rights: true } }` ne ramène que huit booléens
+  d'un document **déjà lu** : une projection, pas une requête, pas une jointure.
+  **Avant d'arbitrer un périmètre sur un coût supposé, mesurer la projection
+  étroite** — ici l'arbitrage « la ligne de l'appelant ou toutes ? » a disparu.
+- **Le `select` est invisible à tout témoin de valeur** (§ Language Resolution,
+  troisième piège) : un double Prisma rend ce qu'on lui dit. Une lecture résolue
+  se garde par DEUX témoins — un de PROJECTION sur la requête, un de VALEUR sur
+  la réponse sérialisée — et aucun ne subsume l'autre.
+
+**`canViewHistory` n'est PAS un droit d'émission** : c'est un fait de MODÉRATION
+(#4056), retiré du push par #4009 et de la fiche par `disclosableEntryRights`.
+Il ne sort d'aucune ligne servie, et le retrait se fait À LA SOURCE —
+`servedParticipantSendRights` dérive son énumération de
+`PARTICIPANT_SEND_RIGHT_NAMES`, et `participantRowWithServedRights` retire la
+source de la surcharge, qui le porte. S'en remettre à l'omission de
+`conversationParticipantSchema` serait un piège armé, pas une protection.
+
+**Les lecteurs de cette loi ne se comptent pas sur le nom du champ.** #20277 a
+demandé « qui sert `permissions` ? » et a trouvé cinq lecteurs ; la question
+juste est « qui dit à un client ce qu'il a le droit d'envoyer ? », et elle en
+rend six — `serializeConversationParticipant` sert `canSendMessages` /
+`canSendFiles` / `canSendImages` **aplatis** depuis l'instantané, sur cinq sites
+dont la collection de SYNCHRONISATION et la diffusion `participant:role-updated`
+(dette mesurée : **#20292**).
+
+> **Une énumération de lecteurs d'une loi se fait sur ce que la loi DÉCIDE, pas
+> sur le nom du champ qui la porte.** Même famille que la leçon 261.
+
+### Un témoin de RETRAIT ne peut pas vivre derrière le sérialiseur
+
+La règle « un témoin de confidentialité assert sur la VALEUR SERVIE » (cycle 83)
+garde une **FUITE** : le sérialiseur y est en aval du défaut, donc si la clé sort
+c'est qu'elle a traversé, et le témoin tombe.
+
+Elle ne garde pas un **RETRAIT**. Quand le schéma ne déclare pas la clé,
+fast-json-stringify la supprime quoi que le code remette : un témoin de route ne
+distingue plus « le code a retiré » de « le schéma a supprimé », et c'est la
+seconde qui répond, parce qu'elle répond toujours. Mesuré en livrant #20277 — le
+témoin de route posé sur le retrait de `anonymousSession` est resté **VERT** sous
+la mutation qui rendait la fabrique bavarde.
+
+Le témoin d'un retrait vit donc au niveau de **l'objet, avant sérialisation** —
+la loi, la fabrique, le helper. Le témoin de route se garde quand même, comme le
+piège armé du cycle 84 (le jour où quelqu'un déclare la clé, c'est lui qui
+l'obligera à voir ce qu'il ouvre), **et son doc-comment ÉCRIT ce qu'il ne prouve
+pas** : un témoin dont la limite n'est pas écrite se lit comme une garde
+complète. Détail :
+`tasks/lessons/2026-11-22-un-temoin-de-non-fuite-derriere-un-serialiseur-qui-supprime-deja-la-cle.md`.
+
+### Et un `any` au site d'appel annule les lois de type qu'il traverse
+
+`participantRowWithServedRights` rend `Omit<T, 'anonymousSession'>`. Appelé sur
+un `any[]`, `Omit<any, …>` ne veut rien dire : le compilateur a perdu jusqu'à
+l'`id` de la ligne, et `membersServedToViewer<T extends { readonly id: string }>`
+l'a refusé (`TS2345`). La réparation n'est pas un cast mais un TYPE NOMMÉ dérivé
+du `select` qui produit la ligne — `ConversationDetailParticipantRow =
+Prisma.ParticipantGetPayload<…>`, la même forme que `ConversationListRow`.
+
 ## Toute porte qui sort un profil de TIERS filtre sa présence
 
 `select: { isOnline: true, lastActiveAt: true }` sur quelqu'un d'AUTRE que

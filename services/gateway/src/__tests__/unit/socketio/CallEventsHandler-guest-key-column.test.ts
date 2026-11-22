@@ -42,6 +42,7 @@ jest.mock('../../../utils/logger', () => ({
 
 import { CallEventsHandler } from '../../../socketio/CallEventsHandler';
 import { resolveParticipantId, resolveJoinParticipantId } from '../../../socketio/call-participants';
+import { matchesMongoWhere } from '../../helpers/mongo-where';
 import { CALL_EVENTS, CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
@@ -58,12 +59,15 @@ const ROWS: ParticipantRow[] = [
   { id: MEMBER_PARTICIPANT_ID, userId: MEMBER_USER_ID, type: 'user', conversationId: CONV_ID, isActive: true },
 ];
 
-function matches(where: any, row: Record<string, unknown>): boolean {
-  return Object.entries(where ?? {}).every(([key, expected]) => {
-    if (key === 'OR') return (expected as any[]).some(branch => matches(branch, row));
-    return row[key] === expected;
-  });
-}
+/**
+ * La SÉMANTIQUE du vrai client, jamais un comparateur écrit à la main (leçon
+ * du 2026-11-21). Celui qui vivait ici savait lire `OR` et rien d'autre : le
+ * `where` de ces portes compose désormais DEUX branches `OR` sous un `AND`
+ * (#20310), et il rendait `null` sur un correctif JUSTE — un faux ROUGE, qui
+ * ne se découvre qu'en ABANDONNANT le correctif.
+ */
+const matches = (where: any, row: Record<string, unknown>): boolean =>
+  matchesMongoWhere(row, where);
 
 function makePrisma() {
   const pick = (row: ParticipantRow, select: any) =>

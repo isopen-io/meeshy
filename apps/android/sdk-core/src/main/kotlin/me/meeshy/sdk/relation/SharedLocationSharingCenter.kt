@@ -35,6 +35,7 @@ import me.meeshy.sdk.location.LocationPermissionGate
 import me.meeshy.sdk.model.relation.SharedLocationFix
 import me.meeshy.sdk.model.relation.SharedLocationOwnSnapshot
 import me.meeshy.sdk.model.relation.SharedLocationOwnSnapshotWire
+import me.meeshy.sdk.model.relation.SharedLocationPointReplacement
 import me.meeshy.sdk.model.relation.SharedLocationPrecision
 import me.meeshy.sdk.model.relation.SharedLocationRoster
 import me.meeshy.sdk.model.relation.SharedLocationSendOutcome
@@ -42,6 +43,7 @@ import me.meeshy.sdk.model.relation.SharedLocationShareDuration
 import me.meeshy.sdk.model.relation.SharedLocationStartRequest
 import me.meeshy.sdk.model.relation.SharedLocationStartVerdict
 import me.meeshy.sdk.model.relation.SharedLocationUpdateGate
+import me.meeshy.sdk.model.relation.pointReplacement
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.RelationsApi
@@ -65,9 +67,10 @@ sealed interface SharedLocationShareProblem {
 
     /**
      * Le partage montre un point choisi à la main sur un autre appareil (#20212) : rien n'est parti, l'écran demande
-     * « Montrer ta position réelle ? » puis rejoue avec `replacingPoint`.
+     * « Montrer ta position réelle ? » en nommant ceux qui la verront, puis rejoue avec la question qu'il a posée
+     * (`replacing`, #20248) : elle ne vaut que pour le partage qu'elle décrivait.
      */
-    data object ReplacesChosenPoint : SharedLocationShareProblem
+    data class ReplacesChosenPoint(val asked: SharedLocationPointReplacement) : SharedLocationShareProblem
 }
 
 /** Où la liste survit à un lancement, par compte : des identifiants et des échéances, jamais une position. */
@@ -105,13 +108,15 @@ interface SharedLocationSharing {
 
     /**
      * Montrer ma position à une personne, à cette précision et pour cette durée. `null` : c'est parti. Devant un point
-     * choisi (#20212), rien ne part sans `replacingPoint` : la position réelle remplacerait le point chez tous.
+     * choisi (#20212), rien ne part sans `replacing` : la position réelle remplacerait le point chez tous. La réponse
+     * est relue contre ce que la passerelle sert À CET INSTANT (#20248) : un autre démarrage, ou quelqu'un ajouté depuis
+     * la question, et elle se repose avec la liste à jour — rien n'est parti.
      */
     suspend fun share(
         userId: String,
         precision: SharedLocationPrecision,
         duration: SharedLocationShareDuration,
-        replacingPoint: Boolean = false,
+        replacing: SharedLocationPointReplacement? = null,
     ): SharedLocationShareProblem?
 
     /**
@@ -150,7 +155,7 @@ interface SharedLocationSharing {
  * UN POINT CHOISI NE SE REMPLACE PAS EN SILENCE (#20212, iso #20087 iOS et #20126 web) : quand la passerelle sert un
  * point choisi à la main par un autre appareil (`source: manual`, gardé dans la liste), cet appareil ne suit plus sa
  * position et n'en envoie aucune ; « Partager » rend [SharedLocationShareProblem.ReplacesChosenPoint] sans rien envoyer,
- * et ne fait passer les destinataires à la position réelle qu'avec `replacingPoint` (la charge porte `source: 'device'`).
+ * et ne fait passer les destinataires à la position réelle qu'avec `replacing` (la charge porte `source: 'device'`).
  *
  * Le suivi ne vit que tant que l'app est utilisée : la permission demandée est celle « pendant l'utilisation » (fine ou
  * approximative, jamais `ACCESS_BACKGROUND_LOCATION`), et aucun service de premier plan ne la prolonge — l'émission en
@@ -220,6 +225,12 @@ class SharedLocationSharingCenter internal constructor(
     @Volatile private var publishedStart: String? = null
 
     /**
+     * Le démarrage que la passerelle a nommé en dernier (`startedAt`, relu ou accusé) : il date la question « Montrer ta
+     * position réelle ? » (#20248, iso `servedStart` d'iOS et du web). `null` : aucun, ou une passerelle qui ne le dit pas.
+     */
+    @Volatile private var servedStart: String? = null
+
+    /**
      * Relancé avec une liste qu'il publiait, l'appareil suit sa position mais n'en envoie rien avant d'avoir relu ce que la
      * passerelle sert (#19767, iso `SharedLocationSharingCenter.swift`) : un autre appareil a pu reprendre le partage
      * pendant qu'il dormait. Seules une réponse et une passerelle d'avant (`null`) lèvent l'attente, comme un « Partager »
@@ -253,15 +264,22 @@ class SharedLocationSharingCenter internal constructor(
         userId: String,
         precision: SharedLocationPrecision,
         duration: SharedLocationShareDuration,
-        replacingPoint: Boolean,
+        replacing: SharedLocationPointReplacement?,
     ): SharedLocationShareProblem? = locked { ticket ->
-        val answered = readBeforeComposing(ticket)
+        // Une réponse à la question prend la position AVANT de relire (iso le web) : la relecture, puis la vérification,
+        // touchent l'envoi, et un démarrage fait ailleurs pendant l'attente du relevé n'est pas écrasé.
+        val early = if (replacing == null) null else locate() ?: return@locked locateProblem()
+        val answered = if (replacing == null) readBeforeComposing(ticket) else syncLocked(ticket)
         if (!isCurrent(ticket)) return@locked SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
         if (!answered) return@locked SharedLocationShareProblem.Refused(SharedLocationSendOutcome.OFFLINE)
         val showsPoint = _roster.value.pruned(clock()).isFixedPoint
-        if (showsPoint && !replacingPoint) return@locked SharedLocationShareProblem.ReplacesChosenPoint
-        if (!permission.isGranted()) return@locked SharedLocationShareProblem.LocationDenied
-        val fix = deviceFix() ?: return@locked SharedLocationShareProblem.LocationUnavailable
+        if (showsPoint) {
+            val current = askedReplacement()
+            if (replacing == null || !current.isCoveredBy(replacing)) {
+                return@locked SharedLocationShareProblem.ReplacesChosenPoint(current)
+            }
+        }
+        val fix = early ?: locate() ?: return@locked locateProblem()
         if (!isCurrent(ticket)) return@locked SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
         val previous = _roster.value
         val next = previous.pruned(clock()).adding(userId, precision, duration, clock()).withFixedPoint(false)
@@ -269,8 +287,22 @@ class SharedLocationSharingCenter internal constructor(
         if (problem != SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FIXED_POINT)) return@locked problem
         // Un point choisi ailleurs que cet appareil ignorait encore : rien n'a été écrit, il relit et demande.
         val reread = syncLocked(ticket)
-        if (reread && isCurrent(ticket) && _roster.value.isFixedPoint) SharedLocationShareProblem.ReplacesChosenPoint else problem
+        if (reread && isCurrent(ticket) && _roster.value.isFixedPoint) {
+            SharedLocationShareProblem.ReplacesChosenPoint(askedReplacement())
+        } else {
+            problem
+        }
     }
+
+    /** La permission puis un relevé ; `null` : l'un des deux manque, [locateProblem] dit lequel. */
+    private suspend fun locate(): SharedLocationFix? = if (permission.isGranted()) deviceFix() else null
+
+    private fun locateProblem(): SharedLocationShareProblem =
+        if (permission.isGranted()) SharedLocationShareProblem.LocationUnavailable else SharedLocationShareProblem.LocationDenied
+
+    /** La question que poserait le partage servi tel que ce centre le connaît. */
+    private fun askedReplacement(): SharedLocationPointReplacement =
+        _roster.value.pruned(clock()).pointReplacement(servedStart)
 
     override suspend fun stopSharing(userId: String): SharedLocationShareProblem? = locked { ticket ->
         val firstRead = !hasReadServed
@@ -353,6 +385,7 @@ class SharedLocationSharingCenter internal constructor(
             scheduleDeadline()
         }
         val truth = read.truth ?: return true
+        servedStart = truth.startedAt
         val before = _roster.value
         val next = before.withServed(truth, clock())
         val yields = next.hasRecipients && !received && before.hasRecipients && yieldsTo(ticket, truth.startedAt)
@@ -486,6 +519,7 @@ class SharedLocationSharingCenter internal constructor(
         lastSent = null
         received = false
         publishedStart = null
+        servedStart = null
         awaitsServedTruth = false
         hasReadServed = false
         loadedFor = account
@@ -589,6 +623,7 @@ class SharedLocationSharingCenter internal constructor(
             is SharedLocationStartVerdict.Started -> {
                 if (claimsPublishing) claimPublishing(ticket)
                 if (fix != null) rememberStart(ticket, verdict.startedAt)
+                verdict.startedAt?.let { servedStart = it }
                 engage(ticket, next, fix)
                 null
             }
@@ -694,6 +729,7 @@ class SharedLocationSharingCenter internal constructor(
 
     private fun wipe(ticket: Ticket) {
         awaitsServedTruth = false
+        servedStart = null
         adopt(ticket, SharedLocationRoster.EMPTY)
         markReceived(ticket, false)
         rememberStart(ticket, null)
@@ -792,6 +828,9 @@ internal interface SharedLocationSharingModule {
 
     @Binds
     fun bindSharing(center: SharedLocationSharingCenter): SharedLocationSharing
+
+    @Binds
+    fun bindKnownPeople(people: AcceptedContactsKnownPeople): SharedLocationKnownPeople
 
     @Binds
     @IntoSet

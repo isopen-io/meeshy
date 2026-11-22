@@ -35,7 +35,7 @@ class CommunityLinksViewModelTest {
     private fun mini(id: String, members: Int = 4) = CommunityMini(id = id, name = "C$id", identifier = "c$id", memberCount = members)
 
     private fun viewModel(api: FakeApi, cache: LinksCache = LinksCache()) =
-        CommunityLinksViewModel(CommunityLinkRepository(api, MeeshyConfig()), cache)
+        CommunityLinksViewModel(CommunityLinkRepository(api, MeeshyConfig(), io.mockk.mockk()), cache)
 
     @Test
     fun `la liste arrive avec ses chiffres et alimente le cache`() = runTest {

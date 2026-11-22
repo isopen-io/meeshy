@@ -224,6 +224,9 @@ const ar = {
   'shareLocation.stopPending': 'ستتوقف المشاركة فور عودة الاتصال.',
   'shareLocation.replacePoint.title': 'هل تريد إظهار موقعك الحقيقي؟',
   'shareLocation.replacePoint.message': 'أنت تشارك نقطة اخترتها على الخريطة. كل من يراها سيرى موقعك الحقيقي بدلًا منها.',
+  'shareLocation.replacePoint.messageNamed': 'أنت تشارك نقطة اخترتها على الخريطة. سيحلّ موقعك الحقيقي محلّها لدى {names}.',
+  'shareLocation.replacePoint.others.one': '{count} شخص آخر',
+  'shareLocation.replacePoint.others.other': '{count} أشخاص آخرين',
   'shareLocation.replacePoint.confirm': 'إظهار موقعي الحقيقي',
   'shareLocation.replacePoint.keep': 'الإبقاء على النقطة المختارة',
 } as const satisfies CirclesCatalog;

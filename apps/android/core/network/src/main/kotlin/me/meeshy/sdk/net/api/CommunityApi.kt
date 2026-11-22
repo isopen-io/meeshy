@@ -37,6 +37,18 @@ data class UpdateCommunityMemberRoleRequest(
     val role: String,
 )
 
+/** Suspendre ou relancer le lien d'entrée d'une communauté (#19661) — corps de `PUT communities/{id}/join-link`. */
+@Serializable
+data class CommunityJoinLinkStateRequest(
+    val paused: Boolean,
+)
+
+/** L'état servi du lien d'entrée (#19661) : l'instant de la pause, nul quand le lien est actif. */
+@Serializable
+data class CommunityJoinLinkState(
+    val joinLinkPausedAt: String? = null,
+)
+
 interface CommunityApi {
     @GET("communities")
     suspend fun list(
@@ -128,6 +140,16 @@ interface CommunityApi {
         @Path("id") communityId: String,
         @Path("requestId") requestId: String,
     ): ApiResponse<CommunityJoinRequestRejected>
+
+    /**
+     * Suspendre ou relancer le lien d'entrée (#19661) : intendants seuls, tout autre lecteur reçoit le 404
+     * générique. Un lien en pause refuse l'entrée `via: "link"` (403 `COMMUNITY_LINK_PAUSED`). Écran : #20255.
+     */
+    @PUT("communities/{id}/join-link")
+    suspend fun setJoinLinkState(
+        @Path("id") communityId: String,
+        @Body body: CommunityJoinLinkStateRequest,
+    ): ApiResponse<CommunityJoinLinkState>
 
     @POST("communities/{id}/leave")
     suspend fun leave(@Path("id") communityId: String): ApiResponse<Unit>

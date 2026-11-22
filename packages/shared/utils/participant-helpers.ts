@@ -1,3 +1,4 @@
+import { resolvedSendRight, type ParticipantRightsOverride } from './participant-rights.js';
 import { isPrivilegedPlatformRole } from './platform-privilege.js';
 
 /**
@@ -160,11 +161,28 @@ export type SerializableParticipantRow = {
   readonly isOnline?: boolean | null;
   readonly lastActiveAt?: Date | null;
   readonly joinedAt?: Date | null;
-  readonly permissions?: {
-    readonly canSendMessages?: boolean | null;
-    readonly canSendFiles?: boolean | null;
-    readonly canSendImages?: boolean | null;
-  } | null;
+  readonly permissions?: ParticipantRightsOverride | null;
+  /**
+   * **REQUIS, et c'est le point du lot** (#20292).
+   *
+   * `permissions` est l'INSTANTANÉ du join ; `anonymousSession.rights` est le
+   * DELTA que l'hôte pose, et il passe DEVANT. Les deux divergent dès le premier
+   * `PATCH …/participants/:id/rights`, par décision écrite : la surcharge
+   * retirée fait retomber le droit sur sa valeur d'origine, donc il n'y a
+   * AUCUNE écriture à aligner — la seule lecture juste est la lecture RÉSOLUE.
+   *
+   * Le champ n'est pas optionnel parce qu'une fabrique ne peut pas résoudre ce
+   * qu'on ne lui donne pas : optionnel, un appelant dont le `select` ne le
+   * projette pas servirait l'instantané **en silence**, ce qui est exactement
+   * le défaut que ce lot ferme sur cinq sites à la fois. Requis, l'omission est
+   * une erreur de COMPILATION — la seule forme de garde qu'un `select` ne peut
+   * pas contourner, et que nul témoin de valeur ne peut voir (un double Prisma
+   * rend ce qu'on lui dit, quel que soit le `select`).
+   *
+   * `null` reste la réponse juste pour un membre INSCRIT, qui ne porte aucune
+   * surcharge : il faut la DIRE, pas l'omettre.
+   */
+  readonly anonymousSession: { readonly rights?: ParticipantRightsOverride | null } | null;
   readonly user?: {
     readonly id?: string | null;
     readonly username?: string | null;
@@ -309,9 +327,9 @@ export const serializeConversationParticipant = (
     createdAt: user?.createdAt ?? joinedAt,
     updatedAt: user?.updatedAt ?? joinedAt,
     isAnonymous: participant.type === 'anonymous',
-    canSendMessages: participant.permissions?.canSendMessages ?? true,
-    canSendFiles: participant.permissions?.canSendFiles ?? true,
-    canSendImages: participant.permissions?.canSendImages ?? true,
+    canSendMessages: resolvedSendRight(participant, 'canSendMessages'),
+    canSendFiles: resolvedSendRight(participant, 'canSendFiles'),
+    canSendImages: resolvedSendRight(participant, 'canSendImages'),
     permissions: {
       canAccessAdmin: isGlobalAdmin,
       canManageUsers: isGlobalAdmin,

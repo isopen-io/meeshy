@@ -43,7 +43,10 @@ data class CallLiveCaptionLine(
     val canRevealOriginal: Boolean,
     /** The original unfolded under the translation the reader touched, in secondary ink. */
     val originalBelow: String? = null,
-    /** Until this instant a translation is awaited: the FINAL line of a peer whose language lies outside the prism. */
+    /**
+     * Until this instant of THIS device's monotonic clock a translation is awaited: the FINAL line of a peer whose
+     * language lies outside the prism, [CallCaptionTranslationWait.TIMEOUT_MS] after its local reception (#20298).
+     */
     val awaitingUntilMs: Long? = null,
     val originLanguage: String? = null,
     val servedLanguage: String? = null,
@@ -52,7 +55,7 @@ data class CallLiveCaptionLine(
 ) {
     val isAwaitingTranslation: Boolean get() = awaitingUntilMs != null
 
-    /** The line at [nowMs]: the wait falls at its deadline, the origin label stays. */
+    /** The line at [nowMs] (the monotonic clock of [awaitingUntilMs]): the wait falls at its deadline, the origin label stays. */
     fun settled(nowMs: Long): CallLiveCaptionLine =
         if (awaitingUntilMs != null && nowMs >= awaitingUntilMs) copy(awaitingUntilMs = null) else this
 
@@ -95,7 +98,7 @@ object CallLiveCaptionLines {
             isShowingOriginal = showsOriginal,
             canRevealOriginal = translation != null,
             originalBelow = segment.text.takeIf { translation != null && !prefersOriginal && isRevealed },
-            awaitingUntilMs = (segment.capturedAtMs + CallCaptionTranslationWait.TIMEOUT_MS).takeIf { awaits },
+            awaitingUntilMs = awaitingUntil(segment).takeIf { awaits },
             originLanguage = origin,
             servedLanguage = servedLanguage,
         )
@@ -119,6 +122,14 @@ object CallLiveCaptionLines {
     /** The next instant a wait falls after [nowMs], the only moment the screen has to redraw for it. */
     fun nextDeadline(lines: List<CallLiveCaptionLine>, nowMs: Long): Long? =
         lines.mapNotNull { it.awaitingUntilMs }.filter { it > nowMs }.minOrNull()
+
+    /**
+     * The wait runs from the LOCAL reception on the monotonic clock (#20298), never from [CallJournalSegment.capturedAtMs],
+     * the speaker's wall clock. A segment nothing stamped draws no wait: the only other anchor is that foreign clock,
+     * whose skew would freeze the dots for an hour; the line keeps its « EN » label and the translation still joins it.
+     */
+    private fun awaitingUntil(segment: CallJournalSegment): Long? =
+        segment.receivedAtElapsedMs?.let { it + CallCaptionTranslationWait.TIMEOUT_MS }
 
     /** Compared as the Prisme compares (rule 4): an `en-US` sentence is already in the rank `en`. */
     private fun inPrism(language: String?, prism: List<String>): Boolean {

@@ -31,6 +31,8 @@ data class CommunityMini(
     val isActive: Boolean = true,
     val memberCount: Int? = null,
     val createdAt: String? = null,
+    /** Le lien d'entrée est en pause (#19661) ; `null` : passerelle qui ne le sert pas. */
+    val joinLinkPaused: Boolean? = null,
 )
 
 /** Totaux « communautés » calculés sur les communautés administrées. */
