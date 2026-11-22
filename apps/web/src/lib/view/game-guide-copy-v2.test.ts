@@ -21,6 +21,7 @@ const EVENTS: Readonly<Record<(typeof GUIDE_MOMENT_KEYS_V2)[number], GuideEventV
   prestige: { kind: 'prestige', prestige: 2, gloryGained: 1000 },
   'atlas-stamp': { kind: 'atlas-stamp', language: 'ja', stamped: 5, total: 83 },
   'flame-freeze-gift': { kind: 'flame-freeze-gift', freezes: 1 },
+  'offering-kept': { kind: 'offering-kept', easedDays: 3 },
 };
 
 describe('les huit moments, dans les sept langues', () => {
@@ -89,5 +90,16 @@ describe('la première Veilleuse offerte (#20169)', () => {
     expect(copy.means).toBe('Les aïeux te la confient : elle garde ta Flamme allumée un jour d’absence.');
     expect(copy.action).toBe('Voir ma Flamme');
     expect(momentCopyV2(guideMomentV2(EVENTS['flame-freeze-gift'], ['flame-freeze-gift']), 'fr').short).toBe('Une Veilleuse t’est offerte pour ta Flamme.');
+  });
+});
+
+describe('l’Offrande gardée par les aïeux (#20327)', () => {
+  test('Mee accueille sans reproche et mène au Rêve', () => {
+    const copy = momentCopyV2(guideMomentV2(EVENTS['offering-kept'], []), 'fr');
+    expect(copy.what).toBe('Les aïeux t’ont gardé ton Offrande.');
+    expect(copy.means).toBe('Elle est prête, sans attendre les actes du jour.');
+    expect(copy.next).toBe('Pendant 3 jours, ton rêve est plus léger, le temps de reprendre.');
+    expect(copy.action).toBe('Voir mon rêve');
+    expect(momentCopyV2(guideMomentV2(EVENTS['offering-kept'], ['offering-kept']), 'fr').short).toBe('Ton Offrande t’attend, gardée par les aïeux.');
   });
 });
