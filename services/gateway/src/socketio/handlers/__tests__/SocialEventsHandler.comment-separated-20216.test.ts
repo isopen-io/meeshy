@@ -11,9 +11,10 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SocialEventsHandler } from '../SocialEventsHandler';
+import { resetSeparationCacheForTests } from '../../separatedRooms';
 
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }) },
@@ -102,6 +103,12 @@ const diffusions: ReadonlyArray<readonly [string, (h: SocialEventsHandler) => Pr
 ];
 
 describe('#20216 — la diffusion d’un commentaire tait l’auteur séparé du lecteur', () => {
+  /* La séparation se garde dans un cache PARTAGÉ par le processus depuis
+     #20236 — une seule chose à invalider quand un blocage bouge. Chaque témoin
+     repart donc d'une ardoise vide, sans quoi il lirait la réponse du
+     précédent (mesuré : les vecteurs « aucun blocage » passaient au rouge). */
+  beforeEach(() => resetSeparationCacheForTests());
+
   it.each(diffusions)('%s exclut la room personnelle de chaque compte séparé du commentateur, dans les deux sens', async (evenement, diffuser) => {
     const { handler, emissions } = monter({
       bloquentLeCommentateur: [LECTEUR_QUI_A_BLOQUE],

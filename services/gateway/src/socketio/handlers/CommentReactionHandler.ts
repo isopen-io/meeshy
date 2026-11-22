@@ -82,15 +82,24 @@ export class CommentReactionHandler {
   }
 
   /**
-   * La room du post, MOINS les rooms personnelles séparées des deux sujets que
-   * l'événement nomme (#20236) — l'ACTEUR et l'AUTEUR du commentaire. `null`
-   * quand la séparation n'a pas pu être lue : on n'annonce pas une activité
+   * La séparation autour des DEUX sujets que l'événement nomme (#20236) —
+   * l'ACTEUR et l'AUTEUR du commentaire —, lue AVANT la mutation pour que
+   * l'émission reste synchrone après elle (l'ordre du fil porte un compteur
+   * d'agrégation). `null` ⇒ on n'annonce rien : on ne diffuse pas une activité
    * sans savoir à qui la taire.
+   *
+   * Seul l'ACTEUR s'exempte (`keep`). Exempter aussi l'auteur rouvrait la
+   * fuite sur le chemin de RETRAIT, qui n'a pas de porte
+   * `commentAuthorSeparatedFrom` — retirer sa réaction reste permis après un
+   * blocage, par décision écrite.
    */
-  private async postRoomEmitter(postId: string, actorId: string, commentAuthorId: string | null | undefined) {
+  private separationAround(actorId: string, commentAuthorId: string | null | undefined): Promise<readonly string[] | null> {
+    return this.separatedRooms.roomsAround([actorId, commentAuthorId], { keep: actorId });
+  }
+
+  /** La room du post, moins ce que la loi nomme — aucun `except()` quand il n'y a rien à taire. */
+  private postRoom(postId: string, separated: readonly string[]) {
     const target = this.io.to(ROOMS.post(postId));
-    const separated = await this.separatedRooms.roomsAround([actorId, commentAuthorId]);
-    if (separated === null) return null;
     return separated.length > 0 ? target.except([...separated]) : target;
   }
 
@@ -157,6 +166,8 @@ export class CommentReactionHandler {
         return;
       }
       const postId = thread.postId;
+
+      const separated = await this.separationAround(userId, thread.authorId);
 
       const reaction = await this.commentReactionService.addReaction({
         commentId: validated.commentId,
@@ -225,7 +236,7 @@ export class CommentReactionHandler {
         return;
       }
 
-      (await this.postRoomEmitter(postId, userId, thread.authorId))?.emit(SERVER_EVENTS.COMMENT_REACTION_ADDED, updateEvent);
+      if (separated !== null) this.postRoom(postId, separated).emit(SERVER_EVENTS.COMMENT_REACTION_ADDED, updateEvent);
 
       // Fire-and-forget: notification errors must not reach the outer catch after
       // success was already confirmed to the client.
@@ -306,6 +317,12 @@ export class CommentReactionHandler {
       // qu'ils ne refetchent pas le fil entier.
       const postId = thread.postId;
 
+      /* Avant la mutation (#20236), et c'est CE chemin qui rend l'exclusion de
+         l'AUTEUR nécessaire : il n'a pas de porte `commentAuthorSeparatedFrom`
+         — retirer sa réaction reste permis après un blocage, par décision
+         écrite — donc l'auteur se voyait annoncer l'activité de qui il a bloqué. */
+      const separated = await this.separationAround(userId, thread.authorId);
+
       const removed = await this.commentReactionService.removeReaction({
         commentId: validated.commentId,
         userId,
@@ -347,7 +364,7 @@ export class CommentReactionHandler {
       };
       if (callback) callback(successResponse);
 
-      (await this.postRoomEmitter(postId, userId, thread.authorId))?.emit(SERVER_EVENTS.COMMENT_REACTION_REMOVED, updateEvent);
+      if (separated !== null) this.postRoom(postId, separated).emit(SERVER_EVENTS.COMMENT_REACTION_REMOVED, updateEvent);
 
       // Le symétrique du `_createCommentReactionNotification` du chemin
       // d'ajout. Le retrait couvre les DEUX familles que le commentaire

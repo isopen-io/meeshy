@@ -20,11 +20,12 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 import { SocialEventsHandler } from '../SocialEventsHandler';
 import { CommentReactionHandler } from '../CommentReactionHandler';
+import { invalidateSeparationAround, resetSeparationCacheForTests } from '../../separatedRooms';
 
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }) },
@@ -105,23 +106,23 @@ function fauxIo(emissions: Emission[]) {
 }
 
 /** Les deux diffusions REST (SocialEventsHandler) et les deux socket (CommentReactionHandler), sous une seule forme. */
+/**
+ * `like` et `unlike` passent par le MÊME chemin que la production : la
+ * séparation se résout AVANT la mutation (ici : avant l'émission), puis
+ * l'émission est SYNCHRONE — c'est ce qui rend à ces deux événements l'ordre
+ * que leur charge absolue exige.
+ */
+const like = async (prisma: PrismaClient, io: any, sens: 'liked' | 'unliked'): Promise<void> => {
+  const handler = new SocialEventsHandler({ io, prisma });
+  const separated = await handler.commentActivitySeparation(ACTEUR, AUTEUR_COMMENTAIRE);
+  const charge = { postId: POST_ID, commentId: COMMENT_ID, userId: ACTEUR, emoji: '❤️', likeCount: 3 } as any;
+  if (sens === 'liked') handler.broadcastCommentLiked(charge, AUTEUR_COMMENTAIRE, separated);
+  else handler.broadcastCommentUnliked(charge, AUTEUR_COMMENTAIRE, separated);
+};
+
 const activites: ReadonlyArray<readonly [string, (p: PrismaClient, io: any) => Promise<void>]> = [
-  [
-    'comment:liked',
-    (prisma, io) =>
-      new SocialEventsHandler({ io, prisma }).broadcastCommentLiked(
-        { postId: POST_ID, commentId: COMMENT_ID, userId: ACTEUR, emoji: '❤️', likeCount: 3 },
-        AUTEUR_COMMENTAIRE,
-      ),
-  ],
-  [
-    'comment:unliked',
-    (prisma, io) =>
-      new SocialEventsHandler({ io, prisma }).broadcastCommentUnliked(
-        { postId: POST_ID, commentId: COMMENT_ID, userId: ACTEUR, emoji: '❤️', likeCount: 2 },
-        AUTEUR_COMMENTAIRE,
-      ),
-  ],
+  ['comment:liked', (prisma, io) => like(prisma, io, 'liked')],
+  ['comment:unliked', (prisma, io) => like(prisma, io, 'unliked')],
   ['comment:reaction-added', (prisma, io) => reaction(prisma, io, 'add')],
   ['comment:reaction-removed', (prisma, io) => reaction(prisma, io, 'remove')],
 ];
@@ -152,6 +153,11 @@ async function reaction(prisma: PrismaClient, io: any, action: 'add' | 'remove')
 const versLePost = (emissions: Emission[]) => emissions.filter((e) => e.rooms.includes(`post:${POST_ID}`));
 
 describe('#20236 — l’activité d’un commentaire ne s’annonce pas à qui un blocage sépare', () => {
+  /* Le cache est PARTAGÉ par le processus (une seule chose à invalider quand un
+     blocage bouge) : chaque témoin repart donc d'une ardoise vide, sans quoi il
+     lirait la réponse du précédent. */
+  beforeEach(() => resetSeparationCacheForTests());
+
   it.each(activites)('%s exclut la room de qui a bloqué l’ACTEUR', async (evenement, diffuser) => {
     const emissions: Emission[] = [];
     await diffuser(fauxPrisma({ [SEPARE_DE_L_ACTEUR]: [ACTEUR] }, []), fauxIo(emissions));
@@ -190,24 +196,85 @@ describe('#20236 — l’activité d’un commentaire ne s’annonce pas à qui 
     expect(emission?.exclues).toEqual([]);
   });
 
-  it.each(activites)('%s n’émet RIEN vers la room du post quand la lecture des blocages échoue (fermé)', async (_evenement, diffuser) => {
+  /**
+   * **UN FAIL-CLOSED PARTIEL N'EST PAS UN FAIL-CLOSED** (audit adversarial du
+   * lot). L'assertion porte sur TOUTES les émissions, pas sur la seule room du
+   * post : `comment:liked` a DEUX adresses, et la feed room de l'auteur partait
+   * avant que la lecture des blocages ait répondu — donc même quand elle
+   * échouait. Un témoin qui ne regarde que la room du post reste vert sur ce
+   * défaut-là (mesuré : la mutation passait).
+   */
+  it.each(activites)('%s n’émet RIEN, sur AUCUNE adresse, quand la lecture des blocages échoue (fermé)', async (_evenement, diffuser) => {
     const emissions: Emission[] = [];
     await diffuser(fauxPrisma('panne', []), fauxIo(emissions));
 
-    expect(versLePost(emissions)).toEqual([]);
+    expect(emissions).toEqual([]);
   });
 
   it('comment:liked sert sa charge ABSOLUE à qui reste dans l’audience, et l’auteur garde son adresse personnelle', async () => {
     const emissions: Emission[] = [];
-    const prisma = fauxPrisma({ [SEPARE_DE_L_ACTEUR]: [ACTEUR] }, []);
-    await new SocialEventsHandler({ io: fauxIo(emissions), prisma }).broadcastCommentLiked(
-      { postId: POST_ID, commentId: COMMENT_ID, userId: ACTEUR, emoji: '❤️', likeCount: 3 },
-      AUTEUR_COMMENTAIRE,
-    );
+    await like(fauxPrisma({ [SEPARE_DE_L_ACTEUR]: [ACTEUR] }, []), fauxIo(emissions), 'liked');
 
     expect(versLePost(emissions)[0].charge).toEqual({ postId: POST_ID, commentId: COMMENT_ID, userId: ACTEUR, emoji: '❤️', likeCount: 3 });
     /* `emitToUser` adresse la FEED room de l'auteur, jamais sa room `user:` — l'exclusion, elle, porte sur `user:` (comme #20216). */
     expect(emissions.some((e) => e.rooms.includes(`feed:${AUTEUR_COMMENTAIRE}`) && e.evenement === 'comment:liked')).toBe(true);
+  });
+
+  /**
+   * **L'AUTEUR N'EST PAS EXEMPTÉ, ET C'EST UN CHEMIN VIVANT** (audit
+   * adversarial du lot). Exempter « tout sujet » de sa propre exclusion
+   * paraissait défensif, au motif que la porte de l'action aurait déjà refusé
+   * un acteur séparé de l'auteur. **Mesuré FAUX** : retirer sa réaction reste
+   * permis après un blocage (décision écrite de #20216), donc `DELETE …/like`
+   * et `comment:reaction-remove` n'ont PAS cette porte. A, que B a bloqué, y
+   * retire sa réaction au commentaire de B — et B se voyait annoncer l'activité
+   * de A, sur sa feed room ET dans la room du post.
+   *
+   * Le témoin ne peut tomber que sur ce vecteur-là : partout ailleurs le
+   * bloqueur est un TIERS, et exempter l'auteur ne change alors rien.
+   */
+  it('quand l’AUTEUR a bloqué l’ACTEUR, le retrait ne lui annonce rien — ni sa feed room, ni la room du post', async () => {
+    const emissions: Emission[] = [];
+    await like(fauxPrisma({ [AUTEUR_COMMENTAIRE]: [ACTEUR] }, []), fauxIo(emissions), 'unliked');
+
+    expect(emissions.some((e) => e.rooms.includes(`feed:${AUTEUR_COMMENTAIRE}`))).toBe(false);
+    expect(versLePost(emissions)[0].exclues).toEqual([`user:${AUTEUR_COMMENTAIRE}`]);
+  });
+
+  it('le même vecteur sur la réaction retirée : la room du post tait l’auteur qui a bloqué l’acteur', async () => {
+    const emissions: Emission[] = [];
+    await reaction(fauxPrisma({ [AUTEUR_COMMENTAIRE]: [ACTEUR] }, []), fauxIo(emissions), 'remove');
+
+    expect(versLePost(emissions)[0].exclues).toEqual([`user:${AUTEUR_COMMENTAIRE}`]);
+  });
+
+  /**
+   * **LA FRAÎCHEUR TIENT À L'INVALIDATION, PAS AU TTL** (audit adversarial).
+   * Le cache sert aussi les sept diffusions de CONTENU (`commentEmitter`) : une
+   * fenêtre d'expiration y rouvrirait #20216 pendant toute sa durée — le TEXTE
+   * et les MÉDIAS d'un commentaire livrés à qui vient de bloquer. Les deux
+   * écrivains de `blockedUserIds` rappellent donc `invalidateSeparationAround`.
+   *
+   * Le témoin ne peut tomber que si le cache est VIVANT entre les deux
+   * diffusions : il réutilise le MÊME handler, comme la production, qui n'en
+   * construit qu'un (`MeeshySocketIOManager`).
+   */
+  it('un blocage posé entre deux diffusions de CONTENU est vu par la seconde', async () => {
+    const emissions: Emission[] = [];
+    const blocages: Record<string, string[]> = {};
+    const handler = new SocialEventsHandler({ io: fauxIo(emissions), prisma: fauxPrisma(blocages, []) });
+    const commentaire = (): any => ({ id: 'c-20236', postId: POST_ID, content: 'bonjour', author: { id: AUTEUR_COMMENTAIRE, username: 'b', displayName: 'B' } });
+
+    await handler.broadcastCommentAdded({ postId: POST_ID, comment: commentaire(), commentCount: 1 }, 'auteur-post-20236', 'PUBLIC', []);
+    expect(emissions[0].exclues).toEqual([]);
+
+    /* Le lecteur bloque l'auteur du commentaire — ce que fait `POST /directory/blocks`. */
+    blocages[SEPARE_DE_L_AUTEUR] = [AUTEUR_COMMENTAIRE];
+    invalidateSeparationAround([SEPARE_DE_L_AUTEUR, AUTEUR_COMMENTAIRE]);
+
+    await handler.broadcastCommentAdded({ postId: POST_ID, comment: commentaire(), commentCount: 2 }, 'auteur-post-20236', 'PUBLIC', []);
+
+    expect(emissions[1].exclues).toEqual([`user:${SEPARE_DE_L_AUTEUR}`]);
   });
 
   /**
@@ -223,12 +290,12 @@ describe('#20236 — l’activité d’un commentaire ne s’annonce pas à qui 
     const lectures: string[][] = [];
     const prisma = fauxPrisma({}, lectures);
     const handler = new SocialEventsHandler({ io: fauxIo(emissions), prisma });
-    const charge = { postId: POST_ID, commentId: COMMENT_ID, userId: ACTEUR, emoji: '❤️', likeCount: 1 };
+    const charge = { postId: POST_ID, commentId: COMMENT_ID, userId: ACTEUR, emoji: '❤️', likeCount: 1 } as any;
 
-    await handler.broadcastCommentLiked(charge, AUTEUR_COMMENTAIRE);
+    handler.broadcastCommentLiked(charge, AUTEUR_COMMENTAIRE, await handler.commentActivitySeparation(ACTEUR, AUTEUR_COMMENTAIRE));
     expect(lectures).toEqual([[ACTEUR, AUTEUR_COMMENTAIRE].sort()]);
 
-    await handler.broadcastCommentLiked({ ...charge, likeCount: 2 }, AUTEUR_COMMENTAIRE);
+    handler.broadcastCommentLiked({ ...charge, likeCount: 2 }, AUTEUR_COMMENTAIRE, await handler.commentActivitySeparation(ACTEUR, AUTEUR_COMMENTAIRE));
     expect(lectures).toHaveLength(1);
     expect(versLePost(emissions)).toHaveLength(2);
   });

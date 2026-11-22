@@ -17,6 +17,7 @@ import { DailyGestureGate, DailyGestureLimitReached, mayCredit } from '../../ser
 import { refuseDailyGesture } from '../../utils/daily-gesture-refusal';
 import { CreateCommentSchema, UpdateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams, UnlikeSchema, TranslatePostSchema } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { safeBroadcast } from '../../socketio/serverEmit';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendConflict, sendGone } from '../../utils/response';
 import { ConflictError } from '../../errors/custom-errors';
 import { resolveMentionedUsers, MentionService } from '../../services/MentionService';
@@ -687,6 +688,15 @@ export function registerCommentRoutes(
         return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
       }
 
+      /* La séparation se lit AVANT l'écriture (#20236) : résolue après, elle
+         décorrèle l'ordre du fil de l'ordre des écritures, et la charge de ces
+         deux événements est ABSOLUE (`likeCount`) — un retrait qui double sa
+         pose fige chez le lecteur un compteur que la base contredit. Lue ici,
+         l'émission redevient synchrone juste après la mutation. */
+      const separated = fastify.socialEvents
+        ? await fastify.socialEvents.commentActivitySeparation(authContext.registeredUser.id, thread.authorId)
+        : null;
+
       const result = await commentService.likeComment(commentId, authContext.registeredUser.id, emoji);
       if (!result) {
         return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
@@ -706,17 +716,15 @@ export function registerCommentRoutes(
       // Broadcast comment liked via Socket.IO
       const socialEvents = fastify.socialEvents;
       if (socialEvents && result.authorId) {
-        /* La diffusion lit désormais la séparation autour de ses DEUX sujets
-           (#20236), donc elle est asynchrone : `safeBroadcast` n'attrape qu'un
-           `throw` SYNCHRONE — le rejet se garde par `.catch`, comme le fait
-           déjà la diffusion de `comment:added`. */
-        socialEvents.broadcastCommentLiked({
-          postId: commentPostId,
-          commentId,
-          userId: authContext.registeredUser.id,
-          emoji,
-          likeCount: result.likeCount,
-        }, result.authorId).catch((err) => enhancedLogger.warn('[POST /comments/:commentId/like]: broadcast comment liked failed', { err }));
+        safeBroadcast('comment:liked', () => {
+          socialEvents.broadcastCommentLiked({
+            postId: commentPostId,
+            commentId,
+            userId: authContext.registeredUser.id,
+            emoji,
+            likeCount: result.likeCount,
+          }, result.authorId, separated);
+        });
       }
 
       // Notify comment author — l'extrait du commentaire liké voyage en
@@ -788,6 +796,15 @@ export function registerCommentRoutes(
         return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
       }
 
+      /* Avant l'écriture, pour la même raison qu'à la pose (#20236). Et c'est
+         ce chemin-ci qui rend l'exclusion de l'AUTEUR nécessaire : retirer sa
+         réaction reste permis après un blocage (décision écrite), donc cette
+         route n'a PAS la porte `commentAuthorSeparatedFrom` — sans la loi,
+         l'auteur se voyait annoncer l'activité de qui il a bloqué. */
+      const separated = fastify.socialEvents
+        ? await fastify.socialEvents.commentActivitySeparation(authContext.registeredUser.id, thread.authorId)
+        : null;
+
       const result = await commentService.unlikeComment(commentId, authContext.registeredUser.id, emoji);
       if (!result) {
         return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
@@ -802,13 +819,15 @@ export function registerCommentRoutes(
       // cette valeur qui adresse la room et sert de clé de cache aux clients.
       const socialEvents = fastify.socialEvents;
       if (socialEvents && result.authorId) {
-        socialEvents.broadcastCommentUnliked({
-          postId: thread.postId,
-          commentId,
-          userId: authContext.registeredUser.id,
-          emoji,
-          likeCount: result.likeCount,
-        }, result.authorId).catch((err) => enhancedLogger.warn('[DELETE /comments/:commentId/like]: broadcast comment unliked failed', { err }));
+        safeBroadcast('comment:unliked', () => {
+          socialEvents.broadcastCommentUnliked({
+            postId: thread.postId,
+            commentId,
+            userId: authContext.registeredUser.id,
+            emoji,
+            likeCount: result.likeCount,
+          }, result.authorId, separated);
+        });
       }
 
       // Le symétrique du `createCommentLikeNotification` de la route de pose :

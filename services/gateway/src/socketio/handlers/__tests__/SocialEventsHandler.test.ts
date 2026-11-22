@@ -540,7 +540,8 @@ describe('SocialEventsHandler', () => {
       const commentAuthorId = 'comment-author-1';
       const data = { commentId: COMMENT_ID, postId: POST_ID, userId: USER_ID, emoji: '👍' } as any;
 
-      handler.broadcastCommentLiked(data, commentAuthorId);
+      /* 3e argument depuis #20236 : la séparation est résolue par l'APPELANT, AVANT sa mutation, pour que l'émission reste synchrone juste après elle (la charge porte un compteur ABSOLU). `[]` = personne à taire. */
+      handler.broadcastCommentLiked(data, commentAuthorId, []);
 
       expect(io.to).toHaveBeenCalledWith(`feed:${commentAuthorId}`);
     });
@@ -550,13 +551,12 @@ describe('SocialEventsHandler', () => {
     // Jumelle descendante : mêmes deux adresses que la pose (le commentateur,
     // et la room du post où lisent les autres). Sans elle le compteur d'un
     // commentaire ne sait que monter en direct.
-    it('emits comment:unliked to the comment author feed room AND the post room', async () => {
+    it('emits comment:unliked to the comment author feed room AND the post room', () => {
       const { handler, io } = buildHandler();
       const commentAuthorId = 'comment-author-1';
       const data = { commentId: COMMENT_ID, postId: POST_ID, userId: USER_ID, emoji: '👍', likeCount: 0 } as any;
 
-      /* `await` depuis #20236 : la diffusion lit la séparation autour de ses deux sujets avant de viser la room du post. */
-      await handler.broadcastCommentUnliked(data, commentAuthorId);
+      handler.broadcastCommentUnliked(data, commentAuthorId, []);
 
       expect(io.to).toHaveBeenCalledWith(`feed:${commentAuthorId}`);
       expect(io.to).toHaveBeenCalledWith(`post:${POST_ID}`);
@@ -568,11 +568,11 @@ describe('SocialEventsHandler', () => {
      * fichier). Une room juste ne prouve rien de ce qui y arrive : seul le NOM
      * décide si un client branche quoi que ce soit dessus.
      */
-    it('names the event `comment:unliked` on BOTH addresses', async () => {
+    it('names the event `comment:unliked` on BOTH addresses', () => {
       const { handler, io } = buildHandler();
       const data = { commentId: COMMENT_ID, postId: POST_ID, userId: USER_ID, emoji: '👍', likeCount: 0 } as any;
 
-      await handler.broadcastCommentUnliked(data, 'comment-author-1');
+      handler.broadcastCommentUnliked(data, 'comment-author-1', []);
 
       const names = emitCalls(io).map(([event]) => event);
       expect(names).toEqual(['comment:unliked', 'comment:unliked']);
