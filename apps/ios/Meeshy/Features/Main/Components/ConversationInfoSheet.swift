@@ -36,27 +36,28 @@ struct ConversationInfoSheet: View {
             .sorted { ($0.pinnedAt ?? .distantPast) > ($1.pinnedAt ?? .distantPast) }
     }
 
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) private var colorScheme
     var isDark: Bool { colorScheme == .dark }
     var theme: ThemeManager { ThemeManager.shared }
     // Lecture directe sans @ObservedObject — évite que chaque event presence force
     // un re-render complet de la fiche conversation.
-    private var presenceManager: PresenceManager { PresenceManager.shared }
+    var presenceManager: PresenceManager { PresenceManager.shared }
     // Feuille : hérite des EnvironmentValues, PAS des EnvironmentObject.
     // Cf. SocialChromeEnvironment.swift.
-    @Environment(\.meeshyMoodEmojiResolver) private var moodEmojiResolver
-    @Environment(\.meeshyMoodTapResolver) private var moodTapResolver
+    @Environment(\.meeshyMoodEmojiResolver) var moodEmojiResolver
+    @Environment(\.meeshyMoodTapResolver) var moodTapResolver
 
-    @State private var participants: [PaginatedParticipant] = []
-    @State private var isLoadingParticipants = false
-    @State private var isLoadingMoreParticipants = false
-    @State private var hasMoreParticipants = true
+    @State var participants: [PaginatedParticipant] = []
+    @State var isLoadingParticipants = false
+    @State var isLoadingMoreParticipants = false
+    @State var hasMoreParticipants = true
     @State var appearAnimation = false
     @State private var selectedTab: InfoTab = .members
-    @State private var showBlockConfirm = false
-    @State private var isBlocking = false
-    @State private var isCreatingShareLink = false
+    @State var showBlockConfirm = false
+    @State var isBlocking = false
+    @State var isCreatingShareLink = false
+    @State var memberSearchQuery: String = ""
 
     /// Freshly minted join link awaiting the system share sheet. Presenting it
     /// through `.sheet(item:)` lets SwiftUI own the presentation — the previous
@@ -65,11 +66,11 @@ struct ConversationInfoSheet: View {
     /// out of the *unordered* `connectedScenes` set. Replaces the former
     /// `createdShareLinkId` / `showShareSheet` pair, which was written but
     /// never read.
-    @State private var shareableLink: ShareableLink?
-    @State private var showLeaveConfirmation = false
+    @State var shareableLink: ShareableLink?
+    @State var showLeaveConfirmation = false
     @State private var showSecurityVerification = false
 
-    private static let logger = MeeshyLog.logger(.conversationInfo)
+    static let logger = MeeshyLog.logger(.conversationInfo)
 
     @State var showAllPinnedMessages = false
     /// #17907 — le défilement de la fiche, lu par l'en-tête, la barre compacte et les onglets
@@ -81,10 +82,10 @@ struct ConversationInfoSheet: View {
     }
 
     var accent: Color { Color(hex: accentColor) }
-    private var isDirect: Bool { conversation.type == .direct }
-    private var otherUserId: String? { conversation.participantUserId }
+    var isDirect: Bool { conversation.type == .direct }
+    var otherUserId: String? { conversation.participantUserId }
 
-    private var canManageMembers: Bool {
+    var canManageMembers: Bool {
         guard let role = conversation.currentUserRole?.lowercased() else { return false }
         return ["creator", "admin", "moderator"].contains(role)
     }
@@ -297,219 +298,6 @@ struct ConversationInfoSheet: View {
             .accessibilityHidden(progress > 0.5)
     }
 
-    // MARK: - Hero Conversation Header (every conversation type)
-
-    private var heroConversationHeader: some View {
-        VStack(spacing: 0) {
-            Color.clear
-                .frame(height: ProfileHeaderMetrics.expandedBanner)
-                .overlay { heroBannerImage.allowsHitTesting(false).accessibilityHidden(true) }
-                .clipped()
-                .contentShape(Rectangle())
-
-            // Avatar overlapping banner
-            headerAvatar
-                .padding(.top, -40)
-
-            Text(conversation.name)
-                .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold, design: .rounded))
-                .foregroundStyle(theme.textPrimary)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .padding(.top, MeeshySpacing.smPlus)
-                .padding(.horizontal, MeeshySpacing.xl)
-
-            conversationInfoRow
-                .padding(.top, MeeshySpacing.sm)
-
-            muteIndicator
-                .padding(.top, MeeshySpacing.xsPlus)
-
-            // La batterie du pair d'un direct (#14147) : le détail pendant un épisode, rien hors épisode.
-            if let peer = ConversationRowListening.userId(for: conversation) {
-                BatteryDetailSection(userId: peer)
-                    .padding(.horizontal, MeeshySpacing.xl)
-                    .padding(.top, MeeshySpacing.sm)
-                // Son téléphone injoignable (#18737) : depuis quand et pourquoi, rien quand il répond.
-                PhoneReachabilityDetailSection(userId: peer)
-                    .padding(.horizontal, MeeshySpacing.xl)
-                    .padding(.top, MeeshySpacing.sm)
-                // Sans réponse à « Tout va bien ? » (#18738) : depuis quand, sa batterie et sa position si partagées.
-                InactivityAlertDetailSection(userId: peer)
-                    .padding(.horizontal, MeeshySpacing.xl)
-                    .padding(.top, MeeshySpacing.sm)
-                // La chute détectée (#18748) : l'heure, la batterie et la position seulement si servies ; rien hors épisode.
-                FallDetailSection(userId: peer)
-                    .padding(.horizontal, MeeshySpacing.xl)
-                    .padding(.top, MeeshySpacing.sm)
-                // En appel (#18753) : depuis quand, jamais avec qui ; rien hors appel.
-                PhoneCallDetailSection(userId: peer)
-                    .padding(.horizontal, MeeshySpacing.xl)
-                    .padding(.top, MeeshySpacing.sm)
-            }
-
-            Text(String(format: String(localized: "conversation.info.created-on", defaultValue: "Créé le %@", bundle: .main), conversation.createdAt.formatted(.dateTime.day().month().year())))
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundStyle(theme.textMuted)
-                .padding(.top, MeeshySpacing.xsPlus)
-        }
-        .padding(.bottom, MeeshySpacing.lg)
-    }
-
-    /// L'avatar du pair (présence, humeur, anneau) en tête-à-tête, celui de l'entité ailleurs.
-    @ViewBuilder
-    private var headerAvatar: some View {
-        if isDirect {
-            LivePresence { MeeshyAvatar(
-                name: conversation.name,
-                context: .profileSheet,
-                accentColor: accentColor,
-                avatarURL: conversation.participantAvatarURL,
-                moodEmoji: otherUserId.flatMap { moodEmojiResolver?($0) },
-                presenceState: otherUserId.map { presenceManager.presenceState(for: $0) },
-                isHere: otherUserId.map { presenceManager.here(userId: $0, conversationId: conversation.id) } ?? .absent,
-                ring: conversation.participantRing,
-                onMoodTap: otherUserId.flatMap { moodTapResolver?($0) }
-            ) }
-        } else {
-            MeeshyAvatar(
-                name: conversation.name,
-                context: .profileBanner,
-                kind: .entity,
-                accentColor: accentColor,
-                avatarURL: conversation.avatar
-            )
-            .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 4))
-        }
-    }
-
-    // MARK: - Compact pinned bar (overlay, fades in when collapsed)
-    /// Le petit avatar de la barre compacte : le pair avec sa présence et son contour servis, ou l'entité.
-    @ViewBuilder
-    private var compactAvatar: some View {
-        if isDirect {
-            LivePresence { MeeshyAvatar(
-                name: conversation.name,
-                context: .custom(32),
-                accentColor: accentColor,
-                avatarURL: conversation.participantAvatarURL,
-                presenceState: otherUserId.map { presenceManager.presenceState(for: $0) },
-                ring: conversation.participantRing
-            ) }
-        } else {
-            MeeshyAvatar(
-                name: conversation.name,
-                context: .custom(32),
-                kind: .entity,
-                accentColor: accentColor,
-                avatarURL: conversation.avatar
-            )
-        }
-    }
-
-
-    private var compactPinnedBar: some View {
-        HStack(spacing: MeeshySpacing.smPlus) {
-            compactAvatar
-
-            VStack(alignment: .leading, spacing: 0) {
-                Text(conversation.name)
-                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold, design: .rounded))
-                    .foregroundStyle(theme.textPrimary)
-                    .lineLimit(1)
-                Text(conversation.type.displayName)
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundStyle(accent)
-                    .lineLimit(1)
-            }
-
-            Spacer()
-        }
-        // Les insets dégagent Fermer (à gauche) et Réglages (à droite), posés par-dessus.
-        .padding(.leading, 56)
-        .padding(.trailing, canManageMembers && !isDirect ? 56 : MeeshySpacing.lg)
-        .padding(.vertical, MeeshySpacing.sm)
-        .frame(height: ProfileHeaderMetrics.collapsedBar)
-        .background(theme.backgroundPrimary)
-        .overlay(alignment: .bottom) {
-            Divider().opacity(MeeshyOpacity.medium)
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    @ViewBuilder
-    private var heroBannerImage: some View {
-        if let bannerURL = conversation.banner, !bannerURL.isEmpty {
-            // CachedAsyncImage (vs raw AsyncImage) caches the banner so reopening
-            // the info sheet doesn't re-download it, and decodes it at the 140-pt
-            // banner size rather than full resolution.
-            // showsStatusOverlays: false — echec silencieux vers le gradient
-            // deja fourni ; pas de bouton retry sur une banniere decorative.
-            CachedAsyncImage(
-                url: bannerURL,
-                targetSize: CGSize(width: 400, height: 140),
-                showsStatusOverlays: false
-            ) {
-                heroBannerPlaceholder
-            }
-            .aspectRatio(contentMode: .fill)
-        } else {
-            heroBannerPlaceholder
-        }
-    }
-
-    private var heroBannerPlaceholder: some View {
-        LinearGradient(
-            colors: [
-                accent.opacity(0.4),
-                accent.opacity(MeeshyOpacity.light),
-                accent.opacity(MeeshyOpacity.medium)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-
-    // MARK: - Shared Info Sub-views
-
-    private var conversationInfoRow: some View {
-        HStack(spacing: MeeshySpacing.xsPlus) {
-            Image(systemName: conversationTypeIcon)
-                .font(MeeshyFont.relative(11, weight: .semibold))
-                .foregroundColor(accent)
-
-            Text(conversation.type.displayName)
-                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                .foregroundStyle(theme.textSecondary)
-
-            if conversation.memberCount > 0 {
-                MetaSeparator()
-                    .foregroundStyle(theme.textMuted)
-                Image(systemName: "person.2.fill")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xxs))
-                    .foregroundStyle(theme.textMuted)
-                Text(conversation.memberCountDisplay)
-                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                    .foregroundStyle(theme.textSecondary)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var muteIndicator: some View {
-        if conversation.userState.isMuted {
-            HStack(spacing: MeeshySpacing.xs) {
-                Image(systemName: "bell.slash.fill")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xxs))
-                Text(String(localized: "conversation.info.muted", defaultValue: "Notifications désactivées", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-            }
-            .foregroundColor(theme.textMuted)
-            .padding(.horizontal, MeeshySpacing.smPlus)
-            .padding(.vertical, MeeshySpacing.xs)
-            .background(Capsule().fill(theme.textMuted.opacity(MeeshyOpacity.subtle)))
-        }
-    }
 
     // MARK: - Pinned tab bar (section header — pins on scroll, like the profile sheet)
 
@@ -590,248 +378,7 @@ struct ConversationInfoSheet: View {
         .animation(.easeInOut(duration: 0.2), value: selectedTab)
     }
 
-    // MARK: - Members Section
-
-    @State private var memberSearchQuery: String = ""
-
-    private var filteredMembers: [PaginatedParticipant] {
-        let q = memberSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !q.isEmpty else { return participants }
-        return participants.filter { p in
-            p.name.lowercased().contains(q) ||
-            (p.username?.lowercased().contains(q) ?? false)
-        }
-    }
-
-    private var membersSection: some View {
-        VStack(spacing: 0) {
-            if conversation.type != .direct, canManageMembers {
-                manageMembersButton
-            }
-
-            // Member count
-            HStack {
-                Text(MembersCountLabel.text(participants.count))
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold, design: .rounded))
-                    .foregroundStyle(theme.textMuted)
-                Spacer()
-            }
-            .padding(.horizontal, MeeshySpacing.xl)
-            .padding(.top, MeeshySpacing.md)
-            .padding(.bottom, MeeshySpacing.xs)
-
-            // Search field
-            HStack(spacing: MeeshySpacing.sm) {
-                Image(systemName: "magnifyingglass")
-                    .font(MeeshyFont.relative(13, weight: .medium))
-                    .foregroundStyle(theme.textMuted)
-                TextField(String(localized: "conversation.info.member-search", defaultValue: "Rechercher un membre…", bundle: .main), text: $memberSearchQuery)
-                    .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                    .foregroundStyle(theme.textPrimary)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                if !memberSearchQuery.isEmpty {
-                    Button {
-                        memberSearchQuery = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(MeeshyFont.relative(MeeshyIconSize.sm))
-                            .foregroundStyle(theme.textMuted)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
-                }
-            }
-            .padding(MeeshySpacing.smPlus)
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                    .fill(MeeshyColors.surfaceFill(isDark: isDark))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                    .strokeBorder(theme.textMuted.opacity(MeeshyOpacity.light), lineWidth: 1)
-            )
-            .padding(.horizontal, MeeshySpacing.xl)
-            .padding(.bottom, MeeshySpacing.sm)
-
-            if isLoadingParticipants {
-                VStack(spacing: MeeshySpacing.md) {
-                    ForEach(0..<3, id: \.self) { _ in
-                        ConversationInfoMemberSkeletonRow()
-                    }
-                }
-                .padding(.horizontal, MeeshySpacing.xl)
-                .padding(.top, MeeshySpacing.lg)
-            } else if filteredMembers.isEmpty {
-                emptyState(icon: "person.2.slash", text: memberSearchQuery.isEmpty ? String(localized: "conversation.info.no-members", defaultValue: "Aucun membre", bundle: .main) : String(localized: "common.no-results", defaultValue: "Aucun résultat", bundle: .main))
-            } else {
-                LazyVStack(spacing: 0) {
-                    ForEach(filteredMembers) { participant in
-                        ConversationInfoMemberRow(participant: participant, conversationId: conversation.id)
-                            .onAppear {
-                                if participant.id == participants.last?.id {
-                                    Task { await loadMoreParticipants() }
-                                }
-                            }
-                    }
-                    if isLoadingMoreParticipants {
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, MeeshySpacing.md)
-                    }
-                }
-                .padding(.top, MeeshySpacing.sm)
-            }
-        }
-        .padding(.bottom, MeeshySpacing.xxxl)
-    }
-
-    private var manageMembersButton: some View {
-        NavigationLink(value: "settings") {
-            HStack(spacing: MeeshySpacing.sm) {
-                Image(systemName: "person.2.badge.gearshape")
-                    .font(MeeshyFont.relative(13, weight: .semibold))
-                Text(String(localized: "conversation.info.manage_members", defaultValue: "Gérer les membres", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                Spacer()
-                Image(systemName: "chevron.forward")
-                    .font(MeeshyFont.relative(11, weight: .semibold))
-                    .foregroundStyle(theme.textMuted)
-            }
-            .foregroundColor(accent)
-            .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.md)
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                    .fill(accent.opacity(isDark ? 0.12 : 0.08))
-            )
-        }
-        .padding(.horizontal, MeeshySpacing.xl)
-        .padding(.top, MeeshySpacing.md)
-        .accessibilityLabel(String(localized: "conversation.info.manage_members.a11y", defaultValue: "Gérer les membres du groupe", bundle: .main))
-    }
-
-    // MARK: - Empty State
-
-    private func emptyState(icon: String, text: String) -> some View {
-        VStack(spacing: MeeshySpacing.md) {
-            Image(systemName: icon)
-                .font(MeeshyFont.relative(32, weight: .light))
-                .foregroundStyle(theme.textMuted.opacity(0.4))
-
-            Text(text)
-                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                .foregroundStyle(theme.textMuted)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 60)
-    }
-
-    // MARK: - Action Buttons
-
-    private var actionButtons: some View {
-        HStack(spacing: MeeshySpacing.md) {
-            actionButton(
-                icon: "link.badge.plus",
-                label: String(localized: "common.share", defaultValue: "Partager", bundle: .main),
-                color: MeeshyColors.shareAccentHex,
-                isLoading: isCreatingShareLink
-            ) {
-                Task { await createShareLink() }
-            }
-
-            actionButton(
-                icon: "rectangle.portrait.and.arrow.right",
-                label: String(localized: "conversation.info.leave.confirm", defaultValue: "Quitter", bundle: .main),
-                color: MeeshyColors.errorHex
-            ) {
-                showLeaveConfirmation = true
-            }
-        }
-        .padding(.horizontal, MeeshySpacing.xl)
-        .padding(.vertical, MeeshySpacing.md)
-        .opacity(appearAnimation ? 1 : 0)
-        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.03), value: appearAnimation)
-    }
-
-    private func actionButton(
-        icon: String,
-        label: String,
-        color: String,
-        isLoading: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: MeeshySpacing.sm) {
-                if isLoading {
-                    ProgressView()
-                        .scaleEffect(0.8)
-                        .tint(Color(hex: color))
-                } else {
-                    Image(systemName: icon)
-                        .font(MeeshyFont.relative(13, weight: .semibold))
-                }
-                Text(label)
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-            }
-            .foregroundColor(Color(hex: color))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, MeeshySpacing.smPlus)
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                    .fill(Color(hex: color).opacity(isDark ? 0.12 : 0.08))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                    .strokeBorder(Color(hex: color).opacity(MeeshyOpacity.light), lineWidth: 1)
-            )
-        }
-        .disabled(isLoading)
-    }
-
-    // MARK: - Share Link Actions
-
-    private func createShareLink() async {
-        isCreatingShareLink = true
-        defer { isCreatingShareLink = false }
-
-        do {
-            let request = CreateShareLinkRequest(
-                conversationId: conversation.id,
-                name: conversation.name,
-                allowAnonymousMessages: true
-            )
-            let result = try await ShareLinkService.shared.createShareLink(request: request)
-            guard let shareURL = URL(string: result.joinUrl) else {
-                throw URLError(.badURL)
-            }
-            shareableLink = ShareableLink(url: shareURL)
-        } catch {
-            FeedbackToastManager.shared.showError(String(localized: "conversation.info.share.error", defaultValue: "Erreur lors de la création du lien", bundle: .main))
-        }
-    }
-
-    private func leaveConversation() async {
-        do {
-            try await ConversationService.shared.leave(conversationId: conversation.id)
-            dismiss()
-        } catch {
-            FeedbackToastManager.shared.showError(String(localized: "conversation.info.leave.error", defaultValue: "Erreur lors du départ de la conversation", bundle: .main))
-        }
-    }
-
     // MARK: - Helpers
-
-    private var conversationTypeIcon: String {
-        switch conversation.type {
-        case .direct: return "person.fill"
-        case .group: return "person.3.fill"
-        case .public, .global, .broadcast: return "globe"
-        case .community: return "building.2.fill"
-        case .channel: return "megaphone.fill"
-        case .bot: return "cpu.fill"
-        }
-    }
 
     private func tabLabel(for tab: InfoTab) -> String {
         switch tab {
@@ -863,93 +410,5 @@ struct ConversationInfoSheet: View {
 
     func attachmentLabel(_ type: MessageAttachment.AttachmentType) -> String {
         MediaKindLabel.name(MediaKindLabel.kind(for: type))
-    }
-
-    // MARK: - Block Button
-
-    private var blockUserButton: some View {
-        Button {
-            HapticFeedback.medium()
-            showBlockConfirm = true
-        } label: {
-            HStack(spacing: MeeshySpacing.sm) {
-                if isBlocking {
-                    ProgressView()
-                        .tint(MeeshyColors.error)
-                        .scaleEffect(0.8)
-                } else {
-                    Image(systemName: "exclamationmark.shield")
-                        .font(MeeshyFont.relative(13, weight: .semibold))
-                }
-                Text(String(localized: "conversation.info.block.title", defaultValue: "Bloquer cet utilisateur", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-            }
-            .foregroundColor(MeeshyColors.error)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, MeeshySpacing.smPlus)
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                    .fill(MeeshyColors.error.opacity(isDark ? 0.12 : 0.08))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                            .stroke(MeeshyColors.error.opacity(MeeshyOpacity.light), lineWidth: 1)
-                    )
-            )
-        }
-        .disabled(isBlocking)
-        .padding(.horizontal, MeeshySpacing.xl)
-        .padding(.bottom, MeeshySpacing.md)
-        .accessibilityLabel(String(format: String(localized: "conversation.info.block.a11y", defaultValue: "Bloquer %@", bundle: .main), conversation.name))
-    }
-
-    // MARK: - Block Action
-
-    private func blockOtherUser() {
-        guard let userId = otherUserId else { return }
-        isBlocking = true
-        Task { [weak blockService = BlockService.shared] in
-            do {
-                try await blockService?.blockUser(userId: userId)
-                HapticFeedback.success()
-                FeedbackToastManager.shared.showSuccess(String(localized: "conversation.info.block.success", defaultValue: "Utilisateur bloqué", bundle: .main))
-                dismiss()
-            } catch {
-                HapticFeedback.error()
-                FeedbackToastManager.shared.showError(String(localized: "conversation.info.block.error", defaultValue: "Erreur lors du blocage", bundle: .main))
-                Self.logger.error("Failed to block user: \(error.localizedDescription)")
-            }
-            isBlocking = false
-        }
-    }
-
-    // MARK: - API
-
-    private func loadParticipants() async {
-        isLoadingParticipants = true
-        defer { isLoadingParticipants = false }
-
-        do {
-            let fetched = try await ParticipantService.shared.loadFirstPage(
-                for: conversation.id
-            )
-            participants = fetched
-            hasMoreParticipants = await ParticipantService.shared.hasMore(for: conversation.id)
-        } catch {
-            Self.logger.error("Failed to load participants: \(error.localizedDescription)")
-        }
-    }
-
-    private func loadMoreParticipants() async {
-        guard hasMoreParticipants, !isLoadingMoreParticipants else { return }
-        isLoadingMoreParticipants = true
-        defer { isLoadingMoreParticipants = false }
-
-        do {
-            let allFetched = try await ParticipantService.shared.loadNextPage(for: conversation.id)
-            participants = allFetched
-            hasMoreParticipants = await ParticipantService.shared.hasMore(for: conversation.id)
-        } catch {
-            Self.logger.error("Failed to load more participants: \(error.localizedDescription)")
-        }
     }
 }
