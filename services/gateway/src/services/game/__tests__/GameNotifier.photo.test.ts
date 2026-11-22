@@ -1,7 +1,7 @@
 /**
  * LE PUSH D'UNE ÉTAPE FRANCHIE APP FERMÉE (#10175, L19 — § 5.16.4) : `game_photo_moment` passe par
- * `GameNotifier`, comme les autres notifications du jeu. Il compte dans le plafond d'une notification de
- * jeu par jour (D9) mais, contrairement à un résultat de ligue, il se DIFFÈRE : un créneau déjà pris rend
+ * `GameNotifier`, comme les autres notifications du jeu. Il compte dans le plafond de deux notifications de
+ * jeu par jour (D9, #17368) mais, contrairement à un résultat de ligue, il se DIFFÈRE : un créneau déjà pris rend
  * sa clé « une seule fois », et la prochaine fenêtre permise le reprend. Il remplace le précédent
  * (même `collapseId`), se cadre dans la langue du destinataire et ne dit jamais quelle étape.
  *
@@ -39,6 +39,8 @@ const photo = (stepIds: readonly string[], dayKey = '2026-10-14'): GameNotificat
 
 const league: GameNotificationEvent = { kind: 'league-result', recipientId: USER, weekKey: '2026-10-05', league: 'jade', nextLeague: 'ambre', zone: 'safe', cup: null };
 
+const step: GameNotificationEvent = { kind: 'season-step', recipientId: USER, season: 1, step: 12, completed: false };
+
 describe('le push photo (game_photo_moment)', () => {
   it('une étape : la phrase au singulier, dans la langue de cadrage, ouvre le carnet, ne nomme pas l’étape', async () => {
     const { notifier, sent } = world({ systemLanguage: 'de', regionalLanguage: 'en' });
@@ -66,24 +68,26 @@ describe('le push photo (game_photo_moment)', () => {
     expect(sent[0]?.metadata).toMatchObject({ count: 3 });
   });
 
-  it('compte dans le plafond : un résultat de ligue le même jour ne part plus (B-5)', async () => {
+  it('compte dans le plafond : avec un résultat de ligue, la troisième du jour ne part plus (B-5)', async () => {
     const { notifier, sent } = world();
 
     expect(await notifier.notify(photo(['flame:7']), NOW)).toBe('sent');
-    expect(await notifier.notify(league, NOW)).toBe('skipped:daily-cap');
-    expect(sent).toHaveLength(1);
+    expect(await notifier.notify(league, NOW)).toBe('sent');
+    expect(await notifier.notify(step, NOW)).toBe('skipped:daily-cap');
+    expect(sent).toHaveLength(2);
   });
 
-  it('créneau du jour déjà pris : DIFFÉRÉ — sa clé se rend, le lendemain il part', async () => {
+  it('créneaux du jour déjà pris : DIFFÉRÉ — sa clé se rend, le lendemain il part', async () => {
     const { notifier, sent } = world();
 
     expect(await notifier.notify(league, NOW)).toBe('sent');
+    expect(await notifier.notify(step, NOW)).toBe('sent');
     expect(await notifier.notify(photo(['flame:7']), NOW)).toBe('skipped:daily-cap');
     expect(await notifier.notify(photo(['flame:7']), NOW)).toBe('skipped:daily-cap');
 
     const tomorrow = new Date('2026-10-15T12:00:00Z');
     expect(await notifier.notify(photo(['flame:7'], '2026-10-15'), tomorrow)).toBe('sent');
-    expect(sent.map((s) => s.type)).toEqual(['game_league_result', 'game_photo_moment']);
+    expect(sent.map((s) => s.type)).toEqual(['game_league_result', 'game_season_step', 'game_photo_moment']);
   });
 
   it('le même résumé ne part qu’une fois par jour ; un résumé différent est un autre événement', async () => {

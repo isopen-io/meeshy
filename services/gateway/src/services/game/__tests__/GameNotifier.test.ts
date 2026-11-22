@@ -1,6 +1,6 @@
 /**
- * LES NOTIFICATIONS DU JEU (#9490) — cinq types, au plus UNE par jour et par destinataire (le
- * jour de son fuseau) — hors les duos et la mission du jour (#9541, #9539) —, jamais pour un compte
+ * LES NOTIFICATIONS DU JEU (#9490) — six types, au plus DEUX par jour et par destinataire (le
+ * jour de son fuseau) — hors l'action d'un autre et les exploits (#17368) —, jamais pour un compte
  * « Jeu masqué » ni qui a coupé « Jeu », dans la
  * langue de cadrage du destinataire, sans jamais nommer un joueur de ligue ni dire une heure.
  *
@@ -149,41 +149,84 @@ describe('une étape de saison atteinte', () => {
   });
 });
 
-describe('au plus UNE notification de jeu par jour et par destinataire', () => {
-  it('la deuxième du même jour est écartée : un résultat de ligue et une étape de saison se partagent le créneau', async () => {
-    const { notifier, sent } = world();
-    expect(await notifier.notify(leagueResult(), NOW)).toBe('sent');
-    expect(await notifier.notify(step(), new Date(NOW.getTime() + 3_600_000))).toBe('skipped:daily-cap');
-    expect(await notifier.notify(step({ step: 13 }), new Date(NOW.getTime() + 7_200_000))).toBe('skipped:daily-cap');
-    expect(sent).toHaveLength(1);
-  });
+describe('au plus DEUX notifications de jeu par jour et par destinataire (décision porteur 2026-11-10, #17368)', () => {
+  const kept = leagueResult({ zone: 'safe' });
 
-  it('le lendemain, une nouvelle part', async () => {
+  it('la troisième du même jour est écartée : un maintien de ligue et deux étapes de saison se partagent les deux créneaux', async () => {
     const { notifier, sent } = world();
-    await notifier.notify(leagueResult(), NOW);
-    await notifier.notify(step(), new Date(NOW.getTime() + 86_400_000));
+    expect(await notifier.notify(kept, NOW)).toBe('sent');
+    expect(await notifier.notify(step(), new Date(NOW.getTime() + 3_600_000))).toBe('sent');
+    expect(await notifier.notify(step({ step: 13 }), new Date(NOW.getTime() + 7_200_000))).toBe('skipped:daily-cap');
     expect(sent).toHaveLength(2);
   });
 
+  it('le lendemain, deux nouvelles partent', async () => {
+    const { notifier, sent } = world();
+    await notifier.notify(kept, NOW);
+    await notifier.notify(step(), NOW);
+    expect(await notifier.notify(step({ step: 13 }), new Date(NOW.getTime() + 86_400_000))).toBe('sent');
+    expect(await notifier.notify(step({ step: 14 }), new Date(NOW.getTime() + 86_400_000))).toBe('sent');
+    expect(sent).toHaveLength(4);
+  });
+
   it('le jour est celui du FUSEAU du destinataire, pas celui du serveur', async () => {
-    // 23 h 30 UTC le 14 = 8 h 30 le 15 à Tokyo : à 20 minutes d'écart, deux jours pour lui.
-    const tokyo = world({ recipient: { timezone: 'Asia/Tokyo' } });
     const late = new Date('2026-10-14T14:50:00Z'); // 23 h 50 le 14 à Tokyo
     const early = new Date('2026-10-14T15:10:00Z'); // 0 h 10 le 15 à Tokyo
-    await tokyo.notifier.notify(leagueResult(), late);
-    expect(await tokyo.notifier.notify(step(), early)).toBe('sent');
+    const tokyo = world({ recipient: { timezone: 'Asia/Tokyo' } });
+    await tokyo.notifier.notify(kept, late);
+    await tokyo.notifier.notify(step(), late);
+    expect(await tokyo.notifier.notify(step({ step: 13 }), early)).toBe('sent');
 
     const utc = world({ recipient: { timezone: 'UTC' } });
-    await utc.notifier.notify(leagueResult(), late);
-    expect(await utc.notifier.notify(step(), early)).toBe('skipped:daily-cap');
+    await utc.notifier.notify(kept, late);
+    await utc.notifier.notify(step(), late);
+    expect(await utc.notifier.notify(step({ step: 13 }), early)).toBe('skipped:daily-cap');
   });
 
   it('deux destinataires ne se partagent pas le plafond', async () => {
     const { db, notifier, sent } = world();
     seedUser(db, { isActive: true, deletedAt: null, systemLanguage: 'fr' }, '68a000000000000000000009');
-    await notifier.notify(leagueResult(), NOW);
-    await notifier.notify(leagueResult({ recipientId: '68a000000000000000000009' }), NOW);
-    expect(sent.map((s) => s.userId)).toEqual([USER, '68a000000000000000000009']);
+    await notifier.notify(kept, NOW);
+    await notifier.notify(step(), NOW);
+    await notifier.notify(leagueResult({ zone: 'safe', recipientId: '68a000000000000000000009' }), NOW);
+    expect(sent.map((s) => s.userId)).toEqual([USER, USER, '68a000000000000000000009']);
+  });
+
+  it('un EXPLOIT de ligue (coupe ou montée) part même quand les deux créneaux sont pris, et n’en prend aucun', async () => {
+    const { notifier, sent, taken } = world();
+    expect(await notifier.notify(leagueResult({ zone: 'promotion' }), NOW)).toBe('sent');
+    expect([...taken.keys()].filter((key) => key.includes(':day:'))).toEqual([]);
+
+    await notifier.notify(step(), NOW);
+    await notifier.notify(step({ step: 13 }), NOW);
+    expect(await notifier.notify(leagueResult({ weekKey: '2026-10-12', zone: 'safe', cup: 'gold' }), NOW)).toBe('sent');
+    expect(sent.map((s) => s.type)).toEqual(['game_league_result', 'game_season_step', 'game_season_step', 'game_league_result']);
+  });
+
+  it('un maintien ou une descente de ligue n’est pas un exploit : il compte', async () => {
+    const { notifier } = world();
+    await notifier.notify(step(), NOW);
+    await notifier.notify(step({ step: 13 }), NOW);
+    expect(await notifier.notify(leagueResult({ zone: 'relegation' }), NOW)).toBe('skipped:daily-cap');
+  });
+
+  it('un refus rend le créneau qu’il avait pris, et seulement celui-là', async () => {
+    const db: FakeGameDb = fakeGameDb();
+    seedUser(db, { isActive: true, deletedAt: null, systemLanguage: 'en', timezone: 'UTC' }, USER);
+    const outcomes = ['create', 'decline', 'create', 'create'];
+    const taken = new Map<string, string>();
+    const throttle = {
+      setnx: async (key: string, value: string) => (taken.has(key) ? false : (taken.set(key, value), true)),
+      del: async (key: string) => void taken.delete(key),
+    };
+    const notifications = { createNotification: async () => (outcomes.shift() === 'decline' ? null : ({ id: 'n' } as never)) };
+    const notifier = new GameNotifier(db.prisma, { notifications: () => notifications as never, throttle });
+
+    expect(await notifier.notify(step({ step: 1 }), NOW)).toBe('sent');
+    expect(await notifier.notify(step({ step: 2 }), NOW)).toBe('skipped:declined');
+    expect(await notifier.notify(step({ step: 3 }), NOW)).toBe('sent');
+    expect(await notifier.notify(step({ step: 4 }), NOW)).toBe('skipped:daily-cap');
+    expect([...taken.keys()].filter((key) => key.includes(':day:'))).toHaveLength(2);
   });
 });
 
@@ -314,7 +357,7 @@ describe('le créneau du jour ne se brûle pas sur une notification qui n’a pa
 });
 
 
-describe('les duos SORTENT du plafond (décision porteur 2026-10-06, #9541)', () => {
+describe('les duos SORTENT du plafond : l’action d’un autre (#9541, #17368)', () => {
   it('une invitation et une acceptation de duo partent le même jour qu’un résultat de ligue', async () => {
     const { notifier, sent } = world();
     expect(await notifier.notify(leagueResult(), NOW)).toBe('sent');
@@ -325,11 +368,13 @@ describe('les duos SORTENT du plafond (décision porteur 2026-10-06, #9541)', ()
     expect(sent.map((s) => s.type)).toEqual(['game_league_result', 'game_duo_invited', 'game_duo_accepted']);
   });
 
-  it('un duo ne prend pas le créneau du jour : le résultat de ligue qui suit part', async () => {
+  it('un duo ne prend pas de créneau du jour, et part quand les deux sont pris', async () => {
     const { notifier, taken } = world();
     await notifier.notify(invited(), NOW);
     expect([...taken.keys()].filter((key) => key.includes(':day:'))).toEqual([]);
-    expect(await notifier.notify(leagueResult(), new Date(NOW.getTime() + 3_600_000))).toBe('sent');
+    await notifier.notify(step(), NOW);
+    await notifier.notify(step({ step: 13 }), NOW);
+    expect(await notifier.notify(invited({ duoId: 'duo-3' }), new Date(NOW.getTime() + 3_600_000))).toBe('sent');
   });
 
   it('reste annoncé UNE fois par duo, et muet pour « Jeu masqué » ou « Jeu » coupé', async () => {
@@ -393,16 +438,13 @@ describe('la mission personnelle du jour (#9539)', () => {
     for (const forbidden of ['activeHours', 'habit', 'histogram', 'usage']) expect(wire).not.toContain(forbidden);
   });
 
-  it('sort du plafond : elle part le même jour qu’un résultat de ligue, et ne prend pas le créneau', async () => {
+  it('compte dans les deux du jour : elle n’est ni un exploit ni l’action d’un autre (#17368)', async () => {
     const { notifier, sent, taken } = world();
-    expect(await notifier.notify(leagueResult(), NOW)).toBe('sent');
-    expect(await notifier.notify(windowEvent(), new Date(NOW.getTime() + 3_600_000))).toBe('sent');
-    expect(sent.map((s) => s.type)).toEqual(['game_league_result', 'game_mission_window']);
-
-    const free = world();
-    await free.notifier.notify(windowEvent(), NOW);
-    expect([...free.taken.keys()].filter((key) => key.includes(':day:'))).toEqual([]);
-    expect(taken.size).toBeGreaterThan(0);
+    expect(await notifier.notify(windowEvent(), NOW)).toBe('sent');
+    expect([...taken.keys()].filter((key) => key.includes(':day:'))).toHaveLength(1);
+    expect(await notifier.notify(leagueResult({ zone: 'safe' }), new Date(NOW.getTime() + 3_600_000))).toBe('sent');
+    expect(await notifier.notify(step(), new Date(NOW.getTime() + 7_200_000))).toBe('skipped:daily-cap');
+    expect(sent.map((s) => s.type)).toEqual(['game_mission_window', 'game_league_result']);
   });
 
   it('s’annonce UNE fois par mission', async () => {
