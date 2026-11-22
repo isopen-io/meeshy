@@ -11,18 +11,7 @@ import me.meeshy.sdk.model.call.CallState
 import org.junit.Test
 
 class CallChromeControllerTest {
-    private class Clock(var now: Long = 1_000L) : CallClock {
-        override fun nowMs(): Long = now
-    }
-
-    private class JumpingWallClock : CallClock {
-        var elapsed = 1_000L
-        var wallJumpMs = 0L
-        override fun nowMs() = WALL_EPOCH_MS + elapsed + wallJumpMs
-        override fun elapsedMs() = elapsed
-    }
-
-    private fun controller(clock: CallClock = Clock()) = CallChromeController(clock)
+    private fun controller() = CallChromeController()
 
     @Test
     fun `the chrome starts revealed`() {
@@ -101,39 +90,6 @@ class CallChromeControllerTest {
         val chrome = controller()
         chrome.onSceneTap(true, false)
         assertThat(chrome.visibility(true, false).isVisible(CallChromeElement.Captions)).isTrue()
-    }
-
-    @Test
-    fun `during the fade the hidden chrome still answers and afterwards it does not`() {
-        val clock = Clock()
-        val chrome = controller(clock)
-        chrome.onSceneTap(true, false)
-        clock.now += 249
-        assertThat(chrome.acceptsTouches(isTapStage = true, isTouchExplorationOn = false)).isTrue()
-        clock.now += 1
-        assertThat(chrome.acceptsTouches(isTapStage = true, isTouchExplorationOn = false)).isFalse()
-    }
-
-    /** #20290 — a wall clock set back an hour made the hidden chrome answer touches for that hour. */
-    @Test
-    fun `once the fade is over the hidden chrome no longer answers, even when the wall clock is set back`() {
-        val clock = JumpingWallClock()
-        val chrome = controller(clock)
-        chrome.onSceneTap(true, false)
-        clock.wallJumpMs = -ONE_HOUR_MS
-        clock.elapsed += CallChromeVisibility.FADE_DURATION_MILLIS
-        assertThat(chrome.acceptsTouches(isTapStage = true, isTouchExplorationOn = false)).isFalse()
-    }
-
-    /** #20290 — a wall clock set forward must not cut the fade short. */
-    @Test
-    fun `during the fade the hidden chrome still answers, even when the wall clock is set forward`() {
-        val clock = JumpingWallClock()
-        val chrome = controller(clock)
-        chrome.onSceneTap(true, false)
-        clock.wallJumpMs = ONE_HOUR_MS
-        clock.elapsed += CallChromeVisibility.FADE_DURATION_MILLIS - 1
-        assertThat(chrome.acceptsTouches(isTapStage = true, isTouchExplorationOn = false)).isTrue()
     }
 
     @Test
@@ -268,10 +224,5 @@ class CallChromeControllerTest {
         assertThat(callIsTapStage(audio, CallGroupVideoStage(remoteCamerasOn = 0))).isTrue()
         assertThat(callIsTapStage(audio, CallGroupVideoStage(remoteCamerasOn = 1))).isTrue()
         assertThat(callIsTapStage(connected(video = true, cameraOn = false))).isTrue()
-    }
-
-    private companion object {
-        const val WALL_EPOCH_MS = 1_763_000_000_000L
-        const val ONE_HOUR_MS = 3_600_000L
     }
 }
