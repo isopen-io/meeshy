@@ -2671,3 +2671,43 @@ socket jusqu'au client.
 1. **#20299** (Android, règle unique du chrome), **#20300** et **#20335** (iOS, à coordonner avec la routine iOS), **#20426**.
 2. Si la marge web doit grandir : `rear-camera.ts` peut se charger au retournement de la caméra (environ 0,9 Ko minifié).
 3. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933.
+
+## Cycle 78 — 2026-11-22
+
+- **Base** : `origin/dev` @ `482c33e62`. Le lot du cycle 77 (#20427, #19894) est fusionné.
+- **Branche** : `claude/determined-volta-fzzfli`.
+- **Objectif** : **#20299**. Sur Android, une seule règle décide si le chrome masqué d'un appel capte encore un toucher.
+- **Livré** (`apps/android/` seulement) :
+  - `CallChromeFade` (`CallConnectedLayout.kt`) est le seul gardien, et il n'a pas changé : `delay(CallChromeStow.fadeMillis(reduceMotion))` retire le contenu de la composition, et `callReviveOnTouch` rallume le chrome pendant le fondu. C'est le choix d'iOS, où la grâce vit dans la vue (`CallControlGlass`).
+  - Retirés, faute d'appelant en production :
+    - `CallChromeController.acceptsTouches()` ;
+    - `CallChromeState.hiddenAtMillis` ;
+    - le paramètre `clock` du contrôleur ;
+    - `CallChromeVisibility.acceptsTouches` (core/model).
+  - Pourquoi : leur règle fixait 250 ms, alors que la vue suit `fadeMillis(reduceMotion)`. Les deux divergeaient sous « Réduire les animations ».
+  - `apps/android/docs/parite-ios/calls.md` est mis à jour.
+- **Tests** :
+  - `CallChromeFadeTouchTest` (Robolectric) monte le vrai `CallChromeFade` au-dessus d'une scène cliquable, avec 5 témoins :
+    - visible, le tap atteint le bouton ;
+    - pendant le fondu, le tap rallume le chrome et le bouton répond ;
+    - après le fondu, le bouton n'existe plus et le tap atteint la scène ;
+    - sans « Réduire les animations », le bouton est encore là à 210 ms ;
+    - avec « Réduire les animations », il a disparu à 210 ms.
+  - Ce sont des témoins de caractérisation : ils sont verts dès l'écriture, et leur rouge se raisonne par mutation (relu par la QA). Trois tests du contrôleur, qui visaient du code mort, sont retirés.
+  - Gardes locales : `check-file-budget.sh`, `check-feature-edges.sh` et `check-verbosity-native.mjs` sont OK. `jvm-check` n'a pas tourné, car le proxy refuse `build-artifacts.signal.org`.
+  - CI : `android.yml` 45068009140, en `workflow_dispatch`.
+- **QA** (`auditeur-adversarial`, indépendante) : favorable avec réserves.
+  - Deux risques de faux rouge dans le test :
+    - `revives == 1` si un `move` sans déplacement n'était pas filtré ;
+    - `stow()` sans `waitForIdle()`.
+  - Le doute ne peut produire qu'un rouge, jamais un faux vert. À corriger si la CI rougit.
+  - La grâce n'a plus de fonction pure nommée sur Android.
+  - Écart préexistant : iOS rallume au relâché, Android à l'appui.
+  - iOS mesure la grâce sur l'horloge murale : ouvert dans **#20436**.
+- **Limites** : rien n'a été vérifié sur appareil.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée : lire son run `android.yml`. S'il est rouge sur `CallChromeFadeTouchTest`, appliquer les réserves (`isAtLeast(1)` et `waitForIdle()`). S'il est vert, fusionner `dev` dans la branche, puis la PR.
+1. **#20426** (web, rapports différés), **#20300** et **#20335** (iOS, à coordonner avec la routine iOS), **#20436**.
+2. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933.
