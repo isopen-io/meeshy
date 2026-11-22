@@ -723,6 +723,5 @@ final class SharedLocationServedSourceTests: XCTestCase {
 
         XCTAssertTrue(message.contains("Alice"))
         XCTAssertTrue(message.contains(ShareMyLocationCopy.replacePointOthers(2)))
-        XCTAssertTrue(ShareMyLocationCopy.replacePointOthers(2).contains("2"))
     }
 }

@@ -197,6 +197,10 @@ final class SharedLocationSharingSyncTests: XCTestCase {
     func test_sharingFromTheDeviceAfterAChosenPoint_asksFirst_thenFollowsTheDeviceAgain() async {
         let sut = await makeManualSUT()
         _ = await sut.center.sharePoint(lisbon, with: alice, precision: .city, duration: .oneHour)
+        sut.served.snapshot = SharedLocationOwnSnapshot(
+            recipients: [SharedLocationOwnRecipient(userId: alice, precision: .city, expiresAt: t0.addingTimeInterval(3600))],
+            acceptsManualSource: true, source: .manual
+        )
         let sent = sut.emitter.starts.count
 
         let asked = await sut.center.share(with: bob, precision: .city, duration: .oneHour)
