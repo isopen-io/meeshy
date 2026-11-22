@@ -391,11 +391,33 @@ class CallCaptionTranslationWaitAnchorTest {
     }
 
     @Test
-    fun `a later revision of the same utterance never prolongs the wait`() {
+    fun `a revision after the final never prolongs the wait`() {
         val journal = CallLiveJournal()
-            .receive(awaited(capturedAtMs = localWallAtReception + hour, receivedAtElapsedMs = receivedAt, isFinal = false))
+            .receive(awaited(capturedAtMs = localWallAtReception + hour, receivedAtElapsedMs = receivedAt))
             .receive(awaited(capturedAtMs = localWallAtReception + hour, receivedAtElapsedMs = receivedAt + 5_000))
             .receive(awaited(capturedAtMs = localWallAtReception + hour, receivedAtElapsedMs = receivedAt + 7_000))
+
+        assertFallsEightSecondsAfterReception(line(journal.segments.single()))
+    }
+
+    @Test
+    fun `a sentence first partial waits from the reception of its FINAL, the one that asks for a translation`() {
+        val journal = CallLiveJournal()
+            .receive(awaited(capturedAtMs = localWallAtReception, receivedAtElapsedMs = 0, isFinal = false))
+            .receive(awaited(capturedAtMs = localWallAtReception + 9_000, receivedAtElapsedMs = 9_000))
+            .receive(awaited(capturedAtMs = localWallAtReception + 9_000, receivedAtElapsedMs = 12_000))
+        val line = line(journal.segments.single())
+
+        assertThat(line.settled(nowMs = 9_000).isAwaitingTranslation).isTrue()
+        assertThat(line.settled(nowMs = 16_999).isAwaitingTranslation).isTrue()
+        assertThat(line.settled(nowMs = 17_000).isAwaitingTranslation).isFalse()
+    }
+
+    @Test
+    fun `a final without a reception keeps the one of its partial`() {
+        val journal = CallLiveJournal()
+            .receive(awaited(capturedAtMs = localWallAtReception, receivedAtElapsedMs = receivedAt, isFinal = false))
+            .receive(awaited(capturedAtMs = localWallAtReception, receivedAtElapsedMs = null))
 
         assertFallsEightSecondsAfterReception(line(journal.segments.single()))
     }

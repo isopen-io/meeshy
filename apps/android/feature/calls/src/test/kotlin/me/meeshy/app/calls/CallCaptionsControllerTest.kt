@@ -111,7 +111,7 @@ class CallCaptionsControllerTest {
     }
 
     @Test
-    fun `a peer's line is stamped with its FIRST local reception on the monotonic clock, never the speaker's (#20298)`() = runController { controller ->
+    fun `a peer's line is stamped with the local reception of its FINAL on the monotonic clock, never the speaker's (#20298)`() = runController { controller ->
         controller.connected()
 
         dataChannel.tryEmit(DataChannelCodec.encodeTranscriptEntry(CallTranscriptEntry("w1", "call-1", "peer", "", "How are", "en", 900, isFinal = false)))
@@ -119,7 +119,7 @@ class CallCaptionsControllerTest {
         relayed.tryEmit(relay())
 
         val line = controller.state.value.journal.segments.single()
-        assertThat(line.receivedAtElapsedMs).isEqualTo(42_000L)
+        assertThat(line.receivedAtElapsedMs).isEqualTo(47_000L)
         assertThat(line.capturedAtMs).isEqualTo(900)
     }
 
