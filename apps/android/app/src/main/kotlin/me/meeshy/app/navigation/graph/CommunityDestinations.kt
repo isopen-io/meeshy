@@ -31,12 +31,15 @@ import me.meeshy.app.navigation.Routes
 object CommunityRoutes {
     const val LIST = "communities"
     const val CREATE = "communities/new"
-    const val DETAIL = "community/{${CommunityDetailViewModel.COMMUNITY_ID_ARG}}"
+    const val DETAIL =
+        "community/{${CommunityDetailViewModel.COMMUNITY_ID_ARG}}?${CommunityDetailViewModel.VIA_ARG}={${CommunityDetailViewModel.VIA_ARG}}"
     const val MEMBERS = "community/{${CommunityDetailViewModel.COMMUNITY_ID_ARG}}/members"
     const val INVITE = "community/{${CommunityDetailViewModel.COMMUNITY_ID_ARG}}/invite"
     const val SETTINGS = "community/{${CommunityDetailViewModel.COMMUNITY_ID_ARG}}/settings"
 
-    fun detail(communityId: String): String = "community/$communityId"
+    /** [viaLink] : arrivé par l'adresse partagée (#20332) — rejoindre comptera l'entrée comme venue du lien. */
+    fun detail(communityId: String, viaLink: Boolean = false): String =
+        if (viaLink) "community/$communityId?${CommunityDetailViewModel.VIA_ARG}=${CommunityDetailViewModel.VIA_LINK}" else "community/$communityId"
 
     fun members(communityId: String): String = "community/$communityId/members"
 
@@ -94,7 +97,14 @@ class CommunityDestinations @Inject constructor() : NavGraphContributor {
         }
         builder.composable(
             route = CommunityRoutes.DETAIL,
-            arguments = listOf(navArgument(CommunityDetailViewModel.COMMUNITY_ID_ARG) { type = NavType.StringType }),
+            arguments = listOf(
+                navArgument(CommunityDetailViewModel.COMMUNITY_ID_ARG) { type = NavType.StringType },
+                navArgument(CommunityDetailViewModel.VIA_ARG) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
         ) { entry ->
             val openConversation = rememberConversationOpener(navController, entry)
             CommunityDetailScreen(
