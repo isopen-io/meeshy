@@ -507,9 +507,9 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
         return String(localized: "community.join.declined.until", defaultValue: "Vous pourrez en refaire une à partir du \(date).", bundle: .module)
     }
 
-    /// Mêmes mots que le web (`community.membership.error.linkPaused`).
+    /// Mêmes mots que la fiche du lien (`communityLink.sheet.joinLinkPaused`).
     static var linkPausedText: String {
-        String(localized: "community.join.linkPaused", defaultValue: "Les arrivées par ce lien sont suspendues : un administrateur de la communauté l’a mis en pause.", bundle: .module)
+        String(localized: "community.join.linkPaused", defaultValue: "Les arrivées par ce lien sont suspendues.", bundle: .module)
     }
 
     private var joinNotice: (text: String, isRefusal: Bool)? {
