@@ -36,7 +36,13 @@ import Foundation
 /// `requiresHydratedStore`. Il porte sa raison, et elle n'est pas de confort —
 /// voir son doc-comment : jouer ce geste trop tôt ne le RETARDE pas, il PERD
 /// ses lignes.
-enum ConversationWindowCatchUp: CaseIterable, Sendable {
+/// `nonisolated` sur le TYPE : le paquet compile sous
+/// `.defaultIsolation(MainActor.self)` (SE-0466), et les deux branches de
+/// rattrapage jouent cette loi depuis une fermeture `@Sendable @concurrent`
+/// (`OrderedEventLane.relay`), donc HORS du MainActor. Sans ce mot, `allCases`
+/// et les deux fonctions ci-dessous seraient isolées et injoignables de là où
+/// elles servent.
+nonisolated enum ConversationWindowCatchUp: CaseIterable, Sendable {
     /// Les mutations locales de la fenêtre — épingle, sourdine, archive,
     /// `deleteForUser` — que le réseau n'a pas pu emporter.
     ///
