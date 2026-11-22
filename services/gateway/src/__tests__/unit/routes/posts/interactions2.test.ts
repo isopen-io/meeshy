@@ -115,7 +115,7 @@ function makeSocialEvents() {
     broadcastStoryReacted: jest.fn<any>(),
     broadcastStatusReacted: jest.fn<any>(),
     broadcastStoryUnreacted: jest.fn<any>(),
-    broadcastStatusUnreacted: jest.fn<any>(),
+    broadcastStatusUnreacted: jest.fn<any>(), activitySeparation: jest.fn<any>().mockResolvedValue([]),
     broadcastStoryViewed: jest.fn<any>(),
     broadcastPostBookmarked: jest.fn<any>(),
     broadcastPostReposted: jest.fn<any>().mockResolvedValue(undefined),
@@ -262,7 +262,7 @@ describe('POST /posts/:postId/like — STORY type triggers broadcastStoryReacted
     expect(res.statusCode).toBe(200);
     expect(socialEvents.broadcastStoryReacted).toHaveBeenCalledWith(
       expect.objectContaining({ storyId: POST_ID }),
-      AUTHOR_ID,
+      AUTHOR_ID, [],
     );
     expect(socialEvents.broadcastStatusReacted).not.toHaveBeenCalled();
   });
@@ -287,7 +287,7 @@ describe('POST /posts/:postId/like — STATUS type triggers broadcastStatusReact
     expect(res.statusCode).toBe(200);
     expect(socialEvents.broadcastStatusReacted).toHaveBeenCalledWith(
       expect.objectContaining({ statusId: POST_ID }),
-      AUTHOR_ID,
+      AUTHOR_ID, [],
     );
     expect(socialEvents.broadcastStoryReacted).not.toHaveBeenCalled();
   });
@@ -359,7 +359,7 @@ describe('DELETE /posts/:postId/like — STORY type triggers broadcastStoryUnrea
     expect(res.statusCode).toBe(200);
     expect(socialEvents.broadcastStoryUnreacted).toHaveBeenCalledWith(
       expect.objectContaining({ storyId: POST_ID }),
-      AUTHOR_ID,
+      AUTHOR_ID, [],
     );
   });
 });
@@ -385,7 +385,7 @@ describe('DELETE /posts/:postId/like — STATUS type triggers broadcastStatusUnr
     expect(res.statusCode).toBe(200);
     expect(socialEvents.broadcastStatusUnreacted).toHaveBeenCalledWith(
       expect.objectContaining({ statusId: POST_ID }),
-      AUTHOR_ID,
+      AUTHOR_ID, [],
     );
   });
 });
@@ -443,7 +443,7 @@ describe("DELETE /posts/:postId/like — l'emoji diffusé est celui qui a été 
     expect(res.statusCode).toBe(200);
     expect(socialEvents.broadcastStoryUnreacted).toHaveBeenCalledWith(
       expect.objectContaining({ storyId: POST_ID, emoji: '😂' }),
-      AUTHOR_ID,
+      AUTHOR_ID, [],
     );
   });
 
@@ -457,7 +457,7 @@ describe("DELETE /posts/:postId/like — l'emoji diffusé est celui qui a été 
     expect(res.statusCode).toBe(200);
     expect(socialEvents.broadcastStatusUnreacted).toHaveBeenCalledWith(
       expect.objectContaining({ statusId: POST_ID, emoji: '🔥' }),
-      AUTHOR_ID,
+      AUTHOR_ID, [],
     );
   });
 
@@ -471,7 +471,7 @@ describe("DELETE /posts/:postId/like — l'emoji diffusé est celui qui a été 
     expect(res.statusCode).toBe(200);
     expect(socialEvents.broadcastPostUnliked).toHaveBeenCalledWith(
       expect.objectContaining({ postId: POST_ID, emoji: '👍' }),
-      AUTHOR_ID, 'PUBLIC', [],
+      AUTHOR_ID, 'PUBLIC', [], [],
     );
   });
 });
@@ -562,7 +562,7 @@ describe('Réactions story/status — payload absolu (likeCount + reactionSummar
     await app.inject({ method: 'POST', url: `/posts/${POST_ID}/like`, payload: {} });
     expect(socialEvents.broadcastStoryReacted).toHaveBeenCalledWith(
       expect.objectContaining({ likeCount: 3, reactionSummary: { '❤️': 2, '😂': 1 } }),
-      AUTHOR_ID,
+      AUTHOR_ID, [],
     );
   });
 
@@ -573,7 +573,7 @@ describe('Réactions story/status — payload absolu (likeCount + reactionSummar
     await app.inject({ method: 'POST', url: `/posts/${POST_ID}/like`, payload: {} });
     expect(socialEvents.broadcastStatusReacted).toHaveBeenCalledWith(
       expect.objectContaining({ likeCount: 1, reactionSummary: { '🔥': 1 } }),
-      AUTHOR_ID,
+      AUTHOR_ID, [],
     );
   });
 
@@ -586,7 +586,7 @@ describe('Réactions story/status — payload absolu (likeCount + reactionSummar
     await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/like` });
     expect(socialEvents.broadcastStoryUnreacted).toHaveBeenCalledWith(
       expect.objectContaining({ likeCount: 2, reactionSummary: { '❤️': 2 } }),
-      AUTHOR_ID,
+      AUTHOR_ID, [],
     );
   });
 
@@ -599,7 +599,7 @@ describe('Réactions story/status — payload absolu (likeCount + reactionSummar
     await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/like` });
     expect(socialEvents.broadcastStatusUnreacted).toHaveBeenCalledWith(
       expect.objectContaining({ likeCount: 0, reactionSummary: {} }),
-      AUTHOR_ID,
+      AUTHOR_ID, [],
     );
   });
 });

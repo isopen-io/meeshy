@@ -151,3 +151,56 @@ describe('un démarrage qui nomme le partage montré (#20249)', () => {
     expect(await servis(m)).toEqual([AMI]);
   });
 });
+
+/**
+ * #20416 : un refus `STARTED_ELSEWHERE` que la relecture n'expliquerait pas (`/mine` sert encore le même
+ * nom) ferait reposer la même question sans fin. La passerelle ne le produit pas : `/mine` ne nomme
+ * qu'un partage que le démarrage relit à l'identique — même pointeur, même ouverture, même terme.
+ */
+describe('tout partage que la relecture nomme, un démarrage qui le nomme le trouve (#20416)', () => {
+  const AVEC_ECHEANCE = [{ userId: AMI, precision: 'exact', expiresInSeconds: 120 }, { userId: SANG, precision: 'exact' }] as const;
+  const etats: ReadonlyArray<{ readonly nom: string; readonly preparer: (m: Monde) => Promise<void> }> = [
+    { nom: 'un point choisi tout frais', preparer: async (m) => void (await choisirPoint(m)) },
+    {
+      nom: 'une liste seule republiée ailleurs',
+      preparer: async (m) => {
+        await ajouterAilleurs(m);
+        m.avancer(MINUTE);
+        await startSharedLocation(m.deps, EMETTEUR, { recipients: AVEC_AMI, durationMinutes: 60 });
+      },
+    },
+    {
+      nom: 'une échéance par personne passée',
+      preparer: async (m) => {
+        await startSharedLocation(m.deps, EMETTEUR, { recipients: AVEC_ECHEANCE, durationMinutes: 60, position: CHOISI, source: 'manual' });
+        m.avancer(3 * MINUTE);
+      },
+    },
+    {
+      nom: 'le terme à une milliseconde',
+      preparer: async (m) => {
+        await choisirPoint(m);
+        m.avancer(60 * MINUTE - 1);
+      },
+    },
+  ];
+
+  etats.forEach(({ nom, preparer }) => {
+    it(`${nom} : le nom servi est accepté`, async () => {
+      const m = monde();
+      await preparer(m);
+      const servi = (await ownSharedLocationFor(m.deps, EMETTEUR)).startedAt;
+      if (servi === undefined) throw new Error('la relecture ne nomme aucun partage');
+
+      expect(await montrerPositionReelle(m, servi)).toMatchObject({ success: true });
+    });
+  });
+
+  it('le terme passé : la relecture ne nomme plus rien, il n’y a rien à reposer', async () => {
+    const m = monde();
+    await choisirPoint(m);
+    m.avancer(60 * MINUTE);
+
+    expect((await ownSharedLocationFor(m.deps, EMETTEUR)).startedAt).toBeUndefined();
+  });
+});
