@@ -15,6 +15,7 @@ import { relationIoOf } from '../../socketio/relationEvents';
 import { logError } from '../../utils/logger';
 import { sendBadRequest, sendInternalError, sendNotFound, sendSuccess } from '../../utils/response';
 import { errorResponses, otherUserOf, relationLimiter, sendCoded, userIdParams } from './shared';
+import { bloodLockFieldsOf, bloodLockResponseProperties, refusedAsBloodLocked } from './blood-lock';
 
 /**
  * L'état servi à un lecteur, déclaré CHAMP PAR CHAMP : le sérialiseur retire tout champ non
@@ -36,7 +37,7 @@ export const batteryStateSchema = {
 
 const personSettingsSchema = {
   type: 'object',
-  properties: {
+  properties: { ...bloodLockResponseProperties,
     userId: { type: 'string' },
     shared: { type: 'boolean' },
     receive: { type: 'string', enum: [...BATTERY_RECEIVE_MODES] },
@@ -151,7 +152,7 @@ export function registerRelationBattery(fastify: FastifyInstance): void {
     const otherId = otherUserOf(request, reply);
     if (!otherId) return reply;
     try {
-      return sendSuccess(reply, await readBatteryPersonSettings(fastify.prisma, { ownerId: request.user!.userId, otherId, now: new Date() }));
+      return sendSuccess(reply, { ...(await readBatteryPersonSettings(fastify.prisma, { ownerId: request.user!.userId, otherId, now: new Date() })), ...(await bloodLockFieldsOf(fastify.prisma, request.user!.userId, otherId)) });
     } catch (error) {
       logError(fastify.log, 'Battery settings read error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
@@ -180,10 +181,12 @@ export function registerRelationBattery(fastify: FastifyInstance): void {
       if (!other) return sendNotFound(reply, 'Personne introuvable');
       const relay = relayOf();
       const before = await captureBatteryAccess(relay, { userA: ownerId, userB: otherId });
+      // #20361 — entre Sangs, après MON accord au palier, rien ne se coupe.
+      if (await refusedAsBloodLocked(fastify.prisma, reply, { ownerId, otherId, cuts: parsed.data.shared === false || parsed.data.receive === 'none' })) return reply;
       const settings = await writeBatteryPersonSettings(fastify.prisma, { ownerId, otherId, update: parsed.data, now: new Date() });
       await refreshBatteryBetween(relay, { userA: ownerId, userB: otherId, before })
         .catch((error: unknown) => logError(fastify.log, 'Battery not refreshed after settings:', error));
-      return sendSuccess(reply, settings);
+      return sendSuccess(reply, { ...settings, ...(await bloodLockFieldsOf(fastify.prisma, ownerId, otherId)) });
     } catch (error) {
       logError(fastify.log, 'Battery settings write error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');

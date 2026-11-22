@@ -1,6 +1,6 @@
 import type { FastifyReply } from 'fastify';
 import { RELATION_BLOOD_LOCKED_CODE } from '@meeshy/shared/types/relation-person-settings';
-import { bloodLockedBetween, type BloodLockDb } from '../../services/relations/bloodLock';
+import { bloodLockedBetween, bloodLockStateBetween, type BloodLockDb } from '../../services/relations/bloodLock';
 import { sendConflict } from '../../utils/response';
 
 /** Les champs que les réponses de réglages par personne servent EN PLUS (#20361). */
@@ -26,4 +26,14 @@ export async function refusedAsBloodLocked(
   if (!params.cuts || !(await bloodLockedBetween(prisma, params.ownerId, params.otherId))) return false;
   sendBloodLocked(reply);
   return true;
+}
+
+/** `lockedByLevel` et `bloodBundleAccepted`, à joindre à un GET ou PUT de réglages par personne. */
+export async function bloodLockFieldsOf(
+  prisma: BloodLockDb,
+  ownerId: string,
+  otherId: string,
+): Promise<{ readonly lockedByLevel: boolean; readonly bloodBundleAccepted: boolean }> {
+  const state = await bloodLockStateBetween(prisma, ownerId, otherId);
+  return { lockedByLevel: state.locked, bloodBundleAccepted: state.bloodBundleAccepted };
 }

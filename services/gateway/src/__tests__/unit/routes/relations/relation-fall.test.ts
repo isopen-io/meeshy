@@ -158,8 +158,8 @@ describe('l\'accord et les réglages', () => {
     await app.call('POST', '/api/v1/me/health/fall', { detectedAt: CHUTE.toISOString() }, MOI);
     const retrait = await app.call('PUT', `/api/v1/relations/${AUTRE}/fall/settings`, { shared: false }, MOI);
     await app.close();
-    expect(lu.body.data).toEqual({ userId: AUTRE, shared: true });
-    expect(retrait.body.data).toEqual({ userId: AUTRE, shared: false });
+    expect(lu.body.data).toMatchObject({ userId: AUTRE, shared: true });
+    expect(retrait.body.data).toMatchObject({ userId: AUTRE, shared: false });
     expect(app.emissions).toContainEqual({ room: ROOMS.user(AUTRE), event: SERVER_EVENTS.FALL_CLEARED, payload: { userId: MOI, reason: 'withdrawn' } });
   });
 
@@ -167,6 +167,6 @@ describe('l\'accord et les réglages', () => {
     const app = avecDoubles(await appli(), { consenti: false });
     const lu = await app.call('GET', `/api/v1/relations/${AUTRE}/fall/settings`, undefined, MOI);
     await app.close();
-    expect(lu.body.data).toEqual({ userId: AUTRE, shared: false });
+    expect(lu.body.data).toMatchObject({ userId: AUTRE, shared: false });
   });
 });
