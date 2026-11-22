@@ -1,5 +1,6 @@
 package me.meeshy.app.calls
 
+import android.os.SystemClock
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -236,16 +237,17 @@ internal fun CallCaptionsFootNote(footer: CallCaptionsFooter, modifier: Modifier
 
 /**
  * The clock the awaited translations settle on: it only moves at the next deadline, so a wait that falls takes its dots
- * (and its « translating » foot) down at that very instant and nothing redraws before.
+ * (and its « translating » foot) down at that very instant and nothing redraws before. It is the monotonic clock the
+ * deadlines are anchored on (#20298): a wall-clock jump neither freezes nor drops a wait.
  */
 @Composable
 private fun rememberSettlingClock(lines: List<CallLiveCaptionLine>): Long {
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     val next = CallLiveCaptionLines.nextDeadline(lines, now)
     LaunchedEffect(next) {
         if (next != null) {
-            delay((next - System.currentTimeMillis()).coerceAtLeast(0))
-            now = maxOf(System.currentTimeMillis(), next)
+            delay((next - SystemClock.elapsedRealtime()).coerceAtLeast(0))
+            now = maxOf(SystemClock.elapsedRealtime(), next)
         }
     }
     return now

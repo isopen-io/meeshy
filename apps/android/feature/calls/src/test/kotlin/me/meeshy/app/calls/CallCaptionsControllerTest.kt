@@ -42,6 +42,7 @@ class CallCaptionsControllerTest {
     private val session = mockk<SessionRepository> {
         every { currentUser } returns MutableStateFlow<MeeshyUser?>(MeeshyUser(id = "me", username = "me", systemLanguage = "fr"))
     }
+    private var elapsedNow = 42_000L
     private val info = CallSessionInfo(callId = "call-1", config = CallConfig.EMPTY.copy(peerId = "peer", peerName = "Ada", conversationId = "conv-1"))
 
     private fun runController(endToEnd: Boolean? = false, block: suspend TestScope.(CallCaptionsController) -> Unit) =
@@ -66,6 +67,7 @@ class CallCaptionsControllerTest {
             notice = CallCaptionsRefusalNotice { refusals += it },
             clock = { 5_000L },
             scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
+            elapsed = { elapsedNow },
         )
         block(controller)
         controller.onCleared()
@@ -106,6 +108,19 @@ class CallCaptionsControllerTest {
         assertThat(journal.single().text).isEqualTo("How are you?")
         assertThat(journal.single().translatedText).isEqualTo("Comment vas-tu ?")
         assertThat(journal.single().capturedAtMs).isEqualTo(900)
+    }
+
+    @Test
+    fun `a peer's line is stamped with its FIRST local reception on the monotonic clock, never the speaker's (#20298)`() = runController { controller ->
+        controller.connected()
+
+        dataChannel.tryEmit(DataChannelCodec.encodeTranscriptEntry(CallTranscriptEntry("w1", "call-1", "peer", "", "How are", "en", 900, isFinal = false)))
+        elapsedNow = 47_000L
+        relayed.tryEmit(relay())
+
+        val line = controller.state.value.journal.segments.single()
+        assertThat(line.receivedAtElapsedMs).isEqualTo(42_000L)
+        assertThat(line.capturedAtMs).isEqualTo(900)
     }
 
     @Test

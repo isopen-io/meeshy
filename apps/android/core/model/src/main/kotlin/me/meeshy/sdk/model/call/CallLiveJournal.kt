@@ -31,6 +31,11 @@ data class CallTranscriptEntry(
  * a translation, so the reader can flip between the two. [key] is the line's stable identity in
  * this journal (minted by [CallLiveJournal]); [wireId] is the cross-transport merge key minted by
  * the speaker's device, `null` for a legacy peer.
+ *
+ * [capturedAtMs] is the SPEAKER's wall clock: it sorts and dates the line, never measures a delay here.
+ * [receivedAtElapsedMs] is THIS device's monotonic clock (`elapsedRealtime`) at the first reception of the
+ * utterance (#20298): the wait for its translation runs from it, so a skew between the two devices neither
+ * freezes the dots nor removes them. Local only, never on the wire; `null` when nothing stamped it.
  */
 data class CallJournalSegment(
     val key: String = "",
@@ -98,13 +103,15 @@ data class CallJournalSegment(
  * 2. existing FINAL + incoming partial ⇒ a stale revision arriving late, ignored;
  * 3. final + final (data channel, then the translated relay) ⇒ the original words are kept, the
  *    translation and a missing name come to enrich them.
- * The capture clock always keeps the EARLIEST value: the start of the utterance.
+ * The capture clock always keeps the EARLIEST value: the start of the utterance; the local reception keeps the
+ * FIRST one, so a revision never restarts the wait for a translation (#20298).
  */
 object CallTranscriptMergeRules {
     fun merged(existing: CallJournalSegment, incoming: CallJournalSegment): CallJournalSegment {
         val base = existing.copy(
             speakerDisplayName = existing.speakerDisplayName ?: incoming.speakerDisplayName,
             capturedAtMs = minOf(existing.capturedAtMs, incoming.capturedAtMs),
+            receivedAtElapsedMs = existing.receivedAtElapsedMs ?: incoming.receivedAtElapsedMs,
         )
         if (!existing.isFinal) {
             return base.copy(

@@ -1,6 +1,7 @@
 package me.meeshy.app.calls
 
 import android.content.Context
+import android.os.SystemClock
 import androidx.annotation.StringRes
 import dagger.Binds
 import dagger.Module
@@ -146,6 +147,7 @@ class CallCaptionsController internal constructor(
     private val clock: () -> Long,
     private val scope: CoroutineScope,
     private val binding: CallConversationBinding = CallConversationBinding(),
+    private val elapsed: () -> Long = clock,
 ) : CallFeatureController {
 
     @Inject
@@ -171,6 +173,7 @@ class CallCaptionsController internal constructor(
         clock = System::currentTimeMillis,
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
         binding = binding,
+        elapsed = SystemClock::elapsedRealtime,
     )
 
     private val _state = MutableStateFlow(CallCaptionsState())
@@ -295,7 +298,9 @@ class CallCaptionsController internal constructor(
             },
         ).map { it.launchIn(scope) }
 
-    private fun receive(segment: CallJournalSegment) = _state.update { it.receiving(segment) }
+    /** A peer's line enters here, stamped with its local reception on the monotonic clock (#20298). */
+    private fun receive(segment: CallJournalSegment) =
+        _state.update { it.receiving(segment.copy(receivedAtElapsedMs = elapsed())) }
 
     /** The zero of the hour IN the call: the instant the media first flows, kept through a reconnection (P6.4). */
     private fun stampCallStart(next: CallState) {
