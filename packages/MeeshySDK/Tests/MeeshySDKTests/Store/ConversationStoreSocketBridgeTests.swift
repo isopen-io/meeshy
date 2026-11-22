@@ -87,13 +87,15 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         init(
             store: ConversationStore, categoryStore: UserCategoryStore, currentUserId: String? = "me",
             onReadingModePreferenceChanged: (@Sendable (String, String) -> Void)? = nil,
-            servedPreferences: ServedPreferencesFeed = ServedPreferencesFeed([])
+            servedPreferences: ServedPreferencesFeed = ServedPreferencesFeed([]),
+            watermarkStore: ConversationPreferencesWatermarkStore = .inMemory()
         ) {
             bridge = ConversationStoreSocketBridge(
                 store: store,
                 categoryStore: categoryStore,
                 currentUserId: { currentUserId },
-                fetchChangedPreferences: { changedSince in servedPreferences.serve(changedSince: changedSince) }
+                fetchChangedPreferences: { changedSince in servedPreferences.serve(changedSince: changedSince) },
+                watermarkStore: watermarkStore
             )
             bridge.activate(
                 conversationUpdated: conversationUpdated.eraseToAnyPublisher(),
