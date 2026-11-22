@@ -91,6 +91,11 @@ export const SHARED_LOCATION_ERROR_CODES = {
    * devient jamais une position réelle par une simple mise à jour. Un client qui ne connaît pas le code y lit un échec.
    */
   FIXED_POINT: 'SHARED_LOCATION_FIXED_POINT',
+  /**
+   * Un démarrage qui nomme le partage qu'il remplace (`expectedStartedAt`, #20249) alors qu'un autre partage a démarré
+   * depuis (ou qu'il n'y en a plus) : rien n'est appliqué, le client relit et redemande.
+   */
+  STARTED_ELSEWHERE: 'SHARED_LOCATION_STARTED_ELSEWHERE',
 } as const;
 export type SharedLocationErrorCode = (typeof SHARED_LOCATION_ERROR_CODES)[keyof typeof SHARED_LOCATION_ERROR_CODES];
 
