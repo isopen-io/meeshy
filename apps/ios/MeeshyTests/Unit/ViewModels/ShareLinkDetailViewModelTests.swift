@@ -847,4 +847,126 @@ final class CommunityLinkDetailTests: XCTestCase {
         XCTAssertEqual(outcome, CommunityInviteOutcome(sent: 0, failed: 0))
         XCTAssertTrue(calls.invited.isEmpty)
     }
+
+    // MARK: - La pause du lien d'entrée (#20255)
+
+    @MainActor
+    private final class PauseProbe {
+        weak var sut: CommunityLinkDetailViewModel?
+        var sent: [Bool] = []
+        var seenDuringCall: [Bool?] = []
+        var busyDuringCall: [Bool] = []
+    }
+
+    private func makePauseSUT(
+        listed: Bool?,
+        served: Bool? = nil,
+        answer: Result<Bool?, Error> = .success(nil),
+        route: Bool = true
+    ) -> (CommunityLinkDetailViewModel, PauseProbe) {
+        let probe = PauseProbe()
+        let link = CommunityLink(id: "c-1", name: "Beatmakers Dakar", identifier: "beatmakers",
+                                 baseUrl: "https://meeshy.me", memberCount: 342, isActive: true,
+                                 createdAt: Date(timeIntervalSince1970: 1_750_000_000), joinLinkPaused: listed)
+        let setPaused: (@concurrent @Sendable (String, Bool) async throws -> Bool)? = route ? { _, paused in
+            try await MainActor.run {
+                probe.sent.append(paused)
+                probe.seenDuringCall.append(probe.sut?.joinLinkPaused)
+                probe.busyDuringCall.append(probe.sut?.isSettingJoinLink ?? false)
+                return try answer.get() ?? paused
+            }
+        } : nil
+        let sut = CommunityLinkDetailViewModel(
+            link: link, viewerId: "me",
+            loadDetails: { _ in CommunityLinkDetails(isPrivate: false, role: "admin", memberCount: 350, avatar: nil,
+                                                     settingsCommunity: nil, joinLinkPaused: served) },
+            loadEntries: { _ in [] },
+            setPrivate: { _, _ in },
+            setJoinLinkPaused: setPaused
+        )
+        probe.sut = sut
+        return (sut, probe)
+    }
+
+    func test_joinLink_showsTheListedPauseAtOnce() {
+        let (paused, _) = makePauseSUT(listed: true)
+        XCTAssertEqual(paused.joinLinkPaused, true)
+        XCTAssertFalse(paused.isLinkActive, "le billet dit « Inactif » d'un lien en pause")
+        XCTAssertTrue(paused.canPauseJoinLink)
+        let (active, _) = makePauseSUT(listed: false)
+        XCTAssertTrue(active.isLinkActive)
+    }
+
+    func test_joinLink_anOlderGateway_offersNoToggle_andSendsNothing() async {
+        let (sut, probe) = makePauseSUT(listed: nil)
+        XCTAssertFalse(sut.canPauseJoinLink)
+        let succeeded = await sut.setJoinLinkPaused(true)
+        XCTAssertFalse(succeeded)
+        XCTAssertTrue(probe.sent.isEmpty)
+        XCTAssertNil(sut.joinLinkPaused)
+    }
+
+    func test_joinLink_withoutTheRoute_offersNoToggle() {
+        let (sut, _) = makePauseSUT(listed: false, route: false)
+        XCTAssertFalse(sut.canPauseJoinLink)
+    }
+
+    func test_pauseJoinLink_isOptimistic_andTellsTheServer() async {
+        let (sut, probe) = makePauseSUT(listed: false)
+        let succeeded = await sut.setJoinLinkPaused(true)
+        XCTAssertTrue(succeeded)
+        XCTAssertEqual(probe.sent, [true])
+        XCTAssertEqual(probe.seenDuringCall, [true], "la rangée bascule avant la réponse")
+        XCTAssertEqual(probe.busyDuringCall, [true])
+        XCTAssertEqual(sut.joinLinkPaused, true)
+        XCTAssertFalse(sut.isSettingJoinLink)
+    }
+
+    func test_pauseJoinLink_comesBack_whenTheServerRefuses() async {
+        let (sut, _) = makePauseSUT(listed: false, answer: .failure(ProbeError.offline))
+        let succeeded = await sut.setJoinLinkPaused(true)
+        XCTAssertFalse(succeeded)
+        XCTAssertEqual(sut.joinLinkPaused, false)
+        XCTAssertTrue(sut.isLinkActive)
+        XCTAssertFalse(sut.isSettingJoinLink)
+    }
+
+    func test_pauseJoinLink_theServedStateWins() async {
+        let (sut, _) = makePauseSUT(listed: false, answer: .success(false))
+        _ = await sut.setJoinLinkPaused(true)
+        XCTAssertEqual(sut.joinLinkPaused, false, "la réponse de la passerelle fait foi")
+    }
+
+    func test_pauseJoinLink_toTheShownState_sendsNothing() async {
+        let (sut, probe) = makePauseSUT(listed: true)
+        let succeeded = await sut.setJoinLinkPaused(true)
+        XCTAssertTrue(succeeded)
+        XCTAssertTrue(probe.sent.isEmpty)
+    }
+
+    func test_load_theDetailsPause_replacesTheListedOne() async {
+        let (sut, _) = makePauseSUT(listed: false, served: true)
+        await sut.load()
+        XCTAssertEqual(sut.joinLinkPaused, true, "la liste en cache peut dater : le détail fait foi")
+    }
+
+    func test_load_detailsWithoutThePause_keepTheListedOne() async {
+        let (sut, _) = makePauseSUT(listed: true, served: nil)
+        await sut.load()
+        XCTAssertEqual(sut.joinLinkPaused, true)
+    }
+
+    func test_details_readTheServedPause_andAnOlderGatewayStaysNil() throws {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let paused = try decoder.decode(APICommunity.self, from: Data("""
+        {"id":"c","identifier":"c","name":"C","isPrivate":false,"createdBy":"u",
+         "createdAt":"2026-02-20T14:00:00Z","joinLinkPaused":true}
+        """.utf8))
+        let older = try decoder.decode(APICommunity.self, from: Data("""
+        {"id":"c","identifier":"c","name":"C","isPrivate":false,"createdBy":"u","createdAt":"2026-02-20T14:00:00Z"}
+        """.utf8))
+        XCTAssertEqual(CommunityLinkDetails(community: paused).joinLinkPaused, true)
+        XCTAssertNil(CommunityLinkDetails(community: older).joinLinkPaused)
+    }
 }
