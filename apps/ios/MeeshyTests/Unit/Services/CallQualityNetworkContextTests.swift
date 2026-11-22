@@ -168,7 +168,7 @@ final class CallStatsRelayedRouteTests: XCTestCase {
         XCTAssertEqual(stats.availableOutgoingBitrateBps, 900_000)
     }
 
-    func test_reduce_noElectedPair_readsTheSmallestPairIdCarryingTheMeasure() {
+    func test_reduce_noElectedPair_readsTheRttOfTheSmallestPairIdButNoBitrate() {
         let entries = [
             measuredPair("CP2", local: "L2", remote: "R2", nominated: false, state: "in-progress", rtt: 0.12),
             measuredPair("CP1", local: "L1", remote: "R1", nominated: false, state: "in-progress", rtt: 0.05, bitrate: 900_000)
@@ -178,7 +178,32 @@ final class CallStatsRelayedRouteTests: XCTestCase {
 
         XCTAssertNil(CallStats.selectedCandidatePair(in: entries))
         XCTAssertEqual(stats.roundTripTimeMs, 50, accuracy: 0.001)
-        XCTAssertEqual(stats.availableOutgoingBitrateBps, 900_000)
+        XCTAssertEqual(stats.availableOutgoingBitrateBps, 0)
+    }
+
+    // MARK: - #20284 — le débit sortant estimé ne se lit QUE sur la paire élue
+
+    func test_reduce_electedPairWithoutBitrate_neverReadsAnotherPairsEstimate() {
+        let entries = [
+            transport(selecting: "CP1"),
+            measuredPair("CP1", local: "L1", remote: "R1", rtt: 0.05),
+            measuredPair("CP2", local: "L2", remote: "R2", rtt: 0.3, bitrate: 120_000)
+        ]
+
+        let stats = CallStats.reduce(entries: entries)
+
+        XCTAssertEqual(CallStats.selectedCandidatePair(in: entries)?.id, "CP1")
+        XCTAssertEqual(stats.roundTripTimeMs, 50, accuracy: 0.001)
+        XCTAssertEqual(stats.availableOutgoingBitrateBps, 0)
+    }
+
+    func test_reduce_noPairAtAll_readsNoBitrate() {
+        let entries = [CallStats.RawEntry(id: "O01", type: "outbound-rtp", kind: "video", values: ["packetsSent": 20])]
+
+        let stats = CallStats.reduce(entries: entries)
+
+        XCTAssertNil(CallStats.selectedCandidatePair(in: entries))
+        XCTAssertEqual(stats.availableOutgoingBitrateBps, 0)
     }
 
     func test_reduce_electedPairWithAberrantRtt_readsZero() {
@@ -332,14 +357,37 @@ final class CallStatsElectionOrderTests: XCTestCase {
         XCTAssertEqual(readings(report), [Reading(pairId: "CP2", rttMs: 40, bitrate: 1_500_000, relayed: false)])
     }
 
-    func test_reduce_noElectedPair_readsTheMeasureOnTheHighestPriorityThenSmallestId() {
+    func test_reduce_noElectedPair_readsTheRttOnTheHighestPriorityThenSmallestIdAndNoBitrate() {
         let report = [
             pair("CP2", local: "L2", remote: "R2", nominated: false, state: "in-progress", rtt: 0.12, bitrate: 900_000),
             pair("CP1", local: "L1", remote: "R1", nominated: false, state: "in-progress", rtt: 0.05),
             pair("CP0", local: "L0", remote: "R0", priority: 10, nominated: false, state: "waiting")
         ]
 
-        XCTAssertEqual(readings(report), [Reading(pairId: nil, rttMs: 50, bitrate: 900_000, relayed: nil)])
+        XCTAssertEqual(readings(report), [Reading(pairId: nil, rttMs: 50, bitrate: 0, relayed: nil)])
+    }
+
+    func test_reduce_electedPairWithoutBitrate_readsNoBitrateButTheNextPairsRttInEveryOrder() {
+        let report = [
+            transport("T01", selecting: "CP1"),
+            pair("CP1", local: "L1", remote: "R1", priority: 10, rtt: 0.05),
+            pair("CP2", local: "L2", remote: "R2", priority: 500, rtt: 0.3, bitrate: 120_000),
+            candidate("L1", type: "host"), candidate("R1", type: "host", local: false)
+        ]
+
+        XCTAssertEqual(readings(report), [Reading(pairId: "CP1", rttMs: 50, bitrate: 0, relayed: false)])
+    }
+
+    func test_reduce_electedPairWithoutRtt_keepsItsBitrateAndTheNextPairsRttInEveryOrder() {
+        let report = [
+            transport("T01", selecting: "CP1"),
+            pair("CP1", local: "L1", remote: "R1", priority: 10, bitrate: 1_500_000),
+            pair("CP2", local: "L2", remote: "R2", priority: 500, nominated: false, state: "in-progress", rtt: 0.12),
+            pair("CP3", local: "L2", remote: "R2", priority: 500, rtt: 0.3, bitrate: 9),
+            candidate("L1", type: "relay"), candidate("R1", type: "srflx", local: false)
+        ]
+
+        XCTAssertEqual(readings(report), [Reading(pairId: "CP1", rttMs: 120, bitrate: 1_500_000, relayed: true)])
     }
 
     func test_selectedCandidatePair_equalPriority_electsTheSmallestId() {

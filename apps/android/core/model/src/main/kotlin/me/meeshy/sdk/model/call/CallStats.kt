@@ -105,13 +105,17 @@ public data class CallStats(
         /**
          * Pure reducer over the projected [entries] (iOS `CallStats.reduce`).
          *
-         * - [roundTripTimeMs] (`currentRoundTripTime` ×1000) and
-         *   [availableOutgoingBitrateBps] (`availableOutgoingBitrate`, truncated) are
-         *   read on the SELECTED pair ([selectedCandidatePair], #19899) — a probing
-         *   pair listed after it no longer overwrites the live path's figures. When no
-         *   pair is elected, or the elected one lacks the field, the `candidate-pair`
-         *   carrying it first in the election order (strongest `priority`, then
-         *   smallest `id`, #20121) gives it — never the report's order.
+         * - [roundTripTimeMs] (`currentRoundTripTime` ×1000) is read on the SELECTED
+         *   pair ([selectedCandidatePair], #19899) — a probing pair listed after it no
+         *   longer overwrites the live path's figure. When no pair is elected, or the
+         *   elected one lacks the field, the `candidate-pair` carrying it first in the
+         *   election order (strongest `priority`, then smallest `id`, #20121) gives it —
+         *   never the report's order.
+         * - [availableOutgoingBitrateBps] (`availableOutgoingBitrate`, truncated) is read
+         *   ONLY on the selected pair, with no fallback (#20284, web `readStats`): a pair
+         *   that carries no traffic holds a weak or stale estimate, and the video tier
+         *   would settle on it. No elected pair, or one without the field, yields `0` —
+         *   "no estimate", never "no bandwidth".
          * - `inbound-rtp` sums [packetsLost] and [bytesReceived]; splits
          *   `packetsReceived` into [inboundAudioPackets] / [inboundVideoPackets] by
          *   [RawEntry.kind]; and accumulates the audio jitter mean.
@@ -233,7 +237,7 @@ public data class CallStats(
                 inboundAudioPackets = inboundAudio,
                 inboundVideoPackets = inboundVideo,
                 outboundPacketsSent = outbound,
-                availableOutgoingBitrateBps = pairMeasure("availableOutgoingBitrate", elected, entries)?.let(CallStatValue::count) ?: 0,
+                availableOutgoingBitrateBps = elected?.values?.get("availableOutgoingBitrate")?.let(CallStatValue::count) ?: 0,
                 jitterMs = jitterMs,
                 inboundAudioBytes = inboundAudioBytes,
                 inboundVideoBytes = inboundVideoBytes,
