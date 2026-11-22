@@ -13,9 +13,16 @@ import org.junit.Test
  */
 class CallToastBusTest {
 
-    private var nowMs = 10_000L
+    private var wallMs = 1_763_700_000_000L
+    private var monotonicMs = 10_000L
     private val clock = object : CallClock {
-        override fun nowMs(): Long = nowMs
+        override fun nowMs(): Long = wallMs
+        override fun elapsedMs(): Long = monotonicMs
+    }
+
+    private fun elapse(ms: Long) {
+        wallMs += ms
+        monotonicMs += ms
     }
 
     private fun bus() = CallToastBus(clock)
@@ -53,7 +60,7 @@ class CallToastBusTest {
         val bus = bus()
 
         val first = bus.error("Recording failed")
-        nowMs += 1_999
+        elapse(1_999)
         val second = bus.error("Recording failed")
 
         assertThat(first).isTrue()
@@ -70,7 +77,7 @@ class CallToastBusTest {
         val bus = bus()
 
         bus.error("Recording failed")
-        nowMs += CallToastBus.DEDUPE_WINDOW_MS
+        elapse(CallToastBus.DEDUPE_WINDOW_MS)
         val again = bus.error("Recording failed")
 
         assertThat(again).isTrue()
@@ -79,6 +86,30 @@ class CallToastBusTest {
             assertThat(awaitItem().message).isEqualTo("Recording failed")
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun `a wall clock jumping ahead does not let a repeat through within two seconds`() = runTest {
+        val bus = bus()
+
+        bus.error("Recording failed")
+        wallMs += ONE_HOUR_MS
+        monotonicMs += 500
+        val repeat = bus.error("Recording failed")
+
+        assertThat(repeat).isFalse()
+    }
+
+    @Test
+    fun `a wall clock jumping back does not silence a text past the window`() = runTest {
+        val bus = bus()
+
+        bus.error("Recording failed")
+        wallMs -= ONE_HOUR_MS
+        monotonicMs += CallToastBus.DEDUPE_WINDOW_MS
+        val again = bus.error("Recording failed")
+
+        assertThat(again).isTrue()
     }
 
     @Test
@@ -117,5 +148,9 @@ class CallToastBusTest {
             expectNoEvents()
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    private companion object {
+        const val ONE_HOUR_MS = 3_600_000L
     }
 }

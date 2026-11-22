@@ -5,6 +5,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -50,11 +51,22 @@ class CallReliabilityMonitorTest {
         override fun restartIceNow() { restarts += 1 }
     }
 
+    /** Le mur peut sauter (NTP, réglage manuel) pendant que l'horloge monotone suit le temps virtuel du test. */
+    private class JumpingWallClock(private val scheduler: TestCoroutineScheduler) : CallClock {
+        var wallJumpMs = 0L
+        override fun nowMs() = WALL_EPOCH_MS + scheduler.currentTime + wallJumpMs
+        override fun elapsedMs() = scheduler.currentTime
+    }
+
     private val signals: CallSignalManager = mockk(relaxed = true)
 
-    private fun TestScope.monitorFor(host: FakeHost, media: FakeMedia): CallReliabilityMonitor {
+    private fun TestScope.monitorFor(
+        host: FakeHost,
+        media: FakeMedia,
+        clock: CallClock = object : CallClock { override fun nowMs() = testScheduler.currentTime },
+    ): CallReliabilityMonitor {
         val monitor = CallReliabilityMonitor(
-            clock = object : CallClock { override fun nowMs() = testScheduler.currentTime },
+            clock = clock,
             signals = signals,
             trigger = CallReconnectionTrigger(signals),
             intervalMs = 2_000,
@@ -182,5 +194,91 @@ class CallReliabilityMonitorTest {
         }
 
         assertThat(media.restarts).isEqualTo(0)
+    }
+
+    @Test
+    fun `a wall clock jumping an hour ahead neither restarts nor fails a connecting call`() = runTest {
+        val host = FakeHost(backgroundScope, CallState.Connecting)
+        val media = FakeMedia()
+        val clock = JumpingWallClock(testScheduler)
+        monitorFor(host, media, clock)
+
+        advanceTimeBy(2_000)
+        runCurrent()
+        clock.wallJumpMs = ONE_HOUR_MS
+        advanceTimeBy(2_000)
+        runCurrent()
+
+        assertThat(host.callState).isEqualTo(CallState.Connecting)
+        assertThat(media.restarts).isEqualTo(0)
+        assertThat(host.mediaEnded).isEqualTo(0)
+        verify(exactly = 0) { signals.emitEnd(any()) }
+    }
+
+    @Test
+    fun `a wall clock jumping an hour back does not freeze the connecting watchdog`() = runTest {
+        val host = FakeHost(backgroundScope, CallState.Connecting)
+        val media = FakeMedia()
+        val clock = JumpingWallClock(testScheduler)
+        monitorFor(host, media, clock)
+
+        advanceTimeBy(2_000)
+        runCurrent()
+        clock.wallJumpMs = -ONE_HOUR_MS
+        advanceTimeBy(12_000)
+        runCurrent()
+        assertThat(media.restarts).isEqualTo(1)
+
+        advanceTimeBy(14_000)
+        runCurrent()
+
+        assertThat(host.callState).isInstanceOf(CallState.Ended::class.java)
+        verify(exactly = 1) { signals.emitEnd("call-1") }
+    }
+
+    @Test
+    fun `a wall clock jumping an hour ahead does not heal a link still within its grace`() = runTest {
+        val host = FakeHost(backgroundScope, CallState.Connected)
+        val media = FakeMedia()
+        val clock = JumpingWallClock(testScheduler)
+        monitorFor(host, media, clock)
+
+        stallInbound(media, untilMs = 2_000)
+        clock.wallJumpMs = ONE_HOUR_MS
+        stallInbound(media, untilMs = 4_000)
+        assertThat(host.events).isEmpty()
+        assertThat(media.restarts).isEqualTo(0)
+
+        stallInbound(media, untilMs = 6_000)
+
+        assertThat(host.events).containsExactly(CallEvent.ConnectionStalled)
+        assertThat(media.restarts).isEqualTo(1)
+    }
+
+    @Test
+    fun `a wall clock jumping an hour back does not freeze the half-open heal`() = runTest {
+        val host = FakeHost(backgroundScope, CallState.Connected)
+        val media = FakeMedia()
+        val clock = JumpingWallClock(testScheduler)
+        monitorFor(host, media, clock)
+
+        stallInbound(media, untilMs = 2_000)
+        clock.wallJumpMs = -ONE_HOUR_MS
+        stallInbound(media, untilMs = 4_000)
+        stallInbound(media, untilMs = 6_000)
+
+        assertThat(host.events).containsExactly(CallEvent.ConnectionStalled)
+        assertThat(media.restarts).isEqualTo(1)
+    }
+
+    private fun TestScope.stallInbound(media: FakeMedia, untilMs: Long) {
+        media.counts = CallPacketCounts(inbound = 0, outbound = (untilMs / 20).toInt())
+        advanceTimeBy(untilMs - testScheduler.currentTime)
+        runCurrent()
+    }
+
+    private companion object {
+        const val WALL_EPOCH_MS = 1_763_700_000_000L
+        const val ONE_HOUR_MS = 3_600_000L
     }
 }
