@@ -12,21 +12,25 @@ nonisolated struct CommunityLinkDetails: Equatable, Sendable {
     let settingsCommunity: MeeshyCommunity?
     /// Les entrées faites par le lien, si la passerelle les sert (#19290) ; `nil` : la fiche s'en passe.
     let linkEntryCount: Int?
+    /// Le lien d'entrée est en pause (#19661), si la passerelle le sert ; `nil` : la fiche garde ce que la liste disait.
+    let joinLinkPaused: Bool?
 
     init(isPrivate: Bool, role: String?, memberCount: Int?, avatar: String?, settingsCommunity: MeeshyCommunity?,
-         linkEntryCount: Int? = nil) {
+         linkEntryCount: Int? = nil, joinLinkPaused: Bool? = nil) {
         self.isPrivate = isPrivate
         self.role = role
         self.memberCount = memberCount
         self.avatar = avatar
         self.settingsCommunity = settingsCommunity
         self.linkEntryCount = linkEntryCount
+        self.joinLinkPaused = joinLinkPaused
     }
 
     init(community: APICommunity) {
         self.init(isPrivate: community.isPrivate, role: community.currentUserRole,
                   memberCount: community.memberCount ?? community._count?.members, avatar: community.avatar,
-                  settingsCommunity: community.toCommunity(), linkEntryCount: community.linkEntryCount)
+                  settingsCommunity: community.toCommunity(), linkEntryCount: community.linkEntryCount,
+                  joinLinkPaused: community.joinLinkPaused)
     }
 }
 
@@ -63,6 +67,11 @@ final class CommunityLinkDetailViewModel: ObservableObject {
     @Published var chosenInviteeIds: [String] = []
     /// Les personnes dont l'invitation est partie : elles quittent la rangée.
     @Published var invitedIds: Set<String> = []
+    /// Le lien d'entrée en pause (#20255) : d'abord ce que la liste servait, puis ce que le détail sert. `nil` :
+    /// passerelle qui ne le sert pas, et la fiche n'offre aucune bascule.
+    @Published private(set) var joinLinkPaused: Bool?
+    /// Une bascule est en vol : un second toucher n'envoie rien.
+    @Published private(set) var isSettingJoinLink = false
 
     let link: CommunityLink
     let viewerId: String?
@@ -71,6 +80,7 @@ final class CommunityLinkDetailViewModel: ObservableObject {
     private let loadEntries: @concurrent @Sendable (String) async throws -> [CommunityLinkEntry]
     private let setPrivate: @concurrent @Sendable (String, Bool) async throws -> Void
     private let loadFriends: @concurrent @Sendable () async -> [CommunityInviteCandidate]
+    private let writeJoinLinkPaused: (@concurrent @Sendable (String, Bool) async throws -> Bool)?
 
     init(link: CommunityLink,
          viewerId: String?,
@@ -78,7 +88,8 @@ final class CommunityLinkDetailViewModel: ObservableObject {
          loadEntries: @escaping @concurrent @Sendable (String) async throws -> [CommunityLinkEntry],
          setPrivate: @escaping @concurrent @Sendable (String, Bool) async throws -> Void,
          loadFriends: @escaping @concurrent @Sendable () async -> [CommunityInviteCandidate] = { [] },
-         invite: @escaping @concurrent @Sendable (String, String) async throws -> Void = { _, _ in }) {
+         invite: @escaping @concurrent @Sendable (String, String) async throws -> Void = { _, _ in },
+         setJoinLinkPaused: (@concurrent @Sendable (String, Bool) async throws -> Bool)? = nil) {
         self.link = link
         self.viewerId = viewerId
         self.loadDetails = loadDetails
@@ -86,9 +97,17 @@ final class CommunityLinkDetailViewModel: ObservableObject {
         self.setPrivate = setPrivate
         self.loadFriends = loadFriends
         self.inviteUser = invite
+        self.writeJoinLinkPaused = setJoinLinkPaused
+        self.joinLinkPaused = link.joinLinkPaused
     }
 
     var memberCount: Int { details?.memberCount ?? link.memberCount }
+
+    /// La rangée « Actif » ne s'offre que si la passerelle sert l'état ET sait l'écrire.
+    var canPauseJoinLink: Bool { joinLinkPaused != nil && writeJoinLinkPaused != nil }
+
+    /// « Actif » sur le billet : la communauté l'est, et son lien n'est pas en pause.
+    var isLinkActive: Bool { link.isActive && joinLinkPaused != true }
 
     /// « 58 entrées par ce lien » — seulement si la passerelle le sert.
     var linkEntryCount: Int? { details?.linkEntryCount }
@@ -123,6 +142,7 @@ final class CommunityLinkDetailViewModel: ObservableObject {
         if let fetchedDetails {
             details = fetchedDetails
             isClosed = fetchedDetails.isPrivate
+            if let served = fetchedDetails.joinLinkPaused, !isSettingJoinLink { joinLinkPaused = served }
             detailsPhase = .loaded
         } else if details == nil {
             detailsPhase = .failed
@@ -144,6 +164,23 @@ final class CommunityLinkDetailViewModel: ObservableObject {
             return true
         } catch {
             isClosed = previous
+            return false
+        }
+    }
+
+    /// Optimiste : le lien se met en pause (ou repart) tout de suite ; la réponse de la passerelle fait foi, et un
+    /// refus remet l'état d'avant.
+    func setJoinLinkPaused(_ paused: Bool) async -> Bool {
+        guard let write = writeJoinLinkPaused, let previous = joinLinkPaused, !isSettingJoinLink else { return false }
+        guard previous != paused else { return true }
+        joinLinkPaused = paused
+        isSettingJoinLink = true
+        defer { isSettingJoinLink = false }
+        do {
+            joinLinkPaused = try await write(link.id, paused)
+            return true
+        } catch {
+            joinLinkPaused = previous
             return false
         }
     }
