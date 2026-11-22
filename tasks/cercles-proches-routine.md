@@ -1832,6 +1832,23 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   chaînes générées à jour. Centre, ViewModel et Compose se prouvent par `android.yml` sur la PR.
 - Prochain lot : #20127 (confirmation liée au partage montré, puis web et Android), #20054, #20056, #20086.
 
+## 2026-11-21 — réveil de 17 h : la confirmation vaut pour le partage montré, sur iOS (#20127)
+
+- Reprise : aucune PR de la routine ouverte ; #20230 (Android lit la source servie, #20212) fusionnée par le porteur à
+  17 h 11. Aucune branche vivante n'écrit `apps/ios/Meeshy/Features/SharedLocation`.
+- Lot : la moitié iOS de #20127 (iOS est la référence). La question « Montrer ta position réelle ? » porte
+  `SharedLocationPointReplacement` — le `startedAt` servi (relu, ou rendu par l'accusé du démarrage) et ceux qui voient le
+  point. La feuille le rend à `share(replacing:)` ; le centre RELIT alors le partage servi, même s'il l'a déjà lu, et ne
+  fait partir la position réelle que si le démarrage est le même et que personne n'a été ajouté depuis (une personne
+  sortie ne rend pas la réponse caduque) ; sinon rien ne part et la question se repose avec la liste à jour. Le message
+  nomme trois personnes au plus, dans l'ordre de la feuille, puis « et N autres » (inconnus d'ici compris) — deux clés
+  neuves en sept langues, dont une plurielle.
+- Web et Android : issue de suivi #20248 (même milestone).
+- Gates locaux : `check_localization.py`, `check_house_rules.sh` (42 règles), `check_cohesion_budget.sh`,
+  `check_test_registration.sh`, couleurs codées en dur : verts. iOS ne compile pas en conteneur : preuve par la CI de la
+  PR (`ios.yml`, `sdk-tests.yml` en `workflow_dispatch`).
+- Prochain lot : #20248 (web + Android), puis #20054, #20056, #20086.
+
 ## 2026-11-21 — réveil de 21 h : la moitié web de #20248 (la confirmation vaut pour le partage montré)
 
 - Reprise : la PR #20250 (moitié iOS de #20127, tête b4067fea0) attend sa CI iOS (build en cours depuis 21 h 11, tranches
