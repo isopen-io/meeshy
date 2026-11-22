@@ -21,6 +21,7 @@ import {
 import { incrementPostCounters } from '../../services/posts/postCounters';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { safeBroadcast } from '../../socketio/serverEmit';
+import { ANONYMOUS_STORY_VIEWER } from '@meeshy/shared/types/post';
 import { sendSuccess, sendBadRequest, sendForbidden, sendInternalError, sendError } from '../../utils/response';
 import {
   SOCIAL_EVENTS_SCHEMA_VERSION,
@@ -119,8 +120,17 @@ export {
  */
 const STANDING_TYPES: ReadonlySet<SocialEvent['type']> = new Set(['impression', 'view', 'dwell', 'dwell-start']);
 
+/**
+ * L'acteur d'un lot d'événements sociaux.
+ *
+ * **Le `username` a été RETIRÉ (#20443)** : son unique lecteur était la charge
+ * de `story:viewed`, qui ne nomme plus personne. Un pseudo qui voyage jusqu'à
+ * la couche de diffusion sans que rien ne le lise est une invitation à le
+ * remettre sur un fil — la seule façon de ne pas renommer le viewer est de ne
+ * pas transporter son nom jusqu'ici.
+ */
 export type SocialEventsActor =
-  | { readonly kind: 'user'; readonly userId: string; readonly username: string }
+  | { readonly kind: 'user'; readonly userId: string }
   | { readonly kind: 'anonymous'; readonly readerKey: string };
 
 /**
@@ -261,11 +271,25 @@ async function broadcastStoryViewed(
     const post = await deps.postService.getPostById(targetId, actor.userId);
     if (!post || post.type !== 'STORY' || post.authorId === actor.userId) return;
 
+    /* #20443 — LA CHARGE NE NOMME PERSONNE. Ce site posait `actor.userId` et
+       `actor.username`, sous la seule loi du BLOCAGE, quand la jumelle DURABLE
+       de cet événement (la liste « Vu par », `services/posts/namedViewers.ts`)
+       ne nomme un viewer que si la paire atteint `views.identity` (Communauté)
+       et agrège tous les autres dans `publicViewCount` : un viewer PUBLIC
+       était anonyme sur le REST et nommé sur le fil.
+       La réparation retire la DONNÉE au lieu d'aligner la garde — aucun des
+       trois clients ne lit ces deux champs (mesuré, cf. le doc-comment de
+       `StoryViewedEventData`), et les servir sous une loi de cercles aurait
+       coûté une lecture `pairAccess` par auteur distinct APRÈS l'écriture de
+       la vue, élargissant la fenêtre de réordonnancement de #20414 pour
+       alimenter un champ que personne n'affiche.
+       Les deux clés restent présentes, à la chaîne vide : le décodeur iOS
+       déployé les veut non optionnelles, et les omettre emporterait
+       `viewCount` — le seul champ lu. Leur retrait est un lot d'après. */
     safeBroadcast('story:viewed', () => {
       socialEvents.broadcastStoryViewed({
         storyId: targetId,
-        viewerId: actor.userId,
-        viewerUsername: actor.username,
+        ...ANONYMOUS_STORY_VIEWER,
         viewCount: post.viewCount,
       }, post.authorId, separated);
     });
@@ -833,7 +857,7 @@ export async function resolveActor(
 ): Promise<SocialEventsActor | undefined> {
   const registeredUser = (request as UnifiedAuthRequest).authContext?.registeredUser;
   if (registeredUser) {
-    return { kind: 'user', userId: registeredUser.id, username: registeredUser.username ?? '' };
+    return { kind: 'user', userId: registeredUser.id };
   }
   return resolveAnonymousReader(prisma as never, request);
 }

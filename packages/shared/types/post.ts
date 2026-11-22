@@ -431,10 +431,66 @@ export interface StoryDeletedEventData {
   readonly authorId: string;
 }
 
+/**
+ * Les deux champs NOMINATIFS de `story:viewed`, anonymisés une fois pour toutes
+ * (#20443). Un site qui compose cette charge les RÉPAND — il ne les écrit pas,
+ * et il n'a aucune identité à aller chercher.
+ */
+export const ANONYMOUS_STORY_VIEWER: {
+  readonly viewerId: '';
+  readonly viewerUsername: '';
+} = { viewerId: '', viewerUsername: '' };
+
+/**
+ * `story:viewed` — **L'AUTEUR SUIT SON COMPTEUR, ET LA CHARGE NE NOMME
+ * PERSONNE** (#20443).
+ *
+ * Cette charge était la plus NOMINATIVE des huit familles d'activité : là où
+ * les sept autres ne portent qu'un `userId`, elle nommait le viewer par son id
+ * **et son pseudo**. Elle le faisait sous la loi du **BLOCAGE** (#20429), quand
+ * sa jumelle DURABLE — la liste « Vu par » servie au même auteur — ne nomme
+ * un viewer que si le niveau effectif de la paire atteint `views.identity`
+ * (Communauté), et agrège tous les autres dans `publicViewCount`
+ * (`services/gateway/src/services/posts/namedViewers.ts`). Le direct était donc
+ * strictement plus FAIBLE que le durable, sur sa charge la plus exposée : un
+ * viewer PUBLIC, sans aucune relation avec l'auteur, était anonyme sur le REST
+ * et nommé sur le fil.
+ *
+ * **Le choix n'est pas d'aligner la garde, c'est de retirer la donnée.** Mesuré
+ * le 2026-11-22 sur les trois clients : AUCUN ne lit ces deux champs — le web
+ * les refuse jusque dans son type de garde (`isStoryViewedEvent` n'exige que
+ * `storyId` et `viewCount`), iOS lit `storyId`/`viewCount`
+ * (`StoryViewModel+TrayRules.applyViewed`, `PublicationViewersSheet`), et
+ * Android déclare le NOM de l'événement sans y abonner aucun décodeur. Servir
+ * une identité sous une loi de cercles aurait coûté une lecture `pairAccess`
+ * par auteur distinct, APRÈS l'écriture de la vue — donc en élargissant la
+ * fenêtre de réordonnancement de #20414 — pour alimenter un champ que personne
+ * n'affiche. Précédent exact : #14319, « une traduction en clair n'a rien à
+ * faire dans une charge que personne n'affiche ».
+ *
+ * **Les deux clés RESTENT, et portent la chaîne vide — c'est la
+ * rétrocompatibilité (#9223), pas une hésitation.** `SocketStoryViewedData`
+ * (`packages/MeeshySDK/Sources/MeeshySDK/Sockets/SocialSocketEvents.swift`) les
+ * déclare NON optionnelles : les omettre ferait échouer le décodage de
+ * l'événement ENTIER sur tout client déployé, et emporterait `viewCount` — le
+ * seul champ que les clients lisent. Le type LITTÉRAL `''` encode les deux
+ * moitiés de la décision d'un coup : aucune identité ne peut y être écrite
+ * (le compilateur refuse), et aucune clé ne peut être omise (le champ est
+ * requis). Leur RETRAIT est un lot d'après : clients rendus tolérants, versions
+ * déployées mesurées, puis clés retirées — jamais de bascule sèche.
+ *
+ * Le gate de SÉPARATION de #20429 reste en place et n'est pas touché ici : la
+ * raison qui l'a motivé (une charge nominative) a disparu, mais le MOMENT d'un
+ * compteur qui bouge est lui-même un signal d'activité — c'est la définition
+ * même des huit familles — et une personne bloquée ne doit pas faire bouger le
+ * compteur que l'auteur regarde.
+ */
 export interface StoryViewedEventData {
   readonly storyId: string;
-  readonly viewerId: string;
-  readonly viewerUsername: string;
+  /** Toujours `''` — voir {@link ANONYMOUS_STORY_VIEWER}. */
+  readonly viewerId: '';
+  /** Toujours `''` — voir {@link ANONYMOUS_STORY_VIEWER}. */
+  readonly viewerUsername: '';
   readonly viewCount: number;
 }
 
