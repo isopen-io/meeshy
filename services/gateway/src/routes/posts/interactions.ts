@@ -119,18 +119,7 @@ export function registerInteractionRoutes(
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
       const targetPostId = target.id;
-      /* **AVANT la mutation** (#20338 ; patron de #20236 à `comments.ts:691`).
-         La charge de ces diffusions est ABSOLUE (`likeCount`,
-         `reactionSummary`) : un réordonnancement fige chez le lecteur un
-         compteur que la base contredit, et iOS le PERSISTE. Résolue ici,
-         l'émission redevient synchrone juste après l'écriture.
-
-         Mon premier jet la résolvait DANS la diffusion, en arguant que la
-         fenêtre préexistait. **Mesuré FAUX** par l'audit adversarial : story,
-         statut et le chemin non-cœur des réactions n'avaient AUCUNE lecture
-         avant leur emit — le lot en OUVRAIT quatre au lieu d'en constater une,
-         et le cache de séparation rendait l'inversion quasi déterministe (1re
-         diffusion : deux lectures ; 2de : un hit, donc elle double la 1re). */
+      /* AVANT la mutation (#20338, patron de #20236) : charge ABSOLUE, donc un réordonnancement fige un compteur faux que iOS persiste. */
       const activiteSeparee = fastify.socialEvents
         ? await fastify.socialEvents.activitySeparation(authContext.registeredUser.id, target.authorId)
         : null;
@@ -326,9 +315,7 @@ export function registerInteractionRoutes(
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
       const targetPostId = target.id;
-      /* AVANT la mutation, même raison que la pose : charge ABSOLUE, ordre
-         (#20338). Le chemin de RETRAIT n'a pas de porte d'auteur, donc c'est
-         aussi celui où la moitié « auteur » de la loi est VIVANTE. */
+      /* AVANT la mutation, même raison que la pose (#20338) : ordre, charge absolue. */
       const activiteSeparee = fastify.socialEvents
         ? await fastify.socialEvents.activitySeparation(authContext.registeredUser.id, target.authorId)
         : null;
