@@ -196,15 +196,31 @@ export const RELATION_LEVEL_DEFAULT_ON: Readonly<Partial<Record<RelationFeature,
 };
 
 /**
+ * LES PARTAGES DU RITUEL (titre d'écoute, position continue, historique, proximité) : leur
+ * défaut actif au Sang n'existe qu'APRÈS l'accord au palier (#20362). Sans cet accord — paire
+ * de l'équipe sans rituel, Sang ancien, corps de rituel v1 — seul un `true` stocké les ouvre :
+ * aucun consentement présumé (analyse de conformité #20364, C1). Pour un émetteur MINEUR
+ * déclaré, ni le défaut ni le verrou ne valent : seul un accord stocké les ouvre (C7).
+ */
+export const RELATION_BUNDLE_ONLY_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
+  'listening.title',
+  'location.live',
+  'location.history',
+  'location.proximity',
+]);
+
+/**
  * DE SANG À SANG RIEN NE SE COUPE, SAUF LE SANG LUI-MÊME (directive porteur du 2026-11-22,
  * #20361). Au niveau effectif Sang (équipe comprise, #16623), une fois l'accord au palier
  * donné (`bloodBundleAccepted`, #20362), ni un refus stocké, ni une coupure globale, ni un
  * blocage de réception ne ferment ces features ; la route qui les COUPE répond
  * `409 RELATION_BLOOD_LOCKED`. Restreindre, c'est redescendre à Proche.
  *
- * Hors du verrou : la position temporaire (un geste par partage), le blocage, la chute
- * refusée sous 15 ans et l'accord GLOBAL de détection de chute (art. 9 RGPD), jugés hors de
- * cette table par leurs orchestrateurs.
+ * Hors du verrou : la position temporaire (un geste par partage) et le blocage. Les gardes
+ * LÉGALES ne se lèvent jamais par ce verrou : l'accord GLOBAL de détection de chute (art. 9
+ * RGPD, donnée de santé) et la chute refusée sous 15 ans passent par `legallyBlocked`
+ * (`resolveEmitterConsent`), jugé AVANT le verrou. La chute figure ici pour une seule raison :
+ * entre Sangs qui ont l'accord de santé, elle ne se refuse plus à l'un d'eux.
  */
 export const RELATION_BLOOD_LOCKED_FEATURES: ReadonlySet<RelationFeature> = new Set<RelationFeature>([
   'bring',

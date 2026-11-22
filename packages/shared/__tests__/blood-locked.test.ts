@@ -59,11 +59,40 @@ describe('le verrou du Sang', () => {
   it('avant l\'accord (décision B), un refus explicite déjà donné reste appliqué, un champ jamais réglé s\'ouvre', () => {
     expect(resolveEmitterConsent({ feature: 'location.live', stored: false, effectiveLevel: 'BLOOD' })).toBe('refused');
     expect(resolveEmitterConsent({ feature: 'device.battery', stored: null, effectiveLevel: 'BLOOD', globallyDisabled: true })).toBe('refused');
-    expect(resolveEmitterConsent({ feature: 'location.live', stored: null, effectiveLevel: 'BLOOD' })).toBe('granted');
+    expect(resolveEmitterConsent({ feature: 'device.battery', stored: null, effectiveLevel: 'BLOOD' })).toBe('granted');
+  });
+
+  it('sans accord au palier, les partages du rituel ne s\'ouvrent que sur un accord stocké (aucun consentement présumé, C1)', () => {
+    for (const feature of ['listening.title', 'location.live', 'location.history', 'location.proximity'] as const) {
+      expect(resolveEmitterConsent({ feature, stored: null, effectiveLevel: 'BLOOD' })).toBe('refused');
+      expect(resolveEmitterConsent({ feature, stored: true, effectiveLevel: 'BLOOD' })).toBe('granted');
+      expect(resolveEmitterConsent({ feature, stored: null, effectiveLevel: 'BLOOD', bloodBundleAccepted: true })).toBe('granted');
+    }
+  });
+
+  it('un émetteur mineur déclaré : ni verrou ni défaut sur la position et le titre d\'écoute (C7)', () => {
+    for (const feature of ['listening.title', 'location.live', 'location.history', 'location.proximity'] as const) {
+      expect(resolveEmitterConsent({ feature, stored: null, effectiveLevel: 'BLOOD', bloodBundleAccepted: true, emitterMinor: true })).toBe('refused');
+      expect(resolveEmitterConsent({ feature, stored: false, effectiveLevel: 'BLOOD', bloodBundleAccepted: true, emitterMinor: true })).toBe('refused');
+      expect(resolveEmitterConsent({ feature, stored: true, effectiveLevel: 'BLOOD', bloodBundleAccepted: true, emitterMinor: true })).toBe('granted');
+    }
+    expect(resolveEmitterConsent({ feature: 'device.battery', stored: false, effectiveLevel: 'BLOOD', bloodBundleAccepted: true, emitterMinor: true })).toBe('granted');
   });
 
   it('l\'accord au palier n\'ouvre rien sous le Sang', () => {
     expect(resolveEmitterConsent({ feature: 'device.battery', stored: false, effectiveLevel: 'CLOSE', bloodBundleAccepted: true })).toBe('refused');
+  });
+});
+
+describe('une garde LÉGALE ne se lève jamais par le verrou du Sang', () => {
+  it('un Sang sans accord de santé (art. 9) ou sous l\'âge minimum n\'émet jamais la chute, même après l\'accord au palier', () => {
+    expect(resolveEmitterConsent({ feature: 'health.fall', stored: true, effectiveLevel: 'BLOOD', bloodBundleAccepted: true, legallyBlocked: true })).toBe('refused');
+    expect(resolveEmitterConsent({ feature: 'health.fall', stored: null, effectiveLevel: 'BLOOD', legallyBlocked: true })).toBe('refused');
+  });
+
+  it('un Sang qui a donné l\'accord de santé émet la chute, même s\'il l\'avait refusée à cette personne avant l\'accord au palier', () => {
+    expect(resolveEmitterConsent({ feature: 'health.fall', stored: false, effectiveLevel: 'BLOOD', bloodBundleAccepted: true, legallyBlocked: false })).toBe('granted');
+    expect(resolveEmitterConsent({ feature: 'health.fall', stored: null, effectiveLevel: 'BLOOD', legallyBlocked: false })).toBe('granted');
   });
 });
 

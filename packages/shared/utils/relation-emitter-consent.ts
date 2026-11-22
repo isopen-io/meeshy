@@ -21,7 +21,7 @@
  */
 import { relationLevelIfAtLeast, type RelationLevel } from '../types/relation.js';
 import { resolveRelationAccess, type RelationAccess, type RelationAccessInput, type RelationConsent } from './relation-access.js';
-import { RELATION_BLOOD_LOCKED_FEATURES, RELATION_LEVEL_DEFAULT_ON, type RelationFeature } from './relation-levels.js';
+import { RELATION_BLOOD_LOCKED_FEATURES, RELATION_BUNDLE_ONLY_FEATURES, RELATION_LEVEL_DEFAULT_ON, type RelationFeature } from './relation-levels.js';
 
 export type StoredEmitterConsent = boolean | null | undefined;
 
@@ -39,7 +39,17 @@ export const resolveEmitterConsent = (params: {
   readonly globallyDisabled?: boolean;
   /** L'émetteur a donné l'accord au palier Sang pour CETTE personne (#20362). */
   readonly bloodBundleAccepted?: boolean;
+  /**
+   * Une garde LÉGALE ferme : l'accord de santé (art. 9 RGPD) absent ou périmé, l'âge minimum non
+   * atteint. Jugée AVANT le verrou du Sang, que rien ne lui fait lever.
+   */
+  readonly legallyBlocked?: boolean;
+  /** L'émetteur est mineur déclaré : les partages du rituel ne s'ouvrent que sur un accord stocké. */
+  readonly emitterMinor?: boolean;
 }): Exclude<RelationConsent, 'unknown'> => {
+  if (params.legallyBlocked === true) return 'refused';
+  const bundleOnly = RELATION_BUNDLE_ONLY_FEATURES.has(params.feature);
+  if (bundleOnly && (params.emitterMinor === true || params.bloodBundleAccepted !== true)) return params.stored === true && params.globallyDisabled !== true ? 'granted' : 'refused';
   if (unlockedByBundle(params)) return 'granted';
   if (params.globallyDisabled === true || params.stored === false) return 'refused';
   if (params.stored === true) return 'granted';
@@ -63,13 +73,15 @@ export type RelationAccessWithStoredConsentInput = Omit<RelationAccessInput, 'co
   readonly storedConsent: StoredEmitterConsent;
   readonly globallyDisabled?: boolean;
   readonly bloodBundleAccepted?: boolean;
+  readonly legallyBlocked?: boolean;
+  readonly emitterMinor?: boolean;
 };
 
 export const resolveRelationAccessWithStoredConsent = (input: RelationAccessWithStoredConsentInput): RelationAccess => {
-  const { storedConsent, globallyDisabled, bloodBundleAccepted, ...law } = input;
+  const { storedConsent, globallyDisabled, bloodBundleAccepted, legallyBlocked, emitterMinor, ...law } = input;
   const probe = resolveRelationAccess({ ...law, consent: 'unknown' });
   if (!probe.requiresConsent) return probe;
-  const consent = resolveEmitterConsent({ feature: law.feature, stored: storedConsent, effectiveLevel: probe.effectiveLevel, globallyDisabled, bloodBundleAccepted });
+  const consent = resolveEmitterConsent({ feature: law.feature, stored: storedConsent, effectiveLevel: probe.effectiveLevel, globallyDisabled, bloodBundleAccepted, legallyBlocked, emitterMinor });
   return resolveRelationAccess({ ...law, consent });
 };
 

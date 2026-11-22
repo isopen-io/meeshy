@@ -1704,7 +1704,7 @@
       "feature": "listening.title",
       "stored": null,
       "effectiveLevel": "BLOOD",
-      "expected": "granted"
+      "expected": "refused"
     },
     {
       "feature": "listening.title",
@@ -1746,6 +1746,13 @@
       "effectiveLevel": "BLOOD",
       "bloodBundleAccepted": true,
       "expected": "refused"
+    },
+    {
+      "feature": "listening.title",
+      "stored": null,
+      "effectiveLevel": "BLOOD",
+      "bloodBundleAccepted": true,
+      "expected": "granted"
     }
   ],
   "estimates": [
