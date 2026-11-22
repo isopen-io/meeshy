@@ -117,5 +117,6 @@ public object GameGuideCards {
         GuideActionV2.SeeAtlas -> ProgressionConcept.Atlas
         GuideActionV2.SeeLevel -> ProgressionConcept.Level
         GuideActionV2.SeeFlame -> ProgressionConcept.Flame
+        GuideActionV2.SeeMissions -> ProgressionConcept.Missions
     }
 }

@@ -120,6 +120,10 @@
     <string name="game2_guide_moment_league_relegated_next_far">Risali già questa settimana: ogni scintilla conta.</string>
     <string name="game2_guide_moment_league_relegated_short">Di nuovo nel torneo di %1$s.</string>
     <string name="game2_guide_moment_league_relegated_what">Riscendi nel torneo di %1$s.</string>
+    <string name="game2_guide_moment_offering_kept_means">È pronta, senza aspettare gli atti del giorno.</string>
+    <string name="game2_guide_moment_offering_kept_next">Per %1$s, il tuo sogno è più leggero, il tempo di riprendere.</string>
+    <string name="game2_guide_moment_offering_kept_short">La tua Offerta ti aspetta, custodita dai tuoi antenati.</string>
+    <string name="game2_guide_moment_offering_kept_what">I tuoi antenati ti hanno custodito l’Offerta.</string>
     <string name="game2_guide_moment_prestige_means">La tua leggenda entra in una nuova Era, con un trofeo numerato e %1$s di gloria. Il tuo rango non arretra mai.</string>
     <string name="game2_guide_moment_prestige_next">La tua luce torna Scintilla: il tuo livello riparte da 1.</string>
     <string name="game2_guide_moment_prestige_short">Rinascita %1$s.</string>
