@@ -1,6 +1,6 @@
 # Un Sang ouvre le compte de son Sang — conception (#20360)
 
-> Brouillon de conception du 2026-11-22, écrit avant toute ligne de code. Lot d'AUTHENTIFICATION et de CONFIDENTIALITÉ. Relu par `auditeur-adversarial`, `crypto-e2ee` et `conformite-juridique` (§ 12). L'état des tâches vit dans les issues du milestone 290, jamais dans ce document.
+> Conception du 2026-11-22, écrit avant toute ligne de code. Lot d'AUTHENTIFICATION et de CONFIDENTIALITÉ. Relu par `auditeur-adversarial`, `crypto-e2ee` et `conformite-juridique` (§ 12). L'état des tâches vit dans les issues du milestone 290, jamais dans ce document.
 >
 > Sources : directive porteur du 2026-11-22 (#13925, dernier commentaire), décision porteur du même jour (#20360, commentaire). Mesures faites sur `origin/dev` à `9ed1cde81c` (inventaire) et `f9d48cc41e` (relectures).
 
@@ -71,7 +71,7 @@ Verbatim : « De Sang à Sang rien ne doit être impossible sauf descendre le Sa
 - **Feature de la loi unique** : `account.open`, ajoutée à `RELATION_FEATURES` (`packages/shared/utils/relation-levels.ts`) ; minimum `BLOOD` ; **dirigée** (D vers T) ; à autorisation de l'émetteur (T), **accordée par défaut au palier Sang** (`RELATION_EMITTER_CONSENT_DEFAULT_LEVEL['account.open'] = 'BLOOD'`, décision porteur). Elle ne se lit nulle part ailleurs que dans `resolveRelationAccess`.
 - **Fermetures de la loi, sans interrupteur** (fail-closed) :
   - **équipe** : `account.open` entre dans `RELATION_TEAM_CLOSED_FEATURES` (un rôle ne crée aucun lien) ; ET refus si **T a un rôle ANALYST ou supérieur** — sinon D hériterait de la console d'administration, des lectures souveraines et du privilège d'équipe de T (`middleware/authorize.ts:49-56` lit le rôle de la ligne `User` de T). En plus, le contexte délégué porte toujours `role: USER` et tout `/admin/**` est refusé ;
-  - **âge** : refus dès que T ou D est mineur déclaré, ou que leurs classes d'âge diffèrent — un majeur dans le compte d'un mineur écrirait à d'autres mineurs « en mineur » et échapperait au bouclier (`relation-access.ts:149-177`). Le cas « deux mineurs entre eux » est la décision #D5 ;
+  - **âge** : refus dès que T ou D est mineur déclaré, ou que leurs classes d'âge diffèrent — un majeur dans le compte d'un mineur écrirait à d'autres mineurs « en mineur » et échapperait au bouclier (`relation-access.ts:149-177`). Le cas « deux mineurs entre eux » est la décision #D5 (#20373) ;
   - blocage, compte désactivé, en suppression ou verrouillé.
 - **Stockage** : `RelationFeatureSetting` (ownerId = T, otherId = D) reçoit le tri-état des colonnes voisines, `accountOpenShared Boolean?` + `accountOpenWithdrawnAt DateTime?` (null = défaut du palier). Plus, sur `UserPreferences.privacy`, un interrupteur global « Personne ne peut ouvrir mon compte » (`accountOpenDisabledAt DateTime?`).
 - **L'autorisation n'est effective qu'après avoir été MONTRÉE à T** (audit 17, conformité 2) : la passerelle garde `accountOpenNoticeSeenAt` (par T) et refuse `account.open` tant qu'il est nul. La notice est une feuille unique : « Nouveau : tes Sangs peuvent ouvrir ton compte, sans ton mot de passe — Garder / Choisir », avec la liste des Sangs et un interrupteur par Sang déjà sur OUI. Elle s'affiche :
@@ -118,7 +118,7 @@ Effet : la ligne `DelegatedSession`, un JWT `{ userId: T, dsid, act: { sub: D } 
 
 ### 4.3 Durée — jamais rafraîchie
 
-- 1 h par défaut, plafond 4 h, inactivité 15 min (valeurs : #D3).
+- 1 h par défaut, plafond 4 h, inactivité 15 min (valeurs : #D3 (#20371)).
 - **`POST /auth/refresh` refuse toute session déléguée** (`401 DELEGATED_SESSION_EXPIRED`) : la route actuelle re-signe par `generateToken(user, sid)` (`routes/auth/magic-link.ts:323`) qui ne connaît pas `act` — un refresh rendrait un jeton ordinaire de T de 24 h (audit 1).
 - **La délégation se lit dans la LIGNE, jamais dans le jeton** : un JWT qui porte `dsid` n'est admis que si la ligne `DelegatedSession` existe ; un JWT sans `dsid` n'est jamais une session déléguée.
 - Inactivité : horloge Redis dédiée `delegation:idle:<dsid>` `EX 900`, glissée à chaque requête (`lastActivityAt` n'est écrit qu'une fois par quart d'heure — audit 15) ; côté socket, un minuteur armé sur `min(expiresAt, inactivité)`.
@@ -136,7 +136,7 @@ Ferment la session (`endedAt`, `endedReason`, socket coupée) : D touche « Reve
 
 ## 5. Ce que la session déléguée PEUT faire (porteur : écrire, configurer ses liens, publier…)
 
-- Lire et écrire dans les conversations `server` et `hybrid` de T : messages texte, réactions, pièces jointes, vocaux (sous § 6.3), réponses, éditions et suppressions **de ce que la session a écrit** (#D6 pour le reste).
+- Lire et écrire dans les conversations `server` et `hybrid` de T : messages texte, réactions, pièces jointes, vocaux (sous § 6.3), réponses, éditions et suppressions **de ce que la session a écrit** (#D6 (#20374) pour le reste).
 - Publier : posts, stories, statuts, commentaires, réactions, reposts.
 - Configurer ses liens, dans les bornes du § 5.1.
 - Lire le fil, les profils (sans la télémétrie des autres, § 6.2), les communautés ; rejoindre ou quitter une communauté.
@@ -150,7 +150,7 @@ Ferment la session (`endedAt`, `endedReason`, socket coupée) : D touche « Reve
 - **le lien T ↔ D est intouchable** depuis la session (pas d'auto-promotion, pas de levée de cooldown) ;
 - **aucun réglage de partage** : toute la route `/relations/:id/settings` et les routes de partage (`battery`, `fall`, `inactivity`, `phone-call`, `phone-reachability`) sont fermées ;
 - **aucun artefact d'accès durable** : gestion des participants et des rôles de conversation et de communauté, liens d'invitation et de partage, `contact-exchange` : fermés ;
-- permis : envoyer, accepter, refuser des demandes jusqu'au palier fixé par **#D1**, descendre un lien non-Sang, catégories de contacts ;
+- permis : envoyer, accepter, refuser des demandes jusqu'au palier fixé par **#D1 (#20369)**, descendre un lien non-Sang, catégories de contacts ;
 - chaque changement de lien part au journal de T et au récapitulatif de fin (§ 9).
 
 ## 6. Ce qu'elle ne peut PAS faire — refus par défaut
@@ -174,7 +174,7 @@ Ferment la session (`endedAt`, `endedReason`, socket coupée) : D touche « Reve
 | Voix | `voice-profile`, `voice-analysis` |
 | Modération | `reports/*` (aucun signalement au nom de T) |
 | Notifications (porteur) | centre de notifications de T : ni liste, ni lu, ni suppression |
-| Appels | passer ou recevoir un appel au nom de T (#D4) |
+| Appels | passer ou recevoir un appel au nom de T (#D4 (#20372)) |
 | Administration | tout `/admin/**` |
 
 ### 6.2 Aucun effet de présence, ni REST ni socket
@@ -189,7 +189,7 @@ Ferment la session (`endedAt`, `endedReason`, socket coupée) : D touche « Reve
 
 - **Voix** : un vocal enregistré par D ne crée, ne lit ni ne met à jour aucun profil vocal (`MessageTranslationService.ts:1205`, `ZmqRequestSender.ts:213-255`) ; la traduction audio se fait **sans clonage**, voix neutre — sinon les correspondants entendraient la voix clonée de T dire les mots de D, et la voix de D (donnée biométrique) atterrirait chez T.
 - **Position** : EXIF GPS retiré à coup sûr des photos et vidéos ; aucune pièce jointe de position.
-- **Traçabilité** : tout objet créé ou modifié porte `actedById: D` côté serveur (`Message`, `Post`, `Comment`, `Reaction`, transitions de lien), servi aux modérateurs et à T, et aux correspondants selon **#D2**.
+- **Traçabilité** : tout objet créé ou modifié porte `actedById: D` côté serveur (`Message`, `Post`, `Comment`, `Reaction`, transitions de lien), servi aux modérateurs et à T, et aux correspondants selon **#D2 (#20370)**.
 - `Cache-Control: no-store, private` sur toute réponse déléguée.
 
 ## 7. E2EE
@@ -198,13 +198,13 @@ Ferment la session (`endedAt`, `endedReason`, socket coupée) : D touche « Reve
 
 **Côté serveur, refus au plus bas niveau** (`callerOf`/`guarded` de `e2ee.ts`, `e2ee-device-trust.ts`, `e2ee-signals.ts`, handlers `/signal/*`) : sans quoi une session déléguée pourrait enrôler un appareil au nom de T (`e2ee.ts:176-184`) — et les correspondants chiffrent vers **tous** les appareils actifs de T (`E2EEMessageSealer.swift:105`) — ou retirer un vrai appareil de T.
 
-**Ce que voit la session déléguée d'une conversation `e2ee` de T** : son nom et une ligne fixe « Chiffrée de bout en bout — visible seulement sur ses appareils ». La projection sert **sans aucun champ de dernier message** (type, durée, taille du média, `encryptedContent` hérité) ; les routes messages, recherche et pièces jointes d'une conversation `e2ee` répondent `403` — ce qui ferme aussi **l'historique en clair d'avant l'activation**, encore lisible serveur. Toute écriture déléguée dans une conversation `e2ee`, même d'apparence chiffrée, est refusée serveur. Le simple fait que la conversation existe révèle une partie du graphe social de T : #D7 dit si on la montre ou si on la cache.
+**Ce que voit la session déléguée d'une conversation `e2ee` de T** : son nom et une ligne fixe « Chiffrée de bout en bout — visible seulement sur ses appareils ». La projection sert **sans aucun champ de dernier message** (type, durée, taille du média, `encryptedContent` hérité) ; les routes messages, recherche et pièces jointes d'une conversation `e2ee` répondent `403` — ce qui ferme aussi **l'historique en clair d'avant l'activation**, encore lisible serveur. Toute écriture déléguée dans une conversation `e2ee`, même d'apparence chiffrée, est refusée serveur. Le simple fait que la conversation existe révèle une partie du graphe social de T : #D7 (#20375) dit si on la montre ou si on la cache.
 
 **`server` et `hybrid`** : chiffrés au repos, lisibles par le serveur, donc **lisibles par D** en entier (texte, pièces jointes, traductions, transcriptions — `EncryptionService.ts:10`). L'écran de l'autorisation le dit en clair : le libellé « Hybride » ou le cadenas ne protègent pas de D.
 
 **Les clés privées de T ne quittent jamais ses appareils.** Les colonnes serveur héritées `User.signalIdentityKeyPrivate` et `SignalPreKeyBundle.identityKeyPrivate` (schema:457, :3781 — module DMA non monté) : témoin qu'elles sont nulles et jamais sélectionnées par une route `allowed`.
 
-**Lire un jour les conversations chiffrées de T** (#D8) : la seule conception défendable est un **appareil lié de T hébergé sur le matériel de D** — identité d'appareil distincte dans un coffre séparé, enrôlement approuvé sur un appareil de T, borné dans le temps, annoncé aux correspondants (liste d'appareils / numéro de sécurité, modèle Sesame), sans historique, retiré et effacé cryptographiquement à la fin. Elle contredit « les clés de T ne quittent jamais ses appareils », change ce que voient les tiers et touche au protocole : lot crypto séparé avec audit tiers, hors de ce lot.
+**Lire un jour les conversations chiffrées de T** (#D8 (#20376)) : la seule conception défendable est un **appareil lié de T hébergé sur le matériel de D** — identité d'appareil distincte dans un coffre séparé, enrôlement approuvé sur un appareil de T, borné dans le temps, annoncé aux correspondants (liste d'appareils / numéro de sécurité, modèle Sesame), sans historique, retiré et effacé cryptographiquement à la fin. Elle contredit « les clés de T ne quittent jamais ses appareils », change ce que voient les tiers et touche au protocole : lot crypto séparé avec audit tiers, hors de ce lot.
 
 ## 8. Effacement complet
 
@@ -228,7 +228,7 @@ Un marqueur `delegatedSessionActive = <dsid>` (sans contenu de T) est écrit ava
 
 ### 8.4 Ce qui ne s'efface pas
 
-Ce que D a lu ; les captures d'écran (iOS ne peut pas les bloquer : détection et journal chez T ; Android `FLAG_SECURE` — #D9) ; le dictionnaire d'apprentissage du clavier ; un appareil jailbreaké ou rooté. La notice de T le dit.
+Ce que D a lu ; les captures d'écran (iOS ne peut pas les bloquer : détection et journal chez T ; Android `FLAG_SECURE` — #D9 (#20377)) ; le dictionnaire d'apprentissage du clavier ; un appareil jailbreaké ou rooté. La notice de T le dit.
 
 ## 9. Traces et information
 
@@ -247,7 +247,7 @@ Ce que D a lu ; les captures d'écran (iOS ne peut pas les bloquer : détection 
 - Un ancien client de T ne sait pas afficher la notice : **la notice non vue ferme l'autorisation** (§ 3).
 - Les nouvelles notifications ont un corps texte complet (affichage générique sur un ancien client).
 - `RelationFeature` étendue : un ancien miroir Swift/Kotlin ignore `account.open` et ne propose rien.
-- Les anciennes routes `/signal/*` n'exigent de `sid` pour personne (constat crypto 3) : issue séparée, hors de ce lot ; ici, elles refusent les sessions déléguées dans leur handler.
+- Les anciennes routes `/signal/*` n'exigent de `sid` pour personne (constat crypto 3) : #20391, hors de ce lot ; ici, elles refusent les sessions déléguées dans leur handler.
 
 ## 11. UX
 
@@ -294,11 +294,11 @@ Non vérifié par l'audit, à couvrir par les lots : `disconnectSession` multi-i
 |---|---|---|---|
 | 1 | critique | l'identité E2EE de D effacée localement par la bascule (iOS et Android) | § 7 (contexte typé, runtime gelé) |
 | 2 | critique | enrôlement d'un appareil au nom de T ; retrait d'un vrai appareil | § 7 (refus dans les handlers) |
-| 3 | élevée | substitution de clé par `POST /signal/keys` | § 6.1, § 7 ; issue hors lot (`sid` absent pour tous) |
+| 3 | élevée | substitution de clé par `POST /signal/keys` | § 6.1, § 7 ; #20391 (`sid` absent pour tous) |
 | 4 | élevée | `conversation-encryption.ts` absent de la liste (activation irréversible) | § 6.1 |
 | 5 | élevée | extensions iOS lisant T comme compte actif | § 8.1 |
 | 6 | moyenne | le plan de fermeture abîme la session de D | § 4.4, § 7 |
-| 7 | moyenne | métadonnées et historique d'avant activation servis | § 7, #D7 |
+| 7 | moyenne | métadonnées et historique d'avant activation servis | § 7, #D7 (#20375) |
 | 8 | faible | `hybrid` = lisible par D en entier | § 7, § 11 |
 | 9 | faible | clés privées héritées détenues par le serveur | § 7 (témoin) |
 | 10 | élevée | effacement par suppression de fichiers insuffisant ; jeton persisté contradictoire | § 8.1–8.3 (effacement cryptographique, jeton en mémoire) |
@@ -309,14 +309,14 @@ Références : Signal Sesame / multi-appareil, RFC 8693 § 4.1 et § 4.4, RFC 94
 
 | # | Risque | Mitigation intégrée | Juriste requis |
 |---|---|---|---|
-| 0 | la politique de confidentialité ne décrit ni les cercles ni la télémétrie, ni aucune base légale (`apps/web/src/institutional/privacy.ts`) ; âge minimum 13 ans | issue séparée | — |
+| 0 | la politique de confidentialité ne décrit ni les cercles ni la télémétrie, ni aucune base légale (`apps/web/src/institutional/privacy.ts`) ; âge minimum 13 ans | #20392 | — |
 | 1 | un défaut OUI ne vaut pas consentement (cons. 32, *Planet49*) | « autorisation », fonction du palier prévue aux CGU | **oui** (base 6(1)(b) ou (f)) |
 | 2 | art. 25(2) : défaut rétroactif pour les Sangs déjà scellés | notice vue obligatoire (§ 3) | — |
 | 3 | art. 32 : un compte compromis en ouvre N | ré-auth biométrique, notification à chaque ouverture | — |
 | 4 | AIPD requise (WP248 : tiers, communications, mineurs, usage innovant) | rattachée à l'AIPD des cercles #13942, registre art. 30 | **oui** (validation) |
 | 5 | correspondants : Meeshy reste responsable (cons. 18, *Lindqvist*, *Ryneš*) | politique : « les Sangs autorisés de votre correspondant peuvent lire et écrire dans vos conversations non chiffrées » ; opposition = conversation E2EE | — |
 | 6 | secret des correspondances (ePrivacy art. 5(1), CP 226-15) | — | **oui, bloquant pour la production** |
-| 7 | usurpation d'identité (CP 226-4-1), accès frauduleux (323-1) envers les correspondants | marqueur « via X » recommandé (#D2) | **oui** |
+| 7 | usurpation d'identité (CP 226-4-1), accès frauduleux (323-1) envers les correspondants | marqueur « via X » recommandé (#D2 (#20370)) | **oui** |
 | 8 | mineurs (art. 8 ; 15 ans en France ; 13-14 ans admis par l'arbre) | fermeture d'âge (§ 3), `birth-date` fermé | **oui** (13-14 ans) |
 | 9 | voix : biométrie de D chez T, voix clonée de T | § 6.3 | — |
 | 10 | lecture de la télémétrie et de la santé des autres Sangs | § 6.1 | — |
@@ -333,15 +333,15 @@ Les points tranchés au § 0 ne se reposent pas. Restent :
 
 | # | Question | Recommandation | Défaut appliqué en attendant |
 |---|---|---|---|
-| D1 | « Configurer ses liens » au nom de T : jusqu'à quel palier la session peut-elle envoyer ou accepter une demande ? (Sang, Atome, partages et artefacts d'accès durables restent fermés — § 5.1) | jusqu'à Proche, chaque changement notifié à T | jusqu'à Ami |
-| D2 | Les correspondants voient-ils qu'un message ou une publication a été écrit par X dans le compte de T ? | oui, discret : « via X » dans le détail du message et sur la publication | pas de mention ; `actedById` servi à T et aux modérateurs seulement |
-| D3 | Durée : défaut / plafond / inactivité | 1 h / 4 h / 15 min | 1 h / 4 h / 15 min |
-| D4 | Appels au nom de T | exclus | exclus |
-| D5 | Deux mineurs déclarés entre eux (majeur ↔ mineur est fermé par la loi) | fermé | fermé |
-| D6 | Éditer ou supprimer les messages et publications de T antérieurs à la session | non | non |
-| D7 | Les conversations E2EE de T apparaissent-elles dans la liste de la session déléguée ? | cachées | cachées |
-| D8 | Lire un jour les conversations E2EE de T (appareil lié, lot crypto + audit tiers) | non dans ce chantier | non |
-| D9 | Captures d'écran pendant la session | journalisées chez T (iOS) / bloquées (Android) | idem |
+| D1 (#20369) | « Configurer ses liens » au nom de T : jusqu'à quel palier la session peut-elle envoyer ou accepter une demande ? (Sang, Atome, partages et artefacts d'accès durables restent fermés — § 5.1) | jusqu'à Proche, chaque changement notifié à T | jusqu'à Ami |
+| D2 (#20370) | Les correspondants voient-ils qu'un message ou une publication a été écrit par X dans le compte de T ? | oui, discret : « via X » dans le détail du message et sur la publication | pas de mention ; `actedById` servi à T et aux modérateurs seulement |
+| D3 (#20371) | Durée : défaut / plafond / inactivité | 1 h / 4 h / 15 min | 1 h / 4 h / 15 min |
+| D4 (#20372) | Appels au nom de T | exclus | exclus |
+| D5 (#20373) | Deux mineurs déclarés entre eux (majeur ↔ mineur est fermé par la loi) | fermé | fermé |
+| D6 (#20374) | Éditer ou supprimer les messages et publications de T antérieurs à la session | non | non |
+| D7 (#20375) | Les conversations E2EE de T apparaissent-elles dans la liste de la session déléguée ? | cachées | cachées |
+| D8 (#20376) | Lire un jour les conversations E2EE de T (appareil lié, lot crypto + audit tiers) | non dans ce chantier | non |
+| D9 (#20377) | Captures d'écran pendant la session | journalisées chez T (iOS) / bloquées (Android) | idem |
 
 ## 14. Plan de lots
 
@@ -349,16 +349,16 @@ Ordre : serveur, puis iOS, Android, web. TDD ; chaque lot serveur relu par `audi
 
 | Lot | Plateforme | Contenu |
 |---|---|---|
-| S1 | shared + gateway | `account.open` dans la loi (Sang, dirigée, défaut au Sang, fermetures équipe/rôle/âge), stockage tri-état, interrupteur global, notice vue obligatoire, miroirs Swift/Kotlin |
-| S2 | gateway | `DelegatedSession`, ouverture (ré-auth, parente approuvée et ancienne, limites, relecture post-insert), JWT `act` non rafraîchissable, admission par hook global + tus + `socket.use`, preuve de possession, inactivité Redis, toutes les révocations |
-| S3 | gateway | politique de refus par défaut (routes, handlers bruts, sockets) + garde d'énumération ; refus dans les handlers E2EE, `/signal/*`, sessions, admin ; fermetures des § 5.1 et § 6.1 |
-| S4 | gateway | aucun effet de présence (REST, handshake), salons, accusés serveur, file hors ligne de T intacte ; `no-store` |
-| S5 | gateway + translator | voix sans profil ni clonage, EXIF retiré, `actedById` |
-| S6 | gateway | journal, notification à chaque ouverture hors préférences, récapitulatif, modération (`actedById`, décisions vers T et D) |
-| I1 | iOS + SDK | `DelegatedSessionContext` hors `AuthManager`, client API sans cache, effacement cryptographique, extensions et observateurs hors délégué, E2EE de D gelé intact, marqueur et purge au lancement |
-| I2 | iOS | entrée sur la fiche du Sang + Face ID, bandeau, FAB « Revenir à mon compte », notice et réglages chez T, journal |
-| A1 | Android | contexte délégué hors `session.currentUserId`, Room SQLCipher à clé éphémère, caches dédiés, jamais Block Store, `FLAG_SECURE`, purge au lancement |
-| A2 | Android | UX iso iOS |
-| W1 | web | jeton en mémoire, shim de stockage, IndexedDB scellée, exclusion du service worker, purge au chargement + UX |
-| C1 | conformité | AIPD (#13942), registre, politique, CGU, fiches stores, notes de revue ; avis juridique signé avant production |
-| R1 | recette | staging à deux comptes Sang (`talkieun` / `talkiedeux`), puis deux téléphones réels |
+| S1 (#20378) | shared + gateway | `account.open` dans la loi (Sang, dirigée, défaut au Sang, fermetures équipe/rôle/âge), stockage tri-état, interrupteur global, notice vue obligatoire, miroirs Swift/Kotlin |
+| S2 (#20379) | gateway | `DelegatedSession`, ouverture (ré-auth, parente approuvée et ancienne, limites, relecture post-insert), JWT `act` non rafraîchissable, admission par hook global + tus + `socket.use`, preuve de possession, inactivité Redis, toutes les révocations |
+| S3 (#20380) | gateway | politique de refus par défaut (routes, handlers bruts, sockets) + garde d'énumération ; refus dans les handlers E2EE, `/signal/*`, sessions, admin ; fermetures des § 5.1 et § 6.1 |
+| S4 (#20381) | gateway | aucun effet de présence (REST, handshake), salons, accusés serveur, file hors ligne de T intacte ; `no-store` |
+| S5 (#20382) | gateway + translator | voix sans profil ni clonage, EXIF retiré, `actedById` |
+| S6 (#20383) | gateway | journal, notification à chaque ouverture hors préférences, récapitulatif, modération (`actedById`, décisions vers T et D) |
+| I1 (#20384) | iOS + SDK | `DelegatedSessionContext` hors `AuthManager`, client API sans cache, effacement cryptographique, extensions et observateurs hors délégué, E2EE de D gelé intact, marqueur et purge au lancement |
+| I2 (#20385) | iOS | entrée sur la fiche du Sang + Face ID, bandeau, FAB « Revenir à mon compte », notice et réglages chez T, journal |
+| A1 (#20386) | Android | contexte délégué hors `session.currentUserId`, Room SQLCipher à clé éphémère, caches dédiés, jamais Block Store, `FLAG_SECURE`, purge au lancement |
+| A2 (#20387) | Android | UX iso iOS |
+| W1 (#20388) | web | jeton en mémoire, shim de stockage, IndexedDB scellée, exclusion du service worker, purge au chargement + UX |
+| C1 (#20389) | conformité | AIPD (#13942), registre, politique, CGU, fiches stores, notes de revue ; avis juridique signé avant production |
+| R1 (#20390) | recette | staging à deux comptes Sang (`talkieun` / `talkiedeux`), puis deux téléphones réels |
