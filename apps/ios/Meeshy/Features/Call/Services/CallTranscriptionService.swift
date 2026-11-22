@@ -138,14 +138,19 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     private let gateResolver: any CallCaptionsGateResolving
     private var gateConversationId: String?
     private var gateReading: Task<Void, Never>?
+    /// #20319 — l'horloge MONOTONE de la réception locale d'un segment distant,
+    /// celle que lit la bande des sous-titres pour faire tomber l'attente.
+    private let monotonicNow: () -> TimeInterval
 
     init(
         socket: any MessageSocketProviding = MessageSocketManager.shared,
         gateResolver: (any CallCaptionsGateResolving)? = nil,
-        utterancePause: Duration = .milliseconds(1200)
+        utterancePause: Duration = .milliseconds(1200),
+        monotonicNow: @escaping () -> TimeInterval = { CallMonotonicClock.seconds() }
     ) {
         self.socket = socket
         self.utterancePause = utterancePause
+        self.monotonicNow = monotonicNow
         self.gateResolver = gateResolver ?? CallCaptionsGateResolver()
         captureForwarding = captureJournal.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
     }
@@ -661,7 +666,10 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         upsertRemoteSegment(segment)
     }
 
-    private func upsertRemoteSegment(_ segment: CallTranscriptionSegment) {
+    /// Site UNIQUE de la réception d'un segment distant (les deux transports) :
+    /// c'est ici qu'il reçoit son instant de réception monotone (#20319).
+    private func upsertRemoteSegment(_ arrival: CallTranscriptionSegment) {
+        let segment = arrival.received(at: monotonicNow())
         guard let wireId = segment.wireId,
               let index = allSegments.firstIndex(where: { $0.wireId == wireId }) else {
             appendSegment(segment)
