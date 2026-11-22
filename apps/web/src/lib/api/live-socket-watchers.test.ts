@@ -104,4 +104,40 @@ describe('createLiveSocketWatchers — s’accrocher à la socket vivante, quell
     watchers.connect(fakeSocket('s2'));
     expect(log).toEqual(['b+s1', 'b-s1', 'b+s2']);
   });
+
+  /**
+   * LA MOITIÉ SYMÉTRIQUE (#20304) — l'accroche était gardée, le DÉTACHEMENT
+   * non : `detach?.()` tournait hors de tout `try`, alors que la règle du
+   * module (« un observateur qui échoue ne retient pas les autres ») ne
+   * distingue pas les deux sens. Un piège armé plutôt qu'une panne tant que
+   * tous les détachements sont des `socket.off` — mais le premier observateur
+   * qui fait autre chose en partant (un `emit` d'adieu, un minuteur arrêté)
+   * aurait emporté la migration de tous ses cadets, en silence.
+   */
+  test('un observateur qui lève EN SE DÉTACHANT ne retient ni les autres ni la migration', () => {
+    const log: string[] = [];
+    const watchers = createLiveSocketWatchers();
+    watchers.connect(fakeSocket('s1'));
+    watchers.watch(() => () => {
+      throw new Error('adieu raté');
+    });
+    watchers.watch(recordingWatcher(log, 'b'));
+    watchers.connect(fakeSocket('s2'));
+    expect(log).toEqual(['b+s1', 'b-s1', 'b+s2']);
+  });
+
+  test('cesser d’observer malgré un détachement qui lève : l’inscription part quand même', () => {
+    const log: string[] = [];
+    const watchers = createLiveSocketWatchers();
+    watchers.connect(fakeSocket('s1'));
+    const stop = watchers.watch(() => () => {
+      throw new Error('adieu raté');
+    });
+    stop();
+    watchers.watch(recordingWatcher(log, 'b'));
+    watchers.connect(fakeSocket('s2'));
+    /* L'observateur qui a levé ne doit plus être accroché nulle part : s'il
+       était resté inscrit, `connect` l'aurait rejoué et aurait relevé. */
+    expect(log).toEqual(['b+s1', 'b-s1', 'b+s2']);
+  });
 });

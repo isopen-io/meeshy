@@ -138,6 +138,31 @@ const click = async (element: Element | null) => {
 
 const crumbsOf = (host: Element) => [...host.querySelectorAll('[data-admin-page-header] nav li')].map((item) => item.textContent?.trim() ?? '');
 
+const liveOf = (host: Element) => host.querySelector('[data-admin-ops-live]')?.getAttribute('data-admin-ops-live');
+
+/** Une socket de témoin qui GARDE ses écouteurs à travers une coupure — c'est
+ *  ce que fait socket.io, et c'est ce qui rend le défaut #20304 observable :
+ *  les écouteurs survivent, l'appartenance à la room non. */
+function liveSocket() {
+  const handlers = new Map<string, (payload: unknown) => void>();
+  const emitted: string[] = [];
+  const socket: SocketClient = {
+    connected: true,
+    connect: () => undefined,
+    disconnect: () => undefined,
+    on: (event, handler) => void handlers.set(event, handler as (payload: unknown) => void),
+    off: (event) => void handlers.delete(event),
+    emit: (event) => void emitted.push(event),
+    emitWithAck: async (event) => {
+      emitted.push(event);
+      return { ok: true, snapshot: SNAPSHOT };
+    },
+  };
+  return { socket, handlers, emitted };
+}
+
+const sourceOf = (socket: SocketClient): LiveSource => async (watcher) => watcher(socket);
+
 describe('l’en-tête de l’écran (#10462)', () => {
   test('le fil d’Ariane dit « Système › Opérations », jamais « Opérations › Opérations »', async () => {
     const { host } = await open();
@@ -170,28 +195,71 @@ describe('l’hôte en direct', () => {
   });
 
   test('par la socket : l’accusé rend l’instantané, un échantillon s’ajoute, le badge dit « En direct »', async () => {
-    const handlers = new Map<string, (payload: unknown) => void>();
-    const emitted: string[] = [];
-    const socket: SocketClient = {
-      connected: true,
-      connect: () => undefined,
-      disconnect: () => undefined,
-      on: (event, handler) => void handlers.set(event, handler as (payload: unknown) => void),
-      off: (event) => void handlers.delete(event),
-      emit: (event) => void emitted.push(event),
-      emitWithAck: async (event) => {
-        emitted.push(event);
-        return { ok: true, snapshot: SNAPSHOT };
-      },
-    };
-    const liveSource: LiveSource = async (watcher) => watcher(socket);
-    const { host } = await open(undefined, { liveSource });
+    const { socket, handlers, emitted } = liveSocket();
+    const { host } = await open(undefined, { liveSource: sourceOf(socket) });
     await mounter.settle();
     expect(emitted).toContain('admin-metrics:subscribe');
-    expect(host.querySelector('[data-admin-ops-live]')?.getAttribute('data-admin-ops-live')).toBe('socket');
+    expect(liveOf(host)).toBe('socket');
     await act(async () => handlers.get('admin-metrics:sample')?.(sample('2026-10-12T10:00:05.000Z', 90)));
     await mounter.settle();
     expect(host.querySelector('[data-admin-stat="ops-cpu"]')?.textContent).toContain('90');
+  });
+
+  /**
+   * **L'ABONNEMENT EST UNE JONCTION DE ROOM, PAS UN ÉCOUTEUR** (#20304).
+   *
+   * `admin-metrics:subscribe` fait `socket.join(ROOMS.adminHostMetrics())`
+   * (`AdminMetricsHandler.handleSubscribe`, unique site de jonction du dépôt),
+   * et une room est tenue PAR SOCKET : une reconnexion socket.io donne un
+   * nouvel id côté serveur, donc une socket qui n'est dans aucune de ces rooms.
+   * `AuthHandler` reconstruit `user:`, `feed:`, les conversations et la room
+   * d'appareil E2EE à chaque ré-authentification — celle-ci, jamais.
+   *
+   * Et `createLiveSocketWatchers` ne rejoue ses observateurs que lorsque
+   * l'OBJET de connexion change (changement d'identité, fermeture), jamais sur
+   * une reconnexion : même instance de `SocketClient`, écouteurs toujours
+   * attachés. Le réabonnement doit donc venir de l'observateur lui-même, sur
+   * `authenticated` — le motif de `conversation-viewing.ts` et de
+   * `publication-rooms.ts`.
+   *
+   * Le témoin lit l'EFFET, jamais l'écouteur : un échantillon émis après la
+   * reconnexion atteint-il les jauges ?
+   */
+  test('une reconnexion ré-abonne : le tableau repart sans remontage (#20304)', async () => {
+    const { socket, handlers, emitted } = liveSocket();
+    const { host } = await open(undefined, { liveSource: sourceOf(socket) });
+    await mounter.settle();
+    expect(emitted.filter((event) => event === 'admin-metrics:subscribe').length).toBe(1);
+
+    await act(async () => handlers.get('disconnect')?.(undefined));
+    await mounter.settle();
+    await act(async () => handlers.get('authenticated')?.(undefined));
+    await mounter.settle();
+
+    expect(emitted.filter((event) => event === 'admin-metrics:subscribe').length).toBe(2);
+    expect(liveOf(host)).toBe('socket');
+    await act(async () => handlers.get('admin-metrics:sample')?.(sample('2026-10-12T10:00:10.000Z', 77)));
+    await mounter.settle();
+    expect(host.querySelector('[data-admin-stat="ops-cpu"]')?.textContent).toContain('77');
+  });
+
+  /**
+   * PENDANT LE TROU, LE SONDAGE REPREND. Le repli REST est gardé par `live`
+   * (`use-host-metrics.ts` : `if (!enabled || live) return;`) : tant que la
+   * pastille affirme « En direct », aucune relecture ne part. Une coupure qui
+   * laisse `live` à `true` fige donc les courbes ET désarme leur unique
+   * secours — c'est le même défaut vu de l'autre côté.
+   */
+  test('la coupure rend la main au sondage : la pastille cesse d’affirmer le direct (#20304)', async () => {
+    const { socket, handlers } = liveSocket();
+    const { host } = await open(undefined, { liveSource: sourceOf(socket) });
+    await mounter.settle();
+    expect(liveOf(host)).toBe('socket');
+
+    await act(async () => handlers.get('disconnect')?.(undefined));
+    await mounter.settle();
+
+    expect(liveOf(host)).toBe('polling');
   });
 });
 

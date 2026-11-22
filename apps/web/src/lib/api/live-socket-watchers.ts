@@ -30,10 +30,27 @@ export function createLiveSocketWatchers() {
     }
   };
 
+  /**
+   * SE DÉTACHER EST AUSSI FAILLIBLE QUE S'ACCROCHER (#20304). La règle du
+   * module — « un observateur qui échoue ne retient pas les autres » — ne
+   * distingue pas les deux sens, et seul l'un des deux était gardé : un adieu
+   * qui lève interrompait la boucle et laissait les observateurs SUIVANTS
+   * accrochés à la socket morte, ou empêchait une inscription de partir.
+   * Aucun détachement du dépôt ne lève aujourd'hui (ce sont des `socket.off`)
+   * — c'était donc un piège armé, pas une panne.
+   */
+  const release = (detach: (() => void) | null): void => {
+    try {
+      detach?.();
+    } catch {
+      /* L'adieu raté ne regarde que lui. */
+    }
+  };
+
   return {
     /** La connexion courante a changé (`null` : fermée) : tous se détachent de l'ancienne, puis s'accrochent à la nouvelle. */
     connect: (socket: SocketClient | null): void => {
-      for (const { detach } of registrations.values()) detach?.();
+      for (const { detach } of registrations.values()) release(detach);
       current = socket;
       for (const [id, { watcher }] of registrations) registrations.set(id, attach(watcher));
     },
@@ -42,7 +59,7 @@ export function createLiveSocketWatchers() {
       const id = Symbol('live-socket-watcher');
       registrations.set(id, attach(watcher));
       return () => {
-        registrations.get(id)?.detach?.();
+        release(registrations.get(id)?.detach ?? null);
         registrations.delete(id);
       };
     },
