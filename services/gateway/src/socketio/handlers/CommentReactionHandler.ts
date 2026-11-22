@@ -30,6 +30,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { SocketRateLimiter } from '../../utils/socket-rate-limiter.js';
 import { loadCommentPostAcl, canUserInteractWithThread, canUserConsumeThread } from '../../services/posts/postVisibility.js';
 import { commentAuthorSeparatedFrom } from '../../services/posts/separatedCommentAuthors.js';
+import { createSeparatedRoomsResolver, type SeparatedRoomsResolver } from '../separatedRooms.js';
 
 const logger = enhancedLogger.child({ module: 'CommentReactionHandler' });
 
@@ -67,6 +68,9 @@ export class CommentReactionHandler {
   private socketToUser: Map<string, string>;
   private readonly logger = logger;
 
+  /** La séparation autour des sujets d'une diffusion d'ACTIVITÉ (#20236). */
+  private readonly separatedRooms: SeparatedRoomsResolver;
+
   constructor(deps: CommentReactionHandlerDependencies) {
     this.io = deps.io;
     this.prisma = deps.prisma;
@@ -74,6 +78,20 @@ export class CommentReactionHandler {
     this.commentReactionService = deps.commentReactionService;
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
+    this.separatedRooms = createSeparatedRoomsResolver({ prisma: deps.prisma });
+  }
+
+  /**
+   * La room du post, MOINS les rooms personnelles séparées des deux sujets que
+   * l'événement nomme (#20236) — l'ACTEUR et l'AUTEUR du commentaire. `null`
+   * quand la séparation n'a pas pu être lue : on n'annonce pas une activité
+   * sans savoir à qui la taire.
+   */
+  private async postRoomEmitter(postId: string, actorId: string, commentAuthorId: string | null | undefined) {
+    const target = this.io.to(ROOMS.post(postId));
+    const separated = await this.separatedRooms.roomsAround([actorId, commentAuthorId]);
+    if (separated === null) return null;
+    return separated.length > 0 ? target.except([...separated]) : target;
   }
 
   /**
@@ -207,7 +225,7 @@ export class CommentReactionHandler {
         return;
       }
 
-      this.io.to(ROOMS.post(postId)).emit(SERVER_EVENTS.COMMENT_REACTION_ADDED, updateEvent);
+      (await this.postRoomEmitter(postId, userId, thread.authorId))?.emit(SERVER_EVENTS.COMMENT_REACTION_ADDED, updateEvent);
 
       // Fire-and-forget: notification errors must not reach the outer catch after
       // success was already confirmed to the client.
@@ -329,7 +347,7 @@ export class CommentReactionHandler {
       };
       if (callback) callback(successResponse);
 
-      this.io.to(ROOMS.post(postId)).emit(SERVER_EVENTS.COMMENT_REACTION_REMOVED, updateEvent);
+      (await this.postRoomEmitter(postId, userId, thread.authorId))?.emit(SERVER_EVENTS.COMMENT_REACTION_REMOVED, updateEvent);
 
       // Le symétrique du `_createCommentReactionNotification` du chemin
       // d'ajout. Le retrait couvre les DEUX familles que le commentaire

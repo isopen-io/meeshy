@@ -12,7 +12,8 @@ import { communityPostAudienceIdsOf, type CommunityPostRef } from '../../service
 import { emitServerEvent, type ServerEventName, type ServerEventPayload } from '../serverEmit';
 import { withAudienceListFor, withoutAudienceList } from '../../services/posts/audienceList';
 import { withServedCarrierMedia, withServedPostMedia } from '../../services/posts/servedPostMedia';
-import { getBlockRelatedUserIds, withoutBlockedRecipients } from '../../utils/blocking';
+import { withoutBlockedRecipients } from '../../utils/blocking';
+import { createSeparatedRoomsResolver, type SeparatedRoomsResolver } from '../separatedRooms';
 import { amisAcceptes } from '../../services/friendship';
 import { circleAudienceIds } from '../../services/posts/postAudience';
 import { POST_CIRCLE_VISIBILITIES, postCircleAudienceFloor } from '@meeshy/shared/utils/relation-levels';
@@ -117,9 +118,13 @@ export class SocialEventsHandler {
   private friendsCache: Map<string, { ids: string[]; expiresAt: number }> = new Map();
   private readonly FRIENDS_CACHE_TTL_MS = 30_000; // 30s
 
+  /** La séparation autour des sujets d'une diffusion d'ACTIVITÉ (#20236) — deux lectures pour N sujets, cache court. */
+  private readonly separatedRooms: SeparatedRoomsResolver;
+
   constructor(deps: SocialEventsHandlerDependencies) {
     this.io = deps.io;
     this.prisma = deps.prisma;
+    this.separatedRooms = createSeparatedRoomsResolver({ prisma: deps.prisma });
   }
 
   // ==============================================
@@ -644,16 +649,11 @@ export class SocialEventsHandler {
    * n'émet rien — le lecteur relira le fil par le REST, qui sait quoi taire.
    * Un commentateur inconnu n'a personne à taire.
    */
-  private async commentEmitter(rooms: string[], commentAuthorId: string | null | undefined) {
+  private async commentEmitter(rooms: string | string[], ...subjects: (string | null | undefined)[]) {
     const target = this.io.to(rooms);
-    if (!commentAuthorId) return target;
-    try {
-      const separated = [...(await getBlockRelatedUserIds(this.prisma, commentAuthorId))];
-      return separated.length > 0 ? target.except(separated.map((id) => ROOMS.user(id))) : target;
-    } catch (error) {
-      logger.error('comment broadcast — block resolution failed, emission dropped', { commentAuthorId, error });
-      return null;
-    }
+    const separated = await this.separatedRooms.roomsAround(subjects);
+    if (separated === null) return null;
+    return separated.length > 0 ? target.except([...separated]) : target;
   }
 
   /**
@@ -707,14 +707,20 @@ export class SocialEventsHandler {
     this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_DELETED, data);
   }
 
-  broadcastCommentLiked(data: CommentLikedEventData, commentAuthorId: string): void {
+  async broadcastCommentLiked(data: CommentLikedEventData, commentAuthorId: string): Promise<void> {
     this.emitToUser(commentAuthorId, SERVER_EVENTS.COMMENT_LIKED, data);
     // Reach every viewer of the post detail (join-gated post room) so the
     // comment's like count updates live for them too — not just the comment
     // author. Payload is ABSOLUTE (likeCount) → idempotent even if the comment
     // author is in both their feed room and the post room. Mirrors
     // `broadcastPostLiked`.
-    this.io.to(ROOMS.post(data.postId)).emit(SERVER_EVENTS.COMMENT_LIKED, data);
+    //
+    // MOINS les rooms personnelles séparées des DEUX sujets (#20236) : l'ACTEUR
+    // que la charge nomme (`userId`) et l'AUTEUR du commentaire, dont le
+    // compteur bouge. La feed room de l'auteur, elle, garde son émission : la
+    // porte de l'action a déjà refusé un acteur séparé de lui.
+    const emitter = await this.commentEmitter(ROOMS.post(data.postId), data.userId, commentAuthorId);
+    emitter?.emit(SERVER_EVENTS.COMMENT_LIKED, data);
   }
 
   /**
@@ -728,9 +734,10 @@ export class SocialEventsHandler {
    * PERSISTE la valeur reçue, si bien que le compte gonflé survivait au
    * redémarrage. Calque de `post:liked` / `post:unliked`.
    */
-  broadcastCommentUnliked(data: CommentUnlikedEventData, commentAuthorId: string): void {
+  async broadcastCommentUnliked(data: CommentUnlikedEventData, commentAuthorId: string): Promise<void> {
     this.emitToUser(commentAuthorId, SERVER_EVENTS.COMMENT_UNLIKED, data);
-    this.io.to(ROOMS.post(data.postId)).emit(SERVER_EVENTS.COMMENT_UNLIKED, data);
+    const emitter = await this.commentEmitter(ROOMS.post(data.postId), data.userId, commentAuthorId);
+    emitter?.emit(SERVER_EVENTS.COMMENT_UNLIKED, data);
   }
 
   // ==============================================

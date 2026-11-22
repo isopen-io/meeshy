@@ -550,12 +550,13 @@ describe('SocialEventsHandler', () => {
     // Jumelle descendante : mêmes deux adresses que la pose (le commentateur,
     // et la room du post où lisent les autres). Sans elle le compteur d'un
     // commentaire ne sait que monter en direct.
-    it('emits comment:unliked to the comment author feed room AND the post room', () => {
+    it('emits comment:unliked to the comment author feed room AND the post room', async () => {
       const { handler, io } = buildHandler();
       const commentAuthorId = 'comment-author-1';
       const data = { commentId: COMMENT_ID, postId: POST_ID, userId: USER_ID, emoji: '👍', likeCount: 0 } as any;
 
-      handler.broadcastCommentUnliked(data, commentAuthorId);
+      /* `await` depuis #20236 : la diffusion lit la séparation autour de ses deux sujets avant de viser la room du post. */
+      await handler.broadcastCommentUnliked(data, commentAuthorId);
 
       expect(io.to).toHaveBeenCalledWith(`feed:${commentAuthorId}`);
       expect(io.to).toHaveBeenCalledWith(`post:${POST_ID}`);
@@ -567,11 +568,11 @@ describe('SocialEventsHandler', () => {
      * fichier). Une room juste ne prouve rien de ce qui y arrive : seul le NOM
      * décide si un client branche quoi que ce soit dessus.
      */
-    it('names the event `comment:unliked` on BOTH addresses', () => {
+    it('names the event `comment:unliked` on BOTH addresses', async () => {
       const { handler, io } = buildHandler();
       const data = { commentId: COMMENT_ID, postId: POST_ID, userId: USER_ID, emoji: '👍', likeCount: 0 } as any;
 
-      handler.broadcastCommentUnliked(data, 'comment-author-1');
+      await handler.broadcastCommentUnliked(data, 'comment-author-1');
 
       const names = emitCalls(io).map(([event]) => event);
       expect(names).toEqual(['comment:unliked', 'comment:unliked']);

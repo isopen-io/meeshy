@@ -39,17 +39,23 @@ function monter(blocages: Blocages) {
       return true;
     },
   });
-  const lireBlocages = (forme: (b: Exclude<Blocages, 'panne'>) => unknown) =>
-    jest.fn(async () => {
-      if (blocages === 'panne') throw new Error('mongo indisponible');
-      return forme(blocages);
-    });
+  /* Les DEUX sens se lisent par `user.findMany` depuis #20236 — « qui a bloqué
+     l'un de ces sujets ? » (`blockedUserIds.hasSome`) puis « qui ces sujets
+     ont-ils bloqué ? » (`id: { in }`) : deux lectures quel que soit le nombre
+     de sujets, là où une lecture par sujet les multipliait. Le double suit la
+     production ; un double resté sur `findUnique` témoignerait d'un monde qui
+     n'existe plus. */
+  const lireBlocages = jest.fn(async (args: any) => {
+    if (blocages === 'panne') throw new Error('mongo indisponible');
+    if (args?.where?.blockedUserIds?.hasSome) return blocages.bloquentLeCommentateur.map((id) => ({ id }));
+    return (args?.where?.id?.in ?? []).map(() => ({ blockedUserIds: blocages.bloquesParLeCommentateur }));
+  });
   const prisma = {
     friendRequest: { findMany: jest.fn(async () => []) },
     userRelation: { findUnique: jest.fn(async () => null), findMany: jest.fn(async () => []) },
     user: {
-      findMany: lireBlocages((b) => b.bloquentLeCommentateur.map((id) => ({ id }))),
-      findUnique: lireBlocages((b) => ({ blockedUserIds: b.bloquesParLeCommentateur })),
+      findMany: lireBlocages,
+      findUnique: jest.fn(async () => null),
       findFirst: jest.fn(async () => null),
     },
   } as unknown as PrismaClient;

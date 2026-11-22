@@ -235,7 +235,11 @@ describe('POST /posts/:postId/comments/:commentId/like — adresse de diffusion'
         findFirst: jest.fn().mockResolvedValue(publicAcl),
       },
     } as any;
-    broadcastCommentLiked = jest.fn() as jest.Mock;
+    /* La diffusion est ASYNCHRONE depuis #20236 (elle lit la séparation autour
+       de l'acteur et de l'auteur avant de viser la room du post) et la route la
+       garde par `.catch` : un double qui rend `undefined` fait lever le site
+       d'appel, donc 500. Le double suit la production. */
+    broadcastCommentLiked = jest.fn(async () => undefined) as unknown as jest.Mock;
     createCommentLikeNotification = jest.fn().mockResolvedValue(undefined) as jest.Mock;
     app.decorate('prisma', prisma);
     app.decorate('socialEvents', { broadcastCommentLiked } as any);
@@ -360,7 +364,7 @@ describe('DELETE /posts/:postId/comments/:commentId/like — diffusion', () => {
         findFirst: jest.fn().mockResolvedValue(publicAcl),
       },
     } as any;
-    broadcastCommentUnliked = jest.fn() as jest.Mock;
+    broadcastCommentUnliked = jest.fn(async () => undefined) as unknown as jest.Mock;
     app.decorate('prisma', prisma);
     app.decorate('socialEvents', { broadcastCommentUnliked } as any);
     registerCommentRoutes(app, prisma, makeRequiredAuth(true));

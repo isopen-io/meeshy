@@ -91,7 +91,11 @@ function createMockSocket() {
 
 function createMockIO() {
   const emitFn = jest.fn();
-  const toFn = jest.fn().mockReturnValue({ emit: emitFn });
+  // `except` depuis #20236 : la diffusion d'activité retire les rooms
+  // personnelles séparées de l'acteur et de l'auteur. Sans blocage elle n'est
+  // pas appelée — le double la porte quand même, pour que l'ajout d'un vecteur
+  // bloqué ne se solde pas par un `undefined is not a function`.
+  const toFn = jest.fn().mockReturnValue({ emit: emitFn, except: jest.fn().mockReturnValue({ emit: emitFn }) });
   return { to: toFn, emit: emitFn, _toEmit: emitFn };
 }
 
@@ -129,6 +133,10 @@ function createMockPrisma(commentAuthorId: string = USER_ID) {
       findFirst: jest.fn(),
     },
     userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
+    // Lue par la diffusion d'activité (#20236) pour savoir qui taire : aucun
+    // blocage ici, donc aucune exclusion — une lecture ABSENTE, elle, fermerait
+    // la diffusion, ce que la production fait exprès.
+    user: { findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(null), findFirst: jest.fn<any>().mockResolvedValue(null) },
     friendRequest: {
       findFirst: jest.fn(),
     },

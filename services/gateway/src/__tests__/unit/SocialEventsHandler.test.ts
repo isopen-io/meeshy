@@ -670,7 +670,7 @@ describe('SocialEventsHandler', () => {
   });
 
   describe('broadcastCommentLiked', () => {
-    it('should emit COMMENT_LIKED to the comment author AND the post room (live count for all viewers)', () => {
+    it('should emit COMMENT_LIKED to the comment author AND the post room (live count for all viewers)', async () => {
       const data: CommentLikedEventData = {
         postId: 'post-1',
         commentId: 'comment-1',
@@ -680,7 +680,8 @@ describe('SocialEventsHandler', () => {
       };
 
       const commentAuthorId = 'user-comment-author';
-      handler.broadcastCommentLiked(data, commentAuthorId);
+      /* `await` depuis #20236 : la room du post n'est visée qu'une fois lue la séparation autour de l'acteur ET de l'auteur. */
+      await handler.broadcastCommentLiked(data, commentAuthorId);
 
       expect(mockIO.to).toHaveBeenCalledTimes(2);
       expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(commentAuthorId));
