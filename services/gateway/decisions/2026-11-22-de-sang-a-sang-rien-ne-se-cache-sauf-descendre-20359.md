@@ -48,6 +48,10 @@ Chacune reste lisible à sa date. Elle ne vaut plus au Sang, et, quand c'est dit
    - le consentement d'un mineur déclaré : c'est l'accord au palier, recueilli au rituel (§ 3 de la décision #13927) ;
    - la baisse sous Sang, qui efface l'accord à la liste.
 
+   **Le verrou ne lève JAMAIS une garde LÉGALE** (revue de sécurité du 2026-11-22). Dans `resolveEmitterConsent` (`packages/shared/utils/relation-emitter-consent.ts`), une garde légale passe par le paramètre `legallyBlocked`, jugé AVANT le verrou et qu'aucun accord au palier ne surcharge. Une coupure de l'utilisateur passe par `globallyDisabled`, que le verrou lève après l'accord. `EmitterSwitch.nature` (`'legal' | 'cut'`, `emitterFeatureAccess.ts`) fait le tri : l'accord de chute (art. 9) et l'âge minimum sont `'legal'`. Témoins : `packages/shared/__tests__/blood-locked.test.ts`, « une garde LÉGALE ne se lève jamais par le verrou du Sang ».
+
+6. **Le fantôme global épargne les Sangs par une liste d'AUTORISATION** (revue de sécurité du 2026-11-22). Un point rangé en fantôme global porte `visibleOnlyTo` : les seuls Sangs pour qui l'émetteur a accepté la liste. Il n'est jamais servi à un autre lecteur, même après la levée du fantôme, même à un lecteur devenu Sang ensuite. Une liste d'exclusion tirée d'un instantané des lecteurs aurait servi tout lecteur absent de l'instantané (fail-open). Site : `bloodLocationVeil.ts` (`pointVeilOf`, `veilAllows`), `bloodLocationSeal.ts` (`pointVisibleTo`).
+
 ### Conditions que le code respecte (analyse du 2026-11-22, AIPD § 13.3)
 
 Chaque condition a son témoin, rouge puis vert, dans le lot qu'elle nomme.
@@ -69,7 +73,10 @@ Chaque condition a son témoin, rouge puis vert, dans le lot qu'elle nomme.
 
 - **Anciens clients** : ils affichent encore les interrupteurs. Le champ `lockedByLevel` leur est inconnu. Une coupure au Sang reçoit un 409, et le client applique son retour arrière optimiste. Le serveur ne répond jamais 200 à une coupure qu'il n'applique pas.
 - **Corps de rituel v1** (quatre consentements) : accepté. Ses `false` ne refusent plus le Sang. Ils ne créent pas `bloodBundleAcceptedAt` (C4).
-- **Route nouvelle** : `PUT /relations/:userId/blood-bundle`. Aucune route n'est retirée.
+- **Route nouvelle** : `PUT /relations/:userId/blood-bundle { version }` → 200, ou 404 hors Sang réel, 409 `RELATION_BLOOD_BUNDLE_OUTDATED`, 400. Aucune route n'est retirée.
+- **Rituel v2** : `consents: { acceptsBloodBundle: true, version }`. Il ouvre aussi les quatre colonnes du rituel, pour qu'un serveur ramené en arrière serve ce qui a été accepté. Version périmée : 409 `RELATION_BLOOD_BUNDLE_OUTDATED`.
+- **Nouveaux clients contre un ancien serveur** : l'ancien serveur ne connaît ni `acceptsBloodBundle` ni la route. Le client envoie donc aussi les quatre booléens à `true` tant que la route lui répond 404, et garde les interrupteurs tant que `lockedByLevel` est absent.
+- **GET de réglages** : `lockedByLevel` et `bloodBundleAccepted` sont des champs optionnels en plus (`relationBloodLockFieldsSchema`).
 - Une version minimale invite à mettre à jour, sans couper la baisse (C8).
 
 ### Mesures compensatoires recommandées

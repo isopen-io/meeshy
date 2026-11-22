@@ -113,7 +113,7 @@ Au-dessous d'Ami :
 - **Position Sang (LOC-03/04/11, RG-12/13/14/16/27)**, **derrière un flag OFF**, sur liste blanche de comptes de test.
   - On étend `LocationHandler` ; il n'y a pas de second système.
   - Historique de 30 jours : index TTL et chiffrement au repos. Les périodes en fantôme ne sont jamais enregistrées, et chacun peut effacer le sien.
-  - Fantôme global et ciblé, indétectables.
+  - Fantôme global et ciblé, indétectables. **Remplacé le 2026-11-22 (#20359)** : le fantôme n'agit plus entre Sangs ; restreindre un Sang, c'est le redescendre à Proche (`services/gateway/decisions/2026-11-22-de-sang-a-sang-rien-ne-se-cache-sauf-descendre-20359.md`).
   - Journal des consultations visible du seul observé, avec un message discret en cas d'excès.
   - Proximité : une alerte aux deux, au plus une par paire toutes les 2 h, et rien si l'un est en fantôme.
 
@@ -125,9 +125,12 @@ Au-dessous d'Ami :
   - à l'entrée en Ami : Bring (expliqué, bloquable par personne) ;
   - à l'entrée en Proche : talkie, catégorie d'écoute ;
   - au rituel Sang : titre d'écoute, position, historique, proximité.
+
+  > **Remplacé le 2026-11-22 (#20359)** : « De Sang à Sang rien ne doit être impossible sauf descendre le Sang ». Chaque palier arrive avec ses fonctions ACTIVES : à Proche, la catégorie d'écoute, la batterie et l'injoignabilité, réglables par personne ; au Sang, tout le reste, sans réglage ni coupure globale. Le rituel recueille UN accord, à la liste versionnée de ce que le Sang ouvre. On le retire en redescendant. L'Ami est inchangé. Décision : `services/gateway/decisions/2026-11-22-de-sang-a-sang-rien-ne-se-cache-sauf-descendre-20359.md` ; analyse : AIPD § 13.
 - **Mineurs** — décision du porteur du 2026-10-31, qui **remplace** la règle « pas de Sang entre un mineur et un majeur hors famille vérifiée ».
   - L'âge **déclaré** fait foi (`User.birthDate`, `isDeclaredMinor`), sans vérification préalable.
   - Le Sang, la position continue et le Bring sont **ouverts à tous, mineurs compris**, derrière un **écran de consentement** feature par feature. Il est **refusable**, avec un **dépliant** qui détaille ce que chaque partage montre, à qui et combien de temps. Les rappels de consentement restent.
+  - **Remplacé le 2026-11-22 (#20359)** : l'écran du rituel porte un accord unique à la liste du Sang. Mesure conservatoire de l'analyse de conformité (condition C7) jusqu'aux avis J1 et J16 : un mineur déclaré garde le retrait par personne de sa position et de son titre d'écoute, sans quitter le Sang.
   - Seule la Connaissance **automatique** reste désactivée entre un mineur et un majeur inconnu.
   - L'analyse `conformite-juridique` (RGPD art. 8, géolocalisation des mineurs, Age Appropriate Design Code) est d'autant plus requise avant la production.
 - **Conformité AVANT la production.** L'agent `conformite-juridique` produit l'AIPD, les durées, les consentements et la politique de confidentialité, et dit ce qui exige un avis signé. **Aucune promotion sans elle.**
@@ -241,7 +244,7 @@ resolveRelationAccess({
 - **Niveau effectif** = `min(grantedByViewer, grantedByTarget)`, relevé à COMMUNITY si `sharesCommunity` et que le minimum est PUBLIC.
 - **Matrice** dans `packages/shared/config/relation-levels.ts` : feature → niveau minimal, avec les clés i18n des libellés, les icônes et les seuils (`acquaintance.minInteractions = 10`, `close.activeWeeks = 4`, `blood.activeWeeks = 12`, `bring.perDay = { FRIEND: 1, CLOSE: 3, BLOOD: 30, ATOM: null }` (null = illimité), `bring` ouvert dès `FRIEND`, `cooldownDays = 30`, `proximity.cooldownHours = 2`). Une surcharge par environnement abaisse les seuils sur staging.
 - **Mineurs** : `BLOOD`, `location.*` et `bring` rendent `requiresConsent: true` pour tous les âges. Il n'y a pas de refus d'âge (§ 1.8, décision du 2026-10-31) ; la Connaissance automatique ne naît pas entre un mineur et un majeur inconnu.
-- **Consentement** : la loi dit le **plafond**. `RelationFeatureSetting` dit si la personne l'active, et les deux sont requis.
+- **Consentement** : la loi dit le **plafond**. `RelationFeatureSetting` dit si la personne l'active, et les deux sont requis. **Remplacé le 2026-11-22 (#20359)** : une colonne nulle vaut le défaut du palier (`RELATION_LEVEL_DEFAULT_ON`) ; au Sang, après l'accord à la liste (`bloodBundleAcceptedAt`, `bloodBundleVersion`), le verrou (`RELATION_BLOOD_LOCKED_FEATURES`) ouvre quel que soit le réglage stocké. Décision : `services/gateway/decisions/2026-11-22-de-sang-a-sang-rien-ne-se-cache-sauf-descendre-20359.md`.
 - **Miroirs** (mêmes cas de témoins) : Swift `MeeshySDK/.../Relations/RelationAccess.swift`, Kotlin `apps/android/core/model/.../relation/RelationAccess.kt`. Le client ne décide jamais d'un accès : le miroir sert à **ne pas proposer** une action que le serveur refusera.
 - **Projections.** `resolvePresenceVisibility` devient une projection de la loi (`areConnected: boolean` → niveau effectif). `services/friendship.ts` devient le site unique du niveau effectif, et ses six copies locales le consomment (§ 7).
 - **Garde** (sur le modèle de `presence-visibility-viewer-aware-guard.test.ts`) : aucune comparaison de niveaux hors de `relation-access.ts` et `friendship.ts`.

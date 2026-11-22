@@ -6,6 +6,8 @@ Lot `conformite-cercles`, issue #13942, chapeau #13925, milestone #215. Rédigé
 
 **Ce qu'il complète.** La première analyse a été déposée le 2026-11-02 en commentaire de #13942, sur l'arbre `d6eef14f5e`. Elle analysait le jalon 2 (écoute, talkie, Bring, position) **avant son écriture**. Depuis, une grande part du jalon 2 est dans `dev`, et le porteur a ouvert les cercles à l'équipe (#16623, 2026-11-07 puis 2026-11-08) et remonté les arrivées et départs de lieux au MVP (#14161). Ce document reprend l'analyse du 2 novembre, la confronte au code réel, dit ce qui a été corrigé et ajoute ce qui est nouveau. Il fait foi dans le dépôt ; le commentaire du 2 novembre reste l'historique.
 
+**Révision du 2026-11-22 (#20364).** La directive du porteur du 2026-11-22 (#20359) remplace le consentement fonction par fonction : chaque palier arrive avec ses fonctions actives, le Sang se consent en une fois et ne se restreint qu'en redescendant. Le § 13 l'analyse. Les passages remplacés sont marqués « Remplacé le 2026-11-22 » et restent lisibles à leur date. Décision : `services/gateway/decisions/2026-11-22-de-sang-a-sang-rien-ne-se-cache-sauf-descendre-20359.md`.
+
 **Base lue.** `origin/dev` à `8b2c2456afb` (2026-11-08), en lecture seule. Branches ouvertes lues : `claude/cercles-16623-serveur` (privilège d'équipe étendu aux audiences), `claude/cercles-16642-serveur` (consentements entre collègues). Spec : `docs/superpowers/specs/2026-10-31-cercles-et-mode-sang-design.md`. Issues lues : les 150 issues du milestone #215, dont #13942, #13948, #14399 à #14412, #14420, #14421, #14465, #14678, #16623, #16642, #16814.
 
 **Ce qui n'est pas analysé ici.** Les appels et les messages directs selon le cercle (#14107, #14108, #14687) : ils réduisent l'exposition et relèvent du régime existant de la messagerie.
@@ -30,6 +32,7 @@ Lot `conformite-cercles`, issue #13942, chapeau #13925, milestone #215. Rédigé
 | Arrivées et départs de lieux entre Sangs (#14161) | **non** | Même régime que la position Sang (même flag) | N3 ; J12 |
 | Privilège d'équipe (#16623) | outils : oui ; audiences et entourage : branche ouverte | **Bloquant** pour les audiences de contenu sur des comptes personnels | N1 (#16814 et trois issues à ouvrir), J11 |
 | Mineurs (transverse) | — | **Bloquant** | E5, E6 ; J1, J3 |
+| **(2026-11-22)** Paliers actifs, verrou du Sang, accord unique à la liste (#20361, #20362) | branche du lot | **Bloquant** | Conditions C1 à C12 (§ 13.3) ; avis J14 à J18 |
 
 ---
 
@@ -41,6 +44,9 @@ Lot `conformite-cercles`, issue #13942, chapeau #13925, milestone #215. Rédigé
 - **Connaissance automatique** (`services/gateway/src/services/relations/autoAcquaintance.ts`) : naît sur les seuils de la semaine glissante. Elle est empêchée par un blocage, par l'âge déclaré (`declaresMinorApart`) et, **depuis #14406**, par la préférence `privacy.autoAcquaintance` (`packages/shared/utils/auto-acquaintance-preference.ts`) : un choix stocké l'emporte ; sans choix, activée pour un majeur et un âge inconnu, **désactivée pour un mineur déclaré**. E8 est corrigé côté serveur.
 
 ### 2.2 Consentements par personne : `RelationFeatureSetting`
+
+> **Remplacé le 2026-11-22 (§ 13).** Les colonnes deviennent tri-état : nulle = le défaut du palier (actif dès Proche pour la catégorie d'écoute, la batterie et l'injoignabilité ; actif au Sang pour le reste, après l'accord à la liste). Au Sang, le retrait par partage de #14401 disparaît, sauf pour un Sang qui n'a pas encore accepté la liste (décision B, #20367) et sous les conditions C3 et C7. L'accord au palier s'ajoute : `bloodBundleAcceptedAt`, `bloodBundleVersion`, par côté.
+
 - Booléens `listeningCategoryShared` (optionnel), `listeningTitleShared`, `locationShared`, `locationHistoryShared`, `proximityShared`, tous faux par défaut.
 - **Depuis #14401**, une date de retrait par partage (`…WithdrawnAt`) et la route `PUT /relations/:userId/settings` (`services/gateway/src/routes/relations/settings.ts`) : un partage se retire sans quitter le Sang (E3 corrigé côté serveur).
 - Préférences de réception : `bringBlockedAt`, `talkieBlockedAt` (dates nullables, conformes à la règle « pas de booléen + date »).
@@ -50,7 +56,7 @@ Lot `conformite-cercles`, issue #13942, chapeau #13925, milestone #215. Rédigé
 
 ### 2.3 La loi d'accès (`packages/shared/utils/relation-access.ts`, `relation-levels.ts`)
 - Fonction pure. Deux natures de consentement, écrites dans `relation-levels.ts` (E9 corrigé, #14407 fermé) :
-  - **consentement RGPD de l'émetteur**, faux par défaut : `listening.category`, `listening.title`, `location.live`, `location.temporary`, `location.history`, `location.proximity` ;
+  - **consentement RGPD de l'émetteur**, faux par défaut (**remplacé le 2026-11-22** : actif par défaut au palier de `RELATION_LEVEL_DEFAULT_ON`, voir § 13) : `listening.category`, `listening.title`, `location.live`, `location.temporary`, `location.history`, `location.proximity` ;
   - **préférence de réception du destinataire**, active par défaut, base « contrat » : `bring`, `talkie`.
 - Seuils : `location.temporary` et `bring` dès Ami, `talkie`, `together` et `listening.category` dès Proche, le reste du partage dès Sang.
 - Bouclier des mineurs (`RELATION_MINOR_TARGET_MIN_LEVEL`) : seulement `dm.request` (Connaissance) et `call.ring` (Ami). **Aucun** refus d'âge sur la position, le Bring ou le talkie : c'est la décision du porteur du 2026-10-31.
@@ -112,13 +118,13 @@ La liste française des traitements soumis à AIPD (CNIL, délibération 2018-32
 | T1. Comptage par paire | Proposer et ouvrir les cercles | Paire, jour, compteurs par nature et sens | Intérêt légitime (art. 6(1)(f)), opposition possible (art. 21) | Les deux membres (progression, notification) | 120 j (TTL) |
 | T2. Connaissance automatique | Ouvrir le message direct à qui échange déjà | Lien, transitions | Intérêt légitime ; décision automatisée à qualifier (art. 22, J5) | Les deux membres | Vie du lien ; transitions **sans borne** (E7) |
 | T3. Liens choisis et rituel | Graduer ce que chacun voit | Niveaux accordés, demandes, transitions | Contrat (art. 6(1)(b)) | Les deux membres | Vie du lien ; purge du compte |
-| T4. Consentements de cercle | Démontrer et appliquer les choix | Partages, retraits, préférences de réception | Obligation de démontrer (art. 7(1)) | Responsable | Vie de la ligne ; preuve à fixer (J9) |
+| T4. Consentements de cercle | Démontrer et appliquer les choix | Partages, retraits, préférences de réception ; **depuis le 2026-11-22**, l'accord à la liste du Sang et sa version | Obligation de démontrer (art. 7(1)) | Responsable | Vie de la ligne ; preuve à fixer (J9) |
 | T5. Écoute | Partager ce que j'écoute | Catégorie ; titre et origine | Consentement (art. 6(1)(a)) ; **explicite** pour le titre (art. 9(2)(a), J2) | Proche consentant : catégorie ; Sang consentant : titre | 900 s, scellé, jamais en base |
 | T6. Talkie | Parler en direct à un Proche | Voix (fragments), paire, horodatage ; copie vocale | Contrat ; confidentialité des communications (directive 2002/58, art. 5(1)) | La personne visée ; Apple et Google pour l'acheminement | Fragments : aucun stockage. Copie : durée d'un message (#14465) |
 | T7. Bring | Faire sonner l'autre en urgence | Expéditeur, destinataire, heure, quota | Contrat ; le blocage est une préférence de réception, pas un consentement | La personne visée ; Apple et Google | Fenêtre de sonnerie et quota en Redis ; aucune trace |
 | T8. Position temporaire | Montrer où je suis pour 1 h ou 8 h | Coordonnées entières, destinataires et leur précision | Consentement (art. 6(1)(a)) et art. 5(3) de la directive 2002/58 (art. 82 LIL) pour la lecture du GPS | Chaque Ami choisi, à la précision choisie | Durée du partage (≤ 8 h), scellé |
 | T9. Ensemble | Lecture synchronisée | Paire, média, position de lecture | Contrat | La paire | 4 h |
-| T10. Position Sang continue, historique, proximité, journal | Savoir où est un très proche | Coordonnées continues ; historique ; consultations ; co-localisation | Consentement **explicite** par observateur et par partage (art. 9(2)(a) par inférence, J2) | Chaque Sang consentant, jamais un admin ni une room | Live : rien après l'arrêt. Historique et consultations : 30 j (prévu). Proximité : délai 2 h |
+| T10. Position Sang continue, historique, proximité, journal | Savoir où est un très proche | Coordonnées continues ; historique ; consultations ; co-localisation | Consentement **explicite** par observateur et par partage (art. 9(2)(a) par inférence, J2). **Remplacé le 2026-11-22** : un accord par observateur, à la liste entière du Sang (§ 13, J14) | Chaque Sang consentant, jamais un admin ni une room | Live : rien après l'arrêt. Historique et consultations : 30 j (prévu). Proximité : délai 2 h |
 | T11. Lieux (#14161) | Prévenir d'une arrivée ou d'un départ | Géorepère d'un lieu nommé (maison, travail, école), événements | Consentement explicite de l'observé seul | Le Sang consentant | Vie du lieu ; événements à fixer |
 | T12. Privilège d'équipe | Tester les cercles entre comptes de l'équipe | Tout ce qui précède, entre comptes MODERATOR, ADMIN et BIGBOSS | **À qualifier** (N1, J11) | Les comptes de l'équipe | Celle de chaque feature |
 
@@ -147,6 +153,7 @@ La liste française des traitements soumis à AIPD (CNIL, délibération 2018-32
 - **Risque résiduel** : faible pour les majeurs une fois E12 fait.
 
 ### 3.7 Position temporaire (T8)
+- **Inchangé le 2026-11-22** : la position temporaire reste hors du verrou du Sang et garde son geste par partage.
 - **Ce qui est bien** : durée courte (1 h ou 8 h) qui s'éteint seule, précision choisie par destinataire, troncature serveur, scellement, aucun historique, consentement faux par défaut. C'est compatible avec le standard 10 de l'AADC (désactivé par défaut, retour à « off » à la fin du partage).
 - **Point d'attention** : le serveur garde la position **entière** pour pouvoir servir plus précis après une montée de lien. C'est un choix du porteur, défendable par la durée courte. Mais la minimisation (art. 5(1)(c)) voudrait ne garder que la précision la plus fine accordée à un destinataire actuel. À reconsidérer si la durée maximale augmente.
 - **`secret-at-rest`** utilise une clé serveur : c'est une **mesure de sécurité** (art. 32), pas une pseudonymisation au sens de l'art. 4(5), puisque le responsable lit en clair.
@@ -154,7 +161,8 @@ La liste française des traitements soumis à AIPD (CNIL, délibération 2018-32
 
 ### 3.8 Position Sang continue, historique, proximité, lieux (T10, T11)
 - **Risques** : (a) **contrôle coercitif** : un partenaire ou un proche exige le partage ; un consentement donné sous pression n'est pas libre (art. 4(11), art. 7(4)) ; (b) un mineur suivi par un majeur ; (c) fuite de l'historique ; (d) consentement figé alors que la relation se dégrade ; (e) inférences sensibles. **Les lieux aggravent (a), (b) et (e)** : « maison », « école » et « travail » nomment exactement ce qu'un harceleur cherche, et l'école désigne un mineur.
-- **Mesures prévues par la spec** : flag OFF et liste blanche ; fantôme global et ciblé, indétectable ; journal des consultations visible du seul observé, avec alerte d'excès ; effacement de son historique ; rien enregistré en fantôme ; proximité au plus une fois toutes les 2 h ; lieux activés par l'observé seul, trois interrupteurs éteints par défaut, aucune coordonnée dans l'alerte, 5 lieux par paire.
+- **Révisé le 2026-11-22 (§ 13.2, point 4)** : le fantôme global et le fantôme ciblé n'agissent plus entre Sangs. La seule restriction est la baisse, dont l'autre peut déduire l'effet. Le risque (a) remonte, et les mesures compensatoires du § 13.5 deviennent des conditions de production.
+- **Mesures prévues par la spec** : flag OFF et liste blanche ; fantôme global et ciblé, indétectable (**plus entre Sangs depuis le 2026-11-22**) ; journal des consultations visible du seul observé, avec alerte d'excès ; effacement de son historique ; rien enregistré en fantôme ; proximité au plus une fois toutes les 2 h ; lieux activés par l'observé seul, trois interrupteurs éteints par défaut, aucune coordonnée dans l'alerte, 5 lieux par paire.
 - **À ajouter avant le flag** :
   - rappel de consentement périodique (« X voit ta position depuis 30 jours, continuer ? ») ;
   - signe permanent visible côté observé quand un partage est actif ;
@@ -261,7 +269,9 @@ La liste française des traitements soumis à AIPD (CNIL, délibération 2018-32
 
 ## 7. Écrans de consentement
 
-Règles communes, inchangées : une action positive par partage ; refuser ne bloque pas le niveau ; défaut éteint pour tout consentement ; un dépliant « ce que ça montre, à qui, combien de temps, comment arrêter » ; version du texte enregistrée (E4) ; 7 langues ; VoiceOver et TalkBack ; le retrait est à la place de l'activation. Ces écrans précèdent et expliquent les autorisations du système, sans les remplacer.
+> **Remplacé le 2026-11-22 (§ 13).** Au rituel du Sang, une seule action positive porte sur la liste entière, versionnée. À l'entrée en Proche, la liste de ce qui s'active est montrée avant l'acte. Les autres règles ci-dessous restent : dépliant, version, sept langues, accessibilité, retrait à la place de l'activation (au Sang, ce retrait est la baisse).
+
+Règles communes, inchangées au 2026-11-08 : une action positive par partage ; refuser ne bloque pas le niveau ; défaut éteint pour tout consentement ; un dépliant « ce que ça montre, à qui, combien de temps, comment arrêter » ; version du texte enregistrée (E4) ; 7 langues ; VoiceOver et TalkBack ; le retrait est à la place de l'activation. Ces écrans précèdent et expliquent les autorisations du système, sans les remplacer.
 
 **État.** Le rituel iOS déplie désormais chaque partage : durée, lieu de stockage, journal des consultations, fantôme, où retirer, lien vers la politique (`367f53fb886`, dans `dev`). Le web accorde la catégorie d'écoute (#16831). Android : #16836, #14427.
 
@@ -406,6 +416,11 @@ Inchangé depuis le 2 novembre sauf ce qui est marqué **(nouveau)**. Les numér
 | J11 **(nouveau)** | Le privilège d'équipe sur des comptes personnels : quelle base légale pour élargir l'audience d'un membre de l'équipe ? Un consentement entre collègues (position, écoute) est-il libre ? Le droit du travail (L. 1121-1, L. 1222-4, information du CSE s'il existe) s'applique-t-il à des modérateurs bénévoles ? | Relation de travail ; qualification du statut des modérateurs |
 | J12 **(nouveau)** | Les lieux nommés entre Sangs (maison, école) pour un mineur : compatibles avec l'art. 25 et l'AADC, ou à exclure ? | Protection des mineurs ; proportionnalité |
 | J13 **(nouveau)** | L'affichage à un tiers du titre lu dans Apple Music ou Spotify est-il permis par leurs conditions développeur ? | Contrat avec un tiers |
+| J14 **(2026-11-22)** | Un accord unique à la liste du Sang (position continue, historique, proximité, titre d'écoute, batterie, état du téléphone, chute, talkie, Bring, Ensemble) est-il un consentement libre et spécifique, alors que la position continue n'existe qu'au Sang ? Le Sang peut-il se présenter comme un service (art. 6(1)(b)) dont la transparence est l'objet ? Le titre d'écoute (art. 9 par inférence, J2) peut-il être consenti dans cette liste ? | Art. 7(4), considérant 43 ; CEPD 05/2020 §§ 25-44 ; CEPD 2/2019 sur l'art. 6(1)(b) |
+| J15 **(2026-11-22)** | Sans fantôme entre Sangs, le risque de contrôle coercitif reste-t-il élevé après les mesures du § 13.5 ? Faut-il consulter la CNIL (art. 36) avant d'allumer la position Sang ? | Engagement envers une autorité ; art. 25, 35, 36 |
+| J16 **(2026-11-22)** | Un mineur déclaré peut-il consentir à la liste entière ? Faut-il l'exclure du verrou (mesure C7) ou du Sang avant 15 ans ? | Art. 8, considérant 38 ; AADC standard 10 ; prolonge J1 et J3 |
+| J17 **(2026-11-22)** | Quelle base légale pour la catégorie d'écoute, la batterie et l'injoignabilité actives par défaut au Proche : l'exécution du service choisi (art. 6(1)(b)) avec opposition par personne, ou un consentement recueilli à l'entrée en Proche ? Pour les Proches d'avant le 2026-11-22, l'activation peut-elle suivre une simple information ? | Art. 6, 7, 25(2) ; considérant 32 |
+| J18 **(2026-11-22)** | Entre collègues de l'équipe, sans lien ni rituel, le défaut actif du Sang et le verrou peuvent-ils jouer ? (Recommandation : non, condition C2.) | Prolonge J11 ; considérant 43 ; Code du travail L. 1121-1 |
 
 Je ne rédige ni la demande Critical Alerts, ni le formulaire Play, ni une notification à la CNIL : ce sont des engagements envers un tiers. #14112 porte le brouillon des entitlements ; c'est au porteur de l'envoyer.
 
@@ -430,6 +445,93 @@ Je ne rédige ni la demande Critical Alerts, ni le formulaire Play, ni une notif
 **Avant d'allumer le flag de position Sang** :
 9. AIPD validée par un juriste (J4), consultation préalable si nécessaire.
 10. Rappel de consentement périodique, signe visible, retrait d'un geste depuis la notification persistante, journal servi **avant** toute lecture d'historique ; N3 et J12 pour les lieux.
+
+---
+
+## 13. Révision du 2026-11-22 : de Sang à Sang rien ne se cache, sauf descendre (#20359, #20364)
+
+Rédigé le 2026-11-22 par l'agent `conformite-juridique`. Base lue : la branche `claude/paliers-actifs-sang-verrouille`, en cours d'écriture (`packages/shared/utils/relation-levels.ts`, `relation-emitter-consent.ts`, `blood-bundle.ts`), et `services/gateway/src/routes/relations/lower.ts`. Décision : `services/gateway/decisions/2026-11-22-de-sang-a-sang-rien-ne-se-cache-sauf-descendre-20359.md`. **Ce n'est pas un avis juridique.**
+
+### 13.1 Le traitement tel que la branche l'écrit
+
+- **Défauts par palier** (`RELATION_LEVEL_DEFAULT_ON`). Colonne nulle = active si le niveau effectif atteint le palier : Proche pour la catégorie d'écoute, la batterie et l'injoignabilité ; Sang pour le titre d'écoute, la position continue, l'historique, la proximité, le relevé de batterie, l'inactivité, l'appel et la chute.
+- **Verrou** (`RELATION_BLOOD_LOCKED_FEATURES`). Au niveau effectif Sang, équipe comprise, une fois l'accord donné : ni refus stocké, ni coupure globale, ni blocage de réception ne ferment. Une coupure répond 409.
+- **Accord à la liste** (`BLOOD_BUNDLE_VERSION = '2026-11-22'`, quatorze features). Stocké par côté.
+- **Décision B**. Avant l'accord, les refus déjà donnés restent appliqués.
+- **Baisse** (`lower.ts`). Unilatérale ; le niveau effectif est le minimum des deux accords. Silencieuse (RG-07), immédiate, partages éteints des deux côtés (`withdrawSharesAfterDrop`). Elle passe par `appVersionFloorPreHandler`, mais le web n'est jamais jugé.
+
+**Écart lu dans la branche.** `resolveEmitterConsent` rend `granted` pour une colonne nulle au Sang **avant** tout accord à la liste. La paire de l'équipe, une paire née d'un rituel ancien, ou un corps v1 dont le `false` n'est pas écrit partageraient donc leur position sans aucun acte. C'est l'objet de C1, C2 et C4.
+
+### 13.2 Analyse par point
+
+1. **Consentement donné au palier, retiré par la baisse (art. 7(1) à 7(4)).**
+   - *Pour.* Une seule action positive, informée, versionnée (art. 7(1) : la preuve existe). Le retrait est plus simple que l'octroi : le rituel demande deux personnes et plusieurs écrans, la baisse un geste (art. 7(3) ; CEPD 05/2020 §§ 113-114). Un choix réel existe : le Proche garde des réglages par personne.
+   - *Contre.* La liste mêle des finalités distinctes : localisation continue et son historique, santé (chute), goûts culturels (titre), sécurité (inactivité, Bring). Le considérant 43 présume non libre un consentement qui ne permet pas de consentir séparément « lorsque cela est approprié ». La position continue n'existe qu'au Sang : la vouloir, c'est accepter le reste (CEPD 05/2020 §§ 42-44, granularité). Retirer un seul élément coûte tout le palier, donc un détriment (§§ 46-48).
+   - *Verdict* : **avis signé requis (J14)**. Conforme sous les conditions C1, C3 à C5, C8, C11 et C12 pour la forme de l'accord et du retrait.
+
+2. **Défauts actifs au Proche, « champs jamais réglés ».**
+   - Pour un **nouveau** Proche, l'activation peut tenir si la liste est montrée AVANT l'acte qui fait le palier (la demande ou l'acceptation), et si l'acte est enregistré avec la version de la liste. La branche prévoit une information « une fois, sans bloquer » à l'entrée en Proche : si elle vient après l'acte, ce n'est ni un consentement ni une information préalable (art. 13(1)).
+   - Pour un Proche **d'avant le 2026-11-22**, une colonne nulle voulait dire « refusé par défaut ». La lire « actif » sans acte de la personne, c'est déduire un accord du silence (art. 4(11), considérant 32 ; CJUE C-673/17, *Planet49*). Il faut que la liste soit montrée, avec le choix, avant l'activation. C'est la même logique que la décision B.
+   - La catégorie d'écoute était classée consentement (§ 2.3). La batterie et l'injoignabilité sont peu sensibles et peuvent relever de l'exécution du service choisi, avec opposition par personne (art. 6(1)(b), 21). L'art. 25(2) pèse peu ici : le destinataire est une personne choisie, pas un nombre indéterminé.
+   - *Verdict* : **conforme sous condition** pour les nouveaux Proches (liste avant l'acte, version stockée). **Avis signé requis (J17)** pour la base légale de la catégorie d'écoute et pour l'activation chez les Proches existants.
+
+3. **Sang sans restriction.**
+   - L'art. 7(3) est satisfait par la baisse, à condition qu'elle reste toujours possible (C8).
+   - Entre collègues de l'équipe, il n'y a ni lien ni rituel, donc ni accord ni baisse. Le verrou y supprimerait tout retrait : **non conforme** en l'état. C2 le corrige.
+   - Un retrait d'autorisation du système (position, Santé) reste toujours possible et ne doit être ni puni ni annoncé (C10, art. 7(4)).
+   - *Verdict* : **conforme sous condition** (C2, C8, C10).
+
+4. **Coupures globales qui n'épargnent plus les Sangs.**
+   - Le fantôme global et ciblé était « indétectable ». C'était la mesure principale contre le contrôle coercitif (§ 3.8 (a)) : se cacher sans que l'autre le sache. La baisse est silencieuse, mais ses effets se voient (la position disparaît, le palier change).
+   - La coupure globale du Bring ne protège plus d'un Sang qui sonne trente fois par jour, Ne pas déranger passé.
+   - *Verdict* : **conforme sous condition** pour la transparence (C9 : « tous sauf tes Sangs » dit avant l'activation, et « Passer mes Sangs en Proche » au même endroit). **Avis signé requis (J15)** sur le risque résiduel et la consultation préalable : les mesures du § 13.5 deviennent des conditions d'allumage du flag de position.
+
+5. **Chute (art. 9).**
+   - L'accord global explicite reste (`fallAlertConsentedAt`, version courante), le refus sous 15 ans aussi (#18748, points 2 et 5). Seul le retrait par personne entre Sangs disparaît.
+   - L'accord explicite doit nommer ses destinataires : « à tous tes Sangs, présents et à venir ». L'accord à la liste ne le remplace jamais.
+   - *Verdict* : **conforme sous condition** (C6). L'avis signé déjà requis par #18748 reste requis.
+
+6. **Mineurs (art. 8, considérant 38).**
+   - Le consentement d'un mineur déclaré devient l'accord à la liste. Avant 15 ans en France, le consentement seul ne suffit pas pour un traitement fondé sur l'art. 6(1)(a) (art. 45 LIL ; J1 toujours ouvert). Entre 15 et 17 ans, l'accord groupé aggrave la question de la liberté : un mineur ne peut plus refuser seulement sa position.
+   - L'AADC (standard 10) et les lignes directrices de la Commission sur l'art. 28 DSA demandent la position désactivée par défaut et un signe visible.
+   - *Verdict* : **avis signé requis (J16, J1, J3)**. Mesure conservatoire C7 : pour un émetteur mineur déclaré, ni verrou ni défaut actif sur la position continue, l'historique, la proximité et le titre d'écoute. L'âge inconnu (E6, #14404) reste ouvert.
+
+7. **Décision B (#20367).**
+   - Elle ne présume aucun accord à partir d'un refus. C'est la seule option qui tient sans avis contraire. A efface des refus explicites : c'est un consentement présumé. C retire un lien que personne n'a demandé à retirer.
+   - Conditions : C1 (les champs jamais réglés ne s'ouvrent pas pour les quatre consentements du rituel), C3 (le retrait par partage reste jusqu'à l'accord), C12 (carte neutre, sans échéance) ; l'accord d'un côté ne lève pas les refus de l'autre.
+   - *Verdict* : **conforme sous condition**.
+
+### 13.3 Conditions que le code respecte
+
+C1 à C12 de la décision. En bref :
+- **C1** : avant l'accord à la liste de la version courante, titre d'écoute, position continue, historique et proximité ne s'ouvrent que sur un `true` stocké.
+- **C2** : entre collègues sans lien, ni défaut actif du Sang ni 409.
+- **C3** : pas de 409 avant l'accord du côté qui coupe.
+- **C4** : un `false` d'un corps v1 ne devient jamais un partage.
+- **C5** : un accord ne vaut que pour sa version.
+- **C6** : la chute garde son accord explicite, retirable par un 200, et le refus sous 15 ans.
+- **C7** : un émetteur mineur déclaré retire sa position et son titre sans quitter le Sang.
+- **C8** : la baisse est toujours possible (par le web au moins), immédiate, et efface l'accord des deux côtés.
+- **C9** : « tous sauf tes Sangs » avant l'activation d'une coupure globale, et « Passer mes Sangs en Proche » au même endroit.
+- **C10** : aucun refus d'autorisation du système n'est puni ni annoncé.
+- **C11** : l'accord et sa version partent dans l'export, sont purgés avec le compte et effacés à la baisse.
+- **C12** : la carte B est neutre, sans pré-sélection ni échéance.
+
+### 13.4 Ce qui exige un avis signé
+
+J14 à J18 (§ 11), plus J1, J2, J3 et J4, que cette révision aggrave. Aucune promotion en production de #20361 et #20362 sans ces avis. Je ne rédige pas de notification à la CNIL : c'est un engagement envers une autorité.
+
+### 13.5 Mesures compensatoires recommandées
+
+Elles deviennent des conditions d'allumage du flag de position Sang (§ 12, point 10) :
+1. Rappel périodique à 30 jours : « X voit ta position depuis 30 jours. Garder Sang / Passer en Proche. »
+2. Signe permanent côté observé, avec la baisse en un geste depuis la notification persistante.
+3. Journal des consultations servi avant toute lecture d'historique.
+4. « Passer mes Sangs en Proche » d'un geste.
+5. Depuis un Bring ou un talkie reçu d'un Sang : « Arrêter » et « Passer X en Proche ».
+6. Signalement d'un Sang depuis sa fiche (#14110), sans le prévenir.
+
+**Licences.** Rien ici n'introduit de publicité, d'offre payante ni de revente de données : NLLB-200 et MMS-TTS restent dans un usage non commercial (#9227).
 
 ---
 
