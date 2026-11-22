@@ -45,7 +45,8 @@ final class ConversationStoreSocketBridgeOrderTests: XCTestCase {
                 currentUserId: { "me" },
                 fetchConversation: fetchConversation,
                 isConversationOpen: isConversationOpen,
-                fetchChangedPreferences: { _ in [] }
+                fetchChangedPreferences: { _ in [] },
+                watermarkStore: .inMemory()
             )
             bridge.activate(
                 conversationUpdated: conversationUpdated.eraseToAnyPublisher(),

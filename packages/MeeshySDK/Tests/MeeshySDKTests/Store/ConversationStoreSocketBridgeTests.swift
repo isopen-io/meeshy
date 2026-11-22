@@ -93,7 +93,8 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
                 store: store,
                 categoryStore: categoryStore,
                 currentUserId: { currentUserId },
-                fetchChangedPreferences: { changedSince in servedPreferences.serve(changedSince: changedSince) }
+                fetchChangedPreferences: { changedSince in servedPreferences.serve(changedSince: changedSince) },
+                watermarkStore: .inMemory()
             )
             bridge.activate(
                 conversationUpdated: conversationUpdated.eraseToAnyPublisher(),
