@@ -38,7 +38,7 @@ async function harness() {
   const app = Fastify({ logger: false });
   app.decorate('prisma', fake.prisma as never);
   app.decorate('notificationService', { markPostNotificationsAsRead: jest.fn(async () => undefined) });
-  app.decorate('socialEvents', { broadcastStoryViewed: jest.fn(async () => undefined) });
+  app.decorate('socialEvents', { separationAroundActor: jest.fn(async () => []), broadcastStoryViewed: jest.fn(async () => undefined) });
 
   // La garde historique : un jeton porteur = un compte, rien ⇒ 401.
   const requiredAuth = async (req: FastifyRequest, reply: FastifyReply) => {

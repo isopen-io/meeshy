@@ -389,7 +389,7 @@ describe('SocialEventsHandler', () => {
         viewCount: 10,
       };
 
-      handler.broadcastStoryViewed(data, AUTHOR_ID);
+      handler.broadcastStoryViewed(data, AUTHOR_ID, []);
 
       expect(mockIO.to).toHaveBeenCalledTimes(1);
       expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(AUTHOR_ID));
@@ -404,7 +404,7 @@ describe('SocialEventsHandler', () => {
         viewCount: 10,
       };
 
-      handler.broadcastStoryViewed(data, AUTHOR_ID);
+      handler.broadcastStoryViewed(data, AUTHOR_ID, []);
 
       expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_1));
       expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_2));
@@ -935,7 +935,7 @@ describe('SocialEventsHandler', () => {
         { method: () => handler.broadcastPostUnliked(unlikeData, AUTHOR_ID, 'PUBLIC', [], []), expectedEvent: SERVER_EVENTS.POST_UNLIKED },
         { method: () => handler.broadcastPostReposted(repostData, AUTHOR_ID), expectedEvent: SERVER_EVENTS.POST_REPOSTED },
         { method: () => handler.broadcastStoryCreated(post, AUTHOR_ID), expectedEvent: SERVER_EVENTS.STORY_CREATED },
-        { method: () => handler.broadcastStoryViewed(storyViewData, AUTHOR_ID), expectedEvent: SERVER_EVENTS.STORY_VIEWED },
+        { method: () => handler.broadcastStoryViewed(storyViewData, AUTHOR_ID, []), expectedEvent: SERVER_EVENTS.STORY_VIEWED },
         { method: () => handler.broadcastStoryReacted(storyReactData, AUTHOR_ID, []), expectedEvent: SERVER_EVENTS.STORY_REACTED },
         { method: () => handler.broadcastStatusCreated(post, AUTHOR_ID), expectedEvent: SERVER_EVENTS.STATUS_CREATED },
         { method: () => handler.broadcastStatusReacted(statusReactData, AUTHOR_ID, []), expectedEvent: SERVER_EVENTS.STATUS_REACTED },
@@ -1123,7 +1123,7 @@ describe('SocialEventsHandler', () => {
         viewerUsername: 'viewer',
         viewCount: 1,
       };
-      handler.broadcastStoryViewed(data, AUTHOR_ID);
+      handler.broadcastStoryViewed(data, AUTHOR_ID, []);
 
       const calledRooms = mockIO.to.mock.calls.flatMap((call: any[]) => Array.isArray(call[0]) ? call[0] : [call[0]]);
       expect(calledRooms).toEqual([ROOMS.feed(AUTHOR_ID)]);

@@ -13,6 +13,7 @@ struct CommunityDetailView: View {
     var onCreatePost: (() -> Void)?
 
     init(communityId: String,
+         arrivesThroughLink: Bool = false,
          onSelectConversation: ((APIConversation) -> Void)? = nil,
          onOpenSettings: ((MeeshyCommunity) -> Void)? = nil,
          onOpenMembers: ((String) -> Void)? = nil,
@@ -21,6 +22,7 @@ struct CommunityDetailView: View {
          onCreatePost: (() -> Void)? = nil) {
         _viewModel = StateObject(wrappedValue: CommunityDetailViewModel(
             communityId: communityId,
+            arrivesThroughLink: arrivesThroughLink,
             postsCache: { await CacheCoordinator.shared.feed }
         ))
         self.onSelectConversation = onSelectConversation

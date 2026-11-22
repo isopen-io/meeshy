@@ -179,6 +179,31 @@ async function applyViews(
 ): Promise<number> {
   if (events.length === 0) return 0;
 
+  /* #20429 — LA SÉPARATION EST RÉSOLUE AVANT LA PREMIÈRE ÉCRITURE, et une
+     seule fois pour tout le lot. `story:viewed` porte un compteur ABSOLU
+     (`viewCount`) : résolue APRÈS, elle ajouterait un `await` de plus entre
+     l'écriture et l'émission, donc élargirait la fenêtre où deux vues
+     concurrentes s'émettent dans l'ordre inverse de leurs écritures — le
+     dernier arrivé gagnant, l'auteur garderait un compte que la base
+     contredit. (Cette fenêtre PRÉEXISTE et ce lot ne la ferme pas :
+     `viewCount` est lu par `getPostById` APRÈS `recordView`. Suivi #20414.)
+
+     Le PRIX de ce hissage est écrit ici parce qu'il est réel : un lot qui ne
+     porte AUCUNE story paie quand même ses deux lectures, le type d'un post
+     n'étant pas connu avant son écriture. Résoudre paresseusement au premier
+     `type === 'STORY'` les économiserait — mais ce verdict vient de
+     `getPostById`, donc APRÈS `recordView`, ce qui est exactement l'`await`
+     supplémentaire que le paragraphe ci-dessus refuse. C'est un arbitrage
+     entre deux lectures par lot et la propriété d'ordre, pas une domination
+     (audit adversarial du lot, constat C4).
+
+     `?.` sur la méthode, et pas seulement sur l'objet : un `socialEvents`
+     PARTIEL ferait lever ici, AVANT la première écriture, et perdrait le lot
+     de vues entier — l'inverse exact de ce que promet la ligne « la vue est
+     DÉJÀ enregistrée » plus bas. Un `undefined` vaut alors `null`, donc le
+     silence, jamais la diffusion. */
+  const separated = await deps.fastify.socialEvents?.separationAroundActor?.(actor.userId) ?? null;
+
   let recorded = 0;
   for (const event of events) {
     const isNewView = await deps.postService.recordView(event.postId, actor.userId, event.durationMs, {
@@ -201,7 +226,7 @@ async function applyViews(
           enhancedLogger.warn('[POST /social/events]: mark post notifications as read failed', { err }));
     }
 
-    await broadcastStoryViewed(deps, event.postId, actor);
+    await broadcastStoryViewed(deps, event.postId, actor, separated);
   }
   return recorded;
 }
@@ -219,9 +244,14 @@ async function broadcastStoryViewed(
   deps: SocialEventsDeps,
   targetId: string,
   actor: Extract<SocialEventsActor, { kind: 'user' }>,
+  separated: readonly string[] | null,
 ): Promise<void> {
   const socialEvents = deps.fastify.socialEvents;
   if (!socialEvents) return;
+
+  /* La vue est DÉJÀ enregistrée — on ne la perd pas pour une séparation
+     illisible : on se contente de ne rien ANNONCER (#20429). */
+  if (separated === null) return;
 
   try {
     // Le viewer est PASSÉ : sans lui, `getPostById` applique le filtre
@@ -237,7 +267,7 @@ async function broadcastStoryViewed(
         viewerId: actor.userId,
         viewerUsername: actor.username,
         viewCount: post.viewCount,
-      }, post.authorId);
+      }, post.authorId, separated);
     });
   } catch (err) {
     enhancedLogger.warn(

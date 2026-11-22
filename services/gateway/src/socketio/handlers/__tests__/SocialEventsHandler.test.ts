@@ -429,7 +429,7 @@ describe('SocialEventsHandler', () => {
       const { handler, io } = buildHandler();
       const data = { storyId: STORY_ID, viewerId: USER_ID } as any;
 
-      handler.broadcastStoryViewed(data, AUTHOR_ID);
+      handler.broadcastStoryViewed(data, AUTHOR_ID, []);
 
       expect(io.to).toHaveBeenCalledWith(`feed:${AUTHOR_ID}`);
       expect(io.to).toHaveBeenCalledTimes(1);

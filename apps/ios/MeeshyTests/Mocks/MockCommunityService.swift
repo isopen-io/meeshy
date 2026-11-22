@@ -10,7 +10,8 @@ enum CommunityStubs {
         currentUserRole: String? = nil,
         requiresJoinApproval: Bool? = nil,
         currentUserJoinRequest: String? = nil,
-        currentUserJoinRetryAt: String? = nil
+        currentUserJoinRetryAt: String? = nil,
+        joinLinkPaused: Bool? = nil
     ) -> APICommunity {
         let membersJSON = members
             .flatMap { try? JSONEncoder().encode($0) }
@@ -19,11 +20,12 @@ enum CommunityStubs {
         let approvalJSON = requiresJoinApproval.map { "\($0)" } ?? "null"
         let requestJSON = currentUserJoinRequest.map { "\"\($0)\"" } ?? "null"
         let retryJSON = currentUserJoinRetryAt.map { "\"\($0)\"" } ?? "null"
+        let pausedJSON = joinLinkPaused.map { "\($0)" } ?? "null"
         let json = """
         {"id":"\(id)","identifier":"mshy_\(id)","name":"\(name)","isPrivate":false,
          "createdBy":"\(createdBy)","createdAt":"2026-09-01T10:00:00.000Z","members":\(membersJSON),
          "currentUserRole":\(roleJSON),"requiresJoinApproval":\(approvalJSON),"currentUserJoinRequest":\(requestJSON),
-         "currentUserJoinRetryAt":\(retryJSON)}
+         "currentUserJoinRetryAt":\(retryJSON),"joinLinkPaused":\(pausedJSON)}
         """
         return JSONStub.decode(json)
     }
@@ -143,8 +145,10 @@ final class MockCommunityService: CommunityServiceProviding, @unchecked Sendable
 
     var joinResult: Result<CommunityJoinOutcome, Error> = .success(.joined(CommunityStubs.member(id: "m", userId: "u", role: "member")))
     private(set) var joinCallCount = 0
-    func join(communityId: String) async throws -> CommunityJoinOutcome {
+    private(set) var lastJoinViaLink: Bool?
+    func join(communityId: String, viaLink: Bool) async throws -> CommunityJoinOutcome {
         joinCallCount += 1
+        lastJoinViaLink = viaLink
         return try joinResult.get()
     }
 

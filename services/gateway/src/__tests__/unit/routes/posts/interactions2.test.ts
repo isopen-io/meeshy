@@ -116,7 +116,7 @@ function makeSocialEvents() {
     broadcastStatusReacted: jest.fn<any>(),
     broadcastStoryUnreacted: jest.fn<any>(),
     broadcastStatusUnreacted: jest.fn<any>(), activitySeparation: jest.fn<any>().mockResolvedValue([]),
-    broadcastStoryViewed: jest.fn<any>(),
+    separationAroundActor: jest.fn<any>().mockResolvedValue([]), broadcastStoryViewed: jest.fn<any>(),
     broadcastPostBookmarked: jest.fn<any>(),
     broadcastPostReposted: jest.fn<any>().mockResolvedValue(undefined),
   };
@@ -640,7 +640,7 @@ describe('POST /posts/:postId/view — STORY type triggers broadcastStoryViewed'
     expect(res.statusCode).toBe(200);
     expect(socialEvents.broadcastStoryViewed).toHaveBeenCalledWith(
       expect.objectContaining({ storyId: POST_ID, viewerId: USER_ID }),
-      AUTHOR_ID,
+      AUTHOR_ID, [],
     );
   });
 

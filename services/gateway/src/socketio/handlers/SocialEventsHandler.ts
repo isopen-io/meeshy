@@ -579,9 +579,62 @@ export class SocialEventsHandler {
     this.emitToFriends(friendIds, authorId, SERVER_EVENTS.STORY_DELETED, { storyId, authorId });
   }
 
-  broadcastStoryViewed(data: StoryViewedEventData, storyAuthorId: string): void {
-    // Seul l'auteur de la story doit voir les vues
-    this.emitToUser(storyAuthorId, SERVER_EVENTS.STORY_VIEWED, data);
+  /**
+   * **LA SÉPARATION AUTOUR D'UN DESTINATAIRE UNIQUE** (#20429).
+   *
+   * {@link activitySeparation} prend DEUX sujets parce que l'audience des sept
+   * familles de #20338 contient des TIERS, qu'il faut taire aussi quand ils
+   * sont séparés de l'AUTEUR. Quand l'audience est **UNE SEULE personne**, un
+   * sujet répond exactement : le destinataire figure dans l'ensemble si et
+   * seulement s'il a bloqué l'acteur ou si l'acteur l'a bloqué. Même verdict
+   * que la forme à deux sujets, pour **deux lectures quel que soit le nombre
+   * de destinataires** au lieu de deux par destinataire — `story:viewed` part
+   * d'un chemin CHAUD, jusqu'à 120 événements par requête.
+   *
+   * Deux formes NUES, délibérément :
+   *
+   * - **pas de `keep`** — avec un seul sujet il n'a rien à filtrer (`read` ne
+   *   rendrait l'acteur que s'il s'était bloqué lui-même, et le destinataire
+   *   n'est jamais l'acteur : le producteur retourne tôt). Porter l'option la
+   *   ferait lire comme porteuse de sens sans qu'aucun témoin la tienne.
+   * - **`cached: false`** — la clé `[acteur]` a pour cardinalité le nombre de
+   *   LECTEURS actifs, et ce cache vide ses 512 entrées ENTIÈREMENT au
+   *   plafond : le peupler depuis ce chemin éviderait les clés stables des
+   *   sept diffusions de CONTENU, l'avertissement que l'audit de #20337 a
+   *   laissé sur place. Bornage LRU : #20415.
+   *
+   * `null` ⇒ l'appelant n'annonce RIEN.
+   */
+  separationAroundActor(actorId: string): Promise<readonly string[] | null> {
+    return this.separatedRooms.roomsAround([actorId], { cached: false });
+  }
+
+  /**
+   * **LA HUITIÈME FAMILLE D'ACTIVITÉ** (#20429), et la plus NOMINATIVE : là où
+   * les sept de #20338 ne portent qu'un `userId`, cette charge nomme le viewer
+   * par son id **ET son pseudo**. Elle partait vers la feed room de l'auteur
+   * sans aucune exclusion.
+   *
+   * `separated` est REQUIS — un appelant qui l'oublie ne compile pas —, il est
+   * résolu AVANT l'écriture de la vue, et `null` tait la diffusion.
+   *
+   * **On NE DIFFUSE PAS, plutôt que de diffuser en excluant** (même forme que
+   * `emitCommentActivity`, #20236) : l'audience n'ayant qu'UN destinataire, le
+   * taire c'est se taire, et aucune charge nominative n'est remise à la couche
+   * de diffusion — sous l'adaptateur Redis, `.except()` encode le paquet
+   * ENTIER et le publie aux autres nœuds, qui ne filtrent qu'à l'arrivée.
+   * (Un premier jet invoquait un join de room qui échouerait : mesuré FAUX par
+   * l'audit du lot — `Adapter.addAll` est synchrone et ne rend rien, et
+   * l'adaptateur Redis ne la surcharge pas.)
+   */
+  broadcastStoryViewed(
+    data: StoryViewedEventData,
+    storyAuthorId: string,
+    separated: readonly string[] | null,
+  ): void {
+    if (separated === null) return;
+    if (separated.includes(ROOMS.user(storyAuthorId))) return;
+    emitServerEvent(this.io.to(ROOMS.feed(storyAuthorId)), SERVER_EVENTS.STORY_VIEWED, data);
   }
 
   broadcastStoryReacted(data: StoryReactedEventData, storyAuthorId: string, separated: readonly string[] | null): void {

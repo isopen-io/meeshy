@@ -515,8 +515,8 @@ struct RootView: View {
         case .hashtag(let tag):
             router.push(.hashtagResults(tag: tag))
 
-        case .community(let id):
-            router.push(.communityDetail(id))
+        case .community(let id, let viaLink):
+            router.push(.communityDetail(id, viaLink: viaLink))
 
         case .recentConversation, .unreadConversations:
             // Widgets et App Shortcut (#7811) : élections de `ConversationListEntry`.
