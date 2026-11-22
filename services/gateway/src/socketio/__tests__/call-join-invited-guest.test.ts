@@ -1,5 +1,6 @@
 import { describe, it, expect } from '@jest/globals';
 import { resolveJoinParticipantId } from '../call-participants';
+import { findFirstIn } from '../../__tests__/helpers/mongo-where';
 
 const CALL = '64b7f0c2a1b2c3d4e5f60718';
 const CONV = '64b7f0c2a1b2c3d4e5f60719';
@@ -13,15 +14,12 @@ const deps = (rows: Row[], invited: string[]) => ({
       findUnique: async () => ({ conversationId: CONV, status: 'active', invitedUserIds: invited }),
     },
     participant: {
-      // #10473 — la clé se lit par `userId`, ou par une branche `OR` qui
-      // choisit sa colonne (`participantKeyWhere`).
-      findFirst: async ({ where }: { where: { userId?: string; OR?: Array<{ userId?: string }>; conversationId: string; isActive?: boolean } }) =>
-        rows.find(
-          (r) =>
-            (where.OR ? where.OR.some((branch) => branch.userId === r.userId) : r.userId === where.userId) &&
-            r.conversationId === where.conversationId &&
-            (where.isActive === undefined || r.isActive === where.isActive)
-        ) ?? null,
+      // La SÉMANTIQUE du vrai client, jamais un comparateur écrit à la main
+      // (leçon du 2026-11-21) : le `where` de cette porte compose désormais
+      // DEUX branches `OR` sous un `AND` (#20310), et un comparateur
+      // `Object.entries(...).every(...)` rendrait `null` sur un correctif
+      // JUSTE — un faux ROUGE, qui se découvre en abandonnant le correctif.
+      findFirst: findFirstIn(rows as unknown as Array<Record<string, unknown>>),
       create: async () => ({ id: 'guest-dave' }),
     },
     user: { findUnique: async () => ({ username: 'dave', displayName: 'Dave', avatar: null }) },

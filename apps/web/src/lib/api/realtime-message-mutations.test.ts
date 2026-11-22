@@ -6,6 +6,7 @@ import type { ConversationUpdatedEventData } from '@meeshy/shared/types/socketio
 import { localMessage, threadOf, threadPages } from '@/test-support/thread-cache';
 
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
+import { mediaHubConversationKey } from './media-hub-cache';
 import { messagesQueryKey } from './messages';
 import { applyConversationUpdated } from './realtime-apply';
 import {
@@ -429,5 +430,69 @@ describe('aucune fuite inter-conversation', () => {
     deleteWith(client, deleted());
 
     expect(threadOf(client, 'c-a')).toBeUndefined();
+  });
+});
+
+/**
+ * #20303 — ET LA TUILE QUITTE « MÉDIAS, LIENS ET DOCUMENTS ».
+ *
+ * `applyMessageDeleted` n'écrivait que DEUX caches : le fil (la bulle devient
+ * une pierre tombale) et l'aperçu de la ligne de liste. L'index de l'écran des
+ * médias est une racine de requête SÉPARÉE (`mediaHubConversationKey`, #8180),
+ * et il gardait le message ENTIER, pièce jointe comprise — donc sa tuile, et
+ * la visionneuse plein écran qui s'ouvre depuis elle, servaient le fichier
+ * qu'on venait de rappeler.
+ *
+ * Ce chemin était le SEUL des trois à ne pas l'écrire : `attachment:deleted`
+ * le fait (`stripFromHub`, #13611), « supprimer pour moi » le fait
+ * (`hideRowsForReader`, qui `removeRows` sur les deux clés, #10587).
+ *
+ * Le témoin lit ce que l'index REND, et la rangée en SORT au lieu d'y devenir
+ * une pierre tombale : un index de MÉDIAS n'a plus rien à montrer d'un message
+ * dont le média est parti — c'est le verdict qu'applique déjà `stripFromHub`
+ * quand il ne reste aucune pièce.
+ */
+describe('#20303 — un message supprimé pour tout le monde quitte l’index des médias', () => {
+  const withPhoto = (id: string): Message =>
+    ({ ...localMessage({ id, content: 'photo' }), attachments: [{ id: `a-${id}`, messageId: id, mimeType: 'image/png', fileUrl: `https://cdn.example/${id}.png` }] }) as unknown as Message;
+
+  const seedHub = (client: QueryClient, messages: readonly Message[], conversationId = 'c-a'): void => {
+    client.setQueryData(mediaHubConversationKey(conversationId), threadPages(messages));
+  };
+
+  /** Ce que la grille REND. */
+  const hubOf = (client: QueryClient, conversationId = 'c-a'): readonly string[] =>
+    (client.getQueryData<{ pages: { messages: Message[] }[] }>(mediaHubConversationKey(conversationId))?.pages ?? []).flatMap((p) => p.messages.map((m) => m.id));
+
+  test('témoin : les deux tuiles sont rendues avant l’évènement', () => {
+    const client = seeded([withPhoto('m-1'), withPhoto('m-2')]);
+    seedHub(client, [withPhoto('m-1'), withPhoto('m-2')]);
+    expect(hubOf(client)).toEqual(['m-1', 'm-2']);
+  });
+
+  test('la rangée sort de l’index, et la bulle reste une pierre tombale dans le fil', () => {
+    const client = seeded([withPhoto('m-1'), withPhoto('m-2')]);
+    seedHub(client, [withPhoto('m-1'), withPhoto('m-2')]);
+
+    applyMessageDeleted(client, { messageId: 'm-1', conversationId: 'c-a' });
+
+    expect(hubOf(client)).toEqual(['m-2']);
+    expect(rowOf(client)?.deletedAt).toBeDefined();
+  });
+
+  test('un index vide, ou sans la rangée, n’est pas touché', () => {
+    const client = seeded([withPhoto('m-1')]);
+    seedHub(client, [withPhoto('m-2')]);
+    applyMessageDeleted(client, { messageId: 'm-1', conversationId: 'c-a' });
+    expect(hubOf(client)).toEqual(['m-2']);
+  });
+
+  test('aucune fuite inter-conversation : l’index d’une AUTRE conversation garde sa rangée', () => {
+    const client = seeded([withPhoto('m-1')]);
+    seedHub(client, [withPhoto('m-1')], 'c-a');
+    seedHub(client, [withPhoto('m-1')], 'c-b');
+    applyMessageDeleted(client, { messageId: 'm-1', conversationId: 'c-a' });
+    expect(hubOf(client, 'c-a')).toEqual([]);
+    expect(hubOf(client, 'c-b')).toEqual(['m-1']);
   });
 });
