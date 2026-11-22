@@ -27,10 +27,11 @@ const events: readonly GuideEventV2[] = [
   { kind: 'prestige', prestige: 1, gloryGained: 1000 },
   { kind: 'atlas-stamp', language: 'ja', stamped: 4, total: 89 },
   { kind: 'flame-freeze-gift', freezes: 1 },
+  { kind: 'offering-kept', easedDays: 3 },
 ];
 
 describe('les moments de la vague 2', () => {
-  it('couvrent les neuf moments de la conception, sans toucher aux douze premiers', () => {
+  it('couvrent les dix moments de la conception, sans toucher aux douze premiers', () => {
     expect([...GUIDE_MOMENT_KEYS_V2].sort()).toEqual(events.map((e) => e.kind).sort());
     expect(GUIDE_MOMENT_KEYS).toHaveLength(12);
     expect(GUIDE_MOMENT_KEYS_V2.some((key) => (GUIDE_MOMENT_KEYS as readonly string[]).includes(key))).toBe(false);
@@ -151,5 +152,34 @@ describe('le moment « Une Veilleuse t\'est offerte » (#20169)', () => {
 
   it('ne se photographie pas', () => {
     expect(photoMomentOfGuideEvent(gift)).toBeNull();
+  });
+});
+
+describe('le moment « Les aïeux t\'ont gardé ton Offrande » (#20327, #17373)', () => {
+  const kept: GuideEventV2 = { kind: 'offering-kept', easedDays: 3 };
+
+  it('fait parler Mee, qui accueille, et mène à la fiche du Rêve où l\'Offrande s\'ouvre', () => {
+    expect(guideMomentV2(kept, [])).toEqual({
+      key: 'offering-kept',
+      speaker: 'mee',
+      mood: 'cheer',
+      data: { easedDays: 3 },
+      action: 'see-missions',
+      presentation: 'full',
+    });
+    expect(guideMomentV2(kept, ['offering-kept']).presentation).toBe('short');
+  });
+
+  it('accueille avant de parler de la Flamme éteinte, et passe devant le retour de la vague 1', () => {
+    const rank = (key: string): number => (GUIDE_MOMENT_PRIORITY_ALL as readonly string[]).indexOf(key);
+    expect(rank('offering-kept')).toBe(rank('flame-out') - 1);
+    expect(rank('offering-kept')).toBeGreaterThan(rank('season-end'));
+    const opening = [{ kind: 'flame-out', lostDays: 0, relightPrice: 100, canRelight: true } as const, { kind: 'return-after-absence', daysAway: 9 } as const, kept];
+    expect(chooseGuideMomentAny(opening, [])?.key).toBe('offering-kept');
+    expect(chooseGuideMomentAny(opening, ['offering-kept', 'flame-out', 'return-after-absence'])?.key).toBe('offering-kept');
+  });
+
+  it('ne se photographie pas', () => {
+    expect(photoMomentOfGuideEvent(kept)).toBeNull();
   });
 });

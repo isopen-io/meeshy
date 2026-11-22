@@ -69,7 +69,9 @@ public object GamePhotoMomentsV2 {
         is GuideEventV2.LeaguePromoted -> PhotoMomentEmblemV2.LeagueUp(event.to, event.weekKey)
         is GuideEventV2.SeasonEnd -> if (event.completed) PhotoMomentEmblemV2.Season(event.season) else null
         is GuideEventV2.Prestige -> PhotoMomentEmblemV2.Prestige(event.prestige)
-        is GuideEventV2.LeagueFirst, is GuideEventV2.LeagueRelegated, is GuideEventV2.SeasonStart, is GuideEventV2.AtlasStamp -> null
+        is GuideEventV2.LeagueFirst, is GuideEventV2.LeagueRelegated, is GuideEventV2.SeasonStart, is GuideEventV2.AtlasStamp,
+        is GuideEventV2.FlameFreezeGift,
+        -> null
     }
 
     /** Les moments de la vague 2 qu'une transition confirmée vient de produire. */

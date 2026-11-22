@@ -4,13 +4,17 @@ import me.meeshy.sdk.model.game.LeagueKey
 import me.meeshy.sdk.model.game.rules.GuideMood
 import me.meeshy.sdk.model.game.rules.GuideSpeaker
 
-/** Le bouton d'un moment de la vague 2 (iOS `GuideActionV2`) : une page du jeu, et « voir le niveau » du Prestige. */
+/**
+ * Le bouton d'un moment de la vague 2 (iOS `GuideActionV2`) : une page du jeu, « voir le niveau » du Prestige et
+ * « voir la Flamme » de la première Veilleuse offerte.
+ */
 public enum class GuideActionV2(public val wire: String) {
     SeeLeague("see-league"),
     SeeSeason("see-season"),
     SeeTrophies("see-trophies"),
     SeeAtlas("see-atlas"),
     SeeLevel("see-level"),
+    SeeFlame("see-flame"),
 }
 
 public enum class GuideMomentKeyV2(public val wire: String) {
@@ -22,6 +26,9 @@ public enum class GuideMomentKeyV2(public val wire: String) {
     Trophy("trophy"),
     Prestige("prestige"),
     AtlasStamp("atlas-stamp"),
+
+    /** La première Veilleuse, offerte au 3e jour de Flamme. Sa clé est `GameFlameLaw.FREEZE_GIFT_SEEN_KEY`. */
+    FlameFreezeGift("flame-freeze-gift"),
 }
 
 /** Ce qui vient d'arriver dans la vague 2 — ligue, saison, trophée, Prestige, Atlas (iOS `GuideEventV2`). */
@@ -58,6 +65,10 @@ public sealed interface GuideEventV2 {
 
     public data class AtlasStamp(val language: String, val stamped: Int, val total: Int) : GuideEventV2 {
         override val key: GuideMomentKeyV2 get() = GuideMomentKeyV2.AtlasStamp
+    }
+
+    public data class FlameFreezeGift(val freezes: Int) : GuideEventV2 {
+        override val key: GuideMomentKeyV2 get() = GuideMomentKeyV2.FlameFreezeGift
     }
 }
 
@@ -106,6 +117,7 @@ public object GameGuideV2 {
         is GuideEventV2.Trophy -> Persona(GuideSpeaker.Duo, GuideMood.Proud, GuideActionV2.SeeTrophies)
         is GuideEventV2.Prestige -> Persona(GuideSpeaker.Duo, GuideMood.Proud, GuideActionV2.SeeLevel)
         is GuideEventV2.AtlasStamp -> Persona(GuideSpeaker.Mee, GuideMood.Cheer, GuideActionV2.SeeAtlas)
+        is GuideEventV2.FlameFreezeGift -> Persona(GuideSpeaker.Meo, GuideMood.Cheer, GuideActionV2.SeeFlame)
     }
 
     public fun moment(event: GuideEventV2, seen: Set<String>): GuideMomentV2 {
@@ -115,13 +127,13 @@ public object GameGuideV2 {
     }
 
     /**
-     * Du plus important au moins important, sur les vingt et un moments. L'ordre relatif des douze d'origine est
+     * Du plus important au moins important, sur tous les moments. L'ordre relatif des douze d'origine est
      * celui de `GameGuide.momentPriority` : sans événement nouveau, le choix est exactement celui de la vague 1.
      */
     public val momentPriority: List<String> = listOf(
         "new-rank", "prestige", "trophy", "level-100", "first-mint", "season-end", "flame-out", "flame-at-risk",
-        "league-promoted", "league-relegated", "new-tier", "season-start", "treasury-tier", "badge-extinguished",
-        "price-rises", "atlas-stamp", "league-first", "first-mint-possible", "missions-unlocked", "first-level",
+        "flame-freeze-gift", "league-promoted", "league-relegated", "new-tier", "season-start", "treasury-tier",
+        "badge-extinguished", "price-rises", "atlas-stamp", "league-first", "first-mint-possible", "missions-unlocked", "first-level",
         "return-after-absence",
     )
 
@@ -137,13 +149,14 @@ public object GameGuideV2 {
 
     /**
      * Les moments de la vague 2 qui se photographient (iOS `GamePhotoMomentsV2.emblem`) : un trophée, une montée, un
-     * voyage accompli, une Renaissance. Une première ligue, une descente, une saison inachevée, un tampon, jamais.
+     * voyage accompli, une Renaissance. Une première ligue, une descente, une saison inachevée, un tampon, une Veilleuse
+     * offerte, jamais.
      */
     public fun isPhotoMoment(event: GuideEventV2): Boolean = when (event) {
         is GuideEventV2.Trophy, is GuideEventV2.LeaguePromoted, is GuideEventV2.Prestige -> true
         is GuideEventV2.SeasonEnd -> event.completed
         is GuideEventV2.LeagueFirst, is GuideEventV2.LeagueRelegated, is GuideEventV2.SeasonStart,
-        is GuideEventV2.AtlasStamp,
+        is GuideEventV2.AtlasStamp, is GuideEventV2.FlameFreezeGift,
         -> false
     }
 }

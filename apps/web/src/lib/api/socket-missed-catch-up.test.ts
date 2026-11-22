@@ -15,7 +15,7 @@ import { FEED_NEW_COUNT_KEY } from './feed-new-count';
 import { STATUS_MOODS_QUERY_KEY, STORY_TRAY_QUERY_KEY } from './stories';
 import type { ConversationsPage } from './conversations-pages';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
-import { MY_PROFILE_QUERY_KEY } from './me-keys';
+import { APP_PREFERENCES_QUERY_KEY, CALL_HISTORY_QUERY_PREFIX, MY_PREFERENCES_QUERY_KEYS, MY_PROFILE_QUERY_KEY } from './me-keys';
 import { messagesQueryKey } from './messages';
 import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATION_LISTS_KEY } from './notifications';
 import { UNKNOWN_ROW_COALESCE_MS } from './realtime-thread-catch-up';
@@ -415,6 +415,78 @@ describe('#18641 / #20336 — les DEUX authentifications rattrapent le fil, le r
 
     expect(queryClient.getQueryState(FEED_QUERY_KEY)?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(FEED_NEW_COUNT_KEY)?.isInvalidated).toBe(false);
+    destroy();
+  });
+});
+
+/**
+ * #20349 — LES PROJECTIONS DU DOCUMENT DE RÉGLAGES RATTRAPENT LA FENÊTRE ELLES
+ * AUSSI.
+ *
+ * Elles n'y étaient pas, et le doc-comment d'`app-preferences.ts` justifiait sa
+ * fenêtre de trente minutes PAR l'événement : « `user:preferences-updated
+ * { userId, category }` … périme cette requête … le réglage arrive à la
+ * relecture qui suit, sans attendre la fenêtre ». Vrai d'un appareil CONNECTÉ
+ * dont la bonne clé est périmée ; faux d'un appareil ABSENT, que l'événement
+ * n'atteint jamais — et `refetchOnReconnect` ne relit qu'une requête STALE,
+ * donc une clé à trente minutes persistée dans `localStorage` revient fraîche
+ * et périmée à la fois.
+ *
+ * La forme JUMELLE avait déjà été tranchée : `['me','profile']`, même absence
+ * d'événement atteignable, est entrée dans la liste par #18914.
+ *
+ * Les deux clés sont RÉPANDUES depuis `MY_PREFERENCES_QUERY_KEYS`, le même
+ * ensemble que le gestionnaire itère : le témoin boucle sur la source, donc une
+ * TROISIÈME projection ajoutée demain est gardée sans que personne l'écrive
+ * ici.
+ */
+describe('#20349 — les deux authentifications rattrapent les réglages du compte', () => {
+  for (const queryKey of MY_PREFERENCES_QUERY_KEYS) {
+    test(`${queryKey.join('/')} : déjà servie et au repos ⇒ relue dès la PREMIÈRE authentification`, () => {
+      const { socket, queryClient, destroy } = connect();
+      queryClient.setQueryData(queryKey, { quoi: 'servi avant que le socket entre dans les rooms' });
+
+      socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+
+      expect(isInvalidated(queryClient, queryKey)).toBe(true);
+      destroy();
+    });
+
+    test(`${queryKey.join('/')} : se périme aussi à la RECONNEXION`, () => {
+      const { socket, queryClient, destroy } = connect();
+      socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+      queryClient.setQueryData(queryKey, { quoi: 'servi avant la coupure' });
+
+      socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+
+      expect(isInvalidated(queryClient, queryKey)).toBe(true);
+      destroy();
+    });
+
+    test(`${queryKey.join('/')} : jamais servie ⇒ rien n’est demandé`, () => {
+      const { socket, queryClient, destroy } = connect();
+
+      socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+
+      expect(queryClient.getQueryState(queryKey)).toBeUndefined();
+      destroy();
+    });
+  }
+
+  /**
+   * LA SENTINELLE DE PORTÉE : les deux clés sont des FEUILLES sous `['me']`, qui
+   * porte aussi le profil et le journal d'appels. Les prendre par préfixe
+   * balaierait des familles que l'événement de réglage ne concerne pas.
+   */
+  test('la racine `[\'me\']` n’est pas balayée : le profil garde son état', () => {
+    const { socket, queryClient, destroy } = connect();
+    queryClient.setQueryData(APP_PREFERENCES_QUERY_KEY, { theme: 'auto' });
+    queryClient.setQueryData(CALL_HISTORY_QUERY_PREFIX, { pages: [] });
+
+    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+
+    expect(isInvalidated(queryClient, APP_PREFERENCES_QUERY_KEY)).toBe(true);
+    expect(isInvalidated(queryClient, CALL_HISTORY_QUERY_PREFIX)).toBe(false);
     destroy();
   });
 });

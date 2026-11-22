@@ -21,6 +21,7 @@ const deCommunityMembership = {
   'community.membership.declined': 'Anfrage abgelehnt',
   'community.membership.declined.hint': 'Du kannst ab dem {date} erneut anfragen.',
   'community.membership.error.cooldown': 'Deine letzte Anfrage wurde abgelehnt: Du kannst 7 Tage danach erneut anfragen.',
+  'community.membership.error.linkPaused': 'Beitritte über diesen Link sind ausgesetzt: Ein Admin der Community hat ihn pausiert.',
   'community.settings.open': "Einstellungen",
   'community.members.open': 'Mitglieder',
   'community.members.title': 'Mitglieder',

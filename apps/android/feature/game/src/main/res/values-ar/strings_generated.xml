@@ -103,6 +103,10 @@
     <string name="game2_guide_moment_atlas_stamp_next">⁦%1$s⁩ لغة من ⁦%2$s⁩ في جواز سفرك.</string>
     <string name="game2_guide_moment_atlas_stamp_short">ختم: %1$s.</string>
     <string name="game2_guide_moment_atlas_stamp_what">ختم جديد: %1$s!</string>
+    <string name="game2_guide_moment_flame_freeze_gift_means">يأتمنك أجدادك عليه: يُبقي لهبك مشتعلًا في يوم تغيب فيه.</string>
+    <string name="game2_guide_moment_flame_freeze_gift_next">القناديل في الاحتياط: ⁦%1$s⁩.</string>
+    <string name="game2_guide_moment_flame_freeze_gift_short">أُهدي إليك قنديل للهبك.</string>
+    <string name="game2_guide_moment_flame_freeze_gift_what">أُهدي إليك قنديل.</string>
     <string name="game2_guide_moment_league_first_means">كل أسبوع، تقيس نفسك مع 29 بطلًا آخر. السبعة الأوائل يرتقون إلى الحلقة التالية، والخمسة الأخيرون يهبطون، وتبدأ الشرارات من الصفر.</string>
     <string name="game2_guide_moment_league_first_next">%1$s حتى الحلقة التالية هذا الأسبوع.</string>
     <string name="game2_guide_moment_league_first_next_top">أنت بالفعل في أعلى حلقات المبارزة.</string>

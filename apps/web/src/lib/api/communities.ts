@@ -76,6 +76,8 @@ export type CommunitySummary = {
   readonly viewerJoinRequest?: CommunityJoinRequestState | null;
   /** Après un refus de moins de sept jours (#19879) : l'instant ISO où le lecteur peut redemander ; `null` = aucun refus en cours ; absent = non servi. */
   readonly viewerJoinRetryAt?: string | null;
+  /** Un intendant a mis le lien d'entrée en pause (#19661) : une arrivée par ce lien est refusée ; absent = non servi. */
+  readonly joinLinkPaused?: boolean;
 };
 
 export type CommunityJoinRequestState = 'pending';
@@ -123,6 +125,7 @@ const WireCommunity = z.object({
   requiresJoinApproval: z.optional(z.nullable(z.boolean())),
   currentUserJoinRequest: optionalText,
   currentUserJoinRetryAt: optionalText,
+  joinLinkPaused: z.optional(z.nullable(z.boolean())),
 });
 
 const WireConversation = z.object({
@@ -182,6 +185,7 @@ export function decodeCommunity(raw: unknown): CommunitySummary | null {
     ...(wire.requiresJoinApproval === true ? { requiresJoinApproval: true } : {}),
     ...(wire.currentUserJoinRequest === undefined ? {} : { viewerJoinRequest: wire.currentUserJoinRequest === 'pending' ? 'pending' : null }),
     ...(wire.currentUserJoinRetryAt === undefined ? {} : { viewerJoinRetryAt: isoInstantOrNull(wire.currentUserJoinRetryAt) }),
+    ...(typeof wire.joinLinkPaused === 'boolean' ? { joinLinkPaused: wire.joinLinkPaused } : {}),
   };
 }
 
@@ -324,19 +328,28 @@ export type MembershipChange = 'changed' | 'pending';
 
 const WirePendingEntry = z.object({ status: z.literal('pending') });
 
+/** Par où l'on entre : `link` = arrivé par l'adresse partagée de la communauté (#20330), compté et refusé si le lien est en pause. */
+export type JoinDoor = 'link';
+
 /**
  * La jonction ANNONCE qu'elle sait lire une demande en attente
  * (`acceptsPending`, #19429) : sans ce mot, la passerelle répond 409 à une
  * communauté qui valide chaque entrée — que ce client lisait « déjà membre ».
+ * Arrivée par le lien, elle le DIT (`via: 'link'`) ; sinon elle reste directe.
  */
-export async function changeMembership(deps: CommunitiesDeps, communityId: string, gesture: MembershipGesture): Promise<ApiResult<MembershipChange>> {
+export async function changeMembership(
+  deps: CommunitiesDeps,
+  communityId: string,
+  gesture: MembershipGesture,
+  via?: JoinDoor,
+): Promise<ApiResult<MembershipChange>> {
   if (__FIXTURES__ && deps.source === 'fixtures') {
     const { fixtureChangeMembership } = await import('./fixtures-communities');
     return fixtureChangeMembership(communityId, gesture);
   }
   const result =
     gesture === 'join'
-      ? await deps.transport.request<unknown>({ method: 'POST', path: communitiesEndpoints.byIdJoin(communityId), body: { acceptsPending: true } })
+      ? await deps.transport.request<unknown>({ method: 'POST', path: communitiesEndpoints.byIdJoin(communityId), body: via === undefined ? { acceptsPending: true } : { acceptsPending: true, via } })
       : await deps.transport.request<unknown>({ method: 'POST', path: communitiesEndpoints.byIdLeave(communityId) });
   if (!result.ok) return result;
   return { ok: true, data: WirePendingEntry.safeParse(result.data).success ? 'pending' : 'changed' };

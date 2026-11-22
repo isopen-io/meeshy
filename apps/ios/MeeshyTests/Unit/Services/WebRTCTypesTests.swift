@@ -1164,8 +1164,10 @@ final class CallStatsReducerTests: XCTestCase {
             mimeType: nil,
             values: [
                 "currentRoundTripTime": rtt,
-                "availableOutgoingBitrate": bitrate
-            ]
+                "availableOutgoingBitrate": bitrate,
+                "nominated": 1
+            ],
+            strings: ["state": "succeeded"]
         )
     }
 

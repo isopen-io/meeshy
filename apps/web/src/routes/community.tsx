@@ -15,11 +15,11 @@ import { performJoinCommunity, performLeaveCommunity } from '@/lib/api/community
 import { canEditSettingsOf } from '@/lib/api/community-settings';
 import { sessionStore } from '@/lib/api/session';
 import { takeInviteStatus } from '@/lib/communities/invite-status';
-import { canInviteOf, findCachedCommunity, membershipActionOf } from '@/lib/communities/view';
+import { arrivesThroughLink, canInviteOf, findCachedCommunity, membershipActionOf, membershipNoticeOf } from '@/lib/communities/view';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
-import { useParams } from '@/lib/router';
+import { useParams, useSearch } from '@/lib/router';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import {
   BackLink,
@@ -71,6 +71,11 @@ import { href, navigate } from '@/routes/route-table';
  * effet : le cœur « Réagir à la communauté » d'iOS n'a aucun effet, là-bas non
  * plus, et « Créer un post » n'y est pas câblé.
  *
+ * **Arrivé par le lien** (`?via=link`, #20330) : rejoindre envoie `via:
+ * 'link'`, et un lien qu'un intendant a mis en pause se dit sous le geste —
+ * avant lui quand le détail sert `joinLinkPaused`, au refus
+ * `COMMUNITY_LINK_PAUSED` sinon (`membershipNoticeOf`).
+ *
  * 403 et 404 rendent le MÊME refus (D-6) : un identifiant ne dit pas si une
  * communauté privée existe.
  */
@@ -78,7 +83,7 @@ import { href, navigate } from '@/routes/route-table';
 const CommunityInviteSheet = lazy(() => import('@/routes/community-invite'));
 const CommunityPostsPanel = lazy(() => import('@/routes/community-posts'));
 
-const JOIN_FAILURE = { refused: 'refused', cooldown: 'cooldown', offline: 'offline', error: 'join' } as const satisfies Readonly<Record<string, MembershipFailure>>;
+const JOIN_FAILURE = { refused: 'refused', cooldown: 'cooldown', linkPaused: 'linkPaused', offline: 'offline', error: 'join' } as const satisfies Readonly<Record<string, MembershipFailure>>;
 
 const ROW_SEPARATOR = '1px solid color-mix(in srgb, var(--color-ios-ink-3) 18%, transparent)';
 
@@ -93,6 +98,8 @@ export default function CommunityScreen() {
   const [inviting, setInviting] = useState(false);
   const [tab, setTab] = useState<CommunityDetailTab>('channels');
   const [inviteStatus, setInviteStatus] = useState<string | null>(() => takeInviteStatus(communityId));
+  const [search] = useSearch();
+  const throughLink = arrivesThroughLink(search);
   const enabled = apiDeps.source === 'fixtures' || signedIn;
 
   const detail = useQuery(
@@ -130,7 +137,7 @@ export default function CommunityScreen() {
     setMembershipPending(true);
     setMembershipFailure(null);
     if (gesture === 'join') {
-      const outcome = await performJoinCommunity({ community, deps: actionDeps });
+      const outcome = await performJoinCommunity({ community, deps: actionDeps, ...(throughLink ? { via: 'link' as const } : {}) });
       setMembershipPending(false);
       if (outcome.status !== 'joined' && outcome.status !== 'requested') setMembershipFailure(JOIN_FAILURE[outcome.status]);
       return;
@@ -144,6 +151,7 @@ export default function CommunityScreen() {
     setMembershipFailure(outcome.status === 'offline' ? 'offline' : 'leave');
   };
 
+  const membershipAction = community === undefined ? 'none' : membershipActionOf(community, viewerId);
   const refused = detail.error instanceof ApiError && (detail.error.status === 403 || detail.error.status === 404);
 
   const conversationBody =
@@ -198,10 +206,10 @@ export default function CommunityScreen() {
               )}
               <CommunityMembershipAction
                 language={language}
-                action={membershipActionOf(community, viewerId)}
+                action={membershipAction}
                 pending={membershipPending}
                 online={online}
-                failure={membershipFailure}
+                failure={membershipNoticeOf({ action: membershipAction, throughLink, community, failure: membershipFailure })}
                 retryAt={community.viewerJoinRetryAt ?? null}
                 onJoin={() => void changeMembership('join')}
                 onLeave={() => void changeMembership('leave')}
