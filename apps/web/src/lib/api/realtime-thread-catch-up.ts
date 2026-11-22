@@ -99,8 +99,43 @@ export function createUnknownRowCatchUp(params: {
   };
 }
 
+/**
+ * LES TROIS FORMES QUE LA FENÊTRE DE PREMIÈRE CONNEXION PEUT AVOIR VIDÉES
+ * (#20421) — la LISTE (long. 1), la FICHE (long. 2) et le fil VIVANT
+ * (long. 3 + `'messages'`).
+ *
+ * **La fiche en était exclue, sur une raison vraie qui répondait à côté** :
+ * « `message:new` ne la nourrit pas ». C'est exact, et ce n'est pas la
+ * question — **huit** écrivains temps réel du cache de détail vivent dans ce
+ * répertoire, tous branchés sur la MÊME connexion dont la première
+ * authentification déclenche ce rattrapage : le RÉGIME de chiffrement
+ * (`realtime-encryption-regime`, `realtime-encryption-changed`, qui invalident
+ * cette clé exacte), les DROITS d'envoi servis (`realtime-participant-rights`,
+ * #20277), le RANG du lecteur (`realtime-viewer-role`), le nom et les réglages
+ * (`realtime-conversation-updated`), `isMember` (`realtime-membership`), le
+ * nombre de membres (`realtime-member-count`) et la disparition de la fiche
+ * entière (`realtime-conversation-gone`).
+ *
+ * Ce que la fenêtre coûtait, au plus cher : une conversation passée en
+ * chiffrement de bout en bout pendant l'intervalle laissait le client sur le
+ * régime CLAIR — la fiche non relue, tenue fraîche par son `staleTime` de 30 s
+ * — et le composeur envoyait en clair dans une conversation chiffrée, ce que la
+ * passerelle REFUSE (fail-closed, #9224).
+ *
+ * **Une FENÊTRE ANCRÉE reste dehors (long. 5), et sa raison n'a pas bougé** :
+ * elle porte le PASSÉ (#7420), que l'intervalle ne peut pas avoir modifié.
+ *
+ * **La longueur 2 affirme qu'aucune AUTRE famille ne vit à cette forme sous
+ * cette racine** — c'est la seconde affirmation d'une énumération, celle que
+ * personne ne relit (leçon 261). Mesurée vraie au jour du lot : les sœurs de la
+ * racine sont `['conversations', id, 'media' | 'members']` (long. 3) et
+ * `['conversations', 'search', q]` (long. 3), et les catégories vivent sur une
+ * racine à elles (`CONVERSATION_CATEGORIES_QUERY_KEY = ['conversation-categories']`).
+ * Un cliquet de source la tient (`socket-missed-catch-up.test.ts`).
+ */
 const isListOrLiveThread = (queryKey: QueryKey): boolean =>
-  queryKey[0] === CONVERSATIONS_QUERY_KEY[0] && (queryKey.length === 1 || (queryKey.length === 3 && queryKey[2] === 'messages'));
+  queryKey[0] === CONVERSATIONS_QUERY_KEY[0]
+  && (queryKey.length === 1 || queryKey.length === 2 || (queryKey.length === 3 && queryKey[2] === 'messages'));
 
 /**
  * DÉJÀ SERVIE ET AU REPOS — le seul état où une relecture rattrape quelque
@@ -123,9 +158,11 @@ const servedAndAtRest = (query: { readonly state: { readonly dataUpdatedAt: numb
  *
  * Deux portées, parce que les familles ne se ressemblent pas :
  *
- * - les CONVERSATIONS, dont seules la liste et le fil VIVANT sont relus — ni la
- *   case d'une conversation, ni une fenêtre ancrée (#7420, du passé) :
- *   `message:new` ne les nourrit pas ;
+ * - les CONVERSATIONS, dont la liste, la FICHE et le fil VIVANT sont relus —
+ *   une fenêtre ancrée reste dehors (#7420 : elle porte le passé). La fiche a
+ *   été exclue jusqu'à #20421 sur une raison vraie qui répondait à côté ;
+ *   le discriminant et les huit familles qui la nourrissent sont écrits à
+ *   `isListOrLiveThread` ;
  * - les familles que l'appelant NOMME (`CATCH_UP_FAMILIES`, `socket.ts`) : la
  *   cloche, les demandes d'amitié, les messages favoris, le profil du lecteur,
  *   le fil social, le rail des stories, les humeurs et les catégories. Ce sont
