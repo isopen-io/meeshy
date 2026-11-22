@@ -43,6 +43,7 @@ import me.meeshy.sdk.model.relation.SharedLocationShareDuration
 import me.meeshy.sdk.model.relation.SharedLocationStartRequest
 import me.meeshy.sdk.model.relation.SharedLocationStartVerdict
 import me.meeshy.sdk.model.relation.SharedLocationUpdateGate
+import me.meeshy.sdk.model.relation.SharedLocationWireInstant
 import me.meeshy.sdk.model.relation.pointReplacement
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
@@ -230,6 +231,12 @@ class SharedLocationSharingCenter internal constructor(
      */
     @Volatile private var servedStart: String? = null
 
+    /** La passerelle a annoncé `acceptsExpectedStart` à la dernière relecture (#20249) : une réponse peut nommer le partage montré. */
+    @Volatile private var acceptsExpectedStart = false
+
+    /** Le dernier envoi a porté la clé jusqu'à la passerelle : un refus LOCAL (liste invalide) ne la met pas en cause. */
+    @Volatile private var expectedStartSent = false
+
     /**
      * Relancé avec une liste qu'il publiait, l'appareil suit sa position mais n'en envoie rien avant d'avoir relu ce que la
      * passerelle sert (#19767, iso `SharedLocationSharingCenter.swift`) : un autre appareil a pu reprendre le partage
@@ -281,17 +288,33 @@ class SharedLocationSharingCenter internal constructor(
         }
         val fix = early ?: locate() ?: return@locked locateProblem()
         if (!isCurrent(ticket)) return@locked SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
+        // La réponse nomme le partage montré, tel que servi (#20249) : la passerelle refuse si un autre a démarré depuis.
+        val expected = askedReplacement().startedAt
+            .takeIf { showsPoint && acceptsExpectedStart && SharedLocationWireInstant.isWire(it) }
         val previous = _roster.value
         val next = previous.pruned(clock()).adding(userId, precision, duration, clock()).withFixedPoint(false)
-        val problem = publish(ticket, next, fix, previous, claimsPublishing = true, replacesChosenPoint = showsPoint)
-        if (problem != SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FIXED_POINT)) return@locked problem
-        // Un point choisi ailleurs que cet appareil ignorait encore : rien n'a été écrit, il relit et demande.
+        val problem = publish(
+            ticket, next, fix, previous, claimsPublishing = true, replacesChosenPoint = showsPoint, expectedStartedAt = expected,
+        )
+        if (!rereadsAfter(problem)) return@locked problem
+        // Rien n'a été écrit : un point choisi que cet appareil ignorait encore, ou le partage nommé n'est plus servi (un
+        // autre démarrage, un arrêt, une passerelle revenue en arrière qui refuse la clé). L'appareil relit et redemande ;
+        // il ne renvoie jamais sans la clé, et ne relance rien devant un partage qui n'est plus un point choisi.
         val reread = syncLocked(ticket)
-        if (reread && isCurrent(ticket) && _roster.value.isFixedPoint) {
-            SharedLocationShareProblem.ReplacesChosenPoint(askedReplacement())
-        } else {
-            problem
+        when {
+            !isCurrent(ticket) -> SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
+            reread && _roster.value.pruned(clock()).isFixedPoint -> SharedLocationShareProblem.ReplacesChosenPoint(askedReplacement())
+            !reread && problem != SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FIXED_POINT) ->
+                SharedLocationShareProblem.Refused(SharedLocationSendOutcome.OFFLINE)
+            else -> problem
         }
+    }
+
+    /** Un refus certain qui n'a rien écrit et que la relecture peut lever : un point choisi, ou le partage nommé remplacé. */
+    private fun rereadsAfter(problem: SharedLocationShareProblem?): Boolean {
+        val outcome = (problem as? SharedLocationShareProblem.Refused)?.outcome ?: return false
+        return outcome == SharedLocationSendOutcome.FIXED_POINT ||
+            (expectedStartSent && (outcome == SharedLocationSendOutcome.STARTED_ELSEWHERE || outcome == SharedLocationSendOutcome.INVALID))
     }
 
     /** La permission puis un relevé ; `null` : l'un des deux manque, [locateProblem] dit lequel. */
@@ -384,8 +407,13 @@ class SharedLocationSharingCenter internal constructor(
             awaitsServedTruth = false
             scheduleDeadline()
         }
-        val truth = read.truth ?: return true
+        val truth = read.truth
+        if (truth == null) {
+            acceptsExpectedStart = false
+            return true
+        }
         servedStart = truth.startedAt
+        acceptsExpectedStart = truth.acceptsExpectedStart
         val before = _roster.value
         val next = before.withServed(truth, clock())
         val yields = next.hasRecipients && !received && before.hasRecipients && yieldsTo(ticket, truth.startedAt)
@@ -520,6 +548,8 @@ class SharedLocationSharingCenter internal constructor(
         received = false
         publishedStart = null
         servedStart = null
+        acceptsExpectedStart = false
+        expectedStartSent = false
         awaitsServedTruth = false
         hasReadServed = false
         loadedFor = account
@@ -605,6 +635,7 @@ class SharedLocationSharingCenter internal constructor(
         previous: SharedLocationRoster,
         claimsPublishing: Boolean = false,
         replacesChosenPoint: Boolean = false,
+        expectedStartedAt: String? = null,
     ): SharedLocationShareProblem? {
         val next = wanted.settled()
         val now = clock()
@@ -613,10 +644,12 @@ class SharedLocationSharingCenter internal constructor(
         val built = if (fix == null) {
             SharedLocationStartRequest.listOnly(recipients, duration)
         } else {
-            SharedLocationStartRequest.of(recipients, duration, fix, replacesChosenPoint)
+            SharedLocationStartRequest.of(recipients, duration, fix, replacesChosenPoint, expectedStartedAt)
         }
+        expectedStartSent = false
         val request = built ?: return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.INVALID)
         if (!isCurrent(ticket)) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
+        expectedStartSent = request.carriesExpectedStart
         val verdict = startTolerant(ticket, request)
         if (!isCurrent(ticket)) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
         return when (verdict) {

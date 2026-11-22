@@ -33,6 +33,11 @@ public data class SharedLocationOwnSnapshot(
      * l'appareil. `null` : passerelle d'avant, ou aucun partage — rien n'est dit.
      */
     val source: SharedLocationSource? = null,
+    /**
+     * La passerelle accepte qu'un démarrage nomme le partage qu'il remplace (`expectedStartedAt`, #20249). Faux : passerelle
+     * d'avant, qui refuserait la clé (`INVALID`) — le centre ne l'envoie pas.
+     */
+    val acceptsExpectedStart: Boolean = false,
 )
 
 /** D'où vient la position que la passerelle sert (`SharedLocationSource` de `packages/shared`). */
@@ -60,6 +65,7 @@ public data class SharedLocationOwnSnapshotWire(
     val recipients: List<JsonElement>? = null,
     val startedAt: String? = null,
     val source: JsonElement? = null,
+    val acceptsExpectedStart: JsonElement? = null,
 ) {
     public fun served(json: Json): SharedLocationOwnSnapshot? = recipients?.let { items ->
         SharedLocationOwnSnapshot(
@@ -68,6 +74,7 @@ public data class SharedLocationOwnSnapshotWire(
             },
             startedAt,
             SharedLocationSource.served(source),
+            (acceptsExpectedStart as? JsonPrimitive)?.takeIf { !it.isString }?.content == "true",
         )
     }
 
