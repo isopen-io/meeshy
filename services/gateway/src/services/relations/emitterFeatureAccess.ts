@@ -4,12 +4,16 @@
  * la loi par `pairAccessAmong` (niveau, blocage, équipe #16623), le consentement tri-état de
  * l'émetteur résolu par `resolveEmitterConsent`, sa coupure globale, et un compte désactivé ou
  * supprimé qui n'émet ni ne reçoit.
+ *
+ * Entre Sangs, après l'accord au palier (#20361), ni le refus stocké ni la COUPURE globale ne
+ * ferment. L'ACCORD de la chute (art. 9 RGPD, âge minimum) n'est pas une coupure : il entre comme
+ * garde LÉGALE (`legallyBlocked`), jugée avant le verrou et que rien ne lève.
  */
 import type { RelationLevel } from '@meeshy/shared/types/relation';
 import { resolveEmitterConsent } from '@meeshy/shared/utils/relation-emitter-consent';
 import type { BatteryDb } from '../battery/batteryAccess';
 import { pairAccessAmong, type PairAccessSubject } from './pairAccess';
-import { relationStoredConsentAmong, relationStoredConsentBy } from './relationConsent';
+import { relationPairConsentFor } from './relationConsent';
 import { isUsableAccount, ACCOUNT_STATE_SELECT, type AccountState } from './usableAccount';
 
 export type EmitterFeatureDb = BatteryDb;
@@ -23,6 +27,8 @@ export type EmitterFeatureDb = BatteryDb;
 export type EmitterSwitch = {
   readonly select: Readonly<Record<string, true>>;
   readonly off: (row: Readonly<Record<string, unknown>>, now: Date) => boolean;
+  /** `legal` : un accord ou un âge exigé par la loi, jamais levé par le verrou du Sang ; `cut` : une coupure de confort. */
+  readonly nature: 'legal' | 'cut';
 };
 
 export type EmitterFeature =
@@ -34,7 +40,7 @@ export type EmitterFeature =
 const globalSwitchOf = (spec: EmitterFeature): EmitterSwitch =>
   'emitterSwitch' in spec
     ? spec.emitterSwitch
-    : { select: { [spec.disabledColumn]: true }, off: (row) => (row[spec.disabledColumn] ?? null) !== null };
+    : { select: { [spec.disabledColumn]: true }, off: (row) => (row[spec.disabledColumn] ?? null) !== null, nature: 'cut' };
 
 export type EmitterFeatureParams = {
   readonly subjectId: string;
@@ -62,27 +68,27 @@ export async function emitterFeatureAllowedAmong(prisma: EmitterFeatureDb, spec:
   const readerOf = (otherId: string): string => (params.subjectIs === 'target' ? otherId : params.subjectId);
   const { feature } = spec;
   const globalSwitch = globalSwitchOf(spec);
-  const [accounts, stored, probe] = await Promise.all([
+  const [accounts, stored] = await Promise.all([
     accountsOf(prisma, [params.subjectId, ...otherIds], globalSwitch),
-    params.subjectIs === 'target'
-      ? relationStoredConsentAmong(prisma, { ownerId: params.subjectId, otherIds, feature })
-      : relationStoredConsentBy(prisma, { ownerIds: otherIds, otherId: params.subjectId, feature }),
-    pairAccessAmong(prisma, { feature, subjectId: params.subjectId, otherIds, subjectIs: params.subjectIs, now: params.now, consentOf: () => 'unknown' }),
+    relationPairConsentFor(prisma, { subjectId: params.subjectId, otherIds, subjectIs: params.subjectIs, feature }),
   ]);
-  const levelOf = (id: string): RelationLevel => probe.get(id)?.effectiveLevel ?? 'PUBLIC';
   const law = await pairAccessAmong(prisma, {
     feature,
     subjectId: params.subjectId,
     otherIds,
     subjectIs: params.subjectIs,
     now: params.now,
-    consentOf: (id) =>
-      resolveEmitterConsent({
+    consentOf: (id, effectiveLevel: RelationLevel) => {
+      const off = globalSwitch.off(accounts.get(emitterOf(id)) ?? {}, params.now);
+      const pair = stored.get(id);
+      return resolveEmitterConsent({
         feature,
-        stored: stored.get(id),
-        effectiveLevel: levelOf(id),
-        globallyDisabled: globalSwitch.off(accounts.get(emitterOf(id)) ?? {}, params.now),
-      }),
+        stored: pair?.stored ?? null,
+        effectiveLevel,
+        bloodBundleAccepted: pair?.bloodBundleAccepted === true,
+        ...(globalSwitch.nature === 'legal' ? { legallyBlocked: off } : { globallyDisabled: off }),
+      });
+    },
   });
   return new Set(
     otherIds.filter((id) => law.get(id)?.allowed === true && isUsableAccount(accounts.get(emitterOf(id))) && isUsableAccount(accounts.get(readerOf(id)))),

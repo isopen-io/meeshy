@@ -9,6 +9,7 @@ import { describe, it, expect } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { batteryAccessAmong, batteryCandidatesOf, isServed } from '../../../../services/battery/batteryAccess';
 import { withdrawRitualSharesOfUser, withdrawSharesAfterDrop, withdrawSharesTheLinkDoesNotOpen } from '../../../../services/relations/ritualShareWithdrawal';
+import { BLOOD_BUNDLE_VERSION } from '@meeshy/shared/utils/blood-bundle';
 import { ADULT_BIRTH, messagingWorld, table, type CircleLink, type Row } from '../../../helpers/messaging-circle-world';
 
 const EMETTEUR = '6300000000000000000000e1';
@@ -64,8 +65,8 @@ async function servis(m: ReturnType<typeof monde>, subjectId = EMETTEUR, otherId
 }
 
 describe('la loi de la batterie, personne par personne', () => {
-  it('Ami : rien, même avec un accord stocké ; Proche : seulement s\'il a reçu l\'accord ; Sang : par défaut, sauf refus', async () => {
-    expect(await servis(monde())).toEqual([PROCHE_CONSENTI, SANG]);
+  it('Ami : rien, même avec un accord stocké ; Proche : actif à l\'arrivée au palier (#20361) ; Sang : par défaut, sauf refus déjà donné', async () => {
+    expect(await servis(monde())).toEqual([PROCHE, PROCHE_CONSENTI, SANG]);
   });
 
   it('bloqué ou désactivé : rien, même entre Sangs', async () => {
@@ -94,6 +95,42 @@ describe('la loi de la batterie, personne par personne', () => {
     expect(isServed(access.get(EMETTEUR))).toBe(true);
     const refuse = await batteryAccessAmong(m.prisma as never, { subjectId: SANG_REFUSE, otherIds: [EMETTEUR], subjectIs: 'viewer', now });
     expect(isServed(refuse.get(EMETTEUR))).toBe(false);
+  });
+});
+
+describe('de Sang à Sang rien ne se coupe, après l\'accord au palier (#20361, décision B #20367)', () => {
+  const ACCORD = { bloodBundleAcceptedAt: new Date('2026-11-22T10:00:00.000Z'), bloodBundleVersion: BLOOD_BUNDLE_VERSION };
+  const accepte = (m: ReturnType<typeof monde>, ownerId: string, otherId: string, extra: Row = {}) => {
+    const rows = (m.prisma as unknown as { relationFeatureSetting: ReturnType<typeof table> }).relationFeatureSetting.rows;
+    const row = rows.find((r) => r.ownerId === ownerId && r.otherId === otherId);
+    if (row) Object.assign(row, ACCORD, extra);
+    else rows.push({ ownerId, otherId, ...ACCORD, ...extra });
+  };
+
+  it('un refus déjà donné à un Sang tient tant que l\'émetteur n\'a pas accepté la liste ; après, la batterie part', async () => {
+    const m = monde();
+    expect(await servis(m, EMETTEUR, [SANG_REFUSE])).toEqual([]);
+    accepte(m, EMETTEUR, SANG_REFUSE);
+    expect(await servis(m, EMETTEUR, [SANG_REFUSE])).toEqual([SANG_REFUSE]);
+  });
+
+  it('la coupure globale épargne le Sang pour qui l\'émetteur a accepté la liste, et lui seul', async () => {
+    const m = monde({ emetteur: { batterySharingDisabledAt: new Date('2026-11-10T00:00:00.000Z') } });
+    accepte(m, EMETTEUR, SANG);
+    expect(await servis(m)).toEqual([SANG]);
+  });
+
+  it('un accord à une version périmée de la liste ne lève rien', async () => {
+    const m = monde();
+    accepte(m, EMETTEUR, SANG_REFUSE, { bloodBundleVersion: '2020-01-01' });
+    expect(await servis(m, EMETTEUR, [SANG_REFUSE])).toEqual([]);
+  });
+
+  it('le lecteur qui a choisi « rien » reçoit la pastille dès SON accord au palier', async () => {
+    const m = monde({ settings: [{ ownerId: SANG, otherId: EMETTEUR, batteryReceive: 'none' }] });
+    accepte(m, SANG, EMETTEUR);
+    const access = await batteryAccessAmong(m.prisma as never, { subjectId: EMETTEUR, otherIds: [SANG], subjectIs: 'target', now });
+    expect(access.get(SANG)).toEqual({ allowed: true, receive: 'pill' });
   });
 });
 
@@ -147,11 +184,12 @@ describe('un accord donné à un Proche ne survit pas au cercle d\'en dessous', 
   const voit = async (prisma: PrismaClient) =>
     (await batteryAccessAmong(prisma as never, { subjectId: EMETTEUR, otherIds: [PROCHE_CONSENTI], subjectIs: 'target', now })).get(PROCHE_CONSENTI)?.allowed;
 
-  it('baisse sous Proche puis remontée : refusé sans nouvel accord', async () => {
+  it('baisse sous Proche puis remontée : la remontée réactive la batterie, comme toute arrivée au palier (#20361)', async () => {
     const m = monde();
     const settings = (m.prisma as unknown as { relationFeatureSetting: ReturnType<typeof table> }).relationFeatureSetting;
     await withdrawSharesAfterDrop(m.prisma as never, { actorId: EMETTEUR, otherId: PROCHE_CONSENTI, level: 'FRIEND', at: now });
-    expect(await voit(remonte(settings))).toBe(false);
+    expect(settings.rows.find((r) => r.ownerId === EMETTEUR && r.otherId === PROCHE_CONSENTI)).toMatchObject({ batteryShared: null, batteryWithdrawnAt: now });
+    expect(await voit(remonte(settings))).toBe(true);
   });
 
   it('daté chez l\'acteur, sans date chez l\'autre ; un refus garde sa valeur', async () => {
@@ -175,11 +213,11 @@ describe('un accord donné à un Proche ne survit pas au cercle d\'en dessous', 
     expect(await servis(m, EMETTEUR, [PROCHE_CONSENTI])).toEqual([PROCHE_CONSENTI]);
   });
 
-  it('un compte qui part éteint les accords qu\'il a donnés et reçus ; une réactivation ne les rallume pas', async () => {
+  it('un compte qui part éteint les accords qu\'il a donnés et reçus ; un refus garde sa valeur', async () => {
     const m = monde({ settings: [{ ownerId: SANG, otherId: EMETTEUR, batteryShared: true }] });
     const settings = (m.prisma as unknown as { relationFeatureSetting: ReturnType<typeof table> }).relationFeatureSetting;
     await withdrawRitualSharesOfUser(m.prisma as never, { userId: EMETTEUR });
-    expect(await voit(remonte(settings))).toBe(false);
+    expect(settings.rows.find((r) => r.ownerId === EMETTEUR && r.otherId === PROCHE_CONSENTI)?.batteryShared).toBeNull();
     expect(settings.rows.find((r) => r.ownerId === SANG)?.batteryShared).toBeNull();
     expect(settings.rows.find((r) => r.otherId === SANG_REFUSE)?.batteryShared).toBe(false);
   });

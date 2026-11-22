@@ -21,7 +21,8 @@ import type { RelationLevel } from '@meeshy/shared/types/relation';
 import { resolveEmitterConsent } from '@meeshy/shared/utils/relation-emitter-consent';
 import { comptesAuMoins } from '../friendship';
 import { pairAccessAmong, type PairAccessDb, type PairAccessSubject } from '../relations/pairAccess';
-import { relationStoredConsentAmong, relationStoredConsentBy, type StoredConsentFeature } from '../relations/relationConsent';
+import { bloodBundleAcceptedOf, relationPairConsentFor, type PairStoredConsent, type StoredConsentFeature } from '../relations/relationConsent';
+import { relationBloodLocked } from '@meeshy/shared/utils/relation-emitter-consent';
 import { teamPeerCandidates } from '../relations/teamPeers';
 import { isUsableAccount, ACCOUNT_STATE_SELECT } from '../relations/usableAccount';
 
@@ -64,23 +65,32 @@ async function accountsOf(prisma: BatteryDb, ids: readonly string[]) {
   return new Map(rows.map((row) => [row.id, row]));
 }
 
-async function storedConsents(prisma: BatteryDb, params: Params, feature: StoredConsentFeature): Promise<ReadonlyMap<string, boolean | null>> {
-  return params.subjectIs === 'target'
-    ? relationStoredConsentAmong(prisma, { ownerId: params.subjectId, otherIds: params.otherIds, feature })
-    : relationStoredConsentBy(prisma, { ownerIds: params.otherIds, otherId: params.subjectId, feature });
+async function storedConsents(prisma: BatteryDb, params: Params, feature: StoredConsentFeature): Promise<ReadonlyMap<string, PairStoredConsent>> {
+  return relationPairConsentFor(prisma, { subjectId: params.subjectId, otherIds: params.otherIds, subjectIs: params.subjectIs, feature });
 }
 
-/** Ce que chaque lecteur a choisi de recevoir de l'émetteur (sa propre ligne, `ownerId` = lecteur). */
-async function receiveModes(prisma: BatteryDb, params: Params): Promise<ReadonlyMap<string, BatteryReceiveMode>> {
+type ReceiveChoice = { readonly mode: BatteryReceiveMode; readonly bloodBundleAccepted: boolean };
+
+/** Ce que chaque lecteur a choisi de recevoir de l'émetteur (sa propre ligne, `ownerId` = lecteur), et son accord au palier. */
+async function receiveModes(prisma: BatteryDb, params: Params): Promise<ReadonlyMap<string, ReceiveChoice>> {
   const where = params.subjectIs === 'target'
     ? { ownerId: { in: [...params.otherIds] }, otherId: params.subjectId }
     : { ownerId: params.subjectId, otherId: { in: [...params.otherIds] } };
   const rows = (await prisma.relationFeatureSetting.findMany({
     where,
-    select: { ownerId: true, otherId: true, batteryReceive: true },
-  })) as ReadonlyArray<{ ownerId: string; otherId: string; batteryReceive: string | null }>;
-  return new Map(rows.map((row) => [params.subjectIs === 'target' ? row.ownerId : row.otherId, parseReceiveMode(row.batteryReceive)]));
+    select: { ownerId: true, otherId: true, batteryReceive: true, bloodBundleAcceptedAt: true, bloodBundleVersion: true },
+  })) as ReadonlyArray<{ ownerId: string; otherId: string; batteryReceive: string | null; bloodBundleAcceptedAt: Date | null; bloodBundleVersion: string | null }>;
+  return new Map(rows.map((row) => [params.subjectIs === 'target' ? row.ownerId : row.otherId, { mode: parseReceiveMode(row.batteryReceive), bloodBundleAccepted: bloodBundleAcceptedOf(row) }]));
 }
+
+/**
+ * Ce que le lecteur reçoit : son choix, sauf qu'entre Sangs, après SON accord au palier, « rien »
+ * ne se choisit plus (#20361) — il reçoit la pastille, la forme la plus discrète.
+ */
+const receiveOf = (choice: ReceiveChoice | undefined, feature: StoredConsentFeature, effectiveLevel: RelationLevel): BatteryReceiveMode => {
+  const mode = choice?.mode ?? BATTERY_DEFAULT_RECEIVE_MODE;
+  return mode === 'none' && choice?.bloodBundleAccepted === true && relationBloodLocked({ feature, effectiveLevel }) ? 'pill' : mode;
+};
 
 /** Le partage de position en cours de l'émetteur accorde-t-il sa batterie à ce lecteur (#19204) ? */
 const grantedBySharedLocation = (params: Params, feature: StoredConsentFeature, otherId: string): boolean =>
@@ -97,32 +107,32 @@ export async function batteryAccessAmong(prisma: BatteryDb, params: Params): Pro
   if (!params.subjectId || otherIds.length === 0) return new Map();
   const scoped: Params = { ...params, otherIds };
 
-  const [accounts, stored, modes, probe] = await Promise.all([
+  const [accounts, stored, modes] = await Promise.all([
     accountsOf(prisma, [params.subjectId, ...otherIds]),
     storedConsents(prisma, scoped, feature),
     receiveModes(prisma, scoped),
-    pairAccessAmong(prisma, { feature, subjectId: params.subjectId, otherIds, subjectIs: params.subjectIs, now: params.now, consentOf: () => 'unknown' }),
   ]);
-  const levelOf = (id: string): RelationLevel => probe.get(id)?.effectiveLevel ?? 'PUBLIC';
   const law = await pairAccessAmong(prisma, {
     feature,
     subjectId: params.subjectId,
     otherIds,
     subjectIs: params.subjectIs,
     now: params.now,
-    consentOf: (id) => {
+    consentOf: (id, effectiveLevel: RelationLevel) => {
       const emitter = accounts.get(emitterOf(scoped, id));
       const globallyDisabled = Boolean(emitter?.batterySharingDisabledAt);
       if (!globallyDisabled && emitter?.locationGhostAt == null && grantedBySharedLocation(scoped, feature, id)) return 'granted';
-      return resolveEmitterConsent({ feature, stored: stored.get(id), effectiveLevel: levelOf(id), globallyDisabled });
+      const pair = stored.get(id);
+      return resolveEmitterConsent({ feature, stored: pair?.stored ?? null, effectiveLevel, globallyDisabled, bloodBundleAccepted: pair?.bloodBundleAccepted === true });
     },
   });
 
   return new Map(
     otherIds.map((id) => {
       const usable = isUsableAccount(accounts.get(emitterOf(scoped, id))) && isUsableAccount(accounts.get(readerOf(scoped, id)));
-      const allowed = usable && law.get(id)?.allowed === true;
-      return [id, allowed ? { allowed, receive: modes.get(id) ?? BATTERY_DEFAULT_RECEIVE_MODE } : CLOSED];
+      const verdict = law.get(id);
+      const allowed = usable && verdict?.allowed === true;
+      return [id, allowed ? { allowed, receive: receiveOf(modes.get(id), feature, verdict.effectiveLevel) } : CLOSED];
     }),
   );
 }

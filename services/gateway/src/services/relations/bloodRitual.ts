@@ -47,7 +47,7 @@ import {
 import { isBlockedBetween } from '../../utils/blocking';
 import { judgeRelationRequest } from './relationRequestGate';
 import { recordLevel } from './userRelationWriter';
-import { withdrawRitualSharesBetween } from './ritualShareWithdrawal';
+import { forgetBloodBundleBetween, withdrawRitualSharesBetween } from './ritualShareWithdrawal';
 import { niveauEffectif } from '../friendship';
 
 export const RITUAL_TTL_MS = 60_000;
@@ -293,6 +293,7 @@ async function withdrawIfSealLost(deps: RitualDeps, actorId: string, otherId: st
     ]);
     if (level === 'BLOOD' && !blocked) return;
     await withdrawRitualSharesBetween(deps.prisma, { actorId, otherId, at: null });
+    await forgetBloodBundleBetween(deps.prisma, { actorId, otherId });
   } catch (error) {
     deps.reportAfterSeal(error);
   }

@@ -25,9 +25,10 @@ import { SHARED_LOCATION_CIRCLES, type SharedLocationBloodItem, type SharedLocat
 import type { RelationLevel } from '@meeshy/shared/types/relation';
 import { comptesAuMoins } from '../friendship';
 import { pairAccessAmong } from '../relations/pairAccess';
-import { relationConsentGrantedBy } from '../relations/relationConsent';
+import { pairConsentResolver, relationPairConsentBy } from '../relations/relationConsent';
 import { teamPeerCandidates } from '../relations/teamPeers';
 import { bloodLocationMutedBy } from './bloodLocationMute';
+import { ownersHidingFrom } from './bloodLocationVeil';
 import { openPoint } from './bloodLocationSeal';
 import { noteConsultation } from './bloodLocationService';
 import type { BloodLocationDeps } from './bloodLocationTypes';
@@ -52,14 +53,14 @@ async function candidatesOf(deps: BloodLocationDeps, viewerId: string): Promise<
 /** Les émetteurs que la loi et leur consentement m'ouvrent, avec le cercle que la loi vient de juger. */
 async function allowedOwners(deps: BloodLocationDeps, viewerId: string, ownerIds: readonly string[]): Promise<ReadonlyMap<string, SharedLocationCircle | undefined>> {
   const feature = 'location.history';
-  const granted = await relationConsentGrantedBy(deps.prisma, { ownerIds, otherId: viewerId, feature });
+  const stored = await relationPairConsentBy(deps.prisma, { ownerIds, otherId: viewerId, feature });
   const law = await pairAccessAmong(deps.prisma, {
     feature,
     subjectId: viewerId,
     otherIds: ownerIds,
     subjectIs: 'viewer',
     now: new Date(deps.now()),
-    consentOf: (ownerId) => (granted.has(ownerId) ? 'granted' : 'refused'),
+    consentOf: pairConsentResolver(feature, stored),
   });
   return new Map(ownerIds.flatMap((ownerId) => {
     const verdict = law.get(ownerId);
@@ -79,14 +80,9 @@ async function noteMapConsultations(deps: BloodLocationDeps, observedIds: readon
   await Promise.all(observedIds.filter((observedId) => !seen.has(observedId)).map((observedId) => noteConsultation(deps, observedId, observerId)));
 }
 
-/** Ceux qui me masquent aujourd'hui leur position : fantôme global, ou fantôme ciblé sur moi. */
-async function ghostedFor(deps: BloodLocationDeps, viewerId: string, ownerIds: readonly string[]): Promise<ReadonlySet<string>> {
-  const [global, targeted] = await Promise.all([
-    deps.prisma.user.findMany({ where: { id: { in: [...ownerIds] }, locationGhostAt: { not: null } }, select: { id: true } }),
-    deps.prisma.relationFeatureSetting.findMany({ where: { ownerId: { in: [...ownerIds] }, otherId: viewerId, ghostAt: { not: null } }, select: { ownerId: true } }),
-  ]);
-  return new Set([...global.map((row) => row.id), ...targeted.map((row) => row.ownerId)]);
-}
+/** Ceux qui me masquent aujourd'hui leur position (fantôme global ou ciblé), sauf l'accord au palier (#20361). */
+const ghostedFor = (deps: BloodLocationDeps, viewerId: string, ownerIds: readonly string[]): Promise<ReadonlySet<string>> =>
+  ownersHidingFrom(deps.prisma, viewerId, ownerIds);
 
 /** Le premier point, du plus récent, qui ne m'est pas masqué : on n'ouvre que ce qu'il faut. */
 function firstVisible(ownerId: string, viewerId: string, rows: readonly { readonly sealed: string; readonly recordedAt: Date }[]) {

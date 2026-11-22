@@ -4,6 +4,9 @@
  * sur la ligne de réglages que l'invité pose pour lui) ou pour tous
  * (`notification.togetherEnabled`), l'invitation ne part pas.
  *
+ * Entre Sangs, après l'accord au palier de l'invité pour cet hôte (#20361), une coupure ne
+ * ferme plus : l'invitation part (décision B, #20367 : avant cet accord, elle reste appliquée).
+ *
  * Elle gouverne l'INVITATION, pas la séance : une séance que l'invité a rejointe continue
  * jusqu'à ce que l'un la quitte. C'est pourquoi elle n'entre pas dans le consentement de la
  * loi d'accès (`RELATION_CONSENT_FEATURES`), que chaque synchronisation rejuge.
@@ -18,6 +21,9 @@
  * ni qu'il a trop invité. Une lecture qui échoue LÈVE : le relais ferme (`UNAVAILABLE`).
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { RelationLevel } from '@meeshy/shared/types/relation';
+import { resolveReceptionPreference } from '@meeshy/shared/utils/relation-emitter-consent';
+import { bloodBundleAcceptedOf } from '../relations/relationConsent';
 import { TOGETHER_INVITES_PER_PAIR, TOGETHER_INVITES_WINDOW_SECONDS } from '@meeshy/shared/types/together';
 import { togetherInviteBudgetKey, type TogetherCache } from './togetherStore';
 
@@ -27,17 +33,18 @@ export type TogetherInvitePair = { readonly hostId: string; readonly guestId: st
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/** L'invité reçoit-il les invitations de cet hôte ? Absent partout ⇒ oui. */
-export async function guestReceivesInvitesFrom(prisma: TogetherReceptionDb, pair: TogetherInvitePair): Promise<boolean> {
+/** L'invité reçoit-il les invitations de cet hôte, à ce niveau effectif ? Absent partout ⇒ oui. */
+export async function guestReceivesInvitesFrom(prisma: TogetherReceptionDb, pair: TogetherInvitePair, effectiveLevel: RelationLevel): Promise<boolean> {
   const [setting, prefs] = await Promise.all([
     prisma.relationFeatureSetting.findFirst({
       where: { ownerId: pair.guestId, otherId: pair.hostId },
-      select: { togetherBlockedAt: true },
+      select: { togetherBlockedAt: true, bloodBundleAcceptedAt: true, bloodBundleVersion: true },
     }),
     prisma.userPreferences.findUnique({ where: { userId: pair.guestId }, select: { notification: true } }),
   ]);
   const notification = isRecord(prefs?.notification) ? prefs.notification : {};
-  return notification.togetherEnabled !== false && !setting?.togetherBlockedAt;
+  const cut = notification.togetherEnabled === false || Boolean(setting?.togetherBlockedAt);
+  return resolveReceptionPreference({ feature: 'together', cut, effectiveLevel, bloodBundleAccepted: bloodBundleAcceptedOf(setting) }) === 'granted';
 }
 
 const instantsOf = (raw: string | null, since: number): readonly number[] => {

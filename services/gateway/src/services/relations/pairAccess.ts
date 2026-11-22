@@ -19,6 +19,7 @@ import { declaredAgeClass, type DeclaredAgeClass } from '@meeshy/shared/utils/ag
 import { ACCOUNT_STATE_SELECT, isUsableAccount, lawRoleOf } from './usableAccount';
 import { relationAccessReads, resolveRelationAccess, type RelationAccess, type RelationConsent } from '@meeshy/shared/utils/relation-access';
 import type { RelationFeature } from '@meeshy/shared/utils/relation-levels';
+import type { RelationLevel } from '@meeshy/shared/types/relation';
 import { getBlockedUserIdsAmong } from '../../utils/blocking';
 import { niveauxParmi } from '../friendship';
 
@@ -35,10 +36,13 @@ export type PairAccessAmongParams = {
   readonly now?: Date;
   /**
    * Le consentement, pour une feature qui en exige un (écoute, position) : l'appelant
-   * le lit par `relationConsentGrantedAmong` et le rend par autre personne. Absent, la
-   * loi refuse toute feature à consentement (`reason: 'consent'`).
+   * le lit par `relationPairConsentAmong` et le rend par autre personne, avec le NIVEAU
+   * EFFECTIF que la loi vient de lire (équipe comprise) — c'est lui qui donne le défaut du
+   * palier et le verrou du Sang (`resolveEmitterConsent`, #20361), et si la CIBLE de la loi (l'émetteur
+   * d'un partage) est mineure déclarée. Absent, la loi refuse
+   * toute feature à consentement (`reason: 'consent'`).
    */
-  readonly consentOf?: (otherId: string) => RelationConsent;
+  readonly consentOf?: (otherId: string, effectiveLevel: RelationLevel, ages: { readonly targetMinor: boolean }) => RelationConsent | undefined;
 };
 
 export type PairPerson = {
@@ -98,23 +102,22 @@ export async function pairAccessAmong(prisma: PairAccessDb, params: PairAccessAm
     ids.map((id) => {
       const level = levels.get(id) ?? 'PUBLIC';
       const [viewerId, targetId] = params.subjectIs === 'viewer' ? [subjectId, id] : [id, subjectId];
-      return [
-        id,
-        resolveRelationAccess({
-          viewerId,
-          targetId,
-          grantedByViewer: level,
-          grantedByTarget: level,
-          sharesCommunity: coMembers.has(id),
-          blockedEitherWay: blocked.has(id),
-          viewerMinor: ageOf(viewerId),
-          targetMinor: ageOf(targetId),
-          viewerRole: roleOf(viewerId),
-          targetRole: roleOf(targetId),
-          feature,
-          consent: params.consentOf?.(id),
-        }),
-      ];
+      const input = {
+        viewerId,
+        targetId,
+        grantedByViewer: level,
+        grantedByTarget: level,
+        sharesCommunity: coMembers.has(id),
+        blockedEitherWay: blocked.has(id),
+        viewerMinor: ageOf(viewerId),
+        targetMinor: ageOf(targetId),
+        viewerRole: roleOf(viewerId),
+        targetRole: roleOf(targetId),
+        feature,
+      };
+      const probe = resolveRelationAccess({ ...input, consent: 'unknown' });
+      const consentOf = params.consentOf;
+      return [id, !probe.requiresConsent || !consentOf ? probe : resolveRelationAccess({ ...input, consent: consentOf(id, probe.effectiveLevel, { targetMinor: input.targetMinor === 'minor' }) })];
     }),
   );
 }

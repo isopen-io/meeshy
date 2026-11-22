@@ -32,9 +32,10 @@ import {
 } from '@meeshy/shared/types/blood-location';
 import { pairAccessAmong } from '../relations/pairAccess';
 import { writeLocationGhost } from '../sharedLocation/locationGhost';
-import { relationConsentGrantedAmong } from '../relations/relationConsent';
+import { pairConsentResolver, relationPairConsentBy } from '../relations/relationConsent';
 import { alertBloodProximity, isPlausibleMove } from './bloodProximity';
-import { signalBloodMoved } from './bloodMoved';
+import { bloodReaderCandidates, signalBloodMoved } from './bloodMoved';
+import { ownersHidingFrom, readersHiddenBy } from './bloodLocationVeil';
 import { openPoint, sealPoint } from './bloodLocationSeal';
 import type { BloodLocationDeps } from './bloodLocationTypes';
 
@@ -44,16 +45,6 @@ const DAY_MS = 24 * 3_600_000;
 const HISTORY_MS = BLOOD_LOCATION_HISTORY_DAYS * DAY_MS;
 const JOURNAL_LIMIT = 200;
 
-/** Qui `ownerId` masque aujourd'hui par un fantôme ciblé. */
-async function ghostedBy(deps: BloodLocationDeps, ownerId: string): Promise<ReadonlySet<string>> {
-  const rows = await deps.prisma.relationFeatureSetting.findMany({ where: { ownerId, ghostAt: { not: null } }, select: { otherId: true } });
-  return new Set(rows.map((row) => row.otherId));
-}
-
-async function inGlobalGhost(deps: BloodLocationDeps, ownerId: string): Promise<boolean> {
-  const row = await deps.prisma.user.findUnique({ where: { id: ownerId }, select: { locationGhostAt: true } });
-  return row?.locationGhostAt != null;
-}
 
 const ANCHOR_SCAN = 50;
 
@@ -72,8 +63,10 @@ async function anchorOf(deps: BloodLocationDeps, ownerId: string): Promise<{ lat
 
 export async function recordBloodLocation(deps: BloodLocationDeps, ownerId: string, input: unknown): Promise<{ readonly recorded: boolean }> {
   const parsed = bloodLocationPayloadSchema.safeParse(input);
-  if (!parsed.success || (await inGlobalGhost(deps, ownerId))) return { recorded: false };
-  const [hidden, anchor] = await Promise.all([ghostedBy(deps, ownerId), anchorOf(deps, ownerId)]);
+  if (!parsed.success) return { recorded: false };
+  const [veil, anchor] = await Promise.all([readersHiddenBy(deps.prisma, ownerId, () => bloodReaderCandidates(deps, ownerId)), anchorOf(deps, ownerId)]);
+  if (veil.everyone) return { recorded: false };
+  const { hidden } = veil;
   const now = deps.now();
   const plausible = isPlausibleMove(anchor, parsed.data, now);
   const recordedAt = new Date(now);
@@ -121,14 +114,14 @@ async function pointsOf(deps: BloodLocationDeps, ownerId: string, viewerId: stri
 }
 
 async function viewerMayRead(deps: BloodLocationDeps, viewerId: string, ownerId: string): Promise<BloodLocationHistoryVerdict | null> {
-  const granted = await relationConsentGrantedAmong(deps.prisma, { ownerId, otherIds: [viewerId], feature: 'location.history' });
+  const stored = await relationPairConsentBy(deps.prisma, { ownerIds: [ownerId], otherId: viewerId, feature: 'location.history' });
   const verdicts = await pairAccessAmong(deps.prisma, {
     feature: 'location.history',
     subjectId: viewerId,
     otherIds: [ownerId],
     subjectIs: 'viewer',
     now: new Date(deps.now()),
-    consentOf: () => (granted.has(viewerId) ? 'granted' : 'refused'),
+    consentOf: pairConsentResolver('location.history', stored),
   });
   const verdict = verdicts.get(ownerId);
   if (verdict?.allowed === true) return null;
@@ -164,8 +157,8 @@ export async function readBloodLocationHistory(
   if (refusal) return refusal;
   if (!deps.enabledFor(ownerId)) return { kind: 'ok', items: [] };
   await noteConsultation(deps, ownerId, viewerId);
-  const [global, targeted, items] = await Promise.all([inGlobalGhost(deps, ownerId), ghostedBy(deps, ownerId), pointsOf(deps, ownerId, viewerId, params)]);
-  return { kind: 'ok', items: global || targeted.has(viewerId) ? [] : items };
+  const [hiding, items] = await Promise.all([ownersHidingFrom(deps.prisma, viewerId, [ownerId]), pointsOf(deps, ownerId, viewerId, params)]);
+  return { kind: 'ok', items: hiding.has(ownerId) ? [] : items };
 }
 
 export async function eraseBloodLocationHistory(deps: BloodLocationDeps, ownerId: string): Promise<{ readonly erased: number }> {

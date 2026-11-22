@@ -18,6 +18,7 @@
  * l'appartenance de quelqu'un à une conversation. Une lecture qui échoue LÈVE : le relais
  * ferme (`TOGETHER_UNAVAILABLE`).
  */
+import type { RelationLevel } from '@meeshy/shared/types/relation';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { TogetherMediaKind } from '@meeshy/shared/types/together';
 import { pairAccess, type PairAccessDb } from '../relations/pairAccess';
@@ -34,7 +35,7 @@ export type TogetherSubject = {
   readonly attachmentId: string;
 };
 
-export type TogetherVerdict = { readonly ok: true; readonly media: TogetherMediaKind } | { readonly ok: false };
+export type TogetherVerdict = { readonly ok: true; readonly media: TogetherMediaKind; readonly level: RelationLevel } | { readonly ok: false };
 
 const REFUSED: TogetherVerdict = { ok: false };
 
@@ -145,5 +146,5 @@ export async function judgeTogether(
     bothActiveMembers(deps.prisma, subject),
     openConversation(deps.prisma, subject),
   ]);
-  return usable && access.allowed && media && members && open ? { ok: true, media } : REFUSED;
+  return usable && access.allowed && media && members && open ? { ok: true, media, level: access.effectiveLevel } : REFUSED;
 }

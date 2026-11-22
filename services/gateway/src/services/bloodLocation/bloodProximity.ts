@@ -33,7 +33,8 @@ import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { RELATION_THRESHOLDS } from '@meeshy/shared/utils/relation-levels';
 import { comptesAuMoins } from '../friendship';
 import { pairAccessAmong } from '../relations/pairAccess';
-import { relationConsentGrantedAmong, relationConsentGrantedBy } from '../relations/relationConsent';
+import { pairConsentResolver, relationPairConsentAmong, relationPairConsentBy } from '../relations/relationConsent';
+import { ownersHidingFrom } from './bloodLocationVeil';
 import { teamPeerCandidates } from '../relations/teamPeers';
 import { bloodLocationMutedBy, bloodLocationMutedFor } from './bloodLocationMute';
 import { openPoint } from './bloodLocationSeal';
@@ -92,11 +93,7 @@ async function claimed(deps: BloodLocationDeps, key: string, ttlSeconds: number)
 async function unhiddenCandidates(deps: BloodLocationDeps, ownerId: string, candidates: readonly string[], ghostedByOwner: ReadonlySet<string>): Promise<readonly string[]> {
   const open = candidates.filter((id) => !ghostedByOwner.has(id));
   if (open.length === 0) return [];
-  const [targeted, global] = await Promise.all([
-    deps.prisma.relationFeatureSetting.findMany({ where: { ownerId: { in: [...open] }, otherId: ownerId, ghostAt: { not: null } }, select: { ownerId: true } }),
-    deps.prisma.user.findMany({ where: { id: { in: [...open] }, locationGhostAt: { not: null } }, select: { id: true } }),
-  ]);
-  const hidden = new Set<string>([...targeted.map((row) => row.ownerId), ...global.map((row) => row.id)]);
+  const hidden = await ownersHidingFrom(deps.prisma, ownerId, open);
   return open.filter((id) => !hidden.has(id));
 }
 
@@ -116,12 +113,12 @@ async function radiusByCandidate(deps: BloodLocationDeps, ownerId: string, candi
 async function mutuallyAllowed(deps: BloodLocationDeps, ownerId: string, candidates: readonly string[]): Promise<readonly string[]> {
   const feature = 'location.proximity';
   const [toThem, fromThem] = await Promise.all([
-    relationConsentGrantedAmong(deps.prisma, { ownerId, otherIds: candidates, feature }),
-    relationConsentGrantedBy(deps.prisma, { ownerIds: candidates, otherId: ownerId, feature }),
+    relationPairConsentAmong(deps.prisma, { ownerId, otherIds: candidates, feature }),
+    relationPairConsentBy(deps.prisma, { ownerIds: candidates, otherId: ownerId, feature }),
   ]);
   const [theySee, iSee] = await Promise.all([
-    pairAccessAmong(deps.prisma, { feature, subjectId: ownerId, otherIds: candidates, subjectIs: 'target', consentOf: (id) => (toThem.has(id) ? 'granted' : 'refused') }),
-    pairAccessAmong(deps.prisma, { feature, subjectId: ownerId, otherIds: candidates, subjectIs: 'viewer', consentOf: (id) => (fromThem.has(id) ? 'granted' : 'refused') }),
+    pairAccessAmong(deps.prisma, { feature, subjectId: ownerId, otherIds: candidates, subjectIs: 'target', consentOf: pairConsentResolver(feature, toThem) }),
+    pairAccessAmong(deps.prisma, { feature, subjectId: ownerId, otherIds: candidates, subjectIs: 'viewer', consentOf: pairConsentResolver(feature, fromThem) }),
   ]);
   return candidates.filter((id) => theySee.get(id)?.allowed === true && iSee.get(id)?.allowed === true);
 }

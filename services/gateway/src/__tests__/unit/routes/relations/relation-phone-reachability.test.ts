@@ -123,15 +123,17 @@ describe('le signe de vie', () => {
 });
 
 describe('les réglages', () => {
-  it('un Proche ne reçoit rien sans accord ; l\'accord le lui sert tout de suite', async () => {
+  it('un Proche reçoit l\'injoignabilité dès l\'arrivée au palier (#20361) ; retirée, plus rien ; rendue, servie tout de suite', async () => {
     const app = avecSessions(await appli({ liens: [lien('CLOSE', 'CLOSE')] }));
     await injoignable([]);
     const avant = await app.call('GET', `/api/v1/relations/${AUTRE}/phone-reachability/settings`, undefined, MOI);
+    const retire = await app.call('PUT', `/api/v1/relations/${AUTRE}/phone-reachability/settings`, { shared: false }, MOI);
     const apres = await app.call('PUT', `/api/v1/relations/${AUTRE}/phone-reachability/settings`, { shared: true }, MOI);
     const refus = await app.call('PUT', `/api/v1/relations/${AUTRE}/phone-reachability/settings`, { shared: true, extra: 1 }, MOI);
     await app.close();
-    expect(avant.body.data).toEqual({ userId: AUTRE, shared: false });
-    expect(apres.body.data).toEqual({ userId: AUTRE, shared: true });
+    expect(avant.body.data).toMatchObject({ userId: AUTRE, shared: true });
+    expect(retire.body.data).toMatchObject({ userId: AUTRE, shared: false });
+    expect(apres.body.data).toMatchObject({ userId: AUTRE, shared: true });
     expect(refus.status).toBe(400);
     expect(app.emissions).toContainEqual({
       room: ROOMS.user(AUTRE),

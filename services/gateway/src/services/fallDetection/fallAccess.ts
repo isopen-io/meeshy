@@ -24,7 +24,7 @@ export function fallEmitterOff(row: Readonly<Record<string, unknown>>, now: Date
   return birthDate !== null && ageInFullYearsUtc(birthDate, now) < FALL_CONSENT_MINIMUM_AGE;
 }
 
-const FALL_SWITCH: EmitterSwitch = { select: FALL_EMITTER_SELECT, off: fallEmitterOff };
+const FALL_SWITCH: EmitterSwitch = { select: FALL_EMITTER_SELECT, off: fallEmitterOff, nature: 'legal' };
 
 export function fallAllowedAmong(prisma: FallDb, params: EmitterFeatureParams): Promise<ReadonlySet<string>> {
   return emitterFeatureAllowedAmong(prisma, { feature: 'health.fall', emitterSwitch: FALL_SWITCH }, params);

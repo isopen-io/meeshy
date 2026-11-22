@@ -16,7 +16,7 @@ import { withMutationLog } from '../../utils/withMutationLog';
 import { getCacheStore } from '../../services/CacheStore';
 import { blockCacheKey } from '../../utils/block-cache';
 import { cancelAutoAcquaintanceOnBlock } from '../../services/relations/autoAcquaintance';
-import { withdrawRitualSharesBetween } from '../../services/relations/ritualShareWithdrawal';
+import { forgetBloodBundleBetween, withdrawRitualSharesBetween } from '../../services/relations/ritualShareWithdrawal';
 import { stopBringsAfterUserBlock } from '../bring';
 import { cutTalkiesOnBlock, talkieCutDepsOf } from '../../services/talkie/talkieCut';
 import { createCustomRateLimiter } from '../../utils/rate-limiter.js';
@@ -171,6 +171,7 @@ export async function bloquer(
   // Après les coupures et sans retenir la réponse : une panne ici ne rend pas 500 sur un blocage écrit, et le rejeu la solde.
   try {
     await withdrawRitualSharesBetween(fastify.prisma, { actorId: moi, otherId: cibleId, at: new Date() });
+    await forgetBloodBundleBetween(fastify.prisma, { actorId: moi, otherId: cibleId });
   } catch (error: unknown) {
     logError(fastify.log, '[BLOCKS] Ritual shares not withdrawn after block', error);
   }

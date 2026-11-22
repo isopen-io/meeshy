@@ -59,7 +59,8 @@ import {
 } from '@meeshy/shared/types/bring';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { declaredAgeClass } from '@meeshy/shared/utils/age';
-import { resolveRelationAccess } from '@meeshy/shared/utils/relation-access';
+import { resolveRelationAccessWithReception } from '@meeshy/shared/utils/relation-emitter-consent';
+import { bloodBundleAcceptedOf } from '../relations/relationConsent';
 import type { RelationThresholds } from '@meeshy/shared/utils/relation-levels';
 import type { CacheStore } from '../CacheStore';
 import type { PushNotificationService } from '../PushNotificationService';
@@ -185,14 +186,14 @@ async function judge(deps: BringDeps, fromUserId: string, toUserId: string): Pro
     deps.prisma.user.findUnique({ where: { id: toUserId }, select: USER_SELECT }),
     deps.prisma.relationFeatureSetting.findUnique({
       where: { ownerId_otherId: { ownerId: toUserId, otherId: fromUserId } },
-      select: { bringBlockedAt: true },
+      select: { bringBlockedAt: true, bloodBundleAcceptedAt: true, bloodBundleVersion: true },
     }),
     receptionPrefs(deps.prisma, toUserId),
   ]);
   if (!isUsableAccount(sender) || !isUsableAccount(recipient)) return NOT_ALLOWED;
 
   const now = deps.now();
-  const verdict = resolveRelationAccess({
+  const verdict = resolveRelationAccessWithReception({
     viewerId: fromUserId,
     targetId: toUserId,
     grantedByViewer: level,
@@ -204,7 +205,8 @@ async function judge(deps: BringDeps, fromUserId: string, toUserId: string): Pro
     viewerRole: sender.role,
     targetRole: recipient.role,
     feature: 'bring',
-    consent: prefs.receives && !setting?.bringBlockedAt ? 'granted' : 'refused',
+    cut: !prefs.receives || Boolean(setting?.bringBlockedAt),
+    bloodBundleAccepted: bloodBundleAcceptedOf(setting),
   });
   if (!verdict.allowed) return NOT_ALLOWED;
 

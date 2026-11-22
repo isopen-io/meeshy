@@ -74,6 +74,8 @@ function monde(options: {
   const settings = table([
     { ownerId: EMETTEUR, otherId: PROCHE_CONSENTI, unreachableShared: true },
     { ownerId: EMETTEUR, otherId: SANG_REFUSE, unreachableShared: false },
+    // #20361 : sans réglage, l'injoignabilité part dès Proche — ce Proche l'a REFUSÉE.
+    { ownerId: EMETTEUR, otherId: PROCHE, unreachableShared: false },
     { ownerId: EMETTEUR, otherId: AMI, unreachableShared: true },
     ...(options.settings ?? []),
   ]);
@@ -342,7 +344,7 @@ describe('un retour qui dépasse l\'éventail', () => {
 });
 
 describe('la loi — rien ne part vers qui n\'y a pas droit, pas même un effacement', () => {
-  it('Sang sans réglage oui ; Proche consenti oui ; Proche sans accord, Sang refusé, Ami, bloqué : rien', async () => {
+  it('Sang sans réglage oui ; Proche consenti oui ; Proche qui a refusé, Sang refusé, Ami, bloqué : rien', async () => {
     const m = monde();
     await m.perdre();
     expect(m.pousses(SANG)).toEqual(['unreachable']);

@@ -33,6 +33,26 @@ export const RELATION_RITUAL_SHARE_WITHDRAWN_AT = {
   proximityShared: 'proximityWithdrawnAt',
 } as const satisfies Record<RelationRitualShare, string>;
 
+/**
+ * DE SANG À SANG RIEN NE SE COUPE (#20361) : une écriture qui COUPE un partage ou une réception
+ * envers un Sang pour qui j'ai donné l'accord au palier répond 409 avec ce code. Pour restreindre,
+ * on redescend la personne à Proche. Un ancien client ne lit pas le code : il garde son retour
+ * arrière optimiste, comme sur toute erreur.
+ */
+export const RELATION_BLOOD_LOCKED_CODE = 'RELATION_BLOOD_LOCKED' as const;
+
+/**
+ * Ce que les GET de réglages par personne servent EN PLUS (#20361) — optionnels, absents d'un
+ * ancien serveur : `lockedByLevel` = au Sang, après mon accord au palier, ces interrupteurs
+ * n'existent plus (l'interface les retire, elle ne les grise pas) ; `bloodBundleAccepted` = j'ai
+ * accepté la liste du Sang à sa version courante (sinon la carte de confirmation, #20367).
+ */
+export const relationBloodLockFieldsSchema = z.object({
+  lockedByLevel: z.boolean().optional(),
+  bloodBundleAccepted: z.boolean().optional(),
+});
+export type RelationBloodLockFields = z.infer<typeof relationBloodLockFieldsSchema>;
+
 export const relationPersonSettingsSchema = z.object({
   userId: z.string(),
   bringBlocked: z.boolean(),
@@ -47,6 +67,8 @@ export const relationPersonSettingsSchema = z.object({
   locationShared: z.boolean(),
   locationHistoryShared: z.boolean(),
   proximityShared: z.boolean(),
+  lockedByLevel: z.boolean().optional(),
+  bloodBundleAccepted: z.boolean().optional(),
 });
 export type RelationPersonSettings = z.infer<typeof relationPersonSettingsSchema>;
 

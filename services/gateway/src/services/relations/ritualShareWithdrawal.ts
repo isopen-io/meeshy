@@ -67,6 +67,22 @@ export async function withdrawRitualSharesBetween(
   ]);
 }
 
+const BUNDLE_FORGOTTEN = { bloodBundleAcceptedAt: null, bloodBundleVersion: null } as const;
+
+/**
+ * La baisse sous Sang EFFACE l'accord au palier des DEUX côtés (#20362, analyse de conformité
+ * #20364, C8) : remonter au Sang redemande l'accord, au rituel.
+ */
+export async function forgetBloodBundleBetween(
+  prisma: Pick<PrismaClient, 'relationFeatureSetting'>,
+  params: { readonly actorId: string; readonly otherId: string },
+): Promise<void> {
+  await prisma.relationFeatureSetting.updateMany({
+    where: { OR: [{ ownerId: params.actorId, otherId: params.otherId }, { ownerId: params.otherId, otherId: params.actorId }], bloodBundleAcceptedAt: { not: null } },
+    data: BUNDLE_FORGOTTEN,
+  });
+}
+
 const SHARES_OFF_DATA = Object.fromEntries(RELATION_RITUAL_SHARES.map((share) => [share, false])) as Record<RelationRitualShare, false>;
 
 /**
@@ -79,7 +95,7 @@ export async function withdrawRitualSharesOfUser(
   params: { readonly userId: string },
 ): Promise<void> {
   const pairs = { OR: [{ ownerId: params.userId }, { otherId: params.userId }] };
-  await prisma.relationFeatureSetting.updateMany({ where: pairs, data: SHARES_OFF_DATA });
+  await prisma.relationFeatureSetting.updateMany({ where: pairs, data: { ...SHARES_OFF_DATA, ...BUNDLE_FORGOTTEN } });
   await prisma.relationFeatureSetting.updateMany({ where: { ...pairs, batteryShared: true }, data: { batteryShared: null } });
 }
 
@@ -118,11 +134,11 @@ export async function withdrawListeningCategoryBetween(
   await Promise.all([
     prisma.relationFeatureSetting.updateMany({
       where: { ownerId: params.actorId, otherId: params.otherId, listeningCategoryShared: true },
-      data: { listeningCategoryShared: false, listeningCategoryWithdrawnAt: params.at },
+      data: { listeningCategoryShared: null, listeningCategoryWithdrawnAt: params.at },
     }),
     prisma.relationFeatureSetting.updateMany({
       where: { ownerId: params.otherId, otherId: params.actorId, listeningCategoryShared: true },
-      data: { listeningCategoryShared: false },
+      data: { listeningCategoryShared: null },
     }),
   ]);
 }
@@ -140,6 +156,7 @@ export async function withdrawSharesAfterDrop(
   if (params.level === 'BLOOD') return;
   const pair = { actorId: params.actorId, otherId: params.otherId, at: params.at };
   await withdrawRitualSharesBetween(prisma, pair);
+  await forgetBloodBundleBetween(prisma, pair);
   if (params.level === 'CLOSE') return;
   await withdrawListeningCategoryBetween(prisma, pair);
   await withdrawBatteryConsentBetween(prisma, pair);

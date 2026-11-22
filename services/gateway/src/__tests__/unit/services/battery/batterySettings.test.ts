@@ -48,11 +48,11 @@ function monde() {
 }
 
 describe('les réglages de la batterie', () => {
-  it('par défaut : partage global ouvert, le Sang partage, le Proche non, réception « all »', async () => {
+  it('par défaut : partage global ouvert, le Sang et le Proche partagent (#20361), réception « all »', async () => {
     const m = monde();
     expect(await readBatteryEmitterSettings(m.prisma, MOI)).toEqual({ sharingEnabled: true });
     expect(await readBatteryPersonSettings(m.prisma, { ownerId: MOI, otherId: SANG, now: NOW })).toEqual({ userId: SANG, shared: true, receive: 'all' });
-    expect(await readBatteryPersonSettings(m.prisma, { ownerId: MOI, otherId: PROCHE, now: NOW })).toEqual({ userId: PROCHE, shared: false, receive: 'all' });
+    expect(await readBatteryPersonSettings(m.prisma, { ownerId: MOI, otherId: PROCHE, now: NOW })).toEqual({ userId: PROCHE, shared: true, receive: 'all' });
   });
 
   it('la coupure globale ferme tout, et se lève', async () => {

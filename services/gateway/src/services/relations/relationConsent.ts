@@ -13,6 +13,9 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { RelationRitualShare } from '@meeshy/shared/types/relation-person-settings';
+import type { RelationLevel } from '@meeshy/shared/types/relation';
+import { resolveEmitterConsent } from '@meeshy/shared/utils/relation-emitter-consent';
+import { isCurrentBloodBundle } from '@meeshy/shared/utils/blood-bundle';
 import type { PairAccessSubject } from './pairAccess';
 
 export const RITUAL_CONSENT_FEATURES = ['listening.title', 'location.live', 'location.history', 'location.proximity'] as const;
@@ -152,4 +155,111 @@ export async function relationStoredConsentBy(
   })) as ReadonlyArray<Record<string, unknown>>;
   const found = new Map(rows.map((row) => [String(row.ownerId), storedValue(row[column])]));
   return new Map(params.ownerIds.map((id) => [id, found.get(id) ?? null]));
+}
+
+/**
+ * CE QUE LA PAIRE A STOCKÉ, et l'accord au palier Sang de son propriétaire (#20361, #20362) :
+ * la valeur brute (`true`, `false`, ou `null` pour rien de dit) et `bloodBundleAccepted`.
+ * C'est `resolveEmitterConsent` (partagé) qui en tire le défaut du palier et le verrou du Sang,
+ * avec le niveau effectif que la loi vient de lire (`pairConsentResolver`). Une ligne absente
+ * ou illisible vaut `{ stored: null, bloodBundleAccepted: false }`.
+ */
+export type PairStoredConsent = { readonly stored: boolean | null; readonly bloodBundleAccepted: boolean };
+
+export type PairConsentFeature = ShareConsentFeature | StoredConsentFeature;
+
+const PAIR_COLUMN: Readonly<Record<PairConsentFeature, string>> = { ...COLUMN, ...STORED_COLUMN };
+
+const NOTHING_STORED: PairStoredConsent = { stored: null, bloodBundleAccepted: false };
+
+/** L'accord au palier ne vaut qu'à la version COURANTE de la liste (C5) : une liste élargie se ré-accepte. */
+export const bloodBundleAcceptedOf = (row: Readonly<Record<string, unknown>> | null | undefined): boolean =>
+  row?.bloodBundleAcceptedAt instanceof Date && isCurrentBloodBundle(row.bloodBundleVersion);
+
+const pairStoredOf = (row: Readonly<Record<string, unknown>>, column: string): PairStoredConsent => ({
+  stored: storedValue(row[column]),
+  bloodBundleAccepted: bloodBundleAcceptedOf(row),
+});
+
+/** Ce que `ownerId` a stocké pour chacun des `otherIds`, et son accord au palier, en UNE lecture. */
+export async function relationPairConsentAmong(
+  prisma: Pick<PrismaClient, 'relationFeatureSetting'>,
+  params: { readonly ownerId: string; readonly otherIds: readonly string[]; readonly feature: PairConsentFeature },
+): Promise<ReadonlyMap<string, PairStoredConsent>> {
+  if (params.otherIds.length === 0) return new Map();
+  const column = PAIR_COLUMN[params.feature];
+  const rows = (await prisma.relationFeatureSetting.findMany({
+    where: { ownerId: params.ownerId, otherId: { in: [...params.otherIds] } },
+    select: { otherId: true, bloodBundleAcceptedAt: true, bloodBundleVersion: true, [column]: true } as Record<string, true>,
+  })) as ReadonlyArray<Record<string, unknown>>;
+  const found = new Map(rows.map((row) => [String(row.otherId), pairStoredOf(row, column)]));
+  return new Map(params.otherIds.map((id) => [id, found.get(id) ?? NOTHING_STORED]));
+}
+
+/** Ce que chacun des `ownerIds` a stocké pour `otherId`, et son accord au palier — le sens du lecteur. */
+export async function relationPairConsentBy(
+  prisma: Pick<PrismaClient, 'relationFeatureSetting'>,
+  params: { readonly ownerIds: readonly string[]; readonly otherId: string; readonly feature: PairConsentFeature },
+): Promise<ReadonlyMap<string, PairStoredConsent>> {
+  if (params.ownerIds.length === 0) return new Map();
+  const column = PAIR_COLUMN[params.feature];
+  const rows = (await prisma.relationFeatureSetting.findMany({
+    where: { ownerId: { in: [...params.ownerIds] }, otherId: params.otherId },
+    select: { ownerId: true, bloodBundleAcceptedAt: true, bloodBundleVersion: true, [column]: true } as Record<string, true>,
+  })) as ReadonlyArray<Record<string, unknown>>;
+  const found = new Map(rows.map((row) => [String(row.ownerId), pairStoredOf(row, column)]));
+  return new Map(params.ownerIds.map((id) => [id, found.get(id) ?? NOTHING_STORED]));
+}
+
+/** Les deux sens d'une lecture de paire, selon que le sujet est l'émetteur (`target`) ou le lecteur (`viewer`). */
+export const relationPairConsentFor = (
+  prisma: Pick<PrismaClient, 'relationFeatureSetting'>,
+  params: { readonly subjectId: string; readonly otherIds: readonly string[]; readonly subjectIs: PairAccessSubject; readonly feature: PairConsentFeature },
+): Promise<ReadonlyMap<string, PairStoredConsent>> =>
+  params.subjectIs === 'target'
+    ? relationPairConsentAmong(prisma, { ownerId: params.subjectId, otherIds: params.otherIds, feature: params.feature })
+    : relationPairConsentBy(prisma, { ownerIds: params.otherIds, otherId: params.subjectId, feature: params.feature });
+
+/**
+ * Le `consentOf` de `pairAccessAmong` pour une feature à consentement de l'émetteur : la valeur
+ * stockée, le défaut du palier, la coupure globale et le verrou du Sang résolus par la loi partagée.
+ */
+export const pairConsentResolver =
+  (feature: PairConsentFeature, stored: ReadonlyMap<string, PairStoredConsent>, globallyDisabled: (otherId: string) => boolean = () => false) =>
+  (otherId: string, effectiveLevel: RelationLevel, ages?: { readonly targetMinor: boolean }): 'granted' | 'refused' => {
+    const pair = stored.get(otherId) ?? NOTHING_STORED;
+    return resolveEmitterConsent({
+      feature,
+      stored: pair.stored,
+      effectiveLevel,
+      globallyDisabled: globallyDisabled(otherId),
+      bloodBundleAccepted: pair.bloodBundleAccepted,
+      emitterMinor: ages?.targetMinor === true,
+    });
+  };
+
+/** Les personnes parmi `otherIds` pour qui `ownerId` a donné l'accord au palier Sang. */
+export async function bloodBundleAcceptedAmong(
+  prisma: Pick<PrismaClient, 'relationFeatureSetting'>,
+  params: { readonly ownerId: string; readonly otherIds: readonly string[] },
+): Promise<ReadonlySet<string>> {
+  if (params.otherIds.length === 0) return new Set();
+  const rows = await prisma.relationFeatureSetting.findMany({
+    where: { ownerId: params.ownerId, otherId: { in: [...params.otherIds] }, bloodBundleAcceptedAt: { not: null } },
+    select: { otherId: true, bloodBundleAcceptedAt: true, bloodBundleVersion: true },
+  });
+  return new Set(rows.filter(bloodBundleAcceptedOf).map((row) => row.otherId));
+}
+
+/** Les propriétaires parmi `ownerIds` qui ont donné l'accord au palier Sang pour `otherId`. */
+export async function bloodBundleAcceptedBy(
+  prisma: Pick<PrismaClient, 'relationFeatureSetting'>,
+  params: { readonly ownerIds: readonly string[]; readonly otherId: string },
+): Promise<ReadonlySet<string>> {
+  if (params.ownerIds.length === 0) return new Set();
+  const rows = await prisma.relationFeatureSetting.findMany({
+    where: { ownerId: { in: [...params.ownerIds] }, otherId: params.otherId, bloodBundleAcceptedAt: { not: null } },
+    select: { ownerId: true, bloodBundleAcceptedAt: true, bloodBundleVersion: true },
+  });
+  return new Set(rows.filter(bloodBundleAcceptedOf).map((row) => row.ownerId));
 }

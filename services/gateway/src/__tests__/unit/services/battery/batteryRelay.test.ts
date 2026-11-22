@@ -74,6 +74,8 @@ function monde(options: { readonly settings?: readonly Row[]; readonly enConvers
   const settings = table([
     { ownerId: EMETTEUR, otherId: PROCHE_CONSENTI, batteryShared: true },
     { ownerId: EMETTEUR, otherId: SANG_REFUSE, batteryShared: false },
+    // #20361 : sans réglage, la batterie part dès Proche — ce Proche l'a REFUSÉE.
+    { ownerId: EMETTEUR, otherId: PROCHE, batteryShared: false },
     { ownerId: EMETTEUR, otherId: AMI, batteryShared: true },
     ...(options.settings ?? []),
   ]);
@@ -120,7 +122,7 @@ function monde(options: { readonly settings?: readonly Row[]; readonly enConvers
 }
 
 describe('la loi — rien ne part vers qui n\'y a pas droit, pas même un effacement', () => {
-  it('Ami rien ; Proche sans consentement rien ; Proche consenti oui ; Sang sans réglage oui ; Sang refusé rien', async () => {
+  it('Ami rien ; Proche qui a refusé rien ; Proche consenti oui ; Sang sans réglage oui ; Sang refusé rien', async () => {
     const m = monde({ enConversation: [SANG, PROCHE_CONSENTI, AMI, PROCHE, SANG_REFUSE] });
     await m.releve(28);
 
