@@ -16,8 +16,13 @@ data class CommunityLink(
     val joinLinkPaused: Boolean? = null,
 ) {
     companion object {
-        /** URL canonique de partage `/chat/<identifiant>` (`/join` n'est plus qu'une 308 legacy). */
-        fun canonicalJoinUrl(baseUrl: String, identifier: String): String = "$baseUrl/chat/$identifier"
+        /**
+         * L'adresse partagée d'une communauté (#20330) : sa page, marquée `?via=link` pour que l'entrée par elle se
+         * compte et se refuse quand le lien est en pause (#19661). Même adresse que le web et iOS ; `/chat/<identifiant>`
+         * ne résout qu'un lien de CONVERSATION et n'ouvrait jamais la communauté.
+         */
+        fun canonicalJoinUrl(baseUrl: String, identifier: String): String =
+            "${baseUrl.trimEnd('/')}/communities/${java.net.URLEncoder.encode(identifier, "UTF-8").replace("+", "%20")}?via=link"
 
         fun of(
             id: String,

@@ -112,12 +112,13 @@ class LinkFormsTest {
     }
 
     @Test
-    fun `une communaute devient un lien chat canonique avec ses totaux`() {
+    fun `une communaute devient son adresse partagee avec ses totaux`() {
         val links = listOf(
             CommunityMini(id = "1", name = "A", identifier = "alpha", isActive = true, memberCount = 4).toCommunityLink("https://meeshy.me/"),
             CommunityMini(id = "2", name = "B", identifier = "beta", isActive = false).toCommunityLink("https://meeshy.me"),
         )
-        assertThat(links[0].joinUrl).isEqualTo("https://meeshy.me/chat/alpha")
+        assertThat(links[0].joinUrl).isEqualTo("https://meeshy.me/communities/alpha?via=link")
+        assertThat(links[1].joinUrl).isEqualTo("https://meeshy.me/communities/beta?via=link")
         assertThat(links[1].memberCount).isEqualTo(0)
         val stats = links.toStats()
         assertThat(stats.totalCommunities).isEqualTo(2)

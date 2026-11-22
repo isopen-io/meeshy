@@ -2548,3 +2548,39 @@ socket jusqu'au client.
 1. **#20299** (règle unique du chrome Android), **#20320** (web, petit lot), **#20300** (iOS, fondu des commandes sur `Date()`), puis **#20335**.
 2. #20257, #20284, #20280, #20273, #20288.
 3. #20185 (recette staging), #11932, #12236, #16933.
+
+## Cycle 75 — 2026-11-22
+
+- **Base** : `origin/dev` @ `229e8aaae`, qui contient #20347 (#20319, cycle 74).
+- **Branche** : `claude/determined-volta-4zd5ck`.
+- **Objectif** : #20284. Sur iOS et Android, `availableOutgoingBitrateBps` ne se lit que sur la paire ICE élue, comme le fait déjà le web (`readStats`, PR #20275).
+  - Pourquoi : une paire qui ne porte pas le trafic peut avoir une estimation faible ou périmée. Le palier vidéo s'y règle, et l'encodeur se reconfigure en plein geste.
+- **Livré** :
+  - Android, `CallStats.kt` (`a0ef53b5a`) : `availableOutgoingBitrateBps = elected?.values?.get("availableOutgoingBitrate")?.let(CallStatValue::count) ?: 0`.
+  - iOS, `CallStats.swift` (`52efefa37`) : même règle.
+  - Le RTT garde son repli `pairMeasure` sur les trois plateformes.
+  - 0 veut dire « pas d'estimation ». Partout, les consommateurs retombent alors sur l'heuristique RTT/pertes :
+    - adaptation iOS : `WebRTCService.swift:470`, garde `> 0` ;
+    - rapport `call:quality-report` : le champ est omis si la valeur est ≤ 0, et la passerelle le déclare `optional()` ;
+    - Android : `AdaptiveBitrateLaw` (valeur ≤ 0), plus la persistance locale.
+  - Aucun payload ne change.
+- **Tests** :
+  - Android (`:core:model`) : nouveaux témoins dans `CallStatsTest` et `CallStatsElectionOrderTest`. `CallStatValueTest` est adapté : sa fixture élit sa paire.
+  - iOS : nouveaux témoins dans `CallQualityNetworkContextTests` et `CallStatsElectionOrderTests`.
+    - Quatre tests qui reposaient sans le dire sur le repli élisent maintenant leur paire : `WebRTCTypesTests`, `CallManagerTests` et `CallManagerAnalyticsRecorderTests`.
+    - Deux tests qui affirmaient le repli attendent maintenant 0.
+  - Rouge : raisonné, et contre-vérifié par mutation par la QA. Avec l'ancien code, les témoins rendent 120 000, 900 000 ou 1 200 000 au lieu de 0. Rien n'a été compilé en local.
+  - Gardes iOS : `house_rules` 42/42, `cohesion_budget` exit 0, `test_registration` 2 063 fichiers inscrits.
+  - CI : `ios.yml` 45018330459 (suites ciblées) et `android.yml` 45018332941, tous deux en `workflow_dispatch` sur `52efefa37`.
+- **QA** (`auditeur-adversarial`, indépendante) : favorable avec réserves.
+  - R1 : sur Android, `AdaptiveBitrateLaw.effectiveLevel` n'a aucun appelant en production. L'encodeur ne lit que RTT et pertes, donc le correctif y sert le rapport et la persistance, pas la fluidité. Consigné dans **#13775**.
+  - R2 : deux témoins iOS sont de non-régression, pas rouges.
+  - R3 et R4 : deux écarts de miroir antérieurs au lot, l'estimation au-delà du plafond et le repli du RTT sur `remote-inbound-rtp`, ouverts dans **#20348**.
+- **Limites** : rien n'a été vérifié sur appareil. Juste après la connexion ICE, si libwebrtc n'a encore élu aucune paire, iOS adapte sur RTT et pertes au lieu de l'estimation.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée : lire les runs 45018330459 (iOS) et 45018332941 (Android). S'ils sont verts, fusionner `dev` dans la branche, puis la PR.
+1. **#20299** (règle unique du chrome Android), **#20320** (web, petit lot), **#20300** (iOS), **#20335**.
+2. #13775 (Android : l'échelle vidéo lit l'estimation, comme iOS), #20348, #20257, #20280, #20273, #20288.
+3. #20185 (recette staging), #11932, #12236, #16933.

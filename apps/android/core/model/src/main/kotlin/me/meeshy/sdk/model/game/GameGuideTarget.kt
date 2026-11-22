@@ -33,12 +33,16 @@ public object GameGuideTarget {
         GuideAction.RelightFlame -> GuideTarget.Scroll(GameAnchor.FlamePanel)
     }
 
-    /** La page où mène le bouton d'un moment de la vague 2 ; « voir le niveau » ouvre le Prestige. */
-    public fun page(action: GuideActionV2): GamePage = when (action) {
+    /**
+     * La page où mène le bouton d'un moment de la vague 2 ; « voir le niveau » ouvre le Prestige. « Voir la Flamme »
+     * n'a pas de page : il ouvre la fiche de la Flamme, comme le bouton de la vague 1.
+     */
+    public fun page(action: GuideActionV2): GamePage? = when (action) {
         GuideActionV2.SeeLeague -> GamePage.League
         GuideActionV2.SeeSeason -> GamePage.Season
         GuideActionV2.SeeTrophies -> GamePage.Showcase
         GuideActionV2.SeeAtlas -> GamePage.Atlas
         GuideActionV2.SeeLevel -> GamePage.Prestige
+        GuideActionV2.SeeFlame -> null
     }
 }

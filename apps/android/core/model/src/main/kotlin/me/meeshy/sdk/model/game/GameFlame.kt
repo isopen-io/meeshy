@@ -61,6 +61,17 @@ public object GameFlameLaw {
 
     public fun bonus(streakDays: Int): Double = bonusPercent(streakDays) / 100.0
 
+    /** La clé de guide du moment « Une Veilleuse t'est offerte » : vue une fois, gardée par `game.guideSeen`. */
+    public const val FREEZE_GIFT_SEEN_KEY: String = "flame-freeze-gift"
+
+    /**
+     * Le moment du cadeau se montre le jour où la première Veilleuse est offerte (`flame.freezeGifted`, servi par la
+     * passerelle), une seule fois. Un serveur antérieur ne sert pas le champ : rien ne se montre. Miroir
+     * d'`announcesFreezeGift` (`packages/shared/utils/game/flame.ts`) et de `GameFlame.announcesFreezeGift` (iOS).
+     */
+    public fun announcesFreezeGift(freezeGifted: Boolean?, guideSeen: Collection<String>): Boolean =
+        freezeGifted == true && FREEZE_GIFT_SEEN_KEY !in guideSeen
+
     /** Acheter un gel : refus FREEZE_AT_MAXIMUM à 2 en réserve, solde insuffisant sinon. `null` = permis. */
     public fun canBuyFreeze(freezes: Int, balance: Int): FreezeRefusal? = when {
         days0(freezes) >= FREEZE_MAX -> FreezeRefusal.AtMaximum

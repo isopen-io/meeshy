@@ -688,6 +688,11 @@ export function registerCommentRoutes(
         return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
       }
 
+      /* AVANT l'écriture (#20236) : la loi dit pourquoi — charge ABSOLUE, ordre. */
+      const separated = fastify.socialEvents
+        ? await fastify.socialEvents.commentActivitySeparation(authContext.registeredUser.id, thread.authorId)
+        : null;
+
       const result = await commentService.likeComment(commentId, authContext.registeredUser.id, emoji);
       if (!result) {
         return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
@@ -714,7 +719,7 @@ export function registerCommentRoutes(
             userId: authContext.registeredUser.id,
             emoji,
             likeCount: result.likeCount,
-          }, result.authorId);
+          }, result.authorId, separated);
         });
       }
 
@@ -787,6 +792,12 @@ export function registerCommentRoutes(
         return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
       }
 
+      /* Comme à la pose (#20236) — et c'est CE chemin qui rend l'exclusion de
+         l'AUTEUR nécessaire : il n'a pas de porte `commentAuthorSeparatedFrom`. */
+      const separated = fastify.socialEvents
+        ? await fastify.socialEvents.commentActivitySeparation(authContext.registeredUser.id, thread.authorId)
+        : null;
+
       const result = await commentService.unlikeComment(commentId, authContext.registeredUser.id, emoji);
       if (!result) {
         return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
@@ -808,7 +819,7 @@ export function registerCommentRoutes(
             userId: authContext.registeredUser.id,
             emoji,
             likeCount: result.likeCount,
-          }, result.authorId);
+          }, result.authorId, separated);
         });
       }
 

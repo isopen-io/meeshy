@@ -960,7 +960,8 @@ final class CallStatsPacketReducerTests: XCTestCase {
     func test_reduce_parsesAvailableOutgoingBitrateFromCandidatePair() {
         let stats = CallStats.reduce(entries: [
             CallStats.RawEntry(id: "cp", type: "candidate-pair",
-                               values: ["currentRoundTripTime": 0.050, "availableOutgoingBitrate": 1_500_000.0])
+                               values: ["currentRoundTripTime": 0.050, "availableOutgoingBitrate": 1_500_000.0, "nominated": 1],
+                               strings: ["state": "succeeded"])
         ])
         XCTAssertEqual(stats.availableOutgoingBitrateBps, 1_500_000)
     }

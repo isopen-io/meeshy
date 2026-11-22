@@ -21,6 +21,7 @@ const esCommunityMembership = {
   'community.membership.declined': 'Solicitud rechazada',
   'community.membership.declined.hint': 'Podrás volver a solicitarlo a partir del {date}.',
   'community.membership.error.cooldown': 'Tu última solicitud fue rechazada: podrás volver a pedirlo 7 días después.',
+  'community.membership.error.linkPaused': 'Las entradas por este enlace están suspendidas: un administrador de la comunidad lo ha pausado.',
   'community.settings.open': "Ajustes",
   'community.members.open': 'Miembros',
   'community.members.title': 'Miembros',

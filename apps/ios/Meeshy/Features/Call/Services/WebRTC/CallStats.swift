@@ -230,7 +230,8 @@ extension CallStats {
     /// by the transport of smallest id whose `selectedCandidatePairId` names an
     /// existing pair, else the nominated succeeded pair first in
     /// `electionOrder`; `nil` otherwise. Route, RTT and available outgoing
-    /// bitrate all read it, as on Android (`CallStats.selectedCandidatePair`).
+    /// bitrate all read it, as on Android (`CallStats.selectedCandidatePair`);
+    /// the bitrate reads ONLY it (#20284).
     static func selectedCandidatePair(in entries: [RawEntry]) -> RawEntry? {
         let pairs = electionOrder(entries)
         let byId = Dictionary(pairs.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
@@ -257,6 +258,7 @@ extension CallStats {
 
     /// #20098 — a pair measure read on the elected pair; with no elected pair,
     /// or one lacking the field, on the pair carrying it first in `electionOrder`.
+    /// Never used for `availableOutgoingBitrate` (#20284).
     private static func pairMeasure(_ key: String, elected: RawEntry?, in entries: [RawEntry]) -> Double? {
         elected?.values[key] ?? electionOrder(entries).first { $0.values[key] != nil }?.values[key]
     }
@@ -266,9 +268,12 @@ extension CallStats {
     /// reference id, e.g. `"COT01_111"`, instead of `"opus"`/`"H264"`) on the
     /// first `inbound-rtp` of `streamOrder` whose codec resolves (#20221), and keeps
     /// inbound audio/video separate. RTT and available outgoing bitrate come
-    /// from the SELECTED pair (#20098); with no elected pair, or an elected
-    /// pair lacking the field, the pair carrying it first in `electionOrder`
-    /// (strongest `priority`, then smallest `id`, #20121).
+    /// from the SELECTED pair (#20098). RTT alone falls back, with no elected
+    /// pair or an elected pair lacking it, to the pair carrying it first in
+    /// `electionOrder` (strongest `priority`, then smallest `id`, #20121). The
+    /// bitrate never does (#20284): a pair that carries no traffic holds a low
+    /// or stale estimate, and the video tier would follow it — no estimate on
+    /// the elected pair reads 0, "no estimate", as on the web (`readStats`).
     static func reduce(entries: [RawEntry]) -> CallStats {
         var packetsLost = 0
         var bytesSent = 0
@@ -321,7 +326,7 @@ extension CallStats {
 
         let elected = selectedCandidatePair(in: entries)
         let rtt = pairMeasure("currentRoundTripTime", elected: elected, in: entries).map { CallStatValue.measured($0 * 1000) } ?? 0
-        let availableOutgoingBitrateBps = pairMeasure("availableOutgoingBitrate", elected: elected, in: entries).map(CallStatValue.count) ?? 0
+        let availableOutgoingBitrateBps = elected?.values["availableOutgoingBitrate"].map(CallStatValue.count) ?? 0
 
         let jitterMs = audioJitterCount > 0 ? CallStatValue.measured((audioJitterSum / Double(audioJitterCount)) * 1000) : 0
 

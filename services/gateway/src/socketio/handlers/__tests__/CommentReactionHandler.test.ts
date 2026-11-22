@@ -101,6 +101,14 @@ function makeSocket(id = SOCKET_ID): Socket {
  */
 function makePrisma(overrides: Record<string, any> = {}): PrismaClient {
   const base = {
+    // Lue par la diffusion d'activité (#20236) : aucun blocage ici, donc aucune
+    // exclusion. Une lecture ABSENTE fermerait la diffusion — c'est voulu en
+    // production, et un double muet en ferait un faux rouge ici.
+    user: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      findUnique: jest.fn<any>().mockResolvedValue(null),
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+    },
     postComment: {
       findUnique: jest.fn<any>().mockResolvedValue({
         authorId: 'comment-author-1',
@@ -126,6 +134,7 @@ function makePrisma(overrides: Record<string, any> = {}): PrismaClient {
   return {
     ...base,
     ...overrides,
+    user: { ...base.user, ...(overrides['user'] ?? {}) },
     post: { ...base.post, ...(overrides['post'] ?? {}) },
     postComment: { ...base.postComment, ...(overrides['postComment'] ?? {}) },
   } as unknown as PrismaClient;
@@ -155,8 +164,10 @@ function makeNotificationService() {
 
 function makeIo() {
   const emit = jest.fn<any>();
+  // `except` depuis #20236 : l'activité d'un commentaire retire les rooms
+  // personnelles séparées de l'acteur et de l'auteur.
   return {
-    to: jest.fn<any>().mockReturnValue({ emit }),
+    to: jest.fn<any>().mockReturnValue({ emit, except: jest.fn<any>().mockReturnValue({ emit }) }),
     _emit: emit,
   };
 }

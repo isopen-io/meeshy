@@ -52,7 +52,7 @@ final class ConversationInfoSheetAccessibilityTests: XCTestCase {
     func test_memberSearchClearButton_hasAccessibilityLabel() throws {
         // The icon-only `xmark.circle.fill` that clears the member-search field
         // carried no accessible name — VoiceOver announced a bare "button".
-        let source = try sheetSource()
+        let source = try sheetSource(named: "ConversationInfoSheet+Members.swift")
         let nearClear = try vicinity(after: "memberSearchQuery = \"\"", in: source)
         XCTAssertTrue(
             nearClear.contains("common.clear-search"),

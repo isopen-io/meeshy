@@ -87,9 +87,21 @@ class CallStatsElectionOrderTest {
     }
 
     @Test
-    fun `sans paire élue la mesure se lit sur la paire de plus forte priorité puis de plus petit id`() {
+    fun `sans paire élue le RTT se lit sur la paire de plus forte priorité puis de plus petit id, et aucun débit sortant`() {
         val readings = orders(noElectedReport).map(::read).toSet()
-        assertThat(readings).containsExactly(Reading(null, 50.0, 900_000, null))
+        assertThat(readings).containsExactly(Reading(null, 50.0, 0, null))
+    }
+
+    @Test
+    fun `le débit sortant ne se lit QUE sur la paire élue, dans tous les ordres (#20284)`() {
+        val report = listOf(
+            transport("T01", selecting = "CP1"),
+            pair("CP1", "L1", "R1", priority = 10.0, rttSeconds = 0.05),
+            pair("CP2", "L2", "R2", priority = 500.0, rttSeconds = 0.3, bitrate = 120_000.0),
+            candidate("L1", "host"), candidate("R1", "host", local = false),
+        )
+        val readings = orders(report).map(::read).toSet()
+        assertThat(readings).containsExactly(Reading("CP1", 50.0, 0, false))
     }
 
     @Test

@@ -21,6 +21,7 @@ const enCommunityMembership = {
   'community.membership.declined': 'Request declined',
   'community.membership.declined.hint': 'You can ask again from {date}.',
   'community.membership.error.cooldown': 'Your last request was declined: you can ask again 7 days after it.',
+  'community.membership.error.linkPaused': 'Joining through this link is paused: a community admin has paused it.',
   'community.settings.open': "Settings",
   'community.members.open': 'Members',
   'community.members.title': 'Members',

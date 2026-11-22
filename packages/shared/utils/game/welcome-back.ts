@@ -65,5 +65,15 @@ export function isKeptOfferingDay(params: { readonly welcomeDay: string | null; 
   return readable(welcomeDay) && isDayKey(today) && welcomeDay === today;
 }
 
+/**
+ * Faut-il dire au joueur qui revient que les aïeux lui ont gardé son Offrande (#20327) ? Tant qu'elle est prête, le
+ * jour du retour : ouverte, elle ne se redit plus. Un serveur antérieur ne sert pas `kept` : rien ne se montre.
+ */
+export function announcesKeptOffering(block: {
+  readonly chest: { readonly status: string; readonly kept?: boolean | undefined };
+}): boolean {
+  return block.chest.kept === true && block.chest.status === 'ready';
+}
+
 /** Le profil d'un Rêve allégé : les capacités du compte, sans ses habitudes. */
 export const easedProfile = (profile: MissionProfile): MissionProfile => ({ capabilities: profile.capabilities, habits: {} });
