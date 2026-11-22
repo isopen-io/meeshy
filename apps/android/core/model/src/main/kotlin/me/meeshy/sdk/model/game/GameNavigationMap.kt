@@ -83,12 +83,16 @@ public object GameNavigationMap {
         is GameLink.LeagueWeek -> GameRoute.Page(GamePage.League, link.key?.let { GamePageFocus.LeagueWeek(it) })
     }
 
-    /** La fiche qu'un moment de la vague 2 du guide ouvre ; « voir le niveau » ouvre la fiche du Niveau. */
+    /**
+     * La fiche qu'un moment de la vague 2 du guide ouvre ; « voir le niveau » ouvre la fiche du Niveau, « voir la
+     * Flamme » celle de la Flamme.
+     */
     public fun guideConcept(action: GuideActionV2): ProgressionConcept = when (GameGuideTarget.page(action)) {
         GamePage.League -> ProgressionConcept.League
         GamePage.Season -> ProgressionConcept.Season
         GamePage.Showcase -> ProgressionConcept.Showcase
         GamePage.Atlas -> ProgressionConcept.Atlas
         GamePage.Prestige, GamePage.Settings -> ProgressionConcept.Level
+        null -> ProgressionConcept.Flame
     }
 }

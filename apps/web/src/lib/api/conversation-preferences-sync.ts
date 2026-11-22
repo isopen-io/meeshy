@@ -7,7 +7,7 @@ import type { ConversationOverride, ConversationStoreState, OverrideKey } from '
 import type { SocketClient } from '@/lib/net/socket';
 
 import { conversationQueryKey, findCachedConversation, patchConversation, patchConversationDetail } from './conversations';
-import { APP_PREFERENCES_QUERY_KEY } from './me-keys';
+import { MY_PREFERENCES_QUERY_KEYS } from './me-keys';
 import { messagesQueryKey } from './messages';
 import type { MessagesInfiniteData } from './messages-pages';
 import { requestFullThreadRead } from './messages-revalidation';
@@ -160,7 +160,13 @@ export function createPreferencesSync(params: {
     if (payload === null) return;
     const conversationId = payload['conversationId'];
     if (conversationId === undefined) {
-      if (typeof payload['category'] === 'string' && !('communityId' in payload)) void queryClient.invalidateQueries({ queryKey: APP_PREFERENCES_QUERY_KEY });
+      /* Une catégorie du document de réglages a changé : TOUTES ses projections se
+         périment (#20349). Itéré, jamais nommé — `['me','circle-notify']` est un
+         FRÈRE de `['me','app-preferences']`, donc aucune invalidation de préfixe
+         ne peut les couvrir toutes les deux. */
+      if (typeof payload['category'] === 'string' && !('communityId' in payload)) {
+        for (const queryKey of MY_PREFERENCES_QUERY_KEYS) void queryClient.invalidateQueries({ queryKey });
+      }
       return;
     }
     if (typeof conversationId !== 'string' || conversationId === '') return;

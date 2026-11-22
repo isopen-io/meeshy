@@ -21,6 +21,7 @@ const arCommunityMembership = {
   'community.membership.declined': 'تم رفض الطلب',
   'community.membership.declined.hint': 'يمكنك الطلب مجددًا ابتداءً من {date}.',
   'community.membership.error.cooldown': 'رُفض طلبك الأخير: يمكنك الطلب مجددًا بعد 7 أيام.',
+  'community.membership.error.linkPaused': 'الانضمام عبر هذا الرابط متوقف: أوقفه أحد مشرفي المجتمع مؤقتًا.',
   'community.settings.open': "الإعدادات",
   'community.members.open': 'الأعضاء',
   'community.members.title': 'الأعضاء',

@@ -17,4 +17,14 @@ struct ConversationStoreSocketFeeds {
     let categoryDeleted: AnyPublisher<CategoryDeletedSocketEvent, Never>
     let categoriesReordered: AnyPublisher<CategoriesReorderedSocketEvent, Never>
     let didReconnect: AnyPublisher<Void, Never>
+
+    /// TOUTE connexion du socket, la PREMIÈRE comprise.
+    ///
+    /// `didReconnect` en est un SOUS-ENSEMBLE strict
+    /// (`handleConnectionEstablished` ne l'émet que `if wasReconnect`), et c'est
+    /// cette différence qui a laissé deux des trois gestes de rattrapage hors
+    /// du démarrage à froid (#20341). La fenêtre que le rattrapage ferme est
+    /// « le socket n'écoutait pas » : le lancement de l'app en est un cas, pas
+    /// une exception.
+    let didConnect: AnyPublisher<Void, Never>
 }

@@ -159,6 +159,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Settings/Views/SettingsInterfaceLanguageMenu.swift",
         "apps/ios/Meeshy/Features/Main/Components/SyncPillLabels.swift",  // 53
         "apps/ios/Meeshy/Features/Main/Components/ConversationInfoSheet.swift",  // 47
+        "apps/ios/Meeshy/Features/Main/Components/ConversationInfoSheet+Header.swift",
+        "apps/ios/Meeshy/Features/Main/Components/ConversationInfoSheet+Members.swift",
+        "apps/ios/Meeshy/Features/Main/Components/ConversationInfoSheet+Actions.swift",
         // #8103 — l'aperçu des épinglés a quitté la fiche (extraction de taille),
         // et l'onglet Médias est devenu l'écran « Médias, liens et documents ».
         "apps/ios/Meeshy/Features/Main/Components/ConversationInfoSheet+Pinned.swift",

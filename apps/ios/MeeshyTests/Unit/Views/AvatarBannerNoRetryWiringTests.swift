@@ -33,7 +33,7 @@ final class AvatarBannerNoRetryWiringTests: XCTestCase {
     }
 
     func test_conversationInfoSheetHeroBanner_suppressesRetryOverlay() throws {
-        let source = try appSource("Meeshy/Features/Main/Components/ConversationInfoSheet.swift")
+        let source = try appSource("Meeshy/Features/Main/Components/ConversationInfoSheet+Header.swift")
         let hero = try block(
             from: "private var heroBannerImage: some View {",
             upTo: "private var heroBannerPlaceholder",
@@ -48,9 +48,9 @@ final class AvatarBannerNoRetryWiringTests: XCTestCase {
     /// zone de toucher, et l'image ({{20,-116},{400,600}}) recouvrait l'en-tête
     /// de la feuille — la roue dentée et « Fermer » ne répondaient plus.
     func test_conversationInfoSheetHeroBanner_neverCapturesTouchesOutsideItsFrame() throws {
-        let source = try appSource("Meeshy/Features/Main/Components/ConversationInfoSheet.swift")
+        let source = try appSource("Meeshy/Features/Main/Components/ConversationInfoSheet+Header.swift")
         let hero = try block(
-            from: "private var heroConversationHeader: some View {",
+            from: "var heroConversationHeader: some View {",
             upTo: "// Avatar overlapping banner",
             in: source
         )
@@ -65,9 +65,10 @@ final class AvatarBannerNoRetryWiringTests: XCTestCase {
 
         // #17907 — Fermer et Réglages flottent en surimpression du défilement, comme sur la fiche profil :
         // aucun débordement du contenu ne peut les recouvrir.
-        XCTAssertTrue(source.contains(".overlay(alignment: .topLeading) { closeButton }"),
+        let sheet = try appSource("Meeshy/Features/Main/Components/ConversationInfoSheet.swift")
+        XCTAssertTrue(sheet.contains(".overlay(alignment: .topLeading) { closeButton }"),
                       "Close must float above the scrolling content, so no overflow can cover it.")
-        XCTAssertTrue(source.contains(".overlay(alignment: .topTrailing) { settingsButton }"),
+        XCTAssertTrue(sheet.contains(".overlay(alignment: .topTrailing) { settingsButton }"),
                       "Settings must float above the scrolling content, so no overflow can cover it.")
     }
 

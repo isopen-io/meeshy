@@ -34,7 +34,9 @@ export type GuideEventV2 =
   | { readonly kind: 'prestige'; readonly prestige: number; readonly gloryGained: number }
   | { readonly kind: 'atlas-stamp'; readonly language: string; readonly stamped: number; readonly total: number }
   /** La première Veilleuse, offerte au 3e jour de Flamme (#20169). Sa clé est `FLAME_FREEZE_GIFT_SEEN_KEY`. */
-  | { readonly kind: 'flame-freeze-gift'; readonly freezes: number };
+  | { readonly kind: 'flame-freeze-gift'; readonly freezes: number }
+  /** Le jour du retour, l'Offrande gardée par les aïeux est prête (#20327) ; le Rêve est allégé `easedDays` jours. */
+  | { readonly kind: 'offering-kept'; readonly easedDays: number };
 
 export type GuideMomentKeyV2 = GuideEventV2['kind'];
 
@@ -48,6 +50,7 @@ export const GUIDE_MOMENT_KEYS_V2: readonly GuideMomentKeyV2[] = [
   'prestige',
   'atlas-stamp',
   'flame-freeze-gift',
+  'offering-kept',
 ];
 
 type DataOf<K extends GuideMomentKeyV2> = Omit<Extract<GuideEventV2, { kind: K }>, 'kind'>;
@@ -58,7 +61,7 @@ export type GuideMomentV2 = {
     readonly speaker: GuideSpeaker;
     readonly mood: GuideMood;
     readonly data: DataOf<K>;
-    readonly action: GuideActionV2 | 'see-level' | 'see-flame';
+    readonly action: GuideActionV2 | 'see-level' | 'see-flame' | 'see-missions';
     readonly presentation: 'full' | 'short';
   };
 }[GuideMomentKeyV2];
@@ -85,6 +88,8 @@ function personaOf(event: GuideEventV2): Persona {
       return { speaker: 'mee', mood: 'cheer', action: 'see-atlas' };
     case 'flame-freeze-gift':
       return { speaker: 'meo', mood: 'cheer', action: 'see-flame' };
+    case 'offering-kept':
+      return { speaker: 'mee', mood: 'cheer', action: 'see-missions' };
   }
 }
 
@@ -107,6 +112,7 @@ export const GUIDE_MOMENT_PRIORITY_ALL: readonly (GuideMomentKey | GuideMomentKe
   'level-100',
   'first-mint',
   'season-end',
+  'offering-kept',
   'flame-out',
   'flame-at-risk',
   'flame-freeze-gift',

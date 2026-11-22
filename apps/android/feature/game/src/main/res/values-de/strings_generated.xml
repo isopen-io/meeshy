@@ -103,6 +103,10 @@
     <string name="game2_guide_moment_atlas_stamp_next">%1$s von %2$s Sprachen in deinem Pass.</string>
     <string name="game2_guide_moment_atlas_stamp_short">Stempel: %1$s.</string>
     <string name="game2_guide_moment_atlas_stamp_what">Neuer Stempel: %1$s!</string>
+    <string name="game2_guide_moment_flame_freeze_gift_means">Von deinen Ahnen: Sie hält deine Flamme an einem Tag ohne dich am Brennen.</string>
+    <string name="game2_guide_moment_flame_freeze_gift_next">Hüterinnen in Reserve: %1$s.</string>
+    <string name="game2_guide_moment_flame_freeze_gift_short">Dir wird eine Hüterin für deine Flamme geschenkt.</string>
+    <string name="game2_guide_moment_flame_freeze_gift_what">Dir wird eine Hüterin geschenkt.</string>
     <string name="game2_guide_moment_league_first_means">Jede Woche misst du dich mit 29 anderen Helden. Die ersten 7 steigen in den nächsten Kreis auf, die letzten 5 steigen ab, und die Funken beginnen wieder bei null.</string>
     <string name="game2_guide_moment_league_first_next">%1$s bis zum nächsten Kreis in dieser Woche.</string>
     <string name="game2_guide_moment_league_first_next_top">Du bist schon im höchsten Kreis der Turniere.</string>
