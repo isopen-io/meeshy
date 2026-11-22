@@ -3,6 +3,7 @@ package me.meeshy.sdk.model.game.guide
 import kotlinx.serialization.Serializable
 import me.meeshy.sdk.model.game.FlameStatus
 import me.meeshy.sdk.model.game.GameBlock
+import me.meeshy.sdk.model.game.GameFlameLaw
 import me.meeshy.sdk.model.game.GameLevels
 import me.meeshy.sdk.model.game.GameSeason
 import me.meeshy.sdk.model.game.GloryLaws
@@ -133,20 +134,30 @@ public object GameGuideEventsV2 {
     private fun seasonStart(season: GuideSnapshot.Season): GuideEventV2 =
         GuideEventV2.SeasonStart(season.number, season.themeKey, GameSeason.STEPS)
 
-    /** Ce que l'état dit à l'ouverture et que la personne n'a pas encore entendu : la première ligue, une saison. */
+    /** Le jour où la première Veilleuse est offerte, tant que sa clé n'est pas vue. */
+    private fun freezeGift(game: GameBlock): GuideEventV2? =
+        GuideEventV2.FlameFreezeGift(game.flame.freezes)
+            .takeIf { GameFlameLaw.announcesFreezeGift(game.flame.freezeGifted, game.guideSeen) }
+
+    /**
+     * Ce que l'état dit à l'ouverture et que la personne n'a pas encore entendu : la première ligue, une saison, la
+     * première Veilleuse offerte le jour du cadeau.
+     */
     public fun standing(game: GameBlock, seen: Set<String>): List<GuideEventV2> {
         val league = game.league?.takeIf { it.access == LeagueAccess.Open }?.current
             ?.let { GuideEventV2.LeagueFirst(it.league, it.pointsToPromotion) }
         val season = GuideSnapshot.of(game).season?.let(::seasonStart)
-        return listOfNotNull(league, season).filter { it.key.wire !in seen }
+        return listOfNotNull(league, season, freezeGift(game)).filter { it.key.wire !in seen }
     }
 
     public fun between(before: GuideSnapshot, after: GuideSnapshot): List<GuideEventV2> =
         leagueEvents(before, after) + seasonEvents(before, after) + trophyEvents(before, after) +
             prestigeEvents(before, after) + atlasEvents(before, after)
 
+    /** Le cadeau ne se dit qu'en ARRIVANT : une lecture qui le portait déjà l'a annoncé. */
     public fun transition(before: GameBlock, after: GameBlock): List<GuideEventV2> =
-        between(GuideSnapshot.of(before), GuideSnapshot.of(after))
+        between(GuideSnapshot.of(before), GuideSnapshot.of(after)) +
+            listOfNotNull(freezeGift(after).takeIf { before.flame.freezeGifted != true })
 
     private fun leagueEvents(before: GuideSnapshot, after: GuideSnapshot): List<GuideEventV2> {
         val was = before.league ?: return emptyList()

@@ -103,6 +103,10 @@
     <string name="game2_guide_moment_atlas_stamp_next">%1$s langues sur %2$s dans ton passeport.</string>
     <string name="game2_guide_moment_atlas_stamp_short">Tampon : %1$s.</string>
     <string name="game2_guide_moment_atlas_stamp_what">Nouveau tampon : %1$s !</string>
+    <string name="game2_guide_moment_flame_freeze_gift_means">Les aïeux te la confient : elle garde ta Flamme allumée un jour d’absence.</string>
+    <string name="game2_guide_moment_flame_freeze_gift_next">Veilleuses en réserve : %1$s.</string>
+    <string name="game2_guide_moment_flame_freeze_gift_short">Une Veilleuse t’est offerte pour ta Flamme.</string>
+    <string name="game2_guide_moment_flame_freeze_gift_what">Une Veilleuse t’est offerte.</string>
     <string name="game2_guide_moment_league_first_means">Chaque semaine, tu te mesures à 29 autres héros. Les 7 premiers gravissent le cercle suivant, les 5 derniers redescendent, et les étincelles repartent de zéro.</string>
     <string name="game2_guide_moment_league_first_next">%1$s jusqu’au cercle suivant cette semaine.</string>
     <string name="game2_guide_moment_league_first_next_top">Tu es déjà au plus haut cercle des joutes.</string>

@@ -80,6 +80,7 @@ private fun actionLabel(action: GuideActionV2): String = when (action) {
     GuideActionV2.SeeTrophies -> stringResource(R.string.game2_guide_action_see_trophies)
     GuideActionV2.SeeAtlas -> stringResource(R.string.game2_guide_action_see_atlas)
     GuideActionV2.SeeLevel -> actionLabel(GuideAction.SeeLevel)
+    GuideActionV2.SeeFlame -> actionLabel(GuideAction.SeeFlame)
 }
 
 @Composable
@@ -312,6 +313,13 @@ private fun momentCopyV2(event: GuideEventV2, action: String): GuideCopyText = w
             action,
         )
     }
+    is GuideEventV2.FlameFreezeGift -> GuideCopyText(
+        stringResource(R.string.game2_guide_moment_flame_freeze_gift_what),
+        stringResource(R.string.game2_guide_moment_flame_freeze_gift_means),
+        stringResource(R.string.game2_guide_moment_flame_freeze_gift_next, count(event.freezes)),
+        stringResource(R.string.game2_guide_moment_flame_freeze_gift_short),
+        action,
+    )
 }
 
 /** Une étape de l'intégration : sa phrase forte EST sa version courte (iOS `GameGuideCopy.step`). */

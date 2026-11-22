@@ -103,6 +103,10 @@
     <string name="game2_guide_moment_atlas_stamp_next">%1$s idiomas de %2$s en tu pasaporte.</string>
     <string name="game2_guide_moment_atlas_stamp_short">Sello: %1$s.</string>
     <string name="game2_guide_moment_atlas_stamp_what">¡Nuevo sello: %1$s!</string>
+    <string name="game2_guide_moment_flame_freeze_gift_means">Tus ancestros te la confían: mantiene tu Llama encendida un día que faltes.</string>
+    <string name="game2_guide_moment_flame_freeze_gift_next">Velas en reserva: %1$s.</string>
+    <string name="game2_guide_moment_flame_freeze_gift_short">Te regalan una Vela para tu Llama.</string>
+    <string name="game2_guide_moment_flame_freeze_gift_what">Te regalan una Vela.</string>
     <string name="game2_guide_moment_league_first_means">Cada semana te mides con otros 29 héroes. Los 7 primeros suben al círculo siguiente, los 5 últimos bajan, y las chispas vuelven a cero.</string>
     <string name="game2_guide_moment_league_first_next">%1$s hasta el círculo siguiente esta semana.</string>
     <string name="game2_guide_moment_league_first_next_top">Ya estás en el círculo más alto de las justas.</string>
