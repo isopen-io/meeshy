@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
-import { TRANSLATION_WAIT_MS } from './call-captions';
+import { isAwaitingTranslation, TRANSLATION_WAIT_MS } from './call-captions';
 import { CHANNEL_PING_MS, createCaptions, type SpeechResult, type SpeechSource } from './call-captions-controller';
 import { createCallStore, type ActiveCall, type CallMember } from './call-store';
 
@@ -63,6 +63,7 @@ function harness(options: { readonly speech?: 'supported' | 'unsupported' | 'den
   const repeats: Array<{ readonly fn: () => void; readonly ms: number; stopped: boolean }> = [];
   const captures: Array<{ readonly language: string; readonly onResult: (result: SpeechResult) => void; stopped: boolean }> = [];
   let clock = 10_000;
+  let elapsed = 3_000;
   let shown = 0;
   const byes: string[] = [];
   let ids = 0;
@@ -89,6 +90,7 @@ function harness(options: { readonly speech?: 'supported' | 'unsupported' | 'den
       emit: (event, payload) => void emitted.push([event, payload]),
       viewerId: () => ME,
       now: () => clock,
+      elapsed: () => elapsed,
       repeat: (fn, ms) => repeats.push({ fn, ms, stopped: false }) - 1,
       stopRepeat: (handle) => {
         const entry = repeats[handle as number];
@@ -106,7 +108,12 @@ function harness(options: { readonly speech?: 'supported' | 'unsupported' | 'den
     repeats,
     captures,
     call: () => store.getState().call,
-    tick: (ms: number) => void (clock += ms),
+    tick: (ms: number) => {
+      clock += ms;
+      elapsed += ms;
+    },
+    elapsed: () => elapsed,
+    jumpWall: (ms: number) => void (clock += ms),
     shown: () => shown,
     byes: () => [...byes],
     say: (text: string, isFinal: boolean, confidence = 0.9) => captures.at(-1)?.onResult({ text, isFinal, confidence }),
@@ -193,12 +200,32 @@ describe('le canal de données (B10)', () => {
     const peer = channel();
     h.port.attach(PEER, peer as unknown as RTCDataChannel);
     peer.onmessage?.({ data: JSON.stringify({ type: 'transcript-entry', entry: { id: 'w-peer-1', callId: 'call-1', speakerId: PEER, speakerDisplayName: 'Nadia Benali', text: 'Hello everyone', language: 'en', capturedAtMs: 5_000, isFinal: true, confidence: 0.9 } }) });
-    expect(h.call()?.captions[0]?.origin).toEqual({ language: 'en', foreign: true, awaitingUntil: 10_000 + TRANSLATION_WAIT_MS });
+    expect(h.call()?.captions[0]?.origin).toEqual({ language: 'en', foreign: true, awaitingUntil: 3_000 + TRANSLATION_WAIT_MS });
     h.tick(2_000);
     h.port.receive(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, translated());
     expect(h.call()?.captions[0]?.origin).toEqual({ language: 'en', foreign: true, awaitingUntil: null });
   });
 
+  test('un final hors du Prisme qui ne reçoit jamais sa traduction cesse d’être attendu 8 s après sa RÉCEPTION, mesurées sur l’horloge monotone (#20298)', () => {
+    const h = harness();
+    h.port.receive(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, translated({ translatedText: undefined, targetLanguage: undefined }));
+    const line = () => h.call()?.captions[0];
+    expect(line()?.translated).toBeNull();
+    h.tick(TRANSLATION_WAIT_MS - 1);
+    expect(isAwaitingTranslation(line()!, h.elapsed())).toBe(true);
+    h.tick(1);
+    expect(isAwaitingTranslation(line()!, h.elapsed())).toBe(false);
+  });
+
+  test('une répétition du même énoncé ne prolonge pas l’attente', () => {
+    const h = harness();
+    const unserved = translated({ translatedText: undefined, targetLanguage: undefined });
+    h.port.receive(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, unserved);
+    h.tick(5_000);
+    h.port.receive(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, unserved);
+    h.tick(TRANSLATION_WAIT_MS - 5_000);
+    expect(isAwaitingTranslation(h.call()!.captions[0]!, h.elapsed())).toBe(false);
+  });
   test('une phrase dans une langue du lecteur n’est ni étiquetée ni attendue ; la mienne ne porte aucune langue', () => {
     const h = harness();
     h.port.receive(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, translated({ id: 'fr', text: 'Salut', translatedText: undefined, sourceLanguage: 'fr', targetLanguage: 'fr' }));
@@ -359,5 +386,65 @@ describe('une conversation chiffrée de bout en bout n’envoie aucune parole à
     h.say('bonjour', true);
     expect(h.events(CLIENT_EVENTS.CALL_TRANSCRIPTION_ACTIVE)).toHaveLength(1);
     expect(h.events(CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT)).toHaveLength(1);
+  });
+});
+
+/**
+ * L'ATTENTE D'UNE TRADUCTION SE MESURE CHEZ LE LECTEUR, SUR UNE HORLOGE QUI NE SAUTE PAS (#20298) —
+ * l'heure de capture de l'orateur (`at`) ne range que le journal ; l'échéance part de la RÉCEPTION
+ * et se compte sur l'horloge monotone (`performance.now()`), qu'un réglage ou une correction NTP de
+ * l'horloge murale ne déplace pas.
+ */
+describe('l’échéance de l’attente ne dépend d’aucune horloge murale (#20298)', () => {
+  const HOUR = 3_600_000;
+  const SPEAKER_NOW = 1_763_800_000_000;
+  const p2p = (at: number) => ({ type: 'transcript-entry', entry: { id: 'w-peer-1', callId: 'call-1', speakerId: PEER, speakerDisplayName: 'Nadia Benali', text: 'Hello everyone', language: 'en', capturedAtMs: at, isFinal: true, confidence: 0.9 } });
+
+  for (const [label, skew] of [
+    ['en avance d’une heure', HOUR],
+    ['en retard d’une heure', -HOUR],
+  ] as const) {
+    test(`l’horloge de l’orateur ${label} : l’attente tombe ${TRANSLATION_WAIT_MS} ms après la réception, par le canal de données comme par la passerelle`, () => {
+      const viaChannel = harness();
+      const peer = channel();
+      viaChannel.port.attach(PEER, peer as unknown as RTCDataChannel);
+      peer.onmessage?.({ data: JSON.stringify(p2p(SPEAKER_NOW + skew)) });
+      const viaGateway = harness();
+      viaGateway.port.receive(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, translated({ translatedText: undefined, targetLanguage: undefined, capturedAtMs: SPEAKER_NOW + skew }));
+      for (const h of [viaChannel, viaGateway]) {
+        expect(h.call()?.captions[0]?.at).toBe(SPEAKER_NOW + skew);
+        h.tick(TRANSLATION_WAIT_MS - 1);
+        expect(isAwaitingTranslation(h.call()!.captions[0]!, h.elapsed())).toBe(true);
+        h.tick(1);
+        expect(isAwaitingTranslation(h.call()!.captions[0]!, h.elapsed())).toBe(false);
+      }
+    });
+  }
+
+  for (const [label, jump] of [
+    ['recule d’une heure', -HOUR],
+    ['avance d’une heure', HOUR],
+  ] as const) {
+    test(`l’horloge murale locale ${label} pendant l’attente : l’attente tombe toujours ${TRANSLATION_WAIT_MS} ms après la réception`, () => {
+      const h = harness();
+      const peer = channel();
+      h.port.attach(PEER, peer as unknown as RTCDataChannel);
+      peer.onmessage?.({ data: JSON.stringify(p2p(10_000)) });
+      h.tick(1_000);
+      h.jumpWall(jump);
+      h.tick(TRANSLATION_WAIT_MS - 1_001);
+      expect(isAwaitingTranslation(h.call()!.captions[0]!, h.elapsed())).toBe(true);
+      h.tick(1);
+      expect(isAwaitingTranslation(h.call()!.captions[0]!, h.elapsed())).toBe(false);
+    });
+  }
+
+  test('un message sans heure de capture reste servi, rangé à l’heure murale de sa réception, et attend sur la monotone', () => {
+    const h = harness();
+    const peer = channel();
+    h.port.attach(PEER, peer as unknown as RTCDataChannel);
+    peer.onmessage?.({ data: JSON.stringify(p2p(0)) });
+    expect(h.call()?.captions[0]).toMatchObject({ original: 'Hello everyone', at: 10_000 });
+    expect(h.call()?.captions[0]?.origin?.awaitingUntil).toBe(3_000 + TRANSLATION_WAIT_MS);
   });
 });
