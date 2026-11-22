@@ -2695,7 +2695,11 @@ socket jusqu'au client.
     - avec « Réduire les animations », il a disparu à 210 ms.
   - Ce sont des témoins de caractérisation : ils sont verts dès l'écriture, et leur rouge se raisonne par mutation (relu par la QA). Trois tests du contrôleur, qui visaient du code mort, sont retirés.
   - Gardes locales : `check-file-budget.sh`, `check-feature-edges.sh` et `check-verbosity-native.mjs` sont OK. `jvm-check` n'a pas tourné, car le proxy refuse `build-artifacts.signal.org`.
-  - CI : `android.yml` 45068009140, en `workflow_dispatch`.
+  - CI, en `workflow_dispatch` :
+    - `android.yml` 45068009140 sur `2fe9392c8a` : `assembleDebug` vert, mais 3 rouges dans le nouveau test. `stow()` écrivait sous `autoAdvance = false` sans `waitForIdle()`, donc le masquage n'était jamais pris par la composition.
+    - Le test est corrigé en `88236abf29` : écriture directe, puis `waitForIdle()`, et `revives` en `isAtLeast(1)`. Le code de production n'a pas changé.
+    - Le run 45071126006 a perdu son runner et a été annulé.
+    - **`android.yml` 45075498121 sur `88236abf29` est vert** (`assembleDebug` + `testDebugUnitTest`).
 - **QA** (`auditeur-adversarial`, indépendante) : favorable avec réserves.
   - Deux risques de faux rouge dans le test :
     - `revives == 1` si un `move` sans déplacement n'était pas filtré ;
@@ -2708,6 +2712,6 @@ socket jusqu'au client.
 
 ### Cycle suivant : par où reprendre
 
-0. Si la PR de ce cycle n'est pas fusionnée : lire son run `android.yml`. S'il est rouge sur `CallChromeFadeTouchTest`, appliquer les réserves (`isAtLeast(1)` et `waitForIdle()`). S'il est vert, fusionner `dev` dans la branche, puis la PR.
+0. Si la PR #20437 n'est pas fusionnée : fusionner `dev` dans la branche, puis la PR. Son `android.yml` est vert.
 1. **#20426** (web, rapports différés), **#20300** et **#20335** (iOS, à coordonner avec la routine iOS), **#20436**.
 2. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933.
