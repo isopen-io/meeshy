@@ -9,7 +9,7 @@ import { safeLocalStorage } from '@/lib/storage';
 import { onConnectionChange } from '../device/capability-tier';
 
 import { fetchActiveCallId } from './active-call';
-import { deviceLabel } from './call-analytics';
+import { lazyCallReports } from './call-analytics-lazy';
 import type { CaptionsContext, CaptionsPort } from './call-captions-controller';
 import { callLensStore } from './call-lens-store';
 import { createCameraEffects } from './camera-effects';
@@ -117,6 +117,13 @@ const cameraEffects = createCameraEffects({
   loadPipeline: () => import('./video-effects-pipeline').then((module) => (camera, settings) => module.createEffectsPipeline(camera, settings)),
 });
 
+/**
+ * Les rapports d'un appel (`call:analytics`, `call:quality-report`) sont un
+ * chunk à part (`budgets.json` › `call_analytics_report`, #19894), préchargé
+ * dès que le moteur se charge : s'il manque, l'appel continue sans eux.
+ */
+const reports = lazyCallReports(() => import('./call-analytics-report').then((module) => ({ analyticsPayload: module.browserAnalyticsPayload, qualityReport: module.qualityReport })));
+
 export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
   journalRecorder();
   return {
@@ -141,7 +148,7 @@ export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
     createQualityLoop: lazyQualityLoop,
     watchNetwork: watchBrowserNetwork,
     platform: () => (__SHELL__ ? 'android-shell' : 'web'),
-    deviceModel: () => (typeof navigator === 'undefined' ? 'web' : deviceLabel(navigator.userAgent)),
+    reports,
     createCaptions: lazyCaptions,
     onJoinRefusedEnded: (ended) => repairEndedCall(appQueryClient, ended),
   };

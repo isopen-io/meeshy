@@ -1,6 +1,6 @@
 import { QueryClient, QueryObserver } from '@tanstack/react-query';
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
@@ -290,23 +290,59 @@ describe('#10573 — la PREMIÈRE authentification rattrape ce que la liste et l
   });
 
   /**
-   * La cloche figurait ICI jusqu'à #18573, dans la même phrase que les deux
-   * assertions ci-dessous — qui sont JUSTES : ni la case d'une conversation, ni
-   * une fenêtre ancrée ne sont nourries par `message:new`. La cloche, elle, est
-   * une famille PERSONNELLE que la fenêtre de première connexion prend en
-   * entier, exactement comme une coupure : l'assertion gelait une lacune sous
-   * les apparences d'une décision. Ce qu'elle doit faire est témoigné par le
-   * bloc #18573 plus bas.
+   * **CETTE PHRASE A TENU DEUX LACUNES, ET LA SECONDE A SURVÉCU AU LOT QUI
+   * DÉNONÇAIT LA PREMIÈRE** (#20421, cycle 219). La cloche figurait ICI jusqu'à
+   * #18573, dans la même phrase que la fiche, sous la même raison — « ni la case
+   * d'une conversation, ni une fenêtre ancrée ne sont nourries par
+   * `message:new` ». Le commentaire qui l'en a sortie disait que « l'assertion
+   * gelait une lacune sous les apparences d'une décision », et il est resté posé
+   * AU-DESSUS de la fiche, qui gelait la même.
+   *
+   * La raison était vraie et répondait à côté : `message:new` ne nourrit pas la
+   * fiche, mais **huit écrivains temps réel** le font, tous branchés sur CETTE
+   * connexion — le régime de chiffrement et les droits d'envoi en tête. La
+   * fiche est désormais DANS la portée, et les deux témoins ci-dessous se
+   * séparent : celui de la fenêtre ancrée garde sa raison, qui porte sur le
+   * PASSÉ (#7420) et reste juste.
    */
-  test('la case d’une conversation et une fenêtre ancrée ne sont pas touchées', () => {
+  test('la FICHE d’une conversation est rattrapée — huit familles temps réel la nourrissent', () => {
+    const { socket, queryClient } = connect();
+    queryClient.setQueryData(conversationQueryKey('c-a'), row('c-a'));
+
+    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+
+    expect(isInvalidated(queryClient, conversationQueryKey('c-a'))).toBe(true);
+  });
+
+  /**
+   * Le cas qui PAIE la fenêtre : la fiche vient du cache PERSISTÉ, donc servie
+   * et au repos dès la première peinture. C'est là que `conversation:encryption-changed`
+   * — qui invalide exactement cette clé en `exact` (`realtime-encryption-regime.ts`)
+   * — a pu passer sans que rien ne la relise, laissant le composeur envoyer en
+   * CLAIR dans une conversation chiffrée, que la passerelle refuse (fail-closed).
+   */
+  test('une fiche RESTAURÉE du disque repart — c’est la fenêtre qui emporte le régime E2EE', () => {
+    const { socket, queryClient } = connect();
+    queryClient.setQueryData(conversationQueryKey('c-chiffree'), row('c-chiffree'));
+    expect(isInvalidated(queryClient, conversationQueryKey('c-chiffree'))).toBe(false);
+
+    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+
+    expect(isInvalidated(queryClient, conversationQueryKey('c-chiffree'))).toBe(true);
+  });
+
+  /**
+   * Une fenêtre ancrée reste DEHORS, et sa raison n'a pas changé : elle porte le
+   * PASSÉ (#7420), que la fenêtre de première connexion ne peut pas avoir
+   * modifié.
+   */
+  test('une fenêtre ancrée n’est pas touchée — elle porte le PASSÉ (#7420)', () => {
     const { socket, queryClient } = connect();
     const anchored = [...messagesQueryKey('c-a'), 'around', 'm-0'] as const;
-    queryClient.setQueryData(conversationQueryKey('c-a'), row('c-a'));
     queryClient.setQueryData(anchored, threadPages([]));
 
     socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
 
-    expect(isInvalidated(queryClient, conversationQueryKey('c-a'))).toBe(false);
     expect(isInvalidated(queryClient, anchored)).toBe(false);
   });
 });
@@ -622,5 +658,98 @@ describe('#20336 — aucune famille ne peut entrer dans une seule des deux branc
     expect(declaration).toContain('queryKey: FEED_QUERY_KEY, exact: true');
     expect(declaration).toContain('queryKey: STATUS_MOODS_QUERY_KEY, exact: true');
     expect(onAuthenticatedBody()).not.toContain('exact: true');
+  });
+});
+
+/**
+ * **LE CLIQUET DE LA SECONDE AFFIRMATION** (#20421, cycle 219).
+ *
+ * `isListOrLiveThread` admet désormais la FICHE par sa LONGUEUR
+ * (`queryKey.length === 2`). Ce discriminant porte deux affirmations : « la
+ * fiche a cette forme » (vérifiée par les témoins de comportement ci-dessus) et
+ * « **aucune AUTRE famille n'a cette forme sous cette racine** » — la seconde,
+ * celle que personne ne relit (leçon 261). Une sœur de longueur 2 ajoutée
+ * demain par un lot qui parlera d'autre chose serait relue à chaque première
+ * connexion, en silence, sans qu'un seul témoin tombe.
+ *
+ * Le balayage lit les clés de PRODUCTION rootées sur `['conversations']` et
+ * exige que la seule de longueur 2 soit celle de la fiche. Il prouve d'abord
+ * qu'il balaie bien quelque chose : une garde négative dont le relevé rend `[]`
+ * reste verte (`presence-visibility-viewer-aware-guard` et la garde des
+ * projections de réglages portent la même précaution).
+ *
+ * **Quand il tombe**, la réparation n'est pas une ligne d'inventaire : c'est de
+ * décider si la famille neuve doit être rattrapée. Si oui, elle rejoint
+ * `CATCH_UP_FAMILIES` avec sa portée et sa raison ; si non, le discriminant
+ * cesse d'être une longueur et devient une forme nommée.
+ */
+describe('#20421 — la longueur 2 ne désigne que la FICHE sous la racine des conversations', () => {
+  const WEB_SRC = new URL('../../', import.meta.url);
+
+  /** Tous les modules de PRODUCTION de `apps/web/src` — la portée de l'affirmation, pas celle du lot. */
+  const productionSources = (): readonly { readonly file: string; readonly text: string }[] => {
+    const walk = (dir: URL, prefix: string): readonly { readonly file: string; readonly text: string }[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        if (entry.isDirectory()) return walk(new URL(`${entry.name}/`, dir), `${prefix}${entry.name}/`);
+        if (!/\.tsx?$/.test(entry.name) || entry.name.includes('.test.')) return [];
+        return [{ file: `${prefix}${entry.name}`, text: readFileSync(new URL(entry.name, dir), 'utf8') }];
+      });
+    return walk(WEB_SRC, '');
+  };
+
+  /** Les littéraux `['conversations', …]` du module, commentaires dépouillés. */
+  const rootedKeys = (text: string): readonly string[] =>
+    [...text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').matchAll(/\[\s*'conversations'\s*(,[^\]]*)?\]/g)].map((match) => match[0]);
+
+  /** Les segments d'un littéral de clé, le premier (`'conversations'`) retiré. */
+  const tailSegments = (literal: string): readonly string[] =>
+    literal
+      .slice(1, -1)
+      .split(',')
+      .map((part) => part.trim())
+      .filter((part) => part !== '')
+      .slice(1);
+
+  /**
+   * **Le discriminant est la NATURE du second segment, pas son nom.**
+   *
+   * Une FICHE est adressée par une VARIABLE — `['conversations', id]`,
+   * `['conversations', conversationId]` : deux sites du dépôt l'écrivent, et le
+   * second (`lib/send/served-regime.ts`) le fait par décision ÉCRITE, pour ne
+   * pas tirer les décodeurs des conversations dans son morceau. Les nommer un à
+   * un ferait rougir le cliquet au premier site qui choisit un autre nom de
+   * variable — une garde qui rougit sur son cas nominal n'apprend plus rien.
+   *
+   * Une SŒUR, elle, est nommée par une CHAÎNE LITTÉRALE (`['conversations',
+   * 'categories']`) : c'est une famille, pas une ligne. C'est elle que la
+   * longueur 2 avalerait en silence.
+   */
+  const isSisterFamily = (literal: string): boolean => {
+    const tail = tailSegments(literal);
+    return tail.length === 1 && /^['"`]/.test(tail[0] ?? '');
+  };
+
+  test('le balayage trouve bien des clés — un relevé vide ne rougit jamais tout seul', () => {
+    const found = productionSources().flatMap(({ text }) => rootedKeys(text));
+
+    expect(found.length).toBeGreaterThanOrEqual(5);
+    expect(found.filter((literal) => tailSegments(literal).length === 1).length).toBeGreaterThanOrEqual(1);
+  });
+
+  test('aucun module de production ne pose une SŒUR de longueur 2 sous cette racine', () => {
+    const sisters = productionSources().flatMap(({ file, text }) =>
+      rootedKeys(text)
+        .filter(isSisterFamily)
+        .map((literal) => `${file} → ${literal}`),
+    );
+
+    expect(sisters).toEqual([]);
+  });
+
+  test('la fiche est bien produite à cette forme, et son producteur est nommé', () => {
+    const conversations = readFileSync(new URL('./conversations.ts', import.meta.url), 'utf8');
+
+    expect(conversations).toContain("export const conversationQueryKey = (id: string) => ['conversations', id] as const;");
+    expect(conversationQueryKey('c-x')).toEqual(['conversations', 'c-x']);
   });
 });
