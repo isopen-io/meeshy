@@ -197,3 +197,32 @@ describe('le palier d’un lien suit son débit estimé et sa perte montante (#1
     expect(TIER_ENCODING.medium.scaleResolutionDownBy).toBe(1);
   });
 });
+
+describe('la route est relayée dès qu’un des deux candidats de la paire élue l’est, comme iOS (#20273)', () => {
+  const pair: Entry = { type: 'candidate-pair', id: 'p', nominated: true, state: 'succeeded', localCandidateId: 'l', remoteCandidateId: 'r', currentRoundTripTime: 0.05 };
+  const local = (candidateType: string): Entry => ({ type: 'local-candidate', id: 'l', candidateType });
+  const remote = (candidateType: string): Entry => ({ type: 'remote-candidate', id: 'r', candidateType });
+  const pathOf = (entries: readonly Entry[]) => readStats(report([pair, ...entries]), 0).path;
+
+  test('le candidat DISTANT relayé suffit, même quand le local est un hôte', () => {
+    expect(pathOf([local('host'), remote('relay')])).toBe('relay');
+  });
+
+  test('le candidat local relayé suffit, même quand le distant est un hôte', () => {
+    expect(pathOf([local('relay'), remote('host')])).toBe('relay');
+  });
+
+  test('deux hôtes font une route directe', () => {
+    expect(pathOf([local('host'), remote('host')])).toBe('direct');
+  });
+
+  test('le seul candidat distant résolu tranche la route', () => {
+    expect(pathOf([remote('relay')])).toBe('relay');
+    expect(pathOf([remote('srflx')])).toBe('direct');
+  });
+
+  test('aucun candidat résolu : la route est inconnue', () => {
+    expect(pathOf([])).toBeNull();
+    expect(pathOf([{ type: 'remote-candidate', id: 'autre', candidateType: 'relay' }])).toBeNull();
+  });
+});
