@@ -110,6 +110,22 @@ describe('#20367 — PUT /relations/:userId/blood-bundle : un Sang déjà scell�
     expect(coupe.status).toBe(409);
   });
 
+  it('une redescente pendant l\'écriture : l\'accord ne survit pas, 404, et rien n\'est verrouillé', async () => {
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')] });
+    const ecrire = app.prisma.relationFeatureSetting.upsert;
+    app.prisma.relationFeatureSetting.upsert = jest.fn(async (args: unknown) => {
+      const ecrit = await ecrire(args);
+      await app.prisma.userRelation.updateMany({ where: {}, data: { grantedByLow: 'CLOSE', grantedByHigh: 'CLOSE' } });
+      return ecrit;
+    });
+    const res = await accepter(app, { version: BLOOD_BUNDLE_VERSION });
+    await app.close();
+
+    expect(res.status).toBe(404);
+    expect(app.reglages.get(`${MOI}:${AUTRE}`)?.bloodBundleAcceptedAt ?? null).toBeNull();
+    expect(app.reglages.get(`${MOI}:${AUTRE}`)?.bloodBundleVersion ?? null).toBeNull();
+  });
+
   it('sous le Sang : 404 sans rien écrire ; version périmée : 409 RELATION_BLOOD_BUNDLE_OUTDATED ; corps illisible : 400', async () => {
     const proche = await appli({ liens: [lien('CLOSE', 'CLOSE')] });
     const sous = await accepter(proche, { version: BLOOD_BUNDLE_VERSION });

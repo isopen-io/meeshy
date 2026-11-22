@@ -26,6 +26,11 @@ const responseSchema = {
  * sans rien écrire) ; seulement à la version courante de la liste (409 RELATION_BLOOD_BUNDLE_OUTDATED).
  * Revenir en arrière, c'est redescendre la personne à Proche : la baisse efface l'accord des deux côtés.
  */
+async function stillBlood(prisma: FastifyInstance['prisma'], ownerId: string, otherId: string): Promise<boolean> {
+  const [level, blocked] = await Promise.all([niveauEffectif(prisma, ownerId, otherId), isBlockedBetween(prisma, ownerId, otherId)]);
+  return level === 'BLOOD' && !blocked;
+}
+
 export function registerBloodBundle(fastify: FastifyInstance): void {
   const writes = relationLimiter(fastify, 'rel:blood-bundle:write:u', 30);
 
@@ -51,14 +56,21 @@ export function registerBloodBundle(fastify: FastifyInstance): void {
       }
       const ownerId = request.user!.userId;
       const userId = otherId.toLowerCase();
-      const [level, blocked] = await Promise.all([niveauEffectif(fastify.prisma, ownerId, userId), isBlockedBetween(fastify.prisma, ownerId, userId)]);
-      if (level !== 'BLOOD' || blocked) return sendNotFound(reply, 'Personne introuvable');
+      if (!(await stillBlood(fastify.prisma, ownerId, userId))) return sendNotFound(reply, 'Personne introuvable');
       const data = { bloodBundleAcceptedAt: new Date(), bloodBundleVersion: parsed.data.version };
       await fastify.prisma.relationFeatureSetting.upsert({
         where: { ownerId_otherId: { ownerId, otherId: userId } },
         create: { ownerId, otherId: userId, ...data },
         update: data,
       });
+      // Vérifier PUIS écrire n'est pas atomique (Mongo, deux collections) : une baisse ou un blocage
+      // arrivé entre les deux laisserait un accord sur une paire qui n'est plus Sang. Le niveau et le
+      // blocage sont RELUS après l'écriture ; s'ils ont changé, l'accord est retiré et rien n'est dit.
+      // Le verrou, lui, ne lit jamais l'accord seul : il exige le niveau effectif Sang à chaque lecture.
+      if (!(await stillBlood(fastify.prisma, ownerId, userId))) {
+        await fastify.prisma.relationFeatureSetting.updateMany({ where: { ownerId, otherId: userId }, data: { bloodBundleAcceptedAt: null, bloodBundleVersion: null } });
+        return sendNotFound(reply, 'Personne introuvable');
+      }
       return sendSuccess(reply, { userId, bloodBundleAccepted: true, version: parsed.data.version, lockedByLevel: true });
     } catch (error) {
       logError(fastify.log, 'Blood bundle acceptance error:', error);

@@ -293,17 +293,20 @@ const consentColumns = (consents: RelationRitualConsents): Record<string, boolea
   Object.fromEntries(RELATION_RITUAL_CONSENT_KEYS.map((key) => [CONSENT_COLUMN[key], consents[key]]));
 
 /**
+ * Une confirmation v1 EFFACE tout accord au palier antérieur : le nouveau rituel en est le seul
+ * accord, et une acceptation d'un rituel passé n'y survit pas.
+ *
  * L'accord au palier ouvre aussi les quatre colonnes du rituel : un serveur ramené en arrière, ou un
  * miroir qui ne lit pas encore l'accord, sert ce que la personne a accepté — jamais moins.
  */
-const confirmationColumns = (confirmation: RelationRitualConfirmation, at: Date): Record<string, boolean | Date | string> =>
+const confirmationColumns = (confirmation: RelationRitualConfirmation, at: Date): Record<string, boolean | Date | string | null> =>
   isBundleConsent(confirmation)
     ? {
       ...Object.fromEntries(RELATION_RITUAL_CONSENT_KEYS.map((key) => [CONSENT_COLUMN[key], true])),
       bloodBundleAcceptedAt: at,
       bloodBundleVersion: confirmation.version,
     }
-    : consentColumns(confirmation);
+    : { ...consentColumns(confirmation), bloodBundleAcceptedAt: null, bloodBundleVersion: null };
 
 async function writeConsents(deps: RitualDeps, ownerId: string, otherId: string, consents: RelationRitualConfirmation, at: Date) {
   const columns = { ...confirmationColumns(consents, at), consentedAt: at };

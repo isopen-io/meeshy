@@ -498,4 +498,17 @@ describe('#20362 — le rituel recueille UN accord, celui du palier entier, vers
     expect([perime.status, perime.body.code]).toEqual([409, 'RELATION_BLOOD_BUNDLE_OUTDATED']);
     expect([refus.status, refus.body.code]).toEqual([400, 'RELATION_CONSENT_REQUIRED']);
   });
+
+  it('un rituel confirmé en v1 efface un accord au palier antérieur : une acceptation périmée ne survit pas au nouveau rituel', async () => {
+    const ancien = { ownerId: AUTRE, otherId: MOI, bloodBundleAcceptedAt: new Date('2026-11-01T00:00:00.000Z'), bloodBundleVersion: BLOOD_BUNDLE_VERSION };
+    const app = await appli(pret({ reglages: [ancien] }));
+    const { token } = await jusquAuxDeuxHolds(app);
+    await moi(app, { phase: 'confirm', token, consents: PALIER });
+    const fin = await autre(app, { phase: 'confirm', token, consents: { ...TOUS, locationLive: false } });
+    await app.close();
+
+    expect(fin.body.data).toMatchObject({ completed: true });
+    const ligne = app.reglages().find((r) => r.ownerId === AUTRE && r.otherId === MOI);
+    expect(ligne).toMatchObject({ locationShared: false, bloodBundleAcceptedAt: null, bloodBundleVersion: null });
+  });
 });
