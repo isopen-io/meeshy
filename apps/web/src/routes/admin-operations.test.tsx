@@ -195,6 +195,98 @@ describe('l’hôte en direct', () => {
   });
 });
 
+/**
+ * LA RECONNEXION (#20304) — `admin-metrics:subscribe` n'est pas une écoute, c'est une
+ * JONCTION DE ROOM côté passerelle, et une room appartient à UN socket. socket.io
+ * reconnecte sous le même `SocketClient` (l'onglet masqué 10 s suffit, via
+ * `bindAppStatePresence`), donc `watchLiveSocket` ne rejoue RIEN : sans ré-émission
+ * sur `authenticated`, les courbes gèlent pour toujours sous une pastille
+ * « En direct », et le repli par sondage reste gardé sur `live === true`.
+ */
+const reconnectableSocket = (answers: readonly unknown[]) => {
+  const handlers = new Map<string, (payload: unknown) => void>();
+  const emitted: string[] = [];
+  let turn = 0;
+  const socket: SocketClient = {
+    connected: true,
+    connect: () => undefined,
+    disconnect: () => undefined,
+    on: (event, handler) => void handlers.set(event, handler as (payload: unknown) => void),
+    off: (event) => void handlers.delete(event),
+    emit: (event) => void emitted.push(event),
+    emitWithAck: async (event) => {
+      emitted.push(event);
+      const answer = answers[Math.min(turn, answers.length - 1)];
+      turn += 1;
+      return answer;
+    },
+  };
+  const subscriptions = () => emitted.filter((event) => event === 'admin-metrics:subscribe').length;
+  const liveOf = (host: Element) => host.querySelector('[data-admin-ops-live]')?.getAttribute('data-admin-ops-live');
+  return { socket, handlers, emitted, subscriptions, liveOf };
+};
+
+describe('la reconnexion de l’hôte en direct (#20304)', () => {
+  test('la coupure désarme « En direct » — sans quoi le repli par sondage ne prend jamais le relais', async () => {
+    const { socket, handlers, liveOf } = reconnectableSocket([{ ok: true, snapshot: SNAPSHOT }]);
+    const { host } = await open(undefined, { liveSource: async (watcher) => watcher(socket) });
+    await mounter.settle();
+    expect(liveOf(host)).toBe('socket');
+
+    await act(async () => handlers.get('disconnect')?.(undefined));
+    await mounter.settle();
+    expect(liveOf(host)).toBe('polling');
+  });
+
+  test('la ré-authentification rejoue l’abonnement, et les échantillons repartent sans remontage', async () => {
+    const { socket, handlers, subscriptions, liveOf } = reconnectableSocket([{ ok: true, snapshot: SNAPSHOT }]);
+    const { host } = await open(undefined, { liveSource: async (watcher) => watcher(socket) });
+    await mounter.settle();
+    expect(subscriptions()).toBe(1);
+
+    await act(async () => handlers.get('disconnect')?.(undefined));
+    await act(async () => handlers.get('authenticated')?.(undefined));
+    await mounter.settle();
+    expect(subscriptions()).toBe(2);
+    expect(liveOf(host)).toBe('socket');
+
+    await act(async () => handlers.get('admin-metrics:sample')?.(sample('2026-10-12T10:00:10.000Z', 77)));
+    await mounter.settle();
+    expect(host.querySelector('[data-admin-stat="ops-cpu"]')?.textContent).toContain('77');
+  });
+
+  test('un ré-abonnement REFUSÉ ne laisse pas la page affirmer qu’elle est en direct', async () => {
+    const { socket, handlers, liveOf } = reconnectableSocket([{ ok: true, snapshot: SNAPSHOT }, { ok: false, code: 'RATE_LIMITED' }]);
+    const { host } = await open(undefined, { liveSource: async (watcher) => watcher(socket) });
+    await mounter.settle();
+    expect(liveOf(host)).toBe('socket');
+
+    await act(async () => handlers.get('disconnect')?.(undefined));
+    await act(async () => handlers.get('authenticated')?.(undefined));
+    await mounter.settle();
+    expect(liveOf(host)).toBe('polling');
+  });
+
+  test('quitter l’écran détache les DEUX écoutes de cycle de vie, pas seulement celle des échantillons', async () => {
+    const { socket, handlers } = reconnectableSocket([{ ok: true, snapshot: SNAPSHOT }]);
+    let detach: (() => void) | null = null;
+    const { host: _host } = await open(undefined, {
+      liveSource: async (watcher) => {
+        detach = watcher(socket);
+        return detach;
+      },
+    });
+    await mounter.settle();
+    expect(handlers.has('authenticated')).toBe(true);
+    expect(handlers.has('disconnect')).toBe(true);
+
+    await act(async () => (detach as (() => void) | null)?.());
+    expect(handlers.has('authenticated')).toBe(false);
+    expect(handlers.has('disconnect')).toBe(false);
+    expect(handlers.has('admin-metrics:sample')).toBe(false);
+  });
+});
+
 describe('la sauvegarde et la purge', () => {
   test('au rang souverain : taper le nom de l’opération l’autorise, la demande part avec confirm', async () => {
     const { host, calls } = await open();
