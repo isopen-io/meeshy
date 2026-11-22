@@ -289591,43 +289591,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ثلاثة أيام من اللهب: يأتمنك أجدادك على قنديل. يُبقي لهبك مشتعلًا في يوم لا تأتي فيه."
+            "value": "يأتمنك أجدادك عليه: يُبقي لهبك مشتعلًا في يوم تغيب فيه."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Drei Tage Flamme: Deine Ahnen vertrauen dir eine an. Sie hält deine Flamme an einem Tag am Brennen, an dem du nicht kommst."
+            "value": "Deine Ahnen vertrauen sie dir an: Sie hält deine Flamme an einem Tag, an dem du fehlst, am Brennen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Three days of Flame: your ancestors entrust you with one. It keeps your Flame lit on a day you don’t come."
+            "value": "Your ancestors entrust it to you: it keeps your Flame lit on a day away."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tres días de Llama: tus ancestros te confían una. Mantiene tu Llama encendida un día en que no vengas."
+            "value": "Tus ancestros te la confían: mantiene tu Llama encendida un día de ausencia."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trois jours de Flamme : les aïeux t’en confient une. Elle garde ta Flamme allumée un jour où tu ne viens pas."
+            "value": "Les aïeux te la confient : elle garde ta Flamme allumée un jour d’absence."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tre giorni di Fiamma: i tuoi antenati te ne affidano una. Tiene accesa la tua Fiamma in un giorno in cui non vieni."
+            "value": "I tuoi antenati te la affidano: tiene accesa la tua Fiamma in un giorno d’assenza."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Três dias de Chama: seus ancestrais lhe confiam uma. Ela mantém sua Chama acesa num dia em que você não vier."
+            "value": "Seus ancestrais a confiam a você: ela mantém sua Chama acesa num dia de ausência."
           }
         }
       }
