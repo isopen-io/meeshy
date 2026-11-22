@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations.links
 
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -30,6 +33,8 @@ import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.CommunityLink
 import me.meeshy.sdk.model.ShareLinkDateFormat
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.ui.component.kit.MeeshyToggleRow
+import me.meeshy.ui.component.kit.MeeshyToggleRowAccessory
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
@@ -47,11 +52,19 @@ fun CommunityLinkDetailScreen(
 ) {
     val link by viewModel.link.collectAsStateWithLifecycle()
     val notFound by viewModel.notFound.collectAsStateWithLifecycle()
+    val joinLink by viewModel.joinLink.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val accent = linkAccent(ACCENT_HEX)
     val actions = rememberLinkActions()
     val haptics = rememberMeeshyHaptics()
     var copied by remember { mutableStateOf(false) }
     LaunchedEffect(copied) { if (copied) { delay(COPIED_FEEDBACK_MS); copied = false } }
+    LaunchedEffect(joinLink.failed) {
+        if (joinLink.failed) {
+            haptics.error()
+            Toast.makeText(context, R.string.links_common_action_failed, Toast.LENGTH_SHORT).show()
+        }
+    }
 
     LinksPage(
         title = link?.name.orEmpty(),
@@ -90,10 +103,15 @@ fun CommunityLinkDetailScreen(
                 )
             }
         }
+        if (joinLink.canPause) {
+            item(key = "joinLink", contentType = "joinLink") {
+                JoinLinkRow(joinLink, accent, onActiveChange = viewModel::setJoinLinkActive)
+            }
+        }
         item(key = "stats", contentType = "stats") {
             Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
                 LinkStatTile(MeeshyIcons.PersonFilled, current.memberCount, stringResource(R.string.links_community_detail_members), accent, Modifier.weight(1f))
-                StatusTile(current.isActive, accent, Modifier.weight(1f))
+                StatusTile(joinLink.isLinkActive, accent, Modifier.weight(1f))
             }
         }
         item(key = "info", contentType = "info") { CommunityInfo(current, accent) }
@@ -110,6 +128,27 @@ private fun CommunityHeader(link: CommunityLink, accent: androidx.compose.ui.gra
         LinkIconBadge(MeeshyIcons.Groups, accent, size = 60.dp)
         Text(link.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MeeshyTheme.tokens.textPrimary)
         Text(link.joinUrl, style = MaterialTheme.typography.labelMedium, fontFamily = FontFamily.Monospace, color = MeeshyTheme.tokens.textSecondary, textAlign = TextAlign.Center, maxLines = 2)
+    }
+}
+
+/**
+ * « Actif », sous les gestes (planche `Lien-Communaute`, iOS `joinLinkRow`) : la pause ne ferme que la porte du LIEN — une
+ * communauté publique reste joignable, les invitations restent — d'où son sous-titre, qui ne dit jamais « plus personne
+ * n'entre ». Le toucher répond tout de suite ; l'état revient si la passerelle refuse.
+ */
+@Composable
+private fun JoinLinkRow(joinLink: CommunityJoinLinkUi, accent: androidx.compose.ui.graphics.Color, onActiveChange: (Boolean) -> Unit) {
+    val isActive = joinLink.paused == false
+    Column(Modifier.fillMaxWidth().linkSurface(accent, radius = 14.dp)) {
+        MeeshyToggleRow(
+            title = stringResource(R.string.links_common_active),
+            subtitle = if (isActive) null else stringResource(R.string.links_community_join_link_paused),
+            accessory = MeeshyToggleRowAccessory.Toggle(isOn = isActive),
+            tint = accent,
+            enabled = !joinLink.isSetting,
+            onClick = { onActiveChange(!isActive) },
+            modifier = Modifier.testTag("communityLink.detail.active"),
+        )
     }
 }
 

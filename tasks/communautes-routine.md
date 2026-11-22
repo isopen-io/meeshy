@@ -873,4 +873,9 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 ## 2026-11-22 — réveil 07:38 UTC
 
 - Début du run : aucune PR de la routine ouverte ; aucune branche vivante sur `feature/conversations/.../links/` ni `sdk-core/.../link/`.
-- Lot : #20255, moitié Android (milestone « Chaque lien se règle, se met en pause et garde son histoire ») — en cours.
+- Lot : #20255, moitié Android (milestone « Chaque lien se règle, se met en pause et garde son histoire »).
+- Modèles : `CommunityMini.joinLinkPaused` et `CommunityLink.joinLinkPaused: Boolean?` (lu de `GET /communities/mine` ; `null` = passerelle plus ancienne, aucune bascule offerte). `CommunityLinkRepository.setJoinLinkPaused` porte `PUT communities/{id}/join-link` (déjà déclaré dans `CommunityApi` par #19661) et rend l'état écrit par la passerelle (`joinLinkPausedAt != null`).
+- App : `CommunityLinkDetailViewModel.joinLink` (`CommunityJoinLinkUi`) et `setJoinLinkActive` — optimiste, la réponse fait foi, un refus remet l'état d'avant et le signale (toast « L'action n'a pas abouti », retour haptique d'erreur), un second toucher en vol n'envoie rien ; une bascule réussie réécrit la seule ligne de la communauté dans `LinksCache`. La fiche porte la rangée « Actif » (`MeeshyToggleRow`) sous les gestes, avec « Les arrivées par ce lien sont suspendues » en pause ; la tuile de statut dit « Inactif » d'un lien en pause. Mêmes mots que l'iOS : `communityLink.sheet.joinLinkPaused` et `shareLink.detail.actionFailed` adoptés au manifeste i18n (sept langues générées).
+- Témoins : `sdk-core/.../link/CommunityLinkJoinLinkPauseTest.kt` (5), `feature/conversations/.../links/CommunityLinkDetailJoinLinkPauseTest.kt` (10). Android ne compile pas en conteneur : preuve par `android.yml` sur la PR.
+- Revue adversariale : non lancée — lot client seul, aucune garde ni route touchée.
+- Reste de #20255 : le message de l'arrivant (`COMMUNITY_LINK_PAUSED`), joignable seulement quand un client enverra `via: "link"`.

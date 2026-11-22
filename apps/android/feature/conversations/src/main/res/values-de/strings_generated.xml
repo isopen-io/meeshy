@@ -188,6 +188,7 @@
         <item quantity="one">%1$d Anmeldung</item>
         <item quantity="other">%1$d Anmeldungen</item>
     </plurals>
+    <string name="links_common_action_failed">Das hat nicht geklappt. Versuch es erneut.</string>
     <string name="links_common_active">Aktiv</string>
     <string name="links_common_cancel">Abbrechen</string>
     <string name="links_common_copy">Kopieren</string>

@@ -191,6 +191,7 @@
         <item quantity="many">%1$d iscritti</item>
         <item quantity="other">%1$d iscritti</item>
     </plurals>
+    <string name="links_common_action_failed">L\'azione non è riuscita. Riprova.</string>
     <string name="links_common_active">Attivo</string>
     <string name="links_common_cancel">Annulla</string>
     <string name="links_common_copy">Copia</string>

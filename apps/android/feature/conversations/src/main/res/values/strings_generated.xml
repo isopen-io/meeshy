@@ -188,6 +188,7 @@
         <item quantity="one">%1$d signup</item>
         <item quantity="other">%1$d signups</item>
     </plurals>
+    <string name="links_common_action_failed">That didn\'t work. Try again.</string>
     <string name="links_common_active">Active</string>
     <string name="links_common_cancel">Cancel</string>
     <string name="links_common_copy">Copy</string>

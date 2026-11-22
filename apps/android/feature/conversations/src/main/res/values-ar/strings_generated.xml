@@ -200,6 +200,7 @@
         <item quantity="many">%1$d تسجيلات</item>
         <item quantity="other">%1$d تسجيلات</item>
     </plurals>
+    <string name="links_common_action_failed">لم يكتمل الإجراء. أعد المحاولة.</string>
     <string name="links_common_active">نشط</string>
     <string name="links_common_cancel">إلغاء</string>
     <string name="links_common_copy">نسخ</string>

@@ -191,6 +191,7 @@
         <item quantity="many">%1$d registros</item>
         <item quantity="other">%1$d registros</item>
     </plurals>
+    <string name="links_common_action_failed">La acción no se completó. Inténtalo de nuevo.</string>
     <string name="links_common_active">Activo</string>
     <string name="links_common_cancel">Cancelar</string>
     <string name="links_common_copy">Copiar</string>
