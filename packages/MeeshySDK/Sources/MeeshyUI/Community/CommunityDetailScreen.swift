@@ -507,12 +507,20 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
         return String(localized: "community.join.declined.until", defaultValue: "Vous pourrez en refaire une à partir du \(date).", bundle: .module)
     }
 
+    /// Mêmes mots que le web (`community.membership.error.linkPaused`).
+    static var linkPausedText: String {
+        String(localized: "community.join.linkPaused", defaultValue: "Les arrivées par ce lien sont suspendues : un administrateur de la communauté l’a mis en pause.", bundle: .module)
+    }
+
     private var joinNotice: (text: String, isRefusal: Bool)? {
         if let until = declinedUntil {
             return (Self.declinedUntilText(until: until), true)
         }
         if viewModel.joinRefusal == .cooldown {
             return (String(localized: "community.join.cooldown", defaultValue: "Votre dernière demande a été refusée : réessayez 7 jours après ce refus.", bundle: .module), true)
+        }
+        if viewModel.joinRefusal == .linkPaused || viewModel.linkArrivalPaused {
+            return (Self.linkPausedText, true)
         }
         if viewModel.joinRequestPending {
             return (String(localized: "community.join.requested.waiting", defaultValue: "Un administrateur ou un modérateur doit l’accepter.", bundle: .module), false)

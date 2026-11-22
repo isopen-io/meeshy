@@ -914,6 +914,53 @@
         }
       }
     },
+    "community.join.linkPaused": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الانضمام عبر هذا الرابط متوقف: أوقفه أحد مشرفي المجتمع مؤقتًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beitritte über diesen Link sind ausgesetzt: Ein Admin der Community hat ihn pausiert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Joining through this link is paused: a community admin has paused it."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las entradas por este enlace están suspendidas: un administrador de la comunidad lo ha pausado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les arrivées par ce lien sont suspendues : un administrateur de la communauté l’a mis en pause."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gli ingressi tramite questo link sono sospesi: un amministratore della community lo ha messo in pausa."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As entradas por este link estão suspensas: um administrador da comunidade colocou-o em pausa."
+          }
+        }
+      }
+    },
     "community.online": {
       "extractionState": "manual",
       "localizations": {
