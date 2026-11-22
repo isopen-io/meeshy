@@ -688,7 +688,7 @@ const es = {
   'game.guide.moment.atlas_stamp.next': '{stamped} idiomas de {total} en tu pasaporte.',
   'game.guide.moment.atlas_stamp.short': 'Sello: {language}.',
   'game.guide.moment.flame_freeze_gift.what': 'Te regalan una Vela.',
-  'game.guide.moment.flame_freeze_gift.means': 'Tres días de Llama: tus ancestros te confían una. Mantiene tu Llama encendida un día en que no vengas.',
+  'game.guide.moment.flame_freeze_gift.means': 'Tus ancestros te la confían: mantiene tu Llama encendida un día que faltes.',
   'game.guide.moment.flame_freeze_gift.next': 'Velas en reserva: {count}.',
   'game.guide.moment.flame_freeze_gift.short': 'Te regalan una Vela para tu Llama.',
   'game.photo.kicker.trophy': 'Nuevo trofeo',

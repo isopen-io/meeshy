@@ -105,6 +105,22 @@ struct GameBlockModelsTests {
         #expect(GameBlock.parse(GameBlockFixture.withExtraKey) != nil)
     }
 
+    @Test("le jour où la première Veilleuse est offerte, la Flamme le dit ; un serveur antérieur ne le sert pas (#20252)")
+    func freezeGiftedIsReadAndTolerant() throws {
+        let gifted = GameBlockFixture.json.replacingOccurrences(of: "\"canRelight\":false}", with: "\"canRelight\":false,\"freezeGifted\":true}")
+        #expect(try #require(GameBlock.parse(Data(gifted.utf8))).flame.freezeGifted == true)
+        #expect(try #require(GameBlock.parse(GameBlockFixture.data)).flame.freezeGifted == nil)
+    }
+
+    @Test("la Veilleuse offerte s'annonce ce jour-là, une seule fois, et jamais devant un serveur antérieur (#20252)")
+    func freezeGiftIsAnnouncedOnce() {
+        #expect(GameFlame.freezeGiftSeenKey == "flame-freeze-gift")
+        #expect(GameFlame.announcesFreezeGift(freezeGifted: true, guideSeen: []))
+        #expect(!GameFlame.announcesFreezeGift(freezeGifted: true, guideSeen: ["flame-freeze-gift"]))
+        #expect(!GameFlame.announcesFreezeGift(freezeGifted: false, guideSeen: []))
+        #expect(!GameFlame.announcesFreezeGift(freezeGifted: nil, guideSeen: []))
+    }
+
     @Test("un signal de mission inconnu reste une chaîne : l'écran ne casse pas")
     func unknownSignalSurvives() throws {
         let patched = GameBlockFixture.json.replacingOccurrences(of: "reply-distinct-conversations", with: "signal-du-futur")

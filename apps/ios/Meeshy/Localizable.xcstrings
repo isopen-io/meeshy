@@ -289538,6 +289538,194 @@
         }
       }
     },
+    "game2.guide.moment.flame_freeze_gift.what": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أُهدي إليك قنديل."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dir wird eine Hüterin geschenkt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A Vigil is yours, as a gift."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Te regalan una Vela."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une Veilleuse t’est offerte."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ti è donata una Lucerna."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você ganhou uma Lamparina."
+          }
+        }
+      }
+    },
+    "game2.guide.moment.flame_freeze_gift.means": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يأتمنك أجدادك عليه: يُبقي لهبك مشتعلًا في يوم تغيب فيه."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Von deinen Ahnen: Sie hält deine Flamme an einem Tag ohne dich am Brennen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your ancestors entrust it to you: it keeps your Flame lit on a day you miss."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus ancestros te la confían: mantiene tu Llama encendida un día que faltes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les aïeux te la confient : elle garde ta Flamme allumée un jour d’absence."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I tuoi antenati te la affidano: tiene accesa la tua Fiamma un giorno d’assenza."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seus ancestrais a confiam a você: mantém sua Chama acesa num dia de ausência."
+          }
+        }
+      }
+    },
+    "game2.guide.moment.flame_freeze_gift.next": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "القناديل في الاحتياط: ⁦%@⁩."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hüterinnen in Reserve: %@."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vigils in reserve: %@."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Velas en reserva: %@."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Veilleuses en réserve : %@."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lucerne di riserva: %@."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lamparinas de reserva: %@."
+          }
+        }
+      }
+    },
+    "game2.guide.moment.flame_freeze_gift.short": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أُهدي إليك قنديل للهبك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dir wird eine Hüterin für deine Flamme geschenkt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A Vigil for your Flame, as a gift."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Te regalan una Vela para tu Llama."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une Veilleuse t’est offerte pour ta Flamme."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ti è donata una Lucerna per la tua Fiamma."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você ganhou uma Lamparina para a sua Chama."
+          }
+        }
+      }
+    },
     "game2.guide.moment.atlas_stamp.next": {
       "extractionState": "manual",
       "localizations": {
