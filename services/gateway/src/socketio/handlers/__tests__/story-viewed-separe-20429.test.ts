@@ -148,11 +148,14 @@ describe('#20429 — story:viewed et la séparation autour du viewer', () => {
 
   it('ni l’id NI LE PSEUDO du viewer ne partent quand un blocage sépare', async () => {
     for (const blocages of [{ [AUTEUR]: [VIEWER] }, { [VIEWER]: [AUTEUR] }, 'panne' as const]) {
-      /* Le cache de séparation est PARTAGÉ par le processus : sans ce vidage,
-         l'itération « panne » était servie par l'entrée que la première venait
-         d'écrire sous la même clé `[viewer]` — elle n'exerçait donc PAS la
-         lecture impossible, et ce témoin ne tombait pas sous un fail-open.
-         Mesuré en mutant la garde (#20429). */
+      /* Ce vidage rend le témoin INDÉPENDANT de la politique de cache du
+         résolveur, et il a été gagné par une mesure : quand ce chemin cachait
+         encore, l'itération « panne » était servie par l'entrée que la
+         première venait d'écrire sous la même clé `[viewer]` — elle
+         n'exerçait donc PAS la lecture impossible, et ce témoin restait vert
+         sous un fail-open. Le chemin passe aujourd'hui `cached: false`
+         (témoin suivant), mais un témoin qui itère ne doit pas DÉPENDRE de
+         cela pour exercer ses cas. */
       resetSeparationCacheForTests();
       const { emissions } = await diffuser(blocages);
       const surLeFil = JSON.stringify(emissions);
@@ -164,6 +167,23 @@ describe('#20429 — story:viewed et la séparation autour du viewer', () => {
   it('un blocage qui ne concerne PAS le viewer ne tait pas l’auteur', async () => {
     const { emissions } = await diffuser({ [AUTRE_AUTEUR]: [AUTEUR] });
     expect(recuParLAuteur(emissions)).toHaveLength(1);
+  });
+
+  it('NE PEUPLE PAS le cache partagé — la clé `[viewer]` éviderait les appelants stables', async () => {
+    const prisma = fauxPrisma({});
+    const handler = new SocialEventsHandler({ io: fauxIo([]) as any, prisma });
+
+    await handler.separationAroundActor(VIEWER);
+    await handler.separationAroundActor(VIEWER);
+
+    /* Deux appels ⇒ QUATRE lectures : aucune entrée n'est servie depuis le
+       cache, donc aucune n'y est écrite. La clé est `[viewer]`, de cardinalité
+       « lecteurs actifs », et ce cache vide ses 512 entrées ENTIÈREMENT au
+       plafond : le peupler depuis un chemin aussi chaud que la vue éviderait
+       les clés stables des sept diffusions de CONTENU (avertissement laissé
+       sur place par l'audit de #20337). Ce témoin tombe si quelqu'un remet le
+       cache sur ce chemin. */
+    expect((prisma.user.findMany as unknown as jest.Mock).mock.calls).toHaveLength(4);
   });
 
   it('TÉMOIN DE COÛT — une résolution sert TOUT le lot : deux lectures, un seul sujet', async () => {

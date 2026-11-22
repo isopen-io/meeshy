@@ -181,18 +181,28 @@ async function applyViews(
 
   /* #20429 — LA SÉPARATION EST RÉSOLUE AVANT LA PREMIÈRE ÉCRITURE, et une
      seule fois pour tout le lot. `story:viewed` porte un compteur ABSOLU
-     (`viewCount`) : résolue APRÈS, elle ajouterait un `await` entre l'écriture
-     et l'émission, donc élargirait la fenêtre où deux vues concurrentes
-     s'émettent dans l'ordre inverse de leurs écritures — le dernier arrivé
-     gagnant, l'auteur garderait un compte que la base contredit.
+     (`viewCount`) : résolue APRÈS, elle ajouterait un `await` de plus entre
+     l'écriture et l'émission, donc élargirait la fenêtre où deux vues
+     concurrentes s'émettent dans l'ordre inverse de leurs écritures — le
+     dernier arrivé gagnant, l'auteur garderait un compte que la base
+     contredit. (Cette fenêtre PRÉEXISTE et ce lot ne la ferme pas :
+     `viewCount` est lu par `getPostById` APRÈS `recordView`. Suivi #20414.)
 
-     Un SEUL sujet, le viewer : l'audience de `story:viewed` est l'auteur, et
-     lui seul (voir `separationAroundActor`). Deux lectures pour le lot entier,
-     sous une clé de cache stable — et non deux par auteur, sur un chemin qui
-     porte jusqu'à 120 événements dont la plupart ne sont pas des stories. */
-  const separated = deps.fastify.socialEvents
-    ? await deps.fastify.socialEvents.separationAroundActor(actor.userId)
-    : null;
+     Le PRIX de ce hissage est écrit ici parce qu'il est réel : un lot qui ne
+     porte AUCUNE story paie quand même ses deux lectures, le type d'un post
+     n'étant pas connu avant son écriture. Résoudre paresseusement au premier
+     `type === 'STORY'` les économiserait — mais ce verdict vient de
+     `getPostById`, donc APRÈS `recordView`, ce qui est exactement l'`await`
+     supplémentaire que le paragraphe ci-dessus refuse. C'est un arbitrage
+     entre deux lectures par lot et la propriété d'ordre, pas une domination
+     (audit adversarial du lot, constat C4).
+
+     `?.` sur la méthode, et pas seulement sur l'objet : un `socialEvents`
+     PARTIEL ferait lever ici, AVANT la première écriture, et perdrait le lot
+     de vues entier — l'inverse exact de ce que promet la ligne « la vue est
+     DÉJÀ enregistrée » plus bas. Un `undefined` vaut alors `null`, donc le
+     silence, jamais la diffusion. */
+  const separated = await deps.fastify.socialEvents?.separationAroundActor?.(actor.userId) ?? null;
 
   let recorded = 0;
   for (const event of events) {
