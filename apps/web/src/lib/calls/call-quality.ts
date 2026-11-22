@@ -83,6 +83,12 @@ const audioJitterMs = (inbound: readonly StatsEntry[]): number => {
 
 const subtype = (mimeType: unknown): string | null => (typeof mimeType === 'string' && mimeType.includes('/') ? (mimeType.split('/')[1] ?? null) : null);
 
+/** `CallStats.relayedRoute` (iOS) : relayée dès qu'un des deux candidats de la paire élue l'est ; inconnue sans aucun des deux. */
+const routeOf = (entries: readonly StatsEntry[], pair: StatsEntry | undefined): MediaPath | null => {
+  const candidates = pair === undefined ? [] : entries.filter((entry) => (entry.type === 'local-candidate' && entry.id === pair.localCandidateId) || (entry.type === 'remote-candidate' && entry.id === pair.remoteCandidateId));
+  return candidates.length === 0 ? null : candidates.some((entry) => entry.candidateType === 'relay') ? 'relay' : 'direct';
+};
+
 export function readStats(report: StatsReportLike, at: number): StatsRead {
   const entries: StatsEntry[] = [];
   report.forEach((entry) => entries.push(entry));
@@ -91,7 +97,6 @@ export function readStats(report: StatsReportLike, at: number): StatsRead {
   const pair = selectedCandidatePair(entries);
   const remote = entries.find((entry) => entry.type === 'remote-inbound-rtp' && typeof entry.roundTripTime === 'number');
   const sum = (list: readonly StatsEntry[], field: string, kind?: string): number => positive(list.filter((entry) => kind === undefined || entry.kind === kind).reduce((total, entry) => total + numberOf(entry[field]), 0));
-  const local = pair === undefined ? undefined : entries.find((entry) => entry.type === 'local-candidate' && entry.id === pair.localCandidateId);
   const estimate = pair?.availableOutgoingBitrate;
   const uplink = entries.find((entry) => entry.type === 'remote-inbound-rtp' && entry.kind === 'video' && typeof entry.fractionLost === 'number');
   return {
@@ -105,7 +110,7 @@ export function readStats(report: StatsReportLike, at: number): StatsRead {
     bytesSent: sum(outbound, 'bytesSent'),
     bytesReceived: sum(inbound, 'bytesReceived'),
     codec: subtype(receivedCodecMime(entries)),
-    path: local === undefined ? null : local.candidateType === 'relay' ? 'relay' : 'direct',
+    path: routeOf(entries, pair),
     availableOutgoingBitrate: typeof estimate === 'number' && Number.isFinite(estimate) && estimate > 0 ? estimate : null,
     uplinkLoss: uplink === undefined ? null : numberOf(uplink.fractionLost) * 100,
   };
