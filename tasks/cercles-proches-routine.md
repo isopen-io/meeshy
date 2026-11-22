@@ -1939,3 +1939,19 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   se passe ailleurs pendant que le démarrage voyage).
 - Gates : modèles Kotlin (`jvm-check`, `SharedLocation*`) verts ; le centre se prouve par `android.yml` sur la PR.
 - Prochain lot : iOS de #20249, puis #20308, #20054, #20056.
+
+## 2026-11-22 — réveil de 15 h : la moitié iOS de #20249 (une réponse nomme le partage montré)
+
+- Reprise : #20398 (Android de #20249) a été fusionnée dans `dev` à 14 h 48 ; aucune PR de la routine ouverte, aucune
+  branche vivante n'écrit les chemins iOS de la position.
+- Lot : iOS de #20249, iso #20345 (web) et #20398 (Android). SDK : `SharedLocationOwnSnapshot.acceptsExpectedStart` (seul
+  un booléen vrai compte), `SharedLocationStartRequest.expectedStartedAt` (ne part qu'avec `replacesChosenPoint` et une
+  position, gardé par les replis sans options, sans échéances et sans mouvement), `SharedLocationSendOutcome.startedElsewhere`,
+  `SharedLocationWireInstant.isWire` (forme `toISOString` seulement). Centre : la réponse nomme le `startedAt` servi sur
+  `acceptsExpectedStart` ; sur `STARTED_ELSEWHERE` (arrêt compris) ou `INVALID` d'une charge partie avec la clé, rien n'a
+  été écrit : l'appareil relit, repose la question à jour si un point choisi est encore montré, sinon rend le refus sans
+  rien relancer ; une relecture en panne rend « hors ligne » ; un `INVALID` que la clé n'explique pas se dit sans reposer
+  la même question. Aucune chaîne nouvelle.
+- Gates : voir la PR (gardes iOS texte et `packages/shared/__tests__/ci` verts ; compilation et tests par la CI iOS).
+- Avec ce lot, les trois clients et la passerelle portent #20249 : l'issue se ferme à la fusion.
+- Prochain lot : #20308, puis #20054, #20056.
