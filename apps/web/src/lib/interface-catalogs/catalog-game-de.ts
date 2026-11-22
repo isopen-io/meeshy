@@ -688,7 +688,7 @@ const de = {
   'game.guide.moment.atlas_stamp.next': '{stamped} von {total} Sprachen in deinem Pass.',
   'game.guide.moment.atlas_stamp.short': 'Stempel: {language}.',
   'game.guide.moment.flame_freeze_gift.what': 'Dir wird eine Hüterin geschenkt.',
-  'game.guide.moment.flame_freeze_gift.means': 'Drei Tage Flamme: Deine Ahnen vertrauen dir eine an. Sie hält deine Flamme an einem Tag am Brennen, an dem du nicht kommst.',
+  'game.guide.moment.flame_freeze_gift.means': 'Von deinen Ahnen: Sie hält deine Flamme an einem Tag ohne dich am Brennen.',
   'game.guide.moment.flame_freeze_gift.next': 'Hüterinnen in Reserve: {count}.',
   'game.guide.moment.flame_freeze_gift.short': 'Dir wird eine Hüterin für deine Flamme geschenkt.',
   'game.guide.moment.offering_kept.what': 'Deine Ahnen haben dir deine Gabe aufbewahrt.',

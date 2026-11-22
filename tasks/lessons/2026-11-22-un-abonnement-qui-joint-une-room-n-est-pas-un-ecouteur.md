@@ -1,8 +1,8 @@
-# Un abonnement qui JOINT UNE ROOM n'est pas un écouteur — et rien, côté client, ne les distingue
+## Un abonnement qui JOINT UNE ROOM n'est pas un écouteur — et rien, côté client, ne les distingue (2026-11-22, #20304)
 
 **2026-11-22 · #20304 · cycle 217 de la routine temps réel**
 
-## Le fait
+### Le fait
 
 `apps/web` a six consommateurs de `watchLiveSocket`. Cinq posent des
 `socket.on(...)` et rien d'autre. Le sixième — `use-host-metrics.ts`, le
@@ -18,7 +18,7 @@ cinq premiers traversent la coupure sans rien faire ; le sixième en sort
 muet — définitivement, puisque rien ne le ré-abonne et que son seul chemin vers
 `setLive(false)` ne passe pas par là.
 
-## La règle
+### La règle
 
 **Devant un observateur de socket, demander : son travail est-il entièrement
 LOCAL au client, ou écrit-il un état CHEZ LE SERVEUR ?** Un `socket.on` est
@@ -33,7 +33,7 @@ passerelle. Le nom n'aide pas non plus — `subscribe` ressemble à « j'écoute
 autant qu'à « inscris-moi ». La mesure qui tranche est un grep du côté serveur :
 `socket.join(` pour ce nom d'événement.
 
-## Le corollaire qui double le coût
+### Le corollaire qui double le coût
 
 Quand l'état gelé sert aussi de GARDE au repli, la panne n'est plus un trou,
 c'est un verrou. Ici `live` reste `true`, donc la page AFFIRME le direct
@@ -43,7 +43,7 @@ d'état qui garde un chemin de secours doit retomber sur le signal de PANNE
 (`'disconnect'`), jamais seulement sur le signal d'ÉCHEC d'une tentative : la
 tentative n'a pas lieu pendant une coupure.
 
-## Le geste
+### Le geste
 
 Un témoin de reconnexion se pose sur une socket de témoin qui **garde ses
 écouteurs à travers la coupure** — c'est ce que fait socket.io, et une fausse
@@ -51,7 +51,7 @@ socket qui les jette rendrait le défaut invisible. Il lit l'EFFET (« un
 échantillon reçu après la reconnexion atteint-il les jauges ? »), jamais la
 présence d'un écouteur.
 
-## Note de convergence — deux sessions, le même `release()`
+### Note de convergence — deux sessions, le même `release()`
 
 Le correctif est celui de `dev` (#20321, cycle 215 d'une session parallèle),
 retenu par la règle #18654 : **la correction déjà sur `dev` se garde**. Ce lot
@@ -74,7 +74,7 @@ itération 257 ↔ cycle 123) ») : la règle de tranchage du dépôt — celui 
 rien écrit cède — ne tranche pas quand les deux ont écrit, et c'est alors
 l'ordre de fusion qui décide.
 
-## Famille
+### Famille
 
 Jumelle de la leçon « une énumération affirme AUSSI qu'elle est complète » : le
 cycle 213 avait balayé le cycle de vie de la socket et conclu « les

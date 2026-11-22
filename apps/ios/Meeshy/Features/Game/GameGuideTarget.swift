@@ -46,14 +46,22 @@ enum GameGuideTarget {
 
 extension GameGuideTarget {
     /// La page où mène le bouton d'un moment de la vague 2 : la ligue, la saison, la vitrine, l'Atlas — et le Prestige,
-    /// dont le moment dit « voir le niveau » et ouvre la page qui l'explique (#9481).
-    static func page(for action: GuideActionV2) -> GamePage {
+    /// dont le moment dit « voir le niveau » et ouvre la page qui l'explique (#9481). « Voir la Flamme » n'a pas de
+    /// page : il ouvre la fiche de la Flamme, comme le bouton de la vague 1 (`target(for: .seeFlame)`).
+    static func page(for action: GuideActionV2) -> GamePage? {
         switch action {
         case .seeLeague: .league
         case .seeSeason: .season
         case .seeTrophies: .showcase
         case .seeAtlas: .atlas
         case .seeLevel: .prestige
+        case .seeFlame: nil
         }
+    }
+
+    /// L'action de la vague 1 que porte la carte d'un moment de la vague 2 : `seeFlame` mène à la fiche de la Flamme ;
+    /// les autres restent `seeProgress`, supplantées par leur page.
+    static func cardAction(for action: GuideActionV2) -> GuideAction {
+        action == .seeFlame ? .seeFlame : .seeProgress
     }
 }

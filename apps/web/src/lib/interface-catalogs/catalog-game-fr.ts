@@ -705,7 +705,7 @@ const fr = {
   'game.guide.moment.atlas_stamp.next': '{stamped} langues sur {total} dans ton passeport.',
   'game.guide.moment.atlas_stamp.short': 'Tampon : {language}.',
   'game.guide.moment.flame_freeze_gift.what': 'Une Veilleuse t’est offerte.',
-  'game.guide.moment.flame_freeze_gift.means': 'Trois jours de Flamme : les aïeux t’en confient une. Elle garde ta Flamme allumée un jour où tu ne viens pas.',
+  'game.guide.moment.flame_freeze_gift.means': 'Les aïeux te la confient : elle garde ta Flamme allumée un jour d’absence.',
   'game.guide.moment.flame_freeze_gift.next': 'Veilleuses en réserve : {count}.',
   'game.guide.moment.flame_freeze_gift.short': 'Une Veilleuse t’est offerte pour ta Flamme.',
   'game.guide.moment.offering_kept.what': 'Les aïeux t’ont gardé ton Offrande.',

@@ -688,7 +688,7 @@ const pt = {
   'game.guide.moment.atlas_stamp.next': '{stamped} de {total} idiomas no seu passaporte.',
   'game.guide.moment.atlas_stamp.short': 'Carimbo: {language}.',
   'game.guide.moment.flame_freeze_gift.what': 'Você ganhou uma Lamparina.',
-  'game.guide.moment.flame_freeze_gift.means': 'Três dias de Chama: seus ancestrais lhe confiam uma. Ela mantém sua Chama acesa num dia em que você não vier.',
+  'game.guide.moment.flame_freeze_gift.means': 'Seus ancestrais a confiam a você: mantém sua Chama acesa num dia de ausência.',
   'game.guide.moment.flame_freeze_gift.next': 'Lamparinas de reserva: {count}.',
   'game.guide.moment.flame_freeze_gift.short': 'Você ganhou uma Lamparina para a sua Chama.',
   'game.guide.moment.offering_kept.what': 'Seus ancestrais guardaram sua Oferenda.',

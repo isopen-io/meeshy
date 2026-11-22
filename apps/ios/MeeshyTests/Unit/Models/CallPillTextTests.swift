@@ -253,7 +253,7 @@ final class CallCaptionsFooterTests: XCTestCase {
         )
         sut.originLanguage = origin
         sut.servedLanguage = served
-        sut.awaitingUntil = awaiting ? Date(timeIntervalSince1970: 8) : nil
+        sut.awaitingUntil = awaiting ? 8 : nil
         return sut
     }
 

@@ -24,8 +24,11 @@ struct CallTranscriptionSegment: Identifiable, Equatable {
     let translatedText: String?
     let translatedLanguage: String?
     /// Wall-clock capture time — LOCAL segments stamp it when the ASR result
-    /// arrives, REMOTE segments stamp it on socket receipt (see
-    /// `CallManager.makeTranscriptionSegment`). Used for chronological
+    /// arrives; REMOTE segments carry the SPEAKER's wall clock (`capturedAtMs`
+    /// on both transports, see `CallTranscriptionSegmentFactory`), the local
+    /// receipt `Date()` surviving only for gateways older than the field. It
+    /// sorts and dates the line and never measures a delay on this device
+    /// (#20319 — see `receivedAtMonotonic`). Used for chronological
     /// ordering and for the "since call start" timestamp shown per row —
     /// `startTime`/`endTime` are ASR-buffer-relative (they reset every time
     /// `CallTranscriptionService.rotateRecognitionRequest` rotates the
@@ -33,6 +36,13 @@ struct CallTranscriptionSegment: Identifiable, Equatable {
     /// call site must decide this deliberately rather than inherit a stale
     /// `Date()` evaluated at type-definition time.
     let capturedAt: Date
+    /// #20319 — THIS device's monotonic clock (`CallMonotonicClock.seconds`)
+    /// at the LOCAL reception of a remote utterance, stamped by
+    /// `CallTranscriptionService` alone. The wait for its translation runs from
+    /// it, so a skew of the speaker's wall clock neither freezes the dots nor
+    /// removes them. Local only: never on the wire, never persisted
+    /// (`resetForCallEnd` maps fields one by one); `nil` when nothing stamped it.
+    private(set) var receivedAtMonotonic: TimeInterval?
 
     init(
         id: UUID,
@@ -47,7 +57,8 @@ struct CallTranscriptionSegment: Identifiable, Equatable {
         language: String,
         translatedText: String? = nil,
         translatedLanguage: String? = nil,
-        capturedAt: Date
+        capturedAt: Date,
+        receivedAtMonotonic: TimeInterval? = nil
     ) {
         self.id = id
         self.wireId = wireId
@@ -62,5 +73,12 @@ struct CallTranscriptionSegment: Identifiable, Equatable {
         self.translatedText = translatedText
         self.translatedLanguage = translatedLanguage
         self.capturedAt = capturedAt
+        self.receivedAtMonotonic = receivedAtMonotonic
+    }
+
+    func received(at instant: TimeInterval) -> CallTranscriptionSegment {
+        var given = self
+        given.receivedAtMonotonic = instant
+        return given
     }
 }
