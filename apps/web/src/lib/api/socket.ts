@@ -191,13 +191,18 @@ import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
  * > web.** Un `staleTime` n'atténue que le démarrage à FROID (par
  * > `refetchOnMount`) ; il n'atténue rien d'un écran OUVERT.
  *
- * Les huit familles entrées à ce lot sont commentées une à une dans la liste.
- * **Cinq familles restent DEHORS avec leur raison, et c'est une décision, pas
+ * Les familles entrées à ce lot sont commentées une à une dans la liste — le
+ * COMPTE ne s'écrit pas ici : il se lit dans la liste, et une mesure recopiée
+ * dans une prose dérive au premier ajout.
+ *
+ * **Des familles restent DEHORS avec leur raison, et c'est une décision, pas
  * une lacune** : les états de proximité (`['relations', …]` — batterie, chutes,
  * inactivité, appels, joignabilité) portent CHACUN son rattrapage, écrit sur
- * place (« à chaque socket accrochée, `GET /relations/…` rattrape »). Le
- * cliquet de ce lot (`socket-missed-catch-up.test.ts`) ne les exempte pas
- * d'office : il exige que la raison soit déclarée.
+ * place (« à chaque socket accrochée, `GET /relations/…` rattrape »), et les
+ * métriques d'exploitation sont SONDÉES. Le cliquet de ce lot
+ * (`socket-missed-catch-up.test.ts` § #20438) ne les exempte pas d'office : il
+ * exige que la raison soit déclarée, et il rougit sur une exemption dont la
+ * famille n'est plus écrite.
  *
  * **LE NOM EST LA MOITIÉ DU CORRECTIF** (#20336, cycle 217). Cette liste
  * s'appelait `CATCH_UP_PERSONAL_FAMILIES`, un nom de SOUS-CATÉGORIE : #18641 et
@@ -244,7 +249,7 @@ const CATCH_UP_FAMILIES: readonly CatchUpFamily[] = [
      jusqu'à #20438 : le journal est `['calls','history']`, une AUTRE racine,
      seulement DÉCLARÉE dans `me-keys.ts`.) */
   ...MY_PREFERENCES_QUERY_KEYS.map((queryKey) => ({ queryKey, exact: true })),
-  /* LES HUIT FAMILLES QUE LE SOCKET ÉCRIT ET QUE RIEN NE RATTRAPAIT (#20438) —
+  /* LES FAMILLES QUE LE SOCKET ÉCRIT ET QUE RIEN NE RATTRAPAIT (#20438) —
      relevées mécaniquement, puis gelées par le cliquet de ce lot. Chacune a un
      écrivain branché sur CETTE connexion, et aucune racine qui la préfixe dans
      les deux branches. */
