@@ -25,9 +25,20 @@ public final class CommunityLinkService: Sendable {
                 memberCount: community.memberCount ?? 0,
                 isActive: community.isActive,
                 createdAt: community.createdAt,
-                memberPreviews: community.memberPreviews
+                memberPreviews: community.memberPreviews,
+                joinLinkPaused: community.joinLinkPaused
             )
         }
+    }
+
+    /// Met le lien d'entrée en pause ou le relance (#19661), réservé aux intendants ; rend l'état que la passerelle
+    /// a écrit, qui fait foi.
+    public func setJoinLinkPaused(communityId: String, paused: Bool) async throws -> Bool {
+        let response: APIResponse<APICommunityJoinLinkState> = try await api.put(
+            CommunitiesEndpoint.byIdJoinLink(id: communityId),
+            body: JoinLinkStateRequest(paused: paused)
+        )
+        return response.data.joinLinkPausedAt != nil
     }
 
     public func stats(links: [CommunityLink]) -> CommunityLinkStats {
@@ -48,4 +59,14 @@ struct APICommunityMini: Decodable {
     let memberCount: Int?
     let createdAt: Date
     let memberPreviews: [LinksFaceMember]?
+    var joinLinkPaused: Bool? = nil
+}
+
+struct JoinLinkStateRequest: Encodable {
+    let paused: Bool
+}
+
+/// La réponse de `PUT /communities/:id/join-link` : l'instant de la pause, `null` pour un lien actif.
+struct APICommunityJoinLinkState: Decodable {
+    let joinLinkPausedAt: Date?
 }
