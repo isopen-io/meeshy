@@ -92,7 +92,7 @@ export type SeparatedRoomsResolver = {
    */
   roomsAround(
     subjects: readonly (string | null | undefined)[],
-    options?: { readonly keep?: string | null },
+    options?: { readonly keep?: string | null; readonly cached?: boolean },
   ): Promise<readonly string[] | null>;
 };
 
@@ -144,12 +144,23 @@ export function createSeparatedRoomsResolver(deps: {
       const at = now();
       const served = (related: readonly string[]): readonly string[] =>
         related.filter((id) => id !== options?.keep).map((id) => ROOMS.user(id));
-      const cached = cache.get(key);
-      if (cached !== undefined && cached.expiresAt > at) return served(cached.ids);
+      /* `cached: false` — un ensemble de sujets qui CHANGE à chaque événement a
+         des clés à usage unique : le cacher ne rend jamais un hit, et au plafond
+         son `cache.clear()` évince les entrées des appelants STABLES, dont les
+         sept diffusions de CONTENU pour lesquelles ce cache a été écrit (#20337,
+         audit adversarial). Mesuré : trois réactions sur le même commentaire
+         rendaient six lectures et aucun hit. */
+      const useCache = options?.cached !== false;
+      if (useCache) {
+        const cached = cache.get(key);
+        if (cached !== undefined && cached.expiresAt > at) return served(cached.ids);
+      }
       try {
         const related = await read(ids);
-        if (cache.size >= MAX_ENTRIES) cache.clear();
-        cache.set(key, { expiresAt: at + ttlMs, subjects: ids, ids: related });
+        if (useCache) {
+          if (cache.size >= MAX_ENTRIES) cache.clear();
+          cache.set(key, { expiresAt: at + ttlMs, subjects: ids, ids: related });
+        }
         return served(related);
       } catch (error) {
         logger.error('diffusion — lecture des blocages impossible, émission abandonnée', { subjects: ids.length, error });

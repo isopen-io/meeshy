@@ -62,8 +62,8 @@ struct LinksFaceSummaryTests {
 
     @Test func theAddressIsReadWithoutSchemeAndCopiedWhole() throws {
         let summary = LinksFaceSummary(tracking: [try tracking()], community: [community()])
-        #expect(summary.tickets.map(\.code) == ["meeshy.me/l/dkr-nuit", "meeshy.me/chat/beatmakers"])
-        #expect(summary.tickets.map(\.copyValue) == ["https://meeshy.me/l/dkr-nuit", "https://meeshy.me/chat/beatmakers"])
+        #expect(summary.tickets.map(\.code) == ["meeshy.me/l/dkr-nuit", "meeshy.me/communities/beatmakers?via=link"])
+        #expect(summary.tickets.map(\.copyValue) == ["https://meeshy.me/l/dkr-nuit", "https://meeshy.me/communities/beatmakers?via=link"])
     }
 
     @Test func aReferralWithoutLinkShowsItsCode() {

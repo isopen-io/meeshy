@@ -6,7 +6,7 @@ import { PACK_DOMAINS, type PackDomain } from '@meeshy/shared/types/content-pack
 
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
-import { packQueryKeys } from '@/lib/api/pack-query-keys';
+import { packQueryKeys, PACK_SHOP_QUERY_ROOT } from '@/lib/api/pack-query-keys';
 import { loadShop, purchasePack, setShopPackInstalled, shopPackText, type ShopPack } from '@/lib/api/packs-shop';
 import type { GloryRankKey } from '@meeshy/shared/utils/game/glory';
 
@@ -61,7 +61,7 @@ const LensSubmit = lazy(() => import('./lens-submit'));
 export type UnifiedFilter = 'all' | PackDomain;
 
 export const BALANCE_QUERY_KEY = ['me', 'packs', 'balance'] as const;
-const SHOP_KEY_ROOT = ['me', 'packs', 'shop'] as const;
+const SHOP_KEY_ROOT = PACK_SHOP_QUERY_ROOT;
 const shopKey = (filter: UnifiedFilter) => [...SHOP_KEY_ROOT, filter] as const;
 const SHOP_INSTALLED_KEY = ['me', 'packs', 'shop', 'installed'] as const;
 

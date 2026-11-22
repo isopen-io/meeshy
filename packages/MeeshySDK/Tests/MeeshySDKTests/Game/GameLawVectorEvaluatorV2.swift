@@ -559,6 +559,7 @@ extension GameLawVectorEvaluator {
         case "atlas-stamp":
             return .atlasStamp(language: string(json, "language"), stamped: int(json, "stamped"), total: int(json, "total"))
         case "flame-freeze-gift": return .flameFreezeGift(freezes: int(json, "freezes"))
+        case "offering-kept": return .offeringKept(easedDays: int(json, "easedDays"))
         case let other: throw GameLawVectorError.malformed("événement de guide « \(other) »")
         }
     }
@@ -582,6 +583,7 @@ extension GameLawVectorEvaluator {
         case .atlasStamp(let language, let stamped, let total):
             object(["language": .string(language), "stamped": .int(stamped), "total": .int(total)])
         case .flameFreezeGift(let freezes): object(["freezes": .int(freezes)])
+        case .offeringKept(let easedDays): object(["easedDays": .int(easedDays)])
         }
     }
 
