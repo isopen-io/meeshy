@@ -60,6 +60,38 @@ mettre à jour **fait partie du correctif** : un double qui ne modélise pas la
 production atteste un monde qui n'existe plus (règle du cycle 92 bis). Aucune
 assertion n'a bougé ; seules les formes de lecture et d'attente.
 
+**Ce que l'audit adversarial a ajouté, et qui vaut autant que la règle**
+
+Trois choses, toutes trouvées en cherchant à casser le lot, aucune en le relisant.
+
+**Généraliser un helper, c'est hériter de tous ses appelants.** Le cache pensé
+pour quatre diffusions d'ACTIVITÉ a été branché dans le helper que sept
+diffusions de CONTENU partagent — donc une fenêtre d'expiration rouvrait, pour
+le TEXTE d'un commentaire, exactement la fuite qu'un lot précédent avait
+fermée. Le doc-comment affirmait « au pire UN événement d'activité » : vrai du
+chemin qu'on avait en tête, faux du helper qu'on avait modifié. **Avant de
+poser une tolérance dans un helper, compter qui l'appelle** — et la question
+n'est pas « combien ? » mais « que tolère CHACUN ? ».
+
+**Un cache de décision se garde par son INVALIDATION, pas par son TTL.** Le TTL
+borne l'erreur ; il ne l'empêche pas. Quand ce qui change la réponse a un nombre
+FINI de sites d'écriture — ici deux, mesurés —, la fraîcheur se prend là, et le
+TTL redevient ce qu'il doit être : un filet, pas la garantie.
+
+**Un « défensif » plus large que sa justification est un trou.** « Un sujet ne
+s'exclut pas de son propre événement » paraissait prudent ; la raison écrite à
+côté ne parlait que de **l'émetteur**. Dans le cas nominal, exempter l'autre
+sujet est un no-op — il ne devient agissant que là où c'est précisément lui
+qu'il faut taire. Un code plus permissif que sa propre justification doit être
+resserré sur elle, pas l'inverse ; et la justification elle-même se vérifie
+(celle-ci, « la porte de l'action a déjà refusé », était fausse sur deux chemins
+sur quatre, par décision écrite).
+
+**Et un fail-closed PARTIEL n'est pas un fail-closed.** L'événement avait deux
+adresses ; une seule attendait la lecture. Le témoin qui ne regardait que la
+room du post restait vert — **l'assertion d'un fail-closed porte sur TOUTES les
+adresses**, jamais sur celle qu'on vient de corriger.
+
 **Famille**
 
 Jumelle de « un lot ferme une classe dans SA langue » (cycle 128) : #20216
