@@ -5,6 +5,7 @@ import { uploadedAttachmentsOf } from './fixtures';
 import { isHeifFamily, UPLOAD_FORMAT_REFUSED } from '@/lib/media/heif';
 
 import type { ApiFailure, ApiResult } from './http';
+import { ATTACHMENT_STATUS_DETAILS_QUERY_ROOT } from './realtime-catch-up-keys';
 import type { Attachment } from './types';
 
 /**
@@ -167,8 +168,10 @@ export type AttachmentStatusRow = {
   readonly viewedLanguages: readonly string[];
 };
 
+/** Dérivée d'`ATTACHMENT_STATUS_DETAILS_QUERY_ROOT` (#20438), que
+ * `CATCH_UP_FAMILIES` périme à chaque (ré)authentification. */
 export const attachmentStatusDetailsQueryKey = (attachmentId: string) =>
-  ['attachment-status-details', attachmentId] as const;
+  [...ATTACHMENT_STATUS_DETAILS_QUERY_ROOT, attachmentId] as const;
 
 /**
  * DÉTERMINISTE, DÉRIVÉE DE L'IDENTIFIANT (#7226) — pas de corpus « qui a
