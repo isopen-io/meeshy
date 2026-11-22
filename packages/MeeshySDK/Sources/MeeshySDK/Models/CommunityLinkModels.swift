@@ -15,9 +15,13 @@ public struct CommunityLink: Codable, Identifiable, Sendable, CacheIdentifiable 
     /// Quelques membres à montrer en pile sur le billet (planche `Moi-Liens`) ; absent d'un serveur qui ne les sert
     /// pas encore, et d'un cache écrit avant eux.
     public let memberPreviews: [LinksFaceMember]?
+    /// Le lien d'entrée est en pause (#19661, servi par `GET /communities/mine` depuis #20255) : on n'entre plus par
+    /// lui, la communauté et ses membres restent. `nil` : passerelle plus ancienne ou cache écrit avant ce champ.
+    public let joinLinkPaused: Bool?
 
     public init(id: String, name: String, identifier: String, baseUrl: String,
-                memberCount: Int, isActive: Bool, createdAt: Date, memberPreviews: [LinksFaceMember]? = nil) {
+                memberCount: Int, isActive: Bool, createdAt: Date, memberPreviews: [LinksFaceMember]? = nil,
+                joinLinkPaused: Bool? = nil) {
         self.id = id
         self.name = name
         self.identifier = identifier
@@ -28,6 +32,7 @@ public struct CommunityLink: Codable, Identifiable, Sendable, CacheIdentifiable 
         self.isActive = isActive
         self.createdAt = createdAt
         self.memberPreviews = memberPreviews
+        self.joinLinkPaused = joinLinkPaused
     }
 }
 

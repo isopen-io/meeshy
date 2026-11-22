@@ -1849,3 +1849,25 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `tsc` 0 ; `vite build` et poids verts ; mutation (démarrage ignoré) ⇒ 3 rouges. Les gates navigateur
   (`check-profile`, Playwright) ne tournent pas en conteneur.
 - Android : reste à faire sous #20248. Prochain lot : #20250 à fusionner, puis Android de #20248, #20249, #20054, #20056.
+
+## 2026-11-22 — réveil de 3 h : la moitié Android de #20248 (la confirmation vaut pour le partage montré)
+
+- Reprise : la PR #20250 (moitié iOS de #20127, tête 37d0ba52d, `ci.yml` vert) attend toujours sa CI iOS et SDK, en file
+  depuis 1 h 50 UTC (65 runs en file) : ce réveil n'y pousse rien (un push annulerait la file). Aucune branche n'écrit les
+  chemins Android de la position.
+- Lot : Android de #20248, iso `SharedLocationPointReplacement` (iOS #20127, web #20278). `:core:model` porte la question
+  (démarrage servi + destinataires, une personne sortie tolérée) et son audience (trois noms au plus, puis le compte) ;
+  `ReplacesChosenPoint` porte la question ; `share(replacing = …)` relit TOUJOURS le partage servi et la repose à jour si un
+  autre démarrage a eu lieu ou si quelqu'un a été ajouté — rien ne part, aucun relevé n'est demandé ; relecture en panne ⇒
+  `OFFLINE`. `servedStart` suit le dernier démarrage nommé (relu ou accusé), effacé au changement de compte et au `wipe`.
+  La fiche nomme la personne de la fiche et les amis du carnet GARDÉ (`AcceptedContactsSource.cached`, aucune requête),
+  puis « et N autres personnes » (`joinParticipantNames`, ICU, rendu public dans `sdk-ui`).
+- Libellés : les clés iOS `messageNamed` / `others` ne sont pas encore sur `dev` (#20250 non fusionnée) : deux libellés
+  Android écrits à la main, sous 80 caractères dans les 7 langues ; cliquet de verbosité vert, chaînes générées à jour.
+- Gates locaux : `jvm-check` `:core:model` `*SharedLocationPointReplacement*` 6/6. Centre, ViewModel et Compose se
+  prouvent par `android.yml` sur la PR.
+- Audit adversarial : non bloquant. Corrigé dans le lot : une réponse prend la position AVANT de relire (iso le web ;
+  iOS relit avant le relevé, et un point relancé ailleurs pendant l'attente du GPS serait écrasé), la fiche compose ses
+  noms par une loi testée. Noté : la passerelle n'accepte pas de `startedAt` attendu (fenêtre d'un aller-retour, #20249) ;
+  iOS et le web nomment un nom vide là où Android l'écarte.
+- Prochain lot : fusionner #20250 dès sa CI iOS verte (fermer #20127 à la main), puis #20249, #20054, #20056.
