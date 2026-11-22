@@ -42,7 +42,7 @@ const mockRecordEngagementBatch = jest.fn<any>().mockResolvedValue(1);
 
 jest.mock('../../../../services/PostService', () => ({
   PostService: jest.fn().mockImplementation(() => ({
-    recordView: (...a: any[]) => mockRecordView(...a),
+    recordView: (...a: any[]) => { ordre.push('recordView'); return mockRecordView(...a); },
     getPostById: (...a: any[]) => mockGetPostById(...a),
     recordMediaDownloads: (...a: any[]) => mockRecordMediaDownloads(...a),
     recordEngagementBatch: (...a: any[]) => mockRecordEngagementBatch(...a),
@@ -165,8 +165,12 @@ async function buildApp(opts: { authenticated?: boolean; prisma?: any } = {}): P
   app.decorate('notificationService', {
     markPostNotificationsAsRead: jest.fn<any>().mockResolvedValue(undefined),
   });
+  // #20429 — la passerelle résout la séparation AVANT d'écrire la vue, et ne
+  // diffuse rien quand elle est illisible. `ordre` relève la succession réelle :
+  // un double muet sur la lecture ferait passer au vert une résolution d'APRÈS.
   app.decorate('socialEvents', {
-    broadcastStoryViewed: jest.fn<any>().mockResolvedValue(undefined),
+    separationAroundActor: jest.fn<any>(async () => { ordre.push('separation'); return separationServie; }),
+    broadcastStoryViewed: jest.fn<any>(() => { ordre.push('story:viewed'); }),
   });
   // `createUnifiedAuthMiddleware` est remplacé par une COUTURE — ces suites
   // exercent l'ACL d'AUDIENCE, pas la résolution du jeton. C'est pourquoi le
@@ -183,8 +187,15 @@ async function buildApp(opts: { authenticated?: boolean; prisma?: any } = {}): P
   return app;
 }
 
+/** La succession réelle des étapes d'un lot de vues (#20429). */
+const ordre: string[] = [];
+/** Ce que la résolution de séparation rend — `null` = illisible, fail-closed. */
+let separationServie: readonly string[] | null = [];
+
 beforeEach(() => {
   jest.clearAllMocks();
+  ordre.length = 0;
+  separationServie = [];
   mockRecordView.mockResolvedValue(true);
   mockGetPostById.mockResolvedValue(null);
   mockRecordMediaDownloads.mockResolvedValue({ recorded: 1 });
@@ -542,6 +553,7 @@ describe('critère 3 — un `view` garde ses deux effets de bord', () => {
     expect((app as any).socialEvents.broadcastStoryViewed).toHaveBeenCalledWith(
       expect.objectContaining({ storyId: VISIBLE_ID, viewerId: USER_ID, viewCount: 7 }),
       AUTHOR_ID,
+      [],
     );
     await app.close();
   });
@@ -560,6 +572,54 @@ describe('critère 3 — un `view` garde ses deux effets de bord', () => {
     });
 
     expect((app as any).socialEvents.broadcastStoryViewed).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  // ── #20429, l'ORDRE et le FAIL-CLOSED du producteur ───────────────────────
+
+  it('résout la séparation AVANT d’écrire la vue, et une seule fois pour le lot', async () => {
+    const app = await buildApp();
+    mockGetPostById.mockResolvedValue({
+      id: VISIBLE_ID, type: 'STORY', authorId: AUTHOR_ID, viewCount: 7,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/social/events',
+      headers: { authorization: 'Bearer jeton' },
+      payload: { events: [{ type: 'view', postId: VISIBLE_ID }, { type: 'view', postId: VISIBLE_ID }] },
+    });
+
+    // La séparation précède la PREMIÈRE écriture : résolue après, elle
+    // ajouterait un `await` entre l'écriture et l'émission d'un compteur
+    // ABSOLU, donc une fenêtre de réordonnancement chez l'auteur.
+    expect(ordre[0]).toBe('separation');
+    expect(ordre.indexOf('separation')).toBeLessThan(ordre.indexOf('recordView'));
+    // UNE résolution pour tout le lot, pas une par vue ni par auteur.
+    expect(ordre.filter((e) => e === 'separation')).toHaveLength(1);
+    expect((app as any).socialEvents.separationAroundActor).toHaveBeenCalledWith(USER_ID);
+    await app.close();
+  });
+
+  it('une séparation ILLISIBLE n’annonce rien — mais la vue reste ÉCRITE et comptée', async () => {
+    const app = await buildApp();
+    separationServie = null;
+    mockGetPostById.mockResolvedValue({
+      id: VISIBLE_ID, type: 'STORY', authorId: AUTHOR_ID, viewCount: 7,
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/social/events',
+      headers: { authorization: 'Bearer jeton' },
+      payload: { events: [{ type: 'view', postId: VISIBLE_ID }] },
+    });
+
+    expect((app as any).socialEvents.broadcastStoryViewed).not.toHaveBeenCalled();
+    // Fermer le DIRECT ne doit pas perdre la vue : elle est déjà durable.
+    expect(ordre).toContain('recordView');
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.payload).data).toMatchObject({ recorded: 1, rejected: 0 });
     await app.close();
   });
 

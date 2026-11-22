@@ -179,6 +179,21 @@ async function applyViews(
 ): Promise<number> {
   if (events.length === 0) return 0;
 
+  /* #20429 — LA SÉPARATION EST RÉSOLUE AVANT LA PREMIÈRE ÉCRITURE, et une
+     seule fois pour tout le lot. `story:viewed` porte un compteur ABSOLU
+     (`viewCount`) : résolue APRÈS, elle ajouterait un `await` entre l'écriture
+     et l'émission, donc élargirait la fenêtre où deux vues concurrentes
+     s'émettent dans l'ordre inverse de leurs écritures — le dernier arrivé
+     gagnant, l'auteur garderait un compte que la base contredit.
+
+     Un SEUL sujet, le viewer : l'audience de `story:viewed` est l'auteur, et
+     lui seul (voir `separationAroundActor`). Deux lectures pour le lot entier,
+     sous une clé de cache stable — et non deux par auteur, sur un chemin qui
+     porte jusqu'à 120 événements dont la plupart ne sont pas des stories. */
+  const separated = deps.fastify.socialEvents
+    ? await deps.fastify.socialEvents.separationAroundActor(actor.userId)
+    : null;
+
   let recorded = 0;
   for (const event of events) {
     const isNewView = await deps.postService.recordView(event.postId, actor.userId, event.durationMs, {
@@ -201,7 +216,7 @@ async function applyViews(
           enhancedLogger.warn('[POST /social/events]: mark post notifications as read failed', { err }));
     }
 
-    await broadcastStoryViewed(deps, event.postId, actor);
+    await broadcastStoryViewed(deps, event.postId, actor, separated);
   }
   return recorded;
 }
@@ -219,9 +234,14 @@ async function broadcastStoryViewed(
   deps: SocialEventsDeps,
   targetId: string,
   actor: Extract<SocialEventsActor, { kind: 'user' }>,
+  separated: readonly string[] | null,
 ): Promise<void> {
   const socialEvents = deps.fastify.socialEvents;
   if (!socialEvents) return;
+
+  /* La vue est DÉJÀ enregistrée — on ne la perd pas pour une séparation
+     illisible : on se contente de ne rien ANNONCER (#20429). */
+  if (separated === null) return;
 
   try {
     // Le viewer est PASSÉ : sans lui, `getPostById` applique le filtre
@@ -237,7 +257,7 @@ async function broadcastStoryViewed(
         viewerId: actor.userId,
         viewerUsername: actor.username,
         viewCount: post.viewCount,
-      }, post.authorId);
+      }, post.authorId, separated);
     });
   } catch (err) {
     enhancedLogger.warn(

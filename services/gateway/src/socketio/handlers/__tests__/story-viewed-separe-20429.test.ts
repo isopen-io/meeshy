@@ -148,6 +148,12 @@ describe('#20429 — story:viewed et la séparation autour du viewer', () => {
 
   it('ni l’id NI LE PSEUDO du viewer ne partent quand un blocage sépare', async () => {
     for (const blocages of [{ [AUTEUR]: [VIEWER] }, { [VIEWER]: [AUTEUR] }, 'panne' as const]) {
+      /* Le cache de séparation est PARTAGÉ par le processus : sans ce vidage,
+         l'itération « panne » était servie par l'entrée que la première venait
+         d'écrire sous la même clé `[viewer]` — elle n'exerçait donc PAS la
+         lecture impossible, et ce témoin ne tombait pas sous un fail-open.
+         Mesuré en mutant la garde (#20429). */
+      resetSeparationCacheForTests();
       const { emissions } = await diffuser(blocages);
       const surLeFil = JSON.stringify(emissions);
       expect(surLeFil).not.toContain(VIEWER);

@@ -167,7 +167,7 @@ function makeSocialEventsStub() {
   return {
     broadcastPostCreated: noop, broadcastPostUpdated: noop,
     broadcastStoryCreated: noop, broadcastStoryUpdated: noop, broadcastStoryReacted: noop,
-    broadcastStoryUnreacted: noop, broadcastStoryViewed: noop,
+    broadcastStoryUnreacted: noop, separationAroundActor: async () => [], broadcastStoryViewed: noop,
     broadcastStatusCreated: noop, broadcastStatusUpdated: noop, broadcastStatusReacted: noop,
     broadcastStatusUnreacted: noop,
     broadcastPostReposted: noop, broadcastPostLiked: noop, broadcastPostUnliked: noop,

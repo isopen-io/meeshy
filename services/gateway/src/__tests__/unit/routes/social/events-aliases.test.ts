@@ -138,7 +138,7 @@ async function buildApp(prisma: ReturnType<typeof makePrisma>): Promise<FastifyI
     createPostLikeNotification: jest.fn<any>().mockResolvedValue(undefined),
     createPostRepostNotification: jest.fn<any>().mockResolvedValue(undefined),
   });
-  app.decorate('socialEvents', { broadcastStoryViewed: jest.fn<any>().mockResolvedValue(undefined) });
+  app.decorate('socialEvents', { separationAroundActor: jest.fn<any>().mockResolvedValue([]), broadcastStoryViewed: jest.fn<any>().mockResolvedValue(undefined) });
 
   const requiredAuth = async (req: FastifyRequest) => {
     (req as any).authContext = {
