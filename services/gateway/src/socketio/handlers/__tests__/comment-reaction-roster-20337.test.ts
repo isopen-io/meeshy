@@ -158,6 +158,15 @@ function fabriquerHandler(options: {
 
 const versLePost = (emissions: Emission[]) => emissions.filter((e) => e.rooms.includes(`post:${POST_ID}`));
 
+/**
+ * Les rooms de TIERS exclues, la room de l'acteur mise de côté : il en sort
+ * TOUJOURS depuis le 2e audit (il reçoit sa charge servie sur sa room
+ * personnelle), donc son exclusion ne dit rien de la séparation mesurée ici.
+ * Elle est gardée par le § « l'acteur ne lit pas … » plus bas.
+ */
+const tiersExclus = (emission: Emission | undefined) =>
+  [...(emission?.exclues ?? [])].filter((room) => room !== `user:${ACTEUR}`).sort();
+
 describe('#20337 — le roster d’une réaction de commentaire ne nomme que des comptes autorisés', () => {
   beforeEach(() => resetSeparationCacheForTests());
 
@@ -179,7 +188,7 @@ describe('#20337 — le roster d’une réaction de commentaire ne nomme que des
 
         const [emission] = versLePost(emissions);
         expect(emission?.charge?.aggregation?.userIds).toContain(TIERS_REACTEUR);
-        expect(emission?.exclues).toEqual([`user:${SEPARE_DU_TIERS}`]);
+        expect(tiersExclus(emission)).toEqual([`user:${SEPARE_DU_TIERS}`]);
       },
     );
 
@@ -195,7 +204,7 @@ describe('#20337 — le roster d’une réaction de commentaire ne nomme que des
 
       await handler.handleAddReaction(socket, { commentId: COMMENT_ID, postId: POST_ID, emoji: '👍' } as any, undefined as any);
 
-      expect(versLePost(emissions)[0]?.exclues).toEqual([`user:${SEPARE_DU_TIERS}`]);
+      expect(tiersExclus(versLePost(emissions)[0])).toEqual([`user:${SEPARE_DU_TIERS}`]);
     });
 
     /**
@@ -213,7 +222,7 @@ describe('#20337 — le roster d’une réaction de commentaire ne nomme que des
 
       await handler.handleAddReaction(socket, { commentId: COMMENT_ID, postId: POST_ID, emoji: '👍' } as any, undefined as any);
 
-      expect(versLePost(emissions)[0]?.exclues).toEqual([]);
+      expect(tiersExclus(versLePost(emissions)[0])).toEqual([]);
     });
 
     /** Un roster vide (ou une agrégation absente) ne doit pas faire tomber la diffusion. */
@@ -407,37 +416,101 @@ describe('#20337 — le roster d’une réaction de commentaire ne nomme que des
       expect(servi.data.aggregation.userIds).toEqual([ACTEUR]);
     });
 
-    it('l’acteur séparé d’un RÉACTEUR sort de la diffusion, qui porte le roster entier', async () => {
-      const emissions: Emission[] = [];
-      const prisma = fauxPrisma({ [ACTEUR]: [TIERS_REACTEUR] });
-      const { handler, socket } = fabriquerHandler({
-        prisma, io: fauxIo(emissions), acteur: ACTEUR, roster: [ACTEUR, TIERS_REACTEUR],
-      });
+    /**
+     * **L'ACTEUR REÇOIT SON ÉVÉNEMENT, SUR SA ROOM PERSONNELLE, FILTRÉ.**
+     *
+     * L'exclure sèchement de la diffusion lui infligeait le défaut même que ce
+     * lot refuse d'infliger aux tiers : `CommentHeartLedger` (iOS) garde son
+     * delta optimiste après l'envoi — seule la DIFFUSION le purge
+     * (`settle(delivered: true)` ne purge rien) — donc un acteur privé de
+     * l'événement gardait un `+1` indéfini sur son propre écran, et
+     * `except(ROOMS.user(actor))` retirant TOUS ses sockets, ses autres
+     * appareils restaient sur un compteur périmé que iOS persiste.
+     *
+     * Le témoin assert donc qu'il REÇOIT, et pas seulement qu'il n'est pas
+     * exclu — « un contrôle existe s'il a un effet ».
+     */
+    it.each([['add'], ['remove']] as const)(
+      'comment:reaction-%s : l’acteur reçoit sa charge FILTRÉE sur sa room personnelle',
+      async (action) => {
+        const emissions: Emission[] = [];
+        const prisma = fauxPrisma({ [ACTEUR]: [TIERS_REACTEUR] });
+        const { handler, socket } = fabriquerHandler({
+          prisma, io: fauxIo(emissions), acteur: ACTEUR, roster: [ACTEUR, TIERS_REACTEUR],
+        });
 
-      await handler.handleAddReaction(socket, { commentId: COMMENT_ID, postId: POST_ID, emoji: '👍' } as any, undefined as any);
+        if (action === 'add') await handler.handleAddReaction(socket, { commentId: COMMENT_ID, postId: POST_ID, emoji: '👍' } as any, undefined as any);
+        else await handler.handleRemoveReaction(socket, { commentId: COMMENT_ID, postId: POST_ID, emoji: '👍' } as any, undefined as any);
 
-      const [emission] = versLePost(emissions);
-      expect(emission?.charge?.aggregation?.userIds).toContain(TIERS_REACTEUR);
-      expect(emission?.exclues).toContain(`user:${ACTEUR}`);
-    });
+        /* La room du post porte le roster entier, l'acteur en est retiré… */
+        const [versPost] = versLePost(emissions);
+        expect(versPost?.charge?.aggregation?.userIds).toContain(TIERS_REACTEUR);
+        expect(versPost?.exclues).toContain(`user:${ACTEUR}`);
+
+        /* …et il reçoit la MÊME famille d'événement sur sa room, sans le tiers. */
+        const versActeur = emissions.find((e) => e.rooms.includes(`user:${ACTEUR}`));
+        expect(versActeur?.evenement).toBe(versPost?.evenement);
+        expect(versActeur?.charge?.aggregation?.userIds).toEqual([ACTEUR]);
+      },
+    );
 
     /**
-     * Le CONTRÔLE, et il porte la décision de #20236 : séparé du seul AUTEUR,
-     * l'acteur GARDE sa diffusion — `keep` reste son privilège sur SES sujets.
-     * Un correctif qui retirerait `keep` tout court ferait rougir ce témoin.
+     * **LE TÉMOIN QUE LE DEUXIÈME AUDIT A RÉCLAMÉ, ET QUI NE POUVAIT PAS
+     * TOMBER.** Le tour précédent gardait « séparé du seul AUTEUR, l'acteur
+     * garde sa diffusion » avec `roster: [ACTEUR]` — l'auteur n'étant PAS dans
+     * le roster, le bon comportement et le mauvais rendaient le même verdict.
+     * Il suffit que l'auteur ait aimé son propre commentaire, ce que rien
+     * n'interdit, pour qu'il devienne un sujet du roster.
+     *
+     * C'est la leçon 261 portée au SUJET : **un témoin qui garde « seulement
+     * l'auteur » doit mettre l'auteur dans l'ensemble qui pourrait le
+     * contredire.** Et le chemin est VIVANT — `handleRemoveReaction` n'a pas de
+     * porte `commentAuthorSeparatedFrom`, par décision écrite.
      */
-    it('séparé du seul AUTEUR, l’acteur garde sa diffusion (décision de #20236)', async () => {
+    it('reçoit sa charge même séparé de l’AUTEUR, et même quand l’AUTEUR a réagi', async () => {
       const emissions: Emission[] = [];
       const prisma = fauxPrisma({ [ACTEUR]: [AUTEUR_COMMENTAIRE] });
       const { handler, socket } = fabriquerHandler({
-        prisma, io: fauxIo(emissions), acteur: ACTEUR, roster: [ACTEUR],
+        prisma, io: fauxIo(emissions), acteur: ACTEUR, roster: [ACTEUR, AUTEUR_COMMENTAIRE],
       });
 
       await handler.handleRemoveReaction(socket, { commentId: COMMENT_ID, postId: POST_ID, emoji: '👍' } as any, undefined as any);
 
-      const [emission] = versLePost(emissions);
-      expect(emission?.exclues).not.toContain(`user:${ACTEUR}`);
-      expect(emission?.exclues).toContain(`user:${AUTEUR_COMMENTAIRE}`);
+      const versActeur = emissions.find((e) => e.rooms.includes(`user:${ACTEUR}`));
+      expect(versActeur).toBeDefined();
+      expect(versActeur?.charge?.aggregation?.userIds).toEqual([ACTEUR]);
+      expect(versLePost(emissions)[0]?.exclues).toContain(`user:${AUTEUR_COMMENTAIRE}`);
+    });
+
+    /** FERMÉ : aucune charge ne part vers l'acteur quand la séparation ne se lit pas. */
+    it('n’émet RIEN vers l’acteur quand la lecture des blocages échoue', async () => {
+      const emissions: Emission[] = [];
+      const { handler, socket } = fabriquerHandler({
+        prisma: fauxPrisma('panne'), io: fauxIo(emissions), acteur: ACTEUR, roster: [ACTEUR, TIERS_REACTEUR],
+      });
+
+      await handler.handleAddReaction(socket, { commentId: COMMENT_ID, postId: POST_ID, emoji: '👍' } as any, undefined as any);
+
+      expect(emissions).toEqual([]);
+    });
+
+    /**
+     * **LA FORME SERVIE NE DÉPEND PAS DU LECTEUR.** Un repli « rien à taire ⇒
+     * je rends la charge telle quelle » faisait disparaître un champ ajouté en
+     * amont pour les SEULS lecteurs qui ont des blocages.
+     */
+    it('sert la même FORME à un lecteur sans blocage qu’à un lecteur qui en a', async () => {
+      const sansBlocage: Emission[] = [];
+      const avecBlocage: Emission[] = [];
+      const a = fabriquerHandler({ prisma: fauxPrisma({}), io: fauxIo(sansBlocage), acteur: ACTEUR, roster: [ACTEUR] });
+      const b = fabriquerHandler({ prisma: fauxPrisma({ [ACTEUR]: [TIERS_REACTEUR] }), io: fauxIo(avecBlocage), acteur: ACTEUR, roster: [ACTEUR] });
+
+      await a.handler.handleAddReaction(a.socket, { commentId: COMMENT_ID, postId: POST_ID, emoji: '👍' } as any, undefined as any);
+      await b.handler.handleAddReaction(b.socket, { commentId: COMMENT_ID, postId: POST_ID, emoji: '👍' } as any, undefined as any);
+
+      const cles = (liste: Emission[]) =>
+        Object.keys(liste.find((e) => e.rooms.includes(`user:${ACTEUR}`))?.charge?.aggregation ?? {}).sort();
+      expect(cles(sansBlocage)).toEqual(cles(avecBlocage));
     });
   });
 });

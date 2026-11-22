@@ -14,15 +14,21 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
-jest.mock('@meeshy/shared/types/socketio-events', () => ({
-  SERVER_EVENTS: {
-    COMMENT_REACTION_ADDED: 'comment:reaction-added',
-    COMMENT_REACTION_REMOVED: 'comment:reaction-removed',
-  },
-  ROOMS: {
-    post: (id: string) => `post:${id}`,
-  },
-}));
+/**
+ * **PAS DE DOUBLE DE CE MODULE — il n'expose que des CONSTANTES pures.**
+ *
+ * Il portait un double PARTIEL : deux entrées de `SERVER_EVENTS` et le seul
+ * `ROOMS.post`. C'est l'anti-patron que le dépôt documente quatre fois
+ * (cycles 86, 91, 93, 104) — « un double partiel perd en silence tout ce que le
+ * module GAGNE », et il ne se signale qu'au moment où le module grandit. Il
+ * s'est signalé ici : #20337 a fait servir à l'acteur sa charge filtrée sur
+ * `ROOMS.user(actorId)`, et sous ce double `ROOMS.user` valait `undefined` —
+ * l'appel JETAIT, la diffusion n'avait jamais lieu, et le rouge accusait le
+ * code au lieu du harnais.
+ *
+ * Le remède du dépôt pour un module de constantes pures n'est même pas
+ * `jest.requireActual` : c'est l'absence de double.
+ */
 
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: {

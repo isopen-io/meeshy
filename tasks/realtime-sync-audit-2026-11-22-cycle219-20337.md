@@ -279,3 +279,122 @@ resynchronise.
 - **#20415** — l'oracle `count` > `userIds.length`, le `cache.clear()` sans
   éviction LRU, et la nuisance d'exclusion pilotée par la liste de blocage d'un
   tiers.
+
+## Troisième tour — l'exclusion de l'acteur était PIRE que le défaut qu'elle corrigeait
+
+Le deuxième audit adversarial a rendu BLOQUANT sur **un seul** correctif du
+deuxième tour, et il avait raison.
+
+### T2-1 / T2-2 — exclure l'acteur lui infligeait le cœur de trop
+
+Le deuxième tour avait fermé le CONSTAT 2 en SORTANT l'acteur de la diffusion
+quand un réacteur l'en sépare. Mesuré : c'est le défaut même que ce lot refuse
+d'infliger aux tiers, déplacé sur l'acteur.
+
+`CommentHeartLedger` (iOS) le dit dans son propre doc-comment — « Displayed
+likes are `likes + delta`; **a socket aggregate is authoritative and clears the
+delta** » — et `settle(_, delivered: true)` fait `guard !delivered else
+{ return }` : après un envoi réussi, le delta optimiste est **CONSERVÉ**, en
+attente de la DIFFUSION. `reconcile` est le seul site qui le purge
+(`likeDelta[commentId] = nil`), et il n'est branché que sur la diffusion — l'ACK
+est **jeté** par les deux clients (iOS `_ = try await …`, Android ne lit que
+`success`).
+
+Donc : acteur exclu ⇒ `reconcile` ne tourne jamais pour lui ⇒ le `+1` reste ⇒ au
+premier rafraîchissement REST, `likes` repasse à la valeur serveur, **qui compte
+déjà sa réaction**, et `displayedLikes = likes + 1` **indéfiniment**, sur la
+ligne qu'il vient de toucher. Et `except(ROOMS.user(actor))` retirant TOUS ses
+sockets, ses autres appareils restaient sur un compteur périmé **que iOS
+persiste** (`FeedPersistenceActor`) : divergence entre deux appareils d'un même
+compte.
+
+> **Fermer l'AUDIENCE au lieu de la CHARGE n'avait pas supprimé le défaut : il
+> l'avait déplacé du tiers vers l'acteur** — sur le seul lecteur dont on était
+> certain qu'il recevrait l'événement. Un correctif de confidentialité qui
+> retire un événement à quelqu'un doit se demander **ce que cet événement
+> FAISAIT chez lui**, pas seulement ce qu'il lui apprenait.
+
+**Le correctif, et il est unique** : l'acteur n'est plus jamais `keep` — il sort
+de la diffusion de room dans TOUS les cas — et reçoit sa charge **SERVIE** sur
+sa room personnelle (`emitToActor`, donc tous ses appareils), filtrée pour lui.
+`ROOMS.user(actorId)` est le second endroit où un filtrage par lecteur est
+possible, et le lot calculait déjà la valeur : `updateEventServedTo` cesse
+d'être une lecture payée pour un ACK que personne ne lit, elle devient la charge
+servie. La décision de #20236 — « un sujet ne s'exclut pas de son PROPRE
+événement » — est mieux tenue qu'avec `keep`, puisqu'il le reçoit quelle que
+soit la séparation.
+
+### T2-3 — le témoin de contrôle du deuxième tour NE POUVAIT PAS TOMBER
+
+Le commit du deuxième tour écrivait : « séparé du seul AUTEUR il garde sa
+diffusion, témoin de contrôle à l'appui ». **Faux dès que l'auteur a lui aussi
+réagi** — un auteur qui aime son propre commentaire, ce que rien n'interdit :
+il devient alors un sujet du ROSTER, qui n'avait pas de `keep`. Le témoin passait
+`roster: [ACTEUR]`, donc l'auteur n'était pas dans l'ensemble qui pouvait le
+contredire, et le bon comportement comme le mauvais rendaient le même verdict.
+
+> C'est la leçon 261 portée au SUJET : **un témoin qui garde « seulement
+> l'auteur » doit mettre l'auteur dans l'ensemble qui pourrait le contredire.**
+
+Le témoin porte désormais `roster: [ACTEUR, AUTEUR_COMMENTAIRE]`, et le chemin
+est VIVANT — `handleRemoveReaction` n'a pas de porte
+`commentAuthorSeparatedFrom`, par décision écrite.
+
+### T2-4 / T2-6 — le lot avait recréé le spread qu'il venait de condamner
+
+`updateEventServedTo`, **née dans le tour qui condamnait le spread**, spreadait :
+`{ ...event, aggregation: { ...event.aggregation, userIds: filtré } }`. Aucune
+fuite aujourd'hui, mais c'est la forme exacte du CONSTAT 1, écrite à quarante
+lignes du doc-comment qui dit « UNE LISTE BLANCHE, JAMAIS UN SPREAD ». Les deux
+filtres projettent maintenant, **inconditionnellement** : un repli « rien à taire
+⇒ je rends la charge telle quelle » faisait dépendre la FORME servie du lecteur,
+donc un champ ajouté en amont aurait disparu **pour les seuls lecteurs qui ont
+des blocages** — le défaut le plus coûteux à reproduire qui soit.
+
+Les trois verdicts de forme sont alignés entre les deux filtres : clé ABSENTE ⇒
+forme connue, rien à taire (et projeter y AJOUTERAIT une clé, ce qui casserait
+« ACK == ce que l'acteur reçoit ») ; valeur présente non-tableau ⇒ **refus**.
+
+### Un double PARTIEL, et il a fait accuser le code au lieu du harnais
+
+`CommentReactionHandler.test.ts` doublait `@meeshy/shared/types/socketio-events`
+avec deux entrées de `SERVER_EVENTS` et le seul `ROOMS.post`. Sous ce double,
+`ROOMS.user` valait `undefined` : l'émission à l'acteur **jetait**, la diffusion
+n'avait jamais lieu, et trois témoins rougissaient en accusant le lot.
+
+> C'est l'anti-patron que le dépôt documente **quatre fois** (cycles 86, 91, 93,
+> 104) — « un double partiel perd en silence tout ce que le module GAGNE », et il
+> ne se signale qu'au moment où le module grandit. Pour un module de CONSTANTES
+> PURES, le remède n'est même pas `jest.requireActual` : c'est **l'absence de
+> double**. Le double est supprimé.
+
+### Les témoins de #20236 mis à jour, et pourquoi ce n'est pas un relâchement
+
+Quatre témoins de `comment-activity-separated-20236.test.ts` assertaient
+`exclues` par ÉGALITÉ. L'acteur sortant désormais toujours de la room, ils
+mettent sa room de côté (`tiersExclus`) et gardent la propriété de #20236 — « qui
+a bloqué l'acteur ou l'auteur est TU », intacte et toujours séparée par sujet.
+La question de l'acteur est gardée **chez elle**, par un témoin qui assert qu'il
+REÇOIT, et pas seulement qu'il n'est pas exclu — « un contrôle existe s'il a un
+effet ». Les huit témoins `comment:liked` / `-unliked` (`SocialEventsHandler`,
+non touché) restent verts sans changement : c'est la preuve que le MÉCANISME a
+changé pour deux familles, pas la règle pour quatre.
+
+### Ce que l'audit a trouvé SAIN au deuxième tour
+
+`users[]` n'a plus aucune trace vivante et aucun consommateur ne l'attendait ; la
+liste blanche ne perd rien (`CommentReactionAggregation` porte exactement ces
+quatre champs, et les trois décodeurs clients n'en lisent pas d'autres) ; le
+`throw` du CONSTAT 8 est inatteignable (un piège armé, pas un chemin) ; le
+`cached: false` ne lit ni n'écrit le cache et le roster ne figure nulle part dans
+la clé cacheable ; le fail-closed des deux lectures est intact, et un roster VIDE
+rend `[]` **avant** le `try`, donc aucune panne n'est tue.
+
+## Gates du troisième tour
+
+| gate | résultat |
+|---|---|
+| témoins du lot | **19 / 19** |
+| `socketio/handlers/__tests__/` + `__tests__/unit/socketio/` + `CommentReactionService` ×2 + `comments-like-delete` + cliquet de journal | **162 suites / 2 162 témoins, 0 rouge** |
+| `tsc --noEmit` (gateway) | **exit 0** |
+| suite complète du gateway (2e tour) | **45 066 verts / 3 028 suites** ; les **6** rouges de codec d'image (HEIF/AVIF/EXIF) **prouvés pré-existants** par retrait du lot de l'arbre |
