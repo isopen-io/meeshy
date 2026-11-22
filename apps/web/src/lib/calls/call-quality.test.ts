@@ -221,6 +221,11 @@ describe('la route est relayée dès qu’un des deux candidats de la paire élu
     expect(pathOf([remote('srflx')])).toBe('direct');
   });
 
+  test('un candidat trouvé SANS type ne compte pas, comme le compactMap d’iOS et d’Android', () => {
+    expect(pathOf([{ type: 'local-candidate', id: 'l' }])).toBeNull();
+    expect(pathOf([{ type: 'local-candidate', id: 'l' }, remote('srflx')])).toBe('direct');
+  });
+
   test('aucun candidat résolu : la route est inconnue', () => {
     expect(pathOf([])).toBeNull();
     expect(pathOf([{ type: 'remote-candidate', id: 'autre', candidateType: 'relay' }])).toBeNull();

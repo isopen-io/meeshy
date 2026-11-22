@@ -6,7 +6,8 @@ import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names'
 
 import { DIRECT, harness, PEER, type FakeLink } from '@/test-support/call-engine-harness';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
-import { TRANSLATION_WAIT_MS, type CallCaption } from '@/lib/calls/call-captions';
+import { monotonicClock, TRANSLATION_WAIT_MS, type CallCaption } from '@/lib/calls/call-captions';
+import { browserCaptionsDeps } from '@/lib/calls/call-captions-runtime';
 import { speakerColor } from '@/lib/calls/call-speaker-color';
 import { callStore, type ActiveCall } from '@/lib/calls/call-store';
 import { useCaptionReveals } from '@/lib/calls/call-captions-unfold-store';
@@ -258,6 +259,10 @@ describe('les gestes', () => {
       }
     });
   }
+
+  test('le chunk des sous-titres remet au contrôleur la MÊME horloge que celle que le panneau lit par défaut (#20320)', () => {
+    expect(browserCaptionsDeps().elapsed).toBe(monotonicClock);
+  });
 
   test('le panneau lit l’horloge monotone du contrôleur : les points tombent quand SA fausse horloge passe l’échéance, sans toucher à performance.now (#20320)', async () => {
     const h = harness();
