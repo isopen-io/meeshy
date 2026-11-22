@@ -32,6 +32,7 @@ struct CommunityLinkDetailView: View {
                   action: LinksPageAction(label: ShareLinkDetailCopy.more, systemImage: "ellipsis") { showsMore = true }) {
             VStack(spacing: MeeshySpacing.xl) {
                 heroTicket
+                joinLinkRow
                 figuresBand
                 entriesChart
                 entryRules
@@ -73,7 +74,7 @@ struct CommunityLinkDetailView: View {
             systemImage: "person.3.fill",
             size: .hero,
             label: "\(link.name), \(address)",
-            statusLabel: link.isActive ? ShareLinkDetailCopy.active : ShareLinkDetailCopy.inactive,
+            statusLabel: viewModel.isLinkActive ? ShareLinkDetailCopy.active : ShareLinkDetailCopy.inactive,
             stub: { heroStub },
             leading: { EmptyView() },
             trailing: {
@@ -143,11 +144,31 @@ struct CommunityLinkDetailView: View {
         }
     }
 
+    // MARK: - Actif (#20255)
+
+    /// « Actif », sous les gestes (planche `Lien-Communaute`) : même rangée, même mot que la fiche d'un lien de
+    /// partage. La pause ne ferme que la porte du LIEN — une communauté publique reste joignable, les invitations
+    /// restent — d'où son sous-titre, qui ne dit jamais « plus personne n'entre ». Offerte seulement quand la
+    /// passerelle sert l'état ; le toucher répond tout de suite, et l'état revient si le serveur refuse.
+    @ViewBuilder
+    private var joinLinkRow: some View {
+        if viewModel.canPauseJoinLink {
+            let isActive = viewModel.joinLinkPaused == false
+            MeeshyToggleRow(ShareLinkDetailCopy.active,
+                            subtitle: isActive ? nil : CommunityLinkDetailCopy.joinLinkPausedHint,
+                            accessory: .toggle(isOn: isActive),
+                            tint: Self.accent,
+                            action: { setJoinLinkActive(!isActive) })
+                .disabled(viewModel.isSettingJoinLink)
+                .accessibilityIdentifier("communityLink.detail.active")
+        }
+    }
+
     // MARK: - Fermer les entrées (K40)
 
-    /// La planche pose aussi « Actif » sous les gestes et « Supprimer ce lien » en pied de fiche. Le lien d'une
-    /// communauté est son adresse même : tant que la passerelle ne sert ni pause ni révocation (#19661), la fiche ne
-    /// les montre pas, plutôt que de désactiver ou supprimer la communauté.
+    /// La planche pose aussi « Supprimer ce lien » en pied de fiche. Le lien d'une communauté est son adresse même :
+    /// tant que la passerelle ne sert pas sa révocation (#19661), la fiche ne la montre pas, plutôt que de supprimer
+    /// la communauté.
     private var closeButton: some View {
         let isClosed = viewModel.isClosed ?? false
         return MeeshyButton(isClosed ? CommunityLinkDetailCopy.reopenEntries : CommunityLinkDetailCopy.closeEntries,
@@ -198,6 +219,17 @@ struct CommunityLinkDetailView: View {
         }
     }
 
+    private func setJoinLinkActive(_ active: Bool) {
+        HapticFeedback.light()
+        Task {
+            guard await viewModel.setJoinLinkPaused(!active) else {
+                HapticFeedback.error()
+                FeedbackToastManager.shared.showError(ShareLinkDetailCopy.actionFailed)
+                return
+            }
+        }
+    }
+
     private func leaveFiche() {
         isEditing = false
         dismiss()
@@ -232,6 +264,9 @@ extension CommunityLinkDetailViewModel {
             },
             invite: { communityId, userId in
                 _ = try await CommunityService.shared.invite(communityId: communityId, userId: userId)
+            },
+            setJoinLinkPaused: { communityId, paused in
+                try await CommunityLinkService.shared.setJoinLinkPaused(communityId: communityId, paused: paused)
             }
         )
     }

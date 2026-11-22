@@ -146,3 +146,44 @@ describe('MissionService.ensureToday — le Rêve d’un joueur qui revient', ()
     expect(changed.target).toBe(floorOf(changed.templateKey));
   });
 });
+
+describe('MissionService.claimChest — l’Offrande gardée par les aïeux au jour du retour (#20266)', () => {
+  it('le jour du retour, l’Offrande s’ouvre sans attendre les trois actes, au contenu du Rêve allégé', async () => {
+    const { db, service } = setup();
+    playedOn(db, '2026-10-13');
+    await service.ensureToday(USER, NOW);
+    expect(todayRows(db).every((row) => row.completedAt === null)).toBe(true);
+
+    const issue = await service.claimChest({ userId: USER, requestId: 'coffre-retour-01', now: NOW });
+
+    expect(issue.status).toBe('claimed');
+    expect(issue.reward.points).toBeGreaterThan(0);
+  });
+
+  it('le lendemain du retour, l’Offrande attend de nouveau ses trois actes', async () => {
+    const { db, service } = setup({ gameWelcomeBackDay: '2026-10-19' });
+    playedOn(db, '2026-10-19');
+    await service.ensureToday(USER, NOW);
+
+    await expect(service.claimChest({ userId: USER, requestId: 'coffre-retour-02', now: NOW })).rejects.toMatchObject({ code: 'CHEST_NOT_READY' });
+  });
+
+  it('un joueur qui n’est pas parti attend ses trois actes, comme toujours', async () => {
+    const { db, service } = setup();
+    playedOn(db, '2026-10-19');
+    await service.ensureToday(USER, NOW);
+
+    await expect(service.claimChest({ userId: USER, requestId: 'coffre-retour-03', now: NOW })).rejects.toMatchObject({ code: 'CHEST_NOT_READY' });
+  });
+
+  it('le jour du retour se lit dès le tirage qui le grave : ensureToday le rend', async () => {
+    const back = setup();
+    playedOn(back.db, '2026-10-13');
+    expect((await back.service.ensureToday(USER, NOW)).welcomeBackDay).toBe(DAY);
+    expect((await back.service.ensureToday(USER, NOW)).welcomeBackDay).toBe(DAY);
+
+    const stayed = setup();
+    playedOn(stayed.db, '2026-10-19');
+    expect((await stayed.service.ensureToday(USER, NOW)).welcomeBackDay ?? null).toBeNull();
+  });
+});

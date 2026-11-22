@@ -22,6 +22,8 @@
         {"catalog": "app", "iosKey": "affiliate.create.error", "androidName": "links_affiliate_create_error", "status": "adopted"},
         {"catalog": "app", "iosKey": "common.active", "androidName": "links_common_active", "status": "adopted"},
         {"catalog": "app", "iosKey": "common.inactive", "androidName": "links_common_inactive", "status": "adopted"},
+        {"catalog": "app", "iosKey": "communityLink.sheet.joinLinkPaused", "androidName": "links_community_join_link_paused", "status": "adopted"},
+        {"catalog": "app", "iosKey": "shareLink.detail.actionFailed", "androidName": "links_common_action_failed", "status": "adopted"},
         {"catalog": "app", "iosKey": "common.cancel", "androidName": "links_common_cancel", "status": "adopted"},
         {"catalog": "app", "iosKey": "common.copy", "androidName": "links_common_copy", "status": "adopted"},
         {"catalog": "app", "iosKey": "common.copyLink", "androidName": "links_common_copy_link", "status": "adopted"},

@@ -134,6 +134,7 @@ class CallMicrophoneCutTest {
         regime = CallConversationRegime { false },
         notice = CallCaptionsRefusalNotice { },
         clock = { 5_000L },
+        elapsed = { 0L },
         scope = CoroutineScope(dispatcher),
     )
 
