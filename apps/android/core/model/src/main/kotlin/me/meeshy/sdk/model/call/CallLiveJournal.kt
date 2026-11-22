@@ -33,8 +33,8 @@ data class CallTranscriptEntry(
  * the speaker's device, `null` for a legacy peer.
  *
  * [capturedAtMs] is the SPEAKER's wall clock: it sorts and dates the line, never measures a delay here.
- * [receivedAtElapsedMs] is THIS device's monotonic clock (`elapsedRealtime`) at the first reception of the
- * utterance (#20298): the wait for its translation runs from it, so a skew between the two devices neither
+ * [receivedAtElapsedMs] is THIS device's monotonic clock (`elapsedRealtime`) at the reception of the
+ * utterance's FINAL (#20298): the wait for its translation runs from it, so a skew between the two devices neither
  * freezes the dots nor removes them. Local only, never on the wire; `null` when nothing stamped it.
  */
 data class CallJournalSegment(
@@ -103,15 +103,20 @@ data class CallJournalSegment(
  * 2. existing FINAL + incoming partial ⇒ a stale revision arriving late, ignored;
  * 3. final + final (data channel, then the translated relay) ⇒ the original words are kept, the
  *    translation and a missing name come to enrich them.
- * The capture clock always keeps the EARLIEST value: the start of the utterance; the local reception keeps the
- * FIRST one, so a revision never restarts the wait for a translation (#20298).
+ * The capture clock always keeps the EARLIEST value: the start of the utterance. The local reception follows the
+ * revisions until the FINAL, then stays: the translation is asked for at the final, so its wait runs from the final's
+ * reception, and a revision after it never restarts it (#20298).
  */
 object CallTranscriptMergeRules {
     fun merged(existing: CallJournalSegment, incoming: CallJournalSegment): CallJournalSegment {
         val base = existing.copy(
             speakerDisplayName = existing.speakerDisplayName ?: incoming.speakerDisplayName,
             capturedAtMs = minOf(existing.capturedAtMs, incoming.capturedAtMs),
-            receivedAtElapsedMs = existing.receivedAtElapsedMs ?: incoming.receivedAtElapsedMs,
+            receivedAtElapsedMs = if (existing.isFinal) {
+                existing.receivedAtElapsedMs ?: incoming.receivedAtElapsedMs
+            } else {
+                incoming.receivedAtElapsedMs ?: existing.receivedAtElapsedMs
+            },
         )
         if (!existing.isFinal) {
             return base.copy(

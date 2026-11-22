@@ -147,7 +147,7 @@ class CallCaptionsController internal constructor(
     private val clock: () -> Long,
     private val scope: CoroutineScope,
     private val binding: CallConversationBinding = CallConversationBinding(),
-    private val elapsed: () -> Long = clock,
+    private val elapsed: () -> Long,
 ) : CallFeatureController {
 
     @Inject
