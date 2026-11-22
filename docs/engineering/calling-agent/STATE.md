@@ -2440,3 +2440,29 @@ socket jusqu'au client.
 2. **#20290** : les commandes masquées et l'horloge murale, un petit lot Android de fiabilité.
 3. #20257, #20284, #20280, #20273, puis #20288.
 4. #20185 (recette staging), #11932, #12236, #16933.
+
+## Cycle 72 — 2026-11-22
+
+- **Base** : `origin/dev` @ `753ec87e7`, qui contient #20258 (#20221) et #20291 (#20043) : les lots des cycles 69 à 71 sont tous fusionnés.
+- **Branche** : `claude/determined-volta-fmhcj4`.
+- **Objectif** : #20290. Sur Android, les commandes d'un appel masquées par un toucher mesurent leur fondu sur l'horloge monotone. Un recul de l'heure murale ne les laisse plus capter les touchers pendant une heure, et une avance ne coupe plus le fondu.
+- **Livré** (`apps/android/feature/calls`, commits `f3dda9bc3` puis `0c9b8083e`) :
+  - `CallChromeController` prend un `CallClock` (défaut `RealCallClock()`) au lieu de `() -> Long = System::currentTimeMillis`. `hiddenAtMillis` n'est posé et relu que par `elapsedMs()`, et aucun autre site ne le lit. Le seul site de production, `CallScreen.kt`, garde le défaut.
+  - **Sous-titres laissés en heure murale, à dessein.** L'échéance d'attente d'une traduction, `awaitingUntilMs = capturedAtMs + délai`, part de `capturedAtMs`. Ce champ est un instant mural posé par l'appareil de l'orateur et relayé par le socket (`CallTranslatedSegmentRef.capturedAtMs`). Le comparer au monotone local mélangerait deux horloges.
+  - La loi partagée `CallChromeVisibility.acceptsTouches` n'a pas changé : elle traite encore un `hiddenFor` négatif comme « dans le fondu », comme son miroir iOS.
+- **Tests** : `CallChromeControllerTest`, 2 témoins avec un faux `JumpingWallClock` (recul d'une heure suivi de 250 ms, avance d'une heure suivie de 249 ms).
+  - Rouge, raisonné : sur le commit `f3dda9bc3`, `hiddenFor` vaut −3 599 750 (accepté à tort) puis 3 600 249 (refusé à tort).
+  - CI : `android.yml`, run 44976960280 (`workflow_dispatch`, sha `0c9b8083e`).
+- **QA** (`auditeur-adversarial`, indépendante) : favorable avec réserves. Les témoins tombent puis passent pour la bonne raison, et la compilation relue à la main ne montre pas de problème.
+  - **R1 (moyenne, maintenabilité)** : `CallChromeController.acceptsTouches()` n'a **aucun appelant en production**. Le vrai gardien est `CallChromeFade` (`delay(fade)`, déjà monotone). Le défaut visé par #20290 n'était donc pas observable sur Android. Ce lot corrige la règle, mais pas un symptôme. La règle unique est l'objet de **#20299**.
+  - **R2 (faible à moyenne)** : les points d'attente des sous-titres comparent l'heure murale locale au `capturedAtMs` de l'orateur. Un décalage d'horloge entre les appareils suffit à les figer environ une heure ou à les supprimer, et le web a le même défaut. Versé dans **#20298**.
+  - **R3 (faible)** : le miroir iOS (`CallControlGlass.swift:161-168`) mesure le fondu sur `Date()`. Versé dans **#20300**.
+- **Limites** : rien n'a été vérifié sur appareil.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée : lire le run `android.yml` 44976960280, fusionner `dev` dans la branche, puis fusionner la PR.
+1. **#20298** : l'attente des sous-titres ancrée sur la réception locale, sur Android et le web. C'est le seul défaut visible trouvé ce cycle.
+2. **#20299** (règle unique du chrome Android), puis **#20300** (iOS, à coordonner avec la routine iOS).
+3. #20257, #20284, #20280, #20273, #20288.
+4. #20185 (recette staging), #11932, #12236, #16933.
