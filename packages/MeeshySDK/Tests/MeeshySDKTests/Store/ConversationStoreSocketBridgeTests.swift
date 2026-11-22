@@ -82,6 +82,7 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         let categoryDeleted = PassthroughSubject<CategoryDeletedSocketEvent, Never>()
         let categoriesReordered = PassthroughSubject<CategoriesReorderedSocketEvent, Never>()
         let didReconnect = PassthroughSubject<Void, Never>()
+        let didConnect = PassthroughSubject<Void, Never>()
 
         init(
             store: ConversationStore, categoryStore: UserCategoryStore, currentUserId: String? = "me",
@@ -109,6 +110,7 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
                 categoryDeleted: categoryDeleted.eraseToAnyPublisher(),
                 categoriesReordered: categoriesReordered.eraseToAnyPublisher(),
                 didReconnect: didReconnect.eraseToAnyPublisher(),
+                didConnect: didConnect.eraseToAnyPublisher(),
                 onReadingModePreferenceChanged: onReadingModePreferenceChanged
             )
         }
@@ -412,6 +414,17 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         )
     }
 
+    /// Le rattrapage traverse un `debounce` de 250 ms puis la file sérialisée
+    /// (#20341) : la relecture se SONDE, elle ne se suppose pas.
+    private func trigger(
+        _ signal: PassthroughSubject<Void, Never>, on env: BridgeEnv,
+        untilAsked count: Int, by feed: ServedPreferencesFeed
+    ) async {
+        signal.send(())
+        _ = await waitUntil { feed.asked.count >= count }
+        await env.bridge.awaitPendingEvents()
+    }
+
     /// L'iPhone dormait quand le web a épinglé et archivé « c1 ». La passerelle
     /// n'écrit que `UserConversationPreferences` : ni `/sync` ni le delta ne
     /// resservent la ligne, et la diffusion manquée n'est jamais rejouée.
@@ -420,10 +433,9 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         await store.hydrate(makeConv(id: "c1"))
         let feed = ServedPreferencesFeed([[], [makeServedRow("c1", version: 3, isPinned: true, isArchived: true)]])
         let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()), servedPreferences: feed)
-        await env.bridge.awaitPendingEvents()
+        await trigger(env.didConnect, on: env, untilAsked: 1, by: feed)
 
-        env.didReconnect.send(())
-        await env.bridge.awaitPendingEvents()
+        await trigger(env.didReconnect, on: env, untilAsked: 2, by: feed)
 
         let state = await store.conversation(id: "c1")?.userState
         XCTAssertEqual(state?.isArchived, true, "la reconnexion relit les préférences servies")
@@ -442,25 +454,31 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         await store.hydrate(cleared)
         let feed = ServedPreferencesFeed([[], [makeServedRow("c1", version: 2, isArchived: true)]])
         let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()), servedPreferences: feed)
-        await env.bridge.awaitPendingEvents()
+        await trigger(env.didConnect, on: env, untilAsked: 1, by: feed)
 
-        env.didReconnect.send(())
-        await env.bridge.awaitPendingEvents()
+        await trigger(env.didReconnect, on: env, untilAsked: 2, by: feed)
 
         let state = await store.conversation(id: "c1")?.userState
         XCTAssertEqual(state?.isArchived, true, "le champ servi s'applique")
         XCTAssertEqual(state?.clearHistoryBefore, clearedAt, "le champ que la route ne sert pas ne s'efface pas")
     }
 
-    /// `didReconnect` ne part pas au premier connect : le démarrage à froid se
-    /// rattrape après la PREMIÈRE hydratation du store — une seule fois.
+    /// `didReconnect` ne part pas au premier connect : quand la connexion
+    /// trouve le store VIDE, le démarrage à froid se rattrape à la PREMIÈRE
+    /// hydratation qui la suit — une seule fois (#20341).
     func test_firstHydration_catchesUpPreferencesChangedWhileTheAppWasClosed() async {
         let store = makeStore()
+        let categories = MockCategoryWriter()
         let feed = ServedPreferencesFeed([[makeServedRow("c1", version: 4, isMuted: true)]])
-        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()), servedPreferences: feed)
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: categories), servedPreferences: feed)
+        env.didConnect.send(())
+        _ = await waitUntil { categories.listCallCount >= 1 }
+        await env.bridge.awaitPendingEvents()
+        XCTAssertEqual(feed.asked.count, 0, "un store vide ne reçoit pas de préférences : le geste attend l'hydratation")
 
         await store.hydrate(makeConv(id: "c1"))
         await store.hydrate(makeConv(id: "c2"))
+        _ = await waitUntil { feed.asked.count >= 1 }
         await env.bridge.awaitPendingEvents()
 
         let state = await store.conversation(id: "c1")?.userState
@@ -480,10 +498,9 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
             makeServedRow("c2", version: 1, updatedAt: newest.addingTimeInterval(-60))
         ]])
         let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()), servedPreferences: feed)
-        await env.bridge.awaitPendingEvents()
+        await trigger(env.didConnect, on: env, untilAsked: 1, by: feed)
 
-        env.didReconnect.send(())
-        await env.bridge.awaitPendingEvents()
+        await trigger(env.didReconnect, on: env, untilAsked: 2, by: feed)
 
         XCTAssertEqual(feed.asked, [nil, newest], "la première relecture lit tout, la suivante part du filigrane servi")
     }
