@@ -185,7 +185,7 @@ export function harness(options: { readonly acks?: Record<string, unknown>; read
   const networkChanged = (): void => networkListeners.forEach((listener) => listener());
   const networkPathChanged = (): void => [...pathListeners].forEach((listener) => listener());
 
-  return { engine, store, emitted, requested, links, tones, displays, cameras, remembered, notices, advance, call, names, linkState, binding, sampleQuality, networkChanged, networkPathChanged, socket, qualityDeps: () => qualityDeps };
+  return { engine, store, elapsed: () => clock, emitted, requested, links, tones, displays, cameras, remembered, notices, advance, call, names, linkState, binding, sampleQuality, networkChanged, networkPathChanged, socket, qualityDeps: () => qualityDeps };
 }
 
 export const DIRECT: StartCallRequest = { conversationId: 'c-1', media: 'audio', title: 'Amina', avatar: null, isGroup: false };
