@@ -13,13 +13,15 @@ import Foundation
 // si le moment se montre en entier (la première fois) ou en version courte. La
 // clé du moment est la clé « déjà vu » que le serveur garde (`game.guideSeen`).
 
-/// Le bouton qui mène à l'étape d'après : les quatre nouveaux, et « voir le niveau » du Prestige.
+/// Le bouton qui mène à l'étape d'après : les quatre nouveaux, « voir le niveau » du Prestige et « voir la Flamme »
+/// de la première Veilleuse offerte.
 public enum GuideActionV2: String, CaseIterable, Sendable, Hashable {
     case seeLeague = "see-league"
     case seeSeason = "see-season"
     case seeTrophies = "see-trophies"
     case seeAtlas = "see-atlas"
     case seeLevel = "see-level"
+    case seeFlame = "see-flame"
 }
 
 public enum GuideMomentKeyV2: String, CaseIterable, Codable, Sendable, Hashable {
@@ -31,6 +33,8 @@ public enum GuideMomentKeyV2: String, CaseIterable, Codable, Sendable, Hashable 
     case trophy
     case prestige
     case atlasStamp = "atlas-stamp"
+    /// La première Veilleuse, offerte au 3e jour de Flamme. Sa clé est `GameFlame.freezeGiftSeenKey`.
+    case flameFreezeGift = "flame-freeze-gift"
 }
 
 /// Ce qui vient d'arriver au joueur, avec les chiffres que le moment cite.
@@ -43,6 +47,7 @@ public enum GuideEventV2: Sendable, Equatable {
     case trophy(trophyKey: String)
     case prestige(prestige: Int, gloryGained: Int)
     case atlasStamp(language: String, stamped: Int, total: Int)
+    case flameFreezeGift(freezes: Int)
 
     public var key: GuideMomentKeyV2 {
         switch self {
@@ -54,6 +59,7 @@ public enum GuideEventV2: Sendable, Equatable {
         case .trophy: .trophy
         case .prestige: .prestige
         case .atlasStamp: .atlasStamp
+        case .flameFreezeGift: .flameFreezeGift
         }
     }
 }
@@ -128,6 +134,7 @@ public enum GameGuideV2 {
         case .trophy: Persona(speaker: .duo, mood: .proud, action: .seeTrophies)
         case .prestige: Persona(speaker: .duo, mood: .proud, action: .seeLevel)
         case .atlasStamp: Persona(speaker: .mee, mood: .cheer, action: .seeAtlas)
+        case .flameFreezeGift: Persona(speaker: .meo, mood: .cheer, action: .seeFlame)
         }
     }
 
@@ -138,12 +145,12 @@ public enum GameGuideV2 {
                              action: voice.action, presentation: presentation)
     }
 
-    /// Du plus important au moins important, sur les vingt et un moments : ce qui
+    /// Du plus important au moins important, sur tous les moments : ce qui
     /// change le rang, ce qui se reçoit pour toujours (Prestige, trophée) puis ce qui
     /// éteint ou protège passent avant.
     public static let momentPriorityAll: [String] = [
         "new-rank", "prestige", "trophy", "level-100", "first-mint", "season-end", "flame-out", "flame-at-risk",
-        "league-promoted", "league-relegated", "new-tier", "season-start", "treasury-tier", "badge-extinguished",
+        "flame-freeze-gift", "league-promoted", "league-relegated", "new-tier", "season-start", "treasury-tier", "badge-extinguished",
         "price-rises", "atlas-stamp", "league-first", "first-mint-possible", "missions-unlocked", "first-level",
         "return-after-absence",
     ]
@@ -184,7 +191,7 @@ public enum GameGuideV2 {
 // qu'une montée vers la même ligue une autre semaine est un moment nouveau.
 //
 // Ne se photographient pas : une première ligue, une descente (Meo la dit
-// calmement), une saison inachevée, un simple tampon d'Atlas.
+// calmement), une saison inachevée, un simple tampon d'Atlas, une Veilleuse offerte.
 
 public enum PhotoMomentEmblemV2: Sendable, Equatable {
     case trophy(trophyKey: String)
@@ -210,7 +217,7 @@ public enum GamePhotoMomentsV2 {
         case .leaguePromoted(_, let to, _, let weekKey): .leagueUp(league: to, weekKey: weekKey)
         case .seasonEnd(let season, _, let completed, _): completed ? .season(season: season) : nil
         case .prestige(let prestige, _): .prestige(number: prestige)
-        case .leagueFirst, .leagueRelegated, .seasonStart, .atlasStamp: nil
+        case .leagueFirst, .leagueRelegated, .seasonStart, .atlasStamp, .flameFreezeGift: nil
         }
     }
 

@@ -15923,6 +15923,50 @@
       }
     },
     {
+      "_label": "guide « flame-freeze-gift » la première fois",
+      "input": {
+        "law": "guide-v2",
+        "event": {
+          "kind": "flame-freeze-gift",
+          "freezes": 1
+        },
+        "seen": []
+      },
+      "expected": {
+        "key": "flame-freeze-gift",
+        "speaker": "meo",
+        "mood": "cheer",
+        "action": "see-flame",
+        "data": {
+          "freezes": 1
+        },
+        "presentation": "full"
+      }
+    },
+    {
+      "_label": "guide « flame-freeze-gift » déjà vu",
+      "input": {
+        "law": "guide-v2",
+        "event": {
+          "kind": "flame-freeze-gift",
+          "freezes": 1
+        },
+        "seen": [
+          "flame-freeze-gift"
+        ]
+      },
+      "expected": {
+        "key": "flame-freeze-gift",
+        "speaker": "meo",
+        "mood": "cheer",
+        "action": "see-flame",
+        "data": {
+          "freezes": 1
+        },
+        "presentation": "short"
+      }
+    },
+    {
       "_label": "choix d'une carte, cas 1",
       "input": {
         "law": "guide-choose",
@@ -16055,6 +16099,57 @@
       "expected": {
         "key": null,
         "presentation": null
+      }
+    },
+    {
+      "_label": "choix d'une carte, cas 7",
+      "input": {
+        "law": "guide-choose",
+        "events": [
+          {
+            "kind": "atlas-stamp",
+            "language": "ja",
+            "stamped": 4,
+            "total": 89
+          },
+          {
+            "kind": "flame-freeze-gift",
+            "freezes": 1
+          },
+          {
+            "kind": "flame-at-risk",
+            "days": 3
+          }
+        ],
+        "seen": []
+      },
+      "expected": {
+        "key": "flame-at-risk",
+        "presentation": "full"
+      }
+    },
+    {
+      "_label": "choix d'une carte, cas 8",
+      "input": {
+        "law": "guide-choose",
+        "events": [
+          {
+            "kind": "league-promoted",
+            "from": "quartz",
+            "to": "ambre",
+            "rank": 3,
+            "weekKey": "2026-10-12"
+          },
+          {
+            "kind": "flame-freeze-gift",
+            "freezes": 1
+          }
+        ],
+        "seen": []
+      },
+      "expected": {
+        "key": "flame-freeze-gift",
+        "presentation": "full"
       }
     },
     {
@@ -16207,6 +16302,20 @@
           "language": "ja",
           "stamped": 4,
           "total": 89
+        }
+      },
+      "expected": {
+        "emblem": null,
+        "id": null
+      }
+    },
+    {
+      "_label": "moment photo de « flame-freeze-gift »",
+      "input": {
+        "law": "photo-moment",
+        "event": {
+          "kind": "flame-freeze-gift",
+          "freezes": 1
         }
       },
       "expected": {
