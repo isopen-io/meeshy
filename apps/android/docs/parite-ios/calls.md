@@ -151,7 +151,7 @@ Sur une scène vidéo seulement (duo vidéo, ou groupe avec au moins une caméra
 Écarts :
 - Type CallChromeVisibility (isRevealed, isStageFullScreen, isModeActive) + éléments (header, controls, openPanel, recordingStatus, recordingConsent, screenShareBanner, captions, selfView) et leurs règles de visibilité.
 - Bascule au toucher limitée à isVideoStage (duo vidéo actif, ou groupe avec caméra) ; ignorée si TalkBack actif.
-- Fondu 250 ms et fenêtre de grâce acceptsTouches pendant le fondu ; interaction revive qui rallume le chrome.
+- Fondu 250 ms (court sous « Réduire les animations ») ; pendant le fondu un toucher rallume le chrome (interaction revive), après il atteint la scène. La règle vit dans le composable `CallChromeFade`, comme la grâce de `CallControlGlass` sur iOS (#20299).
 - GroupStageTapRule : chrome masqué => une vignette touchée rallume ; sinon elle passe à la une.
 - Couplage avec la couche courante (un panneau ou un mode ouvert interdit le masquage).
 

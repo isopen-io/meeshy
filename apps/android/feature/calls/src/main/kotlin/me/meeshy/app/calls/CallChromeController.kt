@@ -5,7 +5,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import me.meeshy.sdk.model.call.CallActionSet
-import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallChromeInteraction
 import me.meeshy.sdk.model.call.CallChromeVisibility
 import me.meeshy.sdk.model.call.CallScreenLayer
@@ -17,8 +16,6 @@ internal data class CallChromeState(
     val layer: CallScreenLayer = CallScreenLayer.Idle,
     val isRevealed: Boolean = true,
     val fingersDown: Int = 0,
-    /** Monotonic ([CallClock.elapsedMs]), never an instant: it only measures how long the fade has run. */
-    val hiddenAtMillis: Long? = null,
     /** La vignette à la une d'un appel de groupe occupe tout l'écran : l'en-tête et la pilule s'effacent. */
     val isStageFullScreen: Boolean = false,
 )
@@ -29,7 +26,7 @@ internal data class CallChromeState(
  * this class only holds the current value. Mirrors the `layer` / `showControls` state of iOS
  * `CallView`.
  */
-internal class CallChromeController(private val clock: CallClock = RealCallClock()) {
+internal class CallChromeController {
 
     private val _state = MutableStateFlow(CallChromeState())
     val state: StateFlow<CallChromeState> = _state.asStateFlow()
@@ -44,17 +41,9 @@ internal class CallChromeController(private val clock: CallClock = RealCallClock
         )
     }
 
-    /** During the fade-out the hidden chrome is still seen, so it still answers; after it, it does not. */
-    fun acceptsTouches(isTapStage: Boolean, isTouchExplorationOn: Boolean): Boolean {
-        val current = _state.value
-        val visible = visibility(isTapStage, isTouchExplorationOn).isVisible(CallChromeElement.Controls)
-        val hiddenFor = current.hiddenAtMillis?.let { clock.elapsedMs() - it } ?: 0L
-        return CallChromeVisibility.acceptsTouches(visible, hiddenFor)
-    }
-
     fun onSceneTap(isTapStage: Boolean, isTouchExplorationOn: Boolean) {
         if (!CallChromeVisibility.mayToggleByTap(isTapStage, isTouchExplorationOn)) return
-        _state.update { if (it.isRevealed) it.hidden(clock.elapsedMs()) else it.revealed() }
+        _state.update { if (it.isRevealed) it.hidden() else it.revealed() }
     }
 
     fun onInteraction(interaction: CallChromeInteraction) {
@@ -98,7 +87,7 @@ internal class CallChromeController(private val clock: CallClock = RealCallClock
         _state.update { it.copy(layer = transform(it.layer)) }
     }
 
-    private fun CallChromeState.hidden(now: Long) = copy(isRevealed = false, hiddenAtMillis = now)
+    private fun CallChromeState.hidden() = copy(isRevealed = false)
 
-    private fun CallChromeState.revealed() = copy(isRevealed = true, hiddenAtMillis = null)
+    private fun CallChromeState.revealed() = copy(isRevealed = true)
 }
