@@ -162,9 +162,10 @@ jour fait partie du correctif :
 - **#20338** — six familles de diffusion d'ACTIVITÉ qui nomment un acteur et ne
   filtrent aucun blocage, dont `post:liked`, jumelle exacte de `comment:liked`.
 
-Et un suivi non chiffré : la panne de lecture ferme le direct pour **tout le
-monde**, journalisée et **sans métrique** — une diffusion fermée en silence ne
-se distingue pas, en exploitation, d'un fil calme.
+- **#20393** — la panne de lecture ferme le direct pour **tout le monde**,
+  journalisée et **sans métrique** : une diffusion fermée en silence ne se
+  distingue pas, en exploitation, d'un fil calme. Trois sites ferment ainsi, et
+  deux sont muets jusque chez l'utilisateur.
 
 ## Un dommage collatéral, trouvé par la suite complète
 
