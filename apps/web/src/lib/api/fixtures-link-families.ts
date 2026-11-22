@@ -140,6 +140,6 @@ export const fixtureCreateAffiliateToken = (body: CreateAffiliateTokenBody, now:
 });
 
 export const fixtureCommunityLinks = (): readonly CommunityLink[] => [
-  { id: 'cm1', name: 'Meeshy Paris', identifier: 'mshy_meeshy-paris', avatar: null, isPrivate: false, role: 'admin', memberCount: 248, createdAt: '2026-05-10T12:00:00.000Z' },
-  { id: 'cm2', name: 'Support lycée Njanda', identifier: 'mshy_support-lycee-njanda', avatar: null, isPrivate: true, role: 'moderator', memberCount: 37, createdAt: '2026-06-02T12:00:00.000Z' },
+  { id: 'cm1', name: 'Meeshy Paris', identifier: 'mshy_meeshy-paris', avatar: null, isPrivate: false, role: 'admin', memberCount: 248, createdAt: '2026-05-10T12:00:00.000Z', joinLinkPaused: false },
+  { id: 'cm2', name: 'Support lycée Njanda', identifier: 'mshy_support-lycee-njanda', avatar: null, isPrivate: true, role: 'moderator', memberCount: 37, createdAt: '2026-06-02T12:00:00.000Z', joinLinkPaused: true },
 ];

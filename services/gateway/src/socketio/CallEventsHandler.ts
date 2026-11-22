@@ -2602,11 +2602,15 @@ export class CallEventsHandler {
         // conversation before they can list / terminate its active calls.
         // Without this gate any authenticated user could iterate over guessed
         // conversation IDs and force-end every active call on the platform.
+        // #20310 — la participation doit être VIVANTE, pas seulement active.
+        // Une ligne active-et-bannie laissait un membre EXCLU énumérer et
+        // TERMINER tout appel en cours de la conversation. `userId` nommant
+        // une colonne (pas un `OR`), le spread de la loi est ici sans piège.
         const membership = await this.prisma.participant.findFirst({
           where: {
             conversationId: data.conversationId,
             userId,
-            isActive: true
+            ...PARTICIPATION_VIVANTE
           },
           select: { id: true }
         });

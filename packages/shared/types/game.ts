@@ -301,6 +301,8 @@ export const gameChestSchema = z.object({
   reward: chestRewardSchema.nullable(),
   /** Tolérant : un contenu du jour illisible tombe seul, sans emporter le bloc. Absent devant un serveur antérieur. */
   today: chestContentSchema.nullable().optional().catch(undefined),
+  /** Le jour du retour, l'Offrande est gardée par les aïeux : prête sans attendre les actes (#20266). Tolérant. */
+  kept: z.boolean().optional().catch(undefined),
 });
 
 export const gameFlameSchema = z.object({

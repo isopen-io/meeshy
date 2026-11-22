@@ -21,7 +21,7 @@ import {
   removeNotifications,
   replaceNotificationCounts,
 } from './notifications-cache';
-import { NOTIFICATION_LISTS_KEY, decodeNotificationCounts } from './notifications';
+import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATION_LISTS_KEY, decodeNotificationCounts } from './notifications';
 import { confirmPendingReads, withoutPendingReads } from './notifications-pending-reads';
 
 /**
@@ -142,4 +142,25 @@ export function applyNotificationCounts(queryClient: QueryClient, payload: unkno
   const counts = decodeNotificationCounts(payload);
   if (counts === null) return;
   replaceNotificationCounts(queryClient, withoutPendingReads(queryClient, counts), { keepByType: objectOf(payload)?.byType === undefined });
+}
+
+/**
+ * **LA SUITE D'UN TROU DANS LE CURSEUR** (#18601) — jumelle de
+ * `NotificationGapResyncCoordinator` (iOS) et de `ChatResyncController`
+ * (Android).
+ *
+ * Un trou prouve que des événements `notification:new` ne sont pas arrivés :
+ * la liste locale est incomplète ET le compte local est court, puisque c'est
+ * `applyNotificationNew` qui l'incrémente. Les DEUX se périment donc, et le
+ * compte se RELIT (`refetchType: 'all'`) plutôt que d'attendre un écran : la
+ * pastille est lue partout, y compris là où aucune liste n'est montée, et une
+ * pastille fausse est précisément ce que ce curseur existe pour corriger.
+ *
+ * Les listes, elles, gardent le régime de `applyNotificationNew` — périmées
+ * sans relecture immédiate : l'écran qui les montre les relira en revenant, et
+ * celui qui ne les montre pas n'a aucune raison de payer une requête.
+ */
+export function resyncAfterSeqGap(queryClient: QueryClient): void {
+  void queryClient.invalidateQueries({ queryKey: NOTIFICATION_LISTS_KEY, refetchType: 'none' });
+  void queryClient.invalidateQueries({ queryKey: NOTIFICATION_COUNTS_QUERY_KEY, refetchType: 'all' });
 }

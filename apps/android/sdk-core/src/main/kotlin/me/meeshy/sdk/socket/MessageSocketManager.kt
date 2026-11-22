@@ -253,11 +253,13 @@ class MessageSocketManager @Inject constructor(
         // donc il avance même si le décodage échoue ensuite (un décodage raté est
         // notre bug, pas un trou d'émission) et même si aucun écran n'écoute.
         //
-        // Le miroir est iOS (`MessageSocketRoutes+Notifications.swift`), PAS le web :
-        // cette ligne a dit « comme le web (`notification-socketio.singleton.ts`) »
-        // jusqu'au 2026-11-14, en nommant un fichier du web LEGACY sorti du dépôt au
-        // #7668 — `apps/web` n'observe aucun curseur (#18601). Ce qui estampille et
-        // ce qui observe se lisent au cliquet `socket-seq-lockstep-gate` (#18602).
+        // Les miroirs sont iOS (`MessageSocketRoutes+Notifications.swift`) et, DEPUIS
+        // #18601, le web (`apps/web/src/lib/api/sync-seq.ts`). Cette ligne a dit
+        // « comme le web (`notification-socketio.singleton.ts`) » jusqu'au 2026-11-14,
+        // en nommant un fichier du web LEGACY sorti du dépôt au #7668, puis « le web
+        // n'observe aucun curseur » jusqu'au 2026-11-22 — deux états vrais à leur
+        // date. Ce qui estampille et ce qui observe se lisent au cliquet
+        // `socket-seq-lockstep-gate` (#18602), jamais ici.
         route(SocketEventNames.NOTIFICATION_NEW, _notificationReceived) { raw ->
             syncSeqTracker.observe((raw.opt(SEQ_KEY) as? Number)?.toLong())
         }

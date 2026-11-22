@@ -56,7 +56,7 @@ import { GloryService } from './GloryService';
 import { MeeshSpend } from './MeeshSpend';
 import { chestHoursIntoDay, dayKeyOf, minuteOfDayInTimezone } from './gameClock';
 import { MISSION_PROFILE_USER_SELECT, missionProfileOf } from './MissionHabits';
-import { easedProfile, isEasedDreamDay, welcomeBackDay } from '@meeshy/shared/utils/game/welcome-back';
+import { easedProfile, isEasedDreamDay, isKeptOfferingDay, welcomeBackDay } from '@meeshy/shared/utils/game/welcome-back';
 import { meeshTotalsFromLedger } from '../meesh/MeeshService';
 import { starFragmentsOf } from './StarFragments';
 import { stampGameRevisionAfterWrite } from './GameRevision';
@@ -126,6 +126,8 @@ export type MissionDay = {
   readonly dayKey: string;
   readonly unlocked: boolean;
   readonly rows: readonly DailyMission[];
+  /** Le jour du retour en vigueur (#20218), lu ou gravé par ce tirage : la lecture du bloc n'a pas à le relire (#20266). */
+  readonly welcomeBackDay?: string | null;
 };
 
 export type SignalOptions = {
@@ -351,7 +353,7 @@ export class MissionService {
     // Un tirage INTERROMPU (une écriture tombée entre deux emplacements) se
     // COMPLÈTE : les emplacements posés font foi, seuls les manquants s'écrivent.
     // Le Rêve du jour se fige au tirage : ses trois actes, ou l'acte unique du premier Rêve sous le niveau 5 (#17370).
-    if (isDreamWhole(existing.map((row) => row.slot))) return { dayKey, unlocked, rows: existing };
+    if (isDreamWhole(existing.map((row) => row.slot))) return { dayKey, unlocked, rows: existing, welcomeBackDay: user?.gameWelcomeBackDay ?? null };
     const taken = new Set(existing.map((row) => row.slot));
 
     const [treasury, profile, welcomeDay] = await Promise.all([
@@ -402,6 +404,7 @@ export class MissionService {
       dayKey,
       unlocked,
       rows: await this.prisma.dailyMission.findMany({ where: { userId, dayKey, slot: { lt: DAILY_MISSION_SLOTS } }, orderBy: { slot: 'asc' } }),
+      welcomeBackDay: welcomeDay,
     };
   }
 
@@ -652,7 +655,8 @@ export class MissionService {
   }
 
   /**
-   * Ouvre le coffre du jour — réclamable une fois les trois missions faites.
+   * Ouvre le coffre du jour — réclamable une fois les trois missions faites, ou, le jour du retour, dès que le Rêve
+   * est tiré : les aïeux l'ont gardé (#20266, `isKeptOfferingDay`).
    *
    * Son contenu suit l'EFFORT des trois missions du jour (#10011) : des points (500 à 10 000), de la Gloire (1 250 à
    * 3 000 sur l'effort, plus jusqu'à 2 800 de précocité à l'heure SERVEUR de la réclamation, gravée, #16414), une
@@ -673,7 +677,8 @@ export class MissionService {
     if (stored?.chestClaimedAt) return this.alreadyClaimed(userId, stored);
 
     const rows = await this.prisma.dailyMission.findMany({ where: { userId, dayKey, slot: { lt: DAILY_MISSION_SLOTS } } });
-    if (!isDreamWhole(rows.map((r) => r.slot)) || rows.some((r) => r.completedAt === null)) throw new GameRefusal('CHEST_NOT_READY');
+    const kept = isKeptOfferingDay({ welcomeDay: user?.gameWelcomeBackDay ?? null, today: dayKey });
+    if (!isDreamWhole(rows.map((r) => r.slot)) || (!kept && rows.some((r) => r.completedAt === null))) throw new GameRefusal('CHEST_NOT_READY');
 
     await this.ensureGameDay(userId, dayKey);
     const mintBase = await this.chestPriceBase({ userId, now, dayKey });

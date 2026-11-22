@@ -117,6 +117,9 @@ public struct APICommunity: Codable, Identifiable, Sendable, CacheIdentifiable {
     /// Les entrées faites PAR LE LIEN de la communauté, distinctes des ajouts directs et des invitations — servi par
     /// `GET /communities/:id` (#19290). `nil` : serveur qui ne le sert pas, et la fiche du lien s'en passe.
     public var linkEntryCount: Int? = nil
+    /// Le lien d'entrée est en pause (#19661) — servi à tout lecteur par `GET /communities/:id` ; l'instant ne part
+    /// qu'aux intendants. `nil` : serveur qui ne le sert pas.
+    public var joinLinkPaused: Bool? = nil
     /// Chaque entrée attend qu'un administrateur ou un modérateur l'accepte (#19429) ;
     /// `nil` : serveur qui ne le sert pas, ou ancienne communauté à entrée directe.
     public var requiresJoinApproval: Bool? = nil

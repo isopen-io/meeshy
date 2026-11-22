@@ -51,7 +51,7 @@ class WebRtcCallQualitySampler internal constructor(
             previous = stats
             feed.record(
                 CallQualityTick(
-                    atMs = clock.nowMs(),
+                    atMs = clock.elapsedMs(),
                     rttMs = stats.roundTripTimeMs,
                     packetLossPercent = interval.packetLoss * 100.0,
                     jitterMs = stats.jitterMs,

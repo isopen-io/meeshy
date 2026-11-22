@@ -613,6 +613,8 @@ const PENDING_CLIENT_ENTRIES = {
   // partagés de la fiche d'un autre — chacun gardé par son cercle — avant le lot CLIENTS qui les affichera. La face
   // web de la fiche de relation est #19180, et son drapeau d'allumage est #19230.
   'users.byIdInCommon': { issue: 19234, reason: 'GET /users/:id/in-common — nos communautés, nos amis et nos médias en commun, lus par la fiche d’un autre (web, iOS, Android)' },
+  // Le lien d'entrée d'une communauté se met en pause (#19661, routine Communautés) : la passerelle sert la bascule
+  // avant la rangée « Actif » de la fiche du lien et le message de l'arrivant (#20255).
 };
 
 // 274 -> 271 (#6375, 2026-11-07) : `communities.byIdMembers`, `.byIdMembersByMemberId` et

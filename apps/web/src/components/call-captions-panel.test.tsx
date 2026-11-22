@@ -223,7 +223,7 @@ describe('les gestes', () => {
   });
 
   test('les trois points retombent en fondu à l’échéance, et le lecteur d’écran n’entend plus l’attente', async () => {
-    const view = mount({ captions: [caption({ id: 'w-es', original: 'Hola a todos', translated: null, pair: null, origin: { language: 'es', foreign: true, awaitingUntil: Date.now() + 40 } })] });
+    const view = mount({ captions: [caption({ id: 'w-es', original: 'Hola a todos', translated: null, pair: null, origin: { language: 'es', foreign: true, awaitingUntil: performance.now() + 40 } })] });
     expect(view.host.querySelector('[data-call-caption-waiting]')?.hasAttribute('data-leaving')).toBe(false);
     expect(view.host.textContent).toContain('Traduction en cours');
     await settle(80);
@@ -234,6 +234,28 @@ describe('les gestes', () => {
     expect(view.host.querySelector('[data-call-caption-languages]')?.textContent).toBe('ES');
     view.done();
   });
+
+  for (const [label, jump] of [
+    ['recule', -3_600_000],
+    ['avance', 3_600_000],
+  ] as const) {
+    test(`l’horloge murale ${label} d’une heure pendant l’attente : les points tiennent jusqu’à l’échéance monotone, puis tombent (#20298)`, async () => {
+      const wall = Date.now();
+      const until = performance.now() + 60;
+      const realNow = Date.now;
+      Date.now = () => wall + jump;
+      const view = mount({ captions: [caption({ id: 'w-es', original: 'Hola a todos', translated: null, pair: null, origin: { language: 'es', foreign: true, awaitingUntil: until } })] });
+      try {
+        expect(view.host.querySelector('[data-call-caption-waiting]')?.hasAttribute('data-leaving')).toBe(false);
+        expect(view.host.textContent).toContain('Traduction en cours');
+        await settle(120);
+        expect(view.host.textContent).not.toContain('Traduction en cours');
+      } finally {
+        Date.now = realNow;
+        view.done();
+      }
+    });
+  }
 
   test('le pied pose le bouton Journal quand l’appel peut l’ouvrir, et il l’ouvre (#17346)', () => {
     const opened: string[] = [];
@@ -361,7 +383,7 @@ describe('les gestes', () => {
 describe('la phrase dit sa langue d’origine et son attente de traduction', () => {
   const spanish = (until: number | null, overrides: Partial<CallCaption> = {}) =>
     caption({ id: 'w-es', original: 'Hola a todos', translated: null, pair: null, origin: { language: 'es', foreign: true, awaitingUntil: until }, ...overrides });
-  const soon = () => Date.now() + 60_000;
+  const soon = () => performance.now() + 60_000;
 
   test('l’original d’une langue étrangère porte sa langue seule, sans flèche', () => {
     const html = panel({ captions: [spanish(null)] });
@@ -378,7 +400,7 @@ describe('la phrase dit sa langue d’origine et son attente de traduction', () 
   });
 
   test('l’échéance passée, les points tombent et l’étiquette de la langue reste', () => {
-    const html = panel({ captions: [spanish(Date.now() - 1)] });
+    const html = panel({ captions: [spanish(performance.now() - 1)] });
     expect(html).not.toContain('data-call-caption-waiting');
     expect(html).toMatch(/data-call-caption-languages="">ES</);
   });

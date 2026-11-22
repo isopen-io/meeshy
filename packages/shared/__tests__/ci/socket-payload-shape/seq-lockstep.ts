@@ -57,12 +57,7 @@ const SWIFT_EVENT_ENUM = 'packages/MeeshySDK/Sources/MeeshySDK/Sockets/SocketEve
  * Il ne porte aucun verdict de produit : décider si le web doit observer le
  * curseur appartient à #18601, pas à ce fichier.
  */
-export const PLATFORMS_WITHOUT_SEQ_CURSOR: ReadonlyMap<ClientPlatform, string> = new Map<ClientPlatform, string>([
-  [
-    'web',
-    "#18601 — aucune occurrence de `_seq`, `observeSyncSeq`, `lastSeq` ni `checkpointSeq` au sens du SyncEngine sous `apps/web/src` ; l'observateur que trois doc-comments du dépôt nommaient (`notification-socketio.singleton.ts`) appartenait au web LEGACY, sorti du dépôt au #7668.",
-  ],
-]);
+export const PLATFORMS_WITHOUT_SEQ_CURSOR: ReadonlyMap<ClientPlatform, string> = new Map<ClientPlatform, string>([]);
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.kt', '.swift']);
 
@@ -271,3 +266,59 @@ export const seqObservedByPlatform = (): ReadonlyMap<ClientPlatform, ReadonlySet
         [platform, new Set(sites.flatMap((site) => (site.event === null ? [] : [site.event])))] as const,
     ),
   );
+
+/**
+ * ─── OBSERVER n'est pas ANNONCER, et `hasGap` ne lit que l'annonce ─────────
+ *
+ * Le relevé ci-dessus répond « qui AVANCE un curseur à la réception ? ». Il ne
+ * dit rien de la seconde moitié du SyncEngine : `GET /sync` ne calcule un trou
+ * que pour un client qui lui ANNONCE son curseur —
+ * `hasGap = seq !== undefined && seq < checkpointSeq - GAP_THRESHOLD`
+ * (`services/gateway/src/routes/sync/index.ts`). Un client qui observe sans
+ * annoncer a la détection EN SESSION et pas celle de la RECONNEXION.
+ *
+ * La distinction a une adresse : depuis #18601, `apps/web` observe le curseur
+ * et ne l'annonce pas — il n'appelle pas `/sync` du tout, par une décision
+ * écrite dans `apps/web/src/lib/api/conversations-delta.ts` (« la porte est
+ * `GET conversations.root?updatedSince=`, pas `GET /sync` »). Lire « le web
+ * observe » comme « `hasGap` le couvre » serait donc faux, et c'est exactement
+ * ce que #18575 demandait de rendre vérifiable plutôt que d'écrire en prose.
+ *
+ * Ce qui compte comme une ANNONCE : un argument nommé `seq` dont la valeur lit
+ * un curseur (`lastSeq`). La borne de mot sur `\bseq` est ce qui empêche
+ * `lastSeq:` — une DÉCLARATION de propriété, dont le talkie du web a trois —
+ * d'être comptée comme un argument : un relevé qui mesure la popularité d'un
+ * mot plutôt qu'une propriété est le défaut que le cycle 107 a payé.
+ */
+const ANNOUNCEMENT = /\bseq\s*[:=]\s*[^;\n]*\blastSeq\b/g;
+
+export const seqAnnouncingPlatforms = (): ReadonlySet<ClientPlatform> => {
+  const announcing = new Set<ClientPlatform>();
+  for (const platform of CLIENT_PLATFORMS) {
+    for (const root of CLIENT_PLATFORM_ROOTS[platform]) {
+      for (const file of sources(join(REPO, root))) {
+        if (ANNOUNCEMENT.test(stripComments(readFileSync(file, 'utf8')))) {
+          announcing.add(platform);
+          ANNOUNCEMENT.lastIndex = 0;
+          break;
+        }
+        ANNOUNCEMENT.lastIndex = 0;
+      }
+    }
+  }
+  return announcing;
+};
+
+/**
+ * Les plateformes qui ANNONCENT leur curseur à `/sync`, donc les seules que
+ * `hasGap` couvre. Inventaire à DEUX sens, comme ses voisins : une plateforme
+ * qui se met à annoncer doit ENTRER ici, et celle qui cesse doit en SORTIR.
+ */
+export const PLATFORMS_ANNOUNCING_SEQ: ReadonlySet<ClientPlatform> = new Set<ClientPlatform>(['ios', 'android']);
+
+/** Pourquoi le web n'y est pas — une DÉCISION écrite, pas un oubli. */
+export const WEB_ANNOUNCEMENT_REASON =
+  "`apps/web` n'appelle pas `GET /sync` : sa porte de rattrapage est "
+  + '`GET conversations.root?updatedSince=` (`apps/web/src/lib/api/conversations-delta.ts`), plus '
+  + "l'invalidation d'`onAuthenticated`. Il OBSERVE le curseur depuis #18601 — détection de trou en "
+  + 'SESSION — sans l\'annoncer, donc `hasGap` ne le couvre pas.';

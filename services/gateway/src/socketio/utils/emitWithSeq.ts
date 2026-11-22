@@ -44,7 +44,15 @@ import {
  * (cycle 168, #18602) : iOS observe (`MessageSocketRoutes+Notifications.swift`),
  * Android observe (`sdk-core/.../socket/MessageSocketManager.kt`, câblé au
  * cycle 108 ; avant ça il jetait le champ pendant que le contrat partagé
- * affirmait le contraire), et `apps/web` n'observe AUCUN curseur (#18601).
+ * affirmait le contraire), et `apps/web` observe DEPUIS #18601
+ * (`apps/web/src/lib/api/sync-seq.ts`, appelé sur `notification:new` avant la
+ * livraison) — il ne l'a pas fait des cycles 163 à 213, et ce paragraphe l'a
+ * dit pendant ce temps.
+ *
+ * ET OBSERVER N'EST PAS ANNONCER (#18575) : `GET /sync` ne calcule un trou que
+ * pour un client qui lui ENVOIE son curseur (`hasGap`). iOS et Android
+ * l'annoncent ; le web l'observe sans l'annoncer, donc il a la détection EN
+ * SESSION et pas celle de la RECONNEXION — ce que le cliquet mesure aussi.
  *
  * L'état se LIT donc au cliquet, jamais dans ce commentaire :
  * `packages/shared/__tests__/ci/socket-seq-lockstep-gate.test.ts` dérive des
