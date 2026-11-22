@@ -22,6 +22,11 @@
  */
 
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
+import {
+  resolveParticipantRights,
+  type ParticipantRightsOverride,
+  type ParticipantRightsSource,
+} from '@meeshy/shared/utils/participant-rights';
 
 /**
  * Le delta que l'hôte pose sur un participant. Tout champ est facultatif.
@@ -32,15 +37,7 @@ import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
  * `Partial<ParticipantPermissions>` ici ferait mentir la signature sur ce que
  * Prisma rend réellement.
  */
-export type ParticipantRightsOverride = {
-  readonly [K in keyof ParticipantPermissions]?: boolean | null;
-};
-
-/** Ce qu'il faut d'une ligne `Participant` pour répondre à la question. */
-export type ParticipantRightsSource = {
-  readonly permissions: ParticipantPermissions;
-  readonly anonymousSession?: { readonly rights?: ParticipantRightsOverride | null } | null;
-};
+export type { ParticipantRightsOverride, ParticipantRightsSource };
 
 /**
  * Les droits qu'un hôte peut piloter, énumérés.
@@ -388,23 +385,7 @@ export function disclosableEntryRights(
   return disclosable;
 }
 
-export function resolveParticipantRights(
-  participant: ParticipantRightsSource,
-): ParticipantPermissions {
-  const { permissions } = participant;
-  const rights = participant.anonymousSession?.rights;
-  if (!rights) return { ...permissions };
-
-  return {
-    canSendMessages: rights.canSendMessages ?? permissions.canSendMessages,
-    canSendFiles: rights.canSendFiles ?? permissions.canSendFiles,
-    canSendImages: rights.canSendImages ?? permissions.canSendImages,
-    canSendVideos: rights.canSendVideos ?? permissions.canSendVideos,
-    canSendAudios: rights.canSendAudios ?? permissions.canSendAudios,
-    canSendLocations: rights.canSendLocations ?? permissions.canSendLocations,
-    canSendLinks: rights.canSendLinks ?? permissions.canSendLinks,
-  };
-}
+export { resolveParticipantRights };
 
 /**
  * Le droit de PIÈCE JOINTE qui gouverne un type MIME donné (#5151).
