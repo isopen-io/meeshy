@@ -17,6 +17,7 @@ import {
   recordBloodLocation,
   updateBloodLocationSettings,
 } from '../../../../services/bloodLocation/bloodLocationService';
+import { BLOOD_BUNDLE_VERSION } from '@meeshy/shared/utils/blood-bundle';
 import { ADULT_BIRTH } from '../../../helpers/messaging-circle-world';
 import { settled } from '../../../helpers/settled';
 import {
@@ -439,5 +440,27 @@ describe('les réglages', () => {
 
   it('LIENS reste le cercle de référence du monde', () => {
     expect(LIENS.some(([, , level]) => level === 'BLOOD')).toBe(true);
+  });
+});
+
+describe('le fantôme global après l\'accord au palier (#20361) — une liste d\'AUTORISATION, jamais d\'exclusion', () => {
+  const ACCORD = { bloodBundleAcceptedAt: new Date(T0), bloodBundleVersion: BLOOD_BUNDLE_VERSION };
+
+  it('un lecteur absent des candidats au moment du point ne le voit jamais ; le Sang accepté le voit', async () => {
+    process.env.SECRETS_AT_REST_KEY = KEY;
+    const horsDrapeau = [AUTRE_SANG];
+    const w = bloodWorldAvecConsentements({ horsDrapeau });
+    w.consentir(MOI, SANG, { ...TOUT_PARTAGE, ...ACCORD });
+    await updateBloodLocationSettings(w.deps, MOI, { ghost: true });
+    await settled(recordBloodLocation(w.deps, MOI, PARIS));
+    horsDrapeau.length = 0;
+    // Le fantôme levé ensuite ne rouvre PAS les points rangés pendant : ils restent à leur liste.
+    await updateBloodLocationSettings(w.deps, MOI, { ghost: false });
+
+    const sang = await readBloodLocationHistory(w.deps, SANG, MOI, {});
+    const autre = await readBloodLocationHistory(w.deps, AUTRE_SANG, MOI, {});
+
+    expect(sang.kind === 'ok' ? sang.items.length : -1).toBe(1);
+    expect(autre.kind === 'ok' ? autre.items : []).toEqual([]);
   });
 });

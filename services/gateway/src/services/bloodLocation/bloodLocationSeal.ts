@@ -12,6 +12,12 @@ export type SealedPoint = {
   readonly longitude: number;
   readonly accuracy?: number;
   readonly hiddenFrom: readonly string[];
+  /**
+   * Rangé en fantôme GLOBAL (#20361) : la liste d'AUTORISATION — les seuls Sangs pour qui
+   * l'émetteur a donné l'accord au palier. Tout autre lecteur, présent ou futur, ne le voit jamais,
+   * même après la levée du fantôme. Absente : aucune restriction au-delà de `hiddenFrom`.
+   */
+  readonly visibleOnlyTo?: readonly string[];
   /** Arrivé à une vitesse impossible depuis le point précédent : rangé, jamais servi à la proximité. */
   readonly implausible?: true;
 };
@@ -22,6 +28,10 @@ export const sealPoint = (ownerId: string, point: SealedPoint): string => sealSe
 
 const isCoordinate = (value: unknown, bound: number): value is number => typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= bound;
 
+/** Le point peut-il être servi à `viewerId` ? Exclusion ciblée ET, en fantôme global, autorisation explicite. */
+export const pointVisibleTo = (point: SealedPoint, viewerId: string): boolean =>
+  !point.hiddenFrom.includes(viewerId) && (point.visibleOnlyTo === undefined || point.visibleOnlyTo.includes(viewerId));
+
 /** Le point, ou `null` (illisible, scellé pour un autre compte, forme inattendue). */
 export function openPoint(ownerId: string, sealed: string): SealedPoint | null {
   try {
@@ -30,11 +40,14 @@ export function openPoint(ownerId: string, sealed: string): SealedPoint | null {
     const row = value as Record<string, unknown>;
     if (!isCoordinate(row.latitude, 90) || !isCoordinate(row.longitude, 180)) return null;
     const hiddenFrom = Array.isArray(row.hiddenFrom) ? row.hiddenFrom.filter((id): id is string => typeof id === 'string') : [];
+    // Fail-closed : une liste d'autorisation présente mais illisible n'autorise personne.
+    const allowList = 'visibleOnlyTo' in row ? (Array.isArray(row.visibleOnlyTo) ? row.visibleOnlyTo.filter((id): id is string => typeof id === 'string') : []) : undefined;
     const accuracy = typeof row.accuracy === 'number' && Number.isFinite(row.accuracy) && row.accuracy >= 0 ? row.accuracy : undefined;
     return {
       latitude: row.latitude,
       longitude: row.longitude,
       hiddenFrom,
+      ...(allowList === undefined ? {} : { visibleOnlyTo: allowList }),
       ...(accuracy === undefined ? {} : { accuracy }),
       ...(row.implausible === true ? { implausible: true as const } : {}),
     };

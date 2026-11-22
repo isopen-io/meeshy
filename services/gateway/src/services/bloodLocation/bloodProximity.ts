@@ -34,10 +34,10 @@ import { RELATION_THRESHOLDS } from '@meeshy/shared/utils/relation-levels';
 import { comptesAuMoins } from '../friendship';
 import { pairAccessAmong } from '../relations/pairAccess';
 import { pairConsentResolver, relationPairConsentAmong, relationPairConsentBy } from '../relations/relationConsent';
-import { ownersHidingFrom } from './bloodLocationVeil';
 import { teamPeerCandidates } from '../relations/teamPeers';
 import { bloodLocationMutedBy, bloodLocationMutedFor } from './bloodLocationMute';
-import { openPoint } from './bloodLocationSeal';
+import { openPoint, pointVisibleTo } from './bloodLocationSeal';
+import { ownersHidingFrom, veilAllows, type PointVeil } from './bloodLocationVeil';
 import type { BloodLocationDeps } from './bloodLocationTypes';
 
 const CANDIDATE_LIMIT = 200;
@@ -90,8 +90,8 @@ async function claimed(deps: BloodLocationDeps, key: string, ttlSeconds: number)
 }
 
 /** Les candidats que `ownerId` n'a pas masqués, et qui ne l'ont pas masqué (fantôme global ou ciblé). */
-async function unhiddenCandidates(deps: BloodLocationDeps, ownerId: string, candidates: readonly string[], ghostedByOwner: ReadonlySet<string>): Promise<readonly string[]> {
-  const open = candidates.filter((id) => !ghostedByOwner.has(id));
+async function unhiddenCandidates(deps: BloodLocationDeps, ownerId: string, candidates: readonly string[], veil: PointVeil): Promise<readonly string[]> {
+  const open = candidates.filter((id) => veilAllows(veil, id));
   if (open.length === 0) return [];
   const hidden = await ownersHidingFrom(deps.prisma, ownerId, open);
   return open.filter((id) => !hidden.has(id));
@@ -131,7 +131,7 @@ async function freshPositionOf(deps: BloodLocationDeps, otherId: string, ownerId
     select: { sealed: true },
   });
   const point = row ? openPoint(otherId, row.sealed) : null;
-  return point && !point.implausible && !point.hiddenFrom.includes(ownerId) ? point : null;
+  return point && !point.implausible && pointVisibleTo(point, ownerId) ? point : null;
 }
 
 /** Cherche les Sangs proches du nouveau point de `ownerId` et leur envoie l'alerte, une par paire toutes les 2 h. */
@@ -139,14 +139,14 @@ export async function alertBloodProximity(
   deps: BloodLocationDeps,
   ownerId: string,
   position: { readonly latitude: number; readonly longitude: number },
-  ghostedByOwner: ReadonlySet<string>,
+  veil: PointVeil,
 ): Promise<void> {
   const [linked, team] = await Promise.all([
     comptesAuMoins(deps.prisma, ownerId, 'BLOOD', { limit: CANDIDATE_LIMIT }),
     teamPeerCandidates(deps.prisma, ownerId),
   ]);
   const candidates = [...new Set([...linked.map((account) => account.id), ...team])].filter((id) => id !== ownerId && deps.enabledFor(id));
-  const visible = await unhiddenCandidates(deps, ownerId, candidates, ghostedByOwner);
+  const visible = await unhiddenCandidates(deps, ownerId, candidates, veil);
   if (visible.length === 0) return;
   const mutual = await mutuallyAllowed(deps, ownerId, visible);
   if (mutual.length === 0) return;

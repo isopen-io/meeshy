@@ -29,7 +29,7 @@ import { pairConsentResolver, relationPairConsentBy } from '../relations/relatio
 import { teamPeerCandidates } from '../relations/teamPeers';
 import { bloodLocationMutedBy } from './bloodLocationMute';
 import { ownersHidingFrom } from './bloodLocationVeil';
-import { openPoint } from './bloodLocationSeal';
+import { openPoint, pointVisibleTo } from './bloodLocationSeal';
 import { noteConsultation } from './bloodLocationService';
 import type { BloodLocationDeps } from './bloodLocationTypes';
 
@@ -88,7 +88,7 @@ const ghostedFor = (deps: BloodLocationDeps, viewerId: string, ownerIds: readonl
 function firstVisible(ownerId: string, viewerId: string, rows: readonly { readonly sealed: string; readonly recordedAt: Date }[]) {
   for (const row of rows) {
     const point = openPoint(ownerId, row.sealed);
-    if (point && !point.hiddenFrom.includes(viewerId)) return { point, recordedAt: row.recordedAt };
+    if (point && pointVisibleTo(point, viewerId)) return { point, recordedAt: row.recordedAt };
   }
   return null;
 }

@@ -34,23 +34,28 @@ export async function ownersHidingFrom(prisma: VeilDb, viewerId: string, ownerId
 }
 
 /**
- * Les lecteurs à qui `ownerId` masque le point qu'il enregistre : ses fantômes ciblés et, en
- * fantôme global, chacun de ses `candidates` — sauf ceux pour qui il a donné l'accord au palier.
- * `everyone` : en fantôme global, aucun candidat n'est épargné (rien ne doit être rangé).
+ * Le voile du point que `ownerId` enregistre : ses fantômes ciblés (`hidden`) et, en fantôme
+ * GLOBAL, une liste d'AUTORISATION (`onlyTo`) — les seuls Sangs pour qui il a donné l'accord au
+ * palier. Jamais une liste d'exclusion tirée d'un instantané des lecteurs : un lecteur absent de
+ * l'instantané (tronqué, hors drapeau, devenu Sang après coup) serait servi (fail-open).
+ * `everyone` : en fantôme global, personne n'est autorisé (rien ne doit être rangé).
  */
-export async function readersHiddenBy(
-  prisma: VeilDb,
-  ownerId: string,
-  candidates: () => Promise<readonly string[]>,
-): Promise<{ readonly hidden: ReadonlySet<string>; readonly everyone: boolean }> {
+export type PointVeil = {
+  readonly hidden: ReadonlySet<string>;
+  readonly onlyTo: ReadonlySet<string> | null;
+  readonly everyone: boolean;
+};
+
+export const veilAllows = (veil: PointVeil, readerId: string): boolean =>
+  !veil.hidden.has(readerId) && (veil.onlyTo === null || veil.onlyTo.has(readerId));
+
+export async function pointVeilOf(prisma: VeilDb, ownerId: string): Promise<PointVeil> {
   const [global, rows] = await Promise.all([
     inGlobalGhost(prisma, ownerId),
     prisma.relationFeatureSetting.findMany({ where: { ownerId, OR: [{ ghostAt: { not: null } }, { bloodBundleAcceptedAt: { not: null } }] }, select: { otherId: true, ghostAt: true, ...BUNDLE_SELECT } }),
   ]);
   const accepted = new Set(rows.filter(bloodBundleAcceptedOf).map((row) => row.otherId));
   const targeted = rows.filter((row) => row.ghostAt != null && !accepted.has(row.otherId)).map((row) => row.otherId);
-  if (!global) return { hidden: new Set(targeted), everyone: false };
-  const all = await candidates();
-  const veiled = all.filter((id) => !accepted.has(id));
-  return { hidden: new Set([...targeted, ...veiled]), everyone: veiled.length === all.length };
+  if (!global) return { hidden: new Set(targeted), onlyTo: null, everyone: false };
+  return { hidden: new Set(targeted), onlyTo: accepted, everyone: accepted.size === 0 };
 }

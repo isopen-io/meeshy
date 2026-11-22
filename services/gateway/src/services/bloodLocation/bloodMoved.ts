@@ -24,6 +24,7 @@ import { pairConsentResolver, relationPairConsentAmong } from '../relations/rela
 import { teamPeerCandidates } from '../relations/teamPeers';
 import { bloodLocationMutedFor } from './bloodLocationMute';
 import type { BloodLocationDeps } from './bloodLocationTypes';
+import { veilAllows, type PointVeil } from './bloodLocationVeil';
 
 const READER_LIMIT = 200;
 
@@ -38,8 +39,8 @@ export async function bloodReaderCandidates(deps: BloodLocationDeps, ownerId: st
   return [...new Set([...linked.map((account) => account.id), ...team])].filter((id) => id !== ownerId && deps.enabledFor(id));
 }
 
-async function candidatesOf(deps: BloodLocationDeps, ownerId: string, hidden: ReadonlySet<string>): Promise<readonly string[]> {
-  return (await bloodReaderCandidates(deps, ownerId)).filter((id) => !hidden.has(id));
+async function candidatesOf(deps: BloodLocationDeps, ownerId: string, veil: PointVeil): Promise<readonly string[]> {
+  return (await bloodReaderCandidates(deps, ownerId)).filter((id) => veilAllows(veil, id));
 }
 
 /** Les candidats qui pourraient lire l'historique de `ownerId` maintenant : loi et consentement relu. */
@@ -66,9 +67,9 @@ async function claimed(deps: BloodLocationDeps, key: string): Promise<boolean> {
   }
 }
 
-export async function signalBloodMoved(deps: BloodLocationDeps, ownerId: string, recordedAt: Date, hidden: ReadonlySet<string>): Promise<void> {
+export async function signalBloodMoved(deps: BloodLocationDeps, ownerId: string, recordedAt: Date, veil: PointVeil): Promise<void> {
   if (!deps.io || !deps.enabledFor(ownerId)) return;
-  const candidates = await candidatesOf(deps, ownerId, hidden);
+  const candidates = await candidatesOf(deps, ownerId, veil);
   if (candidates.length === 0) return;
   const readers = await readersOf(deps, ownerId, candidates);
   if (readers.length === 0) return;

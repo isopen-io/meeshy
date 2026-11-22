@@ -16,8 +16,17 @@ import { bloodBundleAcceptedOf } from './relationConsent';
 
 export type BloodLockDb = Parameters<typeof niveauEffectif>[0] & Parameters<typeof isBlockedBetween>[0] & Pick<PrismaClient, 'relationFeatureSetting'>;
 
-export async function bloodLockedBetween(prisma: BloodLockDb, ownerId: string, otherId: string): Promise<boolean> {
-  if (!ownerId || !otherId || ownerId === otherId) return false;
+export type BloodLockState = {
+  /** Le niveau effectif RÉEL de la paire (jamais celui d'un accord d'équipe). */
+  readonly level: Awaited<ReturnType<typeof niveauEffectif>>;
+  /** J'ai accepté la liste du Sang, à sa version courante, pour cette personne. */
+  readonly bloodBundleAccepted: boolean;
+  /** Le verrou tient : accord + Sang réel + aucun blocage. */
+  readonly locked: boolean;
+};
+
+export async function bloodLockStateBetween(prisma: BloodLockDb, ownerId: string, otherId: string): Promise<BloodLockState> {
+  if (!ownerId || !otherId || ownerId === otherId) return { level: 'PUBLIC', bloodBundleAccepted: false, locked: false };
   const [row, level, blocked] = await Promise.all([
     prisma.relationFeatureSetting.findUnique({
       where: { ownerId_otherId: { ownerId, otherId } },
@@ -26,5 +35,9 @@ export async function bloodLockedBetween(prisma: BloodLockDb, ownerId: string, o
     niveauEffectif(prisma, ownerId, otherId),
     isBlockedBetween(prisma, ownerId, otherId),
   ]);
-  return bloodBundleAcceptedOf(row) && level === 'BLOOD' && !blocked;
+  const bloodBundleAccepted = bloodBundleAcceptedOf(row);
+  return { level, bloodBundleAccepted, locked: bloodBundleAccepted && level === 'BLOOD' && !blocked };
 }
+
+export const bloodLockedBetween = async (prisma: BloodLockDb, ownerId: string, otherId: string): Promise<boolean> =>
+  (await bloodLockStateBetween(prisma, ownerId, otherId)).locked;

@@ -34,9 +34,9 @@ import { pairAccessAmong } from '../relations/pairAccess';
 import { writeLocationGhost } from '../sharedLocation/locationGhost';
 import { pairConsentResolver, relationPairConsentBy } from '../relations/relationConsent';
 import { alertBloodProximity, isPlausibleMove } from './bloodProximity';
-import { bloodReaderCandidates, signalBloodMoved } from './bloodMoved';
-import { ownersHidingFrom, readersHiddenBy } from './bloodLocationVeil';
-import { openPoint, sealPoint } from './bloodLocationSeal';
+import { signalBloodMoved } from './bloodMoved';
+import { ownersHidingFrom, pointVeilOf } from './bloodLocationVeil';
+import { openPoint, pointVisibleTo, sealPoint } from './bloodLocationSeal';
 import type { BloodLocationDeps } from './bloodLocationTypes';
 
 export type { BloodLocationDeps } from './bloodLocationTypes';
@@ -64,24 +64,23 @@ async function anchorOf(deps: BloodLocationDeps, ownerId: string): Promise<{ lat
 export async function recordBloodLocation(deps: BloodLocationDeps, ownerId: string, input: unknown): Promise<{ readonly recorded: boolean }> {
   const parsed = bloodLocationPayloadSchema.safeParse(input);
   if (!parsed.success) return { recorded: false };
-  const [veil, anchor] = await Promise.all([readersHiddenBy(deps.prisma, ownerId, () => bloodReaderCandidates(deps, ownerId)), anchorOf(deps, ownerId)]);
+  const [veil, anchor] = await Promise.all([pointVeilOf(deps.prisma, ownerId), anchorOf(deps, ownerId)]);
   if (veil.everyone) return { recorded: false };
-  const { hidden } = veil;
   const now = deps.now();
   const plausible = isPlausibleMove(anchor, parsed.data, now);
   const recordedAt = new Date(now);
   await deps.prisma.bloodLocationPoint.create({
     data: {
       ownerId,
-      sealed: sealPoint(ownerId, { ...parsed.data, hiddenFrom: [...hidden], ...(plausible ? {} : { implausible: true as const }) }),
+      sealed: sealPoint(ownerId, { ...parsed.data, hiddenFrom: [...veil.hidden], ...(veil.onlyTo === null ? {} : { visibleOnlyTo: [...veil.onlyTo] }), ...(plausible ? {} : { implausible: true as const }) }),
       recordedAt,
       expiresAt: new Date(now + HISTORY_MS),
     },
   });
   // Le signal et l'alerte relisent liens, consentements et coupures puis réservent par lecteur : ils
   // partent APRÈS la réponse, jamais sur le chemin du point (chaque point paierait leur coût).
-  if (plausible) void signalBloodMoved(deps, ownerId, recordedAt, hidden).catch((error: unknown) => deps.report?.(error));
-  if (plausible && anchor) void alertBloodProximity(deps, ownerId, parsed.data, hidden).catch((error: unknown) => deps.report?.(error));
+  if (plausible) void signalBloodMoved(deps, ownerId, recordedAt, veil).catch((error: unknown) => deps.report?.(error));
+  if (plausible && anchor) void alertBloodProximity(deps, ownerId, parsed.data, veil).catch((error: unknown) => deps.report?.(error));
   return { recorded: true };
 }
 
@@ -108,7 +107,7 @@ async function pointsOf(deps: BloodLocationDeps, ownerId: string, viewerId: stri
   });
   return rows.flatMap((row) => {
     const point = openPoint(ownerId, row.sealed);
-    if (!point || point.hiddenFrom.includes(viewerId)) return [];
+    if (!point || !pointVisibleTo(point, viewerId)) return [];
     return [{ latitude: point.latitude, longitude: point.longitude, ...(point.accuracy === undefined ? {} : { accuracy: point.accuracy }), recordedAt: row.recordedAt.toISOString() }];
   });
 }

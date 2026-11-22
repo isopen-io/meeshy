@@ -43,10 +43,13 @@ jest.mock('../../../../services/PushNotificationService', () => ({
 }));
 
 import { relationsRoutes } from '../../../../routes/relations';
+import { RELATION_BLOOD_LOCKED_CODE } from '@meeshy/shared/types/relation-person-settings';
+import { BLOOD_BUNDLE_VERSION } from '@meeshy/shared/utils/blood-bundle';
 import { freezeClock, thawClock } from '../../../helpers/relation-app';
 import { AUTRE, MOI, NOW, buildBringApp, lien, type BringAppOptions, type BringTestApp } from '../../../helpers/bring-app';
 
-const AUCUN_PARTAGE = { bloodLocationMuted: false, listeningCategoryShared: false, listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false };
+// #20361 : la catégorie d'écoute arrive ACTIVE dès Proche ; les partages du rituel attendent l'accord au palier.
+const AUCUN_PARTAGE = { bloodLocationMuted: false, listeningCategoryShared: true, lockedByLevel: false, bloodBundleAccepted: false, listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false };
 
 const appli = (options: BringAppOptions = { liens: [lien('CLOSE', 'CLOSE')] }): Promise<BringTestApp> =>
   buildBringApp(async (a) => { await a.register(relationsRoutes, { prefix: '/api/v1/relations' }); }, options);
@@ -150,14 +153,18 @@ describe('#17023 — togetherBlocked : couper les invitations « ensemble » d\'
 });
 
 describe('#13934 — la catégorie de mon écoute s\'accorde et se retire, personne par personne', () => {
-  it('refusée par défaut, accordée à un Proche, et relue', async () => {
+  it('active dès Proche sans réglage (#20361), retirée sans ligne préalable, puis rendue et relue', async () => {
     const app = await appli();
     const avant = await lire(app);
+    const retire = await regler(app, { listeningCategoryShared: false });
+    const ecrit = app.reglages.get(`${AUTRE}:${MOI}`);
     const pose = await regler(app, { listeningCategoryShared: true });
     const relu = await lire(app);
     await app.close();
 
-    expect(avant.body.data.listeningCategoryShared).toBe(false);
+    expect(avant.body.data.listeningCategoryShared).toBe(true);
+    expect(retire.body.data.listeningCategoryShared).toBe(false);
+    expect(ecrit).toMatchObject({ listeningCategoryShared: false });
     expect(pose.body.data.listeningCategoryShared).toBe(true);
     expect(relu.body.data.listeningCategoryShared).toBe(true);
     expect(app.reglages.get(`${AUTRE}:${MOI}`)).toMatchObject({ listeningCategoryShared: true });
@@ -239,5 +246,48 @@ describe('#19454 — bloodLocationMuted : ne plus recevoir la position continue 
 
     expect(res.status).toBe(400);
     expect(app.reglages.size).toBe(0);
+  });
+});
+
+describe('#20361 — de Sang à Sang, rien ne se coupe après l\'accord au palier', () => {
+  const ACCORD = { ownerId: AUTRE, otherId: MOI, bringBlockedAt: null, bloodBundleAcceptedAt: NOW, bloodBundleVersion: BLOOD_BUNDLE_VERSION };
+
+  it('toute coupure répond 409 RELATION_BLOOD_LOCKED et rien ne s\'écrit', async () => {
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')], reglages: [ACCORD] });
+    const corps = [{ bringBlocked: true }, { talkieBlocked: true }, { togetherBlocked: true }, { bloodLocationMuted: true }, { listeningCategoryShared: false }, { locationShared: false }];
+    const reponses = [];
+    for (const body of corps) reponses.push(await regler(app, body));
+    await app.close();
+
+    expect(reponses.map((r) => [r.status, r.body.code])).toEqual(corps.map(() => [409, RELATION_BLOOD_LOCKED_CODE]));
+    expect(app.reglages.get(`${AUTRE}:${MOI}`)).toEqual(ACCORD);
+  });
+
+  it('le GET dit que tout est ouvert et que les interrupteurs n\'existent plus', async () => {
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')], reglages: [{ ...ACCORD, bringBlockedAt: new Date('2026-11-01T00:00:00.000Z'), locationShared: false }] });
+    const res = await lire(app);
+    await app.close();
+
+    expect(res.body.data).toEqual({ userId: MOI, bringBlocked: false, talkieBlocked: false, togetherBlocked: false, bloodLocationMuted: false, listeningCategoryShared: true, listeningTitleShared: true, locationShared: true, locationHistoryShared: true, proximityShared: true, lockedByLevel: true, bloodBundleAccepted: true });
+  });
+
+  it('sans l\'accord au palier (décision B), ou à une version périmée, la coupure reste possible', async () => {
+    const sansAccord = await appli({ liens: [lien('BLOOD', 'BLOOD')] });
+    const avant = await regler(sansAccord, { bringBlocked: true });
+    await sansAccord.close();
+    const perime = await appli({ liens: [lien('BLOOD', 'BLOOD')], reglages: [{ ...ACCORD, bloodBundleVersion: '2020-01-01' }] });
+    const vieux = await regler(perime, { talkieBlocked: true });
+    await perime.close();
+
+    expect(avant.status).toBe(200);
+    expect(vieux.status).toBe(200);
+  });
+
+  it('rouvrir n\'est jamais refusé', async () => {
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')], reglages: [ACCORD] });
+    const res = await regler(app, { bringBlocked: false });
+    await app.close();
+
+    expect(res.status).toBe(200);
   });
 });
