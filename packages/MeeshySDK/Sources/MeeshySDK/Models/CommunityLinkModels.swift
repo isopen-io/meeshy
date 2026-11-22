@@ -25,14 +25,28 @@ public struct CommunityLink: Codable, Identifiable, Sendable, CacheIdentifiable 
         self.id = id
         self.name = name
         self.identifier = identifier
-        // `/chat/<identifier>` — l'URL canonique de partage (même règle que
-        // `MyShareLink.joinUrl` ; `/join` n'est plus qu'une 308 legacy).
-        self.joinUrl = "\(baseUrl)/chat/\(identifier)"
+        self.joinUrl = Self.canonicalJoinUrl(baseUrl: baseUrl, identifier: identifier)
         self.memberCount = memberCount
         self.isActive = isActive
         self.createdAt = createdAt
         self.memberPreviews = memberPreviews
         self.joinLinkPaused = joinLinkPaused
+    }
+}
+
+extension CommunityLink {
+    /// Ce que `encodeURIComponent` laisse en clair : la même adresse s'écrit à l'identique sur le web et sur Android.
+    private static let componentAllowed = CharacterSet(
+        charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.!~*'()")
+
+    /// L'adresse PARTAGÉE d'une communauté (#20330) : sa page, marquée `?via=link` pour que l'entrée par elle se
+    /// compte et se refuse quand le lien est en pause (#19661). `/chat/<identifiant>` ne résout qu'un lien de
+    /// CONVERSATION (`DeepLinkParser` → `.chatLink`, `GET /anonymous/link/:identifier`) : il n'ouvrait jamais la
+    /// communauté. Même adresse que `communityLinkUrl` (web) et `CommunityLink.canonicalJoinUrl` (Android).
+    public static func canonicalJoinUrl(baseUrl: String, identifier: String) -> String {
+        let origin = baseUrl.hasSuffix("/") ? String(baseUrl.dropLast()) : baseUrl
+        let segment = identifier.addingPercentEncoding(withAllowedCharacters: componentAllowed) ?? identifier
+        return "\(origin)/communities/\(segment)?via=link"
     }
 }
 

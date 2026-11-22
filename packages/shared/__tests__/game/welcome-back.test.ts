@@ -3,6 +3,7 @@ import {
   WELCOME_BACK_ABSENCE_DAYS,
   WELCOME_BACK_EASED_DAYS,
   WELCOME_BACK_PERIOD_DAYS,
+  announcesKeptOffering,
   easedProfile,
   isEasedDreamDay,
   isKeptOfferingDay,
@@ -97,5 +98,21 @@ describe('isKeptOfferingDay — au jour du retour, les aïeux ont gardé l’Off
   it('aucun retour ou une clé illisible : aucune Offrande gardée', () => {
     expect(isKeptOfferingDay({ welcomeDay: null, today: '2026-11-17' })).toBe(false);
     expect(isKeptOfferingDay({ welcomeDay: 'jadis', today: 'jadis' })).toBe(false);
+  });
+});
+
+describe('announcesKeptOffering — dire au joueur qui revient que son Offrande l\'attend (#20327)', () => {
+  it('le jour du retour, tant que l\'Offrande gardée est prête', () => {
+    expect(announcesKeptOffering({ chest: { status: 'ready', kept: true } })).toBe(true);
+  });
+
+  it('plus rien une fois l\'Offrande ouverte, ni tant que le Rêve n\'est pas tiré', () => {
+    expect(announcesKeptOffering({ chest: { status: 'claimed', kept: true } })).toBe(false);
+    expect(announcesKeptOffering({ chest: { status: 'locked', kept: true } })).toBe(false);
+  });
+
+  it('un autre jour, ou un serveur antérieur qui ne sert pas le champ : rien', () => {
+    expect(announcesKeptOffering({ chest: { status: 'ready', kept: false } })).toBe(false);
+    expect(announcesKeptOffering({ chest: { status: 'ready' } })).toBe(false);
   });
 });

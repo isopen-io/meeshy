@@ -282,7 +282,7 @@ describe('les liens communauté', () => {
   });
 
   test('l’adresse est celle que les deux clients ouvrent : `/communities/<identifiant>`', () => {
-    expect(communityLinkUrl('https://meeshy.me', 'mshy_meeshy-paris')).toBe('https://meeshy.me/communities/mshy_meeshy-paris');
+    expect(communityLinkUrl('https://meeshy.me', 'mshy_meeshy-paris')).toBe('https://meeshy.me/communities/mshy_meeshy-paris?via=link');
   });
 
   test('le total des membres ne se dit que si chaque ligne le porte', () => {

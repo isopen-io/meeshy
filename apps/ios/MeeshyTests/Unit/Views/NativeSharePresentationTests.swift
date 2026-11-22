@@ -65,7 +65,7 @@ final class NativeSharePresentationTests: XCTestCase {
         let source = try source(Self.conversationInfoSheet)
 
         XCTAssertTrue(
-            source.contains("@State private var shareableLink: ShareableLink?"),
+            source.contains("@State var shareableLink: ShareableLink?"),
             "ConversationInfoSheet must hold the minted join link in a ShareableLink state so the " +
             "system share sheet is presented declaratively."
         )

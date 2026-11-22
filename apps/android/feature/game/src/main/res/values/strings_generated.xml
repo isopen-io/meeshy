@@ -103,6 +103,10 @@
     <string name="game2_guide_moment_atlas_stamp_next">%1$s of %2$s languages in your passport.</string>
     <string name="game2_guide_moment_atlas_stamp_short">Stamp: %1$s.</string>
     <string name="game2_guide_moment_atlas_stamp_what">New stamp: %1$s!</string>
+    <string name="game2_guide_moment_flame_freeze_gift_means">Your ancestors entrust it to you: it keeps your Flame lit on a day you miss.</string>
+    <string name="game2_guide_moment_flame_freeze_gift_next">Vigils in reserve: %1$s.</string>
+    <string name="game2_guide_moment_flame_freeze_gift_short">A Vigil for your Flame, as a gift.</string>
+    <string name="game2_guide_moment_flame_freeze_gift_what">A Vigil is yours, as a gift.</string>
     <string name="game2_guide_moment_league_first_means">Each week, you measure yourself against 29 other heroes. The top 7 climb to the next circle, the bottom 5 go back down, and the sparks start again from zero.</string>
     <string name="game2_guide_moment_league_first_next">%1$s to the next circle this week.</string>
     <string name="game2_guide_moment_league_first_next_top">You are already in the highest circle of the jousts.</string>

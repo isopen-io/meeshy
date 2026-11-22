@@ -84,7 +84,7 @@ export function decodeOwnSharedLocation(raw: unknown): SharedLocationOwnSnapshot
   const wire = objectOf(raw);
   if (wire === null || !Array.isArray(wire.recipients)) return null;
   const recipients = wire.recipients.flatMap((row) => decodeOwnRecipient(row) ?? []);
-  const own = { recipients, expiresAt: instantOf(wire.expiresAt), ...sourceOf(wire.source) };
+  const own = { recipients, expiresAt: instantOf(wire.expiresAt), ...sourceOf(wire.source), ...(wire.acceptsExpectedStart === true ? { acceptsExpectedStart: true } : {}) };
   return typeof wire.startedAt === 'string' ? { ...own, startedAt: wire.startedAt } : own;
 }
 

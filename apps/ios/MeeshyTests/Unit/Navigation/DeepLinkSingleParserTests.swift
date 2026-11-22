@@ -21,7 +21,8 @@ final class DeepLinkSingleParserTests: XCTestCase {
         "https://meeshy.me/post/p3", "https://meeshy.me/p/p4",
         "https://meeshy.me/story/s1", "https://meeshy.me/stories/s2", "https://meeshy.me/s/s3",
         "https://meeshy.me/reel/r1", "https://meeshy.me/reels?seed=r2", "https://meeshy.me/mood/m1",
-        "https://meeshy.me/communities/cm1", "https://meeshy.me/hashtag/voyage",
+        "https://meeshy.me/communities/cm1", "https://meeshy.me/communities/mshy_club?via=link",
+        "https://meeshy.me/hashtag/voyage",
         "https://www.meeshy.me/story/s4", "https://app.meeshy.me/c/conv3",
         "meeshy://me", "meeshy://links", "meeshy://u/carol", "meeshy://users/dan",
         "meeshy://c/conv4", "meeshy://conversation/conv5", "meeshy://contact/conv6",
@@ -58,6 +59,13 @@ final class DeepLinkSingleParserTests: XCTestCase {
             XCTAssertEqual(DeepLinkParser.parse(url), .external(url), "\(raw) ne nomme rien")
             XCTAssertFalse(makeRouter().handle(url: url), "\(raw) ne doit pas être revendiqué")
         }
+    }
+
+    /// L'adresse PARTAGÉE d'une communauté (#20330) ouvre la communauté, jamais un lien de conversation.
+    func test_adressePartageeDUneCommunaute_ouvreLaCommunaute() {
+        let url = URL(string: CommunityLink.canonicalJoinUrl(baseUrl: "https://meeshy.me", identifier: "mshy_club"))!
+        XCTAssertEqual(DeepLinkParser.parse(url), .community(id: "mshy_club"))
+        XCTAssertEqual(DeepLinkRouter.entry(forLaunchURL: url), .sharedLink)
     }
 
     /// Le partage in-app (`/share`) n'est pas une destination de lancement :

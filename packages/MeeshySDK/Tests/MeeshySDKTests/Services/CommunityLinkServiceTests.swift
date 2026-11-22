@@ -80,7 +80,20 @@ final class CommunityLinkServiceTests: XCTestCase {
         XCTAssertEqual(result[0].name, "Mapped")
         XCTAssertEqual(result[0].memberCount, 10)
         XCTAssertFalse(result[0].isActive)
-        XCTAssertTrue(result[0].joinUrl.contains("mapped-id"))
+        XCTAssertTrue(result[0].joinUrl.hasSuffix("/communities/mapped-id?via=link"))
+    }
+
+    func test_canonicalJoinUrl_isTheCommunityPageMarkedAsALinkArrival() {
+        XCTAssertEqual(CommunityLink.canonicalJoinUrl(baseUrl: "https://meeshy.me", identifier: "mshy_club"),
+                       "https://meeshy.me/communities/mshy_club?via=link")
+        XCTAssertEqual(CommunityLink.canonicalJoinUrl(baseUrl: "https://meeshy.me/", identifier: "café club"),
+                       "https://meeshy.me/communities/caf%C3%A9%20club?via=link")
+    }
+
+    func test_canonicalJoinUrl_neverPointsAtAConversationLink() {
+        let link = CommunityLink(id: "c1", name: "Club", identifier: "mshy_club", baseUrl: "https://meeshy.me",
+                                 memberCount: 1, isActive: true, createdAt: Date(timeIntervalSince1970: 0))
+        XCTAssertFalse(link.joinUrl.contains("/chat/"))
     }
 
     func test_listCommunityLinks_nilMemberCountDefaultsToZero() async throws {

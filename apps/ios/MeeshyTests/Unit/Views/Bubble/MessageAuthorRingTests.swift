@@ -67,7 +67,7 @@ final class MessageAuthorRingTests: XCTestCase {
         .deletingLastPathComponent().deletingLastPathComponent()
 
     private func source(_ path: String) throws -> String {
-        AppSourceGuard.stripComments(try String(contentsOf: Self.appRoot.appendingPathComponent(path), encoding: .utf8))
+        AppSourceGuard.stripComments(try AppSourceGuard.text(at: Self.appRoot.appendingPathComponent(path)))
     }
 
     /// #10946 — l'avatar résout lui-même la RÉFÉRENCE servie (`ring:`) : le pied de la bulle

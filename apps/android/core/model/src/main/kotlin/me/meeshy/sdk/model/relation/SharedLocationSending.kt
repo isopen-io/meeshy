@@ -101,7 +101,18 @@ public class SharedLocationStartRequest private constructor(
      * remplacer, et jamais sans position.
      */
     public val replacesChosenPoint: Boolean = false,
+    /**
+     * Le `startedAt` du partage que ce remplacement REMPLACE, tel que servi (#20249, iso `expectedStartedAt` du web) : si
+     * un autre démarrage a eu lieu depuis, ou un arrêt, la passerelle refuse (`STARTED_ELSEWHERE`) sans rien appliquer.
+     * Ne part qu'avec [replacesChosenPoint] et une position ; le centre ne le nomme que sur `acceptsExpectedStart`.
+     */
+    expectedStartedAt: String? = null,
 ) {
+    public val expectedStartedAt: String? = expectedStartedAt?.takeIf { fix != null && replacesChosenPoint }
+
+    /** La charge nomme le partage qu'elle remplace : un refus `INVALID` met alors la clé en cause, pas la liste. */
+    public val carriesExpectedStart: Boolean get() = expectedStartedAt != null
+
     /** Une liste seule ne porte aucune position. */
     public val isListOnly: Boolean get() = fix == null
 
@@ -113,13 +124,14 @@ public class SharedLocationStartRequest private constructor(
      * alors chacun à son échéance, comme avant.
      */
     public fun withoutDeadlines(): SharedLocationStartRequest =
-        SharedLocationStartRequest(recipients.map { it.copy(expiresInSeconds = null) }, duration, fix, replacesChosenPoint)
+        SharedLocationStartRequest(recipients.map { it.copy(expiresInSeconds = null) }, duration, fix, replacesChosenPoint, expectedStartedAt)
 
     public fun wire(): Map<String, Any> = buildMap {
         put("recipients", recipients.map { it.wire() })
         put("durationMinutes", duration.minutes)
         fix?.let { put("position", it.wire()) }
         if (fix != null && replacesChosenPoint) put("source", "device")
+        expectedStartedAt?.let { put("expectedStartedAt", it) }
     }
 
     public companion object {
@@ -137,7 +149,9 @@ public class SharedLocationStartRequest private constructor(
             duration: SharedLocationShareDuration,
             fix: SharedLocationFix,
             replacesChosenPoint: Boolean = false,
-        ): SharedLocationStartRequest? = ordered(recipients)?.let { SharedLocationStartRequest(it, duration, fix, replacesChosenPoint) }
+            expectedStartedAt: String? = null,
+        ): SharedLocationStartRequest? =
+            ordered(recipients)?.let { SharedLocationStartRequest(it, duration, fix, replacesChosenPoint, expectedStartedAt) }
 
         /** La liste seule (#19287) : un retrait ou une échéance, sans position. `null` : comme [of]. */
         public fun listOnly(
@@ -152,6 +166,17 @@ public class SharedLocationStartRequest private constructor(
             return ordered.takeUnless { it.isEmpty() || it.size > MAX_RECIPIENTS }
         }
     }
+}
+
+/**
+ * L'instant tel que la passerelle l'écrit et le relit (`toISOString`, `z.string().datetime()`, #20249) : un `startedAt`
+ * servi sous une autre forme ne se nomme pas, il serait refusé en boucle.
+ */
+public object SharedLocationWireInstant {
+    private val shape = Regex("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$")
+
+    public fun isWire(value: String?): Boolean =
+        value != null && shape.matches(value) && runCatching { Instant.parse(value) }.isSuccess
 }
 
 /** Ce que l'interface dit d'un envoi qui n'a pas abouti. */
@@ -172,6 +197,12 @@ public enum class SharedLocationSendOutcome {
 
     /** Le partage montre un point choisi à la main ailleurs (#20212) : rien n'a été écrit, la position réelle ne l'a pas remplacé. */
     FIXED_POINT,
+
+    /**
+     * Le partage que la réponse nommait (`expectedStartedAt`) n'est plus celui servi : un autre appareil a démarré, ou le
+     * partage s'est arrêté (#20249). Rien n'a été écrit.
+     */
+    STARTED_ELSEWHERE,
     FAILED;
 
     public companion object {
@@ -181,6 +212,7 @@ public enum class SharedLocationSendOutcome {
             "SHARED_LOCATION_RATE_LIMITED" to RATE_LIMITED,
             "SHARED_LOCATION_UNAVAILABLE" to UNAVAILABLE,
             "SHARED_LOCATION_FIXED_POINT" to FIXED_POINT,
+            "SHARED_LOCATION_STARTED_ELSEWHERE" to STARTED_ELSEWHERE,
             "NO_SOCKET" to OFFLINE,
         )
 

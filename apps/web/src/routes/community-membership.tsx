@@ -30,12 +30,13 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * servi par la passerelle) : un ÉTAT encore, jusqu'à cette date.
  */
 
-export type MembershipFailure = 'join' | 'refused' | 'cooldown' | 'leave' | 'offline';
+export type MembershipFailure = 'join' | 'refused' | 'cooldown' | 'linkPaused' | 'leave' | 'offline';
 
 const FAILURE_KEY = {
   join: 'community.membership.error',
   refused: 'community.membership.error.refused',
   cooldown: 'community.membership.error.cooldown',
+  linkPaused: 'community.membership.error.linkPaused',
   leave: 'community.membership.error',
   offline: 'community.membership.offline',
 } as const satisfies Readonly<Record<MembershipFailure, CommunityMembershipCatalogKey>>;

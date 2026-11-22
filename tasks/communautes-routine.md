@@ -879,3 +879,16 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Témoins : `sdk-core/.../link/CommunityLinkJoinLinkPauseTest.kt` (5), `feature/conversations/.../links/CommunityLinkDetailJoinLinkPauseTest.kt` (10). Android ne compile pas en conteneur : preuve par `android.yml` sur la PR.
 - Revue adversariale : non lancée — lot client seul, aucune garde ni route touchée.
 - Reste de #20255 : le message de l'arrivant (`COMMUNITY_LINK_PAUSED`), joignable seulement quand un client enverra `via: "link"`.
+
+- 2026-11-22 06:52 : #20318 fusionnée dans `dev` (`483222222`) après `android.yml` 44990623971 et `ci.yml` 44990625482 verts sur `f33235729` ; preuve commentée sur #20255.
+
+## 2026-11-22 — réveil 07:38 UTC (bis)
+
+- Début du run : aucune PR de la routine ouverte ; aucune branche vivante sur `CommunityLinkModels.swift`, `CommunityLink.kt` ni `routes/community.tsx`.
+- Lot : #20330 — le lien partagé d'une communauté ouvre la communauté sur les trois plateformes (`/communities/<identifiant>?via=link`, au lieu de `/chat/<identifiant>` qui ne résout qu'un lien de conversation), et le web compte l'entrée par le lien et dit la pause.
+- Défaut trouvé : iOS (`CommunityLink.joinUrl`) et Android (`CommunityLink.canonicalJoinUrl`, `toCommunityLink`) partageaient `/chat/<identifiant>`, qui ne résout qu'un lien de CONVERSATION (`GET /anonymous/link/:identifier`, `ConversationShareLink` seul) : le lien d'une communauté partagé depuis un téléphone ouvrait « lien introuvable ». Le web partageait `/communities/<identifiant>`.
+- Les trois clients écrivent désormais `<origine>/communities/<identifiant>?via=link` (identifiant codé comme `encodeURIComponent`). Web : arrivé par `?via=link` (`arrivesThroughLink`), rejoindre envoie `via: 'link'` ; `decodeCommunity` lit `joinLinkPaused` ; `performJoinCommunity` rend `linkPaused` sur `403 COMMUNITY_LINK_PAUSED` (cache d'avant restauré) ; `membershipNoticeOf` dit la pause AVANT le geste quand le détail la sert ; clé `community.membership.error.linkPaused` en sept langues.
+- Témoins : web `lib/api/community-join-by-link.test.ts` (11 ; rouge prouvé : module absent), `routes/community-membership.test.tsx` (+1), `link-families.test.ts` (adresse) ; SDK `CommunityLinkServiceTests` (+2) ; app iOS `DeepLinkSingleParserTests` (+1, corpus +1) ; Android `CommunityLinkTest`, `LinkFormsTest`.
+- Gates locaux : web `tsc --noEmit` vert ; suite web 35 071 verts, 1 rouge hors lot (`src/test-support/act-leak-guard.test.ts`, qui lance un bun enfant : rouge sous bun 1.4.4 local, la CI tourne en 1.3.14) ; iOS `check_house_rules`, `check_cohesion_budget`, `check_test_registration`, accent et catalogue TS (269 = référence) verts.
+- Revue adversariale : non lancée — aucune route ni garde touchée (le refus et sa garde sont ceux de #19661, revus alors).
+- Reste, suivi #20332 : iOS et Android envoient `via: "link"` et disent la pause à l'arrivant ; un `CommunityLink` iOS en cache garde l'ancienne adresse jusqu'à la relecture réseau.

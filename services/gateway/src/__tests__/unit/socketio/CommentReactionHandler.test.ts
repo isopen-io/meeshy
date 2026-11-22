@@ -91,7 +91,8 @@ function createMockSocket() {
 
 function createMockIO() {
   const emitFn = jest.fn();
-  const toFn = jest.fn().mockReturnValue({ emit: emitFn });
+  // `except` depuis #20236 : la diffusion d'activité tait les rooms séparées.
+  const toFn = jest.fn().mockReturnValue({ emit: emitFn, except: jest.fn().mockReturnValue({ emit: emitFn }) });
   return { to: toFn, emit: emitFn, _toEmit: emitFn };
 }
 
@@ -129,9 +130,8 @@ function createMockPrisma(commentAuthorId: string = USER_ID) {
       findFirst: jest.fn(),
     },
     userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
-    friendRequest: {
-      findFirst: jest.fn(),
-    },
+    user: { findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(null), findFirst: jest.fn<any>().mockResolvedValue(null) }, // #20236
+    friendRequest: { findFirst: jest.fn() },
     communityMember: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
