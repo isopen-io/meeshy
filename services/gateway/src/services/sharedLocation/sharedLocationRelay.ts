@@ -75,6 +75,7 @@ import {
   type SharedLocationCell,
   type SharedLocationState,
 } from './sharedLocationStore';
+import { isNamedStart, startedAfter } from './sharedLocationStartName';
 import { forgetSharedLocationEnds, noteSharedLocationReaderServed, noteSharedLocationReadersServed, noteSharedLocationServed, noteSharedLocationStopped, sharedLocationEndsFor } from './sharedLocationEnds';
 
 export type SharedLocationDb = PairAccessDb;
@@ -406,6 +407,8 @@ async function drainRetiring(deps: SharedLocationRelayDeps, emitterId: string, a
 const NOT_SHARING = failed(SHARED_LOCATION_ERROR_CODES.NOT_SHARING, 'Aucun partage en cours');
 /** Un point choisi à la main ne devient jamais une position d'appareil par une mise à jour (#20087). */
 const FIXED_POINT = failed(SHARED_LOCATION_ERROR_CODES.FIXED_POINT, 'Le partage montre un point choisi');
+/** Le partage nommé par `expectedStartedAt` n'est plus celui qui est servi (#20249). */
+const STARTED_ELSEWHERE = failed(SHARED_LOCATION_ERROR_CODES.STARTED_ELSEWHERE, 'Le partage a changé depuis la relecture');
 
 const coarser = (a: SharedLocationPrecision, b: SharedLocationPrecision): SharedLocationPrecision =>
   SHARED_LOCATION_PRECISIONS.indexOf(a) >= SHARED_LOCATION_PRECISIONS.indexOf(b) ? a : b;
@@ -476,6 +479,11 @@ async function stoppedByListOnly(deps: SharedLocationRelayDeps, emitterId: strin
  * la prise est de plus conditionnée au pointeur LU (#20115) : un point choisi arrivé entre la
  * lecture et la prise n'est jamais remplacé, même un instant — le démarrage relit et le refuse
  * (`FIXED_POINT`), ou retente sur le partage d'appareil qui l'a devancé.
+ *
+ * Avec `expectedStartedAt` (#20249), la prise est aussi conditionnée au pointeur lu, et le partage
+ * servi doit porter ce `startedAt` à la lecture comme après chaque pointeur qui a bougé : sinon
+ * rien n'est appliqué (`STARTED_ELSEWHERE`). Une liste seule publiée ailleurs garde `startedAt`,
+ * donc le démarrage relit et passe.
  */
 export async function startSharedLocation(deps: SharedLocationRelayDeps, emitterId: string, payload: unknown): Promise<SharedLocationAck> {
   const parsed = sharedLocationStartPayloadSchema.safeParse(payload);
@@ -498,16 +506,20 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
   let state: SharedLocationState;
   let previous: SharedLocationState | null;
   const guarded = position !== undefined && parsed.data.source === undefined;
+  const expected = parsed.data.expectedStartedAt;
+  const conditional = guarded || expected !== undefined;
   try {
     const generation = await sharedLocationGeneration(deps.cache, emitterId);
     if (!(await accountStates(deps.prisma, [emitterId])).usable.has(emitterId)) return STOPPED;
     let pointer = await currentSharedLocationSession(deps.cache, emitterId);
     previous = pointer === null ? null : await readSharedLocationSession(deps.cache, emitterId, pointer, now);
+    if (!isNamedStart(expected, previous)) return STARTED_ELSEWHERE;
     if (guarded && previous?.source === 'manual') return FIXED_POINT;
     const sessionId = randomUUID();
+    const basis = previous;
     if (position) {
       state = {
-        sessionId, recipients, position, updatedAt: new Date(now).toISOString(), expiresAt: termIso, startedAt: new Date(now).toISOString(),
+        sessionId, recipients, position, updatedAt: new Date(now).toISOString(), expiresAt: termIso, startedAt: startedAfter(now, previous),
         ...(shareBattery === true ? { shareBattery: true as const } : {}),
         ...(manual ? { source: 'manual' as const } : {}),
       };
@@ -519,11 +531,15 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
       state = { sessionId, ...withoutBattery, servableFrom: new Date(now).toISOString() };
     }
     await storeSharedLocation(deps.cache, emitterId, state, now);
-    let claim = await claimSharedLocation(deps.cache, emitterId, generation, state, now, guarded ? pointer : undefined);
+    let claim = await claimSharedLocation(deps.cache, emitterId, generation, state, now, conditional ? pointer : undefined);
     for (let attempt = 1; claim.moved && attempt < START_CLAIM_ATTEMPTS; attempt += 1) {
       pointer = await currentSharedLocationSession(deps.cache, emitterId);
       previous = pointer === null ? null : await readSharedLocationSession(deps.cache, emitterId, pointer, now);
-      if (previous?.source === 'manual') {
+      if (!isNamedStart(expected, previous)) {
+        await dropSharedLocationSession(deps.cache, emitterId, state.sessionId);
+        return STARTED_ELSEWHERE;
+      }
+      if (guarded && previous?.source === 'manual') {
         await dropSharedLocationSession(deps.cache, emitterId, state.sessionId);
         return FIXED_POINT;
       }
@@ -532,6 +548,14 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
     if (!claim.claimed) {
       await dropSharedLocationSession(deps.cache, emitterId, state.sessionId);
       return claim.moved ? UNAVAILABLE : STOPPED;
+    }
+    if (position && claim.displaced !== null && claim.displaced !== basis?.sessionId) {
+      const displaced = await readSharedLocationSession(deps.cache, emitterId, claim.displaced, now);
+      const startedAt = startedAfter(Date.parse(state.startedAt ?? new Date(now).toISOString()), displaced);
+      if (startedAt !== state.startedAt) {
+        state = { ...state, startedAt };
+        if (!(await storeSharedLocationIfCurrent(deps.cache, emitterId, state, now))) return STOPPED;
+      }
     }
     if (!position) {
       const displaced = claim.displaced === null ? null : await readSharedLocationSession(deps.cache, emitterId, claim.displaced, now);

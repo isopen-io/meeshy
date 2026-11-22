@@ -1832,6 +1832,23 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   chaînes générées à jour. Centre, ViewModel et Compose se prouvent par `android.yml` sur la PR.
 - Prochain lot : #20127 (confirmation liée au partage montré, puis web et Android), #20054, #20056, #20086.
 
+## 2026-11-21 — réveil de 17 h : la confirmation vaut pour le partage montré, sur iOS (#20127)
+
+- Reprise : aucune PR de la routine ouverte ; #20230 (Android lit la source servie, #20212) fusionnée par le porteur à
+  17 h 11. Aucune branche vivante n'écrit `apps/ios/Meeshy/Features/SharedLocation`.
+- Lot : la moitié iOS de #20127 (iOS est la référence). La question « Montrer ta position réelle ? » porte
+  `SharedLocationPointReplacement` — le `startedAt` servi (relu, ou rendu par l'accusé du démarrage) et ceux qui voient le
+  point. La feuille le rend à `share(replacing:)` ; le centre RELIT alors le partage servi, même s'il l'a déjà lu, et ne
+  fait partir la position réelle que si le démarrage est le même et que personne n'a été ajouté depuis (une personne
+  sortie ne rend pas la réponse caduque) ; sinon rien ne part et la question se repose avec la liste à jour. Le message
+  nomme trois personnes au plus, dans l'ordre de la feuille, puis « et N autres » (inconnus d'ici compris) — deux clés
+  neuves en sept langues, dont une plurielle.
+- Web et Android : issue de suivi #20248 (même milestone).
+- Gates locaux : `check_localization.py`, `check_house_rules.sh` (42 règles), `check_cohesion_budget.sh`,
+  `check_test_registration.sh`, couleurs codées en dur : verts. iOS ne compile pas en conteneur : preuve par la CI de la
+  PR (`ios.yml`, `sdk-tests.yml` en `workflow_dispatch`).
+- Prochain lot : #20248 (web + Android), puis #20054, #20056, #20086.
+
 ## 2026-11-21 — réveil de 21 h : la moitié web de #20248 (la confirmation vaut pour le partage montré)
 
 - Reprise : la PR #20250 (moitié iOS de #20127, tête b4067fea0) attend sa CI iOS (build en cours depuis 21 h 11, tranches
@@ -1871,3 +1888,23 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   noms par une loi testée. Noté : la passerelle n'accepte pas de `startedAt` attendu (fenêtre d'un aller-retour, #20249) ;
   iOS et le web nomment un nom vide là où Android l'écarte.
 - Prochain lot : fusionner #20250 dès sa CI iOS verte (fermer #20127 à la main), puis #20249, #20054, #20056.
+
+## 2026-11-22 — réveil de 7 h : la moitié passerelle de #20249 (un démarrage nomme le partage qu'il remplace)
+
+- Reprise : la PR #20309 (Android de #20248) a été fusionnée dans `dev` à 5 h 39 et #20248 est fermée. La PR #20250
+  (iOS de #20127, tête 6935d929d) est menée par une autre session vivante, sa CI iOS et SDK en file depuis 5 h 43 : ce
+  réveil n'y pousse rien. Aucune branche n'écrit les chemins du lot.
+- Lot : passerelle de #20249. Un démarrage peut porter `expectedStartedAt` (le `startedAt` du partage MONTRÉ dans la
+  confirmation « Montrer ta position réelle ? ») ; si le partage servi ne le porte plus (un autre appareil a démarré,
+  ou plus de partage), la passerelle refuse `SHARED_LOCATION_STARTED_ELSEWHERE` sans rien appliquer. La prise est alors
+  conditionnée au pointeur lu (#20115) et le nom se revérifie à chaque pointeur qui bouge ; une liste seule publiée
+  ailleurs garde `startedAt`, donc le démarrage relit et passe. Clé additive, annoncée par `acceptsExpectedStart` sur
+  `GET /relations/locations/mine` ; sans la clé, rien ne change.
+- Audit adversarial : non bloquant. Corrigé dans le lot : deux démarrages dans la même milliseconde portaient le même
+  `startedAt`, donc le même nom (la personne ajoutée ailleurs disparaissait encore) ; `startedAt` est désormais
+  strictement postérieur à celui du partage remplacé, relu après la prise si le pointeur a bougé. Pour les lots clients :
+  sur `INVALID` après avoir envoyé la clé, relire et redemander (jamais renvoyer sans la clé) ; renvoyer `startedAt` tel
+  que servi ; `STARTED_ELSEWHERE` couvre aussi « le partage s'est arrêté ».
+- Gates : voir la PR. Clients (iOS, web, Android) : restent sous #20249, un lot chacun.
+- Prochain lot : web de #20249 (envoyer la clé sur `acceptsExpectedStart`, relire et redemander sur `STARTED_ELSEWHERE`),
+  puis Android, puis iOS après #20250 ; #20308, #20054, #20056.
