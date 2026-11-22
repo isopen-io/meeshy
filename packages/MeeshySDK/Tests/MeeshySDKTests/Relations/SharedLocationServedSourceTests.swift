@@ -17,11 +17,12 @@ struct SharedLocationServedSourceTests {
         source: SharedLocationPositionSource,
         replacesChosenPoint: Bool,
         notify: Bool = false,
-        expectedStartedAt: String? = nil
+        expectedStartedAt: String? = nil,
+        deadline: Int? = nil
     ) throws -> SharedLocationStartRequest {
         let fix = try #require(SharedLocationFix(latitude: 48.85, longitude: 2.35))
         return try #require(SharedLocationStartRequest(
-            recipients: [SharedLocationRecipient(userId: alice, precision: .city, expiresInSeconds: 600)], duration: .oneHour,
+            recipients: [SharedLocationRecipient(userId: alice, precision: .city, expiresInSeconds: deadline)], duration: .oneHour,
             fix: fix, notifyRecipients: notify, source: source, replacesChosenPoint: replacesChosenPoint,
             expectedStartedAt: expectedStartedAt))
     }
@@ -90,7 +91,7 @@ struct SharedLocationServedSourceTests {
     }
 
     @Test func lesReplis_gardentLePartageNommé() throws {
-        let asked = try request(source: .device, replacesChosenPoint: true, notify: true, expectedStartedAt: shown)
+        let asked = try request(source: .device, replacesChosenPoint: true, notify: true, expectedStartedAt: shown, deadline: 600)
         #expect(asked.legacyFallbacks.count == 2)
         #expect(asked.legacyFallbacks.allSatisfy { $0.expectedStartedAt == shown })
         #expect(asked.withMotion(.walking).expectedStartedAt == shown)
