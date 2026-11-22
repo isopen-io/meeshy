@@ -688,7 +688,7 @@ const it = {
   'game.guide.moment.atlas_stamp.next': '{stamped} lingue su {total} nel tuo passaporto.',
   'game.guide.moment.atlas_stamp.short': 'Timbro: {language}.',
   'game.guide.moment.flame_freeze_gift.what': 'Ti è donata una Lucerna.',
-  'game.guide.moment.flame_freeze_gift.means': 'Tre giorni di Fiamma: i tuoi antenati te ne affidano una. Tiene accesa la tua Fiamma in un giorno in cui non vieni.',
+  'game.guide.moment.flame_freeze_gift.means': 'I tuoi antenati te la affidano: tiene accesa la tua Fiamma un giorno d’assenza.',
   'game.guide.moment.flame_freeze_gift.next': 'Lucerne di riserva: {count}.',
   'game.guide.moment.flame_freeze_gift.short': 'Ti è donata una Lucerna per la tua Fiamma.',
   'game.photo.kicker.trophy': 'Nuovo trofeo',

@@ -139,7 +139,7 @@ extension GameText {
 
     static var guideMomentFlameFreezeGiftWhat: String { String(localized: "game2.guide.moment.flame_freeze_gift.what", defaultValue: "Une Veilleuse t’est offerte.", bundle: .main) }
 
-    static var guideMomentFlameFreezeGiftMeans: String { String(localized: "game2.guide.moment.flame_freeze_gift.means", defaultValue: "Trois jours de Flamme : les aïeux t’en confient une. Elle garde ta Flamme allumée un jour où tu ne viens pas.", bundle: .main) }
+    static var guideMomentFlameFreezeGiftMeans: String { String(localized: "game2.guide.moment.flame_freeze_gift.means", defaultValue: "Les aïeux te la confient : elle garde ta Flamme allumée un jour d’absence.", bundle: .main) }
 
     static func guideMomentFlameFreezeGiftNext(count: String) -> String {
         String(localized: "game2.guide.moment.flame_freeze_gift.next", defaultValue: "Veilleuses en réserve : \(count).", bundle: .main)
