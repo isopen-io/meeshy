@@ -26,6 +26,11 @@ enum CallSpeakerColor {
 /// Le temps que la passerelle a pour rendre une traduction : passé ce délai, les
 /// trois points d'attente retombent et la ligne reste dans sa langue d'origine
 /// (la traduction a échoué ou ne viendra plus).
+///
+/// #20319 — le délai court depuis la RÉCEPTION locale, sur l'horloge MONOTONE de
+/// l'appel (`CallMonotonicClock`), jamais depuis l'horloge murale de l'orateur :
+/// un écart d'une heure entre les deux appareils figeait les points ou les
+/// supprimait.
 enum CallCaptionTranslationWait {
     static let timeout: TimeInterval = 8
 }
@@ -57,15 +62,17 @@ struct CallCaptionLine: Equatable, Identifiable {
     var originalBelow: String?
     /// Loi 5 — tant que cette échéance n'est pas passée, une traduction est
     /// attendue : la ligne finale d'un pair dont la langue est hors du Prisme.
-    var awaitingUntil: Date?
+    /// Instant de l'horloge monotone (`CallMonotonicClock.seconds`),
+    /// `timeout` après la réception locale (#20319).
+    var awaitingUntil: TimeInterval?
     var originLanguage: String?
     var servedLanguage: String?
 
     var isAwaitingTranslation: Bool { awaitingUntil != nil }
 
-    /// La ligne à l'instant `now` : l'attente retombe à son échéance, l'étiquette
-    /// de la langue d'origine reste.
-    func settled(at now: Date) -> CallCaptionLine {
+    /// La ligne à l'instant `now` (la même horloge monotone que `awaitingUntil`) :
+    /// l'attente retombe à son échéance, l'étiquette de la langue d'origine reste.
+    func settled(at now: TimeInterval) -> CallCaptionLine {
         guard let deadline = awaitingUntil, now >= deadline else { return self }
         var given = self
         given.awaitingUntil = nil
@@ -145,10 +152,16 @@ struct CallCaptionLine: Equatable, Identifiable {
             isShowingOriginal: showsOriginal,
             canRevealOriginal: translation != nil,
             originalBelow: translation != nil && !prefersOriginal && isRevealed ? segment.text : nil,
-            awaitingUntil: awaits ? segment.capturedAt.addingTimeInterval(CallCaptionTranslationWait.timeout) : nil,
+            awaitingUntil: awaits ? waitDeadline(for: segment) : nil,
             originLanguage: origin,
             servedLanguage: served
         )
+    }
+
+    /// Sans réception locale, aucune attente n'est dessinée : la seule autre
+    /// ancre serait l'horloge murale de l'orateur. L'étiquette « EN » reste.
+    private static func waitDeadline(for segment: CallTranscriptionSegment) -> TimeInterval? {
+        segment.receivedAtMonotonic.map { $0 + CallCaptionTranslationWait.timeout }
     }
 
     private static func servedTranslation(_ segment: CallTranscriptionSegment) -> String? {

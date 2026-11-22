@@ -113,15 +113,39 @@ describe('status:* — les humeurs suivent la passerelle (WEB-05)', () => {
     expect(isInvalidated(queryClient, STATUS_MOODS_QUERY_KEY)).toBe(false);
   });
 
-  test('une RECONNEXION relit les humeurs — jamais la première authentification', () => {
+  /**
+   * **LES DEUX AUTHENTIFICATIONS, PAS LA SECONDE SEULE** (#20336, cycle 217).
+   * Ce témoin disait « jamais la première authentification », et ce `jamais`
+   * n'avait aucune raison écrite : #18914 a posé les humeurs dans la branche de
+   * RECONNEXION, puis gelé ici ce que le lot avait fait — pas ce que le produit
+   * veut. La fenêtre du démarrage à froid est la même (#10573 : « le socket se
+   * branche APRÈS la première peinture »), et les `status:*` n'atteignent un
+   * socket qu'une fois les salles de publication rejointes.
+   *
+   * Le PRÉDICAT reste la seule différence : au démarrage à froid, seule une
+   * requête DÉJÀ SERVIE et au repos repart (`servedAndAtRest`) — c'est ce que
+   * le second témoin mesure, et c'est ce qui rend l'élargissement gratuit sur
+   * le chemin de la première peinture.
+   */
+  test('les DEUX authentifications relisent les humeurs déjà servies', () => {
     const { socket, queryClient, destroy } = connected();
     queryClient.setQueryData<readonly StatusMoodPost[]>(STATUS_MOODS_QUERY_KEY, [mood()]);
 
     socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
-    expect(isInvalidated(queryClient, STATUS_MOODS_QUERY_KEY)).toBe(false);
+    expect(isInvalidated(queryClient, STATUS_MOODS_QUERY_KEY)).toBe(true);
 
+    queryClient.setQueryData<readonly StatusMoodPost[]>(STATUS_MOODS_QUERY_KEY, [mood()]);
     socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
     expect(isInvalidated(queryClient, STATUS_MOODS_QUERY_KEY)).toBe(true);
+    destroy();
+  });
+
+  test('au démarrage à froid, des humeurs jamais servies ne sont pas demandées', () => {
+    const { socket, queryClient, destroy } = connected();
+
+    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+
+    expect(queryClient.getQueryState(STATUS_MOODS_QUERY_KEY)).toBeUndefined();
     destroy();
   });
 });
