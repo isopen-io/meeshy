@@ -17,4 +17,10 @@
     <string name="profile_voice_title">Voce</string>
     <string name="shared_location_share_action_a11y">Condividi la mia posizione con %1$s</string>
     <string name="shared_location_replace_point_message">Chi vede il punto scelto vedrà invece la tua posizione reale.</string>
+    <string name="shared_location_replace_point_message_named">La tua posizione reale sostituirà il punto scelto per %1$s.</string>
+    <plurals name="shared_location_replace_point_others">
+        <item quantity="one">%1$d altra persona</item>
+        <item quantity="many">%1$d altre persone</item>
+        <item quantity="other">%1$d altre persone</item>
+    </plurals>
 </resources>

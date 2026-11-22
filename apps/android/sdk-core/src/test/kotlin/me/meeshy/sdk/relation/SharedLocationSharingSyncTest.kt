@@ -20,6 +20,7 @@ import me.meeshy.sdk.model.relation.SharedLocationFix
 import me.meeshy.sdk.model.relation.SharedLocationOwnRecipient
 import me.meeshy.sdk.model.relation.SharedLocationOwnSnapshot
 import me.meeshy.sdk.model.relation.SharedLocationOwnSnapshotWire
+import me.meeshy.sdk.model.relation.SharedLocationPointReplacement
 import me.meeshy.sdk.model.relation.SharedLocationPrecision
 import me.meeshy.sdk.model.relation.SharedLocationRoster
 import me.meeshy.sdk.model.relation.SharedLocationSendOutcome
@@ -71,6 +72,9 @@ class SharedLocationSharingSyncTest {
         var stops = 0
         var reads = 0
         var fixAsks = 0
+
+        /** Ce qui se passe AILLEURS pendant que l'appareil attend son relevé (un autre appareil du compte). */
+        var onFix: (() -> Unit)? = null
         val queuedStartVerdicts = ArrayDeque<SharedLocationStartVerdict>()
         var following = 0
         val stream = MutableSharedFlow<LiveLocationFix>(extraBufferCapacity = 8)
@@ -93,6 +97,7 @@ class SharedLocationSharingSyncTest {
             fixes = object : LiveLocationFixSource {
                 override suspend fun currentFix(): LiveLocationFix {
                     fixAsks++
+                    onFix?.invoke()
                     return LiveLocationFix(48.8566, 2.3522, accuracy = 8.0)
                 }
                 override fun updates(intervalMillis: Long): Flow<LiveLocationFix> {
@@ -941,8 +946,117 @@ class SharedLocationSharingSyncTest {
         assertThat(relaunched.fixAsks).isEqualTo(0)
     }
 
-    private fun pointChosenElsewhere(vararg pairs: Pair<String, Long>) =
-        served(*pairs).copy(source = SharedLocationSource.MANUAL, startedAt = "2026-11-21T15:00:00.000Z")
+    private fun pointChosenElsewhere(vararg pairs: Pair<String, Long>, startedAt: String = CHOSEN_START) =
+        served(*pairs).copy(source = SharedLocationSource.MANUAL, startedAt = startedAt)
+
+    private fun chosenPointAsked(vararg ids: String, startedAt: String = CHOSEN_START) =
+        SharedLocationPointReplacement(startedAt, ids.toSet())
+
+    @Test
+    fun `l'accord donne a un AUTRE demarrage ne vaut rien, la question se repose a jour et rien ne part`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
+        device.center.sync()
+        val asked = (device.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.ONE_HOUR)
+            as SharedLocationShareProblem.ReplacesChosenPoint).asked
+        device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour, startedAt = "2026-11-21T16:00:00.000Z")
+
+        val problem = device.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.ONE_HOUR, replacing = asked)
+
+        assertThat(problem).isEqualTo(
+            SharedLocationShareProblem.ReplacesChosenPoint(chosenPointAsked(alice, startedAt = "2026-11-21T16:00:00.000Z")),
+        )
+        assertThat(device.starts).isEmpty()
+    }
+
+    @Test
+    fun `un point relance ailleurs PENDANT l'attente du releve n'est pas ecrase, la reponse se relit apres le releve`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
+        device.center.sync()
+        device.onFix = { device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour, startedAt = "2026-11-21T16:00:00.000Z") }
+
+        val problem = device.center.share(
+            bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.ONE_HOUR, replacing = chosenPointAsked(alice),
+        )
+
+        assertThat(problem).isEqualTo(
+            SharedLocationShareProblem.ReplacesChosenPoint(chosenPointAsked(alice, startedAt = "2026-11-21T16:00:00.000Z")),
+        )
+        assertThat(device.starts).isEmpty()
+    }
+
+    @Test
+    fun `un compte qui change efface le demarrage servi, la question d'avant ne vaut rien`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
+        device.center.sync()
+        device.account = "other"
+        device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour, startedAt = "2026-11-21T17:00:00.000Z")
+
+        val problem = device.center.share(
+            bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.ONE_HOUR, replacing = chosenPointAsked(alice),
+        )
+
+        assertThat(problem).isEqualTo(
+            SharedLocationShareProblem.ReplacesChosenPoint(chosenPointAsked(alice, startedAt = "2026-11-21T17:00:00.000Z")),
+        )
+        assertThat(device.starts).isEmpty()
+    }
+
+    @Test
+    fun `une personne ajoutee depuis la question la rend caduque, et la question la compte`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
+        device.center.sync()
+        device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour, carol to 8 * hour)
+
+        val problem = device.center.share(
+            bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.ONE_HOUR, replacing = chosenPointAsked(alice),
+        )
+
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.ReplacesChosenPoint(chosenPointAsked(alice, carol)))
+        assertThat(device.starts).isEmpty()
+    }
+
+    @Test
+    fun `une personne sortie depuis la question ne la rend pas caduque`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
+        device.center.sync()
+
+        val problem = device.center.share(
+            bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.ONE_HOUR, replacing = chosenPointAsked(alice, carol),
+        )
+        runCurrent()
+
+        assertThat(problem).isNull()
+        assertThat(device.starts.single().wire()["source"]).isEqualTo("device")
+    }
+
+    @Test
+    fun `la reponse relit toujours le partage servi, et une relecture en panne n'envoie rien`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
+        device.center.sync()
+        val readsBefore = device.reads
+        device.servedFailure = IllegalStateException("hors ligne")
+
+        val problem = device.center.share(
+            bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.ONE_HOUR, replacing = chosenPointAsked(alice),
+        )
+
+        assertThat(device.reads).isGreaterThan(readsBefore)
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.Refused(SharedLocationSendOutcome.OFFLINE))
+        assertThat(device.starts).isEmpty()
+        device.endOutage()
+    }
 
     @Test
     fun `un point choisi sur un autre appareil coupe le suivi d'ici et aucun releve ne part`() = runTest {
@@ -970,7 +1084,7 @@ class SharedLocationSharingSyncTest {
 
         val problem = device.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.ONE_HOUR)
 
-        assertThat(problem).isEqualTo(SharedLocationShareProblem.ReplacesChosenPoint)
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.ReplacesChosenPoint(chosenPointAsked(alice)))
         assertThat(device.starts).isEmpty()
         assertThat(device.fixAsks).isEqualTo(asksBefore)
         assertThat(device.center.roster.value.entry(bob)).isNull()
@@ -983,7 +1097,9 @@ class SharedLocationSharingSyncTest {
         device.servedSnapshot = pointChosenElsewhere(alice to 8 * hour)
         device.center.sync()
 
-        val problem = device.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.ONE_HOUR, replacingPoint = true)
+        val problem = device.center.share(
+            bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.ONE_HOUR, replacing = chosenPointAsked(alice),
+        )
         runCurrent()
 
         assertThat(problem).isNull()
@@ -1004,7 +1120,7 @@ class SharedLocationSharingSyncTest {
 
         val problem = device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
 
-        assertThat(problem).isEqualTo(SharedLocationShareProblem.ReplacesChosenPoint)
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.ReplacesChosenPoint(chosenPointAsked(alice)))
         assertThat(device.starts.single().wire()).doesNotContainKey("source")
         assertThat(device.center.roster.value.entry(alice)).isNotNull()
         assertThat(device.center.roster.value.entry(bob)).isNull()
@@ -1033,3 +1149,5 @@ class SharedLocationSharingSyncTest {
         assertThat(device.center.roster.value.isFixedPoint).isTrue()
     }
 }
+
+private const val CHOSEN_START = "2026-11-21T15:00:00.000Z"
