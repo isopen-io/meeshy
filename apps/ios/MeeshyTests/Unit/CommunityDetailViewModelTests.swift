@@ -653,6 +653,72 @@ final class CommunityDetailViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.isMember)
         XCTAssertFalse(viewModel.joinRequestPending)
     }
+
+    // MARK: - Arrivée par le lien (#20332)
+
+    private func linkArrivalSUT(
+        arrivesThroughLink: Bool, joinLinkPaused: Bool? = nil
+    ) -> (CommunityDetailViewModel, MockCommunityService) {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator", joinLinkPaused: joinLinkPaused))
+        let viewModel = CommunityDetailViewModel(
+            communityId: "c1", arrivesThroughLink: arrivesThroughLink, service: service,
+            currentUserId: { "u-visitor" },
+            communityUpdates: Empty().eraseToAnyPublisher(), memberChanges: Empty().eraseToAnyPublisher(),
+            deletions: Empty().eraseToAnyPublisher(), myCommunities: MyCommunitiesWrites(add: { _ in }, remove: { _ in })
+        )
+        return (viewModel, service)
+    }
+
+    func test_join_arriveParLeLien_compteLEntreeCommeVenueDuLien() async {
+        let (viewModel, service) = linkArrivalSUT(arrivesThroughLink: true)
+        await viewModel.load()
+
+        await viewModel.joinCommunity()
+
+        XCTAssertEqual(service.lastJoinViaLink, true)
+    }
+
+    func test_join_entreeDirecte_neSeDitPasVenueDuLien() async {
+        let (viewModel, service) = linkArrivalSUT(arrivesThroughLink: false)
+        await viewModel.load()
+
+        await viewModel.joinCommunity()
+
+        XCTAssertEqual(service.lastJoinViaLink, false)
+    }
+
+    func test_join_lienEnPause_ditLaPauseDansLaLangue() async {
+        let (viewModel, service) = linkArrivalSUT(arrivesThroughLink: true)
+        await viewModel.load()
+        let body = Data(#"{"success":false,"error":"paused","code":"COMMUNITY_LINK_PAUSED"}"#.utf8)
+        service.joinResult = .failure(MeeshyError.forbidden(reason: "paused", body: body))
+
+        await viewModel.joinCommunity()
+
+        XCTAssertEqual(viewModel.joinRefusal, .linkPaused)
+        XCTAssertTrue(viewModel.linkArrivalPaused)
+        XCTAssertFalse(viewModel.isMember)
+    }
+
+    func test_load_lienEnPauseServi_seDitAvantLeGeste_aQuiArriveParLeLien() async {
+        let (throughLink, _) = linkArrivalSUT(arrivesThroughLink: true, joinLinkPaused: true)
+        let (direct, _) = linkArrivalSUT(arrivesThroughLink: false, joinLinkPaused: true)
+
+        await throughLink.load()
+        await direct.load()
+
+        XCTAssertTrue(throughLink.linkArrivalPaused)
+        XCTAssertFalse(direct.linkArrivalPaused, "une communauté publique reste joignable par sa fiche")
+    }
+
+    func test_load_lienActif_neDitRien() async {
+        let (viewModel, _) = linkArrivalSUT(arrivesThroughLink: true, joinLinkPaused: false)
+
+        await viewModel.load()
+
+        XCTAssertFalse(viewModel.linkArrivalPaused)
+    }
 }
 
 @MainActor

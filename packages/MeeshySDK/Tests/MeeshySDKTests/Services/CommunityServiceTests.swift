@@ -231,6 +231,35 @@ final class CommunityServiceTests: XCTestCase {
         XCTAssertEqual(CommunityJoinRefusal.classify(MeeshyError.forbidden(reason: nil, body: body)), .cooldown)
     }
 
+    /// #20332 — l'arrivée par l'adresse partagée se dit à la passerelle, qui la
+    /// compte comme venue du lien ; une entrée directe n'envoie aucun `via`.
+    func test_join_throughTheLink_sendsViaLink() async throws {
+        mock.stubWire("/communities/comm1/join", json: """
+        {"success":true,"data":{"id":"mem1","communityId":"comm1","userId":"user1","role":"member"}}
+        """)
+
+        _ = try await service.join(communityId: "comm1", viaLink: true)
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["via"] as? String, "link")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["acceptsPending"] as? Bool, true)
+    }
+
+    func test_join_direct_sendsNoVia() async throws {
+        mock.stubWire("/communities/comm1/join", json: """
+        {"success":true,"data":{"id":"mem1","communityId":"comm1","userId":"user1","role":"member"}}
+        """)
+
+        _ = try await service.join(communityId: "comm1")
+
+        XCTAssertNil(mock.lastRequest?.bodyJSON?["via"])
+    }
+
+    func test_joinRefusal_linkPausedCode_isReadFromTheForbiddenBody() {
+        let body = Data(#"{"success":false,"error":"Joining through this link is paused","code":"COMMUNITY_LINK_PAUSED"}"#.utf8)
+
+        XCTAssertEqual(CommunityJoinRefusal.classify(MeeshyError.forbidden(reason: nil, body: body)), .linkPaused)
+    }
+
     func test_joinRefusal_otherForbidden_isNotACooldown() {
         let body = Data(#"{"success":false,"error":"Cannot join a private community without an invite"}"#.utf8)
 

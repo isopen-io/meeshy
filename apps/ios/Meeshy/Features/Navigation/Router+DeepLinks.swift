@@ -69,8 +69,8 @@ extension Router {
                 // réel par `ReelDoor`, dans le lecteur de réels (#7805).
                 DeepLinkRouter.shared.pendingDeepLink = .reel(postId: postId)
 
-            case .community(let id):
-                push(.communityDetail(id))
+            case .community(let id, let viaLink):
+                push(.communityDetail(id, viaLink: viaLink))
 
             case .recentConversation:
                 DeepLinkRouter.shared.pendingDeepLink = .recentConversation
