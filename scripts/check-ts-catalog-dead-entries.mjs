@@ -615,7 +615,6 @@ const PENDING_CLIENT_ENTRIES = {
   'users.byIdInCommon': { issue: 19234, reason: 'GET /users/:id/in-common — nos communautés, nos amis et nos médias en commun, lus par la fiche d’un autre (web, iOS, Android)' },
   // Le lien d'entrée d'une communauté se met en pause (#19661, routine Communautés) : la passerelle sert la bascule
   // avant la rangée « Actif » de la fiche du lien et le message de l'arrivant (#20255).
-  'communities.byIdJoinLink': { issue: 20255, reason: 'PUT /communities/:id/join-link — mettre en pause ou relancer le lien d’entrée, fiche du lien (web, iOS, Android)' },
 };
 
 // 274 -> 271 (#6375, 2026-11-07) : `communities.byIdMembers`, `.byIdMembersByMemberId` et

@@ -22,7 +22,7 @@ import {
   sendBadRequest
 } from '../../utils/response.js';
 import { CommunityRole } from './types';
-import { communityTextAsWritten } from './serialization';
+import { communityTextAsWritten, joinLinkStateFor } from './serialization';
 import { communityGuardsItsSalons, exitCommunitySalons } from '../../services/conversations/communitySalonExit';
 import { isAddableUser } from './addable-user';
 import { scheduleCommunityMemberBroadcastFrom } from '../../services/community-member-broadcast';
@@ -75,7 +75,8 @@ export async function registerMembershipRoutes(
                   identifier: { type: 'string', nullable: true },
                   avatar: { type: 'string', nullable: true },
                   isPrivate: { type: 'boolean' },
-                  role: { type: 'string' }
+                  role: { type: 'string' },
+                  joinLinkPaused: { type: 'boolean', description: 'Whether a steward paused the community entry link (#19661, #20255). The pause instant is served by the detail to stewards only, never here' }
                 }
               }
             }
@@ -114,15 +115,17 @@ export async function registerMembershipRoutes(
               name: true,
               identifier: true,
               avatar: true,
-              isPrivate: true
+              isPrivate: true,
+              joinLinkPausedAt: true
             }
           }
         }
       });
 
-      const data = memberships.map(m => ({
-        ...communityTextAsWritten(m.community),
-        role: m.role
+      const data = memberships.map(({ community: { joinLinkPausedAt, ...community }, role }) => ({
+        ...communityTextAsWritten(community),
+        role,
+        joinLinkPaused: joinLinkStateFor(joinLinkPausedAt, null).joinLinkPaused
       }));
 
       return sendSuccess(reply, data);

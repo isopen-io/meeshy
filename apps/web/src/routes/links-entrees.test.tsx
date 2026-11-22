@@ -193,6 +193,7 @@ const community = (overrides: Partial<CommunityLink> = {}): CommunityLink => ({
   role: 'admin',
   memberCount: 248,
   createdAt: null,
+  joinLinkPaused: null,
   ...overrides,
 });
 
