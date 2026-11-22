@@ -361,7 +361,7 @@ describe('POST /posts/:id/like — broadcastPostLiked rejects (line 97)', () => 
       broadcastStatusReacted: jest.fn<any>().mockResolvedValue(undefined),
       broadcastStatusUnreacted: jest.fn<any>().mockResolvedValue(undefined),
       broadcastPostBookmarked: jest.fn<any>().mockResolvedValue(undefined),
-      broadcastStoryViewed: jest.fn<any>().mockResolvedValue(undefined),
+      separationAroundActor: jest.fn<any>().mockResolvedValue([]), broadcastStoryViewed: jest.fn<any>().mockResolvedValue(undefined),
       broadcastPostReposted: jest.fn<any>().mockResolvedValue(undefined),
           activitySeparation: jest.fn<any>().mockResolvedValue([]),
     });
@@ -434,7 +434,7 @@ describe('DELETE /posts/:id/like — broadcastPostUnliked rejects (line 185)', (
       broadcastStatusReacted: jest.fn<any>().mockResolvedValue(undefined),
       broadcastStatusUnreacted: jest.fn<any>().mockResolvedValue(undefined),
       broadcastPostBookmarked: jest.fn<any>().mockResolvedValue(undefined),
-      broadcastStoryViewed: jest.fn<any>().mockResolvedValue(undefined),
+      separationAroundActor: jest.fn<any>().mockResolvedValue([]), broadcastStoryViewed: jest.fn<any>().mockResolvedValue(undefined),
       broadcastPostReposted: jest.fn<any>().mockResolvedValue(undefined),
           activitySeparation: jest.fn<any>().mockResolvedValue([]),
     });
