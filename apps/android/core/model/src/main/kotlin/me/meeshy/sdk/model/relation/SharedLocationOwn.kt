@@ -4,6 +4,8 @@ import java.time.Instant
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * Une personne à qui la passerelle sert MA position (#18389, #18578) : qui, à quelle précision, jusqu'à quand. Jamais une
@@ -26,7 +28,26 @@ public data class SharedLocationOwnSnapshot(
      * la liste seule. `null` : passerelle antérieure — l'appareil ne cède alors jamais.
      */
     val startedAt: String? = null,
+    /**
+     * D'où vient le point servi (#20116, #20212) : un point CHOISI à la main par un appareil du compte, ou la position de
+     * l'appareil. `null` : passerelle d'avant, ou aucun partage — rien n'est dit.
+     */
+    val source: SharedLocationSource? = null,
 )
+
+/** D'où vient la position que la passerelle sert (`SharedLocationSource` de `packages/shared`). */
+public enum class SharedLocationSource {
+    MANUAL,
+    DEVICE;
+
+    public companion object {
+        /** Absente, rien n'est dit ; inconnue, c'est un point choisi : dans le doute, la position réelle ne remplace rien. */
+        public fun served(raw: JsonElement?): SharedLocationSource? {
+            if (raw == null || raw is JsonNull) return null
+            return if ((raw as? JsonPrimitive)?.takeIf { it.isString }?.content == "device") DEVICE else MANUAL
+        }
+    }
+}
 
 /**
  * La charge telle qu'elle voyage. Une personne illisible (identifiant vide, échéance illisible) est écartée sans faire
@@ -38,6 +59,7 @@ public data class SharedLocationOwnSnapshot(
 public data class SharedLocationOwnSnapshotWire(
     val recipients: List<JsonElement>? = null,
     val startedAt: String? = null,
+    val source: JsonElement? = null,
 ) {
     public fun served(json: Json): SharedLocationOwnSnapshot? = recipients?.let { items ->
         SharedLocationOwnSnapshot(
@@ -45,6 +67,7 @@ public data class SharedLocationOwnSnapshotWire(
                 runCatching { json.decodeFromJsonElement(RecipientWire.serializer(), item) }.getOrNull()?.served()
             },
             startedAt,
+            SharedLocationSource.served(source),
         )
     }
 

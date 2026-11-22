@@ -571,6 +571,8 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 const PENDING_CLIENT_ENTRIES = {
   // Les entrées d'un lien de communauté (#19429, besoin #19290) : la fiche iOS `Lien-Communaute` les lira.
   'CommunitiesEndpoint.byIdEntriesStats': { issue: 19429, reason: 'GET /communities/:id/entries/stats — « N entrées par ce lien », « N cette semaine », la série sur 30 jours' },
+  // Le lien d'entrée se met en pause (#19661) : la rangée « Actif » de la fiche iOS `Lien-Communaute` l'appellera (#20255).
+  'CommunitiesEndpoint.byIdJoinLink': { issue: 20255, reason: 'PUT /communities/:id/join-link — mettre en pause ou relancer le lien d’entrée' },
   // Routes déjà servies par cette branche (#19375, #19394, chantier #18857), dont l'énumération Swift n'avait pas été régénérée.
   'RelationsEndpoint.summary': { issue: 19375, reason: 'GET /relations/summary — la rangée « Mes cercles » (iOS)' },
   'UsersEndpoint.byIdHighlights': { issue: 19394, reason: 'GET /users/:id/highlights — le rail « À la une » de la fiche (iOS)' },

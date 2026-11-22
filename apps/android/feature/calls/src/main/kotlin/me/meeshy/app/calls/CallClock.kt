@@ -17,7 +17,9 @@ import javax.inject.Singleton
  * chronometer needs (`setWhen`). [elapsedMs] is monotonic: it never jumps when
  * the user or NTP resets the wall clock, so a reported delay is measured on it —
  * the analytics anchors (start → first-connect = `setupTimeMs`, THE
- * setup-regression metric of `call:analytics`) read it.
+ * setup-regression metric of `call:analytics`) read it, and so do the reliability
+ * watchdogs (`Connecting` ICE clock, half-open grace), the toast dedupe window, the
+ * quality ticks' bitrate interval and the fade of the hidden call chrome: a wall jump must neither fire nor freeze them.
  * Its default falls back to [nowMs] so a pinned test clock serves both.
  */
 interface CallClock {

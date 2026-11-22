@@ -29,6 +29,7 @@ import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { admitQuotedPostMedia } from '../../services/posts/quotedPostMediaSnapshot';
 import { serveCitedPostMedia } from '../../services/posts/citedPostMediaBackfill';
 import { hoistCommentCarriers } from './commentCarriers';
+import { commentAuthorSeparatedFrom } from '../../services/posts/separatedCommentAuthors';
 import {
   loadCommentPostAcl,
   canUserConsumeThread,
@@ -639,7 +640,11 @@ export function registerCommentRoutes(
       // Lecture-scope : même garde que le fil (un lecteur autorisé à VOIR le
       // fil peut en demander la traduction).
       const thread = await loadCommentPostAcl(prisma, commentId);
-      if (!thread || !(await canUserConsumeThread(prisma, thread, authContext.registeredUser.id))) {
+      if (
+        !thread ||
+        !(await canUserConsumeThread(prisma, thread, authContext.registeredUser.id)) ||
+        (await commentAuthorSeparatedFrom(prisma, thread, authContext.registeredUser.id))
+      ) {
         return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
       }
 
@@ -675,7 +680,11 @@ export function registerCommentRoutes(
       // est une interaction. Le post est résolu depuis le commentaire, jamais
       // depuis le `:postId` du chemin.
       const thread = await loadCommentPostAcl(prisma, commentId);
-      if (!thread || !(await canUserInteractWithThread(prisma, thread, authContext.registeredUser.id))) {
+      if (
+        !thread ||
+        !(await canUserInteractWithThread(prisma, thread, authContext.registeredUser.id)) ||
+        (await commentAuthorSeparatedFrom(prisma, thread, authContext.registeredUser.id))
+      ) {
         return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
       }
 

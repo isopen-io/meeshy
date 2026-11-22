@@ -240,9 +240,11 @@ export class MediaCaptionTranslationService {
 
       // Un média de commentaire n'a pas de `postId` direct — le POST qui porte
       // la visibilité (donc l'audience de diffusion) est celui du commentaire.
-      const postId = media.postId ?? (media.commentId
-        ? (await this.prisma.postComment.findUnique({ where: { id: media.commentId }, select: { postId: true } }))?.postId
-        : undefined);
+      // L'auteur du commentaire tait la diffusion chez qui en est séparé (#20216).
+      const comment = media.commentId
+        ? await this.prisma.postComment.findUnique({ where: { id: media.commentId }, select: { postId: true, authorId: true } })
+        : null;
+      const postId = media.postId ?? comment?.postId;
       if (!postId) return;
 
       const post = await this.prisma.post.findUnique({
@@ -257,7 +259,7 @@ export class MediaCaptionTranslationService {
         ...(media.commentId ? { commentId: media.commentId } : {}),
         language: targetLanguage,
         translation: translationData,
-      }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err: unknown) => {
+      }, post.authorId, post.visibility, post.visibilityUserIds ?? [], comment?.authorId).catch((err: unknown) => {
         log.error('MediaCaptionTranslation: broadcast failed', err instanceof Error ? err : new Error(String(err)), { mediaId, targetLanguage });
       });
     } catch (err) {

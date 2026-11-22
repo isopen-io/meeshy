@@ -27,6 +27,10 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-15 | Rejoindre, quitter ou changer de rôle dans une communauté se voit aussitôt chez ses membres (passerelle, web) | voir réveil du 2026-11-15 23:38 | #18766 | voir réveil du 2026-11-15 23:38 |
 | 2026-11-18 | Supprimer ou désactiver une communauté se voit aussitôt chez ses membres (passerelle, web) | voir réveil du 2026-11-18 05:38 | #19590 | voir réveil du 2026-11-18 05:38 |
 | 2026-11-21 | Un blocage retire aussi la source d'une republication et l'aperçu des commentaires de l'auteur séparé (passerelle) | voir réveil du 2026-11-21 11:38 | #16894 | voir réveil du 2026-11-21 11:38 |
+| 2026-11-21 | La liste complète des commentaires tait l'auteur bloqué (passerelle) | #20215 | #20205 | fusionnée dans dev |
+| 2026-11-21 | Un commentaire d'un auteur bloqué n'arrive plus en direct et ne se traduit ni ne se like (passerelle) | #20237 | #20216 | fusionnée dans dev (`17c7f207a`) |
+| 2026-11-21 | L'intendant d'une communauté met son lien d'entrée en pause, et le lien en pause ne fait plus entrer (passerelle) | voir réveil du 2026-11-21 17:38 | #19661 (première moitié) | voir réveil du 2026-11-21 17:38 |
+| 2026-11-21 | L'intendant d'une communauté met son lien d'entrée en pause depuis la fiche du lien (web) ; « mes communautés » sert l'état (passerelle) | voir réveil du 2026-11-21 23:38 | #20255 (moitié web) | voir réveil du 2026-11-21 23:38 |
 
 ## 2026-11-07 — lot 1
 
@@ -814,3 +818,40 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Décision : `commentCount` / `replyCount` restent BRUTS (ils ne nomment personne ; un compte par lecteur coûterait une requête par commentaire). Écrite dans le module.
 - Témoins : `unit/services/posts/comments-separated-authors-20205.test.ts` (8, double Prisma qui applique `where`, `orderBy` et `take` ; rouge prouvé : 6 échecs avant le code). Le harnais `PostCommentService.test.ts` reçoit un double `user` sans blocage.
 - Aucun client touché, aucun contrat changé.
+- 2026-11-21 15:30 : #20215 fusionnée dans `dev` (`cdc828c61`) après `ci.yml` 44914073126 vert ; #20205 fermée avec sa preuve.
+
+## 2026-11-21 — réveil 15:38 UTC
+
+- Début du run : aucune PR de la routine ouverte ; aucune branche vivante sur `SocialEventsHandler.ts` ni `routes/posts/comments.ts`.
+- Lot : #20216 (passerelle) — suite de #20205 côté temps réel et actions.
+- Diffusions : `SocialEventsHandler.commentEmitter` — `comment:added`, `comment:updated`, `comment:media-updated` et `comment:translation-updated` partent sur les mêmes rooms, moins `user:<id>` de chaque compte qu'un blocage sépare du COMMENTATEUR (deux sens, `getBlockRelatedUserIds`, relu à chaque émission, jamais mis en cache) ; une lecture des blocages qui échoue n'émet rien (le lecteur relit par le REST, qui sait quoi taire). `broadcastCommentTranslationUpdated` reçoit l'auteur du commentaire en 5e argument optionnel (`PostTranslationService` le lit dans la relecture qu'il faisait déjà).
+- Actions : `loadCommentPostAcl` porte l'auteur du commentaire (additif) ; `commentAuthorSeparatedFrom` (`services/posts/separatedCommentAuthors.ts`, fermé) refuse traduire et liker (REST : `404 COMMENT_NOT_FOUND`) et réagir par socket (« Comment not found »), comme un commentaire absent. Décision : retirer SA réaction reste permis (ne sert rien du commentaire, défait un geste d'avant le blocage).
+- Témoins : `socketio/handlers/__tests__/SocialEventsHandler.comment-separated-20216.test.ts` (13 ; rouge prouvé : 8 échecs avant le code), `__tests__/unit/routes/posts/comment-actions-separated-20216.test.ts` (8 ; rouge prouvé : 6 échecs), `CommentReactionHandler.test.ts` (+3 ; rouge prouvé : 2 échecs). Harnais suivi : `comments-like-delete.test.ts` reconnaît la tranche d'ACL à `select.post` (elle porte désormais `authorId`).
+- Revue adversariale avant la PR : un BLOQUANT corrigé dans le lot — la première version lisait `comment.authorId`, qu'AUCUN producteur ne sélectionne (l'auteur voyage sous `author.id`, `CREATED_COMMENT_SELECT`) : trois diffusions sur quatre partaient sans filtre, et le témoin était vert parce que sa fabrique posait `authorId`. `commentAuthorIdOf` lit `author.id` d'abord, et la fabrique du témoin a la forme sélectionnée (rouge prouvé : 10 échecs sur la version d'avant). Corrigés aussi : `media:caption-translation-updated` et `media:alt-translation-updated` d'un média de COMMENTAIRE passent par la même exclusion ; `comment:reaction-request-sync` (liste nominative des réactions) refuse le commentaire d'un auteur séparé.
+- Aucun client touché, aucun contrat changé (les clients ne voient qu'un événement de moins et le refus « absent » qu'ils traitent déjà).
+- 2026-11-21 17:11 : #20237 fusionnée dans `dev` (`17c7f207a`) par le porteur ; la preuve `ci.yml` 44922597058 était encore en file (runners saturés) au réveil suivant.
+
+## 2026-11-21 — réveil 17:38 UTC
+
+- Début du run : aucune PR de la routine ouverte ; aucune branche vivante sur `routes/communities/`.
+- Lot : #19661, première moitié (passerelle), milestone « Chaque lien se règle, se met en pause et garde son histoire ». `Community.joinLinkPausedAt DateTime?` (nul ou absent = actif, sans migration), servi par `communitySchema` ; `PUT /communities/:id/join-link { paused }` (`routes/communities/join-link.ts`) réservé aux intendants d'une communauté ACTIVE (`isCommunitySteward` : créateur, admin, modérateur actifs), 404 générique pour tout autre lecteur, seul l'état part, une pause déjà posée garde son instant. `POST /communities/:id/join` `via: "link"` sur un lien en pause ⇒ 403 `COMMUNITY_LINK_PAUSED`, avant adhésion et demande.
+- Le détail et la liste servent `joinLinkPaused` à tout lecteur et l'INSTANT `joinLinkPausedAt` aux seuls intendants (`joinLinkStateFor`, `serialization.ts`).
+- Revue adversariale avant la PR : non bloquante. Corrigé dans le lot : l'instant de la pause était lisible par tout lecteur du détail. Écrit comme décision : une demande faite par le lien AVANT la pause reste acceptable (geste d'intendant). Mesuré : aucun client n'envoie encore `via: "link"` — le 403 n'est joignable qu'une fois les clients branchés (#20255), et l'interface devra dire « arrivées par le lien suspendues », jamais « plus personne n'entre ».
+- Décision : la pause ne ferme que la porte du LIEN ; une communauté publique reste joignable directement (`via: "self"`), une communauté privée reste sur invitation. Ce n'est donc pas une garde de confidentialité mais un réglage d'acquisition (le compte « entrées par ce lien » et l'annonce aux intendants ne grossissent plus).
+- Catalogues : `communities.byIdJoinLink` (TS) et `CommunitiesEndpoint.byIdJoinLink` (Swift) déclarés en attente de client, issue #20255 (rangée « Actif » de la fiche du lien et message de l'arrivant, web / iOS / Android).
+- Android : `CommunityApi.setJoinLinkState` (`PUT communities/{id}/join-link`) et ses deux modèles — le cliquet `RouteManifestRatchetTest` interdit d'agrandir la dette « à porter », donc toute route neuve se porte en Retrofit dans le lot ; témoin `CommunityJoinLinkEndpointTest` (verbe, chemin, corps, décodage). L'écran reste #20255.
+- Témoins : `__tests__/unit/routes/communities/join-link-pause-19661.test.ts` (23 ; rouge prouvé : module absent, puis 2 échecs sous chacune des mutations « garde du join retirée » et « instant servi à tous »).
+- Reste de #19661 : « Supprimer ce lien » (révoquer l'adresse sans toucher à la communauté). #19661 reste ouverte.
+
+- 2026-11-21 23:00 : #20259 fusionnée dans `dev` (`c57460f50`) après `ci.yml` 44952956576 vert ; Android vert sur `d30474025` ; les tranches de tests unitaires iOS du run 44947521614 étaient encore en file à la fusion (et au réveil suivant). Preuve commentée sur #19661, qui reste ouverte (« Supprimer ce lien »).
+
+## 2026-11-21 — réveil 23:38 UTC
+
+- Début du run : aucune PR de la routine ouverte ; aucune branche vivante sur `routes/communities/membership.ts` ni sur les fiches de liens du web.
+- Lot : #20255, moitié web (milestone « Chaque lien se règle, se met en pause et garde son histoire »).
+- Passerelle : `GET /communities/mine` sert `joinLinkPaused` (booléen, additif) par `joinLinkStateFor` — la fiche du lien des trois clients lit CETTE liste, jamais le détail, et ne pouvait donc pas savoir l'état. L'instant de la pause n'y part pas (il reste au détail d'un intendant, #19661).
+- Web : `CommunityLink.joinLinkPaused: boolean | null` (`null` = passerelle plus ancienne, aucune bascule offerte) ; `lib/api/community-join-link.ts` porte `PUT communities.byIdJoinLink` et le geste optimiste avec retour arrière (la réponse fait foi, bascule contraire en vol ⇒ `busy`, hors ligne rien ne part). La fiche `/links/communities/$community` dit « Actif » / « Inactif » dans l'en-tête et porte « Désactiver » / « Activer » dans sa barre — même geste et mêmes mots que la fiche d'un lien de suivi, aucune clé de catalogue nouvelle. Entrée `communities.byIdJoinLink` retirée de `PENDING_CLIENT_ENTRIES` (269 = référence).
+- Décision : la rangée « Actif » de la planche est rendue comme la bascule des autres familles de liens du web (barre d'actions), pas comme un interrupteur isolé : même geste ⇒ même effet dans « Mes liens ».
+- Revue adversariale avant la PR : non bloquante (l'instant ne part pas, un simple membre n'obtient rien que le détail ne lui serve déjà). Corrigé dans le lot : un refus restaurait l'instantané de la liste ENTIÈRE et défaisait la bascule réussie d'une autre communauté entre-temps — seule la ligne refusée revient désormais (témoin dédié).
+- Gates locaux : passerelle `tsc --noEmit` vert, 831 tests verts (communautés, `routes/__tests__`, `module-shadowing`, `tsc-never-loaded-tests-ratchet`) ; web `tsc --noEmit` vert, 446 tests verts (liens, communautés, catalogue des familles) ; catalogue TS 269 = référence.
+- Reste de #20255 : iOS (`CommunityLinks*` lit `joinLinkPaused` de `/communities/mine`), Android, et le message de l'arrivant (`COMMUNITY_LINK_PAUSED`), qui ne devient joignable qu'une fois qu'un client envoie `via: "link"`. #20255 reste ouverte.

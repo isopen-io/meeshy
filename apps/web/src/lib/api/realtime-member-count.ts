@@ -5,8 +5,8 @@ import type { Conversation } from './types';
 
 /**
  * **L'EFFECTIF D'UN GROUPE SUIT LES ARRIVÉES ET LES DÉPARTS** (#18914, WEB-14)
- * — `conversation:participant-joined` / `-left` / `-banned`, de n'importe quel
- * membre, sur la ligne de liste et la fiche du fil. Seule la feuille de
+ * — `conversation:participant-joined` / `-left` / `-banned` / `-unbanned`, de
+ * n'importe quel membre, sur la ligne de liste et la fiche du fil. Seule la feuille de
  * détails ouverte les écoutait (`conversation-members-live.ts`).
  *
  * Le contrat (`socketio-events/participant.ts`) sert l'effectif ACTIF APRÈS le
@@ -17,7 +17,7 @@ import type { Conversation } from './types';
  * contrat ; un bannissement qui n'a retiré personne (`membershipEnded: false`)
  * n'en retire pas. FAIL-CLOSED : une charge sans conversation ne touche rien.
  */
-export type MembershipChange = 'joined' | 'left' | 'banned';
+export type MembershipChange = 'joined' | 'left' | 'banned' | 'unbanned';
 
 type MemberCountChange =
   | { readonly conversationId: string; readonly served: { readonly memberCount: number; readonly capped: boolean } }
@@ -27,6 +27,11 @@ const isCount = (value: unknown): value is number => typeof value === 'number' &
 
 function fallbackDelta(payload: Readonly<Record<string, unknown>>, change: MembershipChange): 1 | -1 | 0 {
   if (change === 'joined') return 1;
+  // #20227 — une levée de ban n'AJOUTE un membre que si elle RESTAURE
+  // l'appartenance. C'est le miroir exact de `membershipEnded: false` sur le
+  // bannissement : le même événement dit deux choses, et c'est le champ qui
+  // tranche, jamais son nom.
+  if (change === 'unbanned') return payload.membershipRestored === true ? 1 : 0;
   if (change === 'banned' && payload.membershipEnded === false) return 0;
   return -1;
 }

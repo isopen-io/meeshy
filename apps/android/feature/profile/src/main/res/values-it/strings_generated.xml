@@ -105,6 +105,9 @@
     <string name="shared_location_precision_city">Alla città</string>
     <string name="shared_location_precision_exact">Posizione esatta</string>
     <string name="shared_location_precision_neighborhood">Al quartiere</string>
+    <string name="shared_location_replace_point_confirm">Mostra la mia posizione reale</string>
+    <string name="shared_location_replace_point_keep">Mantieni il punto scelto</string>
+    <string name="shared_location_replace_point_title">Mostrare la tua posizione reale?</string>
     <string name="shared_location_share_action">Condividi la mia posizione</string>
     <string name="shared_location_share_active">%1$s vede la tua posizione (%2$s) fino alle %3$s</string>
     <string name="shared_location_share_confirm">Condividi</string>

@@ -31,7 +31,7 @@ import {
   isMessageEditedEvent,
 } from './realtime-message-mutations';
 import { applyMessageHiddenForMe, applyMessageRestoredForMe, isMessageHiddenForMeEvent, isMessageRestoredForMeEvent } from './realtime-message-hidden';
-import { applyViewerMembershipEnded, viewerMembershipEndedOf } from './realtime-membership-ended';
+import { applyViewerMembershipEnded, applyViewerMembershipRestored, viewerMembershipEndedOf, viewerMembershipRestoredOf } from './realtime-membership';
 import { applyMemberCountChange, memberCountChangeOf, type MembershipChange } from './realtime-member-count';
 import { applyConversationGone, conversationGoneOf, viewerConversationOf } from './realtime-conversation-gone';
 import { applyMessagePinnedEvent, applyMessageUnpinnedEvent, isMessagePinnedEvent, isMessageUnpinnedEvent } from './realtime-message-pin';
@@ -78,6 +78,7 @@ import {
   noteEphemeralDelivery,
 } from './realtime-ephemeral';
 import { catchUpFirstAuthentication, catchUpThreadMessage, createUnknownRowCatchUp, relaunchConversationList } from './realtime-thread-catch-up';
+import { participantRightsUpdatedListener } from './realtime-participant-rights';
 import { viewerRoleUpdatedListener } from './realtime-viewer-role';
 import { bindSocialRealtime } from './realtime-social';
 import { STARRED_MESSAGES_QUERY_ROOT, applyStarredEvent } from './starred-messages-cache';
@@ -533,7 +534,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
 
   const onParticipantJoined = (payload: unknown): void => applyMembershipCount(payload, 'joined');
 
-  /** `conversation:participant-left` / `-banned` qui nomment le lecteur (#11415) : il n'y est plus membre. Règle : `realtime-membership-ended.ts`. */
+  /** `conversation:participant-left` / `-banned` qui nomment le lecteur (#11415) : il n'y est plus membre. Règle : `realtime-membership.ts`. */
   const onParticipantDeparture =
     (change: Exclude<MembershipChange, 'joined'>) =>
     (payload: unknown): void => {
@@ -543,6 +544,26 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     };
   const onParticipantLeft = onParticipantDeparture('left');
   const onParticipantBanned = onParticipantDeparture('banned');
+
+  /**
+   * `conversation:participant-unbanned` qui nomme le lecteur ET restaure son
+   * appartenance (#20227) : il y est de nouveau membre. Règle :
+   * `realtime-membership.ts`.
+   *
+   * La liste se relit EN ENTIER, comme `conversation:restored` : un
+   * débannissement n'écrit qu'un `participant.update`, donc
+   * `Conversation.updatedAt` ne bouge pas et le delta de liste ne peut PAS
+   * porter ce changement.
+   */
+  const onParticipantUnbanned = (payload: unknown): void => {
+    const restored = viewerMembershipRestoredOf(payload, deps.viewerId());
+    if (restored !== null) {
+      applyViewerMembershipRestored(deps.queryClient, restored);
+      requestFullConversationRead(deps.queryClient);
+      relaunchConversationList(deps.queryClient);
+    }
+    applyMembershipCount(payload, 'unbanned');
+  };
 
   /** `conversation:closed` / `-obsoleted` (#14645) — ligne, détail et messages partent. Règle : `realtime-conversation-gone.ts`. */
   const onConversationGone = (payload: unknown): void => {
@@ -835,6 +856,8 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   };
 
   const onViewerRoleUpdated = viewerRoleUpdatedListener(deps.queryClient, deps.viewerId); /* #15987 — `realtime-viewer-role.ts` */
+  /* `participant:rights-updated` (#20228) — les droits servis recouvrent ceux de la ligne NOMMÉE du détail ; un droit absent n'affirme rien. Règle : `realtime-participant-rights.ts`. */
+  const onParticipantRightsUpdated = participantRightsUpdatedListener(deps.queryClient);
   /* Les publications, les stories et leurs commentaires (#18914) — `realtime-social.ts`. */
   const unbindSocial = bindSocialRealtime({ socket, queryClient: deps.queryClient, viewerId: deps.viewerId });
   socket.on<unknown>(SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
@@ -845,6 +868,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_ENCRYPTION_CHANGED, onEncryptionChanged);
   socket.on<unknown>(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, onViewerRoleUpdated);
+  socket.on<unknown>(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, onParticipantRightsUpdated);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
@@ -865,6 +889,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED, onParticipantJoined);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, onParticipantLeft);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onParticipantBanned);
+  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED, onParticipantUnbanned);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_CLOSED, onConversationGone);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_OBSOLETED, onConversationGone);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_DELETED, onConversationDeletedForMe);
@@ -927,6 +952,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_ENCRYPTION_CHANGED, onEncryptionChanged);
       socket.off<unknown>(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, onViewerRoleUpdated);
+      socket.off<unknown>(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, onParticipantRightsUpdated);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
@@ -947,6 +973,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED, onParticipantJoined);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, onParticipantLeft);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, onParticipantBanned);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED, onParticipantUnbanned);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_CLOSED, onConversationGone);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_OBSOLETED, onConversationGone);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_DELETED, onConversationDeletedForMe);
