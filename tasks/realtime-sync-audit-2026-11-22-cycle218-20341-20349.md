@@ -200,3 +200,87 @@ par ce chemin que #20349 est passé. Issue : **#20353**.
 - `pack:installation-updated` n'a **aucun écouteur** dans `apps/web` alors
   qu'iOS et Android en ont un (relevé au passage, à instruire séparément : un
   événement sans lecteur est une autre question que celle de la table).
+
+---
+
+## Lot 3 — web : un pack acheté ou GAGNÉ ailleurs n'atteignait pas le navigateur (#20354)
+
+Trouvé au même balayage que le lot 2, et laissé de côté comme « marginal » ;
+instruit ensuite, il ne l'était pas. `pack:installation-updated` n'avait
+**aucun écouteur** sur le web, quand iOS et Android en ont un. La seule
+occurrence du dépôt était un COMMENTAIRE de `stickers/library-sync.ts` qui
+CITAIT le traitement d'Android pour justifier la conception de son VOISIN.
+
+**Le rang qui compte est le pack GAGNÉ** : un achat garde un geste local qui
+périme les caches, un octroi par trophée n'en a aucun — c'est le seul cas où
+le navigateur ne peut rien savoir sans l'événement.
+
+Décision inverse de celle de son voisin, et c'est raisonné : la charge ne
+porte ni prix, ni compteur d'installations, ni état d'offre, et surtout
+**aucun `userId`** — donc la garde de compte de `library-sync.ts` est
+impossible. Les deux sens d'erreur ne se valent pas : périmer sur un
+événement étranger coûte une relecture faite sous ses propres jetons ;
+ÉCRIRE poserait le pack d'autrui dans mon étagère.
+
+| gate | résultat |
+|---|---|
+| `bun test` (suite web COMPLÈTE) | **35 144 verts / 1 rouge** — la garde méta `act-leak-guard`, qui lance un `bun test` IMBRIQUÉ, sensible à l'environnement et sans rapport avec le lot |
+| `tsc --noEmit` | **0** |
+| `bun run build` | OK |
+| ROUGE par mutation | 3 fois, chacune ne faisant tomber que le témoin qui la nomme |
+
+## L'incident de méthode du cycle, et il vaut plus que les trois lots
+
+En gatant le lot 3, trois gates ont rougi sur un `dev` PROPRE : 43 rouges,
+8 erreurs de type, build en échec. J'ai bisecté les six commits de `dev`,
+proprement, et le bisect a DÉSIGNÉ #20327 — reverser ses seuls fichiers
+rendait le build vert.
+
+**C'était faux.** `packages/shared` avait bougé sur `dev` et mon `dist` datait
+du début de session. Reconstruire `shared` : `tsc` 8 → 0, build vert, suite
+43 rouges → 1.
+
+> Un bisect ne distingue pas « ce commit est fautif » de « ce commit est le
+> premier à EXIGER l'artefact que je n'ai pas reconstruit ». Les deux rendent
+> la même courbe, et retirer le code neuf retire la DEMANDE du type neuf —
+> l'innocent signe des aveux.
+
+Trois signaux étaient là et ont été mal lus : un build VERT deux heures plus
+tôt au même endroit ; des erreurs nommant un symbole NEUF comme absent d'un
+type (la signature exacte d'un `dist` en retard, que le `CLAUDE.md` racine
+décrit mot pour mot) ; et une CI de `dev` qui ne contredisait rien parce
+qu'elle ne conclut JAMAIS — chaque run y est annulé par le groupe de
+concurrence. L'absence de contradiction a été lue comme une confirmation.
+
+Leçon : `tasks/lessons/2026-11-22-un-bisect-confirme-un-faux-coupable-quand-l-artefact-perime-est-la-cause.md`.
+
+## Deux constats d'infrastructure, qui ne sont le défaut de personne
+
+- **~~La CI de `dev` ne conclut jamais.~~ AFFIRMATION RETIRÉE, mesurée FAUSSE
+  le même jour.** Je l'avais tirée des SIX derniers runs `CI` de `dev`, tous
+  `cancelled`. Comptés sur cent : **18 succès, 4 échecs, 20 annulés** — le
+  dernier succès porte `229e8aaae`, exactement le point que j'avais mesuré vert
+  en local. La CI conclut ; elle ne conclut simplement pas sur CHAQUE SHA.
+
+  Et le dépôt avait déjà instruit la question : `ci.yml` porte
+  `cancel-in-progress: false` sur les branches d'intégration depuis #4395, et
+  son en-tête décrit mot pour mot ce que j'ai observé — « les annulations
+  surviennent à des âges courts et IRRÉGULIERS, signature d'un run qui
+  ATTENDAIT et qu'un arrivant plus récent a évincé », suivi de **« Ne pas lire
+  une file d'attente comme une panne. »**
+
+  > Deuxième fois du même cycle qu'une conclusion est tirée d'un échantillon
+  > trop court — après le `dist` périmé. Un compte est une AFFIRMATION : il se
+  > compte, il ne s'extrapole pas de la première page d'une API.
+- **Aucun verdict iOS n'est produit, et celui-là tient à la mesure.** Sur les
+  cent derniers runs du dépôt, `iOS` et `iOS SDK` rendent **zéro** `success` et
+  **zéro** `failure` — uniquement `cancelled` et `skipped`. En attente au même
+  moment : 37 runs macOS, 4 actifs, le plus ancien du **2026-11-11**.
+
+  C'est le CONSTAT, pas sa cause : « la file est bouchée » reste une inférence
+  que je n'ai pas prouvée, et la leçon du jour est précisément de ne pas
+  publier une cause qu'on n'a pas mesurée. Ce qui est sûr : **un lot iOS n'est
+  pas prouvable aujourd'hui**, et c'est ainsi que le lot 1 est entré dans `dev`
+  sans preuve de compilation — la CI des PR rendant `skipped`, seul un
+  `workflow_dispatch` peut juger, et l'auto-merge ne l'attend pas. Issue :
+  #20401.

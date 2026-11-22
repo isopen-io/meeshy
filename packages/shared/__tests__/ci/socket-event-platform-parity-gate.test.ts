@@ -211,14 +211,15 @@ const ASYMETRIES: readonly {
     events: ['battery:pull-requested'],
   },
   {
-    absents: ['web', 'ios'],
+    absents: ['ios'],
     raison:
-      "`pack:installation-updated` — un pack installé ou retiré sur un AUTRE de mes appareils. Android le "
-      + 'ROUTE (`MessageSocketManager`, puis `PackShopViewModel` et `ProfileDecorViewModel`) ; iOS et le web '
-      + "ne le NOMMENT que dans un doc-comment (l'origine `remote` d'un retrait côté iOS, la comparaison de "
-      + '`library-sync.ts` côté web) et relisent leurs vitrines par REST. `sticker:library-updated`, qu\'ils '
-      + 'écoutent tous deux, porte la BIBLIOTHÈQUE de stickers et non la POSSESSION d\'un pack : ce n\'est pas '
-      + 'le même fait. À instruire avec le lot des vitrines.',
+      "`pack:installation-updated` — un pack installé, acheté, GAGNÉ ou retiré sur un AUTRE de mes appareils. "
+      + 'Android le ROUTE (`MessageSocketManager`, puis `PackShopViewModel` et `ProfileDecorViewModel`) ; le web '
+      + "le ROUTE depuis #20354 (`lib/packs/installation-sync.ts`, qui PÉRIME ses vitrines au lieu d'appliquer la "
+      + "charge — elle ne porte ni prix, ni compteur d'installations, ni `userId` permettant de vérifier à qui "
+      + "elle appartient). iOS ne le NOMME que dans un doc-comment (l'origine `remote` d'un retrait) et relit ses "
+      + 'vitrines par REST : un pack GAGNÉ par un trophée, qui n\'a aucun geste local pour l\'annoncer, ne peut '
+      + "donc pas y arriver avant péremption. C'est le dernier retard de cette famille, suivi par #20409.",
     events: ['pack:installation-updated'],
   },
 ];
