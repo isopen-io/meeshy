@@ -8,7 +8,7 @@ import { resolveReaderLanguages } from '@/lib/reader';
 import { quickReplyAllowed } from '@/lib/send/served-regime';
 
 import { monotonicClock } from './call-captions';
-import { createCaptions, type CaptionsContext, type CaptionsPort } from './call-captions-controller';
+import { createCaptions, type CaptionsContext, type CaptionsDeps, type CaptionsPort } from './call-captions-controller';
 import { recognitionFor } from './call-shell-speech';
 import { browserSpeech, recognitionOf, type RecognitionConstructor } from './call-speech';
 
@@ -53,8 +53,9 @@ function utteranceId(): string {
   return `w-${Date.now().toString(36)}-${sequence}`;
 }
 
-export function createBrowserCaptions(ctx: CaptionsContext): CaptionsPort {
-  return createCaptions(ctx, {
+/** Ce que le navigateur remet au contrôleur ; son horloge est `monotonicClock`, celle que le panneau lit par défaut (#20320). */
+export function browserCaptionsDeps(): CaptionsDeps {
+  return {
     speech: browserSpeech(recognition()),
     language: spokenLanguage,
     prism: readerPrism,
@@ -63,5 +64,9 @@ export function createBrowserCaptions(ctx: CaptionsContext): CaptionsPort {
     elapsed: monotonicClock,
     // #13720 — fail-closed : régime connu du cache ET en clair, comme la réponse rapide d'un refus d'appel.
     serverMayHearCaptions: (conversationId) => quickReplyAllowed(conversationId, appQueryClient),
-  });
+  };
+}
+
+export function createBrowserCaptions(ctx: CaptionsContext): CaptionsPort {
+  return createCaptions(ctx, browserCaptionsDeps());
 }

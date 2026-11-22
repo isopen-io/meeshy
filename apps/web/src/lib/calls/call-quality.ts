@@ -83,10 +83,10 @@ const audioJitterMs = (inbound: readonly StatsEntry[]): number => {
 
 const subtype = (mimeType: unknown): string | null => (typeof mimeType === 'string' && mimeType.includes('/') ? (mimeType.split('/')[1] ?? null) : null);
 
-/** `CallStats.relayedRoute` (iOS) : relayée dès qu'un des deux candidats de la paire élue l'est ; inconnue sans aucun des deux. */
+/** `CallStats.relayedRoute` (iOS) : relayée dès qu'un des deux candidats de la paire élue l'est ; inconnue sans aucun type lu (le `compactMap` d'iOS et d'Android). */
 const routeOf = (entries: readonly StatsEntry[], pair: StatsEntry | undefined): MediaPath | null => {
-  const candidates = pair === undefined ? [] : entries.filter((entry) => (entry.type === 'local-candidate' && entry.id === pair.localCandidateId) || (entry.type === 'remote-candidate' && entry.id === pair.remoteCandidateId));
-  return candidates.length === 0 ? null : candidates.some((entry) => entry.candidateType === 'relay') ? 'relay' : 'direct';
+  const types = pair === undefined ? [] : entries.filter((entry) => (entry.type === 'local-candidate' && entry.id === pair.localCandidateId) || (entry.type === 'remote-candidate' && entry.id === pair.remoteCandidateId)).map((entry) => entry.candidateType).filter((type) => typeof type === 'string');
+  return types.length === 0 ? null : types.includes('relay') ? 'relay' : 'direct';
 };
 
 export function readStats(report: StatsReportLike, at: number): StatsRead {
