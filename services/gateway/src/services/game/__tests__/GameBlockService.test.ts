@@ -81,6 +81,20 @@ describe('GameBlockService.build', () => {
     expect((await build(never)).flame.freezeGifted).toBe(false);
   });
 
+  it('au jour du retour, le coffre se sert prêt et gardé par les aïeux, dès la lecture qui grave le retour (#20266)', async () => {
+    const back = fakeGameDb();
+    seedUser(back, { engagementScore: 100 * 20 * 20, levelRecord: 20, timezone: 'UTC' });
+    back.dailyMission.rows.push({ id: 'old', userId: USER, dayKey: '2026-09-20', slot: 0, completedAt: null, createdAt: new Date('2026-09-20T08:00:00Z') });
+    const block = await build(back);
+    expect(gameBlockSchema.safeParse(block).success).toBe(true);
+    expect(block.chest).toMatchObject({ status: 'ready', kept: true });
+
+    const stayed = fakeGameDb();
+    seedUser(stayed, { engagementScore: 100 * 20 * 20, levelRecord: 20, timezone: 'UTC' });
+    stayed.dailyMission.rows.push({ id: 'old', userId: USER, dayKey: '2026-10-04', slot: 0, completedAt: null, createdAt: new Date('2026-10-04T08:00:00Z') });
+    expect((await build(stayed)).chest).toMatchObject({ status: 'locked', kept: false });
+  });
+
   it('les points sont là, l\'étape du 10 manque : le niveau attend à 9 et dit laquelle (#9706)', async () => {
     const db = fakeGameDb();
     seedUser(db, { engagementScore: 100 * 15 * 15, levelRecord: 9 });
