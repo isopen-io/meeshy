@@ -91,16 +91,19 @@ export const ownSharedLocationSchema = {
     startedAt: { type: 'string' },
     source: { type: 'string', enum: ['device', 'manual'] },
     acceptsManualSource: { type: 'boolean' },
+    acceptsExpectedStart: { type: 'boolean' },
   },
 } as const;
 
 /**
  * Ce que `/relations/locations/mine` sert : mon partage, plus l'ANNONCE que cette passerelle accepte un point
  * choisi à la main (`source: 'manual'`, #19557). C'est le seul signal qu'un client lit pour proposer « Choisir sur
- * la carte » ; il est servi avec ou sans partage en cours, puisque le client le lit AVANT de partager.
+ * la carte » ; il est servi avec ou sans partage en cours, puisque le client le lit AVANT de partager. Elle annonce
+ * aussi `expectedStartedAt` au démarrage (#20249) : une confirmation de remplacement n'y nomme le partage montré que
+ * si la passerelle sait le refuser.
  */
 export function servedOwnSharedLocation(own: SharedLocationOwnSnapshot): SharedLocationOwnSnapshot {
-  return { ...own, acceptsManualSource: true };
+  return { ...own, acceptsManualSource: true, acceptsExpectedStart: true };
 }
 
 /** `minLongitude,minLatitude,maxLongitude,maxLatitude` ; absent = toute la carte ; illisible = `null`. */

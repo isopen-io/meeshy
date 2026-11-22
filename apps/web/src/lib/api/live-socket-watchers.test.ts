@@ -93,6 +93,31 @@ describe('createLiveSocketWatchers — s’accrocher à la socket vivante, quell
     expect(log.slice(4)).toEqual(['a-s1', 'b-s1', 'a+s2', 'b+s2']);
   });
 
+  test('un DÉTACHEMENT qui lève n’empêche ni les autres détachements ni la migration (#20304)', () => {
+    const log: string[] = [];
+    const watchers = createLiveSocketWatchers();
+    watchers.connect(fakeSocket('s1'));
+    watchers.watch(() => () => {
+      throw new Error('panne au détachement');
+    });
+    watchers.watch(recordingWatcher(log, 'b'));
+    watchers.connect(fakeSocket('s2'));
+    expect(log).toEqual(['b+s1', 'b-s1', 'b+s2']);
+  });
+
+  test('cesser d’observer malgré un détachement qui lève désinscrit quand même', () => {
+    const log: string[] = [];
+    const watchers = createLiveSocketWatchers();
+    watchers.connect(fakeSocket('s1'));
+    const stop = watchers.watch(() => () => {
+      throw new Error('panne au détachement');
+    });
+    stop();
+    watchers.watch(recordingWatcher(log, 'b'));
+    watchers.connect(fakeSocket('s2'));
+    expect(log).toEqual(['b+s1', 'b-s1', 'b+s2']);
+  });
+
   test('un observateur qui lève à l’accroche n’empêche ni les autres ni les connexions suivantes', () => {
     const log: string[] = [];
     const watchers = createLiveSocketWatchers();

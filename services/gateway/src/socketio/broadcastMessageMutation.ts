@@ -21,7 +21,9 @@ import {
 } from './editedAudience';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { withSealedQuote } from '../services/messaging/servedQuotedMessage';
-import { readerSignedPlanForMessageId } from './readerSignedDelivery';
+import { readerSignedPlanForMessageIdBestEffort } from './readerSignedDelivery';
+import { offlineSignedPayload } from './offlineSignedPayload';
+import { queueSigningFields } from './editedOfflineSigning';
 import { stripClientMessageId } from './utils/message-ack-shaping';
 import { conversationAudienceRooms, loadLiveAudience } from './conversationAudienceRooms';
 
@@ -429,16 +431,31 @@ export async function broadcastMessageMutation(rawParams: MessageMutationParams)
       ? await messageReadership(params.prisma, conversationId, messageId, onError)
       : { kind: 'room' };
   const blockedKeys = blockedReaderKeys(readership);
-  try {
-    // #9646 — un message protégé qui porte des pièces : par destinataire,
-    // chacun sa variante (scellée ou non) et ses adresses signées.
-    const plan = params.eventType === 'edited'
-      ? await readerSignedPlanForMessageId(params.prisma, {
+  // #9646 — un message protégé qui porte des pièces : par destinataire, chacun
+  // sa variante (scellée ou non) et ses adresses signées.
+  //
+  // #20305 — le plan vit HORS du `try` d'émission, et en BEST-EFFORT, parce que
+  // l'enfilage qui suit en dépend : la file est la TROISIÈME sortie de la même
+  // charge, et c'est la plus exposée des trois (son entrée vit 48 h, donc elle
+  // SURVIT à la fenêtre pendant laquelle la protection d'une pièce peut
+  // changer). Laissé dans le `try`, le plan n'était visible que de l'émission
+  // directe : l'enfilage passait la charge GÉNÉRIQUE, donc le `fileUrl` NU
+  // d'une pièce liée au lecteur. Et une lecture TOMBÉE y remontait en
+  // exception, dont le `catch` ne faisait qu'`onError` — l'enfilage, dans le
+  // `try` SUIVANT, écrivait quand même ce qu'on venait de déclarer non
+  // adressable.
+  const plan = params.eventType === 'edited'
+    ? await readerSignedPlanForMessageIdBestEffort(
+        params.prisma,
+        {
           conversationId,
           messageId,
           attachments: (params.payload as { readonly attachments?: unknown }).attachments,
-        })
-      : null;
+        },
+        (error) => onError?.(error),
+      )
+    : null;
+  try {
     const io = manager.getIO();
     if (readership.kind === 'unknown') {
       // Ni qui est bloqué, ni qui est autorisé : rien ne part en direct, et
@@ -550,8 +567,24 @@ export async function broadcastMessageMutation(rawParams: MessageMutationParams)
   // du cycle 93 (« un compte est une affirmation ») appliquée à un inventaire
   // de sites. Le cliquet qui la tient désormais :
   // `src/__tests__/detached-promise-catch-sweep.ts`.
+  // #20305 — les QUATRE producteurs de `message:edited` signent leur charge
+  // enfilée et se taisent sur `PLAN_UNAVAILABLE`. `offlineSignedPayload` compose
+  // la base du lecteur PUIS la signature, dans cet ordre et une seule fois : la
+  // base porte le scellement de citation, donc signer d'abord laisserait une
+  // adresse valide pointant sur ce qu'on vient de retirer. Un SEUL crochet par
+  // lecteur en sort — deux (l'un pour le masque, l'autre pour la signature)
+  // s'excluraient au site d'appel, et le premier posé gagnerait.
+  const signed =
+    params.eventType === 'edited'
+      ? offlineSignedPayload({
+          plan,
+          base: (queueKey) => sealedVariant(params.payload, sealed, queueKey) as Record<string, unknown>,
+          basePerReader: sealed.size > 0,
+        })
+      : null;
   try {
     if (readership.kind === 'unknown') return;
+    if (signed?.kind === 'withhold') return;
     void Promise.resolve(
       manager.enqueueOfflineMessageMutation({
         conversationId,
@@ -565,9 +598,11 @@ export async function broadcastMessageMutation(rawParams: MessageMutationParams)
         // deux unions indépendantes, et la file cesserait d'être gardée à
         // l'étage même où elle vient de l'être.
         ...queuedVariant(params),
-        ...(sealed.size > 0
-          ? { resolvePayloadForReader: (queueKey: string) => sealedVariant(params.payload, sealed, queueKey) }
-          : {}),
+        ...(signed === null
+          ? sealed.size > 0
+            ? { resolvePayloadForReader: (queueKey: string) => sealedVariant(params.payload, sealed, queueKey) }
+            : {}
+          : queueSigningFields(signed)),
       })
     ).catch((error: unknown) => onError?.(error));
   } catch (error) {
