@@ -62,20 +62,23 @@ class CallStatsTest {
         assertThat(stats.roundTripTimeMs).isEqualTo(250.0)
     }
 
+    private fun electedPair(values: Map<String, Double>) = CallStats.RawEntry(
+        id = "cp",
+        type = "candidate-pair",
+        values = values + ("nominated" to 1.0),
+        strings = mapOf("state" to "succeeded"),
+    )
+
     @Test
-    fun `candidate-pair sets the available outgoing bitrate truncated to an int`() {
-        val stats = CallStats.reduce(
-            listOf(entry("cp", "candidate-pair", values = mapOf("availableOutgoingBitrate" to 1_500_000.9))),
-        )
+    fun `the elected candidate-pair sets the available outgoing bitrate truncated to an int`() {
+        val stats = CallStats.reduce(listOf(electedPair(mapOf("availableOutgoingBitrate" to 1_500_000.9))))
         assertThat(stats.availableOutgoingBitrateBps).isEqualTo(1_500_000)
     }
 
     @Test
     fun `a candidate-pair without an rtt leaves rtt at zero`() {
         // Only the bitrate is present — rtt must not be invented.
-        val stats = CallStats.reduce(
-            listOf(entry("cp", "candidate-pair", values = mapOf("availableOutgoingBitrate" to 800_000.0))),
-        )
+        val stats = CallStats.reduce(listOf(electedPair(mapOf("availableOutgoingBitrate" to 800_000.0))))
         assertThat(stats.roundTripTimeMs).isEqualTo(0.0)
         assertThat(stats.availableOutgoingBitrateBps).isEqualTo(800_000)
     }
@@ -139,20 +142,43 @@ class CallStatsTest {
             ),
         )
         assertThat(stats.roundTripTimeMs).isWithin(1e-9).of(60.0)
-        assertThat(stats.availableOutgoingBitrateBps).isEqualTo(1_200_000)
     }
 
     @Test
-    fun `an elected pair that reports no rtt falls back to the previous reading`() {
+    fun `an elected pair that reports no rtt falls back to the next pair carrying one`() {
         val elected = CallStats.RawEntry(
             id = "elected",
             type = "candidate-pair",
             values = mapOf("nominated" to 1.0),
             strings = mapOf("state" to "succeeded"),
         )
-        val stats = CallStats.reduce(listOf(elected, pair("other", rttSeconds = 0.08, bitrate = 300_000.0, state = "waiting")))
+        val stats = CallStats.reduce(listOf(elected, pair("other", rttSeconds = 0.08, state = "waiting")))
         assertThat(stats.roundTripTimeMs).isWithin(1e-9).of(80.0)
-        assertThat(stats.availableOutgoingBitrateBps).isEqualTo(300_000)
+    }
+
+    // --- reduce: the outgoing estimate is read ONLY on the elected pair (#20284) ---
+
+    @Test
+    fun `an elected pair without an outgoing estimate reads no estimate, never another pair's`() {
+        val elected = CallStats.RawEntry(
+            id = "elected",
+            type = "candidate-pair",
+            values = mapOf("nominated" to 1.0, "currentRoundTripTime" to 0.05),
+            strings = mapOf("state" to "succeeded"),
+        )
+        val stats = CallStats.reduce(listOf(elected, pair("other", rttSeconds = 0.3, bitrate = 120_000.0, state = "waiting")))
+        assertThat(stats.availableOutgoingBitrateBps).isEqualTo(0)
+    }
+
+    @Test
+    fun `with no elected pair there is no outgoing estimate, whatever an unelected pair carries`() {
+        val stats = CallStats.reduce(
+            listOf(
+                pair("b", rttSeconds = 0.5, bitrate = 90_000.0, state = "waiting"),
+                pair("a", rttSeconds = 0.06, bitrate = 1_200_000.0, state = "in-progress"),
+            ),
+        )
+        assertThat(stats.availableOutgoingBitrateBps).isEqualTo(0)
     }
 
     // --- reduce: inbound-rtp per kind --------------------------------------
