@@ -688,11 +688,7 @@ export function registerCommentRoutes(
         return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
       }
 
-      /* La séparation se lit AVANT l'écriture (#20236) : résolue après, elle
-         décorrèle l'ordre du fil de l'ordre des écritures, et la charge de ces
-         deux événements est ABSOLUE (`likeCount`) — un retrait qui double sa
-         pose fige chez le lecteur un compteur que la base contredit. Lue ici,
-         l'émission redevient synchrone juste après la mutation. */
+      /* AVANT l'écriture (#20236) : la loi dit pourquoi — charge ABSOLUE, ordre. */
       const separated = fastify.socialEvents
         ? await fastify.socialEvents.commentActivitySeparation(authContext.registeredUser.id, thread.authorId)
         : null;
@@ -796,11 +792,8 @@ export function registerCommentRoutes(
         return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
       }
 
-      /* Avant l'écriture, pour la même raison qu'à la pose (#20236). Et c'est
-         ce chemin-ci qui rend l'exclusion de l'AUTEUR nécessaire : retirer sa
-         réaction reste permis après un blocage (décision écrite), donc cette
-         route n'a PAS la porte `commentAuthorSeparatedFrom` — sans la loi,
-         l'auteur se voyait annoncer l'activité de qui il a bloqué. */
+      /* Comme à la pose (#20236) — et c'est CE chemin qui rend l'exclusion de
+         l'AUTEUR nécessaire : il n'a pas de porte `commentAuthorSeparatedFrom`. */
       const separated = fastify.socialEvents
         ? await fastify.socialEvents.commentActivitySeparation(authContext.registeredUser.id, thread.authorId)
         : null;
