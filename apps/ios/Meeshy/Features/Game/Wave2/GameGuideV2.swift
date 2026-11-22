@@ -4,7 +4,8 @@ import MeeshySDK
 // MARK: - Les événements du guide, vague 2 (#9481)
 //
 // La loi partagée (`GameGuideV2.chooseMoment`) choisit LE moment ; ce fichier relève ses huit événements dans l'état
-// du jeu, comme `GameGuideEvents` le fait pour la vague 1 — et la première Veilleuse offerte, dite le jour du cadeau.
+// du jeu, comme `GameGuideEvents` le fait pour la vague 1 — et la première Veilleuse offerte, dite le jour du cadeau —
+// et l'Offrande gardée par les aïeux, redite tant qu'elle est prête le jour du retour.
 // Miroir de `apps/web/src/lib/game-guide/events-v2.ts` :
 //
 //  - `standing` lit l'ÉTAT à l'ouverture. Seules deux découvertes s'y lisent — la première ligue, le début d'une
@@ -80,7 +81,14 @@ enum GameGuideEventsV2 {
             ? .flameFreezeGift(freezes: game.flame.freezes) : nil
     }
 
-    /// Ce que l'état dit à l'ouverture, et que la personne n'a pas encore entendu.
+    /// Le jour du retour, l'Offrande gardée est prête : une urgence douce, redite jusqu'à ce qu'elle s'ouvre.
+    private static func keptOffering(_ game: GameBlock) -> GuideEventV2? {
+        GameWelcomeBack.announcesKeptOffering(kept: game.chest.kept, status: game.chest.status)
+            ? .offeringKept(easedDays: GameWelcomeBack.easedDays) : nil
+    }
+
+    /// Ce que l'état dit à l'ouverture, et que la personne n'a pas encore entendu — plus l'Offrande gardée, qui se
+    /// redit tant qu'elle est prête.
     static func standing(game: GameBlock, seen: Set<String>) -> [GuideEventV2] {
         var events: [GuideEventV2] = []
         if let league = game.league, league.access == .open, let current = league.current {
@@ -88,7 +96,8 @@ enum GameGuideEventsV2 {
         }
         if let season = GuideSnapshotV2(game: game).season { events.append(seasonStart(season)) }
         if let gift = freezeGift(game) { events.append(gift) }
-        return events.filter { !seen.contains($0.key.rawValue) }
+        let discoveries = events.filter { !seen.contains($0.key.rawValue) }
+        return discoveries + (keptOffering(game).map { [$0] } ?? [])
     }
 
     /// Ce qui est arrivé entre deux instantanés. Une extension absente d'un des deux côtés ne produit rien.
@@ -135,11 +144,13 @@ enum GameGuideEventsV2 {
         return events
     }
 
-    /// Les événements d'une transition entre deux lectures du bloc. Le cadeau ne se dit qu'en ARRIVANT : une lecture
-    /// qui le portait déjà l'a annoncé.
+    /// Les événements d'une transition entre deux lectures du bloc. Le cadeau et l'Offrande gardée ne se disent qu'en
+    /// ARRIVANT : une lecture qui les portait déjà les a annoncés.
     static func transition(from before: GameBlock, to after: GameBlock) -> [GuideEventV2] {
         let gift = before.flame.freezeGifted == true ? nil : freezeGift(after)
-        return between(before: GuideSnapshotV2(game: before), after: GuideSnapshotV2(game: after)) + (gift.map { [$0] } ?? [])
+        let welcome = GameWelcomeBack.announcesKeptOffering(kept: before.chest.kept, status: before.chest.status)
+            ? nil : keptOffering(after)
+        return between(before: GuideSnapshotV2(game: before), after: GuideSnapshotV2(game: after)) + [gift, welcome].compactMap { $0 }
     }
 }
 
@@ -184,6 +195,7 @@ extension GameGuideCopy {
         case .seeAtlas: GameText.guideActionSeeAtlas
         case .seeLevel: actionLabel(.seeLevel)
         case .seeFlame: actionLabel(.seeFlame)
+        case .seeMissions: actionLabel(.seeMissions)
         }
     }
 
@@ -257,6 +269,11 @@ extension GameGuideCopy {
             return copy(
                 GameText.guideMomentFlameFreezeGiftWhat, GameText.guideMomentFlameFreezeGiftMeans,
                 GameText.guideMomentFlameFreezeGiftNext(count: number(freezes)), GameText.guideMomentFlameFreezeGiftShort
+            )
+        case .offeringKept(let easedDays):
+            return copy(
+                GameText.guideMomentOfferingKeptWhat, GameText.guideMomentOfferingKeptMeans,
+                GameText.guideMomentOfferingKeptNext(days: GameCopy.days(easedDays)), GameText.guideMomentOfferingKeptShort
             )
         }
     }
