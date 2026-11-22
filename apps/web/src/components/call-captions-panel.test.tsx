@@ -2,9 +2,11 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
+import { DIRECT, harness, PEER, type FakeLink } from '@/test-support/call-engine-harness';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
-import type { CallCaption } from '@/lib/calls/call-captions';
+import { TRANSLATION_WAIT_MS, type CallCaption } from '@/lib/calls/call-captions';
 import { speakerColor } from '@/lib/calls/call-speaker-color';
 import { callStore, type ActiveCall } from '@/lib/calls/call-store';
 import { useCaptionReveals } from '@/lib/calls/call-captions-unfold-store';
@@ -256,6 +258,37 @@ describe('les gestes', () => {
       }
     });
   }
+
+  test('le panneau lit l’horloge monotone du contrôleur : les points tombent quand SA fausse horloge passe l’échéance, sans toucher à performance.now (#20320)', async () => {
+    const h = harness();
+    await h.engine.start(DIRECT);
+    h.engine.handle(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, { callId: 'call-1', participant: { id: 'p-2', userId: PEER, username: 'amina', displayName: 'Amina' } });
+    h.linkState(h.links[0] as FakeLink, 'connected');
+    const channel = { readyState: 'open', send: () => undefined, onmessage: null as ((event: { data: string }) => void) | null, onclose: null };
+    h.links[0]?.deps.onChannel?.(channel as unknown as RTCDataChannel);
+    channel.onmessage?.({ data: JSON.stringify({ type: 'transcript-entry', entry: { id: 'w-es', callId: 'call-1', speakerId: PEER, speakerDisplayName: 'Amina', text: 'Hola a todos', language: 'es', capturedAtMs: 5_000, isFinal: true, confidence: 0.9 } }) });
+    const live = (): ActiveCall => h.call() as ActiveCall;
+    expect(live().captions[0]?.origin?.awaitingUntil).toBe(h.elapsed() + TRANSLATION_WAIT_MS);
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const render = () => act(() => root.render(<CallCaptionsPanel call={live()} language="fr" colorOf={colorOf} surface="glass" clock={h.elapsed} />));
+    render();
+    try {
+      expect(host.querySelector('[data-call-caption-waiting]')?.hasAttribute('data-leaving')).toBe(false);
+      h.advance(TRANSLATION_WAIT_MS - 1);
+      render();
+      expect(host.textContent).toContain('Traduction en cours');
+      h.advance(2);
+      render();
+      expect(host.querySelector('[data-call-caption-waiting]')?.hasAttribute('data-leaving')).toBe(true);
+      expect(host.textContent).not.toContain('Traduction en cours');
+    } finally {
+      act(() => root.unmount());
+      host.remove();
+      h.engine.hangup();
+    }
+  });
 
   test('le pied pose le bouton Journal quand l’appel peut l’ouvrir, et il l’ouvre (#17346)', () => {
     const opened: string[] = [];
