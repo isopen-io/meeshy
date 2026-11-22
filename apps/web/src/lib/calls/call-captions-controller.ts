@@ -55,6 +55,7 @@ export type CaptionsContext = {
   readonly update: (fn: (call: ActiveCall) => ActiveCall) => void;
   readonly emit: (event: string, payload: unknown) => void;
   readonly viewerId: () => string;
+  /** L'horloge MURALE : l'heure d'une ligne (`at`), qui range le journal et s'affiche. */
   readonly now: () => number;
   readonly repeat: (fn: () => void, ms: number) => unknown;
   readonly stopRepeat: (handle: unknown) => void;
@@ -84,6 +85,8 @@ export type CaptionsDeps = {
   readonly prism: () => readonly string[];
   readonly viewerName: () => string;
   readonly newId: () => string;
+  /** L'horloge MONOTONE (`performance.now()`) : l'échéance de l'attente d'une traduction, qu'un saut de l'horloge murale ne déplace pas (#20298). Portée par le chunk des sous-titres, pas par le moteur. */
+  readonly elapsed: () => number;
   /**
    * La passerelle peut-elle entendre ce qui se dit dans cette conversation
    * (#13720) ? Faux pour une conversation chiffrée de bout en bout, vue comme
@@ -207,7 +210,7 @@ export function createCaptions(ctx: CaptionsContext, deps: CaptionsDeps): Captio
     }
     const call = live();
     if (call === null || message.callId !== ctx.callId) return;
-    const origin = captionOrigin({ language: message.language, isFinal: message.isFinal, translated: null, prism: deps.prism(), now: ctx.now() });
+    const origin = captionOrigin({ language: message.language, isFinal: message.isFinal, translated: null, prism: deps.prism(), received: deps.elapsed() });
     add({ id: message.id, speakerId: userId, speakerName: call.members[userId]?.name || message.speakerName, original: message.text, translated: null, pair: null, origin, isFinal: message.isFinal, at: message.at > 0 ? message.at : ctx.now(), mine: false });
   };
 
@@ -216,7 +219,7 @@ export function createCaptions(ctx: CaptionsContext, deps: CaptionsDeps): Captio
     const call = live();
     if (decoded === null || call === null || decoded.callId !== ctx.callId || decoded.caption.speakerId === ctx.viewerId()) return;
     const speakerName = decoded.speakerName ?? call.members[decoded.caption.speakerId]?.name ?? '';
-    const origin = captionOrigin({ language: decoded.language, isFinal: decoded.caption.isFinal, translated: decoded.caption.translated, prism: deps.prism(), now: ctx.now() });
+    const origin = captionOrigin({ language: decoded.language, isFinal: decoded.caption.isFinal, translated: decoded.caption.translated, prism: deps.prism(), received: deps.elapsed() });
     add({ ...decoded.caption, speakerName, origin, at: decoded.caption.at > 0 ? decoded.caption.at : ctx.now(), mine: false });
   };
 

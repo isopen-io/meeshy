@@ -200,6 +200,7 @@
         <item quantity="many">%1$d تسجيلات</item>
         <item quantity="other">%1$d تسجيلات</item>
     </plurals>
+    <string name="links_common_action_failed">لم يكتمل الإجراء. أعد المحاولة.</string>
     <string name="links_common_active">نشط</string>
     <string name="links_common_cancel">إلغاء</string>
     <string name="links_common_copy">نسخ</string>
@@ -208,6 +209,7 @@
     <string name="links_common_share">مشاركة</string>
     <string name="links_community_create_a11y">إنشاء مجتمع</string>
     <string name="links_community_empty_title">لا توجد مجتمعات تديرها</string>
+    <string name="links_community_join_link_paused">توقّف الانضمام عبر هذا الرابط مؤقتًا</string>
     <string name="links_community_stat_active">النشطون</string>
     <string name="links_hub_community_description">أدر روابط الدعوة إلى مجتمعاتك</string>
     <string name="links_hub_share_create_a11y">إنشاء رابط مشاركة</string>
