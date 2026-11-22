@@ -39,6 +39,7 @@ export function photoMomentOfGuideEvent(event: GuideEventV2): PhotoMomentEmblemV
     case 'season-start':
     case 'atlas-stamp':
     case 'flame-freeze-gift':
+    case 'offering-kept':
       return null;
   }
 }
