@@ -320,16 +320,20 @@ public struct GameBlock: Codable, Sendable, Equatable {
         /// l'ouverture. `nil` devant un serveur antérieur, avant le tirage des missions, ou s'il est illisible (il
         /// tombe seul).
         public let today: ChestContent?
+        /// Vrai le jour du retour, quand les aïeux ont GARDÉ l'Offrande (#20266) : elle est prête sans attendre les
+        /// actes. `nil` devant un serveur antérieur : rien ne s'annonce.
+        public let kept: Bool?
 
-        public init(status: Status, odds: ChestOdds, reward: DailyChest?, today: ChestContent? = nil) {
+        public init(status: Status, odds: ChestOdds, reward: DailyChest?, today: ChestContent? = nil, kept: Bool? = nil) {
             self.status = status
             self.odds = odds
             self.reward = reward
             self.today = today
+            self.kept = kept
         }
 
         private enum CodingKeys: String, CodingKey {
-            case status, odds, reward, today
+            case status, odds, reward, today, kept
         }
 
         public init(from decoder: Decoder) throws {
@@ -338,6 +342,7 @@ public struct GameBlock: Codable, Sendable, Equatable {
             odds = try container.decode(ChestOdds.self, forKey: .odds)
             reward = try container.decodeIfPresent(DailyChest.self, forKey: .reward)
             today = (try? container.decodeIfPresent(ChestContent.self, forKey: .today)) ?? nil
+            kept = (try? container.decodeIfPresent(Bool.self, forKey: .kept)) ?? nil
         }
     }
 

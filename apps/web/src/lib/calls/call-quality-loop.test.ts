@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { profiledEncoding } from './call-data-profile';
 import { TIER_ENCODING } from './call-quality';
 import type { DataProfile } from './call-data-profile';
-import { qualityReport } from './call-analytics';
+import { qualityReport } from './call-analytics-report';
 import { createQualityLoop } from './call-quality-loop';
 import { FREEZE_AFTER_MS, RESUME_AFTER_MS, SUSPEND_AFTER_MS } from './call-survival';
 

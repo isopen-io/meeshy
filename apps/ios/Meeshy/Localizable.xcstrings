@@ -289726,6 +289726,194 @@
         }
       }
     },
+    "game2.guide.moment.offering_kept.what": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حفظ لك أجدادك عطيّتك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Ahnen haben dir deine Gabe aufbewahrt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your ancestors kept your Offering for you."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus ancestros te guardaron tu Ofrenda."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les aïeux t’ont gardé ton Offrande."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I tuoi antenati ti hanno custodito l’Offerta."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seus ancestrais guardaram sua Oferenda."
+          }
+        }
+      }
+    },
+    "game2.guide.moment.offering_kept.means": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إنها جاهزة، دون انتظار فصول اليوم."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sie ist bereit, ohne auf die Akte des Tages zu warten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It’s ready, without waiting for today’s acts."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Está lista, sin esperar a los actos del día."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elle est prête, sans attendre les actes du jour."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "È pronta, senza aspettare gli atti del giorno."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ela está pronta, sem esperar pelos atos do dia."
+          }
+        }
+      }
+    },
+    "game2.guide.moment.offering_kept.next": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "طوال ⁦%@⁩، يكون حلمك أخفّ، ريثما تستعيد إيقاعك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ lang ist dein Traum leichter, damit du wieder hineinfindest."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "For %@, your dream is lighter, while you settle back in."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Durante %@, tu sueño es más ligero, mientras retomas el ritmo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pendant %@, ton rêve est plus léger, le temps de reprendre."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Per %@, il tuo sogno è più leggero, il tempo di riprendere."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Durante %@, seu sonho fica mais leve, enquanto você retoma o ritmo."
+          }
+        }
+      }
+    },
+    "game2.guide.moment.offering_kept.short": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عطيّتك بانتظارك، حفظها لك أجدادك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Gabe wartet auf dich, aufbewahrt von deinen Ahnen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Offering awaits, kept by your ancestors."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu Ofrenda te espera, guardada por tus ancestros."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ton Offrande t’attend, gardée par les aïeux."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La tua Offerta ti aspetta, custodita dai tuoi antenati."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sua Oferenda espera por você, guardada pelos seus ancestrais."
+          }
+        }
+      }
+    },
     "game2.guide.moment.atlas_stamp.next": {
       "extractionState": "manual",
       "localizations": {

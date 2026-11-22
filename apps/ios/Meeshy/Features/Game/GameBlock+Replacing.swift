@@ -178,7 +178,7 @@ extension GameBlock.Missions {
 extension GameBlock.Chest {
     func replacing(status: Status? = nil, reward: DailyChest?? = nil) -> GameBlock.Chest {
         GameBlock.Chest(status: status ?? self.status, odds: odds, reward: reward ?? self.reward,
-                        today: today)
+                        today: today, kept: kept)
     }
 }
 
