@@ -177,3 +177,48 @@ describe('les gardes de la relance tiennent (audit du lot)', () => {
   });
 
 });
+
+describe('un refus certain ne fait pas oublier le démarrage publié d’ici (#20416)', () => {
+  const PUBLIE = 'roster.publishedStart';
+  const S0 = '2026-11-14T06:00:00.000Z';
+
+  const refusCertains = [
+    { outcome: 'started-elsewhere', servi: () => served({ startedAt: S2, source: 'device' }) },
+    { outcome: 'fixed-point', servi: () => served({ startedAt: S2, source: 'device' }) },
+    { outcome: 'invalid', servi: () => served({ startedAt: S2, source: 'device', announces: false }) },
+  ] as const;
+
+  refusCertains.forEach(({ outcome, servi }) => {
+    test(`« ${outcome} » : rien n’a été écrit, le démarrage gardé tient`, async () => {
+      const { world, asked } = await devantUnPoint(served({ startedAt: S1 }));
+      world.memory.set(PUBLIE, S0);
+      world.startQueue.push(async () => {
+        world.server.served = servi();
+        return { kind: 'refused', outcome };
+      });
+      await world.center.share({ ...partage, replacing: asked });
+      expect(world.memory.get(PUBLIE)).toBe(S0);
+    });
+  });
+
+  test('le partage relancé ailleurs n’est pas pris pour celui d’ici : l’onglet ne publie pas à côté', async () => {
+    const { world, asked } = await devantUnPoint(served({ startedAt: S1 }));
+    world.memory.set(PUBLIE, S0);
+    world.startQueue.push(async () => {
+      world.server.served = served({ startedAt: S2, source: 'device' });
+      return { kind: 'refused', outcome: 'started-elsewhere' };
+    });
+    expect(await world.center.share({ ...partage, replacing: asked })).toBe('started-elsewhere');
+    await world.center.sync();
+    expect(world.source.following).toBe(0);
+    expect(world.updates).toEqual([]);
+  });
+
+  test('un refus douteux (accusé perdu) oublie encore : la passerelle a pu prendre l’envoi', async () => {
+    const { world, asked } = await devantUnPoint(served({ startedAt: S1 }));
+    world.memory.set(PUBLIE, S0);
+    world.startQueue.push(async () => ({ kind: 'refused', outcome: 'unavailable' }));
+    await world.center.share({ ...partage, replacing: asked });
+    expect(world.memory.get(PUBLIE)).not.toBe(S0);
+  });
+});

@@ -47,6 +47,16 @@ import type {
 const logger = enhancedLogger.child({ module: 'SocialEventsHandler' });
 
 /**
+ * « Personne à taire », à passer EXPLICITEMENT. Le paramètre `separated` des
+ * deux seams est REQUIS, et ce n'est pas une coquetterie : une garde dont le
+ * défaut est l'OUVERTURE n'est pas une garde — la prochaine famille d'activité
+ * branchée sur ces seams serait non gardée en silence (audit adversarial de
+ * #20338). Omettre devient donc impossible ; déclarer qu'il n'y a rien à taire
+ * reste possible, et se lit comme la décision que c'est.
+ */
+const NOTHING_TO_SILENCE: readonly string[] = [];
+
+/**
  * Cycle 100 — les quatre seams de diffusion sociale, CONTRAINTS par le contrat.
  *
  * Le cycle 99 a typé le `Socket` d'un handler et rendu impossibles, à la
@@ -222,7 +232,8 @@ export class SocialEventsHandler {
     postId: string,
     event: E,
     data: SocialEventPayload<E>,
-    actorId?: string,
+    actorId: string | undefined,
+    separated: readonly string[],
   ): void {
     // **L'ACTEUR fait partie de l'audience de son propre geste** (retour
     // porteur 2026-09-13 : « le like n'est pas synchronisé entre les
@@ -251,7 +262,12 @@ export class SocialEventsHandler {
     const audience = actorId ? [...recipientIds, authorId, actorId] : [...recipientIds, authorId];
     const rooms = audience.map((id) => ROOMS.feed(id));
     rooms.push(ROOMS.post(postId));
-    emitServerEvent(this.io.to(rooms), event, data);
+    /* `separated` ferme la room de la CIBLE, que rien ne filtrait (#20338) :
+       `getVisibilityFilteredRecipients` ne garde que les FEED rooms, et
+       seulement contre les blocages de l'AUTEUR. `except` porte sur les rooms
+       `user:` — un socket en est toujours membre —, donc il retire le lecteur
+       de TOUTES les adresses de cet emit à la fois, feed comme post. */
+    emitServerEvent(this.exceptSeparated(rooms, separated), event, data);
   }
 
   /**
@@ -282,8 +298,10 @@ export class SocialEventsHandler {
     postId: string,
     event: E,
     data: SocialEventPayload<E>,
+    separated?: readonly string[],
   ): void {
-    emitServerEvent(this.io.to([ROOMS.feed(userId), ROOMS.post(postId)]), event, data);
+    const rooms = [ROOMS.feed(userId), ROOMS.post(postId)];
+    emitServerEvent(this.exceptSeparated(rooms, separated), event, data);
   }
 
   /**
@@ -450,7 +468,12 @@ export class SocialEventsHandler {
     // supprimé ne le sait jamais. `post:join` est gaté par visibilité côté
     // serveur (PostReactionHandler) et io.to([...]) dédoublonne.
     const friendIds = await this.getUnblockedFriendIds(authorId);
-    this.emitToFeedsAndPostRoom(friendIds, authorId, postId, SERVER_EVENTS.POST_DELETED, { postId, authorId });
+    /* RIEN À TAIRE, et c'est une décision : `post:deleted` ne porte que
+       `{ postId, authorId }` — il nomme l'AUTEUR, qui est le sujet de la room,
+       et aucun acteur tiers. Sur-diffuser une suppression est sûr (un lecteur
+       qui n'avait pas le post l'ignore). Le paramètre est REQUIS pour que la
+       prochaine famille branchée ici ait à répondre à la question. */
+    this.emitToFeedsAndPostRoom(friendIds, authorId, postId, SERVER_EVENTS.POST_DELETED, { postId, authorId }, undefined, NOTHING_TO_SILENCE);
   }
 
   async broadcastPostLiked(
@@ -458,11 +481,13 @@ export class SocialEventsHandler {
     postAuthorId: string,
     visibility: string | null | undefined,
     visibilityUserIds: string[],
+    separated: readonly string[] | null,
   ): Promise<void> {
+    if (separated === null) return;
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
     // Feed rooms (amis filtrés par visibilité + auteur) ET post room (détail /
     // reel viewer) en UN SEUL emit dédoublonné — plus de double-livraison.
-    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_LIKED, data, data.userId);
+    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_LIKED, data, data.userId, separated);
   }
 
   async broadcastPostUnliked(
@@ -470,9 +495,11 @@ export class SocialEventsHandler {
     postAuthorId: string,
     visibility: string | null | undefined,
     visibilityUserIds: string[],
+    separated: readonly string[] | null,
   ): Promise<void> {
+    if (separated === null) return;
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
-    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_UNLIKED, data, data.userId);
+    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_UNLIKED, data, data.userId, separated);
   }
 
   async broadcastPostReposted(data: PostRepostedEventData, authorId: string): Promise<void> {
@@ -557,15 +584,17 @@ export class SocialEventsHandler {
     this.emitToUser(storyAuthorId, SERVER_EVENTS.STORY_VIEWED, data);
   }
 
-  broadcastStoryReacted(data: StoryReactedEventData, storyAuthorId: string): void {
+  broadcastStoryReacted(data: StoryReactedEventData, storyAuthorId: string, separated: readonly string[] | null): void {
     // UN SEUL emit dédoublonné vers la feed room de l'auteur ET la story room
     // des viewers. L'auteur qui regarde sa propre story est dans les deux rooms :
     // sans dédup il recevait l'event deux fois → compteur `+2` (cf. helper).
-    this.emitToUserFeedAndPostRoom(storyAuthorId, data.storyId, SERVER_EVENTS.STORY_REACTED, data);
+    if (separated === null) return;
+    this.emitToUserFeedAndPostRoom(storyAuthorId, data.storyId, SERVER_EVENTS.STORY_REACTED, data, separated);
   }
 
-  broadcastStoryUnreacted(data: StoryUnreactedEventData, storyAuthorId: string): void {
-    this.emitToUserFeedAndPostRoom(storyAuthorId, data.storyId, SERVER_EVENTS.STORY_UNREACTED, data);
+  broadcastStoryUnreacted(data: StoryUnreactedEventData, storyAuthorId: string, separated: readonly string[] | null): void {
+    if (separated === null) return;
+    this.emitToUserFeedAndPostRoom(storyAuthorId, data.storyId, SERVER_EVENTS.STORY_UNREACTED, data, separated);
   }
 
   // ==============================================
@@ -602,14 +631,16 @@ export class SocialEventsHandler {
     this.emitToFriends(recipients, authorId, SERVER_EVENTS.STATUS_DELETED, { statusId, authorId });
   }
 
-  broadcastStatusReacted(data: StatusReactedEventData, statusAuthorId: string): void {
+  broadcastStatusReacted(data: StatusReactedEventData, statusAuthorId: string, separated: readonly string[] | null): void {
     // Même dédup que `broadcastStoryReacted` : l'auteur-viewer ne compte plus son
     // émoji deux fois.
-    this.emitToUserFeedAndPostRoom(statusAuthorId, data.statusId, SERVER_EVENTS.STATUS_REACTED, data);
+    if (separated === null) return;
+    this.emitToUserFeedAndPostRoom(statusAuthorId, data.statusId, SERVER_EVENTS.STATUS_REACTED, data, separated);
   }
 
-  broadcastStatusUnreacted(data: StatusUnreactedEventData, statusAuthorId: string): void {
-    this.emitToUserFeedAndPostRoom(statusAuthorId, data.statusId, SERVER_EVENTS.STATUS_UNREACTED, data);
+  broadcastStatusUnreacted(data: StatusUnreactedEventData, statusAuthorId: string, separated: readonly string[] | null): void {
+    if (separated === null) return;
+    this.emitToUserFeedAndPostRoom(statusAuthorId, data.statusId, SERVER_EVENTS.STATUS_UNREACTED, data, separated);
   }
 
   // ==============================================
@@ -672,7 +703,31 @@ export class SocialEventsHandler {
    * (audit adversarial du lot).
    */
   commentActivitySeparation(actorId: string, commentAuthorId: string | null | undefined): Promise<readonly string[] | null> {
-    return this.separatedRooms.roomsAround([actorId, commentAuthorId], { keep: actorId });
+    return this.activitySeparation(actorId, commentAuthorId);
+  }
+
+  /**
+   * **LA MÊME LOI, POUR TOUTE ACTIVITÉ** (#20338). #20236 l'avait écrite pour le
+   * COMMENTAIRE ; six autres familles la devaient — `post:liked` / `-unliked`,
+   * `story:reacted` / `-unreacted`, `status:reacted` / `-unreacted` — et
+   * `post:liked` est la jumelle EXACTE de `comment:liked`, laissée de côté
+   * seulement parce que le lot s'arrêtait au commentaire.
+   *
+   * DEUX sujets : l'ACTEUR, que la charge nomme (`userId`), et l'AUTEUR de la
+   * cible, dont le compteur bouge. Taire un seul des deux ne tait rien.
+   *
+   * **`keep: actorId` est ici le bon choix, et il faut dire pourquoi** : ces
+   * charges ne portent AUCUN roster (`PostReactionAggregation` est
+   * `{ emoji, count }` — « NO userIds, count only »), donc rien n'y nomme un
+   * TIERS. C'est ce qui les distingue de #20337, où le roster faisait de
+   * l'acteur un lecteur à filtrer. L'acteur reste dans l'audience de son propre
+   * geste — décision porteur du 2026-09-13, « le like n'est pas synchronisé
+   * entre les différentes vues ».
+   *
+   * `null` ⇒ l'appelant n'annonce RIEN, sur AUCUNE de ses adresses.
+   */
+  activitySeparation(actorId: string, targetAuthorId: string | null | undefined): Promise<readonly string[] | null> {
+    return this.separatedRooms.roomsAround([actorId, targetAuthorId], { keep: actorId });
   }
 
   /**
@@ -791,7 +846,7 @@ export class SocialEventsHandler {
     visibilityUserIds: string[],
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
-    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_TRANSLATION_UPDATED, data);
+    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_TRANSLATION_UPDATED, data, undefined, NOTHING_TO_SILENCE);
   }
 
   /**
@@ -848,7 +903,7 @@ export class SocialEventsHandler {
       emitter?.emit(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, data);
       return;
     }
-    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, data);
+    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, data, undefined, NOTHING_TO_SILENCE);
   }
 
   /**
@@ -869,7 +924,7 @@ export class SocialEventsHandler {
       emitter?.emit(SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, data);
       return;
     }
-    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, data);
+    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, data, undefined, NOTHING_TO_SILENCE);
   }
 
   // ==============================================
