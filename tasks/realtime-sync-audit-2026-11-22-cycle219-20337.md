@@ -398,3 +398,91 @@ rend `[]` **avant** le `try`, donc aucune panne n'est tue.
 | `socketio/handlers/__tests__/` + `__tests__/unit/socketio/` + `CommentReactionService` ×2 + `comments-like-delete` + cliquet de journal | **162 suites / 2 162 témoins, 0 rouge** |
 | `tsc --noEmit` (gateway) | **exit 0** |
 | suite complète du gateway (2e tour) | **45 066 verts / 3 028 suites** ; les **6** rouges de codec d'image (HEIF/AVIF/EXIF) **prouvés pré-existants** par retrait du lot de l'arbre |
+
+## Quatrième tour — un cliquet que je n'avais pas lancé était ROUGE
+
+Le troisième audit adversarial a rendu BLOQUANT sur un point, et c'était **un
+gate du dépôt que mon filtre de témoins n'avait pas atteint**.
+
+### T3-1 — `emitToActor` recréait MOT POUR MOT la neuvième porte d'émission
+
+```ts
+(this.io.to(ROOMS.user(actorId)) as unknown as { emit: (e: string, p: unknown) => unknown })
+  .emit(event, payload);
+```
+
+À comparer à l'exemple que le doc-comment du balayage donne de ce qu'il a été
+écrit pour attraper (`socketio/__tests__/server-emit-door-sweep.ts`) : **même
+expression, même room `ROOMS.user(…)`, même `as unknown as`**. C'est la NEUVIÈME
+porte du cycle 105 — celle qui avait échappé au balayage du cycle 104 et qui a
+motivé l'ajout de sa seconde forme au discriminant. Le cliquet la nommait en
+rouge, avec ma déclaration en clair.
+
+Ce que cela coûtait n'est pas un cliquet : **le couple `(événement, charge)`
+d'une ADRESSE D'ÉMISSION NEUVE n'était vérifié par rien** — mesuré par le dépôt
+au cycle 108 sur cette forme exacte, un nom inventé et une charge fausse
+compilent tous deux à zéro erreur, et une diffusion Socket.IO n'a aucun
+sérialiseur pour rattraper l'écart (classe du défaut du cycle 101). Et la
+signature `(event: string, payload: unknown)` effaçait le couple jusqu'au SITE
+D'APPEL — la quatrième forme, #18649.
+
+Correctif : `emitToActor<E extends ServerEventName>` + `emitServerEvent`, la
+jumelle que `PostReactionHandler` emploie depuis toujours. **Le cast était
+gratuit** : `tsc --noEmit` rend exit 0 sans lui.
+
+> **Un gate rend DEUX verdicts, et c'est celui qu'on n'a pas demandé qui
+> compte.** Mes « 162 suites / 2 162 témoins » avaient filtré sur
+> `comment*` / `CommentReaction*` ; le cliquet qui garde précisément ce que ce
+> tour changeait — la topologie d'ÉMISSION — vit sous `src/socketio/__tests__/`.
+> **Un lot qui change une classe de code se gate sur le RÉPERTOIRE de cette
+> classe, pas sur le nom de sa feature.** C'est la leçon du #20354 (« un lot qui
+> change ce qu'une plateforme OBSERVE se gate chez celui qui tient
+> l'inventaire ») appliquée à l'émission.
+
+### T3-2 — une panne de lecture après un commit annulait l'événement pour toute la salle
+
+`updateEventServedTo` est appelée APRÈS que la mutation est committée. Laisser
+lever plaçait le `catch` du handler devant une écriture RÉUSSIE : l'ACK rendait
+`success: false`, `separationAround` n'était jamais appelée, et la diffusion
+était annulée **pour toute la salle** — alors que sa propre lecture de blocage
+aurait peut-être abouti. Et le delta optimiste de l'acteur n'étant jamais purgé,
+**le cœur de trop revenait par cette porte**, celle que le tour précédent venait
+de fermer.
+
+L'arbitrage est celui de `NotificationService.messageLiveness` — trois états, et
+`unknown` se traite selon ce qui est en jeu : fail-CLOSED sur le SECRET,
+fail-OPEN sur la LIVRAISON. Ici **le secret est le ROSTER, pas l'événement** :
+un roster VIDE ne nomme personne, donc il se vide et l'événement part. Témoin
+dédié, dont le double ne fait lever QUE `findUnique` (la lecture propre à
+`blockedIdsAroundViewer`) pour que l'audience reste lisible — un double qui
+ferait tout lever ne distinguerait pas les deux pannes.
+
+### Ce que le troisième audit a trouvé SAIN, et qui tranche ma question ouverte
+
+**La room personnelle EST une adresse fiable, mesuré et non supposé** — je
+proposais de revenir en arrière si elle ne l'était pas : `socketToUser` n'a
+qu'UN écrivain (`_registerUser`), ses deux appelants rejoignent
+`ROOMS.user(clé)` **avant** l'enregistrement (la raison est écrite sur place), la
+clé est la même des deux côtés, et l'anonyme n'atteint jamais ce chemin (les
+réactions le refusent). Bénéfice non prévu : l'acteur reçoit désormais
+l'événement **même s'il n'a jamais rejoint `post:<id>`** (réaction depuis le fil,
+sans ouvrir le détail) — avant, il n'avait rien.
+
+**Une seule livraison** (`separated` porte toujours sa room, `new Set`
+dédoublonne), **`count` identique dans les deux charges** (la liste blanche le
+recopie, seul `userIds` diffère), et **l'acteur ne peut pas comparer les deux**
+(tous ses sockets sont exclus de la room). **Aucun client ne filtre par ROOM** —
+une room est un concept serveur, et les cinq consommateurs filtrent par `postId`
+— donc rien n'est servi dans le vide. Le `throw` de forme reste inatteignable.
+
+## Suivi ouvert par le quatrième tour
+
+- **#20418** — Android garde un cœur retiré sur son SECOND appareil quand le
+  roster servi est VIDE avec `count > 0` (`CommentReactionLaw` n'a pas la branche
+  « je suis l'acteur » qu'iOS a). Et `hasCurrentUser` cesse d'être faux par
+  construction sur une charge servie PAR LECTEUR : c'est le correctif le moins
+  cher, et il recadre #20410.
+- **#20415** (élargi) — l'`emit` supplémentaire est INCONDITIONNEL, donc un
+  PUBLISH Redis de plus par réaction de commentaire ; et la piste « une seule
+  lecture du jeu de blocage de l'acteur » (six lectures par ajout aujourd'hui)
+  reste ouverte.

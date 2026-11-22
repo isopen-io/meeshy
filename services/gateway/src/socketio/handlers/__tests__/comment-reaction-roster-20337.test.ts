@@ -482,6 +482,45 @@ describe('#20337 — le roster d’une réaction de commentaire ne nomme que des
       expect(versLePost(emissions)[0]?.exclues).toContain(`user:${AUTEUR_COMMENTAIRE}`);
     });
 
+    /**
+     * **UNE PANNE DE LECTURE DÉGRADE LE ROSTER, ELLE N'ANNULE PAS L'ÉVÉNEMENT.**
+     *
+     * `updateEventServedTo` est appelée APRÈS que la mutation est committée.
+     * Laisser lever plaçait le `catch` du handler devant une écriture RÉUSSIE :
+     * l'ACK disait `success: false`, `separationAround` n'était jamais appelée,
+     * et la diffusion était annulée pour TOUTE LA SALLE — alors que sa propre
+     * lecture aurait peut-être abouti. Le delta optimiste de l'acteur n'étant
+     * jamais purgé, le cœur de trop revenait par cette porte.
+     *
+     * Trois états, et `unknown` s'arbitre selon ce qui est en jeu : le SECRET
+     * est le ROSTER (vidé, il ne nomme personne), la LIVRAISON est l'événement.
+     * Fail-closed sur le premier, fail-open sur le second.
+     *
+     * Le double ne fait lever QUE `findUnique`, la lecture propre à
+     * `blockedIdsAroundViewer` : `roomsAround` n'emploie que `findMany`, donc
+     * l'audience reste lisible et la diffusion de room doit partir. Un double
+     * qui ferait tout lever ne distinguerait pas les deux pannes.
+     */
+    it('une panne de la seule lecture du roster sert un roster VIDE et DIFFUSE quand même', async () => {
+      const emissions: Emission[] = [];
+      const prisma = fauxPrisma({ [ACTEUR]: [TIERS_REACTEUR] }) as any;
+      prisma.user.findUnique = jest.fn(async () => { throw new Error('mongo indisponible'); });
+      const { handler, socket } = fabriquerHandler({
+        prisma, io: fauxIo(emissions), acteur: ACTEUR, roster: [ACTEUR, TIERS_REACTEUR],
+      });
+      const ack = jest.fn();
+
+      await handler.handleAddReaction(socket, { commentId: COMMENT_ID, postId: POST_ID, emoji: '👍' } as any, ack as any);
+
+      /* L'ACK reste un SUCCÈS : la mutation a bien eu lieu. */
+      expect((ack.mock.calls[0] as any[])[0].success).toBe(true);
+      /* Le roster servi à l'acteur est VIDE — il ne nomme personne. */
+      const versActeur = emissions.find((e) => e.rooms.includes(`user:${ACTEUR}`));
+      expect(versActeur?.charge?.aggregation?.userIds).toEqual([]);
+      /* Et la salle reçoit son événement : la livraison n'est pas sacrifiée. */
+      expect(versLePost(emissions)).toHaveLength(1);
+    });
+
     /** FERMÉ : aucune charge ne part vers l'acteur quand la séparation ne se lit pas. */
     it('n’émet RIEN vers l’acteur quand la lecture des blocages échoue', async () => {
       const emissions: Emission[] = [];

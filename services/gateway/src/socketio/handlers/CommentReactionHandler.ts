@@ -32,6 +32,7 @@ import { loadCommentPostAcl, canUserInteractWithThread, canUserConsumeThread } f
 import { commentAuthorSeparatedFrom } from '../../services/posts/separatedCommentAuthors.js';
 import { blockedIdsAroundViewer } from '../../services/ContactDirectoryService.js';
 import { createSeparatedRoomsResolver, type SeparatedRoomsResolver } from '../separatedRooms.js';
+import { emitServerEvent, type ServerEventName, type ServerEventPayload } from '../serverEmit';
 
 const logger = enhancedLogger.child({ module: 'CommentReactionHandler' });
 
@@ -152,10 +153,29 @@ export class CommentReactionHandler {
   /**
    * La charge SERVIE à l'acteur, sur sa room personnelle — donc sur TOUS ses
    * appareils, et filtrée pour lui. C'est elle qui purge son delta optimiste.
+   *
+   * **Elle passe par `emitServerEvent`, et le premier jet ne le faisait pas.**
+   * Il écrivait `(this.io.to(ROOMS.user(actorId)) as unknown as { emit: … })` —
+   * MOT POUR MOT la neuvième porte d'émission du cycle 105, sur la MÊME room,
+   * avec le même `as unknown as`, et le cliquet
+   * (`__tests__/server-emit-door-sweep.test.ts`) la nommait en rouge. Un cast
+   * vers le type NU n'ouvre pas un appel : il relâche le couple
+   * `(événement, charge)` d'une ADRESSE NEUVE, que rien d'autre ne vérifie —
+   * une diffusion Socket.IO n'a aucun sérialiseur pour rattraper l'écart. Et la
+   * signature `(event: string, payload: unknown)` effaçait le couple jusqu'au
+   * SITE D'APPEL (la quatrième forme, #18649).
+   *
+   * Le générique `<E>` porte la corrélation jusqu'aux deux appels, où le nom
+   * est CONCRET ; dans ce corps `E` n'est pas résolu, et c'est exactement la
+   * seconde surcharge d'`emitServerEvent` — l'unique effacement sanctionné du
+   * dépôt. Jumelle : `PostReactionHandler`, qui l'emploie depuis toujours.
    */
-  private emitToActor(actorId: string, event: string, payload: unknown): void {
-    (this.io.to(ROOMS.user(actorId)) as unknown as { emit: (e: string, p: unknown) => unknown })
-      .emit(event, payload);
+  private emitToActor<E extends ServerEventName>(
+    actorId: string,
+    event: E,
+    payload: ServerEventPayload<E>,
+  ): void {
+    emitServerEvent(this.io.to(ROOMS.user(actorId)), event, payload);
   }
 
   /**
@@ -249,7 +269,27 @@ export class CommentReactionHandler {
     if (!Array.isArray(userIds)) {
       throw new Error('comment:reaction-* — forme de roster inattendue, filtrage impossible');
     }
-    const separated = new Set(await blockedIdsAroundViewer(this.prisma, viewerId));
+    /* **UNE PANNE DE LECTURE DÉGRADE LE ROSTER, ELLE N'ANNULE PAS L'ÉVÉNEMENT**
+       (#20337, 3e audit adversarial).
+       Cette fonction est appelée APRÈS que la mutation est committée. Laisser
+       lever plaçait le `catch` du handler devant une écriture RÉUSSIE : l'ACK
+       disait `success: false`, et `separationAround` n'était jamais appelée —
+       donc la diffusion était annulée pour TOUTE LA SALLE, alors que sa propre
+       lecture de blocage aurait peut-être abouti. Pire, le delta optimiste de
+       l'acteur n'était jamais purgé : le cœur de trop revenait par cette porte,
+       celle que ce tour venait de fermer.
+       L'arbitrage est celui de `NotificationService.messageLiveness` — trois
+       états, et `unknown` se traite selon ce qui est en jeu : fail-CLOSED sur le
+       SECRET, fail-OPEN sur la LIVRAISON. Ici le secret est le ROSTER, pas
+       l'événement : un roster VIDE ne nomme personne, donc on le vide et on
+       livre. */
+    const separated = await blockedIdsAroundViewer(this.prisma, viewerId)
+      .then((ids) => new Set(ids))
+      .catch((error: unknown) => {
+        this.logger.warn('roster de l’acteur non filtrable — servi VIDE, l’événement part quand même', { viewerId, error });
+        return null;
+      });
+    const served = separated === null ? [] : userIds.filter((id) => !separated.has(id));
     /* **LISTE BLANCHE, INCONDITIONNELLE** — jumelle de `rosterServedTo`, et le
        deuxième audit a eu raison de la réclamer ici aussi : cette fonction est
        NÉE dans le lot qui condamnait le spread, et elle spreadait. Projeter
@@ -263,7 +303,7 @@ export class CommentReactionHandler {
         emoji: aggregation.emoji,
         count: aggregation.count,
         hasCurrentUser: aggregation.hasCurrentUser,
-        userIds: userIds.filter((id) => !separated.has(id)),
+        userIds: served,
       },
     };
   }
@@ -308,7 +348,15 @@ export class CommentReactionHandler {
     };
   }
 
-  /** La room du post, moins ce que la loi nomme — aucun `except()` quand il n'y a rien à taire. */
+  /**
+   * La room du post, moins ce que la loi nomme.
+   *
+   * La branche sans `except()` est **morte pour ses deux appelants** depuis que
+   * l'acteur sort toujours de la diffusion (#20337) : `separated` porte au
+   * minimum `ROOMS.user(actorId)`. Elle reste parce que la fonction ne
+   * présuppose pas ses appelants — mais son doc-comment ne doit pas laisser
+   * croire qu'un `except()` est l'exception ici : il est la règle.
+   */
   private postRoom(postId: string, separated: readonly string[]) {
     const target = this.io.to(ROOMS.post(postId));
     return separated.length > 0 ? target.except([...separated]) : target;
