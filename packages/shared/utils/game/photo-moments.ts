@@ -38,6 +38,7 @@ export function photoMomentOfGuideEvent(event: GuideEventV2): PhotoMomentEmblemV
     case 'league-relegated':
     case 'season-start':
     case 'atlas-stamp':
+    case 'flame-freeze-gift':
       return null;
   }
 }

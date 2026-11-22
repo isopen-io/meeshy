@@ -1,4 +1,5 @@
 import type { GameBlock } from '@meeshy/shared/types/game';
+import { announcesFreezeGift } from '@meeshy/shared/utils/game/flame';
 import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
 import type { GuideEventV2 } from '@meeshy/shared/utils/game/guide-v2';
 import { leagueIndex, type LeagueKey } from '@meeshy/shared/utils/game/league';
@@ -9,7 +10,8 @@ import type { EngagementWithGame } from '@/lib/api/engagement';
 /**
  * LES ÉVÉNEMENTS DU GUIDE, VAGUE 2 (#9481) — la loi partagée
  * (`chooseGuideMomentAny`) choisit LE moment ; ce fichier relève ses huit
- * événements dans l'état du jeu, comme `events.ts` le fait pour la vague 1 :
+ * événements dans l'état du jeu, comme `events.ts` le fait pour la vague 1 —
+ * et, depuis #20169, la première Veilleuse offerte, dite le jour du cadeau :
  *
  *  - `standingGuideEventsV2` lit l'ÉTAT à l'ouverture. Seules deux découvertes
  *    s'y lisent — la première ligue, le début d'une saison — et chacune ne se
@@ -80,8 +82,12 @@ export function standingGuideEventsV2(game: GameBlock, seen: ReadonlySet<string>
       ? { kind: 'league-first', league: league.current.league, pointsToPromotion: league.current.pointsToPromotion }
       : null;
   const season = snapshotOf(game).season;
-  return [first, season === null || season === undefined ? null : seasonStart(season)].filter((event): event is GuideEventV2 => unseen(seen, event));
+  return [first, season === null || season === undefined ? null : seasonStart(season), freezeGift(game)].filter((event): event is GuideEventV2 => unseen(seen, event));
 }
+
+/** Le jour où la première Veilleuse est offerte (#20169), tant que sa clé n'est pas vue. */
+const freezeGift = (game: GameBlock): GuideEventV2 | null =>
+  announcesFreezeGift(game) ? { kind: 'flame-freeze-gift', freezes: game.flame.freezes } : null;
 
 /** Ce qui est arrivé entre deux instantanés. Une extension absente d'un des deux côtés ne produit rien. */
 export function eventsBetween(before: GuideSnapshot, after: GuideSnapshot): GuideEventV2[] {
@@ -135,5 +141,7 @@ export function eventsBetween(before: GuideSnapshot, after: GuideSnapshot): Guid
 export function transitionGuideEventsV2(previous: EngagementWithGame, next: EngagementWithGame): GuideEventV2[] {
   const before = previous.game;
   const after = next.game;
-  return before === undefined || after === undefined ? [] : eventsBetween(snapshotOf(before), snapshotOf(after));
+  if (before === undefined || after === undefined) return [];
+  const gift = before.flame.freezeGifted === true ? null : freezeGift(after);
+  return [...eventsBetween(snapshotOf(before), snapshotOf(after)), ...(gift === null ? [] : [gift])];
 }
