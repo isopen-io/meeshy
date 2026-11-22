@@ -256,12 +256,31 @@ Leçon : `tasks/lessons/2026-11-22-un-bisect-confirme-un-faux-coupable-quand-l-a
 
 ## Deux constats d'infrastructure, qui ne sont le défaut de personne
 
-- **La CI de `dev` ne conclut jamais.** Les six derniers runs `CI` sur `dev`
-  sont tous `cancelled` : les fusions arrivent plus vite que la CI ne tourne,
-  et `cancel-in-progress` tue chaque run. Personne ne sait donc si `dev` est
-  vert, et la question « la CI reproduit-elle mon rouge ? » n'a plus de
-  réponse — alors que c'est le discriminant que le dépôt prescrit.
-- **La file des runners macOS est bouchée.** 37 runs en attente, 4 actifs, le
-  plus ancien du **2026-11-11**. Aucun lot iOS n'est prouvable tant qu'elle ne
-  se vide pas — ce qui a laissé le lot 1 entrer dans `dev` sans preuve de
-  compilation, l'auto-merge n'attendant pas un `workflow_dispatch`.
+- **~~La CI de `dev` ne conclut jamais.~~ AFFIRMATION RETIRÉE, mesurée FAUSSE
+  le même jour.** Je l'avais tirée des SIX derniers runs `CI` de `dev`, tous
+  `cancelled`. Comptés sur cent : **18 succès, 4 échecs, 20 annulés** — le
+  dernier succès porte `229e8aaae`, exactement le point que j'avais mesuré vert
+  en local. La CI conclut ; elle ne conclut simplement pas sur CHAQUE SHA.
+
+  Et le dépôt avait déjà instruit la question : `ci.yml` porte
+  `cancel-in-progress: false` sur les branches d'intégration depuis #4395, et
+  son en-tête décrit mot pour mot ce que j'ai observé — « les annulations
+  surviennent à des âges courts et IRRÉGULIERS, signature d'un run qui
+  ATTENDAIT et qu'un arrivant plus récent a évincé », suivi de **« Ne pas lire
+  une file d'attente comme une panne. »**
+
+  > Deuxième fois du même cycle qu'une conclusion est tirée d'un échantillon
+  > trop court — après le `dist` périmé. Un compte est une AFFIRMATION : il se
+  > compte, il ne s'extrapole pas de la première page d'une API.
+- **Aucun verdict iOS n'est produit, et celui-là tient à la mesure.** Sur les
+  cent derniers runs du dépôt, `iOS` et `iOS SDK` rendent **zéro** `success` et
+  **zéro** `failure` — uniquement `cancelled` et `skipped`. En attente au même
+  moment : 37 runs macOS, 4 actifs, le plus ancien du **2026-11-11**.
+
+  C'est le CONSTAT, pas sa cause : « la file est bouchée » reste une inférence
+  que je n'ai pas prouvée, et la leçon du jour est précisément de ne pas
+  publier une cause qu'on n'a pas mesurée. Ce qui est sûr : **un lot iOS n'est
+  pas prouvable aujourd'hui**, et c'est ainsi que le lot 1 est entré dans `dev`
+  sans preuve de compilation — la CI des PR rendant `skipped`, seul un
+  `workflow_dispatch` peut juger, et l'auto-merge ne l'attend pas. Issue :
+  #20401.
