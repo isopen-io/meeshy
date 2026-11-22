@@ -161,6 +161,7 @@ async function buildApp({ authenticated = true, withCmidDecoration = false } = {
   };
 
   app.decorate('socialEvents', {
+    commentActivitySeparation: jest.fn(async () => []), // #20236 — la route la lit AVANT sa mutation
     broadcastCommentAdded: jest.fn<any>().mockResolvedValue(undefined),
     broadcastCommentUpdated: jest.fn<any>().mockResolvedValue(undefined),
     broadcastCommentDeleted: jest.fn<any>().mockResolvedValue(undefined),
