@@ -50,6 +50,12 @@ describe('#20430 — tout site qui adresse la room d’un post déclare sa natur
     expect(NOTHING_TO_SILENCE_CALLERS.filter((c) => !releves.includes(c.event)).map((c) => c.event)).toEqual([]);
   });
 
+  it('chaque exemption INTERNE dit pourquoi sa charge ne porte aucun contenu', () => {
+    const internes = POST_ROOM_SITES.flatMap((site) => site.exemptionsInternes ?? []);
+    expect(internes.length).toBeGreaterThan(0);
+    for (const exemption of internes) expect(exemption.raison.trim().length).toBeGreaterThan(60);
+  });
+
   it('chaque exemption de NOTHING_TO_SILENCE dit POURQUOI sa charge ne porte aucun contenu', () => {
     for (const caller of NOTHING_TO_SILENCE_CALLERS) {
       expect(caller.raison.trim().length).toBeGreaterThan(60);

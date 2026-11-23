@@ -26,6 +26,34 @@
  * qui cherchait un seul idiome et rendait sept faux positifs : il mesurait la
  * popularité d'une orthographe, pas une propriété. D'où une liste blanche de
  * natures déclarées à la main plutôt qu'une inférence.
+ *
+ * ─── SES TROIS TROUS, MESURÉS ET ÉCRITS ──────────────────────────────────
+ *
+ * L'audit adversarial de #20430 les a OUVERTS un par un, en faisant passer le
+ * cliquet au vert sous une fuite. Les voici, parce qu'un cliquet qui cache ses
+ * angles morts vaut moins que pas de cliquet :
+ *
+ * 1. **Un site neuf NON gardé dans un fichier DÉJÀ déclaré passe au vert.** La
+ *    clé est le FICHIER ; ajouter une émission non gardée dans
+ *    `socialEmissionCore.ts` — le hub d'adresses, et donc le fichier qu'un lot
+ *    futur éditera — ne change pas l'ensemble relevé. **Mesuré : 6/6 verts sous
+ *    une émission injectée.** C'est le trou le plus grave, et il est à la pire
+ *    place.
+ * 2. **Un littéral `[]` dans un `PostRoomTarget` n'a aucun nom à relever.**
+ *    `{ id, separated: [] }` type-checke, n'exclut personne, et le relevé
+ *    `NOTHING_TO_SILENCE` ne peut pas le voir (le champ n'est pas un argument
+ *    nommé). Le relevé attrape le littéral `[]` en DERNIER ARGUMENT d'un
+ *    émetteur connu, pas dans un objet.
+ * 3. **Il ne prouve pas qu'un verdict est JUSTE**, seulement qu'il en existe
+ *    un. Il ne lit pas le flot de données.
+ *
+ * Les trois se ferment par un TYPE, pas par du texte : un verdict NOMINAL que
+ * seul `roomsAround` (ou une exemption nommée) puisse produire rendrait `[]`
+ * et l'oubli impossibles à écrire. **Suivi : #20461.** D'ici là, la preuve de
+ * justesse est aux témoins (`post-contenu-separe-20430.test.ts`,
+ * `activite-post-story-statut-20338.test.ts`, …), et ce balayage ne garde
+ * qu'une chose : **qu'aucun FICHIER neuf n'apparaisse sans que quelqu'un ait
+ * répondu à la question.**
  */
 
 import { readdirSync, readFileSync, statSync } from 'fs';
@@ -53,6 +81,18 @@ export type PostRoomSite = {
   readonly kind: PostRoomKind;
   /** Exigée pour `exemption-motivee` et `adhesion` : ce que la nature engage. */
   readonly raison?: string;
+  /**
+   * Les émissions de CE fichier qui adressent la room sans verdict, chacune
+   * avec sa raison.
+   *
+   * Sans ce champ, une exemption se cachait derrière une nature
+   * `emission-gouvernee` : `broadcastCommentDeleted` émet par la FABRIQUE sans
+   * aucun verdict, et ne figurait ni ici ni dans l'inventaire
+   * `NOTHING_TO_SILENCE` (il ne passe pas la constante). L'audit du lot l'a
+   * trouvée — matériellement inoffensive, structurellement invisible, et
+   * surtout : c'est le patron qu'un lot futur recopierait.
+   */
+  readonly exemptionsInternes?: readonly { readonly event: string; readonly raison: string }[];
 };
 
 /**
@@ -95,6 +135,30 @@ export const POST_ROOM_SITES: readonly PostRoomSite[] = [
       'la modération et non pour le BLOCAGE. Suivi de l’éviction au blocage : #20458.',
   },
   {
+    file: 'socketio/handlers/SocialEventsHandler.ts',
+    kind: 'emission-gouvernee',
+    raison:
+      'Ne cite JAMAIS `ROOMS.post(` — il adresse la room par la FABRIQUE ' +
+      '`commentBroadcastRooms`, sept fois, plus `emitToFeedsAndPostRoom` et ' +
+      '`emitPostToAudience`. C’est pourquoi le relevé suit aussi les fabriques : la ' +
+      'première version de ce balayage, purement orthographique, manquait le fichier ' +
+      'qui émet le PLUS. Les verdicts viennent de `commentEmitter` (contenu de ' +
+      'commentaire, #20216) et de `contentSeparation` (contenu de post et ses trois ' +
+      'traductions, #20430).',
+    exemptionsInternes: [
+      {
+        event: 'COMMENT_DELETED',
+        raison:
+          '`broadcastCommentDeleted` émet par la fabrique SANS verdict. La charge est ' +
+          '`{ postId, commentId, removedIds? }` — des identifiants, aucun texte, aucun ' +
+          'auteur nommé. Sur-diffuser une suppression est sans danger : qui n’avait pas ' +
+          'le commentaire l’ignore, et le lecteur séparé n’apprend rien qu’il ne sache ' +
+          'déjà (il lisait le fil). Exemption DÉCLARÉE depuis l’audit de #20430 ; elle ' +
+          'était invisible aux deux inventaires parce qu’elle ne passe pas la constante.',
+      },
+    ],
+  },
+  {
     file: 'socketio/separatedRooms.ts',
     kind: 'fabrique-de-rooms',
     raison:
@@ -134,25 +198,75 @@ const walk = (dir: string): string[] =>
     return full.endsWith('.ts') ? [full] : [];
   });
 
-/** Les fichiers de production qui citent `ROOMS.post(`, en chemins relatifs. */
+/**
+ * Les FABRIQUES de rooms de post : un fichier qui les consomme adresse la room
+ * sans jamais écrire `ROOMS.post(`.
+ *
+ * **C'est le défaut que l'audit du lot a trouvé dans la première version de ce
+ * balayage**, et il était grave : `SocialEventsHandler.ts` contient **ZÉRO**
+ * occurrence de `ROOMS.post(` et adresse pourtant la room **sept fois** par
+ * `commentBroadcastRooms`. Le fichier qui émet le plus était donc hors du
+ * relevé — et le relevé mesurait une ORTHOGRAPHE, pas une propriété, ce que le
+ * doc-comment d'en tête prétendait justement éviter (cycle 107).
+ */
+const ROOM_FACTORIES = ['commentBroadcastRooms', 'postRoomsOf'] as const;
+
+/**
+ * Les fichiers de production qui ADRESSENT la room d'un post — directement
+ * (`ROOMS.post(`) ou par une fabrique.
+ */
 export function sweepPostRoomFiles(): readonly string[] {
   return walk(GATEWAY_SRC)
-    .filter((file) => readFileSync(file, 'utf8').includes('ROOMS.post('))
+    .filter((file) => {
+      const text = readFileSync(file, 'utf8');
+      return text.includes('ROOMS.post(') || ROOM_FACTORIES.some((f) => text.includes(`${f}(`));
+    })
     .map((file) => relative(GATEWAY_SRC, file).split('\\').join('/'))
     .sort();
 }
 
-/** Les événements passés à `NOTHING_TO_SILENCE`, relevés textuellement. */
+/**
+ * Les événements diffusés SANS séparation : `NOTHING_TO_SILENCE`, ou un
+ * littéral `[]` qui lui est strictement équivalent.
+ *
+ * **Relevé sur l'APPEL entier, pas sur la ligne** — l'audit du lot a désarmé la
+ * première version par deux orthographes triviales : un appel formaté sur neuf
+ * lignes (l'événement n'étant plus sur la même ligne que la constante) et le
+ * littéral `[]`, que `NOTHING_TO_SILENCE` *est*. Un `prettier --print-width` ou
+ * un argument de plus suffisait.
+ */
 export function sweepNothingToSilenceCallers(): readonly string[] {
   const found = new Set<string>();
+  const EMITTERS = /\b(emitToFeedsAndPostRoom|emitToUserFeedAndPostRoom|emitPostToAudience)\s*\(/g;
   for (const file of walk(GATEWAY_SRC)) {
     const text = readFileSync(file, 'utf8');
-    if (!text.includes('NOTHING_TO_SILENCE')) continue;
-    for (const line of text.split('\n')) {
-      if (!line.includes('NOTHING_TO_SILENCE')) continue;
-      const event = /SERVER_EVENTS\.([A-Z_]+)/.exec(line);
-      if (event?.[1]) found.add(event[1]);
+    for (const match of text.matchAll(EMITTERS)) {
+      const call = balancedCall(text, match.index + match[0].length - 1);
+      if (call === null) continue;
+      const sansSeparation = /NOTHING_TO_SILENCE/.test(call) || /,\s*\[\s*\]\s*\)?\s*;?\s*$/.test(call.trim());
+      if (!sansSeparation) continue;
+      const event = /SERVER_EVENTS\.([A-Z_]+)/.exec(call);
+      found.add(event?.[1] ?? `ÉVÉNEMENT-NON-RÉSOLU@${relative(GATEWAY_SRC, file)}`);
     }
   }
   return [...found].sort();
+}
+
+/**
+ * Le texte d'un appel, de sa parenthèse ouvrante à sa fermante APPARIÉE.
+ *
+ * Un balayage qui ne sait pas résoudre PUBLIE plutôt que de deviner (doctrine
+ * du dépôt) : `null` quand les parenthèses ne se referment pas, et l'appelant
+ * passe au suivant plutôt que d'inventer un verdict.
+ */
+function balancedCall(text: string, openIndex: number): string | null {
+  let depth = 0;
+  for (let i = openIndex; i < text.length; i += 1) {
+    if (text[i] === '(') depth += 1;
+    else if (text[i] === ')') {
+      depth -= 1;
+      if (depth === 0) return text.slice(openIndex, i + 1);
+    }
+  }
+  return null;
 }

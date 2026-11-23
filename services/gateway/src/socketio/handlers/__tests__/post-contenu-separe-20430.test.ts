@@ -77,12 +77,28 @@ type Emission = { evenement: string; rooms: string[]; exclues: string[]; charge:
 type Blocages = Readonly<Record<string, readonly string[]>> | 'panne';
 
 /**
- * `LECTEUR` est ami de `AUTEUR` — c'est ce qui le met dans l'audience — et il
- * est DANS la room du post. Le double de blocage ne sert que la loi de
- * séparation ; le pré-filtre des feed rooms est exercé par ses propres témoins.
+ * `LECTEUR` est ami accepté de `AUTEUR` — c'est ce qui le met dans l'audience —
+ * et il est DANS la room du post.
+ *
+ * **Le double sert les DEUX lois, et il a fallu le mesurer** : sa première
+ * rédaction ne fournissait pas `prisma.userRelation`, si bien qu'`amisAcceptes`
+ * levait, que le `catch` de `cachedAudience` rendait `[]`, et que
+ * `feed:LECTEUR` n'apparaissait JAMAIS — bloqué ou non. Les témoins de feed
+ * room assertaient donc l'absence d'une room qui n'était jamais là : ils ne
+ * pouvaient pas tomber (audit du lot, constat C9). Il alimente maintenant :
+ *
+ * - `userRelation.findMany` + `friendRequest.findMany` → l'audience (amis) ;
+ * - `user.findMany({ blockedUserIds: { has } })` et
+ *   `user.findUnique` → les DEUX sens du pré-filtre des feed rooms
+ *   (`getBlockedUserIdsAmong`) ;
+ * - `user.findMany({ blockedUserIds: { hasSome } })` + `id: { in }` → la loi de
+ *   séparation (`roomsAround`).
+ *
+ * `'panne'` fait lever TOUTE lecture de blocage, donc les deux lois ensemble —
+ * ce qui est le cas réel d'une base indisponible.
  */
 function fauxPrisma(blocages: Blocages) {
-  const carte = () => (blocages === 'panne' ? {} : blocages);
+  const carte = (): Readonly<Record<string, readonly string[]>> => (blocages === 'panne' ? {} : blocages);
   const bloqueursDe = (sujets: readonly string[]) =>
     Object.entries(carte())
       .filter(([, cibles]) => cibles.some((c) => sujets.includes(c)))
@@ -91,16 +107,27 @@ function fauxPrisma(blocages: Blocages) {
     user: {
       findMany: jest.fn(async (args: any) => {
         if (blocages === 'panne') throw new Error('mongo indisponible');
+        // La loi de séparation : les deux sens pour tous les sujets.
         if (args?.where?.blockedUserIds?.hasSome) return bloqueursDe(args.where.blockedUserIds.hasSome);
-        if (args?.where?.blockedUserIds?.has) return [];
+        // Le pré-filtre des feed rooms, sens « qui m'a bloqué parmi les candidats ».
+        if (args?.where?.blockedUserIds?.has) {
+          const cible: string = args.where.blockedUserIds.has;
+          const candidats: string[] = args?.where?.id?.in ?? [];
+          return candidats.filter((id) => (carte()[id] ?? []).includes(cible)).map((id) => ({ id }));
+        }
         const ids: string[] = args?.where?.id?.in ?? [];
         return ids.map((id) => ({ id, blockedUserIds: [...(carte()[id] ?? [])] }));
       }),
-      findUnique: jest.fn(async () => ({ blockedUserIds: [] })),
+      // Le pré-filtre, sens « qui j'ai bloqué ».
+      findUnique: jest.fn(async (args: any) => {
+        if (blocages === 'panne') throw new Error('mongo indisponible');
+        return { blockedUserIds: [...(carte()[args?.where?.id] ?? [])] };
+      }),
     },
+    userRelation: { findMany: jest.fn(async () => []) },
     friendRequest: {
       findMany: jest.fn(async () => [
-        { senderId: AUTEUR, receiverId: LECTEUR, status: 'accepted' },
+        { senderId: AUTEUR, receiverId: LECTEUR, status: 'accepted', updatedAt: new Date('2026-11-23T00:00:00Z') },
       ]),
     },
   } as unknown as PrismaClient;
@@ -221,9 +248,18 @@ describe('#20430 — le CONTENU d’un post et la room du post', () => {
       for (const e of emissions) expect(e.rooms.some((r) => r.startsWith('post:'))).toBe(false);
     });
 
-    it('un lecteur SÉPARÉ n’est dans aucune de ses feed rooms', async () => {
-      const emissions = await diffuser({ [LECTEUR]: [AUTEUR] }, diffusion);
-      for (const e of emissions) expect(e.rooms).not.toContain(`feed:${LECTEUR}`);
+    it('sa feed room SERT le lecteur sans blocage, et le TAIT dès qu’un blocage sépare', async () => {
+      /* Les deux moitiés, et la première n'est pas décorative : sans elle, ce
+         témoin assertait l'absence d'une room qui n'apparaissait JAMAIS —
+         l'audience était vide parce que le double ne fournissait pas
+         `userRelation` (audit du lot, constat C9). Un témoin d'absence exige
+         d'avoir montré la présence. */
+      const sans = await diffuser({}, diffusion);
+      expect(sans.some((e) => e.rooms.includes(`feed:${LECTEUR}`))).toBe(true);
+
+      resetSeparationCacheForTests();
+      const avec = await diffuser({ [LECTEUR]: [AUTEUR] }, diffusion);
+      for (const e of avec) expect(e.rooms).not.toContain(`feed:${LECTEUR}`);
     });
   });
 
@@ -237,6 +273,21 @@ describe('#20430 — le CONTENU d’un post et la room du post', () => {
     it('part bien SANS blocage', async () => {
       const emissions = await diffuser({}, diffusion);
       expect(JSON.stringify(emissions)).toContain('the text a separated reader must not receive');
+    });
+
+    it('une lecture de blocages IMPOSSIBLE retire la room du post — et rien n’y part', async () => {
+      /* Ce bras n'avait AUCUN témoin au premier jet : muté en fail-open
+         (`separated ?? []`), 299 suites restaient vertes et le `translation.text`
+         partait vers la room du post sans exclusion (audit du lot, constat C6).
+         La mesure « 5 mutations » du premier jet ne couvrait que `post:updated`. */
+      const emissions = await diffuser('panne', diffusion);
+      expect(emissions.some((e) => e.rooms.some((r) => r.startsWith('post:')))).toBe(false);
+      /* Portée sur ce qui n'est PAS la feed room de l'auteur : lui reçoit
+         toujours sa propre traduction, exemption écrite sur le site. Le premier
+         jet de ce témoin assertait l'absence du texte PARTOUT et tombait sur
+         cette émission-là — la production était juste, l'assertion trop large. */
+      const versDesTiers = emissions.filter((e) => !e.rooms.every((r) => r === `feed:${AUTEUR}`));
+      expect(JSON.stringify(versDesTiers)).not.toContain('the text a separated reader must not receive');
     });
   });
 

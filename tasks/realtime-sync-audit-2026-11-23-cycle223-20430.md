@@ -116,27 +116,108 @@ de justesse reste aux témoins.
 
 ## Preuve
 
-23 témoins neufs, **RED prouvé 7/23** — et le premier relevé de ce rouge était
-TROMPEUR, ce qui vaut d'être dit : il annonçait « 12 rouges », dont plusieurs sur
-le cas NOMINAL de familles qui n'adressent aucune room de post. Leurs témoins de
-blocage passaient donc **vacuement** (zéro reçu, assertion satisfaite). Lire la
-LISTE au lieu du compte a montré que mon tableau de témoins affirmait une
-uniformité que je n'avais pas mesurée — d'où le rangement par ce que chaque
-famille **ATTEINT**, et cinq familles gelées sur « n'adresse aucune room de
-post » pour qu'un lot qui leur ajouterait `postRoomId` sans séparation fasse
-rougir ce fichier.
+26 témoins neufs. Le premier relevé du ROUGE était **TROMPEUR**, et il faut le
+dire : il annonçait « 12 rouges », dont plusieurs sur le cas NOMINAL de familles
+qui n'adressent aucune room de post. Leurs témoins de blocage passaient donc
+**vacuement** (zéro reçu, assertion satisfaite). Lire la LISTE au lieu du compte
+a montré que mon tableau affirmait une uniformité que je n'avais pas mesurée —
+d'où le rangement par ce que chaque famille **ATTEINT**, et cinq familles gelées
+sur « n'adresse aucune room de post ».
 
 | mutation | ce qui tombe |
 |---|---|
-| fail-OPEN : room du post adressée malgré `null` | 1 rouge |
+| fail-OPEN sur `null` (`emitPostToAudience`, les DEUX gardes retirées) | 1 rouge |
 | séparation non appliquée à la room du post | 3 rouges |
-| une traduction revient à `NOTHING_TO_SILENCE` | 1 rouge |
+| fail-OPEN sur `null` (`emitToFeedsAndPostRoom`) | 3 rouges |
+| une traduction revient à `NOTHING_TO_SILENCE` | 2 rouges |
 | l'auteur est tu lui aussi | 1 rouge |
 | une des cinq familles reçoit une room de post | 1 rouge |
-| **le cliquet** : un site neuf non déclaré | 1 rouge |
-| **le cliquet** : un appelant `NOTHING_TO_SILENCE` neuf | 1 rouge |
+| **le pré-filtre des feed rooms retiré** | 8 rouges |
+| **cliquet** : un fichier neuf citant `ROOMS.post(` | 1 rouge |
+| **cliquet** : un fichier neuf n'utilisant QUE la fabrique | 1 rouge |
+| **cliquet** : un appelant `NOTHING_TO_SILENCE` sur plusieurs lignes | 1 rouge |
 
-`tsc --noEmit` : 0. Suites touchées : **358/358, 5821 témoins**.
+> **Une mutation qui n'exprime pas ce qu'elle prétend ne mesure rien.** Le
+> premier jet de la mutation « fail-open » ne retirait QU'UNE des deux gardes de
+> `emitPostToAudience` ; la seconde (`&& separated != null`) tenait, le
+> comportement ne changeait pas, et le relevé rendait **0 rouge** — ce qui se lit
+> comme « aucun témoin ne garde ce bras » alors que la mutation ne l'avait pas
+> ouvert. Devant un 0, vérifier d'abord que la mutation CASSE quelque chose.
+
+`tsc --noEmit` : 0. Suites touchées : **452/452, 6696 témoins**. Suite gateway
+complète (avant le tour d'audit) : **3032/3038, 45 158 témoins** — et le total
+passant de 3036 à 3038 est la preuve indépendante que les deux fichiers de
+témoins neufs sont enfin COLLECTÉS (voir le piège ci-dessous).
+
+## Ce que l'audit adversarial a changé
+
+Onze constats, dont trois bloquants. Les six qui ont modifié le code :
+
+**C6 — le bras fail-closed des trois traductions n'avait AUCUN témoin.** Muté en
+fail-open, 299 suites restaient vertes : le `translation.text` partait vers la
+room du post sans exclusion, en silence. Ma mesure « 5 mutations » ne couvrait
+que `post:updated`. Trois témoins `panne` ajoutés.
+
+**C9 — mon propre témoin affirmait exercer le pré-filtre des feed rooms, et ne
+l'exerçait pas.** Le double ne fournissait pas `prisma.userRelation`, donc
+`amisAcceptes` levait, le `catch` de `cachedAudience` rendait `[]`, et
+**`feed:LECTEUR` n'apparaissait JAMAIS** — bloqué ou non. Cinq témoins
+assertaient l'absence d'une room qui n'était jamais là. Mesuré : le pré-filtre
+entièrement SUPPRIMÉ laissait mes 29 témoins verts. Le double alimente
+maintenant les deux lois, et chaque témoin d'absence montre d'abord la PRÉSENCE
+— le pré-filtre retiré fait tomber **8** témoins.
+
+> **Un témoin d'absence exige d'avoir montré la présence.** Sans cela il
+> n'atteste pas une garde, il atteste un harnais muet — et la phrase du fichier
+> qui renvoyait « à ses propres témoins » faisait croire que la prémisse du
+> fail-closed partiel était mesurée dans le lot. Elle ne l'était pas.
+
+**C7 — deux politiques du verdict `null` dans le même lot.** L'audit les a dites
+contradictoires ; mesuré, elles ne le sont pas, mais **le discriminant n'était
+pas écrit**, et mes trois traductions suivaient la mauvaise. Le discriminant est
+le **SUJET** : le pré-filtre des feed rooms est keyé sur l'AUTEUR, donc il
+couvre le sujet d'une diffusion de CONTENU (la room du post est alors la seule
+surface non gardée, et la fermer suffit) et **pas** l'ACTEUR d'une diffusion
+d'ACTIVITÉ (dont les feed rooms ne sont pas gardées contre son sujet, d'où « on
+n'émet rien », la règle de #20236 et #20338). Les trois traductions sont passées
+à la politique CONTENU, et le discriminant est écrit sur le site.
+
+**C8 — le mot « COMPLET » était faux.** `postInclude` attache `comments`
+(aperçu : auteurs et textes) et `repostOf` (auteur et contenu), et la loi qui
+retire les compagnons séparés est un **NO-OP sur une diffusion**
+(`separatedCompanions.ts` lit `reader.separatedUserIds`, absent de
+`WIRE_BROADCAST`). Un lecteur séparé de C mais pas de A reçoit donc encore le
+commentaire de C sur le post de A — ce que le REST lui retire. Dette tracée
+**#20204**, hors périmètre, et nommée sur le site : ce seam ferme la room du
+post **pour le sujet AUTEUR, et rien de plus**.
+
+**C1 — `keep` était du code mort**, et contredisait la règle que #20429 venait
+d'écrire dix lignes plus haut. Muté, 299 suites restaient vertes. Retiré.
+
+**C3 — le cliquet manquait le fichier qui émet le PLUS.**
+`SocialEventsHandler.ts` contient **zéro** `ROOMS.post(` et adresse la room
+**sept fois** par `commentBroadcastRooms` : mon balayage mesurait une
+ORTHOGRAPHE, pas une propriété — exactement ce que son propre doc-comment
+prétendait éviter en citant le cycle 107. Il suit maintenant les FABRIQUES, et
+le fichier est déclaré. Au passage, une **exemption invisible** : 
+`broadcastCommentDeleted` émet par la fabrique sans aucun verdict et ne passe
+pas `NOTHING_TO_SILENCE`, donc ne figurait dans aucun des deux inventaires. Elle
+est matériellement inoffensive (la charge n'a que des ids) et désormais
+DÉCLARÉE, dans un champ fait pour elle.
+
+**C4 — l'inventaire `NOTHING_TO_SILENCE` était désarmé par deux orthographes** :
+un appel sur plusieurs lignes, et le littéral `[]` (que la constante *est*). Le
+relevé lit maintenant l'APPEL entier, parenthèses appariées.
+
+Et **trois trous subsistent, écrits dans le balayage** plutôt que tus : un site
+neuf non gardé dans un fichier déjà déclaré, un `[]` littéral dans un
+`PostRoomTarget`, et le fait qu'il ne prouve pas qu'un verdict est JUSTE. Les
+trois se ferment par un TYPE nominal, pas par du texte — **#20461**.
+
+> **Un cliquet qui cache ses angles morts vaut moins que pas de cliquet** : on
+> lui fait confiance. L'audit les a ouverts un par un en le faisant passer au
+> vert sous une fuite injectée ; c'est la seule façon honnête de connaître la
+> portée d'une garde.
 
 ## Le piège qui a failli livrer ce lot SANS ses témoins
 
@@ -177,4 +258,10 @@ elle redeviendrait la seule garde si quelqu'un désancrait le motif.
   l'instant ; l'éviction garderait la durée, y compris les familles qu'un lot
   futur ajouterait sans y penser. L'issue #20430 affirmait qu'aucun
   `socketsLeave` n'existait : mesuré faux.
+- **#20461** — un verdict de séparation devrait être un type NOMINAL : les trois
+  trous restants du cliquet s'y ferment d'un coup, et `{ separated: [] }`
+  cesserait de compiler.
+- **#20204** — les compagnons séparés (`comments`, `repostOf`) d'une charge de
+  diffusion : la loi qui les retire est un no-op sur `WIRE_BROADCAST`. C'est ce
+  qui empêche ce lot de revendiquer la complétude.
 - **#20443**, **#20414**, **#20415**, **#20393** — inchangés.
