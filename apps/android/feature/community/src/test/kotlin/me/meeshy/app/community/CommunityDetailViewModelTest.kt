@@ -387,4 +387,79 @@ class CommunityDetailViewModelTest {
         assertThat(vm.state.value.community).isNotNull()
         assertThat(vm.state.value.showError).isFalse()
     }
+
+    private fun arrivingByLink(): CommunityDetailViewModel {
+        every { session.currentUserId } returns "me"
+        every { cache.detail("c1", any()) } returns detail
+        every { cache.channels("c1", any()) } returns channels
+        val handle = SavedStateHandle(mapOf("communityId" to "c1", CommunityDetailViewModel.VIA_ARG to CommunityDetailViewModel.VIA_LINK))
+        return CommunityDetailViewModel(handle, cache, repository, session, InMemoryCommunityAppearanceStore())
+    }
+
+    @Test
+    fun `joining from the shared address counts the entry as coming through the link (20332)`() = runTest {
+        val vm = arrivingByLink()
+        detail.emit(CacheResult.Fresh(community(role = null), 0))
+        coEvery { repository.join("c1", true) } returns
+            NetworkResult.Success(CommunityJoinOutcome.Joined(ApiCommunityMember(id = "m", userId = "me")))
+
+        vm.join()
+
+        coVerify(exactly = 1) { repository.join("c1", true) }
+        coVerify(exactly = 0) { repository.join("c1", false) }
+    }
+
+    @Test
+    fun `joining from the fiche stays a direct entry (20332)`() = runTest {
+        val vm = viewModel()
+        detail.emit(CacheResult.Fresh(community(role = null), 0))
+        coEvery { repository.join("c1", false) } returns
+            NetworkResult.Success(CommunityJoinOutcome.Joined(ApiCommunityMember(id = "m", userId = "me")))
+
+        vm.join()
+
+        coVerify(exactly = 1) { repository.join("c1", false) }
+        coVerify(exactly = 0) { repository.join("c1", true) }
+    }
+
+    @Test
+    fun `a paused link is said before the gesture to who arrives through it (20332)`() = runTest {
+        val vm = arrivingByLink()
+        detail.emit(CacheResult.Fresh(community(role = null).copy(joinLinkPaused = true), 0))
+
+        assertThat(vm.state.value.linkArrivalPaused).isTrue()
+        assertThat(vm.state.value.access?.canJoin).isTrue()
+    }
+
+    @Test
+    fun `a paused link says nothing to who opened the fiche directly (20332)`() = runTest {
+        val vm = viewModel()
+        detail.emit(CacheResult.Fresh(community(role = null).copy(joinLinkPaused = true), 0))
+
+        assertThat(vm.state.value.linkArrivalPaused).isFalse()
+    }
+
+    @Test
+    fun `a member is never told the link is paused (20332)`() = runTest {
+        val vm = arrivingByLink()
+        detail.emit(CacheResult.Fresh(community(role = "member").copy(joinLinkPaused = true), 0))
+
+        assertThat(vm.state.value.linkArrivalPaused).isFalse()
+    }
+
+    @Test
+    fun `a paused link refusal rolls back and says the pause in the reader's language (20332)`() = runTest {
+        val vm = arrivingByLink()
+        detail.emit(CacheResult.Fresh(community(role = null), 0))
+        coEvery { repository.join("c1", true) } returns
+            NetworkResult.Failure(ApiError("paused", code = "COMMUNITY_LINK_PAUSED", httpStatus = 403))
+
+        vm.join()
+
+        assertThat(vm.state.value.access?.isMember).isFalse()
+        assertThat(vm.state.value.community?.memberCount).isEqualTo(4)
+        assertThat(vm.state.value.joinRefusal).isEqualTo(CommunityJoinRefusal.LINK_PAUSED)
+        assertThat(vm.state.value.linkArrivalPaused).isTrue()
+        coVerify { cache.refreshDetail("c1") }
+    }
 }

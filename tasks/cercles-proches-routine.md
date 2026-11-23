@@ -1976,3 +1976,17 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gates : `sdk-core` ne se construit pas en conteneur (dépôt libsignal refusé) : `android.yml` sur la PR fait foi.
 - Reste : iOS de #20416 (point 2) et de #20308, après la fusion de #20417.
 - Prochain lot : fusionner #20417 et fermer #20249 ; puis iOS de #20416 et #20308 ; #20054, #20056.
+
+## 2026-11-22 — réveil de 23 h : web de #19883 (personne ne cache personne sur la carte)
+
+- Reprise : #20441 (Android de #20416) fusionnée. #20417 (iOS de #20249) est menée par une autre session (3023fab02,
+  iOS et SDK en file depuis 20 h 54 UTC) : ce réveil n'y pousse rien. Les lots iOS de #20416, #20308, #20054 attendent
+  sa fusion (mêmes fichiers).
+- Lot : web de #19883, iso `LocationMapFan.spread` (iOS). À la précision « ville », toutes les positions servies
+  tombaient au même centre et une seule épingle restait visible. `spreadPins` (`apps/web/src/lib/map/fan.ts`) ouvre en
+  éventail les épingles qui se recouvrent (écart ≥ diamètre + 4 px), stable quel que soit l'ordre servi ; le flou reste
+  centré sur la position SERVIE, chaque épingle garde le cercle de SA personne. Rien de nouveau ne part du serveur.
+- Audit adversarial : non requis (affichage pur de positions déjà servies, aucun accès ni chiffrement touché).
+- Gates : web `bun test` 35 179 verts, 2 rouges hérités (focal-row, act-leak-guard) ; `tsc` web 0.
+- Reste : Android de #19883 = #19884.
+- Prochain lot : fusionner #20417 et fermer #20249 ; puis iOS de #20416 / #20308, #19884, #20054, #20056.
