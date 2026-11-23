@@ -26,21 +26,24 @@ const responseSchema = {
  * refus déjà donnés ne s'appliquent plus. Seulement envers un Sang RÉEL, non bloqué (404 sinon,
  * sans rien écrire) ; seulement à la version courante de la liste (409 RELATION_BLOOD_BUNDLE_OUTDATED).
  * Revenir en arrière, c'est redescendre la personne à Proche : la baisse efface l'accord des deux côtés.
- * Un blocage, ou la protection d'un mineur (écart d'âge de plus de 5 ans, `minorProtectedBetween`) :
- * 200 neutre `bloodBundleAccepted: false`, rien d'écrit — jamais un 404 qui trahirait le blocage, jamais un
- * accord pris sous protection qui lèverait un refus stocké à la majorité (directive 2026-11-23, constats A et D).
+ * Un blocage reçoit EXACTEMENT la réponse d'un lien absent ou retombé (404, même corps, mêmes lectures) :
+ * `GET /relations/:userId` sert déjà PUBLIC à une paire bloquée, et un 200 ici dirait « on t'a bloqué »
+ * (ré-audit #20361, constat 1 ; contrat de `level.ts` : un inconnu et un bloqué ne se distinguent pas).
+ * La protection d'un mineur (écart d'âge de plus de 5 ans, `minorProtectedBetween`) : 200 neutre
+ * `bloodBundleAccepted: false`, rien d'écrit — jamais un accord pris sous protection qui lèverait un refus
+ * stocké à la majorité (directive 2026-11-23, constat A). Le GET y montre Sang : rien n'est trahi.
  */
 type Standing = 'accepting' | 'neutral' | 'not-blood';
 
 /**
- * Où en est la paire : `not-blood` (404 « personne introuvable »), `neutral` (un blocage, ou la
- * protection d'un mineur face à une personne de plus de 5 ans d'écart : 200 sans rien écrire, pour
- * qu'un blocage ne se lise pas dans la réponse), `accepting` (l'accord peut s'écrire).
+ * Où en est la paire : `not-blood` (404 « personne introuvable » : sous le Sang, sans lien, ou bloquée),
+ * `neutral` (la protection d'un mineur : 200 sans rien écrire), `accepting` (l'accord peut s'écrire).
+ * Les lectures de `bloodLockStateBetween` sont uniformes : le chemin 404 coûte autant que les autres.
  */
 async function standingOf(prisma: FastifyInstance['prisma'], ownerId: string, otherId: string): Promise<Standing> {
   const state = await bloodLockStateBetween(prisma, ownerId, otherId);
-  if (state.level !== 'BLOOD') return 'not-blood';
-  return state.blocked || state.minorProtected ? 'neutral' : 'accepting';
+  if (state.level !== 'BLOOD' || state.blocked) return 'not-blood';
+  return state.minorProtected ? 'neutral' : 'accepting';
 }
 
 const neutral = (reply: FastifyReply, userId: string, version: string) =>

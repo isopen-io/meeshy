@@ -52,6 +52,7 @@ import { judgeRelationRequest } from './relationRequestGate';
 import { recordLevel } from './userRelationWriter';
 import { forgetBloodBundleBetween, withdrawRitualSharesBetween } from './ritualShareWithdrawal';
 import { niveauEffectif } from '../friendship';
+import { minorProtectedBetween } from '@meeshy/shared/utils/age';
 
 export const RITUAL_TTL_MS = 60_000;
 export const RITUAL_HOLD_VALID_MS = 15_000;
@@ -298,23 +299,37 @@ const consentColumns = (consents: RelationRitualConsents): Record<string, boolea
  *
  * L'accord au palier ouvre aussi les quatre colonnes du rituel : un serveur ramené en arrière, ou un
  * miroir qui ne lit pas encore l'accord, sert ce que la personne a accepté — jamais moins.
+ *
+ * Sous la protection d'un mineur (`minorProtectedBetween`, symétrique), l'accord au palier s'écrit
+ * comme une confirmation v1 aux quatre partages ouverts : les colonnes, JAMAIS l'accord — sinon, à la
+ * majorité, il lèverait le fantôme que la protection tenait (ré-audit #20361, constat 2), comme
+ * `PUT /relations/:userId/blood-bundle` le neutralise déjà.
  */
-const confirmationColumns = (confirmation: RelationRitualConfirmation, at: Date): Record<string, boolean | Date | string | null> =>
-  isBundleConsent(confirmation)
-    ? {
-      ...Object.fromEntries(RELATION_RITUAL_CONSENT_KEYS.map((key) => [CONSENT_COLUMN[key], true])),
-      bloodBundleAcceptedAt: at,
-      bloodBundleVersion: confirmation.version,
-    }
-    : { ...consentColumns(confirmation), bloodBundleAcceptedAt: null, bloodBundleVersion: null };
+const confirmationColumns = (confirmation: RelationRitualConfirmation, at: Date, minorProtected: boolean): Record<string, boolean | Date | string | null> => {
+  if (!isBundleConsent(confirmation)) return { ...consentColumns(confirmation), bloodBundleAcceptedAt: null, bloodBundleVersion: null };
+  const shares = Object.fromEntries(RELATION_RITUAL_CONSENT_KEYS.map((key) => [CONSENT_COLUMN[key], true]));
+  return minorProtected
+    ? { ...shares, bloodBundleAcceptedAt: null, bloodBundleVersion: null }
+    : { ...shares, bloodBundleAcceptedAt: at, bloodBundleVersion: confirmation.version };
+};
 
-async function writeConsents(deps: RitualDeps, ownerId: string, otherId: string, consents: RelationRitualConfirmation, at: Date) {
-  const columns = { ...confirmationColumns(consents, at), consentedAt: at };
+type ConsentWrite = { readonly ownerId: string; readonly otherId: string; readonly consents: RelationRitualConfirmation; readonly at: Date; readonly minorProtected: boolean };
+
+async function writeConsents(deps: RitualDeps, write: ConsentWrite) {
+  const columns = { ...confirmationColumns(write.consents, write.at, write.minorProtected), consentedAt: write.at };
   await deps.prisma.relationFeatureSetting.upsert({
-    where: { ownerId_otherId: { ownerId, otherId } },
-    create: { ownerId, otherId, ...columns },
+    where: { ownerId_otherId: { ownerId: write.ownerId, otherId: write.otherId } },
+    create: { ownerId: write.ownerId, otherId: write.otherId, ...columns },
     update: columns,
   });
+}
+
+/** La protection du mineur entre les deux, lue au scellement ; une lecture qui échoue protège (fail-closed). */
+async function minorProtectedPair(deps: RitualDeps, actorId: string, otherId: string, at: Date): Promise<boolean> {
+  const birthOf = (id: string) => deps.prisma.user.findUnique({ where: { id }, select: { birthDate: true } }).then((row) => row?.birthDate ?? null);
+  const dates = await Promise.all([birthOf(actorId), birthOf(otherId)]).catch(() => null);
+  if (dates === null) return true;
+  return minorProtectedBetween({ emitterBirthDate: dates[0], otherBirthDate: dates[1], now: at });
 }
 
 /**
@@ -362,9 +377,10 @@ async function complete(deps: RitualDeps, key: string, state: RitualState, actor
 
   // Les consentements s'écrivent une fois le Sang SCELLÉ, jamais avant : un rituel qui
   // échoue n'enregistre rien. Leur échec laisse les partages à faux (fail-closed).
+  const minorProtected = await minorProtectedPair(deps, actorId, otherId, at);
   const afterSeal = await Promise.allSettled([
-    writeConsents(deps, actorId, otherId, state.confirms[actorId], at),
-    writeConsents(deps, otherId, actorId, state.confirms[otherId], at),
+    writeConsents(deps, { ownerId: actorId, otherId, consents: state.confirms[actorId], at, minorProtected }),
+    writeConsents(deps, { ownerId: otherId, otherId: actorId, consents: state.confirms[otherId], at, minorProtected }),
     deps.settleRequestNotification(checked.request.receiverId, checked.request.id),
   ]);
   afterSeal.forEach((result) => {

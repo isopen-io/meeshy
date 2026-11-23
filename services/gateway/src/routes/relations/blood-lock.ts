@@ -39,5 +39,6 @@ export async function bloodLockFieldsOf(
   otherId: string,
 ): Promise<{ readonly lockedByLevel: boolean; readonly bloodBundleAccepted: boolean }> {
   const state = await bloodLockStateBetween(prisma, ownerId, otherId);
-  return { lockedByLevel: state.locked, bloodBundleAccepted: state.bloodBundleAccepted };
+  // Une paire bloquée ne lit aucun accord : elle sert ce que sert un lien rompu (ré-audit #20361, constat 4).
+  return { lockedByLevel: state.locked, bloodBundleAccepted: state.bloodBundleAccepted && !state.blocked };
 }

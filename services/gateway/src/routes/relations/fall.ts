@@ -8,7 +8,15 @@ import { relationIoOf } from '../../socketio/relationEvents';
 import { logError } from '../../utils/logger';
 import { sendBadRequest, sendInternalError, sendNotFound, sendSuccess } from '../../utils/response';
 import { errorResponses, otherUserOf, relationLimiter, userIdParams } from './shared';
-import { bloodLockFieldsOf, bloodLockResponseProperties, refusedAsBloodLocked } from './blood-lock';
+import { bloodLockFieldsOf, bloodLockResponseProperties } from './blood-lock';
+
+/**
+ * La chute (art. 9 RGPD) reste HORS du verrou du Sang tant que le texte d'accord « à tous tes Sangs »
+ * n'est pas livré (#20406) : un refus par personne s'écrit toujours, avant comme après l'accord au
+ * palier, et `lockedByLevel` le dit faux pour ce réglage (ré-audit #20361, constat B).
+ */
+const fallLockFieldsOf = async (prisma: Parameters<typeof bloodLockFieldsOf>[0], ownerId: string, otherId: string) =>
+  ({ ...(await bloodLockFieldsOf(prisma, ownerId, otherId)), lockedByLevel: false });
 
 const positionSchema = {
   type: 'object',
@@ -69,7 +77,7 @@ export function registerRelationFall(fastify: FastifyInstance): void {
     const otherId = otherUserOf(request, reply);
     if (!otherId) return reply;
     try {
-      return sendSuccess(reply, { ...(await readFallPersonSettings(fastify.prisma, { ownerId: request.user!.userId, otherId, now: new Date() })), ...(await bloodLockFieldsOf(fastify.prisma, request.user!.userId, otherId)) });
+      return sendSuccess(reply, { ...(await readFallPersonSettings(fastify.prisma, { ownerId: request.user!.userId, otherId, now: new Date() })), ...(await fallLockFieldsOf(fastify.prisma, request.user!.userId, otherId)) });
     } catch (error) {
       logError(fastify.log, 'Fall settings read error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
@@ -96,12 +104,10 @@ export function registerRelationFall(fastify: FastifyInstance): void {
       const ownerId = request.user!.userId;
       const other = await fastify.prisma.user.findUnique({ where: { id: otherId }, select: { id: true } });
       if (!other) return sendNotFound(reply, 'Personne introuvable');
-      // #20361 — entre Sangs, après MON accord au palier, rien ne se coupe.
-      if (await refusedAsBloodLocked(fastify.prisma, reply, { ownerId, otherId, cuts: parsed.data.shared !== true })) return reply;
       const settings = await writeFallPersonSettings(fastify.prisma, { ownerId, otherId, update: { shared: parsed.data.shared === true }, now: new Date() });
       await refreshFallBetween(relayOf(), { userA: ownerId, userB: otherId })
         .catch((error: unknown) => logError(fastify.log, 'Fall alert not refreshed after settings:', error));
-      return sendSuccess(reply, { ...settings, ...(await bloodLockFieldsOf(fastify.prisma, ownerId, otherId)) });
+      return sendSuccess(reply, { ...settings, ...(await fallLockFieldsOf(fastify.prisma, ownerId, otherId)) });
     } catch (error) {
       logError(fastify.log, 'Fall settings write error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');

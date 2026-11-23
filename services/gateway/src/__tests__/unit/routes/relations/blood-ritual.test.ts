@@ -40,6 +40,8 @@ jest.mock('../../../../services/sharedLocation/sharedLocationDeps', () => ({
 }));
 
 import { relationsRoutes } from '../../../../routes/relations';
+import { pointVeilOf, ownersHidingFrom } from '../../../../services/bloodLocation/bloodLocationVeil';
+import { messagingWorld, table, type Row } from '../../../helpers/messaging-circle-world';
 import { lowerPair } from '../../../../services/relations/userRelationWriter';
 import { RELATION_RITUAL_SHARE_WITHDRAWN_AT } from '@meeshy/shared/types/relation-person-settings';
 import {
@@ -510,5 +512,35 @@ describe('#20362 — le rituel recueille UN accord, celui du palier entier, vers
     expect(fin.body.data).toMatchObject({ completed: true });
     const ligne = app.reglages().find((r) => r.ownerId === AUTRE && r.otherId === MOI);
     expect(ligne).toMatchObject({ locationShared: false, bloodBundleAcceptedAt: null, bloodBundleVersion: null });
+  });
+
+  it('constat A par le rituel — 14 ans face à 30 : les partages s\'écrivent, JAMAIS l\'accord au palier, et à la majorité le fantôme global masque encore', async () => {
+    const naissances = { [MOI]: new Date('2012-03-04T00:00:00.000Z'), [AUTRE]: new Date('1996-01-01T00:00:00.000Z') };
+    const app = await appli(pret({ naissances }));
+    const { token } = await jusquAuxDeuxHolds(app);
+    await moi(app, { phase: 'confirm', token, consents: PALIER });
+    const fin = await autre(app, { phase: 'confirm', token, consents: PALIER });
+    await app.close();
+
+    expect(fin.body.data).toMatchObject({ completed: true, level: 'BLOOD' });
+    const lignes = app.reglages();
+    for (const [ownerId, otherId] of [[MOI, AUTRE], [AUTRE, MOI]]) {
+      const ligne = lignes.find((r) => r.ownerId === ownerId && r.otherId === otherId);
+      expect(ligne).toMatchObject({ listeningTitleShared: true, locationShared: true, locationHistoryShared: true, proximityShared: true });
+      expect(ligne?.bloodBundleAcceptedAt ?? null).toBeNull();
+      expect(ligne?.bloodBundleVersion ?? null).toBeNull();
+    }
+
+    thawClock();
+    freezeClock(new Date('2031-11-01T12:00:00.000Z'));
+    const fantome = new Date('2026-11-01T00:00:00.000Z');
+    const monde = messagingWorld({ links: [[MOI, AUTRE, 'BLOOD']], users: [{ id: MOI, birthDate: naissances[MOI], locationGhostAt: fantome }, { id: AUTRE, birthDate: naissances[AUTRE], locationGhostAt: fantome }] });
+    const prisma = { ...monde.prisma, relationFeatureSetting: table(lignes as Row[]) };
+    const voileMoi = await pointVeilOf(prisma as never, MOI);
+    const voileAutre = await pointVeilOf(prisma as never, AUTRE);
+    const caches = await ownersHidingFrom(prisma as never, AUTRE, [MOI]);
+
+    expect([voileMoi.everyone, voileAutre.everyone]).toEqual([true, true]);
+    expect([...caches]).toEqual([MOI]);
   });
 });
