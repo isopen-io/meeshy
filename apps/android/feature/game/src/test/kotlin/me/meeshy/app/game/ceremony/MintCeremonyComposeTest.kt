@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.assertContentDescriptionContains
 import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -77,7 +78,9 @@ class MintCeremonyComposeTest {
         settlement = GameMintSettlement(MintSettlementOutcome.Minted(93), key = 1)
         advance(400)
         assertWithMessage("le coup de la pièce confirmée, le choc net de la frappe").that(haptics.played).containsExactly(GameHapticPattern.strikeInPlace)
-        compose.onNodeWithTag(MINT_CEREMONY_TAG).assertContentDescriptionEquals("La n° 93 rejoint ton Héritage.")
+        compose.onNodeWithTag(MINT_CEREMONY_TAG)
+            .assertContentDescriptionContains("La n° 93 rejoint ton Héritage. +", substring = true)
+            .assertContentDescriptionContains("de gloire.", substring = true)
 
         advance(4_000)
         assertThat(finishes).isEqualTo(1)
@@ -134,7 +137,9 @@ class MintCeremonyComposeTest {
         settlement = GameMintSettlement(MintSettlementOutcome.Minted(93), key = 1)
         show(reduce = true)
         advance(500)
-        compose.onNodeWithTag(MINT_CEREMONY_TAG).assertContentDescriptionEquals("La n° 93 rejoint ton Héritage.")
+        compose.onNodeWithTag(MINT_CEREMONY_TAG)
+            .assertContentDescriptionContains("La n° 93 rejoint ton Héritage. +", substring = true)
+            .assertContentDescriptionContains("de gloire.", substring = true)
         assertThat(haptics.played).containsExactly(GameHapticPattern.strikeInPlace)
         advance(3_000)
         assertThat(finishes).isEqualTo(1)

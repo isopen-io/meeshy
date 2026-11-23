@@ -48,6 +48,13 @@ enum MintCeremonyCopy {
         }
     }
 
+    /// Ce que VoiceOver dit d'une frappe CONFIRMÉE (#20141) : la phrase de Mee, la gloire gagnée, puis le pas vers le rang
+    /// suivant — ce que la scène montre, phrase par phrase. Même forme que le web (`mintGlorySpoken`) et Android.
+    static func confirmed(_ edition: MeeshEdition, number: Int, gloryGained: Int, gloryStep step: GloryAfterGain?) -> String {
+        let lines = [glory(gloryGained)] + (step.map { [gloryStep($0)] } ?? [])
+        return ([say(edition, number: number)] + lines.map { "\($0)." }).joined(separator: " ")
+    }
+
     static func refused(_ reason: MintRefusalReason) -> String {
         switch reason {
         case .shadow:

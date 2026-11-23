@@ -194,6 +194,14 @@ final class MintCeremonyRun: ObservableObject {
         if slowFrames >= 4 { stride = 2 }
     }
 
+    /// Ce que VoiceOver dit de la scène (#20141) : la phrase de Mee tant que le marteau est levé, la raison d'un refus,
+    /// et, la frappe confirmée, la gloire gagnée puis le pas vers le rang suivant.
+    var spoken: String {
+        if let refusal { return MintCeremonyCopy.refused(refusal) }
+        guard answeredAtMs != nil else { return MintCeremonyCopy.say(edition, number: number) }
+        return MintCeremonyCopy.confirmed(edition, number: number, gloryGained: gloryGained, gloryStep: gloryStep)
+    }
+
     // MARK: - La réponse
 
     func receive(_ answer: MintCeremonyAnswer) {

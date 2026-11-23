@@ -298,6 +298,38 @@ final class MintCeremonyTests: XCTestCase {
         XCTAssertNotEqual(risen, toward)
     }
 
+    func test_aConfirmedStrike_saysMeesPhrase_thenTheGloryGained_thenTheStepTowardTheNextRank() {
+        let step = GloryAfterGain.toward(gloryMissing: 1200, rank: .conteur, division5: .ii)
+        let spoken = MintCeremonyCopy.confirmed(.silver, number: 92, gloryGained: 1000, gloryStep: step)
+        XCTAssertEqual(spoken, "\(MintCeremonyCopy.say(.silver, number: 92)) \(MintCeremonyCopy.glory(1000)). \(MintCeremonyCopy.gloryStep(step)).")
+    }
+
+    func test_aConfirmedStrike_withoutAStep_saysTheGloryGainedAndNothingMore() {
+        let spoken = MintCeremonyCopy.confirmed(.gold, number: 100, gloryGained: 1000, gloryStep: nil)
+        XCTAssertEqual(spoken, "\(MintCeremonyCopy.say(.gold, number: 100)) \(MintCeremonyCopy.glory(1000)).")
+    }
+
+    func test_theSceneSpeaksTheGlory_onlyOnceTheStrikeIsConfirmed() {
+        let clock = Clock()
+        let haptics = MockGameHaptics()
+        let glory = MintCeremonyGlory(before: 20_000, gained: 1000, mythic: false)
+        let run = MintCeremonyRun(edition: .silver, number: 92, reduced: false, modest: false, glory: glory, haptics: haptics,
+                                  clock: { clock.now }, onFinish: {})
+        XCTAssertEqual(run.spoken, MintCeremonyCopy.say(.silver, number: 92), "le marteau levé : la phrase de Mee seule")
+        clock.now += 6
+        run.receive(.confirmed(number: 93))
+        XCTAssertEqual(run.spoken, MintCeremonyCopy.confirmed(.silver, number: 93, gloryGained: run.gloryGained, gloryStep: run.gloryStep))
+        XCTAssertNotNil(run.gloryStep)
+    }
+
+    func test_aRefusedStrike_saysWhy_andNoGlory() {
+        let clock = Clock()
+        let (run, _, _) = makeRun(clock: clock)
+        clock.now += 2
+        run.receive(.refused(code: "TREASURY_LOCKED"))
+        XCTAssertEqual(run.spoken, MintCeremonyCopy.refused(.locked))
+    }
+
     func test_theCeremony_saysItsLinesInTheCatalogsWords() {
         XCTAssertFalse(MintCeremonyCopy.say(.silver, number: 92).isEmpty)
         for reason in MintRefusalReason.allCases { XCTAssertFalse(MintCeremonyCopy.refused(reason).isEmpty) }

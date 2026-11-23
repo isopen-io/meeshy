@@ -41,6 +41,7 @@ import me.meeshy.sdk.model.game.ceremony.MintCeremonyFrame
 import me.meeshy.sdk.model.game.ceremony.MintCeremonyHitter
 import me.meeshy.sdk.model.game.ceremony.MintCeremonyPaint
 import me.meeshy.sdk.model.game.ceremony.MintCeremonyPose
+import me.meeshy.sdk.model.game.ceremony.MintCeremonyRun
 import me.meeshy.sdk.model.game.ceremony.MintCeremonyStage as Stage
 import me.meeshy.ui.component.game.MeeFigure
 import me.meeshy.ui.component.game.MeeshCoin
@@ -57,6 +58,18 @@ internal data class MintCeremonyWords(
     /** Le pas vers le rang suivant, sous la gloire gagnée (#19860) ; absent pour le Mythe, en Légende I, ou sans gloire lue. */
     val gloryStep: String? = null,
 )
+
+/**
+ * Ce que TalkBack dit de la scène (#20141) : la phrase de Mee tant que le marteau est levé (ou la raison d'un refus,
+ * que [MintCeremonyWords.say] porte alors), et, la frappe confirmée, la gloire gagnée puis le pas vers le rang suivant —
+ * ce que la scène montre, phrase par phrase. Même forme qu'iOS (`MintCeremonyCopy.confirmed`) et le web
+ * (`mintGlorySpoken`).
+ */
+internal fun mintCeremonySpoken(words: MintCeremonyWords, run: MintCeremonyRun): String {
+    if (run.refusal != null || run.answeredAtMs == null) return words.say
+    val lines = listOfNotNull(words.glory, words.gloryStep).map { "$it." }
+    return (listOf(words.say) + lines).joinToString(" ")
+}
 
 /** Pose une boîte de la scène — coin haut-gauche ([x], [y]), taille [w] × [h] en unités de la scène — dans l'écran. */
 internal fun Modifier.stageBox(fit: MintCeremonyFit, x: Double, y: Double, w: Double, h: Double): Modifier = layout { measurable, _ ->

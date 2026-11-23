@@ -159,7 +159,7 @@ private fun MintCeremonyHost(
                 .testTag(MINT_CEREMONY_TAG)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = skip)
                 .semantics {
-                    contentDescription = words.say
+                    contentDescription = mintCeremonySpoken(words, run)
                     role = Role.Button
                     onClick(label = skipHint) {
                         skip()
