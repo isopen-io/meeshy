@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-xtlc3p` |
+| Branche de travail de la session courante | `claude/practical-fermat-10zclt` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -56,7 +56,29 @@ normal.
 | **89w** | 2026-11-19 | `claude/practical-fermat-6cktea` | → `dev` | ✅ mergé |
 | **90w** | 2026-11-20 | `claude/practical-fermat-awbeqk` | → `dev` | ✅ mergé |
 | **91w** | 2026-11-21 | `claude/practical-fermat-h5vgy2` | [#20161](https://github.com/isopen-io/meeshy/pull/20161) → `dev` | ✅ mergé |
-| **92w** | 2026-11-22 | `claude/practical-fermat-xtlc3p` | [#20325](https://github.com/isopen-io/meeshy/pull/20325) → `dev` | ⏳ ouverte |
+| **92w** | 2026-11-22 | `claude/practical-fermat-xtlc3p` | [#20325](https://github.com/isopen-io/meeshy/pull/20325) → `dev` | ✅ mergé |
+| **93w** | 2026-11-23 | `claude/practical-fermat-10zclt` | [#20472](https://github.com/isopen-io/meeshy/pull/20472) → `dev` | ⏳ ouverte |
+
+**93w** — a11y / i18n / maintenabilité (suite de 92w, issue #20326) : **trois
+segments du libellé d'accessibilité d'un message restaient EN DUR EN FRANÇAIS** —
+« réponse à {auteur} », « modifié », « épinglé » — dans `composeMessageLabel`
+(`lib/view/message-a11y-label.ts`, SITE UNIQUE du nom accessible). Même défaut que
+l'accusé de 92w : invisible pour un francophone, entendu en français par un lecteur
+EN/ES/PT/DE/IT/AR sur SES messages. Correction : trois clés ajoutées aux sept
+`catalog-{lang}-shell-labels.ts` (`message.edited.a11y`, `message.pinned.a11y`,
+`message.replyTo.a11y`), **FR byte-identique**, les six autres langues **portées de
+l'iOS déjà relu** (`a11y.message.edited` / `a11y.message.pinned`) — aucune traduction
+inventée ; l'auteur de citation inconnu réutilise `quote.sender.unknown` (= « l'expéditeur »,
+le MÊME que le pied de citation `message-blocks.tsx:744`), seul effet FR « réponse à
+expéditeur inconnu » → « réponse à l'expéditeur ». Témoins : `message-a11y-label.test.ts`
+(42→45, EN « replying to/edited/pinned » pas le français, auteur inconnu « l'expéditeur »,
+modérateur inchangé) + `i18n-catalog.test.ts` 12/12 (parité des 7 catalogues) +
+consommateurs 32/32 ; `tsc` 0 ; harmonie **46/46, 0**. Housekeeping : 92w confirmée
+mergée (#20325, `message-status-label.ts` sur `dev`, `deliveryWord` supprimé) ;
+appariement analyses↔plans 1:1 revérifié 74w→92w (**47/47**), **0 vrai doublon** `w`.
+**Dette 94w+** : le reste de `composeMessageLabel` garde « Sans compte », « Position »,
+« sticker » (sans pluriel), puis les comptes de pièces jointes et réactions (pluriel)
+— issue **#20326** toujours ouverte. Analyse : `docs/analyses/uiux/2026-11-23-iteration-93w.md`.
 
 **92w** — a11y / i18n / maintenabilité (PREMIER tour de l'axe optimisation, le gate
 d'harmonie étant clos) : **le libellé d'accessibilité d'un message annonçait son
