@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { isCurrentBloodBundle } from '@meeshy/shared/utils/blood-bundle';
 import { appVersionFloorPreHandler } from '../../middleware/app-version-floor';
 import { bloodLockStateBetween } from '../../services/relations/bloodLock';
+import { refreshBloodBundleRelays } from '../../services/relations/bloodBundleRefresh';
+import { relationIoOf } from '../../socketio/relationEvents';
 import { logError } from '../../utils/logger';
 import { sendBadRequest, sendConflict, sendInternalError, sendNotFound, sendSuccess } from '../../utils/response';
 import { errorResponses, otherUserOf, relationLimiter, userIdParams } from './shared';
@@ -87,6 +89,9 @@ export function registerBloodBundle(fastify: FastifyInstance): void {
         await fastify.prisma.relationFeatureSetting.updateMany({ where: { ownerId, otherId: userId }, data: { bloodBundleAcceptedAt: null, bloodBundleVersion: null } });
         return after === 'neutral' ? neutral(reply, userId, parsed.data.version) : sendNotFound(reply, 'Personne introuvable');
       }
+      // Comme le rituel et tout changement de palier : ce que l'accord ouvre arrive aussitôt chez l'autre
+      // (écoute, batterie, position partagée, inactivité et chute). Best-effort, jamais levant.
+      await refreshBloodBundleRelays({ prisma: fastify.prisma, io: relationIoOf(fastify), report: (what, error) => logError(fastify.log, `${what} not refreshed after blood bundle:`, error) }, { userA: ownerId, userB: userId });
       return sendSuccess(reply, { userId, bloodBundleAccepted: true, version: parsed.data.version, lockedByLevel: true });
     } catch (error) {
       logError(fastify.log, 'Blood bundle acceptance error:', error);

@@ -23,12 +23,16 @@ describe('minorProtectedBetween', () => {
   it('14 et 30 ans : protection', () => expect(protectedAt(14, 30)).toBe(true));
   it('14 et 20 ans : écart de 6, protection', () => expect(protectedAt(14, 20)).toBe(true));
   it('un mineur de 17 ans face à un enfant de 10 ans : protection (écart de 7)', () => expect(protectedAt(17, 10)).toBe(true));
-  it('mineur et âge inconnu : la protection tient (fail-closed)', () => expect(protectedAt(14, null)).toBe(true));
-  it('un émetteur majeur n\'est jamais protégé', () => {
-    expect(protectedAt(30, 14)).toBe(false);
-    expect(protectedAt(30, null)).toBe(false);
+  it('mineur et âge inconnu : aucune protection, la loi du Sang est entière (décision porteur)', () => {
+    expect(protectedAt(14, null)).toBe(false);
+    expect(protectedAt(null, 14)).toBe(false);
   });
-  it('un émetteur sans date déclarée n\'est pas mineur déclaré', () => expect(protectedAt(null, 30)).toBe(false));
+  it('l\'un des deux est mineur, dans un sens comme dans l\'autre : 30 et 14 ans, protection', () => {
+    expect(protectedAt(30, 14)).toBe(true);
+    expect(protectedAt(14, 30)).toBe(true);
+  });
+  it('deux adultes, même à 30 ans d\'écart : aucune protection', () => expect(protectedAt(50, 20)).toBe(false));
+  it('un adulte qui se déclare 17 ans face à un mineur de 14 : écart de 3, pas de protection', () => expect(protectedAt(14, 17)).toBe(false));
 });
 
 describe('constat A : un accord pris sous protection ne lève jamais un refus stocké', () => {

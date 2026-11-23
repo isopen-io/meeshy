@@ -27,6 +27,16 @@ jest.mock('../../../../services/PushNotificationService', () => ({
   getPushNotificationService: () => ({ sendToUser: async () => [] }),
 }));
 
+const refreshed: string[] = [];
+const recorded = (module: string, names: readonly string[]) => {
+  const actual = jest.requireActual(module) as Record<string, unknown>;
+  return { ...actual, ...Object.fromEntries(names.map((name) => [name, async (...args: unknown[]) => { refreshed.push(name); return (actual[name] as (...a: unknown[]) => unknown)(...args); }])) };
+};
+jest.mock('../../../../services/nowPlaying/nowPlayingDeps', () => recorded('../../../../services/nowPlaying/nowPlayingDeps', ['refreshNowPlayingAfter']));
+jest.mock('../../../../services/battery/batteryDeps', () => recorded('../../../../services/battery/batteryDeps', ['refreshBatteryAfter']));
+jest.mock('../../../../services/sharedLocation/sharedLocationDeps', () => recorded('../../../../services/sharedLocation/sharedLocationDeps', ['refreshSharedLocationAfter']));
+jest.mock('../../../../services/inactivityCheck/inactivityDeps', () => recorded('../../../../services/inactivityCheck/inactivityDeps', ['refreshInactivityServedAfter']));
+
 import { RELATION_BLOOD_LOCKED_CODE } from '@meeshy/shared/types/relation-person-settings';
 import { BLOOD_BUNDLE_VERSION } from '@meeshy/shared/utils/blood-bundle';
 import { relationsRoutes } from '../../../../routes/relations';
@@ -174,14 +184,15 @@ describe('constat A (2026-11-23) — un accord pris sous protection de mineur ne
     expect(coupe.status).toBe(409);
   });
 
-  it('mineur et âge de l\'autre inconnu : la protection tient (fail-closed), l\'accord est neutralisé', async () => {
+  it('mineur et âge de l\'autre inconnu : la loi du Sang est entière (décision porteur), l\'accord est pris', async () => {
     const app = await appli({ liens: [lien('BLOOD', 'BLOOD')], personnes: { [MOI]: { birthDate: NAISSANCE(14) } } });
     const res = await accepter(app);
     await app.close();
 
-    expect(res.body.data).toMatchObject({ bloodBundleAccepted: false });
-    expect(app.reglages.get(`${MOI}:${AUTRE}`)?.bloodBundleAcceptedAt ?? null).toBeNull();
+    expect(res.body.data).toMatchObject({ bloodBundleAccepted: true, lockedByLevel: true });
+    expect(app.reglages.get(`${MOI}:${AUTRE}`)?.bloodBundleAcceptedAt).toEqual(NOW);
   });
+});
 });
 
 describe('constat D — une paire bloquée ne se trahit pas par la réponse de l\'accord au palier', () => {
@@ -193,5 +204,26 @@ describe('constat D — une paire bloquée ne se trahit pas par la réponse de l
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual({ userId: AUTRE, bloodBundleAccepted: false, version: BLOOD_BUNDLE_VERSION, lockedByLevel: false });
     expect(app.reglages.get(`${MOI}:${AUTRE}`)?.bloodBundleAcceptedAt ?? null).toBeNull();
+  });
+});
+
+describe('constat 8 — accepter la liste rafraîchit les relais comme tout changement de palier', () => {
+  it('écoute, batterie, position partagée et inactivité/chute sont relus après l\'accord', async () => {
+    refreshed.length = 0;
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')], personnes: { [MOI]: { birthDate: NAISSANCE(30) }, [AUTRE]: { birthDate: NAISSANCE(30) } } });
+    const res = await app.call('PUT', `/api/v1/relations/${AUTRE}/blood-bundle`, { version: BLOOD_BUNDLE_VERSION }, MOI);
+    await app.close();
+
+    expect(res.body.data.bloodBundleAccepted).toBe(true);
+    expect(new Set(refreshed)).toEqual(new Set(['refreshNowPlayingAfter', 'refreshBatteryAfter', 'refreshSharedLocationAfter', 'refreshInactivityServedAfter']));
+  });
+
+  it('un accord neutralisé ne relit rien', async () => {
+    refreshed.length = 0;
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')], personnes: { [AUTRE]: { blockedUserIds: [MOI] } } });
+    await app.call('PUT', `/api/v1/relations/${AUTRE}/blood-bundle`, { version: BLOOD_BUNDLE_VERSION }, MOI);
+    await app.close();
+
+    expect(refreshed).toEqual([]);
   });
 });

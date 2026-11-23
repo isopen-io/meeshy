@@ -10,8 +10,8 @@
  * ouvre toujours la coupure.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { isBlockedBetween } from '../../utils/blocking';
-import { niveauEffectif } from '../friendship';
+import { getBlockedUserIdsAmong, isBlockedBetween } from '../../utils/blocking';
+import { niveauEffectif, niveauxParmi } from '../friendship';
 import { bloodBundleAcceptedOf } from './relationConsent';
 import { minorProtectedBetween } from '@meeshy/shared/utils/age';
 
@@ -53,3 +53,42 @@ export async function bloodLockStateBetween(prisma: BloodLockDb, ownerId: string
 
 export const bloodLockedBetween = async (prisma: BloodLockDb, ownerId: string, otherId: string): Promise<boolean> =>
   (await bloodLockStateBetween(prisma, ownerId, otherId)).locked;
+
+export type BloodLocksAmong = {
+  /** Les autres pour qui le verrou tient maintenant : accord à la version courante, Sang réel, aucun blocage. */
+  readonly locked: ReadonlySet<string>;
+  /** Les autres face auxquels la protection du mineur s'applique (`minorProtectedBetween`). */
+  readonly minorProtected: ReadonlySet<string>;
+};
+
+/**
+ * {@link bloodLockStateBetween} pour un ÉVENTAIL, en quatre lectures groupées quel que soit le nombre
+ * de personnes (un voile de position se juge à chaque point, jamais quatre requêtes par paire).
+ * `subjectIs: 'owner'` : le sujet est l'émetteur et `otherIds` ses lecteurs ; `'reader'` : l'inverse.
+ */
+export async function bloodLocksAmong(
+  prisma: BloodLockDb,
+  params: { readonly subjectId: string; readonly otherIds: readonly string[]; readonly subjectIs: 'owner' | 'reader' },
+): Promise<BloodLocksAmong> {
+  const others = [...new Set(params.otherIds)].filter((id) => id && id !== params.subjectId);
+  if (!params.subjectId || others.length === 0) return { locked: new Set(), minorProtected: new Set() };
+  const asOwner = params.subjectIs === 'owner';
+  const [rows, levels, blocked, people] = await Promise.all([
+    prisma.relationFeatureSetting.findMany({
+      where: asOwner ? { ownerId: params.subjectId, otherId: { in: others } } : { ownerId: { in: others }, otherId: params.subjectId },
+      select: { ownerId: true, otherId: true, bloodBundleAcceptedAt: true, bloodBundleVersion: true },
+    }),
+    niveauxParmi(prisma, params.subjectId, others),
+    getBlockedUserIdsAmong(prisma, params.subjectId, others),
+    prisma.user.findMany({ where: { id: { in: [params.subjectId, ...others] } }, select: { id: true, birthDate: true } }),
+  ]);
+  const birthOf = (id: string): Date | null => people.find((person) => person.id === id)?.birthDate ?? null;
+  const now = new Date();
+  const accepted = new Set(rows.filter(bloodBundleAcceptedOf).map((row) => (asOwner ? row.otherId : row.ownerId)));
+  const minorProtected = new Set(others.filter((other) => {
+    const [ownerId, readerId] = asOwner ? [params.subjectId, other] : [other, params.subjectId];
+    return minorProtectedBetween({ emitterBirthDate: birthOf(ownerId), otherBirthDate: birthOf(readerId), now });
+  }));
+  const locked = new Set(others.filter((other) => accepted.has(other) && levels.get(other) === 'BLOOD' && !blocked.has(other)));
+  return { locked, minorProtected };
+}

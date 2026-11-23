@@ -152,10 +152,14 @@ export function isVoiceCloningAgeAdmitted(birthDate: Date | null | undefined, no
 export const MINOR_PEER_AGE_GAP_YEARS = 5;
 
 /**
- * LA PROTECTION DU MINEUR ENTRE SANGS, site UNIQUE (directive porteur du 2026-11-23, #20359) :
- * l'émetteur est mineur déclaré ET l'autre personne a plus de 5 ans d'écart avec lui, ou un âge
- * inconnu (fail-closed). Deux mineurs, ou deux personnes à 5 ans d'écart au plus, n'ont aucune
- * protection : la loi du Sang s'applique entière. Un émetteur majeur ou sans date n'est jamais protégé.
+ * LA PROTECTION DU MINEUR ENTRE SANGS, site UNIQUE (directive porteur du 2026-11-23, #20359) : elle ne
+ * s'applique que si TROIS conditions sont réunies — les DEUX âges sont connus, l'un des deux est mineur
+ * déclaré, et l'écart dépasse STRICTEMENT 5 ans. Un âge inconnu d'un côté, deux mineurs, ou deux personnes
+ * à 5 ans d'écart au plus : la loi du Sang s'applique entière, tout s'ouvre (le Sang permet toute
+ * ouverture ; l'âge se force ailleurs, à l'onboarding). Les gardes légales (chute) ne passent pas par ici.
+ *
+ * Une date déclarée par l'autre peut se rajeunir : `reassessBloodBundlesAfterBirthDate` (passerelle) recalcule
+ * la protection à chaque déclaration ou modification d'une date, et efface l'accord d'une paire devenue protégée.
  */
 export function minorProtectedBetween(params: {
   readonly emitterBirthDate: Date | null | undefined;
@@ -163,8 +167,8 @@ export function minorProtectedBetween(params: {
   readonly now: Date;
 }): boolean {
   const { emitterBirthDate, otherBirthDate, now } = params;
-  if (!isDeclaredMinor(emitterBirthDate, now)) return false;
-  if (!otherBirthDate || Number.isNaN(otherBirthDate.getTime())) return true;
-  const gap = Math.abs(ageInFullYearsUtc(emitterBirthDate as Date, now) - ageInFullYearsUtc(otherBirthDate, now));
-  return gap > MINOR_PEER_AGE_GAP_YEARS;
+  const known = (date: Date | null | undefined): date is Date => date instanceof Date && !Number.isNaN(date.getTime());
+  if (!known(emitterBirthDate) || !known(otherBirthDate)) return false;
+  if (!isDeclaredMinor(emitterBirthDate, now) && !isDeclaredMinor(otherBirthDate, now)) return false;
+  return Math.abs(ageInFullYearsUtc(emitterBirthDate, now) - ageInFullYearsUtc(otherBirthDate, now)) > MINOR_PEER_AGE_GAP_YEARS;
 }
