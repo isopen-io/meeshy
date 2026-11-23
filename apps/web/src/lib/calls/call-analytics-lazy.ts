@@ -20,7 +20,7 @@ type ReportUse = (builders: CallReportBuilders) => void;
  * il n'est retenté qu'une minute après son échec, par la demande suivante, et
  * les rapports demandés entre-temps sont abandonnés sans bruit.
  */
-export function lazyCallReports(load: () => Promise<CallReportBuilders>, now: () => number = Date.now): CallReports {
+export function lazyCallReports(load: () => Promise<CallReportBuilders>, now: () => number = () => performance.now()): CallReports {
   let ready: CallReportBuilders | null = null;
   let waiting: ReportUse[] | null = null;
   let failedAt = -Infinity;
