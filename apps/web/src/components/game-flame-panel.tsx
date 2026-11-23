@@ -1,8 +1,8 @@
-import { parseEffortRelight, type GameFlame } from '@meeshy/shared/types/game';
+import type { GameFlame } from '@meeshy/shared/types/game';
 import { FLAME_BONUS_PERCENT_MAX, FLAME_BONUS_PERCENT_PER_DAY } from '@meeshy/shared/utils/game/flame';
 import { spendPreview } from '@meeshy/shared/utils/game/spend';
 
-import { effortRelightLine, formatCount, gameText, meeshCount } from '@/lib/view/game-copy';
+import { effortRelightLine, formatCount, gameText, meeshCount, readEffortRelight } from '@/lib/view/game-copy';
 import { freezeDetail } from '@/lib/view/game-detail';
 
 import { GAME_BRAND, GAME_ERROR, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, GameCard } from './game-surface';
@@ -71,7 +71,7 @@ export function GameFlamePanel(props: GameFlamePanelProps) {
   const out = flame.status === 'out';
   const relight = spendPreview({ held, cost: flame.relightPrice });
   const cannotPayRelight = !relight.affordable;
-  const effort = parseEffortRelight(flame.effortRelight);
+  const effort = readEffortRelight(flame.effortRelight);
 
   return (
     <GameCard id="game-flame-panel" labelledBy="game-flame-panel-title">

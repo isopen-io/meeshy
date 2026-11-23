@@ -152,6 +152,14 @@ describe('le rallumage par l’effort (#20471)', () => {
     expect(page).not.toContain('ne peut plus être rallumée');
   });
 
+  test('une forme illisible se tait : rien de neuf ne s’affiche', async () => {
+    const { readEffortRelight } = await import('@/lib/view/game-copy');
+    expect(readEffortRelight({ lostDays: 9, dreamsDone: 0, dreamsNeeded: 2, closesOn: '2026-10-05', daysLeft: 1 })).toEqual({ lostDays: 9, dreamsDone: 0, dreamsNeeded: 2, closesOn: '2026-10-05', daysLeft: 1 });
+    expect(readEffortRelight({ lostDays: 0, dreamsDone: 0, dreamsNeeded: 2, closesOn: '2026-10-05', daysLeft: 1 })).toBeNull();
+    expect(readEffortRelight({ lostDays: 9, dreamsDone: 0, dreamsNeeded: 2, closesOn: 'demain', daysLeft: 1 })).toBeNull();
+    expect(readEffortRelight(null)).toBeNull();
+  });
+
   test('devant un serveur qui ne le sert pas, rien de neuf ne s’affiche', () => {
     expect(text(renderToStaticMarkup(<GameFlamePanel {...props({ ...out, balance: 5 })} />))).not.toContain('rêve complet');
   });
