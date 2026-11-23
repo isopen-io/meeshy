@@ -30,6 +30,8 @@ const settle = async (): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, 0));
 };
 
+const collectGarbage = (): void => (globalThis as unknown as { readonly Bun: { readonly gc: (force: boolean) => void } }).Bun.gc(true);
+
 const manualClock = () => {
   const state = { now: 0 };
   return { now: (): number => state.now, set: (now: number): void => void (state.now = now) };
@@ -192,9 +194,9 @@ describe('les rapports d’un appel chargés à la demande (#19894)', () => {
     })();
     load.resolve(builders);
     await settle();
-    Bun.gc(true);
+    collectGarbage();
     await settle();
-    Bun.gc(true);
+    collectGarbage();
     expect(held.deref()).toBeUndefined();
   });
 });

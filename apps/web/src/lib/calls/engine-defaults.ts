@@ -27,7 +27,6 @@ import { playCue, primeTones, startTone, stopTone } from './call-tones';
 import { currentCallTransport } from './call-transport';
 import type { CallEngineDeps } from './engine';
 import { createPeerLink } from './peer-link';
-import { acquireRearCamera } from './rear-camera';
 import { selfZoomStore, sentZoom } from './self-zoom';
 import { browserColorSupport, videoEffectsStore } from './video-effects';
 
@@ -131,7 +130,7 @@ export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
     viewerId,
     fetchActiveCallId: (conversationId) => fetchActiveCallId(apiDeps, conversationId),
     acquireMedia: (options) => acquireCallMedia({ ...options, ...preferredInputs(), profile: currentProfile() }),
-    acquireCamera: (facing) => (facing === 'environment' ? acquireRearCamera({ profile: currentProfile() }) : acquireCamera({ facing, cameraId: preferredInputs().cameraId, profile: currentProfile() })),
+    acquireCamera: (facing) => (facing === 'environment' ? import('./rear-camera').then((module) => module.acquireRearCamera({ profile: currentProfile() })) : acquireCamera({ facing, cameraId: preferredInputs().cameraId, profile: currentProfile() })),
     acquireCameraDevice: (deviceId) => acquireChosenInput({ kind: 'camera', deviceId, profile: currentProfile() }),
     rememberCamera: (deviceId) => void writeDevicePreference(browserPreferenceStorage(), 'camera', deviceId),
     acquireDisplay: () => acquireDisplay(),
