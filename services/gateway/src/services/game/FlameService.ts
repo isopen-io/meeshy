@@ -14,7 +14,9 @@
  *    Veilleuse (`firstFreezeGift`, #17371), écrite dans le même geste avec
  *    son jour, que le bloc annonce ce jour-là (#20169) ;
  *  - `buyFreeze` : 1 Meesh, 2 en réserve au plus ;
- *  - `relight` : 3 Meeshes, dans les 48 h, une fois par mois.
+ *  - `relight` : 3 Meeshes, dans les 48 h, une fois par mois ;
+ *  - `relightByEffort` : deux rêves complets dans la même fenêtre rallument
+ *    la Flamme sans payer (#20455), sans consommer le rallumage payé du mois.
  *
  * Les deux dépenses passent par `MeeshSpend` : ligne `spend` + effet dans une
  * même transaction, idempotentes par `requestId`.
@@ -32,6 +34,8 @@ import {
   relightFlame,
   type FlameOutcome,
 } from '@meeshy/shared/utils/game/flame';
+import { canRelightByEffort, relightByEffort, wholeDreamDays } from '@meeshy/shared/utils/game/flame-effort';
+import { FULL_DREAM_ACTS } from '@meeshy/shared/utils/game/missions';
 import { civilDayKey } from '../engagement/civilDay';
 import { GameRefusal } from './GameRefusal';
 import { GloryService } from './GloryService';
@@ -236,6 +240,60 @@ export type FreezeResult =
   | { readonly status: 'bought' | 'already-bought'; readonly freezes: number; readonly balance: number };
 export type RelightResult =
   | { readonly status: 'relit' | 'already-relit'; readonly streak: number; readonly balance: number };
+export type EffortRelightResult = { readonly streak: number } | null;
+
+type EffortDb = Pick<PrismaClient, 'user' | 'dailyMission'>;
+
+/** Les actes du Rêve des journées d'après la rupture — la mission personnelle n'en fait pas partie. */
+async function dreamDaysAfter(db: EffortDb, userId: string, brokenLastDay: string): Promise<readonly string[]> {
+  const rows = await db.dailyMission.findMany({
+    where: { userId, dayKey: { gt: brokenLastDay }, slot: { lt: FULL_DREAM_ACTS } },
+    select: { dayKey: true, slot: true, completedAt: true },
+  });
+  return wholeDreamDays(rows.map((row) => ({ dayKey: row.dayKey, slot: row.slot, completed: row.completedAt != null })));
+}
+
+/**
+ * Rallume la Flamme si deux rêves complets l'ont GAGNÉ (#20455). Appelée à l'achèvement de chaque acte : ne fait
+ * rien tant que la loi refuse. L'écriture est CONDITIONNELLE à la Flamme lue, comme celle du geste du jour : un
+ * geste, un gel ou un rallumage payé concurrent fait reprendre le calcul, jamais écraser. `null` : rien rallumé.
+ */
+export async function writeEffortRelight(db: EffortDb, userId: string, now: Date): Promise<{ readonly streak: number; readonly previousLongest: number; readonly longest: number } | null> {
+  for (let attempt = 0; attempt < STREAK_WRITE_ATTEMPTS; attempt += 1) {
+    const row = await db.user.findUnique({ where: { id: userId }, select: FLAME_USER_SELECT });
+    if (!row) return null;
+    const facts = flameFactsOf(row, now);
+    const broken = brokenFlame(facts);
+    if (broken === null) return null;
+    const verdict = canRelightByEffort({
+      brokenLastDay: broken.lastActiveDay,
+      streakBeforeBreak: broken.streak,
+      today: facts.today,
+      dreamDays: await dreamDaysAfter(db, userId, broken.lastActiveDay),
+    });
+    if (!verdict.allowed) return null;
+    const restored = relightByEffort({
+      brokenLastDay: broken.lastActiveDay,
+      streakBeforeBreak: broken.streak,
+      today: facts.today,
+      lastActiveDay: facts.lastActiveDay,
+      currentStreak: facts.streak,
+    });
+    const longest = Math.max(facts.longest, restored.streak);
+    const written = await db.user.updateMany({
+      where: { id: userId, AND: flameUnchanged(row) },
+      data: {
+        currentStreakDays: restored.streak,
+        longestStreakDays: longest,
+        lastStreakDate: markerOfDayKey(restored.lastActiveDay),
+        brokenStreakDays: null,
+        brokenStreakLastDay: null,
+      },
+    });
+    if (written.count === 1) return { streak: restored.streak, previousLongest: facts.longest, longest };
+  }
+  return null;
+}
 
 type WriteInput = { readonly userId: string; readonly requestId: string; readonly now?: Date };
 
@@ -346,5 +404,13 @@ export class FlameService {
     }
     const row = await this.userRow(this.prisma, userId);
     return { status: 'already-relit', streak: count(row.currentStreakDays), balance: outcome.balance };
+  }
+
+  /** Deux rêves complets dans les 48 h rallument la Flamme, sans payer (#20455). `null` tant que ce n'est pas gagné. */
+  async relightByEffort(userId: string, now: Date = new Date()): Promise<EffortRelightResult> {
+    const relit = await writeEffortRelight(this.prisma, userId, now);
+    if (relit === null) return null;
+    await this.glory.creditFlameRecords({ userId, previousLongest: relit.previousLongest, longest: relit.longest }).catch(() => 0);
+    return { streak: relit.streak };
   }
 }

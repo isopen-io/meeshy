@@ -64,6 +64,9 @@ const frShellLabels = {
   'message.reaction.add': 'Réagir avec {emoji}',
   'message.reaction.remove': 'Retirer votre réaction {emoji}',
   'message.badge.pinned': 'Message épinglé',
+  'message.edited.a11y': 'modifié',
+  'message.pinned.a11y': 'épinglé',
+  'message.replyTo.a11y': 'réponse à {author}',
   'quote.sender.unknown': 'l’expéditeur',
 
   'media.tile.open': 'Ouvrir {name}',

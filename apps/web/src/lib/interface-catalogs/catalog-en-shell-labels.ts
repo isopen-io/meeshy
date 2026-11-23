@@ -59,6 +59,9 @@ const enShellLabels = {
   'message.reaction.add': 'React with {emoji}',
   'message.reaction.remove': 'Remove your {emoji} reaction',
   'message.badge.pinned': 'Pinned message',
+  'message.edited.a11y': 'edited',
+  'message.pinned.a11y': 'pinned',
+  'message.replyTo.a11y': 'replying to {author}',
   'quote.sender.unknown': 'the sender',
 
   'media.tile.open': 'Open {name}',

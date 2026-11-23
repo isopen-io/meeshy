@@ -59,6 +59,9 @@ const esShellLabels = {
   'message.reaction.add': 'Reaccionar con {emoji}',
   'message.reaction.remove': 'Quitar tu reacción {emoji}',
   'message.badge.pinned': 'Mensaje fijado',
+  'message.edited.a11y': 'editado',
+  'message.pinned.a11y': 'fijado',
+  'message.replyTo.a11y': 'en respuesta a {author}',
   'quote.sender.unknown': 'el remitente',
 
   'media.tile.open': 'Abrir {name}',
