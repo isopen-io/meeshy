@@ -184,6 +184,82 @@ qui l'a rappelé. Converti en témoin #20443.
 `tsc --noEmit` (gateway) : **0**. Suite gateway COMPLÈTE : voir le commentaire
 de clôture de l'issue. Suite web `publication-views-realtime` : 5/5.
 
+## Ce que l'audit adversarial a changé
+
+**Verdict : non bloquant.** Il a reproduit les deux cliquets de type
+(`TS2322` / `TS2345`, exit 2 dans les deux sens) et fait tomber le témoin
+réécrit (fail-open du handler ⇒ 5 rouges sur 8). Six constats, dont deux de la
+famille exacte que le doc-comment de ce lot dénonce.
+
+**La portée du cliquet n'était pas écrite, et c'est là que deux harnais ont
+survécu.** `services/gateway/jest.config.json` amnistie `2322` et `2345` dans
+`ignoreCodes` — EXACTEMENT les deux codes que ce lot publie comme sa garde — et
+`tsconfig.json` exclut `__tests__`. **Aucun fichier de test n'est tenu par ce
+type.** Et un `as any` sur l'argument remis au diffuseur passe le compilateur :
+`sweepErasingEmitArgumentCasts` ne garde que les arguments de `.emit(`. Ce qui
+retient ce trou est un témoin de COMPORTEMENT, pas un type.
+
+> **Un cliquet dont la portée n'est pas écrite se lit comme une garde
+> complète.** Celui-ci est juste et son énoncé était littéralement exact — « le
+> `tsc` de la passerelle les porte » — ce qui le rendait d'autant plus
+> trompeur : rien dans la phrase ne disait où il NE porte pas, et c'est
+> précisément là que vivaient les deux résidus ci-dessous.
+
+**Deux familles de harnais attestaient le contrat que ce lot déclare mort** —
+dont les quatre sites web, sans aucune pression du compilateur (charges `unknown`
+ou non annotées, `tsc apps/web` à 0) : ce sont ceux qu'un prochain lot aurait
+copiés. Anonymisés, avec la raison écrite sur place.
+
+**Et un témoin de la passerelle portait le NOM du code que ce lot a supprimé.**
+`interactions.views.test.ts` ouvrait un bloc « STORY viewer has no username uses
+`?? empty string` (line 279) » qui n'assertait qu'un `statusCode === 200` — le
+`?? ''` est parti avec le `username` de l'acteur, et le témoin est resté VERT en
+passant par le chemin nominal. Ce qu'il peut attester a survécu au retrait et
+vaut mieux : **un acteur SANS pseudo diffuse la même charge anonyme que les
+autres.** Il assert désormais sur le couple remis au diffuseur.
+
+> Trois règles maison d'un coup : « un témoin d'écriture assert sur l'EFFET,
+> jamais sur le statut », « une clé de ligne dérive à la première édition » (le
+> `(line 279)` du titre était déjà faux), et le journal de ce lot affirmait
+> « zéro lecteur après ce lot » — vrai de la PRODUCTION, **non balayé dans les
+> tests**. Un relevé de lecteurs qui s'arrête à `src/` ne dit rien des harnais,
+> et ce sont les harnais qui propagent une forme morte.
+
+**Une jambe de la justification était surévaluée, et elle est retirée.** Ce lot
+écrivait que l'alignement sur `views.identity` aurait « élargi la fenêtre de
+réordonnancement de #20414 ». Mesuré : cette fenêtre PRÉEXISTE et elle est déjà
+large — `applyViews` appelle la diffusion DANS sa boucle, et chaque appel y fait
+déjà `getPostById`, que son propre doc-comment nomme « la lecture LOURDE du
+détail ». Une lecture `pairAccess` de plus est marginale devant celles-là : le
+coût réel est un coût de **DÉBIT**, pas d'ordonnancement. La décision tient sur
+ses deux autres jambes — aucun lecteur mesuré, et le précédent #14319.
+
+> **C'est la faute du cycle 221 sous sa forme douce** : une justification
+> publiée plus forte que ce qu'elle mesure. Le commentaire voisin, écrit par
+> #20429, la contredisait déjà noir sur blanc douze lignes plus haut
+> (« cette fenêtre PRÉEXISTE et ce lot ne la ferme pas »). **Une affirmation de
+> coût se mesure contre ce que le site paie DÉJÀ**, et le paragraphe qui le
+> disait était sous mes yeux.
+
+**Les quatre axes sur lesquels l'audit n'a RIEN trouvé**, dits parce qu'un
+silence se lit comme un angle mort : aucune autre identité sur un fil temps réel
+de story (`feed:<id>` n'est rejointe que par son propriétaire, un seul `join` du
+dépôt ; les sept autres familles de #20338 ne portent qu'un acteur de geste
+délibéré et **n'ont aucune jumelle REST plus stricte** — `views.identity` est la
+SEULE feature d'identité de `RELATION_FEATURE_MIN_LEVEL`, donc l'asymétrie que
+ce lot ferme n'a pas de sœur) ; la chaîne vide jamais prise pour une identité
+(aucune carte clé par viewer, aucun `== selfId` alimenté par cette charge, aucun
+chemin push ni service worker, aucun journal qui imprime la charge) ; aucun
+autre lecteur de `SocialEventsActor.username` (l'acteur n'est jamais étalé — le
+relais V2 le reconstruit explicitement) ; et aucune perte produit (les deux
+clients qui affichent la liste la RELISENT sur l'événement, donc les noms
+viennent du REST gardé, et ils en venaient déjà).
+
+**Ce que l'audit n'a PAS pu vérifier, et qui reste donc raisonné** : aucune
+compilation iOS ni Android dans ce conteneur — les deux affirmations sur les
+décodeurs sont LUES dans les sources ; et le PARC déployé n'est mesuré par
+personne (#20453 le reconnaît).
+
 ## Ce que ce lot ouvre, et ne corrige pas
 
 - **#20453** — le RETRAIT des deux clés : rendre les décodeurs tolérants sur
@@ -191,4 +267,13 @@ de clôture de l'issue. Suite web `publication-views-realtime` : 5/5.
   `viewerId: String? = null` sur Android, l'optionnel côté type partagé),
   mesurer les versions déployées, puis retirer les clés du fil. Ce lot a fait l'étape 1 sur
   trois ; les deux autres attendent une mesure de parc, pas un cycle.
-- **#20414**, **#20415**, **#20440** — les trois suivis du cycle 221, intacts.
+- **#20457** — iOS pose `isViewed = true` à chaque `story:viewed`, un événement
+  qui ne part JAMAIS pour soi : la story de l'auteur se marque « vue » dès qu'un
+  TIERS l'ouvre, et descend au tri. Relevé par l'audit, hors périmètre. Et la
+  réparation n'est pas de comparer le viewer à soi — ce test aurait toujours été
+  vrai, même avant ce lot : **la ligne n'est pas mal gardée, elle n'a pas lieu
+  d'être.**
+- **#20414**, **#20415** — deux des trois suivis du cycle 221, intacts.
+  **#20440 est LIVRÉ** par une autre session pendant ce lot (le socle de
+  diffusion quitte `SocialEventsHandler`), et c'est elle qui a pris le numéro de
+  cycle 222 : ce journal est le 223.

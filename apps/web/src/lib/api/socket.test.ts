@@ -370,7 +370,8 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
     [SERVER_EVENTS.STORY_CREATED, { story: { id: 's-1' } }],
     [SERVER_EVENTS.STORY_UPDATED, { story: { id: 's-1' } }],
     [SERVER_EVENTS.STORY_DELETED, { storyId: 's-1', authorId: 'u-1' }],
-    [SERVER_EVENTS.STORY_VIEWED, { storyId: 's-1', viewerId: 'u-1', viewerUsername: 'x', viewCount: 1 }],
+    // #20443 — ne nomme plus personne ; les clés restent, vides (décodeurs stricts).
+    [SERVER_EVENTS.STORY_VIEWED, { storyId: 's-1', viewerId: '', viewerUsername: '', viewCount: 1 }],
   ];
   for (const [event, payload] of STORY_EVENTS) {
     test(`\`${event}\` invalide le rail des STORIES`, () => {

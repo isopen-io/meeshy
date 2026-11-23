@@ -107,7 +107,12 @@ async function diffuser(blocages: Blocages, auteur: string = AUTEUR) {
   const prisma = fauxPrisma(blocages);
   const handler = new SocialEventsHandler({ io: fauxIo(emissions) as any, prisma });
   const separated = await handler.separationAroundActor(VIEWER);
-  handler.broadcastStoryViewed(charge() as any, auteur, separated);
+  /* #20443 — plus de `as any` : `charge()` est désormais exactement assignable à
+     `StoryViewedEventData` (les deux clés nominatives y sont typées `''`). Le
+     cast n'avait plus d'objet, et il effaçait le seul endroit où ce harnais peut
+     être tenu par le type. (Il ne l'est de toute façon pas au gate : le `tsc` de
+     la passerelle exclut `__tests__` — voir le doc-comment du type.) */
+  handler.broadcastStoryViewed(charge(), auteur, separated);
   return { emissions, prisma, separated };
 }
 
@@ -202,7 +207,7 @@ describe('#20429 — story:viewed et la séparation autour du viewer', () => {
 
     const separated = await handler.separationAroundActor(VIEWER);
     for (const auteur of [AUTEUR, AUTRE_AUTEUR, 'troisieme-auteur-20429']) {
-      handler.broadcastStoryViewed({ ...charge(), storyId: `${STORY_ID}` } as any, auteur, separated);
+      handler.broadcastStoryViewed({ ...charge(), storyId: `${STORY_ID}` }, auteur, separated);
     }
 
     const lectures = (prisma.user.findMany as unknown as jest.Mock).mock.calls;

@@ -280,12 +280,14 @@ async function broadcastStoryViewed(
        La réparation retire la DONNÉE au lieu d'aligner la garde — aucun des
        trois clients ne lit ces deux champs (mesuré, cf. le doc-comment de
        `StoryViewedEventData`), et les servir sous une loi de cercles aurait
-       coûté une lecture `pairAccess` par auteur distinct APRÈS l'écriture de
-       la vue, élargissant la fenêtre de réordonnancement de #20414 pour
-       alimenter un champ que personne n'affiche.
-       Les deux clés restent présentes, à la chaîne vide : le décodeur iOS
-       déployé les veut non optionnelles, et les omettre emporterait
-       `viewCount` — le seul champ lu. Leur retrait est un lot d'après. */
+       coûté une lecture `pairAccess` par auteur distinct du lot pour alimenter
+       un champ que personne n'affiche. C'est un coût de DÉBIT, et pas un
+       élargissement notable de la fenêtre de #20414 : cette fenêtre préexiste
+       et le `getPostById` ci-dessus — la lecture LOURDE — y est déjà.
+       Les deux clés restent présentes, à la chaîne vide : les décodeurs iOS
+       ET Android déployés exigent leur PRÉSENCE (`String` non optionnel d'un
+       côté, `String` sans défaut de l'autre), et les omettre emporterait
+       `viewCount` — le seul champ lu. Leur retrait est #20453. */
     safeBroadcast('story:viewed', () => {
       socialEvents.broadcastStoryViewed({
         storyId: targetId,

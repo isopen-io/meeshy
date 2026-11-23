@@ -467,10 +467,22 @@ export const ANONYMOUS_STORY_VIEWER: {
  * (`core/model/.../SocketEvents.kt:751`) ne DÉCLARE même pas
  * `viewerUsername`. Servir
  * une identité sous une loi de cercles aurait coûté une lecture `pairAccess`
- * par auteur distinct, APRÈS l'écriture de la vue — donc en élargissant la
- * fenêtre de réordonnancement de #20414 — pour alimenter un champ que personne
- * n'affiche. Précédent exact : #14319, « une traduction en clair n'a rien à
- * faire dans une charge que personne n'affiche ».
+ * par auteur distinct du lot, sur le chemin le plus chaud du social, pour
+ * alimenter un champ que personne n'affiche. Précédent exact : #14319, « une
+ * traduction en clair n'a rien à faire dans une charge que personne
+ * n'affiche ».
+ *
+ * **Ce que cette troisième jambe ne dit PAS, parce qu'un premier jet le disait
+ * et que c'était surévalué** (relevé par l'audit adversarial du lot) : elle
+ * n'« élargit » pas la fenêtre de réordonnancement de #20414 à un degré qui
+ * pèse dans la décision. Cette fenêtre PRÉEXISTE et elle est déjà large —
+ * `applyViews` appelle la diffusion DANS sa boucle, et chaque appel fait déjà
+ * `getPostById`, que son propre doc-comment décrit comme « la lecture LOURDE
+ * du détail ». Une lecture `pairAccess` de plus est marginale devant celles-là.
+ * Le coût réel est un coût de DÉBIT, pas d'ordonnancement, et la décision tient
+ * sur ses deux autres jambes — aucun lecteur mesuré, et le précédent #14319.
+ * Publier une justification plus forte que ce qu'elle mesure est la faute du
+ * cycle 221, et elle se paie en confiance sur les cycles où la mesure dit vrai.
  *
  * **Les deux clés RESTENT, et portent la chaîne vide — c'est la
  * rétrocompatibilité (#9223), pas une hésitation.** DEUX clients déployés
@@ -484,9 +496,24 @@ export const ANONYMOUS_STORY_VIEWER: {
  * EXIGER sa présence sont deux propriétés distinctes : c'est la seconde qui
  * interdit la bascule sèche. Le type LITTÉRAL `''` encode les deux
  * moitiés de la décision d'un coup : aucune identité ne peut y être écrite
- * (le compilateur refuse), et aucune clé ne peut être omise (le champ est
+ * (`TS2322`), et aucune clé ne peut être omise (`TS2345`, le champ étant
  * requis). Leur RETRAIT est un lot d'après : clients rendus tolérants, versions
- * déployées mesurées, puis clés retirées — jamais de bascule sèche.
+ * déployées mesurées, puis clés retirées — jamais de bascule sèche (#20453).
+ *
+ * **La PORTÉE de ce cliquet, parce qu'un cliquet dont la portée n'est pas
+ * écrite se lit comme une garde complète** (mesuré par l'audit du lot) :
+ *
+ * - Il porte sur le `src/` de PRODUCTION de la passerelle, par son `tsc`
+ *   bloquant — et sur rien d'autre. `services/gateway/tsconfig.json` exclut
+ *   `__tests__`, et `jest.config.json` amnistie `2322` et `2345` dans
+ *   `ignoreCodes` : ce sont EXACTEMENT les deux codes ci-dessus. **Aucun
+ *   fichier de test n'est tenu par ce type**, et c'est là que deux harnais
+ *   avaient survécu en attestant le contrat mort.
+ * - Un `as any` sur l'argument remis au diffuseur passe le compilateur.
+ *   `sweepErasingEmitArgumentCasts` ne garde que les arguments de `.emit(`,
+ *   pas ceux d'une méthode de diffusion. Ce qui le retient est un témoin de
+ *   COMPORTEMENT (« ni l'id ni le pseudo ne partent », harnais de route), pas
+ *   un type — donc le témoin, pas le cliquet, est ce qui tient ce trou.
  *
  * Le gate de SÉPARATION de #20429 reste en place et n'est pas touché ici : la
  * raison qui l'a motivé (une charge nominative) a disparu, mais le MOMENT d'un
