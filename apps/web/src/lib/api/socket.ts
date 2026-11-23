@@ -43,7 +43,15 @@ import { applyMessageReactionUpdate, isMessageReactionUpdate } from './realtime-
 import { FEED_QUERY_KEY } from './feed';
 import { STATUS_MOODS_QUERY_KEY, STORY_TRAY_QUERY_KEY } from './stories';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
-import { MY_PREFERENCES_QUERY_KEYS, MY_PROFILE_QUERY_KEY } from './me-keys';
+import { CALL_HISTORY_QUERY_PREFIX, MY_PREFERENCES_QUERY_KEYS, MY_PROFILE_QUERY_KEY } from './me-keys';
+import { ENGAGEMENT_PROGRESS_QUERY_KEY } from './game-state-order';
+import { PACK_CATCH_UP_ROOTS } from './pack-query-keys';
+import {
+  ATTACHMENT_STATUS_DETAILS_QUERY_ROOT,
+  COMMUNITIES_QUERY_ROOT,
+  CONVERSATION_MEMBERS_QUERY_ROOT,
+  STICKERS_QUERY_KEY,
+} from './realtime-catch-up-keys';
 import { profileRepaintOfUserUpdated, repaintProfile } from './my-portrait';
 import { PUBLIC_PROFILE_QUERY_PREFIX } from './public-profile';
 import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATION_LISTS_KEY, type NotificationsDeps } from './notifications';
@@ -163,6 +171,39 @@ import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
  * SEULE famille dont la portée diffère entre les deux branches, et c'est
  * pourquoi elle reste écrite à la main dans `catchUpFirstAuthentication`.
  *
+ * **ET LA LISTE ÉTAIT COMPLÈTE DE MOITIÉ** (#20438, cycle 221). Treize
+ * familles y figuraient quand le socket en ÉCRIT vingt-sept. Ce qui a tenu la
+ * lacune n'est pas un oubli mais un RAISONNEMENT, qui vivait dans
+ * `unqueuedFamilyVerdict.ts` et dans #20353 : « une relecture sert la vérité,
+ * à son `staleTime` près ». Mesuré, il ne tient pas —
+ * `refetchOnReconnect: true` (`query-client.ts`) est branché sur
+ * l'`onlineManager` de TanStack, qui écoute les transitions `online` /
+ * `offline` du NAVIGATEUR, et **rien dans `apps/web/src` ne le relie au
+ * socket**. Les coupures de socket les plus fréquentes n'ont aucune transition
+ * réseau : redémarrage de la passerelle, déploiement, expiration d'inactivité,
+ * coupure de proxy, ré-authentification — #20224 l'avait déjà mesuré pour la
+ * file d'envoi, sans en tirer la conséquence générale. Et une requête
+ * seulement PÉRIMÉE n'est pas relue : TanStack relit sur un DÉCLENCHEUR
+ * (montage, focus, reconnexion réseau, invalidation), jamais sur l'écoulement
+ * du `staleTime`.
+ *
+ * > **Pour une coupure de socket, ce rattrapage est le SEUL rattrapage du
+ * > web.** Un `staleTime` n'atténue que le démarrage à FROID (par
+ * > `refetchOnMount`) ; il n'atténue rien d'un écran OUVERT.
+ *
+ * Les familles entrées à ce lot sont commentées une à une dans la liste — le
+ * COMPTE ne s'écrit pas ici : il se lit dans la liste, et une mesure recopiée
+ * dans une prose dérive au premier ajout.
+ *
+ * **Des familles restent DEHORS avec leur raison, et c'est une décision, pas
+ * une lacune** : les états de proximité (`['relations', …]` — batterie, chutes,
+ * inactivité, appels, joignabilité) portent CHACUN son rattrapage, écrit sur
+ * place (« à chaque socket accrochée, `GET /relations/…` rattrape »), et les
+ * métriques d'exploitation sont SONDÉES. Le cliquet de ce lot
+ * (`socket-missed-catch-up.test.ts` § #20438) ne les exempte pas d'office : il
+ * exige que la raison soit déclarée, et il rougit sur une exemption dont la
+ * famille n'est plus écrite.
+ *
  * **LE NOM EST LA MOITIÉ DU CORRECTIF** (#20336, cycle 217). Cette liste
  * s'appelait `CATCH_UP_PERSONAL_FAMILIES`, un nom de SOUS-CATÉGORIE : #18641 et
  * #18914 ont ajouté quatre familles de PUBLICATION à la seule branche de
@@ -180,9 +221,9 @@ type CatchUpFamily = {
    * famille, et un défaut implicite se lit comme un arbitrage qui n'a pas eu
    * lieu. C'est la règle que le dépôt applique déjà aux schémas de réponse —
    * « le silence n'est jamais la réponse » — et elle vaut ici pour la même
-   * raison : deux de ces neuf clés ont un VOISIN sous leur racine
-   * (`['feed','new-count']`, le rail des stories), et une dixième famille
-   * posée sans y penser balaierait le sien.
+   * raison : plusieurs de ces clés ont un VOISIN sous leur racine
+   * (`['feed','new-count']`, le rail des stories, et tout ce qui vit sous
+   * `['me']`), et une famille posée sans y penser balaierait le sien.
    */
   readonly exact: boolean;
 };
@@ -202,9 +243,61 @@ const CATCH_UP_FAMILIES: readonly CatchUpFamily[] = [
      `user:preferences-updated` itère, et le dupliquer ici le laisserait
      diverger au premier réglage ajouté. `exact: true` est mesuré : ni
      `['me','app-preferences']` ni `['me','circle-notify']` n'a de descendant,
-     donc rien ne justifie de balayer leur racine `['me']`, qui emporterait le
-     profil et le journal d'appels. */
+     donc rien ne justifie de balayer leur racine `['me']`, qui emporterait les
+     stickers, les packs et la progression du Jeu — chacun avec sa propre
+     portée ci-dessous. (Cette note a dit « le profil et le journal d'appels »
+     jusqu'à #20438 : le journal est `['calls','history']`, une AUTRE racine,
+     seulement DÉCLARÉE dans `me-keys.ts`.) */
   ...MY_PREFERENCES_QUERY_KEYS.map((queryKey) => ({ queryKey, exact: true })),
+  /* LES FAMILLES QUE LE SOCKET ÉCRIT ET QUE RIEN NE RATTRAPAIT (#20438) —
+     relevées mécaniquement, puis gelées par le cliquet de ce lot. Chacune a un
+     écrivain branché sur CETTE connexion, et aucune racine qui la préfixe dans
+     les deux branches. */
+
+  /* LE TROMBINOSCOPE de la conversation ouverte — `conversation-members-live.ts`,
+     cinq événements (rang, départ, bannissement, arrivée, débannissement). C'est
+     une surface de MODÉRATION : la coupure y laisse un membre banni ou parti en
+     liste, et le geste qu'un administrateur pose dessus revient en refus que rien
+     n'explique. Hors de `['conversations', …]` par décision
+     (`conversation-members.ts`), donc hors du seul préfixe que la reconnexion
+     périme. */
+  { queryKey: CONVERSATION_MEMBERS_QUERY_ROOT, exact: false },
+  /* LA COMMUNAUTÉ — `community-live.ts` (`community:updated`) et
+     `community-member-live.ts` (entrée, départ, rang). Par PRÉFIXE : la liste, la
+     fiche, les membres et les demandes d'adhésion vivent sous cette racine, et
+     les quatre événements en touchent plusieurs à la fois. */
+  { queryKey: COMMUNITIES_QUERY_ROOT, exact: false },
+  /* LA PROGRESSION DU JEU — `game-state-live.ts` (`game:updated`,
+     `game:missions-updated`). `exact` : `['me','engagement']` n'a pas de
+     descendant, et sa racine `['me']` porte tout le reste de ce bloc. */
+  { queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY, exact: true },
+  /* MA BIBLIOTHÈQUE DE STICKERS — `library-sync.ts` APPLIQUE la charge au cache
+     au lieu de l'invalider, décision écrite sur place et juste : ce qu'on
+     applique est exactement ce qu'une coupure fait PERDRE, et les cinq minutes
+     de `STICKERS_STALE_TIME` ne relisent rien d'un écran déjà ouvert. */
+  { queryKey: STICKERS_QUERY_KEY, exact: true },
+  /* LES PACKS — `installation-sync.ts` (`pack:installation-updated`, #20354) :
+     un pack acheté ou GAGNÉ sur un autre appareil. QUATRE racines, dérivées de
+     `pack-query-keys.ts` : les stickers gardent leurs clés historiques, que
+     `['me','packs']` ne préfixe pas. Le SOLDE (`['me','packs','balance']`) entre
+     dans la portée par préfixe et c'est sans effet : sa requête est inerte
+     (`enabled: false`), donc rien ne part — `loadCatalogue` l'écrit à chaque
+     relecture de la vitrine. */
+  ...PACK_CATCH_UP_ROOTS.map((queryKey) => ({ queryKey, exact: false })),
+  /* LE PROFIL PUBLIC ouvert — écrit par ce module même (les quatre familles de
+     demande d'ami) et par `profile-decor/equip.ts`. Par préfixe : chaque profil
+     a son entrée sous cette racine, et seul celui qui est OBSERVÉ sera relu. */
+  { queryKey: PUBLIC_PROFILE_QUERY_PREFIX, exact: false },
+  /* LES DÉTAILS D'ÉTAT d'une pièce jointe (#7226) — écrits par ce module sur
+     `attachment-status:updated`. Par préfixe : une entrée par pièce. */
+  { queryKey: ATTACHMENT_STATUS_DETAILS_QUERY_ROOT, exact: false },
+  /* LE JOURNAL D'APPELS — `lib/calls/call-socket-bridge.ts` le périme quand un
+     appel finit. Un appel manqué PENDANT la coupure n'atteint aucun socket, et
+     c'est précisément l'entrée que le journal existe pour montrer. Par préfixe :
+     chaque filtre et chaque raffinement y a son entrée (`callHistoryQueryKey`).
+     Sa racine est `['calls']`, pas `['me']` — il est seulement DÉCLARÉ dans
+     `me-keys.ts`, ce qu'un témoin de portée avait pris pour l'inverse. */
+  { queryKey: CALL_HISTORY_QUERY_PREFIX, exact: false },
 ];
 
 function isTypingEvent(payload: unknown): payload is TypingEvent {

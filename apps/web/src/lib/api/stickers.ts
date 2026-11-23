@@ -22,7 +22,10 @@ import type { ApiResult } from './http';
  * au geste (création, retrait), le réseau confirme.
  */
 
-export const STICKERS_QUERY_KEY = ['me', 'stickers'] as const;
+/** Réexport de `realtime-catch-up-keys.ts` (#20438), d'où `CATCH_UP_FAMILIES`
+ * la nomme : `library-sync.ts` APPLIQUE la charge au cache, et ce qu'on
+ * applique est ce qu'une coupure fait perdre. */
+export { STICKERS_QUERY_KEY } from './realtime-catch-up-keys';
 
 /** Cinq minutes : seul le porteur modifie sa bibliothèque, et il le fait depuis
  * l'écran qui écrit déjà le cache au geste. */
