@@ -636,7 +636,7 @@
     <string name="game_flame_no_streak">لهب ينتظر الإشعال</string>
     <string name="game_flame_panel_bonus">كل يوم من اللهب يغذّي أحلامك: ⁦+%1$s %%⁩ من الشرارات لكل فصل، حتى ⁦+%2$s %%⁩.</string>
     <string name="game_flame_panel_effort_dreams_one">%1$s حلم كامل</string>
-    <string name="game_flame_panel_effort_dreams_other">%1$s أحلام كاملة</string>
+    <string name="game_flame_panel_effort_dreams_other">%1$s حلمًا كاملًا</string>
     <string name="game_flame_panel_effort_relight_today">بقي %1$s اليوم ليعود لهبك (%2$s) دون أن تدفع.</string>
     <string name="game_flame_panel_effort_relight_tomorrow">بقي %1$s حتى مساء الغد ليعود لهبك (%2$s) دون أن تدفع.</string>
     <string name="game_flame_panel_freeze_buy">خذ قنديلًا · %1$s</string>

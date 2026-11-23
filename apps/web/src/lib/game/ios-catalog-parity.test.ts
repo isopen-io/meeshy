@@ -57,12 +57,16 @@ const IOS_OWN_FRENCH_CEILING = 42;
  */
 
 /**
- * Les deux seules clés communes dont une langue, sur iOS, ne peut pas dire le
+ * Les seules clés communes dont une langue, sur iOS, ne peut pas dire le
  * texte du web : l'arabe du web tait le nombre à la forme `.one` (« خطوة واحدة »),
  * et iOS, qui choisit la clé `.one` à la main et non par une règle de pluriel,
  * exige la substitution du français (`LocalizationCatalogGuardTests`).
  */
-const IOS_KEEPS_THE_COUNT: ReadonlySet<string> = new Set(['ar:game2.season.stars.one', 'ar:game2.door.showcase.count.one']);
+const IOS_KEEPS_THE_COUNT: ReadonlySet<string> = new Set([
+  'ar:game2.season.stars.one',
+  'ar:game2.door.showcase.count.one',
+  'ar:game.flame_panel.effort_dreams.one',
+]);
 
 const unitSchema = z.object({ stringUnit: z.object({ value: z.string() }) });
 const xcstringsSchema = z.object({
