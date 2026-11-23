@@ -148,14 +148,29 @@ export function isVoiceCloningAgeAdmitted(birthDate: Date | null | undefined, no
   return birthDay <= voiceCloningBirthDateLimit(now).getTime();
 }
 
-/** Au plus cet écart d'âge (en années révolues), deux personnes sont des pairs : la loi du Sang les traite comme des adultes. */
+/** Au plus cet écart entre DATES de naissance (en années calendaires exactes), deux personnes sont des pairs : la loi du Sang les traite comme des adultes. */
 export const MINOR_PEER_AGE_GAP_YEARS = 5;
+
+const utcDay = (date: Date): number => Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+
+/**
+ * L'écart entre deux DATES de naissance dépasse-t-il STRICTEMENT `years` années calendaires exactes ?
+ * Indépendant de l'horloge : la réponse ne bascule pas au fil des anniversaires (#20503, option A).
+ * Le jour seul compte (UTC), jamais l'heure ; le `years`-ième anniversaire d'un 29 février tombe le
+ * 1er mars d'une année non bissextile, comme pour `ageInFullYearsUtc`.
+ */
+function birthDatesFurtherApartThan(first: Date, second: Date, years: number): boolean {
+  const [older, younger] = utcDay(first) <= utcDay(second) ? [first, second] : [second, first];
+  const anniversary = Date.UTC(older.getUTCFullYear() + years, older.getUTCMonth(), older.getUTCDate());
+  return utcDay(younger) > anniversary;
+}
 
 /**
  * LA PROTECTION DU MINEUR ENTRE SANGS, site UNIQUE (directive porteur du 2026-11-23, #20359) : elle ne
  * s'applique que si TROIS conditions sont réunies — les DEUX âges sont connus, l'un des deux est mineur
  * déclaré, et l'écart dépasse STRICTEMENT 5 ans. Un âge inconnu d'un côté, deux mineurs, ou deux personnes
- * à 5 ans d'écart au plus : la loi du Sang s'applique entière, tout s'ouvre (le Sang permet toute
+ * à 5 ans d'écart au plus — mesuré entre les DATES de naissance, jamais entre âges révolus, pour que le
+ * verdict ne change pas d'un anniversaire à l'autre (#20503) : la loi du Sang s'applique entière, tout s'ouvre (le Sang permet toute
  * ouverture ; l'âge se force ailleurs, à l'onboarding). Les gardes légales (chute) ne passent pas par ici.
  *
  * La protection est lue à chaque décision depuis les dates courantes ; aucun accord n'est révoqué quand
@@ -170,5 +185,5 @@ export function minorProtectedBetween(params: {
   const known = (date: Date | null | undefined): date is Date => date instanceof Date && !Number.isNaN(date.getTime());
   if (!known(emitterBirthDate) || !known(otherBirthDate)) return false;
   if (!isDeclaredMinor(emitterBirthDate, now) && !isDeclaredMinor(otherBirthDate, now)) return false;
-  return Math.abs(ageInFullYearsUtc(emitterBirthDate, now) - ageInFullYearsUtc(otherBirthDate, now)) > MINOR_PEER_AGE_GAP_YEARS;
+  return birthDatesFurtherApartThan(emitterBirthDate, otherBirthDate, MINOR_PEER_AGE_GAP_YEARS);
 }

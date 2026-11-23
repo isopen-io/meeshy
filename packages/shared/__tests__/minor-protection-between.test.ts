@@ -45,3 +45,34 @@ describe('constat A : un accord pris sous protection ne lève jamais un refus st
     expect(later.getUTCFullYear()).toBe(2031);
   });
 });
+
+describe('l\'écart se mesure entre les DATES de naissance, stable toute l\'année (#20503, option A)', () => {
+  const between = (emitter: string, other: string, now: string): boolean =>
+    minorProtectedBetween({ emitterBirthDate: new Date(`${emitter}T00:00:00Z`), otherBirthDate: new Date(`${other}T00:00:00Z`), now: new Date(`${now}T12:00:00Z`) });
+  const CLOCKS = ['2026-01-10', '2026-05-14', '2026-05-16', '2026-08-14', '2026-08-16', '2026-09-14', '2026-09-16', '2026-12-31'];
+
+  it('5 ans et 3 mois d\'écart : protégé à chaque horloge de l\'année, avant et après chaque anniversaire', () => {
+    CLOCKS.forEach((now) => {
+      expect(between('2012-08-15', '2007-05-15', now)).toBe(true);
+      expect(between('2007-05-15', '2012-08-15', now)).toBe(true);
+    });
+  });
+  it('exactement 5 ans d\'écart : jamais protégé', () => {
+    CLOCKS.forEach((now) => expect(between('2012-08-15', '2007-08-15', now)).toBe(false));
+  });
+  it('4 ans et 11 mois d\'écart : jamais protégé', () => {
+    CLOCKS.forEach((now) => expect(between('2012-08-15', '2007-09-15', now)).toBe(false));
+  });
+  it('5 ans et un jour : protégé', () => expect(between('2012-08-16', '2007-08-15', '2026-11-23')).toBe(true));
+  it('l\'heure portée par la date ne compte pas : même jour à 23 h, toujours exactement 5 ans', () => {
+    expect(minorProtectedBetween({ emitterBirthDate: new Date('2012-08-15T23:59:00Z'), otherBirthDate: new Date('2007-08-15T00:00:00Z'), now: NOW })).toBe(false);
+  });
+  it('né un 29 février : ses 5 ans tombent le 1er mars, comme ses anniversaires (ageInFullYearsUtc)', () => {
+    expect(between('2009-02-28', '2004-02-29', '2026-11-23')).toBe(false);
+    expect(between('2009-03-01', '2004-02-29', '2026-11-23')).toBe(false);
+    expect(between('2009-03-02', '2004-02-29', '2026-11-23')).toBe(true);
+  });
+  it('29 février face à un 29 février, 8 ans d\'écart bissextile à bissextile : protégé', () => {
+    expect(between('2012-02-29', '2004-02-29', '2026-11-23')).toBe(true);
+  });
+});
