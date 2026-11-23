@@ -561,20 +561,11 @@ describe('critère 3 — un `view` garde ses deux effets de bord', () => {
   });
 
   // ── #20443, LE PRODUCTEUR NE NOMME PERSONNE ───────────────────────────────
-  //
-  // La jumelle DURABLE de cet événement — la liste « Vu par » servie à l'auteur
-  // — ne nomme un viewer que si le niveau effectif de la paire atteint
-  // `views.identity` (Communauté) ; en dessous, elle l'agrège dans
-  // `publicViewCount` (`services/posts/namedViewers.ts`). Le direct, lui,
-  // nommait le viewer par son id ET son pseudo dès qu'aucun BLOCAGE ne
-  // séparait — une loi strictement plus FAIBLE, sur la charge la plus
-  // nominative des huit familles d'activité.
-  //
-  // Décision de #20443 : il ne nomme plus PERSONNE, à aucun rang. Les témoins
-  // ci-dessous sont écrits sur le vecteur de l'issue — un viewer PUBLIC, sans
-  // aucune relation et sans aucun blocage, donc admis par les deux lois — et
-  // sur l'inconditionnalité, qui est ce que « personne » ajoute à « les
-  // non-nommables ».
+  // Le POURQUOI vit dans le doc-comment de `StoryViewedEventData`
+  // (`packages/shared/types/post.ts`) : la jumelle DURABLE ne nomme un viewer
+  // que si la paire atteint `views.identity`, et le direct nommait sous la
+  // seule loi du blocage. Les témoins portent le vecteur de l'issue — viewer
+  // PUBLIC, aucune relation, aucun blocage — et l'inconditionnalité.
 
   const chargeDiffusee = (app: Awaited<ReturnType<typeof buildApp>>): Record<string, unknown> =>
     ((app as any).socialEvents.broadcastStoryViewed as jest.Mock).mock.calls[0][0] as Record<string, unknown>;
