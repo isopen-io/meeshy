@@ -10,8 +10,17 @@ import type { PersonSummary } from '@/lib/api/friend-requests';
 import { translateCircles, type CirclesCatalogKey } from '@/lib/i18n-circles-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { SocketClient } from '@/lib/net/socket';
+import { usePhoneUnreachableLasting } from '@/lib/phone-reachability/use-phone-reachability';
 import { createTalkieCapture, talkieEncodingSupportedOnce } from '@/lib/talkie/talkie-encoder';
-import { bindTalkieSender, createTalkieSender, type TalkieCaptureFactory, type TalkieSendOutcome, type TalkieSendPhase, type TalkieVoiceCopier } from '@/lib/talkie/talkie-sender';
+import {
+  bindTalkieSender,
+  createTalkieSender,
+  type TalkieCaptureFactory,
+  type TalkiePressMode,
+  type TalkieSendOutcome,
+  type TalkieSendPhase,
+  type TalkieVoiceCopier,
+} from '@/lib/talkie/talkie-sender';
 import { createTalkieVoiceCopier } from '@/lib/talkie/talkie-voice-copy';
 import { useCirclesCatalog } from '@/lib/use-circles-catalog';
 import { layerMotion, useLayerPresence } from '@/lib/view/dialog-exit';
@@ -38,6 +47,8 @@ import { BRAND, BRAND_FILL, FOCUS, INK_2 } from './user-profile-style';
  * - **Réveil** (#17144) : un destinataire hors ligne mais joignable par push —
  *   « Réveil de X… » tant que l'on parle.
  * - **Le (i)** dit à qui le talkie est destiné et quand s'en servir.
+ * - **Téléphone injoignable depuis cinq minutes** (#20241, état SERVI) : le direct n'arrivera pas ; le même geste
+ *   laisse un message vocal dans la conversation directe, et le bouton le dit.
  */
 
 const LEVELS_WITH_TALKIE: ReadonlySet<string> = new Set(['CLOSE', 'BLOOD']);
@@ -54,6 +65,16 @@ export const TALKIE_OUTCOME_NOTICE = {
   'mic-denied': 'talkie.send.micDenied',
   limit: 'talkie.send.limit',
 } as const satisfies Readonly<Record<Exclude<TalkieSendOutcome, 'not-allowed'>, CirclesCatalogKey>>;
+
+/** Ce qu'un message vocal LAISSÉ (#20241) dit en partant : il a été choisi, ce n'est pas un repli. */
+export const talkieOutcomeNotice = (
+  outcome: Exclude<TalkieSendOutcome, 'not-allowed'>,
+  mode: TalkiePressMode,
+): (typeof TALKIE_OUTCOME_NOTICE)[keyof typeof TALKIE_OUTCOME_NOTICE] | 'talkie.send.sentAsVoice' =>
+  mode === 'voice-message' && outcome === 'voice' ? 'talkie.send.sentAsVoice' : TALKIE_OUTCOME_NOTICE[outcome];
+
+/** Le geste d'un pair dont le téléphone est injoignable depuis assez longtemps (#20241) : un message vocal. */
+export const useTalkiePressMode = (userId: string): TalkiePressMode => (usePhoneUnreachableLasting(userId) ? 'voice-message' : 'talkie');
 
 const HOLD_KEYS: ReadonlySet<string> = new Set([' ', 'Enter']);
 
@@ -91,6 +112,7 @@ export const ProfileTalkieRowView = memo(function ProfileTalkieRowView({
   supported,
   phase,
   waking = false,
+  voiceMessage = false,
   onPress,
   onRelease,
 }: {
@@ -99,6 +121,8 @@ export const ProfileTalkieRowView = memo(function ProfileTalkieRowView({
   readonly supported: boolean;
   readonly phase: TalkieSendPhase['kind'];
   readonly waking?: boolean;
+  /** Le téléphone du destinataire est injoignable depuis assez longtemps (#20241) : le geste laisse un message vocal. */
+  readonly voiceMessage?: boolean;
   readonly onPress: () => void;
   readonly onRelease: () => void;
 }) {
@@ -114,15 +138,17 @@ export const ProfileTalkieRowView = memo(function ProfileTalkieRowView({
   const live = phase !== 'idle';
   const label =
     phase === 'recording-copy'
-      ? translateCircles(language, 'talkie.header.announce.recorded')
+      ? translateCircles(language, voiceMessage ? 'talkie.send.recordingCopy' : 'talkie.header.announce.recorded')
       : phase === 'talking'
       ? translateCircles(language, waking ? 'talkie.send.waking' : 'talkie.send.talking', { name })
-      : phase === 'starting' ? translateCircles(language, 'talkie.send.connecting') : translateCircles(language, 'talkie.send.hold');
+      : phase === 'starting'
+      ? translateCircles(language, 'talkie.send.connecting')
+      : translateCircles(language, voiceMessage ? 'talkie.send.leaveVoice' : 'talkie.send.hold');
   return (
     <div data-talkie-row="" className="grid gap-2 rounded-card px-3.5 py-3" style={{ backgroundColor: BRAND_FILL }}>
       <div className="flex items-start gap-2">
         <p className="flex-1 text-caption" style={{ color: INK_2 }}>
-          {translateCircles(language, 'talkie.send.explain', { name })}
+          {translateCircles(language, voiceMessage ? 'talkie.send.leaveVoice.explain' : 'talkie.send.explain', { name })}
         </p>
         <button
           type="button"
@@ -146,7 +172,7 @@ export const ProfileTalkieRowView = memo(function ProfileTalkieRowView({
         type="button"
         data-talkie-send=""
         aria-pressed={live}
-        aria-label={translateCircles(language, 'talkie.send.hold.a11y', { name })}
+        aria-label={translateCircles(language, voiceMessage ? 'talkie.send.leaveVoice.a11y' : 'talkie.send.hold.a11y', { name })}
         {...talkieHoldHandlers({ onPress, onRelease })}
         className={`btn-press grid select-none place-items-center rounded-chip px-4 text-body font-bold ${FOCUS}`}
         style={{
@@ -243,6 +269,8 @@ export function ProfileTalkieRow({
   const [encodes, setEncodes] = useState<boolean | null>(null);
   const [refused, setRefused] = useState(false);
   const captureRef = useRef(capture);
+  const mode = useTalkiePressMode(person.id);
+  const pressedMode = useRef<TalkiePressMode>(mode);
 
   useEffect(() => {
     let live = true;
@@ -256,7 +284,7 @@ export function ProfileTalkieRow({
 
   const onOutcome = (outcome: TalkieSendOutcome): void => {
     if (outcome === 'not-allowed') return setRefused(true);
-    onNotice(translateCircles(language, TALKIE_OUTCOME_NOTICE[outcome]), outcome !== 'voice');
+    onNotice(translateCircles(language, talkieOutcomeNotice(outcome, pressedMode.current)), outcome !== 'voice');
   };
   const sender = useTalkieSender({ watch, capture: captureRef.current, onOutcome, language, ...(copier === undefined ? {} : { copier }) });
   const phase = useStore(sender.store, (state) => state.phase.kind);
@@ -271,7 +299,11 @@ export function ProfileTalkieRow({
       supported={encodes}
       phase={phase}
       waking={waking}
-      onPress={() => sender.press(person.id)}
+      voiceMessage={mode === 'voice-message'}
+      onPress={() => {
+        pressedMode.current = mode;
+        sender.press(person.id, { mode });
+      }}
       onRelease={() => void sender.release()}
     />
   );

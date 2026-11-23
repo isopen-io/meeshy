@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "talkie.send.leaveVoice",
+          "androidName": "talkie_send_leave_voice",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.send.leaveVoice.a11y",
+          "androidName": "talkie_send_leave_voice_a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.card.sentAsVoice",
+          "androidName": "talkie_send_sent_as_voice",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

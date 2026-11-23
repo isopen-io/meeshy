@@ -59,7 +59,7 @@ extension FeedPostCard {
                 storyState: authorStoryRing,
                 moodEmoji: authorMoodEmoji,
                 presenceState: PresenceManager.shared.knownPresenceState(for: post.authorId),
-                ring: post.authorRing,
+                ring: post.authorRing, circleUserId: post.authorId,
                 onViewProfile: { selectedProfileUser = .from(feedPost: post) },
                 onViewStory: onViewAuthorStory,
                 onMoodTap: onAuthorMoodTap,

@@ -28,8 +28,12 @@ public struct MeeshySegmentedPages<ID: Hashable & Sendable, Content: View>: View
     }
 
     public var body: some View {
+        // La page prend TOUJOURS sa hauteur idéale (#20198, #20193) : le `ZStack` place son enfant avec sa propre
+        // taille, une proposition FINIE ; une pile qui la reçoit la redistribue — le bloc le plus souple s'étire, les
+        // rangées et l'échelle des cercles s'écrasent l'une sur l'autre.
         ZStack(alignment: .top) {
             content(shown)
+                .fixedSize(horizontal: false, vertical: true)
                 .id(shown)
                 .meeshyTransition(Self.transition(for: travel), reduced: .opacity)
         }

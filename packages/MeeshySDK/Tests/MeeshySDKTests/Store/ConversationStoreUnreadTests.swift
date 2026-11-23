@@ -204,7 +204,8 @@ final class ConversationStoreUnreadTests: XCTestCase {
                 categoryStore: UserCategoryStore(service: MockCategoryWriter()),
                 currentUserId: { "me" },
                 isConversationOpen: { $0 == openConversationId },
-                fetchChangedPreferences: { _ in [] }
+                fetchChangedPreferences: { _ in [] },
+                watermarkStore: .inMemory()
             )
             bridge.activate(
                 conversationUpdated: conversationUpdated.eraseToAnyPublisher(),

@@ -16,6 +16,10 @@ protocol TalkieVoiceCopying: AnyObject {
     /// `conversationId` : celle que la passerelle a choisie pour le repli ; `nil`, le client choisit.
     @discardableResult
     func send(_ frames: [Data], toUserId: String, conversationId: String?) async -> Bool
+    /// Le message vocal laissé à un proche injoignable (#20241) : toujours dans notre conversation DIRECTE, ouverte au
+    /// besoin. `false` : rien n'est parti.
+    @discardableResult
+    func sendDirect(_ frames: [Data], toUserId: String) async -> Bool
     /// Une copie confiée à la file d'envoi que celle-ci a fini par abandonner : l'émetteur doit le voir (#17255).
     var failures: AnyPublisher<Void, Never> { get }
 }
@@ -25,6 +29,11 @@ extension TalkieVoiceCopying {
 
     @discardableResult
     func send(_ frames: [Data], toUserId: String) async -> Bool {
+        await send(frames, toUserId: toUserId, conversationId: nil)
+    }
+
+    @discardableResult
+    func sendDirect(_ frames: [Data], toUserId: String) async -> Bool {
         await send(frames, toUserId: toUserId, conversationId: nil)
     }
 }
@@ -86,6 +95,11 @@ nonisolated enum TalkieCopyDestination {
             .filter(\.mayCarryTheCopy)
             .max { ($0.rankAt ?? .distantPast) < ($1.rankAt ?? .distantPast) }?
             .id
+    }
+
+    /// La conversation DIRECTE où le message vocal peut partir ; `nil` : il faudra l'ouvrir (#20241).
+    static func pickDirect(among candidates: [TalkieCopyCandidate]) -> String? {
+        pick(among: candidates.filter { $0.type == "direct" })
     }
 }
 
@@ -186,12 +200,21 @@ final class TalkieVoiceCopySender: TalkieVoiceCopying {
 
     @discardableResult
     func send(_ frames: [Data], toUserId: String, conversationId named: String?) async -> Bool {
+        await deliver(frames, toUserId: toUserId, conversationId: named, directOnly: false)
+    }
+
+    @discardableResult
+    func sendDirect(_ frames: [Data], toUserId: String) async -> Bool {
+        await deliver(frames, toUserId: toUserId, conversationId: nil, directOnly: true)
+    }
+
+    private func deliver(_ frames: [Data], toUserId: String, conversationId named: String?, directOnly: Bool) async -> Bool {
         let url = directory.appendingPathComponent("talkie-copy-\(UUID().uuidString).m4a")
         let name = TalkieVoiceCopyName.of(now())
         guard !frames.isEmpty, writeFile(frames, url) != nil else { return false }
         let clientMessageId = newClientMessageId()
         do {
-            let conversationId = if let named { named } else { try await destination(for: toUserId) }
+            let conversationId = if let named { named } else { try await destination(for: toUserId, directOnly: directOnly) }
             queued.insert(clientMessageId)
             try await enqueue(url, conversationId, clientMessageId, name)
             Logger.talkieCopy.info("talkie · copie vocale confiée à la file d'envoi")
@@ -210,9 +233,10 @@ final class TalkieVoiceCopySender: TalkieVoiceCopying {
         failed.send(())
     }
 
-    private func destination(for userId: String) async throws -> String {
+    private func destination(for userId: String, directOnly: Bool) async throws -> String {
         let candidates = (try? await shared(userId)) ?? []
-        if let picked = TalkieCopyDestination.pick(among: candidates) { return picked }
+        let picked = directOnly ? TalkieCopyDestination.pickDirect(among: candidates) : TalkieCopyDestination.pick(among: candidates)
+        if let picked { return picked }
         return try await openDirect(userId)
     }
 }

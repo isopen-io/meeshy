@@ -4,8 +4,8 @@ import { useStore } from 'zustand/react';
 import type { UserPresenceStatus } from '@meeshy/shared/utils/user-presence';
 
 import { MeeshyAvatarMorph, useMeeshyAvatarMorph } from '@/components/kit/meeshy-avatar-morph';
-import { MeeshyPersonRow } from '@/components/kit/meeshy-person-row';
 import { Avatar } from '@/components/avatar';
+import { ProfileWhereHero } from '@/components/profile-where-hero';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sharedLocationsQueryOptions, type SharedLocationDeps } from '@/lib/api/shared-locations';
@@ -17,6 +17,7 @@ import { preload } from '@/routes/route-table';
 import { positionCardOf, remainingWords } from '@/lib/shared-locations/position-card';
 import { sharedLocationsStore, type SharedLocationsStoreApi } from '@/lib/shared-locations/shared-locations-live';
 import { SHARED_LOCATIONS_WORLD, useSharedLocationsUpkeep } from '@/lib/shared-locations/use-shared-locations-upkeep';
+import { whereCaption, whereStampOf } from '@/lib/shared-locations/where-stamp';
 import { useCirclesCatalog } from '@/lib/use-circles-catalog';
 import { initialsOf } from '@/lib/view/conversation';
 import { useMinute } from '@/lib/view/use-minute';
@@ -35,6 +36,12 @@ import { useMinute } from '@/lib/view/use-minute';
  * fermée y restait offert. Elle rattrape donc le MONDE (la même requête que la première de la carte, qui la
  * retrouve en cache), écoute le direct, retire ce qui arrive à terme et relit le temps restant à la minute.
  * Quand la rangée paraît, l'écran de la carte se charge : le voyage de l'avatar trouve son épingle à l'arrivée.
+ *
+ * UN BLOC HÉROS DE CARTE (#20242, iso `ProfileWhereHero` / `ProfileLiveSource`) : la rangée de texte ne montrait
+ * aucune carte et ne disait pas DE QUAND datait la position. Elle devient la carte pleine largeur centrée sur la
+ * dernière position SERVIE, l'avatar en épingle, « Dernière position · il y a 7 min » sur le voile. La lecture était
+ * déjà vivante sur le web (abonnement au magasin + rattrapage du monde à l'ouverture) : la cause iOS — une lecture
+ * figée au premier rendu — n'y existait pas.
  */
 export const MAP_PERSON_PARAM = 'person';
 
@@ -84,21 +91,28 @@ export const ProfileSeeOnMapRow = memo(function ProfileSeeOnMapRow({
   useEffect(() => {
     if (shown) warm();
   }, [shown, warm]);
-  if (!ready || card === null) return null;
+  if (!ready || card === null || location === undefined) return null;
+  const at = now();
   const precision = translateCircles(language, `positions.card.${card.precision}`);
   const remaining = translateCircles(language, 'positions.card.remaining', { time: remainingWords(language, card.remainingMinutes) });
+  const caption = whereCaption(language, whereStampOf(location.updatedAt, at), at);
   return (
     <div data-see-on-map={personId}>
-      <MeeshyPersonRow
-        title={translateCircles(language, 'positions.seeOnMap')}
-        subtitle={`${precision} · ${remaining}`}
-        label={translateCircles(language, 'positions.seeOnMap.a11y', { name })}
-        avatar={
+      <ProfileWhereHero
+        point={location}
+        precision={location.precision}
+        radiusMeters={location.radiusMeters}
+        title={name}
+        caption={caption}
+        detail={`${precision} · ${remaining}`}
+        label={`${translateCircles(language, 'positions.seeOnMap.a11y', { name })}, ${caption}`}
+        attribution={translateCircles(language, 'positions.attribution')}
+        pin={
           <MeeshyAvatarMorph id={personId} size={40}>
             <Avatar initials={initialsOf(name)} color={accent} size={40} name={name} redundant {...(presence === undefined ? {} : { presence })} {...(avatar == null ? {} : { src: avatar })} />
           </MeeshyAvatarMorph>
         }
-        onPress={() => void morph.travel(personId, () => navigate(mapHrefOf(personId)))}
+        onOpen={() => void morph.travel(personId, () => navigate(mapHrefOf(personId)))}
       />
     </div>
   );

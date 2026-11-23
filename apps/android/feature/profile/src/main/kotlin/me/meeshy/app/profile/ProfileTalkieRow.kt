@@ -35,10 +35,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.meeshy.sdk.model.relation.TalkieHoldDelivery
 import me.meeshy.sdk.model.relation.TalkieHoldLook
 import me.meeshy.sdk.model.relation.TalkieSendPhase
 import me.meeshy.ui.R as UiR
 import me.meeshy.ui.component.permission.PermissionFlowHost
+import me.meeshy.ui.component.phonereachability.rememberTalkieHoldDelivery
 import me.meeshy.ui.component.permission.rememberPermissionFlow
 import me.meeshy.ui.component.talkie.TalkieHoldActions
 import me.meeshy.ui.component.talkie.TalkieInfoButton
@@ -62,6 +64,8 @@ internal const val PROFILE_TALKIE_SEND_TAG = "talkie.send"
  * - Relâcher, glisser hors du doigt ou quitter la fiche termine la prise de parole.
  * - Les refus se disent sans fuite : un blocage et un repli rendent la même INFORMATION, jamais en rouge.
  * - Un destinataire hors ligne se réveille : « Réveil de X… » ; le (i) dit l'usage d'urgence.
+ * - Son téléphone injoignable depuis plusieurs minutes (#20241, état SERVI) : « Laisser un message vocal », et le même
+ *   geste dépose un message vocal dans notre direct.
  */
 @Composable
 internal fun ProfileTalkieRow(
@@ -79,13 +83,14 @@ internal fun ProfileTalkieRow(
     val permissions = rememberPermissionFlow()
     val pressed = remember { mutableStateOf(false) }
     var infoOpen by remember { mutableStateOf(false) }
-    TalkieNoticeEffect(notice, control::present)
+    val delivery = rememberTalkieHoldDelivery(userId)
+    TalkieNoticeEffect(notice, control::present, delivery)
     PermissionFlowHost(permissions)
-    val actions = remember(control, userId) {
+    val actions = remember(control, userId, delivery) {
         TalkieHoldActions(
-            press = { control.press(userId) },
+            press = { control.press(userId, delivery) },
             release = control::release,
-            quickTap = { control.inform(context.getString(UiR.string.talkie_send_hold)) },
+            quickTap = { control.inform(context.getString(TalkieWording.holdReminder(delivery))) },
         )
     }
     Column(
@@ -105,8 +110,9 @@ internal fun ProfileTalkieRow(
             val live = TalkieHoldLook.resolve(pressed.value, phase) != TalkieHoldLook.IDLE
             HoldButton(
                 live = live,
-                label = label(phase, waking, displayName),
+                label = label(phase, waking, displayName, delivery),
                 a11yName = displayName,
+                delivery = delivery,
                 modifier = Modifier
                     .weight(1f)
                     .talkieHold(pressed, phase, permissions, actions),
@@ -118,15 +124,15 @@ internal fun ProfileTalkieRow(
 }
 
 @Composable
-private fun label(phase: TalkieSendPhase, waking: Boolean, name: String): String {
-    val res = TalkieWording.label(phase, waking)
+private fun label(phase: TalkieSendPhase, waking: Boolean, name: String, delivery: TalkieHoldDelivery): String {
+    val res = TalkieWording.label(phase, waking, delivery)
     return if (TalkieWording.takesName(res)) stringResource(res, name) else stringResource(res)
 }
 
 @Composable
-private fun HoldButton(live: Boolean, label: String, a11yName: String, modifier: Modifier) {
-    val description = stringResource(UiR.string.talkie_send_hold_a11y, a11yName)
-    val hint = stringResource(UiR.string.talkie_send_hold_hint)
+private fun HoldButton(live: Boolean, label: String, a11yName: String, delivery: TalkieHoldDelivery, modifier: Modifier) {
+    val description = stringResource(TalkieWording.holdA11y(delivery), a11yName)
+    val hint = stringResource(TalkieWording.holdHint(delivery))
     val tint = if (live) Color.White else MeeshyPalette.Indigo500
     Row(
         modifier = modifier

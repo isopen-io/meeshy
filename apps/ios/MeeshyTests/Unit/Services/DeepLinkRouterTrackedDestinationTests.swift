@@ -46,13 +46,13 @@ final class DeepLinkRouterTrackedDestinationTests: XCTestCase {
         XCTAssertEqual(d, .reel(postId: "r9"))
     }
 
-    func test_post_and_status_routeToPostDetail() {
+    func test_post_routesToPostDetail_andStatus_toTheMoodFullScreen() {
         XCTAssertEqual(
             DeepLinkRouter.trackedDestination(for: resolved(type: "POST", targetId: "p1"), token: "tok"),
             .postDetail(postId: "p1"))
         XCTAssertEqual(
             DeepLinkRouter.trackedDestination(for: resolved(type: "STATUS", targetId: "p2"), token: "tok"),
-            .postDetail(postId: "p2"))
+            .mood(postId: "p2"))
     }
 
     func test_story_routesToStoryDetail() {

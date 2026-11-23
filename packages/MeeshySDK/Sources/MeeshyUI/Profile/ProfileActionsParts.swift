@@ -149,7 +149,7 @@ struct ProfileActionsCardSection: View {
         }
         .sheet(isPresented: $showsQR) {
             if let link {
-                RelationLinksCodeSheet(link: link, name: name, tint: tint, mode: .qr)
+                RelationLinksCodeSheet(link: link, name: name, tint: tint)
             }
         }
         .accessibilityIdentifier("profile.actions.card")

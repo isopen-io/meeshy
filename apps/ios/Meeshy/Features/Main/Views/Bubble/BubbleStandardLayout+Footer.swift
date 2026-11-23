@@ -35,7 +35,7 @@ extension BubbleStandardLayout {
             presence: presenceState,
             storyRing: senderStoryRingState,
             isHere: senderIsHere,
-            ring: message.senderRing
+            ring: message.senderRing, userId: content.isMe ? nil : message.senderId
         ) : nil
 
         // #7365 — statut RÉSOLU (tout-ou-rien en groupe), jamais le brut.

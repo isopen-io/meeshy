@@ -48,6 +48,7 @@ class ManifestDeepLinksGuardTest {
         "/me", "/me/progression/saison/3", "/links", "/hashtag/paris", "/join/abc", "/l/AbC123", "/chat/abc", "/c/abc",
         "/conversation/abc", "/reel/r1", "/reels", "/community/k1", "/communities/k1", "/feeds/post/p1", "/post/p1",
         "/p/p1", "/story/s1", "/stories/s1", "/s/s1", "/u/bob", "/users/bob", "/signup", "/signup/affiliate/CODE",
+        "/mood/m1",
     )
 
     @Test

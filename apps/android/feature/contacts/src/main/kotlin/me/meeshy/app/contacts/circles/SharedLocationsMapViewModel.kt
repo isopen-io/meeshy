@@ -73,6 +73,17 @@ class SharedLocationsMapViewModel internal constructor(
         viewModelScope.launch { live.catchUp(null) }
     }
 
+    /**
+     * Une fiche s'ouvre sur [userId] (#20242) : la fiche s'ouvre souvent avant que le magasin ne soit rattrapé (démarrage
+     * à froid, socket pas encore accrochée, rattrapage d'accrochage tombé en panne et jamais rejoué). Une personne ABSENTE
+     * du magasin déclenche donc un rattrapage du monde ; la lecture des épingles étant vivante, sa carte paraît dès qu'il
+     * arrive. Une personne tenue n'en déclenche aucun.
+     */
+    fun ensure(userId: String) {
+        if (live.byUser.value.containsKey(userId)) return
+        viewModelScope.launch { live.catchUp(null) }
+    }
+
     /** L'emprise visible a bougé : un seul rattrapage, sur la dernière emprise, après le calme. */
     fun regionChanged(bounds: SharedLocationBounds?) {
         pending?.cancel()

@@ -4,7 +4,7 @@ import type { ConversationsDeps } from '@/lib/api/conversations';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import type { Conversation } from '@/lib/api/types';
 
-import { createTalkieVoiceCopier, pickTalkieCopyDestination, talkieCopyFileName } from './talkie-voice-copy';
+import { createTalkieVoiceCopier, pickTalkieCopyDestination, pickTalkieDirectDestination, talkieCopyFileName } from './talkie-voice-copy';
 
 /**
  * LA COPIE VOCALE PART LÀ OÙ IL FAUT (#16698, iso `TalkieCopyDestination` iOS, précision porteur #17141) — la
@@ -124,5 +124,32 @@ describe('le copieur', () => {
     const g = gateway();
     expect(await g.copier({ ...copyOf(NAMED), frames: [] })).toBe(false);
     expect(g.requests).toEqual([]);
+  });
+});
+
+describe('le message vocal laissé à un téléphone injoignable (#20241)', () => {
+  test('seul un direct qui peut le porter est choisi', () => {
+    expect(
+      pickTalkieDirectDestination([
+        conversation(RECENT, { listRankAt: '2026-11-13T10:00:00.000Z' }),
+        conversation(SEALED, { type: 'direct', encryptionMode: 'e2ee', listRankAt: '2026-11-13T10:00:00.000Z' }),
+        conversation(DIRECT, { type: 'direct', listRankAt: '2026-10-01T10:00:00.000Z' }),
+      ]),
+    ).toBe(DIRECT);
+    expect(pickTalkieDirectDestination([conversation(RECENT)])).toBeNull();
+  });
+
+  test('le direct partagé reçoit le vocal, jamais le groupe plus récent', async () => {
+    const g = gateway({ shared: [conversation(RECENT, { listRankAt: '2026-11-13T10:00:00.000Z' }), conversation(DIRECT, { type: 'direct', listRankAt: '2026-10-01T10:00:00.000Z' })] });
+    expect(await g.copier({ ...copyOf(null), directOnly: true })).toBe(true);
+    expect(g.sent()[0]?.path).toBe(`/api/v1/conversations/${DIRECT}/messages`);
+  });
+
+  test('aucun direct partagé : il est ouvert EN CLAIR', async () => {
+    const g = gateway({ shared: [conversation(RECENT)] });
+    expect(await g.copier({ ...copyOf(null), directOnly: true })).toBe(true);
+    const created = g.requests.find((r) => r.method === 'POST' && r.path === '/api/v1/conversations');
+    expect(created?.body).toEqual({ type: 'direct', participantIds: [PROCHE], plaintext: true });
+    expect(g.sent()[0]?.path).toBe(`/api/v1/conversations/${DIRECT}/messages`);
   });
 });

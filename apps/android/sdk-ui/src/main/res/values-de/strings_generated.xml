@@ -187,6 +187,19 @@
     <string name="contacts_phonebook_write">Nachricht senden</string>
     <string name="contacts_skeleton_loading">Wird geladen</string>
     <string name="contacts_tab_prefix">Tab</string>
+    <string name="content_card_a11y_open">Öffnet den Inhalt</string>
+    <string name="content_card_a11y_post_by">Beitrag von %1$s</string>
+    <string name="content_card_a11y_reel_by">Reel von %1$s</string>
+    <string name="content_card_a11y_saves">%1$d Speicherungen</string>
+    <string name="content_card_a11y_story_by">Story von %1$s</string>
+    <plurals name="content_card_a11y_views">
+        <item quantity="one">%1$d Ansicht</item>
+        <item quantity="other">%1$d Ansichten</item>
+    </plurals>
+    <string name="content_card_kind_mood">Stimmung</string>
+    <string name="content_card_kind_post">Beitrag</string>
+    <string name="content_card_kind_reel">Reel</string>
+    <string name="content_card_kind_story">Story</string>
     <string name="content_failure_retry">Erneut versuchen</string>
     <string name="content_failure_server_title">Meeshy konnte diesen Inhalt nicht laden</string>
     <string name="content_failure_unavailable_title">Dieser Inhalt ist nicht mehr verfügbar</string>
@@ -538,11 +551,14 @@
     <string name="talkie_send_hold">Zum Sprechen halten</string>
     <string name="talkie_send_hold_a11y">Gedrückt halten, um mit %1$s zu sprechen</string>
     <string name="talkie_send_hold_hint">Doppeltippen und halten, sprechen, dann loslassen.</string>
+    <string name="talkie_send_leave_voice">Sprachnachricht hinterlassen</string>
+    <string name="talkie_send_leave_voice_a11y">%1$s eine Sprachnachricht hinterlassen</string>
     <string name="talkie_send_limit">Höchstens dreißig Sekunden: Die Durchsage wurde beendet.</string>
     <string name="talkie_send_mic_denied">Erlaube das Mikrofon, um das Walkie-Talkie zu nutzen.</string>
     <string name="talkie_send_offline">Offline: Das Walkie-Talkie konnte nicht gesendet werden.</string>
     <string name="talkie_send_rate_limited">Zu viele Durchsagen: Versuche es gleich noch einmal.</string>
     <string name="talkie_send_recording_copy">Sprachnachricht wird aufgenommen…</string>
+    <string name="talkie_send_sent_as_voice">Als Sprachnachricht gesendet</string>
     <string name="talkie_send_talking">Du sprichst mit %1$s…</string>
     <string name="talkie_send_waking">%1$s wird geweckt…</string>
     <string name="time_lastSeen_beforeYesterdayAt">Vorgestern um %1$s gesehen</string>

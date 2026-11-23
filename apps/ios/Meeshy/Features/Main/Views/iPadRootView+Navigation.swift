@@ -133,6 +133,28 @@ extension iPadRootView {
         router.clearPresentedSurfaces { _ in showDeepLink(deepLink) }
     }
 
+    /// Un contenu s'ouvre par la même porte que sur iPhone : le détail du
+    /// post dans la colonne de droite, l'humeur en plein écran (#20211), le
+    /// réel dans son lecteur (#7805, #7806), la story dans le sien — son
+    /// détail n'étant que le repli d'une story expirée ou supprimée (#7807).
+    private func showContent(_ deepLink: DeepLink) {
+        switch deepLink {
+        case .postDetail(let postId):
+            rightPanelRoute = .postDetail(postId)
+        case .mood(let postId):
+            rightPanelRoute = .moodSpotlight(statusId: postId)
+        case .reel(let postId):
+            openReel(postId: postId)
+        case .storyDetail(let postId):
+            Task { @MainActor in
+                await StoryDoor(tray: storyViewModel, viewer: storyViewerCoordinator)
+                    .open(postId: postId) { rightPanelRoute = .postDetail(postId) }
+            }
+        default:
+            break
+        }
+    }
+
     private func showDeepLink(_ deepLink: DeepLink) {
         switch deepLink {
         case .callRequest(let conversationId, let isVideo):
@@ -163,21 +185,8 @@ extension iPadRootView {
             // recreating the same empty view — perceived as an infinite
             // loop.
             navigateToConversationById(id)
-        case .postDetail(let postId):
-            // iPad surfaces the post detail in the right column, matching
-            // the existing post-notification handling above.
-            rightPanelRoute = .postDetail(postId)
-        case .reel(let postId):
-            // Même porte que l'iPhone : le lecteur de réels (#7805, #7806).
-            openReel(postId: postId)
-        case .storyDetail(let postId):
-            // La même porte que l'iPhone (#7807) : le lecteur s'ouvre sur
-            // CETTE story, chargée si le tray l'ignore ; le détail du post
-            // n'est que le repli d'une story expirée ou supprimée.
-            Task { @MainActor in
-                await StoryDoor(tray: storyViewModel, viewer: storyViewerCoordinator)
-                    .open(postId: postId) { rightPanelRoute = .postDetail(postId) }
-            }
+        case .postDetail, .mood, .reel, .storyDetail:
+            showContent(deepLink)
         case .userProfile(let username, let face):
             // Opens the profile sheet over the two-pane layout. Same
             // surface as friend-request notification taps above

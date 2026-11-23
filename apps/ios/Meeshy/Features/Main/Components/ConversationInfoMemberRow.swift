@@ -31,6 +31,7 @@ struct ConversationInfoMemberRow: View {
                 isHere: presenceManager.here(userId: participant.viewingKey, conversationId: conversationId),
                 // LE CONTOUR DU MEMBRE (#10713) — l'avatar le pose dans son empreinte (#10946).
                 ring: participant.avatarRing,
+                circleUserId: participant.userId,
                 onMoodTap: participant.userId.flatMap { moodTapResolver?($0) }
             ) }
 
