@@ -27,6 +27,16 @@ jest.mock('../../../../services/PushNotificationService', () => ({
   getPushNotificationService: () => ({ sendToUser: async () => [] }),
 }));
 
+const refreshed: string[] = [];
+const recorded = (module: string, names: readonly string[]) => {
+  const actual = jest.requireActual(module) as Record<string, unknown>;
+  return { ...actual, ...Object.fromEntries(names.map((name) => [name, async (...args: unknown[]) => { refreshed.push(name); return (actual[name] as (...a: unknown[]) => unknown)(...args); }])) };
+};
+jest.mock('../../../../services/nowPlaying/nowPlayingDeps', () => recorded('../../../../services/nowPlaying/nowPlayingDeps', ['refreshNowPlayingAfter']));
+jest.mock('../../../../services/battery/batteryDeps', () => recorded('../../../../services/battery/batteryDeps', ['refreshBatteryAfter']));
+jest.mock('../../../../services/sharedLocation/sharedLocationDeps', () => recorded('../../../../services/sharedLocation/sharedLocationDeps', ['refreshSharedLocationAfter']));
+jest.mock('../../../../services/inactivityCheck/inactivityDeps', () => recorded('../../../../services/inactivityCheck/inactivityDeps', ['refreshInactivityServedAfter']));
+
 import { RELATION_BLOOD_LOCKED_CODE } from '@meeshy/shared/types/relation-person-settings';
 import { BLOOD_BUNDLE_VERSION } from '@meeshy/shared/utils/blood-bundle';
 import { relationsRoutes } from '../../../../routes/relations';
@@ -139,5 +149,80 @@ describe('#20367 — PUT /relations/:userId/blood-bundle : un Sang déjà scell�
     expect(proche.reglages.get(`${MOI}:${AUTRE}`)).toBeUndefined();
     expect([vieux.status, vieux.body.code]).toEqual([409, 'RELATION_BLOOD_BUNDLE_OUTDATED']);
     expect(illisible.status).toBe(400);
+  });
+});
+
+const NAISSANCE = (age: number): Date => new Date(Date.UTC(2026 - age, 0, 1));
+const REFUS = { ownerId: MOI, otherId: AUTRE, bringBlockedAt: null, locationShared: false, locationHistoryShared: false, proximityShared: false, listeningTitleShared: false };
+
+describe('constat A (2026-11-23) — un accord pris sous protection de mineur ne lève jamais un refus stocké', () => {
+  const accepter = (app: Awaited<ReturnType<typeof appli>>) => app.call('PUT', `/api/v1/relations/${AUTRE}/blood-bundle`, { version: BLOOD_BUNDLE_VERSION }, MOI);
+
+  it('à 14 ans avec quelqu\'un de 30 ans : l\'accord est neutralisé (200, rien d\'écrit) et, cinq ans plus tard, les refus tiennent', async () => {
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')], reglages: [REFUS], personnes: { [MOI]: { birthDate: NAISSANCE(14) }, [AUTRE]: { birthDate: NAISSANCE(30) } } });
+    const res = await accepter(app);
+    thawClock();
+    freezeClock(new Date('2031-10-31T12:00:00Z'));
+    const lu = await app.call('GET', `/api/v1/relations/${AUTRE}/settings`, undefined, MOI);
+    await app.close();
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ bloodBundleAccepted: false, lockedByLevel: false });
+    expect(app.reglages.get(`${MOI}:${AUTRE}`)?.bloodBundleAcceptedAt ?? null).toBeNull();
+    expect(lu.body.data).toMatchObject({ locationShared: false, locationHistoryShared: false, proximityShared: false, listeningTitleShared: false, ritualSharesLocked: false });
+  });
+
+  it.each([[14, 16], [16, 20], [14, 14]])('à %i et %i ans : à 5 ans d\'écart au plus, l\'accord est pris et le verrou tient entier', async (moi, autre) => {
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')], reglages: [REFUS], personnes: { [MOI]: { birthDate: NAISSANCE(moi) }, [AUTRE]: { birthDate: NAISSANCE(autre) } } });
+    const res = await accepter(app);
+    const lu = await app.call('GET', `/api/v1/relations/${AUTRE}/settings`, undefined, MOI);
+    const coupe = await app.call('PUT', `/api/v1/relations/${AUTRE}/settings`, { locationShared: false }, MOI);
+    await app.close();
+
+    expect(res.body.data).toMatchObject({ bloodBundleAccepted: true, lockedByLevel: true });
+    expect(lu.body.data).toMatchObject({ locationShared: true, ritualSharesLocked: true });
+    expect(coupe.status).toBe(409);
+  });
+
+  it('mineur et âge de l\'autre inconnu : la loi du Sang est entière (décision porteur), l\'accord est pris', async () => {
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')], personnes: { [MOI]: { birthDate: NAISSANCE(14) } } });
+    const res = await accepter(app);
+    await app.close();
+
+    expect(res.body.data).toMatchObject({ bloodBundleAccepted: true, lockedByLevel: true });
+    expect(app.reglages.get(`${MOI}:${AUTRE}`)?.bloodBundleAcceptedAt).toEqual(NOW);
+  });
+});
+
+describe('constat D — une paire bloquée ne se trahit pas par la réponse de l\'accord au palier', () => {
+  it('bloqué par l\'autre, je vois toujours Sang : 200 neutre sans écriture, jamais un 404', async () => {
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')], personnes: { [AUTRE]: { blockedUserIds: [MOI] } } });
+    const res = await app.call('PUT', `/api/v1/relations/${AUTRE}/blood-bundle`, { version: BLOOD_BUNDLE_VERSION }, MOI);
+    await app.close();
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual({ userId: AUTRE, bloodBundleAccepted: false, version: BLOOD_BUNDLE_VERSION, lockedByLevel: false });
+    expect(app.reglages.get(`${MOI}:${AUTRE}`)?.bloodBundleAcceptedAt ?? null).toBeNull();
+  });
+});
+
+describe('constat 8 — accepter la liste rafraîchit les relais comme tout changement de palier', () => {
+  it('écoute, batterie, position partagée et inactivité/chute sont relus après l\'accord', async () => {
+    refreshed.length = 0;
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')], personnes: { [MOI]: { birthDate: NAISSANCE(30) }, [AUTRE]: { birthDate: NAISSANCE(30) } } });
+    const res = await app.call('PUT', `/api/v1/relations/${AUTRE}/blood-bundle`, { version: BLOOD_BUNDLE_VERSION }, MOI);
+    await app.close();
+
+    expect(res.body.data.bloodBundleAccepted).toBe(true);
+    expect(new Set(refreshed)).toEqual(new Set(['refreshNowPlayingAfter', 'refreshBatteryAfter', 'refreshSharedLocationAfter', 'refreshInactivityServedAfter']));
+  });
+
+  it('un accord neutralisé ne relit rien', async () => {
+    refreshed.length = 0;
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')], personnes: { [AUTRE]: { blockedUserIds: [MOI] } } });
+    await app.call('PUT', `/api/v1/relations/${AUTRE}/blood-bundle`, { version: BLOOD_BUNDLE_VERSION }, MOI);
+    await app.close();
+
+    expect(refreshed).toEqual([]);
   });
 });

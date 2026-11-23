@@ -230,3 +230,10 @@ describe('un accord donné à un Proche ne survit pas au cercle d\'en dessous', 
     expect(settings.rows.find((r) => r.otherId === PROCHE_CONSENTI)?.batteryShared).toBe(true);
   });
 });
+
+describe('constat E — le verrou du Sang se lit sur le lien RÉEL, pas sur le privilège d\'équipe', () => {
+  it('paire d\'équipe sans lien réel, accord au palier périmé : le refus stocké de l\'émetteur reste appliqué', async () => {
+    const m = monde({ settings: [{ ownerId: ANALYSTE, otherId: ADMIN, batteryShared: false, bloodBundleAcceptedAt: now, bloodBundleVersion: BLOOD_BUNDLE_VERSION }] });
+    expect(await servis(m, ANALYSTE, [ADMIN])).toEqual([]);
+  });
+});

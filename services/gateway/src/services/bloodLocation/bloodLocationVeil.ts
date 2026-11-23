@@ -11,20 +11,9 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { bloodBundleAcceptedOf } from '../relations/relationConsent';
-import { isDeclaredMinor } from '@meeshy/shared/utils/age';
-import { bloodLockedBetween, type BloodLockDb } from '../relations/bloodLock';
+import { bloodLocksAmong, type BloodLockDb } from '../relations/bloodLock';
 
 type VeilDb = BloodLockDb;
-
-/**
- * Défense en profondeur : une ligne d'accord ne suffit jamais. L'accord n'épargne que si le verrou
- * TIENT maintenant (Sang réel, aucun blocage, version courante) — un effacement raté après une
- * baisse ou un blocage ne rouvre rien.
- */
-async function stillLocked(prisma: VeilDb, pairs: ReadonlyArray<readonly [owner: string, reader: string]>): Promise<ReadonlySet<string>> {
-  const verdicts = await Promise.all(pairs.map(async ([owner, reader]) => [`${owner}:${reader}`, await bloodLockedBetween(prisma, owner, reader)] as const));
-  return new Set(verdicts.filter(([, locked]) => locked).map(([key]) => key));
-}
 
 const BUNDLE_SELECT = { bloodBundleAcceptedAt: true, bloodBundleVersion: true } as const;
 
@@ -37,15 +26,16 @@ export async function inGlobalGhost(prisma: Pick<PrismaClient, 'user'>, ownerId:
 export async function ownersHidingFrom(prisma: VeilDb, viewerId: string, ownerIds: readonly string[]): Promise<ReadonlySet<string>> {
   if (ownerIds.length === 0) return new Set();
   const [owners, rows] = await Promise.all([
-    prisma.user.findMany({ where: { id: { in: [...ownerIds] } }, select: { id: true, locationGhostAt: true, birthDate: true } }),
+    prisma.user.findMany({ where: { id: { in: [...ownerIds] } }, select: { id: true, locationGhostAt: true } }),
     prisma.relationFeatureSetting.findMany({ where: { ownerId: { in: [...ownerIds] }, otherId: viewerId }, select: { ownerId: true, ghostAt: true, ...BUNDLE_SELECT } }),
   ]);
-  // Un émetteur mineur déclaré garde son fantôme envers ses Sangs (C7) : son accord n'épargne personne.
-  const minors = new Set(owners.filter((row) => isDeclaredMinor(row.birthDate ?? null, new Date())).map((row) => row.id));
   const global = owners.filter((row) => row.locationGhostAt != null);
-  const claimed = rows.filter(bloodBundleAcceptedOf).map((row) => row.ownerId).filter((id) => !minors.has(id));
-  const locked = await stillLocked(prisma, claimed.map((owner) => [owner, viewerId] as const));
-  const accepted = new Set(claimed.filter((owner) => locked.has(`${owner}:${viewerId}`)));
+  // Défense en profondeur : une ligne d'accord ne suffit jamais, le verrou doit TENIR maintenant (Sang réel,
+  // aucun blocage, version courante), jugé en lecture groupée. La protection d'un mineur (écart de plus de
+  // 5 ans, deux âges connus) garde son fantôme envers cette personne (C7) : son accord n'épargne personne.
+  const claimed = rows.filter(bloodBundleAcceptedOf).map((row) => row.ownerId);
+  const locks = await bloodLocksAmong(prisma, { subjectId: viewerId, otherIds: claimed, subjectIs: 'reader' });
+  const accepted = new Set(claimed.filter((owner) => locks.locked.has(owner) && !locks.minorProtected.has(owner)));
   const targeted = rows.filter((row) => row.ghostAt != null).map((row) => row.ownerId);
   return new Set([...global.map((row) => row.id), ...targeted].filter((id) => !accepted.has(id)));
 }
@@ -68,14 +58,13 @@ export const veilAllows = (veil: PointVeil, readerId: string): boolean =>
 
 export async function pointVeilOf(prisma: VeilDb, ownerId: string): Promise<PointVeil> {
   const [owner, rows] = await Promise.all([
-    prisma.user.findUnique({ where: { id: ownerId }, select: { locationGhostAt: true, birthDate: true } }),
+    prisma.user.findUnique({ where: { id: ownerId }, select: { locationGhostAt: true } }),
     prisma.relationFeatureSetting.findMany({ where: { ownerId, OR: [{ ghostAt: { not: null } }, { bloodBundleAcceptedAt: { not: null } }] }, select: { otherId: true, ghostAt: true, ...BUNDLE_SELECT } }),
   ]);
   const global = owner?.locationGhostAt != null;
-  const minor = isDeclaredMinor(owner?.birthDate ?? null, new Date());
-  const claimed = minor ? [] : rows.filter(bloodBundleAcceptedOf).map((row) => row.otherId);
-  const locked = await stillLocked(prisma, claimed.map((reader) => [ownerId, reader] as const));
-  const accepted = new Set(claimed.filter((reader) => locked.has(`${ownerId}:${reader}`)));
+  const claimed = rows.filter(bloodBundleAcceptedOf).map((row) => row.otherId);
+  const locks = await bloodLocksAmong(prisma, { subjectId: ownerId, otherIds: claimed, subjectIs: 'owner' });
+  const accepted = new Set(claimed.filter((reader) => locks.locked.has(reader) && !locks.minorProtected.has(reader)));
   const targeted = rows.filter((row) => row.ghostAt != null && !accepted.has(row.otherId)).map((row) => row.otherId);
   if (!global) return { hidden: new Set(targeted), onlyTo: null, everyone: false };
   return { hidden: new Set(targeted), onlyTo: accepted, everyone: accepted.size === 0 };

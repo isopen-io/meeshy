@@ -112,18 +112,20 @@ export async function batteryAccessAmong(prisma: BatteryDb, params: Params): Pro
     storedConsents(prisma, scoped, feature),
     receiveModes(prisma, scoped),
   ]);
+  const realLevels = new Map<string, RelationLevel>();
   const law = await pairAccessAmong(prisma, {
     feature,
     subjectId: params.subjectId,
     otherIds,
     subjectIs: params.subjectIs,
     now: params.now,
-    consentOf: (id, effectiveLevel: RelationLevel) => {
+    consentOf: (id, effectiveLevel: RelationLevel, ages) => {
+      realLevels.set(id, ages.realLevel);
       const emitter = accounts.get(emitterOf(scoped, id));
       const globallyDisabled = Boolean(emitter?.batterySharingDisabledAt);
       if (!globallyDisabled && emitter?.locationGhostAt == null && grantedBySharedLocation(scoped, feature, id)) return 'granted';
       const pair = stored.get(id);
-      return resolveEmitterConsent({ feature, stored: pair?.stored ?? null, effectiveLevel, globallyDisabled, bloodBundleAccepted: pair?.bloodBundleAccepted === true });
+      return resolveEmitterConsent({ feature, stored: pair?.stored ?? null, effectiveLevel, realLevel: ages.realLevel, globallyDisabled, bloodBundleAccepted: pair?.bloodBundleAccepted === true });
     },
   });
 
@@ -132,7 +134,7 @@ export async function batteryAccessAmong(prisma: BatteryDb, params: Params): Pro
       const usable = isUsableAccount(accounts.get(emitterOf(scoped, id))) && isUsableAccount(accounts.get(readerOf(scoped, id)));
       const verdict = law.get(id);
       const allowed = usable && verdict?.allowed === true;
-      return [id, allowed ? { allowed, receive: receiveOf(modes.get(id), feature, verdict.effectiveLevel) } : CLOSED];
+      return [id, allowed ? { allowed, receive: receiveOf(modes.get(id), feature, realLevels.get(id) ?? 'PUBLIC') } : CLOSED];
     }),
   );
 }

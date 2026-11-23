@@ -294,7 +294,7 @@ describe('#20361 — de Sang à Sang, rien ne se coupe après l\'accord au palie
 
 describe('#20361 C7 — un mineur déclaré garde le retrait de sa position et de son titre, même après l\'accord au palier', () => {
   const ACCORD = { ownerId: AUTRE, otherId: MOI, bringBlockedAt: null, bloodBundleAcceptedAt: NOW, bloodBundleVersion: BLOOD_BUNDLE_VERSION, locationShared: true, listeningTitleShared: true };
-  const MINEUR = { [AUTRE]: { birthDate: new Date('2012-01-01T00:00:00.000Z') } };
+  const MINEUR = { [AUTRE]: { birthDate: new Date('2012-01-01T00:00:00.000Z') }, [MOI]: { birthDate: new Date('1990-01-01T00:00:00.000Z') } };
 
   it('retirer la position ou le titre : 200, écrit, et l\'accord au palier s\'efface — le talkie n\'est alors plus verrouillé', async () => {
     const app = await appli({ liens: [lien('BLOOD', 'BLOOD')], reglages: [ACCORD], personnes: MINEUR });
