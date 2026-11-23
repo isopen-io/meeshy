@@ -305,6 +305,23 @@ export const gameChestSchema = z.object({
   kept: z.boolean().optional().catch(undefined),
 });
 
+/** Le rallumage par l'effort encore possible (#20471) : les jours qui reviendraient, rêves complets faits et requis, dernier jour, jours restants. */
+export const effortRelightSchema = z.object({
+  lostDays: z.number().int().min(1),
+  dreamsDone: nonNegativeInt,
+  dreamsNeeded: z.number().int().min(1),
+  closesOn: dayKey,
+  daysLeft: nonNegativeInt,
+});
+
+export type GameEffortRelight = z.infer<typeof effortRelightSchema>;
+
+/** Le rallumage par l'effort lu par un client : `null` devant un serveur antérieur ou une forme illisible. */
+export const parseEffortRelight = (value: unknown): GameEffortRelight | null => {
+  const parsed = effortRelightSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+};
+
 export const gameFlameSchema = z.object({
   days: nonNegativeInt,
   form: formKeys.nullable(),
@@ -317,6 +334,8 @@ export const gameFlameSchema = z.object({
   canRelight: z.boolean(),
   /** La première Veilleuse a été offerte AUJOURD'HUI (#20169). Tolérant : absent devant un serveur antérieur. */
   freezeGifted: z.boolean().optional().catch(undefined),
+  /** Deux rêves complets rallumeraient encore la Flamme éteinte (#20471). Tolérant : absent devant un serveur antérieur. */
+  effortRelight: effortRelightSchema.optional().catch(undefined),
 });
 
 export const gameBoostsSchema = z.object({
