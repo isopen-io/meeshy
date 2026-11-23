@@ -51,7 +51,8 @@ struct ProfileFallRow: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             Color.clear.frame(height: 0).accessibilityHidden(true)
-            if let settings = viewModel.settings {
+            // Au Sang verrouillé (#20361) la coupure n'existe plus : la rangée est ABSENTE, jamais grisée.
+            if let settings = viewModel.settings, settings.lockedByLevel != true {
                 MeeshyToggleRow(FallDetectionWording.shareTitle, systemImage: FallDetectionWording.stateIconName,
                                 accessory: .toggle(isOn: settings.isShared), tint: tint) {
                     Task { await viewModel.setShared(!settings.isShared) }

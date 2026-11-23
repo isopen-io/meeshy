@@ -26,16 +26,32 @@ final class SharedLocationAskCenter: ObservableObject {
     @Published private(set) var isServed = true
 
     private let requester: SharedLocationRequesting
+    private let locks: BloodLockProviding
+    private var lockObservation: AnyCancellable?
 
     nonisolated deinit {}
 
-    init(requester: SharedLocationRequesting = RelationsService.shared) {
+    init(requester: SharedLocationRequesting = RelationsService.shared, locks: BloodLockProviding? = nil) {
         self.requester = requester
+        let held = locks ?? BloodLockHolder.center()
+        self.locks = held
+        lockObservation = (held as? BloodLockCenter)?.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
     }
 
-    /// Le bouton existe-t-il pour cette personne ?
+    /// Le bouton existe-t-il pour cette personne ? Jamais entre Sangs verrouillés : la position part d'office, il n'y a
+    /// rien à demander (#20359) — le bouton est ABSENT, pas grisé.
     func canAsk(_ userId: String) -> Bool {
-        isServed && !closed.contains(userId.lowercased())
+        isServed && !closed.contains(userId.lowercased()) && !locks.lock(for: userId).locksPositionAndTitle
+    }
+
+    /// Ma position part d'office vers cette personne (Sang verrouillé) : ni « Partager ma position » ni demande.
+    func positionIsSharedByDefault(_ userId: String) -> Bool {
+        locks.lock(for: userId).locksPositionAndTitle
+    }
+
+    /// Lit le verrou du Sang d'une personne avant que l'écran propose de lui demander quoi que ce soit.
+    func prepare(_ userId: String) async {
+        await locks.refresh(userId)
     }
 
     func hasAsked(_ userId: String) -> Bool {

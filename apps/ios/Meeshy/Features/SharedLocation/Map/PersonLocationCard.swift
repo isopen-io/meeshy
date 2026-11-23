@@ -6,7 +6,8 @@ import MeeshyUI
 struct PersonLocationActions {
     var onWrite: (() -> Void)?
     var onCall: (() -> Void)?
-    var onShareMine: () -> Void
+    /// Absent entre Sangs verrouillés : la position part d'office (#20359).
+    var onShareMine: (() -> Void)?
     var onDirections: () -> Void
     var onHistory: (() -> Void)?
     /// « Demander à prolonger » (#19476) : absent tant que la demande n'est pas offerte pour cette personne.
@@ -120,8 +121,10 @@ struct PersonLocationCard: View {
                     .accessibilityIdentifier("locationMap.person.talkie")
             }
             ProfileBringAction(viewModel: bring, displayName: pin.name, tint: tint)
-            MeeshyLabeledAction(title: LocationMapCopy.shareMine, systemImage: "mappin.and.ellipse", tint: tint,
-                                action: actions.onShareMine)
+            if let onShareMine = actions.onShareMine {
+                MeeshyLabeledAction(title: LocationMapCopy.shareMine, systemImage: "mappin.and.ellipse", tint: tint,
+                                    action: onShareMine)
+            }
             if let onHistory = actions.onHistory {
                 MeeshyLabeledAction(title: LocationMapCopy.history, systemImage: "clock.arrow.circlepath", tint: tint,
                                     action: onHistory)

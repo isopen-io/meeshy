@@ -10,6 +10,9 @@ import MeeshyUI
 struct CircleLinkSheet: View {
     @ObservedObject var viewModel: CirclesViewModel
     let row: CirclesViewModel.Row
+    @ObservedObject private var locks: BloodLockCenter = BloodLockHolder.center()
+    @State private var confirmsLowering = false
+    @State private var isLowering = false
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -24,11 +27,16 @@ struct CircleLinkSheet: View {
                     if let line = CircleProgressSummary.make(row.link).text(levelTitle: { viewModel.title(of: $0) }) {
                         Text(line).font(.subheadline).foregroundStyle(theme.textSecondary)
                     }
-                    if !settings.isEmpty { settingsSection }
+                    if lock.isLocked {
+                        bloodLockedSection
+                    } else if !settings.isEmpty {
+                        settingsSection
+                    }
                 }
                 .padding(MeeshySpacing.xl)
             }
             .background(theme.backgroundPrimary.ignoresSafeArea())
+            .task(id: row.id) { await locks.refresh(row.id) }
             .navigationTitle(name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -63,6 +71,39 @@ struct CircleLinkSheet: View {
         }
         .accessibilityElement(children: .combine)
     }
+
+    /// Entre Sangs, rien ne se coupe (#20359) : aucun interrupteur, une seule porte — redescendre à Proche, où chaque
+    /// élément suit le choix de la personne. Le geste est la baisse ordinaire de « Notre cercle » : silencieuse, immédiate.
+    private var bloodLockedSection: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            Text(BloodLockWording.restrictHint)
+                .font(.subheadline)
+                .foregroundStyle(theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            MeeshyButton(BloodLockWording.restrictAction, systemImage: "arrow.down.circle", kind: .outline,
+                         width: .fill, isPending: isLowering, action: { confirmsLowering = true })
+                .accessibilityIdentifier("circles.bloodLocked.restrict")
+        }
+        .confirmationDialog(ProfileCircleLowering.demote(.close).confirmationTitle(name: name),
+                            isPresented: $confirmsLowering, titleVisibility: .visible) {
+            Button(ProfileCircleLowering.demote(.close).label, role: .destructive) { Task { await lowerToClose() } }
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
+        } message: {
+            Text(ProfileCircleLowering.demote(.close).confirmationBody(name: name, from: .blood))
+        }
+    }
+
+    private func lowerToClose() async {
+        isLowering = true
+        defer { isLowering = false }
+        let model = ProfileCircleModels.model(for: row.id)
+        await model.load()
+        guard await model.lower(.demote(.close)) else { return }
+        await viewModel.load(forceNetwork: true)
+        dismiss()
+    }
+
+    private var lock: RelationBloodLock { locks.lock(for: row.id) }
 
     private var settingsSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {

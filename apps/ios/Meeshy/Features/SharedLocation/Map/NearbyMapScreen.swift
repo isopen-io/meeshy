@@ -327,6 +327,7 @@ struct NearbyMapScreen: View {
         me = LocationMapOwnPosition.lastKnown()
         await model.appeared()
         refocus(animated: false)
+        for person in model.ended { await asks.prepare(person.id) }
     }
 
     private func refocus(animated: Bool) {
