@@ -15,7 +15,8 @@ import MeeshyUI
 /// `apps/web/src/components/game/mint-ceremony.tsx`.
 ///
 /// Toucher passe la scène. Sous « Réduire les animations », un fondu (la loi le dit). Pour le lecteur d'écran, la scène
-/// est UN élément : il dit la phrase de Mee, et un toucher la passe.
+/// est UN élément : il dit la phrase de Mee, puis, la frappe confirmée, la gloire gagnée et le pas vers le rang suivant ;
+/// un toucher la passe.
 struct MintCeremonyScene: View {
     @ObservedObject var run: MintCeremonyRun
 
@@ -46,16 +47,11 @@ struct MintCeremonyScene: View {
             .ignoresSafeArea()
             .onTapGesture { run.skip() }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(spoken)
+            .accessibilityLabel(run.spoken)
             .accessibilityHint(MintCeremonyCopy.skip)
             .accessibilityAddTraits(.isButton)
             .accessibilityAction { run.skip() }
             .accessibilityIdentifier("game.mint.ceremony")
-    }
-
-    private var spoken: String {
-        if let refusal = run.refusal { return MintCeremonyCopy.refused(refusal) }
-        return MintCeremonyCopy.say(run.edition, number: run.number)
     }
 
     @ViewBuilder
