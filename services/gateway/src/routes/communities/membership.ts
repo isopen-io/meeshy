@@ -25,6 +25,11 @@ import { CommunityRole } from './types';
 import { communityTextAsWritten, joinLinkStateFor } from './serialization';
 import { communityGuardsItsSalons, exitCommunitySalons } from '../../services/conversations/communitySalonExit';
 import { isAddableUser } from './addable-user';
+import {
+  refuseCommunityAddition,
+  spendCommunityAdditionByActor,
+  spendCommunityAdditionOfTarget,
+} from '../../utils/community-addition-budget';
 import { scheduleCommunityMemberBroadcastFrom } from '../../services/community-member-broadcast';
 import { closePendingJoinRequests } from '../../services/community-join-request-lifecycle';
 import { scheduleCommunityAddedAnnouncement } from '../../services/notifications/community-added';
@@ -446,6 +451,10 @@ export async function registerMembershipRoutes(
           description: 'User is already a member',
           ...errorResponseSchema
         },
+        429: {
+          description: 'Addition budget exceeded for the actor or the added person (COMMUNITY_ADDITION_BUDGET_EXCEEDED, #19812)',
+          ...errorResponseSchema
+        },
         500: {
           description: 'Internal server error',
           ...errorResponseSchema
@@ -496,6 +505,13 @@ export async function registerMembershipRoutes(
         }
       }
 
+      // #19812 — chaque tentative autorisée compte, avant la porte : un compte
+      // non ajoutable ne se sonde pas gratuitement (`utils/community-addition-budget.ts`).
+      const byActor = await spendCommunityAdditionByActor(fastify, userId);
+      if (!byActor.allowed) {
+        return refuseCommunityAddition(reply, byActor.retryAfter);
+      }
+
       // #6376 — l'invitation AJOUTE la personne, sans son accord : un compte
       // vivant, sans blocage (`isAddableUser`, partagé avec POST …/members).
       if (!(await isAddableUser(fastify.prisma, userId, inviteeId))) {
@@ -508,6 +524,11 @@ export async function registerMembershipRoutes(
 
       if (existingMember?.isActive) {
         return sendConflict(reply, 'User is already a member of this community');
+      }
+
+      const ofTarget = await spendCommunityAdditionOfTarget(fastify, inviteeId);
+      if (!ofTarget.allowed) {
+        return refuseCommunityAddition(reply, ofTarget.retryAfter);
       }
 
       // Réactivation d'une ligne laissée par un départ (#5760), même règle
