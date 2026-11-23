@@ -206,12 +206,30 @@ translator/scripts/images
 frontend/shared/version.txt
 gateway/shared/version.txt
 translator/shared/version.txt
-post-*
-# `post-*` above is unqualified and matches by BASENAME at any depth — it silently
-# swallows real source files named `post-<word>.ts` (lived masked until caught here,
-# 2026-08-19: packages/shared/types/post-reference.ts). Un-ignore known source files
-# individually rather than narrowing the pattern blind, since its original intent
-# (likely a stray root-level artifact) is undocumented.
+# ANCRÉ À LA RACINE le 2026-11-23 (#20430). Non ancré, ce motif matchait par
+# BASENAME À TOUTE PROFONDEUR et avalait en silence des sources réelles nommées
+# `post-<mot>.ts`. Il avait déjà frappé une fois (2026-08-19,
+# `packages/shared/types/post-reference.ts`), et la note laissée alors demandait
+# de ne pas le resserrer À L'AVEUGLE, son intention d'origine n'étant pas
+# documentée. La MESURE qu'elle réclamait, faite le 2026-11-23 :
+#
+#   - AUCUN fichier `post-*` à la racine du dépôt — l'intention supposée (un
+#     artefact racine égaré) n'a aujourd'hui aucun sujet ;
+#   - les SEULS fichiers que le motif ignorait alors étaient les trois témoins
+#     neufs de #20430, qu'il a bien fait disparaître de `git status` ;
+#   - des dizaines de sources SUIVIES portent déjà un basename `post-…`
+#     (`apps/web/src/components/post-repost-confirm.tsx`,
+#     `apps/web/src/lib/admin/post-entities.ts`, …) : elles survivent parce
+#     qu'elles sont déjà dans l'index, mais tout fichier NEUF à côté d'elles
+#     était masqué.
+#
+# L'ancre `/` garde l'intention racine et désarme le piège de profondeur. Le
+# coût mesuré du piège : un lot de sécurité a failli livrer son correctif SANS
+# ses témoins ni son cliquet, avec une CI verte — parce que des témoins absents
+# ne rougissent pas.
+/post-*
+# Conservée bien que redondante sous l'ancre : elle redeviendrait la seule garde
+# si quelqu'un désancrait le motif.
 !packages/shared/types/post-reference.ts
 !services/gateway/src/__tests__/unit/post-service-mocks.ts
 !services/gateway/src/__tests__/unit/post-service-geo-discoverability.test.ts

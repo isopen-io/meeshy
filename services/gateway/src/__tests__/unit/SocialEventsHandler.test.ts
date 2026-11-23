@@ -179,7 +179,7 @@ describe('SocialEventsHandler', () => {
       const rooms = mockIO.to.mock.calls[0][0] as string[];
       expect(rooms).toEqual(expect.arrayContaining([ROOMS.feed(FRIEND_1), ROOMS.feed(FRIEND_2), ROOMS.post('post-77')]));
       expect(rooms).not.toContain(ROOMS.feed(AUTHOR_ID));
-      expect(mockIO.except).toHaveBeenCalledWith(ROOMS.feed(AUTHOR_ID));
+      expect(mockIO.except.mock.calls.flat(2)).toContain(ROOMS.feed(AUTHOR_ID)); // #20430 — la PROPRIÉTÉ, pas l'orthographe de l'argument
       expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(AUTHOR_ID));
       expect(mockIO.emit).toHaveBeenCalledTimes(2);
       expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.POST_UPDATED, { post });

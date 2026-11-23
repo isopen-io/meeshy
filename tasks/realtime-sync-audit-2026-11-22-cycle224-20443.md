@@ -1,4 +1,4 @@
-# Cycle 223 — `story:viewed` ne nomme plus personne (#20443)
+# Cycle 224 — `story:viewed` ne nomme plus personne (#20443)
 
 **Date** : 2026-11-22 · **Branche** : `claude/exciting-planck-ohtvh6` · **Issue** : #20443
 
@@ -184,6 +184,23 @@ qui l'a rappelé. Converti en témoin #20443.
 `tsc --noEmit` (gateway) : **0**. Suite gateway COMPLÈTE : voir le commentaire
 de clôture de l'issue. Suite web `publication-views-realtime` : 5/5.
 
+## Le numéro de cycle est un identifiant NON ALLOUÉ, et il a collisionné DEUX fois
+
+Ce lot s'est d'abord numéroté 222, puis 223, puis 224. À chaque fois, une autre
+session avait fusionné dans `dev` un journal portant le même numéro — #20440 sur
+le 222, #20430 sur le 223 — et `dev` ayant fusionné d'abord, c'est ce lot qui
+cède. Le dépôt en porte d'ailleurs déjà la trace sans personne : **deux fichiers
+`cycle221`** coexistent sur `dev` (#20429 et #20438).
+
+C'est exactement #5102 : **un identifiant qui ne s'alloue pas collisionne.** Le
+numéro de cycle n'est tiré d'aucun registre ; chaque session lit le dernier
+journal présent sur SON arbre et ajoute un. Plusieurs sessions partant du même
+`dev` tirent donc le même numéro, et aucune ne peut le savoir avant de fusionner.
+Renuméroter est la réparation du symptôme, pas de la cause — la cause est
+l'absence d'allocation, et elle se solderait par une clé qui n'a pas besoin
+d'être unique (la date et l'issue le sont déjà : ce fichier est identifiable par
+`2026-11-22` + `20443` sans aucun numéro).
+
 ## La constante que le cliquet d'exports a fait tomber, et il avait raison
 
 `packages/shared/__tests__/types/post.test.ts` fige la surface d'EXÉCUTION de
@@ -303,4 +320,4 @@ personne (#20453 le reconnaît).
 - **#20414**, **#20415** — deux des trois suivis du cycle 221, intacts.
   **#20440 est LIVRÉ** par une autre session pendant ce lot (le socle de
   diffusion quitte `SocialEventsHandler`), et c'est elle qui a pris le numéro de
-  cycle 222 : ce journal est le 223.
+  cycle 222 : ce journal est le 224.

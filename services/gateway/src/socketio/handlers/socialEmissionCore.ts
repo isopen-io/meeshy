@@ -30,6 +30,29 @@ import type {
 export const logger = enhancedLogger.child({ module: 'SocialEventsHandler' });
 
 /**
+ * **LA ROOM D'UN POST NE S'ADRESSE QU'AVEC SON VERDICT DE SÉPARATION** (#20430).
+ *
+ * Les deux champs voyagent ensemble parce que la room du post est la seule
+ * adresse d'une diffusion de contenu que rien d'autre ne filtre : poser un
+ * blocage n'en évince aucune socket, et la porte de `post:join` juge au moment
+ * du JOIN.
+ *
+ * **Ce que ce type garantit, exactement** : qu'on ne puisse pas OUBLIER de
+ * répondre. Il ne garantit PAS qu'on réponde juste — `{ id, separated: [] }`
+ * type-checke et n'exclut personne. C'est une garde contre l'omission, la
+ * forme que quatre lots ont passé leur temps à trouver à la main ; la justesse
+ * du verdict reste aux témoins (audit du lot, constat C5 : la première
+ * rédaction de ce commentaire affirmait l'impossible).
+ *
+ * `separated: null` = la lecture des blocages a échoué ⇒ on n'adresse pas la
+ * room du post.
+ */
+export type PostRoomTarget = {
+  readonly id: string;
+  readonly separated: readonly string[] | null;
+};
+
+/**
  * « Personne à taire », à passer EXPLICITEMENT. Le paramètre `separated` des
  * deux seams est REQUIS, et ce n'est pas une coquetterie : une garde dont le
  * défaut est l'OUVERTURE n'est pas une garde — la prochaine famille d'activité
@@ -201,7 +224,12 @@ export class SocialEmissionCore {
     event: E,
     data: SocialEventPayload<E>,
     actorId: string | undefined,
-    separated: readonly string[],
+    /* `null` (#20430) = la lecture des blocages a échoué sur une diffusion de
+       CONTENU ⇒ la room du post n'est pas adressée, les feed rooms partent
+       seules (le discriminant est écrit dans `emitPostToAudience`). Les
+       diffusions d'ACTIVITÉ, dont le sujet échappe au pré-filtre des feed
+       rooms, ne passent JAMAIS `null` : elles retournent avant (#20236, #20338). */
+    separated: readonly string[] | null,
   ): void {
     // **L'ACTEUR fait partie de l'audience de son propre geste** (retour
     // porteur 2026-09-13 : « le like n'est pas synchronisé entre les
@@ -229,13 +257,17 @@ export class SocialEmissionCore {
     // fermer la boucle sur toutes les surfaces à la fois.
     const audience = actorId ? [...recipientIds, authorId, actorId] : [...recipientIds, authorId];
     const rooms = audience.map((id) => ROOMS.feed(id));
-    rooms.push(ROOMS.post(postId));
+    /* #20430 — sur `null`, la room du post sort de l'adresse et les feed rooms
+       partent seules : même politique que `emitPostToAudience`, pour la même
+       raison (le pré-filtre des feed rooms est keyé sur l'AUTEUR, donc sur le
+       sujet d'une diffusion de CONTENU). */
+    if (separated !== null) rooms.push(ROOMS.post(postId));
     /* `separated` ferme la room de la CIBLE, que rien ne filtrait (#20338) :
        `getVisibilityFilteredRecipients` ne garde que les FEED rooms, et
        seulement contre les blocages de l'AUTEUR. `except` porte sur les rooms
        `user:` — un socket en est toujours membre —, donc il retire le lecteur
        de TOUTES les adresses de cet emit à la fois, feed comme post. */
-    emitServerEvent(this.exceptSeparated(rooms, separated), event, data);
+    emitServerEvent(this.exceptSeparated(rooms, separated ?? []), event, data);
   }
 
   /**
@@ -301,17 +333,63 @@ export class SocialEmissionCore {
     event: E,
     payloadFor: (post: Post) => SocialEventPayload<E>,
     loaded: Post,
-    postRoomId?: string,
+    postRoom?: PostRoomTarget,
   ): void {
     const post = withServedPostMedia(loaded);
     const authorRoom = ROOMS.feed(authorId);
     const audiencePayload = payloadFor(withoutAudienceList(post));
     const audienceRooms = recipientIds.filter((id) => id !== authorId).map((id) => ROOMS.feed(id));
-    if (postRoomId) {
-      emitServerEvent(this.io.to([...audienceRooms, ROOMS.post(postRoomId)]).except(authorRoom), event, audiencePayload);
+    /* #20430 — la room du post et la séparation qui la gouverne voyagent
+       ENSEMBLE. `null` ⇒ on ne l'adresse pas, et les feed rooms partent seules.
+
+       ─── POURQUOI CE N'EST PAS LE « FAIL-CLOSED PARTIEL » DE #20236 ───
+
+       Le discriminant est le SUJET de la diffusion, et il décide seul :
+
+       - une diffusion de CONTENU a pour sujet celui qui a ÉCRIT, et le
+         pré-filtre des feed rooms est justement keyé sur LUI
+         (`getVisibilityFilteredRecipients(authorId, …)` →
+         `withoutBlockedRecipients`, bidirectionnel et lui-même fail-closed :
+         son `catch` ne rend que l'auteur). Les feed rooms sont donc DÉJÀ
+         gardées contre le sujet, et la room du post est la seule qui ne l'est
+         pas : la fermer suffit ;
+       - une diffusion d'ACTIVITÉ a pour sujet l'ACTEUR, que ce pré-filtre
+         n'a jamais regardé — il ne connaît que les blocages de l'auteur. Ses
+         feed rooms ne sont donc PAS gardées contre son sujet, et n'en fermer
+         qu'une partie ne fermerait rien : d'où « on n'émet rien », la règle
+         que #20236 et #20338 appliquent, et qui reste la leur.
+
+       Fermer ici les feed rooms en plus ne protégerait personne et priverait
+       l'audience légitime sur une panne de lecture.
+
+       ─── CE QUE CE SEAM NE FERME PAS ───
+
+       La charge d'audience n'est PAS réduite au seul auteur : `postInclude`
+       y attache `comments` (aperçu, auteurs et textes) et `repostOf` (la
+       source republiée, auteur et contenu), et la loi qui retire ces
+       compagnons séparés est un NO-OP sur une diffusion
+       (`separatedCompanions.ts` lit `reader.separatedUserIds`, absent de
+       `WIRE_BROADCAST`). Un lecteur séparé de C, mais pas de A, reçoit donc
+       encore le commentaire de C sur le post de A — ce que le REST lui
+       retire. **Dette ouverte et tracée : #20204**, hors périmètre de ce lot,
+       et c'est pourquoi ce seam ne revendique PAS d'être complet : il ferme la
+       room du post pour le sujet AUTEUR, et rien de plus. */
+    const postRoomRooms = postRoom === undefined || postRoom.separated === null
+      ? []
+      : [ROOMS.post(postRoom.id)];
+    const separated = postRoom?.separated;
+    if (postRoomRooms.length > 0 && separated != null) {
+      emitServerEvent(
+        this.exceptSeparated([...audienceRooms, ...postRoomRooms], [...separated, authorRoom]),
+        event,
+        audiencePayload,
+      );
     } else {
       for (const room of audienceRooms) emitServerEvent(this.io.to(room), event, audiencePayload);
     }
+    /* L'AUTEUR reçoit TOUJOURS son propre contenu, avec sa liste d'audience :
+       sa feed room ne contient que ses sockets, aucun tiers n'y lit, et un
+       sujet ne se tait pas à lui-même. Exemption ÉCRITE, pas oubli. */
     emitServerEvent(this.io.to(authorRoom), event, payloadFor(withAudienceListFor(post, authorId)));
   }
 
@@ -440,6 +518,32 @@ export class SocialEmissionCore {
    * n'émet rien — le lecteur relira le fil par le REST, qui sait quoi taire.
    * Un commentateur inconnu n'a personne à taire.
    */
+  /**
+   * **LA SÉPARATION AUTOUR DE L'AUTEUR D'UN CONTENU** (#20430).
+   *
+   * Une diffusion de CONTENU n'a qu'UN sujet : celui qui a ÉCRIT (#20236).
+   * `commentEmitter` porte déjà cette loi pour le commentaire ; celle-ci la
+   * porte pour le POST, dont la charge est la plus lourde des trois — le `Post`
+   * entier, ou le `translation.text` d'une de ses traductions.
+   *
+   * **Cachée, elle**, contrairement à `separationAroundActor` : la clé
+   * `[auteur]` est exactement le genre d'entrée STABLE pour lequel ce cache a
+   * été écrit — une traduction diffuse une fois PAR LANGUE CIBLE, chaque
+   * résultat arrivant séparément du pipeline, sans boucle où passer le
+   * résultat.
+   *
+   * `null` ⇒ l'appelant n'adresse PAS la room du post.
+   */
+  contentSeparation(postAuthorId: string): Promise<readonly string[] | null> {
+    /* Pas de `keep`, pour la raison que `separationAroundActor` écrit déjà : avec
+       UN sujet il n'a rien à filtrer, `related` ne pouvant contenir l'auteur que
+       s'il s'était bloqué LUI-MÊME — ce que `routes/directory/blocks.ts` refuse à
+       la source (400), et c'est le seul producteur. Porter l'option la ferait lire
+       comme porteuse de sens sans qu'aucun témoin la tienne (audit du lot : mutée,
+       299 suites restaient vertes). */
+    return this.separatedRooms.roomsAround([postAuthorId]);
+  }
+
   async commentEmitter(rooms: string | string[], commentAuthorId: string | null | undefined) {
     const separated = await this.separatedRooms.roomsAround([commentAuthorId], { keep: commentAuthorId });
     return separated === null ? null : this.exceptSeparated(rooms, separated);
