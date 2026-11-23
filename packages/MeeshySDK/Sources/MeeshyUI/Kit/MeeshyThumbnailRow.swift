@@ -279,5 +279,5 @@ public struct MeeshyThumbnailRow<ID: Hashable & Sendable, Content: View>: View {
 
 extension MeeshyThumbnailRowSpace {
     /// L'espace de la zone visible : le contenu s'y mesure pour savoir où est le doigt.
-    static let viewport = "meeshy.thumbnailRow.viewport"
+    nonisolated static let viewport = "meeshy.thumbnailRow.viewport"
 }
