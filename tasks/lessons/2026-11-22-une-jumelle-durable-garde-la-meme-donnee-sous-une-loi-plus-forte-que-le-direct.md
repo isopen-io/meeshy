@@ -1,6 +1,6 @@
 ## Une jumelle DURABLE peut garder la même donnée sous une loi plus forte que le DIRECT
 
-**2026-11-22, cycle 222 (#20443)**, trouvé par l'audit adversarial de #20429
+**2026-11-22, cycle 223 (#20443)**, trouvé par l'audit adversarial de #20429
 (constat C2).
 
 `story:viewed` — la charge la plus nominative des huit familles d'activité, la

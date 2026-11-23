@@ -1,4 +1,4 @@
-# Cycle 222 — `story:viewed` ne nomme plus personne (#20443)
+# Cycle 223 — `story:viewed` ne nomme plus personne (#20443)
 
 **Date** : 2026-11-22 · **Branche** : `claude/exciting-planck-ohtvh6` · **Issue** : #20443
 
