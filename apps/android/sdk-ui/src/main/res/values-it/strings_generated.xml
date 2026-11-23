@@ -189,6 +189,20 @@
     <string name="contacts_phonebook_write">Invia messaggio</string>
     <string name="contacts_skeleton_loading">Caricamento in corso</string>
     <string name="contacts_tab_prefix">Scheda</string>
+    <string name="content_card_a11y_open">Apre il contenuto</string>
+    <string name="content_card_a11y_post_by">Post di %1$s</string>
+    <string name="content_card_a11y_reel_by">Reel di %1$s</string>
+    <string name="content_card_a11y_saves">%1$d salvataggi</string>
+    <string name="content_card_a11y_story_by">Storia di %1$s</string>
+    <plurals name="content_card_a11y_views">
+        <item quantity="one">%1$d visualizzazione</item>
+        <item quantity="many">%1$d visualizzazioni</item>
+        <item quantity="other">%1$d visualizzazioni</item>
+    </plurals>
+    <string name="content_card_kind_mood">Stato d\'animo</string>
+    <string name="content_card_kind_post">Post</string>
+    <string name="content_card_kind_reel">Reel</string>
+    <string name="content_card_kind_story">Storia</string>
     <string name="content_failure_retry">Riprova</string>
     <string name="content_failure_server_title">Meeshy non è riuscito a caricare questo contenuto</string>
     <string name="content_failure_unavailable_title">Questo contenuto non è più disponibile</string>
@@ -543,11 +557,14 @@
     <string name="talkie_send_hold">Tieni premuto per parlare</string>
     <string name="talkie_send_hold_a11y">Tieni premuto per parlare con %1$s</string>
     <string name="talkie_send_hold_hint">Tocca due volte e tieni premuto, parla, poi rilascia.</string>
+    <string name="talkie_send_leave_voice">Lascia un messaggio vocale</string>
+    <string name="talkie_send_leave_voice_a11y">Lascia un messaggio vocale a %1$s</string>
     <string name="talkie_send_limit">Trenta secondi al massimo: l’intervento si è fermato.</string>
     <string name="talkie_send_mic_denied">Consenti il microfono per usare il walkie-talkie.</string>
     <string name="talkie_send_offline">Offline: il walkie-talkie non è potuto partire.</string>
     <string name="talkie_send_rate_limited">Troppi interventi: riprova tra un attimo.</string>
     <string name="talkie_send_recording_copy">Registrazione del messaggio vocale…</string>
+    <string name="talkie_send_sent_as_voice">Inviato come messaggio vocale</string>
     <string name="talkie_send_talking">Stai parlando con %1$s…</string>
     <string name="talkie_send_waking">Sveglia di %1$s…</string>
     <string name="time_lastSeen_beforeYesterdayAt">Visto l\'altro ieri alle %1$s</string>

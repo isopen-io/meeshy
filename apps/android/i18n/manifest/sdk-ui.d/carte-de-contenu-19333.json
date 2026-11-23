@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "content.kind.post", "androidName": "content_card_kind_post", "status": "adopted"},
+        {"catalog": "app", "iosKey": "content.kind.reel", "androidName": "content_card_kind_reel", "status": "adopted"},
+        {"catalog": "app", "iosKey": "content.kind.story", "androidName": "content_card_kind_story", "status": "adopted"},
+        {"catalog": "app", "iosKey": "content.kind.mood", "androidName": "content_card_kind_mood", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.preview.post", "androidName": "content_card_a11y_post_by", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.preview.reel", "androidName": "content_card_a11y_reel_by", "status": "adopted"},
+        {"catalog": "app", "iosKey": "share.preview.story", "androidName": "content_card_a11y_story_by", "status": "adopted"},
+        {"catalog": "app", "iosKey": "search.posts.opens", "androidName": "content_card_a11y_open", "status": "adopted"},
+        {"catalog": "app", "iosKey": "bubble.media.a11y.viewCount", "androidName": "content_card_a11y_views", "kind": "plurals", "fillMissingQuantities": true, "status": "adopted"},
+        {"catalog": "app", "iosKey": "a11y.feed.post.save.value", "androidName": "content_card_a11y_saves", "status": "adopted"},
+        {"androidName": "content_card_a11y_mood_by", "status": "android-only"},
+        {"androidName": "content_card_a11y_saved", "status": "android-only"}
+      ]
+    }
+  }
+}

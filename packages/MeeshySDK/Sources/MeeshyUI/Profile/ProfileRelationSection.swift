@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import MeeshySDK
 
@@ -165,20 +166,30 @@ public struct ProfileLocationMap {
     public typealias Preview = (_ request: ProfileLocationMapRequest, _ openMap: @escaping () -> Void) -> AnyView
 
     public let isOffered: (_ userId: String) -> Bool
+    /// La même réponse, VIVANTE (#20242) : la position servie arrive souvent après le premier rendu de la fiche
+    /// (démarrage à froid, rattrapage en route). `nil` : la fiche s'en tient à `isOffered`.
+    public let offeredChanges: ((_ userId: String) -> AnyPublisher<Bool, Never>)?
     public let destination: (ProfileLocationMapRequest) -> AnyView
     /// Sans elle, la fiche propose « Carte » dans « Parler » (K32) ; avec elle, la section « Où il est » la remplace.
     public let preview: Preview?
 
     public init(isOffered: @escaping (_ userId: String) -> Bool,
+                offeredChanges: ((_ userId: String) -> AnyPublisher<Bool, Never>)? = nil,
                 destination: @escaping (ProfileLocationMapRequest) -> AnyView,
                 preview: Preview? = nil) {
         self.isOffered = isOffered
+        self.offeredChanges = offeredChanges
         self.destination = destination
         self.preview = preview
     }
 
     func placement(for userId: String) -> ProfileWherePlacement {
-        ProfileWherePlacement.resolve(isOffered: isOffered(userId), hasPreview: preview != nil)
+        placement(for: userId, live: nil)
+    }
+
+    /// `live` : la dernière réponse vivante reçue, qui l'emporte sur la lecture du premier rendu.
+    func placement(for userId: String, live: Bool?) -> ProfileWherePlacement {
+        ProfileWherePlacement.resolve(isOffered: live ?? isOffered(userId), hasPreview: preview != nil)
     }
 }
 

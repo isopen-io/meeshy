@@ -1,6 +1,7 @@
 package me.meeshy.app.profile
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -42,6 +43,10 @@ internal data class ProfileWhereMapAccess(val canMessage: Boolean, val offersCal
  * La carte s'ouvre en plein écran : l'avatar devient l'épingle, la fiche devient la feuille basse (écrire, appeler,
  * itinéraire, partager la mienne), chacune offerte selon [ProfileWhereMapOffers]. Écrire et appeler ferment la carte avant
  * d'agir.
+ *
+ * Dès qu'une position m'est SERVIE (quel que soit le cercle : la passerelle a déjà jugé), l'entrée est le BLOC HÉROS de la
+ * carte (#20242) : la dernière position connue et son heure ; le toucher ouvre la carte. La lecture des épingles est
+ * vivante, et une personne absente du magasin y déclenche un rattrapage ([SharedLocationsMapViewModel.ensure]).
  */
 @Composable
 internal fun ProfileWhereMapAction(
@@ -53,6 +58,8 @@ internal fun ProfileWhereMapAction(
     shareModel: ProfileShareLocationViewModel = hiltViewModel(key = "share-location-$userId"),
 ) {
     val pins by mapModel.pins.collectAsStateWithLifecycle()
+    val updatedAt by mapModel.updatedAt.collectAsStateWithLifecycle()
+    LaunchedEffect(userId) { mapModel.ensure(userId) }
     val sharing by shareModel.state.collectAsStateWithLifecycle()
     var isChoosing by rememberSaveable(userId) { mutableStateOf(false) }
     val permissions = rememberPermissionFlow()
@@ -63,7 +70,14 @@ internal fun ProfileWhereMapAction(
         offersLocation = access.offersLocation,
         sharingWithThem = sharing.entry != null,
     )
-    ProfileWhereMapEntry(userId = userId, sharedWithMe = pins.any { it.userId == userId }) { close ->
+    val pin = pins.firstOrNull { it.userId == userId }
+    ProfileWhereMapEntry(
+        userId = userId,
+        sharedWithMe = pin != null,
+        entry = { open ->
+            pin?.let { ProfileWhereHero(title = displayName, point = it.point, atMillis = updatedAt[userId], onTap = open) }
+        },
+    ) { close ->
         val onCall = callbacks.onCall?.takeIf { offers.call }
         LocationMapDialog(
             focusUserId = userId,
@@ -98,18 +112,22 @@ internal fun ProfileWhereMapAction(
 internal fun ProfileWhereMapEntry(
     userId: String,
     sharedWithMe: Boolean,
+    entry: @Composable (open: () -> Unit) -> Unit = { open -> ProfileWhereMapButton(open) },
     map: @Composable (close: () -> Unit) -> Unit,
 ) {
     var isOpen by rememberSaveable(userId) { mutableStateOf(false) }
-    if (sharedWithMe) {
-        MeeshyButton(
-            title = stringResource(R.string.location_map_open),
-            onClick = { isOpen = true },
-            icon = MeeshyIcons.Map,
-            kind = MeeshyButtonKind.Tinted,
-            size = MeeshyButtonSize.S44,
-            width = MeeshyButtonWidth.Fill,
-        )
-    }
+    if (sharedWithMe) entry { isOpen = true }
     if (isOpen) map { isOpen = false }
+}
+
+@Composable
+private fun ProfileWhereMapButton(open: () -> Unit) {
+    MeeshyButton(
+        title = stringResource(R.string.location_map_open),
+        onClick = open,
+        icon = MeeshyIcons.Map,
+        kind = MeeshyButtonKind.Tinted,
+        size = MeeshyButtonSize.S44,
+        width = MeeshyButtonWidth.Fill,
+    )
 }

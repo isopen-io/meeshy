@@ -223,6 +223,8 @@ export type FeedPost = {
   /** Le listing servi, posé au chargement de la page (`withServedListing`) — absent si le serveur ne dit rien. */
   readonly servedListing?: ServedListing;
   readonly trackingLinks?: unknown;
+  /** LES VUES (`Post.viewCount`, servies par toute lecture) — lues par la carte d'un lien de contenu (#19334). */
+  readonly viewCount?: number | null;
   readonly likeCount?: number | null;
   readonly commentCount?: number | null;
   readonly repostCount?: number | null;

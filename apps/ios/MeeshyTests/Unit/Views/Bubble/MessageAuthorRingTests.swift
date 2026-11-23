@@ -126,6 +126,7 @@ final class MessageAuthorRingTests: XCTestCase {
         "Call/Views/CallControlsViews.swift": (1, "appel — l'invitation qui sonne ne porte pas le contour (#10957)"),
         "Main/Components/ContactCard/ContactCardDetailSheet.swift": (1, "carte de contact — le compte public servi ne porte pas le contour (#10957)"),
         "Main/Components/ContactCardView.swift": (1, "carte de contact — le compte public servi ne porte pas le contour (#10957)"),
+        "Main/Components/ContentCard/ContentLinkCardBody.swift": (1, "carte d'un contenu — l'auteur servi par `GET /posts/:id` (`ContentCard.Author`) ne porte pas le contour (#10957, #20211)"),
         "Main/Components/ConversationCard/ConversationLinkCardBody.swift": (1, "carte de lien — l'invitant servi ne porte pas le contour (#10957)"),
         "Main/Components/MessageDetail/MessageReactionsDetailView.swift": (1, "réactions — la liste des réacteurs ne porte pas le contour (#10957)"),
         "Main/Views/AudioFullscreenPage.swift": (1, "plein écran audio — l'auteur transmis (`ProfileSheetUser`) ne porte pas le contour (#10957)"),

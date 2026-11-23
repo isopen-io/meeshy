@@ -95,18 +95,22 @@ public actor LinkPreviewFetcher {
         try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
 
     public nonisolated static func firstURL(in text: String) -> String? {
+        urls(in: text).first
+    }
+
+    /// Every HTTP(S) URL of a message body, in reading order — same detector,
+    /// same filter as `firstURL(in:)`, which is its head. The content card
+    /// (#19332) needs the first CONTENT link, which is not always the first.
+    public nonisolated static func urls(in text: String) -> [String] {
         guard !text.isEmpty, let detector = Self.linkDetector else {
-            return nil
+            return []
         }
         let range = NSRange(text.startIndex..<text.endIndex, in: text)
-        let matches = detector.matches(in: text, range: range)
-        for match in matches {
-            guard let url = match.url else { continue }
-            guard let scheme = url.scheme?.lowercased(),
-                  scheme == "http" || scheme == "https" else { continue }
+        return detector.matches(in: text, range: range).compactMap { match in
+            guard let url = match.url, let scheme = url.scheme?.lowercased(),
+                  scheme == "http" || scheme == "https" else { return nil }
             return url.absoluteString
         }
-        return nil
     }
 
     // MARK: - Internal

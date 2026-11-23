@@ -31,6 +31,7 @@ import arStudioChrome from './catalog-ar-studio-chrome';
 import arEphemeral from './catalog-ar-ephemeral';
 import arWriteRestriction from './catalog-ar-write-restriction';
 import arConversationCard from './catalog-ar-conversation-card';
+import arContentCard from './catalog-ar-content-card';
 import arStoriesMine from './catalog-ar-stories-mine';
 import arContactCard from './catalog-ar-contact-card';
 import arQuote from './catalog-ar-quote';
@@ -1079,6 +1080,7 @@ const ar = {
   ...arGallery,
   ...arMessageCard,
   ...arConversationCard,
+  ...arContentCard,
   ...arStoriesMine,
   'settings.tools.sounds': 'أصواتي',
   'settings.section.packs': 'الحزم والتنزيلات',

@@ -292,6 +292,8 @@ struct BloodBatteryRow: View {
     let displayName: String
     let tint: Color
     @State private var state: BatteryReaderState?
+    /// Son téléphone est injoignable depuis plusieurs minutes (#20241) : un relevé ne pourrait pas aboutir.
+    @State private var unreachableLasting = false
 
     init(userId: String, displayName: String, tint: Color) {
         _viewModel = StateObject(wrappedValue: ProfileBatteryViewModel(
@@ -313,8 +315,10 @@ struct BloodBatteryRow: View {
                                     titleAccessory: { MeeshyToggleRowNoSlot() },
                                     trailing: { MeeshyToggleRowNoSlot() })
                     .accessibilityElement(children: .combine)
-                pullButton
-                    .padding(.trailing, MeeshySpacing.lg)
+                if !unreachableLasting {
+                    pullButton
+                        .padding(.trailing, MeeshySpacing.lg)
+                }
             }
         }
         .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
@@ -329,6 +333,7 @@ struct BloodBatteryRow: View {
             FeedbackToastManager.shared.showError(new)
             viewModel.notice = nil
         }
+        .modifier(PhoneUnreachableLastingReader(userId: viewModel.userId, lasting: $unreachableLasting))
         .accessibilityIdentifier("bloodLocation.battery")
     }
 

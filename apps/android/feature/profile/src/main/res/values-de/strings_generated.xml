@@ -88,6 +88,11 @@
     <string name="profile_username">Benutzername</string>
     <string name="profile_verified">Verifiziert</string>
     <string name="profile_view_posts">Beiträge</string>
+    <string name="profile_where_hero_last_known">Letzte Position</string>
+    <string name="profile_where_own_title">Mein Standort</string>
+    <string name="profile_where_stamp_at">um %1$s</string>
+    <string name="profile_where_stamp_just_now">gerade eben</string>
+    <string name="profile_where_stamp_minutes">vor %1$d Min.</string>
     <string name="report_close">Schließen</string>
     <string name="report_details_header">Details (optional)</string>
     <string name="report_error">Fehler beim Senden der Meldung</string>

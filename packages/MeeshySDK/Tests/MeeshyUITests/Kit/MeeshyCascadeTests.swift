@@ -110,7 +110,6 @@ struct MeeshyCascadeTests {
         "apps/ios/Meeshy/Features/Profile/Faces/ProfileLinksFace.swift",
         "apps/ios/Meeshy/Features/Profile/Faces/ProfileActionsFace.swift",
         "packages/MeeshySDK/Sources/MeeshyUI/Profile/UserProfileSheet+DetailsTab.swift",
-        "packages/MeeshySDK/Sources/MeeshyUI/Profile/UserProfileSheet+LinksFace.swift",
         "packages/MeeshySDK/Sources/MeeshyUI/Profile/UserProfileSheet+ActionsFace.swift",
     ]
 

@@ -107,16 +107,17 @@ struct ProfileWriteBadgeTests {
 
     // MARK: Les sites
 
-    @Test("« Écrire » porte la pastille dans « Parler » et dans « Avec Léo »")
+    /// Écrire ne vit plus qu'au bouton « Parler » posé à côté des faces (#20177) : la face Actions ne le redit pas, et
+    /// la carte « Avec Léo » est partie avec elle.
+    @Test("« Écrire » porte la pastille au bouton « Parler », et nulle part ailleurs")
     func sites_passTheBadgeToWrite() throws {
         let actions = try Self.source("UserProfileSheet+ActionsFace.swift")
-        #expect(actions.contains("ProfileTalkAction(operation: .write, reach: talkReach(.write), badge: writeBadge"))
-        let vitrine = try Self.source("UserProfileSheet+VitrineBlocks.swift")
-        #expect(vitrine.contains("talk(.write, badge: writeBadge"))
-        #expect(vitrine.contains("ProfileTalkAction(operation: operation"))
-        let talk = try Self.source("ProfileTalkAction.swift")
-        #expect(talk.contains("badge: badge.text"))
-        #expect(talk.contains("badgeLabel: badge.spoken"))
+        #expect(!actions.contains("operation: .write"))
+        let sheet = try Self.source("UserProfileSheet.swift")
+        #expect(sheet.contains("writeBadge: writeBadge"))
+        let selector = try Self.source("RelationFace.swift")
+        #expect(selector.contains("accessory == .talk ? writeBadge.spoken"))
+        #expect(selector.contains("accessory == .talk, let text = writeBadge.text"))
     }
 
     private static func source(_ name: String) throws -> String {

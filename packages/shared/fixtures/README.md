@@ -4,6 +4,10 @@ Domicile des vecteurs de test partagés (contrat Lentille/Focal, workshop `tasks
 Écrits par L0 (noyau TypeScript, LWS-0/1/2) — `packages/shared/`.
 Lus par les 3 plateformes : shared/web (Jest, import direct), iOS (XCTest, ressource de bundle copiée par XcodeGen), Android (JUnit, ressource symlinkée par Gradle).
 
+## `content-link/` (#19331)
+
+- `content-link.vectors.json` — la loi `contentLinkTarget` (`utils/content-link.ts`) : `{ _label, input, expected }`, `expected` étant `{ kind: 'content', postId, type }` (`type` : `POST`, `REEL`, `STORY`, `STATUS` ou `null` pour une forme ancienne), `{ kind: 'tracked', token }` ou `null`. Rejoués par le test TS, par le miroir Swift (`ContentLinkTarget`, MeeshySDK) et par le miroir Kotlin (`:core:model`) : un hôte, un chemin ou une forme d'identifiant ajouté à l'un se voit chez les deux autres.
+
 ## `long-message/` (#8147)
 
 - `excerpt.vectors.json` — la loi `longMessageExcerpt` (`utils/long-message.ts`) : `{ _label, input: { text }, expected: { truncated, excerpt } }`, générés en exécutant la loi TS. iOS les rejoue contre son miroir Swift.

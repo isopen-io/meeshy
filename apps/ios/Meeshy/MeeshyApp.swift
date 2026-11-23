@@ -550,6 +550,7 @@ struct ProfileSheetEnvironment: ViewModifier {
             })
             .environment(\.profileLocationMap, ProfileLocationMap(
                 isOffered: { userId in ProfileWhereCard.isShown(for: userId) },
+                offeredChanges: { userId in ProfileWhereCard.offeredChanges(for: userId) },
                 destination: { request in
                     ProfileSlot.view(.locationMap, userId: request.userId, displayName: request.displayName,
                                      mapRequest: request)
@@ -569,6 +570,9 @@ struct ProfileSheetEnvironment: ViewModifier {
             ))
             .environment(\.profileLoading, LiveProfileLoading())
             .environment(\.avatarListeningSource, ListeningCenter.shared.source)
+            // La batterie de la personne, en icône à côté du grand avatar de sa fiche (#20178) : rien hors épisode.
+            .environment(\.profileHeroBattery, ProfileHeroBattery(states: BatteryLiveState.stream(of:),
+                                                                  describe: BatteryLiveState.signal(for:)))
     }
 }
 

@@ -181,14 +181,6 @@ struct ProfileVitrineBlocksTests {
     }
 
     @MainActor
-    @Test("« Avec Léo » ne porte que le prénom")
-    func withThemTitle_usesTheFirstName() {
-        let title = ProfileVitrineCopy.withThemTitle("Léo Marchetti")
-        #expect(title.contains("Léo"))
-        #expect(!title.contains("Marchetti"))
-    }
-
-    @MainActor
     @Test("un trophée ne se dit pas comme plusieurs")
     func trophies_singularDiffersFromPlural() {
         let one = ProfileVitrineCopy.trophies(earned: 1, total: 5)

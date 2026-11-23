@@ -25,24 +25,11 @@ extension PostDetailView {
         return post.displayContent
     }
 
-    /// Vidéo embeddable (YouTube) détectée dans le contenu affiché du post.
-    var embeddedVideo: EmbeddedVideo? {
-        EmbeddableVideoResolver.resolve(in: effectiveContent)
-    }
-
     /// `[rawURL: token]` outbound-link tracking map du post (nil si aucun lien
     /// tracké → pas de réécriture dans le renderer).
     var postTrackedLinks: [String: String]? {
         let map = displayPost?.trackedLinkMap ?? [:]
         return map.isEmpty ? nil : map
-    }
-
-    /// Destination trackée `/l/<token>` pour la façade vidéo, dérivée de la
-    /// première URL du contenu via `trackedLinkMap`. `nil` → watchURL.
-    var embedTrackedURL: URL? {
-        guard let raw = LinkPreviewFetcher.firstURL(in: effectiveContent),
-              let token = displayPost?.trackedLinkMap[raw] else { return nil }
-        return TrackedLink.redirectURL(token: token)
     }
 
     var textTruncation: (text: String, isTruncated: Bool) {
