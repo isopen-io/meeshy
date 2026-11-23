@@ -1,9 +1,13 @@
+import { useEffect, useRef, useState } from 'react';
+
 import type { GameGlory, GameMintPreview as MintPreview } from '@meeshy/shared/types/game';
 import { meeshDisplayEdition, meeshEdition, type MeeshEdition } from '@meeshy/shared/utils/game/mint';
 
 import { GameBird } from '@/components/game';
-import type { MintCeremonyGlory } from '@/components/game/mint-ceremony';
+import type { MintCeremonyGlory } from '@/lib/game/mint-glory-copy';
 import { MintStrike } from '@/components/game-mint-strike';
+import { loadGameCatalogParts } from '@/lib/i18n-game-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { divisionLabel, editionName, formatCount, gameText, pointsLabel, rankName } from '@/lib/view/game-copy';
 
 import { GAME_BRAND, GAME_ERROR, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, GameCard } from './game-surface';
@@ -54,6 +58,33 @@ export const ceremonyGlory = (mint: MintPreview, glory: GameGlory | undefined): 
   glory === undefined ? null : { before: glory.glory, gained: mint.gloryGained, mythic: glory.rank === 'mythe' };
 
 /**
+ * CE QUE LE LECTEUR D'ÉCRAN ENTEND APRÈS LA PIÈCE (#20141) : la gloire gagnée, puis le pas vers le rang suivant — ce
+ * que la cérémonie, décorative, montre. Ses mots vivent dans la partie « frappe » du catalogue, que la cérémonie
+ * charge à part : l'annonce les charge de même (le plus souvent déjà là), sans les tirer dans la première peinture.
+ * `null` tant qu'ils ne sont pas là, ou s'ils ne viennent pas : la pièce s'annonce seule, comme avant.
+ */
+function useStrikeGlorySpoken(celebrationKey: number | null, glory: MintCeremonyGlory | null): string | null {
+  const [spoken, setSpoken] = useState<string | null>(null);
+  const gesture = useRef(glory);
+  gesture.current = glory;
+  useEffect(() => {
+    setSpoken(null);
+    if (celebrationKey === null) return undefined;
+    let alive = true;
+    const language = currentInterfaceLanguage();
+    const read = gesture.current;
+    Promise.all([import('@/lib/game/mint-glory-copy'), loadGameCatalogParts(language, ['frappe'])]).then(
+      ([copy]) => alive && setSpoken(copy.mintGlorySpoken(read, language)),
+      () => undefined,
+    );
+    return () => {
+      alive = false;
+    };
+  }, [celebrationKey]);
+  return spoken;
+}
+
+/**
  * Pourquoi la frappe est fermée, quand ce n'est PAS faute d'étincelles (porteur, 2026-10-16) : une DETTE d'étincelles à
  * rembourser (elle se déduit des prochains gains), ou une réserve du trésor que le rang n'ouvre pas encore.
  */
@@ -92,6 +123,10 @@ function meeLine(mint: MintPreview): { readonly text: string; readonly fact: str
 export function GameMintPreview(props: GameMintPreviewProps) {
   const { mint, held, online, minting, error, celebration, strikeKey = 0, glory, onMint } = props;
   const mee = meeLine(mint);
+  // La gloire lue AU GESTE, comme la cérémonie : celle que la frappe rafraîchit ne compte pas deux fois.
+  const [gesture, setGesture] = useState({ key: strikeKey, glory: ceremonyGlory(mint, glory) });
+  if (gesture.key !== strikeKey) setGesture({ key: strikeKey, glory: ceremonyGlory(mint, glory) });
+  const glorySpoken = useStrikeGlorySpoken(celebration?.key ?? null, gesture.glory);
 
   return (
     <GameCard id="game-mint" labelledBy="game-mint-title" tint={GAME_WARM}>
@@ -104,8 +139,13 @@ export function GameMintPreview(props: GameMintPreviewProps) {
       </h2>
 
       {celebration === null ? null : (
-        <p role="status" className="text-body font-bold" style={{ color: GAME_BRAND }}>
+        <p role="status" data-game-mint-minted="" className="text-body font-bold" style={{ color: GAME_BRAND }}>
           {gameText('game.mint.minted_line', { number: formatCount(celebration.number), edition: editionName(meeshDisplayEdition(celebration.number)) })}
+          {glorySpoken === null ? null : (
+            <span data-game-mint-glory-spoken="" className="sr-only">
+              {` ${glorySpoken}`}
+            </span>
+          )}
         </p>
       )}
 
