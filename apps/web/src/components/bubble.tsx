@@ -28,7 +28,7 @@ import { EmojiOnly, LocationCard, MoodQuote, StickerArtwork, StoryCitationCard }
 import { ProtectedContent, ProtectionNotice } from './protected-content';
 import { ProtectionChrome } from './protection-chrome';
 import { LongMessageText } from './long-message-text';
-import { ConversationLinkCards } from './conversation-link-cards';
+import { MessageLinkCards } from './message-link-cards';
 import { SystemNotice } from './system-notice';
 import { linkRenderingOf } from '@/lib/view/sender-links';
 import { callNoticeTarget } from '@/lib/calls/call-notice';
@@ -453,9 +453,9 @@ export function Bubble({
           plainTextHidden
         />
       ) : null}
-      {/* La carte d'un lien de conversation (#8099), SOUS le texte comme iOS
-          (`BubbleLinkEmbed.swift`). */}
-      {bareBody || links === 'plain' ? null : <ConversationLinkCards text={message.content} trackingLinks={message.trackingLinks} />}
+      {/* La carte d'un lien — conversation (#8099) ou contenu (#19334) —, SOUS
+          le texte comme iOS (`BubbleLinkEmbed.swift`). */}
+      {bareBody || links === 'plain' ? null : <MessageLinkCards text={message.content} trackingLinks={message.trackingLinks} />}
     </>
   );
 

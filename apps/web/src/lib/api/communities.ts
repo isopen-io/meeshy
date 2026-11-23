@@ -6,6 +6,7 @@ import { decodeHtmlText } from '@/lib/admin/interpret/html-text';
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
+import { COMMUNITIES_QUERY_ROOT } from './realtime-catch-up-keys';
 
 /**
  * **LE PORT DES COMMUNAUTÉS** (#6364) — miroir `CommunityService` (iOS,
@@ -42,7 +43,10 @@ import type { ApiResult, HttpTransport } from './http';
  * community.ts`) ne part pas et nomme son champ.
  */
 
-export const COMMUNITIES_QUERY_PREFIX = ['communities'] as const;
+/** Réexport de `realtime-catch-up-keys.ts` (#20438) : le temps réel la nomme
+ * sans tirer ce port ni `zod` dans son morceau, et le littéral ne vit qu'une
+ * fois. */
+export const COMMUNITIES_QUERY_PREFIX = COMMUNITIES_QUERY_ROOT;
 export const COMMUNITIES_PAGE_SIZE = 20;
 export const SEARCH_MIN_LENGTH = 2;
 

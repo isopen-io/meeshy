@@ -119,8 +119,17 @@ export {
  */
 const STANDING_TYPES: ReadonlySet<SocialEvent['type']> = new Set(['impression', 'view', 'dwell', 'dwell-start']);
 
+/**
+ * L'acteur d'un lot d'événements sociaux.
+ *
+ * **Le `username` a été RETIRÉ (#20443)** : son unique lecteur était la charge
+ * de `story:viewed`, qui ne nomme plus personne. Un pseudo qui voyage jusqu'à
+ * la couche de diffusion sans que rien ne le lise est une invitation à le
+ * remettre sur un fil — la seule façon de ne pas renommer le viewer est de ne
+ * pas transporter son nom jusqu'ici.
+ */
 export type SocialEventsActor =
-  | { readonly kind: 'user'; readonly userId: string; readonly username: string }
+  | { readonly kind: 'user'; readonly userId: string }
   | { readonly kind: 'anonymous'; readonly readerKey: string };
 
 /**
@@ -179,6 +188,31 @@ async function applyViews(
 ): Promise<number> {
   if (events.length === 0) return 0;
 
+  /* #20429 — LA SÉPARATION EST RÉSOLUE AVANT LA PREMIÈRE ÉCRITURE, et une
+     seule fois pour tout le lot. `story:viewed` porte un compteur ABSOLU
+     (`viewCount`) : résolue APRÈS, elle ajouterait un `await` de plus entre
+     l'écriture et l'émission, donc élargirait la fenêtre où deux vues
+     concurrentes s'émettent dans l'ordre inverse de leurs écritures — le
+     dernier arrivé gagnant, l'auteur garderait un compte que la base
+     contredit. (Cette fenêtre PRÉEXISTE et ce lot ne la ferme pas :
+     `viewCount` est lu par `getPostById` APRÈS `recordView`. Suivi #20414.)
+
+     Le PRIX de ce hissage est écrit ici parce qu'il est réel : un lot qui ne
+     porte AUCUNE story paie quand même ses deux lectures, le type d'un post
+     n'étant pas connu avant son écriture. Résoudre paresseusement au premier
+     `type === 'STORY'` les économiserait — mais ce verdict vient de
+     `getPostById`, donc APRÈS `recordView`, ce qui est exactement l'`await`
+     supplémentaire que le paragraphe ci-dessus refuse. C'est un arbitrage
+     entre deux lectures par lot et la propriété d'ordre, pas une domination
+     (audit adversarial du lot, constat C4).
+
+     `?.` sur la méthode, et pas seulement sur l'objet : un `socialEvents`
+     PARTIEL ferait lever ici, AVANT la première écriture, et perdrait le lot
+     de vues entier — l'inverse exact de ce que promet la ligne « la vue est
+     DÉJÀ enregistrée » plus bas. Un `undefined` vaut alors `null`, donc le
+     silence, jamais la diffusion. */
+  const separated = await deps.fastify.socialEvents?.separationAroundActor?.(actor.userId) ?? null;
+
   let recorded = 0;
   for (const event of events) {
     const isNewView = await deps.postService.recordView(event.postId, actor.userId, event.durationMs, {
@@ -201,7 +235,7 @@ async function applyViews(
           enhancedLogger.warn('[POST /social/events]: mark post notifications as read failed', { err }));
     }
 
-    await broadcastStoryViewed(deps, event.postId, actor);
+    await broadcastStoryViewed(deps, event.postId, actor, separated);
   }
   return recorded;
 }
@@ -219,9 +253,14 @@ async function broadcastStoryViewed(
   deps: SocialEventsDeps,
   targetId: string,
   actor: Extract<SocialEventsActor, { kind: 'user' }>,
+  separated: readonly string[] | null,
 ): Promise<void> {
   const socialEvents = deps.fastify.socialEvents;
   if (!socialEvents) return;
+
+  /* La vue est DÉJÀ enregistrée — on ne la perd pas pour une séparation
+     illisible : on se contente de ne rien ANNONCER (#20429). */
+  if (separated === null) return;
 
   try {
     // Le viewer est PASSÉ : sans lui, `getPostById` applique le filtre
@@ -231,13 +270,30 @@ async function broadcastStoryViewed(
     const post = await deps.postService.getPostById(targetId, actor.userId);
     if (!post || post.type !== 'STORY' || post.authorId === actor.userId) return;
 
+    /* #20443 — LA CHARGE NE NOMME PERSONNE. Ce site posait `actor.userId` et
+       `actor.username`, sous la seule loi du BLOCAGE, quand la jumelle DURABLE
+       de cet événement (la liste « Vu par », `services/posts/namedViewers.ts`)
+       ne nomme un viewer que si la paire atteint `views.identity` (Communauté)
+       et agrège tous les autres dans `publicViewCount` : un viewer PUBLIC
+       était anonyme sur le REST et nommé sur le fil.
+       La réparation retire la DONNÉE au lieu d'aligner la garde — aucun des
+       trois clients ne lit ces deux champs (mesuré, cf. le doc-comment de
+       `StoryViewedEventData`), et les servir sous une loi de cercles aurait
+       coûté une lecture `pairAccess` par auteur distinct du lot pour alimenter
+       un champ que personne n'affiche. C'est un coût de DÉBIT, et pas un
+       élargissement notable de la fenêtre de #20414 : cette fenêtre préexiste
+       et le `getPostById` ci-dessus — la lecture LOURDE — y est déjà.
+       Les deux clés restent présentes, à la chaîne vide : les décodeurs iOS
+       ET Android déployés exigent leur PRÉSENCE (`String` non optionnel d'un
+       côté, `String` sans défaut de l'autre), et les omettre emporterait
+       `viewCount` — le seul champ lu. Leur retrait est #20453. */
     safeBroadcast('story:viewed', () => {
       socialEvents.broadcastStoryViewed({
         storyId: targetId,
-        viewerId: actor.userId,
-        viewerUsername: actor.username,
+        viewerId: '',
+        viewerUsername: '',
         viewCount: post.viewCount,
-      }, post.authorId);
+      }, post.authorId, separated);
     });
   } catch (err) {
     enhancedLogger.warn(
@@ -803,7 +859,7 @@ export async function resolveActor(
 ): Promise<SocialEventsActor | undefined> {
   const registeredUser = (request as UnifiedAuthRequest).authContext?.registeredUser;
   if (registeredUser) {
-    return { kind: 'user', userId: registeredUser.id, username: registeredUser.username ?? '' };
+    return { kind: 'user', userId: registeredUser.id };
   }
   return resolveAnonymousReader(prisma as never, request);
 }

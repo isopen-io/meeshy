@@ -2,7 +2,9 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// La face Liens de MA fiche (#18871, planche `Moi-Liens`) : ce qui amène vers moi.
+/// Mes liens (#18871, planche `Moi-Liens`) : ce qui amène vers moi. La page « Mes liens » les montre tous ; sur ma
+/// fiche, la face Liens n'existe plus (#20177) : le billet de mon lien et mes liens créés se posent en tête de la face
+/// Actions (`showsAddresses: false`), et « Mes adresses » vit sur la Vitrine.
 ///
 /// Faite du kit (loi 12) : mon lien de profil sur un billet héros (K30) avec son QR (K31) et ses quatre gestes libellés
 /// (K32) — Copier, QR, Envoyer, Sans contact —, « Mes adresses » en billets compacts sur un rail, « Liens créés » en
@@ -14,6 +16,8 @@ import MeeshyUI
 struct ProfileLinksFace: View {
     let user: MeeshyUser?
     let accentColor: String
+    /// « Mes adresses » : sur la page « Mes liens » ; sur ma fiche, la Vitrine les porte.
+    let showsAddresses: Bool
     /// Une demande de création venue d'ailleurs (le bouton à côté du sélecteur de faces) : ouverte, puis consommée.
     let createRequested: Binding<Bool>
     let onOpen: (Route) -> Void
@@ -24,12 +28,13 @@ struct ProfileLinksFace: View {
     @State private var presented: ProfileLinksPresented?
     @State private var sent: SharedContentWrapper?
 
-    init(user: MeeshyUser?, accentColor: String,
+    init(user: MeeshyUser?, accentColor: String, showsAddresses: Bool = true,
          createRequested: Binding<Bool> = .constant(false),
          links: ProfileLinksFaceModel? = nil, addresses: ProfileAddressesStore = .shared,
          visits: ProfileLinkVisitsModel? = nil, onOpen: @escaping (Route) -> Void) {
         self.user = user
         self.accentColor = accentColor
+        self.showsAddresses = showsAddresses
         self.createRequested = createRequested
         self.onOpen = onOpen
         _links = StateObject(wrappedValue: links ?? ProfileLinksFaceModel())
@@ -48,9 +53,11 @@ struct ProfileLinksFace: View {
                 }
                 .meeshyCascade(rank: 1)
             }
-            ProfileAddressesRail(store: addresses, accent: accent, accountId: user?.id,
-                                 onManage: { onOpen(.myAddresses) })
-                .meeshyCascade(rank: 2)
+            if showsAddresses {
+                ProfileAddressesRail(store: addresses, accent: accent, accountId: user?.id,
+                                     onManage: { onOpen(.myAddresses) })
+                    .meeshyCascade(rank: 2)
+            }
             ProfileCreatedLinks(model: links, accent: accent, onOpen: onOpen,
                                 onCreate: { presented = .create })
                 .meeshyCascade(rank: 3)
@@ -72,9 +79,14 @@ struct ProfileLinksFace: View {
 
     private func loadAll() async {
         async let created: Void = links.load()
-        async let mine: Void = addresses.load()
+        async let mine: Void = loadAddresses()
         async let counted: Void = visits.load(ownerId: user?.id, link: profileLink)
         _ = await (created, mine, counted)
+    }
+
+    private func loadAddresses() async {
+        guard showsAddresses else { return }
+        await addresses.load()
     }
 
     // MARK: - Mon lien de profil

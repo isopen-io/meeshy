@@ -431,10 +431,102 @@ export interface StoryDeletedEventData {
   readonly authorId: string;
 }
 
+/**
+ * `story:viewed` — **L'AUTEUR SUIT SON COMPTEUR, ET LA CHARGE NE NOMME
+ * PERSONNE** (#20443).
+ *
+ * Cette charge était la plus NOMINATIVE des huit familles d'activité : là où
+ * les sept autres ne portent qu'un `userId`, elle nommait le viewer par son id
+ * **et son pseudo**. Elle le faisait sous la loi du **BLOCAGE** (#20429), quand
+ * sa jumelle DURABLE — la liste « Vu par » servie au même auteur — ne nomme
+ * un viewer que si le niveau effectif de la paire atteint `views.identity`
+ * (Communauté), et agrège tous les autres dans `publicViewCount`
+ * (`services/gateway/src/services/posts/namedViewers.ts`). Le direct était donc
+ * strictement plus FAIBLE que le durable, sur sa charge la plus exposée : un
+ * viewer PUBLIC, sans aucune relation avec l'auteur, était anonyme sur le REST
+ * et nommé sur le fil.
+ *
+ * **Le choix n'est pas d'aligner la garde, c'est de retirer la donnée.** Mesuré
+ * le 2026-11-22 sur les trois clients : AUCUN ne lit ces deux champs — le web
+ * les refuse jusque dans son type de garde (`isStoryViewedEvent` n'exige que
+ * `storyId` et `viewCount`), iOS lit `storyId`/`viewCount`
+ * (`StoryViewModel+TrayRules.applyViewed`, `PublicationViewersSheet`), et
+ * Android, qui s'y ABONNE bien (`SocialSocketManager.kt` route l'événement vers
+ * `_storyViewed`), ne lit que `storyId` et `viewCount` dans son unique
+ * collecteur (`StoriesViewModel.kt:173`) — son `SocketStoryViewedData`
+ * (`core/model/.../SocketEvents.kt:751`) ne DÉCLARE même pas
+ * `viewerUsername`. Servir
+ * une identité sous une loi de cercles aurait coûté une lecture `pairAccess`
+ * par auteur distinct du lot, sur le chemin le plus chaud du social, pour
+ * alimenter un champ que personne n'affiche. Précédent exact : #14319, « une
+ * traduction en clair n'a rien à faire dans une charge que personne
+ * n'affiche ».
+ *
+ * **Ce que cette troisième jambe ne dit PAS, parce qu'un premier jet le disait
+ * et que c'était surévalué** (relevé par l'audit adversarial du lot) : elle
+ * n'« élargit » pas la fenêtre de réordonnancement de #20414 à un degré qui
+ * pèse dans la décision. Cette fenêtre PRÉEXISTE et elle est déjà large —
+ * `applyViews` appelle la diffusion DANS sa boucle, et chaque appel fait déjà
+ * `getPostById`, que son propre doc-comment décrit comme « la lecture LOURDE
+ * du détail ». Une lecture `pairAccess` de plus est marginale devant celles-là.
+ * Le coût réel est un coût de DÉBIT, pas d'ordonnancement, et la décision tient
+ * sur ses deux autres jambes — aucun lecteur mesuré, et le précédent #14319.
+ * Publier une justification plus forte que ce qu'elle mesure est la faute du
+ * cycle 221, et elle se paie en confiance sur les cycles où la mesure dit vrai.
+ *
+ * **Les deux clés RESTENT, et portent la chaîne vide — c'est la
+ * rétrocompatibilité (#9223), pas une hésitation.** DEUX clients déployés
+ * exigent la PRÉSENCE de `viewerId`, chacun par sa propre mécanique : iOS le
+ * déclare `String` non optionnel
+ * (`packages/MeeshySDK/Sources/MeeshySDK/Sockets/SocialSocketEvents.swift`), et
+ * Android le déclare `String` SANS DÉFAUT, donc requis par
+ * kotlinx.serialization (`MissingFieldException`). Les omettre ferait échouer
+ * le décodage de l'événement ENTIER sur ces deux clients, et emporterait
+ * `viewCount` — le seul champ qu'ils lisent. Ne pas LIRE un champ et ne pas
+ * EXIGER sa présence sont deux propriétés distinctes : c'est la seconde qui
+ * interdit la bascule sèche. Le type LITTÉRAL `''` encode les deux
+ * moitiés de la décision d'un coup : aucune identité ne peut y être écrite
+ * (`TS2322`), et aucune clé ne peut être omise (`TS2345`, le champ étant
+ * requis). Leur RETRAIT est un lot d'après : clients rendus tolérants, versions
+ * déployées mesurées, puis clés retirées — jamais de bascule sèche (#20453).
+ *
+ * **Aucune constante ne double ce type, et c'est une décision.** Un premier jet
+ * exportait un `ANONYMOUS_STORY_VIEWER` que les producteurs répandaient ; le
+ * cliquet d'exports de `__tests__/types/post.test.ts` l'a fait tomber, et il
+ * avait raison. Ce module est presque entièrement du type effacé à la
+ * compilation : une valeur d'exécution y transforme un import de TYPE en import
+ * de CODE, et n'a droit d'exister que si elle garde quelque chose que le type
+ * ne peut pas garder. Ici le type garde TOUT — `''` interdit l'identité comme
+ * l'omission — donc la constante ne faisait que nommer ce que le compilateur
+ * imposait déjà. Les deux champs s'écrivent en clair au site d'émission.
+ *
+ * **La PORTÉE de ce cliquet, parce qu'un cliquet dont la portée n'est pas
+ * écrite se lit comme une garde complète** (mesuré par l'audit du lot) :
+ *
+ * - Il porte sur le `src/` de PRODUCTION de la passerelle, par son `tsc`
+ *   bloquant — et sur rien d'autre. `services/gateway/tsconfig.json` exclut
+ *   `__tests__`, et `jest.config.json` amnistie `2322` et `2345` dans
+ *   `ignoreCodes` : ce sont EXACTEMENT les deux codes ci-dessus. **Aucun
+ *   fichier de test n'est tenu par ce type**, et c'est là que deux harnais
+ *   avaient survécu en attestant le contrat mort.
+ * - Un `as any` sur l'argument remis au diffuseur passe le compilateur.
+ *   `sweepErasingEmitArgumentCasts` ne garde que les arguments de `.emit(`,
+ *   pas ceux d'une méthode de diffusion. Ce qui le retient est un témoin de
+ *   COMPORTEMENT (« ni l'id ni le pseudo ne partent », harnais de route), pas
+ *   un type — donc le témoin, pas le cliquet, est ce qui tient ce trou.
+ *
+ * Le gate de SÉPARATION de #20429 reste en place et n'est pas touché ici : la
+ * raison qui l'a motivé (une charge nominative) a disparu, mais le MOMENT d'un
+ * compteur qui bouge est lui-même un signal d'activité — c'est la définition
+ * même des huit familles — et une personne bloquée ne doit pas faire bouger le
+ * compteur que l'auteur regarde.
+ */
 export interface StoryViewedEventData {
   readonly storyId: string;
-  readonly viewerId: string;
-  readonly viewerUsername: string;
+  /** Toujours `''` : le type EST la décision, il n'y a rien d'autre à écrire. */
+  readonly viewerId: '';
+  /** Toujours `''` : le type EST la décision, il n'y a rien d'autre à écrire. */
+  readonly viewerUsername: '';
   readonly viewCount: number;
 }
 

@@ -121,6 +121,26 @@ struct GameBlockModelsTests {
         #expect(!GameFlame.announcesFreezeGift(freezeGifted: nil, guideSeen: []))
     }
 
+    @Test("l'Offrande gardée par les aïeux se lit quand la passerelle la sert ; un serveur antérieur ne la sert pas (#20403)")
+    func chestKeptIsReadAndTolerant() throws {
+        let kept = GameBlockFixture.json.replacingOccurrences(of: "\"reward\":null},\"flame\"", with: "\"reward\":null,\"kept\":true},\"flame\"")
+        let parsed = try #require(GameBlock.parse(Data(kept.utf8)))
+        #expect(parsed.chest.kept == true)
+        #expect(try #require(GameBlock.parse(GameBlockFixture.data)).chest.kept == nil)
+        let roundTrip = try JSONDecoder().decode(GameBlock.Chest.self, from: JSONEncoder().encode(parsed.chest))
+        #expect(roundTrip.kept == true)
+    }
+
+    @Test("l'Offrande gardée s'annonce tant qu'elle est prête, jamais ouverte ni devant un serveur antérieur (#20403)")
+    func keptOfferingIsAnnouncedWhileReady() {
+        #expect(GameWelcomeBack.easedDays == 3)
+        #expect(GameWelcomeBack.announcesKeptOffering(kept: true, status: .ready))
+        #expect(!GameWelcomeBack.announcesKeptOffering(kept: true, status: .claimed))
+        #expect(!GameWelcomeBack.announcesKeptOffering(kept: true, status: .locked))
+        #expect(!GameWelcomeBack.announcesKeptOffering(kept: false, status: .ready))
+        #expect(!GameWelcomeBack.announcesKeptOffering(kept: nil, status: .ready))
+    }
+
     @Test("un signal de mission inconnu reste une chaîne : l'écran ne casse pas")
     func unknownSignalSurvives() throws {
         let patched = GameBlockFixture.json.replacingOccurrences(of: "reply-distinct-conversations", with: "signal-du-futur")

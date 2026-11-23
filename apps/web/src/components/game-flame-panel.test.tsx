@@ -132,3 +132,49 @@ describe('le rallumage', () => {
     expect(text(html)).toContain('Une nouvelle Flamme commence');
   });
 });
+
+describe('le rallumage par l’effort (#20471)', () => {
+  test('éteinte, la fenêtre ouverte : combien de rêves complets la rallument, et jusqu’à quand', () => {
+    const page = text(renderToStaticMarkup(<GameFlamePanel {...props({ ...out, balance: 5, effortDreamDays: [] })} />));
+    expect(page).toContain('Encore 2 rêves complets d’ici demain soir et ta Flamme de 9 jours revient, sans payer.');
+    expect(page).toContain('Rallumer la Flamme · 3 Meesh');
+  });
+
+  test('le dernier jour, un rêve fait : « aujourd’hui », au singulier', () => {
+    const lastDay = { streak: 1, lastActiveDay: '2026-10-04', broken: { streak: 9, lastActiveDay: '2026-10-02' }, freezes: 0 } as const;
+    const page = text(renderToStaticMarkup(<GameFlamePanel {...props({ ...lastDay, effortDreamDays: ['2026-10-04'] })} />));
+    expect(page).toContain('Encore 1 rêve complet aujourd’hui et ta Flamme de 9 jours revient, sans payer.');
+  });
+
+  test('sans de quoi payer, l’effort la rallume encore : jamais « ne peut plus être rallumée »', () => {
+    const page = text(renderToStaticMarkup(<GameFlamePanel {...props({ ...out, balance: 5, lastRelightDay: '2026-10-01', effortDreamDays: [] })} />));
+    expect(page).toContain('Encore 2 rêves complets');
+    expect(page).not.toContain('ne peut plus être rallumée');
+  });
+
+  test('une forme illisible se tait : rien de neuf ne s’affiche', async () => {
+    const { readEffortRelight } = await import('@/lib/view/game-copy');
+    expect(readEffortRelight({ lostDays: 9, dreamsDone: 0, dreamsNeeded: 2, closesOn: '2026-10-05', daysLeft: 1 })).toEqual({ lostDays: 9, dreamsDone: 0, dreamsNeeded: 2, closesOn: '2026-10-05', daysLeft: 1 });
+    expect(readEffortRelight({ lostDays: 0, dreamsDone: 0, dreamsNeeded: 2, closesOn: '2026-10-05', daysLeft: 1 })).toBeNull();
+    expect(readEffortRelight({ lostDays: 9, dreamsDone: 0, dreamsNeeded: 2, closesOn: 'demain', daysLeft: 1 })).toBeNull();
+    expect(readEffortRelight(null)).toBeNull();
+  });
+
+  test('devant un serveur qui ne le sert pas, rien de neuf ne s’affiche', () => {
+    expect(text(renderToStaticMarkup(<GameFlamePanel {...props({ ...out, balance: 5 })} />))).not.toContain('rêve complet');
+  });
+
+  test('dit dans les sept langues', async () => {
+    const { loadGameCatalog, translateGame, translateGamePlural } = await import('@/lib/i18n-game-catalog');
+    const languages = ['fr', 'en', 'es', 'pt', 'it', 'de', 'ar'] as const;
+    await Promise.all(languages.map((language) => loadGameCatalog(language)));
+    for (const language of languages) {
+      const dreams = translateGamePlural(language, 'game.flame_panel.effort_dreams', 2);
+      for (const key of ['game.flame_panel.effort_relight_today', 'game.flame_panel.effort_relight_tomorrow'] as const) {
+        const line = translateGame(language, key, { dreams, days: '9' });
+        expect(line).toContain(dreams);
+        expect(line).not.toContain('{');
+      }
+    }
+  });
+});

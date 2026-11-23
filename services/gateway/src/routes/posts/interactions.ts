@@ -119,6 +119,10 @@ export function registerInteractionRoutes(
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
       const targetPostId = target.id;
+      /* AVANT la mutation (#20338, patron de #20236) : charge ABSOLUE, donc un réordonnancement fige un compteur faux que iOS persiste. */
+      const activiteSeparee = fastify.socialEvents
+        ? await fastify.socialEvents.activitySeparation(authContext.registeredUser.id, target.authorId)
+        : null;
 
       // Idempotent via clientMutationId. `likePost` is naturally
       // idempotent at the storage layer (the reaction set keeps a
@@ -157,6 +161,7 @@ export function registerInteractionRoutes(
         op: async () => {
           // #9584 — venu d'une republication simple, le like la crédite AUSSI,
           // pour de vrai : la résolution ci-dessus l'a traversée et la rend.
+
           const res = await postService.likePost(targetPostId, authContext.registeredUser.id, emoji, { through: target.redirectedFrom });
           if (!res) throw new Error('POST_NOT_FOUND');
           // Les deux branches rendent la MÊME forme de post : `likePost` porte
@@ -208,14 +213,14 @@ export function registerInteractionRoutes(
             userId: authContext.registeredUser.id,
             emoji,
             ...counters,
-          }, post.authorId);
+          }, post.authorId, activiteSeparee);
         } else if (post.type === 'STATUS') {
           socialEvents.broadcastStatusReacted({
             statusId: targetPostId,
             userId: authContext.registeredUser.id,
             emoji,
             ...counters,
-          }, post.authorId);
+          }, post.authorId, activiteSeparee);
         } else {
           // L'audience du broadcast vient de `target`, la tranche ACL de la
           // CIBLE réelle déjà chargée plus haut par `resolveInteractionTarget`
@@ -226,7 +231,7 @@ export function registerInteractionRoutes(
             userId: authContext.registeredUser.id,
             emoji,
             ...counters,
-          }, post.authorId, target.visibility, target.visibilityUserIds,
+          }, post.authorId, target.visibility, target.visibilityUserIds, activiteSeparee,
           ).catch((err) => enhancedLogger.warn('[POST /posts/:postId/like]: broadcast post liked failed', { err }));
         }
       }
@@ -310,6 +315,10 @@ export function registerInteractionRoutes(
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
       const targetPostId = target.id;
+      /* AVANT la mutation, même raison que la pose (#20338) : ordre, charge absolue. */
+      const activiteSeparee = fastify.socialEvents
+        ? await fastify.socialEvents.activitySeparation(authContext.registeredUser.id, target.authorId)
+        : null;
 
       // Idempotent via clientMutationId. Unlike is also naturally
       // idempotent — re-running over an already-unliked post is a
@@ -366,14 +375,14 @@ export function registerInteractionRoutes(
             userId: authContext.registeredUser.id,
             emoji: removedEmoji,
             ...counters,
-          }, post.authorId);
+          }, post.authorId, activiteSeparee);
         } else if (post.type === 'STATUS') {
           socialEvents.broadcastStatusUnreacted({
             statusId: targetPostId,
             userId: authContext.registeredUser.id,
             emoji: removedEmoji,
             ...counters,
-          }, post.authorId);
+          }, post.authorId, activiteSeparee);
         } else {
           // Même source que le jumeau `POST` : la tranche ACL de la CIBLE
           // réelle chargée pour la garde, jamais un défaut reconstruit au
@@ -383,7 +392,7 @@ export function registerInteractionRoutes(
             userId: authContext.registeredUser.id,
             emoji: removedEmoji,
             ...counters,
-          }, post.authorId, target.visibility, target.visibilityUserIds,
+          }, post.authorId, target.visibility, target.visibilityUserIds, activiteSeparee,
           ).catch((err) => enhancedLogger.warn('[DELETE /posts/:postId/like]: broadcast post unliked failed', { err }));
         }
       }
@@ -414,7 +423,7 @@ export function registerInteractionRoutes(
   const acteurInscrit = (request: FastifyRequest): SocialEventsActor | null => {
     const registeredUser = (request as UnifiedAuthRequest).authContext?.registeredUser;
     return registeredUser
-      ? { kind: 'user', userId: registeredUser.id, username: registeredUser.username ?? '' }
+      ? { kind: 'user', userId: registeredUser.id }
       : null;
   };
 

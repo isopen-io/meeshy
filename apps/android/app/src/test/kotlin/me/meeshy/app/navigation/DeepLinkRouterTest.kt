@@ -27,8 +27,10 @@ class DeepLinkRouterTest {
         D.Post("p1") to navigate(Routes.postDetail("p1")),
         D.PostDetail("p1") to navigate(Routes.postDetail("p1")),
         D.StoryDetail("s1") to navigate(Routes.postDetail("s1")),
+        D.Mood("m1") to navigate(Routes.moodSpotlight("m1")),
         D.Reel("r1") to navigate("reels?seed=r1"),
         D.Community("k1") to navigate(CommunityRoutes.detail("k1")),
+        D.Community("k1", viaLink = true) to navigate("community/k1?via=link"),
         D.RecentConversation to DeepLinkAction.OpenRecentConversation,
         D.UnreadConversations to DeepLinkAction.OpenUnreadConversations,
         D.Hashtag("paris") to navigate("hashtag/paris"),
@@ -58,6 +60,7 @@ class DeepLinkRouterTest {
             "https://meeshy.me/s/s1", "https://meeshy.me/users/bob", "https://meeshy.me/me", "https://meeshy.me/reels?seed=r1",
             "meeshy://conversations/recent", "meeshy://conversations/unread", "meeshy://quickreply/c1?text=hi",
             "meeshy://send?contactId=c1&message=hi", "meeshy://contact/c1", "https://meeshy.me/signup?ref=CODE",
+            "https://meeshy.me/mood/m1",
         ).forEach { assertThat(DeepLinkRouter.ownsLink(it)).isTrue() }
     }
 

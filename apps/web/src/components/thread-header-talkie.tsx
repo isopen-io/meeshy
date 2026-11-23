@@ -11,9 +11,9 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { createTalkieCapture, talkieEncodingSupportedOnce } from '@/lib/talkie/talkie-encoder';
 import { resolveTalkieHeaderDelivery, resolveTalkieHeaderVoice } from '@/lib/talkie/talkie-header-law';
 import { talkieStore, type TalkieStoreApi } from '@/lib/talkie/talkie-live';
-import type { TalkieCaptureFactory, TalkieSendOutcome, TalkieVoiceCopier } from '@/lib/talkie/talkie-sender';
+import type { TalkieCaptureFactory, TalkiePressMode, TalkieSendOutcome, TalkieVoiceCopier } from '@/lib/talkie/talkie-sender';
 import { useCirclesCatalog } from '@/lib/use-circles-catalog';
-import { talkieHoldHandlers, talkieOfferedAt, TALKIE_OUTCOME_NOTICE, useTalkieSender } from '@/routes/user-profile-talkie';
+import { talkieHoldHandlers, talkieOfferedAt, talkieOutcomeNotice, useTalkiePressMode, useTalkieSender } from '@/routes/user-profile-talkie';
 
 import { CHROME_ACTION_HIT_CLASS } from './chrome-action';
 import { GlyphSvg } from './glyph';
@@ -36,6 +36,7 @@ export { TalkieHeaderBand, talkieAnnouncement, THREAD_TALKIE_REST, type ThreadTa
  * - L'en-tête n'a pas de place pour une phrase : le réveil d'un pair hors ligne
  *   et les issues se disent dans un bandeau neutre posé sous la barre.
  * - Le (i) du talkie ne vit que sur la fiche.
+ * - Téléphone du pair injoignable depuis cinq minutes (#20241) : le même geste laisse un message vocal dans le direct.
  */
 
 function useEncodes(supported: () => Promise<boolean>): boolean | null {
@@ -85,10 +86,16 @@ export function ThreadHeaderTalkie({
   const [refused, setRefused] = useState(false);
   const [notice, announceNotice] = useTransientNotice();
   const captureRef = useRef(capture);
+  const mode = useTalkiePressMode(peerId);
+  const pressedMode = useRef<TalkiePressMode>(mode);
 
   const onOutcome = (outcome: TalkieSendOutcome): void => {
     if (outcome === 'not-allowed') return setRefused(true);
-    announceNotice(translateCircles(language, TALKIE_OUTCOME_NOTICE[outcome]));
+    announceNotice(translateCircles(language, talkieOutcomeNotice(outcome, pressedMode.current)));
+  };
+  const press = (): void => {
+    pressedMode.current = mode;
+    sender.press(peerId, { mode });
   };
   const sender = useTalkieSender({ watch, capture: captureRef.current, onOutcome, language, ...(copier === undefined ? {} : { copier }) });
   const phase = useStore(sender.store, (state) => state.phase.kind);
@@ -115,8 +122,8 @@ export function ThreadHeaderTalkie({
           type="button"
           data-thread-talkie=""
           aria-pressed={pressed}
-          aria-label={translateCircles(language, 'talkie.send.hold.a11y', { name: peerName })}
-          {...talkieHoldHandlers({ onPress: () => sender.press(peerId), onRelease: () => void sender.release() })}
+          aria-label={translateCircles(language, mode === 'voice-message' ? 'talkie.send.leaveVoice.a11y' : 'talkie.send.hold.a11y', { name: peerName })}
+          {...talkieHoldHandlers({ onPress: press, onRelease: () => void sender.release() })}
           className={`${CHROME_ACTION_HIT_CLASS} select-none focus-visible:outline-2 focus-visible:outline-offset-2`}
           style={{ color: 'var(--accent)', outlineColor: 'var(--accent)', touchAction: 'none', WebkitTouchCallout: 'none' }}
         >

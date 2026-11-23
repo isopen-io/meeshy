@@ -7,8 +7,10 @@ import MeeshySDK
 @MainActor
 final class RelationFaceTests: XCTestCase {
 
-    func test_allCases_readVitrineThenLinksThenActions() {
-        XCTAssertEqual(RelationFace.allCases, [.vitrine, .links, .actions])
+    /// #20177 — deux faces : ce que la face Liens portait se range dans la Vitrine (ses adresses, ses communautés) et
+    /// dans les Actions (« Sa fiche » : envoyer, copier, son QR).
+    func test_allCases_areTheVitrineThenTheActions_theLinksFaceIsGone() {
+        XCTAssertEqual(RelationFace.allCases, [.vitrine, .actions])
     }
 
     func test_faceChange_contentSlidesInTheOrderOfTheFaces() {
@@ -16,8 +18,7 @@ final class RelationFaceTests: XCTestCase {
         func travel(_ from: RelationFace, _ to: RelationFace) -> MeeshySegmentedTravel {
             MeeshySegmentedLaw.travel(from: order.firstIndex(of: from), to: order.firstIndex(of: to))
         }
-        XCTAssertEqual(travel(.vitrine, .links), .forward)
-        XCTAssertEqual(travel(.links, .actions), .forward)
+        XCTAssertEqual(travel(.vitrine, .actions), .forward)
         XCTAssertEqual(travel(.actions, .vitrine), .backward)
         XCTAssertEqual(travel(.vitrine, .vitrine), MeeshySegmentedTravel.none)
     }
@@ -34,7 +35,6 @@ final class RelationFaceTests: XCTestCase {
 
     func test_shown_isAlwaysTheVitrine_onMyOwnSheet() {
         XCTAssertEqual(RelationFace.shown(.actions, isCurrentUser: true), .vitrine)
-        XCTAssertEqual(RelationFace.shown(.links, isCurrentUser: true), .vitrine)
         XCTAssertEqual(RelationFace.shown(.actions, isCurrentUser: false), .actions)
     }
 
@@ -44,11 +44,40 @@ final class RelationFaceTests: XCTestCase {
         XCTAssertFalse(RelationFace.showsRelationPill(isCurrentUser: false, isBlocked: true))
     }
 
-    func test_writeShortcut_sitsBesideTheSelector_onTheVitrineOnly() {
-        XCTAssertTrue(RelationFace.vitrine.offersWriteShortcut(isInteractionDisabled: false))
-        XCTAssertFalse(RelationFace.links.offersWriteShortcut(isInteractionDisabled: false))
-        XCTAssertFalse(RelationFace.actions.offersWriteShortcut(isInteractionDisabled: false))
-        XCTAssertFalse(RelationFace.vitrine.offersWriteShortcut(isInteractionDisabled: true))
+    /// #20177 — à droite du sélecteur : « Parler » sur la Vitrine, « Partager le profil » sur les Actions.
+    func test_accessory_onTheVitrine_isTalk_whenWritingIsReachable() {
+        XCTAssertEqual(RelationFace.vitrine.accessory(isInteractionDisabled: false, canTalk: true, hasLink: true), .talk)
+        XCTAssertEqual(RelationFace.vitrine.accessory(isInteractionDisabled: false, canTalk: true, hasLink: false), .talk)
+    }
+
+    func test_accessory_onTheVitrine_isAbsent_whenBlockedOrUnreachable() {
+        XCTAssertNil(RelationFace.vitrine.accessory(isInteractionDisabled: true, canTalk: true, hasLink: true))
+        XCTAssertNil(RelationFace.vitrine.accessory(isInteractionDisabled: false, canTalk: false, hasLink: true))
+    }
+
+    func test_accessory_onTheActions_isShareTheProfile_whenItHasALink() {
+        XCTAssertEqual(RelationFace.actions.accessory(isInteractionDisabled: false, canTalk: true, hasLink: true), .share)
+        XCTAssertEqual(RelationFace.actions.accessory(isInteractionDisabled: true, canTalk: false, hasLink: true), .share)
+        XCTAssertNil(RelationFace.actions.accessory(isInteractionDisabled: false, canTalk: true, hasLink: false))
+    }
+
+    func test_accessories_sayTalkAndShare_withTheirOwnGlyphs() {
+        XCTAssertEqual(RelationFaceAccessory.talk.label, RelationFaceAccessory.talkLabel)
+        XCTAssertEqual(RelationFaceAccessory.share.label, RelationFaceAccessory.shareLabel)
+        XCTAssertNotEqual(RelationFaceAccessory.talk.label, RelationFaceAccessory.share.label)
+        XCTAssertEqual(RelationFaceAccessory.talk.systemImage, "bubble.left.fill")
+        XCTAssertEqual(RelationFaceAccessory.share.systemImage, "square.and.arrow.up")
+    }
+
+    /// Une action n'a qu'une place : « Écrire » ne vit plus qu'au bouton « Parler », Appeler, Vidéo et la carte ne vivent
+    /// plus que sur la face Actions, et « Sa fiche » est le seul endroit d'Envoyer, Copier et QR.
+    func test_noActionIsRepeated_acrossTheTwoFaces() throws {
+        let vitrine = try source("UserProfileSheet+DetailsTab.swift")
+        XCTAssertFalse(vitrine.contains("withThemSection"), "la carte « Avec X » redisait Écrire, Appeler, Vidéo, Carte")
+        let actions = try source("UserProfileSheet+ActionsFace.swift")
+        XCTAssertFalse(actions.contains("operation: .write"), "Écrire vit au bouton Parler de la Vitrine")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: sourceURL("UserProfileSheet+LinksFace.swift").path))
+        XCTAssertTrue(vitrine.contains("RelationReachSection.of(self)"), "ses adresses et ses communautés sur la Vitrine")
     }
 
     func test_everyFace_hasATitleAndTwoGlyphs() {
@@ -99,12 +128,11 @@ final class RelationFaceTests: XCTestCase {
         XCTAssertTrue(try source("ProfileTalkAction.swift").contains("MeeshyLabeledAction("))
         XCTAssertTrue(try source("ProfileActionsFaceParts.swift").contains("MeeshyButton("))
         XCTAssertTrue(try source("ProfileNextCircles.swift").contains("MeeshyMedallion("))
-        for file in ["UserProfileSheet+ActionsFace.swift", "UserProfileSheet+LinksFace.swift", "ProfileInCommonSection.swift",
+        for file in ["UserProfileSheet+ActionsFace.swift", "RelationReachSection.swift", "ProfileInCommonSection.swift",
                      "ProfileNextCircles.swift"] {
             XCTAssertFalse(try source(file).contains("MeeshyLockedRow("), "\(file)")
             XCTAssertFalse(try source(file).contains("LockedRows("), "\(file)")
         }
-        XCTAssertTrue(try source("UserProfileSheet+LinksFace.swift").contains("MeeshyTicket("))
         let sheet = try source("UserProfileSheet.swift")
         XCTAssertTrue(sheet.contains("RelationFaceSelector(face: $face"))
         XCTAssertFalse(sheet.contains("pinnedTabBar"))
@@ -120,13 +148,16 @@ final class RelationFaceTests: XCTestCase {
         XCTAssertTrue(vitrine.contains("postsTab"))
     }
 
-    private func source(_ name: String) throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
+    private func sourceURL(_ name: String) -> URL {
+        URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Sources/MeeshyUI/Profile/\(name)")
-        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func source(_ name: String) throws -> String {
+        try String(contentsOf: sourceURL(name), encoding: .utf8)
     }
 }

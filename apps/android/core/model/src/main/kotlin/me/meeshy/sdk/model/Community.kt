@@ -71,6 +71,8 @@ data class ApiCommunity(
      * (#19879, lue ici pour #19949) ; `null` pour un membre, une demande en attente ou un ancien serveur.
      */
     val currentUserJoinRetryAt: String? = null,
+    /** Un intendant a mis en pause les arrivées par le lien (#19661, lu ici pour #20332) ; `null` = ancien serveur. */
+    val joinLinkPaused: Boolean? = null,
 ) {
     /** Le lecteur attend la réponse à sa demande d'entrée — jamais quand il est déjà membre. */
     val hasPendingJoinRequest: Boolean get() = currentUserJoinRequest == PENDING_JOIN_REQUEST

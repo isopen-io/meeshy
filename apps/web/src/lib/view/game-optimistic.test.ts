@@ -186,6 +186,13 @@ describe('la Flamme', () => {
     expect(gameOf(after).treasury.held).toBe(5 - gameOf(out).flame.relightPrice);
   });
 
+  test('rallumer paie le raccourci : le rallumage par l’effort ne se dit plus (#20471)', () => {
+    const out = view({ streak: 9, lastActiveDay: '2026-10-03', broken: { streak: 9, lastActiveDay: '2026-10-03' }, freezes: 0, balance: 5, effortDreamDays: [] });
+    expect(gameOf(out).flame.effortRelight).toBeDefined();
+    expect('effortRelight' in gameOf(afterRelight(out)).flame).toBe(false);
+    expect('effortRelight' in gameOf(withRelit(out, 9, 2)).flame).toBe(false);
+  });
+
   test('la série servie fixe les jours, la forme et le bonus', () => {
     const out = view({ streak: 9, lastActiveDay: '2026-10-03', broken: { streak: 9, lastActiveDay: '2026-10-03' }, freezes: 0 });
     const after = withRelit(afterRelight(out), 9, 2);

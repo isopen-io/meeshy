@@ -5391,6 +5391,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/posts/:postId/og",
+      "module": "linksRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S0",
+        "S1"
+      ],
+      "securityBasisKey": "no-standard-auth-hook",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/posts/:postId/views",
       "module": "anonyme~10",
       "mountPrefix": "/api/v1",

@@ -70,7 +70,7 @@ public object GamePhotoMomentsV2 {
         is GuideEventV2.SeasonEnd -> if (event.completed) PhotoMomentEmblemV2.Season(event.season) else null
         is GuideEventV2.Prestige -> PhotoMomentEmblemV2.Prestige(event.prestige)
         is GuideEventV2.LeagueFirst, is GuideEventV2.LeagueRelegated, is GuideEventV2.SeasonStart, is GuideEventV2.AtlasStamp,
-        is GuideEventV2.FlameFreezeGift,
+        is GuideEventV2.FlameFreezeGift, is GuideEventV2.OfferingKept,
         -> null
     }
 

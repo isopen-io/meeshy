@@ -71,38 +71,9 @@ public struct AvatarListeningOverlay: View {
     }
 }
 
-/// « Écoute en ce moment » sur la fiche (planche `Autre-Vitrine`, #19674) : une pilule de verre posée À CÔTÉ du grand
-/// avatar, sa note et son égaliseur qui bat. Un toucher la déplie sur ce qui est écouté, tel que servi. Elle s'efface
-/// avec l'avatar quand l'en-tête se replie ; rien sans source, ni sur ma propre fiche.
-struct ProfileAvatarListening: View {
-    /// Sous ce diamètre, l'avatar est dans la barre repliée : la pilule n'y a pas sa place.
-    static let minimumAvatarSize: CGFloat = 64
-    /// La course sur laquelle elle s'efface pendant le repli.
-    static let fadeRange: CGFloat = 24
-
-    let userId: String?
-    let avatarSize: CGFloat
-    let tint: Color
-    @Environment(\.avatarListeningSource) private var source
-
-    /// L'opacité de la pilule pour un diamètre d'avatar : pleine sur le grand, nulle sous le seuil.
-    static func opacity(avatarSize: CGFloat) -> Double {
-        let shown = (avatarSize - minimumAvatarSize) / fadeRange
-        return Double(min(1, max(0, shown)))
-    }
-
-    var body: some View {
-        if let source, let userId, !userId.isEmpty, avatarSize >= Self.minimumAvatarSize {
-            ProfileListeningLive(userId: userId, source: source, tint: tint)
-                .fixedSize()
-                .offset(x: avatarSize + MeeshySpacing.md, y: -avatarSize * 0.12)
-                .opacity(Self.opacity(avatarSize: avatarSize))
-        }
-    }
-}
-
-/// La pilule abonnée à la source d'UNE personne ; rien tant qu'aucune écoute n'est servie.
-private struct ProfileListeningLive: View {
+/// L'écoute d'UNE personne sur sa fiche, abonnée à sa source : une icône (la note et l'égaliseur qui bat) tant qu'on ne
+/// la touche pas, dépliée sur ce qui est écouté au toucher (#20178) ; rien tant qu'aucune écoute n'est servie.
+struct ProfileListeningLive: View {
     let userId: String
     let source: AvatarListeningSource
     let tint: Color
@@ -142,14 +113,16 @@ private struct ProfileListeningLive: View {
                 Image(systemName: ProfileGlyph.listening)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold))
                     .foregroundStyle(tint)
-                Text(isExpanded ? band.text : ProfileListeningCopy.now)
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundStyle(theme.textPrimary)
-                    .lineLimit(1)
-                    .frame(maxWidth: ProfileListeningCopy.maxTextWidth, alignment: .leading)
+                if isExpanded {
+                    Text(band.text)
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                        .foregroundStyle(theme.textPrimary)
+                        .lineLimit(1)
+                        .frame(maxWidth: ProfileListeningCopy.maxTextWidth, alignment: .leading)
+                }
                 ProfileListeningEqualizer(tint: tint, reduceMotion: reduceMotion)
             }
-            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.horizontal, isExpanded ? MeeshySpacing.md : MeeshySpacing.sm)
             .padding(.vertical, MeeshySpacing.xsPlus)
             .meeshyGlass(in: Capsule(), tone: .theme, tint: tint, isInteractive: true)
             .meeshyTapTarget()
@@ -196,10 +169,6 @@ private struct ProfileListeningEqualizer: View {
 /// Les mots de la pilule d'écoute.
 enum ProfileListeningCopy {
     static let maxTextWidth: CGFloat = 180
-
-    static var now: String {
-        String(localized: "profile.listening.now", defaultValue: "Écoute en ce moment", bundle: .module)
-    }
 
     static var hint: String {
         String(localized: "profile.listening.a11y", defaultValue: "Touchez pour voir ce qui est écouté", bundle: .module)

@@ -299,8 +299,12 @@ export function composeMessageLabel({
         `${moodCitation.authorName !== '' ? moodCitation.authorName : translate(language, 'message.mood.label')}, ${moodCitation.emoji} ${moodCitation.text}`.trim(),
       );
     } else if (message.replyTo) {
-      const quotedAuthor = message.replyTo.sender?.displayName ?? 'expéditeur inconnu';
-      segments.push(`réponse à ${quotedAuthor}`);
+      /* « RÉPONSE À {auteur} » DESCEND LE CATALOGUE (93w, #20326) — l'auteur
+         inconnu reprend `quote.sender.unknown`, le MÊME vocabulaire que le
+         « sauter vers » du pied de citation (`message-blocks.tsx:744`), jamais
+         un « expéditeur inconnu » en dur en français. */
+      const quotedAuthor = message.replyTo.sender?.displayName ?? translate(language, 'quote.sender.unknown');
+      segments.push(translate(language, 'message.replyTo.a11y', { author: quotedAuthor }));
     }
 
     /**
@@ -333,9 +337,12 @@ export function composeMessageLabel({
      « lu »/« envoyé » en français, ni « distribué » là où le pied dit « remis ». */
   if (isMine && delivery !== null) segments.push(statusLabel(delivery, language));
 
-  /* #11375 — la modification d'un modérateur se PRONONCE comme elle se voit. */
-  if (message.isEdited) segments.push(editedByThirdParty(message) ? translate(language, 'message.editedByModerator') : 'modifié');
-  if (message.pinnedAt !== undefined) segments.push('épinglé');
+  /* #11375 — la modification d'un modérateur se PRONONCE comme elle se voit.
+     « modifié »/« épinglé » descendent le catalogue (93w, #20326) : FR
+     byte-identique, les six autres langues portées de l'iOS déjà relu
+     (`a11y.message.edited` / `a11y.message.pinned`). */
+  if (message.isEdited) segments.push(editedByThirdParty(message) ? translate(language, 'message.editedByModerator') : translate(language, 'message.edited.a11y'));
+  if (message.pinnedAt !== undefined) segments.push(translate(language, 'message.pinned.a11y'));
   /**
    * « TRANSFÉRÉ » APRÈS « ÉPINGLÉ » (#5936, § 9 Q8 de la spécification) —
    * ÉCART ASSUMÉ avec iOS : `MessageAccessibilityLabelComposer.swift:82-90`

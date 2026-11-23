@@ -164,7 +164,8 @@ public struct NotificationRowView: View, Equatable {
                         context: .notification,
                         accentColor: notifType.accentHex,
                         avatarURL: notification.senderAvatar,
-                        presenceState: notification.senderId.flatMap { presenceResolver?($0) }
+                        presenceState: notification.senderId.flatMap { presenceResolver?($0) },
+                        circleUserId: notification.senderId
                     )
                 }
             case .milestone(let symbol):

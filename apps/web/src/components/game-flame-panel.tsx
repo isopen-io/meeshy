@@ -2,7 +2,7 @@ import type { GameFlame } from '@meeshy/shared/types/game';
 import { FLAME_BONUS_PERCENT_MAX, FLAME_BONUS_PERCENT_PER_DAY } from '@meeshy/shared/utils/game/flame';
 import { spendPreview } from '@meeshy/shared/utils/game/spend';
 
-import { formatCount, gameText, meeshCount } from '@/lib/view/game-copy';
+import { effortRelightLine, formatCount, gameText, meeshCount, readEffortRelight } from '@/lib/view/game-copy';
 import { freezeDetail } from '@/lib/view/game-detail';
 
 import { GAME_BRAND, GAME_ERROR, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, GameCard } from './game-surface';
@@ -21,6 +21,11 @@ import { GameSpendLine, GameTouch } from './game-touch';
  * prix et ce qui restera — ou combien il en manque.
  * Une Flamme trop longtemps éteinte ne propose rien : elle annonce qu'une
  * nouvelle commence au prochain geste.
+ *
+ * Deux rêves complets la rallument aussi, sans payer (#20455) : tant que le bloc
+ * sert `effortRelight`, le panneau dit combien en manquent et jusqu'à quand
+ * (#20471) — même quand une nouvelle Flamme a repris, puisque c'est en jouant
+ * qu'on les réalise — et ne dit plus qu'elle ne peut plus être rallumée.
  */
 
 export type GameFlamePanelProps = {
@@ -66,6 +71,7 @@ export function GameFlamePanel(props: GameFlamePanelProps) {
   const out = flame.status === 'out';
   const relight = spendPreview({ held, cost: flame.relightPrice });
   const cannotPayRelight = !relight.affordable;
+  const effort = readEffortRelight(flame.effortRelight);
 
   return (
     <GameCard id="game-flame-panel" labelledBy="game-flame-panel-title">
@@ -94,6 +100,11 @@ export function GameFlamePanel(props: GameFlamePanelProps) {
       )}
       <Alert message={errors?.freeze} />
 
+      {effort === null ? null : (
+        <p data-game-effort-relight="" className="text-caption font-semibold" style={{ color: GAME_INK }}>
+          {effortRelightLine(effort)}
+        </p>
+      )}
       {out && flame.canRelight ? (
         <>
           <p className="text-caption" style={{ color: GAME_INK_2 }}>
@@ -114,7 +125,7 @@ export function GameFlamePanel(props: GameFlamePanelProps) {
           <GameSpendLine concept="flame" held={held} cost={flame.relightPrice} format={meeshCount} missing={{ fact: 'spend_missing', line: (missing) => gameText('game.spend.missing.relight', { missing }) }} />
         </>
       ) : null}
-      {out && !flame.canRelight && !cannotPayRelight ? (
+      {out && !flame.canRelight && !cannotPayRelight && effort === null ? (
         <p className="text-caption" style={{ color: GAME_BRAND }}>
           {gameText('game.flame_panel.relight_closed')}
         </p>

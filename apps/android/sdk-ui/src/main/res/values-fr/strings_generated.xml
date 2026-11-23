@@ -189,6 +189,21 @@
     <string name="contacts_phonebook_write">Lui écrire</string>
     <string name="contacts_skeleton_loading">Chargement en cours</string>
     <string name="contacts_tab_prefix">Onglet</string>
+    <string name="content_card_a11y_open">Ouvre le contenu</string>
+    <string name="content_card_a11y_post_by">Publication de %1$s</string>
+    <string name="content_card_a11y_reel_by">Réel de %1$s</string>
+    <string name="content_card_a11y_saves">%1$d enregistrements</string>
+    <string name="content_card_a11y_slide_position">Média %1$d sur %2$d</string>
+    <string name="content_card_a11y_story_by">Story de %1$s</string>
+    <plurals name="content_card_a11y_views">
+        <item quantity="one">%1$d vue</item>
+        <item quantity="many">%1$d vues</item>
+        <item quantity="other">%1$d vues</item>
+    </plurals>
+    <string name="content_card_kind_mood">Humeur</string>
+    <string name="content_card_kind_post">Publication</string>
+    <string name="content_card_kind_reel">Réel</string>
+    <string name="content_card_kind_story">Story</string>
     <string name="content_failure_retry">Réessayer</string>
     <string name="content_failure_server_title">Meeshy n\'a pas pu charger ce contenu</string>
     <string name="content_failure_unavailable_title">Ce contenu n\'est plus disponible</string>
@@ -543,11 +558,14 @@
     <string name="talkie_send_hold">Maintenir pour parler</string>
     <string name="talkie_send_hold_a11y">Maintenir pour parler à %1$s</string>
     <string name="talkie_send_hold_hint">Touche deux fois et maintiens, parle, puis relâche.</string>
+    <string name="talkie_send_leave_voice">Laisser un message vocal</string>
+    <string name="talkie_send_leave_voice_a11y">Laisser un message vocal à %1$s</string>
     <string name="talkie_send_limit">Trente secondes au plus : la prise de parole s’est arrêtée.</string>
     <string name="talkie_send_mic_denied">Autorise le micro pour parler en talkie.</string>
     <string name="talkie_send_offline">Hors ligne : le talkie n’a pas pu partir.</string>
     <string name="talkie_send_rate_limited">Trop de prises de parole : réessaie dans un instant.</string>
     <string name="talkie_send_recording_copy">Enregistrement du message vocal…</string>
+    <string name="talkie_send_sent_as_voice">Parti en message vocal</string>
     <string name="talkie_send_talking">Tu parles à %1$s…</string>
     <string name="talkie_send_waking">Réveil de %1$s…</string>
     <string name="time_lastSeen_beforeYesterdayAt">Vu avant-hier à %1$s</string>

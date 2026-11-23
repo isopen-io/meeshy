@@ -137,4 +137,26 @@ class CommunityServedRoleTest {
         assertThat(CommunityJoinRefusal.of("COMMUNITY_JOIN_PENDING")).isNull()
         assertThat(CommunityJoinRefusal.of(null)).isNull()
     }
+
+    @Test
+    fun `arrive par le lien partage, la jonction le dit (20332)`() {
+        val encoder = Json { encodeDefaults = false; explicitNulls = false }
+        assertThat(encoder.encodeToString(JoinCommunityRequest.serializer(), JoinCommunityRequest.of(viaLink = true)))
+            .isEqualTo("""{"acceptsPending":true,"via":"link"}""")
+        assertThat(encoder.encodeToString(JoinCommunityRequest.serializer(), JoinCommunityRequest.of(viaLink = false)))
+            .isEqualTo("""{"acceptsPending":true}""")
+    }
+
+    @Test
+    fun `un lien en pause est un refus que le lecteur lit dans sa langue (20332)`() {
+        assertThat(CommunityJoinRefusal.of("COMMUNITY_LINK_PAUSED")).isEqualTo(CommunityJoinRefusal.LINK_PAUSED)
+    }
+
+    @Test
+    fun `le detail sert la pause du lien, absente d une passerelle plus ancienne (20332)`() {
+        val paused = json.decodeFromString(ApiCommunity.serializer(), """{"id":"c1","joinLinkPaused":true}""")
+        val older = json.decodeFromString(ApiCommunity.serializer(), """{"id":"c1"}""")
+        assertThat(paused.joinLinkPaused).isTrue()
+        assertThat(older.joinLinkPaused).isNull()
+    }
 }

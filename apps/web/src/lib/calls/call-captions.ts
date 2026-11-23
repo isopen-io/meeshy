@@ -102,6 +102,9 @@ export function captionOrigin(params: { readonly language: string | null; readon
   return { language, foreign, awaitingUntil: awaiting ? received + TRANSLATION_WAIT_MS : null };
 }
 
+/** L'horloge MONOTONE des sous-titres, UNE définition (#20320) : le chunk des sous-titres la remet au contrôleur (`CaptionsDeps.elapsed`), qui y pose l'échéance, et le panneau l'y lit par défaut. */
+export const monotonicClock = (): number => performance.now();
+
 /** Une traduction est-elle encore attendue à l'instant `elapsed` (horloge MONOTONE, celle de l'échéance) ? L'attente retombe à son échéance, l'étiquette de la langue reste. */
 export function isAwaitingTranslation(caption: CallCaption, elapsed: number): boolean {
   const until = caption.origin?.awaitingUntil ?? null;

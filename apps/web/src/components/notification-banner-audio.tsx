@@ -44,19 +44,29 @@ function nextSpeed(rate: number): number {
 
 const speedLabel = (rate: number, language: string): string => `${new Intl.NumberFormat(language).format(rate)}×`;
 
+/** Les mots du lecteur — ceux de la bannière par défaut ; un autre hôte (la carte d'un contenu, #20234) passe les siens. */
+export type BannerAudioLabels = { readonly play: string; readonly pause: string; readonly speed: string };
+
 export function BannerAudioPlayer({
   audio,
   audioKey,
   accent,
   language,
   onPlayingChange,
+  labels,
 }: {
   readonly audio: BannerAudio;
   readonly audioKey: string;
   readonly accent: string;
   readonly language: InterfaceLanguage;
-  readonly onPlayingChange: (playing: boolean) => void;
+  readonly onPlayingChange?: (playing: boolean) => void;
+  readonly labels?: BannerAudioLabels;
 }) {
+  const words = labels ?? {
+    play: translateNotificationRow(language, 'notifications.banner.play'),
+    pause: translateNotificationRow(language, 'notifications.banner.pause'),
+    speed: translateNotificationRow(language, 'notifications.banner.speed'),
+  };
   const playback = useMediaPlayback({ attachmentId: `notification:${audioKey}`, tracksTime: true });
   const playing = playback.status === 'playing';
   const duration = playback.duration > 0 ? playback.duration : (audio.durationMs ?? 0) / 1000;
@@ -64,7 +74,7 @@ export function BannerAudioPlayer({
   const track = useRef<HTMLSpanElement | null>(null);
   const seeking = useRef(false);
 
-  useEffect(() => onPlayingChange(playing), [playing, onPlayingChange]);
+  useEffect(() => onPlayingChange?.(playing), [playing, onPlayingChange]);
 
   const seekAt = (clientX: number) => {
     const element = track.current;
@@ -111,7 +121,7 @@ export function BannerAudioPlayer({
         type="button"
         data-banner-audio-toggle
         onClick={playback.toggle}
-        aria-label={translateNotificationRow(language, playing ? 'notifications.banner.pause' : 'notifications.banner.play')}
+        aria-label={playing ? words.pause : words.play}
         className="grid place-items-center text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{
           ...control,
@@ -127,7 +137,7 @@ export function BannerAudioPlayer({
           ref={track}
           role="slider"
           tabIndex={0}
-          aria-label={translateNotificationRow(language, 'notifications.banner.play')}
+          aria-label={words.play}
           aria-valuemin={0}
           aria-valuemax={Math.round(duration)}
           aria-valuenow={Math.round(playback.position)}
@@ -174,7 +184,7 @@ export function BannerAudioPlayer({
         type="button"
         data-banner-audio-speed
         onClick={() => playback.setRate(nextSpeed(playback.rate))}
-        aria-label={translateNotificationRow(language, 'notifications.banner.speed')}
+        aria-label={words.speed}
         className="grid place-items-center text-mini font-semibold tabular-nums focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ ...control, outlineColor: accent, color: accent, backgroundColor: `color-mix(in srgb, ${accent} 14%, transparent)` }}
       >

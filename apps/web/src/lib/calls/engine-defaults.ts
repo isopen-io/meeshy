@@ -9,7 +9,7 @@ import { safeLocalStorage } from '@/lib/storage';
 import { onConnectionChange } from '../device/capability-tier';
 
 import { fetchActiveCallId } from './active-call';
-import { deviceLabel } from './call-analytics';
+import { lazyCallReports } from './call-analytics-lazy';
 import type { CaptionsContext, CaptionsPort } from './call-captions-controller';
 import { callLensStore } from './call-lens-store';
 import { createCameraEffects } from './camera-effects';
@@ -27,7 +27,6 @@ import { playCue, primeTones, startTone, stopTone } from './call-tones';
 import { currentCallTransport } from './call-transport';
 import type { CallEngineDeps } from './engine';
 import { createPeerLink } from './peer-link';
-import { acquireRearCamera } from './rear-camera';
 import { selfZoomStore, sentZoom } from './self-zoom';
 import { browserColorSupport, videoEffectsStore } from './video-effects';
 
@@ -117,6 +116,13 @@ const cameraEffects = createCameraEffects({
   loadPipeline: () => import('./video-effects-pipeline').then((module) => (camera, settings) => module.createEffectsPipeline(camera, settings)),
 });
 
+/**
+ * Les rapports d'un appel (`call:analytics`, `call:quality-report`) sont un
+ * chunk à part (`budgets.json` › `call_analytics_report`, #19894), préchargé
+ * dès que le moteur se charge : s'il manque, l'appel continue sans eux.
+ */
+const reports = lazyCallReports(() => import('./call-analytics-report').then((module) => ({ analyticsPayload: module.browserAnalyticsPayload, qualityReport: module.qualityReport })));
+
 export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
   journalRecorder();
   return {
@@ -124,7 +130,7 @@ export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
     viewerId,
     fetchActiveCallId: (conversationId) => fetchActiveCallId(apiDeps, conversationId),
     acquireMedia: (options) => acquireCallMedia({ ...options, ...preferredInputs(), profile: currentProfile() }),
-    acquireCamera: (facing) => (facing === 'environment' ? acquireRearCamera({ profile: currentProfile() }) : acquireCamera({ facing, cameraId: preferredInputs().cameraId, profile: currentProfile() })),
+    acquireCamera: (facing) => (facing === 'environment' ? import('./rear-camera').then((module) => module.acquireRearCamera({ profile: currentProfile() })) : acquireCamera({ facing, cameraId: preferredInputs().cameraId, profile: currentProfile() })),
     acquireCameraDevice: (deviceId) => acquireChosenInput({ kind: 'camera', deviceId, profile: currentProfile() }),
     rememberCamera: (deviceId) => void writeDevicePreference(browserPreferenceStorage(), 'camera', deviceId),
     acquireDisplay: () => acquireDisplay(),
@@ -141,7 +147,7 @@ export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
     createQualityLoop: lazyQualityLoop,
     watchNetwork: watchBrowserNetwork,
     platform: () => (__SHELL__ ? 'android-shell' : 'web'),
-    deviceModel: () => (typeof navigator === 'undefined' ? 'web' : deviceLabel(navigator.userAgent)),
+    reports,
     createCaptions: lazyCaptions,
     onJoinRefusedEnded: (ended) => repairEndedCall(appQueryClient, ended),
   };

@@ -16,6 +16,9 @@ import type { TalkieVoiceCopier, TalkieVoiceCopy } from './talkie-sender';
  * ouverte au besoin. Jamais une conversation chiffrée de bout en bout (un vocal en clair y est refusé, fail-closed),
  * ni un salon public, ni une chaîne d'annonces, ni une conversation où l'on n'écrit pas.
  *
+ * Un message vocal LAISSÉ à un téléphone injoignable (#20241, `directOnly`) ne part que dans la conversation DIRECTE,
+ * ouverte au besoin, jamais dans un groupe plus récent.
+ *
  * Les trames AAC ADTS mises bout à bout forment un flux `.aac` lisible tel quel ; la passerelle accepte `audio/aac`.
  */
 
@@ -46,6 +49,10 @@ export function pickTalkieCopyDestination(candidates: readonly Candidate[]): str
   return eligible.reduce((best, candidate) => (rankOf(candidate) > rankOf(best) ? candidate : best)).id;
 }
 
+/** Le direct qui peut porter un message vocal LAISSÉ (#20241, iso `TalkieCopyDestination.pickDirect`) ; `null` : l'ouvrir. */
+export const pickTalkieDirectDestination = (candidates: readonly Candidate[]): string | null =>
+  pickTalkieCopyDestination(candidates.filter((candidate) => candidate.type === 'direct'));
+
 const pad = (value: number): string => String(value).padStart(2, '0');
 
 /** `talkie_2026-11-13_1004.aac` — le nom que la bulle montre en repli, daté à l'heure locale du relâcher. */
@@ -60,7 +67,8 @@ async function destinationOf(deps: ConversationsDeps, copy: TalkieVoiceCopy): Pr
   const named = copy.conversationId;
   if (named !== null && canSendPlaintext({ conversationId: named })) return named;
   const shared = await loadSharedConversations({ ...deps, userId: copy.toUserId });
-  const picked = shared.ok ? pickTalkieCopyDestination(shared.data) : null;
+  const pick = copy.directOnly === true ? pickTalkieDirectDestination : pickTalkieCopyDestination;
+  const picked = shared.ok ? pick(shared.data) : null;
   if (picked !== null) return picked;
   const direct = await createDirectConversation(deps, copy.toUserId, { plaintext: true });
   return direct.ok && mayCarryTheCopy(direct.data) ? direct.data.id : null;

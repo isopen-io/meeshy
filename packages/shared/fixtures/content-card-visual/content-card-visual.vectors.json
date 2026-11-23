@@ -1,0 +1,756 @@
+[
+  {
+    "_label": "plusieurs médias visuels : un diaporama de chacun, dans l'ordre, le son écarté",
+    "post": {
+      "id": "66f0c0ffee0000000000c0de",
+      "createdAt": "2026-11-04T09:55:10.287Z",
+      "author": {
+        "id": "6ada27bf28983c39d9838be9",
+        "username": "amani",
+        "displayName": "Amani Diallo"
+      },
+      "type": "POST",
+      "media": [
+        {
+          "id": "m-img",
+          "mimeType": "image/jpeg",
+          "fileUrl": "/f/i.jpg",
+          "thumbnailUrl": "/t/i.jpg"
+        },
+        {
+          "id": "m-aud",
+          "mimeType": "audio/mpeg",
+          "fileUrl": "/f/a.mp3",
+          "duration": 31000
+        },
+        {
+          "id": "m-vid",
+          "mimeType": "video/mp4",
+          "fileUrl": "/f/v.mp4",
+          "thumbnailUrl": "/t/v.jpg",
+          "duration": 12000
+        }
+      ]
+    },
+    "expected": {
+      "kind": "slideshow",
+      "pages": [
+        {
+          "mediaId": "m-img",
+          "mediaKind": "image"
+        },
+        {
+          "mediaId": "m-vid",
+          "mediaKind": "video"
+        }
+      ]
+    }
+  },
+  {
+    "_label": "un réel de plusieurs clips : un diaporama",
+    "post": {
+      "id": "66f0c0ffee0000000000c0de",
+      "createdAt": "2026-11-04T09:55:10.287Z",
+      "author": {
+        "id": "6ada27bf28983c39d9838be9",
+        "username": "amani",
+        "displayName": "Amani Diallo"
+      },
+      "type": "REEL",
+      "media": [
+        {
+          "id": "m-vid",
+          "mimeType": "video/mp4",
+          "fileUrl": "/f/v.mp4",
+          "thumbnailUrl": "/t/v.jpg",
+          "duration": 12000
+        },
+        {
+          "id": "m-vid2",
+          "mimeType": "video/mp4",
+          "fileUrl": "/f/v.mp4",
+          "thumbnailUrl": "/t/v.jpg",
+          "duration": 12000
+        }
+      ]
+    },
+    "expected": {
+      "kind": "slideshow",
+      "pages": [
+        {
+          "mediaId": "m-vid",
+          "mediaKind": "video"
+        },
+        {
+          "mediaId": "m-vid2",
+          "mediaKind": "video"
+        }
+      ]
+    }
+  },
+  {
+    "_label": "un document de plusieurs scènes : un diaporama de ses scènes",
+    "post": {
+      "id": "66f0c0ffee0000000000c0de",
+      "createdAt": "2026-11-04T09:55:10.287Z",
+      "author": {
+        "id": "6ada27bf28983c39d9838be9",
+        "username": "amani",
+        "displayName": "Amani Diallo"
+      },
+      "type": "STORY",
+      "media": [
+        {
+          "id": "m-img",
+          "mimeType": "image/jpeg",
+          "fileUrl": "/f/i.jpg",
+          "thumbnailUrl": "/t/i.jpg"
+        }
+      ],
+      "storyEffects": {
+        "v": 3,
+        "scenes": [
+          {
+            "id": "s1",
+            "objects": [
+              {
+                "id": "bg",
+                "kind": "media",
+                "anchor": {
+                  "t": "free",
+                  "x": 0.5,
+                  "y": 0.5
+                },
+                "plane": "content",
+                "z": 0,
+                "transform": {
+                  "scale": 1,
+                  "rotation": 0,
+                  "opacity": 1
+                },
+                "payload": {
+                  "postMediaId": "m-img",
+                  "mediaType": "image",
+                  "isBackground": true
+                }
+              },
+              {
+                "id": "t1",
+                "kind": "text",
+                "anchor": {
+                  "t": "free",
+                  "x": 0.5,
+                  "y": 0.5
+                },
+                "plane": "fg",
+                "z": 0,
+                "transform": {
+                  "scale": 1,
+                  "rotation": 0,
+                  "opacity": 1
+                },
+                "payload": {
+                  "text": "Bonjour"
+                }
+              }
+            ]
+          },
+          {
+            "id": "s2",
+            "objects": [
+              {
+                "id": "t1",
+                "kind": "text",
+                "anchor": {
+                  "t": "free",
+                  "x": 0.5,
+                  "y": 0.5
+                },
+                "plane": "fg",
+                "z": 0,
+                "transform": {
+                  "scale": 1,
+                  "rotation": 0,
+                  "opacity": 1
+                },
+                "payload": {
+                  "text": "Bonjour"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "expected": {
+      "kind": "slideshow",
+      "pages": [
+        {
+          "scene": 0
+        },
+        {
+          "scene": 1
+        }
+      ]
+    }
+  },
+  {
+    "_label": "une vidéo seule : son image de garde",
+    "post": {
+      "id": "66f0c0ffee0000000000c0de",
+      "createdAt": "2026-11-04T09:55:10.287Z",
+      "author": {
+        "id": "6ada27bf28983c39d9838be9",
+        "username": "amani",
+        "displayName": "Amani Diallo"
+      },
+      "type": "POST",
+      "media": [
+        {
+          "id": "m-vid",
+          "mimeType": "video/mp4",
+          "fileUrl": "/f/v.mp4",
+          "thumbnailUrl": "/t/v.jpg",
+          "duration": 12000
+        }
+      ]
+    },
+    "expected": {
+      "kind": "media",
+      "mediaId": "m-vid",
+      "mediaKind": "video"
+    }
+  },
+  {
+    "_label": "une scène qui n'est qu'une vidéo : l'image de garde, pas la scène",
+    "post": {
+      "id": "66f0c0ffee0000000000c0de",
+      "createdAt": "2026-11-04T09:55:10.287Z",
+      "author": {
+        "id": "6ada27bf28983c39d9838be9",
+        "username": "amani",
+        "displayName": "Amani Diallo"
+      },
+      "type": "REEL",
+      "media": [
+        {
+          "id": "m-vid",
+          "mimeType": "video/mp4",
+          "fileUrl": "/f/v.mp4",
+          "thumbnailUrl": "/t/v.jpg",
+          "duration": 12000
+        }
+      ],
+      "storyEffects": {
+        "v": 3,
+        "scenes": [
+          {
+            "id": "s1",
+            "objects": [
+              {
+                "id": "bg",
+                "kind": "media",
+                "anchor": {
+                  "t": "free",
+                  "x": 0.5,
+                  "y": 0.5
+                },
+                "plane": "content",
+                "z": 0,
+                "transform": {
+                  "scale": 1,
+                  "rotation": 0,
+                  "opacity": 1
+                },
+                "payload": {
+                  "postMediaId": "m-vid",
+                  "mediaType": "video",
+                  "isBackground": true
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "expected": {
+      "kind": "media",
+      "mediaId": "m-vid",
+      "mediaKind": "video"
+    }
+  },
+  {
+    "_label": "une image seule : l'image",
+    "post": {
+      "id": "66f0c0ffee0000000000c0de",
+      "createdAt": "2026-11-04T09:55:10.287Z",
+      "author": {
+        "id": "6ada27bf28983c39d9838be9",
+        "username": "amani",
+        "displayName": "Amani Diallo"
+      },
+      "type": "POST",
+      "media": [
+        {
+          "id": "m-img",
+          "mimeType": "image/jpeg",
+          "fileUrl": "/f/i.jpg",
+          "thumbnailUrl": "/t/i.jpg"
+        }
+      ]
+    },
+    "expected": {
+      "kind": "media",
+      "mediaId": "m-img",
+      "mediaKind": "image"
+    }
+  },
+  {
+    "_label": "un post qui n'est qu'un son : le composant sonore, durée en secondes",
+    "post": {
+      "id": "66f0c0ffee0000000000c0de",
+      "createdAt": "2026-11-04T09:55:10.287Z",
+      "author": {
+        "id": "6ada27bf28983c39d9838be9",
+        "username": "amani",
+        "displayName": "Amani Diallo"
+      },
+      "type": "POST",
+      "content": "Écoutez",
+      "media": [
+        {
+          "id": "m-aud",
+          "mimeType": "audio/mpeg",
+          "fileUrl": "/f/a.mp3",
+          "duration": 31000
+        }
+      ]
+    },
+    "expected": {
+      "kind": "sound",
+      "attachmentId": "m-aud",
+      "url": "/f/a.mp3",
+      "durationSeconds": 31
+    }
+  },
+  {
+    "_label": "une humeur au seul son de fond : le composant sonore",
+    "post": {
+      "id": "66f0c0ffee0000000000c0de",
+      "createdAt": "2026-11-04T09:55:10.287Z",
+      "author": {
+        "id": "6ada27bf28983c39d9838be9",
+        "username": "amani",
+        "displayName": "Amani Diallo"
+      },
+      "type": "STATUS",
+      "moodEmoji": "🎧",
+      "audioUrl": "/f/fond.m4a",
+      "audioDuration": 8000
+    },
+    "expected": {
+      "kind": "sound",
+      "attachmentId": "66f0c0ffee0000000000c0de-audio",
+      "url": "/f/fond.m4a",
+      "durationSeconds": 8
+    }
+  },
+  {
+    "_label": "une scène qui ne peint rien mais porte un son : le composant sonore",
+    "post": {
+      "id": "66f0c0ffee0000000000c0de",
+      "createdAt": "2026-11-04T09:55:10.287Z",
+      "author": {
+        "id": "6ada27bf28983c39d9838be9",
+        "username": "amani",
+        "displayName": "Amani Diallo"
+      },
+      "type": "STORY",
+      "media": [
+        {
+          "id": "m-aud",
+          "mimeType": "audio/mpeg",
+          "fileUrl": "/f/a.mp3",
+          "duration": 31000
+        }
+      ],
+      "storyEffects": {
+        "v": 3,
+        "scenes": [
+          {
+            "id": "s1",
+            "objects": [
+              {
+                "id": "bg",
+                "kind": "media",
+                "anchor": {
+                  "t": "free",
+                  "x": 0.5,
+                  "y": 0.5
+                },
+                "plane": "bg",
+                "z": 0,
+                "transform": {
+                  "scale": 1,
+                  "rotation": 0,
+                  "opacity": 1
+                },
+                "payload": {
+                  "backgroundColor": "#1E1B4B"
+                }
+              },
+              {
+                "id": "a1",
+                "kind": "audio",
+                "anchor": {
+                  "t": "free",
+                  "x": 0.5,
+                  "y": 0.5
+                },
+                "plane": "fg",
+                "z": 0,
+                "transform": {
+                  "scale": 1,
+                  "rotation": 0,
+                  "opacity": 1
+                },
+                "payload": {
+                  "postMediaId": "m-aud"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "expected": {
+      "kind": "sound",
+      "attachmentId": "m-aud",
+      "url": "/f/a.mp3",
+      "durationSeconds": 31
+    }
+  },
+  {
+    "_label": "une story, fond et texte : sa scène",
+    "post": {
+      "id": "66f0c0ffee0000000000c0de",
+      "createdAt": "2026-11-04T09:55:10.287Z",
+      "author": {
+        "id": "6ada27bf28983c39d9838be9",
+        "username": "amani",
+        "displayName": "Amani Diallo"
+      },
+      "type": "STORY",
+      "media": [
+        {
+          "id": "m-img",
+          "mimeType": "image/jpeg",
+          "fileUrl": "/f/i.jpg",
+          "thumbnailUrl": "/t/i.jpg"
+        }
+      ],
+      "storyEffects": {
+        "v": 3,
+        "scenes": [
+          {
+            "id": "s1",
+            "objects": [
+              {
+                "id": "bg",
+                "kind": "media",
+                "anchor": {
+                  "t": "free",
+                  "x": 0.5,
+                  "y": 0.5
+                },
+                "plane": "content",
+                "z": 0,
+                "transform": {
+                  "scale": 1,
+                  "rotation": 0,
+                  "opacity": 1
+                },
+                "payload": {
+                  "postMediaId": "m-img",
+                  "mediaType": "image",
+                  "isBackground": true
+                }
+              },
+              {
+                "id": "t1",
+                "kind": "text",
+                "anchor": {
+                  "t": "free",
+                  "x": 0.5,
+                  "y": 0.5
+                },
+                "plane": "fg",
+                "z": 0,
+                "transform": {
+                  "scale": 1,
+                  "rotation": 0,
+                  "opacity": 1
+                },
+                "payload": {
+                  "text": "Bonjour"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "expected": {
+      "kind": "scene",
+      "index": 0,
+      "carrierId": "66f0c0ffee0000000000c0de"
+    }
+  },
+  {
+    "_label": "une humeur de texte sur couleur : sa scène, pas rien",
+    "post": {
+      "id": "66f0c0ffee0000000000c0de",
+      "createdAt": "2026-11-04T09:55:10.287Z",
+      "author": {
+        "id": "6ada27bf28983c39d9838be9",
+        "username": "amani",
+        "displayName": "Amani Diallo"
+      },
+      "type": "STATUS",
+      "moodEmoji": "🌞",
+      "storyEffects": {
+        "v": 3,
+        "scenes": [
+          {
+            "id": "s1",
+            "objects": [
+              {
+                "id": "bg",
+                "kind": "media",
+                "anchor": {
+                  "t": "free",
+                  "x": 0.5,
+                  "y": 0.5
+                },
+                "plane": "bg",
+                "z": 0,
+                "transform": {
+                  "scale": 1,
+                  "rotation": 0,
+                  "opacity": 1
+                },
+                "payload": {
+                  "backgroundColor": "#1E1B4B"
+                }
+              },
+              {
+                "id": "t1",
+                "kind": "text",
+                "anchor": {
+                  "t": "free",
+                  "x": 0.5,
+                  "y": 0.5
+                },
+                "plane": "fg",
+                "z": 0,
+                "transform": {
+                  "scale": 1,
+                  "rotation": 0,
+                  "opacity": 1
+                },
+                "payload": {
+                  "text": "Bonjour"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "expected": {
+      "kind": "scene",
+      "index": 0,
+      "carrierId": "66f0c0ffee0000000000c0de"
+    }
+  },
+  {
+    "_label": "une vidéo sous un texte : la scène, le texte fait partie de ce qui a été composé",
+    "post": {
+      "id": "66f0c0ffee0000000000c0de",
+      "createdAt": "2026-11-04T09:55:10.287Z",
+      "author": {
+        "id": "6ada27bf28983c39d9838be9",
+        "username": "amani",
+        "displayName": "Amani Diallo"
+      },
+      "type": "STORY",
+      "media": [
+        {
+          "id": "m-vid",
+          "mimeType": "video/mp4",
+          "fileUrl": "/f/v.mp4",
+          "thumbnailUrl": "/t/v.jpg",
+          "duration": 12000
+        }
+      ],
+      "storyEffects": {
+        "v": 3,
+        "scenes": [
+          {
+            "id": "s1",
+            "objects": [
+              {
+                "id": "bg",
+                "kind": "media",
+                "anchor": {
+                  "t": "free",
+                  "x": 0.5,
+                  "y": 0.5
+                },
+                "plane": "content",
+                "z": 0,
+                "transform": {
+                  "scale": 1,
+                  "rotation": 0,
+                  "opacity": 1
+                },
+                "payload": {
+                  "postMediaId": "m-vid",
+                  "mediaType": "video",
+                  "isBackground": true
+                }
+              },
+              {
+                "id": "t1",
+                "kind": "text",
+                "anchor": {
+                  "t": "free",
+                  "x": 0.5,
+                  "y": 0.5
+                },
+                "plane": "fg",
+                "z": 0,
+                "transform": {
+                  "scale": 1,
+                  "rotation": 0,
+                  "opacity": 1
+                },
+                "payload": {
+                  "text": "Bonjour"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "expected": {
+      "kind": "scene",
+      "index": 0,
+      "carrierId": "66f0c0ffee0000000000c0de"
+    }
+  },
+  {
+    "_label": "la republication nue d'une story : la scène de l'original",
+    "post": {
+      "id": "66f0c0ffee0000000000c0de",
+      "createdAt": "2026-11-04T09:55:10.287Z",
+      "author": {
+        "id": "6ada27bf28983c39d9838be9",
+        "username": "amani",
+        "displayName": "Amani Diallo"
+      },
+      "type": "POST",
+      "content": null,
+      "repostOf": {
+        "id": "66f0c0ffee0000000000beef",
+        "type": "STORY",
+        "createdAt": "2026-11-01T08:00:00.000Z",
+        "author": {
+          "id": "o1",
+          "username": "lume"
+        },
+        "media": [
+          {
+            "id": "m-img",
+            "mimeType": "image/jpeg",
+            "fileUrl": "/f/i.jpg",
+            "thumbnailUrl": "/t/i.jpg"
+          }
+        ],
+        "storyEffects": {
+          "v": 3,
+          "scenes": [
+            {
+              "id": "s1",
+              "objects": [
+                {
+                  "id": "bg",
+                  "kind": "media",
+                  "anchor": {
+                    "t": "free",
+                    "x": 0.5,
+                    "y": 0.5
+                  },
+                  "plane": "content",
+                  "z": 0,
+                  "transform": {
+                    "scale": 1,
+                    "rotation": 0,
+                    "opacity": 1
+                  },
+                  "payload": {
+                    "postMediaId": "m-img",
+                    "mediaType": "image",
+                    "isBackground": true
+                  }
+                },
+                {
+                  "id": "t1",
+                  "kind": "text",
+                  "anchor": {
+                    "t": "free",
+                    "x": 0.5,
+                    "y": 0.5
+                  },
+                  "plane": "fg",
+                  "z": 0,
+                  "transform": {
+                    "scale": 1,
+                    "rotation": 0,
+                    "opacity": 1
+                  },
+                  "payload": {
+                    "text": "Bonjour"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "expected": {
+      "kind": "scene",
+      "index": 0,
+      "carrierId": "66f0c0ffee0000000000beef"
+    }
+  },
+  {
+    "_label": "du texte seulement : rien",
+    "post": {
+      "id": "66f0c0ffee0000000000c0de",
+      "createdAt": "2026-11-04T09:55:10.287Z",
+      "author": {
+        "id": "6ada27bf28983c39d9838be9",
+        "username": "amani",
+        "displayName": "Amani Diallo"
+      },
+      "type": "POST",
+      "content": "Juste des mots"
+    },
+    "expected": {
+      "kind": "none"
+    }
+  }
+]

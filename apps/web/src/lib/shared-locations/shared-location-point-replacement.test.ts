@@ -58,4 +58,13 @@ describe('le message nomme ceux qui verront la position réelle', () => {
   test('un nom connu deux fois ne se nomme qu’une fois', () => {
     expect(pointReplacementOps.audience(asked, [{ userId: A, name: 'Ali' }, { userId: A.toUpperCase(), name: 'Ali bis' }])).toEqual({ named: ['Ali'], others: 1 });
   });
+
+  test('un nom vide ne se nomme pas : la personne se nomme par un autre nom connu, sinon se compte (#20308)', () => {
+    expect(pointReplacementOps.audience(asked, [{ userId: A, name: '  ' }, { userId: A, name: 'Ali' }])).toEqual({ named: ['Ali'], others: 1 });
+    expect(pointReplacementOps.audience(asked, [{ userId: A, name: '' }])).toEqual({ named: [], others: 2 });
+  });
+
+  test('un nom se nomme sans ses blancs', () => {
+    expect(pointReplacementOps.audience(asked, [{ userId: A, name: ' Ali ' }])).toEqual({ named: ['Ali'], others: 1 });
+  });
 });

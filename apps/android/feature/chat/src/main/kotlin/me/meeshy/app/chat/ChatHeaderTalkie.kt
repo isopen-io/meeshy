@@ -31,6 +31,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.sdk.model.relation.TalkieHeaderDelivery
 import me.meeshy.sdk.model.relation.TalkieHeaderVoice
+import me.meeshy.sdk.model.relation.TalkieHoldDelivery
 import me.meeshy.sdk.model.relation.TalkieHoldLook
 import me.meeshy.sdk.model.relation.TalkieSendPhase
 import me.meeshy.sdk.theme.DynamicColorGenerator
@@ -38,6 +39,7 @@ import me.meeshy.ui.R as UiR
 import me.meeshy.ui.component.permission.PermissionFlow
 import me.meeshy.ui.component.permission.PermissionFlowHost
 import me.meeshy.ui.component.permission.rememberPermissionFlow
+import me.meeshy.ui.component.phonereachability.rememberTalkieHoldDelivery
 import me.meeshy.ui.component.talkie.TalkieHeaderLive
 import me.meeshy.ui.component.talkie.TalkieHoldActions
 import me.meeshy.ui.component.talkie.TalkieNoticeEffect
@@ -55,7 +57,8 @@ internal class ChatHeaderTalkie(val live: TalkieHeaderLive, val button: @Composa
  * Le talkie dans l'en-tête d'un direct (#17315, iso `ConversationHeaderTalkieButton`) : proposé dès Proche, jamais dans un
  * direct chiffré ni dans un aperçu (l'hôte en décide). Le doigt posé enfonce et vibre ; la voix qui part, ou celle du pair
  * qui arrive, donne toute la barre d'en-tête au talkie ; un `TALKIE_NOT_ALLOWED` le retire, comme sur la fiche. Le (i) du
- * talkie ne vit que sur la fiche profil (#17339).
+ * talkie ne vit que sur la fiche profil (#17339). Le téléphone du pair injoignable depuis plusieurs minutes (#20241, état
+ * SERVI) : le même geste laisse un message vocal dans le direct, et TalkBack le dit.
  */
 @Composable
 internal fun rememberChatHeaderTalkie(
@@ -75,7 +78,8 @@ internal fun rememberChatHeaderTalkie(
     val pressed = remember(peerUserId) { mutableStateOf(false) }
     val permissions = rememberPermissionFlow()
     val context = LocalContext.current
-    TalkieNoticeEffect(notice, control::present)
+    val delivery = rememberTalkieHoldDelivery(peerUserId)
+    TalkieNoticeEffect(notice, control::present, delivery)
     LaunchedEffect(waking) {
         // L'en-tête n'a pas de libellé : le réveil d'un destinataire hors ligne se dit dans un bandeau neutre.
         if (waking) control.inform(context.getString(UiR.string.talkie_send_waking, peerName))
@@ -84,17 +88,17 @@ internal fun rememberChatHeaderTalkie(
     val voice = TalkieHeaderVoice.resolve(look, peerSpeaking = peerUserId in speaking)
     val secondary = remember(accent) { secondaryOf(accent) }
     val live = TalkieHeaderLive(voice, TalkieHeaderDelivery.resolve(voice, phase, waking), accent, secondary)
-    val actions = remember(control, peerUserId) {
+    val actions = remember(control, peerUserId, delivery) {
         TalkieHoldActions(
-            press = { control.press(peerUserId) },
+            press = { control.press(peerUserId, delivery) },
             release = control::release,
-            quickTap = { control.inform(context.getString(UiR.string.talkie_send_hold)) },
+            quickTap = { control.inform(context.getString(TalkieWording.holdReminder(delivery))) },
         )
     }
     val button: @Composable () -> Unit = {
         PermissionFlowHost(permissions, accent = accent)
         AnimatedVisibility(visible = offered && !withdrawn, enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
-            TalkieGlyph(look, phase, waking, peerName, accent, secondary, pressed, permissions, actions)
+            TalkieGlyph(look, phase, waking, delivery, peerName, accent, secondary, pressed, permissions, actions)
         }
     }
     return ChatHeaderTalkie(live, button)
@@ -105,6 +109,7 @@ private fun TalkieGlyph(
     look: TalkieHoldLook,
     phase: TalkieSendPhase,
     waking: Boolean,
+    delivery: TalkieHoldDelivery,
     peerName: String,
     accent: Color,
     secondary: Color,
@@ -112,8 +117,8 @@ private fun TalkieGlyph(
     permissions: PermissionFlow,
     actions: TalkieHoldActions,
 ) {
-    val description = stringResource(UiR.string.talkie_send_hold_a11y, peerName)
-    val hint = stringResource(UiR.string.talkie_send_hold_hint)
+    val description = stringResource(TalkieWording.holdA11y(delivery), peerName)
+    val hint = stringResource(TalkieWording.holdHint(delivery))
     val liveRes = TalkieWording.liveValue(phase, waking)
     val liveValue = if (TalkieWording.takesName(liveRes)) stringResource(liveRes, peerName) else stringResource(liveRes)
     val gradient = Brush.linearGradient(listOf(accent, secondary))

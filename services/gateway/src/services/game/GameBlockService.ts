@@ -17,7 +17,7 @@ import { parseGameBlock, type GameBlock } from '@meeshy/shared/types/game';
 import { buildGameBlock } from '@meeshy/shared/utils/game/game-block';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { meeshTotalsFromLedger } from '../meesh/MeeshService';
-import { FLAME_USER_SELECT, brokenFlame, flameFactsOf } from './FlameService';
+import { FLAME_USER_SELECT, brokenFlame, dreamDaysAfter, effortRelightOpen, flameFactsOf } from './FlameService';
 import { GameBlockExtrasService } from './GameBlockExtrasService';
 import type { PersonalMissionService } from './PersonalMissionService';
 import { GloryService, gloryTotalFromLedger } from './GloryService';
@@ -145,6 +145,16 @@ export class GameBlockService {
     });
 
     const facts = flameFactsOf(user ?? {}, now);
+    const broken = brokenFlame(facts);
+    // Le rallumage par l'effort (#20471) : les rêves complets d'après la rupture, lus seulement quand une Flamme éteinte
+    // peut encore se rallumer ainsi. Un appoint : une lecture qui tombe tait le rallumage, jamais le bloc entier.
+    const effortDreamDays =
+      broken === null || !effortRelightOpen(broken, facts.today)
+        ? undefined
+        : await dreamDaysAfter(this.prisma, userId, broken.lastActiveDay).catch((error: unknown) => {
+            log.warn('effort relight dreams unavailable, block served without them', { userId, error: error instanceof Error ? error.message : String(error) });
+            return undefined;
+          });
     // La place du Mythe (#9636) : celle du compte, ou celle qu'une Gloire gravée hors d'un crédit (la frappe)
     // vient d'ouvrir. Une lecture qui tombe rend le rang sur la Gloire, jamais le bloc entier.
     const mythicSeat = await this.seats.claimIfEligible(userId, glory, now).catch((error: unknown) => {
@@ -185,12 +195,13 @@ export class GameBlockService {
       balance: totals.balance,
       streak: facts.streak,
       lastActiveDay: facts.lastActiveDay,
-      broken: brokenFlame(facts),
+      broken,
       freezes: facts.freezes,
       freezeGiftDay: facts.freezeGiftDay,
       // Le jour du retour, lu ou gravé par le tirage du jour : ce jour-là, l'Offrande est gardée (#20266).
       welcomeBackDay: day.welcomeBackDay ?? null,
       lastRelightDay: facts.lastRelightDay,
+      ...(effortDreamDays === undefined ? {} : { effortDreamDays }),
       missions: day.rows.map(toGameMission),
       ...(personal && personal.startsAt && personal.endsAt
         ? {

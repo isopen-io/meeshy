@@ -433,6 +433,29 @@ struct RootView: View {
         router.clearPresentedSurfaces { _ in showDeepLink(deepLink) }
     }
 
+    /// Un contenu s'ouvre là où il vit : le détail du post (chargé par
+    /// l'écran lui-même), l'humeur en plein écran comme depuis sa notification
+    /// (#20211), le réel par la porte de sa notification (#7805), la story par
+    /// `StoryDoor`, son détail n'étant que le repli d'une story morte (#4903,
+    /// #7807).
+    private func showContent(_ deepLink: DeepLink) {
+        switch deepLink {
+        case .postDetail(let postId):
+            router.push(.postDetail(postId))
+        case .mood(let postId):
+            router.push(.moodSpotlight(statusId: postId))
+        case .reel(let postId):
+            notificationNavigator.openReelFromNotification(postId: postId)
+        case .storyDetail(let postId):
+            Task { @MainActor in
+                await StoryDoor(tray: storyViewModel, viewer: storyViewerCoordinator)
+                    .open(postId: postId) { router.push(.postDetail(postId)) }
+            }
+        default:
+            break
+        }
+    }
+
     private func showDeepLink(_ deepLink: DeepLink) {
         switch deepLink {
         case .callRequest(let conversationId, let isVideo):
@@ -468,24 +491,8 @@ struct RootView: View {
             // infinite loop to the user.
             navigateToConversationById(id)
 
-        case .postDetail(let postId):
-            // PostDetailView lazy-loads the post itself, so we can push
-            // immediately with `initialPost: nil`. The route case already
-            // exists for in-app feed taps; the deep link just reuses it.
-            router.push(.postDetail(postId))
-
-        case .reel(let postId):
-            // Un réel nommé : même porte que sa notification (#7805).
-            notificationNavigator.openReelFromNotification(postId: postId)
-
-        case .storyDetail(let postId):
-            // La porte partagée avec l'iPad et le lien tapé dans l'app : le
-            // `postId` voyage, une story absente du tray est chargée, le détail
-            // du post n'est que le repli d'une story morte (#4903, #7807).
-            Task { @MainActor in
-                await StoryDoor(tray: storyViewModel, viewer: storyViewerCoordinator)
-                    .open(postId: postId) { router.push(.postDetail(postId)) }
-            }
+        case .postDetail, .mood, .reel, .storyDetail:
+            showContent(deepLink)
 
         case .userProfile(let username, let face):
             // Opens the profile sheet over the conversation list (same
@@ -515,8 +522,8 @@ struct RootView: View {
         case .hashtag(let tag):
             router.push(.hashtagResults(tag: tag))
 
-        case .community(let id):
-            router.push(.communityDetail(id))
+        case .community(let id, let viaLink):
+            router.push(.communityDetail(id, viaLink: viaLink))
 
         case .recentConversation, .unreadConversations:
             // Widgets et App Shortcut (#7811) : élections de `ConversationListEntry`.

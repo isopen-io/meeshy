@@ -66,13 +66,19 @@ class TalkieVoiceCopySender internal constructor(
 
     override val failures: Flow<Unit> = ports.exhausted.filter { queued.remove(it) }.map { }
 
-    override suspend fun send(frames: List<ByteArray>, toUserId: String, conversationId: String?): Boolean {
+    override suspend fun send(frames: List<ByteArray>, toUserId: String, conversationId: String?): Boolean =
+        deliver(frames, toUserId, conversationId, directOnly = false)
+
+    override suspend fun sendDirect(frames: List<ByteArray>, toUserId: String): Boolean =
+        deliver(frames, toUserId, conversationId = null, directOnly = true)
+
+    private suspend fun deliver(frames: List<ByteArray>, toUserId: String, conversationId: String?, directOnly: Boolean): Boolean {
         if (frames.isEmpty()) return false
         val file = File(directory, "talkie-copy-${UUID.randomUUID()}.m4a")
         val name = TalkieVoiceCopyName.of(now())
         val durationMs = withContext(Dispatchers.IO) { ports.write(frames, file) } ?: return false
         val clientMessageId = newClientMessageId()
-        val target = conversationId ?: destination(toUserId)
+        val target = conversationId ?: destination(toUserId, directOnly)
         queued.add(clientMessageId)
         val sent = target != null && runCatching { ports.enqueue(file, durationMs, target, clientMessageId, name) }
             .onFailure { if (it is CancellationException) throw it }
@@ -85,9 +91,10 @@ class TalkieVoiceCopySender internal constructor(
         return sent
     }
 
-    private suspend fun destination(userId: String): String? {
+    private suspend fun destination(userId: String, directOnly: Boolean): String? {
         val candidates = runCatching { ports.shared(userId) }.getOrDefault(emptyList())
-        return TalkieCopyDestination.pick(candidates) ?: ports.openDirect(userId)
+        val picked = if (directOnly) TalkieCopyDestination.pickDirect(candidates) else TalkieCopyDestination.pick(candidates)
+        return picked ?: ports.openDirect(userId)
     }
 }
 

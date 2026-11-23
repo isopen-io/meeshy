@@ -62,6 +62,20 @@ class SharedLocationsMapViewModelTest {
     }
 
     @Test
+    fun `la fiche d'une personne absente du magasin demande un rattrapage, une personne tenue n'en demande pas`() = scope.runTest {
+        val live = FakeLive(mapOf("u2" to entry()))
+        val vm = SharedLocationsMapViewModel(live, { emptyMap() }, 300L)
+
+        vm.ensure("u2")
+        advanceUntilIdle()
+        assertThat(live.catchUps).isEmpty()
+
+        vm.ensure("u9")
+        advanceUntilIdle()
+        assertThat(live.catchUps).containsExactly(null)
+    }
+
+    @Test
     fun `la mise a jour servie d'une personne se lit sans reseau, inconnue elle reste absente`() = scope.runTest {
         val live = FakeLive(mapOf("u2" to entry()))
         val vm = SharedLocationsMapViewModel(live, { emptyMap() }, 300L)

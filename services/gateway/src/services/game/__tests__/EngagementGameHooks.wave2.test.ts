@@ -85,6 +85,45 @@ describe('une mission achevée', () => {
   });
 });
 
+describe('le second Rêve complet d’après une rupture (#20455)', () => {
+  const AT = new Date('2026-10-05T12:00:00Z');
+  const brokenThenReplayed = (db: ReturnType<typeof setup>['db']) => {
+    Object.assign(db.user.rows.find((row) => row.id === USER)!, {
+      currentStreakDays: 2,
+      longestStreakDays: 12,
+      lastStreakDate: new Date('2026-10-05T00:00:00Z'),
+      brokenStreakDays: 12,
+      brokenStreakLastDay: '2026-10-02',
+    });
+    const row = (dayKey: string, slot: number, done: boolean) => ({
+      id: `${dayKey}-${slot}`, userId: USER, dayKey, slot, templateKey: `t${slot}`, difficulty: 'easy', signal: done ? 'z' : 'axis:tool.reaction',
+      prism: false, target: 1, progress: done ? 1 : 0, reward: 10, glory: 0, seen: [], completedAt: done ? AT : null, paidPoints: null, rerolledAt: null, createdAt: AT,
+    });
+    db.dailyMission.rows.push(row('2026-10-04', 0, true), row('2026-10-04', 1, true), row('2026-10-04', 2, true));
+    db.dailyMission.rows.push(row('2026-10-05', 0, true), row('2026-10-05', 1, true), row('2026-10-05', 2, false));
+  };
+
+  it('l’acte qui le complète rallume la Flamme, sans Meesh', async () => {
+    const { db, hooks } = setup();
+    brokenThenReplayed(db);
+
+    await hooks.missions.onSignal(USER, 'axis:tool.reaction', { now: AT, dayKey: '2026-10-05', timezone: 'UTC', record: 20 });
+
+    expect(db.user.rows.find((row) => row.id === USER)).toMatchObject({ currentStreakDays: 14, brokenStreakDays: null });
+    expect(db.meeshLedger.rows).toHaveLength(0);
+  });
+
+  it('une saison en panne ne retient pas le rallumage', async () => {
+    const { db, hooks } = setup();
+    brokenThenReplayed(db);
+    jest.spyOn(hooks.seasons, 'addStars').mockRejectedValue(new Error('down'));
+
+    await hooks.missions.onSignal(USER, 'axis:tool.reaction', { now: AT, dayKey: '2026-10-05', timezone: 'UTC', record: 20 });
+
+    expect(db.user.rows.find((row) => row.id === USER)).toMatchObject({ currentStreakDays: 14 });
+  });
+});
+
 describe('une série de Flamme', () => {
   it('qui franchit 100 jours grave le trophée de Flamme, une fois', async () => {
     const { db, hooks } = setup();

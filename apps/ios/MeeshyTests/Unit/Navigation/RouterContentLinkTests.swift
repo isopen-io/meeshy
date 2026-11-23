@@ -37,4 +37,27 @@ final class RouterContentLinkTests: XCTestCase {
         XCTAssertEqual(DeepLinkRouter.shared.pendingDeepLink, .reel(postId: "r1"))
         XCTAssertTrue(router.path.isEmpty)
     }
+
+    /// L'adresse PARTAGÉE d'une communauté (#20332) ouvre le détail en disant
+    /// que le lecteur arrive par le lien ; l'adresse nue, non.
+    func test_handleDeepLink_adressePartageeDUneCommunaute_ouvreLeDetailArriveParLeLien() {
+        let shared = Router()
+        shared.handleDeepLink(URL(string: "https://meeshy.me/communities/mshy_club?via=link")!)
+        XCTAssertEqual(shared.path, [.communityDetail("mshy_club", viaLink: true)])
+
+        let bare = Router()
+        bare.handleDeepLink(URL(string: "https://meeshy.me/communities/mshy_club")!)
+        XCTAssertEqual(bare.path, [.communityDetail("mshy_club")])
+    }
+
+    /// #20211 — une humeur touchée dans l'app s'ouvre en plein écran, la page
+    /// que sa notification ouvre déjà, jamais le détail d'un post.
+    func test_handleDeepLink_lienDHumeur_ouvreLHumeurEnPleinEcran() {
+        let router = Router()
+
+        router.handleDeepLink(URL(string: "https://meeshy.me/mood/m1")!)
+
+        XCTAssertEqual(router.path, [.moodSpotlight(statusId: "m1")])
+        XCTAssertNil(DeepLinkRouter.shared.pendingDeepLink)
+    }
 }

@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.feedback.FeedbackToastCenter
 import me.meeshy.sdk.model.feedback.FeedbackToastKind
+import me.meeshy.sdk.model.relation.TalkieHoldDelivery
 import me.meeshy.sdk.model.relation.TalkieSendOutcome
 
 /**
@@ -23,7 +24,8 @@ class TalkieSendControl(
     private val _withdrawn = MutableStateFlow(false)
     val withdrawn: StateFlow<Boolean> = _withdrawn.asStateFlow()
 
-    fun press(userId: String) = sender.press(userId)
+    /** [delivery] : `VOICE_MESSAGE` quand le téléphone de [userId] est injoignable depuis plusieurs minutes (#20241). */
+    fun press(userId: String, delivery: TalkieHoldDelivery = TalkieHoldDelivery.LIVE) = sender.press(userId, delivery)
 
     fun release() {
         scope.launch { sender.release() }

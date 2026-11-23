@@ -187,7 +187,7 @@ private fun LoadedDetail(
             ActionsSection(
                 access = access,
                 isJoining = state.isJoining,
-                join = JoinFace(state.requiresJoinApproval, state.joinRequestPending, state.joinRefusal, state.joinDeclinedUntil),
+                join = JoinFace(state.requiresJoinApproval, state.joinRequestPending, state.joinRefusal, state.joinDeclinedUntil, state.linkArrivalPaused),
                 communityId = community.id,
                 navigation = navigation,
                 onJoin = onJoin,
@@ -443,7 +443,12 @@ private data class JoinFace(
     val pending: Boolean,
     val refusal: CommunityJoinRefusal?,
     val declinedUntil: Instant? = null,
+    /** Arrivé par un lien qu'un intendant a mis en pause (#20332) : dit avant le geste. */
+    val linkArrivalPaused: Boolean = false,
 ) {
+    /** La pause servie à qui arrive par le lien, ou le 403 `COMMUNITY_LINK_PAUSED` reçu au geste. */
+    val linkPaused: Boolean get() = linkArrivalPaused || refusal == CommunityJoinRefusal.LINK_PAUSED
+
     /** Refusée : la date servie, ou le 403 `COMMUNITY_JOIN_COOLDOWN` le temps que le détail relu la serve. */
     val declined: Boolean get() = declinedUntil != null || refusal == CommunityJoinRefusal.COOLDOWN
 }
@@ -457,6 +462,7 @@ private fun JoinFace.notice(): Pair<String, Boolean>? = when {
     declinedUntil != null ->
         stringResource(R.string.community_join_declined_until, ShareLinkDateFormat.dayAndTime(declinedUntil.toEpochMilli())) to true
     pending -> stringResource(R.string.community_join_requested_waiting) to false
+    linkPaused -> stringResource(R.string.community_join_link_paused) to true
     else -> null
 }
 

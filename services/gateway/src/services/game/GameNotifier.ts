@@ -6,12 +6,12 @@
  * langues) ; ce service décide SI et À QUI.
  *
  * Règles, toutes gardées par `__tests__/GameNotifier.test.ts` :
- *  - **au plus UNE notification de jeu par jour et par destinataire**, le jour de SON fuseau
- *    (`SET NX EX`, `CacheStore.setnx` — Redis, ou sa `Map` en mémoire). Un verrou qui ne
- *    répond pas FERME : on ne notifie pas quand on ne sait pas compter. **Les duos et la
- *    mission du jour en SORTENT** (décision porteur 2026-10-06, #9541 : `countsAgainstGameDailyCap`) :
- *    ils ne se comptent pas et ne prennent pas le créneau — le message d'un ami n'attend pas
- *    demain, et la mission du jour EST la notification quotidienne du compte ;
+ *  - **au plus DEUX notifications de jeu par jour et par destinataire**, le jour de SON fuseau
+ *    (décision porteur 2026-11-10, #17368) : deux créneaux, chacun pris par `SET NX EX`
+ *    (`CacheStore.setnx` — Redis, ou sa `Map` en mémoire). Un verrou qui ne répond pas FERME :
+ *    on ne notifie pas quand on ne sait pas compter. **L'action d'un autre (les duos) et un
+ *    exploit (coupe ou montée de ligue) en SORTENT** (`countsAgainstGameDailyCap`) : ils ne se
+ *    comptent pas et ne prennent aucun créneau. La mission du jour compte ;
  *  - **un événement ne s'annonce qu'une fois** (une clé par duo, par semaine de ligue, par
  *    étape) : rejouer un règlement interrompu ne notifie pas deux fois ;
  *  - **« Jeu masqué » ne notifie rien** : tout est compté, rien n'est montré. Une préférence
@@ -31,7 +31,13 @@
 import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { NotificationType } from '@meeshy/shared/types/notification';
-import { countsAgainstGameDailyCap, gameLeagueResultKey, photoMomentNotificationKey } from '@meeshy/shared/utils/game/notifications';
+import {
+  GAME_NOTIFICATION_DAILY_CAP,
+  countsAgainstGameDailyCap,
+  gameLeagueResultKey,
+  isGameLeagueExploit,
+  photoMomentNotificationKey,
+} from '@meeshy/shared/utils/game/notifications';
 import { personalMissionActivity } from '@meeshy/shared/utils/game/personal-mission';
 import { personalMissionPhrase } from '@meeshy/shared/utils/game/personal-mission-copy';
 import type { LeagueKey } from '@meeshy/shared/utils/game/league';
@@ -117,7 +123,7 @@ type Plan = {
   readonly priority: 'low' | 'normal';
   readonly onceKey: string;
   readonly collapseId: string;
-  /** Compte-t-elle contre le plafond d'une notification de jeu par jour ? (Les duos et la mission du jour : non.) */
+  /** Compte-t-elle contre le plafond de deux notifications de jeu par jour ? (Les duos et les exploits : non.) */
   readonly capped: boolean;
   /**
    * Un créneau du jour déjà pris la DIFFÈRE au lieu de la taire (le push photo, § 5.16.4) : sa clé « une seule
@@ -180,7 +186,7 @@ function planOf(event: GameNotificationEvent): Plan {
         priority: 'low',
         onceKey: `league:${event.weekKey}`,
         collapseId: 'game-league-result',
-        capped: countsAgainstGameDailyCap('game_league_result'),
+        capped: countsAgainstGameDailyCap('game_league_result', { exploit: isGameLeagueExploit(event) }),
         content: (lang) => text(lang, gameLeagueResultKey({ zone: event.zone, cup: event.cup })),
         metadata: {
           action: 'view_details',
@@ -289,10 +295,10 @@ export class GameNotifier {
     const throttle = this.deps.throttle ?? getCacheStore();
     const onceKey = `notif:game:once:${event.recipientId}:${plan.onceKey}`;
     if (!(await throttle.setnx(onceKey, now.toISOString(), ONCE_TTL_SECONDS))) return 'skipped:duplicate';
-    // `GAME_NOTIFICATION_DAILY_CAP` vaut 1 : le créneau du jour se PREND, il ne se compte pas. Les duos
-    // et la mission du jour en sortent (#9541) : ni comptés, ni pris.
-    const dayKey = `notif:game:day:${event.recipientId}:${dayKeyOf(now, recipient.timezone)}`;
-    if (plan.capped && !(await throttle.setnx(dayKey, plan.type, DAY_TTL_SECONDS))) {
+    // Les créneaux du jour se PRENNENT un par un, ils ne se comptent pas : une clé par créneau, et le premier
+    // libre est le sien. Les duos et les exploits en sortent (#17368) : ni comptés, ni pris.
+    const dayKey = plan.capped ? await this.takeDaySlot(throttle, `notif:game:day:${event.recipientId}:${dayKeyOf(now, recipient.timezone)}`, plan.type) : null;
+    if (plan.capped && dayKey === null) {
       if (plan.deferrable) await throttle.del?.(onceKey).catch(() => undefined);
       return 'skipped:daily-cap';
     }
@@ -300,7 +306,7 @@ export class GameNotifier {
     // Le créneau ne se prend que pour une notification CRÉÉE : un refus (Ne pas déranger) ou une
     // panne le rend, sinon un résultat de ligue tombé la nuit taisait la notification du matin.
     const release = async () => {
-      if (plan.capped) await throttle.del?.(dayKey).catch(() => undefined);
+      if (dayKey !== null) await throttle.del?.(dayKey).catch(() => undefined);
     };
     const lang = recipientLanguage(recipient, 'fr');
     const created = await notifications
@@ -329,6 +335,18 @@ export class GameNotifier {
       return 'skipped:declined';
     }
     return 'sent';
+  }
+
+  /**
+   * Le premier créneau libre du jour, ou `null` quand les `GAME_NOTIFICATION_DAILY_CAP` sont pris. Le premier
+   * garde la clé d'avant #17368 : un créneau pris par la version précédente, le jour du déploiement, compte.
+   */
+  private async takeDaySlot(throttle: GameNotificationThrottle, dayPrefix: string, type: NotificationType): Promise<string | null> {
+    for (let slot = 1; slot <= GAME_NOTIFICATION_DAILY_CAP; slot += 1) {
+      const key = slot === 1 ? dayPrefix : `${dayPrefix}:${slot}`;
+      if (await throttle.setnx(key, type, DAY_TTL_SECONDS)) return key;
+    }
+    return null;
   }
 
   /** L'ami qui invite ou accepte : un compte vivant, nommé comme son profil public le nomme. */

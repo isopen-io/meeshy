@@ -103,6 +103,7 @@ struct BubbleFooter: View, Equatable {
                     presenceState: sender.presence,
                     isHere: sender.isHere,
                     ring: sender.ring,
+                    circleUserId: sender.userId,
                     enablePulse: false,
                     onTap: actions.onSenderTap,
                     onViewProfile: actions.onSenderTap,

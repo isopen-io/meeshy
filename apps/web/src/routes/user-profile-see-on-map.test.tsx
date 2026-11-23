@@ -97,7 +97,7 @@ describe('« Voir sur la carte » suit ce que la personne partage', () => {
     const el = await mountActions([sharing('u-rich-kwame')]);
     const row = el.querySelector('[data-see-on-map]');
     expect(row).not.toBeNull();
-    expect(row?.textContent).toContain('Voir sur la carte');
+    expect(row?.querySelector('[data-profile-where-hero]')?.getAttribute('aria-label')?.startsWith('Voir Kwame')).toBe(true);
     expect(row?.textContent).toContain('À un quartier près');
     expect(row?.textContent).toMatch(/4[12]\s?min/);
   });

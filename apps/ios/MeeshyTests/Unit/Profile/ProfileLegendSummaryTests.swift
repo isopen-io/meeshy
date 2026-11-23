@@ -137,9 +137,11 @@ final class ProfileLegendSummaryTests: XCTestCase {
         XCTAssertFalse(source.contains(".fill("), "aucune surface peinte sur place : le verre du design system")
     }
 
-    func test_actionsFace_legendRow_carriesTheLevelAndRankSubtitle() throws {
-        let source = try code("Meeshy/Features/Profile/Faces/ProfileActionsFace.swift")
-
-        XCTAssertTrue(source.contains("subtitle: ProfileLegendSummary.subtitle(for: legend)"))
+    /// #20177 — ma Légende ne vit qu'à un endroit : la carte de ma Vitrine, nourrie du même résumé.
+    func test_myLegend_livesOnTheVitrineOnly_fedByTheSummary() throws {
+        let vitrine = try code("Meeshy/Features/Profile/Views/ProfileView.swift")
+        XCTAssertTrue(vitrine.contains("fallback: .legend(legend.summary)"))
+        let actions = try code("Meeshy/Features/Profile/Faces/ProfileActionsFace.swift")
+        XCTAssertFalse(actions.contains("ProfileLegendSummary.subtitle(for: legend)"))
     }
 }

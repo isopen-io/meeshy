@@ -5,6 +5,7 @@ import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversati
 import { unwrap } from './client';
 import type { ConversationsDeps } from './conversations';
 import type { ApiResult } from './http';
+import { CONVERSATION_MEMBERS_QUERY_ROOT } from './realtime-catch-up-keys';
 import type { Participant } from './types';
 import type { ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
 
@@ -56,8 +57,14 @@ export const MEMBERS_STALE_TIME = 60_000;
 /**
  * Une clé HORS de `['conversations', …]` : ce préfixe porte des conversations,
  * et plusieurs sites le parcourent en supposant cette forme.
+ *
+ * **Sa racine vit dans `realtime-catch-up-keys.ts`** (#20438) : être hors de
+ * `['conversations', …]` la met aussi hors du seul préfixe que la branche de
+ * reconnexion périme, donc `CATCH_UP_FAMILIES` doit la NOMMER — et le faire
+ * depuis ce module emporterait ce port et `zod` dans le morceau du temps réel.
  */
-export const conversationMembersQueryKey = (conversationId: string) => ['conversation-members', conversationId] as const;
+export const conversationMembersQueryKey = (conversationId: string) =>
+  [...CONVERSATION_MEMBERS_QUERY_ROOT, conversationId] as const;
 
 const text = z.optional(z.nullable(z.string()));
 

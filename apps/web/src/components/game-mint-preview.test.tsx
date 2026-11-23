@@ -205,6 +205,62 @@ describe('après la frappe', () => {
 });
 
 /**
+ * LE LECTEUR D'ÉCRAN ENTEND LA GLOIRE DE LA FRAPPE (#20141) — la cérémonie est décorative (`aria-hidden`) : c'est la
+ * ligne qui annonce la pièce qui dit, après elle, la gloire gagnée puis le pas vers le rang suivant, lus AU GESTE.
+ */
+describe('la gloire d’une frappe, annoncée', () => {
+  const statusText = (host: HTMLElement): string => host.querySelector('[data-game-mint-minted]')?.textContent ?? '';
+  const spokenOf = (host: HTMLElement): string => host.querySelector('[data-game-mint-glory-spoken]')?.textContent?.trim() ?? '';
+  const settle = async () => {
+    await act(async () => {
+      for (let i = 0; i < 6; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  };
+
+  test('après la phrase de la pièce, dans la même annonce : la gloire gagnée puis le pas vers le rang suivant', async () => {
+    const game = gameBlockFixture();
+    const before = props({}, { glory: game.glory, strikeKey: 1, celebration: null });
+    let set: (celebrated: boolean) => void = () => undefined;
+    function Bench() {
+      const [celebrated, setCelebrated] = useState(false);
+      set = setCelebrated;
+      return <GameMintPreview {...before} celebration={celebrated ? { number: 4, edition: 'silver', key: 1 } : null} />;
+    }
+    const host = await mount(<Bench />);
+    await act(async () => set(true));
+    await settle();
+    const { mintGlorySpoken } = await import('@/lib/game/mint-glory-copy');
+    const expected = mintGlorySpoken(ceremonyGlory(game.mint, game.glory), 'fr');
+    expect(host.querySelector('[data-game-mint-minted]')?.getAttribute('role')).toBe('status');
+    expect(spokenOf(host)).toBe(expected);
+    expect(statusText(host).indexOf('Meesh n° 4 frappée')).toBeLessThan(statusText(host).indexOf(expected));
+  });
+
+  test('la gloire est celle d’AVANT le geste : la gloire rafraîchie par la frappe ne compte pas deux fois', async () => {
+    const game = gameBlockFixture();
+    const base = props({}, { glory: game.glory, strikeKey: 1, celebration: null });
+    let set: (celebrated: boolean) => void = () => undefined;
+    function Bench() {
+      const [celebrated, setCelebrated] = useState(false);
+      set = setCelebrated;
+      const glory = celebrated ? { ...game.glory, glory: game.glory.glory + game.mint.gloryGained } : game.glory;
+      return <GameMintPreview {...base} glory={glory} celebration={celebrated ? { number: 4, edition: 'silver', key: 1 } : null} />;
+    }
+    const host = await mount(<Bench />);
+    await act(async () => set(true));
+    await settle();
+    const { mintGlorySpoken } = await import('@/lib/game/mint-glory-copy');
+    expect(spokenOf(host)).toBe(mintGlorySpoken(ceremonyGlory(game.mint, game.glory), 'fr'));
+  });
+
+  test('sans pièce frappée, rien n’est annoncé', async () => {
+    const host = await mount(<GameMintPreview {...props({}, { glory: gameBlockFixture().glory })} />);
+    await settle();
+    expect(host.querySelector('[data-game-mint-glory-spoken]')).toBeNull();
+  });
+});
+
+/**
  * LA FRAPPE FERMÉE POUR UNE AUTRE RAISON QUE LE PRIX (porteur 2026-10-16) : une DETTE d'étincelles à rembourser, ou une
  * réserve du trésor que le rang n'ouvre pas encore. Un message clair, jamais un bouton grisé muet.
  */

@@ -76,6 +76,8 @@ final class TalkieSender: ObservableObject {
         var copied: [Data] = []
         /// La conversation que la passerelle a nommée pour la copie (`TALKIE_FALLBACK_VOICE` + `conversationId`).
         var copyInto: String?
+        /// Un message vocal choisi d'emblée (#20241) : aucun talkie, la voix part dans la conversation DIRECTE.
+        var voiceMessage = false
         var queue: [TalkieFragment] = []
         var fragmenter = TalkieFragmenter()
         var budget = TalkieBudget()
@@ -149,8 +151,15 @@ final class TalkieSender: ObservableObject {
 
     // MARK: - Le geste
 
-    func press(toUserId: String) {
+    /// `delivery` : `.voiceMessage` quand le téléphone du destinataire est injoignable depuis plusieurs minutes
+    /// (#20241) — aucun `talkie:start`, la voix s'enregistre tant que le doigt tient et part en message vocal dans la
+    /// conversation directe, même hors ligne (la file d'envoi la portera).
+    func press(toUserId: String, delivery: TalkieDelivery = .live) {
         guard session == nil else { return }
+        guard delivery == .live else {
+            pressVoiceMessage(toUserId: toUserId)
+            return
+        }
         guard emitter.isConnected else {
             report(.offline)
             return
@@ -167,6 +176,21 @@ final class TalkieSender: ObservableObject {
             await Task.yield()
             let micReady = await self.openMic(current)
             await self.conclude(current, verdict: await verdict.value, micReady: micReady)
+        }
+    }
+
+    private func pressVoiceMessage(toUserId: String) {
+        let current = Session(toUserId: toUserId, pressedAt: now())
+        current.voiceMessage = true
+        session = current
+        phase = .recordingCopy(toUserId: toUserId)
+        Task {
+            await Task.yield()
+            guard await self.openMic(current) else {
+                await self.refuse(current, .micDenied)
+                return
+            }
+            await self.startCopy(current)
         }
     }
 
@@ -368,7 +392,17 @@ final class TalkieSender: ObservableObject {
         current.finishing = true
         current.cancelDeadline?()
         await stopMic(current)
-        let sent = await copier.send(current.copied, toUserId: current.toUserId, conversationId: current.copyInto)
+        guard current.voiceMessage else {
+            let sent = await copier.send(current.copied, toUserId: current.toUserId, conversationId: current.copyInto)
+            settle(current, sent ? .voice : .failed)
+            return
+        }
+        // Un simple toucher n'a rien capté : rien ne part, rien ne se dit (le geste se rappelle par ailleurs).
+        guard !current.copied.isEmpty else {
+            settle(current, nil)
+            return
+        }
+        let sent = await copier.sendDirect(current.copied, toUserId: current.toUserId)
         settle(current, sent ? .voice : .failed)
     }
 

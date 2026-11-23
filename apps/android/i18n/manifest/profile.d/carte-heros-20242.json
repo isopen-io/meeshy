@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:profile": {
+      "resDir": "feature/profile/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "profile.where.hero.lastKnown",
+          "androidName": "profile_where_hero_last_known",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.where.stamp.justNow",
+          "androidName": "profile_where_stamp_just_now",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.where.stamp.minutes",
+          "androidName": "profile_where_stamp_minutes",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.where.stamp.at",
+          "androidName": "profile_where_stamp_at",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.actions.position",
+          "androidName": "profile_where_own_title",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

@@ -317,7 +317,7 @@ describe('SocialEventsHandler', () => {
       const { handler, io } = buildHandler();
       const data = { postId: POST_ID, userId: USER_ID, emoji: '❤️', likeCount: 6, reactionSummary: { '❤️': 6 } };
 
-      await handler.broadcastPostLiked(data, AUTHOR_ID, 'PUBLIC', []);
+      await handler.broadcastPostLiked(data, AUTHOR_ID, 'PUBLIC', [], []);
 
       const roomsArg = (io.to as jest.Mock<any>).mock.calls[0][0] as string[];
       expect(roomsArg).toContain(`feed:${FRIEND_ID_1}`);
@@ -346,7 +346,7 @@ describe('SocialEventsHandler', () => {
       const { handler, io } = buildHandler();
       const data = { postId: POST_ID, userId: USER_ID, emoji: '❤️', likeCount: 1, reactionSummary: {} };
 
-      await handler.broadcastPostLiked(data, AUTHOR_ID, 'PUBLIC', []);
+      await handler.broadcastPostLiked(data, AUTHOR_ID, 'PUBLIC', [], []);
 
       expect(io.to).toHaveBeenCalledTimes(1);
     });
@@ -357,7 +357,7 @@ describe('SocialEventsHandler', () => {
       const { handler, io } = buildHandler();
       const data = { postId: POST_ID, userId: USER_ID, emoji: '❤️', likeCount: 5, reactionSummary: {} };
 
-      await handler.broadcastPostUnliked(data, AUTHOR_ID, 'PUBLIC', []);
+      await handler.broadcastPostUnliked(data, AUTHOR_ID, 'PUBLIC', [], []);
 
       const roomsArg = (io.to as jest.Mock<any>).mock.calls[0][0] as string[];
       expect(roomsArg).toContain(`post:${POST_ID}`);
@@ -429,7 +429,7 @@ describe('SocialEventsHandler', () => {
       const { handler, io } = buildHandler();
       const data = { storyId: STORY_ID, viewerId: USER_ID } as any;
 
-      handler.broadcastStoryViewed(data, AUTHOR_ID);
+      handler.broadcastStoryViewed(data, AUTHOR_ID, []);
 
       expect(io.to).toHaveBeenCalledWith(`feed:${AUTHOR_ID}`);
       expect(io.to).toHaveBeenCalledTimes(1);
@@ -441,7 +441,7 @@ describe('SocialEventsHandler', () => {
       const { handler, io } = buildHandler();
       const data = { storyId: STORY_ID, userId: USER_ID, emoji: '❤️' } as any;
 
-      handler.broadcastStoryReacted(data, AUTHOR_ID);
+      handler.broadcastStoryReacted(data, AUTHOR_ID, []);
 
       // Single `io.to([...])` call → Socket.IO dedupes a socket present in both
       // rooms (author watching their own story) → no `+2` double-count.
@@ -457,7 +457,7 @@ describe('SocialEventsHandler', () => {
       const { handler, io } = buildHandler();
       const data = { storyId: STORY_ID, userId: USER_ID, emoji: '❤️' } as any;
 
-      handler.broadcastStoryUnreacted(data, AUTHOR_ID);
+      handler.broadcastStoryUnreacted(data, AUTHOR_ID, []);
 
       expect(io.to).toHaveBeenCalledTimes(1);
       const roomsArg = (io.to as jest.Mock<any>).mock.calls[0][0] as string[];
@@ -497,7 +497,7 @@ describe('SocialEventsHandler', () => {
       const { handler, io } = buildHandler();
       const data = { statusId: STATUS_ID, userId: USER_ID, emoji: '🎉' } as any;
 
-      handler.broadcastStatusReacted(data, AUTHOR_ID);
+      handler.broadcastStatusReacted(data, AUTHOR_ID, []);
 
       expect(io.to).toHaveBeenCalledTimes(1);
       const roomsArg = (io.to as jest.Mock<any>).mock.calls[0][0] as string[];
@@ -511,7 +511,7 @@ describe('SocialEventsHandler', () => {
       const { handler, io } = buildHandler();
       const data = { statusId: STATUS_ID, userId: USER_ID, emoji: '🎉' } as any;
 
-      handler.broadcastStatusUnreacted(data, AUTHOR_ID);
+      handler.broadcastStatusUnreacted(data, AUTHOR_ID, []);
 
       expect(io.to).toHaveBeenCalledTimes(1);
       const roomsArg = (io.to as jest.Mock<any>).mock.calls[0][0] as string[];
@@ -907,7 +907,11 @@ describe('SocialEventsHandler', () => {
   describe('friends cache eviction — expired entries', () => {
     it('deletes expired entries when cache reaches 500 entries', async () => {
       const { handler } = buildHandler();
-      const cache = (handler as any).friendsCache as Map<string, { ids: string[]; expiresAt: number }>;
+      // #20440 — le cache vit sur `SocialEmissionCore`, que le handler compose.
+      // On l'atteint à travers lui plutôt que par un accesseur sur le handler :
+      // un accesseur dont le SEUL lecteur est ce témoin serait du code mort en
+      // production. L'éviction observée est bien celle du socle (même Map).
+      const cache = (handler as any).core.friendsCache as Map<string, { ids: string[]; expiresAt: number }>;
 
       for (let i = 0; i < 500; i++) {
         cache.set(`expired-${i}`, { ids: [], expiresAt: Date.now() - 1 });

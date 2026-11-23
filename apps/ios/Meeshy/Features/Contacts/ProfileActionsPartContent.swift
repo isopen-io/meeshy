@@ -211,8 +211,12 @@ private struct ProfilePhoneSection: View {
                                             tint: request.tint)
             }
             if circle.offersBattery {
+                // « Demander un relevé » réveille son téléphone : injoignable depuis plusieurs minutes, il ne
+                // répondrait pas, la rangée ne se propose pas (#20241).
                 ProfileBatteryRow(userId: request.userId, displayName: request.displayName,
-                                  canPull: circle.offersBatteryPull, asksConsent: circle.batteryAsksConsent,
+                                  canPull: ProfileBatteryPullOffer.offers(canPull: circle.offersBatteryPull,
+                                                                          unreachable: shownUnreachable, now: now),
+                                  asksConsent: circle.batteryAsksConsent,
                                   showsDetail: false)
             }
             if circle.offersInactivity {

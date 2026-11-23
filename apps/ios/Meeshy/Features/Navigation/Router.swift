@@ -28,7 +28,8 @@ enum Route: Hashable {
     /// refusée.
     case nearbyDiscovery(initialCoordinate: RouteCoordinate? = nil)
     case communityList
-    case communityDetail(String)
+    /// `viaLink` : ouverte depuis l'adresse partagée de la communauté (#20332).
+    case communityDetail(String, viaLink: Bool = false)
     case communityCreate
     case communitySettings(Community)
     case communityMembers(String)

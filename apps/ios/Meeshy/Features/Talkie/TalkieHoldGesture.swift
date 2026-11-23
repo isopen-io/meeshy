@@ -30,6 +30,8 @@ struct TalkieHoldModifier: ViewModifier {
     @ObservedObject var sender: TalkieSender
     let userId: String
     @Binding var pressed: Bool
+    /// `.voiceMessage` : le téléphone du destinataire est injoignable depuis plusieurs minutes (#20241).
+    var delivery: TalkieDelivery = .live
     @State private var pressedAt: Date?
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
@@ -64,7 +66,8 @@ struct TalkieHoldModifier: ViewModifier {
         pressed = true
         pressedAt = Date()
         HapticFeedback.medium()
-        sender.press(toUserId: userId)
+        sender.press(toUserId: userId, delivery: delivery)
+        guard delivery == .live else { return }
         Task { await TalkiePushToTalkChannel.shared.activate() }
     }
 
@@ -75,7 +78,7 @@ struct TalkieHoldModifier: ViewModifier {
         pressedAt = nil
         Task { await sender.release() }
         guard quick else { return }
-        FeedbackToastManager.shared.showNotice(ProfileTalkieWording.hold)
+        FeedbackToastManager.shared.showNotice(ProfileTalkieWording.holdReminder(delivery))
     }
 }
 
@@ -108,6 +111,8 @@ struct TalkieLongHoldModifier: ViewModifier {
     /// relâchement, l'ignore (#19885). Un appui long PRIORITAIRE bloquait son toucher simple.
     var onHold: ((Bool) -> Void)? = nil
     @State private var pressed = false
+    /// Le téléphone de la personne est injoignable depuis plusieurs minutes (#20241) : l'appui long laisse un message vocal.
+    @State private var unreachableLasting = false
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
 
@@ -121,8 +126,9 @@ struct TalkieLongHoldModifier: ViewModifier {
             .animation(reduceMotion ? nil : MeeshyAnimation.springFast, value: pressed)
             .simultaneousGesture(hold)
             .onDisappear { end() }
-            .accessibilityAction(named: Text(ProfileTalkieWording.holdA11y(name: displayName))) {
-                FeedbackToastManager.shared.showNotice(ProfileTalkieWording.hold)
+            .modifier(PhoneUnreachableLastingReader(userId: userId, lasting: $unreachableLasting))
+            .accessibilityAction(named: Text(ProfileTalkieWording.holdA11y(name: displayName, delivery: delivery))) {
+                FeedbackToastManager.shared.showNotice(ProfileTalkieWording.holdReminder(delivery))
             }
     }
 
@@ -136,12 +142,15 @@ struct TalkieLongHoldModifier: ViewModifier {
             .onEnded { _ in end() }
     }
 
+    private var delivery: TalkieDelivery { TalkieDelivery.of(lasting: unreachableLasting) }
+
     private func begin() {
         guard !pressed else { return }
         pressed = true
         onHold?(true)
         HapticFeedback.medium()
-        sender.press(toUserId: userId)
+        sender.press(toUserId: userId, delivery: delivery)
+        guard delivery == .live else { return }
         Task { await TalkiePushToTalkChannel.shared.activate() }
     }
 

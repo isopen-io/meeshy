@@ -36,7 +36,7 @@ describe('isServableToAnonymous', () => {
     expect(isServableToAnonymous(row(), NOW)).toBe(true);
   });
 
-  it.each(['FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY'] as const)('refuse la visibilité %s', (visibility) => {
+  it.each(['FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY', 'ACQUAINTANCES', 'CLOSE', 'BLOOD'] as const)('refuse la visibilité %s', (visibility) => {
     expect(isServableToAnonymous(row({ visibility }), NOW)).toBe(false);
   });
 
@@ -57,10 +57,20 @@ describe('isServableToAnonymous', () => {
     expect(isServableToAnonymous(row({ author: null }), NOW)).toBe(false);
   });
 
+  it('une republication publique ne sert pas l’original d’un auteur désactivé, supprimé ou absent (#20211)', () => {
+    const original = (author: { isActive: boolean; deletedAt: Date | null; deactivatedAt: Date | null } | null) =>
+      row({ repostOfId: '507f1f77bcf86cd799439033', repostOf: { visibility: 'PUBLIC', deletedAt: null, expiresAt: null, author } });
+    expect(isServableToAnonymous(original({ isActive: true, deletedAt: null, deactivatedAt: null }), NOW)).toBe(true);
+    expect(isServableToAnonymous(original({ isActive: false, deletedAt: null, deactivatedAt: null }), NOW)).toBe(false);
+    expect(isServableToAnonymous(original({ isActive: true, deletedAt: NOW, deactivatedAt: null }), NOW)).toBe(false);
+    expect(isServableToAnonymous(original({ isActive: true, deletedAt: null, deactivatedAt: NOW }), NOW)).toBe(false);
+    expect(isServableToAnonymous(original(null), NOW)).toBe(false);
+  });
+
   it('une republication publique d’un original réservé aux amis ne sert pas l’original', () => {
     const repost = row({
       repostOfId: '507f1f77bcf86cd799439033',
-      repostOf: { visibility: 'FRIENDS', deletedAt: null, expiresAt: null },
+      repostOf: { visibility: 'FRIENDS', deletedAt: null, expiresAt: null, author: { isActive: true, deletedAt: null, deactivatedAt: null } },
     });
     expect(isServableToAnonymous(repost, NOW)).toBe(false);
   });
@@ -72,7 +82,7 @@ describe('isServableToAnonymous', () => {
   it('une republication d’un original public et vivant est servie', () => {
     const repost = row({
       repostOfId: '507f1f77bcf86cd799439033',
-      repostOf: { visibility: 'PUBLIC', deletedAt: null, expiresAt: null },
+      repostOf: { visibility: 'PUBLIC', deletedAt: null, expiresAt: null, author: { isActive: true, deletedAt: null, deactivatedAt: null } },
     });
     expect(isServableToAnonymous(repost, NOW)).toBe(true);
   });
@@ -80,11 +90,11 @@ describe('isServableToAnonymous', () => {
   it('une republication d’un original expiré ou supprimé est refusée', () => {
     const expired = row({
       repostOfId: '507f1f77bcf86cd799439033',
-      repostOf: { visibility: 'PUBLIC', deletedAt: null, expiresAt: new Date('2026-10-01T00:00:00.000Z') },
+      repostOf: { visibility: 'PUBLIC', deletedAt: null, expiresAt: new Date('2026-10-01T00:00:00.000Z'), author: { isActive: true, deletedAt: null, deactivatedAt: null } },
     });
     const deleted = row({
       repostOfId: '507f1f77bcf86cd799439033',
-      repostOf: { visibility: 'PUBLIC', deletedAt: NOW, expiresAt: null },
+      repostOf: { visibility: 'PUBLIC', deletedAt: NOW, expiresAt: null, author: { isActive: true, deletedAt: null, deactivatedAt: null } },
     });
     expect(isServableToAnonymous(expired, NOW)).toBe(false);
     expect(isServableToAnonymous(deleted, NOW)).toBe(false);

@@ -134,6 +134,8 @@ public data class GameChest(
     @EncodeDefault val reward: DailyChest? = null,
     /** `null` d'un serveur antérieur, avant le tirage des missions, ou si illisible : il tombe SEUL. */
     @EncodeDefault val today: ChestContent? = null,
+    /** Vrai le jour du retour, quand les aïeux ont GARDÉ l'Offrande (#20266) ; `null` devant un serveur antérieur. */
+    @EncodeDefault val kept: Boolean? = null,
 )
 
 internal fun parseMission(obj: JsonObject): GameMission = GameMission(
@@ -215,4 +217,5 @@ internal fun parseChest(obj: JsonObject): GameChest = GameChest(
     odds = parseChestOdds(obj.reqObject("odds")),
     reward = obj.nullableObject("reward")?.let(::parseDailyChest),
     today = obj.lenient("today", ::parseChestContent),
+    kept = obj.optBool("kept"),
 )

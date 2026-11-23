@@ -1,25 +1,65 @@
 import type { ServerEventName } from './serverEmit';
 import { DRAINED_EVENT, type QueuedEventType } from './queuedEventContract';
 
-/**
- * Les familles `message:` / `attachment:` que la passerelle émet, file comprise.
- *
- * `link:message:new` n'y figure pas, et c'est voulu : son préfixe la range avec
- * les liens, et `DRAINED_EVENT` la rejoue déjà sous `'link-message'`.
- */
-type MessageOrAttachmentEvent = Extract<
-  ServerEventName,
-  `message:${string}` | `attachment:${string}` | `attachment-status:${string}`
->;
-
 /** Ce que la file sait rejouer — la table de `queuedEventContract`, lue comme un ensemble. */
 type QueuedEventName = (typeof DRAINED_EVENT)[QueuedEventType];
 
 /**
- * Les familles émises que la file ne rejoue PAS. Calculé, jamais énuméré : une
- * famille neuve y entre sans que personne ne l'ajoute.
+ * Le préfixe d'un nom d'événement, jusqu'au PREMIER deux-points.
+ *
+ * `'link:message:new'` rend `'link:'` et non `'link:message:'`, et c'est le bon
+ * grain : c'est ainsi que `SERVER_EVENTS` range ses domaines, et le dépôt n'a
+ * qu'UN événement serveur sous `link:` (mesuré).
  */
-export type UnqueuedFamily = Exclude<MessageOrAttachmentEvent, QueuedEventName>;
+type PrefixOf<T extends string> = T extends `${infer P}:${string}` ? `${P}:` : never;
+
+/**
+ * **LES PRÉFIXES QUE LA FILE TOUCHE, DÉRIVÉS DE LA FILE ELLE-MÊME** (#20353).
+ *
+ * Ce type était une ÉNUMÉRATION écrite à la main — `message:` / `attachment:` /
+ * `attachment-status:` — et sa seconde affirmation (« ce sont les seules
+ * familles où la question se pose ») n'avait aucun moyen d'être vérifiée
+ * (leçon 261). Mesuré au cycle 220, elle était **fausse dans les deux sens** :
+ * il manquait `reaction:` et `link:`, que `DRAINED_EVENT` rejoue, et
+ * `attachment-status:` y figurait alors que la file n'y touche à RIEN.
+ *
+ * Le remède n'est pas de corriger la liste — « corriger une énumération ne lui
+ * donne aucun moyen de rester vraie » — mais de la DÉRIVER : les prefixes
+ * viennent désormais des valeurs de `DRAINED_EVENT`, si bien qu'une famille
+ * neuve posée dans un préfixe que la file touche déjà ne peut plus échapper au
+ * `satisfies` ci-dessous.
+ *
+ * **L'élargissement n'a coûté AUCUNE entrée**, et c'est ce qui le rend bon
+ * marché : sous `reaction:` les deux seuls événements serveur
+ * (`reaction:added`, `reaction:removed`) sont enfilés, et sous `link:` le seul
+ * (`link:message:new`) l'est aussi — `Exclude` y rend `never`. Le gain est de
+ * STRUCTURE, pas de couverture immédiate.
+ */
+type QueueTouchedPrefix = PrefixOf<QueuedEventName>;
+
+/**
+ * Le seul préfixe de la portée que la file ne touche PAS, et il est DÉCLARÉ
+ * avec sa raison plutôt que glissé dans une liste.
+ *
+ * `attachment-status:` ne porte qu'un événement (`attachment-status:updated`) et
+ * la file n'en rejoue aucun : il n'entre par aucune dérivation. Il appartient
+ * pourtant à la question — c'est la progression de lecture d'un média, une
+ * vérité que le serveur GARDE — donc il reste dans la portée, par décision.
+ *
+ * Un second extra se déclare ici, avec sa raison. Il ne s'en déduit aucun.
+ */
+type DeclaredExtraPrefix = 'attachment-status:';
+
+/** Les familles émises sous ces prefixes, file comprise. */
+type EventInScope = Extract<ServerEventName, `${QueueTouchedPrefix | DeclaredExtraPrefix}${string}`>;
+
+/**
+ * Les familles émises que la file ne rejoue PAS. Calculé, jamais énuméré : une
+ * famille neuve y entre sans que personne ne l'ajoute — et depuis #20353, la
+ * PORTÉE elle-même est calculée, de sorte qu'un préfixe neuf de la file y entre
+ * sans que personne ne l'ajoute non plus.
+ */
+export type UnqueuedFamily = Exclude<EventInScope, QueuedEventName>;
 
 /**
  * Pourquoi une famille se passe de file. DEUX formes, et la distinction n'est
@@ -117,3 +157,72 @@ export const UNQUEUED_FAMILY_VERDICT = {
       "Elle EST l'annonce que le drain a livré. L'enfiler dans la file que le drain vide n'a pas de sens : son contenu est l'acte de remise, pas un état que le serveur garde.",
   },
 } as const satisfies Record<UnqueuedFamily, UnqueuedVerdict>;
+
+/* ------------------------------------------------------------------------- *
+ * LE CLIQUET DE LA PORTÉE — au TYPE, comme celui de `queuedEventContract.ts`.
+ *
+ * `satisfies` garde que la table est TOTALE sur la portée. Il ne garde pas que
+ * la PORTÉE soit la bonne : c'est l'affirmation qu'une énumération écrite à la
+ * main ne peut pas porter, et celle par laquelle #20349 est passé.
+ *
+ * Les assertions ci-dessous ancrent ce que la dérivation PROMET. Elles ne
+ * coûtent aucune ligne exécutable et vivent dans le fichier de PRODUCTION,
+ * pour tomber sous `tsc -p tsconfig.json` (le gate « Qualité TS ») plutôt que
+ * sous un témoin, que `tsconfig.json` EXCLUT.
+ * ------------------------------------------------------------------------- */
+
+type AssertScope<T extends true> = T;
+
+/**
+ * **Tout événement que la file rejoue est DANS la portée.** C'est la propriété
+ * centrale : si un `eventType` neuf rejoue un événement d'un préfixe inconnu,
+ * ses familles sœurs non enfilées entrent automatiquement dans la table — et le
+ * `satisfies` exige alors leur réponse. Sans cette assertion, rien ne dirait
+ * que `PrefixOf` extrait bien le grain par lequel `ServerEventName` se range.
+ */
+type _EveryQueuedEventIsInScope = AssertScope<QueuedEventName extends EventInScope ? true : false>;
+
+/**
+ * **La portée ne contient que des noms d'événements RÉELS.** Un préfixe mal
+ * extrait (`'link:message:'` au lieu de `'link:'`, ou un `PrefixOf` qui rendrait
+ * `never`) rétrécirait la portée en silence, et la table resterait verte sur un
+ * ensemble vide — exactement le défaut d'une garde négative dont le relevé rend
+ * `[]`.
+ */
+type _ScopeIsNotEmpty = AssertScope<[EventInScope] extends [never] ? false : true>;
+
+/**
+ * **La portée contient les SIX familles que la table répond**, nommées une à
+ * une. C'est l'ancre qui ferait tomber la dérivation si elle se rétrécissait
+ * sans que personne ne retire d'entrée : `satisfies` accepte une table plus
+ * LARGE que sa portée sans broncher, donc lui seul ne verrait pas le
+ * rétrécissement.
+ */
+type _KnownFamiliesStayInScope = AssertScope<
+  | 'message:cited-post-withdrawn'
+  | 'message:translation-shared'
+  | 'message:countdown-started'
+  | 'message:pending-delivered'
+  | 'attachment:ready'
+  | 'attachment-status:updated' extends UnqueuedFamily
+    ? true
+    : false
+>;
+
+/**
+ * **Les prefixes que la file touche sont bien ceux qu'on croit.** Mesuré au
+ * cycle 220 : `message:`, `attachment:`, `reaction:` et `link:`. L'ancre est
+ * là pour qu'un `eventType` retiré de la file — donc un préfixe qui sort de la
+ * dérivation — soit un changement VISIBLE et non un rétrécissement muet de la
+ * portée.
+ */
+type _QueueTouchesTheFourMeasuredPrefixes = AssertScope<
+  'message:' | 'attachment:' | 'reaction:' | 'link:' extends QueueTouchedPrefix ? true : false
+>;
+
+export type UnqueuedFamilyScopeRatchet = [
+  _EveryQueuedEventIsInScope,
+  _ScopeIsNotEmpty,
+  _KnownFamiliesStayInScope,
+  _QueueTouchesTheFourMeasuredPrefixes,
+];

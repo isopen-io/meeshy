@@ -70,6 +70,7 @@ class GameGuideVectorParityTest {
         "prestige" -> GuideEventV2.Prestige(e["prestige"].int()!!, e["gloryGained"].int()!!)
         "atlas-stamp" -> GuideEventV2.AtlasStamp(e["language"].text(), e["stamped"].int()!!, e["total"].int()!!)
         "flame-freeze-gift" -> GuideEventV2.FlameFreezeGift(e["freezes"].int()!!)
+        "offering-kept" -> GuideEventV2.OfferingKept(e["easedDays"].int()!!)
         else -> error("événement inconnu ${e["kind"]}")
     }
 

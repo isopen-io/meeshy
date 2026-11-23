@@ -26,7 +26,7 @@ struct VisitorContentRequest: Equatable, Identifiable, Sendable {
     /// `nil` pour tout lien qui n'est ni une publication, ni un réel, ni une story.
     init?(link: DeepLink, via: String?) {
         switch link {
-        case .postDetail(let postId):
+        case .postDetail(let postId), .mood(let postId):
             self.init(postId: postId, kind: .post, via: via)
         case .reel(let postId):
             self.init(postId: postId, kind: .reel, via: via)

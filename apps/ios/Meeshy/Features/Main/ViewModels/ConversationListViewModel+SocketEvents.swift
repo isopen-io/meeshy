@@ -46,216 +46,196 @@ extension ConversationListViewModel {
         // catégories user-level) n'avait aucun lecteur sur iOS. Il en a un
         // depuis #4201 : `UserPreferencesManager.observeRemotePreferenceBroadcast`.
 
+        subscribeToConversationUpdates()
+        subscribeToConversationCreation()
+        subscribeToMembershipChanges()
+        subscribeToReconnect()
+    }
+
+    // MARK: - conversation:updated
+
+    private func subscribeToConversationUpdates() {
         messageSocket.conversationUpdated
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self else { return }
-                guard let index = self.convIndex(for: event.conversationId) else {
-                    // Conversation pas encore connue côté client : c'est le cas
-                    // d'un DM tout neuf (ou d'un groupe qu'on vient d'ajouter
-                    // à l'utilisateur) où le gateway a déjà émis
-                    // CONVERSATION_UPDATED dans ROOMS.user(self) MAIS
-                    // self n'a jamais reçu MESSAGE_NEW (il n'avait pas joint
-                    // ROOMS.conversation(id) avant ce moment). Sans fetch
-                    // d'appoint la conversation reste invisible jusqu'à un
-                    // pull-to-refresh manuel.
-                    self.fetchAndPrependMissingConversation(id: event.conversationId, source: .socketUpdated)
-                    return
-                }
-                // Apply the in-place metadata updates first; the gateway
-                // can piggy-back rename/avatar changes on the same event
-                // that carries lastMessageAt, so we want the row data fresh
-                // BEFORE we bump it to position 0 (otherwise the bumped
-                // row would render stale title for one frame).
-                // Un DM n'est jamais renommable : son `title` client est le
-                // nom du participant, dérivé à la conversion REST
-                // (`toConversation` écarte le titre DB). Le payload socket
-                // porte le titre BRUT — le greffer sur un DM écrase le nom
-                // affiché (« sandra raveloson » → « Sany » au premier
-                // pin/mute). Greffe réservée aux
-                // conversations renommables.
-                if let title = event.title, self.conversations[index].type != .direct {
-                    self.conversations[index].title = title
-                }
-                if let description = event.description { self.conversations[index].description = description }
-                if let avatar = event.avatar { self.conversations[index].avatar = avatar }
-                if let banner = event.banner { self.conversations[index].banner = banner }
-                if let isAnnouncement = event.isAnnouncementChannel {
-                    self.conversations[index].isAnnouncementChannel = isAnnouncement
-                }
-                if let writeRole = event.defaultWriteRole {
-                    self.conversations[index].defaultWriteRole = writeRole
-                }
-                if let slowMode = event.slowModeSeconds {
-                    self.conversations[index].slowModeSeconds = slowMode
-                }
-                if let autoTranslate = event.autoTranslateEnabled {
-                    self.conversations[index].autoTranslateEnabled = autoTranslate
-                }
-                // Bump the row to the top when the gateway tells us a new
-                // message advanced lastMessageAt. We compare strictly
-                // greater-than so a re-broadcast of the same timestamp
-                // (e.g. metadata-only update echoed back to the user
-                // room) doesn't pointlessly reshuffle the list and
-                // trigger a re-render of every cell behind it.
-                //
-                // L'identifiant et le texte que porte l'événement voyagent DANS
-                // la facette. Les poser sur la ligne avant l'appel les faisait
-                // effacer par la remise à neutre du bump une ligne plus bas :
-                // la ligne restait muette jusqu'à la synchro suivante alors même
-                // que le gateway venait d'envoyer le texte.
-                //
-                // Le Prisme voyage avec l'aperçu. Extrait UNE fois : les deux
-                // branches ci-dessous en ont besoin, chacune à sa façon.
-                let replacedPrism = Self.replacedPrism(from: event)
-                if let newLastAt = event.lastMessageAt,
-                   newLastAt > self.conversations[index].lastMessageAt {
-                    Logger.messages.debug("[conversationUpdated] bump websocket id=\(event.conversationId, privacy: .public)")
-                    // Le payload message-driven ne porte que `senderId` (jamais
-                    // `updatedBy`, réservé aux mises à jour de métadonnées — cf.
-                    // ConversationUpdatedEvent). Pour un DM, l'auteur d'un NOUVEAU
-                    // message est forcément l'autre participant : on résout son nom
-                    // depuis les champs déjà en mémoire sur la ligne (aucun aller-
-                    // retour réseau/cache), pour que la ligne affiche l'auteur dès
-                    // ce bump au lieu d'attendre la prochaine synchro (#9359 : avec l'id du pair).
-                    // #6921 — la règle a QUITTÉ ce site pour `ConversationListAuthor`.
-                    // Le repli DM ci-dessus était juste et incomplet : il ne
-                    // couvrait pas MON PROPRE message (`senderId == moi`, donc
-                    // jamais le pair ⇒ `nil`), ce qui retirait le préfixe de la
-                    // ligne à chaque envoi. Et il ignorait `lastMessageSenderName`,
-                    // que la passerelle sert et que le décodeur jetait.
-                    // Message NEUF : « rien d'affirmé » vaut « aucun auteur » —
-                    // celui de l'ancien message ne s'hérite pas (garde anti-périmé).
-                    // `senderId` est un id de PARTICIPANT : « Vous » se reconnaît
-                    // aussi à `updatedBy`, l'id UTILISATEUR de l'auteur (#7612).
-                    let resolvedSenderName = ConversationListAuthor.resolve(
-                        event, readerId: self.currentUserId,
-                        row: self.conversations[index], youLabel: Self.youAuthorLabel
-                    ).displayedNameForNewMessage
-                    let resolvedSenderUserId = ConversationListAuthor.peerUserId(senderUserId: event.messageSenderUserId, senderName: resolvedSenderName, readerId: self.currentUserId, youLabel: Self.youAuthorLabel)
-                    self.bumpToTop(
-                        conversationId: event.conversationId,
-                        facet: LastMessageFacet(
-                            // `…IdValue` : cette branche décrit un message NEUF
-                            // (`newLastAt` a AVANCÉ), donc « clé absente » et
-                            // « plus aucun message » y sont hors sujet — un
-                            // vidage n'avance jamais d'horodatage.
-                            id: event.lastMessageIdValue,
-                            preview: event.lastMessagePreview,
-                            senderName: resolvedSenderName, senderUserId: resolvedSenderUserId,
-                            at: newLastAt,
-                            // La facette décrit UN message : la carte du message
-                            // PRÉCÉDENT n'est pas la sienne, donc `.unchanged`
-                            // vaut `nil` ici (neutre) et non « conserver ».
-                            translations: replacedPrism?.map,
-                            originalLanguage: replacedPrism?.originalLanguage,
-                            location: event.location
-                        )
-                    )
-                } else if case .replaced(.none) = event.lastMessage {
-                    // « Plus AUCUN message visible ici » : le lecteur vient de
-                    // masquer POUR LUI le dernier qui lui restait. Tout le
-                    // groupe d'aperçu arrive à `null`, et les `if let` de la
-                    // branche suivante le jetteraient champ par champ — la
-                    // ligne garderait l'aperçu de ce qui vient de disparaître,
-                    // et pour toujours : plus rien ne bougera dans cette
-                    // conversation pour le faire remplacer.
-                    //
-                    // Le vidage passe par le geste CENTRAL du modèle : la ligne
-                    // dit plus que son texte (pièce jointe, expéditeur, épingle
-                    // de position, « Message expiré »), et n'en effacer qu'une
-                    // partie laisserait le reste décrire le message masqué.
-                    //
-                    // `lastMessageAt` reste en place — voir `clearLastMessage` :
-                    // c'est le rang GLOBAL de la ligne, qu'un masquage personnel
-                    // ne change pour personne.
-                    if self.conversations[index].clearLastMessage() {
-                        self.schedulePersist()
-                    }
-                } else {
-                    if case .replaced(.some(let msgId)) = event.lastMessage {
-                        // Nommer un AUTRE message, c'est cesser de décrire le
-                        // précédent. Ce payload-ci ne porte que l'identité, le
-                        // texte et le Prisme — jamais l'auteur, les pièces
-                        // jointes ni les drapeaux éphémères, que
-                        // `emitConversationPreviewUpdate` ne lit même pas. Sans
-                        // ce geste, une suppression pour tous du dernier
-                        // message laissait la ligne rendre l'aperçu du
-                        // remplaçant sous la vignette, l'auteur et le « Vue
-                        // unique » du message supprimé. Muet quand l'identité
-                        // ne change pas : à l'édition et à la traduction, ces
-                        // champs restent vrais.
-                        self.conversations[index].adoptLastMessage(id: msgId)
-                        // Écrite AVEC l'id (chemin message-driven) et jamais
-                        // seule : `nil` efface la pastille du message précédent
-                        // quand un texte le remplace au même horodatage.
-                        self.conversations[index].lastMessageLocation = event.location
-                    }
-                    if let preview = event.lastMessagePreview {
-                        self.conversations[index].lastMessagePreview = preview.meeshyPreviewTruncated
-                    }
-                    // L'auteur est REPOSÉ au même titre que l'aperçu, et pour la
-                    // même raison (#6921) : `adoptLastMessage` vient de l'effacer
-                    // — à raison, un nouveau message n'ayant pas l'auteur de
-                    // l'ancien — et rien ne le remettait. La ligne montrait alors
-                    // le texte sans son préfixe. `nil` reste `nil` : quand
-                    // l'événement n'affirme aucun auteur, la garde anti-périmé
-                    // s'applique inchangée.
-                    // MÊME message (édition, traduction) : « rien d'affirmé »
-                    // vaut GARDER. Écrire `nil` ici effaçait l'auteur à chaque
-                    // édition de légende — ce que le témoin
-                    // `…editingTheSameMessage_keepsItsDescription` a attrapé.
-                    if case .display(let auteur) = ConversationListAuthor.resolve(
-                        event, readerId: self.currentUserId,
-                        row: self.conversations[index], youLabel: Self.youAuthorLabel
-                    ) {
-                        self.conversations[index].lastMessageSenderName = auteur
-                    }
-                    // Appliquée AU MÊME TITRE que l'aperçu, et au même endroit :
-                    // la paire doit rester cohérente, sinon on recrée le mélange
-                    // exact que le tri-état sert à empêcher — texte neuf, carte
-                    // de l'ancien, et le résolveur qui préfère la carte. C'est
-                    // le cas de l'ÉDITION : même `lastMessageId`, horodatage
-                    // ÉGAL, contenu changé, `translations: null` reçu.
-                    // `.replaced([:])` → `nil` : le résolveur distingue « pas de
-                    // carte » d'une carte vide.
-                    if let prism = replacedPrism {
-                        self.conversations[index].lastMessageTranslations =
-                            prism.map.isEmpty ? nil : prism.map
-                        self.conversations[index].lastMessageOriginalLanguage = prism.originalLanguage
-                    }
-                    // L'horodatage, lui, ne suivait PAS l'aperçu quand celui-ci
-                    // recule — la branche ci-dessus n'est atteinte que si
-                    // `lastMessageAt` n'a pas avancé, et rien ne le réécrivait.
-                    //
-                    // Un recalcul autoritatif du serveur recule légitimement :
-                    // supprimer le dernier message POUR TOUS fait redescendre la
-                    // ligne sur le message précédent. L'aperçu et l'id
-                    // s'appliquaient bien, mais la ligne gardait l'horodatage du
-                    // message supprimé — donc sa PLACE dans la liste, triée par
-                    // `lastMessageAt` décroissant. La ligne affichait le bon
-                    // texte au mauvais rang, jusqu'à la synchro suivante.
-                    //
-                    // Réservé au drapeau : sans lui, un horodatage qui recule
-                    // décrit un message périmé (diffusion arrivée dans le
-                    // désordre) et doit rester ignoré — c'est la raison d'être
-                    // du `>` strict au-dessus. Seul l'émetteur les distingue.
-                    //
-                    // Pas de re-tri explicite : les sections d'affichage trient
-                    // à la construction (`conversationsAreInOrder`), donc la
-                    // place se corrige au prochain rendu.
-                    if event.previewRecalculated, let recalculatedAt = event.lastMessageAt {
-                        self.conversations[index].lastMessageAt = recalculatedAt
-                    }
-                    // Metadata-only mutation (rename, avatar swap, broadcast
-                    // toggle) still needs to land in L2 so a cold restart
-                    // doesn't show the pre-event title for a frame. bumpToTop
-                    // already calls schedulePersist when it runs.
-                    self.schedulePersist()
-                }
-            }
+            .sink { [weak self] event in self?.handleConversationUpdated(event) }
             .store(in: &cancellables)
+    }
 
+    private func handleConversationUpdated(_ event: ConversationUpdatedEvent) {
+        guard let index = convIndex(for: event.conversationId) else {
+            // Conversation pas encore connue côté client : c'est le cas
+            // d'un DM tout neuf (ou d'un groupe qu'on vient d'ajouter
+            // à l'utilisateur) où le gateway a déjà émis
+            // CONVERSATION_UPDATED dans ROOMS.user(self) MAIS
+            // self n'a jamais reçu MESSAGE_NEW (il n'avait pas joint
+            // ROOMS.conversation(id) avant ce moment). Sans fetch
+            // d'appoint la conversation reste invisible jusqu'à un
+            // pull-to-refresh manuel.
+            fetchAndPrependMissingConversation(id: event.conversationId, source: .socketUpdated)
+            return
+        }
+        // Apply the in-place metadata updates first; the gateway
+        // can piggy-back rename/avatar changes on the same event
+        // that carries lastMessageAt, so we want the row data fresh
+        // BEFORE we bump it to position 0 (otherwise the bumped
+        // row would render stale title for one frame).
+        conversations[index].applyMetadata(from: event)
+        applyLastMessage(event, at: index)
+    }
+
+    private func applyLastMessage(_ event: ConversationUpdatedEvent, at index: Int) {
+        // Bump the row to the top when the gateway tells us a new
+        // message advanced lastMessageAt. We compare strictly
+        // greater-than so a re-broadcast of the same timestamp
+        // (e.g. metadata-only update echoed back to the user
+        // room) doesn't pointlessly reshuffle the list and
+        // trigger a re-render of every cell behind it.
+        //
+        // L'identifiant et le texte que porte l'événement voyagent DANS
+        // la facette. Les poser sur la ligne avant l'appel les faisait
+        // effacer par la remise à neutre du bump une ligne plus bas :
+        // la ligne restait muette jusqu'à la synchro suivante alors même
+        // que le gateway venait d'envoyer le texte.
+        //
+        // Le Prisme voyage avec l'aperçu. Extrait UNE fois : les deux
+        // branches ci-dessous en ont besoin, chacune à sa façon.
+        let replacedPrism = Self.replacedPrism(from: event)
+        if let newLastAt = event.lastMessageAt,
+           newLastAt > conversations[index].lastMessageAt {
+            bumpRowForNewMessage(event, newLastAt: newLastAt, at: index, replacedPrism: replacedPrism)
+        } else if case .replaced(.none) = event.lastMessage {
+            // « Plus AUCUN message visible ici » : le lecteur vient de
+            // masquer POUR LUI le dernier qui lui restait. Tout le
+            // groupe d'aperçu arrive à `null`, et les `if let` de la
+            // branche suivante le jetteraient champ par champ — la
+            // ligne garderait l'aperçu de ce qui vient de disparaître,
+            // et pour toujours : plus rien ne bougera dans cette
+            // conversation pour le faire remplacer.
+            //
+            // Le vidage passe par le geste CENTRAL du modèle : la ligne
+            // dit plus que son texte (pièce jointe, expéditeur, épingle
+            // de position, « Message expiré »), et n'en effacer qu'une
+            // partie laisserait le reste décrire le message masqué.
+            //
+            // `lastMessageAt` reste en place — voir `clearLastMessage` :
+            // c'est le rang GLOBAL de la ligne, qu'un masquage personnel
+            // ne change pour personne.
+            if conversations[index].clearLastMessage() {
+                schedulePersist()
+            }
+        } else {
+            applyLastMessageInPlace(event, at: index, replacedPrism: replacedPrism)
+        }
+    }
+
+    private func bumpRowForNewMessage(
+        _ event: ConversationUpdatedEvent,
+        newLastAt: Date,
+        at index: Int,
+        replacedPrism: (map: [String: String], originalLanguage: String?)?
+    ) {
+        Logger.messages.debug("[conversationUpdated] bump websocket id=\(event.conversationId, privacy: .public)")
+        // Le payload message-driven ne porte que `senderId` (jamais
+        // `updatedBy`, réservé aux mises à jour de métadonnées — cf.
+        // ConversationUpdatedEvent). Pour un DM, l'auteur d'un NOUVEAU
+        // message est forcément l'autre participant : on résout son nom
+        // depuis les champs déjà en mémoire sur la ligne (aucun aller-
+        // retour réseau/cache), pour que la ligne affiche l'auteur dès
+        // ce bump au lieu d'attendre la prochaine synchro (#9359 : avec l'id du pair).
+        // #6921 — la règle a QUITTÉ ce site pour `ConversationListAuthor`.
+        // Le repli DM ci-dessus était juste et incomplet : il ne
+        // couvrait pas MON PROPRE message (`senderId == moi`, donc
+        // jamais le pair ⇒ `nil`), ce qui retirait le préfixe de la
+        // ligne à chaque envoi. Et il ignorait `lastMessageSenderName`,
+        // que la passerelle sert et que le décodeur jetait.
+        // Message NEUF : « rien d'affirmé » vaut « aucun auteur » —
+        // celui de l'ancien message ne s'hérite pas (garde anti-périmé).
+        // `senderId` est un id de PARTICIPANT : « Vous » se reconnaît
+        // aussi à `updatedBy`, l'id UTILISATEUR de l'auteur (#7612).
+        let resolvedSenderName = ConversationListAuthor.resolve(
+            event, readerId: currentUserId,
+            row: conversations[index], youLabel: Self.youAuthorLabel
+        ).displayedNameForNewMessage
+        let resolvedSenderUserId = ConversationListAuthor.peerUserId(senderUserId: event.messageSenderUserId, senderName: resolvedSenderName, readerId: currentUserId, youLabel: Self.youAuthorLabel)
+        bumpToTop(
+            conversationId: event.conversationId,
+            facet: LastMessageFacet(
+                // `…IdValue` : cette branche décrit un message NEUF
+                // (`newLastAt` a AVANCÉ), donc « clé absente » et
+                // « plus aucun message » y sont hors sujet — un
+                // vidage n'avance jamais d'horodatage.
+                id: event.lastMessageIdValue,
+                preview: event.lastMessagePreview,
+                senderName: resolvedSenderName, senderUserId: resolvedSenderUserId,
+                at: newLastAt,
+                // La facette décrit UN message : la carte du message
+                // PRÉCÉDENT n'est pas la sienne, donc `.unchanged`
+                // vaut `nil` ici (neutre) et non « conserver ».
+                translations: replacedPrism?.map,
+                originalLanguage: replacedPrism?.originalLanguage,
+                location: event.location
+            )
+        )
+    }
+
+    private func applyLastMessageInPlace(
+        _ event: ConversationUpdatedEvent,
+        at index: Int,
+        replacedPrism: (map: [String: String], originalLanguage: String?)?
+    ) {
+        // Mutée sur une copie, reposée UNE fois : `conversations` a un
+        // `didSet` qui diffe tout le tableau à chaque écriture.
+        var row = conversations[index]
+        if case .replaced(.some(let msgId)) = event.lastMessage {
+            // Nommer un AUTRE message, c'est cesser de décrire le
+            // précédent. Ce payload-ci ne porte que l'identité, le
+            // texte et le Prisme — jamais l'auteur, les pièces
+            // jointes ni les drapeaux éphémères, que
+            // `emitConversationPreviewUpdate` ne lit même pas. Sans
+            // ce geste, une suppression pour tous du dernier
+            // message laissait la ligne rendre l'aperçu du
+            // remplaçant sous la vignette, l'auteur et le « Vue
+            // unique » du message supprimé. Muet quand l'identité
+            // ne change pas : à l'édition et à la traduction, ces
+            // champs restent vrais.
+            row.adoptLastMessage(id: msgId)
+            // Écrite AVEC l'id (chemin message-driven) et jamais
+            // seule : `nil` efface la pastille du message précédent
+            // quand un texte le remplace au même horodatage.
+            row.lastMessageLocation = event.location
+        }
+        if let preview = event.lastMessagePreview {
+            row.lastMessagePreview = preview.meeshyPreviewTruncated
+        }
+        // L'auteur est REPOSÉ au même titre que l'aperçu, et pour la
+        // même raison (#6921) : `adoptLastMessage` vient de l'effacer
+        // — à raison, un nouveau message n'ayant pas l'auteur de
+        // l'ancien — et rien ne le remettait. La ligne montrait alors
+        // le texte sans son préfixe. `nil` reste `nil` : quand
+        // l'événement n'affirme aucun auteur, la garde anti-périmé
+        // s'applique inchangée.
+        // MÊME message (édition, traduction) : « rien d'affirmé »
+        // vaut GARDER. Écrire `nil` ici effaçait l'auteur à chaque
+        // édition de légende — ce que le témoin
+        // `…editingTheSameMessage_keepsItsDescription` a attrapé.
+        if case .display(let auteur) = ConversationListAuthor.resolve(
+            event, readerId: currentUserId,
+            row: row, youLabel: Self.youAuthorLabel
+        ) {
+            row.lastMessageSenderName = auteur
+        }
+        row.applyLastMessagePrismAndClock(from: event, replacedPrism: replacedPrism)
+        conversations[index] = row
+        // Metadata-only mutation (rename, avatar swap, broadcast
+        // toggle) still needs to land in L2 so a cold restart
+        // doesn't show the pre-event title for a frame. bumpToTop
+        // already calls schedulePersist when it runs.
+        schedulePersist()
+    }
+
+    // MARK: - Conversation creation
+
+    private func subscribeToConversationCreation() {
         // Primary discovery path for newly-created conversations.
         //
         // Per the socket-event audit (see
@@ -302,7 +282,31 @@ extension ConversationListViewModel {
                 }
             }
             .store(in: &cancellables)
+    }
 
+    // MARK: - Membership changes
+
+    private func applyMembershipCount(at index: Int, absolute: Int?, absoluteCapped: Bool?, delta: Int) {
+        let resolved = Self.memberCountAfterMembershipEvent(
+            current: conversations[index].memberCount,
+            currentCapped: conversations[index].memberCountCapped,
+            absolute: absolute,
+            absoluteCapped: absoluteCapped,
+            delta: delta
+        )
+        conversations[index].memberCount = resolved.count
+        conversations[index].memberCountCapped = resolved.capped
+        schedulePersist()
+    }
+
+    private func subscribeToMembershipChanges() {
+        subscribeToParticipantJoined()
+        subscribeToParticipantSelfLeft()
+        subscribeToParticipantBanned()
+        subscribeToParticipantUnbanned()
+    }
+
+    private func subscribeToParticipantJoined() {
         // Le pendant montant de `participantSelfLeft`, et il a longtemps manqué :
         // l'effectif ne connaissait que des soustractions (départ, retrait,
         // bannissement) et dérivait durablement vers le bas — `schedulePersist`
@@ -322,19 +326,17 @@ extension ConversationListViewModel {
             .sink { [weak self] event in
                 guard let self, event.userId != self.currentUserId else { return }
                 guard let index = self.convIndex(for: event.conversationId) else { return }
-                let resolved = Self.memberCountAfterMembershipEvent(
-                    current: self.conversations[index].memberCount,
-                    currentCapped: self.conversations[index].memberCountCapped,
+                self.applyMembershipCount(
+                    at: index,
                     absolute: event.memberCount,
                     absoluteCapped: event.memberCountCapped,
                     delta: +1
                 )
-                self.conversations[index].memberCount = resolved.count
-                self.conversations[index].memberCountCapped = resolved.capped
-                self.schedulePersist()
             }
             .store(in: &cancellables)
+    }
 
+    private func subscribeToParticipantSelfLeft() {
         // Quand le partant est MOI, l'événement ne dit pas « l'effectif a
         // changé » — il dit « cette conversation n'est plus la mienne ». Le cas
         // se produit sans rien faire d'anormal : quitter depuis le web, ou être
@@ -356,19 +358,17 @@ extension ConversationListViewModel {
                     self.dropConversationLeftByMe(at: index)
                     return
                 }
-                let resolved = Self.memberCountAfterMembershipEvent(
-                    current: self.conversations[index].memberCount,
-                    currentCapped: self.conversations[index].memberCountCapped,
+                self.applyMembershipCount(
+                    at: index,
                     absolute: event.memberCount,
                     absoluteCapped: event.memberCountCapped,
                     delta: -1
                 )
-                self.conversations[index].memberCount = resolved.count
-                self.conversations[index].memberCountCapped = resolved.capped
-                self.schedulePersist()
             }
             .store(in: &cancellables)
+    }
 
+    private func subscribeToParticipantBanned() {
         // Un bannissement ne retire pas toujours une appartenance : bannir
         // quelqu'un DÉJÀ parti est ce qui l'empêche de revenir par un lien de
         // partage, et ne change rien à l'effectif. Décompter quand même ferait
@@ -401,19 +401,17 @@ extension ConversationListViewModel {
                 // (`apps/web/hooks/queries/use-socket-cache-sync.ts`).
                 guard event.memberCount != nil || event.didEndMembership else { return }
                 guard let self, let index = self.convIndex(for: event.conversationId) else { return }
-                let resolved = Self.memberCountAfterMembershipEvent(
-                    current: self.conversations[index].memberCount,
-                    currentCapped: self.conversations[index].memberCountCapped,
+                self.applyMembershipCount(
+                    at: index,
                     absolute: event.memberCount,
                     absoluteCapped: event.memberCountCapped,
                     delta: -1
                 )
-                self.conversations[index].memberCount = resolved.count
-                self.conversations[index].memberCountCapped = resolved.capped
-                self.schedulePersist()
             }
             .store(in: &cancellables)
+    }
 
+    private func subscribeToParticipantUnbanned() {
         // Symétrique : lever le bannissement de quelqu'un qui était parti de
         // lui-même le rend libre de revenir, mais ne le fait pas rentrer.
         messageSocket.participantUnbanned
@@ -423,19 +421,19 @@ extension ConversationListViewModel {
                 // tranche `didRestoreMembership`.
                 guard event.memberCount != nil || event.didRestoreMembership else { return }
                 guard let self, let index = self.convIndex(for: event.conversationId) else { return }
-                let resolved = Self.memberCountAfterMembershipEvent(
-                    current: self.conversations[index].memberCount,
-                    currentCapped: self.conversations[index].memberCountCapped,
+                self.applyMembershipCount(
+                    at: index,
                     absolute: event.memberCount,
                     absoluteCapped: event.memberCountCapped,
                     delta: +1
                 )
-                self.conversations[index].memberCount = resolved.count
-                self.conversations[index].memberCountCapped = resolved.capped
-                self.schedulePersist()
             }
             .store(in: &cancellables)
+    }
 
+    // MARK: - Reconnect
+
+    private func subscribeToReconnect() {
         // `didReconnect` ne joue ICI aucun delta : le relais du moteur en joue un
         // seul par reconnexion, revenu par `conversationsDidChange`. Il ne
         // rejoue que le préchargement — maintenant, et au rechargement suivant (#10572).

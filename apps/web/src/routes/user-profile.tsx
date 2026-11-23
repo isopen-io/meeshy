@@ -8,7 +8,9 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { GameBannerOwnSlot, GameBannerVisitorSlot } from '@/components/game-profile-slots';
 import { ProfileTabPanel, ProfileTabs, useProfileTab } from '@/components/profile-tabs';
+import { ProfileOwnPositionHero } from '@/components/profile-own-position-hero';
 import { ProfileSeeOnMapRow } from '@/components/profile-see-on-map';
+import { sharedLocationSharingCenter } from '@/lib/shared-locations/shared-location-sharing-live';
 import { ProfileFacePanel, ProfileFaces, useProfileFace } from '@/components/profile-faces';
 import { CircleLadderCard, RelationLockedRows, RelationWriteAction } from '@/components/profile-relation-face';
 import { ReportSheet } from '@/components/report-sheet';
@@ -326,8 +328,12 @@ export function UserProfileView({ username }: { readonly username: string }) {
                 ) : (
                   <ProfileFacePanel language={language} face="actions" idBase={faceBase}>
                     {isSelf ? (
-                      /* SA PROPRE FICHE MÈNE À SON ÉDITION (#7188) — jamais un cul-de-sac. */
-                      <ProfileSelfSection language={language} />
+                      <>
+                        {/* MA DERNIÈRE POSITION CONNUE quand elle part (#20242). */}
+                        {signedIn ? <ProfileOwnPositionHero language={language} name={name} sharing={sharedLocationSharingCenter()?.store ?? null} /> : null}
+                        {/* SA PROPRE FICHE MÈNE À SON ÉDITION (#7188) — jamais un cul-de-sac. */}
+                        <ProfileSelfSection language={language} />
+                      </>
                     ) : (
                       <>
                         {signedIn ? <ProfileSeeOnMapRow language={language} personId={person.id} name={name} avatar={person.avatar} accent={accent} presence={presence?.status} /> : null}

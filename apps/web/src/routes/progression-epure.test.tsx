@@ -110,14 +110,14 @@ describe('les réglages du jeu : un libellé nomme, le détail est derrière un 
     expect(host.querySelectorAll('#game-settings-invitations input[type="radio"]')).toHaveLength(3);
   });
 
-  test('les notifications : le titre est « Notifications », la rangée un nom, « une par jour » derrière un (i)', async () => {
+  test('les notifications : le titre est « Notifications », la rangée un nom, « deux par jour » derrière un (i)', async () => {
     const host = await mount(<GameSettings {...settings()} />);
     const card = host.querySelector('#game-settings-notifications') as Element;
     const shown = visibleText(card);
     expect(card.querySelector('h2')?.textContent).toBe('Notifications');
     expect(shown).toContain('Alliance, joute, voyage');
-    expect(shown).not.toContain('au plus une par jour');
-    expect(noteOf(host, infoButton(host, 'Combien de notifications par jour ?')).textContent).toContain('Au plus une par jour');
+    expect(shown).not.toContain('au plus deux par jour');
+    expect(noteOf(host, infoButton(host, 'Combien de notifications par jour ?')).textContent).toContain('Au plus deux par jour');
   });
 
   test('« Moments à immortaliser » : la rangée seule au repos, « Que fait cette notification ? » dit le reste ; l’interrupteur reste atteignable', async () => {
