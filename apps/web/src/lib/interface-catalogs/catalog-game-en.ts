@@ -750,7 +750,7 @@ const en = {
   'game.photo.kicker.achievement_rarity': 'Great deed done · {rarity}',
   'game.standing.treasury': 'Legacy: {tier}',
   'game.settings.notifications.title': 'Notifications',
-  'game.settings.notifications.body': 'At most one a day, on all your devices.',
+  'game.settings.notifications.body': 'At most two a day, besides feats and the Alliance, on all your devices.',
   'game.settings.notifications.note_q': 'How many notifications a day?',
   'game.settings.notifications.switch': 'Alliance, joust, journey',
   'game.settings.notifications.photo_switch': 'Moments to immortalise',

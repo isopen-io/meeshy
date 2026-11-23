@@ -15,6 +15,7 @@ import {
   GAME_NOTIFICATION_TYPES,
   countsAgainstGameDailyCap,
   gameLeagueResultKey,
+  isGameLeagueExploit,
   isGameNotificationType,
 } from '../../utils/game/notifications.js';
 import { NOTIFICATION_LANGUAGES, buildNotificationDisplay, notificationString } from '../../utils/notification-strings.js';
@@ -44,14 +45,31 @@ describe('les types de notification du jeu', () => {
     expect(isGameNotificationType(undefined)).toBe(false);
   });
 
-  it('au plus UNE par jour et par destinataire — hors les duos et la mission du jour', () => {
-    expect(GAME_NOTIFICATION_DAILY_CAP).toBe(1);
-    expect([...GAME_NOTIFICATIONS_OUTSIDE_DAILY_CAP]).toEqual(['game_duo_invited', 'game_duo_accepted', 'game_mission_window']);
+  it('au plus DEUX par jour et par destinataire — hors les actions d’un autre et les exploits (décision porteur 2026-11-10, #17368)', () => {
+    expect(GAME_NOTIFICATION_DAILY_CAP).toBe(2);
+    expect([...GAME_NOTIFICATIONS_OUTSIDE_DAILY_CAP]).toEqual(['game_duo_invited', 'game_duo_accepted']);
     expect(countsAgainstGameDailyCap('game_league_result')).toBe(true);
     expect(countsAgainstGameDailyCap('game_season_step')).toBe(true);
+    expect(countsAgainstGameDailyCap('game_photo_moment')).toBe(true);
     expect(countsAgainstGameDailyCap('game_duo_invited')).toBe(false);
     expect(countsAgainstGameDailyCap('game_duo_accepted')).toBe(false);
-    expect(countsAgainstGameDailyCap('game_mission_window')).toBe(false);
+  });
+
+  it('la mission du jour compte : elle n’est ni un exploit ni l’action d’un autre', () => {
+    expect(countsAgainstGameDailyCap('game_mission_window')).toBe(true);
+  });
+
+  it('un exploit sort du plafond, quel que soit son type', () => {
+    expect(countsAgainstGameDailyCap('game_league_result', { exploit: true })).toBe(false);
+    expect(countsAgainstGameDailyCap('game_season_step', { exploit: false })).toBe(true);
+  });
+
+  it('en ligue, l’exploit est une coupe ou une montée ; le maintien et la descente n’en sont pas', () => {
+    expect(isGameLeagueExploit({ zone: 'promotion', cup: null })).toBe(true);
+    expect(isGameLeagueExploit({ zone: 'safe', cup: 'bronze' })).toBe(true);
+    expect(isGameLeagueExploit({ zone: 'relegation', cup: 'gold' })).toBe(true);
+    expect(isGameLeagueExploit({ zone: 'safe', cup: null })).toBe(false);
+    expect(isGameLeagueExploit({ zone: 'relegation', cup: null })).toBe(false);
   });
 });
 
