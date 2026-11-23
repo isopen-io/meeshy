@@ -316,12 +316,6 @@ export const effortRelightSchema = z.object({
 
 export type GameEffortRelight = z.infer<typeof effortRelightSchema>;
 
-/** Le rallumage par l'effort lu par un client : `null` devant un serveur antérieur ou une forme illisible. */
-export const parseEffortRelight = (value: unknown): GameEffortRelight | null => {
-  const parsed = effortRelightSchema.safeParse(value);
-  return parsed.success ? parsed.data : null;
-};
-
 export const gameFlameSchema = z.object({
   days: nonNegativeInt,
   form: formKeys.nullable(),

@@ -10,6 +10,7 @@
  */
 
 import { addDays, dayDiff, monthOf } from './day-prng.js';
+import type { ServedEffortRelight } from './flame-effort.js';
 
 export const FLAME_FORMS = [
   { key: 'braise', minDays: 1 },
@@ -74,6 +75,25 @@ export function firstFreezeGift(params: {
 
 /** La clé de guide du moment « Une Veilleuse t'est offerte » (#20169) : vue une fois, gardée par `game.guideSeen`. */
 export const FLAME_FREEZE_GIFT_SEEN_KEY = 'flame-freeze-gift';
+
+const isWholeAtLeast = (value: unknown, min: number): value is number => typeof value === 'number' && Number.isInteger(value) && value >= min;
+
+/**
+ * Le rallumage par l'effort servi dans `flame.effortRelight` (#20471), lu par un client sans zod (#18924) : `null`
+ * devant un serveur antérieur ou une forme illisible, jamais une forme à moitié crue.
+ */
+export function readEffortRelight(value: unknown): ServedEffortRelight | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const { lostDays, dreamsDone, dreamsNeeded, closesOn, daysLeft } = value as Record<string, unknown>;
+  const readable =
+    isWholeAtLeast(lostDays, 1) &&
+    isWholeAtLeast(dreamsDone, 0) &&
+    isWholeAtLeast(dreamsNeeded, 1) &&
+    isWholeAtLeast(daysLeft, 0) &&
+    typeof closesOn === 'string' &&
+    /^\d{4}-\d{2}-\d{2}$/.test(closesOn);
+  return readable ? { lostDays, dreamsDone, dreamsNeeded, closesOn, daysLeft } : null;
+}
 
 /**
  * Le moment du cadeau se montre le jour où la première Veilleuse est offerte (`flame.freezeGifted`, servi par la

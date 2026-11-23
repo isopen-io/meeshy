@@ -6,7 +6,8 @@
 import { describe, it, expect } from 'vitest';
 import { servedEffortRelight } from '../../utils/game/flame-effort';
 import { buildGameBlock, type GameBlockFacts } from '../../utils/game/game-block';
-import { parseEffortRelight, parseGameBlock } from '../../types/game';
+import { readEffortRelight } from '../../utils/game/flame';
+import { effortRelightSchema, parseGameBlock } from '../../types/game';
 
 const broken = { brokenLastDay: '2026-10-02', streakBeforeBreak: 12 };
 
@@ -83,9 +84,9 @@ describe('le bloc `flame` porte le rallumage par l’effort', () => {
   });
 });
 
-describe('parseEffortRelight — un client lit le champ sans croire une forme fausse', () => {
+describe('readEffortRelight — un client lit le champ sans croire une forme fausse', () => {
   it('rend le champ servi', () => {
-    expect(parseEffortRelight({ lostDays: 12, dreamsDone: 1, dreamsNeeded: 2, closesOn: '2026-10-05', daysLeft: 0 })).toEqual({
+    expect(readEffortRelight({ lostDays: 12, dreamsDone: 1, dreamsNeeded: 2, closesOn: '2026-10-05', daysLeft: 0 })).toEqual({
       lostDays: 12,
       dreamsDone: 1,
       dreamsNeeded: 2,
@@ -95,8 +96,18 @@ describe('parseEffortRelight — un client lit le champ sans croire une forme fa
   });
 
   it('rend `null` devant un serveur antérieur ou une forme illisible', () => {
-    expect(parseEffortRelight(undefined)).toBeNull();
-    expect(parseEffortRelight({ lostDays: 12, dreamsDone: 'un', dreamsNeeded: 2, closesOn: '2026-10-05', daysLeft: 0 })).toBeNull();
+    expect(readEffortRelight(undefined)).toBeNull();
+    expect(readEffortRelight({ lostDays: 12, dreamsDone: 'un', dreamsNeeded: 2, closesOn: '2026-10-05', daysLeft: 0 })).toBeNull();
+  });
+
+  it('lit ce que le bloc sert et refuse ce que le contrat refuse, sans zod (#18924)', () => {
+    const served = buildGameBlock(facts({ effortDreamDays: [] })).flame.effortRelight;
+    expect(readEffortRelight(served)).toEqual(effortRelightSchema.parse(served));
+    const wrong = [{ ...served, closesOn: '5 oct.' }, { ...served, lostDays: 0 }, { ...served, daysLeft: 0.5 }, null, 'oui'];
+    wrong.forEach((value) => {
+      expect(readEffortRelight(value)).toBeNull();
+      expect(effortRelightSchema.safeParse(value).success).toBe(false);
+    });
   });
 
   it('une forme illisible tombe seule, sans emporter le bloc', () => {

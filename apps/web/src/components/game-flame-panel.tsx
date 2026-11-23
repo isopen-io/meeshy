@@ -1,5 +1,5 @@
-import { parseEffortRelight, type GameFlame } from '@meeshy/shared/types/game';
-import { FLAME_BONUS_PERCENT_MAX, FLAME_BONUS_PERCENT_PER_DAY } from '@meeshy/shared/utils/game/flame';
+import type { GameFlame } from '@meeshy/shared/types/game';
+import { FLAME_BONUS_PERCENT_MAX, FLAME_BONUS_PERCENT_PER_DAY, readEffortRelight } from '@meeshy/shared/utils/game/flame';
 import { spendPreview } from '@meeshy/shared/utils/game/spend';
 
 import { effortRelightLine, formatCount, gameText, meeshCount } from '@/lib/view/game-copy';
@@ -23,7 +23,7 @@ import { GameSpendLine, GameTouch } from './game-touch';
  * nouvelle commence au prochain geste.
  *
  * Deux rêves complets la rallument aussi, sans payer (#20455) : tant que le bloc
- * sert `effortRelight`, le panneau dit combien en manquent et jusqu'à quand
+ * sert `effortRelight` (lu sans zod, #18924), le panneau dit combien en manquent et jusqu'à quand
  * (#20471) — même quand une nouvelle Flamme a repris, puisque c'est en jouant
  * qu'on les réalise — et ne dit plus qu'elle ne peut plus être rallumée.
  */
@@ -71,7 +71,7 @@ export function GameFlamePanel(props: GameFlamePanelProps) {
   const out = flame.status === 'out';
   const relight = spendPreview({ held, cost: flame.relightPrice });
   const cannotPayRelight = !relight.affordable;
-  const effort = parseEffortRelight(flame.effortRelight);
+  const effort = readEffortRelight(flame.effortRelight);
 
   return (
     <GameCard id="game-flame-panel" labelledBy="game-flame-panel-title">
