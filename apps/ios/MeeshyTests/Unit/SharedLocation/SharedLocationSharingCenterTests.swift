@@ -858,6 +858,8 @@ final class FakeSharedLocationEmitter: SharedLocationEmitting, @unchecked Sendab
     private var recordedStarts: [SharedLocationStartRequest] = []
     /// Rendus dans l'ordre avant `startVerdict` : une passerelle qui refuse puis accepte.
     var queuedStartVerdicts: [SharedLocationStartVerdict] = []
+    /// Ce qui se passe ailleurs pendant que le démarrage voyage (un autre appareil démarre, le partage s'arrête).
+    var onStart: (@Sendable () -> Void)?
     private var recordedUpdates: [SharedLocationFix] = []
     private var recordedStops = 0
     var starts: [SharedLocationStartRequest] { lock.withLock { recordedStarts } }
@@ -871,6 +873,7 @@ final class FakeSharedLocationEmitter: SharedLocationEmitting, @unchecked Sendab
 
     func start(_ request: SharedLocationStartRequest) async -> SharedLocationStartVerdict {
         lock.withLock { recordedStarts.append(request) }
+        onStart?()
         if holdsStarts { await withCheckedContinuation { c in lock.withLock { startGate.append(c) } } }
         return lock.withLock { queuedStartVerdicts.isEmpty ? nil : queuedStartVerdicts.removeFirst() } ?? startVerdict
     }
