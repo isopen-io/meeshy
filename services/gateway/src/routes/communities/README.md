@@ -57,6 +57,8 @@ Gestion complète des membres:
 - `POST /communities/:id/members` - Ajouter un membre (admin uniquement)
 
 **Qui peut être ajouté (#6376).** `POST …/members` et `POST …/invite` (`membership.ts`) ajoutent quelqu'un sans son accord : toutes deux passent `isAddableUser` (`addable-user.ts`) — compte vivant (ni `deactivatedAt`, ni `deletedAt`, `isActive`), aucun blocage dans un sens ou dans l'autre — et rendent le même 404 qu'un inconnu.
+
+**Combien on peut en ajouter (#19812).** Ces deux routes partagent un budget (`utils/community-addition-budget.ts`) : 30 tentatives par heure et 100 par jour par ACTEUR, débitées après les refus d'autorisation et AVANT `isAddableUser` (un compte non ajoutable ne se sonde pas gratuitement) ; 10 ajouts par jour par personne AJOUTÉE, tous acteurs confondus, débités seulement pour un ajout qui va écrire et jamais quand l'acteur est déjà refusé. Au-delà : 429 `COMMUNITY_ADDITION_BUDGET_EXCEEDED` avec `Retry-After`, rien n'est écrit ni notifié. Le même code sert les deux seaux. La notification `community_invite` part une fois par ajout réussi : borner les ajouts la borne.
 - `PATCH /communities/:id/members/:memberId/role` - Modifier le rôle d'un membre (admin uniquement)
 - `DELETE /communities/:id/members/:memberId` - Retirer un membre (admin uniquement)
 
