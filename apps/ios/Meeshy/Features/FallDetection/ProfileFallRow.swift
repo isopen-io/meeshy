@@ -52,7 +52,8 @@ struct ProfileFallRow: View {
         ZStack(alignment: .topLeading) {
             Color.clear.frame(height: 0).accessibilityHidden(true)
             // Au Sang verrouillé (#20361) la coupure n'existe plus : la rangée est ABSENTE, jamais grisée.
-            if let settings = viewModel.settings, settings.lockedByLevel != true {
+            // Seule exception (C13) : un refus de chute déjà donné survit au palier, il reste ré-accordable.
+            if let settings = viewModel.settings, settings.lockedByLevel != true || !settings.isShared {
                 MeeshyToggleRow(FallDetectionWording.shareTitle, systemImage: FallDetectionWording.stateIconName,
                                 accessory: .toggle(isOn: settings.isShared), tint: tint) {
                     Task { await viewModel.setShared(!settings.isShared) }
