@@ -57,7 +57,7 @@ final class GameEpureTests: XCTestCase {
     private static let french: [String: String] = [
         "game2.settings.celebrations.switch": "Signes des aïeux",
         "game2.settings.notifications.switch": "Notifications",
-        "game2.settings.notifications.body": "Alliance, joute, voyage : au plus une par jour, sur tous tes appareils.",
+        "game2.settings.notifications.body": "Au plus deux par jour, hors hauts faits et Alliance, sur tous tes appareils.",
         "game2.settings.friends_league.switch": "Me retirer",
         "game2.settings.friends_league.body": "Classement de la semaine entre amis acceptés. T’en retirer vous masque les uns aux autres.",
         "game2.settings.visibility.body": "Choisis qui voit ton rang, ton Héritage, tes trophées et ton Atlas",

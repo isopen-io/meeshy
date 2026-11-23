@@ -13,7 +13,7 @@
  *    compte au plafond n'écrivent rien (`isKnownPhotoStepId`, `PHOTO_MOMENTS_ACCOUNT_MAX`) ;
  *  - **l'envoi** (`deliver`) regroupe, par compte, les étapes détectées depuis au moins le délai de la politique
  *    et ni présentées ni notifiées (`photoAlertDigest`), et pousse UNE notification par `GameNotifier` (plafond
- *    d'une notification de jeu par jour, « Jeu masqué », langue de cadrage). Il DIFFÈRE — sans rien écrire — pour un
+ *    de deux notifications de jeu par jour, « Jeu masqué », langue de cadrage). Il DIFFÈRE — sans rien écrire — pour un
  *    compte en ligne (l'hôte de l'app est la surface), pendant son « Ne pas déranger » quand il l'a posé
  *    (`isWithinDnd`, la règle même de `NotificationService`, testée AVANT `GameNotifier` pour qu'une suppression ne
  *    consomme pas sa clé), sinon la nuit dans SON fuseau (`effectiveZone`), ou quand le créneau du jour est pris. Il n'envoie rien à un compte

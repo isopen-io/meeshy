@@ -274,7 +274,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
     /// #8285). Activé par défaut.
     public var contactActivityEnabled: Bool
     /// « Notifications du jeu » (`game_duo_invited`, `game_duo_accepted`, `game_league_result`,
-    /// `game_season_step`, #9490) : au plus une par jour. Activé par défaut ; ABSENT = reçu.
+    /// `game_season_step`, #9490) : au plus deux par jour, hors hauts faits et Alliance (#17368). Activé par défaut ; ABSENT = reçu.
     public var gameEnabled: Bool
     /// « Recevoir des Bring » (`notification.bringEnabled`, #14441, #16609) tel
     /// que le serveur l'a servi ou que l'utilisateur l'a choisi ; `nil` = jamais
