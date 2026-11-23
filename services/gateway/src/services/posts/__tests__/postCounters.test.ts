@@ -137,7 +137,7 @@ describe('les sites d\'appel réels comptent un post antérieur aux colonnes', (
     await ingestSocialEvents(
       deps,
       [{ type: 'impression', postId: POST_A, source: 'detail' }],
-      { kind: 'user', userId: 'reader', username: 'reader' },
+      { kind: 'user', userId: 'reader' },
     );
 
     expect(store.read(POST_A)).toMatchObject({ impressionCount: 1, postOpenCount: 1 });

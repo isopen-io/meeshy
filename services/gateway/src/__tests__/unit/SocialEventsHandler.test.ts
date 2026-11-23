@@ -179,7 +179,7 @@ describe('SocialEventsHandler', () => {
       const rooms = mockIO.to.mock.calls[0][0] as string[];
       expect(rooms).toEqual(expect.arrayContaining([ROOMS.feed(FRIEND_1), ROOMS.feed(FRIEND_2), ROOMS.post('post-77')]));
       expect(rooms).not.toContain(ROOMS.feed(AUTHOR_ID));
-      expect(mockIO.except).toHaveBeenCalledWith(ROOMS.feed(AUTHOR_ID));
+      expect(mockIO.except.mock.calls.flat(2)).toContain(ROOMS.feed(AUTHOR_ID)); // #20430 — la PROPRIÉTÉ, pas l'orthographe de l'argument
       expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(AUTHOR_ID));
       expect(mockIO.emit).toHaveBeenCalledTimes(2);
       expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.POST_UPDATED, { post });
@@ -384,8 +384,8 @@ describe('SocialEventsHandler', () => {
     it('should emit STORY_VIEWED ONLY to the story author', () => {
       const data: StoryViewedEventData = {
         storyId: 'story-1',
-        viewerId: VIEWER_ID,
-        viewerUsername: 'viewer',
+        viewerId: '',
+  viewerUsername: '',
         viewCount: 10,
       };
 
@@ -399,8 +399,8 @@ describe('SocialEventsHandler', () => {
     it('should NOT emit to friends', () => {
       const data: StoryViewedEventData = {
         storyId: 'story-1',
-        viewerId: VIEWER_ID,
-        viewerUsername: 'viewer',
+        viewerId: '',
+  viewerUsername: '',
         viewCount: 10,
       };
 
@@ -920,7 +920,7 @@ describe('SocialEventsHandler', () => {
       const likeData: PostLikedEventData = { postId: 'p1', userId: 'u1', emoji: 'heart', likeCount: 1, reactionSummary: { heart: 1 } };
       const unlikeData: PostUnlikedEventData = { postId: 'p1', userId: 'u1', emoji: 'heart', likeCount: 0, reactionSummary: {} };
       const repostData: PostRepostedEventData = { originalPostId: 'p1', repost: post };
-      const storyViewData: StoryViewedEventData = { storyId: 's1', viewerId: 'v1', viewerUsername: 'viewer', viewCount: 1 };
+      const storyViewData: StoryViewedEventData = { storyId: 's1', viewerId: '', viewerUsername: '', viewCount: 1 };
       const storyReactData: StoryReactedEventData = { storyId: 's1', userId: 'u1', emoji: 'fire', likeCount: 1, reactionSummary: { fire: 1 } };
       const statusReactData: StatusReactedEventData = { statusId: 'st1', userId: 'u1', emoji: 'heart', likeCount: 1, reactionSummary: { heart: 1 } };
       const commentAddData: CommentAddedEventData = { postId: 'p1', comment: { id: 'c1', content: 'hi', likeCount: 0, replyCount: 0, createdAt: '' }, commentCount: 1 };
@@ -1119,8 +1119,8 @@ describe('SocialEventsHandler', () => {
       // StatusReacted, CommentLiked
       const data: StoryViewedEventData = {
         storyId: 'story-1',
-        viewerId: VIEWER_ID,
-        viewerUsername: 'viewer',
+        viewerId: '',
+  viewerUsername: '',
         viewCount: 1,
       };
       handler.broadcastStoryViewed(data, AUTHOR_ID, []);

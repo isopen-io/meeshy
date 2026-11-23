@@ -639,7 +639,7 @@ describe('POST /posts/:postId/view — STORY type triggers broadcastStoryViewed'
     const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/view`, payload: {} });
     expect(res.statusCode).toBe(200);
     expect(socialEvents.broadcastStoryViewed).toHaveBeenCalledWith(
-      expect.objectContaining({ storyId: POST_ID, viewerId: USER_ID }),
+      expect.objectContaining({ storyId: POST_ID, viewerId: '', viewerUsername: '' }), // #20443 — l'ALIAS ne nomme pas plus que `POST /social/events`
       AUTHOR_ID, [],
     );
   });

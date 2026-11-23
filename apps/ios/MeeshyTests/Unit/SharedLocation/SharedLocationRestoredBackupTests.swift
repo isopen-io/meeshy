@@ -418,10 +418,13 @@ final class SharedLocationServedSourceTests: XCTestCase {
     private let me = "cccccccccccccccccccccccc"
     private let t0 = Date(timeIntervalSince1970: 1_000_000)
 
-    private final class Served {
+    private final class Served: @unchecked Sendable {
         var snapshot: SharedLocationOwnSnapshot?
         var reads = 0
+        var fails = false
     }
+
+    private struct ServedOutage: Error {}
 
     private final class Clock {
         var now: Date
@@ -445,7 +448,11 @@ final class SharedLocationServedSourceTests: XCTestCase {
         let me = self.me
         let center = SharedLocationSharingCenter(
             emitter: emitter, fixes: fixes, store: store, now: { clock.now }, owner: me, currentAccount: { me },
-            wakes: FakeSharedLocationWakeScheduler(), served: { served.reads += 1; return served.snapshot }
+            wakes: FakeSharedLocationWakeScheduler(), served: {
+                served.reads += 1
+                if served.fails { throw ServedOutage() }
+                return served.snapshot
+            }
         )
         return SUT(center: center, emitter: emitter, fixes: fixes, store: store, served: served, clock: clock)
     }
@@ -453,11 +460,13 @@ final class SharedLocationServedSourceTests: XCTestCase {
     private func served(
         _ people: [String],
         source: SharedLocationPositionSource?,
-        startedAt: String? = nil
+        startedAt: String? = nil,
+        acceptsExpectedStart: Bool = false
     ) -> SharedLocationOwnSnapshot {
         SharedLocationOwnSnapshot(
             recipients: people.map { SharedLocationOwnRecipient(userId: $0, precision: .city, expiresAt: t0.addingTimeInterval(3600)) },
-            acceptsManualSource: true, startedAt: startedAt, source: source
+            acceptsManualSource: true, acceptsUntilStopped: false, startedAt: startedAt, source: source,
+            acceptsExpectedStart: acceptsExpectedStart
         )
     }
 
@@ -723,5 +732,141 @@ final class SharedLocationServedSourceTests: XCTestCase {
 
         XCTAssertTrue(message.contains("Alice"))
         XCTAssertTrue(message.contains(ShareMyLocationCopy.replacePointOthers(2)))
+    }
+
+    // MARK: - La réponse nomme le partage montré (#20249)
+
+    private let s1 = "2026-01-01T00:00:05.000Z"
+    private let s2 = "2026-01-01T00:00:09.000Z"
+
+    private func confirm(_ sut: SUT, _ asked: SharedLocationPointReplacement?) async -> SharedLocationShareProblem? {
+        await sut.center.share(with: bob, precision: .city, term: .bounded(.oneHour), replacing: asked)
+    }
+
+    func test_confirming_onAGatewayThatAcceptsTheKey_namesTheShownShare() async {
+        let sut = makeSUT()
+        sut.served.snapshot = served([alice], source: .manual, startedAt: s1, acceptsExpectedStart: true)
+        let asked = await question(sut)
+
+        let problem = await confirm(sut, asked)
+
+        XCTAssertNil(problem)
+        XCTAssertEqual(sut.emitter.starts.last?.expectedStartedAt, s1)
+        XCTAssertEqual(sut.emitter.starts.last?.wire["expectedStartedAt"] as? String, s1)
+    }
+
+    func test_confirming_onAGatewayThatDoesNotAnnounceTheKey_neverSendsIt() async {
+        let sut = makeSUT()
+        sut.served.snapshot = served([alice], source: .manual, startedAt: s1)
+        let asked = await question(sut)
+
+        _ = await confirm(sut, asked)
+
+        XCTAssertEqual(sut.emitter.starts.last?.replacesChosenPoint, true)
+        XCTAssertNil(sut.emitter.starts.last?.expectedStartedAt)
+    }
+
+    func test_confirming_aStartServedInAnotherShape_neverNamesIt() async {
+        let sut = makeSUT()
+        sut.served.snapshot = served([alice], source: .manual, startedAt: "S1", acceptsExpectedStart: true)
+        let asked = await question(sut)
+
+        _ = await confirm(sut, asked)
+
+        XCTAssertEqual(sut.emitter.starts.last?.replacesChosenPoint, true)
+        XCTAssertNil(sut.emitter.starts.last?.expectedStartedAt)
+    }
+
+    func test_anOrdinaryShare_neverNamesTheShare() async {
+        let sut = makeSUT()
+        sut.served.snapshot = served([alice], source: .device, startedAt: s1, acceptsExpectedStart: true)
+
+        _ = await sut.center.share(with: bob, precision: .city, duration: .oneHour)
+
+        XCTAssertNil(sut.emitter.starts.last?.expectedStartedAt)
+    }
+
+    func test_anotherStartWhileTheAnswerTravels_appliesNothing_andAsksAgainWithTheNewShare() async {
+        let sut = makeSUT()
+        sut.served.snapshot = served([alice], source: .manual, startedAt: s1, acceptsExpectedStart: true)
+        let asked = await question(sut)
+        let elsewhere = served([alice, carol], source: .manual, startedAt: s2, acceptsExpectedStart: true)
+        sut.emitter.onStart = { [served = sut.served] in served.snapshot = elsewhere }
+        sut.emitter.queuedStartVerdicts = [.refused(.startedElsewhere)]
+
+        let problem = await confirm(sut, asked)
+
+        XCTAssertEqual(problem?.pointReplacement, SharedLocationPointReplacement(startedAt: s2, recipientIds: [alice, carol]))
+        XCTAssertEqual(sut.emitter.starts.count, 1)
+        XCTAssertNil(sut.center.entry(for: bob))
+        XCTAssertTrue(sut.center.roster.isFixedPoint)
+    }
+
+    func test_aShareStoppedWhileTheAnswerTravels_saysSo_andRelaunchesNothing() async {
+        let sut = makeSUT()
+        sut.served.snapshot = served([alice], source: .manual, startedAt: s1, acceptsExpectedStart: true)
+        let asked = await question(sut)
+        let stopped = SharedLocationOwnSnapshot(recipients: [], acceptsManualSource: true, acceptsExpectedStart: true)
+        sut.emitter.onStart = { [served = sut.served] in served.snapshot = stopped }
+        sut.emitter.queuedStartVerdicts = [.refused(.startedElsewhere)]
+
+        let problem = await confirm(sut, asked)
+
+        XCTAssertEqual(problem, .refused(.startedElsewhere))
+        XCTAssertEqual(sut.emitter.starts.count, 1)
+        XCTAssertFalse(sut.center.roster.hasRecipients)
+    }
+
+    func test_aRefusalAsStartedElsewhere_thenAReadOutage_saysOffline() async {
+        let sut = makeSUT()
+        sut.served.snapshot = served([alice], source: .manual, startedAt: s1, acceptsExpectedStart: true)
+        let asked = await question(sut)
+        sut.emitter.onStart = { [served = sut.served] in served.fails = true }
+        sut.emitter.queuedStartVerdicts = [.refused(.startedElsewhere)]
+
+        let problem = await confirm(sut, asked)
+
+        XCTAssertEqual(problem, .refused(.offline))
+        XCTAssertNil(sut.center.entry(for: bob))
+    }
+
+    func test_anInvalidThatTheKeyCannotExplain_saysTheFailure_withoutAskingTheSameQuestion() async {
+        let sut = makeSUT()
+        sut.served.snapshot = served([alice], source: .manual, startedAt: s1, acceptsExpectedStart: true)
+        let asked = await question(sut)
+        sut.emitter.startVerdict = .refused(.invalid)
+
+        let problem = await confirm(sut, asked)
+
+        XCTAssertEqual(problem, .refused(.invalid))
+        XCTAssertTrue(sut.emitter.starts.allSatisfy { $0.expectedStartedAt == self.s1 })
+    }
+
+    func test_anInvalidFromAGatewayThatNoLongerAcceptsTheKey_asksAgain_andNeverResendsWithoutIt() async {
+        let sut = makeSUT()
+        sut.served.snapshot = served([alice], source: .manual, startedAt: s1, acceptsExpectedStart: true)
+        let asked = await question(sut)
+        let older = served([alice], source: .manual, startedAt: s1)
+        sut.emitter.onStart = { [served = sut.served] in served.snapshot = older }
+        sut.emitter.startVerdict = .refused(.invalid)
+
+        let problem = await confirm(sut, asked)
+
+        XCTAssertEqual(problem?.pointReplacement, SharedLocationPointReplacement(startedAt: s1, recipientIds: [alice]))
+        XCTAssertTrue(sut.emitter.starts.allSatisfy { $0.expectedStartedAt == self.s1 })
+        XCTAssertNil(sut.center.entry(for: bob))
+    }
+
+    func test_anInvalidWithoutTheKey_readsNothingMore() async {
+        let sut = makeSUT()
+        sut.served.snapshot = served([alice], source: .manual, startedAt: s1)
+        let asked = await question(sut)
+        sut.emitter.startVerdict = .refused(.invalid)
+        let reads = sut.served.reads
+
+        let problem = await confirm(sut, asked)
+
+        XCTAssertEqual(problem, .refused(.invalid))
+        XCTAssertEqual(sut.served.reads, reads + 1)
     }
 }

@@ -16,6 +16,11 @@ import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-
 import { viewerFromRequest } from '../users/presence-gate';
 import { gateCoMemberPresence, type MemberUser } from './member-presence';
 import { isAddableUser } from './addable-user';
+import {
+  refuseCommunityAddition,
+  spendCommunityAdditionByActor,
+  spendCommunityAdditionOfTarget,
+} from '../../utils/community-addition-budget';
 import { scheduleCommunityMemberBroadcastFrom, communityMemberRoleOf } from '../../services/community-member-broadcast';
 import { closePendingJoinRequests } from '../../services/community-join-request-lifecycle';
 import { scheduleCommunityAddedAnnouncement } from '../../services/notifications/community-added';
@@ -279,6 +284,10 @@ const community = await fastify.prisma.community.findFirst({
           description: 'Community or user not found',
           ...errorResponseSchema
         },
+        429: {
+          description: 'Addition budget exceeded for the actor or the added person (COMMUNITY_ADDITION_BUDGET_EXCEEDED, #19812)',
+          ...errorResponseSchema
+        },
         500: {
           description: 'Internal server error',
           ...errorResponseSchema
@@ -323,6 +332,12 @@ const community = await fastify.prisma.community.findFirst({
         return sendForbidden(reply, 'Only community admins can add members');
       }
 
+      // #19812 — même budget que POST …/invite, débité avant la porte.
+      const byActor = await spendCommunityAdditionByActor(fastify, userId);
+      if (!byActor.allowed) {
+        return refuseCommunityAddition(reply, byActor.retryAfter);
+      }
+
       // #6376 — un compte vivant, sans blocage : la règle de POST …/invite (`isAddableUser`).
       if (!(await isAddableUser(fastify.prisma, userId, validatedData.userId))) {
         return sendNotFound(reply, 'User to add not found');
@@ -335,6 +350,13 @@ const community = await fastify.prisma.community.findFirst({
           userId: validatedData.userId
         }
       });
+
+      if (!existingMember?.isActive) {
+        const ofTarget = await spendCommunityAdditionOfTarget(fastify, validatedData.userId);
+        if (!ofTarget.allowed) {
+          return refuseCommunityAddition(reply, ofTarget.retryAfter);
+        }
+      }
 
       let member;
       if (existingMember?.isActive) {

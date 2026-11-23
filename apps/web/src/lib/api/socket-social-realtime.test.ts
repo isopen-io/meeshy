@@ -297,7 +297,8 @@ describe('`story:viewed` est ÉCOUTÉ pour le compte des vues (#7116, revue)', (
     queryClient.setQueryData(STORY_FEED_QUERY_KEY, [story({ viewCount: 8 })]);
     createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
 
-    socket.fire(SERVER_EVENTS.STORY_VIEWED, { storyId: 'st-1', viewerId: 'u-noor', viewerUsername: 'noor', viewCount: 9 });
+    // #20443 — la charge réelle : aucune identité, les deux clés vides.
+    socket.fire(SERVER_EVENTS.STORY_VIEWED, { storyId: 'st-1', viewerId: '', viewerUsername: '', viewCount: 9 });
     const storyOf = () => queryClient.getQueryData<readonly StoryFeedPost[]>(STORY_FEED_QUERY_KEY)?.find((s) => s.id === 'st-1');
     await flush(() => storyOf()?.viewCount === 9);
 
@@ -309,7 +310,7 @@ describe('`story:viewed` est ÉCOUTÉ pour le compte des vues (#7116, revue)', (
     queryClient.setQueryData(STORY_FEED_QUERY_KEY, [story({ viewCount: 8 })]);
     createRealtimeConnection({ token: 't', sessionToken: 's' }, deps).destroy();
 
-    socket.fire(SERVER_EVENTS.STORY_VIEWED, { storyId: 'st-1', viewerId: 'u-noor', viewerUsername: 'noor', viewCount: 9 });
+    socket.fire(SERVER_EVENTS.STORY_VIEWED, { storyId: 'st-1', viewerId: '', viewerUsername: '', viewCount: 9 });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(queryClient.getQueryData<readonly StoryFeedPost[]>(STORY_FEED_QUERY_KEY)?.find((s) => s.id === 'st-1')?.viewCount).toBe(8);

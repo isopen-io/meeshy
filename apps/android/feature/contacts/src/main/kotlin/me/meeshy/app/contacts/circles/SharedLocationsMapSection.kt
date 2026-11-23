@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -50,6 +49,7 @@ import me.meeshy.sdk.model.location.SlippyMap
 import me.meeshy.sdk.model.relation.SharedLocationBounds
 import me.meeshy.sdk.model.relation.SharedLocationPin
 import me.meeshy.sdk.model.relation.SharedLocationPrecision
+import me.meeshy.sdk.model.relation.SharedLocationsFan
 import me.meeshy.sdk.model.relation.SharedLocationsMap
 import me.meeshy.ui.component.kit.MeeshyButton
 import me.meeshy.ui.component.kit.MeeshyButtonKind
@@ -64,6 +64,9 @@ import me.meeshy.ui.theme.MeeshyTheme
 
 private val MAP_HEIGHT = 240.dp
 private val PIN_SIZE = 32.dp
+
+/** Deux épingles plus proches que leur diamètre, plus une marge, s’écartent en éventail (iso iOS `selectedDiameter + 4`). */
+private const val FAN_DISTANCE_DP: Double = 32.0 + 4.0
 private const val MAX_BLUR_RADIUS_DP = 4_000f
 
 /**
@@ -149,24 +152,21 @@ private fun SharedLocationsMapView(
         LaunchedEffect(center, zoom, widthDp, heightDp) {
             if (fitted) onViewportChange(SharedLocationsMap.viewport(center, zoom, widthDp, heightDp, SlippyMap.TILE_SIZE))
         }
-        val groups = remember(pins) { pins.groupBy { it.point } }
+        val placed = remember(pins, zoom) {
+            val at = SharedLocationsFan.place(pins.map { it.userId to it.point }, zoom, SlippyMap.TILE_SIZE, FAN_DISTANCE_DP)
+            pins.map { (at[it.userId] ?: it.point) to it }
+        }
+        val byPoint = remember(placed) { placed.toMap() }
         TileMapView(
             center = center,
             zoom = zoom,
             interactive = true,
             onCenterChange = { center = it },
             onZoomChange = { zoom = it },
-            markers = groups.keys.toList(),
-            marker = { point -> PinGroup(groups[point].orEmpty(), zoom) },
+            markers = placed.map { it.first },
+            marker = { point -> byPoint[point]?.let { Pin(it, zoom) } },
             modifier = Modifier.fillMaxWidth().height(MAP_HEIGHT),
         )
-    }
-}
-
-@Composable
-private fun PinGroup(pins: List<SharedLocationPin>, zoom: Int) {
-    Box {
-        pins.forEachIndexed { index, pin -> Pin(pin, zoom, Modifier.offset(x = (index * 6).dp, y = (index * 6).dp)) }
     }
 }
 

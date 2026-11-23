@@ -104,7 +104,7 @@ object DeepLinkParser {
             head == "reel" -> id?.let { DeepLinkDestination.Reel(it) }
             head == "reels" -> reelsSeed(components, url)?.let { DeepLinkDestination.Reel(it) }
             head == "community" || head == "communities" ->
-                id?.let(::communityIdentifier)?.let { DeepLinkDestination.Community(it) }
+                id?.let(::communityIdentifier)?.let { DeepLinkDestination.Community(it, viaLink = url.queryValue("via") == "link") }
             head == "feeds" -> feedsPost(components, id)
             customScheme -> customOnly(head, id, components, url)
             else -> sharedSegments(head, id)

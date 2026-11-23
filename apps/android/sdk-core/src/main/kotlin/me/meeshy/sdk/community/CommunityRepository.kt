@@ -129,9 +129,12 @@ class CommunityRepository @Inject constructor(
     suspend fun removeMember(communityId: String, userId: String): NetworkResult<Unit> =
         apiCall { communityApi.removeMember(communityId, userId) }
 
-    /** Une adhésion, ou une demande qui attend un administrateur ou un modérateur (#19870). */
-    suspend fun join(communityId: String): NetworkResult<CommunityJoinOutcome> =
-        apiCall { communityApi.join(communityId, JoinCommunityRequest.AcceptsPending) }
+    /**
+     * Une adhésion, ou une demande qui attend un administrateur ou un modérateur (#19870). [viaLink] : le
+     * lecteur arrive par l'adresse partagée (#20332) — l'entrée se compte comme venue du lien.
+     */
+    suspend fun join(communityId: String, viaLink: Boolean = false): NetworkResult<CommunityJoinOutcome> =
+        apiCall { communityApi.join(communityId, JoinCommunityRequest.of(viaLink)) }
 
     /**
      * Une page des demandes d'entrée en attente (#19878), continuée par [PagedResult.nextCursor] — `null`

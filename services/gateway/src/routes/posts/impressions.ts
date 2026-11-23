@@ -69,7 +69,7 @@ async function acteurDImpression(
 ): Promise<{ readonly acteur: SocialEventsActor; readonly admis: number } | null | 'throttled'> {
   const registeredUser = (request as UnifiedAuthRequest).authContext?.registeredUser;
   if (registeredUser) {
-    return { acteur: { kind: 'user', userId: registeredUser.id, username: registeredUser.username ?? '' }, admis: events };
+    return { acteur: { kind: 'user', userId: registeredUser.id }, admis: events };
   }
   if (request.headers.authorization) return null;
   const lecteur = await resolveAnonymousReader(prisma as never, request);

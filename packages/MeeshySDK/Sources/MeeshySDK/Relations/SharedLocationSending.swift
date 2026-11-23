@@ -132,6 +132,10 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
     public let replacesChosenPoint: Bool
     /// « Jusqu'à ce que j'arrête » (#19616) : le partage n'a pas de terme ; `durationMinutes` reste pour le schéma.
     public let untilStopped: Bool
+    /// Le `startedAt` du partage que ce remplacement REMPLACE, tel que servi (#20249, iso `expectedStartedAt` du web) : si
+    /// un autre démarrage a eu lieu depuis, ou un arrêt, la passerelle refuse (`STARTED_ELSEWHERE`) sans rien appliquer.
+    /// Ne part qu'avec `replacesChosenPoint` et une position ; le centre ne le nomme que sur `acceptsExpectedStart`.
+    public let expectedStartedAt: String?
 
     /// `nil` : aucun destinataire valide, ou plus que le plafond. Un destinataire en double garde sa DERNIÈRE précision
     /// et sa dernière échéance (le schéma serveur refuse les doublons, insensibles à la casse).
@@ -143,11 +147,14 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
         shareBattery: Bool = false,
         source: SharedLocationPositionSource = .device,
         replacesChosenPoint: Bool = false,
-        untilStopped: Bool = false
+        untilStopped: Bool = false,
+        expectedStartedAt: String? = nil
     ) {
         guard let ordered = Self.ordered(recipients) else { return nil }
+        let replaces = replacesChosenPoint && source == .device
         self.init(validated: ordered, duration: duration, fix: fix, notifyRecipients: notifyRecipients, shareBattery: shareBattery,
-                  source: source, replacesChosenPoint: replacesChosenPoint && source == .device, untilStopped: untilStopped)
+                  source: source, replacesChosenPoint: replaces, untilStopped: untilStopped,
+                  expectedStartedAt: replaces ? expectedStartedAt : nil)
     }
 
     /// La LISTE SEULE (#19287) : un retrait ou une échéance, sans position. Ni « Prévenir » (elle n'ajoute personne) ni
@@ -161,11 +168,14 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
     ) {
         guard let ordered = Self.ordered(recipients) else { return nil }
         self.init(validated: ordered, duration: duration, fix: nil, notifyRecipients: false, shareBattery: shareBattery,
-                  source: .device, replacesChosenPoint: false, untilStopped: untilStopped)
+                  source: .device, replacesChosenPoint: false, untilStopped: untilStopped, expectedStartedAt: nil)
     }
 
     /// Une liste seule ne porte aucune position.
     public var isListOnly: Bool { fix == nil }
+
+    /// La charge nomme le partage qu'elle remplace : un refus `INVALID` met alors la clé en cause, pas la liste.
+    public var carriesExpectedStart: Bool { expectedStartedAt != nil }
 
     private static func ordered(_ recipients: [SharedLocationRecipient]) -> [SharedLocationRecipient]? {
         let valid = recipients.filter { isObjectId($0.userId) }
@@ -188,7 +198,8 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
         shareBattery: Bool,
         source: SharedLocationPositionSource,
         replacesChosenPoint: Bool,
-        untilStopped: Bool
+        untilStopped: Bool,
+        expectedStartedAt: String?
     ) {
         self.recipients = recipients
         self.duration = duration
@@ -198,6 +209,7 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
         self.source = source
         self.replacesChosenPoint = replacesChosenPoint
         self.untilStopped = untilStopped
+        self.expectedStartedAt = expectedStartedAt
     }
 
     /// La position part avec un mouvement (#19887).
@@ -207,7 +219,8 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
     public func withMotion(_ motion: SharedLocationMotion?) -> SharedLocationStartRequest {
         SharedLocationStartRequest(validated: recipients, duration: duration, fix: fix?.withMotion(motion),
                                    notifyRecipients: notifyRecipients, shareBattery: shareBattery, source: source,
-                                   replacesChosenPoint: replacesChosenPoint, untilStopped: untilStopped)
+                                   replacesChosenPoint: replacesChosenPoint, untilStopped: untilStopped,
+                                   expectedStartedAt: expectedStartedAt)
     }
 
     /// Au moins une personne part avec sa propre échéance.
@@ -227,7 +240,8 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
             shareBattery: shareBattery,
             source: source,
             replacesChosenPoint: replacesChosenPoint,
-            untilStopped: untilStopped
+            untilStopped: untilStopped,
+            expectedStartedAt: expectedStartedAt
         )
     }
 
@@ -236,7 +250,8 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
     /// il ne se dégrade jamais en partage borné que personne n'a choisi.
     public var withoutExtras: SharedLocationStartRequest {
         SharedLocationStartRequest(validated: recipients, duration: duration, fix: fix, notifyRecipients: false, shareBattery: false,
-                                   source: source, replacesChosenPoint: replacesChosenPoint, untilStopped: untilStopped)
+                                   source: source, replacesChosenPoint: replacesChosenPoint, untilStopped: untilStopped,
+                                   expectedStartedAt: expectedStartedAt)
     }
 
     /// Les charges à essayer, dans l'ordre, après un refus `INVALID` : sans les options de #19204, puis sans les
@@ -259,6 +274,7 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
         if shareBattery { wire["shareBattery"] = true }
         if fix != nil, source == .manual || replacesChosenPoint { wire["source"] = source.rawValue }
         if untilStopped { wire["untilStopped"] = true }
+        if let expectedStartedAt { wire["expectedStartedAt"] = expectedStartedAt }
         return wire
     }
 
@@ -281,6 +297,9 @@ public enum SharedLocationSendOutcome: String, Sendable, Equatable {
     /// Une position d'appareil sur un partage dont le point est CHOISI à la main (#20087) : rien n'a été écrit ni
     /// servi. L'appareil relit ce que la passerelle sert, et l'écran demande avant de remplacer le point.
     case fixedPoint
+    /// Le partage que la réponse nommait (`expectedStartedAt`) n'est plus celui servi : un autre appareil a démarré, ou le
+    /// partage s'est arrêté (#20249). Rien n'a été écrit.
+    case startedElsewhere
     case failed
 
     private static let refusals: [String: SharedLocationSendOutcome] = [
@@ -289,11 +308,40 @@ public enum SharedLocationSendOutcome: String, Sendable, Equatable {
         "SHARED_LOCATION_RATE_LIMITED": .rateLimited,
         "SHARED_LOCATION_UNAVAILABLE": .unavailable,
         "SHARED_LOCATION_FIXED_POINT": .fixedPoint,
+        "SHARED_LOCATION_STARTED_ELSEWHERE": .startedElsewhere,
     ]
 
     /// Un code que ce client ne connaît pas vaut un échec, jamais une raison inventée.
     public static func ofRefusal(_ code: String?) -> SharedLocationSendOutcome {
         code.flatMap { refusals[$0] } ?? .failed
+    }
+}
+
+/// L'instant tel que la passerelle l'écrit et le relit (`toISOString`, `z.string().datetime()`, #20249) : un `startedAt`
+/// servi sous une autre forme ne se nomme pas, il serait refusé en boucle.
+public enum SharedLocationWireInstant {
+    /// `AAAA-MM-JJTHH:MM:SS`, des fractions de seconde facultatives, puis `Z` : la forme de `toISOString`.
+    public static func isWire(_ value: String?) -> Bool {
+        guard let value, value.hasSuffix("Z"), WireDate.date(from: value) != nil else { return false }
+        let body = Array(value.utf8.dropLast())
+        guard body.count >= 19, hasWholeSeconds(Array(body.prefix(19))) else { return false }
+        let fraction = body.dropFirst(19)
+        return fraction.isEmpty || (fraction.first == UInt8(ascii: ".") && fraction.count > 1 && fraction.dropFirst().allSatisfy(isDigit))
+    }
+
+    private static func hasWholeSeconds(_ head: [UInt8]) -> Bool {
+        let separators: [Int: UInt8] = [4: UInt8(ascii: "-"), 7: UInt8(ascii: "-"), 10: UInt8(ascii: "T"), 13: UInt8(ascii: ":"), 16: UInt8(ascii: ":")]
+        let shaped = head.indices.allSatisfy { index in
+            guard let separator = separators[index] else { return isDigit(head[index]) }
+            return head[index] == separator
+        }
+        guard shaped else { return false }
+        let field = { (from: Int) in Int(head[from] - 48) * 10 + Int(head[from + 1] - 48) }
+        return (1...12).contains(field(5)) && (1...31).contains(field(8)) && field(11) < 24 && field(14) < 60 && field(17) < 60
+    }
+
+    private static func isDigit(_ byte: UInt8) -> Bool {
+        (48...57).contains(byte)
     }
 }
 

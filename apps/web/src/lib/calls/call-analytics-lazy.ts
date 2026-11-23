@@ -8,32 +8,44 @@ export type CallReportBuilders = {
   readonly qualityReport: (callId: string, total: PeerQuality, at: number) => QualityReportPayload;
 };
 
+type ReportUse = (builders: CallReportBuilders) => void;
+
 /**
  * Les rapports d'un appel chargés à part (#19894) : le chargement part à la
  * construction, donc bien avant le premier relevé et le raccroché. Prêt, un
  * rapport part tout de suite, à la même place qu'avant ; pas encore prêt, il
- * part à l'arrivée du module, dans l'ordre, avec ce qui valait au moment où il
- * a été demandé ; un module qui ne charge pas ne coûte que ces rapports-là, et
- * la demande suivante le retente.
+ * attend dans une file, avec ce qui valait au moment où il a été demandé, et la
+ * file se vide en entier, dans l'ordre, avant qu'un rapport parte en direct
+ * (#20426). Un module qui ne charge pas ne coûte que les rapports en attente ;
+ * il n'est retenté qu'une minute après son échec, par la demande suivante, et
+ * les rapports demandés entre-temps sont abandonnés sans bruit.
  */
-export function lazyCallReports(load: () => Promise<CallReportBuilders>): CallReports {
+export function lazyCallReports(load: () => Promise<CallReportBuilders>, now: () => number = () => performance.now()): CallReports {
   let ready: CallReportBuilders | null = null;
-  let pending: Promise<CallReportBuilders> | null = null;
-  const ensure = (): Promise<CallReportBuilders> =>
-    (pending ??= load().then(
-      (builders) => (ready = builders),
-      (error: unknown) => {
-        pending = null;
-        throw error;
+  let waiting: ReportUse[] | null = null;
+  let failedAt = -Infinity;
+  const run = (use: ReportUse): void => {
+    if (ready) return use(ready);
+    if (waiting) return void waiting.push(use);
+    if (now() - failedAt < 60_000) return;
+    const queue = (waiting = [use]);
+    load().then(
+      (builders) => {
+        for (const queued of queue) {
+          try {
+            queued(builders);
+          } catch {}
+        }
+        ready = builders;
+        waiting = null;
       },
-    ));
-  const run = (use: (builders: CallReportBuilders) => void): void => {
-    if (ready !== null) return use(ready);
-    ensure()
-      .then(use)
-      .catch(() => undefined);
+      () => {
+        waiting = null;
+        failedAt = now();
+      },
+    );
   };
-  ensure().catch(() => undefined);
+  run(() => {});
   return {
     final: (telemetry, context, send) => run((builders) => send(builders.analyticsPayload(telemetry, context))),
     quality: (callId, total, at, send) => run((builders) => send(builders.qualityReport(callId, total, at))),

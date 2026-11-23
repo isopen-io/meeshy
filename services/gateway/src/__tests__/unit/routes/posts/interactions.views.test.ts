@@ -557,8 +557,21 @@ describe('POST /posts/:id/view — null body uses ?? {} fallback (line 257)', ()
   });
 });
 
-describe('POST /posts/:id/view — STORY viewer has no username uses ?? empty string (line 279)', () => {
-  it('returns 200 using empty viewerUsername when user has no username', async () => {
+/*
+ * #20443 — ce bloc s'appelait « STORY viewer has no username uses ?? empty
+ * string (line 279) » et n'assertait qu'un `statusCode === 200`. Le `?? ''`
+ * qu'il nommait a été SUPPRIMÉ avec le `username` de `SocialEventsActor` : le
+ * témoin attestait donc un repli qui n'existe plus, en passant par le chemin
+ * nominal — et il est resté VERT (relevé par l'audit adversarial du lot).
+ *
+ * Ce qu'il peut attester, lui, a survécu au retrait et vaut mieux : un acteur
+ * SANS pseudo diffuse la même charge anonyme que les autres. Il assert donc
+ * désormais sur l'EFFET — le couple remis au diffuseur — et non sur le statut.
+ * (La clé de ligne du titre d'origine était déjà fausse : un titre ne porte
+ * pas de numéro de ligne, il dérive à la première édition.)
+ */
+describe('POST /posts/:id/view — un acteur SANS pseudo diffuse la charge anonyme (#20443)', () => {
+  it('diffuse `story:viewed` avec les deux clés vides, sans pseudo à servir', async () => {
     mockGetPostById.mockResolvedValueOnce({ id: POST_ID, type: 'STORY', authorId: 'other-author', viewCount: 3 });
     const app = Fastify({ logger: false });
     const prisma = {
@@ -581,8 +594,9 @@ describe('POST /posts/:id/view — STORY viewer has no username uses ?? empty st
       markPostNotificationsAsRead: jest.fn<any>().mockResolvedValue(undefined),
       createPostRepostNotification: jest.fn<any>().mockResolvedValue(undefined),
     });
+    const broadcastStoryViewed = jest.fn<any>().mockResolvedValue(undefined);
     app.decorate('socialEvents', {
-      separationAroundActor: jest.fn<any>().mockResolvedValue([]), broadcastStoryViewed: jest.fn<any>().mockResolvedValue(undefined),
+      separationAroundActor: jest.fn<any>().mockResolvedValue([]), broadcastStoryViewed,
       broadcastPostLiked: jest.fn<any>().mockResolvedValue(undefined),
       broadcastPostUnliked: jest.fn<any>().mockResolvedValue(undefined),
       broadcastStoryReacted: jest.fn<any>().mockResolvedValue(undefined),
@@ -599,6 +613,11 @@ describe('POST /posts/:id/view — STORY viewer has no username uses ?? empty st
     await app.ready();
     const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/view`, payload: {} });
     expect(res.statusCode).toBe(200);
+    expect(broadcastStoryViewed).toHaveBeenCalledWith(
+      { storyId: POST_ID, viewerId: '', viewerUsername: '', viewCount: 3 },
+      'other-author',
+      [],
+    );
     await app.close();
   });
 });

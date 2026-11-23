@@ -19,9 +19,21 @@ import kotlinx.serialization.json.contentOrNull
  * de Retrofit n'encode pas les défauts, et un `{}` envoyé ferait retomber sur le 409.
  */
 @Serializable
-data class JoinCommunityRequest(val acceptsPending: Boolean) {
+data class JoinCommunityRequest(
+    val acceptsPending: Boolean,
+    /**
+     * `"link"` quand le lecteur arrive par l'adresse partagée de la communauté (#20332) : l'entrée se
+     * compte comme venue du lien, et se refuse (403 `COMMUNITY_LINK_PAUSED`) quand un intendant l'a mis en
+     * pause. Absent sinon (défaut non encodé) — la passerelle lit alors une entrée directe.
+     */
+    val via: String? = null,
+) {
     companion object {
+        const val VIA_LINK = "link"
         val AcceptsPending = JoinCommunityRequest(acceptsPending = true)
+
+        fun of(viaLink: Boolean): JoinCommunityRequest =
+            JoinCommunityRequest(acceptsPending = true, via = VIA_LINK.takeIf { viaLink })
     }
 }
 
@@ -61,11 +73,19 @@ object CommunityJoinOutcomeSerializer : KSerializer<CommunityJoinOutcome> {
  */
 enum class CommunityJoinRefusal {
     /** 403 `COMMUNITY_JOIN_COOLDOWN` : une demande refusée il y a moins de sept jours. */
-    COOLDOWN;
+    COOLDOWN,
+
+    /** 403 `COMMUNITY_LINK_PAUSED` (#19661, #20332) : un intendant a mis en pause les arrivées par le lien. */
+    LINK_PAUSED;
 
     companion object {
         const val COOLDOWN_CODE = "COMMUNITY_JOIN_COOLDOWN"
+        const val LINK_PAUSED_CODE = "COMMUNITY_LINK_PAUSED"
 
-        fun of(code: String?): CommunityJoinRefusal? = COOLDOWN.takeIf { code == COOLDOWN_CODE }
+        fun of(code: String?): CommunityJoinRefusal? = when (code) {
+            COOLDOWN_CODE -> COOLDOWN
+            LINK_PAUSED_CODE -> LINK_PAUSED
+            else -> null
+        }
     }
 }

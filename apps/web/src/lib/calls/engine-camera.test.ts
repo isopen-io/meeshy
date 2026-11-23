@@ -197,6 +197,17 @@ describe('la caméra bascule aussitôt, la dernière intention gagne (#8735, #90
     expect(h.call()?.localStream?.getVideoTracks()[0]?.readyState).toBe('live');
     expect(h.notices.getState().notice).toEqual({ kind: 'camera-failed', failure: 'unavailable' });
   });
+
+  test('le chunk de la caméra arrière qui ne charge pas : le retournement échoue proprement, celle d’avant revient et l’appel continue (#20426)', async () => {
+    const device = oneCameraAtATime();
+    const h = await connectedWith((facing) => (facing === 'environment' ? Promise.reject(new TypeError('Failed to fetch dynamically imported module: /assets/rear-camera-x.js')) : device.acquireCamera(facing)));
+    await h.engine.toggleCamera();
+    await h.engine.switchCamera();
+    expect(h.call()?.phase.kind).toBe('connected');
+    expect(h.call()?.facing).toBe('user');
+    expect(h.call()?.localStream?.getVideoTracks()[0]?.readyState).toBe('live');
+    expect(h.notices.getState().notice).toEqual({ kind: 'camera-failed', failure: 'unavailable' });
+  });
 });
 
 /**
