@@ -2006,3 +2006,17 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gates : web `bun test` 35 179 verts, 2 rouges hérités (focal-row, act-leak-guard) ; `tsc` web 0.
 - Reste : Android de #19883 = #19884.
 - Prochain lot : fusionner #20417 et fermer #20249 ; puis iOS de #20416 / #20308, #19884, #20054, #20056.
+
+## 2026-11-23 — réveil de 01 h : Android de #19883 (#19884, personne ne cache personne sur la carte)
+
+- Reprise : #20449 (web de #19883) fusionnée, #19883 fermée. #20417 (iOS de #20249) est toujours menée par une autre
+  session (3023fab02, iOS et SDK en file depuis 20 h 54 UTC) : ce réveil n'y pousse rien. Aucune branche n'écrit les
+  chemins de la carte Android.
+- Lot : #19884, iso `LocationMapFan.spread` (iOS) et `spreadPins` (web). `SharedLocationsFan` (`:core:model`) ouvre en
+  éventail les épingles qui se recouvrent à l'écran et les repose sur la projection `SlippyMap` du zoom courant ; une
+  épingle seule garde exactement sa position servie. La carte plein écran et la section de la fiche des cercles ne
+  superposent plus leurs épingles (décalage de 6 dp). Rien de nouveau ne part du serveur.
+- Audit adversarial : non requis (affichage pur de positions déjà servies).
+- Gates : `jvm-check -PjvmCheckModelOnly` `SharedLocationsFanTest` 6/6 (rouge à la compilation avant le code),
+  `SharedLocationsMapTest` 6/6 ; Compose prouvé par `android.yml` sur la PR #20463.
+- Prochain lot : fusionner #20417 et fermer #20249 ; puis iOS de #20416 / #20308, #20054, #20056.
