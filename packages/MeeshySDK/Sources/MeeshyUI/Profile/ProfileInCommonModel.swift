@@ -66,6 +66,12 @@ final class ProfileInCommonModel: ObservableObject {
         }
     }
 
+    /// « Notre histoire » (#20357) : lue du même document, sans dépendre du reste de « En commun » — elle se peint
+    /// dès le cache, même quand rien d'autre n'est partagé.
+    var history: [ProfileInCommonDigest.HistoryStep] {
+        digest(conversations: 0)?.history ?? []
+    }
+
     func digest(conversations: Int) -> ProfileInCommonDigest? {
         inCommon.map { ProfileInCommonDigest.resolve(conversations: conversations, inCommon: $0) }
     }

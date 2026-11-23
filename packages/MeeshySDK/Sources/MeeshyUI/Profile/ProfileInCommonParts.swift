@@ -120,3 +120,17 @@ struct ProfileInCommonHistory: View {
         }
     }
 }
+
+/// « Notre histoire » en deuxième position de la Vitrine (#20357) : depuis quand, les montées
+/// de palier, les moments. Cache d'abord, jamais de spinner ; rien tant que le lien n'a pas d'histoire servie.
+struct ProfileHistorySection: View {
+    @ObservedObject var model: ProfileInCommonModel
+    let tint: Color
+
+    var body: some View {
+        let steps = model.history
+        if !steps.isEmpty {
+            ProfileInCommonHistory(steps: steps, tint: tint)
+        }
+    }
+}

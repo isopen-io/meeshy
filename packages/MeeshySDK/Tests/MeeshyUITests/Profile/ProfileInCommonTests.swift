@@ -245,7 +245,8 @@ final class ProfileInCommonTests: XCTestCase {
     func test_vitrineFace_mountsTheHistorySecond_andInCommonNoLongerHidesIt() throws {
         let vitrine = try profileSource("UserProfileSheet+DetailsTab.swift")
         let live = try XCTUnwrap(vitrine.range(of: "liveSection.meeshyCascade(rank: 0)"))
-        let history = try XCTUnwrap(vitrine.range(of: "ProfileHistorySection(model: inCommon"))
+        let history = try XCTUnwrap(vitrine.range(of: "historySection.meeshyCascade(rank: 1)"))
+        XCTAssertTrue(vitrine.contains("ProfileHistorySection(model: inCommon"))
         let pending = try XCTUnwrap(vitrine.range(of: "ProfilePendingSection.of(self)"))
         XCTAssertLessThan(live.lowerBound, history.lowerBound)
         XCTAssertLessThan(history.lowerBound, pending.lowerBound)

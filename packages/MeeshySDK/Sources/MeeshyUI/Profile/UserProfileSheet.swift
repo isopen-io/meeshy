@@ -111,6 +111,8 @@ public struct UserProfileSheet: View {
     /// #10093 — profil et statistiques : le cache d'abord, la synchronisation dès l'ouverture.
     @StateObject var loader = ProfileSheetLoader()
     @StateObject var acquaintance = ProfileAcquaintanceModel()
+    /// « En commun » et « Notre histoire » (#20357) lisent un seul document, chargé une fois pour les deux blocs.
+    @StateObject var inCommon = ProfileInCommonModel()
     @State private var internalConversations: [MeeshyConversation] = []
     @State private var internalIsLoadingConversations = false
     /// Nos directes lues dans le cache de la liste (#19646) : la pastille d'« Écrire », relue à chaque réécriture du cache,

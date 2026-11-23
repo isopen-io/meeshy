@@ -2,7 +2,7 @@ import SwiftUI
 import MeeshySDK
 
 /// « En commun » sur la Vitrine de l'autre (#19377, planche `Autre-Commun`) : le résumé, nos conversations, puis nos
-/// communautés (K43), nos amis (K48 puis K39), nos médias (K04 + K49, un vocal par K35) et notre histoire (K53). Une
+/// communautés (K43), nos amis (K48 puis K39), nos médias (K04 + K49, un vocal par K35) ; notre histoire (K53) a sa place en tête de la Vitrine (#20357). Une
 /// partie que le cercle commun n'ouvre pas ne se montre pas (#19674) : « Pour aller plus loin » dit le chemin. Rien en
 /// commun : le bloc d'état du kit (K38, planche `Etat-Vide` § 6). Sans donnée servie ni en cache, seules les conversations.
 struct ProfileInCommonSection<Conversations: View>: View {
@@ -16,13 +16,14 @@ struct ProfileInCommonSection<Conversations: View>: View {
     let onOpenImage: (String) -> Void
     private let conversations: Conversations
 
-    @StateObject private var model = ProfileInCommonModel()
+    @ObservedObject var model: ProfileInCommonModel
     @ResolvedThemePalette private var theme
 
-    init(userId: String?, source: any ProfileInCommonLoading, conversationCount: Int, isLoadingConversations: Bool,
+    init(model: ProfileInCommonModel, userId: String?, source: any ProfileInCommonLoading, conversationCount: Int, isLoadingConversations: Bool,
          tint: Color, accentHex: String,
          onFirstMessage: (() -> Void)?, onOpenImage: @escaping (String) -> Void,
          @ViewBuilder conversations: () -> Conversations) {
+        self.model = model
         self.userId = userId
         self.source = source
         self.conversationCount = conversationCount
@@ -47,10 +48,6 @@ struct ProfileInCommonSection<Conversations: View>: View {
                                          tint: tint, accentHex: accentHex, onOpenImage: onOpenImage)
                 }
             }
-        }
-        .task(id: userId) {
-            guard let userId, !userId.isEmpty else { return }
-            await model.open(userId: userId, using: source)
         }
         .accessibilityIdentifier("profile.inCommon")
     }
@@ -114,9 +111,6 @@ private struct ProfileInCommonParts: View {
                     onSelect: { chosen in Task { await model.select(chosen, userId: userId, using: source) } },
                     onOpenImage: onOpenImage
                 )
-            }
-            if !digest.history.isEmpty {
-                ProfileInCommonHistory(steps: digest.history, tint: tint)
             }
         }
     }
