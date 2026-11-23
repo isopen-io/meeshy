@@ -6,6 +6,7 @@ import { translateCircles } from '@/lib/i18n-circles-catalog';
 import { relationLevelIcon, relationLevelLabel, relationLevelTint } from '@/lib/relations/level-labels';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { SharedLocation } from '@/lib/api/shared-locations';
+import { spreadPins, type ScreenPoint } from '@/lib/map/fan';
 import { metersToPixels, screenPoint, tilesCovering, TILE_SIZE, type MapView } from '@/lib/map/slippy';
 
 import { Avatar } from './avatar';
@@ -28,6 +29,9 @@ import { MeeshyMapPin } from './kit/meeshy-map-pin';
  *   cercle servi (serveur antérieur), l'épingle reste neutre : aucun client ne le recalcule.
  * - **Accessible** : la carte est un `application` focalisable (flèches = glisser, + / − =
  *   zoom) ; la LISTE dit la même chose que les épingles, pour qui n'a pas la carte.
+ * - **Personne ne cache personne** (#19883) : des épingles qui se recouvrent (toutes au même
+ *   centre à la précision « ville ») s'ouvrent en éventail autour du point servi ; le flou
+ *   reste centré sur ce point, et chaque épingle garde le cercle de SA personne.
  * - **Pure** : l'état (vue, positions, noms) est tenu par `shared-locations-map.tsx`.
  */
 
@@ -67,6 +71,8 @@ const PIN_AVATAR = 48;
 /** Sous ce diamètre le cercle ne se voit pas : l'épingle suffit (position exacte). */
 const MIN_VISIBLE_BLUR = 16;
 const KEY_PAN_PIXELS = 80;
+/** Deux épingles plus proches que leur diamètre se recouvrent : elles s'écartent d'au moins cela. */
+const FAN_DISTANCE = PIN_SIZE + 4;
 /** Un bouton posé sur la carte (épingle, zoom) garde son toucher : la carte capture le pointeur pour glisser, et un
  * pointeur capturé enverrait le clic à la carte, jamais au bouton. Glisser part donc du fond de carte. */
 const keepsItsTouch = (event: { stopPropagation(): void }): void => event.stopPropagation();
@@ -82,11 +88,14 @@ export function rowText({ language, location, person, formatTime }: { readonly l
   return byPrecision[location.precision]();
 }
 
+const isOnMap = (at: ScreenPoint, view: MapView): boolean => at.x >= 0 && at.y >= 0 && at.x <= view.width && at.y <= view.height;
+
 function Pin({
   location,
   text,
   person,
   view,
+  pinAt,
   selected,
   onSelect,
 }: {
@@ -94,11 +103,13 @@ function Pin({
   readonly text: string;
   readonly person: SharedLocationPerson;
   readonly view: MapView;
+  /** Là où l'épingle se pose : le point servi, ou sa place dans l'éventail. */
+  readonly pinAt: ScreenPoint;
   readonly selected: boolean;
   readonly onSelect: ((userId: string) => void) | undefined;
 }) {
   const at = screenPoint(location, view);
-  if (at.x < 0 || at.y < 0 || at.x > view.width || at.y > view.height) return null;
+  if (!isOnMap(at, view)) return null;
   const blur = Math.round(metersToPixels(location.radiusMeters, location.latitude, view.zoom) * 2);
   return (
     <>
@@ -122,7 +133,7 @@ function Pin({
         data-shared-location-pin={location.userId}
         onPointerDown={keepsItsTouch}
         className="absolute grid place-items-center"
-        style={{ left: at.x - PIN_SIZE / 2, top: at.y - PIN_SIZE / 2, width: PIN_SIZE, height: PIN_SIZE, zIndex: selected ? 1 : 0 }}
+        style={{ left: pinAt.x - PIN_SIZE / 2, top: pinAt.y - PIN_SIZE / 2, width: PIN_SIZE, height: PIN_SIZE, zIndex: selected ? 1 : 0 }}
       >
         <MeeshyMapPin
           label={text}
@@ -161,6 +172,10 @@ export function SharedLocationsMapView({ language, locations, view, personOf, fo
   const t = (key: PlainKey): string => translateCircles(language, key);
   const drag = useRef<{ readonly x: number; readonly y: number } | null>(null);
   const rows = locations.map((location) => ({ location, person: personOf(location.userId) })).map((row) => ({ ...row, text: rowText({ language, ...row, formatTime }) }));
+  const placed = spreadPins(
+    rows.map(({ location }) => ({ id: location.userId, ...screenPoint(location, view) })).filter((pin) => isOnMap(pin, view)),
+    FAN_DISTANCE,
+  );
   const onKeyDown = (event: { readonly key: string; preventDefault(): void }): void => {
     const moves: Readonly<Record<string, readonly [number, number]>> = {
       ArrowLeft: [-KEY_PAN_PIXELS, 0],
@@ -229,7 +244,7 @@ export function SharedLocationsMapView({ language, locations, view, personOf, fo
           />
         ))}
         {rows.map(({ location, person, text }) => (
-          <Pin key={location.userId} location={location} text={text} person={person} view={view} selected={selectedUserId === location.userId} onSelect={onSelect} />
+          <Pin key={location.userId} location={location} text={text} person={person} view={view} pinAt={placed.get(location.userId) ?? screenPoint(location, view)} selected={selectedUserId === location.userId} onSelect={onSelect} />
         ))}
         <div className="absolute right-2 top-2 grid gap-2" onPointerDown={keepsItsTouch}>
           {zoomButton(1, 'positions.zoomIn', '+')}

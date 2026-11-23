@@ -103,6 +103,45 @@ describe('la carte', () => {
   });
 });
 
+describe('des personnes posées au même point (#19883)', () => {
+  const pinAt = (html: string, id: string): { x: number; y: number } => {
+    const match = new RegExp(`data-shared-location-pin="${id}"[^>]*style="left:(-?[\\d.]+)px;top:(-?[\\d.]+)px`).exec(html);
+    return { x: Number(match?.[1]), y: Number(match?.[2]) };
+  };
+  const sameCity = [
+    location({ userId: 'u-a', circle: 'FRIEND', precision: 'city', radiusMeters: 5000 }),
+    location({ userId: 'u-b', circle: 'CLOSE', precision: 'city', radiusMeters: 5000 }),
+    location({ userId: 'u-c', circle: 'BLOOD', precision: 'city', radiusMeters: 5000 }),
+    location({ userId: 'u-d', circle: 'FRIEND', precision: 'city', radiusMeters: 5000 }),
+  ];
+
+  test('quatre positions au même point : quatre épingles distinctes, qui ne se recouvrent pas', () => {
+    const html = render({ locations: sameCity });
+    const pins = ['u-a', 'u-b', 'u-c', 'u-d'].map((id) => pinAt(html, id));
+    pins.forEach((p) => expect(Number.isFinite(p.x) && Number.isFinite(p.y)).toBe(true));
+    pins.forEach((p, i) => pins.slice(i + 1).forEach((q) => expect(Math.hypot(p.x - q.x, p.y - q.y)).toBeGreaterThanOrEqual(56)));
+  });
+
+  test('chaque épingle de l’éventail porte le cercle de SA personne', () => {
+    const html = render({ locations: sameCity });
+    const circleOf = (id: string): string | undefined =>
+      new RegExp(`data-shared-location-pin="${id}"[\\s\\S]*?data-shared-location-circle="([A-Z]+)"`).exec(html)?.[1];
+    expect(['u-a', 'u-b', 'u-c', 'u-d'].map(circleOf)).toEqual(['FRIEND', 'CLOSE', 'BLOOD', 'FRIEND']);
+  });
+
+  test('le flou reste centré sur la position SERVIE : l’éventail ne déplace que les épingles', () => {
+    const html = render({ locations: sameCity });
+    const blurs = [...html.matchAll(/data-blur-diameter="(\d+)"[^>]*style="left:(-?[\d.]+)px;top:(-?[\d.]+)px/g)].map((m) => `${m[2]},${m[3]}`);
+    expect(blurs).toHaveLength(4);
+    expect(new Set(blurs).size).toBe(1);
+  });
+
+  test('une personne seule garde sa place exacte', () => {
+    const html = render({ locations: [location()] });
+    expect(pinAt(html, 'u-ada')).toEqual({ x: 200 - 28, y: 300 - 28 });
+  });
+});
+
 describe('le cercle d’où vient la personne (#17013)', () => {
   test('le marqueur porte l’icône et la couleur du cercle SERVI, et le lecteur d’écran le dit', () => {
     const html = render({ locations: [location({ circle: 'CLOSE' })] });
