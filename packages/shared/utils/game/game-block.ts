@@ -30,6 +30,7 @@ import { MISSIONS_MIN_LEVEL, MISSION_REROLL_PER_DAY, MISSION_REROLL_PRICE, fullD
 import { personalMissionState } from './personal-mission.js';
 import { treasuryReserveAccess, treasuryTier } from './treasury.js';
 import { isKeptOfferingDay } from './welcome-back.js';
+import { servedEffortRelight } from './flame-effort.js';
 import { buildGameBlockExtras, type GameBlockExtrasFacts } from './game-block-extras.js';
 import type { GameBlock, GameChestReward, GameMission } from '../../types/game.js';
 
@@ -120,6 +121,11 @@ export type GameBlockFacts = {
    */
   readonly welcomeBackDay?: string | null;
   readonly lastRelightDay: string | null;
+  /**
+   * Les journées de Rêve complet d'après la rupture (`wholeDreamDays`), que la passerelle lit quand une Flamme est
+   * éteinte (#20471). Absentes, le bloc ne dit rien du rallumage par l'effort.
+   */
+  readonly effortDreamDays?: readonly string[];
   readonly missions: readonly GameMissionRecord[];
   /** La mission personnelle du jour (#9539) : sa plage, et l'instant qui fixe son état. Absente : rien n'est servi. */
   readonly personalMission?: {
@@ -184,6 +190,17 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
     lastRelightDay: facts.lastRelightDay,
     balance: facts.balance,
   });
+
+  // Deux rêves complets rallument la Flamme sans payer (#20455) : le bloc dit combien en manquent, et jusqu'à quand.
+  const effortRelight =
+    facts.effortDreamDays === undefined
+      ? null
+      : servedEffortRelight({
+          brokenLastDay: facts.broken?.lastActiveDay ?? null,
+          streakBeforeBreak: facts.broken?.streak ?? 0,
+          today: flameToday,
+          dreamDays: facts.effortDreamDays,
+        });
 
   const unlocked = record >= MISSIONS_MIN_LEVEL;
   const allDone = facts.missions.length > 0 && facts.missions.every((m) => m.completedAt !== null);
@@ -285,6 +302,7 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       status,
       canRelight: relight.allowed,
       ...(facts.freezeGiftDay === undefined ? {} : { freezeGifted: facts.freezeGiftDay === flameToday }),
+      ...(effortRelight === null ? {} : { effortRelight }),
     },
     boosts: {
       // Avec les étincelles, le Vent arrière souffle à 7 niveaux ou plus sous le record (#10896) ; sans, la loi d'hier.

@@ -313,6 +313,15 @@ describe('FlameService.relightByEffort — deux rêves complets rallument la Fla
     expect(db.user.rows[0]?.lastRelightDay).toBeUndefined();
   });
 
+  it('hors de la fenêtre, ne relit aucun rêve passé (#20471)', async () => {
+    const db = fakeGameDb();
+    replayedSinceBreak(db, { brokenStreakLastDay: '2026-08-02' });
+    const findMany = jest.spyOn(db.prisma.dailyMission, 'findMany');
+
+    expect(await new FlameService(db.prisma).relightByEffort(USER, NOW)).toBeNull();
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
   it('un seul Rêve complet ne rallume rien', async () => {
     const db = fakeGameDb();
     replayedSinceBreak(db);
