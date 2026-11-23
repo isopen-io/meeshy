@@ -30,6 +30,24 @@ import type {
 export const logger = enhancedLogger.child({ module: 'SocialEventsHandler' });
 
 /**
+ * **LA ROOM D'UN POST NE S'ADRESSE QU'AVEC SON VERDICT DE SÉPARATION** (#20430).
+ *
+ * Les deux champs voyagent ensemble parce que la room du post est la seule
+ * adresse d'une diffusion de contenu que rien d'autre ne filtre : poser un
+ * blocage n'en évince aucune socket, et la porte de `post:join` juge au moment
+ * du JOIN. Un type les séparant laisserait écrire un site qui adresse la room
+ * sans verdict — ce que les quatre lots précédents ont passé leur temps à
+ * trouver à la main.
+ *
+ * `separated: null` = la lecture des blocages a échoué ⇒ on n'adresse pas la
+ * room du post.
+ */
+export type PostRoomTarget = {
+  readonly id: string;
+  readonly separated: readonly string[] | null;
+};
+
+/**
  * « Personne à taire », à passer EXPLICITEMENT. Le paramètre `separated` des
  * deux seams est REQUIS, et ce n'est pas une coquetterie : une garde dont le
  * défaut est l'OUVERTURE n'est pas une garde — la prochaine famille d'activité
@@ -301,17 +319,40 @@ export class SocialEmissionCore {
     event: E,
     payloadFor: (post: Post) => SocialEventPayload<E>,
     loaded: Post,
-    postRoomId?: string,
+    postRoom?: PostRoomTarget,
   ): void {
     const post = withServedPostMedia(loaded);
     const authorRoom = ROOMS.feed(authorId);
     const audiencePayload = payloadFor(withoutAudienceList(post));
     const audienceRooms = recipientIds.filter((id) => id !== authorId).map((id) => ROOMS.feed(id));
-    if (postRoomId) {
-      emitServerEvent(this.io.to([...audienceRooms, ROOMS.post(postRoomId)]).except(authorRoom), event, audiencePayload);
+    /* #20430 — la room du post et la séparation qui la gouverne voyagent
+       ENSEMBLE : il est impossible de l'adresser sans verdict. `null` ⇒ on ne
+       l'adresse pas, et les feed rooms partent seules.
+
+       Ce n'est PAS le « fail-closed partiel » que #20236 interdit : là, deux
+       adresses servaient la MÊME audience non filtrée, et n'en garder qu'une ne
+       gardait rien. Ici les feed rooms portent un filtre INDÉPENDANT et déjà
+       appliqué — `getVisibilityFilteredRecipients` → `withoutBlockedRecipients`,
+       bidirectionnel (mesuré) —, et la room du post est la SEULE surface non
+       gardée. La fermer est donc le fail-closed COMPLET de ce qui fuyait ;
+       fermer les feed rooms en plus ne protégerait personne et priverait
+       l'audience légitime sur une panne de lecture. */
+    const postRoomRooms = postRoom !== undefined && postRoom.separated !== null
+      ? [ROOMS.post(postRoom.id)]
+      : [];
+    if (postRoomRooms.length > 0) {
+      const separated = postRoom?.separated ?? [];
+      emitServerEvent(
+        this.exceptSeparated([...audienceRooms, ...postRoomRooms], [...separated, authorRoom]),
+        event,
+        audiencePayload,
+      );
     } else {
       for (const room of audienceRooms) emitServerEvent(this.io.to(room), event, audiencePayload);
     }
+    /* L'AUTEUR reçoit TOUJOURS son propre contenu, avec sa liste d'audience :
+       sa feed room ne contient que ses sockets, aucun tiers n'y lit, et un
+       sujet ne se tait pas à lui-même. Exemption ÉCRITE, pas oubli. */
     emitServerEvent(this.io.to(authorRoom), event, payloadFor(withAudienceListFor(post, authorId)));
   }
 
@@ -440,6 +481,26 @@ export class SocialEmissionCore {
    * n'émet rien — le lecteur relira le fil par le REST, qui sait quoi taire.
    * Un commentateur inconnu n'a personne à taire.
    */
+  /**
+   * **LA SÉPARATION AUTOUR DE L'AUTEUR D'UN CONTENU** (#20430).
+   *
+   * Une diffusion de CONTENU n'a qu'UN sujet : celui qui a ÉCRIT (#20236).
+   * `commentEmitter` porte déjà cette loi pour le commentaire ; celle-ci la
+   * porte pour le POST, dont la charge est la plus lourde des trois — le `Post`
+   * entier, ou le `translation.text` d'une de ses traductions.
+   *
+   * **Cachée, elle**, contrairement à `separationAroundActor` : la clé
+   * `[auteur]` est exactement le genre d'entrée STABLE pour lequel ce cache a
+   * été écrit — une traduction diffuse une fois PAR LANGUE CIBLE, chaque
+   * résultat arrivant séparément du pipeline, sans boucle où passer le
+   * résultat.
+   *
+   * `null` ⇒ l'appelant n'adresse PAS la room du post.
+   */
+  contentSeparation(postAuthorId: string): Promise<readonly string[] | null> {
+    return this.separatedRooms.roomsAround([postAuthorId], { keep: postAuthorId });
+  }
+
   async commentEmitter(rooms: string | string[], commentAuthorId: string | null | undefined) {
     const separated = await this.separatedRooms.roomsAround([commentAuthorId], { keep: commentAuthorId });
     return separated === null ? null : this.exceptSeparated(rooms, separated);

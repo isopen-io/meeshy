@@ -117,7 +117,8 @@ export class SocialEventsHandler {
     // fois (`emitPostToAudience`). Caveat assumé : si l'édition RESTREINT la
     // visibilité, les membres déjà joints à la post room reçoivent encore
     // cette update — même sémantique que comment:added, pas d'éviction de room.
-    this.core.emitPostToAudience(recipients, authorId, SERVER_EVENTS.POST_UPDATED, (p) => ({ post: p }), post, post.id);
+    const separated = await this.core.contentSeparation(authorId);
+    this.core.emitPostToAudience(recipients, authorId, SERVER_EVENTS.POST_UPDATED, (p) => ({ post: p }), post, { id: post.id, separated });
   }
 
   async broadcastPostDeleted(postId: string, authorId: string): Promise<void> {
@@ -430,7 +431,9 @@ export class SocialEventsHandler {
     visibilityUserIds: string[],
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds, { postId: data.postId });
-    this.core.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_TRANSLATION_UPDATED, data, undefined, NOTHING_TO_SILENCE);
+    const separated = await this.core.contentSeparation(postAuthorId);
+    if (separated === null) return;
+    this.core.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_TRANSLATION_UPDATED, data, undefined, separated);
   }
 
   /**
@@ -487,7 +490,9 @@ export class SocialEventsHandler {
       emitter?.emit(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, data);
       return;
     }
-    this.core.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, data, undefined, NOTHING_TO_SILENCE);
+    const separated = await this.core.contentSeparation(postAuthorId);
+    if (separated === null) return;
+    this.core.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, data, undefined, separated);
   }
 
   /**
@@ -508,7 +513,9 @@ export class SocialEventsHandler {
       emitter?.emit(SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, data);
       return;
     }
-    this.core.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, data, undefined, NOTHING_TO_SILENCE);
+    const separated = await this.core.contentSeparation(postAuthorId);
+    if (separated === null) return;
+    this.core.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, data, undefined, separated);
   }
 
   // ==============================================
