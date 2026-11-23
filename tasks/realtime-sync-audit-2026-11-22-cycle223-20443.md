@@ -184,6 +184,33 @@ qui l'a rappelé. Converti en témoin #20443.
 `tsc --noEmit` (gateway) : **0**. Suite gateway COMPLÈTE : voir le commentaire
 de clôture de l'issue. Suite web `publication-views-realtime` : 5/5.
 
+## La constante que le cliquet d'exports a fait tomber, et il avait raison
+
+`packages/shared/__tests__/types/post.test.ts` fige la surface d'EXÉCUTION de
+`types/post.ts` : ce module est presque entièrement du type effacé à la
+compilation, et une valeur d'exécution y transforme un import de TYPE en import
+de CODE. Son doc-comment dit la réparation attendue d'un export neuf : **décider
+s'il a le droit d'exister, jamais allonger la liste.**
+
+Le premier jet de ce lot exportait `ANONYMOUS_STORY_VIEWER`, que les producteurs
+répandaient. La décision, prise contre le cliquet : **il n'a pas le droit
+d'exister**, parce qu'il ne garde RIEN que le type ne garde déjà. Le type
+littéral `''` interdit l'identité (`TS2322`) ET l'omission (`TS2345`) ; la
+constante ne faisait que nommer ce que le compilateur imposait. Les deux champs
+s'écrivent en clair au site d'émission, et les deux mutations ont été rejouées
+APRÈS le retrait pour vérifier que le cliquet de type survit — il survit, dans
+les deux sens.
+
+> Le précédent du module (`DEFAULT_PUBLICATION_VISIBILITY`) est admis parce
+> qu'il garde une VALEUR que nul type ne peut tenir — « un défaut recopié en
+> littéral est ce qui avait laissé les stories web à FRIENDS ». Mon constante
+> n'avait pas cette propriété, et la ressemblance de forme avec un précédent
+> admis est exactement ce qui rend une addition facile à justifier à tort.
+> **Un cliquet qui demande « ce nouvel export garde-t-il quelque chose que le
+> type ne garde pas ? » répond mieux que son auteur** : j'avais écrit la
+> constante comme un « site unique », une valeur du dépôt, sans remarquer que le
+> site unique était déjà le TYPE.
+
 ## Ce que l'audit adversarial a changé
 
 **Verdict : non bloquant.** Il a reproduit les deux cliquets de type

@@ -44,7 +44,6 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 import { SocialEventsHandler } from '../SocialEventsHandler';
 import { resetSeparationCacheForTests } from '../../separatedRooms';
-import { ANONYMOUS_STORY_VIEWER } from '@meeshy/shared/types/post';
 
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }) },
@@ -97,7 +96,8 @@ function fauxIo(emissions: Emission[]) {
  */
 const charge = () => ({
   storyId: STORY_ID,
-  ...ANONYMOUS_STORY_VIEWER,
+  viewerId: '',
+  viewerUsername: '',
   viewCount: 7,
 });
 

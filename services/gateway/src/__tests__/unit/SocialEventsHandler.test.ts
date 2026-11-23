@@ -18,7 +18,6 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { SocialEventsHandler } from '../../socketio/handlers/SocialEventsHandler';
-import { ANONYMOUS_STORY_VIEWER } from '@meeshy/shared/types/post';
 import type { Post, PostLikedEventData, PostUnlikedEventData, PostRepostedEventData, StoryViewedEventData, StoryReactedEventData, StoryUnreactedEventData, StatusReactedEventData, StatusUnreactedEventData, CommentAddedEventData, CommentDeletedEventData, CommentLikedEventData, CommentTranslationUpdatedEventData, CommentMediaUpdatedEventData } from '@meeshy/shared/types/post';
 
 // ===== MOCKS =====
@@ -385,7 +384,8 @@ describe('SocialEventsHandler', () => {
     it('should emit STORY_VIEWED ONLY to the story author', () => {
       const data: StoryViewedEventData = {
         storyId: 'story-1',
-        ...ANONYMOUS_STORY_VIEWER,
+        viewerId: '',
+  viewerUsername: '',
         viewCount: 10,
       };
 
@@ -399,7 +399,8 @@ describe('SocialEventsHandler', () => {
     it('should NOT emit to friends', () => {
       const data: StoryViewedEventData = {
         storyId: 'story-1',
-        ...ANONYMOUS_STORY_VIEWER,
+        viewerId: '',
+  viewerUsername: '',
         viewCount: 10,
       };
 
@@ -919,7 +920,7 @@ describe('SocialEventsHandler', () => {
       const likeData: PostLikedEventData = { postId: 'p1', userId: 'u1', emoji: 'heart', likeCount: 1, reactionSummary: { heart: 1 } };
       const unlikeData: PostUnlikedEventData = { postId: 'p1', userId: 'u1', emoji: 'heart', likeCount: 0, reactionSummary: {} };
       const repostData: PostRepostedEventData = { originalPostId: 'p1', repost: post };
-      const storyViewData: StoryViewedEventData = { storyId: 's1', ...ANONYMOUS_STORY_VIEWER, viewCount: 1 };
+      const storyViewData: StoryViewedEventData = { storyId: 's1', viewerId: '', viewerUsername: '', viewCount: 1 };
       const storyReactData: StoryReactedEventData = { storyId: 's1', userId: 'u1', emoji: 'fire', likeCount: 1, reactionSummary: { fire: 1 } };
       const statusReactData: StatusReactedEventData = { statusId: 'st1', userId: 'u1', emoji: 'heart', likeCount: 1, reactionSummary: { heart: 1 } };
       const commentAddData: CommentAddedEventData = { postId: 'p1', comment: { id: 'c1', content: 'hi', likeCount: 0, replyCount: 0, createdAt: '' }, commentCount: 1 };
@@ -1118,7 +1119,8 @@ describe('SocialEventsHandler', () => {
       // StatusReacted, CommentLiked
       const data: StoryViewedEventData = {
         storyId: 'story-1',
-        ...ANONYMOUS_STORY_VIEWER,
+        viewerId: '',
+  viewerUsername: '',
         viewCount: 1,
       };
       handler.broadcastStoryViewed(data, AUTHOR_ID, []);

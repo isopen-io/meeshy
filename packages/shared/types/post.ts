@@ -432,16 +432,6 @@ export interface StoryDeletedEventData {
 }
 
 /**
- * Les deux champs NOMINATIFS de `story:viewed`, anonymisés une fois pour toutes
- * (#20443). Un site qui compose cette charge les RÉPAND — il ne les écrit pas,
- * et il n'a aucune identité à aller chercher.
- */
-export const ANONYMOUS_STORY_VIEWER: {
-  readonly viewerId: '';
-  readonly viewerUsername: '';
-} = { viewerId: '', viewerUsername: '' };
-
-/**
  * `story:viewed` — **L'AUTEUR SUIT SON COMPTEUR, ET LA CHARGE NE NOMME
  * PERSONNE** (#20443).
  *
@@ -500,6 +490,16 @@ export const ANONYMOUS_STORY_VIEWER: {
  * requis). Leur RETRAIT est un lot d'après : clients rendus tolérants, versions
  * déployées mesurées, puis clés retirées — jamais de bascule sèche (#20453).
  *
+ * **Aucune constante ne double ce type, et c'est une décision.** Un premier jet
+ * exportait un `ANONYMOUS_STORY_VIEWER` que les producteurs répandaient ; le
+ * cliquet d'exports de `__tests__/types/post.test.ts` l'a fait tomber, et il
+ * avait raison. Ce module est presque entièrement du type effacé à la
+ * compilation : une valeur d'exécution y transforme un import de TYPE en import
+ * de CODE, et n'a droit d'exister que si elle garde quelque chose que le type
+ * ne peut pas garder. Ici le type garde TOUT — `''` interdit l'identité comme
+ * l'omission — donc la constante ne faisait que nommer ce que le compilateur
+ * imposait déjà. Les deux champs s'écrivent en clair au site d'émission.
+ *
  * **La PORTÉE de ce cliquet, parce qu'un cliquet dont la portée n'est pas
  * écrite se lit comme une garde complète** (mesuré par l'audit du lot) :
  *
@@ -523,9 +523,9 @@ export const ANONYMOUS_STORY_VIEWER: {
  */
 export interface StoryViewedEventData {
   readonly storyId: string;
-  /** Toujours `''` — voir {@link ANONYMOUS_STORY_VIEWER}. */
+  /** Toujours `''` : le type EST la décision, il n'y a rien d'autre à écrire. */
   readonly viewerId: '';
-  /** Toujours `''` — voir {@link ANONYMOUS_STORY_VIEWER}. */
+  /** Toujours `''` : le type EST la décision, il n'y a rien d'autre à écrire. */
   readonly viewerUsername: '';
   readonly viewCount: number;
 }

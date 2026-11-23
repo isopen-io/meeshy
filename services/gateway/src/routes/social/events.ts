@@ -21,7 +21,6 @@ import {
 import { incrementPostCounters } from '../../services/posts/postCounters';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { safeBroadcast } from '../../socketio/serverEmit';
-import { ANONYMOUS_STORY_VIEWER } from '@meeshy/shared/types/post';
 import { sendSuccess, sendBadRequest, sendForbidden, sendInternalError, sendError } from '../../utils/response';
 import {
   SOCIAL_EVENTS_SCHEMA_VERSION,
@@ -291,7 +290,8 @@ async function broadcastStoryViewed(
     safeBroadcast('story:viewed', () => {
       socialEvents.broadcastStoryViewed({
         storyId: targetId,
-        ...ANONYMOUS_STORY_VIEWER,
+        viewerId: '',
+        viewerUsername: '',
         viewCount: post.viewCount,
       }, post.authorId, separated);
     });
