@@ -29,6 +29,7 @@ class DeepLinkRouterTest {
         D.StoryDetail("s1") to navigate(Routes.postDetail("s1")),
         D.Reel("r1") to navigate("reels?seed=r1"),
         D.Community("k1") to navigate(CommunityRoutes.detail("k1")),
+        D.Community("k1", viaLink = true) to navigate("community/k1?via=link"),
         D.RecentConversation to DeepLinkAction.OpenRecentConversation,
         D.UnreadConversations to DeepLinkAction.OpenUnreadConversations,
         D.Hashtag("paris") to navigate("hashtag/paris"),

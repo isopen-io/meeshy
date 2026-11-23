@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:community": {
+      "resDir": "feature/community/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "community.join.linkPaused",
+          "androidName": "community_join_link_paused",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
