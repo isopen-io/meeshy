@@ -61,13 +61,10 @@ enum BloodLockHolder {
 
 /// Les mots du Sang verrouillé (sept langues dans `Localizable.xcstrings`).
 enum BloodLockWording {
-    static var restrictHint: String {
-        String(localized: "circles.bloodLocked.restrict.hint", defaultValue: "Pour restreindre, redescendre à Proche", bundle: .main)
-    }
     static var restrictAction: String {
         String(localized: "circles.bloodLocked.restrict.action", defaultValue: "Redescendre à Proche", bundle: .main)
     }
     static var lockedNotice: String {
-        String(localized: "circles.bloodLocked.notice", defaultValue: "Entre Sangs, tout se partage. Pour restreindre, redescends cette personne à Proche.", bundle: .main)
+        String(localized: "circles.bloodLocked.notice", defaultValue: "Entre Sangs, tout se partage. Pour restreindre, redescends-la à Proche.", bundle: .main)
     }
 }

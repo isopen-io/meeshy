@@ -8275,53 +8275,6 @@
         }
       }
     },
-    "circles.bloodLocked.restrict.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "للتقييد، النزول إلى «مقرّب»"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Zum Einschränken auf „Nah“ zurückstufen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "To restrict, step down to Close"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Para restringir, bajar a Cercano"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pour restreindre, redescendre à Proche"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Per limitare, scendere a Stretto"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Para restringir, voltar para Próximo"
-          }
-        }
-      }
-    },
     "circles.bloodLocked.restrict.action": {
       "extractionState": "manual",
       "localizations": {
@@ -8399,7 +8352,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Entre Sangs, tout se partage. Pour restreindre, redescends cette personne à Proche."
+            "value": "Entre Sangs, tout se partage. Pour restreindre, redescends-la à Proche."
           }
         },
         "it": {

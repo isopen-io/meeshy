@@ -76,10 +76,6 @@ struct CircleLinkSheet: View {
     /// élément suit le choix de la personne. Le geste est la baisse ordinaire de « Notre cercle » : silencieuse, immédiate.
     private var bloodLockedSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            Text(BloodLockWording.restrictHint)
-                .font(.subheadline)
-                .foregroundStyle(theme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
             MeeshyButton(BloodLockWording.restrictAction, systemImage: "arrow.down.circle", kind: .outline,
                          width: .fill, isPending: isLowering, action: { confirmsLowering = true })
                 .accessibilityIdentifier("circles.bloodLocked.restrict")
