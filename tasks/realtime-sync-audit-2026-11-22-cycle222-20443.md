@@ -42,7 +42,22 @@ l'issue :
 |---|---|
 | web | son type de garde `isStoryViewedEvent` n'exige QUE `storyId` et `viewCount` (`publication-views-realtime.ts`) ; l'écouteur invalide ensuite `storyViewersQueryKey`, donc relit le REST, qui est gardé |
 | iOS | `StoryTrayRules.applyViewed` → `storyId`, `viewCount` · `PublicationViewersSheet` → `storyId` |
-| Android | `SocketEventNames.STORY_VIEWED` est DÉCLARÉ et n'a **aucun abonné** — la constante est sa seule occurrence hors tests |
+| Android | **s'y abonne** (`SocialSocketManager.kt:303` → `_storyViewed`) et son unique collecteur lit `storyId` + `viewCount` (`StoriesViewModel.kt:173`) ; son `SocketStoryViewedData` ne DÉCLARE pas `viewerUsername` |
+
+> **Cette ligne a d'abord été publiée FAUSSE, et c'est la mesure qui l'a
+> corrigée, pas une relecture.** Le premier relevé disait « Android déclare le
+> nom de l'événement sans y abonner aucun décodeur » : un `grep STORY_VIEWED`
+> tronqué par `head -10` sur une liste que les fichiers de test dominaient (dix
+> correspondances `MARK_STORY_VIEWED`, un OutboxKind sans rapport) n'avait rendu
+> que la déclaration de la constante. **Un `head` sur un relevé d'exhaustivité
+> transforme une propriété du dépôt en propriété de la commande** — exactement
+> la leçon 261, par l'instrument le plus banal qui soit. Le second relevé, sans
+> `head` et ancré sur `SocketEventNames.STORY_VIEWED`, a rendu l'abonné en une
+> ligne.
+>
+> La conclusion du lot ne change pas — **aucun client ne LIT ces champs** — mais
+> la raison de garder les clés se renforce : ils sont désormais DEUX à exiger
+> leur présence, et le second le fait par une mécanique différente.
 
 **2. Aligner coûterait une lecture APRÈS l'écriture, pour un champ que personne
 n'affiche.** `pairAccessAmong({ feature: 'views.identity' })` exige l'id de
@@ -57,14 +72,25 @@ rien à faire dans une charge que personne n'affiche ». Et retirer ferme les
 
 ## La rétrocompatibilité est la moitié du lot (#9223)
 
-Un retrait SEC était impossible, et c'est mesuré :
-`SocketStoryViewedData` (`packages/MeeshySDK/.../SocialSocketEvents.swift:65-70`)
-déclare `viewerId: String` et `viewerUsername: String` **non optionnels**.
-Omettre les clés ferait échouer le décodage de l'événement **ENTIER** sur tout
-client déployé — emportant `viewCount`, **le seul champ que les clients lisent**.
-C'est le mécanisme du cycle 128 (un décodeur STRICT rend le rétrécissement plus
-cher qu'il n'y paraît), par le plus discret des chemins : un `catch` de décodage
-silencieux.
+Un retrait SEC était impossible, et c'est mesuré. **DEUX clients déployés
+exigent la PRÉSENCE de `viewerId`, chacun par sa propre mécanique** :
+
+| client | la déclaration | ce qu'une clé absente produit |
+|---|---|---|
+| iOS | `SocketStoryViewedData` (`MeeshySDK/.../SocialSocketEvents.swift:65-70`) — `viewerId: String`, `viewerUsername: String`, non optionnels | `Decodable` échoue ⇒ événement ENTIER perdu |
+| Android | `SocketStoryViewedData` (`core/model/.../SocketEvents.kt:751`) — `viewerId: String` **sans défaut** (et `viewerUsername` non déclaré du tout) | `MissingFieldException` de kotlinx ⇒ événement ENTIER perdu |
+
+Dans les deux cas, ce qui part avec l'événement est `viewCount` — **le seul champ
+que ces deux clients lisent**. C'est le mécanisme du cycle 128 (un décodeur
+STRICT rend le rétrécissement plus cher qu'il n'y paraît), par le plus discret
+des chemins : un `catch` de décodage silencieux.
+
+> **Ne pas LIRE un champ et ne pas EXIGER sa présence sont deux propriétés
+> distinctes, et c'est la SECONDE qui interdit la bascule sèche.** Le relevé
+> « qui lit ces champs ? » autorise le retrait de la VALEUR ; seul le relevé
+> « qui exige cette CLÉ ? » décide du retrait de la clé. Un lot qui ne pose que
+> la première question conclut « personne ne s'en sert, je retire » — et casse
+> les deux clients qui ne s'en servaient effectivement pas.
 
 Les deux clés **restent donc présentes, à la chaîne vide**. Aucune identité ne
 voyage ; aucun décodeur ne casse.
@@ -160,8 +186,9 @@ de clôture de l'issue. Suite web `publication-views-realtime` : 5/5.
 
 ## Ce que ce lot ouvre, et ne corrige pas
 
-- **#20453** — le RETRAIT des deux clés : rendre les décodeurs tolérants
-  (`viewerId: String?` sur iOS, l'optionnel côté type partagé), mesurer les
-  versions déployées, puis retirer les clés du fil. Ce lot a fait l'étape 1 sur
+- **#20453** — le RETRAIT des deux clés : rendre les décodeurs tolérants sur
+  les DEUX clients qui exigent la clé (`viewerId: String?` sur iOS,
+  `viewerId: String? = null` sur Android, l'optionnel côté type partagé),
+  mesurer les versions déployées, puis retirer les clés du fil. Ce lot a fait l'étape 1 sur
   trois ; les deux autres attendent une mesure de parc, pas un cycle.
 - **#20414**, **#20415**, **#20440** — les trois suivis du cycle 221, intacts.

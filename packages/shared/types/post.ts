@@ -461,7 +461,11 @@ export const ANONYMOUS_STORY_VIEWER: {
  * les refuse jusque dans son type de garde (`isStoryViewedEvent` n'exige que
  * `storyId` et `viewCount`), iOS lit `storyId`/`viewCount`
  * (`StoryViewModel+TrayRules.applyViewed`, `PublicationViewersSheet`), et
- * Android déclare le NOM de l'événement sans y abonner aucun décodeur. Servir
+ * Android, qui s'y ABONNE bien (`SocialSocketManager.kt` route l'événement vers
+ * `_storyViewed`), ne lit que `storyId` et `viewCount` dans son unique
+ * collecteur (`StoriesViewModel.kt:173`) — son `SocketStoryViewedData`
+ * (`core/model/.../SocketEvents.kt:751`) ne DÉCLARE même pas
+ * `viewerUsername`. Servir
  * une identité sous une loi de cercles aurait coûté une lecture `pairAccess`
  * par auteur distinct, APRÈS l'écriture de la vue — donc en élargissant la
  * fenêtre de réordonnancement de #20414 — pour alimenter un champ que personne
@@ -469,11 +473,16 @@ export const ANONYMOUS_STORY_VIEWER: {
  * faire dans une charge que personne n'affiche ».
  *
  * **Les deux clés RESTENT, et portent la chaîne vide — c'est la
- * rétrocompatibilité (#9223), pas une hésitation.** `SocketStoryViewedData`
- * (`packages/MeeshySDK/Sources/MeeshySDK/Sockets/SocialSocketEvents.swift`) les
- * déclare NON optionnelles : les omettre ferait échouer le décodage de
- * l'événement ENTIER sur tout client déployé, et emporterait `viewCount` — le
- * seul champ que les clients lisent. Le type LITTÉRAL `''` encode les deux
+ * rétrocompatibilité (#9223), pas une hésitation.** DEUX clients déployés
+ * exigent la PRÉSENCE de `viewerId`, chacun par sa propre mécanique : iOS le
+ * déclare `String` non optionnel
+ * (`packages/MeeshySDK/Sources/MeeshySDK/Sockets/SocialSocketEvents.swift`), et
+ * Android le déclare `String` SANS DÉFAUT, donc requis par
+ * kotlinx.serialization (`MissingFieldException`). Les omettre ferait échouer
+ * le décodage de l'événement ENTIER sur ces deux clients, et emporterait
+ * `viewCount` — le seul champ qu'ils lisent. Ne pas LIRE un champ et ne pas
+ * EXIGER sa présence sont deux propriétés distinctes : c'est la seconde qui
+ * interdit la bascule sèche. Le type LITTÉRAL `''` encode les deux
  * moitiés de la décision d'un coup : aucune identité ne peut y être écrite
  * (le compilateur refuse), et aucune clé ne peut être omise (le champ est
  * requis). Leur RETRAIT est un lot d'après : clients rendus tolérants, versions
