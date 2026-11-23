@@ -2715,3 +2715,48 @@ socket jusqu'au client.
 0. Si la PR #20437 n'est pas fusionnée : fusionner `dev` dans la branche, puis la PR. Son `android.yml` est vert.
 1. **#20426** (web, rapports différés), **#20300** et **#20335** (iOS, à coordonner avec la routine iOS), **#20436**.
 2. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933.
+
+## Cycle 79 — 2026-11-23
+
+- **Base** : `origin/dev` @ `9c8ca291b`, puis `c200b4eac` fusionnée dans la branche avant la PR. Le lot du cycle 78 (#20437, #20299) est fusionné.
+- **Branche** : `claude/determined-volta-kpkefw`.
+- **Objectif** : **#20426**. Les rapports d'appel différés du web partent dans l'ordre, et le chunk qui les compose n'est plus retenté à chaque relevé.
+- **Livré** (`apps/web/` seulement) :
+  - `lazyCallReports` (`call-analytics-lazy.ts`) tient une file FIFO explicite :
+    - à l'arrivée du module, la file se vide de façon synchrone, et ce qui s'y ajoute pendant la vidange part à la suite ;
+    - `ready` n'est posé qu'après la vidange, donc aucun rapport direct ne double la file ;
+    - un envoi qui lève n'arrête pas les suivants ;
+    - la file est libérée après le succès.
+  - Après un échec de chargement, aucun nouvel essai pendant 60 s, sur l'horloge monotone (`performance.now`, injectable). La première idée, 3 essais au total, a été écartée par la QA : l'instance est unique pour toute la page (`engine-defaults.ts`), donc trois échecs auraient privé de rapports tous les appels suivants de l'onglet.
+  - `rear-camera.ts` devient un chunk chargé au premier retournement vers l'arrière (`call_rear_camera`, plafond 2 Ko dans `budgets.json`). C'est ce qui rend la marge du moteur : la file seule coûtait 24 o et la faisait tomber à 1 015 o. Un chunk qui ne charge pas compte comme un échec de caméra : avis `camera-failed`, l'appel reste connecté.
+  - Aucun payload, événement socket ni API publique ne change.
+- **Mesures** (gzip -9) :
+
+  | Chunk | Avant | Après |
+  |---|---|---|
+  | `call_engine` | 15 347 o | **15 149 o** (marge 1 235 o) |
+  | `call_rear_camera` (nouveau) | — | 537 o |
+  | `call_analytics_report` | 1 630 o | 1 630 o |
+
+  - Première peinture inchangée : 24 requêtes.
+- **Tests** :
+  - `call-analytics-lazy.test.ts` : témoins d'ordre (microtâche et ré-entrance), délai d'une minute, nouvel essai puis succès tardif, file libérée (`WeakRef` + `Bun.gc`, stable sur 500 répétitions sous bun 1.3.14 et 1.4.4), envoi qui lève (ajouté par la QA).
+  - `engine-camera.test.ts` : chunk de caméra arrière introuvable, l'appel reste connecté. Vert dès l'écriture : il fixe un comportement existant.
+  - Rouge prouvé : 3 échecs sur le premier code, puis 3 sur le compteur de 3.
+  - Vert, rejoué par l'orchestrateur sur l'arbre fusionné : `bun test src/lib/calls src/components/call-` donne 3 454 pass et 0 fail ; `tsc` donne 0 ; `measure-weight` sort en 0.
+- **QA** (deux passes indépendantes) :
+  - Première passe : défavorable. Marge de 1 015 o, borne qui valait par page et non par appel, file retenue, mutation « sans `try` » qui survivait. Tout est corrigé.
+  - Seconde passe : favorable avec réserves, 9 mutations attrapées sur 9 (l'import statique de `rear-camera` remis n'est attrapé que par `measure-weight`, qui tourne en CI).
+  - R1 (horloge murale qui recule) : corrigée dans le lot.
+  - R2 : un chunk de caméra arrière absent relâche puis rouvre la caméra avant, d'où une brève coupure vidéo. C'était déjà le cas pour une caméra arrière absente.
+  - R3 : un navigateur peut garder en cache l'échec d'un `import()` jusqu'au rechargement, ce qui rend le nouvel essai vain sans danger.
+- **Investigation** : un `call:quality-report` reçu après `call:end` est ignoré sans bruit (`CallEventsHandler.ts:3560-3561`, `call-participants.ts:131`, `leftAt` posé par `CallService.ts:2244-2247`). Un relevé de qualité envoyé depuis la file après le raccroché est donc perdu côté serveur, comme avant ce lot. Ouvert dans **#20459**.
+- **Limites** :
+  - Les 9 `check-calls*.mjs` n'ont pas tourné : pas de Chromium headless dans le conteneur. Ils tournent en CI.
+  - Rien n'a été testé dans un vrai navigateur.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée : lire son `ci.yml`. S'il est vert, fusionner `dev` dans la branche, puis la PR.
+1. **#20300** et **#20335** (iOS, à coordonner avec la routine iOS), **#20436**, **#20459**.
+2. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933.

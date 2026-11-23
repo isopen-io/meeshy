@@ -30,6 +30,13 @@ const settle = async (): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, 0));
 };
 
+const collectGarbage = (): void => (globalThis as unknown as { readonly Bun: { readonly gc: (force: boolean) => void } }).Bun.gc(true);
+
+const manualClock = () => {
+  const state = { now: 0 };
+  return { now: (): number => state.now, set: (now: number): void => void (state.now = now) };
+};
+
 const recorder = <T>() => {
   const sent: T[] = [];
   return { sent, send: (payload: T) => void sent.push(payload) };
@@ -71,6 +78,72 @@ describe('les rapports d’un appel chargés à la demande (#19894)', () => {
     expect(sent).toEqual([qualityReport('call-1', total({ level: 'good' }), 1_000), qualityReport('call-1', total({ level: 'poor' }), 6_000)]);
   });
 
+  test('un rapport demandé à l’arrivée du module part APRÈS ceux qui l’attendaient (#20426)', async () => {
+    const load = deferred<CallReportBuilders>();
+    const reports = lazyCallReports(() => load.promise);
+    const { sent, send } = recorder<QualityReportPayload>();
+    reports.quality('call-1', total({ level: 'good' }), 1_000, send);
+    reports.quality('call-1', total({ level: 'fair' }), 6_000, send);
+    void load.promise.then(() => reports.quality('call-1', total({ level: 'poor' }), 11_000, send));
+    load.resolve(builders);
+    await settle();
+    expect(sent).toEqual([qualityReport('call-1', total({ level: 'good' }), 1_000), qualityReport('call-1', total({ level: 'fair' }), 6_000), qualityReport('call-1', total({ level: 'poor' }), 11_000)]);
+  });
+
+  test('un rapport demandé pendant que la file se vide part à sa suite, dans l’ordre (#20426)', async () => {
+    const load = deferred<CallReportBuilders>();
+    const reports = lazyCallReports(() => load.promise);
+    const { sent, send } = recorder<QualityReportPayload>();
+    const sendThenReport = (payload: QualityReportPayload): void => {
+      send(payload);
+      if (sent.length === 1) reports.quality('call-1', total({ level: 'poor' }), 11_000, send);
+    };
+    reports.quality('call-1', total({ level: 'good' }), 1_000, sendThenReport);
+    reports.quality('call-1', total({ level: 'fair' }), 6_000, send);
+    load.resolve(builders);
+    await settle();
+    expect(sent).toEqual([qualityReport('call-1', total({ level: 'good' }), 1_000), qualityReport('call-1', total({ level: 'fair' }), 6_000), qualityReport('call-1', total({ level: 'poor' }), 11_000)]);
+  });
+
+  test('un envoi en attente qui lève n’arrête ni la file ni le direct, et ne laisse aucun rejet (#20426)', async () => {
+    const escaped: unknown[] = [];
+    const onRejection = (reason: unknown): void => void escaped.push(reason);
+    process.on('unhandledRejection', onRejection);
+    const load = deferred<CallReportBuilders>();
+    const reports = lazyCallReports(() => load.promise);
+    const { sent, send } = recorder<QualityReportPayload>();
+    reports.quality('call-1', total({ level: 'good' }), 1_000, () => {
+      throw new Error('transport fermé');
+    });
+    reports.quality('call-1', total({ level: 'fair' }), 6_000, send);
+    load.resolve(builders);
+    await settle();
+    reports.quality('call-1', total({ level: 'poor' }), 11_000, send);
+    process.off('unhandledRejection', onRejection);
+    expect(sent).toEqual([qualityReport('call-1', total({ level: 'fair' }), 6_000), qualityReport('call-1', total({ level: 'poor' }), 11_000)]);
+    expect(escaped).toEqual([]);
+  });
+
+  test('un module qui ne charge pas n’est pas retenté dans la minute qui suit son échec, quel que soit le nombre de relevés (#20426)', async () => {
+    const attempts: number[] = [];
+    const clock = manualClock();
+    const reports = lazyCallReports(() => {
+      attempts.push(clock.now());
+      return Promise.reject(new Error('chunk introuvable'));
+    }, clock.now);
+    const { sent, send } = recorder<QualityReportPayload>();
+    await settle();
+    for (const at of [5_000, 10_000, 15_000, 20_000, 25_000, 30_000, 35_000, 40_000, 45_000, 50_000, 55_000]) {
+      clock.set(at);
+      expect(() => reports.quality('call-1', total(), at, send)).not.toThrow();
+      await settle();
+    }
+    expect(() => reports.final(createTelemetry(0), context, () => undefined)).not.toThrow();
+    await settle();
+    expect(attempts).toEqual([0]);
+    expect(sent).toEqual([]);
+  });
+
   test('un module qui ne charge pas : rien ne lève, aucun rapport ne part, aucun rejet ne s’échappe', async () => {
     const escaped: unknown[] = [];
     const onRejection = (reason: unknown): void => void escaped.push(reason);
@@ -87,17 +160,43 @@ describe('les rapports d’un appel chargés à la demande (#19894)', () => {
     expect(escaped).toEqual([]);
   });
 
-  test('après un échec de chargement, la demande suivante retente le module et son rapport part', async () => {
+  test('une minute après un échec, la demande suivante retente le module ; des échecs répétés ne condamnent jamais l’onglet, et un succès tardif sert les rapports (#20426)', async () => {
     const attempts: number[] = [];
+    const clock = manualClock();
     const reports = lazyCallReports(() => {
-      attempts.push(attempts.length);
-      return attempts.length === 1 ? Promise.reject(new Error('réseau coupé')) : Promise.resolve(builders);
-    });
+      attempts.push(clock.now());
+      return attempts.length <= 3 ? Promise.reject(new Error('réseau coupé')) : Promise.resolve(builders);
+    }, clock.now);
+    const { sent, send } = recorder<QualityReportPayload>();
     await settle();
-    const { sent, send } = recorder<CallAnalyticsEvent>();
-    reports.final(createTelemetry(0), context, send);
+    const at = async (now: number): Promise<void> => {
+      clock.set(now);
+      reports.quality('call-1', total(), now, send);
+      await settle();
+    };
+    await at(60_000);
+    await at(119_999);
+    await at(120_000);
+    await at(180_000);
+    expect(attempts).toEqual([0, 60_000, 120_000, 180_000]);
+    expect(sent).toEqual([qualityReport('call-1', total(), 180_000)]);
+    reports.quality('call-1', total(), 185_000, send);
+    expect(sent).toEqual([qualityReport('call-1', total(), 180_000), qualityReport('call-1', total(), 185_000)]);
+  });
+
+  test('une fois le module arrivé, la file vidée ne retient plus les rapports qu’elle a servis (#20426)', async () => {
+    const load = deferred<CallReportBuilders>();
+    const reports = lazyCallReports(() => load.promise);
+    const held = ((): WeakRef<object> => {
+      const payloadSink = { sent: [] as QualityReportPayload[] };
+      reports.quality('call-1', total(), 1_000, (payload) => void payloadSink.sent.push(payload));
+      return new WeakRef(payloadSink);
+    })();
+    load.resolve(builders);
     await settle();
-    expect(attempts).toHaveLength(2);
-    expect(sent).toEqual([builders.analyticsPayload(createTelemetry(0), context)]);
+    collectGarbage();
+    await settle();
+    collectGarbage();
+    expect(held.deref()).toBeUndefined();
   });
 });
