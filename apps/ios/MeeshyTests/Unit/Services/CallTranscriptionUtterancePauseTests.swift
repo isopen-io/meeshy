@@ -37,11 +37,22 @@ final class CallTranscriptionUtterancePauseTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(200))
     }
 
+    /// Attend que la pause ait CLOS l'énoncé, au lieu d'une durée fixe : sur un
+    /// runner chargé, 200 ms ne suffisaient pas toujours, la génération restait
+    /// celle de l'énoncé ouvert et l'erreur « périmée » éteignait les sous-titres (#20505).
+    private func waitUntilThePauseClosesTheUtterance(_ sut: CallTranscriptionService) async throws {
+        let deadline = ContinuousClock.now + .seconds(5)
+        while sut.segments.last?.isFinal != true, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(sut.segments.last?.isFinal, true, "la pause n'a pas clos l'énoncé")
+    }
+
     func test_pauseAfterASentence_closesItAsAFinalEntry_andSendsItToTheServer() async throws {
         let (sut, socket) = makeSUT()
 
         speak(sut, "Bonjour à tous", at: 100)
-        try await waitPastThePause()
+        try await waitUntilThePauseClosesTheUtterance(sut)
 
         XCTAssertEqual(sut.segments.count, 1)
         XCTAssertEqual(sut.segments.first?.text, "Bonjour à tous")
@@ -54,7 +65,7 @@ final class CallTranscriptionUtterancePauseTests: XCTestCase {
         let (sut, _) = makeSUT()
 
         speak(sut, "Bonjour à tous", at: 100)
-        try await waitPastThePause()
+        try await waitUntilThePauseClosesTheUtterance(sut)
         speak(sut, "On commence", at: 105)
 
         XCTAssertEqual(sut.segments.map(\.text), ["Bonjour à tous", "On commence"])
@@ -78,7 +89,7 @@ final class CallTranscriptionUtterancePauseTests: XCTestCase {
         let (sut, _) = makeSUT()
 
         speak(sut, "Bonjour à tous", at: 100, generation: 0)
-        try await waitPastThePause()
+        try await waitUntilThePauseClosesTheUtterance(sut)
         speak(sut, "Bonjour à tous et", at: 101, generation: 0)
 
         XCTAssertEqual(sut.segments.map(\.text), ["Bonjour à tous"])
@@ -88,7 +99,7 @@ final class CallTranscriptionUtterancePauseTests: XCTestCase {
         let (sut, _) = makeSUT()
 
         speak(sut, "Bonjour à tous", at: 100, generation: 0)
-        try await waitPastThePause()
+        try await waitUntilThePauseClosesTheUtterance(sut)
         sut.applyRecognitionError(.recognizerUnavailable(language: "fr"), callId: "call-1", generation: 0)
 
         XCTAssertTrue(sut.isTranscribing)
