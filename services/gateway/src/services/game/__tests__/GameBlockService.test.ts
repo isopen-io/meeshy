@@ -81,6 +81,48 @@ describe('GameBlockService.build', () => {
     expect((await build(never)).flame.freezeGifted).toBe(false);
   });
 
+  it('une Flamme éteinte dit combien de rêves complets la rallumeront, et jusqu\'à quand (#20471)', async () => {
+    const db = fakeGameDb();
+    seedUser(db, {
+      currentStreakDays: 1,
+      longestStreakDays: 12,
+      lastStreakDate: new Date('2026-10-04T00:00:00Z'),
+      brokenStreakDays: 12,
+      brokenStreakLastDay: '2026-10-02',
+      timezone: 'UTC',
+    });
+    [0, 1, 2].forEach((slot) =>
+      db.dailyMission.rows.push({ id: `act-${slot}`, userId: USER, dayKey: '2026-10-04', slot, completedAt: new Date('2026-10-04T10:00:00Z'), createdAt: new Date('2026-10-04T08:00:00Z') }),
+    );
+
+    const block = await build(db);
+
+    expect(gameBlockSchema.safeParse(block).success).toBe(true);
+    expect(block.flame.effortRelight).toEqual({ lostDays: 12, dreamsDone: 1, dreamsNeeded: 2, closesOn: '2026-10-05', daysLeft: 0 });
+  });
+
+  it('une Flamme qui n\'est pas éteinte ne dit rien du rallumage par l\'effort, et ne relit aucun rêve passé (#20471)', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { currentStreakDays: 4, longestStreakDays: 4, lastStreakDate: new Date('2026-10-05T00:00:00Z'), timezone: 'UTC' });
+    const findMany = jest.spyOn(db.prisma.dailyMission, 'findMany');
+
+    const block = await build(db);
+
+    expect('effortRelight' in block.flame).toBe(false);
+    expect(findMany.mock.calls.some(([args]) => JSON.stringify(args).includes('"gt"'))).toBe(false);
+  });
+
+  it('une trace de rupture ancienne, fenêtre fermée, ne relit aucun rêve passé (#20471)', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { currentStreakDays: 3, longestStreakDays: 12, lastStreakDate: new Date('2026-10-05T00:00:00Z'), brokenStreakDays: 12, brokenStreakLastDay: '2026-08-02', timezone: 'UTC' });
+    const findMany = jest.spyOn(db.prisma.dailyMission, 'findMany');
+
+    const block = await build(db);
+
+    expect('effortRelight' in block.flame).toBe(false);
+    expect(findMany.mock.calls.some(([args]) => JSON.stringify(args).includes('"gt"'))).toBe(false);
+  });
+
   it('au jour du retour, le coffre se sert prêt et gardé par les aïeux, dès la lecture qui grave le retour (#20266)', async () => {
     const back = fakeGameDb();
     seedUser(back, { engagementScore: 100 * 20 * 20, levelRecord: 20, timezone: 'UTC' });

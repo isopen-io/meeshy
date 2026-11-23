@@ -13,6 +13,7 @@ const broken = { brokenLastDay: '2026-10-02', streakBeforeBreak: 12 };
 describe('servedEffortRelight — ce que le bloc dit du rallumage par l’effort', () => {
   it('le premier jour de la fenêtre : deux rêves manquent, il reste demain', () => {
     expect(servedEffortRelight({ ...broken, today: '2026-10-04', dreamDays: [] })).toEqual({
+      lostDays: 12,
       dreamsDone: 0,
       dreamsNeeded: 2,
       closesOn: '2026-10-05',
@@ -22,6 +23,7 @@ describe('servedEffortRelight — ce que le bloc dit du rallumage par l’effort
 
   it('le dernier jour de la fenêtre : il reste aujourd’hui', () => {
     expect(servedEffortRelight({ ...broken, today: '2026-10-05', dreamDays: ['2026-10-04'] })).toEqual({
+      lostDays: 12,
       dreamsDone: 1,
       dreamsNeeded: 2,
       closesOn: '2026-10-05',
@@ -67,12 +69,12 @@ describe('le bloc `flame` porte le rallumage par l’effort', () => {
   it('le sert, validé par le contrat, quand la passerelle a lu les rêves d’après la rupture', () => {
     const block = buildGameBlock(facts({ effortDreamDays: ['2026-10-03'] }));
     expect(block.flame.status).toBe('out');
-    expect(parseGameBlock(block)?.flame.effortRelight).toEqual({ dreamsDone: 1, dreamsNeeded: 2, closesOn: '2026-10-05', daysLeft: 1 });
+    expect(parseGameBlock(block)?.flame.effortRelight).toEqual({ lostDays: 12, dreamsDone: 1, dreamsNeeded: 2, closesOn: '2026-10-05', daysLeft: 1 });
   });
 
   it('ne compte que les rêves d’après la rupture, et la journée de la Flamme', () => {
     const block = buildGameBlock(facts({ today: '2026-10-05', flameToday: '2026-10-04', effortDreamDays: ['2026-10-02', '2026-10-04'] }));
-    expect(block.flame.effortRelight).toEqual({ dreamsDone: 1, dreamsNeeded: 2, closesOn: '2026-10-05', daysLeft: 1 });
+    expect(block.flame.effortRelight).toEqual({ lostDays: 12, dreamsDone: 1, dreamsNeeded: 2, closesOn: '2026-10-05', daysLeft: 1 });
   });
 
   it('ne part pas quand la passerelle ne l’a pas lu (serveur antérieur), ni quand rien n’est à rallumer', () => {
@@ -83,7 +85,8 @@ describe('le bloc `flame` porte le rallumage par l’effort', () => {
 
 describe('parseEffortRelight — un client lit le champ sans croire une forme fausse', () => {
   it('rend le champ servi', () => {
-    expect(parseEffortRelight({ dreamsDone: 1, dreamsNeeded: 2, closesOn: '2026-10-05', daysLeft: 0 })).toEqual({
+    expect(parseEffortRelight({ lostDays: 12, dreamsDone: 1, dreamsNeeded: 2, closesOn: '2026-10-05', daysLeft: 0 })).toEqual({
+      lostDays: 12,
       dreamsDone: 1,
       dreamsNeeded: 2,
       closesOn: '2026-10-05',
@@ -93,12 +96,12 @@ describe('parseEffortRelight — un client lit le champ sans croire une forme fa
 
   it('rend `null` devant un serveur antérieur ou une forme illisible', () => {
     expect(parseEffortRelight(undefined)).toBeNull();
-    expect(parseEffortRelight({ dreamsDone: 'un', dreamsNeeded: 2, closesOn: '2026-10-05', daysLeft: 0 })).toBeNull();
+    expect(parseEffortRelight({ lostDays: 12, dreamsDone: 'un', dreamsNeeded: 2, closesOn: '2026-10-05', daysLeft: 0 })).toBeNull();
   });
 
   it('une forme illisible tombe seule, sans emporter le bloc', () => {
     const block = buildGameBlock(facts());
-    const served = parseGameBlock({ ...block, flame: { ...block.flame, effortRelight: { dreamsDone: -1 } } });
+    const served = parseGameBlock({ ...block, flame: { ...block.flame, effortRelight: { lostDays: 12, dreamsDone: -1 } } });
     expect(served).not.toBeNull();
     expect(served?.flame.effortRelight).toBeUndefined();
   });

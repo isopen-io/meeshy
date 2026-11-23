@@ -80,6 +80,8 @@ export function canRelightByEffort(params: {
 
 /** Ce que le bloc `flame` dit du rallumage par l'effort (#20471) : combien de rêves complets sont faits, combien il en faut, et le dernier jour possible. */
 export type ServedEffortRelight = {
+  /** Les jours de la Flamme éteinte, qui reviennent avec elle. */
+  readonly lostDays: number;
   readonly dreamsDone: number;
   readonly dreamsNeeded: number;
   readonly closesOn: string;
@@ -95,6 +97,7 @@ export function servedEffortRelight(params: Parameters<typeof canRelightByEffort
   const verdict = canRelightByEffort(params);
   if (verdict.allowed || verdict.reason !== 'dreams-missing' || verdict.closesOn === null) return null;
   return {
+    lostDays: positive(params.streakBeforeBreak),
     dreamsDone: verdict.dreamsDone,
     dreamsNeeded: verdict.dreamsNeeded,
     closesOn: verdict.closesOn,

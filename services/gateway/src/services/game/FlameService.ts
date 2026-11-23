@@ -34,7 +34,7 @@ import {
   relightFlame,
   type FlameOutcome,
 } from '@meeshy/shared/utils/game/flame';
-import { canRelightByEffort, relightByEffort, wholeDreamDays } from '@meeshy/shared/utils/game/flame-effort';
+import { canRelightByEffort, relightByEffort, servedEffortRelight, wholeDreamDays } from '@meeshy/shared/utils/game/flame-effort';
 import { FULL_DREAM_ACTS } from '@meeshy/shared/utils/game/missions';
 import { civilDayKey } from '../engagement/civilDay';
 import { GameRefusal } from './GameRefusal';
@@ -244,8 +244,19 @@ export type EffortRelightResult = { readonly streak: number } | null;
 
 type EffortDb = Pick<PrismaClient, 'user' | 'dailyMission'>;
 
-/** Les actes du Rêve des journées d'après la rupture — la mission personnelle n'en fait pas partie. */
-async function dreamDaysAfter(db: EffortDb, userId: string, brokenLastDay: string): Promise<readonly string[]> {
+/**
+ * Une Flamme éteinte que deux rêves complets peuvent ENCORE rallumer (#20471) : seule celle-là vaut la lecture de ses
+ * rêves. Une trace de rupture ancienne n'est jamais effacée ; sans cette borne, chaque lecture relirait des mois d'actes.
+ */
+export function effortRelightOpen(broken: { readonly streak: number; readonly lastActiveDay: string }, today: string): boolean {
+  return servedEffortRelight({ brokenLastDay: broken.lastActiveDay, streakBeforeBreak: broken.streak, today, dreamDays: [] }) !== null;
+}
+
+/**
+ * Les journées de Rêve complet d'après la rupture — la mission personnelle n'en fait pas partie. Lue par le rallumage
+ * (`writeEffortRelight`) et par le bloc qui le dit (#20471) : une seule requête, une seule loi.
+ */
+export async function dreamDaysAfter(db: EffortDb, userId: string, brokenLastDay: string): Promise<readonly string[]> {
   const rows = await db.dailyMission.findMany({
     where: { userId, dayKey: { gt: brokenLastDay }, slot: { lt: FULL_DREAM_ACTS } },
     select: { dayKey: true, slot: true, completedAt: true },
@@ -264,7 +275,7 @@ export async function writeEffortRelight(db: EffortDb, userId: string, now: Date
     if (!row) return null;
     const facts = flameFactsOf(row, now);
     const broken = brokenFlame(facts);
-    if (broken === null) return null;
+    if (broken === null || !effortRelightOpen(broken, facts.today)) return null;
     const verdict = canRelightByEffort({
       brokenLastDay: broken.lastActiveDay,
       streakBeforeBreak: broken.streak,

@@ -305,8 +305,9 @@ export const gameChestSchema = z.object({
   kept: z.boolean().optional().catch(undefined),
 });
 
-/** Le rallumage par l'effort encore possible (#20471) : rêves complets faits et requis, dernier jour, jours restants. */
+/** Le rallumage par l'effort encore possible (#20471) : les jours qui reviendraient, rêves complets faits et requis, dernier jour, jours restants. */
 export const effortRelightSchema = z.object({
+  lostDays: z.number().int().min(1),
   dreamsDone: nonNegativeInt,
   dreamsNeeded: z.number().int().min(1),
   closesOn: dayKey,
