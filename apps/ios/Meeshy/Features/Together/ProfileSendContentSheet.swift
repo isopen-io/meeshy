@@ -3,16 +3,19 @@ import MeeshySDK
 import MeeshyUI
 
 /// « Lui envoyer un contenu » (#19628, planche `Autre-Actions`, rangée « Ensemble ») : mes publications, mes réels et
-/// mes stories en rangée de vignettes du kit (K20), un toucher choisit, « Envoyer » part vers notre conversation
-/// directe. Cache d'abord : le modèle des publications du profil sert ce qu'il a, les squelettes ne paraissent que sur
-/// un cache vide.
+/// mes stories en grille de cartes larges, trois par ligne, défilement vertical (#20243) ; un toucher choisit,
+/// « Envoyer » part vers notre conversation directe. Cache d'abord : le modèle des publications du profil sert ce
+/// qu'il a, les squelettes ne paraissent que sur un cache vide. Une vidéo seule se joue sur place, muette, une seule à
+/// la fois — celle que la politique du fil élit.
 struct ProfileSendContentSheet: View {
     let tint: Color
 
     @StateObject private var model: ProfileSendContentViewModel
     @StateObject private var posts: ProfileUserPostsViewModel
+    @StateObject private var autoplay = ReelFeedAutoplayCoordinator()
     @Environment(\.dismiss) private var dismiss
     @State private var hasSettled = false
+    @State private var gridWidth: CGFloat = 0
 
     init(userId: String, displayName: String, tint: Color,
          meId: String = AuthManager.shared.currentUser?.id ?? "") {
@@ -29,20 +32,24 @@ struct ProfileSendContentSheet: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-                MeeshySectionHeader(title: ProfileSendContentCopy.title)
-                kindChips
-                content
-                MeeshyButton(ProfileSendContentCopy.send(to: model.displayName), systemImage: "paperplane.fill",
-                             width: .fill, tint: tint, isPending: model.isSending,
-                             disabledReason: selected == nil ? ProfileSendContentCopy.pickFirst : nil,
-                             action: { send() })
-                    .disabled(selected == nil)
-                    .accessibilityIdentifier("profile.sendContent.send")
+        GeometryReader { viewport in
+            let viewportFrame = viewport.frame(in: .global)
+            ScrollView {
+                VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+                    MeeshySectionHeader(title: ProfileSendContentCopy.title)
+                    kindChips
+                    content
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(widthReader)
+                }
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.xl)
             }
-            .padding(MeeshySpacing.xl)
+            .onPreferenceChange(ReelVisibilityPreferenceKey.self) { frames in
+                autoplay.update(frames: frames, viewportMinY: viewportFrame.minY, viewportMaxY: viewportFrame.maxY)
+            }
         }
+        .safeAreaInset(edge: .bottom) { sendBar }
         .task {
             await posts.loadInitial()
             hasSettled = true
@@ -51,8 +58,29 @@ struct ProfileSendContentSheet: View {
             guard pagesFurther else { return }
             await posts.loadMore()
         }
+        .onDisappear(perform: releasePlayback)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+    }
+
+    private var sendBar: some View {
+        MeeshyButton(ProfileSendContentCopy.send(to: model.displayName), systemImage: "paperplane.fill",
+                     width: .fill, tint: tint, isPending: model.isSending,
+                     disabledReason: selected == nil ? ProfileSendContentCopy.pickFirst : nil,
+                     action: { send() })
+            .disabled(selected == nil)
+            .accessibilityIdentifier("profile.sendContent.send")
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.sm)
+            .background(.bar)
+    }
+
+    private var widthReader: some View {
+        GeometryReader { proxy in
+            Color.clear
+                .onAppear { gridWidth = proxy.size.width }
+                .adaptiveOnChange(of: proxy.size.width) { _, width in gridWidth = width }
+        }
     }
 
     private var kindChips: some View {
@@ -68,11 +96,6 @@ struct ProfileSendContentSheet: View {
             }
         )
     }
-
-    private static let words = MeeshyThumbnailRowWords(
-        add: ProfileSendContentCopy.pick, duplicate: ProfileSendContentCopy.pick,
-        moveEarlier: ProfileSendContentCopy.pick, moveLater: ProfileSendContentCopy.pick
-    )
 
     nonisolated private struct PagingKey: Hashable {
         let kind: ProfileSendContentKind
@@ -96,13 +119,18 @@ struct ProfileSendContentSheet: View {
     private var content: some View {
         switch listing {
         case .loading:
-            loadingRow
+            ProfileSendContentGridSkeleton(kind: model.kind, tint: tint, width: gridWidth)
         case .failed:
             failure
         case .empty:
             MeeshyNote(ProfileSendContentCopy.nothing(model.kind), lead: .systemImage("tray"), tint: tint)
         case .choices:
-            choiceRow(choices)
+            ProfileSendContentGrid(posts: choices, kind: model.kind, selectedId: model.selectedId, tint: tint,
+                                   width: gridWidth, autoplay: autoplay,
+                                   onSelect: { id in
+                                       HapticFeedback.soft()
+                                       model.selectedId = id
+                                   })
             if posts.hasMore && posts.paginationState != .exhausted {
                 MeeshyButton(ProfileSendContentCopy.older, systemImage: "clock.arrow.circlepath", kind: .tinted,
                              size: .s44, tint: tint, isPending: posts.isLoadingMore,
@@ -110,36 +138,6 @@ struct ProfileSendContentSheet: View {
                     .accessibilityIdentifier("profile.sendContent.older")
             }
         }
-    }
-
-    private func choiceRow(_ shown: [FeedPost]) -> some View {
-        MeeshyThumbnailRow(
-            shown.map { MeeshyThumbnail(id: $0.id, accessibilityLabel: ProfileSendContentCopy.label(of: $0)) },
-            current: model.selectedId,
-            label: ProfileSendContentCopy.kind(model.kind),
-            words: Self.words,
-            alignment: .leading,
-            onSelect: { id in model.selectedId = id },
-            content: { thumbnail, state in
-                ProfileSendContentTile(post: shown.first { $0.id == thumbnail.id }, size: state.size, tint: tint)
-            }
-        )
-    }
-
-    /// Le chargement a la forme de la rangée qui le remplace : trois vignettes K20 « en préparation », aux mesures
-    /// de la rangée servie — rien ne saute à l'arrivée des contenus.
-    private var loadingRow: some View {
-        MeeshyThumbnailRow(
-            (0..<3).map { MeeshyThumbnail(id: "loading-\($0)", accessibilityLabel: ProfileSendContentCopy.kind(model.kind),
-                                          status: .preparing) },
-            current: nil,
-            label: ProfileSendContentCopy.kind(model.kind),
-            words: Self.words,
-            alignment: .leading,
-            content: { _, _ in tint.opacity(MeeshyOpacity.light) }
-        )
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
 
     private var failure: some View {
@@ -167,6 +165,15 @@ struct ProfileSendContentSheet: View {
         }
     }
 
+    /// La feuille fermée ne garde rien : l'élection s'éteint et le moteur partagé se libère s'il jouait une de ses
+    /// vidéos.
+    private func releasePlayback() {
+        autoplay.clear()
+        let manager = SharedAVPlayerManager.shared
+        guard ProfileSendContentPlayback.releasesEngine(activeURL: manager.activeURL, shown: choices) else { return }
+        manager.stop()
+    }
+
     private func send() {
         guard let post = selected else { return }
         HapticFeedback.light()
@@ -179,37 +186,6 @@ struct ProfileSendContentSheet: View {
             case .failed(let reason):
                 FeedbackToastManager.shared.showError(reason)
             }
-        }
-    }
-}
-
-/// Une vignette de « Lui envoyer un contenu » : l'image servie du contenu, ou, pour une publication sans média, la
-/// première ligne de son texte posée sur l'aplat — deux publications texte se distinguent à l'œil.
-private struct ProfileSendContentTile: View {
-    let post: FeedPost?
-    let size: CGSize
-    let tint: Color
-
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        if let post, let text = ProfileSendContentCopy.textTile(of: post) {
-            ZStack(alignment: .topLeading) {
-                tint.opacity(MeeshyOpacity.light)
-                Text(text)
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundStyle(MeeshyColors.textPrimary(isDark: colorScheme == .dark))
-                    .lineLimit(3)
-                    .multilineTextAlignment(.leading)
-                    .padding(MeeshySpacing.xs)
-                    .accessibilityHidden(true)
-            }
-        } else {
-            CachedAsyncImage(url: post.flatMap { ProfilePublicationTiles.thumbnail(of: $0) },
-                             targetSize: size, showsStatusOverlays: false) {
-                tint.opacity(MeeshyOpacity.light)
-            }
-            .scaledToFill()
         }
     }
 }
@@ -273,6 +249,34 @@ enum ProfileSendContentCopy {
         let line = firstLine(of: post)
         guard line.isEmpty else { return String(line.prefix(60)) }
         return kind(ProfileSendContentKind.allCases.first { $0.accepts(post) } ?? .publication)
+    }
+
+    static var videoWord: String {
+        String(localized: "profile.vitrine.posts.video", defaultValue: "Vidéo", bundle: .main)
+    }
+
+    static var soundWord: String {
+        String(localized: "profile.sendContent.sound", defaultValue: "Son", bundle: .main)
+    }
+
+    static func mediaCount(_ count: Int) -> String {
+        String(format: String(localized: "profile.sendContent.mediaCount", defaultValue: "%lld médias", bundle: .main),
+               count)
+    }
+
+    /// Ce que VoiceOver dit d'une carte de la grille : ce qu'elle montre (vidéo, photo, « 3 médias », son, story…),
+    /// puis le début de son texte.
+    static func spokenLabel(of post: FeedPost, showcase: ContentCard.Showcase? = nil) -> String {
+        let lead: String?
+        switch (showcase ?? ContentCard.Showcase(post: post)).visual {
+        case .slideshow(let pages): lead = mediaCount(pages.count)
+        case .sound: lead = soundWord
+        case .none: lead = nil
+        case .media, .scene: lead = ProfilePublicationsCopy.kindName(of: post)
+        }
+        let line = String(firstLine(of: post).prefix(80))
+        let spoken = [lead, line.isEmpty ? nil : line].compactMap { $0 }.joined(separator: ", ")
+        return spoken.isEmpty ? label(of: post) : spoken
     }
 
     /// La première ligne d'une publication SANS média, posée dans sa vignette ; `nil` dès qu'une image la montre.

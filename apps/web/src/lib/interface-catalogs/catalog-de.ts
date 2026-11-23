@@ -31,6 +31,7 @@ import deStudioChrome from './catalog-de-studio-chrome';
 import deEphemeral from './catalog-de-ephemeral';
 import deWriteRestriction from './catalog-de-write-restriction';
 import deConversationCard from './catalog-de-conversation-card';
+import deContentCard from './catalog-de-content-card';
 import deStoriesMine from './catalog-de-stories-mine';
 import deContactCard from './catalog-de-contact-card';
 import deQuote from './catalog-de-quote';
@@ -1082,6 +1083,7 @@ const de = {
   ...deGallery,
   ...deMessageCard,
   ...deConversationCard,
+  ...deContentCard,
   ...deStoriesMine,
   'settings.tools.sounds': 'Meine Sounds',
   'settings.section.packs': 'Pakete und Downloads',

@@ -321,3 +321,70 @@ describe.each(FICHES)('$compose — les robots d’aperçu de /u/<pseudo> et /@<
     expect(middlewares).toContain('rate-limit@file');
   });
 });
+
+/**
+ * #3673 (parapluie #19331) — les mêmes robots qui déplient le lien d'un CONTENU, `/post/<id>`,
+ * `/reel/<id>`, `/story/<id>`, `/mood/<id>`, `/feeds/post/<id>` et les formes anciennes `/p/<id>`,
+ * `/s/<id>`, reçoivent sa carte (`GET /api/v1/posts/:postId/og`). Sans ce routeur, la route de la
+ * passerelle n'est jointe par personne : nginx sert la coquille de la famille `app`, qui ne nomme rien.
+ */
+const CONTENUS = [
+  { compose: 'docker-compose.staging.yml', router: 'frontend-staging-content-unfurl', chatRouter: 'frontend-staging-unfurl', gatewayRouter: 'gateway-staging' },
+  { compose: 'docker-compose.prod.yml', router: 'frontend-content-unfurl', chatRouter: 'frontend-unfurl', gatewayRouter: 'gateway' },
+] as const;
+
+const CONTENU_ID = '66f0c0ffee0000000000c0de';
+
+describe.each(CONTENUS)('$compose — les robots d’aperçu d’un post, d’un réel, d’une story ou d’une humeur vont à la passerelle', ({ compose, router, chatRouter, gatewayRouter }) => {
+  const labels = labelsOf(fs.readFileSync(path.join(COMPOSE_DIR, compose), 'utf8'));
+  const value = (key: string) => {
+    const raw = labels.find((l) => l.startsWith(`${key}=`))?.slice(key.length + 1);
+    return raw === undefined ? undefined : composeLiteral(raw);
+  };
+  const rule = value(`traefik.http.routers.${router}.rule`) ?? '';
+  const chatRule = value(`traefik.http.routers.${chatRouter}.rule`) ?? '';
+  const middlewares = (value(`traefik.http.routers.${router}.middlewares`) ?? '').split(',');
+  const rewrite = middlewares[0] ?? '';
+  const pathPattern = goRegex(rule.match(/PathRegexp\(`([^`]+)`\)/)?.[1] ?? '$^');
+  const agent = goRegex(rule.match(/HeaderRegexp\(`User-Agent`, `([^`]+)`\)/)?.[1] ?? '$^');
+
+  it('écoute le même hôte et les mêmes robots que /chat/<lien>', () => {
+    expect(rule.split(' && ')[0]).toBe(chatRule.split(' && ')[0]);
+    expect(rule.match(/HeaderRegexp\([^)]*\)/)?.[0]).toBe(chatRule.match(/HeaderRegexp\([^)]*\)/)?.[0]);
+    expect(ROBOTS.filter((ua) => !agent.test(ua))).toEqual([]);
+    expect(HUMAINS.filter((ua) => agent.test(ua))).toEqual([]);
+  });
+
+  it('ne capte que l’adresse d’un contenu dont l’identifiant est un ObjectId', () => {
+    for (const chemin of ['post', 'reel', 'story', 'mood', 'feeds/post', 'p', 's']) {
+      expect(pathPattern.test(`/${chemin}/${CONTENU_ID}`)).toBe(true);
+      expect(pathPattern.test(`/${chemin}/${CONTENU_ID}/`)).toBe(true);
+    }
+    expect(pathPattern.test(`/post/${CONTENU_ID}/comments`)).toBe(false);
+    expect(pathPattern.test('/post/123')).toBe(false);
+    expect(pathPattern.test(`/posts/${CONTENU_ID}`)).toBe(false);
+    expect(pathPattern.test(`/feeds/${CONTENU_ID}`)).toBe(false);
+    expect(pathPattern.test(`/x/post/${CONTENU_ID}`)).toBe(false);
+    expect(pathPattern.test('/reels')).toBe(false);
+    expect(pathPattern.test('/stories/mine')).toBe(false);
+    expect(rule).toContain(`!Query(\`${LINK_UNFURL_OPEN_QUERY.split('=')[0]}\`, \`${LINK_UNFURL_OPEN_QUERY.split('=')[1]}\`)`);
+  });
+
+  it('réécrit chaque adresse de contenu en la carte que la passerelle SERT', () => {
+    const regex = value(`traefik.http.middlewares.${rewrite}.replacepathregex.regex`) ?? '$^';
+    const replacement = value(`traefik.http.middlewares.${rewrite}.replacepathregex.replacement`) ?? '';
+    for (const chemin of ['post', 'reel', 'story', 'mood', 'feeds/post', 'p', 's']) {
+      expect(`/${chemin}/${CONTENU_ID}`.replace(new RegExp(regex), replacement)).toBe(`/api/v1/posts/${CONTENU_ID}/og`);
+      expect(`/${chemin}/${CONTENU_ID}/`.replace(new RegExp(regex), replacement)).toBe(`/api/v1/posts/${CONTENU_ID}/og`);
+    }
+    expect(manifest.routes.some((r) => r.method === 'GET' && r.path === '/api/v1/posts/:postId/og')).toBe(true);
+  });
+
+  it('passe devant l’application, vers la passerelle, avec son TLS et ses limites', () => {
+    expect(Number(value(`traefik.http.routers.${router}.priority`))).toBe(Number(value(`traefik.http.routers.${chatRouter}.priority`)));
+    expect(value(`traefik.http.routers.${router}.service`)).toBe(gatewayRouter);
+    expect(value(`traefik.http.routers.${router}.entrypoints`)).toBe(value(`traefik.http.routers.${gatewayRouter}.entrypoints`));
+    expect(value(`traefik.http.routers.${router}.tls.certresolver`)).toBe(value(`traefik.http.routers.${gatewayRouter}.tls.certresolver`));
+    expect(middlewares).toContain('rate-limit@file');
+  });
+});

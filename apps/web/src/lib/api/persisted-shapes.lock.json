@@ -13,6 +13,16 @@
   "communities/:id/posts": {
    "named": "@tanstack#InfiniteData<FeedPage, FeedPageParam>"
   },
+  "content-link-targets/:token": {
+   "union": [
+    {
+     "primitive": "null"
+    },
+    {
+     "ref": "ContentPathTarget"
+    }
+   ]
+  },
   "conversations": {
    "named": "@tanstack#InfiniteData<ConversationsPage, ConversationsPageParam>"
   },
@@ -2152,6 +2162,22 @@
      "optional": false,
      "type": {
       "primitive": "string"
+     }
+    },
+    "viewCount": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
      }
     },
     "viewerPoints": {

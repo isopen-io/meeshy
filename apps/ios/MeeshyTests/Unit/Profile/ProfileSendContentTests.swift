@@ -83,6 +83,70 @@ final class ProfileSendContentTests: XCTestCase {
         XCTAssertNil(ProfileSendContentCopy.textTile(of: makePhoto()))
     }
 
+    // MARK: - La grille : trois cartes larges par ligne (#20243)
+
+    func test_gridCard_threePerRow_shareTheWidthBetweenTwoGutters() {
+        let size = ProfileSendContentGridLayout.cardSize(width: 361, spacing: 8, kind: .publication)
+        XCTAssertEqual(size.width, 115, accuracy: 0.01)
+        XCTAssertEqual(size.height, 115 * 5 / 4, accuracy: 0.01)
+    }
+
+    func test_gridCard_reelsAndStories_standInThePortraitOfTheScene() {
+        let reel = ProfileSendContentGridLayout.cardSize(width: 361, spacing: 8, kind: .reel)
+        let story = ProfileSendContentGridLayout.cardSize(width: 361, spacing: 8, kind: .story)
+        XCTAssertEqual(reel.height, 115 * 16 / 9, accuracy: 0.01)
+        XCTAssertEqual(story, reel)
+    }
+
+    func test_gridCard_beforeTheWidthIsKnown_hasNoSize() {
+        XCTAssertEqual(ProfileSendContentGridLayout.cardSize(width: 0, spacing: 8, kind: .reel), .zero)
+    }
+
+    // MARK: - Une vidéo seule se joue sur place, muette ; le reste ne monte aucun lecteur
+
+    func test_inlineVideo_singleVideoPost_isItsClip() {
+        let post = makeVideo(id: "v1")
+        XCTAssertEqual(ProfileSendContentPlayback.inlineVideo(of: post)?.id, "v-v1")
+    }
+
+    func test_inlineVideo_severalMedia_isNone_theyAreSwipedNotPlayed() {
+        let post = FeedPost(id: "p2", author: "Moi", authorId: "me", type: "POST", content: "",
+                            media: [FeedMedia(id: "a", type: .video, url: "https://meeshy.me/a.mp4"),
+                                    FeedMedia(id: "b", type: .image, url: "https://meeshy.me/b.jpg")])
+        XCTAssertNil(ProfileSendContentPlayback.inlineVideo(of: post))
+    }
+
+    func test_inlineVideo_image_isNone() {
+        XCTAssertNil(ProfileSendContentPlayback.inlineVideo(of: makePhoto()))
+    }
+
+    func test_releasesEngine_whenTheSheetPlayedOneOfItsVideos() {
+        let shown = [makePhoto(), makeVideo(id: "v1")]
+        XCTAssertTrue(ProfileSendContentPlayback.releasesEngine(activeURL: "https://meeshy.me/v1.mp4", shown: shown))
+    }
+
+    func test_releasesEngine_neverStopsAVideoThatIsNotTheSheets() {
+        let shown = [makeVideo(id: "v1")]
+        XCTAssertFalse(ProfileSendContentPlayback.releasesEngine(activeURL: "https://meeshy.me/other.mp4", shown: shown))
+        XCTAssertFalse(ProfileSendContentPlayback.releasesEngine(activeURL: "", shown: shown))
+    }
+
+    // MARK: - VoiceOver dit ce que la carte montre
+
+    func test_spokenLabel_video_saysItIsAVideoAndItsText() {
+        var post = makeVideo(id: "v1")
+        post.content = "Le marché"
+        XCTAssertEqual(ProfileSendContentCopy.spokenLabel(of: post),
+                       "\(ProfileSendContentCopy.videoWord), Le marché")
+    }
+
+    func test_spokenLabel_severalMedia_saysHowMany() {
+        let post = FeedPost(id: "p2", author: "Moi", authorId: "me", type: "POST", content: "",
+                            media: [FeedMedia(id: "a", type: .image, url: "https://meeshy.me/a.jpg"),
+                                    FeedMedia(id: "b", type: .image, url: "https://meeshy.me/b.jpg")])
+        XCTAssertEqual(ProfileSendContentCopy.spokenLabel(of: post), ProfileSendContentCopy.mediaCount(2))
+    }
+
     // MARK: - L'envoi
 
     func test_send_publication_goesToThePerson_withTheTrackedLink() async {
@@ -183,6 +247,14 @@ final class ProfileSendContentTests: XCTestCase {
     private func makePhoto(id: String = "p1") -> FeedPost {
         var post = FeedPost(id: id, author: "Moi", authorId: "me", type: "POST", content: "",
                             media: [FeedMedia(id: "m1", type: .image, url: "https://meeshy.me/m1.jpg")])
+        post.visibility = "PUBLIC"
+        return post
+    }
+
+    private func makeVideo(id: String) -> FeedPost {
+        var post = FeedPost(id: id, author: "Moi", authorId: "me", type: "POST", content: "",
+                            media: [FeedMedia(id: "v-\(id)", type: .video, url: "https://meeshy.me/\(id).mp4",
+                                              thumbnailUrl: "https://meeshy.me/\(id).jpg", duration: 12)])
         post.visibility = "PUBLIC"
         return post
     }

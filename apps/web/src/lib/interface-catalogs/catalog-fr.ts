@@ -17,6 +17,7 @@ import frStudioChrome from './catalog-fr-studio-chrome';
 import frEphemeral from './catalog-fr-ephemeral';
 import frWriteRestriction from './catalog-fr-write-restriction';
 import frConversationCard from './catalog-fr-conversation-card';
+import frContentCard from './catalog-fr-content-card';
 import frComposerAttach from './catalog-fr-composer-attach';
 import frThreadStates from './catalog-fr-thread-states';
 import frIdentity from './catalog-fr-identity';
@@ -1065,6 +1066,7 @@ const fr = {
   ...frGallery,
   ...frMessageCard,
   ...frConversationCard,
+  ...frContentCard,
 
   /* LE MENU DU MESSAGE, SA BARRE DE SÉLECTION ET SA FEUILLE « PLUS… » (#7555).
      Ces libellés étaient EN DUR, en français, sur trois surfaces servies en

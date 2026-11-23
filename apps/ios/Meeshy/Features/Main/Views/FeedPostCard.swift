@@ -531,9 +531,9 @@ struct FeedPostCard: View {
                     onTapReference: { selectedProfileUser = .from(reference: $0) }
                 )
 
-                // Embed vidéo (YouTube) détecté dans le contenu : player façade
-                // (vignette → lecture inline), hors du geste d'ouverture du post.
-                FeedPostEmbedRow(content: effectiveContent, accentHex: accentColor, trackedLinks: post.trackedLinkMap)
+                // Embed vidéo (YouTube), sinon carte vivante du contenu Meeshy
+                // cité (#19332) — hors du geste d'ouverture du post.
+                FeedPostEmbedRow(content: effectiveContent, accentHex: accentColor, trackedLinks: post.trackedLinkMap, postId: post.id)
                     .equatable()
 
                 // Scène du POST (Task E3) : le post porte son PROPRE canvas v3
