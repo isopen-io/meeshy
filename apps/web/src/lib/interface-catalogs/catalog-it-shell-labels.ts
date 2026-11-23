@@ -59,6 +59,9 @@ const itShellLabels = {
   'message.reaction.add': 'Reagisci con {emoji}',
   'message.reaction.remove': 'Rimuovi la tua reazione {emoji}',
   'message.badge.pinned': 'Messaggio fissato',
+  'message.edited.a11y': 'modificato',
+  'message.pinned.a11y': 'fissato',
+  'message.replyTo.a11y': 'in risposta a {author}',
   'quote.sender.unknown': 'il mittente',
 
   'media.tile.open': 'Apri {name}',

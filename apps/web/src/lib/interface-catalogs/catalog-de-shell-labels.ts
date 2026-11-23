@@ -59,6 +59,9 @@ const deShellLabels = {
   'message.reaction.add': 'Mit {emoji} reagieren',
   'message.reaction.remove': 'Deine Reaktion {emoji} entfernen',
   'message.badge.pinned': 'Angeheftete Nachricht',
+  'message.edited.a11y': 'bearbeitet',
+  'message.pinned.a11y': 'angeheftet',
+  'message.replyTo.a11y': 'Antwort an {author}',
   'quote.sender.unknown': 'den Absender',
 
   'media.tile.open': '{name} öffnen',
