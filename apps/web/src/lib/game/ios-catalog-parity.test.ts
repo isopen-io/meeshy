@@ -57,10 +57,10 @@ const IOS_OWN_FRENCH_CEILING = 42;
  */
 
 /**
- * Les seules clés communes dont une langue, sur iOS, ne peut pas dire le
- * texte du web : l'arabe du web tait le nombre à la forme `.one` (« خطوة واحدة »),
- * et iOS, qui choisit la clé `.one` à la main et non par une règle de pluriel,
- * exige la substitution du français (`LocalizationCatalogGuardTests`).
+ * Les trois seules clés communes dont une langue, sur iOS, ne peut pas dire le
+ * texte du web : l'arabe du web tait le nombre à la forme `.one` (« خطوة واحدة »,
+ * « حلم كامل واحد »), et iOS, qui choisit la clé `.one` à la main et non par une
+ * règle de pluriel, exige la substitution du français (`LocalizationCatalogGuardTests`).
  */
 const IOS_KEEPS_THE_COUNT: ReadonlySet<string> = new Set([
   'ar:game2.season.stars.one',
