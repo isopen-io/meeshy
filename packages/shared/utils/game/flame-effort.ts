@@ -78,6 +78,30 @@ export function canRelightByEffort(params: {
   return { allowed: true, dreamsDone, dreamsNeeded, closesOn };
 }
 
+/** Ce que le bloc `flame` dit du rallumage par l'effort (#20471) : combien de rêves complets sont faits, combien il en faut, et le dernier jour possible. */
+export type ServedEffortRelight = {
+  readonly dreamsDone: number;
+  readonly dreamsNeeded: number;
+  readonly closesOn: string;
+  /** Jours restants après aujourd'hui : `0`, c'est aujourd'hui ou jamais ; `1`, il reste demain. */
+  readonly daysLeft: number;
+};
+
+/**
+ * Le rallumage par l'effort tel que le bloc le sert : seulement quand la Flamme éteinte peut ENCORE se rallumer ainsi
+ * (motif `dreams-missing`). Une Flamme vive, sans série, hors fenêtre, ou déjà rallumée ne dit rien.
+ */
+export function servedEffortRelight(params: Parameters<typeof canRelightByEffort>[0]): ServedEffortRelight | null {
+  const verdict = canRelightByEffort(params);
+  if (verdict.allowed || verdict.reason !== 'dreams-missing' || verdict.closesOn === null) return null;
+  return {
+    dreamsDone: verdict.dreamsDone,
+    dreamsNeeded: verdict.dreamsNeeded,
+    closesOn: verdict.closesOn,
+    daysLeft: Math.max(0, dayDiff(params.today, verdict.closesOn)),
+  };
+}
+
 /**
  * La série rendue. Si le joueur a repris une série depuis la rupture, elle s'ajoute à la série perdue et son
  * dernier jour actif est gardé. Sinon, la série perdue revient avec hier pour dernier jour : le geste du jour s'y
