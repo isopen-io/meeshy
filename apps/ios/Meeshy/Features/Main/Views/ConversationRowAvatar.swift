@@ -115,6 +115,8 @@ struct ConversationRowAvatar: View {
                 // LE CONTOUR DU PAIR (#10713, #10757) — l'avatar le pose dans son empreinte,
                 // l'anneau de story concentrique à l'intérieur (#10714).
                 ring: isDirect ? conversation.participantRing : nil,
+                // Le cercle du pair d'un direct (#20178) : sa pastille en bas à gauche, servie par mes liens.
+                circleUserId: listenedUserId,
                 enablePulse: style.enablePulse,
                 // Tap → story (si non lue) sinon ce que la loi décide (#15887) : le
                 //   profil du pair, sinon les détails — jamais rien. Le handler profil

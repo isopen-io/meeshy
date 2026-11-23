@@ -8,6 +8,7 @@ import type { HttpTransport } from '@/lib/api/http';
 import { appQueryClient } from '@/lib/api/query-client';
 import { RELATION_LINKS_QUERY_KEY, type RelationLink } from '@/lib/api/relations';
 import type { WatchRealtime } from '@/lib/api/watch-realtime';
+import { PHONE_REACHABILITY_STATES_QUERY_KEY } from '@/lib/phone-reachability/phone-reachability-live';
 import { loadCirclesCatalog } from '@/lib/i18n-circles-catalog';
 import type { SocketClient } from '@/lib/net/socket';
 import { createTalkieLevelMeter } from '@/lib/talkie/talkie-header-law';
@@ -196,6 +197,26 @@ describe('le bouton talkie de l’en-tête', () => {
     await settle();
     expect(copies).toHaveLength(1);
     expect(document.querySelector('[data-thread-talkie-notice]')?.textContent).toContain('n’est pas disponible pour un accès d’urgence');
+  });
+
+  test('téléphone du pair injoignable depuis cinq minutes (#20241) : le bouton laisse un message vocal dans le direct, sans talkie', async () => {
+    appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link('CLOSE')]);
+    appQueryClient.setQueryData(PHONE_REACHABILITY_STATES_QUERY_KEY, {
+      [PROCHE]: { userId: PROCHE, unreachableSince: new Date(Date.now() - 6 * 60_000).toISOString(), cause: 'battery', receivedAt: Date.now() },
+    });
+    const { slot, emitted, copies } = harness(OPENED);
+    const node = await mount(slot);
+    await settle();
+    expect(node.querySelector('[data-thread-talkie]')?.getAttribute('aria-label')).toBe('Laisser un message vocal à Ada');
+    await hold(node);
+    expect(emitted).toEqual([]);
+    await act(async () => {
+      node.querySelector('[data-thread-talkie]')?.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true }));
+    });
+    await settle();
+    await settle();
+    expect(copies[0]).toMatchObject({ toUserId: PROCHE, directOnly: true });
+    expect(document.querySelector('[data-thread-talkie-notice]')?.textContent).toContain('Parti en message vocal');
   });
 
   test('la voix du pair qui arrive prend la barre, même quand le talkie ne m’est pas proposé', async () => {

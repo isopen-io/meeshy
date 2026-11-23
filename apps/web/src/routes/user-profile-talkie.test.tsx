@@ -8,6 +8,7 @@ import type { HttpTransport } from '@/lib/api/http';
 import { appQueryClient } from '@/lib/api/query-client';
 import { RELATION_LINKS_QUERY_KEY, type RelationLink } from '@/lib/api/relations';
 import type { WatchRealtime } from '@/lib/api/watch-realtime';
+import { PHONE_REACHABILITY_STATES_QUERY_KEY } from '@/lib/phone-reachability/phone-reachability-live';
 import { loadCirclesCatalog } from '@/lib/i18n-circles-catalog';
 import type { SocketClient } from '@/lib/net/socket';
 import type { TalkieCaptureFactory, TalkieVoiceCopy } from '@/lib/talkie/talkie-sender';
@@ -52,9 +53,20 @@ const link = (effectiveLevel: RelationLink['effectiveLevel']): RelationLink => (
   eligibleFor: null,
 });
 
-const view = (props: { readonly supported?: boolean; readonly phase?: 'idle' | 'starting' | 'talking'; readonly waking?: boolean } = {}) =>
+const view = (
+  props: { readonly supported?: boolean; readonly phase?: 'idle' | 'starting' | 'talking' | 'recording-copy'; readonly waking?: boolean; readonly voiceMessage?: boolean } = {},
+) =>
   renderToStaticMarkup(
-    <ProfileTalkieRowView language="fr" name="Ada" supported={props.supported ?? true} phase={props.phase ?? 'idle'} waking={props.waking ?? false} onPress={noop} onRelease={noop} />,
+    <ProfileTalkieRowView
+      language="fr"
+      name="Ada"
+      supported={props.supported ?? true}
+      phase={props.phase ?? 'idle'}
+      waking={props.waking ?? false}
+      voiceMessage={props.voiceMessage ?? false}
+      onPress={noop}
+      onRelease={noop}
+    />,
   );
 
 describe('ProfileTalkieRowView', () => {
@@ -85,6 +97,21 @@ describe('ProfileTalkieRowView', () => {
     expect(html).toContain('aria-expanded="false"');
     expect(html).toContain('width:48px;height:48px');
     expect(html).not.toContain('extrême urgence');
+  });
+
+  test('téléphone injoignable (#20241) : « Laisser un message vocal », nommé pour le lecteur d’écran', () => {
+    const html = view({ voiceMessage: true });
+    expect(html).toContain('Laisser un message vocal');
+    expect(html).toContain('aria-label="Laisser un message vocal à Ada"');
+    expect(html).toContain('Le téléphone de Ada est injoignable');
+    expect(html).not.toContain('Maintenir pour parler');
+    expect(html).not.toContain('sans décrocher');
+  });
+
+  test('téléphone injoignable, pendant l’enregistrement : « Enregistrement du message vocal… »', () => {
+    const html = view({ voiceMessage: true, phase: 'recording-copy' });
+    expect(html).toContain('Enregistrement du message vocal…');
+    expect(html).not.toContain('Le talkie ne passe pas');
   });
 
   test('navigateur sans AAC : AUCUN bouton, le message vocal est proposé', () => {
@@ -244,5 +271,36 @@ describe('ProfileTalkieRow', () => {
     expect(info?.getAttribute('aria-expanded')).toBe('false');
     expect(text()?.hasAttribute('data-leaving')).toBe(true);
     expect(text()?.hasAttribute('inert')).toBe(true);
+  });
+
+  test('téléphone injoignable depuis cinq minutes (#20241) : le même geste laisse un message vocal dans le direct, sans talkie', async () => {
+    appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link('CLOSE')]);
+    appQueryClient.setQueryData(PHONE_REACHABILITY_STATES_QUERY_KEY, {
+      [PROCHE]: { userId: PROCHE, unreachableSince: new Date(Date.now() - 10 * 60_000).toISOString(), cause: 'network', receivedAt: Date.now() },
+    });
+    const { row, emitted, notices, tones, copies } = harness({ success: true, data: { talkieId: 'a'.repeat(24), maxDurationMs: 30_000, maxChunkBytes: 16_384 } });
+    const node = await mount(row);
+    await settle();
+    const button = node.querySelector<HTMLButtonElement>('[data-talkie-send]');
+    expect(button?.getAttribute('aria-label')).toBe('Laisser un message vocal à Ada');
+    await press(node);
+    expect(emitted).toEqual([]);
+    expect(node.textContent).toContain('Enregistrement du message vocal…');
+    await release(node);
+    expect(copies).toHaveLength(1);
+    expect(copies[0]).toMatchObject({ toUserId: PROCHE, conversationId: null, directOnly: true });
+    expect(notices).toEqual(['Parti en message vocal']);
+    expect(tones).toEqual([false]);
+  });
+
+  test('un silence de moins de cinq minutes ne change rien : maintenir pour parler', async () => {
+    appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link('CLOSE')]);
+    appQueryClient.setQueryData(PHONE_REACHABILITY_STATES_QUERY_KEY, {
+      [PROCHE]: { userId: PROCHE, unreachableSince: new Date(Date.now() - 60_000).toISOString(), cause: 'network', receivedAt: Date.now() },
+    });
+    const { row } = harness({ success: true });
+    const node = await mount(row);
+    await settle();
+    expect(node.querySelector('[data-talkie-send]')?.getAttribute('aria-label')).toContain('Maintenir pour parler à Ada');
   });
 });

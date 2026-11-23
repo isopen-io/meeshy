@@ -547,6 +547,7 @@ struct GlobalSearchView: View {
                 moodEmoji: moodEmojiResolver?(result.id),
                 presenceState: presence,
                 ring: result.ring,
+                circleUserId: result.id,
                 onViewStory: {
                     presentStoryViewer?(StoryViewerRequest(
                         id: result.id,

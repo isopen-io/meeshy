@@ -67,12 +67,10 @@ struct ProfileView: View {
     @State var isUploadingBanner = false
     @State private var bannerPickerShown = false
     @State private var scrollRelay = ScrollOffsetRelay()
-    /// Les trois faces (#18869) : la face montrée, et les portes que la Vitrine et la face Actions ouvrent.
+    /// Les deux faces (#18869, #20177) : la face montrée, et les portes que la Vitrine et la face Actions ouvrent.
     @State private var face: ProfileFace = .vitrine
     @State private var seenAsShown = false
     @State private var shareShown = false
-    /// « Créer un lien » touché à côté du sélecteur : la face Liens ouvre son choix de création, puis consomme la demande.
-    @State private var linkCreateRequested = false
     @State private var securityShown = false
     @State private var logoutAsked = false
     @State private var moodComposerShown = false
@@ -447,7 +445,7 @@ struct ProfileView: View {
         door.open(with: router)
     }
 
-    // MARK: - Les trois faces (#18869)
+    // MARK: - Les deux faces (#18869, #20177)
 
     /// La place que le sélecteur de faces occupe en bas : le contenu défile jusqu'au-dessus de lui.
     private static let faceSelectorRoom: CGFloat = 72
@@ -471,11 +469,10 @@ struct ProfileView: View {
     private func performFaceAccessory(_ accessory: ProfileFaceAccessory) {
         switch accessory {
         case .share: shareShown = true
-        case .createLink: linkCreateRequested = true
         }
     }
 
-    /// La face montrée glisse dans le sens du geste sur le sélecteur (Vitrine < Liens < Actions, #19606).
+    /// La face montrée glisse dans le sens du geste sur le sélecteur (Vitrine < Actions, #19606).
     private var faceContent: some View {
         MeeshySegmentedPages(selection: ProfileFace.shown(face, isEditing: isEditing), order: ProfileFace.allCases) { shown in
             facePage(shown)
@@ -488,14 +485,15 @@ struct ProfileView: View {
         case .vitrine:
             VStack(spacing: MeeshySpacing.xxl) { vitrineFace }
                 .meeshyCascadeFace()
-        case .links:
-            ProfileLinksFace(user: user, accentColor: shownAccentHex, createRequested: $linkCreateRequested,
-                             onOpen: { router.push($0) })
         case .actions:
-            ProfileActionsFace(user: user, stats: stats, accentColor: shownAccentHex,
-                               canShare: ProfileLink(username: user?.username) != nil,
-                               canSetMood: statusComposer != nil,
-                               legend: legend.summary, onAction: { perform($0) }, prefs: UserPreferencesManager.shared)
+            // Mon lien de profil et mes liens créés d'abord (#20177) : ce que je FAIS de mon lien.
+            VStack(spacing: MeeshySpacing.xxl) {
+                ProfileLinksFace(user: user, accentColor: shownAccentHex, showsAddresses: false,
+                                 onOpen: { router.push($0) })
+                ProfileActionsFace(user: user, stats: stats, accentColor: shownAccentHex,
+                                   canSetMood: statusComposer != nil,
+                                   onAction: { perform($0) }, prefs: UserPreferencesManager.shared)
+            }
         }
     }
 
@@ -514,11 +512,14 @@ struct ProfileView: View {
             .transition(.opacity)
         }
         identityBlock.meeshyCascade(rank: 0)
-        // Les blocs montent l'un après l'autre à l'arrivée sur la face (K26, mouvement 08, #19625).
-        ProfileCirclesSection(summary: circles.summary, hasServedLinks: circles.hasServedLinks,
-                              loadState: circles.loadState, accentHex: accentColor, onOpen: open,
-                              onRetry: { Task { await circles.load() } })
-            .meeshyCascade(rank: 1)
+        // Les blocs montent l'un après l'autre à l'arrivée sur la face (K26, mouvement 08, #19625). En édition, ceux qui
+        // ne s'y modifient pas se taisent (#20177).
+        if ProfileVitrineBlock.isShown(.circles, isEditing: isEditing) {
+            ProfileCirclesSection(summary: circles.summary, hasServedLinks: circles.hasServedLinks,
+                                  loadState: circles.loadState, accentHex: accentColor, onOpen: open,
+                                  onRetry: { Task { await circles.load() } })
+                .meeshyCascade(rank: 1)
+        }
         if isEditing {
             ProfileAccentSection(choice: $accentChoice, userId: user?.id,
                                  name: user?.displayName ?? user?.username ?? "")
@@ -531,13 +532,14 @@ struct ProfileView: View {
             )
         }
         if languagesMode == .reorderable { languagesSection }
-        activitySection.meeshyCascade(rank: 2)
-        legendSection.meeshyCascade(rank: 3)
+        if ProfileVitrineBlock.isShown(.activity, isEditing: isEditing) { activitySection.meeshyCascade(rank: 2) }
+        if ProfileVitrineBlock.isShown(.legend, isEditing: isEditing) { legendSection.meeshyCascade(rank: 3) }
         if !isEditing { appearanceSection.meeshyCascade(rank: 4) }
         voiceBlock.meeshyCascade(rank: 5)
+        if ProfileVitrineBlock.isShown(.addresses, isEditing: isEditing) { addressesBlock.meeshyCascade(rank: 6) }
         if !isEditing, let userId = user?.id {
             ProfilePublicationsSection(userId: userId, accentColor: accentColor)
-                .meeshyCascade(rank: 6)
+                .meeshyCascade(rank: 7)
         }
     }
 
@@ -627,14 +629,11 @@ struct ProfileView: View {
 
     private func perform(_ action: ProfileFaceAction) {
         switch action {
-        case .share: shareShown = true
         case .seenAs: seenAsShown = true
         case .edit:
             face = .vitrine
             setEditing(true)
         case .mood: moodComposerShown = true
-        case .stats: router.push(.userStats)
-        case .legend: router.push(.progression)
         case .security: securityShown = true
         case .settings: router.push(.settings)
         case .logout: logoutAsked = true
@@ -716,6 +715,14 @@ struct ProfileView: View {
             ProfileActivityBand(stats: stats, isLoading: statsLoading, isOffline: statsOffline, accentColor: accentColor,
                                 onOpen: openActivity, onRetry: retryStats)
         }
+    }
+
+    /// « Mes adresses » sur ma Vitrine (#20177) : ce qu'on voit de moi ; tout geste mène à la page où elles se règlent.
+    private var addressesBlock: some View {
+        let accentColor = shownAccentHex
+        return ProfileAddressesRail(store: .shared, accent: Color(hex: accentColor), accountId: user?.id,
+                             onManage: { router.push(.myAddresses) })
+            .task { await ProfileAddressesStore.shared.load() }
     }
 
     /// « Ma Légende », une section à part entière (#19986) : la carte porte son propre titre.

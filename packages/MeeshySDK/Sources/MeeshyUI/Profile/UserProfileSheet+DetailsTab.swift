@@ -5,21 +5,22 @@ import MeeshySDK
 //
 // La Vitrine de la fiche d'un autre (#18870), faite du kit (loi 12) : la bio et
 // les puces vivent sous le nom (`ProfileIdentityChips`, dans l'en-tête), puis
-// « Avec lui », « En direct », « Sa voix », « Sa Légende », « En chiffres », la
-// complétude, « En commun » et « Publications ».
+// « En direct », « Sa voix », « Ses adresses », « Sa Légende », « En chiffres »,
+// la complétude, « En commun » et « Publications ».
 
 extension UserProfileSheet {
 
-    /// La Vitrine de l'autre (loi 1), dans l'ordre de la planche `Autre-Vitrine` (#19416) : « Avec lui » (K32, vers la
-    /// face Actions), « En direct » dès Proche, sa voix, son jeu, ses chiffres, sa complétude, puis ce que les anciens
-    /// onglets portaient — ce que nous avons en commun et ses publications (loi 11).
+    /// La Vitrine de l'autre (loi 1), dans l'ordre de la planche `Autre-Vitrine` (#19416) : « En direct » dès Proche, sa
+    /// voix, où le trouver (ses adresses, ses communautés ouvertes, #20177), son jeu, ses chiffres, sa complétude, puis ce
+    /// que les anciens onglets portaient — ce que nous avons en commun et ses publications (loi 11). Écrire vit au bouton
+    /// « Parler » du sélecteur, appeler et la carte sur la face Actions : la Vitrine ne les redit pas.
     @ViewBuilder
     var vitrineFace: some View {
         VStack(spacing: MeeshySpacing.xxl + MeeshySpacing.xs) {
-            withThemSection.meeshyCascade(rank: 0)
-            liveSection.meeshyCascade(rank: 1)
-            ProfilePendingSection.of(self).meeshyCascade(rank: 2)
-            voiceSection.meeshyCascade(rank: 3)
+            liveSection.meeshyCascade(rank: 0)
+            ProfilePendingSection.of(self).meeshyCascade(rank: 1)
+            voiceSection.meeshyCascade(rank: 2)
+            RelationReachSection.of(self).meeshyCascade(rank: 3)
             gameSectionCard.meeshyCascade(rank: 4)
             figuresSection.meeshyCascade(rank: 5)
             completionSection.meeshyCascade(rank: 6)

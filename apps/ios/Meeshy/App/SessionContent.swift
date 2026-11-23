@@ -17,6 +17,7 @@ struct SessionContent: View {
                 .environment(\.mentionContactsProvider, MentionContactsAudienceBridge())
                 .environment(\.entityImageEditor, EntityImageRetouch.editor)
                 .modifier(ProfileSheetEnvironment())
+                .modifier(AvatarCircleEnvironment(viewerId: AuthManager.shared.currentUser?.id))
         case .login:
             loginScreen
         case .none:

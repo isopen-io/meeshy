@@ -23,9 +23,28 @@ struct PersonLocationCard: View {
     let distanceMeters: Double?
     let actions: PersonLocationActions
 
+    /// Talkie et Bring se tiennent ici (#20199) : la carte ouverte les offre sur la personne, chacun seulement s'il est
+    /// permis — Talkie dès Proche, Bring quand la passerelle l'ouvre.
+    @StateObject private var talkie = TalkieSender()
+    @StateObject private var bring: ProfileBringViewModel
+    @State private var talkieHeldAt: Date?
+
     @Environment(\.locale) private var locale
     private var theme: ThemeManager { ThemeManager.shared }
     private var tint: Color { LocationMapTint.color(for: pin.circle) }
+
+    init(pin: SharedLocationPin, place: String?, distanceMeters: Double?, actions: PersonLocationActions) {
+        self.pin = pin
+        self.place = place
+        self.distanceMeters = distanceMeters
+        self.actions = actions
+        _bring = StateObject(wrappedValue: ProfileBringViewModel(userId: pin.id))
+    }
+
+    /// Talkie ne s'offre qu'à partir de Proche, comme partout.
+    static func offersTalkie(_ circle: RelationLevel?) -> Bool {
+        TalkieLongHold.offers(circle: circle)
+    }
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 15)) { context in
@@ -37,6 +56,7 @@ struct PersonLocationCard: View {
                 askExtendRow
             }
         }
+        .task { await bring.load() }
     }
 
     private var header: some View {
@@ -91,6 +111,15 @@ struct PersonLocationCard: View {
             if let onCall = actions.onCall {
                 MeeshyLabeledAction(title: LocationMapCopy.call, systemImage: "phone", tint: tint, action: onCall)
             }
+            if Self.offersTalkie(pin.circle) {
+                MeeshyLabeledAction(title: ProfileTalkieWording.tag, systemImage: "dot.radiowaves.left.and.right", tint: tint,
+                                    hint: ProfileTalkieWording.hold,
+                                    action: { talkieTapped() })
+                    .modifier(TalkieLongHoldModifier(sender: talkie, userId: pin.id, displayName: pin.name,
+                                                     onHold: { talkieHeldAt = $0 ? .distantFuture : Date() }))
+                    .accessibilityIdentifier("locationMap.person.talkie")
+            }
+            ProfileBringAction(viewModel: bring, displayName: pin.name, tint: tint)
             MeeshyLabeledAction(title: LocationMapCopy.shareMine, systemImage: "mappin.and.ellipse", tint: tint,
                                 action: actions.onShareMine)
             if let onHistory = actions.onHistory {
@@ -98,6 +127,12 @@ struct PersonLocationCard: View {
                                     action: onHistory)
             }
         }
+    }
+
+    /// Un toucher simple dit le geste ; le relâchement d'un appui long, déjà parlé, ne le redit pas.
+    private func talkieTapped() {
+        guard !TalkieLongHold.justEnded(at: talkieHeldAt, now: Date()) else { return }
+        FeedbackToastManager.shared.showNotice(ProfileTalkieWording.hold)
     }
 
     /// Sous les actions, une rangée K06 : le geste se voit aussitôt « Demandé », puis ne se rejoue plus.

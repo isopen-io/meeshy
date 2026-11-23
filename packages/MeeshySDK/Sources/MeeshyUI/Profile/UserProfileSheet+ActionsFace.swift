@@ -5,7 +5,7 @@ import MeeshySDK
 // MARK: - UserProfileSheet — la face Actions (#18870, hiérarchie #19433)
 //
 // Ce que je peux FAIRE avec cette personne, fait du kit (loi 12), dans l'ordre de la planche `Autre-Actions` :
-// « Parler » en actions libellées (K32), Talkie et « Ensemble » (lus par l'app), « Où il est », la demande de
+// appeler, la vidéo et la carte en actions libellées (K32 ; écrire vit au bouton « Parler » de la Vitrine), Talkie et « Ensemble » (lus par l'app), « Où il est », la demande de
 // connexion tant qu'aucun lien n'est servi, « Son téléphone » (lu par l'app), « Pour aller plus loin » — le chemin vers
 // le cercle suivant, jamais ce qu'il tient fermé (#19674) —, « Sa fiche » en rangées (K06 : envoyer
 // son profil, copier son lien, son QR, ses nouveautés, notre cercle), et en bas, séparés, bloquer et signaler (K40
@@ -45,13 +45,11 @@ extension UserProfileSheet {
 
     // MARK: - Parler
 
+    /// Appeler, la vidéo et la carte (#20177) : écrire vit au seul bouton « Parler » de la Vitrine, et la grille ne
+    /// porte plus de titre qui le redirait.
     private var talkSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            MeeshySectionHeader(title: String(localized: "profile.relation.section.talk", defaultValue: "Parler", bundle: .module))
             MeeshyActionGrid {
-                ProfileTalkAction(operation: .write, reach: talkReach(.write), badge: writeBadge, tint: accentTint) {
-                    openConversation()
-                }
                 if offersCall {
                     ProfileTalkAction(operation: .call, reach: talkReach(.call), tint: accentTint) { requestCall(isVideo: false) }
                     ProfileTalkAction(operation: .video, reach: talkReach(.video), tint: accentTint) { requestCall(isVideo: true) }

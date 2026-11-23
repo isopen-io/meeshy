@@ -69,7 +69,7 @@ describe('« Voir sur la carte » ne dépend pas d’un passage par la carte', (
     const node = await row({ items: [served()] });
     await settle();
     await settle();
-    expect(node.querySelector('[data-see-on-map="u-leo"]')?.textContent).toContain('Voir sur la carte');
+    expect(node.querySelector('[data-see-on-map="u-leo"] [data-profile-where-hero]')).not.toBeNull();
   });
 
   test('un partage arrêté pendant que la carte était fermée n’est plus offert', async () => {
@@ -93,3 +93,42 @@ describe('« Voir sur la carte » ne dépend pas d’un passage par la carte', (
     expect(node.querySelector('[data-see-on-map]')).toBeNull();
   });
 });
+
+/**
+ * **LE BLOC HÉROS DE CARTE** (#20242, iso `ProfileWhereHero.swift`) — dès qu'une position m'est SERVIE : la carte pleine
+ * largeur centrée sur la DERNIÈRE position connue, le nom et « Dernière position · <heure> » sur un voile en bas ; un
+ * toucher ouvre la carte. Pas de position servie : rien, jamais une carte vide.
+ */
+describe('le bloc héros de la dernière position connue', () => {
+  test('une carte pleine largeur, centrée sur la position servie, qui dit le nom et l’heure de la position', async () => {
+    const node = await row({ items: [served({ updatedAt: new Date(Date.now() - 7 * 60_000 - 5_000).toISOString() })] });
+    await settle();
+    await settle();
+    const hero = node.querySelector<HTMLButtonElement>('[data-profile-where-hero]');
+    expect(hero?.tagName).toBe('BUTTON');
+    expect(hero?.style.height).toBe('200px');
+    expect(hero?.querySelectorAll('img[src^="https://tile.openstreetmap.org/"]').length).toBeGreaterThan(0);
+    expect(hero?.textContent).toContain('Léo Marchetti');
+    expect(hero?.textContent).toContain('Dernière position · il y a 7 min');
+    expect(hero?.textContent).toContain('À un quartier près');
+    expect(hero?.getAttribute('aria-label')).toBe('Voir Léo Marchetti sur la carte, Dernière position · il y a 7 min');
+  });
+
+  test('une position toute fraîche : « à l’instant »', async () => {
+    const node = await row({ items: [served()] });
+    await settle();
+    await settle();
+    expect(node.querySelector('[data-profile-where-hero]')?.textContent).toContain('Dernière position · à l’instant');
+  });
+
+  test('une position arrivée en direct APRÈS l’ouverture de la fiche fait paraître le bloc', async () => {
+    const store = createSharedLocationsStore();
+    const node = await row({ items: [], store });
+    await settle();
+    await settle();
+    expect(node.querySelector('[data-profile-where-hero]')).toBeNull();
+    await act(async () => store.getState().receive(served()));
+    expect(node.querySelector('[data-profile-where-hero]')).not.toBeNull();
+  });
+});
+

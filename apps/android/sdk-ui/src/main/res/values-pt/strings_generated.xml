@@ -543,11 +543,14 @@
     <string name="talkie_send_hold">Segure para falar</string>
     <string name="talkie_send_hold_a11y">Segure para falar com %1$s</string>
     <string name="talkie_send_hold_hint">Toque duas vezes e segure, fale e depois solte.</string>
+    <string name="talkie_send_leave_voice">Deixar uma mensagem de voz</string>
+    <string name="talkie_send_leave_voice_a11y">Deixar uma mensagem de voz para %1$s</string>
     <string name="talkie_send_limit">Trinta segundos no máximo: a fala parou.</string>
     <string name="talkie_send_mic_denied">Permita o microfone para usar o walkie-talkie.</string>
     <string name="talkie_send_offline">Offline: o walkie-talkie não pôde ser enviado.</string>
     <string name="talkie_send_rate_limited">Falas demais: tente de novo em um instante.</string>
     <string name="talkie_send_recording_copy">Gravando mensagem de voz…</string>
+    <string name="talkie_send_sent_as_voice">Enviado como mensagem de voz</string>
     <string name="talkie_send_talking">Você está falando com %1$s…</string>
     <string name="talkie_send_waking">Acordando %1$s…</string>
     <string name="time_lastSeen_beforeYesterdayAt">Visto anteontem às %1$s</string>

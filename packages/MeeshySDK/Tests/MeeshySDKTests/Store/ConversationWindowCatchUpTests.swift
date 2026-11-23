@@ -181,7 +181,8 @@ final class ConversationWindowCatchUpTests: XCTestCase {
                 store: store,
                 categoryStore: categoryStore,
                 currentUserId: { "me" },
-                fetchChangedPreferences: { changedSince in servedPreferences.serve(changedSince: changedSince) })
+                fetchChangedPreferences: { changedSince in servedPreferences.serve(changedSince: changedSince) },
+                watermarkStore: .inMemory())
             bridge.activate(
                 conversationUpdated: Empty().eraseToAnyPublisher(),
                 conversationDeleted: Empty().eraseToAnyPublisher(),

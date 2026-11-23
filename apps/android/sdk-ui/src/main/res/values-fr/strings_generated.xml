@@ -543,11 +543,14 @@
     <string name="talkie_send_hold">Maintenir pour parler</string>
     <string name="talkie_send_hold_a11y">Maintenir pour parler à %1$s</string>
     <string name="talkie_send_hold_hint">Touche deux fois et maintiens, parle, puis relâche.</string>
+    <string name="talkie_send_leave_voice">Laisser un message vocal</string>
+    <string name="talkie_send_leave_voice_a11y">Laisser un message vocal à %1$s</string>
     <string name="talkie_send_limit">Trente secondes au plus : la prise de parole s’est arrêtée.</string>
     <string name="talkie_send_mic_denied">Autorise le micro pour parler en talkie.</string>
     <string name="talkie_send_offline">Hors ligne : le talkie n’a pas pu partir.</string>
     <string name="talkie_send_rate_limited">Trop de prises de parole : réessaie dans un instant.</string>
     <string name="talkie_send_recording_copy">Enregistrement du message vocal…</string>
+    <string name="talkie_send_sent_as_voice">Parti en message vocal</string>
     <string name="talkie_send_talking">Tu parles à %1$s…</string>
     <string name="talkie_send_waking">Réveil de %1$s…</string>
     <string name="time_lastSeen_beforeYesterdayAt">Vu avant-hier à %1$s</string>
