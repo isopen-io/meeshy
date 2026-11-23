@@ -905,3 +905,16 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gardes locales : `check_house_rules` (42 tenues), `check_cohesion_budget`, `check_test_registration`, accent verts.
 - Revue adversariale : non lancée — lot client seul, aucune route ni garde touchée (le refus et sa garde sont ceux de #19661).
 - Reste de #20332 : Android (même chose) ; le cache `CommunityLink` iOS écrit avant #20330 garde `/chat/` jusqu'à la relecture réseau (non mesuré utile à réécrire).
+
+- 2026-11-22 22:08 : #20399 fusionnée dans `dev` (`30dad97c7`) après `ios.yml` 45050635835 vert ; preuve commentée sur #20332, qui reste ouverte (Android).
+
+## 2026-11-22 — réveil 23:38 UTC
+
+- Début du run : aucune PR de la routine ouverte ; aucune branche vivante sur `feature/community/`, `deeplink/` ni `CommunityDestinations.kt`.
+- Lot : #20332, moitié Android (milestone « Chaque lien se règle, se met en pause et garde son histoire »). Dernière partie de #20255.
+- Modèles (`:core:model`) : `DeepLinkDestination.Community(id, viaLink)` lit `?via=link` ; `JoinCommunityRequest.of(viaLink)` envoie `via: "link"` (absent sinon : défaut non encodé, la passerelle lit une entrée directe) ; `CommunityJoinRefusal.LINK_PAUSED` lit `403 COMMUNITY_LINK_PAUSED` ; `ApiCommunity.joinLinkPaused` (servi par le détail, `null` = passerelle plus ancienne).
+- SDK : `CommunityRepository.join(communityId, viaLink = false)`.
+- App : `CommunityRoutes.DETAIL` porte l'argument facultatif `?via={via}` (défaut nul, les adresses `community/<id>` existantes inchangées) ; `DeepLinkRouter` passe l'arrivée par le lien. `CommunityDetailViewModel` lit `via=link` : rejoindre envoie `via: "link"` ; `linkArrivalPaused` (arrivé par le lien ET pause servie ET non membre) dit la pause AVANT le geste, et un refus `COMMUNITY_LINK_PAUSED` la dit aussi (retour arrière de l'adhésion optimiste). L'avis sous les gestes dit « Les arrivées par ce lien sont suspendues. » — clé `community.join.linkPaused` adoptée du catalogue iOS (manifeste `community.d/arrivee-par-le-lien-20332.json`, sept langues générées). Le bouton reste : une communauté publique reste joignable par sa fiche (même choix que web et iOS).
+- Témoins : `CommunityServedRoleTest` (+3), `DeepLinkParserTest` (+3 assertions), `DeepLinkRouterTest` (+1 ligne), `CommunityRepositoryTest` (+1), `CommunityDetailViewModelTest` (+6). `./meeshy.sh jvm-check` ne tourne pas en conteneur (le proxy refuse `build-artifacts.signal.org`) : preuve par `android.yml` sur la PR. `./meeshy.sh i18n --check` vert.
+- Revue adversariale : non lancée — lot client seul, aucune route ni garde touchée (le refus et sa garde sont ceux de #19661).
+- Reste : rien de #20332 hors CI ; le cache `CommunityLink` iOS écrit avant #20330 garde `/chat/` jusqu'à la relecture réseau (non mesuré utile).

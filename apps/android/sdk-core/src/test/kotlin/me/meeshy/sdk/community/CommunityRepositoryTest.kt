@@ -8,9 +8,11 @@ import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.ApiCommunityMember
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.ApiCommunity
+import me.meeshy.sdk.model.CommunityJoinOutcome
 import me.meeshy.sdk.model.CommunityMini
 import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.model.InviteMemberRequest
+import me.meeshy.sdk.model.JoinCommunityRequest
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CommunityApi
 import okhttp3.MediaType.Companion.toMediaType
@@ -112,5 +114,16 @@ class CommunityRepositoryTest {
         val page = (repository.getMembersPaged("c1", 0, 30) as NetworkResult.Success).data
 
         assertThat(page.pagination?.hasMore).isFalse()
+    }
+
+    @Test
+    fun `rejoindre par le lien partage envoie via link, une entree directe ne l envoie pas (20332)`() = runTest {
+        coEvery { api.join("c1", any()) } returns ApiResponse(success = true, data = CommunityJoinOutcome.Joined(ApiCommunityMember(id = "m", userId = "me")))
+
+        repository.join("c1", viaLink = true)
+        repository.join("c1")
+
+        coVerify(exactly = 1) { api.join("c1", JoinCommunityRequest(acceptsPending = true, via = "link")) }
+        coVerify(exactly = 1) { api.join("c1", JoinCommunityRequest(acceptsPending = true)) }
     }
 }

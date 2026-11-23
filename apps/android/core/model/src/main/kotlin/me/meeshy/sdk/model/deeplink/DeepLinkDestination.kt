@@ -30,7 +30,8 @@ sealed interface DeepLinkDestination {
     data class PostDetail(val postId: String) : DeepLinkDestination
     data class StoryDetail(val postId: String) : DeepLinkDestination
     data class Reel(val postId: String) : DeepLinkDestination
-    data class Community(val id: String) : DeepLinkDestination
+    /** [viaLink] : l'adresse partagée de la communauté (`?via=link`, #20332) — rejoindre compte l'entrée comme venue du lien. */
+    data class Community(val id: String, val viaLink: Boolean = false) : DeepLinkDestination
     data object RecentConversation : DeepLinkDestination
     data object UnreadConversations : DeepLinkDestination
     data class Hashtag(val tag: String) : DeepLinkDestination
