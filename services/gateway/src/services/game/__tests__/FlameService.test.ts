@@ -269,3 +269,108 @@ describe('writeStreak — la Veilleuse offerte arrive dans la réserve du compte
     expect(await db.user.findUnique({ where: { id: USER } })).toMatchObject({ flameFreezes: 1 });
   });
 });
+
+describe('FlameService.relightByEffort — deux rêves complets rallument la Flamme sans payer (#20455)', () => {
+  const act = (db: FakeGameDb, dayKey: string, slot: number, done = true) =>
+    db.dailyMission.rows.push({
+      id: `act-${dayKey}-${slot}`, userId: USER, dayKey, slot, templateKey: 'send-voice', difficulty: 'easy',
+      signal: 'axis:content.audio_message', prism: false, target: 1, progress: done ? 1 : 0, reward: 40, glory: 0, seen: [],
+      completedAt: done ? new Date(`${dayKey}T10:00:00Z`) : null, paidPoints: done ? 40 : null, rerolledAt: null,
+    });
+  const wholeDream = (db: FakeGameDb, dayKey: string, done = true) => [0, 1, 2].forEach((slot) => act(db, dayKey, slot, done || slot < 2));
+  const replayedSinceBreak = (db: FakeGameDb, fields: Record<string, unknown> = {}) =>
+    seedUser(db, {
+      currentStreakDays: 2,
+      longestStreakDays: 12,
+      lastStreakDate: new Date('2026-10-05T00:00:00Z'),
+      brokenStreakDays: 12,
+      brokenStreakLastDay: '2026-10-02',
+      ...fields,
+    });
+
+  it('au second Rêve complet, la série perdue revient avec les jours rejoués, sans aucune Meesh', async () => {
+    const db = fakeGameDb();
+    replayedSinceBreak(db);
+    wholeDream(db, '2026-10-04');
+    wholeDream(db, '2026-10-05');
+
+    const relit = await new FlameService(db.prisma).relightByEffort(USER, NOW);
+
+    expect(relit).toEqual({ streak: 14 });
+    expect(db.user.rows[0]).toMatchObject({ currentStreakDays: 14, longestStreakDays: 14, brokenStreakDays: null, brokenStreakLastDay: null });
+    expect((db.user.rows[0]?.lastStreakDate as Date).toISOString()).toBe('2026-10-05T00:00:00.000Z');
+    expect(db.meeshLedger.rows).toHaveLength(0);
+  });
+
+  it('ne consomme pas le rallumage payé du mois', async () => {
+    const db = fakeGameDb();
+    replayedSinceBreak(db);
+    wholeDream(db, '2026-10-04');
+    wholeDream(db, '2026-10-05');
+
+    await new FlameService(db.prisma).relightByEffort(USER, NOW);
+
+    expect(db.user.rows[0]?.lastRelightDay).toBeUndefined();
+  });
+
+  it('un seul Rêve complet ne rallume rien', async () => {
+    const db = fakeGameDb();
+    replayedSinceBreak(db);
+    wholeDream(db, '2026-10-04');
+    wholeDream(db, '2026-10-05', false);
+
+    expect(await new FlameService(db.prisma).relightByEffort(USER, NOW)).toBeNull();
+    expect(db.user.rows[0]).toMatchObject({ currentStreakDays: 2, brokenStreakDays: 12 });
+  });
+
+  it('la mission personnelle ne compte pas comme un acte du Rêve', async () => {
+    const db = fakeGameDb();
+    replayedSinceBreak(db);
+    wholeDream(db, '2026-10-04');
+    act(db, '2026-10-05', 3);
+
+    expect(await new FlameService(db.prisma).relightByEffort(USER, NOW)).toBeNull();
+  });
+
+  it('les rêves d’avant la rupture ne comptent pas', async () => {
+    const db = fakeGameDb();
+    replayedSinceBreak(db);
+    wholeDream(db, '2026-10-01');
+    wholeDream(db, '2026-10-02');
+    wholeDream(db, '2026-10-05');
+
+    expect(await new FlameService(db.prisma).relightByEffort(USER, NOW)).toBeNull();
+  });
+
+  it('hors de la fenêtre de 48 h, deux rêves complets ne rallument plus', async () => {
+    const db = fakeGameDb();
+    replayedSinceBreak(db, { brokenStreakLastDay: '2026-10-01', currentStreakDays: 3 });
+    wholeDream(db, '2026-10-04');
+    wholeDream(db, '2026-10-05');
+
+    expect(await new FlameService(db.prisma).relightByEffort(USER, NOW)).toBeNull();
+    expect(db.user.rows[0]).toMatchObject({ currentStreakDays: 3, brokenStreakDays: 12 });
+  });
+
+  it('une Flamme qui brûle ne bouge pas', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { currentStreakDays: 9, longestStreakDays: 9, lastStreakDate: new Date('2026-10-05T00:00:00Z') });
+    wholeDream(db, '2026-10-04');
+    wholeDream(db, '2026-10-05');
+
+    expect(await new FlameService(db.prisma).relightByEffort(USER, NOW)).toBeNull();
+    expect(db.user.rows[0]).toMatchObject({ currentStreakDays: 9 });
+  });
+
+  it('une fois rallumée, un nouvel acte ne la rallume pas deux fois', async () => {
+    const db = fakeGameDb();
+    replayedSinceBreak(db);
+    wholeDream(db, '2026-10-04');
+    wholeDream(db, '2026-10-05');
+    const service = new FlameService(db.prisma);
+
+    await service.relightByEffort(USER, NOW);
+    expect(await service.relightByEffort(USER, NOW)).toBeNull();
+    expect(db.user.rows[0]).toMatchObject({ currentStreakDays: 14 });
+  });
+});
