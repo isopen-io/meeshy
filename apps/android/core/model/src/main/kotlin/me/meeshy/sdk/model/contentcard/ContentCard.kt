@@ -6,8 +6,11 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiRepostOf
 import me.meeshy.sdk.model.PostType
+import me.meeshy.sdk.model.StoryEffects
+import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.model.displayContent
 import me.meeshy.sdk.model.postTypeFromWire
+import me.meeshy.sdk.model.rendering
 
 /**
  * **La carte VIVANTE d'un contenu Meeshy (#19331)**, telle que la bulle et le texte d'un post la montrent : le post
@@ -26,9 +29,18 @@ data class ContentCard(
     val media: ContentCardMedia?,
     val stats: ContentCardStats,
     val createdAtIso: String?,
+    /** Ce que le bloc visuel montre (#20233) : diaporama, image de garde, son, scène composée, ou rien. */
+    val visual: ContentCardVisual = ContentCardVisual.None,
+    /** Le contenu qui porte la scène dessinée : le post, ou l'original d'une republication nue ; `null` sans scène. */
+    val sceneCarrierId: String? = null,
+    /** Les scènes prêtes pour le player, une par page, posées par le service ([ContentCardScene]) ; `null` sans scène. */
+    val scene: ContentCardScene? = null,
 ) {
-    /** Trois lignes de texte, deux sous un bloc média. */
-    val textMaxLines: Int get() = if (media == null) TEXT_LINES else TEXT_LINES_UNDER_MEDIA
+    /** Le bloc visuel est une image, un diaporama ou une scène : la pastille du genre se pose dessus. */
+    val hasPicture: Boolean get() = visual !is ContentCardVisual.None && visual !is ContentCardVisual.Sound
+
+    /** Trois lignes de texte, deux sous un bloc visuel. */
+    val textMaxLines: Int get() = if (visual is ContentCardVisual.None) TEXT_LINES else TEXT_LINES_UNDER_MEDIA
 
     private companion object {
         const val TEXT_LINES = 3
@@ -48,7 +60,13 @@ data class ContentCardStats(
     val isBookmarkedByMe: Boolean,
 )
 
-/** Le premier média VISUEL : sa vignette, son cadre, sa durée de vidéo, et combien d'autres le suivent. */
+/**
+ * Ce que le player de scène reçoit pour dessiner la carte : une scène par page du document, avec ses seules pièces, et
+ * l'accent de l'auteur qui sert de sol à une scène sans fond déclaré.
+ */
+data class ContentCardScene(val items: List<StoryItem>, val accentHex: String)
+
+/** Un média VISUEL : sa vignette, son cadre, sa durée de vidéo, et combien d'autres le suivent. */
 data class ContentCardMedia(
     val imageUrl: String?,
     val thumbHash: String?,
@@ -57,8 +75,10 @@ data class ContentCardMedia(
     /** Largeur sur hauteur du cadre. */
     val aspectRatio: Float,
     val maxHeightDp: Int,
-    /** Les médias visuels en plus du premier (« +N »). */
+    /** Les médias visuels en plus du premier (« +N ») ; zéro pour une page de diaporama. */
     val extraCount: Int,
+    /** L'identité du média servi (`PostMedia.id`) — celle qu'un objet de scène désigne par `postMediaId`. */
+    val id: String = "",
 )
 
 /**
@@ -74,6 +94,7 @@ object ContentCardProjection {
     private const val MAX_HEIGHT_DP = 220
     private const val PORTRAIT_MAX_HEIGHT_DP = 260
     private const val MILLIS_PER_SECOND = 1000
+    private const val BACKGROUND_SOUND_SUFFIX = "-audio"
 
     private object NoPreferences : LanguageResolver.ContentLanguagePreferences {
         override val systemLanguage: String? = null
@@ -87,13 +108,18 @@ object ContentCardProjection {
         val type = postTypeFromWire(post.type) ?: linkType ?: PostType.POST
         val original = post.repostOf?.takeIf { post.content.isNullOrBlank() && post.media.isNullOrEmpty() }
         val shownType = original?.let { postTypeFromWire(it.type) } ?: type
+        val shownMedia = original?.media ?: post.media.orEmpty()
+        val portrait = shownType == PostType.REEL || shownType == PostType.STORY
+        val scenes = scenesOf(original?.storyEffects ?: post.storyEffects)
+        val sound = if (original != null) soundOf(original.id, shownMedia, original.audioUrl, null) else soundOf(post.id, shownMedia, post.audioUrl, post.audioDuration)
+        val pages = shownMedia.filter(::isVisual).map { pageOf(it, portrait) }
         return ContentCard(
             postId = post.id,
             type = type,
             author = authorOf(original?.author ?: post.author),
             text = (original?.displayContent(reader) ?: post.displayContent(reader)).trim(),
             moodEmoji = (if (original != null) original.moodEmoji else post.moodEmoji)?.takeIf { it.isNotBlank() },
-            media = mediaOf(original?.media ?: post.media.orEmpty(), portrait = shownType == PostType.REEL || shownType == PostType.STORY),
+            media = mediaOf(shownMedia, portrait = portrait),
             stats = ContentCardStats(
                 views = post.viewCount.counted(),
                 likes = post.likeCount.counted(),
@@ -102,8 +128,30 @@ object ContentCardProjection {
                 isBookmarkedByMe = post.isBookmarkedByMe == true,
             ),
             createdAtIso = original.dateOr(post),
+            visual = ContentCardVisualRule.of(pages, sound, scenes),
+            sceneCarrierId = if (scenes.isEmpty()) null else original?.id ?: post.id,
         )
     }
+
+    /** Les scènes du document, aplaties une à une ; une scène seule est déjà la projection plate de `storyEffects`. */
+    private fun scenesOf(effects: StoryEffects?): List<StoryEffects> {
+        effects ?: return emptyList()
+        val canvas = effects.canvas ?: return listOf(effects)
+        return canvas.scenes.indices.map { StoryEffects.rendering(canvas, it) }.ifEmpty { listOf(effects) }
+    }
+
+    /** Le premier média audio du contenu, sinon son son de fond (`audioUrl`) ; les durées servies sont en millisecondes. */
+    private fun soundOf(contentId: String, items: List<ApiPostMedia>, audioUrl: String?, audioDurationMs: Int?): ContentCardVisual.Sound? {
+        items.firstOrNull { it.mimeType.isAudio() && !it.fileUrl.isNullOrBlank() }?.let { audio ->
+            return ContentCardVisual.Sound(audio.id, audio.fileUrl.orEmpty().trim(), audio.duration?.takeIf { it >= 0 }?.let { it / MILLIS_PER_SECOND })
+        }
+        val url = audioUrl?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        return ContentCardVisual.Sound("$contentId$BACKGROUND_SOUND_SUFFIX", url, audioDurationMs?.takeIf { it >= 0 }?.let { it / MILLIS_PER_SECOND })
+    }
+
+    /** Une page de diaporama : le média dans son propre cadre, sans « +N ». */
+    private fun pageOf(item: ApiPostMedia, portrait: Boolean): ContentCardMedia =
+        checkNotNull(mediaOf(listOf(item), portrait)) { "un média visuel donne toujours une page" }
 
     private fun ApiRepostOf?.dateOr(post: ApiPost): String? = if (this != null) createdAt else post.createdAt
 
@@ -127,6 +175,7 @@ object ContentCardProjection {
             aspectRatio = if (portrait) PORTRAIT_ASPECT else aspectOf(first),
             maxHeightDp = if (portrait) PORTRAIT_MAX_HEIGHT_DP else MAX_HEIGHT_DP,
             extraCount = visual.size - 1,
+            id = first.id,
         )
     }
 
@@ -144,6 +193,8 @@ object ContentCardProjection {
     }
 
     private fun String?.isVideo(): Boolean = this?.trim()?.lowercase()?.startsWith("video/") == true
+
+    private fun String?.isAudio(): Boolean = this?.trim()?.lowercase()?.startsWith("audio/") == true
 
     private fun Int?.counted(): Int = (this ?: 0).coerceAtLeast(0)
 }

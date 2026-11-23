@@ -10,6 +10,8 @@ const deContentCard = {
   'content.card.favorites.one': '{count} Favorit',
   'content.card.favorites.other': '{count} Favoriten',
   'content.card.saved': 'gespeichert',
+  'content.card.slideshow': 'Diashow',
+  'content.card.slideshow.page': 'Seite {index} von {count}',
 } satisfies ContentCardCatalogSlice;
 
 export default deContentCard;

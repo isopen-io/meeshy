@@ -8,6 +8,10 @@ Lus par les 3 plateformes : shared/web (Jest, import direct), iOS (XCTest, resso
 
 - `content-link.vectors.json` — la loi `contentLinkTarget` (`utils/content-link.ts`) : `{ _label, input, expected }`, `expected` étant `{ kind: 'content', postId, type }` (`type` : `POST`, `REEL`, `STORY`, `STATUS` ou `null` pour une forme ancienne), `{ kind: 'tracked', token }` ou `null`. Rejoués par le test TS, par le miroir Swift (`ContentLinkTarget`, MeeshySDK) et par le miroir Kotlin (`:core:model`) : un hôte, un chemin ou une forme d'identifiant ajouté à l'un se voit chez les deux autres.
 
+## `content-card-visual/` (#20211, #20233, #20234)
+
+- `content-card-visual.vectors.json` — ce que le bloc visuel de la carte d'un contenu partagé montre : `{ _label, post, expected }`, `post` étant le post SERVI (`GET /posts/:id`) et `expected` `{ kind: 'none' }`, `{ kind: 'media', mediaId, mediaKind }` (image, ou image de garde d'une vidéo), `{ kind: 'slideshow', pages: [{ mediaId, mediaKind } | { scene }] }`, `{ kind: 'sound', attachmentId, url, durationSeconds }` ou `{ kind: 'scene', index, carrierId }`. **Écrits à la main** d'après la règle iOS (`ContentCardVisual.swift`). Rejoués par iOS (`ContentCardVisualVectorTests`), Android (`ContentCardVisualVectorParityTest`, `:core:model`) et le web (`apps/web/src/lib/feed/content-card-visual.test.ts`), par chemin relatif.
+
 ## `long-message/` (#8147)
 
 - `excerpt.vectors.json` — la loi `longMessageExcerpt` (`utils/long-message.ts`) : `{ _label, input: { text }, expected: { truncated, excerpt } }`, générés en exécutant la loi TS. iOS les rejoue contre son miroir Swift.

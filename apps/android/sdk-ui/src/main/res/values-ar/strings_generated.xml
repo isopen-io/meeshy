@@ -199,6 +199,7 @@
     <string name="content_card_a11y_post_by">منشور %1$s</string>
     <string name="content_card_a11y_reel_by">ريل %1$s</string>
     <string name="content_card_a11y_saves">%1$d عملية حفظ</string>
+    <string name="content_card_a11y_slide_position">الوسائط %1$d من %2$d</string>
     <string name="content_card_a11y_story_by">قصة %1$s</string>
     <plurals name="content_card_a11y_views">
         <item quantity="zero">%1$d مشاهدات</item>

@@ -141,11 +141,14 @@ class ContentCardProjectionTest {
     }
 
     @Test
-    fun `a post without a visual medium has no media block and keeps three lines of text`() {
+    fun `a post without a visual medium has no picture, its sound takes the block, and only text alone keeps three lines`() {
         val audioOnly = card(post(media = listOf(ApiPostMedia(id = "a1", mimeType = "audio/mpeg", fileUrl = "files/a1.mp3"))))
 
         assertThat(audioOnly.media).isNull()
-        assertThat(audioOnly.textMaxLines).isEqualTo(3)
+        assertThat(audioOnly.hasPicture).isFalse()
+        assertThat(audioOnly.visual).isInstanceOf(ContentCardVisual.Sound::class.java)
+        assertThat(audioOnly.textMaxLines).isEqualTo(2)
+        assertThat(card(post()).textMaxLines).isEqualTo(3)
         assertThat(card(post(media = listOf(image("m1")))).textMaxLines).isEqualTo(2)
     }
 

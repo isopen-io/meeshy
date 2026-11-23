@@ -86,8 +86,9 @@ export function showsSomething(scene: CanvasScene): boolean {
   });
 }
 
-/** Un objet qui PEINT quelque chose par-dessus le fond. */
-function showsPixels(object: CanvasScene['objects'][number]): boolean {
+/** Un objet qui PEINT quelque chose — un son, une mention ou un fond de
+ * couleur nu ne peignent rien (`SceneShape.paintsPixels`, iOS). */
+export function showsPixels(object: CanvasScene['objects'][number]): boolean {
   if (!isVisible(object)) return false;
   return !isBackground(object) || carriesPicture(object);
 }

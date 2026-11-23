@@ -1766,6 +1766,38 @@
   },
   "src/lib/api/feed-pages.ts#FeedPost": {
    "object": {
+    "audioDuration": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "audioUrl": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
     "author": {
      "optional": true,
      "type": {
@@ -2256,6 +2288,22 @@
   },
   "src/lib/api/feed-pages.ts#FeedRepostOf": {
    "object": {
+    "audioUrl": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
     "author": {
      "optional": true,
      "type": {
@@ -2421,6 +2469,12 @@
         "primitive": "undefined"
        }
       ]
+     }
+    },
+    "storyEffects": {
+     "optional": true,
+     "type": {
+      "primitive": "unknown"
      }
     },
     "translations": {

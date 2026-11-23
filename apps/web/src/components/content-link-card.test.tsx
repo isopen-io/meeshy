@@ -196,8 +196,8 @@ describe('la carte d’un contenu — les états sans carte', () => {
 });
 
 describe('la carte d’un contenu — ce qu’elle montre', () => {
-  test('un réel : portrait, pastille du type, ▶ et sa durée, « +N », texte servi au rang 2 du Prisme', async () => {
-    const post = reel({ media: [video(), video({ id: 'v2' })] });
+  test('un réel d’une vidéo : portrait, pastille du type, son image de garde, ▶ et sa durée, texte servi au rang 2 du Prisme', async () => {
+    const post = reel({ media: [video()] });
     const { host } = await mount({ candidates: [direct()], seed: seedPost(post) });
     const media = host.querySelector<HTMLElement>('[data-content-card-media]');
     expect(media?.getAttribute('data-content-card-media')).toBe('video');
@@ -206,7 +206,7 @@ describe('la carte d’un contenu — ce qu’elle montre', () => {
     expect(host.querySelector('[data-content-card-type]')?.textContent).toBe('Reel');
     expect(host.querySelector('[data-content-card-play]')).not.toBeNull();
     expect(host.querySelector('[data-content-card-duration]')?.textContent).toBe('0:42');
-    expect(host.querySelector('[data-content-card-more]')?.textContent).toBe('+1');
+    expect(host.querySelector('[data-content-card-slideshow]')).toBeNull();
     const text = host.querySelector('[data-content-card-text]');
     expect(text?.textContent).toBe('Good morning everyone');
     expect(text?.getAttribute('lang')).toBe('en');
@@ -303,5 +303,73 @@ describe('la carte d’un contenu — un lien suivi `/l/<jeton>`', () => {
       replies: { [`GET ${RESOLVE_PATH}`]: { ok: true, data: { kind: 'tracking', isActive: true, targetType: 'POST', targetId: POST_ID } } },
     });
     expect(host.innerHTML).toBe('');
+  });
+});
+
+const image = (id: string): FeedMedia => ({ id, mimeType: 'image/jpeg', fileUrl: `posts/${id}.jpg`, thumbnailUrl: `posts/${id}-t.jpg`, width: 1200, height: 900 });
+
+const audioMedia: FeedMedia = { id: 'a1', mimeType: 'audio/mpeg', fileUrl: 'posts/a1.mp3', duration: 31_000 };
+
+const canvasObject = (id: string, kind: string, payload: Record<string, unknown>, plane = 'content') => ({
+  id,
+  kind,
+  anchor: { t: 'free', x: 0.5, y: 0.5 },
+  plane,
+  z: 0,
+  transform: { scale: 1, rotation: 0, opacity: 1 },
+  payload,
+});
+
+const storyScene = (id: string) => ({
+  id,
+  objects: [canvasObject('bg', 'media', { postMediaId: 'i1', mediaType: 'image', isBackground: true }), canvasObject('t1', 'text', { text: 'Bonjour' }, 'fg')],
+});
+
+describe('la carte d’un contenu — le bloc visuel suit ce que le contenu est (#20234)', () => {
+  test('plusieurs médias : un diaporama qu’on fait glisser, page par page, dont chaque page ouvre le contenu', async () => {
+    const post = reel({ type: 'POST', media: [image('i1'), audioMedia, image('i2'), video()] });
+    const { host } = await mount({ candidates: [direct('POST')], seed: seedPost(post) });
+    const slideshow = host.querySelector<HTMLElement>('[data-content-card-slideshow]');
+    expect(slideshow).not.toBeNull();
+    const pages = [...(slideshow?.querySelectorAll<HTMLElement>('[data-content-card-page]') ?? [])];
+    expect(pages.map((page) => page.getAttribute('data-content-card-page'))).toEqual(['image', 'image', 'video']);
+    expect(pages[0]?.querySelector('a')?.getAttribute('href')).toBe(`/post/${POST_ID}?from=link_preview`);
+    expect(pages[1]?.closest('[inert]')).not.toBeNull();
+    const track = slideshow?.querySelector<HTMLElement>('[data-content-card-track]');
+    expect(track?.getAttribute('aria-label')).toBe('Page 1 of 3');
+    expect(track?.closest('a')).toBeNull();
+    await act(async () => {
+      track?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    });
+    expect(track?.getAttribute('aria-label')).toBe('Page 2 of 3');
+    expect(host.querySelectorAll('a[data-content-card-open]')).toHaveLength(1);
+  });
+
+  test('un son seul : le lecteur, dont Lecture joue sans ouvrir le contenu', async () => {
+    const mood = reel({ type: 'STATUS', moodEmoji: '🎧', content: null, translations: null, media: [], audioUrl: 'posts/fond.m4a', audioDuration: 8_000 });
+    const { host } = await mount({ candidates: [direct('STATUS')], seed: seedPost(mood) });
+    const sound = host.querySelector('[data-content-card-sound]');
+    expect(sound?.querySelector('audio')?.getAttribute('src')).toBe(attachmentSrc('posts/fond.m4a'));
+    const play = sound?.querySelector<HTMLButtonElement>('[data-banner-audio-toggle]');
+    expect(play?.getAttribute('aria-label')).toBe('Play audio');
+    expect(play?.closest('a')).toBeNull();
+    expect(host.querySelector('[data-content-card-media]')).toBeNull();
+    expect(cardOf(host)?.getAttribute('href')).toBe(`/mood/${POST_ID}?from=link_preview`);
+  });
+
+  test('sinon, la scène composée, arrêtée, dans le geste qui ouvre la story', async () => {
+    const story = reel({ type: 'STORY', content: null, translations: null, media: [image('i1')], storyEffects: { v: 3, scenes: [storyScene('s1')] } });
+    const { host } = await mount({ candidates: [direct('STORY')], seed: seedPost(story) });
+    const scene = host.querySelector('[data-content-card-scene] [data-feed-scene]');
+    expect(scene).not.toBeNull();
+    expect(scene?.closest('a')?.getAttribute('href')).toBe(`/story/${POST_ID}?from=link_preview`);
+    expect(scene?.querySelector('button')).toBeNull();
+  });
+
+  test('un document de plusieurs scènes : un diaporama de ses scènes', async () => {
+    const story = reel({ type: 'STORY', media: [image('i1')], storyEffects: { v: 3, scenes: [storyScene('s1'), storyScene('s2')] } });
+    const { host } = await mount({ candidates: [direct('STORY')], seed: seedPost(story) });
+    const pages = host.querySelectorAll('[data-content-card-slideshow] [data-content-card-page="scene"] [data-feed-scene]');
+    expect(pages).toHaveLength(2);
   });
 });

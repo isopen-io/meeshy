@@ -140,6 +140,10 @@ export type FeedRepostOf = {
    * fournissent toujours aucun. */
   readonly author?: (Omit<FeedAuthor, 'id'> & { readonly id?: string }) | null;
   readonly media?: readonly FeedMedia[] | null;
+  /** Le document canvas de l'ORIGINAL (`repostOfInclude.storyEffects`) — la carte d'un contenu dessine sa scène (#20234). */
+  readonly storyEffects?: unknown;
+  /** Le son de fond de l'ORIGINAL (`repostOfInclude.audioUrl`). */
+  readonly audioUrl?: string | null;
 };
 
 /**
@@ -186,6 +190,10 @@ export type FeedPost = {
    * n'est servi que si la requête annonce `CANVAS_CAPS_HEADERS` (ci-dessous).
    */
   readonly storyEffects?: unknown;
+  /** LE SON DE FOND d'une humeur ou d'une story (`Post.audioUrl`), sans visuel : la carte d'un contenu le joue (#20234). */
+  readonly audioUrl?: string | null;
+  /** Sa durée, en MILLISECONDES (`Post.audioDuration`). */
+  readonly audioDuration?: number | null;
   /** L'ÉCHÉANCE d'une story ou d'un statut (`Post.expiresAt`, servie par `postScalarSelect`) — absente : le post ne s'éteint pas. */
   readonly expiresAt?: string | Date | null;
   readonly repostOf?: FeedRepostOf | null;

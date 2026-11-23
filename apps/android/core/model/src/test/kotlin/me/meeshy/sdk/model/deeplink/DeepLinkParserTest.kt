@@ -70,11 +70,11 @@ class DeepLinkParserTest {
     }
 
     @Test
-    fun `a mood link opens its post, as a tracked mood does`() {
-        assertThat(parse("https://meeshy.me/mood/m1")).isEqualTo(D.PostDetail("m1"))
+    fun `a mood link opens the mood in full screen, as a tracked mood does`() {
+        assertThat(parse("https://meeshy.me/mood/m1")).isEqualTo(D.Mood("m1"))
         assertThat(parse("https://staging.meeshy.me/mood/m2")).isEqualTo(D.External("https://staging.meeshy.me/mood/m2"))
-        assertThat(DeepLinkParser.parse("https://staging.meeshy.me/mood/m2", "https://staging.meeshy.me")).isEqualTo(D.PostDetail("m2"))
-        assertThat(parse("meeshy://mood/m3")).isEqualTo(D.PostDetail("m3"))
+        assertThat(DeepLinkParser.parse("https://staging.meeshy.me/mood/m2", "https://staging.meeshy.me")).isEqualTo(D.Mood("m2"))
+        assertThat(parse("meeshy://mood/m3")).isEqualTo(D.Mood("m3"))
         assertExternal("https://meeshy.me/mood/")
         assertExternal("https://meeshy.me/mood/%20")
     }

@@ -4,6 +4,9 @@ import { isContentKind, type ContentKind } from '@meeshy/shared/utils/content-li
 
 import type { FeedMedia, FeedPost } from '@/lib/api/feed-pages';
 import { attachmentSrc } from '@/lib/api/media-url';
+import type { SceneCarrier } from '@/lib/canvas/carrier';
+import { objectMediaIdentity } from '@/lib/canvas/carrier';
+import { parseCanvasDocument, type CanvasDocument } from '@/lib/canvas/document';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
 import { servedRingOf } from '@/lib/profile-decor/served-ring';
@@ -11,6 +14,7 @@ import { shortRelativeTime } from '@/lib/relative-time';
 import { initialsOf } from '@/lib/view/conversation';
 
 import { feedMediaKindOf } from './layout';
+import { showsPixels } from './scene-framing';
 import { resolveFeedText } from './text';
 
 /**
@@ -61,6 +65,8 @@ export type ContentCardText = {
 };
 
 export type ContentCardMedia = {
+  /** `PostMedia.id` — celui qu'un objet de scène désigne par `postMediaId`. */
+  readonly id: string;
   readonly kind: 'image' | 'video';
   /** La vignette (une image sert aussi son propre fichier) ; absente d'une vidéo sans vignette. */
   readonly src?: string;
@@ -82,6 +88,37 @@ export type ContentCardStats = {
   readonly favorites: number;
 };
 
+/** Un son seul, qu'on écoute sans quitter la conversation. */
+export type ContentCardSound = {
+  /** L'identité de la piste : le média audio, ou `<post>-audio` pour le son de fond du contenu. */
+  readonly attachmentId: string;
+  /** L'adresse SERVIE : le lecteur la résout (`attachmentSrc`), comme toute pièce. */
+  readonly url: string;
+  readonly durationSeconds?: number;
+};
+
+/** Une page du diaporama : un média, ou une scène du document. */
+export type ContentCardPage = { readonly kind: 'media'; readonly media: ContentCardMedia } | { readonly kind: 'scene'; readonly index: number };
+
+/**
+ * **CE QUE LE BLOC VISUEL MONTRE** (#20234, jumelle web de #20211 ;
+ * référence `ContentCardVisual.swift`, vecteurs partagés
+ * `packages/shared/fixtures/content-card-visual/`). Dans cet ordre :
+ * plusieurs pages ⇒ un diaporama qu'on fait glisser ; une vidéo seule (ou une
+ * scène qui n'est que ce clip) ⇒ son image de garde ; rien de peint mais un
+ * son ⇒ le composant sonore ; sinon la scène composée, à défaut l'image seule,
+ * et rien pour un contenu de texte.
+ */
+export type ContentCardVisual =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'media'; readonly media: ContentCardMedia }
+  | { readonly kind: 'slideshow'; readonly pages: readonly ContentCardPage[] }
+  | { readonly kind: 'sound'; readonly sound: ContentCardSound }
+  | { readonly kind: 'scene'; readonly index: number };
+
+/** La scène à dessiner : le document, et le porteur (le contenu montré) qui indexe ses médias. */
+export type ContentCardScene = { readonly document: CanvasDocument; readonly carrier: SceneCarrier };
+
 export type ContentCardModel = {
   /** La publication que le lien désigne : c'est elle que le geste ouvre. */
   readonly postId: string;
@@ -96,10 +133,13 @@ export type ContentCardModel = {
   readonly media?: ContentCardMedia;
   readonly stats: ContentCardStats;
   readonly bookmarked: boolean;
+  readonly visual: ContentCardVisual;
+  readonly scene?: ContentCardScene;
 };
 
 /** Ce qu'une publication et l'original d'une republication ont en commun. */
 type Shown = {
+  readonly id?: string;
   readonly type?: string;
   readonly createdAt?: string | Date;
   readonly content?: string | null;
@@ -113,6 +153,9 @@ type Shown = {
     readonly avatar?: string | null;
   } | null;
   readonly media?: readonly FeedMedia[] | null;
+  readonly storyEffects?: unknown;
+  readonly audioUrl?: string | null;
+  readonly audioDuration?: number | null;
 };
 
 const textOf = (value: string | null | undefined): string | undefined =>
@@ -155,25 +198,81 @@ const isVisual = (media: FeedMedia): boolean => {
 const clampedRatio = (width: number | undefined, height: number | undefined): number =>
   width === undefined || height === undefined ? UNKNOWN_RATIO : Math.min(WIDEST_RATIO, Math.max(NARROWEST_RATIO, width / height));
 
-/** Le bloc média suit le contenu MONTRÉ : le portrait d'un réel ou d'une story, fût-il republié. */
-function mediaOf(media: readonly FeedMedia[] | null | undefined, shownKind: ContentKind | null): ContentCardMedia | undefined {
-  const ordered = [...(media ?? [])].sort((a, b) => orderOf(a) - orderOf(b));
-  const first = ordered.find(isVisual);
-  if (first === undefined) return undefined;
-  const kind = feedMediaKindOf(first.mimeType) === 'video' ? 'video' : 'image';
-  const source = textOf(first.thumbnailUrl) ?? (kind === 'image' ? textOf(first.fileUrl) : undefined);
-  const placeholder = thumbHashPlaceholder(textOf(first.thumbHash));
-  const durationMs = kind === 'video' ? positiveOf(first.duration) : undefined;
-  const portrait = shownKind === 'REEL' || shownKind === 'STORY';
+const orderedOf = (media: readonly FeedMedia[] | null | undefined): readonly FeedMedia[] => [...(media ?? [])].sort((a, b) => orderOf(a) - orderOf(b));
+
+/** Un média visuel, tel qu'un bloc le peint : le portrait d'un réel ou d'une story, fût-il republié. */
+function cardMediaOf(item: FeedMedia, portrait: boolean, more: number): ContentCardMedia {
+  const kind = feedMediaKindOf(item.mimeType) === 'video' ? 'video' : 'image';
+  const source = textOf(item.thumbnailUrl) ?? (kind === 'image' ? textOf(item.fileUrl) : undefined);
+  const placeholder = thumbHashPlaceholder(textOf(item.thumbHash));
+  const durationMs = kind === 'video' ? positiveOf(item.duration) : undefined;
   return {
+    id: item.id,
     kind,
     ...(source === undefined ? {} : { src: attachmentSrc(source) }),
     ...(placeholder === undefined ? {} : { placeholder }),
     ...(durationMs === undefined ? {} : { durationMs }),
-    more: ordered.length - 1,
-    aspectRatio: portrait ? PORTRAIT_RATIO : clampedRatio(positiveOf(first.width), positiveOf(first.height)),
+    more,
+    aspectRatio: portrait ? PORTRAIT_RATIO : clampedRatio(positiveOf(item.width), positiveOf(item.height)),
     maxHeight: portrait ? CONTENT_CARD_PORTRAIT_MAX_HEIGHT : CONTENT_CARD_MEDIA_MAX_HEIGHT,
   };
+}
+
+const isPortrait = (shownKind: ContentKind | null): boolean => shownKind === 'REEL' || shownKind === 'STORY';
+
+/** Le bloc média suit le contenu MONTRÉ : son premier média visuel, et combien d'autres le suivent. */
+function mediaOf(media: readonly FeedMedia[] | null | undefined, shownKind: ContentKind | null): ContentCardMedia | undefined {
+  const ordered = orderedOf(media);
+  const first = ordered.find(isVisual);
+  return first === undefined ? undefined : cardMediaOf(first, isPortrait(shownKind), ordered.length - 1);
+}
+
+const secondsOf = (milliseconds: number | null | undefined): number | undefined => {
+  const value = positiveOf(milliseconds);
+  return value === undefined ? undefined : Math.floor(value / 1000);
+};
+
+/** Le premier média audio du contenu, sinon son son de fond (`audioUrl`). */
+function soundOf(shown: Shown, shownId: string): ContentCardSound | undefined {
+  const audio = orderedOf(shown.media).find((item) => feedMediaKindOf(item.mimeType) === 'audio' && textOf(item.fileUrl) !== undefined);
+  if (audio !== undefined) {
+    const durationSeconds = secondsOf(audio.duration);
+    return { attachmentId: audio.id, url: audio.fileUrl!, ...(durationSeconds === undefined ? {} : { durationSeconds }) };
+  }
+  const url = textOf(shown.audioUrl);
+  if (url === undefined) return undefined;
+  const durationSeconds = secondsOf(shown.audioDuration);
+  return { attachmentId: `${shownId}-audio`, url, ...(durationSeconds === undefined ? {} : { durationSeconds }) };
+}
+
+/** Le porteur de la scène : les médias du contenu MONTRÉ, résolus (le même repli de vignette que le fil). */
+function sceneOf(shown: Shown, shownId: string): ContentCardScene | undefined {
+  const document = parseCanvasDocument(shown.storyEffects);
+  if (document === null) return undefined;
+  const media = orderedOf(shown.media).flatMap((item) => {
+    const file = textOf(item.fileUrl);
+    if (file === undefined) return [];
+    const thumbnail = textOf(item.thumbnailUrl);
+    const poster = thumbnail === undefined ? thumbHashPlaceholder(textOf(item.thumbHash)) : attachmentSrc(thumbnail);
+    const mimeType = textOf(item.mimeType);
+    return [{ id: item.id, src: attachmentSrc(file), ...(mimeType === undefined ? {} : { mimeType }), ...(poster === undefined ? {} : { poster }) }];
+  });
+  return { document, carrier: { postId: shownId, media } };
+}
+
+function visualOf(pages: readonly ContentCardMedia[], sound: ContentCardSound | undefined, document: CanvasDocument | undefined): ContentCardVisual {
+  const first = document?.scenes[0];
+  if (document === undefined || first === undefined) {
+    if (pages.length > 1) return { kind: 'slideshow', pages: pages.map((media) => ({ kind: 'media', media })) };
+    if (pages[0] !== undefined) return { kind: 'media', media: pages[0] };
+    return sound === undefined ? { kind: 'none' } : { kind: 'sound', sound };
+  }
+  if (document.scenes.length > 1) return { kind: 'slideshow', pages: document.scenes.map((_, index) => ({ kind: 'scene', index })) };
+  const painted = first.objects.filter(showsPixels);
+  if (painted.length === 0) return sound === undefined ? { kind: 'scene', index: 0 } : { kind: 'sound', sound };
+  const only = painted.length === 1 && painted[0]!.kind === 'media' ? objectMediaIdentity(painted[0]!) : null;
+  const shown = only === null ? undefined : pages.find((media) => media.id === only);
+  return shown === undefined ? { kind: 'scene', index: 0 } : { kind: 'media', media: shown };
 }
 
 function textOfShown(shown: Shown, preferredLanguages: readonly string[]): ContentCardText | undefined {
@@ -199,6 +298,12 @@ export function contentCardModelOf(
   const text = textOfShown(shown, params.preferredLanguages);
   const media = mediaOf(shown.media, shownKind);
   const moodEmoji = shownKind === 'STATUS' ? textOf(shown.moodEmoji) : undefined;
+  const shownId = (shown === post ? post.id : textOf(shown.id)) ?? post.id;
+  const scene = sceneOf(shown, shownId);
+  const pages = orderedOf(shown.media)
+    .filter(isVisual)
+    .map((item) => cardMediaOf(item, isPortrait(shownKind), 0));
+  const visual = visualOf(pages, soundOf(shown, shownId), scene?.document);
   return {
     postId: post.id,
     routeType,
@@ -215,5 +320,7 @@ export function contentCardModelOf(
       favorites: countOf(post.bookmarkCount),
     },
     bookmarked: post.isBookmarkedByMe === true,
+    visual,
+    ...(scene === undefined ? {} : { scene }),
   };
 }

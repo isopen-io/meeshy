@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "feed.carousel.a11y.position", "androidName": "content_card_a11y_slide_position", "status": "adopted"}
+      ]
+    }
+  }
+}

@@ -133,7 +133,7 @@ class ContentCardService internal constructor(
     }
 
     private fun projection(linkType: PostType?): (ApiPost) -> ContentCard =
-        { post -> ContentCardProjection.of(post, session.currentUser.value, linkType) }
+        { post -> ContentCardProjection.of(post, session.currentUser.value, linkType).let { card -> card.copy(scene = post.contentCardScene(card)) } }
 
     private companion object {
         /** Un jeton que le serveur ne connaît pas (ou plus) : ce lien ne désigne aucun contenu. */

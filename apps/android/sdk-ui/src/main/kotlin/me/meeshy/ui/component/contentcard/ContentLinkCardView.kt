@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,12 +18,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,9 +34,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -46,10 +51,12 @@ import java.time.ZoneId
 import java.util.Locale
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.contentcard.ContentCard
 import me.meeshy.sdk.model.contentcard.ContentCardMedia
 import me.meeshy.sdk.model.contentcard.ContentCardStats
+import me.meeshy.sdk.model.contentcard.ContentCardVisual
 import me.meeshy.sdk.model.format.CompactCountFormat
 import me.meeshy.sdk.model.format.LocalizedNumber
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
@@ -100,25 +107,44 @@ internal fun ContentLinkCardView(
     onLongPress: (() -> Unit)? = null,
 ) {
     val tokens = MeeshyTheme.tokens
-    val spoken = spokenLabel(card)
+    val pageCount = (card.visual as? ContentCardVisual.Slideshow)?.pages?.size ?: 0
+    val pager = rememberPagerState(pageCount = { pageCount })
+    val current = pager.currentPage
+    val scope = rememberCoroutineScope()
+    val position = if (pageCount > 1) stringResource(R.string.content_card_a11y_slide_position, current + 1, pageCount) else null
+    val spoken = listOfNotNull(spokenLabel(card), position).joinToString(". ")
     val hint = stringResource(R.string.content_card_a11y_open)
-    Column(
-        modifier = modifier
-            .cardSurface(tokens)
-            .let { surface ->
-                if (onLongPress == null) {
-                    surface.clickable(onClickLabel = hint, onClick = onOpen)
-                } else {
-                    surface.combinedClickable(onClickLabel = hint, onLongClick = onLongPress, onClick = onOpen)
+    val nextLabel = stringResource(R.string.feed_carousel_next)
+    val previousLabel = stringResource(R.string.feed_carousel_previous)
+    val turn: (Int) -> Boolean = { target ->
+        scope.launch { pager.scrollToPage(target) }
+        true
+    }
+    Column(modifier = modifier.cardSurface(tokens)) {
+        (card.visual as? ContentCardVisual.Sound)?.let { ContentLinkCardSound(it, card.type) }
+        Column(
+            modifier = Modifier
+                .let { surface ->
+                    if (onLongPress == null) {
+                        surface.clickable(onClickLabel = hint, onClick = onOpen)
+                    } else {
+                        surface.combinedClickable(onClickLabel = hint, onLongClick = onLongPress, onClick = onOpen)
+                    }
                 }
-            }
-            .clearAndSetSemantics {
-                contentDescription = spoken
-                role = Role.Button
-            },
-    ) {
-        card.media?.let { MediaBlock(it, card.type) }
-        Body(card, tokens)
+                .clearAndSetSemantics {
+                    contentDescription = spoken
+                    role = Role.Button
+                    if (pageCount > 1) {
+                        customActions = listOfNotNull(
+                            CustomAccessibilityAction(nextLabel) { turn(current + 1) }.takeIf { current < pageCount - 1 },
+                            CustomAccessibilityAction(previousLabel) { turn(current - 1) }.takeIf { current > 0 },
+                        )
+                    }
+                },
+        ) {
+            ContentLinkCardPicture(card, pager)
+            Body(card, tokens)
+        }
     }
 }
 
@@ -165,34 +191,44 @@ private fun Modifier.cardSurface(tokens: MeeshyThemeTokens): Modifier {
 }
 
 @Composable
-private fun MediaBlock(media: ContentCardMedia, type: PostType) {
-    val baseUrl = LocalMediaBaseUrl.current
+internal fun MediaBlock(media: ContentCardMedia, type: PostType) {
     val locale = rememberReaderLocale()
-    val url = remember(media.imageUrl, baseUrl) { media.imageUrl?.let { resolveMediaUrl(it, baseUrl) } }
     Box(Modifier.fillMaxWidth().mediaFrame(media.aspectRatio, media.maxHeightDp.dp)) {
-        MeeshyAsyncImage(
-            url = url,
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            surface = DecodeBudget.Surface.Fitting(CardMaxWidth.value, media.maxHeightDp.toFloat()),
-            thumbHash = media.thumbHash,
-            showsStatusOverlays = false,
-        )
+        MediaPicture(media)
         KindPill(type, overMedia = true, modifier = Modifier.align(Alignment.TopStart).padding(MeeshySpacing.sm))
         if (media.extraCount > 0) {
             ScrimPill("+" + LocalizedNumber.exact(media.extraCount, locale), Modifier.align(Alignment.TopEnd).padding(MeeshySpacing.sm))
         }
-        if (media.isVideo) {
-            PlayGlyph(Modifier.align(Alignment.Center))
-            media.durationSeconds?.let { seconds ->
-                ScrimPill(LocalizedNumber.duration(seconds, locale = locale), Modifier.align(Alignment.BottomEnd).padding(MeeshySpacing.sm))
-            }
-        }
+    }
+}
+
+/** La vignette d'un média, qui remplit son cadre. */
+@Composable
+internal fun MediaThumbnail(media: ContentCardMedia) {
+    val baseUrl = LocalMediaBaseUrl.current
+    val url = remember(media.imageUrl, baseUrl) { media.imageUrl?.let { resolveMediaUrl(it, baseUrl) } }
+    MeeshyAsyncImage(
+        url = url,
+        contentDescription = null,
+        modifier = Modifier.fillMaxSize(),
+        surface = DecodeBudget.Surface.Fitting(CardMaxWidth.value, media.maxHeightDp.toFloat()),
+        thumbHash = media.thumbHash,
+        showsStatusOverlays = false,
+    )
+}
+
+/** L'image de garde d'une vidéo : le signe lecture au centre, la durée en bas. */
+@Composable
+internal fun BoxScope.VideoSigns(media: ContentCardMedia) {
+    val locale = rememberReaderLocale()
+    PlayGlyph(Modifier.align(Alignment.Center))
+    media.durationSeconds?.let { seconds ->
+        ScrimPill(LocalizedNumber.duration(seconds, locale = locale), Modifier.align(Alignment.BottomEnd).padding(MeeshySpacing.sm))
     }
 }
 
 /** Le cadre du média : toute la largeur, la hauteur du rapport donné, bornée par [maxHeight]. */
-private fun Modifier.mediaFrame(aspectRatio: Float, maxHeight: Dp): Modifier = layout { measurable, constraints ->
+internal fun Modifier.mediaFrame(aspectRatio: Float, maxHeight: Dp): Modifier = layout { measurable, constraints ->
     val width = if (constraints.hasBoundedWidth) constraints.maxWidth else CardMaxWidth.roundToPx()
     val height = min((width / aspectRatio).roundToInt(), maxHeight.roundToPx())
         .coerceIn(constraints.minHeight, constraints.maxHeight)
@@ -229,7 +265,7 @@ private fun Body(card: ContentCard, tokens: MeeshyThemeTokens) {
 private fun AuthorLine(card: ContentCard, tokens: MeeshyThemeTokens) {
     val date = relativeDate(card.createdAtIso)
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
-        if (card.media == null) KindPill(card.type, overMedia = false)
+        if (card.visual is ContentCardVisual.None) KindPill(card.type, overMedia = false)
         MeeshyAvatar(name = card.author.name, size = AvatarSize, imageUrl = card.author.avatarUrl)
         Text(
             card.author.name,
@@ -284,7 +320,7 @@ private fun Stat(icon: ImageVector, count: Int, locale: Locale, tint: Color) {
 
 /** La pastille du genre : sur le média (voile sombre) ou devant le nom quand le contenu n'en a pas. */
 @Composable
-private fun KindPill(type: PostType, overMedia: Boolean, modifier: Modifier = Modifier) {
+internal fun KindPill(type: PostType, overMedia: Boolean, modifier: Modifier = Modifier) {
     val tokens = MeeshyTheme.tokens
     val ink = if (overMedia) MeeshyPalette.White else tokens.textSecondary
     Row(
@@ -301,7 +337,7 @@ private fun KindPill(type: PostType, overMedia: Boolean, modifier: Modifier = Mo
 }
 
 @Composable
-private fun ScrimPill(label: String, modifier: Modifier) {
+internal fun ScrimPill(label: String, modifier: Modifier) {
     Text(
         label,
         color = MeeshyPalette.White,

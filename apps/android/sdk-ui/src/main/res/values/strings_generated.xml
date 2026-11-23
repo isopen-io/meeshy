@@ -191,6 +191,7 @@
     <string name="content_card_a11y_post_by">Post by %1$s</string>
     <string name="content_card_a11y_reel_by">Reel by %1$s</string>
     <string name="content_card_a11y_saves">%1$d saves</string>
+    <string name="content_card_a11y_slide_position">Media %1$d of %2$d</string>
     <string name="content_card_a11y_story_by">Story by %1$s</string>
     <plurals name="content_card_a11y_views">
         <item quantity="one">%1$d view</item>

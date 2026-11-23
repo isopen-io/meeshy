@@ -47,7 +47,8 @@ object TrackedLinkOutcomes {
             "STORY" -> DeepLinkDestination.StoryDetail(id)
             "PROFILE" -> DeepLinkDestination.UserProfile(id)
             "REEL" -> DeepLinkDestination.Reel(id)
-            "POST", "STATUS" -> DeepLinkDestination.PostDetail(id)
+            "POST" -> DeepLinkDestination.PostDetail(id)
+            "STATUS" -> DeepLinkDestination.Mood(id)
             else -> null
         }
     }
