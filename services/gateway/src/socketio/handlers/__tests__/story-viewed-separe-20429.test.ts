@@ -50,7 +50,6 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 }));
 
 const VIEWER = 'viewer-20429';
-const VIEWER_PSEUDO = 'alice-20429';
 const AUTEUR = 'auteur-story-20429';
 const AUTRE_AUTEUR = 'autre-auteur-20429';
 const STORY_ID = '507f191e810c19729de20429';
@@ -89,10 +88,16 @@ function fauxIo(emissions: Emission[]) {
   return { to: (r: string | string[]) => operateur([r].flat(), []) };
 }
 
+/**
+ * La charge TELLE QUE LA PRODUCTION LA COMPOSE depuis #20443 : les deux champs
+ * nominatifs portent la chaîne vide, et le producteur n'a plus d'identité à y
+ * mettre. Un harnais qui les remplirait attesterait un contrat que plus aucun
+ * émetteur ne respecte — ce que ce fichier faisait jusqu'au 2026-11-22.
+ */
 const charge = () => ({
   storyId: STORY_ID,
-  viewerId: VIEWER,
-  viewerUsername: VIEWER_PSEUDO,
+  viewerId: '',
+  viewerUsername: '',
   viewCount: 7,
 });
 
@@ -102,7 +107,12 @@ async function diffuser(blocages: Blocages, auteur: string = AUTEUR) {
   const prisma = fauxPrisma(blocages);
   const handler = new SocialEventsHandler({ io: fauxIo(emissions) as any, prisma });
   const separated = await handler.separationAroundActor(VIEWER);
-  handler.broadcastStoryViewed(charge() as any, auteur, separated);
+  /* #20443 — plus de `as any` : `charge()` est désormais exactement assignable à
+     `StoryViewedEventData` (les deux clés nominatives y sont typées `''`). Le
+     cast n'avait plus d'objet, et il effaçait le seul endroit où ce harnais peut
+     être tenu par le type. (Il ne l'est de toute façon pas au gate : le `tsc` de
+     la passerelle exclut `__tests__` — voir le doc-comment du type.) */
+  handler.broadcastStoryViewed(charge(), auteur, separated);
   return { emissions, prisma, separated };
 }
 
@@ -116,7 +126,7 @@ beforeEach(() => {
 });
 
 describe('#20429 — story:viewed et la séparation autour du viewer', () => {
-  it('SANS blocage, l’auteur reçoit bien le couple (story:viewed, charge complète)', async () => {
+  it('SANS blocage, l’auteur reçoit bien le couple (story:viewed, charge servie)', async () => {
     const { emissions } = await diffuser({});
 
     const recues = recuParLAuteur(emissions);
@@ -124,8 +134,8 @@ describe('#20429 — story:viewed et la séparation autour du viewer', () => {
     expect(recues[0].evenement).toBe('story:viewed');
     expect(recues[0].charge).toEqual({
       storyId: STORY_ID,
-      viewerId: VIEWER,
-      viewerUsername: VIEWER_PSEUDO,
+      viewerId: '',
+      viewerUsername: '',
       viewCount: 7,
     });
   });
@@ -146,7 +156,13 @@ describe('#20429 — story:viewed et la séparation autour du viewer', () => {
     expect(emissions).toHaveLength(0);
   });
 
-  it('ni l’id NI LE PSEUDO du viewer ne partent quand un blocage sépare', async () => {
+  /* #20443 — ce témoin portait « ni l'id NI LE PSEUDO ne partent », et la
+     charge ne les porte plus : posé sur la charge, il serait devenu VACUEUX,
+     vert quelle que soit la garde du handler. Il est donc réécrit sur ce que
+     le handler DÉCIDE — RIEN ne part, sur aucune room, pas même la charge
+     anonyme et son compteur. C'est la forme forte, et elle tombe toujours sous
+     un fail-open. */
+  it('sous une séparation, RIEN ne part — aucune room, pas même le compteur', async () => {
     for (const blocages of [{ [AUTEUR]: [VIEWER] }, { [VIEWER]: [AUTEUR] }, 'panne' as const]) {
       /* Ce vidage rend le témoin INDÉPENDANT de la politique de cache du
          résolveur, et il a été gagné par une mesure : quand ce chemin cachait
@@ -158,9 +174,7 @@ describe('#20429 — story:viewed et la séparation autour du viewer', () => {
          cela pour exercer ses cas. */
       resetSeparationCacheForTests();
       const { emissions } = await diffuser(blocages);
-      const surLeFil = JSON.stringify(emissions);
-      expect(surLeFil).not.toContain(VIEWER);
-      expect(surLeFil).not.toContain(VIEWER_PSEUDO);
+      expect(emissions).toHaveLength(0);
     }
   });
 
@@ -193,7 +207,7 @@ describe('#20429 — story:viewed et la séparation autour du viewer', () => {
 
     const separated = await handler.separationAroundActor(VIEWER);
     for (const auteur of [AUTEUR, AUTRE_AUTEUR, 'troisieme-auteur-20429']) {
-      handler.broadcastStoryViewed({ ...charge(), storyId: `${STORY_ID}` } as any, auteur, separated);
+      handler.broadcastStoryViewed({ ...charge(), storyId: `${STORY_ID}` }, auteur, separated);
     }
 
     const lectures = (prisma.user.findMany as unknown as jest.Mock).mock.calls;

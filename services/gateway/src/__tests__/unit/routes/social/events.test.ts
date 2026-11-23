@@ -70,6 +70,8 @@ import {
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
 const USER_ID = '507f1f77bcf86cd799439011';
+/** Le PSEUDO de l'acteur authentifié — nommé parce que #20443 exige qu'il ne parte pas. */
+const USERNAME = 'alice';
 const AUTHOR_ID = '507f1f77bcf86cd7994390aa';
 
 /** Existe ET visible — le seul des trois qui doit produire une écriture. */
@@ -178,7 +180,7 @@ async function buildApp(opts: { authenticated?: boolean; prisma?: any } = {}): P
   // authentifiée, et ses deux acteurs doivent s'exercer sans fabriquer de JWT.
   const optionalAuth = async (req: FastifyRequest) => {
     (req as any).authContext = authenticated
-      ? { isAuthenticated: true, userId: USER_ID, registeredUser: { id: USER_ID, role: 'USER', username: 'alice' } }
+      ? { isAuthenticated: true, userId: USER_ID, registeredUser: { id: USER_ID, role: 'USER', username: USERNAME } }
       : null;
   };
 
@@ -551,10 +553,68 @@ describe('critère 3 — un `view` garde ses deux effets de bord', () => {
     });
 
     expect((app as any).socialEvents.broadcastStoryViewed).toHaveBeenCalledWith(
-      expect.objectContaining({ storyId: VISIBLE_ID, viewerId: USER_ID, viewCount: 7 }),
+      expect.objectContaining({ storyId: VISIBLE_ID, viewCount: 7 }),
       AUTHOR_ID,
       [],
     );
+    await app.close();
+  });
+
+  // ── #20443, LE PRODUCTEUR NE NOMME PERSONNE ───────────────────────────────
+  // Le POURQUOI vit dans le doc-comment de `StoryViewedEventData`
+  // (`packages/shared/types/post.ts`) : la jumelle DURABLE ne nomme un viewer
+  // que si la paire atteint `views.identity`, et le direct nommait sous la
+  // seule loi du blocage. Les témoins portent le vecteur de l'issue — viewer
+  // PUBLIC, aucune relation, aucun blocage — et l'inconditionnalité.
+
+  const chargeDiffusee = (app: Awaited<ReturnType<typeof buildApp>>): Record<string, unknown> =>
+    ((app as any).socialEvents.broadcastStoryViewed as jest.Mock).mock.calls[0][0] as Record<string, unknown>;
+
+  const voirUneStory = async (app: Awaited<ReturnType<typeof buildApp>>) => {
+    mockGetPostById.mockResolvedValue({
+      id: VISIBLE_ID, type: 'STORY', authorId: AUTHOR_ID, viewCount: 7,
+    });
+    return app.inject({
+      method: 'POST',
+      url: '/social/events',
+      headers: { authorization: 'Bearer jeton' },
+      payload: { events: [{ type: 'view', postId: VISIBLE_ID }] },
+    });
+  };
+
+  it('ne met NI l’id NI le pseudo du viewer sur le fil — vecteur de #20443', async () => {
+    const app = await buildApp();
+    await voirUneStory(app);
+
+    const surLeFil = JSON.stringify(chargeDiffusee(app));
+    expect(surLeFil).not.toContain(USER_ID);
+    expect(surLeFil).not.toContain(USERNAME);
+    await app.close();
+  });
+
+  it('garde les DEUX clés PRÉSENTES — le décodeur iOS déployé les veut non optionnelles', async () => {
+    const app = await buildApp();
+    await voirUneStory(app);
+
+    // Rétrocompatibilité (#9223) : `SocketStoryViewedData` déclare
+    // `viewerId: String` et `viewerUsername: String`. Les OMETTRE ferait
+    // échouer le décodage de l'événement ENTIER chez tout client déployé,
+    // emportant `viewCount` — le seul champ que les clients LISENT. La chaîne
+    // vide est donc la seule anonymisation qui ne casse pas de décodeur ; le
+    // retrait des clés est un lot d'après, une fois les clients tolérants
+    // déployés et mesurés.
+    const charge = chargeDiffusee(app);
+    expect(Object.keys(charge).sort()).toEqual(['storyId', 'viewCount', 'viewerId', 'viewerUsername']);
+    expect(charge.viewerId).toBe('');
+    expect(charge.viewerUsername).toBe('');
+    await app.close();
+  });
+
+  it('sert TOUJOURS le compteur — l’anonymisation n’emporte pas ce que les clients lisent', async () => {
+    const app = await buildApp();
+    await voirUneStory(app);
+
+    expect(chargeDiffusee(app)).toMatchObject({ storyId: VISIBLE_ID, viewCount: 7 });
     await app.close();
   });
 

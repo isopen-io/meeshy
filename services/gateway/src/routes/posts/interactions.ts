@@ -423,7 +423,7 @@ export function registerInteractionRoutes(
   const acteurInscrit = (request: FastifyRequest): SocialEventsActor | null => {
     const registeredUser = (request as UnifiedAuthRequest).authContext?.registeredUser;
     return registeredUser
-      ? { kind: 'user', userId: registeredUser.id, username: registeredUser.username ?? '' }
+      ? { kind: 'user', userId: registeredUser.id }
       : null;
   };
 
