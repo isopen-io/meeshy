@@ -339,6 +339,63 @@ final class GameCopyTests: XCTestCase {
                        "une avancée appliquée localement ne fait pas disparaître la ligne du Rêve complet")
     }
 
+    // MARK: - Le rallumage par l'effort (#20473)
+
+    private func flame(status: FlameStatus = .out, canRelight: Bool = false, effort: GameEffortRelight?) -> GameBlock.Flame {
+        let base = GameFixture.game(held: 9, flameDays: 0, flameStatus: status, canRelight: canRelight).flame
+        return base.replacing(effortRelight: .some(effort))
+    }
+
+    private func effort(done: Int = 1, lostDays: Int = 9, daysLeft: Int = 1) -> GameEffortRelight {
+        GameEffortRelight(lostDays: lostDays, dreamsDone: done, dreamsNeeded: 2, closesOn: "2026-11-24", daysLeft: daysLeft)
+    }
+
+    func test_effortRelight_saysTheMissingDreams_theLostDays_andTheDeadline() {
+        let tomorrow = GameCopy.effortRelight(effort(done: 0, lostDays: 9, daysLeft: 1))
+        let today = GameCopy.effortRelight(effort(done: 0, lostDays: 9, daysLeft: 0))
+        assertNotRaw(tomorrow, "rallumage par l'effort, d'ici demain soir")
+        assertNotRaw(today, "rallumage par l'effort, aujourd'hui")
+        XCTAssertTrue(tomorrow.contains(GameCopy.effortDreams(2)), tomorrow)
+        XCTAssertTrue(tomorrow.contains(GameCopy.days(9)), tomorrow)
+        XCTAssertNotEqual(today, tomorrow, "aujourd'hui et d'ici demain soir ne se disent pas pareil")
+    }
+
+    func test_effortRelight_countsTheDreamsStillMissing_singularForTheLastOne() {
+        XCTAssertTrue(GameCopy.effortRelight(effort(done: 1)).contains(GameCopy.effortDreams(1)))
+        XCTAssertNotEqual(GameCopy.effortDreams(1), GameCopy.effortDreams(2))
+        assertNotRaw(GameCopy.effortDreams(1), "un rêve complet")
+    }
+
+    func test_thePanel_saysTheEffortRelight_onlyWhenServed() {
+        XCTAssertNotNil(GameFlamePanelView.effortRelightLine(flame(effort: effort())))
+        XCTAssertNotNil(GameFlamePanelView.effortRelightLine(flame(status: .lit, effort: effort())),
+                        "même quand une nouvelle Flamme a repris : c'est en jouant qu'on fait les rêves")
+        XCTAssertNil(GameFlamePanelView.effortRelightLine(flame(effort: nil)))
+    }
+
+    func test_thePanel_stopsSayingTheFlameCannotBeRelit_whileTheEffortStillRelightsIt() {
+        XCTAssertTrue(GameFlamePanelView.saysRelightClosed(flame(effort: nil), cannotPayRelight: false))
+        XCTAssertFalse(GameFlamePanelView.saysRelightClosed(flame(effort: effort()), cannotPayRelight: false))
+        XCTAssertFalse(GameFlamePanelView.saysRelightClosed(flame(canRelight: true, effort: nil), cannotPayRelight: false))
+        XCTAssertFalse(GameFlamePanelView.saysRelightClosed(flame(status: .lit, effort: nil), cannotPayRelight: false))
+    }
+
+    func test_theEffortRelightSentences_existInTheSevenLanguages_withTheirTwoMarkers() throws {
+        let here = URL(fileURLWithPath: #filePath)
+        let root = here.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let data = try Data(contentsOf: root.appendingPathComponent("Meeshy/Localizable.xcstrings"))
+        let catalog = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let strings = try XCTUnwrap(catalog["strings"] as? [String: Any])
+        for key in ["game.flame_panel.effort_relight_today", "game.flame_panel.effort_relight_tomorrow"] {
+            let localizations = try XCTUnwrap((strings[key] as? [String: Any])?["localizations"] as? [String: Any], key)
+            XCTAssertEqual(Set(localizations.keys), ["fr", "en", "es", "pt-BR", "it", "de", "ar"], key)
+            for (language, entry) in localizations {
+                let value = try XCTUnwrap(((entry as? [String: Any])?["stringUnit"] as? [String: Any])?["value"] as? String)
+                XCTAssertEqual(value.components(separatedBy: "%@").count - 1, 2, "\(key) [\(language)] : \(value)")
+            }
+        }
+    }
+
     private func missionsView(_ game: GameBlock) -> GameMissionsView {
         GameMissionsView(game: game, online: true, pendingRerollId: nil, chestOpening: false, errors: GameErrors(),
                          onReroll: { _ in }, onClaim: {})

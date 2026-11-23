@@ -14,6 +14,10 @@ import MeeshyUI
 /// prix et ce qui restera — ou combien il en manque. Une
 /// Flamme trop longtemps éteinte ne propose rien : elle annonce qu'une nouvelle
 /// commence au prochain geste.
+///
+/// Deux rêves complets la rallument aussi, sans payer (#20455) : tant que le bloc sert `effortRelight`, le panneau
+/// dit combien en manquent et jusqu'à quand (#20473) — même quand une nouvelle Flamme a repris, puisque c'est en
+/// jouant qu'on les réalise — et ne dit plus qu'elle ne peut plus être rallumée.
 struct GameFlamePanelView: View {
     let game: GameBlock
     let online: Bool
@@ -30,6 +34,16 @@ struct GameFlamePanelView: View {
     var freezeSpend: SpendPreview { GameSpend.preview(held: held, cost: flame.freezePrice) }
     var relightSpend: SpendPreview { GameSpend.preview(held: held, cost: flame.relightPrice) }
     private var cannotPayRelight: Bool { !relightSpend.affordable }
+
+    /// La phrase du rallumage par l'effort, `nil` quand le bloc ne le sert pas (#20473).
+    static func effortRelightLine(_ flame: GameBlock.Flame) -> String? {
+        flame.effortRelight.map { GameCopy.effortRelight($0) }
+    }
+
+    /// « Ne peut plus être rallumée » se tait tant que l'effort la rallume encore (#20473).
+    static func saysRelightClosed(_ flame: GameBlock.Flame, cannotPayRelight: Bool) -> Bool {
+        flame.status == .out && !flame.canRelight && !cannotPayRelight && flame.effortRelight == nil
+    }
 
     /// `missing` : ce qu'il manque, dit avec le geste qu'il vise — acheter un gel, rallumer la Flamme (#10540).
     private func spendRow(_ spend: SpendPreview, identifier: String, missing: @MainActor (String) -> String) -> some View {
@@ -69,6 +83,13 @@ struct GameFlamePanelView: View {
             .foregroundColor(ThemeManager.shared.textPrimary)
             freezeSection
             GameErrorLine(message: errors.freeze, identifier: "game.flame.freeze.error")
+            if let effortLine = Self.effortRelightLine(flame) {
+                Text(effortLine)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                    .foregroundStyle(ThemeManager.shared.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("game.flame.effortRelight")
+            }
             relightSection
             if !online {
                 GameNote(text: String(
@@ -127,7 +148,7 @@ struct GameFlamePanelView: View {
                 bundle: .main
             ))
             spendRow(relightSpend, identifier: "game.flame.relight.spend", missing: { ConceptText.spendMissingRelight(missing: $0) })
-        } else if isOut {
+        } else if Self.saysRelightClosed(flame, cannotPayRelight: cannotPayRelight) {
             GameNote(
                 text: String(
                     localized: "game.flame_panel.relight_closed",

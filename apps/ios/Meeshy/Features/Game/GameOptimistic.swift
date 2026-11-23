@@ -211,11 +211,13 @@ enum GameOptimistic {
 
     // MARK: - Rallumage
 
+    /// Une Flamme rallumée n'a plus de rallumage par l'effort à dire (#20473) : la phrase se retire sans attendre la
+    /// relecture, comme sur le web (`afterRelight`, `withRelit` de `game-optimistic.ts`).
     static func afterRelight(_ state: GameState) -> GameState {
         let flame = state.game.flame
         guard flame.canRelight else { return state }
         let lit = GameState(
-            game: state.game.replacing(flame: flame.replacing(status: .lit, canRelight: false)),
+            game: state.game.replacing(flame: flame.replacing(status: .lit, canRelight: false, effortRelight: .some(nil))),
             meesh: state.meesh
         )
         return shiftBalance(lit, by: -flame.relightPrice)
@@ -228,7 +230,8 @@ enum GameOptimistic {
             form: .some(GameFlame.form(forDays: streak)),
             bonusPercent: GameFlame.bonusPercent(forDays: streak),
             status: .lit,
-            canRelight: false
+            canRelight: false,
+            effortRelight: .some(nil)
         )
         return withBalance(GameState(game: state.game.replacing(flame: flame), meesh: state.meesh), balance)
     }
