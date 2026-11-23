@@ -158,8 +158,8 @@ export const MINOR_PEER_AGE_GAP_YEARS = 5;
  * à 5 ans d'écart au plus : la loi du Sang s'applique entière, tout s'ouvre (le Sang permet toute
  * ouverture ; l'âge se force ailleurs, à l'onboarding). Les gardes légales (chute) ne passent pas par ici.
  *
- * Une date déclarée par l'autre peut se rajeunir : `reassessBloodBundlesAfterBirthDate` (passerelle) recalcule
- * la protection à chaque déclaration ou modification d'une date, et efface l'accord d'une paire devenue protégée.
+ * La protection est lue à chaque décision depuis les dates courantes ; aucun accord n'est révoqué quand
+ * une date change (décision porteur du 2026-11-23, #20408).
  */
 export function minorProtectedBetween(params: {
   readonly emitterBirthDate: Date | null | undefined;
