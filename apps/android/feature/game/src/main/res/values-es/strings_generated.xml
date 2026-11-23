@@ -120,6 +120,10 @@
     <string name="game2_guide_moment_league_relegated_next_far">Vuelve a subir esta semana: cada chispa cuenta.</string>
     <string name="game2_guide_moment_league_relegated_short">De vuelta en la justa %1$s.</string>
     <string name="game2_guide_moment_league_relegated_what">Bajas a la justa %1$s.</string>
+    <string name="game2_guide_moment_offering_kept_means">Está lista, sin esperar a los actos del día.</string>
+    <string name="game2_guide_moment_offering_kept_next">Durante %1$s, tu sueño es más ligero, mientras retomas el ritmo.</string>
+    <string name="game2_guide_moment_offering_kept_short">Tu Ofrenda te espera, guardada por tus ancestros.</string>
+    <string name="game2_guide_moment_offering_kept_what">Tus ancestros te guardaron tu Ofrenda.</string>
     <string name="game2_guide_moment_prestige_means">Tu leyenda entra en una nueva Edad, con un trofeo numerado y %1$s de gloria. Tu rango nunca retrocede.</string>
     <string name="game2_guide_moment_prestige_next">Tu luz vuelve a ser Chispa: tu nivel vuelve a 1.</string>
     <string name="game2_guide_moment_prestige_short">Renacimiento %1$s.</string>

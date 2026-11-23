@@ -120,6 +120,10 @@
     <string name="game2_guide_moment_league_relegated_next_far">Remonte dès cette semaine : chaque étincelle compte.</string>
     <string name="game2_guide_moment_league_relegated_short">Retour dans la joute %1$s.</string>
     <string name="game2_guide_moment_league_relegated_what">Tu redescends dans la joute %1$s.</string>
+    <string name="game2_guide_moment_offering_kept_means">Elle est prête, sans attendre les actes du jour.</string>
+    <string name="game2_guide_moment_offering_kept_next">Pendant %1$s, ton rêve est plus léger, le temps de reprendre.</string>
+    <string name="game2_guide_moment_offering_kept_short">Ton Offrande t’attend, gardée par les aïeux.</string>
+    <string name="game2_guide_moment_offering_kept_what">Les aïeux t’ont gardé ton Offrande.</string>
     <string name="game2_guide_moment_prestige_means">Ta légende entre dans un nouvel Âge, avec un trophée numéroté et %1$s de gloire. Ton rang ne recule jamais.</string>
     <string name="game2_guide_moment_prestige_next">Ta lumière redevient Étincelle : ton niveau repart à 1.</string>
     <string name="game2_guide_moment_prestige_short">Renaissance %1$s.</string>

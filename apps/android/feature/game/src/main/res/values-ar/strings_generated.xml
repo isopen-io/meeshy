@@ -120,6 +120,10 @@
     <string name="game2_guide_moment_league_relegated_next_far">اصعد من جديد هذا الأسبوع: كل شرارة لها وزنها.</string>
     <string name="game2_guide_moment_league_relegated_short">العودة إلى مبارزة %1$s.</string>
     <string name="game2_guide_moment_league_relegated_what">هبطت إلى مبارزة %1$s.</string>
+    <string name="game2_guide_moment_offering_kept_means">إنها جاهزة، دون انتظار فصول اليوم.</string>
+    <string name="game2_guide_moment_offering_kept_next">طوال ⁦%1$s⁩، يكون حلمك أخفّ، ريثما تستعيد إيقاعك.</string>
+    <string name="game2_guide_moment_offering_kept_short">عطيّتك بانتظارك، حفظها لك أجدادك.</string>
+    <string name="game2_guide_moment_offering_kept_what">حفظ لك أجدادك عطيّتك.</string>
     <string name="game2_guide_moment_prestige_means">أسطورتك تدخل عصرًا جديدًا، مع كأس مرقّمة و%1$s من المجد. ورتبتك لا تتراجع أبدًا.</string>
     <string name="game2_guide_moment_prestige_next">يعود نورك شرارةً: يعود مستواك إلى 1.</string>
     <string name="game2_guide_moment_prestige_short">الانبعاث ⁦%1$s⁩.</string>

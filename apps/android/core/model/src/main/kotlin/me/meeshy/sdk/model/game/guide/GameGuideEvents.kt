@@ -6,6 +6,7 @@ import me.meeshy.sdk.model.game.GameBlock
 import me.meeshy.sdk.model.game.GameFlameLaw
 import me.meeshy.sdk.model.game.GameLevels
 import me.meeshy.sdk.model.game.GameSeason
+import me.meeshy.sdk.model.game.GameWelcomeBack
 import me.meeshy.sdk.model.game.GloryLaws
 import me.meeshy.sdk.model.game.GloryRank
 import me.meeshy.sdk.model.game.LeagueAccess
@@ -139,25 +140,33 @@ public object GameGuideEventsV2 {
         GuideEventV2.FlameFreezeGift(game.flame.freezes)
             .takeIf { GameFlameLaw.announcesFreezeGift(game.flame.freezeGifted, game.guideSeen) }
 
+    /** Le jour du retour, l'Offrande gardée est prête : une urgence douce, redite jusqu'à ce qu'elle s'ouvre. */
+    private fun keptOffering(game: GameBlock): GuideEventV2? =
+        GuideEventV2.OfferingKept(GameWelcomeBack.EASED_DAYS)
+            .takeIf { GameWelcomeBack.announcesKeptOffering(game.chest.kept, game.chest.status) }
+
     /**
      * Ce que l'état dit à l'ouverture et que la personne n'a pas encore entendu : la première ligue, une saison, la
-     * première Veilleuse offerte le jour du cadeau.
+     * première Veilleuse offerte le jour du cadeau. Plus l'Offrande gardée, qui se redit tant qu'elle est prête.
      */
     public fun standing(game: GameBlock, seen: Set<String>): List<GuideEventV2> {
         val league = game.league?.takeIf { it.access == LeagueAccess.Open }?.current
             ?.let { GuideEventV2.LeagueFirst(it.league, it.pointsToPromotion) }
         val season = GuideSnapshot.of(game).season?.let(::seasonStart)
-        return listOfNotNull(league, season, freezeGift(game)).filter { it.key.wire !in seen }
+        val discoveries = listOfNotNull(league, season, freezeGift(game)).filter { it.key.wire !in seen }
+        return discoveries + listOfNotNull(keptOffering(game))
     }
 
     public fun between(before: GuideSnapshot, after: GuideSnapshot): List<GuideEventV2> =
         leagueEvents(before, after) + seasonEvents(before, after) + trophyEvents(before, after) +
             prestigeEvents(before, after) + atlasEvents(before, after)
 
-    /** Le cadeau ne se dit qu'en ARRIVANT : une lecture qui le portait déjà l'a annoncé. */
+    /** Le cadeau et l'Offrande gardée ne se disent qu'en ARRIVANT : une lecture qui les portait déjà les a annoncés. */
     public fun transition(before: GameBlock, after: GameBlock): List<GuideEventV2> =
-        between(GuideSnapshot.of(before), GuideSnapshot.of(after)) +
-            listOfNotNull(freezeGift(after).takeIf { before.flame.freezeGifted != true })
+        between(GuideSnapshot.of(before), GuideSnapshot.of(after)) + listOfNotNull(
+            freezeGift(after).takeIf { before.flame.freezeGifted != true },
+            keptOffering(after).takeIf { keptOffering(before) == null },
+        )
 
     private fun leagueEvents(before: GuideSnapshot, after: GuideSnapshot): List<GuideEventV2> {
         val was = before.league ?: return emptyList()
