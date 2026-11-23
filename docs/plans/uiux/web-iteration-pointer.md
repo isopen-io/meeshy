@@ -57,7 +57,7 @@ normal.
 | **90w** | 2026-11-20 | `claude/practical-fermat-awbeqk` | → `dev` | ✅ mergé |
 | **91w** | 2026-11-21 | `claude/practical-fermat-h5vgy2` | [#20161](https://github.com/isopen-io/meeshy/pull/20161) → `dev` | ✅ mergé |
 | **92w** | 2026-11-22 | `claude/practical-fermat-xtlc3p` | [#20325](https://github.com/isopen-io/meeshy/pull/20325) → `dev` | ✅ mergé |
-| **93w** | 2026-11-23 | `claude/practical-fermat-10zclt` | → `dev` | ⏳ ouverte |
+| **93w** | 2026-11-23 | `claude/practical-fermat-10zclt` | [#20472](https://github.com/isopen-io/meeshy/pull/20472) → `dev` | ⏳ ouverte |
 
 **93w** — a11y / i18n / maintenabilité (suite de 92w, issue #20326) : **trois
 segments du libellé d'accessibilité d'un message restaient EN DUR EN FRANÇAIS** —
