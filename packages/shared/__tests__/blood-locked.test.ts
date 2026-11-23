@@ -96,8 +96,8 @@ describe('une garde LÉGALE ne se lève jamais par le verrou du Sang', () => {
     expect(resolveEmitterConsent({ feature: 'health.fall', stored: null, effectiveLevel: 'BLOOD' })).toBe('refused');
   });
 
-  it('un Sang qui a donné l\'accord de santé émet la chute, même s\'il l\'avait refusée à cette personne avant l\'accord au palier', () => {
-    expect(resolveEmitterConsent({ feature: 'health.fall', stored: false, effectiveLevel: 'BLOOD', bloodBundleAccepted: true, legallyBlocked: false })).toBe('granted');
+  it('un Sang qui a donné l\'accord de santé émet la chute par défaut ; un refus donné à une personne précise survit à l\'accord au palier (constat B, fail-closed jusqu\'à #20406)', () => {
+    expect(resolveEmitterConsent({ feature: 'health.fall', stored: false, effectiveLevel: 'BLOOD', bloodBundleAccepted: true, legallyBlocked: false })).toBe('refused');
     expect(resolveEmitterConsent({ feature: 'health.fall', stored: null, effectiveLevel: 'BLOOD', legallyBlocked: false })).toBe('granted');
   });
 });
@@ -130,5 +130,28 @@ describe('une fonction ajoutée à la liste ne s\'ouvre pas en silence (C5)', ()
   it('les fonctions du Sang actives SANS accord au palier sont exactement celles d\'avant le 2026-11-22', () => {
     const sansAccord = BLOOD_BUNDLE_FEATURES.filter((feature) => RELATION_LEVEL_DEFAULT_ON[feature] === 'BLOOD' && !RELATION_BUNDLE_ONLY_FEATURES.has(feature));
     expect(new Set(sansAccord)).toEqual(new Set(['device.battery.pull', 'safety.inactivity', 'device.call', 'health.fall']));
+  });
+});
+
+describe('constat E — le verrou se lit sur le lien RÉEL, jamais sur le niveau d\'équipe', () => {
+  it('paire d\'équipe sans lien réel (niveau effectif Sang, lien réel Public), accord périmé : la coupure s\'applique', () => {
+    for (const feature of ['device.battery', 'device.unreachable', 'safety.inactivity', 'device.call'] as const) {
+      expect(resolveEmitterConsent({ feature, stored: false, effectiveLevel: 'BLOOD', realLevel: 'PUBLIC', bloodBundleAccepted: true })).toBe('refused');
+    }
+    expect(resolveReceptionPreference({ feature: 'bring', cut: true, effectiveLevel: 'BLOOD', realLevel: 'PUBLIC', bloodBundleAccepted: true })).toBe('refused');
+  });
+
+  it('au Sang réel, l\'accord lève toujours le refus', () => {
+    expect(resolveEmitterConsent({ feature: 'device.battery', stored: false, effectiveLevel: 'BLOOD', realLevel: 'BLOOD', bloodBundleAccepted: true })).toBe('granted');
+    expect(resolveReceptionPreference({ feature: 'bring', cut: true, effectiveLevel: 'BLOOD', realLevel: 'BLOOD', bloodBundleAccepted: true })).toBe('granted');
+  });
+});
+
+describe('constat B — la chute (art. 9) : l\'accord au palier ne lève jamais un refus par personne', () => {
+  it('accord au palier + refus explicite pour ce Sang, garde légale levée : refusé', () => {
+    expect(resolveEmitterConsent({ feature: 'health.fall', stored: false, effectiveLevel: 'BLOOD', realLevel: 'BLOOD', bloodBundleAccepted: true, legallyBlocked: false })).toBe('refused');
+  });
+  it('accord au palier sans refus stocké : la chute s\'ouvre par défaut au Sang', () => {
+    expect(resolveEmitterConsent({ feature: 'health.fall', stored: null, effectiveLevel: 'BLOOD', realLevel: 'BLOOD', bloodBundleAccepted: true, legallyBlocked: false })).toBe('granted');
   });
 });

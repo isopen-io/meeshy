@@ -27,7 +27,7 @@ export async function refusedAsBloodLocked(
   if (!params.cuts) return false;
   const lock = await bloodLockStateBetween(prisma, params.ownerId, params.otherId);
   // `minorExempt` : la coupure porte sur la position ou le titre, que le mineur déclaré garde (C7).
-  if (!lock.locked || (params.minorExempt === true && lock.ownerMinor)) return false;
+  if (!lock.locked || (params.minorExempt === true && lock.minorProtected)) return false;
   sendBloodLocked(reply);
   return true;
 }

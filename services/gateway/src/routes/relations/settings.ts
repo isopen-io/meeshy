@@ -124,10 +124,10 @@ const servedSettings = (userId: string, row: SettingsRow | null, lock: BloodLock
     togetherBlocked: !lock.locked && Boolean(row?.togetherBlockedAt),
     bloodLocationMuted: !lock.locked && Boolean(row?.bloodLocationMutedAt),
     listeningCategoryShared: lock.locked || row?.listeningCategoryShared === true || categoryDefault,
-    ...(Object.fromEntries(RELATION_RITUAL_SHARES.map((share) => [share, (lock.locked && !lock.ownerMinor) || row?.[share] === true])) as Record<(typeof RELATION_RITUAL_SHARES)[number], boolean>),
+    ...(Object.fromEntries(RELATION_RITUAL_SHARES.map((share) => [share, (lock.locked && !lock.minorProtected) || row?.[share] === true])) as Record<(typeof RELATION_RITUAL_SHARES)[number], boolean>),
     lockedByLevel: lock.locked,
     bloodBundleAccepted: lock.bloodBundleAccepted,
-    ritualSharesLocked: lock.locked && !lock.ownerMinor,
+    ritualSharesLocked: lock.locked && !lock.minorProtected,
   };
 };
 
@@ -220,10 +220,10 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
         || listeningCategoryShared === false;
       const cutsShares = shares.some((share) => requested[share] === false);
       const lock = cutsLocked || cutsShares ? await bloodLockStateBetween(fastify.prisma, ownerId, userId) : null;
-      if (lock?.locked && (cutsLocked || !lock.ownerMinor)) return sendBloodLocked(reply);
+      if (lock?.locked && (cutsLocked || !lock.minorProtected)) return sendBloodLocked(reply);
       // Le refus d'un mineur ne doit pas se lever tout seul à sa majorité : il efface son accord au
       // palier, et la carte B le lui redemandera (C7, décision B).
-      const minorRevokesBundle = lock?.locked === true && lock.ownerMinor && cutsShares;
+      const minorRevokesBundle = lock?.locked === true && lock.minorProtected && cutsShares;
       const current = await readSettings(fastify.prisma, ownerId, userId);
       // La catégorie est active dès Proche sans réglage : la retirer ÉCRIT le refus, même sans accord stocké.
       const categoryCut = listeningCategoryShared === false && current?.listeningCategoryShared !== false;

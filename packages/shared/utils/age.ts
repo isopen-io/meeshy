@@ -147,3 +147,24 @@ export function isVoiceCloningAgeAdmitted(birthDate: Date | null | undefined, no
   const birthDay = Date.UTC(birthDate.getUTCFullYear(), birthDate.getUTCMonth(), birthDate.getUTCDate());
   return birthDay <= voiceCloningBirthDateLimit(now).getTime();
 }
+
+/** Au plus cet écart d'âge (en années révolues), deux personnes sont des pairs : la loi du Sang les traite comme des adultes. */
+export const MINOR_PEER_AGE_GAP_YEARS = 5;
+
+/**
+ * LA PROTECTION DU MINEUR ENTRE SANGS, site UNIQUE (directive porteur du 2026-11-23, #20359) :
+ * l'émetteur est mineur déclaré ET l'autre personne a plus de 5 ans d'écart avec lui, ou un âge
+ * inconnu (fail-closed). Deux mineurs, ou deux personnes à 5 ans d'écart au plus, n'ont aucune
+ * protection : la loi du Sang s'applique entière. Un émetteur majeur ou sans date n'est jamais protégé.
+ */
+export function minorProtectedBetween(params: {
+  readonly emitterBirthDate: Date | null | undefined;
+  readonly otherBirthDate: Date | null | undefined;
+  readonly now: Date;
+}): boolean {
+  const { emitterBirthDate, otherBirthDate, now } = params;
+  if (!isDeclaredMinor(emitterBirthDate, now)) return false;
+  if (!otherBirthDate || Number.isNaN(otherBirthDate.getTime())) return true;
+  const gap = Math.abs(ageInFullYearsUtc(emitterBirthDate as Date, now) - ageInFullYearsUtc(otherBirthDate, now));
+  return gap > MINOR_PEER_AGE_GAP_YEARS;
+}

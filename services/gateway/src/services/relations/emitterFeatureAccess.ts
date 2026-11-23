@@ -78,13 +78,14 @@ export async function emitterFeatureAllowedAmong(prisma: EmitterFeatureDb, spec:
     otherIds,
     subjectIs: params.subjectIs,
     now: params.now,
-    consentOf: (id, effectiveLevel: RelationLevel) => {
+    consentOf: (id, effectiveLevel: RelationLevel, ages) => {
       const off = globalSwitch.off(accounts.get(emitterOf(id)) ?? {}, params.now);
       const pair = stored.get(id);
       return resolveEmitterConsent({
         feature,
         stored: pair?.stored ?? null,
         effectiveLevel,
+        realLevel: ages.realLevel,
         bloodBundleAccepted: pair?.bloodBundleAccepted === true,
         ...(globalSwitch.nature === 'legal' ? { legallyBlocked: off } : { globallyDisabled: off }),
       });

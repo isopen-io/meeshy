@@ -226,15 +226,16 @@ export const relationPairConsentFor = (
  */
 export const pairConsentResolver =
   (feature: PairConsentFeature, stored: ReadonlyMap<string, PairStoredConsent>, globallyDisabled: (otherId: string) => boolean = () => false) =>
-  (otherId: string, effectiveLevel: RelationLevel, ages?: { readonly targetMinor: boolean }): 'granted' | 'refused' => {
+  (otherId: string, effectiveLevel: RelationLevel, ages?: { readonly targetMinor: boolean; readonly minorProtected: boolean; readonly realLevel?: RelationLevel }): 'granted' | 'refused' => {
     const pair = stored.get(otherId) ?? NOTHING_STORED;
     return resolveEmitterConsent({
       feature,
       stored: pair.stored,
       effectiveLevel,
+      realLevel: ages?.realLevel,
       globallyDisabled: globallyDisabled(otherId),
       bloodBundleAccepted: pair.bloodBundleAccepted,
-      emitterMinor: ages?.targetMinor === true,
+      emitterMinor: ages?.minorProtected === true,
     });
   };
 

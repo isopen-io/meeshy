@@ -13,6 +13,7 @@ import { describe, it, expect } from '@jest/globals';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { fallAllowedAmong } from '../../../../services/fallDetection/fallAccess';
 import { fallSnapshotFor, reconcileFallOfAccount, refreshFallBetween } from '../../../../services/fallDetection/fallRelay';
+import { BLOOD_BUNDLE_VERSION } from '@meeshy/shared/utils/blood-bundle';
 import { ADMIN, ANALYSTE, CHUTE, MIN, PERSONNE, SANG, SANG_REFUSE, T0, monde } from './fallWorld';
 
 const audience = (m: ReturnType<typeof monde>) =>
@@ -179,5 +180,16 @@ describe('mineur — rien de l\'épisode ne se lit dans une clé', () => {
     await m.rapporter(CHUTE);
     expect(m.cache.entries.size).toBeGreaterThan(0);
     for (const key of m.cache.entries.keys()) expect(key.toLowerCase()).not.toContain(PERSONNE);
+  });
+});
+
+describe('constat B (2026-11-23) — l\'accord au palier ne lève pas un refus de chute donné à un Sang précis', () => {
+  it('accord au palier + refus explicite pour ce Sang : il ne reçoit rien (fail-closed jusqu\'à #20406)', async () => {
+    const m = monde();
+    const refus = m.settings.rows.find((row) => row.otherId === SANG_REFUSE);
+    Object.assign(refus as object, { bloodBundleAcceptedAt: new Date(T0), bloodBundleVersion: BLOOD_BUNDLE_VERSION });
+    const allowed = await audience(m);
+    expect(allowed.has(SANG_REFUSE)).toBe(false);
+    expect(allowed.has(SANG)).toBe(true);
   });
 });

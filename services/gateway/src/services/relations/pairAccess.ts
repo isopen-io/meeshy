@@ -15,9 +15,9 @@
  * niveaux n'est écrite ici. Une lecture qui échoue LÈVE : l'appelant ferme.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { declaredAgeClass, type DeclaredAgeClass } from '@meeshy/shared/utils/age';
+import { declaredAgeClass, minorProtectedBetween, type DeclaredAgeClass } from '@meeshy/shared/utils/age';
 import { ACCOUNT_STATE_SELECT, isUsableAccount, lawRoleOf } from './usableAccount';
-import { relationAccessReads, resolveRelationAccess, type RelationAccess, type RelationConsent } from '@meeshy/shared/utils/relation-access';
+import { effectiveRelationLevel, relationAccessReads, resolveRelationAccess, type RelationAccess, type RelationConsent } from '@meeshy/shared/utils/relation-access';
 import type { RelationFeature } from '@meeshy/shared/utils/relation-levels';
 import type { RelationLevel } from '@meeshy/shared/types/relation';
 import { getBlockedUserIdsAmong } from '../../utils/blocking';
@@ -42,11 +42,12 @@ export type PairAccessAmongParams = {
    * d'un partage) est mineure déclarée. Absent, la loi refuse
    * toute feature à consentement (`reason: 'consent'`).
    */
-  readonly consentOf?: (otherId: string, effectiveLevel: RelationLevel, ages: { readonly targetMinor: boolean }) => RelationConsent | undefined;
+  readonly consentOf?: (otherId: string, effectiveLevel: RelationLevel, ages: { readonly targetMinor: boolean; readonly minorProtected: boolean; readonly realLevel: RelationLevel }) => RelationConsent | undefined;
 };
 
 export type PairPerson = {
   readonly age: DeclaredAgeClass;
+  readonly birthDate: Date | null;
   readonly role: string | null;
   readonly deactivated: boolean;
   /** Actif, ni supprimé, ni désactivé (`isUsableAccount`). */
@@ -61,7 +62,7 @@ export async function peopleOf(prisma: PairAccessDb, ids: readonly string[], now
   return new Map(
     rows.map((row) => [
       row.id,
-      { age: declaredAgeClass(row.birthDate ?? null, now), role: lawRoleOf(row), deactivated: row.deactivatedAt != null, usable: isUsableAccount(row) },
+      { age: declaredAgeClass(row.birthDate ?? null, now), birthDate: row.birthDate ?? null, role: lawRoleOf(row), deactivated: row.deactivatedAt != null, usable: isUsableAccount(row) },
     ]),
   );
 }
@@ -117,7 +118,7 @@ export async function pairAccessAmong(prisma: PairAccessDb, params: PairAccessAm
       };
       const probe = resolveRelationAccess({ ...input, consent: 'unknown' });
       const consentOf = params.consentOf;
-      return [id, !probe.requiresConsent || !consentOf ? probe : resolveRelationAccess({ ...input, consent: consentOf(id, probe.effectiveLevel, { targetMinor: input.targetMinor === 'minor' }) })];
+      return [id, !probe.requiresConsent || !consentOf ? probe : resolveRelationAccess({ ...input, consent: consentOf(id, probe.effectiveLevel, { targetMinor: input.targetMinor === 'minor', realLevel: effectiveRelationLevel(input), minorProtected: minorProtectedBetween({ emitterBirthDate: people.get(targetId)?.birthDate, otherBirthDate: people.get(viewerId)?.birthDate, now }) }) })];
     }),
   );
 }

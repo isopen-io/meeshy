@@ -13,7 +13,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { isBlockedBetween } from '../../utils/blocking';
 import { niveauEffectif } from '../friendship';
 import { bloodBundleAcceptedOf } from './relationConsent';
-import { isDeclaredMinor } from '@meeshy/shared/utils/age';
+import { minorProtectedBetween } from '@meeshy/shared/utils/age';
 
 export type BloodLockDb = Parameters<typeof niveauEffectif>[0] & Parameters<typeof isBlockedBetween>[0] & Pick<PrismaClient, 'relationFeatureSetting' | 'user'>;
 
@@ -22,28 +22,33 @@ export type BloodLockState = {
   readonly level: Awaited<ReturnType<typeof niveauEffectif>>;
   /** J'ai accepté la liste du Sang, à sa version courante, pour cette personne. */
   readonly bloodBundleAccepted: boolean;
+  /** Un blocage existe entre les deux, dans un sens ou l'autre. */
+  readonly blocked: boolean;
   /** Le verrou tient : accord + Sang réel + aucun blocage. */
   readonly locked: boolean;
   /**
-   * Je suis mineur déclaré : ma position (continue, historique, proximité) et mon titre d'écoute
-   * restent HORS du verrou — je les retire par personne sans quitter le Sang (conformité C7).
+   * Je suis mineur déclaré ET l'écart d'âge avec cette personne dépasse 5 ans (ou son âge est
+   * inconnu) : ma position (continue, historique, proximité) et mon titre d'écoute restent HORS du
+   * verrou — je les retire par personne sans quitter le Sang (conformité C7, directive 2026-11-23).
+   * Entre pairs (deux mineurs, 5 ans d'écart au plus), la loi du Sang s'applique entière.
    */
-  readonly ownerMinor: boolean;
+  readonly minorProtected: boolean;
 };
 
 export async function bloodLockStateBetween(prisma: BloodLockDb, ownerId: string, otherId: string): Promise<BloodLockState> {
-  if (!ownerId || !otherId || ownerId === otherId) return { level: 'PUBLIC', bloodBundleAccepted: false, locked: false, ownerMinor: false };
-  const [row, level, blocked, owner] = await Promise.all([
+  if (!ownerId || !otherId || ownerId === otherId) return { level: 'PUBLIC', bloodBundleAccepted: false, blocked: false, locked: false, minorProtected: false };
+  const [row, level, blocked, people] = await Promise.all([
     prisma.relationFeatureSetting.findUnique({
       where: { ownerId_otherId: { ownerId, otherId } },
       select: { bloodBundleAcceptedAt: true, bloodBundleVersion: true },
     }),
     niveauEffectif(prisma, ownerId, otherId),
     isBlockedBetween(prisma, ownerId, otherId),
-    prisma.user.findUnique({ where: { id: ownerId }, select: { birthDate: true } }),
+    prisma.user.findMany({ where: { id: { in: [ownerId, otherId] } }, select: { id: true, birthDate: true } }),
   ]);
+  const birthOf = (id: string): Date | null => people.find((person) => person.id === id)?.birthDate ?? null;
   const bloodBundleAccepted = bloodBundleAcceptedOf(row);
-  return { level, bloodBundleAccepted, locked: bloodBundleAccepted && level === 'BLOOD' && !blocked, ownerMinor: isDeclaredMinor(owner?.birthDate ?? null, new Date()) };
+  return { level, bloodBundleAccepted, blocked, locked: bloodBundleAccepted && level === 'BLOOD' && !blocked, minorProtected: minorProtectedBetween({ emitterBirthDate: birthOf(ownerId), otherBirthDate: birthOf(otherId), now: new Date() }) };
 }
 
 export const bloodLockedBetween = async (prisma: BloodLockDb, ownerId: string, otherId: string): Promise<boolean> =>

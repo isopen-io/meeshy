@@ -20,22 +20,38 @@
  * double ne coûte rien et garde UNE seule boucle de niveaux.
  */
 import { relationLevelIfAtLeast, type RelationLevel } from '../types/relation.js';
-import { resolveRelationAccess, type RelationAccess, type RelationAccessInput, type RelationConsent } from './relation-access.js';
+import { effectiveRelationLevel, resolveRelationAccess, type RelationAccess, type RelationAccessInput, type RelationConsent } from './relation-access.js';
 import { RELATION_BLOOD_LOCKED_FEATURES, RELATION_BUNDLE_ONLY_FEATURES, RELATION_LEVEL_DEFAULT_ON, type RelationFeature } from './relation-levels.js';
 
 export type StoredEmitterConsent = boolean | null | undefined;
 
-/** La feature est-elle verrouillée ouverte à ce niveau effectif (le Sang, équipe comprise) ? */
+/**
+ * La feature est-elle verrouillée ouverte à ce niveau ? Le niveau à passer est celui du LIEN RÉEL
+ * (`effectiveRelationLevel`), jamais le niveau d'équipe : entre collègues sans lien il n'y a ni accord
+ * possible ni baisse possible, donc ni verrou (constat E de l'audit, 2026-11-23).
+ */
 export const relationBloodLocked = (params: { readonly feature: RelationFeature; readonly effectiveLevel: RelationLevel }): boolean =>
   params.effectiveLevel === 'BLOOD' && RELATION_BLOOD_LOCKED_FEATURES.has(params.feature);
 
-const unlockedByBundle = (params: { readonly feature: RelationFeature; readonly effectiveLevel: RelationLevel; readonly bloodBundleAccepted?: boolean }): boolean =>
-  params.bloodBundleAccepted === true && relationBloodLocked(params);
+/**
+ * La chute (art. 9 RGPD) n'est PAS levée par l'accord au palier : tant que le texte « à tous tes
+ * Sangs, présents et à venir » et sa version ne sont pas livrés (#20406), l'accord de santé couvre
+ * « mes Sangs » tels qu'ils étaient montrés, et un refus pour un Sang précis reste appliqué
+ * (constat B de l'audit, fail-closed).
+ */
+const FALL_REFUSAL_SURVIVES_BUNDLE: RelationFeature = 'health.fall';
+
+const unlockedByBundle = (params: { readonly feature: RelationFeature; readonly effectiveLevel: RelationLevel; readonly realLevel?: RelationLevel; readonly bloodBundleAccepted?: boolean }): boolean =>
+  params.bloodBundleAccepted === true
+  && params.feature !== FALL_REFUSAL_SURVIVES_BUNDLE
+  && relationBloodLocked({ feature: params.feature, effectiveLevel: params.realLevel ?? params.effectiveLevel });
 
 export const resolveEmitterConsent = (params: {
   readonly feature: RelationFeature;
   readonly stored: StoredEmitterConsent;
   readonly effectiveLevel: RelationLevel;
+  /** Le niveau du lien RÉEL de la paire (sans privilège d'équipe) : celui du verrou. Absent, `effectiveLevel`. */
+  readonly realLevel?: RelationLevel;
   readonly globallyDisabled?: boolean;
   /** L'émetteur a donné l'accord au palier Sang pour CETTE personne (#20362). */
   readonly bloodBundleAccepted?: boolean;
@@ -67,6 +83,7 @@ export const resolveReceptionPreference = (params: {
   readonly feature: RelationFeature;
   readonly cut: boolean;
   readonly effectiveLevel: RelationLevel;
+  readonly realLevel?: RelationLevel;
   readonly bloodBundleAccepted?: boolean;
 }): Exclude<RelationConsent, 'unknown'> => (unlockedByBundle(params) || !params.cut ? 'granted' : 'refused');
 
@@ -82,7 +99,7 @@ export const resolveRelationAccessWithStoredConsent = (input: RelationAccessWith
   const { storedConsent, globallyDisabled, bloodBundleAccepted, legallyBlocked, emitterMinor, ...law } = input;
   const probe = resolveRelationAccess({ ...law, consent: 'unknown' });
   if (!probe.requiresConsent) return probe;
-  const consent = resolveEmitterConsent({ feature: law.feature, stored: storedConsent, effectiveLevel: probe.effectiveLevel, globallyDisabled, bloodBundleAccepted, legallyBlocked, emitterMinor });
+  const consent = resolveEmitterConsent({ feature: law.feature, stored: storedConsent, effectiveLevel: probe.effectiveLevel, realLevel: effectiveRelationLevel(law), globallyDisabled, bloodBundleAccepted, legallyBlocked, emitterMinor });
   return resolveRelationAccess({ ...law, consent });
 };
 
@@ -96,5 +113,5 @@ export const resolveRelationAccessWithReception = (input: RelationAccessWithRece
   const { cut, bloodBundleAccepted, ...law } = input;
   const probe = resolveRelationAccess({ ...law, consent: 'unknown' });
   if (!probe.requiresConsent) return probe;
-  return resolveRelationAccess({ ...law, consent: resolveReceptionPreference({ feature: law.feature, cut, effectiveLevel: probe.effectiveLevel, bloodBundleAccepted }) });
+  return resolveRelationAccess({ ...law, consent: resolveReceptionPreference({ feature: law.feature, cut, effectiveLevel: probe.effectiveLevel, realLevel: effectiveRelationLevel(law), bloodBundleAccepted }) });
 };

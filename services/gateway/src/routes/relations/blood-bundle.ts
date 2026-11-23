@@ -2,8 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { isCurrentBloodBundle } from '@meeshy/shared/utils/blood-bundle';
 import { appVersionFloorPreHandler } from '../../middleware/app-version-floor';
-import { isBlockedBetween } from '../../utils/blocking';
-import { niveauEffectif } from '../../services/friendship';
+import { bloodLockStateBetween } from '../../services/relations/bloodLock';
 import { logError } from '../../utils/logger';
 import { sendBadRequest, sendConflict, sendInternalError, sendNotFound, sendSuccess } from '../../utils/response';
 import { errorResponses, otherUserOf, relationLimiter, userIdParams } from './shared';
@@ -25,11 +24,25 @@ const responseSchema = {
  * refus déjà donnés ne s'appliquent plus. Seulement envers un Sang RÉEL, non bloqué (404 sinon,
  * sans rien écrire) ; seulement à la version courante de la liste (409 RELATION_BLOOD_BUNDLE_OUTDATED).
  * Revenir en arrière, c'est redescendre la personne à Proche : la baisse efface l'accord des deux côtés.
+ * Un blocage, ou la protection d'un mineur (écart d'âge de plus de 5 ans, `minorProtectedBetween`) :
+ * 200 neutre `bloodBundleAccepted: false`, rien d'écrit — jamais un 404 qui trahirait le blocage, jamais un
+ * accord pris sous protection qui lèverait un refus stocké à la majorité (directive 2026-11-23, constats A et D).
  */
-async function stillBlood(prisma: FastifyInstance['prisma'], ownerId: string, otherId: string): Promise<boolean> {
-  const [level, blocked] = await Promise.all([niveauEffectif(prisma, ownerId, otherId), isBlockedBetween(prisma, ownerId, otherId)]);
-  return level === 'BLOOD' && !blocked;
+type Standing = 'accepting' | 'neutral' | 'not-blood';
+
+/**
+ * Où en est la paire : `not-blood` (404 « personne introuvable »), `neutral` (un blocage, ou la
+ * protection d'un mineur face à une personne de plus de 5 ans d'écart : 200 sans rien écrire, pour
+ * qu'un blocage ne se lise pas dans la réponse), `accepting` (l'accord peut s'écrire).
+ */
+async function standingOf(prisma: FastifyInstance['prisma'], ownerId: string, otherId: string): Promise<Standing> {
+  const state = await bloodLockStateBetween(prisma, ownerId, otherId);
+  if (state.level !== 'BLOOD') return 'not-blood';
+  return state.blocked || state.minorProtected ? 'neutral' : 'accepting';
 }
+
+const neutral = (reply: FastifyReply, userId: string, version: string) =>
+  sendSuccess(reply, { userId, bloodBundleAccepted: false, version, lockedByLevel: false });
 
 export function registerBloodBundle(fastify: FastifyInstance): void {
   const writes = relationLimiter(fastify, 'rel:blood-bundle:write:u', 30);
@@ -56,7 +69,9 @@ export function registerBloodBundle(fastify: FastifyInstance): void {
       }
       const ownerId = request.user!.userId;
       const userId = otherId.toLowerCase();
-      if (!(await stillBlood(fastify.prisma, ownerId, userId))) return sendNotFound(reply, 'Personne introuvable');
+      const before = await standingOf(fastify.prisma, ownerId, userId);
+      if (before === 'not-blood') return sendNotFound(reply, 'Personne introuvable');
+      if (before === 'neutral') return neutral(reply, userId, parsed.data.version);
       const data = { bloodBundleAcceptedAt: new Date(), bloodBundleVersion: parsed.data.version };
       await fastify.prisma.relationFeatureSetting.upsert({
         where: { ownerId_otherId: { ownerId, otherId: userId } },
@@ -67,9 +82,10 @@ export function registerBloodBundle(fastify: FastifyInstance): void {
       // arrivé entre les deux laisserait un accord sur une paire qui n'est plus Sang. Le niveau et le
       // blocage sont RELUS après l'écriture ; s'ils ont changé, l'accord est retiré et rien n'est dit.
       // Le verrou, lui, ne lit jamais l'accord seul : il exige le niveau effectif Sang à chaque lecture.
-      if (!(await stillBlood(fastify.prisma, ownerId, userId))) {
+      const after = await standingOf(fastify.prisma, ownerId, userId);
+      if (after !== 'accepting') {
         await fastify.prisma.relationFeatureSetting.updateMany({ where: { ownerId, otherId: userId }, data: { bloodBundleAcceptedAt: null, bloodBundleVersion: null } });
-        return sendNotFound(reply, 'Personne introuvable');
+        return after === 'neutral' ? neutral(reply, userId, parsed.data.version) : sendNotFound(reply, 'Personne introuvable');
       }
       return sendSuccess(reply, { userId, bloodBundleAccepted: true, version: parsed.data.version, lockedByLevel: true });
     } catch (error) {
