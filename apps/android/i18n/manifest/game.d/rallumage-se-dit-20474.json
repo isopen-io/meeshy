@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.effort_dreams.one",
+          "androidName": "game_flame_panel_effort_dreams_one",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.effort_dreams.other",
+          "androidName": "game_flame_panel_effort_dreams_other",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.effort_relight_today",
+          "androidName": "game_flame_panel_effort_relight_today",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.effort_relight_tomorrow",
+          "androidName": "game_flame_panel_effort_relight_tomorrow",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

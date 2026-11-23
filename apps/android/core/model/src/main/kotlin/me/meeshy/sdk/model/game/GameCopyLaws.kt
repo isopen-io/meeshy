@@ -23,6 +23,20 @@ public object GameCopyLaws {
 
     public fun days(count: Int): GameText = GameText.of(GameTextKey.Days, GameTextArg.Count(count))
 
+    /** Les rêves complets qui manquent au rallumage par l'effort (#20474). */
+    public fun effortDreams(count: Int): GameText = GameText.of(GameTextKey.EffortDreams, GameTextArg.Count(count))
+
+    /**
+     * Le rallumage par l'effort (#20474) : les rêves complets qui manquent, avant la fin de la journée ou d'ici demain
+     * soir, et les jours de la Flamme qui reviennent avec elle. Miroir de `GameCopy.effortRelight` (iOS) et
+     * d'`effortRelightLine` (web).
+     */
+    public fun effortRelight(effort: GameEffortRelight): GameText = GameText.of(
+        if (effort.daysLeft == 0) GameTextKey.EffortRelightToday else GameTextKey.EffortRelightTomorrow,
+        GameTextArg.Nested(effortDreams(effort.dreamsMissing)),
+        GameTextArg.Nested(days(effort.lostDays)),
+    )
+
     /** Le nom d'une ligue (iOS `GameText.leagueName`). */
     public fun leagueName(league: LeagueKey): GameText = GameText(
         when (league) {

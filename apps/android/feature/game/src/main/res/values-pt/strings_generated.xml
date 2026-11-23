@@ -635,6 +635,10 @@
     <string name="game_flame_form_soleil">Sol</string>
     <string name="game_flame_no_streak">Chama a acender</string>
     <string name="game_flame_panel_bonus">Cada dia de Chama alimenta seus sonhos: +%1$s%% de faíscas por ato, até +%2$s%%.</string>
+    <string name="game_flame_panel_effort_dreams_one">%1$s sonho completo</string>
+    <string name="game_flame_panel_effort_dreams_other">%1$s sonhos completos</string>
+    <string name="game_flame_panel_effort_relight_today">Só mais %1$s hoje e sua Chama volta com seus %2$s, sem pagar.</string>
+    <string name="game_flame_panel_effort_relight_tomorrow">Só mais %1$s até amanhã à noite e sua Chama volta com seus %2$s, sem pagar.</string>
     <string name="game_flame_panel_freeze_buy">Pegar uma Lamparina · %1$s</string>
     <string name="game_flame_panel_freezes">Lamparinas: %1$s / %2$s</string>
     <string name="game_flame_panel_relight">Reacender a Chama · %1$s</string>

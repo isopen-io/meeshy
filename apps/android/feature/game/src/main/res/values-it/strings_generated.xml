@@ -635,6 +635,10 @@
     <string name="game_flame_form_soleil">Sole</string>
     <string name="game_flame_no_streak">Fiamma da accendere</string>
     <string name="game_flame_panel_bonus">Ogni giorno di Fiamma nutre i tuoi sogni: +%1$s %% di scintille per atto, fino a +%2$s %%.</string>
+    <string name="game_flame_panel_effort_dreams_one">%1$s sogno completo</string>
+    <string name="game_flame_panel_effort_dreams_other">%1$s sogni completi</string>
+    <string name="game_flame_panel_effort_relight_today">Ancora %1$s oggi e la tua Fiamma torna con i suoi %2$s, senza pagare.</string>
+    <string name="game_flame_panel_effort_relight_tomorrow">Ancora %1$s entro domani sera e la tua Fiamma torna con i suoi %2$s, senza pagare.</string>
     <string name="game_flame_panel_freeze_buy">Prendi una Lucerna · %1$s</string>
     <string name="game_flame_panel_freezes">Lucerne: %1$s / %2$s</string>
     <string name="game_flame_panel_relight">Riaccendi la Fiamma · %1$s</string>

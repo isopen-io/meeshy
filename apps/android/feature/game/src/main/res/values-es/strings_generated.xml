@@ -635,6 +635,10 @@
     <string name="game_flame_form_soleil">Sol</string>
     <string name="game_flame_no_streak">Llama por encender</string>
     <string name="game_flame_panel_bonus">Cada día de Llama alimenta tus sueños: +%1$s %% de chispas por acto, hasta +%2$s %%.</string>
+    <string name="game_flame_panel_effort_dreams_one">%1$s sueño completo</string>
+    <string name="game_flame_panel_effort_dreams_other">%1$s sueños completos</string>
+    <string name="game_flame_panel_effort_relight_today">Solo %1$s más hoy y tu Llama vuelve con sus %2$s, sin pagar.</string>
+    <string name="game_flame_panel_effort_relight_tomorrow">Solo %1$s más antes de mañana por la noche y tu Llama vuelve con sus %2$s, sin pagar.</string>
     <string name="game_flame_panel_freeze_buy">Tomar una Vela · %1$s</string>
     <string name="game_flame_panel_freezes">Velas: %1$s / %2$s</string>
     <string name="game_flame_panel_relight">Volver a encender la Llama · %1$s</string>
