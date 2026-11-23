@@ -310,3 +310,54 @@ describe('#20361 C7 — un mineur déclaré garde le retrait de sa position et d
     expect(lu.body.data).toMatchObject({ locationShared: false, listeningTitleShared: false, talkieBlocked: true, lockedByLevel: false, bloodBundleAccepted: false });
   });
 });
+
+describe('#20502 — un réglage écrit sur une paire bloquée répond EXACTEMENT comme sur un lien absent', () => {
+  const MODELES = ['user', 'userRelation', 'friendRequest', 'relationFeatureSetting'] as const;
+  const compte = (app: BringTestApp) => {
+    let lectures = 0;
+    for (const modele of MODELES) {
+      const delegue = (app.prisma as unknown as Record<string, Record<string, unknown>>)[modele];
+      for (const [nom, fn] of Object.entries(delegue)) {
+        if (typeof fn !== 'function') continue;
+        delegue[nom] = (...args: unknown[]) => { lectures += 1; return (fn as (...a: unknown[]) => unknown)(...args); };
+      }
+    }
+    return () => lectures;
+  };
+  const essayer = async (options: BringAppOptions, body: Record<string, boolean>) => {
+    const app = await appli(options);
+    const lectures = compte(app);
+    const res = await regler(app, body);
+    await app.close();
+    return { app, res, lectures: lectures() };
+  };
+
+  const CORPS: ReadonlyArray<Record<string, boolean>> = [
+    { bringBlocked: true },
+    { talkieBlocked: true },
+    { togetherBlocked: true },
+    { bloodLocationMuted: true },
+    { listeningCategoryShared: true },
+    { listeningCategoryShared: false },
+  ];
+  const BLOCAGES = [
+    ['bloqué par l\'autre', { [MOI]: { blockedUserIds: [AUTRE] } }],
+    ['bloqué par moi', { [AUTRE]: { blockedUserIds: [MOI] } }],
+  ] as const;
+
+  it.each(CORPS.flatMap((body) => BLOCAGES.flatMap(([cas, personnes]) => (['CLOSE', 'BLOOD'] as const).map((niveau) => [JSON.stringify(body), cas, niveau, body, personnes] as const))))(
+    '%s, %s, resté %s : même statut, même corps, même nombre de lectures qu\'un lien absent ou retombé, et rien d\'écrit',
+    async (_corps, _cas, niveau, body, personnes) => {
+      const absent = await essayer({ liens: [] }, body);
+      const retombe = await essayer({ liens: [lien('PUBLIC', 'PUBLIC', { transitions: [{ from: niveau, to: 'PUBLIC', at: NOW }] })] }, body);
+      const bloque = await essayer({ liens: [lien(niveau, niveau)], personnes }, body);
+
+      // Un RETRAIT ne demande aucun lien (RGPD art. 7(3)) : sur un lien absent, il répond 200 sans rien créer.
+      expect(absent.res.status).toBe(body.listeningCategoryShared === false ? 200 : 404);
+      expect([bloque.res.status, bloque.res.body]).toEqual([absent.res.status, absent.res.body]);
+      expect([retombe.res.status, retombe.res.body]).toEqual([absent.res.status, absent.res.body]);
+      expect([bloque.lectures, retombe.lectures]).toEqual([absent.lectures, absent.lectures]);
+      expect(bloque.app.reglages.size).toBe(0);
+    },
+  );
+});

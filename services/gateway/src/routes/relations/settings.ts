@@ -19,7 +19,8 @@ import { sendBadRequest, sendInternalError, sendNotFound, sendSuccess } from '..
 import { resolveRelationAccess } from '@meeshy/shared/utils/relation-access';
 import { declaredAgeClass } from '@meeshy/shared/utils/age';
 import { ACCOUNT_STATE_SELECT, lawRoleOf } from '../../services/relations/usableAccount';
-import { niveauEffectif } from '../../services/friendship';
+import { niveauEffectifUniforme } from '../../services/friendship';
+import { isBlockedBetween } from '../../utils/blocking';
 import { bringDepsOf, bringQuotaOf } from '../bring';
 import { bloodLockStateBetween, type BloodLockState } from '../../services/relations/bloodLock';
 import { relationLevelIfAtLeast } from '@meeshy/shared/types/relation';
@@ -29,7 +30,9 @@ import { errorResponses, otherUserOf, relationLimiter, userIdParams } from './sh
 /**
  * BLOQUER le Bring, le talkie ou les invitations « ensemble » ne s'écrit que pour une personne qui EXISTE et avec qui un lien
  * existe (Connaissance au moins, jugé par la loi) : aucune ligne pour un identifiant
- * quelconque. Inconnu, désactivé, sans lien ou bloqué : le même 404. Un RETRAIT de
+ * quelconque. Inconnu, désactivé, sans lien ou bloqué (dans un sens ou l'autre) : le même 404, après les
+ * mêmes quatre lectures, parties ensemble et sans condition (`niveauEffectifUniforme`) — le statut, le
+ * corps et le nombre de lectures ne disent pas « on m'a bloqué » (#20502). Un RETRAIT de
  * partage ou un déblocage ne demandent aucun lien : ils ne touchent que MA ligne
  * existante, et ne la créent jamais (audit #14535 constat 1).
  *
@@ -48,12 +51,13 @@ async function linkedPerson(
   otherId: string,
   feature: 'dm.direct' | 'listening.category' = 'dm.direct',
 ): Promise<boolean> {
-  const [other, owner, level] = await Promise.all([
+  const [other, owner, level, blocked] = await Promise.all([
     prisma.user.findUnique({ where: { id: otherId }, select: { id: true, role: true, birthDate: true, ...ACCOUNT_STATE_SELECT } }),
     prisma.user.findUnique({ where: { id: ownerId }, select: { role: true, birthDate: true, ...ACCOUNT_STATE_SELECT } }),
-    niveauEffectif(prisma, ownerId, otherId),
+    niveauEffectifUniforme(prisma, ownerId, otherId),
+    isBlockedBetween(prisma, ownerId, otherId),
   ]);
-  if (!other || other.deactivatedAt) return false;
+  if (!other || other.deactivatedAt || blocked) return false;
   const now = new Date();
   const ownerSide = { id: ownerId, minor: declaredAgeClass(owner?.birthDate ?? null, now), role: lawRoleOf(owner) };
   const otherSide = { id: otherId, minor: declaredAgeClass(other.birthDate ?? null, now), role: lawRoleOf(other) };
@@ -64,7 +68,7 @@ async function linkedPerson(
       grantedByViewer: level,
       grantedByTarget: level,
       sharesCommunity: false,
-      blockedEitherWay: false,
+      blockedEitherWay: blocked,
       viewerMinor: viewer.minor,
       targetMinor: target.minor,
       viewerRole: viewer.role,
