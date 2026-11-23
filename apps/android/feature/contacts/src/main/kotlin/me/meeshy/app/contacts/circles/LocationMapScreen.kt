@@ -50,6 +50,7 @@ import me.meeshy.sdk.model.location.SlippyMap
 import me.meeshy.sdk.model.relation.SharedLocationBounds
 import me.meeshy.sdk.model.relation.SharedLocationPin
 import me.meeshy.sdk.model.relation.SharedLocationPrecision
+import me.meeshy.sdk.model.relation.SharedLocationsFan
 import me.meeshy.sdk.model.relation.SharedLocationsMap
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.accessibility.decorative
@@ -63,6 +64,7 @@ import me.meeshy.ui.component.kit.MeeshyGlassButton
 import me.meeshy.ui.component.kit.MeeshyGlassButtonKind
 import me.meeshy.ui.component.kit.MeeshyMapPin
 import me.meeshy.ui.component.kit.MeeshyMapPinPrecision
+import me.meeshy.ui.component.kit.MeeshyMapPinRecipe
 import me.meeshy.ui.component.location.TileMapView
 import me.meeshy.ui.component.meeshyPresenceDotColor
 import me.meeshy.ui.component.presentation.MeeshyCoverDialog
@@ -75,6 +77,9 @@ private const val MAX_BLUR_RADIUS_DP = 4_000f
 private const val ARRIVAL_DELAY_MS = 180L
 private const val HERO_DP = 96
 private const val PIN_AVATAR_DP = 50
+
+/** Deux épingles plus proches que l’épingle choisie, plus une marge, s’écartent en éventail (iso iOS `selectedDiameter + 4`). */
+private const val FAN_DISTANCE_DP: Double = MeeshyMapPinRecipe.SELECTED_DP + 4.0
 
 /** Ce que l'hôte de la fiche sait faire pour la personne regardée ; une action absente n'est pas offerte. */
 internal data class LocationMapActions(
@@ -198,7 +203,11 @@ private fun SharedTransitionScope.MapStage(
         LaunchedEffect(center, zoom, widthDp, heightDp, fitted) {
             if (fitted) onViewport(SharedLocationsMap.viewport(center, zoom, widthDp, heightDp, SlippyMap.TILE_SIZE))
         }
-        val groups = remember(pins) { pins.groupBy { it.point } }
+        val placed = remember(pins, zoom) {
+            val at = SharedLocationsFan.place(pins.map { it.userId to it.point }, zoom, SlippyMap.TILE_SIZE, FAN_DISTANCE_DP)
+            pins.map { (at[it.userId] ?: it.point) to it }
+        }
+        val byPoint = remember(placed) { placed.toMap() }
         TileMapView(
             center = center,
             zoom = zoom,
@@ -206,20 +215,17 @@ private fun SharedTransitionScope.MapStage(
             interactive = true,
             onCenterChange = { center = it },
             onZoomChange = { zoom = it },
-            markers = groups.keys.toList(),
+            markers = placed.map { it.first },
             marker = { point ->
-                Box {
-                    groups[point].orEmpty().forEachIndexed { index, pin ->
-                        PersonPin(
-                            pin = pin,
-                            zoom = zoom,
-                            isSelected = pin.userId == selectedId,
-                            travels = pin.userId == focusUserId,
-                            arrived = arrived,
-                            onPress = { onSelect(pin.userId) },
-                            modifier = Modifier.padding(start = (index * 6).dp, top = (index * 6).dp),
-                        )
-                    }
+                byPoint[point]?.let { pin ->
+                    PersonPin(
+                        pin = pin,
+                        zoom = zoom,
+                        isSelected = pin.userId == selectedId,
+                        travels = pin.userId == focusUserId,
+                        arrived = arrived,
+                        onPress = { onSelect(pin.userId) },
+                    )
                 }
             },
             modifier = Modifier.fillMaxSize(),

@@ -6,6 +6,9 @@ import type { MeeshEdition } from '@meeshy/shared/utils/game/mint';
 import type { MissionDifficulty } from '@meeshy/shared/utils/game/missions';
 import type { TreasuryTierKey } from '@meeshy/shared/utils/game/treasury';
 import { GAME_ERROR_CODES } from '@meeshy/shared/types/game-routes';
+import type { GameEffortRelight } from '@meeshy/shared/types/game';
+
+import { isInt, isRec } from '@/lib/api/game-guards';
 
 import {
   formatGameNumber,
@@ -79,6 +82,30 @@ export const meeshCount = (count: number, language: Language = currentInterfaceL
 
 export const daysLabel = (count: number, language: Language = currentInterfaceLanguage()): string =>
   translateGamePlural(language, 'game.days', count);
+
+const isDayKey = (field: unknown): field is string => typeof field === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(field);
+
+/**
+ * Le rallumage par l'effort lu par le web (#20471) : `null` devant un serveur antérieur ou une forme illisible.
+ * Écrit sur les gardes du port plutôt que sur le schéma partagé, qui tirerait `zod` classique dans la page (#18924).
+ */
+export const readEffortRelight = (value: unknown): GameEffortRelight | null => {
+  if (!isRec(value)) return null;
+  const { lostDays, dreamsDone, dreamsNeeded, closesOn, daysLeft } = value;
+  return isInt(lostDays, 1) && isInt(dreamsDone) && isInt(dreamsNeeded, 1) && isDayKey(closesOn) && isInt(daysLeft)
+    ? { lostDays, dreamsDone, dreamsNeeded, closesOn, daysLeft }
+    : null;
+};
+
+/**
+ * Le rallumage par l'effort (#20471) : les rêves complets qui manquent, avant la fin de la journée ou d'ici demain
+ * soir, et les jours de la Flamme qui reviennent avec elle.
+ */
+export const effortRelightLine = (effort: GameEffortRelight, language: Language = currentInterfaceLanguage()): string =>
+  translateGame(language, effort.daysLeft === 0 ? 'game.flame_panel.effort_relight_today' : 'game.flame_panel.effort_relight_tomorrow', {
+    dreams: translateGamePlural(language, 'game.flame_panel.effort_dreams', Math.max(1, effort.dreamsNeeded - effort.dreamsDone)),
+    days: daysLabel(effort.lostDays, language),
+  });
 
 export const actionsLabel = (count: number, language: Language = currentInterfaceLanguage()): string =>
   translateGamePlural(language, 'game.actions', count);

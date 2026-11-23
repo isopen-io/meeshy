@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.game
 
 import me.meeshy.sdk.model.deeplink.GameLink
+import me.meeshy.sdk.model.game.guide.GameGuideCards
 import me.meeshy.sdk.model.game.guide.GuideActionV2
 import me.meeshy.sdk.model.game.pages.GamePage
 import me.meeshy.sdk.model.game.progression.ProgressionConcept
@@ -83,16 +84,6 @@ public object GameNavigationMap {
         is GameLink.LeagueWeek -> GameRoute.Page(GamePage.League, link.key?.let { GamePageFocus.LeagueWeek(it) })
     }
 
-    /**
-     * La fiche qu'un moment de la vague 2 du guide ouvre ; « voir le niveau » ouvre la fiche du Niveau, « voir la
-     * Flamme » celle de la Flamme.
-     */
-    public fun guideConcept(action: GuideActionV2): ProgressionConcept = when (GameGuideTarget.page(action)) {
-        GamePage.League -> ProgressionConcept.League
-        GamePage.Season -> ProgressionConcept.Season
-        GamePage.Showcase -> ProgressionConcept.Showcase
-        GamePage.Atlas -> ProgressionConcept.Atlas
-        GamePage.Prestige, GamePage.Settings -> ProgressionConcept.Level
-        null -> ProgressionConcept.Flame
-    }
+    /** La fiche qu'un moment de la vague 2 du guide ouvre : celle de sa carte (`GameGuideCards.concept`). */
+    public fun guideConcept(action: GuideActionV2): ProgressionConcept = GameGuideCards.concept(action)
 }

@@ -206,7 +206,7 @@ export enum NotificationTypeEnum {
   LEVEL_UP = 'level_up',
   BADGE_EARNED = 'badge_earned',
 
-  // ===== JEU MEESHY (#9490) — au plus une notification de jeu par jour, préférence `gameEnabled` =====
+  // ===== JEU MEESHY (#9490) — au plus deux notifications de jeu par jour hors exploit et action d’autrui (#17368), préférence `gameEnabled` =====
   /** Un ami t'invite à la mission en duo de la semaine. */
   GAME_DUO_INVITED = 'game_duo_invited',
   /** Ton ami a accepté la mission en duo. */

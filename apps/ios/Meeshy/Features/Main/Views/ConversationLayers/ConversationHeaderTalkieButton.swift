@@ -56,6 +56,10 @@ struct ConversationHeaderTalkieButton: View {
     @ObservedObject private var center: TalkieCenter
     @State private var pressed = false
     @State private var withdrawn = false
+    /// Le téléphone du pair est injoignable depuis plusieurs minutes (#20241) : le geste laisse un message vocal.
+    @State private var unreachableLasting = false
+
+    private var delivery: TalkieDelivery { TalkieDelivery.of(lasting: unreachableLasting) }
 
     init(userId: String, peerName: String, accentColor: String, secondaryColor: String, center: TalkieCenter = .shared) {
         self.userId = userId
@@ -83,11 +87,11 @@ struct ConversationHeaderTalkieButton: View {
         HStack(spacing: 0) {
             if offer.offered && !withdrawn {
                 glyph
-                    .modifier(TalkieHoldModifier(sender: sender, userId: userId, pressed: $pressed))
+                    .modifier(TalkieHoldModifier(sender: sender, userId: userId, pressed: $pressed, delivery: delivery))
                     .meeshyTapTarget()
                     .transition(.scale.combined(with: .opacity))
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(ProfileTalkieWording.holdA11y(name: peerName))
+                    .accessibilityLabel(ProfileTalkieWording.holdA11y(name: peerName, delivery: delivery))
                     .accessibilityValue(look == .live ? liveValue : "")
                     .accessibilityHint(ProfileTalkieWording.holdHint)
                     .accessibilityAddTraits([.isButton, .updatesFrequently])
@@ -97,6 +101,7 @@ struct ConversationHeaderTalkieButton: View {
         .preference(key: TalkieHeaderLiveKey.self, value: live)
         .animation(.spring(response: 0.3, dampingFraction: 0.75), value: offer.offered)
         .task(id: userId) { await offer.load() }
+        .modifier(PhoneUnreachableLastingReader(userId: userId, lasting: $unreachableLasting))
         .adaptiveOnChange(of: sender.waking) { _, waking in
             // L'en-tête n'a pas de libellé : le réveil d'un destinataire hors ligne se dit dans un bandeau neutre.
             guard waking else { return }
@@ -109,7 +114,7 @@ struct ConversationHeaderTalkieButton: View {
                 withdrawn = true
                 return
             }
-            ProfileTalkieWording.present(new)
+            ProfileTalkieWording.present(new, delivery: delivery)
         }
     }
 

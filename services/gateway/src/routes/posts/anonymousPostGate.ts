@@ -15,46 +15,52 @@ import { NOT_DELETED } from '../../services/posts/postIncludes';
  * - ni supprimée, ni EXPIRÉE — `getPostById` ne lit pas `expiresAt`, et une
  *   story morte resterait lisible par lien sans ce verrou ;
  * - d'un auteur ACTIF (ni désactivé, ni supprimé) ;
- * - et, pour une republication, d'un ORIGINAL lui-même public et vivant : la
- *   charge porte `repostOf` en entier (texte, médias), et une republication
- *   publique d'une publication réservée aux amis la ferait sortir à côté.
+ * - et, pour une republication, d'un ORIGINAL lui-même public, vivant et d'un
+ *   auteur actif : la charge porte `repostOf` en entier (texte, médias), et
+ *   une republication publique d'une publication réservée aux amis, ou d'un
+ *   compte parti, la ferait sortir à côté (#20211).
  *
  * Fail-closed : une ligne absente, un auteur introuvable, un original
  * disparu, un identifiant malformé — tout rend `false`, et la route répond le
  * même 404 qu'à une publication inexistante (aucun oracle d'existence).
  */
 
+const ANONYMOUS_AUTHOR_SELECT = { isActive: true, deletedAt: true, deactivatedAt: true } as const;
+
 export const ANONYMOUS_POST_ACL_SELECT = {
   visibility: true,
   deletedAt: true,
   expiresAt: true,
   repostOfId: true,
-  author: { select: { isActive: true, deletedAt: true, deactivatedAt: true } },
-  repostOf: { select: { visibility: true, deletedAt: true, expiresAt: true } },
+  author: { select: ANONYMOUS_AUTHOR_SELECT },
+  repostOf: { select: { visibility: true, deletedAt: true, expiresAt: true, author: { select: ANONYMOUS_AUTHOR_SELECT } } },
 } satisfies Prisma.PostSelect;
 
 type Lifetime = { readonly deletedAt: Date | null; readonly expiresAt: Date | null };
 
+type AnonymousAuthorRow = {
+  readonly isActive: boolean;
+  readonly deletedAt: Date | null;
+  readonly deactivatedAt: Date | null;
+} | null;
+
 export type AnonymousPostAclRow = Lifetime & {
   readonly visibility: string;
   readonly repostOfId: string | null;
-  readonly author: {
-    readonly isActive: boolean;
-    readonly deletedAt: Date | null;
-    readonly deactivatedAt: Date | null;
-  } | null;
-  readonly repostOf: (Lifetime & { readonly visibility: string }) | null;
+  readonly author: AnonymousAuthorRow;
+  readonly repostOf: (Lifetime & { readonly visibility: string; readonly author: AnonymousAuthorRow }) | null;
 };
 
 const isPublicAndAlive = (post: Lifetime & { readonly visibility: string }, now: Date): boolean =>
   post.visibility === 'PUBLIC' && post.deletedAt === null && (post.expiresAt === null || post.expiresAt.getTime() > now.getTime());
 
+const isActiveAuthor = (author: AnonymousAuthorRow): boolean =>
+  author !== null && author.isActive && author.deletedAt === null && author.deactivatedAt === null;
+
 export function isServableToAnonymous(row: AnonymousPostAclRow, now: Date): boolean {
-  if (!isPublicAndAlive(row, now)) return false;
-  const author = row.author;
-  if (author === null || !author.isActive || author.deletedAt !== null || author.deactivatedAt !== null) return false;
+  if (!isPublicAndAlive(row, now) || !isActiveAuthor(row.author)) return false;
   if (row.repostOfId === null) return true;
-  return row.repostOf !== null && isPublicAndAlive(row.repostOf, now);
+  return row.repostOf !== null && isPublicAndAlive(row.repostOf, now) && isActiveAuthor(row.repostOf.author);
 }
 
 export type AnonymousPostGatePrisma = {

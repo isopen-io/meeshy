@@ -31,6 +31,8 @@ struct SenderIdentity: Equatable, Sendable {
     /// Le contour d'avatar équipé de l'auteur (#10713) : la RÉFÉRENCE servie, que l'avatar
     /// résout lui-même et pose dans son empreinte (#10946).
     var ring: ServedProfileDecorItem? = nil
+    /// L'auteur, pour la pastille de son cercle (#20178) ; `nil` : aucune.
+    var userId: String? = nil
 
     /// « @pseudo » — ou rien. Le fil sert un pseudo VIDE pour un participant
     /// anonyme, et un « @ » nu sous le nom n'est pas une identité.

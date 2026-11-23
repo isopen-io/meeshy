@@ -147,6 +147,16 @@ extension GameText {
 
     static var guideMomentFlameFreezeGiftShort: String { String(localized: "game2.guide.moment.flame_freeze_gift.short", defaultValue: "Une Veilleuse t’est offerte pour ta Flamme.", bundle: .main) }
 
+    static var guideMomentOfferingKeptWhat: String { String(localized: "game2.guide.moment.offering_kept.what", defaultValue: "Les aïeux t’ont gardé ton Offrande.", bundle: .main) }
+
+    static var guideMomentOfferingKeptMeans: String { String(localized: "game2.guide.moment.offering_kept.means", defaultValue: "Elle est prête, sans attendre les actes du jour.", bundle: .main) }
+
+    static func guideMomentOfferingKeptNext(days: String) -> String {
+        String(localized: "game2.guide.moment.offering_kept.next", defaultValue: "Pendant \(days), ton rêve est plus léger, le temps de reprendre.", bundle: .main)
+    }
+
+    static var guideMomentOfferingKeptShort: String { String(localized: "game2.guide.moment.offering_kept.short", defaultValue: "Ton Offrande t’attend, gardée par les aïeux.", bundle: .main) }
+
     static var photoKickerTrophy: String { String(localized: "game2.photo.kicker.trophy", defaultValue: "Nouveau trophée", bundle: .main) }
 
     static var photoKickerLeagueUp: String { String(localized: "game2.photo.kicker.league_up", defaultValue: "Cercle gravi", bundle: .main) }

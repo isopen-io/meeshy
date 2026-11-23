@@ -15967,6 +15967,50 @@
       }
     },
     {
+      "_label": "guide « offering-kept » la première fois",
+      "input": {
+        "law": "guide-v2",
+        "event": {
+          "kind": "offering-kept",
+          "easedDays": 3
+        },
+        "seen": []
+      },
+      "expected": {
+        "key": "offering-kept",
+        "speaker": "mee",
+        "mood": "cheer",
+        "action": "see-missions",
+        "data": {
+          "easedDays": 3
+        },
+        "presentation": "full"
+      }
+    },
+    {
+      "_label": "guide « offering-kept » déjà vu",
+      "input": {
+        "law": "guide-v2",
+        "event": {
+          "kind": "offering-kept",
+          "easedDays": 3
+        },
+        "seen": [
+          "offering-kept"
+        ]
+      },
+      "expected": {
+        "key": "offering-kept",
+        "speaker": "mee",
+        "mood": "cheer",
+        "action": "see-missions",
+        "data": {
+          "easedDays": 3
+        },
+        "presentation": "short"
+      }
+    },
+    {
       "_label": "choix d'une carte, cas 1",
       "input": {
         "law": "guide-choose",
@@ -16153,6 +16197,58 @@
       }
     },
     {
+      "_label": "choix d'une carte, cas 9",
+      "input": {
+        "law": "guide-choose",
+        "events": [
+          {
+            "kind": "flame-out",
+            "lostDays": 12,
+            "relightPrice": 300,
+            "canRelight": true
+          },
+          {
+            "kind": "offering-kept",
+            "easedDays": 3
+          },
+          {
+            "kind": "flame-freeze-gift",
+            "freezes": 1
+          }
+        ],
+        "seen": []
+      },
+      "expected": {
+        "key": "offering-kept",
+        "presentation": "full"
+      }
+    },
+    {
+      "_label": "choix d'une carte, cas 10",
+      "input": {
+        "law": "guide-choose",
+        "events": [
+          {
+            "kind": "offering-kept",
+            "easedDays": 3
+          },
+          {
+            "kind": "atlas-stamp",
+            "language": "ja",
+            "stamped": 4,
+            "total": 89
+          }
+        ],
+        "seen": [
+          "offering-kept"
+        ]
+      },
+      "expected": {
+        "key": "atlas-stamp",
+        "presentation": "full"
+      }
+    },
+    {
       "_label": "moment photo de « league-first »",
       "input": {
         "law": "photo-moment",
@@ -16316,6 +16412,20 @@
         "event": {
           "kind": "flame-freeze-gift",
           "freezes": 1
+        }
+      },
+      "expected": {
+        "emblem": null,
+        "id": null
+      }
+    },
+    {
+      "_label": "moment photo de « offering-kept »",
+      "input": {
+        "law": "photo-moment",
+        "event": {
+          "kind": "offering-kept",
+          "easedDays": 3
         }
       },
       "expected": {

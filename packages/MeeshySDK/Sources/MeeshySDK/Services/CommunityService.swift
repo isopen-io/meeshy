@@ -13,7 +13,7 @@ public protocol CommunityServiceProviding: Sendable {
     func addMember(communityId: String, userId: String, role: MemberRole) async throws -> APICommunityMember
     func updateMemberRole(communityId: String, memberId: String, role: MemberRole) async throws -> APICommunityMember
     func removeMember(communityId: String, userId: String) async throws
-    func join(communityId: String) async throws -> CommunityJoinOutcome
+    func join(communityId: String, viaLink: Bool) async throws -> CommunityJoinOutcome
     func joinRequests(communityId: String, cursor: String?, limit: Int) async throws -> CommunityJoinRequestPage
     func decideJoinRequest(communityId: String, requestId: String, decision: CommunityJoinRequestDecision) async throws -> APICommunityMember?
     func leave(communityId: String) async throws
@@ -22,6 +22,13 @@ public protocol CommunityServiceProviding: Sendable {
     func checkIdentifier(_ identifier: String) async throws -> IdentifierAvailability
     func getConversations(communityId: String) async throws -> [APIConversation]
     func addConversation(communityId: String, conversationId: String) async throws -> APIConversation
+}
+
+extension CommunityServiceProviding {
+    /// Une entrée directe, jamais comptée comme venue du lien.
+    public func join(communityId: String) async throws -> CommunityJoinOutcome {
+        try await join(communityId: communityId, viaLink: false)
+    }
 }
 
 public final class CommunityService: CommunityServiceProviding, Sendable {
@@ -141,10 +148,12 @@ public final class CommunityService: CommunityServiceProviding, Sendable {
     /// Annonce `acceptsPending` (#19869) : une communauté qui valide chaque
     /// entrée rend une demande en attente (202) au lieu d'un 409 que seul un
     /// ancien client reçoit encore.
-    public func join(communityId: String) async throws -> CommunityJoinOutcome {
+    /// `viaLink` (#20332) : le lecteur arrive par l'adresse partagée de la
+    /// communauté — l'entrée se compte comme venue du lien.
+    public func join(communityId: String, viaLink: Bool) async throws -> CommunityJoinOutcome {
         let response: APIResponse<CommunityJoinOutcome> = try await api.post(
             CommunitiesEndpoint.byIdJoin(id: communityId),
-            body: JoinCommunityRequest(acceptsPending: true)
+            body: JoinCommunityRequest(acceptsPending: true, viaLink: viaLink)
         )
         return response.data
     }

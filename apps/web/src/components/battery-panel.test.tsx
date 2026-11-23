@@ -5,6 +5,7 @@ import { act } from 'react';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import { receiveBatteryState } from '@/lib/battery/battery-live';
 import { loadBatteryCatalog } from '@/lib/i18n-battery-catalog';
+import { receivePhoneReachabilityState } from '@/lib/phone-reachability/phone-reachability-live';
 import type { SafeStorage } from '@/lib/storage';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -168,6 +169,25 @@ describe('le profil d’une personne', () => {
     const host = await mount(<ProfileBatteryRow language="fr" person={{ id: ADA, username: 'ada', displayName: 'Ada' }} deps={deps} client={client} />);
     await settle();
     expect(host.querySelector('[data-battery-detail]')).toBeNull();
+    expect(host.querySelector('[data-battery-pull]')).not.toBeNull();
+  });
+
+  test('un Sang dont le téléphone est injoignable depuis cinq minutes (#20241) : « Demander un relevé » disparaît', async () => {
+    const client = new QueryClient();
+    receivePhoneReachabilityState(client, { userId: ADA, unreachableSince: new Date(Date.now() - 5 * 60_000).toISOString(), cause: 'network' }, Date.now());
+    const { deps } = gateway({ level: 'BLOOD', settings: { shared: true, receive: 'all' } });
+    const host = await mount(<ProfileBatteryRow language="fr" person={{ id: ADA, username: 'ada', displayName: 'Ada' }} deps={deps} client={client} />);
+    await settle();
+    expect(host.querySelector('[data-profile-battery]')).not.toBeNull();
+    expect(host.querySelector('[data-battery-pull]')).toBeNull();
+  });
+
+  test('un silence tout juste ouvert laisse « Demander un relevé »', async () => {
+    const client = new QueryClient();
+    receivePhoneReachabilityState(client, { userId: ADA, unreachableSince: new Date(Date.now() - 60_000).toISOString(), cause: 'network' }, Date.now());
+    const { deps } = gateway({ level: 'BLOOD', settings: { shared: true, receive: 'all' } });
+    const host = await mount(<ProfileBatteryRow language="fr" person={{ id: ADA, username: 'ada', displayName: 'Ada' }} deps={deps} client={client} />);
+    await settle();
     expect(host.querySelector('[data-battery-pull]')).not.toBeNull();
   });
 

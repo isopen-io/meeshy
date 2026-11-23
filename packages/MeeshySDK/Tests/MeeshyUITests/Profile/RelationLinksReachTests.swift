@@ -57,7 +57,7 @@ final class RelationLinksReachTests: XCTestCase {
         XCTAssertTrue(reach.contains("MeeshyTicket("))
         XCTAssertTrue(reach.contains("MeeshyButton("))
         XCTAssertFalse(reach.contains("RoundedRectangle("), "aucun composant redessiné sur place")
-        let face = try source("UserProfileSheet+LinksFace.swift")
+        let face = try source("RelationReachSection.swift")
         XCTAssertFalse(face.contains("RelationLockedAddressRows("))
         XCTAssertFalse(face.contains("lockedAddresses"))
         XCTAssertTrue(face.contains("RelationOpenCommunitiesSection("))

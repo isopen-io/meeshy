@@ -30,9 +30,9 @@ import { declaredAgeClass } from '@meeshy/shared/utils/age';
  *    `messageRequests` et `pairAccess` interrogent, n'est pas lu ici : un majeur
  *    inconnu peut faire entrer un mineur déclaré, qui passe alors à `COMMUNITY`
  *    avec tous les membres. **#19811** — décision produit.
- *  · **le débit par ACTEUR.** Aucun des deux verbes n'en porte ; seul le plafond
- *    global par IP s'applique, et chaque ajout pousse une notification nommant
- *    l'acteur. **#19812**.
+ *  · **le débit.** Il ne vit pas ici mais dans les deux routes, qui débitent
+ *    `utils/community-addition-budget.ts` (par acteur avant cette porte, par
+ *    cible avant l'écriture) — **#19812**.
  *  · **la phase d'ACTIVATION.** `isActive` reste `true` pour un compte dont
  *    l'adresse n'est pas prouvée (le défaut de la colonne) : un compte en phase
  *    `blocked` (`services/auth/account-activation.ts`), qui ne peut plus ouvrir

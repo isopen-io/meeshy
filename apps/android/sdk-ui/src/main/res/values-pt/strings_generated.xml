@@ -189,6 +189,21 @@
     <string name="contacts_phonebook_write">Enviar mensagem</string>
     <string name="contacts_skeleton_loading">Carregando</string>
     <string name="contacts_tab_prefix">Aba</string>
+    <string name="content_card_a11y_open">Abre o conteúdo</string>
+    <string name="content_card_a11y_post_by">Publicação de %1$s</string>
+    <string name="content_card_a11y_reel_by">Reel de %1$s</string>
+    <string name="content_card_a11y_saves">%1$d salvamentos</string>
+    <string name="content_card_a11y_slide_position">Mídia %1$d de %2$d</string>
+    <string name="content_card_a11y_story_by">Story de %1$s</string>
+    <plurals name="content_card_a11y_views">
+        <item quantity="one">%1$d visualização</item>
+        <item quantity="many">%1$d visualizações</item>
+        <item quantity="other">%1$d visualizações</item>
+    </plurals>
+    <string name="content_card_kind_mood">Humor</string>
+    <string name="content_card_kind_post">Publicação</string>
+    <string name="content_card_kind_reel">Reel</string>
+    <string name="content_card_kind_story">Story</string>
     <string name="content_failure_retry">Tentar novamente</string>
     <string name="content_failure_server_title">O Meeshy não conseguiu carregar este conteúdo</string>
     <string name="content_failure_unavailable_title">Este conteúdo não está mais disponível</string>
@@ -543,11 +558,14 @@
     <string name="talkie_send_hold">Segure para falar</string>
     <string name="talkie_send_hold_a11y">Segure para falar com %1$s</string>
     <string name="talkie_send_hold_hint">Toque duas vezes e segure, fale e depois solte.</string>
+    <string name="talkie_send_leave_voice">Deixar uma mensagem de voz</string>
+    <string name="talkie_send_leave_voice_a11y">Deixar uma mensagem de voz para %1$s</string>
     <string name="talkie_send_limit">Trinta segundos no máximo: a fala parou.</string>
     <string name="talkie_send_mic_denied">Permita o microfone para usar o walkie-talkie.</string>
     <string name="talkie_send_offline">Offline: o walkie-talkie não pôde ser enviado.</string>
     <string name="talkie_send_rate_limited">Falas demais: tente de novo em um instante.</string>
     <string name="talkie_send_recording_copy">Gravando mensagem de voz…</string>
+    <string name="talkie_send_sent_as_voice">Enviado como mensagem de voz</string>
     <string name="talkie_send_talking">Você está falando com %1$s…</string>
     <string name="talkie_send_waking">Acordando %1$s…</string>
     <string name="time_lastSeen_beforeYesterdayAt">Visto anteontem às %1$s</string>

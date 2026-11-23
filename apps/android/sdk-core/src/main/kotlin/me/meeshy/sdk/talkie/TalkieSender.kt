@@ -17,6 +17,7 @@ import me.meeshy.sdk.model.relation.TalkieEndReason
 import me.meeshy.sdk.model.relation.TalkieEnded
 import me.meeshy.sdk.model.relation.TalkieFragment
 import me.meeshy.sdk.model.relation.TalkieFragmenter
+import me.meeshy.sdk.model.relation.TalkieHoldDelivery
 import me.meeshy.sdk.model.relation.TalkieLatency
 import me.meeshy.sdk.model.relation.TalkieLatencyStep
 import me.meeshy.sdk.model.relation.TalkieOpened
@@ -40,6 +41,10 @@ typealias TalkieDeadlineScheduler = (delayMs: Long, run: () -> Unit) -> () -> Un
  * - La durée maximale SERVIE ferme seule ; les plafonds d'octets et de fragments aussi, AVANT que le serveur ne coupe.
  * - Un `talkie:ended` qui porte MON `talkieId` arrête le micro, sans `talkie:end`.
  * - **Repli** (`voice`) : le micro continue tant que le doigt tient, puis la voix part en message vocal.
+ * - **Message vocal choisi** ([TalkieHoldDelivery.VOICE_MESSAGE], #20241) : le téléphone du destinataire est injoignable
+ *   depuis plusieurs minutes — aucun `talkie:start`, le micro s'ouvre, la voix s'enregistre tant que le doigt tient et part
+ *   en message vocal dans notre conversation DIRECTE, même hors ligne (la file d'envoi la portera). Un simple toucher sans
+ *   trame n'envoie rien et ne dit rien.
  * - **Réveil** (`delivery: waking`) : l'écran dit « Réveil de X… » ; la voix est gardée jusqu'au verdict `joined` de la
  *   passerelle — `false` la fait partir en copie vocale, même si le verdict arrive avant que le micro ne s'arrête.
  */
@@ -86,6 +91,7 @@ class TalkieSender(
         var copying = false
         var copied: List<ByteArray> = emptyList()
         var copyInto: String? = null
+        var voiceMessage = false
         var queue: List<TalkieFragment> = emptyList()
         val fragmenter = TalkieFragmenter()
         val budget = TalkieBudget()
@@ -115,8 +121,12 @@ class TalkieSender(
 
     // Le geste
 
-    fun press(toUserId: String) {
+    fun press(toUserId: String, delivery: TalkieHoldDelivery = TalkieHoldDelivery.LIVE) {
         if (session != null) return
+        if (delivery == TalkieHoldDelivery.VOICE_MESSAGE) {
+            pressVoiceMessage(toUserId)
+            return
+        }
         if (!emitter.isConnected) {
             _notice.value = TalkieSendOutcome.OFFLINE
             return
@@ -131,6 +141,28 @@ class TalkieSender(
             yield()
             val micReady = openMic(current)
             conclude(current, verdict.await(), micReady)
+        }
+    }
+
+    private fun pressVoiceMessage(toUserId: String) {
+        val current = Session(toUserId, now())
+        current.voiceMessage = true
+        current.copying = true
+        session = current
+        _phase.value = TalkieSendPhase.RecordingCopy(toUserId)
+        scope.launch {
+            yield()
+            if (!openMic(current)) {
+                refuse(current, TalkieSendOutcome.MIC_DENIED)
+                return@launch
+            }
+            if (current.released) {
+                finishCopy(current)
+                return@launch
+            }
+            current.cancelDeadline = schedule(TalkieContract.MAX_DURATION_MS) {
+                scope.launch { finishCopy(current) }
+            }
         }
     }
 
@@ -333,7 +365,15 @@ class TalkieSender(
         current.finishing = true
         current.cancelDeadline?.invoke()
         stopMic(current)
-        val sent = copier.send(current.copied, current.toUserId, current.copyInto)
+        if (current.voiceMessage && current.copied.isEmpty()) {
+            settle(current, outcome = null)
+            return
+        }
+        val sent = if (current.voiceMessage) {
+            copier.sendDirect(current.copied, current.toUserId)
+        } else {
+            copier.send(current.copied, current.toUserId, current.copyInto)
+        }
         settle(current, if (sent) TalkieSendOutcome.VOICE else TalkieSendOutcome.FAILED)
     }
 

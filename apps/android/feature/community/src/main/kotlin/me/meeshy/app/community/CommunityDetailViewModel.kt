@@ -68,7 +68,17 @@ data class CommunityDetailUiState(
     val joinRefusal: CommunityJoinRefusal? = null,
     /** Sa dernière demande a été refusée : nouvelle demande possible à partir de cet instant (#19949). */
     val joinDeclinedUntil: Instant? = null,
+    /** Un intendant a mis en pause les arrivées par le lien (#19661) — servi par le détail, ou appris d'un refus. */
+    val joinLinkPaused: Boolean = false,
+    /** Le lecteur est arrivé par l'adresse partagée (`?via=link`, #20332). */
+    val arrivesThroughLink: Boolean = false,
 ) {
+    /**
+     * La pause se dit AVANT le geste, et seulement à qui arrive par le lien : une communauté publique reste
+     * joignable par sa fiche (miroir `CommunityDetailViewModel.linkArrivalPaused` iOS).
+     */
+    val linkArrivalPaused: Boolean get() = arrivesThroughLink && joinLinkPaused && access?.isMember != true
+
     val showSkeleton: Boolean get() = community == null && isLoading
     val showError: Boolean get() = community == null && !isLoading && failure != null
 }
@@ -96,7 +106,9 @@ class CommunityDetailViewModel @Inject constructor(
 
     val communityId: String = checkNotNull(savedStateHandle[COMMUNITY_ID_ARG])
 
-    private val _state = MutableStateFlow(CommunityDetailUiState())
+    private val arrivesThroughLink: Boolean = savedStateHandle.get<String>(VIA_ARG) == VIA_LINK
+
+    private val _state = MutableStateFlow(CommunityDetailUiState(arrivesThroughLink = arrivesThroughLink))
     val state: StateFlow<CommunityDetailUiState> = _state.asStateFlow()
 
     private val _effects = Channel<CommunityDetailEffect>(Channel.BUFFERED)
@@ -148,7 +160,7 @@ class CommunityDetailViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            when (val result = repository.join(communityId)) {
+            when (val result = repository.join(communityId, viaLink = arrivesThroughLink)) {
                 is NetworkResult.Success -> when (result.data) {
                     is CommunityJoinOutcome.Pending -> {
                         _state.update {
@@ -177,6 +189,7 @@ class CommunityDetailViewModel @Inject constructor(
                             isJoining = false,
                             joinRequestPending = false,
                             joinRefusal = refusal,
+                            joinLinkPaused = it.joinLinkPaused || refusal == CommunityJoinRefusal.LINK_PAUSED,
                             access = before.access,
                             community = before.community,
                         )
@@ -248,6 +261,7 @@ class CommunityDetailViewModel @Inject constructor(
                 joinRequestPending = !access.isMember && (api.hasPendingJoinRequest || sending),
                 joinRefusal = it.joinRefusal.takeUnless { access.isMember },
                 joinDeclinedUntil = api.joinDeclinedUntil(Instant.now()).takeUnless { sending },
+                joinLinkPaused = api.joinLinkPaused == true,
             )
         }
         observeAppearance(api)
@@ -282,5 +296,7 @@ class CommunityDetailViewModel @Inject constructor(
 
     companion object {
         const val COMMUNITY_ID_ARG = "communityId"
+        const val VIA_ARG = "via"
+        const val VIA_LINK = "link"
     }
 }

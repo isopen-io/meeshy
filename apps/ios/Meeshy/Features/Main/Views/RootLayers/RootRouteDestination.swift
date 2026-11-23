@@ -76,9 +76,9 @@ struct RootRouteDestination: View {
                 onDismiss: { router.pop() }
             )
             .navigationBarHidden(true)
-        case .communityDetail(let communityId):
+        case .communityDetail(let communityId, let viaLink):
             CommunityDetailView(
-                communityId: communityId,
+                communityId: communityId, arrivesThroughLink: viaLink,
                 onSelectConversation: { apiConversation in
                     let currentUserId = AuthManager.shared.currentUser?.id ?? ""
                     let conv = apiConversation.toConversation(currentUserId: currentUserId)

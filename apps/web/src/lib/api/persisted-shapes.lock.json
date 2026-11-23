@@ -13,6 +13,16 @@
   "communities/:id/posts": {
    "named": "@tanstack#InfiniteData<FeedPage, FeedPageParam>"
   },
+  "content-link-targets/:token": {
+   "union": [
+    {
+     "primitive": "null"
+    },
+    {
+     "ref": "ContentPathTarget"
+    }
+   ]
+  },
   "conversations": {
    "named": "@tanstack#InfiniteData<ConversationsPage, ConversationsPageParam>"
   },
@@ -1756,6 +1766,38 @@
   },
   "src/lib/api/feed-pages.ts#FeedPost": {
    "object": {
+    "audioDuration": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
+    "audioUrl": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
     "author": {
      "optional": true,
      "type": {
@@ -2154,6 +2196,22 @@
       "primitive": "string"
      }
     },
+    "viewCount": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "number"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
     "viewerPoints": {
      "optional": true,
      "type": {
@@ -2230,6 +2288,22 @@
   },
   "src/lib/api/feed-pages.ts#FeedRepostOf": {
    "object": {
+    "audioUrl": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "null"
+       },
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
+    },
     "author": {
      "optional": true,
      "type": {
@@ -2395,6 +2469,12 @@
         "primitive": "undefined"
        }
       ]
+     }
+    },
+    "storyEffects": {
+     "optional": true,
+     "type": {
+      "primitive": "unknown"
      }
     },
     "translations": {

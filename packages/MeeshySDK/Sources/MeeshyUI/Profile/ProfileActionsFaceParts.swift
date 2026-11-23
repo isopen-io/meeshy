@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 // MARK: - « Carte » dans la grille « Parler » (#18872, loi 6)
@@ -39,6 +40,8 @@ struct ProfileWhereSlot: View {
     let tint: Color
     let isDisabled: Bool
     let placement: ProfileWherePlacement
+    /// La réponse vivante de l'app (#20242) : une position servie après le premier rendu pose la carte sans attendre.
+    @State private var liveOffered: Bool?
 
     /// Tout se lit dans le corps de la fiche ; la place ne reçoit que des valeurs.
     static func of(_ sheet: UserProfileSheet, _ placement: ProfileWherePlacement) -> ProfileWhereSlot {
@@ -48,12 +51,34 @@ struct ProfileWhereSlot: View {
     }
 
     var body: some View {
-        if let map, let request, map.placement(for: request.userId) == placement {
+        if placement == .card {
+            // Une pile et son ancre, jamais un contenu vide : sans enfant, l'écoute de la réponse vivante ne démarrerait
+            // pas. L'action « Carte » vit dans une grille, qui compterait l'ancre : elle garde la lecture du rendu.
+            ZStack(alignment: .topLeading) {
+                Color.clear.frame(height: 0).accessibilityHidden(true)
+                content
+            }
+            .task(id: request?.userId) { await listen() }
+        } else {
+            content
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let map, let request, map.placement(for: request.userId, live: liveOffered) == placement {
             switch placement {
             case .action: ProfileLocationMapAction(map: map, request: request, tint: tint)
             case .card: ProfileWhereSection(map: map, request: request).disabled(isDisabled).padding(.bottom, MeeshySpacing.xxl)
             case .none: EmptyView()
             }
+        }
+    }
+
+    private func listen() async {
+        guard let request, let changes = map?.offeredChanges else { return }
+        for await offered in changes(request.userId).values {
+            liveOffered = offered
         }
     }
 }

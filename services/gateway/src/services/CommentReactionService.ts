@@ -35,19 +35,35 @@ export type AddCommentReactionResult = CommentReactionData & { readonly unchange
 export interface CommentReactionSync {
   readonly commentId: string;
   readonly postId: string;
-  readonly reactions: readonly CommentReactionAggregationWithUsers[];
+  readonly reactions: readonly CommentReactionAggregation[];
   readonly totalCount: number;
   readonly userReactions: readonly string[];
 }
 
-export interface CommentReactionAggregationWithUsers extends CommentReactionAggregation {
-  readonly users: readonly {
-    readonly userId: string;
-    readonly username: string;
-    readonly avatar: string | null;
-    readonly createdAt: string;
-  }[];
-}
+/**
+ * **`users[]` A ÉTÉ COUPÉ (#20337).**
+ *
+ * `CommentReactionAggregationWithUsers` ajoutait à chaque agrégat, pour CHAQUE
+ * réacteur, son `username` (= `User.displayName`), son `avatar` et le
+ * `createdAt` de sa réaction — à la seconde. C'était strictement PLUS que ce
+ * que `userIds` divulgue, et aucun des trois clients ne le décodait : ni
+ * `SocketCommentReactionSyncEvent` (iOS), ni `SocketCommentReactionSyncData`
+ * (Android), ni le web, qui n'écoute pas cette famille. Le champ n'avait aucun
+ * consommateur, dans le dépôt comme sur le fil.
+ *
+ * Il est COUPÉ et non filtré, pour trois raisons : l'argument de
+ * rétrocompatibilité qui oblige à garder `userIds` (les décodeurs Swift le
+ * déclarent NON optionnel — l'omettre fait LEVER le décodage de l'événement
+ * entier) ne s'applique pas à un champ que personne ne lit ; la coupe retire la
+ * requête `user.findMany` que l'enrichissement imposait à chaque
+ * synchronisation ; et un filtrage aurait laissé `users` et `userIds`
+ * désalignés alors que le producteur les construisait index-parallèles.
+ *
+ * Trouvé par l'audit adversarial du lot, et c'est la leçon 275 dans sa forme la
+ * plus pure : `rosterServedTo` gardait la CHAÎNE `userIds` et recopiait le
+ * champ VOISIN par un spread, dans le même objet littéral — en citant la leçon
+ * dans son propre doc-comment.
+ */
 
 export interface CommentReactionUpdateEvent {
   readonly commentId: string;
@@ -261,33 +277,7 @@ export class CommentReactionService {
       }
     });
 
-    const aggregations = Array.from(aggregationMap.values());
-
-    const allUserIds = new Set<string>();
-    aggregations.forEach(a => a.userIds.forEach((uid: string) => allUserIds.add(uid)));
-
-    const users = allUserIds.size > 0
-      ? await this.prisma.user.findMany({
-          where: { id: { in: Array.from(allUserIds) } },
-          select: { id: true, displayName: true, avatar: true }
-        })
-      : [];
-
-    const userMap = new Map(users.map(u => [u.id, u]));
-
-    const enrichedReactions: CommentReactionAggregationWithUsers[] = aggregations.map(agg => ({
-      ...agg,
-      users: agg.userIds.map((uid: string) => {
-        const user = userMap.get(uid);
-        const reaction = reactions.find(r => r.emoji === agg.emoji && r.userId === uid);
-        return {
-          userId: uid,
-          username: user?.displayName ?? 'Anonymous',
-          avatar: user?.avatar ?? null,
-          createdAt: reaction?.createdAt?.toISOString() ?? new Date().toISOString()
-        };
-      })
-    }));
+    const enrichedReactions: CommentReactionAggregation[] = Array.from(aggregationMap.values());
 
     const userReactions = reactions
       .filter(r => currentUserId && r.userId === currentUserId)

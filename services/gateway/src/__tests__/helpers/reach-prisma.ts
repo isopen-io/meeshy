@@ -145,7 +145,7 @@ export function makeReachPrisma(posts: readonly ReachPost[], guests: readonly Re
       visibilityUserIds: [] as string[],
       author: (post.author as object | undefined) ?? ACTIVE_AUTHOR,
       repostOf: parent
-        ? { visibility: parent.visibility, deletedAt: parent.deletedAt ?? null, expiresAt: parent.expiresAt ?? null }
+        ? { visibility: parent.visibility, deletedAt: parent.deletedAt ?? null, expiresAt: parent.expiresAt ?? null, author: (parent.author as object | undefined) ?? ACTIVE_AUTHOR }
         : null,
     };
   };

@@ -6,6 +6,7 @@ export * from './mint-ceremony.js';
 export * from './glory.js';
 export * from './treasury.js';
 export * from './flame.js';
+export * from './flame-effort.js';
 export * from './boosts.js';
 export * from './missions.js';
 export * from './chest.js';

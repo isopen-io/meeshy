@@ -54,6 +54,9 @@ struct ReelFeedVideoSurface: View {
     let isActive: Bool
     /// #10504 — le contenu dont la lecture est mesurée (`playback`).
     var playbackTarget: SocialTarget? = nil
+    /// Toujours muette, quelle que soit l'intention de son du fil : une surface qui montre sans proposer d'écouter
+    /// (« Lui envoyer un contenu », #20243).
+    var silenced: Bool = false
 
     /// Reporté au parent (D3, S2) : `true` quand CETTE instance possède
     /// RÉELLEMENT le moteur partagé et qu'il joue bien SA vidéo
@@ -238,6 +241,7 @@ struct ReelFeedVideoSurface: View {
         // `isMuted == true` laissé par une AUTRE surface (galerie de
         // conversation) garderait `effectiveMuted` vrai et l'icône mentirait
         // (DoD S2 rejet, constat majeur #2).
+        let soundOn = self.soundOn && !silenced
         ReelFeedSoundButtonPolicy.apply(soundOn: soundOn, to: manager)
         manager.shouldLoop = true
         // D5 : aucun armement explicite de la session ici — `apply()`

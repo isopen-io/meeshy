@@ -31,6 +31,7 @@ import itStudioChrome from './catalog-it-studio-chrome';
 import itEphemeral from './catalog-it-ephemeral';
 import itWriteRestriction from './catalog-it-write-restriction';
 import itConversationCard from './catalog-it-conversation-card';
+import itContentCard from './catalog-it-content-card';
 import itStoriesMine from './catalog-it-stories-mine';
 import itContactCard from './catalog-it-contact-card';
 import itQuote from './catalog-it-quote';
@@ -1082,6 +1083,7 @@ const it = {
   ...itGallery,
   ...itMessageCard,
   ...itConversationCard,
+  ...itContentCard,
   ...itStoriesMine,
   'settings.tools.sounds': 'I miei suoni',
   'settings.section.packs': 'Pacchetti e download',

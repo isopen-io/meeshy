@@ -24,6 +24,7 @@ import { useBatteryEntry } from '@/lib/battery/use-battery';
 import { batteryDetailOf, type BatteryDetail } from '@/lib/battery/battery-view';
 import { translateBattery, useBatteryCatalog, type BatteryCatalogKey } from '@/lib/i18n-battery-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { usePhoneUnreachableLasting } from '@/lib/phone-reachability/use-phone-reachability';
 import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
 
 import { BatteryGlyph } from './battery-glyph';
@@ -41,7 +42,8 @@ import { GroupedSection, SECTION_INK, SECTION_INK_2 } from './grouped-section';
  * - **Ce que je partage** (profil de la personne) : proposé à un Proche, jamais pré-coché ; chez un Sang, partagé
  *   par défaut et retirable. Le serveur décide de l'état servi ; l'interface ne le présume pas.
  * - **« Demander un relevé »** n'existe que pour un Sang, dans son PROFIL — comme sur iOS, la fiche d'un direct
- *   porte le détail et ce que je reçois, pas le relevé ; le serveur borne la cadence et le dit.
+ *   porte le détail et ce que je reçois, pas le relevé ; le serveur borne la cadence et le dit. Un téléphone qu'on
+ *   SAIT injoignable depuis cinq minutes (#20241) ne répondra pas : la rangée ne se propose pas.
  * - **La proposition au Proche** arrive UNE fois par compte et par personne, case non cochée, à la place de
  *   l'interrupteur, et seulement quand mon partage global est actif ; la réponse la retire pour de bon.
  * - **Mon partage global** (`/me`) : la coupure pour tous.
@@ -340,6 +342,7 @@ export function ProfileBatteryRow({
   const { settings, problem, save } = usePersonSettings(person.id, deps, client, offered);
   const emitter = useEmitterSettings(deps, client);
   const consent = useConsentMemory(viewerId, person.id, storage);
+  const unreachable = usePhoneUnreachableLasting(person.id, client);
   if (!offered || !ready) return null;
   const name = person.displayName ?? person.username;
   const proposes = level === 'CLOSE' && settings !== null && !settings.shared && emitter.settings?.sharingEnabled === true && !consent.offered;
@@ -350,7 +353,7 @@ export function ProfileBatteryRow({
   return (
     <div data-profile-battery={level ?? ''} className="grid gap-1 rounded-card" style={{ backgroundColor: 'var(--color-ios-card)' }}>
       <DetailOf userId={person.id} language={language} client={client} />
-      {level === 'BLOOD' ? <PullButton language={language} name={name} userId={person.id} deps={deps} /> : null}
+      {level === 'BLOOD' && !unreachable ? <PullButton language={language} name={name} userId={person.id} deps={deps} /> : null}
       {proposes ? <ConsentOffer language={language} name={name} onAnswer={answerConsent} /> : null}
       {settings === null || proposes ? null : (
         <SwitchRow

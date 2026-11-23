@@ -25,7 +25,12 @@ const story = (patch: Partial<StoryFeedPost> = {}): StoryFeedPost => ({
   ...patch,
 });
 
-const event = { storyId: 'st-mienne', viewerId: 'u-noor', viewerUsername: 'noor.haddad', viewCount: 9 };
+/* #20443 — la charge TELLE QUE LA PASSERELLE L'ÉMET : `story:viewed` ne nomme
+   plus personne, les deux clés nominatives partant à la chaîne vide (elles
+   restent sur le fil parce que les décodeurs iOS et Android exigent leur
+   PRÉSENCE). Un harnais qui les remplirait attesterait un contrat que plus
+   aucun émetteur ne respecte — et c'est celui qu'un prochain lot copierait. */
+const event = { storyId: 'st-mienne', viewerId: '', viewerUsername: '', viewCount: 9 };
 
 describe('applyStoryViewedEvent — le compte des vues et la liste suivent en direct', () => {
   test('le compte SERVI remplace celui du corpus ET celui de la story atteinte par lien', () => {

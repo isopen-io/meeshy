@@ -29,6 +29,7 @@ object PendingDeepLink {
         is DeepLinkDestination.UserLinks,
         is DeepLinkDestination.PostDetail,
         is DeepLinkDestination.StoryDetail,
+        is DeepLinkDestination.Mood,
         is DeepLinkDestination.Reel,
         is DeepLinkDestination.Community,
         is DeepLinkDestination.RecentConversation,

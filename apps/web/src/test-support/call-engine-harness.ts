@@ -1,6 +1,8 @@
 import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
 import type { CameraEffectsPort } from '@/lib/calls/camera-effects';
+import type { CallReports } from '@/lib/calls/call-analytics';
+import { analyticsPayload, qualityReport } from '@/lib/calls/call-analytics-report';
 import { createCaptions } from '@/lib/calls/call-captions-controller';
 import { createCallNoticeStore, createCallReactionStore } from '@/lib/calls/call-control-state';
 import { mediaFailureOf } from '@/lib/calls/call-media';
@@ -42,7 +44,7 @@ export const stream = (tracks: readonly FakeTrack[]): MediaStream => {
 
 export type FakeLink = PeerLink & { readonly deps: PeerLinkDeps; offers: number; restarts: number; closed: boolean; received: string[]; sent: unknown[] };
 
-export function harness(options: { readonly acks?: Record<string, unknown>; readonly activeCallId?: string | null; readonly mediaError?: Error; readonly videoRefused?: Error; readonly displayError?: Error; readonly quality?: () => QualityTick | null; readonly random?: number; readonly cameraEffects?: CameraEffectsPort; readonly acquireCamera?: CallEngineDeps['acquireCamera']; readonly acquireCameraDevice?: CallEngineDeps['acquireCameraDevice']; readonly onJoinRefusedEnded?: CallEngineDeps['onJoinRefusedEnded'] } = {}) {
+export function harness(options: { readonly acks?: Record<string, unknown>; readonly activeCallId?: string | null; readonly mediaError?: Error; readonly videoRefused?: Error; readonly displayError?: Error; readonly quality?: () => QualityTick | null; readonly random?: number; readonly cameraEffects?: CameraEffectsPort; readonly acquireCamera?: CallEngineDeps['acquireCamera']; readonly acquireCameraDevice?: CallEngineDeps['acquireCameraDevice']; readonly onJoinRefusedEnded?: CallEngineDeps['onJoinRefusedEnded']; readonly reports?: CallReports } = {}) {
   resetCallTransportForTests();
   let qualityDeps: QualityLoopDeps | null = null;
   const store: CallStoreApi = createCallStore();
@@ -156,7 +158,7 @@ export function harness(options: { readonly acks?: Record<string, unknown>; read
       return () => void pathListeners.splice(pathListeners.indexOf(onChange), 1);
     },
     platform: () => 'web',
-    deviceModel: () => 'Chrome · Linux',
+    reports: options.reports ?? { final: (telemetry, context, send) => send(analyticsPayload(telemetry, { ...context, deviceModel: 'Chrome · Linux' })), quality: (callId, total, at, send) => send(qualityReport(callId, total, at)) },
     tones: { start: (kind) => void tones.push(`start:${kind}`), stop: () => void tones.push('stop'), cue: (kind) => void tones.push(`cue:${kind}`), prime: () => undefined },
     ringLabel: () => 'Appel entrant',
     random: () => options.random ?? 0.99,
@@ -185,7 +187,7 @@ export function harness(options: { readonly acks?: Record<string, unknown>; read
   const networkChanged = (): void => networkListeners.forEach((listener) => listener());
   const networkPathChanged = (): void => [...pathListeners].forEach((listener) => listener());
 
-  return { engine, store, emitted, requested, links, tones, displays, cameras, remembered, notices, advance, call, names, linkState, binding, sampleQuality, networkChanged, networkPathChanged, socket, qualityDeps: () => qualityDeps };
+  return { engine, store, elapsed: () => clock, emitted, requested, links, tones, displays, cameras, remembered, notices, advance, call, names, linkState, binding, sampleQuality, networkChanged, networkPathChanged, socket, qualityDeps: () => qualityDeps };
 }
 
 export const DIRECT: StartCallRequest = { conversationId: 'c-1', media: 'audio', title: 'Amina', avatar: null, isGroup: false };

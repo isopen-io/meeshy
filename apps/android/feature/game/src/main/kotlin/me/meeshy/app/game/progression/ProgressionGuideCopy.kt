@@ -81,6 +81,7 @@ private fun actionLabel(action: GuideActionV2): String = when (action) {
     GuideActionV2.SeeAtlas -> stringResource(R.string.game2_guide_action_see_atlas)
     GuideActionV2.SeeLevel -> actionLabel(GuideAction.SeeLevel)
     GuideActionV2.SeeFlame -> actionLabel(GuideAction.SeeFlame)
+    GuideActionV2.SeeMissions -> actionLabel(GuideAction.SeeMissions)
 }
 
 @Composable
@@ -318,6 +319,13 @@ private fun momentCopyV2(event: GuideEventV2, action: String): GuideCopyText = w
         stringResource(R.string.game2_guide_moment_flame_freeze_gift_means),
         stringResource(R.string.game2_guide_moment_flame_freeze_gift_next, count(event.freezes)),
         stringResource(R.string.game2_guide_moment_flame_freeze_gift_short),
+        action,
+    )
+    is GuideEventV2.OfferingKept -> GuideCopyText(
+        stringResource(R.string.game2_guide_moment_offering_kept_what),
+        stringResource(R.string.game2_guide_moment_offering_kept_means),
+        stringResource(R.string.game2_guide_moment_offering_kept_next, gameString(GameCopyLaws.days(event.easedDays))),
+        stringResource(R.string.game2_guide_moment_offering_kept_short),
         action,
     )
 }

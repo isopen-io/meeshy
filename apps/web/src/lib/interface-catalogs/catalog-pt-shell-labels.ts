@@ -59,6 +59,9 @@ const ptShellLabels = {
   'message.reaction.add': 'Reagir com {emoji}',
   'message.reaction.remove': 'Remover sua reação {emoji}',
   'message.badge.pinned': 'Mensagem fixada',
+  'message.edited.a11y': 'editado',
+  'message.pinned.a11y': 'fixado',
+  'message.replyTo.a11y': 'em resposta a {author}',
   'quote.sender.unknown': 'o remetente',
 
   'media.tile.open': 'Abrir {name}',

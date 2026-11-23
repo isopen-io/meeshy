@@ -269,6 +269,9 @@ public struct SharedLocationOwnSnapshot: Decodable, Sendable, Equatable {
     /// appareil. `nil` : la passerelle ne le dit pas (antérieure à #20116, ou aucun partage) — rien n'est changé ici. Une
     /// source inconnue se lit `manual` : on ne remplace jamais un point par la position réelle sur un doute.
     public let source: SharedLocationPositionSource?
+    /// La passerelle accepte-t-elle qu'un démarrage nomme le partage qu'il remplace (`expectedStartedAt`, #20249) ?
+    /// Absent ou autre chose qu'un booléen vrai : non — une passerelle d'avant refuserait la clé (`INVALID`).
+    public let acceptsExpectedStart: Bool
 
     public init(
         recipients: [SharedLocationOwnRecipient],
@@ -276,9 +279,11 @@ public struct SharedLocationOwnSnapshot: Decodable, Sendable, Equatable {
         acceptsManualSource: Bool = false,
         acceptsUntilStopped: Bool = false,
         startedAt: String? = nil,
-        source: SharedLocationPositionSource? = nil
+        source: SharedLocationPositionSource? = nil,
+        acceptsExpectedStart: Bool = false
     ) {
         self.source = source
+        self.acceptsExpectedStart = acceptsExpectedStart
         self.recipients = recipients
         self.shareBattery = shareBattery
         self.acceptsManualSource = acceptsManualSource
@@ -286,7 +291,7 @@ public struct SharedLocationOwnSnapshot: Decodable, Sendable, Equatable {
         self.startedAt = startedAt
     }
 
-    private enum CodingKeys: String, CodingKey { case recipients, shareBattery, acceptsManualSource, acceptsUntilStopped, startedAt, source }
+    private enum CodingKeys: String, CodingKey { case recipients, shareBattery, acceptsManualSource, acceptsUntilStopped, startedAt, source, acceptsExpectedStart }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -296,6 +301,7 @@ public struct SharedLocationOwnSnapshot: Decodable, Sendable, Equatable {
         acceptsUntilStopped = ((try? c.decodeIfPresent(Bool.self, forKey: .acceptsUntilStopped)) ?? nil) ?? false
         startedAt = (try? c.decodeIfPresent(String.self, forKey: .startedAt)) ?? nil
         source = Self.servedSource(in: c)
+        acceptsExpectedStart = ((try? c.decodeIfPresent(Bool.self, forKey: .acceptsExpectedStart)) ?? nil) ?? false
     }
 
     /// Une clé absente ou nulle ne dit rien ; une clé présente mais illisible (autre chaîne, autre type) dit un point

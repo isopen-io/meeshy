@@ -108,6 +108,21 @@ class TalkieEmitAndCopyTest {
     }
 
     @Test
+    fun `le message vocal laisse a un proche injoignable part dans notre direct, jamais dans un groupe`() = runTest {
+        val existing = FakePorts(
+            candidates = listOf(TalkieCopyCandidate("g", "group", rankAtMs = 9), TalkieCopyCandidate("d", "direct", rankAtMs = 1)),
+        )
+        assertThat(copier(existing).sendDirect(listOf(byteArrayOf(1)), "bob")).isTrue()
+        assertThat(existing.enqueued.single().first).isEqualTo("d")
+        assertThat(existing.openedDirect).isEmpty()
+
+        val groupOnly = FakePorts(candidates = listOf(TalkieCopyCandidate("g", "group", rankAtMs = 9)))
+        assertThat(copier(groupOnly).sendDirect(listOf(byteArrayOf(1)), "bob")).isTrue()
+        assertThat(groupOnly.enqueued.single().first).isEqualTo("direct")
+        assertThat(groupOnly.openedDirect).containsExactly("bob")
+    }
+
+    @Test
     fun `rien a ecrire, aucune conversation ou une file qui refuse, rien ne part et le fichier est retire`() = runTest {
         assertThat(copier(FakePorts()).send(emptyList(), "bob", null)).isFalse()
         assertThat(copier(FakePorts(writes = false)).send(listOf(byteArrayOf(1)), "bob", null)).isFalse()

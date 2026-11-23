@@ -168,6 +168,11 @@ final class SharedLocationSharingCenter: ObservableObject {
     /// Le démarrage que la passerelle a nommé en dernier (`startedAt`, relu ou accusé) : il date la question « Montrer ta
     /// position réelle ? » (#20127). `nil` : aucun, ou une passerelle qui ne le dit pas.
     private var servedStart: String?
+    /// La passerelle a annoncé `acceptsExpectedStart` à la dernière relecture (#20249) : une réponse peut nommer le
+    /// partage montré.
+    private var acceptsExpectedStart = false
+    /// Le dernier démarrage a porté la clé jusqu'à la passerelle : un refus LOCAL (liste invalide) ne la met pas en cause.
+    private var expectedStartSent = false
     private var following = Set<AnyCancellable>()
     private var deadline: AnyCancellable?
     private var socketWatch = Set<AnyCancellable>()
@@ -274,12 +279,46 @@ final class SharedLocationSharingCenter: ObservableObject {
             case .unavailable: return .locationUnavailable
             }
             guard self.isLive else { return .refused(.failed) }
+            let expected = self.expectedStart(showsPoint: showsPoint)
             let next = self.adding(userId, precision: precision, term: term, battery: battery).withFixedPoint(false)
             let problem = await self.publish(next, fix: fix, previous: self.roster, claimsPublishing: true, notify: notify,
-                                             replacesChosenPoint: showsPoint)
-            guard problem == .refused(.fixedPoint) else { return problem }
-            return await self.readServedTruth() && self.roster.isFixedPoint ? .replacesChosenPoint(self.askedReplacement) : problem
+                                             replacesChosenPoint: showsPoint, expectedStartedAt: expected)
+            guard self.rereadsAfter(problem) else { return problem }
+            return await self.askAgainAfter(problem, expected: expected)
         }
+    }
+
+    /// La réponse nomme le partage montré, tel que servi (#20249) : la passerelle refuse si un autre a démarré depuis.
+    private func expectedStart(showsPoint: Bool) -> String? {
+        let shown = askedReplacement.startedAt
+        guard showsPoint, acceptsExpectedStart, SharedLocationWireInstant.isWire(shown) else { return nil }
+        return shown
+    }
+
+    /// Un refus certain qui n'a rien écrit et que la relecture peut lever : un point choisi, ou le partage nommé remplacé.
+    private func rereadsAfter(_ problem: SharedLocationShareProblem?) -> Bool {
+        switch problem {
+        case .refused(.fixedPoint): return true
+        case .refused(.startedElsewhere), .refused(.invalid): return expectedStartSent
+        default: return false
+        }
+    }
+
+    /// Rien n'a été écrit : un point choisi que cet appareil ignorait encore, ou le partage nommé n'est plus servi (un
+    /// autre démarrage, un arrêt, une passerelle revenue en arrière qui refuse la clé). L'appareil relit et redemande ;
+    /// il ne renvoie jamais sans la clé, et ne relance rien devant un partage qui n'est plus un point choisi.
+    private func askAgainAfter(_ problem: SharedLocationShareProblem?, expected: String?) async -> SharedLocationShareProblem? {
+        let reread = await readServedTruth()
+        guard isLive else { return .refused(.failed) }
+        guard reread else { return problem == .refused(.fixedPoint) ? problem : .refused(.offline) }
+        if refusedForAnotherCause(problem, expected: expected) { return problem }
+        return roster.pruned(now: now()).isFixedPoint ? .replacesChosenPoint(askedReplacement) : problem
+    }
+
+    /// Un `INVALID` alors que la relecture sert toujours la clé et le même partage : la clé n'est pas en cause, reposer
+    /// la même question tournerait en rond sans jamais dire l'échec.
+    private func refusedForAnotherCause(_ problem: SharedLocationShareProblem?, expected: String?) -> Bool {
+        problem == .refused(.invalid) && acceptsExpectedStart && askedReplacement.startedAt == expected
     }
 
     /// La question que poserait le partage servi tel que ce centre le connaît.
@@ -414,8 +453,12 @@ final class SharedLocationSharingCenter: ObservableObject {
             awaitsServedTruth = false
             scheduleDeadline()
         }
-        guard let truth = read else { return true }
+        guard let truth = read else {
+            acceptsExpectedStart = false
+            return true
+        }
         servedStart = truth.startedAt
+        acceptsExpectedStart = truth.acceptsExpectedStart
         if truth.shareBattery != nil { servesShareOptions = true }
         if truth.acceptsManualSource { servesFixedPoint = true }
         if truth.acceptsUntilStopped { servesUntilStopped = true }
@@ -586,8 +629,10 @@ final class SharedLocationSharingCenter: ObservableObject {
         previous: SharedLocationRoster,
         claimsPublishing: Bool = false,
         notify: Bool = false,
-        replacesChosenPoint: Bool = false
+        replacesChosenPoint: Bool = false,
+        expectedStartedAt: String? = nil
     ) async -> SharedLocationShareProblem? {
+        expectedStartSent = false
         let offersOptions = servesShareOptions != false
         let next = wanted.settled.withBattery(wanted.sharesBattery && offersOptions)
         let instant = now()
@@ -596,11 +641,12 @@ final class SharedLocationSharingCenter: ObservableObject {
             recipients: recipients, duration: next.serverDuration(now: instant), fix: fix,
             notifyRecipients: notify && offersOptions, shareBattery: next.sharesBattery,
             source: next.isFixedPoint ? .manual : .device, replacesChosenPoint: replacesChosenPoint,
-            untilStopped: next.isOpenEnded
+            untilStopped: next.isOpenEnded, expectedStartedAt: expectedStartedAt
         ) else {
             return .refused(.invalid)
         }
         guard isLive else { return .refused(.failed) }
+        expectedStartSent = request.carriesExpectedStart
         let verdict = await startTolerant(request)
         guard isLive else { return .refused(.failed) }
         return settle(verdict, next: next.withBattery(next.sharesBattery && servesShareOptions != false), fix: fix,
@@ -628,6 +674,8 @@ final class SharedLocationSharingCenter: ObservableObject {
             return .refused(.unconfirmed)
         case .refused(.fixedPoint):
             return .refused(.fixedPoint)
+        case .refused(.startedElsewhere):
+            return .refused(.startedElsewhere)
         case .refused(let outcome):
             forgetPublishedStart(ifSent: fix)
             return .refused(outcome)
@@ -733,6 +781,8 @@ final class SharedLocationSharingCenter: ObservableObject {
         markReceived(false)
         publishedStart = nil
         servedStart = nil
+        acceptsExpectedStart = false
+        expectedStartSent = false
         deadline = nil
         stopFollowingDevice()
     }

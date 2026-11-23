@@ -20,7 +20,7 @@ final class DeepLinkSingleParserTests: XCTestCase {
         "https://meeshy.me/feeds/post/p1", "https://meeshy.me/feeds/p/p2",
         "https://meeshy.me/post/p3", "https://meeshy.me/p/p4",
         "https://meeshy.me/story/s1", "https://meeshy.me/stories/s2", "https://meeshy.me/s/s3",
-        "https://meeshy.me/reel/r1", "https://meeshy.me/reels?seed=r2",
+        "https://meeshy.me/reel/r1", "https://meeshy.me/reels?seed=r2", "https://meeshy.me/mood/m1",
         "https://meeshy.me/communities/cm1", "https://meeshy.me/communities/mshy_club?via=link",
         "https://meeshy.me/hashtag/voyage",
         "https://www.meeshy.me/story/s4", "https://app.meeshy.me/c/conv3",
@@ -64,8 +64,20 @@ final class DeepLinkSingleParserTests: XCTestCase {
     /// L'adresse PARTAGÉE d'une communauté (#20330) ouvre la communauté, jamais un lien de conversation.
     func test_adressePartageeDUneCommunaute_ouvreLaCommunaute() {
         let url = URL(string: CommunityLink.canonicalJoinUrl(baseUrl: "https://meeshy.me", identifier: "mshy_club"))!
-        XCTAssertEqual(DeepLinkParser.parse(url), .community(id: "mshy_club"))
+        XCTAssertEqual(DeepLinkParser.parse(url), .community(id: "mshy_club", viaLink: true))
         XCTAssertEqual(DeepLinkRouter.entry(forLaunchURL: url), .sharedLink)
+    }
+
+    /// L'arrivée par le lien (#20332) survit aux deux voies — lancement système
+    /// et lien tapé dans l'app — et un autre marqueur ne vaut pas le lien.
+    func test_adressePartageeDUneCommunaute_porteLArriveeParLeLien_surLesDeuxVoies() {
+        let url = URL(string: "https://meeshy.me/communities/mshy_club?via=link")!
+        let sut = makeRouter()
+
+        XCTAssertTrue(sut.handle(url: url))
+        XCTAssertEqual(sut.pendingDeepLink, .community(id: "mshy_club", viaLink: true))
+        XCTAssertEqual(DeepLinkParser.parse(URL(string: "https://meeshy.me/communities/mshy_club?via=qr")!),
+                       .community(id: "mshy_club", viaLink: false))
     }
 
     /// Le partage in-app (`/share`) n'est pas une destination de lancement :
@@ -79,5 +91,21 @@ final class DeepLinkSingleParserTests: XCTestCase {
     /// `/l/<token>` : le système le résout, il ne le pose pas tel quel.
     func test_lienDeSuivi_estRevendiquePourResolution() {
         XCTAssertTrue(makeRouter().handle(url: URL(string: "https://meeshy.me/l/abc123")!))
+    }
+
+    /// #20211 — `/mood/<id>`, l'adresse d'une humeur, s'ouvre DANS l'app, en
+    /// plein écran — la page que sa notification ouvre déjà — et le lien suivi
+    /// d'un STATUS mène au même endroit.
+    func test_parse_moodAddress_opensTheMoodFullScreen_likeATrackedStatusTarget() throws {
+        let mood = try XCTUnwrap(URL(string: "https://meeshy.me/mood/66f0c0ffee0000000000c0de"))
+        let trackedStatus = DeepLinkRouter.trackedDestination(
+            for: ResolvedTrackedLink(kind: "tracking", targetType: "STATUS", targetId: "66f0c0ffee0000000000c0de"),
+            token: "Ab3xYz"
+        )
+
+        XCTAssertEqual(DeepLinkParser.parse(mood), .mood(postId: "66f0c0ffee0000000000c0de"))
+        XCTAssertEqual(DeepLinkRouter.link(for: DeepLinkParser.parse(mood)), trackedStatus)
+        XCTAssertEqual(trackedStatus, .mood(postId: "66f0c0ffee0000000000c0de"))
+        XCTAssertTrue(InAppLinks.opensInApp(mood), "une humeur touchée dans l'app ne part plus dans Safari")
     }
 }

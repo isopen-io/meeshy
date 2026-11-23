@@ -28,8 +28,14 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
     /// La demande du lecteur a été refusée (#19948) : « Demande refusée »
     /// jusqu'à cette date — servie par le détail ou annoncée en direct.
     @Published private(set) var joinDeclinedUntil: Date?
+    /// Un intendant a mis en pause les arrivées par le lien (#19661) — servi
+    /// par le détail, ou appris d'un refus `COMMUNITY_LINK_PAUSED`.
+    @Published private(set) var joinLinkPaused = false
 
     let communityId: String
+    /// Le lecteur est arrivé par l'adresse partagée (`?via=link`, #20332) :
+    /// rejoindre compte l'entrée comme venue du lien.
+    let arrivesThroughLink: Bool
     private let service: CommunityServiceProviding
     private let currentUserId: @MainActor () -> String
     private let postsCache: @MainActor () async -> CommunityPostsCache?
@@ -52,6 +58,7 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
     /// « Demande envoyée » à « Demande refusée » sans relecture.
     init(
         communityId: String,
+        arrivesThroughLink: Bool = false,
         service: CommunityServiceProviding = CommunityService.shared,
         currentUserId: @escaping @MainActor () -> String = { AuthManager.shared.currentUser?.id ?? "" },
         postsCache: @escaping @MainActor () async -> CommunityPostsCache? = { nil },
@@ -63,6 +70,7 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
         now: @escaping @MainActor () -> Date = { Date() }
     ) {
         self.communityId = communityId
+        self.arrivesThroughLink = arrivesThroughLink
         self.service = service
         self.currentUserId = currentUserId
         self.postsCache = postsCache
@@ -184,6 +192,7 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
         let recordRole = apiCommunity.members?.first(where: { $0.userId == readerId })?.communityRole
         isCreator = creatorMatch
         requiresJoinApproval = apiCommunity.requiresJoinApproval == true
+        joinLinkPaused = apiCommunity.joinLinkPaused == true
         adopt(role: servedRole ?? recordRole)
         joinRequestPending = !isMember && apiCommunity.currentUserJoinRequest == "pending"
         joinDeclinedUntil = isMember ? nil : apiCommunity.joinDeclinedUntil(now: now())
@@ -209,7 +218,7 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
         if asksForEntry { joinRequestPending = true } else { isLoading = true }
         defer { isLoading = false }
         do {
-            switch try await service.join(communityId: communityId) {
+            switch try await service.join(communityId: communityId, viaLink: arrivesThroughLink) {
             case .pending:
                 requiresJoinApproval = true
                 joinRequestPending = !isMember
@@ -222,8 +231,15 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
         } catch {
             joinRequestPending = false
             joinRefusal = CommunityJoinRefusal.classify(error)
+            if joinRefusal == .linkPaused { joinLinkPaused = true }
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// La pause se dit AVANT le geste, et seulement à qui arrive par le lien :
+    /// une communauté publique reste joignable par sa fiche.
+    var linkArrivalPaused: Bool {
+        arrivesThroughLink && joinLinkPaused && !isMember
     }
 
     /// Avant la date servie, une nouvelle demande serait refusée (403

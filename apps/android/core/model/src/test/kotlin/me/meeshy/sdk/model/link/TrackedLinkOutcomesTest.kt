@@ -27,7 +27,7 @@ class TrackedLinkOutcomesTest {
         assertThat(typed("PROFILE")).isEqualTo(TrackedLinkOutcome.Open(D.UserProfile("x1")))
         assertThat(typed("REEL")).isEqualTo(TrackedLinkOutcome.Open(D.Reel("x1")))
         assertThat(typed("POST")).isEqualTo(TrackedLinkOutcome.Open(D.PostDetail("x1")))
-        assertThat(typed("STATUS")).isEqualTo(TrackedLinkOutcome.Open(D.PostDetail("x1")))
+        assertThat(typed("STATUS")).isEqualTo(TrackedLinkOutcome.Open(D.Mood("x1")))
     }
 
     @Test

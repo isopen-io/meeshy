@@ -187,6 +187,20 @@
     <string name="contacts_phonebook_write">Send a message</string>
     <string name="contacts_skeleton_loading">Loading</string>
     <string name="contacts_tab_prefix">Tab</string>
+    <string name="content_card_a11y_open">Opens the content</string>
+    <string name="content_card_a11y_post_by">Post by %1$s</string>
+    <string name="content_card_a11y_reel_by">Reel by %1$s</string>
+    <string name="content_card_a11y_saves">%1$d saves</string>
+    <string name="content_card_a11y_slide_position">Media %1$d of %2$d</string>
+    <string name="content_card_a11y_story_by">Story by %1$s</string>
+    <plurals name="content_card_a11y_views">
+        <item quantity="one">%1$d view</item>
+        <item quantity="other">%1$d views</item>
+    </plurals>
+    <string name="content_card_kind_mood">Mood</string>
+    <string name="content_card_kind_post">Post</string>
+    <string name="content_card_kind_reel">Reel</string>
+    <string name="content_card_kind_story">Story</string>
     <string name="content_failure_retry">Retry</string>
     <string name="content_failure_server_title">Meeshy couldn\'t load this content</string>
     <string name="content_failure_unavailable_title">This content is no longer available</string>
@@ -538,11 +552,14 @@
     <string name="talkie_send_hold">Hold to talk</string>
     <string name="talkie_send_hold_a11y">Hold to talk to %1$s</string>
     <string name="talkie_send_hold_hint">Double-tap and hold, talk, then release.</string>
+    <string name="talkie_send_leave_voice">Leave a voice message</string>
+    <string name="talkie_send_leave_voice_a11y">Leave %1$s a voice message</string>
     <string name="talkie_send_limit">Thirty seconds at most: the talk has stopped.</string>
     <string name="talkie_send_mic_denied">Allow the microphone to use the walkie-talkie.</string>
     <string name="talkie_send_offline">Offline: the walkie-talkie could not be sent.</string>
     <string name="talkie_send_rate_limited">Too many talks: try again in a moment.</string>
     <string name="talkie_send_recording_copy">Recording a voice message…</string>
+    <string name="talkie_send_sent_as_voice">Sent as a voice message</string>
     <string name="talkie_send_talking">You are talking to %1$s…</string>
     <string name="talkie_send_waking">Waking %1$s…</string>
     <string name="time_lastSeen_beforeYesterdayAt">Seen two days ago at %1$s</string>

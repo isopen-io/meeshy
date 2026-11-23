@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import MeeshySDK
 import MeeshyUI
@@ -32,6 +33,24 @@ struct ProfileWhereCard: View {
         SharedLocationsLiveHolder.live().byUser[userId] != nil
     }
 
+    /// La même lecture, VIVANTE (#20242) : la fiche s'ouvre souvent avant le rattrapage des positions (démarrage à
+    /// froid, socket pas encore accrochée). Figée au premier rendu, elle laissait la fiche sans carte alors que la
+    /// position arrivait un instant plus tard. Une personne absente du magasin déclenche un rattrapage.
+    static func offeredChanges(for userId: String) -> AnyPublisher<Bool, Never> {
+        let live = SharedLocationsLiveHolder.live()
+        if live.byUser[userId] == nil { Task { await live.catchUp(within: nil) } }
+        return offered(userId, in: live.$byUser.eraseToAnyPublisher())
+    }
+
+    /// Hors de tout acteur (#17042) : la fiche lit cette suite par `.values`, hors du fil principal.
+    nonisolated static func offered(_ userId: String,
+                                    in byUser: AnyPublisher<[String: SharedLocationEntry], Never>) -> AnyPublisher<Bool, Never> {
+        byUser
+            .map { @Sendable all in all[userId] != nil }
+            .removeDuplicates()
+            .eraseToAnyPublisher()
+    }
+
     private var pin: SharedLocationPin? { model.pin(for: userId) }
 
     var body: some View {
@@ -63,13 +82,16 @@ struct ProfileWhereCard: View {
     private func card(_ pin: SharedLocationPin, now: Date) -> some View {
         let tint = LocationMapTint.color(for: pin.circle)
         let place = places.name(for: pin)
-        let detail = LocationMapCopy.whereDetail(pin.precision, window: SharedLocationWindow(deadline: pin.deadline, now: now))
+        let window = LocationMapCopy.whereDetail(pin.precision, window: SharedLocationWindow(deadline: pin.deadline, now: now))
+        let detail = [ProfileWhereStamp.of(pin.updatedAt, now: now).map { ProfileWhereStamp.caption($0, now: now) }, window]
+            .compactMap { $0 }
+            .joined(separator: " · ")
         let spoken = place.map { LocationMapCopy.whereLabel(name: displayName, place: $0, detail: detail) }
             ?? [displayName, detail].joined(separator: ", ")
         return MeeshyGroupCard(
             layout: .preview, tint: tint,
             accessory: { EmptyView() },
-            media: { ProfileWhereMiniature(pin: pin, onTap: openMap) },
+            media: { ProfileWhereMiniature(pin: pin, height: ProfileWhereHero<EmptyView>.height, onTap: openMap) },
             emblem: { EmptyView() },
             content: {
                 VStack(alignment: .leading, spacing: MeeshySpacing.lg) {

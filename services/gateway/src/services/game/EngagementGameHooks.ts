@@ -26,7 +26,7 @@ import { TrophyService } from './TrophyService';
 import { MessageGameSignals, type MessageSignalInput } from './MessageGameSignals';
 import { MissionService, type SignalOptions } from './MissionService';
 import { GameWeekPointsRecorder } from './GameWeekPoints';
-import type { StreakPlan } from './FlameService';
+import { FlameService, type StreakPlan } from './FlameService';
 import { getPhotoMomentMarks, type PhotoMomentMarks } from './PhotoMomentMarks';
 import { isGamePhotoPushOn } from './photoPushFlag';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
@@ -76,6 +76,8 @@ export class EngagementGameHooks {
 
   readonly trophies: TrophyService;
 
+  readonly flame: FlameService;
+
   private readonly signals: MessageGameSignals;
 
   private readonly photo: { readonly marks: () => PhotoMomentMarks; readonly on: () => boolean };
@@ -94,10 +96,16 @@ export class EngagementGameHooks {
     this.photo = { marks: () => deps.photoMarks ?? getPhotoMomentMarks(), on: deps.photoPushOn ?? (() => isGamePhotoPushOn()) };
     this.glory = new GloryService(prisma);
     this.trophies = new TrophyService(prisma);
+    this.flame = new FlameService(prisma);
     this.missions = new MissionService(prisma, {
       creditPoints,
       glory: this.glory,
-      onMissionCompleted: (event) => this.seasons.addStars(event.userId, event.difficulty, event.now),
+      // Un acte payé : la saison en tire ses étoiles, et le second Rêve complet d'après une rupture rallume la
+      // Flamme (#20455). Chacun isolé : l'un qui échoue ne retient pas l'autre.
+      onMissionCompleted: async (event) => {
+        await this.isolated('season stars', () => this.seasons.addStars(event.userId, event.difficulty, event.now));
+        await this.isolated('flame effort relight', () => this.flame.relightByEffort(event.userId, event.now).then(() => undefined));
+      },
       ...(deps.emitIO ? { emitIO: deps.emitIO } : {}),
     });
     // Une notification de jeu par jour au plus (#9490) : UN notifieur pour la saison et le duo.

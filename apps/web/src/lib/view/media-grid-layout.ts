@@ -35,6 +35,12 @@ export const PLAY_DIAMETER_MULTI = 44;
 /** `+Media.swift:742` — la capsule du badge de durée d'une vignette vidéo. */
 export const DURATION_BADGE_OPACITY = 0.6;
 
+/** Le libellé `m:ss` de ce badge, d'une durée en MILLISECONDES — la bulle et la carte d'un contenu (#19334) le partagent. */
+export const videoDurationLabel = (durationMs: number): string => {
+  const seconds = Math.round(durationMs / 1000);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+};
+
 /**
  * LA FORME DE LA GRILLE — une DONNÉE que l'hôte déclare, jamais une branche
  * sur la peau recopiée dans le composant (revue #6169). Les deux sources

@@ -61,10 +61,6 @@ data class CallChromeVisibility(
             isDuoVideoActive: Boolean,
             remoteCamerasOn: Int,
         ): Boolean = if (!isGroup) isDuoVideoActive else isLocalVideoEnabled || remoteCamerasOn > 0
-
-        /** During the fade-out the button is still seen: it still answers until the fade ends. */
-        fun acceptsTouches(isVisible: Boolean, hiddenForMillis: Long): Boolean =
-            isVisible || hiddenForMillis < FADE_DURATION_MILLIS
     }
 }
 

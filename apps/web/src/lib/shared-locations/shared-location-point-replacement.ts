@@ -26,11 +26,12 @@ export const pointReplacementOps = {
   isCovered: (current: SharedLocationPointReplacement, asked: SharedLocationPointReplacement): boolean =>
     current.startedAt === asked.startedAt && current.recipientIds.every((id) => asked.recipientIds.includes(id)),
 
-  /** Ceux que la question nomme, dans l'ordre des noms connus ; les autres, inconnus d'ici compris, se comptent. */
+  /** Ceux que la question nomme, dans l'ordre des noms connus (un nom vide ne nomme personne, #20308) ; les autres, inconnus d'ici compris, se comptent. */
   audience: (asked: SharedLocationPointReplacement, known: readonly { readonly userId: string; readonly name: string }[]): SharedLocationReplacementAudience => {
     const named = known
-      .map(({ userId, name }) => ({ id: userId.toLowerCase(), name }))
-      .filter(({ id }, index, all) => asked.recipientIds.includes(id) && all.findIndex((other) => other.id === id) === index)
+      .map(({ userId, name }) => ({ id: userId.toLowerCase(), name: name.trim() }))
+      .filter(({ id, name }) => name.length > 0 && asked.recipientIds.includes(id))
+      .filter(({ id }, index, all) => all.findIndex((other) => other.id === id) === index)
       .slice(0, NAMED_AT_MOST)
       .map(({ name }) => name);
     return { named, others: asked.recipientIds.length - named.length };

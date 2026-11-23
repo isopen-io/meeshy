@@ -118,7 +118,8 @@ data class ApiRepostOf(
     val content: String? = null,
     val originalLanguage: String? = null,
     val translations: Map<String, ApiPostTranslationEntry>? = null,
-    @Serializable(with = StoryEffectsWireSerializer::class)
+    /** Lu comme celui d'un post servi : un document de plusieurs scènes se garde, la carte d'un contenu les fait glisser (#20233). */
+    @Serializable(with = PostReadStoryEffectsSerializer::class)
     val storyEffects: StoryEffects? = null,
     val audioUrl: String? = null,
     val moodEmoji: String? = null,

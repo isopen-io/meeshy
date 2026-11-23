@@ -103,8 +103,10 @@ object DeepLinkParser {
             head == "c" || head == "conversation" -> id?.let { DeepLinkDestination.Conversation(it) }
             head == "reel" -> id?.let { DeepLinkDestination.Reel(it) }
             head == "reels" -> reelsSeed(components, url)?.let { DeepLinkDestination.Reel(it) }
+            // L'humeur partagée (`/mood/<id>`, #19331) : elle s'ouvre en plein écran, comme sa cible suivie (#20233).
+            head == "mood" -> id?.let { DeepLinkDestination.Mood(it) }
             head == "community" || head == "communities" ->
-                id?.let(::communityIdentifier)?.let { DeepLinkDestination.Community(it) }
+                id?.let(::communityIdentifier)?.let { DeepLinkDestination.Community(it, viaLink = url.queryValue("via") == "link") }
             head == "feeds" -> feedsPost(components, id)
             customScheme -> customOnly(head, id, components, url)
             else -> sharedSegments(head, id)

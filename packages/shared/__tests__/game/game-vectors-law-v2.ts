@@ -807,6 +807,7 @@ export function buildGameVectorsV2() {
     { kind: 'prestige', prestige: 1, gloryGained: 1000 },
     { kind: 'atlas-stamp', language: 'ja', stamped: 4, total: 89 },
     { kind: 'flame-freeze-gift', freezes: 1 },
+    { kind: 'offering-kept', easedDays: 3 },
   ];
   const guides = eventsV2.flatMap((event) => [
     vector(`guide « ${event.kind} » la première fois`, { law: 'guide-v2', event, seen: [] }),
@@ -822,6 +823,8 @@ export function buildGameVectorsV2() {
     { events: [], seen: [] },
     { events: [eventsV2[8]!, eventsV2[9]!, { kind: 'flame-at-risk', days: 3 } as GuideEvent], seen: [] },
     { events: [eventsV2[1]!, eventsV2[9]!], seen: [] },
+    { events: [{ kind: 'flame-out', lostDays: 12, relightPrice: 300, canRelight: true } as GuideEvent, eventsV2[10]!, eventsV2[9]!], seen: [] },
+    { events: [eventsV2[10]!, eventsV2[8]!], seen: ['offering-kept'] },
   ].map((c, i) => vector(`choix d'une carte, cas ${i + 1}`, { law: 'guide-choose', ...c }));
 
   const photos = eventsV2.map((event) => vector(`moment photo de « ${event.kind} »`, { law: 'photo-moment', event }));

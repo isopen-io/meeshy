@@ -273,12 +273,18 @@ export function withChestReward(
   return sparks === undefined ? claimed : withMintCounters(claimed, sparks.pocket);
 }
 
+/** Une Flamme rallumée n'a plus de rallumage par l'effort à dire (#20471). */
+const withoutEffortRelight = <F extends { readonly effortRelight?: unknown }>(flame: F): Omit<F, 'effortRelight'> => {
+  const { effortRelight: _done, ...rest } = flame;
+  return rest;
+};
+
 export function afterRelight(view: EngagementWithGame): EngagementWithGame {
   const game = view.game;
   if (game === undefined || !game.flame.canRelight) return view;
   const lit = onGame(view, (current) => ({
     ...current,
-    flame: { ...current.flame, status: 'lit', canRelight: false },
+    flame: { ...withoutEffortRelight(current.flame), status: 'lit', canRelight: false },
   }));
   return shiftBalance(lit, -game.flame.relightPrice);
 }
@@ -288,7 +294,7 @@ export function withRelit(view: EngagementWithGame, streak: number, balance: num
   const relit = onGame(view, (game) => ({
     ...game,
     flame: {
-      ...game.flame,
+      ...withoutEffortRelight(game.flame),
       days: streak,
       form: flameForm(streak),
       bonusPercent: flameBonusPercent(streak),

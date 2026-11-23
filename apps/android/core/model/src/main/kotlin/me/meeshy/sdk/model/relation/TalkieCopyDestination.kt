@@ -32,6 +32,11 @@ public object TalkieCopyDestination {
     /** La conversation partagée la plus récente qui peut porter la copie ; `null` : il faudra ouvrir le direct. */
     public fun pick(candidates: List<TalkieCopyCandidate>): String? =
         candidates.filter { it.mayCarryTheCopy }.maxByOrNull { it.rankAtMs ?: Long.MIN_VALUE }?.id
+
+    /** La conversation DIRECTE où le message vocal laissé à un proche injoignable peut partir ; `null` : l'ouvrir (#20241). */
+    public fun pickDirect(candidates: List<TalkieCopyCandidate>): String? = pick(candidates.filter { it.type == DIRECT })
+
+    private const val DIRECT = "direct"
 }
 
 /**

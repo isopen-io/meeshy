@@ -1924,3 +1924,99 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   servi sans `startedAt` part sans la clé (sessions d'avant #18580, comportement d'avant).
 - Gates : voir la PR. Android et iOS de #20249 : un lot chacun.
 - Prochain lot : Android de #20249, puis iOS ; #20308, #20054, #20056.
+
+## 2026-11-22 — réveil de 13 h : la moitié Android de #20249 (une réponse nomme le partage montré)
+
+- Reprise : #20345 (web de #20249) a été fusionnée dans `dev` à 12 h 41 ; aucune PR de la routine ouverte, aucune
+  branche vivante n'écrit les chemins Android de la position.
+- Lot : Android de #20249, iso #20345. La relecture lit `acceptsExpectedStart` (seul un booléen vrai compte) ; le
+  remplacement d'un point choisi porte `expectedStartedAt` (le `startedAt` tel que servi, forme ISO seulement), le repli
+  sans échéances le garde. Sur `STARTED_ELSEWHERE` (arrêt compris) ou `INVALID` d'une charge partie avec la clé, rien
+  n'a été écrit : l'appareil relit, repose la question à jour si un point choisi est encore montré, sinon rend le refus
+  sans rien relancer ; une relecture en panne rend « hors ligne ». Une passerelle relue sans l'annonce fait repartir la
+  charge d'avant. La fiche affiche le nouveau refus comme les autres échecs : aucune chaîne nouvelle.
+- Banc d'essai : `SharingDevice` sort de `SharedLocationSharingSyncTest` (1153 → 1052 lignes) et gagne `onStart` (ce qui
+  se passe ailleurs pendant que le démarrage voyage).
+- Gates : modèles Kotlin (`jvm-check`, `SharedLocation*`) verts ; le centre se prouve par `android.yml` sur la PR.
+- Prochain lot : iOS de #20249, puis #20308, #20054, #20056.
+
+## 2026-11-22 — réveil de 15 h : la moitié iOS de #20249 (une réponse nomme le partage montré)
+
+- Reprise : #20398 (Android de #20249) a été fusionnée dans `dev` à 14 h 48 ; aucune PR de la routine ouverte, aucune
+  branche vivante n'écrit les chemins iOS de la position.
+- Lot : iOS de #20249, iso #20345 (web) et #20398 (Android). SDK : `SharedLocationOwnSnapshot.acceptsExpectedStart` (seul
+  un booléen vrai compte), `SharedLocationStartRequest.expectedStartedAt` (ne part qu'avec `replacesChosenPoint` et une
+  position, gardé par les replis sans options, sans échéances et sans mouvement), `SharedLocationSendOutcome.startedElsewhere`,
+  `SharedLocationWireInstant.isWire` (forme `toISOString` seulement). Centre : la réponse nomme le `startedAt` servi sur
+  `acceptsExpectedStart` ; sur `STARTED_ELSEWHERE` (arrêt compris) ou `INVALID` d'une charge partie avec la clé, rien n'a
+  été écrit : l'appareil relit, repose la question à jour si un point choisi est encore montré, sinon rend le refus sans
+  rien relancer ; une relecture en panne rend « hors ligne » ; un `INVALID` que la clé n'explique pas se dit sans reposer
+  la même question. Aucune chaîne nouvelle.
+- Gates : voir la PR (gardes iOS texte et `packages/shared/__tests__/ci` verts ; compilation et tests par la CI iOS).
+- Avec ce lot, les trois clients et la passerelle portent #20249 : l'issue se ferme à la fusion.
+- Prochain lot : #20308, puis #20054, #20056.
+
+## 2026-11-22 — réveil de 19 h : la moitié web de #20416 et de #20308
+
+- Reprise : #20417 (iOS de #20249) attend toujours un Mac (construction iOS en file depuis 16 h, tranche 2 du SDK
+  aussi ; sa tranche 6 rouge vient de témoins étrangers corrigés sur `dev` par b35a94491). Rien à pousser sur sa branche
+  tant que ces envois attendent : un nouvel envoi remplacerait celui en file. Ce réveil prend la moitié WEB de #20416 et
+  de #20308, qui ne touche aucun chemin iOS.
+- Lot : un refus certain (`invalid`, `fixed-point`, `started-elsewhere`, tous rendus par la passerelle avant toute
+  écriture) ne fait plus oublier `publishedStart` ; seul un refus douteux (accusé perdu, panne) l'efface encore. Avant,
+  un « démarré ailleurs » faisait adopter le partage de l'autre appareil comme celui d'ici, et deux appareils publiaient.
+  Un nom vide ou blanc ne se nomme plus dans « Montrer votre position réelle ? » (iso Android).
+- Point 1 de #20416 tranché côté passerelle : `/mine` et le démarrage relisent par le même pointeur et la même
+  ouverture ; un témoin prouve que tout partage nommé par la relecture est accepté par un démarrage qui le nomme (point
+  frais, liste seule republiée, échéance par personne passée, terme à 1 ms). Un terme atteint ENTRE relecture et
+  démarrage rend un refus légitime, et la relecture ne nomme alors plus rien : pas de boucle.
+- Audit adversarial : non bloquant. Noté : `NOTHING_WRITTEN` est une liste écrite à la main, sans lien testé avec les
+  sites de la passerelle.
+- Gates : web `bun test` 35 167 verts, 1 rouge hérité (`act-leak-guard`) ; `tsc` web et passerelle à 0 ; passerelle
+  `sharedLocationRelay.demarrage-attendu` 14/14.
+- Reste : iOS et Android de #20416 (point 2) et iOS de #20308, après la fusion de #20417.
+- Prochain lot : fusionner #20417 quand ses Mac passent, fermer #20249 ; puis iOS + Android de #20416, iOS de #20308,
+  #20054, #20056.
+
+## 2026-11-22 — réveil de 21 h : la moitié Android de #20416 (point 2)
+
+- Reprise : #20431 (web de #20416 et #20308) a été fusionnée dans `dev`. #20417 (iOS de #20249) est menée par une autre
+  session vivante (merge de `dev` 3023fab02, SDK relancé à 20 h 54 UTC) : ce réveil n'y pousse rien. Aucune branche
+  n'écrit les chemins Android de la position.
+- Lot : Android de #20416, point 2, iso #20431. Un refus certain (`INVALID`, `FIXED_POINT`, `STARTED_ELSEWHERE`, rendus
+  par la passerelle avant toute écriture) ne fait plus oublier `publishedStart` ; un refus douteux l'oublie encore. Avant,
+  un « démarré ailleurs » faisait prendre le partage de l'autre appareil pour celui d'ici. Le point 1 de #20416 est
+  tranché côté passerelle (#20431) ; Android n'a pas le défaut de #20308 (il écarte déjà un nom vide).
+- Audit adversarial : non bloquant. Vérifié dans la passerelle : les trois refus sortent avant toute écriture, ou après
+  suppression d'une session jamais pointée (sinon `UNAVAILABLE`, refus douteux) ; le repli sans échéances ne change rien.
+- Gates : `sdk-core` ne se construit pas en conteneur (dépôt libsignal refusé) : `android.yml` sur la PR fait foi.
+- Reste : iOS de #20416 (point 2) et de #20308, après la fusion de #20417.
+- Prochain lot : fusionner #20417 et fermer #20249 ; puis iOS de #20416 et #20308 ; #20054, #20056.
+
+## 2026-11-22 — réveil de 23 h : web de #19883 (personne ne cache personne sur la carte)
+
+- Reprise : #20441 (Android de #20416) fusionnée. #20417 (iOS de #20249) est menée par une autre session (3023fab02,
+  iOS et SDK en file depuis 20 h 54 UTC) : ce réveil n'y pousse rien. Les lots iOS de #20416, #20308, #20054 attendent
+  sa fusion (mêmes fichiers).
+- Lot : web de #19883, iso `LocationMapFan.spread` (iOS). À la précision « ville », toutes les positions servies
+  tombaient au même centre et une seule épingle restait visible. `spreadPins` (`apps/web/src/lib/map/fan.ts`) ouvre en
+  éventail les épingles qui se recouvrent (écart ≥ diamètre + 4 px), stable quel que soit l'ordre servi ; le flou reste
+  centré sur la position SERVIE, chaque épingle garde le cercle de SA personne. Rien de nouveau ne part du serveur.
+- Audit adversarial : non requis (affichage pur de positions déjà servies, aucun accès ni chiffrement touché).
+- Gates : web `bun test` 35 179 verts, 2 rouges hérités (focal-row, act-leak-guard) ; `tsc` web 0.
+- Reste : Android de #19883 = #19884.
+- Prochain lot : fusionner #20417 et fermer #20249 ; puis iOS de #20416 / #20308, #19884, #20054, #20056.
+
+## 2026-11-23 — réveil de 01 h : Android de #19883 (#19884, personne ne cache personne sur la carte)
+
+- Reprise : #20449 (web de #19883) fusionnée, #19883 fermée. #20417 (iOS de #20249) est toujours menée par une autre
+  session (3023fab02, iOS et SDK en file depuis 20 h 54 UTC) : ce réveil n'y pousse rien. Aucune branche n'écrit les
+  chemins de la carte Android.
+- Lot : #19884, iso `LocationMapFan.spread` (iOS) et `spreadPins` (web). `SharedLocationsFan` (`:core:model`) ouvre en
+  éventail les épingles qui se recouvrent à l'écran et les repose sur la projection `SlippyMap` du zoom courant ; une
+  épingle seule garde exactement sa position servie. La carte plein écran et la section de la fiche des cercles ne
+  superposent plus leurs épingles (décalage de 6 dp). Rien de nouveau ne part du serveur.
+- Audit adversarial : non requis (affichage pur de positions déjà servies).
+- Gates : `jvm-check -PjvmCheckModelOnly` `SharedLocationsFanTest` 6/6 (rouge à la compilation avant le code),
+  `SharedLocationsMapTest` 6/6 ; Compose prouvé par `android.yml` sur la PR #20463.
+- Prochain lot : fusionner #20417 et fermer #20249 ; puis iOS de #20416 / #20308, #20054, #20056.
