@@ -76,7 +76,8 @@ function makePrisma(fixture: Fixture = {}) {
     user: {
       findFirst: jest.fn<any>(async ({ where }: any) => {
         if (typeof where.id !== 'string') return null;
-        return where.id.startsWith('a1') ? { id: where.id, birthDate: null } : null;
+        const id = where.id.toLowerCase();
+        return id.startsWith('a1') ? { id, birthDate: null } : null;
       }),
       findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: [] }),
       findMany: jest.fn<any>().mockResolvedValue([]),
@@ -220,6 +221,20 @@ describe('POST /communities/:id/invite et /members — budget de la CIBLE (#1981
     expect(refused.statusCode).toBe(429);
     expect(refused.json().code).toBe(COMMUNITY_ADDITION_BUDGET_CODE);
     expect(writes(h)).toBe(COMMUNITY_ADDITION_BUDGET.targetPerDay);
+  });
+
+  it('compte la cible par son id CANONIQUE : changer la casse de l’ObjectId ne rouvre pas son seau', async () => {
+    const h = await build();
+    const victim = targetId(43);
+    await inSequence(COMMUNITY_ADDITION_BUDGET.targetPerDay, (i) => {
+      h.as(actorId(i));
+      return invite(h, victim);
+    });
+
+    h.as(actorId(600));
+    expect((await invite(h, victim.toUpperCase())).statusCode).toBe(429);
+    h.as(actorId(601));
+    expect((await add(h, victim.toUpperCase())).statusCode).toBe(429);
   });
 
   it('un acteur déjà refusé n’entame pas le seau de sa cible', async () => {

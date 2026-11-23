@@ -918,3 +918,16 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Témoins : `CommunityServedRoleTest` (+3), `DeepLinkParserTest` (+3 assertions), `DeepLinkRouterTest` (+1 ligne), `CommunityRepositoryTest` (+1), `CommunityDetailViewModelTest` (+6). `./meeshy.sh jvm-check` ne tourne pas en conteneur (le proxy refuse `build-artifacts.signal.org`) : preuve par `android.yml` sur la PR. `./meeshy.sh i18n --check` vert.
 - Revue adversariale : non lancée — lot client seul, aucune route ni garde touchée (le refus et sa garde sont ceux de #19661).
 - Reste : rien de #20332 hors CI ; le cache `CommunityLink` iOS écrit avant #20330 garde `/chat/` jusqu'à la relecture réseau (non mesuré utile).
+
+- 2026-11-23 00:50 : #20452 fusionnée dans `dev` (`6b6e44f5a`) après `android.yml` 45084789970 et `ci.yml` 45084792489 verts ; #20332 et #20255 fermées avec leur preuve.
+
+## 2026-11-23 — réveil 01:38 UTC
+
+- Début du run : aucune PR de la routine ouverte ; aucune branche vivante sur `routes/communities/`. #7816, #6380, #6451, #14227 déjà fermées : lot pris dans la priorité 2 suivante.
+- Lot : #19812 (milestone neuf « Personne n'est ajouté en masse à une communauté, ni à son insu », avec #19811 et #19813).
+- Passerelle : `utils/community-addition-budget.ts`, partagé par `POST /communities/:id/invite` et `POST /communities/:id/members` : 30/h et 100/j par ACTEUR (débité après les refus d'autorisation et AVANT `isAddableUser`, une tentative vers un compte non ajoutable comptant), 10/j par personne AJOUTÉE tous acteurs confondus (débité seulement pour un ajout qui va écrire, jamais quand l'acteur est déjà refusé ; clé = ObjectId en minuscules). Au-delà : 429 `COMMUNITY_ADDITION_BUDGET_EXCEEDED` + `Retry-After`, rien n'est écrit ni notifié ; 429 déclaré aux deux schémas.
+- Décision : la notification `community_invite` n'a pas de borne propre (une par ajout réussi). Redis en panne ⇒ fail-open, comme les autres budgets.
+- Revue adversariale : corrigé dans le lot — la clé de la cible n'était pas normalisée (changer la casse de l'ObjectId rouvrait un seau neuf). Suivi #20464 : l'entrée des participants d'un salon créé dans une communauté (jusqu'à 250 par requête) ne débite rien, et le cycle ajout/retrait peut remplir le seau d'une cible.
+- Témoins : `__tests__/unit/routes/communities/addition-budget-19812.test.ts` (10 ; rouge prouvé : 5 échecs 200 ≠ 429 avant le branchement, puis 1 sur la casse avant la normalisation).
+- Clients : aucun changement requis (un 429 tombe dans le chemin d'erreur existant des trois clients) ; les phrases localisées du refus sont un suivi client, pas ouvert ce run.
+- Prochain lot recommandé : #20464 (même milestone), puis #19813.

@@ -31,6 +31,14 @@
  *    quand l'acteur est déjà refusé : un acteur obstiné ne doit pas pouvoir
  *    épuiser le quota d'une victime pour empêcher ses vrais proches de l'ajouter.
  *
+ * Redis en panne : `consume` rend `null` et le geste PASSE (fail-open), le même
+ * choix que `middleware()` et `contact-identifier-budget.ts` — un débit est une
+ * borne d'abus, pas une garde d'autorisation, et les refus d'accès restent en
+ * amont. Ce que le module ne compte PAS, et qui est suivi ailleurs : l'entrée
+ * des participants d'un salon créé dans une communauté (`planCommunityAdmission`,
+ * jusqu'à 250 personnes par requête) et le cycle ajout/retrait qui remplit le
+ * seau d'une cible — #20464.
+ *
  * Le refus est un 429 dans l'enveloppe `sendError`, `code`
  * `COMMUNITY_ADDITION_BUDGET_EXCEEDED`, avec `Retry-After`. Le même code sert
  * les deux seaux : dire à l'acteur que c'est la CIBLE qui est saturée lui
@@ -109,13 +117,18 @@ export async function spendCommunityAdditionByActor(
   return verdictOf(await Promise.all([acteurHeure.consume(cle, 1), acteurJour.consume(cle, 1)]));
 }
 
-/** Débite UN ajout qui va écrire sur le seau de la personne AJOUTÉE, tous acteurs confondus. */
+/**
+ * Débite UN ajout qui va écrire sur le seau de la personne AJOUTÉE, tous acteurs
+ * confondus. La clé est l'ObjectId CANONIQUE (minuscules) : la base décode
+ * l'hexadécimal sans tenir compte de la casse, et une clé brute laissait chaque
+ * variante de casse ouvrir un seau neuf pour la même personne.
+ */
 export async function spendCommunityAdditionOfTarget(
   fastify: FastifyInstance,
   targetId: string
 ): Promise<CommunityAdditionVerdict> {
   const { cibleJour } = seaux(fastify);
-  return verdictOf([await cibleJour.consume(`user:${targetId}`, 1)]);
+  return verdictOf([await cibleJour.consume(`user:${targetId.trim().toLowerCase()}`, 1)]);
 }
 
 export function refuseCommunityAddition(reply: FastifyReply, retryAfter: number): void {
