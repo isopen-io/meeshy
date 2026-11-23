@@ -116,7 +116,8 @@ type SettingsRow = { readonly bringBlockedAt: Date | null; readonly talkieBlocke
  * donné), tout est ouvert et `lockedByLevel` le dit : les interrupteurs n'existent plus.
  */
 const servedSettings = (userId: string, row: SettingsRow | null, lock: BloodLockState): RelationPersonSettings => {
-  const categoryDefault = row?.listeningCategoryShared == null && relationLevelIfAtLeast(lock.level, 'CLOSE') !== null;
+  // Une paire bloquée sert ce que sert un lien rompu : aucun défaut de niveau (ré-audit #20361, constat 4).
+  const categoryDefault = row?.listeningCategoryShared == null && !lock.blocked && relationLevelIfAtLeast(lock.level, 'CLOSE') !== null;
   return {
     userId,
     bringBlocked: !lock.locked && Boolean(row?.bringBlockedAt),
@@ -126,7 +127,7 @@ const servedSettings = (userId: string, row: SettingsRow | null, lock: BloodLock
     listeningCategoryShared: lock.locked || row?.listeningCategoryShared === true || categoryDefault,
     ...(Object.fromEntries(RELATION_RITUAL_SHARES.map((share) => [share, (lock.locked && !lock.minorProtected) || row?.[share] === true])) as Record<(typeof RELATION_RITUAL_SHARES)[number], boolean>),
     lockedByLevel: lock.locked,
-    bloodBundleAccepted: lock.bloodBundleAccepted,
+    bloodBundleAccepted: lock.bloodBundleAccepted && !lock.blocked,
     ritualSharesLocked: lock.locked && !lock.minorProtected,
   };
 };

@@ -39,6 +39,7 @@ jest.mock('../../../../services/PushNotificationService', () => ({
 }));
 
 import { FALL_CONSENT_VERSION } from '@meeshy/shared/types/fall-detection';
+import { BLOOD_BUNDLE_VERSION } from '@meeshy/shared/utils/blood-bundle';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { relationsRoutes } from '../../../../routes/relations';
 import healthFallMeRoutes from '../../../../routes/me/health-fall';
@@ -161,6 +162,24 @@ describe('l\'accord et les réglages', () => {
     expect(lu.body.data).toMatchObject({ userId: AUTRE, shared: true });
     expect(retrait.body.data).toMatchObject({ userId: AUTRE, shared: false });
     expect(app.emissions).toContainEqual({ room: ROOMS.user(AUTRE), event: SERVER_EVENTS.FALL_CLEARED, payload: { userId: MOI, reason: 'withdrawn' } });
+  });
+
+  it('constat B (art. 9, en attendant #20406) — après l\'accord au palier, un NOUVEAU refus par personne s\'écrit et tient', async () => {
+    const accord = { ownerId: MOI, otherId: AUTRE, bringBlockedAt: null, bloodBundleAcceptedAt: NOW, bloodBundleVersion: BLOOD_BUNDLE_VERSION };
+    const app = avecDoubles(await appli({ liens: [lien('BLOOD', 'BLOOD')], reglages: [accord] }));
+    const avant = await app.call('GET', `/api/v1/relations/${AUTRE}/fall/settings`, undefined, MOI);
+    const retrait = await app.call('PUT', `/api/v1/relations/${AUTRE}/fall/settings`, { shared: false }, MOI);
+    await app.call('POST', '/api/v1/me/health/fall', { detectedAt: CHUTE.toISOString() }, MOI);
+    const tous = await app.call('GET', '/api/v1/relations/falls', undefined, AUTRE);
+    await app.close();
+
+    expect(avant.body.data).toMatchObject({ shared: true, lockedByLevel: false, bloodBundleAccepted: true });
+    expect(retrait.status).toBe(200);
+    expect(retrait.body.data).toMatchObject({ userId: AUTRE, shared: false, lockedByLevel: false });
+    expect(app.reglages.get(`${MOI}:${AUTRE}`)).toMatchObject({ fallShared: false, bloodBundleVersion: BLOOD_BUNDLE_VERSION });
+    expect(tous.body.data).toEqual({ items: [] });
+    expect(app.emissions.filter((e) => e.event === SERVER_EVENTS.FALL_DETECTED)).toEqual([]);
+    expect(pushes).toEqual([]);
   });
 
   it('sans accord global, le réglage par personne lit « non partagé »', async () => {

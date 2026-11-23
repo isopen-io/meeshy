@@ -34,7 +34,7 @@ export async function ownersHidingFrom(prisma: VeilDb, viewerId: string, ownerId
   // aucun blocage, version courante), jugé en lecture groupée. La protection d'un mineur (écart de plus de
   // 5 ans, deux âges connus) garde son fantôme envers cette personne (C7) : son accord n'épargne personne.
   const claimed = rows.filter(bloodBundleAcceptedOf).map((row) => row.ownerId);
-  const locks = await bloodLocksAmong(prisma, { subjectId: viewerId, otherIds: claimed, subjectIs: 'reader' });
+  const locks = await bloodLocksAmong(prisma, { subjectId: viewerId, otherIds: claimed, subjectIs: 'reader', acceptanceReadByCaller: true });
   const accepted = new Set(claimed.filter((owner) => locks.locked.has(owner) && !locks.minorProtected.has(owner)));
   const targeted = rows.filter((row) => row.ghostAt != null).map((row) => row.ownerId);
   return new Set([...global.map((row) => row.id), ...targeted].filter((id) => !accepted.has(id)));
@@ -63,7 +63,7 @@ export async function pointVeilOf(prisma: VeilDb, ownerId: string): Promise<Poin
   ]);
   const global = owner?.locationGhostAt != null;
   const claimed = rows.filter(bloodBundleAcceptedOf).map((row) => row.otherId);
-  const locks = await bloodLocksAmong(prisma, { subjectId: ownerId, otherIds: claimed, subjectIs: 'owner' });
+  const locks = await bloodLocksAmong(prisma, { subjectId: ownerId, otherIds: claimed, subjectIs: 'owner', acceptanceReadByCaller: true });
   const accepted = new Set(claimed.filter((reader) => locks.locked.has(reader) && !locks.minorProtected.has(reader)));
   const targeted = rows.filter((row) => row.ghostAt != null && !accepted.has(row.otherId)).map((row) => row.otherId);
   if (!global) return { hidden: new Set(targeted), onlyTo: null, everyone: false };

@@ -45,4 +45,21 @@ describe('constat C — lecture groupée du verrou', () => {
     await ownersHidingFrom(grand.prisma as never, OWNER, grand.readers);
     expect(grand.calls()).toBe(petit.calls());
   });
+
+  it('correctif F — les lignes d\'accord lues par le voile ne sont pas relues par le verrou', async () => {
+    const readers = readerIds(3);
+    const world = messagingWorld({ links: readers.map((id) => [OWNER, id, 'BLOOD'] as CircleLink), users: [OWNER, ...readers].map((id) => ({ id, birthDate: ADULT_BIRTH, locationGhostAt: id === OWNER ? new Date() : null })) });
+    const settings = table(readers.map((id) => ({ ownerId: OWNER, otherId: id, ...ACCORD })) as Row[]);
+    let lectures = 0;
+    const compte = { ...settings, findMany: (args: Parameters<typeof settings.findMany>[0]) => { lectures += 1; return settings.findMany(args); } };
+    const prisma = { ...world.prisma, relationFeatureSetting: compte } as unknown as PrismaClient;
+
+    const voile = await pointVeilOf(prisma as never, OWNER);
+    const avant = lectures;
+    const caches = await ownersHidingFrom(prisma as never, readers[0], [OWNER]);
+
+    expect([avant, lectures - avant]).toEqual([1, 1]);
+    expect([...(voile.onlyTo ?? [])].sort()).toEqual([...readers].sort());
+    expect([...caches]).toEqual([]);
+  });
 });

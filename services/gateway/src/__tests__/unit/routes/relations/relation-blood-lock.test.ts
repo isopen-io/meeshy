@@ -59,7 +59,6 @@ const COUPURES: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
   ['phone-reachability', { shared: false }],
   ['phone-call', { shared: false }],
   ['inactivity', { shared: false }],
-  ['fall', { shared: false }],
 ];
 
 beforeEach(() => freezeClock(NOW));
@@ -194,15 +193,54 @@ describe('constat A (2026-11-23) — un accord pris sous protection de mineur ne
   });
 });
 
-describe('constat D — une paire bloquée ne se trahit pas par la réponse de l\'accord au palier', () => {
-  it('bloqué par l\'autre, je vois toujours Sang : 200 neutre sans écriture, jamais un 404', async () => {
-    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')], personnes: { [AUTRE]: { blockedUserIds: [MOI] } } });
+describe('constat D (ré-audit 2026-11-23) — une paire bloquée reçoit EXACTEMENT la réponse d\'un lien absent', () => {
+  const MODELES = ['user', 'userRelation', 'friendRequest', 'relationFeatureSetting'] as const;
+  const compte = (app: Awaited<ReturnType<typeof appli>>) => {
+    let lectures = 0;
+    for (const modele of MODELES) {
+      const delegue = (app.prisma as unknown as Record<string, Record<string, unknown>>)[modele];
+      for (const [nom, fn] of Object.entries(delegue)) {
+        if (typeof fn !== 'function') continue;
+        delegue[nom] = (...args: unknown[]) => { lectures += 1; return (fn as (...a: unknown[]) => unknown)(...args); };
+      }
+    }
+    return () => lectures;
+  };
+  const accepter = async (options: BringAppOptions) => {
+    const app = await appli(options);
+    const lectures = compte(app);
     const res = await app.call('PUT', `/api/v1/relations/${AUTRE}/blood-bundle`, { version: BLOOD_BUNDLE_VERSION }, MOI);
     await app.close();
+    return { app, res, lectures: lectures() };
+  };
 
-    expect(res.status).toBe(200);
-    expect(res.body.data).toEqual({ userId: AUTRE, bloodBundleAccepted: false, version: BLOOD_BUNDLE_VERSION, lockedByLevel: false });
-    expect(app.reglages.get(`${MOI}:${AUTRE}`)?.bloodBundleAcceptedAt ?? null).toBeNull();
+  it.each([
+    ['bloqué par l\'autre', { [AUTRE]: { blockedUserIds: [MOI] } }],
+    ['bloqué par moi', { [MOI]: { blockedUserIds: [AUTRE] } }],
+  ])('%s, resté Sang : même statut, même corps, même nombre de lectures qu\'un lien absent, et rien d\'écrit', async (_cas, personnes) => {
+    const absent = await accepter({ liens: [] });
+    const rompu = await accepter({ liens: [lien('CLOSE', 'CLOSE')] });
+    const bloque = await accepter({ liens: [lien('BLOOD', 'BLOOD')], personnes });
+
+    expect(absent.res.status).toBe(404);
+    expect([bloque.res.status, bloque.res.body]).toEqual([absent.res.status, absent.res.body]);
+    expect([rompu.res.status, rompu.res.body]).toEqual([absent.res.status, absent.res.body]);
+    expect([bloque.lectures, rompu.lectures]).toEqual([absent.lectures, absent.lectures]);
+    expect(bloque.app.reglages.get(`${MOI}:${AUTRE}`)?.bloodBundleAcceptedAt ?? null).toBeNull();
+  });
+});
+
+describe('constat 4 (ré-audit 2026-11-23) — la catégorie d\'écoute par défaut ne trahit pas un blocage', () => {
+  it.each([['CLOSE'], ['BLOOD']] as const)('paire bloquée restée %s, sans ligne : GET /settings sert ce qu\'il sert à un lien absent', async (niveau) => {
+    const absent = await appli({ liens: [] });
+    const sansLien = await absent.call('GET', `/api/v1/relations/${AUTRE}/settings`, undefined, MOI);
+    await absent.close();
+    const bloque = await appli({ liens: [lien(niveau, niveau)], personnes: { [AUTRE]: { blockedUserIds: [MOI] } } });
+    const lu = await bloque.call('GET', `/api/v1/relations/${AUTRE}/settings`, undefined, MOI);
+    await bloque.close();
+
+    expect(sansLien.body.data.listeningCategoryShared).toBe(false);
+    expect(lu.body).toEqual(sansLien.body);
   });
 });
 

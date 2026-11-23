@@ -11,7 +11,7 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getBlockedUserIdsAmong, isBlockedBetween } from '../../utils/blocking';
-import { niveauEffectif, niveauxParmi } from '../friendship';
+import { niveauEffectif, niveauEffectifUniforme, niveauxParmi } from '../friendship';
 import { bloodBundleAcceptedOf } from './relationConsent';
 import { minorProtectedBetween } from '@meeshy/shared/utils/age';
 
@@ -35,6 +35,11 @@ export type BloodLockState = {
   readonly minorProtected: boolean;
 };
 
+/**
+ * Les quatre lectures partent ENSEMBLE et SANS CONDITION, le niveau compris (`niveauEffectifUniforme`) :
+ * le nombre de lectures ne dit rien du lien, et une paire bloquée ne se distingue pas d'un lien absent
+ * par le temps de réponse (ré-audit #20361, constats 1 et 5).
+ */
 export async function bloodLockStateBetween(prisma: BloodLockDb, ownerId: string, otherId: string): Promise<BloodLockState> {
   if (!ownerId || !otherId || ownerId === otherId) return { level: 'PUBLIC', bloodBundleAccepted: false, blocked: false, locked: false, minorProtected: false };
   const [row, level, blocked, people] = await Promise.all([
@@ -42,7 +47,7 @@ export async function bloodLockStateBetween(prisma: BloodLockDb, ownerId: string
       where: { ownerId_otherId: { ownerId, otherId } },
       select: { bloodBundleAcceptedAt: true, bloodBundleVersion: true },
     }),
-    niveauEffectif(prisma, ownerId, otherId),
+    niveauEffectifUniforme(prisma, ownerId, otherId),
     isBlockedBetween(prisma, ownerId, otherId),
     prisma.user.findMany({ where: { id: { in: [ownerId, otherId] } }, select: { id: true, birthDate: true } }),
   ]);
@@ -68,23 +73,34 @@ export type BloodLocksAmong = {
  */
 export async function bloodLocksAmong(
   prisma: BloodLockDb,
-  params: { readonly subjectId: string; readonly otherIds: readonly string[]; readonly subjectIs: 'owner' | 'reader' },
+  params: {
+    readonly subjectId: string;
+    readonly otherIds: readonly string[];
+    readonly subjectIs: 'owner' | 'reader';
+    /**
+     * `otherIds` sont EXACTEMENT ceux dont l'appelant vient de lire l'accord à la version courante
+     * (`bloodBundleAcceptedOf`) : la ligne n'est pas relue (correctif F du ré-audit #20361).
+     */
+    readonly acceptanceReadByCaller?: boolean;
+  },
 ): Promise<BloodLocksAmong> {
   const others = [...new Set(params.otherIds)].filter((id) => id && id !== params.subjectId);
   if (!params.subjectId || others.length === 0) return { locked: new Set(), minorProtected: new Set() };
   const asOwner = params.subjectIs === 'owner';
-  const [rows, levels, blocked, people] = await Promise.all([
-    prisma.relationFeatureSetting.findMany({
+  const acceptedAmong: Promise<ReadonlySet<string>> = params.acceptanceReadByCaller === true
+    ? Promise.resolve(new Set(others))
+    : prisma.relationFeatureSetting.findMany({
       where: asOwner ? { ownerId: params.subjectId, otherId: { in: others } } : { ownerId: { in: others }, otherId: params.subjectId },
       select: { ownerId: true, otherId: true, bloodBundleAcceptedAt: true, bloodBundleVersion: true },
-    }),
+    }).then((rows) => new Set(rows.filter(bloodBundleAcceptedOf).map((row) => (asOwner ? row.otherId : row.ownerId))));
+  const [accepted, levels, blocked, people] = await Promise.all([
+    acceptedAmong,
     niveauxParmi(prisma, params.subjectId, others),
     getBlockedUserIdsAmong(prisma, params.subjectId, others),
     prisma.user.findMany({ where: { id: { in: [params.subjectId, ...others] } }, select: { id: true, birthDate: true } }),
   ]);
   const birthOf = (id: string): Date | null => people.find((person) => person.id === id)?.birthDate ?? null;
   const now = new Date();
-  const accepted = new Set(rows.filter(bloodBundleAcceptedOf).map((row) => (asOwner ? row.otherId : row.ownerId)));
   const minorProtected = new Set(others.filter((other) => {
     const [ownerId, readerId] = asOwner ? [params.subjectId, other] : [other, params.subjectId];
     return minorProtectedBetween({ emitterBirthDate: birthOf(ownerId), otherBirthDate: birthOf(readerId), now });
