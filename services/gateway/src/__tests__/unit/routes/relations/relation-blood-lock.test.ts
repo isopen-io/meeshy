@@ -193,7 +193,6 @@ describe('constat A (2026-11-23) — un accord pris sous protection de mineur ne
     expect(app.reglages.get(`${MOI}:${AUTRE}`)?.bloodBundleAcceptedAt).toEqual(NOW);
   });
 });
-});
 
 describe('constat D — une paire bloquée ne se trahit pas par la réponse de l\'accord au palier', () => {
   it('bloqué par l\'autre, je vois toujours Sang : 200 neutre sans écriture, jamais un 404', async () => {
