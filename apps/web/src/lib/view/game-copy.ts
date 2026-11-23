@@ -6,6 +6,7 @@ import type { MeeshEdition } from '@meeshy/shared/utils/game/mint';
 import type { MissionDifficulty } from '@meeshy/shared/utils/game/missions';
 import type { TreasuryTierKey } from '@meeshy/shared/utils/game/treasury';
 import { GAME_ERROR_CODES } from '@meeshy/shared/types/game-routes';
+import type { GameEffortRelight } from '@meeshy/shared/types/game';
 
 import {
   formatGameNumber,
@@ -79,6 +80,16 @@ export const meeshCount = (count: number, language: Language = currentInterfaceL
 
 export const daysLabel = (count: number, language: Language = currentInterfaceLanguage()): string =>
   translateGamePlural(language, 'game.days', count);
+
+/**
+ * Le rallumage par l'effort (#20471) : les rêves complets qui manquent, avant la fin de la journée ou d'ici demain
+ * soir, et les jours de la Flamme qui reviennent avec elle.
+ */
+export const effortRelightLine = (effort: GameEffortRelight, language: Language = currentInterfaceLanguage()): string =>
+  translateGame(language, effort.daysLeft === 0 ? 'game.flame_panel.effort_relight_today' : 'game.flame_panel.effort_relight_tomorrow', {
+    dreams: translateGamePlural(language, 'game.flame_panel.effort_dreams', Math.max(1, effort.dreamsNeeded - effort.dreamsDone)),
+    days: daysLabel(effort.lostDays, language),
+  });
 
 export const actionsLabel = (count: number, language: Language = currentInterfaceLanguage()): string =>
   translateGamePlural(language, 'game.actions', count);
