@@ -120,6 +120,10 @@
     <string name="game2_guide_moment_league_relegated_next_far">Steig diese Woche wieder auf: Jeder Funke zählt.</string>
     <string name="game2_guide_moment_league_relegated_short">Zurück im %1$s-Turnier.</string>
     <string name="game2_guide_moment_league_relegated_what">Du steigst ab ins %1$s-Turnier.</string>
+    <string name="game2_guide_moment_offering_kept_means">Sie ist bereit, ohne auf die Akte des Tages zu warten.</string>
+    <string name="game2_guide_moment_offering_kept_next">%1$s lang ist dein Traum leichter, damit du wieder hineinfindest.</string>
+    <string name="game2_guide_moment_offering_kept_short">Deine Gabe wartet auf dich, aufbewahrt von deinen Ahnen.</string>
+    <string name="game2_guide_moment_offering_kept_what">Deine Ahnen haben dir deine Gabe aufbewahrt.</string>
     <string name="game2_guide_moment_prestige_means">Deine Legende tritt in ein neues Zeitalter, mit einer nummerierten Trophäe und %1$s Ruhm. Dein Rang weicht nie zurück.</string>
     <string name="game2_guide_moment_prestige_next">Dein Licht wird wieder zum Funken: Dein Level beginnt wieder bei 1.</string>
     <string name="game2_guide_moment_prestige_short">Wiedergeburt %1$s.</string>

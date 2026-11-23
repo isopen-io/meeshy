@@ -121,8 +121,9 @@ describe('composeMessageLabel — l’ordre iOS', () => {
 
     // Pas mien ⇒ AUCUN mot d'accusé, quel que soit `delivery` (iOS : « accusé
     // si à moi » seulement — `BubbleFooter.swift` ne peint jamais la coche
-    // d'un message reçu).
-    expect(label).toBe('réponse à expéditeur inconnu, Bonjour, 09:02');
+    // d'un message reçu). L'auteur de citation inconnu reprend « l'expéditeur »
+    // (`quote.sender.unknown`, le même que le pied de citation) depuis 93w.
+    expect(label).toBe('réponse à l’expéditeur, Bonjour, 09:02');
   });
 
   test('éphémère : le badge apparaît quand `expiresAt` est posé', () => {
@@ -632,5 +633,71 @@ describe('composeMessageLabel — l’accusé reprend le vocabulaire traduit du 
     expect(mine('read', 'fr')).toBe('Bonjour, 09:02, lu');
     const received = composeMessageLabel({ language: 'fr', protection: 'standard', message: message(), isMine: false, servedText: 'Bonjour', delivery: 'read' });
     expect(received).toBe('Bruno Bêta, Bonjour, 09:02');
+  });
+});
+
+/**
+ * « RÉPONSE À », « MODIFIÉ », « ÉPINGLÉ » DESCENDENT LE CATALOGUE (93w,
+ * a11y/i18n — suite de 92w, issue #20326) — trois segments restaient EN DUR EN
+ * FRANÇAIS dans `composeMessageLabel`, invisibles pour un francophone mais
+ * entendus en français par un lecteur d'écran EN/ES/PT/DE/IT/AR sur SES propres
+ * messages. Ils réutilisent le vocabulaire déjà traduit :
+ *  - « réponse à {auteur} » → `message.replyTo.a11y`, l'auteur inconnu reprenant
+ *    `quote.sender.unknown` (= « l'expéditeur »), le MÊME que le « sauter vers »
+ *    du pied de citation (`message-blocks.tsx:744`) ;
+ *  - « modifié » / « épinglé » → `message.edited.a11y` / `message.pinned.a11y`,
+ *    FR byte-identique, les six autres langues portées de l'iOS déjà relu
+ *    (`a11y.message.edited` / `a11y.message.pinned`).
+ */
+describe('composeMessageLabel — réponse/modifié/épinglé descendent le catalogue (93w)', () => {
+  const quoted = (): Message => message({ id: 'q', sender: senderOf('Amina Diallo') });
+
+  test('FR byte-identique : « réponse à Amina Diallo », « modifié », « épinglé »', async () => {
+    await loadInterfaceCatalog('fr');
+    const label = composeMessageLabel({ language: 'fr', protection: 'standard',
+      message: message({ replyTo: quoted(), isEdited: true, pinnedAt: new Date('2026-09-10T09:00:00.000Z') }),
+      isMine: false,
+      servedText: 'Bonjour',
+      delivery: null,
+    });
+    expect(label).toBe('Bruno Bêta, réponse à Amina Diallo, Bonjour, 09:02, modifié, épinglé');
+  });
+
+  test('en anglais, les trois segments se disent dans la langue du lecteur', async () => {
+    await loadInterfaceCatalog('en');
+    const label = composeMessageLabel({ language: 'en', protection: 'standard',
+      message: message({ replyTo: quoted(), isEdited: true, pinnedAt: new Date('2026-09-10T09:00:00.000Z') }),
+      isMine: false,
+      servedText: 'Bonjour',
+      delivery: null,
+    });
+    expect(label).toBe('Bruno Bêta, replying to Amina Diallo, Bonjour, 09:02, edited, pinned');
+    expect(label).not.toContain('modifié');
+    expect(label).not.toContain('épinglé');
+    expect(label).not.toContain('réponse à');
+  });
+
+  test('auteur de citation inconnu : reprend « l’expéditeur » (quote.sender.unknown), plus jamais « expéditeur inconnu » en dur', async () => {
+    await loadInterfaceCatalog('fr');
+    const label = composeMessageLabel({ language: 'fr', protection: 'standard',
+      message: messageWithoutSender({ replyTo: messageWithoutSender({ id: 'q2' }) }),
+      isMine: false,
+      servedText: 'Bonjour',
+      delivery: 'sent',
+    });
+    expect(label).toBe('réponse à l’expéditeur, Bonjour, 09:02');
+    expect(label).not.toContain('expéditeur inconnu');
+  });
+
+  test('un modérateur garde « modifié par un modérateur » (inchangé), jamais le simple « modifié »', async () => {
+    await loadInterfaceCatalog('en');
+    const label = composeMessageLabel({ language: 'en', protection: 'standard',
+      message: message({ isEdited: true, editedById: 'u-mod', editedByRole: 'MODERATOR' }),
+      isMine: false,
+      servedText: 'Bonjour',
+      delivery: null,
+    });
+    expect(label).toContain('edited by a moderator');
+    expect(label).not.toBe('Bruno Bêta, Bonjour, 09:02, edited');
   });
 });

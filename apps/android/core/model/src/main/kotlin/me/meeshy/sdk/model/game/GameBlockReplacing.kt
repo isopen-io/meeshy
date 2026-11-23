@@ -181,6 +181,7 @@ public fun GameChest.replacing(status: ChestStatus? = null, reward: Put<DailyChe
     odds = odds,
     reward = if (reward != null) reward.value else this.reward,
     today = today,
+    kept = kept,
 )
 
 public fun GameFlame.replacing(

@@ -59,6 +59,9 @@ const arShellLabels = {
   'message.reaction.add': 'التفاعل بـ {emoji}',
   'message.reaction.remove': 'إزالة تفاعلك {emoji}',
   'message.badge.pinned': 'رسالة مثبّتة',
+  'message.edited.a11y': 'معدَّلة',
+  'message.pinned.a11y': 'مثبَّتة',
+  'message.replyTo.a11y': 'ردًا على {author}',
   'quote.sender.unknown': 'المُرسِل',
 
   'media.tile.open': 'فتح {name}',

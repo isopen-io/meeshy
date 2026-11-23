@@ -34,8 +34,8 @@ public object GameGuideTarget {
     }
 
     /**
-     * La page où mène le bouton d'un moment de la vague 2 ; « voir le niveau » ouvre le Prestige. « Voir la Flamme »
-     * n'a pas de page : il ouvre la fiche de la Flamme, comme le bouton de la vague 1.
+     * La page où mène le bouton d'un moment de la vague 2 ; « voir le niveau » ouvre le Prestige. « Voir la Flamme » et
+     * « voir mon rêve » n'ont pas de page : ils ouvrent la fiche de la Flamme et celle du Rêve, comme la vague 1.
      */
     public fun page(action: GuideActionV2): GamePage? = when (action) {
         GuideActionV2.SeeLeague -> GamePage.League
@@ -43,6 +43,6 @@ public object GameGuideTarget {
         GuideActionV2.SeeTrophies -> GamePage.Showcase
         GuideActionV2.SeeAtlas -> GamePage.Atlas
         GuideActionV2.SeeLevel -> GamePage.Prestige
-        GuideActionV2.SeeFlame -> null
+        GuideActionV2.SeeFlame, GuideActionV2.SeeMissions -> null
     }
 }

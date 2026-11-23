@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.offering_kept.means",
+          "androidName": "game2_guide_moment_offering_kept_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.offering_kept.next",
+          "androidName": "game2_guide_moment_offering_kept_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.offering_kept.short",
+          "androidName": "game2_guide_moment_offering_kept_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.offering_kept.what",
+          "androidName": "game2_guide_moment_offering_kept_what",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
