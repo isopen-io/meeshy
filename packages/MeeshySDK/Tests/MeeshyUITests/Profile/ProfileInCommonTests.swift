@@ -209,6 +209,49 @@ final class ProfileInCommonTests: XCTestCase {
         XCTAssertTrue(source.stored.isEmpty)
     }
 
+    // MARK: - Notre histoire en deuxième position de la Vitrine (#20357)
+
+    private func historyOnly() -> UserInCommon {
+        let start = Date(timeIntervalSince1970: 1_772_755_200)
+        return UserInCommon(id: "leo", history: [
+            InCommonHistoryStep(kind: .firstMessage, at: start),
+            InCommonHistoryStep(kind: .friend, at: start.addingTimeInterval(86_400)),
+        ])
+    }
+
+    func test_history_paintsFromTheFreshCacheWithoutTheNetworkEvenWhenNothingElseIsInCommon() async {
+        let source = StubInCommonLoading()
+        source.cached = .fresh([historyOnly()], age: 1)
+        let model = ProfileInCommonModel()
+
+        await model.open(userId: "leo", using: source)
+
+        XCTAssertEqual(model.history.map(\.kind), [.firstMessage, .friend])
+        XCTAssertEqual(source.fetchCalls.count, 0)
+    }
+
+    func test_history_isEmptyBeforeAnythingIsLoaded() {
+        XCTAssertTrue(ProfileInCommonModel().history.isEmpty)
+    }
+
+    private func profileSource(_ name: String) throws -> String {
+        let sources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("Sources/MeeshyUI/Profile")
+        return try String(contentsOf: sources.appendingPathComponent(name), encoding: .utf8)
+    }
+
+    /// La frise est le deuxième bloc de la Vitrine, juste après « En direct », et plus le dernier de « En commun ».
+    func test_vitrineFace_mountsTheHistorySecond_andInCommonNoLongerHidesIt() throws {
+        let vitrine = try profileSource("UserProfileSheet+DetailsTab.swift")
+        let live = try XCTUnwrap(vitrine.range(of: "liveSection.meeshyCascade(rank: 0)"))
+        let history = try XCTUnwrap(vitrine.range(of: "ProfileHistorySection(model: inCommon"))
+        let pending = try XCTUnwrap(vitrine.range(of: "ProfilePendingSection.of(self)"))
+        XCTAssertLessThan(live.lowerBound, history.lowerBound)
+        XCTAssertLessThan(history.lowerBound, pending.lowerBound)
+        XCTAssertFalse(try profileSource("ProfileInCommonSection.swift").contains("ProfileInCommonHistory("))
+    }
+
     func test_open_anotherPersonNeverSeesThePreviousOne() async {
         let source = StubInCommonLoading()
         source.cached = .fresh([leoInCommon()], age: 1)
