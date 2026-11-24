@@ -30,6 +30,8 @@ public enum GameErrorCode: String, CaseIterable, Sendable, Hashable {
     case priceChanged = "PRICE_CHANGED"
     case freezeAtMaximum = "FREEZE_AT_MAXIMUM"
     case relightNotAllowed = "RELIGHT_NOT_ALLOWED"
+    /// La veille de la Flamme refusée (#17372) : la raison est à la racine (`no-flame`, `already-paused`, `quarterly-limit`).
+    case flamePauseNotAllowed = "FLAME_PAUSE_NOT_ALLOWED"
     case missionNotFound = "MISSION_NOT_FOUND"
     case missionRerollExhausted = "MISSION_REROLL_EXHAUSTED"
     case missionRerollUnavailable = "MISSION_REROLL_UNAVAILABLE"

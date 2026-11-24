@@ -4,6 +4,7 @@ import kotlinx.serialization.json.JsonElement
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.game.GamePrivacyRequest
 import me.meeshy.sdk.model.game.DuoInviteRequest
+import me.meeshy.sdk.model.game.FlamePauseRequest
 import me.meeshy.sdk.model.game.GameWriteRequest
 import me.meeshy.sdk.model.game.GuideSeenRequest
 import me.meeshy.sdk.model.game.LeagueConsentRequest
@@ -95,6 +96,10 @@ interface GameApi {
     /** Rallume une Flamme éteinte : 3 Meeshes, 48 h, une fois par mois. */
     @POST("me/game/flame/relight")
     suspend fun relightFlame(@Body body: GameWriteRequest): ApiResponse<JsonElement>
+
+    /** Annonce une veille de la Flamme (#17372) : 1 à 7 jours à partir de demain, une fois par trimestre. */
+    @POST("me/game/flame/pause")
+    suspend fun pauseFlame(@Body body: FlamePauseRequest): ApiResponse<JsonElement>
 
     /** Réclame la récompense d'une halte du Voyage. */
     @POST("me/game/season/steps/{step}/claim")
