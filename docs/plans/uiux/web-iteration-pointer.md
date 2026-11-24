@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-10zclt` |
+| Branche de travail de la session courante | `claude/practical-fermat-stot2z` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -57,7 +57,30 @@ normal.
 | **90w** | 2026-11-20 | `claude/practical-fermat-awbeqk` | → `dev` | ✅ mergé |
 | **91w** | 2026-11-21 | `claude/practical-fermat-h5vgy2` | [#20161](https://github.com/isopen-io/meeshy/pull/20161) → `dev` | ✅ mergé |
 | **92w** | 2026-11-22 | `claude/practical-fermat-xtlc3p` | [#20325](https://github.com/isopen-io/meeshy/pull/20325) → `dev` | ✅ mergé |
-| **93w** | 2026-11-23 | `claude/practical-fermat-10zclt` | [#20472](https://github.com/isopen-io/meeshy/pull/20472) → `dev` | ⏳ ouverte |
+| **93w** | 2026-11-23 | `claude/practical-fermat-10zclt` | [#20472](https://github.com/isopen-io/meeshy/pull/20472) → `dev` | ✅ mergé |
+| **94w** | 2026-11-24 | `claude/practical-fermat-stot2z` | → `dev` | ⏳ ouverte |
+
+**94w** — a11y / i18n / maintenabilité (suite de 93w, issue #20326) : **les trois
+segments SANS pluriel restants** du libellé d'accessibilité d'un message restaient
+EN DUR EN FRANÇAIS — « Sans compte » (marqueur anonyme), « sticker », « Position :
+{lieu} »/« lieu partagé » — dans `composeMessageLabel` (`lib/view/message-a11y-label.ts`,
+SITE UNIQUE). Même défaut que 92w/93w : invisible pour un francophone, entendu en
+français par un lecteur EN/ES/PT/DE/IT/AR sur SES messages. Correction : quatre clés
+ajoutées aux sept `catalog-{lang}-shell-labels.ts` (`message.anonymous.a11y`,
+`message.sticker.a11y`, `message.location.named.a11y` {place}, `message.location.shared.a11y`),
+**FR byte-identique**, l'anonyme repris de `linkDetail.stats.anonymous` (déjà traduit),
+le lieu de l'étiquette iOS `a11y.message.location` (**seul PT inventé**, absent iOS) ;
+« sticker » identique sauf de/ar. **L'info-bulle du fantôme** (`focal-row.tsx:803`,
+`title` en dur) descend la MÊME clé — œil et oreille unifiés. Témoins :
+`message-a11y-label.test.ts` (45→49 : EN « Without an account » pas « Sans compte » ;
+AR « ملصق » pas « sticker » ; EN « shared location: … » pas « Position » ; lieu sans
+nom → repli, couvrant null/undefined/'') + `i18n-catalog.test.ts` 12/12 (49 610 `expect`)
++ `message-blocks`/`detail-sheet` 32/32 + `focal-row` 69/69 ; `tsc` 0 ; harmonie **0**.
+Housekeeping : 93w confirmée mergée (#20472) ; appariement analyses↔plans 1:1
+revérifié (**48/48** `w`, 0 doublon → **49/49** avec 94w). **Dette 95w+** : ne restent
+QUE les segments à PLURIEL — comptes de pièces jointes (`attachmentSegments`, aussi
+consommé par `ProtectionNotice`) et réactions (`reactionsSegment`) —, issue **#20326**
+toujours ouverte. Analyse : `docs/analyses/uiux/2026-11-24-iteration-94w.md`.
 
 **93w** — a11y / i18n / maintenabilité (suite de 92w, issue #20326) : **trois
 segments du libellé d'accessibilité d'un message restaient EN DUR EN FRANÇAIS** —

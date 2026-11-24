@@ -62,6 +62,10 @@ const enShellLabels = {
   'message.edited.a11y': 'edited',
   'message.pinned.a11y': 'pinned',
   'message.replyTo.a11y': 'replying to {author}',
+  'message.anonymous.a11y': 'Without an account',
+  'message.sticker.a11y': 'sticker',
+  'message.location.named.a11y': 'shared location: {place}',
+  'message.location.shared.a11y': 'shared location',
   'quote.sender.unknown': 'the sender',
 
   'media.tile.open': 'Open {name}',
