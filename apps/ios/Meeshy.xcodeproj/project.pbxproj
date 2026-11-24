@@ -3160,6 +3160,7 @@
 		A3DE5628F2816534EDA61892 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49CD91B427355A8AB229107E /* WelcomeView.swift */; };
 		A3EE582AD335BF90DD0E6AB7 /* StoryViewModelPublishingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AD0C83B504D10D75258D147 /* StoryViewModelPublishingTests.swift */; };
 		A3FF0BF2AA4331004C281057 /* ContentOpenReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 539E1B25B0282B3B7815EA44 /* ContentOpenReporter.swift */; };
+		A41C20B4617C1AF9503998DD /* TalkieSpectrumAnalyzerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D066B180C415B028547BA379 /* TalkieSpectrumAnalyzerTests.swift */; };
 		A423A3B313DA4BC8D4294D68 /* EmojiPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3D405A5FE6201E7520CEE5C /* EmojiPickerSheet.swift */; };
 		A42706D0E3967045B5F09779 /* MyStoriesCreateStoryGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 981B3621A42468D759597E2A /* MyStoriesCreateStoryGuardTests.swift */; };
 		A4542BF2EEA1D1B45AAEDC83 /* StoryUploadPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE0AF0F91F8C874D827B88BE /* StoryUploadPresentationTests.swift */; };
@@ -4617,6 +4618,7 @@
 		EE30BDB0863140E294BE4690 /* BubbleSkinTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED19A51F8E03AC0E7A831BB3 /* BubbleSkinTests.swift */; };
 		EE3CB7E30E33AC598F6ECCE8 /* GameLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 028CC2942F446E59C851BA7E /* GameLink.swift */; };
 		EE412FB5C825B85EF601C1F0 /* PreviewMenuSpring.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EDA13426CBD3D6924E41C52 /* PreviewMenuSpring.swift */; };
+		EE4D9FF13FD2B67ECFA6537F /* TalkieSpectrumAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 165D29D64742D752D1775218 /* TalkieSpectrumAnalyzer.swift */; };
 		EE5345A5D4750F0F4FEE4238 /* ThermalStateMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1044DE45B0C79FD27DD97D0 /* ThermalStateMonitor.swift */; };
 		EE81D846F41D0F151DF4E40A /* RootMenuLadderGlowGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E21947B5B7F1E6FA3D89EA6D /* RootMenuLadderGlowGuardTests.swift */; };
 		EE8A18F213F1C6D23A1A9FB4 /* FeedPostRowRenderInputsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0B00B0A4CFCF0AFBF2D8197 /* FeedPostRowRenderInputsTests.swift */; };
@@ -5466,6 +5468,7 @@
 		15F2DCF213F70888CBA84A3F /* OnboardingFriendsFoundTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFriendsFoundTests.swift; sourceTree = "<group>"; };
 		1654EA27DA7990B959619892 /* MessageListDormantRenderingSourceGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageListDormantRenderingSourceGuardTests.swift; sourceTree = "<group>"; };
 		165D0E87BF8D92C26813C330 /* CallsTabAccessibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallsTabAccessibilityTests.swift; sourceTree = "<group>"; };
+		165D29D64742D752D1775218 /* TalkieSpectrumAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieSpectrumAnalyzer.swift; sourceTree = "<group>"; };
 		166EA3E08490E5F104EAF93E /* ConversationListViewModel+Subscriptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationListViewModel+Subscriptions.swift"; sourceTree = "<group>"; };
 		16701F7F76F76A609504E139 /* WebRTCErrorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCErrorTests.swift; sourceTree = "<group>"; };
 		16711FEC00BF2F15E68D3B73 /* DeterministicDigestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeterministicDigestBuilder.swift; sourceTree = "<group>"; };
@@ -8957,6 +8960,7 @@
 		D02D1FB29097A44FDC1B2D48 /* EmailVerificationGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailVerificationGateTests.swift; sourceTree = "<group>"; };
 		D04F58E93C2BC25E6E78BBD1 /* NSEDelivery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSEDelivery.swift; sourceTree = "<group>"; };
 		D063598B3A51E36563633AD7 /* ComposerSceneBand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSceneBand.swift; sourceTree = "<group>"; };
+		D066B180C415B028547BA379 /* TalkieSpectrumAnalyzerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieSpectrumAnalyzerTests.swift; sourceTree = "<group>"; };
 		D06A2B44373CBB69D6D5AD24 /* SectionScrollPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectionScrollPill.swift; sourceTree = "<group>"; };
 		D0747DDB6FDDC407628CB714 /* GalleryLotShapeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalleryLotShapeTests.swift; sourceTree = "<group>"; };
 		D07540995EA8E2CB7861ED51 /* LentilleSkeletonRowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LentilleSkeletonRowTests.swift; sourceTree = "<group>"; };
@@ -12540,6 +12544,7 @@
 				AEA23D3ED3B080D7231023FC /* TalkieOutputPlanTests.swift */,
 				2455AF97E389B4AB205E000E /* TalkiePushToTalkChannelTests.swift */,
 				3388F82086611EF7610470CC /* TalkieSenderTests.swift */,
+				D066B180C415B028547BA379 /* TalkieSpectrumAnalyzerTests.swift */,
 				250171E4EAA547407A11CC1F /* TalkieUnreachableTests.swift */,
 				F5480160447F284B3A9AAE3E /* TalkieVoiceCopyTests.swift */,
 				A1C23E5659EC81641F3F0480 /* TalkieWakeJoinerTests.swift */,
@@ -13098,6 +13103,7 @@
 				3EABDF7FF3CE7A51B028FFD2 /* TalkieOutputPlan.swift */,
 				16D42D0FF21360BE57A83FAA /* TalkiePushToTalkChannel.swift */,
 				95724CCB105678154F8A1C2F /* TalkieSender.swift */,
+				165D29D64742D752D1775218 /* TalkieSpectrumAnalyzer.swift */,
 				D97F51552BB90DC3535C3D8A /* TalkieVoiceCopy.swift */,
 				B9D6370CEE3A38D64EE8090E /* TalkieVoicePlayer.swift */,
 				E5718BBE35CA6E86B0B14488 /* TalkieWakeJoiner.swift */,
@@ -19417,6 +19423,7 @@
 				F68FC2D2FC7E0B21AC65CC4B /* TalkiePushToTalkChannel.swift in Sources */,
 				27A93E809FC8B610E1C1A423 /* TalkieSender.swift in Sources */,
 				9EC5A73A51C2CE2443F4502B /* TalkieShortcutIntent.swift in Sources */,
+				EE4D9FF13FD2B67ECFA6537F /* TalkieSpectrumAnalyzer.swift in Sources */,
 				B25B44BC4DE96AFCD86410AA /* TalkieVoiceCopy.swift in Sources */,
 				B3102C10C183656FA58182FD /* TalkieVoicePlayer.swift in Sources */,
 				E9D0F7B8ECAADBD03F85C472 /* TalkieWakeJoiner.swift in Sources */,
@@ -21566,6 +21573,7 @@
 				A4F74CA5E3460D104E4C501C /* TalkieOutputPlanTests.swift in Sources */,
 				57A1EBBBEF0CF4739A6794BB /* TalkiePushToTalkChannelTests.swift in Sources */,
 				82B5198B04E22AFEBBCEE245 /* TalkieSenderTests.swift in Sources */,
+				A41C20B4617C1AF9503998DD /* TalkieSpectrumAnalyzerTests.swift in Sources */,
 				0E270F7AD61FDCFBC008386D /* TalkieUnreachableTests.swift in Sources */,
 				B0E9EDA8953E870DB279186D /* TalkieVoiceCopyTests.swift in Sources */,
 				54E60F1294DEBEEA02EF1004 /* TalkieWakeJoinerTests.swift in Sources */,
