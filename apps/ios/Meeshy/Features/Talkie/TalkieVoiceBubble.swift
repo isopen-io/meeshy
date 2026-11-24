@@ -14,13 +14,16 @@ import SwiftUI
 ///
 /// Chaque image relit le registre (verrou + copie), sans rien publier : la vue ne change ni d'identité ni d'état, seul
 /// le `TimelineView` la redessine. Sous « réduire les animations », dix images par seconde d'un cercle dont l'épaisseur
-/// suit le niveau moyen.
+/// suit le niveau moyen — celui du système comme celui que l'app impose (`meeshyForceReduceMotion`).
 struct TalkieVoiceBubble: View {
     let userId: String
     let geometry: TalkieBubbleGeometry
     let stage: TalkieVoiceStage
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+
+    private var reduceMotion: Bool { MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion) }
 
     /// L'épaisseur du contour en mouvement.
     nonisolated static let strokeWidth: CGFloat = 2
@@ -46,9 +49,9 @@ struct TalkieVoiceBubble: View {
 
     var body: some View {
         let side = Self.frameSide(for: geometry)
-        TimelineView(.animation(minimumInterval: reduceMotion ? 0.1 : nil)) { _ in
+        let reduced = reduceMotion
+        TimelineView(.animation(minimumInterval: reduced ? 0.1 : nil)) { _ in
             let bands = stage.bands(for: userId, now: TalkieVoiceStage.hostNow() - TalkieVoiceStage.readLag)
-            let reduced = reduceMotion
             let geometry = geometry
             Canvas { graphics, size in
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)

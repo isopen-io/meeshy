@@ -545,7 +545,7 @@ struct ProfileSheetEnvironment: ViewModifier {
                 ProfileSlot.view(.pill, userId: userId, displayName: displayName, standing: standing)
             })
             // La voix du talkie autour du grand avatar de la fiche, son compteur dessous quand c'est moi qui parle (#20531).
-            .environment(\.profileHeroVoice, TalkieProfileHeroVoice.make())
+            .environment(\.profileHeroVoice, TalkieProfileHeroVoice.shared)
             .environment(\.profileActionsParts, ProfileActionsParts { part, request in
                 ProfileSlot.view(.actions, userId: request.userId, displayName: request.displayName,
                                  liveRequest: request, actionsPart: part)

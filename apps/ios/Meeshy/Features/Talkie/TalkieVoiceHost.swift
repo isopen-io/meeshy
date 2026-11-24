@@ -11,11 +11,6 @@ nonisolated enum TalkieVoiceHostLaw {
         TalkieBubbleGeometry(baseRadius: buttonSize / 2, maxAmplitude: max(0, (rowHeight - buttonSize) / 2))
     }
 
-    /// La bulle part du bord extérieur de ce que l'avatar peint, et s'en écarte d'au plus 35 % de son rayon.
-    static func profileHero(outerRingRadius: CGFloat, avatarSize: CGFloat) -> TalkieBubbleGeometry {
-        TalkieBubbleGeometry(baseRadius: outerRingRadius, maxAmplitude: ProfileHeroPlan.voiceAmplitude(avatarSize: avatarSize))
-    }
-
     /// Ce que la fente du talkie de l'en-tête montre : le bouton quand il est proposé ; sinon, tant que le pair parle,
     /// une fente d'écoute de même taille, sans geste, qui porte l'orbe de sa voix ; rien le reste du temps.
     static func headerSlot(offered: Bool, withdrawn: Bool, incoming: Bool) -> TalkieHeaderSlot {
@@ -97,6 +92,9 @@ extension TalkieVoiceStageObserver {
 /// `@Published` y rejoue sa valeur courante — un maillon isolé au MainActor y piégeait l'ouverture d'un profil.
 @MainActor
 enum TalkieProfileHeroVoice {
+    /// Construite une fois pour toute l'app : la racine la relit à chaque rendu sans en refaire les fermetures.
+    static let shared = make()
+
     static func make(observer: TalkieVoiceStageObserver = .shared) -> ProfileHeroVoice {
         ProfileHeroVoice(
             bubble: { userId, baseRadius, maxAmplitude in
@@ -115,24 +113,19 @@ enum TalkieProfileHeroVoice {
 }
 
 /// L'orbe du bouton du talkie de l'en-tête : posée derrière le glyphe, sans changer sa place ni prendre le doigt,
-/// entrée et sortie en fondu agrandi (fondu seul sous « Réduire les animations »).
+/// entrée et sortie en fondu agrandi (fondu seul sous « Réduire les animations »). L'hôte lui dit quand se montrer
+/// (`TalkieVoiceHostLaw.shows`) : la feuille n'observe aucun singleton.
 struct TalkieHeaderOrb: View {
     let userId: String
+    let shows: Bool
 
-    @ObservedObject private var voices: TalkieVoiceStageObserver
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
 
     static let geometry = TalkieVoiceHostLaw.headerOrb(buttonSize: MeeshyControlSize.small,
                                                        rowHeight: MeeshyControlSize.tapTarget)
 
-    init(userId: String, voices: TalkieVoiceStageObserver = .shared) {
-        self.userId = userId
-        _voices = ObservedObject(wrappedValue: voices)
-    }
-
     var body: some View {
-        let shows = TalkieVoiceHostLaw.shows(userId: userId, voices: voices.voices)
         let reduceMotion = MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
         ZStack {
             if shows {

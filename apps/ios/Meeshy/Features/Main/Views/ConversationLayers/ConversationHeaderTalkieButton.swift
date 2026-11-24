@@ -56,6 +56,8 @@ struct ConversationHeaderTalkieButton: View {
     @StateObject private var offer: TalkieOfferModel
     @StateObject private var sender = TalkieSender()
     @ObservedObject private var voices: TalkieVoiceStageObserver
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
     @State private var pressed = false
     @State private var withdrawn = false
     /// Le téléphone du pair est injoignable depuis plusieurs minutes (#20241) : le geste laisse un message vocal.
@@ -82,6 +84,11 @@ struct ConversationHeaderTalkieButton: View {
                                       incoming: TalkieVoiceHostLaw.incoming(userId: userId, voices: voices.voices))
     }
 
+    /// Une voix vers le pair ou venant de lui : l'orbe se montre.
+    private var orbShows: Bool { TalkieVoiceHostLaw.shows(userId: userId, voices: voices.voices) }
+
+    private var reduceMotion: Bool { MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion) }
+
     /// Le sort de ma voix tant qu'elle part ; `nil` au repos.
     private var liveDelivery: TalkieHeaderDelivery? {
         look == .live ? TalkieHeaderDelivery.resolve(phase: sender.phase, waking: sender.waking) : nil
@@ -94,7 +101,7 @@ struct ConversationHeaderTalkieButton: View {
             switch slot {
             case .button:
                 glyph(look)
-                    .background { TalkieHeaderOrb(userId: userId) }
+                    .background { TalkieHeaderOrb(userId: userId, shows: orbShows) }
                     .modifier(TalkieHoldModifier(sender: sender, userId: userId, pressed: $pressed, delivery: delivery))
                     .meeshyTapTarget()
                     .transition(.scale.combined(with: .opacity))
@@ -106,7 +113,7 @@ struct ConversationHeaderTalkieButton: View {
                     .accessibilityIdentifier("conversation.header.talkie")
             case .listeningSlot:
                 glyph(.live)
-                    .background { TalkieHeaderOrb(userId: userId) }
+                    .background { TalkieHeaderOrb(userId: userId, shows: orbShows) }
                     .meeshyTapTarget()
                     .allowsHitTesting(false)
                     .transition(.scale.combined(with: .opacity))
@@ -118,7 +125,7 @@ struct ConversationHeaderTalkieButton: View {
                 EmptyView()
             }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.75), value: slot)
+        .animation(MeeshyMotion.animation(.rise, reduce: reduceMotion), value: slot)
         .task(id: userId) { await offer.load() }
         .modifier(PhoneUnreachableLastingReader(userId: userId, lasting: $unreachableLasting))
         .adaptiveOnChange(of: sender.waking) { _, waking in

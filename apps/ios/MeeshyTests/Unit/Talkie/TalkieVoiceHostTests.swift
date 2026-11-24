@@ -24,14 +24,6 @@ final class TalkieVoiceHostTests: XCTestCase {
         XCTAssertEqual(orb.maxAmplitude, 0)
     }
 
-    func test_profileHero_amplitudeIs35PercentOfRadius() {
-        for size in [CGFloat(112), 36, 80] {
-            let hero = TalkieVoiceHostLaw.profileHero(outerRingRadius: size / 2 + 7, avatarSize: size)
-            XCTAssertEqual(hero.maxAmplitude, 0.35 * size / 2, accuracy: 0.0001)
-            XCTAssertEqual(hero.baseRadius, size / 2 + 7)
-        }
-    }
-
     func test_shows_aVoiceToOrFromThePerson_mountsTheHost() {
         XCTAssertTrue(TalkieVoiceHostLaw.shows(userId: "bob", voices: [key("bob", .outgoing)]))
         XCTAssertTrue(TalkieVoiceHostLaw.shows(userId: "bob", voices: [key("bob", .incoming)]))
