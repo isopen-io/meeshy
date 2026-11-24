@@ -517,6 +517,7 @@ export type MissionRerollResponse = z.infer<typeof missionRerollResponseSchema>;
 export type ChestClaimResponse = z.infer<typeof chestClaimResponseSchema>;
 export type FlameFreezeResponse = z.infer<typeof flameFreezeResponseSchema>;
 export type FlameRelightResponse = z.infer<typeof flameRelightResponseSchema>;
+export type FlamePauseResponse = z.infer<typeof flamePauseResponseSchema>;
 export type GuideSeenRequest = z.infer<typeof guideSeenRequestSchema>;
 export type GuideSeenResponse = z.infer<typeof guideSeenResponseSchema>;
 export type MeeshMintResponse = z.infer<typeof meeshMintResponseSchema>;

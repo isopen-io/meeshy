@@ -407,6 +407,14 @@ const it = {
   'game.mascot.level_missing.one': '{count} scintilla in più, e la tua luce raggiunge il livello {level}.',
   'game.mascot.level_missing.other': '{count} scintille in più, e la tua luce raggiunge il livello {level}.',
   'game.mascot.top_level': 'La tua luce è al culmine. Bravo!',
+  'game.error.flame_pause.quarterly_limit': 'La tua Fiamma ha già riposato in questo trimestre.',
+  'game.error.flame_pause.already_paused': 'La tua Fiamma sta già riposando.',
+  'game.error.flame_pause.no_flame': 'La tua Fiamma deve essere accesa per riposare.',
+  'game.flame_panel.pause_intro': 'Una pausa? La tua Fiamma ti aspetta fino a {days}, una volta a trimestre.',
+  'game.flame_panel.pause_days': 'Durata del riposo',
+  'game.flame_panel.pause': 'Lasciala riposare · {days}',
+  'game.flame_panel.paused': 'La tua Fiamma riposa fino a {date}.',
+  'game.flame_panel.paused_soon': 'La tua Fiamma riposa da domani, fino a {date}.',
 } as const satisfies GameConceptCatalog;
 
 export default it;

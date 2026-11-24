@@ -407,6 +407,14 @@ const pt = {
   'game.mascot.level_missing.one': 'Mais {count} faísca, e a sua luz chega ao nível {level}.',
   'game.mascot.level_missing.other': 'Mais {count} faíscas, e a sua luz chega ao nível {level}.',
   'game.mascot.top_level': 'Sua luz está no ponto mais alto. Parabéns!',
+  'game.error.flame_pause.quarterly_limit': 'Sua Chama já descansou neste trimestre.',
+  'game.error.flame_pause.already_paused': 'Sua Chama já está descansando.',
+  'game.error.flame_pause.no_flame': 'Sua Chama precisa estar acesa para descansar.',
+  'game.flame_panel.pause_intro': 'Uma pausa? Sua Chama espera por você até {days}, uma vez por trimestre.',
+  'game.flame_panel.pause_days': 'Duração do descanso',
+  'game.flame_panel.pause': 'Deixar descansar · {days}',
+  'game.flame_panel.paused': 'Sua Chama descansa até {date}.',
+  'game.flame_panel.paused_soon': 'Sua Chama começa a descansar amanhã, até {date}.',
 } as const satisfies GameConceptCatalog;
 
 export default pt;

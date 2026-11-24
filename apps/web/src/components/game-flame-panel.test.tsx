@@ -203,25 +203,25 @@ describe('la Flamme en veille (#20509)', () => {
   });
 
   test('à risque, la veille se propose aussi : elle garde la Flamme dès demain', () => {
-    expect(renderToStaticMarkup(<GameFlamePanel {...props({ lastActiveDay: '2026-10-04' })} />)).toContain('data-game-flame-pause');
+    expect(renderToStaticMarkup(<GameFlamePanel {...props({ lastActiveDay: '2026-10-04' })} />)).toContain('data-game-flame-pause=""');
   });
 
   test('en veille, la carte dit jusqu’à quand, et l’annonce se tait', () => {
     const html = renderToStaticMarkup(<GameFlamePanel {...props({ pause: { from: '2026-10-03', until: '2026-10-09' } })} />);
-    expect(text(html)).toContain('Ta Flamme est en veille jusqu’au 9 octobre.');
-    expect(html).not.toContain('data-game-flame-pause');
+    expect(text(html)).toContain('Ta Flamme est en veille jusqu’au vendredi 9 octobre.');
+    expect(html).not.toContain('data-game-flame-pause=""');
     expect(html).not.toContain('role="radiogroup"');
   });
 
   test('annoncée pour demain, la carte le dit', () => {
     const html = renderToStaticMarkup(<GameFlamePanel {...props({ pause: { from: '2026-10-06', until: '2026-10-08' } })} />);
-    expect(text(html)).toContain('Ta Flamme se met en veille demain, jusqu’au 8 octobre.');
-    expect(html).not.toContain('data-game-flame-pause');
+    expect(text(html)).toContain('Ta Flamme se met en veille demain, jusqu’au jeudi 8 octobre.');
+    expect(html).not.toContain('data-game-flame-pause=""');
   });
 
   test('sans Flamme, ou éteinte, rien à mettre en veille', () => {
-    expect(renderToStaticMarkup(<GameFlamePanel {...props({ streak: 0, lastActiveDay: null })} />)).not.toContain('data-game-flame-pause');
-    expect(renderToStaticMarkup(<GameFlamePanel {...props({ ...out, balance: 5 })} />)).not.toContain('data-game-flame-pause');
+    expect(renderToStaticMarkup(<GameFlamePanel {...props({ streak: 0, lastActiveDay: null })} />)).not.toContain('data-game-flame-pause=""');
+    expect(renderToStaticMarkup(<GameFlamePanel {...props({ ...out, balance: 5 })} />)).not.toContain('data-game-flame-pause=""');
   });
 
   test('hors ligne, l’annonce attend ; en vol, elle dit qu’elle travaille', () => {
