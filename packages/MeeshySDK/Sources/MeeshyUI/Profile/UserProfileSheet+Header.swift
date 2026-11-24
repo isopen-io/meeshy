@@ -281,6 +281,7 @@ extension UserProfileSheet {
         // App câblée → état réel (pas d'anneau sans story active) ; legacy (nil) → anneau décoratif historique.
         let ringState = ProfileHeroPlan.storyRing(showRing ? (storyRingState ?? .read) : .none, avatarSize: Double(size))
         let context = AvatarContext.custom(size)
+        let storyRingSize: CGFloat? = ringState == .none ? nil : context.ringSize
         let photoHint = String(localized: "profile.avatar.viewFullscreen.a11y", defaultValue: "Ouvre la photo en plein écran", bundle: .module)
 
         return MeeshyLivePresence { MeeshyAvatar(
@@ -295,13 +296,13 @@ extension UserProfileSheet {
             onViewStory: ringState != .none ? onViewStory : nil,
             onMoodTap: shownMoodEmoji == nil ? nil : onMoodTap
         ) }
-        .background { heroVoiceHalo(size: size, ringState: ringState, voiceState: voiceState) }
         // Le cadre à sa taille normalisée (#19988) ; le nom descend de ce qu'il peint sous l'avatar (#19925).
         .avatarRing(
             shownAvatarRing,
             avatarSize: context.size,
-            storyRingSize: ringState == .none ? nil : context.ringSize
+            storyRingSize: storyRingSize
         )
+        .background { heroVoiceHalo(size: size, storyRingSize: storyRingSize, voiceState: voiceState) }
         .overlay(alignment: .bottom) { heroVoiceCaption(size: size, voiceState: voiceState) }
         .overlay(alignment: .bottomLeading) {
             ProfileHeroSignals(userId: isIdentityMuted || isCurrentUser ? nil : resolvedUserId, avatarSize: size,
@@ -326,17 +327,13 @@ extension UserProfileSheet {
         }
     }
 
-    /// La voix derrière l'avatar, du bord extérieur de ce qu'il peint jusqu'à 35 % de son rayon au-delà.
+    /// La voix derrière l'avatar ET son cadre, du bord de ce qu'il peint jusqu'à 35 % de son rayon au-delà.
     @ViewBuilder
-    private func heroVoiceHalo(size: CGFloat, ringState: StoryRingState, voiceState: ProfileHeroVoiceState) -> some View {
+    private func heroVoiceHalo(size: CGFloat, storyRingSize: CGFloat?, voiceState: ProfileHeroVoiceState) -> some View {
         if let heroVoice, let userId = heroVoiceUserId {
-            let storyRing = ringState == .none ? nil : AvatarContext.custom(size).ringSize
-            ProfileHeroVoiceHalo(
-                voice: heroVoice, userId: userId, isActive: voiceState.isActive,
-                baseRadius: ProfileHeroPlan.voiceOuterRadius(avatarSize: size, hasRing: shownAvatarRing != nil,
-                                                             storyRingSize: storyRing),
-                maxAmplitude: ProfileHeroPlan.voiceAmplitude(avatarSize: size)
-            )
+            let halo = ProfileHeroPlan.voiceHalo(avatarSize: size, ring: shownAvatarRing, storyRingSize: storyRingSize)
+            ProfileHeroVoiceHalo(voice: heroVoice, userId: userId, isActive: voiceState.isActive,
+                                 baseRadius: halo.baseRadius, maxAmplitude: halo.maxAmplitude)
         }
     }
 

@@ -1,4 +1,5 @@
 import Combine
+import MeeshySDK
 import SwiftUI
 
 // MARK: - La voix autour du grand avatar de la fiche (#20531)
@@ -68,7 +69,7 @@ struct ProfileHeroVoiceReader<Content: View>: View {
                 guard let voice, let userId, !userId.isEmpty else { return }
                 for await value in voice.states(userId).values where value != state {
                     let reduce = MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
-                    withAnimation(reduce ? nil : .spring(response: 0.3, dampingFraction: 0.8)) { state = value }
+                    withAnimation(MeeshyMotion.animation(.morph, reduce: reduce)) { state = value }
                 }
             }
     }
@@ -123,19 +124,26 @@ struct ProfileHeroVoiceCaption: View {
     }
 }
 
+/// Le gabarit de la voix autour de l'avatar, en points d'écran : le cercle d'où elle part, et sa hauteur à pleine voix.
+public nonisolated struct ProfileHeroVoiceHaloGeometry: Equatable, Sendable {
+    public let baseRadius: CGFloat
+    public let maxAmplitude: CGFloat
+}
+
 public extension ProfileHeroPlan {
     /// La place que la légende de la voix prend sous l'avatar déplié : le nom descend d'autant.
     nonisolated static let voiceCaptionHeight: Double = 22
     /// L'écart entre le bas de l'avatar (ou de son cadre) et la légende.
     nonisolated static let voiceCaptionGap: Double = 2
 
-    /// Le bord extérieur de ce que l'avatar du héros peint, vu depuis le visage autour duquel la voix se pose : le
-    /// cadre équipé (sa boîte, ramenée à l'échelle que le cadre impose au visage et à son anneau de story), sinon
-    /// l'anneau de story, sinon le visage nu.
-    static func voiceOuterRadius(avatarSize: CGFloat, hasRing: Bool, storyRingSize: CGFloat?) -> CGFloat {
-        guard hasRing else { return (storyRingSize ?? avatarSize) / 2 }
-        let scale = AvatarRingGeometry.avatarScale(avatarSize: avatarSize, storyRingSize: storyRingSize)
-        return AvatarRingGeometry.decoratedSide(avatarSize: avatarSize) / 2 / scale
+    /// La voix autour de l'avatar du héros, À L'ÉCRAN : elle se pose HORS du cadre (`.background` après
+    /// `.avatarRing`), que l'échelle du visage — anneau de story, film illustré — ne touche donc jamais. Elle part du
+    /// bord de ce que l'avatar peint — la boîte du cadre équipé, sinon l'anneau de story, sinon le visage nu — et s'en
+    /// écarte d'au plus 35 % de son rayon.
+    static func voiceHalo(avatarSize: CGFloat, ring: AvatarRingDesign?, storyRingSize: CGFloat?) -> ProfileHeroVoiceHaloGeometry {
+        let painted = ring.map { AvatarRingLayout.make($0, avatarSize: avatarSize, storyRingSize: storyRingSize).box }
+        return ProfileHeroVoiceHaloGeometry(baseRadius: (painted ?? storyRingSize ?? avatarSize) / 2,
+                                            maxAmplitude: voiceAmplitude(avatarSize: avatarSize))
     }
 
     /// La part du rayon de l'avatar qu'une voix à pleine bande ajoute autour de lui.

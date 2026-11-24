@@ -166,8 +166,11 @@ struct TalkieVoiceClock: View {
 /// Le point rouge du compteur : une demi-seconde qui s'éteint, une demi-seconde qui revient, en boucle, sans horloge
 /// d'images ; immobile sous « réduire les animations ».
 private struct TalkieClockDot: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
     @State private var dimmed = false
+
+    private var reduceMotion: Bool { MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion) }
 
     var body: some View {
         Circle()

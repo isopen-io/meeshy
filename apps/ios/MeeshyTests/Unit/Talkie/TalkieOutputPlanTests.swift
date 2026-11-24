@@ -32,7 +32,7 @@ final class TalkieOutputPlanTests: XCTestCase {
         XCTAssertEqual(TalkieOutputPlan.decide(outputs: []), TalkieOutputPlan(routesToSpeaker: false))
     }
 
-    /// Ce que l'encodeur du talkie émet, le lecteur le décode : sans quoi le gain n'aurait rien à amplifier.
+    /// Ce que l'encodeur du talkie émet, le lecteur le décode : sans quoi le haut-parleur n'aurait rien à jouer.
     func test_aFragmentFromTheEncoder_decodesToSound() throws {
         let format = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 1))
         let input = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 9_600))

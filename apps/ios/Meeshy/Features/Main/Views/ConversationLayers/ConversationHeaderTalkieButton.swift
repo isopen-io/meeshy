@@ -55,6 +55,7 @@ struct ConversationHeaderTalkieButton: View {
 
     @StateObject private var offer: TalkieOfferModel
     @StateObject private var sender = TalkieSender()
+    @ObservedObject private var voices: TalkieVoiceStageObserver
     @State private var pressed = false
     @State private var withdrawn = false
     /// Le téléphone du pair est injoignable depuis plusieurs minutes (#20241) : le geste laisse un message vocal.
@@ -62,22 +63,37 @@ struct ConversationHeaderTalkieButton: View {
 
     private var delivery: TalkieDelivery { TalkieDelivery.of(lasting: unreachableLasting) }
 
-    init(userId: String, peerName: String, accentColor: String, secondaryColor: String) {
+    init(userId: String, peerName: String, accentColor: String, secondaryColor: String,
+         voices: TalkieVoiceStageObserver = .shared) {
         self.userId = userId
         self.peerName = peerName
         self.accentColor = accentColor
         self.secondaryColor = secondaryColor
         _offer = StateObject(wrappedValue: TalkieOfferModel(userId: userId))
+        _voices = ObservedObject(wrappedValue: voices)
     }
 
     private var look: TalkieHoldLook { TalkieHoldLook.resolve(pressed: pressed, phase: sender.phase) }
 
-    /// Une pile, jamais un `Group` : vide tant que le talkie n'est pas proposé, elle existe quand même, et c'est elle
+    /// Le bouton quand le talkie est proposé ; sinon, la voix du pair qui arrive se montre quand même, dans une fente
+    /// d'écoute sans geste, le temps qu'elle dure.
+    private var slot: TalkieHeaderSlot {
+        TalkieVoiceHostLaw.headerSlot(offered: offer.offered, withdrawn: withdrawn,
+                                      incoming: TalkieVoiceHostLaw.incoming(userId: userId, voices: voices.voices))
+    }
+
+    /// Le sort de ma voix tant qu'elle part ; `nil` au repos.
+    private var liveDelivery: TalkieHeaderDelivery? {
+        look == .live ? TalkieHeaderDelivery.resolve(phase: sender.phase, waking: sender.waking) : nil
+    }
+
+    /// Une pile, jamais un `Group` : vide tant que le talkie n'est pas proposé et que le pair se tait, elle existe quand même, et c'est elle
     /// qui porte le chargement de l'offre (#17247). Sans largeur ni espacement, la mise en page de l'en-tête ne bouge pas.
     var body: some View {
         HStack(spacing: 0) {
-            if offer.offered && !withdrawn {
-                glyph
+            switch slot {
+            case .button:
+                glyph(look)
                     .background { TalkieHeaderOrb(userId: userId) }
                     .modifier(TalkieHoldModifier(sender: sender, userId: userId, pressed: $pressed, delivery: delivery))
                     .meeshyTapTarget()
@@ -88,15 +104,31 @@ struct ConversationHeaderTalkieButton: View {
                     .accessibilityHint(ProfileTalkieWording.holdHint)
                     .accessibilityAddTraits([.isButton, .updatesFrequently])
                     .accessibilityIdentifier("conversation.header.talkie")
+            case .listeningSlot:
+                glyph(.live)
+                    .background { TalkieHeaderOrb(userId: userId) }
+                    .meeshyTapTarget()
+                    .allowsHitTesting(false)
+                    .transition(.scale.combined(with: .opacity))
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(TalkieHeaderWording.peerSpeaking(name: peerName))
+                    .accessibilityAddTraits(.updatesFrequently)
+                    .accessibilityIdentifier("conversation.header.talkie.listening")
+            case .none:
+                EmptyView()
             }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.75), value: offer.offered)
+        .animation(.spring(response: 0.3, dampingFraction: 0.75), value: slot)
         .task(id: userId) { await offer.load() }
         .modifier(PhoneUnreachableLastingReader(userId: userId, lasting: $unreachableLasting))
         .adaptiveOnChange(of: sender.waking) { _, waking in
             // L'en-tête n'a pas de libellé : le réveil d'un destinataire hors ligne se dit dans un bandeau neutre.
             guard waking else { return }
             FeedbackToastManager.shared.show(ProfileTalkieWording.waking(name: peerName), type: .info)
+        }
+        .adaptiveOnChange(of: liveDelivery) { previous, current in
+            guard let announced = TalkieVoiceHostLaw.announcement(previous: previous, current: current) else { return }
+            UIAccessibility.post(notification: .announcement, argument: TalkieHeaderWording.announcement(announced))
         }
         .adaptiveOnChange(of: sender.notice) { _, new in
             guard let new else { return }
@@ -121,14 +153,14 @@ struct ConversationHeaderTalkieButton: View {
         }
     }
 
-    private var glyph: some View {
+    private func glyph(_ look: TalkieHoldLook) -> some View {
         ZStack {
             Circle()
                 .fill(
                     gradient
                 )
                 .opacity(look == .idle ? 0 : 1)
-            symbol
+            symbol(look)
         }
         .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
         .adaptiveGlass(in: Circle(), tint: accent.opacity(0.4), interactive: true)
@@ -136,7 +168,7 @@ struct ConversationHeaderTalkieButton: View {
     }
 
     @ViewBuilder
-    private var symbol: some View {
+    private func symbol(_ look: TalkieHoldLook) -> some View {
         let image = Image(systemName: look == .live ? "waveform" : "antenna.radiowaves.left.and.right")
             .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
         if look == .idle {
