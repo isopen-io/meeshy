@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 import GRDB
 import XCTest
-@testable import MeeshyE2EE
+@_spi(Testing) @testable import MeeshyE2EE
 
 /// L'app et l'extension de notification déchiffrent pour le MÊME appareil, sur
 /// la même base du groupe d'apps (spec § 4.4). Ce témoin simule les deux
