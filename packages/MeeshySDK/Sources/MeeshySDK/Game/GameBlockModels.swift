@@ -359,10 +359,13 @@ public struct GameBlock: Codable, Sendable, Equatable {
         /// Vrai le jour où la première Veilleuse est offerte, dans le fuseau du compte. Absent devant un serveur
         /// antérieur : rien ne s'annonce.
         public let freezeGifted: Bool?
+        /// Deux rêves complets rallumeraient encore la Flamme éteinte (#20473). Absent devant un serveur antérieur,
+        /// illisible ou hors de la loi : rien ne se dit, la Flamme se lit quand même.
+        public let effortRelight: GameEffortRelight?
 
         public init(days: Int, form: FlameFormKey?, bonusPercent: Int, freezes: Int, maxFreezes: Int,
                     freezePrice: Int, relightPrice: Int, status: FlameStatus, canRelight: Bool,
-                    freezeGifted: Bool? = nil) {
+                    freezeGifted: Bool? = nil, effortRelight: GameEffortRelight? = nil) {
             self.days = days
             self.form = form
             self.bonusPercent = bonusPercent
@@ -373,6 +376,27 @@ public struct GameBlock: Codable, Sendable, Equatable {
             self.status = status
             self.canRelight = canRelight
             self.freezeGifted = freezeGifted
+            self.effortRelight = effortRelight
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case days, form, bonusPercent, freezes, maxFreezes, freezePrice, relightPrice, status, canRelight
+            case freezeGifted, effortRelight
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            days = try container.decode(Int.self, forKey: .days)
+            form = try container.decodeIfPresent(FlameFormKey.self, forKey: .form)
+            bonusPercent = try container.decode(Int.self, forKey: .bonusPercent)
+            freezes = try container.decode(Int.self, forKey: .freezes)
+            maxFreezes = try container.decode(Int.self, forKey: .maxFreezes)
+            freezePrice = try container.decode(Int.self, forKey: .freezePrice)
+            relightPrice = try container.decode(Int.self, forKey: .relightPrice)
+            status = try container.decode(FlameStatus.self, forKey: .status)
+            canRelight = try container.decode(Bool.self, forKey: .canRelight)
+            freezeGifted = try container.decodeIfPresent(Bool.self, forKey: .freezeGifted)
+            effortRelight = (try? container.decodeIfPresent(GameEffortRelight.self, forKey: .effortRelight)) ?? nil
         }
     }
 

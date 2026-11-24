@@ -88,6 +88,26 @@ enum GameCopy {
             : String(localized: "game.days.other", defaultValue: "\(number) jours", bundle: .main)
     }
 
+    /// Les rêves complets qui manquent au rallumage par l'effort (#20473).
+    static func effortDreams(_ count: Int) -> String {
+        let number = formatCount(count)
+        return isSingular(count)
+            ? String(localized: "game.flame_panel.effort_dreams.one", defaultValue: "\(number) rêve complet", bundle: .main)
+            : String(localized: "game.flame_panel.effort_dreams.other", defaultValue: "\(number) rêves complets", bundle: .main)
+    }
+
+    /// Le rallumage par l'effort (#20473) : les rêves complets qui manquent, avant la fin de la journée ou d'ici
+    /// demain soir, et les jours de la Flamme qui reviennent avec elle. Miroir d'`effortRelightLine` (web).
+    static func effortRelight(_ effort: GameEffortRelight) -> String {
+        let dreams = effortDreams(effort.dreamsMissing)
+        let lost = days(effort.lostDays)
+        return effort.daysLeft == 0
+            ? String(localized: "game.flame_panel.effort_relight_today",
+                     defaultValue: "Encore \(dreams) aujourd’hui et ta Flamme de \(lost) revient, sans payer.", bundle: .main)
+            : String(localized: "game.flame_panel.effort_relight_tomorrow",
+                     defaultValue: "Encore \(dreams) d’ici demain soir et ta Flamme de \(lost) revient, sans payer.", bundle: .main)
+    }
+
     static func actions(_ count: Int) -> String {
         let number = formatCount(count)
         return isSingular(count)

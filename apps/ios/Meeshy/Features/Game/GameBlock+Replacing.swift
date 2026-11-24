@@ -189,7 +189,8 @@ extension GameBlock.Flame {
         bonusPercent: Int? = nil,
         freezes: Int? = nil,
         status: FlameStatus? = nil,
-        canRelight: Bool? = nil
+        canRelight: Bool? = nil,
+        effortRelight: GameEffortRelight?? = nil
     ) -> GameBlock.Flame {
         GameBlock.Flame(
             days: days ?? self.days,
@@ -201,7 +202,8 @@ extension GameBlock.Flame {
             relightPrice: relightPrice,
             status: status ?? self.status,
             canRelight: canRelight ?? self.canRelight,
-            freezeGifted: freezeGifted
+            freezeGifted: freezeGifted,
+            effortRelight: effortRelight ?? self.effortRelight
         )
     }
 }
