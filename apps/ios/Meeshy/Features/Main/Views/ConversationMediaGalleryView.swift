@@ -63,7 +63,7 @@ struct ConversationMediaGalleryView: View {
     /// une autre légende : la garder dépliée ferait s'ouvrir en grand un texte
     /// que l'utilisateur n'a pas demandé à lire, et masquerait le média qu'il
     /// vient d'atteindre.
-    @State private var captionExpanded = false
+    @State var captionExpanded = false
     /// La langue choisie PAR MÉDIA. Par média et non globale : deux pièces d'un
     /// même lot peuvent porter des légendes de provenances différentes, et une
     /// langue choisie sur l'une ne dit rien de l'autre.
@@ -204,7 +204,7 @@ struct ConversationMediaGalleryView: View {
     /// La forme du lot, lue une fois ici et non par chaque page.
     let lotShape: GalleryLotShape
 
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) var dismiss
     /// Les marges sûres de la fenêtre qui porte la vue, mesurées par sa racine (hors de `body`).
     @Environment(\.sceneSafeAreaInsets) var sceneSafeAreaInsets
     /// Publiées par la racine, sinon MESURÉES hors de `body` (`GallerySafeArea`, #12422).
@@ -259,7 +259,7 @@ struct ConversationMediaGalleryView: View {
     /// moment du tap. Feuilleter pendant qu'elle est ouverte ne change pas ce
     /// qu'on cite — sinon le brouillon en cours changerait de destinataire sous
     /// les doigts, et la bannière mentirait sur ce que l'envoi gravera.
-    @State private var replyTarget: MessageAttachment?
+    @State var replyTarget: MessageAttachment?
 
     /// La transition clavier ANNONCÉE, seule source de sa hauteur.
     @State private var replyKeyboard: KeyboardTransition?
@@ -516,46 +516,6 @@ struct ConversationMediaGalleryView: View {
         }
     }
 
-    private func handlePageChange(from oldID: String?, to newID: String?) {
-        guard let newID, let newIndex = indexByID[newID] else { return }
-
-        // **Le repli se REMET à chaque média.** Feuilleter présente une
-        // AUTRE légende ; la garder dépliée ouvrirait en grand un texte que
-        // personne n'a demandé à lire, par-dessus le média qu'on vient
-        // d'atteindre. C'est l'inverse du volet de description du composer, qui
-        // est une préférence d'écran parce qu'il commente TOUTE la publication.
-        if oldID != newID, captionExpanded { captionExpanded = false }
-
-        // **La rangée d'émojis appartient à la pièce qu'on REGARDAIT** (#6084,
-        // révision porteur). La laisser ouverte la ferait surgir sur un média que
-        // personne n'a demandé à commenter, et un émoji tapé par réflexe
-        // atterrirait sur la mauvaise pièce — le pire des deux, parce qu'il
-        // aurait l'air d'avoir marché. Même contrat que le repli de légende juste
-        // au-dessus, et pour la même raison.
-        if oldID != newID, reactionBarOpen { reactionBarOpen = false }
-
-        // **Une scène atteinte au glissement se LIT** : la commande se
-        // relève à chaque page, comme une vidéo active part d'elle-même
-        // (`GalleryVideoPage`). La pause posée sur la scène précédente ne suit pas
-        // le lecteur sur la suivante.
-        if oldID != newID, !scenePlaying { scenePlaying = true }
-
-        if let oldID, oldID != newID, let oldIndex = indexByID[oldID] {
-            let oldAtt = allAttachments[oldIndex]
-            if oldAtt.type == .video && videoManager.activeURL == oldAtt.fileUrl {
-                // BUG B (round 4) — `release(urlString:)` (URL-gated) clears
-                // `activeURL` so the underlying conversation bubble's footer
-                // reappears once the gallery closes. Bare `pause()` left
-                // `activeURL` set → `hasPlayingInlineVideo` stayed true.
-                videoManager.release(urlString: oldAtt.fileUrl)
-            }
-        }
-
-        if oldID != newID { trackImageOpen(leaving: oldID, entering: newID) }
-
-        prefetchNeighbors(around: newIndex)
-    }
-
     // MARK: - Gallery Page
 
     /// Chaque page est montée en `.equatable()` : la réévaluation du `body`
@@ -615,62 +575,6 @@ struct ConversationMediaGalleryView: View {
                 Color.black
             }
         }
-    }
-
-    private func dismissGallery() {
-        stopActiveVideoAudio()
-        dismiss()
-    }
-
-    // MARK: - Caption Overlay
-
-    /// La rangée de langues de la légende (`GalleryCaptionLanguageRow`) — absente
-    /// dès qu'il n'y a rien à basculer (loi 4).
-    @ViewBuilder
-    private func captionLanguageRow(_ id: String) -> some View {
-        let langues = captionLanguages(id)
-        if !langues.isEmpty {
-            GalleryCaptionLanguageRow(languages: langues,
-                                      active: activeCaptionLanguage(id)) { code in
-                captionLanguage[id] = code
-            }
-        }
-    }
-
-    /// **La légende du plein écran rejoint la couche PARTAGÉE.**
-    ///
-    /// Une troisième façon de replier la même chose — `Text` brut,
-    /// `lineLimit(4)`, aucune bascule — serait la forme INERTE : une légende de
-    /// cinq lignes s'y arrêterait au milieu d'une phrase, sans que rien n'indique
-    /// qu'il en reste, ni ne permette de la lire.
-    ///
-    /// > Deux surfaces converties sur trois, c'est une règle qui a l'air
-    /// > partagée. La troisième ne rougit pas : elle affiche un texte, tronqué
-    /// > proprement, et seule la comparaison avec ses sœurs le révèle.
-    ///
-    /// Ce qui passe au composant est la RÈGLE — 15 mots de tête au-delà de 30,
-    /// l'invite, l'ancrage bas-gauche déplié. Le retrait reste 16 pt, celui de
-    /// `bottomMetadataOverlay` juste au-dessus : la légende s'aligne sur sa
-    /// colonne, comme en réel.
-    private func captionOverlay(_ text: String, links: [String: String]) -> some View {
-        MediaCaptionOverlay(caption: text,
-                            isExpanded: captionExpanded,
-                            trackedLinks: links,
-                            horizontalInset: 16,
-                            maxExpandedHeight: cadreCaptionMaxHeight,
-                            // **« JUSTE afficher le texte déplié avec effet
-                            // ombre »** — donc pas de voile en plus. Le
-                            // dégradé noir du composant sert les hôtes qui
-                            // n'ont rien d'autre pour détacher le texte ; ici
-                            // l'ombre suffit, et le voile masquait le média
-                            // que l'utilisateur est venu regarder.
-                            dimsBackgroundWhenExpanded: false,
-                            onToggle: {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    captionExpanded.toggle()
-                                }
-                            })
-            .padding(.vertical, MeeshySpacing.sm)
     }
 
     // MARK: - Controls Overlay
@@ -830,148 +734,11 @@ struct ConversationMediaGalleryView: View {
                            : nil)
     }
 
-    @ViewBuilder
-    private func mediaActions(_ att: MessageAttachment) -> some View {
-        // **« Réagir » est une ACTION, pas un ornement** : les réactions sur les
-        // attachements en plein écran s'activent comme répondre ou composer, par
-        // un bouton réagir (emoji +) qui affiche la traîne des emojis.
-        //
-        // Il rejoint donc CETTE rangée — même rang, même gabarit 40 pt, même
-        // verre que Répondre et Composer — au lieu de poser sa rangée d'émojis
-        // sur l'image en permanence.
-        //
-        // **La garde remonte d'un cran** : c'est l'EXISTENCE du bouton que la loi
-        // décide, pas seulement celle de la rangée. Plus simple et plus sûr — une
-        // pièce protégée n'a alors même pas d'entrée vers le geste, et il n'y a
-        // plus qu'un endroit où la protection pourrait être oubliée.
-        if AttachmentReactionOffer.offersReaction(surface: .fullscreen,
-                                                  attachment: att,
-                                                  hasHandler: onReactToMedia != nil && (reactableMedia?(att) ?? true)) {
-            FullscreenActionButton.react(
-                label: String(localized: "media.react.title",
-                              defaultValue: "Réagir", bundle: .main),
-                hint: String(localized: "media.react.hint",
-                             defaultValue: "Affiche la rangée d'émojis pour réagir à ce média.",
-                             bundle: .main),
-                style: .disc(.adaptive),
-                isOpen: reactionBarOpen
-            ) {
-                HapticFeedback.light()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    reactionBarOpen.toggle()
-                }
-            }
-        }
-        // **Un média PROTÉGÉ ne se cite pas** : la bannière de citation
-        // porte la vignette du média, ce qui ferait sortir de la conversation
-        // ce qu'une vue unique, un flou ou un chiffrement y retiennent. Le
-        // prédicat est celui que le menu d'appui long lit déjà —
-        // `ComposableAttachment.isProtected` — plutôt qu'une seconde écriture
-        // des trois mêmes drapeaux.
-        //
-        // **La ROUTE décide, pas deux `if` côte à côte** : sans elle,
-        // un hôte qui câble les deux rappels monterait la barre PENDANT que la
-        // galerie se referme sous elle.
-        let route = FullscreenReplyRoute.route(
-            isProtected: ComposableAttachment.isProtected(att),
-            hasInPlaceComposer: onSendReplyToMedia != nil && replyCitation != nil,
-            // `replyableMedia` : un hôte de post ne relaie que ce qu'il
-            // sait citer — jamais un média joint à un commentaire.
-            hasThreadHandOff: onReplyToMedia != nil && (replyableMedia?(att) ?? true)
-        )
-        if route != .none {
-            FullscreenActionButton.reply(
-                label: String(localized: "media.reply.title",
-                              defaultValue: "Répondre", bundle: .main),
-                hint: route == .composeInPlace
-                    ? String(localized: "media.reply.hint.inPlace",
-                             defaultValue: "Ouvre la zone de saisie au-dessus de ce média, en le citant.",
-                             bundle: .main)
-                    : String(localized: "media.reply.hint",
-                             defaultValue: "Cite le message qui porte ce média et revient au composer.",
-                             bundle: .main),
-                style: .disc(.adaptive)
-            ) {
-                HapticFeedback.light()
-                switch route {
-                case .composeInPlace:
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                        // **Les deux ouvertures ne partagent pas le bas de
-                        // l'écran**. Elles vivent dans deux `@State`
-                        // indépendants : rien dans le type ne les empêche
-                        // d'être montées ensemble, et la traînée d'émojis
-                        // flotterait alors au-dessus du champ de saisie. Le
-                        // voile ne peut pas trancher cela — il ne fait que
-                        // constater ce qui est monté ; c'est au geste qui ouvre
-                        // la seconde de congédier la première.
-                        reactionBarOpen = false
-                        replyTarget = att
-                    }
-                case .handOffToThread:
-                    onReplyToMedia?(att)
-                case .none:
-                    break
-                }
-            }
-        }
-        // `composableMedia` (#6709) : « Créer avec ce média » seulement sur une pièce qui a sa cible.
-        if let onComposeWithMedia, composableMedia?(att) ?? true {
-            FullscreenActionButton(
-                systemImage: FullscreenChromeSymbol.compose,
-                label: String(localized: "media.compose.title",
-                              defaultValue: "Créer avec ce média", bundle: .main),
-                hint: String(localized: "media.compose.hint",
-                             defaultValue: "Ouvre le composer avec ce média posé.",
-                             bundle: .main),
-                style: .disc(.adaptive)
-            ) {
-                HapticFeedback.light()
-                onComposeWithMedia(att)
-            }
-        }
-    }
-
     private func bottomMetadataOverlay(_ att: MessageAttachment) -> some View {
         GalleryMediaMetadataBlock(att: att,
                                   info: senderInfoMap[att.id],
                                   isScene: sceneContext?.scenes[att.id] != nil,
                                   videoManager: videoManager,
                                   currentAttachmentIsActiveTrack: currentAttachmentIsActiveTrack)
-    }
-
-    // MARK: - Actions
-
-    /// Stops the gallery's video audio when the gallery is dismissed via a path
-    /// that is NOT the swipe-down-to-PIP gesture (X button, image vertical
-    /// dismiss). `SharedAVPlayerManager` is process-wide, so without this the
-    /// AVPlayer keeps emitting audio with no visible player after the gallery is
-    /// gone. The PIP swipe path deliberately calls `startPip()` instead and must
-    /// never reach here — keeping the player alive for picture-in-picture.
-    private func stopActiveVideoAudio() {
-        guard currentIndex < allAttachments.count else { return }
-        let att = allAttachments[currentIndex]
-        guard att.type == .video, videoManager.activeURL == att.fileUrl else { return }
-        // BUG B (round 4) — `release(urlString:)` (URL-gated, safe no-op if
-        // another bubble took over) clears `activeURL` so the conversation
-        // bubble's footer (timestamp/delivery) reappears after the gallery
-        // closes via X-close or image vertical-dismiss. Bare `pause()` left
-        // `activeURL` set, keeping `hasPlayingInlineVideo` true and the footer
-        // hidden until re-mount. The swipe-down PIP path is unaffected: it
-        // calls `startPip()` and never reaches here.
-        videoManager.release(urlString: att.fileUrl)
-    }
-
-    private func cacheAttachment(_ attachment: MessageAttachment?) {
-        guard let attachment else { return }
-        GalleryPrewarm.warm(attachment)
-    }
-
-    /// Préchauffe STRICTEMENT la fenêtre de rendu. L'ancienne valeur (±2)
-    /// décodait cinq images plein format par page traversée alors que trois
-    /// seulement peuvent s'afficher. Règle et bornes : `GalleryRenderWindow`.
-    private func prefetchNeighbors(around index: Int) {
-        guard let range = GalleryRenderWindow.prefetchRange(around: index, count: allAttachments.count)
-        else { return }
-        range.forEach { cacheAttachment(allAttachments[$0]) }
     }
 }

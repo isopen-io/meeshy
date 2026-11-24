@@ -324,7 +324,7 @@ final class MediaGalleryActionColumnTests: XCTestCase {
     /// pas un état interne.
     func test_chaqueAction_consommeToutSaCible_etNeLaisseRienPasserAuCadre() throws {
         let code = try unit()
-        guard let actions = corps("private func mediaActions(", dans: code) else {
+        guard let actions = corps("func mediaActions(", dans: code) else {
             return XCTFail("`mediaActions` introuvable")
         }
         let plat = compact(actions)
@@ -350,7 +350,7 @@ final class MediaGalleryActionColumnTests: XCTestCase {
     func test_laColonne_neMonteAucunGesteDuPleinCadre() throws {
         let code = try unit()
         guard let colonne = corps("var cadreActionColumn: some View {", dans: code),
-              let actions = corps("private func mediaActions(", dans: code) else {
+              let actions = corps("func mediaActions(", dans: code) else {
             return XCTFail("`cadreActionColumn` ou `mediaActions` introuvable")
         }
 

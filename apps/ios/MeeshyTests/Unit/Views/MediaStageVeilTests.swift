@@ -235,7 +235,7 @@ final class MediaStageVeilTests: XCTestCase {
     /// c'est donc au geste qui ouvre la seconde de congédier la première.
     func test_openingTheReply_closesTheReactionRow() throws {
         let code = try source(Self.gallery)
-        guard let actions = declarationBody(startingAt: "private func mediaActions", in: code),
+        guard let actions = declarationBody(startingAt: "func mediaActions", in: code),
               let route = actions.range(of: "case .composeInPlace:"),
               let suite = actions.range(of: "case .handOffToThread:") else {
             return XCTFail("La route de réponse en place est introuvable — la garde ne mesurerait rien.")
