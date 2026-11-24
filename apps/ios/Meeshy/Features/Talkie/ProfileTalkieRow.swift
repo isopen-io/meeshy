@@ -9,11 +9,14 @@ import MeeshyUI
 ///
 /// - Présent dès Proche (`ProfileCircleViewModel.offersTalkie`) : la décision se prend avant l'affichage. La passerelle
 ///   rejuge à chaque appui ; un refus ne fait plus disparaître la carte, il se dit sur sa ligne (`TalkieAftermath`).
-/// - Pendant la parole, un anneau se vide et les secondes restantes s'affichent ; VoiceOver en dit quelques paliers.
+/// - Pendant la parole, la voix vit en ORBE autour du bouton, là où le doigt appuie (#20531, `TalkieHoldOrb`), bornée
+///   à la marge du bouton ; l'anneau du décompte se vide par-dessus et les secondes restantes s'affichent dans le
+///   bouton ; VoiceOver en dit quelques paliers. La voix d'un pair qui arrive y vit aussi.
 /// - Au relâchement, « Envoyé » s'affiche un instant, avec la vibration et le son de `TalkieHoldModifier`.
 /// - Un micro refusé propose « Ouvrir les réglages » ; tout autre refus laisse le bouton, qui réessaie.
 struct ProfileTalkieRow: View {
     @StateObject private var sender: TalkieSender
+    @ObservedObject private var voices: TalkieVoiceStageObserver
     let userId: String
     let displayName: String
     var tint: Color = MeeshyColors.brandPrimary
@@ -25,8 +28,10 @@ struct ProfileTalkieRow: View {
     @Environment(\.openURL) private var openURL
     private var theme: ThemeManager { ThemeManager.shared }
 
-    init(userId: String, displayName: String, tint: Color = MeeshyColors.brandPrimary) {
+    init(userId: String, displayName: String, tint: Color = MeeshyColors.brandPrimary,
+         voices: TalkieVoiceStageObserver = .shared) {
         _sender = StateObject(wrappedValue: TalkieSender())
+        _voices = ObservedObject(wrappedValue: voices)
         self.userId = userId
         self.displayName = displayName
         self.tint = tint
@@ -66,7 +71,7 @@ struct ProfileTalkieRow: View {
                 .overlay(alignment: .trailing) { TalkieInfoButton(tint: tint) }
             if aftermath?.keepsHoldButton != false {
                 holdButton
-                    .padding(.vertical, MeeshySpacing.xxl)
+                    .padding(.vertical, Self.orbRoom)
             }
             Text(ProfileTalkieWording.text(for: line, name: displayName))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
@@ -120,6 +125,7 @@ struct ProfileTalkieRow: View {
             .shadow(color: tint.opacity(MeeshyOpacity.strong), radius: MeeshySpacing.lg, y: MeeshySpacing.md)
             .scaleEffect(live ? Self.pressedScale : 1)
             .background { countdown(live: live) }
+            .background { TalkieHoldOrb(userId: userId, shows: orbShows, geometry: Self.orb) }
             .contentShape(Circle())
             .modifier(TalkieHoldModifier(sender: sender, userId: userId, pressed: $holding, delivery: delivery))
             .accessibilityElement(children: .ignore)
@@ -135,6 +141,12 @@ struct ProfileTalkieRow: View {
     static let countdownScale: CGFloat = 1.18
     /// Le bouton s'enfonce sous le doigt.
     static let pressedScale: CGFloat = 0.94
+    /// La marge libre autour du bouton (`padding(.vertical, xxl)`) : l'orbe de la voix ne la dépasse pas.
+    static let orbRoom: CGFloat = MeeshySpacing.xxl
+    static let orb = TalkieVoiceHostLaw.holdOrb(buttonSize: diameter, room: orbRoom)
+
+    /// Une voix vers la personne ou venant d'elle : l'orbe se montre.
+    private var orbShows: Bool { TalkieVoiceHostLaw.shows(userId: userId, voices: voices.voices) }
 
     @ViewBuilder
     private func glyph(live: Bool) -> some View {

@@ -24,6 +24,30 @@ final class TalkieVoiceHostTests: XCTestCase {
         XCTAssertEqual(orb.maxAmplitude, 0)
     }
 
+    /// Sur la fiche, l'orbe naît du bord du bouton « Maintenir pour parler » et ne dépasse jamais la marge qui
+    /// l'entoure : rien ne bouge autour d'elle.
+    func test_holdOrb_bornAtTheButtonEdge_staysInsideItsRoom() {
+        for (button, room) in [(CGFloat(96), CGFloat(24)), (96, 0), (44, 12)] {
+            let orb = TalkieVoiceHostLaw.holdOrb(buttonSize: button, room: room)
+            XCTAssertEqual(orb.baseRadius, button / 2)
+            XCTAssertLessThanOrEqual(orb.baseRadius + orb.maxAmplitude, button / 2 + room, "\(button) × \(room)")
+            XCTAssertEqual(orb.maxAmplitude, room)
+        }
+    }
+
+    func test_holdOrb_negativeRoom_hasNoAmplitude() {
+        XCTAssertEqual(TalkieVoiceHostLaw.holdOrb(buttonSize: 96, room: -4).maxAmplitude, 0)
+    }
+
+    /// Le bouton de la fiche montre la voix qui part vers la personne comme celle qui vient d'elle.
+    func test_profileRowOrb_showsForEitherDirectionOfThatPerson() {
+        XCTAssertTrue(TalkieVoiceHostLaw.shows(userId: "bob", voices: [key("bob", .outgoing)]))
+        XCTAssertTrue(TalkieVoiceHostLaw.shows(userId: "bob", voices: [key("bob", .incoming)]))
+        XCTAssertFalse(TalkieVoiceHostLaw.shows(userId: "bob", voices: [key("alice", .outgoing)]))
+        XCTAssertEqual(ProfileTalkieRow.orb.baseRadius, ProfileTalkieRow.diameter / 2)
+        XCTAssertEqual(ProfileTalkieRow.orb.maxAmplitude, ProfileTalkieRow.orbRoom)
+    }
+
     func test_shows_aVoiceToOrFromThePerson_mountsTheHost() {
         XCTAssertTrue(TalkieVoiceHostLaw.shows(userId: "bob", voices: [key("bob", .outgoing)]))
         XCTAssertTrue(TalkieVoiceHostLaw.shows(userId: "bob", voices: [key("bob", .incoming)]))

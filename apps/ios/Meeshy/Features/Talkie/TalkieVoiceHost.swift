@@ -2,13 +2,20 @@ import Combine
 import MeeshyUI
 import SwiftUI
 
-/// OÙ LA VOIX DU TALKIE VIT (#20531) : en orbe sur le bouton du talkie de l'en-tête, née sous le doigt et bornée à la
-/// rangée — le nom, le retour et les actions restent visibles —, et autour de l'avatar de la fiche. Montée seulement
-/// tant qu'une voix va vers la personne ou vient d'elle.
+/// OÙ LA VOIX DU TALKIE VIT (#20531) : en orbe sous le doigt — sur le bouton du talkie de l'en-tête, bornée à la
+/// rangée (le nom, le retour et les actions restent visibles), et sur le bouton « Maintenir pour parler » de la fiche,
+/// bornée à sa marge —, et autour de l'avatar de la fiche. Montée seulement tant qu'une voix va vers la personne ou
+/// vient d'elle.
 nonisolated enum TalkieVoiceHostLaw {
     /// L'orbe part du bord du bouton et ne sort jamais de la rangée : `baseRadius + maxAmplitude ≤ rowHeight / 2`.
     static func headerOrb(buttonSize: CGFloat, rowHeight: CGFloat) -> TalkieBubbleGeometry {
-        TalkieBubbleGeometry(baseRadius: buttonSize / 2, maxAmplitude: max(0, (rowHeight - buttonSize) / 2))
+        holdOrb(buttonSize: buttonSize, room: (rowHeight - buttonSize) / 2)
+    }
+
+    /// L'orbe d'un bouton qu'on maintient : elle part de son bord et s'en écarte d'au plus `room`, la marge libre qui
+    /// l'entoure ; une marge négative n'en laisse aucune.
+    static func holdOrb(buttonSize: CGFloat, room: CGFloat) -> TalkieBubbleGeometry {
+        TalkieBubbleGeometry(baseRadius: buttonSize / 2, maxAmplitude: max(0, room))
     }
 
     /// Ce que la fente du talkie de l'en-tête montre : le bouton quand il est proposé ; sinon, tant que le pair parle,
@@ -112,24 +119,25 @@ enum TalkieProfileHeroVoice {
     }
 }
 
-/// L'orbe du bouton du talkie de l'en-tête : posée derrière le glyphe, sans changer sa place ni prendre le doigt,
-/// entrée et sortie en fondu agrandi (fondu seul sous « Réduire les animations »). L'hôte lui dit quand se montrer
-/// (`TalkieVoiceHostLaw.shows`) : la feuille n'observe aucun singleton.
-struct TalkieHeaderOrb: View {
+/// L'orbe d'un bouton du talkie — celui de l'en-tête, celui de la fiche : posée derrière le glyphe, sans changer sa
+/// place ni prendre le doigt, entrée et sortie en fondu agrandi (fondu seul sous « Réduire les animations »). L'hôte
+/// lui dit quand se montrer (`TalkieVoiceHostLaw.shows`) et à quelle échelle : la feuille n'observe aucun singleton.
+struct TalkieHoldOrb: View {
     let userId: String
     let shows: Bool
+    var geometry: TalkieBubbleGeometry = TalkieHoldOrb.headerGeometry
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
 
-    static let geometry = TalkieVoiceHostLaw.headerOrb(buttonSize: MeeshyControlSize.small,
+    static let headerGeometry = TalkieVoiceHostLaw.headerOrb(buttonSize: MeeshyControlSize.small,
                                                        rowHeight: MeeshyControlSize.tapTarget)
 
     var body: some View {
         let reduceMotion = MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
         ZStack {
             if shows {
-                TalkieVoiceBubble(userId: userId, geometry: Self.geometry)
+                TalkieVoiceBubble(userId: userId, geometry: geometry)
                     .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.6)))
             }
         }

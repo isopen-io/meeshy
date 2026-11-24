@@ -101,7 +101,7 @@ struct ConversationHeaderTalkieButton: View {
             switch slot {
             case .button:
                 glyph(look)
-                    .background { TalkieHeaderOrb(userId: userId, shows: orbShows) }
+                    .background { TalkieHoldOrb(userId: userId, shows: orbShows) }
                     .modifier(TalkieHoldModifier(sender: sender, userId: userId, pressed: $pressed, delivery: delivery))
                     .meeshyTapTarget()
                     .transition(.scale.combined(with: .opacity))
@@ -113,7 +113,7 @@ struct ConversationHeaderTalkieButton: View {
                     .accessibilityIdentifier("conversation.header.talkie")
             case .listeningSlot:
                 glyph(.live)
-                    .background { TalkieHeaderOrb(userId: userId, shows: orbShows) }
+                    .background { TalkieHoldOrb(userId: userId, shows: orbShows) }
                     .meeshyTapTarget()
                     .allowsHitTesting(false)
                     .transition(.scale.combined(with: .opacity))
