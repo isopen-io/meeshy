@@ -83,7 +83,7 @@ function surfaces(): Surfaces {
     ),
     flame: text(
       renderToStaticMarkup(
-        <GameFlamePanel flame={{ ...outFlame, status: 'out', canRelight: true }} held={1} online={false} buyingFreeze={false} relighting={false} onBuyFreeze={() => undefined} onRelight={() => undefined} />,
+        <GameFlamePanel flame={{ ...outFlame, status: 'out', canRelight: true }} held={1} online={false} buyingFreeze={false} relighting={false} pausing={false} today="2026-10-05" onBuyFreeze={() => undefined} onRelight={() => undefined} onPause={() => undefined} />,
       ),
     ),
     mint: text(

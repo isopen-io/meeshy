@@ -1,5 +1,6 @@
-import type { GameBlock, GameChestReward, GameMission } from '@meeshy/shared/types/game';
+import type { GameBlock, GameChestReward, GameFlamePause, GameMission } from '@meeshy/shared/types/game';
 import { flameBonusPercent, flameForm } from '@meeshy/shared/utils/game/flame';
+import { canPauseFlame } from '@meeshy/shared/utils/game/flame-pause';
 import { gloryStanding, levelCapForRank } from '@meeshy/shared/utils/game/glory';
 import { levelOnTheWire, mintOnTheWire } from '@meeshy/shared/utils/game/level-wire';
 import type { LevelStepFacts } from '@meeshy/shared/utils/game/level-steps';
@@ -303,4 +304,21 @@ export function withRelit(view: EngagementWithGame, streak: number, balance: num
     },
   }));
   return withBalance(relit, balance);
+}
+
+/**
+ * La veille annoncée (#20509) se voit tout de suite : du lendemain du jour du Jeu à `days` jours plus tard, par la
+ * même loi que la passerelle (`canPauseFlame`). La Flamme garde son état du jour : la veille commence demain.
+ */
+export function afterPause(view: EngagementWithGame, days: number): EngagementWithGame {
+  const game = view.game;
+  if (game === undefined || game.flame.pause !== undefined) return view;
+  const decision = canPauseFlame({ today: game.missions.dayKey, days, status: game.flame.status, pause: null });
+  if (!decision.allowed) return view;
+  return onGame(view, (current) => ({ ...current, flame: { ...current.flame, pause: decision.pause } }));
+}
+
+/** La veille que la passerelle sert fait foi. */
+export function withPaused(view: EngagementWithGame, pause: GameFlamePause): EngagementWithGame {
+  return onGame(view, (game) => ({ ...game, flame: { ...game.flame, pause: { from: pause.from, until: pause.until } } }));
 }

@@ -405,6 +405,14 @@ const fr = {
   'game.mascot.level_missing.one': '{count} étincelle de plus, et ta lumière atteint le niveau {level}.',
   'game.mascot.level_missing.other': '{count} étincelles de plus, et ta lumière atteint le niveau {level}.',
   'game.mascot.top_level': 'Ta lumière est au sommet. Bravo !',
+  'game.error.flame_pause.quarterly_limit': 'Ta Flamme a déjà eu sa veille ce trimestre.',
+  'game.error.flame_pause.already_paused': 'Ta Flamme est déjà en veille.',
+  'game.error.flame_pause.no_flame': 'Il faut une Flamme allumée pour la mettre en veille.',
+  'game.flame_panel.pause_intro': 'Une pause\u00a0? Ta Flamme t’attend jusqu’à {days}, une fois par trimestre.',
+  'game.flame_panel.pause_days': 'Durée de la veille',
+  'game.flame_panel.pause': 'Mettre en veille · {days}',
+  'game.flame_panel.paused': 'Ta Flamme est en veille jusqu’au {date}.',
+  'game.flame_panel.paused_soon': 'Ta Flamme se met en veille demain, jusqu’au {date}.',
 } as const;
 
 export default fr;

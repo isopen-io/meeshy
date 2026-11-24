@@ -130,12 +130,15 @@ export const httpTransport: HttpTransport = withEmailGate(
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string | undefined;
+  /** La raison d'un refus motivé (`ApiFailure.reason`, #20509). */
+  readonly reason: string | undefined;
 
   constructor(failure: ApiFailure) {
     super(failure.error);
     this.name = 'ApiError';
     this.status = failure.status;
     this.code = failure.code;
+    this.reason = failure.reason;
   }
 }
 

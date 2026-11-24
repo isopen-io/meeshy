@@ -407,6 +407,14 @@ const es = {
   'game.mascot.level_missing.one': '{count} chispa más, y tu luz llega al nivel {level}.',
   'game.mascot.level_missing.other': '{count} chispas más, y tu luz llega al nivel {level}.',
   'game.mascot.top_level': 'Tu luz está en la cima. ¡Bravo!',
+  'game.error.flame_pause.quarterly_limit': 'Tu Llama ya descansó este trimestre.',
+  'game.error.flame_pause.already_paused': 'Tu Llama ya está descansando.',
+  'game.error.flame_pause.no_flame': 'Tu Llama tiene que estar encendida para descansar.',
+  'game.flame_panel.pause_intro': '¿Una pausa? Tu Llama te espera hasta {days}, una vez por trimestre.',
+  'game.flame_panel.pause_days': 'Duración del descanso',
+  'game.flame_panel.pause': 'Dejarla descansar · {days}',
+  'game.flame_panel.paused': 'Tu Llama descansa hasta el {date}.',
+  'game.flame_panel.paused_soon': 'Tu Llama descansa a partir de mañana, hasta el {date}.',
 } as const satisfies GameConceptCatalog;
 
 export default es;

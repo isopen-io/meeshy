@@ -214,9 +214,12 @@ function gesturesOf(concept: ProgressionConcept, view: EngagementWithGame, host:
           online={online}
           buyingFreeze={actions.pending.freeze}
           relighting={actions.pending.relight}
+          pausing={actions.pending.pause}
+          today={game.missions.dayKey}
           onBuyFreeze={actions.buyFreeze}
           onRelight={actions.relight}
-          errors={{ freeze: actions.errors.freeze, relight: actions.errors.relight }}
+          onPause={actions.pause}
+          errors={{ freeze: actions.errors.freeze, relight: actions.errors.relight, pause: actions.errors.pause }}
         />
       );
     case 'succes':

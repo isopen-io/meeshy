@@ -426,3 +426,46 @@ describe('la frappe séquencée', () => {
     expect(gameOf(cached()).treasury.held).toBe(gameOf(before).treasury.held + 1);
   });
 });
+
+describe('la Flamme en veille (#20509)', () => {
+  const pausePath = (req: HttpRequest): boolean => pathOf(req) === '/api/v1/me/game/flame/pause';
+
+  test('la veille se voit avant la réponse, la veille servie fait foi', async () => {
+    const hold = new Promise<ApiResult<unknown>>(() => undefined);
+    const pending = await bench(seed(), () => undefined, hold);
+    await act(async () => pending.actions().pause(3));
+    await settle();
+    expect(gameOf(pending.cached()).flame.pause).toEqual({ from: '2026-10-06', until: '2026-10-08' });
+    expect(pending.actions().pending.pause).toBe(true);
+
+    const { actions, cached, calls } = await bench(seed(), (req) => (pausePath(req) ? ok({ status: 'paused', pause: { from: '2026-10-06', until: '2026-10-07' } }) : undefined));
+    await act(async () => actions().pause(3));
+    await settle();
+    expect(calls().find(pausePath)?.body).toMatchObject({ days: 3 });
+    expect(gameOf(cached()).flame.pause).toEqual({ from: '2026-10-06', until: '2026-10-07' });
+  });
+
+  test('refusée, la carte d’avant revient et le refus se dit par sa raison', async () => {
+    const before = seed();
+    const { actions, cached } = await bench(before, (req) =>
+      pausePath(req) ? { ok: false, status: 409, error: 'refus', code: 'FLAME_PAUSE_NOT_ALLOWED', reason: 'quarterly-limit' } : undefined,
+    );
+    await act(async () => actions().pause(7));
+    await settle();
+    expect(gameOf(cached()).flame.pause).toBeUndefined();
+    expect(actions().errors.pause).toBe('Ta Flamme a déjà eu sa veille ce trimestre.');
+  });
+
+  test('une autre durée est une autre intention : son identifiant est neuf', async () => {
+    const { actions, calls } = await bench(seed(), (req) => (pausePath(req) ? refused('FLAME_PAUSE_NOT_ALLOWED') : undefined));
+    await act(async () => actions().pause(2));
+    await settle();
+    await act(async () => actions().pause(2));
+    await settle();
+    await act(async () => actions().pause(5));
+    await settle();
+    const ids = calls().filter(pausePath).map((req) => (req.body as { readonly requestId: string }).requestId);
+    expect(ids[0]).toBe(ids[1]);
+    expect(ids[2]).not.toBe(ids[0]);
+  });
+});

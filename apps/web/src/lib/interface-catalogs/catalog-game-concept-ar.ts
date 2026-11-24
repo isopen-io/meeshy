@@ -427,6 +427,14 @@ const ar = {
   'game.mascot.level_missing.two': 'شرارتان أخريان، ويبلغ نورك المستوى {level}.',
   'game.mascot.level_missing.few': '{count} شرارات أخرى، ويبلغ نورك المستوى {level}.',
   'game.mascot.level_missing.many': '{count} شرارة أخرى، ويبلغ نورك المستوى {level}.',
+  'game.error.flame_pause.quarterly_limit': 'استراح لهبك بالفعل خلال هذه الأشهر الثلاثة.',
+  'game.error.flame_pause.already_paused': 'لهبك يستريح بالفعل.',
+  'game.error.flame_pause.no_flame': 'يجب أن يكون لهبك مشتعلًا ليستريح.',
+  'game.flame_panel.pause_intro': 'استراحة؟ ينتظرك لهبك حتى {days}، مرة واحدة كل ثلاثة أشهر.',
+  'game.flame_panel.pause_days': 'مدة الاستراحة',
+  'game.flame_panel.pause': 'دعه يستريح · {days}',
+  'game.flame_panel.paused': 'يستريح لهبك حتى {date}.',
+  'game.flame_panel.paused_soon': 'يبدأ لهبك استراحته غدًا، حتى {date}.',
 } as const satisfies GameConceptCatalog;
 
 export default ar;
