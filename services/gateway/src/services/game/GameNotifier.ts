@@ -40,6 +40,7 @@ import {
 } from '@meeshy/shared/utils/game/notifications';
 import { personalMissionActivity } from '@meeshy/shared/utils/game/personal-mission';
 import { personalMissionPhrase } from '@meeshy/shared/utils/game/personal-mission-copy';
+import { flamePauseOf, isFlamePausedOn } from '@meeshy/shared/utils/game/flame-pause';
 import type { LeagueKey } from '@meeshy/shared/utils/game/league';
 import { notificationString, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -97,6 +98,7 @@ export type GameNotifyResult =
   | 'skipped:unknown-recipient'
   | 'skipped:unknown-actor'
   | 'skipped:game-hidden'
+  | 'skipped:flame-paused'
   | 'skipped:opted-out'
   | 'skipped:duplicate'
   | 'skipped:daily-cap'
@@ -130,6 +132,8 @@ type Plan = {
    * fois » se rend, et la prochaine fenêtre permise la reprend. Les autres notifications plafonnées se taisent.
    */
   readonly deferrable?: boolean;
+  /** Un RAPPEL (la plage du Rêve) : il se tait un jour où la Flamme est en veille (#17372). Résultats et gestes d'autrui partent. */
+  readonly reminder?: boolean;
   readonly content: (lang: string, timezone: string | null) => string;
   readonly metadata: Record<string, unknown>;
   readonly actorId?: string;
@@ -215,6 +219,7 @@ function planOf(event: GameNotificationEvent): Plan {
         onceKey: `mission-window:${event.missionId}`,
         collapseId: `game-mission-${event.dayKey}`,
         capped: countsAgainstGameDailyCap('game_mission_window'),
+        reminder: true,
         content: (lang, timezone) =>
           notificationString(lang, 'game.missionWindow', {
             mission: personalMissionPhrase(lang, personalMissionActivity(event.templateKey)),
@@ -281,7 +286,7 @@ export class GameNotifier {
 
     const recipient = await this.prisma.user.findUnique({
       where: { id: event.recipientId },
-      select: { isActive: true, deletedAt: true, timezone: true, ...RECIPIENT_LANG_SELECT },
+      select: { isActive: true, deletedAt: true, timezone: true, flamePauseFrom: true, flamePauseUntil: true, ...RECIPIENT_LANG_SELECT },
     });
     if (!recipient || recipient.isActive === false || recipient.deletedAt != null) return 'skipped:unknown-recipient';
 
@@ -290,6 +295,7 @@ export class GameNotifier {
     if (plan.actorId !== undefined && actor === null) return 'skipped:unknown-actor';
 
     if ((await this.profile.settings(event.recipientId)).gameHidden) return 'skipped:game-hidden';
+    if (plan.reminder && isFlamePausedOn(flamePauseOf(recipient), dayKeyOf(now, recipient.timezone))) return 'skipped:flame-paused';
     if (await this.optedOut(event.recipientId)) return 'skipped:opted-out';
 
     const throttle = this.deps.throttle ?? getCacheStore();

@@ -95,6 +95,7 @@ const ar = {
   'game.error.insufficient_meeshes': 'تحتاج إلى Meesh إضافية لذلك.',
   'game.error.freeze_at_maximum': 'قنديلان يحرسان لهبك بالفعل: هذا أقصى ما يمكن.',
   'game.error.relight_not_allowed': 'لا يمكن إعادة إشعال اللهب الآن.',
+  'game.error.flame_pause_not_allowed': 'لا يمكن أن يستريح اللهب الآن.',
   'game.error.mission_not_found': 'هذا الفصل لم يعد موجودًا: تتحدّث الشاشة.',
   'game.error.mission_reroll_exhausted': 'لقد بدّلت فصلًا اليوم بالفعل.',
   'game.error.mission_reroll_unavailable': 'لا يمكن تبديل هذا الفصل.',

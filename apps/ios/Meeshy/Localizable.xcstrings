@@ -269528,6 +269528,53 @@
         }
       }
     },
+    "game.error.flame_pause_not_allowed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن أن يستريح اللهب الآن."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Flamme kann jetzt nicht ruhen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Flame cannot rest right now."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La Llama no puede descansar ahora."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La Flamme ne peut pas se mettre en veille maintenant."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La Fiamma non può riposare adesso."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A Chama não pode descansar agora."
+          }
+        }
+      }
+    },
     "game.error.mission_not_found": {
       "extractionState": "manual",
       "localizations": {

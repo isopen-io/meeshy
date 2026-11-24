@@ -12,6 +12,7 @@ import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 import {
   chestClaimResponseSchema,
   flameFreezeResponseSchema,
+  flamePauseResponseSchema,
   flameRelightResponseSchema,
   guideSeenResponseSchema,
   missionRerollResponseSchema,
@@ -156,6 +157,50 @@ describe('POST /me/game/flame/relight', () => {
 
     expect(res.statusCode).toBe(409);
     expect(res.json()).toMatchObject({ code: 'RELIGHT_NOT_ALLOWED', reason: 'not-extinguished' });
+    await app.close();
+  });
+});
+
+describe('POST /me/game/flame/pause (#17372, #20507)', () => {
+  const lit = (db: FakeGameDb, fields: Record<string, unknown> = {}) =>
+    seedUser(db, { currentStreakDays: 9, longestStreakDays: 9, lastStreakDate: new Date(`${todayKey()}T00:00:00Z`), timezone: 'UTC', ...fields });
+  const tomorrowKey = () => new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  it('annonce une veille à partir de demain : 200, la forme du contrat, écrite sur le compte', async () => {
+    const db = fakeGameDb();
+    lit(db);
+    const app = await buildApp(db);
+
+    const res = await post(app, GAME_ROUTES.flamePause, { requestId: 'veille-route-01', days: 1 });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toEqual({ status: 'paused', pause: { from: tomorrowKey(), until: tomorrowKey() } });
+    expect(flamePauseResponseSchema.safeParse(res.json().data).success).toBe(true);
+    expect(db.user.rows[0]).toMatchObject({ flamePauseFrom: tomorrowKey(), flamePauseUntil: tomorrowKey() });
+    await app.close();
+  });
+
+  it('409 FLAME_PAUSE_NOT_ALLOWED avec le motif quand une veille est déjà posée', async () => {
+    const db = fakeGameDb();
+    lit(db, { flamePauseFrom: tomorrowKey(), flamePauseUntil: tomorrowKey() });
+    const app = await buildApp(db);
+
+    const res = await post(app, GAME_ROUTES.flamePause, { requestId: 'veille-route-02', days: 3 });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: 'FLAME_PAUSE_NOT_ALLOWED', reason: 'already-paused' });
+    await app.close();
+  });
+
+  it('400 hors de un à sept jours, sans rien écrire', async () => {
+    const db = fakeGameDb();
+    lit(db);
+    const app = await buildApp(db);
+
+    const responses = await Promise.all([0, 8, 2.5].map((days) => post(app, GAME_ROUTES.flamePause, { requestId: 'veille-route-03', days })));
+
+    expect(responses.map((res) => res.statusCode)).toEqual([400, 400, 400]);
+    expect(db.user.rows[0]).not.toHaveProperty('flamePauseFrom');
     await app.close();
   });
 });
