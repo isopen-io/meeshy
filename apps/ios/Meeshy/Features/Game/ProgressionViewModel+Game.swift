@@ -23,6 +23,8 @@ struct GamePending: Equatable {
     var chest = false
     var freeze = false
     var relight = false
+    /// La veille de la Flamme annoncée, en vol (#20510).
+    var pause = false
 }
 
 /// Le refus du DERNIER geste, en une phrase — jamais un code (#9383).
@@ -31,6 +33,7 @@ struct GameErrors: Equatable {
     var chest: String?
     var freeze: String?
     var relight: String?
+    var pause: String?
 }
 
 /// La pièce qui vient d'être frappée : c'est ce qui rejoue la scène de la frappe.
@@ -161,6 +164,34 @@ extension ProgressionViewModel {
             await refreshAfterRefusal(error)
         }
         pending.relight = false
+        endGesture()
+    }
+
+    // MARK: - La Flamme en veille
+
+    /// Annoncer une veille de `days` jours à partir de demain (#20510). Une durée est une intention : la rejouer
+    /// après un échec garde son identifiant, une autre durée en prend un neuf. Miroir du geste `pause` du web.
+    func pauseFlame(days: Int) async {
+        guard !pending.pause else { return }
+        pending.pause = true
+        gameErrors.pause = nil
+        let intention = "pause:\(days)"
+        let before = beginGesture { GameOptimistic.afterPause($0, days: days) }
+        do {
+            let response = try await gameService.pauseFlame(days: days, requestId: requestId(for: intention))
+            spent(intention)
+            if let snapshot, let game = snapshot.game {
+                let state = GameOptimistic.withPaused(GameState(game: game, meesh: snapshot.meesh), pause: response.pause)
+                commit(state, over: snapshot)
+            }
+            await load(forceNetwork: true)
+        } catch {
+            restore(before)
+            releaseRequestIdIfConflict(error, intention: intention)
+            gameErrors.pause = FlamePauseCopy.errorMessage(for: error)
+            await refreshAfterRefusal(error)
+        }
+        pending.pause = false
         endGesture()
     }
 
