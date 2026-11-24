@@ -30,12 +30,25 @@ public struct ProfileHeroVoice {
 
     public let bubble: Bubble
     public let caption: Caption
+    /// L'état d'une personne. La suite rendue peut être abonnée depuis n'importe quel fil : la fiche, elle, s'y abonne
+    /// et la lit sur le fil principal (`liveStates`), si bien qu'un maillon isolé au MainActor n'y piège rien.
     public let states: States
 
     public init(bubble: @escaping Bubble, caption: @escaping Caption, states: @escaping States) {
         self.bubble = bubble
         self.caption = caption
         self.states = states
+    }
+
+    /// Ce que la fiche lit : l'état de la personne, abonné et servi sur le fil principal. L'itérateur `.values`
+    /// demande hors du fil principal et une source `@Published` y rejoue sa valeur courante ; sans ce relais, un
+    /// maillon de l'app isolé au MainActor piégeait l'ouverture d'une fiche.
+    @MainActor
+    func liveStates(_ userId: String) -> AnyPublisher<ProfileHeroVoiceState, Never> {
+        states(userId)
+            .subscribe(on: DispatchQueue.main)
+            .receive(on: DispatchQueue.main)
+            .eraseToAnyPublisher()
     }
 }
 
@@ -67,7 +80,7 @@ struct ProfileHeroVoiceReader<Content: View>: View {
             .task(id: userId) {
                 state = .silent
                 guard let voice, let userId, !userId.isEmpty else { return }
-                for await value in voice.states(userId).values where value != state {
+                for await value in voice.liveStates(userId).values where value != state {
                     let reduce = MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
                     withAnimation(MeeshyMotion.animation(.morph, reduce: reduce)) { state = value }
                 }

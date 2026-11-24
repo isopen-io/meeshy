@@ -1,3 +1,5 @@
+import Combine
+import SwiftUI
 import XCTest
 import MeeshySDK
 @testable import MeeshyUI
@@ -54,4 +56,37 @@ final class ProfileHeroVoiceTests: XCTestCase {
         XCTAssertEqual(MeeshyCollapsingHeroRecipe.titleGap(avatarSpill: 0, avatarCaption: 0),
                        MeeshyCollapsingHeroRecipe.titleGap(avatarSpill: 0))
     }
+
+    // MARK: - Lu depuis n'importe quel fil
+
+    /// L'itérateur `.values` demande hors du fil principal, et une source `@Published` y rejoue sa valeur courante : un
+    /// maillon de l'app isolé au MainActor y piégeait l'ouverture d'une fiche. La fiche s'abonne et lit sur le fil
+    /// principal, quelle que soit la source.
+    func test_liveStates_mainActorBoundSource_deliversWithoutTrapping() async {
+        let source = CurrentValueSubject<Bool, Never>(true)
+        let voice = ProfileHeroVoice(
+            bubble: { _, _, _ in AnyView(EmptyView()) },
+            caption: { _ in AnyView(EmptyView()) },
+            states: { _ in
+                source
+                    .map { speaking -> ProfileHeroVoiceState in
+                        MainActor.preconditionIsolated()
+                        return speaking ? .voice(captioned: false) : .silent
+                    }
+                    .eraseToAnyPublisher()
+            }
+        )
+        let states = OffMainVoiceStates(publisher: voice.liveStates("bob"))
+
+        let first = await Task.detached { () -> ProfileHeroVoiceState? in
+            for await value in states.publisher.values { return value }
+            return nil
+        }.value
+
+        XCTAssertEqual(first, .voice(captioned: false))
+    }
+}
+
+private struct OffMainVoiceStates: @unchecked Sendable {
+    let publisher: AnyPublisher<ProfileHeroVoiceState, Never>
 }

@@ -1,3 +1,4 @@
+import Combine
 import MeeshyUI
 import XCTest
 @testable import Meeshy
@@ -102,4 +103,27 @@ final class TalkieVoiceHostTests: XCTestCase {
         XCTAssertNil(TalkieVoiceClock.seconds(startedAt: nil, now: start))
         XCTAssertEqual(TalkieVoiceClock.seconds(startedAt: start, now: start.addingTimeInterval(4.2)), 4)
     }
+
+    // MARK: - Lu hors du fil principal
+
+    /// La fiche lit l'état de la voix par `.values` : l'itérateur Combine demande hors du fil principal, et `@Published`
+    /// y rejoue sa valeur courante. Un maillon isolé au MainActor y piégeait l'app à l'ouverture d'un profil.
+    @MainActor
+    func test_heroVoiceStates_readOffTheMainActor_deliversTheCurrentState() async {
+        let stage = TalkieVoiceStage()
+        stage.begin(userId: "bob", direction: .outgoing, at: Date())
+        let observer = TalkieVoiceStageObserver(stage: stage)
+        let states = OffMainHeroStates(publisher: TalkieProfileHeroVoice.make(observer: observer).states("bob"))
+
+        let first = await Task.detached { () -> ProfileHeroVoiceState? in
+            for await value in states.publisher.values { return value }
+            return nil
+        }.value
+
+        XCTAssertEqual(first, .voice(captioned: true))
+    }
+}
+
+private struct OffMainHeroStates: @unchecked Sendable {
+    let publisher: AnyPublisher<ProfileHeroVoiceState, Never>
 }

@@ -92,7 +92,9 @@ extension TalkieVoiceStageObserver {
     static let shared = TalkieVoiceStageObserver()
 }
 
-/// La voix autour de l'avatar d'une fiche, remise au SDK sans qu'il sache ce qu'est un talkie.
+/// La voix autour de l'avatar d'une fiche, remise au SDK sans qu'il sache ce qu'est un talkie. Les maillons de l'état
+/// sont hors de tout acteur : la fiche le lit par `.values`, dont l'itérateur demande hors du fil principal, et
+/// `@Published` y rejoue sa valeur courante — un maillon isolé au MainActor y piégeait l'ouverture d'un profil.
 @MainActor
 enum TalkieProfileHeroVoice {
     static func make(observer: TalkieVoiceStageObserver = .shared) -> ProfileHeroVoice {
@@ -104,7 +106,7 @@ enum TalkieProfileHeroVoice {
             caption: { userId in ProfileSlot.view(.voiceClock, userId: userId, displayName: "") },
             states: { userId in
                 observer.$voices
-                    .map { TalkieVoiceHostLaw.heroState(userId: userId, voices: $0) }
+                    .map { @Sendable voices in TalkieVoiceHostLaw.heroState(userId: userId, voices: voices) }
                     .removeDuplicates()
                     .eraseToAnyPublisher()
             }
