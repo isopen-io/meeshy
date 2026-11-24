@@ -116,6 +116,52 @@ final class TalkieVoiceStageTests: XCTestCase {
         XCTAssertEqual(stage.bands(for: "bob"), Self.zeros)
     }
 
+    func test_bands_beforeFrameTime_returnsPreviousFrame() throws {
+        let stage = TalkieVoiceStage()
+        stage.begin(userId: "a", direction: .incoming, at: Self.startedAt)
+        stage.push(userId: "a", direction: .incoming, bands: Self.full, at: 1)
+        stage.push(userId: "a", direction: .incoming, bands: Self.zeros, at: 2)
+
+        XCTAssertEqual(stage.bands(for: "a", now: 0.5), Self.zeros, "aucune trame n'est encore due")
+        XCTAssertEqual(try XCTUnwrap(stage.bands(for: "a", now: 1.5).first), 0.55, accuracy: 1e-6)
+        XCTAssertEqual(try XCTUnwrap(stage.bands(for: "a", direction: .incoming, now: 1.9).first), 0.55, accuracy: 1e-6)
+        XCTAssertEqual(try XCTUnwrap(stage.bands(for: "a", now: 2).first), 0.55 * (1 - 0.12), accuracy: 1e-6)
+    }
+
+    func test_bands_afterAllFrames_returnsLatest() throws {
+        let stage = TalkieVoiceStage()
+        stage.begin(userId: "a", direction: .incoming, at: Self.startedAt)
+        [1.0, 2.0, 3.0].forEach { stage.push(userId: "a", direction: .incoming, bands: Self.full, at: $0) }
+
+        let latest = try XCTUnwrap(stage.bands(for: "a", now: 10).first)
+
+        let expected: Float = [Float](repeating: 1, count: 3).reduce(0) { TalkieWaveLaw.smoothed(previous: $0, target: $1) }
+        XCTAssertEqual(latest, expected, accuracy: 1e-6)
+        XCTAssertEqual(stage.frameTimes(for: "a", direction: .incoming), [])
+    }
+
+    func test_ring_overflow_keepsNewestEight() {
+        let stage = TalkieVoiceStage()
+        stage.begin(userId: "a", direction: .incoming, at: Self.startedAt)
+
+        (1...10).forEach { stage.push(userId: "a", direction: .incoming, bands: Self.full, at: TimeInterval($0)) }
+
+        XCTAssertEqual(stage.frameTimes(for: "a", direction: .incoming), (3...10).map(TimeInterval.init))
+        XCTAssertEqual(stage.receivedFrames(for: "a", direction: .incoming), 10)
+    }
+
+    /// Une rafale plus longue que l'anneau ne perd aucun spectre : les trames écrasées ont été lissées d'avance.
+    func test_ring_overflow_smoothsTheOverwrittenFramesFirst() throws {
+        let stage = TalkieVoiceStage()
+        stage.begin(userId: "a", direction: .incoming, at: Self.startedAt)
+        stage.push(userId: "a", direction: .incoming, bands: Self.full, at: 1)
+        (2...9).forEach { stage.push(userId: "a", direction: .incoming, bands: Self.zeros, at: TimeInterval($0)) }
+
+        let after = try XCTUnwrap(stage.bands(for: "a", now: 100).first)
+
+        XCTAssertEqual(after, 0.55 * pow(1 - 0.12, 8), accuracy: 1e-6)
+    }
+
     func test_observer_beginAndEnd_publishesWhoSpeaksAndWhichWay() {
         let stage = TalkieVoiceStage()
         let observer = TalkieVoiceStageObserver(stage: stage)

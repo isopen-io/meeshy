@@ -62,13 +62,13 @@ final class TalkieMicCapture: TalkieCapturing {
         let rate = Int(format.sampleRate)
         let meter = self.meter
         let voice = TalkieVoiceProcessor(userId: toUserId, direction: .outgoing, sampleRate: format.sampleRate, stage: stage)
-        let tapBlock: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { buffer, _ in
+        let tapBlock: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { buffer, when in
             if firstBuffer.withLock({ first in defer { first = false }; return first }) {
                 Logger.talkieMic.info("talkie · micro · premier tampon \(buffer.frameLength) trames à \(rate) Hz")
             }
             voice.level(buffer)
             encoder.encode(buffer)
-            meter.push(rms: voice.publish(buffer))
+            meter.push(rms: voice.publish(buffer, at: TalkieVoiceStage.seconds(of: when)))
         }
         input.installTap(onBus: 0, bufferSize: 1024, format: format, block: tapBlock)
         engine.prepare()

@@ -1243,6 +1243,7 @@
 		3FD326008BE0935187929DD1 /* CallWindowPresenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 157578FE962392E346D741D6 /* CallWindowPresenterTests.swift */; };
 		3FDA795342CA29651A30A7C7 /* PostTranslationMarkPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 087419B26613E22CC18E0E78 /* PostTranslationMarkPlan.swift */; };
 		3FE3794843DEE68067C35326 /* ProfileFacesLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C89C2BC73BF047C00344563 /* ProfileFacesLayoutTests.swift */; };
+		3FE518A9173D653C81F83B3D /* TalkieSpectrumWindows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C64F866150D98151D1DF253 /* TalkieSpectrumWindows.swift */; };
 		401D360A5C167D11C74E0A44 /* WebRTCVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE1F2E42D06691D6615D65AA /* WebRTCVideoView.swift */; };
 		4027064AD899AF20D24C283F /* CallView+Copy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6596AAB537B23AD1D85281BC /* CallView+Copy.swift */; };
 		402EA7509679011BF6F1C099 /* ProfileProgressionEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CE7AF2F40DA167807CFEFBC /* ProfileProgressionEntry.swift */; };
@@ -7472,6 +7473,7 @@
 		7C3DE4B5A783AA5C2F512858 /* CallFrameStyleRuleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallFrameStyleRuleTests.swift; sourceTree = "<group>"; };
 		7C4AC0405FBE46DC1C980E65 /* MockGamePhotoNotebook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockGamePhotoNotebook.swift; sourceTree = "<group>"; };
 		7C4FBE52812B6A28C59CB58D /* MockPreferenceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockPreferenceService.swift; sourceTree = "<group>"; };
+		7C64F866150D98151D1DF253 /* TalkieSpectrumWindows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieSpectrumWindows.swift; sourceTree = "<group>"; };
 		7C7E3E90989541FDECF27F98 /* ConversationView+GuestAttachments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationView+GuestAttachments.swift"; sourceTree = "<group>"; };
 		7C86C3B420BA2B4C06CFF2AB /* SyncPillDotClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillDotClock.swift; sourceTree = "<group>"; };
 		7C8BBDDF3853355DBC1A4424 /* SignupViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignupViewModel.swift; sourceTree = "<group>"; };
@@ -13117,6 +13119,7 @@
 				16D42D0FF21360BE57A83FAA /* TalkiePushToTalkChannel.swift */,
 				95724CCB105678154F8A1C2F /* TalkieSender.swift */,
 				165D29D64742D752D1775218 /* TalkieSpectrumAnalyzer.swift */,
+				7C64F866150D98151D1DF253 /* TalkieSpectrumWindows.swift */,
 				D97F51552BB90DC3535C3D8A /* TalkieVoiceCopy.swift */,
 				CE937FAA18B67907F9DC53EA /* TalkieVoiceLeveler.swift */,
 				B9D6370CEE3A38D64EE8090E /* TalkieVoicePlayer.swift */,
@@ -19439,6 +19442,7 @@
 				27A93E809FC8B610E1C1A423 /* TalkieSender.swift in Sources */,
 				9EC5A73A51C2CE2443F4502B /* TalkieShortcutIntent.swift in Sources */,
 				EE4D9FF13FD2B67ECFA6537F /* TalkieSpectrumAnalyzer.swift in Sources */,
+				3FE518A9173D653C81F83B3D /* TalkieSpectrumWindows.swift in Sources */,
 				B25B44BC4DE96AFCD86410AA /* TalkieVoiceCopy.swift in Sources */,
 				BE9B20174C541645224DADB5 /* TalkieVoiceLeveler.swift in Sources */,
 				B3102C10C183656FA58182FD /* TalkieVoicePlayer.swift in Sources */,

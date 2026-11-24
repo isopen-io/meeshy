@@ -19,9 +19,9 @@ private extension Logger {
 ///   redirection (#17087, `TalkieOutputPlan`). Un changement de sortie en pleine prise de parole réapplique la règle.
 /// - Chaque fragment décodé passe par le gain de SA voix, qui la normalise comme à l'envoi, avant d'être planifié
 ///   (#20531, `TalkieVoiceProcessor`) : là où il est décodé, sur l'acteur principal, sans transformée de Fourier.
-///   L'analyse se fait pendant que la voix SONNE, par un tap posé sur le nœud de la voix (fil de rendu, tampons de
-///   1024 trames demandés) : les bandes vont au registre sous l'expéditeur, synchrones du son, et le niveau à l'onde
-///   de l'en-tête.
+///   L'analyse se fait pendant que la voix SONNE, par un tap posé sur le nœud de la voix : chaque tampon du tap est
+///   découpé en fenêtres de 1024 échantillons datées à l'horloge hôte, qui vont au registre sous l'expéditeur, et le
+///   niveau va à l'onde de l'en-tête.
 /// - Ce qu'on écoutait se tait pendant la voix, puis reprend (#18820, `TalkieListeningHold`) : les lecteurs Meeshy se
 ///   mettent en pause, la musique d'une autre app s'interrompt (session sans mélange, `InterruptingVoiceSessionLaw`) ;
 ///   la voix finie, la session se rend en prévenant les autres apps et les lecteurs Meeshy reprennent. Quand rien ne
@@ -189,11 +189,11 @@ final class TalkieVoicePlayer: TalkieSink {
         guard AudioTapFormatReadiness.mayInstall(sampleRate: format.sampleRate, channelCount: format.channelCount) else { return false }
         let meter = self.meter
         let firstBuffer = OSAllocatedUnfairLock(initialState: true)
-        let tap: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { buffer, _ in
+        let tap: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { buffer, when in
             if firstBuffer.withLock({ first in defer { first = false }; return first }) {
                 Logger.talkiePlayer.info("talkie · réception · tap de la voix, premier tampon \(buffer.frameLength) trames à \(Int(buffer.format.sampleRate)) Hz")
             }
-            meter.push(rms: processor.publish(buffer))
+            meter.push(rms: processor.publish(buffer, at: TalkieVoiceStage.seconds(of: when)))
         }
         node.installTap(onBus: 0, bufferSize: 1024, format: format, block: tap)
         return true
