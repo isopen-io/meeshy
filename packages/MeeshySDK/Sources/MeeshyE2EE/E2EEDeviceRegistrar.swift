@@ -172,8 +172,18 @@ public final class E2EEDeviceRegistrar: E2EEDeviceRegistering {
         try? vault.write { try E2EELocalEnrollmentRecord.saveDate(date, of: device, in: $0) }
     }
 
+    /// Au mieux (#12668) : sans bail d'exécution, le processus va être
+    /// suspendu ; le stock servi tient encore, et le relevé suivant
+    /// réapprovisionne. L'appareil s'ouvre quand même.
     private func replenish(_ stock: E2EEPreKeyStock, identity: E2EELocalIdentity) async throws {
-        guard let request = try keyFactory(for: identity).replenishment(for: stock, now: now()) else { return }
+        let request: E2EEPublishKeysRequest?
+        do {
+            request = try keyFactory(for: identity).replenishment(for: stock, now: now())
+        } catch let suspension as E2EEExecutionLeaseError {
+            logger.info("e2ee pre-key refill postponed: no execution lease (\(String(describing: suspension), privacy: .public))")
+            return
+        }
+        guard let request else { return }
         _ = try await directory.publishKeys(deviceId: stock.deviceId, request)
     }
 

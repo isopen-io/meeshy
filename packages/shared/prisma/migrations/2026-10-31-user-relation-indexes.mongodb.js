@@ -60,6 +60,15 @@ const commandError = (command) => {
   }
 };
 
+const createdOrError = (spec, options) => {
+  try {
+    db.getCollection(spec.collection).createIndex(spec.key, options);
+    return null;
+  } catch (error) {
+    return error.message;
+  }
+};
+
 const convertInPlace = (spec, match) => {
   const label = `${spec.collection}.${match.name}`;
   if (!dryRun) {
@@ -102,7 +111,13 @@ for (const spec of specs) {
   const options = { name: spec.name };
   if (spec.unique) options.unique = true;
 
-  if (!dryRun) db.getCollection(spec.collection).createIndex(spec.key, options);
+  // Un doublon glissé entre le comptage et la création fait lever `createIndex` (E11000) : il se SIGNALE comme les
+  // autres blocages, et le rapport s'imprime toujours (#17232).
+  const createError = dryRun ? null : createdOrError(spec, options);
+  if (createError) {
+    report.blocked.push(`${spec.collection}.${spec.name} — création refusée : ${createError}`);
+    continue;
+  }
   report.created.push(`${spec.collection}.${spec.name}`);
 }
 

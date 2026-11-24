@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import MeeshyE2EE
+@_spi(Testing) @testable import MeeshyE2EE
 @testable import MeeshySDK
 
 /// L'envoi et la réception par appareil (spec § 3.4, § 3.5, § 4.1 à 4.4), de

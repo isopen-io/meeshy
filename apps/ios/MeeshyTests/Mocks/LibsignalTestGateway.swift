@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 import GRDB
-import MeeshyE2EE
+@_spi(Testing) import MeeshyE2EE
 import MeeshySDK
 @testable import Meeshy
 

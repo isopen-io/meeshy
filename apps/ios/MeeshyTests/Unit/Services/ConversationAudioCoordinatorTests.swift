@@ -311,19 +311,38 @@ final class ConversationAudioCoordinatorTests: XCTestCase {
         XCTAssertEqual(engine.stopCallCount, 1)
     }
 
+    /// La session vient d'une source injectée (#9951) : basculer `AuthManager.shared` déconnectait tout l'hôte de
+    /// test, et l'attente fixe de 100 ms rendait le témoin instable.
     func test_authLogout_triggersClose() async {
-        let (sut, engine) = makeSUT()
+        let engine = MockAudioPlaybackEngine()
+        let authentication = CurrentValueSubject<Bool, Never>(true)
+        let sut = ConversationAudioCoordinator(engine: engine, authentication: authentication.eraseToAnyPublisher())
         sut.play(current: makeQueuedAudio(attachmentId: "a1"), tail: [],
                  conversationName: "T", conversationArtworkURL: nil)
         XCTAssertNotNil(sut.activeContext)
+        let closed = expectation(description: "la déconnexion ferme la lecture")
+        let watch = sut.$activeContext.dropFirst().filter { $0 == nil }.sink { _ in closed.fulfill() }
 
-        // Forcer la valeur initiale a true puis a false pour declencher le filter !$0
-        AuthManager.shared.isAuthenticated = true
-        AuthManager.shared.isAuthenticated = false
-        // Combine sink dispatched via DispatchQueue.main → laisse 2 ticks
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        authentication.send(false)
+
+        await fulfillment(of: [closed], timeout: 5)
+        watch.cancel()
         XCTAssertNil(sut.activeContext)
         XCTAssertEqual(engine.stopCallCount, 1)
+    }
+
+    func test_anUnchangedSession_neverClosesThePlayback() async {
+        let engine = MockAudioPlaybackEngine()
+        let authentication = CurrentValueSubject<Bool, Never>(true)
+        let sut = ConversationAudioCoordinator(engine: engine, authentication: authentication.eraseToAnyPublisher())
+        sut.play(current: makeQueuedAudio(attachmentId: "a1"), tail: [],
+                 conversationName: "T", conversationArtworkURL: nil)
+
+        authentication.send(true)
+        await Task.yield()
+
+        XCTAssertNotNil(sut.activeContext)
+        XCTAssertEqual(engine.stopCallCount, 0)
     }
 
     func test_play_secondCall_resetsQueueToNewConv() {

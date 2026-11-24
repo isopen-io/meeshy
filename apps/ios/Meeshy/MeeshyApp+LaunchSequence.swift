@@ -33,6 +33,7 @@ extension MeeshyApp {
         VitrineStage.preparer()
         #endif
         MeeshyConfig.shared.restoreEnvironment()
+        ApplicationExecutionLeasing.attach(UIApplication.shared)
     }
 
     func wireNotificationToasts() async {
