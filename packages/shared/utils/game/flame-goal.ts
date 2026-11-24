@@ -8,10 +8,12 @@
  * de la Flamme (100 et 365 jours).
  *
  * Rater l'objectif ne retire rien : un objectif dont la Flamme s'est éteinte, ou a recommencé depuis le choix, tombe
- * et ne se sert plus. La loi est pure : la Flamme du jour dit tout, sans horloge.
+ * et ne se sert plus. La hauteur de la Flamme ne suffit pas à le dire — choisi au premier jour, un objectif ne verrait
+ * pas une Flamme repartie à 1 —, donc le geste qui la casse le marque (`flameGoalAfterGesture`) et le rallumage, qui
+ * rend la même Flamme, le rend (`flameGoalAfterRelight`). La loi est pure, sans horloge : les jours sont des clés.
  */
 
-import { FLAME_FORMS } from './flame.js';
+import { FLAME_FORMS, type FlameOutcome } from './flame.js';
 
 export const FLAME_GOAL_FIRST_CHOICES = [7, 14, 30] as const;
 
@@ -21,8 +23,15 @@ export const FLAME_GOAL_LADDER: readonly number[] = [
   ...FLAME_FORMS.map((form) => form.minDays).filter((days) => days > Math.max(...FLAME_GOAL_FIRST_CHOICES)),
 ];
 
-/** L'objectif retenu : les jours de Flamme visés et ceux du jour du choix, qui dit si la Flamme a recommencé depuis. */
-export type FlameGoal = { readonly target: number; readonly chosenAtStreak: number };
+/**
+ * L'objectif retenu : les jours de Flamme visés, ceux du jour du choix, et le jour où la Flamme s'est cassée depuis
+ * (`null` ou absent tant qu'elle tient).
+ */
+export type FlameGoal = {
+  readonly target: number;
+  readonly chosenAtStreak: number;
+  readonly brokenOn?: string | null;
+};
 
 export type FlameGoalState =
   | { readonly status: 'none' }
@@ -41,7 +50,8 @@ export function flameGoalState(params: { readonly goal: FlameGoal | null; readon
   const target = days0(params.goal.target);
   if (target === 0) return { status: 'none' };
   const streak = days0(params.streak);
-  if (streak === 0 || streak < days0(params.goal.chosenAtStreak)) return { status: 'lapsed', target };
+  const broken = typeof params.goal.brokenOn === 'string';
+  if (broken || streak === 0 || streak < days0(params.goal.chosenAtStreak)) return { status: 'lapsed', target };
   if (streak >= target) return { status: 'reached', target, next: nextFlameGoal(target) };
   return { status: 'running', target, remaining: target - streak };
 }
@@ -69,6 +79,20 @@ export const chooseFlameGoal = (params: { readonly streak: number; readonly targ
   target: days0(params.target),
   chosenAtStreak: days0(params.streak),
 });
+
+/** Ce que devient l'objectif après le geste du jour : la Flamme cassée (repartie à 1) le fait tomber. */
+export function flameGoalAfterGesture(params: {
+  readonly goal: FlameGoal | null;
+  readonly outcome: FlameOutcome;
+  readonly today: string;
+}): FlameGoal | null {
+  if (params.goal === null || params.outcome !== 'broken') return params.goal;
+  return { ...params.goal, brokenOn: params.today };
+}
+
+/** La Flamme rallumée est celle d'avant la rupture : son objectif repart avec elle. */
+export const flameGoalAfterRelight = (goal: FlameGoal | null): FlameGoal | null =>
+  goal === null ? null : { ...goal, brokenOn: null };
 
 /** Le geste qui porte la Flamme de « en cours » à « atteint » déclenche le signe des aïeux, une seule fois. */
 export function flameGoalReachedBy(params: {

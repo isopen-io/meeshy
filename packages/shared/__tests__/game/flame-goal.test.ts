@@ -10,6 +10,8 @@ import {
   canChooseFlameGoal,
   chooseFlameGoal,
   flameGoalNextSeenKey,
+  flameGoalAfterGesture,
+  flameGoalAfterRelight,
   flameGoalOffer,
   flameGoalReachedBy,
   flameGoalState,
@@ -173,5 +175,38 @@ describe('servedFlameGoal — ce que le bloc `flame` en dit', () => {
 describe('flameGoalNextSeenKey — la proposition suivante se ferme une fois', () => {
   it('une clé de guide par objectif atteint', () => {
     expect(flameGoalNextSeenKey(7)).toBe('flame-goal-next-7');
+  });
+});
+
+describe('flameGoalAfterGesture — la Flamme qui repart à 1 fait tomber l’objectif', () => {
+  it('un objectif choisi au premier jour tombe quand la Flamme s’éteint puis repart, même revenue à la même hauteur', () => {
+    const after = flameGoalAfterGesture({ goal: goal(7), outcome: 'broken', today: '2026-11-24' });
+    expect(after).toEqual({ target: 7, chosenAtStreak: 1, brokenOn: '2026-11-24' });
+    expect(flameGoalState({ goal: after, streak: 1 })).toEqual({ status: 'lapsed', target: 7 });
+    expect(flameGoalState({ goal: after, streak: 5 })).toEqual({ status: 'lapsed', target: 7 });
+    expect(flameGoalOffer({ goal: after, streak: 1 })).toEqual([7, 14, 30]);
+    expect(flameGoalReachedBy({ goal: after, streakBefore: 6, streakAfter: 7 })).toBe(false);
+  });
+
+  it('un geste qui poursuit la Flamme garde l’objectif tel quel', () => {
+    (['started', 'same-day', 'continued', 'protected'] as const).forEach((outcome) => {
+      expect(flameGoalAfterGesture({ goal: goal(14), outcome, today: '2026-11-24' })).toEqual(goal(14));
+    });
+  });
+
+  it('sans objectif, rien', () => {
+    expect(flameGoalAfterGesture({ goal: null, outcome: 'broken', today: '2026-11-24' })).toBeNull();
+  });
+});
+
+describe('flameGoalAfterRelight — la Flamme rallumée est la même : son objectif repart avec elle', () => {
+  it('l’objectif tombé à l’extinction revient avec le rallumage', () => {
+    const broken = flameGoalAfterGesture({ goal: goal(14), outcome: 'broken', today: '2026-11-24' });
+    const relit = flameGoalAfterRelight(broken);
+    expect(flameGoalState({ goal: relit, streak: 9 })).toEqual({ status: 'running', target: 14, remaining: 5 });
+  });
+
+  it('sans objectif, rien', () => {
+    expect(flameGoalAfterRelight(null)).toBeNull();
   });
 });
