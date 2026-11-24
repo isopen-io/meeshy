@@ -17,9 +17,11 @@ private extension Logger {
 ///   arrive, au lieu de se lever devant lui. Rien n'enregistre : c'est la sortie seule.
 /// - Sur la sortie intégrée, la voix sort sur le HAUT-PARLEUR ; avec des écouteurs, un casque ou des AirPods, sans
 ///   redirection (#17087, `TalkieOutputPlan`). Un changement de sortie en pleine prise de parole réapplique la règle.
-/// - Chaque fragment décodé passe par le gain de SA voix, qui la normalise comme à l'envoi, puis par son analyseur,
-///   qui pousse ses bandes au registre des voix sous l'expéditeur (#20531, `TalkieVoiceProcessor`), avant d'être
-///   planifié. Ce travail se fait là où le fragment est décodé, sur l'acteur principal.
+/// - Chaque fragment décodé passe par le gain de SA voix, qui la normalise comme à l'envoi, avant d'être planifié
+///   (#20531, `TalkieVoiceProcessor`) : là où il est décodé, sur l'acteur principal, sans transformée de Fourier.
+///   L'analyse se fait pendant que la voix SONNE, par un tap posé sur le nœud de la voix (fil de rendu, tampons de
+///   1024 trames demandés) : les bandes vont au registre sous l'expéditeur, synchrones du son, et le niveau à l'onde
+///   de l'en-tête.
 /// - Ce qu'on écoutait se tait pendant la voix, puis reprend (#18820, `TalkieListeningHold`) : les lecteurs Meeshy se
 ///   mettent en pause, la musique d'une autre app s'interrompt (session sans mélange, `InterruptingVoiceSessionLaw`) ;
 ///   la voix finie, la session se rend en prévenant les autres apps et les lecteurs Meeshy reprennent. Quand rien ne
@@ -44,6 +46,8 @@ final class TalkieVoicePlayer: TalkieSink {
         let processor: TalkieVoiceProcessor?
         let fromUserId: String?
         var pending = 0
+        /// Le tap d'analyse est posé sur le nœud : il se retire avant que le nœud ne se détache.
+        var tapped = false
         /// Rien de plus n'arrivera : la file finit de sonner, puis se libère.
         var released = false
     }
@@ -103,9 +107,9 @@ final class TalkieVoicePlayer: TalkieSink {
         guard !voice.released, Self.mayPlay(buffer.format, on: voice.format), startEngineIfNeeded() else { return }
         if pristine, let fromUserId = voice.fromUserId {
             stage.begin(userId: fromUserId, direction: .incoming, at: Date())
+            if let processor = voice.processor { voice.tapped = listen(to: voice.node, through: processor) }
         }
         voice.processor?.level(buffer)
-        meter.push(rms: voice.processor?.publish(buffer) ?? 0)
         voice.pending += 1
         voices[talkieId] = voice
         announced.remove(talkieId)
@@ -146,7 +150,7 @@ final class TalkieVoicePlayer: TalkieSink {
         let node = AVAudioPlayerNode()
         engine.attach(node)
         engine.connect(node, to: voicesMixer, format: format)
-        let processor = fromUserId.map { TalkieVoiceProcessor(userId: $0, sampleRate: format.sampleRate, stage: stage) }
+        let processor = fromUserId.map { TalkieVoiceProcessor(userId: $0, direction: .incoming, sampleRate: format.sampleRate, stage: stage) }
         return Voice(node: node, decoder: decoder, format: format, processor: processor, fromUserId: fromUserId)
     }
 
@@ -174,8 +178,25 @@ final class TalkieVoicePlayer: TalkieSink {
 
     private func detach(_ voice: Voice) {
         voice.node.stop()
+        if voice.tapped { voice.node.removeTap(onBus: 0) }
         engine.detach(voice.node)
-        if let fromUserId = voice.fromUserId { stage.end(userId: fromUserId) }
+        if let fromUserId = voice.fromUserId { stage.end(userId: fromUserId, direction: .incoming) }
+    }
+
+    /// Le tap du nœud d'une voix : il voit le son tel qu'il sort, après le gain, et l'analyse sur le fil de rendu.
+    private func listen(to node: AVAudioPlayerNode, through processor: TalkieVoiceProcessor) -> Bool {
+        let format = node.outputFormat(forBus: 0)
+        guard AudioTapFormatReadiness.mayInstall(sampleRate: format.sampleRate, channelCount: format.channelCount) else { return false }
+        let meter = self.meter
+        let firstBuffer = OSAllocatedUnfairLock(initialState: true)
+        let tap: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { buffer, _ in
+            if firstBuffer.withLock({ first in defer { first = false }; return first }) {
+                Logger.talkiePlayer.info("talkie · réception · tap de la voix, premier tampon \(buffer.frameLength) trames à \(Int(buffer.format.sampleRate)) Hz")
+            }
+            meter.push(rms: processor.publish(buffer))
+        }
+        node.installTap(onBus: 0, bufferSize: 1024, format: format, block: tap)
+        return true
     }
 
     // MARK: - Sortie

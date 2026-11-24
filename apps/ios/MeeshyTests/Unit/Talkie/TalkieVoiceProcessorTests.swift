@@ -1,0 +1,160 @@
+import AVFoundation
+import XCTest
+@testable import Meeshy
+
+/// Les briques d'une voix (#20531) : le gain normalise tous les canaux d'un même gain, l'analyseur pousse sous la
+/// bonne personne et le bon sens, et un changement de fréquence ne remet pas le gain à zéro.
+final class TalkieVoiceProcessorTests: XCTestCase {
+
+    private static let startedAt = Date(timeIntervalSince1970: 1_800_000_000)
+
+    private func sine(sampleRate: Double, seconds: Double, rmsDecibels: Float, channels: AVAudioChannelCount = 1) throws -> AVAudioPCMBuffer {
+        let format = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: channels))
+        let count = AVAudioFrameCount(sampleRate * seconds)
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: count))
+        buffer.frameLength = count
+        let amplitude = Float(pow(10, Double(rmsDecibels) / 20)) * Float(2.0.squareRoot())
+        let data = try XCTUnwrap(buffer.floatChannelData)
+        (0..<Int(channels)).forEach { channel in
+            (0..<Int(count)).forEach { index in
+                data[channel][index] = amplitude * Float(sin(2 * Double.pi * 440 * Double(index) / sampleRate))
+            }
+        }
+        return buffer
+    }
+
+    func test_levelThenPublish_pushesUnderTheUserAndTheDirection() throws {
+        let stage = TalkieVoiceStage()
+        stage.begin(userId: "bob", direction: .outgoing, at: Self.startedAt)
+        stage.begin(userId: "bob", direction: .incoming, at: Self.startedAt)
+        let sut = TalkieVoiceProcessor(userId: "bob", direction: .outgoing, sampleRate: 48_000, stage: stage)
+        let buffer = try sine(sampleRate: 48_000, seconds: 0.05, rmsDecibels: -20)
+
+        sut.level(buffer)
+        let rms = sut.publish(buffer)
+
+        XCTAssertGreaterThan(rms, 0)
+        XCTAssertGreaterThan(stage.bands(for: "bob", direction: .outgoing).max() ?? 0, 0)
+        XCTAssertEqual(stage.bands(for: "bob", direction: .incoming).max(), 0)
+    }
+
+    func test_level_rateChange_keepsTheLevelerGain() throws {
+        let sut = TalkieVoiceProcessor(userId: "bob", direction: .incoming, sampleRate: 48_000, stage: TalkieVoiceStage())
+        sut.level(try sine(sampleRate: 48_000, seconds: 1, rmsDecibels: -40))
+        let before = sut.currentGainDecibels
+        XCTAssertGreaterThan(before, 6)
+
+        sut.level(try sine(sampleRate: 16_000, seconds: 0.01, rmsDecibels: -40))
+
+        XCTAssertEqual(sut.currentGainDecibels, before, accuracy: 3)
+    }
+
+    func test_level_stereo_levelsEveryChannelWithTheSameGain() throws {
+        let sut = TalkieVoiceProcessor(userId: "bob", direction: .incoming, sampleRate: 48_000, stage: TalkieVoiceStage())
+        let buffer = try sine(sampleRate: 48_000, seconds: 0.5, rmsDecibels: -40, channels: 2)
+        let original = try XCTUnwrap(buffer.floatChannelData)[1][Int(buffer.frameLength) - 7]
+
+        sut.level(buffer)
+
+        let data = try XCTUnwrap(buffer.floatChannelData)
+        let last = Int(buffer.frameLength) - 7
+        XCTAssertEqual(data[0][last], data[1][last])
+        XCTAssertGreaterThan(abs(data[1][last]), abs(original) * 1.5, "le second canal est amplifié aussi")
+    }
+
+    func test_buffersWithoutFloatChannels_areSafe() throws {
+        let stage = TalkieVoiceStage()
+        stage.begin(userId: "bob", direction: .incoming, at: Self.startedAt)
+        let sut = TalkieVoiceProcessor(userId: "bob", direction: .incoming, sampleRate: 48_000, stage: stage)
+        let format = try XCTUnwrap(AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 48_000, channels: 1, interleaved: false))
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 1024))
+        buffer.frameLength = 1024
+        XCTAssertNil(buffer.floatChannelData)
+
+        sut.level(buffer)
+
+        XCTAssertEqual(sut.publish(buffer), 0)
+        XCTAssertEqual(stage.bands(for: "bob").max(), 0)
+        XCTAssertEqual(sut.currentGainDecibels, 0)
+    }
+}
+
+/// Le lecteur inscrit la voix reçue au registre sous son expéditeur, l'alimente pendant qu'elle SONNE (tap du nœud
+/// de la voix), et la retire quand elle se tait ou finit de sonner (#20531).
+@MainActor
+final class TalkieVoicePlayerStageTests: XCTestCase {
+
+    private final class NoSession: TalkieVoiceSessionProviding {
+        nonisolated deinit {}
+        func activateVoice() {}
+        func releaseVoice() {}
+    }
+
+    private final class NoListening: MeeshyListeningProviding {
+        nonisolated deinit {}
+        func pauseListening() {}
+        func resumeListening() {}
+    }
+
+    private final class FrameBox: @unchecked Sendable {
+        private(set) var frames: [TalkieAacFrame] = []
+        func append(_ batch: [TalkieAacFrame]) { frames += batch }
+    }
+
+    private func makePlayer(stage: TalkieVoiceStage) -> TalkieVoicePlayer {
+        TalkieVoicePlayer(
+            isInCall: { false },
+            meter: TalkieLevelMeter(),
+            listening: TalkieListeningHold(session: NoSession(), listening: NoListening()),
+            stage: stage
+        )
+    }
+
+    private func fragment(seconds: Double) throws -> Data {
+        let format = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 1))
+        let count = AVAudioFrameCount(48_000 * seconds)
+        let input = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: count))
+        input.frameLength = count
+        let samples = try XCTUnwrap(input.floatChannelData?[0])
+        (0..<Int(count)).forEach { samples[$0] = 0.3 * sin(Float($0) * 2 * .pi * 440 / 48_000) }
+        let collected = FrameBox()
+        let encoder = try XCTUnwrap(TalkieAacEncoder(input: format) { collected.append($0) })
+        encoder.encode(input)
+        encoder.drain()
+        return collected.frames.reduce(Data()) { $0 + $1.data }
+    }
+
+    private func waitUntil(_ condition: @escaping @MainActor () -> Bool, seconds: TimeInterval = 4) async {
+        let deadline = Date().addingTimeInterval(seconds)
+        while !condition(), Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
+    func test_play_beginsTheIncomingVoiceUnderTheSender_andSilenceEndsIt() async throws {
+        let stage = TalkieVoiceStage()
+        let sut = makePlayer(stage: stage)
+
+        sut.prepare("t1", fromUserId: "alice")
+        sut.play("t1", try fragment(seconds: 0.5))
+        XCTAssertEqual(stage.direction(for: "alice"), .incoming)
+
+        await waitUntil { stage.bands(for: "alice").contains { $0 > 0 } }
+        XCTAssertTrue(stage.bands(for: "alice").contains { $0 > 0 }, "le tap du nœud alimente les bandes")
+
+        sut.silence("t1")
+        XCTAssertNil(stage.direction(for: "alice"))
+    }
+
+    func test_release_endsTheVoiceOnceItHasPlayed() async throws {
+        let stage = TalkieVoiceStage()
+        let sut = makePlayer(stage: stage)
+        sut.prepare("t1", fromUserId: "alice")
+        sut.play("t1", try fragment(seconds: 0.2))
+
+        sut.release("t1")
+        await waitUntil { stage.direction(for: "alice") == nil }
+
+        XCTAssertNil(stage.direction(for: "alice"))
+    }
+}

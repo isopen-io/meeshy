@@ -61,7 +61,7 @@ final class TalkieMicCapture: TalkieCapturing {
         let firstBuffer = OSAllocatedUnfairLock(initialState: true)
         let rate = Int(format.sampleRate)
         let meter = self.meter
-        let voice = TalkieVoiceProcessor(userId: toUserId, sampleRate: format.sampleRate, stage: stage)
+        let voice = TalkieVoiceProcessor(userId: toUserId, direction: .outgoing, sampleRate: format.sampleRate, stage: stage)
         let tapBlock: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { buffer, _ in
             if firstBuffer.withLock({ first in defer { first = false }; return first }) {
                 Logger.talkieMic.info("talkie · micro · premier tampon \(buffer.frameLength) trames à \(rate) Hz")

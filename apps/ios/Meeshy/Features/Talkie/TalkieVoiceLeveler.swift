@@ -62,20 +62,32 @@ nonisolated final class TalkieVoiceLeveler {
 
     /// Normalise `samples` sur place ; une valeur non finie y devient du silence.
     func process(_ samples: UnsafeMutableBufferPointer<Float>) {
-        guard let base = samples.baseAddress else { return }
+        guard var base = samples.baseAddress else { return }
+        withUnsafeMutablePointer(to: &base) { process(channels: $0, channelCount: 1, frameCount: samples.count) }
+    }
+
+    /// Normalise sur place `channelCount` canaux de `frameCount` échantillons d'un MÊME gain : le niveau se mesure
+    /// sur leur moyenne, puis chaque canal reçoit la même rampe et le même limiteur.
+    func process(channels: UnsafePointer<UnsafeMutablePointer<Float>>, channelCount: Int, frameCount: Int) {
+        guard channelCount > 0 else { return }
         var offset = 0
-        while offset < samples.count {
-            let length = min(Self.sliceLength, samples.count - offset)
-            processSlice(base + offset, length: length)
+        while offset < frameCount {
+            let length = min(Self.sliceLength, frameCount - offset)
+            processSlice(channels, channelCount: channelCount, offset: offset, length: length)
             offset += length
         }
     }
 
-    private func processSlice(_ slice: UnsafeMutablePointer<Float>, length: Int) {
-        for index in 0..<length where !slice[index].isFinite { slice[index] = 0 }
+    private func processSlice(_ channels: UnsafePointer<UnsafeMutablePointer<Float>>, channelCount: Int, offset: Int, length: Int) {
         let elapsed = Float(length) / sampleRate
         var meanSquare: Float = 0
-        vDSP_measqv(slice, 1, &meanSquare, vDSP_Length(length))
+        for channel in 0..<channelCount {
+            let slice = channels[channel] + offset
+            for index in 0..<length where !slice[index].isFinite { slice[index] = 0 }
+            var channelMeanSquare: Float = 0
+            vDSP_measqv(slice, 1, &channelMeanSquare, vDSP_Length(length))
+            meanSquare += channelMeanSquare / Float(channelCount)
+        }
         detect(meanSquare, elapsed: elapsed)
         isSilent = isSilent ? meanSquare <= wakePower : meanSquare < floorPower
         if isSilent {
@@ -83,8 +95,13 @@ nonisolated final class TalkieVoiceLeveler {
         } else {
             follow(elapsed: elapsed)
         }
-        applyGain(slice, length: length)
-        limit(slice, length: length)
+        let target = Self.amplitude(decibels: gainDecibels)
+        for channel in 0..<channelCount {
+            let slice = channels[channel] + offset
+            applyGain(slice, length: length, target: target)
+            limit(slice, length: length)
+        }
+        gainLinear = target
     }
 
     private func detect(_ meanSquare: Float, elapsed: Float) {
@@ -108,12 +125,10 @@ nonisolated final class TalkieVoiceLeveler {
         gainDecibels = abs(gainDecibels) <= step ? 0 : gainDecibels - step * (gainDecibels > 0 ? 1 : -1)
     }
 
-    private func applyGain(_ slice: UnsafeMutablePointer<Float>, length: Int) {
-        let target = Self.amplitude(decibels: gainDecibels)
+    private func applyGain(_ slice: UnsafeMutablePointer<Float>, length: Int, target: Float) {
         var start = gainLinear
         var step = (target - gainLinear) / Float(length)
         vDSP_vrampmul(slice, 1, &start, &step, slice, 1, vDSP_Length(length))
-        gainLinear = target
     }
 
     /// Courbe `tanh` au-dessus du genou de −6 dBFS, tangente à l'identité au genou et asymptote au plafond.

@@ -4572,6 +4572,7 @@
 		EADAADAD8E52DFBA4E2E7430 /* StoryViewerPositionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 628B252F54D0557AE081F687 /* StoryViewerPositionTests.swift */; };
 		EAE5815E18DE092F61B1477A /* ReelsRevealContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0511EC9CE975A97FA8E4A102 /* ReelsRevealContainer.swift */; };
 		EAE8987A4E117FCE06C711B9 /* PostDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68BC8C60105FA31CAB8EF9A5 /* PostDetailView.swift */; };
+		EAE9338350E0BC2CA1ADAB76 /* TalkieVoiceProcessorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B36E4C1D527DEE26CC37801B /* TalkieVoiceProcessorTests.swift */; };
 		EAECFD1AE3C1A9D00759819D /* UnreadCountLabelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BE2EB0BC9AFDD66DE45D597 /* UnreadCountLabelTests.swift */; };
 		EB0B4013327F7B816CD39B55 /* ComposerDoorInventoryGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C40F758012FF10DFFFAF5FB /* ComposerDoorInventoryGuardTests.swift */; };
 		EB20519416E36E76A0B18892 /* TypingDotTimerHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = 589DFA08B1DAF287E831F8BD /* TypingDotTimerHarness.swift */; };
@@ -8474,6 +8475,7 @@
 		B353DF82B4D3FEDC27560A46 /* E2ESessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = E2ESessionManager.swift; sourceTree = "<group>"; };
 		B36431AC585905639889134D /* MessageActionResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageActionResolverTests.swift; sourceTree = "<group>"; };
 		B36CACD7B03D8EDDA4BE26A0 /* FocalQuotedReplyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocalQuotedReplyView.swift; sourceTree = "<group>"; };
+		B36E4C1D527DEE26CC37801B /* TalkieVoiceProcessorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieVoiceProcessorTests.swift; sourceTree = "<group>"; };
 		B371231F9486E11466EC3A53 /* ConversationView+Presentations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationView+Presentations.swift"; sourceTree = "<group>"; };
 		B3945422B83AA5623640D1D7 /* GamePhotoLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamePhotoLayout.swift; sourceTree = "<group>"; };
 		B39D1B7148368C140EBBFAEE /* MeeshyComposerHost+Draft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MeeshyComposerHost+Draft.swift"; sourceTree = "<group>"; };
@@ -12556,6 +12558,7 @@
 				250171E4EAA547407A11CC1F /* TalkieUnreachableTests.swift */,
 				F5480160447F284B3A9AAE3E /* TalkieVoiceCopyTests.swift */,
 				D17E5C989142C01EC9FAD2A1 /* TalkieVoiceLevelerTests.swift */,
+				B36E4C1D527DEE26CC37801B /* TalkieVoiceProcessorTests.swift */,
 				3FB5BC7F119F6F65B1D836C8 /* TalkieVoiceStageTests.swift */,
 				A1C23E5659EC81641F3F0480 /* TalkieWakeJoinerTests.swift */,
 				A837AE52912361D28F7C7975 /* TalkieWordingTests.swift */,
@@ -21591,6 +21594,7 @@
 				0E270F7AD61FDCFBC008386D /* TalkieUnreachableTests.swift in Sources */,
 				B0E9EDA8953E870DB279186D /* TalkieVoiceCopyTests.swift in Sources */,
 				373196F968A7FA1F47F31518 /* TalkieVoiceLevelerTests.swift in Sources */,
+				EAE9338350E0BC2CA1ADAB76 /* TalkieVoiceProcessorTests.swift in Sources */,
 				89912D75B4E7BFA8D978F2E2 /* TalkieVoiceStageTests.swift in Sources */,
 				54E60F1294DEBEEA02EF1004 /* TalkieWakeJoinerTests.swift in Sources */,
 				8A0869F74C5C5085ED8A2A55 /* TalkieWordingTests.swift in Sources */,

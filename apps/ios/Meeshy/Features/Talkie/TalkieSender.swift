@@ -422,7 +422,7 @@ final class TalkieSender: ObservableObject {
         }
         if session === current {
             session = nil
-            stage.end(userId: current.toUserId)
+            stage.end(userId: current.toUserId, direction: .outgoing)
             phase = .idle
             waking = false
             talkWindow = nil
