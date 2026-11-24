@@ -53,6 +53,8 @@ data class ApiError(
     val requiredConsents: List<String>? = null,
     /** Les membres sans appareil chiffré qu'une bascule au bout en bout nomme (`E2EE_PARTICIPANT_WITHOUT_DEVICE`, #20073). */
     val withoutDeviceUserIds: List<String> = emptyList(),
+    /** La raison machine qui qualifie un refus (`FLAME_PAUSE_NOT_ALLOWED` → `quarterly-limit`, #20511) ; `null` sinon. */
+    val reason: String? = null,
     /**
      * Le `message` de l'enveloppe, tel que la réponse l'a servi (`null` : pas d'enveloppe JSON lisible). [message] préfère
      * `error`, qui pour le « route inconnue » de Fastify ne dit que « Not Found » ; celui-ci garde « Route GET:… not

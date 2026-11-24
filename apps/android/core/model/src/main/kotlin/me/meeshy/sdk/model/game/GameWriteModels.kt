@@ -170,6 +170,11 @@ public object GameWriteParser {
         )
     }
 
+    /** Une veille illisible rend `null` : la carte relit alors le bloc servi. */
+    public fun pauseFlame(text: String?): FlamePauseResponse? = read(text) { obj ->
+        FlamePauseResponse(status = obj.optString("status").orEmpty(), pause = parseFlamePause(obj) ?: throw GameParseException("pause"))
+    }
+
     public fun markGuideSeen(text: String?): GuideSeenResponse? = read(text) { obj ->
         GuideSeenResponse(guideSeen = (obj["guideSeen"] as? JsonArray)?.let(::stringsOrEmpty).orEmpty())
     }

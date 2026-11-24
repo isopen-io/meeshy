@@ -571,7 +571,10 @@
     <string name="game_error_duo_not_friends">A aliança se faz entre amigos aceitos.</string>
     <string name="game_error_duo_transition_refused">Este gesto não faz sentido para esta aliança.</string>
     <string name="game_error_flame_goal_not_allowed">Este objetivo de Chama não pode ser escolhido hoje.</string>
+    <string name="game_error_flame_pause_already_paused">Sua Chama já está descansando.</string>
+    <string name="game_error_flame_pause_no_flame">Sua Chama precisa estar acesa para descansar.</string>
     <string name="game_error_flame_pause_not_allowed">A Chama não pode descansar agora.</string>
+    <string name="game_error_flame_pause_quarterly_limit">Sua Chama já descansou neste trimestre.</string>
     <string name="game_error_freeze_at_maximum">Duas Lamparinas já cuidam da sua Chama: é o máximo possível.</string>
     <string name="game_error_generic">Não deu certo — verifique sua conexão e tente de novo.</string>
     <string name="game_error_insufficient_meeshes">Você precisa de mais uma Meesh para isso.</string>
@@ -643,6 +646,11 @@
     <string name="game_flame_panel_effort_relight_tomorrow">Só mais %1$s até amanhã à noite e sua Chama volta com seus %2$s, sem pagar.</string>
     <string name="game_flame_panel_freeze_buy">Pegar uma Lamparina · %1$s</string>
     <string name="game_flame_panel_freezes">Lamparinas: %1$s / %2$s</string>
+    <string name="game_flame_panel_pause">Deixar descansar · %1$s</string>
+    <string name="game_flame_panel_pause_days">Duração do descanso</string>
+    <string name="game_flame_panel_pause_intro">Uma pausa? Sua Chama espera por você até %1$s, uma vez por trimestre.</string>
+    <string name="game_flame_panel_paused">Sua Chama descansa até %1$s.</string>
+    <string name="game_flame_panel_paused_soon">Sua Chama começa a descansar amanhã, até %1$s.</string>
     <string name="game_flame_panel_relight">Reacender a Chama · %1$s</string>
     <string name="game_flame_panel_relight_closed">Esta Chama não pode mais ser reacendida. Uma nova Chama começa com a sua próxima ação.</string>
     <string name="game_flame_panel_relight_intro">Sua Chama se apagou: reacenda-a agora, ela recomeça de onde parou.</string>

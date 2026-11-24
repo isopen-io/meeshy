@@ -35,9 +35,17 @@ import androidx.compose.ui.text.font.FontWeight
  * Deux rêves complets la rallument aussi, sans payer (#20455) : tant que le bloc sert `effortRelight`, le panneau dit
  * combien en manquent et jusqu'à quand (#20474) — même quand une nouvelle Flamme a repris, puisque c'est en jouant
  * qu'on les réalise — et ne dit plus qu'elle ne peut plus être rallumée.
+ *
+ * Une Flamme vivante se met en VEILLE (#17372, #20511) : deux gestes, la durée puis l'annonce ([FlamePauseGestures]).
  */
 @Composable
-internal fun FlamePanel(game: GameBlock, gestures: GameGesturesUiState, onBuyFreeze: () -> Unit, onRelight: () -> Unit) {
+internal fun FlamePanel(
+    game: GameBlock,
+    gestures: GameGesturesUiState,
+    onBuyFreeze: () -> Unit,
+    onRelight: () -> Unit,
+    onPause: (Int) -> Unit = {},
+) {
     val flame = game.flame
     val held = game.treasury.held.toLong()
     val freezeSpend = GameSpend.preview(held, flame.freezePrice.toLong())
@@ -63,6 +71,7 @@ internal fun FlamePanel(game: GameBlock, gestures: GameGesturesUiState, onBuyFre
             )
         }
         GameErrorLine(gestureMessage(gestures.failures[GameGesture.Freeze]))
+        FlamePauseGestures(game, gestures, onPause)
         flame.effortRelight?.let { effort ->
             Text(
                 gameString(GameCopyLaws.effortRelight(effort)),

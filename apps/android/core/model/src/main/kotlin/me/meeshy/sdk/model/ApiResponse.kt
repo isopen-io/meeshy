@@ -49,6 +49,11 @@ data class ApiResponse<T>(
      * tolérance par `EndToEndParticipantWithoutDevice.userIdsFrom` (#20182).
      */
     val withoutDeviceUserIds: JsonElement? = null,
+    /**
+     * La raison machine d'un refus, à la racine (`FLAME_PAUSE_NOT_ALLOWED` → `quarterly-limit`, #20511). Lue en
+     * tolérance : une valeur qui n'est pas une chaîne n'emporte pas le refus.
+     */
+    val reason: JsonElement? = null,
     /** La pagination par curseur des routes qui ne passent pas par `sendSuccess` (`messages/search`), à la racine. */
     val cursorPagination: CursorPagination? = null,
     /**

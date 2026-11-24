@@ -571,7 +571,10 @@
     <string name="game_error_duo_not_friends">Ein Bündnis schließt man unter bestätigten Freunden.</string>
     <string name="game_error_duo_transition_refused">Diese Aktion ergibt für dieses Bündnis keinen Sinn.</string>
     <string name="game_error_flame_goal_not_allowed">Dieses Flammenziel lässt sich heute nicht wählen.</string>
+    <string name="game_error_flame_pause_already_paused">Deine Flamme ruht bereits.</string>
+    <string name="game_error_flame_pause_no_flame">Deine Flamme muss brennen, damit sie ruhen kann.</string>
     <string name="game_error_flame_pause_not_allowed">Die Flamme kann jetzt nicht ruhen.</string>
+    <string name="game_error_flame_pause_quarterly_limit">Deine Flamme hat in diesem Quartal schon geruht.</string>
     <string name="game_error_freeze_at_maximum">Zwei Hüterinnen wachen schon über deine Flamme: Mehr geht nicht.</string>
     <string name="game_error_generic">Das hat nicht geklappt — prüfe deine Verbindung und versuche es erneut.</string>
     <string name="game_error_insufficient_meeshes">Dafür brauchst du eine Meesh mehr.</string>
@@ -643,6 +646,11 @@
     <string name="game_flame_panel_effort_relight_tomorrow">Schaffe %1$s bis morgen Abend, und deine Flamme kehrt mit ihren %2$s zurück, ohne zu zahlen.</string>
     <string name="game_flame_panel_freeze_buy">Eine Hüterin rufen · %1$s</string>
     <string name="game_flame_panel_freezes">Hüterinnen: %1$s / %2$s</string>
+    <string name="game_flame_panel_pause">Ruhen lassen · %1$s</string>
+    <string name="game_flame_panel_pause_days">Dauer der Ruhe</string>
+    <string name="game_flame_panel_pause_intro">Eine Pause? Deine Flamme wartet bis zu %1$s auf dich, einmal pro Quartal.</string>
+    <string name="game_flame_panel_paused">Deine Flamme ruht bis %1$s.</string>
+    <string name="game_flame_panel_paused_soon">Deine Flamme ruht ab morgen, bis %1$s.</string>
     <string name="game_flame_panel_relight">Flamme neu entzünden · %1$s</string>
     <string name="game_flame_panel_relight_closed">Diese Flamme kann nicht mehr neu entzündet werden. Eine neue Flamme beginnt mit deiner nächsten Aktion.</string>
     <string name="game_flame_panel_relight_intro">Deine Flamme ist erloschen: entzünde sie jetzt neu, sie macht dort weiter, wo sie aufgehört hat.</string>

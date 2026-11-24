@@ -571,7 +571,10 @@
     <string name="game_error_duo_not_friends">L’alliance se fait entre amis acceptés.</string>
     <string name="game_error_duo_transition_refused">Ce geste n’a pas de sens pour cette alliance.</string>
     <string name="game_error_flame_goal_not_allowed">Cet objectif de Flamme ne se choisit pas aujourd’hui.</string>
+    <string name="game_error_flame_pause_already_paused">Ta Flamme est déjà en veille.</string>
+    <string name="game_error_flame_pause_no_flame">Il faut une Flamme allumée pour la mettre en veille.</string>
     <string name="game_error_flame_pause_not_allowed">La Flamme ne peut pas se mettre en veille maintenant.</string>
+    <string name="game_error_flame_pause_quarterly_limit">Ta Flamme a déjà eu sa veille ce trimestre.</string>
     <string name="game_error_freeze_at_maximum">Deux Veilleuses gardent déjà ta Flamme : c’est le plus possible.</string>
     <string name="game_error_generic">Ça n’a pas abouti — vérifie ta connexion et réessaie.</string>
     <string name="game_error_insufficient_meeshes">Il te faut une Meesh de plus pour ça.</string>
@@ -643,6 +646,11 @@
     <string name="game_flame_panel_effort_relight_tomorrow">Encore %1$s d’ici demain soir et ta Flamme de %2$s revient, sans payer.</string>
     <string name="game_flame_panel_freeze_buy">Prendre une Veilleuse · %1$s</string>
     <string name="game_flame_panel_freezes">Veilleuses : %1$s / %2$s</string>
+    <string name="game_flame_panel_pause">Mettre en veille · %1$s</string>
+    <string name="game_flame_panel_pause_days">Durée de la veille</string>
+    <string name="game_flame_panel_pause_intro">Une pause ? Ta Flamme t’attend jusqu’à %1$s, une fois par trimestre.</string>
+    <string name="game_flame_panel_paused">Ta Flamme est en veille jusqu’au %1$s.</string>
+    <string name="game_flame_panel_paused_soon">Ta Flamme se met en veille demain, jusqu’au %1$s.</string>
     <string name="game_flame_panel_relight">Rallumer la Flamme · %1$s</string>
     <string name="game_flame_panel_relight_closed">Cette Flamme ne peut plus être rallumée. Une nouvelle Flamme commence dès ton prochain geste.</string>
     <string name="game_flame_panel_relight_intro">Ta Flamme s’est éteinte : rallume-la maintenant, elle repart là où elle s’était arrêtée.</string>

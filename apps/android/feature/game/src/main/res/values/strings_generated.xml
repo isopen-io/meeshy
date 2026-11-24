@@ -571,7 +571,10 @@
     <string name="game_error_duo_not_friends">An alliance is formed between accepted friends.</string>
     <string name="game_error_duo_transition_refused">This move makes no sense for this alliance.</string>
     <string name="game_error_flame_goal_not_allowed">This Flame goal can’t be chosen today.</string>
+    <string name="game_error_flame_pause_already_paused">Your Flame is already resting.</string>
+    <string name="game_error_flame_pause_no_flame">Your Flame needs to be lit before it can rest.</string>
     <string name="game_error_flame_pause_not_allowed">The Flame cannot rest right now.</string>
+    <string name="game_error_flame_pause_quarterly_limit">Your Flame has already rested this quarter.</string>
     <string name="game_error_freeze_at_maximum">Two Vigils already guard your Flame: that’s the most you can have.</string>
     <string name="game_error_generic">That did not go through — check your connection and try again.</string>
     <string name="game_error_insufficient_meeshes">You need one more Meesh for that.</string>
@@ -643,6 +646,11 @@
     <string name="game_flame_panel_effort_relight_tomorrow">Just %1$s more by tomorrow night and your Flame comes back with its %2$s, without paying.</string>
     <string name="game_flame_panel_freeze_buy">Take a Vigil · %1$s</string>
     <string name="game_flame_panel_freezes">Vigils: %1$s / %2$s</string>
+    <string name="game_flame_panel_pause">Let it rest · %1$s</string>
+    <string name="game_flame_panel_pause_days">Rest length</string>
+    <string name="game_flame_panel_pause_intro">Need a break? Your Flame waits up to %1$s, once a quarter.</string>
+    <string name="game_flame_panel_paused">Your Flame is resting until %1$s.</string>
+    <string name="game_flame_panel_paused_soon">Your Flame starts resting tomorrow, until %1$s.</string>
     <string name="game_flame_panel_relight">Relight the Flame · %1$s</string>
     <string name="game_flame_panel_relight_closed">This Flame can no longer be relit. A new Flame starts with your next action.</string>
     <string name="game_flame_panel_relight_intro">Your Flame went out: relight it now, it picks up where it stopped.</string>

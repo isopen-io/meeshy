@@ -571,7 +571,10 @@
     <string name="game_error_duo_not_friends">التحالف يُعقد بين الأصدقاء المقبولين.</string>
     <string name="game_error_duo_transition_refused">هذا الإجراء لا معنى له في هذا التحالف.</string>
     <string name="game_error_flame_goal_not_allowed">لا يمكن اختيار هدف اللهب هذا اليوم.</string>
+    <string name="game_error_flame_pause_already_paused">لهبك يستريح بالفعل.</string>
+    <string name="game_error_flame_pause_no_flame">يجب أن يكون لهبك مشتعلًا ليستريح.</string>
     <string name="game_error_flame_pause_not_allowed">لا يمكن أن يستريح اللهب الآن.</string>
+    <string name="game_error_flame_pause_quarterly_limit">استراح لهبك بالفعل خلال هذه الأشهر الثلاثة.</string>
     <string name="game_error_freeze_at_maximum">قنديلان يحرسان لهبك بالفعل: هذا أقصى ما يمكن.</string>
     <string name="game_error_generic">لم تكتمل العملية — تحقّق من اتصالك وأعد المحاولة.</string>
     <string name="game_error_insufficient_meeshes">تحتاج إلى Meesh إضافية لذلك.</string>
@@ -643,6 +646,11 @@
     <string name="game_flame_panel_effort_relight_tomorrow">بقي %1$s حتى مساء الغد ليعود لهبك (%2$s) دون أن تدفع.</string>
     <string name="game_flame_panel_freeze_buy">خذ قنديلًا · %1$s</string>
     <string name="game_flame_panel_freezes">القناديل: ⁦%1$s / %2$s⁩</string>
+    <string name="game_flame_panel_pause">دعه يستريح · %1$s</string>
+    <string name="game_flame_panel_pause_days">مدة الاستراحة</string>
+    <string name="game_flame_panel_pause_intro">استراحة؟ ينتظرك لهبك حتى %1$s، مرة واحدة كل ثلاثة أشهر.</string>
+    <string name="game_flame_panel_paused">يستريح لهبك حتى %1$s.</string>
+    <string name="game_flame_panel_paused_soon">يبدأ لهبك استراحته غدًا، حتى %1$s.</string>
     <string name="game_flame_panel_relight">أعد إشعال اللهب · %1$s</string>
     <string name="game_flame_panel_relight_closed">لا يمكن إعادة إشعال هذا اللهب بعد الآن. يبدأ لهب جديد مع إجرائك التالي.</string>
     <string name="game_flame_panel_relight_intro">انطفأ لهبك: أعد إشعاله الآن، فيستأنف من حيث توقّف.</string>

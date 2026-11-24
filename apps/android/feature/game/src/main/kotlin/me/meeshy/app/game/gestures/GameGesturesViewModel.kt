@@ -20,6 +20,10 @@ import me.meeshy.sdk.engagement.EngagementProgressRepository
 import me.meeshy.sdk.game.GameGestureRepository
 import me.meeshy.sdk.game.GameWriteOutcome
 import me.meeshy.sdk.model.game.DailyChest
+import me.meeshy.sdk.model.game.FlamePauseDecision
+import me.meeshy.sdk.model.game.GameFlame
+import me.meeshy.sdk.model.game.GameFlamePause
+import me.meeshy.sdk.model.game.GameFlamePauseLaw
 import me.meeshy.sdk.model.game.GameIntentIds
 import me.meeshy.sdk.model.game.GameMintPreview
 import me.meeshy.sdk.model.game.MeeshEdition
@@ -32,13 +36,13 @@ import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.session.SessionRepository
 
 /** Les gestes du jeu qui touchent un solde. Un seul vol à la fois PAR geste : un double appui n'envoie qu'une requête. */
-enum class GameGesture { Reroll, Chest, Freeze, Relight, Mint, Claim, Seal, Prestige }
+enum class GameGesture { Reroll, Chest, Freeze, Relight, Pause, Mint, Claim, Seal, Prestige }
 
 /**
  * Le refus du DERNIER essai d'un geste. Jamais un code affiché : l'écran le met en phrase ([offline] ⇒ rien n'est
  * parti, [code] ⇒ la passerelle a répondu).
  */
-data class GameGestureFailure(val offline: Boolean, val code: String?)
+data class GameGestureFailure(val offline: Boolean, val code: String?, val reason: String? = null)
 
 /** Ce que la passerelle a RENDU aux derniers gestes, tel quel. */
 private data class Results(
@@ -48,6 +52,7 @@ private data class Results(
     val claimingStep: Int?,
     val prestigePassed: Int?,
     val accountTimezone: String?,
+    val announcedPause: GameFlamePause?,
 )
 
 /** La pièce que la passerelle vient de frapper — le numéro et l'édition sont CEUX DE SA RÉPONSE. [key] rejoue la scène. */
@@ -61,6 +66,13 @@ data class GameGesturesUiState(
     val chestOpening: Boolean = false,
     val buyingFreeze: Boolean = false,
     val relighting: Boolean = false,
+    /** La veille de la Flamme annoncée, en vol (#20511). */
+    val pausing: Boolean = false,
+    /**
+     * La veille que la carte dit en attendant que le bloc relu la serve (#20511) : celle que la loi prévoit dès l'appui
+     * (retour optimiste), puis celle que la passerelle a rendue. Un refus la retire. `null` sinon.
+     */
+    val announcedPause: GameFlamePause? = null,
     val minting: Boolean = false,
     /** La halte dont la récompense est attendue. */
     val claimingStep: Int? = null,
@@ -129,23 +141,32 @@ class GameGesturesViewModel internal constructor(
     private val settlementFlow = MutableStateFlow<GameMintSettlement?>(null)
     private val claimingStepFlow = MutableStateFlow<Int?>(null)
     private val prestigePassedFlow = MutableStateFlow<Int?>(null)
+    private val announcedPauseFlow = MutableStateFlow<GameFlamePause?>(null)
 
     val state: StateFlow<GameGesturesUiState> = combine(
         network.isOnline,
         inFlight,
         rerollingMission,
         failures,
-        combine(chestReward, celebrationFlow, settlementFlow, claimingStepFlow, combine(prestigePassedFlow, accountTimezone, ::Pair)) {
-                reward, celebration, settlement, claiming, (passed, timezone) ->
-            Results(reward, celebration, settlement, claiming, passed, timezone)
+        combine(
+            chestReward,
+            celebrationFlow,
+            settlementFlow,
+            claimingStepFlow,
+            combine(prestigePassedFlow, accountTimezone, announcedPauseFlow, ::Triple),
+        ) { reward, celebration, settlement, claiming, (passed, timezone, announced) ->
+            Results(reward, celebration, settlement, claiming, passed, timezone, announced)
         },
-    ) { online, busy, rerolling, failed, (reward, celebration, settlement, claiming, passed, timezone) ->
+    ) { online, busy, rerolling, failed, results ->
+        val (reward, celebration, settlement, claiming, passed, timezone) = results
         GameGesturesUiState(
             online = online,
             rerollingMissionId = rerolling,
             chestOpening = GameGesture.Chest in busy,
             buyingFreeze = GameGesture.Freeze in busy,
             relighting = GameGesture.Relight in busy,
+            pausing = GameGesture.Pause in busy,
+            announcedPause = results.announcedPause,
             minting = GameGesture.Mint in busy,
             claimingStep = claiming,
             buyingSeal = GameGesture.Seal in busy,
@@ -181,6 +202,24 @@ class GameGesturesViewModel internal constructor(
     /** Rallumer la Flamme éteinte : 3 Meeshes, 48 h, une fois par mois. La série rendue est celle de la passerelle. */
     fun relight() {
         run(GameGesture.Relight, "relight") { id -> gestures.relightFlame(id) }
+    }
+
+    /**
+     * Mettre la Flamme en veille [days] jours, à partir de demain (#20511) — rien n'est payé. La carte dit la veille dès
+     * l'appui, par la MÊME loi que la passerelle ([GameFlamePauseLaw.canPause], depuis le jour du Jeu [today]) ; la
+     * réponse la remplace par celle que la passerelle a écrite, un refus la retire et dit sa raison. Une durée est une
+     * intention : la rejouer après une coupure garde son identifiant, une autre durée en prend un neuf.
+     */
+    fun pauseFlame(flame: GameFlame, today: String, days: Int) {
+        val before = announcedPauseFlow.value
+        val foreseen = (GameFlamePauseLaw.canPause(today, days, flame.status, flame.pause) as? FlamePauseDecision.Allowed)?.pause
+        run(
+            GameGesture.Pause,
+            "pause:$days",
+            onStart = { if (foreseen != null) announcedPauseFlow.value = foreseen },
+            onDone = { response -> announcedPauseFlow.value = response.pause },
+            onRefused = { announcedPauseFlow.value = before },
+        ) { id -> gestures.pauseFlame(id, days) }
     }
 
     /**
@@ -261,7 +300,7 @@ class GameGesturesViewModel internal constructor(
                     }
                     is GameWriteOutcome.Refused -> {
                         if (GameRefusalLaw.releasesId(outcome.code)) ids.spent(intention)
-                        val failure = GameGestureFailure(outcome.offline, outcome.code)
+                        val failure = GameGestureFailure(outcome.offline, outcome.code, outcome.reason)
                         failures.update { it + (gesture to failure) }
                         onRefused(failure)
                         if (GameRefusalLaw.refreshesAfter(outcome.code) && !outcome.offline) refreshProgress()
