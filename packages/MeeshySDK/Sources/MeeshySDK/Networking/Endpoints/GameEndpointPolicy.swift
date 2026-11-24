@@ -33,7 +33,7 @@ public extension MeEndpoint {
             // Le relevé de batterie (#14147) : `BATTERY_RATE_LIMITED` attend le prochain changement, il ne se rejoue pas.
             return .structured
         case .gameChestClaim, .gameDuoByDuoIdAbandon, .gameDuoByDuoIdAccept, .gameDuoInvite,
-             .gameFlameFreezes, .gameFlamePause, .gameFlameRelight, .gameGuideSeen, .gameLeagueConsent,
+             .gameFlameFreezes, .gameFlameGoal, .gameFlamePause, .gameFlameRelight, .gameGuideSeen, .gameLeagueConsent,
              .gameLeagueFriends, .gameLeaguePseudonym, .gameLeagueWeek,
              .gameMissionsByMissionIdReroll, .gamePrestige, .gamePrivacy, .gameSeasonSeal,
              .gameSeasonStepsByStepClaim, .gameShowcaseOrder, .gameVisibility:

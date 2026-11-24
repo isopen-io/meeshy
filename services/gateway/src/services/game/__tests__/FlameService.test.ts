@@ -495,3 +495,110 @@ describe('la Flamme attend pendant la veille', () => {
     expect(db.user.rows[0]).toMatchObject({ currentStreakDays: 13, flamePauseFrom: '2026-10-06', flamePauseUntil: '2026-10-08' });
   });
 });
+
+describe('FlameService.chooseGoal — l’objectif de Flamme choisi (#20520, #17379)', () => {
+  const firstDay = (db: FakeGameDb, fields: Record<string, unknown> = {}) =>
+    seedUser(db, { currentStreakDays: 1, longestStreakDays: 1, lastStreakDate: new Date('2026-10-05T00:00:00Z'), timezone: 'UTC', ...fields });
+
+  it('au premier jour d’une Flamme, retient l’objectif choisi et le sert', async () => {
+    const db = fakeGameDb();
+    firstDay(db);
+
+    const result = await new FlameService(db.prisma).chooseGoal({ userId: USER, requestId: 'goal-0001', target: 14, now: NOW });
+
+    expect(result).toEqual({ status: 'chosen', goal: { offer: [], current: { target: 14, remaining: 13, reached: false, next: null } } });
+    expect(db.user.rows[0]).toMatchObject({ flameGoalTarget: 14, flameGoalChosenAtStreak: 1, flameGoalBrokenOn: null });
+  });
+
+  it('rejouer le même choix rend l’objectif déjà retenu, sans seconde écriture', async () => {
+    const db = fakeGameDb();
+    firstDay(db);
+    const flame = new FlameService(db.prisma);
+    await flame.chooseGoal({ userId: USER, requestId: 'goal-0001', target: 7, now: NOW });
+
+    expect(await flame.chooseGoal({ userId: USER, requestId: 'goal-0001', target: 7, now: NOW })).toMatchObject({ status: 'already-chosen' });
+  });
+
+  it('refuse un objectif qui ne se propose pas aujourd’hui, avec sa raison', async () => {
+    const db = fakeGameDb();
+    firstDay(db, { currentStreakDays: 3, longestStreakDays: 3 });
+
+    const refused = await refusal(() => new FlameService(db.prisma).chooseGoal({ userId: USER, requestId: 'goal-0002', target: 7, now: NOW }));
+
+    expect(refused.code).toBe('FLAME_GOAL_NOT_ALLOWED');
+    expect(refused.details).toEqual({ reason: 'not-offered' });
+    expect(db.user.rows[0]).not.toHaveProperty('flameGoalTarget');
+  });
+
+  it('refuse une Flamme éteinte', async () => {
+    const db = fakeGameDb();
+    firstDay(db, { currentStreakDays: 6, lastStreakDate: new Date('2026-10-01T00:00:00Z') });
+
+    const refused = await refusal(() => new FlameService(db.prisma).chooseGoal({ userId: USER, requestId: 'goal-0003', target: 7, now: NOW }));
+
+    expect(refused.details).toEqual({ reason: 'no-flame' });
+  });
+
+  it('l’objectif atteint propose la marche suivante, choisie à la hauteur du jour', async () => {
+    const db = fakeGameDb();
+    firstDay(db, { currentStreakDays: 14, longestStreakDays: 14, flameGoalTarget: 14, flameGoalChosenAtStreak: 1 });
+
+    const result = await new FlameService(db.prisma).chooseGoal({ userId: USER, requestId: 'goal-0004', target: 30, now: NOW });
+
+    expect(result.goal.current).toEqual({ target: 30, remaining: 16, reached: false, next: null });
+    expect(db.user.rows[0]).toMatchObject({ flameGoalTarget: 30, flameGoalChosenAtStreak: 14 });
+  });
+});
+
+describe('l’objectif de Flamme suit la Flamme (#20520)', () => {
+  it('se lit sur le compte, absent sur un compte antérieur', () => {
+    expect(flameFactsOf({ flameGoalTarget: 7, flameGoalChosenAtStreak: 1 }, NOW).goal).toEqual({ target: 7, chosenAtStreak: 1, brokenOn: null });
+    expect(flameFactsOf({}, NOW).goal).toBeNull();
+  });
+
+  it('le geste qui casse la Flamme marque l’objectif', () => {
+    const plan = planStreak(
+      flameFactsOf({ currentStreakDays: 5, longestStreakDays: 5, lastStreakDate: new Date('2026-10-01T00:00:00Z'), timezone: 'UTC', flameGoalTarget: 7, flameGoalChosenAtStreak: 1 }, NOW),
+    );
+
+    expect(plan.outcome).toBe('broken');
+    expect(plan.data).toMatchObject({ flameGoalBrokenOn: '2026-10-05' });
+  });
+
+  it('un geste qui continue la Flamme ne touche pas l’objectif', () => {
+    const plan = planStreak(
+      flameFactsOf({ currentStreakDays: 5, longestStreakDays: 5, lastStreakDate: new Date('2026-10-04T00:00:00Z'), timezone: 'UTC', flameGoalTarget: 7, flameGoalChosenAtStreak: 1 }, NOW),
+    );
+
+    expect(plan.data).not.toHaveProperty('flameGoalBrokenOn');
+  });
+
+  it('le rallumage payé rend l’objectif', async () => {
+    const db = fakeGameDb();
+    seedUser(db, {
+      currentStreakDays: 1,
+      longestStreakDays: 12,
+      lastStreakDate: new Date('2026-10-05T00:00:00Z'),
+      brokenStreakDays: 12,
+      brokenStreakLastDay: '2026-10-03',
+      flameGoalTarget: 30,
+      flameGoalChosenAtStreak: 3,
+      flameGoalBrokenOn: '2026-10-05',
+    });
+    grant(db, 4);
+
+    await new FlameService(db.prisma).relight({ userId: USER, requestId: 'rallume-goal', now: NOW });
+
+    expect(db.user.rows[0]).toMatchObject({ flameGoalTarget: 30, flameGoalBrokenOn: null });
+  });
+
+  it('le rallumage sans objectif n’en écrit aucun', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { currentStreakDays: 12, longestStreakDays: 12, lastStreakDate: new Date('2026-10-02T00:00:00Z') });
+    grant(db, 4);
+
+    await new FlameService(db.prisma).relight({ userId: USER, requestId: 'rallume-nogoal', now: NOW });
+
+    expect(db.user.rows[0]).not.toHaveProperty('flameGoalBrokenOn');
+  });
+});

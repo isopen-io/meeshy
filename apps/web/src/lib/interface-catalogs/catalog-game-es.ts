@@ -96,6 +96,7 @@ const es = {
   'game.error.freeze_at_maximum': 'Dos Velas ya guardan tu Llama: no caben más.',
   'game.error.relight_not_allowed': 'La Llama no se puede volver a encender ahora.',
   'game.error.flame_pause_not_allowed': 'La Llama no puede descansar ahora.',
+  'game.error.flame_goal_not_allowed': 'Este objetivo de Llama no se puede elegir hoy.',
   'game.error.mission_not_found': 'Este acto ya no existe: la pantalla se actualiza.',
   'game.error.mission_reroll_exhausted': 'Ya has cambiado un acto hoy.',
   'game.error.mission_reroll_unavailable': 'Este acto no se puede cambiar.',

@@ -13,6 +13,7 @@ import {
   chestClaimResponseSchema,
   flameFreezeResponseSchema,
   flamePauseResponseSchema,
+  flameGoalResponseSchema,
   flameRelightResponseSchema,
   guideSeenResponseSchema,
   missionRerollResponseSchema,
@@ -201,6 +202,49 @@ describe('POST /me/game/flame/pause (#17372, #20507)', () => {
 
     expect(responses.map((res) => res.statusCode)).toEqual([400, 400, 400]);
     expect(db.user.rows[0]).not.toHaveProperty('flamePauseFrom');
+    await app.close();
+  });
+});
+
+describe('POST /me/game/flame/goal (#20520, #17379)', () => {
+  const firstDay = (db: FakeGameDb, fields: Record<string, unknown> = {}) =>
+    seedUser(db, { currentStreakDays: 1, longestStreakDays: 1, lastStreakDate: new Date(`${todayKey()}T00:00:00Z`), timezone: 'UTC', ...fields });
+
+  it('choisit l’objectif au premier jour : 200, la forme du contrat, écrit sur le compte', async () => {
+    const db = fakeGameDb();
+    firstDay(db);
+    const app = await buildApp(db);
+
+    const res = await post(app, GAME_ROUTES.flameGoal, { requestId: 'objectif-route-01', target: 7 });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toEqual({ status: 'chosen', goal: { offer: [], current: { target: 7, remaining: 6, reached: false, next: null } } });
+    expect(flameGoalResponseSchema.safeParse(res.json().data).success).toBe(true);
+    expect(db.user.rows[0]).toMatchObject({ flameGoalTarget: 7, flameGoalChosenAtStreak: 1 });
+    await app.close();
+  });
+
+  it('409 FLAME_GOAL_NOT_ALLOWED avec le motif passé le premier jour', async () => {
+    const db = fakeGameDb();
+    firstDay(db, { currentStreakDays: 4, longestStreakDays: 4 });
+    const app = await buildApp(db);
+
+    const res = await post(app, GAME_ROUTES.flameGoal, { requestId: 'objectif-route-02', target: 14 });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: 'FLAME_GOAL_NOT_ALLOWED', reason: 'not-offered' });
+    await app.close();
+  });
+
+  it('400 hors de l’échelle, sans rien écrire', async () => {
+    const db = fakeGameDb();
+    firstDay(db);
+    const app = await buildApp(db);
+
+    const responses = await Promise.all([0, 8, 7.5].map((target) => post(app, GAME_ROUTES.flameGoal, { requestId: 'objectif-route-03', target })));
+
+    expect(responses.map((res) => res.statusCode)).toEqual([400, 400, 400]);
+    expect(db.user.rows[0]).not.toHaveProperty('flameGoalTarget');
     await app.close();
   });
 });

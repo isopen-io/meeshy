@@ -537,6 +537,8 @@ enum GameCopy {
             String(localized: "game.error.relight_not_allowed", defaultValue: "La Flamme ne peut pas être rallumée maintenant.", bundle: .main)
         case .flamePauseNotAllowed:
             String(localized: "game.error.flame_pause_not_allowed", defaultValue: "La Flamme ne peut pas se mettre en veille maintenant.", bundle: .main)
+        case .flameGoalNotAllowed:
+            String(localized: "game.error.flame_goal_not_allowed", defaultValue: "Cet objectif de Flamme ne se choisit pas aujourd’hui.", bundle: .main)
         case .missionNotFound:
             String(localized: "game.error.mission_not_found", defaultValue: "Cet acte n’existe plus : l’écran se remet à jour.", bundle: .main)
         case .missionRerollExhausted:

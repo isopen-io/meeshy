@@ -311,6 +311,7 @@ type ErrorKey =
   | 'game.error.freeze_at_maximum'
   | 'game.error.relight_not_allowed'
   | 'game.error.flame_pause_not_allowed'
+  | 'game.error.flame_goal_not_allowed'
   | 'game.error.mission_not_found'
   | 'game.error.mission_reroll_exhausted'
   | 'game.error.mission_reroll_unavailable'
@@ -345,6 +346,7 @@ const ERRORS: Readonly<Record<string, ErrorKey>> = {
   [GAME_ERROR_CODES.freezeAtMaximum]: 'game.error.freeze_at_maximum',
   [GAME_ERROR_CODES.relightNotAllowed]: 'game.error.relight_not_allowed',
   [GAME_ERROR_CODES.flamePauseNotAllowed]: 'game.error.flame_pause_not_allowed',
+  [GAME_ERROR_CODES.flameGoalNotAllowed]: 'game.error.flame_goal_not_allowed',
   [GAME_ERROR_CODES.missionNotFound]: 'game.error.mission_not_found',
   [GAME_ERROR_CODES.missionRerollExhausted]: 'game.error.mission_reroll_exhausted',
   [GAME_ERROR_CODES.missionRerollUnavailable]: 'game.error.mission_reroll_unavailable',

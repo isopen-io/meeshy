@@ -86,8 +86,8 @@ describe('les raretés des succès dans le bloc game', () => {
 });
 
 describe('la table d\'intégration', () => {
-  it('est À PART : GAME_ROUTES garde ses 22 entrées, comparées par les miroirs hors TypeScript', () => {
-    expect(Object.keys(GAME_ROUTES)).toHaveLength(22);
+  it('est À PART : GAME_ROUTES garde ses 23 entrées, comparées par les miroirs hors TypeScript', () => {
+    expect(Object.keys(GAME_ROUTES)).toHaveLength(23);
     expect(Object.keys(GAME_INTEGRATION_ROUTES)).toEqual(['settings', 'userGame']);
     expect(Object.keys(GAME_ROUTES)).not.toContain('settings');
     expect(Object.keys(GAME_ROUTES)).not.toContain('userGame');

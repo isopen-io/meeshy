@@ -134,6 +134,7 @@ public enum class GameTextKey(public val androidName: String, public val form: G
     ErrorFreezeAtMaximum("game_error_freeze_at_maximum", GameTextForm.Plain),
     ErrorRelightNotAllowed("game_error_relight_not_allowed", GameTextForm.Plain),
     ErrorFlamePauseNotAllowed("game_error_flame_pause_not_allowed", GameTextForm.Plain),
+    ErrorFlameGoalNotAllowed("game_error_flame_goal_not_allowed", GameTextForm.Plain),
     ErrorMissionNotFound("game_error_mission_not_found", GameTextForm.Plain),
     ErrorMissionRerollExhausted("game_error_mission_reroll_exhausted", GameTextForm.Plain),
     ErrorMissionRerollUnavailable("game_error_mission_reroll_unavailable", GameTextForm.Plain),

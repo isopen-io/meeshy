@@ -570,6 +570,7 @@
     <string name="game_error_duo_not_found">Cette alliance n’existe plus : l’écran se remet à jour.</string>
     <string name="game_error_duo_not_friends">L’alliance se fait entre amis acceptés.</string>
     <string name="game_error_duo_transition_refused">Ce geste n’a pas de sens pour cette alliance.</string>
+    <string name="game_error_flame_goal_not_allowed">Cet objectif de Flamme ne se choisit pas aujourd’hui.</string>
     <string name="game_error_flame_pause_already_paused">Ta Flamme est déjà en veille.</string>
     <string name="game_error_flame_pause_no_flame">Il faut une Flamme allumée pour la mettre en veille.</string>
     <string name="game_error_flame_pause_not_allowed">La Flamme ne peut pas se mettre en veille maintenant.</string>

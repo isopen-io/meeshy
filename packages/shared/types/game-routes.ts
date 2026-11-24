@@ -19,6 +19,8 @@ export const GAME_ROUTES = {
   flameRelight: '/me/game/flame/relight',
   /** Annoncer une veille de la Flamme, de 1 à 7 jours à partir de demain, une fois par trimestre (#17372). */
   flamePause: '/me/game/flame/pause',
+  /** Choisir l'objectif de Flamme : 7, 14 ou 30 jours au premier jour, la marche suivante une fois atteint (#20520). */
+  flameGoal: '/me/game/flame/goal',
   /** Marquer des moments du guide comme vus. */
   guideSeen: '/me/game/guide/seen',
 
@@ -130,6 +132,8 @@ export const GAME_ERROR_CODES = {
   relightNotAllowed: 'RELIGHT_NOT_ALLOWED',
   /** La veille refusée, avec sa raison (`details.reason`) : `no-flame`, `already-paused`, `quarterly-limit`. */
   flamePauseNotAllowed: 'FLAME_PAUSE_NOT_ALLOWED',
+  /** Le choix d'objectif refusé, avec sa raison (`details.reason`) : `no-flame`, `not-offered`. */
+  flameGoalNotAllowed: 'FLAME_GOAL_NOT_ALLOWED',
   missionNotFound: 'MISSION_NOT_FOUND',
   missionRerollExhausted: 'MISSION_REROLL_EXHAUSTED',
   missionRerollUnavailable: 'MISSION_REROLL_UNAVAILABLE',

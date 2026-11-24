@@ -96,6 +96,7 @@ const pt = {
   'game.error.freeze_at_maximum': 'Duas Lamparinas já cuidam da sua Chama: é o máximo possível.',
   'game.error.relight_not_allowed': 'A Chama não pode ser reacendida agora.',
   'game.error.flame_pause_not_allowed': 'A Chama não pode descansar agora.',
+  'game.error.flame_goal_not_allowed': 'Este objetivo de Chama não pode ser escolhido hoje.',
   'game.error.mission_not_found': 'Este ato não existe mais: a tela está se atualizando.',
   'game.error.mission_reroll_exhausted': 'Você já trocou um ato hoje.',
   'game.error.mission_reroll_unavailable': 'Este ato não pode ser trocado.',

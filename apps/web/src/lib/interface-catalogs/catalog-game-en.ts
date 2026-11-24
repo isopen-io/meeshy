@@ -96,6 +96,7 @@ const en = {
   'game.error.freeze_at_maximum': 'Two Vigils already guard your Flame: that’s the most you can have.',
   'game.error.relight_not_allowed': 'The Flame cannot be relit right now.',
   'game.error.flame_pause_not_allowed': 'The Flame cannot rest right now.',
+  'game.error.flame_goal_not_allowed': 'This Flame goal can’t be chosen today.',
   'game.error.mission_not_found': 'This act no longer exists: the screen is refreshing.',
   'game.error.mission_reroll_exhausted': 'You already changed an act today.',
   'game.error.mission_reroll_unavailable': 'This act can’t be changed.',

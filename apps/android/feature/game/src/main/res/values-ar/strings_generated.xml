@@ -570,6 +570,7 @@
     <string name="game_error_duo_not_found">هذا التحالف لم يعد موجودًا: تتحدّث الشاشة.</string>
     <string name="game_error_duo_not_friends">التحالف يُعقد بين الأصدقاء المقبولين.</string>
     <string name="game_error_duo_transition_refused">هذا الإجراء لا معنى له في هذا التحالف.</string>
+    <string name="game_error_flame_goal_not_allowed">لا يمكن اختيار هدف اللهب هذا اليوم.</string>
     <string name="game_error_flame_pause_already_paused">لهبك يستريح بالفعل.</string>
     <string name="game_error_flame_pause_no_flame">يجب أن يكون لهبك مشتعلًا ليستريح.</string>
     <string name="game_error_flame_pause_not_allowed">لا يمكن أن يستريح اللهب الآن.</string>

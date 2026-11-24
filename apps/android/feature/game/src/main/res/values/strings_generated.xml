@@ -570,6 +570,7 @@
     <string name="game_error_duo_not_found">This alliance no longer exists: the screen is refreshing.</string>
     <string name="game_error_duo_not_friends">An alliance is formed between accepted friends.</string>
     <string name="game_error_duo_transition_refused">This move makes no sense for this alliance.</string>
+    <string name="game_error_flame_goal_not_allowed">This Flame goal can’t be chosen today.</string>
     <string name="game_error_flame_pause_already_paused">Your Flame is already resting.</string>
     <string name="game_error_flame_pause_no_flame">Your Flame needs to be lit before it can rest.</string>
     <string name="game_error_flame_pause_not_allowed">The Flame cannot rest right now.</string>

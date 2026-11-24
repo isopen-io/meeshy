@@ -50,6 +50,7 @@ struct GameRoutesTests {
             ("flameFreezes", MeEndpoint.gameFlameFreezes, [:]),
             ("flameRelight", MeEndpoint.gameFlameRelight, [:]),
             ("flamePause", MeEndpoint.gameFlamePause, [:]),
+            ("flameGoal", MeEndpoint.gameFlameGoal, [:]),
             ("guideSeen", MeEndpoint.gameGuideSeen, [:]),
             ("leagueConsent", MeEndpoint.gameLeagueConsent, [:]),
             ("leaguePseudonym", MeEndpoint.gameLeaguePseudonym, [:]),
@@ -72,11 +73,11 @@ struct GameRoutesTests {
         params.reduce(template) { $0.replacingOccurrences(of: $1.key, with: $1.value) }
     }
 
-    @Test("le catalogue généré sert, route pour route, les vingt-deux entrées de GAME_ROUTES")
+    @Test("le catalogue généré sert, route pour route, les vingt-trois entrées de GAME_ROUTES")
     func theCatalogServesEveryRouteOfTheSharedTable() throws {
         let shared = try Self.quotedValues(of: "GAME_ROUTES", in: Self.source())
         let routes = Self.catalogRoutes()
-        #expect(shared.count == 22)
+        #expect(shared.count == 23)
         #expect(Set(routes.map(\.key)) == Set(shared.keys), "une route ajoutée côté TS sans adresse du catalogue rougit ici")
         for route in routes {
             let template = try #require(shared[route.key], "GAME_ROUTES ne porte pas \(route.key)")
@@ -84,7 +85,7 @@ struct GameRoutesTests {
         }
     }
 
-    @Test("les deux routes de lecture d'intégration sont celles de GAME_INTEGRATION_ROUTES, et GAME_ROUTES garde ses 22 entrées")
+    @Test("les deux routes de lecture d'intégration sont celles de GAME_INTEGRATION_ROUTES, et GAME_ROUTES garde ses 23 entrées")
     func integrationRoutesMatchTheirOwnSharedTable() throws {
         let shared = try Self.quotedValues(of: "GAME_INTEGRATION_ROUTES", in: Self.source())
         #expect(shared.count == 2)
@@ -92,7 +93,7 @@ struct GameRoutesTests {
         #expect(Self.publicPath(MeEndpoint.gamePrivacy) == shared["settings"])
         #expect(Self.publicPath(UsersEndpoint.gameOf(userId: Self.mid))
             == shared["userGame"].map { Self.filled($0, [":userId": Self.mid]) })
-        #expect(try Self.quotedValues(of: "GAME_ROUTES", in: Self.source()).count == 22)
+        #expect(try Self.quotedValues(of: "GAME_ROUTES", in: Self.source()).count == 23)
     }
 
     @Test("le jeu d'un autre : l'identifiant est encodé dans son segment, et l'adresse lit sans écrire")
@@ -130,7 +131,7 @@ struct GameRoutesTests {
         let game: [any MeeshyEndpoint] = Self.catalogRoutes()
             .filter { $0.key != "engagement" && $0.key != "mint" }
             .map(\.endpoint) + [UsersEndpoint.gameOf(userId: "u")]
-        #expect(game.count == 21)
+        #expect(game.count == 22)
         for endpoint in game {
             #expect(endpoint.rejectionPolicy == .structured, "\(endpoint.path)")
         }

@@ -24,6 +24,7 @@ import { TREASURY_TIERS } from '../utils/game/treasury.js';
 import { LEVEL_STEP_KINDS } from '../utils/game/level-steps.js';
 import { FLAME_FORMS } from '../utils/game/flame.js';
 import { FLAME_PAUSE_MAX_DAYS, FLAME_PAUSE_MIN_DAYS } from '../utils/game/flame-pause.js';
+import { FLAME_GOAL_LADDER } from '../utils/game/flame-goal.js';
 import { MISSION_DIFFICULTIES } from '../utils/game/missions.js';
 import { PERSONAL_MISSION_STATES } from '../utils/game/personal-mission.js';
 import type { EngagementProgressPayload } from './engagement.js';
@@ -334,6 +335,30 @@ export const parseFlamePause = (value: unknown): GameFlamePause | null => {
   return parsed.success ? parsed.data : null;
 };
 
+/**
+ * L'objectif de Flamme servi (#20520, #17379) : les jours que le joueur peut viser aujourd'hui (`offer`) et l'objectif
+ * retenu (`current`), en cours ou atteint. Dit par `servedFlameGoal` (`utils/game/flame-goal`).
+ */
+export const servedFlameGoalSchema = z.object({
+  offer: z.array(nonNegativeInt),
+  current: z
+    .object({
+      target: nonNegativeInt,
+      remaining: nonNegativeInt,
+      reached: z.boolean(),
+      next: nonNegativeInt.nullable(),
+    })
+    .nullable(),
+});
+
+export type GameServedFlameGoal = z.infer<typeof servedFlameGoalSchema>;
+
+/** L'objectif lu par un client : `null` devant un serveur antérieur, sans rien à dire, ou une forme illisible. */
+export const parseServedFlameGoal = (value: unknown): GameServedFlameGoal | null => {
+  const parsed = servedFlameGoalSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+};
+
 export const gameFlameSchema = z.object({
   days: nonNegativeInt,
   form: formKeys.nullable(),
@@ -353,6 +378,11 @@ export const gameFlameSchema = z.object({
    * antérieur ou hors de toute veille. Un client antérieur l'ignore ; la Flamme lui paraît allumée pendant la veille.
    */
   pause: flamePauseSchema.optional().catch(undefined),
+  /**
+   * L'objectif de Flamme (#20520) : ce qui se propose et l'objectif retenu. Tolérant : absent devant un serveur
+   * antérieur, ou quand il n'y a rien à dire (aucun choix ouvert, aucun objectif tenu).
+   */
+  goal: servedFlameGoalSchema.optional().catch(undefined),
 });
 
 export const gameBoostsSchema = z.object({
@@ -443,6 +473,15 @@ export const flamePauseResponseSchema = z.object({
   pause: flamePauseSchema,
 });
 
+/** Choisir un objectif de Flamme : une marche de l'échelle (#20520) ; la loi dit laquelle se propose aujourd'hui. */
+export const flameGoalRequestSchema = writeRequest.extend({
+  target: z.number().int().refine((days) => FLAME_GOAL_LADDER.includes(days)),
+});
+export const flameGoalResponseSchema = z.object({
+  status: z.enum(['chosen', 'already-chosen']),
+  goal: servedFlameGoalSchema,
+});
+
 export const guideSeenRequestSchema = writeRequest.extend({
   keys: z.array(z.string().min(1).max(64)).min(1).max(32),
 });
@@ -518,6 +557,7 @@ export type ChestClaimResponse = z.infer<typeof chestClaimResponseSchema>;
 export type FlameFreezeResponse = z.infer<typeof flameFreezeResponseSchema>;
 export type FlameRelightResponse = z.infer<typeof flameRelightResponseSchema>;
 export type FlamePauseResponse = z.infer<typeof flamePauseResponseSchema>;
+export type FlameGoalResponse = z.infer<typeof flameGoalResponseSchema>;
 export type GuideSeenRequest = z.infer<typeof guideSeenRequestSchema>;
 export type GuideSeenResponse = z.infer<typeof guideSeenResponseSchema>;
 export type MeeshMintResponse = z.infer<typeof meeshMintResponseSchema>;

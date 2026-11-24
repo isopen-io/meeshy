@@ -13,7 +13,7 @@ class GameErrorCodeTest {
     @Test
     fun `les valeurs sont exactement celles de GAME_ERROR_CODES du TypeScript`() {
         assertThat(GameErrorCode.entries.map { it.wire }).containsExactlyElementsIn(sharedWireCodes())
-        assertThat(GameErrorCode.entries).hasSize(32)
+        assertThat(GameErrorCode.entries).hasSize(33)
     }
 
     @Test

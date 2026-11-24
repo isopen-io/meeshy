@@ -88,6 +88,9 @@ export const gameDuoInvite = '/api/v1/me/game/duo/invite';
 /** POST /api/v1/me/game/flame/freezes */
 export const gameFlameFreezes = '/api/v1/me/game/flame/freezes';
 
+/** POST /api/v1/me/game/flame/goal */
+export const gameFlameGoal = '/api/v1/me/game/flame/goal';
+
 /** POST /api/v1/me/game/flame/pause */
 export const gameFlamePause = '/api/v1/me/game/flame/pause';
 
