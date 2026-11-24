@@ -415,6 +415,14 @@ const it = {
   'game.flame_panel.pause': 'Lasciala riposare · {days}',
   'game.flame_panel.paused': 'La tua Fiamma riposa fino a {date}.',
   'game.flame_panel.paused_soon': 'La tua Fiamma riposa da domani, fino a {date}.',
+  'game.error.flame_goal.not_offered': 'Questo obiettivo non è proposto oggi.',
+  'game.error.flame_goal.no_flame': 'La tua Fiamma deve essere accesa per scegliere un obiettivo.',
+  'game.flame_panel.goal_intro': 'Un obiettivo per la tua Fiamma? Sceglilo oggi, o lasciala ardere liberamente.',
+  'game.flame_panel.goal_choices': 'Obiettivo della Fiamma',
+  'game.flame_panel.goal_running': 'Obiettivo: {target} di Fiamma. Ne mancano {remaining}.',
+  'game.flame_panel.goal_reached': 'I tuoi antenati salutano la tua Fiamma: {days} mantenuti!',
+  'game.flame_panel.goal_next': 'Punta a {days}',
+  'game.flame_panel.goal_later': 'Più tardi',
 } as const satisfies GameConceptCatalog;
 
 export default it;

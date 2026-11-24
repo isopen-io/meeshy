@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, test } from 'bun:test';
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 
-import { flameGoalLine, flameGoalNextAction, flameGoalRefusal, flameGoalView, readFlameGoal } from './flame-goal-copy';
+import { flameGoalLine, flameGoalSignSeen, flameGoalNextAction, flameGoalRefusal, flameGoalView, readFlameGoal } from './flame-goal-copy';
 import { gameErrorMessage } from './game-copy';
 
 beforeAll(async () => {
@@ -43,6 +43,13 @@ describe('ce que la carte montre de l’objectif (#20521)', () => {
     const reached = { offer: [14], current: { target: 7, remaining: 0, reached: true, next: 14 } };
     expect(flameGoalView(reached, false)).toEqual({ kind: 'reached', target: 7, next: 14 });
     expect(flameGoalView(reached, true)).toBeNull();
+  });
+
+  test('le signe se sait fermé par la clé de l’objectif atteint, et par elle seule', () => {
+    const reached = { offer: [14], current: { target: 7, remaining: 0, reached: true, next: 14 } };
+    expect(flameGoalSignSeen(reached, ['flame-goal-next-7'])).toBe(true);
+    expect(flameGoalSignSeen(reached, ['flame-goal-next-14'])).toBe(false);
+    expect(flameGoalSignSeen(undefined, ['flame-goal-next-7'])).toBe(false);
   });
 
   test('rien à dire : rien ne se montre, pas même un échec', () => {

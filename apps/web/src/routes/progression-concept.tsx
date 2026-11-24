@@ -28,6 +28,7 @@ import { rulesLink } from '@/lib/game/rules-address';
 import { useOptionalRoute, useParams } from '@/lib/router';
 import { gameText } from '@/lib/view/game-copy';
 import { detailOfRef } from '@/lib/view/game-detail';
+import { flameGoalSignSeen } from '@/lib/view/flame-goal-copy';
 import { conceptView, ficheView, isProgressionConcept, shownConcepts, shownProgress, type ConceptView } from '@/lib/view/progression-concepts';
 import { useMinute } from '@/lib/view/use-minute';
 import { useGameActions, type GameActions } from '@/routes/progression-game-actions';
@@ -219,7 +220,11 @@ function gesturesOf(concept: ProgressionConcept, view: EngagementWithGame, host:
           onBuyFreeze={actions.buyFreeze}
           onRelight={actions.relight}
           onPause={actions.pause}
-          errors={{ freeze: actions.errors.freeze, relight: actions.errors.relight, pause: actions.errors.pause }}
+          choosingGoal={actions.pending.goal}
+          goalSignSeen={flameGoalSignSeen(game.flame.goal, game.guideSeen)}
+          onChooseGoal={actions.chooseGoal}
+          onCloseGoalSign={actions.closeGoalSign}
+          errors={{ freeze: actions.errors.freeze, relight: actions.errors.relight, pause: actions.errors.pause, goal: actions.errors.goal }}
         />
       );
     case 'succes':

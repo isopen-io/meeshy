@@ -415,6 +415,14 @@ const de = {
   'game.flame_panel.pause': 'Ruhen lassen · {days}',
   'game.flame_panel.paused': 'Deine Flamme ruht bis {date}.',
   'game.flame_panel.paused_soon': 'Deine Flamme ruht ab morgen, bis {date}.',
+  'game.error.flame_goal.not_offered': 'Dieses Ziel steht heute nicht zur Wahl.',
+  'game.error.flame_goal.no_flame': 'Deine Flamme muss brennen, damit du ein Ziel wählen kannst.',
+  'game.flame_panel.goal_intro': 'Ein Ziel für deine Flamme? Wähle es heute – oder lass sie einfach brennen.',
+  'game.flame_panel.goal_choices': 'Flammenziel',
+  'game.flame_panel.goal_running': 'Ziel: {target} Flamme. Noch {remaining}.',
+  'game.flame_panel.goal_reached': 'Deine Ahnen grüßen deine Flamme: {days} gehalten!',
+  'game.flame_panel.goal_next': '{days} anpeilen',
+  'game.flame_panel.goal_later': 'Später',
 } as const satisfies GameConceptCatalog;
 
 export default de;
