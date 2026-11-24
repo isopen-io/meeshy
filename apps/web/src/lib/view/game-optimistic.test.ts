@@ -11,9 +11,11 @@ import {
   afterFreeze,
   afterMint,
   afterMintUnlessServed,
+  afterPause,
   afterRelight,
   afterReroll,
   withChestReward,
+  withPaused,
   withRelit,
   withRerolled,
 } from './game-optimistic';
@@ -200,5 +202,36 @@ describe('la Flamme', () => {
     expect(gameOf(after).flame.form).toBe('flamme');
     expect(gameOf(after).flame.bonusPercent).toBe(18);
     expect(gameOf(after).treasury.held).toBe(2);
+  });
+});
+
+describe('afterPause — la veille annoncée se voit tout de suite (#20509)', () => {
+  test('une Flamme allumée se met en veille dès demain, pour les jours choisis', () => {
+    const after = afterPause(view(), 3);
+    expect(gameOf(after).flame.pause).toEqual({ from: '2026-10-06', until: '2026-10-08' });
+    expect(gameOf(after).flame.status).toBe(gameOf(view()).flame.status);
+  });
+
+  test('une Flamme à risque garde son risque du jour : la veille commence demain', () => {
+    const atRisk = view({ lastActiveDay: '2026-10-04' });
+    expect(gameOf(atRisk).flame.status).toBe('at-risk');
+    expect(gameOf(afterPause(atRisk, 7)).flame).toMatchObject({ status: 'at-risk', pause: { from: '2026-10-06', until: '2026-10-12' } });
+  });
+
+  test('rien ne change sans Flamme, devant une Flamme éteinte, une veille déjà servie ou hors de 1 à 7 jours', () => {
+    const none = view({ streak: 0, lastActiveDay: null });
+    const out = view({ streak: 9, lastActiveDay: '2026-10-03', broken: { streak: 9, lastActiveDay: '2026-10-03' }, freezes: 0 });
+    const paused = view({ pause: { from: '2026-10-06', until: '2026-10-08' } });
+    expect(afterPause(none, 3)).toBe(none);
+    expect(afterPause(out, 3)).toBe(out);
+    expect(afterPause(paused, 5)).toBe(paused);
+    const lit = view();
+    expect(afterPause(lit, 0)).toBe(lit);
+    expect(afterPause(lit, 8)).toBe(lit);
+  });
+
+  test('la veille que la passerelle sert fait foi', () => {
+    const served = withPaused(afterPause(view(), 3), { from: '2026-10-06', until: '2026-10-07' });
+    expect(gameOf(served).flame.pause).toEqual({ from: '2026-10-06', until: '2026-10-07' });
   });
 });

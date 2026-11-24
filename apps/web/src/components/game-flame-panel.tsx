@@ -1,7 +1,11 @@
+import { useState } from 'react';
+
 import type { GameFlame } from '@meeshy/shared/types/game';
 import { FLAME_BONUS_PERCENT_MAX, FLAME_BONUS_PERCENT_PER_DAY } from '@meeshy/shared/utils/game/flame';
+import { FLAME_PAUSE_MAX_DAYS, FLAME_PAUSE_MIN_DAYS } from '@meeshy/shared/utils/game/flame-pause';
 import { spendPreview } from '@meeshy/shared/utils/game/spend';
 
+import { flamePauseAction, flamePauseIntro, flamePauseLine, readFlamePause } from '@/lib/view/flame-pause-copy';
 import { effortRelightLine, formatCount, gameText, meeshCount, readEffortRelight } from '@/lib/view/game-copy';
 import { freezeDetail } from '@/lib/view/game-detail';
 
@@ -26,6 +30,10 @@ import { GameSpendLine, GameTouch } from './game-touch';
  * sert `effortRelight`, le panneau dit combien en manquent et jusqu'à quand
  * (#20471) — même quand une nouvelle Flamme a repris, puisque c'est en jouant
  * qu'on les réalise — et ne dit plus qu'elle ne peut plus être rallumée.
+ *
+ * Une Flamme vivante se met en VEILLE (#17372, #20509) : deux gestes, la durée
+ * (1 à 7 jours, sept choisis d'avance) puis l'annonce. Tant que le bloc sert
+ * une veille, le panneau dit jusqu'à quand elle attend, et l'annonce se tait.
  */
 
 export type GameFlamePanelProps = {
@@ -34,10 +42,16 @@ export type GameFlamePanelProps = {
   readonly online: boolean;
   readonly buyingFreeze: boolean;
   readonly relighting: boolean;
+  readonly pausing: boolean;
+  /** Le jour du Jeu du joueur (`missions.dayKey`) : une veille qui commence demain se dit « demain ». */
+  readonly today: string;
   readonly onBuyFreeze: () => void;
   readonly onRelight: () => void;
-  readonly errors?: { readonly freeze?: string | undefined; readonly relight?: string | undefined };
+  readonly onPause: (days: number) => void;
+  readonly errors?: { readonly freeze?: string | undefined; readonly relight?: string | undefined; readonly pause?: string | undefined };
 };
+
+const PAUSE_DAYS: readonly number[] = Array.from({ length: FLAME_PAUSE_MAX_DAYS - FLAME_PAUSE_MIN_DAYS + 1 }, (_, index) => FLAME_PAUSE_MIN_DAYS + index);
 
 function ActionButton({ marker, busy, disabled, onClick, children }: { readonly marker: string; readonly busy: boolean; readonly disabled: boolean; readonly onClick: () => void; readonly children: React.ReactNode }) {
   const attributes = { [marker]: '' };
@@ -56,6 +70,37 @@ function ActionButton({ marker, busy, disabled, onClick, children }: { readonly 
   );
 }
 
+function PauseChooser({ online, pausing, onPause, error }: { readonly online: boolean; readonly pausing: boolean; readonly onPause: (days: number) => void; readonly error: string | undefined }) {
+  const [days, setDays] = useState(FLAME_PAUSE_MAX_DAYS);
+  return (
+    <>
+      <p className="text-caption" style={{ color: GAME_INK_2 }}>
+        {flamePauseIntro()}
+      </p>
+      <div role="radiogroup" aria-label={gameText('game.flame_panel.pause_days')} className="flex flex-wrap gap-1">
+        {PAUSE_DAYS.map((count) => (
+          <button
+            key={count}
+            type="button"
+            role="radio"
+            data-game-pause-days={count}
+            aria-checked={count === days}
+            onClick={() => setDays(count)}
+            className="game-press rounded-chip text-body font-semibold"
+            style={{ minWidth: 44, minHeight: 44, color: count === days ? GAME_ON_WARM : GAME_INK, backgroundColor: count === days ? GAME_WARM : 'transparent' }}
+          >
+            {formatCount(count)}
+          </button>
+        ))}
+      </div>
+      <ActionButton marker="data-game-flame-pause" busy={pausing} disabled={!online} onClick={() => onPause(days)}>
+        {flamePauseAction(days)}
+      </ActionButton>
+      <Alert message={error} />
+    </>
+  );
+}
+
 function Alert({ message }: { readonly message: string | undefined }) {
   return message === undefined ? null : (
     <p role="alert" className="text-caption" style={{ color: GAME_ERROR }}>
@@ -65,13 +110,15 @@ function Alert({ message }: { readonly message: string | undefined }) {
 }
 
 export function GameFlamePanel(props: GameFlamePanelProps) {
-  const { flame, held, online, buyingFreeze, relighting, onBuyFreeze, onRelight, errors } = props;
+  const { flame, held, online, buyingFreeze, relighting, pausing, today, onBuyFreeze, onRelight, onPause, errors } = props;
   const full = flame.freezes >= flame.maxFreezes;
   const freeze = spendPreview({ held, cost: flame.freezePrice });
   const out = flame.status === 'out';
   const relight = spendPreview({ held, cost: flame.relightPrice });
   const cannotPayRelight = !relight.affordable;
   const effort = readEffortRelight(flame.effortRelight);
+  const pause = readFlamePause(flame.pause);
+  const burning = flame.status === 'lit' || flame.status === 'at-risk' || flame.status === 'covered';
 
   return (
     <GameCard id="game-flame-panel" labelledBy="game-flame-panel-title">
@@ -99,6 +146,14 @@ export function GameFlamePanel(props: GameFlamePanelProps) {
         </>
       )}
       <Alert message={errors?.freeze} />
+
+      {pause !== null ? (
+        <p data-game-flame-paused="" className="text-caption font-semibold" style={{ color: GAME_INK }}>
+          {flamePauseLine(pause, today)}
+        </p>
+      ) : burning ? (
+        <PauseChooser online={online} pausing={pausing} onPause={onPause} error={errors?.pause} />
+      ) : null}
 
       {effort === null ? null : (
         <p data-game-effort-relight="" className="text-caption font-semibold" style={{ color: GAME_INK }}>

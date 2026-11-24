@@ -8,17 +8,20 @@ import { GAME_ERROR_CODES } from '@meeshy/shared/types/game-routes';
 import { httpTransport, unwrap, ApiError } from '@/lib/api/client';
 import { newClientMessageId } from '@/lib/api/client-message-id';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, mintMeesh, type EngagementWithGame, type MeeshMintResult } from '@/lib/api/engagement';
-import { buyFlameFreeze, claimChest, relightFlame, rerollMission } from '@/lib/api/game';
+import { buyFlameFreeze, claimChest, pauseFlame, relightFlame, rerollMission } from '@/lib/api/game';
 import { GAME_MUTATION_KEY } from '@/lib/api/game-state-order';
 import type { HttpTransport } from '@/lib/api/http';
+import { flamePauseRefusal } from '@/lib/view/flame-pause-copy';
 import { gameErrorMessage } from '@/lib/view/game-copy';
 import {
   afterChestOpening,
   afterFreeze,
   afterMintUnlessServed,
+  afterPause,
   afterRelight,
   afterReroll,
   withChestReward,
+  withPaused,
   withRelit,
   withRerolled,
 } from '@/lib/view/game-optimistic';
@@ -28,7 +31,7 @@ import { strikeGate, type StrikeGate } from '@/lib/game/strike-gate';
 
 /**
  * LES GESTES DU JEU (#9383) — frappe, changement de mission, coffre, gel,
- * rallumage. Chacun suit la même règle (§ Instant App Principles) :
+ * rallumage, veille de la Flamme (#20509). Chacun suit la même règle (§ Instant App Principles) :
  *
  *   capturer l'instantané → appliquer en local → envoyer → restaurer si échec
  *
@@ -55,12 +58,15 @@ export type GameActions = {
   readonly claimChest: () => void;
   readonly buyFreeze: () => void;
   readonly relight: () => void;
+  /** Annoncer une veille de la Flamme de `days` jours, à partir de demain (#20509). */
+  readonly pause: (days: number) => void;
   readonly pending: {
     readonly mint: boolean;
     readonly rerollId: string | null;
     readonly chest: boolean;
     readonly freeze: boolean;
     readonly relight: boolean;
+    readonly pause: boolean;
   };
   readonly errors: {
     readonly mint?: string;
@@ -68,6 +74,7 @@ export type GameActions = {
     readonly chest?: string;
     readonly freeze?: string;
     readonly relight?: string;
+    readonly pause?: string;
   };
   /** La dernière pièce frappée, pour la scène ; `null` tant qu'aucune n'a été frappée depuis l'ouverture. */
   readonly celebration: MintCelebration | null;
@@ -80,6 +87,10 @@ type Snapshot = { readonly snapshot: EngagementWithGame | undefined };
 export { GAME_MUTATION_KEY };
 
 const messageOf = (error: unknown): string => gameErrorMessage(error instanceof ApiError ? error.code : undefined);
+
+/** Une veille refusée dit sa raison (le trimestre pris, une veille en cours, pas de Flamme) ; tout autre échec, le sien. */
+const pauseMessageOf = (error: unknown): string =>
+  error instanceof ApiError && error.code === GAME_ERROR_CODES.flamePauseNotAllowed ? flamePauseRefusal(error.reason) : messageOf(error);
 
 /** Un identifiant que la passerelle dit déjà pris par UNE AUTRE écriture ne sert plus : le prochain geste en génère un neuf. */
 const isIdConflict = (error: unknown): boolean => error instanceof ApiError && error.code === GAME_ERROR_CODES.requestIdConflict;
@@ -240,6 +251,22 @@ export function useGameActions(
     onSettled: refresh,
   });
 
+  // Une durée est une intention : la rejouer après un échec garde son identifiant, une autre durée en prend un neuf.
+  const pause = useMutation({
+    mutationKey: GAME_MUTATION_KEY,
+    mutationFn: async (days: number) => unwrap(await pauseFlame(transport, idFor(`pause:${days}`), days)),
+    onMutate: (days: number) => begin((view) => afterPause(view, days)),
+    onError: (error, days, context: Snapshot | undefined) => {
+      if (isIdConflict(error)) spent(`pause:${days}`);
+      restore(context);
+    },
+    onSuccess: (result, days) => {
+      spent(`pause:${days}`);
+      write((view) => withPaused(view, result.pause));
+    },
+    onSettled: refresh,
+  });
+
   return {
     mint: () => {
       gate.begin();
@@ -250,12 +277,14 @@ export function useGameActions(
     claimChest: () => chest.mutate(),
     buyFreeze: () => freeze.mutate(),
     relight: () => relight.mutate(),
+    pause: (days) => pause.mutate(days),
     pending: {
       mint: mint.isPending,
       rerollId: reroll.isPending ? reroll.variables ?? null : null,
       chest: chest.isPending,
       freeze: freeze.isPending,
       relight: relight.isPending,
+      pause: pause.isPending,
     },
     errors: {
       ...(mint.isError ? { mint: messageOf(mint.error) } : {}),
@@ -263,6 +292,7 @@ export function useGameActions(
       ...(chest.isError ? { chest: messageOf(chest.error) } : {}),
       ...(freeze.isError ? { freeze: messageOf(freeze.error) } : {}),
       ...(relight.isError ? { relight: messageOf(relight.error) } : {}),
+      ...(pause.isError ? { pause: pauseMessageOf(pause.error) } : {}),
     },
     celebration,
     strikeKey,

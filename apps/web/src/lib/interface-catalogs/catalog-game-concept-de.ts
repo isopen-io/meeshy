@@ -407,6 +407,14 @@ const de = {
   'game.mascot.level_missing.one': '{count} Funke mehr, und dein Licht erreicht Level {level}.',
   'game.mascot.level_missing.other': '{count} Funken mehr, und dein Licht erreicht Level {level}.',
   'game.mascot.top_level': 'Dein Licht ist auf dem Gipfel. Bravo!',
+  'game.error.flame_pause.quarterly_limit': 'Deine Flamme hat in diesem Quartal schon geruht.',
+  'game.error.flame_pause.already_paused': 'Deine Flamme ruht bereits.',
+  'game.error.flame_pause.no_flame': 'Deine Flamme muss brennen, damit sie ruhen kann.',
+  'game.flame_panel.pause_intro': 'Eine Pause? Deine Flamme wartet bis zu {days} auf dich, einmal pro Quartal.',
+  'game.flame_panel.pause_days': 'Dauer der Ruhe',
+  'game.flame_panel.pause': 'Ruhen lassen · {days}',
+  'game.flame_panel.paused': 'Deine Flamme ruht bis {date}.',
+  'game.flame_panel.paused_soon': 'Deine Flamme ruht ab morgen, bis {date}.',
 } as const satisfies GameConceptCatalog;
 
 export default de;

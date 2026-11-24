@@ -62,6 +62,10 @@ const ptShellLabels = {
   'message.edited.a11y': 'editado',
   'message.pinned.a11y': 'fixado',
   'message.replyTo.a11y': 'em resposta a {author}',
+  'message.anonymous.a11y': 'Sem conta',
+  'message.sticker.a11y': 'sticker',
+  'message.location.named.a11y': 'localização compartilhada: {place}',
+  'message.location.shared.a11y': 'localização compartilhada',
   'quote.sender.unknown': 'o remetente',
 
   'media.tile.open': 'Abrir {name}',

@@ -1,7 +1,9 @@
+import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 import { GAME_ROUTES, gameMissionRerollPath } from '@meeshy/shared/types/game-routes';
 import type {
   ChestClaimResponse,
   FlameFreezeResponse,
+  FlamePauseResponse,
   FlameRelightResponse,
   GameBlock,
   GameChestReward,
@@ -261,9 +263,11 @@ const malformed = <T>(what: string): ApiResult<T> => ({
   code: 'MALFORMED_PAYLOAD',
 });
 
+const gamePath = (route: string): string => `${API_PREFIX}${route}`;
+
 async function write<T>(params: {
   readonly transport: HttpTransport;
-  readonly route: string;
+  readonly path: string;
   readonly body: unknown;
   readonly decode: (data: unknown) => data is T;
   readonly what: string;
@@ -271,7 +275,7 @@ async function write<T>(params: {
 }): Promise<ApiResult<T>> {
   const result = await params.transport.request<unknown>({
     method: 'POST',
-    path: `${API_PREFIX}${params.route}`,
+    path: params.path,
     body: params.body,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
@@ -296,6 +300,11 @@ const isFreezeResponse = (data: unknown): data is FlameFreezeResponse =>
 const isRelightResponse = (data: unknown): data is FlameRelightResponse =>
   shape(data, { status: isOneOf(['relit', 'already-relit']), streak: (v) => isInt(v), balance: (v) => isInt(v) });
 
+const isDay = (value: unknown): boolean => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+const isPauseResponse = (data: unknown): data is FlamePauseResponse =>
+  shape(data, { status: isOneOf(['paused', 'already-paused']), pause: (v) => shape(v, { from: isDay, until: isDay }) });
+
 const isGuideSeenResponse = (data: unknown): data is GuideSeenResponse =>
   shape(data, { guideSeen: (v) => Array.isArray(v) && v.every(isText) });
 
@@ -303,7 +312,7 @@ const isGuideSeenResponse = (data: unknown): data is GuideSeenResponse =>
 export const rerollMission = (transport: HttpTransport, missionId: string, requestId: string, signal?: AbortSignal) =>
   write({
     transport,
-    route: gameMissionRerollPath(missionId),
+    path: gamePath(gameMissionRerollPath(missionId)),
     body: { requestId },
     decode: isRerollResponse,
     what: 'changement de mission',
@@ -311,18 +320,22 @@ export const rerollMission = (transport: HttpTransport, missionId: string, reque
   });
 
 export const claimChest = (transport: HttpTransport, requestId: string, signal?: AbortSignal) =>
-  write({ transport, route: GAME_ROUTES.chestClaim, body: { requestId }, decode: isChestResponse, what: 'coffre', signal });
+  write({ transport, path: gamePath(GAME_ROUTES.chestClaim), body: { requestId }, decode: isChestResponse, what: 'coffre', signal });
 
 export const buyFlameFreeze = (transport: HttpTransport, requestId: string, signal?: AbortSignal) =>
-  write({ transport, route: GAME_ROUTES.flameFreezes, body: { requestId }, decode: isFreezeResponse, what: 'gel', signal });
+  write({ transport, path: gamePath(GAME_ROUTES.flameFreezes), body: { requestId }, decode: isFreezeResponse, what: 'gel', signal });
 
 export const relightFlame = (transport: HttpTransport, requestId: string, signal?: AbortSignal) =>
-  write({ transport, route: GAME_ROUTES.flameRelight, body: { requestId }, decode: isRelightResponse, what: 'rallumage', signal });
+  write({ transport, path: gamePath(GAME_ROUTES.flameRelight), body: { requestId }, decode: isRelightResponse, what: 'rallumage', signal });
+
+/** Annoncer une veille de la Flamme, de 1 à 7 jours à partir de demain, une fois par trimestre (#17372, #20509). */
+export const pauseFlame = (transport: HttpTransport, requestId: string, days: number, signal?: AbortSignal) =>
+  write({ transport, path: meEndpoints.gameFlamePause, body: { requestId, days }, decode: isPauseResponse, what: 'veille', signal });
 
 export const markGuideSeen = (transport: HttpTransport, requestId: string, keys: readonly string[], signal?: AbortSignal) =>
   write({
     transport,
-    route: GAME_ROUTES.guideSeen,
+    path: gamePath(GAME_ROUTES.guideSeen),
     body: { requestId, keys },
     decode: isGuideSeenResponse,
     what: 'moments vus',

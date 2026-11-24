@@ -62,6 +62,10 @@ const arShellLabels = {
   'message.edited.a11y': 'معدَّلة',
   'message.pinned.a11y': 'مثبَّتة',
   'message.replyTo.a11y': 'ردًا على {author}',
+  'message.anonymous.a11y': 'بدون حساب',
+  'message.sticker.a11y': 'ملصق',
+  'message.location.named.a11y': 'موقع مشارَك: {place}',
+  'message.location.shared.a11y': 'موقع مشارَك',
   'quote.sender.unknown': 'المُرسِل',
 
   'media.tile.open': 'فتح {name}',

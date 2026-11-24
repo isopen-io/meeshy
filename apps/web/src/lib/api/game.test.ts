@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { GAME_ROUTES } from '@meeshy/shared/types/game-routes';
 
-import { claimChest, buyFlameFreeze, markGuideSeen, readGameBlock, relightFlame, rerollMission } from './game';
+import { claimChest, buyFlameFreeze, markGuideSeen, pauseFlame, readGameBlock, relightFlame, rerollMission } from './game';
 import { gameBlockFixture } from './game-fixture';
 import { createHttpTransport } from './http';
 
@@ -221,5 +221,38 @@ describe('le coffre de #10011 : points, Gloire, prime en points, fragment d’é
     const result = await claimChest(transport, 'req-0009-abcd');
     expect(result.ok && result.data.starFragments).toEqual({ collected: 6 });
     expect(result.ok && result.data.reward).toMatchObject({ glory: 208, bonus: 'whole', bonusPoints: 1221 });
+  });
+});
+
+describe('la Flamme en veille (#20509)', () => {
+  test('la durée part avec l’identifiant de l’intention, la veille servie revient', async () => {
+    const calls: Call[] = [];
+    const transport = transportServing({ success: true, data: { status: 'paused', pause: { from: '2026-10-06', until: '2026-10-08' } } }, { calls });
+    const result = await pauseFlame(transport, 'req-0010-abcd', 3);
+    expect(calls[0]?.url).toBe('https://gate.test/api/v1/me/game/flame/pause');
+    expect(calls[0]?.init?.method).toBe('POST');
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({ requestId: 'req-0010-abcd', days: 3 });
+    expect(result.ok && result.data.pause).toEqual({ from: '2026-10-06', until: '2026-10-08' });
+  });
+
+  test('une veille servie sans ses deux jours est un échec nommé', async () => {
+    const transport = transportServing({ success: true, data: { status: 'paused', pause: { from: '2026-10-06' } } });
+    const result = await pauseFlame(transport, 'req-0011-abcd', 3);
+    expect(!result.ok && result.code).toBe('MALFORMED_PAYLOAD');
+  });
+
+  test('le refus garde son code ET sa raison, posée à la racine par la passerelle', async () => {
+    const transport = transportServing(
+      { success: false, error: 'FLAME_PAUSE_NOT_ALLOWED', code: 'FLAME_PAUSE_NOT_ALLOWED', reason: 'quarterly-limit' },
+      { status: 409 },
+    );
+    const result = await pauseFlame(transport, 'req-0012-abcd', 7);
+    expect(!result.ok && result.code).toBe('FLAME_PAUSE_NOT_ALLOWED');
+    expect(!result.ok && result.reason).toBe('quarterly-limit');
+  });
+
+  test('la veille servie par le bloc se lit, et le bloc d’avant elle aussi', () => {
+    expect(readGameBlock(gameBlockFixture({ pause: { from: '2026-10-06', until: '2026-10-08' } }))?.flame.pause).toEqual({ from: '2026-10-06', until: '2026-10-08' });
+    expect(readGameBlock(gameBlockFixture())?.flame.pause).toBeUndefined();
   });
 });

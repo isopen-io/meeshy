@@ -107,6 +107,12 @@ export type ApiFailure = {
    * d'un tête-à-tête ne nomme personne et ne pose pas la clé (#20075).
    */
   readonly withoutDeviceUserIds?: readonly string[];
+  /**
+   * LA RAISON d'un refus du Jeu (`409 FLAME_PAUSE_NOT_ALLOWED` : `quarterly-limit`, `already-paused`, `no-flame`),
+   * étalée à la racine par `sendError` et déclarée par `refusalResponse` (`routes/me/game-shared.ts`). Sans elle,
+   * le joueur lit « pas maintenant » sans savoir que son trimestre est déjà pris (#20509).
+   */
+  readonly reason?: string;
 };
 
 export type ApiSuccess<T> = {
@@ -501,6 +507,7 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
         : {}),
       ...(envelope.emailOwner !== undefined && envelope.emailOwner !== null ? { emailOwner: envelope.emailOwner } : {}),
       ...(withoutDeviceUserIds === undefined ? {} : { withoutDeviceUserIds }),
+      ...(typeof envelope.reason === 'string' && envelope.reason !== '' ? { reason: envelope.reason } : {}),
     };
   }
 

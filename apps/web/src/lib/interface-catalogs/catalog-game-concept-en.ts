@@ -407,6 +407,14 @@ const en = {
   'game.mascot.level_missing.one': '{count} more spark, and your light reaches level {level}.',
   'game.mascot.level_missing.other': '{count} more sparks, and your light reaches level {level}.',
   'game.mascot.top_level': 'Your light is at its peak. Well done!',
+  'game.error.flame_pause.quarterly_limit': 'Your Flame has already rested this quarter.',
+  'game.error.flame_pause.already_paused': 'Your Flame is already resting.',
+  'game.error.flame_pause.no_flame': 'Your Flame needs to be lit before it can rest.',
+  'game.flame_panel.pause_intro': 'Need a break? Your Flame waits up to {days}, once a quarter.',
+  'game.flame_panel.pause_days': 'Rest length',
+  'game.flame_panel.pause': 'Let it rest · {days}',
+  'game.flame_panel.paused': 'Your Flame is resting until {date}.',
+  'game.flame_panel.paused_soon': 'Your Flame starts resting tomorrow, until {date}.',
 } as const satisfies GameConceptCatalog;
 
 export default en;
