@@ -54,7 +54,6 @@ final class TalkieVoicePlayer: TalkieSink {
 
     private let engine = AVAudioEngine()
     private let voicesMixer = AVAudioMixerNode()
-    private let booster = AVAudioUnitEQ(numberOfBands: 0)
     private var voices: [String: Voice] = [:]
     /// Les prises de parole annoncées dont aucun fragment n'a encore sonné : elles tiennent la sortie prête.
     private var announced: Set<String> = []
@@ -62,8 +61,6 @@ final class TalkieVoicePlayer: TalkieSink {
     private var senders: [String: String] = [:]
     private var observers: [NSObjectProtocol] = []
     private let isInCall: () -> Bool
-    /// Le niveau de la voix qui sort, que l'onde de l'en-tête lit en direct (#17310), mesuré fragment par fragment.
-    private let meter: any TalkieLevelMetering
     private let stage: TalkieVoiceStage
 
     nonisolated deinit {}
@@ -73,18 +70,14 @@ final class TalkieVoicePlayer: TalkieSink {
 
     init(
         isInCall: @escaping () -> Bool = { CallManager.isCallActiveFlag },
-        meter: any TalkieLevelMetering = TalkieLevelMeter.incoming,
         listening: TalkieListeningHold = TalkieListeningHold(session: TalkieCoordinatorVoiceSession(), listening: MeeshyListeningPause()),
         stage: TalkieVoiceStage = .shared
     ) {
         self.isInCall = isInCall
-        self.meter = meter
         self.listening = listening
         self.stage = stage
         engine.attach(voicesMixer)
-        engine.attach(booster)
-        engine.connect(voicesMixer, to: booster, format: nil)
-        engine.connect(booster, to: engine.mainMixerNode, format: nil)
+        engine.connect(voicesMixer, to: engine.mainMixerNode, format: nil)
     }
 
     func prepare(_ talkieId: String, fromUserId: String) {
@@ -187,13 +180,12 @@ final class TalkieVoicePlayer: TalkieSink {
     private func listen(to node: AVAudioPlayerNode, through processor: TalkieVoiceProcessor) -> Bool {
         let format = node.outputFormat(forBus: 0)
         guard AudioTapFormatReadiness.mayInstall(sampleRate: format.sampleRate, channelCount: format.channelCount) else { return false }
-        let meter = self.meter
         let firstBuffer = OSAllocatedUnfairLock(initialState: true)
         let tap: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { buffer, when in
             if firstBuffer.withLock({ first in defer { first = false }; return first }) {
                 Logger.talkiePlayer.info("talkie · réception · tap de la voix, premier tampon \(buffer.frameLength) trames à \(Int(buffer.format.sampleRate)) Hz")
             }
-            meter.push(rms: processor.publish(buffer, at: TalkieVoiceStage.seconds(of: when)))
+            processor.publish(buffer, at: TalkieVoiceStage.seconds(of: when))
         }
         node.installTap(onBus: 0, bufferSize: 1024, format: format, block: tap)
         return true
@@ -213,7 +205,6 @@ final class TalkieVoicePlayer: TalkieSink {
         if plan.routesToSpeaker, session.category == .playAndRecord {
             try? session.overrideOutputAudioPort(.speaker)
         }
-        booster.globalGain = plan.gainDecibels
     }
 
     private func startEngineIfNeeded() -> Bool {
@@ -242,7 +233,6 @@ final class TalkieVoicePlayer: TalkieSink {
 
     private func releaseOutputIfIdle() {
         guard isIdle, engine.isRunning || !observers.isEmpty else { return }
-        meter.reset()
         engine.stop()
         observers.forEach(NotificationCenter.default.removeObserver)
         observers = []

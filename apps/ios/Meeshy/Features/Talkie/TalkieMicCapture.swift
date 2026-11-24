@@ -26,12 +26,9 @@ final class TalkieMicCapture: TalkieCapturing {
     private var holdsSession = false
     private var frameRelay: AsyncStream<[TalkieAacFrame]>.Continuation?
     private var frameDelivery: Task<Void, Never>?
-    /// Le niveau de la voix captée, que l'onde de l'en-tête lit en direct (#17310).
-    private let meter: any TalkieLevelMetering
     private let stage: TalkieVoiceStage
 
-    init(meter: any TalkieLevelMetering = TalkieLevelMeter.outgoing, stage: TalkieVoiceStage = .shared) {
-        self.meter = meter
+    init(stage: TalkieVoiceStage = .shared) {
         self.stage = stage
     }
 
@@ -60,7 +57,6 @@ final class TalkieMicCapture: TalkieCapturing {
         }
         let firstBuffer = OSAllocatedUnfairLock(initialState: true)
         let rate = Int(format.sampleRate)
-        let meter = self.meter
         let voice = TalkieVoiceProcessor(userId: toUserId, direction: .outgoing, sampleRate: format.sampleRate, stage: stage)
         let tapBlock: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { buffer, when in
             if firstBuffer.withLock({ first in defer { first = false }; return first }) {
@@ -68,7 +64,7 @@ final class TalkieMicCapture: TalkieCapturing {
             }
             voice.level(buffer)
             encoder.encode(buffer)
-            meter.push(rms: voice.publish(buffer, at: TalkieVoiceStage.seconds(of: when)))
+            voice.publish(buffer, at: TalkieVoiceStage.seconds(of: when))
         }
         input.installTap(onBus: 0, bufferSize: 1024, format: format, block: tapBlock)
         engine.prepare()
@@ -95,7 +91,6 @@ final class TalkieMicCapture: TalkieCapturing {
         self.engine = nil
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
-        meter.reset()
         encoder?.drain()
         encoder = nil
         releaseSession()

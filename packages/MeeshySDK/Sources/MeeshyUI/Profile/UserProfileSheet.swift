@@ -79,6 +79,8 @@ public struct UserProfileSheet: View {
     @Environment(\.profileGameSection) var gameSection
     @Environment(\.profileRelationSection) var relationSection
     @Environment(\.profileRelationPill) var relationPill
+    /// La voix autour du grand avatar (#20531) — fournie par l'app, absente sinon.
+    @Environment(\.profileHeroVoice) var heroVoice
     @Environment(\.profileLocationMap) var locationMap
     /// « En direct · Entre Proches » (#19416) — fourni par l'app, absent sinon.
     @Environment(\.profileLiveSection) var liveSectionSlot

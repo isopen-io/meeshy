@@ -58,6 +58,7 @@ struct ProfileHeroSignals: View {
     let avatarSize: CGFloat
     let tint: Color
     @Environment(\.avatarListeningSource) private var listening
+    @Environment(\.avatarListeningSuppressed) private var listeningSuppressed
     @Environment(\.profileHeroBattery) private var battery
 
     static func isShown(userId: String?, avatarSize: CGFloat) -> Bool {
@@ -77,7 +78,7 @@ struct ProfileHeroSignals: View {
                 if let battery {
                     ProfileBatteryLive(userId: userId, battery: battery)
                 }
-                if let listening {
+                if let listening, !listeningSuppressed {
                     ProfileListeningLive(userId: userId, source: listening, tint: tint)
                 }
             }

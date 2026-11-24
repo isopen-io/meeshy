@@ -5,14 +5,13 @@ import AVFoundation
 /// USB), aucune redirection. La voix arrive déjà normalisée par le gain de sa voix (#20531) : aucun gain de sortie.
 nonisolated struct TalkieOutputPlan: Equatable, Sendable {
     let routesToSpeaker: Bool
-    let gainDecibels: Float
 
     static func decide(outputs: [AVAudioSession.Port]) -> TalkieOutputPlan {
         let builtIn: Set<AVAudioSession.Port> = [.builtInSpeaker, .builtInReceiver]
         guard !outputs.isEmpty, outputs.allSatisfy(builtIn.contains) else {
-            return TalkieOutputPlan(routesToSpeaker: false, gainDecibels: 0)
+            return TalkieOutputPlan(routesToSpeaker: false)
         }
-        return TalkieOutputPlan(routesToSpeaker: outputs.contains(.builtInReceiver), gainDecibels: 0)
+        return TalkieOutputPlan(routesToSpeaker: outputs.contains(.builtInReceiver))
     }
 }
 

@@ -544,6 +544,8 @@ struct ProfileSheetEnvironment: ViewModifier {
             .environment(\.profileRelationPill, ProfileRelationPill { userId, displayName, standing in
                 ProfileSlot.view(.pill, userId: userId, displayName: displayName, standing: standing)
             })
+            // La voix du talkie autour du grand avatar de la fiche, son compteur dessous quand c'est moi qui parle (#20531).
+            .environment(\.profileHeroVoice, TalkieProfileHeroVoice.make())
             .environment(\.profileActionsParts, ProfileActionsParts { part, request in
                 ProfileSlot.view(.actions, userId: request.userId, displayName: request.displayName,
                                  liveRequest: request, actionsPart: part)
@@ -577,20 +579,21 @@ struct ProfileSheetEnvironment: ViewModifier {
 }
 
 /// Les emplacements opaques de la fiche de profil, effacés en UN seul point : le jeu sur la bannière et le cercle à la
-/// place de « Connectés » (#13940), la pilule du cercle commun sous le nom (#18870). Le cercle se reconstruit à chaque membre (`.id`) : la fiche garde ses vues d'un
+/// place de « Connectés » (#13940), la pilule du cercle commun sous le nom (#18870), la voix du talkie autour de
+/// l'avatar et son compteur (#20531). Le cercle se reconstruit à chaque membre (`.id`) : la fiche garde ses vues d'un
 /// membre à l'autre, et le niveau du précédent ne doit jamais se peindre sous le nom du suivant.
 enum ProfileSlot {
-    case relation, pill, locationMap, whereTheyAre, scanner, gameCard, live, actions, send
+    case relation, pill, locationMap, whereTheyAre, scanner, gameCard, live, actions, send, voiceBubble, voiceClock
 
     static func view(_ slot: ProfileSlot, userId: String, displayName: String,
                      standing: Binding<ProfileRelationStanding> = .constant(.unresolved),
                      mapRequest: ProfileLocationMapRequest? = nil, openMap: (() -> Void)? = nil,
                      onOpened: (() -> Void)? = nil, tint: Color? = nil,
                      liveRequest: ProfileLiveRequest? = nil, actionsPart: ProfileActionsPart? = nil,
-                     send: ProfileSendHost? = nil) -> AnyView {
+                     send: ProfileSendHost? = nil, voice: TalkieBubbleGeometry? = nil) -> AnyView {
         AnyView(ProfileSlotContent(slot: slot, userId: userId, displayName: displayName, standing: standing,
                                    mapRequest: mapRequest, openMap: openMap, onOpened: onOpened, tint: tint,
-                                   liveRequest: liveRequest, actionsPart: actionsPart, send: send))
+                                   liveRequest: liveRequest, actionsPart: actionsPart, send: send, voice: voice))
     }
 }
 
@@ -607,6 +610,7 @@ private struct ProfileSlotContent: View {
     let liveRequest: ProfileLiveRequest?
     let actionsPart: ProfileActionsPart?
     let send: ProfileSendHost?
+    let voice: TalkieBubbleGeometry?
 
     var body: some View {
         switch slot {
@@ -638,6 +642,10 @@ private struct ProfileSlotContent: View {
             }
         case .send:
             if let send { send }
+        case .voiceBubble:
+            if let voice { TalkieVoiceBubble(userId: userId, geometry: voice) }
+        case .voiceClock:
+            TalkieVoiceClock(userId: userId)
         }
     }
 }

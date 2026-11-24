@@ -147,6 +147,12 @@ public nonisolated struct MeeshyCollapsingHeroRecipe: Sendable, Equatable {
         return max(titleGap, avatarSpill + 4)
     }
 
+    /// Le même écart, quand l'hôte pose une légende de hauteur `avatarCaption` sous l'avatar déplié : le nom descend
+    /// d'autant, et ne descend pas sans légende.
+    public static func titleGap(avatarSpill: Double, avatarCaption: Double) -> Double {
+        titleGap(avatarSpill: avatarSpill) + (avatarCaption.isFinite ? max(avatarCaption, 0) : 0)
+    }
+
     /// L'avancée du repli de la barre : celle du doigt, ou — pour une bannière gardée dans la barre (#19987) — celle de
     /// l'identité, qui finit à 55 % : dès que l'avatar et le nom sont dans la barre, la barre n'est plus que sa rangée,
     /// sans bande vide dessous ; le reste du défilement fait passer le contenu sous elle.

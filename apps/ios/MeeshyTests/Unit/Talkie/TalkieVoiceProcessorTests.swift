@@ -146,7 +146,6 @@ final class TalkieVoicePlayerStageTests: XCTestCase {
     private func makePlayer(stage: TalkieVoiceStage) -> TalkieVoicePlayer {
         TalkieVoicePlayer(
             isInCall: { false },
-            meter: TalkieLevelMeter(),
             listening: TalkieListeningHold(session: NoSession(), listening: NoListening()),
             stage: stage
         )

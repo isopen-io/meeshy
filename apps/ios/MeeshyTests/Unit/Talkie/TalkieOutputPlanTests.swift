@@ -8,15 +8,11 @@ final class TalkieOutputPlanTests: XCTestCase {
 
     func test_theEarpiece_isRoutedToTheSpeaker() {
         XCTAssertEqual(TalkieOutputPlan.decide(outputs: [.builtInReceiver]),
-                       TalkieOutputPlan(routesToSpeaker: true, gainDecibels: 0))
+                       TalkieOutputPlan(routesToSpeaker: true))
     }
 
-    /// La voix arrive déjà normalisée par son propre gain (#20531) : le haut-parleur ne l'amplifie plus.
-    func test_outputPlan_speaker_noLongerBoosts() {
-        let plan = TalkieOutputPlan.decide(outputs: [.builtInSpeaker])
-        XCTAssertEqual(plan.gainDecibels, 0)
-        XCTAssertFalse(plan.routesToSpeaker)
-        XCTAssertEqual(TalkieOutputPlan.decide(outputs: [.builtInReceiver]).gainDecibels, 0)
+    func test_outputPlan_speaker_staysOnTheSpeaker() {
+        XCTAssertEqual(TalkieOutputPlan.decide(outputs: [.builtInSpeaker]), TalkieOutputPlan(routesToSpeaker: false))
     }
 
     func test_personalOutputs_areNeitherRedirectedNorBoosted() {
@@ -24,16 +20,16 @@ final class TalkieOutputPlanTests: XCTestCase {
                                                .carAudio, .airPlay, .usbAudio, .lineOut, .HDMI]
         personal.forEach { port in
             XCTAssertEqual(TalkieOutputPlan.decide(outputs: [port]),
-                           TalkieOutputPlan(routesToSpeaker: false, gainDecibels: 0), "\(port.rawValue)")
+                           TalkieOutputPlan(routesToSpeaker: false), "\(port.rawValue)")
         }
     }
 
-    func test_aPersonalOutputBesideTheSpeaker_staysUnboosted() {
-        XCTAssertEqual(TalkieOutputPlan.decide(outputs: [.builtInSpeaker, .airPlay]).gainDecibels, 0)
+    func test_aPersonalOutputBesideTheSpeaker_isNotRedirected() {
+        XCTAssertEqual(TalkieOutputPlan.decide(outputs: [.builtInSpeaker, .airPlay]), TalkieOutputPlan(routesToSpeaker: false))
     }
 
     func test_noOutput_changesNothing() {
-        XCTAssertEqual(TalkieOutputPlan.decide(outputs: []), TalkieOutputPlan(routesToSpeaker: false, gainDecibels: 0))
+        XCTAssertEqual(TalkieOutputPlan.decide(outputs: []), TalkieOutputPlan(routesToSpeaker: false))
     }
 
     /// Ce que l'encodeur du talkie émet, le lecteur le décode : sans quoi le gain n'aurait rien à amplifier.

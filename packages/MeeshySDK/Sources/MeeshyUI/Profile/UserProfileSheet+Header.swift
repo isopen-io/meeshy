@@ -63,6 +63,19 @@ extension UserProfileSheet {
     // MARK: - Le héros (K28)
 
     func profileHero(progress: Double) -> some View {
+        ProfileHeroVoiceReader(voice: heroVoice, userId: heroVoiceUserId) { voiceState in
+            profileHero(progress: progress, voiceState: voiceState)
+                .environment(\.avatarListeningSuppressed, voiceState.isActive)
+        }
+    }
+
+    /// La personne dont la voix vit autour de l'avatar : un autre que moi, connu, quand l'app fournit la voix.
+    var heroVoiceUserId: String? {
+        guard heroVoice != nil, !isCurrentUser, let userId = resolvedUserId, !userId.isEmpty else { return nil }
+        return userId
+    }
+
+    private func profileHero(progress: Double, voiceState: ProfileHeroVoiceState) -> some View {
         MeeshyCollapsingHero(
             progress: progress,
             title: displayUser.resolvedDisplayName,
@@ -78,10 +91,11 @@ extension UserProfileSheet {
             keepsBannerInBar: true,
             avatarSpill: Double(AvatarRingGeometry.spill(
                 shownAvatarRing, avatarSize: CGFloat(MeeshyCollapsingHeroRecipe.avatarExpanded))),
+            avatarCaption: ProfileHeroPlan.voiceTitleDrop(voiceState),
             banner: { heroBanner(progress: progress) },
             leading: { heroCloseButton },
             trailing: { heroTrailing(progress: progress) },
-            avatar: { size in heroAvatar(size: size) }
+            avatar: { size in heroAvatar(size: size, voiceState: voiceState) }
         )
     }
 
@@ -259,8 +273,9 @@ extension UserProfileSheet {
     }
 
     /// L'avatar du héros, à la taille que K28 lui donne : grand sous la bannière, mini dans la barre repliée. L'anneau
-    /// de story ne tient que sur le grand ; toucher la photo l'ouvre en plein écran.
-    func heroAvatar(size: CGFloat) -> some View {
+    /// de story ne tient que sur le grand ; toucher la photo l'ouvre en plein écran. Une voix en cours vit derrière lui
+    /// (#20531), sa légende sous le grand.
+    func heroAvatar(size: CGFloat, voiceState: ProfileHeroVoiceState) -> some View {
         let avatarName = displayUser.resolvedDisplayName
         let showRing = !isIdentityMuted
         // App câblée → état réel (pas d'anneau sans story active) ; legacy (nil) → anneau décoratif historique.
@@ -280,12 +295,14 @@ extension UserProfileSheet {
             onViewStory: ringState != .none ? onViewStory : nil,
             onMoodTap: shownMoodEmoji == nil ? nil : onMoodTap
         ) }
+        .background { heroVoiceHalo(size: size, ringState: ringState, voiceState: voiceState) }
         // Le cadre à sa taille normalisée (#19988) ; le nom descend de ce qu'il peint sous l'avatar (#19925).
         .avatarRing(
             shownAvatarRing,
             avatarSize: context.size,
             storyRingSize: ringState == .none ? nil : context.ringSize
         )
+        .overlay(alignment: .bottom) { heroVoiceCaption(size: size, voiceState: voiceState) }
         .overlay(alignment: .bottomLeading) {
             ProfileHeroSignals(userId: isIdentityMuted || isCurrentUser ? nil : resolvedUserId, avatarSize: size,
                                tint: accentTint)
@@ -306,6 +323,28 @@ extension UserProfileSheet {
                     openFullscreenImage(url: bannerURL, fallback: avatarName)
                 }
             }
+        }
+    }
+
+    /// La voix derrière l'avatar, du bord extérieur de ce qu'il peint jusqu'à 35 % de son rayon au-delà.
+    @ViewBuilder
+    private func heroVoiceHalo(size: CGFloat, ringState: StoryRingState, voiceState: ProfileHeroVoiceState) -> some View {
+        if let heroVoice, let userId = heroVoiceUserId {
+            let storyRing = ringState == .none ? nil : AvatarContext.custom(size).ringSize
+            ProfileHeroVoiceHalo(
+                voice: heroVoice, userId: userId, isActive: voiceState.isActive,
+                baseRadius: ProfileHeroPlan.voiceOuterRadius(avatarSize: size, hasRing: shownAvatarRing != nil,
+                                                             storyRingSize: storyRing),
+                maxAmplitude: ProfileHeroPlan.voiceAmplitude(avatarSize: size)
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func heroVoiceCaption(size: CGFloat, voiceState: ProfileHeroVoiceState) -> some View {
+        if let heroVoice, let userId = heroVoiceUserId {
+            ProfileHeroVoiceCaption(voice: heroVoice, userId: userId, isShown: voiceState.showsCaption,
+                                    avatarSize: size, avatarSpill: AvatarRingGeometry.spill(shownAvatarRing, avatarSize: size))
         }
     }
 

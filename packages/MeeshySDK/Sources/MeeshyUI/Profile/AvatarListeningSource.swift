@@ -52,6 +52,7 @@ public struct AvatarListeningOverlay: View {
     let userId: String?
     let avatarSize: CGFloat
     @Environment(\.avatarListeningSource) private var source
+    @Environment(\.avatarListeningSuppressed) private var suppressed
 
     public init(userId: String?, avatarSize: CGFloat) {
         self.userId = userId
@@ -65,7 +66,7 @@ public struct AvatarListeningOverlay: View {
     }
 
     public var body: some View {
-        if let source, let userId, Self.paints(userId: userId, avatarSize: avatarSize) {
+        if !suppressed, let source, let userId, Self.paints(userId: userId, avatarSize: avatarSize) {
             AvatarListeningLive(userId: userId, avatarSize: avatarSize, source: source)
         }
     }
@@ -179,10 +180,21 @@ private struct AvatarListeningSourceKey: EnvironmentKey {
     static let defaultValue: AvatarListeningSource? = nil
 }
 
+private struct AvatarListeningSuppressedKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
 public extension EnvironmentValues {
     /// La source des écoutes servies ; `nil` : aucun bandeau.
     var avatarListeningSource: AvatarListeningSource? {
         get { self[AvatarListeningSourceKey.self] }
         set { self[AvatarListeningSourceKey.self] = newValue }
+    }
+
+    /// Vrai : l'écoute ne se pose pas sur cet avatar, le temps qu'autre chose l'occupe (une voix autour de l'avatar
+    /// de la fiche, #20531) ; elle revient d'elle-même ensuite.
+    var avatarListeningSuppressed: Bool {
+        get { self[AvatarListeningSuppressedKey.self] }
+        set { self[AvatarListeningSuppressedKey.self] = newValue }
     }
 }

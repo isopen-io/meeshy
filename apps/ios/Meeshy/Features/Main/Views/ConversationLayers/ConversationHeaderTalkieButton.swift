@@ -4,8 +4,9 @@ import MeeshyUI
 
 /// L'appel et, dans un direct, le Bring (#17442, dès Ami, même chiffré) puis le talkie à sa gauche (#17093) : proposé dès Proche (`TalkieOfferModel`), jamais dans
 /// un direct chiffré ni dans un aperçu. Le doigt posé enfonce et vibre ; la voix qui part, ou celle du pair qui arrive,
-/// étend le talkie sur toute la barre d'en-tête, son onde suivant le niveau en direct (#17310) ; un `TALKIE_NOT_ALLOWED`
-/// le retire, comme sur la fiche. Le (i) du talkie ne vit que sur la fiche profil.
+/// vit en orbe sur le bouton même, bornée à la rangée (#20531) : l'en-tête ne s'étend pas, le nom, le retour et les
+/// actions restent visibles ; un `TALKIE_NOT_ALLOWED` le retire, comme sur la fiche. Le (i) du talkie ne vit que sur
+/// la fiche profil.
 struct ConversationHeaderCallCluster: View {
     let entry: HeaderCallEntry?
     let conversationId: String
@@ -26,6 +27,7 @@ struct ConversationHeaderCallCluster: View {
             if let peer = talkiePeer {
                 ConversationHeaderTalkieButton(userId: peer, peerName: peerName, accentColor: accentColor, secondaryColor: secondaryColor)
                     .id(peer)
+                    .zIndex(-1)
             }
             ConversationHeaderCallSlot(
                 entry: entry,
@@ -53,7 +55,6 @@ struct ConversationHeaderTalkieButton: View {
 
     @StateObject private var offer: TalkieOfferModel
     @StateObject private var sender = TalkieSender()
-    @ObservedObject private var center: TalkieCenter
     @State private var pressed = false
     @State private var withdrawn = false
     /// Le téléphone du pair est injoignable depuis plusieurs minutes (#20241) : le geste laisse un message vocal.
@@ -61,25 +62,15 @@ struct ConversationHeaderTalkieButton: View {
 
     private var delivery: TalkieDelivery { TalkieDelivery.of(lasting: unreachableLasting) }
 
-    init(userId: String, peerName: String, accentColor: String, secondaryColor: String, center: TalkieCenter = .shared) {
+    init(userId: String, peerName: String, accentColor: String, secondaryColor: String) {
         self.userId = userId
         self.peerName = peerName
         self.accentColor = accentColor
         self.secondaryColor = secondaryColor
         _offer = StateObject(wrappedValue: TalkieOfferModel(userId: userId))
-        _center = ObservedObject(wrappedValue: center)
     }
 
     private var look: TalkieHoldLook { TalkieHoldLook.resolve(pressed: pressed, phase: sender.phase) }
-
-    /// La voix qui part, ou celle du pair qui arrive (#17310) : publiée à la bande, qui donne alors toute la barre au
-    /// talkie. Une voix qui arrive s'y montre même quand le talkie n'est pas proposé dans ce sens.
-    private var live: TalkieHeaderLive {
-        let peerSpeaking = center.active.contains { $0.fromUserId == userId }
-        let voice = TalkieHeaderVoice.resolve(look: look, peerSpeaking: peerSpeaking)
-        let delivery = TalkieHeaderDelivery.resolve(voice: voice, phase: sender.phase, waking: sender.waking)
-        return TalkieHeaderLive(voice: voice, delivery: delivery, accent: accent, secondary: secondary)
-    }
 
     /// Une pile, jamais un `Group` : vide tant que le talkie n'est pas proposé, elle existe quand même, et c'est elle
     /// qui porte le chargement de l'offre (#17247). Sans largeur ni espacement, la mise en page de l'en-tête ne bouge pas.
@@ -87,6 +78,7 @@ struct ConversationHeaderTalkieButton: View {
         HStack(spacing: 0) {
             if offer.offered && !withdrawn {
                 glyph
+                    .background { TalkieHeaderOrb(userId: userId) }
                     .modifier(TalkieHoldModifier(sender: sender, userId: userId, pressed: $pressed, delivery: delivery))
                     .meeshyTapTarget()
                     .transition(.scale.combined(with: .opacity))
@@ -98,7 +90,6 @@ struct ConversationHeaderTalkieButton: View {
                     .accessibilityIdentifier("conversation.header.talkie")
             }
         }
-        .preference(key: TalkieHeaderLiveKey.self, value: live)
         .animation(.spring(response: 0.3, dampingFraction: 0.75), value: offer.offered)
         .task(id: userId) { await offer.load() }
         .modifier(PhoneUnreachableLastingReader(userId: userId, lasting: $unreachableLasting))

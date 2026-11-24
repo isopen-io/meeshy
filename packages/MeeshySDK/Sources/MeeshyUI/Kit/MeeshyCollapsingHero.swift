@@ -32,6 +32,8 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
     private let keepsBannerInBar: Bool
     /// Ce que le cadre illustré de l'avatar peint sous son bord : le nom descend d'autant (#19925).
     private let avatarSpill: Double
+    /// La hauteur d'une légende que l'hôte pose sous l'avatar déplié : le nom descend d'autant, puis remonte avec elle.
+    private let avatarCaption: Double
     private let banner: Banner
     private let leading: Leading
     private let trailing: Trailing
@@ -54,6 +56,7 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
                 onCollapsedTap: (() -> Void)? = nil,
                 keepsBannerInBar: Bool = false,
                 avatarSpill: Double = 0,
+                avatarCaption: Double = 0,
                 @ViewBuilder banner: () -> Banner,
                 @ViewBuilder leading: () -> Leading,
                 @ViewBuilder trailing: () -> Trailing,
@@ -71,6 +74,7 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
         self.onCollapsedTap = onCollapsedTap
         self.keepsBannerInBar = keepsBannerInBar
         self.avatarSpill = avatarSpill
+        self.avatarCaption = avatarCaption
         self.banner = banner()
         self.leading = leading()
         self.trailing = trailing()
@@ -140,7 +144,7 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
         let collapsedY = top + MeeshyCollapsingHeroRecipe.controlTarget / 2 - MeeshyCollapsingHeroRecipe.avatarCollapsed / 2
         let y = expandedY + (collapsedY - expandedY) * travel
         let textExpandedY = expandedHeight - 86 + MeeshyCollapsingHeroRecipe.avatarExpanded
-            + MeeshyCollapsingHeroRecipe.titleGap(avatarSpill: avatarSpill)
+            + MeeshyCollapsingHeroRecipe.titleGap(avatarSpill: avatarSpill, avatarCaption: avatarCaption)
         let textCollapsedY = top + 6
         let textY = textExpandedY + (textCollapsedY - textExpandedY) * travel
         let textExpandedX: Double = centered ? 0 : 20

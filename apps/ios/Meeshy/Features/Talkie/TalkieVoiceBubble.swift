@@ -112,9 +112,10 @@ struct TalkieVoiceBubble: View {
     }
 }
 
-/// LE COMPTEUR DU TALKIE (#20531) : « ● 0:04 », un point rouge qui clignote une fois par seconde (fixe sous « réduire
-/// les animations ») et le temps écoulé depuis le début de la voix, rafraîchi chaque seconde en chiffres à chasse fixe.
-/// Rien quand personne ne parle. VoiceOver lit « Enregistrement, 4 secondes ».
+/// LE COMPTEUR DU TALKIE (#20531) : « ● 0:04 », un point rouge qui bat une fois par seconde (fixe sous « réduire
+/// les animations ») et le temps écoulé depuis le début de la voix, en chiffres à chasse fixe. Chaque seconde relit le
+/// début de la voix au registre : rien tant que personne ne parle, même monté avant que la voix commence. VoiceOver lit
+/// « Enregistrement, 4 secondes ».
 struct TalkieVoiceClock: View {
     let userId: String
     let stage: TalkieVoiceStage
@@ -125,9 +126,8 @@ struct TalkieVoiceClock: View {
     }
 
     var body: some View {
-        if let startedAt = stage.startedAt(for: userId) {
-            TimelineView(.periodic(from: startedAt, by: 1)) { context in
-                let seconds = Self.elapsedSeconds(since: stage.startedAt(for: userId) ?? startedAt, now: context.date)
+        TimelineView(.periodic(from: stage.startedAt(for: userId) ?? Date(), by: 1)) { context in
+            if let seconds = Self.seconds(startedAt: stage.startedAt(for: userId), now: context.date) {
                 HStack(spacing: MeeshySpacing.xs) {
                     TalkieClockDot()
                     Text(Self.text(seconds: seconds))
@@ -138,9 +138,12 @@ struct TalkieVoiceClock: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Self.accessibilityLabel(seconds: seconds))
             }
-        } else {
-            EmptyView()
         }
+    }
+
+    /// Les secondes écoulées depuis le début de la voix ; `nil` quand aucune voix n'a commencé.
+    nonisolated static func seconds(startedAt: Date?, now: Date) -> Int? {
+        startedAt.map { elapsedSeconds(since: $0, now: now) }
     }
 
     /// Les secondes entières écoulées, jamais négatives (une horloge en avance sur le début compte 0).
@@ -160,17 +163,28 @@ struct TalkieVoiceClock: View {
     }
 }
 
-/// Le point rouge du compteur : une période d'une seconde, immobile sous « réduire les animations ».
+/// Le point rouge du compteur : une demi-seconde qui s'éteint, une demi-seconde qui revient, en boucle, sans horloge
+/// d'images ; immobile sous « réduire les animations ».
 private struct TalkieClockDot: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var dimmed = false
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
-            let time = context.date.timeIntervalSinceReferenceDate
-            let blink = reduceMotion ? 1 : 0.3 + 0.7 * (cos(time * 2 * .pi) + 1) / 2
-            Circle().fill(MeeshyColors.error).frame(width: 8, height: 8).opacity(blink)
+        Circle()
+            .fill(MeeshyColors.error)
+            .frame(width: 8, height: 8)
+            .opacity(reduceMotion || !dimmed ? 1 : 0.3)
+            .onAppear { blink(reduceMotion: reduceMotion) }
+            .onDisappear { dimmed = false }
+            .adaptiveOnChange(of: reduceMotion) { _, reduce in blink(reduceMotion: reduce) }
+    }
+
+    private func blink(reduceMotion: Bool) {
+        guard !reduceMotion else {
+            dimmed = false
+            return
         }
-        .frame(width: 8, height: 8)
+        withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) { dimmed = true }
     }
 }
 
