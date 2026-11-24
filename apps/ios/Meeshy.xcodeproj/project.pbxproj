@@ -1068,6 +1068,7 @@
 		37182B15CEE912E0FC5491CF /* BubbleStandardLayout+Reveal.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0C67E61574789171DB94C82 /* BubbleStandardLayout+Reveal.swift */; };
 		3720A25CA1BB5E25155C346A /* CallViewGlassGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A5EA98F98C7114C257CC7D /* CallViewGlassGuardTests.swift */; };
 		3720FDE7AAD19CD732D144DD /* MeeshyFeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A5F3DF05D65620450AF1A61 /* MeeshyFeatureFlags.swift */; };
+		373196F968A7FA1F47F31518 /* TalkieVoiceLevelerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D17E5C989142C01EC9FAD2A1 /* TalkieVoiceLevelerTests.swift */; };
 		373D12F26D31028681F49806 /* ComposerViewfinderSceneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D211DCA48B5EDA7C1EF35A3 /* ComposerViewfinderSceneTests.swift */; };
 		374F227EDA842A08DDBA9169 /* VideoLegacySupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E246EC2671118108315A654 /* VideoLegacySupport.swift */; };
 		3753650348D8F9AB5AE84655 /* PublicationViewersStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47BE126072249917D9D23BB7 /* PublicationViewersStats.swift */; };
@@ -3676,6 +3677,7 @@
 		BE57E586DD7BBE0E5FE45C4B /* ConversationAudioCallSuspensionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 246419010E6710FB77A38740 /* ConversationAudioCallSuspensionTests.swift */; };
 		BE5B8317F3AC84B127D22ED0 /* AudioTrimSectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4696777A0578030CCCED0FF9 /* AudioTrimSectionTests.swift */; };
 		BE7E10EF2BE21CB81B74B8A8 /* morbide_crypte_back.webp in Resources */ = {isa = PBXBuildFile; fileRef = 613D58B566E53BA17225C378 /* morbide_crypte_back.webp */; };
+		BE9B20174C541645224DADB5 /* TalkieVoiceLeveler.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE937FAA18B67907F9DC53EA /* TalkieVoiceLeveler.swift */; };
 		BEAABBCC3597523FC380C183 /* CallConnectionRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 991BFE2E5DB89C89FE6140B2 /* CallConnectionRecoveryTests.swift */; };
 		BEC1BED340CBD6FD4ECC6464 /* ReelAudioLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1106E3BCBD4703288AF94CDB /* ReelAudioLayer.swift */; };
 		BEC586B3D50EDE3CE8809921 /* ComposerMediaPlacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2099D6217A108500478A26B7 /* ComposerMediaPlacement.swift */; };
@@ -8928,6 +8930,7 @@
 		CE6D1FE4FD8144C1F3F62D02 /* ComposerDrawingBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerDrawingBar.swift; sourceTree = "<group>"; };
 		CE735C28F8FD402B62AEC4AC /* LiveCallJoinerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCallJoinerTests.swift; sourceTree = "<group>"; };
 		CE87654142A6243C964F8E3A /* MockPostService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockPostService.swift; sourceTree = "<group>"; };
+		CE937FAA18B67907F9DC53EA /* TalkieVoiceLeveler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieVoiceLeveler.swift; sourceTree = "<group>"; };
 		CE94F6E9BF61CA830ABC4B48 /* CallManager+Resume.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+Resume.swift"; sourceTree = "<group>"; };
 		CEAD8F937AB4680D5EEC752E /* GameGuideEventsV2Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameGuideEventsV2Tests.swift; sourceTree = "<group>"; };
 		CEB19495A2C64AC013A9129C /* SocialAudioTrackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialAudioTrackTests.swift; sourceTree = "<group>"; };
@@ -8981,6 +8984,7 @@
 		D14B61CBCD29553346BAB55E /* ComposerSceneBackgroundTapPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSceneBackgroundTapPolicyTests.swift; sourceTree = "<group>"; };
 		D154139B4EEC041C5E799851 /* PostEditRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostEditRoute.swift; sourceTree = "<group>"; };
 		D15DA836C4DBED0996774A98 /* PostDetailSceneFramingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostDetailSceneFramingTests.swift; sourceTree = "<group>"; };
+		D17E5C989142C01EC9FAD2A1 /* TalkieVoiceLevelerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieVoiceLevelerTests.swift; sourceTree = "<group>"; };
 		D19CF6155E3707515AE1E6AB /* ProgressionConceptPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressionConceptPage.swift; sourceTree = "<group>"; };
 		D1A500BC9F69027BD4087F7E /* ReelPageView+Info.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ReelPageView+Info.swift"; sourceTree = "<group>"; };
 		D1BBA7B9D516659D3649F709 /* VitrineTournage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineTournage.swift; sourceTree = "<group>"; };
@@ -12547,6 +12551,7 @@
 				D066B180C415B028547BA379 /* TalkieSpectrumAnalyzerTests.swift */,
 				250171E4EAA547407A11CC1F /* TalkieUnreachableTests.swift */,
 				F5480160447F284B3A9AAE3E /* TalkieVoiceCopyTests.swift */,
+				D17E5C989142C01EC9FAD2A1 /* TalkieVoiceLevelerTests.swift */,
 				A1C23E5659EC81641F3F0480 /* TalkieWakeJoinerTests.swift */,
 				A837AE52912361D28F7C7975 /* TalkieWordingTests.swift */,
 			);
@@ -13105,6 +13110,7 @@
 				95724CCB105678154F8A1C2F /* TalkieSender.swift */,
 				165D29D64742D752D1775218 /* TalkieSpectrumAnalyzer.swift */,
 				D97F51552BB90DC3535C3D8A /* TalkieVoiceCopy.swift */,
+				CE937FAA18B67907F9DC53EA /* TalkieVoiceLeveler.swift */,
 				B9D6370CEE3A38D64EE8090E /* TalkieVoicePlayer.swift */,
 				E5718BBE35CA6E86B0B14488 /* TalkieWakeJoiner.swift */,
 			);
@@ -19425,6 +19431,7 @@
 				9EC5A73A51C2CE2443F4502B /* TalkieShortcutIntent.swift in Sources */,
 				EE4D9FF13FD2B67ECFA6537F /* TalkieSpectrumAnalyzer.swift in Sources */,
 				B25B44BC4DE96AFCD86410AA /* TalkieVoiceCopy.swift in Sources */,
+				BE9B20174C541645224DADB5 /* TalkieVoiceLeveler.swift in Sources */,
 				B3102C10C183656FA58182FD /* TalkieVoicePlayer.swift in Sources */,
 				E9D0F7B8ECAADBD03F85C472 /* TalkieWakeJoiner.swift in Sources */,
 				B00ECA21E4E72CDF0CA4CFB7 /* TaskSlot.swift in Sources */,
@@ -21576,6 +21583,7 @@
 				A41C20B4617C1AF9503998DD /* TalkieSpectrumAnalyzerTests.swift in Sources */,
 				0E270F7AD61FDCFBC008386D /* TalkieUnreachableTests.swift in Sources */,
 				B0E9EDA8953E870DB279186D /* TalkieVoiceCopyTests.swift in Sources */,
+				373196F968A7FA1F47F31518 /* TalkieVoiceLevelerTests.swift in Sources */,
 				54E60F1294DEBEEA02EF1004 /* TalkieWakeJoinerTests.swift in Sources */,
 				8A0869F74C5C5085ED8A2A55 /* TalkieWordingTests.swift in Sources */,
 				971DC4B190D6804609F4C9CF /* TaskSlotTests.swift in Sources */,
