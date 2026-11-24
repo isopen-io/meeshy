@@ -99,7 +99,7 @@ final class TalkieBubbleLawTests: XCTestCase {
 
     func test_outline_isClosed() {
         let points = tips((0..<bandCount).map { Float($0 % 7) / 7 })
-        let path = TalkieBubbleLaw.outline(tips: points)
+        let path = TalkieBubbleLaw.outline(tips: points, geometry: geometry, center: center)
         var start: CGPoint?
         var end: CGPoint?
         var closes = 0
@@ -121,7 +121,7 @@ final class TalkieBubbleLawTests: XCTestCase {
     func test_outline_passesThroughEveryTip() {
         let points = tips((0..<bandCount).map { Float($0 % 5) / 5 })
         var ends: [CGPoint] = []
-        TalkieBubbleLaw.outline(tips: points).forEach { element in
+        TalkieBubbleLaw.outline(tips: points, geometry: geometry, center: center).forEach { element in
             if case .curve(let to, _, _) = element { ends.append(to) }
         }
         let expected = Array(points.dropFirst()) + [points[0]]
@@ -132,13 +132,22 @@ final class TalkieBubbleLawTests: XCTestCase {
         }
     }
 
+    private var stepBands: [Float] {
+        (0..<bandCount).map { ($0 / 2).isMultiple(of: 2) ? 0 : 1 }
+    }
+
     func test_outline_neverBeyondMaxAmplitude() {
-        let bands = (0..<bandCount).map { $0.isMultiple(of: 2) ? Float(1) : 0 }
-        let path = TalkieBubbleLaw.outline(tips: tips(bands), geometry: geometry, center: center)
+        let path = TalkieBubbleLaw.outline(tips: tips(stepBands), geometry: geometry, center: center)
         let distances = sampledDistances(of: path)
         XCTAssertGreaterThan(distances.count, bandCount * 20)
         XCTAssertLessThanOrEqual(distances.max() ?? .infinity, 70.5)
         XCTAssertGreaterThanOrEqual(distances.min() ?? 0, 49.5)
+    }
+
+    func test_outline_withoutClamp_overshootsAtStepEdges() {
+        let path = TalkieBubbleLaw.unclampedOutlineForTesting(tips: tips(stepBands))
+        let distances = sampledDistances(of: path)
+        XCTAssertTrue((distances.max() ?? 0) > 70.5 || (distances.min() ?? .infinity) < 49.5)
     }
 
     func test_outline_silence_staysOnTheCircle() {
@@ -147,7 +156,7 @@ final class TalkieBubbleLawTests: XCTestCase {
     }
 
     func test_outline_tooFewTips_isEmpty() {
-        XCTAssertTrue(TalkieBubbleLaw.outline(tips: [CGPoint(x: 1, y: 1), CGPoint(x: 2, y: 2)]).isEmpty)
+        XCTAssertTrue(TalkieBubbleLaw.outline(tips: [CGPoint(x: 1, y: 1), CGPoint(x: 2, y: 2)], geometry: geometry, center: center).isEmpty)
     }
 
     func test_reducedMotionStroke_mapsLevelFromTwoToSixPoints() {

@@ -27,15 +27,9 @@ nonisolated enum TalkieBubbleLaw {
         }
     }
 
-    /// Une Catmull-Rom fermée (tension 0,5) convertie en Bézier cubiques. Sans gabarit, elle peut dépasser entre
-    /// deux pointes : le contour du rendu passe par `outline(tips:geometry:center:)`.
-    static func outline(tips: [CGPoint]) -> Path {
-        outline(tips: tips) { $0 }
-    }
-
-    /// La même courbe, dont les points de contrôle sont bornés radialement à `[baseRadius, baseRadius + maxAmplitude]`
+    /// Une Catmull-Rom fermée (tension 0,5) en Bézier cubiques, dont les points de contrôle sont bornés radialement à `[baseRadius, baseRadius + maxAmplitude]`
     /// autour du centre : une Bézier reste dans l'enveloppe convexe de ses points de contrôle, donc le contour ne
-    /// sort jamais de la bulle ni ne rentre dans le héros.
+    /// sort jamais de la bulle ni ne rentre dans le héros. Le bornage peut rompre la continuité C1 aux marches du spectre, par construction.
     static func outline(tips: [CGPoint], geometry: TalkieBubbleGeometry, center: CGPoint) -> Path {
         let lowest = geometry.baseRadius
         let highest = geometry.baseRadius + geometry.maxAmplitude
@@ -54,6 +48,11 @@ nonisolated enum TalkieBubbleLaw {
     /// L'épaisseur du trait quand le mouvement est réduit : de 2 pt (silence) à 6 pt (pleine voix).
     static func reducedMotionStroke(level: Float) -> CGFloat {
         2 + 4 * clampedLevel(level)
+    }
+
+    /// Le même tracé SANS bornage : réservé aux tests, qui prouvent que c'est le bornage qui tient la borne.
+    static func unclampedOutlineForTesting(tips: [CGPoint]) -> Path {
+        outline(tips: tips) { $0 }
     }
 
     private static func clampedLevel(_ value: Float) -> CGFloat {
