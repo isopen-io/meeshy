@@ -41,6 +41,25 @@ final class TalkieSpectrumAnalyzerTests: XCTestCase {
         XCTAssertEqual(argmax(bands), TalkieSpectrumAnalyzer.bandIndex(frequency: 4_000))
     }
 
+    func test_bands_sine200HzAtMinus6dB_peaksInItsBand() {
+        let bands = analyze(sine(frequency: 200, amplitude: 0.5))
+        XCTAssertEqual(argmax(bands), TalkieSpectrumAnalyzer.bandIndex(frequency: 200))
+    }
+
+    func test_bands_sweepAtMinus6dB_eachTonePeaksInItsBand() {
+        let offBin = 4.1 * Self.sampleRate / 1024
+        for frequency in [100, 150, 200, 300, 500, offBin] {
+            let bands = analyze(sine(frequency: frequency, amplitude: 0.5))
+            XCTAssertEqual(argmax(bands), TalkieSpectrumAnalyzer.bandIndex(frequency: frequency), "\(frequency) Hz")
+        }
+    }
+
+    func test_bands_sineAtMinus6dBBetweenTwoBins_staysAtItsLevel() {
+        let bands = analyze(sine(frequency: 4.5 * Self.sampleRate / 1024, amplitude: 0.5))
+        let expected: Float = (20 * log10(0.5) - TalkieWaveLaw.floorDecibels) / -TalkieWaveLaw.floorDecibels
+        XCTAssertEqual(bands.max() ?? 0, expected, accuracy: 0.01)
+    }
+
     // MARK: - Calibrage : 1 à pleine échelle, linéaire en décibels jusqu'au plancher
 
     func test_bands_fullScaleSine_reachesOneInItsBand() {
