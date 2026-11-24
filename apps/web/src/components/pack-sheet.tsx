@@ -12,6 +12,7 @@ import { decorPackState, isAnimatedDecor } from '@/lib/packs/decor-items';
 import { decorItemName, useAppearanceNames, usePackItems, type PackRef } from '@/lib/packs/use-pack-items';
 
 import { DecorThumb } from './decor-stage';
+import { MeeshShortfall } from './meesh-shortfall';
 import type { PackAction } from './pack-shop';
 import { useScheme } from './profile-banner-design';
 import { Sheet } from './sheet';
@@ -41,6 +42,8 @@ export type PackSheetProps = {
   };
   readonly cover: ReactNode;
   readonly action: PackAction;
+  /** Les Meeshes qui manquent pour l'acheter (#20527) ; `null` ou absent : rien ne manque, ou le solde est inconnu. */
+  readonly shortfall?: number | null;
   readonly busy: boolean;
   readonly notice: string;
   readonly onAction: () => void;
@@ -53,7 +56,7 @@ const weightOf = (language: InterfaceLanguage, bytes: number): string => {
   return new Intl.NumberFormat(language, { style: 'unit', unit: mega ? 'megabyte' : 'kilobyte', maximumFractionDigits: 1 }).format(bytes / (mega ? 1_000_000 : 1_000));
 };
 
-export function PackSheet({ language, deps, pack, cover, action, busy, notice, onAction, onOpenItem, onClose }: PackSheetProps) {
+export function PackSheet({ language, deps, pack, cover, action, shortfall = null, busy, notice, onAction, onOpenItem, onClose }: PackSheetProps) {
   const t = translateStickerPacks;
   const tp = translatePackPreview;
   const scheme = useScheme();
@@ -91,6 +94,7 @@ export function PackSheet({ language, deps, pack, cover, action, busy, notice, o
             <p data-pack-sheet-facts className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
               {facts.join(' · ')}
             </p>
+            {shortfall === null ? null : <MeeshShortfall language={language} missing={shortfall} />}
           </div>
         </div>
         {action.kind === 'toggle' || action.kind === 'buy' ? (
