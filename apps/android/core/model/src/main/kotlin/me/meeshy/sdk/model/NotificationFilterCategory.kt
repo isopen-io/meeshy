@@ -125,7 +125,7 @@ public enum class NotificationFilterCategory(public val accentHex: String) {
             CONTACTS to setOf(
                 "friend_request", "contact_request", "FRIEND_REQUEST",
                 "friend_accepted", "contact_accepted", "FRIEND_ACCEPTED",
-                "contact_joined", "contact_recently_active", "STATUS_UPDATE",
+                "contact_joined", "contact_recently_active", "blood_proximity", "STATUS_UPDATE",
             ),
             GROUPS to setOf(
                 "community_invite", "community_joined", "community_left",

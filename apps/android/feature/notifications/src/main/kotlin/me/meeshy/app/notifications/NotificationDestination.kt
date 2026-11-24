@@ -54,6 +54,8 @@ public sealed interface NotificationDestination {
 
     /** Un palier ou un événement du jeu ouvre l'écran que la carte de navigation du jeu nomme (iOS `GameNavigationMap.entry`). */
     public data class Game(val target: GameTarget) : NotificationDestination
+    /** « Un Sang s'approche » (#20540) : la carte de la personne, centrée sur elle et sur moi. */
+    public data class PersonMap(val userId: String) : NotificationDestination
     public data object None : NotificationDestination
 }
 
@@ -81,6 +83,7 @@ public object NotificationDestinationResolver {
             is PushTapDestination.Profile -> NotificationDestination.Profile(destination.userId)
             is PushTapDestination.Community -> NotificationDestination.Community(destination.communityId)
             is PushTapDestination.Game -> NotificationDestination.Game(destination.target)
+            is PushTapDestination.PersonMap -> NotificationDestination.PersonMap(destination.userId)
             PushTapDestination.Notifications, PushTapDestination.None -> NotificationDestination.None
         }
 
@@ -96,6 +99,7 @@ public object NotificationDestinationResolver {
             commentId = (notification.context?.commentId ?: notification.metadata?.commentId).present(),
             parentCommentId = (notification.context?.parentCommentId ?: notification.metadata?.parentCommentId).present(),
             communityId = notification.context?.communityId.present(),
+            userId = notification.metadata?.userId.present(),
         )
     }
 }
@@ -111,6 +115,7 @@ internal fun NotificationDestination.dispatch(
     onOpenGame: (GameTarget) -> Unit = {},
     onOpenStoryContent: (NotificationDestination.StoryContent) -> Unit = { onOpenPost(it.postId) },
     onOpenCommunity: (String) -> Unit = {},
+    onOpenPersonMap: (String) -> Unit = onOpenProfile,
 ) {
     when (this) {
         is NotificationDestination.Conversation -> onOpenConversation(conversationId)
@@ -122,6 +127,7 @@ internal fun NotificationDestination.dispatch(
         is NotificationDestination.Mood -> onOpenMood(statusId)
         is NotificationDestination.StoryContent -> onOpenStoryContent(this)
         is NotificationDestination.Game -> onOpenGame(target)
+        is NotificationDestination.PersonMap -> onOpenPersonMap(userId)
         NotificationDestination.None -> Unit
     }
 }

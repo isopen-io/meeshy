@@ -55,6 +55,8 @@ fun NotificationBannerHost(
     onOpenGame: (GameTarget) -> Unit = {},
     /** « Ajouté à la communauté Y » : le détail de Y, comme la ligne de la cloche et le push (#18670). */
     onOpenCommunity: (String) -> Unit = {},
+    /** « Un Sang s'approche » : la carte de la personne, comme la ligne de la cloche et le push (#20540). */
+    onOpenPersonMap: (String) -> Unit = {},
     /** Appui long ou tirage vers le bas : l'aperçu de la conversation (hébergé par :app). */
     onPreviewConversation: (String) -> Unit = {},
     /** Heure de la dernière présentation modale : le tap qui la suit de peu lui appartient (iOS `suppressToastTap`). */
@@ -136,6 +138,7 @@ fun NotificationBannerHost(
                                     ?.let { onOpenGame(it.target) }
                             }
                             is BannerTap.Community -> onOpenCommunity(target.communityId)
+                            is BannerTap.PersonMap -> onOpenPersonMap(target.userId)
                             is BannerTap.Conversation -> onOpenConversation(target.conversationId)
                             is BannerTap.Post -> onOpenPost(target.postId)
                             BannerTap.None -> Unit

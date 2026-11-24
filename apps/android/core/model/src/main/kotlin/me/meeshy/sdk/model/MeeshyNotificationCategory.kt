@@ -40,6 +40,7 @@ public enum class MeeshyNotificationCategory(public val wire: String?) {
         private val FRIEND_REQUEST_TYPES = setOf("friend_request", "contact_request", "FRIEND_REQUEST")
         private val CONTACT_TYPES = setOf(
             "contact_accepted", "friend_accepted", "FRIEND_ACCEPTED", "contact_joined", "contact_recently_active",
+            "blood_proximity",
         )
         private val INVITATION_TYPES = setOf("community_invite", "GROUP_INVITE", "member_joined", "community_joined")
         private val SOCIAL_TYPES = setOf(

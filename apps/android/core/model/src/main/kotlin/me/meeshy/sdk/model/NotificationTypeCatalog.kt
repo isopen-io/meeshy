@@ -32,6 +32,7 @@ public enum class NotificationType {
     CONTACT_ACTIVITY,
     DEVICE_BATTERY,
     DEVICE_UNREACHABLE,
+    BLOOD_PROXIMITY,
     GROUP_INVITE,
     MEMBER_JOINED,
     MEMBER_LEFT,
@@ -149,6 +150,10 @@ public object NotificationTypeCatalog {
         NotificationTypeDescriptor(
             NotificationType.DEVICE_UNREACHABLE, NotificationCategory.GROUPS,
             { it.deviceUnreachableEnabled }, { p, e -> p.copy(deviceUnreachableEnabled = e) },
+        ),
+        NotificationTypeDescriptor(
+            NotificationType.BLOOD_PROXIMITY, NotificationCategory.GROUPS,
+            { it.bloodProximityEnabled }, { p, e -> p.copy(bloodProximityEnabled = e) },
         ),
         NotificationTypeDescriptor(
             NotificationType.GROUP_INVITE, NotificationCategory.GROUPS,

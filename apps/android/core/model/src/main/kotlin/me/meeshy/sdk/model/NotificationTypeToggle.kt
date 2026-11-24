@@ -76,6 +76,7 @@ public object NotificationTypeToggle {
             ),
         ) { it.contactRequestEnabled },
         ToggleGroup(setOf("contact_recently_active")) { it.contactActivityEnabled },
+        ToggleGroup(setOf("blood_proximity")) { it.bloodProximityEnabled },
         ToggleGroup(setOf("device_battery")) { it.deviceBatteryEnabled },
         ToggleGroup(setOf("device_unreachable")) { it.deviceUnreachableEnabled },
         ToggleGroup(

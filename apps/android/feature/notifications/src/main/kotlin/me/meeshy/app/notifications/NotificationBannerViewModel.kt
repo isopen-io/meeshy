@@ -55,6 +55,8 @@ data class InAppBanner(
      * `pendingEngagementReveal`). `null` pour tout autre contenu.
      */
     val game: ApiNotification? = null,
+    /** « Un Sang s'approche » (#20540) : la personne dont la carte s'ouvre au toucher. `null` pour tout autre contenu. */
+    val personMapUserId: String? = null,
 )
 
 /**
@@ -243,6 +245,7 @@ class NotificationBannerViewModel @Inject constructor(
             communityId = (NotificationDestinationResolver.resolve(shown) as? NotificationDestination.Community)?.communityId,
             previewHidden = !prefs.showPreview,
             game = shown.takeIf { NotificationDestinationResolver.resolve(it) is NotificationDestination.Game },
+            personMapUserId = (NotificationDestinationResolver.resolve(shown) as? NotificationDestination.PersonMap)?.userId,
         )
         dismissJob = viewModelScope.launch {
             delay(VISIBLE_MS)

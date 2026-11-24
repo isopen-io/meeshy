@@ -53,7 +53,7 @@ public enum class PushChannelCategory {
             "story_new_comment", "friend_story_comment", "story_thread_reply",
             "friend_new_story", "friend_new_post", "friend_new_mood",
             "contact_request", "friend_request", "FRIEND_REQUEST", "contact_accepted", "friend_accepted",
-            "FRIEND_ACCEPTED", "contact_joined", "contact_recently_active",
+            "FRIEND_ACCEPTED", "contact_joined", "contact_recently_active", "blood_proximity",
             "game_duo_invited", "game_duo_accepted", "game_league_result", "game_season_step", "game_mission_window",
             "community_invite", "GROUP_INVITE", "member_joined", "community_joined",
         )
