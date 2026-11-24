@@ -148,7 +148,8 @@ public final class ConversationAudioCoordinator: ObservableObject {
 
     public init(
         engine: AudioPlaybackEngineDriving = AudioPlaybackManager(),
-        sessionEvents: AnyPublisher<MediaSessionCoordinator.Event, Never>? = nil
+        sessionEvents: AnyPublisher<MediaSessionCoordinator.Event, Never>? = nil,
+        authentication: AnyPublisher<Bool, Never>? = nil
     ) {
         self.engine = engine
         // Bubble taps and lock-screen commands call the engine directly, bypassing
@@ -163,7 +164,7 @@ public final class ConversationAudioCoordinator: ObservableObject {
             manager.playbackPermissionGuard = { !CallManagerHost.shared.isCallActiveForAudioGuard }
         }
         wireEngineForwarding()
-        wireAuthLogoutHook()
+        wireAuthLogoutHook(authentication ?? AuthManager.shared.$isAuthenticated.eraseToAnyPublisher())
         wireSocketLifecycleHooks()
         wireSessionInterruptionHooks(
             sessionEvents ?? MediaSessionCoordinator.shared.events.eraseToAnyPublisher()
@@ -649,8 +650,10 @@ public final class ConversationAudioCoordinator: ObservableObject {
             .store(in: &cancellables)
     }
 
-    private func wireAuthLogoutHook() {
-        AuthManager.shared.$isAuthenticated
+    /// La session est injectable (#9951) : un test qui basculait `AuthManager.shared` déconnectait aussi tous les
+    /// autres abonnés de l'hôte de test.
+    private func wireAuthLogoutHook(_ authentication: AnyPublisher<Bool, Never>) {
+        authentication
             .removeDuplicates()
             .dropFirst()
             .filter { !$0 }
