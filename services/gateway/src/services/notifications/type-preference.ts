@@ -34,6 +34,7 @@ export function isNotificationTypeEnabledByPreference(
     case 'device_unreachable': return prefs.deviceUnreachableEnabled ?? true;
     case 'location_share_started':
     case 'location_share_requested': return prefs.locationShareEnabled ?? true;
+    case 'blood_proximity':   return prefs.bloodProximityEnabled ?? true;
     case 'game_duo_invited':
     case 'game_duo_accepted':
     case 'game_league_result':

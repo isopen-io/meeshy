@@ -69,6 +69,7 @@ export const notificationTypeEnum = z.enum([
   'inactivity_alert',     // Un Sang n'a pas répondu à « Tout va bien ? », ou vient de répondre (#18738)
   'location_share_started',   // Un lien me partage sa position et m'en prévient (#19204)
   'location_share_requested', // Un destinataire demande de prolonger ou de refaire mon partage (#19204)
+  'blood_proximity',          // Un Sang s'approche : son nom et une distance arrondie, jamais une coordonnée (#20540)
 
   // ===== INTERACTION EVENTS =====
   'user_mentioned',       // Mentionné dans un message (@username)

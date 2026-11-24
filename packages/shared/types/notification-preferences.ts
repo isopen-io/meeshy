@@ -36,6 +36,8 @@ export interface NotificationPreference {
   readonly deviceUnreachableEnabled?: boolean;
   /** « Partages de position » (#19204) : prévenu d'un partage, demande de prolonger — absent = reçu. */
   readonly locationShareEnabled?: boolean;
+  /** « Quand un Sang s'approche » (#20540) : `blood_proximity` — absent = reçu. */
+  readonly bloodProximityEnabled?: boolean;
   /** « Jeu » (#9490) — absent = reçu. */
   readonly gameEnabled?: boolean;
   /** « Moments à immortaliser » (#10175, D8) : le push d'une étape franchie app fermée — absent = reçu. */
@@ -170,6 +172,8 @@ export function isNotificationTypeEnabled(
     case 'location_share_started':
     case 'location_share_requested':
       return prefs.locationShareEnabled !== false;
+    case 'blood_proximity':
+      return prefs.bloodProximityEnabled !== false;
     case 'game_duo_invited':
     case 'game_duo_accepted':
     case 'game_league_result':
