@@ -6,7 +6,9 @@ import org.robolectric.RuntimeEnvironment
 import com.google.common.truth.Truth.assertThat
 import java.util.Locale
 import me.meeshy.sdk.model.game.GameCopyLaws
+import me.meeshy.sdk.model.game.FlamePauseSection
 import me.meeshy.sdk.model.game.GameEffortRelight
+import me.meeshy.sdk.model.game.GameFlamePause
 import me.meeshy.sdk.model.game.GameMaterial
 import me.meeshy.sdk.model.game.GameText
 import me.meeshy.sdk.model.game.GameTextArg
@@ -15,6 +17,7 @@ import me.meeshy.sdk.model.game.GloryRank
 import me.meeshy.sdk.model.game.LevelTierKey
 import me.meeshy.sdk.model.game.TreasuryTierKey
 import me.meeshy.sdk.model.game.GameNumberFormat
+import me.meeshy.app.game.pages.weekdayLabel
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -160,5 +163,23 @@ class GameCopyTest {
             .isEqualTo("Encore 2 rêves complets aujourd’hui et ta Flamme de 12 jours revient, sans payer.")
         assertThat(GameCopy.resolve(resourcesIn("en"), GameCopyLaws.effortRelight(effort)))
             .isEqualTo("Just 1 full dream more by tomorrow night and your Flame comes back with its 12 days, without paying.")
+    }
+
+    @Test
+    fun `la Flamme en veille se dit avec sa duree, son dernier jour et la raison du refus`() {
+        val fr = resourcesIn("fr")
+        assertThat(GameCopy.resolve(fr, GameCopyLaws.flamePauseAction(3))).isEqualTo("Mettre en veille · 3 jours")
+        assertThat(GameCopy.resolve(fr, GameCopyLaws.flamePauseIntro())).contains("jusqu’à 7 jours, une fois par trimestre")
+        val day = weekdayLabel("2026-10-12", Locale.FRENCH)
+        assertThat(day).isEqualTo("lundi 12 octobre")
+        val pause = GameFlamePause(from = "2026-10-06", until = "2026-10-12")
+        assertThat(GameCopy.resolve(fr, GameCopyLaws.flamePaused(FlamePauseSection.Paused(pause, startsTomorrow = false), day)))
+            .isEqualTo("Ta Flamme est en veille jusqu’au lundi 12 octobre.")
+        assertThat(GameCopy.resolve(fr, GameCopyLaws.flamePaused(FlamePauseSection.Paused(pause, startsTomorrow = true), day)))
+            .isEqualTo("Ta Flamme se met en veille demain, jusqu’au lundi 12 octobre.")
+        assertThat(GameCopy.resolve(fr, GameCopyLaws.flamePauseRefusal("quarterly-limit")!!))
+            .isEqualTo("Ta Flamme a déjà eu sa veille ce trimestre.")
+        assertThat(GameCopy.resolve(resourcesIn("en"), GameCopyLaws.flamePauseAction(1))).isEqualTo("Let it rest · 1 day")
+        assertThat(weekdayLabel("pas-un-jour", Locale.FRENCH)).isEqualTo("pas-un-jour")
     }
 }

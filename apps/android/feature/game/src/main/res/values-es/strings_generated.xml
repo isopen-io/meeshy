@@ -570,7 +570,10 @@
     <string name="game_error_duo_not_found">Esta alianza ya no existe: la pantalla se actualiza.</string>
     <string name="game_error_duo_not_friends">La alianza se sella entre amigos aceptados.</string>
     <string name="game_error_duo_transition_refused">Este gesto no tiene sentido para esta alianza.</string>
+    <string name="game_error_flame_pause_already_paused">Tu Llama ya está descansando.</string>
+    <string name="game_error_flame_pause_no_flame">Tu Llama tiene que estar encendida para descansar.</string>
     <string name="game_error_flame_pause_not_allowed">La Llama no puede descansar ahora.</string>
+    <string name="game_error_flame_pause_quarterly_limit">Tu Llama ya descansó este trimestre.</string>
     <string name="game_error_freeze_at_maximum">Dos Velas ya guardan tu Llama: no caben más.</string>
     <string name="game_error_generic">No ha salido bien: revisa tu conexión e inténtalo de nuevo.</string>
     <string name="game_error_insufficient_meeshes">Necesitas una Meesh más para eso.</string>
@@ -642,6 +645,11 @@
     <string name="game_flame_panel_effort_relight_tomorrow">Solo %1$s más antes de mañana por la noche y tu Llama vuelve con sus %2$s, sin pagar.</string>
     <string name="game_flame_panel_freeze_buy">Tomar una Vela · %1$s</string>
     <string name="game_flame_panel_freezes">Velas: %1$s / %2$s</string>
+    <string name="game_flame_panel_pause">Dejarla descansar · %1$s</string>
+    <string name="game_flame_panel_pause_days">Duración del descanso</string>
+    <string name="game_flame_panel_pause_intro">¿Una pausa? Tu Llama te espera hasta %1$s, una vez por trimestre.</string>
+    <string name="game_flame_panel_paused">Tu Llama descansa hasta el %1$s.</string>
+    <string name="game_flame_panel_paused_soon">Tu Llama descansa a partir de mañana, hasta el %1$s.</string>
     <string name="game_flame_panel_relight">Volver a encender la Llama · %1$s</string>
     <string name="game_flame_panel_relight_closed">Esta Llama ya no se puede volver a encender. Una nueva Llama empieza con tu próximo gesto.</string>
     <string name="game_flame_panel_relight_intro">Tu Llama se apagó: vuelve a encenderla ahora, continúa donde se quedó.</string>

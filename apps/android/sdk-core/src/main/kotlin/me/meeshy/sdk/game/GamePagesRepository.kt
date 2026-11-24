@@ -48,7 +48,8 @@ import me.meeshy.sdk.session.AccountFence
  */
 sealed interface GameWriteOutcome<out T> {
     data class Done<T>(val value: T) : GameWriteOutcome<T>
-    data class Refused(val code: String?, val offline: Boolean) : GameWriteOutcome<Nothing>
+    /** [reason] : la raison machine qui qualifie le refus (`FLAME_PAUSE_NOT_ALLOWED` → `quarterly-limit`), `null` sinon. */
+    data class Refused(val code: String?, val offline: Boolean, val reason: String? = null) : GameWriteOutcome<Nothing>
 }
 
 /**

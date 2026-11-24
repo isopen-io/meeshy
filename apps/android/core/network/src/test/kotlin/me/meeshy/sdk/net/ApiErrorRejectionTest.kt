@@ -54,6 +54,18 @@ class ApiErrorRejectionTest {
         assertThat(failureOf(refused(409, """{"success":false,"code":"E2EE_PARTICIPANT_WITHOUT_DEVICE"}""")).withoutDeviceUserIds).isEmpty()
     }
 
+    /** #20511 — la raison d'un refus voyage à la racine ; une forme qui n'est pas une chaîne n'emporte pas le refus. */
+    @Test
+    fun `FLAME_PAUSE_NOT_ALLOWED porte sa raison, a la racine`() = runTest {
+        val error = failureOf(refused(409, """{"success":false,"code":"FLAME_PAUSE_NOT_ALLOWED","error":"x","reason":"quarterly-limit"}"""))
+        assertThat(error.code).isEqualTo("FLAME_PAUSE_NOT_ALLOWED")
+        assertThat(error.reason).isEqualTo("quarterly-limit")
+        val odd = failureOf(refused(409, """{"success":false,"code":"FLAME_PAUSE_NOT_ALLOWED","reason":{"why":"x"}}"""))
+        assertThat(odd.code).isEqualTo("FLAME_PAUSE_NOT_ALLOWED")
+        assertThat(odd.reason).isNull()
+        assertThat(failureOf(refused(409, """{"success":false,"code":"INSUFFICIENT_MEESHES"}""")).reason).isNull()
+    }
+
     /** #20182 (5) — une liste mal formée ne fait pas perdre le 409 : seuls les identifiants lisibles restent. */
     @Test
     fun `des membres sans appareil mal formes n'emportent pas le refus`() = runTest {
