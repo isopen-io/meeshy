@@ -185,6 +185,7 @@
 		07EED708F04C0A4F0098C0B0 /* AudioTrackLanguageResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35C03EEDDBC36F7E9BECB248 /* AudioTrackLanguageResolver.swift */; };
 		07FBEEBCF37687C9BA22BA75 /* ReelsPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45A4C9A6909529AD1474461B /* ReelsPresenter.swift */; };
 		0808776F36CAB8386ADDE879 /* BubbleLanguageFlagControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE1FD735621B84B09703D68E /* BubbleLanguageFlagControllerTests.swift */; };
+		080C6A2D50ED75971F54614F /* TalkieVoiceBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0410CB5D39C494ACD0390E8D /* TalkieVoiceBubble.swift */; };
 		081FFFBFB26384BBCEB34424 /* ScrollTimePillOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16DD7C66DAB48E7CB3FCBD6B /* ScrollTimePillOverlay.swift */; };
 		08267FE605258B0DAADB3515 /* ConversationMediaDoorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88163DB962AF7599D24D8AC9 /* ConversationMediaDoorTests.swift */; };
 		0837B6F48ED97EE5F47566D6 /* ComposerCaptureOrientation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F72E553B14DD2A42D6E3187B /* ComposerCaptureOrientation.swift */; };
@@ -755,6 +756,7 @@
 		26A81F4DC92794C7C7421748 /* ConversationComposerLayers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A67A21D5F16382AF4D405BC /* ConversationComposerLayers.swift */; };
 		26B50FF1EC042AAF69DD9B15 /* CallModeControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14A825B968F9AE87154BCB0A /* CallModeControls.swift */; };
 		26B6376C666D38DB8894A82A /* ShareMyLocationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DA6B0FE427A7700DB5BF752 /* ShareMyLocationSheet.swift */; };
+		26BFE158887B717323CE664E /* TalkieVoiceBubbleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA264E61B24A3A486857CC5C /* TalkieVoiceBubbleTests.swift */; };
 		26C7BDDF7AD62DE4398E1E22 /* MessageMoreSheetAccessibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02F8B384F4BC5AA88547A4BF /* MessageMoreSheetAccessibilityTests.swift */; };
 		26E4E6B5E0E74177D8F74E5F /* EncryptedDevicesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54D391E1015EEBABB9D29852 /* EncryptedDevicesView.swift */; };
 		26E8C93DE1BA0E71F43F8B8D /* ComposerPublishChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F3085FC76A955210DA6670C /* ComposerPublishChannel.swift */; };
@@ -5136,6 +5138,7 @@
 		03FD1449D3CCDEE286C8E487 /* ReachPresenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReachPresenceTests.swift; sourceTree = "<group>"; };
 		0406C69FBE6640463986B7BC /* ProfileUserPostsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileUserPostsViewModel.swift; sourceTree = "<group>"; };
 		040CF9EFBA6DB1D1777721A6 /* MyStoriesSourceCorpus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyStoriesSourceCorpus.swift; sourceTree = "<group>"; };
+		0410CB5D39C494ACD0390E8D /* TalkieVoiceBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieVoiceBubble.swift; sourceTree = "<group>"; };
 		04260261BC13E001288F584F /* CameraModel+SystemPressure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CameraModel+SystemPressure.swift"; sourceTree = "<group>"; };
 		042673C6BD1266EDADDFDF4A /* CallMontageRenderer+Glamour.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallMontageRenderer+Glamour.swift"; sourceTree = "<group>"; };
 		04329AB00B596A6672F99D91 /* AffiliatesListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AffiliatesListView.swift; sourceTree = "<group>"; };
@@ -8604,6 +8607,7 @@
 		BA114E5D3F081F3F59BCA59B /* ConversationReadReceiptSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationReadReceiptSender.swift; sourceTree = "<group>"; };
 		BA122AEF93A1018B3A82CEFF /* BloodLocationScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BloodLocationScreen.swift; sourceTree = "<group>"; };
 		BA1EBE24B2AF8BE6A57D88D6 /* MockSocialSocket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockSocialSocket.swift; sourceTree = "<group>"; };
+		BA264E61B24A3A486857CC5C /* TalkieVoiceBubbleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieVoiceBubbleTests.swift; sourceTree = "<group>"; };
 		BA3E5F2DC6EF95F686647A87 /* VideoThermalProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoThermalProfile.swift; sourceTree = "<group>"; };
 		BA4C39C183307A917D193DB0 /* VoicePlaybackActivityLawTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePlaybackActivityLawTests.swift; sourceTree = "<group>"; };
 		BA4F3A8ED1B2A0E50C43E0EA /* RiverTypingIndicatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RiverTypingIndicatorTests.swift; sourceTree = "<group>"; };
@@ -12563,6 +12567,7 @@
 				3388F82086611EF7610470CC /* TalkieSenderTests.swift */,
 				D066B180C415B028547BA379 /* TalkieSpectrumAnalyzerTests.swift */,
 				250171E4EAA547407A11CC1F /* TalkieUnreachableTests.swift */,
+				BA264E61B24A3A486857CC5C /* TalkieVoiceBubbleTests.swift */,
 				F5480160447F284B3A9AAE3E /* TalkieVoiceCopyTests.swift */,
 				D17E5C989142C01EC9FAD2A1 /* TalkieVoiceLevelerTests.swift */,
 				B36E4C1D527DEE26CC37801B /* TalkieVoiceProcessorTests.swift */,
@@ -13126,6 +13131,7 @@
 				95724CCB105678154F8A1C2F /* TalkieSender.swift */,
 				165D29D64742D752D1775218 /* TalkieSpectrumAnalyzer.swift */,
 				7C64F866150D98151D1DF253 /* TalkieSpectrumWindows.swift */,
+				0410CB5D39C494ACD0390E8D /* TalkieVoiceBubble.swift */,
 				D97F51552BB90DC3535C3D8A /* TalkieVoiceCopy.swift */,
 				CE937FAA18B67907F9DC53EA /* TalkieVoiceLeveler.swift */,
 				B9D6370CEE3A38D64EE8090E /* TalkieVoicePlayer.swift */,
@@ -19450,6 +19456,7 @@
 				9EC5A73A51C2CE2443F4502B /* TalkieShortcutIntent.swift in Sources */,
 				EE4D9FF13FD2B67ECFA6537F /* TalkieSpectrumAnalyzer.swift in Sources */,
 				3FE518A9173D653C81F83B3D /* TalkieSpectrumWindows.swift in Sources */,
+				080C6A2D50ED75971F54614F /* TalkieVoiceBubble.swift in Sources */,
 				B25B44BC4DE96AFCD86410AA /* TalkieVoiceCopy.swift in Sources */,
 				BE9B20174C541645224DADB5 /* TalkieVoiceLeveler.swift in Sources */,
 				B3102C10C183656FA58182FD /* TalkieVoicePlayer.swift in Sources */,
@@ -21604,6 +21611,7 @@
 				82B5198B04E22AFEBBCEE245 /* TalkieSenderTests.swift in Sources */,
 				A41C20B4617C1AF9503998DD /* TalkieSpectrumAnalyzerTests.swift in Sources */,
 				0E270F7AD61FDCFBC008386D /* TalkieUnreachableTests.swift in Sources */,
+				26BFE158887B717323CE664E /* TalkieVoiceBubbleTests.swift in Sources */,
 				B0E9EDA8953E870DB279186D /* TalkieVoiceCopyTests.swift in Sources */,
 				373196F968A7FA1F47F31518 /* TalkieVoiceLevelerTests.swift in Sources */,
 				EAE9338350E0BC2CA1ADAB76 /* TalkieVoiceProcessorTests.swift in Sources */,

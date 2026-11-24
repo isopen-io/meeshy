@@ -50,6 +50,14 @@ nonisolated enum TalkieBubbleLaw {
         2 + 4 * clampedLevel(level)
     }
 
+    /// Le niveau d'ensemble de la voix sous « réduire les animations » : la moyenne des bandes, chacune bornée comme
+    /// une pointe (non finie = 0, hors 0…1 bornée) ; aucune bande = silence.
+    static func meanLevel(bands: [Float]) -> Float {
+        guard !bands.isEmpty else { return 0 }
+        let total = bands.reduce(CGFloat(0)) { $0 + clampedLevel($1) }
+        return Float(total / CGFloat(bands.count))
+    }
+
     /// Le même tracé SANS bornage : réservé aux tests, qui prouvent que c'est le bornage qui tient la borne.
     static func unclampedOutlineForTesting(tips: [CGPoint]) -> Path {
         outline(tips: tips) { $0 }

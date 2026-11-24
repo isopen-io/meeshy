@@ -107,6 +107,11 @@ nonisolated final class TalkieVoiceStage: Sendable {
 
     private static var silence: [Float] { [Float](repeating: 0, count: TalkieSpectrumAnalyzer.bandCount) }
 
+    /// Le retard de lecture de la bulle : une trame arrive 10 à 100 ms après l'heure où elle sonne ; lire un peu en
+    /// arrière de l'horloge hôte étale les trames sur les images au lieu de les servir par rafales. Réglé sur appareil
+    /// à la tâche 7.
+    static let readLag: TimeInterval = 0.06
+
     /// L'horloge hôte en secondes, celle des `AVAudioTime` des taps.
     static func hostNow() -> TimeInterval {
         AVAudioTime.seconds(forHostTime: mach_absolute_time())
