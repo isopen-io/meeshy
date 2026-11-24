@@ -221,11 +221,15 @@ public object GameOptimistic {
 
     // Rallumage
 
+    /**
+     * Une Flamme rallumée n'a plus de rallumage par l'effort à dire (#20474) : la phrase se retire sans attendre la
+     * relecture, comme sur iOS et le web.
+     */
     public fun afterRelight(state: GameState): GameState {
         val flame = state.game.flame
         if (!flame.canRelight) return state
         val lit = GameState(
-            state.game.replacing(flame = flame.replacing(status = FlameStatus.Lit, canRelight = false)),
+            state.game.replacing(flame = flame.replacing(status = FlameStatus.Lit, canRelight = false, effortRelight = Put(null))),
             state.meesh,
         )
         return shiftBalance(lit, -flame.relightPrice)
@@ -239,6 +243,7 @@ public object GameOptimistic {
             bonusPercent = GameFlameLaw.bonusPercent(streak),
             status = FlameStatus.Lit,
             canRelight = false,
+            effortRelight = Put(null),
         )
         return withBalance(GameState(state.game.replacing(flame = flame), state.meesh), balance)
     }

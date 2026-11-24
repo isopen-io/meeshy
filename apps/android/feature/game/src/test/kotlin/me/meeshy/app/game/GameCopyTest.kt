@@ -6,6 +6,7 @@ import org.robolectric.RuntimeEnvironment
 import com.google.common.truth.Truth.assertThat
 import java.util.Locale
 import me.meeshy.sdk.model.game.GameCopyLaws
+import me.meeshy.sdk.model.game.GameEffortRelight
 import me.meeshy.sdk.model.game.GameMaterial
 import me.meeshy.sdk.model.game.GameText
 import me.meeshy.sdk.model.game.GameTextArg
@@ -147,5 +148,17 @@ class GameCopyTest {
         assertThat(GameCopy.resolve(resourcesIn("fr"), record)).contains("12")
         val upcoming = GameText.of(GameTextKey.DoorSeasonUpcoming, GameTextArg.Day("2026-11-01"))
         assertThat(GameCopy.resolve(resourcesIn("fr"), upcoming)).contains("2026")
+    }
+
+    @Test
+    fun `le rallumage par l effort dit les reves qui manquent et les jours qui reviennent`() {
+        val effort = GameEffortRelight(lostDays = 12, dreamsDone = 1, dreamsNeeded = 2, closesOn = "2026-10-21", daysLeft = 1)
+        val fr = resourcesIn("fr")
+        assertThat(GameCopy.resolve(fr, GameCopyLaws.effortRelight(effort)))
+            .isEqualTo("Encore 1 rêve complet d’ici demain soir et ta Flamme de 12 jours revient, sans payer.")
+        assertThat(GameCopy.resolve(fr, GameCopyLaws.effortRelight(effort.copy(dreamsDone = 0, daysLeft = 0))))
+            .isEqualTo("Encore 2 rêves complets aujourd’hui et ta Flamme de 12 jours revient, sans payer.")
+        assertThat(GameCopy.resolve(resourcesIn("en"), GameCopyLaws.effortRelight(effort)))
+            .isEqualTo("Just 1 full dream more by tomorrow night and your Flame comes back with its 12 days, without paying.")
     }
 }

@@ -191,6 +191,7 @@ public fun GameFlame.replacing(
     freezes: Int? = null,
     status: FlameStatus? = null,
     canRelight: Boolean? = null,
+    effortRelight: Put<GameEffortRelight?>? = null,
 ): GameFlame = GameFlame(
     days = days ?: this.days,
     form = if (form != null) form.value else this.form,
@@ -202,6 +203,7 @@ public fun GameFlame.replacing(
     status = status ?: this.status,
     canRelight = canRelight ?: this.canRelight,
     freezeGifted = freezeGifted,
+    effortRelight = if (effortRelight != null) effortRelight.value else this.effortRelight,
 )
 
 public fun GameBoosts.replacing(tailwind: Double? = null): GameBoosts =
