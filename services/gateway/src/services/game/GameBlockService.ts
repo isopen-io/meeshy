@@ -201,6 +201,8 @@ export class GameBlockService {
       // Le jour du retour, lu ou gravé par le tirage du jour : ce jour-là, l'Offrande est gardée (#20266).
       welcomeBackDay: day.welcomeBackDay ?? null,
       lastRelightDay: facts.lastRelightDay,
+      // La veille annoncée (#17372) : le dernier jour actif est déjà avancé des jours en veille, le bloc la dit.
+      pause: facts.pause,
       ...(effortDreamDays === undefined ? {} : { effortDreamDays }),
       missions: day.rows.map(toGameMission),
       ...(personal && personal.startsAt && personal.endsAt

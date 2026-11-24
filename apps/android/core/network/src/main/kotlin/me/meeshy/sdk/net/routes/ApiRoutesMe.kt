@@ -37,6 +37,7 @@ public object ApiRoutesMe {
     public const val GAME_DUO_BY_DUO_ID_ACCEPT: String = "me/game/duo/{duoId}/accept"
     public const val GAME_DUO_INVITE: String = "me/game/duo/invite"
     public const val GAME_FLAME_FREEZES: String = "me/game/flame/freezes"
+    public const val GAME_FLAME_PAUSE: String = "me/game/flame/pause"
     public const val GAME_FLAME_RELIGHT: String = "me/game/flame/relight"
     public const val GAME_FRAMES_ATMOSPHERE: String = "me/game/frames/atmosphere"
     public const val GAME_GUIDE_SEEN: String = "me/game/guide/seen"
