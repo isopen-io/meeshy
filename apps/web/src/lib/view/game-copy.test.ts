@@ -21,6 +21,9 @@ import {
   editionName,
   familyName,
   flameFormName,
+  flamePauseAction,
+  flamePauseLine,
+  flamePauseRefusal,
   formatCount,
   gameErrorMessage,
   levelRingLabel,
@@ -34,6 +37,7 @@ import {
   rankLabel,
   standingLabel,
   rankName,
+  readFlamePause,
   treasuryName,
 } from './game-copy';
 
@@ -295,5 +299,38 @@ describe('les étapes des niveaux se disent dans les sept langues (#9706)', () =
       'atteindre le rang Passeur',
     ]);
     expect(levelHeldLine(steps[0]!, 'fr')).toBe('Ta lumière ouvre déjà la suite : frapper ta première Meesh pour passer le niveau 10.');
+  });
+});
+
+describe('la Flamme en veille se dit (#20509)', () => {
+  test('la veille servie se lit ; absente ou illisible, la carte d’avant', () => {
+    expect(readFlamePause({ from: '2026-10-06', until: '2026-10-12' })).toEqual({ from: '2026-10-06', until: '2026-10-12' });
+    expect(readFlamePause(undefined)).toBeNull();
+    expect(readFlamePause({ from: '2026-10-06' })).toBeNull();
+    expect(readFlamePause({ from: '6 octobre', until: '2026-10-12' })).toBeNull();
+    expect(readFlamePause('2026-10-06')).toBeNull();
+  });
+
+  test('en cours, la carte dit jusqu’à quand ; annoncée, elle dit qu’elle commence demain', () => {
+    expect(flamePauseLine({ from: '2026-10-06', until: '2026-10-12' }, '2026-10-08', 'fr')).toBe('Ta Flamme est en veille jusqu’au 12 octobre.');
+    expect(flamePauseLine({ from: '2026-10-06', until: '2026-10-12' }, '2026-10-05', 'fr')).toBe('Ta Flamme se met en veille demain, jusqu’au 12 octobre.');
+    expect(flamePauseLine({ from: '2026-10-06', until: '2026-10-12' }, '2026-10-08', 'en')).toContain('October 12');
+    expect(flamePauseLine({ from: '2026-10-06', until: '2026-10-12' }, '2026-10-08', 'de')).toContain('12. Oktober');
+  });
+
+  test('dans chaque langue, chaque refus de la veille a sa phrase, distincte de la phrase générale', () => {
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      const general = gameErrorMessage('FLAME_PAUSE_NOT_ALLOWED', language);
+      const phrases = (['quarterly-limit', 'already-paused', 'no-flame'] as const).map((reason) => flamePauseRefusal(reason, language));
+      expect(new Set([general, ...phrases]).size).toBe(4);
+      for (const phrase of phrases) expect(NAMED(phrase)).toBe(true);
+      expect(flamePauseRefusal('invalid-days', language)).toBe(general);
+      expect(flamePauseRefusal(undefined, language)).toBe(general);
+    }
+  });
+
+  test('le bouton dit la durée choisie, au pluriel juste', () => {
+    expect(flamePauseAction(1, 'fr')).toBe('Mettre en veille · 1 jour');
+    expect(flamePauseAction(7, 'fr')).toBe('Mettre en veille · 7 jours');
   });
 });

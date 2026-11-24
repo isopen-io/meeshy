@@ -30,8 +30,11 @@ const props = (patch: Parameters<typeof gameBlockFixture>[0] = {}, extra: Partia
     online: true,
     buyingFreeze: false,
     relighting: false,
+    pausing: false,
+    today: game.missions.dayKey,
     onBuyFreeze: () => undefined,
     onRelight: () => undefined,
+    onPause: () => undefined,
     ...extra,
   } satisfies Parameters<typeof GameFlamePanel>[0];
 };
@@ -176,5 +179,59 @@ describe('le rallumage par l’effort (#20471)', () => {
         expect(line).not.toContain('{');
       }
     }
+  });
+});
+
+describe('la Flamme en veille (#20509)', () => {
+  test('allumée, la carte propose une veille de 1 à 7 jours, sept jours choisis d’avance', () => {
+    const html = renderToStaticMarkup(<GameFlamePanel {...props()} />);
+    expect(html).toContain('role="radiogroup"');
+    expect(html.match(/data-game-pause-days="/g)?.length).toBe(7);
+    expect(html).toContain('data-game-pause-days="7" aria-checked="true"');
+    expect(text(html)).toContain('Mettre en veille · 7 jours');
+    expect(text(html)).toContain('une fois par trimestre');
+  });
+
+  test('deux gestes : la durée, puis l’annonce', async () => {
+    const asked: number[] = [];
+    const host = await mount(<GameFlamePanel {...props({}, { onPause: (days) => asked.push(days) })} />);
+    await click(host.querySelector('[data-game-pause-days="3"]'));
+    expect(host.querySelector('[data-game-pause-days="3"]')?.getAttribute('aria-checked')).toBe('true');
+    expect(host.textContent).toContain('Mettre en veille · 3 jours');
+    await click(host.querySelector('[data-game-flame-pause]'));
+    expect(asked).toEqual([3]);
+  });
+
+  test('à risque, la veille se propose aussi : elle garde la Flamme dès demain', () => {
+    expect(renderToStaticMarkup(<GameFlamePanel {...props({ lastActiveDay: '2026-10-04' })} />)).toContain('data-game-flame-pause');
+  });
+
+  test('en veille, la carte dit jusqu’à quand, et l’annonce se tait', () => {
+    const html = renderToStaticMarkup(<GameFlamePanel {...props({ pause: { from: '2026-10-03', until: '2026-10-09' } })} />);
+    expect(text(html)).toContain('Ta Flamme est en veille jusqu’au 9 octobre.');
+    expect(html).not.toContain('data-game-flame-pause');
+    expect(html).not.toContain('role="radiogroup"');
+  });
+
+  test('annoncée pour demain, la carte le dit', () => {
+    const html = renderToStaticMarkup(<GameFlamePanel {...props({ pause: { from: '2026-10-06', until: '2026-10-08' } })} />);
+    expect(text(html)).toContain('Ta Flamme se met en veille demain, jusqu’au 8 octobre.');
+    expect(html).not.toContain('data-game-flame-pause');
+  });
+
+  test('sans Flamme, ou éteinte, rien à mettre en veille', () => {
+    expect(renderToStaticMarkup(<GameFlamePanel {...props({ streak: 0, lastActiveDay: null })} />)).not.toContain('data-game-flame-pause');
+    expect(renderToStaticMarkup(<GameFlamePanel {...props({ ...out, balance: 5 })} />)).not.toContain('data-game-flame-pause');
+  });
+
+  test('hors ligne, l’annonce attend ; en vol, elle dit qu’elle travaille', () => {
+    expect(renderToStaticMarkup(<GameFlamePanel {...props({}, { online: false })} />)).toMatch(/data-game-flame-pause="" disabled=""/);
+    expect(renderToStaticMarkup(<GameFlamePanel {...props({}, { pausing: true })} />)).toContain('aria-busy="true"');
+  });
+
+  test('un refus se dit à sa place', () => {
+    const html = renderToStaticMarkup(<GameFlamePanel {...props({}, { errors: { pause: 'Ta Flamme a déjà eu sa veille ce trimestre.' } })} />);
+    expect(html).toContain('role="alert"');
+    expect(text(html)).toContain('Ta Flamme a déjà eu sa veille ce trimestre.');
   });
 });
