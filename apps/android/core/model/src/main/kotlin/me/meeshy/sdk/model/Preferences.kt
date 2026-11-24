@@ -273,6 +273,8 @@ data class UserNotificationPreferences(
     val deviceBatteryEnabled: Boolean = true,
     // #18737 — « Téléphone injoignable de mes Proches » (`device_unreachable`).
     val deviceUnreachableEnabled: Boolean = true,
+    // #20540 — « Quand un Sang s'approche » (`blood_proximity`), absente = reçue.
+    val bloodProximityEnabled: Boolean = true,
     val dndEnabled: Boolean = false,
     val dndStartTime: String = "22:00",
     val dndEndTime: String = "08:00",

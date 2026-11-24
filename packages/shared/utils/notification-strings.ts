@@ -44,6 +44,7 @@ export const NOTIFICATION_STRING_KEYS = [
   'inactivity.wellnessTitle', 'inactivity.wellnessBody', 'inactivity.alertAction', 'inactivity.alertBody', 'inactivity.respondedAction', 'inactivity.respondedBody',
   'fall.alertTitle', 'fall.alertBody', 'fall.respondedTitle', 'fall.respondedBody',
   'location.startedAction', 'location.startedBody', 'location.startedBodyMinutes', 'location.extendAction', 'location.reaskAction', 'location.requestBody',
+  'location.proximityAction', 'location.proximityBody',
   'game.duoInvitedAction', 'game.duoInvitedBody', 'game.duoAcceptedAction', 'game.duoAcceptedBody',
   'game.leaguePromoted', 'game.leagueStayed', 'game.leagueRelegated',
   'game.leagueCupGold', 'game.leagueCupSilver', 'game.leagueCupBronze',

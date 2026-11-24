@@ -15,6 +15,8 @@ const frContactDiscovery = {
     'Vos amis et ceux qui ont votre numéro ou votre e-mail voient « était sur Meeshy récemment », au plus une fois toutes les 3 heures. Jamais si votre statut en ligne est masqué.',
   'settings.notif.contact_activity': 'Retour d’un contact',
   'settings.notif.contact_activity.info': 'Une notification quand un contact revient sur Meeshy.',
+  'settings.notif.blood_proximity': 'Un de mes Sangs tout près',
+  'settings.notif.blood_proximity.info': 'Une notification quand un de vos Sangs s’approche, pour vous voir tous les deux sur la carte.',
   'settings.notif.bring': 'Recevoir des Bring',
   'settings.notif.bring.info':
     'Un Proche peut faire sonner votre téléphone pour une urgence extrême, même en silencieux. Coupé, personne ne peut plus vous faire sonner.',

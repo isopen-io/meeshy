@@ -69,6 +69,8 @@ export const NotificationPreferenceSchema = z.object({
   // #19204 — « partages de position » (`location_share_started`, `location_share_requested`).
   // Absent d'un document existant ⇒ reçu.
   locationShareEnabled: z.boolean().default(true),
+  // #20540 — « quand un Sang s'approche » (`blood_proximity`). Absent d'un document existant ⇒ reçu.
+  bloodProximityEnabled: z.boolean().default(true),
   // « Jeu » (#9490) — la RÉCEPTION des notifications du jeu (invitation et acceptation de duo,
   // résultat de la semaine de ligue, étape de saison). Absent d'un document existant ⇒ reçu.
   gameEnabled: z.boolean().default(true),
@@ -163,6 +165,7 @@ export const NOTIFICATION_PREFERENCE_DEFAULTS: NotificationPreference = {
   deviceBatteryEnabled: true,
   deviceUnreachableEnabled: true,
   locationShareEnabled: true,
+  bloodProximityEnabled: true,
   gameEnabled: true,
   gamePhotoEnabled: true,
   bringEnabled: true,

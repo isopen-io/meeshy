@@ -187,6 +187,7 @@ const NOTIFICATION: Kinds<NotificationPreference> = {
   deviceBatteryEnabled: 'flag',
   deviceUnreachableEnabled: 'flag',
   locationShareEnabled: 'flag',
+  bloodProximityEnabled: 'flag',
   gameEnabled: 'flag',
   gamePhotoEnabled: 'flag',
   bringEnabled: 'flag',

@@ -45,6 +45,7 @@ class NotificationTypeToggleTest {
         gameEnabled = false,
         deviceBatteryEnabled = false,
         deviceUnreachableEnabled = false,
+        bloodProximityEnabled = false,
     )
 
     /**

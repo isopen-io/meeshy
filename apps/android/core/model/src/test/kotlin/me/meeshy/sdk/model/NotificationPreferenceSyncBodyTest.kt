@@ -46,7 +46,7 @@ class NotificationPreferenceSyncBodyTest {
         "contactRequestEnabled", "groupInviteEnabled", "memberJoinedEnabled", "memberLeftEnabled",
         "postLikeEnabled", "postCommentEnabled", "postRepostEnabled", "storyReactionEnabled",
         "commentReplyEnabled", "commentLikeEnabled", "friendContentEnabled",
-        "contactActivityEnabled", "gameEnabled", "deviceBatteryEnabled", "deviceUnreachableEnabled",
+        "contactActivityEnabled", "gameEnabled", "deviceBatteryEnabled", "deviceUnreachableEnabled", "bloodProximityEnabled",
         "dndEnabled", "dndStartTime", "dndEndTime", "dndDays", "dndUtcOffsetMinutes",
         "showPreview", "showSenderName", "groupNotifications", "notificationBadgeEnabled",
     )

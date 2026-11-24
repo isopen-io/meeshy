@@ -19,6 +19,7 @@ import type {
   InactivityAlertNotificationMetadata,
   LocationShareStartedNotificationMetadata,
   LocationShareRequestedNotificationMetadata,
+  BloodProximityNotificationMetadata,
 } from './notification-circle-metadata.js';
 export type {
   ContactRecentlyActiveNotificationMetadata,
@@ -29,6 +30,7 @@ export type {
   InactivityAlertNotificationMetadata,
   LocationShareStartedNotificationMetadata,
   LocationShareRequestedNotificationMetadata,
+  BloodProximityNotificationMetadata,
 } from './notification-circle-metadata.js';
 
 // =====================================================
@@ -94,6 +96,8 @@ export enum NotificationTypeEnum {
   LOCATION_SHARE_STARTED = 'location_share_started',
   /** Un destinataire me demande de prolonger ou de refaire mon partage de position (#19204). */
   LOCATION_SHARE_REQUESTED = 'location_share_requested',
+  /** Un Sang s'approche (#20540) : son nom et une distance arrondie, jamais une coordonnée ; le toucher ouvre sa carte. */
+  BLOOD_PROXIMITY = 'blood_proximity',
 
   // ===== INTERACTION EVENTS =====
   USER_MENTIONED = 'user_mentioned',
@@ -741,6 +745,7 @@ export type NotificationMetadata =
   | InactivityAlertNotificationMetadata
   | LocationShareStartedNotificationMetadata
   | LocationShareRequestedNotificationMetadata
+  | BloodProximityNotificationMetadata
   | ContentRemovedNotificationMetadata
   | GameDuoNotificationMetadata
   | GameLeagueResultNotificationMetadata

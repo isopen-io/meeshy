@@ -47,7 +47,7 @@ import {
 } from '@meeshy/shared/utils/conversation-helpers';
 import { notificationString, buildNotificationDisplay } from '@meeshy/shared/utils/notification-strings';
 import { pushMediaFields } from './push-media-fields';
-import { contentRemovedPushFields, pickMetadataString } from './push-metadata-fields';
+import { metadataPushFields, pickMetadataString } from './push-metadata-fields';
 import { recipientLanguage } from '../../utils/recipient-language';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { sanitizeNotificationInputs, persistedNotificationTitle } from './sanitizeInputs';
@@ -1207,7 +1207,7 @@ export class NotificationService {
                 // NSE que la bulle est éphémère sans qu'elle ait à le déduire.
                 ...ephemeralPushFields(params.context),
                 ...(await callBackPushFields({ type: params.type, metadata: params.metadata, language: recipientLang })),
-                ...contentRemovedPushFields({ type: params.type, metadata: params.metadata, showPreview }),
+                ...metadataPushFields({ type: params.type, metadata: params.metadata, showPreview }),
                 ...(await contentActionPushFields({ type: params.type, conversationId: params.context.conversationId, detail: params.context.contentDetail, detailTravels, language: recipientLang })),
                 // GW7 — showPreview:false : AUCUN champ porteur de contenu dans
                 // data. La NSE réécrit inconditionnellement le body depuis

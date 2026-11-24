@@ -6,6 +6,7 @@ import me.meeshy.app.navigation.graph.FriendRequestListDestinations
 import me.meeshy.app.navigation.graph.FriendRequestsDestinations
 import me.meeshy.app.navigation.graph.GameRoutes
 import me.meeshy.app.navigation.graph.LinksRoutes
+import me.meeshy.app.navigation.graph.PersonMapDestinations
 import me.meeshy.app.navigation.graph.StoryRoutes
 import me.meeshy.app.navigation.graph.VoiceProfileWizardDestinations
 
@@ -177,6 +178,13 @@ internal object NavBackChrome {
         arrow("LinksRoutes.COMMUNITY", LinksRoutes.COMMUNITY, linksChrome),
         arrow("LinksRoutes.COMMUNITY_DETAIL", LinksRoutes.COMMUNITY_DETAIL, linksChrome),
         arrow("LinksRoutes.AFFILIATE", LinksRoutes.AFFILIATE, linksChrome),
+        // La carte d'une personne (#20540) : plein écran iOS, fermé par sa croix.
+        modal(
+            "PersonMapDestinations.ROUTE",
+            PersonMapDestinations.ROUTE,
+            IosPresentation.COVER,
+            "$FEATURE/contacts/src/main/kotlin/me/meeshy/app/contacts/circles/LocationMapScreen.kt",
+        ),
     )
 
     private val byRoute: Map<String, BackChrome> = entries.associate { it.route to it.chrome }

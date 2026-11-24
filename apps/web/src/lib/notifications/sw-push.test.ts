@@ -575,6 +575,12 @@ describe('le tap atterrit à l’adresse de la v2, jamais à celle du legacy', (
     expect(worker.opened).toEqual(['/u/marie']);
   });
 
+  test('« Lina est tout près » ouvre la carte de Lina, jamais son profil (#20540)', async () => {
+    const worker = mount();
+    await worker.dispatch('notificationclick', clic({ type: 'blood_proximity', userId: 'u-lina', senderUsername: 'lina' }).event);
+    expect(worker.opened).toEqual(['/positions?person=u-lina']);
+  });
+
   test('une notification du jeu ouvre la page de ce qu’elle annonce, malgré l’indice `progression` du serveur (#9490)', async () => {
     const worker = mount();
     await worker.dispatch('notificationclick', clic({ type: 'game_duo_invited', route: 'progression' }).event);
@@ -629,6 +635,7 @@ describe('le tap atterrit à l’adresse de la v2, jamais à celle du legacy', (
       progressionLigue: '/me/progression/ligue',
       progressionSaison: '/me/progression/saison',
       progressionCarnet: '/me/progression/carnet',
+      sharedLocations: '/positions',
       settings: '/settings',
       notifications: '/notifications',
     });

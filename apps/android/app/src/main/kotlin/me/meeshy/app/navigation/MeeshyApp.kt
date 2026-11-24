@@ -48,6 +48,7 @@ import me.meeshy.app.onboarding.BeneathOnboarding
 import me.meeshy.app.onboarding.hiddenBehindOnboarding
 import me.meeshy.app.navigation.graph.CommunityRoutes
 import me.meeshy.app.navigation.graph.GameRoutes
+import me.meeshy.app.navigation.graph.PersonMapDestinations
 import me.meeshy.app.navigation.graph.authNavGraph
 import me.meeshy.app.navigation.graph.callNavGraph
 import me.meeshy.app.navigation.graph.conversationsNavGraph
@@ -300,6 +301,7 @@ fun MeeshyApp(
                 onOpenPost = { navController.navigateSingleTop(Routes.postDetail(it)) },
                 onOpenGame = { navController.navigateSingleTop(GameRoutes.route(it)) },
                 onOpenCommunity = { navController.navigateSingleTop(CommunityRoutes.detail(it)) },
+                onOpenPersonMap = { navController.navigateSingleTop(PersonMapDestinations.route(it)) },
             )
 
             BannerPeekSheetHost(bannerPeek) { navigator.openConversation(it) }

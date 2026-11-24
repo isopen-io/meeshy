@@ -56,6 +56,7 @@ const expected: AppPreferences = {
   soundEnabled: true,
   contactActivityEnabled: false,
   bringEnabled: true,
+  bloodProximityEnabled: true,
   gameEnabled: false,
   gamePhotoEnabled: false,
   showOnlineStatus: false,

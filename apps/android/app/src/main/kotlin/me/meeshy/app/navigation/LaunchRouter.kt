@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.push.PushTapDestination
 import me.meeshy.sdk.model.story.StoryNotificationContext
 import me.meeshy.app.navigation.graph.CommunityRoutes
 import me.meeshy.app.navigation.graph.GameRoutes
+import me.meeshy.app.navigation.graph.PersonMapDestinations
 import me.meeshy.app.navigation.graph.StoryRoutes
 
 /**
@@ -111,6 +112,7 @@ object LaunchRouter {
             is PushTapDestination.Community -> CommunityRoutes.detail(destination.communityId)
             PushTapDestination.Notifications -> Routes.NOTIFICATIONS
             is PushTapDestination.Game -> GameRoutes.route(destination.target)
+            is PushTapDestination.PersonMap -> PersonMapDestinations.route(destination.userId)
             PushTapDestination.None -> null
         }
     }

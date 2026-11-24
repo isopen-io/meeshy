@@ -200,7 +200,7 @@ class NavBackChromeTest {
         )
         assertThat(NavBackChrome.entries.filter { it.chrome == BackChrome.MODAL && !it.viaSheetHost }.map { it.source }).containsExactly(
             "Routes.MOOD_SPOTLIGHT", "Routes.REELS", "Routes.STORY_VIEWER", "StoryRoutes.STORY_POST", "Routes.COMPOSER", "Routes.STORY_COMPOSER_ROUTE",
-            "Routes.PROFILE_USER", "Routes.CALL",
+            "Routes.PROFILE_USER", "Routes.CALL", "PersonMapDestinations.ROUTE",
         )
         assertThat(NavBackChrome.edgeSwipeBackEnabled(CommunityRoutes.SETTINGS)).isTrue()
         assertThat(NavBackChrome.edgeSwipeBackEnabled(CommunityRoutes.INVITE)).isTrue()

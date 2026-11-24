@@ -117,9 +117,11 @@ export function TargetLink({ target, onClick, ...rest }: SurfaceProps & { readon
       /* LA PAGE DE L'HUMEUR (#10813) — plein écran, réponse en privé. */
       return <Link to="mood" params={target.params} {...surface} />;
     case 'discover':
+    case 'sharedLocations':
       /* L'onglet « Demandes » voyage en `search` : la destination le PORTE
-         (#7173), la ligne ne le reconstruit pas. */
-      return <Link to="discover" search={target.search} {...surface} />;
+         (#7173), la ligne ne le reconstruit pas. « Un Sang s'approche » (#20540)
+         ouvre sa carte, la personne portée de même en `search`. */
+      return <Link to={target.route} search={target.search} {...surface} />;
     case 'userProfile':
       return <Link to="userProfile" params={target.params} {...surface} />;
     case 'community':

@@ -10,6 +10,8 @@ const esContactDiscovery = {
     'Tus amigos y quienes tienen tu número o tu correo ven «estuvo en Meeshy hace poco», como máximo una vez cada 3 horas. Nunca si ocultas tu estado en línea.',
   'settings.notif.contact_activity': 'Regreso de un contacto',
   'settings.notif.contact_activity.info': 'Una notificación cuando un contacto vuelve a Meeshy.',
+  'settings.notif.blood_proximity': 'Alguien de mi Sangre cerca',
+  'settings.notif.blood_proximity.info': 'Una notificación cuando alguien de tu Sangre se acerca, para veros a los dos en el mapa.',
   'settings.notif.bring': 'Recibir Brings',
   'settings.notif.bring.info':
     'Un allegado puede hacer sonar tu teléfono en una emergencia extrema, incluso en silencio. Desactivado, nadie podrá hacerte sonar.',

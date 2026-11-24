@@ -71,9 +71,13 @@ const PUSH_ROUTE_PATTERNS = {
   progressionLigue: '/me/progression/ligue',
   progressionSaison: '/me/progression/saison',
   progressionCarnet: '/me/progression/carnet',
+  sharedLocations: '/positions',
   settings: '/settings',
   notifications: '/notifications',
 };
+
+/** JUMEAU de `src/lib/shared-locations/map-person.ts` (#20540). */
+const MAP_PERSON_PARAM = 'person';
 
 /** JUMEAUX de `src/lib/discover/view.ts`. */
 const DISCOVER_TAB_PARAM = 'onglet';
@@ -94,6 +98,8 @@ const EPHEMERAL_ONLY_TYPES = [
 const MOOD_TYPES = ['friend_new_mood'];
 const REQUEST_TYPES = ['friend_request', 'contact_request'];
 const PROFILE_TYPES = ['contact_joined', 'contact_recently_active', 'device_battery', 'device_unreachable', 'inactivity_alert', 'safety_alert', 'safety_alert_cleared'];
+/** JUMEAU de `MAP_TYPES` (#20540) : « un Sang s'approche » ouvre sa carte. */
+const MAP_TYPES = ['blood_proximity'];
 /** JUMEAU de `MISSED_CALL_TYPES` (#9177) : repli d'un appel manqué sans `conversationId`. */
 const MISSED_CALL_TYPES = ['missed_call', 'CALL_MISSED', 'call_declined'];
 const PROGRESSION_TYPES = [
@@ -141,6 +147,7 @@ const TAP_FIELDS = [
   'friendRequestId',
   'communityId',
   'senderUsername',
+  'userId',
   'route',
 ];
 
@@ -338,6 +345,13 @@ function resolvePushTarget(data) {
 
   const type = texte(data.type);
   if (texte(data.friendRequestId) !== '' || REQUEST_TYPES.indexOf(type) >= 0) return demandes();
+
+  const personne = texte(data.userId);
+  if (MAP_TYPES.indexOf(type) >= 0 && personne !== '') {
+    const search = {};
+    search[MAP_PERSON_PARAM] = personne;
+    return { route: 'sharedLocations', params: {}, search };
+  }
 
   const pseudo = texte(data.senderUsername);
   if (PROFILE_TYPES.indexOf(type) >= 0 && pseudo !== '') return { route: 'userProfile', params: { username: pseudo }, search: {} };
@@ -1098,6 +1112,8 @@ self.meeshyPushTarget = {
   PUSH_ROUTE_PATTERNS: PUSH_ROUTE_PATTERNS,
   DISCOVER_TAB_PARAM: DISCOVER_TAB_PARAM,
   REQUEST_FILTER_PARAM: REQUEST_FILTER_PARAM,
+  MAP_PERSON_PARAM: MAP_PERSON_PARAM,
+  MAP_TYPES: MAP_TYPES,
   EPHEMERAL_ENTITIES: EPHEMERAL_ENTITIES,
   EPHEMERAL_ONLY_TYPES: EPHEMERAL_ONLY_TYPES,
   MOOD_TYPES: MOOD_TYPES,

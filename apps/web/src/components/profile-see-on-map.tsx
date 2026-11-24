@@ -14,6 +14,7 @@ import { translateCircles } from '@/lib/i18n-circles-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { navigate } from '@/lib/router';
 import { preload } from '@/routes/route-table';
+import { mapHrefOf } from '@/lib/shared-locations/map-person';
 import { positionCardOf, remainingWords } from '@/lib/shared-locations/position-card';
 import { sharedLocationsStore, type SharedLocationsStoreApi } from '@/lib/shared-locations/shared-locations-live';
 import { SHARED_LOCATIONS_WORLD, useSharedLocationsUpkeep } from '@/lib/shared-locations/use-shared-locations-upkeep';
@@ -43,9 +44,7 @@ import { useMinute } from '@/lib/view/use-minute';
  * déjà vivante sur le web (abonnement au magasin + rattrapage du monde à l'ouverture) : la cause iOS — une lecture
  * figée au premier rendu — n'y existait pas.
  */
-export const MAP_PERSON_PARAM = 'person';
-
-export const mapHrefOf = (personId: string): string => `/positions?${MAP_PERSON_PARAM}=${encodeURIComponent(personId)}`;
+export { MAP_PERSON_PARAM, mapHrefOf } from '@/lib/shared-locations/map-person';
 
 const warmMap = (): void => void preload('sharedLocations').catch(() => undefined);
 

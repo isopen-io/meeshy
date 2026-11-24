@@ -35,7 +35,7 @@ public fun notificationTypeAccentHex(type: String): String = when (type) {
     // Friend graph & conversation lifecycle → teal.
     "friend_request", "FRIEND_REQUEST", "contact_request",
     "friend_accepted", "FRIEND_ACCEPTED", "contact_accepted", "STATUS_UPDATE",
-    "contact_joined", "contact_recently_active",
+    "contact_joined", "contact_recently_active", "blood_proximity",
     "added_to_conversation", "new_conversation", "new_conversation_direct",
     "new_conversation_group", "removed_from_conversation",
     -> "4ECDC4"
@@ -103,7 +103,7 @@ public fun notificationTypeGlyph(type: String): NotificationGlyph = when (type) 
     "friend_accepted", "contact_accepted", "FRIEND_ACCEPTED", "game_duo_invited", "game_duo_accepted" ->
         NotificationGlyph.FRIENDS
     "contact_joined" -> NotificationGlyph.CONTACT_JOINED
-    "contact_recently_active" -> NotificationGlyph.CONTACT_ACTIVE
+    "contact_recently_active", "blood_proximity" -> NotificationGlyph.CONTACT_ACTIVE
     "community_invite", "GROUP_INVITE" -> NotificationGlyph.GROUP
     "community_joined", "member_joined", "GROUP_JOINED" -> NotificationGlyph.MEMBER_JOINED
     "community_left", "member_left", "GROUP_LEFT", "removed_from_conversation", "member_removed" ->

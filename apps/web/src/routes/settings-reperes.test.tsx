@@ -86,6 +86,7 @@ const preferences: AppPreferences = {
   notifyContactsOnReturn: true,
   contactActivityEnabled: true,
   bringEnabled: true,
+  bloodProximityEnabled: true,
   gameEnabled: true,
   gamePhotoEnabled: true,
   saveMediaToGallery: false,
