@@ -222,6 +222,22 @@ const ASYMETRIES: readonly {
       + "donc pas y arriver avant péremption. C'est le dernier retard de cette famille, suivi par #20409.",
     events: ['pack:installation-updated'],
   },
+  {
+    absents: ['android', 'ios'],
+    raison:
+      "`location:blood-proximity` — l'alerte de proximité entre deux Sangs. Android ne l'écoute pas, PAR "
+      + "DÉCISION, en écho exact à celle du web : son propre commentaire de livraison le dit (« Android "
+      + "n'écoute pas `location:blood-proximity`, donc ce canal ne peut pas poser un second bandeau »), "
+      + 'comme le test du web le prouve (`blood-proximity.test.ts` : « l\'alerte socket … n\'en fait pas '
+      + "descendre une seconde »). Les deux reçoivent déjà ce fait par `notification:new`, le double persisté "
+      + "et poussé que la passerelle émet sous les MÊMES gardes (#20540, `bloodProximityNotice.ts`) — un "
+      + "écouteur direct de ce nom ferait une DOUBLE bannière, pas une parité. iOS n'a PAS ce retard décidé : "
+      + "il n'a simplement pas encore reçu le mirror de cette feature (aucune mention de `blood_proximity` "
+      + "hors de `BloodLocation.swift`, qui est le partage de position, pas cette alerte) ; porté, il suivra "
+      + 'le MÊME canal (`notification:new`), jamais ce nom brut, pour éviter la même double bannière. Suivi : '
+      + '#20544, #20540.',
+    events: ['location:blood-proximity'],
+  },
 ];
 
 const contract = readContractPayloads();
