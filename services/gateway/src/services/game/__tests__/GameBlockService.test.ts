@@ -65,6 +65,22 @@ describe('GameBlockService.build', () => {
     expect(block.boosts.tailwind).toBe(1);
   });
 
+  it('la Flamme dit l’objectif : les trois choix au premier jour, puis l’objectif retenu (#20520)', async () => {
+    const first = fakeGameDb();
+    seedUser(first, { currentStreakDays: 1, longestStreakDays: 1, lastStreakDate: new Date('2026-10-05T00:00:00Z'), timezone: 'UTC' });
+    const offered = await build(first);
+    expect(gameBlockSchema.safeParse(offered).success).toBe(true);
+    expect(offered.flame.goal).toEqual({ offer: [7, 14, 30], current: null });
+
+    const held = fakeGameDb();
+    seedUser(held, { currentStreakDays: 5, longestStreakDays: 5, lastStreakDate: new Date('2026-10-05T00:00:00Z'), flameGoalTarget: 7, flameGoalChosenAtStreak: 1, timezone: 'UTC' });
+    expect((await build(held)).flame.goal).toEqual({ offer: [], current: { target: 7, remaining: 2, reached: false, next: null } });
+
+    const lapsed = fakeGameDb();
+    seedUser(lapsed, { currentStreakDays: 1, longestStreakDays: 9, lastStreakDate: new Date('2026-10-05T00:00:00Z'), flameGoalTarget: 30, flameGoalChosenAtStreak: 1, flameGoalBrokenOn: '2026-10-05', timezone: 'UTC' });
+    expect((await build(lapsed)).flame.goal).toEqual({ offer: [7, 14, 30], current: null });
+  });
+
   it('le jour de la première Veilleuse offerte, la Flamme le dit — et seulement ce jour-là (#20169)', async () => {
     const gifted = fakeGameDb();
     seedUser(gifted, { currentStreakDays: 3, longestStreakDays: 3, lastStreakDate: new Date('2026-10-05T00:00:00Z'), flameFreezes: 1, flameFreezeGiftDay: '2026-10-05', timezone: 'UTC' });

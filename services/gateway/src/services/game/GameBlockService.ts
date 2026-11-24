@@ -203,6 +203,8 @@ export class GameBlockService {
       lastRelightDay: facts.lastRelightDay,
       // La veille annoncée (#17372) : le dernier jour actif est déjà avancé des jours en veille, le bloc la dit.
       pause: facts.pause,
+      // L'objectif de Flamme retenu (#20520) : le bloc le lit sur la Flamme servie.
+      goal: facts.goal,
       ...(effortDreamDays === undefined ? {} : { effortDreamDays }),
       missions: day.rows.map(toGameMission),
       ...(personal && personal.startsAt && personal.endsAt

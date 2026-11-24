@@ -434,6 +434,12 @@ model User {
   /// annoncée puis terminée avant son premier jour. Absents : jamais de veille (aucune reprise de données).
   flamePauseFrom      String?
   flamePauseUntil     String?
+  /// L'objectif de Flamme choisi (#20520, #17379) : les jours visés, ceux de la Flamme au jour du choix, et le jour
+  /// (`AAAA-MM-JJ`, fuseau du compte) où la Flamme s'est cassée depuis — le rallumage le remet à nul. Absents :
+  /// aucun objectif (aucune reprise de données).
+  flameGoalTarget         Int?
+  flameGoalChosenAtStreak Int?
+  flameGoalBrokenOn       String?
   /// Clés de guide déjà vues (étapes d'intégration et moments de Mee et Meo).
   guideSeen           String[] @default([])
   /// Jour civil (`AAAA-MM-JJ`, fuseau du compte) du dernier RETOUR (#20218, #17373) : la première journée de jeu

@@ -21,7 +21,10 @@
  *    (#17372). Les jours en veille ne sont ni gagnés ni manqués : `flameFactsOf`
  *    sert un dernier jour actif AVANCÉ d'autant (`restedLastActiveDay`), que
  *    tous les lecteurs de l'état reçoivent sans rien changer ; le geste du jour
- *    termine la veille la veille du geste.
+ *    termine la veille la veille du geste ;
+ *  - `chooseGoal` : l'objectif de Flamme choisi (#20520, #17379) — 7, 14 ou 30
+ *    jours au premier jour, la marche suivante une fois atteint. Le geste qui
+ *    casse la Flamme le marque, le rallumage (payé ou par l'effort) le rend.
  *
  * Les deux dépenses passent par `MeeshSpend` : ligne `spend` + effet dans une
  * même transaction, idempotentes par `requestId`.
@@ -42,6 +45,15 @@ import {
 import { canRelightByEffort, relightByEffort, servedEffortRelight, wholeDreamDays } from '@meeshy/shared/utils/game/flame-effort';
 import { canPauseFlame, flamePauseOf, pauseEndedBy, restedLastActiveDay, type FlamePause } from '@meeshy/shared/utils/game/flame-pause';
 import { addDays } from '@meeshy/shared/utils/game/day-prng';
+import {
+  canChooseFlameGoal,
+  chooseFlameGoal,
+  flameGoalAfterGesture,
+  flameGoalAfterRelight,
+  servedFlameGoal,
+  type FlameGoal,
+  type ServedFlameGoal,
+} from '@meeshy/shared/utils/game/flame-goal';
 import { FULL_DREAM_ACTS } from '@meeshy/shared/utils/game/missions';
 import { civilDayKey } from '../engagement/civilDay';
 import { GameRefusal } from './GameRefusal';
@@ -61,6 +73,9 @@ export const FLAME_USER_SELECT = {
   brokenStreakLastDay: true,
   flamePauseFrom: true,
   flamePauseUntil: true,
+  flameGoalTarget: true,
+  flameGoalChosenAtStreak: true,
+  flameGoalBrokenOn: true,
 } as const;
 
 /** Ce que Prisma relit d'un compte : tout peut être ABSENT sur un compte antérieur. */
@@ -76,6 +91,9 @@ export type FlameUserRow = {
   readonly brokenStreakLastDay?: string | null;
   readonly flamePauseFrom?: string | null;
   readonly flamePauseUntil?: string | null;
+  readonly flameGoalTarget?: number | null;
+  readonly flameGoalChosenAtStreak?: number | null;
+  readonly flameGoalBrokenOn?: string | null;
 };
 
 export type FlameFacts = {
@@ -91,6 +109,8 @@ export type FlameFacts = {
   readonly lastGestureDay: string | null;
   /** La dernière veille annoncée, `null` sans veille. */
   readonly pause: FlamePause | null;
+  /** L'objectif de Flamme retenu (#20520), `null` sans objectif. */
+  readonly goal: FlameGoal | null;
   readonly freezes: number;
   readonly lastRelightDay: string | null;
   /** Le jour où la première Veilleuse a été offerte (#20169). */
@@ -101,6 +121,13 @@ export type FlameFacts = {
 
 const count = (value: number | null | undefined): number =>
   typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0;
+
+/** L'objectif retenu sur le compte : `null` sans cible, ou devant un compte antérieur. */
+export function flameGoalOf(row: FlameUserRow): FlameGoal | null {
+  const target = count(row.flameGoalTarget);
+  if (target === 0) return null;
+  return { target, chosenAtStreak: count(row.flameGoalChosenAtStreak), brokenOn: row.flameGoalBrokenOn ?? null };
+}
 
 export function flameFactsOf(row: FlameUserRow, now: Date): FlameFacts {
   const today = dayKeyOf(now, row.timezone);
@@ -113,6 +140,7 @@ export function flameFactsOf(row: FlameUserRow, now: Date): FlameFacts {
     lastActiveDay: restedLastActiveDay({ lastActiveDay: lastGestureDay, through: today, pause }),
     lastGestureDay,
     pause,
+    goal: flameGoalOf(row),
     freezes: count(row.flameFreezes),
     lastRelightDay: row.lastRelightDay ?? null,
     freezeGiftDay: row.flameFreezeGiftDay ?? null,
@@ -177,6 +205,7 @@ export function planStreak(facts: FlameFacts): StreakPlan {
     };
   }
   const longest = Math.max(facts.longest, transition.streak);
+  const goal = flameGoalAfterGesture({ goal: facts.goal, outcome: transition.outcome, today: facts.today });
   const gift = firstFreezeGift({ previousLongest: facts.longest, streak: transition.streak, freezes: transition.freezes });
   return {
     outcome: transition.outcome,
@@ -191,6 +220,7 @@ export function planStreak(facts: FlameFacts): StreakPlan {
       ...(transition.freezesUsed > 0 || gift.gifted ? { flameFreezes: gift.freezes } : {}),
       ...(gift.gifted ? { flameFreezeGiftDay: facts.today } : {}),
       ...(ended === null ? {} : { flamePauseUntil: ended.until }),
+      ...(goal === facts.goal ? {} : { flameGoalBrokenOn: goal?.brokenOn ?? null }),
       ...(transition.outcome === 'broken' && transition.lostStreak > 0 && lastActiveDay !== null
         ? { brokenStreakDays: transition.lostStreak, brokenStreakLastDay: lastActiveDay }
         : {}),
@@ -230,6 +260,28 @@ const flamePauseUnchanged = (row: FlameUserRow): Prisma.UserWhereInput[] => [
     : { OR: [{ flamePauseUntil: null }, { flamePauseUntil: { isSet: false } }] },
 ];
 
+const flameGoalUnchanged = (row: FlameUserRow): Prisma.UserWhereInput[] => [
+  typeof row.flameGoalTarget === 'number'
+    ? { flameGoalTarget: row.flameGoalTarget }
+    : { OR: [{ flameGoalTarget: null }, { flameGoalTarget: { isSet: false } }] },
+  typeof row.flameGoalChosenAtStreak === 'number'
+    ? { flameGoalChosenAtStreak: row.flameGoalChosenAtStreak }
+    : { OR: [{ flameGoalChosenAtStreak: null }, { flameGoalChosenAtStreak: { isSet: false } }] },
+  typeof row.flameGoalBrokenOn === 'string'
+    ? { flameGoalBrokenOn: row.flameGoalBrokenOn }
+    : { OR: [{ flameGoalBrokenOn: null }, { flameGoalBrokenOn: { isSet: false } }] },
+];
+
+/** Ce que le rallumage écrit de l'objectif : rien sans objectif, sinon l'objectif rendu (#20520). */
+const relitGoalData = (goal: FlameGoal | null): Prisma.UserUpdateManyMutationInput =>
+  goal === null ? {} : { flameGoalBrokenOn: flameGoalAfterRelight(goal)?.brokenOn ?? null };
+
+/** La hauteur de la Flamme telle que le bloc la sert : 0 quand elle est éteinte. */
+export function servedFlameDays(facts: FlameFacts): number {
+  const status = flameStatus({ lastActiveDay: facts.lastActiveDay, today: facts.today, streak: facts.streak, freezes: facts.freezes });
+  return status === 'out' ? 0 : facts.streak;
+}
+
 /**
  * La Flamme telle qu'on l'a LUE : la condition d'une écriture comparer-et-écrire.
  * Chaque écrivain de la série (geste du jour, gel acheté ou offert, rallumage,
@@ -245,6 +297,7 @@ export function flameUnchanged(row: FlameUserRow): Prisma.UserWhereInput[] {
     lastRelightDayUnchanged(row.lastRelightDay),
     ...brokenStreakUnchanged(row),
     ...flamePauseUnchanged(row),
+    ...flameGoalUnchanged(row),
     ...(typeof row.currentStreakDays === 'number' ? [{ currentStreakDays: row.currentStreakDays }] : []),
     ...(typeof row.longestStreakDays === 'number' ? [{ longestStreakDays: row.longestStreakDays }] : []),
   ];
@@ -280,6 +333,7 @@ export type RelightResult =
   | { readonly status: 'relit' | 'already-relit'; readonly streak: number; readonly balance: number };
 export type EffortRelightResult = { readonly streak: number } | null;
 export type FlamePauseResult = { readonly status: 'paused' | 'already-paused'; readonly pause: FlamePause };
+export type FlameGoalResult = { readonly status: 'chosen' | 'already-chosen'; readonly goal: ServedFlameGoal };
 
 type EffortDb = Pick<PrismaClient, 'user' | 'dailyMission'>;
 
@@ -338,6 +392,7 @@ export async function writeEffortRelight(db: EffortDb, userId: string, now: Date
         lastStreakDate: markerOfDayKey(restored.lastActiveDay),
         brokenStreakDays: null,
         brokenStreakLastDay: null,
+        ...relitGoalData(facts.goal),
       },
     });
     if (written.count === 1) return { streak: restored.streak, previousLongest: facts.longest, longest };
@@ -439,6 +494,7 @@ export class FlameService {
             lastRelightDay: facts.today,
             brokenStreakDays: null,
             brokenStreakLastDay: null,
+            ...relitGoalData(facts.goal),
           },
         });
         return { streak, previousLongest: facts.longest, longest };
@@ -480,6 +536,36 @@ export class FlameService {
       if (written.count === 1) return { status: 'paused', pause: verdict.pause };
     }
     throw new Error('flame pause contention');
+  }
+
+  /**
+   * Choisit l'objectif de Flamme (#20520) : une marche que la loi propose aujourd'hui, lue sur la Flamme SERVIE.
+   * Idempotent par son CONTENU, comme la veille : le même objectif, choisi à la même hauteur, rend `already-chosen`.
+   * L'écriture est conditionnelle à la Flamme lue : un geste ou un rallumage concurrent fait reprendre la décision.
+   */
+  async chooseGoal({ userId, target, now = new Date() }: WriteInput & { readonly target: number }): Promise<FlameGoalResult> {
+    for (let attempt = 0; attempt < STREAK_WRITE_ATTEMPTS; attempt += 1) {
+      const row = await this.userRow(this.prisma, userId);
+      const facts = flameFactsOf(row, now);
+      const streak = servedFlameDays(facts);
+      const asked = chooseFlameGoal({ streak, target });
+      const held = facts.goal;
+      if (held !== null && held.brokenOn === null && held.target === asked.target && held.chosenAtStreak === asked.chosenAtStreak) {
+        return { status: 'already-chosen', goal: this.served(held, streak) };
+      }
+      const verdict = canChooseFlameGoal({ goal: facts.goal, streak, target });
+      if (verdict.allowed === false) throw new GameRefusal('FLAME_GOAL_NOT_ALLOWED', { reason: verdict.reason });
+      const written = await this.prisma.user.updateMany({
+        where: { id: userId, AND: flameUnchanged(row) },
+        data: { flameGoalTarget: asked.target, flameGoalChosenAtStreak: asked.chosenAtStreak, flameGoalBrokenOn: null },
+      });
+      if (written.count === 1) return { status: 'chosen', goal: this.served(asked, streak) };
+    }
+    throw new Error('flame goal contention');
+  }
+
+  private served(goal: FlameGoal, streak: number): ServedFlameGoal {
+    return servedFlameGoal({ goal, streak }) ?? { offer: [], current: null };
   }
 
   /** Deux rêves complets dans les 48 h rallument la Flamme, sans payer (#20455). `null` tant que ce n'est pas gagné. */
