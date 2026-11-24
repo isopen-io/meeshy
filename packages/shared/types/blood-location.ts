@@ -17,7 +17,9 @@
  *    coordonnée, au plus une fois par paire toutes les 2 h ;
  * 7. `location:blood-moved` ({@link BloodMovedEventData}) part, à chaque point, aux comptes qui
  *    pourraient LIRE l'historique de l'émetteur, sans coordonnée, au plus une fois par paire et par
- *    {@link BLOOD_MOVED_SIGNAL_SECONDS} : le client relit alors la carte (#19400).
+ *    {@link BLOOD_MOVED_SIGNAL_SECONDS} : le client relit alors la carte (#19400) ;
+ * 8. la notification `blood_proximity` ({@link BLOOD_PROXIMITY_NOTIFICATION_TYPE}) double l'alerte 6
+ *    en push, pour une app fermée (#20540).
  */
 import { z } from 'zod';
 
@@ -83,6 +85,52 @@ export type BloodProximityEventData = {
   readonly userId: string;
   readonly distanceMeters: 100 | 250 | 500 | 1000 | 2500 | 5000;
 };
+
+/**
+ * L'ALERTE POUSSÉE quand un Sang s'approche (#20540) : la même alerte que
+ * `location:blood-proximity`, sous les mêmes gardes, mais persistée et poussée (APNs/FCM) pour
+ * atteindre une app fermée. Titre et corps sont composés par le serveur dans la langue de cadrage
+ * du destinataire (« Lina est tout près » / « À 500 m — touche pour vous voir tous les deux sur la
+ * carte ») : la distance, le PALIER de l'alerte socket, vit au corps seul, que `showPreview` masque.
+ *
+ * Contrat client : au toucher du push ou du bandeau in-app, OUVRIR LA CARTE de `userId` (l'autre
+ * Sang) centrée sur les deux — jamais une conversation, jamais un profil.
+ */
+export const BLOOD_PROXIMITY_NOTIFICATION_TYPE = 'blood_proximity' as const;
+
+/**
+ * Les clés propres à ce type dans `data` du push, en plus des clés communes (`notificationId`…) :
+ * `type` vaut {@link BLOOD_PROXIMITY_NOTIFICATION_TYPE}, `userId` est l'autre Sang. Aucune
+ * coordonnée, ni distance : la distance n'est que dans le corps, qui suit `showPreview`.
+ */
+export const BLOOD_PROXIMITY_PUSH_DATA_KEYS = ['type', 'userId'] as const;
+export type BloodProximityPushData = {
+  readonly type: typeof BLOOD_PROXIMITY_NOTIFICATION_TYPE;
+  readonly userId: string;
+};
+
+/**
+ * La distance d'une notification se range arrondie à 50 m près, et jamais sous 50 m. La passerelle
+ * lui remet le PALIER de l'alerte socket (100…5000, multiples de 50) : l'arrondi ne l'affine jamais.
+ */
+export const BLOOD_PROXIMITY_NOTIFICATION_ROUNDING_METERS = 50;
+
+/**
+ * Les métadonnées de la ligne `Notification` (servies in-app sur `notification:new`) : l'autre Sang
+ * et la distance arrondie — rien d'autre ne se range.
+ */
+export function bloodProximityNotificationMetadata(input: { readonly userId: string; readonly distanceMeters: number }): {
+  readonly action: 'view_profile';
+  readonly userId: string;
+  readonly distanceMeters: number;
+} {
+  const step = BLOOD_PROXIMITY_NOTIFICATION_ROUNDING_METERS;
+  return {
+    action: 'view_profile',
+    userId: input.userId,
+    distanceMeters: Math.max(step, Math.round(input.distanceMeters / step) * step),
+  };
+}
 
 /**
  * « La position continue de X a bougé » (#19400) : l'identité et l'heure du point, JAMAIS une

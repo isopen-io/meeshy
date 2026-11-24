@@ -93,3 +93,14 @@ export interface LocationShareRequestedNotificationMetadata extends BaseNotifica
   readonly userId: string;
   readonly requestKind: 'extend' | 'reask';
 }
+
+/**
+ * Metadata pour blood_proximity (#20540). `userId` est l'AUTRE Sang : le toucher ouvre sa carte.
+ * Seule la distance arrondie à 50 m se range ({@link bloodProximityNotificationMetadata}) : ni
+ * coordonnée, ni précision, ni heure du point.
+ */
+export interface BloodProximityNotificationMetadata extends BaseNotificationMetadata {
+  readonly action: 'view_profile';
+  readonly userId: string;
+  readonly distanceMeters: number;
+}
