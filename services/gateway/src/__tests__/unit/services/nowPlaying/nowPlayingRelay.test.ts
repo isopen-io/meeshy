@@ -23,6 +23,7 @@ import {
   type NowPlayingRelayDeps,
 } from '../../../../services/nowPlaying/nowPlayingRelay';
 import { revokeTeamSharesOf } from '../../../../services/relations/teamShareGrant';
+import { BLOOD_BUNDLE_VERSION } from '@meeshy/shared/utils/blood-bundle';
 import { ADULT_BIRTH, messagingWorld, table, type CircleLink, type Row } from '../../../helpers/messaging-circle-world';
 
 const EMETTEUR = '6200000000000000000000e1';
@@ -82,6 +83,8 @@ function monde(options: { readonly accords?: readonly Row[]; readonly roles?: Re
       accord(SANG, { listeningTitleShared: true }),
       accord(SANG_SANS_TITRE),
       accord(PROCHE),
+      // #20361 : sans réglage, la catégorie part dès Proche — ce Proche l'a REFUSÉE.
+      { ownerId: EMETTEUR, otherId: PROCHE_SANS_ACCORD, listeningCategoryShared: false, listeningTitleShared: false },
       accord(AMI, { listeningTitleShared: true }),
       accord(BLOQUEUR, { listeningTitleShared: true }),
     ]),
@@ -173,6 +176,28 @@ describe('publier — chaque lecteur reçoit la projection de SON niveau', () =>
     expect(ack).toMatchObject({ success: false, code: NOW_PLAYING_ERROR_CODES.INVALID });
     expect(m.emissions).toEqual([]);
     expect(m.cache.entries.size).toBe(0);
+  });
+});
+
+describe('chaque palier arrive avec ses fonctions actives (#20361)', () => {
+  const ACCORD = { bloodBundleAcceptedAt: new Date(T0), bloodBundleVersion: BLOOD_BUNDLE_VERSION };
+
+  it('un Proche sans aucun réglage reçoit la catégorie, sans titre', async () => {
+    const m = monde({ accords: [] });
+    await publishNowPlaying(m.deps, EMETTEUR, ECOUTE);
+    expect(m.vers(PROCHE).map((e) => [e.data.category, e.data.title])).toEqual([['music', undefined]]);
+  });
+
+  it('un Sang à qui le titre avait été refusé le reçoit dès que l\'émetteur a accepté la liste du Sang', async () => {
+    const m = monde({ accords: [accord(SANG_SANS_TITRE, { listeningCategoryShared: false, ...ACCORD })] });
+    await publishNowPlaying(m.deps, EMETTEUR, ECOUTE);
+    expect(m.vers(SANG_SANS_TITRE).map((e) => e.data.title)).toEqual([ECOUTE.title]);
+  });
+
+  it('sans l\'accord au palier, un Sang sans réglage ne reçoit pas le titre (aucun consentement présumé)', async () => {
+    const m = monde({ accords: [] });
+    await publishNowPlaying(m.deps, EMETTEUR, ECOUTE);
+    expect(m.vers(SANG).map((e) => e.data.title)).toEqual([undefined]);
   });
 });
 

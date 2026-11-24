@@ -8,6 +8,7 @@ import { relationIoOf } from '../../socketio/relationEvents';
 import { logError } from '../../utils/logger';
 import { sendBadRequest, sendInternalError, sendNotFound, sendSuccess } from '../../utils/response';
 import { errorResponses, otherUserOf, relationLimiter, userIdParams } from './shared';
+import { bloodLockFieldsOf, bloodLockResponseProperties, refusedAsBloodLocked } from './blood-lock';
 
 /** L'état servi, déclaré CHAMP PAR CHAMP : rien d'autre que ce que `PhoneCallState` porte ne quitte la passerelle. */
 export const phoneCallStateSchema = {
@@ -15,7 +16,7 @@ export const phoneCallStateSchema = {
   properties: { userId: { type: 'string' }, since: { type: 'string' }, expiresAt: { type: 'string' } },
 } as const;
 
-const personSettingsSchema = { type: 'object', properties: { userId: { type: 'string' }, shared: { type: 'boolean' } } } as const;
+const personSettingsSchema = { type: 'object', properties: { ...bloodLockResponseProperties, userId: { type: 'string' }, shared: { type: 'boolean' } } } as const;
 const envelope = (data: Record<string, unknown>) => ({ type: 'object', properties: { success: { type: 'boolean' }, data } }) as const;
 const phoneCallErrors = { ...errorResponses, 403: errorResponseSchema } as const;
 
@@ -62,7 +63,7 @@ export function registerRelationPhoneCall(fastify: FastifyInstance): void {
     const otherId = otherUserOf(request, reply);
     if (!otherId) return reply;
     try {
-      return sendSuccess(reply, await readPhoneCallPersonSettings(fastify.prisma, { ownerId: request.user!.userId, otherId, now: new Date() }));
+      return sendSuccess(reply, { ...(await readPhoneCallPersonSettings(fastify.prisma, { ownerId: request.user!.userId, otherId, now: new Date() })), ...(await bloodLockFieldsOf(fastify.prisma, request.user!.userId, otherId)) });
     } catch (error) {
       logError(fastify.log, 'Phone call settings read error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
@@ -89,10 +90,12 @@ export function registerRelationPhoneCall(fastify: FastifyInstance): void {
       const ownerId = request.user!.userId;
       const other = await fastify.prisma.user.findUnique({ where: { id: otherId }, select: { id: true } });
       if (!other) return sendNotFound(reply, 'Personne introuvable');
+      // #20361 — entre Sangs, après MON accord au palier, rien ne se coupe.
+      if (await refusedAsBloodLocked(fastify.prisma, reply, { ownerId, otherId, cuts: parsed.data.shared !== true })) return reply;
       const settings = await writePhoneCallPersonSettings(fastify.prisma, { ownerId, otherId, update: { shared: parsed.data.shared === true }, now: new Date() });
       await refreshPhoneCallBetween(relayOf(), { userA: ownerId, userB: otherId })
         .catch((error: unknown) => logError(fastify.log, 'Phone call not refreshed after settings:', error));
-      return sendSuccess(reply, settings);
+      return sendSuccess(reply, { ...settings, ...(await bloodLockFieldsOf(fastify.prisma, ownerId, otherId)) });
     } catch (error) {
       logError(fastify.log, 'Phone call settings write error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');

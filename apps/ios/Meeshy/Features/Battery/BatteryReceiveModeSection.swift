@@ -45,7 +45,8 @@ final class BatteryReceiveModeViewModel: ObservableObject {
     func setReceive(_ mode: BatteryReceiveMode) async {
         guard let current = settings, current.receive != mode,
               let update = BatteryPersonSettingsUpdate(receive: mode) else { return }
-        settings = BatteryPersonSettings(userId: current.userId, isShared: current.isShared, receive: mode)
+        settings = BatteryPersonSettings(userId: current.userId, isShared: current.isShared, receive: mode,
+                                         lockedByLevel: current.lockedByLevel)
         do {
             settings = try await service.updatePersonSettings(userId: userId, update)
         } catch {
@@ -72,7 +73,8 @@ struct BatteryReceiveModeSection: View {
                         get: { settings.receive },
                         set: { mode in Task { await viewModel.setReceive(mode) } }
                     )) {
-                        ForEach(BatteryReceiveMode.allCases, id: \.self) { mode in
+                        // Au Sang verrouillé (#20361), « Rien » est absent : on ne coupe plus la batterie d'un Sang.
+                        ForEach(BatteryReceiveMode.allCases.filter { !(settings.lockedByLevel == true && $0 == .none) }, id: \.self) { mode in
                             Text(BatteryReceiveModeWording.title(mode)).tag(mode)
                         }
                     } label: {

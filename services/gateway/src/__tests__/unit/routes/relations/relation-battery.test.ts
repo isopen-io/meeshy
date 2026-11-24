@@ -120,9 +120,9 @@ describe('les réglages', () => {
     const illisible = await app.call('PUT', `/api/v1/relations/${AUTRE}/battery/settings`, {}, MOI);
     await app.close();
 
-    expect(retire.body.data).toEqual({ userId: AUTRE, shared: false, receive: 'all' });
+    expect(retire.body.data).toMatchObject({ userId: AUTRE, shared: false, receive: 'all' });
     expect(app.emissions).toEqual([{ room: ROOMS.user(AUTRE), event: SERVER_EVENTS.BATTERY_CLEARED, payload: { userId: MOI } }]);
-    expect(recu.body.data).toEqual({ userId: MOI, shared: true, receive: 'critical' });
+    expect(recu.body.data).toMatchObject({ userId: MOI, shared: true, receive: 'critical' });
     expect(illisible.status).toBe(400);
   });
 

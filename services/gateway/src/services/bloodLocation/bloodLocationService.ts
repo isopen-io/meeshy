@@ -32,10 +32,12 @@ import {
 } from '@meeshy/shared/types/blood-location';
 import { pairAccessAmong } from '../relations/pairAccess';
 import { writeLocationGhost } from '../sharedLocation/locationGhost';
-import { relationConsentGrantedAmong } from '../relations/relationConsent';
+import { pairConsentResolver, relationPairConsentBy } from '../relations/relationConsent';
 import { alertBloodProximity, isPlausibleMove } from './bloodProximity';
 import { signalBloodMoved } from './bloodMoved';
-import { openPoint, sealPoint } from './bloodLocationSeal';
+import { minorProtectedBetween } from '@meeshy/shared/utils/age';
+import { ownersHidingFrom, pointVeilOf } from './bloodLocationVeil';
+import { openPoint, pointVisibleTo, sealPoint } from './bloodLocationSeal';
 import type { BloodLocationDeps } from './bloodLocationTypes';
 
 export type { BloodLocationDeps } from './bloodLocationTypes';
@@ -44,16 +46,6 @@ const DAY_MS = 24 * 3_600_000;
 const HISTORY_MS = BLOOD_LOCATION_HISTORY_DAYS * DAY_MS;
 const JOURNAL_LIMIT = 200;
 
-/** Qui `ownerId` masque aujourd'hui par un fantôme ciblé. */
-async function ghostedBy(deps: BloodLocationDeps, ownerId: string): Promise<ReadonlySet<string>> {
-  const rows = await deps.prisma.relationFeatureSetting.findMany({ where: { ownerId, ghostAt: { not: null } }, select: { otherId: true } });
-  return new Set(rows.map((row) => row.otherId));
-}
-
-async function inGlobalGhost(deps: BloodLocationDeps, ownerId: string): Promise<boolean> {
-  const row = await deps.prisma.user.findUnique({ where: { id: ownerId }, select: { locationGhostAt: true } });
-  return row?.locationGhostAt != null;
-}
 
 const ANCHOR_SCAN = 50;
 
@@ -72,23 +64,24 @@ async function anchorOf(deps: BloodLocationDeps, ownerId: string): Promise<{ lat
 
 export async function recordBloodLocation(deps: BloodLocationDeps, ownerId: string, input: unknown): Promise<{ readonly recorded: boolean }> {
   const parsed = bloodLocationPayloadSchema.safeParse(input);
-  if (!parsed.success || (await inGlobalGhost(deps, ownerId))) return { recorded: false };
-  const [hidden, anchor] = await Promise.all([ghostedBy(deps, ownerId), anchorOf(deps, ownerId)]);
+  if (!parsed.success) return { recorded: false };
+  const [veil, anchor] = await Promise.all([pointVeilOf(deps.prisma, ownerId), anchorOf(deps, ownerId)]);
+  if (veil.everyone) return { recorded: false };
   const now = deps.now();
   const plausible = isPlausibleMove(anchor, parsed.data, now);
   const recordedAt = new Date(now);
   await deps.prisma.bloodLocationPoint.create({
     data: {
       ownerId,
-      sealed: sealPoint(ownerId, { ...parsed.data, hiddenFrom: [...hidden], ...(plausible ? {} : { implausible: true as const }) }),
+      sealed: sealPoint(ownerId, { ...parsed.data, hiddenFrom: [...veil.hidden], ...(veil.onlyTo === null ? {} : { visibleOnlyTo: [...veil.onlyTo] }), ...(plausible ? {} : { implausible: true as const }) }),
       recordedAt,
       expiresAt: new Date(now + HISTORY_MS),
     },
   });
   // Le signal et l'alerte relisent liens, consentements et coupures puis réservent par lecteur : ils
   // partent APRÈS la réponse, jamais sur le chemin du point (chaque point paierait leur coût).
-  if (plausible) void signalBloodMoved(deps, ownerId, recordedAt, hidden).catch((error: unknown) => deps.report?.(error));
-  if (plausible && anchor) void alertBloodProximity(deps, ownerId, parsed.data, hidden).catch((error: unknown) => deps.report?.(error));
+  if (plausible) void signalBloodMoved(deps, ownerId, recordedAt, veil).catch((error: unknown) => deps.report?.(error));
+  if (plausible && anchor) void alertBloodProximity(deps, ownerId, parsed.data, veil).catch((error: unknown) => deps.report?.(error));
   return { recorded: true };
 }
 
@@ -115,20 +108,20 @@ async function pointsOf(deps: BloodLocationDeps, ownerId: string, viewerId: stri
   });
   return rows.flatMap((row) => {
     const point = openPoint(ownerId, row.sealed);
-    if (!point || point.hiddenFrom.includes(viewerId)) return [];
+    if (!point || !pointVisibleTo(point, viewerId)) return [];
     return [{ latitude: point.latitude, longitude: point.longitude, ...(point.accuracy === undefined ? {} : { accuracy: point.accuracy }), recordedAt: row.recordedAt.toISOString() }];
   });
 }
 
 async function viewerMayRead(deps: BloodLocationDeps, viewerId: string, ownerId: string): Promise<BloodLocationHistoryVerdict | null> {
-  const granted = await relationConsentGrantedAmong(deps.prisma, { ownerId, otherIds: [viewerId], feature: 'location.history' });
+  const stored = await relationPairConsentBy(deps.prisma, { ownerIds: [ownerId], otherId: viewerId, feature: 'location.history' });
   const verdicts = await pairAccessAmong(deps.prisma, {
     feature: 'location.history',
     subjectId: viewerId,
     otherIds: [ownerId],
     subjectIs: 'viewer',
     now: new Date(deps.now()),
-    consentOf: () => (granted.has(viewerId) ? 'granted' : 'refused'),
+    consentOf: pairConsentResolver('location.history', stored),
   });
   const verdict = verdicts.get(ownerId);
   if (verdict?.allowed === true) return null;
@@ -164,8 +157,8 @@ export async function readBloodLocationHistory(
   if (refusal) return refusal;
   if (!deps.enabledFor(ownerId)) return { kind: 'ok', items: [] };
   await noteConsultation(deps, ownerId, viewerId);
-  const [global, targeted, items] = await Promise.all([inGlobalGhost(deps, ownerId), ghostedBy(deps, ownerId), pointsOf(deps, ownerId, viewerId, params)]);
-  return { kind: 'ok', items: global || targeted.has(viewerId) ? [] : items };
+  const [hiding, items] = await Promise.all([ownersHidingFrom(deps.prisma, viewerId, [ownerId]), pointsOf(deps, ownerId, viewerId, params)]);
+  return { kind: 'ok', items: hiding.has(ownerId) ? [] : items };
 }
 
 export async function eraseBloodLocationHistory(deps: BloodLocationDeps, ownerId: string): Promise<{ readonly erased: number }> {
@@ -221,8 +214,14 @@ export async function updateBloodLocationSettings(deps: BloodLocationDeps, owner
     return { ok: true };
   }
   if (settings.userId === ownerId || !(await locationMayOpenWith(deps, ownerId, settings.userId))) return { ok: false };
+  const people = settings.ghost === true ? await deps.prisma.user.findMany({ where: { id: { in: [ownerId, settings.userId] } }, select: { id: true, birthDate: true } }) : [];
+  const birthOf = (id: string): Date | null => people.find((person) => person.id === id)?.birthDate ?? null;
+  // Le fantôme ciblé d'un mineur efface son accord au palier pour ce Sang quand sa protection s'applique
+  // (deux âges connus, écart de plus de 5 ans, C7) : il ne se lèvera pas à sa majorité.
+  const minorRevokes = settings.ghost === true && minorProtectedBetween({ emitterBirthDate: birthOf(ownerId), otherBirthDate: birthOf(settings.userId), now: at });
   const data = {
     ...(settings.ghost === undefined ? {} : { ghostAt: settings.ghost ? at : null }),
+    ...(minorRevokes ? { bloodBundleAcceptedAt: null, bloodBundleVersion: null } : {}),
     ...(settings.proximityRadiusMeters === undefined ? {} : { proximityRadiusMeters: clampRadius(settings.proximityRadiusMeters) }),
   };
   await deps.prisma.relationFeatureSetting.upsert({

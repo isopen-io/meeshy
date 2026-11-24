@@ -194,7 +194,8 @@ export async function inviteTogether(deps: TogetherRelayDeps, hostId: string, da
   let verdict: TogetherVerdict;
   let received: boolean;
   try {
-    [verdict, received] = await Promise.all([judge(deps, subject), guestReceivesInvitesFrom(deps.prisma, subject)]);
+    verdict = await judge(deps, subject);
+    received = verdict.ok && (await guestReceivesInvitesFrom(deps.prisma, subject, verdict.level));
   } catch {
     return UNAVAILABLE;
   }

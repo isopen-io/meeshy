@@ -3,6 +3,7 @@ import { registerRelationReads } from './read';
 import { registerRelationLower } from './lower';
 import { registerRelationRitual } from './ritual';
 import { registerRelationSettings } from './settings';
+import { registerBloodBundle } from './blood-bundle';
 import { registerRelationNowPlaying } from './nowPlaying';
 import { registerRelationLocations } from './locations';
 import { registerRelationLocationRequest } from './locationRequest';
@@ -32,4 +33,5 @@ export async function relationsRoutes(fastify: FastifyInstance): Promise<void> {
   registerRelationLower(fastify);
   registerRelationRitual(fastify);
   registerRelationSettings(fastify);
+  registerBloodBundle(fastify);
 }

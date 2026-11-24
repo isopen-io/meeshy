@@ -18,9 +18,11 @@
  * l'appartenance de quelqu'un à une conversation. Une lecture qui échoue LÈVE : le relais
  * ferme (`TOGETHER_UNAVAILABLE`).
  */
+import type { RelationLevel } from '@meeshy/shared/types/relation';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { TogetherMediaKind } from '@meeshy/shared/types/together';
 import { pairAccess, type PairAccessDb } from '../relations/pairAccess';
+import { niveauEffectif } from '../friendship';
 import { ACCOUNT_STATE_SELECT, isUsableAccount } from '../relations/usableAccount';
 import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
 import { unsetOrNull } from '../../utils/prisma-unset';
@@ -34,7 +36,7 @@ export type TogetherSubject = {
   readonly attachmentId: string;
 };
 
-export type TogetherVerdict = { readonly ok: true; readonly media: TogetherMediaKind } | { readonly ok: false };
+export type TogetherVerdict = { readonly ok: true; readonly media: TogetherMediaKind; readonly level: RelationLevel } | { readonly ok: false };
 
 const REFUSED: TogetherVerdict = { ok: false };
 
@@ -138,12 +140,13 @@ export async function judgeTogether(
   subject: TogetherSubject,
 ): Promise<TogetherVerdict> {
   if (!subject.hostId || !subject.guestId || subject.hostId === subject.guestId) return REFUSED;
-  const [usable, access, media, members, open] = await Promise.all([
+  const [usable, access, media, members, open, realLevel] = await Promise.all([
     bothUsable(deps.prisma, subject),
     pairAccess(deps.prisma, { feature: 'together', viewerId: subject.hostId, targetId: subject.guestId, now: deps.now }),
     playableMedia(deps.prisma, subject),
     bothActiveMembers(deps.prisma, subject),
     openConversation(deps.prisma, subject),
+    niveauEffectif(deps.prisma, subject.hostId, subject.guestId),
   ]);
-  return usable && access.allowed && media && members && open ? { ok: true, media } : REFUSED;
+  return usable && access.allowed && media && members && open ? { ok: true, media, level: realLevel } : REFUSED;
 }

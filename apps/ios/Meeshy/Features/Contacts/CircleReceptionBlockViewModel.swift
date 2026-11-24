@@ -52,6 +52,7 @@ final class CircleReceptionBlockViewModel: ObservableObject {
     @Published var notice: String?
 
     private let service: BringProviding
+    private let locks: BloodLockProviding
     private let afterGrant: @MainActor () async -> String?
 
     nonisolated deinit {}
@@ -60,12 +61,14 @@ final class CircleReceptionBlockViewModel: ObservableObject {
         userId: String,
         personSwitch: CirclePersonSwitch,
         service: BringProviding,
-        afterGrant: @escaping @MainActor () async -> String? = { nil }
+        afterGrant: @escaping @MainActor () async -> String? = { nil },
+        locks: BloodLockProviding? = nil
     ) {
         self.userId = userId
         self.personSwitch = personSwitch
         self.service = service
         self.afterGrant = afterGrant
+        self.locks = locks ?? BloodLockHolder.center()
     }
 
     convenience init(userId: String, setting: RelationReceptionSetting, service: BringProviding) {
@@ -76,6 +79,7 @@ final class CircleReceptionBlockViewModel: ObservableObject {
         guard let served = try? await service.personSettings(userId: userId) else { return }
         isOn = personSwitch.isOn(in: served)
         isServed = personSwitch.isServed(in: served)
+        locks.record(served.bloodLock, for: userId)
     }
 
     /// Instantané -> local -> réseau -> retour arrière.
@@ -90,6 +94,13 @@ final class CircleReceptionBlockViewModel: ObservableObject {
             isOn = personSwitch.isOn(in: try await write(next))
         } catch {
             isOn = before
+            if RelationRefusal.from(error) == .bloodLocked {
+                // Le verrou tient côté serveur : l'écran le sait désormais et retire l'interrupteur, sans erreur brute.
+                locks.record(RelationBloodLock(lockedByLevel: true, ritualSharesLocked: nil), for: userId)
+                notice = BloodLockWording.lockedNotice
+                HapticFeedback.light()
+                return false
+            }
             notice = String(localized: "circles.notice.lowerFailed", defaultValue: "La modification n'a pas pu être enregistrée.", bundle: .main)
             HapticFeedback.error()
             return false

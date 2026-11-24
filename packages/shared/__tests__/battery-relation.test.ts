@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   RELATION_CONSENT_FEATURES,
   RELATION_DIRECTED_FEATURES,
-  RELATION_EMITTER_CONSENT_DEFAULT_LEVEL,
+  RELATION_LEVEL_DEFAULT_ON,
   RELATION_EMITTER_CONSENT_FEATURES,
   RELATION_FEATURE_MIN_LEVEL,
   RELATION_FEATURES,
@@ -48,14 +48,15 @@ describe('la batterie dans la matrice des cercles (#14147)', () => {
     expect(RELATION_DIRECTED_FEATURES.has('device.battery')).toBe(false);
   });
 
-  it('le consentement est accordé par défaut entre Sangs, pour la batterie, le téléphone injoignable (#18737) et la vérification d\'inactivité (#18738)', () => {
-    expect(RELATION_EMITTER_CONSENT_DEFAULT_LEVEL).toEqual({ 'device.battery': 'BLOOD', 'device.battery.pull': 'BLOOD', 'device.unreachable': 'BLOOD', 'safety.inactivity': 'BLOOD', 'device.call': 'BLOOD', 'health.fall': 'BLOOD' });
+  it('la batterie et l\'injoignabilité arrivent actives dès Proche ; le relevé, l\'inactivité, l\'appel et la chute au Sang (#20361)', () => {
+    expect(RELATION_LEVEL_DEFAULT_ON).toMatchObject({ 'device.battery': 'CLOSE', 'device.battery.pull': 'BLOOD', 'device.unreachable': 'CLOSE', 'safety.inactivity': 'BLOOD', 'device.call': 'BLOOD', 'health.fall': 'BLOOD' });
   });
 });
 
 describe('resolveEmitterConsent — le tri-état par paire', () => {
-  it('nul ou absent vaut le défaut du niveau : refusé entre Proches, accordé entre Sangs', () => {
-    expect(resolveEmitterConsent({ feature: 'device.battery', stored: null, effectiveLevel: 'CLOSE' })).toBe('refused');
+  it('nul ou absent vaut le défaut du niveau : refusé entre Amis, accordé dès Proche (#20361)', () => {
+    expect(resolveEmitterConsent({ feature: 'device.battery', stored: null, effectiveLevel: 'FRIEND' })).toBe('refused');
+    expect(resolveEmitterConsent({ feature: 'device.battery', stored: null, effectiveLevel: 'CLOSE' })).toBe('granted');
     expect(resolveEmitterConsent({ feature: 'device.battery', stored: undefined, effectiveLevel: 'BLOOD' })).toBe('granted');
   });
 
@@ -70,12 +71,13 @@ describe('resolveEmitterConsent — le tri-état par paire', () => {
   });
 
   it('une feature sans défaut garde le sens historique : seul true accorde, même au Sang', () => {
-    expect(resolveEmitterConsent({ feature: 'listening.title', stored: null, effectiveLevel: 'BLOOD' })).toBe('refused');
-    expect(resolveEmitterConsent({ feature: 'listening.title', stored: true, effectiveLevel: 'BLOOD' })).toBe('granted');
+    expect(resolveEmitterConsent({ feature: 'location.temporary', stored: null, effectiveLevel: 'BLOOD' })).toBe('refused');
+    expect(resolveEmitterConsent({ feature: 'location.temporary', stored: true, effectiveLevel: 'BLOOD' })).toBe('granted');
   });
 
   it('une valeur stockée illisible vaut le défaut, jamais un accord', () => {
-    expect(resolveEmitterConsent({ feature: 'device.battery', stored: 'yes' as unknown as boolean, effectiveLevel: 'CLOSE' })).toBe('refused');
+    expect(resolveEmitterConsent({ feature: 'device.battery', stored: 'yes' as unknown as boolean, effectiveLevel: 'FRIEND' })).toBe('refused');
+    expect(resolveEmitterConsent({ feature: 'location.temporary', stored: 'yes' as unknown as boolean, effectiveLevel: 'BLOOD' })).toBe('refused');
   });
 });
 
@@ -85,9 +87,11 @@ describe('resolveRelationAccessWithStoredConsent — la loi avec le consentement
     expect(access).toEqual({ allowed: true, effectiveLevel: 'BLOOD', reason: 'level', requiresConsent: true });
   });
 
-  it('Proche sans consentement : rien ne part, l\'écran de consentement peut être proposé', () => {
+  it('Proche sans réglage : la batterie part, active à l\'arrivée au palier (#20361) ; refusée, rien ne part', () => {
     const access = resolveRelationAccessWithStoredConsent({ ...pair({ grantedByViewer: 'CLOSE', grantedByTarget: 'CLOSE' }), storedConsent: null });
-    expect(access).toEqual({ allowed: false, effectiveLevel: 'CLOSE', reason: 'consent', requiresConsent: true });
+    expect(access).toEqual({ allowed: true, effectiveLevel: 'CLOSE', reason: 'level', requiresConsent: true });
+    const refused = resolveRelationAccessWithStoredConsent({ ...pair({ grantedByViewer: 'CLOSE', grantedByTarget: 'CLOSE' }), storedConsent: false });
+    expect(refused).toEqual({ allowed: false, effectiveLevel: 'CLOSE', reason: 'consent', requiresConsent: true });
   });
 
   it('Proche ayant consenti : la batterie part', () => {

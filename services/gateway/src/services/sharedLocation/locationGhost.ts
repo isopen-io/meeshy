@@ -9,6 +9,7 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { LocationGhostState } from '@meeshy/shared/types/shared-location';
+import { isDeclaredMinor, minorProtectedBetween } from '@meeshy/shared/utils/age';
 import {
   reflectSharedLocationGhost,
   replaySharedLocationBatteryOf,
@@ -16,7 +17,7 @@ import {
   type SharedLocationRelayDeps,
 } from './sharedLocationRelay';
 
-export type LocationGhostDb = Pick<PrismaClient, 'user'>;
+export type LocationGhostDb = Pick<PrismaClient, 'user'> & Partial<Pick<PrismaClient, 'relationFeatureSetting'>>;
 
 export type LocationGhostWrite = { readonly state: LocationGhostState; readonly change: LocationGhostChange };
 
@@ -25,11 +26,30 @@ const stateOf = (ghostAt: Date | null): LocationGhostState => ({ ghost: ghostAt 
 const ghostAtOf = async (db: LocationGhostDb, userId: string): Promise<Date | null> =>
   (await db.user.findUnique({ where: { id: userId }, select: { locationGhostAt: true } }))?.locationGhostAt ?? null;
 
+/**
+ * Un mineur déclaré qui se met en fantôme global efface ses accords au palier envers les Sangs face
+ * auxquels sa protection s'applique (deux âges connus, écart de plus de 5 ans, C7, #20361) : sans cela,
+ * son fantôme se lèverait tout seul envers eux le jour de sa majorité. Entre pairs, la loi du Sang est entière.
+ */
+async function minorGhostRevokesBundles(db: LocationGhostDb, userId: string): Promise<void> {
+  if (!db.relationFeatureSetting) return;
+  const now = new Date();
+  const user = await db.user.findUnique({ where: { id: userId }, select: { birthDate: true } });
+  if (!isDeclaredMinor(user?.birthDate ?? null, now)) return;
+  const rows = await db.relationFeatureSetting.findMany({ where: { ownerId: userId, bloodBundleAcceptedAt: { not: null } }, select: { otherId: true } });
+  if (rows.length === 0) return;
+  const people = await db.user.findMany({ where: { id: { in: rows.map((row) => row.otherId) } }, select: { id: true, birthDate: true } });
+  const protectedIds = people.filter((other) => minorProtectedBetween({ emitterBirthDate: user?.birthDate, otherBirthDate: other.birthDate, now })).map((other) => other.id);
+  if (protectedIds.length === 0) return;
+  await db.relationFeatureSetting.updateMany({ where: { ownerId: userId, otherId: { in: protectedIds } }, data: { bloodBundleAcceptedAt: null, bloodBundleVersion: null } });
+}
+
 export async function writeLocationGhost(db: LocationGhostDb, userId: string, ghost: boolean, at: Date): Promise<LocationGhostWrite> {
   const current = await ghostAtOf(db, userId);
   if ((current !== null) === ghost) return { state: stateOf(current), change: 'unchanged' };
   const next = ghost ? at : null;
   await db.user.updateMany({ where: { id: userId }, data: { locationGhostAt: next } });
+  if (ghost) await minorGhostRevokesBundles(db, userId);
   return { state: stateOf(next), change: ghost ? 'entered' : 'left' };
 }
 

@@ -11,8 +11,8 @@
  * - `none` — rien ne part. Pas même un effacement : il trahirait une écoute.
  *
  * Le niveau, le blocage et l'âge passent par `pairAccessAmong` (site unique de la loi) ;
- * le consentement par `relationConsentGrantedAmong` / `relationConsentGrantedBy`, relus à
- * CHAQUE publication, jamais mis en cache. Chaque émission vise la room `user:<lecteur>`
+ * le consentement par `relationPairConsentFor` (valeur stockée, défaut du palier, verrou du Sang
+ * après l'accord au palier, #20361), relu à CHAQUE publication, jamais mis en cache. Chaque émission vise la room `user:<lecteur>`
  * avec SA charge : aucune room partagée ne sert à tous la charge du plus proche.
  *
  * `refreshNowPlayingBetween` rejoue la projection d'une paire quand son lien ou ses
@@ -36,9 +36,9 @@ import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { comptesAuMoins } from '../friendship';
 import { pairAccessAmong, type PairAccessDb, type PairAccessSubject } from '../relations/pairAccess';
 import {
+  pairConsentResolver,
   relationConsentCounterpartsOf,
-  relationConsentGrantedAmong,
-  relationConsentGrantedBy,
+  relationPairConsentFor,
   type ShareConsentFeature,
 } from '../relations/relationConsent';
 import { ACCOUNT_STATE_SELECT, isUsableTeamAccount } from '../relations/usableAccount';
@@ -89,16 +89,14 @@ async function accessAmong(
 ): Promise<ReadonlyMap<string, NowPlayingReaderAccess>> {
   const verdicts = await Promise.all(
     LEVELS.map(async ([access, feature]) => {
-      const granted = params.subjectIs === 'target'
-        ? await relationConsentGrantedAmong(prisma, { ownerId: params.subjectId, otherIds: params.otherIds, feature })
-        : await relationConsentGrantedBy(prisma, { ownerIds: params.otherIds, otherId: params.subjectId, feature });
+      const stored = await relationPairConsentFor(prisma, { subjectId: params.subjectId, otherIds: params.otherIds, subjectIs: params.subjectIs, feature });
       const law = await pairAccessAmong(prisma, {
         feature,
         subjectId: params.subjectId,
         otherIds: params.otherIds,
         subjectIs: params.subjectIs,
         now: params.now,
-        consentOf: (otherId) => (granted.has(otherId) ? 'granted' : 'refused'),
+        consentOf: pairConsentResolver(feature, stored),
       });
       return [access, law] as const;
     }),

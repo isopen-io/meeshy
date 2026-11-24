@@ -19,14 +19,20 @@ import { sendBadRequest, sendInternalError, sendNotFound, sendSuccess } from '..
 import { resolveRelationAccess } from '@meeshy/shared/utils/relation-access';
 import { declaredAgeClass } from '@meeshy/shared/utils/age';
 import { ACCOUNT_STATE_SELECT, lawRoleOf } from '../../services/relations/usableAccount';
-import { niveauEffectif } from '../../services/friendship';
+import { niveauEffectifUniforme } from '../../services/friendship';
+import { isBlockedBetween } from '../../utils/blocking';
 import { bringDepsOf, bringQuotaOf } from '../bring';
+import { bloodLockStateBetween, type BloodLockState } from '../../services/relations/bloodLock';
+import { relationLevelIfAtLeast } from '@meeshy/shared/types/relation';
+import { bloodLockResponseProperties, sendBloodLocked } from './blood-lock';
 import { errorResponses, otherUserOf, relationLimiter, userIdParams } from './shared';
 
 /**
  * BLOQUER le Bring, le talkie ou les invitations « ensemble » ne s'écrit que pour une personne qui EXISTE et avec qui un lien
  * existe (Connaissance au moins, jugé par la loi) : aucune ligne pour un identifiant
- * quelconque. Inconnu, désactivé, sans lien ou bloqué : le même 404. Un RETRAIT de
+ * quelconque. Inconnu, désactivé, sans lien ou bloqué (dans un sens ou l'autre) : le même 404, après les
+ * mêmes quatre lectures, parties ensemble et sans condition (`niveauEffectifUniforme`) — le statut, le
+ * corps et le nombre de lectures ne disent pas « on m'a bloqué » (#20502). Un RETRAIT de
  * partage ou un déblocage ne demandent aucun lien : ils ne touchent que MA ligne
  * existante, et ne la créent jamais (audit #14535 constat 1).
  *
@@ -45,12 +51,13 @@ async function linkedPerson(
   otherId: string,
   feature: 'dm.direct' | 'listening.category' = 'dm.direct',
 ): Promise<boolean> {
-  const [other, owner, level] = await Promise.all([
+  const [other, owner, level, blocked] = await Promise.all([
     prisma.user.findUnique({ where: { id: otherId }, select: { id: true, role: true, birthDate: true, ...ACCOUNT_STATE_SELECT } }),
     prisma.user.findUnique({ where: { id: ownerId }, select: { role: true, birthDate: true, ...ACCOUNT_STATE_SELECT } }),
-    niveauEffectif(prisma, ownerId, otherId),
+    niveauEffectifUniforme(prisma, ownerId, otherId),
+    isBlockedBetween(prisma, ownerId, otherId),
   ]);
-  if (!other || other.deactivatedAt) return false;
+  if (!other || other.deactivatedAt || blocked) return false;
   const now = new Date();
   const ownerSide = { id: ownerId, minor: declaredAgeClass(owner?.birthDate ?? null, now), role: lawRoleOf(owner) };
   const otherSide = { id: otherId, minor: declaredAgeClass(other.birthDate ?? null, now), role: lawRoleOf(other) };
@@ -61,7 +68,7 @@ async function linkedPerson(
       grantedByViewer: level,
       grantedByTarget: level,
       sharesCommunity: false,
-      blockedEitherWay: false,
+      blockedEitherWay: blocked,
       viewerMinor: viewer.minor,
       targetMinor: target.minor,
       viewerRole: viewer.role,
@@ -96,7 +103,7 @@ const settingsSchema = {
   type: 'object',
   properties: {
     success: { type: 'boolean' },
-    data: { type: 'object', properties: { userId: { type: 'string' }, bringBlocked: { type: 'boolean' }, talkieBlocked: { type: 'boolean' }, togetherBlocked: { type: 'boolean' }, bloodLocationMuted: { type: 'boolean' }, listeningCategoryShared: { type: 'boolean' }, ...shareFlags } },
+    data: { type: 'object', properties: { userId: { type: 'string' }, bringBlocked: { type: 'boolean' }, talkieBlocked: { type: 'boolean' }, togetherBlocked: { type: 'boolean' }, bloodLocationMuted: { type: 'boolean' }, listeningCategoryShared: { type: 'boolean' }, ...shareFlags, ...bloodLockResponseProperties } },
   },
 } as const;
 
@@ -106,16 +113,33 @@ const SETTINGS_SELECT = {
 
 type SettingsRow = { readonly bringBlockedAt: Date | null; readonly talkieBlockedAt: Date | null; readonly togetherBlockedAt: Date | null; readonly bloodLocationMutedAt: Date | null; readonly listeningCategoryShared: boolean | null } & Readonly<Record<(typeof RELATION_RITUAL_SHARES)[number], boolean>>;
 
-/** Ce que JE règle pour l'autre : son Bring, son talkie et ses invitations « ensemble » bloqués ou non, et ce que je lui partage depuis le rituel. */
-const servedSettings = (userId: string, row: SettingsRow | null): RelationPersonSettings => ({
-  userId,
-  bringBlocked: Boolean(row?.bringBlockedAt),
-  talkieBlocked: Boolean(row?.talkieBlockedAt),
-  togetherBlocked: Boolean(row?.togetherBlockedAt),
-  bloodLocationMuted: Boolean(row?.bloodLocationMutedAt),
-  listeningCategoryShared: row?.listeningCategoryShared === true,
-  ...(Object.fromEntries(RELATION_RITUAL_SHARES.map((share) => [share, row?.[share] === true])) as Record<(typeof RELATION_RITUAL_SHARES)[number], boolean>),
-});
+/**
+ * Ce que JE règle pour l'autre, tel que la loi l'APPLIQUE (#20361) : son Bring, son talkie et ses
+ * invitations « ensemble » bloqués ou non, ce que je lui partage depuis le rituel, et la catégorie
+ * d'écoute — active dès Proche tant que je ne l'ai pas retirée. Verrouillé au Sang (accord au palier
+ * donné), tout est ouvert et `lockedByLevel` le dit : les interrupteurs n'existent plus.
+ */
+const servedSettings = (userId: string, row: SettingsRow | null, lock: BloodLockState): RelationPersonSettings => {
+  // Une paire bloquée sert ce que sert un lien rompu : aucun défaut de niveau (ré-audit #20361, constat 4).
+  const categoryDefault = row?.listeningCategoryShared == null && !lock.blocked && relationLevelIfAtLeast(lock.level, 'CLOSE') !== null;
+  return {
+    userId,
+    bringBlocked: !lock.locked && Boolean(row?.bringBlockedAt),
+    talkieBlocked: !lock.locked && Boolean(row?.talkieBlockedAt),
+    togetherBlocked: !lock.locked && Boolean(row?.togetherBlockedAt),
+    bloodLocationMuted: !lock.locked && Boolean(row?.bloodLocationMutedAt),
+    listeningCategoryShared: lock.locked || row?.listeningCategoryShared === true || categoryDefault,
+    ...(Object.fromEntries(RELATION_RITUAL_SHARES.map((share) => [share, (lock.locked && !lock.minorProtected) || row?.[share] === true])) as Record<(typeof RELATION_RITUAL_SHARES)[number], boolean>),
+    lockedByLevel: lock.locked,
+    bloodBundleAccepted: lock.bloodBundleAccepted && !lock.blocked,
+    ritualSharesLocked: lock.locked && !lock.minorProtected,
+  };
+};
+
+const serve = async (prisma: FastifyInstance['prisma'], ownerId: string, userId: string): Promise<RelationPersonSettings> => {
+  const [row, lock] = await Promise.all([readSettings(prisma, ownerId, userId), bloodLockStateBetween(prisma, ownerId, userId)]);
+  return servedSettings(userId, row, lock);
+};
 
 const readSettings = (prisma: FastifyInstance['prisma'], ownerId: string, otherId: string): Promise<SettingsRow | null> =>
   prisma.relationFeatureSetting.findUnique({ where: { ownerId_otherId: { ownerId, otherId } }, select: SETTINGS_SELECT });
@@ -160,7 +184,7 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
       const otherId = otherUserOf(request, reply);
       if (otherId === null) return reply;
       const userId = otherId.toLowerCase();
-      return sendSuccess(reply, servedSettings(userId, await readSettings(fastify.prisma, request.user!.userId, userId)));
+      return sendSuccess(reply, await serve(fastify.prisma, request.user!.userId, userId));
     } catch (error) {
       logError(fastify.log, 'Read relation settings error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
@@ -195,11 +219,24 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
       const contradictory = granted.includes('listeningTitleShared') && listeningCategoryShared === false;
       const teamGrant = granted.length > 0 && !contradictory && (await teamMayGrantShares(fastify.prisma, { ownerId, otherId: userId, shares: granted, now }));
       if (granted.length > 0 && !teamGrant) return sendBadRequest(reply, 'Donnees invalides');
+      // #20361 — entre Sangs, après MON accord au palier, rien ne se coupe : 409, rien n'est écrit.
+      // Les partages du rituel (position, titre) d'un mineur déclaré restent hors du verrou (C7).
+      const cutsLocked = bringBlocked === true || talkieBlocked === true || togetherBlocked === true || bloodLocationMuted === true
+        || listeningCategoryShared === false;
+      const cutsShares = shares.some((share) => requested[share] === false);
+      const lock = cutsLocked || cutsShares ? await bloodLockStateBetween(fastify.prisma, ownerId, userId) : null;
+      if (lock?.locked && (cutsLocked || !lock.minorProtected)) return sendBloodLocked(reply);
+      // Le refus d'un mineur ne doit pas se lever tout seul à sa majorité : il efface son accord au
+      // palier, et la carte B le lui redemandera (C7, décision B).
+      const minorRevokesBundle = lock?.locked === true && lock.minorProtected && cutsShares;
       const current = await readSettings(fastify.prisma, ownerId, userId);
+      // La catégorie est active dès Proche sans réglage : la retirer ÉCRIT le refus, même sans accord stocké.
+      const categoryCut = listeningCategoryShared === false && current?.listeningCategoryShared !== false;
       const blocking = bringBlocked === true || talkieBlocked === true || togetherBlocked === true || bloodLocationMuted === true;
+      const categoryNeedsRow = categoryCut && !current;
       const granting = listeningCategoryShared === true;
       const [linked, close] = await Promise.all([
-        blocking ? linkedPerson(fastify.prisma, ownerId, userId) : false,
+        blocking || categoryNeedsRow ? linkedPerson(fastify.prisma, ownerId, userId) : false,
         granting ? linkedPerson(fastify.prisma, ownerId, userId, 'listening.category') : false,
       ]);
       // Retirer la catégorie retire aussi le titre : on ne garde pas le plus riche des deux partages
@@ -208,7 +245,7 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
         ...shares.filter((share) => requested[share] === false),
         ...(listeningCategoryShared === false ? (['listeningTitleShared'] as const) : []),
       ];
-      const categoryWithdrawn = listeningCategoryShared === false && current?.listeningCategoryShared === true;
+      const categoryWithdrawn = categoryCut;
       const cutsListening = categoryWithdrawn || (withdrawn.includes('listeningTitleShared') && current?.listeningTitleShared === true);
       const ecoute = { prisma: fastify.prisma, io: relationIoOf(fastify), report: (error: unknown) => logError(fastify.log, 'Now playing not refreshed after settings:', error) };
       const ecouteAvant = cutsListening ? await captureNowPlayingBefore(ecoute, { userA: ownerId, userB: userId }) : new Map();
@@ -225,10 +262,11 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
         ...(talkieBlocked === true && linked ? { talkieBlockedAt: now } : {}),
         ...(togetherBlocked === true && linked ? { togetherBlockedAt: now } : {}),
         ...(bloodLocationMuted === true && linked ? { bloodLocationMutedAt: now } : {}),
+        ...(minorRevokesBundle ? { bloodBundleAcceptedAt: null, bloodBundleVersion: null } : {}),
       };
 
       // UNE écriture : le retrait (qui n'exige aucun lien), les blocages et l'accord partent ensemble.
-      if ((blocking && linked) || (granting && close) || teamGrant) {
+      if ((blocking && linked) || (categoryNeedsRow && linked) || (granting && close) || teamGrant) {
         await fastify.prisma.relationFeatureSetting.upsert({
           where: { ownerId_otherId: { ownerId, otherId: userId } },
           create: { ownerId, otherId: userId, ...data },
@@ -252,7 +290,7 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
       // en cours ; un autre réglage n'y touche pas (ni ré-émission, ni consultation notée au journal).
       if (shares.some((share) => share === 'locationShared' || share === 'locationHistoryShared')) await refreshInactivityServedAfter({ prisma: fastify.prisma, io: relationIoOf(fastify), report: (error) => logError(fastify.log, 'Inactivity not refreshed after relation settings:', error) }, ownerId);
 
-      return sendSuccess(reply, servedSettings(userId, await readSettings(fastify.prisma, ownerId, userId)));
+      return sendSuccess(reply, await serve(fastify.prisma, ownerId, userId));
     } catch (error) {
       logError(fastify.log, 'Update relation settings error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');

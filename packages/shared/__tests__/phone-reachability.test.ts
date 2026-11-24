@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   RELATION_CONSENT_FEATURES,
   RELATION_DIRECTED_FEATURES,
-  RELATION_EMITTER_CONSENT_DEFAULT_LEVEL,
+  RELATION_LEVEL_DEFAULT_ON,
   RELATION_EMITTER_CONSENT_FEATURES,
   RELATION_FEATURE_MIN_LEVEL,
   RELATION_FEATURES,
@@ -54,16 +54,17 @@ describe('le téléphone injoignable dans la matrice des cercles (#18737)', () =
     expect(RELATION_FEATURE_MIN_LEVEL['device.unreachable']).toBe('CLOSE');
   });
 
-  it('passe par le consentement de l\'ÉMETTEUR, accordé par défaut entre Sangs seulement', () => {
+  it('passe par le consentement de l\'ÉMETTEUR, accordé par défaut dès Proche (#20361)', () => {
     expect(RELATION_EMITTER_CONSENT_FEATURES.has('device.unreachable')).toBe(true);
     expect(RELATION_CONSENT_FEATURES.has('device.unreachable')).toBe(true);
-    expect(RELATION_EMITTER_CONSENT_DEFAULT_LEVEL['device.unreachable']).toBe('BLOOD');
+    expect(RELATION_LEVEL_DEFAULT_ON['device.unreachable']).toBe('CLOSE');
     expect(RELATION_DIRECTED_FEATURES.has('device.unreachable')).toBe(false);
   });
 
-  it('Sang sans réglage : l\'état part ; Proche sans accord : rien ; Proche ayant consenti : il part', () => {
+  it('Sang sans réglage : l\'état part ; Proche sans réglage : il part ; Proche qui a refusé : rien', () => {
     expect(resolveRelationAccessWithStoredConsent({ ...pair({ grantedByViewer: 'BLOOD', grantedByTarget: 'BLOOD' }), storedConsent: null }).allowed).toBe(true);
-    expect(resolveRelationAccessWithStoredConsent({ ...pair({ grantedByViewer: 'CLOSE', grantedByTarget: 'CLOSE' }), storedConsent: null }).reason).toBe('consent');
+    expect(resolveRelationAccessWithStoredConsent({ ...pair({ grantedByViewer: 'CLOSE', grantedByTarget: 'CLOSE' }), storedConsent: null }).allowed).toBe(true);
+    expect(resolveRelationAccessWithStoredConsent({ ...pair({ grantedByViewer: 'CLOSE', grantedByTarget: 'CLOSE' }), storedConsent: false }).reason).toBe('consent');
     expect(resolveRelationAccessWithStoredConsent({ ...pair({ grantedByViewer: 'CLOSE', grantedByTarget: 'CLOSE' }), storedConsent: true }).allowed).toBe(true);
   });
 

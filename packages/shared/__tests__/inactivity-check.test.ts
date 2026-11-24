@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   RELATION_CONSENT_FEATURES,
   RELATION_DIRECTED_FEATURES,
-  RELATION_EMITTER_CONSENT_DEFAULT_LEVEL,
+  RELATION_LEVEL_DEFAULT_ON,
   RELATION_EMITTER_CONSENT_FEATURES,
   RELATION_FEATURE_MIN_LEVEL,
   RELATION_FEATURES,
@@ -47,7 +47,7 @@ describe('la vérification d\'inactivité dans la matrice des cercles (#18738)',
     expect(RELATION_FEATURE_MIN_LEVEL['safety.inactivity']).toBe('BLOOD');
     expect(RELATION_EMITTER_CONSENT_FEATURES.has('safety.inactivity')).toBe(true);
     expect(RELATION_CONSENT_FEATURES.has('safety.inactivity')).toBe(true);
-    expect(RELATION_EMITTER_CONSENT_DEFAULT_LEVEL['safety.inactivity']).toBe('BLOOD');
+    expect(RELATION_LEVEL_DEFAULT_ON['safety.inactivity']).toBe('BLOOD');
     expect(RELATION_DIRECTED_FEATURES.has('safety.inactivity')).toBe(false);
   });
 

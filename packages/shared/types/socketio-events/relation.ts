@@ -23,6 +23,16 @@ export const RELATION_RITUAL_CONSENT_KEYS = ['listeningTitle', 'locationLive', '
 export type RelationRitualConsentKey = (typeof RELATION_RITUAL_CONSENT_KEYS)[number];
 export type RelationRitualConsents = Readonly<Record<RelationRitualConsentKey, boolean>>;
 
+/**
+ * L'accord UNIQUE au palier Sang (#20362, directive porteur du 2026-11-22) : le rituel ne demande
+ * plus quatre interrupteurs mais « j'accepte ce que le Sang ouvre », à la version de la liste qu'on
+ * m'a montrée (`BLOOD_BUNDLE_VERSION`, `@meeshy/shared/utils/blood-bundle`). Le corps à quatre
+ * booléens (`RelationRitualConsents`) reste accepté des anciens clients : il n'écrit aucun accord
+ * au palier, et ses refus restent appliqués (décision B, #20367).
+ */
+export type RelationRitualBundleConsent = { readonly acceptsBloodBundle: true; readonly version: string };
+export type RelationRitualConfirmation = RelationRitualConsents | RelationRitualBundleConsent;
+
 export interface RelationLevelRaisedEventData {
   readonly userId: string;
   readonly level: RelationLevel;

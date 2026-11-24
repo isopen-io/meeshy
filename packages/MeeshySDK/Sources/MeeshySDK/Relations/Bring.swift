@@ -185,10 +185,14 @@ public struct RelationPersonSettings: Decodable, Sendable, Equatable {
     public let newsNotify: Bool?
     /// Ne plus recevoir la position continue de CE Sang ; `nil` = non servi, et la sortie n'existe pas.
     public let bloodLocationMuted: Bool?
+    /// Ce que le serveur dit du verrou du Sang (#20361) : `lockedByLevel`, `bloodBundleAccepted`, `ritualSharesLocked`
+    /// — tous `nil` d'un serveur d'avant, et le verrou n'existe pas.
+    public let bloodLock: RelationBloodLock
+    public let bloodBundleAccepted: Bool?
 
     public init(userId: String, bringBlocked: Bool, talkieBlocked: Bool = false,
                 listeningCategoryShared: Bool = false, listeningTitleShared: Bool = false, newsNotify: Bool? = nil,
-                bloodLocationMuted: Bool? = nil) {
+                bloodLocationMuted: Bool? = nil, bloodLock: RelationBloodLock = .open, bloodBundleAccepted: Bool? = nil) {
         self.userId = userId
         self.bringBlocked = bringBlocked
         self.talkieBlocked = talkieBlocked
@@ -196,10 +200,13 @@ public struct RelationPersonSettings: Decodable, Sendable, Equatable {
         self.listeningTitleShared = listeningTitleShared
         self.newsNotify = newsNotify
         self.bloodLocationMuted = bloodLocationMuted
+        self.bloodLock = bloodLock
+        self.bloodBundleAccepted = bloodBundleAccepted
     }
 
     private enum CodingKeys: String, CodingKey {
         case userId, bringBlocked, talkieBlocked, listeningCategoryShared, listeningTitleShared, newsNotify, bloodLocationMuted
+        case lockedByLevel, bloodBundleAccepted, ritualSharesLocked
     }
 
     public init(from decoder: Decoder) throws {
@@ -211,6 +218,9 @@ public struct RelationPersonSettings: Decodable, Sendable, Equatable {
         listeningTitleShared = (try? c.decodeIfPresent(Bool.self, forKey: .listeningTitleShared)) ?? false
         newsNotify = try? c.decodeIfPresent(Bool.self, forKey: .newsNotify)
         bloodLocationMuted = try? c.decodeIfPresent(Bool.self, forKey: .bloodLocationMuted)
+        bloodLock = RelationBloodLock(lockedByLevel: try? c.decodeIfPresent(Bool.self, forKey: .lockedByLevel),
+                                      ritualSharesLocked: try? c.decodeIfPresent(Bool.self, forKey: .ritualSharesLocked))
+        bloodBundleAccepted = try? c.decodeIfPresent(Bool.self, forKey: .bloodBundleAccepted)
     }
 
     /// L'abonnement servi, ou `nil` quand le serveur ne le sert pas.

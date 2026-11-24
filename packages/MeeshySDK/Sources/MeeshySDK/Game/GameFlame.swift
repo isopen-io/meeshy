@@ -92,6 +92,52 @@ public struct RelightDecision: Sendable, Equatable {
     }
 }
 
+/// Le rallumage par l'effort encore possible (#20455, #20473) : deux rêves complets rallument la Flamme éteinte sans
+/// payer. La passerelle le sert sur `flame.effortRelight` tant que c'est possible (`servedEffortRelight`,
+/// `packages/shared/utils/game/flame-effort.ts`) ; miroir d'`effortRelightSchema` (`packages/shared/types/game.ts`).
+///
+/// Le décodage REFUSE une forme hors de la loi (jours perdus < 1, rêves requis < 1, négatifs, date illisible) :
+/// le bloc le lit en `try?`, si bien qu'un champ illisible se tait au lieu de faire tomber la Flamme.
+public struct GameEffortRelight: Codable, Sendable, Equatable {
+    /// Les jours de la Flamme qui reviennent avec elle.
+    public let lostDays: Int
+    public let dreamsDone: Int
+    public let dreamsNeeded: Int
+    /// Le dernier jour où le rallumage par l'effort est possible, `AAAA-MM-JJ`.
+    public let closesOn: String
+    /// `0` : aujourd'hui seulement ; `1` : jusqu'à demain soir.
+    public let daysLeft: Int
+
+    /// Les rêves complets qui manquent : jamais moins d'un, puisque la Flamme est encore éteinte.
+    public var dreamsMissing: Int { max(1, dreamsNeeded - dreamsDone) }
+
+    public init(lostDays: Int, dreamsDone: Int, dreamsNeeded: Int, closesOn: String, daysLeft: Int) {
+        self.lostDays = lostDays
+        self.dreamsDone = dreamsDone
+        self.dreamsNeeded = dreamsNeeded
+        self.closesOn = closesOn
+        self.daysLeft = daysLeft
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case lostDays, dreamsDone, dreamsNeeded, closesOn, daysLeft
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        lostDays = try container.decode(Int.self, forKey: .lostDays)
+        dreamsDone = try container.decode(Int.self, forKey: .dreamsDone)
+        dreamsNeeded = try container.decode(Int.self, forKey: .dreamsNeeded)
+        closesOn = try container.decode(String.self, forKey: .closesOn)
+        daysLeft = try container.decode(Int.self, forKey: .daysLeft)
+        let lawful = lostDays >= 1 && dreamsDone >= 0 && dreamsNeeded >= 1 && daysLeft >= 0 && GameDay.isDayKey(closesOn)
+        guard lawful else {
+            throw DecodingError.dataCorruptedError(forKey: .closesOn, in: container,
+                                                   debugDescription: "rallumage par l'effort hors de la loi")
+        }
+    }
+}
+
 public enum GameFlame {
     public static let freezeMax = 2
     /// En Meeshes.

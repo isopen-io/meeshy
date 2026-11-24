@@ -99,7 +99,7 @@ describe('le rattrapage', () => {
     const app = avecSessions(await appli({ liens: [], personnes: { [MOI]: { role: 'ANALYST' }, [AUTRE]: { role: 'ADMIN' } } }));
     const vers = await app.call('GET', `/api/v1/relations/${AUTRE}/inactivity/settings`, undefined, MOI);
     await app.close();
-    expect(vers.body.data).toEqual({ userId: AUTRE, shared: true });
+    expect(vers.body.data).toMatchObject({ userId: AUTRE, shared: true });
   });
 });
 
@@ -149,8 +149,8 @@ describe('les réglages', () => {
     const avant = await app.call('GET', `/api/v1/relations/${AUTRE}/inactivity/settings`, undefined, MOI);
     const retrait = await app.call('PUT', `/api/v1/relations/${AUTRE}/inactivity/settings`, { shared: false }, MOI);
     await app.close();
-    expect(avant.body.data).toEqual({ userId: AUTRE, shared: true });
-    expect(retrait.body.data).toEqual({ userId: AUTRE, shared: false });
+    expect(avant.body.data).toMatchObject({ userId: AUTRE, shared: true });
+    expect(retrait.body.data).toMatchObject({ userId: AUTRE, shared: false });
     expect(app.emissions).toContainEqual({ room: ROOMS.user(AUTRE), event: SERVER_EVENTS.INACTIVITY_CLEARED, payload: { userId: MOI } });
   });
 });

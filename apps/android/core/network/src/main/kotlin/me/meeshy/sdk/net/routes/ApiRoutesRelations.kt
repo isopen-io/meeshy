@@ -17,6 +17,7 @@ public object ApiRoutesRelations {
     public const val BY_USER_ID_BATTERY: String = "relations/{userId}/battery"
     public const val BY_USER_ID_BATTERY_PULL: String = "relations/{userId}/battery/pull"
     public const val BY_USER_ID_BATTERY_SETTINGS: String = "relations/{userId}/battery/settings"
+    public const val BY_USER_ID_BLOOD_BUNDLE: String = "relations/{userId}/blood-bundle"
     public const val BY_USER_ID_FALL_SETTINGS: String = "relations/{userId}/fall/settings"
     public const val BY_USER_ID_INACTIVITY_SETTINGS: String = "relations/{userId}/inactivity/settings"
     public const val BY_USER_ID_LEVEL: String = "relations/{userId}/level"

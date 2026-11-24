@@ -1654,7 +1654,7 @@
       "feature": "device.battery",
       "stored": null,
       "effectiveLevel": "CLOSE",
-      "expected": "refused"
+      "expected": "granted"
     },
     {
       "feature": "device.battery",
@@ -1710,6 +1710,48 @@
       "feature": "listening.title",
       "stored": true,
       "effectiveLevel": "BLOOD",
+      "expected": "granted"
+    },
+    {
+      "feature": "device.battery",
+      "stored": null,
+      "effectiveLevel": "FRIEND",
+      "expected": "refused"
+    },
+    {
+      "feature": "device.battery",
+      "stored": false,
+      "effectiveLevel": "BLOOD",
+      "bloodBundleAccepted": true,
+      "expected": "granted"
+    },
+    {
+      "feature": "device.battery",
+      "stored": null,
+      "effectiveLevel": "BLOOD",
+      "globallyDisabled": true,
+      "bloodBundleAccepted": true,
+      "expected": "granted"
+    },
+    {
+      "feature": "device.battery",
+      "stored": false,
+      "effectiveLevel": "CLOSE",
+      "bloodBundleAccepted": true,
+      "expected": "refused"
+    },
+    {
+      "feature": "location.temporary",
+      "stored": null,
+      "effectiveLevel": "BLOOD",
+      "bloodBundleAccepted": true,
+      "expected": "refused"
+    },
+    {
+      "feature": "listening.title",
+      "stored": null,
+      "effectiveLevel": "BLOOD",
+      "bloodBundleAccepted": true,
       "expected": "granted"
     }
   ],

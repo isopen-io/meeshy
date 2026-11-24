@@ -4,6 +4,7 @@
  *
  * @jest-environment node
  */
+import { BLOOD_BUNDLE_VERSION } from '@meeshy/shared/utils/blood-bundle';
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 
 jest.mock('../../../../utils/logger-enhanced', () => ({
@@ -39,6 +40,8 @@ jest.mock('../../../../services/sharedLocation/sharedLocationDeps', () => ({
 }));
 
 import { relationsRoutes } from '../../../../routes/relations';
+import { pointVeilOf, ownersHidingFrom } from '../../../../services/bloodLocation/bloodLocationVeil';
+import { messagingWorld, table, type Row } from '../../../helpers/messaging-circle-world';
 import { lowerPair } from '../../../../services/relations/userRelationWriter';
 import { RELATION_RITUAL_SHARE_WITHDRAWN_AT } from '@meeshy/shared/types/relation-person-settings';
 import {
@@ -452,5 +455,92 @@ describe('#14924 — course rituel ↔ baisse : un Sang qui tombe pendant l’é
     const lignes = app.reglages();
     expect(lignes).toHaveLength(2);
     lignes.forEach((ligne) => expect(ligne).toMatchObject({ listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false }));
+  });
+});
+
+describe('#20362 — le rituel recueille UN accord, celui du palier entier, versionné', () => {
+  const PALIER = { acceptsBloodBundle: true, version: BLOOD_BUNDLE_VERSION };
+
+  it('l\'accord au palier s\'écrit daté et versionné pour chacun, avec les partages du rituel ouverts', async () => {
+    const app = await appli();
+    const { token } = await jusquAuxDeuxHolds(app);
+    await moi(app, { phase: 'confirm', token, consents: PALIER });
+    const fin = await autre(app, { phase: 'confirm', token, consents: PALIER });
+    await app.close();
+
+    expect(fin.body.data).toMatchObject({ completed: true, level: 'BLOOD' });
+    for (const [ownerId, otherId] of [[MOI, AUTRE], [AUTRE, MOI]]) {
+      expect(app.consents.find((c) => c.ownerId === ownerId)).toMatchObject({
+        otherId, bloodBundleVersion: BLOOD_BUNDLE_VERSION, bloodBundleAcceptedAt: expect.any(Date),
+        listeningTitleShared: true, locationShared: true, locationHistoryShared: true, proximityShared: true,
+      });
+    }
+  });
+
+  it('un ancien client (quatre booléens) achève le rituel sans accord au palier : ses refus restent écrits (C4)', async () => {
+    const app = await appli();
+    const { token } = await jusquAuxDeuxHolds(app);
+    await moi(app, { phase: 'confirm', token, consents: PALIER });
+    const fin = await autre(app, { phase: 'confirm', token, consents: { ...TOUS, locationLive: false } });
+    await app.close();
+
+    expect(fin.body.data).toMatchObject({ completed: true });
+    const ancien = app.consents.find((c) => c.ownerId === AUTRE);
+    expect(ancien).toMatchObject({ locationShared: false, proximityShared: true });
+    expect(ancien?.bloodBundleAcceptedAt ?? null).toBeNull();
+  });
+
+  it('une version périmée ou un accord refusé ne confirme pas : 409 RELATION_BLOOD_BUNDLE_OUTDATED, 400 RELATION_CONSENT_REQUIRED', async () => {
+    const app = await appli();
+    const { token } = await jusquAuxDeuxHolds(app);
+    const perime = await moi(app, { phase: 'confirm', token, consents: { acceptsBloodBundle: true, version: '2020-01-01' } });
+    const refus = await moi(app, { phase: 'confirm', token, consents: { acceptsBloodBundle: false, version: BLOOD_BUNDLE_VERSION } });
+    await app.close();
+
+    expect([perime.status, perime.body.code]).toEqual([409, 'RELATION_BLOOD_BUNDLE_OUTDATED']);
+    expect([refus.status, refus.body.code]).toEqual([400, 'RELATION_CONSENT_REQUIRED']);
+  });
+
+  it('un rituel confirmé en v1 efface un accord au palier antérieur : une acceptation périmée ne survit pas au nouveau rituel', async () => {
+    const ancien = { ownerId: AUTRE, otherId: MOI, bloodBundleAcceptedAt: new Date('2026-11-01T00:00:00.000Z'), bloodBundleVersion: BLOOD_BUNDLE_VERSION };
+    const app = await appli(pret({ reglages: [ancien] }));
+    const { token } = await jusquAuxDeuxHolds(app);
+    await moi(app, { phase: 'confirm', token, consents: PALIER });
+    const fin = await autre(app, { phase: 'confirm', token, consents: { ...TOUS, locationLive: false } });
+    await app.close();
+
+    expect(fin.body.data).toMatchObject({ completed: true });
+    const ligne = app.reglages().find((r) => r.ownerId === AUTRE && r.otherId === MOI);
+    expect(ligne).toMatchObject({ locationShared: false, bloodBundleAcceptedAt: null, bloodBundleVersion: null });
+  });
+
+  it('constat A par le rituel — 14 ans face à 30 : les partages s\'écrivent, JAMAIS l\'accord au palier, et à la majorité le fantôme global masque encore', async () => {
+    const naissances = { [MOI]: new Date('2012-03-04T00:00:00.000Z'), [AUTRE]: new Date('1996-01-01T00:00:00.000Z') };
+    const app = await appli(pret({ naissances }));
+    const { token } = await jusquAuxDeuxHolds(app);
+    await moi(app, { phase: 'confirm', token, consents: PALIER });
+    const fin = await autre(app, { phase: 'confirm', token, consents: PALIER });
+    await app.close();
+
+    expect(fin.body.data).toMatchObject({ completed: true, level: 'BLOOD' });
+    const lignes = app.reglages();
+    for (const [ownerId, otherId] of [[MOI, AUTRE], [AUTRE, MOI]]) {
+      const ligne = lignes.find((r) => r.ownerId === ownerId && r.otherId === otherId);
+      expect(ligne).toMatchObject({ listeningTitleShared: true, locationShared: true, locationHistoryShared: true, proximityShared: true });
+      expect(ligne?.bloodBundleAcceptedAt ?? null).toBeNull();
+      expect(ligne?.bloodBundleVersion ?? null).toBeNull();
+    }
+
+    thawClock();
+    freezeClock(new Date('2031-11-01T12:00:00.000Z'));
+    const fantome = new Date('2026-11-01T00:00:00.000Z');
+    const monde = messagingWorld({ links: [[MOI, AUTRE, 'BLOOD']], users: [{ id: MOI, birthDate: naissances[MOI], locationGhostAt: fantome }, { id: AUTRE, birthDate: naissances[AUTRE], locationGhostAt: fantome }] });
+    const prisma = { ...monde.prisma, relationFeatureSetting: table(lignes as Row[]) };
+    const voileMoi = await pointVeilOf(prisma as never, MOI);
+    const voileAutre = await pointVeilOf(prisma as never, AUTRE);
+    const caches = await ownersHidingFrom(prisma as never, AUTRE, [MOI]);
+
+    expect([voileMoi.everyone, voileAutre.everyone]).toEqual([true, true]);
+    expect([...caches]).toEqual([MOI]);
   });
 });

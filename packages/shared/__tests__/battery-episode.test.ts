@@ -20,7 +20,7 @@ type CaseFile = {
   readonly config: unknown;
   readonly episodes: ReadonlyArray<{ readonly id: string; readonly steps: readonly Step[] }>;
   readonly channels: ReadonlyArray<{ readonly kind: BatteryAnnouncementKind; readonly inConversation: boolean; readonly receivedCritical: boolean; readonly expected: string }>;
-  readonly consent: ReadonlyArray<{ readonly feature: RelationFeature; readonly stored: StoredEmitterConsent; readonly effectiveLevel: RelationLevel; readonly globallyDisabled?: boolean; readonly expected: string }>;
+  readonly consent: ReadonlyArray<{ readonly feature: RelationFeature; readonly stored: StoredEmitterConsent; readonly effectiveLevel: RelationLevel; readonly globallyDisabled?: boolean; readonly bloodBundleAccepted?: boolean; readonly expected: string }>;
   readonly estimates: ReadonlyArray<{ readonly id: string; readonly anchor: BatteryReading | null; readonly current: BatteryReading; readonly expected: number | null }>;
   readonly conversation: ReadonlyArray<{ readonly id: string; readonly now: string; readonly roomOpen: boolean; readonly lastExchangeAt: string | null; readonly awaitingReply: boolean; readonly expected: boolean }>;
 };
@@ -56,8 +56,8 @@ describe('fixtures partagées — l\'oracle écrit à la main est rejoué contre
     expect(batteryReaderChannel(c.kind, c.inConversation, c.receivedCritical)).toBe(c.expected);
   });
 
-  it.each(file.consent.map((c) => [`${c.feature} ${String(c.stored)} ${c.effectiveLevel}`, c] as const))('consentement %s', (_l, c) => {
-    expect(resolveEmitterConsent({ feature: c.feature, stored: c.stored, effectiveLevel: c.effectiveLevel, globallyDisabled: c.globallyDisabled })).toBe(c.expected);
+  it.each(file.consent.map((c) => [`${c.feature} ${String(c.stored)} ${c.effectiveLevel}${c.globallyDisabled ? ' coupé' : ''}${c.bloodBundleAccepted ? ' accord' : ''}`, c] as const))('consentement %s', (_l, c) => {
+    expect(resolveEmitterConsent({ feature: c.feature, stored: c.stored, effectiveLevel: c.effectiveLevel, globallyDisabled: c.globallyDisabled, bloodBundleAccepted: c.bloodBundleAccepted })).toBe(c.expected);
   });
 
   it.each(file.estimates.map((c) => [c.id, c] as const))('estimation %s', (_id, c) => {

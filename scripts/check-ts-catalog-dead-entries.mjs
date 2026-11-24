@@ -548,6 +548,7 @@ const PENDING_CLIENT_ENTRIES = {
   'users.meHighlightsOrder': { issue: 19394, reason: 'PUT /users/me/highlights/order — réordonner mes albums à la une' },
   // « Mes cercles » compté par la passerelle, Communauté comprise (#19375, chantier #18857) : iOS le lira
   // d'abord (rangée « Mes cercles » de la fiche) ; le web et Android le liront avec leur profil.
+  'relations.byUserIdBloodBundle': { issue: 20408, reason: 'PUT /relations/:userId/blood-bundle — l\'accord au palier d\'un Sang déjà scellé (carte B, #20362), que les clients appelleront' },
   'relations.summary': { issue: 19375, reason: 'GET /relations/summary — le compte de chaque cercle et des demandes en attente, rangée « Mes cercles »' },
   // Le profil de la planche (#18857, PR serveur #19316) : le serveur sert avant le tour client web.
   'contactExchange.byTokenAccept': { issue: 19205, reason: 'POST /contact-exchange/:token/accept — accepter un partage sans contact (web)' },

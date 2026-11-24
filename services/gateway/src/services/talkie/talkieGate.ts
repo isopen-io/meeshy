@@ -43,7 +43,9 @@ import { NOTIFICATION_PREFERENCE_DEFAULTS, type NotificationPreference } from '@
 import { TALKIE_ERROR_CODES, TALKIE_FALLBACK_VOICE_MESSAGE, type TalkieErrorCode } from '@meeshy/shared/types/talkie';
 import { declaredAgeClass } from '@meeshy/shared/utils/age';
 import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
-import { resolveRelationAccess, type RelationAccessReason } from '@meeshy/shared/utils/relation-access';
+import { type RelationAccessReason } from '@meeshy/shared/utils/relation-access';
+import { resolveRelationAccessWithReception } from '@meeshy/shared/utils/relation-emitter-consent';
+import { bloodBundleAcceptedOf } from '../relations/relationConsent';
 import { isBlockedBetween } from '../../utils/blocking';
 import { niveauEffectif } from '../friendship';
 import { SERVER_BLIND_REGIME_FILTER } from '../conversations/encryptionRegime';
@@ -188,15 +190,14 @@ export async function judgeTalkie(
     prisma.user.findUnique({ where: { id: toUserId }, select: PARTY_SELECT }),
     prisma.relationFeatureSetting.findUnique({
       where: { ownerId_otherId: { ownerId: toUserId, otherId: fromUserId } },
-      select: { talkieBlockedAt: true },
+      select: { talkieBlockedAt: true, bloodBundleAcceptedAt: true, bloodBundleVersion: true },
     }),
     notificationPrefsOf(prisma, toUserId),
   ]);
   if (!usable(sender) || !usable(recipient)) return because(TALKIE_NOT_ALLOWED, 'account');
 
   const now = deps.now();
-  const receives = prefs.talkieEnabled !== false && !setting?.talkieBlockedAt;
-  const verdict = resolveRelationAccess({
+  const verdict = resolveRelationAccessWithReception({
     viewerId: fromUserId,
     targetId: toUserId,
     grantedByViewer: level,
@@ -208,7 +209,8 @@ export async function judgeTalkie(
     viewerRole: sender.role,
     targetRole: recipient.role,
     feature: 'talkie',
-    consent: receives ? 'granted' : 'refused',
+    cut: prefs.talkieEnabled === false || Boolean(setting?.talkieBlockedAt),
+    bloodBundleAccepted: bloodBundleAcceptedOf(setting),
   });
   if (!verdict.allowed) {
     return verdict.reason === 'consent' ? because(BLOCKED, 'consent') : because(TALKIE_NOT_ALLOWED, `relation-${verdict.reason}`);

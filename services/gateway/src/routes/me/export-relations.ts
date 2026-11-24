@@ -47,6 +47,8 @@ export const relationsExportSchema = {
           consentedAt: { type: 'string' },
           ghostAt: { type: 'string', nullable: true },
           proximityRadiusMeters: { type: 'integer', nullable: true },
+          bloodBundleAcceptedAt: { type: 'string', nullable: true },
+          bloodBundleVersion: { type: 'string', nullable: true },
           withdrawnAt: {
             type: 'object',
             properties: {
@@ -72,6 +74,7 @@ export const relationsExportSchema = {
           recordedAt: { type: 'string' },
           expiresAt: { type: 'string' },
           hiddenFrom: { type: 'array', items: { type: 'string' } },
+          visibleOnlyTo: { type: 'array', items: { type: 'string' } },
           excludedFromProximity: { type: 'boolean' },
         },
       },

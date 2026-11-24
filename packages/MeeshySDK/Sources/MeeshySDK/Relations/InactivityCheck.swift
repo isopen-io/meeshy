@@ -86,14 +86,17 @@ public struct InactivityCheckSettings: Codable, Sendable, Equatable {
 public struct InactivityPersonSettings: Codable, Sendable, Equatable {
     public let userId: String
     public let isShared: Bool
+    /// Au Sang verrouillé (#20361) l'interrupteur n'existe plus : `true` le retire. `nil` = serveur d'avant, rien ne change.
+    public let lockedByLevel: Bool?
 
-    public init(userId: String, isShared: Bool) {
+    public init(userId: String, isShared: Bool, lockedByLevel: Bool? = nil) {
         self.userId = userId
         self.isShared = isShared
+        self.lockedByLevel = lockedByLevel
     }
 
     private enum CodingKeys: String, CodingKey {
-        case userId
+        case userId, lockedByLevel
         case isShared = "shared"
     }
 
@@ -101,6 +104,7 @@ public struct InactivityPersonSettings: Codable, Sendable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         userId = try c.decode(String.self, forKey: .userId)
         isShared = (try? c.decodeIfPresent(Bool.self, forKey: .isShared)) ?? false
+        lockedByLevel = try? c.decodeIfPresent(Bool.self, forKey: .lockedByLevel)
     }
 }
 

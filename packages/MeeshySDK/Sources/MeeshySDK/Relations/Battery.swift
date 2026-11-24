@@ -372,15 +372,19 @@ public struct BatteryPersonSettings: Sendable, Equatable, Codable {
     public let userId: String
     public let isShared: Bool
     public let receive: BatteryReceiveMode
+    /// Au Sang verrouillé (#20361) ni le partage ni la coupure de réception n'existent plus : `true` retire les deux
+    /// interrupteurs. `nil` = serveur d'avant, rien ne change.
+    public let lockedByLevel: Bool?
 
-    public init(userId: String, isShared: Bool, receive: BatteryReceiveMode) {
+    public init(userId: String, isShared: Bool, receive: BatteryReceiveMode, lockedByLevel: Bool? = nil) {
         self.userId = userId
         self.isShared = isShared
         self.receive = receive
+        self.lockedByLevel = lockedByLevel
     }
 
     private enum CodingKeys: String, CodingKey {
-        case userId, receive
+        case userId, receive, lockedByLevel
         case isShared = "shared"
     }
 
@@ -390,6 +394,7 @@ public struct BatteryPersonSettings: Sendable, Equatable, Codable {
         isShared = (try? c.decodeIfPresent(Bool.self, forKey: .isShared)) ?? false
         let raw = (try? c.decodeIfPresent(String.self, forKey: .receive)) ?? nil
         receive = raw.flatMap(BatteryReceiveMode.init(rawValue:)) ?? .defaultMode
+        lockedByLevel = try? c.decodeIfPresent(Bool.self, forKey: .lockedByLevel)
     }
 }
 

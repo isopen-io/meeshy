@@ -17,6 +17,7 @@ public enum RelationsEndpoint: MeeshyEndpoint, Sendable {
     case byUserIdBattery(userId: String)
     case byUserIdBatteryPull(userId: String)
     case byUserIdBatterySettings(userId: String)
+    case byUserIdBloodBundle(userId: String)
     case byUserIdFallSettings(userId: String)
     case byUserIdInactivitySettings(userId: String)
     case byUserIdLevel(userId: String)
@@ -45,6 +46,7 @@ public enum RelationsEndpoint: MeeshyEndpoint, Sendable {
         case .byUserIdBattery(let userId): return "/api/v1/relations/\(userId)/battery"
         case .byUserIdBatteryPull(let userId): return "/api/v1/relations/\(userId)/battery/pull"
         case .byUserIdBatterySettings(let userId): return "/api/v1/relations/\(userId)/battery/settings"
+        case .byUserIdBloodBundle(let userId): return "/api/v1/relations/\(userId)/blood-bundle"
         case .byUserIdFallSettings(let userId): return "/api/v1/relations/\(userId)/fall/settings"
         case .byUserIdInactivitySettings(let userId): return "/api/v1/relations/\(userId)/inactivity/settings"
         case .byUserIdLevel(let userId): return "/api/v1/relations/\(userId)/level"

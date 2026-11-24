@@ -271,6 +271,31 @@ final class GameOptimisticTests: XCTestCase {
         XCTAssertEqual(next.game.treasury.held, 2)
     }
 
+    /// Une Flamme éteinte que deux rêves complets rallumeraient encore (#20473).
+    private func outWithEffort(canRelight: Bool) -> GameState {
+        let game = GameFixture.game(held: 5, flameDays: 0, flameStatus: .out, canRelight: canRelight)
+        let effort = GameEffortRelight(lostDays: 9, dreamsDone: 1, dreamsNeeded: 2, closesOn: "2026-11-24", daysLeft: 1)
+        return GameFixture.state(game.replacing(flame: game.flame.replacing(effortRelight: .some(effort))))
+    }
+
+    func test_afterRelight_withdrawsTheEffortRelightLine_withoutWaitingForTheReread() {
+        let state = outWithEffort(canRelight: true)
+        XCTAssertNotNil(state.game.flame.effortRelight)
+        XCTAssertNil(GameOptimistic.afterRelight(state).game.flame.effortRelight)
+    }
+
+    func test_withRelit_withdrawsTheEffortRelightLine() {
+        XCTAssertNil(GameOptimistic.withRelit(outWithEffort(canRelight: true), streak: 10, balance: 2).game.flame.effortRelight)
+    }
+
+    func test_anyOtherGesture_keepsTheEffortRelightLine() {
+        let state = outWithEffort(canRelight: false)
+        XCTAssertEqual(GameOptimistic.afterRelight(state).game.flame.effortRelight, state.game.flame.effortRelight,
+                       "un rallumage refusé ne retire rien")
+        XCTAssertEqual(state.game.flame.replacing(freezes: 1).effortRelight, state.game.flame.effortRelight,
+                       "une Veilleuse achetée ne fait pas taire le rallumage par l'effort")
+    }
+
     // MARK: - Guide
 
     func test_withGuideSeen_mergesKeysWithoutDuplicates() {

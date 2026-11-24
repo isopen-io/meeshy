@@ -2361,6 +2361,13 @@ model RelationFeatureSetting {
   /// préférence de réception, active par défaut ; ni son point sur ma carte, ni l'alerte de
   /// proximité de la paire ne m'arrivent. Ne touche pas au consentement de `otherId`.
   bloodLocationMutedAt  DateTime?
+  /// L'ACCORD AU PALIER SANG de `ownerId` pour `otherId` (#20362, directive porteur du
+  /// 2026-11-22) : la date et la version de la liste acceptée (`BLOOD_BUNDLE_VERSION`,
+  /// `utils/blood-bundle.ts`). Posé au rituel ou par la carte de confirmation ; effacé par la
+  /// baisse sous Sang. Tant qu'il est nul, un refus explicite déjà donné reste appliqué
+  /// (décision par défaut B, #20367). Optionnels, sans migration.
+  bloodBundleAcceptedAt DateTime?
+  bloodBundleVersion    String?
   consentedAt           DateTime @default(now())
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt

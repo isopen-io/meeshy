@@ -158,7 +158,7 @@ class RelationAccessCasesTest {
 
     @Test
     fun `the emitter consent default is the one of the TypeScript table`() {
-        val table = blockAfter("export const RELATION_EMITTER_CONSENT_DEFAULT_LEVEL", "};", levelsSource)
+        val table = blockAfter("export const RELATION_LEVEL_DEFAULT_ON", "};", levelsSource)
         val declared = Regex("(?:'([\\w.]+)'|(\\w+)):\\s*'([A-Z]+)'").findAll(table)
             .associate { row -> (row.groupValues[1].ifEmpty { row.groupValues[2] }) to row.groupValues[3] }
         val mirrored = RelationFeature.entries

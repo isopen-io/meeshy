@@ -33,6 +33,7 @@ const pointOf = (userId: string, row: PointRow) => {
     recordedAt: row.recordedAt.toISOString(),
     expiresAt: row.expiresAt.toISOString(),
     hiddenFrom: point?.hiddenFrom ?? [],
+    ...(point?.visibleOnlyTo === undefined ? {} : { visibleOnlyTo: point.visibleOnlyTo }),
     excludedFromProximity: point?.implausible === true,
   };
 };

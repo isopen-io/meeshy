@@ -31,6 +31,9 @@ final class ProfileCircleViewModel: ObservableObject {
     @Published private(set) var receivedProposal: ProfileCircleProposal?
     /// Un lien ou un verdict a été lu (cache, liste, détail), ou la lecture s'est achevée : le niveau d'outil est résolu.
     @Published private(set) var hasReadRelation = false
+    /// Le verrou du Sang servi (#20361) : au Sang verrouillé, la position, la batterie et le reste sont partagés d'office
+    /// — aucune demande ni offre de partage ne se montre. `.open` tant que le serveur ne le sert pas.
+    @Published private(set) var bloodLock: RelationBloodLock = .open
 
     /// Les propositions répondues ou remises à plus tard ici : une relecture ne les ramène pas.
     private var setAside: Set<String> = []
@@ -50,6 +53,7 @@ final class ProfileCircleViewModel: ObservableObject {
     private let linksStore: @concurrent @Sendable () async -> GRDBCacheStore<String, RelationLink>
     private let cachedReceived: @concurrent @Sendable () async -> [FriendRequest]
     private let forgetFriendship: @MainActor (String) async -> Void
+    private let locks: BloodLockProviding
 
     init(
         userId: String,
@@ -60,7 +64,8 @@ final class ProfileCircleViewModel: ObservableObject {
         now: @escaping () -> Date = { Date() },
         linksStore: @escaping @concurrent @Sendable () async -> GRDBCacheStore<String, RelationLink> = CirclesLinkStore.live,
         cachedReceived: @escaping @concurrent @Sendable () async -> [FriendRequest] = ReceivedCircleRequests.none,
-        forgetFriendship: @escaping @MainActor (String) async -> Void
+        forgetFriendship: @escaping @MainActor (String) async -> Void,
+        locks: BloodLockProviding? = nil
     ) {
         self.userId = userId
         self.relations = relations
@@ -71,6 +76,8 @@ final class ProfileCircleViewModel: ObservableObject {
         self.linksStore = linksStore
         self.cachedReceived = cachedReceived
         self.forgetFriendship = forgetFriendship
+        self.locks = locks ?? BloodLockHolder.center()
+        bloodLock = self.locks.lock(for: userId)
     }
 
     nonisolated deinit {}
@@ -168,6 +175,7 @@ final class ProfileCircleViewModel: ObservableObject {
     /// verdict servi. La passerelle rejuge la loi à chaque envoi et ne sert rien sous Ami.
     var offersSharedLocation: Bool {
         max(shownLevel ?? .public, toolLevel ?? .public) >= RelationFeature.locationTemporary.minimumLevel
+            && !bloodLock.locksPositionAndTitle
     }
 
     /// Le cercle occupe l'emplacement de la fiche : un lien est montré, ou vient d'être annulé ici.
@@ -235,8 +243,15 @@ final class ProfileCircleViewModel: ObservableObject {
         await revalidation?.value
         await loadServedDetail(since: edits)
         hasReadRelation = true
+        await loadBloodLock()
         await loadPendingRequest(since: edits)
         await loadReceivedProposal(cached: cached)
+    }
+
+    /// Le verrou n'existe qu'au Sang : sous lui, aucune lecture de plus.
+    private func loadBloodLock() async {
+        guard effectiveToolLevel >= .blood else { return }
+        bloodLock = await locks.refresh(userId)
     }
 
     /// Faux dès qu'un geste local a touché le lien depuis le début de la lecture, ou en touche un maintenant.
@@ -449,6 +464,10 @@ final class ProfileCircleViewModel: ObservableObject {
             let served = try await relations.lower(userId: userId, to: target)
             link = served.effectiveLevel <= target ? served : current.lowered(to: target)
             didUnlink = target == .public
+            if target < .blood {
+                locks.record(.open, for: userId)
+                bloodLock = .open
+            }
             await linksStore().invalidate(for: CirclesViewModel.cacheKey)
             if target < .friend { await forgetFriendship(userId) }
             if let reread = await servedDetail() { toolLevel = reread.toolLevel }

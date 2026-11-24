@@ -3390,6 +3390,7 @@
 		B067189B928B84BE743D5C48 /* ComposerAtelierHeaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DF6347671070474423C2357 /* ComposerAtelierHeaderTests.swift */; };
 		B06F645D85540152F9310154 /* ScrollToMessageSettleLawTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAB6D072A7D2F86F2B566097 /* ScrollToMessageSettleLawTests.swift */; };
 		B081B066E8BD45D7A901BAC2 /* StoryRepostEmbedCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28335DED9C6D24EE5FD91313 /* StoryRepostEmbedCell.swift */; };
+		B0A26691324CB3ED48FD872D /* BloodLockCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC17A6F0033375D0610BEB51 /* BloodLockCenter.swift */; };
 		B0ABF73DF4307286007FB554 /* AudioFullscreenRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AEC08629D01FB81DBBD15AA /* AudioFullscreenRules.swift */; };
 		B0BBC98D8AA041E914DC1832 /* OutboxDispatcherCreateCommentEncodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D886A7AADF21C737132403E8 /* OutboxDispatcherCreateCommentEncodingTests.swift */; };
 		B0BC42EBDFBAF3F367DD21ED /* AudioFullscreenTouchTargetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25398B97AC0D61034AE7FB6A /* AudioFullscreenTouchTargetTests.swift */; };
@@ -4334,6 +4335,7 @@
 		E0A2A522063CA2E0D52B7B79 /* ConversationListView+AvatarRouting.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE51825F4B09B1579B3A4FA0 /* ConversationListView+AvatarRouting.swift */; };
 		E0A7AC42BDE5ECF5E6A715BD /* WidgetPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 537FA4625B4C7FF71120B5FA /* WidgetPreviewView.swift */; };
 		E0B5DED2BCE5D2D26ED6C0DF /* OutgoingCallContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5173CC67B56D2366FEC68ED /* OutgoingCallContext.swift */; };
+		E0C2BAD22FCAAB310D5A8968 /* BloodLockSurfacesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE143C48BA6D5FCD22913A7D /* BloodLockSurfacesTests.swift */; };
 		E0C2C7F2B3FE3AFF4B678648 /* ContactSearchPhonePromptGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 472A9DCF0423E2991CD5252B /* ContactSearchPhonePromptGuardTests.swift */; };
 		E0C8053DB103FB0E6C409383 /* EndToEndSignalApplierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF2BAB11462661A53EB33B83 /* EndToEndSignalApplierTests.swift */; };
 		E0D9E9D3DACCE991B5DDA03D /* ConversationTypeDisplayName.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFFF558CEF1F603211177875 /* ConversationTypeDisplayName.swift */; };
@@ -8888,6 +8890,7 @@
 		CBF37237ED9F784B7903D33A /* ComposerViewfinder+Provider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ComposerViewfinder+Provider.swift"; sourceTree = "<group>"; };
 		CC080D96EA2E4CBB86B4D780 /* CallQualityRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallQualityRows.swift; sourceTree = "<group>"; };
 		CC101C144ED2502DE4E2142D /* BubbleCallRecordingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BubbleCallRecordingTests.swift; sourceTree = "<group>"; };
+		CC17A6F0033375D0610BEB51 /* BloodLockCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BloodLockCenter.swift; sourceTree = "<group>"; };
 		CC21904CD4E6F7CF9AC300A1 /* GameRulesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameRulesView.swift; sourceTree = "<group>"; };
 		CC24FC30326F7124BACBB7EC /* ConversationChipAutoScrollTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationChipAutoScrollTests.swift; sourceTree = "<group>"; };
 		CC3A8B00A453CE869B99BB52 /* CallPipMorph.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallPipMorph.swift; sourceTree = "<group>"; };
@@ -9204,6 +9207,7 @@
 		DDF12100A4839EC6226DF268 /* FocalRowInputPreviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocalRowInputPreviewTests.swift; sourceTree = "<group>"; };
 		DDFA0BE1E32F96B182719A8E /* iPadRightPanelNavigationGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iPadRightPanelNavigationGuardTests.swift; sourceTree = "<group>"; };
 		DE02071F969F9AD36229F69E /* LivingSummaryAssembly.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivingSummaryAssembly.swift; sourceTree = "<group>"; };
+		DE143C48BA6D5FCD22913A7D /* BloodLockSurfacesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BloodLockSurfacesTests.swift; sourceTree = "<group>"; };
 		DE1E0D4F702B43BFAD1B7DB2 /* MeeshyComposerHost+Overflow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MeeshyComposerHost+Overflow.swift"; sourceTree = "<group>"; };
 		DE1E13B9AFD1CAD860AAAC4C /* GamePhotoCatchUpTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamePhotoCatchUpTests.swift; sourceTree = "<group>"; };
 		DE21574E0510D0882A27C14D /* SyncPillLabelsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillLabelsTests.swift; sourceTree = "<group>"; };
@@ -14668,6 +14672,7 @@
 				C992C8551C6591ABF64CBB66 /* AvatarCircleDirectory.swift */,
 				357BB0F569723D49EC2E11A2 /* BlockedTab.swift */,
 				69AC0463A77E232994BF17C8 /* BlockedViewModel.swift */,
+				CC17A6F0033375D0610BEB51 /* BloodLockCenter.swift */,
 				4B11D7D60E4217C0140949CD /* BloodRitualView.swift */,
 				F50DD48945D4A1622E2D3AAA /* BloodRitualViewModel.swift */,
 				DFBA10FA9A6175B462A3F43D /* CallBackDialer.swift */,
@@ -15335,6 +15340,7 @@
 			isa = PBXGroup;
 			children = (
 				749F4B15AADF1BFCB456C717 /* AvatarCircleDirectoryTests.swift */,
+				DE143C48BA6D5FCD22913A7D /* BloodLockSurfacesTests.swift */,
 				BA97FAB9CE9C4CE9042BFDFB /* ContactFilterTitleTests.swift */,
 				472A9DCF0423E2991CD5252B /* ContactSearchPhonePromptGuardTests.swift */,
 				5B41A2003C5C839C78939FF0 /* EpureCerclesContactsTests.swift */,
@@ -17013,6 +17019,7 @@
 				8B3971D9712E63B47CFFC2D3 /* BloodLocationRecorder.swift in Sources */,
 				B36201B9F60D6797F6F49F1C /* BloodLocationScreen.swift in Sources */,
 				0667FFC0E056ED5030266832 /* BloodLocationSheet.swift in Sources */,
+				B0A26691324CB3ED48FD872D /* BloodLockCenter.swift in Sources */,
 				D06CBCAB73AB9C61708AB0D7 /* BloodRitualView.swift in Sources */,
 				0C57B6FF49A13AD1C4F7C20D /* BloodRitualViewModel.swift in Sources */,
 				2EC8F4F3D5711399FA6335B2 /* BookmarksView.swift in Sources */,
@@ -19662,6 +19669,7 @@
 				002302C7274C171B5DD552DA /* BatteryReceiveModeViewModelTests.swift in Sources */,
 				81D570EB548C335D3F4A8990 /* BlockActionCoordinatorTests.swift in Sources */,
 				883BECB240EC6E20BA95EFA5 /* BlockedViewModelTests.swift in Sources */,
+				E0C2BAD22FCAAB310D5A8968 /* BloodLockSurfacesTests.swift in Sources */,
 				131DFD68AD85FC722B8C748E /* BloodRitualViewModelTests.swift in Sources */,
 				4DF1295A67BAAD5CAFC1CC64 /* BookmarkFeedbackLocalizationTests.swift in Sources */,
 				699474E2C85C63D89E8DEAB3 /* BookmarksCachePreservationTests.swift in Sources */,

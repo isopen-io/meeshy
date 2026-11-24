@@ -27,6 +27,9 @@ export const byUserIdBatteryPull = (userId: string): string => `/api/v1/relation
 /** GET · PUT /api/v1/relations/:userId/battery/settings */
 export const byUserIdBatterySettings = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/battery/settings`;
 
+/** PUT /api/v1/relations/:userId/blood-bundle */
+export const byUserIdBloodBundle = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/blood-bundle`;
+
 /** GET · PUT /api/v1/relations/:userId/fall/settings */
 export const byUserIdFallSettings = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/fall/settings`;
 

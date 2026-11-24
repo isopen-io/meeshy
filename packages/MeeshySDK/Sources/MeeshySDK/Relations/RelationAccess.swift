@@ -121,12 +121,14 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     }
 
     /// Le niveau à partir duquel le consentement de l'ÉMETTEUR est accordé PAR DÉFAUT
-    /// (`RELATION_EMITTER_CONSENT_DEFAULT_LEVEL`, #14147) : la batterie part entre Sangs sans
-    /// confirmation, retirable ; entre Proches elle attend un accord. `nil` = seul un accord
+    /// (`RELATION_LEVEL_DEFAULT_ON`, #20361) : chaque palier arrive avec ses fonctions actives,
+    /// sans confirmation (la batterie dès Proche), réglables sous le Sang. `nil` = seul un accord
     /// stocké ouvre. Le serveur résout ; le miroir sert à ne pas proposer ce qu'il refusera.
     public var emitterConsentDefaultLevel: RelationLevel? {
         switch self {
-        case .deviceBattery, .deviceBatteryPull, .deviceUnreachable, .safetyInactivity, .deviceCall, .healthFall: return .blood
+        case .listeningCategory, .deviceBattery, .deviceUnreachable: return .close
+        case .listeningTitle, .locationLive, .locationHistory, .locationProximity,
+             .deviceBatteryPull, .safetyInactivity, .deviceCall, .healthFall: return .blood
         default: return nil
         }
     }

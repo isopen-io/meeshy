@@ -92,6 +92,9 @@ public enum RelationRefusal: String, Sendable, Equatable {
     case phaseSkip = "RELATION_PHASE_SKIP"
     case notEligible = "RELATION_NOT_ELIGIBLE"
     case cooldown = "RELATION_COOLDOWN"
+    /// `RELATION_BLOOD_LOCKED` (409, #20361) : entre Sangs, une coupure est refusée — pour restreindre, on redescend à Proche.
+    case bloodLocked = "RELATION_BLOOD_LOCKED"
+    case bloodBundleOutdated = "RELATION_BLOOD_BUNDLE_OUTDATED"
 
     public static func from(_ error: Error) -> RelationRefusal? {
         guard case .rejected(let rejection)? = error as? MeeshyError, let code = rejection.code else { return nil }

@@ -203,7 +203,7 @@ describe('POST … /resolve — les effets', () => {
     expect(partages).toBeLessThan(retour);
     expect((ecritures[partages] as { partages: unknown }).partages).toEqual({
       where: { OR: [{ ownerId: USER_ID }, { otherId: USER_ID }] },
-      data: { listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false },
+      data: { listeningTitleShared: false, locationShared: false, locationHistoryShared: false, proximityShared: false, bloodBundleAcceptedAt: null, bloodBundleVersion: null },
     });
 
     await app.close();

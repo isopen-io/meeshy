@@ -8275,6 +8275,100 @@
         }
       }
     },
+    "circles.bloodLocked.restrict.action": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "النزول إلى «مقرّب»"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf „Nah“ zurückstufen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Step down to Close"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bajar a Cercano"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redescendre à Proche"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scendi a Stretto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voltar para Próximo"
+          }
+        }
+      }
+    },
+    "circles.bloodLocked.notice": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بين الدم كل شيء مشترك. للتقييد، أنزل هذا الشخص إلى «مقرّب»."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zwischen Blut-Kontakten wird alles geteilt. Zum Einschränken stufe diese Person auf „Nah“ zurück."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Between Bloods, everything is shared. To restrict, step this person down to Close."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entre Sangre, todo se comparte. Para restringir, baja a esta persona a Cercano."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entre Sangs, tout se partage. Pour restreindre, redescends-la à Proche."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tra Sangue, tutto è condiviso. Per limitare, porta questa persona a Stretto."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entre Sangues, tudo é compartilhado. Para restringir, volte esta pessoa para Próximo."
+          }
+        }
+      }
+    },
     "circles.action.request": {
       "extractionState": "manual",
       "localizations": {

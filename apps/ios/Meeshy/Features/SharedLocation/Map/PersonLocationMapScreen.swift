@@ -263,7 +263,7 @@ struct PersonLocationMapScreen: View {
         PersonLocationActions(
             onWrite: onWrite.map { write in { dismiss(); write() } },
             onCall: onCall.map { call in { dismiss(); call() } },
-            onShareMine: { sharesMine = true },
+            onShareMine: asks.positionIsSharedByDefault(userId) ? nil : { sharesMine = true },
             onDirections: { Self.openDirections(to: pin) },
             onHistory: showsHistory && pin.circle == .blood ? { bloodHistoryOpen = true } : nil,
             onAskExtend: asks.canAsk(userId) ? { ask(.extend) } : nil,
@@ -302,6 +302,7 @@ struct PersonLocationMapScreen: View {
         me = LocationMapOwnPosition.lastKnown()
         refocus(animated: false)
         showsHistory = await LocationMapServices.bloodLocationEnabled()
+        await asks.prepare(userId)
         await model.appeared()
         refocus(animated: false)
         guard !hasArrived else { return }

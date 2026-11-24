@@ -48,7 +48,8 @@ function monde(options: { readonly accordes?: readonly string[]; readonly coupur
       ...(id === EMETTEUR && options.fantome ? { locationGhostAt: new Date(T0) } : {}),
     })),
   });
-  const settings = table([{ ownerId: EMETTEUR, otherId: SANG_REFUSE, batteryShared: false }]);
+  // Le Proche a REFUSÉ sa batterie (#20361 : sans réglage, elle partirait dès Proche) ; seul le partage l'accorde.
+  const settings = table([{ ownerId: EMETTEUR, otherId: SANG_REFUSE, batteryShared: false }, { ownerId: EMETTEUR, otherId: PROCHE, batteryShared: false }]);
   const emissions: Emission[] = [];
   const grants = { readers: new Set(options.accordes ?? []) };
   const deps: BatteryRelayDeps = {

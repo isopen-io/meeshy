@@ -21,7 +21,9 @@ jest.mock('../../../services/sharedLocation/sharedLocationLazyCache', () => {
 import Fastify, { type FastifyInstance } from 'fastify';
 import locationGhostMeRoutes from '../../../routes/me/location-ghost';
 import bloodLocationMeRoutes from '../../../routes/me/blood-location';
-import { MOI, bloodLocationWorld } from '../../helpers/blood-location-world';
+import { RELATION_BLOOD_LOCKED_CODE } from '@meeshy/shared/types/relation-person-settings';
+import { BLOOD_BUNDLE_VERSION } from '@meeshy/shared/utils/blood-bundle';
+import { AUTRE_SANG, MOI, SANG, T0, bloodLocationWorld } from '../../helpers/blood-location-world';
 
 async function app(world: ReturnType<typeof bloodLocationWorld>, as: string): Promise<FastifyInstance> {
   const fastify = Fastify();
@@ -117,5 +119,22 @@ describe('PUT /me/location/ghost — le fantôme pour tous, drapeau Sang éteint
   it('blood-settings reste derrière le drapeau : 404 drapeau éteint, rétrocompatible', async () => {
     fastify = await app(bloodLocationWorld(), MOI);
     expect((await fastify.inject({ method: 'PUT', url: '/me/location/blood-settings', payload: { ghost: true } })).statusCode).toBe(404);
+  });
+});
+
+describe('PUT /me/location/blood-settings — le fantôme ciblé d\'un Sang verrouillé (#20361)', () => {
+  it('se cacher d\'un Sang pour qui j\'ai accepté la liste : 409 RELATION_BLOOD_LOCKED, rien d\'écrit ; sans accord, 200', async () => {
+    process.env.BLOOD_LOCATION_ENABLED = 'true';
+    process.env.BLOOD_LOCATION_ALLOWLIST = MOI;
+    const world = bloodLocationWorld();
+    world.consentir(MOI, SANG, { bloodBundleAcceptedAt: new Date(T0), bloodBundleVersion: BLOOD_BUNDLE_VERSION });
+    fastify = await app(world, MOI);
+
+    const verrou = await fastify.inject({ method: 'PUT', url: '/me/location/blood-settings', payload: { ghost: true, userId: SANG } });
+    const libre = await fastify.inject({ method: 'PUT', url: '/me/location/blood-settings', payload: { ghost: true, userId: AUTRE_SANG } });
+
+    expect([verrou.statusCode, verrou.json().code]).toEqual([409, RELATION_BLOOD_LOCKED_CODE]);
+    expect(world.settings.rows.find((r) => r.ownerId === MOI && r.otherId === SANG)?.ghostAt ?? null).toBeNull();
+    expect(libre.statusCode).toBe(200);
   });
 });

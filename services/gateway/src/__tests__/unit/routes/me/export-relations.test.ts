@@ -74,7 +74,7 @@ function relationTables() {
       interactionDay({ userLowId: THIRD, userHighId: STRANGER, low: { byLowMessage: 555 } }),
     ]),
     relationFeatureSetting: table([
-      { ownerId: ME, otherId: OTHER, listeningTitleShared: true, locationShared: false, locationHistoryShared: false, proximityShared: true, consentedAt: ROSE, locationWithdrawnAt: WITHDRAWN, ghostAt: GHOSTED, proximityRadiusMeters: 250 },
+      { ownerId: ME, otherId: OTHER, listeningTitleShared: true, locationShared: false, locationHistoryShared: false, proximityShared: true, consentedAt: ROSE, locationWithdrawnAt: WITHDRAWN, ghostAt: GHOSTED, proximityRadiusMeters: 250, bloodBundleAcceptedAt: ROSE, bloodBundleVersion: '2026-11-22' },
       { ownerId: OTHER, otherId: ME, listeningTitleShared: false, locationShared: true, locationHistoryShared: true, proximityShared: false, consentedAt: OTHER_DROP, ghostAt: OTHER_DROP, proximityRadiusMeters: 4321 },
     ]),
     user: {
@@ -142,6 +142,7 @@ describe('GET /export?types=relations', () => {
       {
         userId: OTHER, listeningCategoryShared: false, listeningTitleShared: true, locationShared: false, locationHistoryShared: false, proximityShared: true,
         consentedAt: ROSE.toISOString(), ghostAt: GHOSTED.toISOString(), proximityRadiusMeters: 250,
+        bloodBundleAcceptedAt: ROSE.toISOString(), bloodBundleVersion: '2026-11-22',
         withdrawnAt: { listeningCategoryShared: null, listeningTitleShared: null, locationShared: WITHDRAWN.toISOString(), locationHistoryShared: null, proximityShared: null },
       },
     ]);

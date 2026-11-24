@@ -136,6 +136,9 @@ public extension RelationsEndpoint {
     var rejectionPolicy: MeeshyEndpointRejectionPolicy {
         switch self {
         case .byUserIdRitual, .byUserIdLevel, .byUserIdBatteryPull: return .structured
+        // `RELATION_BLOOD_LOCKED` (409, #20361) : une coupure envers un Sang verrouillé ; l'écran lit le code, jamais la phrase.
+        case .byUserIdSettings, .byUserIdBatterySettings, .byUserIdFallSettings, .byUserIdInactivitySettings,
+             .byUserIdPhoneCallSettings, .byUserIdPhoneReachabilitySettings, .byUserIdBloodBundle: return .structured
         default: return .opaque
         }
     }

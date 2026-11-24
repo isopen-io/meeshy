@@ -38,7 +38,7 @@ struct ProfileBatteryRow: View {
             }
             if viewModel.showsConsentOffer {
                 consentOffer
-            } else if let settings = viewModel.settings {
+            } else if let settings = viewModel.settings, settings.lockedByLevel != true {
                 shareToggle(settings)
             }
         }
