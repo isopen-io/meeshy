@@ -141,26 +141,48 @@ final class TalkieVoiceStageTests: XCTestCase {
         XCTAssertEqual(stage.frameTimes(for: "a", direction: .incoming), [])
     }
 
-    func test_ring_overflow_keepsNewestEight() {
+    func test_ring_overflow_keepsTheNewestFrames() {
         let stage = TalkieVoiceStage()
         stage.begin(userId: "a", direction: .incoming, at: Self.startedAt)
+        let capacity = TalkieVoiceStage.ringCapacity
 
-        (1...10).forEach { stage.push(userId: "a", direction: .incoming, bands: Self.full, at: TimeInterval($0)) }
+        (1...capacity + 2).forEach { stage.push(userId: "a", direction: .incoming, bands: Self.full, at: TimeInterval($0)) }
 
-        XCTAssertEqual(stage.frameTimes(for: "a", direction: .incoming), (3...10).map(TimeInterval.init))
-        XCTAssertEqual(stage.receivedFrames(for: "a", direction: .incoming), 10)
+        XCTAssertEqual(stage.frameTimes(for: "a", direction: .incoming), (3...capacity + 2).map(TimeInterval.init))
+        XCTAssertEqual(stage.receivedFrames(for: "a", direction: .incoming), capacity + 2)
     }
 
     /// Une rafale plus longue que l'anneau ne perd aucun spectre : les trames écrasées ont été lissées d'avance.
     func test_ring_overflow_smoothsTheOverwrittenFramesFirst() throws {
         let stage = TalkieVoiceStage()
         stage.begin(userId: "a", direction: .incoming, at: Self.startedAt)
+        let capacity = TalkieVoiceStage.ringCapacity
         stage.push(userId: "a", direction: .incoming, bands: Self.full, at: 1)
-        (2...9).forEach { stage.push(userId: "a", direction: .incoming, bands: Self.zeros, at: TimeInterval($0)) }
+        (2...capacity + 1).forEach { stage.push(userId: "a", direction: .incoming, bands: Self.zeros, at: TimeInterval($0)) }
 
-        let after = try XCTUnwrap(stage.bands(for: "a", now: 100).first)
+        let after = try XCTUnwrap(stage.bands(for: "a", now: 1_000).first)
 
-        XCTAssertEqual(after, 0.55 * pow(1 - 0.12, 8), accuracy: 1e-6)
+        XCTAssertEqual(after, 0.55 * pow(1 - 0.12, Float(capacity)), accuracy: 1e-6)
+    }
+
+    /// Une voix reçue en Bluetooth se date 250 ms dans le futur : une rafale de trames à venir, plus longue que huit
+    /// fenêtres, ne doit pas faire lire avant l'heure une trame qui n'a pas encore sonné.
+    func test_ring_futureFramesUnderAnOutputDelay_areNotServedBeforeTheyAreDue() throws {
+        let stage = TalkieVoiceStage()
+        stage.begin(userId: "a", direction: .incoming, at: Self.startedAt)
+        let window = 1024.0 / 48_000
+        let now = 100.0
+        stage.push(userId: "a", direction: .incoming, bands: Self.zeros, at: now - window)
+        (0..<16).forEach { stage.push(userId: "a", direction: .incoming, bands: Self.full, at: now + 0.25 + Double($0) * window) }
+
+        XCTAssertEqual(stage.bands(for: "a", now: now), Self.zeros, "aucune trame dont l'heure est passée n'est pleine")
+        XCTAssertEqual(stage.frameTimes(for: "a", direction: .incoming).count, 16)
+    }
+
+    func test_ring_capacityCoversTheLongestOutputDelayAndTheReadLag() {
+        let window = 1024.0 / 48_000
+        let needed = (TalkieVoiceProcessor.maxOutputDelay + TalkieVoiceStage.readLag) / window
+        XCTAssertGreaterThan(Double(TalkieVoiceStage.ringCapacity), needed)
     }
 
     func test_observer_beginAndEnd_publishesWhoSpeaksAndWhichWay() {

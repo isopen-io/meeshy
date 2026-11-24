@@ -19,10 +19,10 @@ nonisolated struct TalkieVoiceKey: Hashable, Sendable {
 /// les 120 bandes de sa voix, lissées bande par bande (montée rapide, retombée lente : `TalkieWaveLaw.smoothed`).
 ///
 /// Le fil audio écrit des trames DATÉES (`push`, une par fenêtre de 1024 échantillons, à l'heure de l'horloge hôte
-/// où elle sonne) dans un anneau de huit trames par voix ; plein, l'anneau lisse la plus ancienne puis l'écrase. Le
-/// lissage s'applique dans l'ordre du temps, à mesure que les trames deviennent dues : la bulle lit à chaque image
-/// (`bands(for:now:)`) les bandes lissées de la dernière trame dont l'heure est passée, sans rien publier. Rien
-/// n'alloue en régime établi, côté fil audio.
+/// où elle sonne) dans un anneau de `ringCapacity` trames par voix ; plein, l'anneau lisse la plus ancienne puis
+/// l'écrase. Le lissage s'applique dans l'ordre du temps, à mesure que les trames deviennent dues : la bulle lit à
+/// chaque image (`bands(for:now:)`) les bandes lissées de la dernière trame dont l'heure est passée, sans rien
+/// publier. Rien n'alloue en régime établi, côté fil audio.
 ///
 /// Seuls le début et la fin d'une voix se publient, par `TalkieVoiceStageObserver`. Une voix se COMPTE : deux talkies
 /// du même expéditeur qui se chevauchent ouvrent deux fois la même voix, qui garde son anneau et son heure de début
@@ -40,8 +40,14 @@ nonisolated final class TalkieVoiceStage: Sendable {
         let voices: Set<TalkieVoiceKey>
     }
 
+    /// Les trames d'avance qu'une voix garde : une voix reçue se date jusqu'à 0,5 s dans le futur (retard de sortie,
+    /// `TalkieVoiceProcessor.maxOutputDelay`) et se lit `readLag` en arrière ; à 48 kHz, cela fait ~27 fenêtres de
+    /// 1024 échantillons en attente. Trente-deux, préallouées au début de la voix : l'anneau ne lisse jamais d'avance une
+    /// trame qui n'a pas encore sonné, et rien n'alloue en régime établi.
+    static let ringCapacity = 32
+
     private nonisolated struct Voice: Sendable {
-        static let capacity = 8
+        static let capacity = TalkieVoiceStage.ringCapacity
         static let width = TalkieSpectrumAnalyzer.bandCount
 
         let startedAt: Date
@@ -66,7 +72,7 @@ nonisolated final class TalkieVoiceStage: Sendable {
         }
 
         /// Anneau plein : la trame la plus ancienne est lissée d'avance avant d'être écrasée — une rafale du tap
-        /// (plus de huit fenêtres livrées d'un coup) ne perd aucun spectre, elle n'en avance que le lissage.
+        /// (plus de `ringCapacity` fenêtres livrées d'un coup) ne perd aucun spectre, elle n'en avance que le lissage.
         mutating func push(_ bands: [Float], at time: TimeInterval) {
             if count == Self.capacity { consumeOldest() }
             let slot = (head + count) % Self.capacity
