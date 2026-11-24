@@ -112,6 +112,48 @@ struct GameBlockModelsTests {
         #expect(try #require(GameBlock.parse(GameBlockFixture.data)).flame.freezeGifted == nil)
     }
 
+    private static func withEffort(_ effort: String) -> Data {
+        Data(GameBlockFixture.json.replacingOccurrences(
+            of: "\"canRelight\":false}", with: "\"canRelight\":false,\"effortRelight\":\(effort)}"
+        ).utf8)
+    }
+
+    @Test("le rallumage par l'effort se lit quand la passerelle le sert, et survit à l'aller-retour (#20473)")
+    func effortRelightIsRead() throws {
+        let served = #"{"lostDays":9,"dreamsDone":1,"dreamsNeeded":2,"closesOn":"2026-11-24","daysLeft":1}"#
+        let flame = try #require(GameBlock.parse(Self.withEffort(served))).flame
+        let expected = GameEffortRelight(lostDays: 9, dreamsDone: 1, dreamsNeeded: 2, closesOn: "2026-11-24", daysLeft: 1)
+        #expect(flame.effortRelight == expected)
+        #expect(flame.effortRelight?.dreamsMissing == 1)
+        let roundTrip = try JSONDecoder().decode(GameBlock.Flame.self, from: JSONEncoder().encode(flame))
+        #expect(roundTrip.effortRelight == expected)
+        #expect(roundTrip == flame)
+    }
+
+    @Test("un serveur antérieur ou un rallumage par l'effort illisible ne casse pas le bloc : rien ne se dit (#20473)",
+          arguments: [
+              #""oops""#,
+              #"{"lostDays":0,"dreamsDone":1,"dreamsNeeded":2,"closesOn":"2026-11-24","daysLeft":1}"#,
+              #"{"lostDays":9,"dreamsDone":-1,"dreamsNeeded":2,"closesOn":"2026-11-24","daysLeft":1}"#,
+              #"{"lostDays":9,"dreamsDone":1,"dreamsNeeded":0,"closesOn":"2026-11-24","daysLeft":1}"#,
+              #"{"lostDays":9,"dreamsDone":1,"dreamsNeeded":2,"closesOn":"demain","daysLeft":1}"#,
+              #"{"lostDays":9,"dreamsDone":1,"dreamsNeeded":2,"closesOn":"2026-11-24","daysLeft":-1}"#,
+              #"{"lostDays":9.5,"dreamsDone":1,"dreamsNeeded":2,"closesOn":"2026-11-24","daysLeft":1}"#,
+              #"{"dreamsDone":1,"dreamsNeeded":2,"closesOn":"2026-11-24","daysLeft":1}"#,
+          ])
+    func effortRelightIsTolerant(served: String) throws {
+        let block = try #require(GameBlock.parse(Self.withEffort(served)))
+        #expect(block.flame.effortRelight == nil)
+        #expect(block.flame.days == 4)
+        #expect(try #require(GameBlock.parse(GameBlockFixture.data)).flame.effortRelight == nil)
+    }
+
+    @Test("il manque toujours au moins un rêve complet à dire (#20473)")
+    func effortRelightAlwaysMissesAtLeastOneDream() {
+        #expect(GameEffortRelight(lostDays: 3, dreamsDone: 0, dreamsNeeded: 2, closesOn: "2026-11-24", daysLeft: 0).dreamsMissing == 2)
+        #expect(GameEffortRelight(lostDays: 3, dreamsDone: 2, dreamsNeeded: 2, closesOn: "2026-11-24", daysLeft: 0).dreamsMissing == 1)
+    }
+
     @Test("la Veilleuse offerte s'annonce ce jour-là, une seule fois, et jamais devant un serveur antérieur (#20252)")
     func freezeGiftIsAnnouncedOnce() {
         #expect(GameFlame.freezeGiftSeenKey == "flame-freeze-gift")
