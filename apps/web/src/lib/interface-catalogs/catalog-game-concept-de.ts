@@ -415,6 +415,7 @@ const de = {
   'game.flame_panel.pause': 'Ruhen lassen · {days}',
   'game.flame_panel.paused': 'Deine Flamme ruht bis {date}.',
   'game.flame_panel.paused_soon': 'Deine Flamme ruht ab morgen, bis {date}.',
+  'game.flame_panel.pause_next': 'Deine Flamme kann ab dem {date} wieder ruhen.',
 } as const satisfies GameConceptCatalog;
 
 export default de;

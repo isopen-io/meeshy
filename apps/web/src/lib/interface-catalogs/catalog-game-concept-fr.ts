@@ -413,6 +413,7 @@ const fr = {
   'game.flame_panel.pause': 'Mettre en veille · {days}',
   'game.flame_panel.paused': 'Ta Flamme est en veille jusqu’au {date}.',
   'game.flame_panel.paused_soon': 'Ta Flamme se met en veille demain, jusqu’au {date}.',
+  'game.flame_panel.pause_next': 'Ta prochaine veille sera possible dès le {date}.',
 } as const;
 
 export default fr;

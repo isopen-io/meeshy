@@ -435,6 +435,7 @@ const ar = {
   'game.flame_panel.pause': 'دعه يستريح · {days}',
   'game.flame_panel.paused': 'يستريح لهبك حتى {date}.',
   'game.flame_panel.paused_soon': 'يبدأ لهبك استراحته غدًا، حتى {date}.',
+  'game.flame_panel.pause_next': 'يستطيع لهبك أن يستريح من جديد ابتداءً من {date}.',
 } as const satisfies GameConceptCatalog;
 
 export default ar;

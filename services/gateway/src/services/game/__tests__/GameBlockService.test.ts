@@ -81,6 +81,18 @@ describe('GameBlockService.build', () => {
     expect((await build(lapsed)).flame.goal).toEqual({ offer: [7, 14, 30], current: null });
   });
 
+  it('le trimestre pris, la Flamme dit dès quand la prochaine veille sera possible (#20517)', async () => {
+    const rested = fakeGameDb();
+    seedUser(rested, { currentStreakDays: 5, longestStreakDays: 5, lastStreakDate: new Date('2026-10-05T00:00:00Z'), flamePauseFrom: '2026-10-01', flamePauseUntil: '2026-10-02', timezone: 'UTC' });
+    const block = await build(rested);
+    expect(gameBlockSchema.safeParse(block).success).toBe(true);
+    expect(block.flame.nextPauseFrom).toBe('2027-01-01');
+
+    const open = fakeGameDb();
+    seedUser(open, { currentStreakDays: 5, longestStreakDays: 5, lastStreakDate: new Date('2026-10-05T00:00:00Z'), timezone: 'UTC' });
+    expect(await build(open).then((served) => served.flame)).not.toHaveProperty('nextPauseFrom');
+  });
+
   it('le jour de la première Veilleuse offerte, la Flamme le dit — et seulement ce jour-là (#20169)', async () => {
     const gifted = fakeGameDb();
     seedUser(gifted, { currentStreakDays: 3, longestStreakDays: 3, lastStreakDate: new Date('2026-10-05T00:00:00Z'), flameFreezes: 1, flameFreezeGiftDay: '2026-10-05', timezone: 'UTC' });

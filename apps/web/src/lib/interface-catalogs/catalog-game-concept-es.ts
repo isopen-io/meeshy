@@ -415,6 +415,7 @@ const es = {
   'game.flame_panel.pause': 'Dejarla descansar · {days}',
   'game.flame_panel.paused': 'Tu Llama descansa hasta el {date}.',
   'game.flame_panel.paused_soon': 'Tu Llama descansa a partir de mañana, hasta el {date}.',
+  'game.flame_panel.pause_next': 'Tu Llama podrá descansar de nuevo a partir del {date}.',
 } as const satisfies GameConceptCatalog;
 
 export default es;
