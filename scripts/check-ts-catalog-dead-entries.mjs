@@ -534,6 +534,9 @@ export const callersIn = (contents, nsNames) => {
 // `applyKnownLiveExceptions` la fait rougir (PÉRIMÉE) le jour où son appelant
 // arrive — la déclaration doit alors partir dans le même commit.
 const PENDING_CLIENT_ENTRIES = {
+  // La Flamme en veille (#17372) : la passerelle sert l'annonce (#20507) avant le geste des clients, que le web
+  // portera depuis la carte de la Flamme.
+  'me.gameFlamePause': { issue: 20509, reason: 'POST /me/game/flame/pause — annoncer une veille de la Flamme de 1 à 7 jours (web)' },
   // Le jeton d'Activité en direct d'un partage de position (#19463, chantier #18857) : l'iPhone qui affiche
   // « Léo partage sa position » le confie à la passerelle, qui clôt l'Activité si le partage finit avant son terme.
   'me.liveActivityTokens': { issue: 19463, reason: 'POST /me/live-activity-tokens — l\'Activité en direct close par la passerelle à la fin du partage' },
