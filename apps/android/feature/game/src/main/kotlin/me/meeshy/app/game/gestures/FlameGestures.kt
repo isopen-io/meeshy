@@ -2,6 +2,9 @@ package me.meeshy.app.game.gestures
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import me.meeshy.app.game.gameString
 import me.meeshy.app.game.pages.GameActionButton
 import me.meeshy.app.game.pages.GameCard
 import me.meeshy.app.game.pages.GameErrorLine
@@ -10,8 +13,10 @@ import me.meeshy.app.game.pages.count
 import me.meeshy.feature.game.R
 import me.meeshy.sdk.model.game.FlameStatus
 import me.meeshy.sdk.model.game.GameBlock
+import me.meeshy.sdk.model.game.GameCopyLaws
 import me.meeshy.sdk.model.game.GameFlameLaw
 import me.meeshy.sdk.model.game.GameSpend
+import me.meeshy.sdk.model.game.saysRelightClosed
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 import androidx.compose.material3.MaterialTheme
@@ -26,6 +31,10 @@ import androidx.compose.ui.text.font.FontWeight
  * Un bouton qui ne peut pas servir se TAIT en disant pourquoi (réserve pleine, pas assez de Meeshes, hors ligne) ; avant
  * chaque achat, la rangée de dépense dit les Meeshes en poche et le prix — ou combien il en manque. Aucun nombre n'est
  * calculé ici : le nombre de Veilleuses et la série rallumée sont ceux que la passerelle sert après le geste.
+ *
+ * Deux rêves complets la rallument aussi, sans payer (#20455) : tant que le bloc sert `effortRelight`, le panneau dit
+ * combien en manquent et jusqu'à quand (#20474) — même quand une nouvelle Flamme a repris, puisque c'est en jouant
+ * qu'on les réalise — et ne dit plus qu'elle ne peut plus être rallumée.
  */
 @Composable
 internal fun FlamePanel(game: GameBlock, gestures: GameGesturesUiState, onBuyFreeze: () -> Unit, onRelight: () -> Unit) {
@@ -54,6 +63,15 @@ internal fun FlamePanel(game: GameBlock, gestures: GameGesturesUiState, onBuyFre
             )
         }
         GameErrorLine(gestureMessage(gestures.failures[GameGesture.Freeze]))
+        flame.effortRelight?.let { effort ->
+            Text(
+                gameString(GameCopyLaws.effortRelight(effort)),
+                modifier = Modifier.testTag("game.flame.effortRelight"),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MeeshyTheme.tokens.textPrimary,
+            )
+        }
         when {
             isOut && flame.canRelight -> {
                 GameNote(stringResource(R.string.game_flame_panel_relight_intro))
@@ -72,7 +90,8 @@ internal fun FlamePanel(game: GameBlock, gestures: GameGesturesUiState, onBuyFre
                 GameNote(stringResource(R.string.game_flame_panel_relight_missing_window, meeshes(flame.relightPrice.toLong())))
                 SpendRow(relightSpend, { meeshes(it) }, { stringResource(R.string.game_spend_missing_relight, it) })
             }
-            isOut -> GameNote(stringResource(R.string.game_flame_panel_relight_closed), tone = MeeshyPalette.Indigo500)
+            flame.saysRelightClosed(cannotPayRelight = !relightSpend.affordable) ->
+                GameNote(stringResource(R.string.game_flame_panel_relight_closed), tone = MeeshyPalette.Indigo500)
         }
         if (!gestures.online) GameNote(stringResource(R.string.game2_offline_action))
     }

@@ -636,6 +636,10 @@
     <string name="game_flame_form_soleil">Sonne</string>
     <string name="game_flame_no_streak">Flamme noch zu entzünden</string>
     <string name="game_flame_panel_bonus">Jeder Tag deiner Flamme nährt deine Träume: +%1$s %% Funken pro Akt, bis zu +%2$s %%.</string>
+    <string name="game_flame_panel_effort_dreams_one">%1$s vollständigen Traum</string>
+    <string name="game_flame_panel_effort_dreams_other">%1$s vollständige Träume</string>
+    <string name="game_flame_panel_effort_relight_today">Schaffe heute %1$s, und deine Flamme kehrt mit ihren %2$s zurück, ohne zu zahlen.</string>
+    <string name="game_flame_panel_effort_relight_tomorrow">Schaffe %1$s bis morgen Abend, und deine Flamme kehrt mit ihren %2$s zurück, ohne zu zahlen.</string>
     <string name="game_flame_panel_freeze_buy">Eine Hüterin rufen · %1$s</string>
     <string name="game_flame_panel_freezes">Hüterinnen: %1$s / %2$s</string>
     <string name="game_flame_panel_relight">Flamme neu entzünden · %1$s</string>

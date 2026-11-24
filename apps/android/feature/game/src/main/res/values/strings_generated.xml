@@ -636,6 +636,10 @@
     <string name="game_flame_form_soleil">Sun</string>
     <string name="game_flame_no_streak">A Flame to light</string>
     <string name="game_flame_panel_bonus">Each day of Flame feeds your dreams: +%1$s %% sparks per act, up to +%2$s %%.</string>
+    <string name="game_flame_panel_effort_dreams_one">%1$s full dream</string>
+    <string name="game_flame_panel_effort_dreams_other">%1$s full dreams</string>
+    <string name="game_flame_panel_effort_relight_today">Just %1$s more today and your Flame comes back with its %2$s, without paying.</string>
+    <string name="game_flame_panel_effort_relight_tomorrow">Just %1$s more by tomorrow night and your Flame comes back with its %2$s, without paying.</string>
     <string name="game_flame_panel_freeze_buy">Take a Vigil · %1$s</string>
     <string name="game_flame_panel_freezes">Vigils: %1$s / %2$s</string>
     <string name="game_flame_panel_relight">Relight the Flame · %1$s</string>

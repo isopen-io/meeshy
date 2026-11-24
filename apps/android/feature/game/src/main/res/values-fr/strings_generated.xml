@@ -636,6 +636,10 @@
     <string name="game_flame_form_soleil">Soleil</string>
     <string name="game_flame_no_streak">Flamme à allumer</string>
     <string name="game_flame_panel_bonus">Chaque jour de Flamme nourrit tes rêves : +%1$s %% d’étincelles par acte, jusqu’à +%2$s %%.</string>
+    <string name="game_flame_panel_effort_dreams_one">%1$s rêve complet</string>
+    <string name="game_flame_panel_effort_dreams_other">%1$s rêves complets</string>
+    <string name="game_flame_panel_effort_relight_today">Encore %1$s aujourd’hui et ta Flamme de %2$s revient, sans payer.</string>
+    <string name="game_flame_panel_effort_relight_tomorrow">Encore %1$s d’ici demain soir et ta Flamme de %2$s revient, sans payer.</string>
     <string name="game_flame_panel_freeze_buy">Prendre une Veilleuse · %1$s</string>
     <string name="game_flame_panel_freezes">Veilleuses : %1$s / %2$s</string>
     <string name="game_flame_panel_relight">Rallumer la Flamme · %1$s</string>
