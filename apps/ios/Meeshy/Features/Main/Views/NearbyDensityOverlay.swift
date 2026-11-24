@@ -165,7 +165,7 @@ struct NearbyDiscoveryMapView: UIViewRepresentable {
     let onRecenter: (CLLocationCoordinate2D) -> Void
 
     func makeUIView(context: Context) -> MKMapView {
-        let map = MKMapView()
+        let map = NearbyMapCanvas()
         map.delegate = context.coordinator
         map.pointOfInterestFilter = .excludingAll
         map.showsCompass = false
@@ -187,7 +187,13 @@ struct NearbyDiscoveryMapView: UIViewRepresentable {
         tap.delegate = context.coordinator
         map.addGestureRecognizer(tap)
         context.coordinator.map = map
-        context.coordinator.apply(self, to: map, animated: false)
+        // La carte n'a pas encore de taille : la caméra attend sa première
+        // mise en page (#3741).
+        context.coordinator.applyContent(self, to: map)
+        map.onLaidOut = { [weak coordinator = context.coordinator, weak map] in
+            guard let coordinator, let map else { return }
+            coordinator.replayPendingRegion(on: map)
+        }
         return map
     }
 
@@ -198,6 +204,22 @@ struct NearbyDiscoveryMapView: UIViewRepresentable {
 
     func makeCoordinator() -> NearbyMapCoordinator {
         NearbyMapCoordinator()
+    }
+}
+
+/// La carte « À proximité » : elle signale chaque mise en page qui lui donne
+/// une taille, pour que la caméra en attente soit posée (#3741).
+final class NearbyMapCanvas: MKMapView {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466) → double-free au démontage.
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
+
+    var onLaidOut: (() -> Void)?
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard bounds.width > 0, bounds.height > 0 else { return }
+        onLaidOut?()
     }
 }
 
@@ -228,14 +250,22 @@ final class NearbyMapCoordinator: NSObject, MKMapViewDelegate, UIGestureRecogniz
     private var recenterTask: Task<Void, Never>?
 
     func apply(_ view: NearbyDiscoveryMapView, to map: MKMapView, animated: Bool) {
+        applyContent(view, to: map)
+        applyRegion(center: view.center, radiusKm: view.radiusKm, to: map, animated: animated)
+    }
+
+    /// Tout ce qui ne dépend pas de la taille de la carte : relais, pins,
+    /// tuiles. La caméra, elle, reste en attente jusqu'à ce que la carte ait
+    /// une taille.
+    func applyContent(_ view: NearbyDiscoveryMapView, to map: MKMapView) {
         onSelectPost = view.onSelectPost
         onSelectCell = view.onSelectCell
         onRecenter = view.onRecenter
         mode = view.mode
         cellSize = view.cellSize
         renderedCells = view.cells
+        pendingRegion = PendingRegion(center: view.center, radiusKm: view.radiusKm)
 
-        applyRegion(center: view.center, radiusKm: view.radiusKm, to: map, animated: animated)
         applyAnnotations(view.pins, showPins: view.showsPins, to: map)
         applyOverlays(
             cells: view.mode == .density ? view.cells : [],
@@ -252,9 +282,19 @@ final class NearbyMapCoordinator: NSObject, MKMapViewDelegate, UIGestureRecogniz
     /// garde, chaque `updateUIView` — donc chaque frame d'animation SwiftUI —
     /// repositionnerait la caméra et la carte deviendrait impossible à
     /// déplacer à la main.
+    ///
+    /// **Jamais sur une carte sans taille (#3741).** `regionThatFits` y rend
+    /// une région invalide et `setRegion` lève alors une exception
+    /// Objective-C qui ferme l'app. La demande reste en attente, sans laisser
+    /// de signature, et la première mise en page la pose.
     private func applyRegion(
         center: CLLocationCoordinate2D?, radiusKm: Double, to map: MKMapView, animated: Bool
     ) {
+        guard Self.hasSize(map) else {
+            pendingRegion = PendingRegion(center: center, radiusKm: radiusKm)
+            return
+        }
+        pendingRegion = nil
         // Sans centre — permission refusée, aucun relevé — la carte recevait
         // AUCUNE région : elle naissait au milieu de nulle part et le geste
         // qu'on proposait à l'utilisateur (« déplacez la carte ») n'avait
@@ -272,11 +312,40 @@ final class NearbyMapCoordinator: NSObject, MKMapViewDelegate, UIGestureRecogniz
             latitudinalMeters: appliedRadius * 2000,
             longitudinalMeters: appliedRadius * 2000
         )
-        map.setRegion(map.regionThatFits(region), animated: animated)
+        let fitted = map.regionThatFits(region)
+        guard Self.isPosable(fitted) else { return }
+        map.setRegion(fitted, animated: animated)
+    }
+
+    /// La caméra demandée avant que la carte ait une taille.
+    func replayPendingRegion(on map: MKMapView) {
+        guard let pending = pendingRegion, Self.hasSize(map) else { return }
+        applyRegion(center: pending.center, radiusKm: pending.radiusKm, to: map, animated: false)
+    }
+
+    private struct PendingRegion {
+        let center: CLLocationCoordinate2D?
+        let radiusKm: Double
+    }
+
+    private var pendingRegion: PendingRegion?
+
+    private static func hasSize(_ map: MKMapView) -> Bool {
+        map.bounds.width > 0 && map.bounds.height > 0
+    }
+
+    private static func isPosable(_ region: MKCoordinateRegion) -> Bool {
+        let values = [region.center.latitude, region.center.longitude,
+                      region.span.latitudeDelta, region.span.longitudeDelta]
+        return values.allSatisfy(\.isFinite)
+            && CLLocationCoordinate2DIsValid(region.center)
+            && region.span.latitudeDelta > 0 && region.span.latitudeDelta <= 180
+            && region.span.longitudeDelta > 0 && region.span.longitudeDelta <= 360
     }
 
     private static let worldFallbackCenter = CLLocationCoordinate2D(latitude: 20, longitude: 0)
-    private static let worldFallbackRadiusKm: Double = 4_000
+    /// Un rayon que l'ajustement à un écran portrait garde entre les pôles.
+    private static let worldFallbackRadiusKm: Double = 2_000
 
     // MARK: - Déplacer la carte À LA MAIN
 
