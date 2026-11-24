@@ -14,18 +14,36 @@ final class TalkieVoiceLevelerTests: XCTestCase {
         var gains: [Float] = []
     }
 
-    private func sine(rmsDecibels: Float, seconds: Double, phaseOffset: Int = 0) -> [Float] {
-        let amplitude = Float(pow(10, Double(rmsDecibels) / 20)) * Float(2.0.squareRoot())
-        let count = Int(seconds * Self.sampleRate)
-        return (0..<count).map { index in
-            amplitude * Float(sin(2 * Double.pi * Self.frequency * Double(index + phaseOffset) / Self.sampleRate))
+    /// Générateur à graine (SplitMix64) : le bruit des témoins est le même à chaque exécution.
+    private struct SeededGenerator: RandomNumberGenerator {
+        var state: UInt64
+
+        mutating func next() -> UInt64 {
+            state &+= 0x9E37_79B9_7F4A_7C15
+            var mixed = state
+            mixed = (mixed ^ (mixed >> 30)) &* 0xBF58_476D_1CE4_E5B9
+            mixed = (mixed ^ (mixed >> 27)) &* 0x94D0_49BB_1331_11EB
+            return mixed ^ (mixed >> 31)
         }
     }
 
-    private func noise(rmsDecibels: Float, seconds: Double) -> [Float] {
+    private func sine(
+        rmsDecibels: Float,
+        seconds: Double,
+        phaseOffset: Int = 0,
+        sampleRate: Double = sampleRate
+    ) -> [Float] {
+        let amplitude = Float(pow(10, Double(rmsDecibels) / 20)) * Float(2.0.squareRoot())
+        let count = Int(seconds * sampleRate)
+        return (0..<count).map { index in
+            amplitude * Float(sin(2 * Double.pi * Self.frequency * Double(index + phaseOffset) / sampleRate))
+        }
+    }
+
+    private func noise(rmsDecibels: Float, seconds: Double, sampleRate: Double = sampleRate, seed: UInt64 = 20531) -> [Float] {
         let amplitude = Float(pow(10, Double(rmsDecibels) / 20)) * Float(3.0.squareRoot())
-        var generator = SystemRandomNumberGenerator()
-        return (0..<Int(seconds * Self.sampleRate)).map { _ in
+        var generator = SeededGenerator(state: seed)
+        return (0..<Int(seconds * sampleRate)).map { _ in
             Float.random(in: -amplitude...amplitude, using: &generator)
         }
     }
@@ -119,6 +137,46 @@ final class TalkieVoiceLevelerTests: XCTestCase {
         XCTAssertEqual(leveler.currentGainDecibels, 0, accuracy: 0.01)
     }
 
+    func test_process_speechStops_gainNeverRisesInTheTail() {
+        let leveler = TalkieVoiceLeveler(sampleRate: Self.sampleRate)
+        var run = Run()
+        feed(sine(rmsDecibels: -30, seconds: 1), through: leveler, into: &run)
+        let gainAtStop = leveler.currentGainDecibels
+
+        var tail = Run()
+        feed(noise(rmsDecibels: -60, seconds: 1), through: leveler, into: &tail)
+        let highest = tail.gains.max() ?? 0
+        XCTAssertLessThanOrEqual(highest, gainAtStop + 0.01, "le gain remonte de \(gainAtStop) à \(highest) dB")
+    }
+
+    func test_process_speechStopsIntoDigitalSilence_gainNeverRises() {
+        let leveler = TalkieVoiceLeveler(sampleRate: Self.sampleRate)
+        var run = Run()
+        feed(sine(rmsDecibels: -30, seconds: 1), through: leveler, into: &run)
+        let gainAtStop = leveler.currentGainDecibels
+
+        var tail = Run()
+        feed([Float](repeating: 0, count: Int(Self.sampleRate)), through: leveler, into: &tail)
+        XCTAssertLessThanOrEqual(tail.gains.max() ?? 0, gainAtStop + 0.01)
+    }
+
+    func test_process_noiseHoveringAtFloor_isNotPumped() {
+        let leveler = TalkieVoiceLeveler(sampleRate: Self.sampleRate)
+        var run = Run()
+        let quieter = noise(rmsDecibels: -51, seconds: 1, seed: 1)
+        let louder = noise(rmsDecibels: -49, seconds: 1, seed: 2)
+        let bufferSize = 1024
+        for index in 0..<Int(2 * Self.sampleRate) / bufferSize {
+            let source = index.isMultiple(of: 2) ? louder : quieter
+            let start = (index / 2 * bufferSize) % (source.count - bufferSize)
+            feed(Array(source[start..<start + bufferSize]), through: leveler, into: &run)
+        }
+
+        let level = rmsDecibels(run.output[...])
+        XCTAssertLessThan(level, -40, "souffle porté à \(level) dBFS")
+        XCTAssertLessThanOrEqual(run.gains.max() ?? 0, 10)
+    }
+
     // MARK: - L'état traverse les tampons
 
     func test_process_stateCarriesAcrossBuffers_noJump() {
@@ -143,6 +201,42 @@ final class TalkieVoiceLevelerTests: XCTestCase {
         for gain in gains {
             XCTAssertEqual(gain, gains[0], accuracy: 0.1, "gains selon la taille du tampon : \(gains)")
         }
+    }
+
+    // MARK: - Un changement de route change la fréquence d'échantillonnage
+
+    func test_updateSampleRate_midVoice_gainDoesNotJump() {
+        let leveler = TalkieVoiceLeveler(sampleRate: Self.sampleRate)
+        var run = Run()
+        feed(sine(rmsDecibels: -24, seconds: 1), through: leveler, into: &run)
+        leveler.updateSampleRate(16_000)
+        feed(sine(rmsDecibels: -24, seconds: 1, sampleRate: 16_000), through: leveler, into: &run)
+
+        let steps = zip(run.gains.dropFirst(), run.gains).map { abs($0 - $1) }
+        XCTAssertLessThanOrEqual(steps.max() ?? 0, 1, "saut de gain maximal : \(steps.max() ?? 0) dB")
+        XCTAssertLessThanOrEqual(run.output.map(abs).max() ?? 0, Self.ceilingLinear)
+        XCTAssertGreaterThan(leveler.currentGainDecibels, 6)
+    }
+
+    func test_updateSampleRate_timeConstantsFollowTheNewRate() {
+        let leveler = TalkieVoiceLeveler(sampleRate: Self.sampleRate)
+        var run = Run()
+        feed(sine(rmsDecibels: -30, seconds: 1), through: leveler, into: &run)
+        XCTAssertGreaterThan(leveler.currentGainDecibels, 10)
+
+        leveler.updateSampleRate(16_000)
+        feed(noise(rmsDecibels: -60, seconds: 1.5, sampleRate: 16_000), through: leveler, into: &run)
+        XCTAssertLessThan(leveler.currentGainDecibels, 1)
+    }
+
+    func test_updateSampleRate_invalidRate_isIgnored() {
+        let leveler = TalkieVoiceLeveler(sampleRate: Self.sampleRate)
+        var run = Run()
+        for rate in [0, -1, .nan, .infinity] { leveler.updateSampleRate(rate) }
+        feed(sine(rmsDecibels: -28, seconds: 2), through: leveler, into: &run)
+
+        XCTAssertTrue(run.output.allSatisfy(\.isFinite))
+        XCTAssertEqual(rmsDecibels(lastHalfSecond(run)), TalkieVoiceLeveler.targetDecibels, accuracy: 1)
     }
 
     // MARK: - Les valeurs non finies sont neutralisées

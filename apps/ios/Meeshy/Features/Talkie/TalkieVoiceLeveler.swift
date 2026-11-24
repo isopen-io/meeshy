@@ -4,9 +4,10 @@ import Foundation
 /// La voix du talkie à un volume normalisé (#20531), sur le fil audio : un gain automatique la porte vers
 /// −16 dBFS de moyenne quadratique, plafonné à +18 dB, puis un limiteur doux la borne à −1 dBFS.
 ///
-/// Le gain monte lentement (constante de 300 ms) et redescend vite (20 ms). Sous le plancher de
-/// `TalkieWaveLaw.floorDecibels`, il est gelé à sa dernière valeur, puis rejoint 0 dB en 1 s : le silence n'est
-/// jamais remonté en souffle.
+/// Le gain monte lentement (constante de 300 ms) et redescend vite (20 ms). Dès qu'une tranche tombe sous le
+/// plancher de `TalkieWaveLaw.floorDecibels`, il est gelé à sa dernière valeur, puis rejoint 0 dB en 1 s : le
+/// silence n'est jamais remonté en souffle. Il n'en ressort qu'au-dessus de −47 dBFS, pour qu'un souffle posé
+/// sur le plancher ne batte pas entre gel et montée.
 ///
 /// Le traitement se fait sur place, par tranches de 256 échantillons au plus, et garde son état d'un tampon à
 /// l'autre quelle que soit leur taille. Il n'alloue rien.
@@ -26,9 +27,11 @@ nonisolated final class TalkieVoiceLeveler {
     private static let holdTime: Float = 0.200
     private static let releaseToUnityTime: Float = 1
     private static let silentPower: Float = 1e-12
+    private static let hysteresisDecibels: Float = 3
 
-    private let sampleRate: Float
+    private var sampleRate: Float
     private let floorPower: Float
+    private let wakePower: Float
     private let knee: Float
     private let ceiling: Float
 
@@ -37,6 +40,7 @@ nonisolated final class TalkieVoiceLeveler {
     private var gainLinear: Float = 1
     private var silentFor: Float = 0
     private var releaseRate: Float = 0
+    private var isSilent = true
 
     var currentGainDecibels: Float { gainDecibels }
 
@@ -44,8 +48,16 @@ nonisolated final class TalkieVoiceLeveler {
         precondition(sampleRate.isFinite && sampleRate > 0, "sampleRate doit être positif")
         self.sampleRate = Float(sampleRate)
         floorPower = Self.power(decibels: TalkieWaveLaw.floorDecibels)
+        wakePower = Self.power(decibels: TalkieWaveLaw.floorDecibels + Self.hysteresisDecibels)
         knee = Self.amplitude(decibels: Self.kneeDecibels)
         ceiling = Self.amplitude(decibels: Self.ceilingDecibels)
+    }
+
+    /// Suit un changement de route (Bluetooth HFP à 16 ou 24 kHz…) sans rien perdre de l'état : le gain continue
+    /// d'où il était, seules les constantes de temps se recalent. Une fréquence non finie ou nulle est ignorée.
+    func updateSampleRate(_ sampleRate: Double) {
+        guard sampleRate.isFinite, sampleRate > 0 else { return }
+        self.sampleRate = Float(sampleRate)
     }
 
     /// Normalise `samples` sur place ; une valeur non finie y devient du silence.
@@ -65,7 +77,8 @@ nonisolated final class TalkieVoiceLeveler {
         var meanSquare: Float = 0
         vDSP_measqv(slice, 1, &meanSquare, vDSP_Length(length))
         detect(meanSquare, elapsed: elapsed)
-        if detectedPower < floorPower {
+        isSilent = isSilent ? meanSquare <= wakePower : meanSquare < floorPower
+        if isSilent {
             holdThenRelease(elapsed: elapsed)
         } else {
             follow(elapsed: elapsed)
