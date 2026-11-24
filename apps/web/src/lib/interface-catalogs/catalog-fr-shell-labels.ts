@@ -67,6 +67,10 @@ const frShellLabels = {
   'message.edited.a11y': 'modifié',
   'message.pinned.a11y': 'épinglé',
   'message.replyTo.a11y': 'réponse à {author}',
+  'message.anonymous.a11y': 'Sans compte',
+  'message.sticker.a11y': 'sticker',
+  'message.location.named.a11y': 'Position : {place}',
+  'message.location.shared.a11y': 'lieu partagé',
   'quote.sender.unknown': 'l’expéditeur',
 
   'media.tile.open': 'Ouvrir {name}',

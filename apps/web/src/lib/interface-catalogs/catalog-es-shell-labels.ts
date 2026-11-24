@@ -62,6 +62,10 @@ const esShellLabels = {
   'message.edited.a11y': 'editado',
   'message.pinned.a11y': 'fijado',
   'message.replyTo.a11y': 'en respuesta a {author}',
+  'message.anonymous.a11y': 'Sin cuenta',
+  'message.sticker.a11y': 'sticker',
+  'message.location.named.a11y': 'ubicación compartida: {place}',
+  'message.location.shared.a11y': 'ubicación compartida',
   'quote.sender.unknown': 'el remitente',
 
   'media.tile.open': 'Abrir {name}',
