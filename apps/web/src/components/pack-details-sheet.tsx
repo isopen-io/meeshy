@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react';
 
+import type { InterfaceLanguage } from '@/lib/interface-language';
+
+import { MeeshShortfall } from './meesh-shortfall';
 import type { PackAction } from './pack-shop';
 import { Sheet } from './sheet';
 
@@ -17,6 +20,8 @@ export function PackDetailsSheet({
   description,
   facts,
   unlock,
+  shortfall = null,
+  language,
   action,
   busy,
   pressed,
@@ -30,6 +35,9 @@ export function PackDetailsSheet({
   readonly description: string;
   readonly facts: readonly string[];
   readonly unlock: string | null;
+  /** Les Meeshes qui manquent pour l'acheter (#20527) ; `null` : rien ne manque, ou le solde est inconnu. */
+  readonly shortfall?: number | null;
+  readonly language: InterfaceLanguage;
   readonly action: PackAction;
   readonly busy: boolean;
   readonly pressed: boolean;
@@ -59,6 +67,7 @@ export function PackDetailsSheet({
                 {unlock}
               </p>
             )}
+            {shortfall === null ? null : <MeeshShortfall language={language} missing={shortfall} />}
           </div>
         </div>
         {action.kind === 'locked' || action.kind === 'included' ? (

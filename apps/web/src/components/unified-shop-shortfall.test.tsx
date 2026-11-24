@@ -109,4 +109,14 @@ describe('UnifiedShop — les Meeshes qui manquent', () => {
     expect(sheet.querySelector('[data-shop-short]')?.textContent).toBe('Il vous manque 6 Meeshes');
     expect(sheet.querySelector('a[data-shop-earn]')?.getAttribute('href')).toBe('/me/progression/concept/meesh');
   });
+
+  test('la fiche d’un pack de décor dit aussi l’écart et le chemin', async () => {
+    const host = await mountShop(gatewayDeps(() => shopOf('wallpaper', [pack('w1', { price: 8, owned: false })], 3)), 'wallpaper');
+    await until(() => host.querySelector('[data-shop-open="wallpaper:w1"]') !== null);
+    await act(async () => host.querySelector<HTMLElement>('[data-shop-open="wallpaper:w1"]')!.click());
+    await until(() => document.querySelector('[data-pack-sheet="wallpaper:w1"] [data-shop-short]') !== null);
+    const sheet = document.querySelector<HTMLElement>('[data-pack-sheet="wallpaper:w1"]')!;
+    expect(sheet.querySelector('[data-shop-short]')?.textContent).toBe('Il vous manque 5 Meeshes');
+    expect(sheet.querySelector('a[data-shop-earn]')?.getAttribute('href')).toBe('/me/progression/concept/meesh');
+  });
 });
