@@ -570,6 +570,7 @@
     <string name="game_error_duo_not_found">Esta alianza ya no existe: la pantalla se actualiza.</string>
     <string name="game_error_duo_not_friends">La alianza se sella entre amigos aceptados.</string>
     <string name="game_error_duo_transition_refused">Este gesto no tiene sentido para esta alianza.</string>
+    <string name="game_error_flame_goal_not_allowed">Este objetivo de Llama no se puede elegir hoy.</string>
     <string name="game_error_flame_pause_not_allowed">La Llama no puede descansar ahora.</string>
     <string name="game_error_freeze_at_maximum">Dos Velas ya guardan tu Llama: no caben más.</string>
     <string name="game_error_generic">No ha salido bien: revisa tu conexión e inténtalo de nuevo.</string>

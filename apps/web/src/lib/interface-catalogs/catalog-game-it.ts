@@ -96,6 +96,7 @@ const it = {
   'game.error.freeze_at_maximum': 'Due Lucerne custodiscono già la tua Fiamma: di più non si può.',
   'game.error.relight_not_allowed': 'La Fiamma non può essere riaccesa adesso.',
   'game.error.flame_pause_not_allowed': 'La Fiamma non può riposare adesso.',
+  'game.error.flame_goal_not_allowed': 'Questo obiettivo di Fiamma non si può scegliere oggi.',
   'game.error.mission_not_found': 'Questo atto non esiste più: la schermata si aggiorna.',
   'game.error.mission_reroll_exhausted': 'Hai già cambiato un atto oggi.',
   'game.error.mission_reroll_unavailable': 'Questo atto non può essere cambiato.',

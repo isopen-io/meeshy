@@ -168,6 +168,7 @@ internal object GameStringIds {
         "game_error_freeze_at_maximum" to R.string.game_error_freeze_at_maximum,
         "game_error_relight_not_allowed" to R.string.game_error_relight_not_allowed,
         "game_error_flame_pause_not_allowed" to R.string.game_error_flame_pause_not_allowed,
+        "game_error_flame_goal_not_allowed" to R.string.game_error_flame_goal_not_allowed,
         "game_error_mission_not_found" to R.string.game_error_mission_not_found,
         "game_error_mission_reroll_exhausted" to R.string.game_error_mission_reroll_exhausted,
         "game_error_mission_reroll_unavailable" to R.string.game_error_mission_reroll_unavailable,

@@ -534,6 +534,8 @@ export const callersIn = (contents, nsNames) => {
 // `applyKnownLiveExceptions` la fait rougir (PÉRIMÉE) le jour où son appelant
 // arrive — la déclaration doit alors partir dans le même commit.
 const PENDING_CLIENT_ENTRIES = {
+  // L'objectif de Flamme (#20520) : la carte de la Flamme web portera le choix au premier jour.
+  'me.gameFlameGoal': { issue: 20521, reason: 'POST /me/game/flame/goal — « Choisir mon objectif de Flamme » depuis la carte de la Flamme (web)' },
   // Le jeton d'Activité en direct d'un partage de position (#19463, chantier #18857) : l'iPhone qui affiche
   // « Léo partage sa position » le confie à la passerelle, qui clôt l'Activité si le partage finit avant son terme.
   'me.liveActivityTokens': { issue: 19463, reason: 'POST /me/live-activity-tokens — l\'Activité en direct close par la passerelle à la fin du partage' },

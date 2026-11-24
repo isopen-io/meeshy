@@ -33,6 +33,10 @@ public data class GameWriteRequest(val requestId: String)
 @Serializable
 public data class FlamePauseRequest(val requestId: String, val days: Int)
 
+/** Choisir l'objectif de Flamme (#20520) : une marche de l'échelle (7, 14, 30, 100, 365 jours). */
+@Serializable
+public data class FlameGoalRequest(val requestId: String, val target: Int)
+
 @Serializable
 public data class GuideSeenRequest(
     val requestId: String,

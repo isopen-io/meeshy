@@ -570,6 +570,7 @@
     <string name="game_error_duo_not_found">Esta aliança não existe mais: a tela está se atualizando.</string>
     <string name="game_error_duo_not_friends">A aliança se faz entre amigos aceitos.</string>
     <string name="game_error_duo_transition_refused">Este gesto não faz sentido para esta aliança.</string>
+    <string name="game_error_flame_goal_not_allowed">Este objetivo de Chama não pode ser escolhido hoje.</string>
     <string name="game_error_flame_pause_not_allowed">A Chama não pode descansar agora.</string>
     <string name="game_error_freeze_at_maximum">Duas Lamparinas já cuidam da sua Chama: é o máximo possível.</string>
     <string name="game_error_generic">Não deu certo — verifique sua conexão e tente de novo.</string>

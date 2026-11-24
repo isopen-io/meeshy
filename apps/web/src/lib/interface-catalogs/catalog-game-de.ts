@@ -96,6 +96,7 @@ const de = {
   'game.error.freeze_at_maximum': 'Zwei Hüterinnen wachen schon über deine Flamme: Mehr geht nicht.',
   'game.error.relight_not_allowed': 'Die Flamme kann jetzt nicht neu entzündet werden.',
   'game.error.flame_pause_not_allowed': 'Die Flamme kann jetzt nicht ruhen.',
+  'game.error.flame_goal_not_allowed': 'Dieses Flammenziel lässt sich heute nicht wählen.',
   'game.error.mission_not_found': 'Diesen Akt gibt es nicht mehr: Der Bildschirm wird aktualisiert.',
   'game.error.mission_reroll_exhausted': 'Du hast heute schon einen Akt getauscht.',
   'game.error.mission_reroll_unavailable': 'Dieser Akt kann nicht getauscht werden.',

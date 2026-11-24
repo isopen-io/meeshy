@@ -32,6 +32,8 @@ public enum GameErrorCode: String, CaseIterable, Sendable, Hashable {
     case relightNotAllowed = "RELIGHT_NOT_ALLOWED"
     /// La veille de la Flamme refusée (#17372) : la raison est à la racine (`no-flame`, `already-paused`, `quarterly-limit`).
     case flamePauseNotAllowed = "FLAME_PAUSE_NOT_ALLOWED"
+    /// Le choix d'objectif de Flamme refusé (#20520) : la raison est à la racine (`no-flame`, `not-offered`).
+    case flameGoalNotAllowed = "FLAME_GOAL_NOT_ALLOWED"
     case missionNotFound = "MISSION_NOT_FOUND"
     case missionRerollExhausted = "MISSION_REROLL_EXHAUSTED"
     case missionRerollUnavailable = "MISSION_REROLL_UNAVAILABLE"

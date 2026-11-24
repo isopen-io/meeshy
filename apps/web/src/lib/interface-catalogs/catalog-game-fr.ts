@@ -113,6 +113,7 @@ const fr = {
   'game.error.freeze_at_maximum': 'Deux Veilleuses gardent déjà ta Flamme : c’est le plus possible.',
   'game.error.relight_not_allowed': 'La Flamme ne peut pas être rallumée maintenant.',
   'game.error.flame_pause_not_allowed': 'La Flamme ne peut pas se mettre en veille maintenant.',
+  'game.error.flame_goal_not_allowed': 'Cet objectif de Flamme ne se choisit pas aujourd’hui.',
   'game.error.mission_not_found': 'Cet acte n’existe plus : l’écran se remet à jour.',
   'game.error.mission_reroll_exhausted': 'Tu as déjà changé un acte aujourd’hui.',
   'game.error.mission_reroll_unavailable': 'Cet acte ne peut pas être changé.',

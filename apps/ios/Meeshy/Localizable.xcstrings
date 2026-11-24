@@ -269904,6 +269904,53 @@
         }
       }
     },
+    "game.error.flame_goal_not_allowed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن اختيار هدف اللهب هذا اليوم."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Flammenziel lässt sich heute nicht wählen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Flame goal can’t be chosen today."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este objetivo de Llama no se puede elegir hoy."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cet objectif de Flamme ne se choisit pas aujourd’hui."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo obiettivo di Fiamma non si può scegliere oggi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este objetivo de Chama não pode ser escolhido hoje."
+          }
+        }
+      }
+    },
     "game.error.flame_pause_not_allowed": {
       "extractionState": "manual",
       "localizations": {
