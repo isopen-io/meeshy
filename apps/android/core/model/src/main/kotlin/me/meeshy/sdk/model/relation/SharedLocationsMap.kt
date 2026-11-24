@@ -72,6 +72,24 @@ public object SharedLocationsMap {
         return SharedLocationBounds.of(minLongitude = west, minLatitude = south, maxLongitude = east, maxLatitude = north)
     }
 
+    /** Ma position ne cadre la carte que si son relevé a moins d'une heure (iso `LocationMapOwnPosition.lastKnown`). */
+    public const val OWN_FIX_MAX_AGE_MILLIS: Long = 3_600_000L
+
+    /** Ma dernière position, si elle est assez fraîche pour cadrer la carte ; `null` sinon. */
+    public fun ownIfFresh(point: GeoPoint, atMillis: Long, nowMillis: Long): GeoPoint? =
+        point.takeIf { nowMillis - atMillis < OWN_FIX_MAX_AGE_MILLIS }
+
+    /**
+     * Ce que la carte cadre : toutes les épingles sans personne ciblée ; sinon la personne ET moi (iOS `refocus` :
+     * `[target, mine]`), de sorte qu'un Sang qui s'approche se voie avec moi sur la même vue (#20540). Tant que la personne
+     * n'est pas servie, rien ne cadre : la carte attend son épingle au lieu de se figer sur moi seul.
+     */
+    public fun framed(pins: List<SharedLocationPin>, focusUserId: String?, own: GeoPoint?): List<GeoPoint> {
+        if (focusUserId == null) return pins.map { it.point }
+        val target = pins.filter { it.userId == focusUserId }.map { it.point }
+        return if (target.isEmpty()) emptyList() else target + listOfNotNull(own)
+    }
+
     /** Le cadrage qui montre toutes les épingles, marge comprise, au zoom le plus proche ; `null` s'il n'y a rien. */
     public fun fit(points: List<GeoPoint>, widthPx: Int, heightPx: Int, tileSize: Int): Pair<GeoPoint, Int>? {
         if (points.isEmpty()) return null

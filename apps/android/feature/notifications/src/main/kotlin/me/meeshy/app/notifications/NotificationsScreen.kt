@@ -74,6 +74,7 @@ fun NotificationsScreen(
     onOpenProfile: (String) -> Unit = {},
     onOpenGame: (GameTarget) -> Unit = {},
     onOpenCommunity: (String) -> Unit = {},
+    onOpenPersonMap: (String) -> Unit = onOpenProfile,
     onOpenStoryContent: ((NotificationDestination.StoryContent, StoryNotificationContext) -> Unit)? = null,
     revealTap: EngagementRevealTapViewModel = hiltViewModel(),
     toasts: NotificationFeedbackToasts = hiltViewModel(),
@@ -89,6 +90,7 @@ fun NotificationsScreen(
     val openProfile by rememberUpdatedState(onOpenProfile)
     val openGame by rememberUpdatedState(onOpenGame)
     val openCommunity by rememberUpdatedState(onOpenCommunity)
+    val openPersonMap by rememberUpdatedState(onOpenPersonMap)
     val openStoryContent by rememberUpdatedState(onOpenStoryContent)
 
     LaunchedEffect(viewModel) {
@@ -116,6 +118,7 @@ fun NotificationsScreen(
                 onOpenMood = { openMood(it) },
                 onOpenGame = { openGame(it) },
                 onOpenCommunity = { openCommunity(it) },
+                onOpenPersonMap = { openPersonMap(it) },
                 onOpenStoryContent = { target ->
                     openStoryContent?.invoke(target, StoryNotificationContext.from(notification, System.currentTimeMillis()))
                         ?: openPost(target.postId)

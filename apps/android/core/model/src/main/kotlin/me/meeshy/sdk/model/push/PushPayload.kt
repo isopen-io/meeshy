@@ -57,6 +57,8 @@ public data class PushPayload(
     val communityId: String? = null,
     /** `true` : le push se DÉCLARE correction d'une notification déjà annoncée (`reproduced`, #7342) ; absent d'une passerelle antérieure. */
     val reproduced: Boolean? = null,
+    /** La personne que la notification NOMME, distincte de l'acteur : l'autre Sang de `blood_proximity` (#20540). */
+    val userId: String? = null,
 ) {
     /**
      * Le texte d'après d'une notification déjà annoncée (message modifié) : la passerelle le pousse sous la MÊME identité
@@ -140,6 +142,7 @@ public data class PushPayload(
                 conversationEncryptionMode = text("conversationEncryptionMode"),
                 communityId = text("communityId"),
                 reproduced = bool("reproduced"),
+                userId = text("userId"),
             )
         }
     }

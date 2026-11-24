@@ -193,6 +193,7 @@ enum class MeeshyNotificationType(val wire: String) {
     @SerialName("content_removed") CONTENT_REMOVED("content_removed"),
     @SerialName("contact_joined") CONTACT_JOINED("contact_joined"),
     @SerialName("contact_recently_active") CONTACT_RECENTLY_ACTIVE("contact_recently_active"),
+    @SerialName("blood_proximity") BLOOD_PROXIMITY("blood_proximity"),
     @SerialName("game_duo_invited") GAME_DUO_INVITED("game_duo_invited"),
     @SerialName("game_duo_accepted") GAME_DUO_ACCEPTED("game_duo_accepted"),
     @SerialName("game_league_result") GAME_LEAGUE_RESULT("game_league_result"),
@@ -390,6 +391,10 @@ data class NotificationMetadata(
     @Serializable(with = TolerantStringSerializer::class) val thumbnailUrl: String? = null,
     @Serializable(with = TolerantStringSerializer::class) val storyReply: String? = null,
     @Serializable(with = TolerantStringSerializer::class) val notificationLocKey: String? = null,
+    /** `blood_proximity` (#20540) : l'AUTRE Sang, dont le toucher ouvre la carte. */
+    @Serializable(with = TolerantStringSerializer::class) val userId: String? = null,
+    /** `blood_proximity` (#20540) : le palier servi (100, 250, 500, 1000, 2500, 5000), jamais une distance mesurée. */
+    val distanceMeters: Int? = null,
 )
 
 /** Résumé léger des pièces jointes d'un message — `NotificationMetadata.Attachments` côté iOS. */

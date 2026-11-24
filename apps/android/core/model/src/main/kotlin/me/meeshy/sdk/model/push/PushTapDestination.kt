@@ -35,6 +35,8 @@ public sealed interface PushTapDestination {
 
     /** Le détail d'une communauté (iOS `.communityDetail`, #18061). */
     public data class Community(val communityId: String) : PushTapDestination
+    /** La carte d'une personne, centrée sur elle et sur moi (iOS `PersonLocationMapScreen`) : un Sang s'approche (#20540). */
+    public data class PersonMap(val userId: String) : PushTapDestination
     public data object Notifications : PushTapDestination
     public data class Game(val target: GameTarget) : PushTapDestination
     public data object None : PushTapDestination
@@ -85,6 +87,9 @@ public sealed interface PushTapDestination {
         )
         private val REACTION_TYPES = setOf("story_reaction", "status_reaction", "post_like")
 
+        /** `BLOOD_PROXIMITY_NOTIFICATION_TYPE` de `packages/shared/types/blood-location.ts`. */
+        private const val BLOOD_PROXIMITY = "blood_proximity"
+
         private const val PROGRESSION_ROUTE = "progression"
         private val EPHEMERAL_ENTITIES = setOf("STORY", "STATUS", "MOOD")
 
@@ -96,6 +101,7 @@ public sealed interface PushTapDestination {
 
             return when {
                 type == null -> conversation ?: None
+                type == BLOOD_PROXIMITY -> (payload.userId ?: payload.senderId)?.let(::PersonMap) ?: Notifications
                 type in COMMUNITY_TYPES && payload.communityId != null -> Community(payload.communityId)
                 type in CONVERSATION_TYPES -> conversation ?: postId?.let { content(payload, type, it) } ?: None
                 type in RELATION_TYPES -> payload.senderId?.let(::Profile) ?: Notifications
