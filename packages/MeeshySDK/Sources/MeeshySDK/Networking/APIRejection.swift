@@ -65,6 +65,9 @@ public struct APIRejection: Error, Sendable, Equatable {
     /// Les membres sans appareil chiffrant d'un 409 `E2EE_PARTICIPANT_WITHOUT_DEVICE`
     /// (#20073) — vide quand la passerelle ne les nomme pas (création d'un direct).
     public let withoutDeviceUserIds: [String]
+    /// La raison machine d'un refus d'état qui en a plusieurs (`FLAME_PAUSE_NOT_ALLOWED` : `quarterly-limit`,
+    /// `already-paused`, `no-flame`), posée à la racine par `sendError(..., { reason })` — `nil` sinon (#20510).
+    public let reason: String?
     /// Le corps était l'enveloppe de la passerelle (`success: false`, celle de
     /// `sendError`) : un refus qu'elle a DÉCIDÉ, et non le JSON d'un
     /// intermédiaire qui lui ressemble (#14693, #14708).
@@ -82,6 +85,7 @@ public struct APIRejection: Error, Sendable, Equatable {
         limit: Int? = nil,
         e2eeMismatch: E2EEDevicesMismatch? = nil,
         withoutDeviceUserIds: [String] = [],
+        reason: String? = nil,
         isGatewayEnvelope: Bool = false
     ) {
         self.statusCode = statusCode
@@ -95,6 +99,7 @@ public struct APIRejection: Error, Sendable, Equatable {
         self.limit = limit
         self.e2eeMismatch = e2eeMismatch
         self.withoutDeviceUserIds = withoutDeviceUserIds
+        self.reason = reason
         self.isGatewayEnvelope = isGatewayEnvelope
     }
 
@@ -142,9 +147,11 @@ struct APIRejectionEnvelope: Decodable {
     let emailOwner: APIRejection.EmailOwner?
     let e2eeMismatch: E2EEDevicesMismatch?
     let withoutDeviceUserIds: [String]?
+    let reason: String?
 
     private enum CodingKeys: String, CodingKey {
         case success, error, message, code, field, suggestions, violations, emailOwner, missing, extra, stale, withoutDeviceUserIds
+        case reason
     }
 
     init(from decoder: Decoder) throws {
@@ -162,6 +169,7 @@ struct APIRejectionEnvelope: Decodable {
         emailOwner = try? container.decodeIfPresent(APIRejection.EmailOwner.self, forKey: .emailOwner)
         e2eeMismatch = Self.mismatch(in: container)
         withoutDeviceUserIds = try? container.decodeIfPresent([String].self, forKey: .withoutDeviceUserIds)
+        reason = (try? container.decodeIfPresent(String.self, forKey: .reason)) ?? nil
     }
 
     /// L'écart Sesame est étalé à la RACINE par `sendError(..., { details })` :
@@ -185,6 +193,7 @@ struct APIRejectionEnvelope: Decodable {
             emailOwner: emailOwner,
             e2eeMismatch: e2eeMismatch,
             withoutDeviceUserIds: withoutDeviceUserIds ?? [],
+            reason: reason,
             isGatewayEnvelope: success == false
         )
     }

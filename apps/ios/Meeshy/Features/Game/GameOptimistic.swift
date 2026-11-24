@@ -236,6 +236,26 @@ enum GameOptimistic {
         return withBalance(GameState(game: state.game.replacing(flame: flame), meesh: state.meesh), balance)
     }
 
+    // MARK: - Veille
+
+    /// La veille annoncée (#20510) se voit tout de suite : du lendemain du jour du Jeu à `days` jours plus tard, par
+    /// la même loi que la passerelle. La Flamme garde son état du jour : la veille commence demain. Miroir
+    /// d'`afterPause` (`apps/web/src/lib/view/game-optimistic.ts`).
+    static func afterPause(_ state: GameState, days: Int) -> GameState {
+        let flame = state.game.flame
+        guard flame.pause == nil else { return state }
+        let decision = GameFlamePauseLaw.canPause(
+            today: state.game.missions.dayKey, days: days, status: flame.status, pause: nil
+        )
+        guard case .allowed(let pause) = decision else { return state }
+        return GameState(game: state.game.replacing(flame: flame.replacing(pause: .some(pause))), meesh: state.meesh)
+    }
+
+    /// La veille que la passerelle sert fait foi.
+    static func withPaused(_ state: GameState, pause: GameFlamePause) -> GameState {
+        GameState(game: state.game.replacing(flame: state.game.flame.replacing(pause: .some(pause))), meesh: state.meesh)
+    }
+
     // MARK: - Guide
 
     /// Les clés vues entrent aussitôt dans l'état : la prochaine ouverture dira la version COURTE.

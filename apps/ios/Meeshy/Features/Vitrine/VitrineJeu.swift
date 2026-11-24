@@ -337,6 +337,7 @@ actor VitrineJeuServeur: EngagementProgressProviding, GameServiceProviding {
     func rerollMission(missionId: String, requestId: String) async throws -> MissionRerollResponse { throw VitrineJeuRefus.horsScene }
     func buyFlameFreeze(requestId: String) async throws -> FlameFreezeResponse { throw VitrineJeuRefus.horsScene }
     func relightFlame(requestId: String) async throws -> FlameRelightResponse { throw VitrineJeuRefus.horsScene }
+    func pauseFlame(days: Int, requestId: String) async throws -> FlamePauseResponse { throw VitrineJeuRefus.horsScene }
 }
 
 /// Le déroulé d'une scène du jeu : la fiche s'ouvre sur l'état d'avant, attend le clap du tournage (`VitrineTournage`),

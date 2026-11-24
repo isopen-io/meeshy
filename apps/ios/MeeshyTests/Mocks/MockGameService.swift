@@ -16,6 +16,10 @@ final class MockGameService: GameServiceProviding, @unchecked Sendable {
     private(set) var chestRequestIds: [String] = []
     private(set) var freezeRequestIds: [String] = []
     private(set) var relightRequestIds: [String] = []
+    var pauseResult: Result<FlamePauseResponse, Error> = .success(
+        FlamePauseResponse(status: "paused", pause: GameFlamePause(from: "2026-11-25", until: "2026-12-01"))
+    )
+    private(set) var pauseCalls: [(days: Int, requestId: String)] = []
     private(set) var guideSeenCalls: [[String]] = []
 
     /// Appelés PENDANT le geste, avant la réponse — là où l'écran montre l'optimiste.
@@ -43,6 +47,11 @@ final class MockGameService: GameServiceProviding, @unchecked Sendable {
     func relightFlame(requestId: String) async throws -> FlameRelightResponse {
         relightRequestIds.append(requestId)
         return try relightResult.get()
+    }
+
+    func pauseFlame(days: Int, requestId: String) async throws -> FlamePauseResponse {
+        pauseCalls.append((days, requestId))
+        return try pauseResult.get()
     }
 
     func markGuideSeen(keys: [String], requestId: String) async throws -> GuideSeenResponse {

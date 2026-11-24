@@ -241,6 +241,84 @@ final class ProgressionViewModelGameTests: XCTestCase {
         XCTAssertFalse(sut.pending.relight)
     }
 
+    // MARK: - La Flamme en veille (#20510)
+
+    func test_pauseFlame_isShownAtOnce_fromTomorrowForTheChosenDays() {
+        let state = GameState(game: GameFixture.game(flameStatus: .lit), meesh: GameFixture.meesh())
+
+        let paused = GameOptimistic.afterPause(state, days: 3)
+
+        XCTAssertEqual(paused.game.flame.pause, GameFlamePause(from: "2026-10-06", until: "2026-10-08"),
+                       "la veille commence le lendemain du jour du Jeu")
+        XCTAssertEqual(paused.game.flame.status, .lit, "la Flamme garde son état du jour")
+        let out = GameState(game: GameFixture.game(flameStatus: .out), meesh: GameFixture.meesh())
+        XCTAssertNil(GameOptimistic.afterPause(out, days: 3).game.flame.pause, "une Flamme éteinte n'a rien à garder")
+    }
+
+    func test_pauseFlame_success_keepsTheServedPause() async {
+        let served = GameFlamePause(from: "2026-10-06", until: "2026-10-12")
+        let lit = GameFixture.game(flameStatus: .lit)
+        let (sut, engagement, service) = makeSUT(snapshot: GameFixture.snapshot(lit))
+        await sut.load(forceNetwork: true)
+        service.pauseResult = .success(FlamePauseResponse(status: "paused", pause: served))
+        engagement.fetchProgressResult = .success(GameFixture.snapshot(lit.replacing(flame: lit.flame.replacing(pause: .some(served)))))
+
+        await sut.pauseFlame(days: 7)
+
+        XCTAssertEqual(service.pauseCalls.map(\.days), [7])
+        XCTAssertEqual(sut.game?.flame.pause, served)
+        XCTAssertFalse(sut.pending.pause)
+        XCTAssertNil(sut.gameErrors.pause)
+    }
+
+    func test_pauseFlame_refused_restoresTheCardAndSaysTheReason() async {
+        let (sut, _, service) = makeSUT(snapshot: GameFixture.snapshot(GameFixture.game(flameStatus: .lit)))
+        await sut.load(forceNetwork: true)
+        service.pauseResult = .failure(MeeshyError.rejected(APIRejection(
+            statusCode: 409, code: GameErrorCode.flamePauseNotAllowed.rawValue, message: "refus", reason: "quarterly-limit"
+        )))
+
+        await sut.pauseFlame(days: 3)
+
+        XCTAssertNil(sut.game?.flame.pause, "le refus rend la carte d'avant")
+        XCTAssertEqual(sut.gameErrors.pause, FlamePauseCopy.refusal(reason: "quarterly-limit"))
+        XCTAssertNotEqual(sut.gameErrors.pause, GameCopy.errorMessage(for: .flamePauseNotAllowed),
+                          "le refus dit sa raison, pas la phrase générale")
+    }
+
+    func test_pauseFlame_retryAfterANetworkFailure_replaysTheSameRequestId() async {
+        let (sut, _, service) = makeSUT(snapshot: GameFixture.snapshot(GameFixture.game(flameStatus: .lit)))
+        await sut.load(forceNetwork: true)
+        service.pauseResult = .failure(URLError(.timedOut))
+
+        await sut.pauseFlame(days: 5)
+        await sut.pauseFlame(days: 5)
+        await sut.pauseFlame(days: 2)
+
+        let ids = service.pauseCalls.map(\.requestId)
+        XCTAssertEqual(ids.count, 3)
+        XCTAssertEqual(ids[0], ids[1], "la même durée rejoue la même intention")
+        XCTAssertNotEqual(ids[1], ids[2], "une autre durée est une autre intention")
+    }
+
+    func test_flamePanel_saysThePause_orOffersIt_onlyOnALivingFlame() {
+        let soon = GameFlamePause(from: "2026-10-06", until: "2026-10-12")
+        let lit = GameFixture.game(flameStatus: .lit).flame
+        XCTAssertEqual(GameFlamePanelView.pauseState(lit, today: "2026-10-05"), .chooser)
+        XCTAssertEqual(GameFlamePanelView.pauseState(lit.replacing(pause: .some(soon)), today: "2026-10-05"),
+                       .paused(FlamePauseCopy.line(soon, today: "2026-10-05")))
+        XCTAssertEqual(GameFlamePanelView.pauseState(GameFixture.game(flameStatus: .out).flame, today: "2026-10-05"), .hidden)
+        XCTAssertNotEqual(FlamePauseCopy.line(soon, today: "2026-10-05"), FlamePauseCopy.line(soon, today: "2026-10-07"),
+                          "annoncée, elle se dit « demain » ; commencée, non")
+    }
+
+    func test_flamePauseDayLabel_saysTheWeekdayInTheReadersLanguage() {
+        let label = FlamePauseCopy.dayLabel("2026-10-12", locale: Locale(identifier: "fr_FR"))
+        XCTAssertTrue(label.contains("lundi"), label)
+        XCTAssertTrue(label.contains("12"), label)
+        XCTAssertTrue(label.contains("octobre"), label)
+    }
+
     // MARK: - La frappe
 
     func test_mint_failure_restoresTheGameBlock() async {
