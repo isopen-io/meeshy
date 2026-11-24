@@ -6,6 +6,8 @@ import kotlinx.serialization.json.JsonElement
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.game.ChestClaimResponse
 import me.meeshy.sdk.model.game.FlameFreezeResponse
+import me.meeshy.sdk.model.game.FlamePauseRequest
+import me.meeshy.sdk.model.game.FlamePauseResponse
 import me.meeshy.sdk.model.game.FlameRelightResponse
 import me.meeshy.sdk.model.game.GamePathSegments
 import me.meeshy.sdk.model.game.GameRefusalLaw
@@ -60,6 +62,10 @@ class GameGestureRepository @Inject constructor(
     suspend fun relightFlame(requestId: String): GameWriteOutcome<FlameRelightResponse> =
         write(GameWriteParser::relightFlame) { game.relightFlame(GameWriteRequest(requestId)) }
 
+    /** Annonce une veille de la Flamme de [days] jours, à partir de demain (#20511). Rien n'est payé. */
+    suspend fun pauseFlame(requestId: String, days: Int): GameWriteOutcome<FlamePauseResponse> =
+        write(GameWriteParser::pauseFlame) { game.pauseFlame(FlamePauseRequest(requestId, days)) }
+
     suspend fun claimSeasonStep(requestId: String, step: Int): GameWriteOutcome<SeasonClaimResponse> =
         write(GameWave2Parser::seasonClaim) { game.claimSeasonStep(step, GameWriteRequest(requestId)) }
 
@@ -79,6 +85,7 @@ class GameGestureRepository @Inject constructor(
             is NetworkResult.Failure -> GameWriteOutcome.Refused(
                 code = result.error.code,
                 offline = GameRefusalLaw.isOffline(result.error.code),
+                reason = result.error.reason,
             )
         }
 }

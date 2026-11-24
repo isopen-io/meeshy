@@ -109,6 +109,10 @@ internal fun monthLabel(month: String, locale: Locale): String =
 internal fun shortMonthLabel(month: String, locale: Locale): String =
     runCatching { formatUtc(LocalDate.parse("$month-01"), "MMMy", locale) }.getOrDefault(month)
 
+/** « lundi 12 octobre » — le dernier jour d'une veille de la Flamme, qui dure sept jours au plus (#20511). */
+internal fun weekdayLabel(dayKey: String, locale: Locale): String =
+    runCatching { formatUtc(LocalDate.parse(dayKey), "EEEEdMMMM", locale) }.getOrDefault(dayKey)
+
 /** « 2 novembre » — la semaine s'identifie par son lundi. */
 internal fun weekDateLabel(weekKey: String, locale: Locale): String =
     runCatching { formatUtc(LocalDate.parse(weekKey), "dMMMM", locale) }.getOrDefault(weekKey)

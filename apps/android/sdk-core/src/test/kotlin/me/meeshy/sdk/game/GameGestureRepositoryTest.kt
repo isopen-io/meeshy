@@ -10,6 +10,9 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.game.ChestClaimResponse
+import me.meeshy.sdk.model.game.FlamePauseRequest
+import me.meeshy.sdk.model.game.FlamePauseResponse
+import me.meeshy.sdk.model.game.GameFlamePause
 import me.meeshy.sdk.model.game.GameWriteRequest
 import me.meeshy.sdk.net.api.EngagementApi
 import me.meeshy.sdk.net.api.GameApi
@@ -51,6 +54,30 @@ class GameGestureRepositoryTest {
         val outcome = repository.buyFlameFreeze("req-12345678")
 
         assertThat(outcome).isEqualTo(GameWriteOutcome.Refused(code = "FREEZE_AT_MAXIMUM", offline = false))
+    }
+
+    @Test
+    fun `annoncer une veille poste la duree et rend la veille servie`() = runTest {
+        coEvery { game.pauseFlame(FlamePauseRequest("req-12345678", 3)) } returns
+            ok("""{"status":"paused","pause":{"from":"2026-10-06","until":"2026-10-08"}}""")
+
+        val outcome = repository.pauseFlame("req-12345678", 3)
+
+        assertThat(outcome).isEqualTo(GameWriteOutcome.Done(FlamePauseResponse("paused", GameFlamePause("2026-10-06", "2026-10-08"))))
+    }
+
+    @Test
+    fun `une veille refusee garde la raison du refus`() = runTest {
+        coEvery { game.pauseFlame(any()) } throws HttpException(
+            Response.error<Unit>(
+                409,
+                """{"success":false,"error":"x","code":"FLAME_PAUSE_NOT_ALLOWED","reason":"quarterly-limit"}"""
+                    .toResponseBody("application/json".toMediaType()),
+            ),
+        )
+
+        assertThat(repository.pauseFlame("req-12345678", 3))
+            .isEqualTo(GameWriteOutcome.Refused(code = "FLAME_PAUSE_NOT_ALLOWED", offline = false, reason = "quarterly-limit"))
     }
 
     @Test

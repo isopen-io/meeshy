@@ -19,7 +19,13 @@ internal fun ConceptGestures(concept: ProgressionConcept, game: GameBlock, viewM
     when (concept) {
         ProgressionConcept.Missions -> MissionsGestures(game, gestures, onReroll = viewModel::reroll, onClaim = viewModel::claimChest)
         ProgressionConcept.Meesh -> MintGestures(game, gestures, onMint = { viewModel.mint(game.mint) })
-        ProgressionConcept.Flame -> FlamePanel(game, gestures, onBuyFreeze = viewModel::buyFreeze, onRelight = viewModel::relight)
+        ProgressionConcept.Flame -> FlamePanel(
+            game,
+            gestures,
+            onBuyFreeze = viewModel::buyFreeze,
+            onRelight = viewModel::relight,
+            onPause = { days -> viewModel.pauseFlame(game.flame, game.missions.dayKey, days) },
+        )
         else -> Unit
     }
 }

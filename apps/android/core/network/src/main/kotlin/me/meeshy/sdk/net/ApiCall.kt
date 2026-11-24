@@ -2,6 +2,7 @@ package me.meeshy.sdk.net
 
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.JsonPrimitive
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.ApiResponseMeta
 import me.meeshy.sdk.model.DeletionAcknowledgement
@@ -49,6 +50,7 @@ private fun ApiResponse<*>.toApiError(
         retryAfterSeconds = retryAfterSecondsOf(httpStatus, refusalCode, retryAfterHeader),
         requiredConsents = requiredConsents,
         withoutDeviceUserIds = EndToEndParticipantWithoutDevice.userIdsFrom(withoutDeviceUserIds),
+        reason = (reason as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { it.isNotBlank() },
         servedMessage = message,
     )
 }

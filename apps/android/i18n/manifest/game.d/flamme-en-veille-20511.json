@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.pause_intro",
+          "androidName": "game_flame_panel_pause_intro",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.pause_days",
+          "androidName": "game_flame_panel_pause_days",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.pause",
+          "androidName": "game_flame_panel_pause",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.paused_soon",
+          "androidName": "game_flame_panel_paused_soon",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.paused",
+          "androidName": "game_flame_panel_paused",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.flame_pause.quarterly_limit",
+          "androidName": "game_error_flame_pause_quarterly_limit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.flame_pause.already_paused",
+          "androidName": "game_error_flame_pause_already_paused",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.flame_pause.no_flame",
+          "androidName": "game_error_flame_pause_no_flame",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

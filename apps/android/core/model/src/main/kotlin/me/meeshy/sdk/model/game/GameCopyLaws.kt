@@ -37,6 +37,30 @@ public object GameCopyLaws {
         GameTextArg.Nested(days(effort.lostDays)),
     )
 
+    // La Flamme en veille (#20511) — miroir de `FlamePauseCopy` (iOS) et de `flame-pause-copy.ts` (web).
+
+    /** « Une pause ? Ta Flamme t’attend jusqu’à 7 jours, une fois par trimestre. » */
+    public fun flamePauseIntro(): GameText =
+        GameText.of(GameTextKey.FlamePauseIntro, GameTextArg.Nested(days(GameFlamePauseLaw.MAX_DAYS)))
+
+    /** « Mettre en veille · 3 jours ». */
+    public fun flamePauseAction(count: Int): GameText =
+        GameText.of(GameTextKey.FlamePauseAction, GameTextArg.Nested(days(count)))
+
+    /** La veille servie : jusqu'à quand, ou qu'elle commence demain. [dayLabel] est son dernier jour, dit par la locale. */
+    public fun flamePaused(section: FlamePauseSection.Paused, dayLabel: String): GameText = GameText.of(
+        if (section.startsTomorrow) GameTextKey.FlamePausedSoon else GameTextKey.FlamePaused,
+        GameTextArg.Verbatim(dayLabel),
+    )
+
+    /** Le refus d'une veille dit sa raison ; une raison inconnue ou absente rend `null` (la phrase générale du refus). */
+    public fun flamePauseRefusal(reason: String?): GameText? = when (FlamePauseRefusal.fromWire(reason)) {
+        FlamePauseRefusal.QuarterlyLimit -> GameText(GameTextKey.FlamePauseQuarterlyLimit)
+        FlamePauseRefusal.AlreadyPaused -> GameText(GameTextKey.FlamePauseAlreadyPaused)
+        FlamePauseRefusal.NoFlame -> GameText(GameTextKey.FlamePauseNoFlame)
+        FlamePauseRefusal.InvalidDays, null -> null
+    }
+
     /** Le nom d'une ligue (iOS `GameText.leagueName`). */
     public fun leagueName(league: LeagueKey): GameText = GameText(
         when (league) {

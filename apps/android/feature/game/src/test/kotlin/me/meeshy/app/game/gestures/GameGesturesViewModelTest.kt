@@ -18,7 +18,11 @@ import me.meeshy.sdk.game.GameWriteOutcome
 import me.meeshy.sdk.model.game.ChestClaimResponse
 import me.meeshy.sdk.model.game.DailyChest
 import me.meeshy.sdk.model.game.FlameFreezeResponse
+import me.meeshy.sdk.model.game.FlamePauseResponse
 import me.meeshy.sdk.model.game.FlameRelightResponse
+import me.meeshy.sdk.model.game.FlameStatus
+import me.meeshy.sdk.model.game.GameFlame
+import me.meeshy.sdk.model.game.GameFlamePause
 import me.meeshy.sdk.model.game.GameIntentIds
 import me.meeshy.sdk.model.game.GameMintPreview
 import me.meeshy.sdk.model.game.GameMission
@@ -467,5 +471,71 @@ class GameGesturesViewModelTest {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
 
         assertThat(vm.state.value.accountTimezone).isEqualTo("Pacific/Auckland")
+    }
+
+    private val litFlame = GameFlame(
+        days = 9, bonusPercent = 9, freezes = 1, maxFreezes = 2, freezePrice = 1, relightPrice = 3,
+        status = FlameStatus.Lit, canRelight = false,
+    )
+
+    @Test
+    fun `la veille annoncee se dit des l appui, puis la veille servie la remplace`() = runTest {
+        val gate = CompletableDeferred<GameWriteOutcome<FlamePauseResponse>>()
+        coEvery { gestures.pauseFlame(any(), 3) } coAnswers { gate.await() }
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.pauseFlame(litFlame, today = "2026-10-05", days = 3)
+
+        assertThat(vm.state.value.pausing).isTrue()
+        assertThat(vm.state.value.announcedPause).isEqualTo(GameFlamePause("2026-10-06", "2026-10-08"))
+        gate.complete(GameWriteOutcome.Done(FlamePauseResponse("paused", GameFlamePause("2026-10-06", "2026-10-08"))))
+        assertThat(vm.state.value.pausing).isFalse()
+        assertThat(vm.state.value.announcedPause).isEqualTo(GameFlamePause("2026-10-06", "2026-10-08"))
+        coVerify(exactly = 1) { progress.refresh() }
+    }
+
+    @Test
+    fun `une veille refusee se retire et garde la raison du refus`() = runTest {
+        coEvery { gestures.pauseFlame(any(), any()) } returns
+            GameWriteOutcome.Refused("FLAME_PAUSE_NOT_ALLOWED", offline = false, reason = "quarterly-limit")
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.pauseFlame(litFlame, today = "2026-10-05", days = 3)
+
+        assertThat(vm.state.value.announcedPause).isNull()
+        assertThat(vm.state.value.failures[GameGesture.Pause])
+            .isEqualTo(GameGestureFailure(offline = false, code = "FLAME_PAUSE_NOT_ALLOWED", reason = "quarterly-limit"))
+        coVerify(exactly = 1) { progress.refresh() }
+    }
+
+    @Test
+    fun `une meme duree rejoue son identifiant apres une coupure, une autre duree en prend un neuf`() = runTest {
+        val sent = mutableListOf<String>()
+        coEvery { gestures.pauseFlame(capture(sent), any()) } returns GameWriteOutcome.Refused("NETWORK", offline = true)
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.pauseFlame(litFlame, today = "2026-10-05", days = 3)
+        vm.pauseFlame(litFlame, today = "2026-10-05", days = 3)
+        vm.pauseFlame(litFlame, today = "2026-10-05", days = 5)
+
+        assertThat(sent[0]).isEqualTo(sent[1])
+        assertThat(sent[2]).isNotEqualTo(sent[0])
+        assertThat(vm.state.value.announcedPause).isNull()
+    }
+
+    @Test
+    fun `hors ligne la veille ne part pas et ne se dit pas`() = runTest {
+        network.simulateOffline()
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.pauseFlame(litFlame, today = "2026-10-05", days = 3)
+
+        assertThat(vm.state.value.announcedPause).isNull()
+        assertThat(vm.state.value.failures[GameGesture.Pause]?.offline).isTrue()
+        coVerify(exactly = 0) { gestures.pauseFlame(any(), any()) }
     }
 }
