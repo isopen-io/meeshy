@@ -15,6 +15,7 @@ public object GameErrorTexts {
             GameErrorCode.TreasuryLocked -> GameTextKey.ErrorTreasuryLocked
             GameErrorCode.FreezeAtMaximum -> GameTextKey.ErrorFreezeAtMaximum
             GameErrorCode.RelightNotAllowed -> GameTextKey.ErrorRelightNotAllowed
+            GameErrorCode.FlamePauseNotAllowed -> GameTextKey.ErrorFlamePauseNotAllowed
             GameErrorCode.MissionNotFound -> GameTextKey.ErrorMissionNotFound
             GameErrorCode.MissionRerollExhausted -> GameTextKey.ErrorMissionRerollExhausted
             GameErrorCode.MissionRerollUnavailable -> GameTextKey.ErrorMissionRerollUnavailable

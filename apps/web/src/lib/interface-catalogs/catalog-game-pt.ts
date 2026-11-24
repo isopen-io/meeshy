@@ -95,6 +95,7 @@ const pt = {
   'game.error.insufficient_meeshes': 'Você precisa de mais uma Meesh para isso.',
   'game.error.freeze_at_maximum': 'Duas Lamparinas já cuidam da sua Chama: é o máximo possível.',
   'game.error.relight_not_allowed': 'A Chama não pode ser reacendida agora.',
+  'game.error.flame_pause_not_allowed': 'A Chama não pode descansar agora.',
   'game.error.mission_not_found': 'Este ato não existe mais: a tela está se atualizando.',
   'game.error.mission_reroll_exhausted': 'Você já trocou um ato hoje.',
   'game.error.mission_reroll_unavailable': 'Este ato não pode ser trocado.',

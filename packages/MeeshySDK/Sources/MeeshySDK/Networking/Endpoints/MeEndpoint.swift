@@ -37,6 +37,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case gameDuoByDuoIdAccept(duoId: String)
     case gameDuoInvite
     case gameFlameFreezes
+    case gameFlamePause
     case gameFlameRelight
     case gameFramesAtmosphere
     case gameGuideSeen
@@ -120,6 +121,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .gameDuoByDuoIdAccept(let duoId): return "/api/v1/me/game/duo/\(duoId)/accept"
         case .gameDuoInvite: return "/api/v1/me/game/duo/invite"
         case .gameFlameFreezes: return "/api/v1/me/game/flame/freezes"
+        case .gameFlamePause: return "/api/v1/me/game/flame/pause"
         case .gameFlameRelight: return "/api/v1/me/game/flame/relight"
         case .gameFramesAtmosphere: return "/api/v1/me/game/frames/atmosphere"
         case .gameGuideSeen: return "/api/v1/me/game/guide/seen"

@@ -276,6 +276,7 @@ describe('les routes de la vague 2', () => {
       chestClaim: '/me/game/chest/claim',
       flameFreezes: '/me/game/flame/freezes',
       flameRelight: '/me/game/flame/relight',
+      flamePause: '/me/game/flame/pause',
       guideSeen: '/me/game/guide/seen',
       leagueConsent: '/me/game/league/consent',
       leaguePseudonym: '/me/game/league/pseudonym',
@@ -292,7 +293,7 @@ describe('les routes de la vague 2', () => {
       prestige: '/me/game/prestige',
       privacy: '/me/game/privacy',
     });
-    expect(Object.keys(GAME_ROUTES)).toHaveLength(21);
+    expect(Object.keys(GAME_ROUTES)).toHaveLength(22);
   });
 
   it('dit la méthode de chaque route nouvelle', () => {

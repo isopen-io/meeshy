@@ -31,6 +31,7 @@ import { personalMissionState } from './personal-mission.js';
 import { treasuryReserveAccess, treasuryTier } from './treasury.js';
 import { isKeptOfferingDay } from './welcome-back.js';
 import { servedEffortRelight } from './flame-effort.js';
+import { servedFlamePause, type FlamePause } from './flame-pause.js';
 import { buildGameBlockExtras, type GameBlockExtrasFacts } from './game-block-extras.js';
 import type { GameBlock, GameChestReward, GameMission } from '../../types/game.js';
 
@@ -122,6 +123,11 @@ export type GameBlockFacts = {
   readonly welcomeBackDay?: string | null;
   readonly lastRelightDay: string | null;
   /**
+   * La veille annoncée (#17372), `null` sans veille. Le dernier jour actif que la passerelle passe est DÉJÀ avancé des
+   * jours en veille (`restedLastActiveDay`) : le bloc ne fait que la dire. Absent : la forme d'avant.
+   */
+  readonly pause?: FlamePause | null;
+  /**
    * Les journées de Rêve complet d'après la rupture (`wholeDreamDays`), que la passerelle lit quand une Flamme est
    * éteinte (#20471). Absentes, le bloc ne dit rien du rallumage par l'effort.
    */
@@ -190,6 +196,8 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
     lastRelightDay: facts.lastRelightDay,
     balance: facts.balance,
   });
+
+  const servedPause = servedFlamePause(facts.pause ?? null, flameToday);
 
   // Deux rêves complets rallument la Flamme sans payer (#20455) : le bloc dit combien en manquent, et jusqu'à quand.
   const effortRelight =
@@ -303,6 +311,7 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       canRelight: relight.allowed,
       ...(facts.freezeGiftDay === undefined ? {} : { freezeGifted: facts.freezeGiftDay === flameToday }),
       ...(effortRelight === null ? {} : { effortRelight }),
+      ...(servedPause === null ? {} : { pause: servedPause }),
     },
     boosts: {
       // Avec les étincelles, le Vent arrière souffle à 7 niveaux ou plus sous le record (#10896) ; sans, la loi d'hier.

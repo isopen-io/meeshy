@@ -16,7 +16,12 @@
  *  - `buyFreeze` : 1 Meesh, 2 en réserve au plus ;
  *  - `relight` : 3 Meeshes, dans les 48 h, une fois par mois ;
  *  - `relightByEffort` : deux rêves complets dans la même fenêtre rallument
- *    la Flamme sans payer (#20455), sans consommer le rallumage payé du mois.
+ *    la Flamme sans payer (#20455), sans consommer le rallumage payé du mois ;
+ *  - `pause` : une veille annoncée de 1 à 7 jours, une fois par trimestre
+ *    (#17372). Les jours en veille ne sont ni gagnés ni manqués : `flameFactsOf`
+ *    sert un dernier jour actif AVANCÉ d'autant (`restedLastActiveDay`), que
+ *    tous les lecteurs de l'état reçoivent sans rien changer ; le geste du jour
+ *    termine la veille la veille du geste.
  *
  * Les deux dépenses passent par `MeeshSpend` : ligne `spend` + effet dans une
  * même transaction, idempotentes par `requestId`.
@@ -35,6 +40,8 @@ import {
   type FlameOutcome,
 } from '@meeshy/shared/utils/game/flame';
 import { canRelightByEffort, relightByEffort, servedEffortRelight, wholeDreamDays } from '@meeshy/shared/utils/game/flame-effort';
+import { canPauseFlame, flamePauseOf, pauseEndedBy, restedLastActiveDay, type FlamePause } from '@meeshy/shared/utils/game/flame-pause';
+import { addDays } from '@meeshy/shared/utils/game/day-prng';
 import { FULL_DREAM_ACTS } from '@meeshy/shared/utils/game/missions';
 import { civilDayKey } from '../engagement/civilDay';
 import { GameRefusal } from './GameRefusal';
@@ -52,6 +59,8 @@ export const FLAME_USER_SELECT = {
   flameFreezeGiftDay: true,
   brokenStreakDays: true,
   brokenStreakLastDay: true,
+  flamePauseFrom: true,
+  flamePauseUntil: true,
 } as const;
 
 /** Ce que Prisma relit d'un compte : tout peut être ABSENT sur un compte antérieur. */
@@ -65,13 +74,23 @@ export type FlameUserRow = {
   readonly flameFreezeGiftDay?: string | null;
   readonly brokenStreakDays?: number | null;
   readonly brokenStreakLastDay?: string | null;
+  readonly flamePauseFrom?: string | null;
+  readonly flamePauseUntil?: string | null;
 };
 
 export type FlameFacts = {
   readonly today: string;
   readonly streak: number;
   readonly longest: number;
+  /**
+   * Le dernier jour actif tel que la Flamme le VOIT aujourd'hui : celui du dernier geste, avancé des jours en veille
+   * jusqu'à aujourd'hui inclus (#17372). C'est lui que lisent `flameStatus` et tous les lecteurs de l'état.
+   */
   readonly lastActiveDay: string | null;
+  /** Le jour du dernier geste, tel qu'écrit : ce que le geste du jour et un rallumage comparent à aujourd'hui. */
+  readonly lastGestureDay: string | null;
+  /** La dernière veille annoncée, `null` sans veille. */
+  readonly pause: FlamePause | null;
   readonly freezes: number;
   readonly lastRelightDay: string | null;
   /** Le jour où la première Veilleuse a été offerte (#20169). */
@@ -84,11 +103,16 @@ const count = (value: number | null | undefined): number =>
   typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0;
 
 export function flameFactsOf(row: FlameUserRow, now: Date): FlameFacts {
+  const today = dayKeyOf(now, row.timezone);
+  const lastGestureDay = row.lastStreakDate ? civilDayKey(row.lastStreakDate) : null;
+  const pause = flamePauseOf(row);
   return {
-    today: dayKeyOf(now, row.timezone),
+    today,
     streak: count(row.currentStreakDays),
     longest: count(row.longestStreakDays),
-    lastActiveDay: row.lastStreakDate ? civilDayKey(row.lastStreakDate) : null,
+    lastActiveDay: restedLastActiveDay({ lastActiveDay: lastGestureDay, through: today, pause }),
+    lastGestureDay,
+    pause,
     freezes: count(row.flameFreezes),
     lastRelightDay: row.lastRelightDay ?? null,
     freezeGiftDay: row.flameFreezeGiftDay ?? null,
@@ -133,8 +157,11 @@ export type StreakPlan = {
 
 /** La transition de série du geste du jour, appliquée à l'état courant. */
 export function planStreak(facts: FlameFacts): StreakPlan {
+  // Le jour du geste n'est jamais en veille — le geste la termine : la veille ne compte que jusqu'à hier.
+  const lastActiveDay = restedLastActiveDay({ lastActiveDay: facts.lastGestureDay, through: addDays(facts.today, -1), pause: facts.pause });
+  const ended = pauseEndedBy(facts.pause, facts.today);
   const transition = advanceFlame({
-    lastActiveDay: facts.lastActiveDay,
+    lastActiveDay,
     today: facts.today,
     streak: facts.streak,
     freezes: facts.freezes,
@@ -163,8 +190,9 @@ export function planStreak(facts: FlameFacts): StreakPlan {
       lastStreakDate: markerOfDayKey(facts.today),
       ...(transition.freezesUsed > 0 || gift.gifted ? { flameFreezes: gift.freezes } : {}),
       ...(gift.gifted ? { flameFreezeGiftDay: facts.today } : {}),
-      ...(transition.outcome === 'broken' && transition.lostStreak > 0 && facts.lastActiveDay !== null
-        ? { brokenStreakDays: transition.lostStreak, brokenStreakLastDay: facts.lastActiveDay }
+      ...(ended === null ? {} : { flamePauseUntil: ended.until }),
+      ...(transition.outcome === 'broken' && transition.lostStreak > 0 && lastActiveDay !== null
+        ? { brokenStreakDays: transition.lostStreak, brokenStreakLastDay: lastActiveDay }
         : {}),
     },
   };
@@ -193,10 +221,19 @@ const brokenStreakUnchanged = (row: FlameUserRow): Prisma.UserWhereInput[] => [
     : { OR: [{ brokenStreakLastDay: null }, { brokenStreakLastDay: { isSet: false } }] },
 ];
 
+const flamePauseUnchanged = (row: FlameUserRow): Prisma.UserWhereInput[] => [
+  typeof row.flamePauseFrom === 'string'
+    ? { flamePauseFrom: row.flamePauseFrom }
+    : { OR: [{ flamePauseFrom: null }, { flamePauseFrom: { isSet: false } }] },
+  typeof row.flamePauseUntil === 'string'
+    ? { flamePauseUntil: row.flamePauseUntil }
+    : { OR: [{ flamePauseUntil: null }, { flamePauseUntil: { isSet: false } }] },
+];
+
 /**
  * La Flamme telle qu'on l'a LUE : la condition d'une écriture comparer-et-écrire.
- * Chaque écrivain de la série (geste du jour, gel acheté ou offert, rallumage)
- * change au moins un champ optionnel gardé ici. Les deux compteurs requis
+ * Chaque écrivain de la série (geste du jour, gel acheté ou offert, rallumage,
+ * veille annoncée) change au moins un champ optionnel gardé ici. Les deux compteurs requis
  * (`currentStreakDays`, `longestStreakDays`) ne se gardent que présents : Prisma
  * n'offre pas `isSet` sur un champ requis, et leurs écrivains changent toujours
  * `lastStreakDate` ou `lastRelightDay` avec eux.
@@ -207,6 +244,7 @@ export function flameUnchanged(row: FlameUserRow): Prisma.UserWhereInput[] {
     flameFreezesUnchanged(row.flameFreezes),
     lastRelightDayUnchanged(row.lastRelightDay),
     ...brokenStreakUnchanged(row),
+    ...flamePauseUnchanged(row),
     ...(typeof row.currentStreakDays === 'number' ? [{ currentStreakDays: row.currentStreakDays }] : []),
     ...(typeof row.longestStreakDays === 'number' ? [{ longestStreakDays: row.longestStreakDays }] : []),
   ];
@@ -241,6 +279,7 @@ export type FreezeResult =
 export type RelightResult =
   | { readonly status: 'relit' | 'already-relit'; readonly streak: number; readonly balance: number };
 export type EffortRelightResult = { readonly streak: number } | null;
+export type FlamePauseResult = { readonly status: 'paused' | 'already-paused'; readonly pause: FlamePause };
 
 type EffortDb = Pick<PrismaClient, 'user' | 'dailyMission'>;
 
@@ -287,7 +326,7 @@ export async function writeEffortRelight(db: EffortDb, userId: string, now: Date
       brokenLastDay: broken.lastActiveDay,
       streakBeforeBreak: broken.streak,
       today: facts.today,
-      lastActiveDay: facts.lastActiveDay,
+      lastActiveDay: facts.lastGestureDay,
       currentStreak: facts.streak,
     });
     const longest = Math.max(facts.longest, restored.streak);
@@ -385,7 +424,7 @@ export class FlameService {
         // Déjà agi aujourd'hui après la rupture : le geste du jour s'ajoute à
         // la série rendue, comme il l'aurait fait sans la rupture.
         const replay =
-          facts.lastActiveDay === facts.today
+          facts.lastGestureDay === facts.today
             ? advanceFlame({ lastActiveDay: restored.lastActiveDay, today: facts.today, streak: restored.streak, freezes: facts.freezes })
             : null;
         const streak = replay?.streak ?? restored.streak;
@@ -415,6 +454,32 @@ export class FlameService {
     }
     const row = await this.userRow(this.prisma, userId);
     return { status: 'already-relit', streak: count(row.currentStreakDays), balance: outcome.balance };
+  }
+
+  /**
+   * Annonce une veille de `days` jours à partir de demain (#17372). Idempotente par son CONTENU : la même veille
+   * annoncée le même jour rend `already-paused`, sans seconde écriture — le `requestId` ne porte pas d'effet à
+   * rejouer, puisque rien n'est payé. L'écriture est conditionnelle à la Flamme lue : un geste ou un rallumage
+   * concurrent fait reprendre la décision.
+   */
+  async pause({ userId, days, now = new Date() }: WriteInput & { readonly days: number }): Promise<FlamePauseResult> {
+    for (let attempt = 0; attempt < STREAK_WRITE_ATTEMPTS; attempt += 1) {
+      const row = await this.userRow(this.prisma, userId);
+      const facts = flameFactsOf(row, now);
+      const asked: FlamePause = { from: addDays(facts.today, 1), until: addDays(facts.today, days) };
+      if (facts.pause !== null && facts.pause.from === asked.from && facts.pause.until === asked.until) {
+        return { status: 'already-paused', pause: asked };
+      }
+      const status = flameStatus({ lastActiveDay: facts.lastActiveDay, today: facts.today, streak: facts.streak, freezes: facts.freezes });
+      const verdict = canPauseFlame({ today: facts.today, days, status, pause: facts.pause });
+      if (!verdict.allowed) throw new GameRefusal('FLAME_PAUSE_NOT_ALLOWED', { reason: verdict.reason });
+      const written = await this.prisma.user.updateMany({
+        where: { id: userId, AND: flameUnchanged(row) },
+        data: { flamePauseFrom: verdict.pause.from, flamePauseUntil: verdict.pause.until },
+      });
+      if (written.count === 1) return { status: 'paused', pause: verdict.pause };
+    }
+    throw new Error('flame pause contention');
   }
 
   /** Deux rêves complets dans les 48 h rallument la Flamme, sans payer (#20455). `null` tant que ce n'est pas gagné. */

@@ -7,6 +7,7 @@
  *   POST /me/game/chest/claim                  ouvrir le coffre du jour
  *   POST /me/game/flame/freezes                acheter un gel (1 Meesh, 2 en réserve)
  *   POST /me/game/flame/relight                rallumer une Flamme (3 Meeshes, 48 h, 1×/mois)
+ *   POST /me/game/flame/pause                  annoncer une veille de 1 à 7 jours (1×/trimestre)
  *   POST /me/game/guide/seen                   mémoriser les clés de guide vues
  *
  * Aucune ne prend d'`userId` : l'utilisateur est celui de l'authentification.
@@ -18,6 +19,7 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { FLAME_PAUSE_MAX_DAYS, FLAME_PAUSE_MIN_DAYS } from '@meeshy/shared/utils/game/flame-pause';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { getEngagementEmitIO } from '../../services/engagement/engagement-emit-registry';
@@ -38,6 +40,16 @@ export type GameRoutesOptions = {
   /** Le registre des packs de cadres que l'atmosphère installe (#10162) ; absent : celui lu au démarrage. */
   readonly packIndex?: PackIndex;
 };
+
+const pauseBody = {
+  type: 'object',
+  required: ['requestId', 'days'],
+  properties: {
+    requestId: requestIdSchema,
+    days: { type: 'integer', minimum: FLAME_PAUSE_MIN_DAYS, maximum: FLAME_PAUSE_MAX_DAYS },
+  },
+  additionalProperties: false,
+} as const;
 
 const guideBody = {
   type: 'object',
@@ -128,6 +140,24 @@ export async function meGameRoutes(fastify: FastifyInstance, options: GameRoutes
     },
     (request: FastifyRequest<{ Body: { requestId: string } }>, reply: FastifyReply) =>
       write(request, reply, (userId) => flame.relight({ userId, requestId: request.body.requestId })),
+  );
+
+  fastify.post(
+    '/game/flame/pause',
+    {
+      onRequest: [fastify.authenticate],
+      config: { rateLimit: gameRateLimitConfig('pause', 10, true) },
+      schema: {
+        description:
+          'Annonce une veille de la Flamme de 1 à 7 jours, à partir de demain, une fois par trimestre civil (#17372) : la Flamme attend, sans grandir ni s’éteindre. Idempotent : la même veille rejouée le même jour rend `already-paused`.',
+        tags: ['me', 'game'],
+        summary: 'Pause the flame',
+        body: pauseBody,
+        response: { 200: okResponse, 401: errorResponseSchema, 409: refusalResponse, 429: errorResponseSchema, 500: errorResponseSchema },
+      },
+    },
+    (request: FastifyRequest<{ Body: { requestId: string; days: number } }>, reply: FastifyReply) =>
+      write(request, reply, (userId) => flame.pause({ userId, requestId: request.body.requestId, days: request.body.days })),
   );
 
   fastify.post(

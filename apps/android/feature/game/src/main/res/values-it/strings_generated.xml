@@ -570,6 +570,7 @@
     <string name="game_error_duo_not_found">Questa alleanza non esiste più: la schermata si aggiorna.</string>
     <string name="game_error_duo_not_friends">L’alleanza si stringe tra amici accettati.</string>
     <string name="game_error_duo_transition_refused">Questo gesto non ha senso per questa alleanza.</string>
+    <string name="game_error_flame_pause_not_allowed">La Fiamma non può riposare adesso.</string>
     <string name="game_error_freeze_at_maximum">Due Lucerne custodiscono già la tua Fiamma: di più non si può.</string>
     <string name="game_error_generic">Non è andata a buon fine: controlla la connessione e riprova.</string>
     <string name="game_error_insufficient_meeshes">Per questo ti serve una Meesh in più.</string>

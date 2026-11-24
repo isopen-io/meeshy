@@ -383,3 +383,115 @@ describe('FlameService.relightByEffort — deux rêves complets rallument la Fla
     expect(db.user.rows[0]).toMatchObject({ currentStreakDays: 14 });
   });
 });
+
+describe('FlameService.pause — la Flamme en veille (#17372, #20507)', () => {
+  const lit = (db: FakeGameDb, fields: Record<string, unknown> = {}) =>
+    seedUser(db, { currentStreakDays: 12, longestStreakDays: 12, lastStreakDate: new Date('2026-10-05T00:00:00Z'), timezone: 'UTC', ...fields });
+
+  it('annonce une veille à partir de demain, écrite sur le compte', async () => {
+    const db = fakeGameDb();
+    lit(db);
+
+    const result = await new FlameService(db.prisma).pause({ userId: USER, requestId: 'pause-0001', days: 7, now: NOW });
+
+    expect(result).toEqual({ status: 'paused', pause: { from: '2026-10-06', until: '2026-10-12' } });
+    expect(db.user.rows[0]).toMatchObject({ flamePauseFrom: '2026-10-06', flamePauseUntil: '2026-10-12', currentStreakDays: 12 });
+  });
+
+  it('rejouer la même annonce le même jour rend la veille déjà posée, sans seconde écriture', async () => {
+    const db = fakeGameDb();
+    lit(db);
+    const flame = new FlameService(db.prisma);
+    await flame.pause({ userId: USER, requestId: 'pause-0001', days: 3, now: NOW });
+
+    expect(await flame.pause({ userId: USER, requestId: 'pause-0001', days: 3, now: NOW })).toEqual({
+      status: 'already-paused',
+      pause: { from: '2026-10-06', until: '2026-10-08' },
+    });
+  });
+
+  it('refuse une autre durée pendant la veille posée, avec sa raison', async () => {
+    const db = fakeGameDb();
+    lit(db, { flamePauseFrom: '2026-10-06', flamePauseUntil: '2026-10-08' });
+
+    const refused = await refusal(() => new FlameService(db.prisma).pause({ userId: USER, requestId: 'pause-0002', days: 5, now: NOW }));
+
+    expect(refused.code).toBe('FLAME_PAUSE_NOT_ALLOWED');
+    expect(refused.details).toEqual({ reason: 'already-paused' });
+  });
+
+  it('refuse une seconde veille dans le trimestre', async () => {
+    const db = fakeGameDb();
+    lit(db, { flamePauseFrom: '2026-10-01', flamePauseUntil: '2026-10-03' });
+
+    const refused = await refusal(() => new FlameService(db.prisma).pause({ userId: USER, requestId: 'pause-0003', days: 2, now: NOW }));
+
+    expect(refused.details).toEqual({ reason: 'quarterly-limit' });
+  });
+
+  it('refuse une Flamme éteinte : il n’y a rien à garder', async () => {
+    const db = fakeGameDb();
+    lit(db, { lastStreakDate: new Date('2026-10-01T00:00:00Z') });
+
+    const refused = await refusal(() => new FlameService(db.prisma).pause({ userId: USER, requestId: 'pause-0004', days: 2, now: NOW }));
+
+    expect(refused.details).toEqual({ reason: 'no-flame' });
+    expect(db.user.rows[0]).not.toHaveProperty('flamePauseFrom');
+  });
+});
+
+describe('la Flamme attend pendant la veille', () => {
+  const resting = (now: Date, fields: Record<string, unknown> = {}) =>
+    flameFactsOf(
+      {
+        currentStreakDays: 12,
+        longestStreakDays: 12,
+        lastStreakDate: new Date('2026-10-05T00:00:00Z'),
+        timezone: 'UTC',
+        flamePauseFrom: '2026-10-06',
+        flamePauseUntil: '2026-10-12',
+        ...fields,
+      },
+      now,
+    );
+
+  it('les lecteurs de l’état voient une Flamme qui n’est ni à risque ni éteinte', () => {
+    expect(resting(new Date('2026-10-09T12:00:00Z'))).toMatchObject({ lastActiveDay: '2026-10-09', lastGestureDay: '2026-10-05' });
+    expect(resting(new Date('2026-10-13T12:00:00Z')).lastActiveDay).toBe('2026-10-12');
+  });
+
+  it('revenir pendant la veille : un jour de plus, la veille se termine la veille du geste', () => {
+    const plan = planStreak(resting(new Date('2026-10-09T12:00:00Z')));
+
+    expect(plan).toMatchObject({ outcome: 'continued', streak: 13 });
+    expect(plan.data).toMatchObject({ currentStreakDays: 13, flamePauseUntil: '2026-10-08' });
+    expect(plan.data).not.toHaveProperty('flameFreezes');
+  });
+
+  it('revenir le lendemain de la veille : la série continue, la veille reste entière', () => {
+    const plan = planStreak(resting(new Date('2026-10-13T12:00:00Z')));
+
+    expect(plan).toMatchObject({ outcome: 'continued', streak: 13 });
+    expect(plan.data).not.toHaveProperty('flamePauseUntil');
+  });
+
+  it('sans veille, la même absence éteint la Flamme', () => {
+    expect(planStreak(resting(new Date('2026-10-09T12:00:00Z'), { flamePauseFrom: null, flamePauseUntil: null })).outcome).toBe('broken');
+  });
+
+  it('le geste du jour, écrit, termine la veille', async () => {
+    const db = fakeGameDb();
+    seedUser(db, {
+      currentStreakDays: 12,
+      longestStreakDays: 12,
+      lastStreakDate: new Date('2026-10-05T00:00:00Z'),
+      timezone: 'UTC',
+      flamePauseFrom: '2026-10-06',
+      flamePauseUntil: '2026-10-12',
+    });
+
+    await writeStreak(db as never, USER, new Date('2026-10-09T12:00:00Z'));
+
+    expect(db.user.rows[0]).toMatchObject({ currentStreakDays: 13, flamePauseFrom: '2026-10-06', flamePauseUntil: '2026-10-08' });
+  });
+});

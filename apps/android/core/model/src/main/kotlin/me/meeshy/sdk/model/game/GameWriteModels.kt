@@ -29,6 +29,10 @@ import kotlinx.serialization.json.JsonObject
 @Serializable
 public data class GameWriteRequest(val requestId: String)
 
+/** Annoncer une veille de la Flamme (#17372) : 1 à 7 jours, à partir de demain. */
+@Serializable
+public data class FlamePauseRequest(val requestId: String, val days: Int)
+
 @Serializable
 public data class GuideSeenRequest(
     val requestId: String,

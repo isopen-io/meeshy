@@ -17,6 +17,8 @@ export const GAME_ROUTES = {
   /** Acheter UN gel de Flamme (1 Meesh, 2 en réserve au plus). */
   flameFreezes: '/me/game/flame/freezes',
   flameRelight: '/me/game/flame/relight',
+  /** Annoncer une veille de la Flamme, de 1 à 7 jours à partir de demain, une fois par trimestre (#17372). */
+  flamePause: '/me/game/flame/pause',
   /** Marquer des moments du guide comme vus. */
   guideSeen: '/me/game/guide/seen',
 
@@ -126,6 +128,8 @@ export const GAME_ERROR_CODES = {
   insufficientMeeshes: 'INSUFFICIENT_MEESHES',
   freezeAtMaximum: 'FREEZE_AT_MAXIMUM',
   relightNotAllowed: 'RELIGHT_NOT_ALLOWED',
+  /** La veille refusée, avec sa raison (`details.reason`) : `no-flame`, `already-paused`, `quarterly-limit`. */
+  flamePauseNotAllowed: 'FLAME_PAUSE_NOT_ALLOWED',
   missionNotFound: 'MISSION_NOT_FOUND',
   missionRerollExhausted: 'MISSION_REROLL_EXHAUSTED',
   missionRerollUnavailable: 'MISSION_REROLL_UNAVAILABLE',

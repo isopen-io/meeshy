@@ -465,6 +465,22 @@ describe('la mission personnelle du jour (#9539)', () => {
     expect(off.sent).toEqual([]);
   });
 
+  it('se tait un jour où la Flamme est en veille, sans prendre de créneau ; les résultats partent (#17372)', async () => {
+    const paused = world({ recipient: { flamePauseFrom: NOW.toISOString().slice(0, 10), flamePauseUntil: NOW.toISOString().slice(0, 10) } });
+    expect(await paused.notifier.notify(windowEvent(), NOW)).toBe('skipped:flame-paused');
+    expect([...paused.taken.keys()]).toEqual([]);
+    expect(await paused.notifier.notify(leagueResult({ zone: 'safe' }), NOW)).toBe('sent');
+    expect(paused.sent.map((s) => s.type)).toEqual(['game_league_result']);
+  });
+
+  it('repart le lendemain de la veille, et une veille vide ne tait rien', async () => {
+    const yesterday = new Date(NOW.getTime() - 86_400_000).toISOString().slice(0, 10);
+    const after = world({ recipient: { flamePauseFrom: yesterday, flamePauseUntil: yesterday } });
+    expect(await after.notifier.notify(windowEvent(), NOW)).toBe('sent');
+    const empty = world({ recipient: { flamePauseFrom: NOW.toISOString().slice(0, 10), flamePauseUntil: yesterday } });
+    expect(await empty.notifier.notify(windowEvent(), NOW)).toBe('sent');
+  });
+
   it('un refus du service (Ne pas déranger) est rendu tel quel', async () => {
     const { notifier } = world({ declines: true });
     expect(await notifier.notify(windowEvent(), NOW)).toBe('skipped:declined');

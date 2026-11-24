@@ -23,6 +23,7 @@ import { GLORY_RANKS, type GloryRankOrMythic } from '../utils/game/glory.js';
 import { TREASURY_TIERS } from '../utils/game/treasury.js';
 import { LEVEL_STEP_KINDS } from '../utils/game/level-steps.js';
 import { FLAME_FORMS } from '../utils/game/flame.js';
+import { FLAME_PAUSE_MAX_DAYS, FLAME_PAUSE_MIN_DAYS } from '../utils/game/flame-pause.js';
 import { MISSION_DIFFICULTIES } from '../utils/game/missions.js';
 import { PERSONAL_MISSION_STATES } from '../utils/game/personal-mission.js';
 import type { EngagementProgressPayload } from './engagement.js';
@@ -322,6 +323,17 @@ export const parseEffortRelight = (value: unknown): GameEffortRelight | null => 
   return parsed.success ? parsed.data : null;
 };
 
+/** La Flamme en veille (#17372) : du premier au dernier jour, inclus — servie de l'annonce au dernier jour. */
+export const flamePauseSchema = z.object({ from: dayKey, until: dayKey });
+
+export type GameFlamePause = z.infer<typeof flamePauseSchema>;
+
+/** La veille lue par un client : `null` devant un serveur antérieur, hors de toute veille, ou une forme illisible. */
+export const parseFlamePause = (value: unknown): GameFlamePause | null => {
+  const parsed = flamePauseSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+};
+
 export const gameFlameSchema = z.object({
   days: nonNegativeInt,
   form: formKeys.nullable(),
@@ -336,6 +348,11 @@ export const gameFlameSchema = z.object({
   freezeGifted: z.boolean().optional().catch(undefined),
   /** Deux rêves complets rallumeraient encore la Flamme éteinte (#20471). Tolérant : absent devant un serveur antérieur. */
   effortRelight: effortRelightSchema.optional().catch(undefined),
+  /**
+   * La veille annoncée qui couvre aujourd'hui ou un jour à venir (#17372). Tolérant : absent devant un serveur
+   * antérieur ou hors de toute veille. Un client antérieur l'ignore ; la Flamme lui paraît allumée pendant la veille.
+   */
+  pause: flamePauseSchema.optional().catch(undefined),
 });
 
 export const gameBoostsSchema = z.object({
@@ -415,6 +432,15 @@ export const flameRelightResponseSchema = z.object({
   status: z.enum(['relit', 'already-relit']),
   streak: nonNegativeInt,
   balance: nonNegativeInt,
+});
+
+/** Annoncer une veille de 1 à 7 jours, à partir de demain (#17372). */
+export const flamePauseRequestSchema = writeRequest.extend({
+  days: z.number().int().min(FLAME_PAUSE_MIN_DAYS).max(FLAME_PAUSE_MAX_DAYS),
+});
+export const flamePauseResponseSchema = z.object({
+  status: z.enum(['paused', 'already-paused']),
+  pause: flamePauseSchema,
 });
 
 export const guideSeenRequestSchema = writeRequest.extend({

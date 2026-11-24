@@ -23,6 +23,7 @@ public enum class GameErrorCode(public val wire: String) {
     PriceChanged("PRICE_CHANGED"),
     FreezeAtMaximum("FREEZE_AT_MAXIMUM"),
     RelightNotAllowed("RELIGHT_NOT_ALLOWED"),
+    FlamePauseNotAllowed("FLAME_PAUSE_NOT_ALLOWED"),
     MissionNotFound("MISSION_NOT_FOUND"),
     MissionRerollExhausted("MISSION_REROLL_EXHAUSTED"),
     MissionRerollUnavailable("MISSION_REROLL_UNAVAILABLE"),

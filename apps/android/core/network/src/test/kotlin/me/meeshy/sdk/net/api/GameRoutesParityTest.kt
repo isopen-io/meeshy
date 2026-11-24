@@ -45,7 +45,7 @@ class GameRoutesParityTest {
         val paths = table(routes, "GAME_ROUTES")
         val verbs = methods(routes, "GAME_ROUTE_METHODS") + mapOf(
             "engagement" to "GET", "mint" to "POST", "missionReroll" to "POST", "chestClaim" to "POST",
-            "flameFreezes" to "POST", "flameRelight" to "POST", "guideSeen" to "POST",
+            "flameFreezes" to "POST", "flameRelight" to "POST", "flamePause" to "POST", "guideSeen" to "POST",
         )
 
         assertThat(paths.size).isAtLeast(21)

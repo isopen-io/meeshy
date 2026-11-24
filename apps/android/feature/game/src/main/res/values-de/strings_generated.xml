@@ -570,6 +570,7 @@
     <string name="game_error_duo_not_found">Dieses Bündnis gibt es nicht mehr: Der Bildschirm wird aktualisiert.</string>
     <string name="game_error_duo_not_friends">Ein Bündnis schließt man unter bestätigten Freunden.</string>
     <string name="game_error_duo_transition_refused">Diese Aktion ergibt für dieses Bündnis keinen Sinn.</string>
+    <string name="game_error_flame_pause_not_allowed">Die Flamme kann jetzt nicht ruhen.</string>
     <string name="game_error_freeze_at_maximum">Zwei Hüterinnen wachen schon über deine Flamme: Mehr geht nicht.</string>
     <string name="game_error_generic">Das hat nicht geklappt — prüfe deine Verbindung und versuche es erneut.</string>
     <string name="game_error_insufficient_meeshes">Dafür brauchst du eine Meesh mehr.</string>

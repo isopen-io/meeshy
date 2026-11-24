@@ -570,6 +570,7 @@
     <string name="game_error_duo_not_found">This alliance no longer exists: the screen is refreshing.</string>
     <string name="game_error_duo_not_friends">An alliance is formed between accepted friends.</string>
     <string name="game_error_duo_transition_refused">This move makes no sense for this alliance.</string>
+    <string name="game_error_flame_pause_not_allowed">The Flame cannot rest right now.</string>
     <string name="game_error_freeze_at_maximum">Two Vigils already guard your Flame: that’s the most you can have.</string>
     <string name="game_error_generic">That did not go through — check your connection and try again.</string>
     <string name="game_error_insufficient_meeshes">You need one more Meesh for that.</string>

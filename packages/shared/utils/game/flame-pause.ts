@@ -28,6 +28,12 @@ export type FlamePauseDecision =
   | { readonly allowed: true; readonly pause: FlamePause }
   | { readonly allowed: false; readonly reason: FlamePauseRefusal };
 
+/** La veille telle qu'un compte la porte (`User.flamePauseFrom` / `flamePauseUntil`) : les deux jours, ou aucune. */
+export const flamePauseOf = (row: { readonly flamePauseFrom?: string | null; readonly flamePauseUntil?: string | null }): FlamePause | null =>
+  typeof row.flamePauseFrom === 'string' && typeof row.flamePauseUntil === 'string'
+    ? { from: row.flamePauseFrom, until: row.flamePauseUntil }
+    : null;
+
 /** Le trimestre civil d'un jour : `AAAA-T1` à `AAAA-T4`. */
 export const quarterOf = (dayKey: string): string => `${dayKey.slice(0, 4)}-T${Math.floor((Number(dayKey.slice(5, 7)) - 1) / 3) + 1}`;
 
