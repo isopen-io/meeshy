@@ -61,6 +61,9 @@ export function shellPushUrl(target: PushTapTarget): string {
       return href('progressionSaison');
     case 'progressionCarnet':
       return href('progressionCarnet');
+    /* #20540 — « un Sang s'approche » ouvre sa carte, comme `sw-push.js`. */
+    case 'sharedLocations':
+      return href('sharedLocations', undefined, target.search);
     case 'settings':
       return href('settings');
     case 'notifications':

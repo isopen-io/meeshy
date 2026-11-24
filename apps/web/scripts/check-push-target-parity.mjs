@@ -54,13 +54,14 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const APP = join(HERE, '..');
 
-/** Les onze tables de types du résolveur, plus la liste des routes qu'un indice serveur peut nommer. */
+/** Les douze tables de types du résolveur, plus la liste des routes qu'un indice serveur peut nommer. */
 const TABLES = [
   'EPHEMERAL_ENTITIES',
   'EPHEMERAL_ONLY_TYPES',
   'MOOD_TYPES',
   'REQUEST_TYPES',
   'PROFILE_TYPES',
+  'MAP_TYPES',
   'PROGRESSION_TYPES',
   'GAME_LEAGUE_TYPES',
   'GAME_SEASON_TYPES',
@@ -71,6 +72,9 @@ const TABLES = [
 
 /** Les paramètres de recherche que la destination « demandes » porte. */
 const PARAMS = ['DISCOVER_TAB_PARAM', 'REQUEST_FILTER_PARAM'];
+
+/** Le paramètre que la carte d'une personne porte (#20540), lu de `lib/shared-locations/map-person.ts`. */
+const MAP_PARAMS = ['MAP_PERSON_PARAM'];
 
 const litteraux = (bloc) => [...bloc.matchAll(/'([^']*)'/g)].map((m) => m[1]);
 
@@ -86,6 +90,7 @@ export function litterauxDuResolveur(
   source,
   vue = readFileSync(join(APP, 'src/lib/discover/view.ts'), 'utf8'),
   tap = readFileSync(join(APP, 'src/lib/notifications/tap-navigation.ts'), 'utf8'),
+  carte = readFileSync(join(APP, 'src/lib/shared-locations/map-person.ts'), 'utf8'),
 ) {
   const lu = {};
   for (const nom of TABLES) {
@@ -96,6 +101,11 @@ export function litterauxDuResolveur(
   for (const nom of PARAMS) {
     const ligne = vue.match(new RegExp(`const ${nom}\\s*=\\s*'([^']*)'`));
     if (ligne === null) throw new Error(`paramètre introuvable dans discover/view.ts : ${nom}`);
+    lu[nom] = ligne[1];
+  }
+  for (const nom of MAP_PARAMS) {
+    const ligne = carte.match(new RegExp(`const ${nom}\\s*=\\s*'([^']*)'`));
+    if (ligne === null) throw new Error(`paramètre introuvable dans shared-locations/map-person.ts : ${nom}`);
     lu[nom] = ligne[1];
   }
   /* La fiche que chaque notification d'un concept ouvre (#9563) : une table
@@ -145,6 +155,7 @@ export const ADRESSES = [
   [{ type: 'friend_request', friendRequestId: 'fr1' }, '/discover?onglet=requests&demandes=received'],
   [{ type: 'contact_joined', senderUsername: 'awa' }, '/u/awa'],
   [{ type: 'contact_recently_active', senderUsername: 'marie' }, '/u/marie'],
+  [{ type: 'blood_proximity', userId: 'u1', senderUsername: 'lina' }, '/positions?person=u1'],
   [{ type: 'community_invite', communityId: 'c1' }, '/communities/c1'],
   [{ type: 'login_new_device' }, '/settings'],
   [{ type: 'badge_earned' }, '/me/progression?section=badges'],
@@ -203,7 +214,7 @@ export function auditParite({ table, resolveur, jumeau }) {
     );
   }
 
-  for (const nom of [...PARAMS, 'NOTIFICATION_CLICKED_MESSAGE']) {
+  for (const nom of [...PARAMS, ...MAP_PARAMS, 'NOTIFICATION_CLICKED_MESSAGE']) {
     if (resolveur[nom] !== jumeau[nom]) {
       violations.push(`${nom} vaut « ${jumeau[nom]} » dans sw-push.js et « ${resolveur[nom]} » côté page.`);
     }

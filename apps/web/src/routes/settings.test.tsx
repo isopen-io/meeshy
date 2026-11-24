@@ -57,6 +57,7 @@ const preferencesOf = (overrides: Partial<AppPreferences> = {}): AppPreferences 
   notifyContactsOnReturn: true,
   contactActivityEnabled: true,
   bringEnabled: true,
+  bloodProximityEnabled: true,
   gameEnabled: true,
   gamePhotoEnabled: true,
   saveMediaToGallery: false,
@@ -521,6 +522,29 @@ describe('les notifications', () => {
       const label = host.querySelector('[data-setting="bringEnabled"]')?.getAttribute('aria-label') ?? '';
       expect(label).not.toContain('settings.');
       expect(label).not.toBe(BRING);
+      expect(label).not.toBe('');
+    }
+  });
+
+  /* #20540 — la porte du push « un Sang s'approche », juste après le retour d'un contact (défaut : reçue). */
+  const BLOOD_NEAR = 'Un de mes Sangs tout près';
+
+  test('« Un de mes Sangs tout près » se bascule, écrit SA clé et suit le retour d’un contact', () => {
+    const host = dom(<NotificationsSection language="fr" view={ready({ bloodProximityEnabled: false })} disabled={false} onToggle={noop} onRetry={noop} />);
+    const toggle = switchNamed(host, BLOOD_NEAR);
+    expect(toggle?.getAttribute('aria-checked')).toBe('false');
+    expect(toggle?.getAttribute('data-setting')).toBe('bloodProximityEnabled');
+    const order = [...host.querySelectorAll('[data-setting]')].map((node) => node.getAttribute('data-setting'));
+    expect(order.indexOf('bloodProximityEnabled')).toBe(order.indexOf('contactActivityEnabled') + 1);
+  });
+
+  test('« Un de mes Sangs tout près » se dit dans chaque langue du catalogue, jamais par sa clé', async () => {
+    for (const language of ['en', 'es', 'de', 'it', 'pt', 'ar'] as const) {
+      await loadInterfaceCatalog(language);
+      const host = dom(<NotificationsSection language={language} view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+      const label = host.querySelector('[data-setting="bloodProximityEnabled"]')?.getAttribute('aria-label') ?? '';
+      expect(label).not.toContain('settings.');
+      expect(label).not.toBe(BLOOD_NEAR);
       expect(label).not.toBe('');
     }
   });

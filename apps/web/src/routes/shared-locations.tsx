@@ -1,6 +1,6 @@
 import { SharedLocationsMap } from '@/components/shared-locations-map';
 import { Glyph } from '@/components/glyph';
-import { MAP_PERSON_PARAM } from '@/components/profile-see-on-map';
+import { MAP_PERSON_PARAM } from '@/lib/shared-locations/map-person';
 import { useOptionalRoute } from '@/lib/router';
 import { Link } from '@/routes/route-table';
 import { translate } from '@/lib/i18n-catalog';

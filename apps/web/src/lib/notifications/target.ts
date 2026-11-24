@@ -1,6 +1,7 @@
 import type { RemovedContentType } from '@meeshy/shared/types/notification';
 
 import { DISCOVER_TAB_PARAM, REQUEST_FILTER_PARAM } from '@/lib/discover/view';
+import { MAP_PERSON_PARAM } from '@/lib/shared-locations/map-person';
 
 import type { NotificationRecord } from './record';
 
@@ -53,6 +54,7 @@ export type NotificationTarget =
   | { readonly route: 'userProfile'; readonly params: { readonly username: string } }
   | { readonly route: 'community'; readonly params: { readonly community: string } }
   | { readonly route: 'progression'; readonly search?: Readonly<Record<string, string>> }
+  | { readonly route: 'sharedLocations'; readonly search: Readonly<Record<string, string>> }
   | { readonly route: 'progressionLigue' | 'progressionSaison' | 'progressionCarnet' | 'settings' };
 
 /**
@@ -90,6 +92,12 @@ export type NotificationTargetInput = {
    * annoncent une PERSONNE (`PROFILE_TYPES`).
    */
   readonly senderUsername?: string | undefined;
+  /**
+   * La PERSONNE dont la carte s'ouvre (#20540) — `userId`, la clé que la passerelle pose sur la carte `data`
+   * de `blood_proximity` (`BLOOD_PROXIMITY_PUSH_DATA_KEYS`) ; la cloche la lit sur `metadata.userId`. Elle ne
+   * route que les types de `MAP_TYPES`.
+   */
+  readonly userId?: string | undefined;
   /**
    * L'indice de ROUTE posé par la passerelle pour les notifications de
    * réengagement. Son propre commentaire dit QUAND il le pose : « quand la
@@ -140,6 +148,13 @@ const REQUEST_TYPES: ReadonlySet<string> = new Set(['friend_request', 'contact_r
  * GÉNÉRIQUE, la fiche dit le reste. « Tout va bien ? » (`wellness_check`) n'en est PAS : son acteur est soi, et la toucher répond « Je vais bien ».
  */
 const PROFILE_TYPES: ReadonlySet<string> = new Set(['contact_joined', 'contact_recently_active', 'device_battery', 'device_unreachable', 'inactivity_alert', 'safety_alert', 'safety_alert_cleared']);
+
+/**
+ * LES TYPES QUI OUVRENT LA CARTE D'UNE PERSONNE (#20540) : « Lina est tout près » ouvre la carte de Lina
+ * (`/positions?person=<userId>`), d'où l'on se voit tous les deux — jamais une conversation, jamais un profil
+ * (contrat `BLOOD_PROXIMITY_NOTIFICATION_TYPE`, `packages/shared/types/blood-location.ts`).
+ */
+const MAP_TYPES: ReadonlySet<string> = new Set(['blood_proximity']);
 
 /**
  * UN APPEL MANQUÉ SANS CONVERSATION NOMMÉE (#9177, suite de #9115) — une
@@ -267,6 +282,9 @@ export function resolveTarget(input: NotificationTargetInput): PushTapTarget | n
   const type = present(input.type);
   if (present(input.friendRequestId) !== '' || REQUEST_TYPES.has(type)) return DISCOVER_REQUESTS;
 
+  const person = present(input.userId);
+  if (MAP_TYPES.has(type) && person !== '') return { route: 'sharedLocations', search: { [MAP_PERSON_PARAM]: person } };
+
   const username = present(input.senderUsername);
   if (PROFILE_TYPES.has(type) && username !== '') return { route: 'userProfile', params: { username } };
   if (MISSED_CALL_TYPES.has(type) && username !== '') return { route: 'userProfile', params: { username } };
@@ -298,6 +316,7 @@ export function notificationTarget(notification: NotificationRecord): Notificati
     friendRequestId: notification.context.friendRequestId,
     communityId: notification.context.communityId,
     senderUsername: notification.actor?.username,
+    userId: notification.metadata.userId ?? notification.actor?.id,
   });
   /* La cloche ne construit jamais l'indice `route` (`NotificationRecord` ne le
      décode pas) : `notifications` est donc hors d'atteinte ici, et le repli de
