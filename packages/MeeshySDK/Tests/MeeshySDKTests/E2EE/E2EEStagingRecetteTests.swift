@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 import GRDB
 import XCTest
-@testable import MeeshyE2EE
+@_spi(Testing) @testable import MeeshyE2EE
 @testable import MeeshySDK
 
 /// Recette CROISÉE sur la vraie passerelle de STAGING (#3707, spec § 8.5 et

@@ -3,7 +3,7 @@ import Foundation
 import GRDB
 import LibSignalClient
 import XCTest
-@testable import MeeshyE2EE
+@_spi(Testing) @testable import MeeshyE2EE
 @testable import MeeshySDK
 
 /// L'enrôlement de cette installation (spec § 3.1 à 3.3) : une fois par compte

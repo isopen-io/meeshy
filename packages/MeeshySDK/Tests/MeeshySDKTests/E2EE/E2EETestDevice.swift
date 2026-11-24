@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 import GRDB
-@testable import MeeshyE2EE
+@_spi(Testing) @testable import MeeshyE2EE
 
 /// Un appareil de test complet : identité, base scellée (en mémoire ou sur un
 /// fichier), stores libsignal, verrou de fichier, fabrique de clés, chiffreur.

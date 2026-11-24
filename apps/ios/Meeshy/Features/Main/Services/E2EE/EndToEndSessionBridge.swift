@@ -3,6 +3,7 @@ import Foundation
 import MeeshyE2EE
 import MeeshySDK
 import os
+import UIKit
 
 /// Ce que la session ouverte branche sur l'E2EE libsignal (#3707) : à
 /// l'ouverture, l'installation s'enrôle (une fois par compte et par identité)
@@ -73,6 +74,7 @@ final class EndToEndSessionBridge: EndToEndSessionBridging {
     func start(userId: String) {
         stop()
         guard !userId.isEmpty else { return }
+        ApplicationExecutionLeasing.attach(UIApplication.shared)
         let runtime = runtime
         account = userId
         enqueue { await runtime.open(session: userId) }
