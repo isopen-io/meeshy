@@ -130,7 +130,7 @@ struct GameRoutesTests {
         let game: [any MeeshyEndpoint] = Self.catalogRoutes()
             .filter { $0.key != "engagement" && $0.key != "mint" }
             .map(\.endpoint) + [UsersEndpoint.gameOf(userId: "u")]
-        #expect(game.count == 20)
+        #expect(game.count == 21)
         for endpoint in game {
             #expect(endpoint.rejectionPolicy == .structured, "\(endpoint.path)")
         }

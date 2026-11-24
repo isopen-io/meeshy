@@ -472,7 +472,7 @@ export class FlameService {
       }
       const status = flameStatus({ lastActiveDay: facts.lastActiveDay, today: facts.today, streak: facts.streak, freezes: facts.freezes });
       const verdict = canPauseFlame({ today: facts.today, days, status, pause: facts.pause });
-      if (!verdict.allowed) throw new GameRefusal('FLAME_PAUSE_NOT_ALLOWED', { reason: verdict.reason });
+      if (verdict.allowed === false) throw new GameRefusal('FLAME_PAUSE_NOT_ALLOWED', { reason: verdict.reason });
       const written = await this.prisma.user.updateMany({
         where: { id: userId, AND: flameUnchanged(row) },
         data: { flamePauseFrom: verdict.pause.from, flamePauseUntil: verdict.pause.until },
