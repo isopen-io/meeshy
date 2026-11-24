@@ -62,6 +62,10 @@ const deShellLabels = {
   'message.edited.a11y': 'bearbeitet',
   'message.pinned.a11y': 'angeheftet',
   'message.replyTo.a11y': 'Antwort an {author}',
+  'message.anonymous.a11y': 'Ohne Konto',
+  'message.sticker.a11y': 'Sticker',
+  'message.location.named.a11y': 'geteilter Standort: {place}',
+  'message.location.shared.a11y': 'geteilter Standort',
   'quote.sender.unknown': 'den Absender',
 
   'media.tile.open': '{name} öffnen',

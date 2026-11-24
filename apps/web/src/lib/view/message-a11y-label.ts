@@ -244,7 +244,10 @@ export function composeMessageLabel({
    * l'iconographie seule ne suffit plus à porter.
    */
   const isAnonymous = !isMine && message.sender?.type === 'anonymous';
-  if (isAnonymous) segments.push('Sans compte');
+  /* « SANS COMPTE » DESCEND LE CATALOGUE (94w, #20326) — FR byte-identique, les
+     six autres langues reprises de `linkDetail.stats.anonymous` (déjà traduit) :
+     un lecteur EN/ES/PT/DE/IT/AR n'entend plus « Sans compte » en français. */
+  if (isAnonymous) segments.push(translate(language, 'message.anonymous.a11y'));
 
   const author = message.sender?.displayName;
   if (!isMine && author !== undefined && author !== '') segments.push(author);
@@ -315,7 +318,11 @@ export function composeMessageLabel({
      */
     const body = bodyKindOf(message);
     if (body.kind === 'sticker') {
-      segments.push(body.sticker.emoji !== undefined ? `sticker ${body.sticker.emoji}` : 'sticker');
+      /* « STICKER » DESCEND LE CATALOGUE (94w, #20326) — même mot en
+         fr/en/es/pt/it, « Sticker » en allemand (nom commun capitalisé),
+         « ملصق » en arabe ; l'emoji suit, jamais une langue en dur. */
+      const stickerWord = translate(language, 'message.sticker.a11y');
+      segments.push(body.sticker.emoji !== undefined ? `${stickerWord} ${body.sticker.emoji}` : stickerWord);
     } else if (body.kind === 'emoji-only') {
       segments.push(message.content);
     } else if (servedText !== '') {
@@ -324,9 +331,19 @@ export function composeMessageLabel({
     segments.push(...attachmentSegments(message.attachments));
 
     /** Le LIEU (#5936, `a11y.message.location`) — APRÈS les pièces jointes,
-     * miroir `nonMediaAccessibilityParts` (`:152-158`). */
+     * miroir `nonMediaAccessibilityParts` (`:152-158`). DESCEND LE CATALOGUE
+     * (94w, #20326) : FR byte-identique (« Position : {place} », repli « lieu
+     * partagé »), les six autres langues reprises de l'étiquette iOS
+     * `a11y.message.location` déjà relue. Un lieu sans nom servi rend le repli
+     * seul, jamais « Position :  » tronqué d'un nom absent. */
     const place = placeOf(message);
-    if (place !== null) segments.push(`Position : ${place.name ?? 'lieu partagé'}`);
+    if (place !== null) {
+      segments.push(
+        place.name != null && place.name !== ''
+          ? translate(language, 'message.location.named.a11y', { place: place.name })
+          : translate(language, 'message.location.shared.a11y'),
+      );
+    }
   }
 
   segments.push(time(message.createdAt));

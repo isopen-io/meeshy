@@ -368,7 +368,8 @@ describe('composeMessageLabel — la citation suit ce que la rangée PEINT (#709
  * .swift:125-128`).
  */
 describe('composeMessageLabel — « Sans compte »', () => {
-  test('un participant anonymous porte « Sans compte » AVANT son nom', () => {
+  test('un participant anonymous porte « Sans compte » AVANT son nom', async () => {
+    await loadInterfaceCatalog('fr');
     const label = composeMessageLabel({ language: 'fr', protection: 'standard',
       message: message({ sender: senderOf('Invité', 'anonymous') }),
       isMine: false,
@@ -377,6 +378,22 @@ describe('composeMessageLabel — « Sans compte »', () => {
     });
 
     expect(label).toBe('Sans compte, Invité, Bonjour, 09:02');
+  });
+
+  /* 94w (#20326) — le marqueur anonyme descend le catalogue : un lecteur EN
+     n'entend plus « Sans compte » en français, mais « Without an account »
+     (repris de `linkDetail.stats.anonymous`). */
+  test('en anglais : « Without an account », jamais « Sans compte »', async () => {
+    await loadInterfaceCatalog('en');
+    const label = composeMessageLabel({ language: 'en', protection: 'standard',
+      message: message({ sender: senderOf('Invité', 'anonymous') }),
+      isMine: false,
+      servedText: 'Bonjour',
+      delivery: 'sent',
+    });
+
+    expect(label).toContain('Without an account');
+    expect(label).not.toContain('Sans compte');
   });
 
   test('un participant `user` ordinaire ne porte JAMAIS « Sans compte »', () => {
@@ -463,7 +480,8 @@ describe('composeMessageLabel — les états du lot (#5936)', () => {
     expect(label).toBe('Emma a rejoint la conversation');
   });
 
-  test('sticker : un segment « sticker 🔥 » remplace le texte', () => {
+  test('sticker : un segment « sticker 🔥 » remplace le texte', async () => {
+    await loadInterfaceCatalog('fr');
     const label = composeMessageLabel({ language: 'fr',
       message: message({ content: '🔥', metadata: { sticker: { emoji: '🔥' } } }),
       isMine: false,
@@ -474,7 +492,23 @@ describe('composeMessageLabel — les états du lot (#5936)', () => {
     expect(label).toContain('sticker 🔥');
   });
 
-  test('lieu : « Position : Tour Eiffel » après les pièces jointes', () => {
+  /* 94w (#20326) — « sticker » descend le catalogue. Le mot ne diffère du
+     français qu'en arabe : un lecteur AR entend « ملصق », jamais « sticker ». */
+  test('en arabe : « ملصق 🔥 », jamais « sticker »', async () => {
+    await loadInterfaceCatalog('ar');
+    const label = composeMessageLabel({ language: 'ar',
+      message: message({ content: '🔥', metadata: { sticker: { emoji: '🔥' } } }),
+      isMine: false,
+      servedText: '🔥',
+      delivery: 'sent',
+      protection: 'standard',
+    });
+    expect(label).toContain('ملصق 🔥');
+    expect(label).not.toContain('sticker');
+  });
+
+  test('lieu : « Position : Tour Eiffel » après les pièces jointes', async () => {
+    await loadInterfaceCatalog('fr');
     const label = composeMessageLabel({ language: 'fr',
       message: message({
         content: '',
@@ -491,6 +525,46 @@ describe('composeMessageLabel — les états du lot (#5936)', () => {
     const positionIndex = label.indexOf('Position : Tour Eiffel');
     expect(attachmentsIndex).toBeGreaterThan(-1);
     expect(positionIndex).toBeGreaterThan(attachmentsIndex);
+  });
+
+  /* 94w (#20326) — le lieu descend le catalogue. Un lecteur EN entend
+     « shared location: Tour Eiffel » (étiquette iOS `a11y.message.location`),
+     jamais « Position ». */
+  test('en anglais : « shared location: Tour Eiffel », jamais « Position »', async () => {
+    await loadInterfaceCatalog('en');
+    const label = composeMessageLabel({ language: 'en',
+      message: message({
+        content: '',
+        messageType: 'location',
+        metadata: { location: { latitude: 48.8584, longitude: 2.2945, name: 'Tour Eiffel' } },
+      }),
+      isMine: false,
+      servedText: '',
+      delivery: 'sent',
+      protection: 'standard',
+    });
+    expect(label).toContain('shared location: Tour Eiffel');
+    expect(label).not.toContain('Position');
+  });
+
+  /* 94w — un lieu SANS nom servi rend le repli seul : FR « lieu partagé »,
+     EN « shared location » — jamais « Position :  » tronqué. */
+  test('lieu sans nom : repli « lieu partagé » (fr) / « shared location » (en)', async () => {
+    const locationNoName = () =>
+      message({
+        content: '',
+        messageType: 'location',
+        metadata: { location: { latitude: 48.8584, longitude: 2.2945 } },
+      });
+    await loadInterfaceCatalog('fr');
+    const fr = composeMessageLabel({ language: 'fr', message: locationNoName(),
+      isMine: false, servedText: '', delivery: 'sent', protection: 'standard' });
+    expect(fr).toContain('lieu partagé');
+    expect(fr).not.toContain('Position : ');
+    await loadInterfaceCatalog('en');
+    const en = composeMessageLabel({ language: 'en', message: locationNoName(),
+      isMine: false, servedText: '', delivery: 'sent', protection: 'standard' });
+    expect(en).toContain('shared location');
   });
 
   test('story citée : « réponse à sa story » remplace « réponse à X »', () => {

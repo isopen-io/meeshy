@@ -62,6 +62,10 @@ const itShellLabels = {
   'message.edited.a11y': 'modificato',
   'message.pinned.a11y': 'fissato',
   'message.replyTo.a11y': 'in risposta a {author}',
+  'message.anonymous.a11y': 'Senza account',
+  'message.sticker.a11y': 'sticker',
+  'message.location.named.a11y': 'posizione condivisa: {place}',
+  'message.location.shared.a11y': 'posizione condivisa',
   'quote.sender.unknown': 'il mittente',
 
   'media.tile.open': 'Apri {name}',

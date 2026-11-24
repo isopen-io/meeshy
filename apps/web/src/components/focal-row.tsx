@@ -800,7 +800,11 @@ export const FocalRow = memo(function FocalRow({
             {isAnonymousSender ? (
               <GlyphSvg
                 glyph={THREAD_IDENTITY_GLYPHS.maskHappy}
-                title="Sans compte"
+                /* 94w (#20326) — l'info-bulle du fantôme descend le MÊME
+                   `message.anonymous.a11y` que le libellé de la rangée : l'œil
+                   (survol) et l'oreille disent le même mot, jamais « Sans
+                   compte » en dur pour un lecteur non francophone. */
+                title={translate(currentInterfaceLanguage(), 'message.anonymous.a11y')}
                 /* `text-title` — LA MÊME taille que le nom, pour que `0.8em`
                    soit bien `nameSize × 0.8` (iOS, `:130-131`). Sans elle,
                    l'`em` se résolvait sur la police HÉRITÉE du conteneur
