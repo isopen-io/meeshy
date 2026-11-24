@@ -75,13 +75,17 @@ final class FakeTalkieSink: TalkieSink {
     }
 
     private(set) var prepared: [String] = []
+    private(set) var preparedSenders: [String] = []
     private(set) var played: [Played] = []
     private(set) var silenced: [String] = []
     private(set) var released: [String] = []
 
     nonisolated deinit {}
 
-    func prepare(_ talkieId: String) { prepared.append(talkieId) }
+    func prepare(_ talkieId: String, fromUserId: String) {
+        prepared.append(talkieId)
+        preparedSenders.append(fromUserId)
+    }
     func play(_ talkieId: String, _ data: Data) { played.append(Played(talkieId: talkieId, data: data)) }
     func silence(_ talkieId: String) { silenced.append(talkieId) }
     func release(_ talkieId: String) { released.append(talkieId) }

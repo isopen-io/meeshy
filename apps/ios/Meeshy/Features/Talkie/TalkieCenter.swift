@@ -12,7 +12,8 @@ private extension Logger {
 @MainActor
 protocol TalkieSink: AnyObject {
     /// Une prise de parole est annoncée : la sortie se prépare, pour que le premier fragment sonne sans l'attendre.
-    func prepare(_ talkieId: String)
+    /// `fromUserId` : sous qui la voix est inscrite au registre des voix (#20531).
+    func prepare(_ talkieId: String, fromUserId: String)
     /// Un fragment, à jouer À LA SUITE du précédent de la même prise de parole.
     func play(_ talkieId: String, _ data: Data)
     /// `cut`, ou « Couper » : se taire sur-le-champ.
@@ -113,7 +114,7 @@ final class TalkieCenter: ObservableObject {
         )
         lastSeq[incoming.talkieId] = -1
         active.append(speaker)
-        sink.prepare(incoming.talkieId)
+        sink.prepare(incoming.talkieId, fromUserId: incoming.fromUserId)
         schedule(speaker)
         Task { await self.hydrate(speaker) }
     }

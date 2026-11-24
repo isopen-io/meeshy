@@ -3,21 +3,20 @@ import MeeshySDK
 import XCTest
 @testable import Meeshy
 
-/// La voix d'un talkie sort fort sur l'iPhone, et n'est jamais forcée dans des écouteurs (#17087).
+/// La voix d'un talkie sort sur le haut-parleur de l'iPhone, et n'est jamais forcée dans des écouteurs (#17087).
 final class TalkieOutputPlanTests: XCTestCase {
 
-    func test_theEarpiece_isRoutedToTheSpeaker_andBoosted() {
+    func test_theEarpiece_isRoutedToTheSpeaker() {
         XCTAssertEqual(TalkieOutputPlan.decide(outputs: [.builtInReceiver]),
-                       TalkieOutputPlan(routesToSpeaker: true, gainDecibels: TalkieOutputPlan.boostDecibels))
+                       TalkieOutputPlan(routesToSpeaker: true, gainDecibels: 0))
     }
 
-    func test_theSpeaker_isKept_andBoosted() {
-        XCTAssertEqual(TalkieOutputPlan.decide(outputs: [.builtInSpeaker]),
-                       TalkieOutputPlan(routesToSpeaker: false, gainDecibels: TalkieOutputPlan.boostDecibels))
-    }
-
-    func test_theBoost_doublesTheAmplitude() {
-        XCTAssertEqual(pow(10, TalkieOutputPlan.boostDecibels / 20), 2, accuracy: 0.01)
+    /// La voix arrive déjà normalisée par son propre gain (#20531) : le haut-parleur ne l'amplifie plus.
+    func test_outputPlan_speaker_noLongerBoosts() {
+        let plan = TalkieOutputPlan.decide(outputs: [.builtInSpeaker])
+        XCTAssertEqual(plan.gainDecibels, 0)
+        XCTAssertFalse(plan.routesToSpeaker)
+        XCTAssertEqual(TalkieOutputPlan.decide(outputs: [.builtInReceiver]).gainDecibels, 0)
     }
 
     func test_personalOutputs_areNeitherRedirectedNorBoosted() {
@@ -29,7 +28,7 @@ final class TalkieOutputPlanTests: XCTestCase {
         }
     }
 
-    func test_aPersonalOutputBesideTheSpeaker_winsOverTheBoost() {
+    func test_aPersonalOutputBesideTheSpeaker_staysUnboosted() {
         XCTAssertEqual(TalkieOutputPlan.decide(outputs: [.builtInSpeaker, .airPlay]).gainDecibels, 0)
     }
 

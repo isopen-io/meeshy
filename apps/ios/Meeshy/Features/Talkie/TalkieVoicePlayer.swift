@@ -15,9 +15,11 @@ private extension Logger {
 ///
 /// - La sortie se prépare dès l'ANNONCE (`prepare`, #17094) : session et moteur sont prêts quand le premier fragment
 ///   arrive, au lieu de se lever devant lui. Rien n'enregistre : c'est la sortie seule.
-/// - Sur la sortie intégrée, la voix sort sur le HAUT-PARLEUR avec un gain ×2 ; avec des écouteurs, un casque ou des
-///   AirPods, ni redirection ni gain (#17087, `TalkieOutputPlan`). Un changement de sortie en pleine prise de parole
-///   réapplique la règle aussitôt.
+/// - Sur la sortie intégrée, la voix sort sur le HAUT-PARLEUR ; avec des écouteurs, un casque ou des AirPods, sans
+///   redirection (#17087, `TalkieOutputPlan`). Un changement de sortie en pleine prise de parole réapplique la règle.
+/// - Chaque fragment décodé passe par le gain de SA voix, qui la normalise comme à l'envoi, puis par son analyseur,
+///   qui pousse ses bandes au registre des voix sous l'expéditeur (#20531, `TalkieVoiceProcessor`), avant d'être
+///   planifié. Ce travail se fait là où le fragment est décodé, sur l'acteur principal.
 /// - Ce qu'on écoutait se tait pendant la voix, puis reprend (#18820, `TalkieListeningHold`) : les lecteurs Meeshy se
 ///   mettent en pause, la musique d'une autre app s'interrompt (session sans mélange, `InterruptingVoiceSessionLaw`) ;
 ///   la voix finie, la session se rend en prévenant les autres apps et les lecteurs Meeshy reprennent. Quand rien ne
@@ -38,6 +40,9 @@ final class TalkieVoicePlayer: TalkieSink {
         let node: AVAudioPlayerNode
         let decoder: TalkieAdtsStreamDecoder
         let format: AVAudioFormat
+        /// Le gain et l'analyseur de cette voix ; `nil` quand l'expéditeur n'a pas été annoncé.
+        let processor: TalkieVoiceProcessor?
+        let fromUserId: String?
         var pending = 0
         /// Rien de plus n'arrivera : la file finit de sonner, puis se libère.
         var released = false
@@ -49,11 +54,13 @@ final class TalkieVoicePlayer: TalkieSink {
     private var voices: [String: Voice] = [:]
     /// Les prises de parole annoncées dont aucun fragment n'a encore sonné : elles tiennent la sortie prête.
     private var announced: Set<String> = []
+    /// L'expéditeur de chaque prise de parole annoncée, sous qui sa voix s'inscrit au registre.
+    private var senders: [String: String] = [:]
     private var observers: [NSObjectProtocol] = []
     private let isInCall: () -> Bool
-    /// Le niveau de la voix qui sort, que l'onde de l'en-tête lit en direct (#17310), mesuré sur le mixeur des voix.
+    /// Le niveau de la voix qui sort, que l'onde de l'en-tête lit en direct (#17310), mesuré fragment par fragment.
     private let meter: any TalkieLevelMetering
-    private var metering = false
+    private let stage: TalkieVoiceStage
 
     nonisolated deinit {}
 
@@ -63,21 +70,24 @@ final class TalkieVoicePlayer: TalkieSink {
     init(
         isInCall: @escaping () -> Bool = { CallManager.isCallActiveFlag },
         meter: any TalkieLevelMetering = TalkieLevelMeter.incoming,
-        listening: TalkieListeningHold = TalkieListeningHold(session: TalkieCoordinatorVoiceSession(), listening: MeeshyListeningPause())
+        listening: TalkieListeningHold = TalkieListeningHold(session: TalkieCoordinatorVoiceSession(), listening: MeeshyListeningPause()),
+        stage: TalkieVoiceStage = .shared
     ) {
         self.isInCall = isInCall
         self.meter = meter
         self.listening = listening
+        self.stage = stage
         engine.attach(voicesMixer)
         engine.attach(booster)
         engine.connect(voicesMixer, to: booster, format: nil)
         engine.connect(booster, to: engine.mainMixerNode, format: nil)
     }
 
-    func prepare(_ talkieId: String) {
+    func prepare(_ talkieId: String, fromUserId: String) {
         guard !isInCall() else { return }
         if isIdle { prepareOutput() }
         announced.insert(talkieId)
+        senders[talkieId] = fromUserId
         _ = startEngineIfNeeded()
     }
 
@@ -89,8 +99,13 @@ final class TalkieVoicePlayer: TalkieSink {
         guard let buffer = decoder.pcm(data) else { return }
         let wasWarm = !isIdle && engine.isRunning
         if isIdle { prepareOutput() }
-        var voice = voices[talkieId] ?? attachVoice(format: buffer.format, decoder: decoder)
+        var voice = voices[talkieId] ?? attachVoice(format: buffer.format, decoder: decoder, fromUserId: senders[talkieId])
         guard !voice.released, Self.mayPlay(buffer.format, on: voice.format), startEngineIfNeeded() else { return }
+        if pristine, let fromUserId = voice.fromUserId {
+            stage.begin(userId: fromUserId, direction: .incoming, at: Date())
+        }
+        voice.processor?.level(buffer)
+        meter.push(rms: voice.processor?.publish(buffer) ?? 0)
         voice.pending += 1
         voices[talkieId] = voice
         announced.remove(talkieId)
@@ -108,6 +123,7 @@ final class TalkieVoicePlayer: TalkieSink {
 
     func silence(_ talkieId: String) {
         announced.remove(talkieId)
+        senders.removeValue(forKey: talkieId)
         if let voice = voices.removeValue(forKey: talkieId) { detach(voice) }
         releaseOutputIfIdle()
     }
@@ -115,6 +131,7 @@ final class TalkieVoicePlayer: TalkieSink {
     func release(_ talkieId: String) {
         guard var voice = voices[talkieId] else {
             announced.remove(talkieId)
+            senders.removeValue(forKey: talkieId)
             releaseOutputIfIdle()
             return
         }
@@ -125,11 +142,12 @@ final class TalkieVoicePlayer: TalkieSink {
 
     // MARK: - Voix
 
-    private func attachVoice(format: AVAudioFormat, decoder: TalkieAdtsStreamDecoder) -> Voice {
+    private func attachVoice(format: AVAudioFormat, decoder: TalkieAdtsStreamDecoder, fromUserId: String?) -> Voice {
         let node = AVAudioPlayerNode()
         engine.attach(node)
         engine.connect(node, to: voicesMixer, format: format)
-        return Voice(node: node, decoder: decoder, format: format)
+        let processor = fromUserId.map { TalkieVoiceProcessor(userId: $0, sampleRate: format.sampleRate, stage: stage) }
+        return Voice(node: node, decoder: decoder, format: format, processor: processor, fromUserId: fromUserId)
     }
 
     /// Un nœud ne joue que le format auquel il est relié : un fragment qui change de format en pleine prise de parole
@@ -148,6 +166,7 @@ final class TalkieVoicePlayer: TalkieSink {
     private var isIdle: Bool { voices.isEmpty && announced.isEmpty }
 
     private func drain(_ talkieId: String) {
+        senders.removeValue(forKey: talkieId)
         guard let voice = voices.removeValue(forKey: talkieId) else { return }
         detach(voice)
         releaseOutputIfIdle()
@@ -156,6 +175,7 @@ final class TalkieVoicePlayer: TalkieSink {
     private func detach(_ voice: Voice) {
         voice.node.stop()
         engine.detach(voice.node)
+        if let fromUserId = voice.fromUserId { stage.end(userId: fromUserId) }
     }
 
     // MARK: - Sortie
@@ -178,28 +198,7 @@ final class TalkieVoicePlayer: TalkieSink {
     private func startEngineIfNeeded() -> Bool {
         guard !engine.isRunning else { return true }
         engine.prepare()
-        guard (try? engine.start()) != nil else { return false }
-        startMetering()
-        return true
-    }
-
-    private func startMetering() {
-        let format = voicesMixer.outputFormat(forBus: 0)
-        guard !metering, AudioTapFormatReadiness.mayInstall(sampleRate: format.sampleRate, channelCount: format.channelCount) else { return }
-        metering = true
-        let meter = self.meter
-        let tap: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { buffer, _ in
-            guard let channel = buffer.floatChannelData?[0] else { return }
-            meter.push(rms: TalkieWaveLaw.rms(UnsafeBufferPointer(start: channel, count: Int(buffer.frameLength))))
-        }
-        voicesMixer.installTap(onBus: 0, bufferSize: 1024, format: format, block: tap)
-    }
-
-    private func stopMetering() {
-        meter.reset()
-        guard metering else { return }
-        metering = false
-        voicesMixer.removeTap(onBus: 0)
+        return (try? engine.start()) != nil
     }
 
     private func observeOutputChanges() {
@@ -222,7 +221,7 @@ final class TalkieVoicePlayer: TalkieSink {
 
     private func releaseOutputIfIdle() {
         guard isIdle, engine.isRunning || !observers.isEmpty else { return }
-        stopMetering()
+        meter.reset()
         engine.stop()
         observers.forEach(NotificationCenter.default.removeObserver)
         observers = []

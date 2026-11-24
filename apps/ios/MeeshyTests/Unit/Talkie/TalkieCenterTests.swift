@@ -69,6 +69,7 @@ final class TalkieCenterTests: XCTestCase {
         rig.sut.open(incoming("t3", from: "me"))
 
         XCTAssertEqual(rig.sink.prepared, ["t1"])
+        XCTAssertEqual(rig.sink.preparedSenders, ["alice"])
         XCTAssertTrue(rig.sink.played.isEmpty)
     }
 

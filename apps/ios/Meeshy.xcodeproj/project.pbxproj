@@ -1176,6 +1176,7 @@
 		3C5D27AD53BD30539447999C /* UserActivityCardsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6732C92541F7E56405503D77 /* UserActivityCardsTests.swift */; };
 		3C643A0F91CFBD50E8DFB7CD /* StoryReactionLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FC1EA60ACFC6BE5EDC4911E /* StoryReactionLedger.swift */; };
 		3C7D99368EBAA4E248C5DEE4 /* PostFullscreenSeriesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB3D25DA4DD5E8201A4EE0D5 /* PostFullscreenSeriesTests.swift */; };
+		3C838E2E69DF04269769CD31 /* TalkieVoiceStage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49000225C7CD7B5D2C8FF53C /* TalkieVoiceStage.swift */; };
 		3C9331DED643B71490DFFB5B /* ComposerBottomClearanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC283F1DDD242522BE1628D8 /* ComposerBottomClearanceTests.swift */; };
 		3CAC78699D3ECF97D0FA4B0F /* TwoFactorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3179CB2435C623A05603B2C0 /* TwoFactorViewModel.swift */; };
 		3CAFF12393C897FC007115E3 /* feerique_clair-de-lune_back.webp in Resources */ = {isa = PBXBuildFile; fileRef = 053429F1E6BC81D3DB852B73 /* feerique_clair-de-lune_back.webp */; };
@@ -2675,6 +2676,7 @@
 		897D41F326B88FC9961A7FB4 /* FeedViewModel+MediaCaptionTranslation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48127EA3285517FC3F0CB8D4 /* FeedViewModel+MediaCaptionTranslation.swift */; };
 		8984D68310C4CA5D356FBB36 /* UnreadBadgeFormatGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 031568CA5591A4011B521992 /* UnreadBadgeFormatGuardTests.swift */; };
 		898C7C19FE817FEF8DC0D01B /* StoryCaptionOverlayWiringGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9328098022F0B32A644ADEDD /* StoryCaptionOverlayWiringGuardTests.swift */; };
+		89912D75B4E7BFA8D978F2E2 /* TalkieVoiceStageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FB5BC7F119F6F65B1D836C8 /* TalkieVoiceStageTests.swift */; };
 		899901A594E984BDFFBC1886 /* ComposerSoclePublishHandoffTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5078B702BD5A39DE1ED108B5 /* ComposerSoclePublishHandoffTests.swift */; };
 		89BA33A38DF97A8F3B133951 /* ConversationVideoInlineMinimalGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C23EE5399ADBBB74848DEB78 /* ConversationVideoInlineMinimalGuardTests.swift */; };
 		89BB78595167BC60061F99AD /* SceneStickerPose.swift in Sources */ = {isa = PBXBuildFile; fileRef = B137FC052FA4B3BC4C090395 /* SceneStickerPose.swift */; };
@@ -6272,6 +6274,7 @@
 		3F9DC121A7427B000585D234 /* ConversationInfoSheet+Actions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationInfoSheet+Actions.swift"; sourceTree = "<group>"; };
 		3FA4D0BE944B7630CB9D3CF1 /* PostDetailSecondaryTranslationPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostDetailSecondaryTranslationPanel.swift; sourceTree = "<group>"; };
 		3FAD89123AEC91380DAC83BB /* SceneCaptionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneCaptionTests.swift; sourceTree = "<group>"; };
+		3FB5BC7F119F6F65B1D836C8 /* TalkieVoiceStageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieVoiceStageTests.swift; sourceTree = "<group>"; };
 		3FC1EA60ACFC6BE5EDC4911E /* StoryReactionLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryReactionLedger.swift; sourceTree = "<group>"; };
 		3FC8BBA73834241736076862 /* signature_aurore_back.webp */ = {isa = PBXFileReference; path = signature_aurore_back.webp; sourceTree = "<group>"; };
 		3FD69F194EC60C6FFDC72D86 /* ConversationSocketHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationSocketHandler.swift; sourceTree = "<group>"; };
@@ -6470,6 +6473,7 @@
 		48C48DF22418A02762FDF9CE /* MediaGalleryActionColumnTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaGalleryActionColumnTests.swift; sourceTree = "<group>"; };
 		48F83D7A51894EAB7A7A002C /* StoryViewModelRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewModelRules.swift; sourceTree = "<group>"; };
 		48FC5751AEE67399D9C6E17C /* ComposerSceneCameraTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSceneCameraTests.swift; sourceTree = "<group>"; };
+		49000225C7CD7B5D2C8FF53C /* TalkieVoiceStage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieVoiceStage.swift; sourceTree = "<group>"; };
 		49144CD839626E0342BBF918 /* CallBubbleViewMiniMenuWiringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallBubbleViewMiniMenuWiringTests.swift; sourceTree = "<group>"; };
 		492FF55D385D5145608F1A31 /* MessageCardExportText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCardExportText.swift; sourceTree = "<group>"; };
 		4931C7B3FB254EA06924B50B /* LicensesSectionHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicensesSectionHeader.swift; sourceTree = "<group>"; };
@@ -12552,6 +12556,7 @@
 				250171E4EAA547407A11CC1F /* TalkieUnreachableTests.swift */,
 				F5480160447F284B3A9AAE3E /* TalkieVoiceCopyTests.swift */,
 				D17E5C989142C01EC9FAD2A1 /* TalkieVoiceLevelerTests.swift */,
+				3FB5BC7F119F6F65B1D836C8 /* TalkieVoiceStageTests.swift */,
 				A1C23E5659EC81641F3F0480 /* TalkieWakeJoinerTests.swift */,
 				A837AE52912361D28F7C7975 /* TalkieWordingTests.swift */,
 			);
@@ -13112,6 +13117,7 @@
 				D97F51552BB90DC3535C3D8A /* TalkieVoiceCopy.swift */,
 				CE937FAA18B67907F9DC53EA /* TalkieVoiceLeveler.swift */,
 				B9D6370CEE3A38D64EE8090E /* TalkieVoicePlayer.swift */,
+				49000225C7CD7B5D2C8FF53C /* TalkieVoiceStage.swift */,
 				E5718BBE35CA6E86B0B14488 /* TalkieWakeJoiner.swift */,
 			);
 			path = Talkie;
@@ -19433,6 +19439,7 @@
 				B25B44BC4DE96AFCD86410AA /* TalkieVoiceCopy.swift in Sources */,
 				BE9B20174C541645224DADB5 /* TalkieVoiceLeveler.swift in Sources */,
 				B3102C10C183656FA58182FD /* TalkieVoicePlayer.swift in Sources */,
+				3C838E2E69DF04269769CD31 /* TalkieVoiceStage.swift in Sources */,
 				E9D0F7B8ECAADBD03F85C472 /* TalkieWakeJoiner.swift in Sources */,
 				B00ECA21E4E72CDF0CA4CFB7 /* TaskSlot.swift in Sources */,
 				8E877AD2FE6781764A828BE3 /* TaskTimeout.swift in Sources */,
@@ -21584,6 +21591,7 @@
 				0E270F7AD61FDCFBC008386D /* TalkieUnreachableTests.swift in Sources */,
 				B0E9EDA8953E870DB279186D /* TalkieVoiceCopyTests.swift in Sources */,
 				373196F968A7FA1F47F31518 /* TalkieVoiceLevelerTests.swift in Sources */,
+				89912D75B4E7BFA8D978F2E2 /* TalkieVoiceStageTests.swift in Sources */,
 				54E60F1294DEBEEA02EF1004 /* TalkieWakeJoinerTests.swift in Sources */,
 				8A0869F74C5C5085ED8A2A55 /* TalkieWordingTests.swift in Sources */,
 				971DC4B190D6804609F4C9CF /* TaskSlotTests.swift in Sources */,

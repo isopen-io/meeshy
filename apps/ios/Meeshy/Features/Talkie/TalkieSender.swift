@@ -11,8 +11,9 @@ private extension Logger {
 /// dans les tests.
 @MainActor
 protocol TalkieCapturing: AnyObject {
-    /// Ouvre le micro. `false` : refusé ou indisponible (appel en cours) — rien ne tourne.
-    func start(onFrame: @escaping @MainActor @Sendable (Data, TimeInterval) -> Void) async -> Bool
+    /// Ouvre le micro pour une voix adressée à `toUserId`, sous qui ses bandes vont au registre des voix (#20531).
+    /// `false` : refusé ou indisponible (appel en cours) — rien ne tourne.
+    func start(toUserId: String, onFrame: @escaping @MainActor @Sendable (Data, TimeInterval) -> Void) async -> Bool
     /// Arrête le micro ; rend la main une fois les dernières trames remises à `onFrame`.
     func stop() async
 }
@@ -100,6 +101,8 @@ final class TalkieSender: ObservableObject {
     private let copier: TalkieVoiceCopying
     private let now: () -> Date
     private let schedule: TalkieDeadlineScheduler
+    /// La voix qui part s'y inscrit sous son destinataire, de l'appui à la fin (#20531).
+    private let stage: TalkieVoiceStage
     private var session: Session?
     /// Les voix réveillées closes, gardées jusqu'au verdict `joined` de la passerelle. Bornées : rien ne grossit.
     private var awaitingJoin: [(talkieId: String, toUserId: String, frames: [Data])] = []
@@ -117,13 +120,15 @@ final class TalkieSender: ObservableObject {
         copier: TalkieVoiceCopying? = nil,
         endedEvents: AnyPublisher<TalkieEnded, Never> = TalkieEvents.ended,
         now: @escaping () -> Date = { Date() },
-        schedule: @escaping TalkieDeadlineScheduler = TalkieSender.sleepingDeadline
+        schedule: @escaping TalkieDeadlineScheduler = TalkieSender.sleepingDeadline,
+        stage: TalkieVoiceStage = .shared
     ) {
         self.emitter = emitter
         self.capture = capture ?? TalkieMicCapture()
         self.copier = copier ?? TalkieVoiceCopySender()
         self.now = now
         self.schedule = schedule
+        self.stage = stage
         let lane = OrderedEventLane()
         endedEvents
             .relay(through: lane) { [weak self] ended in await self?.ended(ended.talkieId, reason: ended.reason, joined: ended.joined) }
@@ -167,6 +172,7 @@ final class TalkieSender: ObservableObject {
         let current = Session(toUserId: toUserId, pressedAt: now())
         session = current
         phase = .starting(toUserId: toUserId)
+        stage.begin(userId: toUserId, direction: .outgoing, at: now())
         let verdict = Task { () -> TalkieStartVerdict in
             let verdict = await self.emitter.start(toUserId: toUserId)
             current.latency.mark(.opened, at: self.now())
@@ -184,6 +190,7 @@ final class TalkieSender: ObservableObject {
         current.voiceMessage = true
         session = current
         phase = .recordingCopy(toUserId: toUserId)
+        stage.begin(userId: toUserId, direction: .outgoing, at: now())
         Task {
             await Task.yield()
             guard await self.openMic(current) else {
@@ -251,7 +258,7 @@ final class TalkieSender: ObservableObject {
     // MARK: - Interne
 
     private func openMic(_ current: Session) async -> Bool {
-        let ready = await capture.start { [weak self] data, duration in self?.frame(current, data, duration) }
+        let ready = await capture.start(toUserId: current.toUserId) { [weak self] data, duration in self?.frame(current, data, duration) }
         guard ready else { return false }
         current.latency.mark(.micReady, at: now())
         if current.finishing || current.released {
@@ -415,6 +422,7 @@ final class TalkieSender: ObservableObject {
         }
         if session === current {
             session = nil
+            stage.end(userId: current.toUserId)
             phase = .idle
             waking = false
             talkWindow = nil

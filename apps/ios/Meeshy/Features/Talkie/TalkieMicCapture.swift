@@ -13,6 +13,9 @@ private extension Logger {
 /// La session audio se prend par `MeeshyRecordingSession`, le chemin des vocaux : le son Meeshy qui joue baisse sans
 /// s'arrêter, et pendant un appel rien ne se reconfigure (le micro ne s'ouvre pas).
 ///
+/// Chaque tampon du micro passe d'abord par le gain qui normalise la voix, puis part à l'encodeur, puis à
+/// l'analyseur qui pousse ses bandes au registre des voix sous le destinataire (#20531, `TalkieVoiceProcessor`).
+///
 /// Chaque ouverture écrit au journal ce que coûtent la permission, la session et le moteur, puis la taille du premier
 /// tampon livré par le micro (#17094) : c'est elle qui dit à quel pas les trames arrivent.
 @MainActor
@@ -25,14 +28,16 @@ final class TalkieMicCapture: TalkieCapturing {
     private var frameDelivery: Task<Void, Never>?
     /// Le niveau de la voix captée, que l'onde de l'en-tête lit en direct (#17310).
     private let meter: any TalkieLevelMetering
+    private let stage: TalkieVoiceStage
 
-    init(meter: any TalkieLevelMetering = TalkieLevelMeter.outgoing) {
+    init(meter: any TalkieLevelMetering = TalkieLevelMeter.outgoing, stage: TalkieVoiceStage = .shared) {
         self.meter = meter
+        self.stage = stage
     }
 
     nonisolated deinit {}
 
-    func start(onFrame: @escaping @MainActor @Sendable (Data, TimeInterval) -> Void) async -> Bool {
+    func start(toUserId: String, onFrame: @escaping @MainActor @Sendable (Data, TimeInterval) -> Void) async -> Bool {
         let startedAt = Date()
         guard engine == nil, await DevicePermissions.requestMicrophone().isUsable else { return false }
         let permittedAt = Date()
@@ -56,14 +61,14 @@ final class TalkieMicCapture: TalkieCapturing {
         let firstBuffer = OSAllocatedUnfairLock(initialState: true)
         let rate = Int(format.sampleRate)
         let meter = self.meter
+        let voice = TalkieVoiceProcessor(userId: toUserId, sampleRate: format.sampleRate, stage: stage)
         let tapBlock: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { buffer, _ in
             if firstBuffer.withLock({ first in defer { first = false }; return first }) {
                 Logger.talkieMic.info("talkie · micro · premier tampon \(buffer.frameLength) trames à \(rate) Hz")
             }
+            voice.level(buffer)
             encoder.encode(buffer)
-            if let channel = buffer.floatChannelData?[0] {
-                meter.push(rms: TalkieWaveLaw.rms(UnsafeBufferPointer(start: channel, count: Int(buffer.frameLength))))
-            }
+            meter.push(rms: voice.publish(buffer))
         }
         input.installTap(onBus: 0, bufferSize: 1024, format: format, block: tapBlock)
         engine.prepare()

@@ -52,9 +52,11 @@ final class TalkieSenderTests: XCTestCase {
         var allow = true
         var stops = 0
         var onStart: (() -> Void)?
+        var targets: [String] = []
         private var onFrame: (@MainActor @Sendable (Data, TimeInterval) -> Void)?
 
-        func start(onFrame: @escaping @MainActor @Sendable (Data, TimeInterval) -> Void) async -> Bool {
+        func start(toUserId: String, onFrame: @escaping @MainActor @Sendable (Data, TimeInterval) -> Void) async -> Bool {
+            targets.append(toUserId)
             onStart?()
             guard allow else { return false }
             self.onFrame = onFrame
@@ -111,6 +113,7 @@ final class TalkieSenderTests: XCTestCase {
         let deadline: FakeDeadline
         let ended: PassthroughSubject<TalkieEnded, Never>
         let copier: FakeCopier
+        let stage: TalkieVoiceStage
     }
 
     final class Clock: @unchecked Sendable {
@@ -118,6 +121,7 @@ final class TalkieSenderTests: XCTestCase {
     }
 
     private func makeRig(clock: Clock = Clock()) -> Rig {
+        let stage = TalkieVoiceStage()
         let emitter = FakeEmitter()
         let capture = FakeCapture()
         let deadline = FakeDeadline()
@@ -133,9 +137,10 @@ final class TalkieSenderTests: XCTestCase {
                 deadline.delays.append(delay)
                 deadline.run = run
                 return { deadline.cancelled += 1 }
-            }
+            },
+            stage: stage
         )
-        return Rig(sut: sut, emitter: emitter, capture: capture, deadline: deadline, ended: ended, copier: copier)
+        return Rig(sut: sut, emitter: emitter, capture: capture, deadline: deadline, ended: ended, copier: copier, stage: stage)
     }
 
     private func settle() async {
@@ -167,6 +172,35 @@ final class TalkieSenderTests: XCTestCase {
         XCTAssertEqual(rig.capture.stops, 1)
         XCTAssertEqual(rig.sut.phase, .idle)
         XCTAssertNil(rig.sut.notice)
+    }
+
+    /// La voix qui part s'inscrit au registre sous son destinataire dès l'appui, et en sort à la fin (#20531).
+    func test_press_beginsTheOutgoingVoice_andTheEndRemovesIt() async {
+        let clock = Clock()
+        let rig = makeRig(clock: clock)
+
+        rig.sut.press(toUserId: "bob")
+        await settle()
+        XCTAssertEqual(rig.stage.direction(for: "bob"), .outgoing)
+        XCTAssertEqual(rig.stage.startedAt(for: "bob"), clock.now)
+        XCTAssertEqual(rig.capture.targets, ["bob"])
+
+        rig.emitter.resolve(.opened(Self.opened))
+        await settle()
+        await rig.sut.release()
+
+        XCTAssertNil(rig.stage.direction(for: "bob"))
+    }
+
+    func test_aRefusedTalk_removesTheOutgoingVoice() async {
+        let rig = makeRig()
+        rig.sut.press(toUserId: "bob")
+        await settle()
+
+        rig.emitter.resolve(.refused(.notAllowed))
+        await settle()
+
+        XCTAssertNil(rig.stage.direction(for: "bob"))
     }
 
     /// #17094 : ouvrir le micro tient l'acteur principal ; `talkie:start` doit être déjà parti, sinon l'aller-retour
