@@ -18,13 +18,16 @@ nonisolated struct TalkieVoiceKey: Hashable, Sendable {
 /// LE REGISTRE DES VOIX DU TALKIE, par personne et par sens (#20531) : qui parle, dans quel sens, depuis quand, et
 /// les 120 bandes de sa voix, lissées bande par bande (montée rapide, retombée lente : `TalkieWaveLaw.smoothed`).
 ///
-/// Le fil audio écrit des trames DATÉES (`push`, une par fenêtre de 1024 échantillons, à l'heure de l'horloge hôte où
-/// elle sonne) dans un anneau de huit trames par voix ; plein, l'anneau lisse la plus ancienne puis l'écrase. Le lissage s'applique
-/// dans l'ordre du temps, à mesure que les trames deviennent dues : la bulle lit à chaque image (`bands(for:now:)`)
-/// les bandes lissées de la dernière trame dont l'heure est passée, sans rien publier. Rien n'alloue en régime établi,
-/// côté fil audio. Seuls
-/// le début et la fin d'une voix se publient, par `TalkieVoiceStageObserver`. Une poussée pour une voix qui n'est pas
-/// en cours est ignorée : un dernier tampon du fil audio ne rouvre pas une voix close.
+/// Le fil audio écrit des trames DATÉES (`push`, une par fenêtre de 1024 échantillons, à l'heure de l'horloge hôte
+/// où elle sonne) dans un anneau de huit trames par voix ; plein, l'anneau lisse la plus ancienne puis l'écrase. Le
+/// lissage s'applique dans l'ordre du temps, à mesure que les trames deviennent dues : la bulle lit à chaque image
+/// (`bands(for:now:)`) les bandes lissées de la dernière trame dont l'heure est passée, sans rien publier. Rien
+/// n'alloue en régime établi, côté fil audio.
+///
+/// Seuls le début et la fin d'une voix se publient, par `TalkieVoiceStageObserver`. Une voix se COMPTE : deux talkies
+/// du même expéditeur qui se chevauchent ouvrent deux fois la même voix, qui garde son anneau et son heure de début
+/// et ne se ferme qu'à la seconde fin. Une poussée pour une voix qui n'est pas en cours est ignorée : un dernier
+/// tampon du fil audio ne rouvre pas une voix close.
 ///
 /// Lue par personne, la voix qui part l'emporte sur celle qui arrive (sens, début), et les bandes sont le maximum des
 /// deux sens, bande par bande.
@@ -42,6 +45,8 @@ nonisolated final class TalkieVoiceStage: Sendable {
         static let width = TalkieSpectrumAnalyzer.bandCount
 
         let startedAt: Date
+        /// Les débuts pas encore refermés : deux talkies du même expéditeur qui se chevauchent tiennent la même voix.
+        var holders = 1
         private(set) var smoothed: [Float]
         private(set) var received = 0
         private var frames: [Float]
@@ -127,13 +132,20 @@ nonisolated final class TalkieVoiceStage: Sendable {
 
     init() {}
 
+    /// Ouvre la voix, ou la tient une fois de plus si elle est déjà en cours : son anneau et son heure de début
+    /// restent ceux du premier début, et rien ne se publie.
     func begin(userId: String, direction: TalkieVoiceDirection, at startedAt: Date) {
         let key = TalkieVoiceKey(userId: userId, direction: direction)
-        let cast = state.mutate { state in
+        let cast = state.mutate { state -> Cast? in
+            if state.voices[key] != nil {
+                state.voices[key]?.holders += 1
+                return nil
+            }
             state.voices[key] = Voice(startedAt: startedAt)
             state.version += 1
             return state.cast
         }
+        guard let cast else { return }
         announce(cast)
     }
 
@@ -144,10 +156,16 @@ nonisolated final class TalkieVoiceStage: Sendable {
         state.mutate { $0.voices[key]?.push(bands, at: time) }
     }
 
+    /// Rend un début ; la voix ne se ferme, et ne se publie, qu'au dernier.
     func end(userId: String, direction: TalkieVoiceDirection) {
         let key = TalkieVoiceKey(userId: userId, direction: direction)
         let cast = state.mutate { state -> Cast? in
-            guard state.voices.removeValue(forKey: key) != nil else { return nil }
+            guard let holders = state.voices[key]?.holders else { return nil }
+            guard holders <= 1 else {
+                state.voices[key]?.holders = holders - 1
+                return nil
+            }
+            state.voices.removeValue(forKey: key)
             state.version += 1
             return state.cast
         }
@@ -253,26 +271,36 @@ final class TalkieVoiceStageObserver: ObservableObject {
 /// ses trames datées au registre sous `userId` et `direction`. Un changement de fréquence (route Bluetooth…) recale le
 /// gain sans le remettre à zéro, et reconstruit l'analyseur.
 ///
-/// `level` normalise un tampon sur place, tous ses canaux d'un même gain. `publish` découpe le premier canal en
-/// fenêtres de 1024 échantillons (`TalkieSpectrumWindows`, reste reporté au tampon suivant), date chacune depuis
-/// l'heure du tampon, la pousse au registre une fois le verrou de l'analyse rendu, et rend la moyenne quadratique du
-/// tampon. Gain et analyse ont chacun leur verrou : au lecteur, le gain tourne sur l'acteur principal et l'analyse
-/// sur le fil du tap, sans s'attendre.
+/// `level` normalise un tampon sur place, tous ses canaux d'un même gain, au réglage de son sens
+/// (`TalkieVoiceLeveler.Tuning.for(_:)`). `publish` découpe le premier canal en fenêtres de 1024 échantillons
+/// (`TalkieSpectrumWindows`, reste reporté au tampon suivant), date chacune depuis l'heure du tampon décalée du retard
+/// de sortie (`updateOutputDelay`), la pousse au registre une fois le verrou de l'analyse rendu, et rend la moyenne
+/// quadratique du tampon. Gain et analyse ont chacun leur verrou : au lecteur, le gain tourne sur l'acteur principal
+/// et l'analyse sur le fil du tap, sans s'attendre.
 nonisolated final class TalkieVoiceProcessor: Sendable {
     private nonisolated struct Gain {
         var sampleRate: Double
         let leveler: TalkieVoiceLeveler
     }
 
+    private nonisolated struct Analysis {
+        let windows: TalkieSpectrumWindows
+        var outputDelay: TimeInterval = 0
+    }
+
+    /// Le plus long retard de sortie admis : au-delà, la route ment, et la bulle suivrait une voix déjà passée.
+    static let maxOutputDelay: TimeInterval = 0.5
+
     private let gain: Locked<Gain>
-    private let analysis: Locked<TalkieSpectrumWindows>
+    private let analysis: Locked<Analysis>
     private let userId: String
     private let direction: TalkieVoiceDirection
     private let stage: TalkieVoiceStage
 
     init(userId: String, direction: TalkieVoiceDirection, sampleRate: Double, stage: TalkieVoiceStage = .shared) {
-        gain = Locked(uncheckedState: Gain(sampleRate: sampleRate, leveler: TalkieVoiceLeveler(sampleRate: sampleRate)))
-        analysis = Locked(uncheckedState: TalkieSpectrumWindows(sampleRate: sampleRate))
+        let leveler = TalkieVoiceLeveler(sampleRate: sampleRate, tuning: .for(direction))
+        gain = Locked(uncheckedState: Gain(sampleRate: sampleRate, leveler: leveler))
+        analysis = Locked(uncheckedState: Analysis(windows: TalkieSpectrumWindows(sampleRate: sampleRate)))
         self.userId = userId
         self.direction = direction
         self.stage = stage
@@ -297,14 +325,40 @@ nonisolated final class TalkieVoiceProcessor: Sendable {
         }
     }
 
+    /// Le retard entre l'heure où le moteur REND un tampon — celle que donne le tap d'un nœud — et celle où il SORT de
+    /// l'appareil : la latence de la sortie plus la durée d'un tampon d'entrée-sortie, 150 à 250 ms en Bluetooth
+    /// A2DP. Borné à 0…0,5 s ; une valeur non finie vaut 0.
+    nonisolated static func outputDelay(outputLatency: TimeInterval, ioBufferDuration: TimeInterval) -> TimeInterval {
+        bounded(outputLatency + ioBufferDuration)
+    }
+
+    private nonisolated static func bounded(_ delay: TimeInterval) -> TimeInterval {
+        delay.isFinite ? min(max(delay, 0), maxOutputDelay) : 0
+    }
+
+    /// L'heure où sonne un tampon rendu à `renderTime`.
+    nonisolated static func soundTime(renderTime: TimeInterval, outputDelay: TimeInterval) -> TimeInterval {
+        renderTime + outputDelay
+    }
+
+    /// Le retard de sortie de la route courante, lu par le lecteur sur l'acteur principal et remis ici comme une
+    /// simple valeur : la voix reçue se date à l'heure où on l'ENTEND. Le micro n'en pose aucun — sa voix se date à
+    /// l'heure où elle est captée.
+    func updateOutputDelay(_ delay: TimeInterval) {
+        let bounded = Self.bounded(delay)
+        analysis.mutateUnchecked { $0.outputDelay = bounded }
+    }
+
     /// `time` : l'heure hôte, en secondes, du premier échantillon du tampon (`TalkieVoiceStage.seconds(of:)`).
     @discardableResult
     func publish(_ buffer: AVAudioPCMBuffer, at time: TimeInterval) -> Float {
         guard let channel = buffer.floatChannelData?[0] else { return 0 }
         let samples = UnsafeBufferPointer(start: channel, count: Int(buffer.frameLength))
         let rate = buffer.format.sampleRate
-        analysis.mutateUnchecked { $0.feed(samples, sampleRate: rate, at: time) }
-        while let window = analysis.mutateUnchecked({ $0.next() }) {
+        analysis.mutateUnchecked { analysis in
+            analysis.windows.feed(samples, sampleRate: rate, at: Self.soundTime(renderTime: time, outputDelay: analysis.outputDelay))
+        }
+        while let window = analysis.mutateUnchecked({ $0.windows.next() }) {
             stage.push(userId: userId, direction: direction, bands: window.bands, at: window.time)
         }
         return TalkieWaveLaw.rms(samples)

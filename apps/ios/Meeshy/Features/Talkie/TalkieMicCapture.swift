@@ -13,8 +13,10 @@ private extension Logger {
 /// La session audio se prend par `MeeshyRecordingSession`, le chemin des vocaux : le son Meeshy qui joue baisse sans
 /// s'arrêter, et pendant un appel rien ne se reconfigure (le micro ne s'ouvre pas).
 ///
-/// Chaque tampon du micro passe d'abord par le gain qui normalise la voix, puis part à l'encodeur, puis à
-/// l'analyseur qui pousse ses bandes au registre des voix sous le destinataire (#20531, `TalkieVoiceProcessor`).
+/// Chaque tampon du micro passe d'abord par le gain qui normalise la voix au réglage d'ENVOI (−22 / −7 dBFS : 6 dB
+/// de marge pour les anciens récepteurs, `TalkieVoiceLeveler.Tuning`), puis part à l'encodeur, puis à l'analyseur
+/// qui pousse ses bandes au registre des voix sous le destinataire, datées à l'heure de la capture (#20531,
+/// `TalkieVoiceProcessor`).
 ///
 /// Chaque ouverture écrit au journal ce que coûtent la permission, la session et le moteur, puis la taille du premier
 /// tampon livré par le micro (#17094) : c'est elle qui dit à quel pas les trames arrivent.

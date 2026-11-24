@@ -104,6 +104,69 @@ final class TalkieVoiceProcessorTests: XCTestCase {
         XCTAssertGreaterThan(abs(data[1][last]), abs(original) * 1.5, "le second canal est amplifié aussi")
     }
 
+    // MARK: - L'envoi laisse 6 dB de marge, la réception normalise pleinement
+
+    func test_level_outgoingLoudVoice_neverExceedsMinus7() throws {
+        let sut = TalkieVoiceProcessor(userId: "bob", direction: .outgoing, sampleRate: 48_000, stage: TalkieVoiceStage())
+        let buffer = try sine(sampleRate: 48_000, seconds: 1, rmsDecibels: -3)
+
+        sut.level(buffer)
+
+        let samples = UnsafeBufferPointer(start: try XCTUnwrap(buffer.floatChannelData)[0], count: Int(buffer.frameLength))
+        XCTAssertLessThanOrEqual(samples.map(abs).max() ?? 0, Float(pow(10, -7.0 / 20)))
+    }
+
+    func test_level_incomingLoudVoice_reachesTheReceiveCeilingBand() throws {
+        let sut = TalkieVoiceProcessor(userId: "bob", direction: .incoming, sampleRate: 48_000, stage: TalkieVoiceStage())
+        let buffer = try sine(sampleRate: 48_000, seconds: 1, rmsDecibels: -3)
+
+        sut.level(buffer)
+
+        let samples = UnsafeBufferPointer(start: try XCTUnwrap(buffer.floatChannelData)[0], count: Int(buffer.frameLength))
+        let peak = samples.map(abs).max() ?? 0
+        XCTAssertGreaterThan(peak, Float(pow(10, -7.0 / 20)))
+        XCTAssertLessThanOrEqual(peak, Float(pow(10, -1.0 / 20)))
+    }
+
+    // MARK: - La voix reçue se date à l'heure où elle SORT
+
+    func test_outputDelay_sumsLatencyAndIOBuffer() {
+        XCTAssertEqual(TalkieVoiceProcessor.outputDelay(outputLatency: 0.18, ioBufferDuration: 0.02), 0.2, accuracy: 1e-12)
+    }
+
+    func test_outputDelay_isBoundedBetweenZeroAndHalfASecond() {
+        XCTAssertEqual(TalkieVoiceProcessor.outputDelay(outputLatency: 0.6, ioBufferDuration: 0.02), 0.5)
+        XCTAssertEqual(TalkieVoiceProcessor.outputDelay(outputLatency: -0.3, ioBufferDuration: 0.01), 0)
+        XCTAssertEqual(TalkieVoiceProcessor.outputDelay(outputLatency: .nan, ioBufferDuration: 0.01), 0)
+        XCTAssertEqual(TalkieVoiceProcessor.outputDelay(outputLatency: .infinity, ioBufferDuration: 0.01), 0)
+    }
+
+    func test_soundTime_shiftsTheRenderTimeByTheOutputDelay() {
+        XCTAssertEqual(TalkieVoiceProcessor.soundTime(renderTime: 100, outputDelay: 0.2), 100.2, accuracy: 1e-12)
+        XCTAssertEqual(TalkieVoiceProcessor.soundTime(renderTime: 100, outputDelay: 0), 100)
+    }
+
+    func test_publish_withOutputDelay_datesTheFramesWhenTheySound() throws {
+        let stage = TalkieVoiceStage()
+        stage.begin(userId: "bob", direction: .incoming, at: Self.startedAt)
+        let sut = TalkieVoiceProcessor(userId: "bob", direction: .incoming, sampleRate: 48_000, stage: stage)
+
+        sut.updateOutputDelay(0.2)
+        sut.publish(try sine(sampleRate: 48_000, seconds: 0.1, rmsDecibels: -20), at: 100)
+
+        XCTAssertEqual(stage.frameTimes(for: "bob", direction: .incoming).first ?? 0, 100.2, accuracy: 1e-9)
+    }
+
+    func test_publish_outgoingWithoutDelay_keepsTheTapTime() throws {
+        let stage = TalkieVoiceStage()
+        stage.begin(userId: "bob", direction: .outgoing, at: Self.startedAt)
+        let sut = TalkieVoiceProcessor(userId: "bob", direction: .outgoing, sampleRate: 48_000, stage: stage)
+
+        sut.publish(try sine(sampleRate: 48_000, seconds: 0.1, rmsDecibels: -20), at: 100)
+
+        XCTAssertEqual(stage.frameTimes(for: "bob", direction: .outgoing).first ?? 0, 100, accuracy: 1e-9)
+    }
+
     func test_buffersWithoutFloatChannels_areSafe() throws {
         let stage = TalkieVoiceStage()
         stage.begin(userId: "bob", direction: .incoming, at: Self.startedAt)
@@ -188,6 +251,8 @@ final class TalkieVoicePlayerStageTests: XCTestCase {
     }
 
     /// Mesure du débit qui atteint le registre : une fenêtre de 1024 échantillons, soit ~47 trames par seconde à 48 kHz.
+    /// L'attente est bornée, sans fenêtre fixe : une machine lente met plus de temps à rendre la seconde de voix, elle
+    /// ne la rend pas moins dense.
     func test_play_feedsTheStageAtTheWindowRate() async throws {
         let stage = TalkieVoiceStage()
         let sut = makePlayer(stage: stage)
@@ -195,8 +260,8 @@ final class TalkieVoicePlayerStageTests: XCTestCase {
         sut.play("t1", try fragment(seconds: 1))
         var lags: [TimeInterval] = []
         var seen = 0
-        let deadline = Date().addingTimeInterval(1.6)
-        while Date() < deadline {
+        let deadline = Date().addingTimeInterval(4)
+        while stage.receivedFrames(for: "alice", direction: .incoming) < 40, Date() < deadline {
             let received = stage.receivedFrames(for: "alice", direction: .incoming)
             if received > seen, let newest = stage.frameTimes(for: "alice", direction: .incoming).last {
                 lags.append(TalkieVoiceStage.hostNow() - newest)

@@ -1,8 +1,9 @@
 import Accelerate
 import Foundation
 
-/// La voix du talkie à un volume normalisé (#20531), sur le fil audio : un gain automatique la porte vers
-/// −16 dBFS de moyenne quadratique, plafonné à +18 dB, puis un limiteur doux la borne à −1 dBFS.
+/// La voix du talkie à un volume normalisé (#20531), sur le fil audio : un gain automatique la porte vers la cible de
+/// son réglage (`Tuning`), en moyenne quadratique, plafonné à +18 dB, puis un limiteur doux la borne sous le plafond
+/// du réglage. L'ENVOI vise −22 / −7 dBFS, la RÉCEPTION −16 / −1 dBFS.
 ///
 /// Le gain monte lentement (constante de 300 ms) et redescend vite (20 ms). Dès qu'une tranche tombe sous le
 /// plancher de `TalkieWaveLaw.floorDecibels`, il est gelé à sa dernière valeur, puis rejoint 0 dB en 1 s : le
@@ -12,12 +13,30 @@ import Foundation
 /// Le traitement se fait sur place, par tranches de 256 échantillons au plus, et garde son état d'un tampon à
 /// l'autre quelle que soit leur taille. Il n'alloue rien.
 nonisolated final class TalkieVoiceLeveler {
-    static let targetDecibels: Float = -16
-    static let maxGainDecibels: Float = 18
-    static let ceilingDecibels: Float = -1
+    /// Où la voix se pose : sa moyenne quadratique visée et le plafond de ses crêtes. Le genou du limiteur se tient
+    /// 5 dB sous le plafond.
+    ///
+    /// Les deux bouts ne visent pas le même niveau, pour rester compatibles avec les récepteurs déjà publiés : ceux
+    /// d'avant la normalisation ajoutent +6,02 dB fixes sur le haut-parleur intégré. Une voix envoyée à −16 / −1 dBFS
+    /// y écrêterait ; l'ENVOI vise donc −22 dBFS sous un plafond de −7 dBFS — 6 dB de marge —, et la RÉCEPTION
+    /// d'aujourd'hui, qui la normalise à son tour, garde −16 / −1 dBFS.
+    nonisolated struct Tuning: Equatable, Sendable {
+        let targetDecibels: Float
+        let ceilingDecibels: Float
 
+        var kneeDecibels: Float { ceilingDecibels - 5 }
+
+        static let send = Tuning(targetDecibels: -22, ceilingDecibels: -7)
+        static let receive = Tuning(targetDecibels: -16, ceilingDecibels: -1)
+
+        /// Ma voix qui part s'envoie ; celle d'un pair qui arrive se reçoit.
+        static func `for`(_ direction: TalkieVoiceDirection) -> Tuning {
+            direction == .outgoing ? send : receive
+        }
+    }
+
+    static let maxGainDecibels: Float = 18
     static let minGainDecibels: Float = -24
-    static let kneeDecibels: Float = -6
 
     private static let sliceLength = 256
     private static let detectorAttack: Float = 0.010
@@ -30,6 +49,7 @@ nonisolated final class TalkieVoiceLeveler {
     private static let hysteresisDecibels: Float = 3
 
     private var sampleRate: Float
+    private let targetDecibels: Float
     private let floorPower: Float
     private let wakePower: Float
     private let knee: Float
@@ -44,13 +64,14 @@ nonisolated final class TalkieVoiceLeveler {
 
     var currentGainDecibels: Float { gainDecibels }
 
-    init(sampleRate: Double) {
+    init(sampleRate: Double, tuning: Tuning) {
         precondition(sampleRate.isFinite && sampleRate > 0, "sampleRate doit être positif")
         self.sampleRate = Float(sampleRate)
+        targetDecibels = tuning.targetDecibels
         floorPower = Self.power(decibels: TalkieWaveLaw.floorDecibels)
         wakePower = Self.power(decibels: TalkieWaveLaw.floorDecibels + Self.hysteresisDecibels)
-        knee = Self.amplitude(decibels: Self.kneeDecibels)
-        ceiling = Self.amplitude(decibels: Self.ceilingDecibels)
+        knee = Self.amplitude(decibels: tuning.kneeDecibels)
+        ceiling = Self.amplitude(decibels: tuning.ceilingDecibels)
     }
 
     /// Suit un changement de route (Bluetooth HFP à 16 ou 24 kHz…) sans rien perdre de l'état : le gain continue
@@ -112,7 +133,7 @@ nonisolated final class TalkieVoiceLeveler {
     private func follow(elapsed: Float) {
         silentFor = 0
         let level = 10 * log10(max(detectedPower, Self.silentPower))
-        let wanted = min(Self.maxGainDecibels, max(Self.minGainDecibels, Self.targetDecibels - level))
+        let wanted = min(Self.maxGainDecibels, max(Self.minGainDecibels, targetDecibels - level))
         let time = wanted > gainDecibels ? Self.riseTime : Self.fallTime
         gainDecibels += (wanted - gainDecibels) * Self.smoothing(elapsed: elapsed, time: time)
     }
@@ -131,7 +152,7 @@ nonisolated final class TalkieVoiceLeveler {
         vDSP_vrampmul(slice, 1, &start, &step, slice, 1, vDSP_Length(length))
     }
 
-    /// Courbe `tanh` au-dessus du genou de −6 dBFS, tangente à l'identité au genou et asymptote au plafond.
+    /// Courbe `tanh` au-dessus du genou (5 dB sous le plafond), tangente à l'identité au genou et asymptote au plafond.
     private func limit(_ slice: UnsafeMutablePointer<Float>, length: Int) {
         let headroom = ceiling - knee
         for index in 0..<length {

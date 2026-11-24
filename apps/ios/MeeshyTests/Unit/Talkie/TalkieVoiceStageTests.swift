@@ -1,4 +1,5 @@
 import Combine
+import MeeshySDK
 import XCTest
 @testable import Meeshy
 
@@ -204,6 +205,59 @@ final class TalkieVoiceStageTests: XCTestCase {
 
         XCTAssertEqual(publications, 0)
         XCTAssertEqual(observer.voices, [TalkieVoiceKey(userId: "a", direction: .incoming)])
+        subscription.cancel()
+    }
+
+    // MARK: - Deux talkies du même expéditeur se chevauchent
+
+    /// Le second talkie d'Alice commence avant que le premier ait fini de sonner : la fin du premier ne coupe pas le
+    /// second, et la voix garde l'heure de son premier début.
+    func test_end_afterTwoBegins_keepsTheVoiceUntilTheSecondEnd() throws {
+        let stage = TalkieVoiceStage()
+        stage.begin(userId: "alice", direction: .incoming, at: Self.startedAt)
+        stage.push(userId: "alice", direction: .incoming, bands: Self.full, at: 1)
+        stage.begin(userId: "alice", direction: .incoming, at: Self.startedAt.addingTimeInterval(3))
+
+        stage.end(userId: "alice", direction: .incoming)
+
+        XCTAssertEqual(stage.direction(for: "alice"), .incoming)
+        XCTAssertEqual(stage.startedAt(for: "alice"), Self.startedAt)
+        XCTAssertEqual(try XCTUnwrap(stage.bands(for: "alice", now: 2).first), 0.55, accuracy: 1e-6, "l'anneau est gardé")
+
+        stage.end(userId: "alice", direction: .incoming)
+
+        XCTAssertNil(stage.direction(for: "alice"))
+        XCTAssertEqual(stage.bands(for: "alice"), Self.zeros)
+    }
+
+    func test_end_moreEndsThanBegins_staysClosed() {
+        let stage = TalkieVoiceStage()
+        stage.begin(userId: "alice", direction: .incoming, at: Self.startedAt)
+        stage.end(userId: "alice", direction: .incoming)
+        stage.end(userId: "alice", direction: .incoming)
+
+        stage.begin(userId: "alice", direction: .incoming, at: Self.startedAt)
+        stage.end(userId: "alice", direction: .incoming)
+
+        XCTAssertNil(stage.direction(for: "alice"))
+    }
+
+    func test_overlappingVoices_publishOnlyOnFirstBeginAndLastEnd() {
+        let stage = TalkieVoiceStage()
+        let casts = Locked<[TalkieVoiceStage.Cast]>([])
+        stage.subscribe(UUID()) { cast in casts.mutate { $0.append(cast) } }
+        let observer = TalkieVoiceStageObserver(stage: stage)
+        var publications = 0
+        let subscription = observer.objectWillChange.sink { publications += 1 }
+
+        stage.begin(userId: "alice", direction: .incoming, at: Self.startedAt)
+        stage.begin(userId: "alice", direction: .incoming, at: Self.startedAt)
+        stage.end(userId: "alice", direction: .incoming)
+        stage.end(userId: "alice", direction: .incoming)
+
+        XCTAssertEqual(casts.read { $0.map(\.voices) }, [[TalkieVoiceKey(userId: "alice", direction: .incoming)], []])
+        XCTAssertEqual(publications, 2)
+        XCTAssertEqual(observer.voices, [])
         subscription.cancel()
     }
 }

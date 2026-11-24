@@ -17,11 +17,13 @@ private extension Logger {
 ///   arrive, au lieu de se lever devant lui. Rien n'enregistre : c'est la sortie seule.
 /// - Sur la sortie intégrée, la voix sort sur le HAUT-PARLEUR ; avec des écouteurs, un casque ou des AirPods, sans
 ///   redirection (#17087, `TalkieOutputPlan`). Un changement de sortie en pleine prise de parole réapplique la règle.
-/// - Chaque fragment décodé passe par le gain de SA voix, qui la normalise comme à l'envoi, avant d'être planifié
+/// - Chaque fragment décodé passe par le gain de SA voix, au réglage de réception (−16 / −1 dBFS), avant d'être planifié
 ///   (#20531, `TalkieVoiceProcessor`) : là où il est décodé, sur l'acteur principal, sans transformée de Fourier.
 ///   L'analyse se fait pendant que la voix SONNE, par un tap posé sur le nœud de la voix : chaque tampon du tap est
 ///   découpé en fenêtres de 1024 échantillons datées à l'horloge hôte, qui vont au registre sous l'expéditeur, et le
-///   niveau va à l'onde de l'en-tête.
+///   niveau va à l'onde de l'en-tête. Le tap date ce que le moteur REND : chaque fenêtre est reportée du retard de
+///   sortie de la route (latence + tampon d'entrée-sortie, relu à chaque changement de sortie), pour que la bulle
+///   suive ce qu'on ENTEND, Bluetooth compris.
 /// - Ce qu'on écoutait se tait pendant la voix, puis reprend (#18820, `TalkieListeningHold`) : les lecteurs Meeshy se
 ///   mettent en pause, la musique d'une autre app s'interrompt (session sans mélange, `InterruptingVoiceSessionLaw`) ;
 ///   la voix finie, la session se rend en prévenant les autres apps et les lecteurs Meeshy reprennent. Quand rien ne
@@ -100,6 +102,7 @@ final class TalkieVoicePlayer: TalkieSink {
         guard !voice.released, Self.mayPlay(buffer.format, on: voice.format), startEngineIfNeeded() else { return }
         if pristine, let fromUserId = voice.fromUserId {
             stage.begin(userId: fromUserId, direction: .incoming, at: Date())
+            voice.processor?.updateOutputDelay(Self.outputDelay())
             if let processor = voice.processor { voice.tapped = listen(to: voice.node, through: processor) }
         }
         voice.processor?.level(buffer)
@@ -229,6 +232,14 @@ final class TalkieVoicePlayer: TalkieSink {
         guard !isIdle else { return }
         applyOutputPlan()
         _ = startEngineIfNeeded()
+        let delay = Self.outputDelay()
+        voices.values.forEach { $0.processor?.updateOutputDelay(delay) }
+    }
+
+    /// Le retard de sortie de la route courante (latence + tampon d'entrée-sortie), lu sur l'acteur principal.
+    private static func outputDelay() -> TimeInterval {
+        let session = AVAudioSession.sharedInstance()
+        return TalkieVoiceProcessor.outputDelay(outputLatency: session.outputLatency, ioBufferDuration: session.ioBufferDuration)
     }
 
     private func releaseOutputIfIdle() {

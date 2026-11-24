@@ -1,13 +1,24 @@
 import XCTest
 @testable import Meeshy
 
-/// La voix du talkie part à un volume normalisé (#20531) : gain automatique vers −16 dBFS, plafonné à +18 dB,
-/// gelé sous le plancher, suivi d'un limiteur doux à −1 dBFS.
+/// La voix du talkie à un volume normalisé (#20531) : gain automatique vers la cible du réglage, plafonné à +18 dB,
+/// gelé sous le plancher, suivi d'un limiteur doux sous son plafond. Les témoins de la loi tournent sur le réglage de
+/// RÉCEPTION (−16 / −1 dBFS) ; ceux de l'ENVOI (−22 / −7 dBFS) disent la marge laissée aux anciens récepteurs.
 final class TalkieVoiceLevelerTests: XCTestCase {
 
     private static let sampleRate = 48_000.0
     private static let frequency = 440.0
-    private static let ceilingLinear = Float(pow(10, Double(TalkieVoiceLeveler.ceilingDecibels) / 20))
+    private static let receive = TalkieVoiceLeveler.Tuning.receive
+    private static let send = TalkieVoiceLeveler.Tuning.send
+    private static let ceilingLinear = linear(receive.ceilingDecibels)
+
+    private static func linear(_ decibels: Float) -> Float {
+        Float(pow(10, Double(decibels) / 20))
+    }
+
+    private func makeLeveler(_ tuning: TalkieVoiceLeveler.Tuning = TalkieVoiceLevelerTests.receive) -> TalkieVoiceLeveler {
+        TalkieVoiceLeveler(sampleRate: Self.sampleRate, tuning: tuning)
+    }
 
     private struct Run {
         var output: [Float] = []
@@ -76,7 +87,7 @@ final class TalkieVoiceLevelerTests: XCTestCase {
     // MARK: - La voix faible remonte vers la cible
 
     func test_process_quietSpeech_risesTowardTarget() {
-        let leveler = TalkieVoiceLeveler(sampleRate: Self.sampleRate)
+        let leveler = makeLeveler()
         var run = Run()
         feed(sine(rmsDecibels: -28, seconds: 2), through: leveler, into: &run)
 
@@ -86,7 +97,7 @@ final class TalkieVoiceLevelerTests: XCTestCase {
     }
 
     func test_process_veryQuietSpeech_gainCappedAtMaximum() {
-        let leveler = TalkieVoiceLeveler(sampleRate: Self.sampleRate)
+        let leveler = makeLeveler()
         var run = Run()
         feed(sine(rmsDecibels: -40, seconds: 2), through: leveler, into: &run)
 
@@ -98,7 +109,7 @@ final class TalkieVoiceLevelerTests: XCTestCase {
     // MARK: - Rien n'écrête
 
     func test_process_loudSignal_neverExceedsCeiling() {
-        let leveler = TalkieVoiceLeveler(sampleRate: Self.sampleRate)
+        let leveler = makeLeveler()
         var run = Run()
         feed(sine(rmsDecibels: -3.0103, seconds: 2), through: leveler, into: &run)
 
@@ -107,7 +118,7 @@ final class TalkieVoiceLevelerTests: XCTestCase {
     }
 
     func test_process_loudBurstAfterQuietSpeech_neverExceedsCeiling() {
-        let leveler = TalkieVoiceLeveler(sampleRate: Self.sampleRate)
+        let leveler = makeLeveler()
         var run = Run()
         feed(sine(rmsDecibels: -40, seconds: 1), through: leveler, into: &run)
         feed(sine(rmsDecibels: -3.0103, seconds: 1), through: leveler, into: &run)
@@ -120,7 +131,7 @@ final class TalkieVoiceLevelerTests: XCTestCase {
     // MARK: - Le silence n'est jamais remonté
 
     func test_process_silenceBelowFloor_doesNotAmplifyNoise() {
-        let leveler = TalkieVoiceLeveler(sampleRate: Self.sampleRate)
+        let leveler = makeLeveler()
         var run = Run()
         feed(sine(rmsDecibels: -30, seconds: 1), through: leveler, into: &run)
         XCTAssertGreaterThan(leveler.currentGainDecibels, 10)
@@ -130,7 +141,7 @@ final class TalkieVoiceLevelerTests: XCTestCase {
     }
 
     func test_process_silenceFromStart_keepsUnityGain() {
-        let leveler = TalkieVoiceLeveler(sampleRate: Self.sampleRate)
+        let leveler = makeLeveler()
         var run = Run()
         feed(noise(rmsDecibels: -60, seconds: 1), through: leveler, into: &run)
 
@@ -138,7 +149,7 @@ final class TalkieVoiceLevelerTests: XCTestCase {
     }
 
     func test_process_speechStops_gainNeverRisesInTheTail() {
-        let leveler = TalkieVoiceLeveler(sampleRate: Self.sampleRate)
+        let leveler = makeLeveler()
         var run = Run()
         feed(sine(rmsDecibels: -30, seconds: 1), through: leveler, into: &run)
         let gainAtStop = leveler.currentGainDecibels
@@ -150,7 +161,7 @@ final class TalkieVoiceLevelerTests: XCTestCase {
     }
 
     func test_process_speechStopsIntoDigitalSilence_gainNeverRises() {
-        let leveler = TalkieVoiceLeveler(sampleRate: Self.sampleRate)
+        let leveler = makeLeveler()
         var run = Run()
         feed(sine(rmsDecibels: -30, seconds: 1), through: leveler, into: &run)
         let gainAtStop = leveler.currentGainDecibels
@@ -161,7 +172,7 @@ final class TalkieVoiceLevelerTests: XCTestCase {
     }
 
     func test_process_noiseHoveringAtFloor_isNotPumped() {
-        let leveler = TalkieVoiceLeveler(sampleRate: Self.sampleRate)
+        let leveler = makeLeveler()
         var run = Run()
         let quieter = noise(rmsDecibels: -51, seconds: 1, seed: 1)
         let louder = noise(rmsDecibels: -49, seconds: 1, seed: 2)
@@ -180,7 +191,7 @@ final class TalkieVoiceLevelerTests: XCTestCase {
     // MARK: - L'état traverse les tampons
 
     func test_process_stateCarriesAcrossBuffers_noJump() {
-        let leveler = TalkieVoiceLeveler(sampleRate: Self.sampleRate)
+        let leveler = makeLeveler()
         var run = Run()
         let first = sine(rmsDecibels: -24, seconds: 1)
         feed(first, through: leveler, bufferSize: 1024, into: &run)
@@ -193,7 +204,7 @@ final class TalkieVoiceLevelerTests: XCTestCase {
     func test_process_bufferSize_doesNotChangeTheOutcome() {
         let signal = sine(rmsDecibels: -30, seconds: 1)
         let gains = [512, 1024, 4096, 700].map { size -> Float in
-            let leveler = TalkieVoiceLeveler(sampleRate: Self.sampleRate)
+            let leveler = makeLeveler()
             var run = Run()
             feed(signal, through: leveler, bufferSize: size, into: &run)
             return leveler.currentGainDecibels
@@ -206,7 +217,7 @@ final class TalkieVoiceLevelerTests: XCTestCase {
     // MARK: - Un changement de route change la fréquence d'échantillonnage
 
     func test_updateSampleRate_midVoice_gainDoesNotJump() {
-        let leveler = TalkieVoiceLeveler(sampleRate: Self.sampleRate)
+        let leveler = makeLeveler()
         var run = Run()
         feed(sine(rmsDecibels: -24, seconds: 1), through: leveler, into: &run)
         leveler.updateSampleRate(16_000)
@@ -219,7 +230,7 @@ final class TalkieVoiceLevelerTests: XCTestCase {
     }
 
     func test_updateSampleRate_timeConstantsFollowTheNewRate() {
-        let leveler = TalkieVoiceLeveler(sampleRate: Self.sampleRate)
+        let leveler = makeLeveler()
         var run = Run()
         feed(sine(rmsDecibels: -30, seconds: 1), through: leveler, into: &run)
         XCTAssertGreaterThan(leveler.currentGainDecibels, 10)
@@ -230,19 +241,19 @@ final class TalkieVoiceLevelerTests: XCTestCase {
     }
 
     func test_updateSampleRate_invalidRate_isIgnored() {
-        let leveler = TalkieVoiceLeveler(sampleRate: Self.sampleRate)
+        let leveler = makeLeveler()
         var run = Run()
         for rate in [0, -1, .nan, .infinity] { leveler.updateSampleRate(rate) }
         feed(sine(rmsDecibels: -28, seconds: 2), through: leveler, into: &run)
 
         XCTAssertTrue(run.output.allSatisfy(\.isFinite))
-        XCTAssertEqual(rmsDecibels(lastHalfSecond(run)), TalkieVoiceLeveler.targetDecibels, accuracy: 1)
+        XCTAssertEqual(rmsDecibels(lastHalfSecond(run)), Self.receive.targetDecibels, accuracy: 1)
     }
 
     // MARK: - Les valeurs non finies sont neutralisées
 
     func test_process_nanInput_outputsFinite() {
-        let leveler = TalkieVoiceLeveler(sampleRate: Self.sampleRate)
+        let leveler = makeLeveler()
         var run = Run()
         var signal = sine(rmsDecibels: -30, seconds: 0.5)
         for index in stride(from: 0, to: signal.count, by: 97) {
@@ -254,5 +265,53 @@ final class TalkieVoiceLevelerTests: XCTestCase {
         XCTAssertTrue(run.output.allSatisfy(\.isFinite))
         XCTAssertTrue(run.gains.allSatisfy(\.isFinite))
         XCTAssertTrue(leveler.currentGainDecibels.isFinite)
+    }
+
+    // MARK: - L'envoi laisse 6 dB de marge aux anciens récepteurs
+
+    func test_tunings_sendSitsSixDecibelsUnderReceive() {
+        XCTAssertEqual(Self.send.targetDecibels, -22)
+        XCTAssertEqual(Self.send.ceilingDecibels, -7)
+        XCTAssertEqual(Self.receive.targetDecibels, -16)
+        XCTAssertEqual(Self.receive.ceilingDecibels, -1)
+    }
+
+    func test_tunings_kneeIsFiveDecibelsUnderTheCeiling() {
+        for tuning in [Self.send, Self.receive] {
+            XCTAssertEqual(tuning.kneeDecibels, tuning.ceilingDecibels - 5)
+        }
+    }
+
+    func test_process_sendTuning_quietSpeech_settlesNearMinus22() {
+        let leveler = makeLeveler(Self.send)
+        var run = Run()
+        feed(sine(rmsDecibels: -34, seconds: 2), through: leveler, into: &run)
+
+        XCTAssertEqual(rmsDecibels(lastHalfSecond(run)), -22, accuracy: 1.5)
+    }
+
+    func test_process_sendTuning_loudSignal_neverExceedsMinus7() {
+        let leveler = makeLeveler(Self.send)
+        var run = Run()
+        feed(sine(rmsDecibels: -40, seconds: 1), through: leveler, into: &run)
+        feed(sine(rmsDecibels: -3.0103, seconds: 1), through: leveler, into: &run)
+        feed(noise(rmsDecibels: -6, seconds: 1), through: leveler, into: &run)
+
+        let peak = run.output.map(abs).max() ?? 0
+        XCTAssertLessThanOrEqual(peak, Self.linear(-7), "crête à \(20 * log10(peak)) dBFS")
+    }
+
+    func test_process_sendTuning_speechLevelLeavesTheSineUnlimited() {
+        let leveler = makeLeveler(Self.send)
+        var run = Run()
+        feed(sine(rmsDecibels: -22, seconds: 2), through: leveler, into: &run)
+
+        XCTAssertEqual(rmsDecibels(lastHalfSecond(run)), -22, accuracy: 1)
+        XCTAssertEqual(leveler.currentGainDecibels, 0, accuracy: 1)
+    }
+
+    func test_forDirection_outgoingSends_incomingReceives() {
+        XCTAssertEqual(TalkieVoiceLeveler.Tuning.for(.outgoing), Self.send)
+        XCTAssertEqual(TalkieVoiceLeveler.Tuning.for(.incoming), Self.receive)
     }
 }
