@@ -12,6 +12,7 @@ import {
   identifyCallBack,
   listenCallBackIntents,
 } from './call-back-intent';
+import type { CallBackIntent } from './call-back-intent';
 import type { StartCallRequest } from './engine';
 
 /**
@@ -28,6 +29,8 @@ type HarnessOptions = {
   readonly connected?: boolean;
   readonly mayPlayAudio?: boolean;
 };
+
+const bridged: Array<(intent: CallBackIntent) => void> = [];
 
 function harness(options: HarnessOptions = {}) {
   const started: StartCallRequest[] = [];
@@ -50,8 +53,14 @@ function harness(options: HarnessOptions = {}) {
     mayPlayAudio: () => options.mayPlayAudio ?? true,
     start: (request) => void started.push(request),
     confirm: (request) => void confirmed.push(request),
+    bridge: (deliver) => void bridged.push(deliver),
   });
+  const deliverFromBridge = bridged.pop();
   return {
+    relay: async (intent: CallBackIntent) => {
+      deliverFromBridge?.(intent);
+      await settle();
+    },
     started,
     confirmed,
     forgotten,
@@ -136,6 +145,13 @@ describe('composer le rappel', () => {
     const { started, post } = harness();
     await post({ type: NOTIFICATION_CLICKED_MESSAGE, url: '/c/conv-2', callBack: { conversationId: 'conv-2', media: 'audio', title: 'Bo', isGroup: false } });
     expect(started).toEqual([{ conversationId: 'conv-2', media: 'audio', title: 'Bo', avatar: null, isGroup: false }]);
+  });
+
+  test('le pont de la coque ne compose JAMAIS seul, même quand la WebView joue le son sans geste : il demande « Appeler » (#19243)', async () => {
+    const h = harness({ mayPlayAudio: true });
+    await h.relay({ conversationId: 'conv-1', media: 'video', title: '', isGroup: false, origin: 'url' });
+    expect(h.started).toEqual([]);
+    expect(h.confirmed).toEqual([{ conversationId: 'conv-1', media: 'video', title: '', avatar: null, isGroup: false }]);
   });
 
   test('une adresse sans intention ne compose rien et ne touche pas à l’adresse', async () => {

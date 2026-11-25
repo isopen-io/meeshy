@@ -53,24 +53,43 @@ export function readsOnArrival(notification: NotificationRecord, location: { rea
 }
 
 type BannerState = {
+  /** La bannière À L'ÉCRAN. */
   readonly current: NotificationRecord | null;
+  /** La bannière retirée de la vue mais encore MONTÉE, le temps qu'une réécriture la reprenne (#19244). */
+  readonly withdrawn: NotificationRecord | null;
   readonly dismiss: () => void;
 };
 
 export const inAppBannerStore = createStore<BannerState>((set) => ({
   current: null,
-  dismiss: () => set({ current: null }),
+  withdrawn: null,
+  dismiss: () => set({ current: null, withdrawn: null }),
 }));
 
-/** Une notification retirée (message supprimé pour tous, réaction retirée) emporte SA bannière — jamais celle d'une autre (#18907). */
+/**
+ * Le temps qu'une bannière retirée garde son montage (#19244) : la passerelle annonce une édition par
+ * `notification:deleted` puis `notification:new` à la suite, à quelques millisecondes. Assez pour que la
+ * réécriture la reprenne en place ; assez court pour qu'un vocal supprimé pour tous ne s'entende plus qu'un instant.
+ */
+export const WITHDRAWN_BANNER_GRACE_MS = 1_000;
+
+/**
+ * Une notification retirée (message supprimé pour tous, réaction retirée) emporte SA bannière — jamais celle d'une
+ * autre (#18907). Elle quitte la vue AUSSITÔT, mais reste montée le délai de grâce : si une réécriture du même id
+ * arrive, `offerInAppBanner` la reprend au même montage — entrée, départ, heure et lecture gardés (#19244).
+ */
 export function retractInAppBanner(id: string): void {
-  if (inAppBannerStore.getState().current?.id !== id) return;
-  inAppBannerStore.setState({ current: null });
+  const current = inAppBannerStore.getState().current;
+  if (current?.id !== id) return;
+  inAppBannerStore.setState({ current: null, withdrawn: current });
+  setTimeout(() => {
+    if (inAppBannerStore.getState().withdrawn === current) inAppBannerStore.setState({ withdrawn: null });
+  }, WITHDRAWN_BANNER_GRACE_MS);
 }
 
 /** La bannière appartient à l'identité qui l'a reçue : elle se vide quand celle-ci change (`identity-scoped-stores.ts`, #18907). */
 export function resetInAppBanner(): void {
-  inAppBannerStore.setState({ current: null });
+  inAppBannerStore.setState({ current: null, withdrawn: null });
 }
 
 /**
@@ -118,5 +137,5 @@ export function offerInAppBanner(notification: NotificationRecord, location: { r
     return;
   }
   if (!shouldShowBanner(notification, location)) return;
-  inAppBannerStore.setState({ current: notification });
+  inAppBannerStore.setState({ current: notification, withdrawn: null });
 }

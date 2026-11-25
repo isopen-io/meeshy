@@ -91,7 +91,8 @@ public class MeeshyCallPlugin extends Plugin {
     @Override
     protected void handleOnNewIntent(Intent intent) {
         super.handleOnNewIntent(intent);
-        if (intent == null) return;
+        // #19243 — MainActivity est exportee : un intent qu'une autre app forge ne decroche rien.
+        if (intent == null || !CallShellStore.sealed(getContext(), intent)) return;
         String ringing = intent.getStringExtra(IncomingCallNotifier.EXTRA_CALL_ID);
         if (ringing != null) showOverLockScreen(true);
         String answered = intent.getStringExtra(IncomingCallNotifier.EXTRA_ANSWER_CALL_ID);

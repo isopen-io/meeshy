@@ -71,4 +71,29 @@ class EncryptedConversationLockStoreTest {
         assertThat(reopened.lockedConversationIdsFlow.value).containsExactly("c1")
         assertThat(vault.keys()).containsExactly("master_pin", "lock_c1")
     }
+
+    @Test
+    fun `un coffre illisible scelle le contenu poussé mais n'invente aucun verrou pour la porte du routeur`() {
+        val sut = store(InMemorySecureStore(allUnreadable = true))
+
+        assertThat(sut.sealsContentOf("c1")).isTrue()
+        assertThat(sut.isLocked("c1")).isFalse()
+    }
+
+    @Test
+    fun `un coffre lisible ne scelle que la conversation verrouillee`() {
+        val sut = store().apply { setLock("c1", "1111") }
+
+        assertThat(sut.sealsContentOf("c1")).isTrue()
+        assertThat(sut.sealsContentOf("c2")).isFalse()
+    }
+
+    @Test
+    fun `un coffre recree que l'app a reconnu perdu ne scelle plus`() {
+        val sut = store(InMemorySecureStore(allUnreadable = true))
+
+        sut.acknowledgeLostLocks()
+
+        assertThat(sut.sealsContentOf("c1")).isFalse()
+    }
 }

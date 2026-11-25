@@ -47,8 +47,12 @@ internal class ConversationListLockCoordinator(
 
     fun isLocked(id: String): Boolean = lockStore.isLocked(id)
 
-    /** Miroir vivant des ids verrouilles ; rejoue l'instantane a l'abonnement. */
+    /**
+     * Miroir vivant des ids verrouilles ; rejoue l'instantane a l'abonnement. La liste ouverte devant l'utilisateur
+     * prend acte d'un coffre perdu (#19088) : les pushs ne restent pas scelles pour toujours sur des verrous disparus.
+     */
     suspend fun observe() {
+        lockStore.acknowledgeLostLocks()
         lockStore.lockedConversationIdsFlow.collect { ids ->
             state.update { it.copy(lockedConversationIds = ids, hasMasterPin = lockStore.hasMasterPin()) }
         }

@@ -52,7 +52,24 @@ interface ConversationLockStore {
     /** Bypasses the [removeMasterPin] guard — for unlock-all / logout wipe. */
     fun forceRemoveMasterPin()
 
+    /**
+     * Lecture de la PORTE DU ROUTEUR et de l'interface : fail-soft, un coffre perdu n'a plus aucun verrou (décision
+     * #19088 — la porte d'une app ouverte ne bloque pas une conversation sur un code que plus rien ne peut vérifier).
+     */
     fun isLocked(conversationId: String): Boolean
+
+    /**
+     * Lecture du SCELLÉ des pushs (miroir de `NSEConversationLock.locked || .unknown`, iOS) : un verrou qu'on ne peut
+     * pas lire compte comme posé. Lue seulement par [sealsContentOf].
+     */
+    fun isLockedOrUnknown(conversationId: String): Boolean = isLocked(conversationId)
+
+    /**
+     * L'app, ouverte devant l'utilisateur, prend acte d'un coffre recréé : ses verrous sont perdus, la porte du routeur
+     * l'applique déjà, et les pushs cessent d'être scellés pour un verrou qui n'existe plus.
+     */
+    fun acknowledgeLostLocks() {}
+
     fun setLock(conversationId: String, pin: String)
     fun verifyLock(conversationId: String, pin: String): Boolean
     fun removeLock(conversationId: String)

@@ -54,4 +54,27 @@ describe('consommer la confirmation du worker', () => {
   test('sans IndexedDB, rien ne décroche seul (fail-closed)', async () => {
     expect(await consumeCallAnswerConfirmation({ callId: 'call-1', now: 1_000, indexedDB: undefined })).toBe(false);
   });
+
+  test('la confirmation ne vaut qu’une fois la transaction VALIDÉE : un retrait qui échoue à l’écriture ne décroche rien (#19244)', async () => {
+    const idb = seeded({ callId: 'call-1', until: 5_000 });
+    idb.abortCommits();
+    expect(await consumeCallAnswerConfirmation({ callId: 'call-1', now: 1_000, indexedDB: idb as unknown as IDBFactory })).toBe(false);
+  });
+
+  test('les confirmations périmées d’AUTRES appels, jamais consommées, sont purgées au passage (#19244)', async () => {
+    const idb = seeded({ callId: 'call-1', until: 5_000 });
+    idb.seed(CALL_INTENT_DB_NAME, CALL_INTENT_STORE_NAME, 'call-old', { callId: 'call-old', until: 500 });
+    idb.seed(CALL_INTENT_DB_NAME, CALL_INTENT_STORE_NAME, 'call-junk', 'mal formée');
+    idb.seed(CALL_INTENT_DB_NAME, CALL_INTENT_STORE_NAME, 'call-ringing', { callId: 'call-ringing', until: 9_000 });
+    expect(await consumeCallAnswerConfirmation({ callId: 'call-1', now: 1_000, indexedDB: idb as unknown as IDBFactory })).toBe(true);
+    expect(idb.peek(CALL_INTENT_DB_NAME, CALL_INTENT_STORE_NAME, 'call-old')).toBeUndefined();
+    expect(idb.peek(CALL_INTENT_DB_NAME, CALL_INTENT_STORE_NAME, 'call-junk')).toBeUndefined();
+    expect(idb.peek(CALL_INTENT_DB_NAME, CALL_INTENT_STORE_NAME, 'call-ringing')).toBeDefined();
+  });
+
+  test('la purge a lieu même quand l’appel demandé n’a rien posé (#19244)', async () => {
+    const idb = seeded({ callId: 'call-old', until: 500 }, 'call-old');
+    expect(await consumeCallAnswerConfirmation({ callId: 'call-1', now: 1_000, indexedDB: idb as unknown as IDBFactory })).toBe(false);
+    expect(idb.peek(CALL_INTENT_DB_NAME, CALL_INTENT_STORE_NAME, 'call-old')).toBeUndefined();
+  });
 });

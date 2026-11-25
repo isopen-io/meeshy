@@ -118,6 +118,15 @@ export function verdictOf({ size, contrast, withEffect, effect }) {
   return effect && (withEffect ?? 0) >= min ? 'effet' : 'bas';
 }
 
+/** Aucun pixel du glyphe au rendu des masques : un rendu manqué (« —:1 »), jamais une mesure basse. */
+export const unmeasured = (row) => row.contrast === null && row.withEffect === null;
+
+/** Re-mesure un cadre tant qu'un de ses textes n'est pas mesuré, `tries` rendus au plus ; le dernier relevé fait foi. */
+export async function measureSettled(measureOnce, { tries }) {
+  const rows = await measureOnce();
+  return tries > 1 && rows.some(unmeasured) ? measureSettled(measureOnce, { tries: tries - 1 }) : rows;
+}
+
 /** `fresh` : bas et hors du cliquet — rouge ; `tolerated` : bas et listé ; `solved` : listé, et plus bas ici. */
 export function judgeContrast(rows, listed) {
   const known = new Set(listed);

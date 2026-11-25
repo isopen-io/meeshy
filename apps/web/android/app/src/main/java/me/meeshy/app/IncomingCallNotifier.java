@@ -102,7 +102,8 @@ final class IncomingCallNotifier {
     private static Intent activityIntent(Context context, String callId, boolean answer) {
         Intent intent = new Intent(context, MainActivity.class)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            .putExtra(EXTRA_CALL_ID, callId);
+            .putExtra(EXTRA_CALL_ID, callId)
+            .putExtra(IntentSealRules.EXTRA_SEAL, CallShellStore.intentSeal(context));
         return answer ? intent.putExtra(EXTRA_ANSWER_CALL_ID, callId) : intent;
     }
 

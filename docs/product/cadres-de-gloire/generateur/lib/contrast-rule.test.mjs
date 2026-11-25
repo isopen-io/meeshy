@@ -5,7 +5,7 @@
 // Usage : node --test lib/contrast-rule.test.mjs
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { contrastRatio, declaresEffect, edgeContrastOf, judgeContrast, minContrastFor, slotsOf, underGlyphContrastOf, verdictOf } from './contrast-rule.mjs';
+import { contrastRatio, declaresEffect, edgeContrastOf, judgeContrast, measureSettled, minContrastFor, slotsOf, underGlyphContrastOf, unmeasured, verdictOf } from './contrast-rule.mjs';
 
 const SIZE = 64;
 const MASK = [20, 20, 200];
@@ -82,6 +82,33 @@ test('le verdict : tenu, sauvé par son effet mesuré, ou bas', () => {
   assert.equal(verdictOf({ size: 20, contrast: 2, withEffect: 6, effect: false }), 'bas');
   assert.equal(verdictOf({ size: 20, contrast: 2, withEffect: 4, effect: true }), 'bas');
   assert.equal(verdictOf({ size: 20, contrast: null, withEffect: null, effect: false }), 'bas');
+});
+
+test('un texte sans aucun pixel de glyphe au rendu n’est pas mesuré : ni dessous, ni au bord', () => {
+  assert.equal(unmeasured({ contrast: null, withEffect: null }), true);
+  assert.equal(unmeasured({ contrast: 1.2, withEffect: null }), false);
+  assert.equal(unmeasured({ contrast: null, withEffect: 2 }), false);
+});
+
+test('un cadre dont un texte n’est pas mesuré se re-mesure, et le premier rendu complet fait foi', async () => {
+  const empty = [{ id: 'egypte.ambassadeur-4#title', contrast: null, withEffect: null }];
+  const full = [{ id: 'egypte.ambassadeur-4#title', contrast: 9.59, withEffect: 13.68 }];
+  const renders = [empty, empty, full];
+  let calls = 0;
+  const rows = await measureSettled(async () => renders[calls++], { tries: 3 });
+  assert.deepEqual(rows, full);
+  assert.equal(calls, 3);
+});
+
+test('un cadre complet au premier rendu ne se re-mesure pas, un rendu toujours vide rend son dernier relevé', async () => {
+  const full = [{ id: 'a#title', contrast: 5, withEffect: 5 }];
+  let calls = 0;
+  assert.deepEqual(await measureSettled(async () => { calls++; return full; }, { tries: 3 }), full);
+  assert.equal(calls, 1);
+  const empty = [{ id: 'a#title', contrast: null, withEffect: null }];
+  calls = 0;
+  assert.deepEqual(await measureSettled(async () => { calls++; return empty; }, { tries: 3 }), empty);
+  assert.equal(calls, 3);
 });
 
 test('le jugement : un texte bas hors du cliquet rougit, un texte du cliquet devenu lisible se signale', () => {

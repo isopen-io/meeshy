@@ -19,7 +19,9 @@ import me.meeshy.app.push.PushTapExtras
 import me.meeshy.app.push.enrich.RichMediaEnricher
 import me.meeshy.app.push.media.PushMediaFetcher
 import me.meeshy.sdk.lock.ConversationLockStore
+import me.meeshy.sdk.lock.EncryptedConversationLockStore
 import me.meeshy.sdk.lock.InMemoryConversationLockStore
+import me.meeshy.sdk.model.security.InMemorySecureStore
 import me.meeshy.sdk.net.InMemoryTokenStore
 import me.meeshy.sdk.notification.ActiveConversationStore
 import me.meeshy.sdk.notification.InMemoryNotificationPreferencesStore
@@ -225,6 +227,18 @@ class LockedConversationBannerTest {
         pipeline(broken).renderNow(message("c1", "n1", "senderAvatar" to avatar))
 
         assertThat(shownText(child()).filter { "4471" in it }).isEmpty()
+        assertThat(child().actions).isNull()
+        coVerify(exactly = 0) { fetcher.fetch(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `un coffre de verrous illisible scelle la banniere au lieu de la laisser passer en clair`() = runTest {
+        val unreadable = EncryptedConversationLockStore(InMemorySecureStore(allUnreadable = true))
+
+        pipeline(unreadable).renderNow(message("c1", "n1", "senderAvatar" to avatar))
+
+        assertThat(shownText(child()).filter { "4471" in it }).isEmpty()
+        assertThat(shownText(child())).contains(lockedLabel)
         assertThat(child().actions).isNull()
         coVerify(exactly = 0) { fetcher.fetch(any(), any(), any(), any(), any()) }
     }

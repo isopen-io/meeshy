@@ -23,13 +23,26 @@ export type CallAnswerConfirmationRequest = {
   readonly indexedDB: IDBFactory | undefined;
 };
 
+type IntentEntry = { readonly callId?: unknown; readonly until?: unknown };
+
+const asEntry = (entry: unknown): IntentEntry | null => (entry !== null && typeof entry === 'object' ? (entry as IntentEntry) : null);
+
 const validFor = (entry: unknown, callId: string, now: number): boolean => {
-  if (entry === null || typeof entry !== 'object') return false;
-  const { callId: posted, until } = entry as { readonly callId?: unknown; readonly until?: unknown };
-  return posted === callId && typeof until === 'number' && until >= now;
+  const parsed = asEntry(entry);
+  return parsed !== null && parsed.callId === callId && typeof parsed.until === 'number' && parsed.until >= now;
 };
 
-/** `true` seulement si le worker a posé cette confirmation et qu'elle n'a pas expiré ; l'entrée est retirée dans tous les cas. */
+const expired = (entry: unknown, now: number): boolean => {
+  const until = asEntry(entry)?.until;
+  return typeof until !== 'number' || until < now;
+};
+
+/**
+ * `true` seulement si le worker a posé cette confirmation, qu'elle n'a pas expiré, et que son retrait est VALIDÉ
+ * (`oncomplete` de la transaction, jamais le seul succès de la requête : une validation qui échoue la laisserait
+ * resservir — #19244). L'entrée de cet appel est retirée dans tous les cas, et les entrées périmées d'appels jamais
+ * décrochés sont purgées au passage : la base ne s'accumule pas.
+ */
 export function consumeCallAnswerConfirmation({ callId, now, indexedDB }: CallAnswerConfirmationRequest): Promise<boolean> {
   return new Promise((resolve) => {
     if (indexedDB === undefined) {
@@ -50,7 +63,10 @@ export function consumeCallAnswerConfirmation({ callId, now, indexedDB }: CallAn
     request.onerror = () => resolve(false);
     request.onsuccess = () => {
       const db = request.result;
+      let done = false;
       const finish = (confirmed: boolean): void => {
+        if (done) return;
+        done = true;
         db.close();
         resolve(confirmed);
       };
@@ -59,19 +75,19 @@ export function consumeCallAnswerConfirmation({ callId, now, indexedDB }: CallAn
         return;
       }
       try {
-        const store = db.transaction(CALL_INTENT_STORE_NAME, 'readwrite').objectStore(CALL_INTENT_STORE_NAME);
-        const reading = store.get(callId);
-        reading.onsuccess = () => {
-          const confirmed = validFor(reading.result, callId, now);
-          if (reading.result === undefined) {
-            finish(false);
-            return;
-          }
-          const removal = store.delete(callId);
-          removal.onsuccess = () => finish(confirmed);
-          removal.onerror = () => finish(false);
+        const transaction = db.transaction(CALL_INTENT_STORE_NAME, 'readwrite');
+        const store = transaction.objectStore(CALL_INTENT_STORE_NAME);
+        let confirmed = false;
+        transaction.oncomplete = () => finish(confirmed);
+        transaction.onerror = () => finish(false);
+        transaction.onabort = () => finish(false);
+        const keys = store.getAllKeys();
+        const values = store.getAll();
+        values.onsuccess = () => {
+          const entries = keys.result.map((key, index) => [key, values.result[index]] as const);
+          confirmed = entries.some(([key, entry]) => key === callId && validFor(entry, callId, now));
+          entries.filter(([key, entry]) => key === callId || expired(entry, now)).forEach(([key]) => store.delete(key));
         };
-        reading.onerror = () => finish(false);
       } catch {
         finish(false);
       }

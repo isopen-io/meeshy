@@ -273,11 +273,21 @@ docs/              → Architecture & feature documentation
 ### Local Test Parity (bun)
 Reproduce CI coverage locally — the prerequisites below are what CI does automatically:
 ```bash
-bun install --ignore-scripts                                  # see note below before using plain `bun install`
+bun install --ignore-scripts --no-save                        # --no-save: see the bun.lock note below
 cd packages/shared && npx prisma generate --generator client  # else ~17 gateway suites fail (commentId/PostMediaSelect)
 cd packages/shared && bun run build                           # else SocialEventsHandler fails (CommentMediaUpdatedEventData missing from dist)
 cd services/gateway && bun run test:coverage                   # 740/740 suites green
 ```
+
+**`bun.lock` ne se committe que depuis le bun épinglé par la CI** (#20026). Un
+bun plus récent (1.4.x des conteneurs de session) réécrit `bun.lock` de
+`lockfileVersion` 1 en 3 sans changer une dépendance, et la CI comme les images
+Docker ne le relisent plus. D'où `--no-save` ci-dessus ; un `bun.lock` modifié
+que le hook de fin de session réclame de committer se restaure, il ne se pousse
+pas. `node scripts/check-bun-lockfile-parity.mjs` (job `quality`) le refuse, et
+exige le même `BUN_VERSION` dans tous les workflows et Dockerfiles ; monter bun
+se fait dans un lot dédié qui déclare le format écrit dans le script et
+committe le lockfile migré.
 
 **UN ARTEFACT PÉRIMÉ REND UN ROUGE QUI RESSEMBLE À UN DÉFAUT DU DÉPÔT**
 (#20315). Les trois commandes ci-dessus ne manquent jamais bruyamment : elles

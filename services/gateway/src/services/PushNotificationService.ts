@@ -21,7 +21,7 @@ import {
   NOTIFICATION_REVOCATION_TTL_MS,
 } from './notifications/notificationRevocationPush';
 import { applyUserPreferences, isCallPushDataType } from './push-delivery-preferences';
-import { pushRoutingClientOf, tokenRoutesPushType } from './push-type-routing';
+import { pushRoutingClientOf, tokenRendersPushFromData, tokenRoutesPushType } from './push-type-routing';
 import { apnsThreadIdOf, loggableCollapseId } from './notifications/push-thread';
 import { isBadgeSyncPush } from './notifications/badgeSyncPush';
 import { sendViaPushToTalk, type PushToTalkTransport } from './talkie/pushToTalkApns';
@@ -455,7 +455,7 @@ export class PushNotificationService {
    * Send notification via Firebase Cloud Messaging
    */
   private async sendViaFCM(
-    tokenRecord: { id: string; token: string; platform: string; bundleId?: string | null },
+    tokenRecord: { id: string; token: string; platform: string; bundleId?: string | null; appVersion?: string | null },
     payload: PushNotificationPayload
   ): Promise<PushResult> {
     if (!this.firebaseMessaging) {
@@ -474,14 +474,20 @@ export class PushNotificationService {
       // une bannière VIDE sans jamais appeler `onBackgroundMessage`. Le
       // title/body localisés serveur du ring voyagent DANS data pour que le
       // client rende sa notification d'appel dans la langue résolue de
-      // l'utilisateur (Prisme).
+      // l'utilisateur (Prisme). Vers l'Android natif, TOUT push est data-only
+      // (#19091) : son pipeline rend la bannière et y scelle le verrou PIN.
       const isCallPush = isCallPushDataType(payload.data?.type);
       const isBadgeOnly = isBadgeSyncPush(payload);
       const dataOnly =
         payload.silent === true ||
         isBadgeOnly ||
         ((tokenRecord.platform === 'android' || tokenRecord.platform === 'web') && isCallPush) ||
-        (tokenRecord.platform === 'android' && payload.dataOnlyOnAndroid === true);
+        (tokenRecord.platform === 'android' && payload.dataOnlyOnAndroid === true) ||
+        tokenRendersPushFromData({
+          platform: tokenRecord.platform,
+          bundleId: tokenRecord.bundleId ?? null,
+          appVersion: tokenRecord.appVersion ?? null,
+        });
 
       const message: any = dataOnly
         ? {
