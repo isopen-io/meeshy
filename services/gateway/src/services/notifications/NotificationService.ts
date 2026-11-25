@@ -145,7 +145,8 @@ import {
 } from './builders/account-security';
 import { sliceCodePoints } from '@meeshy/shared/utils/text-truncate';
 import { guardedInterval } from '../../utils/guarded-timer';
-import { ACTOR_CONTENT_TYPES, refusesActorContent } from './blocked-actor-content';
+import { refusesActorContent } from './blocked-actor-content';
+import { blockerContentMatch } from './blockerContentMatch';
 import { isSecurityEmailType } from './security-types';
 import { bannerTextsWithoutActorName, pushActorOfRow, senderIdentityPushFields } from './senderIdentityPushFields';
 
@@ -3168,8 +3169,9 @@ export class NotificationService {
    *    d'une personne bloquée ne reste pas dans la cloche ni dans le compteur ;
    *  - `'actor-content'` (côté bloqué, acteur = le bloqueur) : seulement les
    *    types qui portent le CONTENU de l'acteur (`ACTOR_CONTENT_TYPES` : extrait,
-   *    vignette, avatar), et SILENCIEUX — aucune émission vers lui, car une
-   *    disparition en direct lui apprendrait le blocage que la route veut taire.
+   *    vignette, avatar) — y compris ceux qu'un TIERS a fait voyager sur une
+   *    publication de l'acteur (#19220, `blockerContentMatch`) —, et SILENCIEUX :
+   *    aucune émission vers lui, une disparition en direct lui apprendrait le blocage.
    */
   async retractNotificationsFromActor(
     userId: string,
@@ -3179,10 +3181,9 @@ export class NotificationService {
     return retractNotificationRows({
       prisma: this.prisma,
       userId,
-      match: {
-        'actor.id': actorId,
-        ...(scope === 'actor-content' ? { type: { $in: [...ACTOR_CONTENT_TYPES] } } : {}),
-      },
+      match: scope === 'actor-content'
+        ? await blockerContentMatch(this.prisma, { userId, actorId })
+        : { 'actor.id': actorId },
       projection: { _id: 1, type: 1, 'context.conversationId': 1, 'delivery.pushSent': 1 },
       announce: scope === 'all' ? (retracted) => this.announceNotificationsRetracted(retracted) : undefined,
       failure: { message: 'Failed to retract notifications from actor', context: { actorId, scope } },
