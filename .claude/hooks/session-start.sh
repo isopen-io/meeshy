@@ -24,6 +24,7 @@ cd "$CLAUDE_PROJECT_DIR"
 # changement que personne n'a demandé. L'install est identique (« no changes »),
 # seule l'écriture du lockfile est retenue — c'est déjà l'idiome des Dockerfiles
 # du dépôt (apps/web/Dockerfile, services/gateway/Dockerfile). #16550
+node scripts/check-bun-lockfile-parity.mjs --local || true
 bun install --ignore-scripts --no-save
 
 (cd packages/shared && npx prisma generate --generator client && bun run build)

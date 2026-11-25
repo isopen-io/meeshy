@@ -442,6 +442,14 @@ jobs:
       - name: Lockfile alignment guard
         run: node scripts/check-lockfile-alignment.mjs --self-test && node scripts/check-lockfile-alignment.mjs
 
+      # #20026 — un bun plus récent que BUN_VERSION réécrit bun.lock dans un
+      # format que ce bun-ci ne relit pas (lockfileVersion 1 -> 3), sans changer
+      # une dépendance. La garde rougit avec la commande qui répare, avant que
+      # l'install ou l'image Docker ne tombe sur « Unknown lockfile version », et
+      # exige qu'un seul bun soit épinglé dans les workflows et les Dockerfiles.
+      - name: bun lockfile parity guard
+        run: node scripts/check-bun-lockfile-parity.mjs --self-test && node scripts/check-bun-lockfile-parity.mjs
+
       # #6351 — filet de sécurité pour la CI ordinaire : un commit qui porte à
       # la fois un marqueur (beta) et un marqueur de saut CI fait supprimer
       # TOUS les workflows du push par GitHub, ios-beta-trigger.yml compris.
