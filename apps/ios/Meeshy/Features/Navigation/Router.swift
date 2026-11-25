@@ -251,6 +251,9 @@ final class Router: ObservableObject {
         didSet { if refusesProfiles, participantProfileTarget != nil { participantProfileTarget = nil } }
     }
 
+    /// La carte d'une personne présentée en plein écran (#20540). `nil` : aucune. Seul `presentPersonMap` la pose.
+    @Published var presentedPersonMap: PersonMapTarget?
+
     /// Le post dont le détail est présenté en feuille (#16676). `nil` : aucun.
     /// Seul `push(.postDetail)` le pose ; la racine iPhone le présente.
     @Published var presentedPost: PostDetailSheetTarget? {
@@ -404,6 +407,12 @@ final class Router: ObservableObject {
     /// partie, jamais dessous.
     func presentProfileSheet(_ user: ProfileSheetUser) {
         present(afterPresentedSurfacesLeave: { [weak self] in self?.deepLinkProfileUser = user })
+    }
+
+    /// La carte d'une personne demandée par une notification — « Lina est tout près » (#20540) : elle monte une fois
+    /// la surface partie, jamais dessous.
+    func presentPersonMap(_ target: PersonMapTarget) {
+        present(afterPresentedSurfacesLeave: { [weak self] in self?.presentedPersonMap = target })
     }
 
     /// Le compte des départs en cours : chaque `clearPresentedSurfaces` qui a
@@ -581,7 +590,9 @@ final class Router: ObservableObject {
             if participantProfileTarget != nil { participantProfileTarget = nil }
             let closesPost = presentedPost != nil
             closePresentedPost()
-            let closes = closedSurfaces || closesProfile || closesPost
+            let closesMap = presentedPersonMap != nil
+            if closesMap { presentedPersonMap = nil }
+            let closes = closedSurfaces || closesProfile || closesPost || closesMap
             if closes { noteSurfacesLeaving() }
             open(closes)
         }

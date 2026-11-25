@@ -303,6 +303,14 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         get { deviceUnreachableEnabled ?? true }
         set { deviceUnreachableEnabled = newValue }
     }
+    /// « Quand un Sang s'approche » (`notification.bloodProximityEnabled`, #20540) — le push `blood_proximity`.
+    /// `nil` = jamais appris, absent du corps envoyé (même règle que `bringEnabled`). L'écran lit
+    /// `receivesBloodProximity`.
+    public var bloodProximityEnabled: Bool?
+    public var receivesBloodProximity: Bool {
+        get { bloodProximityEnabled ?? true }
+        set { bloodProximityEnabled = newValue }
+    }
     public var dndEnabled: Bool
     public var dndStartTime: String
     public var dndEndTime: String
@@ -340,7 +348,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         postLikeEnabled: Bool = true, postCommentEnabled: Bool = true, postRepostEnabled: Bool = true,
         storyReactionEnabled: Bool = true, commentReplyEnabled: Bool = true, commentLikeEnabled: Bool = true,
         friendContentEnabled: Bool = true, contactActivityEnabled: Bool = true, gameEnabled: Bool = true,
-        bringEnabled: Bool? = nil, deviceBatteryEnabled: Bool? = nil, deviceUnreachableEnabled: Bool? = nil, dndEnabled: Bool = false, dndStartTime: String = "22:00", dndEndTime: String = "08:00", dndDays: [DndDay] = [],
+        bringEnabled: Bool? = nil, deviceBatteryEnabled: Bool? = nil, deviceUnreachableEnabled: Bool? = nil, bloodProximityEnabled: Bool? = nil, dndEnabled: Bool = false, dndStartTime: String = "22:00", dndEndTime: String = "08:00", dndDays: [DndDay] = [],
         dndUtcOffsetMinutes: Int = 0,
         showPreview: Bool = true, showSenderName: Bool = true, groupNotifications: Bool = true,
         notificationBadgeEnabled: Bool = true, extras: [String: CodableValue] = [:]
@@ -363,6 +371,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         self.bringEnabled = bringEnabled
         self.deviceBatteryEnabled = deviceBatteryEnabled
         self.deviceUnreachableEnabled = deviceUnreachableEnabled
+        self.bloodProximityEnabled = bloodProximityEnabled
         self.dndEnabled = dndEnabled; self.dndStartTime = dndStartTime; self.dndEndTime = dndEndTime
         self.dndUtcOffsetMinutes = dndUtcOffsetMinutes
         self.dndDays = dndDays; self.showPreview = showPreview; self.showSenderName = showSenderName
@@ -377,7 +386,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         case contactRequestEnabled, groupInviteEnabled, memberJoinedEnabled, memberLeftEnabled
         case postLikeEnabled, postCommentEnabled, postRepostEnabled, storyReactionEnabled
         case commentReplyEnabled, commentLikeEnabled, friendContentEnabled, contactActivityEnabled, gameEnabled
-        case bringEnabled, deviceBatteryEnabled, deviceUnreachableEnabled
+        case bringEnabled, deviceBatteryEnabled, deviceUnreachableEnabled, bloodProximityEnabled
         case dndEnabled, dndStartTime, dndEndTime, dndDays, dndUtcOffsetMinutes
         case showPreview, showSenderName, groupNotifications, notificationBadgeEnabled
         case extras
@@ -414,6 +423,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         bringEnabled = try c.decodeIfPresent(Bool.self, forKey: .bringEnabled)
         deviceBatteryEnabled = try c.decodeIfPresent(Bool.self, forKey: .deviceBatteryEnabled)
         deviceUnreachableEnabled = try c.decodeIfPresent(Bool.self, forKey: .deviceUnreachableEnabled)
+        bloodProximityEnabled = try c.decodeIfPresent(Bool.self, forKey: .bloodProximityEnabled)
         dndEnabled = try c.decodeIfPresent(Bool.self, forKey: .dndEnabled) ?? Self.defaults.dndEnabled
         dndStartTime = try c.decodeIfPresent(String.self, forKey: .dndStartTime) ?? Self.defaults.dndStartTime
         dndEndTime = try c.decodeIfPresent(String.self, forKey: .dndEndTime) ?? Self.defaults.dndEndTime

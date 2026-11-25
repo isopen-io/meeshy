@@ -68,7 +68,7 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
     }
 
     /// Le repli des signaux d'état du téléphone : batterie (#14147), injoignable (#18737), « Tout va bien ? » et
-    /// l'alerte d'inactivité (#18738). Le titre servi par la passerelle prime toujours.
+    /// l'alerte d'inactivité (#18738), et l'approche d'un Sang (#20540). Le titre servi par la passerelle prime toujours.
     private func phoneStateFallbackTitle(actorName: String) -> String {
         switch notificationType {
         case .deviceBattery:
@@ -77,6 +77,8 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
             return String(localized: "notification.wellnessCheck.fallbackTitle", defaultValue: "Tout va bien ?", bundle: .main)
         case .inactivityAlert:
             return String(format: String(localized: "notification.inactivityAlert.fallbackTitle", defaultValue: "%@ n'a pas répondu", bundle: .main), actorName)
+        case .bloodProximity:
+            return String(format: String(localized: "notification.bloodProximity.fallbackTitle", defaultValue: "%@ est tout près", bundle: .main), actorName)
         default:
             return String(format: String(localized: "notification.deviceUnreachable.fallbackTitle", defaultValue: "Téléphone de %@", bundle: .main), actorName)
         }
@@ -118,7 +120,7 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
             return String(format: String(localized: "notification.contactRecentlyActive.fallbackTitle", defaultValue: "%@ était sur Meeshy récemment", bundle: .main), actorName)
         case .relationAcquaintance:
             return String(format: String(localized: "notification.relationAcquaintance.fallbackTitle", defaultValue: "%@ est maintenant une Connaissance", bundle: .main), actorName)
-        case .deviceBattery, .deviceUnreachable, .wellnessCheck, .inactivityAlert:
+        case .deviceBattery, .deviceUnreachable, .wellnessCheck, .inactivityAlert, .bloodProximity:
             return phoneStateFallbackTitle(actorName: actorName)
         case .gameDuoInvited:
             return String(

@@ -160,6 +160,7 @@ struct iPadSheetsLayer: ViewModifier {
                     participantId: target.participantId
                 )
             }
+            .modifier(PersonMapCover(router: router)) // La carte d'une personne, ouverte par une notification (#20540).
             .profileCover(item: $router.deepLinkProfileUser) { user in
                 UserProfileSheet(
                     user: user,

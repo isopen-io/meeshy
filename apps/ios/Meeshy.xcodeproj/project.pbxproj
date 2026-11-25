@@ -123,6 +123,7 @@
 		04E7CC64513EA6F76EFE8C62 /* StoryCommentsOverlayRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF1621FCDAFA30A8361A2A24 /* StoryCommentsOverlayRenderTests.swift */; };
 		05049DA2076286EA01E262A0 /* ConversationEncryptionActivationPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAFEB5DF39B9B875B21AAF8C /* ConversationEncryptionActivationPolicyTests.swift */; };
 		05107084E24B079B1711EA23 /* PackFocusSlug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53DB14F5A831B45221BBEFE4 /* PackFocusSlug.swift */; };
+		05142C29A033E26066A8DA6A /* PersonMapTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA185F211C0E7414C9E5FF2F /* PersonMapTarget.swift */; };
 		051B40E8CBD5E0D725A9A5DE /* CallDeclineSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2DF63014DEA860E08E07A0D /* CallDeclineSheet.swift */; };
 		0530347B8AEC0CAF763A0604 /* StoryViewerView+Canvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDD120B1FC48BA2FD9B1C140 /* StoryViewerView+Canvas.swift */; };
 		053C39CF6505F26921205861 /* ConversationViewModel+Lifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56AA5E659FAFB862FF915C8E /* ConversationViewModel+Lifecycle.swift */; };
@@ -4699,6 +4700,7 @@
 		F2E139E0F3F84C78A70F515A /* ConversationLongPressMenuGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60A78AD725D9E32EFB8C556A /* ConversationLongPressMenuGuardTests.swift */; };
 		F2EC27E27CD8D45B7DF3296A /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 1D1DCBE5085DEF854FE74387 /* Localizable.xcstrings */; };
 		F2F1380FB9AD88A473411B9B /* ComposerViewfinder+Provider.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBF37237ED9F784B7903D33A /* ComposerViewfinder+Provider.swift */; };
+		F2F859F21D46677EA424CB54 /* BloodProximityMapRoutingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 573CABA92D2E659B295F8449 /* BloodProximityMapRoutingTests.swift */; };
 		F3032096F9CE9E255E701A8C /* CaptureDiscardAlertTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AA90D48F09C89E733DE7E41 /* CaptureDiscardAlertTests.swift */; };
 		F30498AD20CBC742A328446D /* CirclesTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AA8E3D569E4EED9ACD999EA /* CirclesTab.swift */; };
 		F30E04BC26285A99EF012EA5 /* CallChromeVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDD9DA4B0422E18D49127290 /* CallChromeVisibility.swift */; };
@@ -6736,6 +6738,7 @@
 		572BD3249FF6CEB7E6094AFB /* EndToEndPeerWithoutDeviceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EndToEndPeerWithoutDeviceTests.swift; sourceTree = "<group>"; };
 		573310DCE9B9EFDE86E92B21 /* ComposerSceneDescriptionEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSceneDescriptionEditor.swift; sourceTree = "<group>"; };
 		5737AF70E64CE3B2036C78D8 /* CameraSuspensionSignalGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraSuspensionSignalGuardTests.swift; sourceTree = "<group>"; };
+		573CABA92D2E659B295F8449 /* BloodProximityMapRoutingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BloodProximityMapRoutingTests.swift; sourceTree = "<group>"; };
 		5777C2D75103ACC8A26C10BC /* ActiveSessionsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveSessionsViewModel.swift; sourceTree = "<group>"; };
 		5783A88075432BD4A5C4B17F /* AudioRecorderManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorderManager.swift; sourceTree = "<group>"; };
 		578AD3BA40C3FF3EAB9F8B82 /* ConversationViewModel+JumpToMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationViewModel+JumpToMessage.swift"; sourceTree = "<group>"; };
@@ -8592,6 +8595,7 @@
 		BA08C40103E1D958DA27524C /* CallFrameCatalogue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallFrameCatalogue.swift; sourceTree = "<group>"; };
 		BA114E5D3F081F3F59BCA59B /* ConversationReadReceiptSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationReadReceiptSender.swift; sourceTree = "<group>"; };
 		BA122AEF93A1018B3A82CEFF /* BloodLocationScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BloodLocationScreen.swift; sourceTree = "<group>"; };
+		BA185F211C0E7414C9E5FF2F /* PersonMapTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonMapTarget.swift; sourceTree = "<group>"; };
 		BA1EBE24B2AF8BE6A57D88D6 /* MockSocialSocket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockSocialSocket.swift; sourceTree = "<group>"; };
 		BA3E5F2DC6EF95F686647A87 /* VideoThermalProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoThermalProfile.swift; sourceTree = "<group>"; };
 		BA4C39C183307A917D193DB0 /* VoicePlaybackActivityLawTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoicePlaybackActivityLawTests.swift; sourceTree = "<group>"; };
@@ -13497,6 +13501,7 @@
 				6C69907A8DDF2853BD9DD09B /* NearbyMapScreen.swift */,
 				FB112CF84B2C8382445436DE /* PersonLocationCard.swift */,
 				32EDB7A545DBAA13973FDF0A /* PersonLocationMapScreen.swift */,
+				BA185F211C0E7414C9E5FF2F /* PersonMapTarget.swift */,
 				C710A363E16764E5532D9B49 /* ProfileOwnPositionPreview.swift */,
 				81744C1A84B794E5BD8497E6 /* ProfileWhereCard.swift */,
 				9091E726E2DCF7F90155106B /* ProfileWhereHero.swift */,
@@ -14481,6 +14486,7 @@
 		9AC063369BA9538D33BB4CA7 /* Navigation */ = {
 			isa = PBXGroup;
 			children = (
+				573CABA92D2E659B295F8449 /* BloodProximityMapRoutingTests.swift */,
 				853FDD4955016ADF597D16CA /* CallDeepLinkTests.swift */,
 				172188A51DF03A306D06CA44 /* CommunityAddedRoutingTests.swift */,
 				FA3706BB7D06D77BA5407CF0 /* ContactRecentlyActiveRoutingTests.swift */,
@@ -18817,6 +18823,7 @@
 				D3ABF189C3938FD402C39A03 /* PerfSignpost.swift in Sources */,
 				4901A9C84520A37C76A0A5D9 /* PersonLocationCard.swift in Sources */,
 				4A7551F601F340130CB159B0 /* PersonLocationMapScreen.swift in Sources */,
+				05142C29A033E26066A8DA6A /* PersonMapTarget.swift in Sources */,
 				E488345564D80A5F732B63FF /* PhoneCallAnnouncementFeed.swift in Sources */,
 				FEC003E5DF39C1C4B82DCA05 /* PhoneCallCenter.swift in Sources */,
 				DC58B1FDBEB683E96F670249 /* PhoneCallReporter.swift in Sources */,
@@ -19681,6 +19688,7 @@
 				81D570EB548C335D3F4A8990 /* BlockActionCoordinatorTests.swift in Sources */,
 				883BECB240EC6E20BA95EFA5 /* BlockedViewModelTests.swift in Sources */,
 				E0C2BAD22FCAAB310D5A8968 /* BloodLockSurfacesTests.swift in Sources */,
+				F2F859F21D46677EA424CB54 /* BloodProximityMapRoutingTests.swift in Sources */,
 				131DFD68AD85FC722B8C748E /* BloodRitualViewModelTests.swift in Sources */,
 				4DF1295A67BAAD5CAFC1CC64 /* BookmarkFeedbackLocalizationTests.swift in Sources */,
 				699474E2C85C63D89E8DEAB3 /* BookmarksCachePreservationTests.swift in Sources */,

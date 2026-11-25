@@ -53,6 +53,8 @@ extension RootView {
         /// vue de révélation n'aurait rien à montrer et le tap retomberait sur
         /// le tableau de bord — le défaut d'origine, une couche plus bas.
         let reveal: EngagementReveal?
+        /// La carte que le toucher ouvre — l'approche d'un Sang (#20540). `nil` pour tout autre type.
+        let personMap: PersonMapTarget?
 
         init(from notification: APINotification) {
             type = notification.notificationType
@@ -68,6 +70,9 @@ extension RootView {
             senderUsername = notification.senderName
             storyContext = StoryNotificationContext.from(notification)
             reveal = EngagementReveal.from(type: notification.notificationType, metadata: notification.metadata)
+            personMap = PersonMapTarget.forNotification(type: notification.notificationType,
+                                                        subjectUserId: notification.metadata?.userId,
+                                                        senderId: notification.senderId, displayName: notification.senderName)
             callId = nil
             callerUserId = nil
             callerName = nil
@@ -89,6 +94,9 @@ extension RootView {
             senderUsername = event.senderUsername
             storyContext = NotificationNavContext.makeStoryContext(from: event)
             reveal = EngagementReveal.from(type: event.notificationType, metadata: event.metadata)
+            personMap = PersonMapTarget.forNotification(type: event.notificationType, subjectUserId: event.apiMetadata?.userId,
+                                                        senderId: event.senderId,
+                                                        displayName: event.senderDisplayName ?? event.senderUsername)
             callId = nil
             callerUserId = nil
             callerName = nil
@@ -114,6 +122,8 @@ extension RootView {
             // tap retombe sur le tableau de bord. Un badge inventé serait pire
             // que pas de badge — cf. le repli MENTEUR d'`EngagementReveal`.
             reveal = nil
+            personMap = PersonMapTarget.forNotification(type: type, subjectUserId: payload.userId, senderId: payload.senderId,
+                                                        displayName: payload.senderDisplayName ?? payload.senderUsername)
             callId = payload.callId
             callerUserId = payload.callerUserId
             callerName = payload.callerName
