@@ -45,16 +45,22 @@ enum PacksPage: Hashable, CaseIterable {
 /// sur l'appareil. « Mes packs » range ce qui est installé (#16433).
 struct PacksSettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.routerCommands) private var router
     @State private var domain: PackDomain
     @State private var page: PacksPage
     private let focusedPack: String?
+    private let leadsToMinting: Bool
     private var theme: ThemeManager { ThemeManager.shared }
 
     /// `initialDomain` ouvre la vitrine FILTRÉE (lien profond `meeshy://settings/packs?domaine=…`,
     /// « Plus dans la boutique ») ; absent, la vitrine s'ouvre sur les stickers (#10632).
     /// `focusedPack` met CE pack en avant (#10703) : sa rangée est centrée et contourée.
     /// `initialPage` ouvre directement « Mes packs » depuis un accès direct (#16433).
-    init(initialDomain: PackDomain? = nil, focusedPack: String? = nil, initialPage: PacksPage = .shop) {
+    /// `leadsToMinting` : un pack trop cher mène à la frappe des Meeshes (#20528) ; `false` quand la vitrine
+    /// s'ouvre dans une autre feuille, d'où le Jeu s'ouvrirait derrière elle — la ligne dit alors l'écart seul.
+    init(initialDomain: PackDomain? = nil, focusedPack: String? = nil, initialPage: PacksPage = .shop,
+         leadsToMinting: Bool = true) {
+        self.leadsToMinting = leadsToMinting
         let opened = initialDomain.flatMap { PackDomain.allCases.contains($0) ? $0 : nil } ?? .sticker
         _domain = State(initialValue: opened)
         _page = State(initialValue: initialPage)
@@ -114,8 +120,20 @@ struct PacksSettingsView: View {
             }
             .accessibilityLabel(String(localized: "settings.packs.domain", defaultValue: "Type de pack", bundle: .main))
 
-            PackShopScreen(domain: domain, focusedPack: focusedPack)
+            PackShopScreen(domain: domain, focusedPack: focusedPack, onEarnMeeshes: earnMeeshesAction)
         }
+    }
+
+    /// Le chemin vers la frappe, absent quand la vitrine s'ouvre dans une autre feuille (#20528).
+    private var earnMeeshesAction: (() -> Void)? {
+        guard leadsToMinting else { return nil }
+        return { earnMeeshes() }
+    }
+
+    /// La frappe vit dans la fiche de l'Héritage : la vitrine se referme et le Jeu s'y ouvre (#20528).
+    private func earnMeeshes() {
+        dismiss()
+        router.openGame(at: .progressionConcept(.meesh))
     }
 }
 
@@ -154,6 +172,8 @@ extension PacksSettingsView {
 struct PackShopScreen: View {
     let domain: PackDomain
     var focusedPack: String?
+    /// Mène à la frappe des Meeshes depuis un pack que le solde ne couvre pas (#20528).
+    var onEarnMeeshes: (() -> Void)?
 
     /// La langue dans laquelle la vitrine nomme ses packs — celle du magasin des cadres qu'elle remplace.
     static var language: String { AuthManager.shared.currentUser?.systemLanguage ?? "fr" }
@@ -161,13 +181,14 @@ struct PackShopScreen: View {
     var body: some View {
         switch domain {
         case .gloryFrame:
-            FramePackShopScreen(store: .shared, shelf: .shared, focusedPack: focusedPack)
+            FramePackShopScreen(store: .shared, shelf: .shared, focusedPack: focusedPack, onEarnMeeshes: onEarnMeeshes)
         case .sticker, .wallpaper, .avatarRing, .banner, .bannerFrame:
             // La vitrine unique (#10632, #10711) : prix en Meeshes, possession, achat optimiste —
             // les stickers y passent comme les fonds, plus de seconde Boutique.
             UnifiedShopView(initialDomain: domain, domains: [domain], focusedSlug: focusedPack,
                             language: PackShopScreen.language, rankName: GameCopy.rankName,
-                            designs: GameFramePackElementDesigns(), readsAllDomains: true)
+                            designs: GameFramePackElementDesigns(), readsAllDomains: true,
+                            onEarnMeeshes: onEarnMeeshes)
                 .id(domain)
                 .padding(.horizontal, MeeshySpacing.lg)
         case .unknown:
@@ -180,6 +201,7 @@ struct FramePackShopScreen: View {
     @ObservedObject var store: FramePackStore
     @ObservedObject var shelf: FramePackShelfLoader
     var focusedPack: String?
+    var onEarnMeeshes: (() -> Void)?
     @State private var selected: PackShopPage = .shop
     /// La vitrine unique des cadres (#10711) : l'achat et l'installation passent par elle, et
     /// les onglets des packs installés suivent ce qu'elle installe.
@@ -199,7 +221,8 @@ struct FramePackShopScreen: View {
                     UnifiedShopView(initialDomain: .gloryFrame, domains: [.gloryFrame],
                                     focusedSlug: focusedPack, language: language,
                                     usageText: FrameUsageCopy.text, store: vitrine,
-                                    designs: GameFramePackElementDesigns(shelf: shelf), readsAllDomains: true)
+                                    designs: GameFramePackElementDesigns(shelf: shelf), readsAllDomains: true,
+                                    onEarnMeeshes: onEarnMeeshes)
                 case .pack(let slug):
                     FramePackShelfView(content: shelf.contents[slug] ?? .loading)
                         .task(id: slug) {
