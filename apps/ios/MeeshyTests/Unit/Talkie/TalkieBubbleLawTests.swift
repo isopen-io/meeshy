@@ -194,4 +194,20 @@ final class TalkieBubbleLawTests: XCTestCase {
         XCTAssertEqual(distance(tips[0]), 60, accuracy: 0.001)
         XCTAssertEqual(distance(tips[1]), 50, accuracy: 0.001)
     }
+
+    /// Une orbe née au centre est un point au silence.
+    func test_tips_bornAtTheCentre_silenceIsAPoint() {
+        let centred = TalkieBubbleGeometry(baseRadius: 0, maxAmplitude: 40, response: .voice)
+        let tips = TalkieBubbleLaw.tips(bands: [], geometry: centred, center: center)
+        XCTAssertTrue(tips.allSatisfy { distance($0) < 0.0001 })
+    }
+
+    /// Sous « réduire les animations », l'orbe née au centre devient un disque dont le rayon suit le niveau ; la bulle
+    /// du héros garde son cercle au bord de l'avatar.
+    func test_reducedRadius_centreBornGrowsWithTheLevel_heroKeepsItsCircle() {
+        let centred = TalkieBubbleGeometry(baseRadius: 0, maxAmplitude: 40, response: .voice)
+        XCTAssertEqual(TalkieBubbleLaw.reducedRadius(level: 0.2, geometry: centred), 20, accuracy: 0.0001)
+        XCTAssertEqual(TalkieBubbleLaw.reducedRadius(level: 0, geometry: centred), 0, accuracy: 0.0001)
+        XCTAssertEqual(TalkieBubbleLaw.reducedRadius(level: 0.9, geometry: geometry), 50, accuracy: 0.0001)
+    }
 }

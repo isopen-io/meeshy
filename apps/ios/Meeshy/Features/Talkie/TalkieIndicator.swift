@@ -162,9 +162,13 @@ private struct TalkieBannerTalkButton: View {
             .font(.subheadline.weight(.bold))
             .foregroundStyle(live ? Color.white : MeeshyColors.brandPrimary)
             .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
-            .background(Capsule().fill(live ? MeeshyColors.brandPrimary : Color.clear))
+            .background {
+                ZStack {
+                    Capsule().fill(live ? MeeshyColors.brandPrimary : Color.clear)
+                    TalkieHoldOrb(userId: userId, shows: orbShows, geometry: Self.orb, direction: .outgoing)
+                }
+            }
             .overlay(Capsule().stroke(MeeshyColors.brandPrimary, lineWidth: 1.5))
-            .background { TalkieHoldOrb(userId: userId, shows: orbShows, geometry: Self.orb, direction: .outgoing) }
             .contentShape(Capsule())
             .modifier(TalkieHoldModifier(sender: sender, userId: userId, pressed: $holding, delivery: delivery))
             .modifier(PhoneUnreachableLastingReader(userId: userId, lasting: $unreachableLasting))

@@ -7,20 +7,20 @@ import SwiftUI
 /// bornée à sa marge —, et autour de l'avatar de la fiche. Montée seulement tant qu'une voix va vers la personne ou
 /// vient d'elle.
 nonisolated enum TalkieVoiceHostLaw {
-    /// L'orbe part du bord du bouton et ne sort jamais de la rangée : `baseRadius + maxAmplitude ≤ rowHeight / 2`.
+    /// L'orbe de l'en-tête part du centre du bouton et ne sort jamais de la rangée : `maxAmplitude ≤ rowHeight / 2`.
     static func headerOrb(buttonSize: CGFloat, rowHeight: CGFloat) -> TalkieBubbleGeometry {
         holdOrb(buttonSize: buttonSize, room: (rowHeight - buttonSize) / 2)
     }
 
-    /// Jusqu'où l'orbe d'un bouton s'écarte de son bord, en part de son rayon, quand la place le permet.
+    /// Jusqu'où l'orbe d'un bouton dépasse son bord, en part de son rayon, quand la place le permet.
     static let holdOrbReach: CGFloat = 0.7
 
-    /// L'orbe d'un bouton qu'on maintient : elle part de son bord et s'en écarte d'au plus `room`, la marge libre qui
-    /// l'entoure, et d'au plus 70 % du rayon ; une marge négative n'en laisse aucune. Elle répond à la voix
-    /// (`TalkieBubbleResponse.voice`) pour qu'une parole normale se voie (#20531).
+    /// L'orbe d'un bouton qu'on maintient : elle part de son CENTRE — un point au silence — et la voix la pousse
+    /// jusqu'au bord du bouton plus `room`, la marge libre qui l'entoure, et au plus 70 % du rayon au-delà du bord ;
+    /// une marge négative la rentre d'autant dans le bouton. Elle répond à la voix (`TalkieBubbleResponse.voice`).
     static func holdOrb(buttonSize: CGFloat, room: CGFloat) -> TalkieBubbleGeometry {
         let radius = buttonSize / 2
-        return TalkieBubbleGeometry(baseRadius: radius, maxAmplitude: max(0, min(room, holdOrbReach * radius)),
+        return TalkieBubbleGeometry(baseRadius: 0, maxAmplitude: max(0, radius + min(room, holdOrbReach * radius)),
                                     response: .voice)
     }
 
@@ -28,12 +28,6 @@ nonisolated enum TalkieVoiceHostLaw {
     /// (#20531) ; le nombre de secondes reste.
     static func holdRingsVisible(orbShows: Bool) -> Bool {
         !orbShows
-    }
-
-    /// Le verre du bouton de l'en-tête ne réagit au doigt qu'au repos : interactif, il grossit le bouton sous l'appui
-    /// et recouvrait l'orbe de ma voix, qui part du bord du bouton.
-    static func headerGlassInteractive(look: TalkieHoldLook) -> Bool {
-        look == .idle
     }
 
     /// Ce que la fente du talkie de l'en-tête montre : le bouton quand il est proposé ; sinon, tant que le pair parle,
@@ -137,8 +131,8 @@ enum TalkieProfileHeroVoice {
     }
 }
 
-/// L'orbe d'un bouton du talkie — celui de l'en-tête, celui de la fiche : posée derrière le glyphe, sans changer sa
-/// place ni prendre le doigt, entrée et sortie en fondu agrandi (fondu seul sous « Réduire les animations »). L'hôte
+/// L'orbe d'un bouton du talkie — celui de l'en-tête, celui de la fiche, le micro du bandeau reçu : née au centre du
+/// bouton, posée entre son fond et son glyphe, sans changer sa place ni prendre le doigt, entrée et sortie en fondu agrandi (fondu seul sous « Réduire les animations »). L'hôte
 /// lui dit quand se montrer (`TalkieVoiceHostLaw.shows`) et à quelle échelle : la feuille n'observe aucun singleton.
 struct TalkieHoldOrb: View {
     let userId: String

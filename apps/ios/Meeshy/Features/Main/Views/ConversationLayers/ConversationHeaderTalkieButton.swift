@@ -101,7 +101,6 @@ struct ConversationHeaderTalkieButton: View {
             switch slot {
             case .button:
                 glyph(look)
-                    .background { TalkieHoldOrb(userId: userId, shows: orbShows) }
                     .modifier(TalkieHoldModifier(sender: sender, userId: userId, pressed: $pressed, delivery: delivery))
                     .meeshyTapTarget()
                     .transition(.scale.combined(with: .opacity))
@@ -113,7 +112,6 @@ struct ConversationHeaderTalkieButton: View {
                     .accessibilityIdentifier("conversation.header.talkie")
             case .listeningSlot:
                 glyph(.live)
-                    .background { TalkieHoldOrb(userId: userId, shows: orbShows) }
                     .meeshyTapTarget()
                     .allowsHitTesting(false)
                     .transition(.scale.combined(with: .opacity))
@@ -160,19 +158,17 @@ struct ConversationHeaderTalkieButton: View {
         }
     }
 
+    /// Le verre, puis l'orbe de la voix née au centre, puis le symbole par-dessus : l'orbe se voit sous le doigt même
+    /// quand le verre grossit, et le symbole reste lisible.
     private func glyph(_ look: TalkieHoldLook) -> some View {
-        ZStack {
-            Circle()
-                .fill(
-                    gradient
-                )
-                .opacity(look == .idle ? 0 : 1)
-            symbol(look)
-        }
-        .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
-        .adaptiveGlass(in: Circle(), tint: accent.opacity(0.4),
-                       interactive: TalkieVoiceHostLaw.headerGlassInteractive(look: look))
-        .animation(.easeOut(duration: 0.15), value: look)
+        Circle()
+            .fill(gradient)
+            .opacity(look == .idle ? 0 : 1)
+            .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
+            .adaptiveGlass(in: Circle(), tint: accent.opacity(0.4), interactive: true)
+            .overlay { TalkieHoldOrb(userId: userId, shows: orbShows) }
+            .overlay { symbol(look) }
+            .animation(.easeOut(duration: 0.15), value: look)
     }
 
     @ViewBuilder

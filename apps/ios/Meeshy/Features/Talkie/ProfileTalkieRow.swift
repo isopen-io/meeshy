@@ -9,9 +9,9 @@ import MeeshyUI
 ///
 /// - Présent dès Proche (`ProfileCircleViewModel.offersTalkie`) : la décision se prend avant l'affichage. La passerelle
 ///   rejuge à chaque appui ; un refus ne fait plus disparaître la carte, il se dit sur sa ligne (`TalkieAftermath`).
-/// - Pendant la parole, la voix vit en ORBE autour du bouton, là où le doigt appuie (#20531, `TalkieHoldOrb`), bornée
-///   à la marge du bouton ; l'anneau du décompte se vide par-dessus et les secondes restantes s'affichent dans le
-///   bouton ; VoiceOver en dit quelques paliers. La voix d'un pair qui arrive y vit aussi.
+/// - Pendant la parole, la voix vit en ORBE née du centre du bouton, là où le doigt appuie (#20531, `TalkieHoldOrb`),
+///   bornée à la marge du bouton ; elle remplace l'anneau du décompte, et les secondes restantes s'affichent
+///   par-dessus ; VoiceOver en dit quelques paliers. La voix d'un pair qui arrive y vit aussi.
 /// - Au relâchement, « Envoyé » s'affiche un instant, avec la vibration et le son de `TalkieHoldModifier`.
 /// - Un micro refusé propose « Ouvrir les réglages » ; tout autre refus laisse le bouton, qui réessaie.
 struct ProfileTalkieRow: View {
@@ -114,6 +114,7 @@ struct ProfileTalkieRow: View {
         let live = holding || sender.isActive
         return MeeshyMedallion(tint: tint, fill: .solid, decor: live ? .none : .waves(count: 2), size: .s96,
                                label: ProfileTalkieWording.holdA11y(name: displayName, delivery: delivery))
+            .overlay { TalkieHoldOrb(userId: userId, shows: orbShows, geometry: Self.orb) }
             .overlay { glyph(live: live).foregroundStyle(MeeshyColors.plateauNoir) }
             .overlay {
                 Circle()
@@ -126,7 +127,6 @@ struct ProfileTalkieRow: View {
             .shadow(color: tint.opacity(MeeshyOpacity.strong), radius: MeeshySpacing.lg, y: MeeshySpacing.md)
             .scaleEffect(live ? Self.pressedScale : 1)
             .background { countdown(live: live) }
-            .background { TalkieHoldOrb(userId: userId, shows: orbShows, geometry: Self.orb) }
             .contentShape(Circle())
             .modifier(TalkieHoldModifier(sender: sender, userId: userId, pressed: $holding, delivery: delivery))
             .accessibilityElement(children: .ignore)

@@ -7,6 +7,9 @@ import SwiftUI
 /// reliées par un contour qui respire. Le grave est en haut, l'aigu tourne dans le sens horaire, et chaque rayon prend
 /// la couleur de sa fréquence : orange au grave, ambre, bleu clair, puis bleu à l'aigu, qui reboucle sur l'orange.
 ///
+/// Autour d'un avatar, la bulle part du bord du héros (`baseRadius`) ; sur un bouton, l'orbe part de son CENTRE
+/// (`baseRadius` 0) : un point au silence, et les rayons comme le remplissage vont du centre au contour.
+///
 /// Le cadre est un carré de côté `frameSide(for:)` : la bulle entière (`baseRadius + maxAmplitude`) plus la moitié du
 /// trait le plus large, centrée — rien ne se dessine hors du cadre. Au silence, c'est un cercle parfait au
 /// `baseRadius` : c'est l'hôte qui décide quand la monter. Le remplissage ne couvre que l'anneau entre le cercle de
@@ -102,13 +105,23 @@ struct TalkieVoiceBubble: View {
 
     nonisolated private static func drawCircle(level: Float, geometry: TalkieBubbleGeometry, center: CGPoint,
                                                in graphics: inout GraphicsContext) {
-        let circle = baseCircle(geometry: geometry, center: center)
+        let radius = TalkieBubbleLaw.reducedRadius(level: level, geometry: geometry)
+        guard radius > 0 else { return }
+        let circle = circle(radius: radius, center: center)
+        if geometry.baseRadius == 0 {
+            var fill = graphics
+            fill.opacity = fillOpacity
+            fill.fill(circle, with: shading(center: center))
+        }
         graphics.stroke(circle, with: shading(center: center), lineWidth: TalkieBubbleLaw.reducedMotionStroke(level: level))
     }
 
     nonisolated private static func baseCircle(geometry: TalkieBubbleGeometry, center: CGPoint) -> Path {
-        let radius = geometry.baseRadius
-        return Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius, width: 2 * radius, height: 2 * radius))
+        circle(radius: geometry.baseRadius, center: center)
+    }
+
+    nonisolated private static func circle(radius: CGFloat, center: CGPoint) -> Path {
+        Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius, width: 2 * radius, height: 2 * radius))
     }
 
     /// Chaque rayon part du cercle de base, sur la droite du centre à sa pointe : aucune trigonométrie de plus.

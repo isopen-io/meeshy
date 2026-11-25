@@ -68,6 +68,13 @@ nonisolated enum TalkieBubbleLaw {
         }
     }
 
+    /// Le rayon du cercle quand le mouvement est réduit : une orbe née au centre devient un disque dont le rayon suit
+    /// le niveau ; une bulle posée au bord d'un avatar garde son cercle au `baseRadius`.
+    static func reducedRadius(level: Float, geometry: TalkieBubbleGeometry) -> CGFloat {
+        guard geometry.baseRadius == 0 else { return geometry.baseRadius }
+        return geometry.maxAmplitude * geometry.response.level(level)
+    }
+
     /// L'épaisseur du trait quand le mouvement est réduit : de 2 pt (silence) à 6 pt (pleine voix).
     static func reducedMotionStroke(level: Float) -> CGFloat {
         2 + 4 * clampedLevel(level)
