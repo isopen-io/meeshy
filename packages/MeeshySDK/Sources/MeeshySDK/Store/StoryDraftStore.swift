@@ -32,7 +32,7 @@ public final class StoryDraftStore: @unchecked Sendable {
     }
 
     private let storage: DatabaseQueue?
-    private var db: DatabaseQueue {
+    var db: DatabaseQueue {
         get throws {
             guard let storage else { throw DatabaseStorageUnavailable() }
             return storage
@@ -54,7 +54,7 @@ public final class StoryDraftStore: @unchecked Sendable {
         storedFailure.mutate { $0 = nil }
     }
 
-    private func recordFailure(_ operation: String, message: String) {
+    func recordFailure(_ operation: String, message: String) {
         let failure = PersistFailure(operation: operation, message: message, occurredAt: Date())
         storedFailure.mutate { $0 = failure }
     }
@@ -106,7 +106,7 @@ public final class StoryDraftStore: @unchecked Sendable {
     // MARK: - Media Directory
 
     /// Répertoire des médias d'UN brouillon.
-    private func mediaDir(for draftId: String) -> URL {
+    func mediaDir(for draftId: String) -> URL {
         mediaRoot.appendingPathComponent(draftId)
     }
 
@@ -415,7 +415,7 @@ public final class StoryDraftStore: @unchecked Sendable {
     /// passe par le pont B2 (`CanvasV3` → `StoryEffects(rendering:sceneIndex:)`) ;
     /// tout le reste décode en legacy. Sans ce partage, migrer un seul des
     /// deux sites viderait l'autre en silence dès qu'une ligne devient v3.
-    private func decodeSlideEffects(_ json: String) -> StoryEffects? {
+    func decodeSlideEffects(_ json: String) -> StoryEffects? {
         guard let data = json.data(using: .utf8) else { return nil }
         if let probe = try? JSONDecoder().decode(CanvasVersionProbe.self, from: data), probe.v == 3 {
             guard let document = try? JSONDecoder().decode(CanvasV3.self, from: data) else { return nil }
@@ -694,205 +694,5 @@ public final class StoryDraftStore: @unchecked Sendable {
         }
         removeMediaDir(mediaDir(for: draftId))
         return true
-    }
-
-    // MARK: - Cycle de vie de publication
-
-    private static func metaValue(_ db: Database, draftId: String, key: String) throws -> String? {
-        try String.fetchOne(
-            db,
-            sql: "SELECT value FROM story_draft_meta WHERE draft_id = ? AND key = ?",
-            arguments: [draftId, key])
-    }
-
-    /// Ratios de canvas PAR SLIDE, indexés `canvasAspectRatio:<slideId>` (cf.
-    /// `save()`/`load()`) — un composer peut porter jusqu'à dix slides à des
-    /// ratios indépendants ; une seule clé par brouillon ne peut pas les
-    /// représenter toutes.
-    private static func canvasAspectRatiosBySlide(_ db: Database, draftId: String) throws -> [String: Double] {
-        let rows = try Row.fetchAll(
-            db,
-            sql: "SELECT key, value FROM story_draft_meta WHERE draft_id = ? AND key LIKE 'canvasAspectRatio:%'",
-            arguments: [draftId])
-        return rows.reduce(into: [String: Double]()) { result, row in
-            let key: String = row["key"]
-            let value: String = row["value"]
-            guard let slideId = key.split(separator: ":", maxSplits: 1).last.map(String.init),
-                  let ratio = Double(value) else { return }
-            result[slideId] = ratio
-        }
-    }
-
-    private static func dateFromMeta(_ raw: String?) -> Date? {
-        raw.flatMap(Double.init).map(Date.init(timeIntervalSince1970:))
-    }
-
-    /// Gèle le brouillon : une publication vient de partir pour lui. La
-    /// nouvelle tentative SUPPLANTE l'erreur précédente — l'utilisateur vient
-    /// de republier, l'ancien échec est caduc.
-    @discardableResult
-    public func markPendingPublish(draftId: String, at date: Date = Date()) -> Bool {
-        do {
-            try db.write { db in
-                try db.execute(
-                    sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, 'pendingPublishAt', ?)",
-                    arguments: [draftId, String(date.timeIntervalSince1970)])
-                try db.execute(
-                    sql: "DELETE FROM story_draft_meta WHERE draft_id = ? AND key = 'lastPublishError'",
-                    arguments: [draftId])
-            }
-            return true
-        } catch {
-            Logger.cache.error("[StoryDraftStore] Erreur markPendingPublish: \(error.localizedDescription)")
-            recordFailure("mark-pending-publish", message: error.localizedDescription)
-            return false
-        }
-    }
-
-    /// Échec PERMANENT : la story revient en brouillon pour amélioration,
-    /// avec son erreur affichable. Lève le gel de publication.
-    @discardableResult
-    public func recordPublishFailure(draftId: String, message: String) -> Bool {
-        do {
-            try db.write { db in
-                try db.execute(
-                    sql: "DELETE FROM story_draft_meta WHERE draft_id = ? AND key = 'pendingPublishAt'",
-                    arguments: [draftId])
-                try db.execute(
-                    sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, 'lastPublishError', ?)",
-                    arguments: [draftId, message])
-            }
-            return true
-        } catch {
-            Logger.cache.error("[StoryDraftStore] Erreur recordPublishFailure: \(error.localizedDescription)")
-            recordFailure("record-publish-failure", message: error.localizedDescription)
-            return false
-        }
-    }
-
-    /// Lève le gel SANS poser d'erreur — annulation utilisateur, ou
-    /// réconciliation d'un marqueur orphelin (crash entre le succès de la
-    /// file et la suppression du brouillon).
-    @discardableResult
-    public func clearPendingPublish(draftId: String) -> Bool {
-        do {
-            try db.write { db in
-                try db.execute(
-                    sql: "DELETE FROM story_draft_meta WHERE draft_id = ? AND key = 'pendingPublishAt'",
-                    arguments: [draftId])
-            }
-            return true
-        } catch {
-            Logger.cache.error("[StoryDraftStore] Erreur clearPendingPublish: \(error.localizedDescription)")
-            recordFailure("clear-pending-publish", message: error.localizedDescription)
-            return false
-        }
-    }
-
-    /// Accès LÉGER au lien d'édition d'un brouillon (routage de réouverture) :
-    /// une seule ligne de meta, jamais les slides.
-    public func draftEditingPostId(_ draftId: String) -> String? {
-        do {
-            return try db.read { db in
-                try Self.metaValue(db, draftId: draftId, key: "editingPostId")
-            }
-        } catch {
-            Logger.cache.error("[StoryDraftStore] Erreur draftEditingPostId: \(error.localizedDescription)")
-            return nil
-        }
-    }
-
-    // MARK: - Inventaire
-
-    /// Tous les brouillons, du plus récemment modifié au plus ancien.
-    ///
-    /// Ne charge NI les effets NI les médias : dresser la liste ne doit pas
-    /// coûter le décodage de chaque story. Seule la vignette touche le disque,
-    /// et seulement pour vérifier que le fichier est encore là.
-    public func listDrafts() -> [StoryDraftSummary] {
-        do {
-            return try db.read { db in
-                let rows = try Row.fetchAll(db, sql: """
-                    SELECT d.id AS id, d.updated_at AS updated_at,
-                           (SELECT COUNT(*) FROM story_draft_slide s WHERE s.draft_id = d.id) AS slide_count
-                    FROM story_draft d
-                    ORDER BY d.updated_at DESC
-                    """)
-                return try rows.compactMap { row in
-                    let id: String = row["id"]
-                    let slideCount: Int = row["slide_count"] ?? 0
-                    guard slideCount > 0 else { return nil }
-                    return StoryDraftSummary(
-                        id: id,
-                        updatedAt: Date(timeIntervalSince1970: row["updated_at"] ?? 0),
-                        slideCount: slideCount,
-                        title: try firstSlideEffects(db, draftId: id)?.textObjects
-                            .map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
-                            .first(where: { !$0.isEmpty }),
-                        coverFileURL: try coverFileURL(db, draftId: id),
-                        backgroundHex: try firstSlideEffects(db, draftId: id)?.background,
-                        thumbHash: try Self.metaValue(db, draftId: id, key: "thumbHash")
-                            ?? firstSlideEffects(db, draftId: id)?.thumbHash,
-                        pendingPublishAt: Self.dateFromMeta(
-                            try Self.metaValue(db, draftId: id, key: "pendingPublishAt")),
-                        lastPublishError: try Self.metaValue(db, draftId: id, key: "lastPublishError"),
-                        editingPostId: try Self.metaValue(db, draftId: id, key: "editingPostId"))
-                }
-            }
-        } catch {
-            Logger.cache.error("[StoryDraftStore] Erreur listDrafts: \(error.localizedDescription)")
-            return []
-        }
-    }
-
-    /// Effets de la première diapositive décodable — porte à la fois le titre
-    /// et le fond, d'où un seul décodage pour les deux.
-    private func firstSlideEffects(_ db: Database, draftId: String) throws -> StoryEffects? {
-        let blobs = try String.fetchAll(
-            db,
-            sql: "SELECT effects_json FROM story_draft_slide WHERE draft_id = ? ORDER BY order_index",
-            arguments: [draftId])
-        return blobs.compactMap(decodeSlideEffects).first
-    }
-
-    /// Vignette du brouillon : la première image DANS L'ORDRE DES SLIDES dont
-    /// le fichier existe encore.
-    ///
-    /// Un `LIMIT 1` sans `ORDER BY` élisait une ligne arbitraire — la carte
-    /// changeait d'image d'une ouverture à l'autre, et n'en montrait aucune
-    /// quand LE fichier élu manquait alors qu'une autre image était là. Les
-    /// éléments qui ne correspondent à aucune slide (médias posés dans une
-    /// slide) passent après, départagés par `element_id` pour rester stables.
-    private func coverFileURL(_ db: Database, draftId: String) throws -> URL? {
-        let fileNames = try String.fetchAll(
-            db,
-            sql: """
-            SELECT m.file_name
-            FROM story_draft_media m
-            LEFT JOIN story_draft_slide s ON s.draft_id = m.draft_id AND s.id = m.element_id
-            WHERE m.draft_id = ? AND m.media_type = 'image'
-            ORDER BY (s.order_index IS NULL), s.order_index, m.element_id
-            """,
-            arguments: [draftId])
-        let dir = mediaDir(for: draftId)
-        return fileNames
-            .lazy
-            .map { dir.appendingPathComponent($0) }
-            .first { FileManager.default.fileExists(atPath: $0.path) }
-    }
-
-    /// `true` quand AUCUN brouillon n'existe.
-    public func isEmpty() -> Bool {
-        do {
-            let count = try db.read { db in
-                try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM story_draft_slide")
-            }
-            return (count ?? 0) == 0
-        } catch {
-            // Signale « pas de brouillon » : l'utilisateur ne se verra pas
-            // proposer une reprise alors qu'un brouillon existe peut-être.
-            Logger.cache.error("[StoryDraftStore] Draft count read failed, reporting empty: \(error.localizedDescription, privacy: .public)")
-            return true
-        }
     }
 }
