@@ -417,7 +417,7 @@ const es = {
   'game.flame_panel.paused_soon': 'Tu Llama descansa a partir de mañana, hasta el {date}.',
   'game.error.flame_goal.not_offered': 'Este objetivo no se ofrece hoy.',
   'game.error.flame_goal.no_flame': 'Tu Llama tiene que estar encendida para elegir un objetivo.',
-  'game.flame_panel.goal_intro': '¿Un objetivo para tu Llama? Elígelo hoy, o déjala arder libremente.',
+  'game.flame_panel.goal_intro': '¿Un objetivo para tu Llama? Elígelo hoy, o déjala arder.',
   'game.flame_panel.goal_choices': 'Objetivo de la Llama',
   'game.flame_panel.goal_running': 'Objetivo: {target} de Llama. Faltan {remaining}.',
   'game.flame_panel.goal_reached': '¡Tus ancestros saludan tu Llama: {days} cumplidos!',

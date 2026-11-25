@@ -381932,43 +381932,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "هدف للهبك؟ اختره اليوم، أو دعه يشتعل بحرية."
+            "value": "هدف للهبك؟ اختره اليوم، أو دعه يشتعل."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ein Ziel für deine Flamme? Wähle es heute – oder lass sie einfach brennen."
+            "value": "Ein Ziel für deine Flamme? Wähle es heute – oder lass sie brennen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A goal for your Flame? Pick one today, or just let it burn."
+            "value": "A goal for your Flame? Pick one today, or let it burn."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "¿Un objetivo para tu Llama? Elígelo hoy, o déjala arder libremente."
+            "value": "¿Un objetivo para tu Llama? Elígelo hoy, o déjala arder."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un objectif pour ta Flamme ? Choisis-le aujourd’hui, ou laisse-la brûler librement."
+            "value": "Un objectif pour ta Flamme ? Choisis-le aujourd’hui, ou laisse-la brûler."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un obiettivo per la tua Fiamma? Sceglilo oggi, o lasciala ardere liberamente."
+            "value": "Un obiettivo per la tua Fiamma? Sceglilo oggi, o lasciala ardere."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Uma meta para sua Chama? Escolha hoje, ou deixe-a arder livremente."
+            "value": "Uma meta para sua Chama? Escolha hoje, ou deixe-a arder."
           }
         }
       }

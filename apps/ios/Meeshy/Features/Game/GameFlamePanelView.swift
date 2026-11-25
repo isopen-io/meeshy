@@ -380,7 +380,7 @@ enum FlamePauseCopy {
 enum FlameGoalCopy {
     static var intro: String {
         String(localized: "game.flame_panel.goal_intro",
-               defaultValue: "Un objectif pour ta Flamme\u{00a0}? Choisis-le aujourd’hui, ou laisse-la brûler librement.", bundle: .main)
+               defaultValue: "Un objectif pour ta Flamme\u{00a0}? Choisis-le aujourd’hui, ou laisse-la brûler.", bundle: .main)
     }
 
     static var choicesGroup: String {
