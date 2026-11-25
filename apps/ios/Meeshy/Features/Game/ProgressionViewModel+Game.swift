@@ -25,6 +25,8 @@ struct GamePending: Equatable {
     var relight = false
     /// La veille de la Flamme annoncée, en vol (#20510).
     var pause = false
+    /// L'objectif de Flamme choisi, en vol (#20522).
+    var goal = false
 }
 
 /// Le refus du DERNIER geste, en une phrase — jamais un code (#9383).
@@ -34,6 +36,7 @@ struct GameErrors: Equatable {
     var freeze: String?
     var relight: String?
     var pause: String?
+    var goal: String?
 }
 
 /// La pièce qui vient d'être frappée : c'est ce qui rejoue la scène de la frappe.
@@ -193,6 +196,47 @@ extension ProgressionViewModel {
         }
         pending.pause = false
         endGesture()
+    }
+
+    // MARK: - L'objectif de Flamme
+
+    /// Choisir l'objectif de sa Flamme, en jours (#20522). Un objectif est une intention : le rejouer après un échec
+    /// garde son identifiant, un autre objectif en prend un neuf. Miroir du geste `chooseGoal` du web.
+    func chooseFlameGoal(target: Int) async {
+        guard !pending.goal else { return }
+        pending.goal = true
+        gameErrors.goal = nil
+        let intention = "goal:\(target)"
+        let before = beginGesture { GameOptimistic.afterGoalChosen($0, target: target) }
+        do {
+            let response = try await gameService.chooseFlameGoal(target: target, requestId: requestId(for: intention))
+            spent(intention)
+            if let snapshot, let game = snapshot.game {
+                commit(GameOptimistic.withGoal(GameState(game: game, meesh: snapshot.meesh), goal: response.goal), over: snapshot)
+            }
+            await load(forceNetwork: true)
+        } catch {
+            restore(before)
+            releaseRequestIdIfConflict(error, intention: intention)
+            gameErrors.goal = FlameGoalCopy.errorMessage(for: error)
+            await refreshAfterRefusal(error)
+        }
+        pending.goal = false
+        endGesture()
+    }
+
+    /// Fermer le signe des aïeux de l'objectif `target` atteint, et la marche suivante qu'il propose (#20522). Le signe
+    /// fermé se range tout de suite, dans l'état et le cache ; un envoi refusé le laisse se redire à la prochaine
+    /// lecture, comme le guide.
+    func closeFlameGoalSign(target: Int) {
+        let keys = [GameFlameGoalLaw.nextSeenKey(reachedTarget: target)]
+        if let snapshot, let game = snapshot.game {
+            commit(GameOptimistic.withGuideSeen(GameState(game: game, meesh: snapshot.meesh), keys: keys), over: snapshot)
+            persistSnapshot()
+        }
+        let service = gameService
+        let requestId = UUID().uuidString
+        Task { _ = try? await service.markGuideSeen(keys: keys, requestId: requestId) }
     }
 
     /// « Identifiant déjà servi à une AUTRE écriture » : le rejouer ne ferait que se heurter au même

@@ -464,7 +464,10 @@ struct ProgressionConceptGestures: View {
                     relighting: viewModel.pending.relight, pausing: viewModel.pending.pause, errors: viewModel.gameErrors,
                     onBuyFreeze: { Task { await viewModel.buyFreeze() } },
                     onRelight: { Task { await viewModel.relight() } },
-                    onPause: { days in Task { await viewModel.pauseFlame(days: days) } }
+                    onPause: { days in Task { await viewModel.pauseFlame(days: days) } },
+                    choosingGoal: viewModel.pending.goal,
+                    onChooseGoal: { target in Task { await viewModel.chooseFlameGoal(target: target) } },
+                    onCloseGoalSign: { target in viewModel.closeFlameGoalSign(target: target) }
                 )
             } else {
                 ProgressionFlammeHero(progress: progress, isDark: isDark)

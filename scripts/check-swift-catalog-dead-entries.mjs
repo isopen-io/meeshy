@@ -569,8 +569,6 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // `applyKnownLiveExceptions` la fait rougir (PÉRIMÉE) le jour où son appelant
 // arrive — la déclaration doit alors partir dans le même commit.
 const PENDING_CLIENT_ENTRIES = {
-  // L'objectif de Flamme (#20520) : la carte de la Flamme iOS portera le choix au premier jour.
-  'MeEndpoint.gameFlameGoal': { issue: 20522, reason: 'POST /me/game/flame/goal — « Choisir mon objectif de Flamme » depuis la carte de la Flamme (iOS)' },
   // Les entrées d'un lien de communauté (#19429, besoin #19290) : la fiche iOS `Lien-Communaute` les lira.
   'CommunitiesEndpoint.byIdEntriesStats': { issue: 19429, reason: 'GET /communities/:id/entries/stats — « N entrées par ce lien », « N cette semaine », la série sur 30 jours' },
   // Routes déjà servies par cette branche (#19375, #19394, chantier #18857), dont l'énumération Swift n'avait pas été régénérée.

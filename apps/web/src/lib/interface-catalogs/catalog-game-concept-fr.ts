@@ -415,7 +415,7 @@ const fr = {
   'game.flame_panel.paused_soon': 'Ta Flamme se met en veille demain, jusqu’au {date}.',
   'game.error.flame_goal.not_offered': 'Cet objectif ne se propose pas aujourd’hui.',
   'game.error.flame_goal.no_flame': 'Il faut une Flamme allumée pour choisir un objectif.',
-  'game.flame_panel.goal_intro': 'Un objectif pour ta Flamme\u00a0? Choisis-le aujourd’hui, ou laisse-la brûler librement.',
+  'game.flame_panel.goal_intro': 'Un objectif pour ta Flamme\u00a0? Choisis-le aujourd’hui, ou laisse-la brûler.',
   'game.flame_panel.goal_choices': 'Objectif de Flamme',
   'game.flame_panel.goal_running': 'Objectif : {target} de Flamme. Encore {remaining}.',
   'game.flame_panel.goal_reached': 'Tes aïeux saluent ta Flamme : {days} tenus\u00a0!',

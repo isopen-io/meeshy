@@ -319,6 +319,100 @@ final class ProgressionViewModelGameTests: XCTestCase {
         XCTAssertTrue(label.contains("octobre"), label)
     }
 
+    // MARK: - L'objectif de Flamme (#20522)
+
+    private func firstDay(offer: [Int] = [7, 14, 30]) -> GameBlock {
+        let game = GameFixture.game(flameDays: 1)
+        return game.replacing(flame: game.flame.replacing(goal: .some(GameServedFlameGoal(offer: offer, current: nil))))
+    }
+
+    func test_chooseFlameGoal_isShownAtOnce_onlyForAnOfferedGoal() {
+        let state = GameState(game: firstDay(), meesh: GameFixture.meesh())
+
+        let chosen = GameOptimistic.afterGoalChosen(state, target: 14)
+
+        XCTAssertEqual(chosen.game.flame.goal?.current,
+                       GameServedFlameGoal.Current(target: 14, remaining: 13, reached: false, next: nil))
+        XCTAssertEqual(chosen.game.flame.goal?.offer, [], "un objectif choisi ne se propose plus")
+        XCTAssertEqual(GameOptimistic.afterGoalChosen(state, target: 100), state, "un objectif non proposé ne bouge rien")
+    }
+
+    func test_chooseFlameGoal_success_keepsTheServedGoal() async {
+        let served = GameServedFlameGoal(offer: [], current: GameServedFlameGoal.Current(target: 30, remaining: 29, reached: false, next: nil))
+        let (sut, engagement, service) = makeSUT(snapshot: GameFixture.snapshot(firstDay()))
+        await sut.load(forceNetwork: true)
+        service.goalResult = .success(FlameGoalResponse(status: "chosen", goal: served))
+        let after = firstDay()
+        engagement.fetchProgressResult = .success(GameFixture.snapshot(after.replacing(flame: after.flame.replacing(goal: .some(served)))))
+
+        await sut.chooseFlameGoal(target: 30)
+
+        XCTAssertEqual(service.goalCalls.map(\.target), [30])
+        XCTAssertEqual(sut.game?.flame.goal, served)
+        XCTAssertFalse(sut.pending.goal)
+        XCTAssertNil(sut.gameErrors.goal)
+    }
+
+    func test_chooseFlameGoal_refused_restoresTheCardAndSaysTheReason() async {
+        let (sut, _, service) = makeSUT(snapshot: GameFixture.snapshot(firstDay()))
+        await sut.load(forceNetwork: true)
+        service.goalResult = .failure(MeeshyError.rejected(APIRejection(
+            statusCode: 409, code: GameErrorCode.flameGoalNotAllowed.rawValue, message: "refus", reason: "not-offered"
+        )))
+
+        await sut.chooseFlameGoal(target: 7)
+
+        XCTAssertEqual(sut.game?.flame.goal, GameServedFlameGoal(offer: [7, 14, 30], current: nil), "le refus rend la carte d'avant")
+        XCTAssertEqual(sut.gameErrors.goal, FlameGoalCopy.refusal(reason: "not-offered"))
+        XCTAssertNotEqual(sut.gameErrors.goal, GameCopy.errorMessage(for: .flameGoalNotAllowed),
+                          "le refus dit sa raison, pas la phrase générale")
+    }
+
+    func test_chooseFlameGoal_retryAfterANetworkFailure_replaysTheSameRequestId() async {
+        let (sut, _, service) = makeSUT(snapshot: GameFixture.snapshot(firstDay()))
+        await sut.load(forceNetwork: true)
+        service.goalResult = .failure(URLError(.timedOut))
+
+        await sut.chooseFlameGoal(target: 7)
+        await sut.chooseFlameGoal(target: 7)
+        await sut.chooseFlameGoal(target: 14)
+
+        let ids = service.goalCalls.map(\.requestId)
+        XCTAssertEqual(ids.count, 3)
+        XCTAssertEqual(ids[0], ids[1], "le même objectif rejoue la même intention")
+        XCTAssertNotEqual(ids[1], ids[2], "un autre objectif est une autre intention")
+    }
+
+    func test_flamePanel_offersTheGoal_saysWhatRemains_andSalutesItUntilClosed() {
+        let flame = GameFixture.game(flameDays: 1).flame
+        XCTAssertNil(GameFlamePanelView.goalState(flame, guideSeen: []), "un serveur antérieur : la carte d'avant")
+        XCTAssertEqual(GameFlamePanelView.goalState(firstDay().flame, guideSeen: []), .choose([7, 14, 30]))
+        let running = flame.replacing(goal: .some(GameServedFlameGoal(offer: [], current: GameServedFlameGoal.Current(target: 7, remaining: 3, reached: false, next: nil))))
+        XCTAssertEqual(GameFlamePanelView.goalState(running, guideSeen: []), .running(target: 7, remaining: 3))
+        let reached = flame.replacing(goal: .some(GameServedFlameGoal(offer: [14], current: GameServedFlameGoal.Current(target: 7, remaining: 0, reached: true, next: 14))))
+        XCTAssertEqual(GameFlamePanelView.goalState(reached, guideSeen: []), .reached(target: 7, next: 14))
+        XCTAssertNil(GameFlamePanelView.goalState(reached, guideSeen: ["flame-goal-next-7"]), "« Plus tard » le fait taire")
+    }
+
+    func test_closeFlameGoalSign_ranksTheKeyAtOnce_andTellsTheServer() async {
+        let reached = GameFixture.game(flameDays: 7)
+        let game = reached.replacing(flame: reached.flame.replacing(
+            goal: .some(GameServedFlameGoal(offer: [14], current: GameServedFlameGoal.Current(target: 7, remaining: 0, reached: true, next: 14)))
+        ))
+        let (sut, _, service) = makeSUT(snapshot: GameFixture.snapshot(game))
+        await sut.load(forceNetwork: true)
+
+        sut.closeFlameGoalSign(target: 7)
+
+        XCTAssertTrue(sut.game?.guideSeen.contains("flame-goal-next-7") == true)
+        let told = expectation(description: "la clé part au serveur")
+        Task {
+            while !service.guideSeenCalls.contains(["flame-goal-next-7"]) { await Task.yield() }
+            told.fulfill()
+        }
+        await fulfillment(of: [told], timeout: 2)
+    }
+
     // MARK: - La frappe
 
     func test_mint_failure_restoresTheGameBlock() async {
