@@ -256,6 +256,22 @@ enum GameOptimistic {
         GameState(game: state.game.replacing(flame: state.game.flame.replacing(pause: .some(pause))), meesh: state.meesh)
     }
 
+    // MARK: - Objectif de Flamme
+
+    /// L'objectif choisi (#20522) se voit tout de suite, par la même loi que la passerelle — seulement s'il est l'un de
+    /// ceux que la carte propose aujourd'hui. Miroir d'`afterGoalChosen` (`apps/web/src/lib/view/game-optimistic.ts`).
+    static func afterGoalChosen(_ state: GameState, target: Int) -> GameState {
+        let flame = state.game.flame
+        guard flame.days > 0, flame.goal?.offer.contains(target) == true,
+              let goal = GameFlameGoalLaw.servedAfterChoosing(target: target, streak: flame.days) else { return state }
+        return GameState(game: state.game.replacing(flame: flame.replacing(goal: .some(goal))), meesh: state.meesh)
+    }
+
+    /// L'objectif que la passerelle sert fait foi.
+    static func withGoal(_ state: GameState, goal: GameServedFlameGoal) -> GameState {
+        GameState(game: state.game.replacing(flame: state.game.flame.replacing(goal: .some(goal))), meesh: state.meesh)
+    }
+
     // MARK: - Guide
 
     /// Les clés vues entrent aussitôt dans l'état : la prochaine ouverture dira la version COURTE.

@@ -22,6 +22,8 @@ public protocol GameServiceProviding: Sendable {
     func relightFlame(requestId: String) async throws -> FlameRelightResponse
     /// Annoncer une veille de la Flamme de 1 à 7 jours, à partir de demain, une fois par trimestre (#17372).
     func pauseFlame(days: Int, requestId: String) async throws -> FlamePauseResponse
+    /// Choisir l'objectif de sa Flamme : 7, 14 ou 30 jours au premier jour, la marche suivante une fois atteint (#20522).
+    func chooseFlameGoal(target: Int, requestId: String) async throws -> FlameGoalResponse
     /// Marquer des moments du guide (ou des étapes d'intégration) comme vus.
     func markGuideSeen(keys: [String], requestId: String) async throws -> GuideSeenResponse
 }
@@ -61,6 +63,12 @@ public final class GameService: GameServiceProviding, Sendable {
     public func pauseFlame(days: Int, requestId: String) async throws -> FlamePauseResponse {
         let response: APIResponse<FlamePauseResponse> = try await api.post(
             MeEndpoint.gameFlamePause, body: FlamePauseRequest(requestId: requestId, days: days))
+        return response.data
+    }
+
+    public func chooseFlameGoal(target: Int, requestId: String) async throws -> FlameGoalResponse {
+        let response: APIResponse<FlameGoalResponse> = try await api.post(
+            MeEndpoint.gameFlameGoal, body: FlameGoalRequest(requestId: requestId, target: target))
         return response.data
     }
 

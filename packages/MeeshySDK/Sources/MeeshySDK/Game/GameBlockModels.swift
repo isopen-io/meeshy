@@ -365,10 +365,14 @@ public struct GameBlock: Codable, Sendable, Equatable {
         /// La veille annoncée ou en cours (#17372, #20510), de l'annonce à son dernier jour. Absente devant un serveur
         /// antérieur, hors de toute veille, ou illisible : la carte d'avant.
         public let pause: GameFlamePause?
+        /// L'objectif de Flamme (#17379, #20522) : les choix du premier jour, l'objectif en cours ou atteint. Absent
+        /// devant un serveur antérieur, sans rien à dire, ou illisible : la carte d'avant.
+        public let goal: GameServedFlameGoal?
 
         public init(days: Int, form: FlameFormKey?, bonusPercent: Int, freezes: Int, maxFreezes: Int,
                     freezePrice: Int, relightPrice: Int, status: FlameStatus, canRelight: Bool,
-                    freezeGifted: Bool? = nil, effortRelight: GameEffortRelight? = nil, pause: GameFlamePause? = nil) {
+                    freezeGifted: Bool? = nil, effortRelight: GameEffortRelight? = nil, pause: GameFlamePause? = nil,
+                    goal: GameServedFlameGoal? = nil) {
             self.days = days
             self.form = form
             self.bonusPercent = bonusPercent
@@ -381,11 +385,12 @@ public struct GameBlock: Codable, Sendable, Equatable {
             self.freezeGifted = freezeGifted
             self.effortRelight = effortRelight
             self.pause = pause
+            self.goal = goal
         }
 
         private enum CodingKeys: String, CodingKey {
             case days, form, bonusPercent, freezes, maxFreezes, freezePrice, relightPrice, status, canRelight
-            case freezeGifted, effortRelight, pause
+            case freezeGifted, effortRelight, pause, goal
         }
 
         public init(from decoder: Decoder) throws {
@@ -402,6 +407,7 @@ public struct GameBlock: Codable, Sendable, Equatable {
             freezeGifted = try container.decodeIfPresent(Bool.self, forKey: .freezeGifted)
             effortRelight = (try? container.decodeIfPresent(GameEffortRelight.self, forKey: .effortRelight)) ?? nil
             pause = (try? container.decodeIfPresent(GameFlamePause.self, forKey: .pause)) ?? nil
+            goal = (try? container.decodeIfPresent(GameServedFlameGoal.self, forKey: .goal)) ?? nil
         }
     }
 
