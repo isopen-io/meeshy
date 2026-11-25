@@ -52,6 +52,12 @@ final class TalkieVoiceHostTests: XCTestCase {
         XCTAssertLessThanOrEqual(ProfileTalkieRow.orb.maxAmplitude, ProfileTalkieRow.orbRoom)
     }
 
+    /// L'orbe remplace l'anneau (2026-11-25) : tant qu'elle vit, ni reflet ni anneau du décompte autour du bouton.
+    func test_holdRings_hiddenWhileTheOrbShows_backAtRest() {
+        XCTAssertFalse(TalkieVoiceHostLaw.holdRingsVisible(orbShows: true))
+        XCTAssertTrue(TalkieVoiceHostLaw.holdRingsVisible(orbShows: false))
+    }
+
     func test_holdOrb_negativeRoom_hasNoAmplitude() {
         XCTAssertEqual(TalkieVoiceHostLaw.holdOrb(buttonSize: 96, room: -4).maxAmplitude, 0)
     }

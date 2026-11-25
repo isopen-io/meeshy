@@ -24,6 +24,12 @@ nonisolated enum TalkieVoiceHostLaw {
                                     response: .voice)
     }
 
+    /// Le reflet et l'anneau du décompte autour d'un bouton maintenu : l'orbe les remplace tant qu'elle vit
+    /// (2026-11-25) ; le nombre de secondes reste.
+    static func holdRingsVisible(orbShows: Bool) -> Bool {
+        !orbShows
+    }
+
     /// Ce que la fente du talkie de l'en-tête montre : le bouton quand il est proposé ; sinon, tant que le pair parle,
     /// une fente d'écoute de même taille, sans geste, qui porte l'orbe de sa voix ; rien le reste du temps.
     static func headerSlot(offered: Bool, withdrawn: Bool, incoming: Bool) -> TalkieHeaderSlot {

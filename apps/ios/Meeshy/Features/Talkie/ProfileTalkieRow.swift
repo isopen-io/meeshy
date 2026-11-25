@@ -120,6 +120,7 @@ struct ProfileTalkieRow: View {
                     .strokeBorder(LinearGradient(colors: [.white.opacity(MeeshyOpacity.heavy), .clear],
                                                  startPoint: .top, endPoint: .center),
                                   lineWidth: MeeshyBorder.strong)
+                    .opacity(ringsVisible ? 1 : 0)
                     .allowsHitTesting(false)
             }
             .shadow(color: tint.opacity(MeeshyOpacity.strong), radius: MeeshySpacing.lg, y: MeeshySpacing.md)
@@ -163,9 +164,12 @@ struct ProfileTalkieRow: View {
         }
     }
 
+    /// L'orbe remplace le reflet et l'anneau du décompte tant qu'elle vit.
+    private var ringsVisible: Bool { TalkieVoiceHostLaw.holdRingsVisible(orbShows: orbShows) }
+
     @ViewBuilder
     private func countdown(live: Bool) -> some View {
-        if live, let window = sender.talkWindow {
+        if live, ringsVisible, let window = sender.talkWindow {
             TalkieCountdownRing(window: window, diameter: Self.diameter * Self.countdownScale, tint: tint)
         }
     }
