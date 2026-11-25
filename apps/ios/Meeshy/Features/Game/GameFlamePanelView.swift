@@ -388,10 +388,10 @@ enum FlameGoalCopy {
     }
 
     static func running(target count: Int, remaining left: Int) -> String {
-        let target = GameCopy.days(count)
-        let remaining = GameCopy.days(left)
+        let goalDays = GameCopy.days(count)
+        let daysLeft = GameCopy.days(left)
         return String(localized: "game.flame_panel.goal_running",
-                      defaultValue: "Objectif : \(target) de Flamme. Encore \(remaining).", bundle: .main)
+                      defaultValue: "Objectif : \(goalDays) de Flamme. Encore \(daysLeft).", bundle: .main)
     }
 
     static func reached(target count: Int) -> String {
