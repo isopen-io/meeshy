@@ -15,9 +15,9 @@ struct TalkieSendingTests {
     @Test func unAccuseOuvert_rendLaPriseDeParoleEtSesBornes() {
         let read = verdict([
             "success": true,
-            "data": ["talkieId": "aaaaaaaaaaaaaaaaaaaaaaaa", "maxDurationMs": 20_000, "maxChunkBytes": 8_192],
+            "data": ["talkieId": "aaaaaaaaaaaaaaaaaaaaaaaa", "maxDurationMs": 12_000, "maxChunkBytes": 8_192],
         ])
-        #expect(read == .opened(TalkieOpened(talkieId: "aaaaaaaaaaaaaaaaaaaaaaaa", maxDuration: 20, maxChunkBytes: 8_192)))
+        #expect(read == .opened(TalkieOpened(talkieId: "aaaaaaaaaaaaaaaaaaaaaaaa", maxDuration: 12, maxChunkBytes: 8_192)))
     }
 
     @Test func desBornesServiesAbsurdes_sontRameneesAuContrat() {
@@ -48,9 +48,9 @@ struct TalkieSendingTests {
     @Test func unAccuseEnReveil_ditQueLeDestinataireSeReveille() {
         let read = verdict([
             "success": true,
-            "data": ["talkieId": "aaaaaaaaaaaaaaaaaaaaaaaa", "maxDurationMs": 20_000, "maxChunkBytes": 8_192, "delivery": "waking"],
+            "data": ["talkieId": "aaaaaaaaaaaaaaaaaaaaaaaa", "maxDurationMs": 12_000, "maxChunkBytes": 8_192, "delivery": "waking"],
         ])
-        #expect(read == .opened(TalkieOpened(talkieId: "aaaaaaaaaaaaaaaaaaaaaaaa", maxDuration: 20, maxChunkBytes: 8_192, delivery: .waking)))
+        #expect(read == .opened(TalkieOpened(talkieId: "aaaaaaaaaaaaaaaaaaaaaaaa", maxDuration: 12, maxChunkBytes: 8_192, delivery: .waking)))
     }
 
     @Test func uneLivraisonAbsenteOuInconnue_vautLeDirect() {
