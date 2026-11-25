@@ -36,7 +36,9 @@ final class DeepLinkSurfaceRoutingGuardTests: XCTestCase {
         // vitrine d'une personne, par son pseudo (#19524).
         "u": "meeshy://u/leo.m",
         // Widget « Mon lien » : un appui ouvre mes liens.
-        "links": "meeshy://links"
+        "links": "meeshy://links",
+        // Widget « Ma Flamme » : un appui ouvre Ma Légende (#20562).
+        "me": "meeshy://me/progression"
     ]
 
     /// Hosts émis SANS destination, et pourquoi ils le restent. Chacun demande
