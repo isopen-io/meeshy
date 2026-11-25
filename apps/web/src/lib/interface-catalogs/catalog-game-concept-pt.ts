@@ -415,6 +415,14 @@ const pt = {
   'game.flame_panel.pause': 'Deixar descansar · {days}',
   'game.flame_panel.paused': 'Sua Chama descansa até {date}.',
   'game.flame_panel.paused_soon': 'Sua Chama começa a descansar amanhã, até {date}.',
+  'game.error.flame_goal.not_offered': 'Esta meta não está disponível hoje.',
+  'game.error.flame_goal.no_flame': 'Sua Chama precisa estar acesa para escolher uma meta.',
+  'game.flame_panel.goal_intro': 'Uma meta para sua Chama? Escolha hoje, ou deixe-a arder livremente.',
+  'game.flame_panel.goal_choices': 'Meta da Chama',
+  'game.flame_panel.goal_running': 'Meta: {target} de Chama. Faltam {remaining}.',
+  'game.flame_panel.goal_reached': 'Seus ancestrais saúdam sua Chama: {days} cumpridos!',
+  'game.flame_panel.goal_next': 'Mirar em {days}',
+  'game.flame_panel.goal_later': 'Mais tarde',
   'game.flame_panel.pause_next': 'Sua Chama poderá descansar de novo a partir de {date}.',
 } as const satisfies GameConceptCatalog;
 

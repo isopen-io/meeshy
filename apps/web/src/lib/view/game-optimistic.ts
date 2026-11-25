@@ -1,5 +1,6 @@
-import type { GameBlock, GameChestReward, GameFlamePause, GameMission } from '@meeshy/shared/types/game';
+import type { GameBlock, GameChestReward, GameFlamePause, GameMission, GameServedFlameGoal } from '@meeshy/shared/types/game';
 import { flameBonusPercent, flameForm } from '@meeshy/shared/utils/game/flame';
+import { chooseFlameGoal, servedFlameGoal } from '@meeshy/shared/utils/game/flame-goal';
 import { canPauseFlame } from '@meeshy/shared/utils/game/flame-pause';
 import { gloryStanding, levelCapForRank } from '@meeshy/shared/utils/game/glory';
 import { levelOnTheWire, mintOnTheWire } from '@meeshy/shared/utils/game/level-wire';
@@ -321,4 +322,29 @@ export function afterPause(view: EngagementWithGame, days: number): EngagementWi
 /** La veille que la passerelle sert fait foi. */
 export function withPaused(view: EngagementWithGame, pause: GameFlamePause): EngagementWithGame {
   return onGame(view, (game) => ({ ...game, flame: { ...game.flame, pause: { from: pause.from, until: pause.until } } }));
+}
+
+const goalOf = (goal: ReturnType<typeof servedFlameGoal>): GameServedFlameGoal | undefined =>
+  goal === null ? undefined : { offer: [...goal.offer], current: goal.current === null ? null : { ...goal.current } };
+
+/**
+ * L'objectif choisi (#20521) se voit tout de suite, par la même loi que la passerelle (`chooseFlameGoal` puis
+ * `servedFlameGoal`) — seulement s'il est l'un de ceux que la carte propose aujourd'hui.
+ */
+export function afterGoalChosen(view: EngagementWithGame, target: number): EngagementWithGame {
+  const game = view.game;
+  if (game === undefined || game.flame.days === 0 || game.flame.goal?.offer.includes(target) !== true) return view;
+  const streak = game.flame.days;
+  const goal = goalOf(servedFlameGoal({ goal: chooseFlameGoal({ streak, target }), streak }));
+  return onGame(view, (current) => ({ ...current, flame: { ...current.flame, goal } }));
+}
+
+/** L'objectif que la passerelle sert fait foi. */
+export function withGoal(view: EngagementWithGame, goal: GameServedFlameGoal): EngagementWithGame {
+  return onGame(view, (game) => ({ ...game, flame: { ...game.flame, goal: { offer: [...goal.offer], current: goal.current === null ? null : { ...goal.current } } } }));
+}
+
+/** Des moments vus (`game.guideSeen`) entrent aussitôt dans le cache, chacun une fois. */
+export function withGuideSeen(view: EngagementWithGame, keys: readonly string[]): EngagementWithGame {
+  return onGame(view, (game) => ({ ...game, guideSeen: [...new Set([...game.guideSeen, ...keys])] }));
 }
