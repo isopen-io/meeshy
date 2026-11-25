@@ -104,3 +104,10 @@ Aujourd'hui, le talkie montre la voix dans la barre d'en-tête (`TalkieHeaderLiv
 - **Tests de bandes :** une sinusoïde à 200 Hz allume la bande qui la contient ; une sinusoïde à 4 kHz allume la sienne.
 - **Tests de gain :** un signal à −40 dBFS remonte vers la cible sans dépasser +18 dB ; un signal plein écrête à −1 dBFS au plus.
 - **Mesure sur iPhone réel :** images par seconde pendant 10 s de parole, et temps de calcul par tampon sur le fil audio, consignés dans l'issue.
+
+## Décisions du porteur du 2026-11-25 (elles priment sur ce qui précède)
+
+1. **L'orbe se voit.** Sur le bouton « Maintenir pour parler » de la fiche, l'orbe sortait à peine du bouton. Elle prend désormais la place libre de la carte, jusqu'à environ 70 % du rayon du bouton, sans jamais sortir de la carte. Les bandes passent par une courbe de réponse qui amène une voix normale vers la moitié de l'amplitude. Le cercle de repos reste.
+2. **L'orbe remplace l'anneau.** Pendant que l'orbe vit, le reflet blanc et l'anneau du décompte autour du bouton de la fiche disparaissent. Le nombre de secondes reste.
+3. **L'en-tête de conversation reste sur place.** Le petit bouton talkie de l'en-tête porte la même orbe, amplifiée selon la même règle et bornée à la rangée. Aucune barre ni aucun bandeau ne recouvre l'en-tête pendant un talkie, à l'envoi comme à la réception. En particulier, le bandeau du talkie reçu ne se pose pas quand l'en-tête de ce correspondant est à l'écran.
+4. **Le bandeau du talkie reçu.** Un spectre HORIZONTAL remplace l'icône d'onde fixe. Il reprend les mêmes 120 bandes de la voix reçue et le même dégradé (orange, ambre, bleu clair, bleu), miroir de part et d'autre d'une ligne médiane, entre le libellé et les boutons. Le bouton micro du bandeau porte l'orbe CIRCULAIRE de ma voix quand je le maintiens pour répondre. « Réduire les animations » est respecté. La mise en page ne bouge pas pendant l'animation, les dessins ne prennent pas le doigt, et VoiceOver ne change pas.
