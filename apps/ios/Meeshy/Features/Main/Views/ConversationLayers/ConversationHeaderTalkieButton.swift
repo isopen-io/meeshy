@@ -87,6 +87,15 @@ struct ConversationHeaderTalkieButton: View {
     /// Une voix vers le pair ou venant de lui : l'orbe se montre.
     private var orbShows: Bool { TalkieVoiceHostLaw.shows(userId: userId, voices: voices.voices) }
 
+    /// Ma voix tant qu'elle part, sinon la sienne (#20579).
+    private var orbDirection: TalkieVoiceDirection? { TalkieVoiceHostLaw.orbDirection(userId: userId, voices: voices.voices) }
+
+    /// Le symbole commun à la fiche, l'en-tête et le bandeau (#20579) ; la fente d'écoute montre le direct du pair.
+    private var holdGlyph: TalkieHoldGlyph {
+        guard slot == .button else { return .live }
+        return TalkieHoldGlyph.resolve(phase: sender.phase, waking: sender.waking, aftermath: nil, delivery: delivery)
+    }
+
     private var reduceMotion: Bool { MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion) }
 
     /// Le sort de ma voix tant qu'elle part ; `nil` au repos.
@@ -126,12 +135,12 @@ struct ConversationHeaderTalkieButton: View {
         .animation(MeeshyMotion.animation(.rise, reduce: reduceMotion), value: slot)
         .task(id: userId) { await offer.load() }
         .modifier(PhoneUnreachableLastingReader(userId: userId, lasting: $unreachableLasting))
-        .adaptiveOnChange(of: sender.waking) { _, waking in
-            // L'en-tête n'a pas de libellé : le réveil d'un destinataire hors ligne se dit dans un bandeau neutre.
-            guard waking else { return }
-            FeedbackToastManager.shared.show(ProfileTalkieWording.waking(name: peerName), type: .info)
-        }
         .adaptiveOnChange(of: liveDelivery) { previous, current in
+            // L'en-tête n'a pas de libellé : le réveil d'un destinataire hors ligne, et le repli en message vocal dès
+            // qu'il commence, se disent dans un bandeau neutre (#20579).
+            if let notice = TalkieLiveNotice.on(previous: previous, current: current, delivery: delivery) {
+                FeedbackToastManager.shared.show(notice.text(name: peerName), type: .info)
+            }
             guard let announced = TalkieVoiceHostLaw.announcement(previous: previous, current: current) else { return }
             UIAccessibility.post(notification: .announcement, argument: TalkieHeaderWording.announcement(announced))
         }
@@ -166,14 +175,14 @@ struct ConversationHeaderTalkieButton: View {
             .opacity(look == .idle ? 0 : 1)
             .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
             .adaptiveGlass(in: Circle(), tint: accent.opacity(0.4), interactive: true)
-            .overlay { TalkieHoldOrb(userId: userId, shows: orbShows) }
+            .overlay { TalkieHoldOrb(userId: userId, shows: orbShows, direction: orbDirection) }
             .overlay { symbol(look) }
             .animation(.easeOut(duration: 0.15), value: look)
     }
 
     @ViewBuilder
     private func symbol(_ look: TalkieHoldLook) -> some View {
-        let image = Image(systemName: look == .live ? "waveform" : "antenna.radiowaves.left.and.right")
+        let image = Image(systemName: holdGlyph.symbol(rest: "antenna.radiowaves.left.and.right"))
             .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
         if look == .idle {
             image.foregroundStyle(

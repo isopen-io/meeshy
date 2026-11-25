@@ -177,6 +177,16 @@ private struct TalkieBannerTalkButton: View {
     private var live: Bool { holding || sender.isActive }
     private var delivery: TalkieDelivery { TalkieDelivery.of(lasting: unreachableLasting) }
 
+    /// Le symbole commun à la fiche et à l'en-tête (#20579) : « connexion » avant l'accusé, jamais l'onde du direct.
+    private var glyph: TalkieHoldGlyph {
+        TalkieHoldGlyph.resolve(phase: sender.phase, waking: sender.waking, aftermath: nil, delivery: delivery)
+    }
+
+    /// Le sort de ma réponse tant qu'elle part : le bandeau annonce un réveil ou un repli quand il commence.
+    private var liveDelivery: TalkieHeaderDelivery? {
+        sender.isActive ? TalkieHeaderDelivery.resolve(phase: sender.phase, waking: sender.waking) : nil
+    }
+
     /// L'orbe CIRCULAIRE de ma voix qui part vers lui (#20531) ; la sienne vit dans le spectre du bandeau.
     private var orbShows: Bool {
         voices.voices.contains(TalkieVoiceKey(userId: userId, direction: .outgoing))
@@ -185,7 +195,7 @@ private struct TalkieBannerTalkButton: View {
     static let orb = TalkieVoiceHostLaw.holdOrb(buttonSize: MeeshyControlSize.tapTarget, room: MeeshySpacing.md)
 
     var body: some View {
-        Image(systemName: live ? "waveform" : "mic.fill")
+        Image(systemName: glyph.symbol(rest: "mic.fill"))
             .font(.subheadline.weight(.bold))
             .foregroundStyle(live ? Color.white : MeeshyColors.brandPrimary)
             .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
@@ -198,6 +208,10 @@ private struct TalkieBannerTalkButton: View {
             .contentShape(Capsule())
             .modifier(TalkieHoldModifier(sender: sender, userId: userId, pressed: $holding, delivery: delivery))
             .modifier(PhoneUnreachableLastingReader(userId: userId, lasting: $unreachableLasting))
+            .adaptiveOnChange(of: liveDelivery) { previous, current in
+                guard let notice = TalkieLiveNotice.on(previous: previous, current: current, delivery: delivery) else { return }
+                FeedbackToastManager.shared.show(notice.text(name: name), type: .info)
+            }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(ProfileTalkieWording.holdA11y(name: name, delivery: delivery))
             .accessibilityHint(ProfileTalkieWording.holdHint)

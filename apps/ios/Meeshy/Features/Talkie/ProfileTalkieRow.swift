@@ -114,7 +114,7 @@ struct ProfileTalkieRow: View {
         let live = holding || sender.isActive
         return MeeshyMedallion(tint: tint, fill: .solid, decor: live ? .none : .waves(count: 2), size: .s96,
                                label: ProfileTalkieWording.holdA11y(name: displayName, delivery: delivery))
-            .overlay { TalkieHoldOrb(userId: userId, shows: orbShows, geometry: Self.orb) }
+            .overlay { TalkieHoldOrb(userId: userId, shows: orbShows, geometry: Self.orb, direction: orbDirection) }
             .overlay { glyph(live: live).foregroundStyle(MeeshyColors.plateauNoir) }
             .overlay {
                 Circle()
@@ -150,6 +150,16 @@ struct ProfileTalkieRow: View {
     /// Une voix vers la personne ou venant d'elle : l'orbe se montre.
     private var orbShows: Bool { TalkieVoiceHostLaw.shows(userId: userId, voices: voices.voices) }
 
+    /// Ma voix tant qu'elle part, sinon la sienne (#20579).
+    private var orbDirection: TalkieVoiceDirection? { TalkieVoiceHostLaw.orbDirection(userId: userId, voices: voices.voices) }
+
+    /// Le symbole du bouton, le même que sur l'en-tête et le bandeau (#20579).
+    private var holdGlyph: TalkieHoldGlyph {
+        TalkieHoldGlyph.resolve(phase: sender.phase, waking: sender.waking, aftermath: aftermath, delivery: delivery)
+    }
+
+    /// Les secondes restantes tant que la voix part ; sinon le symbole commun — « connexion » avant l'accusé, jamais
+    /// l'onde du direct.
     @ViewBuilder
     private func glyph(live: Bool) -> some View {
         if live, let remainingSeconds {
@@ -158,7 +168,7 @@ struct ProfileTalkieRow: View {
                 .monospacedDigit()
                 .contentTransition(.numericText(countsDown: true))
         } else {
-            Image(systemName: live ? "waveform" : (aftermath?.fadesAfter != nil ? "checkmark" : "mic.fill"))
+            Image(systemName: holdGlyph.symbol(rest: "mic.fill"))
                 .font(MeeshyFont.relative(MeeshyIconSize.xl, weight: .bold))
                 .contentTransition(.opacity)
         }

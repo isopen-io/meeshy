@@ -22,6 +22,7 @@
 		004E5080B48D9D68E604A40A /* ComposerObjectEditorView+Keyboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC57A17C39EED9CE4977947B /* ComposerObjectEditorView+Keyboard.swift */; };
 		004E5F38CA955111C2775F1B /* StoryImageUploadEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = F74396C51E40F6D64BEACEFC /* StoryImageUploadEncoder.swift */; };
 		004F8A2FC976A4486D7B1990 /* MeeshyBroadcastExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 94EFBE412A137F5260B4FB96 /* MeeshyBroadcastExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		007D11F453278A6D0779D951 /* TalkieCoherenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5142A4A3CBA39E078D8D790 /* TalkieCoherenceTests.swift */; };
 		008348F06ACBF961B87B2C6C /* BatteryDetailCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64032CD51A5D29081E20E422 /* BatteryDetailCard.swift */; };
 		008FEF2B30C8379573FA818E /* StoryInteractionServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECF82BB3461D0F3AA3CBDEEA /* StoryInteractionServiceTests.swift */; };
 		00AA960A562CC4952A5DDEE7 /* GameHaptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92279AC9C3446FCCE7CC9544 /* GameHaptics.swift */; };
@@ -3733,6 +3734,7 @@
 		C053BD7966B8E00EA516270D /* ExtensionShareDirectoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C40CEFE18C1CEF493231735 /* ExtensionShareDirectoryTests.swift */; };
 		C05B8B6F26229583E8061E29 /* ConversationListViewModel+Prefetch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 066AED00B97FCB2093D95E0A /* ConversationListViewModel+Prefetch.swift */; };
 		C05E903E9A2D47AA000FA36A /* ConversationMediaRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = F48F0894C5A25D7BF8C4C0D5 /* ConversationMediaRules.swift */; };
+		C06E153EF6F2D28B17F0FE5F /* TalkieSurfaceLaw.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AF0A1E04DB42E2DACE7BF06 /* TalkieSurfaceLaw.swift */; };
 		C089786C97DE7A0C5CD2BF5C /* ComposerRailCopy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 763828EE8A8D6C2EECC286BC /* ComposerRailCopy.swift */; };
 		C09C943F22BA5067736E16DB /* BubbleQuotedReply.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F6164D4D41F89DC92F3C9B /* BubbleQuotedReply.swift */; };
 		C09CA67789AF263452972D1F /* SocialFullscreenRouteCacheRoundTripTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6ED65FD7DBEBB46B132745D /* SocialFullscreenRouteCacheRoundTripTests.swift */; };
@@ -7446,6 +7448,7 @@
 		7AD0C83B504D10D75258D147 /* StoryViewModelPublishingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewModelPublishingTests.swift; sourceTree = "<group>"; };
 		7AD5361600647E559DD65871 /* StoryExportDressing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryExportDressing.swift; sourceTree = "<group>"; };
 		7AE62B953E7E1FC6A4870881 /* LentillePerspectiveCurveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LentillePerspectiveCurveTests.swift; sourceTree = "<group>"; };
+		7AF0A1E04DB42E2DACE7BF06 /* TalkieSurfaceLaw.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieSurfaceLaw.swift; sourceTree = "<group>"; };
 		7B035E4B7B140AF93E4EC136 /* ComposerRailDoorLongPress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerRailDoorLongPress.swift; sourceTree = "<group>"; };
 		7B0AFDEED579D2C9085EDDF5 /* SignupPhoneLaterGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignupPhoneLaterGuardTests.swift; sourceTree = "<group>"; };
 		7B174789CED9828D1D4B6377 /* ConversationMediaGalleryView+ReplyComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationMediaGalleryView+ReplyComposer.swift"; sourceTree = "<group>"; };
@@ -8231,6 +8234,7 @@
 		A4C0B97987223FE88C01451E /* ReelFeedCardMenuTriggerGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelFeedCardMenuTriggerGuardTests.swift; sourceTree = "<group>"; };
 		A4D6BAA9849D5C94A569EC7B /* SessionExitPurgesDeliveredNotificationsAppTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionExitPurgesDeliveredNotificationsAppTests.swift; sourceTree = "<group>"; };
 		A4F36552CAC381D4A07EA2C7 /* MeeshyApp+LaunchSequence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MeeshyApp+LaunchSequence.swift"; sourceTree = "<group>"; };
+		A5142A4A3CBA39E078D8D790 /* TalkieCoherenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieCoherenceTests.swift; sourceTree = "<group>"; };
 		A57ACDFEDC6BFD135D21CBFC /* jovial_fete_back.webp */ = {isa = PBXFileReference; path = jovial_fete_back.webp; sourceTree = "<group>"; };
 		A587E039D836AA3B3610FC95 /* MockOnboardingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockOnboardingService.swift; sourceTree = "<group>"; };
 		A5891E84396D3C823F97F449 /* OutboxDispatcherUpdateProfileEncodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxDispatcherUpdateProfileEncodingTests.swift; sourceTree = "<group>"; };
@@ -12561,6 +12565,7 @@
 				6B1A4E9280733AAA73556C39 /* TalkieBubbleLawTests.swift */,
 				EA572372E18217723EFEBF4E /* TalkieCardLawTests.swift */,
 				461283F5DDE32AA7BECA0115 /* TalkieCenterTests.swift */,
+				A5142A4A3CBA39E078D8D790 /* TalkieCoherenceTests.swift */,
 				B3393ED1234D3FB753C56A38 /* TalkieHeaderTests.swift */,
 				DE83A06614AE37445672CF92 /* TalkieNotificationTests.swift */,
 				AEA23D3ED3B080D7231023FC /* TalkieOutputPlanTests.swift */,
@@ -13132,6 +13137,7 @@
 				95724CCB105678154F8A1C2F /* TalkieSender.swift */,
 				165D29D64742D752D1775218 /* TalkieSpectrumAnalyzer.swift */,
 				7C64F866150D98151D1DF253 /* TalkieSpectrumWindows.swift */,
+				7AF0A1E04DB42E2DACE7BF06 /* TalkieSurfaceLaw.swift */,
 				0410CB5D39C494ACD0390E8D /* TalkieVoiceBubble.swift */,
 				D97F51552BB90DC3535C3D8A /* TalkieVoiceCopy.swift */,
 				F884E67DBA33198980CCCB52 /* TalkieVoiceHost.swift */,
@@ -19457,6 +19463,7 @@
 				9EC5A73A51C2CE2443F4502B /* TalkieShortcutIntent.swift in Sources */,
 				EE4D9FF13FD2B67ECFA6537F /* TalkieSpectrumAnalyzer.swift in Sources */,
 				3FE518A9173D653C81F83B3D /* TalkieSpectrumWindows.swift in Sources */,
+				C06E153EF6F2D28B17F0FE5F /* TalkieSurfaceLaw.swift in Sources */,
 				080C6A2D50ED75971F54614F /* TalkieVoiceBubble.swift in Sources */,
 				B25B44BC4DE96AFCD86410AA /* TalkieVoiceCopy.swift in Sources */,
 				544B6E5B738EB54FE5942AB2 /* TalkieVoiceHost.swift in Sources */,
@@ -21606,6 +21613,7 @@
 				C0E7A438D6CECA5187D9D6F7 /* TalkieBubbleLawTests.swift in Sources */,
 				C78DA9D0FD970637C90FE2BF /* TalkieCardLawTests.swift in Sources */,
 				AC0F9C3C14A9C13BC6DB4334 /* TalkieCenterTests.swift in Sources */,
+				007D11F453278A6D0779D951 /* TalkieCoherenceTests.swift in Sources */,
 				69D7403D391A2C1D1169CAD0 /* TalkieHeaderTests.swift in Sources */,
 				232B0413210E6963748CBBC1 /* TalkieNotificationTests.swift in Sources */,
 				A4F74CA5E3460D104E4C501C /* TalkieOutputPlanTests.swift in Sources */,

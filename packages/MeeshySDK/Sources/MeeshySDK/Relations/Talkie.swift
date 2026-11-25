@@ -6,7 +6,7 @@ import Foundation
 // client ne recalcule AUCUNE règle (niveau, réception coupée, E2EE, appel, Ne pas déranger) : la passerelle a jugé.
 
 public enum TalkieContract {
-    /// `TALKIE_MAX_DURATION_MS` : une prise de parole dure au plus 15 s (#20579, 30 s jusqu'au 2026-11-25). Borne ce
+    /// `TALKIE_MAX_DURATION_MS` : une prise de parole dure au plus 15 s (#20579, 30 s auparavant). Borne ce
     /// que l'ÉMETTEUR accepte de l'accusé, et la copie vocale.
     public static let maxDuration: TimeInterval = 15
     /// La borne de ce qu'une voix REÇUE peut annoncer : une passerelle antérieure à #20579 sert encore 30 s pendant la
