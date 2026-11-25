@@ -13,9 +13,10 @@ class WidgetPreviewGuardTest {
         Regex("android:$name=\"@(?:drawable|layout)/([^\"]+)\"").find(text)?.groupValues?.get(1)
 
     @Test
-    fun `the four widgets are covered`() {
+    fun `the five widgets are covered`() {
         assertThat(infos.map { it.name }).containsExactly(
             "favorite_contacts_widget_info.xml",
+            "game_flame_widget_info.xml",
             "quick_reply_widget_info.xml",
             "recent_conversations_widget_info.xml",
             "unread_count_widget_info.xml",
@@ -45,5 +46,6 @@ class WidgetPreviewGuardTest {
         }
         assertThat(res.resolve("xml/unread_count_widget_info.xml").readText()).contains("targetCellWidth=\"2\"")
         assertThat(res.resolve("xml/recent_conversations_widget_info.xml").readText()).contains("targetCellWidth=\"4\"")
+        assertThat(res.resolve("xml/game_flame_widget_info.xml").readText()).contains("targetCellWidth=\"2\"")
     }
 }

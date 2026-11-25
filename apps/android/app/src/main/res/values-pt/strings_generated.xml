@@ -164,6 +164,17 @@
     <string name="widget_favorite_contacts_description">Acesso rápido aos seus contatos favoritos</string>
     <string name="widget_favorite_contacts_title">Contatos favoritos</string>
     <string name="widget_favorites_header">Favoritos</string>
+    <string name="widget_game_flame_acts">Atos do dia: %1$d de %2$d</string>
+    <string name="widget_game_flame_at_risk">Faça uma ação antes da meia-noite</string>
+    <string name="widget_game_flame_covered">Uma Lamparina cuida dela</string>
+    <plurals name="widget_game_flame_days">
+        <item quantity="one">%1$d dia</item>
+        <item quantity="many">%1$d dias</item>
+        <item quantity="other">%1$d dias</item>
+    </plurals>
+    <string name="widget_game_flame_empty">Uma ação hoje acende a sua Chama</string>
+    <string name="widget_game_flame_out">Apagada</string>
+    <string name="widget_game_flame_title">Minha Chama</string>
     <string name="widget_mark_as_read">Marcar como lida</string>
     <string name="widget_presence_away">Ausente</string>
     <string name="widget_presence_idle">Inativo</string>

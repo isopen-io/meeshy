@@ -220,6 +220,50 @@
         },
         {
           "catalog": "widgets",
+          "iosKey": "widget.gameFlame.acts",
+          "androidName": "widget_game_flame_acts",
+          "status": "adopted"
+        },
+        {
+          "catalog": "widgets",
+          "iosKey": "widget.gameFlame.atRisk",
+          "androidName": "widget_game_flame_at_risk",
+          "status": "adopted"
+        },
+        {
+          "catalog": "widgets",
+          "iosKey": "widget.gameFlame.covered",
+          "androidName": "widget_game_flame_covered",
+          "status": "adopted"
+        },
+        {
+          "catalog": "widgets",
+          "iosKey": "widget.gameFlame.days",
+          "kind": "plurals",
+          "fillMissingQuantities": true,
+          "androidName": "widget_game_flame_days",
+          "status": "adopted"
+        },
+        {
+          "catalog": "widgets",
+          "iosKey": "widget.gameFlame.empty",
+          "androidName": "widget_game_flame_empty",
+          "status": "adopted"
+        },
+        {
+          "catalog": "widgets",
+          "iosKey": "widget.gameFlame.out",
+          "androidName": "widget_game_flame_out",
+          "status": "adopted"
+        },
+        {
+          "catalog": "widgets",
+          "iosKey": "widget.gameFlame.title",
+          "androidName": "widget_game_flame_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "widgets",
           "iosKey": "widget.quickReply.callMe",
           "androidName": "widget_quick_reply_call_me",
           "status": "adopted"
