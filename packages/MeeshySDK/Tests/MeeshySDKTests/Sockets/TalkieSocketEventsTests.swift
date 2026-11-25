@@ -112,6 +112,16 @@ final class TalkieSocketEventsTests: XCTestCase {
         let opus = TalkieIncoming(talkieId: "t", fromUserId: "u", codec: "opus", startedAt: "x", maxDurationMs: 30_000)
         XCTAssertFalse(opus.isPlayable)
         let absurd = TalkieIncoming(talkieId: "t", fromUserId: "u", startedAt: "x", maxDurationMs: 86_400_000)
-        XCTAssertEqual(absurd.maxDuration, TalkieContract.maxDuration)
+        XCTAssertEqual(absurd.maxDuration, TalkieContract.incomingCeiling)
+    }
+
+    /// #20579 — pendant la transition, une passerelle antérieure annonce encore 30 s : le récepteur garde la voix
+    /// ouverte le temps servi, au lieu de la fermer à 15 s pendant qu'elle parle encore.
+    func test_anIncomingVoiceKeepsTheServedDurationUpToTheLegacyCeiling() {
+        let legacy = TalkieIncoming(talkieId: "t", fromUserId: "u", startedAt: "x", maxDurationMs: 30_000)
+        let current = TalkieIncoming(talkieId: "t", fromUserId: "u", startedAt: "x", maxDurationMs: 15_000)
+        XCTAssertEqual(TalkieContract.incomingCeiling, 30)
+        XCTAssertEqual(legacy.maxDuration, 30)
+        XCTAssertEqual(current.maxDuration, 15)
     }
 }

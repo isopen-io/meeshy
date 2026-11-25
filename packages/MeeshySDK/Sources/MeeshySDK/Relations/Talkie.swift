@@ -6,8 +6,12 @@ import Foundation
 // client ne recalcule AUCUNE règle (niveau, réception coupée, E2EE, appel, Ne pas déranger) : la passerelle a jugé.
 
 public enum TalkieContract {
-    /// `TALKIE_MAX_DURATION_MS` : une prise de parole dure au plus 30 s.
-    public static let maxDuration: TimeInterval = 30
+    /// `TALKIE_MAX_DURATION_MS` : une prise de parole dure au plus 15 s (#20579, 30 s jusqu'au 2026-11-25). Borne ce
+    /// que l'ÉMETTEUR accepte de l'accusé, et la copie vocale.
+    public static let maxDuration: TimeInterval = 15
+    /// La borne de ce qu'une voix REÇUE peut annoncer : une passerelle antérieure à #20579 sert encore 30 s pendant la
+    /// transition, et le récepteur ne ferme pas une voix qui parle encore. Une valeur absurde reste bornée.
+    public static let incomingCeiling: TimeInterval = 30
     /// Le seul encodage relayé au MVP : celui du vocal (AAC mono, trames ADTS lisibles dès la première).
     public static let codec = "aac-adts"
     /// `TALKIE_MAX_CHUNK_BYTES` : le plafond d'un fragment.
@@ -17,7 +21,7 @@ public enum TalkieContract {
     /// `TALKIE_MAX_CHUNKS` : le plafond du NOMBRE de fragments d'une prise de parole.
     public static let maxChunks = 300
     /// Un fragment part toutes les ~120 ms (#17094) : la voix s'entend d'autant plus tôt qu'un fragment est court — le
-    /// récepteur ne joue qu'un fragment ENTIER — et 30 s restent sous `maxChunks` à toute fréquence du micro.
+    /// récepteur ne joue qu'un fragment ENTIER — et 30 s (la borne reçue) restent sous `maxChunks` à toute fréquence du micro.
     public static let fragmentDuration: TimeInterval = 0.12
 }
 
@@ -40,9 +44,9 @@ public struct TalkieIncoming: Decodable, Sendable, Equatable {
 
     public var isPlayable: Bool { codec == TalkieContract.codec }
 
-    /// La durée servie, bornée par le contrat : une valeur absurde ne garde jamais une prise de parole ouverte.
+    /// La durée servie, bornée par `incomingCeiling` : une valeur absurde ne garde jamais une prise de parole ouverte.
     public var maxDuration: TimeInterval {
-        min(max(TimeInterval(maxDurationMs) / 1000, 0), TalkieContract.maxDuration)
+        min(max(TimeInterval(maxDurationMs) / 1000, 0), TalkieContract.incomingCeiling)
     }
 }
 

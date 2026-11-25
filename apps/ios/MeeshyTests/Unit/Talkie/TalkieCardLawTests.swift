@@ -36,15 +36,34 @@ final class TalkieCardLawTests: XCTestCase {
     }
 
     func test_announces_onlyAFewMilestones_notEverySecond() {
-        XCTAssertEqual((0...30).filter(TalkieCountdown.announces), [5, 10, 20])
+        XCTAssertEqual((0...30).filter(TalkieCountdown.announces), [5, 10])
+    }
+
+    /// #20579 — quinze secondes : le décompte d'une prise de parole ouverte part de 15, et tous ses paliers se disent.
+    func test_aFifteenSecondWindow_countsDownFromFifteen_andEveryMilestoneIsReached() {
+        let window = TalkieTalkWindow(startedAt: Self.start, maxDuration: TalkieContract.maxDuration)
+        XCTAssertEqual(TalkieCountdown.seconds(window, at: at(0)), 15)
+        XCTAssertEqual(TalkieCountdown.seconds(window, at: at(15)), 0)
+        XCTAssertTrue(TalkieCountdown.milestones.allSatisfy { $0 < 15 })
     }
 
     // MARK: - Ce qu'une prise de parole close laisse sur la carte
 
     func test_aftermath_ofAVoiceThatLeft_isSent_evenWhenStoppedAtTheLimit() {
         XCTAssertEqual(TalkieAftermath.of(nil), .sent)
-        XCTAssertEqual(TalkieAftermath.of(.limit), .sent, "le décompte a dit la limite : la voix est partie, ce n'est pas un refus")
+        XCTAssertEqual(TalkieAftermath.of(.limit), .sentAtLimit, "la voix est partie, ce n'est pas un refus")
         XCTAssertEqual(TalkieAftermath.of(.voice), .sentAsVoice)
+    }
+
+    /// #20579 — la limite atteinte se dit sur la carte avec la phrase que l'en-tête et le bandeau disent en bandeau : une
+    /// voix partie (coche, vibration « réussi », le bouton reste), jamais un refus.
+    func test_theLimit_readsLikeASentVoice_withTheSameSentenceEverywhere() {
+        XCTAssertNotNil(TalkieAftermath.sentAtLimit.fadesAfter)
+        XCTAssertTrue(TalkieAftermath.sentAtLimit.keepsHoldButton)
+        XCTAssertNil(TalkieAftermath.sentAtLimit.unblock)
+        XCTAssertEqual(TalkieCueLaw.afterRelease(.sentAtLimit), TalkieCueLaw.afterRelease(.sent))
+        XCTAssertEqual(ProfileTalkieWording.text(for: .aftermath(.sentAtLimit), name: "Awa"), ProfileTalkieWording.settledText(.limit))
+        XCTAssertTrue(ProfileTalkieWording.notice(.limit).contains("15"), ProfileTalkieWording.notice(.limit))
     }
 
     func test_aftermath_ofARefusal_isARefusal() {

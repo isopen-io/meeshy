@@ -142,7 +142,7 @@ struct ConversationHeaderTalkieButton: View {
                 withdrawn = true
                 return
             }
-            ProfileTalkieWording.present(new, delivery: delivery)
+            ProfileTalkieWording.present(new)
         }
     }
 

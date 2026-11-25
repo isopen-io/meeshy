@@ -16,8 +16,8 @@ public enum TalkieWakeContract {
     public static let pushType = "talkie_incoming"
     /// La catégorie dédiée au talkie : la SEULE dont la voix se joue depuis la notification.
     public static let category = "MEESHY_TALKIE"
-    /// La passerelle rejoue jusqu'à 60 s après la fin, et une prise de parole dure au plus 30 s.
-    public static let catchUpWindow: TimeInterval = 60 + TalkieContract.maxDuration
+    /// La passerelle rejoue jusqu'à 60 s après la fin, et une prise de parole REÇUE dure au plus `incomingCeiling`.
+    public static let catchUpWindow: TimeInterval = 60 + TalkieContract.incomingCeiling
     /// Un son de notification ne dure pas plus de 30 s : au-delà, iOS joue le son par défaut.
     public static let maxSoundDuration: TimeInterval = 30
 

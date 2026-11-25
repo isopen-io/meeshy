@@ -7,9 +7,10 @@ import MeeshySDK
 @MainActor
 final class TalkieWordingTests: XCTestCase {
 
-    func test_onlyTheFallback_isAnInformation() {
+    func test_onlyTheFallbackAndTheLimit_areInformations() {
         XCTAssertTrue(ProfileTalkieWording.isInformation(.voice))
-        let errors: [TalkieSendOutcome] = [.notAllowed, .e2ee, .rateLimited, .offline, .failed, .micDenied, .limit]
+        XCTAssertTrue(ProfileTalkieWording.isInformation(.limit), "#20579 — la limite arrête une voix PARTIE : jamais un bandeau d'erreur")
+        let errors: [TalkieSendOutcome] = [.notAllowed, .e2ee, .rateLimited, .offline, .failed, .micDenied]
         errors.forEach { XCTAssertFalse(ProfileTalkieWording.isInformation($0), "\($0)") }
     }
 

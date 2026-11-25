@@ -15,10 +15,10 @@ nonisolated struct TalkieSettled: Equatable {
     let outcome: TalkieSendOutcome?
 }
 
-/// Le décompte des trente secondes : un anneau qui se vide, des secondes arrondies au-dessus (la dernière se lit « 1 »),
-/// et quelques paliers seulement dits à VoiceOver.
+/// Le décompte de la prise de parole (15 s depuis #20579) : un anneau qui se vide, des secondes arrondies au-dessus (la
+/// dernière se lit « 1 »), et quelques paliers seulement dits à VoiceOver.
 nonisolated enum TalkieCountdown {
-    static let milestones: Set<Int> = [20, 10, 5]
+    static let milestones: Set<Int> = [10, 5]
 
     static func remaining(_ window: TalkieTalkWindow, at now: Date) -> TimeInterval {
         let elapsed = max(0, now.timeIntervalSince(window.startedAt))
@@ -44,25 +44,30 @@ nonisolated enum TalkieUnblock: Equatable {
     case openSettings
 }
 
-/// Ce qu'une prise de parole close laisse sur la carte : envoyée (relâchée ou arrêtée à la limite, que le décompte a
-/// montrée), partie en message vocal, ou refusée — et le refus se dit, il ne fait plus disparaître la carte.
+/// Ce qu'une prise de parole close laisse sur la carte : envoyée, envoyée parce que la limite l'a arrêtée (#20579 :
+/// la même phrase qu'en bandeau sur l'en-tête, qui n'a pas de décompte — une information, jamais une erreur), partie en
+/// message vocal, ou refusée — et le refus se dit, il ne fait plus disparaître la carte.
 nonisolated enum TalkieAftermath: Equatable {
     case sent
+    case sentAtLimit
     case sentAsVoice
     case refused(TalkieSendOutcome)
 
     static func of(_ outcome: TalkieSendOutcome?) -> TalkieAftermath {
         switch outcome {
-        case nil, .limit?: .sent
+        case nil: .sent
+        case .limit?: .sentAtLimit
         case .voice?: .sentAsVoice
         case let refusal?: .refused(refusal)
         }
     }
 
-    /// « Envoyé » s'efface vite ; un refus reste jusqu'au prochain appui.
+    /// « Envoyé » s'efface vite, la limite un peu moins (sa phrase est plus longue) ; un refus reste jusqu'au prochain
+    /// appui.
     var fadesAfter: TimeInterval? {
         switch self {
         case .sent, .sentAsVoice: 1.6
+        case .sentAtLimit: 2.6
         case .refused: nil
         }
     }
@@ -144,7 +149,7 @@ nonisolated struct TalkieCue: Equatable {
 nonisolated enum TalkieCueLaw {
     static func afterRelease(_ aftermath: TalkieAftermath) -> TalkieCue {
         switch aftermath {
-        case .sent, .sentAsVoice: TalkieCue(haptic: .success, sound: .sent)
+        case .sent, .sentAtLimit, .sentAsVoice: TalkieCue(haptic: .success, sound: .sent)
         case .refused: TalkieCue(haptic: .warning, sound: nil)
         }
     }

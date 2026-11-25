@@ -100,7 +100,7 @@ struct ProfileTalkieRow: View {
 
     private var lineColor: Color {
         switch line {
-        case .aftermath(.sent), .aftermath(.sentAsVoice): tint
+        case .aftermath(.sent), .aftermath(.sentAtLimit), .aftermath(.sentAsVoice): tint
         case .aftermath(.refused): theme.textSecondary
         default: theme.textPrimary
         }
@@ -277,6 +277,7 @@ enum ProfileTalkieWording {
         case .waking: waking(name: name)
         case .recordingCopy: recordingCopy
         case .aftermath(.sent): sent
+        case .aftermath(.sentAtLimit): notice(.limit)
         case .aftermath(.sentAsVoice): sentAsVoice
         case .aftermath(.refused(let outcome)): notice(outcome)
         }
@@ -319,29 +320,27 @@ enum ProfileTalkieWording {
         String(localized: "talkie.send.recordingCopy", defaultValue: "Enregistrement du message vocal…", bundle: .main)
     }
 
-    /// Une issue qui n'est pas une erreur : le repli fait partir la voix en message vocal (#17141).
+    /// Une issue qui n'est pas une erreur : le repli fait partir la voix en message vocal (#17141), et la limite arrête
+    /// une voix qui est PARTIE (#20579).
     static func isInformation(_ outcome: TalkieSendOutcome) -> Bool {
-        outcome == .voice
+        outcome == .voice || outcome == .limit
     }
 
-    /// Un message vocal CHOISI (téléphone injoignable, #20241) ne se dit pas comme un repli : « Parti en message vocal ».
-    @MainActor
-    static func present(_ outcome: TalkieSendOutcome, delivery: TalkieDelivery, toasts: FeedbackToastManager = .shared) {
-        guard delivery == .voiceMessage, outcome == .voice else {
-            present(outcome, toasts: toasts)
-            return
-        }
-        toasts.show(sentAsVoice, type: .info)
+    /// Ce que dit le bandeau de l'en-tête et du bandeau reçu une fois la voix close — la même phrase que la ligne de la
+    /// carte (#20579) : le repli s'est annoncé quand il a COMMENCÉ (`TalkieLiveNotice`), sa fin dit « Parti en message
+    /// vocal », comme un message vocal choisi.
+    static func settledText(_ outcome: TalkieSendOutcome) -> String {
+        outcome == .voice ? sentAsVoice : notice(outcome)
     }
 
-    /// Dit l'issue : une information neutre pour le repli, une erreur pour le reste.
+    /// Dit l'issue : une information neutre pour le repli et la limite, une erreur pour le reste.
     @MainActor
     static func present(_ outcome: TalkieSendOutcome, toasts: FeedbackToastManager = .shared) {
         guard isInformation(outcome) else {
-            toasts.showError(notice(outcome))
+            toasts.showError(settledText(outcome))
             return
         }
-        toasts.show(notice(outcome), type: .info)
+        toasts.show(settledText(outcome), type: .info)
     }
 
     static func notice(_ outcome: TalkieSendOutcome) -> String {
@@ -361,7 +360,8 @@ enum ProfileTalkieWording {
         case .micDenied:
             String(localized: "talkie.send.micDenied", defaultValue: "Autorise le micro pour parler en talkie.", bundle: .main)
         case .limit:
-            String(localized: "talkie.send.limit", defaultValue: "Trente secondes au plus : la prise de parole s’est arrêtée.", bundle: .main)
+            String(format: String(localized: "talkie.send.limit", defaultValue: "%lld secondes au plus : ta voix est partie.", bundle: .main),
+                   Int(TalkieContract.maxDuration))
         }
     }
 }

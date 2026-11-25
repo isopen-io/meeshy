@@ -343306,43 +343306,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ثلاثون ثانية كحد أقصى: توقفت المداخلة."
+            "value": "%lld ثانية كحد أقصى: أُرسل صوتك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Höchstens dreißig Sekunden: Die Durchsage wurde beendet."
+            "value": "Höchstens %lld Sekunden: Deine Stimme wurde gesendet."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Thirty seconds at most: the talk has stopped."
+            "value": "%lld seconds at most: your voice was sent."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Treinta segundos como máximo: la intervención se ha detenido."
+            "value": "%lld segundos como máximo: tu voz se ha enviado."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trente secondes au plus : la prise de parole s’est arrêtée."
+            "value": "%lld secondes au plus : ta voix est partie."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trenta secondi al massimo: l’intervento si è fermato."
+            "value": "%lld secondi al massimo: la tua voce è partita."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trinta segundos no máximo: a fala parou."
+            "value": "%lld segundos no máximo: sua voz foi enviada."
           }
         }
       }

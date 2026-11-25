@@ -32,6 +32,19 @@ struct TalkieSendingTests {
         )))
     }
 
+    @Test func uneParoleDureQuinzeSecondesAuPlus() {
+        #expect(TalkieContract.maxDuration == 15)
+    }
+
+    /// #20579 — une passerelle antérieure sert encore 30 s : l'émetteur s'arrête quand même à 15 s.
+    @Test func uneAncienneLimiteServie_estRameneeAQuinzeSecondes() {
+        let read = verdict([
+            "success": true,
+            "data": ["talkieId": "aaaaaaaaaaaaaaaaaaaaaaaa", "maxDurationMs": 30_000, "maxChunkBytes": 16_384],
+        ])
+        #expect(read == .opened(TalkieOpened(talkieId: "aaaaaaaaaaaaaaaaaaaaaaaa", maxDuration: 15, maxChunkBytes: 16_384)))
+    }
+
     @Test func unAccuseEnReveil_ditQueLeDestinataireSeReveille() {
         let read = verdict([
             "success": true,

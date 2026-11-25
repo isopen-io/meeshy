@@ -56,7 +56,7 @@ struct TalkieWakeTests {
     }
 
     @Test func leRattrapage_tientSoixanteSecondesApresLaFin() {
-        #expect(TalkieWakeContract.catchUpWindow == 60 + TalkieContract.maxDuration)
+        #expect(TalkieWakeContract.catchUpWindow == 60 + TalkieContract.incomingCeiling)
         #expect(TalkieWakeContract.pushType == "talkie_incoming")
         #expect(TalkieWakeContract.category == "MEESHY_TALKIE")
     }
