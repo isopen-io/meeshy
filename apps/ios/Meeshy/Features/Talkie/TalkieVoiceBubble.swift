@@ -140,10 +140,11 @@ struct TalkieVoiceBubble: View {
     }
 }
 
-/// LE SPECTRE DU BANDEAU REÇU (#20531) : la voix du pair en ruban horizontal, du grave à gauche à l'aigu à droite,
-/// miroir autour d'une ligne médiane, au dégradé de la bulle. Il occupe la place libre entre le libellé et les boutons :
-/// la mise en page ne bouge pas. Au silence, la seule ligne médiane. Sous « réduire les animations », dix images par
-/// seconde d'une ligne dont l'épaisseur suit le niveau moyen. Ni le doigt, ni VoiceOver.
+/// LE SPECTRE DU BANDEAU REÇU (#20531) : la voix du pair en ruban horizontal sur toute la largeur du bandeau, du grave à
+/// gauche à l'aigu à droite, en miroir autour d'une ligne médiane, au dégradé de la bulle. C'est le FOND du bandeau : le
+/// nom et les boutons se posent dessus, et la mise en page ne bouge pas. Au silence, la seule ligne médiane. Sous
+/// « réduire les animations », dix images par seconde d'une ligne dont l'épaisseur suit le niveau moyen. Ni le doigt,
+/// ni VoiceOver.
 struct TalkieVoiceRibbon: View {
     let userId: String
     let direction: TalkieVoiceDirection

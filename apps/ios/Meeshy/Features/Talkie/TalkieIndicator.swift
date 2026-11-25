@@ -69,10 +69,11 @@ struct TalkieIndicator: View {
             Text(title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
+                .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
-                .layoutPriority(1)
-            voiceSpace
+                .modifier(TalkieBannerScrim(isDark: isDark))
+                .frame(maxWidth: .infinity)
             if actions.contains(.mute) { muteButton }
             if actions.contains(.talk) {
                 TalkieBannerTalkButton(sender: sender, userId: speaker.fromUserId, name: name, holding: $holding)
@@ -80,7 +81,7 @@ struct TalkieIndicator: View {
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, MeeshySpacing.xs)
-        .background(RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous).fill(.ultraThinMaterial))
+        .background { voiceBackground }
         .padding(.horizontal, MeeshySpacing.lg)
         .accessibilityElement(children: .contain)
         .task(id: speaker.fromUserId) { await offer.load() }
@@ -99,32 +100,44 @@ struct TalkieIndicator: View {
         }
     }
 
-    /// La place libre entre le libellé et les boutons : le spectre de la voix du pair tant qu'elle sonne (#20531),
-    /// vide sinon. Les deux prennent la même place : rien ne bouge quand la voix s'arrête.
-    @ViewBuilder
-    private var voiceSpace: some View {
-        if isLive {
-            TalkieVoiceRibbon(userId: speaker.fromUserId, direction: .incoming)
-                .frame(minWidth: MeeshySpacing.sm, maxWidth: .infinity)
-                .frame(height: Self.ribbonHeight)
-        } else {
-            Spacer(minLength: MeeshySpacing.sm)
+    /// Le fond du bandeau : le verre, et par-dessus, tant que la voix du pair sonne, son spectre sur TOUTE la largeur,
+    /// en miroir autour de la ligne médiane (#20531). Le nom et les boutons se posent dessus ; le fond ne change jamais
+    /// la taille du bandeau.
+    private var voiceBackground: some View {
+        let shape = RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous)
+        return ZStack {
+            shape.fill(.ultraThinMaterial)
+            if isLive {
+                TalkieVoiceRibbon(userId: speaker.fromUserId, direction: .incoming)
+            }
         }
+        .clipShape(shape)
     }
-
-    static let ribbonHeight: CGFloat = MeeshyControlSize.small
 
     private var muteButton: some View {
         Button(action: onMute) {
             Text(String(localized: "talkie.incoming.mute", defaultValue: "Couper", bundle: .main))
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(MeeshyColors.brandPrimary)
+                .modifier(TalkieBannerScrim(isDark: isDark))
                 .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
         }
         .accessibilityLabel(String(
             format: String(localized: "talkie.incoming.muteNamed", defaultValue: "Couper la voix de %@", bundle: .main), name
         ))
         .accessibilityIdentifier("talkie.incoming.mute")
+    }
+}
+
+/// Le voile qui garde un texte lisible sur le spectre du bandeau : une capsule du fond de l'app, derrière le texte seul.
+private struct TalkieBannerScrim: ViewModifier {
+    let isDark: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.vertical, MeeshySpacing.xxs)
+            .background(Capsule().fill(MeeshyColors.backgroundPrimary(isDark: isDark).opacity(MeeshyOpacity.heavy)))
     }
 }
 
