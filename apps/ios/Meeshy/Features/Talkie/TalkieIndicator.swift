@@ -111,6 +111,7 @@ struct TalkieIndicator: View {
                 .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
             voiceSpace
             if actions.contains(.mute) { muteButton }
             if actions.contains(.talk) {
