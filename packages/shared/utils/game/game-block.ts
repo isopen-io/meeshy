@@ -31,7 +31,7 @@ import { personalMissionState } from './personal-mission.js';
 import { treasuryReserveAccess, treasuryTier } from './treasury.js';
 import { isKeptOfferingDay } from './welcome-back.js';
 import { servedEffortRelight } from './flame-effort.js';
-import { servedFlamePause, type FlamePause } from './flame-pause.js';
+import { nextFlamePauseFrom, servedFlamePause, type FlamePause } from './flame-pause.js';
 import { servedFlameGoal, type FlameGoal } from './flame-goal.js';
 import { buildGameBlockExtras, type GameBlockExtrasFacts } from './game-block-extras.js';
 import type { GameBlock, GameChestReward, GameMission } from '../../types/game.js';
@@ -204,6 +204,8 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
   });
 
   const servedPause = servedFlamePause(facts.pause ?? null, flameToday);
+  // Le trimestre déjà pris se dit avant le geste, plutôt que par le refus de l'annonce (#20517).
+  const nextPauseFrom = facts.pause === undefined ? null : nextFlamePauseFrom({ today: flameToday, status, pause: facts.pause });
   // L'objectif se lit sur la Flamme SERVIE : éteinte, elle vaut 0 jour, et l'objectif tombe (#20520).
   const servedGoal = facts.goal === undefined ? null : servedFlameGoal({ goal: facts.goal, streak: days });
 
@@ -320,6 +322,7 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       ...(facts.freezeGiftDay === undefined ? {} : { freezeGifted: facts.freezeGiftDay === flameToday }),
       ...(effortRelight === null ? {} : { effortRelight }),
       ...(servedPause === null ? {} : { pause: servedPause }),
+      ...(nextPauseFrom === null ? {} : { nextPauseFrom }),
       ...(servedGoal === null ? {} : { goal: { ...servedGoal, offer: [...servedGoal.offer] } }),
     },
     boosts: {

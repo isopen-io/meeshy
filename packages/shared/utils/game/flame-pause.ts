@@ -98,3 +98,26 @@ export function servedFlamePause(pause: FlamePause | null, today: string): Flame
   const kept = lasting(pause);
   return kept !== null && dayDiff(today, kept.until) >= 0 ? { from: kept.from, until: kept.until } : null;
 }
+
+/** Le premier jour du trimestre civil qui suit celui d'un jour. */
+const nextQuarterStart = (dayKey: string): string => {
+  const year = Number(dayKey.slice(0, 4));
+  const quarter = Math.floor((Number(dayKey.slice(5, 7)) - 1) / 3);
+  return quarter === 3 ? `${year + 1}-01-01` : `${year}-${String(quarter * 3 + 4).padStart(2, '0')}-01`;
+};
+
+/**
+ * Le trimestre déjà pris se dit AVANT le geste (#20517) : quand l'annonce n'est refusée que parce que la veille du
+ * trimestre a déjà eu lieu, le premier jour où une veille pourra commencer — le premier du trimestre suivant. `null`
+ * dès que l'annonce est ouverte, pendant une veille en cours ou à venir (elle se dit elle-même), et sans Flamme à
+ * garder. Le jour d'avant ce premier jour, l'annonce rouvre : la veille part toujours du lendemain.
+ */
+export function nextFlamePauseFrom(params: {
+  readonly today: string;
+  readonly status: FlameStatus;
+  readonly pause: FlamePause | null;
+}): string | null {
+  const decision = canPauseFlame({ today: params.today, days: FLAME_PAUSE_MIN_DAYS, status: params.status, pause: params.pause });
+  const previous = lasting(params.pause);
+  return !decision.allowed && decision.reason === 'quarterly-limit' && previous !== null ? nextQuarterStart(previous.from) : null;
+}

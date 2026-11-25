@@ -415,6 +415,7 @@ const en = {
   'game.flame_panel.pause': 'Let it rest · {days}',
   'game.flame_panel.paused': 'Your Flame is resting until {date}.',
   'game.flame_panel.paused_soon': 'Your Flame starts resting tomorrow, until {date}.',
+  'game.flame_panel.pause_next': 'Your Flame can rest again from {date}.',
 } as const satisfies GameConceptCatalog;
 
 export default en;

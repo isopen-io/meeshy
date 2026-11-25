@@ -415,6 +415,7 @@ const it = {
   'game.flame_panel.pause': 'Lasciala riposare · {days}',
   'game.flame_panel.paused': 'La tua Fiamma riposa fino a {date}.',
   'game.flame_panel.paused_soon': 'La tua Fiamma riposa da domani, fino a {date}.',
+  'game.flame_panel.pause_next': 'La tua Fiamma potrà riposare di nuovo dal {date}.',
 } as const satisfies GameConceptCatalog;
 
 export default it;
