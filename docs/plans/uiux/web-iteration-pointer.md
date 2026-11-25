@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-stot2z` |
+| Branche de travail de la session courante | `claude/practical-fermat-o90to9` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -58,7 +58,36 @@ normal.
 | **91w** | 2026-11-21 | `claude/practical-fermat-h5vgy2` | [#20161](https://github.com/isopen-io/meeshy/pull/20161) → `dev` | ✅ mergé |
 | **92w** | 2026-11-22 | `claude/practical-fermat-xtlc3p` | [#20325](https://github.com/isopen-io/meeshy/pull/20325) → `dev` | ✅ mergé |
 | **93w** | 2026-11-23 | `claude/practical-fermat-10zclt` | [#20472](https://github.com/isopen-io/meeshy/pull/20472) → `dev` | ✅ mergé |
-| **94w** | 2026-11-24 | `claude/practical-fermat-stot2z` | → `dev` | ⏳ ouverte |
+| **94w** | 2026-11-24 | `claude/practical-fermat-stot2z` | [#20515](https://github.com/isopen-io/meeshy/pull/20515) → `dev` | ✅ mergé |
+| **95w** | 2026-11-25 | `claude/practical-fermat-o90to9` | → `dev` | ⏳ ouverte |
+
+**95w** — a11y / i18n / maintenabilité (**FIN du filon #20326**, suite de 92w→94w) :
+les DEUX derniers segments à PLURIEL de `composeMessageLabel`
+(`lib/view/message-a11y-label.ts`, SITE UNIQUE du nom accessible d'une rangée)
+restaient EN DUR EN FRANÇAIS — les comptes de pièces jointes (`attachmentSegments` :
+`image/images`, `vidéo/vidéos`, `audio/audios`, `fichier/fichiers`, `contact/contacts`
+via `pluralize`) et le préfixe des réactions (`reactionsSegment` : « réactions : »).
+Même défaut : invisible pour un francophone, entendu en français par un lecteur
+EN/ES/PT/DE/IT/AR sur SES messages. Correction : **11 clés** ajoutées aux sept
+`catalog-{lang}-shell-labels.ts` (`message.attachment.{image,video,audio,file,contact}
+.{one,other}` + `message.reactions.a11y`), **FR byte-identique**, modèle de pluriel
+`{count} <nom>` repris de `message.reaction.count` (Arabe binaire compris) ; noms
+portés d'iOS (`a11y.message.{images,videos,audios,reactions}`) et du catalogue web
+existant pour fichier/contact (absents d'iOS). `attachmentSegments(attachments,
+language)` devient la SOURCE traduite ; `pluralize` **supprimée** (plus aucun
+consommateur). **Les TROIS surfaces servies par cette source unique suivent** :
+`composeMessageLabel` (oreille), `protected-content.tsx` (constat de retenue admin,
+`currentInterfaceLanguage()` déjà en portée) et `quoted-preview.ts` (inventaire de
+citation, `interfaceLanguage` déjà paramètre) — « qui AFFICHE ce qu'élit le résolveur »
+(Prisme, cycle 122). Témoins : `message-a11y-label.test.ts` (51→57 : EN « 2 videos,
+1 audio »/« reactions: 👍 2 », AR « 1 صورة »/« التفاعلات: », FR byte-identique « 2
+images, 1 audio, réactions : 👍 2 », fichier/contact one/other) + `i18n-catalog.test.ts`
+12/12 (49 883 `expect`) + `contact-card/label`/`quoted-preview`/`protection-notice`/
+`message-blocks` verts + `lib/view` **4402/0** ; `tsc` 0 ; harmonie **0** (remesuré à
+l'ouverture). Housekeeping : 94w confirmée mergée (#20515) ; appariement analyses↔plans
+1:1 revérifié (**74/74** `w` → **75/75** avec 95w, 0 doublon). **#20326 FERMÉE** : plus
+un segment de `composeMessageLabel` en dur en français. Analyse :
+`docs/analyses/uiux/2026-11-25-iteration-95w.md`.
 
 **94w** — a11y / i18n / maintenabilité (suite de 93w, issue #20326) : **les trois
 segments SANS pluriel restants** du libellé d'accessibilité d'un message restaient
@@ -390,29 +419,31 @@ du code supprimé et ne se rejouent pas.** La routine repart d'une revue fraîch
 l'`apps/web` actuel (Vite + Preact). Toutes sont annotées `CORRIGÉ` et closes pour
 leur époque.
 
-## Prochaine itération : **93w** — poursuivre l'optimisation
+## Prochaine itération : **96w** — revue fraîche de l'`apps/web`
 
-**Le gate d'harmonie #8879 reste CLOS (0/0 après 92w).** Deux pistes, dans l'ordre :
+**Le filon a11y/i18n #20326 est SOLDÉ (fermé en 95w).** Tout `composeMessageLabel`
+descend le catalogue : plus un segment en dur en français. Il n'y a plus de dette
+a11y/i18n DÉJÀ identifiée à solder — 96w repart donc d'une **revue fraîche** de
+l'`apps/web` actuel (Vite + Preact), dans l'esprit de la routine : épuration
+(dim. 12, « logique épurée »), optimisation (performance/fluidité), cohérence de
+thème/positionnement, accessibilité, i18n (texte visible ou lu encore en dur),
+navigation/gestes. Mesurer contre iOS (`apps/ios` + MeeshySDK, **jamais modifiés**)
+pour la parité, jamais pour reviser iOS.
 
-1. **Solder la DETTE a11y/i18n ouverte en 92w** (prioritaire car c'est un défaut
-   DÉJÀ identifié, pas une recherche) : le reste de `composeMessageLabel`
-   (`lib/view/message-a11y-label.ts`) garde des segments EN DUR EN FRANÇAIS —
-   « Sans compte » (:250), comptes de pièces jointes (:98-110), « réactions » (:122),
-   « réponse à »/« expéditeur inconnu » (:306), « sticker » (:317), « Position »/
-   « lieu partagé » (:328), « modifié » (:339), « épinglé » (:340). **Par petits
-   paquets** : d'abord les segments SANS pluriel (réutiliser `message.pin.*`,
-   `message.editedByModerator`, `quote.sender.unknown` quand le vocabulaire existe
-   déjà traduit), puis les comptes de pièces avec `.one`/`.other`. Parité :
-   `MessageAccessibilityLabelComposer.swift`. **Issue #20326 ouverte.**
-2. **Épuration** (dim. 12, « logique épurée ») : l'épuration des ÉCRANS est très
-   avancée (92w n'a trouvé aucun défaut « phrase au repos » non gouverné) ; la
-   dette a11y/i18n ci-dessus est le filon vif. Rester mesuré contre iOS
-   (`apps/ios` + MeeshySDK, **jamais modifiés**). **Écarté, ne pas reproposer** :
-   le lead E2EE de l'écran Sécurité (repère règle 7 gouverné, #17594).
+**Pistes de départ pour la recherche 96w** (à CONFIRMER par mesure, pas acquises) :
+- Un autre `aria-label` / `title` / texte visible encore en dur en français hors
+  de `composeMessageLabel` — p. ex. le `systemRowLabel` d'un avis d'arrivée
+  (`member-joined`, chemin `message-badges`), noté à vérifier au plan 94w.
+- Une surface « phrase au repos » non gouvernée (épuration) : rare, 92w→94w n'en
+  ont pas trouvé, donc exiger une mesure avant d'en faire un lot.
 
-**Toujours REMESURER le gate d'harmonie à l'ouverture** : 0 après 91w, mais il
-remonte dès que `dev` reçoit une poche de chrome neuve (historique : 9/7 → 28/11
-entre 83w et 84w ; 13/10 → 17/12 entre 84w et 85w ; 10/8 stable entre 85w et 86w ;
-8/7 → 6/5 entre 86w et 87w ; 5/4 → 12/9 entre 88w et 89w ; 12/9 → 9/8 → 5/4 après
-89w/90w ; **5/4 → 0 après 91w**). S'il est remonté, le vider reste prioritaire
-(une seule famille par tour) avant de reprendre l'épuration.
+**Écarté, ne pas reproposer** : le lead E2EE de l'écran Sécurité
+(`settings-security.tsx`) est un repère règle 7 GOUVERNÉ (#17594), pas un défaut
+d'épure.
+
+**Toujours REMESURER le gate d'harmonie #8879 à l'ouverture** : 0 après 91w→95w,
+mais il remonte dès que `dev` reçoit une poche de chrome neuve (historique : 9/7 →
+28/11 entre 83w et 84w ; 13/10 → 17/12 entre 84w et 85w ; 8/7 → 6/5 entre 86w et
+87w ; 5/4 → 12/9 entre 88w et 89w ; **5/4 → 0 après 91w, stable 0 jusqu'à 95w**).
+S'il est remonté, le vider reste prioritaire (une seule famille par tour) avant
+l'épuration.

@@ -93,6 +93,6 @@ describe('la citation d’une carte de visite (#8122)', () => {
   });
 
   test('l’inventaire lu à l’oreille compte un contact, pas un fichier', () => {
-    expect(attachmentSegments([attachment({})])).toEqual(['1 contact']);
+    expect(attachmentSegments([attachment({})], 'fr')).toEqual(['1 contact']);
   });
 });
