@@ -176,10 +176,9 @@ private struct TalkieBannerTalkButton: View {
             .foregroundStyle(live ? Color.white : MeeshyColors.brandPrimary)
             .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
             .background {
-                ZStack {
-                    Capsule().fill(live ? MeeshyColors.brandPrimary : Color.clear)
-                    TalkieHoldOrb(userId: userId, shows: orbShows, geometry: Self.orb, direction: .outgoing)
-                }
+                Capsule()
+                    .fill(live ? MeeshyColors.brandPrimary : Color.clear)
+                    .overlay { TalkieHoldOrb(userId: userId, shows: orbShows, geometry: Self.orb, direction: .outgoing) }
             }
             .overlay(Capsule().stroke(MeeshyColors.brandPrimary, lineWidth: 1.5))
             .contentShape(Capsule())
