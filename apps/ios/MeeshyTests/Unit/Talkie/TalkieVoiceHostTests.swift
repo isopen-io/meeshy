@@ -35,6 +35,23 @@ final class TalkieVoiceHostTests: XCTestCase {
         }
     }
 
+    /// L'orbe d'un bouton se voit (2026-11-25) : elle va jusqu'à 70 % du rayon si la place le permet, jamais au-delà
+    /// de sa marge, et elle répond à la voix plutôt qu'au niveau brut.
+    func test_holdOrb_reachesSeventyPercentOfTheRadius_whenTheRoomAllows() {
+        let roomy = TalkieVoiceHostLaw.holdOrb(buttonSize: 96, room: 100)
+        XCTAssertEqual(roomy.maxAmplitude, 0.7 * 48, accuracy: 0.0001)
+        XCTAssertEqual(roomy.response, .voice)
+        XCTAssertEqual(TalkieVoiceHostLaw.holdOrb(buttonSize: 96, room: 24).maxAmplitude, 24)
+        XCTAssertEqual(TalkieVoiceHostLaw.headerOrb(buttonSize: 28, rowHeight: 44).response, .voice)
+    }
+
+    /// Sur la fiche, la carte laisse assez de place pour que l'orbe aille au moins à 60 % du rayon, sans sortir de sa marge.
+    func test_profileRowOrb_isClearlyVisible_andStaysInsideTheCard() {
+        let radius = ProfileTalkieRow.diameter / 2
+        XCTAssertGreaterThanOrEqual(ProfileTalkieRow.orb.maxAmplitude, 0.6 * radius)
+        XCTAssertLessThanOrEqual(ProfileTalkieRow.orb.maxAmplitude, ProfileTalkieRow.orbRoom)
+    }
+
     func test_holdOrb_negativeRoom_hasNoAmplitude() {
         XCTAssertEqual(TalkieVoiceHostLaw.holdOrb(buttonSize: 96, room: -4).maxAmplitude, 0)
     }

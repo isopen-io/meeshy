@@ -7,6 +7,29 @@ import SwiftUI
 nonisolated struct TalkieBubbleGeometry: Equatable, Sendable {
     let baseRadius: CGFloat
     let maxAmplitude: CGFloat
+    var response: TalkieBubbleResponse = .linear
+}
+
+/// Ce qu'une bande devient avant de pousser le contour (2026-11-25). Le hero garde la bande telle quelle ; les orbes des
+/// boutons répondent à la VOIX : une bande à −40 dBFS (0,2) atteint la moitié de l'amplitude, en racine, qui lève le
+/// faible sans écraser le fort. Une valeur non finie compte pour 0, et le résultat reste dans 0…1.
+nonisolated enum TalkieBubbleResponse: Equatable, Sendable {
+    case linear
+    case voice
+
+    /// La bande qui atteint la moitié de l'amplitude sous la réponse « voix ».
+    static let voiceHalfLevel: Float = 0.2
+
+    func level(_ band: Float) -> CGFloat {
+        guard band.isFinite else { return 0 }
+        let clamped = min(1, max(0, band))
+        switch self {
+        case .linear:
+            return CGFloat(clamped)
+        case .voice:
+            return CGFloat(min(1, clamped / (4 * Self.voiceHalfLevel)).squareRoot())
+        }
+    }
 }
 
 /// La forme de la bulle spectrale (#20531) : 120 bandes deviennent 120 pointes autour du héros, puis le contour
@@ -20,7 +43,7 @@ nonisolated enum TalkieBubbleLaw {
     /// les bandes manquantes valent 0 et les surnuméraires sont ignorées.
     static func tips(bands: [Float], geometry: TalkieBubbleGeometry, center: CGPoint) -> [CGPoint] {
         (0..<bandCount).map { index in
-            let level = index < bands.count ? clampedLevel(bands[index]) : 0
+            let level = index < bands.count ? geometry.response.level(bands[index]) : 0
             let radius = geometry.baseRadius + geometry.maxAmplitude * level
             let angle = 2 * Double.pi * Double(index) / Double(bandCount) - Double.pi / 2
             return CGPoint(x: center.x + radius * CGFloat(cos(angle)), y: center.y + radius * CGFloat(sin(angle)))

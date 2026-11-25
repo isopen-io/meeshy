@@ -12,10 +12,16 @@ nonisolated enum TalkieVoiceHostLaw {
         holdOrb(buttonSize: buttonSize, room: (rowHeight - buttonSize) / 2)
     }
 
+    /// Jusqu'où l'orbe d'un bouton s'écarte de son bord, en part de son rayon, quand la place le permet.
+    static let holdOrbReach: CGFloat = 0.7
+
     /// L'orbe d'un bouton qu'on maintient : elle part de son bord et s'en écarte d'au plus `room`, la marge libre qui
-    /// l'entoure ; une marge négative n'en laisse aucune.
+    /// l'entoure, et d'au plus 70 % du rayon ; une marge négative n'en laisse aucune. Elle répond à la voix
+    /// (`TalkieBubbleResponse.voice`) pour qu'une parole normale se voie (2026-11-25).
     static func holdOrb(buttonSize: CGFloat, room: CGFloat) -> TalkieBubbleGeometry {
-        TalkieBubbleGeometry(baseRadius: buttonSize / 2, maxAmplitude: max(0, room))
+        let radius = buttonSize / 2
+        return TalkieBubbleGeometry(baseRadius: radius, maxAmplitude: max(0, min(room, holdOrbReach * radius)),
+                                    response: .voice)
     }
 
     /// Ce que la fente du talkie de l'en-tête montre : le bouton quand il est proposé ; sinon, tant que le pair parle,

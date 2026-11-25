@@ -170,4 +170,28 @@ final class TalkieBubbleLawTests: XCTestCase {
         XCTAssertEqual(TalkieBubbleLaw.reducedMotionStroke(level: 9), 6, accuracy: 0.0001)
         XCTAssertEqual(TalkieBubbleLaw.reducedMotionStroke(level: .nan), 2, accuracy: 0.0001)
     }
+
+    /// La réponse « voix » (2026-11-25) : une bande à −40 dBFS (0,2) atteint la moitié de l'amplitude, le silence reste
+    /// un cercle, le plein reste au bord, et la courbe ne redescend jamais.
+    func test_voiceResponse_bringsNormalSpeechToHalfTheRange() {
+        XCTAssertEqual(TalkieBubbleResponse.voice.level(0.2), 0.5, accuracy: 0.0001)
+        XCTAssertEqual(TalkieBubbleResponse.voice.level(0), 0, accuracy: 0.0001)
+        XCTAssertEqual(TalkieBubbleResponse.voice.level(1), 1, accuracy: 0.0001)
+        XCTAssertEqual(TalkieBubbleResponse.voice.level(.nan), 0, accuracy: 0.0001)
+        XCTAssertEqual(TalkieBubbleResponse.voice.level(7), 1, accuracy: 0.0001)
+        let samples = stride(from: Float(0), through: 1, by: 0.01).map { TalkieBubbleResponse.voice.level($0) }
+        XCTAssertEqual(samples, samples.sorted())
+    }
+
+    func test_linearResponse_keepsTheBandAsIs() {
+        XCTAssertEqual(TalkieBubbleResponse.linear.level(0.2), 0.2, accuracy: 0.0001)
+        XCTAssertEqual(TalkieBubbleResponse.linear.level(-1), 0, accuracy: 0.0001)
+    }
+
+    func test_tips_voiceResponse_liftsAQuietBandToHalfItsAmplitude() {
+        let lifted = TalkieBubbleGeometry(baseRadius: 50, maxAmplitude: 20, response: .voice)
+        let tips = TalkieBubbleLaw.tips(bands: [0.2], geometry: lifted, center: center)
+        XCTAssertEqual(distance(tips[0]), 60, accuracy: 0.001)
+        XCTAssertEqual(distance(tips[1]), 50, accuracy: 0.001)
+    }
 }
