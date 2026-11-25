@@ -13,6 +13,8 @@ struct PackShowcaseContext {
     /// Toute la vitrine lue : « Du même éditeur » et la page de l'éditeur y puisent (#16433).
     var catalogue = PackShopState()
     var language = "fr"
+    /// Mène à la frappe des Meeshes depuis la fiche d'un pack trop cher (#20528).
+    var onEarnMeeshes: (() -> Void)?
 
     func row(_ slug: String) -> PackRow? { rows.first { $0.slug == slug } }
 }

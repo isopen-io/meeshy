@@ -44,6 +44,8 @@ public struct PackRow: Identifiable, Hashable, Sendable {
     public let downloadBytes: Int?
     /// L'éditeur du pack (#16315) ; `nil` sur un ancien serveur.
     public let publisher: PackPublisherRef?
+    /// Les Meeshes qui manquent au solde servi pour l'acheter (#20528) ; `nil` = rien ne manque ou solde inconnu.
+    public let shortfall: PackMeeshShortfall?
 
     public var id: String { slug }
 
@@ -53,7 +55,9 @@ public struct PackRow: Identifiable, Hashable, Sendable {
     public init(slug: String, name: String, author: String = "", description: String = "",
                 installed: Bool, removable: Bool = true, cover: PackCover = .none, usageText: String? = nil,
                 price: Int? = nil, owned: Bool = true, locked: Bool = false, unlockText: String? = nil,
-                bundled: Bool = false, downloadBytes: Int? = nil, publisher: PackPublisherRef? = nil) {
+                bundled: Bool = false, downloadBytes: Int? = nil, publisher: PackPublisherRef? = nil,
+                shortfall: PackMeeshShortfall? = nil) {
+        self.shortfall = shortfall
         self.publisher = publisher
         self.bundled = bundled
         self.downloadBytes = downloadBytes
@@ -96,10 +100,13 @@ public struct PackShopView: View {
     /// écran (#16268). `nil` : la rangée reste inerte, comme avant.
     let onOpen: ((String) -> Void)?
     let onOpenCover: ((String) -> Void)?
+    /// Mène à la frappe des Meeshes (#20528) ; `nil` : la ligne d'un pack trop cher dit l'écart, sans lien.
+    let onEarnMeeshes: (() -> Void)?
 
     public init(rows: [PackRow]?, pending: Set<String>, showsFailure: Bool, failureText: String? = nil,
                 focusedSlug: String? = nil, onOpen: ((String) -> Void)? = nil, onOpenCover: ((String) -> Void)? = nil,
-                onToggle: @escaping (String) -> Void) {
+                onEarnMeeshes: (() -> Void)? = nil, onToggle: @escaping (String) -> Void) {
+        self.onEarnMeeshes = onEarnMeeshes
         self.onOpen = onOpen
         self.onOpenCover = onOpenCover
         self.focusedSlug = focusedSlug
@@ -155,6 +162,27 @@ public struct PackShopView: View {
     }
 
     private func rowView(_ row: PackRow) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            rowLine(row)
+            if let shortfall = Self.shortfall(of: row) {
+                PackMeeshShortfallLine(shortfall: shortfall, slug: row.slug, onEarn: onEarnMeeshes)
+                    .padding(.leading, Self.coverSide + 12)
+            }
+        }
+        .padding(row.slug == focusedSlug ? 6 : 0)
+        .overlay {
+            if row.slug == focusedSlug {
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .stroke(MeeshyColors.indigo500, lineWidth: 2)
+                    .accessibilityHidden(true)
+            }
+        }
+        .id(row.slug)
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(row.slug == focusedSlug ? .isSelected : [])
+    }
+
+    private func rowLine(_ row: PackRow) -> some View {
         HStack(spacing: 12) {
             cover(row)
             rowText(row)
@@ -173,17 +201,6 @@ public struct PackShopView: View {
                 PackInstallButton(row: row, busy: pending.contains(row.slug), onToggle: onToggle)
             }
         }
-        .padding(row.slug == focusedSlug ? 6 : 0)
-        .overlay {
-            if row.slug == focusedSlug {
-                RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .stroke(MeeshyColors.indigo500, lineWidth: 2)
-                    .accessibilityHidden(true)
-            }
-        }
-        .id(row.slug)
-        .accessibilityElement(children: .contain)
-        .accessibilityAddTraits(row.slug == focusedSlug ? .isSelected : [])
     }
 
     private func open(_ row: PackRow) {
@@ -262,6 +279,11 @@ public struct PackShopView: View {
             .padding(.horizontal, 14)
             .frame(minHeight: 44)
             .accessibilityIdentifier("shop.locked.\(row.slug)")
+    }
+
+    /// L'écart ne se dit que là où le geste est « Acheter » : un pack à débloquer ne s'achète pas encore (#20528).
+    static func shortfall(of row: PackRow) -> PackMeeshShortfall? {
+        row.needsPurchase && !showsLocked(row) ? row.shortfall : nil
     }
 
     /// Un pack PAYANT que je possède le dit (« Possédé ») ; un pack gratuit n'a rien à déclarer.
