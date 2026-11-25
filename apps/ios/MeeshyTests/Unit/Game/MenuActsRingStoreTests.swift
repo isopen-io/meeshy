@@ -224,4 +224,48 @@ final class MenuActsRingStoreTests: XCTestCase {
         XCTAssertNil(GameFlameWidgetKeys.decode(Data("{}".utf8)))
         XCTAssertNil(GameFlameWidgetKeys.decode(nil))
     }
+
+    // MARK: - « Jeu masqué » tient après une activation (#20567)
+
+    func test_afterTheGameIsHidden_aReturnToTheForeground_neitherReadsNorRepaintsTheWidget() async {
+        let (sut, source, widget) = makeWidgetSUT(cached: GameFixture.game(flameDays: 5, missions: acts([true, false, false])))
+        await sut.activate(hidden: false)
+        await sut.activate(hidden: true)
+        let readsWhileShown = source.cachedCalls
+
+        await sut.readCache()
+
+        XCTAssertEqual(widget.published.last, .hidden, "« Jeu masqué » : un retour au premier plan ne rallume pas le widget")
+        XCTAssertNil(sut.ring)
+        XCTAssertEqual(sut.attention, .none)
+        XCTAssertEqual(source.cachedCalls, readsWhileShown, "« Jeu masqué » : le magasin ne relit rien")
+    }
+
+    func test_afterTheGameIsShownAgain_theWidgetFollowsTheCacheAgain() async {
+        let (sut, _, widget) = makeWidgetSUT(cached: GameFixture.game(flameDays: 5, missions: acts([true, false, false])))
+        await sut.activate(hidden: true)
+
+        await sut.activate(hidden: false)
+
+        XCTAssertEqual(widget.published.last, .shown(WidgetGameFlame(days: 5, status: "lit", actsDone: 1, actsTotal: 3)))
+    }
+
+    // MARK: - Un seul magasin nourrit le widget, au-dessus des racines iPhone et iPad (#20567)
+
+    func test_theWidgetIsFedAboveBothRoots_andOnlyThere() throws {
+        let views = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Game/
+            .deletingLastPathComponent()   // Unit/
+            .deletingLastPathComponent()   // MeeshyTests/
+            .deletingLastPathComponent()   // ios/
+            .appendingPathComponent("Meeshy/Features/Main/Views")
+        let read = { (name: String) in try String(contentsOf: views.appendingPathComponent(name), encoding: .utf8) }
+
+        let adaptive = try read("AdaptiveRootView.swift")
+        XCTAssertEqual(adaptive.components(separatedBy: "GameFlameWidgetFeeder()").count - 1, 1,
+                       "la racine commune monte le widget une fois, pour l'iPhone comme pour l'iPad")
+        let roots = try ["RootView.swift", "RootFloatingChrome.swift", "iPadRootView.swift"].map(read).joined()
+        XCTAssertFalse(roots.contains("GameFlameWidgetFeeder") || roots.contains("widgetFeed(") || roots.contains("publishWidget:"),
+                       "aucune racine ne publie elle-même au widget : une seule source le nourrit")
+    }
 }
