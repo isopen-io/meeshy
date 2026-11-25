@@ -15,7 +15,7 @@
  *
  * ## Les bornes, tenues même en rafale
  *
- * 30 s par prise de parole (une minuterie la ferme même si l'émetteur se tait),
+ * 15 s par prise de parole (une minuterie la ferme même si l'émetteur se tait, #20579),
  * 16 Ko par fragment, 512 Ko et 300 fragments au total, numéros de séquence
  * strictement croissants. Séquence, octets et nombre sont RÉSERVÉS avant toute
  * attente : une rafale arrivée dans le même tour de boucle ne passe pas le

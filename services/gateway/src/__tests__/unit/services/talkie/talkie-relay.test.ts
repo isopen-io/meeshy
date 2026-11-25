@@ -196,7 +196,7 @@ describe('#13935 — finir, et les bornes', () => {
     expect(of(t, 'talkie:chunk')).toEqual([]);
   });
 
-  it('au-delà de 30 s, la prise de parole se ferme (« limit »)', async () => {
+  it('au-delà de la durée maximale, la prise de parole se ferme (« limit »)', async () => {
     const t = relayWith();
     const talkieId = await open(t);
     t.advance(TALKIE_MAX_DURATION_MS + 1_500);

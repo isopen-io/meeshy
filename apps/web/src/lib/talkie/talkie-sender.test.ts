@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { TALKIE_CLIENT_EVENTS, TALKIE_SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/talkie-event-names';
+import { TALKIE_MAX_DURATION_MS } from '@meeshy/shared/types/talkie-constants';
 
 import { bindTalkieSender, outcomeOfRefusal } from './talkie-sender';
 import { fakeCapture, harness, PROCHE, settle, TALKIE_ID } from './talkie-sender.test-support';
@@ -96,11 +97,11 @@ describe('appuyer → parler → relâcher', () => {
 });
 
 describe('les limites', () => {
-  test('passé la durée maximale servie, la prise de parole se ferme seule et le dit', async () => {
+  test('passé la durée maximale servie, bornée par le contrat (15 s, #20579), la prise de parole se ferme seule et le dit', async () => {
     const h = harness();
     h.sender.press(PROCHE);
     await settle();
-    expect(h.timers.at(-1)?.ms).toBe(30_000);
+    expect(h.timers.at(-1)?.ms).toBe(TALKIE_MAX_DURATION_MS);
     h.fireTimers();
     await settle();
     expect(h.ends()).toEqual([{ talkieId: TALKIE_ID }]);

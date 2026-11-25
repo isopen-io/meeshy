@@ -29,9 +29,9 @@ describe('le contrat du talkie', () => {
     expect([SERVER_EVENTS.TALKIE_INCOMING, SERVER_EVENTS.TALKIE_CHUNK, SERVER_EVENTS.TALKIE_ENDED]).toEqual(['talkie:incoming', 'talkie:chunk', 'talkie:ended']);
   });
 
-  it('un seul encodage, celui du vocal, et les bornes de D-4', () => {
+  it('un seul encodage, celui du vocal, et les bornes de D-4 (15 s depuis #20579)', () => {
     expect(TALKIE_CODECS).toEqual(['aac-adts']);
-    expect(TALKIE_MAX_DURATION_MS).toBe(30_000);
+    expect(TALKIE_MAX_DURATION_MS).toBe(15_000);
     expect(TALKIE_MAX_CHUNK_BYTES).toBe(16_384);
   });
 

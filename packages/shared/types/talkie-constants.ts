@@ -5,13 +5,17 @@
  * pour ses lecteurs.
  */
 
-/** Une prise de parole dure au plus 30 s, comme la copie vocale qui la double. */
-export const TALKIE_MAX_DURATION_MS = 30_000;
+/**
+ * Une prise de parole dure au plus 15 s, comme la copie vocale qui la double (#20579, 30 s jusqu'au 2026-11-25).
+ * Servie dans l'accusé (`maxDurationMs`) : un client déployé la lit et suit la limite ; la passerelle coupe à cette
+ * durée quel que soit le client.
+ */
+export const TALKIE_MAX_DURATION_MS = 15_000;
 /** Un fragment de ~500 ms en AAC mono 64 kb/s pèse ~4 Ko : 16 Ko laissent de la marge sans ouvrir un tuyau. */
 export const TALKIE_MAX_CHUNK_BYTES = 16_384;
-/** Plafond d'une prise de parole entière : 30 s à 64 kb/s ≈ 240 Ko, doublés. */
+/** Plafond d'une prise de parole entière : gardé à la mesure de 30 s à 64 kb/s (≈ 240 Ko, doublés), large pour 15 s. */
 export const TALKIE_MAX_TOTAL_BYTES = 512_000;
-/** Plafond du NOMBRE de fragments d'une prise de parole : 30 s par fragments de 100 ms au plus court. */
+/** Plafond du NOMBRE de fragments d'une prise de parole : gardé à 30 s par fragments de 100 ms, large pour 15 s. */
 export const TALKIE_MAX_CHUNKS = 300;
 /**
  * Une voix SCELLÉE (#13949) ne porte, à l'ouverture, que l'IDENTIFIANT de la clé de sa prise de parole
@@ -77,6 +81,6 @@ export const TALKIE_ERROR_CODES = {
 } as const;
 export type TalkieErrorCode = (typeof TALKIE_ERROR_CODES)[keyof typeof TALKIE_ERROR_CODES];
 
-/** `sender` : bouton relâché · `limit` : 30 s ou plafond atteint · `cut` : coupée (blocage, réglage, déconnexion). */
+/** `sender` : bouton relâché · `limit` : 15 s ou plafond atteint · `cut` : coupée (blocage, réglage, déconnexion). */
 export const TALKIE_END_REASONS = ['sender', 'limit', 'cut'] as const;
 export type TalkieEndReason = (typeof TALKIE_END_REASONS)[number];
