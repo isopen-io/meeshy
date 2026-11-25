@@ -120,14 +120,19 @@ struct PacksSettingsView: View {
             }
             .accessibilityLabel(String(localized: "settings.packs.domain", defaultValue: "Type de pack", bundle: .main))
 
-            PackShopScreen(domain: domain, focusedPack: focusedPack, onEarnMeeshes: leadsToMinting ? earnMeeshes : nil)
+            PackShopScreen(domain: domain, focusedPack: focusedPack, onEarnMeeshes: earnMeeshesAction)
         }
     }
 
     /// La frappe vit dans la fiche de l'Héritage : la vitrine se referme et le Jeu s'y ouvre (#20528).
-    private func earnMeeshes() {
-        dismiss()
-        router.openGame(at: .progressionConcept(.meesh))
+    private var earnMeeshesAction: (() -> Void)? {
+        guard leadsToMinting else { return nil }
+        let dismiss = dismiss
+        let router = router
+        return {
+            dismiss()
+            router.openGame(at: .progressionConcept(.meesh))
+        }
     }
 }
 
