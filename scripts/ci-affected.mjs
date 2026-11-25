@@ -86,6 +86,16 @@ export const DOMAINES = {
     '.claude/workflows/meeshy-kit-planche.lots.json',
     'docs/product/composer-vue-finale/planche.html',
     'docs/product/kit/',
+    // Le gate « adresses émises servies » (#7312, tranche 3) lit ces chemins via
+    // `apps/web/scripts/lib/emitted-inventory.mjs` pour savoir ce qu'iOS et le SDK
+    // ÉMETTENT vers meeshy.me — tenu par `check-web-navigateur-read-set.mjs`.
+    'apps/ios/Meeshy/',
+    'apps/ios/MeeshyWidgets/',
+    'apps/ios/MeeshyNotificationExtension/',
+    'apps/ios/MeeshyNotificationContentExtension/',
+    'apps/ios/MeeshyShareExtension/',
+    'apps/ios/fastlane/metadata/',
+    'packages/MeeshySDK/Sources/',
   ],
   // Les suites unitaires (#12558) : chacune ne lit que sa zone, ses tests qui lisent ailleurs
   // (Swift, Kotlin, infrastructure, l'autre suite…) étant rejoués à chaque poussée par la voie
@@ -165,9 +175,10 @@ const CAS = [
 ];
 
 const CAS_NAVIGATEUR = [
-  ['navigateur : iOS seul', ['apps/ios/Meeshy/App.swift'], false],
+  // #20591 — couvert depuis que le gate « adresses émises servies » (#7312) lit apps/ios et le SDK.
+  ['navigateur : iOS seul', ['apps/ios/Meeshy/App.swift'], true],
   ['navigateur : Android natif seul', ['apps/android/app/src/main/Foo.kt'], false],
-  ['navigateur : SDK seul', ['packages/MeeshySDK/Sources/MeeshySDK/X.swift'], false],
+  ['navigateur : SDK seul', ['packages/MeeshySDK/Sources/MeeshySDK/X.swift'], true],
   ['navigateur : documentation', ['docs/product/roadmap.md', 'tasks/lessons.md'], false],
   ['navigateur : traducteur seul', ['services/translator/src/main.py'], false],
   ['navigateur : préfixe trompeur', ['packages/shared-legacy/x.ts', 'apps/web-old/x.ts'], false],
