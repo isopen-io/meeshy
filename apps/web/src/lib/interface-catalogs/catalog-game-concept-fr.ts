@@ -413,6 +413,14 @@ const fr = {
   'game.flame_panel.pause': 'Mettre en veille · {days}',
   'game.flame_panel.paused': 'Ta Flamme est en veille jusqu’au {date}.',
   'game.flame_panel.paused_soon': 'Ta Flamme se met en veille demain, jusqu’au {date}.',
+  'game.error.flame_goal.not_offered': 'Cet objectif ne se propose pas aujourd’hui.',
+  'game.error.flame_goal.no_flame': 'Il faut une Flamme allumée pour choisir un objectif.',
+  'game.flame_panel.goal_intro': 'Un objectif pour ta Flamme\u00a0? Choisis-le aujourd’hui, ou laisse-la brûler librement.',
+  'game.flame_panel.goal_choices': 'Objectif de Flamme',
+  'game.flame_panel.goal_running': 'Objectif : {target} de Flamme. Encore {remaining}.',
+  'game.flame_panel.goal_reached': 'Tes aïeux saluent ta Flamme : {days} tenus\u00a0!',
+  'game.flame_panel.goal_next': 'Viser {days}',
+  'game.flame_panel.goal_later': 'Plus tard',
   'game.flame_panel.pause_next': 'Ta prochaine veille sera possible dès le {date}.',
 } as const;
 

@@ -9,12 +9,15 @@ import type { EngagementWithGame } from '@/lib/api/engagement';
 import {
   afterChestOpening,
   afterFreeze,
+  afterGoalChosen,
   afterMint,
   afterMintUnlessServed,
   afterPause,
   afterRelight,
   afterReroll,
   withChestReward,
+  withGoal,
+  withGuideSeen,
   withPaused,
   withRelit,
   withRerolled,
@@ -233,5 +236,36 @@ describe('afterPause — la veille annoncée se voit tout de suite (#20509)', ()
   test('la veille que la passerelle sert fait foi', () => {
     const served = withPaused(afterPause(view(), 3), { from: '2026-10-06', until: '2026-10-07' });
     expect(gameOf(served).flame.pause).toEqual({ from: '2026-10-06', until: '2026-10-07' });
+  });
+});
+
+describe('afterGoalChosen — l’objectif choisi se voit tout de suite (#20521)', () => {
+  test('au premier jour, l’objectif choisi part en cours, par la même loi que la passerelle', () => {
+    const after = afterGoalChosen(view({ streak: 1, goal: null }), 14);
+    expect(gameOf(after).flame.goal).toEqual({ offer: [], current: { target: 14, remaining: 13, reached: false, next: null } });
+  });
+
+  test('la marche suivante d’un objectif atteint se choisit aussi', () => {
+    const after = afterGoalChosen(view({ streak: 7, goal: { target: 7, chosenAtStreak: 1 } }), 14);
+    expect(gameOf(after).flame.goal?.current).toEqual({ target: 14, remaining: 7, reached: false, next: null });
+  });
+
+  test('rien ne change pour un objectif que la carte ne propose pas, ou sans objectif servi', () => {
+    const firstDay = view({ streak: 1, goal: null });
+    expect(afterGoalChosen(firstDay, 100)).toBe(firstDay);
+    const later = view({ goal: null });
+    expect(afterGoalChosen(later, 7)).toBe(later);
+    const before = view();
+    expect(afterGoalChosen(before, 7)).toBe(before);
+  });
+
+  test('l’objectif que la passerelle sert fait foi', () => {
+    const served = withGoal(afterGoalChosen(view({ streak: 1, goal: null }), 7), { offer: [], current: { target: 7, remaining: 6, reached: false, next: null } });
+    expect(gameOf(served).flame.goal).toEqual({ offer: [], current: { target: 7, remaining: 6, reached: false, next: null } });
+  });
+
+  test('le signe fermé entre aussitôt dans les moments vus, une seule fois', () => {
+    const once = withGuideSeen(view(), ['flame-goal-next-7']);
+    expect(gameOf(withGuideSeen(once, ['flame-goal-next-7'])).guideSeen).toEqual(['flame-goal-next-7']);
   });
 });
