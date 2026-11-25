@@ -29,6 +29,12 @@ interface GameDevicePrefsStore {
 
     fun current(): GameDevicePrefs
 
+    /**
+     * Les réglages d'un compte NOMMÉ — pour un appelant hors de la session vivante (widget dans un processus à froid,
+     * où le compte courant n'est pas encore chargé en mémoire) : « Jeu masqué » ne se perd pas faute de session.
+     */
+    fun forAccount(userId: String?): GameDevicePrefs = current()
+
     fun set(hidden: Boolean? = null, celebrations: Boolean? = null, friendsLeagueOptOut: Boolean? = null)
 }
 
@@ -66,6 +72,8 @@ class SharedPreferencesGameDevicePrefsStore @Inject constructor(
             .distinctUntilChanged()
 
     override fun current(): GameDevicePrefs = read(session.currentUserId)
+
+    override fun forAccount(userId: String?): GameDevicePrefs = read(userId)
 
     override fun set(hidden: Boolean?, celebrations: Boolean?, friendsLeagueOptOut: Boolean?) {
         val userId = session.currentUserId ?: return

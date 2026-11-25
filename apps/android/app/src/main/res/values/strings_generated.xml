@@ -164,6 +164,16 @@
     <string name="widget_favorite_contacts_description">Quick access to your favorite contacts</string>
     <string name="widget_favorite_contacts_title">Favorite Contacts</string>
     <string name="widget_favorites_header">Favorites</string>
+    <string name="widget_game_flame_acts">Today’s acts: %1$d of %2$d</string>
+    <string name="widget_game_flame_at_risk">Do something before midnight</string>
+    <string name="widget_game_flame_covered">A Vigil guards it</string>
+    <plurals name="widget_game_flame_days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+    <string name="widget_game_flame_empty">An action today lights your Flame</string>
+    <string name="widget_game_flame_out">Out</string>
+    <string name="widget_game_flame_title">My Flame</string>
     <string name="widget_mark_as_read">Mark as read</string>
     <string name="widget_presence_away">Away</string>
     <string name="widget_presence_idle">Idle</string>
