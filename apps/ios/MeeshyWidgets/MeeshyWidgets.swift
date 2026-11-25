@@ -12,6 +12,7 @@ struct MeeshyWidgetBundle: WidgetBundle {
         FavoriteContactsWidget()
         MyProfileLinkWidget()
         ClosePeopleWidget()
+        GameFlameWidget()
         MeeshyLiveActivityBundle().body
     }
 }

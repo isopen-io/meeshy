@@ -10,6 +10,9 @@ import Foundation
 /// in-app ne mène jamais à Safari ni à un écran vide. Le lien ne juge pas : passé, en cours ou futur se lit
 /// à l'ouverture (`GET /me/game/seasons/:number`, `GET /me/game/league/weeks/:weekKey`).
 enum GameLink: Hashable {
+    /// Ma Légende, nue (`/me/progression`) : là où la Flamme et les actes du jour se jouent — la porte du widget « Ma
+    /// Flamme » (#20562).
+    case legend
     case season(number: Int?)
     case leagueWeek(key: String?)
 }
@@ -26,7 +29,8 @@ enum GameLinkParser {
 
     /// Le lien du Jeu de segments d'adresse (`["me", "progression", "saison", "3"]`), `nil` hors du Jeu.
     static func link(from components: [String]) -> GameLink? {
-        guard components.count >= 3, components[0] == "me", components[1] == "progression" else { return nil }
+        guard components.count >= 2, components[0] == "me", components[1] == "progression" else { return nil }
+        guard components.count >= 3 else { return .legend }
         let param = components.count == 4 ? components[3] : nil
         switch components[2] {
         case "saison": return .season(number: param.flatMap(seasonNumber))
@@ -71,6 +75,7 @@ extension GameNavigationMap {
     /// `Router.openGame(at:)` au-dessus de Progression et de la fiche — « retour » remonte la chaîne.
     static func entry(for link: GameLink) -> Route {
         switch link {
+        case .legend: .progression
         case .season(let number): .gamePage(.season, focus: number.map { .season(number: $0) })
         case .leagueWeek(let key): .gamePage(.league, focus: key.map { .leagueWeek(key: $0) })
         }

@@ -15,6 +15,10 @@ import MeeshySDK
 // La MÊME lecture sert le point du barreau « Ma Légende » (#18165) : l'Offrande prête et la Flamme en danger, lues par
 // `GameAttention` (#17796) dans le même bloc. Le magasin du bandeau ne se revalide que pendant son ouverture ; celui-ci
 // suit chaque écriture du cache, donc le point reste juste sur tout écran à menus.
+//
+// Et le widget « Ma Flamme » (#20562) : la même lecture publie la Flamme et les actes du jour dans le groupe d'app
+// (`GameFlameWidgetFeed`), le widget ne fait ni requête ni calcul. « Jeu masqué » le vide. L'app ne le recharge que si ce
+// qu'elle publie a changé.
 
 @MainActor
 final class MenuActsRingStore: ObservableObject {
@@ -26,13 +30,18 @@ final class MenuActsRingStore: ObservableObject {
     @Published private(set) var attention: GameAttention = .none
 
     private let source: PlayerBannerSourcing
+    private let publishWidget: @MainActor (WidgetGameFlameState) -> Void
+    /// La dernière publication au widget : une lecture identique ne le recharge pas.
+    private var publishedWidget: WidgetGameFlameState?
     private var subscriptions = Set<AnyCancellable>()
     private var subscribed = false
     /// La relecture en cours : une nouvelle écriture du cache la remplace, jamais deux lectures en parallèle.
     private var pendingRead: Task<Void, Never>?
 
-    init(source: PlayerBannerSourcing = EngagementPlayerBannerSource()) {
+    init(source: PlayerBannerSourcing = EngagementPlayerBannerSource(),
+         publishWidget: @escaping @MainActor (WidgetGameFlameState) -> Void = { WidgetDataManager.shared.publishGameFlame($0) }) {
         self.source = source
+        self.publishWidget = publishWidget
     }
 
     /// Lit le cache, puis suit ses écritures. Idempotent : les abonnements ne se posent qu'une fois.
@@ -40,6 +49,7 @@ final class MenuActsRingStore: ObservableObject {
         guard !hidden else {
             ring = nil
             attention = .none
+            publish(.hidden)
             return
         }
         subscribeOnce()
@@ -53,6 +63,13 @@ final class MenuActsRingStore: ObservableObject {
         if next != ring { ring = next }
         let signaled = GameAttention.of(game, hidden: false)
         if signaled != attention { attention = signaled }
+        publish(GameFlameWidgetFeed.state(of: game, hidden: false))
+    }
+
+    private func publish(_ widget: WidgetGameFlameState) {
+        guard widget != publishedWidget else { return }
+        publishedWidget = widget
+        publishWidget(widget)
     }
 
     /// Une écriture du cache vient d'être annoncée : relire, en remplaçant la relecture précédente.

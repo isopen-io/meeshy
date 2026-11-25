@@ -35,7 +35,7 @@ final class MenuActsRingStoreTests: XCTestCase {
         return (MenuActsRingStore(source: source, publishWidget: { _ in }), source)
     }
 
-    private final class WidgetSpy {
+    @MainActor private final class WidgetSpy {
         var published: [WidgetGameFlameState] = []
     }
 
