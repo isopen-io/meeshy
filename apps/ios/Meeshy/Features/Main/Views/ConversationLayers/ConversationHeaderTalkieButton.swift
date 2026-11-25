@@ -174,7 +174,8 @@ struct ConversationHeaderTalkieButton: View {
             symbol(look)
         }
         .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
-        .adaptiveGlass(in: Circle(), tint: accent.opacity(0.4), interactive: true)
+        .adaptiveGlass(in: Circle(), tint: accent.opacity(0.4),
+                       interactive: TalkieVoiceHostLaw.headerGlassInteractive(look: look))
         .animation(.easeOut(duration: 0.15), value: look)
     }
 

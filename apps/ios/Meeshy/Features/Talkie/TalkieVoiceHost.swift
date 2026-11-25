@@ -30,6 +30,12 @@ nonisolated enum TalkieVoiceHostLaw {
         !orbShows
     }
 
+    /// Le verre du bouton de l'en-tête ne réagit au doigt qu'au repos : interactif, il grossit le bouton sous l'appui
+    /// et recouvrait l'orbe de ma voix, qui part du bord du bouton.
+    static func headerGlassInteractive(look: TalkieHoldLook) -> Bool {
+        look == .idle
+    }
+
     /// Ce que la fente du talkie de l'en-tête montre : le bouton quand il est proposé ; sinon, tant que le pair parle,
     /// une fente d'écoute de même taille, sans geste, qui porte l'orbe de sa voix ; rien le reste du temps.
     static func headerSlot(offered: Bool, withdrawn: Bool, incoming: Bool) -> TalkieHeaderSlot {

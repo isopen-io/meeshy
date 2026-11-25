@@ -58,6 +58,14 @@ final class TalkieVoiceHostTests: XCTestCase {
         XCTAssertTrue(TalkieVoiceHostLaw.holdRingsVisible(orbShows: false))
     }
 
+    /// Le verre interactif d'iOS 26 grossit le bouton sous le doigt et recouvrait l'orbe de l'en-tête : il ne réagit
+    /// qu'au repos, et le bouton garde sa taille tant que la voix vit.
+    func test_headerGlass_isInteractiveOnlyAtRest() {
+        XCTAssertTrue(TalkieVoiceHostLaw.headerGlassInteractive(look: .idle))
+        XCTAssertFalse(TalkieVoiceHostLaw.headerGlassInteractive(look: .pressed))
+        XCTAssertFalse(TalkieVoiceHostLaw.headerGlassInteractive(look: .live))
+    }
+
     func test_holdOrb_negativeRoom_hasNoAmplitude() {
         XCTAssertEqual(TalkieVoiceHostLaw.holdOrb(buttonSize: 96, room: -4).maxAmplitude, 0)
     }
