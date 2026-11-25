@@ -11,7 +11,8 @@ private extension Logger {
 /// part en trame ADTS autonome (`TalkieAdts`) — l'encodage que lisent les trois récepteurs.
 ///
 /// La session audio se prend par `MeeshyRecordingSession`, le chemin des vocaux : le son Meeshy qui joue baisse sans
-/// s'arrêter, et pendant un appel rien ne se reconfigure (le micro ne s'ouvre pas).
+/// s'arrêter, et pendant un appel rien ne se reconfigure (le micro ne s'ouvre pas). Une voix de talkie reçue qui sonne
+/// reste audible pendant qu'on parle, et garde la session quand le micro s'arrête (#20579, `TalkieMicSessionLaw`).
 ///
 /// Chaque tampon du micro passe d'abord par le gain qui normalise la voix au réglage d'ENVOI (−22 / −7 dBFS : 6 dB
 /// de marge pour les anciens récepteurs, `TalkieVoiceLeveler.Tuning`), puis part à l'encodeur, puis à l'analyseur
@@ -40,7 +41,8 @@ final class TalkieMicCapture: TalkieCapturing {
         let startedAt = Date()
         guard engine == nil, await DevicePermissions.requestMicrophone().isUsable else { return false }
         let permittedAt = Date()
-        guard await MeeshyRecordingSession.shared.begin(.voiceMessage) else { return false }
+        let alongside = TalkieMicSessionLaw.alongsideIncoming(stage.cast().voices)
+        guard await MeeshyRecordingSession.shared.begin(.voiceMessage, alongsidePlayback: alongside) else { return false }
         let sessionAt = Date()
         holdsSession = true
         let engine = AVAudioEngine()
@@ -106,10 +108,11 @@ final class TalkieMicCapture: TalkieCapturing {
         Int((to.timeIntervalSince(from) * 1000).rounded())
     }
 
+    /// Une voix reçue qui sonne encore garde la session : c'est elle qui la rendra à sa fin (#20579).
     private func releaseSession() {
         guard holdsSession else { return }
         holdsSession = false
-        MeeshyRecordingSession.shared.finish(handingBackSession: true)
+        MeeshyRecordingSession.shared.finish(handingBackSession: TalkieMicSessionLaw.handsBackSession(stage.cast().voices))
     }
 }
 

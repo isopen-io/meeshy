@@ -77,6 +77,25 @@ final class MeeshyRecordingSessionTests: XCTestCase {
         XCTAssertEqual(session.configured.first?.1, true)
     }
 
+    /// #20579 — le talkie parle pendant qu'une voix de talkie SONNE, hors des lecteurs du ducker : la session se pose
+    /// comme par-dessus un son Meeshy (`.default`), pour que le traitement de la voix ne l'éteigne pas.
+    func test_begin_alongsideAPlaybackTheDuckerDoesNotKnow_takesTheSessionThatKeepsItAudible() async {
+        let (sut, session, _, _) = makeSUT()
+
+        let began = await sut.begin(.voiceMessage, alongsidePlayback: true)
+
+        XCTAssertTrue(began)
+        XCTAssertEqual(session.configured.first?.0, RecordingSessionLaw.configuration(for: .voiceMessage, meeshySoundPlaying: true))
+    }
+
+    func test_begin_withoutAnythingPlaying_keepsTheVoiceChatSession() async {
+        let (sut, session, _, _) = makeSUT()
+
+        _ = await sut.begin(.voiceMessage, alongsidePlayback: false)
+
+        XCTAssertEqual(session.configured.first?.0, RecordingSessionLaw.configuration(for: .voiceMessage, meeshySoundPlaying: false))
+    }
+
     func test_finish_afterAVoiceMessage_restoresTheVolumeAndGivesThePlaybackSessionBack() async {
         let (sut, session, source, _) = makeSUT()
         let voiceNote = FakePlayer(volume: 0.7)

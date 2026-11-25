@@ -76,3 +76,25 @@ extension TalkieVoiceHostLaw {
         return incoming(userId: userId, voices: voices) ? .incoming : nil
     }
 }
+
+/// Le micro du talkie et une voix reçue qui SONNE en même temps (#20579, parler et recevoir à la fois) : la session se
+/// pose pour que la voix reçue reste audible (le traitement de la voix d'un appel l'éteindrait), et le micro qui
+/// s'arrête ne rend pas la session sous elle — c'est la voix, à sa fin, qui la rend.
+nonisolated enum TalkieMicSessionLaw {
+    static func alongsideIncoming(_ voices: Set<TalkieVoiceKey>) -> Bool {
+        voices.contains { $0.direction == .incoming }
+    }
+
+    static func handsBackSession(_ voices: Set<TalkieVoiceKey>) -> Bool {
+        !alongsideIncoming(voices)
+    }
+}
+
+extension TalkieBannerLaw {
+    /// Celui à qui le bandeau répond pendant que je maintiens « Parler », ou après : on répond à la voix qui sonne, et le
+    /// bandeau reste tant que ma réponse part. Répondre ne fait PAS taire la voix reçue (#20579) : on s'entend à deux.
+    static func replyingTo(pressed: Bool, live: TalkieSpeaker?, current: TalkieSpeaker?, sending: Bool) -> TalkieSpeaker? {
+        guard pressed else { return sending ? current : nil }
+        return live ?? current
+    }
+}

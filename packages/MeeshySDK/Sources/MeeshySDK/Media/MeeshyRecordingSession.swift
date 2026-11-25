@@ -64,12 +64,16 @@ public final class MeeshyRecordingSession {
     /// Un enregistrement commence : l'enregistreur démarre quand `whenReady`
     /// reçoit `true`. `false` ⇒ la session n'a pas pu être prise (appel VoIP),
     /// ou l'enregistrement a été arrêté avant qu'elle ne soit prête.
+    ///
+    /// `alongsidePlayback` : un son Meeshy que le ducker ne connaît pas joue en même temps et doit rester audible — la
+    /// voix d'un talkie reçu pendant qu'on lui répond (#20579). La session se pose alors comme par-dessus un son Meeshy.
     public func begin(
         _ source: RecordingSource,
+        alongsidePlayback: Bool = false,
         whenReady: @escaping @MainActor @Sendable (Bool) -> Void
     ) {
         let configuration = RecordingSessionLaw.configuration(
-            for: source, meeshySoundPlaying: ducker.hasAudiblePlayback
+            for: source, meeshySoundPlaying: alongsidePlayback || ducker.hasAudiblePlayback
         )
         recordingEpoch &+= 1
         let epoch = recordingEpoch
@@ -91,9 +95,9 @@ public final class MeeshyRecordingSession {
 
     /// `begin`, attendu : rend quand la session est prête (ou refusée).
     @discardableResult
-    public func begin(_ source: RecordingSource) async -> Bool {
+    public func begin(_ source: RecordingSource, alongsidePlayback: Bool = false) async -> Bool {
         await withCheckedContinuation { continuation in
-            begin(source) { continuation.resume(returning: $0) }
+            begin(source, alongsidePlayback: alongsidePlayback) { continuation.resume(returning: $0) }
         }
     }
 

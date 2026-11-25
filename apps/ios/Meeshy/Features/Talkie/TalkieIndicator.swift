@@ -220,8 +220,9 @@ private struct TalkieBannerTalkButton: View {
     }
 }
 
-/// Ce que le bandeau montre : la voix qui sonne, ou celle à qui l'on répond. Répondre prend la parole : la voix reçue se
-/// tait ici (sans quoi le micro la renverrait), et le bandeau reste jusqu'à ce que la réponse soit partie.
+/// Ce que le bandeau montre : la voix qui sonne, ou celle à qui l'on répond. Répondre prend la parole SANS faire taire la
+/// voix reçue (#20579) : on parle et on s'entend à deux, son spectre continue dans le bandeau pendant que l'orbe de ma
+/// voix vit sur le micro, et le bandeau reste jusqu'à ce que la réponse soit partie.
 struct TalkieBannerRoot: View {
     @ObservedObject var center: TalkieCenter
     @ObservedObject var presenter: TalkieBannerPresenter
@@ -251,17 +252,12 @@ struct TalkieBannerRoot: View {
         .animation(.easeOut(duration: 0.2), value: TalkieBannerLaw.speaker(active: live, replyingTo: presenter.replyingTo)?.id)
         .onPreferenceChange(TalkieBannerFrameKey.self) { presenter.interactiveFrame = $0 }
         .adaptiveOnChange(of: holding) { _, pressed in
-            guard pressed else {
-                if !sender.isActive { presenter.replyingTo = nil }
-                return
-            }
-            guard let speaker = live else { return }
-            presenter.replyingTo = speaker
-            center.mute(speaker.talkieId)
+            presenter.replyingTo = TalkieBannerLaw.replyingTo(pressed: pressed, live: live, current: presenter.replyingTo,
+                                                              sending: sender.isActive)
         }
         .adaptiveOnChange(of: sender.isActive) { _, active in
-            guard !active, !holding else { return }
-            presenter.replyingTo = nil
+            presenter.replyingTo = TalkieBannerLaw.replyingTo(pressed: holding, live: live, current: presenter.replyingTo,
+                                                              sending: active)
         }
     }
 }

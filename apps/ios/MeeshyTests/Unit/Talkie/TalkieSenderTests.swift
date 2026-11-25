@@ -459,6 +459,58 @@ final class TalkieSenderTests: XCTestCase {
         XCTAssertEqual(rig.capture.stops, 1)
     }
 
+    /// #20579 — la coupure de la passerelle (15 s + marge) arrive APRÈS que le client s'est arrêté seul : la prise de
+    /// parole se clôt une fois, sur la limite — jamais un second bandeau, jamais une erreur.
+    func test_theServerCut_afterTheClientStoppedItself_settlesOnceOnTheLimit() async {
+        let rig = makeRig()
+        rig.sut.press(toUserId: "bob")
+        await settle()
+        rig.emitter.resolve(.opened(Self.opened))
+        await settle()
+
+        rig.deadline.run?()
+        await settle()
+        let settled = rig.sut.lastSettled
+        rig.ended.send(TalkieEnded(talkieId: Self.opened.talkieId, fromUserId: "me", toUserId: "bob", reason: .limit))
+        await settle()
+
+        XCTAssertEqual(rig.sut.lastSettled, settled)
+        XCTAssertEqual(settled?.outcome, .limit)
+        XCTAssertEqual(rig.emitter.ends, [Self.opened.talkieId])
+    }
+
+    /// #20579 — la coupure de la passerelle DEVANCE le client (réseau lent) : même issue, et la minuterie du client,
+    /// annulée, ne rouvre rien.
+    func test_theServerCut_beforeTheClientDeadline_settlesOnTheLimit_andCancelsTheDeadline() async {
+        let rig = makeRig()
+        rig.sut.press(toUserId: "bob")
+        await settle()
+        rig.emitter.resolve(.opened(Self.opened))
+        await settle()
+
+        rig.ended.send(TalkieEnded(talkieId: Self.opened.talkieId, fromUserId: "me", toUserId: "bob", reason: .limit))
+        await settle()
+
+        XCTAssertEqual(rig.sut.lastSettled?.outcome, .limit)
+        XCTAssertGreaterThanOrEqual(rig.deadline.cancelled, 1)
+        XCTAssertTrue(ProfileTalkieWording.isInformation(.limit))
+    }
+
+    /// #20579 — la voix que Bob m'envoie se termine pendant que je lui parle : la mienne continue.
+    func test_thePeersVoiceEnding_whileITalk_leavesMineOpen() async {
+        let rig = makeRig()
+        rig.sut.press(toUserId: "bob")
+        await settle()
+        rig.emitter.resolve(.opened(Self.opened))
+        await settle()
+
+        rig.ended.send(TalkieEnded(talkieId: "cccccccccccccccccccccccc", fromUserId: "bob", toUserId: "me", reason: .sender))
+        await settle()
+
+        XCTAssertEqual(rig.sut.phase, .talking(toUserId: "bob", talkieId: Self.opened.talkieId))
+        XCTAssertEqual(rig.capture.stops, 0)
+    }
+
     func test_theServedMaximumDuration_closesTheTalkByItself() async {
         let rig = makeRig()
         rig.sut.press(toUserId: "bob")
