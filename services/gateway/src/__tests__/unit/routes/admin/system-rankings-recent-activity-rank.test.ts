@@ -32,9 +32,11 @@ import { systemRankingsRoutes } from '../../../../routes/admin/system-rankings';
 const LIFTED = 'conv00lifted';
 const SPOKEN = 'conv00spoken';
 
-const EARLY = new Date('2026-11-01T10:00:00Z');
-const MIDDLE = new Date('2026-11-10T10:00:00Z');
-const LATE = new Date('2026-11-18T10:00:00Z');
+const DAY_MS = 86_400_000;
+const daysAgo = (days: number): Date => new Date(Date.now() - days * DAY_MS);
+const EARLY = daysAgo(18);
+const MIDDLE = daysAgo(9);
+const LATE = daysAgo(1);
 
 const convo = (id: string, lastMessageAt: Date, lastActivityAt: Date | null): MongoDocument => ({
   id,
