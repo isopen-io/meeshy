@@ -183,6 +183,14 @@ jobs:
             -storepass "$MEESHY_ANDROID_STORE_PASSWORD" -alias "$MEESHY_ANDROID_KEY_ALIAS" \
             | grep 'SHA256' | tee -a "$GITHUB_STEP_SUMMARY" || true
 
+      # #13404 — aucun .aab ne part si R8 a effacé une signature Retrofit ou retiré un modèle @Serializable (#13400).
+      - name: R8 a gardé les signatures Retrofit et les modèles @Serializable
+        run: |
+          python3 scripts/r8/check_r8_release.py \
+            --artifact app/build/outputs/bundle/release/app-release.aab \
+            --usage app/build/outputs/mapping/release/usage.txt \
+            --mapping app/build/outputs/mapping/release/mapping.txt
+
       - name: Publier l'aab et le mapping
         uses: actions/upload-artifact@v7
         with:

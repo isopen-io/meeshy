@@ -232,6 +232,10 @@ jobs:
       - name: Cliquet du texte natif (épure)
         run: node --test scripts/__tests__/check-verbosity-native.test.mjs && node scripts/check-verbosity-native.mjs
 
+      # #13404 — témoins du contrôle de la release minifiée (job release-r8 ci-dessous). Pur Python.
+      - name: Témoins du contrôle R8
+        run: python3 -m unittest discover -s apps/android/scripts/r8/tests
+
   android:
     name: Android (assemble + unit tests)
     needs: i18n
@@ -418,6 +422,68 @@ jobs:
         with:
           name: android-test-reports
           path: apps/android/**/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # #13404 — la release MINIFIÉE (R8), que ni assembleDebug ni les tests unitaires ne construisent. Un modèle @Serializable
+  # que le code ne lit jamais n'existe qu'en argument de type d'une signature Retrofit : R8 le retirait et réécrivait
+  # ApiResponse<Model> en ApiResponse<Object>, et 64 routes levaient « Serializer for class 'Any' is not found » en
+  # release seulement (#13400, règle -keep de proguard-rules.pro). Le contrôle relit le dex (dexdump) et usage.txt.
+  release-r8:
+    name: Release minifiée (R8 garde Retrofit et les modèles)
+    needs: i18n
+    if: needs.i18n.outputs.android_touched == 'true' && !inputs.record_snapshots
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: apps/android
+
+    steps:
+      - name: Libérer le disque du runner
+        working-directory: /
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost /usr/share/swift /usr/local/share/powershell
+          sudo docker image prune --all --force > /dev/null || true
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      # Non signé, sans google-services.json : R8 ne dépend ni de la clé ni de FCM, et c'est le même bundleRelease
+      # que celui que publie android-release.yml.
+      - name: Construire la release minifiée (bundleRelease)
+        run: ./gradlew :app:bundleRelease --no-daemon
+
+      - name: Signatures Retrofit et modèles @Serializable gardés (dexdump + usage.txt)
+        run: |
+          python3 scripts/r8/check_r8_release.py \
+            --artifact app/build/outputs/bundle/release/app-release.aab \
+            --usage app/build/outputs/mapping/release/usage.txt \
+            --mapping app/build/outputs/mapping/release/mapping.txt
+
+      - name: Publier le mapping et usage.txt
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-release-r8-mapping
+          path: |
+            apps/android/app/build/outputs/mapping/release/mapping.txt
+            apps/android/app/build/outputs/mapping/release/usage.txt
           if-no-files-found: ignore
           retention-days: 14
 
