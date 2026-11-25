@@ -417,7 +417,7 @@ const en = {
   'game.flame_panel.paused_soon': 'Your Flame starts resting tomorrow, until {date}.',
   'game.error.flame_goal.not_offered': 'This goal isn’t on offer today.',
   'game.error.flame_goal.no_flame': 'Your Flame needs to be lit to choose a goal.',
-  'game.flame_panel.goal_intro': 'A goal for your Flame? Pick one today, or just let it burn.',
+  'game.flame_panel.goal_intro': 'A goal for your Flame? Pick one today, or let it burn.',
   'game.flame_panel.goal_choices': 'Flame goal',
   'game.flame_panel.goal_running': 'Goal: {target} of Flame. {remaining} to go.',
   'game.flame_panel.goal_reached': 'Your ancestors salute your Flame: {days} held!',
