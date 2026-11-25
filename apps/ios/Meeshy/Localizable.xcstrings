@@ -188224,6 +188224,53 @@
         }
       }
     },
+    "settings.notifications.blood_proximity": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عندما يقترب أحد من دمي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wenn ein Blut-Kontakt in der Nähe ist"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When a Blood is nearby"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuando alguien de mi Sangre está cerca"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quand un Sang s’approche"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quando qualcuno del mio Sangue si avvicina"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quando alguém do meu Sangue se aproxima"
+          }
+        }
+      }
+    },
     "settings.notifications.contacts_groups": {
       "extractionState": "manual",
       "localizations": {
@@ -354115,6 +354162,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Telefone de %@"
+          }
+        }
+      }
+    },
+    "notification.bloodProximity.fallbackTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ قريب جدًا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ist ganz in der Nähe"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is nearby"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ está muy cerca"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ est tout près"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ è vicinissimo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ está bem perto"
           }
         }
       }

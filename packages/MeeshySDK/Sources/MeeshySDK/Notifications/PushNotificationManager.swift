@@ -447,6 +447,9 @@ public struct NotificationPayload {
     /// qu'on marque. `nil` : aucun compte (déconnecté), ou une charge qui en
     /// nomme un autre. `PushTapConsumption` ne navigue que sous ce compte.
     public let addressedTo: String?
+    /// La personne dont la notification parle quand ce n'est pas l'expéditeur d'un message — l'autre Sang d'un
+    /// `blood_proximity` (#20540), dont la carte s'ouvre au toucher. `''` vaut absence sur le fil.
+    public let userId: String?
 
     public init(userInfo: [AnyHashable: Any], addressedTo: String? = nil) {
         self.addressedTo = addressedTo
@@ -473,6 +476,8 @@ public struct NotificationPayload {
         self.commentId = rawCommentId.isEmpty ? nil : rawCommentId
         let rawParentCommentId = userInfo["parentCommentId"] as? String ?? ""
         self.parentCommentId = rawParentCommentId.isEmpty ? nil : rawParentCommentId
+        let rawUserId = userInfo["userId"] as? String ?? ""
+        self.userId = rawUserId.isEmpty ? nil : rawUserId
 
         if let aps = userInfo["aps"] as? [String: Any],
            let alert = aps["alert"] as? [String: Any] {

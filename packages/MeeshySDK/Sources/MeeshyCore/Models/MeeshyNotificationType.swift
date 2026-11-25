@@ -55,6 +55,10 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
     /// Un Sang n'a pas répondu à « Tout va bien ? », ou vient de répondre (#18738). L'acteur est la personne ; le toucher
     /// ouvre son profil. Signal de sécurité : aucun interrupteur par type.
     case inactivityAlert = "inactivity_alert"
+    /// Un Sang vient de s'approcher (#20540) : la passerelle la pousse aux deux, au palier de l'alerte socket
+    /// (`metadata.distanceMeters`), titre et corps déjà rendus. L'acteur et `metadata.userId` sont l'autre Sang ; le
+    /// toucher ouvre sa carte, centrée sur les deux. Suit la préférence `bloodProximityEnabled`.
+    case bloodProximity = "blood_proximity"
 
     // Interaction events
     case userMentioned = "user_mentioned"
@@ -198,6 +202,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .deviceUnreachable: return "iphone.slash"
         case .wellnessCheck: return "hand.wave.fill"
         case .inactivityAlert: return "person.fill.questionmark"
+        case .bloodProximity: return "location.circle.fill"
         case .communityInvite, .legacyGroupInvite: return "person.3.fill"
         case .communityJoined, .memberJoined, .legacyGroupJoined: return "person.badge.checkmark"
         case .communityLeft, .memberLeft, .legacyGroupLeft: return "person.badge.minus"
@@ -254,7 +259,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .userMentioned, .mention, .legacyMention:
             return "9B59B6"
         case .friendRequest, .contactRequest, .legacyFriendRequest, .friendAccepted, .contactAccepted, .legacyFriendAccepted, .legacyStatusUpdate,
-             .contactJoined, .contactRecentlyActive, .relationAcquaintance, .deviceBattery, .deviceUnreachable, .wellnessCheck:
+             .contactJoined, .contactRecentlyActive, .relationAcquaintance, .deviceBattery, .deviceUnreachable, .wellnessCheck, .bloodProximity:
             return "4ECDC4"
         case .communityInvite, .communityJoined, .communityLeft, .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged, .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft:
             return "F8B500"
