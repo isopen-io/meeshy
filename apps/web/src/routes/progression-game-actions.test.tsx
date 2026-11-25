@@ -469,3 +469,44 @@ describe('la Flamme en veille (#20509)', () => {
     expect(ids[2]).not.toBe(ids[0]);
   });
 });
+
+describe('l’objectif de Flamme (#20521)', () => {
+  const goalPath = (req: HttpRequest): boolean => pathOf(req) === '/api/v1/me/game/flame/goal';
+  const seenPath = (req: HttpRequest): boolean => pathOf(req) === '/api/v1/me/game/guide/seen';
+
+  test('l’objectif se voit avant la réponse, l’objectif servi fait foi', async () => {
+    const hold = new Promise<ApiResult<unknown>>(() => undefined);
+    const pending = await bench(seed({ streak: 1, goal: null }), () => undefined, hold);
+    await act(async () => pending.actions().chooseGoal(14));
+    await settle();
+    expect(gameOf(pending.cached()).flame.goal?.current).toMatchObject({ target: 14, reached: false });
+    expect(pending.actions().pending.goal).toBe(true);
+
+    const served = { offer: [], current: { target: 14, remaining: 12, reached: false, next: null } };
+    const { actions, cached, calls } = await bench(seed({ streak: 1, goal: null }), (req) => (goalPath(req) ? ok({ status: 'chosen', goal: served }) : undefined));
+    await act(async () => actions().chooseGoal(14));
+    await settle();
+    expect(calls().find(goalPath)?.body).toMatchObject({ target: 14 });
+    expect(gameOf(cached()).flame.goal).toEqual(served);
+  });
+
+  test('refusé, la carte d’avant revient et le refus se dit par sa raison', async () => {
+    const { actions, cached } = await bench(seed({ streak: 1, goal: null }), (req) =>
+      goalPath(req) ? { ok: false, status: 409, error: 'refus', code: 'FLAME_GOAL_NOT_ALLOWED', reason: 'not-offered' } : undefined,
+    );
+    await act(async () => actions().chooseGoal(7));
+    await settle();
+    expect(gameOf(cached()).flame.goal).toEqual({ offer: [7, 14, 30], current: null });
+    expect(actions().errors.goal).toBe('Cet objectif ne se propose pas aujourd’hui.');
+  });
+
+  test('fermer le signe le range dans les moments vus, en cache et chez la passerelle', async () => {
+    const { actions, cached, calls } = await bench(seed({ streak: 7, goal: { target: 7, chosenAtStreak: 1 } }), (req) =>
+      seenPath(req) ? ok({ guideSeen: ['flame-goal-next-7'] }) : undefined,
+    );
+    await act(async () => actions().closeGoalSign(7));
+    await settle();
+    expect(gameOf(cached()).guideSeen).toContain('flame-goal-next-7');
+    expect(calls().find(seenPath)?.body).toMatchObject({ keys: ['flame-goal-next-7'] });
+  });
+});

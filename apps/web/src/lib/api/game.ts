@@ -3,6 +3,7 @@ import { GAME_ROUTES, gameMissionRerollPath } from '@meeshy/shared/types/game-ro
 import type {
   ChestClaimResponse,
   FlameFreezeResponse,
+  FlameGoalResponse,
   FlamePauseResponse,
   FlameRelightResponse,
   GameBlock,
@@ -305,6 +306,16 @@ const isDay = (value: unknown): boolean => typeof value === 'string' && /^\d{4}-
 const isPauseResponse = (data: unknown): data is FlamePauseResponse =>
   shape(data, { status: isOneOf(['paused', 'already-paused']), pause: (v) => shape(v, { from: isDay, until: isDay }) });
 
+const isCount = (value: unknown): boolean => isInt(value);
+
+const isServedGoal = (value: unknown): boolean =>
+  shape(value, {
+    offer: (v) => Array.isArray(v) && v.every(isCount),
+    current: orNull((v) => shape(v, { target: isCount, remaining: isCount, reached: isBool, next: orNull(isCount) })),
+  });
+
+const isGoalResponse = (data: unknown): data is FlameGoalResponse => shape(data, { status: isOneOf(['chosen', 'already-chosen']), goal: isServedGoal });
+
 const isGuideSeenResponse = (data: unknown): data is GuideSeenResponse =>
   shape(data, { guideSeen: (v) => Array.isArray(v) && v.every(isText) });
 
@@ -331,6 +342,10 @@ export const relightFlame = (transport: HttpTransport, requestId: string, signal
 /** Annoncer une veille de la Flamme, de 1 à 7 jours à partir de demain, une fois par trimestre (#17372, #20509). */
 export const pauseFlame = (transport: HttpTransport, requestId: string, days: number, signal?: AbortSignal) =>
   write({ transport, path: meEndpoints.gameFlamePause, body: { requestId, days }, decode: isPauseResponse, what: 'veille', signal });
+
+/** Choisir l'objectif de sa Flamme : 7, 14 ou 30 jours au premier jour, la marche suivante une fois l'objectif atteint (#20521). */
+export const chooseFlameGoal = (transport: HttpTransport, requestId: string, target: number, signal?: AbortSignal) =>
+  write({ transport, path: meEndpoints.gameFlameGoal, body: { requestId, target }, decode: isGoalResponse, what: 'objectif de Flamme', signal });
 
 export const markGuideSeen = (transport: HttpTransport, requestId: string, keys: readonly string[], signal?: AbortSignal) =>
   write({

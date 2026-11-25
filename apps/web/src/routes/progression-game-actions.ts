@@ -2,25 +2,30 @@ import { useCallback, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import type { GameMintPreview, MissionRerollResponse } from '@meeshy/shared/types/game';
+import { flameGoalNextSeenKey } from '@meeshy/shared/utils/game/flame-goal';
 
 import { GAME_ERROR_CODES } from '@meeshy/shared/types/game-routes';
 
 import { httpTransport, unwrap, ApiError } from '@/lib/api/client';
 import { newClientMessageId } from '@/lib/api/client-message-id';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, mintMeesh, type EngagementWithGame, type MeeshMintResult } from '@/lib/api/engagement';
-import { buyFlameFreeze, claimChest, pauseFlame, relightFlame, rerollMission } from '@/lib/api/game';
+import { buyFlameFreeze, chooseFlameGoal, claimChest, markGuideSeen, pauseFlame, relightFlame, rerollMission } from '@/lib/api/game';
 import { GAME_MUTATION_KEY } from '@/lib/api/game-state-order';
 import type { HttpTransport } from '@/lib/api/http';
+import { flameGoalRefusal } from '@/lib/view/flame-goal-copy';
 import { flamePauseRefusal } from '@/lib/view/flame-pause-copy';
 import { gameErrorMessage } from '@/lib/view/game-copy';
 import {
   afterChestOpening,
   afterFreeze,
+  afterGoalChosen,
   afterMintUnlessServed,
   afterPause,
   afterRelight,
   afterReroll,
   withChestReward,
+  withGoal,
+  withGuideSeen,
   withPaused,
   withRelit,
   withRerolled,
@@ -31,7 +36,7 @@ import { strikeGate, type StrikeGate } from '@/lib/game/strike-gate';
 
 /**
  * LES GESTES DU JEU (#9383) — frappe, changement de mission, coffre, gel,
- * rallumage, veille de la Flamme (#20509). Chacun suit la même règle (§ Instant App Principles) :
+ * rallumage, veille de la Flamme (#20509), objectif de Flamme (#20521). Chacun suit la même règle (§ Instant App Principles) :
  *
  *   capturer l'instantané → appliquer en local → envoyer → restaurer si échec
  *
@@ -60,6 +65,10 @@ export type GameActions = {
   readonly relight: () => void;
   /** Annoncer une veille de la Flamme de `days` jours, à partir de demain (#20509). */
   readonly pause: (days: number) => void;
+  /** Choisir l'objectif de sa Flamme, en jours (#20521). */
+  readonly chooseGoal: (target: number) => void;
+  /** Fermer le signe des aïeux de l'objectif `target` atteint, et la marche suivante qu'il propose (#20521). */
+  readonly closeGoalSign: (target: number) => void;
   readonly pending: {
     readonly mint: boolean;
     readonly rerollId: string | null;
@@ -67,6 +76,7 @@ export type GameActions = {
     readonly freeze: boolean;
     readonly relight: boolean;
     readonly pause: boolean;
+    readonly goal: boolean;
   };
   readonly errors: {
     readonly mint?: string;
@@ -75,6 +85,7 @@ export type GameActions = {
     readonly freeze?: string;
     readonly relight?: string;
     readonly pause?: string;
+    readonly goal?: string;
   };
   /** La dernière pièce frappée, pour la scène ; `null` tant qu'aucune n'a été frappée depuis l'ouverture. */
   readonly celebration: MintCelebration | null;
@@ -91,6 +102,10 @@ const messageOf = (error: unknown): string => gameErrorMessage(error instanceof 
 /** Une veille refusée dit sa raison (le trimestre pris, une veille en cours, pas de Flamme) ; tout autre échec, le sien. */
 const pauseMessageOf = (error: unknown): string =>
   error instanceof ApiError && error.code === GAME_ERROR_CODES.flamePauseNotAllowed ? flamePauseRefusal(error.reason) : messageOf(error);
+
+/** Un objectif refusé dit sa raison (il ne se propose pas aujourd'hui, pas de Flamme) ; tout autre échec, le sien. */
+const goalMessageOf = (error: unknown): string =>
+  error instanceof ApiError && error.code === GAME_ERROR_CODES.flameGoalNotAllowed ? flameGoalRefusal(error.reason) : messageOf(error);
 
 /** Un identifiant que la passerelle dit déjà pris par UNE AUTRE écriture ne sert plus : le prochain geste en génère un neuf. */
 const isIdConflict = (error: unknown): boolean => error instanceof ApiError && error.code === GAME_ERROR_CODES.requestIdConflict;
@@ -267,6 +282,32 @@ export function useGameActions(
     onSettled: refresh,
   });
 
+  // Un objectif est une intention : le rejouer après un échec garde son identifiant, un autre objectif en prend un neuf.
+  const goal = useMutation({
+    mutationKey: GAME_MUTATION_KEY,
+    mutationFn: async (target: number) => unwrap(await chooseFlameGoal(transport, idFor(`goal:${target}`), target)),
+    onMutate: (target: number) => begin((view) => afterGoalChosen(view, target)),
+    onError: (error, target, context: Snapshot | undefined) => {
+      if (isIdConflict(error)) spent(`goal:${target}`);
+      restore(context);
+    },
+    onSuccess: (result, target) => {
+      spent(`goal:${target}`);
+      write((view) => withGoal(view, result.goal));
+    },
+    onSettled: refresh,
+  });
+
+  // Le signe fermé se range tout de suite ; un envoi refusé le laisse se redire à la prochaine lecture, comme le guide.
+  const closeGoalSign = useCallback(
+    (target: number) => {
+      const keys = [flameGoalNextSeenKey(target)];
+      write((view) => withGuideSeen(view, keys));
+      void markGuideSeen(transport, newClientMessageId(), keys).catch(() => undefined);
+    },
+    [transport, write],
+  );
+
   return {
     mint: () => {
       gate.begin();
@@ -278,6 +319,8 @@ export function useGameActions(
     buyFreeze: () => freeze.mutate(),
     relight: () => relight.mutate(),
     pause: (days) => pause.mutate(days),
+    chooseGoal: (target) => goal.mutate(target),
+    closeGoalSign,
     pending: {
       mint: mint.isPending,
       rerollId: reroll.isPending ? reroll.variables ?? null : null,
@@ -285,6 +328,7 @@ export function useGameActions(
       freeze: freeze.isPending,
       relight: relight.isPending,
       pause: pause.isPending,
+      goal: goal.isPending,
     },
     errors: {
       ...(mint.isError ? { mint: messageOf(mint.error) } : {}),
@@ -293,6 +337,7 @@ export function useGameActions(
       ...(freeze.isError ? { freeze: messageOf(freeze.error) } : {}),
       ...(relight.isError ? { relight: messageOf(relight.error) } : {}),
       ...(pause.isError ? { pause: pauseMessageOf(pause.error) } : {}),
+      ...(goal.isError ? { goal: goalMessageOf(goal.error) } : {}),
     },
     celebration,
     strikeKey,
