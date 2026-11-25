@@ -145,6 +145,9 @@
     <string name="pack_shop_owned">Im Besitz</string>
     <string name="pack_shop_remove">Entfernen</string>
     <string name="pack_shop_retry">Erneut versuchen</string>
+    <string name="pack_shop_short_earn">Meeshes prägen</string>
+    <string name="pack_shop_short_many">Dir fehlen %1$s Meeshes</string>
+    <string name="pack_shop_short_one">Dir fehlt 1 Meesh</string>
     <string name="privacy_analytics">Analytics</string>
     <string name="privacy_calls_non_contacts">Anrufe von Nicht-Kontakten</string>
     <string name="privacy_last_seen">Letzte Anmeldung</string>

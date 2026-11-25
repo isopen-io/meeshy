@@ -54,4 +54,30 @@ class PackRowPresentationTest {
         assertThat(present(ShopPack(slug = "a", price = 10, owned = false, requirementPreview = locked)).action)
             .isEqualTo(PackRowAction.Locked)
     }
+    @Test fun `a pack to buy that the served balance does not cover says what is missing`() {
+        val row = PackRowPresentation.of(ShopPack(slug = "a", price = 90, owned = false), balance = 82)
+
+        assertThat(row.action).isEqualTo(PackRowAction.Buy(90))
+        assertThat(row.shortfall).isEqualTo(8)
+    }
+
+    @Test fun `a pack the balance covers, exactly or more, says nothing missing`() {
+        assertThat(PackRowPresentation.of(ShopPack(slug = "a", price = 90, owned = false), balance = 90).shortfall).isNull()
+        assertThat(PackRowPresentation.of(ShopPack(slug = "a", price = 90, owned = false), balance = 400).shortfall).isNull()
+    }
+
+    @Test fun `an unknown balance, an owned, free or locked pack say nothing missing`() {
+        val locked = buildJsonObject { put("met", JsonPrimitive(false)) }
+
+        assertThat(PackRowPresentation.of(ShopPack(slug = "a", price = 90, owned = false), balance = null).shortfall).isNull()
+        assertThat(PackRowPresentation.of(ShopPack(slug = "a", price = 90, owned = true), balance = 0).shortfall).isNull()
+        assertThat(PackRowPresentation.of(ShopPack(slug = "a"), balance = 0).shortfall).isNull()
+        assertThat(PackRowPresentation.of(ShopPack(slug = "a", price = 90, requirementPreview = locked), balance = 0).shortfall).isNull()
+    }
+
+    @Test fun `the shortfall law reads the spend preview of every spending gesture`() {
+        assertThat(PackMeeshShortfall.missing(balance = 0, price = 1, owned = false)).isEqualTo(1)
+        assertThat(PackMeeshShortfall.missing(balance = -5, price = 3, owned = false)).isEqualTo(3)
+        assertThat(PackMeeshShortfall.missing(balance = 3, price = null, owned = false)).isNull()
+    }
 }
