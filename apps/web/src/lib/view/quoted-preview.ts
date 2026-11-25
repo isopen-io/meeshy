@@ -383,7 +383,7 @@ export function quotedPreviewOf(params: {
       text: media?.label ?? '',
       language: '',
       media,
-      inventory: attachmentSegments(quoted.attachments),
+      inventory: attachmentSegments(quoted.attachments, interfaceLanguage),
       isProtected: false,
     };
   }
@@ -392,7 +392,7 @@ export function quotedPreviewOf(params: {
     text: rendered.text,
     language: rendered.language,
     media,
-    inventory: attachmentSegments(quoted.attachments),
+    inventory: attachmentSegments(quoted.attachments, interfaceLanguage),
     isProtected: false,
   };
 }

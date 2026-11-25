@@ -193,6 +193,64 @@ describe('composeMessageLabel — l’ordre iOS', () => {
   });
 });
 
+/**
+ * 95w (#20326) — les DEUX derniers segments à PLURIEL (`attachmentSegments`,
+ * `reactionsSegment`) descendent le catalogue. FR byte-identique ; un lecteur
+ * EN/AR entend les comptes et les réactions dans SA langue.
+ */
+describe('composeMessageLabel — comptes de pièces et réactions (95w, #20326)', () => {
+  const withMedia = (language: InterfaceLanguage, mimeTypes: readonly string[], reactions?: Record<string, number>) =>
+    composeMessageLabel({
+      language,
+      protection: 'standard',
+      message: message({
+        content: '',
+        attachments: mimeTypes.map((mimeType, index) => attachment({ id: `a${index}`, mimeType })),
+        ...(reactions ? { reactionSummary: reactions } : {}),
+      }),
+      isMine: false,
+      servedText: '',
+      delivery: 'sent',
+    });
+
+  test('FR byte-identique : « 2 images, 1 audio », « réactions : 👍 2 »', async () => {
+    await loadInterfaceCatalog('fr');
+    const label = withMedia('fr', ['image/jpeg', 'image/png', 'audio/mpeg'], { '👍': 2 });
+    expect(label).toBe('Bruno Bêta, 2 images, 1 audio, 09:02, réactions : 👍 2');
+  });
+
+  test('FR : fichier et contact au singulier/pluriel', async () => {
+    await loadInterfaceCatalog('fr');
+    expect(withMedia('fr', ['application/pdf'])).toContain('1 fichier');
+    expect(withMedia('fr', ['application/pdf', 'application/zip'])).toContain('2 fichiers');
+  });
+
+  test('EN : « 2 videos, 1 audio », jamais « vidéos » ; « reactions: 👍 2 »', async () => {
+    await loadInterfaceCatalog('en');
+    const label = withMedia('en', ['video/mp4', 'video/webm', 'audio/mpeg'], { '👍': 2 });
+    expect(label).toContain('2 videos');
+    expect(label).toContain('1 audio');
+    expect(label).toContain('reactions: 👍 2');
+    expect(label).not.toContain('vidéo');
+    expect(label).not.toContain('réactions');
+  });
+
+  test('EN : « 1 image », « 2 files », « 1 contact »', async () => {
+    await loadInterfaceCatalog('en');
+    expect(withMedia('en', ['image/jpeg'])).toContain('1 image');
+    expect(withMedia('en', ['application/pdf', 'application/zip'])).toContain('2 files');
+    expect(withMedia('en', ['application/pdf'])).not.toContain('1 fichier');
+  });
+
+  test('AR : « 1 صورة » (pas « 1 image ») ; réactions « التفاعلات: 👍 2 »', async () => {
+    await loadInterfaceCatalog('ar');
+    const label = withMedia('ar', ['image/jpeg'], { '👍': 2 });
+    expect(label).toContain('1 صورة');
+    expect(label).toContain('التفاعلات: 👍 2');
+    expect(label).not.toContain('réactions');
+  });
+});
+
 
 /**
  * LA PROTECTION GOUVERNE LE LIBELLÉ (revue #5774) — le défaut mesuré sur

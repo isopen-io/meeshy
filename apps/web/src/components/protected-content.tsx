@@ -733,7 +733,7 @@ export function ProtectionNotice({
   const ariaLabel = translate(language, LABELS[kind].aria);
   /* Le MÊME vocabulaire que l'oreille — `attachmentSegments` est le site
      unique, importé et jamais recopié (§ `PROTECTED_LABEL`). */
-  const constat = kind === 'withheld' ? attachmentSegments(attachments).join(', ') : '';
+  const constat = kind === 'withheld' ? attachmentSegments(attachments, language).join(', ') : '';
   const media =
     constat === '' ? null : (
       <span data-withheld-media className="not-italic opacity-80">

@@ -74,8 +74,23 @@ const PROTECTED_LABEL_KEY = {
   withheld: 'message.withheld',
 } as const satisfies Readonly<Record<Exclude<ProtectionKind, 'standard'> | 'withheld', InterfaceCatalogKey>>;
 
-const pluralize = (count: number, singular: string, plural: string): string =>
-  `${count} ${count === 1 ? singular : plural}`;
+/**
+ * LES COMPTES DE PIÈCES DESCENDENT LE CATALOGUE (95w, #20326) — `{count} <nom>`,
+ * modèle de pluriel `message.reaction.count.{one,other}` (Arabe binaire compris),
+ * FR byte-identique (« 1 image », « 2 vidéos »). Les noms viennent d'iOS
+ * (`a11y.message.{images,videos,audios}`) et du catalogue web existant pour
+ * fichier/contact (absents d'iOS : `composer.attach.file`, `newConversation.search`).
+ */
+const ATTACHMENT_KEYS = {
+  image: ['message.attachment.image.one', 'message.attachment.image.other'],
+  video: ['message.attachment.video.one', 'message.attachment.video.other'],
+  audio: ['message.attachment.audio.one', 'message.attachment.audio.other'],
+  file: ['message.attachment.file.one', 'message.attachment.file.other'],
+  contact: ['message.attachment.contact.one', 'message.attachment.contact.other'],
+} as const satisfies Readonly<Record<string, readonly [InterfaceCatalogKey, InterfaceCatalogKey]>>;
+
+const countSegment = (count: number, category: keyof typeof ATTACHMENT_KEYS, language: InterfaceLanguage): string =>
+  translate(language, ATTACHMENT_KEYS[category][count === 1 ? 0 : 1], { count: String(count) });
 
 /** Minuscule le PREMIER caractère seul — un nom de groupe transféré (« Salon »)
  * ne doit pas perdre sa majuscule au milieu de la phrase. La casse se plie à
@@ -96,27 +111,28 @@ const lowerFirst = (text: string, language: InterfaceLanguage): string =>
  * `PROTECTED_LABEL`, quelques lignes plus haut). Il n'y a rien à dupliquer —
  * `kindOf` et `pluralize` vivent déjà ici.
  */
-export function attachmentSegments(attachments: readonly Attachment[] | undefined): readonly string[] {
+export function attachmentSegments(attachments: readonly Attachment[] | undefined, language: InterfaceLanguage): readonly string[] {
   if (attachments === undefined || attachments.length === 0) return [];
   const counts = { image: 0, video: 0, audio: 0, file: 0, contact: 0 };
   /* Une carte de visite est un CONTACT à l'oreille, jamais un fichier (#8122). */
   for (const attachment of attachments) counts[isContactCardAttachment(attachment) ? 'contact' : kindOf(attachment)] += 1;
 
   const segments: string[] = [];
-  if (counts.image > 0) segments.push(pluralize(counts.image, 'image', 'images'));
-  if (counts.video > 0) segments.push(pluralize(counts.video, 'vidéo', 'vidéos'));
-  if (counts.audio > 0) segments.push(pluralize(counts.audio, 'audio', 'audios'));
-  if (counts.file > 0) segments.push(pluralize(counts.file, 'fichier', 'fichiers'));
-  if (counts.contact > 0) segments.push(pluralize(counts.contact, 'contact', 'contacts'));
+  for (const category of ['image', 'video', 'audio', 'file', 'contact'] as const) {
+    if (counts[category] > 0) segments.push(countSegment(counts[category], category, language));
+  }
   return segments;
 }
 
-/** Les réactions, dans l'ordre stable de `Object.entries` — même vocabulaire que `reactionEntries`. */
-function reactionsSegment(reactionSummary: Record<string, number> | undefined): string | undefined {
+/** Les réactions, dans l'ordre stable de `Object.entries` — même vocabulaire que
+ * `reactionEntries`. Le préfixe descend le catalogue (95w, #20326) ; la liste
+ * `emoji count` n'a pas de langue. */
+function reactionsSegment(reactionSummary: Record<string, number> | undefined, language: InterfaceLanguage): string | undefined {
   if (reactionSummary === undefined) return undefined;
   const entries = Object.entries(reactionSummary).filter(([, count]) => count > 0);
   if (entries.length === 0) return undefined;
-  return `réactions : ${entries.map(([emoji, count]) => `${emoji} ${count}`).join(', ')}`;
+  const list = entries.map(([emoji, count]) => `${emoji} ${count}`).join(', ');
+  return translate(language, 'message.reactions.a11y', { list });
 }
 
 export type MessageLabelInput = {
@@ -268,7 +284,7 @@ export function composeMessageLabel({
    * été retenu » s'annonçaient d'une seule phrase.
    */
   if (contentWithheld) {
-    segments.push(translate(language, PROTECTED_LABEL_KEY.withheld), ...attachmentSegments(message.attachments));
+    segments.push(translate(language, PROTECTED_LABEL_KEY.withheld), ...attachmentSegments(message.attachments, language));
   } else if (endToEndSealed(message)) {
     /* CHIFFRÉ DE BOUT EN BOUT (#12983) — l'oreille entend ce que l'œil lit,
        jamais le littéral `[Encrypted]` que la passerelle sert au web. */
@@ -328,7 +344,7 @@ export function composeMessageLabel({
     } else if (servedText !== '') {
       segments.push(plainTextOf(servedText));
     }
-    segments.push(...attachmentSegments(message.attachments));
+    segments.push(...attachmentSegments(message.attachments, language));
 
     /** Le LIEU (#5936, `a11y.message.location`) — APRÈS les pièces jointes,
      * miroir `nonMediaAccessibilityParts` (`:152-158`). DESCEND LE CATALOGUE
@@ -373,7 +389,7 @@ export function composeMessageLabel({
   /* LES EFFETS DÉCORATIFS ne se prononcent plus (#7596) : ils s'EXÉCUTENT à
      l'écran, et les énumérer au lecteur d'écran ferait d'une décoration une
      information — la même chose que le compteur que l'œil ne voit plus. */
-  const reactions = reactionsSegment(message.reactionSummary);
+  const reactions = reactionsSegment(message.reactionSummary, language);
   if (reactions !== undefined) segments.push(reactions);
 
   return segments.join(', ');
