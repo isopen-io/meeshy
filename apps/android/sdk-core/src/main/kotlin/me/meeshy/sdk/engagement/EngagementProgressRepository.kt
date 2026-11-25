@@ -15,6 +15,7 @@ import me.meeshy.sdk.cache.KeyedJsonCache
 import me.meeshy.sdk.cache.KeyedJsonCacheSource
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.model.game.GameWriteParser
+import me.meeshy.sdk.model.game.GameBlock
 import me.meeshy.sdk.model.game.GameBlockParser
 import me.meeshy.sdk.model.game.GameRarityEntry
 import me.meeshy.sdk.model.game.engagement.ApiEngagementProgress
@@ -69,6 +70,15 @@ class EngagementProgressRepository(
      */
     suspend fun cachedProgress(): ApiEngagementProgress? =
         cache.get(NAMESPACE, KEY, JsonElement.serializer())?.value?.let(::read)
+
+    /**
+     * Le bloc `game` du DERNIER état connu, suivi au disque seul — jamais au réseau : le widget « Ma Flamme » (#20566) se
+     * repeint quand ce bloc change, et reçoit `null` dès que le compte est vidé (déconnexion).
+     */
+    fun observeCachedGame(): Flow<GameBlock?> =
+        cache.observe(NAMESPACE, KEY, JsonElement.serializer())
+            .map { document -> document?.value?.let(::read)?.game }
+            .flowOn(Dispatchers.Default)
 
     /** Force le réseau (tirer pour rafraîchir) et pose la charge au cache ; lève sur un échec, le cache reste. */
     suspend fun refresh() = source().revalidate()

@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import timber.log.Timber
 
 /**
- * Le point unique de repeinte des quatre widgets (pendant de `WidgetRefresher.refreshAll` de la
+ * Le point unique de repeinte des cinq widgets (pendant de `WidgetRefresher.refreshAll` de la
  * coque `apps/web/android`). [request] dit « quelque chose a changé hors du cache » (langue du
  * lecteur, thème) ; [repaintAll] redessine, chaque widget isolé des échecs des autres.
  */
@@ -33,6 +33,12 @@ class WidgetRefresher @Inject constructor(
         repaint { RecentConversationsWidget().updateAll(context) }
         repaint { FavoriteContactsWidget().updateAll(context) }
         repaint { QuickReplyWidget().updateAll(context) }
+        repaint { GameFlameWidget().updateAll(context) }
+    }
+
+    /** « Ma Flamme » seul : sa face a changé (#20566), les quatre autres widgets n'ont rien à redessiner. */
+    suspend fun repaintGameFlame() {
+        repaint { GameFlameWidget().updateAll(context) }
     }
 
     private suspend fun repaint(widget: suspend () -> Unit) {

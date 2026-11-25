@@ -22,6 +22,11 @@ internal object WidgetTheme {
 
     val pin = ColorProvider(day = MeeshyPalette.Orange500, night = MeeshyPalette.Orange500)
 
+    /** La Flamme de « Ma Flamme » (iOS `GameFlameLook.tint`) : vive, à risque, gardée par une Veilleuse. */
+    val flameLit = ColorProvider(day = MeeshyPalette.Orange500, night = MeeshyPalette.Orange500)
+    val flameAtRisk = ColorProvider(day = MeeshyPalette.Amber500, night = MeeshyPalette.Amber500)
+    val flameCovered = ColorProvider(day = MeeshyPalette.TileSky, night = MeeshyPalette.TileSky)
+
     /** Bordure de la pastille de présence : la couleur du fond du widget. */
     fun dotBorder(night: Boolean): Color = if (night) MeeshyPalette.SurfaceDarkDeep else Color.White
 }

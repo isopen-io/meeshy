@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Aperçu du sélecteur de widgets : la forme de « Ma Flamme », jamais de données fictives. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="110dp"
+    android:height="110dp"
+    android:viewportWidth="110"
+    android:viewportHeight="110">
+    <path
+        android:fillColor="@color/widget_surface"
+        android:pathData="M22,0 H88 A22,22 0 0 1 110,22 V88 A22,22 0 0 1 88,110 H22 A22,22 0 0 1 0,88 V22 A22,22 0 0 1 22,0 Z" />
+    <path
+        android:fillColor="@color/widget_preview_brand"
+        android:pathData="M14,16 h52 v8 h-52 Z" />
+    <path
+        android:fillColor="@color/widget_preview_brand"
+        android:pathData="M27.5,46.67s0.74,2.65 0.74,4.8c0,2.06 -1.35,3.73 -3.41,3.73 -2.07,0 -3.63,-1.67 -3.63,-3.73l0.03,-0.36C19.21,53.51 18,56.62 18,60c0,4.42 3.58,8 8,8s8,-3.58 8,-8C34,54.61 31.41,49.8 27.5,46.67z" />
+    <path
+        android:fillColor="@color/widget_preview_bar"
+        android:pathData="M42,54 h40 v10 h-40 Z" />
+    <path
+        android:fillColor="@color/widget_preview_bar"
+        android:pathData="M14,84 h70 v8 h-70 Z" />
+</vector>
