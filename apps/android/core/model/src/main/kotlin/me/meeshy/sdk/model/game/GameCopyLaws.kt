@@ -61,6 +61,28 @@ public object GameCopyLaws {
         FlamePauseRefusal.InvalidDays, null -> null
     }
 
+    // L'objectif de Flamme (#20523) — miroir de `FlameGoalCopy` (iOS) et de `flame-goal-copy.ts` (web).
+
+    /** « Objectif : 14 jours de Flamme. Encore 5 jours. » */
+    public fun flameGoalRunning(target: Int, remaining: Int): GameText = GameText.of(
+        GameTextKey.FlameGoalRunning,
+        GameTextArg.Nested(days(target)),
+        GameTextArg.Nested(days(remaining)),
+    )
+
+    /** « Tes aïeux saluent ta Flamme : 7 jours tenus ! » */
+    public fun flameGoalReached(target: Int): GameText = GameText.of(GameTextKey.FlameGoalReached, GameTextArg.Nested(days(target)))
+
+    /** « Viser 14 jours » — la marche suivante, d'un seul toucher. */
+    public fun flameGoalNext(target: Int): GameText = GameText.of(GameTextKey.FlameGoalNext, GameTextArg.Nested(days(target)))
+
+    /** Le refus d'un objectif dit sa raison ; une raison inconnue ou absente rend `null` (la phrase générale du refus). */
+    public fun flameGoalRefusal(reason: String?): GameText? = when (FlameGoalRefusal.fromWire(reason)) {
+        FlameGoalRefusal.NotOffered -> GameText(GameTextKey.FlameGoalNotOffered)
+        FlameGoalRefusal.NoFlame -> GameText(GameTextKey.FlameGoalNoFlame)
+        null -> null
+    }
+
     /** Le nom d'une ligue (iOS `GameText.leagueName`). */
     public fun leagueName(league: LeagueKey): GameText = GameText(
         when (league) {

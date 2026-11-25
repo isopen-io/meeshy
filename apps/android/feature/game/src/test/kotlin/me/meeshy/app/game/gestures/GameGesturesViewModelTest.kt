@@ -18,6 +18,8 @@ import me.meeshy.sdk.game.GameWriteOutcome
 import me.meeshy.sdk.model.game.ChestClaimResponse
 import me.meeshy.sdk.model.game.DailyChest
 import me.meeshy.sdk.model.game.FlameFreezeResponse
+import me.meeshy.sdk.model.game.FlameGoalResponse
+import me.meeshy.sdk.model.game.FlameGoalSection
 import me.meeshy.sdk.model.game.FlamePauseResponse
 import me.meeshy.sdk.model.game.FlameRelightResponse
 import me.meeshy.sdk.model.game.FlameStatus
@@ -26,6 +28,8 @@ import me.meeshy.sdk.model.game.GameFlamePause
 import me.meeshy.sdk.model.game.GameIntentIds
 import me.meeshy.sdk.model.game.GameMintPreview
 import me.meeshy.sdk.model.game.GameMission
+import me.meeshy.sdk.model.game.GameServedFlameGoal
+import me.meeshy.sdk.model.game.GuideSeenResponse
 import me.meeshy.sdk.model.game.MeeshEdition
 import me.meeshy.sdk.model.game.MeeshMintResponse
 import me.meeshy.sdk.model.game.MissionDifficulty
@@ -537,5 +541,98 @@ class GameGesturesViewModelTest {
         assertThat(vm.state.value.announcedPause).isNull()
         assertThat(vm.state.value.failures[GameGesture.Pause]?.offline).isTrue()
         coVerify(exactly = 0) { gestures.pauseFlame(any(), any()) }
+    }
+
+    private val firstDay = GameServedFlameGoal(offer = listOf(7, 14, 30), current = null)
+    private val firstDayFlame = litFlame.copy(days = 1, goal = firstDay)
+
+    @Test
+    fun `l objectif choisi se dit des l appui, puis l objectif servi le remplace`() = runTest {
+        val gate = CompletableDeferred<GameWriteOutcome<FlameGoalResponse>>()
+        coEvery { gestures.chooseFlameGoal(any(), 14) } coAnswers { gate.await() }
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.chooseFlameGoal(firstDayFlame, 14)
+
+        assertThat(vm.state.value.choosingGoal).isTrue()
+        assertThat(vm.state.value.flameGoal.section(firstDay, emptyList())).isEqualTo(FlameGoalSection.Running(14, 13))
+        val served = GameServedFlameGoal(emptyList(), GameServedFlameGoal.Current(14, 13, false, null))
+        gate.complete(GameWriteOutcome.Done(FlameGoalResponse("chosen", served)))
+        assertThat(vm.state.value.choosingGoal).isFalse()
+        assertThat(vm.state.value.flameGoal.shown(firstDay)).isEqualTo(served)
+        assertThat(vm.state.value.flameGoal.shown(served)).isEqualTo(served)
+        coVerify(exactly = 1) { progress.refresh() }
+    }
+
+    @Test
+    fun `un objectif refuse se retire et garde la raison du refus`() = runTest {
+        coEvery { gestures.chooseFlameGoal(any(), any()) } returns
+            GameWriteOutcome.Refused("FLAME_GOAL_NOT_ALLOWED", offline = false, reason = "not-offered")
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.chooseFlameGoal(firstDayFlame, 14)
+
+        assertThat(vm.state.value.flameGoal.shown(firstDay)).isEqualTo(firstDay)
+        assertThat(vm.state.value.failures[GameGesture.Goal])
+            .isEqualTo(GameGestureFailure(offline = false, code = "FLAME_GOAL_NOT_ALLOWED", reason = "not-offered"))
+    }
+
+    @Test
+    fun `un objectif que la carte ne propose pas part sans se dire d avance`() = runTest {
+        val gate = CompletableDeferred<GameWriteOutcome<FlameGoalResponse>>()
+        coEvery { gestures.chooseFlameGoal(any(), 100) } coAnswers { gate.await() }
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.chooseFlameGoal(firstDayFlame, 100)
+
+        assertThat(vm.state.value.choosingGoal).isTrue()
+        assertThat(vm.state.value.flameGoal.shown(firstDay)).isEqualTo(firstDay)
+        gate.complete(GameWriteOutcome.Refused("FLAME_GOAL_NOT_ALLOWED", offline = false, reason = "not-offered"))
+    }
+
+    @Test
+    fun `un meme objectif rejoue son identifiant apres une coupure, un autre en prend un neuf`() = runTest {
+        val sent = mutableListOf<String>()
+        coEvery { gestures.chooseFlameGoal(capture(sent), any()) } returns GameWriteOutcome.Refused("NETWORK", offline = true)
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.chooseFlameGoal(firstDayFlame, 7)
+        vm.chooseFlameGoal(firstDayFlame, 7)
+        vm.chooseFlameGoal(firstDayFlame, 30)
+
+        assertThat(sent[0]).isEqualTo(sent[1])
+        assertThat(sent[2]).isNotEqualTo(sent[0])
+        assertThat(vm.state.value.flameGoal.shown(firstDay)).isEqualTo(firstDay)
+    }
+
+    @Test
+    fun `fermer le signe des aieux le tait tout de suite et range sa cle une fois`() = runTest {
+        coEvery { gestures.closeFlameGoalSign(any(), 7) } returns GameWriteOutcome.Done(GuideSeenResponse(listOf("flame-goal-next-7")))
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+        val reached = GameServedFlameGoal(listOf(14), GameServedFlameGoal.Current(7, 0, true, 14))
+        assertThat(vm.state.value.flameGoal.section(reached, emptyList())).isEqualTo(FlameGoalSection.Reached(7, 14))
+
+        vm.closeFlameGoalSign(7)
+        vm.closeFlameGoalSign(7)
+
+        assertThat(vm.state.value.flameGoal.section(reached, emptyList())).isNull()
+        coVerify(exactly = 1) { gestures.closeFlameGoalSign(any(), 7) }
+    }
+
+    @Test
+    fun `hors ligne le signe se tait sans rien envoyer`() = runTest {
+        network.simulateOffline()
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
+
+        vm.closeFlameGoalSign(7)
+
+        assertThat(vm.state.value.flameGoal.closedSigns).containsExactly(7)
+        coVerify(exactly = 0) { gestures.closeFlameGoalSign(any(), any()) }
     }
 }

@@ -101,6 +101,10 @@ internal fun JsonObject.nullableObject(key: String): JsonObject? {
 internal fun JsonArray.strings(key: String): List<String> =
     map { it.string() ?: missing(key) }
 
+/** Les entiers d'un tableau ; tout élément qui n'en est pas un fait échouer le tableau. */
+internal fun JsonArray.ints(key: String): List<Int> =
+    map { it.int() ?: missing(key) }
+
 /**
  * Une clé de la liste fermée du Jeu, lue depuis le `@SerialName` de l'énumération
  * — l'unique source du nom sur le fil. Inconnue ⇒ `null` (l'appelant décide si
