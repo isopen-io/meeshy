@@ -423,6 +423,7 @@ const de = {
   'game.flame_panel.goal_reached': 'Deine Ahnen grüßen deine Flamme: {days} gehalten!',
   'game.flame_panel.goal_next': '{days} anpeilen',
   'game.flame_panel.goal_later': 'Später',
+  'game.flame_panel.pause_next': 'Deine Flamme kann ab dem {date} wieder ruhen.',
 } as const satisfies GameConceptCatalog;
 
 export default de;

@@ -223,6 +223,14 @@ describe('la Flamme en veille (#20509)', () => {
     expect(html).not.toContain('data-game-flame-pause=""');
   });
 
+  test('le trimestre pris, l’annonce se tait et la carte dit dès quand la prochaine sera possible (#20517)', () => {
+    const html = renderToStaticMarkup(<GameFlamePanel {...props({ pause: { from: '2026-10-01', until: '2026-10-02' } })} />);
+    expect(text(html)).toContain('Ta prochaine veille sera possible dès le 1 janvier.');
+    expect(html).toContain('data-game-flame-pause-next=""');
+    expect(html).not.toContain('data-game-flame-pause=""');
+    expect(html).not.toContain('role="radiogroup"');
+  });
+
   test('sans Flamme, ou éteinte, rien à mettre en veille', () => {
     expect(renderToStaticMarkup(<GameFlamePanel {...props({ streak: 0, lastActiveDay: null })} />)).not.toContain('data-game-flame-pause=""');
     expect(renderToStaticMarkup(<GameFlamePanel {...props({ ...out, balance: 5 })} />)).not.toContain('data-game-flame-pause=""');

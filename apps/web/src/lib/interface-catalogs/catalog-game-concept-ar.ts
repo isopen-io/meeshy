@@ -443,6 +443,7 @@ const ar = {
   'game.flame_panel.goal_reached': 'أجدادك يحيّون لهبك: {days} من الثبات!',
   'game.flame_panel.goal_next': 'استهدف {days}',
   'game.flame_panel.goal_later': 'لاحقًا',
+  'game.flame_panel.pause_next': 'يستطيع لهبك أن يستريح من جديد ابتداءً من {date}.',
 } as const satisfies GameConceptCatalog;
 
 export default ar;

@@ -27,6 +27,12 @@ export const readFlamePause = (value: unknown): GameFlamePause | null => {
   return isDayKey(from) && isDayKey(until) ? { from, until } : null;
 };
 
+/**
+ * Le premier jour où la prochaine veille pourra commencer, servi quand celle du trimestre a déjà eu lieu (#20517) :
+ * `null` devant un serveur antérieur, l'annonce ouverte, ou une forme illisible — la carte d'avant.
+ */
+export const readNextPauseFrom = (value: unknown): string | null => (isDayKey(value) ? value : null);
+
 /** Un jour `AAAA-MM-JJ` dit dans la langue du lecteur, avec son jour de la semaine : une veille dure sept jours au plus. */
 const pauseDayLabel = (dayKey: string, language: Language): string => {
   const [year, month, day] = dayKey.split('-').map(Number);
@@ -38,6 +44,15 @@ const pauseDayLabel = (dayKey: string, language: Language): string => {
 /** En veille : jusqu'à quand ; annoncée, qu'elle commence demain (la veille part toujours du lendemain de l'annonce). */
 export const flamePauseLine = (pause: GameFlamePause, today: string, language: Language = currentInterfaceLanguage()): string =>
   translateGame(language, pause.from > today ? 'game.flame_panel.paused_soon' : 'game.flame_panel.paused', { date: pauseDayLabel(pause.until, language) });
+
+/** Le trimestre pris : dès quand la prochaine veille sera possible, sans le jour de la semaine (il est loin). */
+export const flamePauseNextLine = (dayKey: string, language: Language = currentInterfaceLanguage()): string => {
+  const [year, month, day] = dayKey.split('-').map(Number);
+  const date = new Intl.DateTimeFormat(language, { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(
+    new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1)),
+  );
+  return translateGame(language, 'game.flame_panel.pause_next', { date });
+};
 
 export const flamePauseIntro = (language: Language = currentInterfaceLanguage()): string =>
   translateGame(language, 'game.flame_panel.pause_intro', { days: daysLabel(FLAME_PAUSE_MAX_DAYS, language) });

@@ -6,7 +6,7 @@ import { FLAME_PAUSE_MAX_DAYS, FLAME_PAUSE_MIN_DAYS } from '@meeshy/shared/utils
 import { spendPreview } from '@meeshy/shared/utils/game/spend';
 
 import { flameGoalLine, flameGoalNextAction, flameGoalView, readFlameGoal, type FlameGoalView } from '@/lib/view/flame-goal-copy';
-import { flamePauseAction, flamePauseIntro, flamePauseLine, readFlamePause } from '@/lib/view/flame-pause-copy';
+import { flamePauseAction, flamePauseIntro, flamePauseLine, flamePauseNextLine, readFlamePause, readNextPauseFrom } from '@/lib/view/flame-pause-copy';
 import { daysLabel, effortRelightLine, formatCount, gameText, meeshCount, readEffortRelight } from '@/lib/view/game-copy';
 import { freezeDetail } from '@/lib/view/game-detail';
 
@@ -202,6 +202,7 @@ export function GameFlamePanel(props: GameFlamePanelProps) {
   const cannotPayRelight = !relight.affordable;
   const effort = readEffortRelight(flame.effortRelight);
   const pause = readFlamePause(flame.pause);
+  const nextPauseFrom = readNextPauseFrom(flame.nextPauseFrom);
   const burning = flame.status === 'lit' || flame.status === 'at-risk' || flame.status === 'covered';
 
   return (
@@ -237,6 +238,10 @@ export function GameFlamePanel(props: GameFlamePanelProps) {
       {pause !== null ? (
         <p data-game-flame-paused="" className="text-caption font-semibold" style={{ color: GAME_INK }}>
           {flamePauseLine(pause, today)}
+        </p>
+      ) : burning && nextPauseFrom !== null ? (
+        <p data-game-flame-pause-next="" className="text-caption" style={{ color: GAME_INK_2 }}>
+          {flamePauseNextLine(nextPauseFrom)}
         </p>
       ) : burning ? (
         <PauseChooser online={online} pausing={pausing} onPause={onPause} error={errors?.pause} />

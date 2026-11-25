@@ -379,6 +379,11 @@ export const gameFlameSchema = z.object({
    */
   pause: flamePauseSchema.optional().catch(undefined),
   /**
+   * Le premier jour où une veille pourra commencer, quand celle du trimestre a déjà eu lieu (#20517) : le client tait
+   * l'annonce et dit cette date. Tolérant : absent devant un serveur antérieur, ou quand l'annonce est ouverte.
+   */
+  nextPauseFrom: dayKey.optional().catch(undefined),
+  /**
    * L'objectif de Flamme (#20520) : ce qui se propose et l'objectif retenu. Tolérant : absent devant un serveur
    * antérieur, ou quand il n'y a rien à dire (aucun choix ouvert, aucun objectif tenu).
    */

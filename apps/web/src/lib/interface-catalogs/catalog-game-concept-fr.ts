@@ -421,6 +421,7 @@ const fr = {
   'game.flame_panel.goal_reached': 'Tes aïeux saluent ta Flamme : {days} tenus\u00a0!',
   'game.flame_panel.goal_next': 'Viser {days}',
   'game.flame_panel.goal_later': 'Plus tard',
+  'game.flame_panel.pause_next': 'Ta prochaine veille sera possible dès le {date}.',
 } as const;
 
 export default fr;

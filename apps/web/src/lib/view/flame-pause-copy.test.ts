@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, test } from 'bun:test';
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 
-import { flamePauseAction, flamePauseLine, flamePauseRefusal, readFlamePause } from './flame-pause-copy';
+import { flamePauseAction, flamePauseLine, flamePauseNextLine, flamePauseRefusal, readFlamePause, readNextPauseFrom } from './flame-pause-copy';
 import { gameErrorMessage } from './game-copy';
 
 beforeAll(async () => {
@@ -42,5 +42,19 @@ describe('la Flamme en veille se dit (#20509)', () => {
   test('le bouton dit la durée choisie, au pluriel juste', () => {
     expect(flamePauseAction(1, 'fr')).toBe('Mettre en veille · 1 jour');
     expect(flamePauseAction(7, 'fr')).toBe('Mettre en veille · 7 jours');
+  });
+
+  test('le trimestre pris, la carte dit dès quand la prochaine veille sera possible (#20517)', () => {
+    expect(readNextPauseFrom('2027-01-01')).toBe('2027-01-01');
+    expect(readNextPauseFrom(undefined)).toBeNull();
+    expect(readNextPauseFrom('janvier')).toBeNull();
+    expect(flamePauseNextLine('2027-01-01', 'fr')).toBe('Ta prochaine veille sera possible dès le 1 janvier.');
+    expect(flamePauseNextLine('2027-01-01', 'en')).toContain('January 1');
+    expect(flamePauseNextLine('2027-01-01', 'de')).toContain('1. Januar');
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      const line = flamePauseNextLine('2027-04-01', language);
+      expect(NAMED(line)).toBe(true);
+      expect(line).not.toBe(flamePauseRefusal('quarterly-limit', language));
+    }
   });
 });

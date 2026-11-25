@@ -423,6 +423,7 @@ const es = {
   'game.flame_panel.goal_reached': '¡Tus ancestros saludan tu Llama: {days} cumplidos!',
   'game.flame_panel.goal_next': 'Apuntar a {days}',
   'game.flame_panel.goal_later': 'Más tarde',
+  'game.flame_panel.pause_next': 'Tu Llama podrá descansar de nuevo a partir del {date}.',
 } as const satisfies GameConceptCatalog;
 
 export default es;
