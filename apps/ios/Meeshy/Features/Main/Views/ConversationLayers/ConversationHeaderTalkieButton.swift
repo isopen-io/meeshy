@@ -56,7 +56,6 @@ struct ConversationHeaderTalkieButton: View {
     @StateObject private var offer: TalkieOfferModel
     @StateObject private var sender = TalkieSender()
     @ObservedObject private var voices: TalkieVoiceStageObserver
-    private let headers: TalkieHeaderPresence
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
     @State private var pressed = false
@@ -67,14 +66,13 @@ struct ConversationHeaderTalkieButton: View {
     private var delivery: TalkieDelivery { TalkieDelivery.of(lasting: unreachableLasting) }
 
     init(userId: String, peerName: String, accentColor: String, secondaryColor: String,
-         voices: TalkieVoiceStageObserver = .shared, headers: TalkieHeaderPresence = .shared) {
+         voices: TalkieVoiceStageObserver = .shared) {
         self.userId = userId
         self.peerName = peerName
         self.accentColor = accentColor
         self.secondaryColor = secondaryColor
         _offer = StateObject(wrappedValue: TalkieOfferModel(userId: userId))
         _voices = ObservedObject(wrappedValue: voices)
-        self.headers = headers
     }
 
     private var look: TalkieHoldLook { TalkieHoldLook.resolve(pressed: pressed, phase: sender.phase) }
@@ -128,8 +126,6 @@ struct ConversationHeaderTalkieButton: View {
             }
         }
         .animation(MeeshyMotion.animation(.rise, reduce: reduceMotion), value: slot)
-        .onAppear { headers.appear(userId) }
-        .onDisappear { headers.disappear(userId) }
         .task(id: userId) { await offer.load() }
         .modifier(PhoneUnreachableLastingReader(userId: userId, lasting: $unreachableLasting))
         .adaptiveOnChange(of: sender.waking) { _, waking in

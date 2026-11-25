@@ -17,50 +17,10 @@ enum TalkieBannerLaw {
         active ?? replyingTo
     }
 
-    /// La première voix qui sonne hors des correspondants dont l'en-tête de conversation est à l'écran ; sinon celui à
-    /// qui l'on répond, sous la même règle. L'en-tête porte déjà l'orbe de leur voix : rien ne le recouvre (#20531).
-    static func speaker(active: [TalkieSpeaker], replyingTo: TalkieSpeaker?, onScreenHeaders: Set<String>) -> TalkieSpeaker? {
-        let live = liveSpeaker(active: active, onScreenHeaders: onScreenHeaders)
-        let answered = replyingTo.flatMap { onScreenHeaders.contains($0.fromUserId) ? nil : $0 }
-        return speaker(active: live, replyingTo: answered)
-    }
-
-    /// La voix qui sonne et que le bandeau montre.
-    static func liveSpeaker(active: [TalkieSpeaker], onScreenHeaders: Set<String>) -> TalkieSpeaker? {
-        active.first { !onScreenHeaders.contains($0.fromUserId) }
-    }
-
     /// « Couper » tant que la voix sonne ; « Parler » seulement si l'émission vers ce correspondant est ouverte
     /// (`TalkieOfferRule`, servie par `TalkieOfferModel`). Rien de grisé : ce qui n'agit pas n'est pas montré.
     static func actions(speakerIsLive: Bool, offered: Bool) -> [TalkieBannerAction] {
         (speakerIsLive ? [.mute] : []) + (offered ? [.talk] : [])
-    }
-}
-
-/// Les correspondants dont l'en-tête de conversation est à l'écran (#20531) : leur voix vit en orbe sur le bouton
-/// talkie de l'en-tête, et le bandeau du talkie reçu ne s'y pose pas. Chaque en-tête compte, jusqu'au dernier parti.
-@MainActor
-final class TalkieHeaderPresence: ObservableObject {
-    static let shared = TalkieHeaderPresence()
-
-    @Published private(set) var peers: Set<String> = []
-    private var counts: [String: Int] = [:]
-
-    nonisolated deinit {}
-
-    func appear(_ userId: String) {
-        counts[userId, default: 0] += 1
-        peers.insert(userId)
-    }
-
-    func disappear(_ userId: String) {
-        guard let count = counts[userId] else { return }
-        guard count > 1 else {
-            counts[userId] = nil
-            peers.remove(userId)
-            return
-        }
-        counts[userId] = count - 1
     }
 }
 
@@ -221,19 +181,14 @@ private struct TalkieBannerTalkButton: View {
 struct TalkieBannerRoot: View {
     @ObservedObject var center: TalkieCenter
     @ObservedObject var presenter: TalkieBannerPresenter
-    @ObservedObject var headers: TalkieHeaderPresence
     @StateObject private var sender = TalkieSender()
     @State private var holding = false
 
-    private var live: TalkieSpeaker? { TalkieBannerLaw.liveSpeaker(active: center.active, onScreenHeaders: headers.peers) }
-
-    private var shown: TalkieSpeaker? {
-        TalkieBannerLaw.speaker(active: center.active, replyingTo: presenter.replyingTo, onScreenHeaders: headers.peers)
-    }
+    private var live: TalkieSpeaker? { center.active.first }
 
     var body: some View {
         VStack(spacing: 0) {
-            if let speaker = shown {
+            if let speaker = TalkieBannerLaw.speaker(active: live, replyingTo: presenter.replyingTo) {
                 TalkieIndicator(
                     speaker: speaker,
                     isLive: live?.id == speaker.id,
@@ -249,7 +204,7 @@ struct TalkieBannerRoot: View {
             }
             Spacer(minLength: 0)
         }
-        .animation(.easeOut(duration: 0.2), value: shown?.id)
+        .animation(.easeOut(duration: 0.2), value: TalkieBannerLaw.speaker(active: live, replyingTo: presenter.replyingTo)?.id)
         .onPreferenceChange(TalkieBannerFrameKey.self) { presenter.interactiveFrame = $0 }
         .adaptiveOnChange(of: holding) { _, pressed in
             guard pressed else {
@@ -295,20 +250,16 @@ final class TalkieBannerPresenter: ObservableObject {
     }
 
     private var window: CallPassthroughWindow?
-    private var headers: TalkieHeaderPresence = .shared
     private var subscription: AnyCancellable?
     private var hideTask: Task<Void, Never>?
 
     nonisolated deinit {}
 
-    func bind(_ center: TalkieCenter, headers: TalkieHeaderPresence = .shared) {
+    func bind(_ center: TalkieCenter) {
         guard subscription == nil else { return }
-        self.headers = headers
         subscription = center.$active
-            .combineLatest($replyingTo, headers.$peers)
-            .map { active, replying, peers in
-                TalkieBannerLaw.speaker(active: active, replyingTo: replying, onScreenHeaders: peers) != nil
-            }
+            .combineLatest($replyingTo)
+            .map { active, replying in TalkieBannerLaw.speaker(active: active.first, replyingTo: replying) != nil }
             .removeDuplicates()
             .sink { [weak self] shown in
                 guard let self else { return }
@@ -322,7 +273,7 @@ final class TalkieBannerPresenter: ObservableObject {
         guard window == nil, let scene = CallWindowScene.target() else { return }
         let overlay = CallPassthroughWindow(windowScene: scene)
         // Sa propre fenêtre, hors de la racine de l'app : la préférence « Réduire les animations » de Meeshy s'y pose ici.
-        let root = TalkieBannerRoot(center: center, presenter: self, headers: headers)
+        let root = TalkieBannerRoot(center: center, presenter: self)
             .environment(\.meeshyForceReduceMotion, MeeshyAccessibilityPreferences.shared.reduceMotion)
         let controller = UIHostingController(rootView: root)
         controller.view.backgroundColor = .clear

@@ -205,30 +205,4 @@ final class TalkieBannerLawTests: XCTestCase {
         XCTAssertEqual(TalkieBannerLaw.speaker(active: nil, replyingTo: answered), answered)
         XCTAssertNil(TalkieBannerLaw.speaker(active: nil, replyingTo: nil))
     }
-
-    /// L'en-tête d'une conversation ne se recouvre pas (2026-11-25) : quand l'en-tête du correspondant est à l'écran,
-    /// sa voix vit en orbe sur le bouton de l'en-tête, et le bandeau ne se pose pas pour lui ; une autre voix, oui.
-    func test_theBannerSkipsAPeerWhoseConversationHeaderIsOnScreen() {
-        let alice = speaker()
-        let bob = speaker("t2", from: "bob")
-
-        XCTAssertNil(TalkieBannerLaw.speaker(active: [alice], replyingTo: nil, onScreenHeaders: ["alice"]))
-        XCTAssertEqual(TalkieBannerLaw.speaker(active: [alice, bob], replyingTo: nil, onScreenHeaders: ["alice"]), bob)
-        XCTAssertNil(TalkieBannerLaw.speaker(active: [], replyingTo: alice, onScreenHeaders: ["alice"]))
-        XCTAssertEqual(TalkieBannerLaw.speaker(active: [alice], replyingTo: nil, onScreenHeaders: []), alice)
-        XCTAssertEqual(TalkieBannerLaw.speaker(active: [], replyingTo: alice, onScreenHeaders: ["bob"]), alice)
-    }
-
-    /// Un en-tête compte tant qu'il est à l'écran ; deux en-têtes du même correspondant (iPad) se comptent.
-    func test_headerPresence_countsEachHeaderUntilTheLastOneLeaves() {
-        let presence = TalkieHeaderPresence()
-        presence.appear("alice")
-        presence.appear("alice")
-        presence.disappear("alice")
-        XCTAssertEqual(presence.peers, ["alice"])
-        presence.disappear("alice")
-        XCTAssertEqual(presence.peers, [])
-        presence.disappear("alice")
-        XCTAssertEqual(presence.peers, [])
-    }
 }
