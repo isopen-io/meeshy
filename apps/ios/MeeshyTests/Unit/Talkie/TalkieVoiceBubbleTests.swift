@@ -1,4 +1,5 @@
 import MeeshySDK
+import SwiftUI
 import XCTest
 @testable import Meeshy
 
@@ -58,11 +59,58 @@ final class TalkieVoiceBubbleTests: XCTestCase {
 
     // MARK: - Le spectre horizontal du bandeau reçu (2026-11-25)
 
-    func test_ribbon_silence_isAFlatLineOnTheMidline() {
+    func test_ribbon_silence_crestRestsOnTheImaginaryMidline() {
         let size = CGSize(width: 120, height: 28)
         let crest = TalkieRibbonLaw.crest(bands: [], size: size)
         XCTAssertEqual(crest.count, TalkieBubbleLaw.bandCount)
         XCTAssertTrue(crest.allSatisfy { abs($0.y - 14) < 0.0001 })
+    }
+
+    /// Au silence total, le bandeau ne montre aucun spectre : ni ligne, ni contour.
+    func test_ribbon_totalSilence_drawsNothing() {
+        let size = CGSize(width: 120, height: 28)
+        XCTAssertTrue(TalkieRibbonLaw.shape(bands: [], size: size).isEmpty)
+        XCTAssertTrue(TalkieRibbonLaw.shape(bands: [Float](repeating: 0, count: 120), size: size).isEmpty)
+    }
+
+    /// Deux voix séparées par des bandes muettes font deux lobes : aucun trait plat ne les relie sur la médiane.
+    func test_ribbon_silentBandsBetweenTwoLobes_drawNoLine() {
+        let size = CGSize(width: 119, height: 28)
+        var bands = [Float](repeating: 0, count: 120)
+        bands[30] = 1
+        bands[90] = 1
+        let shape = TalkieRibbonLaw.shape(bands: bands, size: size)
+        var lobes = 0
+        shape.forEach { if case .move = $0 { lobes += 1 } }
+        XCTAssertEqual(lobes, 2)
+        XCTAssertLessThanOrEqual(shape.boundingRect.minX, 29.0001)
+        XCTAssertGreaterThanOrEqual(shape.boundingRect.maxX, 90.9999)
+        XCTAssertFalse(Self.pathTouches(shape, x: 60))
+    }
+
+    /// Sous « réduire les animations », le spectre se fige en une bande pleine dont la hauteur suit la voix ; muet, rien.
+    func test_ribbon_reduced_isAFilledBandThatVanishesInSilence() {
+        let size = CGSize(width: 120, height: 28)
+        XCTAssertTrue(TalkieRibbonLaw.reducedShape(level: 0, size: size).isEmpty)
+        let band = TalkieRibbonLaw.reducedShape(level: 0.2, size: size).boundingRect
+        XCTAssertEqual(band.height, 14, accuracy: 0.0001)
+        XCTAssertEqual(band.midY, 14, accuracy: 0.0001)
+        XCTAssertEqual(band.width, 120, accuracy: 0.0001)
+    }
+
+    private static func pathTouches(_ path: Path, x: CGFloat) -> Bool {
+        var touches = false
+        var last = CGPoint.zero
+        path.forEach { element in
+            switch element {
+            case .move(let p): last = p
+            case .line(let p):
+                if min(last.x, p.x) < x && max(last.x, p.x) > x { touches = true }
+                last = p
+            default: break
+            }
+        }
+        return touches
     }
 
     func test_ribbon_bandsRunFromTheBassOnTheLeftToTheTrebleOnTheRight() {

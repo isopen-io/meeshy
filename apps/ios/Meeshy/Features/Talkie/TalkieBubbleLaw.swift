@@ -134,13 +134,35 @@ nonisolated enum TalkieRibbonLaw {
     }
 
     /// La crête puis son miroir sous la ligne médiane, en un contour fermé.
+    /// Un lobe par suite de bandes qui parlent, ancré sur la médiane aux bandes muettes voisines : la médiane reste
+    /// imaginaire, rien ne se dessine là où une bande se tait, et le silence total rend un chemin vide.
     static func shape(bands: [Float], size: CGSize) -> Path {
         let crest = crest(bands: bands, size: size)
         let middle = size.height / 2
         var path = Path()
-        path.addLines(crest)
-        crest.reversed().forEach { path.addLine(to: CGPoint(x: $0.x, y: 2 * middle - $0.y)) }
-        path.closeSubpath()
+        lobes(crest: crest, middle: middle).forEach { lobe in
+            let top = crest[lobe]
+            path.addLines(Array(top))
+            top.reversed().forEach { path.addLine(to: CGPoint(x: $0.x, y: 2 * middle - $0.y)) }
+            path.closeSubpath()
+        }
         return path
+    }
+
+    /// Le spectre figé sous « réduire les animations » : une bande pleine centrée, haute comme la voix, absente au silence.
+    static func reducedShape(level: Float, size: CGSize) -> Path {
+        let height = size.height * TalkieBubbleResponse.voice.level(level)
+        guard height > 0 else { return Path() }
+        let rect = CGRect(x: 0, y: (size.height - height) / 2, width: size.width, height: height)
+        return Path(roundedRect: rect, cornerRadius: height / 2, style: .continuous)
+    }
+
+    private static func lobes(crest: [CGPoint], middle: CGFloat) -> [ClosedRange<Int>] {
+        let speaking = crest.indices.filter { middle - crest[$0].y > 0 }
+        let runs = speaking.reduce(into: [ClosedRange<Int>]()) { runs, index in
+            guard let last = runs.last, last.upperBound == index - 1 else { return runs.append(index...index) }
+            runs[runs.count - 1] = last.lowerBound...index
+        }
+        return runs.map { max(0, $0.lowerBound - 1)...min(crest.count - 1, $0.upperBound + 1) }
     }
 }

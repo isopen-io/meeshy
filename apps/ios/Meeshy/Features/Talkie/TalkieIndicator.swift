@@ -74,6 +74,7 @@ struct TalkieIndicator: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .modifier(TalkieBannerScrim(isDark: isDark))
                 .frame(maxWidth: .infinity)
+                .anchorPreference(key: TalkieRibbonRegionKey.self, value: .bounds) { $0 }
             if actions.contains(.mute) { muteButton }
             if actions.contains(.talk) {
                 TalkieBannerTalkButton(sender: sender, userId: speaker.fromUserId, name: name, holding: $holding)
@@ -81,7 +82,9 @@ struct TalkieIndicator: View {
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, MeeshySpacing.xs)
-        .background { voiceBackground }
+        .backgroundPreferenceValue(TalkieRibbonRegionKey.self) { region in
+            GeometryReader { proxy in voiceBackground(ribbonEnd: region.map { proxy[$0].maxX }) }
+        }
         .padding(.horizontal, MeeshySpacing.lg)
         .accessibilityElement(children: .contain)
         .task(id: speaker.fromUserId) { await offer.load() }
@@ -100,15 +103,16 @@ struct TalkieIndicator: View {
         }
     }
 
-    /// Le fond du bandeau : le verre, et par-dessus, tant que la voix du pair sonne, son spectre sur TOUTE la largeur,
-    /// en miroir autour de la ligne médiane (#20531). Le nom et les boutons se posent dessus ; le fond ne change jamais
-    /// la taille du bandeau.
-    private var voiceBackground: some View {
+    /// Le fond du bandeau : le verre, et par-dessus, tant que la voix du pair sonne, son spectre du bord avant jusqu'à
+    /// la fin de la zone du nom (#20531) — l'espacement de la rangée le sépare de « Couper », il ne passe jamais sous
+    /// « Couper » ni sous le micro. Le nom se pose dessus ; le fond ne change jamais la taille du bandeau.
+    private func voiceBackground(ribbonEnd: CGFloat?) -> some View {
         let shape = RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous)
-        return ZStack {
+        return ZStack(alignment: .leading) {
             shape.fill(.ultraThinMaterial)
-            if isLive {
+            if isLive, let ribbonEnd, ribbonEnd > 0 {
                 TalkieVoiceRibbon(userId: speaker.fromUserId, direction: .incoming)
+                    .frame(width: ribbonEnd)
             }
         }
         .clipShape(shape)
@@ -116,16 +120,26 @@ struct TalkieIndicator: View {
 
     private var muteButton: some View {
         Button(action: onMute) {
-            Text(String(localized: "talkie.incoming.mute", defaultValue: "Couper", bundle: .main))
-                .font(.subheadline.weight(.bold))
+            Image(systemName: "speaker.slash.fill")
+                .font(.body.weight(.semibold))
                 .foregroundStyle(MeeshyColors.brandPrimary)
-                .modifier(TalkieBannerScrim(isDark: isDark))
                 .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
+                .contentShape(Rectangle())
         }
         .accessibilityLabel(String(
             format: String(localized: "talkie.incoming.muteNamed", defaultValue: "Couper la voix de %@", bundle: .main), name
         ))
+        .accessibilityInputLabels([String(localized: "talkie.incoming.mute", defaultValue: "Couper", bundle: .main)])
         .accessibilityIdentifier("talkie.incoming.mute")
+    }
+}
+
+/// Où finit la zone du nom dans la rangée du bandeau : le spectre s'arrête là.
+private struct TalkieRibbonRegionKey: PreferenceKey {
+    static var defaultValue: Anchor<CGRect>? { nil }
+
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        value = value ?? nextValue()
     }
 }
 

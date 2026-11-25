@@ -140,11 +140,11 @@ struct TalkieVoiceBubble: View {
     }
 }
 
-/// LE SPECTRE DU BANDEAU REÇU (#20531) : la voix du pair en ruban horizontal sur toute la largeur du bandeau, du grave à
-/// gauche à l'aigu à droite, en miroir autour d'une ligne médiane, au dégradé de la bulle. C'est le FOND du bandeau : le
-/// nom et les boutons se posent dessus, et la mise en page ne bouge pas. Au silence, la seule ligne médiane. Sous
-/// « réduire les animations », dix images par seconde d'une ligne dont l'épaisseur suit le niveau moyen. Ni le doigt,
-/// ni VoiceOver.
+/// LE SPECTRE DU BANDEAU REÇU (#20531) : la voix du pair en ruban horizontal, du grave à gauche à l'aigu à droite, en
+/// miroir autour d'une médiane qui reste imaginaire, au dégradé de la bulle, en remplissage seul (aucun contour). C'est
+/// le fond de la zone du nom : il s'arrête avant « Couper » et ne bouge pas la mise en page. Une bande muette ne dessine
+/// rien, le silence total non plus. Sous « réduire les animations », dix images par seconde d'une bande pleine dont la
+/// hauteur suit le niveau moyen. Ni le doigt, ni VoiceOver.
 struct TalkieVoiceRibbon: View {
     let userId: String
     let direction: TalkieVoiceDirection
@@ -154,7 +154,6 @@ struct TalkieVoiceRibbon: View {
     @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
 
     nonisolated private static let fillOpacity: Double = 0.35
-    nonisolated private static let strokeWidth: CGFloat = 1.5
     nonisolated private static let spectrum = Gradient(colors: [
         MeeshyColors.orange500, MeeshyColors.amber500, MeeshyColors.info, MeeshyColors.blue500,
     ])
@@ -173,28 +172,16 @@ struct TalkieVoiceRibbon: View {
             Canvas { graphics, size in
                 let shading = GraphicsContext.Shading.linearGradient(
                     Self.spectrum, startPoint: .zero, endPoint: CGPoint(x: size.width, y: 0))
-                if reduced {
-                    Self.drawLine(level: TalkieBubbleLaw.meanLevel(bands: bands), size: size, shading: shading, in: &graphics)
-                } else {
-                    let shape = TalkieRibbonLaw.shape(bands: bands, size: size)
-                    var fill = graphics
-                    fill.opacity = Self.fillOpacity
-                    fill.fill(shape, with: shading)
-                    graphics.stroke(shape, with: shading, style: StrokeStyle(lineWidth: Self.strokeWidth, lineJoin: .round))
-                }
+                let shape = reduced
+                    ? TalkieRibbonLaw.reducedShape(level: TalkieBubbleLaw.meanLevel(bands: bands), size: size)
+                    : TalkieRibbonLaw.shape(bands: bands, size: size)
+                var fill = graphics
+                fill.opacity = Self.fillOpacity
+                fill.fill(shape, with: shading)
             }
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-    }
-
-    nonisolated private static func drawLine(level: Float, size: CGSize, shading: GraphicsContext.Shading,
-                                             in graphics: inout GraphicsContext) {
-        var line = Path()
-        line.move(to: CGPoint(x: 0, y: size.height / 2))
-        line.addLine(to: CGPoint(x: size.width, y: size.height / 2))
-        graphics.stroke(line, with: shading, style: StrokeStyle(lineWidth: TalkieBubbleLaw.reducedMotionStroke(level: level),
-                                                                lineCap: .round))
     }
 }
 
