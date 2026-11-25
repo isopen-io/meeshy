@@ -36,7 +36,8 @@ final class ConversationSettingsImageUploadTests: XCTestCase {
     private func makeSUT(uploadResult: Result<String, Error>) -> ConversationSettingsViewModel {
         ConversationSettingsViewModel(
             conversation: MeeshyConversation(id: "conv-1", identifier: "conv-1", type: .group),
-            imageUploader: FakeImageUploader(uploadResult: uploadResult)
+            imageUploader: FakeImageUploader(uploadResult: uploadResult),
+            conversationService: ConversationService.shared
         )
     }
 

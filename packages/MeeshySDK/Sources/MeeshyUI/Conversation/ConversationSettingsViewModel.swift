@@ -46,6 +46,7 @@ public final class ConversationSettingsViewModel: ObservableObject {
     public let currentUserRole: MemberRole
 
     private let imageUploader: UserServiceProviding
+    private let conversationService: ConversationServiceProviding
 
     private let originalTitle: String
     private let originalDescription: String
@@ -70,9 +71,11 @@ public final class ConversationSettingsViewModel: ObservableObject {
     init(
         conversation: MeeshyConversation,
         currentUserRole: MemberRole = .member,
-        imageUploader: UserServiceProviding = UserService.shared
+        imageUploader: UserServiceProviding,
+        conversationService: ConversationServiceProviding
     ) {
         self.imageUploader = imageUploader
+        self.conversationService = conversationService
         self.originalConversation = conversation
         self.conversationId = conversation.id
         self.conversationName = conversation.name
@@ -124,7 +127,7 @@ public final class ConversationSettingsViewModel: ObservableObject {
             let newSlowMode = slowModeSeconds != originalSlowModeSeconds ? slowModeSeconds : nil
             let newAutoTranslate = autoTranslateEnabled != originalAutoTranslateEnabled ? autoTranslateEnabled : nil
 
-            let apiConversation = try await ConversationService.shared.update(
+            let apiConversation = try await conversationService.update(
                 conversationId: conversationId,
                 title: newTitle,
                 description: newDescription,
@@ -169,7 +172,7 @@ public final class ConversationSettingsViewModel: ObservableObject {
 
     func leaveConversation() async {
         do {
-            try await ConversationService.shared.leave(conversationId: conversationId)
+            try await conversationService.leave(conversationId: conversationId)
         } catch {
             errorMessage = error.localizedDescription
             showError = true
@@ -178,7 +181,7 @@ public final class ConversationSettingsViewModel: ObservableObject {
 
     func deleteConversationForAll() async {
         do {
-            try await ConversationService.shared.delete(conversationId: conversationId)
+            try await conversationService.delete(conversationId: conversationId)
         } catch {
             errorMessage = error.localizedDescription
             showError = true
@@ -192,7 +195,7 @@ public final class ConversationSettingsViewModel: ObservableObject {
         defer { isLoadingMembers = false }
 
         do {
-            let response = try await ConversationService.shared.getParticipants(
+            let response = try await conversationService.getParticipants(
                 conversationId: conversationId,
                 limit: 50,
                 cursor: nil
@@ -212,7 +215,7 @@ public final class ConversationSettingsViewModel: ObservableObject {
     /// paramètre EST la garde — la route voisine des droits attend l'autre.
     public func updateRole(userId: String, newRole: String) async {
         do {
-            try await ConversationService.shared.updateParticipantRole(
+            try await conversationService.updateParticipantRole(
                 conversationId: conversationId,
                 userId: userId,
                 role: newRole
@@ -230,7 +233,7 @@ public final class ConversationSettingsViewModel: ObservableObject {
     /// colonnes ; c'est ce qui rend un visiteur sans compte expulsable.
     public func expelParticipant(key: String) async {
         do {
-            try await ConversationService.shared.removeParticipant(
+            try await conversationService.removeParticipant(
                 conversationId: conversationId,
                 key: key
             )
@@ -246,7 +249,7 @@ public final class ConversationSettingsViewModel: ObservableObject {
     /// le gateway invalide `Participant.shareLinkId`. Même clé que l'expulsion.
     public func banParticipant(key: String) async {
         do {
-            try await ConversationService.shared.banParticipant(
+            try await conversationService.banParticipant(
                 conversationId: conversationId,
                 key: key
             )
@@ -264,7 +267,7 @@ public final class ConversationSettingsViewModel: ObservableObject {
     /// destructrice offerte, la moitié réparatrice absente.
     public func unbanParticipant(key: String) async {
         do {
-            try await ConversationService.shared.unbanParticipant(
+            try await conversationService.unbanParticipant(
                 conversationId: conversationId,
                 key: key
             )

@@ -28,7 +28,9 @@ public struct ConversationSettingsView: View {
     ) {
         _viewModel = StateObject(wrappedValue: ConversationSettingsViewModel(
             conversation: conversation,
-            currentUserRole: currentUserRole
+            currentUserRole: currentUserRole,
+            imageUploader: UserService.shared,
+            conversationService: ConversationService.shared
         ))
         self.onUpdated = onUpdated
         self.onLeft = onLeft
