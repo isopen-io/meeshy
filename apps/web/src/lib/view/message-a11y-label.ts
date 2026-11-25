@@ -109,7 +109,7 @@ const lowerFirst = (text: string, language: InterfaceLanguage): string =>
  * vocabulaire que l'oreille : « un second vocabulaire ferait dire deux choses
  * différentes à l'œil et à l'oreille pour un même état » (doc-comment de
  * `PROTECTED_LABEL`, quelques lignes plus haut). Il n'y a rien à dupliquer —
- * `kindOf` et `pluralize` vivent déjà ici.
+ * `kindOf` et `countSegment` (la descente du catalogue) vivent déjà ici.
  */
 export function attachmentSegments(attachments: readonly Attachment[] | undefined, language: InterfaceLanguage): readonly string[] {
   if (attachments === undefined || attachments.length === 0) return [];
