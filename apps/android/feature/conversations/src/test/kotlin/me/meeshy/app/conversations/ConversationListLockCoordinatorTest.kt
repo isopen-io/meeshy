@@ -5,6 +5,12 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Test
 import me.meeshy.sdk.lock.InMemoryConversationLockStore
+import me.meeshy.sdk.lock.EncryptedConversationLockStore
+import me.meeshy.sdk.lock.sealsContentOf
+import me.meeshy.sdk.model.security.InMemorySecureStore
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runTest
 
 class ConversationListLockCoordinatorTest {
 
@@ -189,5 +195,16 @@ class ConversationListLockCoordinatorTest {
 
         assertThat(info).containsExactly("c1")
         assertThat(state.value.lockPrompt).isNull()
+    }
+
+    @Test
+    fun `la liste ouverte reconnait un coffre de verrous perdu, la banniere cesse d'etre scellee`() = runTest {
+        val store = EncryptedConversationLockStore(InMemorySecureStore(allUnreadable = true))
+        val coordinator = ConversationListLockCoordinator(MutableStateFlow(ConversationListUiState()), store) {}
+        assertThat(store.sealsContentOf("c1")).isTrue()
+
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { coordinator.observe() }
+
+        assertThat(store.sealsContentOf("c1")).isFalse()
     }
 }
