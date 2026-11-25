@@ -7,7 +7,9 @@ import unittest
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
-from check_r8_release import erased_retrofit_signatures, removed_serializers, kept_serializer_count  # noqa: E402
+from check_r8_release import (  # noqa: E402
+    erased_retrofit_signatures, kept_serializer_count, removed_serializers, retrofit_annotation_descriptors,
+)
 
 SCRIPT = os.path.join(os.path.dirname(HERE), "check_r8_release.py")
 
@@ -46,7 +48,22 @@ USAGE_CLEAN = """me.meeshy.core.model.Kept:
 me.meeshy.feature.Unused
 """
 
+OBFUSCATED_DUMP = """Class #0 annotations:
+Annotations on method #12 'a'
+  VISIBILITY_RUNTIME Lw00/f; value="auth/me"
+  VISIBILITY_SYSTEM Ldalvik/annotation/Signature; value={ "(" "Lkotlin/coroutines/Continuation<" "-" "Lq3/b<" "Ljava/lang/Object;" ">;>;)" "Ljava/lang/Object;" }
+Annotations on method #13 'b'
+  VISIBILITY_RUNTIME Lw00/b; value="me"
+  VISIBILITY_SYSTEM Ldalvik/annotation/Signature; value={ "(" "Lkotlin/coroutines/Continuation<" "-" "Lq3/b<" "Lq3/c;" ">;>;)" "Ljava/lang/Object;" }
+Annotations on method #14 'c'
+  VISIBILITY_RUNTIME Lq3/z; value="x"
+  VISIBILITY_SYSTEM Ldalvik/annotation/Signature; value={ "(" "Ljava/util/List<" "Ljava/lang/Object;" ">;)V" }
+"""
+
 MAPPING = """# compiler: R8
+retrofit2.http.DELETE -> w00.b:
+retrofit2.http.GET -> w00.f:
+    java.lang.String value() -> value
 me.meeshy.core.model.Kept -> q3.c:
 me.meeshy.core.model.Kept$$serializer -> q3.c$a:
     1:1:void <init>():0:0 -> <init>
@@ -54,32 +71,44 @@ me.meeshy.core.model.Other$$serializer -> q3.e$a:
 """
 
 
+RETROFIT = frozenset({"Lw00/b;", "Lw00/f;"})
+
+
 class ErasedSignatures(unittest.TestCase):
     def test_healthy_signatures_are_not_reported(self):
-        erased, retrofit_methods = erased_retrofit_signatures(HEALTHY_DUMP)
+        erased, retrofit_methods = erased_retrofit_signatures(HEALTHY_DUMP, RETROFIT)
         self.assertEqual(erased, [])
         self.assertEqual(retrofit_methods, 2)
 
+    def test_retrofit_annotations_renamed_by_r8_are_recognised_through_the_mapping(self):
+        erased, retrofit_methods = erased_retrofit_signatures(OBFUSCATED_DUMP, RETROFIT)
+        self.assertEqual(retrofit_methods, 2)
+        self.assertEqual(len(erased), 1)
+        self.assertIn("'a'", erased[0])
+
     def test_type_argument_erased_to_object_is_reported_for_a_retrofit_method_only(self):
-        erased, retrofit_methods = erased_retrofit_signatures(ERASED_DUMP)
+        erased, retrofit_methods = erased_retrofit_signatures(ERASED_DUMP, RETROFIT)
         self.assertEqual(retrofit_methods, 1)
         self.assertEqual(len(erased), 1)
         self.assertIn("'a'", erased[0])
 
     def test_suspend_erased_return_type_is_not_a_type_argument(self):
-        erased, _ = erased_retrofit_signatures(HEALTHY_DUMP)
+        erased, _ = erased_retrofit_signatures(HEALTHY_DUMP, RETROFIT)
         self.assertEqual(erased, [])
 
 
 class Serializers(unittest.TestCase):
     def test_a_wholly_removed_serializer_is_reported(self):
-        self.assertEqual(removed_serializers(USAGE_REMOVED), ["me.meeshy.core.model.ChangePasswordResponse$$serializer"])
+        self.assertEqual(removed_serializers(USAGE_REMOVED.splitlines()), ["me.meeshy.core.model.ChangePasswordResponse$$serializer"])
 
     def test_members_removed_from_a_kept_serializer_are_not_reported(self):
-        self.assertEqual(removed_serializers(USAGE_CLEAN), [])
+        self.assertEqual(removed_serializers(USAGE_CLEAN.splitlines()), [])
 
     def test_kept_serializers_are_counted_from_the_mapping(self):
-        self.assertEqual(kept_serializer_count(MAPPING), 2)
+        self.assertEqual(kept_serializer_count(MAPPING.splitlines()), 2)
+
+    def test_renamed_retrofit_annotations_are_read_from_the_mapping(self):
+        self.assertEqual(retrofit_annotation_descriptors(MAPPING.splitlines()), {"Lw00/b;", "Lw00/f;"})
 
 
 class Command(unittest.TestCase):
@@ -102,6 +131,9 @@ class Command(unittest.TestCase):
 
     def test_an_erased_signature_fails(self):
         self.assertEqual(self.run_check(ERASED_DUMP, USAGE_CLEAN, MAPPING).returncode, 1)
+
+    def test_an_erased_signature_behind_renamed_annotations_fails(self):
+        self.assertEqual(self.run_check(OBFUSCATED_DUMP, USAGE_CLEAN, MAPPING).returncode, 1)
 
     def test_a_removed_model_fails(self):
         self.assertEqual(self.run_check(HEALTHY_DUMP, USAGE_REMOVED, MAPPING).returncode, 1)

@@ -7,7 +7,8 @@ Deux défauts que seul l'artefact minifié montre (#13400, correctif 9863555c45)
 - un modèle @Serializable retiré en entier par R8 (son $$serializer figure dans usage.txt comme classe retirée).
 
 Entrées : l'APK ou l'AAB (dexdump est lancé sur chacun de ses .dex) ou une sortie `dexdump -a` déjà produite,
-plus usage.txt et mapping.txt du dossier build/outputs/mapping/release. Échoue fermé : une sortie dexdump sans
+plus usage.txt et mapping.txt du dossier build/outputs/mapping/release. R8 renomme les annotations retrofit2.http
+(GET devient par exemple w00.f) : leurs nouveaux noms se lisent dans mapping.txt. Échoue fermé : une sortie dexdump sans
 aucune méthode Retrofit, ou un mapping sans aucun $$serializer de l'application, ne prouve rien.
 """
 import argparse
@@ -24,6 +25,8 @@ APP_PACKAGE = "me.meeshy."
 HEADER = re.compile(r"^Annotations on (method|field|class)")
 QUOTED = re.compile(r'"((?:[^"\\]|\\.)*)"')
 OBJECT = "Ljava/lang/Object;"
+RETROFIT_PACKAGE = "retrofit2.http."
+ANNOTATION = re.compile(r"^\s*VISIBILITY_RUNTIME (L[^;\s]+;)")
 
 
 def _blocks(dump):
@@ -64,12 +67,29 @@ def _object_type_argument(signature):
     return False
 
 
-def erased_retrofit_signatures(dump):
+def retrofit_annotation_descriptors(mapping_lines):
+    descriptors = set()
+    for line in mapping_lines:
+        if not line.startswith(RETROFIT_PACKAGE) or " -> " not in line:
+            continue
+        renamed = line.split(" -> ", 1)[1].rstrip().rstrip(":")
+        descriptors.add("L" + renamed.replace(".", "/") + ";")
+    return descriptors
+
+
+def _carries_retrofit_annotation(line, renamed):
+    if "Lretrofit2/http/" in line:
+        return True
+    match = ANNOTATION.match(line)
+    return bool(match) and match.group(1) in renamed
+
+
+def erased_retrofit_signatures(dump, renamed=frozenset()):
     erased, retrofit_methods = [], 0
     for title, lines in _blocks(dump):
         if not title.startswith("Annotations on method") or title.endswith(" parameters"):
             continue
-        if not any("Lretrofit2/http/" in line for line in lines):
+        if not any(_carries_retrofit_annotation(line, renamed) for line in lines):
             continue
         retrofit_methods += 1
         for line in lines:
@@ -80,17 +100,17 @@ def erased_retrofit_signatures(dump):
     return erased, retrofit_methods
 
 
-def removed_serializers(usage):
+def removed_serializers(usage_lines):
     return [
-        line.strip() for line in usage.splitlines()
+        line.strip() for line in usage_lines
         if line and not line[0].isspace() and not line.rstrip().endswith(":")
         and line.startswith(APP_PACKAGE) and line.strip().endswith("$$serializer")
     ]
 
 
-def kept_serializer_count(mapping):
+def kept_serializer_count(mapping_lines):
     return sum(
-        1 for line in mapping.splitlines()
+        1 for line in mapping_lines
         if line.startswith(APP_PACKAGE) and line.split(" -> ")[0].endswith("$$serializer")
     )
 
@@ -126,6 +146,11 @@ def _read(path):
         return handle.read()
 
 
+def _lines(path):
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        return [line for line in handle if line.startswith(APP_PACKAGE) or line.startswith(RETROFIT_PACKAGE)]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     source = parser.add_mutually_exclusive_group(required=True)
@@ -136,9 +161,10 @@ def main():
     args = parser.parse_args()
 
     dump = dump_artifact(args.artifact) if args.artifact else _read(args.dexdump_output)
-    erased, retrofit_methods = erased_retrofit_signatures(dump)
-    removed = removed_serializers(_read(args.usage))
-    kept = kept_serializer_count(_read(args.mapping))
+    mapping = _lines(args.mapping)
+    erased, retrofit_methods = erased_retrofit_signatures(dump, frozenset(retrofit_annotation_descriptors(mapping)))
+    removed = removed_serializers(_lines(args.usage))
+    kept = kept_serializer_count(mapping)
 
     failures = []
     if retrofit_methods == 0:
