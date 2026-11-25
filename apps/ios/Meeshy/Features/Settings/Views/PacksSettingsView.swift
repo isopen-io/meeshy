@@ -120,8 +120,14 @@ struct PacksSettingsView: View {
             }
             .accessibilityLabel(String(localized: "settings.packs.domain", defaultValue: "Type de pack", bundle: .main))
 
-            PackShopScreen(domain: domain, focusedPack: focusedPack, onEarnMeeshes: leadsToMinting ? earnMeeshes : nil)
+            PackShopScreen(domain: domain, focusedPack: focusedPack, onEarnMeeshes: earnMeeshesAction)
         }
+    }
+
+    /// Le chemin vers la frappe, absent quand la vitrine s'ouvre dans une autre feuille (#20528).
+    private var earnMeeshesAction: (() -> Void)? {
+        guard leadsToMinting else { return nil }
+        return { earnMeeshes() }
     }
 
     /// La frappe vit dans la fiche de l'Héritage : la vitrine se referme et le Jeu s'y ouvre (#20528).
