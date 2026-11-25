@@ -749,6 +749,17 @@ jobs:
           cd apps/web
           node scripts/check-institutional.mjs
 
+      # LES ADRESSES ÉMISES SONT SERVIES (#7312) : il part de ce que l'app iOS,
+      # le SDK, la passerelle et le web ÉMETTENT vers meeshy.me, et non des
+      # pages déjà servies — `/help`, `/faq`, `/download` et `/reel/<id>` sont
+      # morts en rendant 200. Il lit le même `dist` : un document atteint doit
+      # différer de la coquille par son titre et son poids.
+      - name: Gate adresses émises servies
+        if: ${{ !cancelled() && matrix.tranche == 3 }}
+        run: |
+          cd apps/web
+          node scripts/check-emitted-addresses.mjs
+
       # LE CRITÈRE BINAIRE DE LA LENTILLE, dans le MÊME travail : il lève le
       # même navigateur sur le même `dist`, et un second travail paierait une
       # installation de Chromium pour rien.
