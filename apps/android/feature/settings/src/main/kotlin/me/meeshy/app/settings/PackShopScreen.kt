@@ -47,6 +47,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -55,6 +56,7 @@ import coil.compose.AsyncImage
 import java.util.Locale
 import me.meeshy.feature.settings.R
 import me.meeshy.sdk.model.appearance.AppearancePackDomain
+import me.meeshy.sdk.model.game.GameNumberFormat
 import me.meeshy.sdk.model.packs.PackRowAction
 import me.meeshy.sdk.model.packs.PackRowPresentation
 import me.meeshy.sdk.model.packs.PackShelfPhase
@@ -88,6 +90,7 @@ private const val SKELETON_ROWS = 3
 @Composable
 fun PackShopScreen(
     onBack: () -> Unit,
+    onEarnMeeshes: (() -> Unit)? = null,
     viewModel: PackShopViewModel = hiltViewModel(),
     browse: PackShopBrowseViewModel = hiltViewModel(),
 ) {
@@ -139,6 +142,7 @@ fun PackShopScreen(
                         onToggleInstall = { slug -> haptics.light(); viewModel.toggleInstall(slug) },
                         onOpen = { slug -> haptics.light(); browse.openDetail(ui.selected, slug) },
                         onOpenCover = { slug -> haptics.light(); browse.openViewer(ui.selected, slug, 0) },
+                        onEarnMeeshes = onEarnMeeshes?.let { earn -> { haptics.light(); earn() } },
                     ) { slug ->
                         haptics.light()
                         viewModel.buy(slug)
@@ -154,6 +158,7 @@ fun PackShopScreen(
         browse = browse,
         onToggleInstall = { slug -> haptics.light(); viewModel.toggleInstall(slug) },
         onBuy = { slug -> haptics.light(); viewModel.buy(slug) },
+        onEarnMeeshes = onEarnMeeshes?.let { earn -> { haptics.light(); earn() } },
     )
     }
 }
@@ -238,6 +243,7 @@ private fun Shelf(
     onToggleInstall: (String) -> Unit,
     onOpen: (String) -> Unit,
     onOpenCover: (String) -> Unit,
+    onEarnMeeshes: (() -> Unit)?,
     onBuy: (String) -> Unit,
 ) {
     val packs = ui.packs
@@ -259,6 +265,8 @@ private fun Shelf(
                 onToggleInstall = { onToggleInstall(pack.slug) },
                 onOpen = { onOpen(pack.slug) },
                 onOpenCover = { onOpenCover(pack.slug) },
+                balance = ui.balance,
+                onEarnMeeshes = onEarnMeeshes,
             )
         }
     }
@@ -315,10 +323,12 @@ internal fun PackRow(
     onToggleInstall: () -> Unit = {},
     onOpen: (() -> Unit)? = null,
     onOpenCover: (() -> Unit)? = null,
+    balance: Int? = null,
+    onEarnMeeshes: (() -> Unit)? = null,
 ) {
     val requester = remember { BringIntoViewRequester() }
     LaunchedEffect(focused) { if (focused) requester.bringIntoView() }
-    val presentation = remember(pack) { PackRowPresentation.of(pack) }
+    val presentation = remember(pack, balance) { PackRowPresentation.of(pack, balance) }
     val name = pack.localizedName(language)
     val description = pack.localizedDescription(language)
     val outline = if (focused) Modifier.border(BorderStroke(2.dp, MeeshyPalette.Indigo500), RoundedCornerShape(MeeshyRadius.md)).padding(6.dp) else Modifier
@@ -326,50 +336,85 @@ internal fun PackRow(
     val opens = onOpen?.let { open ->
         Modifier.clip(RoundedCornerShape(MeeshyRadius.md)).clickable(onClickLabel = openLabel, role = Role.Button, onClick = open)
     } ?: Modifier
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .bringIntoViewRequester(requester)
-            .then(outline)
-            .then(opens)
-            .semantics { this.selected = focused },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Cover(pack, onOpen = onOpenCover?.let { open -> stringResource(R.string.pack_shop_open_item_a11y, name) to open })
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                text = name,
-                style = meeshyText(MeeshyFontSize.body, FontWeight.SemiBold),
-                color = MeeshyTheme.tokens.textPrimary,
-                modifier = Modifier.semantics { heading() },
-            )
-            pack.author?.takeIf { it.isNotBlank() }?.let {
-                Text(stringResource(R.string.pack_shop_by, it), style = meeshyText(MeeshyFontSize.small), color = MeeshyTheme.tokens.textSecondary)
-            }
-            if (presentation.showsOwned) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Icon(MeeshyIcons.CheckCircleFilled, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(14.dp))
-                    Text(stringResource(R.string.pack_shop_owned), style = meeshyText(MeeshyFontSize.small, FontWeight.Medium), color = MeeshyTheme.tokens.textSecondary)
-                }
-            }
-            if (presentation.showsFree) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Icon(MeeshyIcons.Gift, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(14.dp))
-                    Text(stringResource(R.string.pack_shop_free), style = meeshyText(MeeshyFontSize.small, FontWeight.Medium), color = MeeshyTheme.tokens.textSecondary)
-                }
-            }
-            if (description.isNotBlank()) {
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .bringIntoViewRequester(requester)
+                .then(outline)
+                .then(opens)
+                .semantics { this.selected = focused },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Cover(pack, onOpen = onOpenCover?.let { open -> stringResource(R.string.pack_shop_open_item_a11y, name) to open })
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    text = description,
-                    style = meeshyText(MeeshyFontSize.small),
-                    color = MeeshyTheme.tokens.textSecondary,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+                    text = name,
+                    style = meeshyText(MeeshyFontSize.body, FontWeight.SemiBold),
+                    color = MeeshyTheme.tokens.textPrimary,
+                    modifier = Modifier.semantics { heading() },
+                )
+                pack.author?.takeIf { it.isNotBlank() }?.let {
+                    Text(stringResource(R.string.pack_shop_by, it), style = meeshyText(MeeshyFontSize.small), color = MeeshyTheme.tokens.textSecondary)
+                }
+                if (presentation.showsOwned) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(MeeshyIcons.CheckCircleFilled, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(14.dp))
+                        Text(stringResource(R.string.pack_shop_owned), style = meeshyText(MeeshyFontSize.small, FontWeight.Medium), color = MeeshyTheme.tokens.textSecondary)
+                    }
+                }
+                if (presentation.showsFree) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(MeeshyIcons.Gift, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(14.dp))
+                        Text(stringResource(R.string.pack_shop_free), style = meeshyText(MeeshyFontSize.small, FontWeight.Medium), color = MeeshyTheme.tokens.textSecondary)
+                    }
+                }
+                if (description.isNotBlank()) {
+                    Text(
+                        text = description,
+                        style = meeshyText(MeeshyFontSize.small),
+                        color = MeeshyTheme.tokens.textSecondary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            PackAction(presentation.action, name, busy, onBuy, onToggleInstall)
+        }
+        presentation.shortfall?.let { PackShortfallLine(it, language, onEarnMeeshes) }
+    }
+}
+
+/**
+ * **Les Meeshes qui manquent, dits AVANT le geste** (#20529, iOS `PackMeeshShortfallLine`, web `MeeshShortfall`) :
+ * l'écart, puis « Frapper des Meeshes » quand l'app sait y mener. Le lien est un bouton à part entière, cible de
+ * 48 dp, hors de l'élément qui ouvre la fiche.
+ */
+@Composable
+internal fun PackShortfallLine(missing: Int, language: String, onEarn: (() -> Unit)?) {
+    val line = if (missing == 1) {
+        stringResource(R.string.pack_shop_short_one)
+    } else {
+        stringResource(R.string.pack_shop_short_many, GameNumberFormat.formatCount(missing, Locale.forLanguageTag(language)))
+    }
+    Column {
+        Text(line, style = meeshyText(MeeshyFontSize.small, FontWeight.SemiBold), color = MeeshyTheme.tokens.textSecondary)
+        onEarn?.let { earn ->
+            Box(
+                modifier = Modifier
+                    .sizeIn(minHeight = TargetSize)
+                    .clickable(role = Role.Button, onClick = earn),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Text(
+                    text = stringResource(R.string.pack_shop_short_earn),
+                    style = meeshyText(MeeshyFontSize.small, FontWeight.SemiBold),
+                    color = MeeshyPalette.Indigo500,
+                    textDecoration = TextDecoration.Underline,
                 )
             }
         }
-        PackAction(presentation.action, name, busy, onBuy, onToggleInstall)
     }
 }
 

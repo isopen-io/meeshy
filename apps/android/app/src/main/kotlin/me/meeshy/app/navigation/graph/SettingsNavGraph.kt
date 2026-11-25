@@ -35,6 +35,7 @@ import me.meeshy.app.settings.SecurityScreen
 import me.meeshy.app.settings.SettingsScreen
 import me.meeshy.app.settings.SupportScreen
 import me.meeshy.app.settings.TwoFactorScreen
+import me.meeshy.sdk.model.game.progression.ProgressionConcept
 import me.meeshy.sdk.model.legal.LegalDocumentKind
 import me.meeshy.sdk.model.settings.SettingsHubSectionId
 import me.meeshy.sdk.model.settings.SettingsInvite
@@ -93,8 +94,15 @@ internal fun NavGraphBuilder.settingsNavGraph(
             navArgument("pack") { type = NavType.StringType; nullable = true; defaultValue = null },
         ),
         deepLinks = listOf(navDeepLink { uriPattern = Routes.PACK_SHOP_DEEP_LINK }),
-    ) { _, dismiss ->
-        PackShopScreen(onBack = dismiss)
+    ) { entry, dismiss ->
+        PackShopScreen(
+            onBack = dismiss,
+            onEarnMeeshes = {
+                navController.pushFrom(entry, GameRoutes.concept(ProgressionConcept.Meesh)) {
+                    popUpTo(entry.destination.id) { inclusive = true }
+                }
+            },
+        )
     }
     sheetComposable(Routes.DATA_EXPORT, navController) { _, dismiss ->
         DataExportScreen(onBack = dismiss)

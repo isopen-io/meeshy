@@ -145,6 +145,9 @@
     <string name="pack_shop_owned">Owned</string>
     <string name="pack_shop_remove">Remove</string>
     <string name="pack_shop_retry">Try again</string>
+    <string name="pack_shop_short_earn">Mint Meeshes</string>
+    <string name="pack_shop_short_many">You need %1$s more Meeshes</string>
+    <string name="pack_shop_short_one">You need 1 more Meesh</string>
     <string name="privacy_analytics">Analytics</string>
     <string name="privacy_calls_non_contacts">Calls from non-contacts</string>
     <string name="privacy_last_seen">Last sign-in</string>

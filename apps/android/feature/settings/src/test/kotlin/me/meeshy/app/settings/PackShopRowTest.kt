@@ -163,11 +163,16 @@ class PackShopRowTest {
     }
 
     @Test
-    fun `an affordable pack or an unknown balance adds nothing`() {
+    fun `an affordable pack adds nothing`() {
         showShort(ShopPack(slug = "prestige", name = "Prestige", price = 20, owned = false), balance = 20) {}
-        compose.onNodeWithText("Mint Meeshes").assertDoesNotExist()
 
+        compose.onNodeWithText("Mint Meeshes").assertDoesNotExist()
+    }
+
+    @Test
+    fun `an unknown balance adds nothing`() {
         showShort(ShopPack(slug = "prestige", name = "Prestige", price = 20, owned = false), balance = null) {}
+
         compose.onNodeWithText("Mint Meeshes").assertDoesNotExist()
     }
 }

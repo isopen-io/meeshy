@@ -145,6 +145,9 @@
     <string name="pack_shop_owned">Adquirido</string>
     <string name="pack_shop_remove">Quitar</string>
     <string name="pack_shop_retry">Reintentar</string>
+    <string name="pack_shop_short_earn">Acuñar Meeshes</string>
+    <string name="pack_shop_short_many">Te faltan %1$s Meeshes</string>
+    <string name="pack_shop_short_one">Te falta 1 Meesh</string>
     <string name="privacy_analytics">Analítica</string>
     <string name="privacy_calls_non_contacts">Llamadas de no contactos</string>
     <string name="privacy_last_seen">Último inicio de sesión</string>
