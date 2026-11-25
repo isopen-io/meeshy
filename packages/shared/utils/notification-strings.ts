@@ -48,7 +48,7 @@ export const NOTIFICATION_STRING_KEYS = [
   'game.duoInvitedAction', 'game.duoInvitedBody', 'game.duoAcceptedAction', 'game.duoAcceptedBody',
   'game.leaguePromoted', 'game.leagueStayed', 'game.leagueRelegated',
   'game.leagueCupGold', 'game.leagueCupSilver', 'game.leagueCupBronze',
-  'game.seasonStep', 'game.seasonDone', 'game.missionWindow',
+  'game.seasonStep', 'game.seasonDone', 'game.missionWindow', 'game.missionWindowFlame',
   'game.photoMoment', 'game.photoMoments',
   'repost',
   'invitation.group', 'invitation.direct',
@@ -112,7 +112,7 @@ export type NotificationStringParams = {
   readonly author?: string;
   readonly count?: number;
   readonly callIcon?: string;
-  /** `game.missionWindow` : l'activité de la mission et les deux bornes de sa plage, déjà localisées. */
+  /** `game.missionWindow` : l'activité de la mission et les deux bornes de sa plage, déjà localisées ; `game.missionWindowFlame` y ajoute `count`, la hauteur de la Flamme. */
   readonly mission?: string;
   readonly start?: string;
   readonly end?: string;
