@@ -6,14 +6,19 @@ import kotlinx.serialization.json.JsonElement
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.game.ChestClaimResponse
 import me.meeshy.sdk.model.game.FlameFreezeResponse
+import me.meeshy.sdk.model.game.FlameGoalRequest
+import me.meeshy.sdk.model.game.FlameGoalResponse
 import me.meeshy.sdk.model.game.FlamePauseRequest
 import me.meeshy.sdk.model.game.FlamePauseResponse
 import me.meeshy.sdk.model.game.FlameRelightResponse
+import me.meeshy.sdk.model.game.GameFlameGoalLaw
 import me.meeshy.sdk.model.game.GamePathSegments
 import me.meeshy.sdk.model.game.GameRefusalLaw
 import me.meeshy.sdk.model.game.GameWave2Parser
 import me.meeshy.sdk.model.game.GameWriteParser
 import me.meeshy.sdk.model.game.GameWriteRequest
+import me.meeshy.sdk.model.game.GuideSeenRequest
+import me.meeshy.sdk.model.game.GuideSeenResponse
 import me.meeshy.sdk.model.game.MeeshMintResponse
 import me.meeshy.sdk.model.game.MissionRerollResponse
 import me.meeshy.sdk.model.game.PrestigeResponse
@@ -65,6 +70,16 @@ class GameGestureRepository @Inject constructor(
     /** Annonce une veille de la Flamme de [days] jours, à partir de demain (#20511). Rien n'est payé. */
     suspend fun pauseFlame(requestId: String, days: Int): GameWriteOutcome<FlamePauseResponse> =
         write(GameWriteParser::pauseFlame) { game.pauseFlame(FlamePauseRequest(requestId, days)) }
+
+    /** Choisit l'objectif de la Flamme, en jours (#20523) : une marche que la carte propose aujourd'hui. Rien n'est payé. */
+    suspend fun chooseFlameGoal(requestId: String, target: Int): GameWriteOutcome<FlameGoalResponse> =
+        write(GameWriteParser::chooseFlameGoal) { game.chooseFlameGoal(FlameGoalRequest(requestId, target)) }
+
+    /** Ferme le signe des aïeux de l'objectif [reachedTarget] atteint : sa clé rejoint `game.guideSeen` (#20523). */
+    suspend fun closeFlameGoalSign(requestId: String, reachedTarget: Int): GameWriteOutcome<GuideSeenResponse> =
+        write(GameWriteParser::markGuideSeen) {
+            game.markGuideSeen(GuideSeenRequest(requestId, listOf(GameFlameGoalLaw.nextSeenKey(reachedTarget))))
+        }
 
     suspend fun claimSeasonStep(requestId: String, step: Int): GameWriteOutcome<SeasonClaimResponse> =
         write(GameWave2Parser::seasonClaim) { game.claimSeasonStep(step, GameWriteRequest(requestId)) }

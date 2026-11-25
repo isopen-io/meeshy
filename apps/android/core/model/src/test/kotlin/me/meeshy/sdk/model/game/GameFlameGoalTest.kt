@@ -103,6 +103,29 @@ class GameFlameGoalTest {
     }
 
     @Test
+    fun `l objectif annonce se dit jusqu a la relecture du bloc, puis le bloc fait foi`() {
+        val offer = GameServedFlameGoal(listOf(7, 14, 30), null)
+        val chosen = GameServedFlameGoal(emptyList(), GameServedFlameGoal.Current(14, 13, false, null))
+        val local = FlameGoalLocal(announcement = FlameGoalAnnouncement(basis = offer, goal = chosen))
+
+        assertThat(local.shown(offer)).isEqualTo(chosen)
+        assertThat(local.section(offer, guideSeen = emptyList())).isEqualTo(FlameGoalSection.Running(14, 13))
+
+        val reread = GameServedFlameGoal(emptyList(), GameServedFlameGoal.Current(14, 12, false, null))
+        assertThat(local.shown(reread)).isEqualTo(reread)
+        assertThat(FlameGoalLocal().shown(offer)).isEqualTo(offer)
+    }
+
+    @Test
+    fun `un signe ferme a l instant se tait avant meme que le bloc le range`() {
+        val reached = GameServedFlameGoal(listOf(14), GameServedFlameGoal.Current(7, 0, true, 14))
+
+        assertThat(FlameGoalLocal(closedSigns = setOf(7)).section(reached, guideSeen = emptyList())).isNull()
+        assertThat(FlameGoalLocal(closedSigns = setOf(14)).section(reached, guideSeen = emptyList()))
+            .isEqualTo(FlameGoalSection.Reached(7, 14))
+    }
+
+    @Test
     fun `la cle qui ferme le signe est celle de l objectif atteint`() {
         assertThat(GameFlameGoalLaw.nextSeenKey(reachedTarget = 7)).isEqualTo("flame-goal-next-7")
         assertThat(GameFlameGoalLaw.nextSeenKey(reachedTarget = -3)).isEqualTo("flame-goal-next-0")

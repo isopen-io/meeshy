@@ -81,6 +81,26 @@ public object GameFlameGoalLaw {
     }
 }
 
+/**
+ * L'objectif que la carte dit dès l'appui, en attendant que le bloc relu le serve : le prévu par la loi, puis celui que
+ * la passerelle a rendu. [basis] est l'objectif que le bloc servait au moment du geste.
+ */
+public data class FlameGoalAnnouncement(val basis: GameServedFlameGoal?, val goal: GameServedFlameGoal)
+
+/** Les objectifs atteints dont le joueur vient de fermer le signe, et ce qu'il vient de choisir. */
+public data class FlameGoalLocal(val announcement: FlameGoalAnnouncement? = null, val closedSigns: Set<Int> = emptySet()) {
+    /**
+     * L'objectif à dire : l'annoncé tant que le bloc sert encore celui d'avant le geste, le servi dès qu'il a été relu
+     * — une relecture qui échoue ne fait donc pas revenir les choix, une relecture réussie fait foi.
+     */
+    public fun shown(served: GameServedFlameGoal?): GameServedFlameGoal? =
+        announcement?.takeIf { it.basis == served }?.goal ?: served
+
+    /** La section de la carte, le signe fermé à l'instant compris. */
+    public fun section(served: GameServedFlameGoal?, guideSeen: Collection<String>): FlameGoalSection? =
+        GameFlameGoalLaw.section(shown(served), guideSeen + closedSigns.map(GameFlameGoalLaw::nextSeenKey))
+}
+
 /** La réponse de `POST /me/game/flame/goal` : `chosen` | `already-chosen`, et l'objectif servi. */
 public data class FlameGoalResponse(val status: String, val goal: GameServedFlameGoal) {
     val alreadyDone: Boolean get() = status.startsWith("already-")
