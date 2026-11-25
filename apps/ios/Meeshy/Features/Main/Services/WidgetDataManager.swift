@@ -294,7 +294,7 @@ final class WidgetDataManager: NotificationWidgetSink {
         if let defaults = sharedDefaults {
             let accountKeys = [
                 conversationsKey, snapshotsKey, favoritesKey, profileLinkKey, profileLinkVisitsKey, lastUpdatedKey,
-                ClosePeopleWidgetKeys.defaultsKey,
+                ClosePeopleWidgetKeys.defaultsKey, GameFlameWidgetKeys.defaultsKey,
                 unreadCountKey, WidgetActionFlusher.pendingMarkReadKey,
                 ShareDirectorySnapshot.defaultsKey,
             ]
@@ -581,6 +581,16 @@ final class WidgetDataManager: NotificationWidgetSink {
             writingToSharedContainer { defaults.removeObject(forKey: key) }
         }
         WidgetCenter.shared.reloadTimelines(ofKind: ClosePeopleWidgetKeys.kind)
+    }
+
+    /// « Ma Flamme » (#20562) : la Flamme et les actes du jour lus dans le cache du Jeu, ou « Jeu masqué », qui vide le
+    /// widget. `MenuActsRingStore` ne publie que ce qui change.
+    func publishGameFlame(_ state: WidgetGameFlameState) {
+        guard let defaults = sharedDefaults,
+              let data = encoder.encodeOrLog(state, field: "widget game flame", logger: Logger.widgetData) else { return }
+        let key = GameFlameWidgetKeys.defaultsKey
+        writingToSharedContainer { defaults.set(data, forKey: key) }
+        WidgetCenter.shared.reloadTimelines(ofKind: GameFlameWidgetKeys.kind)
     }
 
     /// La présence servie d'une personne, telle que les widgets la publient (`nil` : inconnue).

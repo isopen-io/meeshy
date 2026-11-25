@@ -32,7 +32,18 @@ final class MenuActsRingStoreTests: XCTestCase {
     private func makeSUT(cached: GameBlock?) -> (sut: MenuActsRingStore, source: FakeSource) {
         let source = FakeSource()
         source.cachedBlock = cached
-        return (MenuActsRingStore(source: source), source)
+        return (MenuActsRingStore(source: source, publishWidget: { _ in }), source)
+    }
+
+    @MainActor private final class WidgetSpy {
+        var published: [WidgetGameFlameState] = []
+    }
+
+    private func makeWidgetSUT(cached: GameBlock?) -> (sut: MenuActsRingStore, source: FakeSource, widget: WidgetSpy) {
+        let source = FakeSource()
+        source.cachedBlock = cached
+        let widget = WidgetSpy()
+        return (MenuActsRingStore(source: source, publishWidget: { widget.published.append($0) }), source, widget)
     }
 
     func test_activate_withACachedDay_showsTheActsDoneOutOfTheDay_withoutAnyRequest() async {
@@ -148,5 +159,69 @@ final class MenuActsRingStoreTests: XCTestCase {
         await sut.activate(hidden: true)
 
         XCTAssertEqual(sut.attention, .none, "« Jeu masqué » : aucun point")
+    }
+
+    // MARK: - Le widget de la Flamme (#20562, tranche iOS de #17369)
+
+    func test_activate_publishesTheFlameAndTheActsOfTheDayToTheWidget_withoutAnyRequest() async {
+        let (sut, source, widget) = makeWidgetSUT(cached: GameFixture.game(flameDays: 23, flameStatus: .atRisk,
+                                                                         missions: acts([true, false, true])))
+
+        await sut.activate(hidden: false)
+
+        XCTAssertEqual(widget.published, [.shown(WidgetGameFlame(days: 23, status: "at-risk", actsDone: 2, actsTotal: 3))])
+        XCTAssertEqual(source.fetchCalls, 0, "le widget se nourrit du cache, comme l'anneau")
+    }
+
+    func test_readCache_withAnUnchangedDay_doesNotReloadTheWidgetAgain() async {
+        let (sut, _, widget) = makeWidgetSUT(cached: GameFixture.game(missions: acts([true, false, false])))
+        await sut.activate(hidden: false)
+
+        await sut.readCache()
+        await sut.readCache()
+
+        XCTAssertEqual(widget.published.count, 1, "l'app ne recharge le widget que si ce qu'elle publie change")
+    }
+
+    func test_readCache_afterAnActIsDone_publishesTheNewCount() async {
+        let (sut, source, widget) = makeWidgetSUT(cached: GameFixture.game(flameDays: 4, missions: acts([true, false, false])))
+        await sut.activate(hidden: false)
+
+        source.cachedBlock = GameFixture.game(flameDays: 4, missions: acts([true, true, false]))
+        await sut.readCache()
+
+        XCTAssertEqual(widget.published.last, .shown(WidgetGameFlame(days: 4, status: "lit", actsDone: 2, actsTotal: 3)))
+    }
+
+    func test_activate_withAnEmptyCache_publishesNothing() async {
+        let (sut, _, widget) = makeWidgetSUT(cached: nil)
+
+        await sut.activate(hidden: false)
+
+        XCTAssertTrue(widget.published.isEmpty, "aucun bloc : le widget garde ce qu'il montrait, rien n'est inventé")
+    }
+
+    func test_activate_whenTheGameIsHidden_emptiesTheWidget() async {
+        let (sut, _, widget) = makeWidgetSUT(cached: GameFixture.game(missions: acts([true, true, false])))
+        await sut.activate(hidden: false)
+
+        await sut.activate(hidden: true)
+
+        XCTAssertEqual(widget.published.last, .hidden, "« Jeu masqué » : le widget se vide")
+    }
+
+    func test_widgetSnapshot_carriesOnlyTheOwnFlameAndActs() {
+        let fields = Mirror(reflecting: WidgetGameFlame(days: 1, status: "lit", actsDone: 0, actsTotal: 3)).children.compactMap(\.label)
+
+        XCTAssertEqual(fields, ["days", "status", "actsDone", "actsTotal"], "rien d'autrui ne voyage vers le widget")
+    }
+
+    func test_widgetSnapshot_roundTripsThroughTheAppGroup_andAnUnreadableOneReadsAsNothing() throws {
+        let shown = WidgetGameFlameState.shown(WidgetGameFlame(days: 9, status: "covered", actsDone: 3, actsTotal: 3))
+
+        XCTAssertEqual(GameFlameWidgetKeys.decode(try JSONEncoder().encode(shown)), shown)
+        XCTAssertEqual(GameFlameWidgetKeys.decode(try JSONEncoder().encode(WidgetGameFlameState.hidden)), .hidden)
+        XCTAssertNil(GameFlameWidgetKeys.decode(Data("{}".utf8)))
+        XCTAssertNil(GameFlameWidgetKeys.decode(nil))
     }
 }
