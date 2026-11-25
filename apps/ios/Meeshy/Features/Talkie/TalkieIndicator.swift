@@ -79,13 +79,6 @@ struct TalkieIndicator: View {
     @StateObject private var offer: TalkieOfferModel
     @State private var withdrawn = false
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
-    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
-    @State private var pulsing = false
-
-    private var reduceMotion: Bool {
-        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
-    }
 
     init(speaker: TalkieSpeaker, isLive: Bool, sender: TalkieSender, holding: Binding<Bool>, onMute: @escaping () -> Void) {
         self.speaker = speaker
@@ -113,17 +106,12 @@ struct TalkieIndicator: View {
 
     var body: some View {
         HStack(spacing: MeeshySpacing.md) {
-            Image(systemName: "waveform")
-                .font(.headline)
-                .foregroundStyle(MeeshyColors.brandPrimary)
-                .opacity(pulsing ? 0.45 : 1)
-                .accessibilityHidden(true)
             Text(title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: MeeshySpacing.sm)
+            voiceSpace
             if actions.contains(.mute) { muteButton }
             if actions.contains(.talk) {
                 TalkieBannerTalkButton(sender: sender, userId: speaker.fromUserId, name: name, holding: $holding)
@@ -147,10 +135,23 @@ struct TalkieIndicator: View {
         .onAppear {
             UIAccessibility.post(notification: .announcement, argument: title)
             if isLive { TalkieCuePlayer.incoming() }
-            guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) { pulsing = true }
         }
     }
+
+    /// La place libre entre le libellé et les boutons : le spectre de la voix du pair tant qu'elle sonne (2026-11-25),
+    /// vide sinon. Les deux prennent la même place : rien ne bouge quand la voix s'arrête.
+    @ViewBuilder
+    private var voiceSpace: some View {
+        if isLive {
+            TalkieVoiceRibbon(userId: speaker.fromUserId, direction: .incoming)
+                .frame(minWidth: MeeshySpacing.sm, maxWidth: .infinity)
+                .frame(height: Self.ribbonHeight)
+        } else {
+            Spacer(minLength: MeeshySpacing.sm)
+        }
+    }
+
+    static let ribbonHeight: CGFloat = MeeshyControlSize.small
 
     private var muteButton: some View {
         Button(action: onMute) {
@@ -173,10 +174,18 @@ private struct TalkieBannerTalkButton: View {
     let userId: String
     let name: String
     @Binding var holding: Bool
+    @ObservedObject private var voices = TalkieVoiceStageObserver.shared
     @State private var unreachableLasting = false
 
     private var live: Bool { holding || sender.isActive }
     private var delivery: TalkieDelivery { TalkieDelivery.of(lasting: unreachableLasting) }
+
+    /// L'orbe CIRCULAIRE de ma voix qui part vers lui (2026-11-25) ; la sienne vit dans le spectre du bandeau.
+    private var orbShows: Bool {
+        voices.voices.contains(TalkieVoiceKey(userId: userId, direction: .outgoing))
+    }
+
+    static let orb = TalkieVoiceHostLaw.holdOrb(buttonSize: MeeshyControlSize.tapTarget, room: MeeshySpacing.md)
 
     var body: some View {
         Image(systemName: live ? "waveform" : "mic.fill")
@@ -185,6 +194,7 @@ private struct TalkieBannerTalkButton: View {
             .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
             .background(Capsule().fill(live ? MeeshyColors.brandPrimary : Color.clear))
             .overlay(Capsule().stroke(MeeshyColors.brandPrimary, lineWidth: 1.5))
+            .background { TalkieHoldOrb(userId: userId, shows: orbShows, geometry: Self.orb, direction: .outgoing) }
             .contentShape(Capsule())
             .modifier(TalkieHoldModifier(sender: sender, userId: userId, pressed: $holding, delivery: delivery))
             .modifier(PhoneUnreachableLastingReader(userId: userId, lasting: $unreachableLasting))

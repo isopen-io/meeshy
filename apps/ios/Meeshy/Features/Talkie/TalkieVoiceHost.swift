@@ -138,6 +138,8 @@ struct TalkieHoldOrb: View {
     let userId: String
     let shows: Bool
     var geometry: TalkieBubbleGeometry = TalkieHoldOrb.headerGeometry
+    /// Nil : la voix vers la personne comme celle qui vient d'elle ; sinon, ce sens seul.
+    var direction: TalkieVoiceDirection?
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
@@ -149,7 +151,7 @@ struct TalkieHoldOrb: View {
         let reduceMotion = MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
         ZStack {
             if shows {
-                TalkieVoiceBubble(userId: userId, geometry: geometry)
+                TalkieVoiceBubble(userId: userId, geometry: geometry, direction: direction)
                     .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.6)))
             }
         }

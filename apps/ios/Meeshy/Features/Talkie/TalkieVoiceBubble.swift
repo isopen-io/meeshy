@@ -18,6 +18,7 @@ import SwiftUI
 struct TalkieVoiceBubble: View {
     let userId: String
     let geometry: TalkieBubbleGeometry
+    let direction: TalkieVoiceDirection?
     let stage: TalkieVoiceStage
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
@@ -35,10 +36,20 @@ struct TalkieVoiceBubble: View {
         MeeshyColors.orange500, MeeshyColors.amber500, MeeshyColors.info, MeeshyColors.blue500, MeeshyColors.orange500,
     ])
 
-    init(userId: String, geometry: TalkieBubbleGeometry, stage: TalkieVoiceStage = .shared) {
+    /// `direction` nil : les deux sens de la personne (le plus fort, bande par bande) ; sinon, ce sens seul.
+    init(userId: String, geometry: TalkieBubbleGeometry, direction: TalkieVoiceDirection? = nil,
+         stage: TalkieVoiceStage = .shared) {
         self.userId = userId
         self.geometry = geometry
+        self.direction = direction
         self.stage = stage
+    }
+
+    /// Les bandes d'une image : un sens de la personne, ou les deux.
+    nonisolated static func bands(stage: TalkieVoiceStage, userId: String, direction: TalkieVoiceDirection?,
+                                  now: TimeInterval) -> [Float] {
+        guard let direction else { return stage.bands(for: userId, now: now) }
+        return stage.bands(for: userId, direction: direction, now: now)
     }
 
     /// Le côté du cadre : le diamètre de la bulle pleine, plus la moitié du trait le plus large de chaque côté.
@@ -51,7 +62,8 @@ struct TalkieVoiceBubble: View {
         let side = Self.frameSide(for: geometry)
         let reduced = reduceMotion
         TimelineView(.animation(minimumInterval: reduced ? 0.1 : nil)) { _ in
-            let bands = stage.bands(for: userId, now: TalkieVoiceStage.hostNow() - TalkieVoiceStage.readLag)
+            let bands = Self.bands(stage: stage, userId: userId, direction: direction,
+                                   now: TalkieVoiceStage.hostNow() - TalkieVoiceStage.readLag)
             let geometry = geometry
             Canvas { graphics, size in
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
@@ -112,6 +124,63 @@ struct TalkieVoiceBubble: View {
             path.addLine(to: tip)
         }
         return path
+    }
+}
+
+/// LE SPECTRE DU BANDEAU REÇU (2026-11-25) : la voix du pair en ruban horizontal, du grave à gauche à l'aigu à droite,
+/// miroir autour d'une ligne médiane, au dégradé de la bulle. Il occupe la place libre entre le libellé et les boutons :
+/// la mise en page ne bouge pas. Au silence, la seule ligne médiane. Sous « réduire les animations », dix images par
+/// seconde d'une ligne dont l'épaisseur suit le niveau moyen. Ni le doigt, ni VoiceOver.
+struct TalkieVoiceRibbon: View {
+    let userId: String
+    let direction: TalkieVoiceDirection
+    let stage: TalkieVoiceStage
+
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+
+    nonisolated private static let fillOpacity: Double = 0.35
+    nonisolated private static let strokeWidth: CGFloat = 1.5
+    nonisolated private static let spectrum = Gradient(colors: [
+        MeeshyColors.orange500, MeeshyColors.amber500, MeeshyColors.info, MeeshyColors.blue500,
+    ])
+
+    init(userId: String, direction: TalkieVoiceDirection = .incoming, stage: TalkieVoiceStage = .shared) {
+        self.userId = userId
+        self.direction = direction
+        self.stage = stage
+    }
+
+    var body: some View {
+        let reduced = MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+        TimelineView(.animation(minimumInterval: reduced ? 0.1 : nil)) { _ in
+            let bands = TalkieVoiceBubble.bands(stage: stage, userId: userId, direction: direction,
+                                                now: TalkieVoiceStage.hostNow() - TalkieVoiceStage.readLag)
+            Canvas { graphics, size in
+                let shading = GraphicsContext.Shading.linearGradient(
+                    Self.spectrum, startPoint: .zero, endPoint: CGPoint(x: size.width, y: 0))
+                if reduced {
+                    Self.drawLine(level: TalkieBubbleLaw.meanLevel(bands: bands), size: size, shading: shading, in: &graphics)
+                } else {
+                    let shape = TalkieRibbonLaw.shape(bands: bands, size: size)
+                    var fill = graphics
+                    fill.opacity = Self.fillOpacity
+                    fill.fill(shape, with: shading)
+                    graphics.stroke(shape, with: shading, style: StrokeStyle(lineWidth: Self.strokeWidth, lineJoin: .round))
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    nonisolated private static func drawLine(level: Float, size: CGSize, shading: GraphicsContext.Shading,
+                                             in graphics: inout GraphicsContext) {
+        var line = Path()
+        line.move(to: CGPoint(x: 0, y: size.height / 2))
+        line.addLine(to: CGPoint(x: size.width, y: size.height / 2))
+        graphics.stroke(line, with: shading, style: StrokeStyle(lineWidth: TalkieBubbleLaw.reducedMotionStroke(level: level),
+                                                                lineCap: .round))
     }
 }
 

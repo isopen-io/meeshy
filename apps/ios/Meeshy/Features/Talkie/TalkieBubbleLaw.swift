@@ -110,3 +110,30 @@ nonisolated enum TalkieBubbleLaw {
         return path
     }
 }
+
+/// Le spectre HORIZONTAL du bandeau reçu (2026-11-25) : les mêmes 120 bandes, du grave à gauche à l'aigu à droite,
+/// en crête au-dessus de la ligne médiane et en miroir au-dessous. Une bande répond comme l'orbe d'un bouton
+/// (`TalkieBubbleResponse.voice`) et monte d'au plus la demi-hauteur : rien ne sort du cadre.
+nonisolated enum TalkieRibbonLaw {
+    /// La crête : un point par bande, au-dessus de la ligne médiane ; une bande manquante vaut le silence.
+    static func crest(bands: [Float], size: CGSize) -> [CGPoint] {
+        let count = TalkieBubbleLaw.bandCount
+        let middle = size.height / 2
+        return (0..<count).map { index in
+            let level = index < bands.count ? TalkieBubbleResponse.voice.level(bands[index]) : 0
+            let x = size.width * CGFloat(index) / CGFloat(count - 1)
+            return CGPoint(x: x, y: middle - middle * level)
+        }
+    }
+
+    /// La crête puis son miroir sous la ligne médiane, en un contour fermé.
+    static func shape(bands: [Float], size: CGSize) -> Path {
+        let crest = crest(bands: bands, size: size)
+        let middle = size.height / 2
+        var path = Path()
+        path.addLines(crest)
+        crest.reversed().forEach { path.addLine(to: CGPoint(x: $0.x, y: 2 * middle - $0.y)) }
+        path.closeSubpath()
+        return path
+    }
+}

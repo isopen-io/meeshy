@@ -55,4 +55,55 @@ final class TalkieVoiceBubbleTests: XCTestCase {
         XCTAssertTrue(label.contains(spoken), label)
         XCTAssertNotEqual(label, spoken)
     }
+
+    // MARK: - Le spectre horizontal du bandeau reçu (2026-11-25)
+
+    func test_ribbon_silence_isAFlatLineOnTheMidline() {
+        let size = CGSize(width: 120, height: 28)
+        let crest = TalkieRibbonLaw.crest(bands: [], size: size)
+        XCTAssertEqual(crest.count, TalkieBubbleLaw.bandCount)
+        XCTAssertTrue(crest.allSatisfy { abs($0.y - 14) < 0.0001 })
+    }
+
+    func test_ribbon_bandsRunFromTheBassOnTheLeftToTheTrebleOnTheRight() {
+        let size = CGSize(width: 119, height: 28)
+        let crest = TalkieRibbonLaw.crest(bands: [], size: size)
+        XCTAssertEqual(crest.first?.x ?? -1, 0, accuracy: 0.0001)
+        XCTAssertEqual(crest.last?.x ?? -1, 119, accuracy: 0.0001)
+        XCTAssertEqual(crest[60].x, 60, accuracy: 0.0001)
+    }
+
+    /// Une bande à −40 dBFS monte à la moitié de la demi-hauteur, comme l'orbe ; rien ne sort du cadre.
+    func test_ribbon_answersTheVoiceLikeTheOrb_andNeverLeavesItsFrame() {
+        let size = CGSize(width: 120, height: 28)
+        var bands = [Float](repeating: 0, count: 120)
+        bands[0] = 0.2
+        bands[1] = 9
+        bands[2] = .nan
+        let crest = TalkieRibbonLaw.crest(bands: bands, size: size)
+        XCTAssertEqual(crest[0].y, 7, accuracy: 0.0001)
+        XCTAssertEqual(crest[1].y, 0, accuracy: 0.0001)
+        XCTAssertEqual(crest[2].y, 14, accuracy: 0.0001)
+        XCTAssertTrue(crest.allSatisfy { $0.y >= 0 && $0.y <= 14 })
+    }
+
+    /// Le contour est le miroir de la crête autour de la ligne médiane : fermé, jamais au-delà du bas du cadre.
+    func test_ribbon_shape_isMirroredAroundTheMidline() {
+        let size = CGSize(width: 120, height: 28)
+        var bands = [Float](repeating: 0, count: 120)
+        bands[30] = 1
+        let shape = TalkieRibbonLaw.shape(bands: bands, size: size)
+        XCTAssertEqual(shape.boundingRect.minY, 0, accuracy: 0.0001)
+        XCTAssertEqual(shape.boundingRect.maxY, 28, accuracy: 0.0001)
+    }
+
+    /// Le bouton « Parler » du bandeau ne montre que MA voix qui part, jamais celle du pair (elle vit dans le spectre).
+    func test_bubble_readingOneDirection_ignoresTheOther() {
+        let stage = TalkieVoiceStage()
+        let now = TalkieVoiceStage.hostNow()
+        stage.begin(userId: "bob", direction: .incoming, at: Date())
+        stage.push(userId: "bob", direction: .incoming, bands: [Float](repeating: 1, count: 120), at: now - 1)
+        XCTAssertEqual(TalkieVoiceBubble.bands(stage: stage, userId: "bob", direction: .outgoing, now: now).max(), 0)
+        XCTAssertGreaterThan(TalkieVoiceBubble.bands(stage: stage, userId: "bob", direction: nil, now: now).max() ?? 0, 0)
+    }
 }
