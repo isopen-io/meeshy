@@ -485,4 +485,54 @@ describe('la mission personnelle du jour (#9539)', () => {
     const { notifier } = world({ declines: true });
     expect(await notifier.notify(windowEvent(), NOW)).toBe('skipped:declined');
   });
+
+  describe('dit la Flamme quand elle brûle (#20575)', () => {
+    const flame = (days: number, lastStreakDate: string) => ({
+      systemLanguage: 'fr',
+      timezone: 'Europe/Paris',
+      currentStreakDays: days,
+      longestStreakDays: days,
+      lastStreakDate: new Date(`${lastStreakDate}T00:00:00Z`),
+    });
+
+    it('une Flamme de douze jours, pas encore entretenue aujourd’hui : « Ta Flamme brûle depuis 12 jours »', async () => {
+      const { notifier, sent } = world({ recipient: flame(12, '2026-10-13') });
+      expect(await notifier.notify(windowEvent(), NOW)).toBe('sent');
+      expect(sent[0]!.content).toBe(
+        'Un acte rien que pour toi : envoyer des messages vocaux, entre 18:00 et 20:00. Ta Flamme brûle depuis 12 jours.',
+      );
+    });
+
+    it('déjà entretenue aujourd’hui, elle se dit aussi', async () => {
+      const { notifier, sent } = world({ recipient: flame(5, '2026-10-14') });
+      await notifier.notify(windowEvent(), NOW);
+      expect(sent[0]!.content).toContain('Ta Flamme brûle depuis 5 jours.');
+    });
+
+    it('éteinte (deux jours manqués sans Veilleuse), elle ne se dit pas : la hauteur servie est 0', async () => {
+      const { notifier, sent } = world({ recipient: flame(12, '2026-10-11') });
+      await notifier.notify(windowEvent(), NOW);
+      expect(sent[0]!.content).toBe('Un acte rien que pour toi : envoyer des messages vocaux, entre 18:00 et 20:00.');
+    });
+
+    it('d’un seul jour, elle ne se dit pas encore', async () => {
+      const { notifier, sent } = world({ recipient: flame(1, '2026-10-13') });
+      await notifier.notify(windowEvent(), NOW);
+      expect(sent[0]!.content).not.toContain('Flamme');
+    });
+
+    it('dans la langue de cadrage du destinataire', async () => {
+      const { notifier, sent } = world({ recipient: { ...flame(12, '2026-10-13'), systemLanguage: 'en' } });
+      await notifier.notify(windowEvent(), NOW);
+      expect(sent[0]!.content).toContain('12');
+      expect(sent[0]!.content).toContain('Flame');
+      expect(sent[0]!.lang).toBe('en');
+    });
+
+    it('les autres notifications du Jeu ne disent pas la Flamme', async () => {
+      const { notifier, sent } = world({ recipient: flame(12, '2026-10-13') });
+      await notifier.notify(leagueResult({ zone: 'safe' }), NOW);
+      expect(sent[0]!.content).toBe(notificationString('fr', 'game.leagueStayed'));
+    });
+  });
 });
