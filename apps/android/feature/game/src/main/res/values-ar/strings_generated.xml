@@ -570,7 +570,9 @@
     <string name="game_error_duo_not_found">هذا التحالف لم يعد موجودًا: تتحدّث الشاشة.</string>
     <string name="game_error_duo_not_friends">التحالف يُعقد بين الأصدقاء المقبولين.</string>
     <string name="game_error_duo_transition_refused">هذا الإجراء لا معنى له في هذا التحالف.</string>
+    <string name="game_error_flame_goal_no_flame">يجب أن يكون لهبك مشتعلًا لتختار هدفًا.</string>
     <string name="game_error_flame_goal_not_allowed">لا يمكن اختيار هدف اللهب هذا اليوم.</string>
+    <string name="game_error_flame_goal_not_offered">هذا الهدف غير متاح اليوم.</string>
     <string name="game_error_flame_pause_already_paused">لهبك يستريح بالفعل.</string>
     <string name="game_error_flame_pause_no_flame">يجب أن يكون لهبك مشتعلًا ليستريح.</string>
     <string name="game_error_flame_pause_not_allowed">لا يمكن أن يستريح اللهب الآن.</string>
@@ -646,6 +648,12 @@
     <string name="game_flame_panel_effort_relight_tomorrow">بقي %1$s حتى مساء الغد ليعود لهبك (%2$s) دون أن تدفع.</string>
     <string name="game_flame_panel_freeze_buy">خذ قنديلًا · %1$s</string>
     <string name="game_flame_panel_freezes">القناديل: ⁦%1$s / %2$s⁩</string>
+    <string name="game_flame_panel_goal_choices">هدف اللهب</string>
+    <string name="game_flame_panel_goal_intro">هدف للهبك؟ اختره اليوم، أو دعه يشتعل.</string>
+    <string name="game_flame_panel_goal_later">لاحقًا</string>
+    <string name="game_flame_panel_goal_next">استهدف %1$s</string>
+    <string name="game_flame_panel_goal_reached">أجدادك يحيّون لهبك: %1$s من الثبات!</string>
+    <string name="game_flame_panel_goal_running">الهدف: %1$s من اللهب. تبلغه بعد %2$s.</string>
     <string name="game_flame_panel_pause">دعه يستريح · %1$s</string>
     <string name="game_flame_panel_pause_days">مدة الاستراحة</string>
     <string name="game_flame_panel_pause_intro">استراحة؟ ينتظرك لهبك حتى %1$s، مرة واحدة كل ثلاثة أشهر.</string>

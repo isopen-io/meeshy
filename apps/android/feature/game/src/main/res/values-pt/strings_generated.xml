@@ -570,7 +570,9 @@
     <string name="game_error_duo_not_found">Esta aliança não existe mais: a tela está se atualizando.</string>
     <string name="game_error_duo_not_friends">A aliança se faz entre amigos aceitos.</string>
     <string name="game_error_duo_transition_refused">Este gesto não faz sentido para esta aliança.</string>
+    <string name="game_error_flame_goal_no_flame">Sua Chama precisa estar acesa para escolher uma meta.</string>
     <string name="game_error_flame_goal_not_allowed">Este objetivo de Chama não pode ser escolhido hoje.</string>
+    <string name="game_error_flame_goal_not_offered">Esta meta não está disponível hoje.</string>
     <string name="game_error_flame_pause_already_paused">Sua Chama já está descansando.</string>
     <string name="game_error_flame_pause_no_flame">Sua Chama precisa estar acesa para descansar.</string>
     <string name="game_error_flame_pause_not_allowed">A Chama não pode descansar agora.</string>
@@ -646,6 +648,12 @@
     <string name="game_flame_panel_effort_relight_tomorrow">Só mais %1$s até amanhã à noite e sua Chama volta com seus %2$s, sem pagar.</string>
     <string name="game_flame_panel_freeze_buy">Pegar uma Lamparina · %1$s</string>
     <string name="game_flame_panel_freezes">Lamparinas: %1$s / %2$s</string>
+    <string name="game_flame_panel_goal_choices">Meta da Chama</string>
+    <string name="game_flame_panel_goal_intro">Uma meta para sua Chama? Escolha hoje, ou deixe-a arder.</string>
+    <string name="game_flame_panel_goal_later">Mais tarde</string>
+    <string name="game_flame_panel_goal_next">Mirar em %1$s</string>
+    <string name="game_flame_panel_goal_reached">Seus ancestrais saúdam sua Chama: %1$s cumpridos!</string>
+    <string name="game_flame_panel_goal_running">Meta: %1$s de Chama. Faltam %2$s.</string>
     <string name="game_flame_panel_pause">Deixar descansar · %1$s</string>
     <string name="game_flame_panel_pause_days">Duração do descanso</string>
     <string name="game_flame_panel_pause_intro">Uma pausa? Sua Chama espera por você até %1$s, uma vez por trimestre.</string>

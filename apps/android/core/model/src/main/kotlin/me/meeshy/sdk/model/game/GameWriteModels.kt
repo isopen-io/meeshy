@@ -175,6 +175,11 @@ public object GameWriteParser {
         FlamePauseResponse(status = obj.optString("status").orEmpty(), pause = parseFlamePause(obj) ?: throw GameParseException("pause"))
     }
 
+    /** Un objectif illisible rend `null` : la carte relit alors le bloc servi (#20523). */
+    public fun chooseFlameGoal(text: String?): FlameGoalResponse? = read(text) { obj ->
+        FlameGoalResponse(status = obj.optString("status").orEmpty(), goal = parseFlameGoal(obj) ?: throw GameParseException("goal"))
+    }
+
     public fun markGuideSeen(text: String?): GuideSeenResponse? = read(text) { obj ->
         GuideSeenResponse(guideSeen = (obj["guideSeen"] as? JsonArray)?.let(::stringsOrEmpty).orEmpty())
     }
