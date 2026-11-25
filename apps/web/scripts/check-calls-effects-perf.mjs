@@ -28,7 +28,9 @@
  * par image 720p pour un simple filtre de canevas, ~80 ms avec le flou), ils
  * sont RAPPORTÉS sans faire échouer — `REQUIRE_GPU=1` les exige quand même.
  * Ce qui ne dépend pas du matériel échoue partout : aucune tâche longue
- * pendant un glissé (le traitement a quitté le fil principal), le worker
+ * pendant un glissé (le traitement a quitté le fil principal) — hors UNE tâche
+ * isolée de moins de 100 ms, tolérée et nommée (`lib/glide-long-tasks.mjs`,
+ * #20176 : la régression touche chaque glissé, l'accident de l'hôte un seul), le worker
  * rend son relevé, et le flou floute.
  *
  * `DIST=<dossier>` mesure un autre build (la mesure « avant »).
@@ -38,6 +40,7 @@
  */
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
+import { ISOLATED_LONG_TASK_CEILING_MS, glideLongTaskVerdict } from './lib/glide-long-tasks.mjs';
 
 const DIST = process.env.DIST ?? new URL('../dist/', import.meta.url).pathname;
 const REPORT_ONLY = process.env.REPORT_ONLY === '1';
@@ -83,10 +86,21 @@ const ARM = () => {
   window.__gateLong = [];
   try {
     new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) window.__gateLong.push({ start: entry.startTime, duration: entry.duration });
+      for (const entry of list.getEntries()) window.__gateLong.push({ start: entry.startTime, duration: entry.duration, name: entry.name });
     }).observe({ type: 'longtask', buffered: true });
   } catch {
     window.__gateLong = null;
+  }
+  window.__gateFrames = [];
+  try {
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        const scripts = (entry.scripts ?? []).map((script) => ({ invoker: script.invoker, source: script.sourceURL, duration: Math.round(script.duration) }));
+        window.__gateFrames.push({ start: entry.startTime, duration: entry.duration, blocking: entry.blockingDuration, scripts });
+      }
+    }).observe({ type: 'long-animation-frame', buffered: true });
+  } catch {
+    window.__gateFrames = null;
   }
 };
 
@@ -189,6 +203,24 @@ const glide = async (page, direction) => {
   return { start, end };
 };
 
+/**
+ * NOMMER LA TÂCHE FAUTIVE (#20176) : son glissé, son début relatif à lui, sa
+ * durée, et les scripts que la Long Animation Frame qui la contient attribue
+ * — un échec se diagnostique sur sa ligne, sans relire le journal entier.
+ */
+const namedLongTasks = async (page, touched, glides) => {
+  if (touched.length === 0) return '';
+  const frames = await page.evaluate(() => window.__gateFrames);
+  return touched
+    .map(({ glide, offsetMs, duration }) => {
+      const at = glides[glide].start + offsetMs;
+      const frame = frames?.find((candidate) => candidate.start <= at + duration && candidate.start + candidate.duration >= at) ?? null;
+      const scripts = frame === null ? 'aucune frame longue attribuée' : frame.scripts.length === 0 ? 'aucun script (navigateur, ramasse-miettes ou rendu)' : frame.scripts.map((script) => `${script.invoker} ${script.source} ${script.duration} ms`).join(', ');
+      return `glissé ${glide + 1}, ${offsetMs >= 0 ? '+' : ''}${offsetMs} ms, ${duration} ms [${scripts}]`;
+    })
+    .join(' ; ');
+};
+
 /** Le moteur WebGL de la page : un rendu LOGICIEL ne dit rien du coût d'une image sur un appareil. */
 const softwareGl = (page) =>
   page.evaluate(() => {
@@ -234,13 +266,16 @@ const measure = async (page, name, { reference = false } = {}) => {
   const fps = delivered / seconds;
   const dropped = Math.max(0, 1 - delivered / (seconds * CAMERA_FPS));
   const encoderFps = Math.round(((last.link.sent - first.link.sent) / seconds) * 10) / 10;
-  const duringGlide = long === null ? null : long.filter((task) => glides.some((g) => task.start < g.end && task.start + task.duration > g.start));
+  const verdict = glideLongTaskVerdict({ tasks: long, glides });
+  const duringGlide = long === null ? null : verdict.touched;
   const result = { name, fps: Math.round(fps * 10) / 10, encoderFps, dropped: Math.round(dropped * 1000) / 10, size: `${last.link.width}×${last.link.height}`, limitation: last.link.limitation, longTasks: long?.length ?? null, longTasksDuringGlide: duringGlide?.length ?? null, worstLongTask: long === null || long.length === 0 ? 0 : Math.round(Math.max(...long.map((task) => task.duration))), p95: timing?.p95 ?? null, p50: timing?.p50 ?? null, frames: timing?.frames ?? null, glides: glides.length };
   console.log(`  mesure ${JSON.stringify(result)}`);
   if (reference) return result;
   hardwareCheck(fps >= FLOOR.fps, `${name} : ${result.fps} images par seconde remises à l’envoi (≥ ${FLOOR.fps} ; l’encodeur en envoie ${encoderFps}, limité par « ${result.limitation} »)`);
   hardwareCheck(dropped < FLOOR.dropped, `${name} : ${result.dropped} % d'images perdues (< ${FLOOR.dropped * 100} %)`);
-  check(duringGlide !== null && duringGlide.length === 0, `${name} : aucune tâche longue pendant ${glides.length} glissés (${result.longTasksDuringGlide})`);
+  const culprits = await namedLongTasks(page, verdict.touched, glides);
+  if (verdict.tolerated !== null) console.log(`  toléré ${name} : une tâche longue isolée (< ${ISOLATED_LONG_TASK_CEILING_MS} ms) — ${culprits}`);
+  check(verdict.ok, `${name} : aucune tâche longue répétée ni ≥ ${ISOLATED_LONG_TASK_CEILING_MS} ms pendant ${glides.length} glissés (${result.longTasksDuringGlide}${verdict.touched.length === 0 ? '' : ` : ${culprits}`})`);
   check(timing !== null, `${name} : le worker rend le relevé du coût de chaque image`);
   hardwareCheck(timing !== null && timing.p95 <= FLOOR.p95, `${name} : p95 du traitement d'une image ${result.p95} ms (≤ ${FLOOR.p95})`);
   return result;

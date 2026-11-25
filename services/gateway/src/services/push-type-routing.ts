@@ -137,6 +137,21 @@ export function tokenRoutesPushType(
   return compareAppVersions(version, floor) >= 0;
 }
 
+/**
+ * #19091 — l'application native rend ELLE-MÊME toute notification depuis `data` (`MeeshyFcmService` → pipeline), et
+ * c'est là que le verrou PIN scelle une conversation verrouillée. Un bloc `notification` y est rendu par le SYSTÈME app
+ * fermée, hors du pipeline, donc en clair : vers elle, le fil FCM est data-only. Le plancher est la 3.1.0, première
+ * native qui déclare `appVersion` + `bundleId` ; une coque 2.x restée sous `me.meeshy.app`, une version illisible et
+ * tout autre client gardent le bloc `notification`, le seul qu'ils savent afficher (rétrocompatibilité, #9223).
+ */
+export const ANDROID_NATIVE_DATA_ONLY_FLOOR = '3.1.0';
+
+export function tokenRendersPushFromData(token: RoutableToken): boolean {
+  if (pushRoutingClientOf(token) !== 'android-native') return false;
+  const version = readableVersion(token.appVersion);
+  return version !== null && compareAppVersions(version, ANDROID_NATIVE_DATA_ONLY_FLOOR) >= 0;
+}
+
 /** Les jetons qu'une notification ordinaire atteint au chokepoint : jamais `voip` (`NotificationService.createNotification`). */
 const NOTIFICATION_TOKEN_TYPES = ['apns', 'fcm'] as const;
 

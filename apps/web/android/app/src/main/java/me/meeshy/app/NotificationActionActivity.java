@@ -21,7 +21,9 @@ import java.util.Map;
  * Un relais d'ACTIVITE, pas un recepteur : Android 12 interdit d'ouvrir une
  * activite depuis le recepteur d'une notification. L'intention ne porte que
  * les cles que la ligne lit ({@link NotificationFunnelRules#lineExtras}).
- * Non exportee : seul un `PendingIntent` de l'app l'atteint.
+ * Non exportee : seul un `PendingIntent` de l'app l'atteint — c'est pourquoi
+ * elle scelle ce qu'elle remet a `MainActivity` ({@link IntentSealRules},
+ * #19243), et jamais ce qui part vers une autre app.
  */
 public class NotificationActionActivity extends Activity {
 
@@ -62,6 +64,7 @@ public class NotificationActionActivity extends Activity {
         Intent target = intent.getBooleanExtra(EXTRA_IN_APP, false)
             ? new Intent(Intent.ACTION_VIEW, link, this, MainActivity.class)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                .putExtra(IntentSealRules.EXTRA_SEAL, CallShellStore.intentSeal(this))
             : new Intent(Intent.ACTION_VIEW, link).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         try {
             startActivity(target);

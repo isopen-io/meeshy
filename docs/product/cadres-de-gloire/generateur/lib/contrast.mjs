@@ -10,6 +10,8 @@
 //                  un texte du cliquet redevenu lisible est signalé : il s'en retire au prochain réexport, avec le
 //                  contrat, puisque le témoin de packages/shared juge le contrat publié ;
 //   --mutate low-contrast efface presque le titre de chaque cadre (opacité 6 %, sans effet) : la garde doit rougir.
+// Un cadre dont un texte n'a aucun pixel de glyphe au rendu des masques (« —:1 ») est un rendu manqué : il se re-mesure,
+// trois rendus au plus ; un texte toujours vide reste bas, et la ligne le dit non mesurable.
 // Seuls les cadres QUI PARTENT sont jugés : ceux d'une collection qui a son contrat (--contracts, par défaut
 // packages/shared/design/glory-frames/<collection>.json). Une étude d'atelier (`poses`) est dessinée, pas livrée ; le
 // jour où elle entre au catalogue, son contrat la fait entrer sous la garde.
@@ -20,7 +22,7 @@
 // à plat — nourrissent les deux mesures.
 import fs from 'node:fs';
 import path from 'node:path';
-import { declaresEffect, edgeContrastOf, flatColor, judgeContrast, minContrastFor, slotsOf, underGlyphContrastOf, verdictOf } from './contrast-rule.mjs';
+import { declaresEffect, edgeContrastOf, flatColor, judgeContrast, measureSettled, minContrastFor, slotsOf, underGlyphContrastOf, unmeasured, verdictOf } from './contrast-rule.mjs';
 import { bakedSlotsOf, DECOR_TEXTS_FILE, frameIdOf, readDecorTexts } from './decor-sorts.mjs';
 import { launch } from './launch.mjs';
 import { classify, isFront, markBaked, read, show } from './layers.mjs';
@@ -41,6 +43,7 @@ const CHECK = process.argv.includes('--check');
 const REPORT = arg('--report', null);
 const MUTATE = arg('--mutate', null);
 const DECOR_TEXTS = readDecorTexts(path.resolve(arg('--decor-texts', DECOR_TEXTS_FILE)));
+const RENDER_TRIES = 3;
 const FW = W * SCALE;
 const FH = H * SCALE;
 
@@ -131,7 +134,7 @@ const free = [...handles];
 const rows = (await pool(jobs, JOBS, async (job) => {
   const handle = free.pop();
   try {
-    return await measure(handle, job);
+    return await measureSettled(() => measure(handle, job), { tries: RENDER_TRIES });
   } finally {
     free.push(handle);
   }
@@ -143,7 +146,7 @@ const measuredFrames = new Set(rows.map((row) => row.id.split('#')[0]));
 const judged = judgeContrast(rows, ONLY ? listed.filter((slotId) => measuredFrames.has(slotId.split('#')[0])) : listed);
 if (REPORT) fs.writeFileSync(path.resolve(REPORT), JSON.stringify({ gaps: path.relative(process.cwd(), GAPS), rows, solved: judged.solved }, null, 1) + '\n');
 const count = (verdict) => rows.filter((row) => row.verdict === verdict).length;
-const show1 = (row) => `${row.id} « ${row.sample} » ${row.size} px : ${row.contrast ?? '—'}:1 dessous, ${row.withEffect ?? '—'}:1 au bord${row.effect ? ' (effet déclaré)' : ''}, seuil ${row.min}:1`;
+const show1 = (row) => `${row.id} « ${row.sample} » ${row.size} px : ${row.contrast ?? '—'}:1 dessous, ${row.withEffect ?? '—'}:1 au bord${row.effect ? ' (effet déclaré)' : ''}, seuil ${row.min}:1${unmeasured(row) ? ` (non mesurable : aucun pixel du glyphe en ${RENDER_TRIES} rendus)` : ''}`;
 for (const row of judged.fresh) console.error(`  BAS ${show1(row)}`);
 if (studies.length && !ONLY) console.log(`  hors catalogue, non jugé(s) (aucun contrat sous ${path.relative(process.cwd(), CONTRACTS)}) : ${studies.join(', ')}`);
 if (judged.solved.length) console.log(`  ${judged.solved.length} texte(s) du cliquet lisible(s) ou cuit(s) ici, à retirer au prochain réexport : ${judged.solved.join(', ')}`);

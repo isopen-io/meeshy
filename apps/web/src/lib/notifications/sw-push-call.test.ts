@@ -112,6 +112,10 @@ describe('les actions de la notification d’appel', () => {
     const worker = mount();
     const before = Date.now();
     await worker.dispatch('notificationclick', click({ type: 'call', callId: 'call-1', conversationId: 'conv-1' }, 'answer'));
+    /* AVANT : le bouchon d'`openWindow` relit l'entrée au moment même de l'ouverture — un worker qui ouvrirait
+       d'abord et poserait ensuite rougit ici, ce que la lecture après coup ne voyait pas (#19244). */
+    expect(worker.intentsAtOpen).toHaveLength(1);
+    expect(worker.intentsAtOpen[0]).toMatchObject({ callId: 'call-1' });
     const posted = worker.idb.peek(CALL_INTENT_DB_NAME, CALL_INTENT_STORE_NAME, 'call-1') as { callId: string; until: number };
     expect(posted.callId).toBe('call-1');
     expect(posted.until).toBeGreaterThanOrEqual(before + ANSWER_INTENT_TTL_MS);

@@ -3,6 +3,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createFakeIndexedDB, type FakeIndexedDB } from '@/test-support/fake-indexed-db';
+import { CALL_INTENT_DB_NAME, CALL_INTENT_STORE_NAME } from '@/lib/calls/call-answer-confirmation';
+import { CALL_ANSWER_PARAM } from '@/lib/calls/call-answer-intent';
 import {
   DELIVERY_RECEIPT_DB_NAME,
   DELIVERY_RECEIPT_KEY,
@@ -69,6 +71,8 @@ export type WorkerHarness = {
   readonly shown: ShownNotification[];
   readonly tray: TrayBanner[];
   readonly opened: string[];
+  /** Pour chaque `openWindow`, la confirmation d'appel présente À CET INSTANT pour le `?repondre=` de l'adresse (#19244). */
+  readonly intentsAtOpen: unknown[];
   readonly badges: number[];
   readonly clients: ClientStub[];
   /** Les accusés de remise partis — vide tant qu'aucun push éligible n'a de crédential. */
@@ -121,6 +125,7 @@ export function mount({
   const listeners = new Map<string, Listener>();
   const shown: ShownNotification[] = [];
   const opened: string[] = [];
+  const intentsAtOpen: unknown[] = [];
   const badges: number[] = [];
   const deliveries: CapturedFetch[] = [];
   const idb: FakeIndexedDB = createFakeIndexedDB();
@@ -151,6 +156,8 @@ export function mount({
       matchAll: async () => clients,
       openWindow: async (url: string) => {
         opened.push(url);
+        const callId = new URL(url, 'https://meeshy.me').searchParams.get(CALL_ANSWER_PARAM);
+        intentsAtOpen.push(callId === null ? undefined : idb.peek(CALL_INTENT_DB_NAME, CALL_INTENT_STORE_NAME, callId));
         return null;
       },
     },
@@ -197,6 +204,7 @@ export function mount({
     shown,
     tray,
     opened,
+    intentsAtOpen,
     badges,
     clients,
     deliveries,
