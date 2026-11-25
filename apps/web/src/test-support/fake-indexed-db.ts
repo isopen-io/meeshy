@@ -6,7 +6,7 @@
  * témoignés contre la vraie API. Ce double porte le sous-ensemble que
  * `delivery-receipt-credential.ts` (côté page) et `public/sw-push.js` (côté
  * worker, jumeau gardé de ses trois littéraux) utilisent l'un et l'autre —
- * `open`, `onupgradeneeded`, une transaction, `put`/`get` — rien de plus.
+ * `open`, `onupgradeneeded`, une transaction qui se valide, `put`/`get`/`delete`/`getAll`/`getAllKeys` — rien de plus.
  *
  * **Une seule instance servie aux deux témoins prouve l'ABSENCE de dérive** :
  * écrire avec le module TS puis lire avec la logique brute copiée du worker,
@@ -38,47 +38,87 @@ class FakeIDBOpenRequest extends FakeIDBRequest {
 }
 
 class FakeObjectStore {
-  constructor(private readonly rows: Map<string, unknown>) {}
+  constructor(
+    private readonly rows: Map<string, unknown>,
+    private readonly transaction: FakeTransaction,
+  ) {}
 
   put(value: unknown, key: string): FakeIDBRequest {
-    const request = new FakeIDBRequest();
     this.rows.set(key, value);
-    request.succeed(key);
-    return request;
+    return this.transaction.track(key);
   }
 
   get(key: string): FakeIDBRequest {
-    const request = new FakeIDBRequest();
-    request.succeed(this.rows.get(key));
-    return request;
+    return this.transaction.track(this.rows.get(key));
+  }
+
+  getAll(): FakeIDBRequest {
+    return this.transaction.track([...this.rows.values()]);
+  }
+
+  getAllKeys(): FakeIDBRequest {
+    return this.transaction.track([...this.rows.keys()]);
   }
 
   delete(key: string): FakeIDBRequest {
-    const request = new FakeIDBRequest();
     this.rows.delete(key);
-    request.succeed(undefined);
-    return request;
+    return this.transaction.track(undefined);
   }
 }
 
+/**
+ * Une transaction se VALIDE comme la vraie : quand plus aucune de ses requêtes n'attend, après que leurs `onsuccess`
+ * ont pu en émettre d'autres — jamais au moment où l'on pose `oncomplete` (#19244). `abortCommits` la fait échouer à
+ * la validation, ses requêtes ayant réussi : le cas qu'un `onsuccess` seul ne voit pas.
+ */
 class FakeTransaction {
+  oncomplete: (() => void) | null = null;
   onerror: Listener = null;
+  onabort: Listener = null;
+  private pending = 0;
+  private settled = false;
 
-  constructor(private readonly stores: Map<string, Map<string, unknown>>) {}
+  constructor(
+    private readonly stores: Map<string, Map<string, unknown>>,
+    private readonly aborts: boolean,
+  ) {
+    queueMicrotask(() => this.settle());
+  }
 
-  set oncomplete(listener: (() => void) | null) {
-    if (listener !== null) queueMicrotask(listener);
+  track(result: unknown): FakeIDBRequest {
+    const request = new FakeIDBRequest();
+    this.pending += 1;
+    request.result = result;
+    queueMicrotask(() => {
+      request.onsuccess?.({ target: request });
+      this.pending -= 1;
+      queueMicrotask(() => this.settle());
+    });
+    return request;
   }
 
   objectStore(name: string): FakeObjectStore {
     const rows = this.stores.get(name);
     if (rows === undefined) throw new Error(`aucun magasin « ${name} »`);
-    return new FakeObjectStore(rows);
+    return new FakeObjectStore(rows, this);
+  }
+
+  private settle(): void {
+    if (this.settled || this.pending > 0) return;
+    this.settled = true;
+    if (this.aborts) {
+      this.onerror?.({ target: this });
+      this.onabort?.({ target: this });
+      return;
+    }
+    this.oncomplete?.();
   }
 }
 
 class FakeDatabase {
   readonly stores = new Map<string, Map<string, unknown>>();
+
+  constructor(private readonly aborts: () => boolean) {}
   readonly objectStoreNames = { contains: (name: string): boolean => this.stores.has(name) };
 
   createObjectStore(name: string): void {
@@ -87,7 +127,7 @@ class FakeDatabase {
 
   transaction(name: string): FakeTransaction {
     if (!this.stores.has(name)) throw new Error(`aucun magasin « ${name} »`);
-    return new FakeTransaction(this.stores);
+    return new FakeTransaction(this.stores, this.aborts());
   }
 
   close(): void {
@@ -103,15 +143,18 @@ export type FakeIndexedDB = {
   seed(name: string, store: string, key: string, value: unknown): void;
   /** Lit directement, hors du protocole asynchrone — pour constater ce qu'un module a écrit ou consommé. */
   peek(name: string, store: string, key: string): unknown;
+  /** Toute transaction ouverte ensuite échoue à sa validation, ses requêtes ayant réussi. */
+  abortCommits(): void;
 };
 
 export function createFakeIndexedDB(): FakeIndexedDB {
   const databases = new Map<string, FakeDatabase>();
+  let aborting = false;
 
   const databaseOf = (name: string): FakeDatabase => {
     const existing = databases.get(name);
     if (existing !== undefined) return existing;
-    const created = new FakeDatabase();
+    const created = new FakeDatabase(() => aborting);
     databases.set(name, created);
     return created;
   };
@@ -135,6 +178,9 @@ export function createFakeIndexedDB(): FakeIndexedDB {
     },
     peek(name, store, key) {
       return databases.get(name)?.stores.get(store)?.get(key);
+    },
+    abortCommits() {
+      aborting = true;
     },
   };
 }
