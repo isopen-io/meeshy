@@ -143,7 +143,7 @@ struct ProfileTalkieRow: View {
     /// Le bouton s'enfonce sous le doigt.
     static let pressedScale: CGFloat = 0.94
     /// La marge libre autour du bouton (`padding(.vertical, orbRoom)`) : l'orbe de la voix ne la dépasse pas, et elle
-    /// suffit pour que l'orbe aille aux deux tiers du rayon (2026-11-25).
+    /// suffit pour que l'orbe aille aux deux tiers du rayon (#20531).
     static let orbRoom: CGFloat = MeeshySpacing.xxxl
     static let orb = TalkieVoiceHostLaw.holdOrb(buttonSize: diameter, room: orbRoom)
 

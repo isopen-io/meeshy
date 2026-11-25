@@ -10,7 +10,7 @@ nonisolated struct TalkieBubbleGeometry: Equatable, Sendable {
     var response: TalkieBubbleResponse = .linear
 }
 
-/// Ce qu'une bande devient avant de pousser le contour (2026-11-25). Le hero garde la bande telle quelle ; les orbes des
+/// Ce qu'une bande devient avant de pousser le contour (#20531). Le hero garde la bande telle quelle ; les orbes des
 /// boutons répondent à la VOIX : une bande à −40 dBFS (0,2) atteint la moitié de l'amplitude, en racine, qui lève le
 /// faible sans écraser le fort. Une valeur non finie compte pour 0, et le résultat reste dans 0…1.
 nonisolated enum TalkieBubbleResponse: Equatable, Sendable {
@@ -111,7 +111,7 @@ nonisolated enum TalkieBubbleLaw {
     }
 }
 
-/// Le spectre HORIZONTAL du bandeau reçu (2026-11-25) : les mêmes 120 bandes, du grave à gauche à l'aigu à droite,
+/// Le spectre HORIZONTAL du bandeau reçu (#20531) : les mêmes 120 bandes, du grave à gauche à l'aigu à droite,
 /// en crête au-dessus de la ligne médiane et en miroir au-dessous. Une bande répond comme l'orbe d'un bouton
 /// (`TalkieBubbleResponse.voice`) et monte d'au plus la demi-hauteur : rien ne sort du cadre.
 nonisolated enum TalkieRibbonLaw {

@@ -17,7 +17,7 @@ nonisolated enum TalkieVoiceHostLaw {
 
     /// L'orbe d'un bouton qu'on maintient : elle part de son bord et s'en écarte d'au plus `room`, la marge libre qui
     /// l'entoure, et d'au plus 70 % du rayon ; une marge négative n'en laisse aucune. Elle répond à la voix
-    /// (`TalkieBubbleResponse.voice`) pour qu'une parole normale se voie (2026-11-25).
+    /// (`TalkieBubbleResponse.voice`) pour qu'une parole normale se voie (#20531).
     static func holdOrb(buttonSize: CGFloat, room: CGFloat) -> TalkieBubbleGeometry {
         let radius = buttonSize / 2
         return TalkieBubbleGeometry(baseRadius: radius, maxAmplitude: max(0, min(room, holdOrbReach * radius)),
@@ -25,7 +25,7 @@ nonisolated enum TalkieVoiceHostLaw {
     }
 
     /// Le reflet et l'anneau du décompte autour d'un bouton maintenu : l'orbe les remplace tant qu'elle vit
-    /// (2026-11-25) ; le nombre de secondes reste.
+    /// (#20531) ; le nombre de secondes reste.
     static func holdRingsVisible(orbShows: Bool) -> Bool {
         !orbShows
     }

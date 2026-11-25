@@ -18,7 +18,7 @@ enum TalkieBannerLaw {
     }
 
     /// La première voix qui sonne hors des correspondants dont l'en-tête de conversation est à l'écran ; sinon celui à
-    /// qui l'on répond, sous la même règle. L'en-tête porte déjà l'orbe de leur voix : rien ne le recouvre (2026-11-25).
+    /// qui l'on répond, sous la même règle. L'en-tête porte déjà l'orbe de leur voix : rien ne le recouvre (#20531).
     static func speaker(active: [TalkieSpeaker], replyingTo: TalkieSpeaker?, onScreenHeaders: Set<String>) -> TalkieSpeaker? {
         let live = liveSpeaker(active: active, onScreenHeaders: onScreenHeaders)
         let answered = replyingTo.flatMap { onScreenHeaders.contains($0.fromUserId) ? nil : $0 }
@@ -37,7 +37,7 @@ enum TalkieBannerLaw {
     }
 }
 
-/// Les correspondants dont l'en-tête de conversation est à l'écran (2026-11-25) : leur voix vit en orbe sur le bouton
+/// Les correspondants dont l'en-tête de conversation est à l'écran (#20531) : leur voix vit en orbe sur le bouton
 /// talkie de l'en-tête, et le bandeau du talkie reçu ne s'y pose pas. Chaque en-tête compte, jusqu'au dernier parti.
 @MainActor
 final class TalkieHeaderPresence: ObservableObject {
@@ -138,7 +138,7 @@ struct TalkieIndicator: View {
         }
     }
 
-    /// La place libre entre le libellé et les boutons : le spectre de la voix du pair tant qu'elle sonne (2026-11-25),
+    /// La place libre entre le libellé et les boutons : le spectre de la voix du pair tant qu'elle sonne (#20531),
     /// vide sinon. Les deux prennent la même place : rien ne bouge quand la voix s'arrête.
     @ViewBuilder
     private var voiceSpace: some View {
@@ -174,13 +174,22 @@ private struct TalkieBannerTalkButton: View {
     let userId: String
     let name: String
     @Binding var holding: Bool
-    @ObservedObject private var voices = TalkieVoiceStageObserver.shared
+    @ObservedObject private var voices: TalkieVoiceStageObserver
     @State private var unreachableLasting = false
+
+    init(sender: TalkieSender, userId: String, name: String, holding: Binding<Bool>,
+         voices: TalkieVoiceStageObserver = .shared) {
+        self.sender = sender
+        self.userId = userId
+        self.name = name
+        _holding = holding
+        _voices = ObservedObject(wrappedValue: voices)
+    }
 
     private var live: Bool { holding || sender.isActive }
     private var delivery: TalkieDelivery { TalkieDelivery.of(lasting: unreachableLasting) }
 
-    /// L'orbe CIRCULAIRE de ma voix qui part vers lui (2026-11-25) ; la sienne vit dans le spectre du bandeau.
+    /// L'orbe CIRCULAIRE de ma voix qui part vers lui (#20531) ; la sienne vit dans le spectre du bandeau.
     private var orbShows: Bool {
         voices.voices.contains(TalkieVoiceKey(userId: userId, direction: .outgoing))
     }
