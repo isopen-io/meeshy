@@ -570,7 +570,9 @@
     <string name="game_error_duo_not_found">Esta alianza ya no existe: la pantalla se actualiza.</string>
     <string name="game_error_duo_not_friends">La alianza se sella entre amigos aceptados.</string>
     <string name="game_error_duo_transition_refused">Este gesto no tiene sentido para esta alianza.</string>
+    <string name="game_error_flame_goal_no_flame">Tu Llama tiene que estar encendida para elegir un objetivo.</string>
     <string name="game_error_flame_goal_not_allowed">Este objetivo de Llama no se puede elegir hoy.</string>
+    <string name="game_error_flame_goal_not_offered">Este objetivo no se ofrece hoy.</string>
     <string name="game_error_flame_pause_already_paused">Tu Llama ya está descansando.</string>
     <string name="game_error_flame_pause_no_flame">Tu Llama tiene que estar encendida para descansar.</string>
     <string name="game_error_flame_pause_not_allowed">La Llama no puede descansar ahora.</string>
@@ -646,6 +648,12 @@
     <string name="game_flame_panel_effort_relight_tomorrow">Solo %1$s más antes de mañana por la noche y tu Llama vuelve con sus %2$s, sin pagar.</string>
     <string name="game_flame_panel_freeze_buy">Tomar una Vela · %1$s</string>
     <string name="game_flame_panel_freezes">Velas: %1$s / %2$s</string>
+    <string name="game_flame_panel_goal_choices">Objetivo de la Llama</string>
+    <string name="game_flame_panel_goal_intro">¿Un objetivo para tu Llama? Elígelo hoy, o déjala arder.</string>
+    <string name="game_flame_panel_goal_later">Más tarde</string>
+    <string name="game_flame_panel_goal_next">Apuntar a %1$s</string>
+    <string name="game_flame_panel_goal_reached">¡Tus ancestros saludan tu Llama: %1$s cumplidos!</string>
+    <string name="game_flame_panel_goal_running">Objetivo: %1$s de Llama. Faltan %2$s.</string>
     <string name="game_flame_panel_pause">Dejarla descansar · %1$s</string>
     <string name="game_flame_panel_pause_days">Duración del descanso</string>
     <string name="game_flame_panel_pause_intro">¿Una pausa? Tu Llama te espera hasta %1$s, una vez por trimestre.</string>

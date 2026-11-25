@@ -32,6 +32,8 @@ public data class GameFlame(
     @EncodeDefault val effortRelight: GameEffortRelight? = null,
     /** La veille annoncée ou en cours (#20511) ; `null` sans veille, illisible ou devant un serveur antérieur. */
     @EncodeDefault val pause: GameFlamePause? = null,
+    /** L'objectif proposé ou en cours (#20523) ; `null` sans objectif, illisible ou devant un serveur antérieur. */
+    @EncodeDefault val goal: GameServedFlameGoal? = null,
 )
 
 /** L'Heure du Prisme : [début, fin[ en minutes de la journée locale. */
@@ -138,6 +140,7 @@ internal fun parseFlame(obj: JsonObject): GameFlame = GameFlame(
     freezeGifted = obj.optBool("freezeGifted"),
     effortRelight = parseEffortRelight(obj),
     pause = parseFlamePause(obj),
+    goal = parseFlameGoal(obj),
 )
 
 private fun parsePrismHour(obj: JsonObject): PrismHour = PrismHour(

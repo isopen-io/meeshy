@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.goal_intro",
+          "androidName": "game_flame_panel_goal_intro",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.goal_choices",
+          "androidName": "game_flame_panel_goal_choices",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.goal_running",
+          "androidName": "game_flame_panel_goal_running",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.goal_reached",
+          "androidName": "game_flame_panel_goal_reached",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.goal_next",
+          "androidName": "game_flame_panel_goal_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.goal_later",
+          "androidName": "game_flame_panel_goal_later",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.flame_goal.not_offered",
+          "androidName": "game_error_flame_goal_not_offered",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.error.flame_goal.no_flame",
+          "androidName": "game_error_flame_goal_no_flame",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

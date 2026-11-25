@@ -20,8 +20,11 @@ import me.meeshy.sdk.engagement.EngagementProgressRepository
 import me.meeshy.sdk.game.GameGestureRepository
 import me.meeshy.sdk.game.GameWriteOutcome
 import me.meeshy.sdk.model.game.DailyChest
+import me.meeshy.sdk.model.game.FlameGoalAnnouncement
+import me.meeshy.sdk.model.game.FlameGoalLocal
 import me.meeshy.sdk.model.game.FlamePauseDecision
 import me.meeshy.sdk.model.game.GameFlame
+import me.meeshy.sdk.model.game.GameFlameGoalLaw
 import me.meeshy.sdk.model.game.GameFlamePause
 import me.meeshy.sdk.model.game.GameFlamePauseLaw
 import me.meeshy.sdk.model.game.GameIntentIds
@@ -36,7 +39,7 @@ import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.session.SessionRepository
 
 /** Les gestes du jeu qui touchent un solde. Un seul vol à la fois PAR geste : un double appui n'envoie qu'une requête. */
-enum class GameGesture { Reroll, Chest, Freeze, Relight, Pause, Mint, Claim, Seal, Prestige }
+enum class GameGesture { Reroll, Chest, Freeze, Relight, Pause, Goal, Mint, Claim, Seal, Prestige }
 
 /**
  * Le refus du DERNIER essai d'un geste. Jamais un code affiché : l'écran le met en phrase ([offline] ⇒ rien n'est
@@ -53,6 +56,15 @@ private data class Results(
     val prestigePassed: Int?,
     val accountTimezone: String?,
     val announcedPause: GameFlamePause?,
+    val flameGoal: FlameGoalLocal,
+)
+
+/** La queue des résultats : `combine` ne prend que cinq flux à la fois. */
+private data class Tail(
+    val passed: Int?,
+    val timezone: String?,
+    val announcedPause: GameFlamePause?,
+    val flameGoal: FlameGoalLocal,
 )
 
 /** La pièce que la passerelle vient de frapper — le numéro et l'édition sont CEUX DE SA RÉPONSE. [key] rejoue la scène. */
@@ -73,6 +85,10 @@ data class GameGesturesUiState(
      * (retour optimiste), puis celle que la passerelle a rendue. Un refus la retire. `null` sinon.
      */
     val announcedPause: GameFlamePause? = null,
+    /** L'objectif de Flamme choisi, en vol (#20523). */
+    val choosingGoal: Boolean = false,
+    /** L'objectif que la carte dit en attendant la relecture, et les signes des aïeux fermés à l'instant (#20523). */
+    val flameGoal: FlameGoalLocal = FlameGoalLocal(),
     val minting: Boolean = false,
     /** La halte dont la récompense est attendue. */
     val claimingStep: Int? = null,
@@ -142,6 +158,7 @@ class GameGesturesViewModel internal constructor(
     private val claimingStepFlow = MutableStateFlow<Int?>(null)
     private val prestigePassedFlow = MutableStateFlow<Int?>(null)
     private val announcedPauseFlow = MutableStateFlow<GameFlamePause?>(null)
+    private val flameGoalFlow = MutableStateFlow(FlameGoalLocal())
 
     val state: StateFlow<GameGesturesUiState> = combine(
         network.isOnline,
@@ -153,9 +170,9 @@ class GameGesturesViewModel internal constructor(
             celebrationFlow,
             settlementFlow,
             claimingStepFlow,
-            combine(prestigePassedFlow, accountTimezone, announcedPauseFlow, ::Triple),
-        ) { reward, celebration, settlement, claiming, (passed, timezone, announced) ->
-            Results(reward, celebration, settlement, claiming, passed, timezone, announced)
+            combine(prestigePassedFlow, accountTimezone, announcedPauseFlow, flameGoalFlow, ::Tail),
+        ) { reward, celebration, settlement, claiming, tail ->
+            Results(reward, celebration, settlement, claiming, tail.passed, tail.timezone, tail.announcedPause, tail.flameGoal)
         },
     ) { online, busy, rerolling, failed, results ->
         val (reward, celebration, settlement, claiming, passed, timezone) = results
@@ -167,6 +184,8 @@ class GameGesturesViewModel internal constructor(
             relighting = GameGesture.Relight in busy,
             pausing = GameGesture.Pause in busy,
             announcedPause = results.announcedPause,
+            choosingGoal = GameGesture.Goal in busy,
+            flameGoal = results.flameGoal,
             minting = GameGesture.Mint in busy,
             claimingStep = claiming,
             buyingSeal = GameGesture.Seal in busy,
@@ -221,6 +240,43 @@ class GameGesturesViewModel internal constructor(
             onRefused = { announcedPauseFlow.value = before },
         ) { id -> gestures.pauseFlame(id, days) }
     }
+
+    /**
+     * Choisir l'objectif de la Flamme, en jours (#20523) — rien n'est payé. La carte le dit dès l'appui, par la MÊME loi
+     * que la passerelle ([GameFlameGoalLaw.servedAfterChoosing]), seulement pour un objectif qu'elle propose ; la
+     * réponse le remplace par celui que la passerelle sert, un refus le retire et dit sa raison. Un objectif est une
+     * intention : le rejouer après une coupure garde son identifiant, un autre en prend un neuf.
+     */
+    fun chooseFlameGoal(flame: GameFlame, target: Int) {
+        val before = flameGoalFlow.value.announcement
+        val served = flame.goal
+        val foreseen = GameFlameGoalLaw.servedAfterChoosing(target, flame.days)
+            ?.takeIf { served?.offer?.contains(target) == true }
+        run(
+            GameGesture.Goal,
+            "goal:$target",
+            onStart = { if (foreseen != null) setGoalAnnouncement(FlameGoalAnnouncement(served, foreseen)) },
+            onDone = { response -> setGoalAnnouncement(FlameGoalAnnouncement(served, response.goal)) },
+            onRefused = { setGoalAnnouncement(before) },
+        ) { id -> gestures.chooseFlameGoal(id, target) }
+    }
+
+    /**
+     * Fermer le signe des aïeux de l'objectif [target] atteint, et la marche suivante qu'il propose (#20523). Il se tait
+     * tout de suite ; un envoi refusé le laisse se redire à la prochaine ouverture, comme le guide.
+     */
+    fun closeFlameGoalSign(target: Int) {
+        if (target in flameGoalFlow.value.closedSigns) return
+        flameGoalFlow.update { it.copy(closedSigns = it.closedSigns + target) }
+        if (!isOnline.value) return
+        val intention = "goal-sign:$target"
+        viewModelScope.launch {
+            if (gestures.closeFlameGoalSign(ids.idFor(intention), target) is GameWriteOutcome.Done) ids.spent(intention)
+        }
+    }
+
+    private fun setGoalAnnouncement(announcement: FlameGoalAnnouncement?) =
+        flameGoalFlow.update { it.copy(announcement = announcement) }
 
     /**
      * Frapper la Meesh suivante. Le prix que l'écran a montré part avec la frappe ([GameMintPreview.price]) : au-delà,

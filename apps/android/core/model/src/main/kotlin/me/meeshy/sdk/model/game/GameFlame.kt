@@ -44,6 +44,9 @@ public object GameFlameLaw {
         Form(FlameFormKey.Soleil, 365),
     )
 
+    /** Les seuils des formes de la Flamme, en jours : 1, 7, 30, 100, 365. */
+    public val formThresholds: List<Int> = FORMS.map { it.minDays }
+
     public const val FREEZE_MAX: Int = 2
     public const val FREEZE_PRICE: Int = 1
     public const val RELIGHT_PRICE: Int = 3

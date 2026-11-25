@@ -25,6 +25,8 @@ internal fun ConceptGestures(concept: ProgressionConcept, game: GameBlock, viewM
             onBuyFreeze = viewModel::buyFreeze,
             onRelight = viewModel::relight,
             onPause = { days -> viewModel.pauseFlame(game.flame, game.missions.dayKey, days) },
+            onChooseGoal = { target -> viewModel.chooseFlameGoal(game.flame, target) },
+            onCloseGoalSign = viewModel::closeFlameGoalSign,
         )
         else -> Unit
     }

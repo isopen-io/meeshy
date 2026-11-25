@@ -37,6 +37,8 @@ import androidx.compose.ui.text.font.FontWeight
  * qu'on les réalise — et ne dit plus qu'elle ne peut plus être rallumée.
  *
  * Une Flamme vivante se met en VEILLE (#17372, #20511) : deux gestes, la durée puis l'annonce ([FlamePauseGestures]).
+ *
+ * Au premier jour d'une Flamme, elle propose un OBJECTIF (#17379, #20523) d'un seul toucher ([FlameGoalGestures]).
  */
 @Composable
 internal fun FlamePanel(
@@ -45,6 +47,8 @@ internal fun FlamePanel(
     onBuyFreeze: () -> Unit,
     onRelight: () -> Unit,
     onPause: (Int) -> Unit = {},
+    onChooseGoal: (Int) -> Unit = {},
+    onCloseGoalSign: (Int) -> Unit = {},
 ) {
     val flame = game.flame
     val held = game.treasury.held.toLong()
@@ -53,6 +57,7 @@ internal fun FlamePanel(
     val isOut = flame.status == FlameStatus.Out
     GameCard(title = stringResource(R.string.game_flame_panel_title)) {
         GameNote(stringResource(R.string.game_flame_panel_bonus, count(GameFlameLaw.BONUS_PERCENT_PER_DAY), count(GameFlameLaw.BONUS_PERCENT_MAX)))
+        FlameGoalGestures(game, gestures, onChooseGoal, onCloseGoalSign)
         Text(
             stringResource(R.string.game_flame_panel_freezes, count(flame.freezes), count(flame.maxFreezes)),
             style = MaterialTheme.typography.bodyLarge,
