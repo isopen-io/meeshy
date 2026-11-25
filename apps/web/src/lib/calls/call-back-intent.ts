@@ -8,9 +8,11 @@ export const CALL_BACK_NAME_PARAM = 'appelant';
 export const CALL_BACK_GROUP_PARAM = 'groupe';
 
 /**
- * `origin` dit d'où vient l'intention : le MESSAGE du worker (ou le pont de la
- * coque) est une voie de confiance ; l'ADRESSE d'un onglet neuf se compose à la
- * main (#18907) — elle ne porte ni nom ni groupe, et ne compose jamais seule.
+ * `origin` dit d'où vient l'intention : le MESSAGE du worker est une voie de
+ * confiance ; l'ADRESSE d'un onglet neuf se compose à la main (#18907), et le
+ * pont de la coque Android relaie une adresse que toute app peut forger
+ * (`MainActivity` est exportée, #19243) — ni l'une ni l'autre ne porte de nom
+ * ou de groupe, et aucune ne compose jamais seule.
  */
 export type CallBackIntentOrigin = 'url' | 'message';
 
@@ -34,6 +36,8 @@ export type CallBackIntentEnvironment = {
   readonly start: (request: StartCallRequest) => void;
   /** Le geste manque : « Appeler » le demande, et c'est lui qui composera. */
   readonly confirm: (request: StartCallRequest) => void;
+  /** Le pont de la coque remet ses intentions déjà lues, origine comprise. */
+  readonly bridge?: (deliver: (intent: CallBackIntent) => void) => void;
 };
 
 /**
@@ -111,6 +115,7 @@ export function listenCallBackIntents(env: CallBackIntentEnvironment): void {
     const intent = callBackIntentFromMessage(event.data);
     if (intent !== null) deliver(intent);
   });
+  env.bridge?.(deliver);
 }
 
 type CallBackActions = Pick<CallBackIntentEnvironment, 'ready' | 'start' | 'confirm'>;
@@ -155,9 +160,9 @@ export async function listenCallBackIntentsInBrowser(): Promise<void> {
 /**
  * « Rappeler » touché sur une bannière de la coque Android (#10908) : l'appel
  * arrive par le pont natif (`shell-call-back.ts`), jamais par l'adresse — le
- * lien profond l'y laisse, et le relire composerait l'appel deux fois. La
- * WebView de Capacitor joue le son sans geste
- * (`setMediaPlaybackRequiresUserGesture(false)`) : l'appel part sans « Appeler ».
+ * lien profond l'y laisse, et le relire composerait l'appel deux fois. Le pont
+ * relaie une ADRESSE (#19243) : « Appeler » est toujours demandé, et le nom
+ * vient du fil, même si la WebView joue le son sans geste.
  */
 export async function listenCallBackIntentsInShell(): Promise<void> {
   const [actions, { ecouterRappels }, { coqueCourante }] = await Promise.all([
@@ -170,11 +175,8 @@ export async function listenCallBackIntentsInShell(): Promise<void> {
     path: '',
     search: '',
     forgetParams: () => undefined,
-    container: {
-      addEventListener: (_type, listener) => {
-        ecouterRappels(coqueCourante(), (callBack) => listener({ data: { type: NOTIFICATION_CLICKED_MESSAGE, callBack } }));
-      },
-    },
+    container: undefined,
+    bridge: (deliver) => void ecouterRappels(coqueCourante(), deliver),
     mayPlayAudio: () => true,
   });
 }

@@ -1,7 +1,9 @@
 package me.meeshy.app;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import java.security.SecureRandom;
 
 /**
  * Ce que la coque retient de l'appel ENTRE deux processus (#8049) : le registre
@@ -29,6 +31,7 @@ final class CallShellStore {
     private static final String KEY_API_BASE = "apiBase";
     private static final String KEY_KIND = "credentialKind";
     private static final String KEY_TOKEN = "credentialToken";
+    private static final String KEY_SEAL = "intentSeal";
 
     private CallShellStore() {}
 
@@ -60,6 +63,20 @@ final class CallShellStore {
     static String voiceOrigin(Context context) {
         SharedPreferences prefs = prefs(context);
         return NotificationVoiceRules.origin(prefs.getString(KEY_API_BASE, null), prefs.getString(KEY_KIND, null), prefs.getString(KEY_TOKEN, null));
+    }
+
+    /** #19243 — le sceau des intents de la coque ({@link IntentSealRules}), tire au premier usage. */
+    static synchronized String intentSeal(Context context) {
+        String seal = prefs(context).getString(KEY_SEAL, null);
+        if (seal != null && !seal.isEmpty()) return seal;
+        String fresh = IntentSealRules.fresh(new SecureRandom());
+        prefs(context).edit().putString(KEY_SEAL, fresh).commit();
+        return fresh;
+    }
+
+    /** #19243 — l'intent vient-il de la coque elle-meme ? Un intent forge par une autre app, non. */
+    static boolean sealed(Context context, Intent intent) {
+        return intent != null && IntentSealRules.honours(intentSeal(context), intent.getStringExtra(IntentSealRules.EXTRA_SEAL));
     }
 
     static String apiBase(Context context) {
