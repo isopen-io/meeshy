@@ -26,32 +26,28 @@ final class PackMeeshShortfallTests: XCTestCase {
     }
 
     func test_row_carriesTheGapAtTheServedBalance() {
-        XCTAssertEqual(UnifiedShopView.row(paid("aurore"), balance: 12).missingMeeshes, 8)
-        XCTAssertNil(UnifiedShopView.row(paid("aurore"), balance: 40).missingMeeshes)
-        XCTAssertNil(UnifiedShopView.row(paid("aurore")).missingMeeshes, "sans solde, la rangée se tait comme avant")
-        XCTAssertNil(UnifiedShopView.row(paid("aurore", owned: true), balance: 0).missingMeeshes)
+        XCTAssertEqual(UnifiedShopView.row(paid("aurore"), language: "fr", balance: 12).shortfall?.missing, 8)
+        XCTAssertNil(UnifiedShopView.row(paid("aurore"), balance: 40).shortfall)
+        XCTAssertNil(UnifiedShopView.row(paid("aurore")).shortfall, "sans solde, la rangée se tait comme avant")
+        XCTAssertNil(UnifiedShopView.row(paid("aurore", owned: true), balance: 0).shortfall)
     }
 
     func test_shortfall_isSaidOnlyWhereTheGestureIsBuy() {
-        let toBuy = PackRow(slug: "a", name: "A", installed: false, price: 20, owned: false, missingMeeshes: 8)
-        let locked = PackRow(slug: "b", name: "B", installed: false, price: 20, owned: false, locked: true, missingMeeshes: 8)
-        let owned = PackRow(slug: "c", name: "C", installed: false, price: 20, owned: true, missingMeeshes: 8)
+        let gap = PackMeeshShortfall(missing: 8, language: "fr")
+        let toBuy = PackRow(slug: "a", name: "A", installed: false, price: 20, owned: false, shortfall: gap)
+        let locked = PackRow(slug: "b", name: "B", installed: false, price: 20, owned: false, locked: true, shortfall: gap)
+        let owned = PackRow(slug: "c", name: "C", installed: false, price: 20, owned: true, shortfall: gap)
 
-        XCTAssertEqual(PackShopView.shortfall(of: toBuy), 8)
+        XCTAssertEqual(PackShopView.shortfall(of: toBuy), gap)
         XCTAssertNil(PackShopView.shortfall(of: locked), "un pack à débloquer ne s'achète pas encore : rien ne manque en Meeshes")
         XCTAssertNil(PackShopView.shortfall(of: owned))
     }
 
-    func test_line_saysTheCountAndSeparatesOneFromMany() {
-        let one = PackMeeshShortfall.line(missing: 1)
-        let many = PackMeeshShortfall.line(missing: 8)
-
-        XCTAssertTrue(one.contains("1"), one)
-        XCTAssertTrue(many.contains("8"), many)
-        XCTAssertFalse(one.contains("%"), one)
-        XCTAssertFalse(many.contains("%"), many)
-        XCTAssertNotEqual(one.replacingOccurrences(of: "1", with: "8"), many,
-                          "1 Meesh se dit au singulier, jamais « 1 Meeshes »")
+    func test_line_saysTheCountInTheReadersDigits() {
+        XCTAssertTrue(PackMeeshShortfall(missing: 8, language: "fr").line.contains("8"))
+        XCTAssertTrue(PackMeeshShortfall(missing: 3500, language: "de").line.contains("3.500"))
+        XCTAssertFalse(PackMeeshShortfall(missing: 1, language: "fr").line.contains("%"))
+        XCTAssertFalse(PackMeeshShortfall(missing: 8, language: "fr").line.contains("%"))
     }
 
     func test_earnLabel_namesTheWayToTheMeeshes() {
@@ -59,15 +55,31 @@ final class PackMeeshShortfallTests: XCTestCase {
         XCTAssertNotEqual(PackMeeshShortfall.earnLabel, "shop.short.earn")
     }
 
+    func test_catalogue_theFrenchSourceSaysOneMeeshInTheSingular() throws {
+        let chaines = try Self.catalogueStrings()
+        XCTAssertEqual(try Self.value(chaines, "shop.short.one", "fr"), "Il vous manque 1 Meesh")
+        XCTAssertEqual(try Self.value(chaines, "shop.short.many", "fr"), "Il vous manque %@ Meeshes")
+        XCTAssertEqual(try Self.value(chaines, "shop.short.earn", "fr"), "Frapper des Meeshes")
+    }
+
     func test_catalogue_saysTheGapAndTheWayInTheSevenLanguages() throws {
-        let url = Self.sourceCatalogue
-        let racine = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
-        let chaines = try XCTUnwrap(racine["strings"] as? [String: Any])
+        let chaines = try Self.catalogueStrings()
         for cle in ["shop.short.one", "shop.short.many", "shop.short.earn"] {
             let entree = try XCTUnwrap(chaines[cle] as? [String: Any], cle)
             let langues = try XCTUnwrap(entree["localizations"] as? [String: Any], cle)
             XCTAssertEqual(Set(langues.keys), ["fr", "en", "es", "pt-BR", "it", "de", "ar"], cle)
         }
+    }
+
+    private static func catalogueStrings() throws -> [String: Any] {
+        let racine = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(contentsOf: sourceCatalogue)) as? [String: Any])
+        return try XCTUnwrap(racine["strings"] as? [String: Any])
+    }
+
+    private static func value(_ chaines: [String: Any], _ cle: String, _ langue: String) throws -> String? {
+        let entree = try XCTUnwrap(chaines[cle] as? [String: Any], cle)
+        let langues = try XCTUnwrap(entree["localizations"] as? [String: Any], cle)
+        return ((langues[langue] as? [String: Any])?["stringUnit"] as? [String: Any])?["value"] as? String
     }
 
     private static var sourceCatalogue: URL {

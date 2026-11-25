@@ -114,6 +114,9 @@ struct PackDetailView: View {
                     .font(MeeshyFont.relative(13, weight: .semibold))
                     .foregroundStyle(.secondary)
             }
+            if let shortfall = PackShopView.shortfall(of: row) {
+                PackMeeshShortfallLine(shortfall: shortfall, slug: row.slug, onEarn: context.onEarnMeeshes)
+            }
             if PackShopView.showsLocked(row) {
                 Text(PackUnlockCopy.lockedTitle)
                     .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))

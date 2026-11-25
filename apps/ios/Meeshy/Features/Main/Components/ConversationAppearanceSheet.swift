@@ -76,7 +76,7 @@ struct ConversationAppearanceSheet: View {
         .task { await loadInstalledWallpapers() }
         // « Plus dans la boutique » installe puis revient : le sélecteur relit les packs installés.
         .sheet(isPresented: $showsShop, onDismiss: { Task { await loadInstalledWallpapers() } }) {
-            PacksSettingsView(initialDomain: .wallpaper)
+            PacksSettingsView(initialDomain: .wallpaper, leadsToMinting: false)
         }
         .onReceive(NotificationCenter.default.publisher(for: ConversationAppearanceChange.notification).receive(on: DispatchQueue.main)) { note in
             if let remote = ConversationAppearanceChange.appearance(in: note, for: viewModel.conversationId) { viewModel.adopt(remote) }
