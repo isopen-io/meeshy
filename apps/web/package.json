@@ -118,9 +118,9 @@
     "vite-plugin-pwa": "2.0.0"
   },
   "optionalDependencies": {
-    "@capacitor/android": "8.6.0",
-    "@capacitor/cli": "8.6.0",
-    "@capacitor/core": "8.6.0",
-    "@capacitor/ios": "8.6.0"
+    "@capacitor/android": "8.6.2",
+    "@capacitor/cli": "8.6.2",
+    "@capacitor/core": "8.6.2",
+    "@capacitor/ios": "8.6.2"
   }
 }
