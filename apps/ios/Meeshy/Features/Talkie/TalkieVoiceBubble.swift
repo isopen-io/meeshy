@@ -22,7 +22,7 @@ struct TalkieVoiceBubble: View {
     let userId: String
     let geometry: TalkieBubbleGeometry
     let direction: TalkieVoiceDirection?
-    let stage: TalkieVoiceStage
+    let stage: any TalkieVoiceStageProviding
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
@@ -41,7 +41,7 @@ struct TalkieVoiceBubble: View {
 
     /// `direction` nil : les deux sens de la personne (le plus fort, bande par bande) ; sinon, ce sens seul.
     init(userId: String, geometry: TalkieBubbleGeometry, direction: TalkieVoiceDirection? = nil,
-         stage: TalkieVoiceStage = .shared) {
+         stage: any TalkieVoiceStageProviding = TalkieVoiceStage.shared) {
         self.userId = userId
         self.geometry = geometry
         self.direction = direction
@@ -49,7 +49,7 @@ struct TalkieVoiceBubble: View {
     }
 
     /// Les bandes d'une image : un sens de la personne, ou les deux.
-    nonisolated static func bands(stage: TalkieVoiceStage, userId: String, direction: TalkieVoiceDirection?,
+    nonisolated static func bands(stage: any TalkieVoiceStageProviding, userId: String, direction: TalkieVoiceDirection?,
                                   now: TimeInterval) -> [Float] {
         guard let direction else { return stage.bands(for: userId, now: now) }
         return stage.bands(for: userId, direction: direction, now: now)
@@ -148,7 +148,7 @@ struct TalkieVoiceBubble: View {
 struct TalkieVoiceRibbon: View {
     let userId: String
     let direction: TalkieVoiceDirection
-    let stage: TalkieVoiceStage
+    let stage: any TalkieVoiceStageProviding
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
@@ -158,7 +158,7 @@ struct TalkieVoiceRibbon: View {
         MeeshyColors.orange500, MeeshyColors.amber500, MeeshyColors.info, MeeshyColors.blue500,
     ])
 
-    init(userId: String, direction: TalkieVoiceDirection = .incoming, stage: TalkieVoiceStage = .shared) {
+    init(userId: String, direction: TalkieVoiceDirection = .incoming, stage: any TalkieVoiceStageProviding = TalkieVoiceStage.shared) {
         self.userId = userId
         self.direction = direction
         self.stage = stage
@@ -191,9 +191,9 @@ struct TalkieVoiceRibbon: View {
 /// « Enregistrement, 4 secondes ».
 struct TalkieVoiceClock: View {
     let userId: String
-    let stage: TalkieVoiceStage
+    let stage: any TalkieVoiceStageProviding
 
-    init(userId: String, stage: TalkieVoiceStage = .shared) {
+    init(userId: String, stage: any TalkieVoiceStageProviding = TalkieVoiceStage.shared) {
         self.userId = userId
         self.stage = stage
     }

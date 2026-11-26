@@ -65,12 +65,14 @@ final class TalkieVoicePlayer: TalkieSink {
     private var senders: [String: String] = [:]
     private var observers: [NSObjectProtocol] = []
     private let isInCall: () -> Bool
-    private let stage: TalkieVoiceStage
+    private let stage: any TalkieVoiceStageProviding
     private let stageSubscription = UUID()
     /// Mon micro est ouvert : les voix reçues se taisent sur une sortie qu'il entend.
     private var micOpen = false
 
-    nonisolated deinit {}
+    nonisolated deinit {
+        stage.unsubscribe(stageSubscription)
+    }
 
     /// Ce qu'on écoutait, mis en pause pendant la voix et rendu à sa fin (#18820).
     private let listening: TalkieListeningHold
@@ -78,7 +80,7 @@ final class TalkieVoicePlayer: TalkieSink {
     init(
         isInCall: @escaping () -> Bool = { CallManager.isCallActiveFlag },
         listening: TalkieListeningHold = TalkieListeningHold(session: TalkieCoordinatorVoiceSession(), listening: MeeshyListeningPause()),
-        stage: TalkieVoiceStage = .shared
+        stage: any TalkieVoiceStageProviding = TalkieVoiceStage.shared
     ) {
         self.isInCall = isInCall
         self.listening = listening

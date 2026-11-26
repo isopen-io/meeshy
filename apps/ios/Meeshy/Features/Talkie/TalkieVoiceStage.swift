@@ -15,6 +15,23 @@ nonisolated struct TalkieVoiceKey: Hashable, Sendable {
     let direction: TalkieVoiceDirection
 }
 
+/// Ce que les voix du talkie demandent au registre (`TalkieVoiceStage`) : l'émetteur, le micro, le lecteur, l'analyse
+/// et la bulle en reçoivent un, `.shared` par défaut, un registre local en test.
+nonisolated protocol TalkieVoiceStageProviding: AnyObject, Sendable {
+    func begin(userId: String, direction: TalkieVoiceDirection, at startedAt: Date)
+    func push(userId: String, direction: TalkieVoiceDirection, bands: [Float], at time: TimeInterval)
+    func end(userId: String, direction: TalkieVoiceDirection)
+    func bands(for userId: String, now: TimeInterval) -> [Float]
+    func bands(for userId: String, direction: TalkieVoiceDirection, now: TimeInterval) -> [Float]
+    func frameTimes(for userId: String, direction: TalkieVoiceDirection) -> [TimeInterval]
+    func receivedFrames(for userId: String, direction: TalkieVoiceDirection) -> Int
+    func startedAt(for userId: String) -> Date?
+    func direction(for userId: String) -> TalkieVoiceDirection?
+    func cast() -> TalkieVoiceStage.Cast
+    func subscribe(_ id: UUID, _ listener: @escaping @Sendable (TalkieVoiceStage.Cast) -> Void)
+    func unsubscribe(_ id: UUID)
+}
+
 /// LE REGISTRE DES VOIX DU TALKIE, par personne et par sens (#20531) : qui parle, dans quel sens, depuis quand, et
 /// les 120 bandes de sa voix, lissées bande par bande (montée rapide, retombée lente : `TalkieWaveLaw.smoothed`).
 ///
@@ -31,7 +48,7 @@ nonisolated struct TalkieVoiceKey: Hashable, Sendable {
 ///
 /// Lue par personne, la voix qui part l'emporte sur celle qui arrive (sens, début), et les bandes sont le maximum des
 /// deux sens, bande par bande.
-nonisolated final class TalkieVoiceStage: Sendable {
+nonisolated final class TalkieVoiceStage: TalkieVoiceStageProviding {
     static let shared = TalkieVoiceStage()
 
     /// Les voix en cours, numérotées : un observateur ne revient jamais à un état plus ancien.
@@ -233,6 +250,11 @@ nonisolated final class TalkieVoiceStage: Sendable {
         listeners.mutate { $0[id] = nil }
     }
 
+    /// Les abonnés encore inscrits : un observateur ou un lecteur libéré n'y figure plus.
+    var listenerCount: Int {
+        listeners.read { $0.count }
+    }
+
     private func announce(_ cast: Cast) {
         listeners.read { Array($0.values) }.forEach { $0(cast) }
     }
@@ -248,12 +270,12 @@ final class TalkieVoiceStageObserver: ObservableObject {
 
     @Published private(set) var voices: Set<TalkieVoiceKey> = []
 
-    private let stage: TalkieVoiceStage
+    private let stage: any TalkieVoiceStageProviding
     private let userId: String?
     private let subscription = UUID()
     private var version = -1
 
-    init(stage: TalkieVoiceStage = .shared, userId: String? = nil) {
+    init(stage: any TalkieVoiceStageProviding = TalkieVoiceStage.shared, userId: String? = nil) {
         self.stage = stage
         self.userId = userId
         stage.subscribe(subscription) { [weak self] cast in
@@ -306,9 +328,10 @@ nonisolated final class TalkieVoiceProcessor: Sendable {
     private let analysis: Locked<Analysis>
     private let userId: String
     private let direction: TalkieVoiceDirection
-    private let stage: TalkieVoiceStage
+    private let stage: any TalkieVoiceStageProviding
 
-    init(userId: String, direction: TalkieVoiceDirection, sampleRate: Double, stage: TalkieVoiceStage = .shared) {
+    init(userId: String, direction: TalkieVoiceDirection, sampleRate: Double,
+         stage: any TalkieVoiceStageProviding = TalkieVoiceStage.shared) {
         let leveler = TalkieVoiceLeveler(sampleRate: sampleRate, tuning: .for(direction))
         gain = Locked(uncheckedState: Gain(sampleRate: sampleRate, leveler: leveler))
         analysis = Locked(uncheckedState: Analysis(windows: TalkieSpectrumWindows(sampleRate: sampleRate)))

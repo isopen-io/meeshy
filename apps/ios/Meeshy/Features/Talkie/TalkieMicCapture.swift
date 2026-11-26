@@ -30,9 +30,9 @@ final class TalkieMicCapture: TalkieCapturing {
     private var holdsSession = false
     private var frameRelay: AsyncStream<[TalkieAacFrame]>.Continuation?
     private var frameDelivery: Task<Void, Never>?
-    private let stage: TalkieVoiceStage
+    private let stage: any TalkieVoiceStageProviding
 
-    init(stage: TalkieVoiceStage = .shared) {
+    init(stage: any TalkieVoiceStageProviding = TalkieVoiceStage.shared) {
         self.stage = stage
     }
 

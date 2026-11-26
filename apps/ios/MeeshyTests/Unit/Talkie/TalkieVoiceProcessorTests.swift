@@ -287,4 +287,15 @@ final class TalkieVoicePlayerStageTests: XCTestCase {
 
         XCTAssertNil(stage.direction(for: "alice"))
     }
+
+    func test_deinit_releasedPlayer_leavesNoListenerOnTheStage() {
+        let stage = TalkieVoiceStage()
+        var sut: TalkieVoicePlayer? = makePlayer(stage: stage)
+        XCTAssertEqual(stage.listenerCount, 1, "le lecteur écoute le registre pour savoir si le micro est ouvert")
+
+        sut = nil
+
+        XCTAssertNil(sut)
+        XCTAssertEqual(stage.listenerCount, 0, "un lecteur libéré ne laisse aucun écouteur au registre")
+    }
 }

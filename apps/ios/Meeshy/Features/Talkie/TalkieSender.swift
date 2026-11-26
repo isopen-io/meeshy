@@ -105,7 +105,7 @@ final class TalkieSender: ObservableObject {
     private let schedule: TalkieDeadlineScheduler
     /// La voix qui part s'y inscrit sous son destinataire, de l'appui à l'arrêt du micro (#20531) : une copie qui
     /// attend encore le réseau ne tient plus le micro pour ouvert, et la voix reçue redevient audible.
-    private let stage: TalkieVoiceStage
+    private let stage: any TalkieVoiceStageProviding
     private var session: Session?
     /// Les voix réveillées closes, gardées jusqu'au verdict `joined` de la passerelle. Bornées : rien ne grossit.
     private var awaitingJoin: [(talkieId: String, toUserId: String, frames: [Data])] = []
@@ -124,7 +124,7 @@ final class TalkieSender: ObservableObject {
         endedEvents: AnyPublisher<TalkieEnded, Never> = TalkieEvents.ended,
         now: @escaping () -> Date = { Date() },
         schedule: @escaping TalkieDeadlineScheduler = TalkieSender.sleepingDeadline,
-        stage: TalkieVoiceStage = .shared
+        stage: any TalkieVoiceStageProviding = TalkieVoiceStage.shared
     ) {
         self.emitter = emitter
         self.capture = capture ?? TalkieMicCapture()
