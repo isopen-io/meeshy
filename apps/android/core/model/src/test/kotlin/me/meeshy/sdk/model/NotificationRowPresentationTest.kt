@@ -69,6 +69,8 @@ class NotificationRowPresentationTest {
     fun `un jeu sans acteur et un systeme sans acteur portent la signature`() {
         assertThat(NotificationRowPresentation.of(notification("game_league_result", actor = null), "Ligue", null, now).leading)
             .isEqualTo(RowLeading.Signature)
+        assertThat(NotificationRowPresentation.of(notification("game_flame_evening", actor = null), "Ta Flamme", null, now).leading)
+            .isEqualTo(RowLeading.Signature)
         assertThat(NotificationRowPresentation.of(notification("security_alert", actor = null), "Sécurité", null, now).leading)
             .isEqualTo(RowLeading.Signature)
         assertThat(NotificationRowPresentation.of(notification("security_alert"), "Sécurité", null, now).leading)

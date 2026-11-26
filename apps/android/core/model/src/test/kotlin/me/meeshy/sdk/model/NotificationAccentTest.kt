@@ -57,7 +57,7 @@ class NotificationAccentTest {
         listOf(
             "achievement_unlocked", "ACHIEVEMENT_UNLOCKED", "badge_earned", "streak_milestone", "level_up",
             "game_duo_invited", "game_duo_accepted", "game_league_result", "game_season_step",
-            "game_mission_window",
+            "game_mission_window", "game_flame_evening",
         ).forEach { assertThat(notificationTypeAccentHex(it)).isEqualTo("FBBF24") }
     }
 
@@ -86,6 +86,7 @@ class NotificationAccentTest {
         }
         assertThat(notificationTypeGlyph("level_up")).isEqualTo(NotificationGlyph.STAR)
         assertThat(notificationTypeGlyph("game_mission_window")).isEqualTo(NotificationGlyph.GAME_TIMER)
+        assertThat(notificationTypeGlyph("game_flame_evening")).isEqualTo(NotificationGlyph.STREAK)
         assertThat(notificationTypeGlyph("content_removed")).isEqualTo(NotificationGlyph.CONTENT_REMOVED)
         assertThat(notificationTypeGlyph("contact_recently_active")).isEqualTo(NotificationGlyph.CONTACT_ACTIVE)
         assertThat(notificationTypeGlyph("type_du_futur")).isEqualTo(NotificationGlyph.BELL)

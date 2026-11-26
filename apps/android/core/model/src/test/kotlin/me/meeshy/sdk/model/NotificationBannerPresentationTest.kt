@@ -342,6 +342,14 @@ class NotificationBannerPresentationTest {
     }
 
     @Test
+    fun flameEvening_isNamedByTheFlame_andShowsTheServedSentence() {
+        val sentence = "Ta Flamme brûle depuis 12 jours. Un geste ce soir la garde allumée."
+        val banner = present(notification("game_flame_evening", actor = null, subtitle = null, content = sentence))
+        assertThat(banner.headline).isEqualTo(BannerHeadline.GameSurface(GameSurfaceTitle.FLAME_EVENING, null))
+        assertThat(banner.body).isEqualTo(sentence)
+    }
+
+    @Test
     fun gameNotificationWithAServerTitle_keepsTheServerTitle() {
         val banner = present(notification("game_league_result", actor = null, title = "Meeshy", subtitle = "a clos la semaine"))
         assertThat(banner.headline).isEqualTo(BannerHeadline.Plain("Meeshy a clos la semaine"))

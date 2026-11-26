@@ -22,7 +22,7 @@ public sealed interface GameTarget {
         public val NOTIFICATION_TYPES: Set<String> = setOf(
             "achievement_unlocked", "streak_milestone", "level_up", "badge_earned",
             "game_duo_invited", "game_duo_accepted", "game_league_result", "game_season_step",
-            "game_mission_window",
+            "game_mission_window", "game_flame_evening",
         )
 
         /** L'écran du jeu d'un type de notification ; la première page pour un type du jeu que la carte ne nomme pas. */
@@ -33,7 +33,7 @@ public sealed interface GameTarget {
                 "game_season_step" -> Page(GamePage.Season)
                 "game_mission_window" -> Concept(ProgressionConcept.Missions)
                 "level_up" -> Concept(ProgressionConcept.Level)
-                "streak_milestone" -> Concept(ProgressionConcept.Flame)
+                "streak_milestone", "game_flame_evening" -> Concept(ProgressionConcept.Flame)
                 "badge_earned" -> Concept(ProgressionConcept.Badges)
                 "achievement_unlocked" -> Concept(ProgressionConcept.Succes)
                 else -> null

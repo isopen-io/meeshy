@@ -103,6 +103,7 @@ public data class NotificationRowPresentation(
             MeeshyNotificationType.GAME_LEAGUE_RESULT,
             MeeshyNotificationType.GAME_SEASON_STEP,
             MeeshyNotificationType.GAME_MISSION_WINDOW,
+            MeeshyNotificationType.GAME_FLAME_EVENING,
         )
 
         private val SIGNED_WITHOUT_ACTOR = setOf(
