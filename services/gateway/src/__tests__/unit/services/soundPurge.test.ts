@@ -2,6 +2,7 @@ import { describe, it, expect } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { purgeRemovedSoundFiles, runSoundFilePurgeIfEnabled, soundFilePurgeEnabled, type SoundFileStore } from '../../../services/posts/soundPurge';
 import { staticFileUrl } from '../../../services/posts/soundFormats';
+import { matchesMongoWhere, type MongoDocument } from '../../helpers/mongo-where';
 
 type SoundRow = {
   id: string;
@@ -48,7 +49,7 @@ function fakePrisma(w: World): PrismaClient {
         .filter((s) => s.deletedAt !== null && s.mutedAt === null && !usedIds(w).has(s.id))
         .filter((s) => after === undefined || s.id > after)
         .slice(0, take)
-        .map((s) => ({ id: s.id, fileUrl: s.fileUrl }));
+        .map((s) => ({ id: s.id, fileUrl: s.fileUrl, deletedAt: s.deletedAt, mutedAt: s.mutedAt }));
     },
     count: async ({ where }: { where: { fileUrl: string; id: { not: string } } }) =>
       w.sounds.filter((s) => s.fileUrl === where.fileUrl && s.id !== where.id.not).length,
@@ -157,6 +158,70 @@ describe('purgeRemovedSoundFiles (#9854)', () => {
 
     expect(store.removedNames).toEqual(['b.m4a', 'c.m4a']);
     expect(result).toEqual({ removed: 2, failed: 1 });
+  });
+});
+
+describe('purgeRemovedSoundFiles — la destruction ne se fie pas à la seule requête (#9854)', () => {
+  type Doc = MongoDocument & { id: string; fileUrl: string };
+
+  function connector(docs: ReadonlyArray<Doc>, options: { honourWhere: boolean }) {
+    const wheres: MongoDocument[] = [];
+    const prisma = {
+      sound: {
+        findMany: async ({ where, take }: { where: MongoDocument; take: number }) => {
+          wheres.push(where);
+          const after = (where['id'] as { gt?: string } | undefined)?.gt;
+          return [...docs]
+            .sort((x, y) => x.id.localeCompare(y.id))
+            .filter((d) => after === undefined || d.id > after)
+            .filter((d) => !options.honourWhere || matchesMongoWhere(d, where))
+            .slice(0, take)
+            .map((d) => ({
+              id: d.id,
+              fileUrl: d.fileUrl,
+              deletedAt: (d['deletedAt'] as Date | null | undefined) ?? null,
+              mutedAt: (d['mutedAt'] as Date | null | undefined) ?? null,
+            }));
+        },
+        count: async () => 0,
+      },
+      soundUsage: { count: async () => 0 },
+    } as unknown as PrismaClient;
+    return { prisma, wheres };
+  }
+
+  function recordingStore(): SoundFileStore & { removedNames: string[] } {
+    const removedNames: string[] = [];
+    return {
+      removedNames,
+      remove: async (filename: string) => {
+        removedNames.push(filename);
+        return 'removed';
+      },
+    };
+  }
+
+  const liveNeverRemoved: Doc = { id: 'live', fileUrl: staticFileUrl('live.m4a'), usages: [] };
+  const mutedRemoved: Doc = { id: 'muted', fileUrl: staticFileUrl('muted.m4a'), deletedAt: removed, mutedAt: removed, usages: [] };
+  const removedUnused: Doc = { id: 'gone', fileUrl: staticFileUrl('gone.m4a'), deletedAt: removed, usages: [] };
+
+  it('la clause, lue avec la sémantique Mongo, n\'apparie ni un son vivant à `deletedAt` ABSENT ni un son coupé', async () => {
+    const { prisma } = connector([liveNeverRemoved, mutedRemoved, removedUnused], { honourWhere: true });
+    const store = recordingStore();
+
+    await purgeRemovedSoundFiles({ prisma, store });
+
+    expect(store.removedNames).toEqual(['gone.m4a']);
+  });
+
+  it('un candidat rendu sans retrait ou coupé (pipeline d\'agrégation, ordre BSON) ne perd jamais son fichier', async () => {
+    const { prisma } = connector([liveNeverRemoved, mutedRemoved, removedUnused], { honourWhere: false });
+    const store = recordingStore();
+
+    const result = await purgeRemovedSoundFiles({ prisma, store });
+
+    expect(store.removedNames).toEqual(['gone.m4a']);
+    expect(result.removed).toBe(1);
   });
 });
 

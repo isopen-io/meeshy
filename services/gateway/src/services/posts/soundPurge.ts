@@ -13,7 +13,12 @@
  *
  * Fail-closed : l'usage est recompté juste avant la suppression, une adresse
  * qui ne désigne pas un fichier audio du volume est ignorée, et un fichier
- * qu'une autre ligne `Sound` cite encore est gardé.
+ * qu'une autre ligne `Sound` cite encore est gardé. Le retrait se revérifie
+ * DANS le processus sur la ligne lue (`deletedAt` daté, `mutedAt` nul), en plus
+ * de `isSet: true` + `not: null` dans la requête : le connecteur peut passer par
+ * un pipeline d'agrégation où l'absence suit l'ordre BSON (mesuré sur
+ * `ExpiredMessagesCleanupService`), et l'erreur coûterait le fichier d'un son
+ * vivant, sans retour.
  *
  * Idempotente : un fichier déjà absent compte pour rien, donc un rejeu ne
  * supprime rien de plus. Best-effort : un fichier qui résiste n'arrête pas
@@ -71,14 +76,17 @@ export function soundVolumeFilename(fileUrl: string): string | null {
 }
 
 const REMOVED_UNUSED_SOUND_WHERE = {
-  deletedAt: { not: null },
-  AND: [NOT_MUTED_WHERE],
+  AND: [{ deletedAt: { isSet: true } }, { deletedAt: { not: null } }, NOT_MUTED_WHERE],
   usages: { none: {} },
 };
 
-type Candidate = { id: string; fileUrl: string };
+type Candidate = { id: string; fileUrl: string; deletedAt: Date | null; mutedAt: Date | null };
+
+const isRemovedAndNotMuted = (candidate: Candidate): boolean =>
+  candidate.deletedAt instanceof Date && candidate.mutedAt === null;
 
 async function purgeOne(prisma: PrismaClient, store: SoundFileStore, candidate: Candidate): Promise<SoundFileRemoval | 'kept'> {
+  if (!isRemovedAndNotMuted(candidate)) return 'kept';
   const filename = soundVolumeFilename(candidate.fileUrl);
   if (!filename) return 'kept';
   const [usages, otherRows] = await Promise.all([
@@ -98,7 +106,7 @@ export async function purgeRemovedSoundFiles(options: PurgeRemovedSoundFilesOpti
   for (;;) {
     const batch: Candidate[] = await prisma.sound.findMany({
       where: { ...REMOVED_UNUSED_SOUND_WHERE, ...(after ? { id: { gt: after } } : {}) },
-      select: { id: true, fileUrl: true },
+      select: { id: true, fileUrl: true, deletedAt: true, mutedAt: true },
       orderBy: { id: 'asc' },
       take: batchSize,
     });
