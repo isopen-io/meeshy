@@ -240,6 +240,8 @@ nonisolated final class TalkieVoiceStage: Sendable {
 
 /// Les voix en cours — qui parle, et dans quel sens : publiées au début et à la fin d'une voix, jamais à chaque trame.
 /// L'abonnement précède la lecture de l'état initial : une voix qui commence entre les deux n'est pas perdue.
+/// `userId` borne l'observateur aux voix d'UNE personne : le bouton du talkie d'une fiche, d'un en-tête ou d'un bandeau
+/// ne se redessine pas quand une autre personne parle.
 @MainActor
 final class TalkieVoiceStageObserver: ObservableObject {
     typealias Cast = TalkieVoiceStage.Cast
@@ -247,11 +249,13 @@ final class TalkieVoiceStageObserver: ObservableObject {
     @Published private(set) var voices: Set<TalkieVoiceKey> = []
 
     private let stage: TalkieVoiceStage
+    private let userId: String?
     private let subscription = UUID()
     private var version = -1
 
-    init(stage: TalkieVoiceStage = .shared) {
+    init(stage: TalkieVoiceStage = .shared, userId: String? = nil) {
         self.stage = stage
+        self.userId = userId
         stage.subscribe(subscription) { [weak self] cast in
             guard Thread.isMainThread else {
                 Task { @MainActor in self?.apply(cast) }
@@ -269,7 +273,8 @@ final class TalkieVoiceStageObserver: ObservableObject {
     private func apply(_ cast: Cast) {
         guard cast.version > version else { return }
         version = cast.version
-        if voices != cast.voices { voices = cast.voices }
+        let shown = userId.map { id in cast.voices.filter { $0.userId == id } } ?? cast.voices
+        if voices != shown { voices = shown }
     }
 }
 

@@ -16,7 +16,7 @@ import MeeshyUI
 /// - Un micro refusé propose « Ouvrir les réglages » ; tout autre refus laisse le bouton, qui réessaie.
 struct ProfileTalkieRow: View {
     @StateObject private var sender: TalkieSender
-    @ObservedObject private var voices: TalkieVoiceStageObserver
+    @StateObject private var voices: TalkieVoiceStageObserver
     let userId: String
     let displayName: String
     var tint: Color = MeeshyColors.brandPrimary
@@ -28,10 +28,9 @@ struct ProfileTalkieRow: View {
     @Environment(\.openURL) private var openURL
     private var theme: ThemeManager { ThemeManager.shared }
 
-    init(userId: String, displayName: String, tint: Color = MeeshyColors.brandPrimary,
-         voices: TalkieVoiceStageObserver = .shared) {
+    init(userId: String, displayName: String, tint: Color = MeeshyColors.brandPrimary) {
         _sender = StateObject(wrappedValue: TalkieSender())
-        _voices = ObservedObject(wrappedValue: voices)
+        _voices = StateObject(wrappedValue: TalkieVoiceStageObserver(userId: userId))
         self.userId = userId
         self.displayName = displayName
         self.tint = tint

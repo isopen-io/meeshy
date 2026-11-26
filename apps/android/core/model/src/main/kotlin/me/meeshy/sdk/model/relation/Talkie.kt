@@ -9,8 +9,8 @@ import kotlinx.serialization.Serializable
  * déranger) : la passerelle a jugé.
  */
 public object TalkieContract {
-    /** `TALKIE_MAX_DURATION_MS` : une prise de parole dure au plus 30 s. */
-    public const val MAX_DURATION_MS: Long = 30_000L
+    /** `TALKIE_MAX_DURATION_MS` : une prise de parole dure au plus 15 s (#20579). */
+    public const val MAX_DURATION_MS: Long = 15_000L
 
     /** Le seul encodage relayé au MVP : celui du vocal (AAC mono, trames ADTS lisibles dès la première). */
     public const val CODEC: String = "aac-adts"
@@ -25,7 +25,7 @@ public object TalkieContract {
     public const val MAX_CHUNKS: Int = 300
 
     /**
-     * La durée d'un fragment émis (#17094) : assez court pour que le premier mot parte vite, assez long pour que 30 s
+     * La durée d'un fragment émis (#17094) : assez court pour que le premier mot parte vite, assez long pour que 15 s
      * restent sous [MAX_CHUNKS] à toute fréquence du micro.
      */
     public const val FRAGMENT_DURATION_MS: Long = 120L
@@ -72,7 +72,7 @@ public class TalkieChunk(
     }
 }
 
-/** `sender` : bouton relâché · `limit` : 30 s ou plafond atteint · `cut` : coupée (blocage, réglage, appel). */
+/** `sender` : bouton relâché · `limit` : 15 s ou plafond atteint · `cut` : coupée (blocage, réglage, appel). */
 public enum class TalkieEndReason(public val wire: String) {
     SENDER("sender"),
     LIMIT("limit"),

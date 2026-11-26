@@ -19,10 +19,10 @@ class TalkieSendingTest {
     @Test
     fun `un accuse accepte ouvre la prise de parole avec ses bornes et son mode`() {
         val verdict = TalkieStartVerdict.read(
-            ack("""{"success":true,"data":{"talkieId":"t1","maxDurationMs":20000,"maxChunkBytes":8000,"delivery":"waking"}}"""),
+            ack("""{"success":true,"data":{"talkieId":"t1","maxDurationMs":12000,"maxChunkBytes":8000,"delivery":"waking"}}"""),
         )
         assertThat(verdict).isEqualTo(
-            TalkieStartVerdict.Opened(TalkieOpened("t1", 20_000, 8_000, TalkieDelivery.WAKING)),
+            TalkieStartVerdict.Opened(TalkieOpened("t1", 12_000, 8_000, TalkieDelivery.WAKING)),
         )
     }
 

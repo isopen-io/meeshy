@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 
 /// LE SYMBOLE D'UN BOUTON DU TALKIE, le même sur la fiche, l'en-tête et le micro du bandeau reçu (#20579) : il dit à
@@ -77,22 +78,46 @@ extension TalkieVoiceHostLaw {
     }
 }
 
-/// Le micro du talkie et une voix reçue qui SONNE en même temps (#20579, parler et recevoir à la fois) : la session se
-/// pose pour que la voix reçue reste audible (le traitement de la voix d'un appel l'éteindrait), et le micro qui
-/// s'arrête ne rend pas la session sous elle — c'est la voix, à sa fin, qui la rend.
+/// Le micro du talkie et une voix reçue qui SONNE en même temps (#20579, parler et recevoir à la fois).
+///
+/// - Le mode du micro se choisit par la SORTIE, jamais par l'ordre des voix : qu'elle arrive avant ou après l'ouverture
+///   du micro, une voix reçue trouve la même session. Sur une sortie personnelle (écouteurs, casque, Bluetooth), le
+///   micro n'entend pas la voix reçue : mode `.default`, sans traitement de la voix qui l'éteindrait. Sur le haut-parleur
+///   ou l'écouteur de l'iPhone, il l'entendrait : mode `.voiceChat`, pour son annulation d'écho.
+/// - Sur ces sorties-là, la voix reçue se tait tant que mon micro est ouvert, sans quoi il la renverrait à son
+///   expéditeur ; son spectre continue de se voir. Elle se réentend dès que le micro se ferme (#20583 mesurera s'il
+///   peut en être autrement).
+/// - Le micro qui s'arrête pendant qu'elle sonne ne rend pas la session sous elle : la session redevient celle de la
+///   lecture, et c'est la voix, à sa fin, qui la rend.
 nonisolated enum TalkieMicSessionLaw {
-    static func alongsideIncoming(_ voices: Set<TalkieVoiceKey>) -> Bool {
-        voices.contains { $0.direction == .incoming }
+    private static let acousticPorts: Set<AVAudioSession.Port> = [.builtInSpeaker, .builtInReceiver]
+
+    /// Une sortie que le micro de l'iPhone entend.
+    static func acoustic(_ outputs: [AVAudioSession.Port]) -> Bool {
+        !outputs.isEmpty && outputs.allSatisfy(acousticPorts.contains)
     }
 
-    static func handsBackSession(_ voices: Set<TalkieVoiceKey>) -> Bool {
-        !alongsideIncoming(voices)
+    static func alongsidePlayback(outputs: [AVAudioSession.Port]) -> Bool {
+        !acoustic(outputs)
+    }
+
+    static func incomingAudible(micOpen: Bool, outputs: [AVAudioSession.Port]) -> Bool {
+        !micOpen || !acoustic(outputs)
+    }
+
+    static func micOpen(_ voices: Set<TalkieVoiceKey>) -> Bool {
+        voices.contains { $0.direction == .outgoing }
+    }
+
+    static func alongsideIncoming(_ voices: Set<TalkieVoiceKey>) -> Bool {
+        voices.contains { $0.direction == .incoming }
     }
 }
 
 extension TalkieBannerLaw {
     /// Celui à qui le bandeau répond pendant que je maintiens « Parler », ou après : on répond à la voix qui sonne, et le
-    /// bandeau reste tant que ma réponse part. Répondre ne fait PAS taire la voix reçue (#20579) : on s'entend à deux.
+    /// bandeau reste tant que ma réponse part. Répondre ne COUPE pas la voix reçue (#20579) : avec des écouteurs on
+    /// s'entend à deux ; sur le haut-parleur, elle se tait le temps que mon micro est ouvert (`TalkieMicSessionLaw`).
     static func replyingTo(pressed: Bool, live: TalkieSpeaker?, current: TalkieSpeaker?, sending: Bool) -> TalkieSpeaker? {
         guard pressed else { return sending ? current : nil }
         return live ?? current

@@ -103,14 +103,18 @@ public final class MeeshyRecordingSession {
 
     /// L'enregistrement se termine — envoi, annulation ou échec. Sans `begin`
     /// préalable, ne fait rien.
-    public func finish(handingBackSession: Bool) {
+    ///
+    /// `alongsidePlayback` : un son Meeshy que le ducker ne connaît pas joue
+    /// encore (la voix d'un talkie reçu, #20579) — la session redevient celle
+    /// de la lecture au lieu d'être rendue sous lui.
+    public func finish(handingBackSession: Bool, alongsidePlayback: Bool = false) {
         guard isRecording else { return }
         isRecording = false
         recordingEpoch &+= 1
         ducker.restore()
         session.releaseRecordingHold()
         guard handingBackSession else { return }
-        handBackConfiguration()
+        handBackConfiguration(alongsidePlayback: alongsidePlayback)
     }
 
     /// La caméra arme son micro : la session devient capable d'enregistrer
@@ -134,11 +138,11 @@ public final class MeeshyRecordingSession {
         handBackConfiguration()
     }
 
-    private func handBackConfiguration() {
+    private func handBackConfiguration(alongsidePlayback: Bool = false) {
         guard ownsRecordingConfiguration else { return }
         ownsRecordingConfiguration = false
         session.handBackSession(
-            RecordingSessionLaw.handBack(meeshySoundStillPlaying: ducker.hasAudiblePlayback)
+            RecordingSessionLaw.handBack(meeshySoundStillPlaying: alongsidePlayback || ducker.hasAudiblePlayback)
         )
     }
 }

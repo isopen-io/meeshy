@@ -55,7 +55,7 @@ struct ConversationHeaderTalkieButton: View {
 
     @StateObject private var offer: TalkieOfferModel
     @StateObject private var sender = TalkieSender()
-    @ObservedObject private var voices: TalkieVoiceStageObserver
+    @StateObject private var voices: TalkieVoiceStageObserver
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
     @State private var pressed = false
@@ -65,14 +65,13 @@ struct ConversationHeaderTalkieButton: View {
 
     private var delivery: TalkieDelivery { TalkieDelivery.of(lasting: unreachableLasting) }
 
-    init(userId: String, peerName: String, accentColor: String, secondaryColor: String,
-         voices: TalkieVoiceStageObserver = .shared) {
+    init(userId: String, peerName: String, accentColor: String, secondaryColor: String) {
         self.userId = userId
         self.peerName = peerName
         self.accentColor = accentColor
         self.secondaryColor = secondaryColor
         _offer = StateObject(wrappedValue: TalkieOfferModel(userId: userId))
-        _voices = ObservedObject(wrappedValue: voices)
+        _voices = StateObject(wrappedValue: TalkieVoiceStageObserver(userId: userId))
     }
 
     private var look: TalkieHoldLook { TalkieHoldLook.resolve(pressed: pressed, phase: sender.phase) }
@@ -141,7 +140,8 @@ struct ConversationHeaderTalkieButton: View {
             if let notice = TalkieLiveNotice.on(previous: previous, current: current, delivery: delivery) {
                 FeedbackToastManager.shared.show(notice.text(name: peerName), type: .info)
             }
-            guard let announced = TalkieVoiceHostLaw.announcement(previous: previous, current: current) else { return }
+            guard let announced = TalkieVoiceHostLaw.announcement(previous: previous, current: current,
+                                                                  delivery: delivery) else { return }
             UIAccessibility.post(notification: .announcement, argument: TalkieHeaderWording.announcement(announced))
         }
         .adaptiveOnChange(of: sender.notice) { _, new in

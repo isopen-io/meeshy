@@ -9,7 +9,7 @@ class TalkieFloorTest {
     private val me = "me"
     private val t0 = 1_800_000_000_000L
 
-    private fun incoming(talkieId: String = "t1", from: String = "alice", codec: String = TalkieContract.CODEC, maxMs: Long = 30_000) =
+    private fun incoming(talkieId: String = "t1", from: String = "alice", codec: String = TalkieContract.CODEC, maxMs: Long = 15_000) =
         TalkieIncoming(talkieId = talkieId, fromUserId = from, codec = codec, startedAt = "2026-11-08T05:00:00Z", maxDurationMs = maxMs)
 
     private fun chunk(seq: Int, talkieId: String = "t1", from: String = "alice") =
@@ -30,7 +30,7 @@ class TalkieFloorTest {
         val state = opened()
         assertThat(state.active.map { it.talkieId }).containsExactly("t1")
         assertThat(state.active.single().openedAtMs).isEqualTo(t0)
-        assertThat(state.active.single().deadlineMs).isEqualTo(t0 + 30_000 + TALKIE_EXPIRY_GRACE_MS)
+        assertThat(state.active.single().deadlineMs).isEqualTo(t0 + 15_000 + TALKIE_EXPIRY_GRACE_MS)
     }
 
     @Test

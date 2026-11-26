@@ -20,14 +20,16 @@ private extension Logger {
 /// - Chaque fragment décodé passe par le gain de SA voix, au réglage de réception (−16 / −1 dBFS), avant d'être planifié
 ///   (#20531, `TalkieVoiceProcessor`) : là où il est décodé, sur l'acteur principal, sans transformée de Fourier.
 ///   L'analyse se fait pendant que la voix SONNE, par un tap posé sur le nœud de la voix : chaque tampon du tap est
-///   découpé en fenêtres de 1024 échantillons datées à l'horloge hôte, qui vont au registre sous l'expéditeur, et le
-///   niveau va à l'onde de l'en-tête. Le tap date ce que le moteur REND : chaque fenêtre est reportée du retard de
+///   découpé en fenêtres de 1024 échantillons datées à l'horloge hôte, qui vont au registre sous l'expéditeur. Le tap date ce que le moteur REND : chaque fenêtre est reportée du retard de
 ///   sortie de la route (latence + tampon d'entrée-sortie, relu à chaque changement de sortie), pour que la bulle
 ///   suive ce qu'on ENTEND, Bluetooth compris.
 /// - Ce qu'on écoutait se tait pendant la voix, puis reprend (#18820, `TalkieListeningHold`) : les lecteurs Meeshy se
 ///   mettent en pause, la musique d'une autre app s'interrompt (session sans mélange, `InterruptingVoiceSessionLaw`) ;
 ///   la voix finie, la session se rend en prévenant les autres apps et les lecteurs Meeshy reprennent. Quand rien ne
 ///   joue, la session est `.soloAmbient` : le bouton silencieux reste respecté.
+/// - Pendant que mon micro est ouvert sur le haut-parleur ou l'écouteur de l'iPhone, les voix reçues se taisent — le
+///   micro les renverrait — et leur spectre continue ; elles se réentendent quand il se ferme (#20579,
+///   `TalkieMicSessionLaw.incomingAudible`). Avec des écouteurs, elles sonnent pendant qu'on parle.
 /// - Pendant un appel, rien ne sort : la passerelle coupe déjà (`cut`), et la session reste à l'appel.
 @MainActor
 final class TalkieVoicePlayer: TalkieSink {
@@ -64,6 +66,9 @@ final class TalkieVoicePlayer: TalkieSink {
     private var observers: [NSObjectProtocol] = []
     private let isInCall: () -> Bool
     private let stage: TalkieVoiceStage
+    private let stageSubscription = UUID()
+    /// Mon micro est ouvert : les voix reçues se taisent sur une sortie qu'il entend.
+    private var micOpen = false
 
     nonisolated deinit {}
 
@@ -80,6 +85,10 @@ final class TalkieVoicePlayer: TalkieSink {
         self.stage = stage
         engine.attach(voicesMixer)
         engine.connect(voicesMixer, to: engine.mainMixerNode, format: nil)
+        stage.subscribe(stageSubscription) { [weak self] cast in
+            let open = TalkieMicSessionLaw.micOpen(cast.voices)
+            Task { @MainActor in self?.micChanged(open: open) }
+        }
     }
 
     func prepare(_ talkieId: String, fromUserId: String) {
@@ -98,8 +107,9 @@ final class TalkieVoicePlayer: TalkieSink {
         guard let buffer = decoder.pcm(data) else { return }
         let wasWarm = !isIdle && engine.isRunning
         if isIdle { prepareOutput() }
+        guard startEngineIfNeeded() else { return }
         var voice = voices[talkieId] ?? attachVoice(format: buffer.format, decoder: decoder, fromUserId: senders[talkieId])
-        guard !voice.released, Self.mayPlay(buffer.format, on: voice.format), startEngineIfNeeded() else { return }
+        guard !voice.released, Self.mayPlay(buffer.format, on: voice.format) else { return }
         if pristine, let fromUserId = voice.fromUserId {
             stage.begin(userId: fromUserId, direction: .incoming, at: Date())
             voice.processor?.updateOutputDelay(Self.outputDelay())
@@ -200,6 +210,18 @@ final class TalkieVoicePlayer: TalkieSink {
         listening.begin(systemSession: Self.systemActivatedSession)
         applyOutputPlan()
         observeOutputChanges()
+        applyDuplex()
+    }
+
+    private func micChanged(open: Bool) {
+        guard open != micOpen else { return }
+        micOpen = open
+        applyDuplex()
+    }
+
+    private func applyDuplex() {
+        let outputs = AVAudioSession.sharedInstance().currentRoute.outputs.map(\.portType)
+        voicesMixer.outputVolume = TalkieMicSessionLaw.incomingAudible(micOpen: micOpen, outputs: outputs) ? 1 : 0
     }
 
     private func applyOutputPlan() {
@@ -231,6 +253,7 @@ final class TalkieVoicePlayer: TalkieSink {
     private func outputChanged() {
         guard !isIdle else { return }
         applyOutputPlan()
+        applyDuplex()
         _ = startEngineIfNeeded()
         let delay = Self.outputDelay()
         voices.values.forEach { $0.processor?.updateOutputDelay(delay) }

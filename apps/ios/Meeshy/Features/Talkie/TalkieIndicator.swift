@@ -60,6 +60,9 @@ struct TalkieIndicator: View {
         return String(format: String(localized: "talkie.incoming.title", defaultValue: "%@ te parle", bundle: .main), name)
     }
 
+    /// La marge entre les boutons du bandeau et le bord de son verre.
+    static let verticalMargin = MeeshySpacing.xs
+
     private var actions: [TalkieBannerAction] {
         TalkieBannerLaw.actions(speakerIsLive: isLive, offered: offer.offered && !withdrawn)
     }
@@ -81,7 +84,7 @@ struct TalkieIndicator: View {
             }
         }
         .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.vertical, MeeshySpacing.xs)
+        .padding(.vertical, Self.verticalMargin)
         .backgroundPreferenceValue(TalkieRibbonRegionKey.self) { region in
             GeometryReader { proxy in voiceBackground(ribbonEnd: region.map { proxy[$0].maxX }) }
         }
@@ -162,16 +165,15 @@ private struct TalkieBannerTalkButton: View {
     let userId: String
     let name: String
     @Binding var holding: Bool
-    @ObservedObject private var voices: TalkieVoiceStageObserver
+    @StateObject private var voices: TalkieVoiceStageObserver
     @State private var unreachableLasting = false
 
-    init(sender: TalkieSender, userId: String, name: String, holding: Binding<Bool>,
-         voices: TalkieVoiceStageObserver = .shared) {
+    init(sender: TalkieSender, userId: String, name: String, holding: Binding<Bool>) {
         self.sender = sender
         self.userId = userId
         self.name = name
         _holding = holding
-        _voices = ObservedObject(wrappedValue: voices)
+        _voices = StateObject(wrappedValue: TalkieVoiceStageObserver(userId: userId))
     }
 
     private var live: Bool { holding || sender.isActive }
@@ -192,7 +194,8 @@ private struct TalkieBannerTalkButton: View {
         voices.voices.contains(TalkieVoiceKey(userId: userId, direction: .outgoing))
     }
 
-    static let orb = TalkieVoiceHostLaw.holdOrb(buttonSize: MeeshyControlSize.tapTarget, room: MeeshySpacing.md)
+    /// Bornée à la marge verticale du bandeau autour du micro : l'orbe reste dans le verre, à pleine voix comprise.
+    static let orb = TalkieVoiceHostLaw.holdOrb(buttonSize: MeeshyControlSize.tapTarget, room: TalkieIndicator.verticalMargin)
 
     var body: some View {
         Image(systemName: glyph.symbol(rest: "mic.fill"))
@@ -220,9 +223,10 @@ private struct TalkieBannerTalkButton: View {
     }
 }
 
-/// Ce que le bandeau montre : la voix qui sonne, ou celle à qui l'on répond. Répondre prend la parole SANS faire taire la
-/// voix reçue (#20579) : on parle et on s'entend à deux, son spectre continue dans le bandeau pendant que l'orbe de ma
-/// voix vit sur le micro, et le bandeau reste jusqu'à ce que la réponse soit partie.
+/// Ce que le bandeau montre : la voix qui sonne, ou celle à qui l'on répond. Répondre prend la parole SANS couper la
+/// voix reçue (#20579) : avec des écouteurs on s'entend à deux, sur le haut-parleur elle se tait le temps que mon micro
+/// est ouvert (`TalkieMicSessionLaw`) ; son spectre continue dans le bandeau pendant que l'orbe de ma voix vit sur le
+/// micro, et le bandeau reste jusqu'à ce que la réponse soit partie.
 struct TalkieBannerRoot: View {
     @ObservedObject var center: TalkieCenter
     @ObservedObject var presenter: TalkieBannerPresenter

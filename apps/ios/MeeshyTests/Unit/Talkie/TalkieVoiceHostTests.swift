@@ -113,15 +113,21 @@ final class TalkieVoiceHostTests: XCTestCase {
     }
 
     func test_announcement_onEnteringLive_andOnEachDeliveryChangeWhileLive() {
-        XCTAssertEqual(TalkieVoiceHostLaw.announcement(previous: nil, current: .live), .live)
-        XCTAssertEqual(TalkieVoiceHostLaw.announcement(previous: .live, current: .relayed), .relayed)
-        XCTAssertEqual(TalkieVoiceHostLaw.announcement(previous: .relayed, current: .recorded), .recorded)
+        XCTAssertEqual(TalkieVoiceHostLaw.announcement(previous: nil, current: .live, delivery: .live), .live)
+        XCTAssertEqual(TalkieVoiceHostLaw.announcement(previous: .live, current: .relayed, delivery: .live), .relayed)
+        XCTAssertEqual(TalkieVoiceHostLaw.announcement(previous: .relayed, current: .recorded, delivery: .live), .recorded)
     }
 
     func test_announcement_neitherWhenNothingChangesNorWhenTheVoiceEnds() {
-        XCTAssertNil(TalkieVoiceHostLaw.announcement(previous: .live, current: .live))
-        XCTAssertNil(TalkieVoiceHostLaw.announcement(previous: .relayed, current: nil))
-        XCTAssertNil(TalkieVoiceHostLaw.announcement(previous: nil, current: nil))
+        XCTAssertNil(TalkieVoiceHostLaw.announcement(previous: .live, current: .live, delivery: .live))
+        XCTAssertNil(TalkieVoiceHostLaw.announcement(previous: .relayed, current: nil, delivery: .live))
+        XCTAssertNil(TalkieVoiceHostLaw.announcement(previous: nil, current: nil, delivery: .live))
+    }
+
+    /// #20241 — le message vocal laissé exprès ne s'annonce pas comme un talkie qui ne passe pas.
+    func test_announcement_staysSilentOnAChosenVoiceMessage() {
+        XCTAssertNil(TalkieVoiceHostLaw.announcement(previous: nil, current: .recorded, delivery: .voiceMessage))
+        XCTAssertEqual(TalkieVoiceHostLaw.announcement(previous: nil, current: .live, delivery: .voiceMessage), .live)
     }
 
     func test_announcementText_saysWhatTheVoiceBecomes_onePhrasePerDelivery() {

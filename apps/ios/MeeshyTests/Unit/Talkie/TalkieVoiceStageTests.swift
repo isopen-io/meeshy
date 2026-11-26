@@ -206,6 +206,22 @@ final class TalkieVoiceStageTests: XCTestCase {
         ])
     }
 
+    /// Le bouton du talkie d'une personne ne se redessine pas quand une autre parle.
+    func test_observerOfOnePerson_publishesNothingWhenSomeoneElseSpeaks() {
+        let stage = TalkieVoiceStage()
+        let observer = TalkieVoiceStageObserver(stage: stage, userId: "a")
+        var publications = 0
+        let subscription = observer.objectWillChange.sink { publications += 1 }
+
+        stage.begin(userId: "b", direction: .incoming, at: Self.startedAt)
+        XCTAssertEqual(publications, 0)
+
+        stage.begin(userId: "a", direction: .outgoing, at: Self.startedAt)
+        XCTAssertEqual(observer.voices, [TalkieVoiceKey(userId: "a", direction: .outgoing)])
+        XCTAssertEqual(publications, 1)
+        subscription.cancel()
+    }
+
     func test_observer_startsFromTheVoicesAlreadyInProgress() {
         let stage = TalkieVoiceStage()
         stage.begin(userId: "a", direction: .incoming, at: Self.startedAt)

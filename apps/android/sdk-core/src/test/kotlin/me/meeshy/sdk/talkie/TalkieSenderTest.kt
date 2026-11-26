@@ -33,7 +33,7 @@ class TalkieSenderTest {
         const val FRAME_MS = 1_024.0 * 1_000.0 / 48_000
         val FRAMES_PER_FRAGMENT = ceil(TalkieContract.FRAGMENT_DURATION_MS / FRAME_MS).toInt()
         val TALKIE = "a".repeat(24)
-        val OPENED = TalkieOpened(TALKIE, 30_000, 16_384)
+        val OPENED = TalkieOpened(TALKIE, 15_000, 16_384)
         val WAKING = OPENED.copy(delivery = TalkieDelivery.WAKING)
     }
 
@@ -158,7 +158,7 @@ class TalkieSenderTest {
         runCurrent()
         assertThat(rig.sut.phase.value).isEqualTo(TalkieSendPhase.Talking("bob", TALKIE))
         assertThat(rig.emitter.chunks).containsExactly(Chunk(TALKIE, 0, fragmentBytes))
-        assertThat(rig.delays).containsExactly(30_000L)
+        assertThat(rig.delays).containsExactly(15_000L)
 
         rig.capture.speak(FRAMES_PER_FRAGMENT * 2 + 1)
         rig.sut.release()

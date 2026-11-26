@@ -44,9 +44,12 @@ nonisolated enum TalkieVoiceHostLaw {
 
     /// Ce que VoiceOver annonce quand ma voix part : son sort en entrant en direct, puis à chaque changement de sort
     /// tant qu'elle dure ; rien à la fin, rien sans changement. La voix qui arrive s'annonce par l'indicateur de
-    /// réception, jamais ici.
-    static func announcement(previous: TalkieHeaderDelivery?, current: TalkieHeaderDelivery?) -> TalkieHeaderDelivery? {
+    /// réception, jamais ici. Un message vocal CHOISI (#20241) ne s'annonce pas comme un repli : le geste le disait,
+    /// comme pour le bandeau neutre (`TalkieLiveNotice`).
+    static func announcement(previous: TalkieHeaderDelivery?, current: TalkieHeaderDelivery?,
+                             delivery: TalkieDelivery) -> TalkieHeaderDelivery? {
         guard let current, current != previous else { return nil }
+        guard current != .recorded || delivery == .live else { return nil }
         return current
     }
 

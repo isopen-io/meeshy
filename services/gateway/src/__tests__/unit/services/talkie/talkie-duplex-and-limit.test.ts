@@ -18,13 +18,13 @@ const BOB = '507f1f77bcf86cd799439022';
 const ALICE_SOCKET = 'sock-alice';
 const BOB_SOCKET = 'sock-bob';
 
-type Emission = { room: string; event: string; payload: Record<string, any> };
+type Emission = { room: string; event: string; payload: Record<string, unknown> };
 
 function relayWith(overrides: Partial<TalkieRelayDeps> = {}) {
   const emissions: Emission[] = [];
   let clock = Date.parse('2026-11-25T10:00:00Z');
   const deps: TalkieRelayDeps = {
-    io: { to: (room: string) => ({ emit: (event: string, payload: Record<string, any>) => { emissions.push({ room, event, payload }); } }) } as never,
+    io: { to: (room: string) => ({ emit: (event: string, payload: Record<string, unknown>) => { emissions.push({ room, event, payload }); } }) } as never,
     judge: async (): Promise<TalkieVerdict> => ({ ok: true }),
     withinStartRate: async () => true,
     cutAt: async () => null,

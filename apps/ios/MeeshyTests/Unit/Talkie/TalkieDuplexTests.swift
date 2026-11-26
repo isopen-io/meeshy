@@ -1,3 +1,4 @@
+import AVFoundation
 import Combine
 import XCTest
 import MeeshySDK
@@ -59,17 +60,32 @@ final class TalkieDuplexTests: XCTestCase {
 
     // MARK: - La session audio partagée par le micro et la voix reçue
 
-    func test_theMic_takesASessionThatKeepsAnIncomingVoiceAudible() {
+    func test_theMicStopping_alongsideAVoiceThatSounds_keepsAPlaybackSession() {
         XCTAssertTrue(TalkieMicSessionLaw.alongsideIncoming([TalkieVoiceKey(userId: awa, direction: .incoming)]))
         XCTAssertFalse(TalkieMicSessionLaw.alongsideIncoming([TalkieVoiceKey(userId: awa, direction: .outgoing)]))
         XCTAssertFalse(TalkieMicSessionLaw.alongsideIncoming([]))
     }
 
-    func test_theMicStopping_neverReleasesTheSessionUnderAVoiceThatStillSounds() {
-        let both: Set<TalkieVoiceKey> = [TalkieVoiceKey(userId: awa, direction: .incoming),
-                                         TalkieVoiceKey(userId: awa, direction: .outgoing)]
-        XCTAssertFalse(TalkieMicSessionLaw.handsBackSession(both))
-        XCTAssertTrue(TalkieMicSessionLaw.handsBackSession([TalkieVoiceKey(userId: awa, direction: .outgoing)]))
+    /// Le mode du micro dépend de la SORTIE, jamais de l'ordre des voix : une voix qui arrive après l'ouverture du micro
+    /// trouve la même session que celle qui sonnait avant.
+    func test_theMicSession_isChosenByTheOutput_notByWhichVoiceCameFirst() {
+        XCTAssertTrue(TalkieMicSessionLaw.alongsidePlayback(outputs: [.headphones]))
+        XCTAssertTrue(TalkieMicSessionLaw.alongsidePlayback(outputs: [.bluetoothHFP]))
+        XCTAssertFalse(TalkieMicSessionLaw.alongsidePlayback(outputs: [.builtInSpeaker]))
+        XCTAssertFalse(TalkieMicSessionLaw.alongsidePlayback(outputs: [.builtInReceiver]))
+    }
+
+    /// Sur le haut-parleur, le micro entendrait la voix reçue et la renverrait : elle se tait tant qu'il est ouvert.
+    func test_anIncomingVoice_isSilencedWhileMyMicIsOpenOnTheSpeaker_only() {
+        XCTAssertFalse(TalkieMicSessionLaw.incomingAudible(micOpen: true, outputs: [.builtInSpeaker]))
+        XCTAssertTrue(TalkieMicSessionLaw.incomingAudible(micOpen: false, outputs: [.builtInSpeaker]))
+        XCTAssertTrue(TalkieMicSessionLaw.incomingAudible(micOpen: true, outputs: [.headphones]))
+        XCTAssertTrue(TalkieMicSessionLaw.incomingAudible(micOpen: true, outputs: [.bluetoothA2DP]))
+    }
+
+    func test_myMicIsOpen_whileMyOwnVoiceLeaves() {
+        XCTAssertTrue(TalkieMicSessionLaw.micOpen([TalkieVoiceKey(userId: awa, direction: .outgoing)]))
+        XCTAssertFalse(TalkieMicSessionLaw.micOpen([TalkieVoiceKey(userId: awa, direction: .incoming)]))
     }
 
     private static func repoFile(_ path: String) -> URL {

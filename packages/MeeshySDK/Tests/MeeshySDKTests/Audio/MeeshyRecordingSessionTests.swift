@@ -96,6 +96,18 @@ final class MeeshyRecordingSessionTests: XCTestCase {
         XCTAssertEqual(session.configured.first?.0, RecordingSessionLaw.configuration(for: .voiceMessage, meeshySoundPlaying: false))
     }
 
+    /// #20579 — le micro s'arrête pendant qu'un son que le ducker ne connaît pas joue encore (la voix d'un talkie reçu) :
+    /// la session redevient celle de la lecture, jamais rendue sous ce son, et elle n'appartient plus à l'enregistrement.
+    func test_finish_alongsideAPlaybackTheDuckerDoesNotKnow_returnsToContentPlayback_andOwnsNothingAfter() async {
+        let (sut, session, _, _) = makeSUT()
+        _ = await sut.begin(.voiceMessage, alongsidePlayback: true)
+
+        sut.finish(handingBackSession: true, alongsidePlayback: true)
+        sut.handBack()
+
+        XCTAssertEqual(session.handBacks, [.returnToContentPlayback])
+    }
+
     func test_finish_afterAVoiceMessage_restoresTheVolumeAndGivesThePlaybackSessionBack() async {
         let (sut, session, source, _) = makeSUT()
         let voiceNote = FakePlayer(volume: 0.7)
