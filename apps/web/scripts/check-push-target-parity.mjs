@@ -164,6 +164,7 @@ export const ADRESSES = [
   [{ type: 'game_league_result', route: 'progression' }, '/me/progression/ligue'],
   [{ type: 'game_season_step', route: 'progression' }, '/me/progression/saison'],
   [{ type: 'game_photo_moment', route: 'progression' }, '/me/progression/carnet'],
+  [{ type: 'game_flame_evening', route: 'progression' }, '/me/progression?section=flame'],
   [{ type: 'un_type_sans_ecran' }, '/notifications'],
 ];
 

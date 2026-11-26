@@ -179,6 +179,7 @@ export function isNotificationTypeEnabled(
     case 'game_league_result':
     case 'game_season_step':
     case 'game_mission_window':
+    case 'game_flame_evening':
       return prefs.gameEnabled !== false;
     case 'game_photo_moment':
       return prefs.gameEnabled !== false && prefs.gamePhotoEnabled !== false;

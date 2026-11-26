@@ -147,6 +147,7 @@ export const notificationTypeEnum = z.enum([
   'game_season_step',         // Étape de saison atteinte
   'game_mission_window',      // La mission personnelle du jour commence (plage horaire)
   'game_photo_moment',        // Des étapes franchies app fermée peuvent rejoindre le carnet (#10175)
+  'game_flame_evening',       // Le rappel du soir d'une Flamme de 3 jours ou plus sans geste du jour (#20612)
 
   // ===== PAYMENT/SUBSCRIPTION (future) =====
   'subscription_expiring',    // Abonnement expire bientôt

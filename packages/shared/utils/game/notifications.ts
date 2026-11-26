@@ -10,6 +10,8 @@
  * langues) ; la préférence est `notification.gameEnabled` (défaut activé, absent = reçu).
  */
 
+import type { FlameStatus } from './flame.js';
+
 export const GAME_NOTIFICATION_TYPES = [
   'game_duo_invited',
   'game_duo_accepted',
@@ -19,6 +21,8 @@ export const GAME_NOTIFICATION_TYPES = [
   'game_mission_window',
   /** Des étapes franchies app fermée peuvent rejoindre le carnet — regroupées, dans le plafond (#10175, D9). */
   'game_photo_moment',
+  /** Le rappel du soir : une Flamme de trois jours ou plus n'a reçu aucun geste aujourd'hui (#17368, #20612). */
+  'game_flame_evening',
 ] as const;
 
 export type GameNotificationType = (typeof GAME_NOTIFICATION_TYPES)[number];
@@ -81,6 +85,30 @@ export const GAME_MISSION_FLAME_MIN_DAYS = 2;
 
 export const missionWindowKey = (flameDays: number): 'game.missionWindow' | 'game.missionWindowFlame' =>
   Number.isFinite(flameDays) && flameDays >= GAME_MISSION_FLAME_MIN_DAYS ? 'game.missionWindowFlame' : 'game.missionWindow';
+
+/**
+ * LE RAPPEL DU SOIR (#17368, #20612) — décision du porteur du 2026-11-10 : « une fois, si la Flamme a 3 jours
+ * ou plus et qu'aucun geste n'a été fait. Jamais après 21 h ». Aucun geste aujourd'hui, c'est une Flamme qui vit
+ * encore sans avoir été entretenue : `at-risk` (dernier geste hier) ou `covered` (une Veilleuse couvre l'écart, et
+ * en brûlera une de plus à minuit). La plage commence à 18 h et se ferme à 21 h, dans le fuseau du joueur.
+ * « Une fois par jour » et le plafond de deux sont tenus par le notifieur, pas par cette loi.
+ */
+export const GAME_FLAME_EVENING_MIN_DAYS = 3;
+export const GAME_FLAME_EVENING_FIRST_MINUTE = 18 * 60;
+export const GAME_FLAME_EVENING_LAST_MINUTE = 21 * 60;
+
+export const flameEveningReminderDue = (params: {
+  readonly status: FlameStatus;
+  /** La hauteur SERVIE de la Flamme (`servedFlameDays`) : 0 quand elle est éteinte. */
+  readonly days: number;
+  /** La minute du jour LOCAL du joueur, 0..1439. */
+  readonly minuteOfDay: number;
+}): boolean =>
+  (params.status === 'at-risk' || params.status === 'covered') &&
+  Number.isFinite(params.days) &&
+  params.days >= GAME_FLAME_EVENING_MIN_DAYS &&
+  params.minuteOfDay >= GAME_FLAME_EVENING_FIRST_MINUTE &&
+  params.minuteOfDay < GAME_FLAME_EVENING_LAST_MINUTE;
 
 /** Le texte du push photo (D13) : une étape au singulier, plusieurs en une phrase groupée qui dit leur nombre. */
 export const photoMomentNotificationKey = (count: number): 'game.photoMoment' | 'game.photoMoments' =>
