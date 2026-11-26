@@ -107,6 +107,7 @@ enum GameNavigationMap {
         case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult: .gamePage(.league)
         case .gameSeasonStep: .gamePage(.season)
         case .gameMissionWindow: .progressionConcept(.missions, section: .act)
+        case .gameFlameEvening: .progressionConcept(.flame, section: .act)
         case .levelUp: .progressionConcept(.level)
         case .streakMilestone: .progressionConcept(.flame)
         case .badgeEarned: .progressionConcept(.badges)
