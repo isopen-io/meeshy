@@ -231,7 +231,7 @@ export class PostService {
     // #10524 (aucune puce « Reposté de ») et #9853 (aucun son retiré dans un post neuf),
     // AVANT toute lecture du canvas : traductions, signaux et réel compris.
     if (data.storyEffects !== undefined) {
-      data = { ...data, storyEffects: await newPublicationStoryEffects(this.prisma, data.storyEffects, { isRepost: Boolean(data.repostOfId) }) };
+      data = { ...data, storyEffects: await newPublicationStoryEffects(this.prisma, data.storyEffects, { repostOfId: data.repostOfId }) };
     }
 
     if (data.repostOfId) {

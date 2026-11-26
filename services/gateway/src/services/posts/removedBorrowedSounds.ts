@@ -10,8 +10,8 @@
  *
  * Le retrait est SILENCIEUX : la piste quitte le blob, la publication réussit.
  * Un ancien client ne voit rien échouer — il publie sans la piste. Appliqué à
- * la seule création : une édition ou une republication d'un post qui le liait
- * déjà garde ce qu'il jouait.
+ * la seule création : une édition d'un post qui le liait déjà garde ce qu'il
+ * jouait, une republication garde ce que sa SOURCE jouait.
  *
  * Trois logements d'un son emprunté, les mêmes que `extractCaptureTracks` :
  * les `audioPlayerObjects` v1, les objets `audio` des scènes v3 et le son de
@@ -67,36 +67,57 @@ export function storyEffectsWithoutSounds(storyEffects: Blob, removed: ReadonlyS
   return { ...storyEffects, audioPlayerObjects: tracks.filter((t) => !borrows(t, removed)) };
 }
 
-/**
- * Le blob d'une publication NEUVE, sans les sons retirés de la bibliothèque.
- * Ne lit la base que si le blob emprunte au moins un son.
- */
-export async function storyEffectsWithoutRemovedSounds(
-  prisma: { sound: Pick<PrismaClient['sound'], 'findMany'> },
-  storyEffects: Blob,
-): Promise<Blob> {
-  const soundIds = [...new Set(extractCaptureTracks(storyEffects)
+function borrowedSoundIds(storyEffects: unknown): string[] {
+  const blob = asRecord(storyEffects);
+  if (!blob) return [];
+  return [...new Set(extractCaptureTracks(blob)
     .map((t) => t.soundId)
     .filter((id): id is string => Boolean(id)))];
+}
+
+type SoundsReader = { sound: Pick<PrismaClient['sound'], 'findMany'> };
+type SourceReader = { post: Pick<PrismaClient['post'], 'findFirst'> };
+
+/**
+ * Le blob d'une publication NEUVE, sans les sons retirés de la bibliothèque.
+ * Ne lit la base que si le blob emprunte au moins un son. `keep` : les sons
+ * que la publication a le droit de garder (ceux que sa source liait déjà).
+ */
+export async function storyEffectsWithoutRemovedSounds(
+  prisma: SoundsReader,
+  storyEffects: Blob,
+  keep: () => Promise<ReadonlySet<string>> = async () => new Set(),
+): Promise<Blob> {
+  const soundIds = borrowedSoundIds(storyEffects);
   if (soundIds.length === 0) return storyEffects;
   const removed = await prisma.sound.findMany({
     where: { id: { in: soundIds }, deletedAt: { not: null } },
     select: { id: true, deletedAt: true },
   });
-  const ids = new Set(removed.filter((s) => s.deletedAt).map((s) => s.id));
-  return storyEffectsWithoutSounds(storyEffects, ids);
+  const removedIds = removed.filter((s) => s.deletedAt).map((s) => s.id);
+  if (removedIds.length === 0) return storyEffects;
+  const kept = await keep();
+  return storyEffectsWithoutSounds(storyEffects, new Set(removedIds.filter((id) => !kept.has(id))));
 }
 
 /**
  * Le blob d'une publication passée par `createPost` : jamais de puce de crédit
- * (#10524) et, hors republication, aucun son retiré (#9853).
+ * (#10524) et aucun son retiré (#9853) — sauf, pour une republication, ceux
+ * que la SOURCE liait déjà : le blob vient du client, qui peut y AJOUTER une
+ * piste ; seule celle que la source jouait se garde. La source n'est relue
+ * que si le blob emprunte un son retiré.
  */
 export async function newPublicationStoryEffects(
-  prisma: { sound: Pick<PrismaClient['sound'], 'findMany'> },
+  prisma: SoundsReader & SourceReader,
   storyEffects: Blob,
-  options: { readonly isRepost: boolean },
+  options: { readonly repostOfId?: string },
 ): Promise<Blob> {
   const withoutCredits = storyEffectsWithoutCredits(storyEffects);
-  if (options.isRepost) return withoutCredits;
-  return storyEffectsWithoutRemovedSounds(prisma, withoutCredits);
+  const { repostOfId } = options;
+  const linkedBySource = async (): Promise<ReadonlySet<string>> => {
+    if (!repostOfId) return new Set();
+    const source = await prisma.post.findFirst({ where: { id: repostOfId }, select: { storyEffects: true } });
+    return new Set(borrowedSoundIds(source?.storyEffects));
+  };
+  return storyEffectsWithoutRemovedSounds(prisma, withoutCredits, linkedBySource);
 }

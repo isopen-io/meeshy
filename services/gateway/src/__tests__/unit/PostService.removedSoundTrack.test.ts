@@ -89,6 +89,22 @@ describe('createPost — un son retiré ne part pas dans une publication neuve (
     expect(effects).toEqual({ audioPlayerObjects: [v1Effects().audioPlayerObjects[1]] });
   });
 
+  const republished = async (sourceEffects: Record<string, unknown>) => {
+    prisma.post.findFirst.mockResolvedValue(makePost({ id: 'source-1', visibility: 'PUBLIC', storyEffects: sourceEffects }));
+    await service.createPost({ type: PostType.STORY, visibility: 'PUBLIC' as never, storyEffects: v1Effects(), repostOfId: 'source-1' }, AUTHOR);
+    return (prisma.post.create.mock.calls[0]?.[0] as { data: { storyEffects: any } }).data.storyEffects;
+  };
+
+  it('test_createPost_repostOfSourceLinkingRemovedSound_keepsTrack', async () => {
+    const effects = await republished(v1Effects());
+    expect(effects.audioPlayerObjects.map((t: { id: string }) => t.id)).toEqual(['t-removed', 't-live']);
+  });
+
+  it('test_createPost_repostAddingRemovedSoundSourceNeverLinked_dropsTrack', async () => {
+    const effects = await republished({ audioPlayerObjects: [v1Effects().audioPlayerObjects[1]] });
+    expect(effects.audioPlayerObjects.map((t: { id: string }) => t.id)).toEqual(['t-live']);
+  });
+
   it('test_updatePost_postAlreadyLinkingRemovedSound_keepsTrack', async () => {
     prisma.post.findFirst.mockResolvedValue(makePost({ id: 'story-1', authorId: AUTHOR, type: PostType.STORY, media: [] }));
     prisma.post.update.mockImplementation(async (args: { data: Record<string, unknown> }) => makePost({ id: 'story-1', ...args.data }));
