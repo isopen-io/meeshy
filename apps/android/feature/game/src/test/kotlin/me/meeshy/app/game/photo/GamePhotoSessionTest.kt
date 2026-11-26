@@ -94,7 +94,7 @@ class GamePhotoSessionTest {
         s.chooseFormat(square = true)
 
         assertThat(s.showsSave).isTrue()
-        assertThat(s.shareBytes()).isEqualTo(square)
+        assertThat(s.prepareShare()?.bytes).isEqualTo(square)
         s.save()
         assertThat(gallery.saved.last().second).isEqualTo("meeshy-rank_polyglotte_3-square.jpg")
     }

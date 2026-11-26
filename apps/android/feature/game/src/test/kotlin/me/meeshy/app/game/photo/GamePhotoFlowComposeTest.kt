@@ -2,6 +2,8 @@ package me.meeshy.app.game.photo
 
 import android.content.Context
 import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -59,7 +61,7 @@ class GamePhotoFlowComposeTest {
         val notebook = FakePhotoNotebook()
         val session = fakeSession(moment, notebook = notebook)
         var shared: ByteArray? = null
-        compose.setContent { Still { GamePhotoFlow(session, onClose = {}, onSelfie = {}, onGallery = {}, onShare = { shared = it }) } }
+        compose.setContent { Still { GamePhotoFlow(session, onClose = {}, onSelfie = {}, onGallery = {}, onShare = { shared = it.bytes }) } }
 
         compose.onNodeWithTag(PHOTO_CARD_TAG).performClick()
         compose.waitUntil(5_000) { session.state is PhotoFlowState.Result }
@@ -73,6 +75,37 @@ class GamePhotoFlowComposeTest {
             check(shared?.toList() == listOf<Byte>(1)) { "Partager n'a pas remis la story" }
             check(session.state == PhotoFlowState.Result(PhotoMode.Card, kept = true))
         }
+    }
+
+    @Test
+    fun `mon lien d invitation se retire d un geste et Partager part alors sans texte`() {
+        val links = FakeReferralLinks(existing = "https://meeshy.me/join/abc")
+        val session = fakeSession(moment, referralLinks = links)
+        var shared: PhotoShareOut? = null
+        kotlinx.coroutines.runBlocking { session.prepareReferral() }
+        compose.setContent { Still { GamePhotoFlow(session, onClose = {}, onSelfie = {}, onGallery = {}, onShare = { shared = it }) } }
+
+        compose.onNodeWithTag(PHOTO_CARD_TAG).performClick()
+        compose.waitUntil(5_000) { session.state is PhotoFlowState.Result }
+        compose.onNodeWithText(context.getString(R.string.game_referral_link_toggle)).assertExists()
+        compose.onNodeWithTag(PHOTO_LINK_TOGGLE_TAG).assertIsOn().performClick()
+        compose.waitUntil(5_000) { !session.linkOnCard }
+
+        compose.onNodeWithTag(PHOTO_LINK_TOGGLE_TAG).assertIsOff()
+        compose.onNodeWithTag(PHOTO_SHARE_TAG).performClick()
+        compose.waitUntil(5_000) { shared != null }
+        compose.runOnIdle { check(shared?.text == null) { "Le lien retiré est parti en texte" } }
+    }
+
+    @Test
+    fun `sans service de parrainage aucun choix de lien n est propose`() {
+        val session = fakeSession(moment)
+        compose.setContent { Still { GamePhotoFlow(session, onClose = {}, onSelfie = {}, onGallery = {}, onShare = {}) } }
+
+        compose.onNodeWithTag(PHOTO_CARD_TAG).performClick()
+        compose.waitUntil(5_000) { session.state is PhotoFlowState.Result }
+
+        compose.onNodeWithTag(PHOTO_LINK_TOGGLE_TAG).assertDoesNotExist()
     }
 
     @Test

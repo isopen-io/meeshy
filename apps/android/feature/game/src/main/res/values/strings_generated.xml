@@ -953,6 +953,7 @@
     <string name="game_photo_offer_start">Take the photo</string>
     <string name="game_photo_offer_title">Shall we capture it?</string>
     <string name="game_photo_preview">Preview: %1$s</string>
+    <string name="game_photo_referral_qr_label">QR code of your invitation link</string>
     <string name="game_photo_save">Save</string>
     <string name="game_photo_scene_a11y">Camera preview — double-tap to take without saving to Photos</string>
     <string name="game_photo_selfie">Selfie with us</string>
@@ -984,6 +985,9 @@
     <string name="game_rank_passeur">Bridge-builder</string>
     <string name="game_rank_polyglotte">Polyglot</string>
     <string name="game_rank_voix">Voice</string>
+    <string name="game_referral_link_toggle">My invitation link on the card</string>
+    <string name="game_referral_share_text">Join me on Meeshy: %1$s</string>
+    <string name="game_referral_title">Join me on Meeshy</string>
     <string name="game_rules_1_title">Every move makes sparks fly</string>
     <string name="game_rules_2_title">Sparks form your light</string>
     <string name="game_rules_3_title">We mint Meeshes</string>

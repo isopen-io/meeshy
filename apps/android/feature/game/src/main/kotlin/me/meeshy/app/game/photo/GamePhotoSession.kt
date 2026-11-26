@@ -8,7 +8,9 @@ import androidx.compose.runtime.setValue
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
+import me.meeshy.sdk.game.ReferralLinkProviding
 import me.meeshy.sdk.media.CaptureGallery
 import me.meeshy.sdk.model.composer.capture.CaptureOrigin
 import me.meeshy.sdk.model.composer.capture.CaptureSaveLaw
@@ -26,6 +28,8 @@ import me.meeshy.sdk.model.game.photo.PhotoFlowEvent
 import me.meeshy.sdk.model.game.photo.PhotoFlowState
 import me.meeshy.sdk.model.game.photo.PhotoFormat
 import me.meeshy.sdk.model.game.photo.PhotoMode
+import me.meeshy.sdk.model.game.photo.PhotoReferralBanner
+import me.meeshy.sdk.model.game.photo.PhotoReferralChoice
 
 /** Ce que le déroulé dit après un geste — un ton et une phrase, jamais un code. */
 enum class PhotoNotice(val good: Boolean) {
@@ -36,6 +40,12 @@ enum class PhotoNotice(val good: Boolean) {
     SaveFailed(false),
     Shared(true),
 }
+
+/** Les phrases du bandeau de parrainage, dites dans la langue de l'interface ; [shareText] habille le lien du partage. */
+class PhotoReferralText(val title: String, val qrLabel: String, val shareText: (String) -> String)
+
+/** Ce que « Partager » remet à la feuille système : l'image du format choisi, puis le lien en texte quand il existe. */
+class PhotoShareOut(val bytes: ByteArray, val text: String?)
 
 /**
  * LE DÉROULÉ D'UNE PHOTO (iOS `GamePhotoSession`, #9382, #13891) :
@@ -49,6 +59,9 @@ enum class PhotoNotice(val good: Boolean) {
  *
  * L'étape vit dans [GamePhotoFlow] (réducteur pur) ; cette classe y branche les effets, chacun INJECTÉ pour que le
  * déroulé se teste sans objectif ni disque. Aucune image n'est envoyée au serveur.
+ *
+ * La carte porte le lien d'invitation de l'utilisateur en carré QR (#13978) tant qu'il ne l'a pas retiré (#17392) ; la
+ * loi vit dans [PhotoReferralChoice]. Sans [referralLinks] ni [referralText], la carte part sans bandeau.
  */
 @Stable
 class GamePhotoSession(
@@ -61,6 +74,9 @@ class GamePhotoSession(
     private val strikeMillis: Long = STRIKE_MILLIS,
     private val onStrike: () -> Unit = {},
     private val encodeSource: (Bitmap) -> ByteArray? = ::sourceJpeg,
+    private val referralLinks: ReferralLinkProviding? = null,
+    private val referralText: PhotoReferralText? = null,
+    private val rightToLeft: Boolean = false,
 ) {
     var state: PhotoFlowState by mutableStateOf(PhotoFlowState.Offer)
         private set
@@ -82,9 +98,23 @@ class GamePhotoSession(
     var squareFormat: Boolean by mutableStateOf(false)
         private set
 
+    /** Le lien d'invitation de la carte : lu, créé au partage, retiré ou remis par l'utilisateur. */
+    var referralChoice: PhotoReferralChoice by mutableStateOf(PhotoReferralChoice())
+        private set
+
     private var takeSave: TakeSaveState? by mutableStateOf(null)
     private var composedSource: Bitmap? = null
+    private var composedWith: PhotoReferral? = null
     private var taking = false
+    private var readingReferral = false
+    private val sharing = Mutex()
+
+    private val referralOffered: Boolean get() = referralLinks != null && referralText != null
+
+    /** « Mon lien d'invitation sur la carte » : offert s'il y a un lien, ou un jeton que « Partager » peut créer. */
+    val offersLinkChoice: Boolean get() = referralOffered && referralChoice.offersLinkChoice
+
+    val linkOnCard: Boolean get() = referralChoice.linkOnCard
 
     /** « Enregistrer » n'existe que s'il sert : une prise déjà dans la galerie dans ce format ne le montre pas. */
     val showsSave: Boolean get() = takeSave?.let(CaptureSaveLaw::saveButtonVisible) ?: false
@@ -94,6 +124,29 @@ class GamePhotoSession(
 
     private fun send(event: PhotoFlowEvent) {
         state = GamePhotoFlow.reduce(state, event)
+    }
+
+    // 0. Le lien d'invitation
+
+    /** Lit le jeton qui existe DÉJÀ — sans jamais en créer un : seul « Partager » en crée. */
+    suspend fun prepareReferral() {
+        val links = referralLinks ?: return
+        if (!referralOffered || referralChoice.prepared || readingReferral) return
+        readingReferral = true
+        val existing = try {
+            links.existingLink()
+        } finally {
+            readingReferral = false
+        }
+        referralChoice = referralChoice.read(existing)
+        recompose()
+    }
+
+    /** Sans lien, le bandeau n'existe pas et rien ne part en texte ; le remettre ne rappelle pas le réseau. */
+    suspend fun setLinkOnCard(shown: Boolean) {
+        if (referralChoice.linkOnCard == shown) return
+        referralChoice = referralChoice.withLinkOnCard(shown)
+        recompose()
     }
 
     // 1. La proposition
@@ -160,12 +213,14 @@ class GamePhotoSession(
             strike = 1f
         }
         composedSource = source
-        val result = composer.compose(PhotoComposeRequest(moment, text, source, mode))
+        val referral = currentReferral()
+        val result = composer.compose(request(source, mode, referral))
         if (result == null) {
             send(PhotoFlowEvent.ComposeFailed)
             return
         }
         composed = result
+        composedWith = referral
         send(PhotoFlowEvent.Composed)
         val format = format(squareFormat)
         val origin = if (zone == CaptureZone.FRAME) CaptureOrigin.Frame(moment.id, format) else CaptureOrigin.Outside(moment.id, format)
@@ -185,13 +240,17 @@ class GamePhotoSession(
     /** Garde le 9:16, la photo d'origine réduite (jamais pour une carte seule) et la recette. */
     suspend fun keep() {
         if (state !is PhotoFlowState.Result) return
-        val result = composed
+        val result = exportable()
         val outcome = if (result == null) {
             NotebookKeepOutcome.Unavailable
         } else {
             val taken = composedSource.takeIf { result.mode != PhotoMode.Card }
             val source = taken?.let { withContext(Dispatchers.Default) { encodeSource(it) } }
-            val recipe = NotebookRecipe(frameId = moment.id, mirror = taken?.let { result.mode == PhotoMode.Selfie })
+            val recipe = NotebookRecipe(
+                frameId = moment.id,
+                mirror = taken?.let { result.mode == PhotoMode.Selfie },
+                showLink = referralChoice.showsLink,
+            )
             notebook.keep(moment, KeptPhoto(result.storyJpeg, result.mode, source, recipe))
         }
         send(PhotoFlowEvent.Kept(outcome == NotebookKeepOutcome.Kept))
@@ -210,8 +269,27 @@ class GamePhotoSession(
         writeToGallery(current.currentVersion)
     }
 
-    /** Les octets qui partent au partage, dans le format choisi. */
-    fun shareBytes(): ByteArray? = composed?.let { if (squareFormat) it.squareJpeg else it.storyJpeg }
+    /**
+     * Au toucher de « Partager » : le seul geste qui crée un jeton, quand l'utilisateur n'en a aucun ; la carte est
+     * recomposée avec le vrai lien — ou sans bandeau sur un refus — avant de partir. Un second toucher pendant la
+     * création ne rend rien : aucune seconde feuille ne s'ouvre sur une carte privée du lien qu'on obtient.
+     */
+    suspend fun prepareShare(): PhotoShareOut? {
+        if (!sharing.tryLock()) return null
+        try {
+            val links = referralLinks
+            if (links != null && referralOffered && referralChoice.needsCreation) {
+                referralChoice = referralChoice.created(links.shareableLink())
+                recompose()
+            }
+            val result = exportable() ?: return null
+            val bytes = if (squareFormat) result.squareJpeg else result.storyJpeg
+            val shareText = referralChoice.outgoingLink?.let { link -> referralText?.shareText?.invoke(link) }
+            return PhotoShareOut(bytes, shareText)
+        } finally {
+            sharing.unlock()
+        }
+    }
 
     fun shared(completed: Boolean) {
         if (completed) notice = PhotoNotice.Shared
@@ -219,7 +297,7 @@ class GamePhotoSession(
 
     /** L'écriture dans la galerie, déjà comptée par l'état (optimiste) : un échec rend CETTE version à enregistrer. */
     private suspend fun writeToGallery(version: SavedVersion) {
-        val result = composed
+        val result = exportable()
         val bytes = result?.let { if (version.format == PhotoFormat.Square.wire) it.squareJpeg else it.storyJpeg }
         val ok = bytes != null && gallery.saveImage(bytes, "meeshy-${GamePhotoNotebookIndex.sanitized(moment.id)}-${version.format}.jpg")
         if (ok) {
@@ -228,6 +306,40 @@ class GamePhotoSession(
             takeSave = takeSave?.let { CaptureSaveLaw.applySaveFailed(it, version) }
             notice = PhotoNotice.SaveFailed
         }
+    }
+
+    private fun request(source: Bitmap?, mode: PhotoMode, referral: PhotoReferral?): PhotoComposeRequest =
+        PhotoComposeRequest(moment, text, source, mode, referral = referral, rightToLeft = rightToLeft)
+
+    /** Le bandeau que l'aperçu porte maintenant : le lien, son emplacement, ou rien. */
+    private fun currentReferral(): PhotoReferral? {
+        val phrases = referralText?.takeIf { referralLinks != null } ?: return null
+        return when (val banner = referralChoice.preview) {
+            null -> null
+            PhotoReferralBanner.Placeholder -> PhotoReferral(link = "", title = phrases.title, qrLabel = phrases.qrLabel, placeholder = true)
+            is PhotoReferralBanner.Ready -> PhotoReferral(link = banner.link, title = phrases.title, qrLabel = phrases.qrLabel)
+        }
+    }
+
+    /** L'aperçu suit le lien : recomposé seulement quand le bandeau change. */
+    private suspend fun recompose() {
+        if (state !is PhotoFlowState.Result) return
+        val current = composed ?: return
+        val referral = currentReferral()
+        if (referral == composedWith) return
+        val result = composer.compose(request(composedSource, current.mode, referral)) ?: return
+        composed = result
+        composedWith = referral
+    }
+
+    /**
+     * L'image qui SORT de l'app (galerie, carnet, partage) : celle de l'aperçu, sauf quand l'aperçu porte l'EMPLACEMENT
+     * du lien — elle est alors recomposée sans bandeau. Aucune image ne part avec un lien factice (conformité H-8).
+     */
+    private suspend fun exportable(): ComposedPhoto? {
+        val current = composed ?: return null
+        if (composedWith?.placeholder != true) return current
+        return composer.compose(request(composedSource, current.mode, referral = null))
     }
 
     companion object {
