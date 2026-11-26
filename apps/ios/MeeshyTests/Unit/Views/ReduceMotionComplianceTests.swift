@@ -121,6 +121,24 @@ final class ReduceMotionComplianceTests: XCTestCase {
         XCTAssertEqual(copies, [], "typing dots are `MeeshyTypingDots` (SDK) — never a local copy")
     }
 
+    // MARK: - Les transitions des Réglages (#18687)
+
+    private static let aboutView = "Meeshy/Features/Settings/Views/AboutView.swift"
+    private static let phoneChangeFlow = "Meeshy/Features/Settings/ViewModels/PhoneChangeFlowModel.swift"
+
+    /// Le pli « Plus » d'À propos et les étapes du changement de numéro
+    /// animent par `meeshyWithAnimation` : un `withAnimation` nu ignore le
+    /// réglage, système comme forcé par l'app.
+    func test_settingsTransitions_passThroughMeeshyWithAnimation() throws {
+        for path in [Self.aboutView, Self.phoneChangeFlow] {
+            let code = codeLines(try source(path))
+            let bare = code.replacingOccurrences(of: "meeshyWithAnimation(", with: "")
+            XCTAssertTrue(code.contains("meeshyWithAnimation("), "\(path) anime par meeshyWithAnimation")
+            XCTAssertFalse(bare.contains("withAnimation("), "\(path) garde un withAnimation nu, sourd à « Réduire les animations »")
+            XCTAssertTrue(code.contains("reduced: MeeshyMotion.reducedFade"), "\(path) garde le fondu court du mode réduit")
+        }
+    }
+
     // MARK: - L'ancien décor d'inscription (#5218)
     //
     // Trois règles vivaient ici : le décor du wizard d'inscription

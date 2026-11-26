@@ -6,6 +6,11 @@ import MeeshyUI
 struct AboutView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -115,7 +120,7 @@ struct AboutView: View {
         VStack(spacing: 0) {
             Button {
                 HapticFeedback.light()
-                withAnimation(.easeInOut(duration: 0.2)) { showsMoreInformation.toggle() }
+                meeshyWithAnimation(.easeInOut(duration: 0.2), reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion) { showsMoreInformation.toggle() }
             } label: {
                 HStack(spacing: MeeshySpacing.md) {
                     fieldIcon("info.circle.fill", color: accentColor)
