@@ -22,11 +22,11 @@ class NotificationFilterCategoryTest {
 
     @Test
     fun knownTypes_holdsEveryPortediOSRawValue() {
-        // 92 : les 91 valeurs iOS du lot des types complets, plus `blood_proximity` (#20540).
-        assertThat(NotificationTypeVocabulary.KNOWN_TYPES).hasSize(92)
+        // 93 : les 91 valeurs iOS du lot des types complets, plus `blood_proximity` (#20540) et `game_flame_evening` (#20615).
+        assertThat(NotificationTypeVocabulary.KNOWN_TYPES).hasSize(93)
         assertThat(NotificationTypeVocabulary.KNOWN_TYPES).containsAtLeast(
             "new_message", "NEW_MESSAGE", "call", "member_role_changed",
-            "AFFILIATE_SIGNUP", "voice_clone_ready", "friend_new_mood",
+            "AFFILIATE_SIGNUP", "voice_clone_ready", "friend_new_mood", "game_flame_evening",
         )
     }
 
