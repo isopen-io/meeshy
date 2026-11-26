@@ -22,6 +22,7 @@ import {
 } from './notifications/notificationRevocationPush';
 import { applyUserPreferences, isCallPushDataType } from './push-delivery-preferences';
 import { pushRoutingClientOf, tokenRendersPushFromData, tokenRoutesPushType } from './push-type-routing';
+import { cleanupInactiveTokens as cleanupInactivePushTokens } from './push-token-cleanup';
 import { apnsThreadIdOf, loggableCollapseId } from './notifications/push-thread';
 import { isBadgeSyncPush } from './notifications/badgeSyncPush';
 import { sendViaPushToTalk, type PushToTalkTransport } from './talkie/pushToTalkApns';
@@ -953,31 +954,7 @@ export class PushNotificationService {
    * Should be run periodically (e.g., daily cron job)
    */
   async cleanupInactiveTokens(daysInactive: number = 90): Promise<number> {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - daysInactive);
-
-    const result = await this.prisma.pushToken.deleteMany({
-      where: {
-        OR: [
-          // Inactive tokens not used in X days
-          {
-            isActive: false,
-            updatedAt: { lt: cutoffDate },
-          },
-          // Active tokens not used in X days (stale)
-          {
-            lastUsedAt: { lt: cutoffDate },
-          },
-          // Tokens with too many failures
-          {
-            failedAttempts: { gte: 5 },
-          },
-        ],
-      },
-    });
-
-    pushLogger.info('Cleaned up inactive/stale tokens', { count: result.count });
-    return result.count;
+    return cleanupInactivePushTokens(this.prisma, pushLogger, daysInactive);
   }
 
   /**
