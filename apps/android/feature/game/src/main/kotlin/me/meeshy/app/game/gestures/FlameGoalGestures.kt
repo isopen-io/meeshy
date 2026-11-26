@@ -41,8 +41,9 @@ import me.meeshy.ui.theme.MeeshyTheme
 /**
  * L'OBJECTIF DE FLAMME (#17379, #20523 — iOS `GameFlamePanelView.goalSection`, #20522 ; web #20521). Au premier jour
  * d'une Flamme, la carte propose 7, 14 ou 30 jours, et la puce ENVOIE d'un seul toucher : ne rien choisir ne coûte
- * rien. En cours, elle dit ce qu'il reste ; atteint, le signe des aïeux, la marche suivante et « Plus tard ». Raté, rien
- * ne se dit : la passerelle cesse de le servir.
+ * rien. En cours, elle dit ce qu'il reste ; atteint, le signe des aïeux, la marche suivante et « Plus tard ». Le salut
+ * dit (fermé ici ou montré par Mee et Meo, #20603), la marche suivante reste choisissable sous une ligne sobre ; au
+ * sommet, plus rien. Raté, rien ne se dit : la passerelle cesse de le servir.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -100,6 +101,19 @@ internal fun FlameGoalGestures(
                     )
                 }
             }
+        }
+        is FlameGoalSection.Next -> FlowRow(
+            modifier = Modifier.testTag("game.flame.goal.next"),
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        ) {
+            Text(
+                gameString(GameCopyLaws.flameGoalNextIntro(section.target)),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MeeshyTheme.tokens.textMuted,
+            )
+            GoalChoice(section.next, gameString(GameCopyLaws.flameGoalNext(section.next)), gestures, onChoose)
         }
         null -> Unit
     }

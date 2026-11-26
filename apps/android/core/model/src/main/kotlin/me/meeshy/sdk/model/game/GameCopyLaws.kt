@@ -80,6 +80,10 @@ public object GameCopyLaws {
     /** « Viser 14 jours » — la marche suivante, d'un seul toucher. */
     public fun flameGoalNext(target: Int): GameText = GameText.of(GameTextKey.FlameGoalNext, GameTextArg.Nested(days(target)))
 
+    /** « Objectif de 7 jours tenu. La marche suivante ? » — le salut déjà dit, la marche suivante reste à portée. */
+    public fun flameGoalNextIntro(target: Int): GameText =
+        GameText.of(GameTextKey.FlameGoalNextIntro, GameTextArg.Nested(days(target)))
+
     /** Le refus d'un objectif dit sa raison ; une raison inconnue ou absente rend `null` (la phrase générale du refus). */
     public fun flameGoalRefusal(reason: String?): GameText? = when (FlameGoalRefusal.fromWire(reason)) {
         FlameGoalRefusal.NotOffered -> GameText(GameTextKey.FlameGoalNotOffered)

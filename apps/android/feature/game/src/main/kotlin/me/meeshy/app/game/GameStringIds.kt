@@ -36,6 +36,7 @@ internal object GameStringIds {
         "game_flame_panel_goal_running" to R.string.game_flame_panel_goal_running,
         "game_flame_panel_goal_reached" to R.string.game_flame_panel_goal_reached,
         "game_flame_panel_goal_next" to R.string.game_flame_panel_goal_next,
+        "game_flame_panel_goal_next_intro" to R.string.game_flame_panel_goal_next_intro,
         "game_flame_panel_goal_later" to R.string.game_flame_panel_goal_later,
         "game_error_flame_goal_not_offered" to R.string.game_error_flame_goal_not_offered,
         "game_error_flame_goal_no_flame" to R.string.game_error_flame_goal_no_flame,

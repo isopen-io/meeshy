@@ -3,6 +3,7 @@ package me.meeshy.sdk.model.game.guide
 import kotlinx.serialization.Serializable
 import me.meeshy.sdk.model.game.FlameStatus
 import me.meeshy.sdk.model.game.GameBlock
+import me.meeshy.sdk.model.game.GameFlameGoalLaw
 import me.meeshy.sdk.model.game.GameFlameLaw
 import me.meeshy.sdk.model.game.GameLevels
 import me.meeshy.sdk.model.game.GameSeason
@@ -146,14 +147,30 @@ public object GameGuideEventsV2 {
             .takeIf { GameWelcomeBack.announcesKeptOffering(game.chest.kept, game.chest.status) }
 
     /**
+     * L'objectif de Flamme atteint, tant que sa clé ([GameFlameGoalLaw.nextSeenKey]) n'est ni dans `game.guideSeen` ni
+     * dans [seen] : la carte de la Flamme et la carte de guide la lisent toutes les deux, donc un objectif ne se salue
+     * qu'une fois, par l'une ou par l'autre.
+     */
+    private fun goalReached(game: GameBlock, seen: Set<String>): GuideEventV2? {
+        val current = game.flame.goal?.current?.takeIf { it.reached } ?: return null
+        val key = GameFlameGoalLaw.nextSeenKey(current.target)
+        if (key in game.guideSeen || key in seen) return null
+        return GuideEventV2.FlameGoalReached(current.target, current.next)
+    }
+
+    private fun reachedTarget(game: GameBlock): Int? = game.flame.goal?.current?.takeIf { it.reached }?.target
+
+    /**
      * Ce que l'état dit à l'ouverture et que la personne n'a pas encore entendu : la première ligue, une saison, la
-     * première Veilleuse offerte le jour du cadeau. Plus l'Offrande gardée, qui se redit tant qu'elle est prête.
+     * première Veilleuse offerte le jour du cadeau, l'objectif de Flamme atteint. Plus l'Offrande gardée, qui se redit
+     * tant qu'elle est prête.
      */
     public fun standing(game: GameBlock, seen: Set<String>): List<GuideEventV2> {
         val league = game.league?.takeIf { it.access == LeagueAccess.Open }?.current
             ?.let { GuideEventV2.LeagueFirst(it.league, it.pointsToPromotion) }
         val season = GuideSnapshot.of(game).season?.let(::seasonStart)
-        val discoveries = listOfNotNull(league, season, freezeGift(game)).filter { it.key.wire !in seen }
+        val discoveries = listOfNotNull(league, season, freezeGift(game), goalReached(game, seen))
+            .filter { it.seenKey !in seen }
         return discoveries + listOfNotNull(keptOffering(game))
     }
 
@@ -161,12 +178,18 @@ public object GameGuideEventsV2 {
         leagueEvents(before, after) + seasonEvents(before, after) + trophyEvents(before, after) +
             prestigeEvents(before, after) + atlasEvents(before, after)
 
-    /** Le cadeau et l'Offrande gardée ne se disent qu'en ARRIVANT : une lecture qui les portait déjà les a annoncés. */
-    public fun transition(before: GameBlock, after: GameBlock): List<GuideEventV2> =
-        between(GuideSnapshot.of(before), GuideSnapshot.of(after)) + listOfNotNull(
+    /**
+     * Le cadeau, l'Offrande gardée et l'objectif atteint ne se disent qu'en ARRIVANT : une lecture qui les portait déjà
+     * les a annoncés. Une nouvelle marche tenue est un objectif nouveau.
+     */
+    public fun transition(before: GameBlock, after: GameBlock): List<GuideEventV2> {
+        val target = reachedTarget(after)
+        return between(GuideSnapshot.of(before), GuideSnapshot.of(after)) + listOfNotNull(
             freezeGift(after).takeIf { before.flame.freezeGifted != true },
             keptOffering(after).takeIf { keptOffering(before) == null },
+            goalReached(after, emptySet()).takeIf { target != null && reachedTarget(before) != target },
         )
+    }
 
     private fun leagueEvents(before: GuideSnapshot, after: GuideSnapshot): List<GuideEventV2> {
         val was = before.league ?: return emptyList()
