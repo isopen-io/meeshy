@@ -87,10 +87,14 @@ public nonisolated struct MeeshyColors {
     public static let infoHex = "60A5FA"
     public static let neutral500Hex = "6B7280"
     public static let indigo50Hex = "EEF2FF"
+    public static let indigo200Hex = "C7D2FE"
     public static let indigo300Hex = "A5B4FC"
     public static let indigo400Hex = "818CF8"
     public static let indigo600Hex = "4F46E5"
+    public static let indigo700Hex = "4338CA"
+    public static let indigo800Hex = "3730A3"
     public static let indigo900Hex = "312E81"
+    public static let indigo950Hex = "1E1B4B"
     public static let purple500Hex = "A855F7"
 
     // MARK: - Feature Accents (link management surfaces: tracking, share, community)

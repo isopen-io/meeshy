@@ -78,6 +78,40 @@ final class BubbleSkinTests: XCTestCase {
         XCTAssertEqual(BubbleSkinLedger.skin(for: conversationId, isDark: false), .brand)
     }
 
+    // MARK: - La coche « lu » (#10794)
+
+    private static func contrast(_ a: String, _ b: String) -> Double {
+        CanvasChromeScheme.contrastRatio(
+            CanvasChromeScheme.relativeLuminance(hex: a) ?? 0,
+            CanvasChromeScheme.relativeLuminance(hex: b) ?? 0
+        )
+    }
+
+    func test_readTick_withoutPersonalAccent_keepsTheBrandIndigo() {
+        XCTAssertEqual(BubbleSkin.brand.readTickHex(isDark: false), MeeshyColors.indigo600Hex)
+        XCTAssertEqual(BubbleSkin.brand.readTickHex(isDark: true), MeeshyColors.indigo400Hex)
+    }
+
+    func test_readTick_onEveryPersonalAccent_reachesTheNonTextContrastOfWCAG() {
+        for entry in AppearanceCatalog.shared.gamut.entries {
+            for isDark in [false, true] {
+                let skin = BubbleSkin.resolve(ConversationAppearance(accent: entry.key), isDark: isDark)
+                let tick = skin.readTickHex(isDark: isDark)
+                XCTAssertGreaterThanOrEqual(
+                    Self.contrast(tick, skin.sentFillHex), 3,
+                    "\(entry.key) \(isDark ? "sombre" : "clair") : coche \(tick) sur \(skin.sentFillHex)"
+                )
+            }
+        }
+    }
+
+    func test_readTick_onAPersonalAccent_staysAnIndigoDistinctFromTheInk() {
+        let skin = BubbleSkin.resolve(ConversationAppearance(accent: "corail"), isDark: false)
+        let tick = skin.readTickHex(isDark: false)
+        XCTAssertTrue(BubbleSkin.readTickLadder(for: skin.sentInk).map(\.hex).contains(tick))
+        XCTAssertNotEqual(tick.uppercased(), "000000")
+    }
+
     // MARK: - Gardes de source
 
     private static let appRoot = URL(fileURLWithPath: #filePath)
@@ -118,5 +152,11 @@ final class BubbleSkinTests: XCTestCase {
         XCTAssertEqual(AppSourceGuard.stripComments(rows).components(separatedBy: ".environment(\\.bubbleSkin, scene.skin)").count - 1, 2)
         let menu = try String(contentsOf: Self.appRoot.appendingPathComponent("Meeshy/Features/Main/Components/MessageOverlayMenu.swift"), encoding: .utf8)
         XCTAssertTrue(AppSourceGuard.stripComments(menu).contains(".environment(\\.bubbleSkin, previewSkin)"))
+    }
+
+    /// La coche « lu » de la bulle envoyée lit la peau, dans la rangée comme dans l'aperçu du menu.
+    func test_guard_footerReadTickReadsTheSkin() throws {
+        let footer = try String(contentsOf: Self.appRoot.appendingPathComponent("Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift"), encoding: .utf8)
+        XCTAssertTrue(AppSourceGuard.stripComments(footer).contains("skin.readTick(isDark: isDark).color"))
     }
 }
