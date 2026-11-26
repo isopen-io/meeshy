@@ -347,3 +347,60 @@ function inTargetLane(key: string, task: () => Promise<void>): Promise<void> {
     if (targetLanes.get(key) === next) targetLanes.delete(key);
   });
 }
+
+/**
+ * Le rôle de PLATEFORME a changé (#16137) : `obsoleteVerdict` le lit, donc la
+ * capacité bascule dans les conversations où le rang ne suffisait pas déjà,
+ * sans que ni le rang ni `conversation.updatedAt` ne bougent. La cible reçoit,
+ * dans sa room personnelle, `participant:role-updated` — que les clients
+ * publiés écoutent déjà — portant son rang de conversation INCHANGÉ et la
+ * capacité recalculée, pour chaque conversation où elle bascule, et seulement
+ * celles-là. Ne rejette jamais : un échec de lecture n'émet rien et le client
+ * garde la capacité servie avant, que la route refusera s'il le faut.
+ */
+export async function announcePlatformRoleCapabilities(
+  prisma: ObsoleteReader,
+  params: {
+    readonly io: ServerEmitIO;
+    readonly userId: string;
+    readonly previousRole: string;
+    readonly newRole: string;
+    readonly updatedBy: string;
+    readonly onError: (error: unknown) => void;
+  },
+): Promise<void> {
+  const { io, userId, updatedBy, onError } = params;
+  try {
+    const memberships = await prisma.participant.findMany({
+      where: { userId, isActive: true },
+      select: {
+        conversationId: true,
+        userId: true,
+        role: true,
+        type: true,
+        leftAt: true,
+        bannedAt: true,
+        conversation: { select: { type: true, identifier: true } },
+      },
+    });
+    const conversationIds = memberships.map((row) => row.conversationId);
+    const viewerAs = (platformRole: string): ObsoleteViewer => ({ userId, isAnonymous: false, hasRegisteredUser: true, platformRole });
+    const [before, after] = await Promise.all([
+      loadObsoleteVerdicts(prisma, { viewers: [viewerAs(params.previousRole)], conversationIds, memberships }),
+      loadObsoleteVerdicts(prisma, { viewers: [viewerAs(params.newRole)], conversationIds, memberships }),
+    ]);
+    memberships
+      .map((row) => ({ row, was: servedCapabilities(before(userId, row.conversationId)), now: servedCapabilities(after(userId, row.conversationId)) }))
+      .filter(({ was, now }) => was.canMakeObsolete !== now.canMakeObsolete)
+      .forEach(({ row, now }) =>
+        io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, {
+          conversationId: row.conversationId,
+          userId,
+          newRole: row.role,
+          updatedBy,
+          viewerCapabilities: now,
+        }));
+  } catch (error) {
+    onError(error);
+  }
+}

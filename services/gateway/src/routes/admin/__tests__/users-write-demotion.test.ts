@@ -31,7 +31,11 @@ const cible = {
   updatedAt: new Date('2026-01-01T00:00:00.000Z'),
 };
 
-async function monter(evict: (userId: string) => Promise<unknown>, role = cible.role) {
+async function monter(
+  evict: (userId: string) => Promise<unknown>,
+  role = cible.role,
+  announcePlatformRole: (change: { userId: string; previousRole: string; newRole: string; updatedBy: string }) => Promise<void> = async () => undefined,
+) {
   const app: FastifyInstance = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('prisma', {} as never);
   app.decorate('authenticate', async (request: unknown) => {
@@ -43,6 +47,7 @@ async function monter(evict: (userId: string) => Promise<unknown>, role = cible.
       userManagementService: { getUserById: async () => ({ ...cible, role }), updateRole } as never,
       userAuditService: { createAuditLog: jest.fn(async () => undefined) } as never,
       evictFromAdminRooms: evict,
+      announcePlatformRole,
     });
   });
   await app.ready();
@@ -67,6 +72,35 @@ describe('PATCH /admin/users/:userId — rôle', () => {
     const response = await app.inject({ method: 'PATCH', url: '/admin/users/u1', payload: { role: 'ADMIN' } });
     expect(response.statusCode).toBe(200);
     expect(evict).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('le rôle de plateforme écrit, la cible reçoit ses capacités recalculées (#16137)', async () => {
+    const order: string[] = [];
+    const announce = jest.fn(async (change: { userId: string }) => { order.push(`announce:${change.userId}`); });
+    const { app, updateRole } = await monter(async () => undefined, 'MODERATOR', announce);
+    updateRole.mockImplementation(async (_id, data) => { order.push('update'); return { ...cible, role: data.role }; });
+    const response = await app.inject({ method: 'PATCH', url: '/admin/users/u1', payload: { role: 'ADMIN' } });
+    expect(response.statusCode).toBe(200);
+    expect(announce).toHaveBeenCalledWith({ userId: 'u1', previousRole: 'MODERATOR', newRole: 'ADMIN', updatedBy: 'boss' });
+    expect(order).toEqual(['update', 'announce:u1']);
+    await app.close();
+  });
+
+  it('un rôle inchangé n’annonce rien', async () => {
+    const announce = jest.fn(async () => undefined);
+    const { app } = await monter(async () => undefined, 'ADMIN', announce);
+    const response = await app.inject({ method: 'PATCH', url: '/admin/users/u1', payload: { role: 'ADMIN' } });
+    expect(response.statusCode).toBe(200);
+    expect(announce).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('une annonce qui échoue ne fait pas échouer le geste', async () => {
+    const announce = jest.fn(async () => { throw new Error('socket down'); });
+    const { app } = await monter(async () => undefined, 'USER', announce);
+    const response = await app.inject({ method: 'PATCH', url: '/admin/users/u1', payload: { role: 'ADMIN' } });
+    expect(response.statusCode).toBe(200);
     await app.close();
   });
 });

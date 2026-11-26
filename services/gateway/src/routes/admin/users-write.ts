@@ -19,6 +19,7 @@ import { replyIdentifierTaken } from '../../services/admin/admin-identifier-take
 import { replyEmailDomainRefused } from '../../services/auth/email-domain-guard';
 import { refreshParticipantNameSnapshots, type AccountNameFields } from '../../services/participantNameSnapshots';
 import { evictFromAdminRooms, isAdminRank } from '../../socketio/evictFromAdminRooms';
+import { announcePlatformRoleCapabilities } from '../../services/conversations/obsoleteCapability';
 import { changedNameViolations, sendLengthFloorRefusal, sendZodRefusal } from '../../utils/identity-name-floor';
 import { visibleNameText } from '@meeshy/shared/utils/visible-name-length';
 
@@ -100,7 +101,15 @@ type Deps = {
    * serveur socket, résolu à l'appel (le manager n'existe pas encore à l'enregistrement).
    */
   evictFromAdminRooms?: (userId: string) => Promise<unknown>;
+  /**
+   * #16137 — le rôle de plateforme entre dans `canMakeObsolete` : la cible
+   * reçoit ses capacités recalculées. Absente ⇒ `announcePlatformRoleCapabilities`
+   * sur le serveur socket, résolu à l'appel.
+   */
+  announcePlatformRole?: (change: PlatformRoleChange) => Promise<void>;
 };
+
+type PlatformRoleChange = { userId: string; previousRole: string; newRole: string; updatedBy: string };
 
 type Corps = Record<string, unknown>;
 
@@ -247,6 +256,17 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
         userId,
         onError: (err) => logError(fastify.log, `[ADMIN_USER_ROLE] admin room eviction failed (userId=${userId})`, err),
       }));
+  const announcePlatformRole =
+    deps.announcePlatformRole ??
+    (async (change: PlatformRoleChange) => {
+      const io = fastify.socketIOHandler?.getManager?.()?.getIO();
+      if (!io) return;
+      await announcePlatformRoleCapabilities(fastify.prisma, {
+        io,
+        ...change,
+        onError: (err) => logError(fastify.log, `[ADMIN_USER_ROLE] capabilities refresh failed (userId=${change.userId})`, err),
+      });
+    });
 
   /**
    * La fiche RELUE après le geste : `prisma.user.update` rend la ligne nue,
@@ -389,6 +409,10 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
         // Le rang perdu sort des rooms d'administration AVANT la trace (#10459 point 1) :
         // un socket ne revérifie son rang qu'à l'abonnement.
         if (!isAdminRank(nouveauRole)) await evictDemoted(userId);
+        if (avant !== nouveauRole) {
+          announcePlatformRole({ userId, previousRole: avant, newRole: nouveauRole, updatedBy: moi.id })
+            .catch((err: unknown) => logError(fastify.log, `[ADMIN_USER_ROLE] capabilities refresh failed (userId=${userId})`, err));
+        }
         await tracer(request, {
           cible: userId,
           action: UserAuditAction.UPDATE_ROLE,
