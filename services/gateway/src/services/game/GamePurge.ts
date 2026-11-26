@@ -6,7 +6,11 @@
  * points de semaine, duos, saisons, trophées, Atlas et leurs colonnes de `User` —
  * et ce que chaque post a rapporté au compte (#9569) : une ligne par post, donc
  * la trace de ses gestes, de même nature que les quotas par cible — et le registre de ses moments
- * photo (#10162), comme les réglages photo de `GameProfile`.
+ * photo (#10162), comme les réglages photo de `GameProfile` — et ce que chaque
+ * conversation lui a rapporté (#9585) : `ConversationEngagement`, la jumelle par
+ * conversation du calque par post. Une conversation, elle, ne se détruit que VIDE
+ * (purge du monde refusée dès qu'elle porte un message, groupe d'appel jamais
+ * annoncé) : aucun crédit n'y a été écrit, ses lignes n'ont donc pas de sort à part.
  *
  * Ce que la purge garantit au-delà de l'effacement (intégrité référentielle) :
  *  - un duo OUVERT est terminé proprement avant d'être effacé : le partenaire qui
@@ -59,6 +63,7 @@ export const GAME_PURGED_MODELS = [
   'engagementPostPoints',
   'gamePhotoMoment',
   'engagementActStreak',
+  'conversationEngagement',
 ] as const;
 
 /** Les modèles de jeu par compte qui ne se purgent PAS par `deleteMany({ userId })`, et la raison. */
@@ -206,6 +211,7 @@ export async function purgeGameData(prisma: PurgeDb, userId: string, deps: GameP
     prisma.engagementPostPoints.deleteMany({ where }),
     prisma.gamePhotoMoment.deleteMany({ where }),
     prisma.engagementActStreak.deleteMany({ where }),
+    prisma.conversationEngagement.deleteMany({ where }),
   ]);
   const deleted = Object.fromEntries(GAME_PURGED_MODELS.map((model, index) => [model, counts[index]!.count]));
 
