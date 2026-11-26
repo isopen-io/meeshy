@@ -192,7 +192,8 @@ extension GameBlock.Flame {
         canRelight: Bool? = nil,
         effortRelight: GameEffortRelight?? = nil,
         pause: GameFlamePause?? = nil,
-        goal: GameServedFlameGoal?? = nil
+        goal: GameServedFlameGoal?? = nil,
+        nextPauseFrom: String?? = nil
     ) -> GameBlock.Flame {
         GameBlock.Flame(
             days: days ?? self.days,
@@ -207,7 +208,8 @@ extension GameBlock.Flame {
             freezeGifted: freezeGifted,
             effortRelight: effortRelight ?? self.effortRelight,
             pause: pause ?? self.pause,
-            goal: goal ?? self.goal
+            goal: goal ?? self.goal,
+            nextPauseFrom: nextPauseFrom ?? self.nextPauseFrom
         )
     }
 }

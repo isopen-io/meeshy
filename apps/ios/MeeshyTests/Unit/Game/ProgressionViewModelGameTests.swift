@@ -312,6 +312,27 @@ final class ProgressionViewModelGameTests: XCTestCase {
                           "annoncée, elle se dit « demain » ; commencée, non")
     }
 
+    func test_flamePanel_quarterTaken_saysWhenTheNextPauseOpens_insteadOfOfferingIt() {
+        let lit = GameFixture.game(flameStatus: .lit).flame
+        let taken = lit.replacing(nextPauseFrom: .some("2027-01-01"))
+        XCTAssertEqual(GameFlamePanelView.pauseState(taken, today: "2026-12-05"),
+                       .next(FlamePauseCopy.nextLine("2027-01-01")),
+                       "le trimestre pris tait l'annonce et dit dès quand la prochaine sera possible")
+        let paused = GameFlamePause(from: "2026-12-06", until: "2026-12-08")
+        XCTAssertEqual(GameFlamePanelView.pauseState(taken.replacing(pause: .some(paused)), today: "2026-12-05"),
+                       .paused(FlamePauseCopy.line(paused, today: "2026-12-05")), "une veille servie se dit d'abord")
+        XCTAssertEqual(GameFlamePanelView.pauseState(GameFixture.game(flameStatus: .out).flame
+            .replacing(nextPauseFrom: .some("2027-01-01")), today: "2026-12-05"), .hidden,
+                       "une Flamme éteinte ne parle pas de veille")
+    }
+
+    func test_flamePauseNextLine_saysTheDayAndMonth_withoutTheWeekday() {
+        let line = FlamePauseCopy.nextLine("2027-01-01", locale: Locale(identifier: "fr_FR"))
+        XCTAssertTrue(line.contains("janvier"), line)
+        XCTAssertTrue(line.contains("1"), line)
+        XCTAssertFalse(line.contains("vendredi"), line)
+    }
+
     func test_flamePauseDayLabel_saysTheWeekdayInTheReadersLanguage() {
         let label = FlamePauseCopy.dayLabel("2026-10-12", locale: Locale(identifier: "fr_FR"))
         XCTAssertTrue(label.contains("lundi"), label)

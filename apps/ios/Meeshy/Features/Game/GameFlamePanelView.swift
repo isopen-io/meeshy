@@ -58,17 +58,21 @@ struct GameFlamePanelView: View {
         flame.status == .out && !flame.canRelight && !cannotPayRelight && flame.effortRelight == nil
     }
 
-    /// Ce que la carte montre de la veille : sa phrase quand le bloc en sert une, le choix de la durée sur une Flamme
-    /// vivante, rien sur une Flamme absente ou éteinte.
+    /// Ce que la carte montre de la veille : sa phrase quand le bloc en sert une, dès quand la prochaine sera possible
+    /// quand le trimestre est pris (#20534), le choix de la durée sur une Flamme vivante, rien sur une Flamme absente
+    /// ou éteinte. Miroir de `GameFlamePanel` (`apps/web/src/components/game-flame-panel.tsx`).
     enum PauseSection: Equatable {
         case paused(String)
+        case next(String)
         case chooser
         case hidden
     }
 
     static func pauseState(_ flame: GameBlock.Flame, today: String) -> PauseSection {
         if let pause = flame.pause { return .paused(FlamePauseCopy.line(pause, today: today)) }
-        return GameFlamePauseLaw.isBurning(flame.status) ? .chooser : .hidden
+        guard GameFlamePauseLaw.isBurning(flame.status) else { return .hidden }
+        if let nextPauseFrom = flame.nextPauseFrom { return .next(FlamePauseCopy.nextLine(nextPauseFrom)) }
+        return .chooser
     }
 
     /// Ce que la carte montre de l'objectif : les choix du premier jour, ce qu'il reste, ou le signe des aïeux avec la
@@ -178,6 +182,9 @@ struct GameFlamePanelView: View {
                 .foregroundStyle(ThemeManager.shared.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("game.flame.paused")
+        case .next(let line):
+            GameNote(text: line)
+                .accessibilityIdentifier("game.flame.pause.next")
         case .chooser:
             GameNote(text: FlamePauseCopy.intro)
             pauseDayChooser
@@ -342,15 +349,20 @@ enum FlamePauseCopy {
             : String(localized: "game.flame_panel.paused", defaultValue: "Ta Flamme est en veille jusqu’au \(date).", bundle: .main)
     }
 
+    /// Le trimestre pris : dès quand la prochaine veille sera possible, sans le jour de la semaine (il est loin).
+    static func nextLine(_ dayKey: String, locale: Locale = .current) -> String {
+        let date = dayLabel(dayKey, withWeekday: false, locale: locale)
+        return String(localized: "game.flame_panel.pause_next", defaultValue: "Ta prochaine veille sera possible dès le \(date).", bundle: .main)
+    }
+
     /// Un jour `AAAA-MM-JJ` dit dans la langue du lecteur, avec son jour de la semaine : une veille dure sept jours au plus.
-    static func dayLabel(_ dayKey: String, locale: Locale = .current) -> String {
+    static func dayLabel(_ dayKey: String, withWeekday: Bool = true, locale: Locale = .current) -> String {
         guard let number = GameDay.number(of: dayKey) else { return dayKey }
         let date = Date(timeIntervalSince1970: TimeInterval(number) * 86_400)
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
-        let style = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
-            .weekday(.wide).day().month(.wide)
-        return date.formatted(style)
+        let style = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone).day().month(.wide)
+        return date.formatted(withWeekday ? style.weekday(.wide) : style)
     }
 
     /// Le refus d'une veille dit sa raison ; une raison inconnue garde la phrase générale du refus.
