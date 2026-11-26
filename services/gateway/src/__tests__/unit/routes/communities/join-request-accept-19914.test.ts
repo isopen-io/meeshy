@@ -54,7 +54,7 @@ const memberRow = (data: Record<string, unknown> = {}) => ({
 });
 
 type Options = {
-  readonly create?: () => Promise<unknown>;
+  readonly create?: (args: any) => Promise<unknown>;
   readonly activeAfter?: boolean;
 };
 
@@ -68,7 +68,9 @@ function makePrisma(options: Options = {}) {
       }),
     },
     communityMember: {
-      findFirst: jest.fn<any>(async () => {
+      findFirst: jest.fn<any>(async (args: any) => {
+        // La garde d'appartenance de la décision (#19927) : personne n'est membre avant l'acceptation.
+        if (args?.select) return null;
         reads += 1;
         if (reads === 1) return null;
         return options.activeAfter ? memberRow() : null;
@@ -94,12 +96,18 @@ function makePrisma(options: Options = {}) {
 }
 
 const apps: FastifyInstance[] = [];
-async function build(prisma: any, engagement = { recordActivity: jest.fn<any>().mockResolvedValue(undefined) }) {
+async function build(
+  prisma: any,
+  engagement = { recordActivity: jest.fn<any>().mockResolvedValue(undefined) },
+  platformRole = 'USER'
+) {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('authenticate', async (req: any) => {
     req.authContext = {
+      // Seul un lecteur `user` porte son rôle de plateforme jusqu'à la garde de présence.
+      ...(platformRole === 'USER' ? {} : { type: 'user' }),
       isAuthenticated: true, userId: ADMIN, hasFullAccess: true,
-      registeredUser: { id: ADMIN, username: 'a', displayName: 'A', role: 'USER' },
+      registeredUser: { id: ADMIN, username: 'a', displayName: 'A', role: platformRole },
     };
   });
   app.decorate('prisma', prisma);
@@ -179,6 +187,7 @@ describe('POST /communities/:id/join-requests/:requestId/accept — une panne ap
     const prisma = makePrisma({ create: async () => { throw new Error('write failed'); } });
     prisma.communityMember.findFirst
       .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
       .mockRejectedValueOnce(new Error('read failed'));
     const app = await build(prisma);
 
@@ -196,7 +205,29 @@ describe('POST /communities/:id/join-requests/:requestId/accept — une panne ap
 
     expect(res.statusCode).toBe(200);
     expect(res.json().data.user.isOnline).toBe(false);
-    expect(res.json().data.user).not.toHaveProperty('deactivatedAt');
+  });
+
+  it('un ADMIN de la plateforme lit la présence du nouveau membre (témoin du critère suivant)', async () => {
+    const prisma = makePrisma();
+    const app = await build(prisma, undefined, 'ADMIN');
+
+    const res = await accept(app);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.user.isOnline).toBe(true);
+  });
+
+  it('un compte désactivé ne sert pas sa présence, même à un ADMIN de la plateforme (#19927)', async () => {
+    const prisma = makePrisma({
+      create: async ({ data }: any) =>
+        memberRow({ ...data, user: { id: ARRIVANT, username: 'n', displayName: 'N', avatar: null, isOnline: true, deactivatedAt: new Date('2026-11-19T11:00:00Z') } }),
+    } as any);
+    const app = await build(prisma, undefined, 'ADMIN');
+
+    const res = await accept(app);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.user.isOnline).toBe(false);
   });
 
   it('le chemin `entered` (écriture engagée malgré l\'erreur) ne la sert pas non plus', async () => {
@@ -217,7 +248,8 @@ describe('POST /communities/:id/join-requests/:requestId/accept — une panne ap
     const res = await accept(app);
 
     expect(res.statusCode).toBe(200);
-    expect(prisma.communityMember.findFirst).toHaveBeenCalledTimes(1);
+    const membershipReads = prisma.communityMember.findFirst.mock.calls.filter((c: any) => !c[0]?.select);
+    expect(membershipReads).toHaveLength(1);
     expect(reopenings(prisma)).toEqual([]);
   });
 });

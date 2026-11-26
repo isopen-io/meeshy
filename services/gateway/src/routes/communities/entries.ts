@@ -32,7 +32,12 @@ import { getBlockRelatedUserIds, isBlockedBetween } from '../../utils/blocking.j
 import { admitCommunityMember, membershipAfterFailure } from './admission';
 import { gateCoMemberPresence } from './member-presence';
 import { viewerFromRequest } from '../users/presence-gate';
-import { liveJoinRequestWhere, reopenOrphanedAcceptances, sealVerifiedAcceptances } from '../../services/community-join-request-lifecycle';
+import {
+  closePendingJoinRequests,
+  liveJoinRequestWhere,
+  reopenOrphanedAcceptances,
+  sealVerifiedAcceptances
+} from '../../services/community-join-request-lifecycle';
 import type { CommunityEngagementOptions } from './types';
 
 const logger = enhancedLogger.child({ module: 'CommunityEntryRoutes' });
@@ -229,7 +234,12 @@ export async function registerEntryRoutes(fastify: FastifyInstance, options: Com
 
   /**
    * La demande EN ATTENTE que CET intendant peut trancher : un demandeur au
-   * compte utilisable, sans blocage entre eux. Tout le reste est le 404 générique.
+   * compte utilisable, sans blocage entre eux, et qui n'est pas DÉJÀ membre
+   * actif. Tout le reste est le 404 générique.
+   *
+   * #19927 — une acceptation dont l'écriture s'applique après la relecture
+   * rouvre la demande d'une personne entrée : au moment de la décision, cette
+   * demande n'a plus rien à trancher, elle se clôt.
    */
   async function decidableRequest(id: string, requestId: string, viewerId: string) {
     const pending = await fastify.prisma.communityJoinRequest.findFirst({
@@ -238,7 +248,19 @@ export async function registerEntryRoutes(fastify: FastifyInstance, options: Com
     });
     if (!pending || !isUsableAccount(pending.user)) return null;
     if (await isBlockedBetween(fastify.prisma, viewerId, pending.userId)) return null;
+    if (await isActiveMember(id, pending.userId)) {
+      await closePendingJoinRequests(fastify.prisma, { communityId: id, userIds: [pending.userId], decidedBy: null });
+      return null;
+    }
     return pending;
+  }
+
+  async function isActiveMember(communityId: string, userId: string): Promise<boolean> {
+    const member = await fastify.prisma.communityMember.findFirst({
+      where: { communityId, userId, isActive: true },
+      select: { id: true }
+    });
+    return member !== null;
   }
 
   /** Bascule ATOMIQUE `pending` → décision : deux décisions concurrentes, une seule gagne, et rend l'instant écrit. */

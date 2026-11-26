@@ -468,7 +468,8 @@ describe('Les demandes en attente', () => {
 
   it('accepter réactive une ligne laissée par un départ au lieu d\'en créer une seconde', async () => {
     const prisma = makePrisma({ viewerRole: 'moderator', request: pending });
-    prisma.communityMember.findFirst.mockResolvedValue({ id: ROW, isActive: false });
+    const left = { id: ROW, isActive: false };
+    prisma.communityMember.findFirst.mockImplementation(async ({ where }: any) => (where.isActive ? null : left));
     const app = await build(prisma);
     const res = await app.inject({ method: 'POST', url: `/communities/${COMM}/join-requests/${REQUEST}/accept` });
     expect(res.statusCode).toBe(200);
