@@ -51,6 +51,7 @@ const frPublicEntry = {
   'magicLink.resend.label': 'Renvoyer le lien',
   'magicLink.cancel': 'Annuler',
   'magicLink.linkExpired': 'Lien expiré, renvoyez-en un nouveau',
+  'magicLink.expiresIn': 'Le lien expire dans {time}',
 } as const;
 
 export default frPublicEntry;

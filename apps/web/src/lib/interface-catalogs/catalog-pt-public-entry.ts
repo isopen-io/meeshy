@@ -48,6 +48,7 @@ const ptPublicEntry = {
   'magicLink.resend.label': 'Reenviar o link',
   'magicLink.cancel': 'Cancelar',
   'magicLink.linkExpired': 'Link expirado, solicite um novo',
+  'magicLink.expiresIn': 'O link expira em {time}',
 } satisfies Readonly<Record<keyof typeof frPublicEntry, string>>;
 
 export default ptPublicEntry;

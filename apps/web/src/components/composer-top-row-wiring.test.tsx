@@ -293,7 +293,7 @@ describe('Composer — les quatre contrôles à effet de la rangée haute (#6175
     expect(panel).not.toBeNull();
     expect(el.querySelector('[data-composer-effects]')?.getAttribute('aria-expanded')).toBe('true');
     act(() => {
-      panel!.querySelector<HTMLButtonElement>('[aria-label="Confettis, inactif"]')!.click();
+      panel!.querySelector<HTMLButtonElement>('[aria-label="Confettis"][aria-pressed="false"]')!.click();
     });
 
     expect(el.querySelector('[data-composer-effects]')?.getAttribute('aria-label')).toBe('1 effet actif');
@@ -318,7 +318,7 @@ describe('Composer — les quatre contrôles à effet de la rangée haute (#6175
     });
     await openEffects(el);
     act(() => {
-      el.querySelector<HTMLElement>('[data-composer-effects-panel]')!.querySelector<HTMLButtonElement>('[aria-label="Confettis, inactif"]')!.click();
+      el.querySelector<HTMLElement>('[data-composer-effects-panel]')!.querySelector<HTMLButtonElement>('[aria-label="Confettis"][aria-pressed="false"]')!.click();
     });
     act(() => {
       el.querySelector<HTMLButtonElement>('[aria-label="Envoyer"]')!.click();
@@ -368,10 +368,10 @@ describe('Composer — les quatre contrôles à effet de la rangée haute (#6175
     await openEffects(el);
     const panel = () => el.querySelector<HTMLElement>('[data-composer-effects-panel]')!;
     act(() => {
-      panel().querySelector<HTMLButtonElement>('[aria-label="Lueur, inactif"]')!.click();
+      panel().querySelector<HTMLButtonElement>('[aria-label="Lueur"][aria-pressed="false"]')!.click();
     });
     act(() => {
-      panel().querySelector<HTMLButtonElement>('[aria-label="Zoom, inactif"]')!.click();
+      panel().querySelector<HTMLButtonElement>('[aria-label="Zoom"][aria-pressed="false"]')!.click();
     });
     const clear = [...panel().querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Tout effacer');
     act(() => {

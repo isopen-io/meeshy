@@ -48,6 +48,7 @@ const dePublicEntry = {
   'magicLink.resend.label': 'Link erneut senden',
   'magicLink.cancel': 'Abbrechen',
   'magicLink.linkExpired': 'Link abgelaufen – fordere einen neuen an',
+  'magicLink.expiresIn': 'Der Link läuft in {time} ab',
 } satisfies Readonly<Record<keyof typeof frPublicEntry, string>>;
 
 export default dePublicEntry;

@@ -48,6 +48,7 @@ const arPublicEntry = {
   'magicLink.resend.label': 'إعادة إرسال الرابط',
   'magicLink.cancel': 'إلغاء',
   'magicLink.linkExpired': 'انتهت صلاحية الرابط، اطلب رابطًا جديدًا',
+  'magicLink.expiresIn': 'تنتهي صلاحية الرابط خلال {time}',
 } satisfies Readonly<Record<keyof typeof frPublicEntry, string>>;
 
 export default arPublicEntry;

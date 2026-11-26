@@ -132,6 +132,7 @@ const arShellLabels = {
   'composer.format.underline': 'تسطير',
   'composer.format.strikethrough': 'يتوسطه خط',
   'composer.format.shift': 'Shift',
+  'composer.format.ctrl': 'Ctrl',
   'composer.caption.dialog': 'إضافة تعليقات إلى الصور قبل الإرسال',
   'composer.caption.back': 'العودة إلى شريط الكتابة دون إرسال',
   'composer.caption.remove': 'إزالة {name} من الإرسال',

@@ -132,6 +132,7 @@ const deShellLabels = {
   'composer.format.underline': 'Unterstrichen',
   'composer.format.strikethrough': 'Durchgestrichen',
   'composer.format.shift': 'Umschalt',
+  'composer.format.ctrl': 'Strg',
   'composer.caption.dialog': 'Bilder vor dem Senden beschriften',
   'composer.caption.back': 'Ohne Senden zur Eingabe zurück',
   'composer.caption.remove': '{name} aus dem Versand entfernen',

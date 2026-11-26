@@ -132,6 +132,7 @@ const ptShellLabels = {
   'composer.format.underline': 'Sublinhado',
   'composer.format.strikethrough': 'Tachado',
   'composer.format.shift': 'Shift',
+  'composer.format.ctrl': 'Ctrl',
   'composer.caption.dialog': 'Legendar as imagens antes do envio',
   'composer.caption.back': 'Voltar ao compositor sem enviar',
   'composer.caption.remove': 'Remover {name} do envio',

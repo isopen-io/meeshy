@@ -63,6 +63,7 @@ export function ComposerFormatBar({ onFormat }: { readonly onFormat: (style: Emp
     >
       {FORMAT_BUTTONS.map((button) => {
         const label = translate(language, button.label);
+        const ctrl = translate(language, 'composer.format.ctrl');
         const shortcut = button.shift ? `${translate(language, 'composer.format.shift')}+${button.shortcut}` : button.shortcut;
         return (
         <button
@@ -71,8 +72,8 @@ export function ComposerFormatBar({ onFormat }: { readonly onFormat: (style: Emp
           onPointerDown={(event) => event.preventDefault()}
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => onFormat(button.style)}
-          aria-label={`${label} (Ctrl+${shortcut})`}
-          title={`${label} — Ctrl+${shortcut}`}
+          aria-label={`${label} (${ctrl}+${shortcut})`}
+          title={`${label} — ${ctrl}+${shortcut}`}
           data-format={button.style}
           className="grid size-11 place-items-center rounded-chip text-[17px]"
           style={{

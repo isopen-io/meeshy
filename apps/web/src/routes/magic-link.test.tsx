@@ -14,6 +14,7 @@ import { authColumnIn, strayFromAuthColumn } from '@/test-support/auth-column';
 import { arriveByEmailLink, leaveEmailLink, tokenInHistory } from '@/test-support/email-link-arrival';
 import type { auth } from '@/lib/api/auth';
 import { perceivableText } from '@/test-support/perceivable-text';
+import { setInterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * T9 (#5816) — « MagicLinkFlow », les cinq états (vide, saisie, envoi,
@@ -562,5 +563,24 @@ describe('MagicLinkValidation — « Réessayer » relance la validation (#18322
 
     expect(tokens).toEqual(['m-retry', 'm-retry']);
     expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+  });
+});
+
+describe('MagicLinkFlow — le compte à rebours se nomme dans la langue d’interface (#7566)', () => {
+  test('en anglais, le minuteur annonce « The link expires in … », jamais le français', async () => {
+    await setInterfaceLanguage('en');
+    try {
+      const { clock, now } = fakeClock();
+      const stub = requestStub([{ ok: true, data: { expiresInSeconds: 600 }, status: 200 }]);
+      const el = mount({ request: stub.request, clock, now });
+      fill(el, 'ada@meeshy.example');
+      await act(async () => {
+        submit(el);
+        await Promise.resolve();
+      });
+      expect(el.querySelector('[role="timer"]')?.getAttribute('aria-label')).toBe('The link expires in 10 minutes');
+    } finally {
+      await setInterfaceLanguage('fr');
+    }
   });
 });

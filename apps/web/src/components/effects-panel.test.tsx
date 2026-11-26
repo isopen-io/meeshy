@@ -32,8 +32,9 @@ describe('EffectsPanel — rendu statique', () => {
 
   test('un bit actif porte aria-pressed="true", un bit inactif "false"', () => {
     const html = renderToStaticMarkup(<EffectsPanel flags={MESSAGE_EFFECT_FLAGS.SHAKE} onChange={() => {}} />);
-    expect(html).toContain('aria-label="Secousse, actif"');
-    expect(html).toContain('aria-label="Zoom, inactif"');
+    expect(html).toMatch(/aria-pressed="true"[^>]*aria-label="Secousse"/);
+    expect(html).toMatch(/aria-pressed="false"[^>]*aria-label="Zoom"/);
+    expect(html).not.toMatch(/aria-label="[^"]*, (actif|inactif)"/);
   });
 
   test('« Tout effacer » est ABSENT quand aucun effet n’est armé', () => {
@@ -87,7 +88,7 @@ describe('EffectsPanel — DOM réel', () => {
       changed = f;
     });
     act(() => {
-      el.querySelector<HTMLButtonElement>('[aria-label="Secousse, inactif"]')!.click();
+      el.querySelector<HTMLButtonElement>('[aria-label="Secousse"][aria-pressed="false"]')!.click();
     });
     expect(changed).toBe(MESSAGE_EFFECT_FLAGS.GLOW | MESSAGE_EFFECT_FLAGS.SHAKE);
   });
@@ -98,7 +99,7 @@ describe('EffectsPanel — DOM réel', () => {
       changed = f;
     });
     act(() => {
-      el.querySelector<HTMLButtonElement>('[aria-label="Secousse, actif"]')!.click();
+      el.querySelector<HTMLButtonElement>('[aria-label="Secousse"][aria-pressed="true"]')!.click();
     });
     expect(changed).toBe(MESSAGE_EFFECT_FLAGS.GLOW);
   });

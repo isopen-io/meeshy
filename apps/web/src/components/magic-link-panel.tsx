@@ -218,7 +218,7 @@ export function MagicLinkPanel({
                 <p
                   role="timer"
                   aria-live="off"
-                  aria-label={`Le lien expire dans ${spokenCountdown(remaining, locale)}`}
+                  aria-label={translate(language, 'magicLink.expiresIn', { time: spokenCountdown(remaining, locale) })}
                   className="font-bold tabular-nums text-screen"
                   style={{ color: 'var(--ios-indigo-600)' }}
                 >

@@ -142,6 +142,12 @@ describe('StoryRail — la grande en flux, la compacte épinglée', () => {
     expect(ul?.getAttribute('aria-label')).toBe('Stories');
   });
 
+  test('le rail se nomme dans la langue d’interface — « Storys » en allemand, jamais « Stories » figé (#7566)', async () => {
+    await loadInterfaceCatalog('de');
+    const el = mount({ variant: 'grande', groups: [group('u-amina', 'Amina Diallo')], language: 'de' });
+    expect(el.querySelector('ul[data-rail="grande"]')?.getAttribute('aria-label')).toBe('Storys');
+  });
+
   /**
    * **CE TÉMOIN REMPLACE « les conversations ARCHIVÉES sont exclues »**, et le
    * remplacement est une décision, pas une perte : l'archivage est une propriété

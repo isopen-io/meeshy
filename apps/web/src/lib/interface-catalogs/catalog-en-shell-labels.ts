@@ -132,6 +132,7 @@ const enShellLabels = {
   'composer.format.underline': 'Underline',
   'composer.format.strikethrough': 'Strikethrough',
   'composer.format.shift': 'Shift',
+  'composer.format.ctrl': 'Ctrl',
   'composer.caption.dialog': 'Caption images before sending',
   'composer.caption.back': 'Back to the composer without sending',
   'composer.caption.remove': 'Remove {name} from what you’re sending',

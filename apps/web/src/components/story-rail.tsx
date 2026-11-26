@@ -465,7 +465,7 @@ export const StoryRail = forwardRef<
       ref={ref}
       data-rail={variant}
       inert={inert}
-      aria-label={inert ? undefined : 'Stories'}
+      aria-label={inert ? undefined : translate(language, 'stories.title')}
       className={
         grande
           ? 'scrollbar-none flex items-start overflow-x-auto'

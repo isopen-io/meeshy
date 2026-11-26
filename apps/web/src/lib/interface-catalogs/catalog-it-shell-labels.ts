@@ -132,6 +132,7 @@ const itShellLabels = {
   'composer.format.underline': 'Sottolineato',
   'composer.format.strikethrough': 'Barrato',
   'composer.format.shift': 'Maiusc',
+  'composer.format.ctrl': 'Ctrl',
   'composer.caption.dialog': 'Aggiungi didascalie alle immagini prima dell’invio',
   'composer.caption.back': 'Torna al compositore senza inviare',
   'composer.caption.remove': 'Rimuovi {name} dall’invio',

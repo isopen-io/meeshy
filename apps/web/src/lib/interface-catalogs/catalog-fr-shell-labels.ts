@@ -140,6 +140,7 @@ const frShellLabels = {
   'composer.format.underline': 'Souligné',
   'composer.format.strikethrough': 'Barré',
   'composer.format.shift': 'Maj',
+  'composer.format.ctrl': 'Ctrl',
   'composer.caption.dialog': 'Légender les images avant l’envoi',
   'composer.caption.back': 'Revenir au composeur sans envoyer',
   'composer.caption.remove': 'Retirer {name} de l’envoi',

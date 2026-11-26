@@ -37,7 +37,7 @@ function EffectChip({
       type="button"
       onClick={onToggle}
       aria-pressed={active}
-      aria-label={`${label}, ${active ? 'actif' : 'inactif'}`}
+      aria-label={label}
       /* CIBLE ≥ 44 (dimension 5) — la hauteur, comme les capsules du rail
          éphémère (`min-h-11`). */
       className="btn-press inline-flex min-h-11 shrink-0 items-center rounded-full px-3.5 text-title font-semibold"

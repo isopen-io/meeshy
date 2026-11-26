@@ -6,7 +6,9 @@ import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { Composer } from './composer';
-import { emphasisShortcutOf } from './composer-format-bar';
+import { ComposerFormatBar, emphasisShortcutOf } from './composer-format-bar';
+import { setInterfaceLanguage } from '@/lib/interface-language';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 /**
  * GRAS, ITALIQUE, SOULIGNÉ, BARRÉ EN UN GESTE (#7849) — vu du lecteur : un
@@ -124,5 +126,19 @@ describe('la barre de format', () => {
       fieldOf(el).dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
     });
     expect(sent).toEqual(['rdv ~~annulé~~']);
+  });
+});
+
+describe('la barre de format, dans une autre langue (#7566)', () => {
+  test('en allemand, le raccourci se nomme « Strg+ », jamais « Ctrl+ » figé', async () => {
+    await setInterfaceLanguage('de');
+    try {
+      const html = renderToStaticMarkup(<ComposerFormatBar onFormat={() => {}} />);
+      expect(html).toContain('(Strg+B)');
+      expect(html).toContain('— Strg+B');
+      expect(html).not.toContain('Ctrl+');
+    } finally {
+      await setInterfaceLanguage('fr');
+    }
   });
 });

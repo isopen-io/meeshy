@@ -132,6 +132,7 @@ const esShellLabels = {
   'composer.format.underline': 'Subrayado',
   'composer.format.strikethrough': 'Tachado',
   'composer.format.shift': 'Mayús',
+  'composer.format.ctrl': 'Ctrl',
   'composer.caption.dialog': 'Añadir pies de foto antes de enviar',
   'composer.caption.back': 'Volver al compositor sin enviar',
   'composer.caption.remove': 'Quitar {name} del envío',
