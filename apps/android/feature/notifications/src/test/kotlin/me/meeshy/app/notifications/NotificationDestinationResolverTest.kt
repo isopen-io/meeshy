@@ -319,6 +319,7 @@ class NotificationDestinationResolverTest {
             "badge_earned" to GameTarget.Concept(ProgressionConcept.Badges),
             "achievement_unlocked" to GameTarget.Concept(ProgressionConcept.Succes),
             "game_mission_window" to GameTarget.Concept(ProgressionConcept.Missions),
+            "game_flame_evening" to GameTarget.Concept(ProgressionConcept.Flame),
             "game_duo_invited" to GameTarget.Page(GamePage.League),
             "game_duo_accepted" to GameTarget.Page(GamePage.League),
             "game_league_result" to GameTarget.Page(GamePage.League),

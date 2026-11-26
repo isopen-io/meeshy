@@ -221,8 +221,13 @@ describe('le rappel du soir de la Flamme (#20612)', () => {
     expect(tokenRoutesPushType(browser('2.32.1'), EVENING)).toBe(false);
   });
 
-  it('iOS et l’Android natif ne le routent pas encore : aucune version ne le reçoit', () => {
+  it('iOS ne le route pas encore : aucune version ne le reçoit', () => {
     expect(tokenRoutesPushType(iphone('99.0.0'), EVENING)).toBe(false);
-    expect(tokenRoutesPushType(nativeAndroid('99.0.0'), EVENING)).toBe(false);
+  });
+
+  it('l’Android natif l’ouvre sur la fiche de la Flamme depuis la 3.1.1 (#20615) : la 3.1.0 publiée ne le reçoit pas', () => {
+    expect(tokenRoutesPushType(nativeAndroid('3.1.1'), EVENING)).toBe(true);
+    expect(tokenRoutesPushType(nativeAndroid('3.2.0'), EVENING)).toBe(true);
+    expect(tokenRoutesPushType(nativeAndroid('3.1.0'), EVENING)).toBe(false);
   });
 });

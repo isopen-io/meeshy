@@ -143,6 +143,7 @@ class PushTapDestinationTest {
             "game_league_result" to GameTarget.Page(GamePage.League),
             "game_season_step" to GameTarget.Page(GamePage.Season),
             "game_mission_window" to GameTarget.Concept(ProgressionConcept.Missions),
+            "game_flame_evening" to GameTarget.Concept(ProgressionConcept.Flame),
             "level_up" to GameTarget.Concept(ProgressionConcept.Level),
             "streak_milestone" to GameTarget.Concept(ProgressionConcept.Flame),
             "badge_earned" to GameTarget.Concept(ProgressionConcept.Badges),

@@ -135,7 +135,7 @@ class NotificationFilterCategoryTest {
         NotificationFilterCategory.ENGAGEMENT to setOf(
             "achievement_unlocked", "ACHIEVEMENT_UNLOCKED", "streak_milestone", "level_up", "badge_earned",
             "game_duo_invited", "game_duo_accepted", "game_league_result", "game_season_step",
-            "game_mission_window",
+            "game_mission_window", "game_flame_evening",
         ),
         NotificationFilterCategory.CONTACTS to setOf(
             "friend_request", "contact_request", "FRIEND_REQUEST", "friend_accepted", "contact_accepted",
