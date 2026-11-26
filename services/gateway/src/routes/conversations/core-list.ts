@@ -34,6 +34,7 @@ import { sendUnauthorized, sendInternalError, sendBadRequest } from '../../utils
 import { resolveListCursor } from './list-cursor';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceFor, viewerFromRequest } from '../users/presence-gate';
+import { participantActivity } from './participant-activity';
 import { validatePagination, buildCursorPaginationMeta } from '../../utils/pagination';
 import { sendWithETag } from '../../utils/etag';
 import { resolveVisibleLastMessages } from '../../services/resolveVisibleLastMessage';
@@ -732,6 +733,7 @@ export function registerConversationListRoute(
             const hideOnline = !vis.showOnline;
             const hideLastSeen = !vis.showLastSeenTimestamp;
             const profileDecor = participantProfileDecor(startupPackIndex(), m.user);
+            const activity = participantActivity(m);
             return {
               ...withoutRequestFields(m),
               // #10713 — le contour équipé du pair, dessiné par la ligne de liste.
@@ -744,8 +746,8 @@ export function registerConversationListRoute(
               // client ignore `participantBanner` (évite le sur-transfert).
               // Note : `Participant` n'a pas de colonne `banner`, seule `User` en a.
               banner: isDirect ? (m.user?.banner ?? null) : null,
-              isOnline: hideOnline ? false : (liveOnline === undefined ? m.isOnline : liveOnline),
-              lastActiveAt: hideLastSeen ? null : m.lastActiveAt,
+              isOnline: hideOnline ? false : (liveOnline === undefined ? activity.isOnline : liveOnline),
+              lastActiveAt: hideLastSeen ? null : activity.lastActiveAt,
               user: m.userId
                 ? {
                     ...m.user,
