@@ -378,6 +378,7 @@ const fr = {
   'admin.images.saved': 'Image mise à jour',
   'admin.images.removed': 'Image retirée',
   'admin.images.failed': 'Échec de la mise à jour de l’image',
+  'admin.images.formatRefused': 'Ce format de photo (HEIC) n’est pas encore accepté. Choisissez une photo JPEG ou PNG.',
   'admin.images.offline': 'Hors ligne : réessayez une fois connecté.',
   'admin.images.unreadable': 'Cette image n’a pas pu être lue.',
   'admin.section.saving': 'Enregistrement…',

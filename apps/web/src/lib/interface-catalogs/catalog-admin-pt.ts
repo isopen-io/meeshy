@@ -350,6 +350,7 @@ const pt = {
   'admin.images.saved': 'Imagem atualizada',
   'admin.images.removed': 'Imagem removida',
   'admin.images.failed': 'Falha ao atualizar a imagem',
+  'admin.images.formatRefused': 'Este formato de foto (HEIC) ainda não é aceito. Escolha uma foto JPEG ou PNG.',
   'admin.images.offline': 'Sem conexão: tente novamente quando estiver conectado.',
   'admin.images.unreadable': 'Não foi possível ler esta imagem.',
   'admin.section.saving': 'Salvando…',

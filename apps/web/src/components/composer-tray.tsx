@@ -305,8 +305,8 @@ function PreviewTile({
     [attachment.localId, attachment.file, attachment.kind],
   );
   /* W9 (#11315) — un HEIC que ce navigateur ne décode pas : l'aperçu lève
-     `error`. La vignette montre alors le glyphe d'image, et ne propose plus
-     « Éditer », que l'éditeur ne saurait pas ouvrir. */
+     `error`. La vignette montre alors le glyphe d'image, ne propose plus
+     « Éditer », que l'éditeur ne saurait pas ouvrir, et le dit (#12322). */
   const [undecodable, setUndecodable] = useState(false);
   const shownUrl = undecodable ? undefined : previewUrl;
   const mounting = progress !== undefined;
@@ -377,6 +377,14 @@ function PreviewTile({
         >
           {face}
         </button>
+      ) : undecodable ? (
+        /* #12322 — la vignette DIT pourquoi « Éditer » manque : ce navigateur
+           ne décode pas ce HEIC, la photo part telle quelle et la passerelle
+           la sert en JPEG. */
+        <span data-pending-undecodable="" title={translate(language, 'composer.attachment.heifNotEditable')} className="block">
+          {face}
+          <span className="sr-only">{translate(language, 'composer.attachment.heifNotEditable')}</span>
+        </span>
       ) : (
         face
       )}

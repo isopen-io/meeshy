@@ -350,6 +350,7 @@ const es = {
   'admin.images.saved': 'Imagen actualizada',
   'admin.images.removed': 'Imagen quitada',
   'admin.images.failed': 'Error al actualizar la imagen',
+  'admin.images.formatRefused': 'Este formato de foto (HEIC) aún no se acepta. Elige una foto JPEG o PNG.',
   'admin.images.offline': 'Sin conexión: vuelve a intentarlo cuando estés conectado.',
   'admin.images.unreadable': 'No se pudo leer esta imagen.',
   'admin.section.saving': 'Guardando…',

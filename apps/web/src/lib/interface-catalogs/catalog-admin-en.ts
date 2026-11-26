@@ -350,6 +350,7 @@ const en = {
   'admin.images.saved': 'Image updated',
   'admin.images.removed': 'Image removed',
   'admin.images.failed': 'Image update failed',
+  'admin.images.formatRefused': 'This photo format (HEIC) isn’t accepted yet. Choose a JPEG or PNG photo.',
   'admin.images.offline': 'Offline: try again once connected.',
   'admin.images.unreadable': 'This image could not be read.',
   'admin.section.saving': 'Saving…',

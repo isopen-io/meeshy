@@ -290,3 +290,63 @@ describe('l’aperçu immédiat et le refus de RANG (#8289)', () => {
   });
 });
 
+
+describe('une photo HEIC que la passerelle écarte (#12322)', () => {
+  async function televerserHeic(reponseUpload: { readonly ok: boolean; readonly status?: number }) {
+    const t = routedTransport((req: HttpRequest) => {
+      if (req.method === 'GET' && pathOf(req) === '/api/v1/admin/users/u-alice/profile-image-candidates') {
+        return { ok: true, data: [], pagination: { total: 0, offset: 0, limit: 30, hasMore: false } };
+      }
+      if (req.method === 'POST' && pathOf(req) === '/api/v1/attachments/upload') {
+        return reponseUpload.ok
+          ? { ok: true, data: { attachments: [] } }
+          : { ok: false, status: reponseUpload.status ?? 415, error: 'Unsupported media type' };
+      }
+      return undefined;
+    });
+    const echecs: string[] = [];
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminUserImageSheet
+          membre={membre()}
+          kind="avatar"
+          language="fr"
+          deps={{ source: 'gateway', transport: t.transport }}
+          isOnline={() => true}
+          onAnnounce={() => {}}
+          onSaved={() => {}}
+          onFailed={(_kind, message) => echecs.push(message)}
+          onClose={() => {}}
+        />
+      </QueryClientProvider>,
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    const input = host.querySelector<HTMLInputElement>('[data-admin-image-file]')!;
+    const heic = new File([new Uint8Array(16)], 'IMG_0042.HEIC', { type: '' });
+    Object.defineProperty(input, 'files', { configurable: true, value: [heic] });
+    await act(async () => {
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    return { host, calls: t.calls, echecs };
+  }
+
+  const MOTIF = 'Ce format de photo (HEIC) n’est pas encore accepté. Choisissez une photo JPEG ou PNG.';
+
+  test('écartée sans adresse servie, la feuille dit la cause FORMAT, jamais « échec »', async () => {
+    const { host, calls, echecs } = await televerserHeic({ ok: true });
+
+    expect(calls().some((req) => req.method === 'POST' && pathOf(req) === '/api/v1/attachments/upload')).toBe(true);
+    expect(host.querySelector('[data-admin-image-refused]')?.getAttribute('data-admin-image-refused')).toBe('format');
+    expect(host.querySelector('[data-admin-image-refused]')?.textContent).toBe(MOTIF);
+    expect(echecs).toEqual([MOTIF]);
+  });
+
+  test('refusée par un 415, la cause dite est la même', async () => {
+    const { host } = await televerserHeic({ ok: false, status: 415 });
+
+    expect(host.querySelector('[data-admin-image-refused]')?.getAttribute('data-admin-image-refused')).toBe('format');
+  });
+});

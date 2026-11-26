@@ -18,6 +18,7 @@ import { apiDeps } from '@/lib/api/deps';
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { ProfileImageKind } from '@/lib/api/profile';
 import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
+import { UPLOAD_FORMAT_REFUSED } from '@/lib/media/heif';
 import { PROFILE_IMAGE_ACCEPT } from '@/lib/profile/image-upload';
 
 /**
@@ -53,17 +54,26 @@ const TITRES: Readonly<Record<ProfileImageKind, AdminPlainCatalogKey>> = {
   banner: 'admin.gallery.banner',
 };
 
-type Refus = 'offline' | 'unreadable' | 'failed' | 'forbidden' | null;
+type Refus = 'offline' | 'unreadable' | 'failed' | 'forbidden' | 'format' | null;
 
 const REFUS: Readonly<Record<Exclude<Refus, null>, AdminPlainCatalogKey>> = {
   offline: 'admin.images.offline',
   unreadable: 'admin.images.unreadable',
   failed: 'admin.images.failed',
   forbidden: 'admin.prefs.reserved',
+  format: 'admin.images.formatRefused',
 };
 
 /** Un 403 est un RANG insuffisant, jamais « échec » : l'administrateur doit savoir que réessayer n'y fera rien. */
 const refusDuStatut = (status: number): Exclude<Refus, null> => (status === 403 ? 'forbidden' : 'failed');
+
+/**
+ * Un HEIC que la passerelle n'a pas su convertir (#12322) : la cause est le
+ * FORMAT, et l'administrateur doit savoir qu'il faut une autre photo, pas un
+ * nouvel essai — le même motif que le profil du membre (#11315).
+ */
+const refusDuTeleversement = (issue: { readonly httpStatus?: number; readonly code?: string }): Exclude<Refus, null> =>
+  issue.code === UPLOAD_FORMAT_REFUSED ? 'format' : refusDuStatut(issue.httpStatus ?? 0);
 
 export function AdminUserImageSheet({
   membre,
@@ -157,7 +167,7 @@ export function AdminUserImageSheet({
       onFailed?.(kind, '');
       return;
     }
-    echouer(issue.status === 'refused' ? refusDuStatut(issue.httpStatus ?? 0) : issue.status);
+    echouer(issue.status === 'refused' ? refusDuTeleversement(issue) : issue.status);
   }
 
   const occupe = enVol !== null;

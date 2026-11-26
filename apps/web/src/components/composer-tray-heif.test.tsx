@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { pendingAttachmentOf } from '@/lib/send/attachments';
 
 import ComposerTray from './composer-tray';
@@ -16,9 +17,10 @@ import ComposerTray from './composer-tray';
  */
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
-beforeAll(() => {
+beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
+  await loadInterfaceCatalog('fr');
 });
 
 afterAll(async () => {
@@ -68,5 +70,18 @@ describe('PreviewTile — un aperçu que le navigateur ne décode pas', () => {
     expect(el.querySelector('[data-pending-kind="image"]')).not.toBeNull();
     expect(el.querySelector('[data-composer-edit]')).toBeNull();
     expect(el.textContent).toContain('IMG_0042.HEIC');
+  });
+
+  test('la vignette DIT pourquoi « Éditer » n’est pas offert, et que la photo part telle quelle (#12322)', () => {
+    const el = mountTray(new File([new Uint8Array(8)], 'IMG_0042.HEIC', { type: '' }));
+    const tile = () => el.querySelector<HTMLElement>('[data-pending-tile]')!;
+    expect(tile().querySelector('[data-pending-undecodable]')).toBeNull();
+    act(() => {
+      el.querySelector('[data-pending-tile] img')!.dispatchEvent(new Event('error'));
+    });
+    const motif = 'Ce navigateur ne sait pas ouvrir cette photo HEIC pour la retoucher : elle part telle quelle.';
+    const dit = tile().querySelector<HTMLElement>('[data-pending-undecodable]');
+    expect(dit?.getAttribute('title')).toBe(motif);
+    expect(dit?.textContent).toContain(motif);
   });
 });

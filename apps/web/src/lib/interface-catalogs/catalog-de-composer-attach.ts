@@ -109,6 +109,7 @@ const deComposerAttach = {
   'send.failure.guestTooLarge': 'Diese Datei ist hier zu groß (höchstens {max})',
   'send.failure.formatRefused': 'dieses Fotoformat (HEIC) wird noch nicht akzeptiert',
   'profile.image.formatRefused': 'Dieses Fotoformat (HEIC) wird noch nicht akzeptiert. Wähle ein JPEG- oder PNG-Foto.',
+  'composer.attachment.heifNotEditable': 'Dieser Browser kann dieses HEIC-Foto nicht zum Bearbeiten öffnen: Es wird unverändert gesendet.',
 } satisfies ComposerAttachCatalogSlice;
 
 export default deComposerAttach;
