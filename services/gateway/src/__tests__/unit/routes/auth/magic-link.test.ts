@@ -12,13 +12,19 @@ import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
+const journal: unknown[][] = [];
+const record = (...args: unknown[]): void => {
+  journal.push(args);
+};
+const childLogger = { info: record, debug: record, warn: record, error: record };
+
 jest.mock('../../../../utils/logger-enhanced', () => ({
-  enhancedLogger: {
-    child: jest.fn(() => ({
-      info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn(),
-    })),
-  },
+  enhancedLogger: { child: jest.fn(() => childLogger) },
 }));
+
+function journalText(): string {
+  return journal.map((args) => args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ')).join('\n');
+}
 
 // Depuis #4264 un JWT porte `sid` — l'identifiant de la ligne `UserSession`
 // qui l'a émis. Le double sert donc par défaut un jeton NOMMÉ : c'est la forme
@@ -781,6 +787,34 @@ describe('POST /resend-verification — already verified', () => {
       payload: { email: 'alice@test.com' },
     });
     expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+});
+
+describe('POST /resend-verification — journal sans adresse en clair (#16049)', () => {
+  it('ne journalise pas l’adresse demandée', async () => {
+    journal.length = 0;
+    const app = await buildApp();
+    await app.inject({
+      method: 'POST',
+      url: '/resend-verification',
+      payload: { email: 'alice.martin@exemple.com' },
+    });
+    expect(journal.length).toBeGreaterThan(0);
+    expect(journalText()).not.toContain('alice.martin');
+    expect(journalText()).not.toContain('exemple.com');
+    await app.close();
+  });
+});
+
+describe('POST /send-phone-code et /verify-phone — journal sans numéro en clair (#16049)', () => {
+  it('ne journalise pas le numéro', async () => {
+    journal.length = 0;
+    const app = await buildApp();
+    await app.inject({ method: 'POST', url: '/send-phone-code', payload: { phoneNumber: '+33612345678' } });
+    await app.inject({ method: 'POST', url: '/verify-phone', payload: { phoneNumber: '+33612345678', code: '123456' } });
+    expect(journal.length).toBeGreaterThan(0);
+    expect(journalText()).not.toContain('612345');
     await app.close();
   });
 });

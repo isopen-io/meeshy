@@ -19,6 +19,7 @@ import {
   type CurrentSessionRef
 } from './SessionService';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { redactEmailForLog, redactIdentifierForLog, redactPhoneForLog } from '../utils/log-redaction';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
 import { resolveAutoTranslateEnabled } from '../utils/auto-translate-preference';
 import {
@@ -158,9 +159,9 @@ export class AuthService {
       // Normaliser le téléphone au format E.164 si c'est un numéro
       const normalizedPhone = normalizePhoneNumber(credentials.username);
 
-      logger.info(`[AUTH_SERVICE] Recherche utilisateur avec identifiant normalizedIdentifier=${normalizedIdentifier}`);
+      logger.info(`[AUTH_SERVICE] Recherche utilisateur avec identifiant=${redactIdentifierForLog(normalizedIdentifier)}`);
       if (normalizedPhone && normalizedPhone !== credentials.username) {
-        logger.info(`[AUTH_SERVICE] Téléphone normalisé normalizedPhone=${normalizedPhone}`);
+        logger.info(`[AUTH_SERVICE] Téléphone normalisé=${redactPhoneForLog(normalizedPhone)}`);
       }
 
       // Rechercher l'utilisateur par username, email ou téléphone
@@ -184,7 +185,7 @@ export class AuthService {
       });
 
       if (!user) {
-        logger.warn(`[AUTH_SERVICE] ❌ Aucun utilisateur trouvé pour normalizedIdentifier=${normalizedIdentifier}`);
+        logger.warn(`[AUTH_SERVICE] ❌ Aucun utilisateur trouvé pour identifiant=${redactIdentifierForLog(normalizedIdentifier)}`);
         return null;
       }
 
@@ -754,7 +755,7 @@ export class AuthService {
         language: recipientLanguage(user, 'fr')
       });
 
-      logger.info(`[AUTH_SERVICE] ✅ Email de vérification renvoyé à user.email=${normalizedEmail}`);
+      logger.info(`[AUTH_SERVICE] ✅ Email de vérification renvoyé à ${redactEmailForLog(normalizedEmail)}`, { userId: user.id });
       return { success: true };
 
     } catch (error) {

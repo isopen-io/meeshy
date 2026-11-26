@@ -16,6 +16,7 @@ import { createUnifiedAuthMiddleware, findTrustedSession} from '../../middleware
 import { logWarn } from '../../utils/logger';
 import { AuthRouteContext, formatUserResponse, formatSessionResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { redactEmailForLog, redactPhoneForLog } from '../../utils/log-redaction';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import { accountIsBelowMinimumAge } from '../../services/auth/minimum-age-gate';
 import { scheduleContactJoinedAnnouncement } from '../../services/notifications/contact-joined';
@@ -531,7 +532,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       const validatedData = validateSchema(AuthSchemas.resendVerification, request.body, 'resend-verification');
       const { email } = validatedData;
 
-      logger.info(`[AUTH] Demande de renvoi de vérification pour email=${email}`);
+      logger.info(`[AUTH] Demande de renvoi de vérification pour ${redactEmailForLog(email)}`);
 
       const result = await authService.resendVerificationEmail(email);
 
@@ -577,7 +578,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       const validatedData = validateSchema(AuthSchemas.sendPhoneCode, request.body, 'send-phone-code');
       const { phoneNumber } = validatedData;
 
-      logger.info(`[AUTH] Envoi code SMS pour phoneNumber=${phoneNumber}`);
+      logger.info(`[AUTH] Envoi code SMS pour ${redactPhoneForLog(phoneNumber)}`);
 
       const result = await authService.sendPhoneVerificationCode(phoneNumber);
 
@@ -622,7 +623,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       const validatedData = validateSchema(AuthSchemas.verifyPhone, request.body, 'verify-phone');
       const { phoneNumber, code } = validatedData;
 
-      logger.info(`[AUTH] Vérification téléphone phoneNumber=${phoneNumber}`);
+      logger.info(`[AUTH] Vérification téléphone ${redactPhoneForLog(phoneNumber)}`);
 
       const result = await authService.verifyPhone(phoneNumber, code);
 
