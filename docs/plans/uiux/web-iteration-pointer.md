@@ -60,6 +60,32 @@ normal.
 | **93w** | 2026-11-23 | `claude/practical-fermat-10zclt` | [#20472](https://github.com/isopen-io/meeshy/pull/20472) → `dev` | ✅ mergé |
 | **94w** | 2026-11-24 | `claude/practical-fermat-stot2z` | [#20515](https://github.com/isopen-io/meeshy/pull/20515) → `dev` | ✅ mergé |
 | **95w** | 2026-11-25 | `claude/practical-fermat-o90to9` | → `dev` | ✅ mergé |
+| **96w** | 2026-11-26 | `claude/practical-fermat-h4rohp` | → `dev` | ⏳ ouverte |
+
+**96w** — cohérence de positionnement (dim. 6) / maintenabilité (dim. 11) / parité
+iOS (**revue FRAÎCHE**, #20326 soldée, gate #8879 à 0) : **jumelle divergente d'un
+formateur `m:ss`**. `videoDurationLabel` (`lib/view/media-grid-layout.ts`), le badge
+peint sur une vignette vidéo (`video-tile.tsx`, `content-card-visual.tsx`),
+calculait `Math.round(durationMs/1000)` **sans garde** — alors que le SOCLE
+`formatMediaTime` (`lib/view/seek-track.ts`), lu par le lecteur
+(`media-transport.ts`), la citation (`quoted-preview.ts`) et les accusés
+(`message-receipts-sheet.tsx`) via `attachmentDurationLabel`, **plancher**
+(`Math.floor`) et garde le non-fini en « 0:00 ». Deux défauts : (1) pour toute
+fraction ≥ .5 s le badge annonçait **+1 s** par rapport au même fichier partout
+ailleurs (1,5 s → badge « 0:02 », lecteur « 0:01 ») ; (2) une durée indéfinie
+peignait **« NaN:NaN »**. Parité iOS confirmée : le badge `MeeshyVideoThumbnail
+.swift:53` appelle `MediaFormat.duration` dont le défaut est `rounding: .down`
+(plancher) — le web arrondissait, le correctif le RAPPROCHE d'iOS. Correction :
+`videoDurationLabel = (ms) => formatMediaTime(ms / 1000)` — site unique, plancher +
+garde hérités (pas de cycle : `seek-track.ts` n'importe rien). Témoin NEUF
+(couverture inexistante) `media-grid-layout.test.ts` (describe « même horloge
+plancher que le socle », **4 rouges → 27/27 verts** : 1,5 s → « 0:01 », 90,5 s →
+« 1:30 », accord byte-à-byte avec `formatMediaTime`, NaN/∞/négatif/0 → « 0:00 ») +
+`video-tile.test.tsx` 17/17 + `lib/view` **4378/0** ; `tsc` 0 ; gate #8879 **0**.
+Housekeeping : 95w confirmée mergée (#20326 soldée sur `dev`) ; appariement
+analyses↔plans 1:1 revérifié (**75/75** `w` → **76/76** avec 96w, 0 doublon).
+**#20605 fermée** ; dette #20606 (composer-tray + export arrondissent encore).
+Analyse : `docs/analyses/uiux/2026-11-26-iteration-96w.md`.
 
 **95w** — a11y / i18n / maintenabilité (**FIN du filon #20326**, suite de 92w→94w) :
 les DEUX derniers segments à PLURIEL de `composeMessageLabel`
@@ -419,27 +445,33 @@ du code supprimé et ne se rejouent pas.** La routine repart d'une revue fraîch
 l'`apps/web` actuel (Vite + Preact). Toutes sont annotées `CORRIGÉ` et closes pour
 leur époque.
 
-## Prochaine itération : **96w** — revue fraîche de l'`apps/web`
+## Prochaine itération : **97w** — revue fraîche de l'`apps/web`
 
-**Le filon a11y/i18n #20326 est SOLDÉ (fermé en 95w).** Tout `composeMessageLabel`
-descend le catalogue : plus un segment en dur en français. Il n'y a plus de dette
-a11y/i18n DÉJÀ identifiée à solder — 96w repart donc d'une **revue fraîche** de
-l'`apps/web` actuel (Vite + Preact), dans l'esprit de la routine : épuration
-(dim. 12, « logique épurée »), optimisation (performance/fluidité), cohérence de
-thème/positionnement, accessibilité, i18n (texte visible ou lu encore en dur),
-navigation/gestes. Mesurer contre iOS (`apps/ios` + MeeshySDK, **jamais modifiés**)
-pour la parité, jamais pour reviser iOS.
+**Filons a11y/i18n (#20326) et harmonie (#8879) SOLDÉS ; 96w a soldé le badge de
+durée vidéo (#20605).** 97w repart d'une **revue fraîche** de l'`apps/web` actuel
+(Vite + Preact), dans l'esprit de la routine : épuration (dim. 12, « logique
+épurée »), optimisation (performance/fluidité), cohérence de thème/positionnement,
+accessibilité, i18n (texte visible ou lu encore en dur), navigation/gestes.
+Mesurer contre iOS (`apps/ios` + MeeshySDK, **jamais modifiés**) pour la parité,
+jamais pour reviser iOS.
 
-**Pistes de départ pour la recherche 96w** (à CONFIRMER par mesure, pas acquises) :
-- Un autre `aria-label` / `title` / texte visible encore en dur en français hors
-  de `composeMessageLabel` — p. ex. le `systemRowLabel` d'un avis d'arrivée
-  (`member-joined`, chemin `message-badges`), noté à vérifier au plan 94w.
-- Une surface « phrase au repos » non gouvernée (épuration) : rare, 92w→94w n'en
-  ont pas trouvé, donc exiger une mesure avant d'en faire un lot.
+**Piste la plus mûre pour 97w** : la **dette #20606** — deux des cinq formateurs
+`m:ss` du web arrondissent encore (`composer-tray.tsx:99` minuteur vocal ; iOS
+`VoiceRecordingView.swift:206` plancher → correctif direct ; `message-card-media
+.ts:54` export → vérifier la parité iOS de la carte d'export AVANT de planchér).
+Lot surgical, témoins d'accord avec `formatMediaTime`.
+
+**Méthode confirmée par 96w** : la revue fraîche la plus rentable est la chasse
+aux JUMELLES DIVERGENTES (un concept réimplémenté en N sites qui dérivent) — le
+badge vidéo arrondissait quand tout le reste planchérait. Chercher d'autres
+familles de même forme (formateurs, résolveurs de couleur, calculs d'état
+recopiés) avant de conclure à une surface propre.
 
 **Écarté, ne pas reproposer** : le lead E2EE de l'écran Sécurité
 (`settings-security.tsx`) est un repère règle 7 GOUVERNÉ (#17594), pas un défaut
-d'épure.
+d'épure. i18n des attributs/texte visible : propre (balayé 96w). a11y des boutons
+(948 scannés) : tous nommés. Gestes dismiss/show/back : `useBackDismiss` +
+`<dialog>` couvrent tout.
 
 **Toujours REMESURER le gate d'harmonie #8879 à l'ouverture** : 0 après 91w→95w,
 mais il remonte dès que `dev` reçoit une poche de chrome neuve (historique : 9/7 →
