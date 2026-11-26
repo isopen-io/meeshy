@@ -80,6 +80,7 @@ import { threadRowKeyOf } from '@/lib/view/use-arrival-motion';
 import { useNewerMessages } from '@/lib/view/use-newer-messages';
 import { useReadTracking } from '@/lib/view/use-read-tracking';
 import { AfterReadSeenContext, useAfterReadConsumption } from '@/lib/view/use-after-read-consumption';
+import { useViewOnceQueue } from '@/lib/view/use-view-once-queue';
 import { useEngagementRevalidation } from '@/lib/view/use-conversation-engagement';
 import { selfSenderOf, viewerParticipationOf } from '@/lib/view/self-sender';
 import { resumeThreadTarget, useUnreadBoundary } from '@/lib/view/unread-boundary';
@@ -208,10 +209,8 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    * dans `consumeViewOnceOptimistic` (`lib/api/view-once.ts`), qui écrit la
    * consommation au CACHE de requêtes avant tout réseau, la DIT au serveur
    * (`POST …/messages/:messageId/consume`) et la défait sur un refus
-   * permanent. `threadData.messages` (dérivé du MÊME cache par `select`)
-   * reflète l'écriture au rendu suivant, sans second état à tenir
-   * synchronisé ; cet écran n'en garde que la garde HORS LIGNE, la seule
-   * moitié qui soit à lui (`online`, D-16 — une révélation dont la
+   * permanent ; une panne la met en file (`useViewOnceQueue`, #8015). L'écran
+   * ne garde que la garde HORS LIGNE (`online`, D-16 : une révélation dont la
    * confirmation ne peut pas partir ne s'accorde pas).
    */
   /**
@@ -222,12 +221,13 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    * plus que le consommer — il tenait `expiredIds` à la main jusqu'ici.
    */
   const { destroyingIds, expiredIds, noteExpired: onEphemeralExpired } = useEphemeralDestruction();
+  const viewOnceQueue = useViewOnceQueue({ conversationId, messages: threadData.messages, viewerId: viewer.id ?? undefined, queryClient });
   const consume = useCallback(
     async (messageId: string): Promise<boolean> => {
       if (!online) return false;
-      return consumeViewOnceOptimistic({ conversationId, messageId, deps: { ...apiDeps, queryClient } });
+      return consumeViewOnceOptimistic({ conversationId, messageId, deps: { ...apiDeps, queryClient, viewOnceQueue } });
     },
-    [online, queryClient, conversationId],
+    [online, queryClient, conversationId, viewOnceQueue],
   );
 
   /**

@@ -89,6 +89,7 @@ const HOOK_NAMES = [
   'useNewerMessages',
   'useReadTracking',
   'useAfterReadConsumption',
+  'useViewOnceQueue',
   'useEngagementRevalidation',
   'useThreadOpenScroll',
   'useUnreadBoundary',

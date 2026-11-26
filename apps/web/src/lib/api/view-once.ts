@@ -7,6 +7,7 @@ import { findCachedThreadMessage, patchThreadMessages } from './messages';
 import { outcomeOf } from './outcome';
 import type { Attachment, Message } from './types';
 import { sealViewOnceIn } from './view-once-seal';
+import type { ViewOnceQueue } from './view-once-queue';
 import type { Transport } from '../net/transport';
 
 /**
@@ -89,7 +90,11 @@ export function viewOnceMediaUrlsOf(attachments: readonly Attachment[] | undefin
   );
 }
 
-export type ConsumeViewOnceDeps = ConversationsDeps & { readonly queryClient: QueryClient };
+/** `viewOnceQueue` (#8015) : la file où entre une consommation que la panne a retenue. */
+export type ConsumeViewOnceDeps = ConversationsDeps & {
+  readonly queryClient: QueryClient;
+  readonly viewOnceQueue?: ViewOnceQueue | undefined;
+};
 
 /**
  * LE COMPTE QUE LA PASSERELLE SERT (#7224) — `data.viewOnceCount` de la
@@ -133,7 +138,9 @@ function restoreMessage(deps: ConsumeViewOnceDeps, conversationId: string, previ
  * un refus PERMANENT (4xx hors `RETRYABLE_CLIENT_STATUSES`) la DÉFAIT et rend
  * `false` — l'écran montre alors sa légende d'échec (`REVEAL_ERROR_NOTICE_MS`)
  * et ne révèle rien —, une panne (réseau, 429, 5xx) la LAISSE : le secret est
- * déjà lu, le rouvrir serait pire que de le compter deux fois.
+ * déjà lu, le rouvrir serait pire que de le compter deux fois. Et la panne la
+ * met en FILE (`viewOnceQueue`, #8015) : le serveur l'apprend au retour du
+ * réseau, et « déjà ouvert » tient jusque-là, rechargement compris.
  *
  * Le succès réécrit le compte SERVI (`servedViewOnceCount`) : la valeur du
  * serveur atteint la rangée, elle ne s'arrête pas au port.
@@ -173,10 +180,12 @@ export async function consumeViewOnceOptimistic(params: {
   try {
     result = await consumeViewOnce(deps.transport, { conversationId, messageId });
   } catch {
+    deps.viewOnceQueue?.enqueue(conversationId, messageId);
     return true;
   }
 
   const outcome = outcomeOf(result);
+  if (outcome === 'transient') deps.viewOnceQueue?.enqueue(conversationId, messageId);
   if (outcome === 'permanent') {
     if (previous !== undefined) restoreMessage(deps, conversationId, previous);
     return false;
