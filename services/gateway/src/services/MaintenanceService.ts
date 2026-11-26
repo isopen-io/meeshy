@@ -18,6 +18,7 @@ import type { SessionRevoker } from './admin/user-management.service';
 import { purgeAccountIsolatedData, anonymizeUserIdentity } from './AccountPurgeService';
 import { endSharedLocationAfter } from './sharedLocation/sharedLocationDeps';
 import { purgeMediaOfDeletedAccount } from './purgeDeletedAccountMedia';
+import { runSoundFilePurgeIfEnabled } from './posts/soundPurge';
 import { deactivateCommunityMembershipsOfDeletedAccount } from './deactivateDeletedAccountCommunityMemberships';
 import { communityMemberAnnouncerOverIO } from './community-member-broadcast';
 import { cleanupExpiredData as sweepExpiredData, type ShareLinkRevocationLive } from './cleanupExpiredData';
@@ -446,6 +447,10 @@ export class MaintenanceService {
         // Nettoyer les sessions et données expirées
         await this.cleanupExpiredData();
 
+        // #9854 — fichier d'un son retiré sans plus aucun usage. Coupé tant que
+        // `SOUND_FILE_PURGE_ENABLED` n'est pas levé (staging d'abord).
+        await this.purgeRemovedSoundFiles();
+
         // Traiter les demandes de suppression de compte
         await this.processAccountDeletionRequests();
 
@@ -456,6 +461,15 @@ export class MaintenanceService {
       }
     } else if (!isInCleanupWindow && !alreadyRunToday) {
       logger.debug(`⏰ [DAILY CLEANUP] En attente de la fenêtre de nettoyage (2h-3h), heure actuelle: ${currentHour}h`);
+    }
+  }
+
+  private async purgeRemovedSoundFiles(): Promise<void> {
+    try {
+      const result = await runSoundFilePurgeIfEnabled({ prisma: this.prisma });
+      if (result) logger.info(`🧹 [CLEANUP] Sons retirés : ${result.removed} fichier(s) purgé(s), ${result.failed} échec(s)`);
+    } catch (error) {
+      logger.error('❌ [CLEANUP] Purge des fichiers de sons retirés échouée:', error);
     }
   }
 

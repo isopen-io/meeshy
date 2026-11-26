@@ -371,6 +371,10 @@ services:
       # /app/sounds éphémère et les perdrait à chaque recréation du conteneur.
       - UPLOAD_DIR=/app/sounds
       - SOUND_LIBRARY_ENABLED=true
+      # #9854 — purge du fichier d'un son retiré sans plus aucun usage : staging
+      # SEULEMENT. La première passe sur les données de production attend le feu
+      # vert du porteur (défaut du code : coupée).
+      - SOUND_FILE_PURGE_ENABLED=true
       # Le Bring (#13936) : allumé sur staging SEULEMENT, pour la recette. En production il
       # reste éteint (défaut du code) tant que les sous-lots clients, #14421 et #14409 ne
       # sont pas livrés — audit #14441, B2.
