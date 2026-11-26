@@ -9,8 +9,18 @@ import kotlinx.serialization.Serializable
  * déranger) : la passerelle a jugé.
  */
 public object TalkieContract {
-    /** `TALKIE_MAX_DURATION_MS` : une prise de parole dure au plus 15 s (#20579). */
+    /**
+     * `TALKIE_MAX_DURATION_MS` : une prise de parole dure au plus 15 s (#20579, 30 s auparavant). Borne ce que
+     * l'ÉMETTEUR accepte de l'accusé, et la copie vocale.
+     */
     public const val MAX_DURATION_MS: Long = 15_000L
+
+    /**
+     * La borne de ce qu'une voix REÇUE peut annoncer : une passerelle antérieure à #20579 sert encore 30 s pendant la
+     * transition, et le récepteur ne ferme pas une voix qui parle encore. Une valeur absurde reste bornée. Miroir de
+     * `TalkieContract.incomingCeiling` du SDK iOS.
+     */
+    public const val INCOMING_CEILING_MS: Long = 30_000L
 
     /** Le seul encodage relayé au MVP : celui du vocal (AAC mono, trames ADTS lisibles dès la première). */
     public const val CODEC: String = "aac-adts"
@@ -43,8 +53,11 @@ public data class TalkieIncoming(
     /** Un encodage que ce client ne sait pas lire ne s'ouvre pas. */
     public val isPlayable: Boolean get() = codec == TalkieContract.CODEC
 
-    /** La durée servie, bornée par le contrat : une valeur absurde ne garde jamais une prise de parole ouverte. */
-    public val boundedDurationMs: Long get() = maxDurationMs.coerceIn(0L, TalkieContract.MAX_DURATION_MS)
+    /**
+     * La durée servie, bornée par [TalkieContract.INCOMING_CEILING_MS] : une valeur absurde ne garde jamais une prise de
+     * parole ouverte.
+     */
+    public val boundedDurationMs: Long get() = maxDurationMs.coerceIn(0L, TalkieContract.INCOMING_CEILING_MS)
 }
 
 /**

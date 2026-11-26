@@ -37,6 +37,14 @@ class TalkieSendingTest {
     }
 
     @Test
+    fun `un accuse a 30 s d'une passerelle anterieure est ramene aux 15 s que l'emetteur s'autorise`() {
+        val verdict = TalkieStartVerdict.read(
+            ack("""{"success":true,"data":{"talkieId":"t1","maxDurationMs":30000}}"""),
+        ) as TalkieStartVerdict.Opened
+        assertThat(verdict.opened.maxDurationMs).isEqualTo(15_000L)
+    }
+
+    @Test
     fun `un accuse sans identifiant est un echec et une echeance vaut hors ligne`() {
         assertThat(TalkieStartVerdict.read(ack("""{"success":true,"data":{}}""")))
             .isEqualTo(TalkieStartVerdict.Refused(TalkieSendOutcome.FAILED))

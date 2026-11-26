@@ -6,9 +6,13 @@
  */
 
 /**
- * Une prise de parole dure au plus 15 s, comme la copie vocale qui la double (#20579, 30 s jusqu'au 2026-11-25).
- * Servie dans l'accusé (`maxDurationMs`) : un client déployé la lit et suit la limite ; la passerelle coupe à cette
- * durée quel que soit le client.
+ * Une prise de parole dure au plus 15 s, comme la copie vocale qui la double (#20579, 30 s auparavant).
+ * Servie dans l'accusé (`maxDurationMs`) : l'émetteur web, iOS et Android programme l'échéance de sa voix en direct sur
+ * `min(servi, sa constante)`, donc un client publié avant #20579 (constante de 30 s) s'arrête lui aussi à 15 s ; et la
+ * passerelle coupe à cette durée plus la marge du dernier fragment, quel que soit le client. Ce que l'accusé ne borne
+ * pas : la COPIE VOCALE d'un repli, qui n'a pas d'accusé ouvert — un Android publié avant #20579 l'enregistre jusqu'à
+ * sa constante locale de 30 s. Côté réception, les clients bornent une voix annoncée à 30 s (`incomingCeiling` iOS,
+ * `INCOMING_CEILING_MS` Android) : une passerelle encore à 30 s n'y est pas coupée à 15 s.
  */
 export const TALKIE_MAX_DURATION_MS = 15_000;
 /** Un fragment de ~500 ms en AAC mono 64 kb/s pèse ~4 Ko : 16 Ko laissent de la marge sans ouvrir un tuyau. */

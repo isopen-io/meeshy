@@ -116,9 +116,9 @@ public enum class TalkieWakeProgress {
     public companion object {
         /**
          * Le temps que le réveil attend une annonce qui n'arrive pas (socket qui ne se connecte pas, rattrapage déjà
-         * expiré) : la durée maximale d'une prise de parole, plus sa marge — au-delà, plus rien ne peut sortir.
+         * expiré) : la plus longue voix qu'on puisse recevoir, plus sa marge — au-delà, plus rien ne peut sortir.
          */
-        public const val JOIN_TIMEOUT_MS: Long = TalkieContract.MAX_DURATION_MS + TALKIE_EXPIRY_GRACE_MS + 12_000L
+        public const val JOIN_TIMEOUT_MS: Long = TalkieContract.INCOMING_CEILING_MS + TALKIE_EXPIRY_GRACE_MS + 12_000L
 
         /** Le temps laissé à la file pour finir de sonner après la fin servie, avant que le service ne s'arrête. */
         public const val DRAIN_GRACE_MS: Long = 2_500L

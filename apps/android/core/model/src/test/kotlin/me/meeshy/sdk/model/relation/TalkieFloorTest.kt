@@ -40,9 +40,24 @@ class TalkieFloorTest {
     }
 
     @Test
-    fun `une duree servie absurde est bornee au contrat`() {
+    fun `une duree servie absurde est bornee au plafond de reception`() {
         val state = TalkieFloor.open(TalkieFloorState(), incoming(maxMs = 3_600_000), me, t0)
-        assertThat(state.active.single().maxDurationMs).isEqualTo(TalkieContract.MAX_DURATION_MS)
+        assertThat(state.active.single().maxDurationMs).isEqualTo(TalkieContract.INCOMING_CEILING_MS)
+    }
+
+    @Test
+    fun `une voix annoncee a 30 s par une passerelle anterieure n'est pas fermee a 15 s`() {
+        val state = TalkieFloor.open(TalkieFloorState(), incoming(maxMs = 30_000), me, t0)
+        assertThat(state.active.single().maxDurationMs).isEqualTo(30_000L)
+        assertThat(state.active.single().deadlineMs).isEqualTo(t0 + 30_000 + TALKIE_EXPIRY_GRACE_MS)
+        val (_, steps) = feed(state, chunk(0), chunk(1))
+        assertThat(played(steps)).containsExactly(0, 1).inOrder()
+    }
+
+    @Test
+    fun `le plafond de reception garde la duree d'une passerelle anterieure, l'emission reste a 15 s`() {
+        assertThat(TalkieContract.INCOMING_CEILING_MS).isEqualTo(30_000L)
+        assertThat(TalkieContract.MAX_DURATION_MS).isEqualTo(15_000L)
     }
 
     @Test

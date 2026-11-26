@@ -254,6 +254,21 @@ class TalkieSenderTest {
     }
 
     @Test
+    fun `l'echeance de la voix suit la duree servie par l'accuse, et y ferme sur la limite`() = runTest {
+        val rig = rig()
+        rig.sut.press("bob")
+        runCurrent()
+        rig.emitter.resolve(TalkieStartVerdict.Opened(OPENED.copy(maxDurationMs = 12_000)))
+        runCurrent()
+        assertThat(rig.delays).containsExactly(12_000L)
+
+        rig.deadline[0]!!.invoke()
+        runCurrent()
+        assertThat(rig.emitter.ends).containsExactly(TALKIE)
+        assertThat(rig.sut.notice.value).isEqualTo(TalkieSendOutcome.LIMIT)
+    }
+
+    @Test
     fun `la copie vocale se ferme seule a la duree maximale, et une copie qui ne part pas est un echec`() = runTest {
         val rig = rig()
         rig.copier.succeeds = false

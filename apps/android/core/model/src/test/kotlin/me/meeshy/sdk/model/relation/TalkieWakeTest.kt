@@ -66,8 +66,8 @@ class TalkieWakeTest {
     }
 
     @Test
-    fun `l'attente d'une annonce est bornee au-dela de la duree maximale d'une prise de parole`() {
-        assertThat(TalkieWakeProgress.JOIN_TIMEOUT_MS).isGreaterThan(TalkieContract.MAX_DURATION_MS + TALKIE_EXPIRY_GRACE_MS)
+    fun `l'attente d'une annonce est bornee au-dela de la plus longue voix qu'on puisse recevoir`() {
+        assertThat(TalkieWakeProgress.JOIN_TIMEOUT_MS).isGreaterThan(TalkieContract.INCOMING_CEILING_MS + TALKIE_EXPIRY_GRACE_MS)
     }
 
     @Test
