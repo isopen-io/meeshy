@@ -98,6 +98,8 @@ struct AdaptiveRootView: View {
             compact: { RootView(scope: $0) },
             regular: { iPadRootView(scope: $0) }
         )
+        // Le widget « Ma Flamme » est nourri au-dessus des deux racines : sur iPad comme sur iPhone (#20567).
+        .background(GameFlameWidgetFeeder())
         .environment(\.rootNavigationHandoff, navigationHandoff)
         // #3707 — un envoi chiffré qui bute sur la limite d'appareils du compte ouvre l'écran de retrait.
         .modifier(EndToEndDeviceLimitPresenter())
