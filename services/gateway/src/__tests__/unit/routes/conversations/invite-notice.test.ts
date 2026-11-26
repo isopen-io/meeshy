@@ -55,6 +55,8 @@ function monter() {
         participants: [{ id: 'p-actor', userId: ACTOR, role: 'admin', displayName: 'Demo', user: { id: ACTOR, username: 'demo', role: 'USER' } }],
       }),
       update: jest.fn<any>().mockResolvedValue(undefined),
+      // #14659 — une conversation démarrée : l'avis part à la room.
+      count: jest.fn<any>().mockResolvedValue(0),
     },
     user: { findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(bob), findFirst: jest.fn<any>().mockResolvedValue(bob) },
     participant: {

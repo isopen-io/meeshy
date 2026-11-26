@@ -16,7 +16,7 @@ const postConversationNotice = jest.fn<any>(async () => null);
 jest.mock('../../../../services/conversations/conversationNotice', () => ({
   postConversationNotice: (...args: unknown[]) => postConversationNotice(...args),
   noticeActor: (p: { id: string; displayName: string }) => ({ participantId: p.id, displayName: p.displayName }),
-  noticeBroadcast: () => async () => undefined,
+  noticeDelivery: () => ({ broadcast: async () => undefined }),
 }));
 
 const resoudreSuccessionDuCreateur = jest.fn<any>();

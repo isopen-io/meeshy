@@ -15,7 +15,7 @@ import { resolveTargetParticipant, identifyTarget } from './utils/target-partici
 import { participantActionRefusal } from './utils/participant-authority'
 import { accorder, refuser, type VerdictDeGeste } from './utils/participant-geste-verdict'
 import type { PasserelleSocketDeConversation } from './utils/participant-geste-socket'
-import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice'
+import { postConversationNotice, noticeActor, noticeDelivery } from '../../services/conversations/conversationNotice'
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges'
 import { guestShareLinkId } from '../../services/shareLinkReadGate'
 import { releaseAgentRoleFor } from '../../services/conversations/releaseAgentRole'
@@ -153,7 +153,7 @@ export async function bannirParticipant(
   // « Demo a retiré Bob ». Bannir quelqu'un déjà parti ne sort personne.
   if (targetParticipant.isActive) {
     await postConversationNotice(
-      { prisma, broadcast: noticeBroadcast(socketIO) },
+      { prisma, ...noticeDelivery(socketIO) },
       {
         conversationId: id,
         notice: {

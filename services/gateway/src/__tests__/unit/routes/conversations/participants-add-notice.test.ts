@@ -74,6 +74,8 @@ async function monterApp() {
         id: CONV_ID, type: 'group', title: 'T', createdAt: new Date('2025-01-01'), isActive: true, closedAt: null,
       })),
       update: jest.fn<any>().mockResolvedValue(undefined),
+      // #14659 — une conversation démarrée : l'avis part à la room.
+      count: jest.fn<any>().mockResolvedValue(0),
     },
     participant: {
       findFirst: jest.fn<any>(async (a: any) => rowsMatching(rows, a?.where)[0] ?? null),

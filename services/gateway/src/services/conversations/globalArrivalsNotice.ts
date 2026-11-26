@@ -22,7 +22,7 @@ const logger = enhancedLogger.child({ module: 'GlobalArrivalsNotice' });
 const OPEN_LINE_LOOKUP_LIMIT = 20;
 
 export type GlobalArrivalsDeps = {
-  readonly prisma: Pick<PrismaClient, 'message' | 'conversation'>;
+  readonly prisma: Pick<PrismaClient, 'message' | 'conversation' | 'participant'>;
   /** Diffusion d'une ligne NEUVE (`message:new` + `conversation:updated`). */
   readonly broadcast?: (message: unknown, conversationId: string) => Promise<void>;
   /** Diffusion d'une ligne MISE À JOUR (`message:edited`). */

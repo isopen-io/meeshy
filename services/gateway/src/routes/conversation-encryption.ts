@@ -23,7 +23,7 @@ import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendBadRequest, sendError, sendForbidden, sendInternalError } from '../utils/response.js';
 import { isServerAtRestUnavailable } from '../services/messaging/serverAtRest';
 import {
-  noticeBroadcast,
+  noticeDelivery,
   postSystemNotice,
   type SocketNoticeGateway,
   type SystemNoticeDeps,
@@ -76,17 +76,22 @@ type EncryptionMode = 'e2ee' | 'server' | 'hybrid';
  * La diffusion de l'avis, DÉTACHÉE de la réponse (#11416) : `message:new` et
  * `conversation:updated` partent par le chemin ordinaire des messages, mais
  * l'activation ne les attend pas — l'avis est déjà écrit, et une émission
- * lente ou en panne ne doit ni retenir ni faire échouer le geste.
+ * lente ou en panne ne doit ni retenir ni faire échouer le geste. La remise
+ * ciblée d'un groupe encore silencieux (#14659) n'émet qu'un `message:new` par
+ * créateur, sans lecture : elle passe telle quelle.
  */
-function detachedNoticeBroadcast(gateway: SocketNoticeGateway): SystemNoticeDeps['broadcast'] {
-  const broadcast = noticeBroadcast(gateway);
-  return async (message, conversationId) => {
-    void Promise.resolve(broadcast?.(message, conversationId)).catch((error: unknown) => {
-      logger.warn('encryption notice written but not broadcast', {
-        conversationId,
-        error: error instanceof Error ? error.message : String(error),
+function detachedNoticeDelivery(gateway: SocketNoticeGateway): Pick<SystemNoticeDeps, 'broadcast' | 'deliverTo'> {
+  const { broadcast, deliverTo } = noticeDelivery(gateway);
+  return {
+    deliverTo,
+    broadcast: async (message, conversationId) => {
+      void Promise.resolve(broadcast?.(message, conversationId)).catch((error: unknown) => {
+        logger.warn('encryption notice written but not broadcast', {
+          conversationId,
+          error: error instanceof Error ? error.message : String(error),
+        });
       });
-    });
+    },
   };
 }
 
@@ -275,7 +280,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
     });
     if (actor) {
       await postSystemNotice(
-        { prisma: fastify.prisma, broadcast: detachedNoticeBroadcast(fastify.socketIOHandler) },
+        { prisma: fastify.prisma, ...detachedNoticeDelivery(fastify.socketIOHandler) },
         { conversationId: conversation.id, senderParticipantId: actor.id, ...notice({ participantId: actor.id, displayName: actor.displayName }) },
       );
     }

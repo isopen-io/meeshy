@@ -35,7 +35,7 @@ const CONV_ID = '507f1f77bcf86cd799439022';
 const PARTICIPANT_ID = '507f1f77bcf86cd799439033';
 
 type Harness = {
-  prisma: { message: { create: jest.Mock }; conversation: { update: jest.Mock } };
+  prisma: { message: { create: jest.Mock }; conversation: { update: jest.Mock; count: jest.Mock } };
   broadcast: jest.Mock;
 };
 
@@ -49,7 +49,8 @@ function harness(): Harness {
       message: {
         create: jest.fn<any>().mockImplementation(async ({ data }: any) => ({ id: 'msg-1', createdAt: CREATED_AT, ...data })),
       },
-      conversation: { update: jest.fn<any>().mockResolvedValue(undefined) },
+      // #14659 — une conversation démarrée : l'avis part à la room.
+      conversation: { update: jest.fn<any>().mockResolvedValue(undefined), count: jest.fn<any>().mockResolvedValue(0) },
     },
     broadcast: jest.fn<any>().mockResolvedValue(undefined),
   };

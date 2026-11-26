@@ -59,7 +59,8 @@ function socketDouble() {
 function messagePrisma() {
   return {
     message: { create: jest.fn<any>(async ({ data }: any) => ({ id: 'sys-1', createdAt: new Date(), ...data })) },
-    conversation: { update: jest.fn<any>().mockResolvedValue(undefined) },
+    // #14659 — une conversation démarrée : l'avis part à la room.
+    conversation: { update: jest.fn<any>().mockResolvedValue(undefined), count: jest.fn<any>().mockResolvedValue(0) },
   };
 }
 

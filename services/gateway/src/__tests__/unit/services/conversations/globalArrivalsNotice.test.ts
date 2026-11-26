@@ -52,7 +52,7 @@ function harness(rows: readonly Row[] = []) {
   const conversationUpdate = jest.fn<any>(async () => ({}));
   const broadcast = jest.fn<any>(async () => undefined);
   const broadcastUpdate = jest.fn<any>(async () => undefined);
-  const prisma = { message: { findMany, create, update }, conversation: { update: conversationUpdate } };
+  const prisma = { message: { findMany, create, update }, conversation: { update: conversationUpdate, count: jest.fn<any>().mockResolvedValue(0) } };
   return { prisma, broadcast, broadcastUpdate, deps: { prisma: prisma as never, broadcast, broadcastUpdate, now: () => NOW } };
 }
 

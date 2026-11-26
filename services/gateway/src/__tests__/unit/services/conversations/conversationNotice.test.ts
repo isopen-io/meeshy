@@ -10,7 +10,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import { parseConversationNotice } from '@meeshy/shared/utils/conversation-notice';
-import { postConversationNotice, postSystemNotice } from '../../../../services/conversations/conversationNotice';
+import { noticeDelivery, postConversationNotice, postSystemNotice } from '../../../../services/conversations/conversationNotice';
 import { systemEventFromMessage } from '../../../../routes/conversations/utils/last-message-nature';
 
 const CONV_ID = '507f1f77bcf86cd799439022';
@@ -18,13 +18,29 @@ const CREATED_AT = new Date('2026-09-23T10:00:00.000Z');
 const demo = { participantId: '507f1f77bcf86cd799439033', displayName: 'Demo' };
 const bob = { participantId: '507f1f77bcf86cd799439044', displayName: 'Bob' };
 
-function harness(overrides: { create?: jest.Mock; broadcast?: jest.Mock; deletedAt?: Date } = {}) {
+type HarnessOverrides = {
+  create?: jest.Mock;
+  broadcast?: jest.Mock;
+  deletedAt?: Date;
+  silent?: boolean;
+  creators?: ReadonlyArray<{ id: string; userId: string | null }>;
+  count?: jest.Mock;
+  deliverTo?: jest.Mock | null;
+};
+
+function harness(overrides: HarnessOverrides = {}) {
   const create = overrides.create ?? jest.fn<any>().mockImplementation(async ({ data }: any) => ({ id: 'msg-1', createdAt: CREATED_AT, ...data }));
   const update = jest.fn<any>().mockResolvedValue(undefined);
   const updateMany = jest.fn<any>().mockResolvedValue({ count: 1 });
   const findUnique = jest.fn<any>().mockResolvedValue({ deletedAt: overrides.deletedAt ?? null });
   const broadcast = overrides.broadcast ?? jest.fn<any>().mockResolvedValue(undefined);
-  return { deps: { prisma: { message: { create, updateMany }, conversation: { update, findUnique } }, broadcast }, create, update, updateMany, broadcast };
+  const count = overrides.count ?? jest.fn<any>().mockResolvedValue(overrides.silent ? 1 : 0);
+  const findMany = jest.fn<any>().mockResolvedValue(overrides.creators ?? []);
+  const deliverTo = overrides.deliverTo === null ? undefined : overrides.deliverTo ?? jest.fn<any>().mockResolvedValue(undefined);
+  return {
+    deps: { prisma: { message: { create, updateMany }, conversation: { update, findUnique, count }, participant: { findMany } }, broadcast, ...(deliverTo ? { deliverTo } : {}) },
+    create, update, updateMany, broadcast, count, findMany, deliverTo,
+  };
 }
 
 const NOTICES = [
@@ -115,5 +131,70 @@ describe('postSystemNotice — un avis SILENCIEUX (#9629, #9630)', () => {
     const h = harness();
     await postConversationNotice(h.deps as never, { conversationId: CONV_ID, notice: { kind: 'member-left', actor: bob } });
     expect((h.create.mock.calls[0][0] as { data: Record<string, unknown> }).data).not.toHaveProperty('expiresAt');
+  });
+});
+
+describe('postSystemNotice — un groupe encore SILENCIEUX ne s’annonce pas par ses avis (#14659)', () => {
+  const creator = { id: '507f1f77bcf86cd799439055', userId: '507f1f77bcf86cd799439066' };
+  const rename = { kind: 'conversation-renamed', actor: demo } as const;
+
+  it('un groupe silencieux avec un créateur : l’avis ne part que vers le créateur, jamais vers la room', async () => {
+    const h = harness({ silent: true, creators: [creator] });
+    await postConversationNotice(h.deps as never, { conversationId: CONV_ID, notice: rename });
+
+    expect(h.count).toHaveBeenCalledWith({ where: { id: CONV_ID, type: { in: ['direct', 'group'] }, firstMessageSentAt: null } });
+    expect(h.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ conversationId: CONV_ID, role: 'creator', isActive: true }),
+    }));
+    expect(h.broadcast).not.toHaveBeenCalled();
+    expect(h.deliverTo).toHaveBeenCalledWith(expect.objectContaining({ id: 'msg-1' }), CONV_ID, [creator]);
+  });
+
+  it('un groupe démarré ou né avant #14644 (count nul) : la diffusion ordinaire, inchangée', async () => {
+    const h = harness({ silent: false });
+    await postConversationNotice(h.deps as never, { conversationId: CONV_ID, notice: rename });
+
+    expect(h.broadcast).toHaveBeenCalledWith(expect.objectContaining({ id: 'msg-1' }), CONV_ID);
+    expect(h.deliverTo).not.toHaveBeenCalled();
+    expect(h.findMany).not.toHaveBeenCalled();
+  });
+
+  it('un groupe silencieux sans créateur est visible de tous dans la liste : la diffusion ordinaire', async () => {
+    const h = harness({ silent: true, creators: [] });
+    await postConversationNotice(h.deps as never, { conversationId: CONV_ID, notice: rename });
+
+    expect(h.broadcast).toHaveBeenCalled();
+    expect(h.deliverTo).not.toHaveBeenCalled();
+  });
+
+  it('un groupe silencieux sans remise ciblée branchée : rien en direct, l’avis reste persisté', async () => {
+    const h = harness({ silent: true, creators: [creator], deliverTo: null });
+    const message = await postConversationNotice(h.deps as never, { conversationId: CONV_ID, notice: rename });
+
+    expect(message).toMatchObject({ id: 'msg-1' });
+    expect(h.broadcast).not.toHaveBeenCalled();
+  });
+
+  it('fail-closed : une lecture de l’audience qui tombe ne diffuse à personne', async () => {
+    const h = harness({ count: jest.fn<any>().mockRejectedValue(new Error('mongo down')) });
+    const message = await postConversationNotice(h.deps as never, { conversationId: CONV_ID, notice: rename });
+
+    expect(message).toMatchObject({ id: 'msg-1' });
+    expect(h.broadcast).not.toHaveBeenCalled();
+    expect(h.deliverTo).not.toHaveBeenCalled();
+  });
+
+  it('noticeDelivery : la remise ciblée émet message:new sur la room personnelle du créateur seule', async () => {
+    const emit = jest.fn();
+    const to = jest.fn().mockReturnValue({ emit });
+    const broadcastMessage = jest.fn<any>().mockResolvedValue(undefined);
+    const delivery = noticeDelivery({ getManager: () => ({ broadcastMessage, getIO: () => ({ to }) }) } as never);
+
+    await delivery.deliverTo?.({ id: 'msg-1', conversationId: CONV_ID, content: 'x', createdAt: CREATED_AT, metadata: rename }, CONV_ID, [creator]);
+
+    expect(broadcastMessage).not.toHaveBeenCalled();
+    expect(to).toHaveBeenCalledTimes(1);
+    expect(to).toHaveBeenCalledWith(`user:${creator.userId}`);
+    expect(emit).toHaveBeenCalledWith('message:new', expect.objectContaining({ id: 'msg-1', conversationId: CONV_ID }));
   });
 });

@@ -139,6 +139,8 @@ function makePrisma(opts: {
         ? jest.fn().mockRejectedValue(conversationFindError)
         : jest.fn().mockResolvedValue(makeConversation(conversation)),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      // #14659 — une conversation démarrée : l'avis part à la room.
+      count: jest.fn().mockResolvedValue(0),
       // #12966 — la paire n'a pas d'autre tête-à-tête.
       findMany: jest.fn().mockResolvedValue([]),
       update: jest.fn().mockResolvedValue({

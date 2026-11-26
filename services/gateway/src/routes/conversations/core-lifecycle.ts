@@ -53,7 +53,7 @@ import { EngagementService } from '../../services/engagement/EngagementService';
 import { cutTalkiesOnEndToEnd, talkieCutDepsOf } from '../../services/talkie/talkieCut';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
-import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice';
+import { postConversationNotice, noticeActor, noticeDelivery } from '../../services/conversations/conversationNotice';
 import { directLookupWheres, firstFound } from '../../services/conversations/directPair';
 import { highestRankedConversation } from '../../services/conversations/highestRanked';
 import {
@@ -840,7 +840,7 @@ export function registerUpdateConversationRoute(
         ];
         for (const kind of notices) {
           await postConversationNotice(
-            { prisma, broadcast: noticeBroadcast(fastify.socketIOHandler) },
+            { prisma, ...noticeDelivery(fastify.socketIOHandler) },
             { conversationId, notice: { kind, actor: noticeActor(membership) } },
           );
         }

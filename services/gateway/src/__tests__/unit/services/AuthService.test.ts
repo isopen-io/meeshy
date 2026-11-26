@@ -196,7 +196,9 @@ const mockPrisma = {
     update: jest.fn()
   },
   conversation: {
-    findFirst: jest.fn()
+    findFirst: jest.fn(),
+    // #14659 — une conversation démarrée : l'avis part à la room.
+    count: jest.fn()
   },
   participant: {
     findFirst: jest.fn(),

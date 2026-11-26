@@ -16,7 +16,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js'
 import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure'
 import { eraseExternalPeerOnClose } from '../../services/external-conversation/erase-external-peers'
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
-import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice'
+import { postConversationNotice, noticeActor, noticeDelivery } from '../../services/conversations/conversationNotice'
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges'
 import { releaseAgentRoleFor } from '../../services/conversations/releaseAgentRole'
 
@@ -211,7 +211,7 @@ export function registerLeaveRoutes(
       // #7593 — la ligne de liste des restants dit « X a quitté la conversation ».
       if (!conversationClosed) {
         await postConversationNotice(
-          { prisma, broadcast: noticeBroadcast(socketIOHandler) },
+          { prisma, ...noticeDelivery(socketIOHandler) },
           { conversationId: id, notice: { kind: 'member-left', actor: noticeActor(participant) } },
         )
       }

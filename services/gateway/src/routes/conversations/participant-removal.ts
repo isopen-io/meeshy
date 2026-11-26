@@ -13,7 +13,7 @@ import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority
 import { resolveTargetParticipant, identifyTarget } from './utils/target-participant';
 import { participantActionRefusal } from './utils/participant-authority';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice';
+import { postConversationNotice, noticeActor, noticeDelivery } from '../../services/conversations/conversationNotice';
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
 
 const logger = enhancedLogger.child({ module: 'ConversationParticipantRemovalRoute' });
@@ -169,7 +169,7 @@ export function registerParticipantRemovalRoute(
 
       // #7593 — la ligne de liste des restants dit « Demo a retiré Bob ».
       await postConversationNotice(
-        { prisma, broadcast: noticeBroadcast(fastify.socketIOHandler) },
+        { prisma, ...noticeDelivery(fastify.socketIOHandler) },
         {
           conversationId,
           notice: {

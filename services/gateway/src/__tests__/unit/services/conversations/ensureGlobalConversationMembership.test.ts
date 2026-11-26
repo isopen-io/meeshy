@@ -26,7 +26,7 @@ const USER_ID = 'user-new';
 
 type Harness = {
   prisma: {
-    conversation: { findFirst: jest.Mock };
+    conversation: { findFirst: jest.Mock; count: jest.Mock };
     participant: {
       findFirst: jest.Mock;
       create: jest.Mock;
@@ -48,7 +48,7 @@ function harness(overrides: { globalConv?: any; existingMember?: any; memberCoun
   const { globalConv = GLOBAL_CONV, existingMember = null, memberCount = 3 } = overrides;
   return {
     prisma: {
-      conversation: { findFirst: jest.fn<any>().mockResolvedValue(globalConv) },
+      conversation: { findFirst: jest.fn<any>().mockResolvedValue(globalConv), count: jest.fn<any>().mockResolvedValue(0) },
       participant: {
         findFirst: jest.fn<any>().mockResolvedValue(existingMember),
         create: jest.fn<any>().mockResolvedValue({ id: 'part-new' }),

@@ -10,7 +10,7 @@ import type { GuestSocketRegistry } from '../../socketio/revokeShareLinkGuests';
 import { resoudreSuccessionDuCreateur } from './creatorSuccession';
 import { closeOrphanedSalonLinks } from './orphanedSalonLinks';
 import { announceParticipantRoleWithCapabilities } from './obsoleteCapability';
-import { postConversationNotice, noticeActor, noticeBroadcast, type SocketNoticeGateway } from './conversationNotice';
+import { postConversationNotice, noticeActor, noticeDelivery, type SocketNoticeGateway } from './conversationNotice';
 import { announceConversationLanguageChange } from '../message-translation/conversationLanguageChanges';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 
@@ -220,7 +220,7 @@ async function announceExit(deps: SalonExitDeps, request: SalonExitRequest, depa
 
   const displayName = row.displayName ?? '';
   await postConversationNotice(
-    { prisma, broadcast: noticeBroadcast(socketIOHandler as SocketNoticeGateway) },
+    { prisma, ...noticeDelivery(socketIOHandler as SocketNoticeGateway) },
     { conversationId, notice: { kind: 'member-left', actor: noticeActor({ id: row.id, displayName }) } },
   );
 

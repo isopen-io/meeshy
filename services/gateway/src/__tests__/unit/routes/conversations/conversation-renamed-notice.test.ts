@@ -45,6 +45,8 @@ function monterPrisma() {
         participants: [{ id: 'p-demo', userId: ADMIN_ID, isActive: true, user: { id: ADMIN_ID, username: 'demo' } }],
       })),
       findUnique: jest.fn<any>(),
+      // #14659 — une conversation démarrée : l'avis part à la room.
+      count: jest.fn<any>().mockResolvedValue(0),
     },
     message,
   };
