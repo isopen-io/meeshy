@@ -8,7 +8,8 @@ extension ProfileCirclesViewModel {
         self.init(
             relations: RelationsService.shared,
             pendingRequests: FriendshipCache.shared,
-            networkMonitor: NetworkMonitor.shared
+            networkMonitor: NetworkMonitor.shared,
+            configCache: RelationsConfigDefaultsCache.shared
         )
     }
 }

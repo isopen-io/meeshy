@@ -18,6 +18,7 @@ struct ContactsHubView: View {
     @Environment(\.routerCommands) private var router
     @State private var scrollRelay = ScrollOffsetRelay()
     @State private var selectedTab: PeopleTab
+    private let initialCircle: RelationLevel?
 
     @StateObject private var keypadVM = KeypadViewModel()
     @StateObject private var callsVM = CallsViewModel()
@@ -28,8 +29,10 @@ struct ContactsHubView: View {
 
     /// - Parameter initialTab: tab shown on open. The floating menu ladder
     ///   lands on `.calls` (call journal); everything else keeps the directory.
-    init(initialTab: PeopleTab = .contacts) {
+    /// - Parameter initialCircle: the level « Cercles » lands on (#18685).
+    init(initialTab: PeopleTab = .contacts, initialCircle: RelationLevel? = nil) {
         _selectedTab = State(initialValue: initialTab)
+        self.initialCircle = initialCircle
     }
 
     var body: some View {
@@ -113,6 +116,7 @@ struct ContactsHubView: View {
             CirclesTab(
                 viewModel: circlesVM,
                 isActive: selectedTab == .circles,
+                focusedLevel: initialCircle,
                 onScrollOffsetChange: { scrollRelay.offset = $0 },
                 onFindContacts: { selectedTab = .contacts }
             )

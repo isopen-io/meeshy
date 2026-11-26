@@ -7,13 +7,15 @@ import MeeshyUI
 ///
 /// Une vue à VALEURS : elle reçoit le résumé et une porte à ouvrir, elle ne charge rien et ne connaît pas le routeur.
 /// Les pastilles SONT l'échelle de proximité du kit (K33, forme à comptes) : la même loi d'intensité que « Voir comme »,
-/// aucune pastille redessinée ici (loi 12). Toute l'échelle ouvre « Mes cercles », donc elle est UN bouton et UNE
-/// annonce VoiceOver ; un cercle vide garde sa pastille (zéro est une réponse, pas une absence).
+/// aucune pastille redessinée ici (loi 12). Chaque pastille ouvre « Mes cercles » sur SON niveau (#18685) ; VoiceOver
+/// garde UNE annonce pour l'échelle, ouvre Mes cercles en haut et propose une action par niveau. Un cercle vide garde
+/// sa pastille (zéro est une réponse, pas une absence). Les noms viennent de la table servie, catalogue en repli.
 struct ProfileCirclesSection: View {
     let summary: ProfileCirclesSummary
     let hasServedLinks: Bool
     var loadState: LoadState = .idle
     let accentHex: String
+    var levelTitles: CircleLevelTitles = .catalogue
     let onOpen: (ProfileDoor) -> Void
     /// Relance le chargement depuis l'état indisponible.
     var onRetry: () -> Void = {}
@@ -101,35 +103,41 @@ struct ProfileCirclesSection: View {
 
     /// L'échelle tient sur une rangée tant que chaque nom y tient ENTIER ; sinon elle défile, jamais des noms écrasés.
     private var scaleButton: some View {
-        Button {
-            HapticFeedback.light()
-            onOpen(.circles)
-        } label: {
-            ViewThatFits(in: .horizontal) {
-                scale.frame(maxWidth: .infinity)
-                ScrollView(.horizontal, showsIndicators: false) { scale }
-            }
-            .frame(minHeight: MeeshyControlSize.tapTarget)
-            .padding(.horizontal, MeeshySpacing.sm)
-            .padding(.vertical, MeeshySpacing.sm)
-            .contentShape(Rectangle())
+        ViewThatFits(in: .horizontal) {
+            scale.frame(maxWidth: .infinity)
+            ScrollView(.horizontal, showsIndicators: false) { scale }
         }
-        .buttonStyle(PressableButtonStyle())
+        .frame(minHeight: MeeshyControlSize.tapTarget)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.sm)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.accessibilityLabel(summary: summary, isLoading: phase == .loading))
+        .accessibilityLabel(Self.accessibilityLabel(summary: summary, titles: levelTitles, isLoading: phase == .loading))
         .accessibilityHint(Self.pillHint)
         .accessibilityAddTraits(.isButton)
+        .accessibilityAction { open(.circles) }
+        .accessibilityActions {
+            ForEach(summary.entries) { entry in
+                Button(levelTitles.title(of: entry.level)) { open(.circle(entry.level)) }
+            }
+        }
         .accessibilityIdentifier("profile.circles.scale")
+    }
+
+    private func open(_ door: ProfileDoor) {
+        HapticFeedback.light()
+        onOpen(door)
     }
 
     private var scale: some View {
         MeeshyCircleScale(
-            levels: Self.scaleLevels(of: summary),
+            levels: Self.scaleLevels(of: summary, titles: levelTitles),
             current: nil,
             counts: phase == .counts ? Self.scaleCounts(of: summary) : nil,
             tint: tint,
             form: .dots,
-            size: .regular
+            size: .regular,
+            onSelect: { open(Self.door(forPillAt: $0, of: summary)) },
+            haptic: .none
         )
     }
 
@@ -151,11 +159,17 @@ struct ProfileCirclesSection: View {
 
     /// Les niveaux de l'échelle, du plus large au plus intime : nommés comme partout, dessinés du glyphe de « Voir
     /// comme ».
-    static func scaleLevels(of summary: ProfileCirclesSummary) -> [MeeshyCircleScaleLevel] {
+    static func scaleLevels(of summary: ProfileCirclesSummary,
+                            titles: CircleLevelTitles = .catalogue) -> [MeeshyCircleScaleLevel] {
         summary.entries.map { entry in
-            MeeshyCircleScaleLevel(title: CircleLevelNames.title(of: entry.level),
+            MeeshyCircleScaleLevel(title: titles.title(of: entry.level),
                                    systemImage: VitrineSeenAsCopy.glyph(of: entry.level))
         }
+    }
+
+    /// La porte de la pastille touchée : Mes cercles sur son niveau ; hors de l'échelle, Mes cercles en haut.
+    static func door(forPillAt index: Int, of summary: ProfileCirclesSummary) -> ProfileDoor {
+        summary.entries.indices.contains(index) ? .circle(summary.entries[index].level) : .circles
     }
 
     /// Le compte de chaque pastille, dans l'ordre des niveaux.
@@ -170,10 +184,11 @@ struct ProfileCirclesSection: View {
     }
 
     /// Le titre de la section, puis chaque cercle avec ses personnes : une seule annonce pour toute l'échelle.
-    static func accessibilityLabel(summary: ProfileCirclesSummary, isLoading: Bool = false) -> String {
+    static func accessibilityLabel(summary: ProfileCirclesSummary, titles: CircleLevelTitles = .catalogue,
+                                   isLoading: Bool = false) -> String {
         if isLoading { return [title, ProfileActivityBand.loadingLabel].joined(separator: ", ") }
         let pills = summary.entries.map {
-            pillAccessibilityLabel(title: CircleLevelNames.title(of: $0.level), count: $0.count)
+            pillAccessibilityLabel(title: titles.title(of: $0.level), count: $0.count)
         }
         return ([title] + pills).joined(separator: ", ")
     }

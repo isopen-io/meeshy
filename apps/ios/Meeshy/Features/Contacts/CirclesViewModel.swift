@@ -36,7 +36,8 @@ final class CirclesViewModel: ObservableObject {
 
     @Published private(set) var links: [RelationLink] = []
     @Published private(set) var people: [String: CirclePerson] = [:]
-    @Published private(set) var config: RelationsConfig?
+    /// Les noms des niveaux : la table servie, gardée en cache, avec repli sur le catalogue local (#18685).
+    @Published private(set) var levelTitles: CircleLevelTitles
     @Published private(set) var loadState: LoadState = .idle
     @Published private(set) var incomingRaises: [FriendRequest] = []
     @Published private(set) var outgoingRaises: [FriendRequest] = []
@@ -50,6 +51,7 @@ final class CirclesViewModel: ObservableObject {
     private let offlineQueue: OfflineQueueing
     private let networkMonitor: any NetworkMonitorProviding
     private let languageCode: String
+    private let configCache: RelationsConfigCaching
     private let now: () -> Date
     private let linksStore: @concurrent @Sendable () async -> GRDBCacheStore<String, RelationLink>
     private var revalidationTask: Task<Void, Never>?
@@ -66,6 +68,7 @@ final class CirclesViewModel: ObservableObject {
         offlineQueue: OfflineQueueing,
         networkMonitor: any NetworkMonitorProviding,
         languageCode: String = CirclesViewModel.interfaceLanguageCode,
+        configCache: RelationsConfigCaching = RelationsConfigMemoryCache(),
         now: @escaping () -> Date = { Date() },
         linksStore: @escaping @concurrent @Sendable () async -> GRDBCacheStore<String, RelationLink> = CirclesLinkStore.live,
         levelEvents: AnyPublisher<RelationLevelRaisedEvent, Never> = RelationEvents.levelRaised,
@@ -78,6 +81,8 @@ final class CirclesViewModel: ObservableObject {
         self.offlineQueue = offlineQueue
         self.networkMonitor = networkMonitor
         self.languageCode = languageCode
+        self.configCache = configCache
+        self.levelTitles = CircleLevelTitles(config: configCache.cached(), language: languageCode)
         self.now = now
         self.linksStore = linksStore
         levelSubscription = levelEvents
@@ -135,11 +140,18 @@ final class CirclesViewModel: ObservableObject {
     }
 
     func title(of level: RelationLevel) -> String {
-        config?.label(for: level, language: languageCode) ?? CircleLevelNames.title(of: level)
+        levelTitles.title(of: level)
     }
 
     func icon(of level: RelationLevel) -> String {
-        config?.icon(for: level) ?? CircleLevelNames.icon(of: level)
+        levelTitles.icon(of: level)
+    }
+
+    /// La section où « Mes cercles » se pose quand on l'ouvre sur un niveau (#18685) : seulement si ce niveau se liste
+    /// et a quelqu'un ; sinon l'écran s'ouvre en haut.
+    func focusTarget(for level: RelationLevel?) -> RelationLevel? {
+        guard let level else { return nil }
+        return sections.contains { $0.level == level } ? level : nil
     }
 
     /// Le cran que j'ai demandé à cette personne et qui attend sa réponse : l'optimiste d'abord, puis la demande servie.
@@ -196,7 +208,10 @@ final class CirclesViewModel: ObservableObject {
     }
 
     private func loadConfig() async {
-        if let served = try? await relations.config() { config = served }
+        guard let served = try? await relations.config() else { return }
+        configCache.save(served)
+        let next = CircleLevelTitles(config: served, language: languageCode)
+        if next != levelTitles { levelTitles = next }
     }
 
     // MARK: - Demander un cran (optimiste)

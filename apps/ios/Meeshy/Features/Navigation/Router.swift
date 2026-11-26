@@ -11,8 +11,10 @@ enum Route: Hashable {
     case profile
     /// People hub. The associated value picks the tab it opens on — the
     /// floating menu ladder lands on `.calls` (call journal), deep links and
-    /// the iPad panel keep the directory default.
-    case contacts(PeopleTab = PeopleTab.contacts)
+    /// the iPad panel keep the directory default. `circle` : le niveau sur lequel
+    /// « Mes cercles » s'ouvre quand une pastille de ma fiche y mène (#18685) ;
+    /// `nil` = l'écran s'ouvre en haut, comme avant.
+    case contacts(PeopleTab = PeopleTab.contacts, circle: RelationLevel? = nil)
     case peopleDiscovery(DiscoveryTab = .discover)
     /// Découverte de publications par PROXIMITÉ —
     /// carte de densité, carte à pins, liste.
@@ -115,7 +117,7 @@ extension Route {
             return String(localized: "route.title.settings", defaultValue: "Paramètres", bundle: .main)
         case .profile:
             return String(localized: "route.title.profile", defaultValue: "Profil", bundle: .main)
-        case .contacts(let tab):
+        case .contacts(let tab, _):
             return tab.title
         case .peopleDiscovery:
             return String(localized: "route.title.discover", defaultValue: "Découvrir", bundle: .main)

@@ -31,6 +31,7 @@ extension CirclesViewModel {
             people: CirclePeopleDirectory.shared,
             offlineQueue: OfflineQueue.shared,
             networkMonitor: NetworkMonitor.shared,
+            configCache: RelationsConfigDefaultsCache.shared,
             publishClosePeople: { links, people in ClosePeopleWidgetFeed.publish(links: links, people: people) }
         )
     }

@@ -15,11 +15,14 @@ struct CirclesTab: View {
     }
     @ObservedObject var viewModel: CirclesViewModel
     var isActive: Bool = true
+    /// Le niveau sur lequel l'onglet s'ouvre (#18685) : sa section se pose en haut dès qu'elle est peinte, une fois.
+    var focusedLevel: RelationLevel?
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
     var onFindContacts: () -> Void = {}
     private var theme: ThemeManager { ThemeManager.shared }
 
     @State private var openedRow: CirclesViewModel.Row?
+    @State private var hasFocused = false
     @StateObject private var sharedLocations = SharedLocationsMapViewModel()
 
     var body: some View {
@@ -76,6 +79,19 @@ struct CirclesTab: View {
     // MARK: - Liste
 
     private var circlesList: some View {
+        ScrollViewReader { proxy in
+            circlesScroll
+                .task(id: viewModel.sections.map(\.level)) { focus(with: proxy) }
+        }
+    }
+
+    private func focus(with proxy: ScrollViewProxy) {
+        guard !hasFocused, let target = viewModel.focusTarget(for: focusedLevel) else { return }
+        hasFocused = true
+        proxy.scrollTo(target, anchor: .top)
+    }
+
+    private var circlesScroll: some View {
         ScrollView(.vertical, showsIndicators: false) {
             ContactsScrollSentinel()
             LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
@@ -84,7 +100,7 @@ struct CirclesTab: View {
                 SharedLocationsMapSection(viewModel: sharedLocations)
                 requestsBlock
                 ForEach(viewModel.sections) { section in
-                    sectionHeader(section)
+                    sectionHeader(section).id(section.level)
                     ForEach(section.rows) { row in
                         CircleRowView(viewModel: viewModel, row: row) { openedRow = row }
                     }

@@ -30,11 +30,16 @@ final class ProfileCirclesViewModel: ObservableObject {
     @Published private(set) var loadState: LoadState = .idle
     /// Le cache ou le serveur a servi des liens (fût-ce aucun) : cinq zéros peuvent alors se dire « aucun lien ».
     @Published private(set) var hasServedLinks = false
+    /// Les noms des pastilles : la table servie gardée en cache d'abord, revalidée en silence, le catalogue local en
+    /// repli (#18685) — le même cache que « Mes cercles ».
+    @Published private(set) var levelTitles: CircleLevelTitles
 
     private let relations: RelationsProviding
     private let pendingRequests: ProfilePendingRequestsCounting
     private let networkMonitor: any NetworkMonitorProviding
     private let linksStore: @concurrent @Sendable () async -> GRDBCacheStore<String, RelationLink>
+    private let configCache: RelationsConfigCaching
+    private let languageCode: String
     private var links: [RelationLink] = []
     private var revalidationTask: Task<Void, Never>?
     private var pendingSubscription: AnyCancellable?
@@ -45,12 +50,17 @@ final class ProfileCirclesViewModel: ObservableObject {
         relations: RelationsProviding,
         pendingRequests: ProfilePendingRequestsCounting,
         networkMonitor: any NetworkMonitorProviding,
-        linksStore: @escaping @concurrent @Sendable () async -> GRDBCacheStore<String, RelationLink> = CirclesLinkStore.live
+        linksStore: @escaping @concurrent @Sendable () async -> GRDBCacheStore<String, RelationLink> = CirclesLinkStore.live,
+        configCache: RelationsConfigCaching = RelationsConfigMemoryCache(),
+        languageCode: String = CirclesViewModel.interfaceLanguageCode
     ) {
         self.relations = relations
         self.pendingRequests = pendingRequests
         self.networkMonitor = networkMonitor
         self.linksStore = linksStore
+        self.configCache = configCache
+        self.languageCode = languageCode
+        self.levelTitles = CircleLevelTitles(config: configCache.cached(), language: languageCode)
         pendingSubscription = pendingRequests.pendingReceivedChanges
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.refreshSummary() }
@@ -71,6 +81,15 @@ final class ProfileCirclesViewModel: ObservableObject {
         )
         await revalidationTask?.value
         refreshSummary()
+        await revalidateLevelTitles()
+    }
+
+    /// Un échec garde les noms déjà peints ; une table servie se garde pour la prochaine ouverture.
+    private func revalidateLevelTitles() async {
+        guard let served = try? await relations.config() else { return }
+        configCache.save(served)
+        let next = CircleLevelTitles(config: served, language: languageCode)
+        if next != levelTitles { levelTitles = next }
     }
 
     private func apply(_ served: [RelationLink]) {

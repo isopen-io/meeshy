@@ -56,8 +56,8 @@ struct RootRouteDestination: View {
         case .profile:
             ProfileView()
                 .navigationBarHidden(true)
-        case .contacts(let initialTab):
-            ContactsHubView(initialTab: initialTab)
+        case .contacts(let initialTab, let circle):
+            ContactsHubView(initialTab: initialTab, initialCircle: circle)
                 .navigationBarHidden(true)
         case .peopleDiscovery(let initialTab):
             PeopleDiscoveryView(initialTab: initialTab)

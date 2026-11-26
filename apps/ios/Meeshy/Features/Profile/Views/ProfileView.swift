@@ -516,7 +516,8 @@ struct ProfileView: View {
         // ne s'y modifient pas se taisent (#20177).
         if ProfileVitrineBlock.isShown(.circles, isEditing: isEditing) {
             ProfileCirclesSection(summary: circles.summary, hasServedLinks: circles.hasServedLinks,
-                                  loadState: circles.loadState, accentHex: accentColor, onOpen: open,
+                                  loadState: circles.loadState, accentHex: accentColor,
+                                  levelTitles: circles.levelTitles, onOpen: open,
                                   onRetry: { Task { await circles.load() } })
                 .meeshyCascade(rank: 1)
         }
