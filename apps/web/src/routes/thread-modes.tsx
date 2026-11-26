@@ -20,6 +20,7 @@ import type { ListPaginationState } from '@/lib/lens/pagination';
 import type { Conversation, Message } from '@/lib/api/types';
 import type { TypingEntry } from '@/lib/api/typing-store';
 import type { Viewer } from '@/lib/api/viewer';
+import type { ConsumeViewOnceHandler } from '@/lib/api/view-once';
 import { dayLabel, type PlacedMessage } from '@/lib/grouping';
 import type { ConversationEpisode, FaceRampEntry } from '@/lib/summary/types';
 import type { SummaryEntryMenu } from '@/lib/view/summary-exits';
@@ -270,7 +271,7 @@ export function ThreadModes({
    * rendu : pas de `tabIndex` sans appui long, pas de `onClick` sans
    * sélection, pas de bande de reprise sans accusé local.
    */
-  readonly consume?: (messageId: string) => Promise<boolean>;
+  readonly consume?: ConsumeViewOnceHandler;
   readonly onEphemeralExpired?: (messageId: string) => void;
   readonly deliveryOf?: (messageId: string) => LocalDelivery | undefined;
   readonly startedAtOf?: (messageId: string) => number | undefined;

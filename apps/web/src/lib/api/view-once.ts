@@ -90,6 +90,14 @@ export function viewOnceMediaUrlsOf(attachments: readonly Attachment[] | undefin
   );
 }
 
+/**
+ * LE MOMENT DU GESTE (#8015) — `open` : le toucher qui RÉVÈLE un texte, refusé
+ * hors ligne (D-16) ; `close` : la fermeture de la visionneuse d'un média DÉJÀ
+ * vu (#8008), qui se compte même hors ligne, en file.
+ */
+export type ViewOnceConsumeMoment = 'open' | 'close';
+export type ConsumeViewOnceHandler = (messageId: string, moment: ViewOnceConsumeMoment) => Promise<boolean>;
+
 /** `viewOnceQueue` (#8015) : la file où entre une consommation que la panne a retenue. */
 export type ConsumeViewOnceDeps = ConversationsDeps & {
   readonly queryClient: QueryClient;
@@ -151,6 +159,9 @@ function restoreMessage(deps: ConsumeViewOnceDeps, conversationId: string, previ
  * recyclée par le virtualiseur remonterait sur un `viewOnceCount: 0` et
  * rouvrirait le secret dans la MÊME session.
  *
+ * HORS LIGNE (`online: false`, #8015) : l'ouverture est refusée (D-16) ; la
+ * fermeture d'un média déjà vu est scellée et part en FILE, sans appel.
+ *
  * SITE UNIQUE : `routes/thread.tsx` n'en tient plus aucune moitié — c'est ce
  * qui rend cette loi témoignable sans monter l'écran (budget de fichier, et
  * la leçon « une loi qui habite un écran est intestable »).
@@ -159,8 +170,11 @@ export async function consumeViewOnceOptimistic(params: {
   readonly conversationId: string;
   readonly messageId: string;
   readonly deps: ConsumeViewOnceDeps;
+  readonly moment?: ViewOnceConsumeMoment;
+  readonly online?: boolean;
 }): Promise<boolean> {
-  const { conversationId, messageId, deps } = params;
+  const { conversationId, messageId, deps, moment = 'open', online = true } = params;
+  if (!online && moment === 'open') return false;
   const previous = findCachedThreadMessage(deps.queryClient, conversationId, messageId);
 
   /* L'OUVERTURE EST LA CONSOMMATION, ET LA CONSOMMATION EST LA PURGE (#7580) :
@@ -173,6 +187,11 @@ export async function consumeViewOnceOptimistic(params: {
 
   if (__FIXTURES__ && deps.source === 'fixtures') {
     recordViewOnceConsumption(messageId);
+    return true;
+  }
+
+  if (!online) {
+    deps.viewOnceQueue?.enqueue(conversationId, messageId);
     return true;
   }
 

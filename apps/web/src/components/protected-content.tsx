@@ -24,7 +24,7 @@ import { RevealPhaseChannel, useRevealPhasePublisher } from '@/lib/reading-mode/
 import { captureShield } from '@/lib/capture/capture-shield';
 import { useCaptureShield } from '@/lib/capture/use-capture-shield';
 import type { Attachment } from '@/lib/api/types';
-import { purgeViewOnceMedia, viewOnceMediaUrlsOf } from '@/lib/api/view-once';
+import { purgeViewOnceMedia, viewOnceMediaUrlsOf, type ConsumeViewOnceHandler } from '@/lib/api/view-once';
 import { layerMotion, LAYER_MOTION_MS } from '@/lib/view/dialog-exit';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
@@ -118,7 +118,7 @@ export function ProtectedContent({
    * appareils », qui ne sont pas ceux du lecteur.
    */
   readonly endToEnd?: boolean;
-  readonly onConsumeViewOnce?: ((messageId: string) => Promise<boolean>) | undefined;
+  readonly onConsumeViewOnce?: ConsumeViewOnceHandler | undefined;
   /**
    * LE MÉDIA D'UN MESSAGE PROTÉGÉ — ce que la grille et la visionneuse ont
    * besoin de savoir. Deux règles, par NATURE de protection :
@@ -229,7 +229,7 @@ export function ProtectedContent({
         media: (liveAttachments.current?.length ?? 0) > 0,
       };
       setPending(true);
-      const ok = onConsumeViewOnce ? await onConsumeViewOnce(messageId) : false;
+      const ok = onConsumeViewOnce ? await onConsumeViewOnce(messageId, 'open') : false;
       setPending(false);
       if (!ok) {
         setRevealError(true);
@@ -290,7 +290,7 @@ export function ProtectedContent({
     setViewing(null);
     if (!isViewOnce || closed === null) return;
     setPhase((current) => closeViewOnce(openViewOnce(current), { now: now(), immediate: true }));
-    void onConsumeViewOnce?.(messageId);
+    void onConsumeViewOnce?.(messageId, 'close');
     void purgeViewOnceMedia(closed.urls);
   }, [viewing, isViewOnce, now, onConsumeViewOnce, messageId]);
 

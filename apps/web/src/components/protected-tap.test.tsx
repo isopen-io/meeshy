@@ -142,10 +142,13 @@ const mountIn = async (
 
 const consumeSpy = () => {
   const calls: string[] = [];
+  const moments: string[] = [];
   return {
     calls,
-    onConsume: async (id: string) => {
+    moments,
+    onConsume: async (id: string, moment?: string) => {
       calls.push(id);
+      moments.push(moment ?? 'non dit');
       return true;
     },
   };
@@ -198,6 +201,7 @@ for (const skin of SKINS) describe(`${skin} — un TEXTE protégé`, () => {
 
     expect(host.textContent).toContain(SECRET);
     expect(spy.calls).toEqual(['m-8008']);
+    expect(spy.moments).toEqual(['open']);
   });
 
   test('déjà ouvert : la puce ne rouvre rien', async () => {
@@ -344,6 +348,7 @@ for (const skin of SKINS) describe(`${skin} — un MÉDIA à vue unique`, () => 
 
     await closeViewer();
     expect(spy.calls).toEqual(['m-8008']);
+    expect(spy.moments).toEqual(['close']);
     expect(host.querySelector('[data-view-once-chip]')?.getAttribute('data-view-once-chip')).toBe('opened');
     expect(document.body.innerHTML).not.toContain(PHOTO_URL);
   });

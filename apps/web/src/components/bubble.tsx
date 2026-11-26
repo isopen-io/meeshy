@@ -10,6 +10,7 @@ import { threadRowKeyOf } from '@/lib/view/use-arrival-motion';
 import type { LocalDelivery } from '@/lib/view/message';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { prismFor, served } from '@/lib/api/prism';
+import type { ConsumeViewOnceHandler } from '@/lib/api/view-once';
 import { mediaCarrierOf } from '@/lib/view/media';
 import type { PlacedMessage } from '@/lib/grouping';
 import { endToEndSealed } from '@/lib/view/end-to-end-sealed';
@@ -168,7 +169,7 @@ export function Bubble({
   /** L'échéance de CE lecteur, composée par l'hôte — voir `focal-row.tsx`, même contrat (#7454). */
   ephemeralDeadline: EphemeralDeadline;
   /** Consomme une vue unique (D-10, `lib/api/view-once.ts`). */
-  onConsumeViewOnce?: (messageId: string) => Promise<boolean>;
+  onConsumeViewOnce?: ConsumeViewOnceHandler;
   onEphemeralExpired?: (messageId: string) => void;
   /** Horloge injectable — jamais `Date.now()` lu directement. */
   now?: () => number;

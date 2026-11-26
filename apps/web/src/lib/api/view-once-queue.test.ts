@@ -209,3 +209,53 @@ describe('consumeViewOnceOptimistic + file (#8015)', () => {
     expect([...queue.pendingFor('c-a')]).toEqual(['m1']);
   });
 });
+
+describe('fermée HORS LIGNE — le moment du geste décide (#8015, revue)', () => {
+  const network: string[] = [];
+  const neverCalled = createHttpTransport({
+    base: '',
+    fetchImpl: (async (input: RequestInfo | URL) => {
+      network.push(String(input));
+      throw new TypeError('Failed to fetch');
+    }) as typeof fetch,
+  });
+
+  test('la FERMETURE d un média vu hors ligne est consommée en file, sans appel réseau, et la rangée passe « déjà ouverte »', async () => {
+    const client = new QueryClient();
+    seedThread(client, 'c-a', [viewOnce('m1')]);
+    const queue = createViewOnceQueue({ storage: memoryStorage(), key: KEY, send: async () => ({ ok: true, status: 200 }) });
+
+    const recorded = await consumeViewOnceOptimistic({
+      conversationId: 'c-a',
+      messageId: 'm1',
+      moment: 'close',
+      online: false,
+      deps: { source: 'gateway', transport: neverCalled, queryClient: client, viewOnceQueue: queue },
+    });
+
+    expect(recorded).toBe(true);
+    expect(network).toEqual([]);
+    expect([...queue.pendingFor('c-a')]).toEqual(['m1']);
+    const row = client.getQueryData<MessagesInfiniteData>(messagesQueryKey('c-a'))?.pages[0]?.messages[0];
+    expect(row?.consumedByMe).toBe(true);
+  });
+
+  test('l OUVERTURE hors ligne reste refusée (D-16) : rien n est consommé ni mis en file', async () => {
+    const client = new QueryClient();
+    seedThread(client, 'c-a', [viewOnce('m1')]);
+    const queue = createViewOnceQueue({ storage: memoryStorage(), key: KEY, send: async () => ({ ok: true, status: 200 }) });
+
+    const revealed = await consumeViewOnceOptimistic({
+      conversationId: 'c-a',
+      messageId: 'm1',
+      moment: 'open',
+      online: false,
+      deps: { source: 'gateway', transport: neverCalled, queryClient: client, viewOnceQueue: queue },
+    });
+
+    expect(revealed).toBe(false);
+    expect(queue.pendingFor('c-a').size).toBe(0);
+    const row = client.getQueryData<MessagesInfiniteData>(messagesQueryKey('c-a'))?.pages[0]?.messages[0];
+    expect(row?.consumedByMe).not.toBe(true);
+  });
+});

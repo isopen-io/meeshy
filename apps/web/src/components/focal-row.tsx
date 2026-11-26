@@ -12,6 +12,7 @@ import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { usePresence } from '@/lib/view/use-presence';
 import { threadRowKeyOf } from '@/lib/view/use-arrival-motion';
 import { prismFor, served } from '@/lib/api/prism';
+import type { ConsumeViewOnceHandler } from '@/lib/api/view-once';
 import { mediaCarrierOf } from '@/lib/view/media';
 import type { PlacedMessage } from '@/lib/grouping';
 import { endToEndSealed } from '@/lib/view/end-to-end-sealed';
@@ -242,7 +243,7 @@ export const FocalRow = memo(function FocalRow({
    */
   ephemeralDeadline: EphemeralDeadline;
   /** Consomme une vue unique (D-10, `lib/api/view-once.ts`) ; `undefined` en environnement sans réseau. */
-  onConsumeViewOnce?: (messageId: string) => Promise<boolean>;
+  onConsumeViewOnce?: ConsumeViewOnceHandler;
   onEphemeralExpired?: (messageId: string) => void;
   /** Horloge injectable — jamais `Date.now()` lu directement (déterminisme des témoins). */
   now?: () => number;

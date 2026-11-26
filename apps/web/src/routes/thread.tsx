@@ -24,7 +24,7 @@ import { apiDeps } from '@/lib/api/deps';
 import { useConversationsSnapshot, useSealedThread, useThreadData } from '@/lib/api/query';
 import { markCaughtUp } from '@/lib/api/receipts';
 import { clearConversationBanners } from '@/lib/notifications/conversation-banners';
-import { consumeViewOnceOptimistic } from '@/lib/api/view-once';
+import { consumeViewOnceOptimistic, type ConsumeViewOnceHandler } from '@/lib/api/view-once';
 import { sessionStore } from '@/lib/api/session';
 import { requestDeparture } from '@/lib/conversation-departure';
 import { useComposerAccess } from '@/lib/send/use-composer-access';
@@ -209,9 +209,8 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    * dans `consumeViewOnceOptimistic` (`lib/api/view-once.ts`), qui écrit la
    * consommation au CACHE de requêtes avant tout réseau, la DIT au serveur
    * (`POST …/messages/:messageId/consume`) et la défait sur un refus
-   * permanent ; une panne la met en file (`useViewOnceQueue`, #8015). L'écran
-   * ne garde que la garde HORS LIGNE (`online`, D-16 : une révélation dont la
-   * confirmation ne peut pas partir ne s'accorde pas).
+   * permanent ; une panne la met en file (`useViewOnceQueue`, #8015), et la
+   * garde HORS LIGNE (D-16) y vit aussi : l'écran ne passe que `online`.
    */
   /**
    * LA DESTRUCTION D'UN ÉPHÉMÈRE, EN TROIS PHASES (#7468) — le crochet tient
@@ -222,11 +221,9 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    */
   const { destroyingIds, expiredIds, noteExpired: onEphemeralExpired } = useEphemeralDestruction();
   const viewOnceQueue = useViewOnceQueue({ conversationId, messages: threadData.messages, viewerId: viewer.id ?? undefined, queryClient });
-  const consume = useCallback(
-    async (messageId: string): Promise<boolean> => {
-      if (!online) return false;
-      return consumeViewOnceOptimistic({ conversationId, messageId, deps: { ...apiDeps, queryClient, viewOnceQueue } });
-    },
+  const consume = useCallback<ConsumeViewOnceHandler>(
+    async (messageId, moment) =>
+      consumeViewOnceOptimistic({ conversationId, messageId, moment, online, deps: { ...apiDeps, queryClient, viewOnceQueue } }),
     [online, queryClient, conversationId, viewOnceQueue],
   );
 
