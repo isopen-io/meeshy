@@ -204,6 +204,61 @@ final class GameGuideEventsV2Tests: XCTestCase {
         XCTAssertEqual(opened.kept, true)
     }
 
+    // MARK: - L'objectif de Flamme atteint (#20602)
+
+    private func goalGame(target: Int?, reached: Bool, next: Int? = nil, seen: [String] = []) -> GameBlock {
+        let base = GameFixture.game(flameDays: 7, guideSeen: seen)
+        let current = target.map { GameServedFlameGoal.Current(target: $0, remaining: reached ? 0 : 2, reached: reached, next: next) }
+        let goal = GameServedFlameGoal(offer: next.map { [$0] } ?? [], current: current)
+        return base.replacing(flame: base.flame.replacing(goal: .some(goal)))
+    }
+
+    func test_standing_salutesTheReachedGoalOnce_byItsGoalKey() {
+        let said: [GuideEventV2] = [.flameGoalReached(target: 7, next: 14)]
+        XCTAssertEqual(GameGuideEventsV2.standing(game: goalGame(target: 7, reached: true, next: 14), seen: []), said)
+        XCTAssertEqual(GameGuideEventsV2.standing(game: goalGame(target: 7, reached: true, next: 14, seen: ["flame-goal-next-7"]), seen: []), [],
+                       "la carte de la Flamme l'a déjà dit, ou « Plus tard » l'a fermé")
+        XCTAssertEqual(GameGuideEventsV2.standing(game: goalGame(target: 7, reached: true, next: 14), seen: ["flame-goal-next-7"]), [],
+                       "ce que l'écran vient de marquer compte aussi")
+        XCTAssertEqual(GameGuideEventsV2.standing(game: goalGame(target: 7, reached: true, next: 14), seen: ["flame-goal-reached"]), said,
+                       "le genre vu ne fait pas taire un nouvel objectif")
+        XCTAssertEqual(GameGuideEventsV2.standing(game: goalGame(target: 7, reached: false), seen: []), [], "tant qu'il court, rien")
+        XCTAssertEqual(GameGuideEventsV2.standing(game: goalGame(target: nil, reached: false, next: 7), seen: []), [])
+        XCTAssertEqual(GameGuideEventsV2.standing(game: GameFixture.game(flameDays: 7), seen: []), [], "un serveur antérieur ne sert pas d'objectif")
+    }
+
+    func test_transition_salutesTheGoalReachedWhileTheScreenIsOpen_onlyWhenItArrives() {
+        let running = goalGame(target: 7, reached: false)
+        let reached = goalGame(target: 7, reached: true, next: 14)
+        XCTAssertEqual(GameGuideEventsV2.transition(from: running, to: reached), [.flameGoalReached(target: 7, next: 14)])
+        XCTAssertEqual(GameGuideEventsV2.transition(from: reached, to: reached), [], "déjà atteint à la lecture d'avant")
+        XCTAssertEqual(GameGuideEventsV2.transition(from: running, to: goalGame(target: 7, reached: true, next: 14, seen: ["flame-goal-next-7"])), [])
+        XCTAssertEqual(GameGuideEventsV2.transition(from: reached, to: goalGame(target: 14, reached: true, next: 30)),
+                       [.flameGoalReached(target: 14, next: 30)], "une nouvelle marche tenue est un moment nouveau")
+    }
+
+    func test_theReachedGoalMoment_isSaidByMeeAndMeo_marksTheGoalKey_andOpensTheFlame() throws {
+        let chosen = GameGuideV2.chooseMoment(events: [.wave2(.flameGoalReached(target: 7, next: 14))], seen: [String]())
+        guard case .wave2(let moment) = try XCTUnwrap(chosen) else { return XCTFail("un moment de la vague 2") }
+        let card = GameGuideCard.ofMomentV2(moment)
+        XCTAssertEqual(card.key, "flame-goal-next-7", "la carte se marque vue par la clé que la carte de la Flamme lit")
+        XCTAssertEqual(card.speaker, .duo)
+        XCTAssertEqual(card.mood, .proud)
+        XCTAssertNil(card.wave2Page)
+        XCTAssertEqual(GameGuideTarget.target(for: card.action), .scroll(.flame))
+        XCTAssertFalse(card.photo)
+        XCTAssertEqual(card.copy.what, GameText.guideMomentFlameGoalReachedWhat(days: GameCopy.days(7)))
+        XCTAssertEqual(card.copy.next, GameText.guideMomentFlameGoalReachedNext(days: GameCopy.days(14)))
+        XCTAssertEqual(card.copy.short, GameText.guideMomentFlameGoalReachedShort(days: GameCopy.days(7)))
+        XCTAssertEqual(card.copy.action, GameGuideCopy.actionLabel(.seeFlame))
+    }
+
+    func test_theTopGoalMoment_saysEveryStepIsClimbed() throws {
+        let chosen = GameGuideV2.chooseMoment(events: [.wave2(.flameGoalReached(target: 365, next: nil))], seen: [String]())
+        guard case .wave2(let moment) = try XCTUnwrap(chosen) else { return XCTFail("un moment de la vague 2") }
+        XCTAssertEqual(GameGuideCard.ofMomentV2(moment).copy.next, GameText.guideMomentFlameGoalReachedNextTop)
+    }
+
     func test_thePrestigeMoment_opensThePrestigePage() {
         let prestige = GuideMomentV2(key: .prestige, speaker: .duo, mood: .proud, event: .prestige(prestige: 1, gloryGained: 1000),
                                      action: .seeLevel, presentation: .full)

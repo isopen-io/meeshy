@@ -412,7 +412,10 @@ final class ProgressionViewModelGameTests: XCTestCase {
         XCTAssertEqual(GameFlamePanelView.goalState(running, guideSeen: []), .running(target: 7, remaining: 3))
         let reached = flame.replacing(goal: .some(GameServedFlameGoal(offer: [14], current: GameServedFlameGoal.Current(target: 7, remaining: 0, reached: true, next: 14))))
         XCTAssertEqual(GameFlamePanelView.goalState(reached, guideSeen: []), .reached(target: 7, next: 14))
-        XCTAssertNil(GameFlamePanelView.goalState(reached, guideSeen: ["flame-goal-next-7"]), "« Plus tard » le fait taire")
+        XCTAssertEqual(GameFlamePanelView.goalState(reached, guideSeen: ["flame-goal-next-7"]), .next(target: 7, next: 14),
+                       "« Plus tard » ou la carte du guide fait taire le salut, la marche suivante reste à portée")
+        let top = flame.replacing(goal: .some(GameServedFlameGoal(offer: [], current: GameServedFlameGoal.Current(target: 365, remaining: 0, reached: true, next: nil))))
+        XCTAssertNil(GameFlamePanelView.goalState(top, guideSeen: ["flame-goal-next-365"]), "au sommet, plus rien à viser")
     }
 
     func test_closeFlameGoalSign_ranksTheKeyAtOnce_andTellsTheServer() async {
