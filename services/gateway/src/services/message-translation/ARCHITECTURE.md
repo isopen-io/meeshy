@@ -35,7 +35,7 @@ handleNewMessage()
     NO                       ▼
     │                   Return (e2ee_skipped)
     ▼
-_saveMessageToDatabase()
+saveTranslationPathMessage()  (saveTranslationPathMessage.ts)
     │
     ├─> translationStats.incrementMessagesSaved()
     │

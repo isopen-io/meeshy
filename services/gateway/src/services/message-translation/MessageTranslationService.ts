@@ -31,18 +31,17 @@ import { createTranslationJSON, type MessageTranslationJSON } from '../../utils/
 import { isBlankTranscriptionText } from '../../utils/transcription';
 import { isUrlOnly } from '../../utils/url-content';
 import { KeyedMutex } from '../../utils/keyed-mutex';
-import { generateConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { resolveServerTargetLanguages } from './serverTargetLanguages';
 import { translateTextDirectly } from './directTextTranslation';
+import { saveTranslationPathMessage, CONVERSATION_OBSOLETED_STATUS } from './saveTranslationPathMessage';
 import { attachmentAudioRichView, type AttachmentAudioRichView } from '../audio/attachmentAudioRichView';
-import { LIVE_MESSAGE_MARK } from '../messaging/liveMessage';
 import { diffTranslationTargets } from '../../utils/translation-targets';
 import { applyPreset, mergeVoiceCloneParams, type ChatterboxTTSParams, type VoiceCloneParameters } from '../../types/translation.types';
 import { isEmojiOnly } from '../../utils/emoji-only';
 import { guardedInterval } from '../../utils/guarded-timer';
-import { implicitConversationRegime } from '../conversations/creationRegime';
 import { isEndToEndMode } from '../messaging/e2eePlaintextAdmission';
+
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
 
@@ -232,9 +231,9 @@ export class MessageTranslationService extends EventEmitter {
         });
 
         if (!messageData.id) {
-          const savedMessage = await this._saveMessageToDatabase(messageData);
+          const saved = await saveTranslationPathMessage(this.prisma, messageData);
           this.stats.incrementMessagesSaved();
-          return { messageId: savedMessage.id, status: 'emoji_only_skipped' };
+          return { messageId: saved.message.id, status: saved.obsoleted ? CONVERSATION_OBSOLETED_STATUS : 'emoji_only_skipped' };
         }
         return { messageId: messageData.id, status: 'emoji_only_skipped' };
       }
@@ -249,9 +248,9 @@ export class MessageTranslationService extends EventEmitter {
         });
 
         if (!messageData.id) {
-          const savedMessage = await this._saveMessageToDatabase(messageData);
+          const saved = await saveTranslationPathMessage(this.prisma, messageData);
           this.stats.incrementMessagesSaved();
-          return { messageId: savedMessage.id, status: 'url_only_skipped' };
+          return { messageId: saved.message.id, status: saved.obsoleted ? CONVERSATION_OBSOLETED_STATUS : 'url_only_skipped' };
         }
         return { messageId: messageData.id, status: 'url_only_skipped' };
       }
@@ -264,11 +263,11 @@ export class MessageTranslationService extends EventEmitter {
         });
 
         if (!messageData.id) {
-          const savedMessage = await this._saveMessageToDatabase(messageData);
+          const saved = await saveTranslationPathMessage(this.prisma, messageData);
           this.stats.incrementMessagesSaved();
           return {
-            messageId: savedMessage.id,
-            status: 'e2ee_skipped'
+            messageId: saved.message.id,
+            status: saved.obsoleted ? CONVERSATION_OBSOLETED_STATUS : 'e2ee_skipped'
           };
         }
         return {
@@ -292,9 +291,12 @@ export class MessageTranslationService extends EventEmitter {
           throw new Error(`Message ${messageData.id} non trouvé en base de données`);
         }
       } else {
-        const savedMessage = await this._saveMessageToDatabase(messageData);
-        messageId = savedMessage.id;
+        const saved = await saveTranslationPathMessage(this.prisma, messageData);
         this.stats.incrementMessagesSaved();
+        if (saved.obsoleted) {
+          return { messageId: saved.message.id, status: CONVERSATION_OBSOLETED_STATUS };
+        }
+        messageId = saved.message.id;
       }
 
       const response = {
@@ -328,78 +330,6 @@ export class MessageTranslationService extends EventEmitter {
     } catch (error) {
       logger.error(`❌ Erreur traitement message: ${error}`);
       this.stats.incrementErrors();
-      throw error;
-    }
-  }
-
-  private async _saveMessageToDatabase(messageData: MessageData) {
-    try {
-      const existingConversation = await this.prisma.conversation.findFirst({
-        where: { id: messageData.conversationId }
-      });
-
-      if (!existingConversation) {
-        const conversationIdentifier = generateConversationIdentifier(`Conversation ${messageData.conversationId}`);
-
-        await this.prisma.conversation.create({
-          data: {
-            ...(await implicitConversationRegime(this.prisma, { enabledBy: messageData.senderId ?? 'system', conversationId: messageData.conversationId })),
-            id: messageData.conversationId,
-            identifier: conversationIdentifier,
-            title: `Conversation ${messageData.conversationId}`,
-            type: 'group',
-            createdAt: new Date(),
-            lastMessageAt: new Date()
-          }
-        });
-      }
-
-      const message = await this.prisma.message.create({
-        data: {
-          conversationId: messageData.conversationId,
-          senderId: messageData.senderId!,
-          content: messageData.content,
-          originalLanguage: messageData.originalLanguage,
-          messageType: messageData.messageType || 'text',
-          replyToId: messageData.replyToId || null,
-          ...LIVE_MESSAGE_MARK
-        }
-      });
-
-      await this.prisma.conversation.update({
-        where: { id: messageData.conversationId },
-        data: { lastMessageAt: new Date() }
-      });
-
-      // Flip gardé, séparé du bump ci-dessus — celui-ci doit rester
-      // inconditionnel, il pilote l'ordre de liste/le curseur/le delta sync
-      // pour TOUS les messages, pas seulement le premier. Ne concerne que les
-      // DM créés vides (Prisme design doc 2026-08-04) ; `count` à 0 signifie
-      // "pas le premier message" ou "conversation non concernée" — no-op.
-      // Ce chemin (`_saveMessageToDatabase`) crée le message HORS
-      // `MessagingService.handleMessage` — ex: `POST /translate-blocking`
-      // (cas nouveau message) — donc il porte sa propre copie du flip plutôt
-      // que d'hériter de celui de `runMessagePostSaveEffects`.
-      //
-      // Isolé dans son propre try/catch, contrairement au reste de cette
-      // fonction : le message ET le bump `lastMessageAt` ci-dessus ont DÉJÀ
-      // committé avec succès à ce stade. Laisser une panne ici remonter au
-      // catch englobant transformerait un envoi réussi en 500 côté route
-      // (`POST /translate-blocking`) — exactement ce que le commentaire
-      // jumeau de `runMessagePostSaveEffects.ts` interdit ("aucune ne doit
-      // transformer un envoi réussi en 500").
-      try {
-        await this.prisma.conversation.updateMany({
-          where: { id: messageData.conversationId, firstMessageSentAt: null },
-          data: { firstMessageSentAt: new Date() }
-        });
-      } catch (flipError) {
-        logger.error(`❌ Erreur flip firstMessageSentAt: ${flipError}`);
-      }
-
-      return message;
-    } catch (error) {
-      logger.error(`❌ Erreur sauvegarde message: ${error}`);
       throw error;
     }
   }
