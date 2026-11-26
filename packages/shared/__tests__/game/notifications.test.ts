@@ -18,6 +18,10 @@ import {
   isGameLeagueExploit,
   isGameNotificationType,
   GAME_MISSION_FLAME_MIN_DAYS,
+  GAME_FLAME_EVENING_MIN_DAYS,
+  GAME_FLAME_EVENING_FIRST_MINUTE,
+  GAME_FLAME_EVENING_LAST_MINUTE,
+  flameEveningReminderDue,
   missionWindowKey,
 } from '../../utils/game/notifications.js';
 import { NOTIFICATION_LANGUAGES, buildNotificationDisplay, notificationString } from '../../utils/notification-strings.js';
@@ -25,7 +29,7 @@ import { personalMissionPhrase } from '../../utils/game/personal-mission-copy.js
 import { notificationTypeEnum } from '../../utils/notification-type-enum.js';
 
 describe('les types de notification du jeu', () => {
-  it('sont six, uniques, déclarés par l’énumération ET par le schéma de validation', () => {
+  it('sont sept, uniques, déclarés par l’énumération ET par le schéma de validation', () => {
     expect([...GAME_NOTIFICATION_TYPES]).toEqual([
       'game_duo_invited',
       'game_duo_accepted',
@@ -33,6 +37,7 @@ describe('les types de notification du jeu', () => {
       'game_season_step',
       'game_mission_window',
       'game_photo_moment',
+      'game_flame_evening',
     ]);
     for (const type of GAME_NOTIFICATION_TYPES) {
       expect(Object.values(NotificationTypeEnum)).toContain(type);
@@ -61,6 +66,10 @@ describe('les types de notification du jeu', () => {
     expect(countsAgainstGameDailyCap('game_mission_window')).toBe(true);
   });
 
+  it('le rappel du soir compte aussi : c’est un rappel, pas un exploit (#20612)', () => {
+    expect(countsAgainstGameDailyCap('game_flame_evening')).toBe(true);
+  });
+
   it('un exploit sort du plafond, quel que soit son type', () => {
     expect(countsAgainstGameDailyCap('game_league_result', { exploit: true })).toBe(false);
     expect(countsAgainstGameDailyCap('game_season_step', { exploit: false })).toBe(true);
@@ -82,7 +91,7 @@ describe('la préférence « Jeu » (notification.gameEnabled)', () => {
     expect(NotificationPreferenceSchema.strict().parse({ gameEnabled: false }).gameEnabled).toBe(false);
   });
 
-  it('gouverne les six types, et eux seuls', () => {
+  it('gouverne les sept types, et eux seuls', () => {
     const prefs = { ...NOTIFICATION_PREFERENCE_DEFAULTS, gameEnabled: false } as unknown as NotificationPreference;
     for (const type of GAME_NOTIFICATION_TYPES) expect(isNotificationTypeEnabled(prefs, type)).toBe(false);
     expect(isNotificationTypeEnabled(prefs, 'new_message')).toBe(true);
@@ -190,5 +199,58 @@ describe('le résultat de la semaine de ligue', () => {
     expect(gameLeagueResultKey({ zone: 'promotion', cup: null })).toBe('game.leaguePromoted');
     expect(gameLeagueResultKey({ zone: 'safe', cup: null })).toBe('game.leagueStayed');
     expect(gameLeagueResultKey({ zone: 'relegation', cup: null })).toBe('game.leagueRelegated');
+  });
+});
+
+describe('le rappel du soir de la Flamme (#17368, #20612)', () => {
+  const at = (hour: number, minute = 0): number => hour * 60 + minute;
+  const due = (over: Partial<Parameters<typeof flameEveningReminderDue>[0]> = {}) =>
+    flameEveningReminderDue({ status: 'at-risk', days: 3, minuteOfDay: at(19), ...over });
+
+  it('part le soir pour une Flamme de trois jours ou plus qui n’a reçu aucun geste aujourd’hui', () => {
+    expect(GAME_FLAME_EVENING_MIN_DAYS).toBe(3);
+    expect(due()).toBe(true);
+    expect(due({ days: 40 })).toBe(true);
+    expect(due({ status: 'covered' })).toBe(true);
+  });
+
+  it('se tait sous trois jours, ou sans Flamme à garder', () => {
+    expect(due({ days: 2 })).toBe(false);
+    expect(due({ days: 0 })).toBe(false);
+    expect(due({ days: Number.NaN })).toBe(false);
+    expect(due({ status: 'none' })).toBe(false);
+    expect(due({ status: 'out' })).toBe(false);
+  });
+
+  it('se tait quand le geste du jour est fait', () => {
+    expect(due({ status: 'lit' })).toBe(false);
+  });
+
+  it('de 18 h à 21 h locales, jamais après 21 h', () => {
+    expect(GAME_FLAME_EVENING_FIRST_MINUTE).toBe(at(18));
+    expect(GAME_FLAME_EVENING_LAST_MINUTE).toBe(at(21));
+    expect(due({ minuteOfDay: at(17, 59) })).toBe(false);
+    expect(due({ minuteOfDay: at(18) })).toBe(true);
+    expect(due({ minuteOfDay: at(20, 59) })).toBe(true);
+    expect(due({ minuteOfDay: at(21) })).toBe(false);
+    expect(due({ minuteOfDay: at(23, 30) })).toBe(false);
+    expect(due({ minuteOfDay: at(8) })).toBe(false);
+  });
+
+  it('dit la hauteur de la Flamme dans les huit langues, et « اللهب » en arabe', () => {
+    for (const lang of NOTIFICATION_LANGUAGES) {
+      const text = notificationString(lang, 'game.flameEvening', { count: 12 });
+      expect(text, lang).toContain('12');
+      expect(text, lang).not.toContain('{');
+      expect(text, lang).not.toContain('game.');
+    }
+    expect(notificationString('fr', 'game.flameEvening', { count: 12 })).toBe(
+      'Ta Flamme brûle depuis 12 jours. Un geste ce soir la garde allumée.',
+    );
+    expect(notificationString('ar', 'game.flameEvening', { count: 12 })).toContain('اللهب');
+  });
+
+  it('n’a pas d’acteur : le corps porte la phrase', () => {
+    expect(buildNotificationDisplay('fr', { type: 'game_flame_evening', actorName: null })).toEqual({ title: null, subtitle: null, action: null });
   });
 });

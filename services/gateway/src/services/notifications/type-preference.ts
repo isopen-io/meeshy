@@ -40,6 +40,7 @@ export function isNotificationTypeEnabledByPreference(
     case 'game_league_result':
     case 'game_season_step':
     case 'game_mission_window':
+    case 'game_flame_evening':
     // Les exploits du Jeu — rang, palier de Flamme, haut fait — sont du Jeu :
     // « Jeu » coupé ne reçoit rien (décision porteur 2026-11-10, #17368).
     case 'level_up':

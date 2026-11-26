@@ -97,6 +97,17 @@ const LOCATION_SHARE_ENDED_FLOORS: Readonly<Record<PushRoutingClient, string | n
   ios: null, 'android-native': null, 'android-shell': null, web: null,
 };
 
+/**
+ * `game_flame_evening` (#20612) : le rappel du soir ouvre la fiche de la Flamme. La coque et le navigateur le routent
+ * (`GAME_FLAME_TYPES` dans `target.ts` et `sw-push.js`) depuis la première version de `@meeshy/web` construite après
+ * leur arrivée, au plus tôt la 2.32.2 ; iOS et l'Android natif ne le routent pas encore, chaque lot client pose ici sa
+ * première version. Sans appareil capable, le job ne l'annonce pas : un rappel du soir qui n'atteint que la cloche ne
+ * prend pas un des deux créneaux du jour.
+ */
+const GAME_FLAME_EVENING_FLOORS: Readonly<Record<PushRoutingClient, string | null>> = {
+  ios: null, 'android-native': null, 'android-shell': '2.32.2', web: '2.32.2',
+};
+
 export const PUSH_TYPE_ROUTING_FLOORS: PushTypeRoutingFloors = new Map([
   ['game_photo_moment', { ios: null, 'android-native': null, 'android-shell': '2.23.0', web: '2.23.0' }],
   ['bring_stopped', BRING_STOPPED_FLOORS],
@@ -104,6 +115,7 @@ export const PUSH_TYPE_ROUTING_FLOORS: PushTypeRoutingFloors = new Map([
   ['battery_pull', BATTERY_PULL_FLOORS],
   ['e2ee_device_verification', E2EE_DEVICE_VERIFICATION_FLOORS],
   ['location_share_ended', LOCATION_SHARE_ENDED_FLOORS],
+  ['game_flame_evening', GAME_FLAME_EVENING_FLOORS],
 ]);
 
 const ANDROID_NATIVE_BUNDLE = /^me\.meeshy\.(app|android)(\.|$)/;

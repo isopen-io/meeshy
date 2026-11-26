@@ -38,9 +38,11 @@ import {
   countsAgainstGameDailyCap,
   gameLeagueResultKey,
   isGameLeagueExploit,
+  flameEveningReminderDue,
   missionWindowKey,
   photoMomentNotificationKey,
 } from '@meeshy/shared/utils/game/notifications';
+import { flameStatus } from '@meeshy/shared/utils/game/flame';
 import { personalMissionActivity } from '@meeshy/shared/utils/game/personal-mission';
 import { personalMissionPhrase } from '@meeshy/shared/utils/game/personal-mission-copy';
 import { flamePauseOf, isFlamePausedOn } from '@meeshy/shared/utils/game/flame-pause';
@@ -51,9 +53,9 @@ import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-
 import { getCacheStore } from '../CacheStore';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
 import type { NotificationService } from '../notifications/NotificationService';
-import { FLAME_USER_SELECT, flameFactsOf, servedFlameDays } from './FlameService';
+import { FLAME_USER_SELECT, flameFactsOf, servedFlameDays, type FlameFacts } from './FlameService';
 import { GameProfileService } from './GameProfileService';
-import { dayKeyOf, effectiveZone } from './gameClock';
+import { dayKeyOf, effectiveZone, minuteOfDayInTimezone } from './gameClock';
 
 const log = enhancedLogger.child({ module: 'GameNotifier' });
 
@@ -94,6 +96,15 @@ export type GameNotificationEvent =
       readonly recipientId: string;
       readonly stepIds: readonly string[];
       readonly dayKey: string;
+    }
+  | {
+      /**
+       * Le rappel du soir (#17368, #20612) : une Flamme de trois jours ou plus n'a reçu aucun geste aujourd'hui.
+       * `dayKey` est le jour LOCAL du destinataire : une seule annonce par jour. Relu à l'envoi par la loi partagée.
+       */
+      readonly kind: 'flame-evening';
+      readonly recipientId: string;
+      readonly dayKey: string;
     };
 
 export type GameNotifyResult =
@@ -103,6 +114,7 @@ export type GameNotifyResult =
   | 'skipped:unknown-actor'
   | 'skipped:game-hidden'
   | 'skipped:flame-paused'
+  | 'skipped:not-due'
   | 'skipped:opted-out'
   | 'skipped:duplicate'
   | 'skipped:daily-cap'
@@ -136,8 +148,14 @@ type Plan = {
    * fois » se rend, et la prochaine fenêtre permise la reprend. Les autres notifications plafonnées se taisent.
    */
   readonly deferrable?: boolean;
-  /** Un RAPPEL (la plage du Rêve) : il se tait un jour où la Flamme est en veille (#17372). Résultats et gestes d'autrui partent. */
+  /** Un RAPPEL (la plage du Rêve, le soir de la Flamme) : il se tait un jour où la Flamme est en veille (#17372). Résultats et gestes d'autrui partent. */
   readonly reminder?: boolean;
+  /**
+   * Relu à l'ENVOI, sur le compte tel qu'il est à cet instant : le rappel du soir se tait si le geste du jour a
+   * été fait entre le passage du job et l'envoi, ou si 21 h a sonné. Lu AVANT la clé « une seule fois » : un
+   * rappel qui n'était pas dû ne brûle pas son jour.
+   */
+  readonly due?: (facts: FlameFacts, minuteOfDay: number) => boolean;
   /**
    * `flameDays` : la hauteur de la Flamme telle que le bloc `game` la sert (0 éteinte), le jour du fuseau du
    * destinataire. Seule l'annonce de la mission du jour la dit (#20575).
@@ -247,6 +265,19 @@ function planOf(event: GameNotificationEvent): Plan {
           endsAt: event.endsAt.toISOString(),
         },
       };
+    case 'flame-evening':
+      return {
+        type: 'game_flame_evening',
+        priority: 'normal',
+        onceKey: `flame-evening:${event.dayKey}`,
+        // UN identifiant : le rappel d'un soir remplace celui de la veille resté sur l'écran.
+        collapseId: 'game-flame-evening',
+        capped: countsAgainstGameDailyCap('game_flame_evening'),
+        reminder: true,
+        due: (facts, minuteOfDay) => flameEveningReminderDue({ status: flameStatusOf(facts), days: servedFlameDays(facts), minuteOfDay }),
+        content: (lang, _timezone, flameDays) => text(lang, 'game.flameEvening', flameDays),
+        metadata: { action: 'view_details', route: ROUTE, gameSection: 'flame', dayKey: event.dayKey },
+      };
     case 'photo-moment': {
       const count = new Set(event.stepIds).size;
       return {
@@ -264,6 +295,9 @@ function planOf(event: GameNotificationEvent): Plan {
     }
   }
 }
+
+const flameStatusOf = (facts: FlameFacts) =>
+  flameStatus({ lastActiveDay: facts.lastActiveDay, today: facts.today, streak: facts.streak, freezes: facts.freezes });
 
 const nonEmpty = (value: string | null | undefined): string | null => (value && value.trim() !== '' ? value.trim() : null);
 
@@ -306,6 +340,8 @@ export class GameNotifier {
     if ((await this.profile.settings(event.recipientId)).gameHidden) return 'skipped:game-hidden';
     if (plan.reminder && isFlamePausedOn(flamePauseOf(recipient), dayKeyOf(now, recipient.timezone))) return 'skipped:flame-paused';
     if (await this.optedOut(event.recipientId)) return 'skipped:opted-out';
+    const facts = flameFactsOf(recipient, now);
+    if (plan.due && !plan.due(facts, minuteOfDayInTimezone(now, recipient.timezone))) return 'skipped:not-due';
 
     const throttle = this.deps.throttle ?? getCacheStore();
     const onceKey = `notif:game:once:${event.recipientId}:${plan.onceKey}`;
@@ -330,7 +366,7 @@ export class GameNotifier {
         type: plan.type,
         priority: plan.priority,
         lang,
-        content: plan.content(lang, recipient.timezone ?? null, servedFlameDays(flameFactsOf(recipient, now))),
+        content: plan.content(lang, recipient.timezone ?? null, servedFlameDays(facts)),
         ...(actor ? { actor } : {}),
         context: {},
         metadata: plan.metadata as never,

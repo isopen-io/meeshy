@@ -211,3 +211,18 @@ describe('talkie_incoming (#17144) — l’Android natif 3.1.0 route le réveil 
     expect(tokenRoutesPushType(browser('99.0.0'), 'talkie_incoming')).toBe(false);
   });
 });
+
+describe('le rappel du soir de la Flamme (#20612)', () => {
+  const EVENING = 'game_flame_evening';
+
+  it('ne part que vers un client qui sait ouvrir la fiche de la Flamme : la coque et le navigateur dès la 2.32.2', () => {
+    expect(tokenRoutesPushType(browser('2.32.2'), EVENING)).toBe(true);
+    expect(tokenRoutesPushType(shell('2.33.0'), EVENING)).toBe(true);
+    expect(tokenRoutesPushType(browser('2.32.1'), EVENING)).toBe(false);
+  });
+
+  it('iOS et l’Android natif ne le routent pas encore : aucune version ne le reçoit', () => {
+    expect(tokenRoutesPushType(iphone('99.0.0'), EVENING)).toBe(false);
+    expect(tokenRoutesPushType(nativeAndroid('99.0.0'), EVENING)).toBe(false);
+  });
+});

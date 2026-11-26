@@ -223,6 +223,8 @@ export enum NotificationTypeEnum {
   GAME_MISSION_WINDOW = 'game_mission_window',
   /** Des étapes du jeu franchies app fermée peuvent rejoindre le carnet : une notification groupée, dans le plafond (#10175). */
   GAME_PHOTO_MOMENT = 'game_photo_moment',
+  /** Le rappel du soir : une Flamme de trois jours ou plus sans geste du jour, entre 18 h et 21 h locales, dans le plafond (#20612). */
+  GAME_FLAME_EVENING = 'game_flame_evening',
 
   // ===== PAYMENT/SUBSCRIPTION =====
   SUBSCRIPTION_EXPIRING = 'subscription_expiring',

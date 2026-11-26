@@ -130,6 +130,14 @@ describe('les autres familles', () => {
     }
   });
 
+  /* Le rappel du soir (#20612) ouvre la fiche de la Flamme, là où un geste la garde allumée — jamais le haut du hub. */
+  test('le rappel du soir de la Flamme ouvre la fiche de la Flamme', () => {
+    const expected = { route: 'progression', search: { section: 'flame' } };
+    expect(notificationTarget(record({ type: 'game_flame_evening' }))).toEqual(expected);
+    expect(resolveTarget({ type: 'game_flame_evening', route: 'progression' })).toEqual(expected);
+    expect(pushTapTarget({ type: 'game_flame_evening', route: 'progression' })).toEqual(expected);
+  });
+
   test('une étape de saison ouvre la page Saison', () => {
     expect(notificationTarget(record({ type: 'game_season_step' }))).toEqual({ route: 'progressionSaison' });
     expect(resolveTarget({ type: 'game_season_step', route: 'progression' })).toEqual({ route: 'progressionSaison' });
