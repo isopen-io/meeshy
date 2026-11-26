@@ -16,7 +16,8 @@
  *
  * Gardé par `VIDEO_COMPAT_RENDITION=true` (posé en staging ; la production
  * attend que S2 ait chiffré le CPU, #9232) et borné par
- * `VIDEO_TRANSCODE_MAX_SYNC_BYTES`. Un drapeau PROPRE, et non
+ * `VIDEO_TRANSCODE_MAX_SYNC_BYTES` pendant la requête seulement (le worker
+ * de médias rend une vidéo de toute taille, #12294). Un drapeau PROPRE, et non
  * `VIDEO_TRANSCODE` : celui-ci allume aussi le REMPLACEMENT d'une vidéo trop
  * lourde (720p CRF 26), une seconde génération que ce lot ne veut pas activer. Si l'image de la passerelle n'a pas le
  * filtre `zscale`, une source HDR n'a PAS de rendu — jamais un rendu délavé —
@@ -90,7 +91,7 @@ function runProbe(args: readonly string[]): Promise<string | null> {
   });
 }
 
-type VideoStream = { readonly codec_name?: string; readonly color_transfer?: string; readonly width?: number; readonly height?: number };
+export type VideoStream = { readonly codec_name?: string; readonly color_transfer?: string; readonly width?: number; readonly height?: number };
 
 async function probeVideo(file: string): Promise<VideoStream | null> {
   const out = await runProbe(['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=codec_name,color_transfer,width,height', '-of', 'json', file]);
@@ -123,19 +124,33 @@ export type CompatRenditionDeps = {
   readonly uploadBasePath: string;
   readonly runFfmpeg: (args: string[]) => Promise<void>;
   readonly hasFilter?: (name: string) => Promise<boolean>;
+  readonly probeVideo?: (file: string) => Promise<VideoStream | null>;
 };
+
+/**
+ * `deferred` (le worker de médias, #12294) : le rendu se fait APRÈS la réponse
+ * de l'upload, dans une file à un encodage à la fois — la borne
+ * `VIDEO_TRANSCODE_MAX_SYNC_BYTES`, qui protège le temps de réponse d'une
+ * requête, ne prive plus une vidéo lourde de son rendu.
+ */
+export type CompatRenditionOptions = { readonly strict?: boolean; readonly deferred?: boolean };
+
+function exceedsSyncBound(fileSize: number): boolean {
+  const maxSync = Number(process.env.VIDEO_TRANSCODE_MAX_SYNC_BYTES || 200 * 1024 * 1024);
+  return fileSize > maxSync;
+}
 
 export async function produceCompatibilityRendition(
   deps: CompatRenditionDeps,
   source: { readonly relPath: string; readonly fileSize: number },
-  options: { readonly strict?: boolean } = {},
+  options: CompatRenditionOptions = {},
 ): Promise<MediaRendition | null> {
   if (process.env.VIDEO_COMPAT_RENDITION !== 'true') return null;
-  const maxSync = Number(process.env.VIDEO_TRANSCODE_MAX_SYNC_BYTES || 200 * 1024 * 1024);
-  if (source.fileSize > maxSync) return null;
+  if (options.deferred !== true && exceedsSyncBound(source.fileSize)) return null;
 
+  const probe = deps.probeVideo ?? probeVideo;
   const inputAbs = path.join(deps.uploadBasePath, source.relPath);
-  const stream = await probeVideo(inputAbs);
+  const stream = await probe(inputAbs);
   const plan = planCompatibilityRendition({ codec: stream?.codec_name ?? null, transfer: stream?.color_transfer ?? null });
   if (plan === null) return null;
   if (plan.toneMap && !(await (deps.hasFilter ?? ffmpegHasFilter)('zscale'))) {
@@ -149,7 +164,7 @@ export async function produceCompatibilityRendition(
     // #11257 — le rendu H.264 d'une vidéo HEVC est l'encodage qui reste au
     // serveur depuis #11261 : il est mesuré à l'étape `transcode`.
     await timeMediaStage('transcode', 'video', () => deps.runFfmpeg(buildCompatibilityRenditionArgs(inputAbs, outputAbs, plan)));
-    const [rendered, stat] = await Promise.all([probeVideo(outputAbs), fs.stat(outputAbs)]);
+    const [rendered, stat] = await Promise.all([probe(outputAbs), fs.stat(outputAbs)]);
     if (!rendered?.width || !rendered.height || stat.size === 0) throw new Error('rendu vide');
     return { codec: 'h264', mimeType: 'video/mp4', url: outputRel, width: rendered.width, height: rendered.height, size: stat.size };
   } catch (error) {

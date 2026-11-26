@@ -16,11 +16,13 @@ import { MetadataManager } from '../MetadataManager';
 import {
   produceMediaRenditions,
   produceEncryptedThumbnail,
+  renderDeferred,
   MAX_THUMBHASH_LENGTH,
 } from '../media-renditions';
 
 const ORIGINAL_VIDEO_TRANSCODE = process.env.VIDEO_TRANSCODE;
 const ORIGINAL_MAX_SYNC = process.env.VIDEO_TRANSCODE_MAX_SYNC_BYTES;
+const ORIGINAL_COMPAT = process.env.VIDEO_COMPAT_RENDITION;
 
 async function jpeg(width: number, height: number): Promise<Buffer> {
   return sharp({ create: { width, height, channels: 3, background: { r: 90, g: 140, b: 200 } } })
@@ -49,6 +51,8 @@ describe('media-renditions — la fabrique commune des rendus (#11260)', () => {
     else process.env.VIDEO_TRANSCODE = ORIGINAL_VIDEO_TRANSCODE;
     if (ORIGINAL_MAX_SYNC === undefined) delete process.env.VIDEO_TRANSCODE_MAX_SYNC_BYTES;
     else process.env.VIDEO_TRANSCODE_MAX_SYNC_BYTES = ORIGINAL_MAX_SYNC;
+    if (ORIGINAL_COMPAT === undefined) delete process.env.VIDEO_COMPAT_RENDITION;
+    else process.env.VIDEO_COMPAT_RENDITION = ORIGINAL_COMPAT;
   });
 
   async function placeImage(relPath: string, width: number, height: number): Promise<number> {
@@ -184,6 +188,34 @@ describe('media-renditions — la fabrique commune des rendus (#11260)', () => {
 
       expect(deps.runFfmpeg).not.toHaveBeenCalled();
       expect(out.storedPath).toBe(relPath);
+    });
+
+    it('une vidéo HEVC plus lourde que le plafond synchrone reçoit quand même son rendu H.264, en tâche de fond (#12294)', async () => {
+      process.env.VIDEO_COMPAT_RENDITION = 'true';
+      process.env.VIDEO_TRANSCODE_MAX_SYNC_BYTES = String(1024);
+      const heavy = 4 * 1024 * 1024 * 1024;
+      await placeClip(2048);
+      const runFfmpeg = jest.fn<(args: string[]) => Promise<void>>().mockImplementation(async (args) => {
+        await fs.writeFile(args[args.length - 1], Buffer.alloc(4096, 3));
+      });
+      const probeVideo = async (file: string) => (file.endsWith('_h264.mp4')
+        ? { codec_name: 'h264', width: 1920, height: 1080 }
+        : { codec_name: 'hevc', color_transfer: 'bt709', width: 3840, height: 2160 });
+      const deps = { ...videoDeps(runFfmpeg).deps, probeVideo };
+
+      const duringUpload = await produceMediaRenditions(deps, {
+        relPath, mimeType: 'video/quicktime', attachmentType: 'video', fileSize: heavy, metadata: { videoCodec: 'hevc' }, clientThumbHash: 'client-hash',
+      });
+      expect(duringUpload.renditions).toBeUndefined();
+      expect(runFfmpeg).not.toHaveBeenCalled();
+
+      const inBackground = await renderDeferred(deps, { relPath, mimeType: 'video/quicktime', attachmentType: 'video', fileSize: heavy }, 'transcode', { strict: true });
+
+      expect(inBackground).toEqual({
+        kind: 'transcode',
+        rendition: { codec: 'h264', mimeType: 'video/mp4', url: '2026/10/u1/clip_h264.mp4', width: 1920, height: 1080, size: 4096 },
+      });
+      expect(runFfmpeg).toHaveBeenCalledTimes(1);
     });
 
     it('garde l original si le transcodage échoue', async () => {

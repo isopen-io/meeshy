@@ -6,7 +6,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { ThumbHashGenerator } from './ThumbHashGenerator.js';
 import { planVideoTranscode, buildVideoTranscodeArgs } from './video-transcode-plan.js';
 import type { MediaRendition } from '@meeshy/shared/types/attachment';
-import { produceCompatibilityRendition } from './video-compat-rendition.js';
+import { produceCompatibilityRendition, type CompatRenditionDeps } from './video-compat-rendition.js';
 import { convertStoredHeif } from './heif-conversion.js';
 import type { MediaJobKind } from './media-processing/jobs.js';
 import { timeMediaStage } from '../metrics/mediaStageMetrics';
@@ -68,6 +68,7 @@ export interface RenditionDeps {
   readonly uploadBasePath: string;
   readonly metadataManager: RenditionMetadataPort;
   readonly runFfmpeg: (args: string[]) => Promise<void>;
+  readonly probeVideo?: CompatRenditionDeps['probeVideo'];
 }
 
 export interface RenditionSource {
@@ -184,7 +185,7 @@ export async function renderDeferred(
 ): Promise<DeferredRenditionFields> {
   const strict = options.strict === true;
   if (kind === 'transcode') {
-    return { kind, rendition: await attempt('compat rendition', () => produceCompatibilityRendition(deps, source, { strict }), null, strict) };
+    return { kind, rendition: await attempt('compat rendition', () => produceCompatibilityRendition(deps, source, { strict, deferred: true }), null, strict) };
   }
   const visual = await visualRenditions(deps.metadataManager, { ...source, metadata: {} }, strict);
   if (strict && visual.thumbnailPath === null && (source.attachmentType === 'image' || source.attachmentType === 'video')) {
