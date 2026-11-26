@@ -29,7 +29,17 @@ jest.mock('../../../utils/password-hash', () => ({
 const USER_ID = '507f1f77bcf86cd799439011';
 const ACCOUNT_FIELDS = ['userId', 'authorId', 'senderId', 'creatorId', 'ownerId', 'closedBy', 'deletedBy'];
 
-const lowerFirst = (name: string) => name.charAt(0).toLowerCase() + name.slice(1);
+/**
+ * Une référence de compte sans relation Prisma : un `@db.ObjectId` dont le NOM
+ * dit un rôle de personne (`recipientId`, `requesterId`, `uploadedBy`,
+ * `controlledUserIds`…). Sans cette lecture, un modèle comme `MessageEnvelope`
+ * (`recipientUserId`) ou `CallRecording` (`consentedUserIds`) échappait au relevé
+ * et n'avait jamais à déclarer de verdict.
+ */
+const ACCOUNT_ROLE_FIELD =
+  /^(?:\w*[uU]serIds?|\w*By|\w*ById|(?:recipient|requester|joiner|observer|observed|inviter|invitee|reviewer|receiver|sender|owner|author|creator|actor|viewer|reporter|moderator|caller|callee|referrer|referred|blocker|blocked|member|other|userLow|userHigh)Ids?)$/;
+
+const lowerFirst =(name: string) => name.charAt(0).toLowerCase() + name.slice(1);
 
 type SchemaModel = { readonly delegate: string; readonly accountFields: readonly string[] };
 
@@ -42,7 +52,11 @@ function schemaModels(): SchemaModel[] {
       const relation = /^\s{2}\w+\s+User\??\s+@relation\([^)]*fields:\s*\[(\w+)\]/.exec(line);
       return relation ? [relation[1]!] : [];
     });
-    return { delegate: lowerFirst(name!), accountFields: [...new Set([...named, ...related])] };
+    const objectIdRoles = lines.flatMap((line) => {
+      const field = /^\s{2}(\w+)\s+String(?:\?|\[\])?\s.*@db\.ObjectId/.exec(line);
+      return field && ACCOUNT_ROLE_FIELD.test(field[1]!) ? [field[1]!] : [];
+    });
+    return { delegate: lowerFirst(name!), accountFields: [...new Set([...named, ...related, ...objectIdRoles])] };
   });
 }
 
@@ -52,7 +66,8 @@ const GAME_DECLARED = new Set<string>([...GAME_PURGED_MODELS, ...Object.keys(GAM
 describe("l'inventaire de la purge d'un compte (#4225)", () => {
   it('le relevé du schéma trouve bien les modèles qui désignent un compte', () => {
     const delegates = MODELS.filter((model) => model.accountFields.length > 0).map((model) => model.delegate);
-    expect(delegates).toEqual(expect.arrayContaining(['userSession', 'message', 'conversationEngagement', 'mention']));
+    expect(delegates).toEqual(expect.arrayContaining(['userSession', 'message', 'conversationEngagement', 'mention',
+      'messageEnvelope', 'contactJoinNotice', 'callRecording', 'agentConfig', 'messageAttachment']));
     expect(delegates.length).toBeGreaterThan(90);
   });
 
