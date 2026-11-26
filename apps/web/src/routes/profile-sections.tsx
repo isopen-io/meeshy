@@ -210,7 +210,6 @@ function UploadVeil({
       className={`absolute inset-0 grid place-items-center ${round ? 'rounded-chip' : ''}`}
       style={{ backgroundColor: 'var(--color-scrim)' }}
     >
-      <span className="sr-only">{translate(language, 'profile.image.uploading')}</span>
       <button
         type="button"
         data-profile-cancel-upload={kind}
@@ -392,6 +391,9 @@ export function ProfileHero({
         </p>
         <p className={`text-body font-medium ${BRAND_INK}`}>{`@${profile.username}`}</p>
       </div>
+      <p role="status" aria-live="polite" className="sr-only" data-profile-upload-status>
+        {pending.avatar === undefined && pending.banner === undefined ? '' : translate(language, 'profile.image.uploading')}
+      </p>
       {viewer}
     </section>
   );

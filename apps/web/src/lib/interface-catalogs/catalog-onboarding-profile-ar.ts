@@ -9,6 +9,7 @@ const ar = {
   'onboarding.profile.pickAvatar': 'اختر صورة الملف الشخصي',
   'onboarding.profile.failed': 'لم تُحفظ صورتك.',
   'onboarding.profile.retry': 'أعد المحاولة',
+  'onboarding.profile.uploading': 'جارٍ الإرسال…',
 } as const satisfies OnboardingProfileCatalog;
 
 export default ar;

@@ -151,6 +151,20 @@ describe('la bannière et l’avatar', () => {
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain('Annuler l’envoi');
   });
+
+  test('l’envoi s’annonce au lecteur d’écran dans une région polie, toujours posée, vide au repos (#17240)', () => {
+    const region = (pending: Parameters<typeof ProfileHero>[0]['pending']) => {
+      const html = renderToStaticMarkup(
+        <ProfileHero language="fr" profile={profileOf()} editing pending={pending} onPick={noop} onCancelUpload={noop} />,
+      );
+      return html.match(/<p[^>]*data-profile-upload-status[^>]*>([^<]*)<\/p>/);
+    };
+    const idle = region({});
+    expect(idle?.[0]).toContain('role="status"');
+    expect(idle?.[0]).toContain('aria-live="polite"');
+    expect(idle?.[1]).toBe('');
+    expect(region({ banner: 'blob:aperçu' })?.[1]).toBe('Envoi en cours');
+  });
 });
 
 /**

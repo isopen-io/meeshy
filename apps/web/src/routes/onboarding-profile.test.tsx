@@ -173,6 +173,20 @@ describe('« Montre-toi » — le téléversement optimiste', () => {
     expect(host.querySelector('[role="alert"]')).toBeNull();
   });
 
+  test('pendant l’envoi, une région polie annonce « Envoi… », et l’annonce se tait à la fin (#17240)', async () => {
+    const { element, calls } = bench();
+    const host = await mount(element);
+    const status = () => host.querySelector('[data-onb-profile-status]');
+    expect(status()?.getAttribute('role')).toBe('status');
+    expect(status()?.getAttribute('aria-live')).toBe('polite');
+    expect(status()?.textContent).toBe('');
+    await choose(host, 'avatar');
+    expect(status()?.textContent).toBe('Envoi…');
+    await act(async () => calls[0]?.resolve({ status: 'saved', url: 'https://cdn/a.jpg' }));
+    await settle();
+    expect(status()?.textContent).toBe('');
+  });
+
   test('un envoi annulé rend l’état d’avant sans message d’erreur', async () => {
     const { element, calls } = bench();
     const host = await mount(element);

@@ -14,6 +14,7 @@ const fr = {
   'onboarding.profile.pickAvatar': 'Choisir une photo de profil',
   'onboarding.profile.failed': 'Ton image n’a pas été enregistrée.',
   'onboarding.profile.retry': 'Réessayer',
+  'onboarding.profile.uploading': 'Envoi…',
 } as const;
 
 export default fr;

@@ -224,6 +224,10 @@ export function ProfileCard({
         />
       ))}
 
+      <p role="status" aria-live="polite" className="sr-only" data-onb-profile-status>
+        {KINDS.some((kind) => slots[kind].pending !== null) ? translateOnboardingProfile(lang, 'onboarding.profile.uploading') : ''}
+      </p>
+
       {failedKind === undefined ? null : (
         <div role="alert" className="onb-profile-error">
           <span className="onb-error">{translateOnboardingProfile(lang, 'onboarding.profile.failed')}</span>

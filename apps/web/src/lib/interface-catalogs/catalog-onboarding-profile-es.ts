@@ -9,6 +9,7 @@ const es = {
   'onboarding.profile.pickAvatar': 'Elegir una foto de perfil',
   'onboarding.profile.failed': 'Tu imagen no se guardó.',
   'onboarding.profile.retry': 'Reintentar',
+  'onboarding.profile.uploading': 'Enviando…',
 } as const satisfies OnboardingProfileCatalog;
 
 export default es;
