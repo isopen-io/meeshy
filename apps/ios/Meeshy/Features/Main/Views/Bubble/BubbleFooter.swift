@@ -64,7 +64,7 @@ struct BubbleFooter: View, Equatable {
                 if model.isFailed, let onRetry = actions.onRetry {
                     Button(action: { onRetry(); HapticFeedback.light() }) {
                         HStack(spacing: MeeshySpacing.xxs) {
-                            deliveryView(tint: compactMetaColor, readTint: surfaceReadColor)
+                            deliveryView(tint: compactMetaColor, readTint: readColor)
                             Image(systemName: "arrow.clockwise")
                                 .font(.caption2.weight(.bold))
                                 .foregroundStyle(MeeshyColors.stateFailed)
@@ -74,7 +74,7 @@ struct BubbleFooter: View, Equatable {
                     .buttonStyle(.plain)
                     .accessibilityLabel(String(localized: "bubble.footer.resend", defaultValue: "Renvoyer le message", bundle: .main))
                 } else {
-                    deliveryView(tint: compactMetaColor, readTint: surfaceReadColor)
+                    deliveryView(tint: compactMetaColor, readTint: readColor)
                 }
             }
         }
@@ -330,12 +330,8 @@ struct BubbleFooter: View, Equatable {
     }
 
     private var readColor: Color {
-        // `.read` est toujours un indigo, jamais gras. Sur la bulle envoyée,
-        // la peau élit celui qui tient 3:1 sur son accent (#10794).
-        model.isMe ? skin.readTick(isDark: isDark).color : surfaceReadColor
-    }
-
-    private var surfaceReadColor: Color {
+        // `.read` is always indigo — never white, never bold. A lighter
+        // indigo reads on dark surfaces, a deeper one on light surfaces.
         isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo600
     }
 }

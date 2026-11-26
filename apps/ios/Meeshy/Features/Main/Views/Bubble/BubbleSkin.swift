@@ -26,21 +26,6 @@ enum BubbleInk: Equatable {
     }
 }
 
-struct ReadTickShade: Equatable {
-    let hex: String
-    let color: Color
-
-    static let indigo50 = ReadTickShade(hex: MeeshyColors.indigo50Hex, color: MeeshyColors.indigo50)
-    static let indigo200 = ReadTickShade(hex: MeeshyColors.indigo200Hex, color: MeeshyColors.indigo200)
-    static let indigo300 = ReadTickShade(hex: MeeshyColors.indigo300Hex, color: MeeshyColors.indigo300)
-    static let indigo400 = ReadTickShade(hex: MeeshyColors.indigo400Hex, color: MeeshyColors.indigo400)
-    static let indigo600 = ReadTickShade(hex: MeeshyColors.indigo600Hex, color: MeeshyColors.indigo600)
-    static let indigo700 = ReadTickShade(hex: MeeshyColors.indigo700Hex, color: MeeshyColors.indigo700)
-    static let indigo800 = ReadTickShade(hex: MeeshyColors.indigo800Hex, color: MeeshyColors.indigo800)
-    static let indigo900 = ReadTickShade(hex: MeeshyColors.indigo900Hex, color: MeeshyColors.indigo900)
-    static let indigo950 = ReadTickShade(hex: MeeshyColors.indigo950Hex, color: MeeshyColors.indigo950)
-}
-
 struct BubbleSkin: Equatable {
     let sentFillHex: String
     let sentInk: BubbleInk
@@ -63,27 +48,6 @@ struct BubbleSkin: Equatable {
     /// L'accent qu'une pièce posée sur une bulle reçoit : celui de la bulle envoyée pour moi, sinon celui de la bulle reçue.
     func accentHex(isMe: Bool, received: String) -> String {
         isMe ? sentFillHex : received
-    }
-
-    /// La coche « lu » garde l'indigo, au plus vif qui tienne 3:1 (WCAG, non textuel) sur la bulle envoyée (#10794).
-    func readTick(isDark: Bool) -> ReadTickShade {
-        guard self != .brand else { return isDark ? .indigo400 : .indigo600 }
-        let fill = CanvasChromeScheme.relativeLuminance(hex: sentFillHex) ?? 0
-        return Self.readTickLadder(for: sentInk).first { shade in
-            CanvasChromeScheme.contrastRatio(CanvasChromeScheme.relativeLuminance(hex: shade.hex) ?? 0, fill) >= Self.readTickMinimumContrast
-        } ?? ReadTickShade(hex: sentInk == .black ? "000000" : "FFFFFF", color: ink)
-    }
-
-    func readTickHex(isDark: Bool) -> String { readTick(isDark: isDark).hex }
-
-    static let readTickMinimumContrast = 3.0
-
-    /// Du plus vif au plus sûr : des indigos clairs sous une encre blanche, sombres sous une encre noire.
-    static func readTickLadder(for ink: BubbleInk) -> [ReadTickShade] {
-        switch ink {
-        case .white: return [.indigo300, .indigo200, .indigo50]
-        case .black: return [.indigo700, .indigo800, .indigo900, .indigo950]
-        }
     }
 
     static let receivedAccentWeight = (light: 0.16, dark: 0.28)
