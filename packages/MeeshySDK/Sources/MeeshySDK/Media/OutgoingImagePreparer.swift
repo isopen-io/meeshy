@@ -308,14 +308,23 @@ enum OutgoingImageWriter {
         return encode(original, as: format, maxPixelDimension: palier, policy: policy) ?? essai
     }
 
+    /// Une photo HDR que le runtime ne sait pas écrire avec sa carte de gain
+    /// part en SDR, pixels redressés, plutôt que d'être refusée (#12498) : le
+    /// repli sur l'original la retiendrait dès qu'elle porte un lieu interdit.
+    private static func encodeOnce(_ original: OriginalImage, as format: OutgoingImageFormat, limit: CGFloat,
+                                   policy: OutgoingImagePolicy) -> OutgoingImage? {
+        let carriesGainMap = format.isLossy && OutgoingImageGainMap.isPresent(in: original.source)
+        return (carriesGainMap ? write(original, as: format, limit: limit, policy: policy, carriesGainMap: true) : nil)
+            ?? write(original, as: format, limit: limit, policy: policy, carriesGainMap: false)
+    }
+
     /// Décodage réduit par ImageIO ; le profil couleur suit l'image ; les
     /// métadonnées de la prise suivent, sans le lieu sauf choix contraire.
     /// Les pixels sont redressés, SAUF ceux d'une photo HDR (#11847) : ils
     /// restent couchés, l'orientation voyage avec eux, et la carte de gain les suit.
-    private static func encodeOnce(_ original: OriginalImage, as format: OutgoingImageFormat, limit: CGFloat,
-                                   policy: OutgoingImagePolicy) -> OutgoingImage? {
+    private static func write(_ original: OriginalImage, as format: OutgoingImageFormat, limit: CGFloat,
+                              policy: OutgoingImagePolicy, carriesGainMap: Bool) -> OutgoingImage? {
         guard let type = format.typeIdentifier else { return nil }
-        let carriesGainMap = format.isLossy && OutgoingImageGainMap.isPresent(in: original.source)
         let redresses = !carriesGainMap || OutgoingImageGeometry.isUpright(original.properties)
         let decoded = carriesGainMap
             ? OutgoingImageGainMap.decoded(original, maxPixelSize: limit, upright: redresses)

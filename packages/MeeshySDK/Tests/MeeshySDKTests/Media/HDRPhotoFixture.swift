@@ -79,6 +79,40 @@ enum HDRPhotoFixture {
         return encoded
     }
 
+    /// Une prise HDR géolocalisée écrite par CoreImage (`.hdrImage`), qui pose sa
+    /// carte de gain là où `kCGImageDestinationEncodeToISOGainmap` refuse (le
+    /// simulateur iOS 26.1 de la CI, #12498) : la fixture ne dépend pas de la
+    /// capacité que le témoin mesure.
+    @available(iOS 18.0, macOS 15.0, *)
+    static func geolocatedJPEG(width: Int, height: Int) throws -> Data {
+        let linear = try XCTUnwrap(CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3))
+        let p3 = try XCTUnwrap(CGColorSpace(name: CGColorSpace.displayP3))
+        let frame = CGRect(x: 0, y: 0, width: width, height: height)
+        let hdr = try gradient(frame, bright: XCTUnwrap(CIColor(red: 4, green: 3, blue: 2, alpha: 1, colorSpace: linear)),
+                               dark: XCTUnwrap(CIColor(red: 0.05, green: 0.1, blue: 0.2, alpha: 1, colorSpace: linear)))
+        let sdr = try gradient(frame, bright: XCTUnwrap(CIColor(red: 1, green: 0.8, blue: 0.5, alpha: 1, colorSpace: linear)),
+                               dark: XCTUnwrap(CIColor(red: 0.05, green: 0.1, blue: 0.2, alpha: 1, colorSpace: linear)))
+            .settingProperties([kCGImagePropertyGPSDictionary: [
+                kCGImagePropertyGPSLatitude: 48.8566, kCGImagePropertyGPSLatitudeRef: "N",
+                kCGImagePropertyGPSLongitude: 2.3522, kCGImagePropertyGPSLongitudeRef: "E",
+            ] as [CFString: Any]])
+        let encoded = try XCTUnwrap(CIContext().jpegRepresentation(of: sdr, colorSpace: p3, options: [
+            .hdrImage: hdr,
+            CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): 0.95,
+        ]), "fixture : CoreImage n'a rien écrit, \(system)")
+        XCTAssertTrue(hasGainMap(encoded), "fixture sans carte de gain : \(describe(encoded)) \(system)")
+        return encoded
+    }
+
+    private static func gradient(_ frame: CGRect, bright: CIColor, dark: CIColor) throws -> CIImage {
+        try XCTUnwrap(CIFilter(name: "CILinearGradient", parameters: [
+            "inputPoint0": CIVector(x: 0, y: 0),
+            "inputPoint1": CIVector(x: frame.width, y: frame.height),
+            "inputColor0": dark,
+            "inputColor1": bright,
+        ])?.outputImage?.cropped(to: frame))
+    }
+
     /// La carte de gain Apple ou ISO, telle qu'un lecteur HDR la trouve.
     static func hasGainMap(_ data: Data) -> Bool {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return false }
