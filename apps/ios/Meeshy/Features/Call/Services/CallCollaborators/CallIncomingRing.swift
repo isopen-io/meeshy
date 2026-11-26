@@ -175,12 +175,13 @@ final class CallIncomingRing: CallIncomingRingProviding {
             Logger.calls.warning("[VOIP_FRESHNESS] no auth token — cannot verify, assuming fresh")
             return
         }
-        let urlString = "\(MeeshyConfig.shared.apiBaseURL)/calls/\(callId)"
-        guard let url = URL(string: urlString) else { return }
-
-        var request = URLRequest(url: url, timeoutInterval: QualityThresholds.voipFreshnessTimeoutSeconds)
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        guard let request = VoIPFreshnessRequest.make(
+            callId: callId,
+            token: token,
+            baseURL: MeeshyConfig.shared.apiBaseURL,
+            clientHeaders: await ClientInfoProvider.shared.buildHeaders(),
+            timeout: QualityThresholds.voipFreshnessTimeoutSeconds
+        ) else { return }
 
         do {
             let (data, response) = try await APIClient.shared.urlSession.data(for: request)
