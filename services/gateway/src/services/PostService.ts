@@ -39,6 +39,7 @@ import { attachReferenceAccess } from './posts/referenceAccess';
 import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
 import { withBackgroundMediaUrls } from './posts/storyBackgroundMediaUrl';
 import { storyEffectsWithoutCredits } from './posts/repostCreditChips';
+import { newPublicationStoryEffects } from './posts/removedBorrowedSounds';
 import { isContentDerivedFromTextObjects, storyTextObjectText } from './posts/storyContentComposition';
 import { storyTranslatableTexts } from './posts/storyEffectsV3';
 import { syncPostTrackingLinks } from './posts/publicationTrackingLinks';
@@ -227,11 +228,10 @@ export class PostService {
     let repostOfId: string | undefined;
     let originalRepostOfId: string | undefined;
 
-    // #10524 — aucune puce « Reposté de @auteur » ne s'enregistre : un client
-    // antérieur à la règle l'envoie encore. Appliqué AVANT toute lecture du
-    // canvas, donc aussi aux traductions, aux signaux et au réel.
+    // #10524 (aucune puce « Reposté de ») et #9853 (aucun son retiré dans un post neuf),
+    // AVANT toute lecture du canvas : traductions, signaux et réel compris.
     if (data.storyEffects !== undefined) {
-      data = { ...data, storyEffects: storyEffectsWithoutCredits(data.storyEffects) };
+      data = { ...data, storyEffects: await newPublicationStoryEffects(this.prisma, data.storyEffects, { isRepost: Boolean(data.repostOfId) }) };
     }
 
     if (data.repostOfId) {

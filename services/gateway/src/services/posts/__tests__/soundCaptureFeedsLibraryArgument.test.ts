@@ -106,6 +106,7 @@ function makePrisma() {
       update: jest.fn<any>().mockResolvedValue({}),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
+    sound: { findMany: jest.fn<any>().mockResolvedValue([]) },
     postView: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     postReaction: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     postImpression: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },

@@ -35,6 +35,7 @@ function buildPrisma() {
       updateMany: jest.fn<() => Promise<unknown>>().mockResolvedValue({ count: 0 }),
       findFirst: jest.fn<() => Promise<unknown>>().mockResolvedValue(null),
     },
+    sound: { findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]) },
   } as unknown as import('@meeshy/shared/prisma/client').PrismaClient;
 }
 
