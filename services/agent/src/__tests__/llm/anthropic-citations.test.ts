@@ -71,6 +71,23 @@ describe('Anthropic provider — web search citations', () => {
     ]);
   });
 
+  it('refuses a paused turn rather than serving the search preamble as the message', async () => {
+    messagesCreate.mockResolvedValue({
+      model: 'm',
+      usage: { input_tokens: 1, output_tokens: 1 },
+      stop_reason: 'pause_turn',
+      content: [
+        { type: 'server_tool_use', id: 's1', name: 'web_search', input: { query: 'a' } },
+        { type: 'web_search_tool_result', tool_use_id: 's1', content: [] },
+        { type: 'text', text: 'Je vais affiner la recherche.' },
+        { type: 'server_tool_use', id: 's2', name: 'web_search', input: { query: 'b' } },
+      ],
+    });
+    await expect(
+      makeProvider().chat({ messages: [{ role: 'user', content: 'x' }], tools: [{ type: 'web_search_preview' }] }),
+    ).rejects.toThrow(/pause_turn/);
+  });
+
   it('returns no citations when the answer carries none', async () => {
     messagesCreate.mockResolvedValue({
       model: 'm',

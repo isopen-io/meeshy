@@ -13,6 +13,7 @@ type ContentBlock = Record<string, unknown> & { type?: unknown; text?: unknown; 
 type AnthropicMessage = {
   content?: ContentBlock[];
   model?: string;
+  stop_reason?: string;
   usage?: { input_tokens?: number; output_tokens?: number };
 };
 
@@ -108,6 +109,10 @@ export function createAnthropicProvider(config: LlmProviderConfig): LlmProvider 
         messages,
         ...(tools ? { tools } : {}),
       });
+
+      if (response.stop_reason === 'pause_turn') {
+        throw new Error('Anthropic web search paused (pause_turn): no final answer to serve');
+      }
 
       const content = response.content ?? [];
       const blocks = tools ? answerBlocks(content) : content.filter((block) => block.type === 'text').slice(0, 1);
