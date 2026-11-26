@@ -347,7 +347,7 @@ describe('les notifications du jeu', () => {
   });
 
   test('aucune rangée du jeu ne porte de geste rapide : pas d’« Écrire », pas de « Se connecter »', () => {
-    for (const type of ['game_duo_invited', 'game_duo_accepted', 'game_league_result', 'game_season_step', 'game_mission_window']) {
+    for (const type of ['game_duo_invited', 'game_duo_accepted', 'game_league_result', 'game_season_step', 'game_mission_window', 'game_flame_evening']) {
       const actor = { id: 'u-amina', username: 'amina', displayName: 'Amina', avatar: null };
       expect(notificationQuickActions(record({ type, actor }), { isFriend: false })).toEqual([]);
     }

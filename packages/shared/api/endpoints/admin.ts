@@ -96,6 +96,9 @@ export const agentTopicsByIdTest = (id: string): string => `/api/v1/admin/agent/
 /** GET /api/v1/admin/analytics/calls */
 export const analyticsCalls = '/api/v1/admin/analytics/calls';
 
+/** GET /api/v1/admin/analytics/game */
+export const analyticsGame = '/api/v1/admin/analytics/game';
+
 /** GET /api/v1/admin/analytics/hourly-activity */
 export const analyticsHourlyActivity = '/api/v1/admin/analytics/hourly-activity';
 

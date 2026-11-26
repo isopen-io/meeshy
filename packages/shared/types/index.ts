@@ -57,6 +57,8 @@ export * from './content-surfaces.js';
 export * from './content-reach.js';
 export * from './social-events-v2.js';
 export * from './playback-qoe.js';
+// Le point de départ du Jeu servi à l'administration (#17363, #20617)
+export * from './game-baseline.js';
 
 // Sticker porté par un message (#4823) — descripteur dédié, hissé depuis `metadata.sticker`
 export * from './message-sticker.js';

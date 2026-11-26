@@ -122,6 +122,8 @@ const GAME_SEASON_TYPES = ['game_season_step'];
 /** JUMEAU de `GAME_PHOTO_TYPES` (#10175) : le résumé des moments à immortaliser ouvre le carnet. */
 const GAME_PHOTO_TYPES = ['game_photo_moment'];
 const GAME_MISSION_TYPES = ['game_mission_window'];
+/** JUMEAU de `GAME_FLAME_TYPES` (#20612) : le rappel du soir ouvre la fiche de la Flamme. */
+const GAME_FLAME_TYPES = ['game_flame_evening'];
 const SECURITY_TYPES = [
   'security_alert',
   'login_new_device',
@@ -361,6 +363,7 @@ function resolvePushTarget(data) {
   if (GAME_SEASON_TYPES.indexOf(type) >= 0) return { route: 'progressionSaison', params: {}, search: {} };
   if (GAME_PHOTO_TYPES.indexOf(type) >= 0) return { route: 'progressionCarnet', params: {}, search: {} };
   if (GAME_MISSION_TYPES.indexOf(type) >= 0) return { route: 'progression', params: {}, search: { section: 'missions' } };
+  if (GAME_FLAME_TYPES.indexOf(type) >= 0) return { route: 'progression', params: {}, search: { section: 'flame' } };
   if (PROGRESSION_TYPES.indexOf(type) >= 0 && Object.prototype.hasOwnProperty.call(PROGRESSION_TYPE_SECTIONS, type)) {
     return { route: 'progression', params: {}, search: { section: PROGRESSION_TYPE_SECTIONS[type] } };
   }

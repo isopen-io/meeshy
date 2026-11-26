@@ -107,6 +107,11 @@
     <string name="game2_guide_moment_flame_freeze_gift_next">Lucerne di riserva: %1$s.</string>
     <string name="game2_guide_moment_flame_freeze_gift_short">Ti è donata una Lucerna per la tua Fiamma.</string>
     <string name="game2_guide_moment_flame_freeze_gift_what">Ti è donata una Lucerna.</string>
+    <string name="game2_guide_moment_flame_goal_reached_means">Hai mantenuto l’obiettivo che ti eri dato.</string>
+    <string name="game2_guide_moment_flame_goal_reached_next">Prossimo gradino: %1$s, da scegliere nella tua Fiamma.</string>
+    <string name="game2_guide_moment_flame_goal_reached_next_top">Hai salito tutti i gradini: la tua Fiamma arde alta.</string>
+    <string name="game2_guide_moment_flame_goal_reached_short">Obiettivo di Fiamma mantenuto: %1$s.</string>
+    <string name="game2_guide_moment_flame_goal_reached_what">I tuoi antenati salutano la tua Fiamma: %1$s mantenuti!</string>
     <string name="game2_guide_moment_league_first_means">Ogni settimana ti misuri con altri 29 eroi. I primi 7 salgono al cerchio successivo, gli ultimi 5 riscendono, e le scintille ripartono da zero.</string>
     <string name="game2_guide_moment_league_first_next">%1$s fino al cerchio successivo questa settimana.</string>
     <string name="game2_guide_moment_league_first_next_top">Sei già nel cerchio più alto dei tornei.</string>
@@ -652,6 +657,7 @@
     <string name="game_flame_panel_goal_intro">Un obiettivo per la tua Fiamma? Sceglilo oggi, o lasciala ardere.</string>
     <string name="game_flame_panel_goal_later">Più tardi</string>
     <string name="game_flame_panel_goal_next">Punta a %1$s</string>
+    <string name="game_flame_panel_goal_next_intro">Obiettivo di %1$s mantenuto. Il prossimo gradino?</string>
     <string name="game_flame_panel_goal_reached">I tuoi antenati salutano la tua Fiamma: %1$s mantenuti!</string>
     <string name="game_flame_panel_goal_running">Obiettivo: %1$s di Fiamma. Ne mancano %2$s.</string>
     <string name="game_flame_panel_pause">Lasciala riposare · %1$s</string>

@@ -107,6 +107,11 @@
     <string name="game2_guide_moment_flame_freeze_gift_next">القناديل في الاحتياط: ⁦%1$s⁩.</string>
     <string name="game2_guide_moment_flame_freeze_gift_short">أُهدي إليك قنديل للهبك.</string>
     <string name="game2_guide_moment_flame_freeze_gift_what">أُهدي إليك قنديل.</string>
+    <string name="game2_guide_moment_flame_goal_reached_means">لقد حقّقت الهدف الذي وضعته لنفسك.</string>
+    <string name="game2_guide_moment_flame_goal_reached_next">الدرجة التالية: ⁦%1$s⁩، تختارها في لهبك.</string>
+    <string name="game2_guide_moment_flame_goal_reached_next_top">صعدت كل الدرجات: لهبك يشتعل عاليًا.</string>
+    <string name="game2_guide_moment_flame_goal_reached_short">تحقّق هدف اللهب: ⁦%1$s⁩.</string>
+    <string name="game2_guide_moment_flame_goal_reached_what">أجدادك يحيّون لهبك: ⁦%1$s⁩ من الثبات!</string>
     <string name="game2_guide_moment_league_first_means">كل أسبوع، تقيس نفسك مع 29 بطلًا آخر. السبعة الأوائل يرتقون إلى الحلقة التالية، والخمسة الأخيرون يهبطون، وتبدأ الشرارات من الصفر.</string>
     <string name="game2_guide_moment_league_first_next">%1$s حتى الحلقة التالية هذا الأسبوع.</string>
     <string name="game2_guide_moment_league_first_next_top">أنت بالفعل في أعلى حلقات المبارزة.</string>
@@ -652,6 +657,7 @@
     <string name="game_flame_panel_goal_intro">هدف للهبك؟ اختره اليوم، أو دعه يشتعل.</string>
     <string name="game_flame_panel_goal_later">لاحقًا</string>
     <string name="game_flame_panel_goal_next">استهدف %1$s</string>
+    <string name="game_flame_panel_goal_next_intro">تحقّق هدف %1$s. الدرجة التالية؟</string>
     <string name="game_flame_panel_goal_reached">أجدادك يحيّون لهبك: %1$s من الثبات!</string>
     <string name="game_flame_panel_goal_running">الهدف: %1$s من اللهب. تبلغه بعد %2$s.</string>
     <string name="game_flame_panel_pause">دعه يستريح · %1$s</string>

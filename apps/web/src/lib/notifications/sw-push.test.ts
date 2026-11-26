@@ -595,6 +595,12 @@ describe('le tap atterrit à l’adresse de la v2, jamais à celle du legacy', (
     expect(worker.opened).toEqual(['/me/progression?section=missions']);
   });
 
+  test('le rappel du soir ouvre la fiche de la Flamme, malgré l’indice `progression` du serveur (#20612)', async () => {
+    const worker = mount();
+    await worker.dispatch('notificationclick', clic({ type: 'game_flame_evening', route: 'progression' }).event);
+    expect(worker.opened).toEqual(['/me/progression?section=flame']);
+  });
+
   test('« moments à immortaliser » ouvre le carnet, malgré l’indice `progression` du serveur (#10175)', async () => {
     const worker = mount();
     await worker.dispatch('notificationclick', clic({ type: 'game_photo_moment', route: 'progression' }).event);

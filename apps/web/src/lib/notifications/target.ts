@@ -214,6 +214,10 @@ export const PROGRESSION_SECTION_PARAM = 'section';
 const GAME_MISSION_TYPES: ReadonlySet<string> = new Set(['game_mission_window']);
 const MISSIONS_SECTION: NotificationTarget = { route: 'progression', search: { [PROGRESSION_SECTION_PARAM]: 'missions' } };
 
+/** Le rappel du soir (#20612) : la fiche de la Flamme, là où un geste la garde allumée. */
+const GAME_FLAME_TYPES: ReadonlySet<string> = new Set(['game_flame_evening']);
+const FLAME_SECTION: NotificationTarget = { route: 'progression', search: { [PROGRESSION_SECTION_PARAM]: 'flame' } };
+
 /**
  * UNE PUBLICATION RETIRÉE PAR LA MODÉRATION (#11150) n'existe plus : sa
  * notification n'ouvre rien (le push atterrit sur la cloche). Un MESSAGE
@@ -293,6 +297,7 @@ export function resolveTarget(input: NotificationTargetInput): PushTapTarget | n
   if (GAME_SEASON_TYPES.has(type)) return { route: 'progressionSaison' };
   if (GAME_PHOTO_TYPES.has(type)) return { route: 'progressionCarnet' };
   if (GAME_MISSION_TYPES.has(type)) return MISSIONS_SECTION;
+  if (GAME_FLAME_TYPES.has(type)) return FLAME_SECTION;
   if (PROGRESSION_TYPES.has(type) && Object.hasOwn(PROGRESSION_TYPE_SECTIONS, type)) {
     return { route: 'progression', search: { [PROGRESSION_SECTION_PARAM]: PROGRESSION_TYPE_SECTIONS[type] ?? '' } };
   }

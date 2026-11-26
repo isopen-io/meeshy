@@ -536,3 +536,84 @@ describe('la mission personnelle du jour (#9539)', () => {
     });
   });
 });
+
+describe('le rappel du soir de la Flamme (#17368, #20612)', () => {
+  /** 19 h à Paris le 2026-10-14 (UTC+2). */
+  const EVENING = new Date('2026-10-14T17:00:00Z');
+  const evening = (dayKey = '2026-10-14'): GameNotificationEvent => ({ kind: 'flame-evening', recipientId: USER, dayKey });
+  const flame = (days: number, lastStreakDate: string, over: Record<string, unknown> = {}) => ({
+    systemLanguage: 'fr',
+    timezone: 'Europe/Paris',
+    currentStreakDays: days,
+    longestStreakDays: days,
+    lastStreakDate: new Date(`${lastStreakDate}T00:00:00Z`),
+    ...over,
+  });
+
+  it('dit la hauteur de la Flamme et mène à sa fiche, dans la langue de cadrage du destinataire', async () => {
+    const { notifier, sent } = world({ recipient: flame(12, '2026-10-13') });
+    expect(await notifier.notify(evening(), EVENING)).toBe('sent');
+    expect(sent[0]).toMatchObject({
+      type: 'game_flame_evening',
+      lang: 'fr',
+      content: 'Ta Flamme brûle depuis 12 jours. Un geste ce soir la garde allumée.',
+      metadata: { action: 'view_details', route: 'progression', gameSection: 'flame', dayKey: '2026-10-14' },
+      collapseId: 'game-flame-evening',
+    });
+  });
+
+  it('part une seule fois par jour local', async () => {
+    const { notifier, sent } = world({ recipient: flame(12, '2026-10-13') });
+    await notifier.notify(evening(), EVENING);
+    expect(await notifier.notify(evening(), new Date('2026-10-14T18:30:00Z'))).toBe('skipped:duplicate');
+    expect(sent).toHaveLength(1);
+  });
+
+  it('se tait quand le geste du jour a été fait entre-temps, sans brûler sa clé du jour', async () => {
+    const { notifier, sent, db } = world({ recipient: flame(12, '2026-10-14') });
+    expect(await notifier.notify(evening(), EVENING)).toBe('skipped:not-due');
+    db.user.rows.forEach((row) => Object.assign(row, { lastStreakDate: new Date('2026-10-13T00:00:00Z') }));
+    expect(await notifier.notify(evening(), new Date('2026-10-14T18:00:00Z'))).toBe('sent');
+    expect(sent).toHaveLength(1);
+  });
+
+  it('jamais après 21 h locales, ni avant 18 h', async () => {
+    const { notifier, sent } = world({ recipient: flame(12, '2026-10-13') });
+    expect(await notifier.notify(evening(), new Date('2026-10-14T19:00:00Z'))).toBe('skipped:not-due');
+    expect(await notifier.notify(evening(), new Date('2026-10-14T15:59:00Z'))).toBe('skipped:not-due');
+    expect(sent).toHaveLength(0);
+  });
+
+  it('se tait sous trois jours de Flamme, et pour une Flamme éteinte', async () => {
+    const short = world({ recipient: flame(2, '2026-10-13') });
+    expect(await short.notifier.notify(evening(), EVENING)).toBe('skipped:not-due');
+    const out = world({ recipient: flame(12, '2026-10-11') });
+    expect(await out.notifier.notify(evening(), EVENING)).toBe('skipped:not-due');
+  });
+
+  it('une Veilleuse qui couvre l’écart ne tait pas le rappel : la Flamme vit encore', async () => {
+    const { notifier } = world({ recipient: flame(12, '2026-10-12', { flameFreezes: 1 }) });
+    expect(await notifier.notify(evening(), EVENING)).toBe('sent');
+  });
+
+  it('compte dans les deux du jour : il se tait quand les deux créneaux sont pris', async () => {
+    const { notifier, sent } = world({ recipient: flame(12, '2026-10-13') });
+    await notifier.notify(leagueResult({ zone: 'safe' }), EVENING);
+    await notifier.notify(step(), EVENING);
+    expect(await notifier.notify(evening(), EVENING)).toBe('skipped:daily-cap');
+    expect(sent).toHaveLength(2);
+  });
+
+  it('se tait en veille, en « Jeu masqué » et quand « Jeu » est coupé', async () => {
+    const paused = world({ recipient: flame(12, '2026-10-13', { flamePauseFrom: '2026-10-14', flamePauseUntil: '2026-10-16' }) });
+    expect(await paused.notifier.notify(evening(), EVENING)).toBe('skipped:flame-paused');
+
+    const hidden = world({ recipient: flame(12, '2026-10-13') });
+    hidden.db.gameProfile.rows.push({ id: 'gp', userId: USER, gameHiddenAt: new Date() });
+    expect(await hidden.notifier.notify(evening(), EVENING)).toBe('skipped:game-hidden');
+
+    const optedOut = world({ recipient: flame(12, '2026-10-13') });
+    optedOut.db.userPreferences.rows.push({ id: 'p', userId: USER, notification: { gameEnabled: false } });
+    expect(await optedOut.notifier.notify(evening(), EVENING)).toBe('skipped:opted-out');
+  });
+});

@@ -107,6 +107,11 @@
     <string name="game2_guide_moment_flame_freeze_gift_next">Velas en reserva: %1$s.</string>
     <string name="game2_guide_moment_flame_freeze_gift_short">Te regalan una Vela para tu Llama.</string>
     <string name="game2_guide_moment_flame_freeze_gift_what">Te regalan una Vela.</string>
+    <string name="game2_guide_moment_flame_goal_reached_means">Cumpliste el objetivo que te fijaste.</string>
+    <string name="game2_guide_moment_flame_goal_reached_next">Siguiente escalón: %1$s, para elegir en tu Llama.</string>
+    <string name="game2_guide_moment_flame_goal_reached_next_top">Subiste todos los escalones: tu Llama arde alto.</string>
+    <string name="game2_guide_moment_flame_goal_reached_short">Objetivo de Llama cumplido: %1$s.</string>
+    <string name="game2_guide_moment_flame_goal_reached_what">¡Tus ancestros saludan tu Llama: %1$s cumplidos!</string>
     <string name="game2_guide_moment_league_first_means">Cada semana te mides con otros 29 héroes. Los 7 primeros suben al círculo siguiente, los 5 últimos bajan, y las chispas vuelven a cero.</string>
     <string name="game2_guide_moment_league_first_next">%1$s hasta el círculo siguiente esta semana.</string>
     <string name="game2_guide_moment_league_first_next_top">Ya estás en el círculo más alto de las justas.</string>
@@ -652,6 +657,7 @@
     <string name="game_flame_panel_goal_intro">¿Un objetivo para tu Llama? Elígelo hoy, o déjala arder.</string>
     <string name="game_flame_panel_goal_later">Más tarde</string>
     <string name="game_flame_panel_goal_next">Apuntar a %1$s</string>
+    <string name="game_flame_panel_goal_next_intro">Objetivo de %1$s cumplido. ¿El siguiente escalón?</string>
     <string name="game_flame_panel_goal_reached">¡Tus ancestros saludan tu Llama: %1$s cumplidos!</string>
     <string name="game_flame_panel_goal_running">Objetivo: %1$s de Llama. Faltan %2$s.</string>
     <string name="game_flame_panel_pause">Dejarla descansar · %1$s</string>

@@ -69,8 +69,9 @@ public object GameGuideCards {
         destination = destination(moment.action),
     )
 
+    /** Montrée, la carte écrit [GuideMomentV2.seenKey] : pour un objectif atteint, celle que la carte de la Flamme lit. */
     public fun of(moment: GuideMomentV2): GuideCard = GuideCard(
-        key = moment.key.wire,
+        key = moment.seenKey,
         speaker = moment.speaker,
         mood = moment.mood,
         content = GuideContent.MomentV2(moment),
