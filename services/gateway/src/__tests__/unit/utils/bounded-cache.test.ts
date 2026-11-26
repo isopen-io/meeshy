@@ -177,4 +177,25 @@ describe('BoundedTtlCache', () => {
       expect([...cache.keys()]).toEqual(['u2:a']);
     });
   });
+
+  describe('injected clock', () => {
+    it('test_ttl_readsInjectedClock_notWallClock', () => {
+      let clock = 1_000;
+      const cache = new BoundedTtlCache<string, number>({ maxSize: 10, ttlMs: 60_000, now: () => clock });
+      cache.set('a', 1);
+      clock += 59_999;
+      expect(cache.get('a')).toBe(1);
+      clock += 1;
+      expect(cache.get('a')).toBeUndefined();
+    });
+
+    it('test_evictExpired_readsInjectedClock', () => {
+      let clock = 0;
+      const cache = new BoundedTtlCache<string, number>({ maxSize: 10, ttlMs: 100, now: () => clock });
+      cache.set('a', 1);
+      clock = 100;
+      cache.evictExpired();
+      expect(cache.size).toBe(0);
+    });
+  });
 });

@@ -194,6 +194,7 @@ import {
   SocketLocationLiveStopSchema,
 } from '../../validation/socket-event-schemas.js';
 import { getBlockRelatedUserIds } from '../../utils/blocking';
+import { BoundedTtlCache } from '../../utils/bounded-cache';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { EngagementService } from '../../services/engagement/EngagementService';
@@ -282,6 +283,16 @@ interface LiveLocationSession {
  */
 const BLOCK_SET_REFRESH_MS = 60_000;
 
+/**
+ * Le verdict d'une session INCONNUE, retenu sous le même pas d'une minute que
+ * l'ensemble de blocage d'une session connue (#16791) : `refused` = la règle 5
+ * a dit non ; un ensemble = la règle 5 a admis ET le blocage est PROUVÉ. Une
+ * lecture de blocage qui n'a rien prouvé n'est jamais retenue. Borné : une
+ * entrée par (fil, partageur) actif après un redémarrage, et le pas l'évince.
+ */
+type UnknownSessionVerdict = 'refused' | ReadonlySet<string>;
+const UNKNOWN_SESSION_VERDICT_MAX = 10_000;
+
 // Préfixée par la longueur plutôt que jointe par un séparateur : les deux
 // moitiés sont des identifiants opaques (ObjectId, ou jeton de session pour
 // un anonyme), et aucun caractère ne peut être déclaré absent des deux.
@@ -316,6 +327,7 @@ export class LocationHandler {
    * plantée jusqu'à huit heures.
    */
   private readonly now: () => Date;
+  private readonly unknownSessionVerdicts: BoundedTtlCache<string, UnknownSessionVerdict>;
 
   constructor(deps: LocationHandlerDependencies) {
     this.io = deps.io;
@@ -326,6 +338,11 @@ export class LocationHandler {
     this.normalizeConversationId = deps.normalizeConversationId;
     this.engagement = deps.engagement === undefined ? new EngagementService(deps.prisma) : deps.engagement;
     this.now = deps.now ?? (() => new Date());
+    this.unknownSessionVerdicts = new BoundedTtlCache({
+      maxSize: UNKNOWN_SESSION_VERDICT_MAX,
+      ttlMs: BLOCK_SET_REFRESH_MS,
+      now: () => this.now().getTime(),
+    });
   }
 
   async handleLiveLocationStart(
@@ -484,12 +501,10 @@ export class LocationHandler {
       // #9927 — une session CONNUE a passé la règle 5 à son départ. Une session
       // INCONNUE (redémarrage, ou client qui n'a jamais démarré) passe la même
       // vérification avant d'être relayée : sans elle, `live-update` seul
-      // posait une épingle dans Global sans jamais rencontrer la garde.
-      if (!session && await refusesMinorInConversation(this.prisma, {
-        conversationId: normalizedId,
-        userId: context.isAnonymous ? null : context.userId,
-        now,
-      })) return;
+      // posait une épingle dans Global sans jamais rencontrer la garde. Son
+      // verdict, avec celui du blocage, est retenu une minute (#16791).
+      const unknownVerdict = session ? undefined : await this._unknownSessionVerdict(key, normalizedId, context, now);
+      if (unknownVerdict === 'refused' || unknownVerdict === null) return;
       // Passé le terme, la position n'est plus relayée. Sans cette borne le
       // retrait diffusé à l'expiration serait défait par la mise à jour
       // suivante : le pair recevrait un `stopped`, puis un `updated` qui
@@ -526,21 +541,10 @@ export class LocationHandler {
         });
       } else {
         // Session INCONNUE (redémarrage, ou client qui n'a jamais démarré) :
-        // elle passe la même porte que le départ, pas un chemin plus large.
-        // Fail-closed — un point non relayé revient à la seconde suivante, une
-        // position servie à un pair bloqué ne se retire pas.
-        //
-        // COÛT ASSUMÉ, ET IL NE DATE PAS DE CE LOT : faute de session, il n'y a
-        // rien où amortir, donc cette lecture a lieu à CHAQUE point — jusqu'à
-        // 120 par minute et par partageur (`LOCATION_LIVE_UPDATE`). C'est
-        // exactement le régime que `refusesMinorInConversation`, dix lignes
-        // plus haut, paie déjà sur ce même chemin : ce lot double une dépense
-        // existante, il ne l'invente pas, et la situation est transitoire (un
-        // redémarrage, le temps que les partages en cours s'éteignent).
-        // Amortir les DEUX ensemble est le suivi #16791.
-        const fresh = await this._blockRelatedOf(context);
-        if (fresh === null) return;
-        hidden = fresh;
+        // elle passe la même porte que le départ, pas un chemin plus large —
+        // `_unknownSessionVerdict` a déjà tu le point si rien n'était prouvé.
+        if (unknownVerdict === undefined) return;
+        hidden = unknownVerdict;
       }
 
       const eventData: LocationLiveUpdatedEventData = {
@@ -889,6 +893,34 @@ export class LocationHandler {
       logger.error('live location block lookup failed', { error, userId: context.userId });
       return null;
     }
+  }
+
+  /**
+   * La règle 5 et l'ensemble de blocage d'une session INCONNUE, lus au plus une
+   * fois par minute et par (fil, partageur) (#16791). Sans ce mémo, le chemin
+   * payait les deux lectures à CHAQUE point — ~240 requêtes par minute et par
+   * partageur au plafond de `LOCATION_LIVE_UPDATE`, pendant jusqu'à huit heures
+   * après chaque redémarrage. La session n'est PAS reconstruite (cf. l'en-tête).
+   *
+   * `null` = la lecture de blocage n'a rien prouvé : le point se tait, et rien
+   * n'est retenu, donc le point suivant relit (fail-closed, comme avant).
+   */
+  private async _unknownSessionVerdict(
+    key: string,
+    conversationId: string,
+    context: { userId: string; isAnonymous: boolean },
+    now: Date
+  ): Promise<UnknownSessionVerdict | null> {
+    const retained = this.unknownSessionVerdicts.get(key);
+    if (retained !== undefined) return retained;
+    const refused = await refusesMinorInConversation(this.prisma, {
+      conversationId,
+      userId: context.isAnonymous ? null : context.userId,
+      now,
+    });
+    const verdict = refused ? 'refused' : await this._blockRelatedOf(context);
+    if (verdict !== null) this.unknownSessionVerdicts.set(key, verdict);
+    return verdict;
   }
 
   /** Les sockets des comptes à exclure — O(|bloqués|), comme chez les jumeaux. */

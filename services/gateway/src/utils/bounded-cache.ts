@@ -26,6 +26,12 @@ export type BoundedTtlCacheOptions = {
    * pure size-bounded (FIFO) cache of immutable values that never go stale.
    */
   ttlMs?: number;
+  /**
+   * The clock the TTL is measured against, in epoch milliseconds. Defaults to
+   * `Date.now`; a caller whose own clock is injected passes it here so the
+   * expiry stays observable under a controlled clock.
+   */
+  now?: () => number;
 };
 
 type Entry<V> = { value: V; expiresAt: number };
@@ -34,10 +40,12 @@ export class BoundedTtlCache<K, V> {
   private readonly store = new Map<K, Entry<V>>();
   private readonly maxSize: number;
   private readonly ttlMs: number | undefined;
+  private readonly now: () => number;
 
-  constructor({ maxSize, ttlMs }: BoundedTtlCacheOptions) {
+  constructor({ maxSize, ttlMs, now = () => Date.now() }: BoundedTtlCacheOptions) {
     this.maxSize = maxSize;
     this.ttlMs = ttlMs;
+    this.now = now;
   }
 
   get size(): number {
@@ -47,7 +55,7 @@ export class BoundedTtlCache<K, V> {
   get(key: K): V | undefined {
     const entry = this.store.get(key);
     if (!entry) return undefined;
-    if (entry.expiresAt <= Date.now()) {
+    if (entry.expiresAt <= this.now()) {
       this.store.delete(key);
       return undefined;
     }
@@ -68,7 +76,7 @@ export class BoundedTtlCache<K, V> {
     }
     this.store.set(key, {
       value,
-      expiresAt: this.ttlMs === undefined ? Infinity : Date.now() + this.ttlMs
+      expiresAt: this.ttlMs === undefined ? Infinity : this.now() + this.ttlMs
     });
   }
 
@@ -89,7 +97,7 @@ export class BoundedTtlCache<K, V> {
   /** Drop every entry whose TTL has elapsed. No-op for a TTL-less cache. */
   evictExpired(): void {
     if (this.ttlMs === undefined) return;
-    const now = Date.now();
+    const now = this.now();
     for (const [key, entry] of this.store) {
       if (entry.expiresAt <= now) this.store.delete(key);
     }
