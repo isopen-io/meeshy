@@ -1,5 +1,5 @@
 import type { GuideAction, GuideMood, GuideMoment, GuideMomentKey, GuideSpeaker, OnboardingStep, OnboardingStepKey } from '@meeshy/shared/utils/game/guide';
-import { GUIDE_MOMENT_KEYS_V2, type GuideActionV2, type GuideEventV2, type GuideMomentV2 } from '@meeshy/shared/utils/game/guide-v2';
+import { GUIDE_MOMENT_KEYS_V2, guideSeenKeyV2, type GuideActionV2, type GuideEventV2, type GuideMomentV2 } from '@meeshy/shared/utils/game/guide-v2';
 import { photoMomentOfGuideEvent, type PhotoMomentEmblemV2 } from '@meeshy/shared/utils/game/photo-moments';
 import { ONBOARDING_STEPS, onboardingStepSeenKey } from '@meeshy/shared/utils/game/guide';
 
@@ -94,9 +94,10 @@ const isMomentV2 = (moment: GuideMoment | GuideMomentV2): moment is GuideMomentV
 
 /** Le moment de la vague 2 qui se photographie : trophée, montée de ligue, saison terminée, Prestige — jamais une descente ni un tampon. */
 function cardOfMomentV2(moment: GuideMomentV2): GuideCard {
-  const emblem = photoMomentOfGuideEvent({ kind: moment.key, ...moment.data } as GuideEventV2);
+  const event = { kind: moment.key, ...moment.data } as GuideEventV2;
+  const emblem = photoMomentOfGuideEvent(event);
   return {
-    key: moment.key,
+    key: guideSeenKeyV2(event),
     speaker: moment.speaker,
     mood: moment.mood,
     copy: momentCopyV2(moment),

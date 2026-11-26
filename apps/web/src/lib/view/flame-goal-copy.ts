@@ -48,18 +48,23 @@ export const flameGoalSignSeen = (goal: unknown, guideSeen: readonly string[]): 
 export type FlameGoalView =
   | { readonly kind: 'choose'; readonly offer: readonly number[] }
   | { readonly kind: 'running'; readonly target: number; readonly remaining: number }
-  | { readonly kind: 'reached'; readonly target: number; readonly next: number | null };
+  | { readonly kind: 'reached'; readonly target: number; readonly next: number | null }
+  /** Le signe déjà dit (fermé ici, ou montré par Mee et Meo) : la marche suivante reste choisissable, sans salut redit. */
+  | { readonly kind: 'next'; readonly target: number; readonly next: number };
 
 /**
  * Ce que la carte montre : les choix du premier jour, ce qu'il reste, ou le signe des aïeux avec la marche suivante —
- * jusqu'à ce que le joueur le ferme (`signSeen`, la clé `flameGoalNextSeenKey` dans `game.guideSeen`).
+ * jusqu'à ce que le joueur le ferme ou que la carte de guide le dise (`signSeen`, la clé `flameGoalNextSeenKey` dans
+ * `game.guideSeen`, #20548). Ensuite le salut ne se redit pas, mais la marche suivante reste à portée : la carte de
+ * guide y mène.
  */
 export function flameGoalView(goal: GameServedFlameGoal | null, signSeen: boolean): FlameGoalView | null {
   if (goal === null) return null;
   const { current } = goal;
   if (current === null) return goal.offer.length === 0 ? null : { kind: 'choose', offer: goal.offer };
   if (!current.reached) return { kind: 'running', target: current.target, remaining: current.remaining };
-  return signSeen ? null : { kind: 'reached', target: current.target, next: current.next };
+  if (!signSeen) return { kind: 'reached', target: current.target, next: current.next };
+  return current.next === null ? null : { kind: 'next', target: current.target, next: current.next };
 }
 
 export const flameGoalLine = (view: FlameGoalView, language: Language = currentInterfaceLanguage()): string => {
@@ -70,6 +75,8 @@ export const flameGoalLine = (view: FlameGoalView, language: Language = currentI
       return translateGame(language, 'game.flame_panel.goal_running', { target: daysLabel(view.target, language), remaining: daysLabel(view.remaining, language) });
     case 'reached':
       return translateGame(language, 'game.flame_panel.goal_reached', { days: daysLabel(view.target, language) });
+    case 'next':
+      return translateGame(language, 'game.flame_panel.goal_next_intro', { target: daysLabel(view.target, language) });
   }
 };
 

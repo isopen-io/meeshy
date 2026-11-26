@@ -423,6 +423,7 @@ const it = {
   'game.flame_panel.goal_reached': 'I tuoi antenati salutano la tua Fiamma: {days} mantenuti!',
   'game.flame_panel.goal_next': 'Punta a {days}',
   'game.flame_panel.goal_later': 'Più tardi',
+  'game.flame_panel.goal_next_intro': 'Obiettivo di {target} mantenuto. Il prossimo gradino?',
   'game.flame_panel.pause_next': 'La tua Fiamma potrà riposare di nuovo dal {date}.',
 } as const satisfies GameConceptCatalog;
 

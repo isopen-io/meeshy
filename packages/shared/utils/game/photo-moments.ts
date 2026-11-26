@@ -40,6 +40,7 @@ export function photoMomentOfGuideEvent(event: GuideEventV2): PhotoMomentEmblemV
     case 'atlas-stamp':
     case 'flame-freeze-gift':
     case 'offering-kept':
+    case 'flame-goal-reached':
       return null;
   }
 }

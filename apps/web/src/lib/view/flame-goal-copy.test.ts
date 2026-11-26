@@ -42,7 +42,8 @@ describe('ce que la carte montre de l’objectif (#20521)', () => {
   test('atteint : le signe des aïeux et la marche suivante, jusqu’à ce qu’on le ferme', () => {
     const reached = { offer: [14], current: { target: 7, remaining: 0, reached: true, next: 14 } };
     expect(flameGoalView(reached, false)).toEqual({ kind: 'reached', target: 7, next: 14 });
-    expect(flameGoalView(reached, true)).toBeNull();
+    expect(flameGoalView(reached, true)).toEqual({ kind: 'next', target: 7, next: 14 });
+    expect(flameGoalView({ offer: [], current: { target: 365, remaining: 0, reached: true, next: null } }, true)).toBeNull();
   });
 
   test('le signe se sait fermé par la clé de l’objectif atteint, et par elle seule', () => {
@@ -76,6 +77,7 @@ describe('l’objectif se dit (#20521)', () => {
     for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
       expect(NAMED(flameGoalLine({ kind: 'running', target: 14, remaining: 5 }, language))).toBe(true);
       expect(NAMED(flameGoalLine({ kind: 'reached', target: 7, next: 14 }, language))).toBe(true);
+      expect(NAMED(flameGoalLine({ kind: 'next', target: 7, next: 14 }, language))).toBe(true);
       expect(NAMED(flameGoalLine({ kind: 'choose', offer: [7, 14, 30] }, language))).toBe(true);
       expect(NAMED(flameGoalNextAction(14, language))).toBe(true);
       const general = gameErrorMessage('FLAME_GOAL_NOT_ALLOWED', language);
