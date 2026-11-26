@@ -13,18 +13,23 @@ import UIKit
 /// `.first` routinely hands back a background scene under multi-window.
 public enum WindowMetrics {
     /// Miroir de `DeviceLayout.activeWindowScene` : deux scènes au premier plan (fenêtre détachée) — celle qui tient la
-    /// fenêtre clé l'emporte.
+    /// fenêtre clé l'emporte ; et seulement quand AUCUNE n'est active, une scène `.foregroundInactive` (Centre de
+    /// contrôle, alerte système, appel qui s'annonce), toujours à l'écran (#6633).
     private static var activeWindowScene: UIWindowScene? {
-        for scene in UIApplication.shared.connectedScenes {
-            guard let windowScene = scene as? UIWindowScene, windowScene.activationState == .foregroundActive,
-                  windowScene.keyWindow != nil else { continue }
-            return windowScene
-        }
-        for scene in UIApplication.shared.connectedScenes {
-            guard let windowScene = scene as? UIWindowScene,
-                  windowScene.activationState == .foregroundActive else { continue }
-            return windowScene
-        }
+        pickActive(UIApplication.shared.connectedScenes.lazy.compactMap { $0 as? UIWindowScene },
+                   isForeground: { windowScene in windowScene.activationState == .foregroundActive },
+                   holdsKey: { $0.keyWindow != nil },
+                   isOnScreen: { $0.activationState == .foregroundInactive })
+    }
+
+    /// Miroir de `DeviceLayout.pickActive` — même ordre de passes, sans allocation.
+    static func pickActive<S: Sequence>(_ scenes: S, isForeground: (S.Element) -> Bool,
+                                        holdsKey: (S.Element) -> Bool,
+                                        isOnScreen: (S.Element) -> Bool) -> S.Element? {
+        for scene in scenes where isForeground(scene) && holdsKey(scene) { return scene }
+        for scene in scenes where isForeground(scene) { return scene }
+        for scene in scenes where isOnScreen(scene) && holdsKey(scene) { return scene }
+        for scene in scenes where isOnScreen(scene) { return scene }
         return nil
     }
 
@@ -57,11 +62,21 @@ public enum WindowMetrics {
         return window.convert(window.bounds, to: window.screen.coordinateSpace)
     }
 
-    /// Safe-area insets of the window the app is actually rendered in. `.zero`
-    /// is the correct last resort rather than a screen-derived guess: it is
-    /// the honest value on a device with no home indicator/notch, and when no
-    /// foreground scene exists nothing is being laid out anyway.
+    /// Safe-area insets of the window the app is actually rendered in.
+    /// Without a measurable window, the last MEASURED insets (`.zero` before
+    /// any measurement), never a screen-derived guess — miroir de
+    /// `DeviceLayout.safeAreaTop` / `safeAreaBottom` (#6633).
     static var safeAreaInsets: UIEdgeInsets {
-        activeWindow?.safeAreaInsets ?? .zero
+        let measured = activeWindow?.safeAreaInsets
+        if let measured, measured != lastMeasuredInsets { lastMeasuredInsets = measured }
+        return insetsRemembering(measured: measured, last: lastMeasuredInsets)
     }
+
+    /// Une marge ne change pas parce qu'une alerte s'affiche : sans fenêtre mesurable, la dernière MESURÉE. Une mesure
+    /// qui vaut zéro (paysage, appareil sans encoche) reste la vérité — seule l'absence de mesure se comble.
+    static func insetsRemembering(measured: UIEdgeInsets?, last: UIEdgeInsets) -> UIEdgeInsets {
+        measured ?? last
+    }
+
+    private static var lastMeasuredInsets: UIEdgeInsets = .zero
 }
