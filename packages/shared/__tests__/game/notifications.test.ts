@@ -17,6 +17,8 @@ import {
   gameLeagueResultKey,
   isGameLeagueExploit,
   isGameNotificationType,
+  GAME_MISSION_FLAME_MIN_DAYS,
+  missionWindowKey,
 } from '../../utils/game/notifications.js';
 import { NOTIFICATION_LANGUAGES, buildNotificationDisplay, notificationString } from '../../utils/notification-strings.js';
 import { personalMissionPhrase } from '../../utils/game/personal-mission-copy.js';
@@ -127,6 +129,32 @@ describe('les textes', () => {
     expect(notificationString('fr', 'game.missionWindow', { mission: 'envoyer des stickers', start: '18:00', end: '20:00' })).toBe(
       'Un acte rien que pour toi : envoyer des stickers, entre 18:00 et 20:00.',
     );
+  });
+
+  it('la mission du jour dit aussi la Flamme quand elle brûle, dans chaque langue (#20575)', () => {
+    for (const lang of NOTIFICATION_LANGUAGES) {
+      const mission = personalMissionPhrase(lang, 'react');
+      const text = notificationString(lang, 'game.missionWindowFlame', { mission, start: '18:00', end: '20:00', count: 12 });
+      expect(text, lang).toContain(mission);
+      expect(text, lang).toContain('18:00');
+      expect(text, lang).toContain('20:00');
+      expect(text, lang).toContain('12');
+      expect(text, lang).not.toContain('{');
+      expect(text, lang).not.toBe(notificationString(lang, 'game.missionWindow', { mission, start: '18:00', end: '20:00' }));
+    }
+    expect(notificationString('fr', 'game.missionWindowFlame', { mission: 'envoyer des stickers', start: '18:00', end: '20:00', count: 12 })).toBe(
+      'Un acte rien que pour toi : envoyer des stickers, entre 18:00 et 20:00. Ta Flamme brûle depuis 12 jours.',
+    );
+    expect(notificationString('ar', 'game.missionWindowFlame', { mission: 'x', start: '18:00', end: '20:00', count: 12 })).toContain('اللهب');
+  });
+
+  it('la Flamme ne se dit qu’à partir de deux jours : ni éteinte, ni d’un seul jour (#20575)', () => {
+    expect(GAME_MISSION_FLAME_MIN_DAYS).toBe(2);
+    expect(missionWindowKey(0)).toBe('game.missionWindow');
+    expect(missionWindowKey(1)).toBe('game.missionWindow');
+    expect(missionWindowKey(2)).toBe('game.missionWindowFlame');
+    expect(missionWindowKey(40)).toBe('game.missionWindowFlame');
+    expect(missionWindowKey(Number.NaN)).toBe('game.missionWindow');
   });
 
   it('l’étape de la saison porte son numéro, dans chaque langue', () => {
