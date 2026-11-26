@@ -75,6 +75,25 @@ describe('announcePlatformRoleCapabilities — le rôle de plateforme change', (
     expect(emitted).toEqual([]);
   });
 
+  it('promu puis rétrogradé aussitôt : la dernière capacité remise est celle du dernier rôle, même si la première lecture traîne', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const slow = prismaDouble();
+    const slowFindMany = slow.participant.findMany;
+    slow.participant.findMany = jest.fn<any>(async (args: any) => { await gate; return slowFindMany(args); });
+    const { io, emitted } = ioDouble();
+    const promoted = announcePlatformRoleCapabilities(slow as never, {
+      io: io as never, userId: ALICE, previousRole: 'USER', newRole: 'ADMIN', updatedBy: ADMIN, onError: jest.fn(),
+    });
+    const demoted = announcePlatformRoleCapabilities(prismaDouble() as never, {
+      io: io as never, userId: ALICE, previousRole: 'ADMIN', newRole: 'USER', updatedBy: ADMIN, onError: jest.fn(),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    release();
+    await Promise.all([promoted, demoted]);
+    expect(emitted.map((e) => e.payload.viewerCapabilities.canMakeObsolete)).toEqual([true, false]);
+  });
+
   it('une lecture impossible ne rejette pas et n’émet rien', async () => {
     const prisma = { participant: { findMany: jest.fn<any>().mockRejectedValue(new Error('down')), groupBy: jest.fn<any>() } };
     const { io, emitted } = ioDouble();

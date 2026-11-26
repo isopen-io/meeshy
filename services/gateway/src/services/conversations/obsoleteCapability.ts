@@ -356,7 +356,9 @@ function inTargetLane(key: string, task: () => Promise<void>): Promise<void> {
  * publiés écoutent déjà — portant son rang de conversation INCHANGÉ et la
  * capacité recalculée, pour chaque conversation où elle bascule, et seulement
  * celles-là. Ne rejette jamais : un échec de lecture n'émet rien et le client
- * garde la capacité servie avant, que la route refusera s'il le faut.
+ * garde la capacité servie avant, que la route refusera s'il le faut. Les
+ * annonces d'un même compte partent dans l'ORDRE des changements
+ * (`inTargetLane`) : promu puis rétrogradé, il reçoit en dernier le `false`.
  */
 export async function announcePlatformRoleCapabilities(
   prisma: ObsoleteReader,
@@ -370,37 +372,39 @@ export async function announcePlatformRoleCapabilities(
   },
 ): Promise<void> {
   const { io, userId, updatedBy, onError } = params;
-  try {
-    const memberships = await prisma.participant.findMany({
-      where: { userId, isActive: true },
-      select: {
-        conversationId: true,
-        userId: true,
-        role: true,
-        type: true,
-        leftAt: true,
-        bannedAt: true,
-        conversation: { select: { type: true, identifier: true } },
-      },
-    });
-    const conversationIds = memberships.map((row) => row.conversationId);
-    const viewerAs = (platformRole: string): ObsoleteViewer => ({ userId, isAnonymous: false, hasRegisteredUser: true, platformRole });
-    const [before, after] = await Promise.all([
-      loadObsoleteVerdicts(prisma, { viewers: [viewerAs(params.previousRole)], conversationIds, memberships }),
-      loadObsoleteVerdicts(prisma, { viewers: [viewerAs(params.newRole)], conversationIds, memberships }),
-    ]);
-    memberships
-      .map((row) => ({ row, was: servedCapabilities(before(userId, row.conversationId)), now: servedCapabilities(after(userId, row.conversationId)) }))
-      .filter(({ was, now }) => was.canMakeObsolete !== now.canMakeObsolete)
-      .forEach(({ row, now }) =>
-        io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, {
-          conversationId: row.conversationId,
-          userId,
-          newRole: row.role,
-          updatedBy,
-          viewerCapabilities: now,
-        }));
-  } catch (error) {
-    onError(error);
-  }
+  return inTargetLane(`platform:${userId}`, async () => {
+    try {
+      const memberships = await prisma.participant.findMany({
+        where: { userId, isActive: true },
+        select: {
+          conversationId: true,
+          userId: true,
+          role: true,
+          type: true,
+          leftAt: true,
+          bannedAt: true,
+          conversation: { select: { type: true, identifier: true } },
+        },
+      });
+      const conversationIds = memberships.map((row) => row.conversationId);
+      const viewerAs = (platformRole: string): ObsoleteViewer => ({ userId, isAnonymous: false, hasRegisteredUser: true, platformRole });
+      const [before, after] = await Promise.all([
+        loadObsoleteVerdicts(prisma, { viewers: [viewerAs(params.previousRole)], conversationIds, memberships }),
+        loadObsoleteVerdicts(prisma, { viewers: [viewerAs(params.newRole)], conversationIds, memberships }),
+      ]);
+      memberships
+        .map((row) => ({ row, was: servedCapabilities(before(userId, row.conversationId)), now: servedCapabilities(after(userId, row.conversationId)) }))
+        .filter(({ was, now }) => was.canMakeObsolete !== now.canMakeObsolete)
+        .forEach(({ row, now }) =>
+          io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, {
+            conversationId: row.conversationId,
+            userId,
+            newRole: row.role,
+            updatedBy,
+            viewerCapabilities: now,
+          }));
+    } catch (error) {
+      onError(error);
+    }
+  });
 }
