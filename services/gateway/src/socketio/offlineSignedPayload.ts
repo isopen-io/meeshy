@@ -53,6 +53,23 @@ import { PLAN_UNAVAILABLE, type PlanOutcome } from './planOutcome';
  * ce qu'on éviterait de perdre en enfilant est une adresse nue écrite dans Redis
  * pour deux jours. C'est l'arbitrage que l'émission directe a déjà pris.
  */
+/**
+ * Le plan est-il un plan QUI SIGNE ? (#19979)
+ *
+ * `PLAN_UNAVAILABLE` n'est pas la seule forme de « je ne sais pas adresser » :
+ * un `undefined` venu d'un appelant non typé, ou un objet sans la capacité
+ * attendue, tombaient dans la branche « un plan » et rendaient un `resolve`
+ * qui jette au premier lecteur. Tout ce qui n'est ni `null` ni un plan
+ * signant se replie sur `withhold`, la seule réponse sûre à un inconnu.
+ */
+function canSign(
+  plan: PlanOutcome<ReaderSignedPlan> | undefined,
+  capability: 'signFor' | 'signAttachment',
+): plan is ReaderSignedPlan {
+  if (plan === undefined || plan === null || plan === PLAN_UNAVAILABLE) return false;
+  return typeof (plan as Partial<ReaderSignedPlan>)[capability] === 'function';
+}
+
 export type OfflineSignedDecision =
   /** On ne sait pas adresser : rien n'est enfilé pour cette émission. */
   | { readonly kind: 'withhold' }
@@ -81,12 +98,12 @@ export function offlineSignedPayload(params: {
   readonly basePerReader?: boolean;
 }): OfflineSignedDecision {
   const { plan, base } = params;
-  if (plan === PLAN_UNAVAILABLE) return { kind: 'withhold' };
   if (plan === null) {
     return params.basePerReader
       ? { kind: 'per-reader', resolve: (queueKey) => base(queueKey) }
       : { kind: 'as-is' };
   }
+  if (!canSign(plan, 'signFor')) return { kind: 'withhold' };
   return {
     kind: 'per-reader',
     resolve: (queueKey, participantId) => plan.signFor(base(queueKey), participantId),
@@ -111,8 +128,8 @@ export function offlineSignedAttachment(params: {
   readonly payload: Record<string, unknown> & { readonly attachment: unknown };
 }): OfflineSignedDecision {
   const { plan, payload } = params;
-  if (plan === PLAN_UNAVAILABLE) return { kind: 'withhold' };
   if (plan === null) return { kind: 'as-is' };
+  if (!canSign(plan, 'signAttachment')) return { kind: 'withhold' };
   return {
     kind: 'per-reader',
     resolve: (_queueKey, participantId) => ({

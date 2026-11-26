@@ -493,7 +493,19 @@ export async function enqueueForOfflineParticipants(
         const readable = readableLanguagesFor(p);
         if (readable.length > 0 && !readable.includes(restrictToLanguage)) continue;
       }
-      const body = resolvePayloadForReader ? resolvePayloadForReader(queueKey, p.id) : payload;
+      // #19979 — la résolution est gardée PAR ENTRÉE : une signature qui lève
+      // pour un lecteur ne prive pas les suivants de la leur, et le journal
+      // nomme ce qui est tombé au lieu du « Failed to fetch participants » du
+      // `catch` extérieur. Ce lecteur-là ne reçoit RIEN plutôt qu'une charge
+      // générique, qui serait l'adresse nue que la résolution devait signer ;
+      // il la retrouve en relisant le fil.
+      let body: Record<string, unknown>;
+      try {
+        body = resolvePayloadForReader ? resolvePayloadForReader(queueKey, p.id) : payload;
+      } catch (err) {
+        logger.warn('Failed to resolve offline payload for reader', { userId: queueKey, conversationId, eventType, error: err });
+        continue;
+      }
       const entry: QueuedMessagePayload = {
         messageId,
         conversationId,

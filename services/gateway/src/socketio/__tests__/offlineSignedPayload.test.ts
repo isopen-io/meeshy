@@ -121,3 +121,19 @@ describe('offlineSignedPayload (#18619)', () => {
     expect(parLecteur).toHaveBeenCalledWith('u-bob');
   });
 });
+
+describe('offlineSignedPayload — un plan ABSENT (#19979)', () => {
+  /**
+   * `undefined` n'est ni `PLAN_UNAVAILABLE` ni `null` : il tombait dans la
+   * branche « un plan », et rendait un `resolve` qui jette au premier lecteur.
+   * Ne pas savoir adresser se dit `withhold`, quelle que soit la forme de
+   * l'inconnu.
+   */
+  it('RETIENT quand le plan est undefined plutôt que rendre un resolve qui jette', () => {
+    expect(offlineSignedPayload({ plan: undefined as never, base }).kind).toBe('withhold');
+  });
+
+  it('RETIENT quand le plan ne porte pas de signFor appelable', () => {
+    expect(offlineSignedPayload({ plan: { targets: [] } as never, base }).kind).toBe('withhold');
+  });
+});
