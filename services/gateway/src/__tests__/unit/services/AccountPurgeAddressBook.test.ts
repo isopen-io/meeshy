@@ -21,6 +21,7 @@ jest.mock('../../../utils/password-hash', () => ({
 }));
 
 import { purgeAccountIsolatedData } from '../../../services/AccountPurgeService';
+import { ACCOUNT_SCOPED_MODELS } from '../../../services/accountScopedErasure';
 import { GAME_PURGED_MODELS } from '../../../services/game/GamePurge';
 import { fakeFileStore, fakePackDb } from './pack-privacy.fakes';
 
@@ -94,6 +95,7 @@ function base() {
     profileAddress: table([]),
     storyHighlight: table([]),
     communityJoinRequest: table([]),
+    ...Object.fromEntries(ACCOUNT_SCOPED_MODELS.map((model) => [model, table([])])),
     trackingLink: table([]),
     trackingLinkClick: table([]),
     // Les visites du lien de profil (#19206) : aucune.

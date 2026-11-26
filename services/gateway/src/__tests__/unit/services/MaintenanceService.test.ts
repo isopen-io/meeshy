@@ -71,6 +71,7 @@ jest.mock('../../../utils/password-hash', () => ({
 }));
 
 import { MaintenanceService } from '../../../services/MaintenanceService';
+import { ACCOUNT_SCOPED_MODELS } from '../../../services/accountScopedErasure';
 import { logger } from '../../../utils/logger';
 import { anonymizeMessagesOfDeletedAccount } from '../../../services/messaging/anonymizeDeletedAccountMessages';
 import { purgeMediaOfDeletedAccount } from '../../../services/purgeDeletedAccountMedia';
@@ -138,6 +139,7 @@ function makePrisma(overrides: {
     communityJoinRequest: {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
+    ...Object.fromEntries(ACCOUNT_SCOPED_MODELS.map((model) => [model, { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) }])),
     friendRequest: {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },

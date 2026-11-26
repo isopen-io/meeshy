@@ -14,6 +14,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { purgeAccountIsolatedData, anonymizeUserIdentity } from '../../../services/AccountPurgeService';
 import { GAME_PURGED_MODELS } from '../../../services/game/GamePurge';
+import { ACCOUNT_SCOPED_MODELS } from '../../../services/accountScopedErasure';
 import { accountReaderKeyOf } from '../../../services/posts/readerKey';
 import { sharedTranslationRow, sharedTranslationTable } from '../../helpers/shared-translation-table';
 import { fakeFileStore, fakePackDb } from './pack-privacy.fakes';
@@ -48,6 +49,8 @@ function fakePrisma(overrides: Record<string, any> = {}) {
     // Les albums « à la une » (#19394) : un compte qui n'en a composé aucun.
     storyHighlight: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     communityJoinRequest: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    // Ce que seul le compte lit (#4225) : préférences, jetons, marques personnelles, paliers.
+    ...Object.fromEntries(ACCOUNT_SCOPED_MODELS.map((model) => [model, { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) }])),
     // Les visites de son lien de profil (#19206) : aucune.
     profileLinkVisitDay: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     // Ses invitations par e-mail (#19207) : aucune.

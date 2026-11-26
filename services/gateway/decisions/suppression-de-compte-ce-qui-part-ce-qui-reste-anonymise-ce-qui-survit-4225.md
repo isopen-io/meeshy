@@ -115,3 +115,20 @@ partiel se relance sans dommage), **aucune résurrection** après purge,
 `dataPurged` qui ne passe à `true` qu'une fois la purge effective — le champ
 existe précisément pour ne pas mentir pendant l'intervalle —, et un témoin par
 entité vérifiant le verdict ci-dessus.
+
+### Addendum du 2026-11-26 — l'inventaire tenu par le schéma
+
+Le corollaire du § 0 a maintenant son cliquet : `services/accountPurgeInventory.ts`
+donne un verdict à chaque modèle qui désigne un compte (les sept noms de champ du
+§ 0, plus toute relation vers `User`), et `AccountPurgeInventory.test.ts` le
+confronte à `schema.prisma`. Le relevé en a trouvé vingt-deux que rien n'effaçait
+(préférences, statistiques, jetons de réinitialisation et de lien magique,
+historique de mots de passe, marques personnelles, rôles d'agent, journal de
+synchronisation, paliers) ; `eraseAccountScopedRowsOf` les efface.
+
+Une correction de mesure : **`ServerEncryptionKey` passe d'EFFACER à CONSERVER.**
+C'est une clé PAR CONVERSATION, et son `userId` ne nomme que son créateur :
+l'effacer rendrait illisibles les pièces des autres participants. Les purges
+décidées et pas encore livrées (`Post` et ses commentaires, `SignalPreKeyBundle`,
+`ConversationPublicKey`, `DMASession`, `AffiliateToken`, `AffiliateRelation`) sont
+écrites `pending` dans l'inventaire, chacune avec sa raison.

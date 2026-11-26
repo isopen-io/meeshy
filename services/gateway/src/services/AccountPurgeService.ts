@@ -5,6 +5,7 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import { hashPassword } from '../utils/password-hash';
 import { clearPendingTwoFactor } from './auth/pending-two-factor';
 import { eraseAddressBookOf } from './ContactDirectoryService';
+import { eraseAccountScopedRowsOf } from './accountScopedErasure';
 import { purgeGameData, type GamePurgeSummary } from './game/GamePurge';
 import { eraseSharedTranslationsOfAccount } from './messaging/sharedTranslationErasure';
 import { purgePackData, type PackFileStore, type PackPurgeSummary } from './packs/PackPrivacy';
@@ -70,6 +71,8 @@ export type AccountPurgeSummary = {
   readonly emailInvitationsDeleted: number;
   /** Ses demandes d'entrée en communauté (#19429) : chacune porte son pays d'arrivée. */
   readonly communityJoinRequestsDeleted: number;
+  /** Ses préférences, statistiques, jetons d'authentification, marques personnelles, rôles d'agent et paliers (#4225). */
+  readonly accountScopedRowsDeleted: number;
 };
 
 export type AccountPurgeOptions = {
@@ -150,7 +153,7 @@ export async function purgeAccountIsolatedData(
   options: AccountPurgeOptions = {},
 ): Promise<AccountPurgeSummary> {
   if (!isValidObjectId(userId)) throw new Error('INVALID_USER_ID');
-  const [sessions, pushTokens, voiceProfile, relations, pairInteractionDays, relationConsents, friendRequests, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry, callTelemetry, e2ee, externalPeerHandles, profileAddresses, storyHighlights, profileLinkVisitDays, emailInvitations, communityJoinRequests] =
+  const [sessions, pushTokens, voiceProfile, relations, pairInteractionDays, relationConsents, friendRequests, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry, callTelemetry, e2ee, externalPeerHandles, profileAddresses, storyHighlights, profileLinkVisitDays, emailInvitations, communityJoinRequests, accountScopedRows] =
     await Promise.all([
       prisma.userSession.deleteMany({ where: { userId } }),
       prisma.pushToken.deleteMany({ where: { userId } }),
@@ -194,6 +197,8 @@ export async function purgeAccountIsolatedData(
       eraseSentInvitationsOf(prisma, userId),
       // #19429 : ses demandes d'entrée en communauté — son pays d'arrivée, et une demande qu'on accepterait après lui.
       prisma.communityJoinRequest.deleteMany({ where: { userId } }),
+      // #4225 : ce que seul ce compte lit, que la pierre tombale empêchait la cascade d'emporter.
+      eraseAccountScopedRowsOf(prisma, userId),
       // #13937 : l'historique de position du Sang et le journal de ses consultations partent avec le compte.
       prisma.bloodLocationPoint.deleteMany({ where: { ownerId: userId } }),
       prisma.bloodLocationConsultation.deleteMany({ where: { OR: [{ observedId: userId }, { observerId: userId }] } }),
@@ -225,6 +230,7 @@ export async function purgeAccountIsolatedData(
     profileLinkVisitDaysDeleted: profileLinkVisitDays,
     emailInvitationsDeleted: emailInvitations,
     communityJoinRequestsDeleted: communityJoinRequests.count,
+    accountScopedRowsDeleted: accountScopedRows,
   };
 
   logger.info(
@@ -236,7 +242,7 @@ export async function purgeAccountIsolatedData(
       `packChoices=${packs.choicesDeleted} stickers=${packs.libraryDeleted} packSubmissions=${packs.submissionsDeleted} ` +
       `packsAnonymized=${packs.publishedAnonymized} packFiles=${packs.filesDeleted} packOwnerships=${packs.ownershipsDeleted} partnerProfiles=${packs.partnerProfilesDeleted} ` +
       `impressions=${readingTelemetry.impressions} engagements=${readingTelemetry.engagements} ` +
-      `views=${readingTelemetry.views} contentEvents=${readingTelemetry.contentEvents} callTelemetry=${callTelemetry} externalPeerHandles=${externalPeerHandles} profileAddresses=${profileAddresses} storyHighlights=${storyHighlights.count} profileLinkVisitDays=${profileLinkVisitDays} emailInvitations=${emailInvitations} communityJoinRequests=${communityJoinRequests.count}`
+      `views=${readingTelemetry.views} contentEvents=${readingTelemetry.contentEvents} callTelemetry=${callTelemetry} externalPeerHandles=${externalPeerHandles} profileAddresses=${profileAddresses} storyHighlights=${storyHighlights.count} profileLinkVisitDays=${profileLinkVisitDays} emailInvitations=${emailInvitations} communityJoinRequests=${communityJoinRequests.count} accountScopedRows=${accountScopedRows}`
   );
 
   return summary;
