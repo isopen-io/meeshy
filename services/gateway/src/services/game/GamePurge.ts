@@ -235,6 +235,11 @@ export async function purgeGameData(prisma: PurgeDb, userId: string, deps: GameP
       lastRelightDay: null,
       brokenStreakDays: null,
       brokenStreakLastDay: null,
+      flamePauseFrom: null,
+      flamePauseUntil: null,
+      flameGoalTarget: null,
+      flameGoalChosenAtStreak: null,
+      flameGoalBrokenOn: null,
       gameWelcomeBackDay: null,
     },
   });

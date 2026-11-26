@@ -127,6 +127,8 @@ struct RootNotificationNavigator {
                 router.presentProfileSheet(ProfileSheetUser(userId: senderId, username: ctx.senderUsername ?? senderId))
             }
 
+        case .bloodProximity: if let personMap = ctx.personMap { router.presentPersonMap(personMap) } // Sa carte (#20540)
+
         case .communityInvite, .communityJoined, .communityLeft,
              .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft,
              .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged,
@@ -181,14 +183,9 @@ struct RootNotificationNavigator {
             openSocialNotification(ctx)
 
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
-            // Un palier annoncé ouvre le tableau de bord qui le RESTITUE
-            // (#5698) — pas les statistiques, qui ne connaissent pas ces paliers.
-            //
-            // Et il se CÉLÈBRE d'abord (#5809) : `EngagementRevealHost` couvre
-            // le tableau de bord dès que ce palier est posé. `nil` quand la
-            // charge ne dit pas lequel — on n'en invente pas, et le tap se
-            // comporte alors exactement comme avant.
-            // … puis ouvre la FICHE de son concept, au-dessus de la première page (#9564, carte de navigation).
+            // Un palier annoncé ouvre le tableau de bord qui le RESTITUE (#5698), et il s'y CÉLÈBRE d'abord (#5809) :
+            // `EngagementRevealHost` le couvre dès que ce palier est posé ; `nil` quand la charge ne dit pas lequel —
+            // on n'en invente pas. Puis la FICHE de son concept s'ouvre, au-dessus de la première page (#9564).
             router.present(afterPresentedSurfacesLeave: {
                 router.pendingEngagementReveal = ctx.reveal
                 router.openGame(at: GameNavigationMap.entry(for: ctx.type) ?? .progression)

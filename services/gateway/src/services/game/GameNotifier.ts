@@ -17,6 +17,8 @@
  *  - **« Jeu masqué » ne notifie rien** : tout est compté, rien n'est montré. Une préférence
  *    `notification.gameEnabled` à `false` non plus — et elle se lit AVANT le plafond du jour,
  *    pour qu'un compte qui a coupé « Jeu » ne consomme pas un créneau qu'il ne verra jamais ;
+ *  - **l'annonce de la mission du jour dit la Flamme** dès deux jours (#20575, `missionWindowKey`) : la
+ *    hauteur SERVIE (`servedFlameDays`), jamais la colonne brute — une Flamme éteinte ne se dit pas ;
  *  - **le cadrage est dans la langue du destinataire** (`recipientLanguage` : la descente du
  *    Prisme, jamais `systemLanguage` seul) ;
  *  - **la charge ne dit que ce que le destinataire sait déjà de LUI** : un duo nomme l'AMI
@@ -36,6 +38,7 @@ import {
   countsAgainstGameDailyCap,
   gameLeagueResultKey,
   isGameLeagueExploit,
+  missionWindowKey,
   photoMomentNotificationKey,
 } from '@meeshy/shared/utils/game/notifications';
 import { personalMissionActivity } from '@meeshy/shared/utils/game/personal-mission';
@@ -48,6 +51,7 @@ import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-
 import { getCacheStore } from '../CacheStore';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
 import type { NotificationService } from '../notifications/NotificationService';
+import { FLAME_USER_SELECT, flameFactsOf, servedFlameDays } from './FlameService';
 import { GameProfileService } from './GameProfileService';
 import { dayKeyOf, effectiveZone } from './gameClock';
 
@@ -134,7 +138,11 @@ type Plan = {
   readonly deferrable?: boolean;
   /** Un RAPPEL (la plage du Rêve) : il se tait un jour où la Flamme est en veille (#17372). Résultats et gestes d'autrui partent. */
   readonly reminder?: boolean;
-  readonly content: (lang: string, timezone: string | null) => string;
+  /**
+   * `flameDays` : la hauteur de la Flamme telle que le bloc `game` la sert (0 éteinte), le jour du fuseau du
+   * destinataire. Seule l'annonce de la mission du jour la dit (#20575).
+   */
+  readonly content: (lang: string, timezone: string | null, flameDays: number) => string;
   readonly metadata: Record<string, unknown>;
   readonly actorId?: string;
 };
@@ -220,11 +228,12 @@ function planOf(event: GameNotificationEvent): Plan {
         collapseId: `game-mission-${event.dayKey}`,
         capped: countsAgainstGameDailyCap('game_mission_window'),
         reminder: true,
-        content: (lang, timezone) =>
-          notificationString(lang, 'game.missionWindow', {
+        content: (lang, timezone, flameDays) =>
+          notificationString(lang, missionWindowKey(flameDays), {
             mission: personalMissionPhrase(lang, personalMissionActivity(event.templateKey)),
             start: clockLabel(event.startsAt, lang, timezone),
             end: clockLabel(event.endsAt, lang, timezone),
+            count: flameDays,
           }),
         // La charge ne dit que la plage TIRÉE : jamais d'où elle vient (heures habituelles, usages).
         metadata: {
@@ -286,7 +295,7 @@ export class GameNotifier {
 
     const recipient = await this.prisma.user.findUnique({
       where: { id: event.recipientId },
-      select: { isActive: true, deletedAt: true, timezone: true, flamePauseFrom: true, flamePauseUntil: true, ...RECIPIENT_LANG_SELECT },
+      select: { isActive: true, deletedAt: true, ...FLAME_USER_SELECT, ...RECIPIENT_LANG_SELECT },
     });
     if (!recipient || recipient.isActive === false || recipient.deletedAt != null) return 'skipped:unknown-recipient';
 
@@ -321,7 +330,7 @@ export class GameNotifier {
         type: plan.type,
         priority: plan.priority,
         lang,
-        content: plan.content(lang, recipient.timezone ?? null),
+        content: plan.content(lang, recipient.timezone ?? null, servedFlameDays(flameFactsOf(recipient, now))),
         ...(actor ? { actor } : {}),
         context: {},
         metadata: plan.metadata as never,

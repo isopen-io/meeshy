@@ -109,6 +109,12 @@ public struct NotificationMetadata: Codable, Sendable, Equatable {
     /// Le motif du retrait, que l'auteur doit lire.
     public let reason: String?
 
+    // MARK: - Un Sang s'approche (#20540)
+    /// L'autre Sang, celui dont la carte s'ouvre au toucher.
+    public let userId: String?
+    /// Le PALIER de l'alerte (100, 250, 500, 1000, 2500 ou 5000 m), jamais la distance mesurée.
+    public let distanceMeters: Int?
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         messagePreview = try container.decodeIfPresent(String.self, forKey: .messagePreview)
@@ -162,6 +168,9 @@ public struct NotificationMetadata: Codable, Sendable, Equatable {
         completed = try container.decodeIfPresent(Bool.self, forKey: .completed)
         contentId = try container.decodeIfPresent(String.self, forKey: .contentId)
         reason = try container.decodeIfPresent(String.self, forKey: .reason)
+        userId = try container.decodeIfPresent(String.self, forKey: .userId)
+        distanceMeters = (try? container.decodeIfPresent(Int.self, forKey: .distanceMeters))
+            ?? (try? container.decodeIfPresent(Double.self, forKey: .distanceMeters)).map { Int($0) }
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -173,5 +182,6 @@ public struct NotificationMetadata: Codable, Sendable, Equatable {
         case achievementKey, axisKey, threshold, level, tierRank, value
         case route, gameSection, duoId, weekKey, league, outcome, cup, season, step, completed
         case contentId, reason
+        case userId, distanceMeters
     }
 }

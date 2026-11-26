@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { GAME_ROUTES } from '@meeshy/shared/types/game-routes';
 
-import { claimChest, buyFlameFreeze, markGuideSeen, pauseFlame, readGameBlock, relightFlame, rerollMission } from './game';
+import { chooseFlameGoal, claimChest, buyFlameFreeze, markGuideSeen, pauseFlame, readGameBlock, relightFlame, rerollMission } from './game';
 import { gameBlockFixture } from './game-fixture';
 import { createHttpTransport } from './http';
 
@@ -254,5 +254,34 @@ describe('la Flamme en veille (#20509)', () => {
   test('la veille servie par le bloc se lit, et le bloc d’avant elle aussi', () => {
     expect(readGameBlock(gameBlockFixture({ pause: { from: '2026-10-06', until: '2026-10-08' } }))?.flame.pause).toEqual({ from: '2026-10-06', until: '2026-10-08' });
     expect(readGameBlock(gameBlockFixture())?.flame.pause).toBeUndefined();
+  });
+});
+
+describe('l’objectif de Flamme (#20521)', () => {
+  test('l’objectif part avec l’identifiant de l’intention, l’objectif servi revient', async () => {
+    const calls: Call[] = [];
+    const goal = { offer: [], current: { target: 14, remaining: 13, reached: false, next: null } };
+    const transport = transportServing({ success: true, data: { status: 'chosen', goal } }, { calls });
+    const result = await chooseFlameGoal(transport, 'req-0020-abcd', 14);
+    expect(calls[0]?.url).toBe('https://gate.test/api/v1/me/game/flame/goal');
+    expect(calls[0]?.init?.method).toBe('POST');
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({ requestId: 'req-0020-abcd', target: 14 });
+    expect(result.ok && result.data.goal).toEqual(goal);
+  });
+
+  test('un objectif servi illisible est un échec nommé', async () => {
+    const transport = transportServing({ success: true, data: { status: 'chosen', goal: { offer: [], current: { target: 14 } } } });
+    const result = await chooseFlameGoal(transport, 'req-0021-abcd', 14);
+    expect(!result.ok && result.code).toBe('MALFORMED_PAYLOAD');
+  });
+
+  test('le refus garde son code et sa raison', async () => {
+    const transport = transportServing(
+      { success: false, error: 'FLAME_GOAL_NOT_ALLOWED', code: 'FLAME_GOAL_NOT_ALLOWED', reason: 'not-offered' },
+      { status: 409 },
+    );
+    const result = await chooseFlameGoal(transport, 'req-0022-abcd', 7);
+    expect(!result.ok && result.code).toBe('FLAME_GOAL_NOT_ALLOWED');
+    expect(!result.ok && result.reason).toBe('not-offered');
   });
 });

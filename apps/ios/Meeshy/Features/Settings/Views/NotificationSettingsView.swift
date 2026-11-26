@@ -142,6 +142,9 @@ struct NotificationSettingsView: View {
                     .padding(.bottom, MeeshySpacing.sm + 2)
             }
 
+            notifToggle(icon: "location.circle.fill", title: String(localized: "settings.notifications.blood_proximity", defaultValue: "Quand un Sang s’approche", bundle: .main), color: MeeshyColors.successHex,
+                        keyPath: \.receivesBloodProximity)
+
             notifToggle(icon: "battery.25", title: String(localized: "settings.notifications.device_battery", defaultValue: "Batterie de mes proches", bundle: .main), color: MeeshyColors.successHex,
                         keyPath: \.receivesDeviceBattery)
 

@@ -10,7 +10,10 @@ import { callBackIntentFromMessage, type CallBackIntent } from './call-back-inte
  * profond (`meeshy://c/<id>?rappeler=…`, routé par `shell-deep-links.ts`), et
  * `MeeshyWidgetsPlugin` signale à part l'appel à composer, RETENU côté natif
  * jusqu'à l'abonnement : un lancement à froid ne le perd pas. La charge est
- * relue par la loi du web (`callBackIntentFromMessage`).
+ * relue par la loi du web (`callBackIntentFromMessage`), puis réduite à ce
+ * qu'une ADRESSE peut dire (#19243) : `MainActivity` est exportée, toute app
+ * peut lui remettre `meeshy://c/<id>?rappeler=video&appelant=Maman`. Le fil et
+ * le type seuls passent ; le nom vient du fil et « Appeler » est demandé.
  */
 export const CALL_BACK_EVENT = 'callBackRequested';
 
@@ -20,7 +23,7 @@ export function ecouterRappels(coque: CoqueNative | undefined, onRequest: (inten
   if (!declare || typeof addListener !== 'function') return false;
   addListener(WIDGETS_BRIDGE, CALL_BACK_EVENT, (donnees) => {
     const intent = callBackIntentFromMessage({ type: NOTIFICATION_CLICKED_MESSAGE, callBack: donnees });
-    if (intent !== null) onRequest(intent);
+    if (intent !== null) onRequest({ ...intent, title: '', isGroup: false, origin: 'url' });
   });
   return true;
 }

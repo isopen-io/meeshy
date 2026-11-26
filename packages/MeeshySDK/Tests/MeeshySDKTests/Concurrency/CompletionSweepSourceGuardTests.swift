@@ -10,6 +10,8 @@ final class CompletionSweepSourceGuardTests: XCTestCase {
         "MeeshySDK/Cache/CacheCoordinator.swift",
         "MeeshySDK/Services/LinkPreviewFetcher.swift",
         "MeeshySDK/Store/StoryDraftStore.swift",
+        "MeeshySDK/Store/StoryDraftStore+PublicationLifecycle.swift",
+        "MeeshySDK/Store/StoryDraftStore+Inventory.swift",
         "MeeshyCore/Utils/WireDate.swift",
     ]
 

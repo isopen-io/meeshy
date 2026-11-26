@@ -13,6 +13,7 @@ import type { GloryRankKey } from '@meeshy/shared/utils/game/glory';
 import { loadGameCatalogParts, translateGame } from '@/lib/i18n-game-catalog';
 import { usePackPreviewCatalog } from '@/lib/i18n-pack-preview-catalog';
 import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
+import { meeshShortfall } from '@/lib/packs/shortfall';
 import { packIsLocked, packUnlockLine } from '@/lib/packs/unlock-line';
 import { stickerPackCoverSrc } from '@/lib/sticker-packs/src';
 import type { PlainStickerPacksKey } from '@/lib/i18n-sticker-packs-catalog';
@@ -125,6 +126,7 @@ function UnifiedPackInspector({
           pack={{ ...sheetRef, title: shopPackText(sheet, language).name, description: shopPackText(sheet, language).description, author: sheet.author, installed: sheet.installed, price: sheet.price, owned: sheet.owned }}
           cover={<PackCover pack={sheet} />}
           action={inspection.actionOf(sheet)}
+          shortfall={inspection.shortfall(sheet)}
           busy={inspection.busy(sheet)}
           notice={inspection.notice}
           onAction={() => void inspection.toggle(sheet)}
@@ -186,6 +188,7 @@ export const unifiedShopAdapter = (
   deps: ConversationsDeps,
   queryClient: QueryClient,
   rankName?: (rank: GloryRankKey) => string,
+  balance?: number | null,
 ): PackShopAdapter<UnifiedPack> => ({
   domain: filter,
   catalogueKey: shopKey(filter),
@@ -214,6 +217,7 @@ export const unifiedShopAdapter = (
   unlock: (pack) =>
     pack.requirementPreview === undefined ? null : packUnlockLine({ preview: pack.requirementPreview, language, ...(rankName !== undefined ? { rankName } : {}) }),
   locked: (pack) => packIsLocked(pack.requirementPreview),
+  shortfall: (pack) => meeshShortfall({ balance, price: pack.price, owned: pack.owned }),
   price: (pack) => pack.price,
   owned: (pack) => pack.owned,
   removable: (pack) => pack.removable,
@@ -256,8 +260,12 @@ export function UnifiedShop({
     () => (ranksReady === language ? (rank: GloryRankKey) => translateGame(language, `game.rank.${rank}`) : undefined),
     [ranksReady, language],
   );
-  const adapter = useMemo(() => unifiedShopAdapter(language, filter, deps, queryClient, rankName), [language, filter, deps, queryClient, rankName]);
   const balance = useQuery<number | null>({ queryKey: BALANCE_QUERY_KEY, queryFn: () => null, enabled: false, staleTime: Infinity });
+  /* #20527 — le solde servi entre dans l'adaptateur : un pack qu'il ne couvre pas dit l'écart et mène à la frappe. */
+  const adapter = useMemo(
+    () => unifiedShopAdapter(language, filter, deps, queryClient, rankName, balance.data),
+    [language, filter, deps, queryClient, rankName, balance.data],
+  );
   const chips: readonly { readonly id: UnifiedFilter; readonly label: string }[] = [
     { id: 'all', label: translateStickerPacks(language, 'packs.shop.all') },
     ...PACK_DOMAINS.map((domain) => ({ id: domain, label: translateStickerPacks(language, DOMAIN_KEYS[domain]) })),

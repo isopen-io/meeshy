@@ -49,6 +49,8 @@ export const ACTOR_CONTENT_TYPES: ReadonlySet<NotificationType> = new Set<Notifi
   // Partage de position (#19204) : l'émetteur prévient, le destinataire demande — jamais à un bloqué.
   'location_share_started',
   'location_share_requested',
+  // Un Sang s'approche (#20540) : son nom et sa distance, jamais vers un bloqué.
+  'blood_proximity',
 ]);
 
 export async function refusesActorContent(

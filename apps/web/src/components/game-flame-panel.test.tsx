@@ -35,6 +35,10 @@ const props = (patch: Parameters<typeof gameBlockFixture>[0] = {}, extra: Partia
     onBuyFreeze: () => undefined,
     onRelight: () => undefined,
     onPause: () => undefined,
+    choosingGoal: false,
+    goalSignSeen: false,
+    onChooseGoal: () => undefined,
+    onCloseGoalSign: () => undefined,
     ...extra,
   } satisfies Parameters<typeof GameFlamePanel>[0];
 };
@@ -219,6 +223,14 @@ describe('la Flamme en veille (#20509)', () => {
     expect(html).not.toContain('data-game-flame-pause=""');
   });
 
+  test('le trimestre pris, l’annonce se tait et la carte dit dès quand la prochaine sera possible (#20517)', () => {
+    const html = renderToStaticMarkup(<GameFlamePanel {...props({ pause: { from: '2026-10-01', until: '2026-10-02' } })} />);
+    expect(text(html)).toContain('Ta prochaine veille sera possible dès le 1 janvier.');
+    expect(html).toContain('data-game-flame-pause-next=""');
+    expect(html).not.toContain('data-game-flame-pause=""');
+    expect(html).not.toContain('role="radiogroup"');
+  });
+
   test('sans Flamme, ou éteinte, rien à mettre en veille', () => {
     expect(renderToStaticMarkup(<GameFlamePanel {...props({ streak: 0, lastActiveDay: null })} />)).not.toContain('data-game-flame-pause=""');
     expect(renderToStaticMarkup(<GameFlamePanel {...props({ ...out, balance: 5 })} />)).not.toContain('data-game-flame-pause=""');
@@ -233,5 +245,76 @@ describe('la Flamme en veille (#20509)', () => {
     const html = renderToStaticMarkup(<GameFlamePanel {...props({}, { errors: { pause: 'Ta Flamme a déjà eu sa veille ce trimestre.' } })} />);
     expect(html).toContain('role="alert"');
     expect(text(html)).toContain('Ta Flamme a déjà eu sa veille ce trimestre.');
+  });
+});
+
+describe('l’objectif de Flamme (#20521)', () => {
+  const firstDay = { streak: 1, goal: null } as const;
+  const running = { streak: 9, goal: { target: 14, chosenAtStreak: 1 } } as const;
+  const reached = { streak: 7, goal: { target: 7, chosenAtStreak: 1 } } as const;
+
+  test('au premier jour, la carte propose 7, 14 ou 30 jours, et ne rien choisir ne coûte rien', () => {
+    const html = renderToStaticMarkup(<GameFlamePanel {...props(firstDay)} />);
+    expect(html.match(/data-game-flame-goal="/g)?.length).toBe(3);
+    expect(text(html)).toContain('7 jours');
+    expect(text(html)).toContain('30 jours');
+    expect(html).toContain('role="group"');
+  });
+
+  test('un geste choisit l’objectif', async () => {
+    const asked: number[] = [];
+    const host = await mount(<GameFlamePanel {...props(firstDay, { onChooseGoal: (target) => asked.push(target) })} />);
+    await click(host.querySelector('[data-game-flame-goal="14"]'));
+    expect(asked).toEqual([14]);
+  });
+
+  test('passé le premier jour, sans objectif, rien ne se propose', () => {
+    expect(renderToStaticMarkup(<GameFlamePanel {...props({ goal: null })} />)).not.toContain('data-game-flame-goal');
+    expect(renderToStaticMarkup(<GameFlamePanel {...props()} />)).not.toContain('data-game-flame-goal');
+  });
+
+  test('en cours, la carte dit ce qu’il reste, et ne propose rien d’autre', () => {
+    const html = renderToStaticMarkup(<GameFlamePanel {...props(running)} />);
+    expect(text(html)).toContain('Objectif : 14 jours de Flamme. Encore 5 jours.');
+    expect(html).not.toContain('data-game-flame-goal="');
+  });
+
+  test('atteint, les aïeux le saluent et la marche suivante se propose ; « Plus tard » la ferme', async () => {
+    const chosen: number[] = [];
+    const closed: number[] = [];
+    const host = await mount(
+      <GameFlamePanel {...props(reached, { onChooseGoal: (target) => chosen.push(target), onCloseGoalSign: (target) => closed.push(target) })} />,
+    );
+    expect(host.textContent).toContain('Tes aïeux saluent ta Flamme : 7 jours tenus');
+    expect(host.querySelector('[data-game-flame-goal-sign]')?.getAttribute('role')).toBe('status');
+    await click(host.querySelector('[data-game-flame-goal="14"]'));
+    expect(chosen).toEqual([14]);
+    await click(host.querySelector('[data-game-flame-goal-later]'));
+    expect(closed).toEqual([7]);
+  });
+
+  test('le signe déjà fermé, ou déjà dit par Mee et Meo, ne se redit pas ; la marche suivante reste à portée', async () => {
+    const chosen: number[] = [];
+    const host = await mount(<GameFlamePanel {...props(reached, { goalSignSeen: true, onChooseGoal: (target) => chosen.push(target) })} />);
+    expect(host.querySelector('[data-game-flame-goal-sign]')).toBeNull();
+    expect(host.querySelector('[data-game-flame-goal-later]')).toBeNull();
+    expect(host.textContent).not.toContain('Tes aïeux saluent');
+    expect(host.textContent).toContain('Objectif de 7 jours tenu.');
+    await click(host.querySelector('[data-game-flame-goal="14"]'));
+    expect(chosen).toEqual([14]);
+  });
+
+  test('une Flamme cassée fait tomber l’objectif sans le dire comme un échec', () => {
+    const html = renderToStaticMarkup(<GameFlamePanel {...props({ ...out, goal: { target: 14, chosenAtStreak: 1, brokenOn: '2026-10-04' } })} />);
+    expect(html).not.toContain('data-game-flame-goal');
+    expect(text(html)).not.toContain('Objectif');
+  });
+
+  test('hors ligne, le choix attend ; en vol, il dit qu’il travaille ; un refus se dit à sa place', () => {
+    expect(renderToStaticMarkup(<GameFlamePanel {...props(firstDay, { online: false })} />)).toMatch(/data-game-flame-goal="7" disabled=""/);
+    expect(renderToStaticMarkup(<GameFlamePanel {...props(firstDay, { choosingGoal: true })} />)).toMatch(/data-game-flame-goal="7" disabled="" aria-busy="true"/);
+    const html = renderToStaticMarkup(<GameFlamePanel {...props(firstDay, { errors: { goal: 'Cet objectif ne se propose pas aujourd’hui.' } })} />);
+    expect(html).toContain('role="alert"');
+    expect(text(html)).toContain('Cet objectif ne se propose pas aujourd’hui.');
   });
 });

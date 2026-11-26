@@ -66,6 +66,34 @@ describe('le bloc `flame` porte la veille', () => {
   });
 });
 
+describe('le bloc `flame` dit quand la prochaine veille sera possible (#20517)', () => {
+  it('le trimestre pris, il dit le premier jour du suivant, validé par le contrat', () => {
+    const block = buildGameBlock(facts({ today: '2026-12-05', lastActiveDay: '2026-12-05', pause: week }));
+    expect(block.flame).not.toHaveProperty('pause');
+    expect(block.flame.nextPauseFrom).toBe('2027-01-01');
+    expect(parseGameBlock(block)?.flame.nextPauseFrom).toBe('2027-01-01');
+  });
+
+  it('se tait quand l’annonce est ouverte, pendant la veille, et devant une passerelle qui ne la lit pas', () => {
+    expect(buildGameBlock(facts({ today: '2026-12-31', lastActiveDay: '2026-12-31', pause: week })).flame).not.toHaveProperty('nextPauseFrom');
+    expect(buildGameBlock(facts({ pause: week })).flame).not.toHaveProperty('nextPauseFrom');
+    expect(buildGameBlock(facts({ today: '2026-12-05', lastActiveDay: '2026-12-05' })).flame).not.toHaveProperty('nextPauseFrom');
+  });
+
+  it('se tait pour une Flamme éteinte : il n’y a rien à mettre en veille', () => {
+    const block = buildGameBlock(facts({ today: '2026-12-20', lastActiveDay: '2026-12-05', pause: week }));
+    expect(block.flame.status).toBe('out');
+    expect(block.flame).not.toHaveProperty('nextPauseFrom');
+  });
+
+  it('une forme illisible tombe seule, sans emporter le bloc', () => {
+    const block = buildGameBlock(facts({ today: '2026-12-05', lastActiveDay: '2026-12-05', pause: week }));
+    const parsed = parseGameBlock({ ...block, flame: { ...block.flame, nextPauseFrom: 'janvier' } });
+    expect(parsed?.flame.nextPauseFrom).toBeUndefined();
+    expect(parsed?.flame.days).toBe(12);
+  });
+});
+
 describe('le contrat de l’annonce', () => {
   it('une adresse et un code de refus à elle', () => {
     expect(GAME_ROUTES.flamePause).toBe('/me/game/flame/pause');

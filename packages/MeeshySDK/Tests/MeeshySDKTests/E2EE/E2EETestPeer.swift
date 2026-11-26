@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 import GRDB
 import LibSignalClient
-@testable import MeeshyE2EE
+@_spi(Testing) @testable import MeeshyE2EE
 @testable import MeeshySDK
 
 /// Une installation complète branchée sur la fausse passerelle : enrôlée par

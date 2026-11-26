@@ -61,7 +61,10 @@ public class MeeshyWidgetsPlugin extends Plugin {
         NotificationBannerActions.dismiss(getContext(), intent);
         Uri data = intent.getData();
         // #10908 — « Rappeler » touche sur la banniere d'un appel manque : la page compose l'appel.
-        NotificationBannerRules.CallBack callBack = data == null ? null : NotificationBannerRules.callBackRequest(data.toString());
+        // #19243 — seulement si la banniere l'a scelle : un lien forge n'ouvre que le fil.
+        NotificationBannerRules.CallBack callBack = data == null || !CallShellStore.sealed(getContext(), intent)
+            ? null
+            : NotificationBannerRules.callBackRequest(data.toString());
         if (callBack != null) {
             JSObject request = new JSObject();
             request.put("conversationId", callBack.conversationId);

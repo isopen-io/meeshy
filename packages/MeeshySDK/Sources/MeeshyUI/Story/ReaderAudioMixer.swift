@@ -24,7 +24,7 @@ import MeeshySDK
 @MainActor
 public final class ReaderAudioMixer {
 
-    public private(set) var isMuted: Bool = false
+    public internal(set) var isMuted: Bool = false
     public private(set) var isPlaying: Bool = false
     /// Number of foreground audio clips currently configured.
     public var activeClipCount: Int { entries.count }
@@ -78,13 +78,13 @@ public final class ReaderAudioMixer {
     var configurationTicket: UInt64 = 0
     /// Wall-clock origin for the current playback pass — set on `play()` and
     /// used to derive the sample-accurate host-time targets for each clip.
-    private var playbackStartHostTime: UInt64?
+    var playbackStartHostTime: UInt64?
     /// Instant `mach_absolute_time()` du dernier `pause()`, tant qu'aucune
     /// reprise ne l'a soldé. `slideElapsedSeconds` se mesure contre
     /// `playbackStartHostTime`, une horloge MURALE : sans ce jalon, une pause
     /// de N secondes faisait avancer le chip audio de N secondes pendant que
     /// rien ne jouait, et la reprise servait un écoulé faux de N (#6580).
-    private var pausedAtHostTime: UInt64?
+    var pausedAtHostTime: UInt64?
     private var didShutdown: Bool = false
     /// Stored background audio entry (at most one per slide).
     var backgroundEntry: BackgroundEntry?
@@ -395,82 +395,6 @@ public final class ReaderAudioMixer {
         engineHost.clientDidGoIdle()
     }
 
-    // MARK: - Volume / mute
-
-    public func setVolume(_ volume: Float, for audioId: String) {
-        // Plafond partagé : un gain au-delà de 100 % doit survivre jusqu'au
-        // chemin d'amplification, le borner ici le rendrait inaudible.
-        let clamped = max(0, min(StoryVolume.maxGain, volume))
-        guard var entry = entries[audioId] else { return }
-        entry.targetVolume = clamped
-        entries[audioId] = entry
-        entry.node.volume = effectiveVolume(for: entry)
-    }
-
-    public func setMute(_ muted: Bool) {
-        isMuted = muted
-        for entry in entries.values {
-            entry.node.volume = effectiveVolume(for: entry)
-        }
-        if let bg = backgroundEntry {
-            bg.player.volume = muted ? 0 : bg.targetVolume
-        }
-    }
-
-    /// Volume courant du clip de fond, indépendant du mute global.
-    ///
-    /// Le mixer n'exposait que `setVolume(_:for:)`, réservé aux clips
-    /// d'avant-plan indexés par id : le slot de fond, unique et sans id
-    /// exposé, restait figé sur la valeur posée à `configureBackground`.
-    /// L'automation de volume a besoin de le piloter à chaque tick.
-    public func setBackgroundVolume(_ volume: Float) {
-        guard var bg = backgroundEntry else { return }
-        let clamped = min(StoryVolume.maxGain, max(0, volume))
-        guard bg.targetVolume != clamped else { return }
-        bg.targetVolume = clamped
-        backgroundEntry = bg
-        bg.player.volume = isMuted ? 0 : clamped
-    }
-
-    /// Mute / unmute a single foreground clip without touching the global
-    /// `isMuted` flag (used by the per-chip tap action in the reader). The
-    /// background slot is not exposed here — the bg has no dedicated chip.
-    public func setMute(_ muted: Bool, for audioId: String) {
-        guard var entry = entries[audioId] else { return }
-        entry.isUserMuted = muted
-        entries[audioId] = entry
-        entry.node.volume = effectiveVolume(for: entry)
-    }
-
-    public func isMuted(audioId: String) -> Bool {
-        entries[audioId]?.isUserMuted ?? false
-    }
-
-    /// Volume CIBLE d'un clip d'avant-plan tel que le mixer le tient (avant
-    /// mute global / per-piste). Miroir de `AudioMixer.intendedVolume(for:)` —
-    /// seam d'observation : c'est ce qui permet de prouver qu'un mute d'auteur
-    /// (`volume = 0` dans le modèle) atteint réellement le moteur.
-    public func intendedVolume(for audioId: String) -> Float? {
-        entries[audioId]?.targetVolume
-    }
-
-    /// Volume cible du slot de fond (nil si aucun fond configuré).
-    public func intendedBackgroundVolume() -> Float? {
-        backgroundEntry?.targetVolume
-    }
-
-    /// Volume RÉELLEMENT porté par le node d'un clip — distinct de
-    /// `intendedVolume(for:)`, qui rend la CIBLE. Seam d'observation de
-    /// l'enveloppe : c'est lui qui prouve qu'un clip entré en cours de piste
-    /// n'est pas rendu muet par une montée rejouée depuis zéro.
-    func appliedVolume(for audioId: String) -> Float? {
-        entries[audioId]?.node.volume
-    }
-
-    func effectiveVolume(for entry: Entry) -> Float {
-        (isMuted || entry.isUserMuted) ? 0 : entry.targetVolume
-    }
-
     // MARK: - Playhead
 
     /// Temps écoulé depuis l'origine `t = 0` de la slide en cours, en
@@ -662,138 +586,6 @@ public final class ReaderAudioMixer {
         return true
     }
 
-    /// Schedule fade-in and fade-out volume ramps. node.volume is sampled by
-    /// the audio render thread per slice; main-thread updates are picked up
-    /// at sub-millisecond granularity which is fine for human-perceptible
-    /// fades. Sample-accurate fades would require AVAudioMixerNode +
-    /// AVAudioUnitEQ scheduled parameter automation — overkill for the
-    /// 0.1-0.5s fade durations the composer typically authors.
-    ///
-    /// `slideElapsed` est ce qui sépare « ce clip COMMENCE » de « ce clip est
-    /// déjà commencé ». Sans elle, un clip entré à mi-fade rejouait sa montée
-    /// DEPUIS LE SILENCE, et un clip entré passé son fade-out posait DEUX
-    /// rampes qui tiraient à la même milliseconde sur le même `node.volume`
-    /// (#6580) — la position avait suivi l'ouverture, l'amplitude non.
-    /// `AudioEnvelope` est le site unique de cette règle ; le fond la partage.
-    private func scheduleFades(for entry: Entry, originHost: UInt64, slideElapsed: Double) {
-        if let cycle = entry.envelopeCycle {
-            runLoopEnvelope(for: entry, cycle: cycle)
-            return
-        }
-        let envelope = AudioEnvelope.plan(
-            elapsedInClip: slideElapsed - Double(entry.startTime),
-            fadeIn: Double(entry.fadeIn),
-            fadeOut: Double(entry.fadeOut),
-            clipDuration: Double(entry.duration),
-            target: entry.targetVolume)
-        entry.node.volume = (isMuted || entry.isUserMuted) ? 0 : envelope.initialVolume
-        [envelope.fadeIn, envelope.fadeOut].compactMap { $0 }.forEach { ramp in
-            scheduleVolumeFade(
-                entry: entry,
-                from: ramp.from,
-                to: ramp.to,
-                duration: ramp.duration,
-                triggerAt: originHost + ReaderAudioMixer.hostTime(
-                    forDelaySeconds: Double(entry.startTime) + ramp.startOffset)
-            )
-        }
-    }
-
-    private func scheduleVolumeFade(entry: Entry, from start: Float, to end: Float,
-                                    duration: TimeInterval, triggerAt hostTrigger: UInt64) {
-        let delaySeconds = ReaderAudioMixer.delaySeconds(forHostTime: hostTrigger,
-                                                         relativeTo: mach_absolute_time())
-        guard delaySeconds >= 0 else { return }
-        // Timer.scheduledTimer fires on the run loop that scheduled it (main),
-        // so the body is implicitly main-isolated — `assumeIsolated` lifts the
-        // Swift 6 @Sendable closure annotation without an actor hop.
-        let timer = Timer.scheduledTimer(withTimeInterval: delaySeconds, repeats: false) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.runVolumeRamp(entry: entry, from: start, to: end,
-                                    duration: duration, startHost: hostTrigger)
-            }
-        }
-        if var stored = entries[entry.audioId] {
-            stored.fadeTimers.append(timer)
-            entries[entry.audioId] = stored
-        }
-    }
-
-    /// Le volume suit le temps RÉEL écoulé depuis `startHost` (l'instant prévu
-    /// du fondu), pas le nombre de réveils : un réveil tardif n'étire plus la
-    /// rampe, un déclenchement tardif ne la décale plus (#9702).
-    private func runVolumeRamp(entry: Entry, from start: Float, to end: Float,
-                               duration: TimeInterval, startHost: UInt64) {
-        guard duration > 0 else {
-            entry.node.volume = (isMuted || entry.isUserMuted) ? 0 : end
-            return
-        }
-        let audioId = entry.audioId
-        let task = Task { @MainActor [weak self] in
-            guard let self else { return }
-            while !Task.isCancelled {
-                guard let live = self.entries[audioId] else { return }
-                let elapsed = ReaderAudioMixer.delaySeconds(forHostTime: mach_absolute_time(),
-                                                            relativeTo: startHost)
-                let volume = ReaderVolumeRamp.volume(from: start, to: end,
-                                                     duration: duration, elapsed: elapsed)
-                live.node.volume = (self.isMuted || live.isUserMuted) ? 0 : volume
-                if ReaderVolumeRamp.isComplete(duration: duration, elapsed: elapsed) { return }
-                guard await cancellableSleep(for: ReaderVolumeRamp.step) else { return }
-            }
-        }
-        if var stored = entries[entry.audioId] {
-            stored.fadeTasks.append(task)
-            entries[entry.audioId] = stored
-        }
-    }
-
-    /// **L'enveloppe d'une boucle d'aperçu suit l'horloge de la passe (#10367).**
-    ///
-    /// Une minuterie par fondu ne vaut que pour le premier tour : le volume se
-    /// relit donc à 60 Hz sur l'origine VIVANTE (`playbackStartHostTime`, que
-    /// la reprise après pause fait glisser) et la phase du tour
-    /// (`ReaderLoopEnvelope`). La tâche s'efface avec SA passe — `stop()`,
-    /// `play()` à neuf et `teardown()` avancent l'époque — et tombe avec les
-    /// autres rampes sous `fadeOutAndStop`.
-    private func runLoopEnvelope(for entry: Entry, cycle: Double) {
-        let audioId = entry.audioId
-        let epoch = playbackEpoch
-        _ = applyLoopEnvelope(audioId: audioId, epoch: epoch, cycle: cycle)
-        let task = Task { @MainActor [weak self] in
-            while !Task.isCancelled {
-                guard self?.applyLoopEnvelope(audioId: audioId, epoch: epoch, cycle: cycle) == true else { return }
-                guard await cancellableSleep(for: ReaderVolumeRamp.step) else { return }
-            }
-        }
-        if var stored = entries[audioId] {
-            stored.fadeTasks.append(task)
-            entries[audioId] = stored
-        }
-    }
-
-    /// Pose le volume que dicte la phase du tour. `false` quand la passe n'est
-    /// plus la sienne : la tâche s'arrête.
-    private func applyLoopEnvelope(audioId: String, epoch: UInt64, cycle: Double) -> Bool {
-        guard playbackEpoch == epoch, let live = entries[audioId] else { return false }
-        guard let slideElapsed = loopEnvelopeSlideElapsed else { return true }
-        let volume = ReaderLoopEnvelope.volume(elapsedInClip: slideElapsed - Double(live.startTime),
-                                               cycle: cycle,
-                                               fadeIn: Double(live.fadeIn),
-                                               fadeOut: Double(live.fadeOut),
-                                               target: live.targetVolume)
-        live.node.volume = (isMuted || live.isUserMuted) ? 0 : volume
-        return true
-    }
-
-    /// Écoulé de la passe que lit une enveloppe de boucle — premier plan et
-    /// fond (#10369). `nil` hors passe ou en pause : une pause gèle la phase,
-    /// l'origine ne glisse qu'à la reprise.
-    var loopEnvelopeSlideElapsed: Double? {
-        guard pausedAtHostTime == nil, let origin = playbackStartHostTime else { return nil }
-        return ReaderAudioMixer.delaySeconds(forHostTime: mach_absolute_time(), relativeTo: origin)
-    }
-
     // MARK: - Internal
 
     struct Entry {
@@ -862,7 +654,7 @@ extension ReaderAudioMixer: AudiblyPlayingPlayer {
     var isSounding: Bool { !isMuted && (!entries.isEmpty || backgroundEntry != nil) }
 }
 
-// MARK: - Ducking + fade-out
+// MARK: - Ducking
 
 extension ReaderAudioMixer {
     /// When `true`, foreground entry start/end events automatically schedule
@@ -876,61 +668,6 @@ extension ReaderAudioMixer {
     public var duckedBackgroundVolume: Float {
         get { _duckedBackgroundVolume }
         set { _duckedBackgroundVolume = newValue }
-    }
-
-    /// Fond enchaîné vers le silence de TOUTES les entrées (premier plan et
-    /// fond) en `duration` secondes, puis arrêt du moteur. Appelé à la fermeture
-    /// du lecteur par `PlaybackCoordinator.fadeOutAllExternal` (#9867).
-    ///
-    /// Le gain suit le temps RÉEL écoulé (`ReaderVolumeRamp`, comme les rampes
-    /// d'enveloppe), pas un nombre de réveils ; les rampes d'auteur en cours
-    /// sont annulées pour ne pas remonter le volume sous le fondu. Un fondu
-    /// dépassé par une autre passe (`stop()`, `play()` à neuf) s'efface sans
-    /// arrêter celle-ci.
-    public func fadeOutAndStop(duration: TimeInterval = 0.5) async {
-        guard isPlaying else { stop(); return }
-        cancelVolumeAutomation()
-        let epoch = playbackEpoch
-        let startHost = mach_absolute_time()
-        while playbackEpoch == epoch, !Task.isCancelled {
-            let elapsed = Self.delaySeconds(forHostTime: mach_absolute_time(), relativeTo: startHost)
-            applyFadeGain(ReaderVolumeRamp.volume(from: 1, to: 0, duration: duration, elapsed: elapsed))
-            if ReaderVolumeRamp.isComplete(duration: duration, elapsed: elapsed) { break }
-            guard await cancellableSleep(for: ReaderVolumeRamp.step) else { break }
-        }
-        guard playbackEpoch == epoch else { return }
-        stop()
-    }
-
-    /// Les rampes d'enveloppe (minuteries d'attente, tâches de rampe) des deux
-    /// slots tombent : elles tireraient le volume vers le haut sous un fondu.
-    func cancelVolumeAutomation() {
-        entries = entries.mapValues { entry in
-            entry.fadeTimers.forEach { $0.invalidate() }
-            entry.fadeTasks.forEach { $0.cancel() }
-            var cleared = entry
-            cleared.fadeTimers = []
-            cleared.fadeTasks = []
-            return cleared
-        }
-        guard var bg = backgroundEntry else { return }
-        bg.fadeTimers.forEach { $0.invalidate() }
-        bg.fadeTasks.forEach { $0.cancel() }
-        bg.fadeTimers = []
-        bg.fadeTasks = []
-        backgroundEntry = bg
-    }
-
-    /// `gain` ∈ [0, 1] appliqué au volume EFFECTIF de chaque slot — mute global
-    /// et mute par piste compris —, jamais au volume courant : multiplier le
-    /// courant à chaque pas ferait une descente exponentielle.
-    private func applyFadeGain(_ gain: Float) {
-        for entry in entries.values {
-            entry.node.volume = effectiveVolume(for: entry) * gain
-        }
-        if let bg = backgroundEntry {
-            bg.player.volume = (isMuted ? 0 : bg.targetVolume) * gain
-        }
     }
 }
 

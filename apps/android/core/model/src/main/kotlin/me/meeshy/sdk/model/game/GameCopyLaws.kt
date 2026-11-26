@@ -53,12 +53,38 @@ public object GameCopyLaws {
         GameTextArg.Verbatim(dayLabel),
     )
 
+    /** Le trimestre pris : « Ta prochaine veille sera possible dès le 1 janvier. », [dayLabel] sans jour de semaine. */
+    public fun flamePauseNext(dayLabel: String): GameText =
+        GameText.of(GameTextKey.FlamePauseNext, GameTextArg.Verbatim(dayLabel))
+
     /** Le refus d'une veille dit sa raison ; une raison inconnue ou absente rend `null` (la phrase générale du refus). */
     public fun flamePauseRefusal(reason: String?): GameText? = when (FlamePauseRefusal.fromWire(reason)) {
         FlamePauseRefusal.QuarterlyLimit -> GameText(GameTextKey.FlamePauseQuarterlyLimit)
         FlamePauseRefusal.AlreadyPaused -> GameText(GameTextKey.FlamePauseAlreadyPaused)
         FlamePauseRefusal.NoFlame -> GameText(GameTextKey.FlamePauseNoFlame)
         FlamePauseRefusal.InvalidDays, null -> null
+    }
+
+    // L'objectif de Flamme (#20523) — miroir de `FlameGoalCopy` (iOS) et de `flame-goal-copy.ts` (web).
+
+    /** « Objectif : 14 jours de Flamme. Encore 5 jours. » */
+    public fun flameGoalRunning(target: Int, remaining: Int): GameText = GameText.of(
+        GameTextKey.FlameGoalRunning,
+        GameTextArg.Nested(days(target)),
+        GameTextArg.Nested(days(remaining)),
+    )
+
+    /** « Tes aïeux saluent ta Flamme : 7 jours tenus ! » */
+    public fun flameGoalReached(target: Int): GameText = GameText.of(GameTextKey.FlameGoalReached, GameTextArg.Nested(days(target)))
+
+    /** « Viser 14 jours » — la marche suivante, d'un seul toucher. */
+    public fun flameGoalNext(target: Int): GameText = GameText.of(GameTextKey.FlameGoalNext, GameTextArg.Nested(days(target)))
+
+    /** Le refus d'un objectif dit sa raison ; une raison inconnue ou absente rend `null` (la phrase générale du refus). */
+    public fun flameGoalRefusal(reason: String?): GameText? = when (FlameGoalRefusal.fromWire(reason)) {
+        FlameGoalRefusal.NotOffered -> GameText(GameTextKey.FlameGoalNotOffered)
+        FlameGoalRefusal.NoFlame -> GameText(GameTextKey.FlameGoalNoFlame)
+        null -> null
     }
 
     /** Le nom d'une ligue (iOS `GameText.leagueName`). */

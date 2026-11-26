@@ -67,8 +67,8 @@ const CONVERSATION_TYPES: readonly ConversationType[] = ['direct', 'group', 'pub
  * du commentaire, de son parent et du POST qui le porte, le média d'un contenu
  * sans texte, la clé du palier d'engagement, la section du jeu (`gameSection`,
  * #9490), le MOTIF d'un retrait par la modération (`reason`, #11150), le palier de la
- * batterie (`batteryKind`, #14147) et le pas du téléphone injoignable (`reachabilityKind`, #18737) —
- * jamais la prose du corps.
+ * batterie (`batteryKind`, #14147), le pas du téléphone injoignable (`reachabilityKind`, #18737) et
+ * l'autre Sang d'une alerte de proximité (`userId`, #20540), dont la carte s'ouvre — jamais la prose du corps.
  */
 type MetadataField =
   | 'postType'
@@ -86,7 +86,8 @@ type MetadataField =
   | 'gameSection'
   | 'reason'
   | 'batteryKind'
-  | 'reachabilityKind';
+  | 'reachabilityKind'
+  | 'userId';
 
 const METADATA_FIELDS: readonly MetadataField[] = [
   'postType',
@@ -105,6 +106,7 @@ const METADATA_FIELDS: readonly MetadataField[] = [
   'reason',
   'batteryKind',
   'reachabilityKind',
+  'userId',
 ];
 
 /** `tierRank` (#10298) : présent ⇒ le palier est composé par le serveur, titre et corps compris. */

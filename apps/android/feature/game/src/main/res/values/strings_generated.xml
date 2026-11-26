@@ -570,6 +570,9 @@
     <string name="game_error_duo_not_found">This alliance no longer exists: the screen is refreshing.</string>
     <string name="game_error_duo_not_friends">An alliance is formed between accepted friends.</string>
     <string name="game_error_duo_transition_refused">This move makes no sense for this alliance.</string>
+    <string name="game_error_flame_goal_no_flame">Your Flame needs to be lit to choose a goal.</string>
+    <string name="game_error_flame_goal_not_allowed">This Flame goal can’t be chosen today.</string>
+    <string name="game_error_flame_goal_not_offered">This goal isn’t on offer today.</string>
     <string name="game_error_flame_pause_already_paused">Your Flame is already resting.</string>
     <string name="game_error_flame_pause_no_flame">Your Flame needs to be lit before it can rest.</string>
     <string name="game_error_flame_pause_not_allowed">The Flame cannot rest right now.</string>
@@ -645,9 +648,16 @@
     <string name="game_flame_panel_effort_relight_tomorrow">Just %1$s more by tomorrow night and your Flame comes back with its %2$s, without paying.</string>
     <string name="game_flame_panel_freeze_buy">Take a Vigil · %1$s</string>
     <string name="game_flame_panel_freezes">Vigils: %1$s / %2$s</string>
+    <string name="game_flame_panel_goal_choices">Flame goal</string>
+    <string name="game_flame_panel_goal_intro">A goal for your Flame? Pick one today, or let it burn.</string>
+    <string name="game_flame_panel_goal_later">Later</string>
+    <string name="game_flame_panel_goal_next">Aim for %1$s</string>
+    <string name="game_flame_panel_goal_reached">Your ancestors salute your Flame: %1$s held!</string>
+    <string name="game_flame_panel_goal_running">Goal: %1$s of Flame. %2$s to go.</string>
     <string name="game_flame_panel_pause">Let it rest · %1$s</string>
     <string name="game_flame_panel_pause_days">Rest length</string>
     <string name="game_flame_panel_pause_intro">Need a break? Your Flame waits up to %1$s, once a quarter.</string>
+    <string name="game_flame_panel_pause_next">Your Flame can rest again from %1$s.</string>
     <string name="game_flame_panel_paused">Your Flame is resting until %1$s.</string>
     <string name="game_flame_panel_paused_soon">Your Flame starts resting tomorrow, until %1$s.</string>
     <string name="game_flame_panel_relight">Relight the Flame · %1$s</string>

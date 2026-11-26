@@ -365,10 +365,18 @@ public struct GameBlock: Codable, Sendable, Equatable {
         /// La veille annoncée ou en cours (#17372, #20510), de l'annonce à son dernier jour. Absente devant un serveur
         /// antérieur, hors de toute veille, ou illisible : la carte d'avant.
         public let pause: GameFlamePause?
+        /// Le premier jour (`AAAA-MM-JJ`) où la prochaine veille pourra commencer, servi quand celle du trimestre a
+        /// déjà eu lieu (#20517, #20534). Absent devant un serveur antérieur, l'annonce ouverte, ou illisible : la
+        /// carte d'avant.
+        public let nextPauseFrom: String?
+        /// L'objectif de Flamme (#17379, #20522) : les choix du premier jour, l'objectif en cours ou atteint. Absent
+        /// devant un serveur antérieur, sans rien à dire, ou illisible : la carte d'avant.
+        public let goal: GameServedFlameGoal?
 
         public init(days: Int, form: FlameFormKey?, bonusPercent: Int, freezes: Int, maxFreezes: Int,
                     freezePrice: Int, relightPrice: Int, status: FlameStatus, canRelight: Bool,
-                    freezeGifted: Bool? = nil, effortRelight: GameEffortRelight? = nil, pause: GameFlamePause? = nil) {
+                    freezeGifted: Bool? = nil, effortRelight: GameEffortRelight? = nil, pause: GameFlamePause? = nil,
+                    goal: GameServedFlameGoal? = nil, nextPauseFrom: String? = nil) {
             self.days = days
             self.form = form
             self.bonusPercent = bonusPercent
@@ -381,11 +389,13 @@ public struct GameBlock: Codable, Sendable, Equatable {
             self.freezeGifted = freezeGifted
             self.effortRelight = effortRelight
             self.pause = pause
+            self.goal = goal
+            self.nextPauseFrom = nextPauseFrom
         }
 
         private enum CodingKeys: String, CodingKey {
             case days, form, bonusPercent, freezes, maxFreezes, freezePrice, relightPrice, status, canRelight
-            case freezeGifted, effortRelight, pause
+            case freezeGifted, effortRelight, pause, goal, nextPauseFrom
         }
 
         public init(from decoder: Decoder) throws {
@@ -402,6 +412,9 @@ public struct GameBlock: Codable, Sendable, Equatable {
             freezeGifted = try container.decodeIfPresent(Bool.self, forKey: .freezeGifted)
             effortRelight = (try? container.decodeIfPresent(GameEffortRelight.self, forKey: .effortRelight)) ?? nil
             pause = (try? container.decodeIfPresent(GameFlamePause.self, forKey: .pause)) ?? nil
+            goal = (try? container.decodeIfPresent(GameServedFlameGoal.self, forKey: .goal)) ?? nil
+            nextPauseFrom = ((try? container.decodeIfPresent(String.self, forKey: .nextPauseFrom)) ?? nil)
+                .flatMap { GameDay.isDayKey($0) ? $0 : nil }
         }
     }
 

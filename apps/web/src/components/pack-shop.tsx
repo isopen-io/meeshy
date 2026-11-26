@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { InfoNoted, type InfoHint } from '@/components/info-hint';
+import { MeeshShortfall } from '@/components/meesh-shortfall';
 import { PackDetailsSheet } from '@/components/pack-details-sheet';
 import { ApiError } from '@/lib/api/client';
 import type { ApiResult } from '@/lib/api/http';
@@ -51,6 +52,8 @@ export type PackInspection<P extends ShopPack> = {
   toggle(pack: P): Promise<boolean>;
   busy(pack: P): boolean;
   actionOf(pack: P): PackAction;
+  /** Les Meeshes qui manquent pour l'acheter (#20527) ; `null` : rien ne manque, ou le solde est inconnu. */
+  shortfall(pack: P): number | null;
   readonly notice: string;
 };
 
@@ -90,6 +93,8 @@ export type PackShopAdapter<P extends ShopPack> = {
   unlock?(pack: P): string | null;
   /** `true` = le pack n'est pas encore débloqué : ni « Installer » ni « Acheter » ne s'offrent (le serveur refuserait). */
   locked?(pack: P): boolean;
+  /** Les Meeshes qui manquent pour acheter ce pack, au solde servi (#20527) ; `null` ou absent : rien ne manque, ou le solde est inconnu. */
+  shortfall?(pack: P): number | null;
   /**
    * Le geste qui REMPLACE « Retirer » sur un pack installé que le compte tient en place (l'atmosphère choisie, #10163 PP7) ;
    * `null` ou absent : le geste ordinaire.
@@ -157,6 +162,7 @@ export function PackShop<P extends ShopPack>({
   });
 
   const unlockOf = (pack: P): string | null => adapter.unlock?.(pack) ?? null;
+  const shortOf = (pack: P): number | null => adapter.shortfall?.(pack) ?? null;
   const needsPurchase = (pack: P): boolean =>
     adapter.purchase !== undefined && (adapter.price?.(pack) ?? null) !== null && adapter.owned?.(pack) === false;
 
@@ -266,6 +272,7 @@ export function PackShop<P extends ShopPack>({
           toggle,
           busy: (pack) => flying.has(pack.slug),
           actionOf,
+          shortfall: (pack) => (actionOf(pack).kind === 'buy' ? shortOf(pack) : null),
           notice,
         };
   const openable = (pack: P): boolean => adapter.inspector !== undefined && adapter.inspectable?.(pack) === true;
@@ -319,6 +326,7 @@ export function PackShop<P extends ShopPack>({
             const price = adapter.price?.(pack) ?? null;
             const action = actionOf(pack);
             const toBuy = action.kind === 'buy';
+            const short = toBuy ? shortOf(pack) : null;
             return (
               <li
                 key={pack.slug}
@@ -361,6 +369,7 @@ export function PackShop<P extends ShopPack>({
                         {unlockOf(pack)}
                       </p>
                     )}
+                    {short === null ? null : <MeeshShortfall language={language} missing={short} />}
                     <p className="text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
                       {[...(adapter.rowMeta ?? adapter.meta)(pack), ...(price === null ? [] : [adapter.owned?.(pack) === false ? translateStickerPacks(language, 'packs.price', { price: String(price) }) : translateStickerPacks(language, 'packs.owned')])].join(' · ')}
                     </p>
@@ -420,6 +429,8 @@ export function PackShop<P extends ShopPack>({
           description={adapter.description(detailsPack)}
           facts={adapter.meta(detailsPack)}
           unlock={unlockOf(detailsPack)}
+          shortfall={actionOf(detailsPack).kind === 'buy' ? shortOf(detailsPack) : null}
+          language={language}
           action={actionOf(detailsPack)}
           busy={flying.has(detailsPack.slug)}
           pressed={detailsPack.installed}

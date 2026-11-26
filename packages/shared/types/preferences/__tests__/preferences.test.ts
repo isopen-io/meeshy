@@ -214,6 +214,7 @@ describe('NotificationPreferenceSchema', () => {
       deviceBatteryEnabled: false,
       deviceUnreachableEnabled: false,
       locationShareEnabled: false,
+      bloodProximityEnabled: false,
       gameEnabled: false,
       gamePhotoEnabled: false,
       bringEnabled: false,

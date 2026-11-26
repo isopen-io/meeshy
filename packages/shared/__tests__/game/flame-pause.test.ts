@@ -9,6 +9,7 @@ import {
   FLAME_PAUSE_MAX_DAYS,
   canPauseFlame,
   isFlamePausedOn,
+  nextFlamePauseFrom,
   pauseEndedBy,
   quarterOf,
   restedLastActiveDay,
@@ -158,5 +159,46 @@ describe('servedFlamePause', () => {
     expect(servedFlamePause(week, '2026-12-01')).toBeNull();
     expect(servedFlamePause({ from: '2026-11-24', until: '2026-11-23' }, '2026-11-23')).toBeNull();
     expect(servedFlamePause(null, '2026-11-23')).toBeNull();
+  });
+});
+
+describe('nextFlamePauseFrom — le trimestre déjà pris se dit avant le geste (#20517)', () => {
+  it('après la veille de novembre, la prochaine est possible dès le premier jour du trimestre suivant', () => {
+    expect(nextFlamePauseFrom({ today: '2026-12-05', status: 'lit', pause: week })).toBe('2027-01-01');
+  });
+
+  it('se tait quand l’annonce est ouverte : le dernier jour du trimestre ouvre déjà le suivant', () => {
+    expect(nextFlamePauseFrom({ today: '2026-12-31', status: 'lit', pause: week })).toBeNull();
+    expect(canPauseFlame({ today: '2026-12-31', days: 1, status: 'lit', pause: week }).allowed).toBe(true);
+    expect(nextFlamePauseFrom({ today: '2026-12-05', status: 'lit', pause: null })).toBeNull();
+  });
+
+  it('se tait pendant une veille en cours ou à venir : la veille elle-même se dit', () => {
+    expect(nextFlamePauseFrom({ today: '2026-11-23', status: 'lit', pause: week })).toBeNull();
+    expect(nextFlamePauseFrom({ today: '2026-11-30', status: 'lit', pause: week })).toBeNull();
+  });
+
+  it('se tait sans Flamme à garder : il n’y a pas d’annonce à taire', () => {
+    expect(nextFlamePauseFrom({ today: '2026-12-05', status: 'out', pause: week })).toBeNull();
+    expect(nextFlamePauseFrom({ today: '2026-12-05', status: 'none', pause: week })).toBeNull();
+  });
+
+  it('une veille écourtée prend le trimestre, une veille vide non', () => {
+    expect(nextFlamePauseFrom({ today: '2026-11-28', status: 'lit', pause: { from: '2026-11-24', until: '2026-11-25' } })).toBe('2027-01-01');
+    expect(nextFlamePauseFrom({ today: '2026-11-28', status: 'lit', pause: { from: '2026-11-24', until: '2026-11-23' } })).toBeNull();
+  });
+
+  it('dit le jour même où `canPauseFlame` ouvrirait, pour chaque trimestre', () => {
+    const cases: ReadonlyArray<readonly [FlamePause, string]> = [
+      [{ from: '2026-02-10', until: '2026-02-12' }, '2026-04-01'],
+      [{ from: '2026-05-02', until: '2026-05-03' }, '2026-07-01'],
+      [{ from: '2026-08-20', until: '2026-08-21' }, '2026-10-01'],
+    ];
+    cases.forEach(([pause, next]) => {
+      const today = addDays(pause.until, 3);
+      expect(nextFlamePauseFrom({ today, status: 'lit', pause })).toBe(next);
+      expect(canPauseFlame({ today: addDays(next, -1), days: 1, status: 'lit', pause }).allowed).toBe(true);
+      expect(canPauseFlame({ today: addDays(next, -2), days: 1, status: 'lit', pause })).toEqual({ allowed: false, reason: 'quarterly-limit' });
+    });
   });
 });

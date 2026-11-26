@@ -114,8 +114,11 @@ internal fun weekdayLabel(dayKey: String, locale: Locale): String =
     runCatching { formatUtc(LocalDate.parse(dayKey), "EEEEdMMMM", locale) }.getOrDefault(dayKey)
 
 /** « 2 novembre » — la semaine s'identifie par son lundi. */
-internal fun weekDateLabel(weekKey: String, locale: Locale): String =
-    runCatching { formatUtc(LocalDate.parse(weekKey), "dMMMM", locale) }.getOrDefault(weekKey)
+internal fun weekDateLabel(weekKey: String, locale: Locale): String = dayMonthLabel(weekKey, locale)
+
+/** « 1 janvier » : un jour `AAAA-MM-JJ` lointain, dit sans le jour de la semaine. */
+internal fun dayMonthLabel(dayKey: String, locale: Locale): String =
+    runCatching { formatUtc(LocalDate.parse(dayKey), "dMMMM", locale) }.getOrDefault(dayKey)
 
 /** La date d'un trophée vue PAR SON PROPRIÉTAIRE : « 26 octobre 2026 », depuis l'horodatage ISO servi. */
 internal fun awardedLabel(iso: String, locale: Locale): String =

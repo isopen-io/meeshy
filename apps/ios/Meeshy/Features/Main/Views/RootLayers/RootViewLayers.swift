@@ -27,6 +27,7 @@ struct RootEnvironmentLayer: ViewModifier {
         content
             .modifier(MeeshyRouterInjection(router: router))
             .modifier(PublishesSceneNavigation(router: router, role: .main))
+            .modifier(PersonMapCover(router: router)) // La carte d'une personne, ouverte par une notification (#20540).
             .environmentObject(storyViewModel)
             .environmentObject(statusViewModel)
             .meeshyConversationList(conversationViewModel)

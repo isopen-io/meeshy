@@ -164,6 +164,20 @@
     <string name="widget_favorite_contacts_description">وصول سريع إلى جهات اتصالك المفضلة</string>
     <string name="widget_favorite_contacts_title">جهات الاتصال المفضلة</string>
     <string name="widget_favorites_header">المفضلة</string>
+    <string name="widget_game_flame_acts">فصول اليوم: %1$d من %2$d</string>
+    <string name="widget_game_flame_at_risk">قم بإجراء قبل منتصف الليل</string>
+    <string name="widget_game_flame_covered">قنديل يحرسه</string>
+    <plurals name="widget_game_flame_days">
+        <item quantity="zero">%1$d يوم</item>
+        <item quantity="one">يوم واحد</item>
+        <item quantity="two">يومان</item>
+        <item quantity="few">%1$d أيام</item>
+        <item quantity="many">%1$d يومًا</item>
+        <item quantity="other">%1$d يوم</item>
+    </plurals>
+    <string name="widget_game_flame_empty">إجراء واحد اليوم يُشعل لهبك</string>
+    <string name="widget_game_flame_out">منطفئ</string>
+    <string name="widget_game_flame_title">لهبي</string>
     <string name="widget_mark_as_read">وضع علامة مقروء</string>
     <string name="widget_presence_away">بالخارج</string>
     <string name="widget_presence_idle">خامل</string>

@@ -125,7 +125,7 @@ public enum NotificationCategory: String, CaseIterable, Sendable {
                 .friendRequest, .contactRequest, .legacyFriendRequest,
                 .friendAccepted, .contactAccepted, .legacyFriendAccepted,
                 .contactJoined, .contactRecentlyActive, .relationAcquaintance, .deviceBattery, .deviceUnreachable,
-                .inactivityAlert, .legacyStatusUpdate
+                .inactivityAlert, .bloodProximity, .legacyStatusUpdate
             ]
         case .groups:
             return [

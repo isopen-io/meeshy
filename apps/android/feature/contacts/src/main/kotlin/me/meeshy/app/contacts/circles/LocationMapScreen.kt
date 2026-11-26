@@ -188,7 +188,8 @@ private fun SharedTransitionScope.MapStage(
         val heightDp = maxHeight.value.toInt()
         var center by remember { mutableStateOf(GeoPoint(0.0, 0.0)) }
         var zoom by remember { mutableIntStateOf(SharedLocationsMap.SINGLE_PIN_ZOOM) }
-        val framed = remember(pins, focusUserId) { pins.filter { focusUserId == null || it.userId == focusUserId }.map { it.point } }
+        val own = rememberOwnFramePoint()
+        val framed = remember(pins, focusUserId, own) { SharedLocationsMap.framed(pins, focusUserId, own) }
         var fitted by remember { mutableStateOf(false) }
         var lastRecenter by remember { mutableIntStateOf(0) }
         LaunchedEffect(framed, widthDp, heightDp, recenter) {

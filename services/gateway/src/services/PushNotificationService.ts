@@ -21,7 +21,8 @@ import {
   NOTIFICATION_REVOCATION_TTL_MS,
 } from './notifications/notificationRevocationPush';
 import { applyUserPreferences, isCallPushDataType } from './push-delivery-preferences';
-import { pushRoutingClientOf, tokenRoutesPushType } from './push-type-routing';
+import { pushRoutingClientOf, tokenRendersPushFromData, tokenRoutesPushType } from './push-type-routing';
+import { cleanupInactiveTokens as cleanupInactivePushTokens } from './push-token-cleanup';
 import { apnsThreadIdOf, loggableCollapseId } from './notifications/push-thread';
 import { isBadgeSyncPush } from './notifications/badgeSyncPush';
 import { sendViaPushToTalk, type PushToTalkTransport } from './talkie/pushToTalkApns';
@@ -455,7 +456,7 @@ export class PushNotificationService {
    * Send notification via Firebase Cloud Messaging
    */
   private async sendViaFCM(
-    tokenRecord: { id: string; token: string; platform: string; bundleId?: string | null },
+    tokenRecord: { id: string; token: string; platform: string; bundleId?: string | null; appVersion?: string | null },
     payload: PushNotificationPayload
   ): Promise<PushResult> {
     if (!this.firebaseMessaging) {
@@ -474,14 +475,20 @@ export class PushNotificationService {
       // une bannière VIDE sans jamais appeler `onBackgroundMessage`. Le
       // title/body localisés serveur du ring voyagent DANS data pour que le
       // client rende sa notification d'appel dans la langue résolue de
-      // l'utilisateur (Prisme).
+      // l'utilisateur (Prisme). Vers l'Android natif, TOUT push est data-only
+      // (#19091) : son pipeline rend la bannière et y scelle le verrou PIN.
       const isCallPush = isCallPushDataType(payload.data?.type);
       const isBadgeOnly = isBadgeSyncPush(payload);
       const dataOnly =
         payload.silent === true ||
         isBadgeOnly ||
         ((tokenRecord.platform === 'android' || tokenRecord.platform === 'web') && isCallPush) ||
-        (tokenRecord.platform === 'android' && payload.dataOnlyOnAndroid === true);
+        (tokenRecord.platform === 'android' && payload.dataOnlyOnAndroid === true) ||
+        tokenRendersPushFromData({
+          platform: tokenRecord.platform,
+          bundleId: tokenRecord.bundleId ?? null,
+          appVersion: tokenRecord.appVersion ?? null,
+        });
 
       const message: any = dataOnly
         ? {
@@ -947,31 +954,7 @@ export class PushNotificationService {
    * Should be run periodically (e.g., daily cron job)
    */
   async cleanupInactiveTokens(daysInactive: number = 90): Promise<number> {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - daysInactive);
-
-    const result = await this.prisma.pushToken.deleteMany({
-      where: {
-        OR: [
-          // Inactive tokens not used in X days
-          {
-            isActive: false,
-            updatedAt: { lt: cutoffDate },
-          },
-          // Active tokens not used in X days (stale)
-          {
-            lastUsedAt: { lt: cutoffDate },
-          },
-          // Tokens with too many failures
-          {
-            failedAttempts: { gte: 5 },
-          },
-        ],
-      },
-    });
-
-    pushLogger.info('Cleaned up inactive/stale tokens', { count: result.count });
-    return result.count;
+    return cleanupInactivePushTokens(this.prisma, pushLogger, daysInactive);
   }
 
   /**

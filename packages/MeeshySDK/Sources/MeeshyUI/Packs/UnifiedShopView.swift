@@ -131,18 +131,22 @@ public struct UnifiedShopView: View {
     private let language: String
     private let usageText: ((FrameUsage) -> String)?
     private let rankName: ((GloryRank) -> String)?
+    private let onEarnMeeshes: (() -> Void)?
 
     /// `language` nomme les packs dans la langue du lecteur ; `usageText` traduit la loi d'usage
     /// d'un cadre (« Rang Ambassadeur uniquement ») — l'app la possède, la vitrine l'affiche (#10711).
     /// `rankName` nomme un rang du jeu pour « ce qui reste à débloquer » (#11306) ; sans lui, la ligne dit
     /// la Gloire manquante sans le rang. `designs` peint les éléments d'un pack dans sa fiche et son plein
-    /// écran — l'app y ajoute ce que le SDK ne sait pas lire seul (les cadres du jeu).
+    /// écran — l'app y ajoute ce que le SDK ne sait pas lire seul (les cadres du jeu). `onEarnMeeshes` mène à la
+    /// frappe des Meeshes depuis un pack que le solde ne couvre pas (#20528) ; sans lui, la ligne dit l'écart seul.
     @MainActor
     public init(initialDomain: PackDomain? = nil, domains: [PackDomain] = PackDomain.allCases,
                 focusedSlug: String? = nil, language: String = "fr",
                 usageText: ((FrameUsage) -> String)? = nil, rankName: ((GloryRank) -> String)? = nil,
                 store: PackShopStore? = nil, wearer: PackStageWearer? = nil,
-                designs: (any PackElementDesignProviding)? = nil, readsAllDomains: Bool = false) {
+                designs: (any PackElementDesignProviding)? = nil, readsAllDomains: Bool = false,
+                onEarnMeeshes: (() -> Void)? = nil) {
+        self.onEarnMeeshes = onEarnMeeshes
         self.wearer = wearer
         _showcase = StateObject(wrappedValue: PackShowcaseModel(designs: designs, language: language))
         self.focusedSlug = focusedSlug
@@ -167,14 +171,17 @@ public struct UnifiedShopView: View {
     }
 
     private func rows(in domain: PackDomain) -> [PackRow]? {
-        store.state.packs(in: domain)?.map { Self.row($0, language: language, usageText: usageText, rankName: rankName) }
+        let balance = store.state.balance
+        return store.state.packs(in: domain)?.map {
+            Self.row($0, language: language, usageText: usageText, rankName: rankName, balance: balance)
+        }
     }
 
     private func context(for domain: PackDomain) -> PackShowcaseContext {
         PackShowcaseContext(rows: rows(in: domain) ?? [], pending: pendingSlugs(in: domain),
                             wearer: wearer ?? .current,
                             onToggle: { slug in Task { await store.tap(domain: domain, slug: slug) } },
-                            catalogue: store.state, language: language)
+                            catalogue: store.state, language: language, onEarnMeeshes: onEarnMeeshes)
     }
 
     private var failureText: String? {
@@ -266,7 +273,8 @@ public struct UnifiedShopView: View {
                          failureText: failureText,
                          focusedSlug: focusedSlug,
                          onOpen: { showcase.openDetail(domain: domain, slug: $0) },
-                         onOpenCover: { showcase.openViewer(domain: domain, slug: $0) }) { slug in
+                         onOpenCover: { showcase.openViewer(domain: domain, slug: $0) },
+                         onEarnMeeshes: onEarnMeeshes) { slug in
                 Task { await store.tap(domain: domain, slug: slug) }
             }
         }
@@ -281,7 +289,7 @@ public struct UnifiedShopView: View {
     /// d'usage d'un cadre quand l'app sait la dire.
     public static func row(_ pack: ShopPack, language: String = "fr",
                            usageText: ((FrameUsage) -> String)? = nil,
-                           rankName: ((GloryRank) -> String)? = nil) -> PackRow {
+                           rankName: ((GloryRank) -> String)? = nil, balance: Int? = nil) -> PackRow {
         let cover: PackCover
         if MeeStickerCatalog.cast(forPackSlug: pack.slug) != nil {
             cover = .mee(slug: pack.slug)
@@ -298,7 +306,8 @@ public struct UnifiedShopView: View {
                        unlockText: pack.requirementPreview.flatMap {
                            PackUnlockCopy.line($0, language: language, rankName: rankName)
                        },
-                       bundled: pack.isBundled, publisher: pack.publisher)
+                       bundled: pack.isBundled, publisher: pack.publisher,
+                       shortfall: PackMeeshShortfall.of(pack, balance: balance, language: language))
     }
 
     /// Le nom d'un domaine, tel que les puces et les réglages le disent.

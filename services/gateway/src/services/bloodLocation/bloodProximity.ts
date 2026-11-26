@@ -19,6 +19,10 @@
  * l'alerte de cette paire ; l'autre la reçoit toujours, et rien ne lui dit la coupure. Une paire coupée
  * dans les deux sens n'est même pas évaluée.
  *
+ * Chaque alerte socket a son double poussé (#20540, `notifyProximity`) : même destinataire, même
+ * garde de silence, même cadence (prise une fois pour les deux canaux), et le MÊME palier de distance
+ * — jamais plus précis que l'alerte socket. Une app fermée l'apprend ainsi ; un échec de notification n'arrête rien.
+ *
  * Le consentement est relu en base à CHAQUE enregistrement (`relationConsent`), jamais en cache : un
  * retrait coupe l'alerte suivante. La loi d'accès (`location.proximity`, niveau, blocage, âge, équipe)
  * est celle de `pairAccessAmong`, dans les deux sens.
@@ -38,7 +42,7 @@ import { teamPeerCandidates } from '../relations/teamPeers';
 import { bloodLocationMutedBy, bloodLocationMutedFor } from './bloodLocationMute';
 import { openPoint, pointVisibleTo } from './bloodLocationSeal';
 import { ownersHidingFrom, veilAllows, type PointVeil } from './bloodLocationVeil';
-import type { BloodLocationDeps } from './bloodLocationTypes';
+import type { BloodLocationDeps, BloodProximityNotice } from './bloodLocationTypes';
 
 const CANDIDATE_LIMIT = 200;
 /** Au-delà (≈ 250 km/h), un déplacement depuis le point précédent est tenu pour inventé. */
@@ -78,6 +82,16 @@ export function isPlausibleMove(previous: (Point & { readonly at: number }) | nu
   if (!previous) return true;
   const seconds = Math.max(1, (at - previous.at) / 1000);
   return distanceMeters(previous, next) / seconds <= PROXIMITY_MAX_SPEED_MPS;
+}
+
+/** La notification poussée de chaque alerte (#20540) : best-effort, un échec n'arrête rien. */
+async function notifyAll(deps: BloodLocationDeps, notices: readonly BloodProximityNotice[]): Promise<void> {
+  const notify = deps.notifyProximity;
+  if (!notify || notices.length === 0) return;
+  const settled = await Promise.allSettled(notices.map((notice) => Promise.resolve().then(() => notify(notice))));
+  settled.forEach((result) => {
+    if (result.status === 'rejected') deps.report?.(result.reason);
+  });
 }
 
 async function claimed(deps: BloodLocationDeps, key: string, ttlSeconds: number): Promise<boolean> {
@@ -171,7 +185,15 @@ export async function alertBloodProximity(
     if (meters > (radii.get(otherId) ?? BLOOD_PROXIMITY_DEFAULT_RADIUS_METERS)) continue;
     if (!(await claimed(deps, pairKeyOf(ownerId, otherId), RELATION_THRESHOLDS.proximity.cooldownHours * 3600))) continue;
     const distance = stepOf(meters);
-    if (!mutedOwner.has(otherId)) deps.io?.to(ROOMS.user(otherId)).emit(SERVER_EVENTS.BLOOD_PROXIMITY, { userId: ownerId, distanceMeters: distance });
-    if (!mutedByOwner.has(otherId)) deps.io?.to(ROOMS.user(ownerId)).emit(SERVER_EVENTS.BLOOD_PROXIMITY, { userId: otherId, distanceMeters: distance });
+    const notices: BloodProximityNotice[] = [];
+    if (!mutedOwner.has(otherId)) {
+      deps.io?.to(ROOMS.user(otherId)).emit(SERVER_EVENTS.BLOOD_PROXIMITY, { userId: ownerId, distanceMeters: distance });
+      notices.push({ recipientId: otherId, otherId: ownerId, distanceMeters: distance });
+    }
+    if (!mutedByOwner.has(otherId)) {
+      deps.io?.to(ROOMS.user(ownerId)).emit(SERVER_EVENTS.BLOOD_PROXIMITY, { userId: otherId, distanceMeters: distance });
+      notices.push({ recipientId: ownerId, otherId, distanceMeters: distance });
+    }
+    await notifyAll(deps, notices);
   }
 }

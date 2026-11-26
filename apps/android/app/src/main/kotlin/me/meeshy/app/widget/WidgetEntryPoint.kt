@@ -4,6 +4,8 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import me.meeshy.sdk.conversation.ConversationRepository
+import me.meeshy.sdk.engagement.EngagementProgressRepository
+import me.meeshy.sdk.game.GameDevicePrefsStore
 import me.meeshy.sdk.net.TokenStore
 import me.meeshy.sdk.socket.PresenceStore
 
@@ -32,4 +34,10 @@ internal interface WidgetEntryPoint {
 
     /** La carte de présence vivante : l'état SERVI des pairs affichés, rien d'autre (#13747). */
     fun presenceStore(): PresenceStore
+
+    /** Le dernier bloc `game` connu, lu au disque seul : la Flamme et les actes du jour de « Ma Flamme » (#20566). */
+    fun engagementProgress(): EngagementProgressRepository
+
+    /** « Jeu masqué », lu pour le compte NOMMÉ par [tokenStore] : il ne se perd pas dans un processus à froid. */
+    fun gameDevicePrefs(): GameDevicePrefsStore
 }

@@ -21,16 +21,24 @@ const coqueAvec = (rappels: Array<(donnees: unknown) => void>): CoqueNative => (
 });
 
 describe('ecouterRappels (#10908)', () => {
-  test('relaie l’appel demandé par la bannière, audio ou vidéo, avec le nom de l’appelant ou du groupe', () => {
+  test('relaie le fil et le type de l’appel demandé par la bannière, audio ou vidéo', () => {
     const rappels: Array<(donnees: unknown) => void> = [];
     const demandes: CallBackIntent[] = [];
     expect(ecouterRappels(coqueAvec(rappels), (intent) => demandes.push(intent))).toBe(true);
-    rappels[0]?.({ conversationId: 'c7', media: 'video', title: 'Famille', isGroup: true });
-    rappels[0]?.({ conversationId: 'c8', media: 'audio', title: '', isGroup: false });
-    expect(demandes).toEqual([
-      { conversationId: 'c7', media: 'video', title: 'Famille', isGroup: true, origin: 'message' },
-      { conversationId: 'c8', media: 'audio', title: '', isGroup: false, origin: 'message' },
+    rappels[0]?.({ conversationId: 'c7', media: 'video' });
+    rappels[0]?.({ conversationId: 'c8', media: 'audio' });
+    expect(demandes.map(({ conversationId, media }) => ({ conversationId, media }))).toEqual([
+      { conversationId: 'c7', media: 'video' },
+      { conversationId: 'c8', media: 'audio' },
     ]);
+  });
+
+  test('le pont relaie une ADRESSE : il ne choisit ni le nom ni le groupe, et n’appelle jamais sans « Appeler » (#19243)', () => {
+    const rappels: Array<(donnees: unknown) => void> = [];
+    const demandes: CallBackIntent[] = [];
+    ecouterRappels(coqueAvec(rappels), (intent) => demandes.push(intent));
+    rappels[0]?.({ conversationId: 'conv-1', media: 'video', title: 'Maman', isGroup: true });
+    expect(demandes).toEqual([{ conversationId: 'conv-1', media: 'video', title: '', isGroup: false, origin: 'url' }]);
   });
 
   test('ignore une charge illisible', () => {

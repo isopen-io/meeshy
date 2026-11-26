@@ -3,6 +3,7 @@ package me.meeshy.sdk.lock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import me.meeshy.sdk.model.security.SecureRead
 import me.meeshy.sdk.model.security.SecureStore
 
 /**
@@ -69,6 +70,12 @@ class EncryptedConversationLockStore(private val store: SecureStore) : Conversat
     }
 
     override fun isLocked(conversationId: String): Boolean = store.get(lockKey(conversationId)) != null
+
+    override fun isLockedOrUnknown(conversationId: String): Boolean = store.read(lockKey(conversationId)) != SecureRead.Absent
+
+    override fun acknowledgeLostLocks() {
+        if (store.read(MASTER_PIN_KEY) == SecureRead.Unreadable) store.acknowledgeRecovery(null)
+    }
 
     override fun setLock(conversationId: String, pin: String) {
         store.put(lockKey(conversationId), PinHasher.hash(pin))

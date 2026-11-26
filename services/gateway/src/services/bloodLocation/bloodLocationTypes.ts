@@ -5,6 +5,13 @@ import type { PairAccessDb } from '../relations/pairAccess';
 export type BloodLocationDb = PairAccessDb &
   Pick<PrismaClient, 'bloodLocationPoint' | 'bloodLocationConsultation' | 'relationFeatureSetting'>;
 
+/** Une alerte à porter : à qui, l'autre Sang, et le PALIER de distance de l'alerte socket — jamais la mesure brute. */
+export type BloodProximityNotice = {
+  readonly recipientId: string;
+  readonly otherId: string;
+  readonly distanceMeters: number;
+};
+
 export type BloodLocationDeps = {
   readonly prisma: BloodLocationDb;
   readonly io: ServerEmitIO | undefined;
@@ -25,6 +32,12 @@ export type BloodLocationDeps = {
    * LÈVE, et aucune paire n'est évaluée.
    */
   readonly countProximityEvaluations: (key: string, by: number, ttlSeconds: number) => Promise<number>;
+  /**
+   * Porte la notification `blood_proximity` (#20540) vers `recipientId` : persistée et poussée,
+   * pour une app fermée. Appelée là où `location:blood-proximity` part, sous ses gardes et sa
+   * cadence déjà prise. Absente, rien ne part ; un échec n'arrête jamais l'alerte.
+   */
+  readonly notifyProximity?: (notice: BloodProximityNotice) => Promise<unknown>;
   /** Journalise un échec sans charge ; jamais d'effet sur le geste. */
   readonly report?: (error: unknown) => void;
 };

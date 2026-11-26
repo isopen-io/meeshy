@@ -8,6 +8,7 @@
  *   POST /me/game/flame/freezes                acheter un gel (1 Meesh, 2 en réserve)
  *   POST /me/game/flame/relight                rallumer une Flamme (3 Meeshes, 48 h, 1×/mois)
  *   POST /me/game/flame/pause                  annoncer une veille de 1 à 7 jours (1×/trimestre)
+ *   POST /me/game/flame/goal                   choisir l'objectif de Flamme (7, 14, 30 jours, puis la marche suivante)
  *   POST /me/game/guide/seen                   mémoriser les clés de guide vues
  *
  * Aucune ne prend d'`userId` : l'utilisateur est celui de l'authentification.
@@ -20,6 +21,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { FLAME_PAUSE_MAX_DAYS, FLAME_PAUSE_MIN_DAYS } from '@meeshy/shared/utils/game/flame-pause';
+import { FLAME_GOAL_LADDER } from '@meeshy/shared/utils/game/flame-goal';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { getEngagementEmitIO } from '../../services/engagement/engagement-emit-registry';
@@ -47,6 +49,16 @@ const pauseBody = {
   properties: {
     requestId: requestIdSchema,
     days: { type: 'integer', minimum: FLAME_PAUSE_MIN_DAYS, maximum: FLAME_PAUSE_MAX_DAYS },
+  },
+  additionalProperties: false,
+} as const;
+
+const goalBody = {
+  type: 'object',
+  required: ['requestId', 'target'],
+  properties: {
+    requestId: requestIdSchema,
+    target: { type: 'integer', enum: [...FLAME_GOAL_LADDER] },
   },
   additionalProperties: false,
 } as const;
@@ -158,6 +170,24 @@ export async function meGameRoutes(fastify: FastifyInstance, options: GameRoutes
     },
     (request: FastifyRequest<{ Body: { requestId: string; days: number } }>, reply: FastifyReply) =>
       write(request, reply, (userId) => flame.pause({ userId, requestId: request.body.requestId, days: request.body.days })),
+  );
+
+  fastify.post(
+    '/game/flame/goal',
+    {
+      onRequest: [fastify.authenticate],
+      config: { rateLimit: gameRateLimitConfig('goal', 10, true) },
+      schema: {
+        description:
+          'Choisit l’objectif de Flamme (#20520, #17379) : 7, 14 ou 30 jours au premier jour d’une Flamme, la marche suivante une fois l’objectif atteint. Idempotent : le même objectif rechoisi à la même hauteur rend `already-chosen`.',
+        tags: ['me', 'game'],
+        summary: 'Choose the flame goal',
+        body: goalBody,
+        response: { 200: okResponse, 401: errorResponseSchema, 409: refusalResponse, 429: errorResponseSchema, 500: errorResponseSchema },
+      },
+    },
+    (request: FastifyRequest<{ Body: { requestId: string; target: number } }>, reply: FastifyReply) =>
+      write(request, reply, (userId) => flame.chooseGoal({ userId, requestId: request.body.requestId, target: request.body.target })),
   );
 
   fastify.post(

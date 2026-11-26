@@ -33,6 +33,10 @@ public data class GameWriteRequest(val requestId: String)
 @Serializable
 public data class FlamePauseRequest(val requestId: String, val days: Int)
 
+/** Choisir l'objectif de Flamme (#20520) : une marche de l'échelle (7, 14, 30, 100, 365 jours). */
+@Serializable
+public data class FlameGoalRequest(val requestId: String, val target: Int)
+
 @Serializable
 public data class GuideSeenRequest(
     val requestId: String,
@@ -169,6 +173,11 @@ public object GameWriteParser {
     /** Une veille illisible rend `null` : la carte relit alors le bloc servi. */
     public fun pauseFlame(text: String?): FlamePauseResponse? = read(text) { obj ->
         FlamePauseResponse(status = obj.optString("status").orEmpty(), pause = parseFlamePause(obj) ?: throw GameParseException("pause"))
+    }
+
+    /** Un objectif illisible rend `null` : la carte relit alors le bloc servi (#20523). */
+    public fun chooseFlameGoal(text: String?): FlameGoalResponse? = read(text) { obj ->
+        FlameGoalResponse(status = obj.optString("status").orEmpty(), goal = parseFlameGoal(obj) ?: throw GameParseException("goal"))
     }
 
     public fun markGuideSeen(text: String?): GuideSeenResponse? = read(text) { obj ->

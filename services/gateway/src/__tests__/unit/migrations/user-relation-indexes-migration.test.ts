@@ -179,6 +179,36 @@ describe('2026-10-31-user-relation-indexes.mongodb.js', () => {
     expect(quits).toEqual([2]);
   });
 
+  it('#17232 — un doublon glissé juste avant la CRÉATION d’un index neuf est signalé (sortie 2), le rapport est imprimé', () => {
+    const database = fakeDatabase({ UserRelation: ID_ONLY, AtomLink: ID_ONLY });
+    const realCollection = database.db.getCollection;
+    const racing = {
+      ...database,
+      db: {
+        ...database.db,
+        getCollection: (name: string) => {
+          const collection = realCollection(name);
+          return name !== 'UserRelation'
+            ? collection
+            : {
+                ...collection,
+                createIndex: (key: Record<string, number>, createOptions: { name: string; unique?: boolean }) => {
+                  if (createOptions.unique) throw new Error('E11000 duplicate key error collection: meeshy.UserRelation');
+                  return collection.createIndex(key, createOptions);
+                },
+              };
+        },
+      },
+    };
+
+    const { text, quits } = run(racing);
+
+    expect(text).toContain(`UserRelation.${PAIR} — création refusée : E11000`);
+    expect(text).not.toContain(`+ UserRelation.${PAIR}`);
+    expect((database.indexes.get('AtomLink') ?? []).find((index) => index.name === ATOM)?.unique).toBe(true);
+    expect(quits).toEqual([2]);
+  });
+
   it('en simulation (DRY_RUN=1), ne verrouille, ne convertit ni ne crée rien', () => {
     const database = fakeDatabase(withLegacyPairIndex());
     const before = JSON.stringify([...database.indexes.entries()]);

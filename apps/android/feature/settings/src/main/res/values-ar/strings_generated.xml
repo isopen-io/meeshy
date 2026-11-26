@@ -145,6 +145,9 @@
     <string name="pack_shop_owned">مملوك</string>
     <string name="pack_shop_remove">إزالة</string>
     <string name="pack_shop_retry">إعادة المحاولة</string>
+    <string name="pack_shop_short_earn">سكّ ميشيز</string>
+    <string name="pack_shop_short_many">ينقصك %1$s من ميشيز</string>
+    <string name="pack_shop_short_one">ينقصك 1 من ميشيز</string>
     <string name="privacy_analytics">التحليلات</string>
     <string name="privacy_calls_non_contacts">مكالمات من خارج جهات الاتصال</string>
     <string name="privacy_last_seen">آخر تسجيل دخول</string>

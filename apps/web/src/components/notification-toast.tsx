@@ -116,7 +116,16 @@ function useEnterAnimation(key: string) {
   return ref;
 }
 
-export function NotificationBanner({ notification, onDismiss }: { readonly notification: NotificationRecord; readonly onDismiss: () => void }) {
+export function NotificationBanner({
+  notification,
+  onDismiss,
+  withdrawn = false,
+}: {
+  readonly notification: NotificationRecord;
+  readonly onDismiss: () => void;
+  /** Retirée de la vue, encore montée : une réécriture du même id la reprend en place (#19244). */
+  readonly withdrawn?: boolean;
+}) {
   const language = currentInterfaceLanguage();
   const receivedAt = useMemo(() => new Date(), [notification.id]);
   const banner = useMemo(() => bannerPresentation(notification, { language, now: receivedAt }), [notification, language, receivedAt]);
@@ -262,6 +271,8 @@ export function NotificationBanner({ notification, onDismiss }: { readonly notif
       aria-live="polite"
       aria-label={translateNotificationRow(language, 'notifications.banner.label')}
       data-in-app-banner={notification.id}
+      hidden={withdrawn}
+      aria-hidden={withdrawn ? 'true' : undefined}
       className="pointer-events-none fixed inset-x-0 flex justify-center px-2"
       style={{ top: 'calc(env(safe-area-inset-top) + 8px)', zIndex: 1050 }}
     >
@@ -342,8 +353,11 @@ export function NotificationToastHost() {
      doit rester touchable au-dessus d'elle (comme l'appel, `call-layer.tsx`).
      Et DANS la modale du dessus quand il y en a une (#10539) : sous un
      `<dialog>` modal, `<body>` est inerte et recouvert (`top-modal-host.ts`). */
+  const withdrawn = useStore(inAppBannerStore, (state) => state.withdrawn);
   const host = useTopModalHost();
-  if (current === null) return null;
-  const banner = <NotificationBanner key={current.id} notification={current} onDismiss={dismiss} />;
+  /* Une bannière retirée reste montée, cachée, sous la MÊME clé : sa réécriture la reprend sans la remonter (#19244). */
+  const shown = current ?? withdrawn;
+  if (shown === null) return null;
+  const banner = <NotificationBanner key={shown.id} notification={shown} onDismiss={dismiss} withdrawn={current === null} />;
   return createPortal(banner, host);
 }

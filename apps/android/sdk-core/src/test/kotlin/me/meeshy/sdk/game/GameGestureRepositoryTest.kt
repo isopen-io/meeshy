@@ -6,14 +6,19 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import java.io.IOException
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.game.ChestClaimResponse
+import me.meeshy.sdk.model.game.FlameGoalRequest
+import me.meeshy.sdk.model.game.FlameGoalResponse
 import me.meeshy.sdk.model.game.FlamePauseRequest
 import me.meeshy.sdk.model.game.FlamePauseResponse
 import me.meeshy.sdk.model.game.GameFlamePause
+import me.meeshy.sdk.model.game.GameServedFlameGoal
 import me.meeshy.sdk.model.game.GameWriteRequest
+import me.meeshy.sdk.model.game.GuideSeenRequest
+import me.meeshy.sdk.model.game.GuideSeenResponse
 import me.meeshy.sdk.net.api.EngagementApi
 import me.meeshy.sdk.net.api.GameApi
 import me.meeshy.sdk.net.api.MeeshMintRequest
@@ -78,6 +83,44 @@ class GameGestureRepositoryTest {
 
         assertThat(repository.pauseFlame("req-12345678", 3))
             .isEqualTo(GameWriteOutcome.Refused(code = "FLAME_PAUSE_NOT_ALLOWED", offline = false, reason = "quarterly-limit"))
+    }
+
+    @Test
+    fun `choisir un objectif poste la cible et rend l objectif servi`() = runTest {
+        coEvery { game.chooseFlameGoal(FlameGoalRequest("req-12345678", 14)) } returns
+            ok("""{"status":"chosen","goal":{"offer":[],"current":{"target":14,"remaining":13,"reached":false,"next":null}}}""")
+
+        val outcome = repository.chooseFlameGoal("req-12345678", 14)
+
+        assertThat(outcome).isEqualTo(
+            GameWriteOutcome.Done(
+                FlameGoalResponse("chosen", GameServedFlameGoal(emptyList(), GameServedFlameGoal.Current(14, 13, false, null))),
+            ),
+        )
+    }
+
+    @Test
+    fun `un objectif refuse garde la raison du refus`() = runTest {
+        coEvery { game.chooseFlameGoal(any()) } throws HttpException(
+            Response.error<Unit>(
+                409,
+                """{"success":false,"error":"x","code":"FLAME_GOAL_NOT_ALLOWED","reason":"not-offered"}"""
+                    .toResponseBody("application/json".toMediaType()),
+            ),
+        )
+
+        assertThat(repository.chooseFlameGoal("req-12345678", 30))
+            .isEqualTo(GameWriteOutcome.Refused(code = "FLAME_GOAL_NOT_ALLOWED", offline = false, reason = "not-offered"))
+    }
+
+    @Test
+    fun `fermer le signe des aieux range la cle de l objectif atteint`() = runTest {
+        coEvery { game.markGuideSeen(GuideSeenRequest("req-12345678", listOf("flame-goal-next-7"))) } returns
+            ok("""{"guideSeen":["flame-goal-next-7"]}""")
+
+        assertThat(repository.closeFlameGoalSign("req-12345678", 7))
+            .isEqualTo(GameWriteOutcome.Done(GuideSeenResponse(listOf("flame-goal-next-7"))))
+        coVerify { game.markGuideSeen(GuideSeenRequest("req-12345678", listOf("flame-goal-next-7"))) }
     }
 
     @Test

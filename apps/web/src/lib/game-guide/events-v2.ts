@@ -1,5 +1,6 @@
 import type { GameBlock } from '@meeshy/shared/types/game';
 import { announcesFreezeGift } from '@meeshy/shared/utils/game/flame';
+import { flameGoalNextSeenKey } from '@meeshy/shared/utils/game/flame-goal';
 import { announcesKeptOffering, WELCOME_BACK_EASED_DAYS } from '@meeshy/shared/utils/game/welcome-back';
 import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
 import type { GuideEventV2 } from '@meeshy/shared/utils/game/guide-v2';
@@ -7,13 +8,15 @@ import { leagueIndex, type LeagueKey } from '@meeshy/shared/utils/game/league';
 import type { SeasonThemeKey } from '@meeshy/shared/utils/game/season';
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
+import { readFlameGoal } from '@/lib/view/flame-goal-copy';
 
 /**
  * LES ÉVÉNEMENTS DU GUIDE, VAGUE 2 (#9481) — la loi partagée
  * (`chooseGuideMomentAny`) choisit LE moment ; ce fichier relève ses huit
  * événements dans l'état du jeu, comme `events.ts` le fait pour la vague 1 —
  * et, depuis #20169, la première Veilleuse offerte, dite le jour du cadeau —
- * et, depuis #20327, l'Offrande gardée par les aïeux, redite tant qu'elle est prête :
+ * et, depuis #20327, l'Offrande gardée par les aïeux, redite tant qu'elle est prête —
+ * et, depuis #20548, l'objectif de Flamme atteint, salué une fois par objectif :
  *
  *  - `standingGuideEventsV2` lit l'ÉTAT à l'ouverture. Seules deux découvertes
  *    s'y lisent — la première ligue, le début d'une saison — et chacune ne se
@@ -84,7 +87,9 @@ export function standingGuideEventsV2(game: GameBlock, seen: ReadonlySet<string>
       ? { kind: 'league-first', league: league.current.league, pointsToPromotion: league.current.pointsToPromotion }
       : null;
   const season = snapshotOf(game).season;
-  const discoveries = [first, season === null || season === undefined ? null : seasonStart(season), freezeGift(game)].filter((event): event is GuideEventV2 => unseen(seen, event));
+  const discoveries = [first, season === null || season === undefined ? null : seasonStart(season), freezeGift(game), goalReached(game, seen)].filter(
+    (event): event is GuideEventV2 => unseen(seen, event),
+  );
   const welcome = keptOffering(game);
   return welcome === null ? discoveries : [...discoveries, welcome];
 }
@@ -96,6 +101,23 @@ const keptOffering = (game: GameBlock): GuideEventV2 | null =>
 /** Le jour où la première Veilleuse est offerte (#20169), tant que sa clé n'est pas vue. */
 const freezeGift = (game: GameBlock): GuideEventV2 | null =>
   announcesFreezeGift(game) ? { kind: 'flame-freeze-gift', freezes: game.flame.freezes } : null;
+
+/**
+ * L'objectif de Flamme atteint (#20548), tant que sa clé (`flameGoalNextSeenKey`) n'est ni dans `game.guideSeen` ni
+ * dans ce que l'écran vient de marquer : la carte de la Flamme et la carte de guide la lisent toutes les deux, donc un
+ * objectif ne se salue qu'une fois, par l'une ou par l'autre.
+ */
+function goalReached(game: GameBlock, seen: ReadonlySet<string>): GuideEventV2 | null {
+  const current = readFlameGoal(game.flame.goal)?.current;
+  if (current === null || current === undefined || !current.reached) return null;
+  const key = flameGoalNextSeenKey(current.target);
+  return game.guideSeen.includes(key) || seen.has(key) ? null : { kind: 'flame-goal-reached', target: current.target, next: current.next };
+}
+
+const reachedTarget = (game: GameBlock): number | null => {
+  const current = readFlameGoal(game.flame.goal)?.current;
+  return current?.reached === true ? current.target : null;
+};
 
 /** Ce qui est arrivé entre deux instantanés. Une extension absente d'un des deux côtés ne produit rien. */
 export function eventsBetween(before: GuideSnapshot, after: GuideSnapshot): GuideEventV2[] {
@@ -152,5 +174,7 @@ export function transitionGuideEventsV2(previous: EngagementWithGame, next: Enga
   if (before === undefined || after === undefined) return [];
   const gift = before.flame.freezeGifted === true ? null : freezeGift(after);
   const welcome = announcesKeptOffering(before) ? null : keptOffering(after);
-  return [...eventsBetween(snapshotOf(before), snapshotOf(after)), ...[gift, welcome].filter((event): event is GuideEventV2 => event !== null)];
+  const target = reachedTarget(after);
+  const goal = target === null || reachedTarget(before) === target ? null : goalReached(after, new Set());
+  return [...eventsBetween(snapshotOf(before), snapshotOf(after)), ...[gift, welcome, goal].filter((event): event is GuideEventV2 => event !== null)];
 }

@@ -16,6 +16,7 @@ public object GameErrorTexts {
             GameErrorCode.FreezeAtMaximum -> GameTextKey.ErrorFreezeAtMaximum
             GameErrorCode.RelightNotAllowed -> GameTextKey.ErrorRelightNotAllowed
             GameErrorCode.FlamePauseNotAllowed -> GameTextKey.ErrorFlamePauseNotAllowed
+            GameErrorCode.FlameGoalNotAllowed -> GameTextKey.ErrorFlameGoalNotAllowed
             GameErrorCode.MissionNotFound -> GameTextKey.ErrorMissionNotFound
             GameErrorCode.MissionRerollExhausted -> GameTextKey.ErrorMissionRerollExhausted
             GameErrorCode.MissionRerollUnavailable -> GameTextKey.ErrorMissionRerollUnavailable

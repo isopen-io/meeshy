@@ -28,6 +28,8 @@ function fakeDocument(videoSeconds: ReadonlyMap<string, number>): Document {
       preload: '',
       duration: Number.NaN,
       pause: () => undefined,
+  chooseGoal: () => undefined,
+  closeGoalSign: () => undefined,
       removeAttribute: () => undefined,
       load: () => {
         node.duration = videoSeconds.get(src) ?? Number.NaN;

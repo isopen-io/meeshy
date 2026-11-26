@@ -160,3 +160,37 @@ describe('l’Offrande gardée par les aïeux, le jour du retour (#20327)', () =
     expect(transitionGuideEventsV2(after, after).map((e) => e.kind)).not.toContain('offering-kept');
   });
 });
+
+describe('l’objectif de Flamme atteint (#20548)', () => {
+  const goal = (game: NonNullable<EngagementWithGame['game']>, current: { target: number; remaining: number; reached: boolean; next: number | null } | null, guideSeen = game.guideSeen) => ({
+    ...game,
+    guideSeen,
+    flame: { ...game.flame, goal: { offer: current?.reached === true && current.next !== null ? [current.next] : [], current } },
+  });
+  const reached = { target: 7, remaining: 0, reached: true, next: 14 };
+  const running = { target: 7, remaining: 1, reached: false, next: null };
+
+  test('atteint et pas encore salué, l’ouverture le dit avec la marche suivante', () => {
+    expect(standingGuideEventsV2(goal(gameBlockFixture(), reached), new Set())).toContainEqual({ kind: 'flame-goal-reached', target: 7, next: 14 });
+  });
+
+  test('salué par la carte de la Flamme ou par le guide (sa clé vue), il ne se redit pas', () => {
+    expect(standingGuideEventsV2(goal(gameBlockFixture(), reached, ['flame-goal-next-7']), new Set()).map((e) => e.kind)).not.toContain('flame-goal-reached');
+    expect(standingGuideEventsV2(goal(gameBlockFixture(), reached), new Set(['flame-goal-next-7'])).map((e) => e.kind)).not.toContain('flame-goal-reached');
+  });
+
+  test('en cours, sans objectif, ou devant un serveur antérieur : rien', () => {
+    expect(standingGuideEventsV2(goal(gameBlockFixture(), running), new Set())).toEqual([]);
+    expect(standingGuideEventsV2(goal(gameBlockFixture(), null), new Set())).toEqual([]);
+    expect(standingGuideEventsV2(gameBlockFixture(), new Set()).map((e) => e.kind)).not.toContain('flame-goal-reached');
+  });
+
+  test('atteint pendant que l’écran est ouvert : dit aussitôt, une fois', () => {
+    const before = withGame((game) => goal(game, running));
+    const after = withGame((game) => goal(game, reached));
+    expect(transitionGuideEventsV2(before, after)).toContainEqual({ kind: 'flame-goal-reached', target: 7, next: 14 });
+    expect(transitionGuideEventsV2(after, after).map((e) => e.kind)).not.toContain('flame-goal-reached');
+    const seen = withGame((game) => goal(game, reached, ['flame-goal-next-7']));
+    expect(transitionGuideEventsV2(before, seen).map((e) => e.kind)).not.toContain('flame-goal-reached');
+  });
+});

@@ -570,6 +570,9 @@
     <string name="game_error_duo_not_found">Dieses Bündnis gibt es nicht mehr: Der Bildschirm wird aktualisiert.</string>
     <string name="game_error_duo_not_friends">Ein Bündnis schließt man unter bestätigten Freunden.</string>
     <string name="game_error_duo_transition_refused">Diese Aktion ergibt für dieses Bündnis keinen Sinn.</string>
+    <string name="game_error_flame_goal_no_flame">Deine Flamme muss brennen, damit du ein Ziel wählen kannst.</string>
+    <string name="game_error_flame_goal_not_allowed">Dieses Flammenziel lässt sich heute nicht wählen.</string>
+    <string name="game_error_flame_goal_not_offered">Dieses Ziel steht heute nicht zur Wahl.</string>
     <string name="game_error_flame_pause_already_paused">Deine Flamme ruht bereits.</string>
     <string name="game_error_flame_pause_no_flame">Deine Flamme muss brennen, damit sie ruhen kann.</string>
     <string name="game_error_flame_pause_not_allowed">Die Flamme kann jetzt nicht ruhen.</string>
@@ -645,9 +648,16 @@
     <string name="game_flame_panel_effort_relight_tomorrow">Schaffe %1$s bis morgen Abend, und deine Flamme kehrt mit ihren %2$s zurück, ohne zu zahlen.</string>
     <string name="game_flame_panel_freeze_buy">Eine Hüterin rufen · %1$s</string>
     <string name="game_flame_panel_freezes">Hüterinnen: %1$s / %2$s</string>
+    <string name="game_flame_panel_goal_choices">Flammenziel</string>
+    <string name="game_flame_panel_goal_intro">Ein Ziel für deine Flamme? Wähle es heute – oder lass sie brennen.</string>
+    <string name="game_flame_panel_goal_later">Später</string>
+    <string name="game_flame_panel_goal_next">%1$s anpeilen</string>
+    <string name="game_flame_panel_goal_reached">Deine Ahnen grüßen deine Flamme: %1$s gehalten!</string>
+    <string name="game_flame_panel_goal_running">Ziel: %1$s Flamme. Noch %2$s.</string>
     <string name="game_flame_panel_pause">Ruhen lassen · %1$s</string>
     <string name="game_flame_panel_pause_days">Dauer der Ruhe</string>
     <string name="game_flame_panel_pause_intro">Eine Pause? Deine Flamme wartet bis zu %1$s auf dich, einmal pro Quartal.</string>
+    <string name="game_flame_panel_pause_next">Deine Flamme kann ab dem %1$s wieder ruhen.</string>
     <string name="game_flame_panel_paused">Deine Flamme ruht bis %1$s.</string>
     <string name="game_flame_panel_paused_soon">Deine Flamme ruht ab morgen, bis %1$s.</string>
     <string name="game_flame_panel_relight">Flamme neu entzünden · %1$s</string>

@@ -504,6 +504,8 @@ const NOTIFICATION_TOGGLES = [
   { key: 'pushEnabled', label: 'settings.notifications.title', icon: { set: 'ecran', name: 'bellRinging' }, tint: 'var(--color-error)' },
   { key: 'soundEnabled', label: 'settings.notif.sounds', icon: { set: 'ecran', name: 'speakerHigh' }, tint: 'var(--ios-indigo-300)' },
   { key: 'contactActivityEnabled', label: 'settings.notif.contact_activity', caption: 'settings.notif.contact_activity.info', icon: { set: 'ecran', name: 'handPalm' }, tint: 'var(--color-ios-brand)' },
+  /* « Un Sang tout près » (#20540) — la porte du push `blood_proximity`, rangée avec les cercles. */
+  { key: 'bloodProximityEnabled', label: 'settings.notif.blood_proximity', caption: 'settings.notif.blood_proximity.info', icon: { set: 'socle', name: 'users' }, tint: 'var(--color-error)' },
   /* « Recevoir des Bring » (#16588) — l'interrupteur GLOBAL que la passerelle lit
      avant de faire sonner ; le blocage par personne reste sur la fiche d'un lien. */
   { key: 'bringEnabled', label: 'settings.notif.bring', caption: 'settings.notif.bring.info', icon: { set: 'socle', name: 'phone' }, tint: 'var(--color-error)' },

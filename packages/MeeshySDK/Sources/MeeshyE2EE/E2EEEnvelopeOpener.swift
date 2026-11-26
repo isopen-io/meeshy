@@ -121,6 +121,28 @@ public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
     }
 
     public func open(_ envelope: E2EEServedEnvelope) -> E2EEOpenOutcome {
+        switch attempt(envelope) {
+        case .decided(let outcome): outcome
+        case .suspended: .deferred(envelopeId: envelope.id)
+        }
+    }
+
+    /// Une ouverture tranchée, ou suspendue faute de bail d'exécution (#12668) :
+    /// le processus va être suspendu, et le lot s'arrête là.
+    private enum Attempt {
+        case decided(E2EEOpenOutcome)
+        case suspended
+    }
+
+    private func attempt(_ envelope: E2EEServedEnvelope) -> Attempt {
+        do {
+            return .decided(try decide(envelope))
+        } catch {
+            return .suspended
+        }
+    }
+
+    private func decide(_ envelope: E2EEServedEnvelope) throws(E2EEExecutionLeaseError) -> E2EEOpenOutcome {
         guard envelope.isAddressed(to: local.registrationId) else { return .notForThisDevice(envelopeId: envelope.id) }
         if let known = known(envelope) { return known }
         let sender = E2EEDeviceAddress(userId: envelope.senderUserId, deviceId: envelope.senderDeviceId)
@@ -160,6 +182,7 @@ public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
             // consommée) APRÈS que le premier a rangé le clair. Il le relit.
             if let known = known(envelope) { return known }
             if error as? E2EEOpenError == .unapprovedOwnDevice { return .deferred(envelopeId: envelope.id) }
+            if let suspension = error as? E2EEExecutionLeaseError { throw suspension }
             guard Self.isVerdict(error) else {
                 logger.warning("e2ee envelope deferred id=\(envelope.id, privacy: .public): storage refused")
                 return .deferred(envelopeId: envelope.id)
@@ -263,14 +286,32 @@ public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
         for _ in 0..<Self.maxCatchUpPages {
             try Task.checkCancellation()
             let page = try await directory.envelopes(after: cursor, limit: Self.pageSize)
-            let opened = page.envelopes.map { ($0, open($0)) }
+            let (opened, suspended) = openUntilSuspended(page.envelopes)
             await acknowledge(opened)
             outcomes += opened.map(\.1)
+            guard !suspended else {
+                logger.info("e2ee catch-up suspended: no execution lease; the rest waits for the next one")
+                return outcomes
+            }
             guard !page.envelopes.isEmpty, let next = page.nextCursor, served.insert(next).inserted else { return outcomes }
             cursor = next
         }
         logger.warning("e2ee catch-up stopped at its page budget pages=\(Self.maxCatchUpPages, privacy: .public); the rest waits for the next one")
         return outcomes
+    }
+
+    /// Les enveloppes d'une page, dans l'ordre, jusqu'à la première dont la
+    /// prise du verrou est refusée faute de bail : elle et les suivantes ne
+    /// démarrent pas, restent sur le serveur, et se disent reportées.
+    private func openUntilSuspended(_ envelopes: [E2EEServedEnvelope]) -> ([(E2EEServedEnvelope, E2EEOpenOutcome)], suspended: Bool) {
+        var opened: [(E2EEServedEnvelope, E2EEOpenOutcome)] = []
+        for (index, envelope) in envelopes.enumerated() {
+            guard case .decided(let outcome) = attempt(envelope) else {
+                return (opened + envelopes[index...].map { ($0, .deferred(envelopeId: $0.id)) }, true)
+            }
+            opened.append((envelope, outcome))
+        }
+        return (opened, false)
     }
 
     /// Une enveloppe ouverte, gardée pour une version future, ou définitivement

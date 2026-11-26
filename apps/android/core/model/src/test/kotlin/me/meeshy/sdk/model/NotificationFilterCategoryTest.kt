@@ -22,8 +22,8 @@ class NotificationFilterCategoryTest {
 
     @Test
     fun knownTypes_holdsEveryPortediOSRawValue() {
-        // 91 MeeshyNotificationType raw values iOS (dix types ajoutés par le lot des types complets).
-        assertThat(NotificationTypeVocabulary.KNOWN_TYPES).hasSize(91)
+        // 92 : les 91 valeurs iOS du lot des types complets, plus `blood_proximity` (#20540).
+        assertThat(NotificationTypeVocabulary.KNOWN_TYPES).hasSize(92)
         assertThat(NotificationTypeVocabulary.KNOWN_TYPES).containsAtLeast(
             "new_message", "NEW_MESSAGE", "call", "member_role_changed",
             "AFFILIATE_SIGNUP", "voice_clone_ready", "friend_new_mood",
@@ -139,7 +139,7 @@ class NotificationFilterCategoryTest {
         ),
         NotificationFilterCategory.CONTACTS to setOf(
             "friend_request", "contact_request", "FRIEND_REQUEST", "friend_accepted", "contact_accepted",
-            "FRIEND_ACCEPTED", "contact_joined", "contact_recently_active", "STATUS_UPDATE",
+            "FRIEND_ACCEPTED", "contact_joined", "contact_recently_active", "blood_proximity", "STATUS_UPDATE",
         ),
         NotificationFilterCategory.GROUPS to setOf(
             "community_invite", "community_joined", "community_left", "GROUP_INVITE", "GROUP_JOINED",

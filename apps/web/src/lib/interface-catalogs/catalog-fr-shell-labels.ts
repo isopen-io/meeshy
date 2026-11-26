@@ -71,6 +71,20 @@ const frShellLabels = {
   'message.sticker.a11y': 'sticker',
   'message.location.named.a11y': 'Position : {place}',
   'message.location.shared.a11y': 'lieu partagé',
+  /* 95w (#20326) — comptes de pièces jointes (pluriel) + préfixe des réactions,
+     derniers segments de `composeMessageLabel` descendus au catalogue. FR
+     byte-identique (modèle `message.reaction.count`, Arabe binaire compris). */
+  'message.attachment.image.one': '{count} image',
+  'message.attachment.image.other': '{count} images',
+  'message.attachment.video.one': '{count} vidéo',
+  'message.attachment.video.other': '{count} vidéos',
+  'message.attachment.audio.one': '{count} audio',
+  'message.attachment.audio.other': '{count} audios',
+  'message.attachment.file.one': '{count} fichier',
+  'message.attachment.file.other': '{count} fichiers',
+  'message.attachment.contact.one': '{count} contact',
+  'message.attachment.contact.other': '{count} contacts',
+  'message.reactions.a11y': 'réactions : {list}',
   'quote.sender.unknown': 'l’expéditeur',
 
   'media.tile.open': 'Ouvrir {name}',

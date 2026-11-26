@@ -12,8 +12,33 @@ import os
 /// bloquer pour toujours sur `flock`. Un `body` qui attend, de façon
 /// synchrone, un autre fil qui prend le même verrou n'est pas détectable : il
 /// bloque, et c'est à l'appelant de ne jamais l'écrire.
+///
+/// **Le verrou ne se tient que sous un bail d'exécution** (#12668) : iOS
+/// termine (0xdead10cc) un processus suspendu qui tient un verrou de fichier
+/// dans un conteneur partagé. Sans bail accordé, ou bail expiré avant que le
+/// corps ne démarre, la prise lève `E2EEExecutionLeaseError` sans exécuter
+/// `body` : l'opération est reportée, jamais faite à moitié.
 public protocol E2EEProcessLockProviding: Sendable {
     func withLock<T>(_ body: () throws -> T) throws -> T
+}
+
+public extension E2EEProcessLockProviding {
+    /// Un lot long, découpé : chaque tranche sous SA prise (donc son bail et
+    /// sa transaction). Dès qu'une prise est refusée faute de bail, aucune
+    /// tranche ne démarre plus, et celles déjà faites — persistées — sont
+    /// rendues. Si aucune ne l'a été, le refus remonte.
+    func withLockInSlices<Slice, T>(_ slices: [Slice], _ body: (Slice) throws -> T) throws -> [T] {
+        var done: [T] = []
+        for slice in slices {
+            do {
+                done.append(try withLock { try body(slice) })
+            } catch let refusal as E2EEExecutionLeaseError {
+                guard !done.isEmpty else { throw refusal }
+                return done
+            }
+        }
+        return done
+    }
 }
 
 public enum E2EEProcessLockError: Error, Equatable {
@@ -53,45 +78,72 @@ public final class E2EEProcessLock: E2EEProcessLockProviding {
     private static let instances = OSAllocatedUnfairLock<[String: E2EEProcessLock]>(initialState: [:])
 
     private let path: String
+    private let leasing: any E2EEExecutionLeasing
     private let fileLock: any E2EEFileLocking
     private let local = OSAllocatedUnfairLock()
 
-    public convenience init(path: String) {
-        self.init(path: path, fileLock: E2EEFlock())
+    /// `leasing` est le bail du processus qui construit le verrou :
+    /// `beginBackgroundTask` dans l'app, `E2EEExpiringActivityLeasing` dans la NSE.
+    public convenience init(path: String, leasing: any E2EEExecutionLeasing) {
+        self.init(path: path, leasing: leasing, fileLock: E2EEFlock())
     }
 
-    init(path: String, fileLock: any E2EEFileLocking) {
+    /// Sans bail : les témoins seulement.
+    @_spi(Testing) public convenience init(path: String) {
+        self.init(path: path, leasing: E2EEUnguardedExecutionLeasing())
+    }
+
+    convenience init(path: String, fileLock: any E2EEFileLocking) {
+        self.init(path: path, leasing: E2EEUnguardedExecutionLeasing(), fileLock: fileLock)
+    }
+
+    init(path: String, leasing: any E2EEExecutionLeasing, fileLock: any E2EEFileLocking) {
         self.path = path
+        self.leasing = leasing
         self.fileLock = fileLock
     }
 
-    public static func shared(appGroup: String = "group.me.meeshy.apps") throws -> E2EEProcessLock {
-        try shared(appGroup: appGroup) { FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: $0) }
+    /// Le verrou du groupe d'apps, une instance par fichier et par processus :
+    /// le bail de la PREMIÈRE construction est celui de l'instance.
+    public static func shared(appGroup: String = "group.me.meeshy.apps", leasing: any E2EEExecutionLeasing) throws -> E2EEProcessLock {
+        try shared(appGroup: appGroup, leasing: leasing) { FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: $0) }
     }
 
-    static func shared(appGroup: String, container: (String) -> URL?) throws -> E2EEProcessLock {
+    static func shared(
+        appGroup: String,
+        leasing: any E2EEExecutionLeasing = E2EEUnguardedExecutionLeasing(),
+        container: (String) -> URL?
+    ) throws -> E2EEProcessLock {
         guard let directory = container(appGroup) else { throw CocoaError(.fileNoSuchFile) }
-        return shared(path: directory.appendingPathComponent("e2ee.lock").path)
+        return shared(path: directory.appendingPathComponent("e2ee.lock").path, leasing: leasing)
     }
 
-    static func shared(path: String) -> E2EEProcessLock {
+    static func shared(path: String, leasing: any E2EEExecutionLeasing) -> E2EEProcessLock {
         instances.withLock { cache in
             if let existing = cache[path] { return existing }
-            let created = E2EEProcessLock(path: path)
+            let created = E2EEProcessLock(path: path, leasing: leasing)
             cache[path] = created
             return created
         }
     }
 
+    /// Réentrance d'abord (aucun bail pour une prise imbriquée), puis le bail,
+    /// puis le verrou local et le `flock` — que la prise peut attendre : le
+    /// bail se relit une fois le verrou obtenu, et un bail expiré pendant
+    /// l'attente rend le verrou sans exécuter `body`.
     public func withLock<T>(_ body: () throws -> T) throws -> T {
         let marker = Self.heldMarker(for: path)
         let thread = Thread.current.threadDictionary
         guard thread[marker] == nil else { throw E2EEProcessLockError.reentrant }
-        return try local.withLockUnchecked { () throws -> T in
-            try fileLock.hold(path) {
-                thread[marker] = true
-                defer { thread.removeObject(forKey: marker) }
-                return try body()
+        return try leasing.withLease { lease in
+            guard !lease.isExpired else { throw E2EEExecutionLeaseError.expired }
+            return try local.withLockUnchecked { () throws -> T in
+                try fileLock.hold(path) {
+                    guard !lease.isExpired else { throw E2EEExecutionLeaseError.expired }
+                    thread[marker] = true
+                    defer { thread.removeObject(forKey: marker) }
+                    return try body()
+                }
             }
         }
     }

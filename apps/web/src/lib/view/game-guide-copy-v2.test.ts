@@ -22,6 +22,7 @@ const EVENTS: Readonly<Record<(typeof GUIDE_MOMENT_KEYS_V2)[number], GuideEventV
   'atlas-stamp': { kind: 'atlas-stamp', language: 'ja', stamped: 5, total: 83 },
   'flame-freeze-gift': { kind: 'flame-freeze-gift', freezes: 1 },
   'offering-kept': { kind: 'offering-kept', easedDays: 3 },
+  'flame-goal-reached': { kind: 'flame-goal-reached', target: 7, next: 14 },
 };
 
 describe('les huit moments, dans les sept langues', () => {
@@ -101,5 +102,25 @@ describe('l’Offrande gardée par les aïeux (#20327)', () => {
     expect(copy.next).toBe('Pendant 3 jours, ton rêve est plus léger, le temps de reprendre.');
     expect(copy.action).toBe('Voir mon rêve');
     expect(momentCopyV2(guideMomentV2(EVENTS['offering-kept'], ['offering-kept']), 'fr').short).toBe('Ton Offrande t’attend, gardée par les aïeux.');
+  });
+});
+
+describe('l’objectif de Flamme atteint (#20548)', () => {
+  test('Mee et Meo saluent les jours tenus, disent la marche suivante et mènent à la Flamme', () => {
+    const copy = momentCopyV2(guideMomentV2(EVENTS['flame-goal-reached'], []), 'fr');
+    expect(copy.what).toBe('Tes aïeux saluent ta Flamme : 7 jours tenus\u00a0!');
+    expect(copy.means).toBe('Tu as tenu l’objectif que tu t’étais fixé.');
+    expect(copy.next).toBe('Prochaine marche : 14 jours, à choisir dans ta Flamme.');
+    expect(copy.action).toBe('Voir ma Flamme');
+    expect(momentCopyV2(guideMomentV2(EVENTS['flame-goal-reached'], ['flame-goal-next-7']), 'fr').short).toBe('Objectif de Flamme tenu : 7 jours.');
+  });
+
+  test('après la dernière marche, rien ne se propose : la Flamme brûle haut', async () => {
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      await loadGameCatalog(language);
+      const copy = momentCopyV2(guideMomentV2({ kind: 'flame-goal-reached', target: 365, next: null }, []), language);
+      expect({ language, bare: /game\.[a-z_]+\.|\{\w+\}/.test(copy.next) }).toEqual({ language, bare: false });
+    }
+    expect(momentCopyV2(guideMomentV2({ kind: 'flame-goal-reached', target: 365, next: null }, []), 'fr').next).toBe('Tu as gravi toutes les marches : ta Flamme brûle haut.');
   });
 });

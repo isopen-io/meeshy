@@ -614,6 +614,19 @@
        }
       ]
      }
+    },
+    "userId": {
+     "optional": true,
+     "type": {
+      "union": [
+       {
+        "primitive": "string"
+       },
+       {
+        "primitive": "undefined"
+       }
+      ]
+     }
     }
    }
   },

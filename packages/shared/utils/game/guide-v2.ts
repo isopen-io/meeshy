@@ -15,6 +15,7 @@
  * est la clé « déjà vu » que le serveur garde (`game.guideSeen`).
  */
 
+import { flameGoalNextSeenKey } from './flame-goal.js';
 import { chooseGuideMoment, guideMoment } from './guide.js';
 import type { GuideEvent, GuideMoment, GuideMomentKey, GuideMood, GuideSpeaker } from './guide.js';
 import type { LeagueKey } from './league.js';
@@ -36,7 +37,13 @@ export type GuideEventV2 =
   /** La première Veilleuse, offerte au 3e jour de Flamme (#20169). Sa clé est `FLAME_FREEZE_GIFT_SEEN_KEY`. */
   | { readonly kind: 'flame-freeze-gift'; readonly freezes: number }
   /** Le jour du retour, l'Offrande gardée par les aïeux est prête (#20327) ; le Rêve est allégé `easedDays` jours. */
-  | { readonly kind: 'offering-kept'; readonly easedDays: number };
+  | { readonly kind: 'offering-kept'; readonly easedDays: number }
+  /**
+   * L'objectif de Flamme choisi est atteint (#20546) : `target` jours tenus, `next` la marche suivante (`null` après
+   * la dernière). Sa clé « vue » n'est pas son genre mais `flameGoalNextSeenKey(target)`, celle que la carte de la
+   * Flamme lit aussi : un objectif se salue une fois, par l'une ou par l'autre.
+   */
+  | { readonly kind: 'flame-goal-reached'; readonly target: number; readonly next: number | null };
 
 export type GuideMomentKeyV2 = GuideEventV2['kind'];
 
@@ -51,6 +58,7 @@ export const GUIDE_MOMENT_KEYS_V2: readonly GuideMomentKeyV2[] = [
   'atlas-stamp',
   'flame-freeze-gift',
   'offering-kept',
+  'flame-goal-reached',
 ];
 
 type DataOf<K extends GuideMomentKeyV2> = Omit<Extract<GuideEventV2, { kind: K }>, 'kind'>;
@@ -90,12 +98,21 @@ function personaOf(event: GuideEventV2): Persona {
       return { speaker: 'meo', mood: 'cheer', action: 'see-flame' };
     case 'offering-kept':
       return { speaker: 'mee', mood: 'cheer', action: 'see-missions' };
+    case 'flame-goal-reached':
+      return { speaker: 'duo', mood: 'proud', action: 'see-flame' };
   }
 }
 
+/**
+ * La clé « vue » qu'un moment écrit dans `game.guideSeen` : son genre, sauf l'objectif de Flamme atteint, dont la clé
+ * est celle de l'objectif (`flameGoalNextSeenKey`) — un nouvel objectif atteint est un nouveau moment.
+ */
+export const guideSeenKeyV2 = (event: GuideEvent | GuideEventV2): string =>
+  event.kind === 'flame-goal-reached' ? flameGoalNextSeenKey(event.target) : event.kind;
+
 export function guideMomentV2(event: GuideEventV2, seen: Iterable<string>): GuideMomentV2 {
   const { kind, ...data } = event;
-  const presentation = new Set(seen).has(kind) ? 'short' : 'full';
+  const presentation = new Set(seen).has(guideSeenKeyV2(event)) ? 'short' : 'full';
   return { key: kind, ...personaOf(event), data, presentation } as GuideMomentV2;
 }
 
@@ -116,6 +133,7 @@ export const GUIDE_MOMENT_PRIORITY_ALL: readonly (GuideMomentKey | GuideMomentKe
   'flame-out',
   'flame-at-risk',
   'flame-freeze-gift',
+  'flame-goal-reached',
   'league-promoted',
   'league-relegated',
   'new-tier',
@@ -147,7 +165,7 @@ export function chooseGuideMomentAny(
   if (legacy.length === events.length) return chooseGuideMoment(legacy, seenSet);
   const rank = (e: GuideEvent | GuideEventV2): number => GUIDE_MOMENT_PRIORITY_ALL.indexOf(e.kind);
   const byPriority = [...events].sort((a, b) => rank(a) - rank(b));
-  const chosen = byPriority.find((e) => !seenSet.has(e.kind)) ?? byPriority[0];
+  const chosen = byPriority.find((e) => !seenSet.has(guideSeenKeyV2(e))) ?? byPriority[0];
   if (chosen === undefined) return null;
   return isEventV2(chosen) ? guideMomentV2(chosen, seenSet) : guideMoment(chosen, seenSet);
 }

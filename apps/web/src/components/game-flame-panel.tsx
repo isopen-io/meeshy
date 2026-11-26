@@ -5,8 +5,9 @@ import { FLAME_BONUS_PERCENT_MAX, FLAME_BONUS_PERCENT_PER_DAY } from '@meeshy/sh
 import { FLAME_PAUSE_MAX_DAYS, FLAME_PAUSE_MIN_DAYS } from '@meeshy/shared/utils/game/flame-pause';
 import { spendPreview } from '@meeshy/shared/utils/game/spend';
 
-import { flamePauseAction, flamePauseIntro, flamePauseLine, readFlamePause } from '@/lib/view/flame-pause-copy';
-import { effortRelightLine, formatCount, gameText, meeshCount, readEffortRelight } from '@/lib/view/game-copy';
+import { flameGoalLine, flameGoalNextAction, flameGoalView, readFlameGoal, type FlameGoalView } from '@/lib/view/flame-goal-copy';
+import { flamePauseAction, flamePauseIntro, flamePauseLine, flamePauseNextLine, readFlamePause, readNextPauseFrom } from '@/lib/view/flame-pause-copy';
+import { daysLabel, effortRelightLine, formatCount, gameText, meeshCount, readEffortRelight } from '@/lib/view/game-copy';
 import { freezeDetail } from '@/lib/view/game-detail';
 
 import { GAME_BRAND, GAME_ERROR, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, GameCard } from './game-surface';
@@ -34,6 +35,10 @@ import { GameSpendLine, GameTouch } from './game-touch';
  * Une Flamme vivante se met en VEILLE (#17372, #20509) : deux gestes, la durée
  * (1 à 7 jours, sept choisis d'avance) puis l'annonce. Tant que le bloc sert
  * une veille, le panneau dit jusqu'à quand elle attend, et l'annonce se tait.
+ *
+ * Au premier jour d'une Flamme, le panneau propose un OBJECTIF (#17379, #20521) : 7, 14 ou 30 jours, en un geste,
+ * et ne rien choisir ne coûte rien. En cours, il dit ce qu'il reste ; atteint, les aïeux le saluent et la marche
+ * suivante se propose, jusqu'à ce que le joueur ferme le signe (`goalSignSeen`). Un objectif raté ne se dit pas.
  */
 
 export type GameFlamePanelProps = {
@@ -48,7 +53,17 @@ export type GameFlamePanelProps = {
   readonly onBuyFreeze: () => void;
   readonly onRelight: () => void;
   readonly onPause: (days: number) => void;
-  readonly errors?: { readonly freeze?: string | undefined; readonly relight?: string | undefined; readonly pause?: string | undefined };
+  readonly choosingGoal: boolean;
+  /** Le signe de l'objectif atteint est déjà fermé (`flameGoalNextSeenKey` dans `game.guideSeen`). */
+  readonly goalSignSeen: boolean;
+  readonly onChooseGoal: (target: number) => void;
+  readonly onCloseGoalSign: (target: number) => void;
+  readonly errors?: {
+    readonly freeze?: string | undefined;
+    readonly relight?: string | undefined;
+    readonly pause?: string | undefined;
+    readonly goal?: string | undefined;
+  };
 };
 
 const PAUSE_DAYS: readonly number[] = Array.from({ length: FLAME_PAUSE_MAX_DAYS - FLAME_PAUSE_MIN_DAYS + 1 }, (_, index) => FLAME_PAUSE_MIN_DAYS + index);
@@ -101,6 +116,83 @@ function PauseChooser({ online, pausing, onPause, error }: { readonly online: bo
   );
 }
 
+function GoalChoice({ target, label, online, choosing, onChoose }: { readonly target: number; readonly label: string; readonly online: boolean; readonly choosing: boolean; readonly onChoose: (target: number) => void }) {
+  return (
+    <button
+      type="button"
+      data-game-flame-goal={target}
+      disabled={!online || choosing}
+      aria-busy={choosing}
+      onClick={() => onChoose(target)}
+      className="game-press rounded-chip px-4 text-body font-bold disabled:opacity-60"
+      style={{ minWidth: 44, minHeight: 44, backgroundColor: GAME_WARM, color: GAME_ON_WARM }}
+    >
+      {label}
+    </button>
+  );
+}
+
+type GoalBlockProps = {
+  readonly view: FlameGoalView;
+  readonly online: boolean;
+  readonly choosing: boolean;
+  readonly onChoose: (target: number) => void;
+  readonly onClose: (target: number) => void;
+};
+
+function GoalBlock({ view, online, choosing, onChoose, onClose }: GoalBlockProps) {
+  switch (view.kind) {
+    case 'choose':
+      return (
+        <>
+          <p className="text-caption" style={{ color: GAME_INK_2 }}>
+            {flameGoalLine(view)}
+          </p>
+          <div role="group" aria-label={gameText('game.flame_panel.goal_choices')} className="flex flex-wrap gap-1">
+            {view.offer.map((target) => (
+              <GoalChoice key={target} target={target} label={daysLabel(target)} online={online} choosing={choosing} onChoose={onChoose} />
+            ))}
+          </div>
+        </>
+      );
+    case 'next':
+      return (
+        <div className="flex flex-wrap items-center gap-1">
+          <p className="text-caption" style={{ color: GAME_INK_2 }}>
+            {flameGoalLine(view)}
+          </p>
+          <GoalChoice target={view.next} label={flameGoalNextAction(view.next)} online={online} choosing={choosing} onChoose={onChoose} />
+        </div>
+      );
+    case 'running':
+      return (
+        <p data-game-flame-goal-running="" className="text-caption font-semibold" style={{ color: GAME_INK }}>
+          {flameGoalLine(view)}
+        </p>
+      );
+    case 'reached':
+      return (
+        <div data-game-flame-goal-sign="" role="status" className="flex flex-col gap-1">
+          <p className="text-body font-bold" style={{ color: GAME_BRAND }}>
+            {flameGoalLine(view)}
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {view.next === null ? null : <GoalChoice target={view.next} label={flameGoalNextAction(view.next)} online={online} choosing={choosing} onChoose={onChoose} />}
+            <button
+              type="button"
+              data-game-flame-goal-later=""
+              onClick={() => onClose(view.target)}
+              className="game-press rounded-chip px-4 text-body font-semibold"
+              style={{ minHeight: 44, color: GAME_INK }}
+            >
+              {gameText('game.flame_panel.goal_later')}
+            </button>
+          </div>
+        </div>
+      );
+  }
+}
+
 function Alert({ message }: { readonly message: string | undefined }) {
   return message === undefined ? null : (
     <p role="alert" className="text-caption" style={{ color: GAME_ERROR }}>
@@ -111,6 +203,7 @@ function Alert({ message }: { readonly message: string | undefined }) {
 
 export function GameFlamePanel(props: GameFlamePanelProps) {
   const { flame, held, online, buyingFreeze, relighting, pausing, today, onBuyFreeze, onRelight, onPause, errors } = props;
+  const goal = flameGoalView(readFlameGoal(flame.goal), props.goalSignSeen);
   const full = flame.freezes >= flame.maxFreezes;
   const freeze = spendPreview({ held, cost: flame.freezePrice });
   const out = flame.status === 'out';
@@ -118,6 +211,7 @@ export function GameFlamePanel(props: GameFlamePanelProps) {
   const cannotPayRelight = !relight.affordable;
   const effort = readEffortRelight(flame.effortRelight);
   const pause = readFlamePause(flame.pause);
+  const nextPauseFrom = readNextPauseFrom(flame.nextPauseFrom);
   const burning = flame.status === 'lit' || flame.status === 'at-risk' || flame.status === 'covered';
 
   return (
@@ -128,6 +222,9 @@ export function GameFlamePanel(props: GameFlamePanelProps) {
       <p className="text-caption" style={{ color: GAME_INK_2 }}>
         {gameText('game.flame_panel.bonus', { perDay: formatCount(FLAME_BONUS_PERCENT_PER_DAY), max: formatCount(FLAME_BONUS_PERCENT_MAX) })}
       </p>
+
+      {goal === null ? null : <GoalBlock view={goal} online={online} choosing={props.choosingGoal} onChoose={props.onChooseGoal} onClose={props.onCloseGoalSign} />}
+      <Alert message={errors?.goal} />
 
       {/* Les gels se touchent : ce qu'est un gel, ce qu'il coûte (#9563). */}
       <GameTouch detail={freezeDetail(flame)} className="flex items-center self-start rounded-chip text-body font-semibold" style={{ minHeight: 44, color: GAME_INK }}>
@@ -150,6 +247,10 @@ export function GameFlamePanel(props: GameFlamePanelProps) {
       {pause !== null ? (
         <p data-game-flame-paused="" className="text-caption font-semibold" style={{ color: GAME_INK }}>
           {flamePauseLine(pause, today)}
+        </p>
+      ) : burning && nextPauseFrom !== null ? (
+        <p data-game-flame-pause-next="" className="text-caption" style={{ color: GAME_INK_2 }}>
+          {flamePauseNextLine(nextPauseFrom)}
         </p>
       ) : burning ? (
         <PauseChooser online={online} pausing={pausing} onPause={onPause} error={errors?.pause} />

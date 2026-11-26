@@ -391,6 +391,7 @@ extension iPadRootView {
                 router.deepLinkProfileUser = ProfileSheetUser(userId: senderId, username: ctx.senderUsername ?? senderId)
             }
 
+        case .bloodProximity: if let personMap = ctx.personMap { router.presentPersonMap(personMap) } // Sa carte (#20540)
         case .communityInvite, .communityJoined, .communityLeft,
              .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft,
              .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged,
@@ -435,8 +436,7 @@ extension iPadRootView {
             openSocialNotification(ctx)
 
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
-            // Le palier se CÉLÈBRE d'abord (#5809) — `nil` quand la charge ne dit pas lequel (push) — puis la fiche
-            // de son concept s'ouvre sur son chemin complet (#9564).
+            // Le palier se CÉLÈBRE d'abord (#5809, `nil` sur un push), puis la fiche de son concept s'ouvre (#9564).
             router.pendingEngagementReveal = ctx.reveal
             router.openGame(at: GameNavigationMap.entry(for: ctx.type) ?? .progression)
 

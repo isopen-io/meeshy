@@ -257,6 +257,9 @@ targets:
       # Gardes : `LocationShareActivityLawTests`, `ClosePeopleWidgetTests`.
       - path: MeeshyWidgets/LocationShareActivityAttributes.swift
       - path: MeeshyWidgets/ClosePeopleWidgetContract.swift
+      # #20562 — « Ma Flamme » : l'app PUBLIE la Flamme et les actes du jour lus dans le cache du Jeu, le widget
+      # les PEINT. Foundation seul ; gardes : `MenuActsRingStoreTests`, `GameDeepLinkTests`.
+      - path: MeeshyWidgets/GameFlameWidgetContract.swift
       - path: MeeshyWidgets/OpenVitrineIntent.swift
       # #14628 — l'AGPL-3.0 de libsignal : le texte officiel de la licence et
       # les avis de libsignal publiés par Signal au tag épinglé voyagent DANS

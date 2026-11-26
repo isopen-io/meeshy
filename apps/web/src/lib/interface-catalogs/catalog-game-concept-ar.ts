@@ -435,6 +435,16 @@ const ar = {
   'game.flame_panel.pause': 'دعه يستريح · {days}',
   'game.flame_panel.paused': 'يستريح لهبك حتى {date}.',
   'game.flame_panel.paused_soon': 'يبدأ لهبك استراحته غدًا، حتى {date}.',
+  'game.error.flame_goal.not_offered': 'هذا الهدف غير متاح اليوم.',
+  'game.error.flame_goal.no_flame': 'يجب أن يكون لهبك مشتعلًا لتختار هدفًا.',
+  'game.flame_panel.goal_intro': 'هدف للهبك؟ اختره اليوم، أو دعه يشتعل.',
+  'game.flame_panel.goal_choices': 'هدف اللهب',
+  'game.flame_panel.goal_running': 'الهدف: {target} من اللهب. تبلغه بعد {remaining}.',
+  'game.flame_panel.goal_reached': 'أجدادك يحيّون لهبك: {days} من الثبات!',
+  'game.flame_panel.goal_next': 'استهدف {days}',
+  'game.flame_panel.goal_later': 'لاحقًا',
+  'game.flame_panel.goal_next_intro': 'تحقّق هدف {target}. الدرجة التالية؟',
+  'game.flame_panel.pause_next': 'يستطيع لهبك أن يستريح من جديد ابتداءً من {date}.',
 } as const satisfies GameConceptCatalog;
 
 export default ar;

@@ -164,6 +164,17 @@
     <string name="widget_favorite_contacts_description">Accès rapide à vos contacts favoris</string>
     <string name="widget_favorite_contacts_title">Contacts favoris</string>
     <string name="widget_favorites_header">Favoris</string>
+    <string name="widget_game_flame_acts">Actes du jour : %1$d sur %2$d</string>
+    <string name="widget_game_flame_at_risk">Fais un geste avant minuit</string>
+    <string name="widget_game_flame_covered">Une Veilleuse la garde</string>
+    <plurals name="widget_game_flame_days">
+        <item quantity="one">%1$d jour</item>
+        <item quantity="many">%1$d jours</item>
+        <item quantity="other">%1$d jours</item>
+    </plurals>
+    <string name="widget_game_flame_empty">Un geste aujourd’hui allume ta Flamme</string>
+    <string name="widget_game_flame_out">Éteinte</string>
+    <string name="widget_game_flame_title">Ma Flamme</string>
     <string name="widget_mark_as_read">Marquer comme lu</string>
     <string name="widget_presence_away">Absent</string>
     <string name="widget_presence_idle">Inactif</string>

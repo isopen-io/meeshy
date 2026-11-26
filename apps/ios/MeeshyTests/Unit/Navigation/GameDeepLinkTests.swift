@@ -61,6 +61,16 @@ final class GameDeepLinkTests: XCTestCase {
         XCTAssertEqual(parse("meeshy://me/progression/reglages"), .ownProfile)
     }
 
+    func test_parse_bareProgression_opensMyLegend() {
+        XCTAssertEqual(parse("meeshy://me/progression"), .game(.legend))
+        XCTAssertEqual(parse("https://meeshy.me/me/progression"), .game(.legend))
+    }
+
+    func test_theFlameWidgetLink_opensMyLegend() throws {
+        let link = try XCTUnwrap(GameFlameWidgetKeys.link)
+        XCTAssertEqual(parse(link.absoluteString), .game(.legend))
+    }
+
     func test_isMeeshyDeepLink_claimsGameLinks() {
         XCTAssertTrue(DeepLinkParser.isMeeshyDeepLink(URL(string: "https://meeshy.me/me/progression/saison/4")!))
         XCTAssertTrue(DeepLinkParser.isMeeshyDeepLink(URL(string: "https://meeshy.me/me/progression/ligue/2026-10-12")!))
@@ -96,6 +106,12 @@ final class GameDeepLinkTests: XCTestCase {
     func test_entry_bareLinks_openThePagesWithoutFocus() {
         XCTAssertEqual(GameNavigationMap.entry(for: .season(number: nil)), .gamePage(.season))
         XCTAssertEqual(GameNavigationMap.entry(for: .leagueWeek(key: nil)), .gamePage(.league))
+    }
+
+    func test_openGame_fromTheLegendLink_opensMyLegendAlone() {
+        let router = Router()
+        router.openGame(at: GameNavigationMap.entry(for: .legend))
+        XCTAssertEqual(router.path, [.progression])
     }
 
     func test_openGame_fromALink_stacksProgressionFicheAndPage() {

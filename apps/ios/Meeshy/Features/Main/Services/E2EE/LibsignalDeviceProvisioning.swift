@@ -30,7 +30,7 @@ nonisolated final class LibsignalDeviceProvisioning: EndToEndDeviceProvisioning,
     }
 
     @Sendable static func appGroupStorage(secrets: any E2EESecretStoreProviding) throws -> Storage {
-        let processLock = try E2EEProcessLock.shared()
+        let processLock = try E2EEProcessLock.shared(leasing: ApplicationExecutionLeasing.live)
         return (try E2EEGRDBRecordVault.shared(secrets: secrets, lock: processLock), processLock)
     }
 

@@ -63,6 +63,7 @@ internal fun PackShopBrowseLayer(
     browse: PackShopBrowseViewModel,
     onToggleInstall: (String) -> Unit,
     onBuy: (String) -> Unit,
+    onEarnMeeshes: (() -> Unit)? = null,
 ) {
     AnimatedContent(
         targetState = browsing.stack.top,
@@ -84,6 +85,8 @@ internal fun PackShopBrowseLayer(
                 onToggleInstall = { onToggleInstall(route.slug) },
                 onBuy = { onBuy(route.slug) },
                 onOpenItem = { index -> browse.openViewer(route.domain, route.slug, index) },
+                balance = shop.balance,
+                onEarnMeeshes = onEarnMeeshes,
             )
             is ShopBrowseRoute.Viewer -> PackShopViewer(
                 route = route,
@@ -116,9 +119,11 @@ internal fun PackShopDetail(
     onToggleInstall: () -> Unit,
     onBuy: () -> Unit,
     onOpenItem: (Int) -> Unit,
+    balance: Int? = null,
+    onEarnMeeshes: (() -> Unit)? = null,
 ) {
     val name = pack.localizedName(language)
-    val presentation = remember(pack) { PackRowPresentation.of(pack) }
+    val presentation = remember(pack, balance) { PackRowPresentation.of(pack, balance) }
     Box(Modifier.fillMaxSize().background(MeeshyTheme.tokens.backgroundPrimary)) {
         Column(
             Modifier
@@ -144,6 +149,7 @@ internal fun PackShopDetail(
                 Text(it, style = meeshyText(MeeshyFontSize.subhead), color = MeeshyTheme.tokens.textSecondary)
             }
             PackAction(presentation.action, name, busy, onBuy, onToggleInstall)
+            presentation.shortfall?.let { PackShortfallLine(it, language, onEarnMeeshes) }
             Text(
                 stringResource(R.string.pack_shop_detail_items),
                 style = meeshyText(MeeshyFontSize.headline, FontWeight.SemiBold),

@@ -785,6 +785,11 @@
         },
         {
           "catalog": "app",
+          "iosKey": "game.error.flame_goal_not_allowed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
           "iosKey": "game.error.mission_not_found",
           "status": "adopted"
         },

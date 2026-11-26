@@ -73,6 +73,15 @@ export function gameLeagueResultKey(params: {
   return params.zone === 'relegation' ? 'game.leagueRelegated' : 'game.leagueStayed';
 }
 
+/**
+ * L'annonce de la mission du jour dit la Flamme (#17368, #20575) à partir de DEUX jours : une Flamme éteinte
+ * (hauteur servie 0) ou d'un seul jour ne se dit pas — le catalogue n'a pas de forme au singulier.
+ */
+export const GAME_MISSION_FLAME_MIN_DAYS = 2;
+
+export const missionWindowKey = (flameDays: number): 'game.missionWindow' | 'game.missionWindowFlame' =>
+  Number.isFinite(flameDays) && flameDays >= GAME_MISSION_FLAME_MIN_DAYS ? 'game.missionWindowFlame' : 'game.missionWindow';
+
 /** Le texte du push photo (D13) : une étape au singulier, plusieurs en une phrase groupée qui dit leur nombre. */
 export const photoMomentNotificationKey = (count: number): 'game.photoMoment' | 'game.photoMoments' =>
   count > 1 ? 'game.photoMoments' : 'game.photoMoment';

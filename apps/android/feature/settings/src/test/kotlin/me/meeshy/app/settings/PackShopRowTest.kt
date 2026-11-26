@@ -128,4 +128,51 @@ class PackShopRowTest {
         show(ShopPack(slug = "base", name = "Essentials", coverUrl = "/api/v1/pack-assets/aaaaaaaaaaaaaaaa.webp"))
         compose.onNodeWithText("Essentials").assertExists()
     }
+    private fun showShort(pack: ShopPack, balance: Int?, onEarn: (() -> Unit)?) {
+        compose.setContent {
+            MeeshyTheme { PackRow(pack, "en", busy = false, focused = false, onBuy = {}, balance = balance, onEarnMeeshes = onEarn) }
+        }
+        compose.waitForIdle()
+    }
+
+    @Test
+    fun `a pack the balance does not cover says what is missing, keeps Buy, and leads to minting`() {
+        var earned = 0
+        showShort(ShopPack(slug = "prestige", name = "Prestige", price = 90, owned = false), balance = 82) { earned += 1 }
+
+        compose.onNodeWithText("You need 8 more Meeshes").assertExists()
+        compose.onNodeWithText("Buy · 90").assertExists()
+        compose.onNodeWithText("Mint Meeshes").performClick()
+
+        assertThat(earned).isEqualTo(1)
+    }
+
+    @Test
+    fun `one missing Meesh is said in the singular`() {
+        showShort(ShopPack(slug = "prestige", name = "Prestige", price = 20, owned = false), balance = 19, onEarn = null)
+
+        compose.onNodeWithText("You need 1 more Meesh").assertExists()
+    }
+
+    @Test
+    fun `without a path to minting the line says the gap alone`() {
+        showShort(ShopPack(slug = "prestige", name = "Prestige", price = 90, owned = false), balance = 10, onEarn = null)
+
+        compose.onNodeWithText("You need 80 more Meeshes").assertExists()
+        compose.onNodeWithText("Mint Meeshes").assertDoesNotExist()
+    }
+
+    @Test
+    fun `an affordable pack adds nothing`() {
+        showShort(ShopPack(slug = "prestige", name = "Prestige", price = 20, owned = false), balance = 20) {}
+
+        compose.onNodeWithText("Mint Meeshes").assertDoesNotExist()
+    }
+
+    @Test
+    fun `an unknown balance adds nothing`() {
+        showShort(ShopPack(slug = "prestige", name = "Prestige", price = 20, owned = false), balance = null) {}
+
+        compose.onNodeWithText("Mint Meeshes").assertDoesNotExist()
+    }
 }
