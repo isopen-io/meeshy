@@ -50,6 +50,7 @@ public enum class MeeshyNotificationCategory(public val wire: String?) {
             "friend_content_reaction", "friend_content_share", "friend_content_repost", "friend_content_quote",
             "friend_new_story", "friend_new_post", "friend_new_mood",
             "game_duo_invited", "game_duo_accepted", "game_league_result", "game_season_step", "game_mission_window",
+            "game_flame_evening",
         )
         private val COMMENTABLE_TYPES = setOf("post_comment", "POST_COMMENT", "story_new_comment", "friend_story_comment")
         private val CALL_INCOMING_TYPES = setOf("incoming_call", "call_incoming")

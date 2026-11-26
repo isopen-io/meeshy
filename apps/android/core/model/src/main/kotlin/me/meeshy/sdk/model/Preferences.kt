@@ -267,7 +267,8 @@ data class UserNotificationPreferences(
     val friendContentEnabled: Boolean = true,
     // #8285 — « Quand un contact revient sur Meeshy » (`contact_recently_active`).
     val contactActivityEnabled: Boolean = true,
-    // #9490 — « Jeu » (`game_duo_invited`, `game_duo_accepted`, `game_league_result`, `game_season_step`).
+    // #9490 — « Jeu » (`game_duo_invited`, `game_duo_accepted`, `game_league_result`, `game_season_step`,
+    // `game_mission_window`, `game_flame_evening`).
     val gameEnabled: Boolean = true,
     // #14147 — « La batterie de mes Proches et de mes Sangs » (`device_battery`).
     val deviceBatteryEnabled: Boolean = true,

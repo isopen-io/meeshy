@@ -51,7 +51,7 @@ public fun notificationTypeAccentHex(type: String): String = when (type) {
     // distinct de la famille communauté : un badge ne ressemble plus à une invitation.
     "achievement_unlocked", "ACHIEVEMENT_UNLOCKED", "streak_milestone", "badge_earned", "level_up",
     "game_duo_invited", "game_duo_accepted", "game_league_result", "game_season_step",
-    "game_mission_window",
+    "game_mission_window", "game_flame_evening",
     -> "FBBF24"
 
     // Calls → pink.
@@ -119,7 +119,7 @@ public fun notificationTypeGlyph(type: String): NotificationGlyph = when (type) 
     "friend_new_mood" -> NotificationGlyph.MOOD
     "achievement_unlocked", "ACHIEVEMENT_UNLOCKED", "game_league_result" -> NotificationGlyph.TROPHY
     "badge_earned" -> NotificationGlyph.MEDAL
-    "streak_milestone" -> NotificationGlyph.STREAK
+    "streak_milestone", "game_flame_evening" -> NotificationGlyph.STREAK
     "level_up", "member_promoted" -> NotificationGlyph.STAR
     "game_season_step" -> NotificationGlyph.GAME_SEASON
     "game_mission_window" -> NotificationGlyph.GAME_TIMER

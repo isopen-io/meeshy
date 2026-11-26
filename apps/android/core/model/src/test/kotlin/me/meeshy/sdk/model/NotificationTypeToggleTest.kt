@@ -315,6 +315,7 @@ class NotificationTypeToggleTest {
         val off = allOn.copy(gameEnabled = false)
         listOf(
             "game_duo_invited", "game_duo_accepted", "game_league_result", "game_season_step", "game_mission_window",
+            "game_flame_evening",
         ).forEach { assertThat(NotificationTypeToggle.isEnabled(it, off)).isFalse() }
         assertThat(NotificationTypeToggle.isEnabled("level_up", off)).isTrue()
         assertThat(NotificationTypeToggle.isEnabled("badge_earned", off)).isTrue()

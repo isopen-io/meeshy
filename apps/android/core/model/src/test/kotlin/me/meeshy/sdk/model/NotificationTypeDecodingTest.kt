@@ -19,10 +19,11 @@ class NotificationTypeDecodingTest {
         "game_league_result" to MeeshyNotificationType.GAME_LEAGUE_RESULT,
         "game_season_step" to MeeshyNotificationType.GAME_SEASON_STEP,
         "game_mission_window" to MeeshyNotificationType.GAME_MISSION_WINDOW,
+        "game_flame_evening" to MeeshyNotificationType.GAME_FLAME_EVENING,
     )
 
     @Test
-    fun `les dix nouveaux types sont reconnus par leur valeur de fil`() {
+    fun `les onze nouveaux types sont reconnus par leur valeur de fil`() {
         newTypes.forEach { (wire, expected) ->
             assertThat(MeeshyNotificationType.fromWire(wire)).isEqualTo(expected)
             assertThat(json.decodeFromString<MeeshyNotificationType>("\"$wire\"")).isEqualTo(expected)

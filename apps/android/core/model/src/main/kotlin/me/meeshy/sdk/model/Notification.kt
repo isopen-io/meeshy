@@ -199,6 +199,7 @@ enum class MeeshyNotificationType(val wire: String) {
     @SerialName("game_league_result") GAME_LEAGUE_RESULT("game_league_result"),
     @SerialName("game_season_step") GAME_SEASON_STEP("game_season_step"),
     @SerialName("game_mission_window") GAME_MISSION_WINDOW("game_mission_window"),
+    @SerialName("game_flame_evening") GAME_FLAME_EVENING("game_flame_evening"),
     @SerialName("call") INCOMING_CALL_ALERT("call"),
 
     // Legacy uppercase (backward compat)

@@ -421,6 +421,7 @@ class LaunchRouterTest {
         assertThat(tapRoute("type" to "game_league_result")).isEqualTo("progression/page/league")
         assertThat(tapRoute("type" to "game_season_step")).isEqualTo("progression/page/season")
         assertThat(tapRoute("type" to "badge_earned")).isEqualTo("progression/badges")
+        assertThat(tapRoute("type" to "game_flame_evening")).isEqualTo("progression/flame")
         assertThat(routes.route(me.meeshy.sdk.model.game.GameTarget.Home)).isEqualTo(routes.PROGRESSION)
     }
 
