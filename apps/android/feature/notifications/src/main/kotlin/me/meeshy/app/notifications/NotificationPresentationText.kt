@@ -43,6 +43,7 @@ internal fun headlineText(headline: BannerHeadline): String = when (headline) {
                 GameSurfaceTitle.LEAGUE_RESULT -> R.string.notification_game_league_result_title
                 GameSurfaceTitle.SEASON_STEP -> R.string.notification_game_season_step_title
                 GameSurfaceTitle.MISSION_WINDOW -> R.string.notification_game_mission_window_title
+                GameSurfaceTitle.FLAME_EVENING -> R.string.notification_game_flame_evening_title
             },
         ),
         headline.action,

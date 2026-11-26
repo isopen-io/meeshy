@@ -80,7 +80,10 @@ public object NotificationTypeToggle {
         ToggleGroup(setOf("device_battery")) { it.deviceBatteryEnabled },
         ToggleGroup(setOf("device_unreachable")) { it.deviceUnreachableEnabled },
         ToggleGroup(
-            setOf("game_duo_invited", "game_duo_accepted", "game_league_result", "game_season_step", "game_mission_window"),
+            setOf(
+                "game_duo_invited", "game_duo_accepted", "game_league_result", "game_season_step", "game_mission_window",
+                "game_flame_evening",
+            ),
         ) { it.gameEnabled },
         ToggleGroup(
             setOf("new_conversation", "new_conversation_direct", "new_conversation_group", "added_to_conversation", "removed_from_conversation"),

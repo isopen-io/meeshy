@@ -62,6 +62,12 @@ class GameNavigationMapTest {
     }
 
     @Test
+    fun `le rappel du soir ouvre la fiche de la Flamme a la section act`() {
+        assertThat(GameNavigationMap.entry("game_flame_evening"))
+            .isEqualTo(GameRoute.Concept(ProgressionConcept.Flame, ConceptSection.Act))
+    }
+
+    @Test
     fun `les types hors du jeu n ouvrent rien`() {
         assertThat(GameNavigationMap.entry("new_message")).isNull()
     }
