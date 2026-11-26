@@ -428,6 +428,53 @@ describe('LocationHandler — cycle de vie du partage', () => {
     });
   });
 
+  // ── un verbe, un verdict (#16797) ──────────────────────────────────────────
+
+  describe('une diffusion qui lève après l\'ACK', () => {
+    const makeFailingBroadcastSocket = () => {
+      const socket = makeSocket(SHARER_SOCKET);
+      (socket.to as jest.Mock<any>).mockReturnValue({
+        emit: jest.fn(() => {
+          throw new Error('adapter down');
+        }),
+      });
+      return socket;
+    };
+
+    it('ne rend au partageur qu\'UN verdict, celui du succès', async () => {
+      const ctx = makeHandler();
+      handler = ctx.handler;
+      const callback = jest.fn();
+
+      await handler.handleLiveLocationStart(
+        makeFailingBroadcastSocket(),
+        { ...PARIS, conversationId: CONV_ID, durationMinutes: 30 },
+        callback
+      );
+
+      expect(callback).toHaveBeenCalledTimes(1);
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    });
+
+    it('laisse la session ouverte, donc rejouée au pair qui ouvre le fil', async () => {
+      const ctx = makeHandler();
+      handler = ctx.handler;
+      await handler.handleLiveLocationStart(
+        makeFailingBroadcastSocket(),
+        { ...PARIS, conversationId: CONV_ID, durationMinutes: 30 },
+        jest.fn()
+      );
+
+      const viewer = makeSocket(VIEWER_SOCKET);
+      await handler.replayLiveLocationsTo(viewer, NORMALIZED_CONV_ID);
+
+      expect(viewer.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.LOCATION_LIVE_STARTED,
+        expect.objectContaining({ conversationId: NORMALIZED_CONV_ID, userId: SHARER_ID })
+      );
+    });
+  });
+
   // ── dispose ────────────────────────────────────────────────────────────────
 
   it('dispose désarme les minuteries sans rien diffuser', async () => {

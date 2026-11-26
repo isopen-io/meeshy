@@ -432,8 +432,22 @@ export class LocationHandler {
       // clients traitent tout LOCATION_LIVE_* reçu comme l'état d'un pair DISTANT
       // (cf. StatusHandler typing + CallEventsHandler media-toggle). Un self-echo
       // ferait apparaître le partageur comme un partageur distant sur sa carte.
-      this._fromSocketExcept(socket, ROOMS.conversation(normalizedId), blockRelated)
-        .emit(SERVER_EVENTS.LOCATION_LIVE_STARTED, eventData);
+      //
+      // UN VERBE, UN VERDICT (#16797) : l'ACK ci-dessus EST le verdict. La
+      // diffusion peut lever (adaptateur, encodeur) ; si son échec tombait dans
+      // le `catch` du verbe, l'appareil recevrait `success: false` APRÈS avoir
+      // allumé son GPS sur `success: true`. La session ouverte est un fait
+      // durable — `replayLiveLocationsTo` l'apprend à chaque pair qui ouvre le
+      // fil — donc l'échec de l'annonce se journalise, il ne se rétracte pas.
+      try {
+        this._fromSocketExcept(socket, ROOMS.conversation(normalizedId), blockRelated)
+          .emit(SERVER_EVENTS.LOCATION_LIVE_STARTED, eventData);
+      } catch (broadcastError: unknown) {
+        logger.error('location:live-started broadcast failed after ACK', {
+          conversationId: normalizedId,
+          error: broadcastError,
+        });
+      }
       this._creditLiveLocation(context, normalizedId);
     } catch (error: unknown) {
       logger.error('Error handling location:live-start', error);
