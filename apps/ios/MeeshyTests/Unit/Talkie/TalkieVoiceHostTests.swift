@@ -147,6 +147,22 @@ final class TalkieVoiceHostTests: XCTestCase {
         XCTAssertEqual(TalkieVoiceClock.seconds(startedAt: start, now: start.addingTimeInterval(4.2)), 4)
     }
 
+    /// Le compteur se cale sur la voix que l'hôte a VUE : monté avant elle, rien ; dès qu'elle se publie, son début
+    /// exact, à la seconde près ; à sa fin, rien, sans attendre le tic suivant.
+    func test_clockAnchor_followsThePublishedVoice_fromItsStartToItsEnd() {
+        let stage = TalkieVoiceStage()
+        let start = Date(timeIntervalSinceReferenceDate: 1000.4)
+        XCTAssertNil(TalkieVoiceClock.anchor(userId: "bob", voices: [], stage: stage))
+
+        stage.begin(userId: "bob", direction: .outgoing, at: start)
+        XCTAssertNil(TalkieVoiceClock.anchor(userId: "bob", voices: [], stage: stage))
+        XCTAssertEqual(TalkieVoiceClock.anchor(userId: "bob", voices: [key("bob", .outgoing)], stage: stage), start)
+        XCTAssertNil(TalkieVoiceClock.anchor(userId: "bob", voices: [key("alice", .outgoing)], stage: stage))
+
+        stage.end(userId: "bob", direction: .outgoing)
+        XCTAssertNil(TalkieVoiceClock.anchor(userId: "bob", voices: [key("bob", .outgoing)], stage: stage))
+    }
+
     // MARK: - Lu hors du fil principal
 
     /// La fiche lit l'état de la voix par `.values` : l'itérateur Combine demande hors du fil principal, et `@Published`

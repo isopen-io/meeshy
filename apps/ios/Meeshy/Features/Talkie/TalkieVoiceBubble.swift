@@ -186,32 +186,35 @@ struct TalkieVoiceRibbon: View {
 }
 
 /// LE COMPTEUR DU TALKIE (#20531) : « ● 0:04 », un point rouge qui bat une fois par seconde (fixe sous « réduire
-/// les animations ») et le temps écoulé depuis le début de la voix, en chiffres à chasse fixe. Chaque seconde relit le
-/// début de la voix au registre : rien tant que personne ne parle, même monté avant que la voix commence. VoiceOver lit
-/// « Enregistrement, 4 secondes ».
+/// les animations ») et le temps écoulé depuis le début de la voix, en chiffres à chasse fixe. Le compteur n'observe
+/// que les voix de SA personne, publiées au début et à la fin (`TalkieVoiceStageObserver`) : rien tant que personne ne
+/// parle, même monté avant que la voix commence ; dès qu'elle se publie, le cadran se cale sur son début exact ; à sa
+/// fin, il disparaît sans attendre le tic suivant. VoiceOver lit « Enregistrement, 4 secondes ».
 struct TalkieVoiceClock: View {
     let userId: String
     let stage: any TalkieVoiceStageProviding
 
+    @StateObject private var voices: TalkieVoiceStageObserver
+
     init(userId: String, stage: any TalkieVoiceStageProviding = TalkieVoiceStage.shared) {
         self.userId = userId
         self.stage = stage
+        _voices = StateObject(wrappedValue: TalkieVoiceStageObserver(stage: stage, userId: userId))
     }
 
     var body: some View {
-        TimelineView(.periodic(from: stage.startedAt(for: userId) ?? Date(), by: 1)) { context in
-            if let seconds = Self.seconds(startedAt: stage.startedAt(for: userId), now: context.date) {
-                HStack(spacing: MeeshySpacing.xs) {
-                    TalkieClockDot()
-                    Text(Self.text(seconds: seconds))
-                        .font(.caption.weight(.semibold).monospacedDigit())
-                        .lineLimit(1)
-                        .fixedSize()
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(Self.accessibilityLabel(seconds: seconds))
-            }
+        if let startedAt = Self.anchor(userId: userId, voices: voices.voices, stage: stage) {
+            TalkieVoiceClockFace(startedAt: startedAt)
+                .id(startedAt)
         }
+    }
+
+    /// Le début sur lequel le cadran se cale : celui de la voix de la personne tant que l'hôte en a VU une, `nil`
+    /// sinon — une voix que le registre ouvre ou ferme avant sa publication ne décale ni ne prolonge le compteur.
+    nonisolated static func anchor(userId: String, voices: Set<TalkieVoiceKey>,
+                                   stage: any TalkieVoiceStageProviding) -> Date? {
+        guard TalkieVoiceHostLaw.shows(userId: userId, voices: voices) else { return nil }
+        return stage.startedAt(for: userId)
     }
 
     /// Les secondes écoulées depuis le début de la voix ; `nil` quand aucune voix n'a commencé.
@@ -233,6 +236,26 @@ struct TalkieVoiceClock: View {
     static func accessibilityLabel(seconds: Int) -> String {
         let duration = MediaFormat.duration(seconds, style: .spoken)
         return String(format: String(localized: "talkie.clock.a11y", defaultValue: "Enregistrement, %@", bundle: .main), duration)
+    }
+}
+
+/// Le cadran du compteur : des tics à chaque seconde pleine depuis `startedAt`, remis en VALEUR par l'hôte.
+private struct TalkieVoiceClockFace: View {
+    let startedAt: Date
+
+    var body: some View {
+        TimelineView(.periodic(from: startedAt, by: 1)) { context in
+            let seconds = TalkieVoiceClock.elapsedSeconds(since: startedAt, now: context.date)
+            HStack(spacing: MeeshySpacing.xs) {
+                TalkieClockDot()
+                Text(TalkieVoiceClock.text(seconds: seconds))
+                    .font(.caption.weight(.semibold).monospacedDigit())
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(TalkieVoiceClock.accessibilityLabel(seconds: seconds))
+        }
     }
 }
 
