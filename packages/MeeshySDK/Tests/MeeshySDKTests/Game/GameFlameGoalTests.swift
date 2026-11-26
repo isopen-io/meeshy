@@ -63,4 +63,37 @@ struct GameFlameGoalTests {
         #expect(response.alreadyDone)
         #expect(response.goal.current?.remaining == 29)
     }
+
+    @Test("l'objectif atteint est un moment de Mee et Meo, vu par la clé de l'objectif, juste après la Veilleuse offerte")
+    func theReachedGoalIsAGuideMoment() throws {
+        let event = GuideEventV2.flameGoalReached(target: 7, next: 14)
+        #expect(event.key == .flameGoalReached)
+        #expect(event.key.rawValue == "flame-goal-reached")
+        #expect(event.seenKey == "flame-goal-next-7")
+        #expect(GuideEventV2.offeringKept(easedDays: 3).seenKey == "offering-kept")
+        let moment = GameGuideV2.moment(for: event, seen: [String]())
+        #expect(moment.speaker == .duo)
+        #expect(moment.mood == .proud)
+        #expect(moment.action == .seeFlame)
+        #expect(moment.presentation == .full)
+        #expect(moment.seenKey == "flame-goal-next-7")
+        #expect(GameGuideV2.moment(for: event, seen: ["flame-goal-reached"]).presentation == .full,
+                "le genre vu ne rend pas court un nouvel objectif")
+        #expect(GameGuideV2.moment(for: event, seen: ["flame-goal-next-7"]).presentation == .short)
+        #expect(GamePhotoMomentsV2.emblem(of: event) == nil)
+        let rank = { (key: String) in GameGuideV2.momentPriorityAll.firstIndex(of: key) ?? -1 }
+        #expect(rank("flame-goal-reached") == rank("flame-freeze-gift") + 1)
+        #expect(rank("flame-goal-reached") == rank("league-promoted") - 1)
+    }
+
+    @Test("un objectif déjà salué cède la place à un moment inédit, et un nouvel objectif atteint est un moment nouveau")
+    func theChoiceReadsTheGoalKey() {
+        let goal7 = GuideAnyEvent.wave2(.flameGoalReached(target: 7, next: 14))
+        let goal14 = GuideAnyEvent.wave2(.flameGoalReached(target: 14, next: 30))
+        let stamp = GuideAnyEvent.wave2(.atlasStamp(language: "ja", stamped: 4, total: 89))
+        #expect(GameGuideV2.chooseMoment(events: [goal7, stamp], seen: [String]())?.keyValue == "flame-goal-reached")
+        #expect(GameGuideV2.chooseMoment(events: [goal7, stamp], seen: ["flame-goal-next-7"])?.keyValue == "atlas-stamp")
+        #expect(GameGuideV2.chooseMoment(events: [goal14, stamp], seen: ["flame-goal-next-7", "flame-goal-reached"])?.keyValue
+                == "flame-goal-reached")
+    }
 }

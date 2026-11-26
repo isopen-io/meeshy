@@ -76,12 +76,14 @@ struct GameFlamePanelView: View {
     }
 
     /// Ce que la carte montre de l'objectif : les choix du premier jour, ce qu'il reste, ou le signe des aïeux avec la
-    /// marche suivante — jusqu'à ce que le joueur le ferme (sa clé `flame-goal-next-<jours>` dans `game.guideSeen`).
-    /// Miroir de `flameGoalView` (`apps/web/src/lib/view/flame-goal-copy.ts`).
+    /// marche suivante — jusqu'à ce que le joueur le ferme ou que la carte de Mee et Meo le dise (sa clé
+    /// `flame-goal-next-<jours>` dans `game.guideSeen`). Ensuite le salut ne se redit pas, mais la marche suivante reste
+    /// choisissable. Miroir de `flameGoalView` (`apps/web/src/lib/view/flame-goal-copy.ts`).
     enum GoalSection: Equatable {
         case choose([Int])
         case running(target: Int, remaining: Int)
         case reached(target: Int, next: Int?)
+        case next(target: Int, next: Int)
     }
 
     static func goalState(_ flame: GameBlock.Flame, guideSeen: [String]) -> GoalSection? {
@@ -89,7 +91,8 @@ struct GameFlamePanelView: View {
         guard let current = goal.current else { return goal.offer.isEmpty ? nil : .choose(goal.offer) }
         guard current.reached else { return .running(target: current.target, remaining: current.remaining) }
         let seen = guideSeen.contains(GameFlameGoalLaw.nextSeenKey(reachedTarget: current.target))
-        return seen ? nil : .reached(target: current.target, next: current.next)
+        guard seen else { return .reached(target: current.target, next: current.next) }
+        return current.next.map { GoalSection.next(target: current.target, next: $0) }
     }
 
     /// `missing` : ce qu'il manque, dit avec le geste qu'il vise — acheter un gel, rallumer la Flamme (#10540).
@@ -218,6 +221,16 @@ struct GameFlamePanelView: View {
                 .accessibilityIdentifier("game.flame.goal.running")
         case .reached(let target, let next):
             goalSign(target: target, next: next)
+        case .next(let target, let next):
+            FlowLayout(spacing: MeeshySpacing.xs) {
+                Text(FlameGoalCopy.nextIntro(target: target))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                    .foregroundStyle(ThemeManager.shared.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                goalChoice(target: next, title: FlameGoalCopy.nextAction(days: next))
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("game.flame.goal.next")
         case nil:
             EmptyView()
         }
@@ -415,6 +428,12 @@ enum FlameGoalCopy {
     static func nextAction(days count: Int) -> String {
         let days = GameCopy.days(count)
         return String(localized: "game.flame_panel.goal_next", defaultValue: "Viser \(days)", bundle: .main)
+    }
+
+    static func nextIntro(target count: Int) -> String {
+        let goalDays = GameCopy.days(count)
+        return String(localized: "game.flame_panel.goal_next_intro",
+                      defaultValue: "Objectif de \(goalDays) tenu. La marche suivante\u{00a0}?", bundle: .main)
     }
 
     static var later: String {
