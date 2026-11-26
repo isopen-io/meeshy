@@ -132,7 +132,7 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
                 format: String(localized: "notification.game.duoAccepted.fallbackTitle", defaultValue: "%@ a accepté ton duo", bundle: .main),
                 actorName
             )
-        case .gameLeagueResult, .gameSeasonStep, .gameMissionWindow:
+        case .gameLeagueResult, .gameSeasonStep, .gameMissionWindow, .gameFlameEvening:
             return notificationType.gameSurfaceTitle ?? ""
         case .newConversationDirect:
             // Direct DM: the conversation has no real title — surface the
@@ -283,7 +283,7 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
         case .contentRemoved:
             return removalBody
         // Le jeu : la phrase est SERVIE, dans la langue du lecteur — il n'y a ni extrait ni aperçu à lui préférer.
-        case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow:
+        case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow, .gameFlameEvening:
             return Self.firstNonEmpty(content)
         default:
             return nil
