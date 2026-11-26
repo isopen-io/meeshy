@@ -172,4 +172,10 @@ public extension ProfileHeroPlan {
     nonisolated static func voiceTitleDrop(_ state: ProfileHeroVoiceState) -> Double {
         state.showsCaption ? voiceCaptionHeight : 0
     }
+
+    /// Où commence ce qui défile sous le héros, la voix comprise : tant que sa légende se pose, la première carte
+    /// descend avec le nom, pour ne jamais passer sous lui.
+    nonisolated static func contentTop(voiceState: ProfileHeroVoiceState) -> Double {
+        MeeshyCollapsingHeroRecipe.contentTop(expandedHeight: expandedHeight, avatarCaption: voiceTitleDrop(voiceState))
+    }
 }

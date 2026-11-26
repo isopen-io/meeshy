@@ -57,6 +57,26 @@ final class ProfileHeroVoiceTests: XCTestCase {
                        MeeshyCollapsingHeroRecipe.titleGap(avatarSpill: 0))
     }
 
+    /// Tant que la légende se pose, le nom descend de sa hauteur : la première carte de la fiche descend d'autant pour
+    /// ne jamais passer sous lui. Sans légende, ce qui défile commence où il a toujours commencé.
+    func test_contentTop_whileTheCaptionShows_descendsByTheCaption_andNotOtherwise() {
+        XCTAssertEqual(ProfileHeroPlan.contentTop(voiceState: .silent), ProfileHeroPlan.contentTop)
+        XCTAssertEqual(ProfileHeroPlan.contentTop(voiceState: .voice(captioned: false)), ProfileHeroPlan.contentTop)
+        XCTAssertEqual(ProfileHeroPlan.contentTop(voiceState: .voice(captioned: true)),
+                       ProfileHeroPlan.contentTop + ProfileHeroPlan.voiceCaptionHeight)
+    }
+
+    func test_heroScrollView_readsTheVoiceOnce_forTheHeroAndTheContentTop() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let code = try String(contentsOf: root.appendingPathComponent(
+            "Sources/MeeshyUI/Profile/UserProfileSheet+Header.swift"), encoding: .utf8)
+        XCTAssertTrue(code.contains("ProfileHeroPlan.contentTop(voiceState: voiceState)"))
+        XCTAssertFalse(code.contains("frame(height: CGFloat(ProfileHeroPlan.contentTop))"))
+        XCTAssertEqual(code.components(separatedBy: "ProfileHeroVoiceReader(").count - 1, 1)
+    }
+
     // MARK: - Lu depuis n'importe quel fil
 
     /// L'itérateur `.values` demande hors du fil principal, et une source `@Published` y rejoue sa valeur courante : un

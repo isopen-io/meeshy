@@ -112,6 +112,27 @@ struct MeeshyCollapsingHeroTests {
         #expect(MeeshyCollapsingHeroRecipe.resolve(progress: 0.7).controlsDiscOpacity == 0)
     }
 
+    @Test("une légende sous l'avatar déplié fait descendre ce qui défile d'autant que le nom ; sans elle, rien ne bouge")
+    func contentTop_includesTheCaptionOnlyWhileItShows() {
+        let bare = MeeshyCollapsingHeroRecipe.contentTop()
+        #expect(bare == MeeshyCollapsingHeroRecipe.expandedHeight + MeeshyCollapsingHeroRecipe.identityOverflow)
+        #expect(MeeshyCollapsingHeroRecipe.contentTop(avatarCaption: 0) == bare)
+        #expect(MeeshyCollapsingHeroRecipe.contentTop(avatarCaption: 22) == bare + 22)
+        #expect(MeeshyCollapsingHeroRecipe.contentTop(avatarCaption: -5) == bare)
+        #expect(MeeshyCollapsingHeroRecipe.contentTop(avatarCaption: .nan) == bare)
+        let drop = MeeshyCollapsingHeroRecipe.titleGap(avatarSpill: 0, avatarCaption: 22)
+            - MeeshyCollapsingHeroRecipe.titleGap(avatarSpill: 0)
+        #expect(MeeshyCollapsingHeroRecipe.contentTop(avatarCaption: 22) - bare == drop)
+    }
+
+    @Test("le haut de ce qui défile suit le héros déplié que l'hôte donne, légende comprise")
+    func contentTop_followsTheHostExpandedHeight() {
+        #expect(MeeshyCollapsingHeroRecipe.contentTop(expandedHeight: 280)
+                == 280 + MeeshyCollapsingHeroRecipe.identityOverflow)
+        #expect(MeeshyCollapsingHeroRecipe.contentTop(expandedHeight: 280, avatarCaption: 22)
+                - MeeshyCollapsingHeroRecipe.contentTop(expandedHeight: 280) == 22)
+    }
+
     @Test("sans avatar l'avatar vaut zéro ; sans sous-titre le sous-titre vaut zéro")
     func optionalSlots_takeNoRoom() {
         let bare = MeeshyCollapsingHeroRecipe.resolve(progress: 0, hasAvatar: false, hasSubtitle: false)

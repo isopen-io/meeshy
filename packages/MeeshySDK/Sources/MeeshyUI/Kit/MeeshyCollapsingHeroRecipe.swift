@@ -150,7 +150,20 @@ public nonisolated struct MeeshyCollapsingHeroRecipe: Sendable, Equatable {
     /// Le même écart, quand l'hôte pose une légende de hauteur `avatarCaption` sous l'avatar déplié : le nom descend
     /// d'autant, et ne descend pas sans légende.
     public static func titleGap(avatarSpill: Double, avatarCaption: Double) -> Double {
-        titleGap(avatarSpill: avatarSpill) + (avatarCaption.isFinite ? max(avatarCaption, 0) : 0)
+        titleGap(avatarSpill: avatarSpill) + captionDrop(avatarCaption)
+    }
+
+    /// Où commence ce qui défile sous le héros déplié : sous l'identité, qui déborde de la bannière de
+    /// `identityOverflow`, et plus bas de la légende `avatarCaption` tant que l'hôte la pose — le nom descend d'autant,
+    /// la première carte aussi. Le repli n'en dépend pas : le doigt mène toujours la même distance, sans saut.
+    public static func contentTop(expandedHeight: Double = MeeshyCollapsingHeroRecipe.expandedHeight,
+                                  avatarCaption: Double = 0) -> Double {
+        expandedHeight + identityOverflow + captionDrop(avatarCaption)
+    }
+
+    /// Ce dont une légende sous l'avatar fait descendre le nom : sa hauteur ; rien sans légende, ni pour un non-nombre.
+    private static func captionDrop(_ avatarCaption: Double) -> Double {
+        avatarCaption.isFinite ? max(avatarCaption, 0) : 0
     }
 
     /// L'avancée du repli de la barre : celle du doigt, ou — pour une bannière gardée dans la barre (#19987) — celle de

@@ -13,11 +13,18 @@ extension UserProfileSheet {
     // MARK: - Le défilement sous le héros
 
     /// Ce qui défile, sous le héros épinglé : il vit DANS le défilement (le doigt posé sur la bannière fait défiler)
-    /// et se contre-décale pour rester en haut, pendant que K28 se replie.
+    /// et se contre-décale pour rester en haut, pendant que K28 se replie. La voix est lue une fois, pour le héros et
+    /// pour le haut de ce qui défile, qui descend avec le nom tant que sa légende se pose.
     func heroScrollView<Content: View>(_ content: Content) -> some View {
+        ProfileHeroVoiceReader(voice: heroVoice, userId: heroVoiceUserId) { voiceState in
+            heroScrollView(content, voiceState: voiceState)
+        }
+    }
+
+    private func heroScrollView<Content: View>(_ content: Content, voiceState: ProfileHeroVoiceState) -> some View {
         ScrollView(showsIndicators: false) {
             LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-                Color.clear.frame(height: CGFloat(ProfileHeroPlan.contentTop))
+                Color.clear.frame(height: CGFloat(ProfileHeroPlan.contentTop(voiceState: voiceState)))
                 heroDetails
                 content
             }
@@ -33,7 +40,8 @@ extension UserProfileSheet {
             }
             .overlay(alignment: .top) {
                 ScrollOffsetReader(relay: scrollRelay) { offset in
-                    profileHero(progress: ProfileHeroPlan.progress(scrollOffset: Double(offset), topInset: heroTopInset))
+                    profileHero(progress: ProfileHeroPlan.progress(scrollOffset: Double(offset), topInset: heroTopInset),
+                                voiceState: voiceState)
                         .offset(y: -offset)
                 }
             }
@@ -61,13 +69,6 @@ extension UserProfileSheet {
     }
 
     // MARK: - Le héros (K28)
-
-    func profileHero(progress: Double) -> some View {
-        ProfileHeroVoiceReader(voice: heroVoice, userId: heroVoiceUserId) { voiceState in
-            profileHero(progress: progress, voiceState: voiceState)
-                .environment(\.avatarListeningSuppressed, voiceState.isActive)
-        }
-    }
 
     /// La personne dont la voix vit autour de l'avatar : un autre que moi, connu, quand l'app fournit la voix.
     var heroVoiceUserId: String? {
@@ -97,6 +98,7 @@ extension UserProfileSheet {
             trailing: { heroTrailing(progress: progress) },
             avatar: { size in heroAvatar(size: size, voiceState: voiceState) }
         )
+        .environment(\.avatarListeningSuppressed, voiceState.isActive)
     }
 
     /// « Retour » (‹) en plein écran, « Fermer » (⌄) en feuille : un bouton de verre du kit (K02) ; la feuille joue son
