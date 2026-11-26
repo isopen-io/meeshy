@@ -27,9 +27,12 @@ struct NearbyMapScreen: View {
     @Environment(\.locale) private var locale
     @Environment(\.horizontalSizeClass) private var sizeClass
     private var theme: ThemeManager { ThemeManager.shared }
+    private let reach: PersonMapReach
 
     init(sharing: SharedLocationSharingCenter = SharedLocationSharingHolder.center(),
-         asks: SharedLocationAskCenter = SharedLocationAskHolder.center()) {
+         asks: SharedLocationAskCenter = SharedLocationAskHolder.center(),
+         reach: PersonMapReach = .live) {
+        self.reach = reach
         _sharing = ObservedObject(wrappedValue: sharing)
         _asks = ObservedObject(wrappedValue: asks)
     }
@@ -60,7 +63,9 @@ struct NearbyMapScreen: View {
         .onReceive(NetworkMonitor.shared.isOfflinePublisher.receive(on: DispatchQueue.main)) { isOffline = $0 }
         .adaptiveOnChange(of: model.pins, initial: true) { _, pins in Task { await places.resolve(pins) } }
         .fullScreenCover(item: $opened) { person in
-            PersonLocationMapScreen(userId: person.userId, displayName: person.name)
+            PersonLocationMapScreen(userId: person.userId, displayName: person.name,
+                                    onWrite: leaving(reach.onWrite(userId: person.userId)),
+                                    onCall: leaving(reach.onCall(userId: person.userId, displayName: person.name)))
         }
         .sheet(isPresented: $sharesMine) {
             ShareMyLocationSheet(recipients: model.pins.map {
@@ -113,6 +118,11 @@ struct NearbyMapScreen: View {
                 .meeshyGlassTone(.onLight)
             }
             .onMeeshyAnchoredSheetFootprint { sheetHeight = $0?.height ?? 0 }
+    }
+
+    /// Écrire ou appeler quitte aussi « Mes proches » : la conversation ou l'appel s'ouvre sous elle.
+    private func leaving(_ action: (() -> Void)?) -> (() -> Void)? {
+        action.map { act in { dismiss(); act() } }
     }
 
     private var recipientIds: [String] { sharing.roster.pruned(now: Date()).recipients.map(\.userId) }

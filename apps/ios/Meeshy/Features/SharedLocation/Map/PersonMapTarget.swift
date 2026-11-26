@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 /// La carte d'UNE personne, demandée hors de sa fiche (#20540) : « Lina est tout près » ouvre la carte de Lina, centrée
 /// sur les deux, depuis le push, la bannière in-app et la liste des notifications. La racine la présente en plein écran
@@ -26,7 +27,43 @@ struct PersonMapCover: ViewModifier {
 
     func body(content: Content) -> some View {
         content.fullScreenCover(item: $router.presentedPersonMap) { target in
-            PersonLocationMapScreen(userId: target.userId, displayName: target.displayName)
+            PersonLocationMapScreen(userId: target.userId, displayName: target.displayName,
+                                    onWrite: PersonMapReach.live.onWrite(userId: target.userId),
+                                    onCall: PersonMapReach.live.onCall(userId: target.userId,
+                                                                       displayName: target.displayName))
         }
+    }
+}
+
+/// De quoi joindre une personne depuis sa carte quand la fiche n'est pas l'hôte (#20199) : « Écrire » ouvre ou crée notre
+/// direct, « Appeler » compose un appel audio par le même chemin que la fiche. Rien pour moi-même, rien sans compte.
+@MainActor
+struct PersonMapReach {
+    let write: @MainActor (String) async -> Void
+    let call: @MainActor (ProfileCallRequest) -> Void
+    let currentUserId: @MainActor () -> String?
+
+    static let live = PersonMapReach(
+        write: { await LiveProfileLinkCardActions().write(to: $0) },
+        call: { CallBackDialer.shared.dialFromProfile($0) },
+        currentUserId: { AuthManager.shared.currentUser?.id }
+    )
+
+    func onWrite(userId: String) -> (() -> Void)? {
+        guard reaches(userId) else { return nil }
+        let write = write
+        return { Task { await write(userId) } }
+    }
+
+    func onCall(userId: String, displayName: String) -> (() -> Void)? {
+        guard reaches(userId) else { return nil }
+        let call = call
+        let request = ProfileCallRequest(userId: userId, displayName: displayName, isVideo: false, conversationId: nil)
+        return { call(request) }
+    }
+
+    private func reaches(_ userId: String) -> Bool {
+        guard !userId.isEmpty, let me = currentUserId(), !me.isEmpty else { return false }
+        return userId != me
     }
 }
