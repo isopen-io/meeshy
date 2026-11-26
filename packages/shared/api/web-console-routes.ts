@@ -26,6 +26,13 @@ export type WebConsoleRoute = ManifestRouteInput & {
 export const WEB_CONSOLE_ROUTES: readonly WebConsoleRoute[] = [
   {
     method: 'GET',
+    path: '/api/v1/admin/analytics/game',
+    reason:
+      'Point de départ du Jeu (#17363, #20617) : retour à 1, 7 et 30 jours par semaine d’inscription et compteurs quotidiens du Jeu, agrégés. ' +
+      'Lu par l’onglet « Jeu » des statistiques de la console web (#20618) ; aucun écran d’administration natif.',
+  },
+  {
+    method: 'GET',
     path: '/api/v1/admin/analytics/playback',
     reason:
       'Qualité de lecture agrégée (#11280) : temps jusqu’à la première image et rebuffer, p50/p95 par surface et tier. ' +

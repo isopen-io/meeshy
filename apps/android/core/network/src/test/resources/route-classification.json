@@ -89,6 +89,7 @@
     "GET /api/v1/admin/agent/topics",
     "GET /api/v1/admin/agent/topics/:id",
     "GET /api/v1/admin/analytics/calls",
+    "GET /api/v1/admin/analytics/game",
     "GET /api/v1/admin/analytics/hourly-activity",
     "GET /api/v1/admin/analytics/kpis",
     "GET /api/v1/admin/analytics/language-distribution",
