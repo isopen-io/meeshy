@@ -237,10 +237,10 @@ describe('la période et l’onglet vivent dans l’adresse', () => {
     expect(host.querySelector('[data-admin-tab-panel="activity"]')).not.toBeNull();
   });
 
-  test('les onglets sont un tablist ARIA de quatre entrées, et le contenu un tabpanel nommé par l’onglet actif', async () => {
+  test('les onglets sont un tablist ARIA de cinq entrées, et le contenu un tabpanel nommé par l’onglet actif', async () => {
     const host = await openPanel('/probe', statsGateway().deps);
     const tabs = [...host.querySelectorAll('[role="tab"]')].map((node) => node.textContent);
-    expect(tabs).toEqual(['Activité', 'Messages', 'Appels', 'Lecture']);
+    expect(tabs).toEqual(['Activité', 'Messages', 'Appels', 'Lecture', 'Jeu']);
     expect(tab(host, 'activity')?.getAttribute('aria-selected')).toBe('true');
     const panel = host.querySelector('[role="tabpanel"]');
     const labelledBy = panel?.getAttribute('aria-labelledby') ?? '';
@@ -256,6 +256,17 @@ describe('la période et l’onglet vivent dans l’adresse', () => {
     const panel = host.querySelector('[role="tabpanel"]');
     expect(panel?.getAttribute('aria-labelledby')).toBe(tab(host, 'messages')?.id);
     expect(tab(host, 'messages')?.getAttribute('aria-controls')).toBe(panel?.id);
+  });
+
+  test('l’onglet Jeu lit le point de départ du Jeu sur sa fenêtre par défaut, sept jours (#20618)', async () => {
+    const gateway = statsGateway();
+    const host = await openPanel('/probe', gateway.deps);
+    await act(async () => tab(host, 'game')?.click());
+    for (let attempt = 0; attempt < 20 && host.querySelector('[data-admin-tab-panel="game"]') === null; attempt += 1) await mounter.settle();
+    await mounter.settle();
+
+    expect(host.querySelector('[data-admin-tab-panel="game"]')).not.toBeNull();
+    expect(gateway.calls().map((call) => call.path)).toContain('/api/v1/admin/analytics/game?days=7');
   });
 
   test('un seul titre de niveau 1, des sections titrées de niveau 2', async () => {
