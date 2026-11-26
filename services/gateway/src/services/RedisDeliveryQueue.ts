@@ -12,6 +12,8 @@ import { destroyedAtBound, readBoundedPushReply } from './deliveryQueueBound';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import type { DeliveryQueueSealer } from './deliveryQueueSealing';
 import { ServerAtRestUnavailableError, ServerAtRestUnreadableError } from './messaging/serverAtRest';
+import { DEFAULT_UNSEALED_BUDGET, UnsealedRetentionBudget, type UnsealedBudgetLimits } from './deliveryQueueUnsealedBudget';
+import { processDeliveryQueueSealMetrics, type DeliveryQueueSealMetrics } from './metrics/deliveryQueueSealMetrics';
 
 const logger = enhancedLogger.child({ module: 'RedisDeliveryQueue' });
 
@@ -400,7 +402,7 @@ function isPermanentlyUnsealable(error: unknown): boolean {
  */
 type SealVerdict =
   | { readonly outcome: 'seal'; readonly entry: QueuedMessagePayload }
-  | { readonly outcome: 'keep'; readonly entry: QueuedMessagePayload }
+  | { readonly outcome: 'keep'; readonly entry: QueuedMessagePayload; readonly reason: string }
   | { readonly outcome: 'drop' };
 
 function isStillLive(entry: QueuedMessagePayload, now: number): boolean {
@@ -443,13 +445,28 @@ type ReplayPlan = { readonly replay: QueuedMessagePayload[]; readonly retry: Que
 /** #12822 — `sealAtRest` : la charge appartient à une conversation chiffrée au repos. */
 export type DeliveryQueueEnqueueOptions = { readonly sealAtRest?: boolean };
 
+/** #19945 — la série et le budget du clair gardé faute de sceau. */
+export type RedisDeliveryQueueOptions = {
+  readonly metrics?: Pick<DeliveryQueueSealMetrics, 'unsealed'>;
+  readonly unsealedBudget?: UnsealedBudgetLimits;
+};
+
 export class RedisDeliveryQueue {
   private memoryQueue: Map<string, QueuedMessagePayload[]> = new Map();
+  private readonly metrics: Pick<DeliveryQueueSealMetrics, 'unsealed'>;
+  private readonly unsealedBudget: UnsealedRetentionBudget;
 
   constructor(
     private cacheStore: CacheStore,
     private readonly sealer: DeliveryQueueSealer | null = null,
-  ) {}
+    options: RedisDeliveryQueueOptions = {},
+  ) {
+    this.metrics = options.metrics ?? processDeliveryQueueSealMetrics;
+    this.unsealedBudget = new UnsealedRetentionBudget(
+      options.unsealedBudget ?? DEFAULT_UNSEALED_BUDGET,
+      () => this.memoryQueue.values(),
+    );
+  }
 
   private getRedis(): Redis | null {
     return this.cacheStore.getNativeClient();
@@ -501,13 +518,13 @@ export class RedisDeliveryQueue {
   private async sealedForStorage(userId: string, entry: QueuedMessagePayload): Promise<SealVerdict> {
     const refuse = (reason: string, error?: unknown): SealVerdict => {
       const permanent = error === undefined || isPermanentlyUnsealable(error);
-      logger.error(permanent
-        ? 'Offline entry of an at-rest conversation DROPPED: it can never be sealed'
-        : 'Offline entry of an at-rest conversation kept unsealed in memory: it cannot be sealed right now', {
+      if (!permanent) return { outcome: 'keep', entry, reason };
+      logger.error('Offline entry of an at-rest conversation DROPPED: it can never be sealed', {
         userId, conversationId: entry.conversationId, messageId: entry.messageId, eventType: normalizedEventType(entry),
-        reason, disposition: permanent ? 'dropped' : 'kept-in-memory',
+        reason, disposition: 'dropped',
       });
-      return permanent ? { outcome: 'drop' } : { outcome: 'keep', entry };
+      this.metrics.unsealed('dropped_unsealable');
+      return { outcome: 'drop' };
     };
     if (!this.sealer) return refuse('no-sealer');
     try {
@@ -515,6 +532,31 @@ export class RedisDeliveryQueue {
     } catch (error) {
       return refuse(error instanceof Error && 'code' in error ? String(error.code) : 'seal-failed', error);
     }
+  }
+
+  /**
+   * #19945 — une entrée `keep` n'entre dans le tas que si le budget du clair
+   * gardé l'admet (`deliveryQueueUnsealedBudget.ts`). Appelée SANS `await`
+   * entre l'admission et l'écriture dans la tranche mémoire : deux enfilages
+   * concurrents ne peuvent pas se rapprocher du tas l'un au milieu de l'autre.
+   */
+  private admittedUnsealed(userId: string, entry: QueuedMessagePayload, reason: string, serialized: string): boolean {
+    const admitted = this.unsealedBudget.admit(entry, Buffer.byteLength(serialized, 'utf8'));
+    const context = {
+      userId, conversationId: entry.conversationId, messageId: entry.messageId, eventType: normalizedEventType(entry),
+    };
+    if (!admitted) {
+      logger.error('Offline entry of an at-rest conversation DROPPED: the unsealed retention budget is full', {
+        ...context, reason: 'volume-cap', sealReason: reason, disposition: 'dropped',
+      });
+      this.metrics.unsealed('dropped_volume_cap');
+      return false;
+    }
+    logger.error('Offline entry of an at-rest conversation kept unsealed in memory: it cannot be sealed right now', {
+      ...context, reason, disposition: 'kept-in-memory',
+    });
+    this.metrics.unsealed('kept_in_memory');
+    return true;
   }
 
   /**
@@ -632,6 +674,7 @@ export class RedisDeliveryQueue {
     const heapOnly = verdict.outcome === 'keep';
     const redis = heapOnly ? null : this.getRedis();
     const serialized = JSON.stringify(entry);
+    if (verdict.outcome === 'keep' && !this.admittedUnsealed(userId, entry, verdict.reason, serialized)) return;
     const dedupId = entry.dedupKey ?? entry.messageId;
 
     if (redis) {
